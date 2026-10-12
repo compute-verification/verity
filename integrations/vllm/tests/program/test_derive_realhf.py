@@ -37,10 +37,10 @@ from torch import nn
 
 transformers = pytest.importorskip("transformers")
 
-from verity.primitives.circuits.codec import program_digest
+from verity.ml.circuits.codec import program_digest
 from verity_vllm.program.frontend.derive import DERIVE_VERSION, DeriveReport, Unsupported, derive_report
-from verity_vllm.program.registry.serve3_reference import materialize
-from verity.primitives.circuits.types import Array, Record, Value
+from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.circuits.types import Array, Record, Value
 
 # ---------------------------------------------------------------------------------------------------------
 # dims, environment, output

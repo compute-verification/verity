@@ -1,0 +1,5 @@
+# The merge queue's admission rules (`research queue`, tools/research/src/research/queue.py). No change waits on a per-head grant
+# (Daniel, 8 Oct): a PR is admitted once it is marked ready at its head, and `check` is the gate.
+# The research coordinator owns this file.
+
+hold_label = "hold"

@@ -448,7 +448,7 @@ def test_h100_header_binds_the_hopper_target_and_gemm_v2():
     """[R13 hopper] cc 9.0 is the registered `hopper` GEMM target (vLLM family "hopper": the sm_90 tuned table; Triton lowers tl.dot to wgmma
     there, another k16 step): the launch must show the HOPPER table's tiling for (M, N, K) and binds `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16}`
     — the sm_89 tiling (BLOCK_SIZE_K 64) on an H100 header is a pin mismatch, and the accepted `Gemm_v1` is NOT what an H100 launch binds."""
-    from verity_vllm.program.registry.gemm_targets import HOPPER_TUNED_GEMM
+    from verity_vllm.program.frontend.gemm_targets import HOPPER_TUNED_GEMM
     consts, warps, stages = GP.tuned_launch_config(HOPPER_TUNED_GEMM, 32, 2048, 2048)          # the hopper (2048,2048) row, M<=32 bucket
     assert (consts["BLOCK_SIZE_M"], consts["BLOCK_SIZE_N"], consts["BLOCK_SIZE_K"], warps, stages) == (16, 128, 128, 4, 5)
     for prof in (L.PROFILE, BASE.PROFILE):

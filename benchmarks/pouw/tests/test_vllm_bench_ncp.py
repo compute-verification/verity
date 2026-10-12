@@ -16,7 +16,7 @@ spec.loader.exec_module(VB)
 
 
 def test_each_calls_operands_cancel_to_the_int7_product():
-    from verity.protocols.accounting.work.pouw.schemes.ncp import word_perm
+    from verity.core.protocols.pouw.schemes.ncp import word_perm
     gen = torch.Generator().manual_seed(7)
     m, k, n = 5, 64, 24
     A = torch.randint(-64, 64, (m, k), dtype=torch.int8, generator=gen)

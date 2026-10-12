@@ -3,7 +3,7 @@ name = "verity-gkr"
 version = "0.0.0"
 description = "A-GKR, frozen: its Python drivers and tests."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-numerical", "numpy", "blake3>=1.0", "verity-catalog"]
+dependencies = ["research", "verity", "verity-numerical", "numpy", "blake3>=1.0"]
 
 [project.optional-dependencies]
 torch = ["torch>=2.4"]
@@ -24,4 +24,4 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-inputs = ["archive/direct", "catalog/census"]
+inputs = ["archive/direct", "benchmarks/census"]

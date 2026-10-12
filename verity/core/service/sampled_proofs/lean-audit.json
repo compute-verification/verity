@@ -1,0 +1,18 @@
+{
+ "roots": ["SampledProofs"],
+ "exempt": {
+  "SampledProofs.Main": "the sampled-proofs-one-stage executable's entry point, one line; its command is Core.Protocol.main over SampledProofs.OneStage.protocol, audited under SampledProofs",
+  "SampledProofs.DifftestMain": "the sampled-proofs-difftest executable's entry point, one line; it serves SampledProofs.Pieces.table, audited under SampledProofs",
+  "SampledProofs.VerifierMain": "the sampled-proofs-verifier executable's entry point, one line; it serves SampledProofs.Pieces.verifier, audited under SampledProofs"
+ },
+ "layers": {
+  "SampledProofs": {
+   "imports": ["Lean", "Flock", "CoreProtocol", "SampledProofs"],
+   "except": [],
+   "why": "the port is code: Lean core, C-Flock's verifier library and the core protocol interface, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  }
+ },
+ "dependencies": {
+  "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
+ }
+}

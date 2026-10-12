@@ -1,5 +1,5 @@
-// Pearl-C on the RTX PRO 6000 Blackwell (sm_120a): the kernels of `pearl-c-sm120-v1` (verity/protocols/accounting/work/pouw/schemes/
-// pearl_c.py on pearl_c_device.SM120, hashing -h1 and -h2) and the plain FP8 GEMMs, for run.py and arm.py.  Every kernel takes one Args by value:
+// Pearl-C on the RTX PRO 6000 Blackwell (sm_120a): the kernels of `pearl-c-sm120-v1` (verity/core/protocols/pouw/schemes/
+// pearl_c.py on pearl_c_device.SM120, hashing -h3) and the plain FP8 GEMMs, for run.py.  Every kernel takes one Args by value:
 // 16 pointers p[] and 16 ints i[].  sm_120 has no wgmma, TMA multicast or tcgen05: the products are warp-level mma.sync
 // (kind::f8f6f4 m16n8k32 E4M3 for every FP8 atom, m16n8k16 BF16 for the peel) fed by ldmatrix from shared memory that
 // cp.async fills (TMA on the 128 x 128 GEMMs: mainloop_sm120.cuh), within 99 KB of shared memory per block.
@@ -14,8 +14,7 @@
 #include <cuda_fp16.h>
 #include <cuda_fp8.h>
 
-#include "../pearl_c/hash_h2.cuh"
-#include "../pouw_hash/pouw_hash.cuh"
+#include "../pearl_c/hash_h3.cuh"
 #include "mainloop_sm120.cuh"
 
 // ---------------------------------------------------------------- formats (IEEE, nearest even, no FTZ)
@@ -67,9 +66,8 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 //   PLAIN   y = bf16(total sa sb)
 //   CT      stores C~ (FP32)
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
-//   PEARLC_S  PEARLC without storing C~ or U (only y): the hash-free control for a fused epilogue's digests
-//   PEARLC_B  PEARLC_S with the -h1 message digests of C~ and U from registers (ml_body only)
-enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_B };
+//   PEARLC_S  PEARLC without storing C~ or U (only y): the call without hashing
+enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S };
 constexpr int BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
 template <int MODE, int TM, int BN> __host__ __device__ constexpr int gemm_smem() {
   return STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0);
@@ -282,16 +280,13 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
 }
 
 // The 128 x 128 GEMMs on bc-fb55a759's mainloop (mainloop_sm120.cuh: TMA into 3 stages of 128 bytes of depth, a producer
-// warpgroup, 8 consumer warps of 64 x 32, the chain word for word gemm_body's), with gemm_body's epilogues; PEARLC_B's is GPU 2's
-// fused one (bc-7442ca43's gemm_pearlc_b: each (row, 32-column chunk)'s message of C~ and U hashed from registers by
-// pouw_hash's quad_msg_digest_b3, BLAKE3 keyed by blake3("pearl-c/h1/message"), into p9 in hash_msg_v's layout), its 1 KB of
-// scratch per warp in the tail stage's P_A rows once every consumer has read its peel fragments.  p10 the four tensor maps
-// (ml::Maps; P_A, P_B the peel's, else A, B again), p11 the message key.
+// warpgroup, 8 consumer warps of 64 x 32, the chain word for word gemm_body's), with gemm_body's epilogues.  p10 the four
+// tensor maps (ml::Maps; P_A, P_B the peel's, else A, B again).
 constexpr int ML_NT = 384;
 template <int G> constexpr int ML_RP = G ? 24 : 40;   // the producer's registers: the mainloop's recommended v1 and v2
 template <int G> constexpr int ML_U = G ? 1 : 2;      // stages per K-loop iteration (v1 at 2 spills under nvcc 13.0)
 template <int MODE, int G> DEV void ml_body(const Args& a) {
-  constexpr bool PEEL = MODE >= M_PEARLC, HASH = MODE == M_PEARLC_B;
+  constexpr bool PEEL = MODE >= M_PEARLC;
   constexpr bool STORE_C = MODE == M_CT || MODE == M_PEARLC, STORE_U = MODE == M_PEARLC;
   using L = ml::Mainloop<128, 128, G, 3, PEEL, 1, ML_RP<G>>;
   constexpr int MI = L::MI, NI = L::NI;
@@ -344,17 +339,8 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
         }
     }
     if constexpr (PEEL) {
-      if constexpr (HASH) {
-#pragma unroll
-        for (int mi = 0; mi < MI; mi++)
-#pragma unroll
-          for (int ni = 0; ni < NI; ni++)
-#pragma unroll
-            for (int e = 0; e < 4; e++) acc[mi][ni][e] = total[mi][ni][e];   // C~, beside U
-      }
       const uint32_t pa0 = ml.tail_wait(), pb0 = pa0 + L::A_BYTES;
-      // with C~ held beside U, one step's fragments at a time (hoisting all four spills v1)
-#pragma unroll(HASH ? 1 : 4)
+#pragma unroll 4
       for (int s = 0; s < 4; s++) {
         uint32_t fa[MI][4], fb[NI][2];
 #pragma unroll
@@ -370,7 +356,7 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
 #pragma unroll
           for (int ni = 0; ni < NI; ni++) hmma(total[mi][ni], fa[mi], fb[ni]);
       }
-      if constexpr (!HASH) ml.tail_release();
+      ml.tail_release();
 #pragma unroll
       for (int mi = 0; mi < MI; mi++) {
         const int row = row0 + 16 * mi;
@@ -387,34 +373,12 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
           store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
         }
       }
-      if constexpr (HASH) {
-        asm volatile("bar.sync 1, %0;" ::"n"(L::NCT) : "memory");   // every consumer's peel reads of the tail are done
-        uint64_t* scratch = reinterpret_cast<uint64_t*>(ml_smem + (pa0 - ml.base)) + 128 * warp;
-        const uint32_t* kp = reinterpret_cast<const uint32_t*>(a.p[11]);
-        uint32_t key[8];
-        asm volatile("ld.global.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(key[0]), "=r"(key[1]), "=r"(key[2]), "=r"(key[3]) : "l"(kp));
-        asm volatile("ld.global.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(key[4]), "=r"(key[5]), "=r"(key[6]), "=r"(key[7]) : "l"(kp + 4));
-        uint8_t* const dg = reinterpret_cast<uint8_t*>(a.p[9]) + (size_t)(tn * 128 + wn * L::WN) / 32 * 32;
-        const int per = N / 32, row = tm * 128 + wm * L::WM;
-        auto region = [&](auto pc) {
-          constexpr int p = decltype(pc)::value;
-          auto frag = [&](int arr, int j, int i) { return arr ? total[2 * p + (j >> 2)][j & 3][i] : acc[2 * p + (j >> 2)][j & 3][i]; };
-          uint32_t h[8];
-          ph::quad_msg_digest_b3<2>(frag, key, scratch, h);
-          uint4* o = reinterpret_cast<uint4*>(dg + (size_t)(row + ph::pearlc::narrow_row(p, lane)) * per * 32);
-          o[0] = make_uint4(h[0], h[1], h[2], h[3]);
-          o[1] = make_uint4(h[4], h[5], h[6], h[7]);
-        };
-        region(Int<0>{});
-        region(Int<1>{});
-        ml.tail_release();
-      }
     }
   }
 }
 
 // G4: pearl-c-sm120-v1 (pearl_c_device.SM120); _u: unpromoted (SM120_UNPROMOTED); gemm_fast is the plain GEMM unpromoted;
-// _d: the 64 x 64 tile; gemm_words: the 128 x 32 tile; ML_GEMM: the 128 x 128 tile on the mainloop, _s y alone, _b fused
+// _d: the 64 x 64 tile; gemm_words: the 128 x 32 tile; ML_GEMM: the 128 x 128 tile on the mainloop, _s y alone
 #define ML_GEMM(NAME, MODE, G)                                                                                \
   extern "C" __global__ void __launch_bounds__(ML_NT, 1) NAME(const Args a) { ml_body<MODE, G>(a); } \
   extern "C" __global__ void NAME##_smem(int* out) { *out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM; }
@@ -429,8 +393,6 @@ ML_GEMM(gemm_ct_u, M_CT, 0)
 ML_GEMM(gemm_pearlc_u, M_PEARLC, 0)
 ML_GEMM(gemm_pearlc_s, M_PEARLC_S, 4)
 ML_GEMM(gemm_pearlc_s_u, M_PEARLC_S, 0)
-ML_GEMM(gemm_pearlc_b, M_PEARLC_B, 4)
-ML_GEMM(gemm_pearlc_b_u, M_PEARLC_B, 0)
 GEMM(gemm_ct_d, M_CT, 64, 64, 4)
 GEMM(gemm_pearlc_d, M_PEARLC, 64, 64, 4)
 GEMM(gemm_ct_d_u, M_CT, 64, 64, 0)
@@ -484,7 +446,7 @@ template <int G> DEV void words_body(const Args& a) {
 extern "C" __global__ void __launch_bounds__(128) words(const Args a) { words_body<4>(a); }
 extern "C" __global__ void __launch_bounds__(128) words_u(const Args a) { words_body<0>(a); }
 
-// ---------------------------------------------------------------- noise lines (Pearl's line rule; hash.cuh's BLAKE3)
+// ---------------------------------------------------------------- noise lines (Pearl's line rule on -h3's H_line)
 DEV uint32_t isqrt(uint32_t v) {
   uint32_t r = (uint32_t)sqrt((double)v);
   while ((uint64_t)r * r > v) r--;
@@ -497,19 +459,16 @@ DEV int k32(int t) { return (t & ~31) | (t >> 1 & 3) << 3 | (t >> 3 & 3) << 1 | 
 
 // p0 the line key (8 words), p1 codes (count x 32, row-major), p2 transposed (32 x count) or 0, p3 transposed into 128 x count
 // (rows 32-127 left as they are) or 0, both in K32 order along count (the F lines, count = k); i0 side, i1 factor, i2 count,
-// i3 bf16(32 x the line's L2 norm): 0x4600 for Pearl's 256, 0x4400 for 16
+// i3 bf16(32 x the line's L2 norm): 0x4600 for Pearl's 256, 0x4400 for 16.  i4 lines keyed per row (E_A,
+// `pearl_c.PearlC.encode`): line t < i4 is line 0 under its own line key, p4 + 32 t (s512_seeds' p2); the rest, line t under
+// p0.  The raw bytes are H_line's (hash_h3.cuh's s512_line_raw, `pearl_c.sample_line` on an S512Seed).
 extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
   const int line = blockIdx.x * blockDim.x + threadIdx.x, count = a.i[2];
   if (line >= count) return;
-  const uint32_t* key = reinterpret_cast<const uint32_t*>(a.p[0]);
-  uint32_t kw[8], msg[16], h[8];
-#pragma unroll
-  for (int i = 0; i < 8; i++) kw[i] = key[i];
-#pragma unroll
-  for (int i = 0; i < 16; i++) msg[i] = 0;
-  msg[0] = (uint32_t)a.i[0] | (uint32_t)a.i[1] << 8 | ((uint32_t)line & 0xFFFF) << 16;
-  msg[1] = (uint32_t)line >> 16;
-  blake3_block(kw, msg, h);
+  const bool own = line < a.i[4];
+  uint32_t kw[8], h[8];
+  load_key(own ? a.p[4] + (uint64_t)line * 32 : a.p[0], kw);
+  s512_line_raw(kw, (uint32_t)a.i[0], (uint32_t)a.i[1], own ? 0u : (uint32_t)line, h);
   int xs[32];
   uint32_t sumsq = 0;
 #pragma unroll
@@ -569,8 +528,6 @@ extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
   reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(alpha);
   reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
 }
-
-#include "h2_rows_stats.cuh"   // -h2's rows form `s`, stats_s5's outputs from hash_rows_b3s's loads (after S5_LINE, S5_FLOOR)
 
 // E' = e4m3(beta_row E) per row.  p0 E codes (rows x 32), p1 beta (f32), p2 out E' codes (rows x 32); i0 rows
 extern "C" __global__ void eprime(const Args a) {
@@ -797,25 +754,6 @@ extern "C" __global__ void pb(const Args a) {
   uint16_t* out = reinterpret_cast<uint16_t*>(a.p[4]) + (size_t)row * 64;
   out[q] = mid;
   out[32 + q] = e4m3bf(E[q]) ^ 0x8000;
-}
-
-// ---------------------------------------------------------------- -h1: E_A's line key from A's committed root
-// The noise is keyed on the device's own commitment of A (pearl_c.PearlC.noise): seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖
-// root_B ‖ u64 index), H_l(x) = BLAKE3(x; key = BLAKE3(l)), and E_A's line key is keyed(seed_A, "pearl/v4/FP8/noise-line")
-// (pearl_kw._line_key).  p0 root_A (the last node of A's tree), p1 the unit's block: salt (32) ‖ root_B (32) ‖ u64 index ‖
-// BLAKE3("pearl-c/v0/seed-A") (32), p2 out: E_A's line key (32 B), p3 out: seed_A (32 B) or 0.  One thread.
-__constant__ uint8_t LINE_LABEL[23] = {'p', 'e', 'a', 'r', 'l', '/', 'v', '4', '/', 'F', 'P', '8', '/',
-                                       'n', 'o', 'i', 's', 'e', '-', 'l', 'i', 'n', 'e'};
-extern "C" __global__ void __launch_bounds__(32) seed_line_a(const Args a) {
-  if (threadIdx.x) return;
-  const uint8_t* ra = reinterpret_cast<const uint8_t*>(a.p[0]);
-  const uint8_t* unit = reinterpret_cast<const uint8_t*>(a.p[1]);
-  uint32_t key[8], seed[8], h[8];
-  load_key(a.p[1] + 72, key);
-  b3_short<104>(key, [&](int j) { return (uint32_t)(j < 32 ? unit[j] : j < 64 ? ra[j - 32] : unit[j - 32]); }, seed);
-  b3_short<23>(seed, [&](int j) { return (uint32_t)LINE_LABEL[j]; }, h);
-  store_cv(a.p[2], h);
-  if (a.p[3]) store_cv(a.p[3], seed);
 }
 
 // words differing between two buffers: p0, p1 (u32), p2 counter (u64); i0 count (in words, < 2^31 per launch)

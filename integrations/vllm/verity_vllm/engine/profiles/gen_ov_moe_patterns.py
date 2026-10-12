@@ -30,6 +30,8 @@ Pins (κ): the router kernel's reduction geometry `VPT` (from the `topkGating<VP
 `renormalize=False`, no bias, no padding rows; the fused kernel's non-schedule constexprs (`compute_type=bf16`, no
 quantisation, `SPLIT_K=1`, `HAS_BIAS=False`, `SWAP_AB=False`) plus — for parity with the base GEMM's κ pins — its tiling
 (`FUSED_MOE_PINS`).  Anything else is `Unsupported` with the observed values.
+
+`MoEFusedExpertsFp8` is the scope with block-FP8 experts: both activation quants and the block-FP8 pair forms (its docstring).
 """
 
 from __future__ import annotations
@@ -38,10 +40,10 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import act as _ACT
 from verity_vllm.program.registry import moe as _MOE
-from verity_vllm.program.registry import targets as T
+from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
 
 from verity_vllm.observe.events import ViewDesc
@@ -186,6 +188,14 @@ class MoEFusedExperts:
     fused_pins: dict[str, Any] = field(default_factory=lambda: dict(FUSED_MOE_PINS))
     fused_num_warps: int = FUSED_MOE_NUM_WARPS
     fused_num_stages: int = FUSED_MOE_NUM_STAGES
+    #: the fused kernel's A / B dtype and the scale pointers it must not carry; class attributes like `router`, which the block-FP8
+    #: scope (`MoEFusedExpertsFp8`) overrides with `_numeric_pins`
+    operand_dtype = "bfloat16"
+    absent_ptrs = ("a_scale_ptr", "b_scale_ptr")
+    kernel_note = "bf16 unquantised kernel"
+
+    def _numeric_pins(self) -> dict[str, Any]:
+        return FUSED_MOE_NUMERIC_PINS
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or not op_name(node.op).startswith(MOE_OP_PREFIX):
@@ -217,11 +227,12 @@ class MoEFusedExperts:
                                counts={"topk_softmax": len(routers), "align": len(aligns), "fused_moe_kernel": len(launches),
                                        "silu_and_mul": len(silus), "moe_sum": len(sums)}, census=moe_subtree_census(node))
         router, up, down, silu, msum = routers[0], launches[0], launches[1], silus[0], sums[0]
-        gates = self._gate_launches(node)
-        if isinstance(gates, Unsupported):
-            return gates
-        keep = {router.id, up.id, down.id, silu.id, msum.id} | {a.id for a in aligns} | {g.id for g in gates}
-        keep |= set().union(*(set(n.ids()) for n in (router, up, down, silu, msum, *aligns, *gates)))
+        gates, own = self._gate_launches(node), self._scope_ops(node)
+        for r in (gates, own):
+            if isinstance(r, Unsupported):
+                return r
+        keep = {router.id, up.id, down.id, silu.id, msum.id} | {a.id for a in aligns} | {g.id for g in gates} | {o.id for o in own}
+        keep |= set().union(*(set(n.ids()) for n in (router, up, down, silu, msum, *aligns, *gates, *own)))
         # [R19 qwen3, TP] descendants the scope patterns own (the in-scope all-reduce of a rank): resolved here, kept out of the glue walk
         extra: list[Compute] = []
         if self.scope_patterns:
@@ -279,7 +290,7 @@ class MoEFusedExperts:
         # 3. up/gate GEMM over pairs --------------------------------------------------------------------------------
         P = M * TOPK
         ids_flat = _flat(ids, P)
-        try:   # the record target's expert GEMM Definitions (`registry.targets.moe_expert_gemm_spec`): the same selection the builder makes
+        try:   # the record target's expert GEMM Definitions (`frontend.targets.moe_expert_gemm_spec`): the same selection the builder makes
             up_spec, down_spec = (T.moe_expert_gemm_spec(target_of(ctx)[0], E, K, N, routed=w) for K, N, w in ((H, 2 * I, False), (I, H, True)))
         except T.UnregisteredTarget as e:
             return unsupported(node, f"target has no registered fused-MoE binding: {e}")
@@ -345,6 +356,10 @@ class MoEFusedExperts:
                                launches=[g.id for g in gates], census=moe_subtree_census(node))
         return gates
 
+    def _scope_ops(self, node: TreeNode) -> list[TreeNode] | Unsupported:
+        """Descendants a subclass resolves itself (`MoEFusedExpertsFp8`: the two activation quants), kept out of the glue walk."""
+        return []
+
     def _gate(self, node: TreeNode, gate: TreeNode, router: TreeNode, logits: ViewDesc, ctx: StepContext) -> Compute | Unsupported:
         """The in-scope router gate GEMM, resolved by the profile's own patterns exactly as the first-match resolver would resolve it
         outside a scope (same tiling pins, same Definition), once it is shown to be the launch that writes the router's logits."""
@@ -369,9 +384,9 @@ class MoEFusedExperts:
         """Check one `fused_moe_kernel` launch against the pins and return `(a_view, b_view, c_view)` or an Unsupported."""
         e = launch.enter
         consts = dict(e.constexprs)
-        bad = {k: (consts.get(k), v) for k, v in FUSED_MOE_NUMERIC_PINS.items() if consts.get(k) != v}
+        bad = {k: (consts.get(k), v) for k, v in self._numeric_pins().items() if consts.get(k) != v}
         if bad:
-            return unsupported(node, "fused_moe_kernel numeric constexprs differ from the modelled bf16 unquantised kernel",
+            return unsupported(node, f"fused_moe_kernel numeric constexprs differ from the modelled {self.kernel_note}",
                                mismatches={k: {"observed": o, "pinned": p} for k, (o, p) in bad.items()})
         bad = {k: (consts.get(k), v) for k, v in self.fused_pins.items() if consts.get(k) != v}
         if bad or e.num_warps != self.fused_num_warps or e.num_stages != self.fused_num_stages:
@@ -383,7 +398,7 @@ class MoEFusedExperts:
                                observed={"MUL_ROUTED_WEIGHT": consts.get("MUL_ROUTED_WEIGHT"), "top_k": consts.get("top_k")},
                                expected={"MUL_ROUTED_WEIGHT": expect_weighted, "top_k": expect_top_k})
         a = bound_args(launch)
-        for k in ("b_bias_ptr", "a_scale_ptr", "b_scale_ptr"):
+        for k in ("b_bias_ptr", *self.absent_ptrs):
             if a.get(k) is not None:
                 return unsupported(node, f"fused_moe_kernel has a {k}", **{k: repr(a.get(k))})
         av, bv, cv = a.get("a_ptr"), a.get("b_ptr"), a.get("c_ptr")
@@ -392,12 +407,12 @@ class MoEFusedExperts:
         if a.get("N") != N or a.get("K") != K or a.get("num_valid_tokens") != P:
             return unsupported(node, "fused_moe_kernel N / K / num_valid_tokens differ from the scope's geometry",
                                observed={"N": a.get("N"), "K": a.get("K"), "num_valid_tokens": a.get("num_valid_tokens")}, expected={"N": N, "K": K, "P": P})
-        if bv.shape != (E, N, K) or not _contig(bv) or bv.dtype != "bfloat16":
-            return unsupported(node, "fused_moe_kernel B operand is not a contiguous bf16 [E,N,K] expert table", b=repr(bv))
+        if bv.shape != (E, N, K) or not _contig(bv) or bv.dtype != self.operand_dtype:
+            return unsupported(node, f"fused_moe_kernel B operand is not a contiguous {self.operand_dtype} [E,N,K] expert table", b=repr(bv))
         if (a.get("stride_be"), a.get("stride_bn"), a.get("stride_bk")) != (N * K, K, 1):
             return unsupported(node, "fused_moe_kernel B strides are not [E][N][K] row-major", strides=[a.get("stride_be"), a.get("stride_bn"), a.get("stride_bk")])
-        if av.dtype != "bfloat16" or av.rank != 2 or not is_row_major(av) or av.shape[1] != K:
-            return unsupported(node, "fused_moe_kernel A operand is not a row-major bf16 [rows,K] view", a=repr(av))
+        if av.dtype != self.operand_dtype or av.rank != 2 or not is_row_major(av) or av.shape[1] != K:
+            return unsupported(node, f"fused_moe_kernel A operand is not a row-major {self.operand_dtype} [rows,K] view", a=repr(av))
         if cv.dtype != "bfloat16" or cv.numel != P * N or not _contig(cv) or (a.get("stride_cm"), a.get("stride_cn")) != (N, 1):
             return unsupported(node, "fused_moe_kernel C operand is not a contiguous bf16 [M*TOPK, N] pair-major output", c=repr(cv),
                                strides=[a.get("stride_cm"), a.get("stride_cn")])
@@ -477,6 +492,183 @@ class MoEFusedExpertsOrdered(MoEFusedExperts):
 
 #: The declared constructions the fold knows (the frontend's `TargetProfile.MOE_CONSTRUCTIONS` keys); the pattern each folds with.
 MOE_CONSTRUCTION_PATTERNS = {"indexed-read": MoEFusedExperts, "padded": MoEFusedExpertsPadded, "indexed-read-ordered": MoEFusedExpertsOrdered}
+
+#: the experts class whose arithmetic the block-FP8 pair forms state (`TargetProfile.moe_backend = "triton"`)
+TRITON_EXPERTS = TargetProfile.MOE_BACKEND_KERNELS["triton"]
+K_QUANT = "per_token_group_fp8_quant"
+
+
+def header_moe_experts_class(ctx: StepContext) -> str | None:
+    """The experts class the record's fused-MoE layers carried (`RunHeader.profile["backends"]["moe_experts_class"]`, written by
+    `engine.run_facts` from `moe_experts_class_of(model)` under a declared `moe_backend`), None when the header does not say."""
+    try:
+        k = ((ctx.header.profile or {}).get("backends") or {}).get("moe_experts_class")
+        return k if isinstance(k, str) else None
+    except (AttributeError, TypeError):
+        return None
+
+
+def _quant_io(q: TreeNode) -> tuple[Any, Any, Any]:
+    """`(input, output_q, output_s)` of a `per_token_group_fp8_quant` call: its first three parameters."""
+    a = bound_args(q)
+    return tuple(a.get(n, a.get(f"arg{i}")) for i, n in enumerate(("input", "output_q", "output_s")))
+
+
+def _same(u: Any, v: ViewDesc) -> bool:
+    return isinstance(u, ViewDesc) and (u.alloc, u.offset, u.shape) == (v.alloc, v.offset, v.shape)
+
+
+@dataclass(frozen=True)
+class _Scaled:
+    """One block-FP8 launch's operands: the quant that wrote A and A_scale, its bf16 input, and the e4m3 / f32 views the kernel read."""
+
+    quant: TreeNode
+    source: ViewDesc
+    a: ViewDesc
+    a_s: ViewDesc
+    b: ViewDesc
+    b_s: ViewDesc
+    KB: int
+
+
+@dataclass
+class MoEFusedExpertsFp8(MoEFusedExperts):
+    """The pairwise Group for vLLM d9105ea80's `Fp8MoEMethod` -> `TritonExperts` at block [G, G] (`group`, the rank's MoE block), whose
+    activations are quantised per token group inside the scope:
+
+      `_C.per_token_group_fp8_quant` (x)     -> Compute(Fp8GroupQuant_v1{K=H,G}, rows=M): hidden [M,H] bf16 -> (x_q e4m3, x_s [M,H/G] f32)
+      `fused_moe_kernel` (w13, fp8)          -> Compute(MoeExpertFp8Gemm_v1{E,K=H,N=2I,G,KB,SWAP,DOT}, rows=M*TOPK):
+                                                (Gather(x_q, p//TOPK), Gather(x_s, p//TOPK), PerRow(ids.flat), Shared(w13), Shared(w13_s))
+      `_C.silu_and_mul`                      -> SiluMul_v2{I}, as above
+      `_C.per_token_group_fp8_quant` (h)     -> Compute(Fp8GroupQuant_v1{K=I,G}, rows=M*TOPK): cache2 bf16 -> (h_q e4m3, h_s f32)
+      `fused_moe_kernel` (w2, fp8, weighted) -> Compute(MoeExpertFp8GemmW_v1{E,K=I,N=H,G,KB,SWAP,DOT}, rows=M*TOPK):
+                                                (PerRow(h_q), PerRow(h_s), PerRow(ids.flat), PerRow(weights.flat), Shared(w2), Shared(w2_s))
+
+    The router, the alignment schedule, the in-scope gate GEMM, `moe_sum` and the TP collective are `MoEFusedExperts`'.  The launch is
+    `use_fp8_w8a8` with `group_n == group_k == G`, A_scale `[rows, K/G]` and B_scale `[E, cdiv(N, G), K/G]` row-major, the tiling pins as
+    above, and `BLOCK_SIZE_K` dividing G.  At block 128 vLLM fuses the SiLU with the second quant (`silu_and_mul_per_block_quant`,
+    `triton_moe.py:474-485`), which this scope refuses by its shape.  DOT is the record target's e4m3 step (`targets.moe_expert_fp8_dot`);
+    a target with none refuses by name.  The record must attest `TritonExperts` (`header_moe_experts_class`): vLLM's FP8 MoE oracle may
+    select another experts class, whose arithmetic these Definitions do not state."""
+
+    name = "moe.fused_experts.pairwise.fp8"
+    operand_dtype = "float8_e4m3fn"
+    absent_ptrs = ()
+    kernel_note = "block-FP8 kernel (use_fp8_w8a8, group_n == group_k == G)"
+    group: int = 0
+
+    def _numeric_pins(self) -> dict[str, Any]:
+        return {**FUSED_MOE_NUMERIC_PINS, "use_fp8_w8a8": True, "group_n": self.group, "group_k": self.group}
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or not op_name(node.op).startswith(MOE_OP_PREFIX):
+            return None
+        got = header_moe_experts_class(ctx)
+        if got != TRITON_EXPERTS:
+            return unsupported(node, f"the record does not attest {TRITON_EXPERTS} for its fused-MoE layers (RunHeader.profile.backends."
+                                     f"moe_experts_class, written under a declared moe_backend); {self.name} states that kernel's arithmetic",
+                               moe_experts_class=got)
+        r = super().match(node, ctx)
+        return self._fp8_parts(node, ctx, r) if isinstance(r, Group) else r
+
+    def _quants(self, node: TreeNode) -> list[TreeNode]:
+        return find_descendants(node, lambda n: not n.is_triton and op_name(n.op) == K_QUANT)
+
+    def _scope_ops(self, node: TreeNode) -> list[TreeNode] | Unsupported:
+        qs = self._quants(node)
+        if len(qs) != 2:
+            return unsupported(node, f"block-FP8 MoE scope does not have its two {K_QUANT} calls (the input's, then the SiLU output's)",
+                               count=len(qs), census=moe_subtree_census(node))
+        return qs
+
+    def _fused(self, node: TreeNode, launch: TreeNode, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int, P: int):
+        """`MoEFusedExperts._fused` under the FP8 pins, then the scales (`_scaled`); returns `(the bf16 input of the quant that wrote A, b,
+        c)`, so `match`'s A checks read hidden_states (w13) and the SiLU output (w2) through their quants."""
+        r = super()._fused(node, launch, expect_weighted=expect_weighted, expect_top_k=expect_top_k, E=E, K=K, N=N, P=P)
+        if isinstance(r, Unsupported):
+            return r
+        s = self._scaled(node, launch, E=E, K=K, N=N)
+        return s if isinstance(s, Unsupported) else (s.source, r[1], r[2])
+
+    def _scaled(self, node: TreeNode, launch: TreeNode, *, E: int, K: int, N: int) -> _Scaled | Unsupported:
+        G = self.group
+        a = bound_args(launch)
+        av, asv, bv, bsv = a.get("a_ptr"), a.get("a_scale_ptr"), a.get("b_ptr"), a.get("b_scale_ptr")
+        if not all(isinstance(v, ViewDesc) for v in (av, asv, bv, bsv)):
+            return unsupported(node, "block-FP8 fused_moe_kernel without its a_scale / b_scale views", a_scale_ptr=repr(asv), b_scale_ptr=repr(bsv))
+        KB = launch.enter.constexprs.get("BLOCK_SIZE_K")
+        if K % G or not isinstance(KB, int) or KB <= 0 or G % KB:
+            return unsupported(node, "the block G does not tile K, or BLOCK_SIZE_K does not divide G", K=K, G=G, BLOCK_SIZE_K=KB)
+        KG, NB = K // G, -(-N // G)
+        a_strides = (a.get("stride_asm"), a.get("stride_ask"))
+        if asv.dtype != "float32" or asv.shape != (av.shape[0], KG) or a_strides != (KG, 1):
+            return unsupported(node, "a_scale is not the row-major f32 [rows, K/G] group scale of A", a_scale=repr(asv), strides=list(a_strides),
+                               expected=[av.shape[0], KG])
+        b_strides = (a.get("stride_bse"), a.get("stride_bsn"), a.get("stride_bsk"))
+        if bsv.dtype != "float32" or bsv.shape != (E, NB, KG) or not _contig(bsv) or b_strides != (NB * KG, KG, 1):
+            return unsupported(node, "b_scale is not the contiguous f32 [E, cdiv(N, G), K/G] block scale of B", b_scale=repr(bsv),
+                               strides=list(b_strides), expected=[E, NB, KG])
+        writers = [q for q in self._quants(node) if _same(_quant_io(q)[1], av) and _same(_quant_io(q)[2], asv)]
+        if len(writers) != 1 or not isinstance(src := _quant_io(writers[0])[0], ViewDesc):
+            return unsupported(node, f"no single {K_QUANT} in the scope writes this launch's A and a_scale", a=repr(av), a_scale=repr(asv),
+                               writers=[q.id for q in writers])
+        return _Scaled(writers[0], src, av, asv, bv, bsv, KB)
+
+    def _fp8_parts(self, node: TreeNode, ctx: StepContext, r: Group) -> Group | Unsupported:
+        """`r` with each expert GEMM replaced by its activation quant, then its block-FP8 pair form."""
+        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant  # noqa: PLC0415  (registry.fp8 loads with an FP8 scope only)
+        C, G = self.config, self.group
+        E, TOPK, H, I = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"]
+        up, down = find_descendants(node, lambda n: n.is_triton and triton_name(n) == K_FUSED)
+        parts = list(r.parts)
+        at = {p.consumed: i for i, p in enumerate(parts) if isinstance(p, Compute)}
+        silu = next(p for p in parts if isinstance(p, Compute) and p.spec.name == "SiluMul")
+        tp = target_of(ctx)[0]
+        repl: dict[int, tuple[Compute, Compute]] = {}
+        for launch, K, N, routed in ((up, H, 2 * I, False), (down, I, H, True)):
+            i = at[(launch.id,)]
+            base, P = parts[i], parts[i].rows
+            s = self._scaled(node, launch, E=E, K=K, N=N)
+            if isinstance(s, Unsupported):
+                return s
+            q = PerTokenGroupFp8Quant(group=G).match(s.quant, ctx)
+            if not isinstance(q, Compute):
+                return unsupported(node, f"a {K_QUANT} inside the MoE scope did not resolve as Fp8GroupQuant_v1", child_id=s.quant.id,
+                                   child_reason=getattr(q, "reason", None), child_detail=getattr(q, "detail", None))
+            if (q.operands[0].view, q.outputs[0].view, q.outputs[1].view) != (s.source, s.a, s.a_s):
+                return unsupported(node, f"the {K_QUANT} the launch reads does not resolve to its own views", child_id=s.quant.id)
+            if routed and not (_same(silu.outputs[0].view, s.source) and max(silu.consumed) < s.quant.id < launch.id):
+                return unsupported(node, "the w2 launch's quant does not read the SiLU output between the SiLU and the launch",
+                                   quant_input=repr(s.source), silu_output=repr(silu.outputs[0].view))
+            if not routed and not s.quant.id < launch.id:
+                return unsupported(node, "the w13 launch's quant runs after the launch", quant_id=s.quant.id, launch_id=launch.id)
+            try:
+                spec = T.moe_expert_fp8_gemm_spec(tp, E, K, N, G, s.KB, bool(launch.enter.constexprs.get("SWAP_AB")), routed=routed)
+            except T.UnregisteredTarget as e:
+                return unsupported(node, f"target has no registered block-FP8 fused-MoE binding: {e}")
+            if routed:
+                ops = (PerRow(s.a), PerRow(s.a_s), base.operands[1], base.operands[2], Shared(s.b), Shared(s.b_s))
+            else:
+                rows = tuple(p // TOPK for p in range(P))
+                ops = (Gather(s.a, rows), Gather(s.a_s, rows), base.operands[1], Shared(s.b), Shared(s.b_s))
+            w = "w2" if routed else "w13"
+            roots = (None,) * (len(ops) - 2) + (_root_name(ctx, s.b, w), _root_name(ctx, s.b_s, f"{w}_ws"))
+            quant = dataclasses.replace(q, hint=f"{r.hint}/{w}_act_quant", attribution=() if routed else q.attribution, pattern=self.name)
+            gemm = Compute(spec, P, ops, base.outputs, base.consumed, hint=base.hint, kernels=base.kernels, pattern=self.name, roots=roots)
+            repl[i] = (quant, gemm)
+        out = [x for i, p in enumerate(parts) for x in repl.get(i, (p,))]
+        return Group(tuple(out), r.consumed, hint=r.hint, pattern=self.name)
+
+
+@dataclass
+class MoEFusedExpertsFp8Ordered(MoEFusedExpertsFp8):
+    """`moe_construction = indexed-read-ordered` with block-FP8 experts: the router in the kernel's selection order."""
+
+    router = "ordered"
+
+
+#: The declared constructions the block-FP8 scope folds; `padded` states bf16 expert bodies and has no FP8 form.
+MOE_FP8_CONSTRUCTION_PATTERNS = {"indexed-read": MoEFusedExpertsFp8, "indexed-read-ordered": MoEFusedExpertsFp8Ordered}
 
 
 def ov_moe_patterns(config: dict[str, Any], *, gemm_constexprs: dict[str, Any] | None = None, gemm_num_sms: int | None = None,

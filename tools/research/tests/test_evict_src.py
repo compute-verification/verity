@@ -159,7 +159,7 @@ def _map(n):
 
 
 def _cmdline(n):
-    fake_proc(n.proc, 104, cmdline=f"python3 {n.src}/{n.a}/tools/check/check.py")
+    fake_proc(n.proc, 104, cmdline=f"python3 {n.src}/{n.a}/tools/verity/check/check.py")
 
 
 def _running(n):
@@ -278,6 +278,42 @@ def test_a_tree_that_may_be_a_runs_only_copy_of_its_source_is_kept(node, setup, 
     assert (node.src / node.a).is_dir()
 
 
+def _captured(n, *, marker: dict | None, digest: str = "d" * 64, cap_digest: str | None = None) -> None:
+    rd = write_run(n, "r14", source=n.a, store={"commit": n.a, "dirty": True, "dirty_digest": digest})
+    job = json.loads((rd / "job.json").read_text())
+    job["store"]["dirty_capture"] = {"path": "source-dirty.tar", "bytes": 10, "sha256": "e" * 64, "dirty_digest": cap_digest or digest}
+    (rd / "job.json").write_text(json.dumps(job))
+    if marker is not None:
+        (rd / ".custody").write_text(json.dumps(marker))
+    _age(rd, 3)
+
+
+PRESERVED = {"preserved": True, "files": {"job.json": [1, "f" * 64], "source-dirty.tar": [10, "e" * 64]}}
+
+
+def test_a_dirty_run_whose_preserved_record_holds_its_capture_no_longer_keeps_the_tree(node):
+    """The 10 Oct src sweep deleted trees that were seven runs' only copy of their dirty sources; the runner now captures a dirty
+    source into the run dir and custody uploads it, so once the record is preserved the tree is not the only copy."""
+    _captured(node, marker=PRESERVED)
+    rep = run(node)
+    assert rep["error"] is None and node.a in [d["tree"] for d in rep["deleted"]], kept(rep)
+
+
+@pytest.mark.parametrize("marker, digest, cap_digest", [
+    (None, "d" * 64, None),
+    ({**PRESERVED, "preserved": False}, "d" * 64, None),
+    ({"preserved": True, "files": {"source-dirty.tar": [10, "0" * 64]}}, "d" * 64, None),
+    ({"preserved": True, "files": {"job.json": [1, "f" * 64]}}, "d" * 64, None),
+    (PRESERVED, "too-large", None),
+    (PRESERVED, "d" * 64, "a" * 64),
+], ids=["no-custody", "not-preserved", "other-bytes", "not-in-record", "too-large", "other-digest"])
+def test_a_dirty_run_keeps_the_tree_unless_its_preserved_record_holds_that_capture(node, marker, digest, cap_digest):
+    _captured(node, marker=marker, digest=digest, cap_digest=cap_digest)
+    rep = run(node)
+    assert any(w.startswith("3: run r14's source is dirty, and no preserved record") for w in kept(rep).get(node.a, [])), kept(rep)
+    assert (node.src / node.a).is_dir()
+
+
 def test_a_research_keep_record_leaves_the_tree_to_retention(node):
     from research import retention as RT
     RT.keep(node.src / node.a, owner="@infra", expires=None, priority="keep", root=node.root.parent, why="pinned")
@@ -325,6 +361,60 @@ def test_a_process_it_cannot_read_deletes_nothing(node, monkeypatch):
     monkeypatch.setattr(EV.os, "readlink", readlink)
     _all_kept(node, run(node), "2: ")
     assert "CAP_SYS_PTRACE" in run(node)["error"]
+
+
+RUNPOD_NGINX = """events { worker_connections 2048; }
+http {
+    server { listen 9091; location / { proxy_pass http://localhost:9090; } error_page 502 /502.html;
+             location = /502.html { root /usr/share/nginx/html; } }
+}
+"""
+
+
+def _runpod_proxy(node, monkeypatch, *, conf: str = RUNPOD_NGINX, uid: int = 65534, master: str = "nginx: master process /usr/sbin/nginx",
+                  name: str = "nginx") -> Path:
+    """RunPod's proxy: a root nginx master (39) the pass reads and its worker (40) as `nobody`, which it can't."""
+    fake_proc(node.proc, 39, cmdline=master)
+    os.remove(node.proc / "39" / "exe")
+    os.symlink("/usr/sbin/nginx", node.proc / "39" / "exe")
+    fake_proc(node.proc, 40, cmdline="nginx: worker process")
+    (node.proc / "40" / "status").write_text(f"Name:\t{name}\nPPid:\t39\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
+    real = os.readlink
+
+    def readlink(p, *a, **k):
+        if str(p).startswith(str(node.proc / "40") + "/"):
+            raise PermissionError(13, "Permission denied")
+        return real(p, *a, **k)
+
+    monkeypatch.setattr(EV.os, "readlink", readlink)
+    path = node.tmp / "nginx.conf"
+    path.write_text(conf)
+    return path
+
+
+def test_runpods_proxy_worker_is_passed_over_unread_and_its_master_is_read(node, monkeypatch):
+    rep = run(node, nginx_conf=_runpod_proxy(node, monkeypatch))
+    assert rep["error"] is None and [d["tree"] for d in rep["deleted"]] == [node.a, node.b], rep
+    tree(node.src, node.a, 5)
+    os.remove(node.proc / "39" / "cwd")
+    os.symlink(f"{node.src}/{node.a}", node.proc / "39" / "cwd")
+    rep = run(node, nginx_conf=node.tmp / "nginx.conf")
+    assert rep["error"] is None and kept(rep)[node.a] == ["2: process 39 (p39) uses it"], rep
+
+
+@pytest.mark.parametrize("how", ["conf names the root", "conf includes", "conf loads a module", "root worker", "master with -c",
+                                 "not nginx"])
+def test_any_other_process_it_cannot_read_still_deletes_nothing(node, monkeypatch, how):
+    top = Path(os.path.abspath(node.src)).parts[1]
+    kw = {"conf names the root": {"conf": RUNPOD_NGINX + f"# root /{top}/x;\n"},
+          "conf includes": {"conf": RUNPOD_NGINX + "include /etc/nginx/sites-enabled/*;\n"},
+          "conf loads a module": {"conf": "load_module modules/x.so;\n" + RUNPOD_NGINX},
+          "root worker": {"uid": 0},
+          "master with -c": {"master": "nginx: master process /usr/sbin/nginx -c /elsewhere.conf"},
+          "not nginx": {"name": "python3"}}[how]
+    rep = run(node, nginx_conf=_runpod_proxy(node, monkeypatch, **kw))
+    _all_kept(node, rep, "2: ")
+    assert "/40 is unreadable" in rep["error"]
 
 
 def test_an_empty_proc_deletes_nothing(node):
@@ -515,7 +605,7 @@ def test_a_replace_ref_or_graft_in_the_nodes_repository_places_nothing(node):
 def test_a_process_naming_a_tree_however_it_spells_the_path_keeps_it(node, how):
     a = node.a
     if how == "relative-cmdline":
-        fake_proc(node.proc, 500, cwd=str(node.root), cmdline=f"python3 src/{a}/tools/check/check.py")
+        fake_proc(node.proc, 500, cwd=str(node.root), cmdline=f"python3 src/{a}/tools/verity/check/check.py")
     elif how == "double-slash-env":
         fake_proc(node.proc, 500, environ=f"PYTHONPATH={node.root}//src/{a}/tools/research/src\0")
     else:

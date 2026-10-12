@@ -1,6 +1,6 @@
 """The remaining chains with their program values as inputs: `Attention_v12` / `v13` (the scale; the target-keyed chain without FA2's
 per-iteration Check_inf, and FA3's), `AttentionSoftcap_v4` / `v5` (the softcap's two words) and the elementwise scalars
-(`Bf16DivScalar_v3`, `Bf16MulScalar_v3`, `AddScalarF32_v3`, `AddScalarBf16_v3`), and the reference and quarantine norms' epsilon
+(`Bf16DivScalar_v3`, `Bf16MulScalar_v3`, `AddScalarF32_v3`, `AddScalarBf16_v3`), and the reference and aten norms' epsilon
 (`RMSNormRef_v2`, `LayerNormRef_v2`, `LayerNormAten_v2`). Each computes what its constant-holding twin computes and holds none of its
 values as a constant."""
 
@@ -9,15 +9,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.codec import encode_program, program_digest
-from verity.primitives.circuits.constants import program_data
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.codec import encode_program, program_digest
+from verity.ml.circuits.constants import program_data
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.program import Program
 from verity_vllm.program.registry import b1, dense as DN, fa2_softcap as F2S, fa3_check_inf as F3, hopper
 from verity_vllm.program.registry import prims as P, ref_prims as RP
 from verity_vllm.program.registry import value_inputs as VI
-from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as LN
+from verity_vllm.program.registry import layer_norm as LN
 
 HOP = dict(DOT=hopper.HopperBF16WgmmaDot16)
 
@@ -169,7 +169,7 @@ def test_the_constant_twins_keep_their_digests():
         "LayerNormAten_v1": bind(LN.LayerNormAten, N=8, EPS=1e-5),
     }
     assert {k: program_digest(encode_program(Program(v)))[:16] for k, v in got.items()} == {
-        "Attention_v2": "60e807334440913c", "Attention_v4": "24c1db008a6c9530", "AttentionSoftcap_v1": "7b4c0527ff71ccf5",
-        "AttentionSoftcap_v2": "73566dca0e3f4f58", "Bf16DivScalar_v1": "7d862b3a4e7a6bc5", "Bf16MulScalar_v1": "69e49293ae28239f",
-        "AddScalarF32_v1": "8e231a99070d49e4", "AddScalarBf16_v1": "a00d19a8d03b6837",
-        "RMSNormRef_v1": "43fba1ae9045cff2", "LayerNormRef_v1": "636d5a7416b8bb62", "LayerNormAten_v1": "88dff3fe4246dfa1"}
+        "Attention_v2": "62fa3bb28d03e5d8", "Attention_v4": "95413195ae00c692", "AttentionSoftcap_v1": "eb63193194c87cf0",
+        "AttentionSoftcap_v2": "3e69667726a0a607", "Bf16DivScalar_v1": "25bace9a57773ab6", "Bf16MulScalar_v1": "efe2e181523aafd8",
+        "AddScalarF32_v1": "5d68003bd74e3840", "AddScalarBf16_v1": "22017d4f8b23c248",
+        "RMSNormRef_v1": "c1f320c64fef5c6b", "LayerNormRef_v1": "7f97dc6cdf51458d", "LayerNormAten_v1": "93931c7a49661fb0"}

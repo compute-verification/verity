@@ -3,8 +3,8 @@
     python check.py LINES.jsonl [...]                  exit 0 only if every build's every row matches and none is missing
     python check.py --against REF.jsonl LINES.jsonl    the same against rows already checked (stdlib only: on the device's host)
 
-The references: hashlib (SHA-256, SHAKE128/256), the `blake3` package and verity.primitives.crypto.blake3, the repo's
-TurboSHAKE128 (verity.primitives.crypto.turboshake), Pearl-C's own `leaf` and Pearl's ticket (`hash_labelled(extract(...))`). The
+The references: hashlib (SHA-256, SHAKE128/256), the `blake3` package and verity.ml.crypto.blake3, the repo's
+TurboSHAKE128 (verity.ml.crypto.turboshake), Pearl-C's own `leaf` and Pearl's ticket (`hash_labelled(extract(...))`). The
 three "stream" rows are the timed kernels' first iteration; SHA-256's and BLAKE3's are raw compressions (no padding), which
 hashlib can't produce, so their SHA-256 compression is here, held to hashlib on a padded message first.
 """
@@ -92,10 +92,10 @@ def _chain_block(b: int) -> list[int]:
 def expected() -> dict[tuple, str]:
     """(what, len, d) -> hex, for every row `pouw_hash_bench check` prints."""
     import blake3 as blake3_pkg
-    from verity.primitives.crypto import blake3 as B3
-    from verity.primitives.crypto.turboshake import turboshake128
-    from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-    from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
+    from verity.ml.crypto import blake3 as B3
+    from verity.ml.crypto.turboshake import turboshake128
+    from verity.core.protocols.pouw.schemes import pearl_c as C
+    from verity.core.protocols.pouw.schemes import pearl_kw as P
 
     out: dict[tuple, str] = {}
     for n, d, olen in ((0, 0x1F, 32), (0, 0x1F, 200), (1, 0x1F, 32), (17, 0x01, 32), (167, 0x06, 32), (168, 0x1F, 32),

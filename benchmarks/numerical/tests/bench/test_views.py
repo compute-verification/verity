@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from verity_catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS
+from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS
 from verity_numerical.bench import census, contract
 from verity_numerical.bench import tables as T
 from verity_numerical.bench import views as V
@@ -311,12 +311,12 @@ def test_undefined_schemes_and_weaker_statements_leave_table2(store: LocalStore)
     bare = put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=0.05))
     agkr = put(store, result(target=FP8_ADA_MMA, gpu=RTX4090, t_total=0.05))
     views = V.build(store)
-    assert codes(views, ajtai) == ["S"] and "which verity.primitives.commitments does not define yet" in next(
+    assert codes(views, ajtai) == ["S"] and "which verity.ml.commitments does not define yet" in next(
         r for r in views.rejected if r["artifact"] == ajtai)["codes"][0][1]
     assert codes(views, bare)[0] == "R" and codes(views, agkr)[0] == "R"
     ln = line(views)
     assert ln["cells"]["B-Ligero"] is None and ln["empty"]["B-Ligero"]["state"] == "weaker"
-    assert "a scheme verity.primitives.commitments does not define (B-Ligero + Ajtai n=64)" in ln["empty"]["B-Ligero"]["text"]
+    assert "a scheme verity.ml.commitments does not define (B-Ligero + Ajtai n=64)" in ln["empty"]["B-Ligero"]["text"]
     assert ln["empty"]["A-GKR"]["text"] == "results only for a weaker statement (A-GKR CPU (Rust))"
     # the rejected list previews what such a result costs end to end
     pre = next(r for r in views.rejected if r["artifact"] == ajtai)["end_to_end_preview"]
@@ -681,9 +681,9 @@ def test_the_legacy_rules_ignore_interaction_so_parity_holds(store: LocalStore) 
 
 
 def test_flock_is_its_own_family_and_column(store: LocalStore) -> None:
-    assert V.candidate_for("flock union (backends/flock)") is V.FLOCK and V.candidate_for("verity-gkr gpu ... flock") .id == "A-GKR"
+    assert V.candidate_for("flock union (verity/ml/flock)") is V.FLOCK and V.candidate_for("verity-gkr gpu ... flock") .id == "A-GKR"
     doc = hashed("blake3", t_total=0.4)
-    doc["workload_fingerprint"]["software"]["backend"]["name"] = "flock union, flock-128-r2 (backends/flock)"
+    doc["workload_fingerprint"]["software"]["backend"]["name"] = "flock union, flock-128-r2 (verity/ml/flock)"
     doc["workload_fingerprint"]["proof_class"] = "NON_ZK_PROOF"
     assert V.configuration_of(doc) is V.FLOCK_CONFIG
     views = V.build(store)
@@ -695,7 +695,7 @@ def test_flock_is_its_own_family_and_column(store: LocalStore) -> None:
 
 def test_route_a_stays_in_the_a_gkr_column_with_a_note() -> None:
     route_a = ("verity-gkr gpu (archive/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton) + Flock "
-               "flock-128-r2 (backends/flock/live flock-link, CPU) + the sigma link (route (a))")
+               "flock-128-r2 (verity/ml/flock/live flock-link, CPU) + the sigma link (route (a))")
     assert V.candidate_for(route_a).id == "A-GKR"
     md = V.render_markdown(V.Views(rules=V.SPEC))
     assert f"| **A-GKR** |  | " in md and V.FAMILY_NOTES["A-GKR"] in md and V.FAMILY_NOTES["Flock"] in md
@@ -716,7 +716,7 @@ def test_a_pure_flock_record_fills_the_flock_column_without_renderer_changes(sto
     """The record contract agreed with lane flock-backend: backend name starting ``flock``, a complete class, the line's GPU SKU,
     whole-proof bound, protocol + plateau sweep, commitment timed, the interaction record, preserved dumps, a non-producer's
     verification label.  It lands in the Flock column on the keyed-BLAKE3 row line, provisional until red-team-flock grants it."""
-    art = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (backends/flock)",
+    art = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (verity/ml/flock)",
                     proof_class="NON_ZK_PROOF", security={"target": -128, "achieved_log2": -195.5})
     views = V.build(store)
     cell = line(views)["cells"]["Flock"]
@@ -777,7 +777,7 @@ def test_flocks_declared_class_is_non_zk_proof() -> None:
 
 
 ROUTE_A_NAME = ("verity-gkr gpu (archive/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton) + Flock "
-                "flock-128-r2 (backends/flock/live flock-link, CPU) + the sigma link (route (a))")
+                "flock-128-r2 (verity/ml/flock/live flock-link, CPU) + the sigma link (route (a))")
 PLAIN_GKR_GPU = "verity-gkr gpu (archive/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton)"
 ROUTE_A_LIVE = {"rounds.sequential_depth": 4076, "net.bytes_out": 2_058_029.0, "net.bytes_in": 165_825.0, "net.rtt_ms": 0.356,
                 "rtt_method": "median of 20 TCP connects to the verifier pod", "net.wait_seconds": 4076 * 0.000356 + (2_058_029 + 165_825) * 8 / 100e9}
@@ -937,7 +937,7 @@ def test_cli_entities(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> 
 
 
 def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on_and_their_declared_roles() -> None:
-    from verity import claims
+    from verity.core import claims
 
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     cfgs = {c["variant"]: c for c in V.configuration_records(V.Views(rules=V.SPEC))}
@@ -1083,7 +1083,7 @@ def test_entities_schemes_carry_the_hash_assumptions_their_configurations_declar
     assert "statement commitment (frame-v3 trees)" in b3["assumption_details"][0]["roles"]
     assert {"B-Ligero + BLAKE3 in circuit", V.ROUTE_A, V.FLOCK_CONFIG.id} <= set(b3["implementations"])
     assert all(r["scheme"] in sch for r in ent["results"])
-    from verity import claims
+    from verity.core import claims
     assert all(claims.get(i).kind == "assumption" for s in sch.values() for i in s["assumptions"])
 
 
@@ -1344,7 +1344,7 @@ def test_the_entities_render_keys_real_k_results_by_their_statement(store: Local
 # --- non-GEMM statements: another template is another statement, with native N from its memory-bandwidth work model -------------
 
 NONGEMM = ("rope-head/d64/neox-bf16", "silu-mul/i8192/bf16", "rmsnorm-fused-cuda/n2048-eps1e-05/bf16", "rmsnorm-triton/n2048-eps1e-05/bf16")
-FLOCK_NAME = "flock union, flock-128-r2 (backends/flock)"
+FLOCK_NAME = "flock union, flock-128-r2 (verity/ml/flock)"
 
 
 def nongemm(store: LocalStore, sub: str, *, t_total: float = 0.4, commit: float = 0.1, verified: bool = True, redteam: bool = True,
@@ -1624,7 +1624,7 @@ def test_a_typed_circuit_cell_is_never_a_table2_cell(store: LocalStore, monkeypa
     """Different statement ids are never merged: a typed cell on a flat cell's line is no Table 2 cell (nor admissible, so no
     headline or result), listed as rejected with the reason, until Table 2 gives the typed statement lines of its own; flipping
     C2 alone does not admit it."""
-    flat = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (backends/flock)",
+    flat = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (verity/ml/flock)",
                      proof_class="NON_ZK_PROOF", security={"target": -128, "achieved_log2": -195.5})
     doc = hashed("blake3", t_total=0.1)
     fp = doc["workload_fingerprint"]
@@ -1645,7 +1645,7 @@ def test_a_hidden_output_circuit_result_never_shares_a_cell_with_a_public_output
     """#757 moved `verity/flock-circuit` and `/types` to hidden outputs (at k64 about 28% slower), and the names alone no longer
     tell the two apart: the identity's `outputs` does. A hidden-output result has a configuration of its own, which claims no
     privacy (M0's transcript is not hiding), and is no Table 2 cell until Table 2 gives it lines of its own."""
-    flat = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (backends/flock)",
+    flat = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (verity/ml/flock)",
                      proof_class="NON_ZK_PROOF", security={"target": -128, "achieved_log2": -195.5})
     doc = hashed("blake3", t_total=0.1)
     fp = doc["workload_fingerprint"]

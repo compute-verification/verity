@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from verity.primitives.circuits.refs import Coll
+from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.torch_frontend import _permute
 from verity_vllm.program.frontend.rules.common import dtype_is, shape

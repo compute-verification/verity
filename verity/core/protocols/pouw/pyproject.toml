@@ -1,0 +1,13 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.verity.tests]
+# Test-only: PoUW's Lean FP8 vector generator (lean/scripts/fp8atom_vectors.py, which test_lean_package.py runs)
+# reads the HOPPER wgmma model replays and the RTX 4090 captures. The schemes import the catalog, whose Definitions register
+# their kernels (verity.ml.kernels) lazily. test_pouw_pearl_c4 checks Pearl-C4's device-run replay, a benchmark's.
+inputs = ["verity", "Security", "verity/core/protocols/pouw/PROTOCOL.md", "verity/ml/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json", "verity/ml/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k32.json",
+          "verity/ml/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json", "verity/ml/circuits", "verity/ml/kernels",
+          "benchmarks/pouw/pearl_c4"]
+parallel = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

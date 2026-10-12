@@ -23,7 +23,6 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity.primitives.circuits.partition_object import program_sha512
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.boolean import derived
@@ -32,7 +31,7 @@ from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_li
 
 
 def _spec_histogram(program) -> dict[str, int]:
-    from verity.primitives.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import _spec_id
     h: dict[str, int] = {}
     for n in program.fn.body.nodes:
         if n.form in ("call", "primitive"):
@@ -46,8 +45,8 @@ def _spec_histogram(program) -> dict[str, int]:
 
 def _instance_rows(program):
     """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py), one at a time."""
-    from verity.primitives.circuits.codec import descriptor_id
-    from verity.primitives.circuits.refs import runs
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.refs import runs
     for k, n in enumerate(program.fn.body.nodes):
         yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [runs(a.refs) for a in n.args]}  # json writes a run tuple as the list it was
 
@@ -101,11 +100,12 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_bindings/views.py",
                          "verity_vllm/program/frontend/rules/vocab.py", "verity_vllm/program/frontend/rules/triton_iface.py",
                          "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
-                         "verity_vllm/program/registry/targets.py",
+                         "verity_vllm/program/frontend/targets.py",
                          # [R13 tp] the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
-                         # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor)
-                         "verity_vllm/program/frontend/rules/vllm_sampling.py",
+                         # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
+                         "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
+                         "verity_vllm/program/frontend/rules/vllm_moe_fp8.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
                          "verity_vllm/program/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
@@ -196,7 +196,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     assumption about the schedule.  Its Program takes S as a per-event CONSTANT (`sampling["splits"]` = that int; `Const32[S]` the
     select's 6th operand, computed here from the target's SM count, never hard-coded) and has no `splits` input; the circuit then
     anchors S itself.  A workload of several requests keeps the derived input above."""
-    from verity_vllm.program.registry.topp_split import SPLIT_MAX_BATCH, splits_for, splits_for_v1
+    from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for, splits_for_v1
     kind = sampling.get("kind")
     if kind != "stochastic":
         return None
@@ -313,12 +313,12 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
     """The facts READ BACK from the environment/model/export that the Program's Definition selection rests on — the conditions under
     which the artifact may be reused (`target_profile.check_reuse`). Every value is observed, none is a literal."""
     from verity_vllm.program.frontend.rules.vllm_bindings import GEMM_PINS, RMS_PINS, tuned_gemm_table_sha256
-    from verity_vllm.program.registry.gemm_targets import try_gemm_target_for
-    # [R13 ampere] the registered GEMM specialization the construction pinned (verity_vllm.program.registry.gemm_targets, selected by the target's
+    from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
+    # [R13 ampere] the registered GEMM specialization the construction pinned (verity_vllm.program.frontend.gemm_targets, selected by the target's
     # capability + the arch family vLLM applied): its key and k16 step are conditions of reuse; None (with the refusal) when unregistered.
     gt, gt_refusal = try_gemm_target_for(profile.compute_capability, applied.get("tuned_gemm_arch_family"))
-    from verity_vllm.program.registry import targets as TG
-    try:   # [R13 hopper] the target-keyed Definition selection the Program rests on (registry.targets): step, GEMM/attention kinds, FA version
+    from verity_vllm.program.frontend import targets as TG
+    try:   # [R13 hopper] the target-keyed Definition selection the Program rests on (frontend.targets): step, GEMM/attention kinds, FA version
         tb = TG.describe(profile)
         target_bindings = {k: tb[k] for k in ("tensor_core_family", "dot", "gemm_kind", "attention_kind", "flash_attn_version_effective", "tuned_gemm_arch_family")}
     except TG.UnregisteredTarget as e:
@@ -383,7 +383,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                  # this rank's weight shards as its committed weight inputs, the other rank's collective partials as peer inputs)
                  "tp": {"world": int(tp), "rank": int(rank)},
                  # [R15 hopper HOP-03, M-0225] the LAUNCH CONTEXT (structural input): per request step the varlen launch's max_seqlen_q over every
-                 # co-scheduled sequence (registry.targets.parse_launch_context).  FA3's tile rule reads it; None = own rows (B1 semantics, digests unchanged)
+                 # co-scheduled sequence (frontend.targets.parse_launch_context).  FA3's tile rule reads it; None = own rows (B1 semantics, digests unchanged)
                  "launch_context": launch}
     try:
         res["code_rev"] = json.load(open("EXPORT.json"))
@@ -487,9 +487,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # READ BACK what vLLM saw during instantiation (never a literal); declared != applied -> refuse
             applied = read_back_applied()
             applied["attention_backend"] = res["target"]["consulted"].get("attention_backend_knob")
-            # [R15 fp8] the block-scaled FP8 GEMM kernel vLLM selected for the model's FP8 linears (declared by `fp8_block_gemm`)
-            from verity_vllm.program.frontend.target_profile import fp8_block_gemm_kernel_of
-            applied["fp8_block_gemm_kernel"] = fp8_block_gemm_kernel_of(model)
+            # [R15 fp8] the kernels vLLM selected: the FP8 linears' (declared by `fp8_block_gemm`), the fused-MoE experts' (by `moe_backend`)
+            from verity_vllm.program.frontend.target_profile import applied_kernels
+            applied.update(applied_kernels(target, model))
             # derived (observed) selection fields: the instantiated layers' attention impl; the fused-norm dispatch (after export)
             res["attention_impls_observed"] = vm.attention_impls(model)
             # [R13 hopper] READ BACK the FA version the selector gave the layers (one value over all layers, else None = mismatch): the
@@ -527,8 +527,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             applied_export["attention_backend"] = applied["attention_backend"]
             if "flash_attn_version" in applied:                  # absent when no layer is a FlashAttention impl (judged by the attention rule)
                 applied_export["flash_attn_version"] = applied["flash_attn_version"]
-            # [R15 fp8] the layers' FP8 kernel objects, read back AGAIN after the export (a kernel swapped around the export would show here)
-            applied_export["fp8_block_gemm_kernel"] = fp8_block_gemm_kernel_of(model)
+            # [R15 fp8] the layers' kernel objects, read back AGAIN after the export (a kernel swapped around the export would show here)
+            applied_export.update(applied_kernels(target, model))
             res["target"]["applied_after_export"] = applied_export
             bad = profile_mismatches(target, applied_export)
             if bad:
@@ -572,13 +572,13 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
 def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling: dict, launch: dict | None, tp: int, rank: int,
                    model_root: str | None) -> None:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
-    from verity.primitives.circuits.codec import canonical_json, encode_program
+    from verity.ml.circuits.codec import canonical_json, encode_program
     from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
     from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
-    digest = hashlib.sha256(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
+    digest = hashlib.sha512(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
     # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
     corr_digest = correspondence_digest(desc)
     assert corr_digest == rep.correspondence_digest, (corr_digest, rep.correspondence_digest)
@@ -586,7 +586,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
         f.write(raw)
     corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
-    res["program"] = {"function": program.fn.id, "digest": digest, "sha512": program_sha512(desc), "gates": program.gates, "input_gates": program.input_gates,
+    res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
                       "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
                       "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                       "correspondence_digest": corr_digest,
@@ -699,7 +699,7 @@ def _write_manifest(out: str, res: dict) -> None:
                           "site_packages_by_package": tr.get("site_packages_by_package"),
                           "non_site_packages_paths": [p for p in tr.get("non_site_packages_paths", []) if not p.startswith("/usr/lib/python")]},
          "program": res.get("program"), "spec_histogram": res.get("spec_histogram"), "ok": res.get("ok"), "unsupported": res.get("unsupported"),
-         "files": ["descriptor.json.gz (verity.primitives.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand runs)", "derive-report.json", "inputs.json", "result.json",
+         "files": ["descriptor.json.gz (verity.ml.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand runs)", "derive-report.json", "inputs.json", "result.json",
                    "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
     if res.get("relabeled_from"):
         m["relabeled_from"] = res["relabeled_from"]
@@ -745,7 +745,7 @@ def main(a: Options) -> int:
     _gc_tune()
     try:
         from verity_vllm.program.frontend.target_profile import parse_target_arg
-        from verity_vllm.program.registry.targets import parse_launch_context
+        from verity_vllm.program.frontend.targets import parse_launch_context
         from verity_vllm.pipeline.tp.emit_ranks import parse_ranks
         emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,

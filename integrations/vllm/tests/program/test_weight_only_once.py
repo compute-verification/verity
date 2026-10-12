@@ -13,8 +13,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity.primitives.circuits.codec import _spec_id, program_digest
-from verity.primitives.circuits.refs import runs
+from verity.ml.circuits.codec import _spec_id, program_digest
+from verity.ml.circuits.refs import runs
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_export_facts, observe_target_profile
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from tests.program.test_norm_chain import BF, GemmaNorm, _bi_facts, _derive, _emitted, _evaluate

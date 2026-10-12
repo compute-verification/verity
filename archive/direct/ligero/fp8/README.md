@@ -6,7 +6,7 @@ kept fraction bits -- the low 10 bits of every honest word are zero because the 
 low bits is rejected by the verifier's decode).  Per step: 32 exact E4M3 products (4x4-bit significands, exponents
 `max(t,1) - 7` each, subnormals unnormalised), two groups of 16 on a 14-bit truncating adder with exponent floor -139,
 the incoming accumulator joining the first group and the group result the second; normalisation / subnormal shift /
-overflow exactly as `verity_catalog.silicon.silicon.group_sum`.  Domain: finite operands (`0x7f`/`0xff` NaN rejected) and finite
+overflow exactly as `verity.ml.circuits.silicon.silicon.group_sum`.  Domain: finite operands (`0x7f`/`0xff` NaN rejected) and finite
 accumulators; a group leaving the FP32 range gives the sticky infinity as `tc_dot` does.
 
 **Gadget layout** (`relation.py`, on `compile.LigeroCtx`; the BF16 gadgets of `verity_numerical.checker.gadgets` reused

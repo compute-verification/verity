@@ -18,7 +18,7 @@ cd "$(dirname "$0")"
 MODE=${1:-run}
 OUT=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$OUT"
 if ! sha256sum -c MANIFEST.sha256 > "$OUT/inputs.check" 2>&1; then echo "REFUSED: the tree does not match MANIFEST.sha256"; exit 5; fi
-chmod +x pouw_hash_bench   # a shipped repo (pearl_c/ship.sh) checks every file out 100644
+chmod +x pouw_hash_bench   # a shipped repo (archive/pouw-blake3/pearl_c/ship.sh) checks every file out 100644
 WANT=${POUW_EXPECT_UUID:-}
 DEFAULT_LABEL=unlabelled
 if [ "$WANT" = pod ]; then

@@ -1,6 +1,6 @@
-"""The arm interface (v0): what a PoUW prover arm gives the harness, and what the harness gives it. Its contract, and what the
-harness does with each member, is published in the project store (`internal/pouw/rtx-pro/workers/6-harness.md`, "Arm
-interface"); this module is that contract in code, and `check_arm` is what the harness enforces before it runs an arm.
+"""The arm interface (v0): what a PoUW prover arm gives the harness, and what the harness gives it. This module is its
+contract, and what the harness does with each member, in code, and `check_arm` is what the harness enforces before it runs
+an arm.
 
 An arm is any object with the members of `BenchArm` (v0.6; `Arm`, its old name, is a deprecated alias: the vLLM API's
 `Arm` is a bench mode at the serving level, not a prover under test); the harness loads it by ``module:Class`` (``--arm``),
@@ -25,7 +25,7 @@ before anything is timed: no .FTZ and no FP32 MUFU outside ptxas's pinned IEEE s
 approximate div/sqrt build, and only from a pinned toolkit.
 
 The record may also name the arm's reference ``verifier`` (v0.4), which `verify.py` runs after timing, in the same run, on
-the transcripts the timed code emitted (server.md 08:35Z: a measured panel row needs the verifier's acceptance of its own
+the transcripts the timed code emitted (panel rule (b), 08:35Z: a measured panel row needs the verifier's acceptance of its own
 run's transcript). ``ctx["out_dir"]`` is the run's directory, and ``ctx["transcripts_dir"]`` its ``transcripts/``, where an
 arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention). The declaration (`check_verifier`):
 
@@ -37,7 +37,7 @@ arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention
   ``per: "run"`` once for the run (identical commands of several arms run once).
 - ``commit`` (optional): the verifier's git commit, when it isn't the run's source commit.
 - ``control`` (optional, v0.5): the negative control's transcript, like ``transcript`` (``{arm}`` and ``{shape}``): what the
-  arm's no-write control dumped into the same poisoned buffers. The verifier must reject it (panel rule, server.md 11:50Z).
+  arm's no-write control dumped into the same poisoned buffers. The verifier must reject it (panel rule, 11:50Z).
 
 An arm with ``dump(dev, call, shape, dir)`` (v0.5) lets the harness make its transcripts (`bench.poison_dump`, after the
 timed items): the harness fills every buffer of ``call.transcript_buffers`` (default ``call.outputs``; name what a setup
@@ -55,13 +55,13 @@ control is rejected only by a line that starts with ``REJECT`` and names its sha
 The record may also name the kernel it runs and what the attempt is (v0.5), which `verify.py` writes into the attempt's
 evidence-store record (`ledger.py`, kind ``kernel-attempt/v1``):
 
-- ``variant``: the kernel as `verity.protocols.accounting.work.pouw.serving.KernelVariant` names it, from `ledger.variant_record` (family, device,
+- ``variant``: the kernel as `verity.core.protocols.pouw.serving.KernelVariant` names it, from `ledger.variant_record` (family, device,
   schemes, the digest of the sources it was built from, the binary's digest, and ``prices``: the priced path it runs,
   such as ``cast-8.72`` or ``lut256``, `price_twins`' names).
 - ``lineage``: ``parent`` (the art: id of the attempt it changes, or that attempt's variant id), ``approach``
   (``<campaign>/<slug>``), ``mechanism`` (namespaced tags such as ``pipeline:tma-ws``), ``hypothesis`` (one line), ``panel``
   (``{"line", "version", "attempt"?, "change"?}``), ``scheme``, ``schedule``, and ``phase_groups`` (each chain phase,
-  before, gemm and after, as `verity.protocols.accounting.work.pouw.serving.GROUPS`).
+  before, gemm and after, as `verity.core.protocols.pouw.serving.GROUPS`).
 
 γ is never declared here: the ledger looks it up from the Lean-pinned price twins of the panel version's statement on the
 variant's priced path, at both FP32 prices. A lineage with ``gamma`` gets no record.
@@ -76,14 +76,14 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
 VERSION = "v0.6"
-#: a call's step groups, in the order its main lane runs them; must equal verity.protocols.accounting.work.pouw.serving.GROUPS
+#: a call's step groups, in the order its main lane runs them; must equal verity.core.protocols.pouw.serving.GROUPS
 GROUPS = ("a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
-#: the groups nothing later in the call reads, so they may leave the main lane; must equal verity.protocols.accounting.work.pouw.serving.MOVABLE
+#: the groups nothing later in the call reads, so they may leave the main lane; must equal verity.core.protocols.pouw.serving.MOVABLE
 MOVABLE = frozenset({"tile_hash", "screen"})
 #: the chain's parts (`chain.py`), each the groups it runs, in order
 PARTS = {"before": ("a_tree", "forming"), "gemm": ("gemm", "cleanup"), "after": ("tile_hash", "screen")}
 #: the groups the chain's side stream takes: the served deferred schedule's side lane, so must equal
-#: verity.protocols.accounting.work.pouw.serving.DEFERRED.side; moving more of `MOVABLE` would time a schedule nobody serves
+#: verity.core.protocols.pouw.serving.DEFERRED.side; moving more of `MOVABLE` would time a schedule nobody serves
 DEFERRED = frozenset({"tile_hash"})
 VERIFIER_FIELDS = {
     "run": ("python", "run_dir", "run_id", "commit", "arm"),

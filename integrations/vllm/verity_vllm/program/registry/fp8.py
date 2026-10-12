@@ -30,7 +30,7 @@ words and cross-checked against a CPU re-quantisation of the checkpoint; fp8.md 
 and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
 
 Registered functions (all `Name_v1`):
-  primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity_catalog.definitions.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity_catalog.definitions.prims`)
+  primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity.ml.circuits.ops.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity.ml.circuits.ops.prims`)
   composites  Fp8RowAbsMax{K}, Fp8RowScale, Fp8ActQuant{K}, DotE4m3{K}, ScaledMmFp8Coordinate{K,BIAS},
               ScaledMmFp8{K,N,BIAS} (the cutlass GEMM over the quantised row), QuantLinearFp8{K,N,BIAS} (= Fp8ActQuant
               + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS};
@@ -44,17 +44,15 @@ from __future__ import annotations
 
 import types
 
-import numpy as np
-
-from verity.primitives.circuits.defs import CompositeDefinition, bind, composite
-from verity.primitives.circuits.refs import Coll as _Coll, concat, tuple_of
-from verity.primitives.circuits.types import Array, Record, Tuple, Value
-from verity_catalog.definitions.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
-from verity_catalog.definitions.scalar import F32Fabs, F32Fmaxf, F32Fminf
+from verity.ml.circuits.defs import CompositeDefinition, bind, composite
+from verity.ml.circuits.refs import Coll as _Coll, concat, tuple_of
+from verity.ml.circuits.types import Array, Record, Tuple, Value
+from verity.ml.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
+from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import hopper as H
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.prims import BF16, F32, I32, bits_of, f32_of
+from verity_vllm.program.registry.prims import BF16, F32, I32, bits_of
 
 # ---------------------------------------------------------------------------------------------------------
 # types and constants
@@ -69,7 +67,7 @@ E4M3_NAN = 0x7F
 C448 = b1.f32c(448.0)        # quant_type_max_v<fp8_e4m3fn> as float
 C_NEG448 = b1.f32c(-448.0)
 # min_scaling_factor<fp8_e4m3fn>::val() = 1.0f / (448.0f * 512.0f), evaluated in f32 (nvcc constant folding, RN)
-MIN_SCALE_BITS = bits_of(np.float32(1.0) / (np.float32(448.0) * np.float32(512.0)))
+MIN_SCALE_BITS = bits_of(1.0 / (448.0 * 512.0))
 C_MIN_SCALE = b1.const(32, MIN_SCALE_BITS)
 
 QUANT_THREADS = 256       # dynamic_per_token_scaled_fp8_quant: block(min(hidden, 256)); every B1 K is >= 256
@@ -273,7 +271,7 @@ def QuantLinearFp8(B, S, x, w, sw, *bias):
 # ---------------------------------------------------------------------------------------------------------
 
 FP8_BLOCK = 128           # the checkpoint's weight_block_size (both axes) and the activation group size (GroupShape(1, 128))
-C_EPS_QUANT = b1.const(32, bits_of(np.float32(1e-10)))   # `eps` of per_token_group_quant_fp8 (the fold's start value)
+C_EPS_QUANT = b1.const(32, bits_of(1e-10))   # `eps` of per_token_group_quant_fp8 (the fold's start value)
 #: the group sizes `Fp8GroupQuant_v1{K,G}` is registered at: 128 (the dense linears) and 64 (fused_moe's inputs at block [64, 64], vLLM's
 #: refinement of 128x128 checkpoint blocks at TP8).  `_C.per_token_group_fp8_quant` runs one kernel at every group size,
 #: `per_token_group_quant_8bit_kernel` (csrc/libtorch_stable/quantization/w8a8/fp8/per_token_group_quant.cu:42-160 at d9105ea80, launched
@@ -287,7 +285,10 @@ _BLOCK_CONF = ("exact-model-tested; H100 80GB 2026-09-19 (vLLM d9105ea80, CUTLAS
                "vs descending k: 160/160 ascending, s = FMUL(sfa, sfb) vs the other associations: 240/240) — out/gen/sweep/evidence/fp8/")
 _QUANT_CONF = ("exact-model-tested; H100 80GB 2026-09-19: _C.per_token_group_fp8_quant vs the model on 290,304 e4m3 words and 2,268 group scales "
                "(seven shapes, rows of varying magnitude with outliers), 0 mismatches — out/gen/sweep/evidence/fp8/check_block_gemm.json; "
-               "all at G = 128: G = 64 (QUANT_GROUPS) is the same kernel over narrower groups, not yet compared")
+               "all at G = 128; G = 64 (QUANT_GROUPS) and G = 128 on cc 12.0: property blackwell_fp8_capture on an RTX PRO 6000, run "
+               "r20261003-220018-3f6a, record 0d346c79c642a0a1 (#1000 @ 2fd4e257f), cases "
+               "quant/K4096/G64 and quant/K192/G64 (the fused-MoE experts' inputs, 300 rows each) and quant/K4096/G128 and quant/K1024/G128, "
+               "with every quant call its dense and MoE GEMM cases received, 7,941 rows, 0 mismatches")
 
 
 @composite("Fp8GroupScale", 1, ["G"], lambda S: ((("x", Array(S.G, BF16)),), F32), conformance=_QUANT_CONF)
@@ -432,10 +433,6 @@ def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
                                 xq, sx, w, ws)
 
 
-#: each restated GEMM by the Definition it restates (bound instead under `fp8_scale_construction = shared-per-block`)
-SHARED_SCALE = {"ScaledMmFp8Block_v1": ScaledMmFp8BlockSharedScale}
-
-
 # ---------------------------------------------------------------------------------------------------------
 # the same five Definitions, version 3, over the GEMM target's e4m3 k32 step `DOT` (a declared static, as `DotE4m3_v2` and
 # `ScaledMmFp8NoSwap_v1` lift the per-tensor chain).  `targets.scaled_mm_fp8_block_spec` binds them where the GEMM target's
@@ -443,9 +440,13 @@ SHARED_SCALE = {"ScaledMmFp8Block_v1": ScaledMmFp8BlockSharedScale}
 # (tests/program/test_fp8_block_dot.py), and hopper keeps binding the v1 forms, so its Programs keep their digests.
 # ---------------------------------------------------------------------------------------------------------
 
-_BLOCK_DOT_CONF = ("model-untested; at DOT = HopperE4m3QgmmaDot32_v1 the function of the version 1 form (tests/program/"
-                   "test_fp8_block_dot.py, every word equal), which is exact-model-tested on Hopper; at DOT = BlackwellE4m3QmmaDot32_v1 "
-                   "(cc 12.0) not yet compared with cc 12.0's blockwise _C.cutlass_scaled_mm (the blackwell_fp8_capture property)")
+_BLOCK_DOT_CONF = ("exact-model-tested; at DOT = HopperE4m3QgmmaDot32_v1 the function of the version 1 form (tests/program/"
+                   "test_fp8_block_dot.py, every word equal), which is exact-model-tested on Hopper; at DOT = BlackwellE4m3QmmaDot32_v1, "
+                   "G = 128 (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, run r20261003-220018-3f6a, record "
+                   "0d346c79c642a0a1 (#1000 @ 2fd4e257f), cases cutlass/qkv_proj (K 4096, N 1280) "
+                   "and cutlass/o_proj (K 1024, N 4096) x M in {1, 2, 64, 65, 256, 257, 300}: CutlassFp8BlockScaledMMKernel's blockwise "
+                   "_C.cutlass_scaled_mm in all three cc 12.0 dispatch variants, 5,080,320 words, 0 mismatches; Hopper's step, both Triton "
+                   "scale orders and an unfused mul + add each refuted (30,354, 13,159, 13,278 and 13,222 words)")
 
 
 @composite("ScaledMmFp8BlockCoordinate", 3, ["K", "G", "DOT"], _coordinate_sig, conformance=_BLOCK_DOT_CONF)
@@ -484,38 +485,6 @@ def ScaledMmFp8BlockSharedScaleV3(B, S, xq, sx, w, ws):
     return _shared_scale_blocks(B, K, N, G, bind(ScaledMmFp8BlockSharedScaleTileV3, K=K, G=G, DOT=DOT),
                                 bind(ScaledMmFp8BlockCoordinateGivenScaleV3, K=K, G=G, DOT=DOT), xq, sx, w, ws)
 
-
-#: the blockwise GEMM's Definition by `fp8_scale_construction`: the v1 forms (Hopper's step as written) and the v3 forms over a step
-BLOCK_GEMMS = {None: {"per-coordinate": ScaledMmFp8Block, "shared-per-block": ScaledMmFp8BlockSharedScale},
-               "DOT": {"per-coordinate": ScaledMmFp8BlockV3, "shared-per-block": ScaledMmFp8BlockSharedScaleV3}}
-
-
-def block_gemm(K: int, N: int, G: int, scale: str, dot=None):
-    """The blockwise FP8 GEMM bound at (K, N, G) under the scale construction `scale`: the v1 form when `dot` is None, else the v3 form
-    over the e4m3 k32 step `dot`."""
-    if dot is None:
-        return bind(BLOCK_GEMMS[None][scale], K=int(K), N=int(N), G=int(G))
-    return bind(BLOCK_GEMMS["DOT"][scale], K=int(K), N=int(N), G=int(G), DOT=dot)
-
-
-def scale_products(x_s: np.ndarray, w_s: np.ndarray) -> np.ndarray:
-    """The f32 words a host committer commits as `ScaledMmFp8BlockSharedScale_v1`'s scale products: `F32Mul_v1(x_s[kb], w_s[nb][kb])`
-    for every weight block nb and k block kb, computed by the IR (`evaluate_batch` on `F32Mul_v1`), NaN payloads included.  `x_s` is one
-    token row's K/G activation scales ([K/G], or [R, K/G] for R rows) and `w_s` the checkpoint's [N/G, K/G] block scales, both as u32
-    words; returns [N/G, K/G] (or [R, N/G, K/G]) u32 words.  numpy's array multiply is `F32Mul_v1` on every product but a NaN, whose
-    payload it takes from the other operand: those lanes go through the IR's evaluator."""
-    from verity.primitives.circuits.evaluation import evaluate_batch
-    xs = np.asarray(x_s, dtype=np.uint32)
-    ws = np.asarray(w_s, dtype=np.uint32)
-    if ws.ndim != 2 or xs.ndim not in (1, 2) or xs.shape[-1] != ws.shape[1]:
-        raise ValueError(f"scale_products: x_s {xs.shape} and w_s {ws.shape} are not [.., K/G] and [N/G, K/G]")
-    rows = xs.reshape(-1, 1, ws.shape[1])
-    a, b = (np.ascontiguousarray(v).reshape(-1) for v in np.broadcast_arrays(rows, ws[None, :, :]))
-    out = (a.view(np.float32) * b.view(np.float32)).view(np.uint32)      # RN-even: F32Mul_v1 on every product that is not a NaN
-    nan = ((out & 0x7F800000) == 0x7F800000) & ((out & 0x7FFFFF) != 0)
-    if nan.any():                                                          # a NaN's payload is the IR's, never numpy's operand choice
-        out[nan] = evaluate_batch(P.F32Mul, a[nan], b[nan]).astype(np.uint32)
-    return out.reshape(xs.shape[:-1] + ws.shape)
 
 FP8_BLOCK_COMPOSITES = [Fp8GroupScale, Fp8GroupQuant, ScaledMmFp8BlockCoordinate, ScaledMmFp8Block]
 
@@ -624,97 +593,9 @@ LayerPostFp8.ported_from = b1.LayerPost  # type: ignore[attr-defined]
 FP8_COMPOSITES = [Fp8RowAbsMax, Fp8RowScale, Fp8ActQuant, DotE4m3, ScaledMmFp8Coordinate, ScaledMmFp8, QuantLinearFp8,
                   LayerPreFp8, LayerPostFp8, ServeFp8]
 
-#: TA1 call name -> this port's call name (the capture mapping's child selectors are written against TA1's names)
-CALL_NAMES: dict[str, str] = {**H.CALL_NAMES, "LayerPre": "LayerPreFp8", "LayerPost": "LayerPostFp8", "Serve": "ServeFp8"}
-
 
 def set_conformance(status: dict[str, str]) -> None:
     """Set conformance statuses from evidence (the port's expectations / conformance run / the tc-fp8 pin)."""
     by_name = {d.name: d for d in FP8_COMPOSITES}  # the FP8 primitives' conformance is core's
     for name, st in status.items():
         by_name[name].conformance = st
-
-
-# ---------------------------------------------------------------------------------------------------------
-# CPU reference of the two kernels on numpy arrays (for the binding cross-check and the pod experiments)
-# ---------------------------------------------------------------------------------------------------------
-
-
-def np_f32_to_e4m3_sat(x: np.ndarray) -> np.ndarray:
-    """Vectorised `F32ToE4m3Sat` over an f32 array (the same function, for whole tensors)."""
-    x = np.asarray(x, dtype=np.float32)
-    u = x.view(np.uint32)
-    sign = ((u >> 31) << 7).astype(np.uint8)
-    a = np.abs(x).astype(np.float64)
-    out = np.zeros(x.shape, dtype=np.uint8)
-    nan = np.isnan(x)
-    sat = (~nan) & (a >= 464.0)
-    small = (~nan) & (a < 2.0 ** -6)
-    normal = (~nan) & (~sat) & (~small)
-    # normal binades: e = floor(log2 a); step 2^(e-3); RNE
-    e = np.zeros(x.shape, dtype=np.int64)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        e[normal] = np.floor(np.log2(a[normal])).astype(np.int64)
-    step = np.exp2((e - 3).astype(np.float64))
-    q = np.zeros(x.shape, dtype=np.float64)
-    q[normal] = a[normal] / step[normal]
-    q[small] = a[small] / 2.0 ** -9
-    n = np.rint(q)  # numpy rint: round half to even, exact on these magnitudes
-    # a value that rounds up to the next binade (n == 16) or to 480 (n == 15 at e == 8)
-    val = np.where(normal, n * step, np.where(small, n * 2.0 ** -9, 0.0))
-    val = np.where(nan, np.nan, val)
-    sat2 = (~nan) & (val >= 464.0)
-    zero = (~nan) & (val == 0.0)
-    sub = (~nan) & (~zero) & (val < 2.0 ** -6)
-    norm2 = (~nan) & (~zero) & (~sub) & (~sat2) & (~sat)
-    e2 = np.zeros(x.shape, dtype=np.int64)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        e2[norm2] = np.floor(np.log2(val[norm2])).astype(np.int64)
-    m3 = np.zeros(x.shape, dtype=np.int64)
-    m3[norm2] = np.rint((val[norm2] / np.exp2(e2[norm2].astype(np.float64)) - 1.0) * 8).astype(np.int64)
-    out[norm2] = (((e2[norm2] + 7) << 3) | m3[norm2]).astype(np.uint8)
-    out[sub] = np.rint(val[sub] / 2.0 ** -9).astype(np.uint8)
-    out[sat | sat2] = 0x7E
-    out = (out | np.where(nan, 0, sign)).astype(np.uint8)
-    out[nan] = E4M3_NAN
-    return out
-
-
-def np_e4m3_to_f32(b: np.ndarray) -> np.ndarray:
-    b = np.asarray(b, dtype=np.uint8)
-    sign = np.where(b & 0x80, -1.0, 1.0)
-    e = ((b >> 3) & 0xF).astype(np.int64)
-    m = (b & 0x7).astype(np.float64)
-    val = np.where(e == 0, m * 2.0 ** -9, np.exp2((e - 7).astype(np.float64)) * (1.0 + m / 8.0))
-    val = np.where((b & 0x7F) == 0x7F, np.nan, val)
-    return (sign * val).astype(np.float32)
-
-
-def np_bf16_to_f32(w: np.ndarray) -> np.ndarray:
-    return (np.asarray(w, dtype=np.uint16).astype(np.uint32) << 16).view(np.float32)
-
-
-def np_dynamic_per_token_quant(x_bf16: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """CPU twin of `_C.dynamic_per_token_scaled_fp8_quant` on bf16 rows [M, K] -> (x_q [M, K] u8, s_x [M] f32)."""
-    xf = np_bf16_to_f32(x_bf16)
-    absmax = np.nanmax(np.abs(xf), axis=1, initial=np.float32(0.0)).astype(np.float32)  # fmaxf drops NaN; starts at 0
-    absmax = np.where(np.isnan(absmax), np.float32(0.0), absmax).astype(np.float32)
-    s = np.maximum((absmax / np.float32(448.0)).astype(np.float32), np.float32(f32_of(MIN_SCALE_BITS))).astype(np.float32)
-    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-        r = (xf / s[:, None]).astype(np.float32)
-    r = np.fmin(r, np.float32(448.0))     # fminf(x, 448): NaN -> 448
-    r = np.fmax(np.float32(-448.0), r)    # fmaxf(-448, x)
-    return np_f32_to_e4m3_sat(r), s
-
-
-def np_online_weight_quant(w_bf16: np.ndarray) -> tuple[np.ndarray, np.float32]:
-    """CPU twin of `Fp8PerTensorOnlineLinearMethod.process_weights_after_loading` on the bf16 tensor [N, K]:
-    amax over the tensor (aminmax + abs + maximum in bf16 — exact), s_w = f32(amax) / 448 (torch f32 RN),
-    W_q = cvt(f32(W) * (1.0f / s_w)) (static_scaled_fp8_quant: reciprocal multiply, then clamp ±448, then cvt)."""
-    wf = np_bf16_to_f32(w_bf16)
-    amax = np.float32(np.max(np.abs(wf)))
-    s_w = np.float32(amax / np.float32(448.0))
-    inv = np.float32(np.float32(1.0) / s_w)
-    r = (wf * inv).astype(np.float32)
-    r = np.fmax(np.float32(-448.0), np.fmin(r, np.float32(448.0)))
-    return np_f32_to_e4m3_sat(r), s_w

@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
+from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.core.protocols.pouw.schemes import pearl_kw as P
 
 #: the liveness screen's relative band, far wider than its FP32 error (2⁻²³)
 BAND = 2.0 ** -10
@@ -46,7 +46,7 @@ SCATTER_BLOCK = 1024
 def scatter_into(x: Any, alpha: Any, aux: Any, rows: int, flags_to: Any, leaves: Any, leaves_to: Any, root: Any, roots_to: Any,
                  offs: Any) -> None:
     """A graph's scatter into the pass, one launch: the first `rows` rows of x screened (`screen_into`'s flags) into
-    `flags_to`, and the `leaves` and A's 32-byte `root` copied to `leaves_to` and `roots_to`, each at the byte offset
+    `flags_to`, and the `leaves` and A's 64-byte `root` copied to `leaves_to` and `roots_to`, each at the byte offset
     `offs[1]`, `offs[0]`, `offs[2]` read on the device.  Its first `rows` programs screen a row each, the next
     ⌈len(leaves) / SCATTER_BLOCK⌉ copy the leaves, the last one the root."""
     import torch
@@ -54,7 +54,7 @@ def scatter_into(x: Any, alpha: Any, aux: Any, rows: int, flags_to: Any, leaves:
     from .pouw_pearl_c_triton import scatter
     k, n, B = x.shape[1], leaves.numel(), SCATTER_BLOCK
     scatter[(rows - (-n // B) + 1,)](x, alpha.view(torch.float32), aux.view(torch.float32), rows, k, len(range(0, k, C.S5_STRIDE)),
-                                     P.SIGMA_MIN, BAND, flags_to, leaves, leaves_to, root, roots_to, offs, n, BLOCK=B)
+                                     P.SIGMA_MIN, BAND, flags_to, leaves, leaves_to, root, roots_to, offs, n, root.numel(), BLOCK=B)
 
 
 def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:

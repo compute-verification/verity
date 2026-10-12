@@ -11,11 +11,11 @@ P = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(P)
 
 # what `research run --on vy-nebius-1 --preflight check -- true` printed on 2 Oct (00:51Z without the bundles' URLs, 00:52Z with)
-REFUSED = """research: preflight tools/check/preflight.py on vy-nebius-1: FAILED in 0.7 s
+REFUSED = """research: preflight tools/verity/check/preflight.py on vy-nebius-1: FAILED in 0.7 s
 research: preflight: uv 0.12.20
-research: run r20261002-005132-46b6 refused on vy-nebius-1 (PreflightFailed): the machine failed the preflight tools/check/preflight.py (exit 1): backends/flock/verifier/lean/level3: its Lean dependencies (32c884ee1ea4) are not warm here and the run carries no URL for their bundle
+research: run r20261002-005132-46b6 refused on vy-nebius-1 (PreflightFailed): the machine failed the preflight tools/verity/check/preflight.py (exit 1): Security/Proofs: its Lean dependencies (32c884ee1ea4) are not warm here and the run carries no URL for their bundle
 """
-LAUNCHED = """research: preflight: store: backends/flock/verifier/lean/level3's Lean bundle 32c884ee1ea4 read with the run's custody key
+LAUNCHED = """research: preflight: store: Security/Proofs's Lean bundle 32c884ee1ea4 read with the run's custody key
 research: vy-nebius-1's lease was not extended: the run has no --timeout, so a pod lease (if any) may end it
 research: run r20261002-005227-a0ab launched on vy-nebius-1 (None) pid=1398558 -> /workspace/research/runs/r20261002-005227-a0ab
 research: workload cwd: --cwd source

@@ -1,17 +1,17 @@
-"""Pure-`verity.primitives.circuits` frontend analyses (no torch): dead gates (§8.6), correspondence across reference
+"""Pure-`verity.ml.circuits` frontend analyses (no torch): dead gates (§8.6), correspondence across reference
 encodings (§8.5), the registry version record (§8.1). Runs locally."""
 
 from __future__ import annotations
 
-from verity.primitives.circuits import Program, bind
-from verity.primitives.circuits.defs import Builder, CompositeDefinition, SpecializedDefinition
-from verity.primitives.circuits.liveness import dead_gates
+from verity.ml.circuits import Program, bind
+from verity.ml.circuits.defs import Builder, CompositeDefinition, SpecializedDefinition
+from verity.ml.circuits.liveness import dead_gates
 from verity_vllm.program.frontend.correspond import compare_bodies, correspond
 from verity_vllm.program.frontend.provenance import registry_version
-from verity.primitives.circuits.refs import Coll, Concat, Strided, array_of
+from verity.ml.circuits.refs import Coll, Concat, Strided, array_of
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry.prims import F32
-from verity.primitives.circuits.types import Array
+from verity.ml.circuits.types import Array
 
 from tests.program.test_running_example import Id16, Relu16, make_program
 

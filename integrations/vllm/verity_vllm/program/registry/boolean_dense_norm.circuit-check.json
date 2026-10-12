@@ -1,0 +1,55 @@
+{
+ "definitions": {
+  "F32AddZero_v1": {
+   "and": 399
+  },
+  "MeanCombineTriton_v1{N=1030}": {
+   "and": 5897
+  },
+  "MeanCombineTriton_v1{N=16}": {
+   "and": 1896
+  },
+  "MeanDivTriton_v1{N=1030}": {
+   "and": 1452
+  },
+  "MeanDivTriton_v1{N=16}": {
+   "and": 699
+  },
+  "MeanThreadTriton_v1{K=1}": {
+   "and": 2793
+  },
+  "MeanThreadTriton_v1{K=4}": {
+   "and": 4032
+  },
+  "MeanThreadTriton_v1{K=8}": {
+   "and": 5684
+  },
+  "MeanThreadsTriton_v1{N=16}": {
+   "and": 16128
+  },
+  "MeanTriton_v2{N=16}": {
+   "and": 25248
+  },
+  "MeanWarpTriton_v1{L=32}": {
+   "and": 25172
+  },
+  "MeanWarpTriton_v1{L=4}": {
+   "and": 7224
+  },
+  "MeanWarpTriton_v1{L=6}": {
+   "and": 9646
+  },
+  "MeanWarpsTriton_v1{N=16}": {
+   "and": 7224
+  },
+  "NarrowF32ToBf16El_v1": {
+   "and": 66
+  },
+  "NarrowF32ToBf16_v2{N=16}": {
+   "and": 1056
+  },
+  "RsqrtF32_v2{N=1,RSQRT=RsqrtApprox_v2}": {
+   "and": 1134
+  }
+ }
+}

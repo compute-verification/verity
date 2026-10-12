@@ -414,7 +414,7 @@ def main(args: Options) -> int:
                     if str(wdoc.get("workload_digest")) == str(pdr_):                 # only a composition the manifest names is of record
                         for q in wdoc.get("requests") or []:
                             spec = str(((q.get("component") or {}).get("specialization")) or "")
-                            digs.update(_re.findall(r'program_digest=\\?"([0-9a-f]{64})', spec))
+                            digs.update(_re.findall(r'program_digest=\\?"([0-9a-f]{128})', spec))
                 except Exception as e:  # noqa: BLE001
                     print(f"[tp2commit] rank {r}: GP-01 workload_program unreadable for the replay's of-record set: {e!r}", flush=True)
             of_record[str(r)] = sorted(digs)
@@ -501,8 +501,8 @@ def main(args: Options) -> int:
     tokens_ref = None
     all_pass = True
     xrank_pairs: list[dict] = []     # [TP-12] one verdict per instrumented pair
-    from verity_vllm.program.registry import b1_tp2 as _TP2
-    xrank_families = _TP2.cross_rank_families(world)      # [lane vllm-tp-n] the cross-rank families of THIS world, from the registry's composites
+    from verity_vllm.program.frontend import collective_kinds
+    xrank_families = collective_kinds.cross_rank_families(world)      # [lane vllm-tp-n] the cross-rank families of THIS world, from the registry's composites
     for pair in range(args.pairs):
         order = [a for a in (["control", "instrumented"] if pair % 2 == 0 else ["instrumented", "control"]) if args.only_arm in (None, a)]
         for k, arm in enumerate(order):

@@ -1,0 +1,16 @@
+{
+ "roots": ["VStarDifftest"],
+ "exempt": {
+  "VStarMain": "the vstar executable's entry point, one line; its command is VStar.Cli.cmd, audited under the verifier's package (verity/core/service/flock)"
+ },
+ "layers": {
+  "VStarDifftest": {
+   "imports": ["Lean", "Flock", "Difftest", "VStar"],
+   "except": [],
+   "why": "the difftest port reaches V* only through the harness, as a port does"
+  }
+ },
+ "dependencies": {
+  "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
+ }
+}

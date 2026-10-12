@@ -38,7 +38,7 @@ MAGIC = b"VYSP1FI\x01"
 SCHEMA = "sp1-format-instances/v1"
 K_VU = 1536
 
-#: format -> (target attribute of verity_catalog.targets.target, row bytes, y bytes, relation)
+#: format -> (target attribute of verity.ml.circuits.targets.target, row bytes, y bytes, relation)
 FORMATS = {
     "bf16-hopper": ("BF16_HOPPER", 2 * K_VU, 2, "bf16-hopper"),
     "fp8-hopper": ("FP8_HOPPER_WGMMA", K_VU, 4, "fp8-hopper"),
@@ -52,7 +52,7 @@ def _groupsum_chunk(args: tuple[str, int, int, int]) -> list[tuple[bytes, bytes,
     import numpy as np
     from archive.direct.ligero.relations import relation
     from archive.direct.ligero.relchain import _instance
-    from verity_catalog.silicon.cast import f32_to_bf16_word
+    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 
     name, seed, lo, hi = args
     rel = relation(name)
@@ -83,7 +83,7 @@ def _nvfp4_chunk(args: tuple[str, int, int, int]) -> list[tuple[bytes, bytes, in
 
 def recipe(fmt: str) -> tuple[object, dict, int, str]:
     """(target, frozen ref, seed, recipe digest) of ``fmt``; the digest must equal the frozen ref's manifest_sha256."""
-    from verity_catalog.targets import target as targets
+    from verity.ml.circuits.targets import target as targets
     from verity_numerical.bench.tables import FROZEN_INSTANCES
 
     tgt = getattr(targets, FORMATS[fmt][0])

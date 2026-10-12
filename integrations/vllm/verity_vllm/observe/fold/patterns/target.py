@@ -3,7 +3,7 @@ specialization of that target, and how often the fold issues a weight-only Call 
 
 from __future__ import annotations
 
-from verity.primitives.circuits.refs import runs
+from verity.ml.circuits.refs import runs
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 from verity_vllm.observe.fold.resolver import Shared, StepContext, spec_label
@@ -12,7 +12,7 @@ X01_SCRATCH_KEY = "x01_num_sms"
 
 
 def _targets():
-    from verity_vllm.program.registry import targets as T
+    from verity_vllm.program.frontend import targets as T
     return T
 
 
@@ -82,7 +82,7 @@ def gemm_target_of(ctx: StepContext):
     the family the capture host reported): `(GemmTarget, None)` or `(None, refusal)` — the ONE source of the launch geometry every
     `matmul_kernel_persistent` launch must show (`GemmTarget.launch_config`), shared with Bet A (`vllm_bindings.gemm_pins_for`).  The
     selection is recorded once in `ctx.scratch[GEMM_TARGET_SCRATCH_KEY]` for the fold / resolution report."""
-    from verity_vllm.program.registry.gemm_targets import try_gemm_target_for
+    from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
     tp, recorded = target_of(ctx)
     fam = header_gemm_arch_family(ctx)
     gt, refusal = try_gemm_target_for(tp.compute_capability, fam)
@@ -92,7 +92,7 @@ def gemm_target_of(ctx: StepContext):
                                                             "compute_capability": list(tp.compute_capability), "target_recorded": recorded,
                                                             "header_tuned_gemm_arch_family": None if fam is ... else fam,
                                                             "tuned_table_sha256": gt.table_sha256() if gt else None, "launches": 0,
-                                                            "basis": "R13 ampere: launch geometry = the registered GEMM target's (verity_vllm.program.registry.gemm_targets)"})
+                                                            "basis": "R13 ampere: launch geometry = the registered GEMM target's (verity_vllm.program.frontend.gemm_targets)"})
     rec["launches"] += 1
     return gt, refusal
 

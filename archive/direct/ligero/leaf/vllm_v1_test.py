@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.primitives.commitments import vllm_v1 as core
+from verity.ml.commitments import vllm_v1 as core
 
 from ..compile import Expr, LigeroCtx, P
 from ..relations import FP8_ADA_RELATION

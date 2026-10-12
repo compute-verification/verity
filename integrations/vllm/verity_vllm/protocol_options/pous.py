@@ -1,11 +1,11 @@
 """POUS as a protocol option: the served model's linear weights live only as their encoding ``C``, decoded on every use,
-with an in-process responder for the timed audit (`verity.protocols.accounting.space.pous`, `verity/protocols/accounting/space/pous/PROTOCOL.md`).
+with an in-process responder for the timed audit (`verity.core.protocols.pous`, `verity/core/protocols/pous/PROTOCOL.md`).
 
 Placeholder, 28 Sep 2026: this wires the protocol in; it certifies nothing yet.
 
-* **The scheme** is a name `verity.protocols.accounting.space.pous.schemes.REGISTRY` registers; the default is the band, ``band-chain/d12/v1``.
+* **The scheme** is a name `verity.core.protocols.pous.schemes.REGISTRY` registers; the default is the band, ``band-chain/d12/v1``.
 * **What is encoded** is the weight of every ``LinearBase`` layer, found by type, deduplicated by storage and laid out
-  in module order (`verity.protocols.accounting.space.pous.layout.Layout`).  Linears only: whether the embedding and the tied head are encoded too
+  in module order (`verity.core.protocols.pous.layout.Layout`).  Linears only: whether the embedding and the tied head are encoded too
   is open with Daniel, and `commitment` says what is covered.
 * **Commit** (`commit_weights`, the composition's first phase, model untouched): the commitment to ``W`` before any
   salt exists (`protocol.commit`), recorded in the composition record's ``weights``.
@@ -42,12 +42,12 @@ COVERS = "linears"
 
 
 def schemes() -> tuple[str, ...]:
-    from verity.protocols.accounting.space.pous import schemes as pous_schemes
+    from verity.core.protocols.pous import schemes as pous_schemes
     return tuple(sorted(pous_schemes.REGISTRY))
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
-    from verity.protocols.accounting.space.pous import schemes as pous_schemes
+    from verity.core.protocols.pous import schemes as pous_schemes
 
     out, own = [], ctx.settings_of(NAME)
     stray = sorted(set(own) - set(SETTINGS))
@@ -101,7 +101,7 @@ def linear_types() -> tuple[type, ...]:
 
 
 def _base(scheme: str) -> Any:
-    from verity.protocols.accounting.space.pous import schemes as pous_schemes
+    from verity.core.protocols.pous import schemes as pous_schemes
     return pous_schemes.get(scheme).params
 
 
@@ -121,7 +121,7 @@ class _Store:
     meta: dict[str, Any] = field(default_factory=dict)
 
     def decode(self, name: str) -> bytes:
-        from verity.protocols.accounting.space.pous import protocol
+        from verity.core.protocols.pous import protocol
         return protocol.decode_tensor(self.scheme, self.layout, self.salt, name, self.blocks.__getitem__)
 
 
@@ -171,9 +171,9 @@ def _plaintext(entry: str, model: Any) -> tuple[list[tuple[str, Any]], dict[int,
 
 def _commit(scheme_id: str, weights: Mapping[str, bytes]) -> tuple[Any, Any, bytes, bytes]:
     """``W`` laid out, the scheme at its size, ``W`` itself and the commitment to it (no salt exists yet)."""
-    from verity.protocols.accounting.space.pous import protocol
-    from verity.protocols.accounting.space.pous import schemes as pous_schemes
-    from verity.protocols.accounting.space.pous.layout import Layout
+    from verity.core.protocols.pous import protocol
+    from verity.core.protocols.pous import schemes as pous_schemes
+    from verity.core.protocols.pous.layout import Layout
 
     layout = Layout.of(_base(scheme_id), [(n, len(b)) for n, b in weights.items()])
     scheme = pous_schemes.get(scheme_id, params=layout.params)
@@ -192,8 +192,8 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
 
 
 def _encode(layout: Any, scheme: Any, w: bytes, commitment: bytes, source: bytes | None) -> _Store:
-    from verity.protocols.accounting.space.pous import protocol
-    from verity.protocols.accounting.space.pous.verifier import VerifierKey, leaf_hash
+    from verity.core.protocols.pous import protocol
+    from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
 
     salt = protocol.draw_salt(source if source is not None else os.urandom(32), commitment)
     blocks = [b for seg in protocol.encode(scheme, w, salt) for b in seg]
@@ -227,7 +227,7 @@ class PousOption(Option):
         if self.closed or self.store is None:
             raise RuntimeError(f"{self.name} is closed: its responder is stopped")
         self.answered += 1
-        from verity.protocols.accounting.space.pous import protocol
+        from verity.core.protocols.pous import protocol
         return protocol.responder(self.store.scheme, self.store.blocks.__getitem__)(index)
 
 
@@ -294,7 +294,7 @@ def install(scheme: str, target: Target) -> PousOption:
     cert = store.scheme.certificate
     opt.details = {"salt_source": store.salt_source, "blocks": len(store.blocks), "layers": len(layers),
                    "certificate": None if cert is None else cert.theorem, "experimental": store.scheme.experimental,
-                   "responder": "in-process (placeholder)", "codec": "verity.protocols.accounting.space.pous reference, CPU (placeholder)"}
+                   "responder": "in-process (placeholder)", "codec": "verity.core.protocols.pous reference, CPU (placeholder)"}
     return opt
 
 

@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import value_inputs as VI
@@ -79,7 +79,7 @@ class RMSNormTritonLaunch:
 class FusedAddRMSNorm:
     """`_C.fused_add_rms_norm(input!, residual!, weight, epsilon)` (in place: input ← norm(input+residual),
     residual ← input+residual) → `Compute(RMSNormFusedCuda_v2{N,EPS}, rows=M, (PerRow(x), PerRow(res), Shared(w)),
-    (PerRow(x), PerRow(res)))` on a batch-invariant record target (`registry.targets.rmsnorm_fused_spec`, the selector the Build's
+    (PerRow(x), PerRow(res)))` on a batch-invariant record target (`frontend.targets.rmsnorm_fused_spec`, the selector the Build's
     vocabulary calls; refused by name elsewhere).  The fold reads all operands before writing (the outputs alias the inputs)."""
 
     eps: float | None = None

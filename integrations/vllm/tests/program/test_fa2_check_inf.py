@@ -6,15 +6,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation.reference import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation.reference import evaluate
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import b1, hopper
 from verity_vllm.program.registry import fa2_check_inf as F2
+from verity_vllm.program.registry import attention_vocab
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.frontend import targets as TG
 
 NEG_INF, NAN = 0xFF800000, 0x7FFFFFFF
 FA2 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}
@@ -31,22 +32,22 @@ def _is_nan(w: int) -> bool:
 
 def test_masked_from_is_the_tiles_masking_steps():
     # non-causal launch (one query row per sequence): only the first block, ceil(sk/BN) - 1
-    assert [F2.fa2_masked_from(sk, 1, 0, 64, False) for sk in (1, 64, 65, 257)] == [0, 0, 1, 4]
+    assert [attention_vocab.fa2_masked_from(sk, 1, 0, 64, False) for sk in (1, 64, 65, 257)] == [0, 0, 1, 4]
     # causal prefill (sq = sk), BN 64: the 64-row tile's n_block_max less its two masking steps
-    assert [F2.fa2_masked_from(130, 130, r, 64, True) for r in (0, 63, 64, 127, 128, 129)] == [0, 0, 0, 0, 1, 1]
+    assert [attention_vocab.fa2_masked_from(130, 130, r, 64, True) for r in (0, 63, 64, 127, 128, 129)] == [0, 0, 0, 0, 1, 1]
     # a chunked prefill's tile is capped by the sequence's keys: 17 rows over 300 keys guard blocks 3 and 4 (not 4 and 5)
-    assert F2.fa2_masked_from(300, 17, 16, 64, True) == 3
+    assert attention_vocab.fa2_masked_from(300, 17, 16, 64, True) == 3
     # BN 128 (head dim 64): ceil(64/128) + 1 = 2 masking steps as well
-    assert [F2.fa2_masked_from(sk, sk, sk - 1, 128, True) for sk in (1, 128, 129, 257, 385)] == [0, 0, 0, 1, 2]
+    assert [attention_vocab.fa2_masked_from(sk, sk, sk - 1, 128, True) for sk in (1, 128, 129, 257, 385)] == [0, 0, 0, 1, 2]
     # the row's first block is always at or above it: the first iteration runs Check_inf
     for BN in (64, 128):
         for sq, sk in ((1, 300), (130, 130), (17, 300), (64, 164), (200, 1031)):
             for r in range(sq):
                 T = r + 1 + sk - sq
-                assert F2.fa2_masked_from(sk, sq, r, BN, sq > 1) <= -(-T // BN) - 1
+                assert attention_vocab.fa2_masked_from(sk, sq, r, BN, sq > 1) <= -(-T // BN) - 1
     with pytest.raises(ValueError, match="non-causal launch has one query row"):
-        F2.fa2_masked_from(300, 2, 0, 64, False)
-    assert TG.fa2_masked_from(PRO6000, 16 + 1 + 283, 128, 17, 16, 17) == F2.fa2_masked_from(300, 17, 16, 64, True)
+        attention_vocab.fa2_masked_from(300, 2, 0, 64, False)
+    assert TG.fa2_masked_from(PRO6000, 16 + 1 + 283, 128, 17, 16, 17) == attention_vocab.fa2_masked_from(300, 17, 16, 64, True)
 
 
 def _block(check: bool, first: bool = False, D: int = 16, BN: int = 16, block=F2.AttnBlockV5):

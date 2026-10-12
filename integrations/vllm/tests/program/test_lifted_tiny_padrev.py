@@ -23,13 +23,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 L = pytest.importorskip("verity_vllm.program.registry.lifted")
 
-from verity.primitives.circuits import Program  # noqa: E402
+from verity.ml.circuits import Program  # noqa: E402
 from verity_vllm.program.registry import b1, pad_prims as PP, prims as P, ref_prims as R  # noqa: E402
-from verity_vllm.program.registry import serve3_reference as ref  # noqa: E402
+from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
 from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
 from tests.program import test_lifted_tiny as T  # noqa: E402  (pad's fixture harness: _lserve, EOS_FOR, Y_RAW, ...)
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs  # noqa: E402
-from verity.primitives.circuits.types import Array, Value  # noqa: E402
+from verity.ml.circuits.types import Array, Value  # noqa: E402
 
 RNG = np.random.default_rng(20260920)
 

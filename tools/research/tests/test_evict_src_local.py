@@ -96,7 +96,7 @@ def test_LOW_a_sibling_tree_named_relatively_from_another_tree_or_from_src_keeps
     """_LOOSE needs the literal `src/` before the sha.  `diff -r . ../<sha>` from another tree, or `python3 <sha>/x.py` from <src>,
     names it without one."""
     fake_proc(node.proc, 800, cwd=f"{node.src}/{node.c}", cmdline=f"diff -r . ../{node.a}")
-    fake_proc(node.proc, 801, cwd=str(node.src), cmdline=f"python3 {node.b}/tools/check/check.py")
+    fake_proc(node.proc, 801, cwd=str(node.src), cmdline=f"python3 {node.b}/tools/verity/check/check.py")
     rep = run(node, origin=None)
     assert node.a not in deleted(rep) and node.b not in deleted(rep), deleted(rep)
 
@@ -124,10 +124,10 @@ def _ignoring(node, ignore: str, artifacts: dict | None = None) -> str:
 
 
 def test_build_caches_and_fetched_fixtures_under_ignored_paths_let_the_tree_go(node):
-    d = _ignoring(node, ".venv/\n.lake/\n__pycache__/\nbig/\nfx/\n",
+    d = _ignoring(node, ".venv/\n.lake/\n__pycache__/\n.hypothesis/\nbig/\nfx/\n",
                   {"art:" + "1" * 64: "big/data.npz", "art:" + "2" * 64: "fx/tree", "previous": {"art:" + "1" * 64: ["art:" + "3" * 64]}})
     t = node.src / d
-    for p in (".venv/bin/python", ".lake/build/x.olean", "pkg/__pycache__/m.cpython-312.pyc", "big/data.npz", "fx/tree/a/b.bin"):
+    for p in (".venv/bin/python", ".lake/build/x.olean", "pkg/__pycache__/m.cpython-312.pyc", "pkg/.hypothesis/.gitignore", "big/data.npz", "fx/tree/a/b.bin"):
         (t / p).parent.mkdir(parents=True, exist_ok=True)
         (t / p).write_text("regenerable")
     _age(t, 5)

@@ -121,7 +121,7 @@ def _reference(leaf_name: str, rows: np.ndarray, word_bits: int, role: int) -> b
         return blake3.blake3(bytes(row_bytes(rows, word_bits)[0]), key=key_for(role)).digest()
     import hashlib
 
-    from verity.primitives.commitments.rowleaf import sha256_row_prefix
+    from verity.ml.commitments.rowleaf import sha256_row_prefix
     return hashlib.sha256(sha256_row_prefix(role, word_bits, rows.shape[1]) + bytes(row_bytes(rows, word_bits)[0])).digest()
 
 

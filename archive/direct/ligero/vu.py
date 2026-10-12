@@ -307,17 +307,17 @@ def auth_trees_for(vu: instances.VuTier, root: Path, total_vus: int, cache: str 
     t0 = time.perf_counter()
     trees, cached = auth_mod.load_or_build_trees(cache, a_words=xa, b_words=wb, y_words=yy, bindings=bindings, procs=procs)
     secs = time.perf_counter() - t0
-    from verity.primitives.commitments import merkle_depth
+    from verity.ml.commitments import merkle_depth
     info = {"version": auth_mod.AUTH_VERSION, "scheme": "verifier-side openings (auth-integration option b): Merkle "
             "multiproofs of every boundary word beside the Ligero proof; both verifiers recompute the leaves from the "
             "published words and fold them to the roots",
-            "hash": "SHA-256 with the veritor/protocol/merkle/frame/v3 framing (verity.primitives.commitments.merkle)",
+            "hash": "SHA-256 with the veritor/protocol/merkle/frame/v3 framing (verity.ml.commitments.merkle)",
             "tree": "binary Merkle tree, arity 2, one 16-bit word per leaf (leaf rank == position), padded to 2^depth "
                     "with domain-bound pad leaves; depth = merkle_depth(count)",
             "leaf": "H('leaf' | domain_id | uint(rank) | uint(position) | 'u16' | word as 2 big-endian bytes)",
             "domain": "CommitmentDomain(binding, owner, RangeIndexedDomain(0, count)); binding = identity_digest("
                       f"{auth_mod.BINDING_TAG!r}, {{dataset, tier, manifest_sha256, vu_lo, vu_hi, K, tree, schema}})",
-            "multiproof": "canonical shared-path multiproof of verity_experimental.commitments.multiproof (per level, ascending, the "
+            "multiproof": "canonical shared-path multiproof of verity.ml.commitments.multiproof (per level, ascending, the "
                           "sibling of every known node whose sibling is not known)",
             "trees": {n: {"count": t.count, "depth": merkle_depth(t.count), "root": t.root.hex(),
                           "binding": t.ref.binding.hex(), "owner": t.ref.owner} for n, t in trees.items()},
@@ -808,7 +808,7 @@ def bench_vu(args) -> int:
         sw["authentication"]["multiproof_bytes_per_proof"] = int(proof.n_bytes()["auth_multiproofs"])
         sw["authentication"]["multiproof_siblings_per_proof"] = [len(s) for s in proof.auth]
         sw["authentication"]["opened_leaves_per_proof"] = {"a": per_proof * STEP * STEPS, "b": per_proof * STEP * STEPS, "y": per_proof}
-        sw["authentication"]["verifier"] = ("python: protocol.verify -> auth.verify_auth (leaf digests + verity.primitives.commitments.verify_multiproof, "
+        sw["authentication"]["verifier"] = ("python: protocol.verify -> auth.verify_auth (leaf digests + verity.ml.commitments.verify_multiproof, "
                                             f"{auth_info['procs']} processes for the leaves); rust: archive/ligero-verify (sha256.rs, auth fold)")
     preprocessing = f"constraint compilation (a function of Params only, {R.compile_seconds:.2f}s)"
     if with_auth:

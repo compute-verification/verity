@@ -1,5 +1,5 @@
 """`boolean_softcap`: `AttnBlockSoftcap_v3` / `AttentionHeadSoftcap_v3` / `AttentionSoftcap_v3` with ``TANH`` = `MufuTanh_v2` and
-``EX2`` = `MufuEx2Ftz_v2` (`verity_catalog.definitions.boolean.mufu`) are Boolean, agree with their word views (`fa2_softcap`'s v2 chain at the
+``EX2`` = `MufuEx2Ftz_v2` (`verity.ml.circuits.ops.boolean.mufu`) are Boolean, agree with their word views (`fa2_softcap`'s v2 chain at the
 same statics, over `MufuTanh_v1` and `MufuEx2Ftz_v1`), Call their blocks and heads as the word chain does, and are pinned by gate
 count and program digest.
 
@@ -13,19 +13,19 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.batch import type_shape
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.types import Array
-from verity_catalog.definitions.boolean import attention as BA
-from verity_catalog.definitions.boolean import gemm as BG
-from verity_catalog.definitions.boolean import mufu as BM
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import NOT, const_bits, sub
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.batch import type_shape
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.types import Array
+from verity.ml.circuits.ops.boolean import attention as BA
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.ops.boolean import mufu as BM
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import NOT, const_bits, sub
 from verity_vllm.program.registry import boolean_softcap as BSC
 from verity_vllm.program.registry import fa2_softcap as FS
 from verity_vllm.program.registry import prims as P
@@ -72,15 +72,15 @@ def _attention(**kw):
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
     "AttnBlockSoftcap_v3{D=16,NVIS=5,FIRST=True,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,"
-    "EX2=MufuEx2Ftz_v2}": (216995, 438108, 19465, "988d414ee85e02cd3baaf15a540cb1d539cb30e3682a14088c49fd878b85ddba"),
+    "EX2=MufuEx2Ftz_v2}": (216995, 438108, 19465, "6f2847e732be67644cfa4edce44537abc6979d3f5d59795a935acd4af1c0e7f204e08b154d2b33ef9eb9e4d99bf80d0735cbdde3268e49cc89b53724e199d60b"),
     "AttnBlockSoftcap_v3{D=16,NVIS=16,FIRST=False,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,"
-    "EX2=MufuEx2Ftz_v2}": (480332, 987971, 39245, "3b7bd821430315a41e876ebe5561e0f1419684c0e508d4c226f43bc4fefb91bf"),
+    "EX2=MufuEx2Ftz_v2}": (480332, 987971, 39245, "84dbc72f3f9b264731c36109e8eef7c199197b0592da4127e8e93d5592d2a075477ced7e4b8e85afdb7bc0c41f25452e5d78bbe3d426bbb179b29e29432c234a"),
     "AttentionHeadSoftcap_v3{T=20,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1,"
     "TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": (724703, 1473314, 59765,
-                                           "7d0dbbe427822f14d79fbebee5333e4ca59bd0d7d8a8b763f5fa7e51afc1319a"),
+                                           "74781601637f97ffb5c13e429032ae65d804c743a2c83e24c9a0c9a75d45cfedd4dcb80c51c99e7dae48d946e86f27788d85402303beb5934618c5cb79c52e72"),
     "AttentionSoftcap_v3{T=20,NH=4,KVH=2,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1,"
     "TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": (2898812, 5893256, 239060,
-                                           "00f6b8c07225c9f3d76d211322ac771a2c4defa86ed252bedd025b8257103a04"),
+                                           "c13d0649e3db71d63de1a218ea208ecc6f0531625ae14614c234614ee86d7aeb7c7b355c53ba15c5ab8cfb0fb502ebbd4d8437cab1f95b64fa0c0b8e4d3c0376"),
 }
 
 PINNED = [_block(NVIS=5, FIRST=True, BN=16, CHECK=True), _block(NVIS=16, FIRST=False, BN=16, CHECK=True),

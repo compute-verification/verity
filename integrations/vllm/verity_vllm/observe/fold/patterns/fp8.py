@@ -14,7 +14,7 @@ block's scale products once), `ScaledMmFp8Block_v1` under `per-coordinate`; one 
 Both registered Definitions (`verity_vllm.program.registry.fp8`) are pinned bit for bit on the H100 against these kernels (the module's
 `_QUANT_CONF` / `_BLOCK_CONF` conformance notes; out/gen/sweep/evidence/fp8/).  The GEMM Definition is the blockwise CUTLASS kernel's
 arithmetic (k32 steps, `s = FMUL(sfa, sfb)`, FFMA promotion per K-tile in ascending order) over the record target's e4m3 step
-(`registry.targets.scaled_mm_fp8_block_spec`: the v1 forms on hopper, the version 3 forms over `GemmTarget.fp8_block_dot` elsewhere).
+(`frontend.targets.scaled_mm_fp8_block_spec`: the v1 forms on hopper, the version 3 forms over `GemmTarget.fp8_block_dot` elsewhere).
 A record whose GEMM target has no blockwise step is refused here fail-closed -- another GPU runs another kernel (Marlin /
 torch._scaled_mm on Ada, DeepGEMM, its own blockwise CUTLASS kernel), which has no registered Definition; nothing is approximated by a
 looser comparison (COORD 6).
@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import fp8
 
 from verity_vllm.observe.events import ViewDesc

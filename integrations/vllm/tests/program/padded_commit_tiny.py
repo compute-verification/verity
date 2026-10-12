@@ -47,14 +47,14 @@ from typing import Any
 
 import numpy as np
 
-from verity.primitives.circuits import Program, bind
-from verity.primitives.circuits import boundary as BD
-from verity.primitives.circuits import query_ast as GS
-from verity.primitives.circuits import partition as PT
-from verity.primitives.circuits.codec import encode_program, program_digest
-from verity.primitives.circuits.evaluate import evaluate_region
+from verity.ml.circuits import Program, bind
+from verity.ml.circuits import boundary as BD
+from verity.ml.circuits import query_ast as GS
+from verity.ml.circuits import partition as PT
+from verity.ml.circuits.codec import encode_program, program_digest
+from verity.ml.circuits.evaluate import evaluate_region
 from verity_vllm.program.registry import b1, lifted as L
-from verity_vllm.program.registry import serve3_reference as ref
+from verity_vllm.program.kernels import serve3_reference as ref
 from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
 
 try:  # the production host core (the one revb accepted on F-r17b-44 / moe M-1023): pos_leaf + fold_levels + fold_path

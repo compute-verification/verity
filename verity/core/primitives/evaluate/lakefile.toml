@@ -1,0 +1,24 @@
+# The descriptor v1 evaluator: `verity.ml.circuits.evaluation.reference.evaluate` on a Program, as executable Lean. It reads the
+# Program through C-Flock's verifier (`Flock.Program`: decode, layout, scope resolution) and adds the primitives' semantics;
+# it is code, so it requires nothing of `Security/` (Daniel's layout ruling, 5 Oct).
+name = "verity_evaluate"
+defaultTargets = ["Evaluate", "verity-evaluate"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../service/flock"
+
+[[require]]
+name = "verity_difftest"
+path = "../../difftest/lean"
+
+[[lean_lib]]
+name = "Evaluate"
+
+[[lean_exe]]
+name = "verity-evaluate"
+root = "Evaluate.Main"

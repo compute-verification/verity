@@ -16,8 +16,8 @@ published on the machine that ran it with a minted key, so custody no longer dep
                                                                           every run under the runs roots by custody state (F2); with
                                                                           --older-min, the ended runs not on the remote after N minutes
 
-The record uploads the run's own files, the files matching its `--declared-output` globs, and undeclared files up to
-UNDECLARED_CAP_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
+The record uploads the run's own files, everything under out/ (the workload's $OUT), the files matching its `--declared-output`
+globs, and undeclared files up to UNDECLARED_CAP_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
 .agents/skills/writing-runs/SKILL.md).  The listing is the record's `meta.trimmed` when it fits in TRIMMED_INLINE_BYTES, else the
 file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).  A credential a run may be sent
 (CREDENTIALS) is deleted from the run dir before its record is taken, whatever the run's tool and however it ended, so no record
@@ -49,7 +49,9 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+from ..env import DIRTY_CAPTURE
 from ..telemetry.job import write_json_atomic
+from ..telemetry.run import OUT_DIR
 from .attempt import TERMINAL as TERMINAL_STATES
 from .evict import EVICTED_FILE
 
@@ -102,9 +104,12 @@ def _sha256(p: Path) -> str:
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-#: The runner's own files, always uploaded; everything else is kept only when it matches a declared output (`--declared-output GLOB`).
+#: The runner's own files, always uploaded; everything else is kept only when it matches a declared output (`declared_globs`).
+#: DIRTY_CAPTURE is a dirty source's bytes (env.py): never trimmed, so the record, not the machine's tree, is their durable copy.
 RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log", "job.json", "status.json", "events.jsonl", "failure.json",
-                       "result.json", "launch.json", "remote.json", "refused.json"})
+                       "result.json", "launch.json", "remote.json", "refused.json", "slot.json", DIRTY_CAPTURE})
+#: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run).
+RUN_FILE_GLOBS = ("logs/stall-*.txt",)
 #: The launcher's record of a remote run (remote.py): only on the launching machine, rewritten by every `status` and `fetch`, and never
 #: in the record the run's machine takes, so custody of the launcher's copy neither checks it nor lets eviction remove it.
 LAUNCHER_RECORD = "remote.json"
@@ -116,21 +121,27 @@ TRIMMED_INLINE_BYTES = 64 << 10
 SKILL = ".agents/skills/writing-runs/SKILL.md"
 
 
+def is_run_file(rel: str) -> bool:
+    return rel in RUN_FILES or any(fnmatch.fnmatchcase(rel, g) for g in RUN_FILE_GLOBS)
+
+
 def declared_globs(run_dir: Path) -> list[str]:
-    return [str(g) for g in (((_read(Path(run_dir) / "job.json") or {}).get("execution") or {}).get("declared_outputs") or [])]
+    """`out/*` (the workload's $OUT), always, then the run's own `--declared-output` globs."""
+    job = _read(Path(run_dir) / "job.json") or {}
+    return [f"{OUT_DIR}/*", *(str(g) for g in (job.get("execution") or {}).get("declared_outputs") or [])]
 
 
 def select(run_dir: Path, cap: int | None = None) -> tuple[list[str], list[dict[str, Any]]]:
     """(files the run record uploads, [{path, bytes, sha256}] of the files it only lists): the run's own files, every file matching a
-    declared glob (fnmatch on the path relative to the run dir, so `*` crosses `/`: `out/*` is all of out/, `*` is everything), and
-    undeclared files up to `cap` bytes in total."""
+    declared glob (`declared_globs`; fnmatch on the path relative to the run dir, so `*` crosses `/`: `out/*` is all of out/, `*` is
+    everything), and undeclared files up to `cap` bytes in total."""
     d = Path(run_dir)
     cap = UNDECLARED_CAP_BYTES if cap is None else cap
     globs = declared_globs(d)
     kept, trimmed, used = [], [], 0
     for rel in run_files(d):
         size = (d / rel).stat().st_size
-        if rel in RUN_FILES or any(fnmatch.fnmatchcase(rel, g) for g in globs):
+        if is_run_file(rel) or any(fnmatch.fnmatchcase(rel, g) for g in globs):
             kept.append(rel)
         elif used + size <= cap:
             used += size
@@ -144,8 +155,8 @@ def trim_warning(trimmed: list[dict[str, Any]]) -> str | None:
     if not trimmed:
         return None
     return (f"custody trimmed {len(trimmed)} undeclared file(s), {sum(t['bytes'] for t in trimmed) / (1 << 20):.1f} MiB (listed with size "
-            f"and sha256, no bytes), e.g. {trimmed[0]['path']}. Declare what to keep with --declared-output GLOB: undeclared uploads "
-            f"will be dropped once lanes declare their outputs. See {SKILL}")
+            f"and sha256, no bytes), e.g. {trimmed[0]['path']}. Write what to keep under $OUT, or declare it with --declared-output "
+            f"GLOB: undeclared uploads will be dropped once lanes declare their outputs. See {SKILL}")
 
 
 def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]:
@@ -162,7 +173,7 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
 
 
 #: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: check's presigned
-#: URLs of the Lean dependency bundles (`tools/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/,
+#: URLs of the Lean dependency bundles (`tools/verity/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/,
 #: and the temporary name a shipped tree's preflight writes that file under before replacing it
 CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*")
 

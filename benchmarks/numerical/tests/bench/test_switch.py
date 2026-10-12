@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_catalog.targets.target import FIRST, FP8_ADA_MMA
+from verity.ml.circuits.targets.target import FIRST, FP8_ADA_MMA
 from verity_numerical.bench import switch as S
 from verity_numerical.bench import tables as T
 

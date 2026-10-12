@@ -109,7 +109,7 @@ Published by `research run` at completion or failure (both — a failed attempt 
   "conditions": {"hw.family": "h100", "hw.sku": "NVIDIA H100 80GB HBM3", "driver": "...", "cuda": "...", "...": "..."},
   "key_conditions": ["hw.family"],
   "source": {"commit": "<sha>", "tree": "<sha>", "dirty": false, "dirty_digest": null, "lockfiles": {"uv.lock": "<sha256>"}},
-  "closure": {"tools/tc_probe/tc_probe.py": "<sha256>", "...": "path -> content sha256 of every declared source file"},
+  "closure": {"benchmarks/tc_probe/tc_probe.py": "<sha256>", "...": "path -> content sha256 of every declared source file"},
   "execution": {"start_utc": "...", "end_utc": "...", "wall_s": 12.3, "exclusive": false, "load_start": 1.2, "load_end": 1.1,
                 "host": "vy-g5", "project": "verity", "campaign": "r21-silicon", "run_dir": "/workspace/research/runs/r...",
                 "stage": "bench", "remote": {"machine": "vy-g5", "pod_id": "...", "root": "...", "source_sha": "..."} },
@@ -129,8 +129,7 @@ derivation by content as the key param `input.<name> = sha256:<hex>` (`inputs` h
 Without a Tool declaration (`research run -- CMD` with no `--tool`): `tool = {"name": "<argv[0] basename>", "version": null}`,
 `key_params = ["argv"]`, `key_conditions = []`, so `derivation = drv(H(tool name, inputs, {"argv": redacted argv}, {}))`: the
 whole command line is the request, and `reuse_key` is `null` whatever the tree (argv cannot name the files, environment or data
-the command reads, so nothing may be served as its reuse). `params` then holds `{"argv": argv}`. The rule used to be
-`key_params = []` with a reuse key: every undeclared `python …` run of one clean tree shared one derivation and one reuse key.
+the command reads, so nothing may be served as its reuse). `params` then holds `{"argv": argv}`.
 Publishing applies the rule to a record written by an older runner (or with no `store` section): it is re-derived.
 
 `research run` writes everything it computed before launch into job.json's optional `store` section (`tool {name, version, spec}`,
@@ -162,23 +161,41 @@ attempt_conditions(attempt, key, value)
 attempt_outputs(attempt, name, artifact)
 attempt_inputs(attempt, name, artifact)
 labels(target, key, value, by, ts, ref, path)
-replicas(id, location, verified_utc, detail, verified)   verifications (§7: verified = etag-md5 | sha256-readback); the one table a rebuild
-                                                          keeps, since it is not a local fact; `verified` is added to an older catalog on open
+replicas(id, location, verified_utc, detail)            verifications, which a rebuild keeps (not a local fact)
+replica_checks(id, location, verified)                  which check (§7): etag-md5 | sha256-readback
 ~~~
 
 Flattening: nested objects get dotted keys, lists numeric components (`families.0`), scalars are stored as text (strings raw,
 everything else `json.dumps`: `true`, `null`, `1.5`); `--where` and `--label` compare that text. `local` means manifest + every
 blob present here; `remote` means pushed (from a listing or a recorded push/verification).
 
-`research.store.index.Index(path)`: `index_artifact(manifest_doc, art_id, local=None, remote=None, repo_path=None)` (None keeps the
-current flag), `index_attempt(doc)`, `index_label(label, path)`, `set_presence(art_id, *, local, remote, repo_path)`,
-`set_replica(art_id, location, verified_utc, detail, verified=None)`, `rebuild(artifacts, attempts, labels)`, `artifact(id)`, `artifacts()`,
-`attempt(run_id)`, `attempts_by_reuse_key(key)`, `attempts_by_derivation(drv)`, `attempts_by_output(art_id)`,
-`select_artifacts(kind=None, where=None, label=None, attempt=None, tool=None, derivation=None)`, `labels(target, key=None)`,
-`replicas(art_id)`, `sql(query, params=())` and `sql_with_columns(...)` on a read-only (`?mode=ro`) connection. Attempt queries
-return the attempt documents; artifact queries return `{id, kind, bytes, payload_type, manifest, local, remote, repo_path}`.
+`research.store.index.Index(path)` writes and queries these tables (its docstrings list the methods); `sql(query)` and
+`sql_with_columns` use a read-only (`?mode=ro`) connection.
 `compact(src, dst)` (`research data catalog --compact OUT`) copies the catalog for readers that query it but never fetch
 (`research notes mcp --catalog`): the same tables and indexes, `manifest_json` NULL, no `replicas` / `replica_checks`.
+
+### 5.1 The derived index — `index()` (`bucket_index.py`)
+
+Derived from the bucket, for display and search; readers move to it from the catalog (`sql`, `inspect`, `status`, `select`,
+the notes MCP). Guards never read it: they list and HEAD the bucket. The same four tables in SQLite and in Neon's `store`
+database (schemas `store_private`, `store_public`; `SQLITE_DDL`, `POSTGRES_DDL`); the module docstring has the details:
+
+~~~text
+records(id, type, kind, time, doc)   artifact | run | label (id label:<sha256 of the assertion>); kind = artifact kind | tool | key;
+                                     time = manifest LastModified | run start | label ts; doc less payload.files and closure
+fields(id, path, value)              doc's scalar leaves, flattened as §5; a value over 1,024 characters only in doc
+edges(src, name, dst)                refs.*, inputs.*, outputs.*, telemetry.*, a label's target; dst need not be a record
+listings(prefix, listed_at, keys)    the last listing of each prefix: the index is complete as of listed_at
+~~~
+
+`index(remote, db)` lists `manifests/`, `labels/` and the runs after the newest indexed one (a full `attempts/` listing
+hourly), reads only what it lacks, checks each record against its key (a failure is reported, left out, read again next pass)
+and never touches `objects/`. One pass and pass by pass give the same rows (tested). `index(public, db, policy=PUBLIC,
+private=db)` rebuilds the public tables: the artifacts whose manifests are in the public bucket, their producing runs cut to
+`PUBLIC_RUN_FIELDS`, and the `verified` / `verifier` / `proof_class` labels on them without `ref`; every cut is a whitelist.
+`research data index` builds `<store>/index.sqlite` (`--public`: `index-public.sqlite`; `--from DIR`: a directory as bucket;
+`--postgres`: both schemas of `$STORE_INDEXER_DATABASE_URL` through `psql`, rows only, so grants survive). The control pod runs
+it every 5 minutes (`infra/control/store_index.sh`).
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
@@ -189,19 +206,19 @@ from research.store.tool import Tool
 
 TC_PROBE = Tool(
     name="tc_probe", version="1",
-    command=["python", "tools/tc_probe/tc_probe.py"],
-    closure=["tools/tc_probe/**", "catalog/verity_catalog/silicon/**"],   # repo-relative globs -> file manifest at run time
+    command=["python", "benchmarks/tc_probe/tc_probe.py"],
+    closure=["benchmarks/tc_probe/**", "verity/ml/circuits/silicon/**"],   # repo-relative globs -> file manifest at run time
     key_params=["instruction", "families", "seed", "n_random", "replay_golden"],
     key_conditions=["hw.family"],
-    param_artifacts=["replay_golden", "replay_instances"],                     # path-valued params: identity = content, never pathname
-    caches=["nvcc"],                                                            # names for d.scratch(name)
+    param_artifacts=["replay_golden", "replay_instances"],  # path-valued params: identity = content, never pathname
+    caches=["nvcc"],                                        # names for d.scratch(name)
     produces=["tc-evidence/v1", "run-files/v1"],
 )
 ~~~
 
-Declarations live next to the tool they describe (`tools/tc_probe/tool.py`, `archive/direct/ligero/tool.py`; the example above is
-illustrative, the files follow the scripts' real argparse) and are found by `research run --tool <dotted.module:NAME>` or
-`--tool <name>` via the registry in `research/store/tools_registry.py` (a dict name -> dotted path; keep it tiny). A declaration
+Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`, `archive/direct/ligero/tool.py`; the example above is
+illustrative, the files follow the scripts' argparse) and are found by `research run --tool <dotted.module:NAME>` or
+`--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny). A declaration
 imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls
 back to executing `<source root>/<module path>.py` by file when the module is not on sys.path).
 
@@ -267,6 +284,8 @@ class Remote(Protocol):
     def describe(self) -> str                              # for `where`
 ~~~
 
+`FsRemote` and `S3Remote` also have `list_times(prefix, start_after=None) -> [(key, last modified)]`, what `index()` (§5.1) lists with.
+
 `FsRemote(root)` (a directory, also the test double; its `etag` is the file's MD5) and `S3Remote(endpoint, bucket, access_key,
 secret_key, region="auto", session_token=None)` (SigV4 with signed payload hashes, stdlib `urllib`+`hmac`, path-style
 `<endpoint>/<bucket>/<key>`; one PUT for objects <= 5 GiB, the service's PutObject limit; above that `push` raises `StoreError`
@@ -310,9 +329,7 @@ Inputs come from flags > `store.toml [remote]` (endpoint, bucket, the env var *n
 - **local** (no API call): sign a JWT (HS256) with the parent *secret access key* — Cloudflare's documented client-side signing,
   ported claim for claim from their reference implementation: `{bucket, scope | actions, paths?: {prefixPaths, objectPaths}, sub:
   account id, iss: parent key id, aud: endpoint host, iat, exp}`; the temporary key id is the parent's, the temporary secret is the
-  sha256 hex of the JWT, the session token is `base64("jwt/" + JWT)`. Checked live against the store's bucket (2026-09-22): a 10-minute
-  `object-read-only` credential HEADs a manifest (200) and is refused a PUT (403); `--prefix` + `--actions` are enforced (PUT inside
-  the prefix 200, HEAD outside it 403, a GET not in `actions` 403). One deviation from the reference TypeScript: R2 answers 400 to a
+  sha256 hex of the JWT, the session token is `base64("jwt/" + JWT)`. R2 enforces the permission, `--prefix` and `--actions` (checked live). One deviation from the reference TypeScript: R2 answers 400 to a
   JWT that carries both `scope` and `actions`, so `--actions` *replaces* `--permission` in the claims. Only this path can scope by
   action.
 - **api**: `POST /client/v4/accounts/{account}/r2/temp-access-credentials` with `CLOUDFLARE_API_TOKEN` (body `{bucket,
@@ -341,7 +358,7 @@ by one of two checks, and the replica record (`replicas.verified`) says which:
 ~~~text
 etag-md5          `push --verify head` (default): HEAD after upload; Content-Length == bytes and the single-part ETag == hex MD5 of
                   the local bytes (S3 and R2 make a single-PUT object's ETag its MD5; a `-` in the ETag marks multipart, which is not
-                  an MD5, and such an object falls back to read-back).  One extra round trip per object.
+                  an MD5, and such an object falls back to read-back). One extra round trip per object.
 sha256-readback   `push --verify readback`, `verify`, `put --preserve`'s manifest: download and sha256 against the manifest.  Costs
                   the object's bytes again.  Manifests are always read back (they are small); blobs on request.
 ~~~
@@ -471,35 +488,26 @@ research data where ART [--json]              replicas: local / repo / remote (+
 research data fetch ART [--to DIR]            materialise payload (file or tree); prints path
 research data verify ART [--json]             PRESERVED check against the remote (exit 1 unless PRESERVED)
 research data push [ART|RUN ...] [--pending] [--jobs N] [--verify head|readback] [--json]
-                                              preserve on the remote: blobs uploaded with N threads (default 32), each verified (head:
-                                              size + MD5 ETag, default; readback: download + sha256), then the manifest (PRESERVED); one
-                                              line per artifact with objects, uploaded/skipped, MB, seconds, objects/s and the check done;
-                                              a run id pushes the attempt manifest and every artifact it references; --pending pushes
-                                              every local artifact without a verified remote replica and every attempt the remote lacks
+                                              preserve on the remote (§7, §7.2): a run id pushes its attempt and every artifact it names
 research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA] [-- ARGV...]
-                                              -> attempts with that reuse_key (or --any-source: that derivation); ARGV after -- is
-                                                 parsed by the Tool exactly as `run` would, --param overrides; missing key conditions
-                                                 come from this machine's conditions(); --source-tree hashes that tree's lockfiles
+                                              -> attempts with that reuse_key (or --any-source: that derivation); ARGV is parsed as `run` would
 research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
 research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
 research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
-research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels all on the remote, else the failing legs
+research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
+                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
-                                              re-register every fixtures/artifacts.json entry whose bytes changed (§7): put as a bare
-                                              fixture/v1 under the new id (--preserve pushes it), rewrite the entry, keep the old id under
-                                              the map's `previous` block; prints old -> new; idempotent; exit 1 on a missing path or conflict
+                                              re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
 research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
                                               copy every registry entry and its `previous` ids to the export bucket (§7.3)
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
-                                              run dirs holding a store_publish_error.json (§10): stale (the run is an attempt in this store)
-                                              vs REAL (it is not); read-only unless --clean, which deletes the stale files and nothing else
+                                              run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones
 research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs)
 research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
 research data reindex [--remote]
@@ -572,7 +580,7 @@ telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
-trust-dossier/v1         the computed trust level of one numerical target (`python tools/tc_probe/trust.py --publish`): meta =
+trust-dossier/v1         the computed trust level of one numerical target (`python benchmarks/tc_probe/trust.py --publish`): meta =
                          the TrustReport (level, criteria with evidence ids, D-entries, references, missing items, triggers, procedure);
                          refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; labels target,
                          instruction, level, anchor
@@ -592,8 +600,9 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 7. **`conditions()` owns normalisation.** One SKU->family map.
 8. **Canonical JSON everywhere** ids are computed.
 
-## 13. Deferred (each arrives with a named failure)
+## 13. Open questions
 
-`diff` (F9), `independent` (U3, descriptive not authoritative: shared closure files / lockfiles / inputs), `impact` (F4),
-`gc` (F11), pod teardown gating on PRESERVED (F7), closure-scoped reuse, replica planner beyond the
-three-tier order above.
+- **Many-run analytics.** Postgres on Neon is the index now; DuckLake comes only when many-run results outgrow `fields`.
+  No lakeFS or registry server.
+- **Signed labels.** A label's `by` is whatever its writer says. When labels get signed, they become in-toto attestations
+  signed with Sigstore/cosign, not a scheme of our own.

@@ -112,9 +112,10 @@ def _warn(msg: str) -> None:
     print(f"research data: {msg}", file=sys.stderr)
 
 
-def write_once(dst: Path, data: bytes | Path) -> bool:
+def write_once(dst: Path, data: bytes | Path, sha256: str | None = None) -> bool:
     """Temp file beside `dst`, then hard-link into place: the first writer wins, nothing is ever overwritten.  Returns whether this
-    call created it.  Falls back to rename where the filesystem refuses links."""
+    call created it.  Falls back to rename where the filesystem refuses links.  `sha256`: the copy must hash to it, else IntegrityError
+    and nothing is written."""
     dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists():
         return False
@@ -123,6 +124,14 @@ def write_once(dst: Path, data: bytes | Path) -> bool:
         tmp.write_bytes(data)
     else:
         shutil.copyfile(data, tmp)
+    try:
+        if sha256 is not None and (got := sha256_file(tmp))[0] != sha256:
+            # custody stages a run's files as hard links: a writer still appending to one (a check's orphaned suite) changed it here
+            raise IntegrityError(f"{data} changed between hashing and storing ({sha256[:16]} hashed, {got[0][:16]} copied, "
+                                 f"{got[1]} bytes): is something still writing it?")
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     os.chmod(tmp, 0o444)
     try:
         os.link(tmp, dst)
@@ -310,10 +319,10 @@ class LocalStore:
         self.index.index_artifact(m.to_doc(), art, local=self._blobs_local(m), repo_path=self.replica_map().get(art))
         return art
 
-    def _store_blob(self, src: Path, hex_: str) -> Path:
+    def _store_blob(self, src: Path, hex_: str, verify: bool = True) -> Path:
         dst = self.object_path(hex_)
         if not dst.exists():
-            write_once(dst, src)
+            write_once(dst, src, hex_ if verify else None)
         return dst
 
     def _blobs_local(self, m: ArtifactManifest) -> bool:
@@ -335,7 +344,7 @@ class LocalStore:
             return self._read_manifest(p, hex_)
         r = self.remote
         if r is not None:
-            tmp = p.parent / f".tmp-{hex_}-{os.getpid()}"
+            tmp = p.parent / f".tmp-{hex_}-{os.getpid()}-{threading.get_ident()}"
             try:
                 r.get(manifest_key(hex_), tmp)
             except KeyError:
@@ -415,7 +424,7 @@ class LocalStore:
             got = sha256_file(tmp)[0]
             if got != hex_:
                 raise IntegrityError(f"{art_id}: remote {object_key(hex_)} hashes to {got}")
-            return self._store_blob(tmp, hex_)
+            return self._store_blob(tmp, hex_, verify=False)
         finally:
             tmp.unlink(missing_ok=True)
 
@@ -560,7 +569,7 @@ class LocalStore:
             r = self.remote
             if r is None:
                 return None
-            tmp = p.parent / f".tmp-{run_id}-{os.getpid()}"
+            tmp = p.parent / f".tmp-{run_id}-{os.getpid()}-{threading.get_ident()}"
             try:
                 r.get(attempt_key(run_id), tmp)
             except KeyError:

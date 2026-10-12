@@ -55,11 +55,11 @@
     {"file": "verity_vllm/program/kernels/compiled_norm_literal.py", "kind": "function", "symbol": "_build", "detail": "lines", "count": 206},
     {"file": "verity_vllm/program/kernels/relations.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1344},
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1020},
-    {"file": "verity_vllm/program/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1246},
+    {"file": "verity_vllm/program/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1146},
     {"file": "verity_vllm/program/kernels/derived_rows.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 944},
-    {"file": "verity_vllm/program/registry/lifted.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2368},
-    {"file": "verity_vllm/program/registry/quarantine/ln/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
-    {"file": "verity_vllm/program/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 983},
+    {"file": "verity_vllm/program/registry/lifted.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2228},
+    {"file": "verity_vllm/program/registry/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
+    {"file": "verity_vllm/program/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 805},
     {"file": "verity_vllm/query/required.py", "kind": "function", "symbol": "request_manifest", "detail": "lines", "count": 187}
   ]
 }

@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 import torch
 
+from verity.core.protocols.pouw.coins import Challenger
 from verity_vllm import protocol_options as PO
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart
 from verity_vllm.observe.fold.patterns.pouw import OP, PouwLinear, with_protocols
@@ -30,7 +31,6 @@ from tests.program import test_pouw_lowering as LW
 
 M, K, NQ = LW.M, LW.K, LW.NQ
 BF = torch.bfloat16
-BEACON = "5a" * 32
 
 
 class Apply:
@@ -62,7 +62,7 @@ class Model(torch.nn.Module):
 
 
 def _install(model, stage: str):
-    settings = {"pouw": {"beacon": BEACON}}
+    settings = {"pouw": {"coins": Challenger(0)}}
     if stage == "capture":
         return PO.at_capture(LW.POUW, model, settings)
     return PO.install(model, PO.Context(stage=stage, enabled=("pouw:ncp-v2",), settings=settings))
@@ -153,7 +153,7 @@ def test_the_capture_serves_the_committed_y_word_for_word(observed, linears):
 
 
 def test_the_capture_context_leaves_sampled_proofs_out_and_is_none_without_an_executor():
-    ctx = PO.capture_context(LW.POUW, settings={"pouw": {"beacon": BEACON}, "sampled-proofs": {}})
+    ctx = PO.capture_context(LW.POUW, settings={"pouw": {"coins": Challenger(0)}, "sampled-proofs": {}})
     assert ctx.stage == "capture" and ctx.enabled == ("pouw:ncp-v2",) and set(ctx.settings) == {"pouw"}
     assert PO.capture_context(LW.DEFAULT_TARGET) is None and PO.capture_context(None) is None
 
@@ -171,11 +171,12 @@ def test_the_served_y_alone_is_the_commits(linears):
 
 
 def test_the_match_capture_installs_its_workloads_target_executors(linears):
-    """`m1_capture` installs what the workload's target declares, from its `protocols_config`, and records the entries in the header."""
+    """`m1_capture` installs what the workload's target declares, from its `protocols_config` with the epoch's challenger
+    its own (`pouw.challenged`), and records the entries in the header."""
     from types import SimpleNamespace
 
     from verity_vllm.pipeline import m1_capture
-    wl = {"target": {"protocols": ["pouw:ncp-v2", "sampled-proofs:vllm-v1"]}, "protocols_config": {"pouw": {"beacon": BEACON}}}
+    wl = {"target": {"protocols": ["pouw:ncp-v2", "sampled-proofs:vllm-v1"]}, "protocols_config": {"pouw": {}}}
     model, args = Model(), SimpleNamespace(target=None)
     protocols, entries = m1_capture.capture_protocols(wl, args, model)
     try:
@@ -195,9 +196,9 @@ def test_a_workloads_protocols_config_reaches_the_capture_and_the_commit(tmp_pat
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import cli
     doc = json.loads(open("workloads/workload_qwen05_32x16_1req.json").read())
-    doc["protocols_config"] = {"pouw": {"beacon": BEACON, "draws": 8}}
+    doc["protocols_config"] = {"pouw": {"draws": 8}}
     (tmp_path / "wl.json").write_text(json.dumps(doc))
-    assert va.load_workload(tmp_path / "wl.json")["protocols_config"] == {"pouw": {"beacon": BEACON, "draws": 8}}
+    assert va.load_workload(tmp_path / "wl.json")["protocols_config"] == {"pouw": {"draws": 8}}
     del doc["protocols_config"]
     (tmp_path / "wl.json").write_text(json.dumps(doc))
     assert va.load_workload(tmp_path / "wl.json")["protocols_config"] is None

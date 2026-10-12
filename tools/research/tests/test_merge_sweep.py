@@ -3,6 +3,7 @@ is closed with a comment naming the commit it landed in, and every one based on 
 remote is a bare repository in tmp and GitHub is a fake `gh`, so nothing here reaches the network."""
 from __future__ import annotations
 
+import functools
 import json
 import os
 import subprocess
@@ -46,7 +47,7 @@ def _world(tmp_path: Path):
     repo.mkdir()
     (repo / "mytools").mkdir()
     (repo / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
-    (repo / "tools" / "check").mkdir(parents=True)
+    (repo / "tools" / "verity" / "check").mkdir(parents=True)
     for rel, text in CHECK_FILES.items():
         (repo / rel).write_text(text)
     (repo / ".gitignore").write_text("__pycache__/\n")
@@ -99,6 +100,33 @@ def test_the_sweep_keeps_a_landed_branch_that_moved_past_its_landed_head(tmp_pat
     lines: list[str] = []
     assert M.sweep(repo, gh=gh, log=lines.append) == ([1, 2], [5])
     assert _heads(repo) == {"main", "A", "C", "D", "E"} and any(line.startswith("research merge: kept A") for line in lines)
+
+
+def test_the_sweep_closes_a_pr_whose_pinned_head_landed_and_whose_head_since_only_merged_main(tmp_path):
+    """#1273, #1274 and #1283 merged `main` into heads a tip had pinned (6 Oct): the tip lands them as the pinned heads, so the sweep
+    closes such a PR, saying so, and keeps its branch.  One whose head since adds content stays open."""
+    repo, gh, tips, _merge = _world(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "train", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge #3 ({tips['C'][:8]})", tips["C"])
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "Merge train U (#3)", "train")
+    _git(repo, "push", "-q", "origin", "main")
+    landed = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "C")
+    _git(repo, "merge", "-q", "--no-ff", "--no-edit", tips["B"])
+    _git(repo, "push", "-q", "origin", "C")
+    gh.open[3]["headRefOid"] = moved = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "D")
+    (repo / "D2.txt").write_text("more\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "more")
+    _git(repo, "checkout", "-q", "main")
+    lines: list[str] = []
+    closed, _ = M.sweep(repo, gh=gh, log=lines.append)
+    assert 3 in closed and 4 not in closed
+    note = f"Merged into main at {landed[:12]} (Merge train U (#3)). Its head since, {moved[:12]}, adds nothing to main."
+    assert ("pr", "close", "3", "--comment", note) in gh.mutations
+    assert "C" in _heads(repo)
 
 
 def test_the_sweep_is_idempotent_and_its_dry_run_changes_nothing(tmp_path):
@@ -237,3 +265,275 @@ def test_a_merge_without_the_remote_skips_the_sweep(tmp_path, monkeypatch, capsy
     monkeypatch.chdir(repo)
     M._sweep_after(repo, "main", "origin")
     assert "no remote 'origin'; pull request sweep skipped" in capsys.readouterr().out
+
+
+# ---- the steps after a landing follow origin's main, not the push
+
+def _steps(monkeypatch) -> list[tuple]:
+    """Every after-landing step `caught_up` runs, in order: ("alert", old, new), ("mirror", sha), ("after_land", sha),
+    ("report", start, tip)."""
+    import research.spec_alert as S
+
+    ran: list[tuple] = []
+    monkeypatch.setattr(S, "alert", lambda _repo, old, new, **_k: ran.append(("alert", old, new)) or True)
+    monkeypatch.setattr(M, "push_mirror", lambda _repo, sha, _name: ran.append(("mirror", sha)) or True)
+    monkeypatch.setattr(M, "after_land", lambda _repo, _tool, sha, **_k: ran.append(("after_land", sha)))
+    monkeypatch.setattr(M, "report_landings", lambda _repo, start, tip, **_k: ran.append(("report", start, tip)) or True)
+    monkeypatch.setenv("RESEARCH_MERGE_MIRROR", "vy-nebius-1")
+    return ran
+
+
+def _marker(repo: Path) -> str:
+    out = _git(repo, "ls-remote", "origin", M.AFTER_LAND_REF)
+    return out.split()[0] if out else ""
+
+
+def test_a_landing_pushed_another_way_gets_its_after_landing_steps_on_the_next_merge_run_once(tmp_path, monkeypatch, capsys):
+    """#1206 (5 Oct) was the second landing to skip the spec DM, node 1's mirror and `post_train.py`: it reached main without
+    `research merge --push`.  Each `research merge` run catches them up from the marker, once, whoever runs it; a dry run runs
+    none, and a remote with no marker yet only gets one."""
+    repo, gh, _tips, merge = _world(tmp_path)
+    monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
+    ran = _steps(monkeypatch)
+    monkeypatch.chdir(repo)
+    assert M.main(["--sweep"]) == 0
+    assert ran == [] and _marker(repo) == merge and f"had no {M.AFTER_LAND_REF}; set it to main ({merge[:12]})" in capsys.readouterr().out
+    other = tmp_path / "other"
+    _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(other))
+    for name in ("x", "y"):
+        (other / f"{name}.txt").write_text(name + "\n")
+        _git(other, "add", "-A")
+        _git(other, "commit", "-q", "-m", f"{name}, pushed by hand")
+    _git(other, "push", "-q", "origin", "main")
+    tip = _git(other, "rev-parse", "HEAD")
+    assert M.main(["--sweep", "--dry-run"]) == 0 and ran == [] and _marker(repo) == merge
+    assert M.main(["--sweep"]) == 0
+    assert ran == [("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip)] and _marker(repo) == tip
+    assert f"last ran for {merge[:12]}; catching up 2 commit(s) of main to {tip[:12]}" in capsys.readouterr().out
+    assert M.main(["--sweep"]) == 0 and len(ran) == 4, "caught up once"
+
+
+def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_landings_it_missed_brought(tmp_path, monkeypatch,
+                                                                                                        capsys):
+    repo, gh, _tips, merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    before = _git(repo, "rev-parse", f"{merge}^1")
+    _git(repo, "push", "-q", "origin", f"{before}:{M.AFTER_LAND_REF}")       # the steps last ran before B's train landed
+    ran = _steps(monkeypatch)
+    assert M.main(["C", "--push"]) == 0, capsys.readouterr().err
+    tip = _git(repo, "rev-parse", "origin/main")
+    assert ran == [("alert", before, merge), ("mirror", merge), ("after_land", merge), ("report", before, merge),  # B's train
+                   ("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip)]          # the push's: C
+    assert _marker(repo) == tip
+
+
+def test_a_spec_dm_that_failed_is_sent_again_by_the_next_sweep_which_fails_until_it_goes(tmp_path, monkeypatch, capsys):
+    """Tip 141 (8 Oct): the DM failed on the Slack broker's socket, the after-landing marker moved anyway, and only a hand retry
+    sent it.  The DM's own marker stays put until `alert` returns True, so the next run resends it, and `--sweep` exits 1 while it
+    lags main; the mirror and `after_land` still run once."""
+    import research.spec_alert as S
+
+    repo, gh, _tips, merge = _world(tmp_path)
+    monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
+    ran = _steps(monkeypatch)
+    monkeypatch.chdir(repo)
+    assert M.main(["--sweep"]) == 0 and _marker(repo) == merge
+    assert _git(repo, "ls-remote", "origin", M.SPEC_ALERTED_REF).split()[0] == merge
+    other = tmp_path / "other"
+    _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(other))
+    (other / "x.txt").write_text("x\n")
+    _git(other, "add", "-A")
+    _git(other, "commit", "-q", "-m", "x, pushed by hand")
+    _git(other, "push", "-q", "origin", "main")
+    tip = _git(other, "rev-parse", "HEAD")
+    sent = iter([False, True])
+    monkeypatch.setattr(S, "alert", lambda _repo, old, new, **_k: ran.append(("alert", old, new)) or next(sent))
+    capsys.readouterr()
+    assert M.main(["--sweep"]) == 1
+    err, out = capsys.readouterr()[::-1]
+    assert ran == [("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip)] and _marker(repo) == tip
+    assert f"{M.SPEC_ALERTED_REF} stays at {merge[:12]}" in out and f"{M.SPEC_ALERTED_REF} is {merge[:12]}, behind main" in err
+    assert M.main(["--sweep"]) == 0
+    assert ran[4:] == [("alert", merge, tip)], "only the DM is retried"
+    assert _git(repo, "ls-remote", "origin", M.SPEC_ALERTED_REF).split()[0] == tip
+    assert M.main(["--sweep"]) == 0 and len(ran) == 5, "sent once"
+
+
+def test_a_marker_main_does_not_hold_runs_nothing_and_says_how_to_reset_it(tmp_path, monkeypatch, capsys):
+    repo, gh, tips, _merge = _world(tmp_path)
+    monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
+    _git(repo, "push", "-q", "origin", f"{tips['D']}:{M.AFTER_LAND_REF}")
+    ran = _steps(monkeypatch)
+    monkeypatch.chdir(repo)
+    assert M.main(["--sweep"]) == 0 and ran == [] and _marker(repo) == tips["D"]
+    assert f"last ran for {tips['D'][:12]}, which isn't in origin's main" in capsys.readouterr().out
+
+
+# ---- main to node 1's bare repository, once origin has it
+
+def _node1(tmp_path, monkeypatch):
+    """vy-nebius-1's bare repository in tmp, pushed to through `git_push_url` with `sh -c` standing in for its ssh."""
+    bare = tmp_path / "node1.git"
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    monkeypatch.setenv("RESEARCH_MERGE_MIRROR", "vy-nebius-1")
+    asked = []
+    monkeypatch.setattr(M, "_mirror_target", lambda name: (asked.append(name), (["sh", "-c"], str(bare)))[1])
+    return bare, asked
+
+
+def _main_of(bare: Path) -> str | None:
+    r = subprocess.run(["git", "--git-dir", str(bare), "rev-parse", "-q", "--verify", "refs/heads/main"], capture_output=True,
+                       text=True)
+    return r.stdout.strip() or None
+
+
+def test_a_merge_with_push_pushes_main_to_node_1_after_origin(tmp_path, monkeypatch, capsys):
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    bare, asked = _node1(tmp_path, monkeypatch)
+    capsys.readouterr()
+    assert M.main(["C", "--push"]) == 0
+    out, main = capsys.readouterr().out, _git(repo, "rev-parse", "main")
+    assert _git(repo, "rev-parse", "origin/main") == main == _main_of(bare) and asked == ["vy-nebius-1"]
+    assert out.index("pushed main to origin") < out.index(f"pushed main ({main[:12]}) to vy-nebius-1:{bare}")
+
+
+def test_a_refused_node_1_push_leaves_the_merge_landed_and_names_the_command_that_reruns_it(tmp_path, monkeypatch, capsys):
+    """Node 1's main is somewhere the merge doesn't contain: the plain push is refused, never forced, and the merge stands."""
+    repo, gh, tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    bare, _asked = _node1(tmp_path, monkeypatch)
+    _git(repo, "push", "-q", "--no-verify", str(bare), f"{tips['D']}:refs/heads/main")
+    capsys.readouterr()
+    assert M.main(["C", "--push"]) == 0
+    err, main = capsys.readouterr().err, _git(repo, "rev-parse", "main")
+    assert _git(repo, "rev-parse", "origin/main") == main and _main_of(bare) == tips["D"]
+    line, = [ln for ln in err.splitlines() if "not pushed to vy-nebius-1" in ln]
+    assert f"main ({main[:12]}) not pushed to vy-nebius-1 (git push exited 1: " in line and "rejected" in line
+    assert line.endswith(f"; rerun: cd {repo} && research merge --mirror {main}")
+    _git(tmp_path, "--git-dir", str(bare), "update-ref", "-d", "refs/heads/main")
+    assert M.main(["--mirror", main]) == 0 and _main_of(bare) == main
+
+
+def test_a_hand_landed_main_reaches_node_1_past_the_checkouts_push_guard(tmp_path, monkeypatch, capsys):
+    """The guard judges pushes to origin's main; node 1's copy follows origin, so a main landed by hand, which has no check
+    attempt of its tree, still reaches it (61f64824c and 24aa9a9a4 didn't, 7 Oct)."""
+    repo, _gh, _tips, _merge = _world(tmp_path)
+    bare, _asked = _node1(tmp_path, monkeypatch)
+    _git(repo, "config", "core.hooksPath", str(repo / ".git" / "hooks"))
+    assert M.install_push_guard(repo) == repo / ".git" / "hooks" / "pre-push"
+    (repo / "by-hand.txt").write_text("landed by hand\n")
+    _git(repo, "add", "by-hand.txt")
+    _git(repo, "commit", "-qm", "landed by hand")
+    main = _git(repo, "rev-parse", "HEAD")
+    plain = subprocess.run(["git", "push", "-q", str(bare), f"{main}:refs/heads/main"], cwd=repo, capture_output=True, text=True)
+    assert plain.returncode != 0 and _main_of(bare) is None, "the guard refuses it as a push to main"
+    monkeypatch.chdir(repo)
+    assert M.main(["--mirror", main]) == 0 and _main_of(bare) == main
+
+
+def test_a_machine_that_cannot_be_resolved_fails_only_the_node_1_push(tmp_path, monkeypatch, capsys):
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    monkeypatch.setenv("RESEARCH_MERGE_MIRROR", "vy-nebius-1")
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "no-machines.toml"))
+    assert M.main(["C", "--push"]) == 0
+    err = capsys.readouterr().err
+    assert "not pushed to vy-nebius-1 (Refused: machine 'vy-nebius-1' is not in" in err and "research merge --mirror" in err
+    assert _git(repo, "rev-parse", "origin/main") == _git(repo, "rev-parse", "main")
+
+
+def test_a_node_1_push_with_no_answer_is_cut_off_and_the_merge_stands(tmp_path, monkeypatch, capsys):
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    bare, _asked = _node1(tmp_path, monkeypatch)
+    bounds = []
+
+    def hangs(argv, **kw):
+        bounds.append(kw["timeout"])
+        raise subprocess.TimeoutExpired(argv, kw["timeout"])
+
+    monkeypatch.setattr(M, "push_mirror", functools.partial(M.push_mirror, run=hangs))
+    assert M.main(["C", "--push"]) == 0
+    assert bounds == [M.MIRROR_TIMEOUT_S] and _main_of(bare) is None
+    assert f"not pushed to vy-nebius-1 (no answer within {M.MIRROR_TIMEOUT_S} s); rerun:" in capsys.readouterr().err
+
+
+def test_nothing_goes_to_node_1_when_origin_refuses_main(tmp_path, monkeypatch, capsys):
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    bare, asked = _node1(tmp_path, monkeypatch)
+    other = tmp_path / "other"
+    _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(other))
+    (other / "x.txt").write_text("x\n")
+    _git(other, "add", "-A")
+    _git(other, "commit", "-q", "-m", "someone else landed first")
+    _git(other, "push", "-q", "origin", "main")
+    assert M.main(["C", "--push"]) == 1
+    assert asked == [] and _main_of(bare) is None and "vy-nebius-1" not in capsys.readouterr().err
+
+
+# ---- every landing is reported in the merge thread
+
+def test_each_landing_is_one_line_naming_what_it_merged_and_its_checked_run(tmp_path):
+    """Friction pass, 10 Oct: #1692 + #1694 and #1697 + #1706 were missing from the lander's reports, and a stacked member such
+    as #1706 reads closed on GitHub, so the lines come from main's first-parent log: a train's merges (`Merge #N`, `Merge
+    origin/BRANCH`, or a pinned commit) through ``prs``, and the runs its `Checked:` trailer names, the lander's `*` id too."""
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "root")
+    start = _git(repo, "rev-parse", "HEAD")
+    heads = {}
+    for name in ("feature", "pinned", "seven"):
+        _git(repo, "checkout", "-q", "-b", name, start)
+        (repo / name).write_text(name)
+        _git(repo, "add", name)
+        _git(repo, "commit", "-q", "-m", name)
+        heads[name] = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "train", start)
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge #7 ({heads['seven'][:8]})", "seven")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge origin/feature ({heads['feature'][:8]})", "feature")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge {heads['pinned'][:12]} ({heads['pinned'][:8]})", "pinned")
+    train = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge {train[:12]} ({train[:8]})\n\nChecked: r20261010-104434-7273 (full "
+         "check: passed), r20261010-*-9827 (suites)\nSkipped-check: none", "train")
+    landing = _git(repo, "rev-parse", "HEAD")
+    (repo / "hand").write_text("h")
+    _git(repo, "add", "hand")
+    _git(repo, "commit", "-q", "-m", "a fix pushed by hand")
+    hand = _git(repo, "rev-parse", "HEAD")
+    prs = {"feature": 9, heads["pinned"]: 8}
+    assert M.landing_lines(repo, start, hand, prs) == [
+        f"landed on main: {landing[:12]} #7 + #9 + #8; checked by r20261010-104434-7273, r20261010-*-9827",
+        f"landed on main: {hand[:12]} “a fix pushed by hand”; checked by no run (no Check: trailer)"]
+    assert M.landing_lines(repo, start, landing)[0].startswith(f"landed on main: {landing[:12]} #7 + feature + {heads['pinned'][:12]};")
+    assert M.landing_lines(repo, hand, hand) == []
+
+
+def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_them_standing(tmp_path, capsys):
+    from research.monitors import MERGE_THREAD
+    from research.slack import is_quiet
+
+    repo, gh, _tips, merge = _world(tmp_path)
+    start = _git(repo, "rev-parse", f"{merge}^1")
+    calls = []
+
+    class Api:
+        def call(self, method, **kw):
+            calls.append((method, kw))
+
+    reg = {"channels": {"agent-coordination": {"id": "C1"}}}
+    assert M.report_landings(repo, start, merge, api=Api(), reg=reg, gh=gh, log=lambda _: None)
+    (method, kw), = calls
+    assert method == "chat.postMessage" and kw["channel"] == "C1" and kw["thread_ts"] == MERGE_THREAD
+    assert kw["text"].startswith(f"landed on main: {merge[:12]} “Merge train T (B)”; checked by no run") and is_quiet(kw["text"])
+
+    class Down:
+        def call(self, method, **kw):
+            raise OSError("broker socket closed")
+
+    assert not M.report_landings(repo, start, merge, api=Down(), reg=reg, gh=gh)
+    assert f"the landings {start[:12]}..{merge[:12]} weren't posted to the merge thread: OSError" in capsys.readouterr().err
+    assert M.report_landings(repo, merge, merge, api=Down(), reg=reg, gh=gh), "nothing landed, nothing to post"

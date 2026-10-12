@@ -49,7 +49,7 @@ import torch.nn as nn
 from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.rules import vllm_iface as vi
-from verity_vllm.program.registry.serve3_reference import materialize
+from verity_vllm.program.kernels.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager")
 C = dict(T=3, NH=2, KVH=1, D=8, H=16, MAX_POS=16, EPS=1e-5, POS0=2)

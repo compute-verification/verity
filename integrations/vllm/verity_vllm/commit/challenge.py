@@ -1,14 +1,14 @@
-"""The integration's one challenge module: every draw over committed values, on `verity.primitives.randomness`.
+"""The integration's one challenge module: every draw over committed values, on `verity.ml.randomness`.
 
 Today's derivations hash the run root, the prover's own commitment (Fiat-Shamir), and their outputs are recorded in
 verdicts.  They stay byte-identical while `LEGACY` is true; decision 42 retires them at the re-baseline epoch.  The
-non-legacy forms draw through `verity.primitives.randomness.derive` from a `source` that is a beacon round published after the
-run root was registered, or an auditor key, with the run root and the draw's other bindings as context:
+non-legacy forms draw through `verity.ml.randomness.derive` from a `source` that is an auditor key, with the run root
+and the draw's other bindings as context:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
-* the replay sample: sampled proofs' verification-unit draw (`replay_key`), each stratum a replay unit selected with
-  p = 1 and `per_stratum` of its units checked (`stratum_picks`).
+* the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of sampled proofs' former derived
+  proof-unit draw, with `per_stratum` units of each stratum drawn uniformly at the stratum's index (`stratum_picks`).
 
 The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
 difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
@@ -20,20 +20,19 @@ import hashlib
 import random
 from bisect import bisect_right
 from collections.abc import Callable, Sequence
-from fractions import Fraction
 from itertools import accumulate
 from typing import Any, TypeVar
 
 import numpy as np
 
-from verity.primitives.randomness import Key, derive
-from verity_experimental.sampled_proofs.law import ReplayUnit, Stage, TwoStageLaw, select_verification_units, vu_key
+from verity.ml.randomness import Key, derive
 
 #: Every derivation's default until the re-baseline epoch (decision 42).
 LEGACY = True
 
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
 IDENTITIES_DOMAIN = "verity/vllm-commit/opening-identities/v1"
+REPLAY_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
 _LEGACY_POSITIONS_TAG = b"verity/cmt-integ/challenge/v0"
 
 T = TypeVar("T")
@@ -43,7 +42,7 @@ def _source(legacy: bool, source: bytes | None) -> None:
     if legacy and source is not None:
         raise ValueError("a legacy challenge derives from the run root alone; pass legacy=False with a source")
     if not legacy and not source:
-        raise ValueError("a non-legacy challenge needs a source: a beacon round after the root, or an auditor key")
+        raise ValueError("a non-legacy challenge needs a source: an auditor key")
 
 
 def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, salt: bytes = b"", *, legacy: bool = LEGACY,
@@ -99,22 +98,23 @@ def legacy_replay_seed(challenge: str, run_root: bytes) -> int:
 
 
 def replay_key(source: bytes, run_root: bytes) -> Key:
-    """The replay sample's key off legacy: sampled proofs' verification-unit draw after the run root."""
+    """The replay sample's key off legacy, derived after the run root."""
     _source(False, source)
-    return vu_key(source, {"run_root": bytes(run_root)})
+    return derive(source, REPLAY_DOMAIN, {"run_root": bytes(run_root)})
 
 
 def stratum_picks(pools: Sequence[Sequence[T]], per_stratum: int, seed: int | None, key: Key | None = None) -> list[list[T]]:
     """`per_stratum` members of each pool (all of a smaller pool), in pool order.
 
-    With `seed` (legacy; pass None with a key): one `random.Random(seed)` samples the pools in turn.  With `key`: the two-stage law with every
-    pool a replay unit at p = 1 and k = `per_stratum`, pool i drawn at index i."""
+    With `seed` (legacy; pass None with a key): one `random.Random(seed)` samples the pools in turn.  With `key`: pool i's
+    members at the positions of `key.subset(min(per_stratum, len(pool)), len(pool), ("vu", i))`."""
     if (seed is None) == (key is None):
         raise ValueError("stratum_picks takes a legacy seed or a key, not both")
     if key is not None:
-        law = TwoStageLaw({"stratum": Stage(Fraction(1), int(per_stratum))})
-        vus = select_verification_units(key, law, [ReplayUnit(i, "stratum", len(p)) for i, p in enumerate(pools)])
-        return [[pool[j] for j in vus[i]] for i, pool in enumerate(pools)]
+        if int(per_stratum) < 0:
+            raise ValueError("stratum_picks needs per_stratum >= 0")
+        return [[pool[j] for j in key.subset(min(int(per_stratum), len(pool)), len(pool), ("vu", i))]
+                for i, pool in enumerate(pools)]
     rng = random.Random(int(seed))
     out = []
     for pool in pools:

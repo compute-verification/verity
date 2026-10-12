@@ -7,8 +7,8 @@
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "engine.profiles.dense_generic <-> engine.profiles.generic"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "pipeline.commit <-> pipeline.hot"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "program.frontend.derive <-> program.frontend.emit <-> program.frontend.rules <-> program.frontend.rules.base <-> program.frontend.rules.family <-> program.frontend.rules.padding <-> program.frontend.rules.patterns <-> program.frontend.rules.profile <-> program.frontend.rules.reference <-> program.frontend.rules.views"},
-    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "program.frontend.rules.vllm_bindings <-> program.frontend.rules.vllm_moe"},
-    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "program.frontend.target_profile <-> program.registry.gemm_targets"},
+    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "program.frontend.rules.vllm_bindings <-> program.frontend.rules.vllm_moe <-> program.frontend.rules.vllm_moe_fp8"},
+    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "program.frontend.gemm_targets <-> program.frontend.target_profile"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "program.kernels.fa2_relation <-> program.kernels.gemm_relation"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "program.registry.sampling <-> program.registry.topp_split"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "acquire <-> commit"},
@@ -87,6 +87,7 @@
     {"file": "verity_vllm/engine/profiles/gen_ln_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_ln_patterns -> observe.fold.tree"},
     {"file": "verity_vllm/engine/profiles/gen_ov_moe_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_ov_moe_patterns -> observe.events"},
     {"file": "verity_vllm/engine/profiles/gen_ov_moe_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_ov_moe_patterns -> observe.fold.patterns"},
+    {"file": "verity_vllm/engine/profiles/gen_ov_moe_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_ov_moe_patterns -> observe.fold.patterns.fp8"},
     {"file": "verity_vllm/engine/profiles/gen_ov_moe_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_ov_moe_patterns -> observe.fold.resolver"},
     {"file": "verity_vllm/engine/profiles/gen_ov_moe_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_ov_moe_patterns -> observe.fold.tree"},
     {"file": "verity_vllm/engine/profiles/gen_ov_sampling_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_ov_sampling_patterns -> observe.events"},
@@ -133,8 +134,8 @@
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "layer", "symbol": "<module>", "detail": "program.kernels.sampling_rng -> observe.events"},
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "layer", "symbol": "<module>", "detail": "program.kernels.sampling_rng -> observe.log"},
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "layer", "symbol": "<module>", "detail": "program.kernels.twins -> check.fold_compare"},
-    {"file": "verity_vllm/program/registry/lifted.py", "kind": "layer", "symbol": "<module>", "detail": "program.registry.lifted -> pipeline.global_program"},
-    {"file": "verity_vllm/program/registry/lifted.py", "kind": "layer", "symbol": "<module>", "detail": "program.registry.lifted -> query.query_artifact"},
+    {"file": "verity_vllm/program/lifting/lifted_records.py", "kind": "layer", "symbol": "<module>", "detail": "program.lifting.lifted_records -> pipeline.global_program"},
+    {"file": "verity_vllm/program/lifting/lifted_records.py", "kind": "layer", "symbol": "<module>", "detail": "program.lifting.lifted_records -> query.query_artifact"},
     {"file": "verity_vllm/query/manifest/verify.py", "kind": "layer", "symbol": "<module>", "detail": "query.manifest.verify -> pipeline.manifest"}
   ]
 }

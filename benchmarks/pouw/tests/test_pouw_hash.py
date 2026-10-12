@@ -1,5 +1,5 @@
 """The shared hashing module off the device (benchmarks/pouw/pouw_hash): the host build of pouw_hash.cuh against every
-reference (check.py: hashlib, the `blake3` package, verity.primitives.crypto.turboshake, Pearl-C's `leaf` and Pearl's ticket), the
+reference (check.py: hashlib, the `blake3` package, verity.ml.crypto.turboshake, Pearl-C's `leaf` and Pearl's ticket), the
 checker's rejections by name, the header's domain bytes against the scheme's, and sass.py's opcode census on SASS lines."""
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ sys.path.insert(0, str(HERE))
 
 import check as K  # noqa: E402
 import sass as S  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
 
 
 @pytest.fixture(scope="module")

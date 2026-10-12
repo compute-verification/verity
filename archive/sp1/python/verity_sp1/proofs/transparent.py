@@ -12,13 +12,13 @@ zero-knowledge; it is the reference every other backend must agree with.
 
 from __future__ import annotations
 
-from verity.primitives.commitments.limits import VerificationLimits
+from verity.ml.commitments.limits import VerificationLimits
 
 # The framing primitives are private to merkle.py on purpose: nothing but the
 # commitment code and this reference checker may spell out a leaf or node hash.
-from verity.primitives.commitments.merkle import _hash as framed_hash
-from verity.primitives.commitments.merkle import _uint, merkle_depth
-from verity_experimental.commitments.multiproof import verify_multiproof
+from verity.ml.commitments.merkle import _hash as framed_hash
+from verity.ml.commitments.merkle import _uint, merkle_depth
+from verity.ml.commitments.multiproof import verify_multiproof
 from verity.errors import ProtocolError
 
 from verity_vllm.check.codes import Reject, VerificationCode

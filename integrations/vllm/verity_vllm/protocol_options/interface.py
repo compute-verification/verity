@@ -20,7 +20,7 @@ An adapter is one module of this package (`sampled_proofs`, `pous`, `pouw`) that
   finds every option's in ``target.weight_commitments``.
 
 An adapter holds no protocol logic: the scheme, its commitments, the salt and the audit are its protocol package's
-(`verity.protocols.accounting.work.pouw`, `verity.protocols.accounting.space.pous`, `verity.protocols.verification.sampled_proofs`), which never import this one.  It finds its hook sites by type,
+(`verity.core.protocols.pouw`, `verity.core.protocols.pous`, `verity.core.protocols.sampled_proofs`), which never import this one.  It finds its hook sites by type,
 never by module name, and makes every patch and service through ``target.hooks(entry)``: an `engine.hooks.Hooks` tagged
 with its entry, so the composition uninstalls it and a committer recognises it (`engine.hooks.live(tag)`).
 """

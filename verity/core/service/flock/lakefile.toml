@@ -1,0 +1,36 @@
+name = "flock_verifier"
+version = "0.1.0"
+defaultTargets = ["flock-verify", "flock-rows", "flock-firewall", "flock-witness", "flock-rec-opening", "flock-rec-sparse"]
+
+[leanOptions]
+autoImplicit = false
+
+[[lean_lib]]
+name = "Flock"
+
+[[lean_lib]]
+name = "VStar"
+
+[[lean_exe]]
+name = "flock-verify"
+root = "FlockVerify"
+
+[[lean_exe]]
+name = "flock-rows"
+root = "FlockRows"
+
+[[lean_exe]]
+name = "flock-firewall"
+root = "FlockFirewall"
+
+[[lean_exe]]
+name = "flock-rec-sparse"
+root = "FlockRecSparse"
+
+[[lean_exe]]
+name = "flock-witness"
+root = "FlockWitness"
+
+[[lean_exe]]
+name = "flock-rec-opening"
+root = "FlockRecOpening"

@@ -1,4 +1,4 @@
-"""The commitment scheme of the Commit path: ``vllm-v1`` (:mod:`verity.primitives.commitments.vllm_v1`, spec ``PROTOCOL.md`` beside it).
+"""The commitment scheme of the Commit path: ``vllm-v1`` (:mod:`verity.ml.commitments.vllm_v1`, spec ``PROTOCOL.md`` beside it).
 
 Every leaf and root rule the integration hashes comes from here.  Headers, root bindings, tags and the tree walk are core's.
 The two rules that run once per leaf keep a prefix-once form over core's tags -- the position leaf (one hash per
@@ -18,11 +18,11 @@ import operator
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from verity.primitives.commitments import leaves as core_tree
-from verity.primitives.commitments import vllm_v1 as V
+from verity.ml.commitments import leaves as core_tree
+from verity.ml.commitments import vllm_v1 as V
 
 __all__ = ["FA2H_KIND_CHUNK", "FA2H_TAG", "FA2H_VERSION", "LIFT_PREFIX", "NAME", "NODE_PREFIX", "POS_LEAF_TAG", "U64_32", "chunk_header", "chunk_leaf",
-           "empty_root", "fold", "fold_levels", "fold_path", "names_digest", "path_in_levels", "path_shape", "pos_leaf", "run_root",
+           "empty_root", "fold", "fold_levels", "fold_path", "names_digest", "path_in_levels", "path_shape", "pos_leaf", "program_field", "run_root",
            "semantic_root", "step_root", "stream_root", "thread_header", "thread_leaf", "thread_root", "weights_root"]
 
 NAME = V.NAME
@@ -107,6 +107,15 @@ def thread_header(src_mask: int, slab: int, m_block: int, n_block: int, tidx: in
 
 
 # --- root bindings ---------------------------------------------------------------------------------------------------------
+
+def program_field(program_digest: str) -> bytes:
+    """The 32-byte ``program`` field the roots bind for a Program digest (hex): its first 32 bytes, so SHA-512 truncated to
+    256 bits for an IR Program digest (``codec.program_digest``), and the whole digest for a 32-byte one."""
+    d = bytes.fromhex(program_digest)
+    if len(d) < 32:
+        raise ValueError(f"a Program digest has at least 32 bytes, not {len(d)}")
+    return d[:32]
+
 
 def step_root(program_digest: bytes, ctx_digest: bytes, geo_digest: bytes, layout_digest: bytes, n: int, tree_root: bytes) -> bytes:
     return V.step_root(bytes(program_digest), bytes(ctx_digest), bytes(geo_digest), bytes(layout_digest), operator.index(n), bytes(tree_root))

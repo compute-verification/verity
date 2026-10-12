@@ -1,0 +1,44 @@
+name = "network_check"
+defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../../service/flock"
+
+# The check is a core protocol, reads the Program's grid from the certifier program (`expectedRow`, Σ_sync) and verifies
+# certificates with the LMS port.
+[[require]]
+name = "core_protocol"
+path = "../../interface"
+
+[[require]]
+name = "certifier_program"
+path = "../../certifier/lean"
+
+[[require]]
+name = "lms"
+path = "../../../primitives/lms/lean"
+
+# `tagged_sha512` is core's identity hash.
+[[require]]
+name = "core_identity"
+path = "../../../primitives/identity"
+
+[[lean_lib]]
+name = "NetworkCheck"
+
+[[lean_exe]]
+name = "network-check-difftest"
+root = "NetworkCheck.DifftestMain"
+
+[[lean_exe]]
+name = "network-check"
+root = "NetworkCheck.Main"
+
+[[lean_exe]]
+name = "network-records"
+root = "NetworkCheck.RecordsMain"

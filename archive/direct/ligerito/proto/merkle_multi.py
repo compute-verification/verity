@@ -1,5 +1,5 @@
 """Merkle multi-opening (shared authentication paths) for a set of leaves of a power-of-two Blake3 tree whose leaves
-are ``blake3(row words, little-endian u32)`` and nodes ``blake3(left || right)`` -- the tree ``kernels/hash_gpu/
+are ``blake3(row words, little-endian u32)`` and nodes ``blake3(left || right)`` -- the tree ``verity/ml/kernels/hash_gpu/
 merkle.commit`` builds on the device (bit-exact with the host ``blake3`` package, as ``ligero/merkle.verify_path``
 relies on).  ``plan`` lists the sibling nodes the verifier cannot recompute, level by level in sorted order; the
 prover gathers exactly those digests from the device tree in one copy; ``verify`` consumes them in the same order.

@@ -1,12 +1,12 @@
 """B-Ligero's ``leaf = blake3`` is the core ``blake3-keyed/row/v2`` schema byte for byte: its native chunk-CV fold lands on
-every full-row digest of ``verity.primitives.commitments.frame_v3``'s vectors, with the same keys and schema string."""
+every full-row digest of ``verity.ml.commitments.frame_v3``'s vectors, with the same keys and schema string."""
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from verity.primitives.commitments.frame_v3 import vectors as V
-from verity.primitives.commitments.rowleaf import SCHEMA_BLAKE3_ROW, blake3_row_key
+from verity.ml.commitments.frame_v3 import vectors as V
+from verity.ml.commitments.rowleaf import SCHEMA_BLAKE3_ROW, blake3_row_key
 
 from . import blake3 as L
 

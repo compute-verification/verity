@@ -1,0 +1,70 @@
+{
+ "definitions": {
+  "AmpereBF16TcDot16_v3": {
+   "and": 8260
+  },
+  "BlackwellE4m3QmmaDot32_v2": {
+   "and": 9128
+  },
+  "BlackwellE5m2QmmaDot32_v2": {
+   "and": 8931
+  },
+  "BlackwellMxf4OmmaDot64_v2": {
+   "and": 5917
+  },
+  "BlackwellNvf4OmmaDot64_v2": {
+   "and": 6864
+  },
+  "DotBf16_v3{K=16,DOT=AmpereBF16TcDot16_v3}": {
+   "and": 7996
+  },
+  "DotBf16_v3{K=16,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 7604
+  },
+  "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
+   "and": 32776
+  },
+  "DotBf16_v3{K=64,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 31220
+  },
+  "F2fpBf16_v2": {
+   "and": 66
+  },
+  "GemmCoordinateE4m3_v2{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 18050
+  },
+  "GemmCoordinateE4m3_v2{K=64,DOT=HopperE4m3QgmmaDot32_v2}": {
+   "and": 13445
+  },
+  "GemmCoordinateMxf4_v2{K=128,DOT=BlackwellMxf4OmmaDot64_v2}": {
+   "and": 11511
+  },
+  "GemmCoordinateNvf4_v2{K=128,DOT=BlackwellNvf4OmmaDot64_v2}": {
+   "and": 13401
+  },
+  "GemmCoordinate_v3{K=32,DOT=AmpereBF16TcDot16_v3}": {
+   "and": 16322
+  },
+  "GemmCoordinate_v3{K=32,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 15542
+  },
+  "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
+   "and": 32842
+  },
+  "GemmCoordinate_v3{K=64,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 31286
+  },
+  "Gemm_v3{K=32,N=3,DOT=AmpereBF16TcDot16_v3}": {
+   "and": 48966
+  },
+  "Gemm_v3{K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 46626
+  },
+  "HopperBF16WgmmaDot16_v2": {
+   "and": 7872
+  },
+  "HopperE4m3QgmmaDot32_v2": {
+   "and": 6799
+  }
+ }
+}

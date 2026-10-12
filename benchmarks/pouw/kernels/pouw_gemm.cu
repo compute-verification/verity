@@ -8,7 +8,7 @@
 //     c0[j] = -128*sum_l Y[j,l]; each m16n8k16 u8xs8 step is dumped.  The Python wrapper hashes 16x16 tiles
 //     step-major with ncp-v1's SHAKE256 framing.
 //   fp8_gemm(A e4m3 [M,K], B e4m3 [N,K], cfg) -> C f32 [M,N]: m16n8k32 e4m3 mma with FP32 accumulate, a fresh +0
-//     accumulator every 128 products promoted to the total by one FP32 add (the `ada` device of verity.protocols.accounting.work.pouw's
+//     accumulator every 128 products promoted to the total by one FP32 add (the `ada` device of verity.core.protocols.pouw's
 //     pearl-fp8-v4, which the gate checks bit for bit).
 //
 // The tiling is the PoUW research store's code/pouw-gpu-constants/ncp_gemm.cu (cp.async multistage pipeline, ldmatrix.x4

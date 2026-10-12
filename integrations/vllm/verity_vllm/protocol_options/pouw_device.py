@@ -24,7 +24,7 @@ from functools import cache
 from pathlib import Path
 
 import numpy as np
-from verity.protocols.accounting.work.pouw.circuit import ncp2
+from verity.core.protocols.pouw.circuit import ncp2
 
 from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_native as PN

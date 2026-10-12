@@ -104,12 +104,27 @@ def test_a_lane_with_only_notes_sent_to_it_gets_a_report_of_its_own(tmp_path):
     assert all("CHECKPOINT" not in p.read_text() for p in sent)
 
 
-def test_the_lanes_newest_report_of_its_own_is_its_report_whatever_its_slug(tmp_path):
-    _report(tmp_path, "kv", "# kv\n", 60)
-    named = tmp_path / "lanes" / "kv" / "20260923T2000Z-report-kv-prefix-design.md"
-    named.write_text(FRONT.format(lane="kv", status="final"))
+def test_checkpoints_stay_in_the_lanes_main_report_when_it_writes_a_newer_side_report(tmp_path):
+    """proofs' checkpoints went to `...-report-service-stack-restacked.md`, the newest report, and were moved back by hand."""
+    main = _report(tmp_path, "kv", "# kv\n", 60)
+    side = tmp_path / "lanes" / "kv" / "20260923T2000Z-report-kv-prefix-design.md"
+    side.write_text(FRONT.format(lane="kv", status="final"))
     t = (NOW - dt.timedelta(minutes=40)).timestamp()
-    os.utime(named, (t, t))
+    os.utime(side, (t, t))
+    _note(tmp_path, "kv", "20260923T2030Z-report-from-red-team-review.md", 30)
+    assert notes.report_for(tmp_path, "kv") == main
+    assert notes.checkpoint(tmp_path, "kv", "open", "still here", commit="abc1234", now=NOW) == main
+    assert "CHECKPOINT" not in side.read_text()
+
+
+def test_without_a_main_report_the_lanes_newest_report_of_its_own_is_its_report_whatever_its_slug(tmp_path):
+    older = tmp_path / "lanes" / "kv" / "20260923T1700Z-report-kv-overview.md"
+    named = tmp_path / "lanes" / "kv" / "20260923T2000Z-report-kv-prefix-design.md"
+    for p, ago in ((older, 60), (named, 40)):
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(FRONT.format(lane="kv", status="open"))
+        t = (NOW - dt.timedelta(minutes=ago)).timestamp()
+        os.utime(p, (t, t))
     _note(tmp_path, "kv", "20260923T2030Z-report-from-red-team-review.md", 30)
     assert notes.report_for(tmp_path, "kv") == named
 
@@ -791,7 +806,9 @@ def test_finish_requires_the_push_only_when_asked(tmp_path, repo):
     assert rc == 0 and "  pushed    lane/q on origin" in text
 
 
-def test_gc_worktrees_removes_only_clean_pushed_worktrees_of_done_lanes(tmp_path, repo):
+def test_gc_worktrees_removes_only_clean_pushed_worktrees_of_done_lanes(tmp_path, repo, monkeypatch):
+    git = notes._git
+    monkeypatch.setattr(notes, "_git", lambda p, *a, **kw: git(p, *a, timeout=None))   # a loaded pod can't time a status out here
     root = tmp_path / "notes"
     origin = tmp_path / "origin.git"
     _git(tmp_path, "init", "-q", "--bare", str(origin))
@@ -817,6 +834,9 @@ def test_gc_worktrees_removes_only_clean_pushed_worktrees_of_done_lanes(tmp_path
         "busy": "lane busy is open", "dirty": "dirty (1 paths)", "done": None, "local": "branch tip not on origin",
         "pred": "lane pred-2 is open", "scratch": "no lane"}
     assert (tmp_path / "done").exists()                                             # listing removes nothing
+    with monkeypatch.context() as m:                                                # a failed status keeps it, and says so
+        m.setattr(notes, "_git", lambda p, *a, **kw: None if a[0] == "status" else git(p, *a, timeout=None))
+        assert {Path(r["worktree"]).name: r["keep"] for r in notes.gc_worktrees(root, repo, now=NOW)}["done"] == "git status failed"
     rows = {Path(r["worktree"]).name: r for r in notes.gc_worktrees(root, repo, now=NOW, apply=True)}
     assert rows["done"]["removed"] is True and "removed" not in rows["dirty"]
     assert not (tmp_path / "done").exists() and (tmp_path / "dirty" / "wip.py").exists()
@@ -1150,7 +1170,7 @@ def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path,
 
 
 FRESH = ["--on", "vy-lean", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_audit", "--",
-         "python", "tools/lean/audit.py", "--all", "--build", "--fresh"]
+         "python", "tools/verity/lean/check.py", "--all", "--build", "--fresh"]
 
 
 def _run_toml(*entries: str) -> str:

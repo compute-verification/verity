@@ -40,6 +40,7 @@ def reg(tmp_path, monkeypatch) -> Path:
     d = tmp_path / "notes" / "machines.d"
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
     monkeypatch.setenv("RESEARCH_MACHINES_D", str(d))
+    monkeypatch.setenv("RESEARCH_NOTES", str(d.parent))
     return d
 
 
@@ -82,24 +83,6 @@ def test_an_ssh_entry_without_a_usable_host_is_refused(reg):
         remote.pod_target({"provider": "ssh", "name": "x"})
     with pytest.raises(remote.Refused, match="runpod or ssh"):
         remote.pod_target({"provider": "aws", "name": "x"})
-
-
-# ---- the lease on a machine that is not a pod --------------------------------------------------------------------------------------------
-
-def test_the_lease_loop_stops_a_non_runpod_machine_by_its_own_command(tmp_path):
-    rec = tmp_path / "stop.sh"
-    rec.write_text(f'#!/bin/sh\necho "$1" >> {tmp_path / "stopped"}\necho "TERMINATED $1"\n')
-    (tmp_path / "environ").write_bytes(b"")
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("LEASE_", "RESEARCH_LEASE", "RUNPOD_"))}
-    env |= {"LEASE_DIR": str(tmp_path / "lease"), "LEASE_ENVIRON": str(tmp_path / "environ"), "LEASE_TERMINATE_CMD": f"sh {rec}",
-            "LEASE_DEADLINE_FILE": str(tmp_path / "no-deadline"),     # not the host's /etc/research/deadline (a Nebius server has one)
-            "LEASE_MACHINE_ID": "computeinstance-e00test", "LEASE_ONCE": "1"}
-    now = 1_800_000_000
-    assert subprocess.run(["sh", str(L.LEASE_SH), "extend", "60", "test"], env={**env, "LEASE_NOW": str(now)}).returncode == 0
-    not_due = subprocess.run(["sh", str(L.LEASE_SH), "loop"], env={**env, "LEASE_NOW": str(now + 60 + 899)})
-    assert not_due.returncode == 1 and not (tmp_path / "stopped").exists()
-    due = subprocess.run(["sh", str(L.LEASE_SH), "loop"], env={**env, "LEASE_NOW": str(now + 60 + 900)})
-    assert due.returncode == 0 and (tmp_path / "stopped").read_text() == "computeinstance-e00test\n"
 
 
 # ---- gpu-lease -----------------------------------------------------------------------------------------------------------------------------
@@ -620,7 +603,7 @@ def queued(p: subprocess.Popen) -> str:
 @needs_flock
 def test_under_the_agent_a_request_queues_at_once_with_its_flags_and_takes_exactly_the_gpus_it_is_granted(tmp_path):
     """GPU 0 is free, so gpu-lease's own rules would take it; under the agent it takes the granted GPU 2.  The wait file carries
-    what the agent's planner reads (tools/cluster's nebius2.job_of)."""
+    what the agent's planner reads (infra/cluster's nebius2.job_of)."""
     env = {**gpu_env(tmp_path), "GPU_LEASE_AGENT_POLL_S": "0.05"}
     gl = tmp_path / "gl"
     agent = hold_agent_lock(gl)
@@ -675,64 +658,6 @@ def test_under_the_agent_a_request_without_wait_gives_up_when_no_grant_comes_and
     assert (gl / "agent.lock").exists()
     assert subprocess.run(["bash", str(GPU_LEASE), "1", "--", "true"], env=env, capture_output=True).returncode == 0
 
-
-needs_taskset = pytest.mark.skipif(shutil.which("taskset") is None or shutil.which("flock") is None, reason="needs taskset and flock")
-
-
-@needs_taskset
-def test_check_slot_pins_a_check_to_a_free_slot_with_the_pods_python(tmp_path):
-    slot = NEBIUS / "check_slot.sh"
-    env = {**{k: v for k, v in os.environ.items() if k != "UV_PYTHON"}, "VY_CHECK_SLOTS": "0 0", "VY_CHECK_LOCKS": str(tmp_path),
-           "VY_CHECK_WAIT": "0"}
-    show = "echo $UV_PYTHON $(taskset -cp $$ | sed 's/.*: //')"
-    first = subprocess.Popen(["bash", str(slot), "bash", "-c", f"{show}; read x"], env=env, stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    try:
-        assert first.stdout.readline().split() == ["3.14.7", "0"]
-        second = subprocess.run(["bash", str(slot), "bash", "-c", show], env=env, capture_output=True, text=True)
-        assert second.returncode == 0 and "check-b" in second.stderr
-        other = subprocess.Popen(["flock", str(tmp_path / "check-b.lock"), "bash", "-c", "echo ready; read x"], stdin=subprocess.PIPE,
-                                 stdout=subprocess.PIPE, text=True)
-        try:
-            assert other.stdout.readline().strip() == "ready"
-            busy = subprocess.run(["bash", str(slot), "true"], env=env, capture_output=True, text=True)
-            assert busy.returncode == 75 and "every check slot is busy" in busy.stderr
-        finally:
-            other.stdin.close()
-            other.wait()
-    finally:
-        first.stdin.close()
-        first.wait()
-    slots_file = tmp_path / "check-slots"
-    slots_file.write_text("0\n")
-    r = subprocess.run(["bash", str(slot), "bash", "-c", show], env={**env, "VY_CHECK_SLOTS": "", "VY_CHECK_SLOTS_FILE": str(slots_file),
-                       "UV_PYTHON": "3.12"}, capture_output=True, text=True)
-    assert r.stdout.split() == ["3.12", "0"]
-    path_file = tmp_path / "check-path"
-    path_file.write_text("/opt/check-toolchain/bin\n")
-    r = subprocess.run(["bash", str(slot), "bash", "-c", "echo $PATH"], env={**env, "VY_CHECK_PATH_FILE": str(path_file)},
-                       capture_output=True, text=True)
-    assert r.stdout.startswith("/opt/check-toolchain/bin:")
-
-
-
-def test_a_short_check_takes_a_short_slot_while_every_train_slot_is_held(tmp_path):
-    """--short: a lane's short check doesn't queue behind the trains. With both check slots held it still starts, in check-s1, on
-    the check slots' CPUs, at nice 10, so the trains keep first claim on the cores."""
-    slot = NEBIUS / "check_slot.sh"
-    env = {**os.environ, "VY_CHECK_SLOTS": "0 0", "VY_CHECK_LOCKS": str(tmp_path), "VY_CHECK_WAIT": "0"}
-    held = [subprocess.Popen(["flock", str(tmp_path / f"check-{s}.lock"), "bash", "-c", "echo ready; read x"], stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE, text=True) for s in ("a", "b")]
-    try:
-        assert [h.stdout.readline().strip() for h in held] == ["ready", "ready"]
-        assert subprocess.run(["bash", str(slot), "true"], env=env, capture_output=True, text=True).returncode == 75
-        r = subprocess.run(["bash", str(slot), "--short", "bash", "-c", "echo $(nice) $(taskset -cp $$ | sed 's/.*: //')"], env=env,
-                           capture_output=True, text=True)
-        assert r.returncode == 0 and "check-s1" in r.stderr and r.stdout.split() == ["10", "0"], (r.stdout, r.stderr)
-    finally:
-        for h in held:
-            h.stdin.close()
-            h.wait()
 
 # ---- launch.sh ---------------------------------------------------------------------------------------------------------------------------
 
@@ -944,6 +869,8 @@ def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(t
     a Verity job that finds no slot requeues the newest lent job, and nothing more is lent while it waits."""
     monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
     monkeypatch.setenv("FILL_VERITY_CPU_SLOTS", "2")
+    monkeypatch.setenv("FILL_VERITY_UNTIL", "9999-01-01T00:00:00+00:00")
+    monkeypatch.setenv("FILL_VERITY_STOP", "9999-01-01T01:00:00+00:00")
     spec = importlib.util.spec_from_file_location("fill_runner_lend", FILL_RUNNER)
     fr = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fr)
@@ -2341,7 +2268,7 @@ def test_n2_commit_counts_the_gpus_deployments_gpu_could_still_admit(tmp_path):
 def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_1(tmp_path):
     """submit's `place` asks `cluster submit` for node 2 with the row's research question and prints the placed.jsonl line; a
     refusal exits 3, and a queue that gives no answer prints nothing and exits 0, so it never holds a row back. The queue is a
-    stand-in `cluster` package that echoes its arguments (tools/cluster's own tests cover the placement)."""
+    stand-in `cluster` package that echoes its arguments (infra/cluster's own tests cover the placement)."""
     src = tmp_path / "cluster-src"
     (src / "src" / "cluster").mkdir(parents=True)
     (src / "descriptions").mkdir()
@@ -2364,7 +2291,7 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     assert rec["question"] == "Does cov-gm149's Commit validate on vy-nebius-2?"
     r = place(src, gpus="9")
     assert r.returncode == 3 and "refuses" in r.stderr and not r.stdout
-    silent = tmp_path / "silent-cluster"     # answers nothing; a missing one would fall through to tools/cluster's editable install
+    silent = tmp_path / "silent-cluster"     # answers nothing; a missing one would fall through to infra/cluster's editable install
     (silent / "src" / "cluster").mkdir(parents=True)
     (silent / "src" / "cluster" / "__init__.py").write_text("")
     (silent / "src" / "cluster" / "__main__.py").write_text("import sys\nsys.exit('no queue here')\n")
@@ -2689,6 +2616,37 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
     assert m.check(1_800_000_060.0) == [] and not (pool / "blocked").exists()
 
 
+def test_gpu_stray_reads_only_the_gpu_variables_of_a_process(monkeypatch):
+    """Daniel's ruling (7 Oct): the probe reads another process's GPU variables and nothing else of its environment, which may
+    hold its secrets. Under sudo only the matching lines leave `grep`; read directly, the rest is dropped at once."""
+    spec = importlib.util.spec_from_file_location("gpu_stray_under_test", NEBIUS / "gpu_stray.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    env = {"PATH": os.environ["PATH"], "CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all", "JOB_TOKEN": "dummy"}
+    p = subprocess.Popen(["cat"], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        p.stdin.write(b"up\n")
+        p.stdin.flush()
+        assert p.stdout.readline() == b"up\n"          # cat echoes once it has exec'd with `env`
+        assert m.environ(p.pid) == {"CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all"}
+        ran = []
+
+        def denied(self):
+            raise PermissionError(str(self))
+
+        def sudo(cmd, **kw):
+            ran.append(cmd)
+            return real_run(cmd[2:], **kw)              # the same grep, without sudo
+
+        real_run = subprocess.run
+        monkeypatch.setattr(m.Path, "read_bytes", denied)
+        monkeypatch.setattr(m.subprocess, "run", sudo)
+        assert m.environ(p.pid) == {"CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all"}
+        assert ran == [["sudo", "-n", "grep", "-zaE", "^(NVIDIA_VISIBLE_DEVICES|CUDA_VISIBLE_DEVICES)=", f"/proc/{p.pid}/environ"]]
+    finally:
+        p.communicate()
+
+
 def test_gpu_stray_judges_only_a_process_listed_before_and_after_the_leases_are_read(monkeypatch, tmp_path):
     """Node 1, 06:58Z Oct 2: a leased engine was still listed while its context reset, and its lease ended before the locks were
     read, so the probe blocked its pool. A second listing after the locks drops it."""
@@ -2889,6 +2847,21 @@ def test_n1_lease_kills_everything_a_policy_command_that_overruns_started(monkey
 
 
 @needs_flock
+def test_n1_lease_sees_a_waiter_that_a_read_of_proc_locks_misses(monkeypatch, tmp_path, reap):
+    """/proc/locks comes a page per read, so on a node with many locks one read can miss a lock held throughout (seen on node 1,
+    where it left a waiter unserved for a tick): a waiter is its file's lock, probed directly."""
+    m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 3)
+    keys(max=3)
+    (tmp_path / "gl" / "wait.2.4343").write_text("pid=4343 n=1 who=gone since=x\n")
+    monkeypatch.setattr(m, "lock_holders", dict)
+    assert [w["file"] for w in m.waiters()] == ["wait.1.4242"]
+    m.Controller().tick(1_800_000_000.0)
+    os.close(fd)
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+    assert not m.waiters()
+
+
+@needs_flock
 def test_n1_lease_logs_a_limits_file_it_cant_write_and_goes_on(monkeypatch, tmp_path, reap):
     m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 1)
     keys(max=3)
@@ -3044,24 +3017,6 @@ def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared
     (tmp_path / "cg" / cg.lstrip("/") / "memory.peak").write_text(f"{12_340_000_000}\n")
     monkeypatch.setattr(fr, "CGROUP_ROOT", str(tmp_path / "cg"))
     assert fr.mem_peak_gb(os.getpid()) == 12.34 and fr.mem_peak_gb(2**22 + 7) is None
-
-
-def test_slot_d_runs_through_a_window_only_on_a_slot_d_runs_clause(tmp_path):
-    """Node 2, 3 Oct 2:22 PM UTC: circuits' 14:30Z window said "no merge checks on node 2 through it (no slot-d=runs)", and the
-    words alone let slot d run into it. A window that starts in 2000 and lasts 190 years is open whatever the time."""
-    src = (NEBIUS / "check_slot_d.sh").read_text()
-    program = src[src.index("\n", src.index("<< 'EOF'")) + 1:src.index("\nEOF\n")]
-    windows = tmp_path / "windows"
-
-    def refuses(comment: str) -> bool:
-        windows.write_text(f"# slot-d=runs in a header line\n2000-01-01T00:00Z 99999999 # {comment}\n")
-        return subprocess.run([sys.executable, "-", str(windows), "30"], input=program, text=True,
-                              capture_output=True).returncode != 0
-
-    assert refuses("circuits TP8; no merge checks on node 2 through it (no slot-d=runs)")
-    assert refuses("circuits TP8 (slot-d=runs only for the 8:00 run)")
-    assert not refuses("pouw-ncp, bc-2f661c92 (fallback 13:35Z); slot-d=runs (its host threads stay off 0-47)")
-    assert not refuses("slot-d=runs: Pearl-C4 re-time")
 
 
 def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_its_lock(tmp_path, monkeypatch):

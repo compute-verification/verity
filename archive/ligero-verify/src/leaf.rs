@@ -1027,7 +1027,7 @@ mod tests {
     #[test]
     fn sha256_leaf_bytes_match_the_python_scheme() {
         // leaf/sha256.py: Sha256Leaf().native(rows, word_bits=, role=) of 1536-word rows (rng seeds 1 / 2), then leaf_bytes
-        // == verity.primitives.commitments.rowleaf.sha256_row_digest (hashlib over the core prefix || row bytes)
+        // == verity.ml.commitments.rowleaf.sha256_row_digest (hashlib over the core prefix || row bytes)
         let x: [u32; 17] = [393249, 60336, 42228, 53307, 8065, 20306, 48806, 19787, 63601, 59087, 60567, 13660, 6583, 26673,
             9928, 34867, 32873];
         let w: [u32; 17] = [393250, 1457, 21848, 63781, 48250, 47699, 9984, 32060, 40006, 63166, 30315, 25577, 45471, 16651,

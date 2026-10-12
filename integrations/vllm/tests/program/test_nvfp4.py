@@ -7,14 +7,15 @@ import struct
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.defs import bind
-from verity_catalog.definitions.prims import BlackwellNvf4OmmaDot64, F32ToE4m3Sat
-from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops.prims import BlackwellNvf4OmmaDot64, F32ToE4m3Sat
+from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import nvfp4 as N4
+from verity_vllm.program.kernels import nvfp4_twins
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.query import word as W
 
 DOT = BlackwellNvf4OmmaDot64
@@ -87,11 +88,11 @@ def test_the_gemm_is_the_step_chain_then_alpha_then_bf16():
 
 
 def test_the_device_layouts():
-    assert N4.unpack_codes([0x21, 0xF0]) == [1, 2, 0, 15]
+    assert nvfp4_twins.unpack_codes([0x21, 0xF0]) == [1, 2, 0, 15]
     K = 4096                                                 # 64 k-tiles of 4 blocks
-    assert N4.sf_offset(0, 0, K) == 0 and N4.sf_offset(0, 3, K) == 3 and N4.sf_offset(0, 4, K) == 512
-    assert N4.sf_offset(1, 0, K) == 16 and N4.sf_offset(32, 0, K) == 4 and N4.sf_offset(128, 0, K) == 64 * 512
-    offs = {N4.sf_offset(r, b, K) for r in range(256) for b in range(K // 16)}
+    assert nvfp4_twins.sf_offset(0, 0, K) == 0 and nvfp4_twins.sf_offset(0, 3, K) == 3 and nvfp4_twins.sf_offset(0, 4, K) == 512
+    assert nvfp4_twins.sf_offset(1, 0, K) == 16 and nvfp4_twins.sf_offset(32, 0, K) == 4 and nvfp4_twins.sf_offset(128, 0, K) == 64 * 512
+    offs = {nvfp4_twins.sf_offset(r, b, K) for r in range(256) for b in range(K // 16)}
     assert len(offs) == 256 * K // 16 and max(offs) < 256 * K // 16      # a permutation of the padded tile
 
 

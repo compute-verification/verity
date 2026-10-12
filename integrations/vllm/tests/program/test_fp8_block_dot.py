@@ -3,9 +3,9 @@
 * `ScaledMmFp8Block_v3{K,N,G,DOT}` and the shared-scale form's version 3 Definitions are the version 1 forms with the step lifted: at
   DOT = HopperE4m3QgmmaDot32 the same circuit gate for gate (so every word equal), at DOT = BlackwellE4m3QmmaDot32 another function;
   their version 4 forms are Boolean, agree with their word views, and are what the switch maps them to.
-* `registry.targets.scaled_mm_fp8_block_spec` binds by `GemmTarget.fp8_block_dot`: the version 1 forms on hopper (its Programs keep
-  their digests), the version 3 forms over another target's step, and a refusal by name where a target records none.  The frontend
-  rule and the fold's pattern ask it instead of comparing the compute capability with 9.
+* `frontend.targets.scaled_mm_fp8_block_spec` binds by `GemmTarget.fp8_block_dot`: the version 1 forms on hopper (its Programs keep
+  their digests), the version 3 forms over another target's step (blackwell_consumer's, which cites the cc 12.0 capture), and a refusal
+  by name where a target records none.  The frontend rule and the fold's pattern ask it instead of comparing the compute capability with 9.
 * `Fp8GroupQuant_v1{K,G}` at G = 64 (`fp8.QUANT_GROUPS`): a group's words are those of the G = 128 form over that group padded with
   zeros, and the rule and the fold bind it."""
 from __future__ import annotations
@@ -16,22 +16,23 @@ import types
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.defs import bind
-from verity_catalog.definitions.boolean import gemm as BG
-from verity.primitives.circuits.boolean import trace as TR
-from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, spec_label
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity_vllm.program.registry import boolean_fp8 as BF
 from verity_vllm.program.registry import fp8 as F
-from verity_vllm.program.registry import gemm_targets as GT
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.registry import fp8_vocab
+from verity_vllm.program.frontend import gemm_targets as GT
+from verity_vllm.program.frontend import targets as TG
 from tests.program import test_fp8_profile as FP
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 from tests.program.test_fp8_shared_scale import _canon, _Ctx
@@ -40,14 +41,7 @@ ONE, MINUS_ONE = 0x38, 0xB8          # e4m3 1.0, -1.0
 F32_ONE = 0x3F800000
 HOPPER = TargetProfile(compute_capability=(9, 0), num_sms=132, fp8_block_gemm="cutlass")
 SM120 = TargetProfile(compute_capability=(12, 0), num_sms=188, fp8_block_gemm="cutlass")
-
-
-@pytest.fixture
-def sm120_step(monkeypatch):
-    """blackwell_consumer with its blockwise step recorded (not registered until the cc 12.0 capture compares it)."""
-    gt = dataclasses.replace(GT.REGISTERED["blackwell_consumer"], fp8_block_dot="BlackwellE4m3QmmaDot32")
-    monkeypatch.setitem(GT.REGISTERED, "blackwell_consumer", gt)
-
+ADA = TargetProfile(compute_capability=(8, 9), num_sms=128, fp8_block_gemm="cutlass")
 
 def _word(defn, *args) -> int:
     return int(np.asarray(evaluate(defn, *args)).reshape(-1)[0])
@@ -90,9 +84,9 @@ def test_at_blackwells_step_the_block_gemm_is_another_function() -> None:
 def test_block_gemm_picks_the_form_by_its_step() -> None:
     for scale, v1, v3 in (("per-coordinate", F.ScaledMmFp8Block, F.ScaledMmFp8BlockV3),
                           ("shared-per-block", F.ScaledMmFp8BlockSharedScale, F.ScaledMmFp8BlockSharedScaleV3)):
-        assert F.block_gemm(256, 384, 128, scale) == bind(v1, K=256, N=384, G=128)
-        assert F.block_gemm(256, 384, 128, scale, BlackwellE4m3QmmaDot32) == bind(v3, K=256, N=384, G=128, DOT=BlackwellE4m3QmmaDot32)
-    assert F.SHARED_SCALE == {"ScaledMmFp8Block_v1": F.ScaledMmFp8BlockSharedScale}
+        assert fp8_vocab.block_gemm(256, 384, 128, scale) == bind(v1, K=256, N=384, G=128)
+        assert fp8_vocab.block_gemm(256, 384, 128, scale, BlackwellE4m3QmmaDot32) == bind(v3, K=256, N=384, G=128, DOT=BlackwellE4m3QmmaDot32)
+    assert fp8_vocab.SHARED_SCALE == {"ScaledMmFp8Block_v1": F.ScaledMmFp8BlockSharedScale}
 
 
 # ---------------------------------------------------------------- the version 4 forms
@@ -137,18 +131,41 @@ def test_hopper_binds_the_version_1_forms(scale) -> None:
         assert TG.scaled_mm_fp8_block_spec(tp, K, N, 128) == bind(v1, K=K, N=N, G=128)
 
 
-@pytest.mark.parametrize("cc", [(8, 9), (10, 0), (12, 0)])
+@pytest.mark.parametrize("cc", [(8, 9), (10, 0)])
 def test_a_target_without_a_blockwise_step_is_refused(cc) -> None:
     tp = TargetProfile(compute_capability=cc)
     with pytest.raises(TG.UnregisteredTarget):
         TG.scaled_mm_fp8_block_spec(tp, 2560, 6144, 128)
     if cc != (10, 0):                                                     # cc 10.0 has no GEMM target at all
-        with pytest.raises(TG.UnregisteredTarget, match=r"blockwise FP8 linear on (ada|blackwell_consumer) \("):
+        with pytest.raises(TG.UnregisteredTarget, match=r"blockwise FP8 linear on ada \(8\.9\)"):
             TG.fp8_block_dot(tp)
 
 
+def test_blackwell_consumer_records_its_blockwise_step_with_its_own_measurement() -> None:
+    """cc 12.0's blockwise step is its `_C.cutlass_scaled_mm` blockwise kernel's own measurement, not the per-tensor FP8 linear's
+    (`fp8_dot`): its evidence names the capture run and record and the cutlass cases it rests on."""
+    gt = GT.REGISTERED["blackwell_consumer"]
+    assert gt.fp8_block_dot == "BlackwellE4m3QmmaDot32"
+    [ev] = [e for e in gt.evidence if e.startswith("the blockwise FP8 linear")]
+    for needle in ("blackwell_fp8_capture", "r20261003-220018-3f6a", "0d346c79c642a0a1", "cutlass/*", "qkv_proj (K 4096, N 1280)",
+                   "o_proj (K 1024, N 4096)", "M in {1, 2, 64, 65, 256, 257, 300}", "5,080,320 words",
+                   "ScaledMmFp8Block_v3{DOT=BlackwellE4m3QmmaDot32_v1}"):
+        assert needle in ev, needle
+    assert {k for k, t in GT.REGISTERED.items() if t.fp8_block_dot} == {"hopper", "blackwell_consumer"}
+
+
+def test_the_blockwise_step_is_keyed_on_its_own_field(monkeypatch) -> None:
+    """Without `fp8_block_dot`, cc 12.0 is refused by name although its per-tensor and fused-MoE steps (`fp8_dot`, `fp8_moe_dot`)
+    are the same step."""
+    gt = dataclasses.replace(GT.REGISTERED["blackwell_consumer"], fp8_block_dot=None)
+    monkeypatch.setitem(GT.REGISTERED, "blackwell_consumer", gt)
+    assert gt.fp8_dot == gt.fp8_moe_dot == "BlackwellE4m3QmmaDot32"
+    with pytest.raises(TG.UnregisteredTarget, match=r"blockwise FP8 linear on blackwell_consumer \(12\.0\): .* no registered Definition"):
+        TG.scaled_mm_fp8_block_spec(SM120, 6144, 2624, 128)
+
+
 @pytest.mark.parametrize("scale", ["shared-per-block", "per-coordinate"])
-def test_a_recorded_step_binds_the_version_3_forms_over_it(sm120_step, scale) -> None:
+def test_blackwell_consumer_binds_the_version_3_forms_over_its_step(scale) -> None:
     assert TG.fp8_block_dot(SM120) is BlackwellE4m3QmmaDot32
     v3 = F.ScaledMmFp8BlockV3 if scale == "per-coordinate" else F.ScaledMmFp8BlockSharedScaleV3
     spec = TG.scaled_mm_fp8_block_spec(SM120, 6144, 2624, 128, scale)
@@ -180,24 +197,23 @@ def _gate(tp):
         clear_observations()
 
 
-@pytest.mark.parametrize("cc", [(8, 9), (10, 0), (12, 0)])
+@pytest.mark.parametrize("cc", [(8, 9), (10, 0)])
 def test_the_rule_refuses_a_target_without_a_blockwise_step(cc) -> None:
-    """On cc 12.0, `VLLM_USE_DEEP_GEMM=0` also selects `CutlassFp8BlockScaledMMKernel`, whose `_C.cutlass_scaled_mm` is that target's
-    own blockwise kernel: the kernel-class read-back cannot tell it from Hopper's, so the GEMM target decides."""
     reason = _gate(DEFAULT_TARGET.with_overrides(compute_capability=cc))
     assert reason.startswith("numerics_unregistered: ")
     if cc != (10, 0):
-        key = "ada" if cc == (8, 9) else "blackwell_consumer"
-        assert f"blockwise FP8 linear on {key} ({cc[0]}.{cc[1]})" in reason and "no registered Definition" in reason
+        assert "blockwise FP8 linear on ada (8.9)" in reason and "no registered Definition" in reason
 
 
-def test_the_rule_passes_the_gate_where_a_step_is_recorded(sm120_step) -> None:
+def test_the_rule_passes_the_gate_where_a_step_is_recorded() -> None:
+    """On cc 12.0, `VLLM_USE_DEEP_GEMM=0` also selects `CutlassFp8BlockScaledMMKernel`, whose `_C.cutlass_scaled_mm` is that target's
+    own blockwise kernel: the kernel-class read-back cannot tell it from Hopper's, so the GEMM target decides."""
     assert _gate(DEFAULT_TARGET.with_overrides(compute_capability=(9, 0))) == "unexpected operator arity"
     assert _gate(DEFAULT_TARGET.with_overrides(compute_capability=(12, 0))) == "unexpected operator arity"
 
 
 @pytest.mark.parametrize("scale", [None, "per-coordinate"])
-def test_the_rule_binds_the_targets_step(monkeypatch, sm120_step, scale) -> None:
+def test_the_rule_binds_the_targets_step(monkeypatch, scale) -> None:
     from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
     from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
 
@@ -216,7 +232,7 @@ def test_the_rule_binds_the_targets_step(monkeypatch, sm120_step, scale) -> None
         finally:
             clear_observations()
         (facts[cc], _emitted), = ctx.records
-        assert ctx.calls == [F.block_gemm(K, N, 128, scale or "shared-per-block", None if cc == (9, 0) else BlackwellE4m3QmmaDot32)] * 2
+        assert ctx.calls == [fp8_vocab.block_gemm(K, N, 128, scale or "shared-per-block", None if cc == (9, 0) else BlackwellE4m3QmmaDot32)] * 2
     assert "dot" not in facts[(9, 0)] and facts[(12, 0)]["dot"] == "BlackwellE4m3QmmaDot32_v1"
 
 
@@ -229,19 +245,18 @@ def _mm(tp):
 
 
 def test_the_fold_refuses_a_target_without_a_blockwise_step() -> None:
-    r = _mm(SM120)
-    assert isinstance(r, Unsupported) and r.detail["compute_capability"] == [12, 0]
-    assert r.reason == ("blockwise FP8 linear on blackwell_consumer (12.0): this target's _C.cutlass_scaled_mm blockwise kernel has no "
-                        "registered Definition")
+    r = _mm(ADA)
+    assert isinstance(r, Unsupported) and r.detail["compute_capability"] == [8, 9]
+    assert r.reason == "blockwise FP8 linear on ada (8.9): this target's _C.cutlass_scaled_mm blockwise kernel has no registered Definition"
 
 
 @pytest.mark.parametrize("scale", [None, "per-coordinate"])
-def test_the_fold_binds_the_targets_step(sm120_step, scale) -> None:
+def test_the_fold_binds_the_targets_step(scale) -> None:
     K, N, G = FP.K, FP.N, FP.G
     for tp, dot in ((HOPPER, None), (SM120, BlackwellE4m3QmmaDot32)):
         r = _mm(tp.with_overrides(fp8_scale_construction=scale))
         assert isinstance(r, Compute), r
-        assert spec_label(r.spec) == spec_label(F.block_gemm(K, N, G, scale or "shared-per-block", dot))
+        assert spec_label(r.spec) == spec_label(fp8_vocab.block_gemm(K, N, G, scale or "shared-per-block", dot))
     assert spec_label(r.spec).endswith(",DOT=BlackwellE4m3QmmaDot32_v1}")
 
 

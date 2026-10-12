@@ -1,6 +1,6 @@
 """Which GPU a run is on, checked before anything else: `CUDA_VISIBLE_DEVICES` names exactly one index, the worker's; CUDA
-sees exactly one device; its UUID is the one the server page (`internal/pouw/rtx-pro/server.md`) gives that index; and CUDA
-orders devices by PCI bus id, so CUDA and NVML agree. NVML is addressed by that UUID, never by an index."""
+sees exactly one device; its UUID is the one expected for that index (`--expect-uuid`); and CUDA orders devices by PCI
+bus id, so CUDA and NVML agree. NVML is addressed by that UUID, never by an index."""
 
 from __future__ import annotations
 

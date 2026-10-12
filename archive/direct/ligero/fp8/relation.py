@@ -61,12 +61,12 @@ class FP8Params(Params):
 
     @classmethod
     def from_model(cls, model) -> FP8Params:
-        """The adder-side widths of an E4M3 :class:`verity_catalog.silicon.models.GroupSum`: ``groups`` and the adder ``width`` /
+        """The adder-side widths of an E4M3 :class:`verity.ml.circuits.silicon.models.GroupSum`: ``groups`` and the adder ``width`` /
         ``zero_exponent`` are the model's, the operand format is the model's dtype.  ``FP8Params.from_model(ADA_E4M3_M16N8K32)
         == ADA``; ``HOPPER_E4M3_K32`` gives one group of 32 on the same 14-bit adder (``--relation fp8-hopper``).  The
         22-bit public packing (``pack_public``) assumes the 14-bit adder (``rescale == 10``), so other widths are refused."""
-        from verity_catalog.silicon.models import GroupSum
-        from verity_catalog.silicon.term import FORMATS
+        from verity.ml.circuits.silicon.models import GroupSum
+        from verity.ml.circuits.silicon.term import FORMATS
 
         if not isinstance(model, GroupSum):
             raise ValueError(f"{getattr(model, 'name', model)!r} is not a GroupSum")

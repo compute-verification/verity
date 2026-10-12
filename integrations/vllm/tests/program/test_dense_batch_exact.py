@@ -19,10 +19,10 @@ import shutil
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate_batch, kernels
-from verity.primitives.circuits.evaluation.batch import type_shape
-from verity.primitives.circuits.evaluation.reference import signature_of, statics_of
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate_batch, kernels
+from verity.ml.circuits.evaluation.batch import type_shape
+from verity.ml.circuits.evaluation.reference import signature_of, statics_of
+from verity.ml.circuits.defs import bind
 from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.program.kernels import dense_rows as DR
 from verity_vllm.program.kernels import derived_rows as D

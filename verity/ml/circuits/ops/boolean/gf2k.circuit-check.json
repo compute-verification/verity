@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "Gf128Mul_v1": {
+   "and": 2187
+  },
+  "Gf256Mul_v1": {
+   "and": 6561
+  },
+  "GfResiduals_v1{S={5649ec091c4b}}": {
+   "and": 2187
+  },
+  "GfScale_v1{L=2}": {
+   "and": 4374
+  }
+ }
+}

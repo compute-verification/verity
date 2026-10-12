@@ -24,6 +24,11 @@ and neither is a dotted name that only looks like a module ([rewrite] keep_dotte
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. A tracked file that a `.gitignore` matches stays tracked where
 it moves. It appends [paths] to research's `moves.json` (once), whose recorded moves it never rewrites.
+
+It fails on a rewritten reference to a directory the map splits across destinations (`backends/flock/` to `verity/ml/flock/`
+with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
+whole would no longer cover the part that left. [split] acknowledges each one it may let through, by file and directory,
+with the reason; one that no longer occurs is an error too.
 """
 from __future__ import annotations
 
@@ -47,7 +52,7 @@ HERE = Path(__file__).resolve().parent
 _ROOT_JOIN = "\x00root\x00"
 IDENT = re.compile(r"[A-Za-z_]\w*\Z")
 TEXT_LIMIT = 4 << 20
-#: old top-level paths that the move empties; a tracked file left under one has no row in the map
+#: old paths that the move empties, when the map has no [retired]; a tracked file left under one has no row in the map
 RETIRED = ("packages/", "protocols/", "census/", "backends/gkr/", "backends/direct/", "backends/ligero-verify/",
            "backends/ligerito-verify/", "backends/sp1/", "backends/vole/", "backends/redteam/", "backends/shared/",
            "backends/numerical/", "backends/README.md", "backends/AGENTS.md", "benchmarks/dot_product/",
@@ -88,10 +93,16 @@ class Layout:
         self.keep_in = rw.get("keep_in", {})
         self.keep_dotted = tuple(rw.get("keep_dotted", []))
         self.merged = set(data.get("distributions", {}).get("merged", []))
+        self.retired = tuple(data.get("retired", {}).get("paths", RETIRED))
+        self.drop = set(data.get("drop", {}).get("paths", []))
+        #: "old file: old directory" -> why the file's reference to a directory the map splits may follow the larger part
+        self.split = dict(data.get("split", {}))
 
     # paths
     def file(self, p: str) -> str | None:
         """Where file `p` goes, or None when it stays."""
+        if p in self.drop:
+            return None
         if p in self.files:
             return self.files[p]
         for o, n in self.dirs:
@@ -178,7 +189,7 @@ def derived_modules(layout: Layout) -> dict[str, str]:
         if not (old.endswith("/") or old.endswith(".py")):
             continue
         a, b = module_name(old, layout.old_roots), module_name(new, layout.new_roots)
-        if a and b and a != b:
+        if a and b and (a != b or old == new):     # a row that keeps a directory keeps its modules' names too
             out[a] = b
         if old.endswith("/") and (r := next((n for n, d in layout.old_roots.items() if d == old.rstrip("/")), None)):
             if b and r != b:
@@ -196,9 +207,21 @@ class Run:
         self.notes: dict[str, list[str]] = defaultdict(list)    # kind -> things for a person to look at
         self.moved: dict[str, str] = {}             # new path -> old path, for files this run moves
         self.texts: dict[str, str] = {}             # new path -> text as it will be written
+        self.dropped: list[str] = []                # old paths of the files [drop] deletes
+        self.splits: dict[str, str] = {}            # "old file: old directory" -> a rewrite of a split directory's reference
 
     def note(self, kind: str, what: str):
         self.notes[kind].append(what)
+
+    def split_reference(self, path: str, directory: str, what: str):
+        """File `path` (new) refers to old `directory`, which the map splits, by a reference the rewrite changes (`what`)."""
+        self.note("approximate directory paths", what)
+        self.splits.setdefault(f"{self.old_of.get(path, path)}: {directory.strip('/')}", what)
+
+    def unacknowledged_splits(self) -> tuple[list[str], list[str]]:
+        """The split references [split] doesn't acknowledge, and the acknowledgements no reference needs any more."""
+        return ([f"{k} ({w})" for k, w in sorted(self.splits.items()) if k not in self.L.split],
+                sorted(k for k in self.L.split if k not in self.splits))
 
     # ---------------------------------------------------------------------------------------------- moves
 
@@ -220,11 +243,14 @@ class Run:
                     continue
                 self.binds[pkg] = {a.asname or a.name for n in body if isinstance(n, ast.ImportFrom) and n.module
                                    for a in n.names} | {n.name for n in body if isinstance(n, (ast.FunctionDef, ast.ClassDef))}
-        moves, left = [], []
+        moves, left, self.dropped = [], [], []
         for p in tracked:
+            if p in self.L.drop:
+                self.dropped.append(p)
+                continue
             new = self.L.file(p)
             if new is None:
-                if p.startswith(RETIRED) or p in RETIRED:
+                if p.startswith(self.L.retired) or p in self.L.retired:
                     left.append(p)
                 continue
             moves.append((p, new))
@@ -247,7 +273,11 @@ class Run:
             dst.parent.mkdir(parents=True, exist_ok=True)
             os.rename(self.root / old, dst)
         if not self.dry:
-            for d in sorted({posixpath.dirname(o) for o, _ in moves}, key=len, reverse=True):
+            for p in self.dropped:
+                (self.root / p).unlink()
+        self.changes["files dropped"] = len(self.dropped)
+        if not self.dry:
+            for d in sorted({posixpath.dirname(o) for o in (*(o for o, _ in moves), *self.dropped)}, key=len, reverse=True):
                 for a in [d, *_ancestors(d)]:
                     try:
                         (self.root / a).rmdir()
@@ -290,8 +320,9 @@ class Run:
 
     def index(self, moves: list[tuple[str, str]]):
         dest = dict(moves)
-        self.new_files = {dest.get(p, p) for p in self.tracked_old}
-        self.old_of = {dest.get(p, p): p for p in self.tracked_old}
+        kept = self.tracked_old - set(self.dropped)
+        self.new_files = {dest.get(p, p) for p in kept}
+        self.old_of = {dest.get(p, p): p for p in kept}
         self.new_dirs = {d for p in self.new_files for d in _ancestors(p)}
         mods = set()
         for p in self.new_files | set(self.L.data.get("create", {})):
@@ -348,6 +379,7 @@ class Run:
         """Each pinned dependency bundle is keyed by its package's manifest and toolchain (`lean_audit.deps_key`), and a moved
         package's manifest names its path requirements' new directories. A bundle holds only the fetched packages, so when the
         manifest changed in nothing else the same bundle is pinned under the new key."""
+        pin = self.L.file(pin) or pin
         text = self._read(pin)
         if text is None:
             return
@@ -481,7 +513,7 @@ class Run:
             if out == token.rstrip("/"):
                 return token
             if approx:
-                self.note("approximate directory paths", f"{path}: {token} -> {out}")
+                self.split_reference(path, full, f"{path}: {token} -> {out}")
             self._count(path, "package-relative paths")
             return out + ("/" if token.endswith("/") else "")
 
@@ -526,7 +558,9 @@ class Run:
                 if approx:
                     self.note("unmapped directory paths", f"{path}: {token}")
                 return None
-            if approx or "{" in tail:
+            if approx:
+                self.split_reference(path, head, f"{path}: {token} -> {new}/{tail}")
+            elif "{" in tail:
                 self.note("approximate directory paths", f"{path}: {token} -> {new}/{tail}")
             return f"{new}/{tail}" + ("/" if slash else "")
         is_dir = t in self.old_dirs or slash or (t not in self.known_old and self.L.file(t) is None)
@@ -536,7 +570,7 @@ class Run:
                 self.note("unmapped directory paths", f"{path}: {token}")
             return None
         if approx:
-            self.note("approximate directory paths", f"{path}: {token} -> {new}")
+            self.split_reference(path, t, f"{path}: {token} -> {new}")
         return new + ("/" if slash else "")
 
     def _map_relative(self, token: str, path: str, old: str, plain: bool = False, from_member: bool = False) -> str | None:
@@ -565,12 +599,12 @@ class Run:
             if new_target is None:
                 new_target = target            # it stays, though part of it may move
                 if approx and path != old:
-                    self.note("approximate directory paths", f"{path}: {token} (part of {target} moves)")
+                    self.split_reference(path, target, f"{path}: {token} (part of {target} moves)")
             elif approx:
-                self.note("approximate directory paths", f"{path}: {token} -> {new_target}")
+                self.split_reference(path, target, f"{path}: {token} -> {new_target}")
         else:
             new_target = self.L.file(target) or target
-        if path == old and new_target == target:
+        if path == old and new_target == target and not self._through_moved(posixpath.dirname(old), t):
             return None                                 # neither end moved: the token stays as written
         rel = posixpath.relpath(new_target, base_new or ".")
         if t.startswith("./") and not rel.startswith("."):
@@ -578,6 +612,17 @@ class Run:
         if plain and rel.startswith(".."):
             self.note("relative paths that now leave their directory", f"{path}: {t} -> {rel}")
         return rel + ("/." if dot else "") + ("/" if slash else "")
+
+    def _through_moved(self, base: str, t: str) -> bool:
+        """Whether relative path `t`, written from `base`, climbs back out of a directory the move takes away (a Lake
+        manifest's inherited `lms/lean/../../../../../core/service/flock`): as written it would stop resolving, so it is
+        rewritten to its normal form even when neither end moved."""
+        segs, cur = t.split("/"), base
+        for i, seg in enumerate(segs[:-1]):
+            cur = posixpath.normpath(posixpath.join(cur, seg))
+            if seg != ".." and ".." in segs[i + 1:] and self.L.directory(cur)[0] not in (None, cur):
+                return True
+        return False
 
     def _member_of(self, old: str) -> str | None:
         """The directory of the distribution (a pyproject.toml below the root) that file `old` belongs to."""
@@ -690,11 +735,6 @@ class Run:
         common = 0
         while common < min(len(new_dirs), len(tparts)) and new_dirs[common] == tparts[common]:
             common += 1
-        if not segs:
-            if common < len(tparts):
-                self.note("anchors not recomputed", f"{where}: {m.group(0)} (was {anchor or 'the root'})")
-                return m.group(0)
-            common = len(tparts)
         new_up = len(new_dirs) - common
         rest = tparts[common:]
         r = m.group("r") or ""
@@ -702,6 +742,8 @@ class Run:
             f"{m.group('head')}{r}" + ".parent" * (new_up + 1)
         q = m.group("q") or '"'
         out = base + "".join(f" / {q}{s}{q}" for s in rest)
+        if not segs and rest:
+            out = f"({out})"                        # the file left the directory it anchored at: join its way back
         if out == m.group(0) or (new_up == up and rest == segs):
             return m.group(0)
         self._count(where, "anchors")
@@ -1331,9 +1373,11 @@ def load(path: Path) -> Layout:
 def unpinned_uv(root: Path) -> str | None:
     """Why `uv lock` here wouldn't be the pinned uv's (`tools/check/pod_setup.sh`), or None.  Another uv writes another lock
     header, so the move would differ from a rerun of the script with the pinned one, which `restack.py` refuses."""
-    m = re.search(r"^UV_VERSION=\$\{UV_VERSION:-([^}]+)\}", (root / "tools" / "check" / "pod_setup.sh").read_text(), re.M)
+    setup = next((p for p in (root / "tools" / "check" / "pod_setup.sh", root / "tools" / "verity" / "check" / "pod_setup.sh")
+                  if p.exists()), None)
+    m = setup and re.search(r"^UV_VERSION=\$\{UV_VERSION:-([^}]+)\}", setup.read_text(), re.M)
     if not m:
-        return "tools/check/pod_setup.sh pins no UV_VERSION"
+        return "pod_setup.sh pins no UV_VERSION"
     if not shutil.which("uv"):
         return f"uv isn't on the PATH (pod_setup.sh pins {m.group(1)})"
     got = subprocess.run(["uv", "--version"], capture_output=True, text=True).stdout.split()[1:2]
@@ -1355,6 +1399,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--resolve", metavar="MODULE")
     ap.add_argument("--report", type=Path, help="write every change and note as JSON here")
     ap.add_argument("--allow-dirty", action="store_true")
+    ap.add_argument("--report-splits", action="store_true",
+                    help="note references to a split directory that [split] doesn't acknowledge, instead of failing (restack.py "
+                         "on a branch: its own references are its owner's to check)")
     a = ap.parse_args(argv)
     layout = load(a.map)
     if a.resolve:
@@ -1387,6 +1434,14 @@ def main(argv: list[str] | None = None) -> int:
     run.move(moves)
     run.create()
     run.rewrite_all()
+    unacknowledged, stale = run.unacknowledged_splits()
+    if a.report_splits:
+        for x in unacknowledged:
+            run.note("references to a split directory [split] doesn't acknowledge", x)
+    elif unacknowledged or stale:
+        raise SystemExit("references to a directory the map splits, which [split] doesn't acknowledge:\n"
+                         + "".join(f"  {x}\n" for x in unacknowledged)
+                         + "".join(f"  [split] acknowledges what no reference needs any more: {k}\n" for k in stale))
     run.record()
     run.write()
     renamed_modules = sum(1 for o, n in moves if o.endswith(".py") and (mo := module_name(o, layout.old_roots))

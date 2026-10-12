@@ -1,5 +1,5 @@
-// Drives the pinned Hawkeye simulator's own compiled routines (catalog/verity_catalog/silicon/hawkeye/PIN.json, unmodified sources) on
-// transition-unit cases, so that hawkeye_close.py and verity_catalog.silicon.silicon can be compared bit for bit against the C++.
+// Drives the pinned Hawkeye simulator's own compiled routines (verity/ml/circuits/silicon/hawkeye/PIN.json, unmodified sources) on
+// transition-unit cases, so that hawkeye_close.py and verity.ml.circuits.silicon.silicon can be compared bit for bit against the C++.
 //
 // Build inside the recorded run (exhaustive_pod.sh), against the pinned checkout $HAWKEYE and a CPU libtorch:
 //   g++ -std=c++17 -O2 -I$HAWKEYE -I$TORCH_INC -I$TORCH_INC/torch/csrc/api/include -D_GLIBCXX_USE_CXX11_ABI=$ABI \

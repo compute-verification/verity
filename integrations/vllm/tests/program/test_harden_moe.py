@@ -38,7 +38,7 @@ import torch.nn.functional as F
 
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.registry.serve3_reference import materialize
+from verity_vllm.program.kernels.serve3_reference import materialize
 
 REF = dict(mode="reference")
 T, H, I, E, K = 4, 8, 16, 4, 2

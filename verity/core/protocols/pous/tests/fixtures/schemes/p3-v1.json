@@ -1,0 +1,19 @@
+{
+ "certificate": null,
+ "name": "p3/v1",
+ "point_vector": "segment_64kb",
+ "small": {
+  "params": {
+   "k": 3,
+   "n": 8,
+   "segments": 2,
+   "wc": 64
+  },
+  "root": "298c48f6cf6852426dd8be55d55edfc20ceea1638e50f33db91d48cb69e9f7047ff228a436a5f6f1f0d4ddf386ba8ff62590ca64b31eab653bd83f394d899a7c",
+  "salt": "9d7619b400e3d651e31e0e4359d198edd115972db38b8949",
+  "segments": [
+   "9572ffeb1f67ed4d24c143d42ab246fd46ded70b21da7995be718d7ba3391e6a",
+   "0b4c80f8609e885cfcd09afebf0a4a77068946d77a40ad2b3598c5dc8a56d825"
+  ]
+ }
+}

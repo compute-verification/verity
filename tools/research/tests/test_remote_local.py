@@ -144,6 +144,22 @@ def test_bad_schema_is_refused_without_side_effects(tmp_path):
     assert not (runs_root / "bad").exists()
 
 
+def test_a_machine_that_takes_runs_through_its_check_slots_refuses_any_other(tmp_path, monkeypatch):
+    """/etc/vy/runs-via-slot (cpu-1's, deploy.toml): the launcher starts a run only when its command is slot.py's (`python3
+    tools/verity/check/slot.py [OPTS] -- CMD`); three runs beside cpu-1's merge check took its slice from 586G to 647G (8 Oct)."""
+    marker = tmp_path / "runs-via-slot"
+    monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(marker))
+    marker.write_text("")
+    req, runs_root = _request(tmp_path, "off", [PY, "-c", "print('no')"])
+    out = remote.launch_request(req)
+    assert out["started"] is False and "only through its check slots" in out["refused"] and str(marker) in out["refused"]
+    assert R.summarize(runs_root / "off")["state"] == "refused" and not (runs_root / "off" / "job.json").exists()
+    req, _ = _request(tmp_path, "slot", ["python3", "tools/verity/check/slot.py", "--by", "t", "--", "true"])
+    doc = json.loads(req.read_text()); doc["cwd"] = str(tmp_path); req.write_text(json.dumps(doc))   # no slot.py here: the run fails
+    assert remote.launch_request(req)["started"]
+    _wait_terminal(runs_root / "slot")
+
+
 def test_tool_tarball_is_deterministic_and_excludes_caches():
     d1, s1 = remote.tool_tarball()
     d2, s2 = remote.tool_tarball()

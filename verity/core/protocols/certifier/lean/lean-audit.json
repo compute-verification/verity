@@ -1,0 +1,42 @@
+{
+ "roots": ["NetworkCertifier"],
+ "exempt": {
+  "NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetworkCertifier.Difftest.main, audited under NetworkCertifier, a test and not a proof"
+ },
+ "runs": {
+  "NetworkCertifier.DifftestMain": {
+   "why": "10,000 random instances on which NetTiming's definitions (expectedRow, and Accepted of constantRate and StatusComplete by decide) give what the Python audit gives: schedule.expected_grids, Audit.check_link with the first differing bucket, Audit.check_ingress_link, and each prefix's acceptance",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "10000"],
+   "data": {
+    "difftest/instances.jsonl": "c048b4c1fcf4b2918611f2c249d46aead1cbd3124d068fe659645964ecc62601",
+    "difftest/python.jsonl": "355d87108c136dd003c12c07f4026ec776d07922de7c1dbbe47381f48b74796f"
+   },
+   "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  }
+ },
+ "layers": {
+  "NetworkCertifier.Grid": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "NetworkCertifier.Run": {
+   "imports": ["NetworkCertifier.Grid"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "NetworkCertifier.Ingress": {
+   "imports": ["NetworkCertifier.Run"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "NetworkCertifier.Schedule": {
+   "imports": ["NetworkCertifier.Run"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  }
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}

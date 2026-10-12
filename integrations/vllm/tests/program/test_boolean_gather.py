@@ -10,13 +10,13 @@ import json
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.defs import REGISTRY, bind
-from verity.primitives.circuits.boolean.trace import word_of
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.boolean.trace import word_of
 from verity_vllm.program.registry import boolean_gather as BGA
 from verity_vllm.program.registry import prims as P
 from verity_vllm.query import word as W
@@ -25,13 +25,13 @@ SERVED_VOCAB = 49152
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "GatherBf16x64_v2": (1424, 2432, 390, "32ad23887b81376c19dc42f00ef6615441c1313a84036f4461ee71bc571d33e9"),
-    "GatherBf16x76u10_v1": (1296, 2496, 90, "124da57933230a4853b82a773b4706a1b1d28829d3624b9d0b067afbe7f3a362"),
-    "GatherBf16x2u22_v1": (352, 368, 315, "5aa825f9e1f4e35ae34821dd12885cdde030076d172f8966c801cbcecdc76a2d"),
-    "Embedding_v2{V=64,H=16}": (22784, 38912, 6240, "5e2c243cae2c57bef479411b692310180a3a92667cf0677b98452403755cb0c7"),
-    "GatherBf16x1024u10_v1": (16368, 32736, 0, "826205e682cc1f4fb12b92c5c88647ef026d8cdb3d4488808d26568e85dc0c2b"),
-    "GatherBf16x1100_v2": (18016, 35600, 405, "1fe5a1077bc99834d2b73f662c931510f2d84d772436a8479dad920a2fbdcba8"),
-    "Embedding_v2{V=1100,H=2}": (36032, 71200, 810, "fa46b99f44fe81b12d4dba0a4d0379dafc4a2338b5236fd9b16f569bbd1f2184"),
+    "GatherBf16x64_v2": (1424, 2432, 390, "2e1cfba6e2a01125cdf2ea16da210c91f6f71d08c3719d370ad85ca447aec674b948e4317e5398c23366f9ead77299041628401a467b83fd720d5864c10d9f16"),
+    "GatherBf16x76u10_v1": (1296, 2496, 90, "8e52f98031c197156ad9c2b522590e891442fe20131a156b01239f595ce6e752b84477a49d1a09af9846985dc76b0adbce36ffee7314e6cf5987cb897f40be92"),
+    "GatherBf16x2u22_v1": (352, 368, 315, "644d53b8b1d12a48010d7b92b906f1fb59aa4b73d64110d72bde8c2e28c9c03a922c49dcd968e8ef08b1c8606bc6894a8731a970f5d21c36f5adc5a34cd36a0e"),
+    "Embedding_v2{V=64,H=16}": (22784, 38912, 6240, "dc6159de5ce51bacbf41b8e34ba63754be24b70569bfa501765e6396cabb66476f1f5936e97870fc115cf1a984ffe51c8cf384c3e64547dc2bfcf19b45117b58"),
+    "GatherBf16x1024u10_v1": (16368, 32736, 0, "342ae6660d384c030788a4e8d1acd46784bb40d4bd1c49f027378765bc35c19036ff5ec3d241ca671d94f34375f48902539942fe64097d8ac4d2d1cb44796b6b"),
+    "GatherBf16x1100_v2": (18016, 35600, 405, "13b5d96e04c3c84641ee9330dd9e2d1a14224fc79cf0603aa9216b8e135f1db500f807f3f1a5568c2eec14653871caac90ff709e1fd3b400739046ae18e28d77"),
+    "Embedding_v2{V=1100,H=2}": (36032, 71200, 810, "01796fa581b87c15391b8bc98d1789432a6a82b1e928435b46853c81bd15346ebc0d78acaa6db9fdc2baadecb90849af27852c9de053dad3899c6c369d8c0387"),
 }
 QUICK = [bind(BGA.gather_bf16(64)), bind(BGA.gather_index(76, 10)), bind(BGA.gather_index(2, 22)), bind(BGA.Embedding, V=64, H=16)]
 TREES = [bind(BGA.gather_index(1024, 10)), bind(BGA.gather_bf16(1100)), bind(BGA.Embedding, V=1100, H=2)]

@@ -9,7 +9,7 @@ the shapes still to derive.  [R17-1] `LAG` (the declared scheduler's post-EOS ro
 REQUIRED static of the workload Program (`Workload_v1{requests, shared, lag}`): the digest differs per value and GM-01 G6 consumes it.
 
 Writes: `workload_program.json` (artifact: digest, components, address map, chronology), `descriptor.json.gz` (the workload
-Program's descriptor, decodable with verity.primitives.circuits.codec), `address_map.json`, `chronology.json`.
+Program's descriptor, decodable with verity.ml.circuits.codec), `address_map.json`, `chronology.json`.
 
 Layout 1.1 (`verity_vllm.pipeline.layout`): beside the absolute `inputs.manifest` / `inputs.derived` paths of the build machine, the
 artifact carries a `layout` block with the same paths relative to the artifact root (`--artifact-root`, default the parent of
@@ -27,8 +27,8 @@ import sys
 import time
 from dataclasses import dataclass
 
-from verity.primitives.circuits.codec import canonical_json, descriptor_size
-from verity.primitives.circuits.defs import REGISTRY
+from verity.ml.circuits.codec import canonical_json, descriptor_size
+from verity.ml.circuits.defs import REGISTRY
 from verity_vllm.config import option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import workload as W
@@ -396,7 +396,7 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     """[COORD M-0169 on M-0571 (3)] The workload Program's declaration of the top-p split geometry as a WORKLOAD-level derived value:
     S_t = SplitsFor_v1(|live(t)|, num_SMs), with |live(t)| the requests holding a logits row at engine step t (the declared chronology
     and the verified EOS stops GM-01 G6 establishes) and num_SMs the components' agreed target constant (`applicability.num_sms`).
-    vLLM computes S on the host per sampler launch (`registry/topp_split.splits_for`), so no fold instance carries the relation: GM-01
+    vLLM computes S on the host per sampler launch (`registry/topp_geometry.splits_for`), so no fold instance carries the relation: GM-01
     evaluates it per engine step against every top-p TokenSelect's launch S (`global_match.sampler_geometry_check`).  Declared for a
     stochastic sampler only (None for greedy); a stochastic sampler without an agreed num_SMs is a named refusal (the relation cannot be
     evaluated).  The declared schedule (every request to its cap) is carried for the reader; the check uses the REALIZED live count.
@@ -417,7 +417,7 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
         out["refusal"] = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): S_t = SplitsFor_v1(|live(t)|, num_SMs) "
                           "cannot be evaluated -- the Program does not model this row's sampler geometry (M-0571 (3))")
         return out
-    from verity_vllm.program.registry.topp_split import splits_for
+    from verity_vllm.program.registry.topp_geometry import splits_for
     live = declared_live_counts(reqs)
     out["declared_live_counts"] = live
     out["declared_schedule"] = [int(splits_for(n, int(nsm))) if n > 0 else None for n in live]

@@ -11,7 +11,7 @@ nvf4_bench.cubin is nvf4_bench.cu built off the card:
    0x30-0x3F (1), never bit 7 or 0x7F.
 2. Gates, at each of SMALL's shapes and at SHAPE (m = n = k):
    model   nv_ref_words (one warp per m16 x n8 block, fragments read from global memory) against BLACKWELL_SM120_NVF4
-           (verity_kernels.tc.block_scaled_batch chained from +0): every word at shapes of at most FULL_MODEL coordinates,
+           (verity.ml.kernels.tc.block_scaled_batch chained from +0): every word at shapes of at most FULL_MODEL coordinates,
            MODEL_SAMPLES coordinates (every row mod 16 and column mod 8) otherwise.  Needs numpy and verity importable.
    words   each of KERNELS' FP32-word kernel (_w) against nv_ref_words, word for word: full grid, 1 CTA, 3 CTAs, then
            GATE_REPEATS more full-grid runs.
@@ -426,8 +426,8 @@ def model_gate(dev: Dev, ops: dict, ref: int, m: int, n: int, k: int, samples: i
     every row mod 16 and column mod 8."""
     try:
         import numpy as np
-        from verity_kernels.tc import block_scaled_batch, chain_batch
-        from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4 as model
+        from verity.ml.kernels.tc import block_scaled_batch, chain_batch
+        from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4 as model
     except ImportError as e:
         return {"skipped": f"{type(e).__name__}: {e}"}
     t0 = time.time()

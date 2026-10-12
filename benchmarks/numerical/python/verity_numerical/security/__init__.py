@@ -6,5 +6,5 @@
 
 ``census``: the checker census from the WP2 gadget contracts (``verity_numerical.checker``), the source of every
 per-unit default in ``accounting`` (tables, layered shape, committed columns per unit) and of the diff against
-``verity_catalog.silicon.relation.vu_census``.
+``verity.ml.circuits.silicon.relation.vu_census``.
 """

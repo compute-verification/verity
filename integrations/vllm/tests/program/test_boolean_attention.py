@@ -8,48 +8,48 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.batch import type_shape
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.boolean import trace as TR
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.batch import type_shape
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.boolean import trace as TR
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.registry import boolean_attention as BAt
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
     "AttnBlock_v6{D=16,NVIS=5,FIRST=True,BN=16}":
-        (207368, 401776, 20609, "ab2416cc9c468378bdd59613e568da63db6f797066618364e182247cf70289d6"),
+        (207368, 401776, 20609, "8bf294c4e2261155f51d7813250f7ce10876b4ba2dc45d58fc8eedd422f7d5e2e1226a96a6039074f60b551f4d9415a593f67ba2f223c300a83293b8ce0c9952"),
     "AttnBlock_v6{D=16,NVIS=16,FIRST=False,BN=16}":
-        (435868, 848195, 39421, "29d550d42be678bb90f181253d042b4b0a25e34f9df2aae04c0fbb1c716c4fbb"),
+        (435868, 848195, 39421, "19a68a87889fefbf58241be6573f710721c42fb4a6b318f86259f38e6a722f37e57d587ce00c4cee995f47162edde9c3aa632d6e4d47bc62d23137e7784034cb"),
     "AttentionHead_v6{T=20,D=16,BN=16}":
-        (673779, 1306610, 61173, "d395754e7904c882aca9ce74741b08ff0d7588621e15c7531ec07e13b9e826f7"),
+        (673779, 1306610, 61173, "967e5dd8d1832716dc26c8b6f66fbffb012fb2914f20f3791fe22b64f19e1f7806863cc9b7e74c67a0738d78d12c7a1664fa0b9a3393e98ab9d3defbd646ae33"),
     "Attention_v6{T=20,NH=4,KVH=2,D=16,BN=16}":
-        (2695116, 5226440, 244692, "756f612ee6c53ec47dab52cc696841097d000045ea24c186adf944b04b7dc6ab"),
-    "Fa3InvSum_v2": (947, 4866, 102, "47bce9f5362663c4900c1cb1161e72c82290cba29067319c84c833866d58ac1a"),
+        (2695116, 5226440, 244692, "27a8d84292ec0b928a4e06cb6390aa8416d97a5ce73cf01a5a4245b62fbb3324bb3b62902616a04d97bd3c2ed7ab378ba3f55753605c1633072f701cfd619094"),
+    "Fa3InvSum_v2": (947, 4866, 102, "017c77eb48a6d4ed9be9ddaa291fa4c3ae280333540ed06045fef47238963ed59268c32fb069f62910b83e099df8eded6bba977ae659d6b42280ca8d8d653c5d"),
     "AttnBlock_v7{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2}":
-        (423452, 826819, 36253, "f368b54a12412459aab96880cc583052ed0106a59d74b29b831c1a249c9ef7cb"),
+        (423452, 826819, 36253, "d92cfd5e65517fc26f16b0a3b6bb7299cfc03700d6779850414fe1c6d74af9429b77fddb36bdd7f2ae7d1f2ffb9fcf65d894404b4e4ae4c7ab0b1a0f25f93373"),
     "AttentionHead_v7{T=20,D=16,BN=16,DOT=AmpereBF16TcDot16_v3,INV=Fa2InvSum_v2}":
-        (673779, 1306610, 61173, "1d5dcacaed0741eb24c0a81d012bdffa83a3de4997e23ace8f9b63f9aa221331"),
+        (673779, 1306610, 61173, "fd36c8a200873698b9e36b1e397f4325e89fc06a730d1d7a1ae04a69cb2cf135d81ea2d26f0234197c1750a3c345cacf3cebbe9bb31f85053071ef07ef4e493d"),
     "AttentionHead_v7{T=20,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
-        (653603, 1271874, 56018, "b93597b1ddc67975a6ca60a168370e6530ed2d31baeffa872f4963894d6c15d6"),
+        (653603, 1271874, 56018, "6f6c1e3b711a9a9c8945f177798a73a507bb950dc7a944e2a57c5c18f7bedf5109d8d4b8991242eb5f172499ea35f24fcf9b210ba2986d0c5a0860aec1aca844"),
     "Attention_v7{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
-        (2614412, 5087496, 224072, "64b3e252a8279e2c66736791a7d8ab109868af1843941878c9d0412ee72d9e48"),
+        (2614412, 5087496, 224072, "ffe2f2a05f7fe9100bfd69fcc393c1862f370134702fb1bdd967c4f2310ba33502fc588754b56145b4602099ccef5230b1aa90f24b029bfc152caa1e545857d1"),
     "AttnBlock_v8{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=False}":
-        (423452, 826819, 36253, "42aeb37ee1c67679030a82f40597352cf8d6beb1edcd05d30eeccc54f041a316"),
+        (423452, 826819, 36253, "f1ecfec2525794dd9755b9e409d764c99402dd1778d8cdfedaadf4cb06fa23b045c894204bedea2313090e499c2b3b534762ea316dc93d3d5430c18cea9a2ec9"),
     "AttentionHead_v8{T=40,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1}":
-        (1134159, 2213423, 97356, "11355fbfd9d1b67e9f2c8c4a83f7b6ffd0f68d3735321fec0a8cb6fecb88009c"),
+        (1134159, 2213423, 97356, "07eaeb2ecd4ff38c7865ba7946c083432363e8a04e681c67fe22dfa456cca6c108e94e70d36363929227c17bb352cac6282028f3e8164b11609bb20ad756f643"),
     "Attention_v8{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0}":
-        (2614412, 5087496, 224100, "d5fa69f89e7905c7ea19ad232df1442652329ceb0a776f3c07f926449b09a41b"),
+        (2614412, 5087496, 224100, "881930b20185c6ead14b5b25f3b383315371b79526e6d356ad1813add166397515e4f0d503f6d1fc5e6a29f33d4e4231af2a0a9ea24248f4767214a4b6e0f3f2"),
     "AttnBlock_v9{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=False}":
-        (423389, 826819, 36229, "d3d95e63b62cd24677de54e94d3cc2dc5ba9d4bb875c6d8098e95c13a8515fb4"),
+        (423389, 826819, 36229, "983b119dad8d4fa90b1eb2c2426dca506af42694a2b22b83009a7241b925b6fff0645d436669de29ceedec9a3c0b77845a30c1b8c5b82cccb219d95c65ad74ae"),
     "AttentionHead_v9{T=40,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=2}":
-        (1134033, 2213423, 97301, "dc0c870d652b50b92f6a4b67cf942805a2d905c82b19830e12836a8868e2026a"),
+        (1134033, 2213423, 97301, "71d4680190e38a0736b8a2ab86b97c0cf501fc65ad5508c36bd6d57376250bbbbff785ceac056c7153e9fced9ba01a712d887d698d28ffcbfeda9f06f30d99cb"),
     "Attention_v9{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=1}":
-        (2614160, 5087496, 223976, "8f8ef0b7049dc2d38a587748246df2410e5e80b439a5ada9c45026d2035d4cad"),
+        (2614160, 5087496, 223976, "d9481cd9ea4938b7941f85c0b993ec08241739f47a661f8257362f9d772c7075ca18f83c6390fae02c19470eec60bcc61bbcebf2d6362c16c7354c5f2e06f0e9"),
 }
 
 FA2, FA3 = BAt.ATTENTION_FA2, BAt.ATTENTION_FA3

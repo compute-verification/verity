@@ -1,0 +1,12 @@
+# A suite of `verity`'s tests (the root's pyproject.toml is the distribution).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: tests/test_leaves.py reads the typed-obligation fixtures through the frozen SP1 backend's statement codec (which
+# raises vLLM's check codes), and test_hm96 looks up the claims
+# hm96's PROTOCOL.md cites in verity.core.claims.
+inputs = ["verity", "verity/ml/circuits", "verity/ml/kernels", "verity/core/__init__.py", "verity/core/claims", "archive/sp1/python/verity_sp1", "integrations/vllm/verity_vllm/__init__.py",
+          "integrations/vllm/verity_vllm/check", "fixtures/typed-obligation-v0", "verity/ml/commitments/hm96/PROTOCOL.md"]
+parallel = true

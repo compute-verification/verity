@@ -1,5 +1,4 @@
-"""form_nv's block-step variants on one card (handoffs/ue4m3-scale-lut.md, server.md 11:28Z and 13:25Z): the gate, then
-the timing.
+"""form_nv's block-step variants on one card: the gate, then the timing.
 
   python form_bench.py CUBIN OUT_JSON [--expect-uuid GPU-...] [--shapes 8192x8192,64x8192] [--reps 7] [--item-ms 40]
 
@@ -75,7 +74,7 @@ def shape_run(d: D.Dev, rows: int, k: int, args) -> dict:
     b = pl.buf
     d.write(b["seed_a"], bytes(range(32)))
     d.write(b["seed_b"], bytes(range(32, 64)))
-    d.launch("lines", D.cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fa"]], i=[D.ROLE_FA, k])
+    d.launch("lines", D.cdiv(k, 512), 128, p=[b["seed_b"], b["lines_fa"]], i=[D.ROLE_FA, k])
     _, geo, kw = next(s for s in pl.steps("hash") if s[0] == pl.form)
     smem = {v: pl.form_smem if v == pl.form else 0 for v in VARIANTS}
     bufs = {v: {o: b[o] if v == pl.form else d.alloc(pl.sizes[o]) for o in OUTS} for v in VARIANTS}

@@ -1,5 +1,5 @@
 """The fused-MoE expert GEMMs with the target's k16 step (`registry.moe` `MoeExpertGemm_v2` / `MoeExpertGemmW_v2{E,K,N,DOT}`, bound
-through `registry.targets.moe_expert_dot`): only the families whose fused_moe_kernel correspondence ran bind them (cc 12.0; cc 8.x and
+through `frontend.targets.moe_expert_dot`): only the families whose fused_moe_kernel correspondence ran bind them (cc 12.0; cc 8.x and
 9.0 keep the `_v1` ids), with the Ampere step they are the `_v1` Definitions, with the sm_120 step they are that step's ascending chain
 (and the step is observable), and the vocabulary, the replay rows, the VU export and GP-01 read the same families."""
 from __future__ import annotations
@@ -9,16 +9,16 @@ import json
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.defs import bind
-from verity_kernels.tc import f2fp_bf16_batch, group_sum_total_batch
-from verity_catalog.definitions.prims import HopperBF16WgmmaDot16
-from verity_catalog.silicon.models import HOPPER_BF16_M16N8K16
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.defs import bind
+from verity.ml.kernels.tc import f2fp_bf16_batch, group_sum_total_batch
+from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
+from verity.ml.circuits.silicon.models import HOPPER_BF16_M16N8K16
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import moe as M
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import targets as T
+from verity_vllm.program.frontend import targets as T
 
 E, K, N = 3, 64, 5
 

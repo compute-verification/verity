@@ -23,7 +23,7 @@ import torch
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import pad_prims  # noqa: F401  — registers BitAnd_v1/BitNot_v1 for `ops.<name>` resolution
 from verity_vllm.program.registry.prims import BF16, BIT, I32
-from verity.primitives.circuits.types import Array, Tuple as TupleT
+from verity.ml.circuits.types import Array, Tuple as TupleT
 from tests.program.b1_authored import FinalV2, _forward_positions_v2
 from verity_vllm.program.frontend.torch_frontend import Arr, Dep, Tup, batch, function, ops
 

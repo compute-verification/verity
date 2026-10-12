@@ -1,0 +1,31 @@
+# vy-nebius-2's scheduler agent (`cluster agent --mode live`) as a service, from one pinned, content-addressed tree:
+# <root>/src/<commit>/, shipped and verified by `research run --on vy-nebius-2 --source ...` (its READY.json). Install with
+# that commit in place of @SOURCE@:
+#   sed s/@SOURCE@/$sha/g infra/cluster/vy-cluster-agent.service | sudo tee /etc/systemd/system/vy-cluster-agent.service
+#   sudo systemctl daemon-reload && sudo systemctl enable vy-cluster-agent
+# A new pin takes effect on `sudo systemctl restart vy-cluster-agent`, outside a timed window: the new agent continues the
+# ledger's chain in a new segment under live/.
+# Stop, and stay stopped: `touch /workspace/pouw/infra/cluster/live/STOP`. The agent exits 0, which is never restarted, and
+# the unit won't start while STOP exists. Any exit frees agent.lock, so gpu-lease and fill_runner fall back to their own rules.
+# Exit 2 (a plan that would break a rule) is the agent's own safety stop and is not restarted either; 1 (a crash) is.
+[Unit]
+Description=vy-nebius-2 scheduler agent (cluster agent --mode live) from verity @SOURCE@
+ConditionPathExists=!/workspace/pouw/infra/cluster/live/STOP
+StartLimitIntervalSec=1h
+StartLimitBurst=5
+
+[Service]
+User=research
+Group=research
+WorkingDirectory=/workspace/research/src/@SOURCE@
+Environment=PYTHONPATH=/workspace/research/src/@SOURCE@/tools/cluster/src PYTHONDONTWRITEBYTECODE=1
+ExecStartPre=/usr/bin/test -f /workspace/research/src/@SOURCE@/READY.json
+ExecStart=/usr/bin/python3 -m cluster agent infra/cluster/descriptions/nebius.toml --mode live --roll --out /workspace/pouw/infra/cluster/live --stop-file /workspace/pouw/infra/cluster/live/STOP
+Restart=on-failure
+RestartSec=15
+RestartPreventExitStatus=2
+TimeoutStopSec=20
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

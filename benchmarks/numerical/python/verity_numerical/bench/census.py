@@ -1,4 +1,4 @@
-"""The census (``catalog/census/`` at the repository root, data only: see its README), read directly.
+"""The census (``benchmarks/census/`` at the repository root, data only: see its README), read directly.
 
 Each file is loaded as ``{id: entry}`` with entries as attribute namespaces (``HARDWARE["rtx-4090/e4m3"].flop_per_second``).
 ``$VERITY_CENSUS`` points at the directory when it lives elsewhere.  The files are validated against their schemas in
@@ -13,11 +13,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-ROOT = Path(os.environ.get("VERITY_CENSUS") or Path(__file__).resolve().parents[5] / "catalog" / "census")
+ROOT = Path(os.environ.get("VERITY_CENSUS") or Path(__file__).resolve().parents[4] / "census")
 
 
 def raw(name: str) -> list[dict[str, Any]]:
-    """``catalog/census/<name>.json`` as written."""
+    """``benchmarks/census/<name>.json`` as written."""
     return json.loads((ROOT / f"{name}.json").read_text(encoding="utf-8"))
 
 

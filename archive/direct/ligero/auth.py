@@ -5,7 +5,7 @@ the prover's challenges to them through ``statement_digest``.  On its own that p
 computed".  This module supplies the missing half of the claim -- "the dot products were computed on *these committed*
 weights and activations, and produced *these committed* outputs" -- by
 
-  1. committing the input set's words as three indexed Merkle trees of :mod:`verity.primitives.commitments` (one 16-bit word per
+  1. committing the input set's words as three indexed Merkle trees of :mod:`verity.ml.commitments` (one 16-bit word per
      leaf, ``schema="u16"``, big-endian value bytes; SHA-256 with the ``veritor/protocol/merkle/frame/v3`` framing;
      binary tree, ``merkle_depth(count)`` levels):
 
@@ -23,7 +23,7 @@ weights and activations, and produced *these committed* outputs" -- by
      these leaf indices under these roots".
 
   3. having the prover ship one Merkle *multiproof* per tree (shared authentication paths, canonical order of
-     :func:`verity_experimental.commitments.multiproof`) and having *both* verifiers recompute the leaf digests from the published
+     :func:`verity.ml.commitments.multiproof`) and having *both* verifiers recompute the leaf digests from the published
      words and fold them to the root before accepting.  This is the verifier-side-openings option of the
      ``auth-integration`` lane: the Ligero proof is unchanged; the authentication cost lands in the verifier's time
      and in the transcript bytes.
@@ -42,15 +42,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from verity.primitives.commitments import (
+from verity.ml.commitments import (
     CommitmentDomain,
     RangeIndexedDomain,
     VerificationLimits,
     identity_digest,
     merkle_depth,
 )
-from verity_experimental.commitments.multiproof import verify_multiproof
-from verity.primitives.commitments.merkle import (  # the pad-leaf frame has no public wrapper; pinned by tests
+from verity.ml.commitments.multiproof import verify_multiproof
+from verity.ml.commitments.merkle import (  # the pad-leaf frame has no public wrapper; pinned by tests
     _FRAME,
     _LEAF,
     _NODE,
@@ -121,7 +121,7 @@ def domain_for(binding: bytes, owner: int, count: int) -> CommitmentDomain:
     return CommitmentDomain(bytes(binding), int(owner), RangeIndexedDomain(0, int(count)))
 
 
-# Batch forms of CommitmentDomain.leaf / .node and the pad leaf (verity.primitives.commitments.merkle): the frame, tag and domain id
+# Batch forms of CommitmentDomain.leaf / .node and the pad leaf (verity.ml.commitments.merkle): the frame, tag and domain id
 # are one hashed prefix copied per hash, the parts one update -- the same bytes into SHA-256 (pinned by hashchain_test.py).
 _L32 = (32).to_bytes(8, "big")
 
@@ -391,7 +391,7 @@ def _merge(runs: list[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 def multiproof_siblings(tree: WordTree, ranks: np.ndarray) -> list[bytes]:
-    """The canonical multiproof of :mod:`verity_experimental.commitments.multiproof` for ``ranks`` (a set): per level, ascending,
+    """The canonical multiproof of :mod:`verity.ml.commitments.multiproof` for ``ranks`` (a set): per level, ascending,
     the sibling of every known node whose sibling is not itself known.
 
     Computed on the *runs* of known nodes rather than node by node: inside a run every sibling is known, so a run

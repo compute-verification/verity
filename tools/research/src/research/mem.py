@@ -3,8 +3,11 @@
 Every process on a pod shares one memory cgroup, and `free` / /proc/meminfo describe the HOST (vyv-v2cpu3 on 2026-09-23: MemTotal
 946 GB, cgroup memory.max 256 GB, and 300 GB of hand-written reservations).  The reading, in GB (10^9 bytes):
 
-    limit      memory.max (cgroup v2) / memory.limit_in_bytes (v1), the smaller when both are finite; neither finite -> MemTotal
-    in_use     memory.current / memory.usage_in_bytes minus inactive_file (reclaimable page cache); meminfo: MemTotal - MemAvailable
+    limit      memory.max (cgroup v2) / memory.limit_in_bytes (v1) of the cgroup with the least headroom (limit - in_use): the
+               process's own, or a v2 ancestor's (a Nebius node puts each run in its own session scope under the user slice's
+               cap, so the run's own empty scope says nothing about its neighbours); none finite -> MemTotal
+    in_use     that cgroup's memory.current / memory.usage_in_bytes minus inactive_file (reclaimable page cache); meminfo: MemTotal
+               - MemAvailable
     reserved   over the LIVE reservations in the ramlock dir (the fleet convention, /workspace/ramlock/<owner>-<job>.json with
                {"owner", "gb", "started", "pid"?, "note"}; machines.toml `ramlock` overrides the dir): the part not yet in use --
                gb minus the RSS of the named pid's process tree, or all of gb when the file names no pid (a running reserved
@@ -48,6 +51,16 @@ def _cgroup_dirs() -> list[Path]:
     return [d for d in (cg.dir, cg.v1_dir) if d is not None]
 
 
+def _with_ancestors(dirs: list[Path]) -> list[Path]:
+    """Each dir, and each ancestor of a v2 one (memory.max beside it) that has a memory.max of its own."""
+    out = []
+    for d in dirs:
+        out.append(d)
+        if (d / "memory.max").exists():
+            out += [p for p in d.parents if (p / "memory.max").exists()]
+    return out
+
+
 def _proc() -> Path:
     return Path(os.environ.get("RESEARCH_PROC_ROOT", "/proc"))
 
@@ -55,15 +68,16 @@ def _proc() -> Path:
 def reading() -> dict[str, Any]:
     """{"limit", "in_use" (bytes), "source", "cgroup": "v2" | "v1" | None}"""
     best: dict[str, Any] | None = None
-    for d in _cgroup_dirs():
+    for d in _with_ancestors(_cgroup_dirs()):
         v2 = (d / "memory.max").exists()
         limit, _ = _int_or_kind(*_read(d / ("memory.max" if v2 else "memory.limit_in_bytes")))
         usage, _ = _int_or_kind(*_read(d / ("memory.current" if v2 else "memory.usage_in_bytes")))
         if limit is None or usage is None:
             continue
         inactive = _kv_file(_read(d / "memory.stat")[0]).get("inactive_file" if v2 else "total_inactive_file", 0)
-        if best is None or limit < best["limit"]:
-            best = {"limit": limit, "in_use": max(0, usage - inactive), "source": str(d), "cgroup": "v2" if v2 else "v1"}
+        in_use = max(0, usage - inactive)
+        if best is None or limit - in_use < best["limit"] - best["in_use"]:
+            best = {"limit": limit, "in_use": in_use, "source": str(d), "cgroup": "v2" if v2 else "v1"}
     if best is not None:
         return best
     mi = {k.rstrip(":"): v * 1024 for k, v in _kv_file(_read(_proc() / "meminfo")[0]).items()}

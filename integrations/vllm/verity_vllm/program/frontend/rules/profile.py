@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import torch
 
-from verity.primitives.circuits.refs import Coll, array_of
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.refs import Coll, array_of
+from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import attention_scale, dtype_is, from_rows, kv_logs, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.reference import LinearRule
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.registry.targets import UnregisteredTarget
+from verity_vllm.program.frontend.targets import UnregisteredTarget
 
 aten = torch.ops.aten
 BF16 = torch.bfloat16

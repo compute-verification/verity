@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from verity.primitives.circuits.refs import Coll
+from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import from_rows, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, aten
-from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as _LN
+from verity_vllm.program.registry import layer_norm as _LN
 
 
 class LayerNormAtenRule(OpRule):

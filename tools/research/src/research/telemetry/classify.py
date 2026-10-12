@@ -18,6 +18,11 @@ Rules (first match by priority; every rule's evidence refs recorded; ambiguity l
         corroboration, recorded in oom.attribution and NEVER a veto: the vanished process had the highest sampled /proc/<pid>/oom_score
         (the kernel's own victim rule) / the largest anon+shmem at the preceding sample; disagreement is a limitation line
         otherwise                                                 -> OOM_UNRESOLVED_ORIGIN
+     The run's own queue scope (`cluster-<run id>.scope`, which `research run --queue` starts) counts as the job's own cgroup here and in 7b.
+  6b exit by SIGTERM + an oom_kill increment in the run's own queue scope
+                                                                  -> CGROUP_OOM_ATTRIBUTED (0.1.4), established: systemd stopped the scope after the kernel
+                                                                     OOM-killed a process in it.  Every OOM class in the job's own cgroup names its cap
+                                                                     (`MemoryMax=NG`, job.json's environment.cgroup.memory_max_bytes) in `why`.
   COEXISTENCE (rev S-r17-51 c1, brief s6 'retain both'): whenever the job exited by SIGKILL with an oom_kill delta in its interval and rules 3-5
   chose another class (CUDA string, low mount, marker), the class is that first match but certainty = ambiguous, both evidence sets are
   recorded (`competing` = [chosen, other]; the OOM side is also an incident).  Exempt: a DELIVERED and identity-VERIFIED marker stays
@@ -182,6 +187,15 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     # ---- incidents: cgroup OOM deltas over the job interval -------------------------------------------------------------------------------
     cg_samples = [s for s in samples if s.get("kind") == "cgroup" and isinstance(s.get("cgroup"), dict)]
     cg_scope = cg_samples[0]["scope"] if cg_samples else None
+    run_id = (jobdoc.get("ownership") or {}).get("job") or d.name
+    cg_path = str((cg_samples[0]["cgroup"].get("path") if cg_samples else None) or ((jobdoc.get("environment") or {}).get("cgroup") or {}).get("path") or "")
+    queue_scope = cg_path.rstrip("/").rsplit("/", 1)[-1] == f"cluster-{run_id}.scope"
+    own_scope = cg_scope == "job_cgroup" or queue_scope
+    cap_bytes = ((jobdoc.get("environment") or {}).get("cgroup") or {}).get("memory_max_bytes")
+    cap = (f"MemoryMax={cap_bytes >> 30}G" if cap_bytes % (1 << 30) == 0 else f"MemoryMax={cap_bytes}") if isinstance(cap_bytes, int) else None
+    if queue_scope:
+        ref("cgroup.queue_scope", path=cg_path, memory_max=cap,
+            note="the run's own allocation (`research run --queue`'s systemd scope): it holds the runner, its sampler and the workload, nothing else")
     oom_delta: dict[str, int] = {}
     delta_windows: list[dict[str, Any]] = []
     failcnt_delta: int | None = None
@@ -374,7 +388,7 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     # ---- OOM attribution (rule 6 body; also consulted by rule 5 when a marker and an increment compete) --------------------------------------
     def oom_attribution() -> dict[str, Any]:
         """-> {class, why, certainty, limitations, detail}; class is CGROUP_OOM_ATTRIBUTED or OOM_UNRESOLVED_ORIGIN."""
-        if cg_scope == "job_cgroup":
+        if own_scope:
             return {"class": "CGROUP_OOM_ATTRIBUTED", "why": "SIGKILL exit and an oom_kill increment in the job's own cgroup during the job",
                     "certainty": "established", "limitations": [], "detail": {"scope": cg_scope}}
         detail: dict[str, Any] = {}
@@ -464,6 +478,12 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
         cls, why, certainty = oa["class"], oa["why"], oa["certainty"]
         limitations += oa["limitations"]
         ref("oom.attribution", **oa["detail"])
+    elif term_sig == 15 and queue_scope and any(k.endswith("oom_kill") or k.endswith("oom_group_kill") for k in oom_delta):
+        # rule 6b (0.1.4): systemd stops a scope (OOMPolicy=stop) with SIGTERM once the kernel OOM-kills a process in it
+        cls, certainty = "CGROUP_OOM_ATTRIBUTED", "established"
+        why = (f"exit by SIGTERM after an oom_kill increment in the run's own queue scope {cg_path.rsplit('/', 1)[-1]}: the kernel OOM-killed a process "
+               "at the scope's memory cap and systemd then stopped the scope")
+        limitations.append("the recorded signal is systemd's stop of the scope, not the OOM-killed process's SIGKILL")
     elif term_sig is not None:
         timeout_s = status.get("timeout_s") or (status.get("execution") or {}).get("timeout_s")
         ran = (job_end - job_start) if (job_start is not None and job_end is not None) else None
@@ -477,7 +497,7 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     elif term_rc is not None and killed_hit and (oom_delta or (not kill_counter_seen and (bool(failcnt_delta) or under_oom_seen))):
         # rule 7b (0.1.3): the workload's wrapper exited rc != 0 and reported a SIGKILLed descendant while the cgroup counted a kill
         # (or, cgroup v1 with no oom_kill counter at all, hit its limit: failcnt grew / under_oom was raised)
-        shared = cg_scope != "job_cgroup"
+        shared = not own_scope
         gone = [{"window": {k: w[k] for k in ("counter", "from", "to", "window_start_mono", "window_end_mono")}, **vanish_in(w)}
                 for w in delta_windows if w["counter"].endswith("oom_kill") or w["counter"].endswith("oom_group_kill")]
         tree_gone = sorted({p for g in gone for p in g["tree_gone"]})
@@ -523,6 +543,8 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     if cls == "UNKNOWN_SIGNAL" and not samples:
         certainty = "ambiguous"
         limitations.append("no resource samples: a cgroup OOM in this interval could not have been observed")
+    if cap and cls in ("CGROUP_OOM_ATTRIBUTED", "CGROUP_OOM") and own_scope:
+        why += f"; the cap was {cap}" + (" (`research run --queue --mem-gb G` sets it)" if queue_scope else "")
 
     out = {"schema": FAILURE_SCHEMA, "classifier_version": CLASSIFIER_VERSION, "attempt_dir": str(d), "inputs": inputs,
            "termination": termination, "class": cls, "certainty": certainty, "why": why, "competing": competing, "location": location,

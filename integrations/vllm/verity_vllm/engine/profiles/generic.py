@@ -48,8 +48,8 @@ from verity_vllm.engine.profiles.gen_dense_gemma2_patterns import with_gemma2_pa
 from verity_vllm.engine.profiles.gen_dense_softcap_patterns import with_softcap_patterns
 from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, with_tuned_gemm
 from verity_vllm.engine.profiles.gen_ln_patterns import with_ln_patterns
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_NUMERIC_PINS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
-                                  ROUTER_VPT_BY_E, MoEFusedExperts)
+from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
+                                  MOE_FP8_CONSTRUCTION_PATTERNS, ROUTER_VPT_BY_E, MoEFusedExperts, MoEFusedExpertsFp8)
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 MODULE_PREFIX = "derived_"
@@ -361,14 +361,17 @@ def _dense_patterns(cfg: dict[str, Any], C: dict[str, Any], patterns: list) -> l
 
 def _moe_patterns(C: dict[str, Any], patterns: list, *, world: int, moe_construction: str | None, fused_pins, fused_num_warps, fused_num_stages) -> list:
     key = moe_construction or TargetProfile.DEFAULT_MOE_CONSTRUCTION
-    if key not in MOE_CONSTRUCTION_PATTERNS:
-        raise ValueError(f"moe_construction {moe_construction!r} is not one of {sorted(MOE_CONSTRUCTION_PATTERNS)}")
+    table = MOE_FP8_CONSTRUCTION_PATTERNS if C.get("FP8_BLOCK") else MOE_CONSTRUCTION_PATTERNS
+    if key not in table:
+        raise ValueError(f"moe_construction {moe_construction!r} is not one of {sorted(table)}" + (" (block-FP8 experts)" if C.get("FP8_BLOCK") else ""))
+    # the rank's scale grid, vLLM's refined block (64 for the 235B at TP8), is the FP8 scope's group
+    group = {"group": analytic.fp8_moe_block(int(C["FP8_BLOCK"]), int(C["I"]), int(C["H"]))} if C.get("FP8_BLOCK") else {}
     coll = TpCollective(world=world) if world > 1 else None
-    moe = MOE_CONSTRUCTION_PATTERNS[key](C, router_vpt={**ROUTER_VPT_BY_E, int(C["NUM_EXPERTS"]): int(C["ROUTER_VPT"])},
-                                         renormalize=bool(C.get("RENORMALIZE", False)), scope_patterns=(coll,) if coll else (),
-                                         fused_pins=dict(FUSED_MOE_PINS if fused_pins is None else fused_pins),
-                                         fused_num_warps=FUSED_MOE_NUM_WARPS if fused_num_warps is None else int(fused_num_warps),
-                                         fused_num_stages=FUSED_MOE_NUM_STAGES if fused_num_stages is None else int(fused_num_stages))
+    moe = table[key](C, router_vpt={**ROUTER_VPT_BY_E, int(C["NUM_EXPERTS"]): int(C["ROUTER_VPT"])},
+                     renormalize=bool(C.get("RENORMALIZE", False)), scope_patterns=(coll,) if coll else (),
+                     fused_pins=dict(FUSED_MOE_PINS if fused_pins is None else fused_pins),
+                     fused_num_warps=FUSED_MOE_NUM_WARPS if fused_num_warps is None else int(fused_num_warps),
+                     fused_num_stages=FUSED_MOE_NUM_STAGES if fused_num_stages is None else int(fused_num_stages), **group)
     out = with_tuned_gemm(patterns)
     out.insert(next(i for i, p in enumerate(out) if type(p).__name__ == "GemmLaunchTuned") + 1, moe)   # tuned GEMM, MoE scope, then the base list
     return out
@@ -452,13 +455,18 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
     if arch == "moe":
         moe = next(p for p in patterns if isinstance(p, MoEFusedExperts))
         E, T, I, H = C["NUM_EXPERTS"], C["TOPK"], C["I"], C["H"]
+        if isinstance(moe, MoEFusedExpertsFp8):
+            fp8 = f"G={moe.group},KB={moe.fused_pins['BLOCK_SIZE_K']},SWAP=False,DOT=the record target's e4m3 step"
+            experts = [f"Fp8GroupQuant_v1{{K={H},G={moe.group}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},{fp8}}}", f"SiluMul_v2{{I={I}}}",
+                       f"Fp8GroupQuant_v1{{K={I},G={moe.group}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},{fp8}}}"]
+        else:
+            experts = [f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}", f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}"]
         notes["moe"] = {"status": "constructive: Computes over registry.moe definitions per step per rank",
                         "scope_pattern": f"gen_ov_moe_patterns.{type(moe).__name__} (vllm.moe_forward*), renormalize={bool(C.get('RENORMALIZE', False))}",
                         "definitions": [f"MoeRouterTopK{'Ordered' if moe.router == 'ordered' else ''}{'Norm' if C.get('RENORMALIZE') else ''}_v1"
-                                        f"{{E={E},TOPK={T},VPT={C['ROUTER_VPT']}}}",
-                                        f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}", f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}",
+                                        f"{{E={E},TOPK={T},VPT={C['ROUTER_VPT']}}}", *experts,
                                         f"MoeSum_v1{{TOPK={T},H={H}}}"] + ([f"AllReduce2_v1{{N={H}}} (the block's TP all-reduce, in or after the scope)"] if world > 1 else []),
-                        "pins": {"fused_moe_kernel": {**FUSED_MOE_NUMERIC_PINS, **moe.fused_pins, "num_warps": moe.fused_num_warps, "num_stages": moe.fused_num_stages,
+                        "pins": {"fused_moe_kernel": {**moe._numeric_pins(), **moe.fused_pins, "num_warps": moe.fused_num_warps, "num_stages": moe.fused_num_stages,
                                                       "source": "gen_ov_moe_patterns.FUSED_MOE_PINS (vLLM BI default, M-invariant)" if fused_moe_pins is None
                                                                 else "injected (build_profile(fused_moe_pins=...))"},
                                  "router_vpt_by_E": {E: C["ROUTER_VPT"]},

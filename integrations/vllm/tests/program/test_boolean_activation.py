@@ -9,22 +9,22 @@ import json
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits import partition_object as PO
-from verity.primitives.circuits.defs import REGISTRY, bind
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import Circuit
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import Circuit
 from verity_vllm.program.registry import boolean_activation as BA
 from verity_vllm.program.registry import dense as D
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "TanhBf16_v2": (391, 1628, 31, "e6d9d24d463514967c9630141c5794340d8fdbcb0d3f3cf14024c19f1b7da912"),
-    "Bf16Tanh_v2{N=8}": (3128, 13024, 248, "1fa5eaeb7f5accef60cf881e9ae2a9818ad3d30a041e8d384641e304ec9928ba"),
+    "TanhBf16_v2": (391, 1628, 31, "556586c2a32ec874adf62df5acc74a853dde4642b1add2cd3365cdd55d3f876147219bbb421733c9d7dd74897869b3b6a4945c01dc25a833f45bc3a54be7d4fd"),
+    "Bf16Tanh_v2{N=8}": (3128, 13024, 248, "a145e0351c69d4a45f8740b301f91e6682306d7cde53a41c75d7c77329862567bf16add6473d294b9d8f501e714af3a84cbdfb2a26a938d27503d84bbb8f01ba"),
 }
 WORDS = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
 

@@ -1,5 +1,5 @@
 """Census of the frozen target's checker, counted from the WP2 gadget contracts (``verity_numerical.checker``), not
-from ``verity_catalog.silicon.relation`` (whose ``census``/``vu_census`` count none of the repairs the red team and WP2 found:
+from ``verity.ml.circuits.silicon.relation`` (whose ``census``/``vu_census`` count none of the repairs the red team and WP2 found:
 RANGE(magW), direct remainder ranges, the tight quotient bound, the decode of an arbitrary incoming accumulator).
 
 Method.  ``step.py``'s composed unit (``check_step_expr``) and VU (``check_vu_expr``) are executed once on *symbolic*
@@ -32,7 +32,7 @@ arbitrary finite ``c``; the VU is the chain from ``c_0 = 0``):
     vu      ``check_vu_expr`` for K/16 word-chained units from the constant 0 plus the epilogue, exactly as
             ``step.py`` composes it (the first unit decodes a constant; every other unit decodes the previous word).
 
-``diff_vs_relation`` puts the two side by side with ``verity_catalog.silicon.relation.census`` / ``vu_census``.
+``diff_vs_relation`` puts the two side by side with ``verity.ml.circuits.silicon.relation.census`` / ``vu_census``.
 
 Per-gadget breakdown (``UnitCensus.by_gadget``): every gadget's ``check`` (and the free-standing pieces v2's
 composition calls directly) is wrapped for the duration of a census so that the predicates and multiplications it
@@ -616,12 +616,12 @@ def layer_shape(c: UnitCensus) -> list[dict]:
 
 
 def diff_vs_relation(K: int = 1536, relation_unit: dict | None = None, relation_vu: dict | None = None) -> dict:
-    """Checker census beside ``verity_catalog.silicon.relation.census``/``vu_census`` (Ampere pipeline) for the unit and the VU:
+    """Checker census beside ``verity.ml.circuits.silicon.relation.census``/``vu_census`` (Ampere pipeline) for the unit and the VU:
     mul, lin, lookup and the lookup tables; ``delta`` = checker - relation."""
     if relation_unit is None or relation_vu is None:
-        from verity_catalog.silicon.relation import census as rel_census
-        from verity_catalog.silicon.relation import vu_census as rel_vu_census
-        from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16
+        from verity.ml.circuits.silicon.relation import census as rel_census
+        from verity.ml.circuits.silicon.relation import vu_census as rel_vu_census
+        from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
         relation_unit = relation_unit or rel_census(AMPERE_BF16_M16N8K16)
         relation_vu = relation_vu or rel_vu_census(AMPERE_BF16_M16N8K16, K)
     u, v = census_unit(), census_vu(K)

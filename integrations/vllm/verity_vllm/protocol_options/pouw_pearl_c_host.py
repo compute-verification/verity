@@ -1,5 +1,5 @@
 """The Pearl-C device path's host helpers (`pouw_pearl_c_device`): device byte buffers and their uploads, the current stream's
-handle, each call's keys by native BLAKE3 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`) and the
+handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`) and the
 streams a run owns (`_Lane`), and a retained pass's files (`_write`, `write_manifest`).
 """
 from __future__ import annotations
@@ -9,12 +9,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-import blake3
-from verity.primitives.commitments import RangeIndexedDomain
-from verity.primitives.commitments.merkle import domain_message
-from verity.protocols.accounting.work.pouw.audit import activation_binding, rows_domain
+from verity.ml.commitments import RangeIndexedDomain
+from verity.ml.commitments.merkle import domain_message
+from verity.core.protocols.pouw.audit import HM96, activation_binding, rows_domain
 
-#: the pinned ring's key slots (each call's dom_a ‖ unit, 136 bytes)
+#: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
 #: torch's stream priority for each of a schedule's priorities (torch maps values past its range to the nearest valid one)
 PRIORITY = {"least": 0, "caller": 0, "greatest": -(1 << 10)}
@@ -65,31 +64,32 @@ def _bytes(t: Any) -> bytes:
     return t.cpu().numpy().tobytes()
 
 
-def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, hash: str = "blake3") -> bytes:
-    """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows, under tree hash `hash`."""
+def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, hash: str = HM96) -> bytes:
+    """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows, under tree hash `hash` (-h3's
+    is `HM96`)."""
     return rows_domain(activation_binding(salt, index), index, m16, hash).domain_id + fixture.unit_block(salt, root_b, index)
 
 
 class _Keys:
-    """`call_keys` by native BLAKE3 (the `blake3` package): dom_a is `merkle.domain_message` hashed natively, and unit's
-    label hash is a constant.  The native path is held to `call_keys` once at construction, so a tree hash whose domain id
-    isn't BLAKE3 of that message fails there.  ``native`` set to None takes `call_keys` itself (the reference path)."""
+    """`call_keys` natively: dom_a is `merkle.domain_message` hashed by hashlib's SHA-512.  The native path is held to
+    `call_keys` once at construction, so a tree hash whose domain id isn't that digest of that message fails there.
+    ``native`` set to None takes `call_keys` itself (the reference path)."""
 
-    def __init__(self, fixture: Any, salt: bytes, hash: str):
-        self.native, self.fixture, self.salt, self.hash = blake3, fixture, salt, hash
-        self.label = fixture.unit_block(salt, bytes(32), 0)[-32:]
+    def __init__(self, fixture: Any, salt: bytes, hash: str = HM96):
+        self.native, self.fixture, self.salt, self.hash = hashlib.sha512, fixture, salt, hash
         self.positions: dict[int, bytes] = {}
-        if self(bytes(32), 0, CHECK_ROWS) != call_keys(fixture, salt, bytes(32), 0, CHECK_ROWS, hash):
-            raise ValueError(f"native BLAKE3 keys don't frame tree hash {hash!r} as CommitmentDomain does")
+        root = bytes(64)
+        if self(root, 0, CHECK_ROWS) != call_keys(fixture, salt, root, 0, CHECK_ROWS, hash):
+            raise ValueError(f"native keys don't frame tree hash {hash!r} as CommitmentDomain does")
 
     def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
         if self.native is None:
             return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash)
         pos = self.positions.get(m16)
         if pos is None:
-            pos = self.positions[m16] = bytes.fromhex(RangeIndexedDomain(m16).identity_digest)
-        msg = domain_message(activation_binding(self.salt, index), index, pos, m16, self.hash)
-        return self.native.blake3(msg).digest() + self.salt + root_b + index.to_bytes(8, "little") + self.label
+            pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
+        msg = domain_message(activation_binding(self.salt, index), index, pos, m16, "sha512")
+        return self.native(msg).digest() + self.salt + root_b + index.to_bytes(8, "little")
 
 
 class _Lane:
@@ -110,7 +110,7 @@ class _Uploads:
     """Small host-to-device copies through a pinned ring allocated once: each is one copy on the current stream, and a slot is
     written again only once its last copy is done (its event)."""
 
-    def __init__(self, device: Any, slots: int = UPLOAD_SLOTS, width: int = 144):
+    def __init__(self, device: Any, slots: int = UPLOAD_SLOTS, width: int = 176):
         import torch
         self.cuda, self.slots, self.i = device.type == "cuda", slots, 0
         self.host = torch.zeros((slots, width), dtype=torch.uint8, pin_memory=self.cuda)
@@ -145,10 +145,11 @@ def _write(path: Path, data: bytes, digest: bool = True) -> dict:
 
 
 def write_manifest(d: Path, head: dict, weights: dict[str, dict], matmuls: list[dict]) -> Path:
-    """The pass's manifest, which `verify_run.py` reads: `head` (the scheme and its arguments, the beacon, the salt, the
-    records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and tree
+    """The pass's manifest, which `verify_run.py` reads: `head` (the scheme and its arguments, the epoch's coin commitment
+    and its salt coin's opening, the salt, the records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and tree
     levels) and every matmul in order (index, m, k, n, weight, real rows, |K|, excluded A rows, A's root, rows and tree
-    levels).  Trees are the device's layout: level 0 padded to a power of two, then each level above it, 32 bytes a node."""
+    levels).  Trees are the device's layout: level 0 padded to a power of two, then each level above it, 64 bytes a node; the
+    head also holds the prover's hm96 salt key."""
     path = d / "manifest.json"
     path.write_text(json.dumps({**head, "weights": weights, "matmuls": matmuls}, indent=1) + "\n")
     return path

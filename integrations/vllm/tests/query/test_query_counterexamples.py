@@ -3,14 +3,14 @@ with a gap (a forgotten Input gate, a forgotten constant gate), a set whose inte
 w_out is 32 (dead return), sets whose exact w_out exceeds 32 (AttnBlock calls: 640 / 672 bits), scan-carry boundaries,
 fan-out counted once, dead parameters, 64-bit gates -- and the RA rule that `Unsupported` is never a pass.
 
-The three core modules are other owners' (`verity.primitives.circuits.query_ast`, `verity.primitives.circuits.boundary`, `verity.primitives.circuits.partition`): every test
+The three core modules are other owners' (`verity.ml.circuits.query_ast`, `verity.ml.circuits.boundary`, `verity.ml.circuits.partition`): every test
 `importorskip`s what it needs, so this file SKIPS (never fails) until the branches are merged.  The oracle side of every
 assertion is `fixtures_query` (explicit `GateSelection` on the expanded circuit)."""
 from __future__ import annotations
 
 import pytest
 
-from verity.primitives.circuits.parts import Limits, Part, Unsupported
+from verity.ml.circuits.parts import Limits, Part, Unsupported
 from tests.program import fixtures_query as FX
 
 # ---------------------------------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ from tests.program import fixtures_query as FX
 _OWNER = {"gateset": "qapi", "boundary": "qbound", "partition": "qpart"}
 
 
-_MODULES = {"gateset": "verity.primitives.circuits.query_ast", "boundary": "verity.primitives.circuits.boundary", "partition": "verity.primitives.circuits.partition"}
+_MODULES = {"gateset": "verity.ml.circuits.query_ast", "boundary": "verity.ml.circuits.boundary", "partition": "verity.ml.circuits.partition"}
 
 
 def _mod(name: str):
@@ -488,7 +488,7 @@ def test_query_json_roundtrip_and_id(GS):
     q2 = from_json(doc)
     assert to_json(q2) == doc
     assert query_id(q) == query_id(q2)
-    assert len(query_id(q)) == 64
+    assert len(query_id(q)) == 128
     assert query_id(q) != query_id(default(32))
     assert query_id(instances("//DotBf16_v1")) != query_id(instances("//Gemm_v1"))
 

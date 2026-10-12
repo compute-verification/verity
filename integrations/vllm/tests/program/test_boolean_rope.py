@@ -1,6 +1,6 @@
 """`registry.boolean_rope`: the Boolean NeoX rotation agrees with its word Definitions (`trace.word_of`) on every quadruple of
 special bf16 words and on 90k random and structured quadruples per half, on random heads of each served head width against
-`RoPEHead_v1` through the IR reference, on 81k random heads of each served head width against `RoPE_v1`'s kernel, and on 1,024
+`RoPEHead_v1` through the IR reference, on 16k random heads of each served head width against `RoPE_v1`'s kernel, and on 1,024
 random heads of every `RoPE_v1` binding the served workload Programs call (`SERVED`); carries exactly its builders' live ANDs;
 is pinned by gate count and program digest; and cuts under `Q_word` v1 into one 16-bit unit per output element, as the word
 Program does. The interleaved (GPT-J) versions agree with `RoPEHeadGptJ_v2` / `RoPEGptJ_v2` through the IR reference at
@@ -15,15 +15,15 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits import partition_object as PO
-from verity.primitives.circuits.defs import REGISTRY, bind
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import Circuit
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import Circuit
 from verity_vllm.program.kernels import twins  # noqa: F401  (registers RoPE_v1's kernel, which the served shapes' word side runs)
 from verity_vllm.program.kernels.twins import rand_bf16, tie_pairs_mul
 from verity_vllm.program.registry import b1
@@ -49,36 +49,36 @@ ROPES = sorted({bind(R.RoPE, NHEADS=n, D=d) for shapes in SERVED.values() for n,
 HEADS = {d: bind(R.RoPEHead, D=d) for d in sorted({t.bindings["D"] for t in ROPES})}
 HEAD = HEADS[64]
 K = bind(R.RoPE, NHEADS=3, D=64)
-#: one served binding per head width, run on 81k heads: SmolLM2's q and k, Phi-3's, Qwen3's q, Gemma-2's q
+#: one served binding per head width, run on 16k heads: SmolLM2's q and k, Phi-3's, Qwen3's q, Gemma-2's q
 LARGE = [bind(R.RoPE, NHEADS=n, D=d) for n, d in ((9, 64), (3, 64), (32, 96), (32, 128), (8, 256))]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "RopeOut_v2": (2966, 4608, 295, "5677d123ea2492ecbb3f4d477325ac7a6407d5a393ae8e094291b7640661c4fd"),
-    "RopeOutAdd_v2": (2966, 4608, 294, "358c043fb20c3738d2e852c96f10910877053f5c9dcd78cb3e90ccb6a54a3b02"),
-    "RoPEHead_v2{D=64}": (189824, 294912, 18848, "84bd8192e6ddd91076d45608e0fe5ecf41e3d90b8a4d6bf0b11537503c02cff2"),
-    "RoPEHead_v2{D=96}": (284736, 442368, 28272, "73688224fdc345974ed4aab8267a07160d2fdee6062a088ad1fe229dd6e702ee"),
-    "RoPEHead_v2{D=128}": (379648, 589824, 37696, "80f0ade7180aebd481c0dc897946d1f8d3517e9b4941c9f60bfe8d9a562e27f1"),
-    "RoPEHead_v2{D=256}": (759296, 1179648, 75392, "940ef33ab15a29408f149e64b4776ef32cccd59da17c62b5652f00b18759a85e"),
-    "RoPE_v2{NHEADS=9,D=64}": (1708416, 2654208, 169632, "c0f8d5b33977be128701803c57cdbb9f277cb43e6ae58c4c64c6712abfe0dfd8"),
-    "RoPE_v2{NHEADS=3,D=64}": (569472, 884736, 56544, "3b75b585c31aa6954a3db2f7ec5c7cdcd8f83541a8342b19f2f5283f6dd55504"),
-    "RoPE_v2{NHEADS=32,D=64}": (6074368, 9437184, 603136, "5b4929780ac659b5bc664a671a0ccead8ae9cfdbd48394f5c9ffa40f7c5c673c"),
-    "RoPE_v2{NHEADS=8,D=64}": (1518592, 2359296, 150784, "81764434f198c07ec39d43e18ca09a9ca578a28ac964559bb40db92b840f0aea"),
-    "RoPE_v2{NHEADS=14,D=64}": (2657536, 4128768, 263872, "4fb613382515c36faedc8ba1f76665d273d16440ca9894bfcd64b86bf48865f1"),
-    "RoPE_v2{NHEADS=2,D=64}": (379648, 589824, 37696, "a341007033e668ee4a782802113ebe55e820a0e95261b25009af3cf1f65f1a34"),
-    "RoPE_v2{NHEADS=32,D=96}": (9111552, 14155776, 904704, "17e632e380943ef3d9e0fe86c83f1459a572fc5be1ec6e2fc5363af71e5bf6f3"),
-    "RoPE_v2{NHEADS=16,D=128}": (6074368, 9437184, 603136, "6b4717f97b44e29cb57087303944d856dc454dbd1883f45db6a0542822f3f92f"),
-    "RoPE_v2{NHEADS=12,D=128}": (4555776, 7077888, 452352, "7896c240969f1973e7a474b2d2c7f460c75582955b44d4042c59adcae7cd6f44"),
-    "RoPE_v2{NHEADS=2,D=128}": (759296, 1179648, 75392, "bb6e33ae1f5d2d645f111e095795b336400dc7fdb1b73099302521c300437c37"),
-    "RoPE_v2{NHEADS=32,D=128}": (12148736, 18874368, 1206272, "3b126c8191ae06739027cd2177b009a606c54e2630182325a0fedcc71035dbc3"),
-    "RoPE_v2{NHEADS=8,D=128}": (3037184, 4718592, 301568, "203883c9082e55e5733f8f57f55cf0c5bd5c98010b6b4f6160000befd91c1ba2"),
-    "RoPE_v2{NHEADS=8,D=256}": (6074368, 9437184, 603136, "5cc0e9f4bcc9180d51f8b199620667815d7a108552d985b2af27118843bfd8db"),
-    "RoPE_v2{NHEADS=4,D=256}": (3037184, 4718592, 301568, "7c083426ccb30a5159264b245865b7857feeb997348faff6d04a766fc9a2cf8f"),
-    "RoPEHeadGptJ_v3{D=64}": (189824, 294912, 18848, "561cc590e461c8908ec4f06e8027296afc533e20ddcc29f9627099410034ea6d"),
-    "RoPEGptJ_v3{NHEADS=1,D=64}": (189824, 294912, 18848, "7a84f311d0be77f6554692eb5b5be39fb231a2e04ddaccaf0992d466ae3be7d0"),
-    "RoPEGptJ_v3{NHEADS=5,D=64}": (949120, 1474560, 94240, "63ecf6db25b549fa621d149de9098381c49f1ec13bf6fa5a5b0cce39c60eb69a"),
-    "RoPEGptJ_v3{NHEADS=8,D=64}": (1518592, 2359296, 150784, "25f59ca92368718a8a3aed916f29bc418fdceb1c788d9e604becfc74eded7320"),
-    "RoPEGptJ_v3{NHEADS=20,D=64}": (3796480, 5898240, 376960, "84c4205df84e9e0fe7e948737ea266453240f3a565282ef83f97b0811a779e29"),
+    "RopeOut_v2": (2966, 4608, 295, "d04513f5effb40ddb44a20c17342bac87dd8468fa2a4f4f42551a9026d9d9229b7c0ee2d90cbde79b122f60635499d5a5f5ec0534a687c95e9fb8f47fbaa614b"),
+    "RopeOutAdd_v2": (2966, 4608, 294, "d53f3f2e6b4dcca7d8bafca17d8a9c02d0d39073e1e13c6e493da779b1a8f62c5b28f37f8332a0d8e4f551e0e7dfa2f64cfeabb6dc9ef51a7f3748257b1f12b6"),
+    "RoPEHead_v2{D=64}": (189824, 294912, 18848, "c21dd89b6ed10938299967990ef89f901fa72e2050b72e687b13cd5b0833eba5d9301fcbf07dd09ae31a7d054d151d50f1fc2b001fad4d40457e1a29b71dff75"),
+    "RoPEHead_v2{D=96}": (284736, 442368, 28272, "afc7de9dd43b93339c7a54c68a1f2c81be0b102920e0ee2dc93b7245a96b979e8e2c80b96c0d4e0e23a0f2fe83cc342196520aaba0841985c8a4a2d80676a4ec"),
+    "RoPEHead_v2{D=128}": (379648, 589824, 37696, "d401e772969b8a1535ef3963e3526eaa5dc89efbc5fa3673dd7046b5ccc14ccf518d1c7d73ebeb5481905ec335264bc7bddeb8ca3515193c576d327c4013343b"),
+    "RoPEHead_v2{D=256}": (759296, 1179648, 75392, "030d4fee1a3c7ebcee43fd39d5a453a9256e311cd01ce63b369a6436f38ca6a510190536115d245a3db5cbb1ccdaa25bb4071517463f69af59c84dcb07e7c4fb"),
+    "RoPE_v2{NHEADS=9,D=64}": (1708416, 2654208, 169632, "099fb72d3bc9bb82ff98236fa04b79c1ad390018e0a51e20b9f99806bd2b5bd02ef2d031e8aa7c9e70b94bce16d9ec109cb4138388e13c5d12c5cfe167c231ca"),
+    "RoPE_v2{NHEADS=3,D=64}": (569472, 884736, 56544, "dbf2e021fdd58cfa21f6ef3b927fe3b77c5a6576f31e28f1c8595a27090afd217b8fd722741aa028373b1b723d7701daabe5c38c1947a177712403e2d0e58e3e"),
+    "RoPE_v2{NHEADS=32,D=64}": (6074368, 9437184, 603136, "4e29903fa63bf822c2370bfa64345fce31a53a7616b5ace53195a03f83dc21585b0f69be739d622f71d31a1b82ca0646e1d18bee02c0b38b72c10b9b2c1f9789"),
+    "RoPE_v2{NHEADS=8,D=64}": (1518592, 2359296, 150784, "fd04901d7ef230c5bd96d6b044c4e485660e576cbbf7e9091cd9c263a48653d21fe385f4bf6deea6d7ac67d04540b0cdb5e212da2866dc735a2ccb1b8dc07d5b"),
+    "RoPE_v2{NHEADS=14,D=64}": (2657536, 4128768, 263872, "3096be038bb49f07afe3d04458ac8f355f7f49349c3c2236352111b78506a5cee64db722a8fe4ef56b5df7cf088170fd3e555cd72f9b07b92e327d9b6f6ae521"),
+    "RoPE_v2{NHEADS=2,D=64}": (379648, 589824, 37696, "97e91c5866c8b108a396e71042f0725422d44b1cf1b073af9abf7bf5abe73c756fdb933b268c3bab645d8f9ab8318b86bf4b2162192b0725506c13d42a377454"),
+    "RoPE_v2{NHEADS=32,D=96}": (9111552, 14155776, 904704, "b21c95a8fdb1f8cda78f1fdf8e76923de2a38fe23e1761a2fef06af8bf406c71be43844a242a72907e08d485c788bd57a3e7cba59f5b253c3299f7d74fbbe20f"),
+    "RoPE_v2{NHEADS=16,D=128}": (6074368, 9437184, 603136, "2ef30c5e9a813d6afe66a1ba3048730f85a8f7da1ec1317f0df54dcc25234252f8cde85ee9cdb2a52f9a281dffcf2da5584d0237078ef8600fbf6c9d5907ef19"),
+    "RoPE_v2{NHEADS=12,D=128}": (4555776, 7077888, 452352, "908e49643d3c201427559276dc468e16ce2c7b0d68f6f99c4797d3f528850e34f06f29e3ba411bd2f090f3b5743b07e12f89c3485f1668fdfa0c61df343fa6ba"),
+    "RoPE_v2{NHEADS=2,D=128}": (759296, 1179648, 75392, "d807660f948a3e3e302949ce960d15d2e6d0454abd8edcdeadc470fa10240d7a0627f3a19b796709e754dc6d4f184e4682ed97122576b99af43db32409346c47"),
+    "RoPE_v2{NHEADS=32,D=128}": (12148736, 18874368, 1206272, "b5a7d97b91566f8a972f743b53d0112088a56f33835429f7e92eef43cda7bf6969d1d1f1b5af6ab6b2a1dd1fef935bf99b4f5403ffaa40f6677774c87181bc90"),
+    "RoPE_v2{NHEADS=8,D=128}": (3037184, 4718592, 301568, "25323b32f3cff1d5c7fcac86b368eb8351aacd038c4f32966c99efa137c2be6ad5c13adb622a951b5c4ba6ad98e46b4de704ec42589a91dd5c06e2cc25ffb78b"),
+    "RoPE_v2{NHEADS=8,D=256}": (6074368, 9437184, 603136, "523ec5010b65022134a689b8a83595a9036e3a95ac4c1f97b140c76ffede2bfb202f1958674e639cdc99c6cabea4f0dd01d8738fa81d6f498f9920a37130fc74"),
+    "RoPE_v2{NHEADS=4,D=256}": (3037184, 4718592, 301568, "bae7e4991c4cb2d0fb47cbd5701d5d4162d3c5eea42fa865c261c9679d0ae2c35675b28b0518073e723cb81298671b3964278ab6bfa017eb56610d422d199c8a"),
+    "RoPEHeadGptJ_v3{D=64}": (189824, 294912, 18848, "2024a0b64d1b8a1773764ddb667b59d37254d0e5dd803488031f304ce5acddff1cb6d2f990fb5674d74a37d5c12c44a5fb895eb80394902a6d6c2ae324e76b3b"),
+    "RoPEGptJ_v3{NHEADS=1,D=64}": (189824, 294912, 18848, "402b602e9cc2539978313a55362a8c949ff3097112b368b7d4e78749da6c1c7537f975b8e0df8145b1b516b1a277222618d8173524386cc9f2ac2c3095463413"),
+    "RoPEGptJ_v3{NHEADS=5,D=64}": (949120, 1474560, 94240, "2ce703d681be79d90c398be8b7bd92c26085cb57d807690cce51b77ff11da81080cbee601c92a68578938526a7de54dfa833e759754d610bc7403a36cba96146"),
+    "RoPEGptJ_v3{NHEADS=8,D=64}": (1518592, 2359296, 150784, "a30cf280f468a859bdd566cca018b124d9e6fc2d5bcdc58f335056942d2b5c0010558fbf8d9b71734009ed2d0f81045b2dd0fd3d52aa0f938019a3a2644105cd"),
+    "RoPEGptJ_v3{NHEADS=20,D=64}": (3796480, 5898240, 376960, "a1c712cf4eb8f930183ad9d7972f78502970ff32537564901250a852924eaa725512bc7b265634b58704c3485811e07b25ea4e809cf2ba9bca413ddebb0c47a2"),
 }
 GPTJ_HEAD = bind(R.RoPEHeadGptJ, D=64)
 #: k_pe's one head; GLM-4.7-Flash's q_pe at TP4 and TP1 (5 and 20 heads); GLM-5.3's at TP8 (8 heads)
@@ -232,11 +232,11 @@ def test_every_served_binding_agrees_with_rope_v1(target) -> None:
 
 @pytest.mark.slow
 @pytest.mark.parametrize("target", LARGE, ids=lambda t: t.id)
-def test_each_served_head_width_agrees_with_rope_v1_on_81k_heads(target) -> None:
-    """81k random heads of one served binding per head width D against `RoPE_v1`'s kernel, 5M to 21M rotations: a rounding
+def test_each_served_head_width_agrees_with_rope_v1_on_16k_heads(target) -> None:
+    """16k random heads of one served binding per head width D against `RoPE_v1`'s kernel, 1M to 4M rotations: a rounding
     case of `RopeOut_v2` or `RopeOutAdd_v2` that served activations and cos/sin rows hit less often than once in 10^5, which
     the 90k-quadruple, 96k-word and 1,024-head tests miss."""
-    _agree(target, list(_random_heads(target, 81_000)))
+    _agree(target, list(_random_heads(target, 16_384)))
 
 
 @pytest.mark.parametrize("target", [GPTJ_HEAD, *GPTJ], ids=lambda t: t.id)

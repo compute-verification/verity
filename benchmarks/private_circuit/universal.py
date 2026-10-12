@@ -10,7 +10,7 @@
   words packed), one row per source: `op`, `src` and `out` are committed once and opened by every instance (the registered
   program), `x` once per instance; the outputs are hidden rows.
 * **The checks.** Before staging, every instance's outputs agree four ways:   the netlist interpreted (`universal.interpret`),
-  the hidden program as its own Boolean Definition (`direct`) and the unit, each under `verity.primitives.circuits.evaluation` (`evaluate` on the
+  the hidden program as its own Boolean Definition (`direct`) and the unit, each under `verity.ml.circuits.evaluation` (`evaluate` on the
   first instance, `evaluate_batch` on all), and the flat Definition's transcript that staging lays out (which `class_statement.stage`
   checks against the lowered circuit). The live `serve --zk` / `prove --zk` session must be accepted, then each recorded session
   is replayed by Lean's `flock-verify verify --zk`, which must accept it, and must refuse it without `--zk` and with a proof byte
@@ -21,7 +21,7 @@
 * **`--wired`: several units, public topology.** A circuit of four units (`wired_topology`: layer 1 reads layer 0's outputs,
   layer 2 layers 0 and 1, layer 3 layer 2, beside the circuit's input bits), a random hidden netlist per layer, on `n`
   instances: a Program of one `batch` of the unit per layer (`wired_program`), whose wiring is the public layout's. Checked
-  against `interpret` composed along the topology and `verity.primitives.circuits.evaluation` of the Program; `Q_template_instance` makes every
+  against `interpret` composed along the topology and `verity.ml.circuits.evaluation` of the Program; `Q_template_instance` makes every
   member one unit, and the topology the partition derives (`derived_topology`) must be the one built. One class statement of
   `4 n` instances staged with `class_statement.Wiring` (PROTOCOL.md §16.13, Linking: each cut source a link row under its
   writer's salt, META `links` and `definition`), proved live with the verifier's own `--links` file (`class_statement.links_file`)
@@ -49,13 +49,13 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits import partition_object as PO
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.types import Array
-from verity.primitives.circuits.boolean import trace as TR
-from verity_experimental.private_circuits import universal as U
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.types import Array
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.private_circuits import universal as U
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
@@ -286,9 +286,9 @@ def wired_program(fn, n: int, nc: int, topo):
     """The wired circuit on ``n`` instances as a Program: per layer one ``batch`` of ``n`` members of the unit, its program (``op``,
     ``src``, ``out``) one parameter shared by the members and its x per member, assembled from the circuit's input and earlier
     layers' outputs (reference rearrangements, no gates). Returns (the composite, the Program)."""
-    from verity.primitives.circuits.defs import CompositeDefinition
-    from verity.primitives.circuits.program import Program
-    from verity.primitives.circuits.refs import array_of, coll_concat
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.program import Program
+    from verity.ml.circuits.refs import array_of, coll_concat
 
     params, ret = fn.signature()
     n_in = params[-1][1].leaves
@@ -406,7 +406,7 @@ def run_wired(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
         raise AssertionError(f"staging capped the instances at {n}, not {L * a.n}")
     part, desc = stage / "partition.json", stage / "program.desc"
     part.write_text(json.dumps(PO.build(program, query), sort_keys=True))
-    from verity.primitives.circuits.codec import canonical_json, encode_program
+    from verity.ml.circuits.codec import canonical_json, encode_program
     desc.write_bytes(canonical_json(encode_program(program)))
     text = (stage / "circuit.txt").read_text()
     pin = FC.digest(text)
@@ -520,7 +520,7 @@ def write_result(rows: list[dict], a) -> None:
            "workload_fingerprint": {"kind": "private-circuit/universal-e2e/v0", "statement": FC.STATEMENT, "zk": True,
                                     "classes": a.cls, "n": a.n, "warm": a.warm, "runs": a.runs, "seed": a.seed, "wired": a.wired},
            "validation": {"status": "passed" if rows and all(r["pass"] for r in rows) else "failed",
-                          "checker": "flock-circuit serve --zk (live) and Lean flock-verify verify --zk, outputs against verity.primitives.circuits.evaluation",
+                          "checker": "flock-circuit serve --zk (live) and Lean flock-verify verify --zk, outputs against verity.ml.circuits.evaluation",
                           "detail": f"{sum(r['pass'] for r in rows)} of {len(rows)} rows passed" + "".join(
                               f"; wired {r['class']['G']},{r['class']['N_IN']},{r['class']['N_OUT']} made-up input: "
                               f"{(r.get('made_up_input') or {}).get('verdict')}, wrong salt: {(r.get('wrong_salt') or {}).get('verdict')}"

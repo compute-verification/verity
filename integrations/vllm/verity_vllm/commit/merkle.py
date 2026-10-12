@@ -1,7 +1,7 @@
 """Merkle trees over canonical ids, openings, ``commitments.json`` (contract section 5).
 
 Hash layout (also in :mod:`verity_vllm.commit.hashing`; specified as ``vllm-v1`` in
-``verity/primitives/commitments/vllm_v1/PROTOCOL.md`` §1–§3)::
+``verity/ml/commitments/vllm_v1/PROTOCOL.md`` §1–§3)::
 
     H(tag, *parts) = sha256( u32be(len(tag)) || tag || (u64be(len(part)) || part)* )
     leaf  = H("verity-vllm/leaf/v1", canonical_id, dtype, "[d0,d1,...]", raw little-endian bytes)
@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.primitives.commitments.leaves import fold_path
+from verity.ml.commitments.leaves import fold_path
 from verity.errors import InvalidArtifact
 from verity_vllm.commit import hashing, identity, scheme
 from verity_vllm.observe.capture_v1 import COMMITMENTS_FILE, WEIGHTS_TREE_ID, CaptureError, CaptureReader, Value, _write_json, boundary_tree_id, ru_tree_id

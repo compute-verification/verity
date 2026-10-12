@@ -7,38 +7,38 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.batch import type_shape
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.defs import bind
-from verity_catalog.definitions.boolean import gemm as BG
-from verity.primitives.circuits.boolean import trace as TR
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.batch import type_shape
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.boolean import trace as TR
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.registry import boolean_fp8 as BF
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "Fp8RowScale_v2": (2831, 6165, 354, "43dac6496871797298a15ce142f740e490e26a97cbb064fc81ad3bf0c65272be"),
-    "DotE4m3_v3{K=64}": (13598, 24402, 2036, "7a251da32da5f6a9a8b6017b12e942535ffafe3e9d651e402db64f88f1a15be8"),
+    "Fp8RowScale_v2": (2831, 6165, 354, "5756f5168724db73eee88d038ad7f83126995ededff4876db6f3ba7104617239414f5c1c044e23927a80443e329d7ff3a0b3cc4bd585c9d6ad5e47a3940a60c0"),
+    "DotE4m3_v3{K=64}": (13598, 24402, 2036, "f7aa9b0f89adc7c25403cf484375bb532ad7c627ceb2f1e867996d3ef46684e4e6bd7e385c26a0705eef57ba3df7b596291dc91b7afdda2629399ab720a20579"),
     "ScaledMmFp8Coordinate_v2{K=64,BIAS=True}":
-        (20579, 37013, 2428, "99f4d987af96906cf3edcc11e821e9f8ea9255440f2c5cb73c778d3cbe39c73b"),
-    "Fp8ActQuant_v2{K=256}": (1027541, 2120408, 177916, "a7a3e66509772aa45d373d5ffa08244d8191f6d91455e23e5fa29644ec79b49b"),
+        (20579, 37013, 2428, "b64fe6336c9f0a74948bcecce04708b014eaa5f92b855e4994d24fe7dbf06d0a5fd356cd2276823bde7713839f3a6cb10801d497358f5effc975422d749e413e"),
+    "Fp8ActQuant_v2{K=256}": (1027541, 2120408, 177916, "cb38226e0b5517b40fdd0d0d5c07ede0452bc1a7e35677f2af387b9c734c98c2e1bdeb657633258b69231fcdce86e43bf0cf5a75849c966f0ec7fd2999e0c154"),
     "QuantLinearFp8_v2{K=256,N=2,BIAS=True}":
-        (1150287, 2340846, 194988, "d5a207fbf4e703b6cf1db5798c3bac977b65702ca8a792eeeb757d3b8db8fae2"),
-    "Fp8GroupQuant_v2{K=256,G=128}": (949674, 1979312, 152056, "92c13a1e3eb02c463da0ccb9ada8058908d621469de4834c56083148768d437b"),
+        (1150287, 2340846, 194988, "c31762aa8015c4648a7a3dad8280e17845f04e1eed054f5183fb637c0f70621da4152bd007acb01fe119a090c1ad3288c2a1544dace8e5fd923fa63ec0ed2ad7"),
+    "Fp8GroupQuant_v2{K=256,G=128}": (949674, 1979312, 152056, "1cfa22f8d07c56c1438b833f5bc9c108a057ac401488d01ce126a946d494255721fd152d763a40b939f859f50f3d45083d2edfb0e05df54dbff8ad1e7615ba99"),
     "ScaledMmFp8BlockCoordinate_v2{K=256,G=128}":
-        (68288, 122732, 8913, "bba9b1f6c06f80f604a30ce4270070bfc40bfe51f8f355232bc1f37239ef5b4c"),
+        (68288, 122732, 8913, "acc3811b8c179356da7bdb38eb4dba09c9bd19f636397a1f1ff4e3f48c8fa888d0b0f623d43a3aa478ff74488ae04cfdca1acd8ef897f33668d2e92b7e07f495"),
     "ScaledMmFp8Block_v2{K=256,N=128,G=128}":
-        (8740864, 15709696, 1140864, "f045320bcfd0aea545792a3d334b482a360eb340d81539159f9264edbb64c92b"),
+        (8740864, 15709696, 1140864, "d996bf8b62e7371e246ec3d99ed95f721fa1326c8a768f0034fa8e9994dc8210a9ce89802a0be4f03a40dc57a9a27a44fad611383b6cf6598340a90e67d251d9"),
     "ScaledMmFp8BlockSharedScale_v2{K=256,N=128,G=128}":
-        (8123644, 14528596, 1112924, "92e8e7e2bc4cc9ba78d6993f67b2eef88277f8106d097bb3147ab7ed5ea41b90"),
+        (8123644, 14528596, 1112924, "a108dfadcbed0ab0263070ee6b31749420e6a7cbe347243960f844ddc0c3145551d9517d4056932d9a01e03ea25bf163b9beca75bb723996bb5722b66e92e08f"),
     "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}":
-        (18256, 34804, 2050, "6e0d4f336ec3e4c04b1860d74083d883c4f64862b3bea5295a907cc124672b83"),
+        (18256, 34804, 2050, "392993a9c78be64299f8a42d958d49f685e44715c8b94fb62ca15afcd205fca05888213b53916fadca3c935ab2d2a33469a22f05e905d1dc0e08b7a1f722b43d"),
     "ScaledMmFp8NoSwap_v2{K=64,N=2,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}":
-        (50474, 94830, 4884, "7f57b9e8cd9f74b25f8d46bbe30974ae1b1dc50cabd0bfe3c2774c49a8828f38"),
+        (50474, 94830, 4884, "a827e1f5b0a81ac753963f667d592d2c970cda9d1a909b96e3a30ff81d7d85f19f6d628c158567d9bfb976f12170f83d4da6f540e5e7772d5b3e34e00d9fcaa8"),
 }
 #: the cc 12.0 (sm_120 mma.sync) and Hopper (wgmma) e4m3 k32 steps on bits, the no-swap linear's DOT
 SM120, HOPPER = BG.BlackwellE4m3QmmaDot32, BG.HopperE4m3QgmmaDot32

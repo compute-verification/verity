@@ -27,16 +27,16 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.primitives.circuits import Program, bind, program_digest  # noqa: E402
+from verity.ml.circuits import Program, bind, program_digest  # noqa: E402
 from verity_vllm.correspondence.capture_identities import LazyTranscript, Segments, check_call  # noqa: E402
-from verity.primitives.circuits.evaluate import evaluate_region  # noqa: E402
+from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
 from verity_vllm.program.frontend import FrontendError, export, function, Arr, batch, ops  # noqa: E402
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
 from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
 from verity_vllm.program.registry import b1  # noqa: E402
 from verity_vllm.program.registry.prims import BF16, I32  # noqa: E402
-from verity.primitives.circuits.refs import Coll, concat  # noqa: E402
-from verity.primitives.circuits.types import Array  # noqa: E402
+from verity.ml.circuits.refs import Coll, concat  # noqa: E402
+from verity.ml.circuits.types import Array  # noqa: E402
 
 pytestmark = pytest.mark.filterwarnings("ignore::verity_vllm.program.frontend.torch_frontend.DeadGateWarning")
 
@@ -632,9 +632,9 @@ def _miswired_serve(kind: str):
     """A Serve-shaped program whose decode attention reads K/V rows from the wrong owner: `layer` (rows of layer
     L+1), `future` (the row this position itself produces is replaced by the next step's row), `stale` (a
     position is dropped)."""
-    from verity.primitives.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.defs import CompositeDefinition
     from verity_vllm.program.registry.b1 import Embedding, Final, LayerPost, LayerPre, kv_type
-    from verity.primitives.circuits.refs import tuple_of  # noqa: F401
+    from verity.ml.circuits.refs import tuple_of  # noqa: F401
     C, LP = TINY, 2
 
     def body(B, S, prompt, weights):
@@ -925,7 +925,7 @@ def test_early_exit_on_eos_is_not_specialised_on_observed_tokens():
 
 # ---------------------------------------------------------------------------------------------------------
 # 6. capture-to-program mappings, corrupted values, missing obligations, mismatched versions
-#    (pure verity.primitives.circuits: the correspondence primitives that any derive_corr.py must rest on; the derive_corr.py
+#    (pure verity.ml.circuits: the correspondence primitives that any derive_corr.py must rest on; the derive_corr.py
 #     specific tests are appended when CAPCORR's script lands)
 # ---------------------------------------------------------------------------------------------------------
 
@@ -947,7 +947,7 @@ def _segments(d: dict[int, int]) -> Segments:
 
 def _tiny_program_with_truth():
     """A root call of `BiasAdd{N=8}` over prescribed inputs, fully evaluated: (program, truth transcript, the call)."""
-    from verity.primitives.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.defs import CompositeDefinition
     W = CompositeDefinition("XferWrapBiasAdd", 1, (), lambda S: ((("y", Array(8, BF16)), ("b", Array(8, BF16))), Array(8, BF16)),
                             lambda B, S, y, b: B.call(bind(b1.BiasAdd, N=8), y, b, name="ba"), register=False)
     P = Program(bind(W))
@@ -1058,7 +1058,7 @@ def test_repeated_return_and_returned_input_preserved_authored():
     input is the caller's reference; the dead declared return is in `returns`, not in `out`."""
     Top, _ = ex.identity_pair(*_running_prims())
     P = export(Top, (torch.empty((), dtype=torch.bfloat16, device="meta"),), dead_gates="ignore")
-    from verity.primitives.circuits import query
+    from verity.ml.circuits import query
     f = query(P.circuit, "//F")[0]
     assert f.args == (0, 0)
     assert f.returns[0] == f.returns[2], "t returned twice must be the same gate"

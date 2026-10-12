@@ -1,2 +1,2 @@
-# each side's guarantees, reads and dependencies, merged without a rebuild (tools/lean/merge.py; `merge.py --install` once per clone)
+# each side's guarantees, reads and dependencies, merged without a rebuild (tools/verity/lean/merge.py; `merge.py --install` once per clone)
 lean-audit.json merge=lean-audit

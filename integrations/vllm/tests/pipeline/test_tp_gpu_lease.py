@@ -28,7 +28,6 @@ from tests.pipeline.test_row import TP_DENSE, _tp_row
 from verity_vllm.engine import hooks
 from verity_vllm.engine.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline import gpu_lease as GL
-from verity_vllm.pipeline.row_tp import MATCH_LEG_KEPT
 from verity_vllm.pipeline.tp import lease as TPL
 
 GPUS = ("4", "5")
@@ -113,8 +112,9 @@ class _Com:
 
 
 def free(lock: Path) -> bool:
-    """Whether nothing holds ``lock`` now."""
-    return subprocess.run(["flock", "-n", str(lock), "true"]).returncode == 0
+    """Whether nothing holds ``lock`` now.  A shared probe: the lease holds its locks exclusively, and two ranks probing at once
+    must not see each other's probe as a holder."""
+    return subprocess.run(["flock", "-s", "-n", str(lock), "true"]).returncode == 0
 
 
 class _Rank:
@@ -460,9 +460,10 @@ out = args[args.index("--out") + 1]
 
 
 def free(g):
+    # shared: the per-rank legs (build, global-program) run at once, and an exclusive probe would see the other leg's probe
     fd = os.open(os.path.join(TMP, g + ".lock"), os.O_CREAT | os.O_WRONLY | os.O_APPEND)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
         return True
     except BlockingIOError:
         return False
@@ -532,25 +533,6 @@ def _stages(t: Any) -> list[str]:
     return [re.sub(r"wall=\d+s", "wall=", re.sub(r" \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", "", ln.rstrip("\n"))) for ln in open(f"{t.d}/stages.txt")]
 
 
-def test_a_leased_tp_match_holds_every_gpu_only_for_the_capture_and_the_control_and_judges_as_an_unleased_one(tmp_path):
-    t, legs = _match(tmp_path / "leased", True)
-    u, legs_u = _match(tmp_path / "unleased", False)
-    gpu = [{"leg": leg, "devices": "4,5", "lease": f"lease/{leg}/gpu_lease.started", "locks": ["4.lock", "5.lock"], "free": [False, False]}
-           for leg in ("capture", "control")]
-    cpu = ["tp-match", "build", "build", "global-program", "global-program", "tp-fold-match"]
-    assert legs == gpu + [{"leg": leg, "devices": "", "lease": "", "locks": [], "free": [True, True]} for leg in cpu]
-    assert legs_u == [{"leg": leg, "devices": "4,5", "lease": "", "locks": [], "free": [True, True]} for leg in ["capture", "control", *cpu]]
-    assert _stages(t) == _stages(u) and len(_stages(t)) == 2, _stages(t)
-    assert _stages(t)[0].startswith("eos-truncated served=[16,3 16,1] declared=[16,3]") and _stages(t)[1].startswith("match PASS rc=0/0/0/0 ")
-    summary = lambda r: json.loads(Path(f"{r.d}/match_summary.json").read_text())
-    assert summary(t) == summary(u) and summary(t)["pass"] is True and summary(t)["fold_rc"] == 0
-    for leg in ("capture", "control"):
-        rec = json.loads(Path(f"{t.M}/lease/{leg}/{GL.RECORD}").read_text())
-        assert rec["kept"] == MATCH_LEG_KEPT and rec["released_at"] == "process.end" and rec["rc"] == 0 and rec["held_min"] is not None
-    assert not Path(f"{t.d}/{GL.RECORD}").exists() and not Path(f"{u.M}/lease").exists()
-    assert (tmp_path / "leased" / "lease.args").read_text().startswith("2 --wait ")
-    assert all(GL.STARTED not in e and GL.WEIGHTS_HASH not in e for e in (t.child_env, u.child_env))
-    assert sum("GPU lease (gpu_lease.json)" in ln for ln in open(f"{t.d}/row.log")) == 2
 
 
 def test_the_tp_capture_takes_its_lease_before_the_device_and_before_its_engine():

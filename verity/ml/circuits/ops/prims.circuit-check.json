@@ -1,0 +1,40 @@
+{
+ "pieces": {
+  "AmpereBF16TcDot16_v2": {
+   "and": 8623
+  },
+  "Bf16ToF32_v1": {
+   "and": 0
+  },
+  "BlackwellE4m3QmmaDot32_v1": {
+   "and": 9793
+  },
+  "BlackwellMxf4OmmaDot64_v1": {
+   "and": 6140
+  },
+  "BlackwellNvf4OmmaDot64_v1": {
+   "and": 7002
+  },
+  "E4m3ToF32_v1": {
+   "and": 15
+  },
+  "F2fpBf16_v1": {
+   "and": 77
+  },
+  "F32ToBf16Rn_v1": {
+   "and": 77
+  },
+  "F32ToE2m1Sat_v1": {
+   "and": 60
+  },
+  "F32ToE4m3Sat_v1": {
+   "and": 238
+  },
+  "HopperBF16WgmmaDot16_v1": {
+   "and": 8233
+  },
+  "HopperE4m3QgmmaDot32_v1": {
+   "and": 7377
+  }
+ }
+}

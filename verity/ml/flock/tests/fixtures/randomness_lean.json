@@ -1,0 +1,1342 @@
+{
+ "extra": [
+  {
+   "context": {
+    "receipt": {
+     "bytes": "00112233445566778899aabbccddeeff"
+    }
+   },
+   "domain": "verity/pouw/closure-draw/v1",
+   "key": "7fb77c8669e13b3e4858e68d505b1498b1a4202e5b7f4900f0f12b5914338aeb",
+   "source": "76657269666965722d736563726574",
+   "streams": [
+    {
+     "bytes": "21a02d6d18578b9d77b3f9fd9b34636cf669eeca0d795fb7ecbecb48448b81442a5124e6408afc6279cd772c69d1a75d3d00154e495e068cbe5561a0a4e3798a28897f71f33692e8d7d3b5fe7cbedc4fdd377c5b6ba9bac4997e1c6b67995e9915fe859c",
+     "index": [
+      "s",
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "dc9292ece4a4e323490e9c807b5328d537dbcd563c11d66fc3dea5867a6e0812dd25704fe57c13dd2afce9803cc3fb6bb76725f4a39d1fc3cc77a7db953d80373d7aaa620e0671eb2fa08aebc71644a772de5193589d50a41994532a525da8b915262ae1",
+     "index": [
+      "s",
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpDigest_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "82d730bc1379587c1214ef684754932567cd01029c68134403c2dc06a3e675d644f0f1af1e5aefb92ccfda09d39f79d8d779fe6a3757f41c1ce13ca9b63efea39ec9861e528e970e104a0de0d7538687e545f0b8618c618c6385cc71893b1bbf87008182",
+     "index": [
+      "s",
+      "call",
+      1,
+      2,
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "760c41b81b428cd79274bdfaafb3d23b2359b990182e2005c8f3834c476250320a896ce756bed559a44a2b42469114decdaebd30cab747caba096ff61fabfe420109f4279f68436c648e1f46dbcd94e1ee593f4173de2fc0f9cbdb54df2f29bf132166aa",
+     "index": [
+      "s",
+      "call",
+      2,
+      0,
+      "stratum",
+      "NcpFormX_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "087c199a5eb2e9fd3a33c85933714406125dbe0fbc6745341b74e5913ca14e0d26481ed25c7fa2bb82e4f403b3df3693f6ec8344aa00000d78f7b988541c795471c682dae47da1df8dc2cdac5661fe77ec9b6daa9c1a1de521828cbb43a9fbd9bba5e57b",
+     "index": [
+      "s",
+      "call",
+      3,
+      9,
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "596a53717c7af707076633850febdf36c0843eeffac4919496266834b9c7f26b227cbe3d4cd45c843e569cf030b55b4941e7c6e45dd0db0fa013398cc25aeed1b5e72d419188675b3d548e22287006bbb906d784efa12313b65826aee8db1a1c7fcb8711",
+     "index": [
+      "s",
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "d4af665df4978c575269ee95de0ffc373a4803ddc8fded43ab178a53fe3edef636dea78ba4464eb5b420a80979a493ec4795c57e82a31c9306c73423ead155d0aa58484c6d16a1cbdbcbbe5413adf6ca77196342e8e8dd340876a16e971c65e60157e310",
+     "index": [
+      "s",
+      "s",
+      3,
+      0
+     ]
+    },
+    {
+     "bytes": "26b8ec768207943e8f7fc7aceda6614469580c585fcf08251827c565c18577750141377cea3aafbf1267e704adcdc363a9febec275d2b945ab6f60b968df9e2915318947674a6d712031db39552257fb018b4ca186cfeec6ef33f63c207809634dfda8ae",
+     "index": [
+      "s",
+      {
+       "bytes": "00ff"
+      },
+      "\u00e9",
+      256,
+      0
+     ]
+    }
+   ],
+   "subset": [
+    [
+     3,
+     10,
+     [
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpTile_v1"
+     ],
+     [
+      3,
+      4,
+      8
+     ]
+    ],
+    [
+     1,
+     1,
+     [
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpDigest_v1"
+     ],
+     [
+      0
+     ]
+    ],
+    [
+     0,
+     7,
+     [
+      "call",
+      1,
+      2,
+      "stratum",
+      "NcpTile_v1"
+     ],
+     []
+    ],
+    [
+     7,
+     7,
+     [
+      "call",
+      2,
+      0,
+      "stratum",
+      "NcpFormX_v1"
+     ],
+     [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    ],
+    [
+     12,
+     6171648,
+     [
+      "call",
+      3,
+      9,
+      "stratum",
+      "NcpTile_v1"
+     ],
+     [
+      183135,
+      751981,
+      1348552,
+      1644899,
+      1743514,
+      1903104,
+      2904497,
+      3262345,
+      4311621,
+      4417330,
+      5318538,
+      5953282
+     ]
+    ],
+    [
+     5,
+     300,
+     [
+      "stratum",
+      "NcpTile_v1"
+     ],
+     [
+      42,
+      66,
+      190,
+      213,
+      245
+     ]
+    ],
+    [
+     4,
+     1000,
+     [
+      "s",
+      3
+     ],
+     [
+      32,
+      97,
+      187,
+      841
+     ]
+    ],
+    [
+     2,
+     256,
+     [
+      {
+       "bytes": "00ff"
+      },
+      "\u00e9",
+      256
+     ],
+     [
+      119,
+      127
+     ]
+    ]
+   ],
+   "uniform": [
+    [
+     1,
+     [
+      0
+     ],
+     0
+    ],
+    [
+     6171648,
+     [
+      "call",
+      3
+     ],
+     5351806
+    ],
+    [
+     170141183460469231731687303715884105729,
+     [
+      9
+     ],
+     156325585214545090551677800102289576093
+    ],
+    [
+     1000,
+     [],
+     136
+    ]
+   ]
+  },
+  {
+   "context": {
+    "receipt": {
+     "bytes": "ffeeddccbbaa99887766554433221100"
+    }
+   },
+   "domain": "verity/pouw/closure-draw/v1",
+   "key": "5439927ea66b45862d75acb65ce4e6227bd98de69363934296d9b7148cc1e944",
+   "source": "76657269666965722d736563726574",
+   "streams": [
+    {
+     "bytes": "3aaecb1f954191310ff74f69924919e981ec523511c76b30c04637ca84027af8bdddc5ac2e1780941279ec2f74564ab72cfe70df9cb82848a24f52bece86483d845ba6c7c694ab1841b5b90533758d55b68d69d39d4475785e42c7153a60f58a2be309d0",
+     "index": [
+      "s",
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "de487d48da99e871997e55c21e708600f188775fcdb8934872ecb9a4538d1cbd5163749c67845a67d35b9269b1aa2ad9e9c48cfe85d7cf345f928b783ee0e6c95fb8ce3cade54ff811b3a97d6bdfa7ed375b1667a4885835ed145a08f14a9c035abfd008",
+     "index": [
+      "s",
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpDigest_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "f853c78c05591000d1d110e0b1213b7e3d10a820ebd13a8786ecd2f4ce9bb1389abd1ed9d8b93bbf50186d11ae9135dd042184dd155a9a3eef034544e639153fd719383af60d73d7f2f11e112ef501ffff4911423c8b48cd08de4f25bca268e6970774c6",
+     "index": [
+      "s",
+      "call",
+      1,
+      2,
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "0df7ea4bfa0fcdf978ad28fde33cd036204c64aef72aa0f81f5e0ebc0ada15bae165ff6738b935e4364065ca87a0aafe014f2523621752ed38a1c29e223cfaa865a7abfa372f99018faf1a4189148836da18f2150f786232bdbf19efa5036f1fa15527a7",
+     "index": [
+      "s",
+      "call",
+      2,
+      0,
+      "stratum",
+      "NcpFormX_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "d82425731093f5bb300dd8eabb4f71531a7583feb0a3e9dd6736908fdee70d3dcb0b982ff74a7a983a29238ebd04f7f6c1971fefdb268f37b4a62a693724b719a86d4e904b99f17ace7781060dc515ad1eb1133b2e27e0ccd0dab5061988792ae2ea1e92",
+     "index": [
+      "s",
+      "call",
+      3,
+      9,
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "839c45f06447184b7f6176a7d9c85cc1c19f8b91a664a04a37f2c92ccb2ed34c4ee57c12e211d4d66bcdd2d9a59705d2e2457b4df57928d84258b5a1f903eb11bb2b7658a534982c8f50efdd588b424710c264784baf2ffefe3e0408cf67e9e7ccffaa93",
+     "index": [
+      "s",
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "767d1b49aa991835777d730999a63ba8b939f668bc68c1e8014d7bf8e0b26f49e89cdb24f612785f69af495161d777427a893f797cfee2af8791f78de4acad018af35b5424274586f0f3a08d9cc2261556ac053268ea51e3c94a70a94e1ae88d72f78145",
+     "index": [
+      "s",
+      "s",
+      3,
+      0
+     ]
+    },
+    {
+     "bytes": "3d7206b96213f18ad2c34a0187c4f6cdf197dc713726ee1844168fda3778d06d3bc757b48f51f28cafd0e26ef7df609e65a9187428aacdd949a25465839a55dca203c53de4ce49cb4dee8638dc578462349293798c723931b3e2c1f5351fcf753d464fda",
+     "index": [
+      "s",
+      {
+       "bytes": "00ff"
+      },
+      "\u00e9",
+      256,
+      0
+     ]
+    }
+   ],
+   "subset": [
+    [
+     3,
+     10,
+     [
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpTile_v1"
+     ],
+     [
+      1,
+      3,
+      9
+     ]
+    ],
+    [
+     1,
+     1,
+     [
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpDigest_v1"
+     ],
+     [
+      0
+     ]
+    ],
+    [
+     0,
+     7,
+     [
+      "call",
+      1,
+      2,
+      "stratum",
+      "NcpTile_v1"
+     ],
+     []
+    ],
+    [
+     7,
+     7,
+     [
+      "call",
+      2,
+      0,
+      "stratum",
+      "NcpFormX_v1"
+     ],
+     [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    ],
+    [
+     12,
+     6171648,
+     [
+      "call",
+      3,
+      9,
+      "stratum",
+      "NcpTile_v1"
+     ],
+     [
+      58010,
+      829912,
+      1340526,
+      1499106,
+      1710362,
+      2338053,
+      2555328,
+      3396318,
+      5119267,
+      5283222,
+      5951967,
+      6087326
+     ]
+    ],
+    [
+     5,
+     300,
+     [
+      "stratum",
+      "NcpTile_v1"
+     ],
+     [
+      8,
+      16,
+      136,
+      205,
+      210
+     ]
+    ],
+    [
+     4,
+     1000,
+     [
+      "s",
+      3
+     ],
+     [
+      508,
+      613,
+      677,
+      765
+     ]
+    ],
+    [
+     2,
+     256,
+     [
+      {
+       "bytes": "00ff"
+      },
+      "\u00e9",
+      256
+     ],
+     [
+      158,
+      195
+     ]
+    ]
+   ],
+   "uniform": [
+    [
+     1,
+     [
+      0
+     ],
+     0
+    ],
+    [
+     6171648,
+     [
+      "call",
+      3
+     ],
+     1643923
+    ],
+    [
+     170141183460469231731687303715884105729,
+     [
+      9
+     ],
+     124040361488381322018219423838088340115
+    ],
+    [
+     1000,
+     [],
+     945
+    ]
+   ]
+  },
+  {
+   "context": {
+    "epoch": 7,
+    "program": "p"
+   },
+   "domain": "verity/sampled-proofs/ru-sample/v1",
+   "key": "de34e304e10f265920757611edcb01c1234d729939e1474bcbdd6d76a9477f7c",
+   "source": "626561636f6e2d726f756e642d37",
+   "streams": [
+    {
+     "bytes": "53f0cb75f7513f8223610c6b831ba8898e13047154a1bef593849bb9f412a564631162117f0f0ff43d29604101734752844c9c13d823c3a8e7b1019f3fb57fed3542ba9b512ef232895848250f0bcdaf451c42a3aebe3b4a6b1ae794bb4e5c8308320d40",
+     "index": [
+      "s",
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "5f9b27137b9c4f16df32d7a88d00985ba6d40ab718a81abac7107b6ca9f6e45d8c2b6d03ea53b5ee069449f8a6d5e3bc0743c642180b97eb34bce553807b894cc6ab74deb84e4bb08c8908e8a0e517d817021aebc1e07ee231af44bb28000e1133e1a6c2",
+     "index": [
+      "s",
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpDigest_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "93360eac7cf762a1ab452207c64c59e8e681c36fc9f28e31c0059c460ef3b41c648cbe5c221e451f82537a6bfa540035a1e0699382c9a71ef6797cec4fb95a5ea36e007f610b3a3b3c974cf63875884e755241f759def2329450edfb7e1c7f9cd57ec607",
+     "index": [
+      "s",
+      "call",
+      1,
+      2,
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "2f8571fa76050e2a40fa8fce938f650ccb7bfe86e34a5c49e88002e59ef8a93b7f0c6de80d1872ee81fe3d74608e4f3d18b39ad0c50b662b889ce623e8dd2b4e3e7dfda441c322fe2ffef3b01942171542ca5acb9b773c33019183a7e64f5f653e8a1f25",
+     "index": [
+      "s",
+      "call",
+      2,
+      0,
+      "stratum",
+      "NcpFormX_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "635abc84101a1cc07e37a2da5b66b21d53dc838960445233d486d966fb9c04385fbe28ef5bd337200b5141ffa0be70d6d3041cb001bf2078437970c06e7d6b157b52d9044696062f210c974e69c43e208185c126db037496a13bbfc4b95c27174820a5aa",
+     "index": [
+      "s",
+      "call",
+      3,
+      9,
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "e100ce40fe577bbe2d6b47aa40589bd0fc9c30d5c88b905c8c208977a90a25c5f7eb82bb40919082a86978eb0925fcb36f08298d0d2ffd7c845ee1e581295c7ce06642a42fa02cd2872b11a1006f11b37a5c2eea091ef6986a54d20e0d2b60de1914b356",
+     "index": [
+      "s",
+      "stratum",
+      "NcpTile_v1",
+      0
+     ]
+    },
+    {
+     "bytes": "1438497e3eb7ffca9e3e9854c7c84092ecea9d90197b6b6f1b3f3f7f37c986c05c2f3caa57d5e1f33752b64fcd4b1a475b8495b41ee8696394e29268551bebfd49d5db8820be768c65a54cc208c255e62994016f3e824cebba6a1e1c6766585a5849c5e4",
+     "index": [
+      "s",
+      "s",
+      3,
+      0
+     ]
+    },
+    {
+     "bytes": "0f93f084783ec69a6fcad505e4dc3aa7af13dd4fef8480fb03dbe3f0237c170bdac3fd2e003061e8d837810eeb859beb256d65250948c280ec42351419732f180e4e883d22d38bbacef3e6f2a0e44dcc4ab531c2661250a3d10db9805eca812529fa07ad",
+     "index": [
+      "s",
+      {
+       "bytes": "00ff"
+      },
+      "\u00e9",
+      256,
+      0
+     ]
+    }
+   ],
+   "subset": [
+    [
+     3,
+     10,
+     [
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpTile_v1"
+     ],
+     [
+      2,
+      7,
+      9
+     ]
+    ],
+    [
+     1,
+     1,
+     [
+      "call",
+      0,
+      5,
+      "stratum",
+      "NcpDigest_v1"
+     ],
+     [
+      0
+     ]
+    ],
+    [
+     0,
+     7,
+     [
+      "call",
+      1,
+      2,
+      "stratum",
+      "NcpTile_v1"
+     ],
+     []
+    ],
+    [
+     7,
+     7,
+     [
+      "call",
+      2,
+      0,
+      "stratum",
+      "NcpFormX_v1"
+     ],
+     [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    ],
+    [
+     12,
+     6171648,
+     [
+      "call",
+      3,
+      9,
+      "stratum",
+      "NcpTile_v1"
+     ],
+     [
+      19916,
+      366447,
+      607577,
+      739769,
+      1407683,
+      1925807,
+      2313333,
+      4077412,
+      4170658,
+      4530527,
+      5502838,
+      6095232
+     ]
+    ],
+    [
+     5,
+     300,
+     [
+      "stratum",
+      "NcpTile_v1"
+     ],
+     [
+      93,
+      95,
+      118,
+      191,
+      217
+     ]
+    ],
+    [
+     4,
+     1000,
+     [
+      "s",
+      3
+     ],
+     [
+      221,
+      332,
+      542,
+      672
+     ]
+    ],
+    [
+     2,
+     256,
+     [
+      {
+       "bytes": "00ff"
+      },
+      "\u00e9",
+      256
+     ],
+     [
+      165,
+      202
+     ]
+    ]
+   ],
+   "uniform": [
+    [
+     1,
+     [
+      0
+     ],
+     0
+    ],
+    [
+     6171648,
+     [
+      "call",
+      3
+     ],
+     3511453
+    ],
+    [
+     170141183460469231731687303715884105729,
+     [
+      9
+     ],
+     7896704683122647847007985141326210128
+    ],
+    [
+     1000,
+     [],
+     300
+    ]
+   ]
+  }
+ ],
+ "kat": {
+  "cases": [
+   {
+    "bernoulli": [
+     [
+      "1/2",
+      0,
+      true
+     ],
+     [
+      "1/3",
+      1,
+      true
+     ],
+     [
+      "2/3",
+      2,
+      true
+     ],
+     [
+      "0",
+      3,
+      false
+     ],
+     [
+      "1",
+      4,
+      true
+     ]
+    ],
+    "context": {},
+    "domain": "verity/test/kat/v1",
+    "key": "4b045b8eb2527ea52a30cdfea1335d749bb3fe7603bad5d6f6c8eeac566c5563",
+    "shard": {
+     "index": 5,
+     "key": "f515dfe69bbe16991f05a71a2701f527f6884c61a88a070116b520f0bd8bb494"
+    },
+    "source": "00",
+    "stream": {
+     "bytes": "b55877aa21f769467775a0ee5d5270b0b8125fd4a886afc4f4d30a70f9608ca59fa3d9c56f198d7ebdf24edd8c7f984b5f7f1d814c22fedadcbe09a3de6e045f09c6ff1e8e8a501275c9e33a93248f12",
+     "index": [
+      "s",
+      3
+     ]
+    },
+    "subset": [
+     [
+      0,
+      5,
+      0,
+      []
+     ],
+     [
+      3,
+      10,
+      1,
+      [
+       1,
+       3,
+       9
+      ]
+     ],
+     [
+      10,
+      10,
+      2,
+      [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9
+      ]
+     ],
+     [
+      4,
+      1000000000000,
+      3,
+      [
+       269043548716,
+       683296427304,
+       859594527390,
+       892001900413
+      ]
+     ]
+    ],
+    "uniform": [
+     [
+      1,
+      0,
+      0
+     ],
+     [
+      7,
+      0,
+      6
+     ],
+     [
+      7,
+      1,
+      0
+     ],
+     [
+      1000,
+      2,
+      56
+     ],
+     [
+      170141183460469231731687303715884105729,
+      3,
+      82032543000685665912139537762172129378
+     ],
+     [
+      1000000000000000000000000000000,
+      4,
+      191129178121232438328689363540
+     ]
+    ]
+   },
+   {
+    "bernoulli": [
+     [
+      "1/2",
+      0,
+      false
+     ],
+     [
+      "1/3",
+      1,
+      true
+     ],
+     [
+      "2/3",
+      2,
+      false
+     ],
+     [
+      "0",
+      3,
+      false
+     ],
+     [
+      "1",
+      4,
+      true
+     ]
+    ],
+    "context": {
+     "boundary_root": {
+      "bytes": "2222222222222222222222222222222222222222222222222222222222222222"
+     },
+     "epoch": {
+      "int": 7
+     },
+     "program": {
+      "bytes": "1111111111111111111111111111111111111111111111111111111111111111"
+     }
+    },
+    "domain": "verity/sampled-proofs/ru-sample/v1",
+    "key": "739c77138ce7545272a79306593e1a394272c8eb46e4db43aa96146973f93e19",
+    "shard": {
+     "index": 5,
+     "key": "c72364f6bc99511cf50a0f77fa7e3adad098919c7af513fb2a2a0ed7bd221278"
+    },
+    "source": "626561636f6e2d726f756e642d3432",
+    "stream": {
+     "bytes": "788b685f7337c9bc62d48eacd10b9fe77287dc44a700aff9d79fde316f9332df499e552c71287b64eae30268063e7784175990c931ffe2b582655d559df6140260cc1af88cb32494c185b47d166384f9",
+     "index": [
+      "s",
+      3
+     ]
+    },
+    "subset": [
+     [
+      0,
+      5,
+      0,
+      []
+     ],
+     [
+      3,
+      10,
+      1,
+      [
+       1,
+       3,
+       6
+      ]
+     ],
+     [
+      10,
+      10,
+      2,
+      [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9
+      ]
+     ],
+     [
+      4,
+      1000000000000,
+      3,
+      [
+       10783972250,
+       359366712604,
+       657030657901,
+       843643435280
+      ]
+     ]
+    ],
+    "uniform": [
+     [
+      1,
+      0,
+      0
+     ],
+     [
+      7,
+      0,
+      2
+     ],
+     [
+      7,
+      1,
+      5
+     ],
+     [
+      1000,
+      2,
+      495
+     ],
+     [
+      170141183460469231731687303715884105729,
+      3,
+      79121671276340071759719247785697086834
+     ],
+     [
+      1000000000000000000000000000000,
+      4,
+      80882411819006015531020989707
+     ]
+    ]
+   },
+   {
+    "bernoulli": [
+     [
+      "1/2",
+      0,
+      true
+     ],
+     [
+      "1/3",
+      1,
+      true
+     ],
+     [
+      "2/3",
+      2,
+      false
+     ],
+     [
+      "0",
+      3,
+      false
+     ],
+     [
+      "1",
+      4,
+      true
+     ]
+    ],
+    "context": {
+     "device": {
+      "str": "gpu0"
+     },
+     "request": {
+      "str": "r0"
+     },
+     "zero": {
+      "int": 0
+     }
+    },
+    "domain": "verity/pouw/noise-seed/v1",
+    "key": "40a6d33d2eec93cece56c17394f7fb8fffe9be44c9f01942c4d0d0c538b54f40",
+    "shard": {
+     "index": 5,
+     "key": "30b64a66383d6677ec8ace3b42ad13badac76b4790bc4d2681bd5488a6202ea9"
+    },
+    "source": "6465766963652d6b6579",
+    "stream": {
+     "bytes": "ff73ec582bafa742e7386507aabe1f304fddc908a25c879789bef5db22d9738310b262ac960e9427fefecc61b493678256a73f5974549b906c2b074ef173038336ef634ced38fa12f78d0b247772397e",
+     "index": [
+      "s",
+      3
+     ]
+    },
+    "subset": [
+     [
+      0,
+      5,
+      0,
+      []
+     ],
+     [
+      3,
+      10,
+      1,
+      [
+       3,
+       6,
+       9
+      ]
+     ],
+     [
+      10,
+      10,
+      2,
+      [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9
+      ]
+     ],
+     [
+      4,
+      1000000000000,
+      3,
+      [
+       12354122356,
+       188791922859,
+       774362563436,
+       833175899714
+      ]
+     ]
+    ],
+    "uniform": [
+     [
+      1,
+      0,
+      0
+     ],
+     [
+      7,
+      0,
+      2
+     ],
+     [
+      7,
+      1,
+      6
+     ],
+     [
+      1000,
+      2,
+      910
+     ],
+     [
+      170141183460469231731687303715884105729,
+      3,
+      96239708575882412325137163021809197506
+     ],
+     [
+      1000000000000000000000000000000,
+      4,
+      561782326956842283573336163484
+     ]
+    ]
+   }
+  ],
+  "frame": [
+   [
+    "b''",
+    "620000000000000000"
+   ],
+   [
+    "b'ab'",
+    "6200000000000000026162"
+   ],
+   [
+    "'\u00e9'",
+    "730000000000000002c3a9"
+   ],
+   [
+    "0",
+    "69000000000000000100"
+   ],
+   [
+    "255",
+    "690000000000000001ff"
+   ],
+   [
+    "256",
+    "6900000000000000020100"
+   ]
+  ]
+ },
+ "source": "verity/ml/flock/tests/lean/RandomnessVectors.lean via tests/lean/generate.sh",
+ "window": [
+  {
+   "calls": [
+    {
+     "index": [
+      0,
+      5
+     ],
+     "strata": [
+      {
+       "k": 2,
+       "name": "NcpTile_v1",
+       "units": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+       ]
+      },
+      {
+       "k": 1,
+       "name": "NcpDigest_v1",
+       "units": [
+        6,
+        7
+       ]
+      }
+     ]
+    },
+    {
+     "index": [
+      1,
+      5
+     ],
+     "strata": [
+      {
+       "k": 2,
+       "name": "NcpTile_v1",
+       "units": [
+        8,
+        9,
+        10,
+        11
+       ]
+      },
+      {
+       "k": 1,
+       "name": "NcpDigest_v1",
+       "units": [
+        12
+       ]
+      }
+     ]
+    }
+   ],
+   "context": {
+    "receipt": {
+     "bytes": "00112233445566778899aabbccddeeff"
+    }
+   },
+   "domain": "verity/pouw/closure-draw/v1",
+   "drawn": [
+    3,
+    4,
+    7,
+    8,
+    9,
+    12
+   ],
+   "source": "76657269666965722d736563726574"
+  },
+  {
+   "calls": [
+    {
+     "index": [
+      0,
+      5
+     ],
+     "strata": [
+      {
+       "k": 1,
+       "name": "NcpTile_v1",
+       "units": [
+        0,
+        1,
+        2
+       ]
+      }
+     ]
+    },
+    {
+     "index": [
+      0,
+      5
+     ],
+     "strata": [
+      {
+       "k": 1,
+       "name": "NcpTile_v1",
+       "units": [
+        3,
+        4,
+        5
+       ]
+      }
+     ]
+    }
+   ],
+   "context": {
+    "receipt": {
+     "bytes": "00112233445566778899aabbccddeeff"
+    }
+   },
+   "domain": "verity/pouw/closure-draw/v1",
+   "drawn": null,
+   "source": "76657269666965722d736563726574"
+  }
+ ],
+ "inputs": {
+  "verity/ml/flock/tests/lean/RandomnessVectors.lean": "b9329b680abae3d3c68f779538b356e7d5dad45f0e36d1d96dfd88ab06439b54",
+  "verity/ml/randomness/tests/vectors.json": "ddf31f7f92ac4e022bd9cbe26f2df3a3b66b529825c5d57efda665454eea1b63",
+  "verity/core/primitives/randomness/Randomness.lean": "4e1d2377135b9f044236fb6cb03681f0db505c8de783674cd18b7d27040bfd53",
+  "Security/Proofs/Flock/Soundness/PlanDraw.lean": "c43af291e915dd33fe3111010ad61179e4422f0ff3fd145488f79d149d9c4478",
+  "Security/Proofs/lake-manifest.json": "83d20180009e0590a3385aa9c19912cc65e2771cbd3c889ef3321a256f79e9e7",
+  "Security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632",
+  "verity/core/service/flock/Flock/Hash.lean": "21fc9913ecb9aa3ef0e463c94b7b810b9bc9e832c5c8862472c8376e39662885",
+  "verity/core/service/flock/Flock/Draw.lean": "9ca895edc41bfd9ae48444d85c403fd4120baf51789885ac7e22e3bec9f55886"
+ }
+}

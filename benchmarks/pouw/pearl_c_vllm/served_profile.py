@@ -50,13 +50,15 @@ def _mode() -> str:
 
 
 def _phase(prompts, sp) -> str:
-    n = len(prompts) if isinstance(prompts, (list, tuple)) else 1
+    import e2e
+    ps = list(prompts) if isinstance(prompts, (list, tuple)) else [prompts]
     mt = getattr(sp, "max_tokens", None)
-    if mt == 1:
-        return "prefill" if n == 1 else "d1"
     if mt == 48:
         return "chat"
-    return "dn" if n > 1 else f"gen{mt}"
+    one = len(ps) == 1 and isinstance(ps[0], dict) and len(ps[0].get("prompt_token_ids", ())) == e2e.PREFILL
+    if mt == 1:
+        return "prefill" if one else "d1"
+    return "dn" if not one else f"gen{mt}"
 
 
 def _instrument() -> None:
@@ -120,13 +122,13 @@ def _instrument() -> None:
 CATEGORIES = (
     ("pearlc:gemm", r"^gemm_pearlc|^gemm_ct"),
     ("pearlc:forming", r"^(stats_s5|form_s5|eprime|lines|words|words_u|gemm_words|pa|pb)$|^(stats_s5|form_s5|gemm_words)"),
-    ("pearlc:a_tree", r"^hash_rows|^hash_pad$|^hash_node_keys$|^seed_line_a$|^b3s_level_keys"),
-    ("pearlc:tile_hash", r"^hash_msg|^hash_leaf"),
-    ("pearlc:tree", r"^hash_nodes$|^hash_tree_small$|^hash_tree_leaves$"),
+    ("pearlc:a_tree", r"^s512_rows$|^s512_pads$|^s512_seeds$|^hm_leaves$|^s512_frame_leaves$"),
+    ("pearlc:tile_hash", r"^s512_tile_leaves$"),
+    ("pearlc:tree", r"^s512_nodes$|^s512_tree_small$"),
     ("pearlc:screen", r"^kernel$|screen"),
     ("fp8:quant", r"fp8_quant|scaled_fp8|segmented_max|dynamic_scaled|per_token_group_quant|quant"),
     ("attention", r"flash|fmha|attention|attn|FlashAttn|paged"),
-    ("gemm", r"cutlass|nvjet|gemm|Gemm|sm90_|sm100_|sm120_|xmma|cublas|Kernel2|splitK"),
+    ("gemm", r"cutlass|nvjet|gemm|Gemm|sm90_|sm100_|sm120_|xmma|cublas|Kernel2|splitK|^device_kernel$"),
     ("norm", r"rms_norm|layernorm|layer_norm"),
     ("act", r"act_and_mul|silu|gelu"),
     ("rotary", r"rotary"),

@@ -1335,7 +1335,7 @@ def test_phases_are_step_groups_or_v04s_names_never_both_and_the_side_stream_tak
     assert A.Arm is A.BenchArm and isinstance(FakeArm(), A.BenchArm) and A.VERSION == "v0.6"
     assert set(A.PARTS["after"]) == A.MOVABLE and sum(A.PARTS.values(), ()) == A.GROUPS and A.DEFERRED <= A.MOVABLE
     try:
-        from verity.protocols.accounting.work.pouw import serving
+        from verity.core.protocols.pouw import serving
     except ImportError:
         serving = None
     if serving is not None:
@@ -1398,7 +1398,7 @@ class DumpingArm(FakeArm):
 
 
 class StaleCall(FakeCall):
-    """Its setup wrote the root and a seed; its timed launch writes neither (the stale-output case, server.md 11:50Z)."""
+    """Its setup wrote the root and a seed; its timed launch writes neither (the stale-output case, panel rule)."""
 
     def __init__(self, dev, ms):
         super().__init__(dev, ms)

@@ -13,7 +13,7 @@ Until the switch (a labelled 6 PM PT digest) the published tables stay :mod:`ver
   and verifier model; soundness with the whole-proof bound at the batching of each cell it holds and the dominant term; the
   proximity bounds (regime, proven, machine-checked or conjectured); transferability; assumptions; the pin; ``archived``; its cells (computed).
 * **Table 2** -- end-to-end overhead ``N / P`` per subcircuit, hardware class and admissible commitment scheme (one line per
-  ``verity_catalog.targets.target.TARGETS`` entry and scheme some row's statement declares), a native column, one column per
+  ``verity.ml.circuits.targets.target.TARGETS`` entry and scheme some row's statement declares), a native column, one column per
   backend family (:data:`FAMILIES`).  ``N`` is the
   compute-bound datasheet estimate (:func:`native`); ``P`` is inputs per second end to end, committing the batch's values and
   then proving (:func:`throughput`).  A cell is the family's best admissible backend and statement (highest ``P``, ties to the lower
@@ -51,8 +51,8 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-from verity import claims as claims_registry
-from verity_catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
+from verity.core import claims as claims_registry
+from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import census, contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T
@@ -80,7 +80,7 @@ ALGEBRAIC_FLAG = "algebraic hash, not for highest-stakes use"
 #: The spec's reject reasons, in the order they are checked; ``B`` exists only under the legacy rules (today's batch and K).
 REASON_LETTERS: dict[str, str] = {
     "R": "weaker statement than the full relation", "Z": "not the family's declared class",
-    "S": "commitments on a scheme verity.primitives.commitments does not define", "L": "fails the view's security filter",
+    "S": "commitments on a scheme verity.ml.commitments does not define", "L": "fails the view's security filter",
     "U": "not independently verified", "F": "proof files not preserved", "I": "another input set", "K": "prover not on the line's GPU",
     "P": "phase-sum", "M": "protocol not met", "D": "capped by a red-team verdict", "X": "other", "B": "legacy: batch != 4096 or K != 1536"}
 _ORDER = {k: i for i, k in enumerate(REASON_LETTERS)}
@@ -92,7 +92,7 @@ _ORDER = {k: i for i, k in enumerate(REASON_LETTERS)}
 @dataclass(frozen=True)
 class Scheme:
     """A commitment scheme with the hash of its leaves (one Table 2 line per subcircuit, hardware class and admissible scheme).
-    ``core`` is where ``verity.primitives.commitments`` defines it (``None``: not defined there, so inadmissible); ``standard``: built only on
+    ``core`` is where ``verity.ml.commitments`` defines it (``None``: not defined there, so inadmissible); ``standard``: built only on
     standard hashes (SHA-256, BLAKE3) -- an algebraic scheme is admissible and flagged (:data:`ALGEBRAIC_FLAG`)."""
 
     id: str
@@ -106,13 +106,13 @@ class Scheme:
 
 
 SCHEMES: tuple[Scheme, ...] = (
-    Scheme("frame-v3/sha256", "frame-v3 · SHA-256", "verity.primitives.commitments.merkle (frame-v3 word leaves; the SHA-256 row leaf is core-schemes')", True),
+    Scheme("frame-v3/sha256", "frame-v3 · SHA-256", "verity.ml.commitments.merkle (frame-v3 word leaves; the SHA-256 row leaf is core-schemes')", True),
     Scheme("frame-v3/blake3-row", "frame-v3 · keyed-BLAKE3 rows",
-           "verity.primitives.commitments.merkle trees; the keyed-BLAKE3 row-leaf schema is promoted from archive/direct/ligero/leaf/blake3.py (core-schemes)", True),
-    Scheme("vllm-v1", "vllm-v1 · SHA-256", "verity.primitives.commitments.vllm_v1 (position / fa2h / id leaves, step and stream root bindings)", True),
+           "verity.ml.commitments.merkle trees; the keyed-BLAKE3 row-leaf schema is promoted from archive/direct/ligero/leaf/blake3.py (core-schemes)", True),
+    Scheme("vllm-v1", "vllm-v1 · SHA-256", "verity.ml.commitments.vllm_v1 (position / fa2h / id leaves, step and stream root bindings)", True),
     Scheme("frame-v3-sha512/hm96-sha512", "frame-v3 · SHA-512, hm96-sha512 leaves",
-           "verity.primitives.commitments.frame_v3 (the SHA-512 variant) over verity.primitives.commitments.hm96 hm96-sha512/v1 leaves", True),
-    Scheme("frame-v3/poseidon2-row", "frame-v3 · Poseidon2 rows", "verity.primitives.commitments.rowleaf (leaf/v2h)", False),
+           "verity.ml.commitments.frame_v3 (the SHA-512 variant) over verity.ml.commitments.hm96 hm96-sha512/v1 leaves", True),
+    Scheme("frame-v3/poseidon2-row", "frame-v3 · Poseidon2 rows", "verity.ml.commitments.rowleaf (leaf/v2h)", False),
     Scheme("frame-v3/poseidon2-tile", "frame-v3 · Poseidon2 64x64 tiles", None, False),
     Scheme("frame-v3/ajtai-row", "frame-v3 · Ajtai rows", None, False),
 )
@@ -260,9 +260,9 @@ class Configuration:
         """Why the statement's commitments are on an inadmissible scheme (reason S), or ``None``."""
         s = _SCHEME.get(self.scheme) if self.scheme else None
         if s is None:
-            return f"{self.id} binds no scheme of verity.primitives.commitments"
+            return f"{self.id} binds no scheme of verity.ml.commitments"
         if s.core is None:
-            return f"{self.id} commits with {s.label}, which verity.primitives.commitments does not define yet"
+            return f"{self.id} commits with {s.label}, which verity.ml.commitments does not define yet"
         return None
 
 
@@ -402,16 +402,19 @@ FLOCK_VLLM_CONFIG = dataclasses.replace(
     soundness="2^-205 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-203 over 4 proofs (the cells "
               "record the earlier, still valid 2^-195.44); "
               "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
-#: M0's generic circuit (statement ``verity/flock-circuit``): one pinned GF(2) circuit per template, the SHA-512 commitments
-#: proved inside it.  The unit wording, the absent privacy claim and the time and AND qualifiers follow red-team-flock-3's
-#: statement review (a plain row would call the attention unit a head, or read the hm96 leaves as hiding).
+#: M0's generic circuit (statement ``verity/flock-circuit``): one pinned GF(2) circuit per template, the hm96-sha512 leaves
+#: proved inside it and the frame-v3-sha512 trees over them recomputed by the verifier (the Lean verifier's PROTOCOL.md
+#: §16.10, ``HmRow.checkPublic``).  The unit wording, the absent privacy claim and the time and AND qualifiers follow
+#: red-team-flock-3's statement review (a plain row would call the attention unit a head, or read the hm96 leaves as hiding).
 FLOCK_CIRCUIT_CONFIG = dataclasses.replace(
     FLOCK_CONFIG, id="C-Flock, generic circuit, SHA-512 in-circuit commitments", scheme="frame-v3-sha512/hm96-sha512",
     ports="per instance: one query row (attention: one query over T keys) or one output coordinate (GEMM); x, W committed; "
           "y public, equal to the IR reference on every proved instance",
-    commitment="frame-v3-sha512 trees over hm96-sha512 leaves, proved in the circuit (the benchmark's salts are "
-               "public); commitment timed separately as serving's hm96-sha512 leaf and tree commitment of the committed values",
-    hashes=(Hash("SHA-512", _STMT, _CR + " (frame-v3-sha512 trees, in circuit)"), Hash("SHA-512", _STMT, _CR + " (hm96-sha512 leaves, in circuit)"),
+    commitment="hm96-sha512 leaves proved in the circuit (the benchmark's salts are public); the frame-v3-sha512 trees over "
+               "them recomputed by the verifier from the public file and held to its header's roots; commitment timed "
+               "separately as serving's hm96-sha512 leaf and tree commitment of the committed values",
+    hashes=(Hash("SHA-512", _STMT, _CR + " (frame-v3-sha512 trees, recomputed by the verifier)"),
+            Hash("SHA-512", _STMT, _CR + " (hm96-sha512 leaves, in circuit)"),
             *FLOCK_CONFIG.hashes[2:3],
             Hash("SHA-512", _COINS, "commit-before-coin binding of the live transcript")),
     zk="No: NON_ZK_PROOF; no privacy claim (M0's mask slots are zero and the benchmark's hm96 salts are public)",
@@ -448,7 +451,7 @@ _HIDDEN_ZK = ("No: NON_ZK_PROOF; no privacy claim (M0's transcript is a function
 FLOCK_CIRCUIT_HIDDEN_CONFIG = dataclasses.replace(
     FLOCK_CIRCUIT_CONFIG, id="C-Flock, generic circuit, hidden outputs, SHA-512 in-circuit commitments", ports=_HIDDEN_PORTS,
     zk=_HIDDEN_ZK, pin="verity/flock-circuit pinned circuit file with hidden outputs (PR #757); the Lean verifier of record "
-                       "(Stmt.setupHidden: no soundness theorem yet)")
+                       "(Stmt.setupHidden: FailClosed.flock_headline_exec_hidden, in the forms the proof covers)")
 FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG = dataclasses.replace(
     FLOCK_CIRCUIT_TYPED_CONFIG, id="C-Flock, typed circuit (verity/flock-circuit/types), hidden outputs, SHA-512 in-circuit commitments",
     ports=_HIDDEN_PORTS, zk=_HIDDEN_ZK + FLOCK_CIRCUIT_TYPED_CONFIG.zk[len(FLOCK_CIRCUIT_CONFIG.zk):],
@@ -586,7 +589,7 @@ def whole_proof_log2(fp: Mapping[str, Any]) -> float | None:
 
 # --- interaction: t = compute + rounds x RTT + bytes / bandwidth (reporting standard, Daniel 2026-09-25) --------------------------
 
-#: The reference network the Table 2 cell is evaluated at (``census.REFERENCE_NETWORK``, ``catalog/census/networks.json``: same datacenter); the
+#: The reference network the Table 2 cell is evaluated at (``census.REFERENCE_NETWORK``, ``benchmarks/census/networks.json``: same datacenter); the
 #: interaction drill-down adds ``census.SENSITIVITY_NETWORKS``.
 REF_RTT_S, REF_BANDWIDTH_BPS = census.REFERENCE_NETWORK.rtt_s, census.REFERENCE_NETWORK.bandwidth_bps
 #: A measured interactive run must be within this fraction of the formula at the reference profile.
@@ -1112,7 +1115,7 @@ def class_native(target: Target, sub: str, cached: bool, klass: Mapping[str, Any
 
 def memory_native(target: Target, sub: str, cached: bool = False, variables: Mapping[str, int] | None = None) -> dict[str, Any]:
     """``N`` for a memory-bound subcircuit: instances per second = the hardware line's memory bandwidth / the template's bytes per
-    input (``catalog/census/subcircuits.json`` ``work_model.bytes_per_input``), with the basis for the footnote.  Operations are not
+    input (``benchmarks/census/subcircuits.json`` ``work_model.bytes_per_input``), with the basis for the footnote.  Operations are not
     binding (``ops_per_instance`` is the template's op count, for reference)."""
     known = census.SUBCIRCUITS[sub]
     wm = census.SUBCIRCUIT_TEMPLATES[known.template].work_model
@@ -1481,7 +1484,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         config = configuration_of(meta, cfgs)
         if target is None:
             V.rejected.append({"artifact": art, "family": cand.id, "configuration": config.id if config else None, "line": None,
-                               "attempt": rid, "codes": [("X", f"profile {fp.get('profile')!r} is not a target of verity_catalog.targets.target")]})
+                               "attempt": rid, "codes": [("X", f"profile {fp.get('profile')!r} is not a target of verity.ml.circuits.targets.target")]})
             continue
         entries.append(Ctx(art, meta, labels, attempt, target, _FAMILY[cand.id], config, []))
     if not rules.legacy:
@@ -1687,7 +1690,7 @@ def _empty_reason(rejected: Sequence[Mapping[str, Any]], target: Target, scheme:
     if all(r["codes"][0][0] in ("R", "S") for r in mine):
         weak = sorted({str(r["configuration"]) for r in mine if r["codes"][0][0] == "R"})
         bad = sorted({str(r["configuration"]) for r in mine if r["codes"][0][0] == "S"})
-        parts = ([f"a weaker statement ({', '.join(weak)})"] if weak else []) + ([f"a scheme verity.primitives.commitments does not define ({', '.join(bad)})"] if bad else [])
+        parts = ([f"a weaker statement ({', '.join(weak)})"] if weak else []) + ([f"a scheme verity.ml.commitments does not define ({', '.join(bad)})"] if bad else [])
         return {"state": "weaker", "text": "results only for " + " or ".join(parts)}
     firsts: dict[str, int] = {}
     for r in mine:
@@ -1949,7 +1952,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
         rows1.append(row)
     out += [T._md_table(TABLE1_COLUMNS, rows1), "",
             "Statement: the full relation commits x, W and y with the configuration's scheme and proves y = S(x, W) over the committed "
-            "values; its scheme must be defined in verity.primitives.commitments (reason S otherwise). A configuration whose soundness argument "
+            "values; its scheme must be defined in verity.ml.commitments (reason S otherwise). A configuration whose soundness argument "
             f"uses an algebraic hash (Poseidon2 and the like) is admissible and flagged: {ALGEBRAIC_FLAG}. Bounds "
             "are the accountant's whole-proof figures at each cell's batching (`security.achieved_log2`), from proven proximity bounds only.", "",
             "## Table 2 — End-to-end overhead per subcircuit, hardware class and commitment scheme", "",
@@ -2130,17 +2133,17 @@ def verity_commit() -> str | None:
     return out.stdout.strip() or None if out.returncode == 0 else None
 
 
-#: ``verity.claims`` instances of the hash names Table 1 uses (a name joining two hashes names both).
+#: ``verity.core.claims`` instances of the hash names Table 1 uses (a name joining two hashes names both).
 HASH_INSTANCES = {"SHA-256": ("sha-256",), "SHA-512": ("sha-512",), "BLAKE3": ("blake3",), "BLAKE3 (keyed)": ("blake3",),
                   "BLAKE2b": ("blake2b",), "SHAKE-256": ("shake-256",), "BLAKE3 / BLAKE2b": ("blake3", "blake2b"),
                   "Poseidon2-BabyBear": ("poseidon2-babybear",), "Poseidon2-KoalaBear": ("poseidon2-koalabear",),
                   "Ajtai n=64 (linear digest)": ("ajtai-n64",), "BLAKE3 / SHA-256": ("blake3", "sha-256"), "Ajtai n=128 (linear digest)": ("ajtai-n128",)}
-#: ``verity.claims`` properties by the leading words of a hash's assumed property; a hash assumed to be a random oracle
+#: ``verity.core.claims`` properties by the leading words of a hash's assumed property; a hash assumed to be a random oracle
 #: is cited once, as the ``random-oracle`` model.
 HASH_PROPERTIES = (("collision resistance", "cr"), ("expected-time collision resistance", "ecr"), ("commit-before-coin binding", "cr"), ("live transcript and root_f binding", "cr"),
                    ("prg", "xof"), ("ring-sis", "sis"))
 PROXIMITY_REGIMES = {"unique decoding": "rs-proximity-udr", "johnson regime (list decoding)": "rs-proximity-johnson"}
-#: ``verity.claims`` ids of a Table 1 assumption, by a phrase it contains.
+#: ``verity.core.claims`` ids of a Table 1 assumption, by a phrase it contains.
 ASSUMPTION_PHRASES = (("logup fractional-sum soundness", "logup"),)
 #: An ``unknown`` ZK text claims nothing, so it maps to ``no-zk`` (Verity claims no zero knowledge for it; the text says why).
 _ZK_GUARANTEE = {"malicious-verifier-zk": "malicious-verifier-zk", "hvzk": "hvzk", "none": "no-zk", "unknown": "no-zk"}
@@ -2164,7 +2167,7 @@ def _role(h: Hash) -> str:
 
 
 def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, Any]]:
-    """A configuration's security claims: each a ``property`` (a ``verity.claims`` id with its Table 1 text, and for soundness
+    """A configuration's security claims: each a ``property`` (a ``verity.core.claims`` id with its Table 1 text, and for soundness
     ``param``, the weakest whole-proof bound at its cells as TeX) with the ``assumptions`` it rests on, each an id (``None``
     and ``unmapped`` when the renderer has none yet), its ``role`` as the configuration declares it (a hash's role and
     detail, a proximity bound's component; empty where nothing is declared) and its Table 1 text.
@@ -2343,10 +2346,10 @@ def _compose(entry: dict[str, Any], members: Sequence[Mapping[str, Any]], config
 def scheme_entities(configurations: Sequence[Configuration]) -> list[dict[str, Any]]:
     """Each commitment scheme under its site id (:data:`SCHEME_IDS`; ``legacy_id`` the renderer's): ``name``, a one-line
     ``description`` (the commitment text of the first full-relation configuration that binds it, up to its first ``;``), its
-    ``tree_hash`` and ``leaf_hashes`` (``verity.claims`` instances of the statement-commitment hashes its configurations declare:
+    ``tree_hash`` and ``leaf_hashes`` (``verity.core.claims`` instances of the statement-commitment hashes its configurations declare:
     the tree's role names the trees), ``algebraic`` when any of them is an algebraic instance, the ``assumptions`` those hashes
     are (with the roles and configurations that declare them), and the ``leaf_circuits`` that commit its leaves."""
-    from verity.claims import INSTANCES  # noqa: PLC0415
+    from verity.core.claims import INSTANCES  # noqa: PLC0415
 
     out = []
     for sch in SCHEMES:
@@ -2515,7 +2518,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     * ``workload_headline`` -- per census workload and backend, the share of the served run's native work its cleared cells
       cover and the work-weighted overhead over that share, in both bases, uncovered subcircuits listed with why
       (:mod:`verity_numerical.bench.headline`); ``None`` under the legacy rules;
-    * ``claims`` -- the ``verity.claims`` entries cited (the site imports these); ``census`` -- the ``catalog/census/`` entries as read
+    * ``claims`` -- the ``verity.core.claims`` entries cited (the site imports these); ``census`` -- the ``benchmarks/census/`` entries as read
       at render time; ``provenance`` -- render time, verity commit, rules, banner.
 
     Ids: subcircuits by their census id, backends ``<letter>-<mode>`` (or a composed backend's own id), statements

@@ -29,7 +29,7 @@ print("sent", *sorted(os.listdir(inputs)) if inputs and os.path.isdir(inputs) el
 print("custody", os.environ.get("RESEARCH_PREFLIGHT_CUSTODY", "-"))
 if os.environ.get("PF_FAIL"):
     print("uv is not on the PATH", file=sys.stderr)
-    print("prepare the pod: bash tools/check/pod_setup.sh", file=sys.stderr)
+    print("prepare the pod: bash tools/verity/check/pod_setup.sh", file=sys.stderr)
     sys.exit(1)
 """
 
@@ -72,7 +72,7 @@ def test_a_failing_preflight_refuses_the_run_before_anything_runs(tmp_path, repo
     rc = _run(tmp_path, repo, "--env", "PF_FAIL=1")
     err = capsys.readouterr().err
     assert rc == 3 and "refused on m (PreflightFailed)" in err
-    assert "uv is not on the PATH; prepare the pod: bash tools/check/pod_setup.sh" in err, "the preflight's stderr is the reason"
+    assert "uv is not on the PATH; prepare the pod: bash tools/verity/check/pod_setup.sh" in err, "the preflight's stderr is the reason"
     assert "research: preflight pf.py --say hi on m: FAILED" in err
     [rid] = [p.name for p in (tmp_path / "runs").iterdir()]
     run_dir = machine / "runs" / rid

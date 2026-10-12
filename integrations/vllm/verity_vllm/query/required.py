@@ -49,7 +49,7 @@ from dataclasses import dataclass, field
 from functools import reduce
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.primitives.circuits import partition_object as PO
+from verity.ml.circuits import partition_object as PO
 from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
@@ -63,10 +63,10 @@ __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLIN
            "member_name", "shared_instances", "collective_sites", "request_manifest", "BridgeResult", "under",
            "CallMember", "Population", "population", "Q_WORD_ID", "Q_WORD_TEXT", "QUERY_OF_RECORD", "QUERIES", "partition_of"]
 
-#: the query of record: every Call cut into word units (`verity.primitives.circuits.cut`); the Program's partition is the `verity/partition/v1` object
+#: the query of record: every Call cut into word units (`verity.ml.circuits.cut`); the Program's partition is the `verity/partition/v1` object
 #: naming it (`partition_of`).  `Q_module_body_v1` stays selectable, for A/B only.
 Q_WORD_ID = word_query.query_id(16, 32)
-Q_WORD_TEXT = (f"{Q_WORD_ID}: units = the word units of every Call's cut (verity.primitives.circuits.cut; {PO.FORMAT} names the partition as Q_word v1 "
+Q_WORD_TEXT = (f"{Q_WORD_ID}: units = the word units of every Call's cut (verity.ml.circuits.cut; {PO.FORMAT} names the partition as Q_word v1 "
                "{X: 16, W: 32}); committed = every Value one Call produces and another Call reads or the Program returns, and the prescribed "
                "inputs a Call reads (U_C (in(C) u out(C)) over the Calls), minus the Program's literals (the Values of Calls that read no "
                "Value: written in the descriptor, never acquired); plus each Call's committed interior words (the tap families)")
@@ -74,9 +74,9 @@ QUERY_OF_RECORD = Q_WORD_ID
 QUERIES = (Q_WORD_ID, Q_MODULE_BODY_ID)
 
 
-def partition_of(program_sha512: str) -> dict[str, Any]:
+def partition_of(program_digest: str) -> dict[str, Any]:
     """The Program's partition of record: the `verity/partition/v1` object (Q_word v1, X = 16, W = 32) and its digest."""
-    obj = {"format": PO.FORMAT, "program": program_sha512, "query": PO.query(16, 32)}
+    obj = {"format": PO.FORMAT, "program": program_digest, "query": PO.query(16, 32)}
     return {"object": obj, "digest": PO.digest(obj)}
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -98,7 +98,7 @@ SUPPLIED_PARAM = re.compile(r"^(values|run(_\d+)?)$")
 def collective_kind(family: str) -> str | None:
     """The tensor-parallel collective a Definition family is, any world: "all_reduce" | "all_gather" | None -- the registry's composites
     decide (AllReduce2_v1 / AllReduce_v2{WORLD,N} / AllGather2_v1 / AllGather_v1{WORLD,N}); imported on first use (only a rank Program asks)."""
-    from verity_vllm.program.registry.b1_tp2 import collective_kind as kind
+    from verity_vllm.program.frontend.collective_kinds import collective_kind as kind
     return kind(family)
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -553,8 +553,8 @@ def query_header(profile: str, hidden_family: str, *, return_slots: bool, query:
 
 def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any], *, request_id: str | int | None = None,
                      workload: Mapping[str, Any] | None = None, artifact: Mapping[str, Any] | None = None, program_dir: str | None = None,
-                     rank: int = 0, ranks: int = 1, profile: str | None = None, return_slots: bool = True, norm_scales: Any = None, taps: Sequence[Any] = (), query: str = QUERY_OF_RECORD, program_sha512: str | None = None) -> BridgeResult:
-    """The v1-shaped manifest of ONE request Program (B=1 component) under `query` (+ `norm_scales`, + `taps`: `query.router_softmax` / `vocab_range` POLICY; + its partition given `program_sha512`)."""
+                     rank: int = 0, ranks: int = 1, profile: str | None = None, return_slots: bool = True, norm_scales: Any = None, taps: Sequence[Any] = (), query: str = QUERY_OF_RECORD, program_digest: str | None = None) -> BridgeResult:
+    """The v1-shaped manifest of ONE request Program (B=1 component) under `query` (+ `norm_scales`, + `taps`: `query.router_softmax` / `vocab_range` POLICY; + its partition given `program_digest`)."""
     pdig = (artifact or {}).get("program_digest") or res["program"]["digest"]
     profile, fa, attn_obs = _profile(res, profile)
     hidden_family = "fa3_hidden_m1_stream" if profile == "hopper" else "fa2_hidden_m1_stream"
@@ -710,7 +710,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     scales = norm_scales.kernel_rows(pop, add, impl, aliases) if norm_scales else None     # the norm-scale tap's rows: interior to the kernel norms
     tapped = [(t, t.kernel_rows(pop, add, impl, aliases)) for t in taps]                   # the other taps' rows: interior to their Calls
     identities.sort(key=fmt.row_key)
-    q = query_header(profile, hidden_family, return_slots=return_slots, query=query, partition=partition_of(program_sha512) if program_sha512 and query == Q_WORD_ID else None, call_boundaries=bool(fam_counts.get("call_boundaries")))
+    q = query_header(profile, hidden_family, return_slots=return_slots, query=query, partition=partition_of(program_digest) if program_digest and query == Q_WORD_ID else None, call_boundaries=bool(fam_counts.get("call_boundaries")))
     if prog_world > 1:
         q["required_families"].append("tp_rank_partials")
         q["policy"]["protocol_required"].append(f"TP-04 (world {prog_world}): every collective output and its rank-local partial")

@@ -8,12 +8,12 @@ rules, but are not developed.
 
 ## What is fixed
 
-- The subcircuit is `verity_catalog.targets.target.FIRST`. Lanes do not change it.
+- The subcircuit is `verity.ml.circuits.targets.target.FIRST`. Lanes do not change it.
   The backend transition unit is one 16-product update with arbitrary finite
   `c`; the proof unit is `GemmCoordinate<K>` from `c_0 = 0` plus the epilogue.
 - Backend families must agree on profile, input/output bitstrings, supported domain,
   the exact function and proof-unit endpoints. Auxiliary witness layouts are theirs.
-- Semantic disagreements go into `catalog/verity_catalog/silicon/discrepancy_log.json` (an entry
+- Semantic disagreements go into `verity/ml/circuits/silicon/discrepancy_log.json` (an entry
   with an owner), then to the coordinator. Changing a reference
   implementation resolves nothing by itself.
 - Proof gadgets (selectors, quotient/remainder, leading-bit, lookup layouts,
@@ -65,7 +65,7 @@ Table 1  Candidate proof systems (definitional: no performance, no status)
          Candidate | Description | ZK | Verifier model | Soundness | Setup | Interaction | Security assumptions
          rows = tables.CANDIDATES: A-GKR (NON_ZK_PROOF), B-Ligero (COMPLETE_ZK_BACKEND; COMPLETE_HVZK_BACKEND
          as drill-down), SP1 (any sound class); ZK is No | HVZK | Malicious-verifier ZK (two variants allowed)
-Table 2  Headline proving overhead by target (one row per verity_catalog.targets.target.TARGETS)
+Table 2  Headline proving overhead by target (one row per verity.ml.circuits.targets.target.TARGETS)
          Device | Datatype / target | Native dense peak, spec | Native dense peak, measured | A-GKR | B-Ligero | SP1
 Table 3  Prover phase decomposition (one row per populated Table 2 cell, the same artifact)
          Device / target | Candidate | Total prover time | Witness | Encoding + commitment | Arithmetic | Lookup | ZK additional | Serialization | Other
@@ -132,7 +132,7 @@ commitment scheme over the full committed relation on a core-defined scheme,
 results on an algebraic hash flagged and marked `(alg.)`, Table 3 with
 serving and proving overhead) render as a labelled preview with
 `python -m verity_numerical.bench.views --root <store> [--rules spec|unfiltered|legacy]`
-(`--format entities`: the docs site's JSON, with ids from `verity.census` and `verity.claims`);
+(`--format entities`: the docs site's JSON, with ids from `verity.census` and `verity.core.claims`);
 `--parity` checks that the legacy-rules views select exactly today's cells
 (the switch's gate; `--take-snapshot --record` stores the check as a
 `tables-parity/v1` artifact). The steward renders it as a preview for a
@@ -233,7 +233,7 @@ first-class consumer is the **tensor core**, not the SIMT core. Consequences:
 
 Decided 2026-09-22 (lane `trust`). For every numerical target (a `Target`: one
 subcircuit's exact tensor-core relation on one architecture) "do we trust this circuit, and why"
-is **computed from evidence, never asserted**: `assess` in `tools/tc_probe/trust.py`
+is **computed from evidence, never asserted**: `assess` in `benchmarks/tc_probe/trust.py`
 evaluates predicates over store artifacts (ids + labels) and repo fixtures and
 returns a level with the exact evidence that satisfies or fails each criterion;
 `Instruction.status` is reported next to it so the two can disagree visibly.
@@ -262,7 +262,7 @@ returns a level with the exact evidence that satisfies or fails each criterion;
 
 Trust is re-opened only by an **invalidation trigger**: a canary/probe
 mismatch on the anchor, a driver/ptxas/toolkit change on the anchor (re-run
-`tools/tc_probe/tc_probe.py --instruction <id> --canary`, < 1 min, exit 1 on
+`benchmarks/tc_probe/tc_probe.py --instruction <id> --canary`, < 1 min, exit 1 on
 any mismatch, labelled `family=canary`), an independent verifier rejecting an
 honest run, a new D-entry naming the target, a red-team finding. The
 **procedure** is frozen in code with the criteria (`RELITIGATION_PROCEDURE`):
@@ -272,7 +272,7 @@ automatically (an open D-entry blocks TRUSTED, a mismatch on the anchor blocks
 PINNED; nobody edits a level) -> resolve with hardware as arbiter, the tile
 joins `REGRESSION_TILES`, close with `trust_downgrade=resolved:<D-id>`.
 
-Dossier: `python tools/tc_probe/trust.py <target|instruction|--all>
+Dossier: `python benchmarks/tc_probe/trust.py <target|instruction|--all>
 [--root STORE] [--format md|json] [--publish]` renders the criteria table with
 evidence ids, D-entries, references, SASS/lowering, the missing items to the
 next level, the triggers and the procedure; `--publish` writes a

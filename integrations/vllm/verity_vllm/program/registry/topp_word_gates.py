@@ -15,11 +15,11 @@ from functools import cache
 
 import numpy as np
 
-from verity.primitives.circuits.defs import PrimitiveDefinition
-from verity_catalog.definitions.scalar import BitAnd, BitNot, BitOr, F32Eq, F32Fabs, I32Add, I32Eq, I32Le, SelectF32, SelectI32
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.moe import F32GtStrict, F32Sub
-from verity_vllm.program.registry.prims import BIT, F32, I32
+from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.ml.circuits.ops.scalar import BIT, BitAnd, BitNot, BitOr, F32, F32Eq, F32Fabs, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity.ml.circuits.ops.fp32 import F32Add, F32Fma, F32Mul
+from verity.ml.circuits.ops.mufu import DivFullRcp, DivFullScaleA, MufuEx2Ftz
+from verity_vllm.program.registry.ref_prims import F32GtStrict, F32Sub
 
 #: bits of a count word inside the builder (a lane count; V < 2^(CW - 1)); a count gate reads it as an i32
 CW = 20
@@ -115,15 +115,15 @@ class _Num:
 
 def _tl_exp(k, x):
     """``topp_split.tl_exp``: MUFU.EX2(x * log2e), with ptxas' non-ftz path (t < -126: EX2(t / 2) squared)."""
-    t = k.call(P.F32Mul, x, k.c(LOG2E))
+    t = k.call(F32Mul, x, k.c(LOG2E))
     small = k.call(F32GtStrict, k.c(M126), t)
-    e = k.call(P.MufuEx2Ftz, k.call(SelectF32, small, k.call(P.F32Mul, t, k.c(HALF)), t))
-    return k.call(SelectF32, small, k.call(P.F32Mul, e, e), e)
+    e = k.call(MufuEx2Ftz, k.call(SelectF32, small, k.call(F32Mul, t, k.c(HALF)), t))
+    return k.call(SelectF32, small, k.call(F32Mul, e, e), e)
 
 
 def _tl_div(k, a, b, r):
     """``div.full.f32``'s a / b from ``r = DivFullRcp(b)``: ``F32Mul(DivFullScaleA(a, b), r)``."""
-    return k.call(P.F32Mul, k.call(P.DivFullScaleA, a, b), r)
+    return k.call(F32Mul, k.call(DivFullScaleA, a, b), r)
 
 
 def _ge(k, a, b):
@@ -176,8 +176,8 @@ WIDTH = {"f": 32, "i": CW, "b": 1}
 #: each operation's word gate, or its expansion into word gates (a function of the calls it makes), and the constant operands it
 #: adds after the operation's (a gate as a select of 0, a bit as a select of 1 or 0)
 GATES = {
-    "sub": (F32Sub, ()), "add": (P.F32Add, ()), "mul": (P.F32Mul, ()), "fma": (P.F32Fma, ()), "exp": (_tl_exp, ()),
-    "rcp": (P.DivFullRcp, ()), "div": (_tl_div, ()), "log": (NvLogf, ()), "gt": (F32GtStrict, ()), "ge": (_ge, ()),
+    "sub": (F32Sub, ()), "add": (F32Add, ()), "mul": (F32Mul, ()), "fma": (F32Fma, ()), "exp": (_tl_exp, ()),
+    "rcp": (DivFullRcp, ()), "div": (_tl_div, ()), "log": (NvLogf, ()), "gt": (F32GtStrict, ()), "ge": (_ge, ()),
     "eq": (F32Eq, ()), "near": (_near, ()), "max": (_py_max, ()), "min": (_py_min, ()), "nanmax": (_nan_max, ()),
     "nanmin": (_nan_min, ()), "sel": (SelectF32, ()), "seli": (SelectI32, ()), "selb": (SelectBit, ()),
     "gate": (SelectF32, ((0, 32),)), "gatei": (SelectI32, ((0, 32),)), "and": (BitAnd, ()), "or": (BitOr, ()),

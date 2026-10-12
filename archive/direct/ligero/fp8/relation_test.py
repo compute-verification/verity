@@ -11,7 +11,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 pytest.importorskip("blake3")            # the verifier accepts blake3-named proofs only; without the package the prover falls back and the chain tests fail for the wrong reason
-from verity_catalog.silicon.silicon import (
+from verity.ml.circuits.silicon.silicon import (
     ADA_E4M3_M16N8K32,
     HOPPER_E4M3_K32,
     Pipeline,

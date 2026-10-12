@@ -1,7 +1,7 @@
 """Lane PAD-IMPL: `Serve@3` at TINY-PAD against PAD-SPEC v1's frozen semantics — the prefix property
 (§13, `n ∈ {0, 3, D_MAX}`), the absorbing property and the inactive step-boundary
 relation (§6), output interpretation (§8), digest distinctness (§10), the measured gate budget (§14.1), and
-the vectorized reference evaluator (§11/§12, `verity_vllm/program/registry/serve3_reference.py`) bit-for-bit against
+the vectorized reference evaluator (§11/§12, `verity_vllm/program/kernels/serve3_reference.py`) bit-for-bit against
 the gate-level evaluation.
 
 Fixture: TINY-PAD dims (spec §14: the test-suite TINY with `MAX_POS` 8 → 16), random bf16 weights
@@ -22,10 +22,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.primitives.circuits import Program, bind  # noqa: E402
-from verity.primitives.circuits.codec import program_digest  # noqa: E402
+from verity.ml.circuits import Program, bind  # noqa: E402
+from verity.ml.circuits.codec import program_digest  # noqa: E402
 from verity_vllm.program.registry import b1, serve3  # noqa: E402
-from verity_vllm.program.registry import serve3_reference as ref  # noqa: E402
+from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
 from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,

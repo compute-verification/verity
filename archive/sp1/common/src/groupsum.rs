@@ -1,5 +1,5 @@
 //! Hawkeye's grouped, truncating accumulation for any operand format, bit for
-//! bit as `verity_catalog.silicon.models.GroupSum.step` computes it (`group_sum`,
+//! bit as `verity.ml.circuits.silicon.models.GroupSum.step` computes it (`group_sum`,
 //! `term.fp32_term`, `term.pack_fp32`): the model behind every non-block-scaled
 //! Table 2 row.  [`crate::tc`] is the same function specialised to the Ampere
 //! pipeline and BF16 products; this one takes the pipeline's groups, adder

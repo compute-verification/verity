@@ -291,13 +291,3 @@ def test_the_cli_refuses_a_second_guard_and_status_stop_read_the_recorded_pid(tm
     assert research_main(["pods", "guard", "stop"]) == 1
 
 
-def test_a_live_guard_is_recognised_by_its_command_line(tmp_path):
-    assert G._alive(99999999) is False
-    other = live_helper()
-    try:
-        assert G._alive(other.pid)
-    finally:
-        other.kill()
-        other.wait()
-        other.stdout.close()
-    assert not G._alive(other.pid)

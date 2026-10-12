@@ -30,8 +30,8 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 
-from verity_catalog.silicon import relation as R
-from verity_catalog.silicon.silicon import Pipeline
+from verity.ml.circuits.silicon import relation as R
+from verity.ml.circuits.silicon.silicon import Pipeline
 
 __all__ = ["FORGERIES", "Forgery", "forge_align", "forge_final", "forge_leading_bit", "forge_split", "max_products",
            "thresholds"]

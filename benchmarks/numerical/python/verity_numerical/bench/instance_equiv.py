@@ -117,7 +117,7 @@ def _runner():
 def declared(target: str, ref: Mapping[str, Any]) -> tuple[bool, str | None]:
     """Whether a runner ref over [0, n) is ``target``'s declared set -- the frozen ref, a prefix of it, or a synthetic stream by
     generator, seed and n (``views.instance_range``) -- with why not when it names the declared set but repeats it."""
-    from verity_catalog.targets.target import TARGETS
+    from verity.ml.circuits.targets.target import TARGETS
     from verity_numerical.bench.tables import FROZEN_INSTANCES
     from verity_numerical.bench.views import instance_range
     if same_ref(ref, FROZEN_INSTANCES[target]):

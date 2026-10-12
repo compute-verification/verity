@@ -65,7 +65,7 @@ Ask each of these of a proposed process. A "no" costs velocity unless the propos
    to their Python in the week of Sep 22–29.
 3. **Is it code, with the fix in its failure message?** A check costs nothing until it fires, and it teaches when it
    does. Prose taxes every agent's context and is followed unreliably; the lane contract says it: "a rule you can't see
-   enforced is not protection". Good: the Lean audit's `escapes` list; `verity/tests/test_boundaries.py`.
+   enforced is not protection". Good: the Lean check's `escapes` list; `tests/test_boundaries.py`.
 4. **Does it label rather than block, unless the error would pass unnoticed?** A label lets work go on and lets readers
    filter. Block only for errors nobody would notice until they cost a lot: #118 made `merkle_binding` vacuous by
    redefining `MerkleScheme.Collision`, the axiom audit passed it, and only the guarantees' records and a person reading
@@ -102,10 +102,10 @@ where a result is relied on.
 
    ~~~sh
    git fetch origin main
-   git log origin/main --since=2.weeks --date=format:'%m-%d %H:%M' --format='%h %ad %s' -- verity/protocols/accounting/space/pous   # changes by path
+   git log origin/main --since=2.weeks --date=format:'%m-%d %H:%M' --format='%h %ad %s' -- verity/core/protocols/pous   # changes by path
    git log origin/main --since=1.week --format=%h -- AGENTS.md | wc -l                                        # how often a file changes
    gh pr list --state merged --limit 300 --json number,createdAt,mergedAt,files --jq '
-     .[] | select(any(.files[]; .path | startswith("protocols/")))
+     .[] | select(any(.files[]; .path | startswith("verity/core/protocols/")))
      | [.number, (((.mergedAt|fromdate) - (.createdAt|fromdate)) / 3600 * 10 | floor / 10)] | @tsv'         # hours to merge
    wc -w AGENTS.md ~/.research/notes/kb/LANE-CONTRACT.md                                                      # always-read words
    ~~~

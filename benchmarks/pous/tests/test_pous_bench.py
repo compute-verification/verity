@@ -25,20 +25,21 @@ def test_weight_sets_are_the_frozen_benchmarks():
     assert doc["schema"] == "pous-weight-sets/v1"
     sets = {ws["id"]: ws for ws in doc["weight_sets"]}
     blocks = {i: -(-ws["bytes"] // 65_536) for i, ws in sets.items()}
-    assert blocks == {"qwen2.5-0.5b/linears+head": 15_075, "qwen2.5-7b/layer0+head": 23_744, "llama3.1-8b/layer0+head": 22_688}
+    assert blocks == {"qwen2.5-0.5b/linears+head": 15_075, "qwen2.5-7b/layer0+head": 23_744, "llama3.1-8b/layer0+head": 22_688,
+                      "llama3.1-8b/layers0-8+head": 75_936}
     for ws in sets.values():
         assert ws["bytes"] == sum(o * k * 2 for _, o, k in ws["tensors"])
         assert all(len(s) == 64 for s in ws["checkpoint"]["safetensors_sha256"].values())
-    hardware = {h["id"] for h in json.loads((ROOT / "catalog" / "census" / "hardware.json").read_text())}
+    hardware = {h["id"] for h in json.loads((ROOT / "benchmarks" / "census" / "hardware.json").read_text())}
     assert set(doc["hardware"]) <= hardware
 
 
 def test_harness_registry_and_certificate_gate():
-    pytest.importorskip("verity.protocols.accounting.space.pous")
-    from verity.protocols.accounting.space.pous import schemes
+    pytest.importorskip("verity.core.protocols.pous")
+    from verity.core.protocols.pous import schemes
 
     bench = _bench()
-    assert set(bench.IMPLS) == {"reference", "vllm-gpu", "band-gpu", "p2-v1-gpu", "p2-gpu"}
+    assert set(bench.IMPLS) == {"reference", "vllm-gpu", "band-gpu", "p2-v1-gpu", "p2-v3-gpu", "p2-v3-mc-gpu", "p2-gpu"}
     assert set(bench.VllmGpu.MODELS) <= {ws["id"] for ws in json.loads((BENCH / "weight_sets.json").read_text())["weight_sets"]}
     one = schemes.get()
     gate, gaps = bench.certificate_gate(one, 111, 536_800)

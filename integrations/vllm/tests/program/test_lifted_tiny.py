@@ -32,14 +32,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.primitives.circuits import Program, bind  # noqa: E402
-from verity.primitives.circuits.codec import decode_program, encode_program, program_digest  # noqa: E402
-from verity.primitives.circuits.defs import REGISTRY, PrimitiveDefinition  # noqa: E402
+from verity.ml.circuits import Program, bind  # noqa: E402
+from verity.ml.circuits.codec import decode_program, encode_program, program_digest  # noqa: E402
+from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition  # noqa: E402
 from verity_vllm.program.registry import b1, lifted as L, pad_prims as PP, prims as P, serve3  # noqa: E402
-from verity_vllm.program.registry import serve3_reference as ref  # noqa: E402
+from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
 from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1  # noqa: E402
-from verity.primitives.circuits.types import Array, Record, Tuple, Value  # noqa: E402
+from verity.ml.circuits.types import Array, Record, Tuple, Value  # noqa: E402
 
 I32, BF16, F32 = Value(32), Value(16), Value(32)
 N_EVENTS = D_MAX + 1  # prefill event + D_MAX decode events (the Serve_v2 skeleton; SPEC R3 maps this to Workload_v1's T = cap−1)
@@ -202,7 +202,7 @@ def test_strict_class_is_generated_not_authored_and_originals_untouched():
     assert ce.id == "Lifted[Const32[0xff800000]_v1]_v2" and ce.params == ((L.ENABLE_PARAM, Value(2)),) and REGISTRY[ce.id] is ce
     assert ce.evaluate(1) == 0xFF800000 and ce.evaluate(0) == BOT32 and ce.evaluate(L.enc_bot(1)) == INV32 and ce.evaluate(0b11) == INV32
     # an Input is the Program's boundary, produced by no body: it owns no enable and lifts as before
-    from verity.primitives.circuits.program import input_prim
+    from verity.ml.circuits.program import input_prim
     assert L.lifted_prim(input_prim(32)) is input_prim(33) and not L.has_enable(L.lifted_prim(input_prim(32)))
     # a registered input lifts to a registered input: widening keeps its binding time
     assert L.lifted_prim(input_prim(32, "registration")) is input_prim(33, "registration")
@@ -637,14 +637,14 @@ def test_lsplits_for_candidate_pad04():
     """CANDIDATE PAD-04 / F-pad-11: `LSplitsForSMS<SMS>_v1` — payload agreement with stoch's `SplitsFor_v1` (the verbatim vLLM
     doubling loop) for every `1 ≤ n ≤ 64` at 142 / 132 / 108 SMs; `Active(0)` → ⊥ (no live row, no event); ⊥ → ⊥; INV → INV_6;
     `n > 64` refused by name (structural bound, asserted at build); the table flips stoch named (17, 34, 35, 67.. are beyond 64)."""
-    from verity_vllm.program.registry import topp_split as TS
+    from verity_vllm.program.registry import topp_geometry
     for sms in (142, 132, 108):
         lp, up = L.l_splits_for(sms), L.splits_for_prim(sms)
         assert lp.id == f"LSplitsForSMS{sms}_v1" and up.id == f"SplitsForSMS{sms}_v1" and lp.lifted_from is up
         assert lp.lift_class == "specified" and lp.candidate == "PAD-04" and lp.id in L.specified_ids()
         assert lp.params == (("n_live", Value(L.N_LIVE_BITS + 1)),) and lp.ret == Value(L.SPLITS_BITS + 1)
         for n in range(1, 65):
-            s = TS.splits_for(n, sms)
+            s = topp_geometry.splits_for(n, sms)
             assert lp.evaluate(n) == up.evaluate(n) == s and 1 <= s <= 32 and s & (s - 1) == 0  # Active(n) → 0‖S, bit for bit
             assert s == max(x for x in (1, 2, 4, 8, 16, 32) if x * n <= sms or x == 1)
         assert lp.evaluate(0) == L.enc_bot(L.SPLITS_BITS)  # the specified rule
@@ -666,7 +666,7 @@ def test_lsplits_for_candidate_pad04():
     with pytest.raises(ValueError, match="not a target profile"):
         L.l_splits_for(0)
     # codec: the candidate's ids resolve lazily like the other five
-    from verity.primitives.circuits.codec import _lookup_primitive
+    from verity.ml.circuits.codec import _lookup_primitive
     assert _lookup_primitive(REGISTRY, "LSplitsForSMS142_v1") is L.l_splits_for(142)
     assert _lookup_primitive(REGISTRY, "SplitsForSMS142_v1") is L.splits_for_prim(142)
 
@@ -804,7 +804,7 @@ def test_lifted_width_summary_is_the_true_width_rule_r17_6b():
     assert L.lifted_width_summary([32, 32], w_max_lifted=66)["ok"]  # the parameter is a parameter
     with pytest.raises(ValueError):
         L.lifted_width_summary([0])
-    from verity.primitives.circuits import partition
+    from verity.ml.circuits import partition
     assert getattr(partition, "validate_width", None) is not None  # the ONE validator: lifted_width_admissibility calls it at W_MAX_LIFTED
 
 
@@ -935,8 +935,8 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
     assert g.evaluate(E, *_rand(16, E)) == 0x7FFF and g.oor_payload == 0x7FFF
     # (a) at the Program level: two Programs that differ only in the route VALUE have the same digest -- one object for every route
     fs = L.l_fixed_select(E, 16)
-    from verity.primitives.circuits.defs import composite
-    from verity.primitives.circuits.types import Array as _A
+    from verity.ml.circuits.defs import composite
+    from verity.ml.circuits.types import Array as _A
 
     @composite("FixedSelectFixture", 1, [], lambda S: ((("r", Value(33)), ("z", _A(E, Value(17)))), Value(17)), conformance="protocol-defined")
     def FixedSelectFixture(B, S, r, z):
@@ -957,7 +957,7 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
 def test_stage1_cold_decode_resolves_the_continuation_members_by_id():
     """`LIsEOS<E>_v1` / `LEmitNext[H=h]_v1` (R17-32) and `LFixedSelect<E>x<w>_v1` resolve through the codec's lazy family table -- a Program
     decoded in a fresh registry state (no prior materialisation) finds them by id; the digest round-trips."""
-    from verity.primitives.circuits.codec import _lookup_primitive
+    from verity.ml.circuits.codec import _lookup_primitive
     for fid, want in (("LIsEOS1_v1", L.l_is_eos(1)), ("LIsEOS3_v1", L.l_is_eos(3)), ("LEmitNext[H=1]_v1", L.l_emit_next(1)),
                       ("LEmitNext[H=0]_v1", L.l_emit_next(0)), ("LFixedSelect4x16_v1", L.l_fixed_select(4, 16)), ("LFixedSelect8x32_v1", L.l_fixed_select(8, 32))):
         assert _lookup_primitive(REGISTRY, fid) is want, fid
@@ -977,7 +977,7 @@ def test_lenable_is_total_never_bot_and_a_disabled_parent_wins_whatever_the_loca
             assert le.evaluate(parent, local) == 0b11, (parent, local)
     assert le.evaluate(1, 0b10) == le.evaluate(1, 0b11) == 0b11
     # the codec resolves it by id (a cold decode of a padded Program)
-    from verity.primitives.circuits.codec import _lookup_primitive
+    from verity.ml.circuits.codec import _lookup_primitive
     assert _lookup_primitive(REGISTRY, "LEnable_v1") is le
 
 
@@ -996,7 +996,7 @@ def test_enabled_fixed_select_is_the_a12_slot_combine_member_bot_under_a_disable
     # the same for the plain select (LSelect under a disabled parent is ⊥ whatever it would have selected) and the codec resolves both
     ls = L.lifted_prim(L.l_select(32))
     assert ls.id == "Lifted[LSelect32_v1]_v2" and ls.evaluate(1, 5, 6, 1) == 5 and ls.evaluate(1, 5, 6, 0) == L.enc_bot(32)
-    from verity.primitives.circuits.codec import _lookup_primitive
+    from verity.ml.circuits.codec import _lookup_primitive
     assert _lookup_primitive(REGISTRY, lfs.id) is lfs and _lookup_primitive(REGISTRY, ls.id) is ls
     with pytest.raises(TypeError, match="already a lifted"):
         L.lifted_prim(lfs)
@@ -1020,9 +1020,9 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
     the enable (the author's construction, not the replay's).  Checked: (1) `lift_def(bind(twin))` on the registry path IS the hand lift;
     (2) a decoded specialization of the twin (encode -> decode) lifts to the hand lift too; (3) evaluation: enable 1 -> hand body, enable 0
     -> ⊥ everywhere; (4) a lift with a wrong interface (no enable / wrong ret) is refused by name at bind time; (5) statics must match."""
-    from verity.primitives.circuits.codec import decode_program, encode_program
-    from verity.primitives.circuits.defs import CompositeDefinition
-    from verity.primitives.circuits.refs import coll_concat
+    from verity.ml.circuits.codec import decode_program, encode_program
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.refs import coll_concat
     from verity_vllm.program.registry.prims import I32
 
     def twin_sig(S):
@@ -1068,8 +1068,8 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
     lnode = next(n for n in ldec.body.nodes if getattr(n.fn, "defn", None) is hand)
     assert lnode.fn.bindings == {"N": 3}
     # evaluate the lifted decoded root: its one PARAM is the enable; the decoded root's own `Input33` node (x) is prescribed gate by gate
-    from verity.primitives.circuits.evaluate import evaluate_region
-    from verity.primitives.circuits.layout import resolve
+    from verity.ml.circuits.evaluate import evaluate_region
+    from verity.ml.circuits.layout import resolve
     pd = L.as_program(ldec)
     td = {resolve(pd.circuit.root_scope, pd.input_coll(0).refs[0]): 1}
     x_gates = [g for g in range(pd.gates) if getattr(pd.circuit.gate(g).prim, "family", None) == "Input" and g not in td]
@@ -1098,7 +1098,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
 
 def test_every_lift_of_a_primitive_declares_its_tables():
     """The data guard sees a table only through its primitive's declaration, and a lift runs its base's evaluator."""
-    from verity_catalog.definitions.mufu import MufuEx2Ftz
+    from verity.ml.circuits.ops.mufu import MufuEx2Ftz
     lp = L.lifted_prim(MufuEx2Ftz)
     assert MufuEx2Ftz.tables == (("ex2", "library"),)
     assert L.lifted_prim_v1(MufuEx2Ftz).tables == lp.tables == L.with_ordinary(lp, 1).tables == MufuEx2Ftz.tables

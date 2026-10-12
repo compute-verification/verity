@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "Embedding_v2{V=1100,H=2}": {
+   "and": 36032
+  },
+  "Embedding_v2{V=64,H=16}": {
+   "and": 22784
+  }
+ }
+}

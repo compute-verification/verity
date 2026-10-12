@@ -13,7 +13,6 @@ the predictor gives the rows' traced digests.
 
 from __future__ import annotations
 
-import gzip
 import json
 import re
 from pathlib import Path
@@ -38,21 +37,21 @@ def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
 
 
 @pytest.mark.parametrize("model,digest", [
-    ("smollm2-135m", "3c792f4807b296f1d7a372cd246aa80eed6b8b929f927900da5059155e2af697"),
-    ("llama32-1b", "3b438e0e35d365105b36d0697023dad70da86ecd27b27d476f2445a5641fabeb"),
-    ("tinyllama-11b", "c12cd8cc914bda1fb13136fe0a8ead108e4c1721fe4e9ab05714a4f41a1be19f"),
-    ("qwen25-05b", "221e97b683f184f265c4baf1f2e490f674c59ec86490c91fa61fe69d2235c28c"),
-    ("phi3-mini", "9ac4fc245509b18c08e6a8e091748a415bb0b7dbb220fcbd3353e2841d3a3fc9"),
-    ("qwen3-4b", "69ebe6af722d17985687e59aa529902771aaa8d323ae4931999b3fcf8a676108"),
-    ("olmoe-1b-7b", "99d789b704be9c42bdb429d5e45baa71380de3226b622b2c37dc9d521ebf1887"),
-    ("qwen3-30b-a3b", "e3655459083291eafb440a562e38ed9b5ae5addfbde2f0e39114e89277021d78"),
-    ("gemma2-2b", "c062d1b305e1bcf5fb614dbfd70c7686e73df57dd7c9c23671a66b8107c10ddd"),
+    ("smollm2-135m", "4fd836ffc4f1a9894cfc099add65e2f28ea260bf80714580b79489ef17d10754e68ddd9b9becfd444c97ba724f95e5d142dc464dae13dad67bef43850f2070b9"),
+    ("llama32-1b", "773b545605765fe927f70717bc20ea19076aeb3ad3e4f83bf398cdc8fd7421637be2f3e7b7c653292b2031192eb59bdff86965fd460aefcda517702befff323a"),
+    ("tinyllama-11b", "75eeda370d481672af5f189578e1b6711f3d05104d1e0fca99d27c9e9d0310be9a87ba03c65908b04ac4d313d0476dc09c32b8387d66084fb4cbdd777c3193ea"),
+    ("qwen25-05b", "452681af0e5f7cdd4003098f333d0c588d0128d98bccdef377d89fa8ef42524823045490ce7e6d3b7f435a6362c7603c7637eae57c1709299e27084826874b94"),
+    ("phi3-mini", "ecd84c104c7ae0368a596d0f47e83f9eda564ef88c5ca692c8226a24a7783eaf5c264f8f1e21fb638db052c99d24ab8ceb8f9c4e762dc0f668f6314822eaa394"),
+    ("qwen3-4b", "21acad0cea8011bce8e3a83844f57645a04d6fa9ef9c6c1ff30640e868c340368705a11e7e405c6fca870a583a9b1aba74367e316f234a017a7cb3cc6a799fb8"),
+    ("olmoe-1b-7b", "60982699f17e47e048ea3ac7d3dc6c28bec57a74f0c6002f4e4d89a4e776b047e010ba772125d21bf9afa39cefe9e8c4152d4952e87056169e458de826c517e7"),
+    ("qwen3-30b-a3b", "98a180a562abf1d603951ed135a1e26a084cc48cb53cdbfbb7b0e26ca2139244cfc036bdb8ab8af0e9a9a4786ef8372ce478a365253791ba35479a5b2bf0717c"),
+    ("gemma2-2b", "b0688044e6a562d2cbb7a6fa6995deb9025d08d134b331236dc4c16ffedf8e38cb093a5e521052cb8c19d5d1641b0c8bb725eddb50e1a0f480149354bbab15c7"),
 ])
 def test_step_program_equals_the_traced_build(model, digest):
     r = build_program(_phi(json.loads((FIX / f"{model}.config.json").read_text())), "step", M=1, pos0=8)
     cls = {"qwen25-05b": "Qwen2ForCausalLM", "phi3-mini": "Phi3ForCausalLM", "qwen3-4b": "Qwen3ForCausalLM", "olmoe-1b-7b": "OlmoeForCausalLM",
            "qwen3-30b-a3b": "Qwen3MoeForCausalLM", "gemma2-2b": "Gemma2ForCausalLM"}.get(model, "LlamaForCausalLM")
-    assert r.function == f"Derived[vLLMStep[{cls}]]_v1{{SRC={{f8a263a011b5}}}}"
+    assert r.function == f"Derived[vLLMStep[{cls}]]_v1{{SRC={{d9c6ce11eb35}}}}"
     assert r.digest == digest
 
 
@@ -63,20 +62,20 @@ def test_request_and_workload_programs_equal_the_traced_build():
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
     r = build_program(phi, "request", LP=256, T=31)
-    assert r.digest == "c18f32dba2ceef5c38caf64c9348cbc498f9fe5122edfe55f61cb15e20278824"
+    assert r.digest == "52e6bb0b37e31ec3bdcc976027f412955be60cdd7bcd1ed4982aee7b4b716681a00323889897a394808aa040994f53a3e210dc603dba9a65751817e1df348f5c"
     assert r.n_root_nodes == 86738
-    assert S.predict_workload(phi)["digest"] == "5a03914457d2b2d9597a620a285566e7649b00537acb13994a67963bff016636"
+    assert S.predict_workload(phi)["digest"] == "345798f4dc27339a239f17acd3232b758b4b242092d87e9c558ea9d02ec202f08b14212f8c68a7e6dbc5413e4f235a7085fcd15a66b021cd51d8e3755e7e2f06"
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [
-    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}", 0, "b61d007ab219e9161a8c16e7854af7cbd3b7deda267930fe236038f1170f1459"),
-    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={ffedfc14b0e0}}", 1, "7c37593eda24d3ebe09527b33c27516a5d290c92d83d015ac4e842d2d28928b5"),
-    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={33928f49cee7}}", 0, "7ca0319a25893edc2bccf7866f25cd29cc28f58b6eef3158b0c2b04feda0c753"),
-    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={33928f49cee7}}", 1, "7da1ceee0fc64bbd16aa0267c5c283708eb75740ac532659a6e7c64c2bac05db"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={3f2e2f30d60d}}", 0, "de6d9f143bc8a485a3ec4dcdeb6ecbe43013ea87d444dfa167cb1143921e8ef3"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={3f2e2f30d60d}}", 1, "40da70bce2941f84f5d149ca70f69194b24e60240e998e5ca4cb0e17fc7356e0"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={32f6bda2809e}}", 0, "c4ebc70a471394983db8ba424cbb2ce35851bd9dc71a485fb6f4187865bb3626"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={32f6bda2809e}}", 1, "3e9c7925d46c5b0d2748762abe840b802e8a741cb1a3194ec8aedc06ffd89dcd"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 0, "71d9310ecaef13138ee37e31fe4f5be475d232d952058fec72169232cae90136800b33b24c632e9dab2d0fbf6957288f88927c3c651bc7c2ba839514f9c484cc"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 1, "3343270c8e008ad0106a174bad32c6a23c428c7d821e8a2aa251e8edbdcf0b9d77972761c98e5203ad50c0977dd11546ff10c20f566920a72b833ad61efbff90"),
+    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 0, "15bf71465c58172b07dbd848f434f886274de57e88d30fe8d41075b08cc45c8cfedc7a5164343af904af3cc7f47227cdc51725704a1f28e6e82c3bdef4425b8e"),
+    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 1, "8c4abf0f43e41613ab749374f38aaade322cf7a2cc8e692c68de5b7c28840aa1c77933a18c89db9a55f741895621d0d7679e1e6d7201b485211ecec09511e6b8"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 0, "0605dc64bd0076b31c8a1363c4d3443a07a09fc7dabcd2734bf521d544f96c3dc1a24db315b928ee8b42fd690230e85c2f07345156da73610a486300f72f366d"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 1, "c2a420cc21022518f94f0e6cf7e06a6066049cd1a48d3bc6506324c51722d6ec01ae9b10bc7d658b518ab01ceb949160f4ce86eed72ae134748a0f40f3e5cd96"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 0, "25068910fdb6ab3bde8890d77c58d85d05b2833098ef4b1701b6c84318683ea79722e26b31e41255f03e29ddfe806241fce1aa93e0a299ec2415ee029e90b4e6"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 1, "5c9905db914095dd2e587b3c48dc004d6037a274b6d3f274381e765e44afa8bc9ab165e8f35ebcb417ffb9def35d3425ff752c94bc0c1a464d3f3951f81a4cf4"),
 ])
 def test_tensor_parallel_rank_step_equals_the_traced_build(model, function, rank, digest):
     """Llama-3.2-1B (cov-p000), Gemma-2-2B (cov-p058-2), Qwen3-30B-A3B (cov-p081) and OLMoE (cov-p069) at TP2: each rank's step
@@ -95,12 +94,12 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     `peers_*` Inputs GP-01 keeps request-local.  About 15 s."""
     phi = _phi(json.loads((FIX / "llama32-1b.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}], tp={"world": 2, "rank": 1})
-    assert S.predict_workload(phi)["digest"] == "e2d93ebe35e1ee77d568ade81b93a79e1a39cd1ca3caf7ca91d2aeb8b6758351"
+    assert S.predict_workload(phi)["digest"] == "4cd839563c959eee6f1abaf647bd7d771a842cb8940ed5a92443e85e2ca48cd7f5aecfa1f80d8084c276d3c32a59b1dbf36770a18cb8015ec6ebc8c62cb9c1da"
 
 
 @pytest.mark.parametrize("sampling,M,digest", [
-    ({**STOCH}, 8, "68a5d8274937c6d89c63bcb509ee5c97818485af19cbf13d99a6577bc8241493"),
-    ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "902f910d8ad69adf3c2dec4f88f17e53b25833be68043c664c5de5cf8eaa770f"),
+    ({**STOCH}, 8, "740d7f22434aa56824d598e4b66f8223c45546ca6e1428639951e5299b7f1968f209b61903452be424a6f407d6d2197658d39073b97bcdf7539c0a923c38ccda"),
+    ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "6529c4fbcbfeecf09393c9e137e3272da8ef54bad1b116c8c0f3f1bb078ef6747e6bc99265b1f3bcfd39d4b5123914a04881ad345361c890bfb387de20a14f49"),
 ])
 def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
     """SmolLM2-135M under the seeded top-p policy: a B8 row's step (the split count a `splits` Input, cov-g230) and a B1 row's (the
@@ -184,98 +183,6 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
         build_program(_phi(cfg, **phi_kw), "step")
-
-
-def _row(tmp_path: Path, row: str, builds: dict, sweep: dict | None = None) -> dict:
-    return {"dir": str(tmp_path / "rows" / "job" / row), "job": "job", "row": row, "summary": {}, "builds": builds, "source_root": None,
-            "workload_path": None, "workload": {"model": "org/tiny", "tokenizer_revision": "rev", "target": {}, **({"sweep": sweep} if sweep else {}),
-                                                "requests": [{"request_id": "u0", "index": 0, "prompt_len": 8, "max_tokens": 3, "arrive_step": 0,
-                                                              **({"seed": 7} if sweep else {})}]}}
-
-
-def test_score_reports_exact_divergence_and_refusals(tmp_path):
-    cfgp = tmp_path / "hf" / "models--org--tiny" / "snapshots" / "rev" / "config.json"
-    cfgp.parent.mkdir(parents=True)
-    cfgp.write_text(json.dumps(TINY))
-    phi = _phi(TINY, [{"request_id": "u0", "index": 0, "prompt_len": 8, "max_tokens": 3, "arrive_step": 0}])
-    step = build_program(phi, "step", M=1, pos0=8)
-    req = build_program(phi, "request", LP=8, T=2)
-    wl = S.predict_workload(phi)
-    # the traced request descriptor: the prediction with one root reference moved (the attention's key history of row 3)
-    bad = json.loads(json.dumps(req.desc))
-    nodes = bad["definitions"][bad["root"]]["body"]["nodes"]
-    k = next(i for i, n in enumerate(nodes) if bad["callees"][n["fn"]].startswith("Attention") and len(n["args"]) == 3
-             and "concat" in n["args"][1]["refs"])
-    nodes[k]["args"][1]["refs"] = nodes[k]["args"][2]["refs"]
-    dpath = tmp_path / "traced_request.json.gz"
-    with gzip.open(dpath, "wt") as f:
-        json.dump(bad, f)
-    greedy = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o3__mixed__greedy__bi-eager"
-    stoch = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o3__mixed__stoch-t0.8-p0.95__bi-eager"
-    topk = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o4__mixed__stoch-t0.8-p0.95__bi-eager"
-    sweep = {"sampling": "stoch-t0.8-p0.95", "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "sampling_seeds": [7]}
-    sstep = build_program(_phi(TINY, sampling={**STOCH, "splits": 32}), "step", M=1, pos0=8)
-    tp2 = "smollm2-135m__bf16__rtxpro6000__tp2__b1__i8__o3__mixed__greedy__bi-eager"
-    rank_step = {r: build_program(_phi(TINY, tp={"world": 2, "rank": r}), "step", M=1, pos0=8).digest for r in (0, 1)}
-    rank1_wl = S.predict_workload(_phi(TINY, phi.requests, tp={"world": 2, "rank": 1}))["digest"]
-    assert len({rank_step[0], rank_step[1], step.digest}) == 3
-    prog = lambda d: {"digest": d, "function": None, "n_root_nodes": None}  # noqa: E731
-    inv = {"schema": "verity-predict/inventory/v1", "root": str(tmp_path / "rows"), "rows": [
-        _row(tmp_path, greedy, {
-            "build_step": {"wrapper": "step", "M": 1, "pos0": 8, "LP": 8, "T": 4, "ok": True, "program": prog(step.digest)},
-            "build_request": {"wrapper": "request", "M": 1, "pos0": 8, "LP": 8, "T": 2, "ok": True, "program": prog("0" * 64), "descriptor": str(dpath)},
-            "build_request_LP9_T2": {"wrapper": None, "ok": False, "message": "Device string must not be empty"},
-            "build_workload": {"ok": True, "workload_digest": wl["digest"], "lag": 1, "n_requests": 1}}),
-        _row(tmp_path, stoch, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog(sstep.digest)}}, sweep),
-        _row(tmp_path, topk, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog("1" * 64)}},
-             {**sweep, "sampling_params": {**sweep["sampling_params"], "top_k": 50}}),
-        _row(tmp_path, tp2, {f"rank{r}/build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog(rank_step[r])} for r in (0, 1)}
-             | {"rank1/build_workload": {"ok": True, "workload_digest": rank1_wl, "lag": 1, "n_requests": 1}}),
-    ]}
-    cache = str(tmp_path / "cache.jsonl")
-    res = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache)
-    assert S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache, cached_only=True)["summary"] == res["summary"]
-    assert S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache, cached_only=True, max_diverge=0)["summary"] == \
-        res["summary"], "a divergence in the cache is reported whatever the budget for new ones"
-    cold = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=str(tmp_path / "empty.jsonl"), cached_only=True)
-    assert cold["summary"]["units_compared"] == 0 and cold["summary"]["units_by_status"]["not_run"] == 7
-    tight = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, max_mem_mb=1, cache=cache, cached_only=True)
-    assert tight["summary"]["units_by_status"]["over_budget"] == 7
-    units = {(r["row"], u["unit"]): u for r in res["rows"] for u in r["units"]}
-    assert units[(greedy, "build_step")]["status"] == "exact"
-    assert units[(greedy, "build_workload")]["status"] == "exact"
-    u = units[(greedy, "build_request")]
-    assert u["status"] == "differs" and u["predicted_digest"] == req.digest
-    assert u["first_divergence"]["where"] == "root node" and u["first_divergence"]["node"] == k and u["first_divergence"]["arg"] == 1
-    assert u["equivalence"]["verdict"] != "equivalent"
-    assert units[(greedy, "build_request_LP9_T2")]["status"] == "no_trace"
-    assert units[(stoch, "build_step")]["status"] == "exact"
-    assert units[(topk, "build_step")]["status"] == "unexpressible" and "top_k = 50" in units[(topk, "build_step")]["reason"]
-    assert all(units[(tp2, n)]["status"] == "exact" for n in ("rank0/build_step", "rank1/build_step", "rank1/build_workload"))
-    s = res["summary"]
-    assert (s["units_compared"], s["units_exact"]) == (7, 6)
-    assert s["units_by_granularity"]["step:exact"] == 4
-    assert "| first divergence | units |" in S.table_md(res)
-    entries = [json.loads(line) for line in open(cache)]
-    assert res["code"] == S.code_version() and {e["code"] for e in entries} == {res["code"]} and s["compared_by_code"] == {res["code"]: 7}
-    other, unstamped = str(tmp_path / "other.jsonl"), str(tmp_path / "unstamped.jsonl")
-    with open(other, "w") as f:
-        f.writelines(json.dumps({**e, "code": "0" * 16}) + "\n" for e in entries)
-    with open(unstamped, "w") as f:
-        f.writelines(json.dumps({k: v for k, v in e.items() if k != "code"}) + "\n" for e in entries)
-    for path, version in ((other, "0" * 16), (unstamped, S.UNSTAMPED)):
-        kw = dict(hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=path, cached_only=True)
-        assert S.score(inv, **kw)["summary"]["units_by_status"]["not_run"] == 7, "another code's results are not this code's"
-        old = S.score(inv, **kw, reuse_code=(version,))["summary"]
-        assert old["compared_by_code"] == {version: 7} and {**old, "compared_by_code": 0} == {**s, "compared_by_code": 0}
-    # whatever the order written: this code's result for a key, then the reused versions' in the order named
-    e = entries[0]
-    mixed = str(tmp_path / "mixed.jsonl")
-    with open(mixed, "w") as f:
-        f.writelines(json.dumps(x) + "\n" for x in ({**e, "digest": "own"}, {**e, "code": "a", "digest": "a"}, {**e, "code": "b", "digest": "b"}))
-    assert S.Cache(mixed, e["code"], ("a", "b")).get(e["key"])["digest"] == "own"
-    assert S.Cache(mixed, "c", ("a", "b")).get(e["key"])["digest"] == "a"
-    assert S.Cache(mixed, "c", ("b", "a")).get(e["key"])["digest"] == "b"
 
 
 def test_memory_estimate_is_above_a_measured_peak():

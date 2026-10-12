@@ -37,7 +37,7 @@ STATIC_KEYS = ("H", "NL", "NH", "KVH", "D", "I", "V", "QKV", "GU", "EPS", "ROPE_
 
 #: the KEY SET of `_BATCH_INVARIANT_MATMUL_TUNED_CONFIGS["ada"]` in the pinned vLLM (d9105ea80,
 #: vllm/model_executor/determinism/batch_invariant_configs.py, read on pod cp-ov-easy 2026-09-17): (N, K) -> block_k.  Since R15
-#: (GEMM-ADA-TABLE) all five rows are pinned verbatim in `verity_vllm.program.registry.gemm_targets.ADA_TUNED_GEMM` (re-exported by
+#: (GEMM-ADA-TABLE) all five rows are pinned verbatim in `verity_vllm.program.frontend.gemm_targets.ADA_TUNED_GEMM` (re-exported by
 #: `gen_llama_patterns`); this lane's GEMM shapes hit none of them and take the DEFAULT tiling.
 ADA_TUNED_KEYS: dict[tuple[int, int], int] = {(12288, 2048): 64, (2048, 6144): 128, (4096, 2048): 64, (151936, 2048): 64, (2048, 2048): 64}
 

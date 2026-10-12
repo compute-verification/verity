@@ -64,7 +64,7 @@
 # capped at the held time.  Nothing is refused or stopped on it, and CMD's exit status is gpu-lease's.
 # GPU_LEASE_STARTED overrides the lease's start time, %Y-%m-%dT%H:%M:%SZ (tests).
 #
-# Agent mode: while the node's scheduler (`cluster agent --mode live`, tools/cluster) holds $GPU_LEASE_DIR/agent.lock, it decides
+# Agent mode: while the node's scheduler (`cluster agent --mode live`, infra/cluster) holds $GPU_LEASE_DIR/agent.lock, it decides
 # instead of the rules above.  Every request queues at once as its wait file, which also records --max-min (max=), the memory cap
 # (mem=), --preemptible (preempt=1) and --timed (timed=1); the agent stops what its plan evicts, and grants by writing
 # $GPU_LEASE_DIR/grant.<pid>, the GPU indices comma-separated.  gpu-lease takes exactly those GPUs (polling every

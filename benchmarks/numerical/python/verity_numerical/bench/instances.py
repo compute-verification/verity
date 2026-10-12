@@ -5,7 +5,7 @@ a shared input set each would benchmark on its own inputs -- the quiet non-compa
 prevent.  This module owns the dataset's byte layout, its loader, the build that regenerates it from the recipe in
 :mod:`verity_numerical.bench.instances_gen`, its verification against the pinned digests in ``manifest.json``, and the
 sensitivity statistic of the negatives.  The relation is not restated here: expected words are ``silicon.tc_dot_chain``
-+ ``cast.f32_to_bf16_word`` (``verity_catalog.targets.target.FIRST``), cross-checked against ``hawkeye_close``.
++ ``cast.f32_to_bf16_word`` (``verity.ml.circuits.targets.target.FIRST``), cross-checked against ``hawkeye_close``.
 
 Tiers (``fixtures/bench-instances/v1/``; the byte layout is in that directory's ``README.md``)::
 
@@ -45,9 +45,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_catalog.silicon import silicon as S
-from verity_catalog.silicon.errors import InvalidArtifact
-from verity_catalog.targets.target import FIRST
+from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.ml.circuits.targets.target import FIRST
 
 from . import instances_gen as G
 
@@ -353,15 +353,15 @@ def _git_head() -> str | None:
 
 
 def _source_digests() -> dict[str, str]:
-    import verity_catalog.silicon.cast as cast_mod
+    import verity.ml.circuits.silicon.cast as cast_mod
 
     import verity_numerical.reference.hawkeye_close as hk_mod
 
     files = {
         "verity_numerical/bench/instances.py": Path(__file__),
         "verity_numerical/bench/instances_gen.py": Path(G.__file__),
-        "verity_catalog/silicon/silicon.py": Path(S.__file__),
-        "verity_catalog/silicon/cast.py": Path(cast_mod.__file__),
+        "verity/ml/circuits/silicon/silicon.py": Path(S.__file__),
+        "verity/ml/circuits/silicon/cast.py": Path(cast_mod.__file__),
         "verity_numerical/reference/hawkeye_close.py": Path(hk_mod.__file__),
     }
     return {k: sha256_file(p) for k, p in files.items()}
@@ -561,7 +561,7 @@ def build(out: Path | str = DEFAULT_ROOT, procs: int = 1, seeds_dir: Path | str 
                 "vu-k1536-neg": {"n": len(neg["rows"]), "per_mistake": NEG_PER_MISTAKE, "composition": neg["composition"], "files": files["vu-k1536-neg"]},
             },
             "sensitivity": sens,
-            "hardware": {"runs": [], "note": "filled in by tools/tc_probe --replay-instances (recorded research runs)"},
+            "hardware": {"runs": [], "note": "filled in by benchmarks/tc_probe --replay-instances (recorded research runs)"},
         }
         manifest["generated"]["seconds"] = round(time.time() - t_start, 1)
         _write_json(out / "manifest.json", manifest)
@@ -860,7 +860,7 @@ def _render_stats(root: Path) -> list[str]:
 
 def record_hardware(root: Path | str, run_id: str, probe_results: Path | str, note: str | None = None,
                     build_commit: str | None = None) -> dict:
-    """Append a ``tools/tc_probe --replay-instances`` run to ``manifest.json``'s ``hardware.runs``: the research run id, the
+    """Append a ``benchmarks/tc_probe --replay-instances`` run to ``manifest.json``'s ``hardware.runs``: the research run id, the
     device identity, and the match counts of both tiers as the probe reported them.  Refuses a report whose array digests
     were checked against another manifest than this one's files (``digests.mismatched`` non-empty) and a report from
     a different dataset.  ``build_commit`` fills ``generated.git_head`` when the build ran from a research source archive
@@ -887,7 +887,7 @@ def record_hardware(root: Path | str, run_id: str, probe_results: Path | str, no
     tu, vu = rep["tu-k16"], rep["vu-k1536"]
     entry = {
         "run_id": run_id,
-        "tool": "tools/tc_probe/tc_probe.py --replay-instances",
+        "tool": "benchmarks/tc_probe/tc_probe.py --replay-instances",
         "device": results["identity"],
         "layout_check": results.get("layout_check"),
         "arrays_digest_checked": rep["digests"]["checked"],
@@ -905,7 +905,7 @@ def record_hardware(root: Path | str, run_id: str, probe_results: Path | str, no
     manifest["hardware"]["note"] = (
         "sm_89 (RTX 4090, Ada) replay of every tu-k16 transition and every vu-k1536 chain, hardware accumulators carried; "
         "Ada evidence for this dataset.  Not an sm_80 confirmation of these instances: the A100 measurement of the same "
-        "instruction (mma.sync.m16n8k16 bf16) matched sm_89 word for word on 25.7M elements (tools/tc_probe, WP1), which "
+        "instruction (mma.sync.m16n8k16 bf16) matched sm_89 word for word on 25.7M elements (benchmarks/tc_probe, WP1), which "
         "is the evidence that the two architectures agree on the transition; this dataset was replayed on sm_89 only."
     )
     _write_json(root / "manifest.json", manifest)

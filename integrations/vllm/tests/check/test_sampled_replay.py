@@ -1630,8 +1630,8 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
     """[revb M-0461] the evaluator provenance a record carries names the total family (`silicon_total.TOTAL_FAMILY_VERSION` /
     `HOPPER_WGMMA_FAMILY_VERSION`, restated by `registry.tc_total`) of the k16 step it replays through, so two Definitions of one
     name with different non-finite content are told apart on the record itself.  The strings are literals (EVALUATORS must import
-    without verity.primitives.circuits); this test holds them equal to the constants the step is evaluated with."""
-    from verity_catalog.silicon import total as TC   # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
+    without verity.ml.circuits); this test holds them equal to the constants the step is evaluated with."""
+    from verity.ml.circuits.silicon import total as TC   # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
 
     ampere = f"registry.tc_total {TC.AMPERE_BF16_DOT16_TOTAL.name} total family v{TC.TOTAL_FAMILY_VERSION}"
     hopper = f"registry.tc_total {TC.HOPPER_BF16_WGMMA_K16.name} family v{TC.HOPPER_WGMMA_FAMILY_VERSION}"
@@ -1646,10 +1646,10 @@ def test_moe_evaluators_equal_the_registered_definitions():
     """[MAN-06f v3 unit 2] the numpy / scalar-primitive evaluators of the MoE families are the registered `verity_vllm.program.registry.moe`
     Definitions (the bodies R13 moe_kernel_xcheck checked against the real kernels): bit-equal to the reference evaluator on random
     words -- router (renormalize False / True, a tie), sum, up and down expert GEMMs (the gather by the committed expert id)."""
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.program import Program
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.program import Program
     from verity_vllm.program.registry import moe as R
-    from verity_vllm.program.registry.serve3_reference import materialize
+    from verity_vllm.program.kernels.serve3_reference import materialize
 
     def ref(fn, inputs):
         P = Program(fn)

@@ -130,7 +130,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     """[COORD M-0169 on M-0571 (3) / M-0579 (4)] The top-p split geometry as a WORKLOAD-level derived value, checked per engine step.
 
     vLLM picks the split count of `_apply_topp_split` on the HOST per sampler launch, S = splits_for(sampler batch, num_SMs)
-    (`verity_vllm.program.registry.topp_split.splits_for`, the doubling loop) -- no kernel computes it, so the fold has no SplitsFor instance:
+    (`verity_vllm.program.registry.topp_geometry.splits_for`, the doubling loop) -- no kernel computes it, so the fold has no SplitsFor instance:
     only the launch's S on every stochastic top-p TokenSelect of that engine step.  The sampler batch at engine step t is |live(t)|,
     the requests with a logits row at t -- the declared chronology AND the verified EOS stops that G6 establishes above -- and num_SMs
     is the Program's declared target constant (`sampler_geometry.num_sms`, else `applicability.components.num_sms`).  Rule per engine
@@ -144,8 +144,8 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     allowed to follow the inflated batch), a top-p select on a step the state schedules nobody at is named, a scheduled sampling step
     without a top-p select is named, and a step whose state is unestablished fails closed.  The live->S transitions are reported with
     their causes (`transitions`).  Without `scheduled` the check reads the observed logits rows as before (R16 form)."""
-    from verity_vllm.program.registry.sampling import SHARED_GREEDY
-    from verity_vllm.program.registry.topp_split import splits_for
+    from verity_vllm.program.registry.sampling_vocab import SHARED_GREEDY
+    from verity_vllm.program.registry.topp_geometry import splits_for
     from verity_vllm.program.sampling_event import family_of
     topp = (_TOPP_FAMILY, SHARED_GREEDY[_TOPP_FAMILY].id)   # either `sampler_construction`
     per_step: dict[int | None, set[int | None]] = collections.defaultdict(set)

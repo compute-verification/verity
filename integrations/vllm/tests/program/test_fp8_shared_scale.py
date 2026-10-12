@@ -12,12 +12,13 @@ import types
 
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.cut import call_scope
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.layout import resolve
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.cut import call_scope
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.layout import resolve
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity_vllm.program.registry import fp8
+from verity_vllm.program.registry import fp8_vocab
 from verity_vllm.query import word as W
 
 SHAPES = [(256, 256), (384, 128), (128, 512)]
@@ -111,7 +112,7 @@ def test_new_ids_carry_no_version_in_their_names():
     for d in (fp8.ScaledMmFp8BlockSharedScale, fp8.ScaledMmFp8BlockSharedScaleTile, fp8.ScaledMmFp8BlockCoordinateGivenScale):
         name = d.id.rsplit("_v", 1)[0]
         assert d.id == f"{name}_v1" and not re.search(r"[Vv]\d", name) and name.startswith("ScaledMmFp8Block")
-    assert fp8.SHARED_SCALE == {"ScaledMmFp8Block_v1": fp8.ScaledMmFp8BlockSharedScale}
+    assert fp8_vocab.SHARED_SCALE == {"ScaledMmFp8Block_v1": fp8.ScaledMmFp8BlockSharedScale}
 
 
 def test_the_knob_defaults_to_shared_per_block_and_is_omitted_when_unset():

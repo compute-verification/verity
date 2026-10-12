@@ -8,7 +8,7 @@ import os
 import numpy as np
 import pytest
 
-from verity_catalog.definitions import mufu
+from verity.ml.circuits.ops import mufu
 from verity_vllm.program.kernels import fa2_model as FA
 from verity_vllm.program.kernels import fa2_relation, rms_relation
 from verity_vllm.program.kernels import rms_triton_model as RM
@@ -43,7 +43,7 @@ def test_a_table_that_is_not_the_pinned_one_does_not_load(monkeypatch):
     monkeypatch.setitem(rms_relation._TABLES, rms_relation.tables_dir("cuda"), RM.RmsTables(z, z, {"sqrt": other, "rcp": other, "rsq": other}, z))
     with pytest.raises(ValueError, match="pinned"):
         rms_relation.tables("cuda")
-    monkeypatch.setattr(mufu, "MUFU_TANH_TABLE_MANIFEST_SHA256", "0" * 64)
+    monkeypatch.setattr(mufu, "MUFU_TANH_TABLE_MANIFEST_SHA512", "0" * 128)
     mufu.mufu_tanh_shards.cache_clear()
     with pytest.raises(P.MufuTanhUnmeasured, match="pinned"):
         P.MufuTanh.evaluate(TANH_TABLE_WORD)
@@ -51,7 +51,7 @@ def test_a_table_that_is_not_the_pinned_one_does_not_load(monkeypatch):
 
 def test_the_decoded_tables_are_core_library_tables():
     """Each measured MUFU table, decoded as raw little-endian u32 words, has the SHA-256 and SHA-512 core's library lists."""
-    from verity.primitives.circuits import library as L
+    from verity.ml.circuits import library as L
 
     t, fa2 = rms_relation.tables("cuda"), fa2_relation.tables()
     for name in ("rsq", "sqrt", "rcp", "ex2"):

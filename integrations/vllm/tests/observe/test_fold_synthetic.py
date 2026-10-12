@@ -19,11 +19,11 @@ from verity_vllm.observe.fold.fold import FoldError, fold, instance_nodes
 from verity_vllm.observe.fold.memory import MemoryStats, Unresolved
 from verity_vllm.observe.fold.patterns.norms import eps_input
 from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Supplied, Transparent
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.refs import Affine, Explicit, concat
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.refs import Affine, Explicit, concat
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import value_inputs as VI
-from verity.primitives.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, Record, Value
 
 # ---------------------------------------------------------------------------------------------------------
 # toy configuration
@@ -482,7 +482,7 @@ def test_registered_values_are_inputs_of_the_program(memory):
     Definitions that take them as inputs; the Program holds neither as a constant, and each request has a (here empty) run parameter."""
     import numpy as np
 
-    from verity.primitives.circuits.constants import REGISTRATION, RUN, inputs, program_data
+    from verity.ml.circuits.constants import REGISTRATION, RUN, inputs, program_data
     from verity_vllm.program.registry import prims as P
 
     r = fold(toy_log(), toy_profile(registered_values=True), strict=True)

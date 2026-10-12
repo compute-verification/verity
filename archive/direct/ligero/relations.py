@@ -1,6 +1,6 @@
 """The relations the B-Ligero chain prover can be instantiated for, by ``--relation`` name (lane b-hopper).
 
-A relation is a tensor-core pipeline (``verity_catalog.silicon.models``: groups, adder width, floor, operand format) proved as a
+A relation is a tensor-core pipeline (``verity.ml.circuits.silicon.models``: groups, adder width, floor, operand format) proved as a
 chain of transition units: the gadget system compiled from ``Params.from_model(model)`` (the BF16 unit of ``unit.py``
 or the FP8 unit of ``fp8/relation.py`` -- ONE code path per operand format, parametrised by the model), its hint
 generator, the verifier's public decode, and the statement's word widths (``protocol.RelationHooks``; torch is imported only when a runner needs it).  ``relchain.py``
@@ -31,9 +31,9 @@ from dataclasses import dataclass, replace
 from typing import Callable
 
 import numpy as np
-from verity_catalog.silicon.cast import f32_to_bf16_word
-from verity_catalog.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, GroupSum
-from verity_catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
+from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+from verity.ml.circuits.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, GroupSum
+from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
 from verity_numerical.bench import contract
 from verity_numerical.checker.params import Params
 

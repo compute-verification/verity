@@ -99,19 +99,19 @@ def word_record(r: dict[str, Any], *, strict: bool, max_gates: str | None = None
             "max_gates": word_query.gate_limits(max_gates)}
 
 
-def program_sha512(program_dir: str, res: dict[str, Any]) -> str | None:
-    """The Program's SHA-512 (`verity.primitives.circuits.partition_object.program_sha512`): the Build's record (`result.json` program.sha512), else
+def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None:
+    """The Program's digest (`verity.ml.circuits.codec.program_digest`): the Build's record (`result.json` program.digest), else
     recomputed from its `descriptor.json.gz`; None when the Build has neither."""
-    s = (res.get("program") or {}).get("sha512")
+    s = (res.get("program") or {}).get("digest")
     if s:
         return s
     p = os.path.join(program_dir, "descriptor.json.gz")
     if not os.path.exists(p):
         return None
     import gzip
-    from verity.primitives.circuits.partition_object import program_sha512 as sha512_of
+    from verity.ml.circuits.codec import program_digest
     with gzip.open(p, "rt") as f:
-        return sha512_of(json.load(f))
+        return program_digest(json.load(f))
 
 
 def cross_call_check(program_dir: str, *, strict: bool = True, log=None) -> dict[str, Any]:
@@ -135,7 +135,7 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
     r = request_manifest(P, corr, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, rank=rank, ranks=ranks,
                          profile=profile, return_slots=return_slots, norm_scales=NS.POLICY if norm_scales else None,
                          taps=tuple(TAPS[t] for t in taps) + DEFAULT_TAPS, query=query,
-                         program_sha512=program_sha512(program_dir, res) if query == Q_WORD_ID else None)
+                         program_digest=recorded_program_digest(program_dir, res) if query == Q_WORD_ID else None)
     if word and word != "off":
         sp = SP.policy_of(r.manifest)
         acquired = {**(NS.TAP_WORDS if norm_scales else {}), **{f: w for t in taps for f, w in TAPS[t].tap_words.items()}, **(SP.TAP_WORDS if sp else {})}

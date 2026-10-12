@@ -66,7 +66,7 @@ Ligero parameters and Fiat-Shamir structure, and changes the field.
 6. **Ligero opening** (`k = 4096, n = 16384, t = 192`, the CPU crate's parameters): `w = Σ r^i X_i` (proximity row),
    the `2k-1` coefficients of `q(Z) = Σ_i a_i(Z) U_i(Z)`, 192 distinct columns with SHA-256 paths.  Radix-2 NTT over
    the `2^27`-adic BabyBear roots (`ligero.ntt`, row-batched on the device); Merkle leaves/nodes by
-   `kernels/hash_gpu` (SHA-256 CUDA), leaf = the column's u32 LE, node = SHA-256(left||right).
+   `verity/ml/kernels/hash_gpu` (SHA-256 CUDA), leaf = the column's u32 LE, node = SHA-256(left||right).
 
 ## 4. Transcript
 

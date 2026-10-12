@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
-from verity.primitives.commitments.identity import Digest, JSONValue, identity_digest
+from verity.ml.commitments.identity import Digest, JSONValue, identity_digest
 from verity.errors import InvalidArtifact
 
 GATE_SET_IDENTITY_TAG = "veritor/gate-set/v1"

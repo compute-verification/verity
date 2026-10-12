@@ -10,7 +10,7 @@ words per lane, little-endian), the 8 capacity lanes come from the carried rows 
 (213 S-boxes x 4 product rows: x^2, x^3, x^4, x^7; the linear layers are affine, no rows), the digest is the first 8 rate
 lanes of the output, the carry is ``output capacity - IV``.
 
-Native (committer): :func:`archive.direct.ligero.poseidon2.hash_rows_np` == ``verity.primitives.commitments.poseidon2_babybear.hash_row``
+Native (committer): :func:`archive.direct.ligero.poseidon2.hash_rows_np` == ``verity.ml.commitments.poseidon2_babybear.hash_row``
 row by row.  Chain witness: :func:`sponge_states` (torch, host or device, all VUs in lockstep).  Device hook:
 :class:`Poseidon2Witness` writes the 1704 S-box rows per unit with the state in registers (``LIGERO_DEVICE_SPONGE=0`` keeps
 the fused program path).
@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 import numpy as np
-from verity.primitives.commitments.rowleaf import SCHEMA_ROW, row_leaf_value
+from verity.ml.commitments.rowleaf import SCHEMA_ROW, row_leaf_value
 
 from .. import poseidon2 as h2
 from ..compile import Expr, LigeroCtx, P, Quadratic

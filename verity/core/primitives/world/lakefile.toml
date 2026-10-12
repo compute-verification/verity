@@ -1,0 +1,12 @@
+# The outside world as a core device or challenger reaches it: the verifier's coins, a monotonic clock, a timer, byte
+# streams, and an LMS signer's leaf state. A device is a pure `step` over events; its driver runs it over a `World`.
+# No dependencies.
+name = "core_world"
+defaultTargets = ["World"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[lean_lib]]
+name = "World"

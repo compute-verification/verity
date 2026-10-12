@@ -14,6 +14,7 @@ view and the Match's and the Commit's lookups, each in a fresh interpreter. They
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import os
 import subprocess
@@ -23,7 +24,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from verity.primitives.circuits.codec import canonical_json, encode_program, program_digest
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
@@ -81,7 +82,7 @@ def _decode_cold(descriptor: Path) -> int:
     """The gates of `descriptor` decoded in a fresh interpreter through the Match's registry (`program_compare._registry`, its own
     module list), as the Build's next stage reads the workload Program."""
     code = ("import gzip, json, sys\n"
-            "from verity.primitives.circuits.codec import decode_program\n"
+            "from verity.ml.circuits.codec import decode_program\n"
             "from verity_vllm.check.match.program_compare import _registry\n"
             "print(decode_program(json.load(gzip.open(sys.argv[1])), _registry()).gates)\n")
     p = subprocess.run([sys.executable, "-c", code, str(descriptor)], cwd=VLLM_DIR, capture_output=True, text=True)
@@ -108,7 +109,21 @@ def _build_101(tmp_path) -> Path:
     from tests.regression import store_io
     if os.environ.get("VERITY_SKIP_STORE") == "1" or not store_io.reachable():
         pytest.skip("the evidence store is not reachable here")
-    return store_io.fetch(BUILD_101, to=tmp_path / "build")
+    build = store_io.fetch(BUILD_101, to=tmp_path / "build")
+    _rekey_sha512(build / "build_request")
+    return build
+
+
+def _rekey_sha512(d: Path) -> None:
+    """#101's Build recorded its Program digest under SHA-256, before the identities moved to SHA-512. The record must be the SHA-256
+    digest of the descriptor the Build wrote; each file of the request dir then carries that same descriptor's SHA-512 digest in its
+    place, so nothing but the digest changes."""
+    desc = json.load(gzip.open(d / "descriptor.json.gz"))
+    old = hashlib.sha256(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
+    assert json.load(open(d / "result.json"))["program"]["digest"] == old
+    new = program_digest(desc)
+    for p in d.glob("*.json"):
+        p.write_text(p.read_text().replace(old, new))
 
 
 def _run(code: str, *args: str) -> subprocess.CompletedProcess:
@@ -169,11 +184,11 @@ def test_every_consumers_registry_holds_every_registered_definition():
     want = _run("from verity_vllm.program.registry.catalog import load\nprint(len(load()[0].defs))")
     assert want.returncode == 0, want.stderr[-2000:]
     n = int(want.stdout.split()[-1])
-    for setup in ("import verity_vllm.pipeline.global_program as m; from verity.primitives.circuits.defs import REGISTRY as R",
+    for setup in ("import verity_vllm.pipeline.global_program as m; from verity.ml.circuits.defs import REGISTRY as R",
                   "from verity_vllm.check.match.program_compare import _registry; R = _registry()",
                   "from verity_vllm.query.program_view import _registry; R = _registry()[0]",
                   "from verity_vllm.query import word as W; W.specialization('GumbelTopPTokenSelect_v2', {'V': 16, 'S': 4}); "
-                  "from verity.primitives.circuits.defs import REGISTRY as R"):
+                  "from verity.ml.circuits.defs import REGISTRY as R"):
         p = _run(setup + "\nfor k in ('GumbelTopPTokenSelect_v2', 'TopPMask_v2', 'TopPKeepWord_v1', 'NvLogf_v1', 'TopPNumkeep_v1'):\n"
                  "    assert k in R.defs, k\nprint(len(R.defs))")
         assert p.returncode == 0, (setup, p.stderr[-2000:])

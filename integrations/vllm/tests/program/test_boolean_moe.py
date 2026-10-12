@@ -15,34 +15,35 @@ import json
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits import partition_object as PO
-from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.primitives.circuits.refs import array_of, tuple_of
-from verity.primitives.circuits.types import Array, Tuple
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import ZERO
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.ml.circuits.refs import array_of, tuple_of
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import ZERO
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.registry import boolean_moe as BM
 from verity_vllm.program.registry import moe as M
+from verity_vllm.program.kernels import moe_twins
 from verity_vllm.program.registry.prims import F32, I32
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "MoeSumCoordinate_v2{TOPK=8}": (5222, 8395, 764, "6b71d820f6508d24d85de35f383ab531d9efe382a16ce28650cf649041cdb26e"),
-    "MoeSum_v2{TOPK=8,H=8}": (41776, 67160, 6112, "9ba2b3bb9d5faad5be0299738869c260df30577c2e6245364250ea81af55f02f"),
-    "NvExpf_v2": (11372, 21804, 880, "83b491c59b5f94f2d54d2361ba490041c994c9b0bb7964262a9526f6275aaeb8"),
+    "MoeSumCoordinate_v2{TOPK=8}": (5222, 8395, 764, "afe7da5c3245a9ec9d6631f1b9b6b686f2c83af71edd52fd8e0c35cd2dee4af2702d65488815ed365213797fb33d77e830fe82d929c5ef3417e60cd05fc59a7d"),
+    "MoeSum_v2{TOPK=8,H=8}": (41776, 67160, 6112, "4c068e14ab23ebb919f4090677ab7cd17c3935c82fe382e6f8cd1ad24bff1210ebffabe282250d4adbda4e23521fa6759ef72a6b539bd49bf4967e6e38f4a699"),
+    "NvExpf_v2": (11372, 21804, 880, "a91ca00bbe5e644fd206e1be3fe064234dc439382fb2201d823f0c8568646e186262ad31cd26a6253072854294694606fa977c8005650aaf938b23a50ebe16f7"),
     "MoeRouterTopKOrdered_v2{E=8,TOPK=2,VPT=4}": (126243, 239434, 10631,
-                                                  "b85ffb422ab659512bc2a9fe8078659d8154ae30f694fd33064142fbf66fbddd"),
-    "MoeRouterSigmoidScore_v2": (30839, 58793, 2452, "9802429379b926dcd20f692897ab08c824d2fbb50dee4696ce79b413d78113ff"),
+                                                  "285955047f4821f8c5f751d032ec0bafcb8b1621eaf34a635486e7ac65588ad45d9811acfc985d00bbd5bffcc819e11ac40a0e1ee714c99e41fb5b0d0b9adcc7"),
+    "MoeRouterSigmoidScore_v2": (30839, 58793, 2452, "511c827402ceb909aaf546f15ab00ac31b6712e5955806ead1ce12d1cc1a5d35755bbddd37d95aa01ad8d90ab5b23bf0ed07c3076c7cd92c5c4fad5bd89d7456"),
     "MoeRouterSigmoidBias_v2{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}": (258083, 492361, 20884,
-                                                                     "8eed9bd78d3b13ed68ba80dd27b95b0dfee1bb50d94addf8550925035e4c06ae"),
+                                                                     "b96888197c14bc72fe4a4f6c5a19ae0b11b3ed1247024b175b759a35227b8d149665193205f1db6e309033793c20e42d19a24e74ff6629c046a9d86058407024"),
     "MoeRouterSigmoidBias_v2{E=8,TOPK=2,SCALE=2.5,KERNEL='warp'}": (259626, 494985, 21130,
-                                                                    "4a2e29c0dd16b1386d8f58a40d853977bae7051a0243b0587d85cd5f7fb3b38c"),
+                                                                    "27ac80523ef558eb7d6bb3d98e86fcdf0345e959eca86586de7a3dc7fd478b57bb9fef175ad1b826c88e125c587efb27e62e3c971cd997b20ba6f9fe8b436750"),
 }
 TARGETS = [bind(BM.MoeSumCoordinate, TOPK=8), bind(BM.MoeSum, TOPK=8, H=8), bind(BM.NvExpf), bind(BM.MoeRouterSigmoidScore),
            pytest.param(bind(BM.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4), marks=pytest.mark.slow),
@@ -283,7 +284,7 @@ def _score_words(rng, n: int) -> tuple[np.ndarray, np.ndarray]:
                         rng.uniform(-40, 40, n).astype(np.float32).view(np.uint32), rng.uniform(-1.3, 1.3, n).astype(np.float32).view(np.uint32)])
     b = np.where(rng.integers(0, 4, len(x)) == 0, rng.integers(0, 1 << 32, len(x), dtype=np.uint64).astype(np.uint32),
                  rng.uniform(-1, 1, len(x)).astype(np.float32).view(np.uint32))
-    b[::37] = [M.nv_sigmoid_bits(int(w)) ^ 0x80000000 for w in x[::37]]
+    b[::37] = [moe_twins.nv_sigmoid_bits(int(w)) ^ 0x80000000 for w in x[::37]]
     return x, b
 
 

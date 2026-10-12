@@ -7,10 +7,6 @@ dependencies = [
     "research",
     "verity",
     "numpy>=1.26",
-    "blake3>=1.0",
-    "verity-catalog",
-    "verity-experimental",
-    "verity-kernels",
 ]
 
 [project.scripts]
@@ -42,12 +38,21 @@ markers = [
     "regression: R19 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
     "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
     "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
-    "rebuild: recomputes from a row's Programs (a manifest rebuild, a component decode); skipped unless VERITY_REGRESSION_REBUILD=1, as after each train on main (tools/check/post_train.py)",
+    "rebuild: recomputes from a row's Programs (a manifest rebuild, a component decode); skipped unless VERITY_REGRESSION_REBUILD=1, as after each train on main (tools/verity/check/post_train.py)",
 ]
 
 [tool.verity.tests]
-# Test-only: tests/pipeline checks the fixtures this package registers; tests/program/test_fp8_moe.py replays the Hopper e4m3
-# k32 step's pinned vectors through the block-scaled GEMMs.
-inputs = ["fixtures/artifacts.json", ".gitignore", "catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json",
-          "catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k32.json"]
+# In place of its dependencies' directories (`inputs_only`): `verity` whole, since the code identity (`source_identity.code_identity`,
+# the hot Commit worker's key, which tests/pipeline computes over this tree) hashes every file of it; of `research`, what the
+# package imports (`research.store.tool`, `research.telemetry.source_identity`) and the store CLI that `store_io` starts for a
+# fetch, and the run fixture tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
+# this package registers; tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
+# tests/program/test_lowering.py imports `verity_sp1.proofs`.
+inputs_only = true
+inputs = ["verity", "verity/README.md", "fixtures/artifacts.json", ".gitignore", "archive/sp1/python/verity_sp1",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
+          "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
+          "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
+          "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
+          "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2"]
 parallel = true

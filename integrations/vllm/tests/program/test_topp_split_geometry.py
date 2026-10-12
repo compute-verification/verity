@@ -23,6 +23,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.program.registry import topp_split as TS
+from verity_vllm.program.registry import topp_geometry
 
 f32 = np.float32
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -141,10 +142,10 @@ def test_drain_crosses_every_split_boundary_of_the_devices_sm_count(num_sm, adde
     from verity_vllm.pipeline.topp_split_probe import DRAIN_BATCHES, drain_batches
     bs = drain_batches(num_sm)
     assert list(bs) == sorted(bs, reverse=True) and set(bs) - set(DRAIN_BATCHES) == added
-    for n in range(1, TS.SPLIT_MAX_BATCH):
-        if TS.splits_for(n, num_sm) != TS.splits_for(n + 1, num_sm):
+    for n in range(1, topp_geometry.SPLIT_MAX_BATCH):
+        if topp_geometry.splits_for(n, num_sm) != topp_geometry.splits_for(n + 1, num_sm):
             assert {n, n + 1} <= set(bs), (num_sm, n)
-    assert {TS.splits_for(b, num_sm) for b in bs} == {TS.splits_for(n, num_sm) for n in range(1, TS.SPLIT_MAX_BATCH + 1)}
+    assert {topp_geometry.splits_for(b, num_sm) for b in bs} == {topp_geometry.splits_for(n, num_sm) for n in range(1, topp_geometry.SPLIT_MAX_BATCH + 1)}
 
 
 def test_multi_block_slice_stats_are_fma_accumulated():

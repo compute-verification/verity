@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from verity.primitives.circuits.refs import Coll
+from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
@@ -102,7 +102,7 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
     b_scales = Ws.T ([K/G, cdiv(N, G)] view of f32 Ws [cdiv(N, G), K/G]: N may end mid-block, `fp8.weight_blocks`), bias None)` ->
     `scaled_mm_fp8_block{K,N,G}` per token row (the active target's `fp8_scale_construction`: ScaledMmFp8BlockSharedScale_v1 by
     default, ScaledMmFp8Block_v1 per-coordinate; the version 3 forms over the target's step where it is not Hopper's,
-    `registry.targets.fp8_block_dot`); `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
+    `frontend.targets.fp8_block_dot`); `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
     values `PerTokenGroupFp8Quant[vllm]` computed.  Binds the BLOCK-scaled shapes only: a per-tensor / per-token scaled_mm (scales [M,1] /
     [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8, R14 QZ) and is refused here, named.  A target whose GEMM record
     has no blockwise step is refused: `_C.cutlass_scaled_mm` runs that target's own blockwise kernel under the same op and kernel class."""
@@ -122,7 +122,7 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         return _C_op("cutlass_scaled_mm")
 
     def applies(self, node, ctx):
-        from verity_vllm.program.registry import targets as T
+        from verity_vllm.program.frontend import targets as T
         try:
             T.fp8_block_dot(active_target_profile())
         except T.UnregisteredTarget as e:
@@ -175,7 +175,7 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         srows, _ = rows_of(ctx.coll(a_s))
         if len(rows) != len(srows):
             refuse("shape", node, ctx.module_path(node), f"a has {len(rows)} rows but a_scales {len(srows)}")
-        from verity_vllm.program.registry import targets as T
+        from verity_vllm.program.frontend import targets as T
         tp = active_target_profile()
         scale = tp.effective_fp8_scale_construction()
         dot = T.fp8_block_dot(tp)

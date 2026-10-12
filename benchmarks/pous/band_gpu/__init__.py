@@ -4,5 +4,5 @@
 - `codec.py`, `dense.py`: the GPU twins (`dense.encode`, `dense.decode_segments`, `dense.decode_blocks`) and the kernels'
   dispatch switches; moved from the vLLM tree's `engine/pous`, with no vLLM dependency.
 - `harness.py`: encode, `C` resident, the synthetic decode loop, the timed audits, the step floor.
-- `live.py`: the verifier process of the timed audit (the responder's wire client and `verity.protocols.accounting.space.pous.protocol.Verifier`).
+- `memory_challenger.py`: the memory challenger process of the timed audit (the responder's wire client and `verity.core.protocols.pous.protocol.TimedAudit`).
 """

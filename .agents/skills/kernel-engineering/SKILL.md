@@ -65,12 +65,12 @@ If it was tried and dropped, your hypothesis says what's different this time, or
 
 ## Where the code goes
 
-- **Exact semantics:** `verity_catalog.silicon`. A newly captured step lands as a model with a sampled fixture and an
-  `instructions` entry (`tools/tc_probe`, `tools/tc_probe_fp4`). A kernel directory never defines a second one.
-- **The scheme and its verifier:** `verity/protocols/accounting/work/pouw` (`verity.protocols.accounting.work.pouw`, stdlib only; its `PROTOCOL.md`).
+- **Exact semantics:** `verity.ml.circuits.silicon`. A newly captured step lands as a model with a sampled fixture and an
+  `instructions` entry (`benchmarks/tc_probe`, `benchmarks/tc_probe_fp4`). A kernel directory never defines a second one.
+- **The scheme and its verifier:** `verity/core/protocols/pouw` (`verity.core.protocols.pouw`, stdlib only; its `PROTOCOL.md`).
 - **The kernel:** a directory under `benchmarks/pouw/`, like GPU 1's `pearl_c_sm120/` on #540: `run.py` (`Dev`,
   `Pipeline`), `fixture.py`, `build.sh`, its sources, and its harness arm against `arm.py`'s contract. Where serving
-  kernels finally live is Daniel's call; the loader keys on digests, so a later move is cheap.
+  kernels finally live is compute-accounting's call; the loader keys on digests, so a later move is cheap.
 - **The vLLM executor:** `integrations/vllm` (`verity_vllm/linear/impl/` once #567's migration reaches step 4).
 - **A new circuit** (a Definition, a subcircuit template) passes `circuit-check` (`AGENTS.md` "Circuits").
 
@@ -106,7 +106,7 @@ Stop at the lowest tier that decides the attempt. Only a candidate that beats it
 
 | Tier | Runs on | Establishes | How |
 |---|---|---|---|
-| 1 conformance | CPU | the build; the SASS gate on each binary; no spills; the twin against `verity_catalog.silicon` on small tiles; the executor's step order on `RecordingDev` | the package's suite (`uv run tools/check/suites.py benchmarks/pouw`); `python benchmarks/pouw/harness/sass_gate.py K.cubin --json gate.json` |
+| 1 conformance | CPU | the build; the SASS gate on each binary; no spills; the twin against `verity.ml.circuits.silicon` on small tiles; the executor's step order on `RecordingDev` | the package's suite (`uv run tools/verity/check/suites.py benchmarks/pouw`); `python benchmarks/pouw/harness/sass_gate.py K.cubin --json gate.json` |
 | 2a screen | one leased GPU, untimed | the device gates at the served shapes; a poisoned transcript that verifies and a no-write control that's rejected; a diagnostic interleaved time; the time split; ncu, compute-sanitizer, knob sweeps | `research run ... -- gpu-lease 1 --wait -- ...`, or fill chunks of at most 8 minutes |
 | 2b timed | the whole node, locked-2100 | the measured panel row | `bench.py` under `research run --no-sampler` and `gpu-lease 8 --wait --timed`, then `verify.py --tier 2b` after the lease, in the same run |
 | 3 served | vLLM on the card | the served arms, the time split, the verify job, the served row | [Hooking a kernel into vLLM](#hooking-a-kernel-into-vllm) |
@@ -238,7 +238,7 @@ nobody.
 - **One owner per thing.** A kernel directory, the hashing module, the harness, the serving API and the panel each have
   one owner lane. Change theirs by a PR against their branch or a message to them, and review their PRs when they ask.
 - **Interfaces are data, in one place.** Scheme names, hashing formats, schedules, step groups and kernel variants are
-  defined once (`verity.protocols.accounting.work.pouw.serving`, #567). Never keep a local copy of such a table (tree hashes, keys, arm tables); if
+  defined once (`verity.core.protocols.pouw.serving`, #567). Never keep a local copy of such a table (tree hashes, keys, arm tables); if
   you find one, replace yours with the shared one, or tell its owner.
 - **Messages:** a one-line checkpoint per result in your status file. Message your coordinator (never through a note)
   only to unblock, to ask for a decision, or when your result changes someone's plan (lane contract §3a).

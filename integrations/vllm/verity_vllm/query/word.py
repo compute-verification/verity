@@ -12,12 +12,12 @@ The rule (no recomputes):
     value a program or a request brings (a norm's epsilon, the attention scale, a softcap, temperature, top-p): a registered or run
     input, committed under a hiding leaf.  Only an operation's own constant bits and wiring (`WIRING`: bit rearrangement, such as
     BF16 -> FP32 zero-extension) are circuit structure, not counted as gates; a unit reads through wiring to its source.
-  * **Width** counts bits (`verity.primitives.circuits.cut.fits`): a unit's boundary gates (read by another unit, or returned) total at most X declared
+  * **Width** counts bits (`verity.ml.circuits.cut.fits`): a unit's boundary gates (read by another unit, or returned) total at most X declared
     bits (16), or the unit has exactly ONE boundary value, of at most W bits (32: float interiors such as a norm scale, attention's
     max, sum and inverse sum).  No dtype is read.
   * It is the query of record (`required.QUERY_OF_RECORD`): a Call's inputs and outputs are the bridge's required values.
 
-The cut of one Call (`partition`), on its computing gates (`Graph`, core's `verity.primitives.circuits.cut.CallGraph`: wiring and constants removed,
+The cut of one Call (`partition`), on its computing gates (`Graph`, core's `verity.ml.circuits.cut.CallGraph`: wiring and constants removed,
 reads through them re-pointed):
 
   1. The returned gates, in return order, packed into outputs of at most X bits (a wider value is an output alone).
@@ -26,7 +26,7 @@ reads through them re-pointed):
   3. A gate no returned value depends on (dead) joins the one unit it reads, else heads a dead unit; any value such a gate reads
      across units is committed too.
 
-`verity.primitives.circuits.partition.validate_unit_cut` checks every Call's cut; the committed interior values are what serving must acquire (a tap
+`verity.ml.circuits.partition.validate_unit_cut` checks every Call's cut; the committed interior values are what serving must acquire (a tap
 where it does not today).  `unit_rule` summarises one specialization; `check_query` checks a Program and fails by name.
 
 A specialization's unit rule is a function of the Definition, the query and the gate limits alone.  Attention has one specialization
@@ -44,9 +44,9 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity.primitives.circuits.codec import canonical_json, definition_entry
-from verity.primitives.circuits.cut import WIRING, CallGraph, cut_word, fits, separable
-from verity.primitives.circuits.defs import PrimitiveDefinition
+from verity.ml.circuits.codec import canonical_json, definition_entry
+from verity.ml.circuits.cut import WIRING, CallGraph, cut_word, fits, separable
+from verity.ml.circuits.defs import PrimitiveDefinition
 
 from verity_vllm.query.call_scope import QueryRuleViolation, specialization
 
@@ -106,7 +106,7 @@ def _np(a: Any, dtype: Any = np.int64) -> np.ndarray:
 
 
 class Graph(CallGraph):
-    """`verity.primitives.circuits.cut.CallGraph` (the core reference: the computing gates of one activation, structure removed) with numpy views of
+    """`verity.ml.circuits.cut.CallGraph` (the core reference: the computing gates of one activation, structure removed) with numpy views of
     the per-gate arrays the cut computes on: `keep`, `width`, `prim`, `scope`, `external` and the reads `src` -> `dst`."""
 
     def __init__(self, fn: Any) -> None:
@@ -117,7 +117,7 @@ class Graph(CallGraph):
 
 
 def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
-    """(owner per gate, kind per unit, head per gate) of core's `verity.primitives.circuits.cut.cut_word` (the reference): "output" (returned values),
+    """(owner per gate, kind per unit, head per gate) of core's `verity.ml.circuits.cut.cut_word` (the reference): "output" (returned values),
     "committed" (a value another unit reads), "dead" (read by no returned value); `head[g] >= 0` marks the gates the cut commits -- the
     returned ones and every value read across units."""
     own, kinds, head = cut_word(G, X)
@@ -126,8 +126,8 @@ def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
 
 def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
     """The partition of `G` with, per unit: gates, |out(S)| in bits over its boundary gates (read by another unit, or returned), and
-    the partition invariant's check (`verity.primitives.circuits.partition.validate_unit_cut` over the gates the cut commits; violations by gate id)."""
-    from verity.primitives.circuits.partition import INPUT_UNIT, validate_unit_cut
+    the partition invariant's check (`verity.ml.circuits.partition.validate_unit_cut` over the gates the cut commits; violations by gate id)."""
+    from verity.ml.circuits.partition import INPUT_UNIT, validate_unit_cut
     owner, kinds, head = partition(G, X)
     U = len(kinds)
     gates = np.bincount(owner, minlength=U)
@@ -195,7 +195,7 @@ def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: i
 RULE_CACHE_ENV = "VERITY_UNIT_RULE_CACHE"
 _RULE_CACHE_SCHEMA = "verity-vllm/unit-rule/v1"
 #: the directory of unit rules this process shares (`use_rule_cache`; None: none).  An entry is keyed by the Definition's content (its
-#: entry and its callees', transitively), X, W, extras, the gate limits and the source of the code that cuts (`verity.primitives.circuits`, this
+#: entry and its callees', transitively), X, W, extras, the gate limits and the source of the code that cuts (`verity.ml.circuits`, this
 #: package's `word`, `cross_call` and `call_scope`); a rule is written only when JSON gives it back equal, so a read rule is the computed one
 _RULE_CACHE: list[str | None] = [None]
 _DIGESTS: dict[str, str] = {}
@@ -209,10 +209,10 @@ def use_rule_cache(directory: str | None) -> None:
 
 def _code_version() -> str:
     if not _CODE:
-        import verity.primitives.circuits
+        import verity.ml.circuits
         here = Path(__file__).parent
         h = hashlib.sha256()
-        for p in [*sorted(Path(verity.primitives.circuits.__file__).parent.glob("*.py")), *(here / f for f in ("word.py", "cross_call.py", "call_scope.py"))]:
+        for p in [*sorted(Path(verity.ml.circuits.__file__).parent.glob("*.py")), *(here / f for f in ("word.py", "cross_call.py", "call_scope.py"))]:
             h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
         _CODE.append(h.hexdigest())
     return _CODE[0]

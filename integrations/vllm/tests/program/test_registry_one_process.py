@@ -1,4 +1,4 @@
-"""Core's `verity_catalog.definitions` Definitions and every integration registry module load into one process, in either order, and
+"""Core's `verity.ml.circuits.ops` Definitions and every integration registry module load into one process, in either order, and
 the integration's names for the core Definitions are core's objects (the registry refuses a second object under an id)."""
 
 from __future__ import annotations
@@ -12,16 +12,17 @@ import pytest
 
 import verity_vllm.program.registry as registry
 
-CORE = ("verity_catalog.definitions.prims", "verity_catalog.definitions.scalar", "verity_catalog.definitions.fp32", "verity_catalog.definitions.mufu", "verity_catalog.definitions.gemm", "verity_kernels.tc")
+CORE = ("verity.ml.circuits.ops.prims", "verity.ml.circuits.ops.scalar", "verity.ml.circuits.ops.fp32", "verity.ml.circuits.ops.mufu", "verity.ml.circuits.ops.gemm", "verity.ml.kernels.tc")
 
 CHECK = """
 import importlib, sys
 for m in sys.argv[1:]:
     importlib.import_module(m)
-from verity.primitives.circuits.defs import REGISTRY
-from verity_catalog.definitions import fp32 as F, gemm as G, mufu as M, prims as C, scalar as S
-from verity_vllm.program.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM, targets as T
-from verity.primitives.circuits.defs import PrimitiveDefinition
+from verity.ml.circuits.defs import REGISTRY
+from verity.ml.circuits.ops import fp32 as F, gemm as G, mufu as M, prims as C, scalar as S
+from verity_vllm.program.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM
+from verity_vllm.program.frontend import targets as T
+from verity.ml.circuits.defs import PrimitiveDefinition
 core = [C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16, C.HopperBF16WgmmaDot16, C.AmpereBF16TcDot16, C.F32ToE4m3Sat,
         C.HopperE4m3QgmmaDot32, C.ZERO32, G.DotBf16, G.GemmCoordinate, G.Gemm]
 core += [getattr(S, n) for n in S.__all__ if n not in ("BIT", "BF16", "F32", "I32")]
@@ -42,8 +43,8 @@ assert PP.ALL_NEW == [S.BitAnd, S.BitNot] and (SM.F32Eq, SM.BitOr, SM.BitNot) ==
 assert H.HopperBF16WgmmaDot16 is C.HopperBF16WgmmaDot16 is T.DOTS["HopperBF16WgmmaDot16"]
 assert (b1.DotBf16V2, b1.GemmCoordinateV2, b1.GemmV2) == (G.DotBf16, G.GemmCoordinate, G.Gemm)
 assert b1.const is C.const and b1.ZERO32 is C.ZERO32 and b1.const(16, 0) is C.const(16, 0)
-from verity.primitives.circuits.codec import decode_program, encode_program, program_digest
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.codec import decode_program, encode_program, program_digest
+from verity.ml.circuits.program import Program
 prog = Program(b1.GemmV2.bind(K=32, N=2, DOT=H.HopperBF16WgmmaDot16))
 desc = encode_program(prog)
 assert program_digest(encode_program(decode_program(desc, REGISTRY))) == program_digest(desc)

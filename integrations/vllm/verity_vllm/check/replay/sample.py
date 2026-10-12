@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.primitives.randomness import Key
+from verity.ml.randomness import Key
 
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.commit import challenge as CH
@@ -49,7 +49,7 @@ def challenge_seed(challenge: str, run_root: bytes) -> tuple[int, str]:
     """[rev-cb M-0572, v2] the sample seed under a VERIFIER-ISSUED post-commitment challenge: sha256(challenge || run_root)[:8].  Binding the
     challenge to the root means a challenge issued before the root was fixed (or for another run) selects a different sample, and the
     prover cannot grind the sample by recommitting (the root changes -> the verifier issues a fresh challenge).  Returns (seed, source).
-    Legacy (`challenge.LEGACY`); its successor is `challenge.replay_key`, a beacon-keyed draw passed as `challenge_key`."""
+    Legacy (`challenge.LEGACY`); its successor is `challenge.replay_key`, an auditor-keyed draw passed as `challenge_key`."""
     return CH.legacy_replay_seed(challenge, run_root), RC.challenge_seed_source(challenge)
 
 

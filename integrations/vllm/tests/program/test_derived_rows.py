@@ -115,11 +115,11 @@ def _ex2_exact(w: int, T: np.ndarray) -> int:
 
 def test_ex2_every_exponent_class_equals_the_exact_rule():
     """`MufuEx2Ftz` on every exponent class of both signs (edge and seeded mantissas; NaN and inf at 255): the compiled rule
-    (`fa2_model.mufu_ex2`), the IR reference (`verity.primitives.circuits.evaluation.evaluate`) and the numpy twin equal the rule evaluated
+    (`fa2_model.mufu_ex2`), the IR reference (`verity.ml.circuits.evaluation.evaluate`) and the numpy twin equal the rule evaluated
     exactly, and every 0 < |x| < 2^-23 gives T[0] = 1.0.  That includes |x| < 2^-63, where the C shift count reached 64 or
     more (undefined; x86-64 took it mod 64: ex2(6.5e-22) was 1.0083, ex2(2^-64) 2.0 and ex2(-2^-64) 0.5)."""
     D = _derived()
-    from verity.primitives.circuits.evaluation import evaluate
+    from verity.ml.circuits.evaluation import evaluate
     from verity_vllm.program.kernels import fa2_model as FA
     from verity_vllm.program.registry import prims as P
     tabs = D._fa2_tables()
@@ -185,10 +185,10 @@ def test_tc_dot16_matches_prim():
 
 
 def _veritor_silicon():
-    """`(verity_catalog.silicon.silicon, verity_catalog.silicon.total)` -- veritor's `core.silicon` / `core.silicon_total` promoted verbatim into Verity's
+    """`(verity.ml.circuits.silicon.silicon, verity.ml.circuits.silicon.total)` -- veritor's `core.silicon` / `core.silicon_total` promoted verbatim into Verity's
     core; the registered tensor-core primitives are held to them word for word on every encoding.  (Until R19 the reference was
     `src/veritor`, importable only on 3.12; the Verity runtime is 3.12 everywhere, so the oracle always imports.)"""
-    from verity_catalog.silicon import silicon, total
+    from verity.ml.circuits.silicon import silicon, total
     return silicon, total
 
 
@@ -242,7 +242,7 @@ def test_hopper_wgmma_port_equals_silicon_total_on_every_encoding():
 
 
 def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
-    """The registered HopperBF16WgmmaDot16 evaluates from Verity's core alone (`verity_catalog.silicon.total`; no `veritor`, no numpy) and
+    """The registered HopperBF16WgmmaDot16 evaluates from Verity's core alone (`verity.ml.circuits.silicon.total`; no `veritor`, no numpy) and
     follows the total rules of the step by construction -- any NaN operand / acc -> 0x7FFFFFFF; inf * 0 -> NaN; infinities
     of both signs -> NaN, of one sign -> that infinity (finite terms ignored); finite overflow -> the sticky infinity; an all-zero
     group -> +0 (never -0); a subnormal result is encoded as a subnormal; the 26-bit adder rounds by truncation."""
@@ -495,8 +495,8 @@ def test_rope_rows_matches_the_registered_prims_word_for_word():
 def test_attention_rows_fa2_equals_the_registered_attention_v3_definition(T):
     """[R17 dense, BRIEF §4] `attention_rows` (FA2 defaults) == `Attention_v3{T, NH, KVH, D, BN}` evaluated gate for gate: GQA (head h reads
     KV head h // (NH/KVH)), one query over T keys, ceil(T/BN) blocks last -> first, Fa2InvSum epilogue -- on random N(0,1) words."""
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
     from verity_vllm.program.kernels import derived_rows as D
     NH, KVH, Dh, BN = 4, 2, 64, 128
@@ -521,8 +521,8 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
     -- the tile the H100 B8 1024/128 Program of record binds at T >= 2) -- two implementations, one word sequence."""
     from verity_vllm.program.kernels import fa2_relation, fa3_model
 
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1, hopper
     from verity_vllm.program.kernels import derived_rows as D
     from verity_vllm.program.registry import prims as P
@@ -615,8 +615,8 @@ def test_silu_mid_factorises_the_prim():
 @pytest.mark.parametrize("N,eps", [(576, 1e-5), (2048, 1e-6)])
 def test_rmsnorm_triton_rows_vs_gates(N, eps):
     D = _derived()
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
     prog, call = _standalone(bind(b1.RMSNormTriton, N=N, EPS=eps))
     sqrt = _prim_calls(call, "MufuSqrtFtz")[0]
@@ -639,8 +639,8 @@ def test_rmsnorm_triton_rows_vs_gates(N, eps):
 
 def test_rmsnorm_fused_v2_rows_vs_gates():
     D = _derived()
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
     N, eps = 576, 1e-5
     prog, call = _standalone(bind(b1.RMSNormFusedCuda, N=N, EPS=eps))
@@ -663,8 +663,8 @@ def test_rmsnorm_fused_v2_rows_vs_gates():
                                            (64, 3, False), (128, 64, False)])
 def test_attn_block_vs_gates(D_, NVIS, FIRST):
     D = _derived()
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
     BN = b1.BN
     prog, call = _standalone(bind(b1.AttnBlock, D=D_, NVIS=NVIS, FIRST=FIRST))
@@ -691,8 +691,8 @@ def test_attn_block_vs_gates(D_, NVIS, FIRST):
 @pytest.mark.parametrize("T,D_", [(5, 64), (64, 64), (65, 64), (130, 64), (70, 128)])
 def test_attention_head_states_vs_gates(T, D_):
     D = _derived()
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
     prog, call = _standalone(bind(b1.AttentionHead, T=T, D=D_))
     blocks = [c for c in call.children() if not c.is_primitive and c.name == "AttnBlock"]
@@ -729,8 +729,8 @@ def test_attention_head_states_vs_gates(T, D_):
 @pytest.mark.parametrize("D_,NVIS,FIRST", [(64, 128, True), (64, 128, False), (64, 100, True), (64, 3, False), (128, 64, False), (128, 17, True)])
 def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
     D = _derived()
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
     BN = b1.fa2_kblock_n(D_)  # the geometry E6 pins for this head dim; here bound explicitly as the declared static
     assert BN == (128 if D_ <= 64 else 64)
@@ -758,8 +758,8 @@ def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
 @pytest.mark.parametrize("T,D_", [(5, 64), (64, 64), (65, 64), (128, 64), (129, 64), (190, 64), (70, 128)])
 def test_attention_head_v3_states_vs_gates(T, D_):
     D = _derived()
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
     BN = b1.fa2_kblock_n(D_)
     prog, call = _standalone(bind(b1.AttentionHeadV3, T=T, D=D_, BN=BN))
@@ -818,8 +818,8 @@ def test_v1_and_v3_attention_heads_are_gate_for_gate_equal_within_one_block(T):
     Serve_v4 is the same object, so their rows are byte-identical up to T = 63 keys (at T = 64 the v3 head still pads --
     one `Const16[0]` gate more, same output word -- so the 128×64 record's positions 0..63 agree in VALUE, as D54 saw, while
     the gate layout already shifts by one)."""
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
     rng = np.random.default_rng(6400 + T)
     q = _rand_bf16(rng, 64)
@@ -840,8 +840,8 @@ def test_v1_and_v3_attention_heads_are_gate_for_gate_equal_within_one_block(T):
 def test_attention_head_v3_at_bn_64_is_attention_head_v1_gate_for_gate():
     """The legacy geometry as a declared static: `AttentionHead_v3{T, D, BN=64}` == `AttentionHead_v1{T, D}` on every gate, at a
     two-block T -- the D57 default relation (`Serve_v4{..., BN=64}` is `Serve_v1`'s arithmetic under a new identity)."""
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
     T = 100
     rng = np.random.default_rng(64100)

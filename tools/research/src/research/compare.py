@@ -1,18 +1,273 @@
-"""`research compare BASELINE CANDIDATE`: what differs between two runs, and the measured ratios where both have a number.
+"""`research compare`: two ways to set runs side by side.
 
-Descriptive only.  It shows source, tool, machine, fingerprint (expected and observed, key by key), environment, execution,
-instrumentation, outcome, and measurement differences; it does not decide which differences invalidate the comparison.  That is the
-workload's contract (a changed ELF may be the point of the experiment; a changed relation is not).  Ratios are labeled
-candidate / baseline.  One pair of runs is one measured ratio, not a confidence interval; repetitions inside the workload's own
-files are not flattened here.
+`verdict(originals, replay, expect)` judges a replay against the attempts it replays, read from the evidence store by run id
+(`load`: the attempt manifest, its result's meta and its outputs' manifests, local first, else the remote the store fetches from;
+no payload bytes are downloaded, since manifests carry every file's sha256).  One of:
+
+    same             every check below is equal
+    within-band      nothing differs, but something only matched within the originals' own variation
+    differs          something changed (each reason says what), or a metric moved and the band is unknown (one original)
+    expected-change  `expect` (a `replay_expect` label value: `refused: FORM` or `blocked: GATE`) names the refusal the replay shows
+
+The checks, each against every original:
+
+    derivation   the replay is the same computation (the store's drv: id, which holds no source revision)
+    status       state, rc and validation as the attempt records them
+    outputs      every named output (all but result, run_files, run_record) equal by art id, or by content net of the run's own id:
+                 the publisher stamps `meta.run_id` on typed outputs, so the same bytes from two runs never share an art id
+    run files    per file by sha256: the run record's files (with the ones custody trimmed, listed by sha256) and the result's run
+                 files, minus the runner's own logs and records (RUNNER_FILES).  When an attempt has no run record, only the result's
+                 listed files are compared.
+    metrics      the result's measurements.  Numbers: with two or more originals, inside [min - spread, max + spread], spread =
+                 max - min; with one, equal.  Anything else: equal.
+
+An item on which the originals disagree among themselves (a file, an output, a status field) cannot be checked bit for bit: it is
+within-band.  `expect` given: a replay refused (not done, rc != 0 or validation failed) whose failure, class, result summary or
+validation detail contains FORM (GATE) is expected-change; one refused otherwise, or not refused at all, differs.
+
+`compare(base_dir, cand_dir)` is the older descriptive diff of two run directories.  It shows source, tool, machine, fingerprint
+(expected and observed, key by key), environment, execution, instrumentation, outcome, and measurement differences; it does not
+decide which differences invalidate the comparison.  Ratios are labeled candidate / baseline.  One pair of runs is one measured
+ratio, not a confidence interval.
 """
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from . import record
 from . import runs as R
+
+SAME, WITHIN_BAND, DIFFERS, EXPECTED_CHANGE = "same", "within-band", "differs", "expected-change"
+VERDICTS = (SAME, WITHIN_BAND, DIFFERS, EXPECTED_CHANGE)
+EXPECT_KEY = "replay_expect"
+EXPECT_RE = re.compile(r"(refused|blocked): (\S.*)")
+#: outputs that are not compared by art id: the result (its meta holds the run id and the measurements, checked as metrics), and
+#: the two trees whose files are compared one by one
+NOT_NAMED = frozenset({"result", "run_files", "run_record"})
+#: how many examples a reason line names
+EXAMPLES = 5
+
+
+@dataclass(frozen=True)
+class Attempt:
+    """What `verdict` reads of one attempt.  `files` maps a run-dir path to its sha256; `files_scope` says what they cover."""
+    id: str
+    doc: dict[str, Any]
+    result: dict[str, Any] | None
+    outputs: dict[str, str]
+    contents: dict[str, str]
+    files: dict[str, str]
+    listed: frozenset[str]
+    files_scope: str
+
+
+@dataclass
+class Verdict:
+    verdict: str
+    replay: str
+    originals: list[str]
+    expect: str | None
+    reasons: list[str] = field(default_factory=list)
+    band: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def to_doc(self) -> dict[str, Any]:
+        return {"verdict": self.verdict, "replay": self.replay, "originals": self.originals, "expect": self.expect,
+                "reasons": self.reasons, "band": self.band}
+
+
+def runner_files() -> frozenset[str]:
+    """The runner's own logs and records in a run dir (custody's always-kept files, the sampler's stream, the publisher's error)."""
+    from .store import custody
+
+    return custody.RUN_FILES | {"resources.jsonl", "store_publish_error.json", custody.TRIMMED_LISTING}
+
+
+def load(store: Any, run_id: str) -> Attempt:
+    """The attempt `run_id` from `store` (a `LocalStore`); LookupError when neither the store nor its remote has it."""
+    from .store import canon, custody
+
+    doc = store.get_attempt(run_id)
+    if doc is None:
+        raise LookupError(f"{run_id}: no attempt in the store at {store.root}" + (f" or on {store.remote.describe()}" if store.remote else ""))
+    outs = {k: v for k, v in (doc.get("outputs") or {}).items() if v}
+    mans = {name: store.get_manifest(art) for name, art in outs.items()}
+    own = {art: f"@{name}" for name, art in outs.items()}
+    contents = {}
+    for name, m in mans.items():
+        if name in NOT_NAMED:
+            continue
+        d = m.to_doc()
+        meta = {k: v for k, v in (d.get("meta") or {}).items() if not (k == "run_id" and v == run_id)}
+        refs = {k: ([own.get(x, x) for x in v] if isinstance(v, list) else own.get(v, v)) for k, v in (d.get("refs") or {}).items()}
+        contents[name] = canon.sha256({**d, "meta": meta, "refs": refs})
+    skip = runner_files()
+    files: dict[str, str] = {}
+    listed: set[str] = set()
+    if "run_files" in mans and mans["run_files"].payload is not None:
+        for f in mans["run_files"].payload.files or []:
+            files[f.path] = f.sha256
+            listed.add(f.path)
+    scope = "run_files" if listed else "none"
+    if "run_record" in mans and mans["run_record"].payload is not None:
+        scope = "run_record"
+        for f in mans["run_record"].payload.files or []:
+            if f.path not in skip and not custody.is_run_file(f.path):
+                files[f.path] = f.sha256
+        for t in custody.trimmed_of(store, outs["run_record"], mans["run_record"]):
+            if t["path"] not in skip and not custody.is_run_file(t["path"]):
+                files[t["path"]] = t["sha256"]
+    return Attempt(id=run_id, doc=doc, result=mans["result"].meta if "result" in mans else None, outputs=outs, contents=contents,
+                   files=files, listed=frozenset(listed), files_scope=scope)
+
+
+def _examples(items: list[str]) -> str:
+    return ", ".join(items[:EXAMPLES]) + (f", ... ({len(items)} in all)" if len(items) > EXAMPLES else "")
+
+
+def _is_number(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _refusal(a: Attempt) -> tuple[bool, str]:
+    st = a.doc.get("status") or {}
+    val = (a.result or {}).get("validation") or {}
+    refused = st.get("state") != "done" or st.get("rc") not in (0, None) or st.get("validation") == "failed"
+    text = " | ".join(str(x) for x in (st.get("failure"), st.get("class"), st.get("result"), val.get("detail") if isinstance(val, dict) else None) if x)
+    return refused, text
+
+
+class _Tally:
+    def __init__(self) -> None:
+        self.differs: list[str] = []
+        self.within: list[str] = []
+        self.notes: list[str] = []
+        self.same: dict[str, int] = {}
+
+    def categorical(self, what: str, name: str, orig: list[Any], rep: Any, show: Any = None) -> None:
+        """One item: equal across the originals and in the replay (same), the originals disagree (within), else differs."""
+        show = show or (lambda v: repr(v))
+        label = f"{what} {name}" if name else what
+        distinct = {repr(v) for v in orig}
+        if len(distinct) > 1:
+            self.within.append(f"{label}: varies across the originals ({len(distinct)} distinct), not checked bit for bit")
+        elif repr(rep) == repr(orig[0]):
+            self.same[what] = self.same.get(what, 0) + 1
+        else:
+            self.differs.append(f"{label}: {show(orig[0])} -> {show(rep)}")
+
+
+def _short_sha(v: Any) -> str:
+    return "absent" if v is None else str(v)[:12]
+
+
+def verdict(originals: list[Attempt], replay: Attempt, expect: str | None = None) -> Verdict:
+    """Judge `replay` against `originals` (module docstring).  ValueError when there is no original or `expect` is malformed."""
+    if not originals:
+        raise ValueError("verdict needs at least one original")
+    m = None
+    if expect is not None:
+        m = EXPECT_RE.fullmatch(expect)
+        if not m:
+            raise ValueError(f"{EXPECT_KEY} {expect!r} is neither `refused: FORM` nor `blocked: GATE`")
+    v = Verdict(verdict=SAME, replay=replay.id, originals=[o.id for o in originals], expect=expect)
+    t = _Tally()
+
+    t.categorical("derivation", "", [o.doc.get("derivation") for o in originals], replay.doc.get("derivation"))
+    for k in ("state", "rc", "validation"):
+        t.categorical("status", k, [(o.doc.get("status") or {}).get(k) for o in originals], (replay.doc.get("status") or {}).get(k))
+
+    names = sorted(set(replay.contents).union(*(o.contents for o in originals)))
+    for n in names:
+        orig = [o.contents.get(n) for o in originals]
+        if all(o.outputs.get(n) == replay.outputs.get(n) for o in originals) and replay.outputs.get(n):
+            t.same["output"] = t.same.get("output", 0) + 1
+            continue
+        t.categorical("output", n, orig, replay.contents.get(n), show=lambda c: "absent" if c is None else "content " + c[:12])
+
+    every = [*originals, replay]
+    if all(a.files_scope == "run_record" for a in every):
+        paths = sorted(set().union(*(a.files for a in every)))
+    else:
+        bare = [a.id for a in every if a.files_scope != "run_record"]
+        t.notes.append(f"run files: only the result's listed files are compared ({_examples(bare)} has no run record)")
+        paths = sorted(set().union(*(a.listed for a in every)))
+    file_diffs: list[str] = []
+    file_varies: list[str] = []
+    for p in paths:
+        orig = [o.files.get(p) for o in originals]
+        if len(set(orig)) > 1:
+            file_varies.append(p)
+        elif replay.files.get(p) == orig[0]:
+            t.same["run file"] = t.same.get("run file", 0) + 1
+        else:
+            file_diffs.append(f"{p} ({_short_sha(orig[0])} -> {_short_sha(replay.files.get(p))})")
+    if file_diffs:
+        t.differs.append(f"run files: {len(file_diffs)} differ: {_examples(file_diffs)}")
+    if file_varies:
+        t.within.append(f"run files: {len(file_varies)} vary across the originals, not checked bit for bit: {_examples(file_varies)}")
+
+    def measurements(a: Attempt) -> dict[str, dict[str, Any]]:
+        return {x["name"]: x for x in ((a.result or {}).get("measurements") or []) if isinstance(x, dict) and isinstance(x.get("name"), str)}
+
+    om = [measurements(o) for o in originals]
+    rm = measurements(replay)
+    for name in sorted(set(rm).union(*om)):
+        orig = [d.get(name) for d in om]
+        rep = rm.get(name)
+        if any(x is None for x in orig) or rep is None:
+            t.categorical("metric", name, [x is not None for x in orig], rep is not None,
+                          show=lambda present: "present" if present else "absent")
+            continue
+        units = {x.get("unit") for x in orig} | {rep.get("unit")}
+        if len(units) > 1:
+            t.differs.append(f"metric {name}: units {sorted(map(str, units))}")
+            continue
+        vals = [x.get("value") for x in orig]
+        rv = rep.get("value")
+        if not (all(_is_number(x) for x in vals) and _is_number(rv)):
+            t.categorical("metric", name, vals, rv)
+            continue
+        lo, hi = min(vals), max(vals)
+        unit = rep.get("unit")
+        if len(vals) < 2:
+            if rv == lo:
+                t.same["metric"] = t.same.get("metric", 0) + 1
+            else:
+                t.differs.append(f"metric {name}: {lo} -> {rv} {unit}; band unknown: one original (a band needs at least two)")
+            v.band[name] = {"n": 1, "lo": None, "hi": None, "value": rv, "unit": unit}
+            continue
+        spread = hi - lo
+        band_lo, band_hi = lo - spread, hi + spread
+        v.band[name] = {"n": len(vals), "lo": band_lo, "hi": band_hi, "value": rv, "unit": unit}
+        if lo == hi == rv:
+            t.same["metric"] = t.same.get("metric", 0) + 1
+        elif band_lo <= rv <= band_hi:
+            t.within.append(f"metric {name}: {rv} {unit} inside the band [{band_lo:.6g}, {band_hi:.6g}] of {len(vals)} originals")
+        else:
+            t.differs.append(f"metric {name}: {rv} {unit} outside the band [{band_lo:.6g}, {band_hi:.6g}] of {len(vals)} originals")
+
+    if m is not None:
+        refused, text = _refusal(replay)
+        token = m.group(2)
+        if refused and token in text:
+            v.verdict = EXPECTED_CHANGE
+            v.reasons = [f"expected {expect}: the replay was refused ({text})"]
+            return v
+        t.differs.insert(0, f"expected {expect}: " + (f"the replay was refused, but not naming {token!r} ({text})" if refused
+                                                       else "the replay was not refused"))
+    v.verdict = DIFFERS if t.differs else WITHIN_BAND if t.within else SAME
+    same = ", ".join(f"{n} {'status field' if what == 'status' else what}{'s' if n != 1 else ''}" for what, n in t.same.items())
+    v.reasons = t.differs + t.within + t.notes + ([f"equal: {same}"] if same else [])
+    return v
+
+
+def render_verdict(v: Verdict) -> str:
+    lines = [f"{v.verdict}  replay {v.replay} against {', '.join(v.originals)}" + (f"  (expect {v.expect})" if v.expect else "")]
+    lines += [f"  - {r}" for r in v.reasons]
+    return "\n".join(lines)
 
 
 def _get(d: Any, *path: str) -> Any:

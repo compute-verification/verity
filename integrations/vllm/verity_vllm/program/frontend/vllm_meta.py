@@ -8,6 +8,8 @@ Environment knobs of the pinned vLLM that the construction sets (declared, not h
   VLLM_BATCH_INVARIANT=1     the admitted profile (selects the BI code paths: fused_add_rms_norm / Triton rms_norm / BI GEMM)
   VLLM_USE_LAYERNAME=0       layer names as plain `str` op arguments (torch>=2.11 default wraps them in an opaque `LayerName`
                              object, which export would lift as a custom object); the vLLM source documents this switch.
+  VLLM_DISABLE_SHARED_EXPERTS_STREAM=1  a shared expert runs on the main stream: `SharedExperts.__init__` would otherwise make a CUDA
+    aux stream (no driver on a GPU-free Build host); the stream schedules the same kernels on the same values.
   HF_HUB_OFFLINE=1           the model config is the seeded snapshot; no network.
 """
 
@@ -400,7 +402,7 @@ class StochasticRequest(nn.Module):
 def single_request_splits(sampling: dict) -> int | None:
     """The single-request constant S of a stochastic policy: `sampling["splits"]` when it is an int, the
     policy's geometry is one request's (`sampler_batch == 1`) and the int is SplitsFor_v1(1, num_SMs) of that geometry; else None."""
-    from verity_vllm.program.registry.topp_split import splits_for_v1
+    from verity_vllm.program.registry.topp_geometry import splits_for_v1
     S, g = sampling.get("splits"), sampling.get("geometry") or {}
     if isinstance(S, bool) or not isinstance(S, int) or g.get("sampler_batch") != 1 or g.get("num_sms") is None:
         return None

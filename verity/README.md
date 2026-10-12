@@ -1,27 +1,33 @@
 # Verity core (`verity`)
 
-One distribution, one module per concern. Import from the module that owns an object (`from verity.primitives.circuits import Program`);
-`verity` itself re-exports nothing. The architecture and the dependency direction between these modules are the root
-`README.md`; the repository map with each module's contents is the root `AGENTS.md`.
+One distribution, one module per concern. Import from the module that owns an object
+(`from verity.ml.circuits import Program`); `verity` itself re-exports nothing. The architecture is the root
+`README.md`, and the repository map is the root `AGENTS.md`.
 
 | module | what it owns |
 |---|---|
-| `verity.primitives.circuits` | types, Definitions, Programs, the canonical layout, the reference evaluator, the descriptor codec, the partition references (`cut`, `partition`, `partition_object`, `units`), constants' binding times (`constants`) and annotations; the program format is specified in `primitives/circuits/PROTOCOL.md` |
-| `verity.primitives.circuits.evaluation` | the one evaluator: the plain-integer reference and `evaluate_batch` over numpy arrays, with registered kernels |
-| `verity_catalog.definitions` | exact hardware semantics of the tensor-core accumulator step (`verity_catalog.silicon`) and their IR registrations (`prims`, `gemm`), the other IR primitives (`scalar`: integer, bit, select and comparison operations; `fp32`: FP32/BF16 arithmetic), with numpy kernels, and the library of hardware and protocol objects core owns (`library`) |
-| `verity.primitives.randomness` | `derive(source, domain, context)`, the one challenge derivation, and exact samplers |
-| `verity_sp1.proofs` | backend-independent single statements, how a backend is judged on them, and `IntegrityProfile` |
-| `verity.primitives.commitments` | application-level commitment schemes (`frame_v3`, `vllm_v1`, `hm96`, Merkle trees and openings) |
-| `verity.claims` | the ids of security claims the tables cite |
+| `verity.ml.circuits` | Circuits: types, Definitions, Programs, the canonical layout, the descriptor codec, constants' binding times (`constants`), annotations (`verity/annotations/v0`). Stdlib only, and it imports no other core module. Its format (descriptor v1, canonical JSON = RFC 8785, layout, scope resolution) is specified in `ml/circuits/PROTOCOL.md`, with every rule pinned by `ml/circuits/tests/format_vectors.json`. |
+| the partition references, in `verity.ml.circuits` | `cut` (the query `Q_word` v1's canonical evaluator, its algorithm in the docstring), `partition.validate_unit_cut` (the invariant) and `partition_object` (`verity/partition/v1`, a program digest plus a query: `evaluate`, `locate`, `validate`, `verify`). They are pinned by `ml/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`. `units` cuts each proof unit out as a standalone circuit. |
+| `verity.ml.circuits.boolean` | The Boolean profile (PROTOCOL §9): the gates `And<n>_v1`, `Xor<n>_v1`, `Not_v1`, the constant bits, `is_boolean` and the word view. Also C-Flock's linear-form builder (`forms`), the multiplexer tree (`gather`) and `trace.definition`, a builder traced into gates. |
+| `verity.ml.circuits.library`, `.operations` | The library of hardware and protocol objects core owns. The pinned list of operations, whose guard (`program_data`) lists the data a program still holds. |
+| `verity.ml.circuits.evaluation` | The one evaluator: the plain-integer reference (`evaluate`), `evaluate_batch` over numpy arrays with registered kernels (each listed in `ml/circuits/tests/evaluation/test_evaluation.py`, which self-checks it), and `bits`, the bit-sliced evaluator of Boolean Definitions. |
+| `verity.ml.commitments` | The commitment schemes the records use (`frame_v3`, `vllm_v1`, `hm96`, Merkle trees and openings), each with a specification and conformance vectors. SHA-512 and the Merkle tree as Boolean gates are its `gates`, and Merkle multiproofs its `multiproof`. |
+| `verity.ml.crypto` | Shared hash code (`blake3`, `turboshake`). Under one hash, the BLAKE3 and TurboSHAKE code leaves the served path for `archive/`. |
+| `verity.ml.randomness` | `derive(source, domain, context)`, the one challenge derivation, and exact samplers over counter-mode streams. Stdlib only, and it imports no other core module. Its byte formats are pinned by `ml/randomness/tests/vectors.json`. |
+| `verity.ml.private_circuits` | The universal unit: one public Boolean Definition that runs any private circuit of a size class (protocol 2, private circuits). |
+| `verity.core.protocols.profile` | `IntegrityProfile`: what an accepted audit established (the exhaustive facts, a verifier's sampling design over named levels of a partition hierarchy, and δ). |
+| `verity.core.protocols.sampled_proofs` | Sampled proofs as the one-stage audit (`one_stage`) and two-stage sampling (`two_stage`). Plans and consumers are `verity.core.protocols.sampled_proofs`. |
+| `verity.core.protocols.pouw` | Proof of useful work: the `PoUWScheme` interface, its lifecycle (`audit`) and the named schemes (`schemes.get`), each with pinned vectors. |
+| `verity.core.protocols.pous` | Proof of useful space: the reference codecs, setup, and the memory challenger's timed audit. Its grader is the Lean package `lean/`. |
+| `verity.core.protocols.bandwidth` | The bandwidth audit v0: a window's tags over a PoUS store before a deadline, the verifier's sampled check, and the ingress it certifies (`PROTOCOL.md`). Its GPU tagger is `benchmarks/bandwidth/`. |
+| `verity.core.protocols.certifier` | The network certifier: its audit and calibration. |
+| `verity.core.claims` | The ids of security claims (guarantees, and assumptions as `property/instance` such as `cr/sha-512`) that the tables cite. Stdlib only. |
+| `verity/core/`, in Lean | The Lean ports in `primitives`, `devices`, `service` and `protocols`, each held to today's Python by `difftest`, and C-Flock's executable verifier of record (`service/flock/`). |
+| `Security/` | The Lean every protocol states its guarantees in, and their proofs (root `AGENTS.md`, "Lean"). |
 
-`tests/test_boundaries.py` checks the direction of imports between core modules and a list of packages core may not
-import, and keeps the plain-integer references (`verity.primitives.circuits`, `verity_catalog.silicon`, `verity.primitives.randomness`, `verity.claims`) free
-of numpy.
+`tests/test_boundaries.py` checks which core units each may import (`ALLOWED`) and which packages core may not import, and
+it keeps the plain-integer references (`ml/circuits`, `ml/randomness`, `core/claims`) free of numpy.
 
 ~~~sh
-uv run pytest verity/tests            # in `check`
+uv run tools/verity/check/suites.py   # each directory's tests are a suite of their own; `check` runs them all
 ~~~
-
-The byte formats are pinned by vector files beside the tests: `verity/primitives/circuits/tests/format_vectors.json` (the program format),
-`verity/primitives/circuits/tests/partition_vectors.json` and `template_instance_vectors.json` (partitions), `verity/primitives/randomness/tests/vectors.json`
-(the challenge derivation).

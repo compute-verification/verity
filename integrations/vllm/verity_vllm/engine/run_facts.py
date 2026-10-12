@@ -80,6 +80,11 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         fp8k = fp8_block_gemm_kernel_of(engine.model)
         if fp8k is not None:
             manifest["backends"]["fp8_block_gemm_kernel"] = fp8k
+        # the fused-MoE experts class, attested only under a declared `target.moe_backend`: every MoE layer has one, so an unconditional
+        # key would move the profile id of every earlier MoE run
+        if engine.target is not None and engine.target.moe_backend is not None:
+            from verity_vllm.program.frontend.target_profile import moe_experts_class_of
+            manifest["backends"]["moe_experts_class"] = moe_experts_class_of(engine.model)
         manifest["engine_kwargs"]["kernel_config"] = dict(engine.kwargs.get("kernel_config") or {})
         if engine.target is not None:
             manifest["target"] = engine.target.to_json()

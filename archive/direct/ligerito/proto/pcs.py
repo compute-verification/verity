@@ -180,7 +180,7 @@ def _open_rows(U: torch.Tensor, tree, S: list[int], depth: int) -> RoundOpen:
 def _commit(U: torch.Tensor):
     """Blake3 Merkle over the codeword rows (= the columns of the (W, n) buffer U)."""
     if ligero_merkle._gpu_merkle is None:
-        raise RuntimeError("kernels/hash_gpu (cupy) is required for the GPU Merkle")
+        raise RuntimeError("verity/ml/kernels/hash_gpu (cupy) is required for the GPU Merkle")
     tree = ligero_merkle._gpu_merkle.commit(U, HASH)
     return ligero_merkle._gpu_merkle.digest_bytes(tree.root, HASH), tree
 

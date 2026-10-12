@@ -1,7 +1,7 @@
 """Tool declarations (store README §6.1): a small Python object around an existing command.
 
-    TOOL = Tool(name="tc_probe", version="1", command=["python", "tools/tc_probe/tc_probe.py"],
-                closure=["tools/tc_probe/**", ...], key_params=[...], key_conditions=["hw.family"],
+    TOOL = Tool(name="tc_probe", version="1", command=["python", "benchmarks/tc_probe/tc_probe.py"],
+                closure=["benchmarks/tc_probe/**", ...], key_params=[...], key_conditions=["hw.family"],
                 param_artifacts=["replay_golden"], caches=["nvcc"], produces=["tc-evidence/v1", "run-files/v1"],
                 parse=None, conditions=None)
 

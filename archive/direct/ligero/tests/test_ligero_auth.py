@@ -1,7 +1,7 @@
 """``authentication = included`` for B-Ligero (``archive/direct/ligero/auth.py``, ``serialize.py`` v3/v2 formats).
 
 Torch-free: the word trees, the canonical multiproofs, the statement block and the verifier's authentication check are
-numpy + ``verity.primitives.commitments``.  The pinned digests below are the SAME constants ``archive/ligero-verify/src/auth.rs``
+numpy + ``verity.ml.commitments``.  The pinned digests below are the SAME constants ``archive/ligero-verify/src/auth.rs``
 pins in its unit tests, so the two verifiers are checked against one set of numbers (a divergence shows up on the
 laptop, without a Rust toolchain).  The proof-file round trip needs ``protocol.Proof`` and is skipped without torch.
 """
@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from verity_experimental.commitments.multiproof import multiproof, verify_multiproof
-from verity.primitives.commitments import MerkleTree
+from verity.ml.commitments.multiproof import multiproof, verify_multiproof
+from verity.ml.commitments import MerkleTree
 
 from archive.direct.ligero import auth
 

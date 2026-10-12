@@ -61,6 +61,8 @@ import threading
 import time
 from pathlib import Path
 
+from .secret_hint import FRESH_SHELL, lost
+
 SYNC_ENV = "RESEARCH_NOTES_SYNC"
 TOKEN_ENV = "RESEARCH_NOTES_TOKEN"
 NOTES_URL = "https://github.com/danielreuter/research-notes.git"
@@ -126,6 +128,27 @@ def remote_target(root: Path, remote: str = "origin") -> tuple[list[str], str]:
     URL as configured (`remote get-url` prints it rewritten by insteadOf), else ([], remote) as before."""
     url = _out(root, "config", "--get", f"remote.{remote}.url")
     return (token_url(url) if url else None) or ([], remote)
+
+
+RACE = ("non-fast-forward", "fetch first", "[rejected]", "failed to update ref", "stale info")
+REFUSED = ("Authentication failed", "could not read Username", "Permission denied", "denied to", "returned error: 401",
+           "returned error: 403", "Repository not found", "does not appear to be a git repository")
+
+
+def refused(stderr: str) -> bool:
+    """Whether a failed fetch or push was refused (credentials, permissions, no such repository), which no retry changes. Anything
+    else, a lost push race or a lock or transfer error two machines' syncs under load hit (6 Oct, load 156), is retried."""
+    return any(k in stderr for k in REFUSED)
+
+
+def token_hint(root: Path, remote: str = "origin") -> str:
+    """'' unless RESEARCH_NOTES_TOKEN is empty here and `remote` is github.com's; then why git failed and what to do, for the end of
+    a fetch or push failure (a laptop's own credentials need no token, so an empty one is no refusal by itself)."""
+    url = _out(root, "config", "--get", f"remote.{remote}.url") or ""
+    if os.environ.get(TOKEN_ENV) or not GITHUB_URL_RE.match(url.strip()):
+        return ""
+    return (f" -> {TOKEN_ENV} is empty in this shell, so git used the VM's own credentials, which the notes repo refuses: "
+            + (lost(TOKEN_ENV) or f"set it (a Cursor secret, Cloud Agents > Secrets) or {FRESH_SHELL}"))
 
 
 def pull(root: Path, remote: str = "origin") -> subprocess.CompletedProcess:
@@ -454,14 +477,15 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
     root = Path(root)
     if _out(root, "rev-parse", "--git-dir") is None:
         return {"rc": 2, "error": f"{root} is not a git repository"}
+    branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
+    if not branch:
+        return {"rc": 2, "pushed": False, "attempts": 0, "commit": None,
+                "error": "HEAD is detached; nothing committed: check out the notes branch"}
     rep = {"rc": 0, "pushed": False, "attempts": 0, **commit(root, paths, message, max_bytes, now)}
     if rep["future"] or rep["header"]:
         rep["rc"] = FUTURE_RC
     if _out(root, "remote", "get-url", remote) is None:
         return {**rep, "note": f"no remote {remote!r}: committed locally only"}
-    branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
-    if not branch:
-        return {**rep, "rc": 2, "error": "HEAD is detached; check out the notes branch"}
     secrets = _secret_values() if secrets is None else secrets
     tracking = f"refs/remotes/{remote}/{branch}"
     opts, where = remote_target(root, remote)
@@ -470,13 +494,19 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
         f = _run(root, *opts, "fetch", "-q", where, f"+refs/heads/{branch}:{tracking}", timeout=300)
         has_remote = f.returncode == 0
         if not has_remote and "couldn't find remote ref" not in f.stderr:
-            return {**rep, "rc": 1, "error": f"git fetch {remote} failed: {f.stderr.strip()[-300:]}"}
+            if n < retries and not refused(f.stderr):
+                time.sleep(min(2.0, 0.1 * 2 ** n))
+                continue
+            return {**rep, "rc": 1, "error": f"git fetch {remote} failed: {f.stderr.strip()[-300:]}{token_hint(root, remote)}"}
         base = tracking if has_remote else None
         if has_remote and _run(root, "merge-base", "--is-ancestor", tracking, "HEAD").returncode != 0:
             rb = _run(root, "rebase", "--autostash", tracking, timeout=300)
             if rb.returncode:
                 conflict = [x for x in (_out(root, "diff", "--name-only", "--diff-filter=U") or "").splitlines() if x]
                 _run(root, "rebase", "--abort")
+                if not _out(root, "symbolic-ref", "-q", "HEAD"):
+                    # an abort that lost its rebase-merge directory (NFS, 3 and 6 Oct) leaves HEAD detached at the remote branch
+                    _run(root, "checkout", "-q", branch)
                 return {**rep, "rc": 3, "conflict": conflict,
                         "error": "rebase conflict; nothing was dropped (the local commit is kept, the rebase aborted): resolve "
                                  + (", ".join(conflict) or rb.stderr.strip()[-200:]) + ", then sync again"}
@@ -490,8 +520,8 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
         if p.returncode == 0:
             _run(root, *opts, "fetch", "-q", where, f"+refs/heads/{branch}:{tracking}", timeout=300)
             return {**rep, "pushed": True, "warn": rep["warn"] + citation_warnings(cites)}
-        if not any(k in p.stderr for k in ("non-fast-forward", "fetch first", "[rejected]", "failed to update ref", "stale info")):
-            return {**rep, "rc": 1, "error": f"git push failed (local commit kept): {p.stderr.strip()[-300:]}"}
+        if refused(p.stderr) or n == retries and not any(k in p.stderr for k in RACE):
+            return {**rep, "rc": 1, "error": f"git push failed (local commit kept): {p.stderr.strip()[-300:]}{token_hint(root, remote)}"}
         time.sleep(min(2.0, 0.1 * 2 ** n))
     return {**rep, "rc": 1, "error": f"lost the push race {retries + 1} times (local commit kept); sync again"}
 

@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import get
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_debit as D
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as W
-from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity.core.protocols.pouw.protocol import Matmul, Shape
+from verity.core.protocols.pouw.schemes import get
+from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.core.protocols.pouw.schemes import pearl_c_debit as D
+from verity.core.protocols.pouw.schemes import pearl_c_work as W
+from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
@@ -35,7 +35,11 @@ DEVICES = {"pearl-c-sm120/v1": SM120, "pearl-c-sm120/v2": SM120_UNPROMOTED}
 PRICES = {Fraction(8): (SM120.prices, Fraction(8)),
           Fraction(1047, 125): (replace(SM120.prices, fadd=Fraction(1047, 125), forming_a_only=2), Fraction(8953, 1000))}
 TWINS = [t for t in P.load() if t["status"] == "pinned"]
-H100_PINS = {f"Pouw.PearlC.pearlC{kind}H100Rev1_{n}": n for kind in ("Gamma", "Sampled") for n in (8192, 16384)}
+CUBES = [t for t in TWINS if t["shape"] is not None]
+#: each layout twin's linears, as `Definitions/Pouw/PearlC/Device.lean` lists them (`llama31_8bLinears`)
+LAYOUTS = {"llama31_8b": ((6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336))}
+H100_PINS = {f"Pouw.SecurityProofs.PearlC.{kind}H100Rev1_{n}": n
+             for kind in ("Gamma", "Sampled") for n in (8192, 16384)}
 
 
 def scheme_of(twin: dict) -> C.PearlC:
@@ -78,13 +82,13 @@ def test_every_pinned_twin_is_priced_here():
                                                           for k in ("unit", "tile")}
 
 
-@pytest.mark.parametrize("twin", TWINS, ids=[t["pin"].removeprefix("Pouw.PearlC.") for t in TWINS])
+@pytest.mark.parametrize("twin", CUBES, ids=[t["pin"].removeprefix("Pouw.PearlC.") for t in CUBES])
 def test_gamma_is_the_pinned_twins(twin):
     s, n = scheme_of(twin), twin["shape"]
     assert gamma(s, n, cast_offset(twin), twin["reading"], twin["kind"]) == Fraction(twin["gamma"])
 
 
-@pytest.mark.parametrize("twin", [t for t in TWINS if t["reading"] == "forming-credited"],
+@pytest.mark.parametrize("twin", [t for t in CUBES if t["reading"] == "forming-credited"],
                          ids=lambda t: t["pin"].removeprefix("Pouw.PearlC."))
 def test_credit_and_cap_are_the_pinned_twins(twin):
     """The Lean's credit, solved from the pinned γ alone, is `credit_of`; the unit's cap ρ·credit is its cells' and a
@@ -105,11 +109,29 @@ def test_credit_and_cap_are_the_pinned_twins(twin):
         assert rho * W.cell_credit(s, record) * rows * cols == rho * credit * share
 
 
+@pytest.mark.parametrize("twin", [t for t in TWINS if t["shape"] is None], ids=lambda t: t["pin"].split(".")[-1])
+def test_gamma_is_the_pinned_linear_and_layout_twins(twin):
+    """A twin of one linear (n, k) states one γ at every batch m, and a layout's is the max over its linears: the unit's
+    least credit (1 − ρ)·credit over `wrefDevRev1K d c` at m × n × k."""
+    s, c = scheme_of(twin), cast_offset(twin)
+    linears = LAYOUTS[twin["layout"]] if twin.get("layout") else ((twin["n"], twin["k"]),)
+    assert twin["reading"] == "forming-credited"
+    for m in (1, 32, 8192):
+        gammas = []
+        for n, k in linears:
+            sh = Shape(m, k, n)
+            gammas.append(1 - (1 - GAMMA0) * (1 - s.cap) * Fraction(s.credit_of(sh)) / (s.wref(sh) + c * m * k))
+        assert max(gammas) == Fraction(twin["gamma"])
+
+
 @pytest.mark.parametrize("pin,n", H100_PINS.items(), ids=list(H100_PINS))
 def test_h100_gamma_is_rev1s_pin(pin, n):
-    """`pearl-c-h100-v1`'s γ at the cap is `DeviceRev1Gamma.lean`'s, read off the repository's pin."""
-    sig = " ".join(" ".join(P.guarantees(json.loads(P.REPO_AUDIT.read_text()))[pin]["signature"]).split())
-    lit = P._GAMMA_LITERAL.search(sig)
+    """`pearl-c-h100-v1`'s γ at the cap is `DeviceRev1Gamma.lean`'s, read off the repository's pin (its lifted
+    guarantee's statement)."""
+    audit = json.loads(P.REPO_AUDIT.read_text())
+    sig, lifted = P._statement(pin, P.guarantees(audit)[pin], P.lifted_definitions(audit, P.REPO_AUDIT.parent))
+    lit = P._GAMMA_LITERAL.search(sig) or P._GAMMA_SOURCE.search(sig)
+    assert lifted and lit, sig
     s = get("pearl-c-h100-v1")
     assert gamma(s, n, Fraction(0), "forming-credited", "unit") == Fraction(int(lit[1]), int(lit[2]))
     assert s.credit_of(Shape(n, n, n)) == lean_credit(Fraction(int(lit[1]), int(lit[2])), n, s.cap,

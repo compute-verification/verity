@@ -8,13 +8,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation.reference import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation.reference import evaluate
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import b1, hopper
 from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.registry import attention_vocab
+from verity_vllm.program.frontend import targets as TG
 
 NEG_INF, NAN = 0xFF800000, 0x7FFFFFFF
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -27,18 +28,18 @@ def _bf16(rng, shape):
 
 def test_masked_from_is_the_tiles_causal_mask_boundary():
     # decode (one query row, T keys): only the first block, ceil(T/BN) - 1, is a Check_inf iteration
-    assert [F3.fa3_masked_from(T, 128, 0, 64, 4) for T in (1, 128, 129, 287)] == [0, 0, 1, 2]
+    assert [attention_vocab.fa3_masked_from(T, 128, 0, 64, 4) for T in (1, 128, 129, 287)] == [0, 0, 1, 2]
     # prefill rows (sq = sk): tile m_block = 4r // 128 starts at query row 32 m_block; blocks from its first row's diagonal are masked
-    assert [F3.fa3_masked_from(r + 1, 128, r, 128, 4) for r in (0, 31, 32, 127, 128, 159, 160, 286)] == [0, 0, 0, 0, 1, 1, 1, 2]
+    assert [attention_vocab.fa3_masked_from(r + 1, 128, r, 128, 4) for r in (0, 31, 32, 127, 128, 159, 160, 286)] == [0, 0, 0, 0, 1, 1, 1, 2]
     # the row's first block (ceil(T/BN) - 1) is always at or above it: the first iteration runs Check_inf
     for kBM, g, BN in ((64, 4, 192), (192, 4, 128), (128, 8, 128), (64, 1, 128)):
         for sq, sk in ((1, 300), (130, 130), (17, 300), (64, 164)):
             for r in range(sq):
                 T = r + 1 + sk - sq
-                assert F3.fa3_masked_from(T, BN, r, kBM, g) <= -(-T // BN) - 1
+                assert attention_vocab.fa3_masked_from(T, BN, r, kBM, g) <= -(-T // BN) - 1
     with pytest.raises(ValueError, match="does not divide kBlockM"):
-        F3.fa3_masked_from(10, 128, 3, 64, 7)
-    assert TG.fa3_masked_from(TargetProfile(**H100), 130, 32, 8, 128, 130, 129) == F3.fa3_masked_from(130, 128, 129, 128, 4)
+        attention_vocab.fa3_masked_from(10, 128, 3, 64, 7)
+    assert TG.fa3_masked_from(TargetProfile(**H100), 130, 32, 8, 128, 130, 129) == attention_vocab.fa3_masked_from(130, 128, 129, 128, 4)
 
 
 def _block(check: bool, first: bool = False, D: int = 16, BN: int = 16):

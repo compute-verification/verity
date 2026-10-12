@@ -47,7 +47,7 @@ const DIGEST_TAG: &[u8] = b"veritor/typed-obligation/v0";
 const MERKLE_FRAMING: &str = "veritor/protocol/merkle/frame/v3";
 const VLLM_FRAMING: &str = "verity-vllm/leaf/v1";
 
-// --- canonical JSON (verity.primitives.commitments.identity.canonical_json_text) --------------
+// --- canonical JSON (verity.ml.commitments.identity.canonical_json_text) --------------
 
 fn canonical(value: &Json, out: &mut String) {
     match value {

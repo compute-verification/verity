@@ -1,8 +1,8 @@
-"""Per-token timing traces of real vLLM serving, for the network warden's calibration (`network-warden-calibrate`).
+"""Per-token timing traces of real vLLM serving, for the network certifier's calibration (`network-certifier-calibrate`).
 
 One job (`run.sh`, under `research run --queue` on one leased GPU) starts vLLM's OpenAI-compatible server on that GPU from
 the node's local weights, replays recorded request mixes open-loop with a streaming client on the same host, and records
-on the monotonic clock when each request was sent and when each streamed chunk arrived. The client stands where a warden
+on the monotonic clock when each request was sent and when each streamed chunk arrived. The client stands where a certifier
 in front of the server would: every streamed token is one egress frame, ready when its chunk arrives, and a request is
 ⌈bytes/B⌉ ingress frames that arrive when it is sent.
 
@@ -31,7 +31,7 @@ goes to stderr and the job exits, rather than holding its GPU to the lease's end
   GPU and of the job's CPUs, the GPU's utilisation, clocks and compute processes, and the longest stall of a 10 ms
   heartbeat thread and of the client's event loop (the monitor's own, in the offline modes);
 - `meta.json`: host, GPU, CPUs, versions, model, server arguments, the mix and t0;
-- `server.log`, and at the end `trace.json` (the calibration format, `verity.protocols.accounting.communication.warden.calibration`) and
+- `server.log`, and at the end `trace.json` (the calibration format, `verity.core.protocols.certifier.calibration`) and
   `summary.json`.
 
 **Exit status.** 0 when the chunk ran to its deadline. A SIGTERM (an eviction: the lease reclaimed the GPU) stops it;

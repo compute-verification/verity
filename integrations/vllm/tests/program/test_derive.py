@@ -17,11 +17,11 @@ import torch.nn.functional as F
 from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.codec import program_digest
-from verity.primitives.circuits.refs import Coll
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.codec import program_digest
+from verity.ml.circuits.refs import Coll
 from verity_vllm.program.registry import b1, prims as P
-from verity_vllm.program.registry.serve3_reference import materialize
+from verity_vllm.program.kernels.serve3_reference import materialize
 
 from verity_vllm.program.frontend import examples
 from verity_vllm.program.frontend.correspond import correspond_rebound
@@ -143,7 +143,7 @@ def test_s1_mlp_reference_mode_evaluates_and_matches_stated_semantics():
 def test_s1_gemm_structure_corresponds_to_examples_gemm():
     """Profile-mode Linear (bf16) derives to exactly the registered `Gemm_v1{K,N}` + `BiasAdd_v1{N}` kinds — the same
     definitions `examples.py`'s authored Gemm uses, so the derived body equals the authored body node for node."""
-    from verity.primitives.circuits.defs import bind as ir_bind
+    from verity.ml.circuits.defs import bind as ir_bind
     from verity_vllm.program.frontend.correspond import compare_bodies
 
     m = torch.nn.Linear(16, 8, device="meta", dtype=torch.bfloat16)
@@ -246,7 +246,7 @@ def test_gpt2_greedy_request_reference_mode_tokens_match_torch():
     assert kinds["ArgmaxRef_v1"] == 3 and kinds["I64ToI32_v1"] == 4 and kinds["EagerAttentionRef_v1"] == 2 * (2 + 3 + 4)
     assert "IntCatNarrow[reference]_v1" in rep.provenance["rules_applied"]
     ids = torch.tensor([3, 17])
-    from verity_vllm.program.registry.serve3_reference import materialize
+    from verity_vllm.program.kernels.serve3_reference import materialize
     wbits = np.concatenate([_bits(dict(g.named_parameters())[w["name"]]) for w in rep.provenance["weights"]])
     t = materialize(rep.program, [[int(v) for v in ids.tolist()], [int(v) for v in wbits]])
     got = [int(t[o]) for o in rep.program.circuit.root_outputs()]
@@ -304,7 +304,7 @@ def test_literal_written_into_a_tensor_is_a_mutation():
 
 
 def _layer_oracle_digest(C, L0: bool, T: int, T0: int = 0) -> str:
-    from verity.primitives.circuits.defs import bind as ir_bind
+    from verity.ml.circuits.defs import bind as ir_bind
     from verity_vllm.program.frontend.rules.family import DecoderLayerT
     return program_digest(Program(ir_bind(DecoderLayerT, C=C, L0=L0, T=T, T0=T0)))
 
@@ -358,7 +358,7 @@ def test_s2_allowed_dims_refuses_other_shapes():
 
 
 def _serve_oracle_digest(C, LP, STEPS) -> str:
-    from verity.primitives.circuits.defs import bind as ir_bind
+    from verity.ml.circuits.defs import bind as ir_bind
     return program_digest(Program(ir_bind(b1.Serve, C=C, LP=LP, STEPS=STEPS)))
 
 
@@ -424,7 +424,7 @@ def test_s3_full_b0_matches_certified_digest():
     rep = derive_report(m, (_meta(LP, dtype=torch.int32),), **PROF, config=C, name="Serve")
     assert rep.ok, rep.unsupported
     assert rep.family and rep.family["matched"]
-    assert rep.digest == "dc895366bba839f2ff51eeb4a2b3bf09846b3c0cc3bef51bcd5ab51cea4f7e78"   # the re-baseline re-key (AmpereBF16TcDot16_v2); d4f4b1f1 before
+    assert rep.digest == "7d09b7a652a8364525bf82a34bb7e261efc033d7b53ceda20d5e5bf2a774bbbdd402d04cd3bd7868946582956090359a851d01cf6415568b830647b8b2f56df7"   # the re-baseline re-key (AmpereBF16TcDot16_v2); d4f4b1f1 before
     assert rep.digest == _serve_oracle_digest(C, LP, STEPS)
 
 
@@ -501,7 +501,7 @@ def test_returned_parameter_is_recorded_explicitly():
 
 def test_unsupported_is_never_a_partial_program():
     """Unsupported carries no program; nothing is registered by a failed derivation."""
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ml.circuits.defs import REGISTRY
     before = set(REGISTRY.defs)
     r = derive(ex.NegUnknownOp(), (torch.empty(2, 8),), **REF)
     assert isinstance(r, Unsupported)
@@ -557,7 +557,7 @@ def test_pad_tiny_padded_serve_matches_serve_v3():
     rewrites = [a for a in rep.provenance["applications"] if a["rule"] == "CacheRowWrite[vllm]_v1"]
     assert len(rewrites) == C3["NL"] * D_MAX and all(a["preconditions_checked"]["slot"] == a["preconditions_checked"]["history_rows"] - 1 for a in rewrites)
     # output: (D_MAX+1 token slots i32, D_MAX+1 live bits); the live vector is on the return type, designation is PAD-INT's manifest
-    from verity.primitives.circuits.types import Array as Arr_, Tuple as Tup_
+    from verity.ml.circuits.types import Array as Arr_, Tuple as Tup_
     _, ret = fsd.signature()
     assert isinstance(ret, Tup_) and ret.fields[0] == Arr_(D_MAX + 1, P.I32) and ret.fields[1] == Arr_(D_MAX + 1, P.BIT)
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.commitments.frame_v3 import vectors as V
+from verity.ml.commitments.frame_v3 import vectors as V
 
 from ..compile import LigeroCtx, P
 from ..relations import FP8_ADA_RELATION

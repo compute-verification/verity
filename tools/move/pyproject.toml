@@ -1,5 +1,9 @@
-# The layout move's tools (`restack.py`) and their tests. Not a package: the scripts are stdlib and git, run as files, and their
-# tests run as a suite (`uv run tools/check/suites.py tools/move`).
+# The generated moves (`layout.py`, `lean.py`, `rename.py`), `restack.py`, and their tests. Not a package: the scripts are
+# stdlib and git, run as files, and their tests run as a suite (`uv run tools/check/suites.py tools/move`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `lean.py` writes the merged locks with the Lean audit's own `audit.text`, which tests/test_lean.py imports.
+inputs = ["tools/verity/lean"]

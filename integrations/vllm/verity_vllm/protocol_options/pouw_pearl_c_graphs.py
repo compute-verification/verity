@@ -18,14 +18,17 @@ stream of the run's own, and the next call joins it after its own A tree, so the
 a call joins at once when the call before is of its shape (the side steps still read that shape's buffers), and the
 forward's last call joins its own before vLLM's capture ends.  The same kernels write the same bytes, so the commitments are
 the serial capture's.
+
+With a `statement` enabled (and hashing), a whole capture also copies each call's A words to the statement's stage, and
+`whole_replayed` launches its commitment of the forward's rows after the replay; its key says so.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
+from verity.core.protocols.pouw.protocol import Matmul, Shape
+from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 
 from .pouw_pearl_c_host import _bytes, _write, _zeros, torch_uint8
 from .pouw_pearl_c_screen import excluded, scatter_into
@@ -33,9 +36,9 @@ from .pouw_pearl_c_screen import excluded, scatter_into
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
 GRAPH_ROWS = 256
-#: with ``graphs``, each weight's slot of per-call inputs its graph reads: dom_a ‖ unit (136 bytes, padded), and the byte
-#: offsets of the call's leaves, flags and A root in the pass's buffers (three int64)
-SLOT_BYTES = 144
+#: with ``graphs``, each weight's slot of per-call inputs its graph reads: dom_a ‖ unit (168 bytes, padded), and
+#: the byte offsets of the call's leaves, flags and A root in the pass's buffers (three int64)
+SLOT_BYTES = 176
 
 
 def _capturing() -> bool:
@@ -80,8 +83,8 @@ class _Slots:
 
 
 class GraphCalls:
-    """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``order``, ``key_slots``, ``offs``,
-    ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps` and `_call_cuts`, and
+    """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``order``, ``nb`` (its trees' node bytes),
+    ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps` and `_call_cuts`, and
     its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose lengths bound it)."""
 
     #: while vLLM captures forwards (`whole_capture_begin`), the calls made inside its stream capture, in order; None otherwise
@@ -98,6 +101,10 @@ class GraphCalls:
     #: inside a deferred whole capture, the shape whose call's side steps no call has joined yet, and the side stream
     _deferred: Any = None
     _side_stream: Any = None
+    #: a commitment of each forward replayed whole beside the scheme's, while its ``enabled`` (with hashing): inside the
+    #: capture, `stage(w, sh)` after each call's steps (and `prepare(w, sh)` outside it, in the warm-up); after each replay,
+    #: `after(calls, tiles_at)` on the replaying stream (benchmarks/pouw/served_zk/statement.py's `Statement`)
+    statement: Any = None
 
     def _graph_call(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int, index: int, caller: Any) -> tuple[Any, bool]:
         """A graphed call: inside vLLM's capture of a whole forward, its steps launched into that capture (and in a retained
@@ -112,9 +119,13 @@ class GraphCalls:
             if self._whole_retained:
                 for stage, t in zip(self._stages[w], self._kept(sh, pipe), strict=True):
                     stage.copy_(t)
+            if self._statement_on():
+                self.statement.stage(w, sh)
             return out
         if self._whole is not None and self._whole_retained and w not in self._stages:
             self._stages[w] = tuple(t.new_empty(t.shape) for t in self._kept(sh, pipe))
+        if self._whole is not None and self._statement_on():
+            self.statement.prepare(w, sh)
         if self.hashing:
             self._slot(w, index, sh.m16, m, caller)
         return self._replay(w, sh, pipe, raw, tiles, m)
@@ -142,11 +153,16 @@ class GraphCalls:
         if not self.graphs or self.cur is None or self.schedule.side or self.schedule.main_priority == "greatest":
             return None
         retained = self.cur.retain is not None if retained is None else retained
-        return (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
+        key = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
+        return (*key, "statement") if self._statement_on() else key
 
     def _defers(self) -> bool:
         """Whether a whole capture forks each call's tile hashing beside the next call (`whole_defer`, with hashing)."""
         return self.whole_defer and self.hashing
+
+    def _statement_on(self) -> bool:
+        """Whether forwards replayed whole commit `statement`'s rows too (it is set and enabled, with hashing)."""
+        return self.statement is not None and self.statement.enabled and self.hashing
 
     def whole_capture_begin(self, key: tuple | None = None) -> None:
         """Calls are recorded from here, for the forwards of `key`'s kind (`whole_key`'s; an unretained pass's when None).
@@ -207,7 +223,7 @@ class GraphCalls:
         staged = s is not None and s.calls is calls and s.at == at
         if not staged:
             s = self._slots(calls, at)
-        if s.after[1] > self.capacity or 32 * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
+        if s.after[1] > self.capacity or self.nb * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity; end it and begin another")
         if self._slots_copied is not None:
             self._slots_copied.synchronize()
@@ -232,6 +248,8 @@ class GraphCalls:
         s, self._uploaded = self._uploaded, None
         self._predicted = dict(s.predicted)    # the upload rewrote the uncalled weights' slots from the host copy
         cur.tiles, cur.flag_rows = s.after[1], s.after[2]
+        if self._statement_on():
+            self.statement.after(calls, s.at[1])
         if cur.retain is not None:
             self._keep_whole(calls, s.at[2])
         self._next = self._slots(calls, s.after)
@@ -243,7 +261,7 @@ class GraphCalls:
 
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
         """A call's byte offsets in the pass's buffers: its leaves, its flags, its A root."""
-        return 32 * tiles_at, 2 * flags_at, 32 * index
+        return self.nb * tiles_at, 2 * flags_at, self.nb * index
 
     def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
         """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every
@@ -260,7 +278,8 @@ class GraphCalls:
             keys, offs = self._host_keys.numpy(), self._host_offs.numpy()
             tiles_at, flags_at = cur.tiles, cur.flag_rows
             for v, i in sorted(self.order.items(), key=lambda kv: kv[1]):
-                keys[i, :136] = np.frombuffer(self.keys(self.roots[v], index + i, m16), np.uint8)
+                kv = self.keys(self.roots[v], index + i, m16)
+                keys[i, :len(kv)] = np.frombuffer(kv, np.uint8)
                 offs[i] = self._offsets(index + i, tiles_at, flags_at)
                 self._predicted[v] = (index + i, m16, tiles_at, flags_at)
                 tiles_at += R.cdiv(m16, R.TILE) * (self.weights[v].n // R.TILE)
@@ -285,7 +304,7 @@ class GraphCalls:
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None:
-            g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(32 * tiles, self.device))
+            g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(self.nb * tiles, self.device))
             if self.cur.poison is not None:
                 g.y.view(torch.uint8).fill_(self.cur.poison)
                 g.leaves.fill_(self.cur.poison)
@@ -387,7 +406,7 @@ class GraphCalls:
         else none), into the pass's flags, and the call's leaves and A root into the pass's buffers, at the offsets in its
         weight's slot."""
         size, offs = pipe.size["tree_a"], self.offs[self.order[w]]
-        root, flags, leaves = sh.b["tree_a"][size - 32:size], self.flag_buf.view(-1), g.leaves[:32 * tiles]
+        root, flags, leaves = sh.b["tree_a"][size - self.nb:size], self.flag_buf.view(-1), g.leaves[:self.nb * tiles]
 
         def scatter():
             scatter_into(sh.xa, sh.b["alpha_a"], sh.b["aux_a"], flag_rows, flags, leaves, self.leaves, root, self.roots_buf, offs)

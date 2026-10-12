@@ -43,7 +43,7 @@ def values(tok: int, start: int, vs: int) -> tuple[int, int, int]:
 
 
 def shard_fn(VS: int, H: int, START: int) -> Any:
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import b1_tp2
 
     return bind(b1_tp2.EmbeddingShard, VS=VS, H=H, START=START)

@@ -24,6 +24,9 @@ from . import CANCEL_ACTORS
 from .events import append, events_path, utc_now_ms
 from .procs import stat_fields
 
+#: the group members a marker names: a whole group's list can pass the record cap (events.MAX_RECORD_BYTES), and the writer then drops
+#: `target`, pgid included, so the classifier can't match the marker to the job it stopped
+MEMBERS_KEPT = 16
 DEFAULT_FALLBACK = os.environ.get("TELEMETRY_CANCEL_FALLBACK") or (
     "/root/dm/cancel.jsonl" if os.path.isdir("/root/dm") else str(Path.home() / ".veritor" / "telemetry" / "cancel.jsonl"))
 
@@ -85,13 +88,15 @@ def cancel(a: argparse.Namespace) -> int:
         else:
             verified = None   # no expectation supplied: identity recorded, not verified
     elif a.target_pgid is not None:
-        ident = {"pgid": a.target_pgid, "members": pgid_members(a.target_pgid)}
+        members = pgid_members(a.target_pgid)
+        ident = {"pgid": a.target_pgid, "members": members[:MEMBERS_KEPT], "members_total": len(members)}
         if a.expect_run_dir is not None:
             want = str(Path(a.expect_run_dir).resolve())
-            ident["run_dir_members"] = [m["pid"] for m in ident["members"] if run_dir_of(m["pid"]) == want]
-            verified = bool(ident["run_dir_members"])
+            ours = [m["pid"] for m in members if run_dir_of(m["pid"]) == want]
+            ident["run_dir_members"] = ours[:MEMBERS_KEPT]
+            verified = bool(ours)
         else:
-            verified = bool(ident["members"]) if a.expect_nonempty else None
+            verified = bool(members) if a.expect_nonempty else None
     elif a.target_pod:
         ident = {"pod": a.target_pod}
     intent = {"kind": "cancel_intent", "actor": a.actor, "reason": a.reason, "signal": a.signal, "target": ident, "verified": verified,

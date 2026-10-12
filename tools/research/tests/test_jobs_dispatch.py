@@ -114,7 +114,7 @@ def test_a_merge_check_runs_on_a_free_pod_and_completes_with_its_run_id():
 
 
 @pytest.mark.parametrize("tail", [
-    "research run --on t1: refused: the machine failed the preflight tools/check/preflight.py (exit 1): uv is not on the PATH",
+    "research run --on t1: refused: the machine failed the preflight tools/verity/check/preflight.py (exit 1): uv is not on the PATH",
     "research: run r20260929-000001-abcd refused on t1 (PreflightFailed): cpu: no avx512f  (recorded in /x)",
 ])
 def test_a_pod_that_fails_checks_preflight_is_benched_and_another_pod_takes_the_job(tail):
@@ -317,15 +317,15 @@ def test_only_a_verdict_is_a_failure(kind, summary, want):
 
 def test_the_commands_each_kind_runs(tmp_path):
     job = {"kind": "merge-check", "payload": {"commit": C1, "base": BASE}}
-    assert D.command(job, "t1", "py", None) == ["py", "tools/check/check.py", "--record", "--on", "t1", "--base", BASE]
+    assert D.command(job, "t1", "py", None) == ["py", "tools/verity/check/check.py", "--record", "--on", "t1", "--base", BASE]
     assert D.command(job, "t1", "py", tmp_path / "v.tar.gz")[-2:] == ["--verdicts-in", str(tmp_path / "v.tar.gz")]
-    regen = D.command({"kind": "lean-regen", "payload": {"packages": ["backends/flock/verifier/soundness"]}}, "t1", "py", None)
+    regen = D.command({"kind": "lean-regen", "payload": {"packages": ["verity/ml/flock/verifier/soundness"]}}, "t1", "py", None)
     assert regen[:15] == ["py", "-m", "research", "run", "--on", "t1", "--project", "verity", "--source", ".", "--cwd", "source",
                           "--preflight", "check", "--"]
     assert "--preflight" not in D.command({"kind": "lean-regen", "payload": {"packages": ["p"]}}, "t1", "py", None, preflight=False)
     assert D.command({"kind": "audit-main", "payload": {"commit": C1}}, "t1", "py", None) == [
-        "py", "tools/check/check.py", "--record", "--on", "t1", "--base", D.EMPTY_TREE, "--no-cache"]
-    assert "audit.py --build --update backends/flock/verifier/soundness" in regen[-1]
+        "py", "tools/verity/check/check.py", "--record", "--on", "t1", "--base", D.EMPTY_TREE, "--no-cache"]
+    assert "check.py --build --update verity/ml/flock/verifier/soundness" in regen[-1]
     assert '$RESEARCH_RUN_DIR/records/$p' in regen[-1] and regen[-1].endswith("exit $rc")
 
 
@@ -355,8 +355,8 @@ def test_the_launch_child_checks_the_commit_in_its_own_worktree_without_the_toke
     _git(origin, "add", ".")
     _git(origin, "commit", "-qm", "base")
     base = _git(origin, "rev-parse", "HEAD")
-    (origin / "tools" / "check").mkdir(parents=True)
-    (origin / "tools" / "check" / "check.py").write_text(
+    (origin / "tools" / "verity" / "check").mkdir(parents=True)
+    (origin / "tools" / "verity" / "check" / "check.py").write_text(
         "import json, os, subprocess, sys\n"
         f"json.dump({{'argv': sys.argv[1:], 'cwd': os.getcwd(), 'token': os.environ.get('JOBS_TOKEN'),\n"
         "           'head': subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()},\n"
@@ -529,7 +529,7 @@ def _lean_repo(tmp_path: Path) -> Path:
         "a/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": "../b"}, {"type": "git", "name": "mathlib"}]}),
         "a/nested/lakefile.toml": "", "a/nested/N.lean": "n",
         "b/lakefile.toml": "", "b/B.lean": "b", "c/lean-audit.json": "{}", "c/C.lean": "c",
-        "tools/lean/audit.py": "audit", "tools/check/check.py": "check", "README.md": "readme",
+        "tools/verity/lean/check.py": "audit", "tools/verity/check/check.py": "check", "README.md": "readme",
     }
     for f, text in files.items():
         (repo / f).parent.mkdir(parents=True, exist_ok=True)
@@ -546,10 +546,10 @@ def test_a_lean_regen_is_keyed_on_the_files_the_audit_reads(tmp_path):
     repo = _lean_repo(tmp_path)
     one = _git(repo, "rev-parse", "HEAD")
     assert sorted(lean_inputs(one, ["a"], repo)) == ["a/A.lean", "a/lake-manifest.json", "a/lakefile.toml", "a/lean-audit.json",
-                                                    "b/B.lean", "b/lakefile.toml", "tools/lean/audit.py"]
+                                                    "b/B.lean", "b/lakefile.toml", "tools/verity/lean/check.py"]
     keys = {}
-    for name, path, text in (("readme", "README.md", "x"), ("nested", "a/nested/N.lean", "x"), ("check", "tools/check/check.py", "x"),
-                             ("dep", "b/B.lean", "x"), ("tool", "tools/lean/audit.py", "x"), ("other", "c/C.lean", "x")):
+    for name, path, text in (("readme", "README.md", "x"), ("nested", "a/nested/N.lean", "x"), ("check", "tools/verity/check/check.py", "x"),
+                             ("dep", "b/B.lean", "x"), ("tool", "tools/verity/lean/check.py", "x"), ("other", "c/C.lean", "x")):
         (repo / path).write_text(text)
         _git(repo, "commit", "-qam", name)
         keys[name] = lean_key(_git(repo, "rev-parse", "HEAD"), ["a"], repo)
@@ -559,6 +559,31 @@ def test_a_lean_regen_is_keyed_on_the_files_the_audit_reads(tmp_path):
     assert lean_key(one, ["a/"], repo) == base != lean_key(one, ["a", "c"], repo)
     with pytest.raises(SystemExit, match="b has no lean-audit.json"):
         lean_key(one, ["b"], repo)
+
+
+def test_a_lean_regen_is_keyed_on_its_provers_and_everything_they_require(tmp_path):
+    """A package whose guarantees are proved in a nested package (`proved_in`) is audited from that package's build, and so
+    from every package it requires by path, at any depth."""
+    from research.jobs.cli import lean_inputs, lean_key
+
+    repo = _lean_repo(tmp_path)
+    files = {"s/lean-audit.json": json.dumps({"proved_in": ["Proofs"]}), "s/lakefile.toml": "", "s/S.lean": "s",
+             "s/Proofs/lakefile.toml": "", "s/Proofs/P.lean": "p",
+             "s/Proofs/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": ".."}, {"type": "path", "dir": "../../a"}]})}
+    for f, text in files.items():
+        (repo / f).parent.mkdir(parents=True, exist_ok=True)
+        (repo / f).write_text(text)
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "s")
+    one = _git(repo, "rev-parse", "HEAD")
+    assert {"s/S.lean", "s/Proofs/P.lean", "a/A.lean", "b/B.lean"} <= set(lean_inputs(one, ["s"], repo))
+    assert not {"a/nested/N.lean", "c/C.lean"} & set(lean_inputs(one, ["s"], repo))
+    base, keys = lean_key(one, ["s"], repo), set()
+    for path in ("s/Proofs/P.lean", "a/A.lean", "b/B.lean"):
+        (repo / path).write_text("x")
+        _git(repo, "commit", "-qam", path)
+        keys.add(lean_key(_git(repo, "rev-parse", "HEAD"), ["s"], repo))
+    assert len(keys | {base}) == 4
 
 
 def test_trains_with_the_same_lean_inputs_share_one_regeneration(tmp_path, monkeypatch, capsys):
@@ -583,11 +608,11 @@ def test_trains_with_the_same_lean_inputs_share_one_regeneration(tmp_path, monke
 
 def _flock_repo(tmp_path: Path, rustflags: str, pattern: str | None = None) -> Path:
     repo = tmp_path / "flock"
-    files = {"backends/flock/verifier/upstream.json": json.dumps({"upstream": {"sha256": "0" * 64, "rustflags": rustflags}}),
-             "backends/flock/src.rs": "fn main() {}", "backends/flock/README.md": "flock", "docs.md": "docs",
-             "tools/check/tool.py": 'CHECK = Tool(name="check", merge_requires={"lean-agreement": ["backends/flock/", "!README.md"]})\n'}
+    files = {"verity/ml/flock/verifier/upstream.json": json.dumps({"upstream": {"sha256": "0" * 64, "rustflags": rustflags}}),
+             "verity/ml/flock/src.rs": "fn main() {}", "verity/ml/flock/README.md": "flock", "docs.md": "docs",
+             "tools/verity/check/tool.py": 'CHECK = Tool(name="check", merge_requires={"lean-agreement": ["verity/ml/flock/", "!README.md"]})\n'}
     if pattern is not None:
-        files["tools/check/preflight.py"] = f"import re\nAVX512 = re.compile({pattern!r})\n"
+        files["tools/verity/check/preflight.py"] = f"import re\nAVX512 = re.compile({pattern!r})\n"
     for f, text in files.items():
         (repo / f).parent.mkdir(parents=True, exist_ok=True)
         (repo / f).write_text(text)
@@ -605,12 +630,12 @@ def _change(repo: Path, path: str) -> tuple[str, str]:
 
 
 @pytest.mark.parametrize("rustflags,pattern,path,want", [
-    ("-C target-cpu=x86-64-v3", r"target-cpu=(native|x86-64-v4)\b|avx512", "backends/flock/src.rs", False),   # today's pin
-    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "backends/flock/src.rs", True),
+    ("-C target-cpu=x86-64-v3", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/ml/flock/src.rs", False),   # today's pin
+    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/ml/flock/src.rs", True),
     ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "docs.md", False),                # no agreement runs
-    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "backends/flock/README.md", False),
-    ("-C target-cpu=x86-64-v4", r"never", "backends/flock/src.rs", False),                                     # the tree's own rule
-    ("-C target-cpu=native", None, "backends/flock/src.rs", True),                                            # a tree before #440
+    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/ml/flock/README.md", False),
+    ("-C target-cpu=x86-64-v4", r"never", "verity/ml/flock/src.rs", False),                                     # the tree's own rule
+    ("-C target-cpu=native", None, "verity/ml/flock/src.rs", True),                                            # a tree before #440
 ])
 def test_a_check_asks_for_avx512_only_when_its_tree_says_so(tmp_path, rustflags, pattern, path, want):
     from research.jobs.cli import needs_avx512
@@ -621,13 +646,13 @@ def test_a_check_asks_for_avx512_only_when_its_tree_says_so(tmp_path, rustflags,
 
 
 def test_a_flock_file_whose_name_git_quotes_still_asks_for_avx512(tmp_path):
-    """`git diff --name-only` quotes a name with bytes outside ASCII (`"backends/flock/\\303\\251.rs"`), which the agreement's
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/ml/flock/\\303\\251.rs"`), which the agreement's
     rule never matched, so a change to such a file asked for no AVX-512 machine."""
     from research.jobs.cli import needs_avx512
 
     repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
     base = _git(repo, "rev-parse", "HEAD")
-    (repo / "backends" / "flock" / "é.rs").write_text("fn f() {}")
+    (repo / "verity" / "ml" / "flock" / "é.rs").write_text("fn f() {}")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "é")
     assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
@@ -640,7 +665,7 @@ def test_a_check_asks_for_avx512_for_a_file_renamed_out_of_the_agreements_paths(
 
     repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
     base = _git(repo, "rev-parse", "HEAD")
-    _git(repo, "mv", "backends/flock/src.rs", "src.rs")
+    _git(repo, "mv", "verity/ml/flock/src.rs", "src.rs")
     _git(repo, "commit", "-qm", "move")
     assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
 

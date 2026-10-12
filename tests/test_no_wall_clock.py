@@ -135,21 +135,22 @@ def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
     runs: a test elsewhere that runs or skips on `lake` or a `.lake/` build output passes or fails with the build order (as
     verity-flock did, r20260929-015410-5a20). Such tests belong to a suite `check` runs after its Lean steps (`AFTER_LEAN`), and
     that suite declares the build outputs it uses under `[tool.verity.tests] artifacts`, which key its cached pass."""
-    spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "check" / "check.py")
+    spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(check)
     names = {}
     for p in _tracked():
         if os.path.basename(p) == "pyproject.toml":
             data = tomllib.loads((ROOT / p).read_text())
-            if "pytest" in data.get("tool", {}) and "project" in data:
-                names[re.sub(r"[-_.]+", "-", data["project"]["name"]).lower()] = (os.path.dirname(p), data)
+            if "pytest" in data.get("tool", {}):
+                name = re.sub(r"[-_.]+", "-", data["project"]["name"]).lower() if "project" in data else os.path.dirname(p)
+                names[name] = (os.path.dirname(p), data)
     after = [names[s][0] + "/" for s in check.AFTER_LEAN]
     offenders = [f"{path}:{line}" for path in _test_sources() if not path.startswith(tuple(after))
                  for line in lean_gates((ROOT / path).read_text(encoding="utf-8"))]
     assert not offenders, "tests that skip on what check's Lean steps build, outside the suites it runs after them:\n" + "\n".join(offenders)
     flock = names["verity-flock"][1]["tool"]["verity"]["tests"]
-    assert "backends/flock/verifier/lean/.lake/build/bin/flock-verify" in flock.get("artifacts", []), "verity-flock runs the verifier"
+    assert "verity/core/service/flock/.lake/build/bin/flock-verify" in flock.get("artifacts", []), "verity-flock runs the verifier"
 
 
 def test_the_lean_gate_scan_sees_each_form() -> None:

@@ -1,0 +1,18 @@
+{
+ "roots": ["Difftest", "DifftestExample"],
+ "layers": {
+  "Difftest": {
+   "imports": ["Lean", "Flock.Canon"],
+   "except": [],
+   "why": "the harness is code: Lean core and C-Flock's canonical JSON, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "DifftestExample": {
+   "imports": ["Difftest"],
+   "except": [],
+   "why": "the example port reaches Lean only through the harness, as a port does"
+  }
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}

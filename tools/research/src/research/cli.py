@@ -4,8 +4,8 @@
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
   research run --local-only REASON [...] -- CMD...   # where the store has no usable remote a local run refuses (exit 3): REASON says
                                                  # what preserves its records instead (default $RESEARCH_LOCAL_ONLY; job.json records it)
-  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...
-                                                 # the one queue (tools/cluster) places the job and runs it under its node's executor
+  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
+                                                 # the one queue (infra/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
@@ -15,14 +15,16 @@
                                                  # cancel; never the runner, never SIGKILL, so it still records the exit and publishes
                                                  # custody.  From any VM: a run another VM launched is found as `inspect` finds it
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
-  research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
+  research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json | --py-spy]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
                                                  # each ssh machine, and its records fetched here (remote.adopt)
   research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
   research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
                                                  # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
-                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (research/keeper.py)
-  research compare <baseline> <candidate> [--json]   # differences and candidate/baseline ratios; the workload contract judges them
+                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (`ops keeper`, verity_ops/keeper.py)
+  research compare <original>... <replay> [--expect E] [--json]
+                                                 # the replay's verdict from the store (same | within-band | differs | expected-change);
+                                                 # --dirs: two run dirs' differences and ratios, which the workload contract judges
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
   research keep PATH --owner @LANE --expires DATE|never --priority low|normal|high|keep [--regenerate CMD] [--art ART | --preserve] [--why T]
@@ -55,12 +57,12 @@
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
   research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
-                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (research/deploy.py)
+                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
                                                  # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
-                                                 # idle: `cluster usage` (tools/cluster usage.py) over the console's record on vy-nebius-1
+                                                 # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -96,6 +98,7 @@ import json
 import math
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import clone
@@ -178,7 +181,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
-                         "and reserve them for the run; else MemoryNotAvailable (research.mem)")
+                         "and reserve them for the run; else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
+                         "(its scope's MemoryMax=), required unless --kind names a registered kind, whose shape gives it")
     ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S", help="with --mem-gb: wait up to S seconds for the memory instead of refusing")
     ap.add_argument("--preflight", default=None, metavar="TOOL",
                     help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
@@ -186,7 +190,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--job-user", default=None, metavar="USER",
                     help="run the workload as USER (an unprivileged system user) in a transient system unit, with no sudo, no home and "
                          "a clean environment; the runner keeps its records as itself (research.jobuser)")
-    q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (tools/cluster) places and runs the job; "
+    q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
                                    "--on then pins its node, and --mem-gb is its memory")
     q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
     q.add_argument("--class", dest="queue_class", default="work", metavar="P", help="its priority class (the description's [priorities]; default work)")
@@ -197,7 +201,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                    help="its longest run in minutes, which the GPU lease enforces (default --timeout, else its kind's max_wall_min); "
                         "without --timeout, a GPU job's runner also allows GPU_WAIT_MIN for the lease to be granted")
     q.add_argument("--kind", dest="queue_kind", default="adhoc", metavar="K",
-                   help="what the job is: a kind in tools/cluster/kinds/<owner>.toml supplies its shape, time and question (default adhoc)")
+                   help="what the job is: a kind in infra/cluster/kinds/<owner>.toml supplies its shape, time and question (default adhoc)")
     q.add_argument("--question", default=None, metavar="Q", help="the research question it answers, recorded (default: its kind's)")
     q.add_argument("--disk-gb", type=float, default=None, metavar="N",
                    help="the disk it will write: held on the machine while N more GB would fill the disk past 80%% (released at "
@@ -206,6 +210,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                    help="the phase this run is (default: gpu with --gpus, else cpu); a GPU is booked only for a gpu phase, and only "
                         "around the workload, so the runner's custody runs in the CPU allocation")
     q.add_argument("--preemptible", action="store_true", help="it may be stopped for higher-ranked work and requeued (a guest's must be)")
+    q.add_argument("--gpu-host", action="store_true",
+                   help="a job without --gpus whose workload takes its GPUs with gpu-lease itself, around each GPU step: its CPU "
+                        "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle)")
     q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
     q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
@@ -262,6 +269,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                                            ("--kind", ns.queue_kind != "adhoc"), ("--question", ns.question),
                                            ("--phase", ns.queue_phase), ("--class", ns.queue_class != "work"),
                                            ("--preemptible", ns.preemptible), ("--quiet", ns.quiet), ("--gpu-ids", ns.gpu_ids),
+                                           ("--gpu-host", ns.gpu_host),
                                            ("--disk-gb", ns.disk_gb is not None))
                   if given]
     if queue_only:
@@ -357,6 +365,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         # on a machine in <root>/src/<sha>/, which every run of that commit shares: concurrent runs raced on it)
         a.cwd = str(run_dir)
     run_dir.mkdir(parents=True, exist_ok=ns.claimed)
+    _place_dirty_capture(prep, run_dir)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
     if ns.claimed and remote_info is not None:
         try:
@@ -567,14 +576,20 @@ def _clone_imports(of: Path, tree: Path, home: Path, remote_info: dict | None) -
     """A machine's runner has the shipped tree's import roots on PYTHONPATH (launch_request), so the workload would import its code
     from the shared tree: a write beside a module's __file__ would land there, and the run would execute that tree's files, whatever
     another run left in them, while the record describes the clean clone.  Each entry under `of` is moved to the same directory in
-    the clone (run.remote.pythonpath too), and bytecode goes beside the clone: under <root>/cache/pycache every clone path would add
-    its own copies, never removed.  Locally the workload imports from whatever its interpreter has installed (an editable install
-    points at the invoking checkout); nothing is moved."""
+    the clone, and `of`'s shim (`pythonpath.shim_packages`: <root>/cache/pyshim/<key>, outside `of` but linking into it, so
+    `import verity` reached the shared tree) is replaced by a shim of the clone under `home`, removed with it; in place,
+    run.remote.pythonpath too.  Bytecode goes beside the clone: under <root>/cache/pycache every clone path would add its own
+    copies, never removed.  Locally the workload imports from whatever its interpreter has installed (an editable install points
+    at the invoking checkout); nothing is moved."""
+    from .pythonpath import shim_dir, shim_packages
+
     base = os.path.realpath(of)
 
     def move(p: str) -> str:
         real = os.path.realpath(p)
-        return str(tree / os.path.relpath(real, base)) if real == base or real.startswith(base + os.sep) else p
+        if real == base or real.startswith(base + os.sep):
+            return str(tree / os.path.relpath(real, base))
+        return shim_dir(tree, pkgs, home / "pyshim") if (pkgs := shim_packages(p, base)) else p
 
     if remote_info is not None and remote_info.get("pythonpath"):
         remote_info["pythonpath"] = [move(p) for p in remote_info["pythonpath"]]
@@ -708,6 +723,8 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     Tool load is best effort: a failure is recorded in the `store` section, never a reason not to run.  `env_map` (--env) is
     recorded as `params.env`, values redacted where the NAME matches SECRET_KEY; it is not part of the derivation (a Tool that
     depends on an environment variable declares it as a key param)."""
+    import tempfile
+
     from . import env as E
     from .store import attempt as A
     from .store import derivation as D
@@ -725,9 +742,11 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     if ns.campaign:
         env_out["RESEARCH_CAMPAIGN"] = ns.campaign
     conds = None
+    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir is made after this returns
     try:
         hint = json.loads(ns.source_identity) if ns.source_identity else None
-        conds = E.conditions(run_dir=run_dir, project=ns.project, campaign=ns.campaign, exclusive=bool(ns.exclusive_lock), source_root=source_root, source_hint=hint)
+        conds = E.conditions(run_dir=run_dir, project=ns.project, campaign=ns.campaign, exclusive=bool(ns.exclusive_lock), source_root=source_root,
+                             source_hint=hint, dirty_capture=capture)
         if tool is not None:
             conds.update(tool.tool_conditions(conds))
             params, key = tool.resolve_params(command, source_root)
@@ -771,7 +790,31 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
         section = {"error": f"{type(e).__name__}: {e}", "tool": {"name": tool.name, "version": tool.version, "spec": tool.spec} if tool else None,
                    "campaign": ns.campaign}
         print(f"research run: store preparation failed ({section['error']}); running anyway, the attempt will be published from the records", file=sys.stderr)
-    return {"tool": tool, "conditions": conds, "section": section, "env": env_out}
+    return {"tool": tool, "conditions": conds, "section": section, "env": env_out, "dirty_capture": capture}
+
+
+def _place_dirty_capture(prep: dict, run_dir: Path) -> None:
+    """Move the dirty source's capture (env.DIRTY_CAPTURE) into the run dir, and name it in the store section with the digest it
+    reproduces; custody uploads it with the run's own files, and `evict_src` lets the tree go only once that record is preserved.
+    No capture (a clean source, `too-large`, any error) leaves the section without one, and the tree stays the run's source."""
+    import hashlib
+    import shutil
+
+    cap: Path = prep["dirty_capture"]
+    try:
+        conds = prep["section"].get("conditions") or {}
+        if cap.is_file() and conds.get("source.dirty"):
+            dest = run_dir / cap.name
+            shutil.move(cap, dest)
+            with open(dest, "rb") as f:
+                sha = hashlib.file_digest(f, "sha256").hexdigest()
+            prep["section"]["dirty_capture"] = {"path": cap.name, "bytes": dest.stat().st_size, "sha256": sha,
+                                                "dirty_digest": conds.get("source.dirty_digest")}
+    except OSError as e:
+        prep["section"].pop("dirty_capture", None)
+        print(f"research run: the dirty source was not captured ({type(e).__name__}: {e}); its tree stays its only copy", file=sys.stderr)
+    finally:
+        shutil.rmtree(cap.parent, ignore_errors=True)
 
 
 def _no_usable_remote() -> str | None:
@@ -837,7 +880,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     the runner inside the job's CPU allocation and a gpu phase's workload alone inside its GPU lease. Its records, status and logs
     are an `--on` run's."""
     if not ns.source or not ns.project:
-        print("research run --queue: --source GITDIR (the tree with tools/cluster, whose kinds/ it resolves) and --project are "
+        print("research run --queue: --source GITDIR (the tree with infra/cluster, whose kinds/ it resolves) and --project are "
               "required", file=sys.stderr)
         return 2
     timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
@@ -851,7 +894,8 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
             "gpu-model": ns.gpu_model, "cpus": ns.cpus, "mem-gb": math.ceil(ns.mem_gb) if ns.mem_gb is not None else None,
             "max-s": int(given_max) if given_max else None, "custody-s": RUN_MARGIN_S,
             "disk-gb": ns.disk_gb,
-            "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids}
+            "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids,
+            "gpu-host": ns.gpu_host}
     try:
         placed = remote.queue_placement(Path(ns.source).expanduser(), run_id, spec)
     except remote.Refused as e:
@@ -1015,6 +1059,8 @@ def cmd_fetch(argv: list[str]) -> int:
     if ex := rec.get("launcher_exited"):
         print(f"research fetch: {s['run_id']}: the machine's runner (pid {ex['runner_pid']}) exited without writing status.json; "
               f"launcher.log ends: {ex['last_line'] or '(empty)'}", file=sys.stderr)
+    if gone := rec.get("runner_gone"):
+        print(f"research fetch: {s['run_id']}: it ended without recording it: {gone['why']}", file=sys.stderr)
     print(f"research: {s['run_id']} observed {rec['observed_utc']}: {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
           + (f"  preserved={'yes' if rec.get('preserved') else 'NO: ' + json.dumps(rec.get('preserve_error'))}" if ns.all else ""))
     marker = rec.get("fetched_marker") if ns.all else None
@@ -1044,19 +1090,89 @@ def cmd_cancel(argv: list[str]) -> int:
         return 1
     print(f"research cancel: {run_dir.name}: SIGTERM to its workload's process group {out['pgid']} ({out['processes']} process(es)), "
           f"recorded as a manual cancel; the runner records the exit and publishes custody (`research fetch {run_dir.name}`)")
+    if ran := _ran_text(R.summarize(run_dir), datetime.now(timezone.utc)):
+        print(f"research cancel: {run_dir.name} {ran}")
     return 0
 
 
+def _utc(text: str | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat(text).astimezone(timezone.utc) if text else None
+    except ValueError:
+        return None
+
+
+def _ran_text(s: dict, now: datetime) -> str:
+    """How long a run ran, and how much of that its check waited for a check slot (runs.SLOT_FILE): its state reads `running` from
+    launch, so a check that waited 95 min for a slot and checked 12 was taken for 107 min in (af2d, 10 Oct)."""
+    if not (start := _utc(s.get("started_utc"))):
+        return ""
+    sl, mins = s.get("slot") or {}, lambda a, b: f"{max(0.0, (b - a).total_seconds()) / 60:.0f} min"
+    text = f"ran {mins(start, now)} since {start:%Y-%m-%dT%H:%MZ}"
+    since, took = _utc(sl.get("since")), _utc(sl.get("took"))
+    if sl.get("state") == "held" and since and took:
+        return f"{text}: waited {mins(since, took)} for a check slot, then checked {mins(took, now)} in slot {sl.get('slot')}"
+    if sl.get("state") == "waiting" and since:
+        return f"{text}: waiting for a check slot since {since:%H:%MZ} ({mins(since, now)}), so its check never started"
+    if sl.get("state") == "left":
+        return f"{text}: left the check line without a slot ({sl.get('why')}), so its check never started"
+    return text
+
+
 def cmd_compare(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="research compare")
-    ap.add_argument("baseline")
-    ap.add_argument("candidate")
+    ap = argparse.ArgumentParser(
+        prog="research compare", formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="ORIGINAL... REPLAY: the replay's verdict against the originals, read from the evidence store by run id (local, "
+                    "else its remote), so the run dirs need not exist here. Exit 0 for same, within-band and expected-change, 1 for "
+                    "differs. --dirs (or a run the store lacks): the descriptive diff of two run dirs under --runs-dir.",
+        epilog=C.__doc__)
+    ap.add_argument("runs", nargs="+", metavar="RUN", help="run ids: one or more originals, then the replay")
+    ap.add_argument("--expect", default=None, help="a replay_expect value (`refused: FORM`, `blocked: GATE`); default: the latest "
+                                                   "replay_expect label on the first original, if any")
+    ap.add_argument("--no-expect", action="store_true", help="ignore the originals' replay_expect labels")
+    ap.add_argument("--store", default=None, help="store root (default $RESEARCH_STORE or ~/.research/store)")
+    ap.add_argument("--dirs", action="store_true", help="the descriptive diff of two run directories (BASELINE CANDIDATE)")
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
+    if len(ns.runs) < 2:
+        ap.error("needs at least one original and the replay")
+    if not ns.dirs:
+        from .store import ids as store_ids
+        from .store.local import LocalStore, StoreError
+
+        st = LocalStore(ns.store)
+        try:
+            bad = [r for r in ns.runs if not store_ids.is_run_id(r)]
+            if bad:
+                raise LookupError(f"{bad[0]}: not a full run id")
+            atts = [C.load(st, r) for r in ns.runs]
+            expect = None if ns.no_expect else ns.expect
+            if expect is None and not ns.no_expect:
+                labels = st.labels(ns.runs[0], key=C.EXPECT_KEY)
+                expect = str(labels[-1].value) if labels else None
+            v = C.verdict(atts[:-1], atts[-1], expect)
+        except LookupError as e:
+            if len(ns.runs) != 2:
+                print(f"research compare: {e}", file=sys.stderr)
+                return 1
+            print(f"research compare: {e}; comparing the run dirs instead", file=sys.stderr)
+        except StoreError as e:
+            print(f"research compare: {e}", file=sys.stderr)
+            return 1
+        except ValueError as e:
+            print(f"research compare: {e}", file=sys.stderr)
+            return 2
+        else:
+            print(json.dumps(v.to_doc(), indent=2, sort_keys=True) if ns.json else C.render_verdict(v))
+            return 1 if v.verdict == C.DIFFERS else 0
+        finally:
+            st.close()
+    if len(ns.runs) != 2:
+        ap.error("--dirs compares exactly two run dirs")
     root = R.runs_root(ns.runs_dir)
     try:
-        b, c = R.resolve(root, ns.baseline), R.resolve(root, ns.candidate)
+        b, c = R.resolve(root, ns.runs[0]), R.resolve(root, ns.runs[1])
     except (FileNotFoundError, LookupError) as e:
         print(f"research compare: {e}", file=sys.stderr)
         return 1
@@ -1106,6 +1222,26 @@ def cmd_launch_request(argv: list[str]) -> int:
     return 0
 
 
+def _read_holds(rows: list[dict]) -> None:
+    """Each live run's `scope_memory` and `holds` (research.holds' lines) where it executes, one ssh per machine for remote runs,
+    or its `scope_memory_error`."""
+    from . import holds, scopemem
+
+    remotes = [Path(s["dir"]) for s in rows if s.get("remote_rec")]
+    got = remote.node_readings(remotes) if remotes else {}
+    for s in rows:
+        if s.get("remote_rec"):
+            r = got.get(str(Path(s["dir"]))) or {"error": "not read"}
+        else:
+            doc = scopemem.node([str(s["dir"])])
+            r = {"run": doc.pop("runs")[str(s["dir"])], "node": doc, "machine": None}
+        if r.get("error"):
+            s["scope_memory_error"] = r["error"]
+            continue
+        s["scope_memory"] = r["run"]["memory"]
+        s["holds"] = holds.lines(s.get("run_id") or s["id"], r["machine"], r)
+
+
 def _fmt(s: dict) -> str:
     cmd = " ".join(s["command"]).replace("\n", " ") if s.get("command") else "?"
     if len(cmd) > 50:
@@ -1124,7 +1260,8 @@ def cmd_status(argv: list[str]) -> int:
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--on", default=None, metavar="NAME", help="with RUN another VM launched: look for it on this machine only")
     ap.add_argument("--all", action="store_true", help="every run, not just the last 20")
-    ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first")
+    ap.add_argument("--refresh", action="store_true", help="fetch the records of every non-terminal remote run first, and read each "
+                                                          "active one's memory on its machine (research.scopemem)")
     ap.add_argument("--balance", action="store_true", help="show the provider's account ledger (balance, spend limit, current $/h) with its observation time")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
@@ -1156,6 +1293,17 @@ def cmd_status(argv: list[str]) -> int:
     rows = [R.summarize(one)] if one else R.list_runs(root)
     if not ns.all:
         rows = rows[-20:]
+    unread = 0
+    live = []
+    for s in rows:
+        rr = s.get("remote_rec")
+        if s["state"] not in R.ACTIVE or (rr and not rr.get("remote_run_dir")):
+            continue
+        if rr and not (ns.refresh or one):
+            unread += 1
+            continue
+        live.append(s)
+    _read_holds(live)
     if ns.json:
         print(json.dumps({"runs_root": str(root), "runs": rows, "ledger": ledger}, indent=2, sort_keys=True))
         return 0
@@ -1171,11 +1319,25 @@ def cmd_status(argv: list[str]) -> int:
     print(f"{'run':<24} {'state':<10} {'rc':>3}  {'class':<22} {'res':<4} {'valid':<8} {'project':<10} {'where':<11} {'stage':<16} command")
     for s in rows:
         print(_fmt(s))
+        for label, text in s.get("holds") or []:
+            print(f"{'':<26}{label:<4} {text}")
+        if s.get("scope_memory_error"):
+            print(f"{'':<26}mem  unread: {s['scope_memory_error']}")
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)
     unfetched = sum(1 for s in rows if s.get("remote_rec") and not s["has_job"] and s["state"] != "refused")
-    print(f"\n{len(rows)} shown ({active} active" + (f", {unfetched} remote not yet fetched: `research status --refresh`" if unfetched else "") + f") under {root}"
+    print(f"\n{len(rows)} shown ({active} active" + (f", {unfetched} remote not yet fetched: `research status --refresh`" if unfetched else "")
+          + (f", memory of {unread} active remote run(s): `--refresh` or `research status RUN`" if unread else "") + f") under {root}"
           f"   res: result.json ok/BAD/-absent   valid: the workload's own checker")
     return 0
+
+
+def _slot_text(sl: dict) -> str:
+    """A run's check-slot record (runs.SLOT_FILE) in a line: waiting since when and why, the slot it took and when, or why it left."""
+    if sl.get("state") == "held":
+        return f"check slot {sl.get('slot')} (cores {sl.get('cores')}) taken {sl.get('took')}, after waiting in line since {sl.get('since')}"
+    if sl.get("state") == "left":
+        return f"left the check line at {sl.get('left')} without a slot, waiting since {sl.get('since')}: {sl.get('why')}"
+    return f"waiting in the check line since {sl.get('since')}, not started" + (f": {sl['why']}" if sl.get("why") else "")
 
 
 def _tool_line(tool: dict | None) -> str:
@@ -1193,6 +1355,8 @@ def cmd_inspect(argv: list[str]) -> int:
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--py-spy", action="store_true", help="instead: print a py-spy dump of the live run's Python processes, read on its "
+                                                          "machine (research.telemetry.pyspy)")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
     try:
@@ -1200,6 +1364,8 @@ def cmd_inspect(argv: list[str]) -> int:
     except (FileNotFoundError, LookupError) as exc:
         print(f"research inspect: {exc}", file=sys.stderr)
         return 1
+    if ns.py_spy:
+        return _inspect_py_spy(run_dir)
     s = R.summarize(run_dir)
     if ns.json:
         print(json.dumps(s, indent=2, sort_keys=True))
@@ -1238,6 +1404,17 @@ def cmd_inspect(argv: list[str]) -> int:
         print(f"observed  phase={rr.get('phase')} at={rr.get('observed_utc')} state={lo.get('state')}"
               + (f"  ERROR={rr.get('error')}" if rr.get("error") else "")
               + ("  (records shown are a cached copy; `research fetch` refreshes)" if rr.get("observed_utc") else "  (nothing fetched yet)"))
+        if q := rr.get("queue"):
+            print(f"queue     placed on {q.get('machine')} ({q.get('why')}); {q.get('phase')} phase")
+    if sl := s.get("slot"):
+        print(f"slot      {_slot_text(sl)}")
+    if s["state"] in R.ACTIVE and (not s.get("remote_rec") or s["remote_rec"].get("remote_run_dir")):
+        row = {**s, "id": Path(s["dir"]).name}
+        _read_holds([row])
+        for label, text in row.get("holds") or []:
+            print(f"{label:<9} {text}")
+        if row.get("scope_memory_error"):
+            print(f"mem       unread: {row['scope_memory_error']}")
     files = sorted(p.name for p in Path(s["dir"]).iterdir() if p.is_file())
     print(f"files     {', '.join(files)}")
     missing = [n for n, ok in (("job.json", s["has_job"]), ("status.json", s["has_status"])) if not ok]
@@ -1246,21 +1423,58 @@ def cmd_inspect(argv: list[str]) -> int:
     return 0
 
 
-CLUSTER_SRC = Path(__file__).resolve().parents[3] / "cluster" / "src"
+def _inspect_py_spy(run_dir: Path) -> int:
+    from .telemetry import pyspy
+
+    if (run_dir / "remote.json").exists():
+        try:
+            text = remote.py_spy(run_dir)
+        except remote.Refused as e:
+            print(f"research inspect: {run_dir.name}: {e}", file=sys.stderr)
+            return 1
+    else:
+        if (state := R.summarize(run_dir)["state"]) not in ("running", "waiting"):
+            print(f"research inspect: {run_dir.name} is {state}: no live workload to dump", file=sys.stderr)
+            return 1
+        results = pyspy.of_run(run_dir)
+        if results is None:
+            print(f"research inspect: {pyspy.MISSING}", file=sys.stderr)
+            return 3
+        text = pyspy.render(results)
+    sys.stdout.write(text)
+    return 0
+
+
+CLUSTER_SRC = Path(__file__).resolve().parents[4] / "infra" / "cluster" / "src"
 
 
 def cmd_usage(argv: list[str]) -> int:
-    """`research usage ...` is `cluster usage ...`, run from this tree's tools/cluster (research never imports cluster), with
+    """`research usage ...` is `cluster usage ...`, run from this tree's infra/cluster (research never imports cluster), with
     its output and exit code: 0, 1 on a finding (the record unread, stale or short of hours), 2 on bad arguments or with no
-    tools/cluster here."""
+    infra/cluster here."""
     import subprocess
 
     if not (CLUSTER_SRC / "cluster" / "usage.py").is_file():
-        print(f"research usage: no tools/cluster beside this research package ({CLUSTER_SRC})", file=sys.stderr)
+        print(f"research usage: no infra/cluster beside this research package ({CLUSTER_SRC})", file=sys.stderr)
         return 2
     env = dict(os.environ)
     env["PYTHONPATH"] = str(CLUSTER_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     return subprocess.run([sys.executable, "-m", "cluster", "usage", *argv], env=env).returncode
+
+
+OPS_COMMANDS = ("keeper", "deploy")
+OPS_SRC = Path(__file__).resolve().parents[4] / "infra" / "ops"
+
+
+def hand_to_ops(cmd: str, rest: list[str]) -> int:
+    """`research keeper|deploy ...` is `ops ...` (infra/ops), exec'd in this interpreter with this tree's
+    infra/ops first on its path, so a venv synced before verity-ops existed still runs it. research never imports it."""
+    env = dict(os.environ)
+    if (OPS_SRC / "verity_ops" / "cli.py").is_file():
+        env["PYTHONPATH"] = str(OPS_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.execve(sys.executable, [sys.executable, "-m", "verity_ops", cmd, *rest], env)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1277,6 +1491,8 @@ def main(argv: list[str] | None = None) -> int:
 
     recover()
     cmd, rest = argv[0], argv[1:]
+    if cmd in OPS_COMMANDS:
+        return hand_to_ops(cmd, rest)
     if cmd == "run":
         return cmd_run(rest)
     if cmd == "status":
@@ -1325,18 +1541,10 @@ def main(argv: list[str] | None = None) -> int:
         from .retention import main as retention_main
 
         return retention_main(rest)
-    if cmd == "keeper":
-        from .keeper import main as keeper_main
-
-        return keeper_main(rest)
     if cmd == "pods":
         from .pods.part import main as pods_main
 
         return pods_main(rest)
-    if cmd == "deploy":
-        from .deploy import main as deploy_main
-
-        return deploy_main(rest)
     if cmd == "monitors":
         from .monitors import main as monitors_main
 

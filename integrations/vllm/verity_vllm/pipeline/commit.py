@@ -71,7 +71,7 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.commit import challenge as CH, opened as OV  # noqa: E402
+from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
@@ -1055,7 +1055,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
         import faulthandler
         faulthandler.dump_traceback_later(float(os.environ["VERITY_TRACEDUMP"]), repeat=True)
-    # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] source identity precheck BEFORE anything else runs: verity.primitives.circuits, verity_vllm, vllm-poc,
+    # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] source identity precheck BEFORE anything else runs: verity.ml.circuits, verity_vllm, vllm-poc,
     # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITY_TREE must agree).
     # A mismatch exits 3 with PRECHECK_FAIL_SOURCE_IDENTITY on stderr -- no engine, no inference; the record is written beside the out dir.
     from verity_vllm.pipeline import source_identity as _sid
@@ -1181,8 +1181,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
                       f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
-    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args,
-                target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=args.protocols_config or wl.get("protocols_config")), execution=va.execution_of_workload(wl))
+    _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), va.target_of_workload(wl, args.target))   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
+    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=_settings), execution=va.execution_of_workload(wl))
     _live = (_HOT or {}).get("eng")
     if _live is not None:
         # [R16 sys] hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
@@ -1306,7 +1306,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps kernels needs the native_collect committer (got {kind})")
             compiled_kernels.attach(com, required_manifest)
-            com.program_digest = bytes.fromhex(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
+            com.program_digest = SCH.program_field(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
             print(f"[delta] compiled kernel source attached -> committer {com.name}; program digest (P_compiled) {required_manifest['program_digest'][:16]}", flush=True)
         if compiled_src is not None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
@@ -1761,7 +1761,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               f"errors {rc.extra.get('errors')}", flush=True)
         coms[kind] = com
     com = coms[kinds[0]] if kinds else None
-    protocols = PO.at_commit(_ekw["target"], eng.model, versions, args.protocols_config or wl.get("protocols_config"))   # after every committer registered the weights
+    protocols = PO.at_commit(_ekw["target"], eng.model, versions, _settings)   # after every committer registered the weights
     if args.value_check and com is not None and hasattr(com, "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
         from verity_vllm.check.value_check import run_value_check

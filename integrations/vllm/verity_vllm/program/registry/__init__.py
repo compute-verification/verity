@@ -20,9 +20,9 @@ PROTOCOL SUMMARY (Build stage: the registry = the closed vocabulary every Progra
   Purpose: the registered function library the frontend binds vLLM's traced ATen ops to (Build), the fold names captured kernels with
     (Match) and the replay evaluates bit-exactly with (Commit): primitives with total evaluators on encodings (`prims`), the B1 eager
     composites (`b1`), the sampler chain (`sampling`), the ⊥-lifted families (`lifted`), and the kernel conformance record.
-  Inputs: none at import beyond `verity.primitives.circuits` (REGISTRY, register_lazy_family); a descriptor's spec ids (e.g. `Const32[0x..]_v1`,
+  Inputs: none at import beyond `verity.ml.circuits` (REGISTRY, register_lazy_family); a descriptor's spec ids (e.g. `Const32[0x..]_v1`,
     `GatherBf16x64_v1`, `Lifted[..]_v2`) are resolved on demand through the regex families registered here.
-  Outputs: a populated `verity.primitives.circuits.defs.REGISTRY`; every Program descriptor (descriptor.json.gz) decodes only against it.
+  Outputs: a populated `verity.ml.circuits.defs.REGISTRY`; every Program descriptor (descriptor.json.gz) decodes only against it.
   Invariants: importing ANY `verity_vllm.program.registry.*` module registers the lazy families first (Python imports the package), so a
     descriptor decoded after such an import resolves as it did in veritor; family ORDER matters -- the two catch-alls (`{ORD=n}`,
     `Lifted[..]`) are registered last; a spec id no family matches is a decode failure, never a guessed definition; this module is
@@ -32,14 +32,14 @@ PROTOCOL SUMMARY (Build stage: the registry = the closed vocabulary every Progra
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# On-demand primitive families.  veritor hardcoded these in verity_ir/codec.py:_LAZY_PRIMITIVE_FAMILIES; verity.primitives.circuits registers
+# On-demand primitive families.  veritor hardcoded these in verity_ir/codec.py:_LAZY_PRIMITIVE_FAMILIES; verity.ml.circuits registers
 # only its own `Input<w>` and exposes `register_lazy_family` for semantics packages.  Order matters for the two catch-alls
 # (`{ORD=n}` and `Lifted[..]`), which is why they are registered last, exactly as veritor listed them.  Importing any
 # `verity_vllm.program.registry.*` module runs this (Python imports the package first), so a descriptor decoded after such an import
 # resolves as it did in veritor.  The makers import lazily to keep this package import light and cycle-free.
 def _register_lazy_families() -> None:
-    from verity.primitives.circuits.codec import lookup_primitive, register_lazy_family
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ml.circuits.codec import lookup_primitive, register_lazy_family
+    from verity.ml.circuits.defs import REGISTRY
 
     def _b1():
         from verity_vllm.program.registry import b1
@@ -61,7 +61,7 @@ def _register_lazy_families() -> None:
         from verity_vllm.program.registry import topp_word_gates
         return topp_word_gates
 
-    register_lazy_family(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$", lambda m: _b1().const(int(m[1]), int(m[2], 16)))
+    register_lazy_family(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$", lambda m: _b1().const(int(m[1]), int(m[2], 16)))  # prims.CONST_ID
     register_lazy_family(r"^GatherBf16x(\d+)_v1$", lambda m: _prims().gather_bf16(int(m[1])))
     # [R15 stoch] the top-p keep word (one per vocabulary; [R16] the split count S is its i32 `splits` OPERAND) and the bit extractor
     register_lazy_family(r"^TopPMaskWordx(\d+)_v1$", lambda m: _sampling().topp_mask_word(int(m[1])))

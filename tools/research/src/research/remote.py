@@ -46,11 +46,11 @@
                     `source/SUB`, or a relative SUB) runs it inside the tree instead, an explicit opt-in; `--cwd clone` (or `clone/SUB`)
                     in the run's own `git clone --shared` of the tree at <root>/scratch/<run-id>/tree, checked to be the shipped commit
                     and removed when the workload exits (research/clone.py), so nothing one run does there reaches another's; its
-                    PYTHONPATH entries under the tree move into the clone too (cli._clone_imports); job.json records run.cwd and
-                    run.cwd_basis (and run.cwd_clone).  The launcher refuses `--cwd clone` for a tree shipped without git or a package
-                    that predates it.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not into the tree; a clone's
-                    goes beside the clone.  A tree whose own research package predates this runs its workloads in the tree; the launcher says
-                    so (remote.json workload_cwd).
+                    PYTHONPATH entries under the tree, and the tree's shim, move into the clone too (cli._clone_imports); job.json
+                    records run.cwd and run.cwd_basis (and run.cwd_clone).  The launcher refuses `--cwd clone` for a tree shipped
+                    without git or a package that predates it.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not
+                    into the tree; a clone's goes beside the clone.  A tree whose own research package predates this runs its workloads
+                    in the tree; the launcher says so (remote.json workload_cwd).
     claim           `research launch-request` on the machine does mkdir(<root>/runs/<run-id>) as the claim, then starts the detached
                     runner.  Re-delivering the same request finds the directory and reports its state; it never starts a second workload.
                     Each delivery holds flock(<root>/requests/<run-id>/.launch.lock) until it has answered, so a re-delivery (an ssh drop,
@@ -138,7 +138,7 @@ SHIP_CHUNK = 1 << 20                          # the launcher never holds more of
 STALE_PARTIAL_MIN = 30                        # a <root>/src/*.partial-* directory with nothing written for this long belongs to a dead ship
 _RC_DIGEST = 75                               # the ship script's exit when the received archive is not the launcher's (nothing extracted)
 WORKLOAD_CWD_DEFAULT = "run_dir"              # the machine-side runner's default workload cwd; a shipped package without this line predates it
-SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl")
+SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl", "slot.json")
 TERMINAL = ("done", "failed", "cancelled")
 FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
 FETCHED_SCHEMA = "research/fetched/v0.1"
@@ -152,6 +152,7 @@ GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and
 DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
 DIRECT_CPUS_FILE = "/etc/vy/direct-cpus"      # the CPUs a direct run starts on (a cpu list, e.g. 0-95): the rest are pinned benchmarks'.
                                               # A command may still pin itself elsewhere (taskset -c 128-159 ...); absent: no default
+RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only through a check slot (pods/nebius/slot_only.py); cpu-1's
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -207,6 +208,10 @@ def load_machines(path: Path | None = None) -> dict[str, dict[str, Any]]:
     return ms
 
 
+#: a machine's runs root when its entry names none (a pod `research pods register` wrote without --root)
+DEFAULT_ROOT = "/workspace/research"
+
+
 def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     ms = load_machines() if machines is None else machines
     m = ms.get(name)
@@ -224,7 +229,7 @@ def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str
     if project not in allowed:
         raise Refused(f"machine {name!r} belongs to project(s) {allowed}, not {project!r}; refusing to touch it")
     out = dict(m)
-    out.setdefault("root", "/workspace/research")
+    out.setdefault("root", DEFAULT_ROOT)
     out.setdefault("python", "python3")
     out["name"] = name
     return out
@@ -445,10 +450,13 @@ QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's 
 
 def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
     """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
-    description in the --source tree (tools/cluster). Refused when the queue refuses the job."""
-    src = Path(source) / "tools" / "cluster" if source is not None else None
+    description in the --source tree (infra/cluster). Refused when the queue refuses the job."""
+    from .store import tools_registry
+
+    src = (Path(source) / (tools_registry.resolve("infra/cluster", lambda p: (Path(source) / p).is_dir()) or "infra/cluster")
+           if source is not None else None)
     if src is None or not (src / "src" / "cluster" / "submit.py").is_file():
-        raise Refused("--queue: the --source tree has no tools/cluster with `cluster submit` (the queue's description and client)")
+        raise Refused("--queue: the --source tree has no infra/cluster with `cluster submit` (the queue's description and client)")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     argv = [sys.executable, "-m", "cluster", "submit", str(src / "descriptions" / "nebius.toml"), "--run-id", run_id,
@@ -1249,6 +1257,11 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     remote = dict(req.get("remote") or {})
     remote["request"] = str(request_path)
     try:
+        if (marker := Path(os.environ.get("RUNS_VIA_SLOT_FILE") or RUNS_VIA_SLOT_FILE)).exists():
+            from .pods.nebius import slot_only
+
+            if not slot_only.through_slot(req["command"]):
+                raise Refused(slot_only.refusal(marker))
         if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
             src_dir = remote.get("source_dir") or str(runs_root.parent / "src" / str(remote["source_sha"]))
             require_ready_source(src_dir, str(remote["source_sha"]))
@@ -1662,6 +1675,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
+                   **({"submitted_by": by} if (by := os.environ.get("RESEARCH_AGENT_URL")) else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    **({"job_user": job_user} if job_user else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
@@ -1751,6 +1765,7 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         except Refused as e:
             answers.append(f"{name}: {e}")
             continue
+        m = {**m, "root": m.get("root") or DEFAULT_ROOT}
         rd = f"{m['root']}/runs/{run_id}"
         ssh = ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"))
         try:
@@ -1777,6 +1792,26 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         fetch(local)
         return local
     raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers)})" if answers else " (no ssh machine is registered)"))
+
+
+def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
+    """Why a run whose status isn't terminal has no runner on its machine, or None while it may have one: the machine rebooted
+    since the runner started (job.json's boot id), or the pid is gone where the runner ran in the machine's own pid namespace
+    (job.json's hostname is the machine's; a Kubernetes pod's runner isn't visible from the host). Unreadable is None."""
+    env = (_read_json(local_dir / "job.json") or {}).get("environment") or {}
+    if not env.get("boot_id"):
+        return None
+    probe = ssh_run(ssh, ["sh", "-c", f"cat /proc/sys/kernel/random/boot_id; hostname; kill -0 {pid} 2>/dev/null && echo alive "
+                                      "|| echo gone"], timeout=120)
+    lines = probe.stdout.decode(errors="replace").split() if probe.returncode == 0 else []
+    if len(lines) != 3:
+        return None
+    boot, host, alive = lines
+    if boot != env["boot_id"]:
+        return f"the machine rebooted since its runner started (boot {env['boot_id']}, now {boot})"
+    if host == env.get("hostname") and alive == "gone":
+        return f"its runner (pid {pid}) is gone without recording an end"
+    return None
 
 
 def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
@@ -1810,9 +1845,14 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
         return rec
     rec["observed_utc"] = utc_now_ms()
     st = _read_json(local_dir / "status.json") or {}
-    rec["last_observed"] = {"state": st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
+    waits = st.get("state") == "running" and (_read_json(local_dir / "slot.json") or {}).get("state") == "waiting"
+    rec["last_observed"] = {"state": "waiting" if waits else st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
     rec.pop("last_fetch_error", None)
     rec.pop("launcher_exited", None)
+    rec.pop("runner_gone", None)
+    if st.get("state") not in TERMINAL and isinstance(st.get("pid"), int):
+        if why := _runner_gone(ssh, local_dir, st["pid"]):
+            rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why}
     pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
     if not st and isinstance(pid, int):
         # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)
@@ -1828,6 +1868,100 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
             rec["fetched_marker"] = _mark_fetched(ssh, rd, local_dir, manifest)
     write_json_atomic(local_dir / "remote.json", rec)
     return rec
+
+
+#: slot.py and lean_slot.py, beside this package in the caller's checkout, which NODE_PROGRAM loads on the machine (as `check.py
+#: --slots` does) for the check and Lean slots a run holds or waits on; without them the reading has no slots
+CHECK_DIR = Path(__file__).resolve().parents[3] / "verity" / "check"
+#: what `node_readings` runs on a machine as `python3 - RUN_DIR...`, after `SRC = {...}`: research.scopemem's `node`
+NODE_PROGRAM = '''
+import json, sys, types
+
+
+def load(name, src, file):
+    m = types.ModuleType(name)
+    m.__file__ = file
+    sys.modules[name] = m
+    exec(compile(src, file, "exec"), m.__dict__)
+    return m
+
+
+mem = load("research_scopemem", SRC["scopemem"], "research/scopemem.py")
+mods = (load("check_slot_for_lean_slot", SRC["slot"], "tools/verity/check/slot.py"),
+        load("check_lean_slot", SRC["lean"], "tools/verity/check/lean_slot.py")) if SRC.get("slot") and SRC.get("lean") else None
+print(json.dumps(mem.node(sys.argv[1:], slot_mods=mods)))
+'''
+
+
+def node_payload(check_dir: Path = CHECK_DIR) -> bytes:
+    from . import scopemem
+
+    def src(p: Path) -> str | None:
+        try:
+            return p.read_text()
+        except OSError:
+            return None
+
+    srcs = {"scopemem": Path(scopemem.__file__).read_text(), "slot": src(check_dir / "slot.py"), "lean": src(check_dir / "lean_slot.py")}
+    return (f"SRC = {srcs!r}\n" + NODE_PROGRAM).encode()
+
+
+def node_readings(local_dirs: list[Path]) -> dict[str, dict[str, Any]]:
+    """Each launched remote run's reading where it executes (research.scopemem's `node`: its memory and CPUs, and its machine's
+    GPU leases and check and Lean slots), by local run dir: `{"run", "node", "machine"}`, or `{"error"}` when it can't be read.
+    One ssh per machine, whatever the number of its runs."""
+    by: dict[tuple, list[tuple[Path, dict[str, Any]]]] = {}
+    out: dict[str, dict[str, Any]] = {}
+    for d in local_dirs:
+        rec = _read_json(d / "remote.json")
+        if not rec or not rec.get("remote_run_dir"):
+            out[str(d)] = {"error": f"{d} is not a launched remote run"}
+            continue
+        by.setdefault((rec["host"], rec["port"], rec.get("user") or "root"), []).append((d, rec))
+    payload = node_payload() if by else b""
+
+    def one(target: tuple, runs: list[tuple[Path, dict[str, Any]]]) -> None:
+        machine = runs[0][1].get("machine")
+        try:
+            r = ssh_run(ssh_argv(target[0], target[1], user=target[2]), ["python3", "-", *(rec["remote_run_dir"] for _, rec in runs)],
+                        stdin=payload, timeout=60)
+            doc = json.loads(r.stdout) if r.returncode == 0 else None
+            why = None if isinstance(doc, dict) else f"rc {r.returncode} {r.stderr.decode(errors='replace').strip()[-200:]}"
+        except subprocess.TimeoutExpired:
+            doc, why = None, "took over 60 s"
+        except ValueError:
+            doc, why = None, f"its answer is not JSON: {r.stdout[:120]!r}"
+        except Exception as e:  # noqa: BLE001  (no ssh key here, ...): that machine's runs unread, the rest still shown
+            doc, why = None, f"{type(e).__name__}: {e}"
+        for d, rec in runs:
+            run = (doc or {}).get("runs", {}).get(rec["remote_run_dir"])
+            out[str(d)] = ({"run": run, "node": {k: v for k, v in doc.items() if k != "runs"}, "machine": machine} if run is not None
+                           else {"error": f"reading {machine}: {why or 'no reading of this run'}"})
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=max(1, len(by))) as ex:
+        list(ex.map(lambda kv: one(*kv), by.items()))
+    return out
+
+
+def py_spy(local_dir: Path) -> str:
+    """`research inspect --py-spy`: a py-spy dump of the live workload's Python processes on its machine (research.telemetry.pyspy,
+    sent as `python3 -` over fetch's ssh, which reads the machine's status.json)."""
+    from .telemetry import pyspy
+
+    rec = _read_json(local_dir / "remote.json")
+    if not rec or not rec.get("remote_run_dir"):
+        raise Refused(f"{local_dir} is not a launched remote run")
+    limit = pyspy.MAX_PROCS * pyspy.DUMP_TIMEOUT_S + 60
+    try:
+        r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["python3", "-", rec["remote_run_dir"]],
+                    stdin=Path(pyspy.__file__).read_bytes(), timeout=limit)
+    except subprocess.TimeoutExpired:
+        raise Refused(f"the dump on {rec.get('machine')} took over {limit:g} s") from None
+    if r.returncode:
+        raise Refused(f"no dump on {rec.get('machine')}: rc {r.returncode} {r.stderr.decode(errors='replace').strip()[-300:]}")
+    return r.stdout.decode(errors="replace")
 
 
 def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
@@ -1869,7 +2003,8 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
                 if x.get("kind") == "cancel_result" and (x.get("target") or {}).get("pgid") == pgid), None)
     if res is None:
         raise Refused(f"the cancel recorded no result on the machine (rc {r.returncode}): {stderr[-300:]}")
-    return {"pgid": pgid, "processes": len((res.get("target") or {}).get("members") or []), "delivered": bool(res.get("delivered")),
+    tgt = res.get("target") or {}
+    return {"pgid": pgid, "processes": tgt.get("members_total", len(tgt.get("members") or [])), "delivered": bool(res.get("delivered")),
             "why": res.get("reason")}
 
 

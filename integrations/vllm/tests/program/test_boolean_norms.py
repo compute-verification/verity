@@ -16,18 +16,18 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.batch import type_shape
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.defs import PrimitiveDefinition, bind
-from verity.primitives.circuits.parts import n_members
-from verity_catalog.definitions.boolean import elementwise as EW
-from verity_catalog.silicon import fp
-from verity_catalog.definitions.boolean import mufu as MU
-from verity.primitives.circuits.boolean import trace as TR
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.batch import type_shape
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import PrimitiveDefinition, bind
+from verity.ml.circuits.parts import n_members
+from verity.ml.circuits.ops.boolean import elementwise as EW
+from verity.ml.circuits.silicon import fp
+from verity.ml.circuits.ops.boolean import mufu as MU
+from verity.ml.circuits.boolean import trace as TR
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import boolean_norms as BN
 from verity_vllm.program.registry import prims as P
@@ -44,13 +44,13 @@ LEAVES = [BN.RMSNormSquare, BN.RMSNormSquareFma, BN.RMSNormThreadTriton, BN.RMSN
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "RMSNormSquare_v1": (628, 866, 69, "d0bf21a34ee8a33561722d17158104876e65f7322a642e3831400b6311afe71c"),
-    "RMSNormSquareFma_v1": (2046, 3224, 182, "5443bb67bc8b497048c3f71c353564d6e0b0812f5d6beec124e5aa6791dbb9b1"),
-    "RMSNormThreadTriton_v1": (14950, 23434, 1343, "581ec2225d0fd2cb5bf60f586b0e9e8a3bcbfb08dc28795f61fce5958bdcf042"),
-    "RMSNormScaleCuda_v1": (50, 62, 2, "5bba877a862c4ba65bc4a67e14dd4321e045d95013a3066d61fff86658e2545c"),
-    "RMSNormInvTriton_v1": (34, 62, 2, "508a85462d7f7ede9d330e173251bb648d270ca66aeab2919f56f9a9d90a5ea6"),
-    "RMSNormOutCuda_v1": (2370, 4022, 189, "8af12c08d4255d816a2e66132868850c08d72b44bdb917a4fdfe4e14e94e49d2"),
-    "RMSNormOutTriton_v1": (2386, 4038, 189, "44e7dccc15889c6632c4f639f05f040ae06fb35063c3e829236279e91973e314"),
+    "RMSNormSquare_v1": (628, 866, 69, "107a20fbed9dcf460bdbf3410fc09f2231fd275ced137af3a872e1adb824dd648160dd929dc604aae818a23f07097dc91edcfadd92683f1a3a56c38fa0114295"),
+    "RMSNormSquareFma_v1": (2046, 3224, 182, "9758ed81b821dbe999843dfaa7070a654f5adae8a42b6c9c1f093ff5cdd13e0cebd16136231ce52d78fbfc4ef19d3d58ef7838c76967f941a7b9440481763e7b"),
+    "RMSNormThreadTriton_v1": (14950, 23434, 1343, "5b473a958a7f253ea354705826d054d59dff3f18455632c35146915a889c708075061a8b7d98b40f8e5b11092d1a449f9b7ea13aed41659ae8eec97e89f18e82"),
+    "RMSNormScaleCuda_v1": (50, 62, 2, "ce2e14452bfff31d64d33582b787860a8454ca79ac1a1b00faa9c002e6b99f07b0f3fbae75ed8945b26734bedf39ea44e54d9835cd38f623ee57339bce0b509e"),
+    "RMSNormInvTriton_v1": (34, 62, 2, "50853d8e08ae69de472e39537d1fee4d2bedd78612a98131f38e4d1ea7599421d453905bd46f2347cb4de055a7140fe35745a253faf63a91b66834a009621bf0"),
+    "RMSNormOutCuda_v1": (2370, 4022, 189, "9e60d828f6dc92512c5cfe4e65cc1aba7e5f910b48044aafb16ae555083bbcb71632925e56e12131187a1d3d089dc7c18432f1ef13fd7cf99771766909fe8b4f"),
+    "RMSNormOutTriton_v1": (2386, 4038, 189, "7c8c974f6eda043429ec47ad8c7be006c87122bbba4bbb460c4f305e0a20e8c46e091644d28d61a1f0872a183c9d80fc603f0f768b53e60808731552d47b6160"),
 }
 
 #: (N, EPS) -> And gates of the parts a served Program calls (`_parts`, the MUFU sub-Calls, their packing and F32Mul_v3 aside)
@@ -293,7 +293,7 @@ def _special_rows(rng, N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return tuple(np.stack([row[k] for row in rows]) for k in range(3))
 
 
-#: the MUFU statics as proofs' Boolean Definitions (`verity_catalog.definitions.boolean.mufu`), which the switch binds
+#: the MUFU statics as proofs' Boolean Definitions (`verity.ml.circuits.ops.boolean.mufu`), which the switch binds
 CUDA_BITS = {"RSQRT": bind(MU.RsqrtApprox)}
 TRITON_BITS = {"SQRT": bind(MU.MufuSqrtFtz), "SCALEA": bind(MU.DivFullScaleA), "RCP": bind(MU.DivFullRcp)}
 
@@ -429,7 +429,7 @@ def _reached(fn) -> set[str]:
 
 @pytest.mark.parametrize("which", ["cuda", "triton"])
 def test_only_the_mufu_sub_calls_are_word_ids(which) -> None:
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ml.circuits.defs import REGISTRY
     top = _top(which, 1536, 1e-6)
     prims = {i for i in _reached(top) if isinstance(REGISTRY.defs.get(i), PrimitiveDefinition)}
     assert prims <= {"And2_v1", "Xor2_v1", "Not_v1", "Const1[0x0]_v1", "Const1[0x1]_v1"}, prims

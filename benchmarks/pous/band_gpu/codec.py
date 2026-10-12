@@ -1,7 +1,7 @@
-"""P3 on the GPU: the `reference` backend of `verity.protocols.accounting.space.pous.primitives` (the SHAKE256 instantiation), as batched torch code.
+"""P3 on the GPU: the `reference` backend of `verity.core.protocols.pous.primitives` (the SHAKE256 instantiation), as batched torch code.
 
-The operating point is `verity.protocols.accounting.space.pous.params.OPERATING_POINT`: a segment is `N` = 220 labels of `M` = 65,560 bytes (220 components
-of 298 bytes), band graph B(220, 12), two layers joined by the transpose.  `verity.protocols.accounting.space.pous` is the oracle: the verifier's own
+The operating point is `verity.core.protocols.pous.params.OPERATING_POINT`: a segment is `N` = 220 labels of `M` = 65,560 bytes (220 components
+of 298 bytes), band graph B(220, 12), two layers joined by the transpose.  `verity.core.protocols.pous` is the oracle: the verifier's own
 encoding with it must have the server's root, and the vLLM tree's `tests/engine/test_pous_codec.py` checks each piece against it.
 
 This module is the GPU twin of `scheme.P3`; `dense.py` beside it is that of `dense.DENSE` and of the band (`band.BAND12`), and
@@ -24,10 +24,10 @@ segment and parallel across segments.  Every tensor is `uint8` on one CUDA devic
 from __future__ import annotations
 
 import torch
-from verity.protocols.accounting.space.pous import primitives
-from verity.protocols.accounting.space.pous.codec import Codec
-from verity.protocols.accounting.space.pous.params import OPERATING_POINT, SALT_BITS, TAG_BITS
-from verity.protocols.accounting.space.pous.scheme import P3
+from verity.core.protocols.pous import primitives
+from verity.core.protocols.pous.codec import Codec
+from verity.core.protocols.pous.params import OPERATING_POINT, SALT_BITS, TAG_BITS
+from verity.core.protocols.pous.scheme import P3
 
 from . import native
 
@@ -42,7 +42,7 @@ TAG_BYTES = TAG_BITS // 8
 H_HEADER = primitives.HEADER
 PI_DOMAIN = primitives.PI_DOMAIN
 P_DOMAIN = primitives.P_DOMAIN
-NAME = "verity.protocols.accounting.space.pous.primitives.reference/gpu-v1"
+NAME = "verity.core.protocols.pous.primitives.reference/gpu-v1"
 assert OPERATING_POINT.wc % 8 == 0 and N * WC == M
 
 

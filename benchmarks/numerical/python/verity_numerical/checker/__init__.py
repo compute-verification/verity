@@ -6,8 +6,8 @@ and its predicate names are one way to write the relation and are NOT canonical 
 backend must preserve is the set of accepted (x, y) pairs (section 1) and, if it embeds the relation in a prime
 field, the additional bounds of section 3.
 
-The executable semantics it must agree with on the finite domain is ``verity_catalog.silicon.silicon`` (``tc_dot`` =
-two ``group_sum`` steps of the Ampere BF16 m16n8k16 model), then ``verity_catalog.silicon.cast.f32_to_bf16`` for the VU.
+The executable semantics it must agree with on the finite domain is ``verity.ml.circuits.silicon.silicon`` (``tc_dot`` =
+two ``group_sum`` steps of the Ampere BF16 m16n8k16 model), then ``verity.ml.circuits.silicon.cast.f32_to_bf16`` for the VU.
 Nothing here is derived from that module; ``reference.py`` re-states the same arithmetic parametrically so the
 reduced-width searches have a reference, and the differential tests compare the checker to ``silicon`` itself.
 
@@ -19,7 +19,7 @@ class per gadget with ``contract(p)`` (ranges as data), ``gen`` (honest hints) a
 FP8 (silicon Phase 0).  ``Params`` carries two formats -- the operand's (``sig``, ``exp``, ``op_nan_rule``) and the
 accumulator's (``acc_sig``, ``acc_exp``) -- and admits an adder narrower than the accumulator (``width <
 acc_sig``, the *lossy* case of Hopper/Ada E4M3: 14 < 24).  ``Params.from_model(model)`` derives them from a
-``verity_catalog.silicon.models.GroupSum``; at ``AMPERE_BF16_M16N8K16`` it is ``REAL`` and nothing below changes (contracts,
+``verity.ml.circuits.silicon.models.GroupSum``; at ``AMPERE_BF16_M16N8K16`` it is ``REAL`` and nothing below changes (contracts,
 hint layout and outputs at ``REAL``/``TOY``/``TINY`` are byte-identical to the BF16-only checker).  In the lossy
 case one gadget joins the data flow before ``AlignState``: ``RescaleState`` (M = 2^drop P + r, r < 2^drop, P < 2^W),
 the truncation of the incoming FP32 significand to the adder width that ``GroupSum.step`` performs; ``Normalise``

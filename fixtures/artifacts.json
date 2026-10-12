@@ -1,12 +1,12 @@
 {
-  "art:4f8e9ff844325c68da26ead9d9f9f85f2859d8a7470829fa2541ada1d9109801": "catalog/verity_catalog/silicon/hawkeye/PIN.json",
-  "art:cf4699436015c096941a361160b5bcb570d02d469ad014988e99aeab0fb022c8": "catalog/tests/fixtures/golden/ada_bf16_m16n8k16.json",
-  "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": "catalog/tests/fixtures/gpu-nan-2026-09-28/fp32_ops.json",
+  "art:4f8e9ff844325c68da26ead9d9f9f85f2859d8a7470829fa2541ada1d9109801": "verity/ml/circuits/silicon/hawkeye/PIN.json",
+  "art:cf4699436015c096941a361160b5bcb570d02d469ad014988e99aeab0fb022c8": "verity/ml/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",
+  "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": "verity/ml/circuits/ops/tests/fixtures/gpu-nan-2026-09-28/fp32_ops.json",
   "art:592130d2c1e0d166446c59cb43795e090e99695e2f110523715e93a52746010e": "fixtures/bench-instances/v1/manifest.json",
   "art:c94fae7b8f1c37950b8bb13e76221948057b0bfa4d616ca0a7644ca74a39d3df": "fixtures/bench-instances/v1/vu-k1536.index.json",
   "art:9e977c565a9468b46936120b1d09495786ffaf308963409a350f565426cc9169": "fixtures/bench-instances/v1/vu-k1536-neg.index.json",
   "art:19f80a238753239044f5f850e9907259a53938522512eed40a53ea1f5fd7fd53": "fixtures/bench-instances/v1/tu-k16.index.json",
-  "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887": "catalog/verity_catalog/silicon/discrepancy_log.json",
+  "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941": "verity/ml/circuits/silicon/discrepancy_log.json",
   "art:ad3eaa3e52972a08384ee2de612b657a52efc4cc8dcc15d37fb94ad78c6cee55": "integrations/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
   "art:18e719e6f770a09a551c6aec3bf0d3594db446bfb984a521c81641540f3559b3": "archive/direct/fixtures/crosscheck_units.json",
   "art:42deda5cb9bc36241c8fddd742be71353a5699de8efa413f2b5033a60794be31": "archive/gkr/fixtures/babybear-transcripts/transcript_vu4.json",
@@ -73,7 +73,7 @@
   "art:29f9ba8d555d5297f9bbe572d69a8cba26c63a126445f34a58d810126215ffec": "archive/sp1/common/tests/vectors.json",
   "art:712ec77fca7da4c4f72121af05125eb4ac7237ce1a5735eb56b0269565ae0048": "fixtures/lean-vectors",
   "art:df4d6bbee2db9cea59216dc535327ab23211aba279f6bc8c9b2a3c353c03f4a7": "fixtures/redteam-v2/gkr",
-  "art:cb796395face65cdcb01321729bc5477942b5d33cbe1b65b5f6dab018308a00c": "catalog/verity_catalog/silicon/captures/autoproof-probe-vectors.json",
+  "art:cb796395face65cdcb01321729bc5477942b5d33cbe1b65b5f6dab018308a00c": "verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json",
   "art:88a9a67d87412aec852c6e6695d1ac8a3245d5454b10491af28d6b7e443d3b65": "fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json",
   "art:0cd02a9d343d7136cc00cf59505f4279a0312fd27e250f416ce9e553fc227e26": "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/in_qkv.npy",
   "art:4b8d584d2622c449c26818b79d32f28fed7194909daeda9365281232891a8368": "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/out_q.npy",
@@ -92,24 +92,27 @@
   "art:67d428555f44c24594efb8c3744c85e667025f74bb5de7145357739171219945": "integrations/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
   "art:a7c7b36effa6ae2097f192856ac68f998d82901b042b54725ef6ac259b427e6a": "integrations/vllm/tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:44aca97047b4caa2a39334546d40877f48ef64dd70f67f4bd3b941b11abf9f75": "integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
-  "art:7ef52142d7982f8a2d7153f4410a5452a435acb508bc061582343d0d49773ff9": "catalog/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_0/out_row.u16",
-  "art:717e0de012feeca965453526a69e9a7a4755ae8a7c7a2c9ae6b2e5408544cbcf": "catalog/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_1/out_row.u16",
-  "art:8a1a5738bf0e518d716ba8278bf65cf495e23f7fa6e1f8bcc5e39f92e5f914d2": "catalog/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_2/out_row.u16",
-  "art:59bbe24a88399ed59e3b9816293761fd58ebc8d66f7009e6a48d08b7cd98627d": "catalog/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_0/out_row.u16",
-  "art:b791f38357bbd785bc18c3821251a9c6164df054ed9d13aa0d7807e5f176c8b6": "catalog/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_1/out_row.u16",
-  "art:c1f3cde4dfa1343f00a135265291fea99d3e858734a05f30876aadcce19e8737": "catalog/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_2/out_row.u16",
-  "art:3fd5fe7385f9a734309bd6db7ad6455b3dd845a2314a12be0a5fc817ced83f75": "catalog/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
-  "art:3c5997ae19ec61df22f07babcde89a9eb0018b7b03f98a29dc3a7b82a04a1667": "catalog/tests/fixtures/tc-hopper-wgmma-bf16-2026-09-26/records.json.gz",
-  "art:cc1f274f1194184395e6b2cf4db97d42859839008742d35d33f1f50adf79c438": "catalog/tests/fixtures/tc-sm120-k32-e2m1-2026-09-30/records.json",
-  "art:62b100147633ba0c8922fc25fabba0e451779e3f78934f5610b7a2f72925f9a2": "catalog/tests/fixtures/tc-total-2026-09-07/4090/cvt_special.json",
-  "art:09de03f180d981400493cc75fd1721a35c4920af4969dbcb0582f258fe021668": "catalog/tests/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz",
-  "art:69729b5a213b81bc878563a826352524ba96834b092ab4fc21374f4b5a876733": "catalog/tests/fixtures/tc-total-2026-09-07/a100/cvt_special.json",
-  "art:c32e2740a2da0e567f0121e77667081214e016b87149bab0b258cf69fbda7072": "catalog/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
-  "art:afe6bacd767cd55298790dda9d5f67994b0500a44c735481ad865a66e02bfe04": "catalog/tests/fixtures/vectors/tc-ampere-bf16-total-hw.json",
-  "art:d549388039b89d9c53fe8d5b5cdbe9bb5be4cc71cea1ef0844f5c71e606c4c1f": "catalog/tests/fixtures/vectors/tc-ampere-bf16-total.json",
-  "art:8e64204959f3943541eaaa2eb7e980a7b6d09a470d6f3ccb4b17f676efcdffa7": "backends/flock/tests/fixtures/hidden-outputs",
-  "art:4274bdf17e6fe0cbb00d0605644a955182a0f4fbe4c84d2f0263d0e26f838260": "backends/flock/tests/fixtures/public-inputs",
-  "art:73260dcd0a485e06024b588ddc499bbe904c599cae142960e980148f13ebcdeb": "backends/flock/tests/fixtures/public-inputs-blocks",
+  "art:7ef52142d7982f8a2d7153f4410a5452a435acb508bc061582343d0d49773ff9": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_0/out_row.u16",
+  "art:717e0de012feeca965453526a69e9a7a4755ae8a7c7a2c9ae6b2e5408544cbcf": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_1/out_row.u16",
+  "art:8a1a5738bf0e518d716ba8278bf65cf495e23f7fa6e1f8bcc5e39f92e5f914d2": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_2/out_row.u16",
+  "art:59bbe24a88399ed59e3b9816293761fd58ebc8d66f7009e6a48d08b7cd98627d": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_0/out_row.u16",
+  "art:b791f38357bbd785bc18c3821251a9c6164df054ed9d13aa0d7807e5f176c8b6": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_1/out_row.u16",
+  "art:c1f3cde4dfa1343f00a135265291fea99d3e858734a05f30876aadcce19e8737": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_2/out_row.u16",
+  "art:3fd5fe7385f9a734309bd6db7ad6455b3dd845a2314a12be0a5fc817ced83f75": "verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
+  "art:3c5997ae19ec61df22f07babcde89a9eb0018b7b03f98a29dc3a7b82a04a1667": "verity/ml/circuits/ops/tests/fixtures/tc-hopper-wgmma-bf16-2026-09-26/records.json.gz",
+  "art:cc1f274f1194184395e6b2cf4db97d42859839008742d35d33f1f50adf79c438": "verity/ml/circuits/ops/tests/fixtures/tc-sm120-k32-e2m1-2026-09-30/records.json",
+  "art:62b100147633ba0c8922fc25fabba0e451779e3f78934f5610b7a2f72925f9a2": "verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/cvt_special.json",
+  "art:09de03f180d981400493cc75fd1721a35c4920af4969dbcb0582f258fe021668": "verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz",
+  "art:69729b5a213b81bc878563a826352524ba96834b092ab4fc21374f4b5a876733": "verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/cvt_special.json",
+  "art:c32e2740a2da0e567f0121e77667081214e016b87149bab0b258cf69fbda7072": "verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+  "art:afe6bacd767cd55298790dda9d5f67994b0500a44c735481ad865a66e02bfe04": "verity/ml/circuits/ops/tests/fixtures/vectors/tc-ampere-bf16-total-hw.json",
+  "art:d549388039b89d9c53fe8d5b5cdbe9bb5be4cc71cea1ef0844f5c71e606c4c1f": "verity/ml/circuits/ops/tests/fixtures/vectors/tc-ampere-bf16-total.json",
+  "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073": "verity/ml/flock/tests/fixtures/f1-gate",
+  "art:8e64204959f3943541eaaa2eb7e980a7b6d09a470d6f3ccb4b17f676efcdffa7": "verity/ml/flock/tests/fixtures/hidden-outputs",
+  "art:4274bdf17e6fe0cbb00d0605644a955182a0f4fbe4c84d2f0263d0e26f838260": "verity/ml/flock/tests/fixtures/public-inputs",
+  "art:73260dcd0a485e06024b588ddc499bbe904c599cae142960e980148f13ebcdeb": "verity/ml/flock/tests/fixtures/public-inputs-blocks",
+  "art:1a76e7c297d9a6ba73edb349148885b43becd71723acc2c22c245c6794ccc69b": "verity/ml/flock/tests/fixtures/rec-c3-inner",
+  "art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3": "verity/ml/flock/tests/fixtures/rec-coins",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -117,13 +120,27 @@
     "art:44aca97047b4caa2a39334546d40877f48ef64dd70f67f4bd3b941b11abf9f75": [
       "art:d68968cee842d0199f1e12aa7efb6a8ee90e1d0ea1123e4946afdd4f7ceb7f5b"
     ],
-    "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887": [
+    "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941": [
       "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
       "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
       "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
       "art:cba3df59a2100c154fcdcf532b86a97adef04e4dbe3690cb751ad39f61f5813d",
       "art:9ea8114d17bfad729de762a292b304b781a6bc987608193804454a3fb2260238",
-      "art:b238706278bd3f122ae084fbd6d9e01b9369779d4208b67eaab547e102e99364"
+      "art:b238706278bd3f122ae084fbd6d9e01b9369779d4208b67eaab547e102e99364",
+      "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887"
+    ],
+    "art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3": [
+      "art:97537edaf796edb3ec098d64a39283d2c74040bd06be85375304a5263e6bedc9"
+    ],
+    "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073": [
+      "art:cd6a7a1b0c579c5b4ae3553689e9918cc459822bca72ec74144ba2e79a1410ee"
+    ],
+    "art:1a76e7c297d9a6ba73edb349148885b43becd71723acc2c22c245c6794ccc69b": [
+      "art:07b423d36b18d2687c95d8bd95f8fccd8de46848c355a2a1a2b993db1e5354ea",
+      "art:542a0ada5b70b0f8197d75a5e8c3962ff44b82a3139e95a6a14be718b4accb1a",
+      "art:7bdc5f20216f10610a833f35c501fb3f09f558adcdb80010dfe35f13c4a91b1a",
+      "art:8d90528b4e090d58e5754e313080ef05d74a35b805fce8ace5a15cc12e75b728",
+      "art:d59791332598d1b33958ed907b08e1cdbebc33c556ea98bc76451f8a709a2df8"
     ]
   }
 }

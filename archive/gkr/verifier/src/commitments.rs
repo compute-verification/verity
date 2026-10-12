@@ -1,5 +1,5 @@
 //! The commitment scheme of a committed-operands statement (`R+sha256`, `R+blake3`): scheme `frame-v3` of
-//! `verity/primitives/commitments/frame_v3` (its `PROTOCOL.md`; the framing is `merkle.py`'s, the row-leaf
+//! `verity/ml/commitments/frame_v3` (its `PROTOCOL.md`; the framing is `merkle.py`'s, the row-leaf
 //! schemas `rowleaf.py`'s), checked natively.  The proof publishes, per VU, the row digests of its x row and W column
 //! as public words; this module rebuilds the tree leaves from them (and the `y` word leaves from the output words),
 //! the three roots, and compares them with the pinned roots of the frozen input set.  The domains are derived here
@@ -626,7 +626,7 @@ pub(crate) mod tests {
     }
 
     fn vectors() -> J {
-        let text = include_str!("../../../../verity/primitives/commitments/frame_v3/vectors.json");
+        let text = include_str!("../../../../verity/ml/commitments/frame_v3/vectors.json");
         parse(text.as_bytes(), &mut 0)
     }
 

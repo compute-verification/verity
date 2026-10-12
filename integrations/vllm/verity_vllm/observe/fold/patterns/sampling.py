@@ -8,7 +8,7 @@ import math
 from dataclasses import dataclass, replace
 from typing import Any
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
@@ -524,8 +524,9 @@ class TokenSelectGumbelTopP:
         if out.rank == 1:
             out = ViewDesc(out.alloc, out.offset, (R, 1), (out.strides[0], 1), out.dtype, out.device)
         from verity_vllm.program.registry import sampling as _sampling
+        from verity_vllm.program.registry import sampling_vocab
         construction = self.construction or target_of(ctx)[0].effective_sampler_construction()
-        spec = bind(_sampling.select_for(_sampling.GumbelTopPTokenSelect, construction), V=V)
+        spec = bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, construction), V=V)
         S = int(s2["S"])        # the split kernels' constexpr: the launch's S -> the 6th operand (bound to the Program's `splits` Input)
         kernels = (*s2["kernels"], "ArgMaxOps", "gather_kernel")
         parts = []

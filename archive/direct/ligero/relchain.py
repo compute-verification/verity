@@ -27,7 +27,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from verity_catalog.silicon.silicon import tc_dot
+from verity.ml.circuits.silicon.silicon import tc_dot
 from verity_numerical.bench import contract
 
 from . import phases, protocol as protocol_mod
@@ -109,7 +109,7 @@ def set_instances(rel: Relation, path, n: int, lo: int = 0):
     batch form of ``tc_dot``) and every final word must be what the set recorded (its stored word, or the FP32 accumulator
     a ``u32`` port holds), else the set is refused.
     A set is never recycled: ``lo + n`` beyond its size is an error."""
-    from verity_kernels.tc import group_sum_total_batch
+    from verity.ml.kernels.tc import group_sum_total_batch
     from verity_numerical.bench.input_sets import InputSet
     s = InputSet.open(path)
     K = int(s.subcircuit.params["K"])

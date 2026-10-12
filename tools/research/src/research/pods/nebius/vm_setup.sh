@@ -38,8 +38,11 @@ mountpoint -q /workspace || mount /workspace
 install -d -o "$U" -g "$U" /workspace/hf /workspace/hf/hub /workspace/hf/prefetch /workspace/research /workspace/ramlock \
   /workspace/cache /workspace/cache/uv /workspace/cp
 
+# TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB; four at once filled it on vy-nebius-1 (6 Oct)
+install -d -m 1777 -o root -g root /workspace/tmp
+echo 'd /workspace/tmp 1777 root root 10d' > /etc/tmpfiles.d/workspace-tmp.conf
 touch /etc/environment
-for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID; do
+for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID TMPDIR=/workspace/tmp; do
   grep -q "^${kv%%=*}=" /etc/environment || echo "$kv" >> /etc/environment
 done
 
@@ -48,8 +51,10 @@ systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -y -q git rsync fio jq python3-venv util-linux ripgrep
-UV_VERSION=0.12.20        # tools/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
+# python3-numpy: `python3 tools/verity/lean/check.py --update` runs PoUW's vector generators, which import numpy, under that
+# python3 (node 2 and cpu-1 lacked it, 11 Oct)
+apt-get install -y -q git rsync fio jq python3-venv python3-numpy util-linux ripgrep
+UV_VERSION=0.12.20        # tools/verity/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
 [ "$(uv --version 2> /dev/null | cut -d' ' -f2)" = "$UV_VERSION" ] \
   || curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 if [ ! -x /usr/local/bin/nebius ]; then

@@ -1,8 +1,8 @@
-"""The FP8 draft targets (``verity_catalog.targets.target.FP8_HOPPER_WGMMA`` / ``FP8_ADA_MMA``) and their pinned vectors.
+"""The FP8 draft targets (``verity.ml.circuits.targets.target.FP8_HOPPER_WGMMA`` / ``FP8_ADA_MMA``) and their pinned vectors.
 
 A draft target is a relation stated precisely enough to generate vectors against; these tests pin each clause of the
 statement to the code that implements it (the model, the program builder, the family) and replay the recorded
-``catalog/verity_catalog/silicon/captures/vectors`` on the model.  The vectors are model replays, not hardware captures: their evidence is the
+``verity/ml/circuits/silicon/captures/vectors`` on the model.  The vectors are model replays, not hardware captures: their evidence is the
 instruction pin the target names, and a semantic drift in the model, the program or the vector fails here.
 """
 
@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from verity_catalog.silicon.errors import InvalidArtifact
-from verity_catalog.silicon.instructions import INSTRUCTIONS
-from verity_catalog.silicon.models import ADA_E4M3_M16N8K32, HOPPER_E4M3_K32
+from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+from verity.ml.circuits.silicon.models import ADA_E4M3_M16N8K32, HOPPER_E4M3_K32
 from verity_sp1.proofs.families import make_tensor_core_gate_set
 from verity_sp1.proofs.programs import gemm_accumulator_fp8
-from verity_catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS, TC_VECTORS, Target
+from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS, TC_VECTORS, Target
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 DRAFTS = (FP8_HOPPER_WGMMA, FP8_ADA_MMA)

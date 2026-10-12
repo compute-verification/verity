@@ -2,9 +2,9 @@
 BLOCK_SIZE_K 32) and its Boolean versions (`boolean_fp8_moe`), and `fp8`'s blockwise CUTLASS GEMM over a ragged N (GLM-5.3's
 `fused_qkv_a_proj`, N = 2624 over 21 weight-scale rows).
 
-* the plain-integer reference (`verity.primitives.circuits.evaluation.evaluate`) against a model written here from the kernels: core's k32 step
+* the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`) against a model written here from the kernels: core's k32 step
   (`HopperE4m3QgmmaDot32`), FMUL and FFMA each rounded once from the exact rational, and `cvt.rn.bf16.f32`;
-* the step's pinned vectors (`catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
+* the step's pinned vectors (`verity/ml/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
   coordinates;
 * operands on which the per-tile promotion, SWAP_AB and CUTLASS's per-block promotion give different words;
 * the numpy twins in `derived_rows` and `fp8_moe_rows` that the H200 capture compares the kernels with, against the Definitions;
@@ -21,17 +21,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.evaluation.batch import type_shape
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.boolean import trace as TR
-from verity_catalog.definitions.prims import F32ToE4m3Sat
-from verity_catalog.definitions.prims import HopperE4m3QgmmaDot32 as DOT
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.evaluation.batch import type_shape
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.ops.prims import F32ToE4m3Sat
+from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32 as DOT
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import fp8_moe_rows as MR
@@ -40,10 +40,10 @@ from verity_vllm.program.registry import boolean_fp8 as BF
 from verity_vllm.program.registry import boolean_fp8_moe as BM
 from verity_vllm.program.registry import fp8 as F
 from verity_vllm.program.registry import fp8_moe as M
-from verity_vllm.program.registry.moe import nv_expf_bits
+from verity_vllm.program.kernels.moe_twins import nv_expf_bits
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 
-VECTORS = Path(__file__).resolve().parents[4] / "catalog" / "verity_catalog" / "silicon" / "captures" / "vectors"
+VECTORS = Path(__file__).resolve().parents[4] / "verity" / "ml" / "circuits" / "silicon" / "captures" / "vectors"
 SIGN, ONE = 1 << 31, 0x3F800000
 
 
@@ -427,19 +427,19 @@ def test_the_act_twin_is_the_definition(I: int, G: int, specials: bool) -> None:
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
     "MoeExpertFp8BlockCoordinate_v2{K=256,G=128,KB=32,SWAP=False}":
-        (109778, 197810, 11175, "35f87679820e9c4408a1f8d3dc97b2bf0e0e070f7e785aab95b3bdeb4151d56a"),
+        (109778, 197810, 11175, "94332fbb6c435fd7a8344438ac9402c3021410860b04032cad9c253d621ddf11897c17dbee1b6640a600295bfe8324c81077ee22459a581778d3e1f96d283071"),
     "MoeExpertFp8BlockCoordinateW_v2{K=256,G=128,KB=32,SWAP=False}":
-        (112208, 202460, 11285, "a339a0d6d91e03c1f72091bc0ba7aa5ae5f9420a5a28b675f2104e498f249811"),
+        (112208, 202460, 11285, "c31feda4eca0e41c22447406df556f76638ddb553ec548b8e56c6a76e9efb09d135f63ee56caff5dc513aa936b5d5046e26a3eb0f91eae4be66c0347b8b74502"),
     "MoeExpertFp8BlockGemm_v2{K=32,N=40,G=32,KB=32,SWAP=False}":
-        (551200, 992480, 56400, "237c564cdc35ad094647ca77dc67a0b9f038e135c4a8bc5d106f5aa0dfd38648"),
+        (551200, 992480, 56400, "02bf354d3d15fd0343efdc9434e277df290446a412dc26ea0b8e8d9d6449d19b24560c22fdf9a10b2862ab020c4c4fe542a81bce55f183ef391efdd7b9e10c00"),
     "ScaledMmFp8Block_v2{K=32,N=40,G=32}":
-        (551200, 992480, 56400, "4712c394556bdf70301a0b131d8875349a98e017362da895011442a2b5f12ce8"),
+        (551200, 992480, 56400, "7dc8e98a0274e6b1dd7a6b88c7b60488ad3eef4c3a0376704007526ed5b709d58c56e2a6a8feb20be84dd97c0b82190f5e8d9545e579bddc9a0983d4e186282a"),
     "ScaledMmFp8BlockSharedScale_v2{K=32,N=40,G=32}":
-        (458860, 815780, 52220, "2d1026d10adfb618f5085d1c72600dc8bd2c2d9cf9f5f380c87c0bfdf0b20186"),
+        (458860, 815780, 52220, "60abef94ce2a00604d9ee7dd5052e678fa4f9c0eac967867d9dc04d409c293eda985414ec9e0ad3648bff480a186ad6f194506ce22def0a1a913aceec6eb4b53"),
     "SiluMulFp8BlockQuantResult_v2":
-        (19561, 38091, 1468, "6bec32e8f9b69b5a1e5553bc756c246723c4cc52c7abfd47e00f1032cac05a17"),
+        (19561, 38091, 1468, "6712f4b4c28cb6b216780434b20f11d82695f118f34388ea79535d8436790b91cf25e4d129bf7d57b39fb6e0e62b5cafec3be7ad65372823c9f0062226cb8bb9"),
     "SiluMulFp8BlockQuant_v2{I=8,G=4}":
-        (191042, 377416, 16984, "73286c9132e36dc65431695158824acfa71c8d7ee3e20a5e77cf77c2ee04cc17"),
+        (191042, 377416, 16984, "b962d6fdb1581ff9e7ae32f9ce57a2463eca87644a16a1fe94143c546dcfcaf351046c037e6e44f452441379edb2e809ff41679ddc4f7f68de59165592a33041"),
 }
 PINNED = [bind(BM.MoeExpertFp8BlockCoordinateV2, K=256, G=128, KB=32, SWAP=False),
           bind(BM.MoeExpertFp8BlockCoordinateWV2, K=256, G=128, KB=32, SWAP=False),

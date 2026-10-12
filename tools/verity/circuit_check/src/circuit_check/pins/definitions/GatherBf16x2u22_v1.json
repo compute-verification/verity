@@ -1,0 +1,7 @@
+{
+ "definitions": {
+  "GatherBf16x2u22_v1": {
+   "and": 352
+  }
+ }
+}

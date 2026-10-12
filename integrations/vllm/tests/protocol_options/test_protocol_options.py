@@ -210,9 +210,9 @@ def test_the_commit_context_is_none_for_the_default_and_checked_for_a_declared_s
     PO.into_verdict(None, versions, "/nonexistent", TargetProfile(), program_digest=None, manifest=None)
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
     p = TargetProfile(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
-    ctx = PO.commit_context(p, settings={"pouw": {"beacon": 7}})
+    ctx = PO.commit_context(p, settings={"pouw": {"draws": 7}})
     assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.scheme("pouw"), ctx.settings_of("pouw")) == \
-        ("commit", ALL[:1] + ALL[2:], False, "ncp-v1", {"beacon": 7})
+        ("commit", ALL[:1] + ALL[2:], False, "ncp-v1", {"draws": 7})
     with pytest.raises(PO.Refused, match="TP 2"):
         PO.commit_context(p, world=2)
 
@@ -427,10 +427,10 @@ def _commit(*enabled):
 
 
 def test_beside_sampled_proofs_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
-    """`verity.protocols.accounting.work.pouw.circuit` (#364) has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
+    """`verity.core.protocols.pouw.circuit` (#364) has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
     that scheme is admitted beside sampled proofs, and every other one keeps #311's refusal, word for word.  Without sampled
     proofs nothing changes."""
-    from verity.protocols.accounting.work.pouw import circuit
+    from verity.core.protocols.pouw import circuit
     assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
@@ -450,7 +450,7 @@ def test_beside_sampled_proofs_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
 
 
 def test_traced_as_is_the_circuit_of_one_executed_call():
-    from verity.protocols.accounting.work.pouw.protocol import DomainError
+    from verity.core.protocols.pouw.protocol import DomainError
     t = PO.traced_as("pouw:ncp-v2", 16, 64, 16)
     assert t.scheme == "ncp-v2" and t.definition.name == "NcpLinear" and t.served == 16 * 16
     assert PO.traced_as("pouw:ncp-v1", 16, 64, 16) is None and PO.traced_as("pouw:pearl-fp8-v4", 16, 64, 16) is None
@@ -462,10 +462,10 @@ def test_traced_as_is_the_circuit_of_one_executed_call():
 def test_without_its_circuit_registry_pouw_stays_refused_beside_sampled_proofs(monkeypatch):
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
-    monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity.protocols.accounting.work.pouw.not_a_circuit_registry")
+    monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity.core.protocols.pouw.not_a_circuit_registry")
     got = PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:vllm-v1"))
     assert got[-1] == _refused_beside_sampled_proofs("ncp-v2")
-    assert got[0].startswith("pouw: its circuit registry verity.protocols.accounting.work.pouw.not_a_circuit_registry is not installed")
+    assert got[0].startswith("pouw: its circuit registry verity.core.protocols.pouw.not_a_circuit_registry is not installed")
     with pytest.raises(PO.Refused, match="is not installed"):
         PO.traced_as("pouw:ncp-v2", 16, 64, 16)
 

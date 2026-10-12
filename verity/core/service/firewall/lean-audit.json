@@ -1,0 +1,20 @@
+{
+ "roots": ["Firewall"],
+ "exempt": {
+  "FirewallMain": "the core-firewall executable's entry point, one line; its command is Core.Protocol.main of Core.Firewall.protocol, audited under Firewall and CoreProtocol",
+  "FirewallDifftest": "the core-firewall-difftest executable's entry point, one line: Difftest.serve over Core.Firewall.opFn and outerFn, audited under Firewall and Difftest"
+ },
+ "escapes": {
+  "Core.Firewall.pyJson": "partial def: Python's json.dumps(sort_keys=True) of any JSON value, recursing through it, for the values an open's error message quotes; no proof is about it, and the agreement tests (tests/test_firewall_release_agreement.py) cover it"
+ },
+ "layers": {
+  "Firewall": {
+   "imports": ["Lean", "Flock", "CoreProtocol", "Firewall"],
+   "except": [],
+   "why": "the release side is code: Lean core, C-Flock's verifier library (its canonical JSON, SHA-512 and the firewall's contract) and the core protocol interface, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  }
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}

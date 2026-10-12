@@ -1,0 +1,106 @@
+{
+ "definitions": {
+  "ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}": {
+   "and": 19
+  },
+  "ArgmaxLeaf_v1{G=50,FIRST=1,FINAL=1}": {
+   "and": 2661
+  },
+  "ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": {
+   "and": 3415
+  },
+  "ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": {
+   "and": 3431
+  },
+  "ArgmaxLeaf_v1{G=8,FIRST=0,FINAL=0}": {
+   "and": 394
+  },
+  "ArgmaxMerge_v1{G=2,IW=12,FINAL=1}": {
+   "and": 29
+  },
+  "ArgmaxMerge_v1{G=2,IW=6,FINAL=0}": {
+   "and": 40
+  },
+  "ArgmaxMerge_v1{G=4,IW=6,FINAL=1}": {
+   "and": 104
+  },
+  "ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": {
+   "and": 2577
+  },
+  "ArgmaxStep_v2": {
+   "and": 134
+  },
+  "F32ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}": {
+   "and": 35
+  },
+  "F32ArgmaxLeaf_v1{G=2,FIRST=1,FINAL=1}": {
+   "and": 135
+  },
+  "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": {
+   "and": 6455
+  },
+  "F32ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": {
+   "and": 6487
+  },
+  "F32ArgmaxLeaf_v1{G=8,FIRST=0,FINAL=0}": {
+   "and": 746
+  },
+  "F32ArgmaxMerge_v1{G=2,IW=12,FINAL=1}": {
+   "and": 45
+  },
+  "F32ArgmaxMerge_v1{G=2,IW=6,FINAL=0}": {
+   "and": 72
+  },
+  "F32ArgmaxMerge_v1{G=2,IW=6,FINAL=1}": {
+   "and": 39
+  },
+  "F32ArgmaxMerge_v1{G=4,IW=6,FINAL=1}": {
+   "and": 184
+  },
+  "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": {
+   "and": 4593
+  },
+  "F32ArgmaxStage_v1{V=2,L=0}": {
+   "and": 135
+  },
+  "F32ArgmaxStage_v1{V=200,L=0}": {
+   "and": 20143
+  },
+  "F32ArgmaxStage_v1{V=200,L=1}": {
+   "and": 184
+  },
+  "F32ArgmaxStage_v1{V=4161,L=1}": {
+   "and": 4665
+  },
+  "F32ArgmaxStage_v1{V=4161,L=2}": {
+   "and": 45
+  },
+  "F32ArgmaxStage_v1{V=65,L=0}": {
+   "and": 6522
+  },
+  "F32ArgmaxStage_v1{V=65,L=1}": {
+   "and": 39
+  },
+  "TokenSelectStage_v1{V=200,L=0}": {
+   "and": 10655
+  },
+  "TokenSelectStage_v1{V=200,L=1}": {
+   "and": 104
+  },
+  "TokenSelectStage_v1{V=4161,L=1}": {
+   "and": 2617
+  },
+  "TokenSelectStage_v1{V=4161,L=2}": {
+   "and": 29
+  },
+  "TokenSelectStage_v1{V=50,L=0}": {
+   "and": 2661
+  },
+  "TokenSelect_v2{V=200}": {
+   "and": 10759
+  },
+  "TokenSelect_v2{V=50}": {
+   "and": 2661
+  }
+ }
+}

@@ -11,15 +11,15 @@ import json
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits import partition_object as PO
-from verity.primitives.circuits.defs import REGISTRY, bind
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import Circuit
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import Circuit
 from verity_vllm.program.registry import act
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import boolean_silu as BSL
@@ -27,10 +27,10 @@ from verity_vllm.program.registry import prims as P
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "SiluMulBf16_v3": (1372, 7034, 162, "d228d6ecc77f994dd1e2fd23208223ee85fdc11d58b8effa8c4fd759a0643613"),
-    "SiluMul_v3{I=8}": (10976, 56272, 1296, "f34ab37e75145eb2a12c911e8e7344fcdd5a6650347e83e016d4dd16525e1d32"),
-    "SiluMulBf16_v4": (1380, 7023, 166, "67102e7bf0c2497b99fdf3a3094020b6a431adfe0353c37fa92d12018f7b2378"),
-    "SiluMul_v4{I=8}": (11040, 56184, 1328, "81e5be9a649d815fc1f3fd13af4b583e8f691aacb5c0272cb679707ec9147de3"),
+    "SiluMulBf16_v3": (1372, 7034, 162, "a7ddde8f9a7785aba7f60449a99e5de9c00248d00f7d7711ccca96e1d5186aa4862dbdf971c0bf876e99a613a0b48ea290c9b2e1b3013b7c24a2f8c5427360f8"),
+    "SiluMul_v3{I=8}": (10976, 56272, 1296, "43ea066e735705e41661357e1b89c8c1cbcd94398c81c8cd9fee0bdbb21c2af7b676581f27e9a29bfbc28b4a291a47712d55c7316830f1f689b387985c9b0c81"),
+    "SiluMulBf16_v4": (1380, 7023, 166, "5b166b381858235d19f218e96e43d0e2102bbe73f6cdf9315fa850f80a4afed4e032ac57b5e2efd271c071893212d93dd6b542ac86ab33fa119558b976f8aa7b"),
+    "SiluMul_v4{I=8}": (11040, 56184, 1328, "28e2e644cc7ab2a39d60e14429558cc92c3019807248898144be4f77010d17f646c05383e5e5049b756449aa12af9abbfe4d17f29bf566f87f1d35e51c5d3505"),
 }
 #: version -> (element, row)
 VERSIONS = {"v3": (BSL.SiluMulBf16, BSL.SiluMul), "v4": (BSL.SiluMulBf16Expf, BSL.SiluMulExpf)}

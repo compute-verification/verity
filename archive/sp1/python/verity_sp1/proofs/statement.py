@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from verity.errors import ProtocolError
-from verity_experimental.commitments.multiproof import multiproof_from_paths
+from verity.ml.commitments.multiproof import multiproof_from_paths
 
 PORT: Literal["port"] = "port"
 LOCAL: Literal["local"] = "local"

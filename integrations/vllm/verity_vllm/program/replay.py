@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.primitives.circuits.defs import Body, Builder
-from verity.primitives.circuits.refs import Coll, PartLog, concat, prefix_runs
+from verity.ml.circuits.defs import Body, Builder
+from verity.ml.circuits.refs import Coll, PartLog, concat, prefix_runs
 
 
 def substitute(refs, env: dict[tuple[str, int], Any], logs: dict[int, tuple[Any, Any]] | None = None):

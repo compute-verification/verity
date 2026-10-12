@@ -1,8 +1,9 @@
 """The POUS-only harness (`benchmarks/pous/band_gpu/harness.py`, `bench.py --impl band-gpu`) on CPU: the band's reference codec
-stands in for the GPU twin on CPU tensors, a Python thread for the native responder (its wire format), and the verifier is the
-harness's own `live.py` process.  The harness's timer is injected and the verifier runs on its logical clock (`--clock
-logical`: each answer's time is the responder's reported one), so no outcome here depends on a clock or on the machine's
-load: what is checked is that each step runs and each gate and control decides, not the numbers."""
+stands in for the GPU twin on CPU tensors, a Python thread for the native responder (its wire format), and the memory
+challenger is the harness's own `memory_challenger.py` process.  The harness's timer is injected and the memory
+challenger runs on its logical clock (`--clock logical`: each answer's time is the responder's reported one), so no
+outcome here depends on a clock or on the machine's load: what is checked is that each step runs and each gate and
+control decides, not the numbers."""
 from __future__ import annotations
 
 import hashlib
@@ -15,17 +16,20 @@ import subprocess
 import sys
 import threading
 import types
+import weakref
 from pathlib import Path
 
 import pytest
 
 torch = pytest.importorskip("torch")
-pytest.importorskip("verity.protocols.accounting.space.pous")
+pytest.importorskip("verity.core.protocols.pous")
 
 ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmarks" / "pous"
 BAND = "band-chain/d12/v1"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
+SEED = "5eed" * 8
+"""`memory_challenger.py --seed`: the audits' challenges, and so the controls' verdicts, are fixed."""
 
 
 def _bench():
@@ -42,7 +46,7 @@ def _harness():
 
 
 def _small():
-    from verity.protocols.accounting.space.pous import band
+    from verity.core.protocols.pous import band
     return band.BandParams(16, 64 * 8, 12)          # 64-byte blocks, 1 KiB segments
 
 
@@ -93,11 +97,11 @@ class PyResponder:
 
 def _backend(params, flip_last: bool = False):
     """The reference codec as the twin: tags carry each row's segment id and the salt."""
-    from verity.protocols.accounting.space.pous import schemes
-    from verity.protocols.accounting.space.pous.labels import salt_value, tag
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.labels import salt_value, tag
 
     harness = _harness()
-    from band_gpu.live import scheme_of
+    from band_gpu.memory_challenger import scheme_of
 
     at = lambda d: schemes.Band(type(params)(params.blocks_per_segment, params.m, d, 64))  # noqa: E731
     sch = scheme_of(at(params.d).name, at(params.d).params)
@@ -133,7 +137,7 @@ def _backend(params, flip_last: bool = False):
 
 def _vectors(params):
     """The band's pinned whole-segment vector, at the small geometry, from the reference."""
-    from verity.protocols.accounting.space.pous import schemes
+    from verity.core.protocols.pous import schemes
 
     harness = _harness()
     b = params.blocks_per_segment * params.block_bytes
@@ -145,7 +149,8 @@ def _vectors(params):
 def _args(tmp_path, **kw):
     base = {"scheme": BAND, "max_segments": 0, "kernels": "", "build_dir": str(tmp_path / "build"), "reference_segments": 2,
             "workers": 2, "tokens": "1,8", "reps": 1, "load_tokens": 0, "audits": 2, "pings": 20, "allowance": "max", "k": 0, "deadline_ns": 0, "clock": "logical",
-            "verifier_cpu": None, "responder_cpu": None, "step_reps": 3, "nvme_dir": "", "nvme_samples": 8, "impl_commit": None}
+            "verifier_cpu": None, "responder_cpu": None, "step_reps": 3, "nvme_dir": "", "nvme_samples": 8, "impl_commit": None,
+            "seed": SEED}
     return types.SimpleNamespace(**{**base, **kw})
 
 
@@ -167,7 +172,7 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
     m = body["metrics"]
     assert m["loop"]["tokens"] == [1, 8] and m["loop"]["tensors"] == 3 and set(m["loop"]["overhead"]) == {1, 8}
     honest, value, late, rec = m["audit"], m["value_control"], m["late_control"], m["recompute_control"]
-    from verity.protocols.accounting.space.pous import audit
+    from verity.core.protocols.pous import audit
 
     assert honest["audits_accepted"] == 2 and honest["k"] == audit.CHALLENGES and honest["responder"]["answered"] == 2 * audit.CHALLENGES
     assert set(honest["margin_s"]) >= {"min", "p50", "max"} and honest["limit_ns"] > honest["deadline_ns"]
@@ -252,12 +257,12 @@ def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
 def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_there():
     """`--band-d 6`: the band at in-degree 6, unregistered (`band-chain/d6/v1` is the codec's name, not a registered byte
     format), whose segments round-trip and whose certificate at the frozen point is
-    `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the verifier process rebuilds it from its manifest;
+    `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the memory challenger process rebuilds it from its manifest;
     d = 4 has no certificate and is refused."""
-    from verity.protocols.accounting.space.pous import band, schemes
+    from verity.core.protocols.pous import band, schemes
 
     harness = _harness()
-    from band_gpu.live import params_of, scheme_of
+    from band_gpu.memory_challenger import params_of, scheme_of
 
     small = harness.with_in_degree(_small(), 6)
     sch = scheme_of("band-chain/d6/v1", small)
@@ -328,7 +333,7 @@ def test_audits_0_runs_the_band_untimed_with_no_limit_audit_or_control_and_says_
 def test_bench_labels_an_untimed_result_and_refuses_audits_0_where_it_would_pass_vacuously(tmp_path, monkeypatch):
     bench = _bench()
     common = ["--weight-set", "qwen2.5-0.5b/linears+head", "--hardware", "cpu", "--out", str(tmp_path)]
-    with pytest.raises(SystemExit, match="only band-gpu and p2-v1-gpu run untimed"):
+    with pytest.raises(SystemExit, match="only band-gpu and the P2 arms run untimed"):
         bench.main(["--impl", "reference", "--audits", "0", *common])
 
     class Untimed:
@@ -383,6 +388,22 @@ def test_the_control_responder_holds_only_the_late_controls_answers():
     assert got[0] == got[4] == (777_000, 777_000, b"R" * width)                         # recomputed: reported, not held
     assert got[3] == (0, 999_000, c_host[5 * width:6 * width]) and got[7][1] == 999_000
     assert got[1] == (0, 1_000, c_host[width:2 * width])
+
+
+def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_alone(tmp_path):
+    """`--seed` fixes the CPU tests' challenge sources, since a control's gate is a statistical test that real draws fail now
+    and then; a timed audit on the wall clock refuses it before reading anything, so its challenges stay `os.urandom`'s."""
+    _harness()
+    from band_gpu import memory_challenger as mc
+
+    files = ["--ready", str(tmp_path / "ready.json"), "--leaves", str(tmp_path / "leaves.bin"), "--out", str(tmp_path / "out.json")]
+    with pytest.raises(SystemExit) as refused:
+        mc.main([*files, "--seed", SEED])
+    assert refused.value.code == 2 and not (tmp_path / "out.json").exists()
+    seed = bytes.fromhex(SEED)
+    with pytest.raises(ValueError, match="logical clock alone"):
+        mc.audit("127.0.0.1", 0, None, None, audits=1, pings=1, seed=seed)
+    assert len({mc.seeded_source(seed, j) for j in range(4)} | {mc.seeded_source(b"other", 0)}) == 5
 
 
 def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():
@@ -450,6 +471,21 @@ def test_the_native_build_is_keyed_by_the_nvcc_release_that_compiles_it(tmp_path
     assert at("12.8") == at("12.8") != at("13.0")                       # another toolkit's .so is never adopted
 
 
+def test_every_checkout_of_the_same_native_source_compiles_one_copy_left_untouched(tmp_path, monkeypatch):
+    sys.path.insert(0, str(BENCH))
+    from band_gpu import native
+
+    copy = native._stable_copy(str(tmp_path))
+    assert open(copy, "rb").read() == open(native.SOURCE, "rb").read()
+    os.utime(copy, ns=(1, 1))
+    assert native._stable_copy(str(tmp_path)) == copy and os.stat(copy).st_mtime_ns == 1   # ninja sees nothing to rebuild
+    other = tmp_path / "checkout" / "pous_native.cu"
+    other.parent.mkdir()
+    other.write_bytes(b"// another source\n")
+    monkeypatch.setattr(native, "SOURCE", str(other))
+    assert native._stable_copy(str(tmp_path)) == copy and open(copy, "rb").read() == b"// another source\n"
+
+
 def test_the_recompute_gate_fails_a_run_whose_challenges_missed_every_dropped_block():
     harness = _harness()
     assert harness.recompute_gate({"wrong": 0, "answers": 20, "recomputed_answers": 3})["passed"]
@@ -475,6 +511,43 @@ def test_the_step_floor_is_the_fastest_kernel_and_a_call_under_the_certificate_i
     assert got["sampled_nvidia_smi_id"] == "GPU-b"
     assert got["at_plus15pct_overclock_s"] == got["at_max_clock_s"] / 1.15
     assert not harness.step_floor(fake, 2, 300_000, facts)["below_certificate"]
+
+
+def test_the_plain_arm_warms_the_device_up_before_its_first_rep_and_keeps_no_warmup_rep(monkeypatch):
+    harness = _harness()
+    ran = []
+    monkeypatch.setattr(harness, "forward", lambda flat, pl, x: ran.append(x))
+
+    def timer(fn):
+        fn()
+        return 0.125
+
+    fake = harness.Backend("cpu", None, None, None, None, None, timer, warmup_s=harness.PLAIN_WARMUP_S)
+    reps, how = harness._plain_arm(fake, types.SimpleNamespace(view=lambda *_: None), [], {1: "x1", 8: "x8"}, [1, 8], 3)
+    warm = int(harness.PLAIN_WARMUP_S / 0.125)
+    assert warm > 0 and ran == ["x1"] * warm + ["x1"] * 4 + ["x8"] * 4           # then each T: one untimed call, 3 reps
+    assert reps == {1: [0.125] * 3, 8: [0.125] * 3} and not how[1]["graphed"]
+    assert harness.Backend("cpu", None, None, None, None, None, timer).warmup_s == 0           # the CPU stand-in's: none
+
+
+def test_the_eager_fallback_runs_after_the_failed_capture_and_its_tensors_are_released():
+    harness = _harness()
+    held = []
+
+    class Tensors:
+        pass
+
+    def graphed(fn):
+        state = Tensors()                                      # a failed capture's tensors, alive in its frame
+        held.append(weakref.ref(state))
+        raise RuntimeError("operation not permitted when stream is capturing")
+
+    def fn():
+        assert held[0]() is None
+
+    fake = harness.Backend("cpu", None, None, None, None, None, lambda f: (f(), 1e-3)[1], graphed=graphed)
+    reps, how = harness._timed_arm(fake, fn, 2)
+    assert reps == [1e-3, 1e-3] and not how["graphed"] and how["reason"].startswith("RuntimeError: operation not permitted")
 
 
 SMI_STUB = """\
@@ -536,28 +609,34 @@ def test_the_harness_asks_nvidia_smi_about_the_leased_or_cuda_device_never_gpu_0
     assert harness.cuda_uuid(0) == "GPU-1cd543c7-ad34"                                       # torch's UUID, as nvidia-smi writes it
 
 
+def _pod_sh(tmp_path, case: str, gpus: str, *args: str, **env: str):
+    """pod.sh IMPL=band-gpu AUDITS=0 ARGS on stub nvidia-smi, uv, lscpu, nvcc and torch's venv python (which logs its arguments
+    to py-args): its result, the nvidia-smi queries and the run directory."""
+    d = tmp_path / case
+    d.mkdir()
+    bin_dir, log, smi_env = _smi_stub(d, gpus)
+    for name, body in (("uv", "exit 0"), ("lscpu", "exit 0")):
+        (bin_dir / name).write_text(f"#!/bin/sh\n{body}\n")
+        (bin_dir / name).chmod(0o755)
+    nvcc = d / "cuda" / "bin" / "nvcc"
+    nvcc.parent.mkdir(parents=True)
+    nvcc.write_text("#!/bin/sh\necho 'Cuda compilation tools, release 13.0, V13.0.88'\n")
+    nvcc.chmod(0o755)
+    py = d / "work" / "pous-bench" / "gpu312-torch2.14.0-cu130" / "bin" / "python"     # torch's venv, as if built
+    py.parent.mkdir(parents=True)
+    py.write_text(f"#!/bin/sh\necho \"$@\" >> {d / 'py-args'}\nexit 0\n")
+    py.chmod(0o755)
+    (d / "run").mkdir()
+    base = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(d), "RESEARCH_RUN_DIR": str(d / "run"), "WORK": str(d / "work"),
+            "CUDA_HOME": str(d / "cuda")}
+    rc = subprocess.run(["bash", str(BENCH / "pod.sh"), "IMPL=band-gpu", "AUDITS=0", *args], cwd=ROOT, capture_output=True, text=True,
+                        env={**base, **smi_env, **env})
+    return rc, _queries(log), d / "run"
+
+
 def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_path):
     def run(case: str, gpus: str, **env: str):
-        d = tmp_path / case
-        d.mkdir()
-        bin_dir, log, smi_env = _smi_stub(d, gpus)
-        for name, body in (("uv", "exit 0"), ("lscpu", "exit 0")):
-            (bin_dir / name).write_text(f"#!/bin/sh\n{body}\n")
-            (bin_dir / name).chmod(0o755)
-        nvcc = d / "cuda" / "bin" / "nvcc"
-        nvcc.parent.mkdir(parents=True)
-        nvcc.write_text("#!/bin/sh\necho 'Cuda compilation tools, release 13.0, V13.0.88'\n")
-        nvcc.chmod(0o755)
-        py = d / "work" / "pous-bench" / "gpu312-torch2.14.0-cu130" / "bin" / "python"     # torch's venv, as if built
-        py.parent.mkdir(parents=True)
-        py.write_text(f"#!/bin/sh\necho \"$@\" >> {d / 'py-args'}\nexit 0\n")
-        py.chmod(0o755)
-        (d / "run").mkdir()
-        base = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(d), "RESEARCH_RUN_DIR": str(d / "run"), "WORK": str(d / "work"),
-                "CUDA_HOME": str(d / "cuda")}
-        rc = subprocess.run(["bash", str(BENCH / "pod.sh"), "IMPL=band-gpu", "AUDITS=0"], cwd=ROOT, capture_output=True, text=True,
-                            env={**base, **smi_env, **env})
-        return rc, _queries(log), d / "run"
+        return _pod_sh(tmp_path, case, gpus, **env)
 
     rc, calls, out = run("lease", "GPU-a GPU-b GPU-c", GPU_LEASE_UUID="GPU-b", CUDA_VISIBLE_DEVICES="1",
                          KERNELS='{"chain_pairs": false}')
@@ -576,6 +655,68 @@ def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_
     assert rc.returncode == 2 and "name the run's GPU" in rc.stdout and calls == []
 
 
+def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
+    """PREPARE=1, run before the GPU lease: for p2-v3-mc-gpu, `lake build memory-challenger-verdict` in its Lean package
+    (lake from the user's elan here, /opt/elan's on the pod image) and exit, with no nvidia-smi query; for p2-v3-gpu,
+    `lake build pous-timed-audit` in pous_check where its lakefile declares one; for another IMPL, nothing; a failed build
+    exits 3."""
+    home = tmp_path / "home"
+    lake = home / ".elan" / "bin" / "lake"
+    lake.parent.mkdir(parents=True)
+    lake.write_text(f"#!/bin/sh\necho \"$PWD $*\" >> {tmp_path / 'lake-args'}\nexit ${{LAKE_RC:-0}}\n")
+    lake.chmod(0o755)
+    rc, calls, _ = _pod_sh(tmp_path, "mc", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-mc-gpu", HOME=str(home))
+    assert rc.returncode == 0 and calls == []
+    package = ROOT / "verity" / "core" / "devices" / "memory_challenger" / "lean"
+    assert (tmp_path / "lake-args").read_text() == f"{package} build memory-challenger-verdict\n"
+    rc, calls, _ = _pod_sh(tmp_path, "band", "GPU-a GPU-b", "PREPARE=1", HOME=str(home))
+    assert rc.returncode == 0 and calls == [] and (tmp_path / "lake-args").read_text().count("\n") == 1
+    check = ROOT / "verity" / "core" / "protocols" / "pous" / "check"
+    declared = 'name = "pous-timed-audit"' in (check / "lakefile.toml").read_text()
+    rc, calls, _ = _pod_sh(tmp_path, "strict", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-gpu", HOME=str(home))
+    assert rc.returncode == 0 and calls == []
+    assert (tmp_path / "lake-args").read_text().splitlines()[1:] == ([f"{check} build pous-timed-audit"] if declared else [])
+    (tmp_path / "lake-args").unlink()
+    rc, calls, _ = _pod_sh(tmp_path, "failed", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-mc-gpu", HOME=str(home), LAKE_RC="1")
+    assert rc.returncode == 3 and calls == []
+
+
+def test_pod_sh_python_path_loads_the_lean_verdict_without_site_packages():
+    """The pod's venv holds numpy, torch and gmpy2 alone, and pod.sh's PYTHONPATH the rest: with that path and no
+    site-packages at all, the memory challenger's Lean verdict (`verdict.py`, through `verity_difftest`, Hypothesis
+    unimportable) and `live.py` load.  r20261009-034919-c88c's five arms signed their sessions and then lost them to
+    `No module named 'verity_difftest'`."""
+    line = next(s for s in (BENCH / "pod.sh").read_text().splitlines() if s.startswith("export PYTHONPATH="))
+    path = line.split("=", 1)[1].replace("$REPO", str(ROOT))
+    code = ("import importlib.util, sys\n"
+            "sys.modules['hypothesis'] = None\n"
+            "spec = importlib.util.spec_from_file_location('v', sys.argv[1])\n"
+            "spec.loader.exec_module(importlib.util.module_from_spec(spec))\n"
+            "sys.path.insert(0, sys.argv[2])\n"
+            "from memory_challenger import live\n")
+    verdict = ROOT / "verity" / "core" / "devices" / "memory_challenger" / "lean" / "verdict.py"
+    rc = subprocess.run([sys.executable, "-S", "-c", code, str(verdict), str(BENCH)], capture_output=True, text=True,
+                        env={"PYTHONPATH": path, "PATH": os.environ.get("PATH", "/usr/bin:/bin")})
+    assert rc.returncode == 0, rc.stderr[-2000:]
+
+
+def test_pod_sh_runs_the_placement_gate_first_and_stops_on_its_refusal(tmp_path):
+    """GATE_ROLE: placement.py's gate checks the run's machine before anything is built or timed; here the guarded node's record
+    is another machine's, so the run exits 4 with the verdict recorded and bench.py never starts."""
+    node = tmp_path / "n2.json"
+    node.write_text(json.dumps({"boot_id": "another-machine"}))
+    rc, _, out = _pod_sh(tmp_path, "gate", "GPU-only", "GATE_ROLE=memory-challenger", "GATE_CORES=124-127",
+                         f"GATE_PEERS=worker:vy-nebius-2={node}", "GATE_ABSENT=firewall challenger")
+    assert rc.returncode == 4 and "the placement gate refused this run as memory-challenger" in rc.stdout, rc.stdout[-2000:]
+    v = json.loads((out / "placement-gate.json").read_text())
+    assert v["role"] == "memory-challenger" and v["passed"] is False and v["absent"] == ["challenger", "firewall"]
+    assert any(p.startswith("vy-nebius-2 (worker): its boot_id ") and p.endswith(" is not the node's another-machine")
+               for p in v["problems"]), v["problems"]
+    assert v["cores"]["declared"] == "124-127" and not (tmp_path / "gate" / "py-args").exists()
+    rc, _, out = _pod_sh(tmp_path, "ungated", "GPU-only")
+    assert rc.returncode == 0 and not (out / "placement-gate.json").exists()                      # no GATE_ROLE: no gate
+
+
 def test_the_kernel_settings_and_the_loop_layout():
     harness = _harness()
     before = harness.set_kernels({})
@@ -590,3 +731,31 @@ def test_the_kernel_settings_and_the_loop_layout():
         harness.set_kernels(before)
     pl = harness.placements(WS["tensors"], 2000)
     assert [(name, off, size) for name, _, _, off, size in pl] == [("q", 0, 1024), ("k", 1024, 512)]   # down ends past 2000
+
+
+def test_the_harness_moves_every_one_of_its_threads_off_the_memory_challengers_and_responders_cpus():
+    harness = _harness()
+    here = sorted(os.sched_getaffinity(0))
+    if len(here) < 3:
+        pytest.skip("needs three CPUs")
+    started, stop, tid = threading.Event(), threading.Event(), []
+
+    def wait():
+        tid.append(threading.get_native_id())
+        started.set()
+        stop.wait()
+
+    t = threading.Thread(target=wait)
+    t.start()
+    started.wait()
+    try:
+        harness.leave_reserved(types.SimpleNamespace(verifier_cpu=here[0], responder_cpu=here[1]))
+        assert os.sched_getaffinity(0) == os.sched_getaffinity(tid[0]) == set(here[2:])     # a thread started before, too
+    finally:
+        stop.set()
+        t.join()
+        for x in os.listdir("/proc/self/task"):
+            try:
+                os.sched_setaffinity(int(x), here)
+            except ProcessLookupError:
+                pass

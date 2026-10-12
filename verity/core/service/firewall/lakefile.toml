@@ -1,0 +1,32 @@
+# The firewall's release side in Lean (live PROTOCOL.md §10.5): the record `firewall/v0`, one outer session's decision
+# over Flock.Firewall.Contract, and the decision as a core protocol (`core-firewall`). Code, not analysis: Lean core,
+# C-Flock's verifier library, the core protocol interface, and the difftest server for `core-firewall-difftest`.
+name = "core_firewall"
+defaultTargets = ["Firewall", "core-firewall", "core-firewall-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../flock"
+
+[[require]]
+name = "core_protocol"
+path = "../../protocols/interface"
+
+[[require]]
+name = "verity_difftest"
+path = "../../difftest/lean"
+
+[[lean_lib]]
+name = "Firewall"
+
+[[lean_exe]]
+name = "core-firewall"
+root = "FirewallMain"
+
+[[lean_exe]]
+name = "core-firewall-difftest"
+root = "FirewallDifftest"

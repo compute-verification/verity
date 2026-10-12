@@ -110,7 +110,7 @@ def test_a_step_vllm_skipped_top_p_on_binds_the_prescribed_s():
     The prescribed S = SplitsFor_v1(rows, num_SMs) is bound instead -- only for a derived-S Program and only when EVERY row has top_p 1."""
     np = pytest.importorskip("numpy")
     from verity_vllm.commit.committer import topp_splits as TS
-    from verity_vllm.program.registry.topp_split import splits_for_v1
+    from verity_vllm.program.registry.topp_geometry import splits_for_v1
     ones, sm = (lambda: np.ones(8, dtype=np.float32)), (lambda: 188)
     assert TS.step_splits([], 8, splits_for_v1, ones, sm) == (16, None, "splits_prescribed_steps")
     assert TS.step_splits([], 1, splits_for_v1, lambda: [1.0], sm) == (32, None, "splits_prescribed_steps")
@@ -135,7 +135,7 @@ def test_every_tp_rank_arms_the_prescribed_s_as_the_single_rank_commit_does(tmp_
     np = pytest.importorskip("numpy")
     from verity_vllm.acquire.sources import taps as T
     from verity_vllm.commit.committer import topp_splits as TS
-    from verity_vllm.program.registry.topp_split import splits_for_v1
+    from verity_vllm.program.registry.topp_geometry import splits_for_v1
     rows = [{"family": "sampler_splits", "op_path": "runner.sampler", "request_id": "r0", "step": 0, "rows": 1, "rank": r} for r in (0, 1)]
     derived = {"populations": {"by_family": {"sampler_splits": 2}}, "identities": rows}
     (tmp_path / "derived.json").write_text(json.dumps(derived))

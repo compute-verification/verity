@@ -600,7 +600,7 @@ def main(argv=None) -> int:
     if hash_a and hash_ref:
         txt, d = sec_hash(hash_a, hash_ref, bw_meas)
         doc["kernels"] += d
-        md += ["## 1. `kernels/hash_gpu` -- Merkle commitment hashing (4090 run `r20260922-054241-b966`)", "", txt, ""]
+        md += ["## 1. `verity/ml/kernels/hash_gpu` -- Merkle commitment hashing (4090 run `r20260922-054241-b966`)", "", txt, ""]
         sha_b = next(r for r in d if r.get("hash") == "sha256" and r.get("candidate") == "B" and r.get("kernel") == "hash_gpu")
         b3_b = next(r for r in d if r.get("hash") == "blake3" and r.get("candidate") == "B" and r.get("kernel") == "hash_gpu")
         best_b = max((r for r in d if r.get("kernel") == "hash_gpu" and r.get("candidate") == "B" and r.get("mds") is None and r["hash"] in ("sha256", "blake3")), key=lambda r: r["a100_gb_per_s"])

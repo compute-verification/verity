@@ -107,11 +107,11 @@ def unreplayable_sites(p: Loaded) -> dict[str, Any]:
     EmbeddingShard rows with a committed member), from the Program itself: the cross-rank pass records its strata against them.
     Never raises: ``{"error": ...}`` names what could not be read."""
     try:
-        from verity_vllm.program.registry import b1_tp2 as _TP2
+        from verity_vllm.program.frontend import collective_kinds
         from verity_vllm.query.manifest import format as RM
 
         xs: dict[str, set] = {}
-        xr_fams = _TP2.cross_rank_families(p.world)     # [lane vllm-tp-n] from the registry's composites at this world, not typed
+        xr_fams = collective_kinds.cross_rank_families(p.world)     # [lane vllm-tp-n] from the registry's composites at this world, not typed
         for r_ in p.index.rows:
             fam_ = RM.spec_family(r_["spec"])
             if fam_ in xr_fams:

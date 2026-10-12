@@ -524,7 +524,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             if rid in program_S:      # [rev-pm M-0541 T3] record BOTH the kernel's S (mask constexpr) and the Program's S; name a disagreement
                 sp = program_S[rid]
                 if isinstance(sp, dict):       # [R16 M-0169] derived: S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the record's logits rows at t
-                    from verity_vllm.program.registry.topp_split import splits_for as _sf
+                    from verity_vllm.program.registry.topp_geometry import splits_for as _sf
                     nsm = sp.get("derived")
                     pS = int(_sf(int(n_rows_step), int(nsm))) if nsm is not None and 1 <= int(n_rows_step) <= 64 else None
                     rec["program_S"] = pS

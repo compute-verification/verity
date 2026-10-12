@@ -274,6 +274,11 @@ def target_mismatches(engine: Engine) -> list[str]:
         got = fp8_block_gemm_kernel_of(engine.model)
         if got != tp.fp8_block_gemm_kernel():
             bad.append(f"fp8_block_gemm declared {tp.fp8_block_gemm!r} ({tp.fp8_block_gemm_kernel()}), layers report {got!r}")
+    if getattr(tp, "moe_backend", None) is not None:
+        from verity_vllm.program.frontend.target_profile import moe_experts_class_of
+        got = moe_experts_class_of(engine.model)
+        if got != tp.moe_experts_class():
+            bad.append(f"moe_backend declared {tp.moe_backend!r} ({tp.moe_experts_class()}), layers report {got!r}")
     return bad
 
 

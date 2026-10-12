@@ -1,23 +1,29 @@
 {
   "schema": "verity/slack-routing-vectors/v2",
-  "about": "The delivery rule. `vectors` pins research.slack.route_targets: which names a post in #agent-coordination wakes (`msg` the post, `root` its thread's root or null for a top-level post, `inboxes` every inbox thread's ts, `targets` the names in order). `subscriptions` pins research.slack.deliveries, which extends it: each case's `deliveries` is every [name, mode] the post reaches, in order: the targets as `wake`, then each other name in `book` (sorted) whose first matching subscription's `deliver` it takes, with the same `inboxes`. A post's kind is its footer's first tag that isn't `urgent` or `(quiet)`, else `announce` (an announcement), `status` (a status line) or `message`. The console site's events route passes the same file.",
+  "about": "The delivery rule. `vectors` pins research.slack.route_targets: which names a post in #agent-coordination wakes (`msg` the post, `root` its thread's root or null for a top-level post, `inboxes` every inbox thread's ts, `targets` the names in order; optional `history`, the thread's earlier replies, and `branches`, PR number -> head branch, feed a reply under an announcement's `pr_watchers`). `subscriptions` pins research.slack.deliveries, which extends it: each case's `deliveries` is every [name, mode] the post reaches, in order: the targets as `wake`, then each other name in `book` (sorted) whose first matching subscription's `deliver` it takes, with the same `inboxes`. A post's kind is its footer's first tag that isn't `urgent` or `(quiet)`, else `announce` (an announcement), `status` (a status line) or `message`. The console site's events route passes the same file.",
   "registry": {
     "handles": [
       {
         "handle": "infra",
-        "usergroup": "SINFRA"
+        "usergroup": "SINFRA",
+        "holder": "bc-00000000-1111-2222-3333-44444444558b"
       },
       {
         "handle": "proofs",
-        "usergroup": "SPROOFS"
+        "usergroup": "SPROOFS",
+        "holder": "bc-aaaaaaaa-bbbb-cccc-dddd-eeeeeeee95d4"
       },
       {
         "handle": "circuits",
-        "usergroup": "SCIRC"
+        "usergroup": "SCIRC",
+        "holder": "bc-11111111-2222-3333-4444-55555555a1c1 (circuits lead)"
       },
       {
         "handle": "console",
-        "usergroup": null
+        "usergroup": null,
+        "branch_suffixes": [
+          "c3b2"
+        ]
       }
     ],
     "humans": [
@@ -562,6 +568,422 @@
       },
       "root": null,
       "targets": []
+    },
+    {
+      "name": "a reply under an announcement also wakes the owner of each PR it names (by its branch's last 4 characters), never its author",
+      "msg": {
+        "ts": "1700000040.000010",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": "Landed #1585; #1590 is next"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "branches": {
+        "1585": "cursor/gemm-rows-a1c1",
+        "1590": "cursor/level3-95d4"
+      },
+      "targets": [
+        "infra",
+        "circuits"
+      ]
+    },
+    {
+      "name": "a quiet reply under an announcement still wakes the owners of the PRs it names",
+      "msg": {
+        "ts": "1700000040.000011",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "#1585 is in tonight's train (quiet)"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "branches": {
+        "1585": "cursor/gemm-rows-a1c1"
+      },
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "a train-prep branch names the PRs its name lists",
+      "msg": {
+        "ts": "1700000040.000012",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "Built cursor/train-prep-1585-1590-on-041c30713-558b"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "branches": {
+        "1585": "cursor/gemm-rows-a1c1",
+        "1590": "cursor/level3-95d4"
+      },
+      "targets": [
+        "circuits",
+        "proofs"
+      ]
+    },
+    {
+      "name": "a branch named directly wakes its owner, here by the registry's branch_suffixes",
+      "msg": {
+        "ts": "1700000040.000013",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "Rebased cursor/pr-owner-doorbells-c3b2 onto main"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "targets": [
+        "console"
+      ]
+    },
+    {
+      "name": "a PR whose branch isn't known wakes whoever named it earlier in the thread, but not by a status line",
+      "msg": {
+        "ts": "1700000040.000014",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "#1600 failed its suites"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "history": [
+        {
+          "ts": "1700000040.000002",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "#1600 is ready for the next train"
+        },
+        {
+          "ts": "1700000040.000003",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "circuits",
+          "text": "✅ done — reviewed #1600"
+        }
+      ],
+      "branches": {},
+      "targets": [
+        "proofs"
+      ]
+    },
+    {
+      "name": "a run id a handle named beside its own PR earlier wakes it when a later post names that run",
+      "msg": {
+        "ts": "1700000040.000015",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "dd21 landed: #1588 + #1589"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "history": [
+        {
+          "ts": "1700000040.000004",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "circuits",
+          "text": "If r20261009-035518-dd21 lands first, I'll merge main into #1585"
+        },
+        {
+          "ts": "1700000040.000005",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "dd21 is the train for #1590? (it isn't mine to say)"
+        }
+      ],
+      "branches": {
+        "1585": "cursor/gemm-rows-a1c1",
+        "1588": "cursor/census-95d4",
+        "1589": "cursor/node-558b",
+        "1590": "cursor/other-0000"
+      },
+      "targets": [
+        "proofs",
+        "circuits"
+      ]
+    },
+    {
+      "name": "a year or a PR number is not a run id",
+      "msg": {
+        "ts": "1700000040.000016",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "1585 landed in 2026"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "history": [
+        {
+          "ts": "1700000040.000006",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "circuits",
+          "text": "#1585 waits on 1585 and 2026"
+        }
+      ],
+      "branches": {
+        "1585": "cursor/gemm-rows-a1c1"
+      },
+      "targets": []
+    },
+    {
+      "name": "a status line under an announcement wakes only the root's poster, whatever PRs it names",
+      "msg": {
+        "ts": "1700000040.000017",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": "✅ done — #1585 landed"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "branches": {
+        "1585": "cursor/gemm-rows-a1c1"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply under a root that isn't an announcement wakes no PR owners",
+      "msg": {
+        "ts": "1700000041.000002",
+        "thread_ts": "1700000041.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "see #1590"
+      },
+      "root": {
+        "ts": "1700000041.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "@circuits please review"
+      },
+      "branches": {
+        "1590": "cursor/level3-95d4"
+      },
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "one emoji may lead the names (`:mega: @a @b`), as Slack stores 📣",
+      "msg": {
+        "ts": "1700000050.000002",
+        "thread_ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": ":mega: @proofs <!subteam^SCIRC|@circuits> please reread the rules"
+      },
+      "root": {
+        "ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nrules changed"
+      },
+      "targets": [
+        "proofs",
+        "circuits"
+      ]
+    },
+    {
+      "name": "an emoji followed by a word is not a lead, so a status line keeps routing as one",
+      "msg": {
+        "ts": "1700000050.000003",
+        "thread_ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": ":white_check_mark: done — reread @circuits"
+      },
+      "root": {
+        "ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nrules changed"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply that names only its author (`proofs: landed`) names no one, so it wakes the root's poster",
+      "msg": {
+        "ts": "1700000050.000004",
+        "thread_ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": "proofs: Landed G as main abc123"
+      },
+      "root": {
+        "ts": "1700000050.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nrules changed"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a long multi-line reply under an announcement that names someone wakes only them, whatever PRs and runs its body mentions",
+      "msg": {
+        "ts": "1700000040.000020",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "@infra circuits, on 1700000040.000004: yes, r20261011-044421-6350 is ours, launched before your placement reached it.\n• Delete its scratch the moment 6350's pytest exits; nothing of ours needs it.\n• Its next suites run goes on vy-cpu-2 after dd21, beside #1590 and #1600, with --basetemp under scratch.\n• #1585's tree is main + #1590.\n\nThe rest is in the run's notes."
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "history": [
+        {
+          "ts": "1700000040.000004",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "#1590 rides r20261009-035518-dd21; 6350 is its suites run"
+        },
+        {
+          "ts": "1700000040.000005",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "vy-monitors",
+          "text": "vy-nebius-1: the OOM killer took python of the run for #1600"
+        }
+      ],
+      "branches": {
+        "1590": "cursor/level3-95d4",
+        "1585": "cursor/gemm-rows-a1c1"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply led by an unlabelled user-group mention is addressed: a PR its body names wakes no owner",
+      "msg": {
+        "ts": "1700000040.000021",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "<!subteam^SINFRA> Sweep 2 is in slot a: r20261011-052607-b6d8.\nIts tree is main + #1590, labelled on the run. (quiet)"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "history": [
+        {
+          "ts": "1700000040.000004",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "#1590 rides r20261009-035518-dd21; 6350 is its suites run"
+        },
+        {
+          "ts": "1700000040.000005",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "vy-monitors",
+          "text": "vy-nebius-1: the OOM killer took python of the run for #1600"
+        }
+      ],
+      "branches": {
+        "1590": "cursor/level3-95d4",
+        "1585": "cursor/gemm-rows-a1c1"
+      },
+      "targets": [
+        "infra"
+      ]
+    },
+    {
+      "name": "a reply that names no one wakes the PR watchers that are handles: a bot that named an unknown PR earlier is not one",
+      "msg": {
+        "ts": "1700000040.000022",
+        "thread_ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "circuits",
+        "text": "#1600 and #1590 are on the next train, after dd21"
+      },
+      "root": {
+        "ts": "1700000040.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "📣 *Announcement* from @infra to every handle\nmerge thread: land outcomes go here"
+      },
+      "history": [
+        {
+          "ts": "1700000040.000004",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "#1590 rides r20261009-035518-dd21; 6350 is its suites run"
+        },
+        {
+          "ts": "1700000040.000005",
+          "thread_ts": "1700000040.000001",
+          "bot_id": "B1",
+          "username": "vy-monitors",
+          "text": "vy-nebius-1: the OOM killer took python of the run for #1600"
+        }
+      ],
+      "branches": {
+        "1590": "cursor/level3-95d4",
+        "1585": "cursor/gemm-rows-a1c1"
+      },
+      "targets": [
+        "infra",
+        "proofs"
+      ]
     }
   ],
   "subscriptions": {

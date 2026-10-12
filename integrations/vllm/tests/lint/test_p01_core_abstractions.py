@@ -12,7 +12,7 @@ Checked today, against ``allowlists/p01_core_abstractions.json``:
   that another file, in the integration or in core, also registers.  One entry per integration file and id.
 
 Not checked here: ids built at run time, such as the ``Const<w>[0x..]`` family (``tests/program/
-test_registry_one_process.py`` loads ``verity_catalog.definitions`` and every integration registry module into one process, where
+test_registry_one_process.py`` loads ``verity.ml.circuits.ops`` and every integration registry module into one process, where
 core's Definition registry refuses a second object under an id); one id computing two functions, which only
 evaluation can see; and verifying a production opening with core alone.
 """
@@ -31,8 +31,16 @@ MUTATORS = frozenset({"append", "extend", "insert", "update", "setdefault", "pop
 DEFINITION_CALLS = frozenset({"primitive", "composite", "PrimitiveDefinition", "CompositeDefinition"})
 
 
-def _core(origin: str | None) -> bool:
-    return bool(origin) and (origin == "verity" or origin.startswith("verity."))
+def _core(name: str | None) -> bool:
+    """`name` is core as it was before the platform move: under `verity`, except what moves since put there from outside it
+    (the catalog, the kernels, C-Flock, verity_experimental's multiproofs, private circuits and ports), with core's own
+    protocols and claims, which are under `verity.core` now."""
+    def under(prefix: str) -> bool:
+        return name == prefix or name.startswith(prefix + ".")
+    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
+    return bool(name) and under("verity") and (not any(map(under, moved_in))
+                                or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
 
 def _private(name: str) -> bool:
@@ -145,8 +153,8 @@ def test_allowlist_has_no_stale_entries() -> None:
 def test_detectors_on_examples() -> None:
     bad = (
         "import verity.program.codec as codec\n"
-        "from verity.primitives.circuits import defs\n"
-        "from verity.primitives.circuits.defs import _check, primitive\n"
+        "from verity.ml.circuits import defs\n"
+        "from verity.ml.circuits.defs import _check, primitive\n"
         "codec._LAZY_PRIMITIVE_FAMILIES = tuple(codec._LAZY_PRIMITIVE_FAMILIES) + ('x',)\n"
         "setattr(defs, 'REGISTRY', {})\n"
         "defs.REGISTRY['Gemm_v1'] = None\n"
@@ -154,14 +162,14 @@ def test_detectors_on_examples() -> None:
     )
     got = {(v.kind, v.detail) for v in file_violations(bad, "verity_vllm/a.py")}
     assert got == {
-        ("core-private", "verity.primitives.circuits.defs._check"),
+        ("core-private", "verity.ml.circuits.defs._check"),
         ("core-private", "verity.program.codec._LAZY_PRIMITIVE_FAMILIES"),
         ("core-patch", "verity.program.codec._LAZY_PRIMITIVE_FAMILIES"),
-        ("core-patch", "setattr(verity.primitives.circuits.defs, REGISTRY)"),
-        ("core-patch", "verity.primitives.circuits.defs.REGISTRY[...]"),
-        ("core-patch", "verity.primitives.circuits.defs.REGISTRY.update()"),
+        ("core-patch", "setattr(verity.ml.circuits.defs, REGISTRY)"),
+        ("core-patch", "verity.ml.circuits.defs.REGISTRY[...]"),
+        ("core-patch", "verity.ml.circuits.defs.REGISTRY.update()"),
     }, got
-    good = "from verity.primitives.circuits.defs import primitive, CompositeDefinition\nx = CompositeDefinition('A', 1, (), None, None)\nx.doc = 'd'\n"
+    good = "from verity.ml.circuits.defs import primitive, CompositeDefinition\nx = CompositeDefinition('A', 1, (), None, None)\nx.doc = 'd'\n"
     assert file_violations(good, "verity_vllm/a.py") == []
     tree = ast.parse("@primitive('Bf16ToF32', 1, [], None)\ndef f(a): return a\n"
                      "G = CompositeDefinition('G', 2, (), None, None, register=False)\n"

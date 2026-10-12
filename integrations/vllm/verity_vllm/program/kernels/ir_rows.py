@@ -2,7 +2,7 @@
 `GemmaRMSNorm` runs (`(1 + weight)`, square, mean, `+ eps`, rsqrt, scale, multiply, narrow; the residual add), `gelu_pytorch_tanh`'s
 `GeluTanhMul` and the soft-capped logits (divide, tanh, multiply).
 
-One row is one instance of the row's Definition, evaluated by `verity.primitives.circuits.evaluation.evaluate_batch` with the family's `dense_rows` kernel
+One row is one instance of the row's Definition, evaluated by `verity.ml.circuits.evaluation.evaluate_batch` with the family's `dense_rows` kernel
 where one is registered (the IR's reference for what it declines), else the IR's reference -- never "auto", which would pick this
 kernel for itself.  So the words are the Definition's, NaN payloads included, with no arithmetic of its own.  An instance past
 `MAX_WORDS` argument words is declined (the reference holds it as Python ints).  Registered from `rows` (kernel "rows").
@@ -17,7 +17,7 @@ import numpy as np
 from verity_vllm.program.kernels.kernel_registry import Declined
 
 MAX_WORDS = 1 << 18
-EVALUATOR = ("verity_vllm.program.kernels.ir_rows.ir_row (the row's registry.dense Definition by verity.primitives.circuits.evaluation.evaluate_batch: "
+EVALUATOR = ("verity_vllm.program.kernels.ir_rows.ir_row (the row's registry.dense Definition by verity.ml.circuits.evaluation.evaluate_batch: "
              "its dense_rows kernel, else the IR reference)")
 _WORD = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}
 
@@ -47,10 +47,10 @@ def f64_statics(statics: dict[str, Any]) -> dict[str, Any]:
 def ir_row(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
     """One ROW of `family{statics}`: arg g = the instance's parameter g, as words.  Returns {"0": words, "out": words} (a module's
     output is spelt `0` when the row is the module's return, `out` inside its body)."""
-    from verity.primitives.circuits.evaluation import evaluate_batch, kernels
-    from verity.primitives.circuits.evaluation.batch import type_dtype
-    from verity.primitives.circuits.evaluation.reference import signature_of
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate_batch, kernels
+    from verity.ml.circuits.evaluation.batch import type_dtype
+    from verity.ml.circuits.evaluation.reference import signature_of
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.kernels.dense_rows import KERNEL as DENSE
 
     d = bind(_definitions()[family], **f64_statics(statics))
@@ -70,7 +70,7 @@ def ir_row(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -> d
 
 def check_targets(family: str) -> list:
     """Self-check specialisations: 16 words (I = 16), a constant C of 1.0 where the Definition takes one."""
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     d = _definitions()[family]
     return [bind(d, **{k: v for k, v in (("N", 16), ("I", 16), ("C", 1.0)) if k in d.statics})]
 

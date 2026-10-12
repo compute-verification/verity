@@ -1,7 +1,7 @@
-"""Pearl-C4's reference replay of a device run's own transcript under the work law (`pearl_c_work.audit`), with the domain
-and the debit of research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md`` §1 and §2.  It opens rows and words
-and recomputes them in the clear, so its ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK
-proof, PROTOCOL.md), never the protocol's verdict.
+"""Pearl-C4's reference replay of a device run's own transcript under the work law (`pearl_c_work.audit`), with
+Pearl-C4's domain and debit (`schemes.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
+ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md), never the protocol's
+verdict.
 
 **The dump** (`write_dump`) is what a timed call emits, as the device holds it after the call: A's rows (BF16, row-major,
 the unit's m rows with its zero filler) and B's, the device's A and B roots (`audit.commit_rows`, SHA-256 whole-row leaves),
@@ -12,7 +12,8 @@ many fall outside D-SB's byte range (`device_scales`).
 
 **`prove`** makes transcript v0 (`FORMAT`) from a dump, on the host:
 
-* the epoch: B's root as the device committed it, and the salt from the epoch beacon (`audit.Epoch.start`);
+* the epoch: B's root as the device committed it, and the salt keyed by the call's recorded epoch beacon
+  (`audit.Epoch.unverified`: a recorded replay's salt, with no coin behind it, not the epoch's live coin);
 * the transcript commitment over the device's leaves (`audit.transcript_domain`);
 * the records: one unit, no channel split, its real rows, and as excluded the rows that fail `row_passes` (D-NF) and the
   rows that pass it but not R1 (`PearlC4.r1_row`, row by row over the workers), as `pearl_c_work.declare` has them;
@@ -49,13 +50,13 @@ from functools import partial
 from multiprocessing import get_context
 from pathlib import Path
 
-from verity.primitives.commitments import Commitment, MerkleTree, Opening
+from verity.ml.commitments import Commitment, MerkleTree, Opening
 
-from verity.protocols.accounting.work.pouw import audit as au
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, tagged
-from verity.protocols.accounting.work.pouw.schemes import get
-from verity.protocols.accounting.work.pouw.schemes import pearl_c4 as F
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as W
+from verity.core.protocols.pouw import audit as au
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged
+from verity.core.protocols.pouw.schemes import get
+from verity.core.protocols.pouw.schemes import pearl_c4 as F
+from verity.core.protocols.pouw.schemes import pearl_c_work as W
 
 FORMAT = "verity/pouw/pearl-c4-transcript/v0"
 REPORT = "verity/pouw/pearl-c4-replay/v0"
@@ -119,8 +120,8 @@ def device_scales(fmt: F.Fmt, data: bytes) -> dict:
     return out
 
 
-def draw_beacon(transcript_root: bytes, records_digest: bytes) -> W.Beacon:
-    return W.Beacon(COMMITTED_ROUND + 1, tagged(DRAW_BEACON_TAG, transcript_root, records_digest))
+def draw_beacon(transcript_root: bytes, records_digest: bytes) -> W.RecordedDraw:
+    return W.RecordedDraw(COMMITTED_ROUND + 1, tagged(DRAW_BEACON_TAG, transcript_root, records_digest))
 
 
 def _pool(workers: int, chunksize: int = 1) -> tuple[Callable, Callable[[], None]]:
@@ -192,7 +193,8 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
     splits = {unit.weight: W.Split(k)}
     digest = W.records_root(epoch.salt, epoch.weights_root, splits, [record])
     beacon = draw_beacon(tree.commitment.root, digest)
-    picks = W.draw(s, [record], beacon, tree.commitment.root, digest, epoch.salt, t) + W.exclusion_tiles(s, [record])
+    picks = (W.draw(s, [record], W.replay_key(beacon, tree.commitment.root, digest, epoch.salt), t)
+             + W.exclusion_tiles(s, [record]))
     ids = {(r.matmul, r.tile.rows[0], r.tile.cols[0]): r.id for r in refs}
     opened = sorted({ids[(pos, tile.rows[0], tile.cols[0])] for pos, tile in picks})
     openings = [{"tile": i, "a": [_opening_json(tree_a.open(r)) for r in refs[i].tile.rows],
@@ -250,7 +252,7 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
               for w, sp in t["splits"].items()}
     commitment = Commitment(bytes.fromhex(t["transcript"]["root"]), t["transcript"]["count"])
     transcript = au.Transcript(tuple(bytes.fromhex(r) for r in t["activation_roots"]), commitment, ())
-    beacon = W.Beacon(t["draw"]["round"], bytes.fromhex(t["draw"]["value"]))
+    beacon = W.RecordedDraw(t["draw"]["round"], bytes.fromhex(t["draw"]["value"]))
     report = {"format": REPORT, "scheme": s.name, "run": t["run"], "shape": t["shape"], "t": t["t"],
               "shortcuts": list(SHORTCUTS), "salt": epoch.salt.hex()}
     fs = draw_beacon(commitment.root, W.records_root(epoch.salt, epoch.weights_root, splits, records))

@@ -288,8 +288,8 @@ def export_ptx(triton_dir: str | Path | None, dest: Path, *, gpu: dict[str, Any]
 
 
 def ship_ptx(production_ptx_dir: Path, kernels_dir: Path) -> dict[str, Any]:
-    """W1cF F10: copy production's exported PTX (``production/ptx/``) into a bundle's ``kernels/`` as
-    ``kernels/<ptx_code_sha256>.ptx`` + ``kernels/ptx-index.json`` so identity is checkable from the archive."""
+    """W1cF F10: copy production's exported PTX (``production/ptx/``) into a bundle's ``verity/ml/kernels/`` as
+    ``verity/ml/kernels/<ptx_code_sha256>.ptx`` + ``kernels/ptx-index.json`` so identity is checkable from the archive."""
     src = Path(production_ptx_dir)
     idx_path = src / "index.json"
     if not idx_path.is_file():

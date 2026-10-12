@@ -1,22 +1,16 @@
 #!/bin/bash
 # infra's delete-without-asking node sweep, run ON a node as root by vy-node-sweep.timer (deploy.toml installs it as
 # /usr/local/bin/vy-node-sweep; node 1 with --jobs-src --lake).
-# Usage: vy-node-sweep [--dry-run] [--src] [--src-age-h H] [--approved FILE] [--jobs-src] [--lake]. Per the policy in the
+# Usage: vy-node-sweep [--dry-run] [--src-age-h H] [--jobs-src] [--lake]. Per the policy in the
 # notes' lanes/resource-steward/*-report-resource-steward.md:
-#  - only with --src (off since 4 Oct: research.store.evict.evict_src, #1115, decides src/ with stricter rules: local commits,
-#    stashes, loose objects, hidden index flags, extra config), /workspace/research/src/<sha> trees whose directory is older
-#    than H h (default 24), unless something live names the sha
-#    (REFS_PY: a request not yet finished or refused whose runner is alive or not yet launched, a Kueue workload or pod not finished, a
-#    fill job queued or running, any process's cwd, root, open files, maps, argv or environment), and unless the tree holds
-#    files outside its commit (EXTRA_PY), which may be a run's output. The trees that pass are renamed into src/.trash/ (one
-#    rename each, so the launcher never sees a half-deleted READY tree), scanned once more together, put back if anything
-#    names them now, and deleted. A tree listed in the --approved FILE (shas, whose owners have said their files outside the
-#    commit may go) skips only the age and EXTRA_PY checks, and is swept without --src;
-#  - src/.trash/ entries an interrupted sweep left (decided already; nothing executes from there);
+#  - never a whole /workspace/research/src/<sha> tree: research.store.evict.evict_src (vy-store-evict) is the only deleter of
+#    those, because a tree may hold a run's dirty source, and only it knows when the run's preserved record holds a copy;
 #  - check scratch untouched for 2 h and not held open: /tmp/pytest-of-research/pytest-*, <verity-check cache>/lean-audit-scratch-*;
 #  - only with --lake, the Lean dependencies (.lake/packages) a failed audit left in a source tree nothing live names, at any
 #    age (that section);
-#  - only with --jobs-src, infra's job trees in /workspace/jobs/src older than H h (see that section).
+#  - only with --jobs-src, infra's job trees in /workspace/jobs/src older than H h (default 24; see that section), unless something
+#    live names them (REFS_PY: a request not yet finished or refused whose runner is alive or not yet launched, a Kueue workload or
+#    pod not finished, a fill job queued or running, any process's cwd, root, open files, maps, argv or environment).
 # Nothing a retention record keeps is deleted, whatever the rules above say (retained(); only the record's owner releases it).
 # Prints "deleted PATH files=N mb=M age=Xh" or "kept PATH: why" per candidate, each line first appended, stamped, to $LOG (not
 # in a dry run), and goes on to the end when its ssh drops (SIGPIPE ignored), so $LOG is the record of what it did.
@@ -24,11 +18,11 @@
 # environment.
 [ "$(id -u)" = 0 ] || { echo "node-sweep: needs root to read every process" >&2; exit 2; }
 exec 9>/run/lock/resource-steward-sweep.lock; flock -n 9 || { echo "node-sweep: another sweep is running" >&2; exit 2; }
-DRY=0; AGE_H=24; APPROVED=; JOBS=0; LAKE=0; SRCS=0
-while [ $# -gt 0 ]; do case $1 in --dry-run) DRY=1;; --src) SRCS=1;; --src-age-h) AGE_H=$2; shift;; --jobs-src) JOBS=1;; --lake) LAKE=1;;
-  --approved) APPROVED=$(tr -s ' \n' ',,' < "$2") || exit 2; shift;; *) echo "unknown $1" >&2; exit 2;; esac; shift; done
-approved() { [[ ,$APPROVED, == *,$1,* ]]; }
-R=/workspace/research; SRC=$R/src; TRASH=$SRC/.trash; now=$(date +%s); T=$(mktemp -d); trap 'rm -rf $T' EXIT; trap '' PIPE
+DRY=0; AGE_H=24; JOBS=0; LAKE=0
+while [ $# -gt 0 ]; do case $1 in --dry-run) DRY=1;; --src-age-h) AGE_H=$2; shift;; --jobs-src) JOBS=1;; --lake) LAKE=1;;
+  --src|--approved) echo "node-sweep: $1 is gone: whole source trees are vy-store-evict's alone (research.store.evict.evict_src)" >&2; exit 2;;
+  *) echo "unknown $1" >&2; exit 2;; esac; shift; done
+R=/workspace/research; SRC=$R/src; now=$(date +%s); T=$(mktemp -d); trap 'rm -rf $T' EXIT; trap '' PIPE
 LOG=/home/research/resource-steward/node-sweep.log
 say() { [ $DRY = 1 ] || printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> $LOG; echo "$*" 2>/dev/null; return 0; }
 age_h() { echo $(( (now - $(stat -c %Y "$1")) / 3600 )); }
@@ -84,46 +78,6 @@ for p in os.listdir("/proc"):
 held() { python3 -c "$REFS_PY" $1 | awk '{a[$1]=a[$1]" "$2} END{for (k in a) print k a[k]}'; }  # PATTERNS_FILE -> "<pattern> <refs...>"
 named() { awk -v s="$1" '$1==s{$1=""; print substr($0,2)}' $2; }
 
-# A tree that holds anything besides its commit's files, build caches and registered fixtures (fixtures/artifacts.json, files
-# or directories, which fetch-fixtures restores) may hold a run's output, so it is kept: untracked or ignored files
-# (.gitignore also hides results/, outputs/ and the like), modified tracked files, or, in a tree shipped without .git, files
-# the bare repo's commit lacks or files changed after READY.json. Exit 1 with a reason when it holds any, or when it can't tell.
-EXTRA_PY='
-import json, os, re, subprocess, sys
-tree = sys.argv[1]; bare = "/workspace/research/git/verity.git"
-CACHE = re.compile(r"(^|/)(\.venv|\.lake|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|\.hypothesis|node_modules|target|[^/]*\.egg-info)(/|$)|\.pyc$|^READY\.json$|^integrations/vllm/verity_vllm/program/kernels/cpp/build(/|$)")
-try: reg = {v for k, v in json.load(open(os.path.join(tree, "fixtures/artifacts.json"))).items() if k.startswith("art:") and isinstance(v, str)}
-except FileNotFoundError: reg = set()
-extra = []
-def files(rel):
-    p = os.path.join(tree, rel)
-    if not os.path.isdir(p) or os.path.islink(p): yield rel; return
-    for dp, dns, fns in os.walk(p):
-        r = os.path.relpath(dp, tree)
-        dns[:] = [d for d in dns if not CACHE.search(os.path.normpath(os.path.join(r, d)) + "/")]
-        for f in fns: yield os.path.normpath(os.path.join(r, f))
-def keep(rel): return not CACHE.search(rel) and not any(rel == r or rel.startswith(r.rstrip("/") + "/") for r in reg)
-if os.path.isdir(os.path.join(tree, ".git")):
-    st = subprocess.run(["git", "-C", tree, "status", "--porcelain", "--ignored", "-z", "--untracked-files=normal"], capture_output=True)
-    if st.returncode: print("git status failed"); sys.exit(1)
-    for e in st.stdout.split(b"\0"):
-        if not e: continue
-        code, rel = e[:2].decode(), os.path.normpath(e[3:].decode(errors="replace"))
-        if code in ("??", "!!"):
-            if not CACHE.search(rel + "/"): extra += [f for f in files(rel) if keep(f)]
-        else: extra.append(code.strip() + " " + rel)
-else:
-    ls = subprocess.run(["git", "--git-dir", bare, "ls-tree", "-r", "--name-only", "-z", os.path.basename(tree)], capture_output=True)
-    if ls.returncode: print("no .git, and the bare repo lacks the commit"); sys.exit(1)
-    tracked = {x.decode() for x in ls.stdout.split(b"\0") if x}
-    try: shipped = os.stat(os.path.join(tree, "READY.json")).st_mtime + 60
-    except OSError: print("no READY.json"); sys.exit(1)
-    for f in files("."):
-        if f in tracked:
-            if os.lstat(os.path.join(tree, f)).st_mtime > shipped: extra.append("changed " + f)
-        elif keep(f): extra.append(f)
-if extra: print(f"{len(extra)} file(s) outside the commit: " + ", ".join(extra[:3])); sys.exit(1)
-'
 # A retention record (`research keep`: <dir>/.retention.json, or <path>.retention.json beside it) on a path or any directory
 # above it keeps the path until the record expires; one anywhere beneath it keeps it whole, expired or not; one that can't be
 # read, or an expiry that can't be parsed, keeps it. retained PATH prints why and returns 0 when a record keeps PATH.
@@ -152,39 +106,6 @@ gone() { local p=$1 n m w
   n=$(find "$p" -xdev 2>/dev/null | wc -l); m=$(du -sm --one-file-system "$p" 2>/dev/null | cut -f1)
   if [ $DRY = 1 ]; then say "would delete $3 files=$n mb=$m age=${2}h"; else rm -rf --one-file-system -- "$p" && say "deleted $3 files=$n mb=$m age=${2}h"; fi; }
 
-# what an interrupted sweep left in src/.trash
-[ $DRY = 0 ] && for t in $TRASH/*; do [ -d "$t" ] || continue; gone "$t" $(age_h "$t") "$t (left by an interrupted sweep)"; done
-
-# source trees
-: > $T/src
-for d in $SRC/*/; do d=${d%/}; s=${d##*/}
-  [[ $s =~ ^[0-9a-f]{40}$ ]] || continue
-  { { [ $SRCS = 1 ] && [ $(age_h $d) -ge $AGE_H ]; } || approved $s; } && echo $s >> $T/src
-done
-if [ -s $T/src ]; then
-  held $T/src > $T/held
-  grep -q '^FAILED' $T/held && { echo "node-sweep: $(grep '^FAILED' $T/held | head -1); no source tree deleted" >&2; exit 2; }
-  : > $T/moved
-  for s in $(cat $T/src); do
-    r=$(named $s $T/held); [ -n "$r" ] && { say "kept $SRC/$s: $r"; continue; }
-    w=$(retained $SRC/$s) && { say "kept $SRC/$s: $w"; continue; }
-    approved $s || x=$(cd /tmp && GIT_OPTIONAL_LOCKS=0 runuser -u research -- python3 -c "$EXTRA_PY" $SRC/$s 2>&1) || { say "kept $SRC/$s: ${x:-could not inspect}"; continue; }
-    a=$(age_h $SRC/$s)
-    [ $DRY = 1 ] && { gone $SRC/$s $a "$SRC/$s$(approved $s && echo ' (owner-approved)')"; continue; }
-    mkdir -p $TRASH; mv -T $SRC/$s $TRASH/$s-$now && echo "$s $a" >> $T/moved || say "kept $SRC/$s: rename failed"
-  done
-  if [ -s $T/moved ]; then
-    cut -d' ' -f1 $T/moved > $T/pats; held $T/pats > $T/held2
-    while read s a; do t=$TRASH/$s-$now; r=$(named $s $T/held2)
-      if [ -n "$r" ] || grep -q '^FAILED' $T/held2; then
-        mv -T $t $SRC/$s && say "kept $SRC/$s: named after rename: ${r:-scan failed}" || say "STUCK $t: named after rename (${r:-scan failed}) and could not be put back"
-        continue
-      fi
-      gone $t $a "$SRC/$s$(approved $s && echo ' (owner-approved)')"
-    done < $T/moved
-  fi
-fi
-
 # check scratch
 : > $T/scr
 cache=$(readlink -f /home/research/.cache/verity-check)
@@ -202,12 +123,14 @@ fi
 
 # Lean dependencies in source trees (Daniel's card 23a10e51, 3:33 PM PDT 2 Oct, at any age): WarmDeps.take moves or copies
 # check's Lean packages into a tree's .lake/packages, and a failed audit never gives them back; the next run on the tree drops
-# them before its own take. Only .lake/packages of the verifier's three Lake packages goes, only in a tree nothing live names
+# them before its own take. Only .lake/packages of the verifier's Lake packages goes, only in a tree nothing live names
 # (REFS_PY, by sha); each is renamed aside, the tree checked once more, put back if named, and deleted.
-# Trees from before and after the 5 Oct layout move sit side by side, so both layouts' paths are listed; the move leaves LK_OLD.
-LK_OLD="backends/flock/verifier/lean backends/flock/verifier/lean/level3 backends/flock/verifier/lean/soundness"
-LK_NEW="verity/protocols/verification/flock/lean security_proofs/flock/level3 security_proofs/flock/soundness"
-LK="$LK_OLD $LK_NEW"
+# Trees from before and after the 5 Oct layout move and the Lean move sit side by side, so every layout's paths are listed.
+# These are strings the moves' path rewriting must leave alone: each names where a tree of that age keeps them.
+LK_OLD="verity/core/service/flock verity/core/service/flock/level3 verity/core/service/flock/soundness"
+LK_NEW="verity/core/protocols/verification/flock/lean security_proofs/flock/level3 security_proofs/flock/soundness"
+LK_LEAN="Security Security/Proofs"
+LK="$LK_OLD $LK_NEW $LK_LEAN"
 [ $LAKE = 1 ] && [ $DRY = 0 ] && for k in $LK; do for p in $SRC/*/$k/.lake/packages.rs-trash-*; do
   [ -d "$p" ] && gone "$p" $(age_h "$p") "$p (left by an interrupted sweep)"; done; done
 : > $T/lk

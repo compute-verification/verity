@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-pytest.importorskip("verity.protocols.accounting.space.pous")
+pytest.importorskip("verity.core.protocols.pous")
 
 ROOT = Path(__file__).resolve().parents[3]
 

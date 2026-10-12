@@ -1,6 +1,6 @@
-"""The integration's kernels as core `verity.primitives.circuits.evaluation` kernels, plus what core's kernel registry does not carry yet.
+"""The integration's kernels as core `verity.ml.circuits.evaluation` kernels, plus what core's kernel registry does not carry yet.
 
-Every kernel here is registered with `verity.primitives.circuits.evaluation.register_kernel` against the Definition id it computes and is
+Every kernel here is registered with `verity.ml.circuits.evaluation.register_kernel` against the Definition id it computes and is
 checked against the reference by core `self_check`.  Core's kernel is a batch function returning a decline mask; the
 integration's kernels are written per instance, and their callers record WHY an instance was declined.  `register` keeps
 both forms:
@@ -24,8 +24,8 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from verity.primitives.circuits.evaluation import Kernel, register_kernel
-from verity.primitives.circuits.evaluation.reference import key_of, statics_of
+from verity.ml.circuits.evaluation import Kernel, register_kernel
+from verity.ml.circuits.evaluation.reference import key_of, statics_of
 
 __all__ = ["Declined", "Registered", "covers", "instance", "register", "registered"]
 

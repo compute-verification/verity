@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "SiluMulBf16_v3": {
+   "and": 1372
+  },
+  "SiluMulBf16_v4": {
+   "and": 1380
+  },
+  "SiluMul_v3{I=8}": {
+   "and": 10976
+  },
+  "SiluMul_v4{I=8}": {
+   "and": 11040
+  }
+ }
+}

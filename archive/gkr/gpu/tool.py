@@ -91,7 +91,7 @@ A_GPU_PROVE = Tool(
     command=["python", "-m", "gpu.run"],
     closure=["archive/gkr/gpu/**", "archive/gkr/packed/**", "archive/gkr/bench_result.py", "archive/gkr/soundness.py",
              "archive/direct/encode/**", "archive/direct/ligero/**", "benchmarks/numerical/python/verity_numerical/**",
-             *(p for n in ("verity", "verity_catalog", "verity_kernels", "verity_experimental") for p in package_paths(TREE, n, "**"))],
+             *(p for n in ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.core") for p in package_paths(TREE, n, "**"))],
     key_params=["dir", "vus", "checker", "path", "field", "clear", "tier", "lo", "relation"],
     key_conditions=["hw.family"],
     param_artifacts=["dir"],

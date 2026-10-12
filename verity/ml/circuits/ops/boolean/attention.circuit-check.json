@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "F32AddFtz_v3": {
+   "and": 888
+  },
+  "F32FmaFtz_v3": {
+   "and": 4584
+  },
+  "F32FmaSubFtz_v3": {
+   "and": 4584
+  },
+  "F32Max_v2": {
+   "and": 237
+  },
+  "F32MulFtz_v3": {
+   "and": 2506
+  },
+  "F32SubFtz_v3": {
+   "and": 952
+  },
+  "Fa2InvSum_v2": {
+   "and": 947
+  },
+  "GuardNegInfZero_v2": {
+   "and": 63
+  }
+ }
+}

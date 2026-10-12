@@ -16,8 +16,8 @@ import os
 import numpy as np
 import pytest
 import torch
-from verity_catalog.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
-from verity_catalog.silicon.silicon import tc_dot
+from verity.ml.circuits.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
+from verity.ml.circuits.silicon.silicon import tc_dot
 
 from .. import protocol as protocol_mod
 from ..fp8.census import census

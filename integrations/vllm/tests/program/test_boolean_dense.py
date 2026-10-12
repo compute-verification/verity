@@ -12,17 +12,17 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits import partition_object as PO
-from verity.primitives.circuits.defs import REGISTRY, bind
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import Circuit
-from verity_catalog.definitions.boolean import elementwise as EW
-from verity_catalog.silicon import fp
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import Circuit
+from verity.ml.circuits.ops.boolean import elementwise as EW
+from verity.ml.circuits.silicon import fp
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import boolean_dense as BD
 from verity_vllm.program.registry import dense as D
@@ -30,19 +30,19 @@ from verity_vllm.program.registry import prims as P
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "GeluTanhMulBf16_v2": (1347, 5960, 148, "f0e19a849febe1c41aa13ccb29726c60fb02eb1ef6a98b18a5285cbd170e3b30"),
-    "GeluTanhMul_v2{I=8}": (10776, 47680, 1184, "e40e773a4348acaf7293a66e35cd3203918a64bb88c4f048e38557406c7b333b"),
-    "SquareBf16_v2{N=8}": (5024, 6928, 552, "55f6f0553b5366f163455bb577a8e351b75348099c43e774393f57ab4308cd88"),
-    "SquareF32_v2{N=8}": (15824, 32088, 824, "309f38372145938d3071159a31ed90c64604ebfcbd63113c77cc3cf459a54da5"),
-    "AddScalarF32_v2{N=8,C=1e-06}": (5936, 9528, 992, "42b14b97ebbba18fa9a25a0ec14c029fab03c6483cbc369f74cce021dc2b2081"),
-    "AddScalarBf16_v2{N=8,C=1.0}": (4968, 6984, 680, "eaa9be642a87c9c7ccb9a0fc99ac6eacc70edff2c61ec0cf9aafd9a78dd1c840"),
-    "AddWidenedBf16_v2{N=8}": (5328, 7960, 792, "8232df82822f63bfb687cbfb0c0b8f8554ce02fea21027bf40aac22527d60881"),
-    "ScaleRowBf16_v2{N=8}": (9138, 15566, 698, "c19ac7d55851fea0d4ff70e7e859136eadbf1106b3ff12f2b95dd9a66767ca51"),
-    "ScaleRowF32_v2{N=8}": (19202, 36766, 866, "8e98438627108735fc0ef7799b06a73994563870afbdc4751d52e80f242b1b73"),
-    "MulVecF32_v2{N=8}": (19440, 37200, 880, "11dbb54026e179ca6eba74122f761d6b5256035740977035974ddebab32c99ef"),
-    "Bf16DivScalar_v2{N=8,C=30.0}": (6920, 10264, 936, "982d287bbe9222390180e5b1209885098de4ead065d831d984c953979871f1be"),
-    "Bf16MulScalar_v2{N=8,C=30.0}": (5032, 6672, 752, "ee0789d1c10184d60b73c50092e9c23a7fa81a11293d214a9f6ca3db50efe5a6"),
-    "Bf16MulScalarTensor_v2{N=8}": (6266, 9030, 778, "364c1357d18a6a3609442540fb32a291e48b6a14507bf95817db2b98cea86bcf"),
+    "GeluTanhMulBf16_v2": (1347, 5960, 148, "81c7d135f91b44a24bdb7a8a7f937f6101cf5930541823248e1aeaedc68d9c0ce1d9b4cc2c02a32ffceb6672e4f451265f8258dfc1aecb70850f98f62ca84ae9"),
+    "GeluTanhMul_v2{I=8}": (10776, 47680, 1184, "dd4803674750a3fb502edeeeecd52ccdcb8866fcfd6e8589e4c31d5889fb2ebaa88564088a1750f6bbc189d190eb144b0b7771a96d45a2eae2a343aadde4ecc2"),
+    "SquareBf16_v2{N=8}": (5024, 6928, 552, "8e841f597a15e0a0c27e55ec59ea9a2a99eb0f3c43e0a9f6b2d6448f52e9df8b41c35adfb7c9c41cca22279d1d67b15f91e83471ef11c1338b4412fbad71ef2c"),
+    "SquareF32_v2{N=8}": (15824, 32088, 824, "b5c3d5b5cbfd87a402c4218474f0ae5212b7f2f478ada1377e263933a7f2cb67663db627cf79421908fba0eb3c82e4a7adbbcf474153278958a233fcacfdd4c6"),
+    "AddScalarF32_v2{N=8,C=1e-06}": (5936, 9528, 992, "2e426d23eab02bb9f81d1679db80aba8296ce90f617597693f95a646005415503cab20ba56cada2887b0297edd73e0ddf9d2bb6c5642cd94cd5930d2c23ea907"),
+    "AddScalarBf16_v2{N=8,C=1.0}": (4968, 6984, 680, "2095c31aa92974eec555e3162ca6539e7685d91e8d894cd429426d84c3ba1fd463b88b2113a9ed6342ceb85e81e8fe400925f42df7d8d7f1c6a0bc1740a5e3e9"),
+    "AddWidenedBf16_v2{N=8}": (5328, 7960, 792, "e52c5cc93b800e37427238e54293f1722d59e1497f3e5d82e67c48700d44452724f163143a3aacad5b0847171fcf90faaeb8dd56699dec5b8efaa0a20a6df356"),
+    "ScaleRowBf16_v2{N=8}": (9138, 15566, 698, "81115d487167d76f6093d1affc2184a9fca6b59e56f1abb672e68f4d98aadb32fa7237e967c2b3544a9dc1b12d8972e304b7b3d688bd1ec06194a4eb9134b361"),
+    "ScaleRowF32_v2{N=8}": (19202, 36766, 866, "3f074cf5f91f65fd554a444e21356a729b393588a151921b5af8daecb3767493127d407780979763d18856c2cfaf9f38b28e2343b797c4618351b0a39c5643dc"),
+    "MulVecF32_v2{N=8}": (19440, 37200, 880, "6c52d0d148f189647e49b3c401881a257a00d8aa342a077838b7826c0f60c6f464f6baa467f038469dfaacf61877a83c7a2c9cc8ce08f27a69c9f852e2835d1e"),
+    "Bf16DivScalar_v2{N=8,C=30.0}": (6920, 10264, 936, "c0abf4b14d7fe109beecf09d639cb85efe61ba62f271c78d2c3c46dfb1a378b96d179e7eec4c7ebdbdfd9e243e645d4a46097e1b2c69eb729785c1c124bdfae1"),
+    "Bf16MulScalar_v2{N=8,C=30.0}": (5032, 6672, 752, "a87bc65a022f5a0ecdc895fc9144e0fa7b21cf0a3dd73284fe398743179176699a505955c7160c9fbe57ef82426ff49f1e5319b478e4593e16dceba8248a9eae"),
+    "Bf16MulScalarTensor_v2{N=8}": (6266, 9030, 778, "be8e1fa1b4387879e49ac2fa72edea3f26bfb53d1924710fde4418b3cfa9101ba203d01684d47679408aadf6364ff977df3cf510a560849d57b6486cb0445706"),
 }
 
 _EXP = [0, 1, 2, 116, 117, 118, 119, 120, 126, 127, 128, 129, 130, 131, 133, 134, 135, 254, 255]

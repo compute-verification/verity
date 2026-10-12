@@ -1,22 +1,22 @@
 """FA2 with logit soft-capping on bits: `AttnBlockSoftcap_v3` / `AttentionHeadSoftcap_v3` / `AttentionSoftcap_v3`, `fa2_softcap`'s
 v2 bodies line for line over Boolean Definitions, so their word views are the v2 chain at the same statics.
 
-Every word is its bits (`verity.primitives.circuits.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`.  The
+Every word is its bits (`verity.ml.circuits.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`.  The
 v2 chain's callees on bits: ``DOT`` and ``INV`` are bound to the Boolean versions of the word chain's (`HopperBF16WgmmaDot16_v2`,
-`Fa2InvSum_v2`), the dot is `DotBf16_v3{K=D, DOT}`, the cast `F2fpBf16_v2`, the f32 operations `verity_catalog.definitions.boolean.attention`'s.
+`Fa2InvSum_v2`), the dot is `DotBf16_v3{K=D, DOT}`, the cast `F2fpBf16_v2`, the f32 operations `verity.ml.circuits.ops.boolean.attention`'s.
 The two MUFU operations the word chain calls, stage A' `MufuTanh_v1` and B2/B3's `MufuEx2Ftz_v1`, are the statics ``TANH`` and
 ``EX2``; ``word_statics`` names their word Definitions, so the switch binds each to its Boolean version.  The word constants (zero,
 `softcap_mul_bits(D, CAP)`, `softcap_scale_log2_bits(CAP)`) are written with the constant bits.
 """
 from __future__ import annotations
 
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.definitions.boolean import attention as BA
-from verity_catalog.definitions.boolean import gemm as BG
-from verity.primitives.circuits.boolean.trace import word_of
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.ops.boolean import attention as BA
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.boolean.trace import word_of
 from verity_vllm.program.registry import fa2_softcap as FS
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.b1 import _lane

@@ -1,7 +1,7 @@
 """R13 X-05 (B-SAMPLING) — the sampling policy is a structural input of the Bet A construction and an applicability condition;
 a row whose sampler the builder cannot bind is REFUSED, never built as the greedy Program (F-dse-08 was a fail-open Build).
 
-GPU-free and vLLM-free: the refusal happens in `derive_step.run` before any vLLM import, so these tests run anywhere `verity.primitives.circuits`
+GPU-free and vLLM-free: the refusal happens in `derive_step.run` before any vLLM import, so these tests run anywhere `verity.ml.circuits`
 imports.  Covered: policy parsing from `--sampling` and from the two manifest formats (sweep/workload.py `sweep.*`, legacy
 `variants` + per-request `variant`/`seed`), disagreement between the two sources, the refusal record (`reason: "sampler"`,
 `structural_inputs.sampling` = the declared policy, no artifact), applicability carrying the sampler, and greedy-by-omission recorded
@@ -183,7 +183,7 @@ def test_a_single_request_takes_the_constant_S_of_its_sm_count(tmp_path, num_sms
     from verity_vllm.pipeline.build import sampler_geometry
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend.vllm_meta import single_request_splits
-    from verity_vllm.program.registry.topp_split import splits_for_v1
+    from verity_vllm.program.registry.topp_geometry import splits_for_v1
     target = TargetProfile.default().with_overrides(num_sms=num_sms)
     for lp_t in ((8, 15), (8, 9), (None, None)):
         pol = sampling_policy(None, _requests_manifest(tmp_path, 1))

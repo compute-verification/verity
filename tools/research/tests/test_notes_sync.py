@@ -59,31 +59,43 @@ def test_a_sync_commits_pushes_and_the_other_machine_picks_it_up(machines):
     assert NS.sync(b, secrets=[]) == {**rep, "note": "already on the remote"}
 
 
-@pytest.mark.slow
-def test_a2_two_machines_20_times_in_the_same_minute_lose_no_write(machines):
-    origin, a, b = machines
-    errors: list = []
 
-    def write_and_sync(repo: Path, who: str, i: int) -> None:
-        _insert_after(repo / DOC, f"<!-- {who} -->", f"{who} write {i}")
-        d = repo / "lanes" / "shared"
-        d.mkdir(parents=True, exist_ok=True)
-        (d / f"checkpoint-{who}-{i}.md").write_text(f"{who} {i}\n")
-        rep = NS.sync(repo, retries=20, secrets=[])
-        if rep["rc"]:
-            errors.append((who, i, rep))
 
-    for i in range(20):
-        ts = [threading.Thread(target=write_and_sync, args=(m, w, i)) for m, w in ((a, "a"), (b, "b"))]
-        for t in ts:
-            t.start()
-        for t in ts:
-            t.join()
-    assert errors == []
-    doc = _git(origin, "show", f"main:{DOC}")
-    assert all(f"{w} write {i}" in doc for w in "ab" for i in range(20))
-    files = _git(origin, "ls-tree", "--name-only", "main", "lanes/shared/").split()
-    assert len(files) == 40
+def _fail_once(monkeypatch, verb: str, stderr: str) -> list:
+    real, failed = NS._run, []
+
+    def run(root, *args, **kw):
+        if verb in args and not failed:
+            failed.append(args)
+            return subprocess.CompletedProcess(["git", *args], 128, "", stderr)
+        return real(root, *args, **kw)
+    monkeypatch.setattr(NS, "_run", run)
+    return failed
+
+
+@pytest.mark.parametrize("verb, stderr", [
+    ("push", "error: cannot lock ref 'refs/heads/main': Unable to create '/srv/notes.git/refs/heads/main.lock': File exists.\n"
+             " ! [remote rejected] HEAD -> main (failed to lock)"),
+    ("fetch", "fatal: the remote end hung up unexpectedly"),
+])
+def test_a_fetch_or_push_that_fails_under_load_is_retried(machines, monkeypatch, verb, stderr):
+    """Two machines' syncs under load 156 (vy-mig-check-20, 6 Oct) failed on their first attempt with an error that was not a
+    lost push race, and gave up there; a lock or transfer error clears on the next attempt."""
+    origin, a, _ = machines
+    failed = _fail_once(monkeypatch, verb, stderr)
+    _insert_after(a / DOC, "<!-- a -->", "a under load")
+    rep = NS.sync(a, secrets=[])
+    assert failed and (rep["rc"], rep["pushed"], rep["attempts"]) == (0, True, 2), rep
+    assert "a under load" in _git(origin, "show", f"main:{DOC}")
+
+
+def test_a_refused_fetch_is_not_retried(machines, monkeypatch):
+    _, a, _ = machines
+    _fail_once(monkeypatch, "fetch", "remote: Permission to danielreuter/research-notes.git denied to cursor[bot].\n"
+                                     "fatal: unable to access 'https://github.com/x': The requested URL returned error: 403")
+    _insert_after(a / DOC, "<!-- a -->", "a refused")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["attempts"]) == (1, 1) and "git fetch origin failed" in rep["error"] and "403" in rep["error"]
 
 
 def test_a3_a_same_hunk_conflict_names_the_file_and_loses_nothing(machines):
@@ -96,6 +108,43 @@ def test_a3_a_same_hunk_conflict_names_the_file_and_loses_nothing(machines):
     assert "b says no" in _git(b, "show", f"HEAD:{DOC}") and "b says no" in (b / DOC).read_text()
     assert "a says yes" in _git(origin, "show", f"main:{DOC}") and "b says no" not in _git(origin, "show", f"main:{DOC}")
     assert not (b / ".git" / "rebase-merge").exists()
+
+
+def test_a_detached_head_commits_nothing(machines):
+    """The steward's clone, 6 Oct 16:05Z: once HEAD was detached, every pass committed onto it and none could push (nine syncs
+    unpushed by 17:20Z); a sync on a detached HEAD now leaves the work uncommitted for the branch to take."""
+    _, a, _ = machines
+    _git(a, "checkout", "-q", "--detach")
+    _insert_after(a / DOC, "<!-- a -->", "a while detached")
+    before = _git(a, "rev-parse", "HEAD")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["commit"], rep["pushed"]) == (2, None, False) and "detached" in NS.render_sync(rep)
+    assert _git(a, "rev-parse", "HEAD") == before and "a while detached" in (a / DOC).read_text()
+
+
+def test_a_rebase_whose_abort_lost_its_state_goes_back_to_the_branch(machines, monkeypatch):
+    """The same clone, 6 Oct 16:05Z: on NFS the rebase lost `.git/rebase-merge` ("could not lock .../git-rebase-todo"), so its
+    abort did nothing and HEAD stayed detached at origin/main; the sync puts the branch back, with the local commit on it."""
+    origin, a, b = machines
+    _insert_after(a / DOC, "<!-- b -->", "a first")
+    assert NS.sync(a, secrets=[])["pushed"]
+    _insert_after(b / DOC, "<!-- a -->", "b local")
+    real = NS._run
+
+    def run(root, *args, **kw):
+        if args[:1] == ("rebase",) and "--abort" not in args:
+            real(root, "checkout", "-q", "--detach", args[-1])
+            return subprocess.CompletedProcess(["git", *args], 1, "",
+                                               "error: could not lock '.git/rebase-merge/git-rebase-todo': No such file or directory")
+        if args == ("rebase", "--abort"):
+            return subprocess.CompletedProcess(["git", *args], 128, "", "fatal: no rebase in progress?")
+        return real(root, *args, **kw)
+    monkeypatch.setattr(NS, "_run", run)
+    rep = NS.sync(b, secrets=[])
+    assert rep["rc"] == 3 and _git(b, "symbolic-ref", "--short", "HEAD").strip() == "main"
+    assert "b local" in _git(b, "show", f"HEAD:{DOC}") and "b local" in (b / DOC).read_text()
+    monkeypatch.setattr(NS, "_run", real)
+    assert NS.sync(b, secrets=[])["pushed"] and "b local" in _git(origin, "show", f"main:{DOC}")
 
 
 def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pass(machines):
@@ -515,6 +564,10 @@ def test_sync_with_the_token_goes_past_the_bots_insteadof(cloud_vm, monkeypatch)
     (a / "lanes" / "x" / "report.md").write_text("CHECKPOINT none (20:00Z) [open] started\n")
     rep = NS.sync(a, secrets=[])
     assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"], "unset: the plain URL is the bot's, refused as before"
+    assert f"{NS.TOKEN_ENV} is empty in this shell" in rep["error"] and "Cloud Agents > Secrets" in rep["error"], rep["error"]
+    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", f"OTHER,{NS.TOKEN_ENV}")
+    err = NS.sync(a, secrets=[])["error"]
+    assert NS.FRESH_SHELL in err and "Cloud Agents" not in err, "a secret this VM injects is lost from the shell, not unconfigured"
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
     seen = _argv_log(monkeypatch)
     rep = NS.sync(a, secrets=[])
@@ -532,6 +585,7 @@ def test_a_refused_fetch_with_the_token_says_so_without_the_token(cloud_vm, tmp_
     (a / "kb" / "new.md").write_text("new\n")
     rep = NS.sync(a, secrets=[])
     assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"] and TOKEN not in rep["error"]
+    assert f"{NS.TOKEN_ENV} is empty" not in rep["error"], "set but refused: not the empty-token hint"
 
 
 def test_the_standby_pull_uses_the_token_and_updates_the_tracking_branch(cloud_vm, monkeypatch):

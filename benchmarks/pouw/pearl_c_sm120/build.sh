@@ -5,8 +5,8 @@
 #                        and the SASS has the intended tensor-core instructions and nothing lowered: every FP8 atom a
 #                        QMMA.16832.F32.E4M3.E4M3 (64 per 128-deep stage in the 128 x 128 GEMMs on the mainloop, 8 per 64-deep
 #                        stage in the 64 x 64 and 128 x 32 ones, at least one in form_s5 and words), every peel step an
-#                        HMMA.16816.F32.BF16 (64 in each gemm_pearlc and gemm_pearlc_s, 16 in the fused gemm_pearlc_b's loop,
-#                        none elsewhere), no other MMA form
+#                        HMMA.16816.F32.BF16 (64 in each gemm_pearlc and gemm_pearlc_s, none elsewhere), no other MMA
+#                        form
 #   sass.json            registers and tensor-core, copy and local-memory instruction counts per kernel
 #   check/               fixture.py's inputs and expected buffers (needs verity and numpy)
 #   run.py, toolchain.txt (nvcc --version and the full nvcc command line), source.txt (the verity commit), MANIFEST.sha256
@@ -27,6 +27,6 @@ rm "$OUT/pearl_c_sm120.sass"
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c_sm120/fixture.py "$OUT/check")
 cp "$HERE/run.py" "$OUT/"
 { "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o pearl_c_sm120.cubin pearl_c_sm120.cu"; } > "$OUT/toolchain.txt"
-{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c_sm120 benchmarks/pouw/pearl_c verity/protocols/accounting/work/pouw verity; } > "$OUT/source.txt"
+{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c_sm120 benchmarks/pouw/pearl_c verity/core/protocols/pouw verity; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"

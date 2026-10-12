@@ -7,12 +7,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import RegisteredTable, evaluate
-from verity.primitives.circuits.codec import encode_program, program_digest
-from verity.primitives.circuits.constants import REGISTRATION, inputs, program_data
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.evaluation import RegisteredTable, evaluate
+from verity.ml.circuits.codec import encode_program, program_digest
+from verity.ml.circuits.constants import REGISTRATION, inputs, program_data
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.registry import dense as D
 from verity_vllm.program.registry import tables as T
 
@@ -45,7 +45,7 @@ def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
     prog = Program(T.GeluTanhMulBf16V3, registered=("gelu_tanh_bf16",))
     d = tmp_path / "p.json"
     d.write_text(json.dumps(encode_program(prog)))
-    code = ("import json, sys; from verity.primitives.circuits.codec import decode_program, program_digest; from verity.primitives.circuits.defs import REGISTRY; "
+    code = ("import json, sys; from verity.ml.circuits.codec import decode_program, program_digest; from verity.ml.circuits.defs import REGISTRY; "
             "import verity_vllm.program.registry.tables; assert 'TableRead16x1_v1' not in REGISTRY; "
             "print(program_digest(decode_program(json.load(open(sys.argv[1])), REGISTRY)))")
     out = subprocess.run([sys.executable, "-c", code, str(d)], capture_output=True, text=True, check=True).stdout.split()
@@ -89,7 +89,7 @@ def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
     """The strict lift's operand widths (`operand_widths.leaf_widths`) are one run per parameter for `TableRead27x2_v1`, not a list
     of 2^28, and a list for a narrow primitive; the lift of `TableRead16x1_v1` (past the layout's wide fan-in too) still maps an
     active, a ⊥ and an invalid table word as the flat widths do."""
-    from verity_catalog.definitions import scalar as SC
+    from verity.ml.circuits.ops import scalar as SC
     from verity_vllm.program.registry import lifted as L
     from verity_vllm.program.registry import operand_widths as OW
 
@@ -124,7 +124,7 @@ def test_a_registered_values_derivation_registers_the_gelu_table():
 
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
-    from verity_vllm.program.registry.serve3_reference import materialize
+    from verity_vllm.program.kernels.serve3_reference import materialize
 
     class GeGLU(torch.nn.Module):
         def __init__(self, I: int) -> None:

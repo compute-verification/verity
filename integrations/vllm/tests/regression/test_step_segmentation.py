@@ -58,11 +58,11 @@ def test_a_component_without_a_histogram_states_no_sampling_count():
 def _flat_request(family: str):
     """A flat two-step request body (what derive_step emits: the selects at the root body's top level, not inside a call):
     step 0 = [select(l0)], step 1 = [F32Add(temp, temp), select(l1)]."""
-    from verity.primitives.circuits.codec import encode_program
-    from verity.primitives.circuits.defs import CompositeDefinition, bind
-    from verity.primitives.circuits.program import Program
-    from verity.primitives.circuits.refs import tuple_of
-    from verity.primitives.circuits.types import Array, Tuple, Value
+    from verity.ml.circuits.codec import encode_program
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.program import Program
+    from verity.ml.circuits.refs import tuple_of
+    from verity.ml.circuits.types import Array, Tuple, Value
     from verity_vllm.program.registry import b1, sampling
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry.prims import BF16, F32, I32

@@ -29,7 +29,7 @@ instead.  A phase that raises records its error and fails the verdict without st
              its (q, scale) on every pair against `SiluMulFp8BlockQuant_v1{I,128}` of that pair's w13 output row (twin
              `fp8_moe_rows.silu_mul_fp8_block_quant_rows`): the `act` rows.
              Every launch's (token, slot) -> expert assignment is checked against the routing, and its tile against `wgmma_tile`.
-  reference  on a sample of the coordinates and rows of every launch, the plain-integer reference (`verity.primitives.circuits.evaluation.evaluate`) of
+  reference  on a sample of the coordinates and rows of every launch, the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`) of
              `ScaledMmFp8BlockCoordinate_v1`, `MoeExpertFp8BlockCoordinate(W)_v1`, `Fp8GroupQuant_v1` and `SiluMulFp8BlockQuant_v1`, which
              the twins must equal.
   ptx        every `fused_moe_kernel` compiled in the run's Triton cache: its dot is wgmma, every wgmma `.m64nNk32.f32.e4m3.e4m3`, and
@@ -317,8 +317,8 @@ def dense_jobs(job: dict[str, Any]) -> list[dict[str, Any]]:
 
 def compare_dense(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [r0, r1) of one dense launch: quant and GEMM twins against the kernel's words, the reference on a sample."""
-    from verity.primitives.circuits.evaluation import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.registry import fp8 as F
 
@@ -507,8 +507,8 @@ def moe_launches(work: Path, name: str, inter: int, M: int, hot: int, seed: int,
 def compare_act(a: dict[str, np.ndarray], p0: int, p1: int, reference: bool, rec: dict[str, Any]) -> None:
     """The served w2 launch's A and A_scale on pairs [p0, p1), `silu_and_mul_per_block_quant`'s (q, scale), against
     `SiluMulFp8BlockQuant_v1{I,128}` of the pairs' w13 output rows `gu` (the twin), and the reference on pair p0."""
-    from verity.primitives.circuits.evaluation import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.kernels.fp8_moe_rows import silu_mul_fp8_block_quant_rows
     from verity_vllm.program.registry import fp8_moe as MO
 
@@ -527,8 +527,8 @@ def compare_act(a: dict[str, np.ndarray], p0: int, p1: int, reference: bool, rec
 def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     """Pairs [p0, p1) of one expert launch: the GEMM twin at the launch's statics against the kernel's words, the w13 activation's
     quant twin, the served w2 launch's input against the activation's twin, and the reference on a sample."""
-    from verity.primitives.circuits.evaluation import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.kernels.fp8_moe_rows import moe_expert_fp8_block_row
     from verity_vllm.program.registry import fp8 as F
@@ -598,8 +598,8 @@ def ptx(triton_cache: Path) -> dict[str, Any]:
 
 def bind_check(statics: set[tuple[int, bool]]) -> dict[str, Any]:
     """The Programs bind at every GLM-5.3 shape, with the weight-scale rows each reads."""
-    from verity.primitives.circuits.evaluation.batch import type_shape
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation.batch import type_shape
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import fp8 as F
     from verity_vllm.program.registry import fp8_moe as MO
 

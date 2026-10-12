@@ -11,20 +11,21 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Callable
 
 from .tool import Tool
 
 REGISTRY: dict[str, str] = {
-    "tc_probe": "tools.tc_probe.tool:TC_PROBE",
-    "instances_hw": "tools.tc_probe.tool:INSTANCES_HW",
-    "tc_probe_fp4": "tools.tc_probe_fp4.tool:TC_PROBE_FP4",
-    "tc_price_fp4": "tools.tc_probe_fp4.tool:TC_PRICE_FP4",
+    "tc_probe": "benchmarks.tc_probe.tool:TC_PROBE",
+    "instances_hw": "benchmarks.tc_probe.tool:INSTANCES_HW",
+    "tc_probe_fp4": "benchmarks.tc_probe_fp4.tool:TC_PROBE_FP4",
+    "tc_price_fp4": "benchmarks.tc_probe_fp4.tool:TC_PRICE_FP4",
     "bench_vu": "archive.direct.ligero.tool:BENCH_VU",
     "ligero_verify_batch": "archive.direct.ligero.tool:LIGERO_VERIFY_BATCH",
     "a_gpu_prove": "archive.gkr.gpu.tool:A_GPU_PROVE",
     "bench_vu_fp8": "archive.direct.ligero.fp8.tool:BENCH_VU_FP8",
     "bench_vu_fp4": "archive.direct.ligero.fp4.tool:BENCH_VU_FP4",
-    "native_peak": "tools.native_peak.tool:NATIVE_PEAK",
+    "native_peak": "benchmarks.native_peak.tool:NATIVE_PEAK",
     "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",
     "hiding_leaf_cost": "benchmarks.commitments.tool:HIDING_LEAF_COST",
     "pouw_gemm": "benchmarks.pouw.tool:POUW_GEMM",
@@ -33,12 +34,12 @@ REGISTRY: dict[str, str] = {
     "pouw_e2e": "benchmarks.pouw.tool:POUW_E2E",
     "pouw_pearl_cal": "benchmarks.pouw.tool:POUW_PEARL_CAL",
     "serving_commit_cost": "benchmarks.commitments.tool:SERVING_COMMIT_COST",
-    "flock_pure": "backends.flock.tool:FLOCK_PURE",
-    "flock_agreement": "backends.flock.verifier.tool:FLOCK_AGREEMENT",
-    "flock_class_sweep": "backends.flock.tool:FLOCK_CLASS_SWEEP",
-    "check": "tools.check.tool:CHECK",
-    "lean_audit": "tools.lean.tool:LEAN_AUDIT",
-    "lean_upstream": "tools.lean.tool:LEAN_UPSTREAM",
+    "flock_pure": "verity.ml.flock.tool:FLOCK_PURE",
+    "flock_agreement": "verity.ml.flock.verifier.tool:FLOCK_AGREEMENT",
+    "flock_class_sweep": "verity.ml.flock.tool:FLOCK_CLASS_SWEEP",
+    "check": "tools.verity.check.tool:CHECK",
+    "lean_audit": "tools.verity.lean.tool:LEAN_AUDIT",
+    "lean_upstream": "tools.verity.lean.tool:LEAN_UPSTREAM",
     # vLLM integration sweep stages (integration-owned declarations).
     "vllm.build": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
     "vllm.plan": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_PLAN",
@@ -89,15 +90,43 @@ def former_modules(module: str, moves: list[dict[str, str]] | None = None) -> li
     return out
 
 
+def former_paths(path: str, moves: list[dict[str, str]] | None = None) -> list[str]:
+    """``path`` (a file, or a directory with or without its `/`) as each earlier layout named it, newest first: mapped back
+    through each move's renamed paths (`moves.json`; a directory maps as a prefix)."""
+    path, out = path.rstrip("/"), []
+    for paths in reversed(_moves() if moves is None else moves):
+        for old, new in sorted(paths.items(), key=lambda kv: -len(kv[1])):
+            old, new = old.rstrip("/"), new.rstrip("/")
+            if path == new or path.startswith(new + "/"):
+                path = old + path[len(new):]
+                out.append(path)
+                break
+    return out
+
+
+def resolve(path: str, exists: Callable[[str], bool], moves: list[dict[str, str]] | None = None) -> str | None:
+    """``path`` if ``exists`` holds for it, else the newest name an earlier layout gave it that does (`former_paths`), else None:
+    how a reader of an older commit or tree finds a file the layout moved since."""
+    if exists(path):
+        return path
+    return next((p for p in former_paths(path, moves) if exists(p)), None)
+
+
 def locate(spec_or_name: str, root: Path) -> tuple[str, str] | None:
     """(module, attr) of the declaration ``root`` holds for a tool, under its module or one an earlier layout gave it; None
-    when it holds none."""
+    when it holds none.  The current module is looked for before `moves.json` is read, so an unreadable one can't hide a
+    declaration at its current path (`merge.required_steps` would then require no step)."""
     module, _, attr = REGISTRY.get(spec_or_name, spec_or_name).rpartition(":")
-    for m in (module, *former_modules(module)) if module else ():
+    if not module:
+        return None
+
+    def holds(m: str) -> bool:
         rel = Path(*m.split("."))
-        if (root / rel.with_suffix(".py")).is_file() or (root / rel / "__init__.py").is_file():
-            return m, attr
-    return None
+        return (root / rel.with_suffix(".py")).is_file() or (root / rel / "__init__.py").is_file()
+
+    if holds(module):
+        return module, attr
+    return next(((m, attr) for m in former_modules(module) if holds(m)), None)
 
 
 def from_tree(spec_or_name: str, root: Path) -> Tool:

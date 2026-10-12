@@ -19,15 +19,15 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.cut import separable
-from verity.primitives.circuits.defs import REGISTRY, bind
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import Circuit
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.cut import separable
+from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import Circuit
 from verity_vllm.program.registry import gumbel_boolean as GB
 from verity_vllm.program.registry import sampling as SM
 from verity_vllm.program.registry import sampling_boolean as SB
@@ -38,23 +38,23 @@ F32 = GB.F32
 M32 = 0xFFFFFFFF
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "NvLogf_v3": (43280, 74409, 2800, "de76fbaa2aad52188bae776c7126a03b5dc53cdd60d42e92329a3a215a4fc684"),
-    "GumbelSetup_v1{N=5}": (1138, 4005, 160, "9375f1fa66b562618818fb0e4ed5dd5f376df7db69735add6cdc98015bf785ac"),
-    "GumbelSetup_v1{N=64}": (3859, 13430, 160, "5cb1d52b7f54d98c9a09a62ae421b3faa5a5861a3e03425dc271fcedc0238a7a"),
-    "GumbelStreamKey_v2": (9245, 39200, 305, "f2705d3f2a8773c2141265d929820745f4a94d016a569a49a7292701c2cf255e"),
-    "GumbelStreamKeyHead_v1": (4960, 20667, 305, "ce1e48e84de995338ec119adc022ac33f3843c1204a06c483e30b565d656c0db"),
-    "GumbelStreamKeyTail_v1": (4285, 18533, 0, "7d48b86982e102f577d20b6e1474246856f2a9b3fd919205783d290bdef10b5e"),
-    "GumbelLaneHead_v1": (1556, 6643, 35, "e5dd193123761d3553f1ef68f587733e73ba3fbdfe910cfd2a955e6587bf4743"),
-    "GumbelLaneRounds_v1": (5035, 21681, 81, "3006ba5b5243c22548e07fbc4537d4c753328b5c7dfbe907eda7de2a9f1736da"),
+    "NvLogf_v3": (43280, 74409, 2800, "69ad963aa5ff5276e47ea1065d7ab2b65ec7d522b15b9849c2b724ae1acd5bbe9f612a6ba6e097e109ef99207b56b94226c8ff2d2f18a1708448e95693343a3b"),
+    "GumbelSetup_v1{N=5}": (1138, 4005, 160, "665163a8e11b818c93cfec66672ff17fd69654c4ac363d8e7e35cc706113df75af13272602207635a6d1d1aff74455febde42587166cfbb27d0931d776cb0274"),
+    "GumbelSetup_v1{N=64}": (3859, 13430, 160, "9b9c10135574f923cfbb8b6139811415e652dc2b22dac77ca97cb99ebd1978135cc6cdab0e514097e6da603a835f0c778286c678b26c2a9b1bc68147aa811c7f"),
+    "GumbelStreamKey_v2": (9245, 39200, 305, "12e3eed59d4c4a8bb162063b135d04ce5f8164bf0b568e458555a537ea4dcfbe8916f97d6c488c36ad4eaddd75421179883ada1f965e1e2bf6d1f6741e8fb8ac"),
+    "GumbelStreamKeyHead_v1": (4960, 20667, 305, "fe6d2ab0625dacc3b0fb5573482132b8343ccd14f138f4afe69ce3c7a0399d1fd5f0c36349d43daf1bf18993b984e1543ba0c03362134420f7a3abc27c229589"),
+    "GumbelStreamKeyTail_v1": (4285, 18533, 0, "2c31e3ac773074d314192bcf2525a37bf132b13774d0624564bee2738244d3a6eff61a05949a888a6744e57c6b57d55db5f97f2166a5223059c2c06ed7ac5d32"),
+    "GumbelLaneHead_v1": (1556, 6643, 35, "4487033a1bf1192c3abb681b2df58de39529b3c5431d2d6a82d274d6f91a4a9be982447252b14ac8eed5762444635cfd1953c22e27bae49d082e41daea1eb7a9"),
+    "GumbelLaneRounds_v1": (5035, 21681, 81, "e8a27237e45e078260046e86707d68c70aca8cd642141084ffbf5f7665803d25e0aa82f71e10cea14a88843e613c11e98b4fafd5d556d69ecbe7dbc6990c2a59"),
 }
 #: the same for the Definitions that reach the lane's noise (slow to trace)
 LANE_PINS = {
-    "GumbelLaneTail_v1": (92314, 162277, 6115, "b69e53afd3caeedd7f8091988ca8d5b3b18498d9d35f06f866e2d992caeb92ec"),
-    "GumbelLane_v1": (98905, 190601, 6231, "01652356dc2d2bbad20a5c559e5d1560953c867bf8d2aeb16fc4c80e219f52de"),
-    "GumbelNoiseGroup_v1{G=64}": (6329920, 12198464, 398784, "f5a351595c08c67173a1c806160aa28b2de29482568e1d8c09ea66690739eafc"),
-    "GumbelNoise_v1{V=65}": (6428825, 12389065, 405015, "f300c5c44ae7e156500ca28f1aaca4db218f873f6d978e45597d43c8f7e49da7"),
-    "GumbelSelectF32_v2{V=5}": (505349, 997312, 31762, "203158c354be3312fa18eeb90876bf6607ea4af1b7ac49cff6550c3487956944"),
-    "GumbelSelectF32_v2{V=65}": (6448490, 12458099, 407786, "7b112f17685a3da507d37dafed296c75cc6f942ee9bf8cab2141528cc6813cd1"),
+    "GumbelLaneTail_v1": (92314, 162277, 6115, "beb5c6bac7ca2e8918bf4cb12111467bce5c480b9440ae4ae770cec422a1eafafe41997c70ee4feb2b4792f6feee11159662d120959f462cc08da535b8be12a2"),
+    "GumbelLane_v1": (98905, 190601, 6231, "41cba3705e0fe255a2a472256d27b1789c995d7fc7f6ce5535859adfc2cae502ac2917414236498f625fba46eb48afb06fad2d3af94edaaa788ab4b917e172e8"),
+    "GumbelNoiseGroup_v1{G=64}": (6329920, 12198464, 398784, "b48fafac10e3ab3b059f99587d4b6bfa5e45bed8d9bd2882fec6d14abda01f6b3cbedb2281e14844e6a116663557c8ae9b453c28a82ae5d3a6a233158d710ea5"),
+    "GumbelNoise_v1{V=65}": (6428825, 12389065, 405015, "df8df2b1f311f90e6e8d90eb439269663cf8327c3a3c8ddd300d12d17511da6a760321383cccffdc4669840abb82a656057ad9ad0a84170fbda3963952d25bfb"),
+    "GumbelSelectF32_v2{V=5}": (505349, 997312, 31762, "26d127cdc687e94c2fe212e228e2e050236c103fd4020ab440d84acb5df7af446c8cfd761b462979a87cf48e96318d1015881b624f123be08dd3697b7df11788"),
+    "GumbelSelectF32_v2{V=65}": (6448490, 12458099, 407786, "50615df3a5d769c3d865e0da9ee65ca187b3458f1f1f85b1d5738fdad87a501de38ae87bf4f91597d15704712616de4aac58ca8a42f25252f361e9fb3f3bdd49"),
 }
 
 #: each stage's gates at Gemma-2's vocabulary (the noisy row: 256,000 lanes of GumbelLane_v1)
@@ -359,7 +359,7 @@ BULK = [(1, 4096), (2, 4096), (5, 2048), (63, 512), (64, 512), (65, 512), (129, 
 @pytest.mark.slow
 def test_gumbel_select_agrees_with_its_word_definition() -> None:
     """Every size in one test, so one process traces the lane. At V = 1 against the restatement (`GumbelSelectF32_v1{V=1}`'s
-    scan has no iterations, which `verity.primitives.circuits.layout.resolve_gate` misreads: `test_sampling_boolean`'s word-view xfail). The
+    scan has no iterations, which `verity.ml.circuits.layout.resolve_gate` misreads: `test_sampling_boolean`'s word-view xfail). The
     body is `gumbel_select_calls`: the stages in order (and the lane products' two constant bits), as a served Program calls
     them at its root."""
     for V, n in BULK:

@@ -1,0 +1,69 @@
+// What the guest kernel and the hypervisor took from two cores, the timed audit's memory challenger's ($1) and responder's
+// ($2), each line stamped with bpftrace's nsecs (CLOCK_MONOTONIC, the clock of band_gpu/memory_challenger.py's host_trace):
+//   switch CPU T PREV_COMM PREV_PID NEXT_COMM NEXT_PID    every context switch
+//   irq|softirq|vec CPU T WHAT NS                        a hard interrupt, softirq or APIC vector (the local timer, IPIs) over $3 ns
+//   fault CPU T PID NS                                   a page fault handled for over $3 ns
+//   work CPU T FUNCTION NS                               a workqueue item (a kworker's) that ran for over $3 ns
+//   steal CPU T NS                                       time the hypervisor did not run that vCPU, over $3 ns, between two
+//                                                        reads of its KVM steal clock (each tick and run-queue clock update)
+// hosttrace.sh also records the two cores' /proc/stat steal before and after, and runs it.
+BEGIN { printf("hosttrace cpus %d %d over %d ns\n", $1, $2, $3); }
+
+tracepoint:sched:sched_switch /cpu == $1 || cpu == $2/ {
+  printf("switch %d %llu %s %d %s %d\n", cpu, nsecs, args->prev_comm, args->prev_pid, args->next_comm, args->next_pid);
+}
+
+tracepoint:irq:irq_handler_entry /cpu == $1 || cpu == $2/ { @irq[cpu] = nsecs; @irqn[cpu] = args->irq; }
+tracepoint:irq:irq_handler_exit /(cpu == $1 || cpu == $2) && @irq[cpu]/ {
+  $d = nsecs - @irq[cpu];
+  @irqs[cpu] = count();
+  if ($d > $3) { printf("irq %d %llu %d %llu\n", cpu, @irq[cpu], @irqn[cpu], $d); }
+  delete(@irq[cpu]);
+}
+
+tracepoint:irq:softirq_entry /cpu == $1 || cpu == $2/ { @sirq[cpu] = nsecs; }
+tracepoint:irq:softirq_exit /(cpu == $1 || cpu == $2) && @sirq[cpu]/ {
+  $d = nsecs - @sirq[cpu];
+  @softirqs[cpu] = count();
+  if ($d > $3) { printf("softirq %d %llu %d %llu\n", cpu, @sirq[cpu], args->vec, $d); }
+  delete(@sirq[cpu]);
+}
+
+tracepoint:irq_vectors:*_entry /cpu == $1 || cpu == $2/ { @vec[cpu] = nsecs; }
+tracepoint:irq_vectors:*_exit /(cpu == $1 || cpu == $2) && @vec[cpu]/ {
+  $d = nsecs - @vec[cpu];
+  @vecs[cpu, probe] = count();
+  if ($d > $3) { printf("vec %d %llu %s %llu\n", cpu, @vec[cpu], probe, $d); }
+  delete(@vec[cpu]);
+}
+
+kprobe:handle_mm_fault /cpu == $1 || cpu == $2/ { @pf[tid] = nsecs; }
+kretprobe:handle_mm_fault /@pf[tid]/ {
+  $d = nsecs - @pf[tid];
+  @faults[cpu] = count();
+  if ($d > $3) { printf("fault %d %llu %d %llu\n", cpu, @pf[tid], pid, $d); }
+  delete(@pf[tid]);
+}
+
+tracepoint:workqueue:workqueue_execute_start /cpu == $1 || cpu == $2/ { @wq[tid] = nsecs; @wqf[tid] = args->function; }
+tracepoint:workqueue:workqueue_execute_end /@wq[tid]/ {
+  $d = nsecs - @wq[tid];
+  @works[cpu, ksym(@wqf[tid])] = count();
+  if ($d > $3) { printf("work %d %llu %s %llu\n", cpu, @wq[tid], ksym(@wqf[tid]), $d); }
+  delete(@wq[tid]); delete(@wqf[tid]);
+}
+
+kprobe:kvm_steal_clock /arg0 == $1 || arg0 == $2/ { @sc[tid] = arg0 + 1; }
+kretprobe:kvm_steal_clock /@sc[tid]/ {
+  $c = @sc[tid] - 1;
+  if (@steal_at[$c] && retval > @steal_at[$c] && retval - @steal_at[$c] > $3) {
+    printf("steal %d %llu %llu\n", $c, nsecs, retval - @steal_at[$c]);
+  }
+  if (retval > @steal_at[$c]) { @steal_at[$c] = retval; }
+  delete(@sc[tid]);
+}
+
+END {
+  clear(@irq); clear(@irqn); clear(@sirq); clear(@vec); clear(@pf); clear(@wq); clear(@wqf); clear(@sc); clear(@steal_at);
+  printf("end %llu\n", nsecs);
+}

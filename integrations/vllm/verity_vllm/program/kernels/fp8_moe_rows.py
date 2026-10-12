@@ -1,5 +1,5 @@
-"""The fused-MoE expert GEMM's twin (`registry.fp8_moe`: `MoeExpertFp8BlockCoordinate(W)_v1`), vectorised over one (token, expert)
-pair's output columns with `derived_rows`'s k32 e4m3 step, and the twin of the activation between the two launches
+"""The fused-MoE expert GEMM's twin (`registry.fp8_moe`: `MoeExpertFp8BlockCoordinate(W)_v1`, and `_v3` with its `DOT`), vectorised
+over one (token, expert) pair's output columns with `derived_rows`'s k32 e4m3 step or core's sm_120 one, and the twin of the activation between the two launches
 (`SiluMulFp8BlockQuant_v1`) over whole rows.  The scalar Definitions are the reference; tests/program/test_fp8_moe.py checks these
 twins against them word for word, and the H200 capture (tests/properties/glm53_block_fp8_capture_gpu.py) checks the kernels' words
 against them."""
@@ -9,22 +9,45 @@ from functools import lru_cache
 
 import numpy as np
 
+from verity.ml.kernels.tc import group_sum_total_batch
+from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
 from verity_vllm.program.kernels.derived_rows import f2fp_bf16, fma_rn, mul_rn, tc_dot32_e4m3
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.fp8 import MIN_SCALE_BITS, np_bf16_to_f32, np_f32_to_e4m3_sat, weight_blocks
+from verity_vllm.program.registry.fp8 import MIN_SCALE_BITS, weight_blocks
+from verity_vllm.program.kernels.fp8_twins import np_bf16_to_f32, np_f32_to_e4m3_sat
 from verity_vllm.program.registry.fp8_moe import check_act_statics, check_statics
-from verity_vllm.program.registry.moe import nv_expf_bits
+from verity_vllm.program.kernels.moe_twins import nv_expf_bits
 
 F32_ONE = 0x3F800000
+E4M3_NAN = 0x7F
+
+
+def qmma_dot32_e4m3(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """`BlackwellE4m3QmmaDot32_v1` vectorised by core's kernel (`group_sum_total_batch` on `BLACKWELL_SM120_E4M3_M16N8K32`, every
+    encoding): acc (n,) f32 words, a/b (n, 32) e4m3 bytes -> (f32 words, `tc_dot32_e4m3`'s mask: an e4m3 NaN byte or a non-finite
+    accumulator)."""
+    acc = np.asarray(acc, dtype=np.uint32)
+    a, b = np.asarray(a, dtype=np.uint8), np.asarray(b, dtype=np.uint8)
+    nonfin = ((a & E4M3_NAN) == E4M3_NAN).any(axis=-1) | ((b & E4M3_NAN) == E4M3_NAN).any(axis=-1) | ((acc & 0x7F800000) == 0x7F800000)
+    return np.asarray(group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b)[0], dtype=np.uint32), nonfin
+
+
+#: the twin's k32 step by the registered step a `MoeExpertFp8Block*_v3` binds as `DOT` (`_v1` is "hopper")
+TWIN_DOTS = {"hopper": tc_dot32_e4m3, "blackwell": qmma_dot32_e4m3}
+TWIN_DOT_OF = {HopperE4m3QgmmaDot32.id: "hopper", BlackwellE4m3QmmaDot32.id: "blackwell"}
 
 
 def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, G: int = 128, KB: int = 32,
-                             swap: bool = False, g: int | None = None, chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
+                             swap: bool = False, g: int | None = None, dot: str = "hopper",
+                             chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
     """`MoeExpertFp8BlockCoordinate_v1{K,G,KB,SWAP}` (g None) or `MoeExpertFp8BlockCoordinateW_v1` (g the pair's f32 topk weight
     word) on ONE (token, expert) pair of `fused_moe_kernel`: xq (K,) e4m3 bytes, sx (K/G,) f32 words, w (N, K) the expert's e4m3
     bytes, ws (cdiv(N, G), K/G) f32 words -> (N bf16 words, nonfinite mask).  Per output column n (`fp8_moe.triton_block_acc`):
     for each K tile k ascending, `d` = KB/32 `tc_dot32_e4m3` steps from +0, then `acc` = FFMA(FMUL(d, sx[kb]), ws[n // G][kb], acc)
-    from +0 (the two scales swapped under `swap`), kb = k*KB // G; then FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`."""
+    from +0 (the two scales swapped under `swap`), kb = k*KB // G; then FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`.
+    `dot` = "blackwell" is the `_v3{DOT=BlackwellE4m3QmmaDot32_v1}` forms, `qmma_dot32_e4m3` for the step."""
+    step = TWIN_DOTS[dot]
     xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
     K = xq.size
     check_statics(K, G, KB)
@@ -44,7 +67,7 @@ def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: 
             d = np.zeros(n1 - n0, dtype=np.uint32)
             for st in range(KB // 32):
                 lo = k * KB + 32 * st
-                d, f = tc_dot32_e4m3(d, np.broadcast_to(xq[lo:lo + 32], (n1 - n0, 32)), wc[:, lo:lo + 32])
+                d, f = step(d, np.broadcast_to(xq[lo:lo + 32], (n1 - n0, 32)), wc[:, lo:lo + 32])
                 nf |= f
             kb = k * KB // G
             a, b = np.broadcast_to(sx[kb], (n1 - n0,)), ws[rows, kb]

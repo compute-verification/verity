@@ -1,6 +1,6 @@
 """Call boundaries (`call_boundaries`, Q_word: a Value two Calls of one module body exchange) as an acquisition source, evaluated on the
 host.  Per module body M and committed engine step, a forward pre-hook reads M's inputs and evaluates M's rows with the IR's evaluator
-(`verity.primitives.circuits.evaluation.evaluate_batch`: a registered row kernel of `verity_vllm.program.kernels.rows` where one is, the reference for the rest
+(`verity.ml.circuits.evaluation.evaluate_batch`: a registered row kernel of `verity_vllm.program.kernels.rows` where one is, the reference for the rest
 and for what a kernel declines -- exact, NaN payloads included); at the step's end every required interior Value is committed as
 `<M>/<fx node>/<member>`, [rows, width] words over the identity's element range.  Attached whenever the required manifest names
 `call_boundaries` identities; a manifest naming none refuses it (exit 3).  No kernel changes: the served kernels run unchanged, and the
@@ -308,7 +308,7 @@ class CallBoundarySource:
         return [{"class": FAMILY, "how": "bound-as-leaf", "rule": None, "count": self.stats["tensors"], "bytes": self.stats["bytes"],
                  "tensors": self.stats["tensors"], "bodies": self.stats["bodies"], "errors": self.stats["errors"],
                  "evidence": (f"call-boundary source: `<module>/<fx node>/<member>` of {self.plan.covered} identities in {len(self.modules)} "
-                              f"module bodies, evaluated on the host from each module's forward arguments by verity.primitives.circuits.evaluation.evaluate_batch "
+                              f"module bodies, evaluated on the host from each module's forward arguments by verity.ml.circuits.evaluation.evaluate_batch "
                               f"(the Programs of {sorted(self.plan.program_dirs)}); the consuming Calls' replay checks the served outputs")}]
 
 

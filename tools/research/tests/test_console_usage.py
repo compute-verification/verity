@@ -23,7 +23,7 @@ NOW = datetime(2026, 10, 3, 9, 10, tzinfo=timezone.utc)
 
 
 def test_the_console_and_the_module_share_their_labels_and_the_record():
-    assert (vc.NO_POD, vc.USAGE_RECORD) == (usage.NO_POD, Path(usage.RECORD))
+    assert (vc.NO_POD, vc.POOL_UNLEASED, vc.USAGE_RECORD) == (usage.NO_POD, usage.POOL_UNLEASED, Path(usage.RECORD))
     assert set(vc.NODE_NAMES.values()) == set(usage.NODES.values())
 
 
@@ -96,12 +96,20 @@ def test_node_1s_minutes_are_read_at_each_minutes_end_and_memory_holds_by_the_mi
 def test_lanes_and_kinds_of_each_nodes_holders():
     assert [(vc.lane_of("node 1", h), vc.kind_of("node 1", h)) for h in (
         "gpu-pool-circuits-1791-x", "gpu-pool-1791-y", "Kueue vllm-epoch-run", "SkyPilot m0-*", vc.NO_POD)] == [
-        ("circuits", "gpu-lease pool"), ("proofs", "gpu-lease pool"), ("circuits", "Kueue vllm-epoch-run"),
+        ("circuits", "gpu-lease pool"), (vc.POOL_UNLEASED, "gpu-lease pool"), ("circuits", "Kueue vllm-epoch-run"),
         ("proofs", "SkyPilot m0-*"), (vc.NO_POD, vc.NO_POD)]
     assert [(vc.lane_of("node 2", h), vc.kind_of("node 2", h)) for h in (
         "fill bc-15ada664", "bc-b8aaadaa", "circuits-tp8", "(process, no lease)")] == [
         ("memory-accounting", "fill"), ("circuits", "gpu-lease"), ("circuits-tp8", "gpu-lease"),
         ("(process, no lease)", "(process, no lease)")]
+
+
+def test_a_leases_who_names_its_lane():
+    assert [vc.who_lane(w) for w in (
+        "keeper:memory-accounting", "keeper:circuits", "fill:bc-15ada664", "fill:network-accounting", "verity:bc-ecea50f6",
+        "memory-accounting:erase-calib", "keeper:someone", "adhoc:ubuntu", "infra2:x", "circuits-tp8")] == [
+        "memory-accounting", "circuits", "memory-accounting", "network-accounting", "network-accounting",
+        "memory-accounting", "keeper:someone", "adhoc:ubuntu", "infra2:x", "circuits-tp8"]
 
 
 MINUTES = {
@@ -116,7 +124,7 @@ def test_held_idle_lines_come_from_the_modules_rows():
     rows = vc.usage_rows(MINUTES, SPANS)
     assert {(r["node"], r["owner"], r["kind"]) for r in rows} == {
         ("vy-nebius-1", "circuits", "gpu-lease"), ("vy-nebius-1", "circuits", "Kueue vllm-epoch-run"),
-        ("vy-nebius-1", "proofs", usage.POOL_UNLEASED), ("vy-nebius-1", vc.NO_POD, vc.NO_POD),
+        ("vy-nebius-1", usage.POOL_UNLEASED, usage.POOL_UNLEASED), ("vy-nebius-1", vc.NO_POD, vc.NO_POD),
         ("vy-nebius-2", "circuits-tp8", "gpu-lease"), ("vy-nebius-2", "memory-accounting", "fill")}
     got = {(d["node"], d["lane"]): (d["held_gpu_h"], d["held_idle_gpu_h"], d["held_idle_pct"], d["unmeasured_gpu_h"],
                                     d["target_pct"], d["complete"]) for d in vc.idle_readings(rows, NOW)}
@@ -146,11 +154,56 @@ def test_a_pools_leases_end_its_own_idle_before_each_shrink(tmp_path):
         f.write('{"t": "2026-10-03T08:10:00Z", "ev": "unfenced", "gpu": 4}\n')
     (circuits / "n1-lease.json").write_text(json.dumps({"t": "2026-10-03T08:20:00Z", "gpus": [{"index": 4, "lease": None}]}))
     pools = {str(circuits): "circuits", str(provers): "proofs"}
-    spans = vc.n1_lease_spans(H0 + 3600, pools, {str(circuits): 30, str(provers): 120})
+    spans = vc.n1_lease_spans(H0 + 3600, pools, {str(circuits): 30, str(provers): 120}, tmp_path / "lease-usage.jsonl")
     assert sorted(spans) == [(3, H0, H0 + 70, "circuits"), (4, H0 + 600, H0 + 1170, "circuits"), (5, H0, H0 + 120, "proofs")]
     minutes = {"node 1": [(H0, 3, 1.0, 0, 0, 0, "gpu-pool-circuits-1791-x"), (H0 + 60, 3, 1.0, 0, 0, 0, "gpu-pool-circuits-1791-x")]}
     rows = {(r["owner"], r["kind"]): r for r in vc.usage_rows(minutes, {"node 1": spans[:1]})}
     assert (rows[("circuits", "gpu-lease")]["useful_s"], rows[("circuits", usage.POOL_UNLEASED)]["busy_s"]) == (70, 50)
+
+
+def usage_record(gpu: int, who: str, since: str, end: str) -> str:
+    return json.dumps({"schema": "gpu-lease/usage/v1", "pid": 1, "scope": None, "who": who, "run": None, "timed": False,
+                       "preemptible": False, "since": f"2026-10-03T{since}Z", "end": f"2026-10-03T{end}Z", "rc": 0, "cmd": "x",
+                       "gpus": [{"index": gpu, "uuid": f"GPU-{gpu}", "held_s": 1, "busy_s": 1, "sampled_s": 1}]}) + "\n"
+
+
+def test_a_pool_span_counts_to_the_lanes_of_the_leases_in_it(tmp_path):
+    # the provers pool serves every lane: its leases were memory-accounting's keeper cells, network-accounting's runs and
+    # adhoc:ubuntu, and the report named proofs for all of them
+    pool = tmp_path / "gpu-lease"
+    pool.mkdir()
+    (pool / "n1-lease.log").write_text("".join(json.dumps({"t": f"2026-10-03T{t}Z", "ev": ev, "gpu": g}) + "\n" for t, ev, g in (
+        ("08:00:00", "unfenced", 5), ("08:00:00", "unfenced", 6), ("08:10:00", "shrink", 6), ("08:30:00", "shrink", 5),
+        ("08:40:00", "unfenced", 7))))
+    (pool / "n1-lease.json").write_text(json.dumps({"t": "2026-10-03T08:59:00Z", "gpus": [
+        {"index": 5, "lease": None},
+        {"index": 7, "lease": {"who": "adhoc:ubuntu", "run": None, "since": "2026-10-03T08:40:05Z", "until": None}}]}))
+    log = tmp_path / "lease-usage.jsonl"
+    log.write_text(usage_record(5, "keeper:memory-accounting", "08:00:10", "08:12:00") + "torn{\n"
+                   + usage_record(5, "verity:bc-ecea50f6", "08:15:00", "08:28:00")
+                   + usage_record(5, "keeper:circuits", "09:30:00", "09:40:00")       # after the span: not in it
+                   + json.dumps({"schema": "other", "who": "x"}) + "\n")
+    spans = vc.n1_lease_spans(H0 + 3600, {str(pool): "proofs"}, {str(pool): 120}, log)
+    assert sorted(spans) == [(5, H0 + 10, H0 + 720, "memory-accounting"), (5, H0 + 900, H0 + 1680, "network-accounting"),
+                             (6, H0, H0 + 480, "proofs"),                       # no record names its who: the pool's lane
+                             (7, H0 + 2405, H0 + 3600, "adhoc:ubuntu")]         # live: until now, not the state's time
+    minutes = {"node 1": [(H0, 5, 1.0, 0, 0, 0, "gpu-pool-1791-y"), (H0 + 720, 5, 0, 1.0, 0, 0, "gpu-pool-1791-y")]}
+    rows = {(r["owner"], r["kind"]): r for r in vc.usage_rows(minutes, {"node 1": spans})}
+    assert rows[("memory-accounting", "gpu-lease")]["useful_s"] == 50
+    assert (rows[(usage.POOL_UNLEASED, usage.POOL_UNLEASED)]["busy_s"], rows[(usage.POOL_UNLEASED, usage.POOL_UNLEASED)]["idle_s"],
+            rows[(usage.POOL_UNLEASED, usage.POOL_UNLEASED)]["useful_s"]) == (10, 60, 0)
+    assert not any(r["owner"] == "proofs" for r in rows.values() if r["kind"] != "gpu-lease")
+
+
+def test_a_live_lease_a_record_already_has_counts_once(tmp_path):
+    pool = tmp_path / "gpu-lease"
+    pool.mkdir()
+    (pool / "n1-lease.json").write_text(json.dumps({"t": "2026-10-03T08:20:00Z", "gpus": [
+        {"index": 0, "lease": {"who": "keeper:circuits", "since": "2026-10-03T08:00:00Z"}}]}))
+    log = tmp_path / "lease-usage.jsonl"
+    log.write_text(usage_record(0, "keeper:circuits", "08:00:00", "08:10:00"))
+    assert vc.n1_leases(H0 + 3600, {str(pool): "proofs"}, log) == [(0, H0, H0 + 600, "keeper:circuits")]
+    assert vc.n1_leases(H0 + 3600, {str(pool): "proofs"}, tmp_path / "none") == [(0, H0, H0 + 3600, "keeper:circuits")]
 
 
 def fake_proc(tmp_path, procs: dict) -> Path:

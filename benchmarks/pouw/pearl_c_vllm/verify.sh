@@ -11,11 +11,14 @@
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 PASSES=$WORK/passes/${1:?the window run id}; JOBS=${2:-48}; OUT=${RESEARCH_RUN_DIR:-.}
-export PYTHONPATH=$PWD:$PWD/catalog:$PWD/kernels:$PWD/experimental:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 status=0
+# the epoch's coin commitment, as e2e.py's challenger published it beside the passes; a window recorded before epoch coins
+# has none, and its passes are read as recorded ones (their beacon's salt)
+if [ -f "$PASSES/coins.json" ]; then EPOCH=(--coins "$PASSES/coins.json"); else EPOCH=(--recorded); fi
 for pass in prefill decode control control-leaves; do
   [ "$pass" = control-leaves ] && [ ! -f "$PASSES/$pass/manifest.json" ] && continue
-  "$PY" benchmarks/pouw/pearl_c_vllm/verify_run.py "$PASSES/$pass/manifest.json" --jobs "$JOBS" ${FAST:+--fast --cross-check ${CROSS:-256}} \
+  "$PY" benchmarks/pouw/pearl_c_vllm/verify_run.py "$PASSES/$pass/manifest.json" "${EPOCH[@]}" --jobs "$JOBS" ${FAST:+--fast --cross-check ${CROSS:-256}} \
     $(case "$pass" in control*) echo --expect-reject;; esac) || status=1
   cp "$PASSES/$pass/verify.json" "$OUT/$pass-verify.json" && cp "$PASSES/$pass/manifest.json" "$OUT/$pass-manifest.json"
 done

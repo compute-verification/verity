@@ -13,12 +13,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.primitives.commitments import hm96
-from verity.primitives.commitments.frame_v3 import FrameV3, Port, RowLeaf
-from verity.primitives.commitments.identity import identity_digest
-from verity.primitives.commitments.indexed import RangeIndexedDomain
-from verity.primitives.commitments.merkle import CommitmentDomain
-from verity.primitives.commitments.rowleaf import ROLE_X, row_leaf, sha512_row_layout
+from verity.ml.commitments import hm96
+from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf
+from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.rowleaf import ROLE_X, row_leaf, sha512_row_layout
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity_vllm.commit import serving_rows as SR
 
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())
@@ -125,11 +126,13 @@ def test_domains_follow_the_agreed_rule_from_registration_fields(tmp_path):
     assert rec["commitment"]["source"]["index"] == hashlib.sha512((tmp_path / "index.json").read_bytes()).hexdigest()
     for p, leaves in rec["leaves"].items():
         schema = SR.ROW_SCHEMA
-        binding = identity_digest("verity/one-stage/served-domain/v0", {"program": rec["partition"]["program"], "partition": rec["partition_digest"],
-                                                                         "port": p, "schema": schema, "leaves": leaves,
-                                                                         "run": rec["commitment"]["source"]["run"]})
-        dom = CommitmentDomain(bytes.fromhex(binding), -1, RangeIndexedDomain(0, leaves), hash="sha512")
-        assert dom.domain_id.hex() == rec["domains"][p]
+        binding = identity_digest_sha512("verity/one-stage/served-domain/v1", {"program": rec["partition"]["program"],
+                                                                                "partition": rec["partition_digest"], "port": p, "schema": schema,
+                                                                                "leaves": leaves, "run": rec["commitment"]["source"]["run"]})
+        dom = CommitmentDomain(binding, -1, RangeIndexedDomain(0, leaves), hash="sha512")
+        assert len(binding) == 64 and dom.domain_id.hex() == rec["domains"][p]
+        assert rec["domains"][p] == R.served_domain(rec["partition"]["program"], rec["partition_digest"], p, schema, leaves,
+                                                    rec["commitment"]["source"]["run"])
     assert rec["leaves"] == {"RoPEHead_v1{D=64}/x": 9, "RoPEHead_v1{D=64}/cs": 9, "RoPEHead_v1{D=64}/out": 9,
                              "Norm_v1{N=128}/in0": 4, "Norm_v1{N=128}/in1": 4, "Norm_v1{N=128}/out.0": 4, "Norm_v1{N=128}/out.1": 4}
     other = SR.commit(window(9, 4, "r-other"), data(w), salt_key=bytes(32))

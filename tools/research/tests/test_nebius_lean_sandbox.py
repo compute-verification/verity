@@ -1,10 +1,10 @@
 """vy-lean-sandbox (`pods/nebius/lean_sandbox.py`): the unit it starts, what it refuses before starting one, the probes and their
 verdict, the `build` slot in lean_slot.py's files, the tree it checks out and calls clean; with stand-ins for systemd and the
-host. And what deploys it: vy-lean-build-setup, run-daily's stub, the daily units and their entries in deploy.toml."""
+host. And what deploys it: vy-lean-build-setup, lean's publisher, the daily units (their entries in deploy.toml: infra/ops's
+test_deploy.py)."""
 from __future__ import annotations
 
 import configparser
-import fnmatch
 import importlib.util
 import json
 import os
@@ -21,14 +21,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from research import deploy
-
 NEBIUS = Path(__file__).resolve().parents[1] / "src/research/pods/nebius"
-CHECK = Path(__file__).resolve().parents[3] / "tools/check"
+CHECK = Path(__file__).resolve().parents[3] / "tools/verity/check"
 
 
 def _load(name: str, path: Path):
-    """``path`` as module ``name``, compiled from its source: tools/check's __pycache__ is no input of this suite."""
+    """``path`` as module ``name``, compiled from its source: tools/verity/check's __pycache__ is no input of this suite."""
     old = sys.pycache_prefix, sys.dont_write_bytecode
     sys.pycache_prefix, sys.dont_write_bytecode = os.devnull, True
     try:
@@ -158,7 +156,9 @@ def test_the_probe_source_runs_by_itself_in_isolated_mode():
     assert r.returncode == 0 and "vy-lean-sandbox" in r.stdout
 
 
-def test_deps_go_read_only_into_the_packages_lake_and_must_be_readable_by_others(host):
+def test_deps_go_read_only_into_the_packages_lake_deps_and_must_be_readable_by_others(host):
+    """At `.lake/deps`, not `.lake/packages`: Lake's artifact cache writes beside every dependency's artifacts, so the build
+    copies them to `.lake/packages` itself (`cache.py build`)."""
     deps = host.tmp / "deps"
     (deps / "mathlib").mkdir(parents=True)
     (deps / "mathlib" / "A.olean").write_text("o")
@@ -166,9 +166,9 @@ def test_deps_go_read_only_into_the_packages_lake_and_must_be_readable_by_others
         p.chmod(mode)
     run = Systemd()
     assert S.main(args(host, "--deps", f"pkg={deps}"), run=run, **prep()) == S.OK
-    inside = f"{host.tree}/pkg/.lake/packages"
+    inside = f"{host.tree}/pkg/.lake/deps"
     assert f"BindReadOnlyPaths={deps}:{inside}" in _opts(run.calls[1][0], "-p")
-    assert (host.tree / "pkg" / ".lake" / "packages").is_dir() and inside in json.loads(run.calls[0][0][-1])["unwritable"]
+    assert (host.tree / "pkg" / ".lake" / "deps").is_dir() and inside in json.loads(run.calls[0][0][-1])["unwritable"]
 
     (deps / "mathlib" / "B.olean").write_text("o")
     (deps / "mathlib" / "B.olean").chmod(0o600)                 # as Mathlib's cache writes its builds
@@ -708,13 +708,9 @@ def test_the_daily_service_runs_the_publisher_as_root_bounded_and_its_timer_fire
     svc, timer = _unit("vy-lean-cache-daily.service"), _unit("vy-lean-cache-daily.timer")
     assert dict(svc["Service"]) == {"Type": "oneshot", "ExecStart": "/usr/local/lib/vy-lean-cache/run-daily",
                                     "TimeoutStartSec": "3h", "Nice": "15", "IOSchedulingClass": "idle"}
+    assert (svc["Unit"]["RequiresMountsFor"], svc["Unit"]["AssertPathIsMountPoint"]) == ("/build /workspace", "/build")
     assert dict(timer["Timer"]) == {"OnCalendar": "*-*-* 06:15:00 UTC", "AccuracySec": "1min", "Persistent": "false"}
     assert dict(timer["Install"]) == {"WantedBy": "timers.target"}
-
-
-def test_run_daily_is_a_stub_that_exits_2_until_leans_publisher_replaces_it():
-    r = subprocess.run(["bash", str(NEBIUS / "lean_cache_daily.sh")], capture_output=True, text=True)
-    assert r.returncode == 2 and "publisher not installed (lean's PR)" in r.stderr
 
 
 def test_the_setup_script_runs_only_as_root(tmp_path):
@@ -723,20 +719,3 @@ def test_the_setup_script_runs_only_as_root(tmp_path):
     r = subprocess.run(["bash", str(NEBIUS / "lean_build_setup.sh")], capture_output=True, text=True,
                        env={"PATH": f"{tmp_path}:/usr/bin:/bin"})
     assert r.returncode == 2 and "run as root" in r.stdout
-
-
-LEAN_CACHE = {"/usr/local/sbin/vy-lean-build-setup": "lean_build_setup.sh", "/usr/local/bin/vy-lean-sandbox": "lean_sandbox.py",
-              "/usr/local/lib/vy-lean-cache/run-daily": "lean_cache_daily.sh",
-              "/etc/systemd/system/vy-lean-cache-daily.service": "vy-lean-cache-daily.service",
-              "/etc/systemd/system/vy-lean-cache-daily.timer": "vy-lean-cache-daily.timer"}
-
-
-def test_deploy_puts_the_sandbox_its_setup_and_the_daily_units_on_node_1_only_and_starts_nothing():
-    nodes = deploy.load()
-    n1 = {e.path: e for e in nodes["vy-nebius-1"].entries}
-    for path, src in LEAN_CACHE.items():
-        assert n1[path].src == f"tools/research/src/research/pods/nebius/{src}" and n1[path].run == [], path
-        assert any(fnmatch.fnmatch(path, m) for m in nodes["vy-nebius-1"].managed), path
-    assert not set(LEAN_CACHE) & {e.path for e in nodes["vy-nebius-2"].entries}
-    for src in ("lean_build_setup.sh", "lean_sandbox.py", "lean_cache_daily.sh"):
-        assert os.access(NEBIUS / src, os.X_OK), src                                # installed with the repository's mode

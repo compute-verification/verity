@@ -1,0 +1,10003 @@
+{
+ "about": "Pinned vectors of Q_word v1 (verity.primitives.circuits.cut, verity.primitives.circuits.partition_object) beyond partition_vectors.json, checked by verity/primitives/circuits/tests/test_qword_vectors.py; written by it with --write.  Programs are descriptor bytes (TWide_v1, TNarrow_v1 and TAdd64_v1 are test primitives: n leaves of Value<32> or two Value<64>, one output).",
+ "constants": {
+  "wiring": [
+   "Bf16ToF32_v1",
+   "F32BitsShl23_v1",
+   "F32Fabs_v1"
+  ],
+  "wide_fan_in": 4096,
+  "width_rule": [
+   16,
+   32,
+   0
+  ],
+  "param_max": 65536
+ },
+ "descriptors": {
+  "narrow": "{\"callees\":[\"Bf16GtStrict_v1\",\"Bf16ToF32_v1\",\"F32Fmaxf_v1\",\"F32ToBf16Rn_v1\",\"BitAnd_v1\",\"Input16_v1\",\"QNarrow_v1\"],\"definitions\":{\"Bf16GtStrict_v1\":{\"form\":\"primitive\",\"id\":\"Bf16GtStrict_v1\",\"params\":[[\"a\",[\"Value\",16]],[\"b\",[\"Value\",16]]],\"ret\":[\"Value\",1]},\"Bf16ToF32_v1\":{\"form\":\"primitive\",\"id\":\"Bf16ToF32_v1\",\"params\":[[\"a\",[\"Value\",16]]],\"ret\":[\"Value\",32]},\"BitAnd_v1\":{\"form\":\"primitive\",\"id\":\"BitAnd_v1\",\"params\":[[\"a\",[\"Value\",1]],[\"b\",[\"Value\",1]]],\"ret\":[\"Value\",1]},\"F32Fmaxf_v1\":{\"form\":\"primitive\",\"id\":\"F32Fmaxf_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"F32ToBf16Rn_v1\":{\"form\":\"primitive\",\"id\":\"F32ToBf16Rn_v1\",\"params\":[[\"a\",[\"Value\",32]]],\"ret\":[\"Value\",16]},\"Input16_v1\":{\"form\":\"primitive\",\"id\":\"Input16_v1\",\"params\":[],\"ret\":[\"Value\",16]},\"QNarrow_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,2,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,3,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,3,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",4,0,1]},\"type\":2},{\"refs\":{\"affine\":[\"n\",5,0,1]},\"type\":2}],\"fn\":2,\"form\":\"primitive\",\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",6,0,1]},\"type\":2}],\"fn\":3,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"p\",1,1,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",8,0,1]},\"type\":2},{\"refs\":{\"affine\":[\"n\",9,0,1]},\"type\":2}],\"fn\":2,\"form\":\"primitive\",\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",10,0,1]},\"type\":2}],\"fn\":3,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",12,0,1]},\"type\":2},{\"refs\":{\"affine\":[\"n\",13,0,1]},\"type\":2}],\"fn\":2,\"form\":\"primitive\",\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",14,0,1]},\"type\":2}],\"fn\":3,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":1},{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":1}],\"fn\":4,\"form\":\"primitive\",\"out\":1}],\"params\":[[\"a\",[\"Array\",4,[\"Value\",16]]],[\"b\",[\"Array\",4,[\"Value\",16]]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",0,0,1]},{\"affine\":[\"n\",1,0,1]},{\"affine\":[\"n\",2,0,1]},{\"affine\":[\"n\",3,0,1]},{\"affine\":[\"n\",7,0,1]},{\"affine\":[\"n\",11,0,1]},{\"affine\":[\"n\",15,0,1]},{\"affine\":[\"n\",16,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",1],[\"Value\",1],[\"Value\",1],[\"Value\",1],[\"Value\",16],[\"Value\",16],[\"Value\",16],[\"Value\",1]]]},\"form\":\"composite\",\"id\":\"QNarrow_v1\"},\"Root[QTopNarrow_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":5,\"form\":\"batch\",\"n\":4,\"out\":3},{\"args\":[],\"axes\":[],\"fn\":5,\"form\":\"batch\",\"n\":4,\"out\":3},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,4]},\"type\":3},{\"refs\":{\"affine\":[\"n\",1,0,4]},\"type\":3}],\"fn\":6,\"form\":\"call\",\"out\":4}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,8]},\"ret_type\":[\"Tuple\",[[\"Tuple\",[[\"Value\",1],[\"Value\",1],[\"Value\",1],[\"Value\",1],[\"Value\",16],[\"Value\",16],[\"Value\",16],[\"Value\",1]]]]]},\"form\":\"composite\",\"id\":\"Root[QTopNarrow_v1]_v1\"}},\"program_fn\":\"QTopNarrow_v1\",\"root\":\"Root[QTopNarrow_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",16],[\"Value\",1],[\"Value\",32],[\"Array\",4,[\"Value\",16]],[\"Tuple\",[[\"Value\",1],[\"Value\",1],[\"Value\",1],[\"Value\",1],[\"Value\",16],[\"Value\",16],[\"Value\",16],[\"Value\",1]]]]}",
+  "wiring-and-dead": "{\"callees\":[\"F32Fabs_v1\",\"Bf16ToF32_v1\",\"F32BitsShl23_v1\",\"I32Add_v1\",\"Input32_v1\",\"Input16_v1\",\"QWiring_v1\",\"QDead_v1\"],\"definitions\":{\"Bf16ToF32_v1\":{\"form\":\"primitive\",\"id\":\"Bf16ToF32_v1\",\"params\":[[\"a\",[\"Value\",16]]],\"ret\":[\"Value\",32]},\"F32BitsShl23_v1\":{\"form\":\"primitive\",\"id\":\"F32BitsShl23_v1\",\"params\":[[\"a\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"F32Fabs_v1\":{\"form\":\"primitive\",\"id\":\"F32Fabs_v1\",\"params\":[[\"x\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"I32Add_v1\":{\"form\":\"primitive\",\"id\":\"I32Add_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"Input16_v1\":{\"form\":\"primitive\",\"id\":\"Input16_v1\",\"params\":[],\"ret\":[\"Value\",16]},\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"QDead_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":3,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,3,1]},\"type\":0}],\"fn\":3,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":3,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":3,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0}],\"fn\":3,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Array\",4,[\"Value\",32]]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",3,0,1]},{\"affine\":[\"n\",4,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"QDead_v1\"},\"QWiring_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":1}],\"fn\":1,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":2,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0}],\"fn\":2,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",3,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",4,0,1]},\"type\":0}],\"fn\":3,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":3,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",6,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Array\",3,[\"Value\",32]]],[\"h\",[\"Value\",16]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",0,0,1]},{\"affine\":[\"n\",1,0,1]},{\"affine\":[\"n\",2,0,1]},{\"affine\":[\"n\",5,0,1]},{\"affine\":[\"n\",7,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32],[\"Value\",32],[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"QWiring_v1\"},\"Root[QTopWiring_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":4,\"form\":\"batch\",\"n\":3,\"out\":2},{\"args\":[],\"axes\":[],\"fn\":5,\"form\":\"batch\",\"n\":1,\"out\":3},{\"args\":[],\"axes\":[],\"fn\":4,\"form\":\"batch\",\"n\":4,\"out\":4},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,3]},\"type\":2},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":1}],\"fn\":6,\"form\":\"call\",\"out\":5},{\"args\":[{\"refs\":{\"affine\":[\"n\",2,0,4]},\"type\":4}],\"fn\":7,\"form\":\"call\",\"out\":6}],\"params\":[],\"ret\":{\"concat\":[{\"affine\":[\"n\",3,0,5]},{\"affine\":[\"n\",4,0,2]}]},\"ret_type\":[\"Tuple\",[[\"Tuple\",[[\"Value\",32],[\"Value\",32],[\"Value\",32],[\"Value\",32],[\"Value\",32]]],[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]]]},\"form\":\"composite\",\"id\":\"Root[QTopWiring_v1]_v1\"}},\"program_fn\":\"QTopWiring_v1\",\"root\":\"Root[QTopWiring_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Value\",16],[\"Array\",3,[\"Value\",32]],[\"Array\",1,[\"Value\",16]],[\"Array\",4,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Value\",32],[\"Value\",32],[\"Value\",32],[\"Value\",32]]],[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]]}",
+  "wide": "{\"callees\":[\"I32Add_v1\",\"TWide_v1\",\"TNarrow_v1\",\"Input32_v1\",\"QTWideTwice_v1\",\"QTNarrowTwice_v1\"],\"definitions\":{\"I32Add_v1\":{\"form\":\"primitive\",\"id\":\"I32Add_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"QTNarrowTwice_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,4]},\"type\":2},{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0}],\"fn\":2,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,4]},\"type\":2},{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0}],\"fn\":2,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",2,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Array\",4,[\"Value\",32]]],[\"s\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",3,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"QTNarrowTwice_v1\"},\"QTWideTwice_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,4096]},\"type\":1},{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,4096]},\"type\":1},{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",2,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Array\",4096,[\"Value\",32]]],[\"s\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",3,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"QTWideTwice_v1\"},\"Root[QTopWide_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":3,\"form\":\"batch\",\"n\":4096,\"out\":1},{\"args\":[],\"axes\":[],\"fn\":3,\"form\":\"batch\",\"n\":1,\"out\":3},{\"args\":[],\"axes\":[],\"fn\":3,\"form\":\"batch\",\"n\":4,\"out\":2},{\"args\":[],\"axes\":[],\"fn\":3,\"form\":\"batch\",\"n\":1,\"out\":3},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,4096]},\"type\":1},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":4,\"form\":\"call\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",2,0,4]},\"type\":2},{\"refs\":{\"affine\":[\"n\",3,0,1]},\"type\":0}],\"fn\":5,\"form\":\"call\",\"out\":0}],\"params\":[],\"ret\":{\"concat\":[{\"affine\":[\"n\",4,0,1]},{\"affine\":[\"n\",5,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"Root[QTopWide_v1]_v1\"},\"TNarrow_v1\":{\"form\":\"primitive\",\"id\":\"TNarrow_v1\",\"params\":[[\"x\",[\"Array\",4,[\"Value\",32]]],[\"a\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TWide_v1\":{\"form\":\"primitive\",\"id\":\"TWide_v1\",\"params\":[[\"x\",[\"Array\",4096,[\"Value\",32]]],[\"a\",[\"Value\",32]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"QTopWide_v1\",\"root\":\"Root[QTopWide_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",4096,[\"Value\",32]],[\"Array\",4,[\"Value\",32]],[\"Array\",1,[\"Value\",32]]]}",
+  "wide-batched": "{\"callees\":[\"I32Add_v1\",\"TWide_v1\",\"Input32_v1\",\"QWideRows_v1\"],\"definitions\":{\"I32Add_v1\":{\"form\":\"primitive\",\"id\":\"I32Add_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"QWideRows_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",2,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",2,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,8192]},\"type\":1},{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0}],\"axes\":[0,null],\"fn\":1,\"form\":\"batch\",\"n\":2,\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"p\",1,0,8192]},\"type\":3},{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0}],\"axes\":[1,null],\"fn\":1,\"form\":\"batch\",\"n\":2,\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",2,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"xr\",[\"Array\",2,[\"Array\",4096,[\"Value\",32]]]],[\"xc\",[\"Array\",4096,[\"Array\",2,[\"Value\",32]]]],[\"s\",[\"Value\",32]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",3,0,1]},{\"affine\":[\"n\",1,1,1]},{\"affine\":[\"n\",2,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"QWideRows_v1\"},\"Root[QTopWideRows_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":8192,\"out\":4},{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":8192,\"out\":4},{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":1,\"out\":5},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,8192]},\"type\":1},{\"refs\":{\"affine\":[\"n\",1,0,8192]},\"type\":3},{\"refs\":{\"affine\":[\"n\",2,0,1]},\"type\":0}],\"fn\":3,\"form\":\"call\",\"out\":6}],\"params\":[],\"ret\":{\"affine\":[\"n\",3,0,3]},\"ret_type\":[\"Tuple\",[[\"Tuple\",[[\"Value\",32],[\"Value\",32],[\"Value\",32]]]]]},\"form\":\"composite\",\"id\":\"Root[QTopWideRows_v1]_v1\"},\"TWide_v1\":{\"form\":\"primitive\",\"id\":\"TWide_v1\",\"params\":[[\"x\",[\"Array\",4096,[\"Value\",32]]],[\"a\",[\"Value\",32]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"QTopWideRows_v1\",\"root\":\"Root[QTopWideRows_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",2,[\"Array\",4096,[\"Value\",32]]],[\"Array\",2,[\"Value\",32]],[\"Array\",4096,[\"Array\",2,[\"Value\",32]]],[\"Array\",8192,[\"Value\",32]],[\"Array\",1,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Value\",32],[\"Value\",32]]]]}",
+  "separable": "{\"callees\":[\"F32Fmaxf_v1\",\"F32Fabs_v1\",\"QMax3_v1\",\"I32Add_v1\",\"QStep_v1\",\"Input32_v1\",\"QSepMixed_v1\",\"QSepScan_v1\",\"QSepPartial_v1\"],\"definitions\":{\"F32Fabs_v1\":{\"form\":\"primitive\",\"id\":\"F32Fabs_v1\",\"params\":[[\"x\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"F32Fmaxf_v1\":{\"form\":\"primitive\",\"id\":\"F32Fmaxf_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"I32Add_v1\":{\"form\":\"primitive\",\"id\":\"I32Add_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"QMax3_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Array\",3,[\"Value\",32]]]],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"QMax3_v1\"},\"QSepMixed_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,2]},\"type\":1}],\"axes\":[0],\"fn\":1,\"form\":\"batch\",\"n\":2,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"p\",1,0,6]},\"type\":2}],\"axes\":[0],\"fn\":2,\"form\":\"batch\",\"n\":2,\"out\":1}],\"params\":[[\"x\",[\"Array\",2,[\"Value\",32]]],[\"rows\",[\"Array\",2,[\"Array\",3,[\"Value\",32]]]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",0,0,2]},{\"affine\":[\"n\",1,0,2]}]},\"ret_type\":[\"Tuple\",[[\"Array\",2,[\"Value\",32]],[\"Array\",2,[\"Value\",32]]]]},\"form\":\"composite\",\"id\":\"QSepMixed_v1\"},\"QSepPartial_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,6]},\"type\":2}],\"axes\":[0],\"fn\":2,\"form\":\"batch\",\"n\":2,\"out\":1}],\"params\":[[\"rows\",[\"Array\",2,[\"Array\",3,[\"Value\",32]]]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"QSepPartial_v1\"},\"QSepScan_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,3]},\"type\":3}],\"fn\":4,\"form\":\"scan\",\"n\":3,\"n_xs\":1,\"out\":4}],\"params\":[[\"xs\",[\"Array\",3,[\"Value\",32]]],[\"c\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,4]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Array\",3,[\"Value\",32]]]]},\"form\":\"composite\",\"id\":\"QSepScan_v1\"},\"QStep_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":3,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"c\",[\"Value\",32]],[\"x\",[\"Value\",32]]],\"ret\":{\"strided\":[\"n\",0,0,1,0,0,2]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"QStep_v1\"},\"Root[QTopSep_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":5,\"form\":\"batch\",\"n\":2,\"out\":1},{\"args\":[],\"axes\":[],\"fn\":5,\"form\":\"batch\",\"n\":6,\"out\":5},{\"args\":[],\"axes\":[],\"fn\":5,\"form\":\"batch\",\"n\":3,\"out\":3},{\"args\":[],\"axes\":[],\"fn\":5,\"form\":\"batch\",\"n\":1,\"out\":6},{\"args\":[],\"axes\":[],\"fn\":5,\"form\":\"batch\",\"n\":6,\"out\":5},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,2]},\"type\":1},{\"refs\":{\"affine\":[\"n\",1,0,6]},\"type\":2}],\"fn\":6,\"form\":\"call\",\"out\":7},{\"args\":[{\"refs\":{\"affine\":[\"n\",2,0,3]},\"type\":3},{\"refs\":{\"affine\":[\"n\",3,0,1]},\"type\":0}],\"fn\":7,\"form\":\"call\",\"out\":4},{\"args\":[{\"refs\":{\"affine\":[\"n\",4,0,6]},\"type\":2}],\"fn\":8,\"form\":\"call\",\"out\":0}],\"params\":[],\"ret\":{\"concat\":[{\"affine\":[\"n\",5,0,4]},{\"affine\":[\"n\",6,0,4]},{\"affine\":[\"n\",7,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Tuple\",[[\"Array\",2,[\"Value\",32]],[\"Array\",2,[\"Value\",32]]]],[\"Tuple\",[[\"Value\",32],[\"Array\",3,[\"Value\",32]]]],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"Root[QTopSep_v1]_v1\"}},\"program_fn\":\"QTopSep_v1\",\"root\":\"Root[QTopSep_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",2,[\"Value\",32]],[\"Array\",2,[\"Array\",3,[\"Value\",32]]],[\"Array\",3,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Array\",3,[\"Value\",32]]]],[\"Array\",6,[\"Value\",32]],[\"Array\",1,[\"Value\",32]],[\"Tuple\",[[\"Array\",2,[\"Value\",32]],[\"Array\",2,[\"Value\",32]]]]]}",
+  "primitive-calls": "{\"callees\":[\"Input32_v1\",\"I32Add_v1\",\"F32Fabs_v1\",\"Const32[0x00000007]_v1\"],\"definitions\":{\"Const32[0x00000007]_v1\":{\"form\":\"primitive\",\"id\":\"Const32[0x00000007]_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"F32Fabs_v1\":{\"form\":\"primitive\",\"id\":\"F32Fabs_v1\",\"params\":[[\"x\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"I32Add_v1\":{\"form\":\"primitive\",\"id\":\"I32Add_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[QTopPrims_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":0,\"form\":\"batch\",\"n\":3,\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":1},{\"refs\":{\"affine\":[\"n\",0,1,1]},\"type\":1}],\"fn\":1,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,2,1]},\"type\":1}],\"fn\":2,\"form\":\"primitive\",\"out\":1},{\"args\":[],\"fn\":3,\"form\":\"primitive\",\"out\":1}],\"params\":[],\"ret\":{\"concat\":[{\"affine\":[\"n\",1,0,1]},{\"affine\":[\"n\",2,0,1]},{\"affine\":[\"n\",3,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"Root[QTopPrims_v1]_v1\"}},\"program_fn\":\"QTopPrims_v1\",\"root\":\"Root[QTopPrims_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Array\",3,[\"Value\",32]],[\"Value\",32]]}",
+  "recompute": "{\"callees\":[\"I32Add_v1\",\"Input32_v1\",\"QTwiceSep_v1\"],\"definitions\":{\"I32Add_v1\":{\"form\":\"primitive\",\"id\":\"I32Add_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"QTwiceSep_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Array\",2,[\"Value\",32]]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",0,0,1]},{\"affine\":[\"n\",1,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"QTwiceSep_v1\"},\"Root[QTopRecompute_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":2,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,2]},\"type\":1}],\"fn\":2,\"form\":\"call\",\"out\":2}],\"params\":[],\"ret\":{\"affine\":[\"n\",1,0,2]},\"ret_type\":[\"Tuple\",[[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]]]},\"form\":\"composite\",\"id\":\"Root[QTopRecompute_v1]_v1\"}},\"program_fn\":\"QTopRecompute_v1\",\"root\":\"Root[QTopRecompute_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",2,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]]}",
+  "too-wide": "{\"callees\":[\"TAdd64_v1\",\"Input64_v1\",\"QWide64_v1\"],\"definitions\":{\"Input64_v1\":{\"form\":\"primitive\",\"id\":\"Input64_v1\",\"params\":[],\"ret\":[\"Value\",64]},\"QWide64_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"a\",[\"Array\",2,[\"Value\",64]]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",64]},\"form\":\"composite\",\"id\":\"QWide64_v1\"},\"Root[QTopWide64_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":2,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,2]},\"type\":1}],\"fn\":2,\"form\":\"call\",\"out\":0}],\"params\":[],\"ret\":{\"affine\":[\"n\",1,0,1]},\"ret_type\":[\"Tuple\",[[\"Value\",64]]]},\"form\":\"composite\",\"id\":\"Root[QTopWide64_v1]_v1\"},\"TAdd64_v1\":{\"form\":\"primitive\",\"id\":\"TAdd64_v1\",\"params\":[[\"a\",[\"Value\",64]],[\"b\",[\"Value\",64]]],\"ret\":[\"Value\",64]}},\"program_fn\":\"QTopWide64_v1\",\"root\":\"Root[QTopWide64_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",64],[\"Array\",2,[\"Value\",64]]]}",
+  "root-batch": "{\"callees\":[\"F32Fmaxf_v1\",\"F32Fabs_v1\",\"Input32_v1\",\"QMax3_v1\"],\"definitions\":{\"F32Fabs_v1\":{\"form\":\"primitive\",\"id\":\"F32Fabs_v1\",\"params\":[[\"x\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"F32Fmaxf_v1\":{\"form\":\"primitive\",\"id\":\"F32Fmaxf_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"QMax3_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Array\",3,[\"Value\",32]]]],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"QMax3_v1\"},\"Root[QTopBatch_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":6,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,6]},\"type\":2}],\"axes\":[0],\"fn\":3,\"form\":\"batch\",\"n\":2,\"out\":3}],\"params\":[],\"ret\":{\"affine\":[\"n\",1,0,2]},\"ret_type\":[\"Array\",2,[\"Value\",32]]},\"form\":\"composite\",\"id\":\"Root[QTopBatch_v1]_v1\"}},\"program_fn\":\"QTopBatch_v1\",\"root\":\"Root[QTopBatch_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",6,[\"Value\",32]],[\"Array\",2,[\"Array\",3,[\"Value\",32]]],[\"Array\",2,[\"Value\",32]]]}",
+  "root-scan": "{\"callees\":[\"I32Add_v1\",\"Input32_v1\",\"QStep_v1\"],\"definitions\":{\"I32Add_v1\":{\"form\":\"primitive\",\"id\":\"I32Add_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"QStep_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"c\",[\"Value\",32]],[\"x\",[\"Value\",32]]],\"ret\":{\"strided\":[\"n\",0,0,1,0,0,2]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"QStep_v1\"},\"Root[QTopScan_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":3,\"out\":1},{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":1,\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",0,0,3]},\"type\":1}],\"fn\":2,\"form\":\"scan\",\"n\":3,\"n_xs\":1,\"out\":3}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,4]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Array\",3,[\"Value\",32]]]]},\"form\":\"composite\",\"id\":\"Root[QTopScan_v1]_v1\"}},\"program_fn\":\"QTopScan_v1\",\"root\":\"Root[QTopScan_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",3,[\"Value\",32]],[\"Array\",1,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Array\",3,[\"Value\",32]]]]]}"
+ },
+ "evaluations": [
+  [
+   "narrow",
+   [
+    {
+     "X": 16,
+     "W": 32,
+     "object": {
+      "format": "verity/partition/v1",
+      "program": "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
+      "query": {
+       "name": "Q_word",
+       "version": 1,
+       "params": {
+        "X": 16,
+        "W": 32
+       }
+      }
+     },
+     "object_digest": "ab476adb8c08f262b641ffdadbc44200d1ba4c946c9b42e0de4ccfb988ea7ca32b01051b956c6516ce2cc6578eecc626ca7301f8f7483e52e89d888a3b11aeba",
+     "population": 5,
+     "owners_digest": "ae04f2c010f24761506b2d7dc0f7a3b3ffc463d925183ae511406c74c08c21d9f9dcb95f9c0f178d6121dad838c7f43edc3a7d32ae8ea23096831f4092be4099",
+     "calls": [
+      {
+       "call": 2,
+       "definition": "QNarrow_v1",
+       "graph": {
+        "total": 17,
+        "structure": 6,
+        "n": 11,
+        "keep": [
+         0,
+         1,
+         2,
+         3,
+         6,
+         7,
+         10,
+         11,
+         14,
+         15,
+         16
+        ],
+        "width": [
+         1,
+         1,
+         1,
+         1,
+         32,
+         16,
+         32,
+         16,
+         32,
+         16,
+         1
+        ],
+        "prim": [
+         "Bf16GtStrict_v1",
+         "Bf16GtStrict_v1",
+         "Bf16GtStrict_v1",
+         "Bf16GtStrict_v1",
+         "F32Fmaxf_v1",
+         "F32ToBf16Rn_v1",
+         "F32Fmaxf_v1",
+         "F32ToBf16Rn_v1",
+         "F32Fmaxf_v1",
+         "F32ToBf16Rn_v1",
+         "BitAnd_v1"
+        ],
+        "external": [
+         1,
+         1,
+         1,
+         1,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0
+        ],
+        "src": [
+         4,
+         6,
+         8,
+         0
+        ],
+        "dst": [
+         5,
+         7,
+         9,
+         10
+        ],
+        "input_ids": [
+         0,
+         4,
+         1,
+         5,
+         2,
+         6,
+         3,
+         7
+        ],
+        "input_reads": [
+         [
+          0,
+          0
+         ],
+         [
+          1,
+          0
+         ],
+         [
+          2,
+          1
+         ],
+         [
+          3,
+          1
+         ],
+         [
+          4,
+          2
+         ],
+         [
+          5,
+          2
+         ],
+         [
+          6,
+          3
+         ],
+         [
+          7,
+          3
+         ],
+         [
+          0,
+          4
+         ],
+         [
+          1,
+          4
+         ],
+         [
+          2,
+          6
+         ],
+         [
+          3,
+          6
+         ],
+         [
+          4,
+          8
+         ]
+        ],
+        "outputs": [
+         0,
+         1,
+         2,
+         3,
+         5,
+         7,
+         9,
+         10
+        ],
+        "returned_inputs": [],
+        "recomputed": []
+       },
+       "owner": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        2,
+        2,
+        3,
+        3,
+        4
+       ],
+       "units": 5,
+       "committed": [
+        0,
+        1,
+        2,
+        3,
+        5,
+        7,
+        9,
+        10
+       ],
+       "kinds": [
+        "output",
+        "output",
+        "output",
+        "output",
+        "output"
+       ]
+      }
+     ],
+     "locate": [
+      [
+       0,
+       [
+        0,
+        2,
+        0
+       ],
+       []
+      ],
+      [
+       1,
+       [
+        0,
+        2,
+        1
+       ],
+       []
+      ],
+      [
+       2,
+       [
+        0,
+        2,
+        2
+       ],
+       []
+      ],
+      [
+       3,
+       [
+        0,
+        2,
+        3
+       ],
+       []
+      ],
+      [
+       4,
+       [
+        0,
+        2,
+        4
+       ],
+       []
+      ]
+     ],
+     "verify": {
+      "ok": true,
+      "codes": [],
+      "cut": []
+     }
+    },
+    {
+     "X": 32,
+     "W": 32,
+     "object": {
+      "format": "verity/partition/v1",
+      "program": "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
+      "query": {
+       "name": "Q_word",
+       "version": 1,
+       "params": {
+        "X": 32,
+        "W": 32
+       }
+      }
+     },
+     "object_digest": "0a94459f4e328addda5a7f6d3a861150c4ca347ab98b1ff32150337c0958a83f3326fdbd23aadbd4d1e7b705824c7777a3d20b37e42a4f997bc11a62e632ed7b",
+     "population": 3,
+     "owners_digest": "8f0f3ba8eb1026396fc09fe6cff4944bede2cb1142036005951b28faa02025a7c0b767d59720c5a2bdf3b971e1114ec410a82b1b6ed0159b1fdcd57d6f2e56da",
+     "calls": [
+      {
+       "call": 2,
+       "definition": "QNarrow_v1",
+       "graph": {
+        "total": 17,
+        "structure": 6,
+        "n": 11,
+        "keep": [
+         0,
+         1,
+         2,
+         3,
+         6,
+         7,
+         10,
+         11,
+         14,
+         15,
+         16
+        ],
+        "width": [
+         1,
+         1,
+         1,
+         1,
+         32,
+         16,
+         32,
+         16,
+         32,
+         16,
+         1
+        ],
+        "prim": [
+         "Bf16GtStrict_v1",
+         "Bf16GtStrict_v1",
+         "Bf16GtStrict_v1",
+         "Bf16GtStrict_v1",
+         "F32Fmaxf_v1",
+         "F32ToBf16Rn_v1",
+         "F32Fmaxf_v1",
+         "F32ToBf16Rn_v1",
+         "F32Fmaxf_v1",
+         "F32ToBf16Rn_v1",
+         "BitAnd_v1"
+        ],
+        "external": [
+         1,
+         1,
+         1,
+         1,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0
+        ],
+        "src": [
+         4,
+         6,
+         8,
+         0
+        ],
+        "dst": [
+         5,
+         7,
+         9,
+         10
+        ],
+        "input_ids": [
+         0,
+         4,
+         1,
+         5,
+         2,
+         6,
+         3,
+         7
+        ],
+        "input_reads": [
+         [
+          0,
+          0
+         ],
+         [
+          1,
+          0
+         ],
+         [
+          2,
+          1
+         ],
+         [
+          3,
+          1
+         ],
+         [
+          4,
+          2
+         ],
+         [
+          5,
+          2
+         ],
+         [
+          6,
+          3
+         ],
+         [
+          7,
+          3
+         ],
+         [
+          0,
+          4
+         ],
+         [
+          1,
+          4
+         ],
+         [
+          2,
+          6
+         ],
+         [
+          3,
+          6
+         ],
+         [
+          4,
+          8
+         ]
+        ],
+        "outputs": [
+         0,
+         1,
+         2,
+         3,
+         5,
+         7,
+         9,
+         10
+        ],
+        "returned_inputs": [],
+        "recomputed": []
+       },
+       "owner": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        2
+       ],
+       "units": 3,
+       "committed": [
+        0,
+        1,
+        2,
+        3,
+        5,
+        7,
+        9,
+        10
+       ],
+       "kinds": [
+        "output",
+        "output",
+        "output"
+       ]
+      }
+     ],
+     "locate": [
+      [
+       0,
+       [
+        0,
+        2,
+        0
+       ],
+       []
+      ],
+      [
+       1,
+       [
+        0,
+        2,
+        1
+       ],
+       []
+      ],
+      [
+       2,
+       [
+        0,
+        2,
+        2
+       ],
+       []
+      ]
+     ],
+     "verify": {
+      "ok": true,
+      "codes": [],
+      "cut": []
+     }
+    },
+    {
+     "X": 64,
+     "W": 64,
+     "object": {
+      "format": "verity/partition/v1",
+      "program": "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
+      "query": {
+       "name": "Q_word",
+       "version": 1,
+       "params": {
+        "X": 64,
+        "W": 64
+       }
+      }
+     },
+     "object_digest": "fe71ad4a245ce259a5433dac3bc3a0dab7da10aae07955d8ebfb42ab1c59467487f232fbc7422d60427a08ef226ff8e69f5c3e8c628cde74afdbdd266e50cca8",
+     "population": 1,
+     "owners_digest": "e618d6b35024130fe2251fa1a4ba515ebacdd9f22e48c52cdd45174437797f0d00d8d6afcd68bdb406405251df2dc0ab43bc78892a8f1253585d7054c2d875a4",
+     "calls": [
+      {
+       "call": 2,
+       "definition": "QNarrow_v1",
+       "graph": {
+        "total": 17,
+        "structure": 6,
+        "n": 11,
+        "keep": [
+         0,
+         1,
+         2,
+         3,
+         6,
+         7,
+         10,
+         11,
+         14,
+         15,
+         16
+        ],
+        "width": [
+         1,
+         1,
+         1,
+         1,
+         32,
+         16,
+         32,
+         16,
+         32,
+         16,
+         1
+        ],
+        "prim": [
+         "Bf16GtStrict_v1",
+         "Bf16GtStrict_v1",
+         "Bf16GtStrict_v1",
+         "Bf16GtStrict_v1",
+         "F32Fmaxf_v1",
+         "F32ToBf16Rn_v1",
+         "F32Fmaxf_v1",
+         "F32ToBf16Rn_v1",
+         "F32Fmaxf_v1",
+         "F32ToBf16Rn_v1",
+         "BitAnd_v1"
+        ],
+        "external": [
+         1,
+         1,
+         1,
+         1,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0
+        ],
+        "src": [
+         4,
+         6,
+         8,
+         0
+        ],
+        "dst": [
+         5,
+         7,
+         9,
+         10
+        ],
+        "input_ids": [
+         0,
+         4,
+         1,
+         5,
+         2,
+         6,
+         3,
+         7
+        ],
+        "input_reads": [
+         [
+          0,
+          0
+         ],
+         [
+          1,
+          0
+         ],
+         [
+          2,
+          1
+         ],
+         [
+          3,
+          1
+         ],
+         [
+          4,
+          2
+         ],
+         [
+          5,
+          2
+         ],
+         [
+          6,
+          3
+         ],
+         [
+          7,
+          3
+         ],
+         [
+          0,
+          4
+         ],
+         [
+          1,
+          4
+         ],
+         [
+          2,
+          6
+         ],
+         [
+          3,
+          6
+         ],
+         [
+          4,
+          8
+         ]
+        ],
+        "outputs": [
+         0,
+         1,
+         2,
+         3,
+         5,
+         7,
+         9,
+         10
+        ],
+        "returned_inputs": [],
+        "recomputed": []
+       },
+       "owner": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+       ],
+       "units": 1,
+       "committed": [
+        0,
+        1,
+        2,
+        3,
+        5,
+        7,
+        9,
+        10
+       ],
+       "kinds": [
+        "output"
+       ]
+      }
+     ],
+     "locate": [
+      [
+       0,
+       [
+        0,
+        2,
+        0
+       ],
+       []
+      ]
+     ],
+     "verify": {
+      "ok": true,
+      "codes": [],
+      "cut": []
+     }
+    }
+   ]
+  ],
+  [
+   "wiring-and-dead",
+   [
+    {
+     "X": 16,
+     "W": 32,
+     "object": {
+      "format": "verity/partition/v1",
+      "program": "2e11019881584107bdd267a01032bf2d5af8c668d2c7d47c90d876797777752ff2f32e38b953d065b57dfd38b1cc0db54e0e818cb85b992f3918679ce2cf509f",
+      "query": {
+       "name": "Q_word",
+       "version": 1,
+       "params": {
+        "X": 16,
+        "W": 32
+       }
+      }
+     },
+     "object_digest": "fd860f7c64d709b957b3dbb45db24e94fd02b8ea62845a32e7efc2d7260cfe45d9ea7b669bead3ad2671e5ec9762eff5b4ad1dd8b39415ef8efbe7d80069dd53",
+     "population": 7,
+     "owners_digest": "f2034b3e78fba4becb0f866e6995db598e395572929240699627a3dbfe56024b99fe31418251a172fa659873cbca48990a05e4729972f519711e430c470887aa",
+     "calls": [
+      {
+       "call": 3,
+       "definition": "QWiring_v1",
+       "graph": {
+        "total": 8,
+        "structure": 6,
+        "n": 2,
+        "keep": [
+         5,
+         6
+        ],
+        "width": [
+         32,
+         32
+        ],
+        "prim": [
+         "I32Add_v1",
+         "I32Add_v1"
+        ],
+        "external": [
+         0,
+         1
+        ],
+        "src": [],
+        "dst": [],
+        "input_ids": [
+         0,
+         3,
+         1,
+         2
+        ],
+        "input_reads": [
+         [
+          3,
+          0
+         ],
+         [
+          0,
+          1
+         ],
+         [
+          2,
+          1
+         ]
+        ],
+        "outputs": [
+         0,
+         1
+        ],
+        "returned_inputs": [
+         0,
+         1,
+         2
+        ],
+        "recomputed": []
+       },
+       "owner": [
+        0,
+        1
+       ],
+       "units": 2,
+       "committed": [
+        0,
+        1
+       ],
+       "kinds": [
+        "output",
+        "output"
+       ]
+      },
+      {
+       "call": 4,
+       "definition": "QDead_v1",
+       "graph": {
+        "total": 5,
+        "structure": 0,
+        "n": 5,
+        "keep": [
+         0,
+         1,
+         2,
+         3,
+         4
+        ],
+        "width": [
+         32,
+         32,
+         32,
+         32,
+         32
+        ],
+        "prim": [
+         "I32Add_v1",
+         "I32Add_v1",
+         "I32Add_v1",
+         "I32Add_v1",
+         "I32Add_v1"
+        ],
+        "external": [
+         1,
+         1,
+         0,
+         1,
+         1
+        ],
+        "src": [
+         0,
+         1,
+         0,
+         1
+        ],
+        "dst": [
+         2,
+         2,
+         3,
+         4
+        ],
+        "input_ids": [
+         0,
+         1,
+         2,
+         3
+        ],
+        "input_reads": [
+         [
+          0,
+          0
+         ],
+         [
+          1,
+          0
+         ],
+         [
+          2,
+          1
+         ],
+         [
+          3,
+          1
+         ],
+         [
+          0,
+          3
+         ],
+         [
+          2,
+          4
+         ]
+        ],
+        "outputs": [
+         3,
+         4
+        ],
+        "returned_inputs": [],
+        "recomputed": []
+       },
+       "owner": [
+        2,
+        3,
+        4,
+        0,
+        1
+       ],
+       "units": 5,
+       "committed": [
+        0,
+        1,
+        3,
+        4
+       ],
+       "kinds": [
+        "output",
+        "output",
+        "committed",
+        "committed",
+        "dead"
+       ]
+      }
+     ],
+     "locate": [
+      [
+       0,
+       [
+        0,
+        3,
+        0
+       ],
+       []
+      ],
+      [
+       1,
+       [
+        0,
+        3,
+        1
+       ],
+       []
+      ],
+      [
+       2,
+       [
+        1,
+        4,
+        0
+       ],
+       []
+      ],
+      [
+       3,
+       [
+        1,
+        4,
+        1
+       ],
+       []
+      ],
+      [
+       4,
+       [
+        1,
+        4,
+        2
+       ],
+       []
+      ],
+      [
+       5,
+       [
+        1,
+        4,
+        3
+       ],
+       []
+      ],
+      [
+       6,
+       [
+        1,
+        4,
+        4
+       ],
+       []
+      ]
+     ],
+     "verify": {
+      "ok": true,
+      "codes": [],
+      "cut": []
+     }
+    }
+   ]
+  ],
+  [
+   "wide",
+   [
+    {
+     "X": 16,
+     "W": 32,
+     "object": {
+      "format": "verity/partition/v1",
+      "program": "4b5d81f2616731da0a0c85ea3d4207eb3d88c832215b4b93be42bdd76527e9874afef81ceb4811e7c77947a6b7618dbf6ac71aa1c962e66d0c193a41e996c70a",
+      "query": {
+       "name": "Q_word",
+       "version": 1,
+       "params": {
+        "X": 16,
+        "W": 32
+       }
+      }
+     },
+     "object_digest": "3a601e641d546b80581883739d25ea07932ad15860a1bf61767df06ed2b2bd39b01dba30776676fd4dd07df24b7735c954b42366a2d963528748507bb85a7013",
+     "population": 2,
+     "owners_digest": "5493debf844e45338aae076b6b7f36f98cc13749a5edea9a7bda213b9f5bba500b6d18963575d07d29a8a73344b83e3776eb789b417c292cd65fec197e5c4484",
+     "calls": [
+      {
+       "call": 4,
+       "definition": "QTWideTwice_v1",
+       "graph": {
+        "total": 4,
+        "structure": 0,
+        "n": 4,
+        "keep": [
+         0,
+         1,
+         2,
+         3
+        ],
+        "width": [
+         32,
+         32,
+         32,
+         32
+        ],
+        "prim": [
+         "I32Add_v1",
+         "TWide_v1",
+         "TWide_v1",
+         "I32Add_v1"
+        ],
+        "external": [
+         1,
+         1,
+         1,
+         0
+        ],
+        "src": [
+         0,
+         0,
+         1,
+         2
+        ],
+        "dst": [
+         1,
+         2,
+         3,
+         3
+        ],
+        "input_ids": [
+         4096
+        ],
+        "input_reads": [
+         [
+          0,
+          0
+         ]
+        ],
+        "outputs": [
+         3
+        ],
+        "returned_inputs": [],
+        "recomputed": []
+       },
+       "owner": [
+        0,
+        0,
+        0,
+        0
+       ],
+       "units": 1,
+       "committed": [
+        3
+       ],
+       "kinds": [
+        "output"
+       ]
+      },
+      {
+       "call": 5,
+       "definition": "QTNarrowTwice_v1",
+       "graph": {
+        "total": 4,
+        "structure": 0,
+        "n": 4,
+        "keep": [
+         0,
+         1,
+         2,
+         3
+        ],
+        "width": [
+         32,
+         32,
+         32,
+         32
+        ],
+        "prim": [
+         "I32Add_v1",
+         "TNarrow_v1",
+         "TNarrow_v1",
+         "I32Add_v1"
+        ],
+        "external": [
+         1,
+         1,
+         1,
+         0
+        ],
+        "src": [
+         0,
+         0,
+         1,
+         2
+        ],
+        "dst": [
+         1,
+         2,
+         3,
+         3
+        ],
+        "input_ids": [
+         4,
+         0,
+         1,
+         2,
+         3
+        ],
+        "input_reads": [
+         [
+          0,
+          0
+         ],
+         [
+          1,
+          1
+         ],
+         [
+          2,
+          1
+         ],
+         [
+          3,
+          1
+         ],
+         [
+          4,
+          1
+         ],
+         [
+          1,
+          2
+         ],
+         [
+          2,
+          2
+         ],
+         [
+          3,
+          2
+         ],
+         [
+          4,
+          2
+         ]
+        ],
+        "outputs": [
+         3
+        ],
+        "returned_inputs": [],
+        "recomputed": [
+         [
+          2,
+          1
+         ]
+        ]
+       },
+       "owner": [
+        0,
+        0,
+        0,
+        0
+       ],
+       "units": 1,
+       "committed": [
+        3
+       ],
+       "kinds": [
+        "output"
+       ]
+      }
+     ],
+     "locate": [
+      [
+       0,
+       [
+        0,
+        4,
+        0
+       ],
+       []
+      ],
+      [
+       1,
+       [
+        1,
+        5,
+        0
+       ],
+       []
+      ]
+     ],
+     "verify": {
+      "ok": true,
+      "codes": [],
+      "cut": []
+     }
+    }
+   ]
+  ],
+  [
+   "separable",
+   [
+    {
+     "X": 16,
+     "W": 32,
+     "object": {
+      "format": "verity/partition/v1",
+      "program": "99ca1635ea6de4c2e6da602583d520f19e229afbe8fd3b8faf9d91ece4a53ceda038c3f4d3ae34e16af9a4b78e5dd25ee9100e459708ee0bd23c1da3097919d4",
+      "query": {
+       "name": "Q_word",
+       "version": 1,
+       "params": {
+        "X": 16,
+        "W": 32
+       }
+      }
+     },
+     "object_digest": "45c64f1d480508fd8720feb7cfe9c953900ec28dbead04c256f77994bd25c8b658a53386f6b24049e7a9b725e1180ede0a8fee2c21cb362eca1b91cb457eb08f",
+     "population": 8,
+     "owners_digest": "36365c1c793fed52015fe8f2db3fa13f292f166037c692b027261aa164fd43a9bc6e3da74597e16bf7c8f89bc1d7aa0dc946fc73c64d84bdd5b2a7029fea0daa",
+     "calls": [
+      {
+       "call": 5,
+       "definition": "QSepMixed_v1",
+       "graph": {
+        "total": 8,
+        "structure": 4,
+        "n": 4,
+        "keep": [
+         2,
+         4,
+         5,
+         7
+        ],
+        "width": [
+         32,
+         32,
+         32,
+         32
+        ],
+        "prim": [
+         "F32Fmaxf_v1",
+         "F32Fmaxf_v1",
+         "F32Fmaxf_v1",
+         "F32Fmaxf_v1"
+        ],
+        "external": [
+         1,
+         0,
+         1,
+         0
+        ],
+        "src": [
+         0,
+         2
+        ],
+        "dst": [
+         1,
+         3
+        ],
+        "input_ids": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7
+        ],
+        "input_reads": [
+         [
+          2,
+          0
+         ],
+         [
+          3,
+          0
+         ],
+         [
+          4,
+          1
+         ],
+         [
+          5,
+          2
+         ],
+         [
+          6,
+          2
+         ],
+         [
+          7,
+          3
+         ]
+        ],
+        "outputs": [
+         1,
+         3
+        ],
+        "returned_inputs": [
+         0,
+         1
+        ],
+        "recomputed": []
+       },
+       "owner": [
+        0,
+        0,
+        1,
+        1
+       ],
+       "units": 2,
+       "committed": [
+        1,
+        3
+       ]
+      },
+      {
+       "call": 6,
+       "definition": "QSepScan_v1",
+       "graph": {
+        "total": 3,
+        "structure": 0,
+        "n": 3,
+        "keep": [
+         0,
+         1,
+         2
+        ],
+        "width": [
+         32,
+         32,
+         32
+        ],
+        "prim": [
+         "I32Add_v1",
+         "I32Add_v1",
+         "I32Add_v1"
+        ],
+        "external": [
+         1,
+         1,
+         1
+        ],
+        "src": [
+         0,
+         1
+        ],
+        "dst": [
+         1,
+         2
+        ],
+        "input_ids": [
+         3,
+         0,
+         1,
+         2
+        ],
+        "input_reads": [
+         [
+          0,
+          0
+         ],
+         [
+          1,
+          0
+         ],
+         [
+          2,
+          1
+         ],
+         [
+          3,
+          2
+         ]
+        ],
+        "outputs": [
+         2,
+         0,
+         1,
+         2
+        ],
+        "returned_inputs": [],
+        "recomputed": []
+       },
+       "owner": [
+        1,
+        2,
+        0
+       ],
+       "units": 3,
+       "committed": [
+        0,
+        1,
+        2
+       ],
+       "kinds": [
+        "output",
+        "output",
+        "output"
+       ]
+      },
+      {
+       "call": 7,
+       "definition": "QSepPartial_v1",
+       "graph": {
+        "total": 6,
+        "structure": 2,
+        "n": 4,
+        "keep": [
+         0,
+         2,
+         3,
+         5
+        ],
+        "width": [
+         32,
+         32,
+         32,
+         32
+        ],
+        "prim": [
+         "F32Fmaxf_v1",
+         "F32Fmaxf_v1",
+         "F32Fmaxf_v1",
+         "F32Fmaxf_v1"
+        ],
+        "external": [
+         1,
+         0,
+         1,
+         0
+        ],
+        "src": [
+         0,
+         2
+        ],
+        "dst": [
+         1,
+         3
+        ],
+        "input_ids": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5
+        ],
+        "input_reads": [
+         [
+          0,
+          0
+         ],
+         [
+          1,
+          0
+         ],
+         [
+          2,
+          1
+         ],
+         [
+          3,
+          2
+         ],
+         [
+          4,
+          2
+         ],
+         [
+          5,
+          3
+         ]
+        ],
+        "outputs": [
+         1
+        ],
+        "returned_inputs": [],
+        "recomputed": []
+       },
+       "owner": [
+        0,
+        0,
+        1,
+        2
+       ],
+       "units": 3,
+       "committed": [
+        1,
+        2
+       ],
+       "kinds": [
+        "output",
+        "committed",
+        "dead"
+       ]
+      }
+     ],
+     "locate": [
+      [
+       0,
+       [
+        0,
+        5,
+        0
+       ],
+       [
+        [
+         1,
+         0,
+         0
+        ]
+       ]
+      ],
+      [
+       1,
+       [
+        0,
+        5,
+        1
+       ],
+       [
+        [
+         1,
+         1,
+         0
+        ]
+       ]
+      ],
+      [
+       2,
+       [
+        1,
+        6,
+        0
+       ],
+       []
+      ],
+      [
+       3,
+       [
+        1,
+        6,
+        1
+       ],
+       []
+      ],
+      [
+       4,
+       [
+        1,
+        6,
+        2
+       ],
+       []
+      ],
+      [
+       5,
+       [
+        2,
+        7,
+        0
+       ],
+       []
+      ],
+      [
+       6,
+       [
+        2,
+        7,
+        1
+       ],
+       []
+      ],
+      [
+       7,
+       [
+        2,
+        7,
+        2
+       ],
+       []
+      ]
+     ],
+     "verify": {
+      "ok": true,
+      "codes": [],
+      "cut": []
+     }
+    }
+   ]
+  ],
+  [
+   "primitive-calls",
+   [
+    {
+     "X": 16,
+     "W": 32,
+     "object": {
+      "format": "verity/partition/v1",
+      "program": "6f420e127fe2478ca02ca4fda4588eef43487a4ded11bd41f340933b876e6ee363d517602a5aa6857dcd627b65adf4e1d5241d3e6cb642d04c078733de7446b5",
+      "query": {
+       "name": "Q_word",
+       "version": 1,
+       "params": {
+        "X": 16,
+        "W": 32
+       }
+      }
+     },
+     "object_digest": "dd9fdfd66caadbaedb5cf770d8bdf0be23f556b5a6bd38a4fa679e0e50a0ed5521db533646171e8434d2aa6c49176763a2a9bce6a361f192ccda4a7889f98554",
+     "population": 1,
+     "owners_digest": "2a86604d5b62068d4d4b43dfbe6d8f715c27b673efc198283ba082df1f3aa34f317bb8636edd0b2bdd8b9fca5793212e911e19fe053f636049b82cf4424a50cc",
+     "calls": [
+      {
+       "call": 1,
+       "definition": "I32Add_v1",
+       "graph": {
+        "total": 1,
+        "structure": 0,
+        "n": 1,
+        "keep": [
+         0
+        ],
+        "width": [
+         32
+        ],
+        "prim": [
+         "I32Add_v1"
+        ],
+        "external": [
+         1
+        ],
+        "src": [],
+        "dst": [],
+        "input_ids": [
+         0,
+         1
+        ],
+        "input_reads": [
+         [
+          0,
+          0
+         ],
+         [
+          1,
+          0
+         ]
+        ],
+        "outputs": [
+         0
+        ],
+        "returned_inputs": [],
+        "recomputed": []
+       },
+       "owner": [
+        0
+       ],
+       "units": 1,
+       "committed": [
+        0
+       ],
+       "kinds": [
+        "output"
+       ]
+      },
+      {
+       "call": 2,
+       "definition": "F32Fabs_v1",
+       "graph": {
+        "total": 1,
+        "structure": 1,
+        "n": 0,
+        "keep": [],
+        "width": [],
+        "prim": [],
+        "external": [],
+        "src": [],
+        "dst": [],
+        "input_ids": [
+         0
+        ],
+        "input_reads": [],
+        "outputs": [],
+        "returned_inputs": [
+         0
+        ],
+        "recomputed": []
+       },
+       "owner": [],
+       "units": 0,
+       "committed": [],
+       "kinds": []
+      },
+      {
+       "call": 3,
+       "definition": "Const32[0x00000007]_v1",
+       "graph": {
+        "total": 1,
+        "structure": 1,
+        "n": 0,
+        "keep": [],
+        "width": [],
+        "prim": [],
+        "external": [],
+        "src": [],
+        "dst": [],
+        "input_ids": [],
+        "input_reads": [],
+        "outputs": [],
+        "returned_inputs": [],
+        "recomputed": []
+       },
+       "owner": [],
+       "units": 0,
+       "committed": [],
+       "kinds": []
+      }
+     ],
+     "locate": [
+      [
+       0,
+       [
+        0,
+        1,
+        0
+       ],
+       []
+      ]
+     ],
+     "verify": {
+      "ok": true,
+      "codes": [],
+      "cut": []
+     }
+    }
+   ]
+  ],
+  [
+   "wide-batched",
+   [
+    {
+     "X": 16,
+     "W": 32,
+     "object": {
+      "format": "verity/partition/v1",
+      "program": "0f6e73749585b4c407b22c8adfc7de2b8b63342c226e3e13e986692b9952d93fc0e44e23db4b219e17caaf5cbb077033e551ab524355d23ce73eac4150a4e837",
+      "query": {
+       "name": "Q_word",
+       "version": 1,
+       "params": {
+        "X": 16,
+        "W": 32
+       }
+      }
+     },
+     "object_digest": "9babb75ad30af668167bfeb91c31794f6eaca931afaa22f6a31aabfffd767c491f70d9caf5fcfe6addaf772daec3e04a7e0e4bb983b884e01f1d50ae0248d502",
+     "population": 4,
+     "owners_digest": "614a77d17bf44e4783a2b81ee0a339eeff5e260f8373d7475d9561b61c8df657802eebe04ad05200bd6c1d56955b0958ef28c02d68bb59da39ab161d630ab628",
+     "calls": [
+      {
+       "call": 3,
+       "definition": "QWideRows_v1",
+       "graph": {
+        "total": 6,
+        "structure": 0,
+        "n": 6,
+        "keep": [
+         0,
+         1,
+         2,
+         3,
+         4,
+         5
+        ],
+        "width": [
+         32,
+         32,
+         32,
+         32,
+         32,
+         32
+        ],
+        "prim": [
+         "I32Add_v1",
+         "TWide_v1",
+         "TWide_v1",
+         "TWide_v1",
+         "TWide_v1",
+         "I32Add_v1"
+        ],
+        "external": [
+         1,
+         1,
+         1,
+         1,
+         1,
+         0
+        ],
+        "src": [
+         0,
+         0,
+         0,
+         0,
+         1,
+         4
+        ],
+        "dst": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         5
+        ],
+        "input_ids": [
+         16384
+        ],
+        "input_reads": [
+         [
+          0,
+          0
+         ]
+        ],
+        "outputs": [
+         5,
+         2,
+         3
+        ],
+        "returned_inputs": [],
+        "recomputed": []
+       },
+       "owner": [
+        3,
+        0,
+        1,
+        2,
+        0,
+        0
+       ],
+       "units": 4,
+       "committed": [
+        0,
+        2,
+        3,
+        5
+       ],
+       "kinds": [
+        "output",
+        "output",
+        "output",
+        "committed"
+       ]
+      }
+     ],
+     "locate": [
+      [
+       0,
+       [
+        0,
+        3,
+        0
+       ],
+       []
+      ],
+      [
+       1,
+       [
+        0,
+        3,
+        1
+       ],
+       []
+      ],
+      [
+       2,
+       [
+        0,
+        3,
+        2
+       ],
+       []
+      ],
+      [
+       3,
+       [
+        0,
+        3,
+        3
+       ],
+       []
+      ]
+     ],
+     "verify": {
+      "ok": true,
+      "codes": [],
+      "cut": []
+     }
+    }
+   ]
+  ]
+ ],
+ "verify_refusals": [
+  [
+   "a value two units compute",
+   "recompute",
+   16,
+   32,
+   {
+    "ok": false,
+    "codes": [
+     "cut"
+    ],
+    "cut": [
+     [
+      1,
+      [
+       "gate-recomputed"
+      ]
+     ]
+    ]
+   }
+  ],
+  [
+   "a 64-bit output at W = 32",
+   "too-wide",
+   16,
+   32,
+   {
+    "ok": false,
+    "codes": [
+     "cut"
+    ],
+    "cut": [
+     [
+      1,
+      [
+       "unit-too-wide"
+      ]
+     ]
+    ]
+   }
+  ],
+  [
+   "32-bit outputs at W = 16",
+   "wiring-and-dead",
+   16,
+   16,
+   {
+    "ok": false,
+    "codes": [
+     "cut"
+    ],
+    "cut": [
+     [
+      3,
+      [
+       "unit-too-wide"
+      ]
+     ],
+     [
+      4,
+      [
+       "unit-too-wide"
+      ]
+     ]
+    ]
+   }
+  ],
+  [
+   "a root batch",
+   "root-batch",
+   16,
+   32,
+   {
+    "ok": false,
+    "codes": [
+     "query-inapplicable"
+    ],
+    "cut": []
+   }
+  ],
+  [
+   "a root scan",
+   "root-scan",
+   16,
+   32,
+   {
+    "ok": false,
+    "codes": [
+     "query-inapplicable"
+    ],
+    "cut": []
+   }
+  ],
+  [
+   "another program",
+   "narrow",
+   16,
+   32,
+   {
+    "ok": false,
+    "codes": [
+     "program"
+    ],
+    "cut": []
+   }
+  ]
+ ],
+ "order_refusals": [
+  [
+   "a gate of a Call reads itself",
+   "wiring-and-dead",
+   "QDead_v1",
+   2,
+   0,
+   {
+    "affine": [
+     "n",
+     2,
+     0,
+     1
+    ]
+   },
+   {
+    "codes": [
+     "query-inapplicable"
+    ],
+    "detail": [
+     {
+      "definition": "QDead_v1",
+      "node": 2,
+      "arg": 0,
+      "reference": [
+       "n",
+       2
+      ],
+      "why": "not topological"
+     }
+    ]
+   }
+  ],
+  [
+   "a root Call reads its own output",
+   "wiring-and-dead",
+   null,
+   4,
+   0,
+   {
+    "concat": [
+     {
+      "affine": [
+       "n",
+       4,
+       0,
+       2
+      ]
+     },
+     {
+      "affine": [
+       "n",
+       2,
+       0,
+       2
+      ]
+     }
+    ]
+   },
+   {
+    "codes": [
+     "query-inapplicable"
+    ],
+    "detail": [
+     {
+      "definition": "Root[QTopWiring_v1]_v1",
+      "node": 4,
+      "arg": 0,
+      "reference": [
+       "n",
+       4
+      ],
+      "why": "not topological"
+     }
+    ]
+   }
+  ],
+  [
+   "a root Call reads a later Call",
+   "wiring-and-dead",
+   null,
+   3,
+   0,
+   {
+    "concat": [
+     {
+      "affine": [
+       "n",
+       4,
+       0,
+       2
+      ]
+     },
+     {
+      "affine": [
+       "n",
+       0,
+       2,
+       1
+      ]
+     }
+    ]
+   },
+   {
+    "codes": [
+     "query-inapplicable"
+    ],
+    "detail": [
+     {
+      "definition": "Root[QTopWiring_v1]_v1",
+      "node": 3,
+      "arg": 0,
+      "reference": [
+       "n",
+       4
+      ],
+      "why": "not topological"
+     }
+    ]
+   }
+  ]
+ ],
+ "served": [
+  [
+   "the derived sets",
+   {
+    "3": [
+     0,
+     1
+    ],
+    "4": [
+     0,
+     1,
+     3,
+     4
+    ]
+   },
+   {
+    "ok": true,
+    "codes": [],
+    "cut": []
+   }
+  ],
+  [
+   "nothing",
+   {},
+   {
+    "ok": false,
+    "codes": [
+     "served-missing"
+    ],
+    "cut": []
+   }
+  ],
+  [
+   "a gate that is not an integer",
+   {
+    "3": [
+     0,
+     1
+    ],
+    "4": [
+     "0",
+     "1",
+     "3",
+     "4"
+    ]
+   },
+   {
+    "ok": false,
+    "codes": [
+     "served-malformed"
+    ],
+    "cut": []
+   }
+  ],
+  [
+   "a gate listed twice",
+   {
+    "3": [
+     0,
+     1
+    ],
+    "4": [
+     0,
+     1,
+     3,
+     4,
+     0
+    ]
+   },
+   {
+    "ok": false,
+    "codes": [
+     "served-malformed"
+    ],
+    "cut": []
+   }
+  ],
+  [
+   "one Call left out",
+   {
+    "3": [
+     0,
+     1
+    ]
+   },
+   {
+    "ok": false,
+    "codes": [
+     "served-missing"
+    ],
+    "cut": []
+   }
+  ],
+  [
+   "a key that is no Call",
+   {
+    "3": [
+     0,
+     1
+    ],
+    "4": [
+     0,
+     1,
+     3,
+     4
+    ],
+    "999": [
+     0
+    ]
+   },
+   {
+    "ok": false,
+    "codes": [
+     "served-unknown"
+    ],
+    "cut": []
+   }
+  ],
+  [
+   "a committed value left out",
+   {
+    "3": [
+     0,
+     1
+    ],
+    "4": [
+     1,
+     3,
+     4
+    ]
+   },
+   {
+    "ok": false,
+    "codes": [
+     "cut"
+    ],
+    "cut": [
+     [
+      4,
+      [
+       "read-uncommitted"
+      ]
+     ]
+    ]
+   }
+  ],
+  [
+   "an output left out",
+   {
+    "3": [
+     0,
+     1
+    ],
+    "4": [
+     0,
+     1,
+     3
+    ]
+   },
+   {
+    "ok": false,
+    "codes": [
+     "cut"
+    ],
+    "cut": [
+     [
+      4,
+      [
+       "output-uncommitted"
+      ]
+     ]
+    ]
+   }
+  ],
+  [
+   "a dead gate served",
+   {
+    "3": [
+     0,
+     1
+    ],
+    "4": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   },
+   {
+    "ok": false,
+    "codes": [
+     "cut"
+    ],
+    "cut": [
+     [
+      4,
+      [
+       "committed-unread"
+      ]
+     ]
+    ]
+   }
+  ]
+ ],
+ "object_refusals": [
+  [
+   "not an object",
+   [],
+   [
+    "not-an-object"
+   ]
+  ],
+  [
+   "an extra key",
+   {
+    "format": "verity/partition/v1",
+    "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "query": {
+     "name": "Q_word",
+     "version": 1,
+     "params": {
+      "X": 16,
+      "W": 32
+     }
+    },
+    "owners": []
+   },
+   [
+    "keys"
+   ]
+  ],
+  [
+   "a non-string key",
+   "{'format': 'verity/partition/v1', 'program': '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000', 'query': {'name': 'Q_word', 'version': 1, 'params': {'X': 16, 'W': 32}}, 1: 2}",
+   [
+    "keys"
+   ]
+  ],
+  [
+   "another format",
+   {
+    "format": "verity/partition/v0",
+    "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "query": {
+     "name": "Q_word",
+     "version": 1,
+     "params": {
+      "X": 16,
+      "W": 32
+     }
+    }
+   },
+   [
+    "format"
+   ]
+  ],
+  [
+   "a program that is not SHA-512 hex",
+   {
+    "format": "verity/partition/v1",
+    "program": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+    "query": {
+     "name": "Q_word",
+     "version": 1,
+     "params": {
+      "X": 16,
+      "W": 32
+     }
+    }
+   },
+   [
+    "program-digest"
+   ]
+  ],
+  [
+   "a query without params",
+   {
+    "format": "verity/partition/v1",
+    "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "query": {
+     "name": "Q_word",
+     "version": 1
+    }
+   },
+   [
+    "query-keys"
+   ]
+  ],
+  [
+   "an unknown version",
+   {
+    "format": "verity/partition/v1",
+    "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "query": {
+     "name": "Q_word",
+     "version": 3,
+     "params": {
+      "X": 16,
+      "W": 32
+     }
+    }
+   },
+   [
+    "query-unknown"
+   ]
+  ],
+  [
+   "a missing parameter",
+   {
+    "format": "verity/partition/v1",
+    "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "query": {
+     "name": "Q_word",
+     "version": 1,
+     "params": {
+      "X": 16
+     }
+    }
+   },
+   [
+    "query-params"
+   ]
+  ],
+  [
+   "X = 0",
+   {
+    "format": "verity/partition/v1",
+    "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "query": {
+     "name": "Q_word",
+     "version": 1,
+     "params": {
+      "X": 0,
+      "W": 32
+     }
+    }
+   },
+   [
+    "query-params"
+   ]
+  ],
+  [
+   "X past 2^16",
+   {
+    "format": "verity/partition/v1",
+    "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "query": {
+     "name": "Q_word",
+     "version": 1,
+     "params": {
+      "X": 65537,
+      "W": 32
+     }
+    }
+   },
+   [
+    "query-params"
+   ]
+  ],
+  [
+   "a float X",
+   {
+    "format": "verity/partition/v1",
+    "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "query": {
+     "name": "Q_word",
+     "version": 1,
+     "params": {
+      "X": 16.0,
+      "W": 32
+     }
+    }
+   },
+   [
+    "query-params"
+   ]
+  ],
+  [
+   "a boolean W",
+   {
+    "format": "verity/partition/v1",
+    "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "query": {
+     "name": "Q_word",
+     "version": 1,
+     "params": {
+      "X": 16,
+      "W": true
+     }
+    }
+   },
+   [
+    "query-params"
+   ]
+  ]
+ ],
+ "corpora": [
+  {
+   "seed": 20260927,
+   "n": 500,
+   "max_gates": 12,
+   "cases_sha512": "31d1d2bd5a634f772591882f9897d1cdb18c9fe59940e7e207c7bdba4f8dfe5a16d910f97efc195655aba99adb9c5a01090a12b54a8fbcd5bcd560cb655ae678",
+   "expected_sha512": "bbd9c508f908c6c5601696554c4b39c2fc164b129a1036957b5de27f64e7f7b785cf6c4260ba3a983f5bc895eb5d8abd81e005411eee963823bb8c410a303b9f",
+   "units": 11833,
+   "unit_kinds": [
+    "committed",
+    "dead",
+    "output"
+   ],
+   "first_case": {
+    "X": 16,
+    "calls": [
+     {
+      "call": 0,
+      "def": {
+       "separable": [
+        [
+         {
+          "prim": {
+           "params": true,
+           "wiring": false
+          }
+         },
+         3
+        ]
+       ]
+      }
+     },
+     {
+      "call": 1,
+      "def": {
+       "separable": [
+        [
+         {
+          "flat": {
+           "n": 8,
+           "src": [
+            6,
+            1,
+            4,
+            3,
+            0,
+            4,
+            0,
+            0,
+            5,
+            1
+           ],
+           "dst": [
+            7,
+            7,
+            7,
+            7,
+            6,
+            6,
+            2,
+            4,
+            7,
+            4
+           ],
+           "width": [
+            1,
+            1,
+            8,
+            8,
+            32,
+            32,
+            16,
+            8
+           ],
+           "outputs": [
+            1,
+            3,
+            7
+           ],
+           "inputs": 0,
+           "input_reads": [],
+           "returned_inputs": [],
+           "total": 8,
+           "free": 0,
+           "recomputed": []
+          }
+         },
+         3
+        ]
+       ]
+      }
+     },
+     {
+      "call": 4,
+      "def": {
+       "separable": [
+        [
+         {
+          "prim": {
+           "params": true,
+           "wiring": true
+          }
+         },
+         2
+        ],
+        [
+         {
+          "separable": [
+           [
+            {
+             "flat": {
+              "n": 8,
+              "src": [
+               1,
+               0,
+               2,
+               4,
+               5
+              ],
+              "dst": [
+               2,
+               3,
+               6,
+               7,
+               6
+              ],
+              "width": [
+               32,
+               8,
+               32,
+               1,
+               32,
+               16,
+               8,
+               16
+              ],
+              "outputs": [
+               4,
+               6,
+               3
+              ],
+              "inputs": 0,
+              "input_reads": [],
+              "returned_inputs": [],
+              "total": 8,
+              "free": 0,
+              "recomputed": []
+             }
+            },
+            2
+           ],
+           [
+            {
+             "prim": {
+              "params": true,
+              "wiring": false
+             }
+            },
+            3
+           ],
+           [
+            {
+             "flat": {
+              "n": 9,
+              "src": [
+               0,
+               2,
+               2,
+               0,
+               4,
+               2
+              ],
+              "dst": [
+               6,
+               5,
+               8,
+               1,
+               5,
+               3
+              ],
+              "width": [
+               1,
+               8,
+               1,
+               32,
+               1,
+               1,
+               1,
+               8,
+               8
+              ],
+              "outputs": [
+               8,
+               8,
+               7
+              ],
+              "inputs": 0,
+              "input_reads": [],
+              "returned_inputs": [],
+              "total": 9,
+              "free": 0,
+              "recomputed": []
+             }
+            },
+            3
+           ]
+          ]
+         },
+         2
+        ],
+        [
+         {
+          "prim": {
+           "params": true,
+           "wiring": true
+          }
+         },
+         2
+        ]
+       ]
+      }
+     },
+     {
+      "call": 3,
+      "def": {
+       "flat": {
+        "n": 8,
+        "src": [
+         5,
+         0,
+         0,
+         4,
+         6
+        ],
+        "dst": [
+         6,
+         3,
+         6,
+         7,
+         7
+        ],
+        "width": [
+         1,
+         16,
+         16,
+         1,
+         16,
+         1,
+         32,
+         32
+        ],
+        "outputs": [
+         4,
+         5,
+         4
+        ],
+        "inputs": 0,
+        "input_reads": [],
+        "returned_inputs": [],
+        "total": 8,
+        "free": 0,
+        "recomputed": []
+       }
+      },
+      "graph": {
+       "n": 8,
+       "src": [
+        5,
+        0,
+        0,
+        4,
+        6
+       ],
+       "dst": [
+        6,
+        3,
+        6,
+        7,
+        7
+       ],
+       "width": [
+        1,
+        16,
+        16,
+        1,
+        16,
+        1,
+        32,
+        32
+       ],
+       "outputs": [
+        4,
+        5,
+        4
+       ],
+       "inputs": 0,
+       "input_reads": [],
+       "returned_inputs": [],
+       "total": 8,
+       "free": 0,
+       "recomputed": []
+      }
+     }
+    ]
+   },
+   "first_expected": {
+    "calls": [
+     {
+      "call": 0,
+      "owner": [
+       0,
+       1,
+       2
+      ],
+      "units": 3
+     },
+     {
+      "call": 1,
+      "owner": [
+       1,
+       0,
+       1,
+       0,
+       1,
+       1,
+       1,
+       1,
+       3,
+       2,
+       3,
+       2,
+       3,
+       3,
+       3,
+       3,
+       5,
+       4,
+       5,
+       4,
+       5,
+       5,
+       5,
+       5
+      ],
+      "units": 6
+     },
+     {
+      "call": 4,
+      "owner": [
+       1,
+       1,
+       1,
+       1,
+       0,
+       1,
+       1,
+       2,
+       4,
+       4,
+       4,
+       4,
+       3,
+       4,
+       4,
+       5,
+       6,
+       7,
+       8,
+       10,
+       13,
+       11,
+       14,
+       12,
+       15,
+       16,
+       9,
+       9,
+       18,
+       21,
+       19,
+       22,
+       20,
+       23,
+       24,
+       17,
+       17,
+       26,
+       29,
+       27,
+       30,
+       28,
+       31,
+       32,
+       25,
+       25,
+       34,
+       34,
+       34,
+       34,
+       33,
+       34,
+       34,
+       35,
+       37,
+       37,
+       37,
+       37,
+       36,
+       37,
+       37,
+       38,
+       39,
+       40,
+       41,
+       43,
+       46,
+       44,
+       47,
+       45,
+       48,
+       49,
+       42,
+       42,
+       51,
+       54,
+       52,
+       55,
+       53,
+       56,
+       57,
+       50,
+       50,
+       59,
+       62,
+       60,
+       63,
+       61,
+       64,
+       65,
+       58,
+       58
+      ],
+      "units": 66
+     },
+     {
+      "call": 3,
+      "owner": [
+       2,
+       4,
+       5,
+       6,
+       0,
+       1,
+       3,
+       7
+      ],
+      "units": 8,
+      "committed": [
+       0,
+       4,
+       5,
+       6
+      ],
+      "kinds": [
+       "output",
+       "output",
+       "committed",
+       "committed",
+       "dead",
+       "dead",
+       "dead",
+       "dead"
+      ],
+      "head": [
+       2,
+       -1,
+       -1,
+       -1,
+       0,
+       1,
+       3,
+       -1
+      ]
+     }
+    ],
+    "population": 83,
+    "locate": [
+     [
+      0,
+      [
+       0,
+       0,
+       0
+      ],
+      [
+       [
+        0,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      1,
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       [
+        0,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      2,
+      [
+       0,
+       0,
+       2
+      ],
+      [
+       [
+        0,
+        2,
+        0
+       ]
+      ]
+     ],
+     [
+      3,
+      [
+       1,
+       1,
+       0
+      ],
+      [
+       [
+        0,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      4,
+      [
+       1,
+       1,
+       1
+      ],
+      [
+       [
+        0,
+        0,
+        1
+       ]
+      ]
+     ],
+     [
+      5,
+      [
+       1,
+       1,
+       2
+      ],
+      [
+       [
+        0,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      6,
+      [
+       1,
+       1,
+       3
+      ],
+      [
+       [
+        0,
+        1,
+        1
+       ]
+      ]
+     ],
+     [
+      7,
+      [
+       1,
+       1,
+       4
+      ],
+      [
+       [
+        0,
+        2,
+        0
+       ]
+      ]
+     ],
+     [
+      8,
+      [
+       1,
+       1,
+       5
+      ],
+      [
+       [
+        0,
+        2,
+        1
+       ]
+      ]
+     ],
+     [
+      9,
+      [
+       2,
+       4,
+       0
+      ],
+      [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      10,
+      [
+       2,
+       4,
+       1
+      ],
+      [
+       [
+        1,
+        0,
+        1
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ]
+     ],
+     [
+      11,
+      [
+       2,
+       4,
+       2
+      ],
+      [
+       [
+        1,
+        0,
+        2
+       ],
+       [
+        0,
+        0,
+        2
+       ]
+      ]
+     ],
+     [
+      12,
+      [
+       2,
+       4,
+       3
+      ],
+      [
+       [
+        1,
+        0,
+        3
+       ],
+       [
+        0,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      13,
+      [
+       2,
+       4,
+       4
+      ],
+      [
+       [
+        1,
+        0,
+        4
+       ],
+       [
+        0,
+        1,
+        1
+       ]
+      ]
+     ],
+     [
+      14,
+      [
+       2,
+       4,
+       5
+      ],
+      [
+       [
+        1,
+        0,
+        5
+       ],
+       [
+        0,
+        1,
+        2
+       ]
+      ]
+     ],
+     [
+      15,
+      [
+       2,
+       4,
+       6
+      ],
+      [
+       [
+        1,
+        0,
+        6
+       ],
+       [
+        1,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      16,
+      [
+       2,
+       4,
+       7
+      ],
+      [
+       [
+        1,
+        0,
+        7
+       ],
+       [
+        1,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      17,
+      [
+       2,
+       4,
+       8
+      ],
+      [
+       [
+        1,
+        0,
+        8
+       ],
+       [
+        1,
+        2,
+        0
+       ]
+      ]
+     ],
+     [
+      18,
+      [
+       2,
+       4,
+       9
+      ],
+      [
+       [
+        1,
+        0,
+        9
+       ],
+       [
+        2,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      19,
+      [
+       2,
+       4,
+       10
+      ],
+      [
+       [
+        1,
+        0,
+        10
+       ],
+       [
+        2,
+        0,
+        1
+       ]
+      ]
+     ],
+     [
+      20,
+      [
+       2,
+       4,
+       11
+      ],
+      [
+       [
+        1,
+        0,
+        11
+       ],
+       [
+        2,
+        0,
+        2
+       ]
+      ]
+     ],
+     [
+      21,
+      [
+       2,
+       4,
+       12
+      ],
+      [
+       [
+        1,
+        0,
+        12
+       ],
+       [
+        2,
+        0,
+        3
+       ]
+      ]
+     ],
+     [
+      22,
+      [
+       2,
+       4,
+       13
+      ],
+      [
+       [
+        1,
+        0,
+        13
+       ],
+       [
+        2,
+        0,
+        4
+       ]
+      ]
+     ],
+     [
+      23,
+      [
+       2,
+       4,
+       14
+      ],
+      [
+       [
+        1,
+        0,
+        14
+       ],
+       [
+        2,
+        0,
+        5
+       ]
+      ]
+     ],
+     [
+      24,
+      [
+       2,
+       4,
+       15
+      ],
+      [
+       [
+        1,
+        0,
+        15
+       ],
+       [
+        2,
+        0,
+        6
+       ]
+      ]
+     ],
+     [
+      25,
+      [
+       2,
+       4,
+       16
+      ],
+      [
+       [
+        1,
+        0,
+        16
+       ],
+       [
+        2,
+        0,
+        7
+       ]
+      ]
+     ],
+     [
+      26,
+      [
+       2,
+       4,
+       17
+      ],
+      [
+       [
+        1,
+        0,
+        17
+       ],
+       [
+        2,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      27,
+      [
+       2,
+       4,
+       18
+      ],
+      [
+       [
+        1,
+        0,
+        18
+       ],
+       [
+        2,
+        1,
+        1
+       ]
+      ]
+     ],
+     [
+      28,
+      [
+       2,
+       4,
+       19
+      ],
+      [
+       [
+        1,
+        0,
+        19
+       ],
+       [
+        2,
+        1,
+        2
+       ]
+      ]
+     ],
+     [
+      29,
+      [
+       2,
+       4,
+       20
+      ],
+      [
+       [
+        1,
+        0,
+        20
+       ],
+       [
+        2,
+        1,
+        3
+       ]
+      ]
+     ],
+     [
+      30,
+      [
+       2,
+       4,
+       21
+      ],
+      [
+       [
+        1,
+        0,
+        21
+       ],
+       [
+        2,
+        1,
+        4
+       ]
+      ]
+     ],
+     [
+      31,
+      [
+       2,
+       4,
+       22
+      ],
+      [
+       [
+        1,
+        0,
+        22
+       ],
+       [
+        2,
+        1,
+        5
+       ]
+      ]
+     ],
+     [
+      32,
+      [
+       2,
+       4,
+       23
+      ],
+      [
+       [
+        1,
+        0,
+        23
+       ],
+       [
+        2,
+        1,
+        6
+       ]
+      ]
+     ],
+     [
+      33,
+      [
+       2,
+       4,
+       24
+      ],
+      [
+       [
+        1,
+        0,
+        24
+       ],
+       [
+        2,
+        1,
+        7
+       ]
+      ]
+     ],
+     [
+      34,
+      [
+       2,
+       4,
+       25
+      ],
+      [
+       [
+        1,
+        0,
+        25
+       ],
+       [
+        2,
+        2,
+        0
+       ]
+      ]
+     ],
+     [
+      35,
+      [
+       2,
+       4,
+       26
+      ],
+      [
+       [
+        1,
+        0,
+        26
+       ],
+       [
+        2,
+        2,
+        1
+       ]
+      ]
+     ],
+     [
+      36,
+      [
+       2,
+       4,
+       27
+      ],
+      [
+       [
+        1,
+        0,
+        27
+       ],
+       [
+        2,
+        2,
+        2
+       ]
+      ]
+     ],
+     [
+      37,
+      [
+       2,
+       4,
+       28
+      ],
+      [
+       [
+        1,
+        0,
+        28
+       ],
+       [
+        2,
+        2,
+        3
+       ]
+      ]
+     ],
+     [
+      38,
+      [
+       2,
+       4,
+       29
+      ],
+      [
+       [
+        1,
+        0,
+        29
+       ],
+       [
+        2,
+        2,
+        4
+       ]
+      ]
+     ],
+     [
+      39,
+      [
+       2,
+       4,
+       30
+      ],
+      [
+       [
+        1,
+        0,
+        30
+       ],
+       [
+        2,
+        2,
+        5
+       ]
+      ]
+     ],
+     [
+      40,
+      [
+       2,
+       4,
+       31
+      ],
+      [
+       [
+        1,
+        0,
+        31
+       ],
+       [
+        2,
+        2,
+        6
+       ]
+      ]
+     ],
+     [
+      41,
+      [
+       2,
+       4,
+       32
+      ],
+      [
+       [
+        1,
+        0,
+        32
+       ],
+       [
+        2,
+        2,
+        7
+       ]
+      ]
+     ],
+     [
+      42,
+      [
+       2,
+       4,
+       33
+      ],
+      [
+       [
+        1,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      43,
+      [
+       2,
+       4,
+       34
+      ],
+      [
+       [
+        1,
+        1,
+        1
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ]
+     ],
+     [
+      44,
+      [
+       2,
+       4,
+       35
+      ],
+      [
+       [
+        1,
+        1,
+        2
+       ],
+       [
+        0,
+        0,
+        2
+       ]
+      ]
+     ],
+     [
+      45,
+      [
+       2,
+       4,
+       36
+      ],
+      [
+       [
+        1,
+        1,
+        3
+       ],
+       [
+        0,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      46,
+      [
+       2,
+       4,
+       37
+      ],
+      [
+       [
+        1,
+        1,
+        4
+       ],
+       [
+        0,
+        1,
+        1
+       ]
+      ]
+     ],
+     [
+      47,
+      [
+       2,
+       4,
+       38
+      ],
+      [
+       [
+        1,
+        1,
+        5
+       ],
+       [
+        0,
+        1,
+        2
+       ]
+      ]
+     ],
+     [
+      48,
+      [
+       2,
+       4,
+       39
+      ],
+      [
+       [
+        1,
+        1,
+        6
+       ],
+       [
+        1,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      49,
+      [
+       2,
+       4,
+       40
+      ],
+      [
+       [
+        1,
+        1,
+        7
+       ],
+       [
+        1,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      50,
+      [
+       2,
+       4,
+       41
+      ],
+      [
+       [
+        1,
+        1,
+        8
+       ],
+       [
+        1,
+        2,
+        0
+       ]
+      ]
+     ],
+     [
+      51,
+      [
+       2,
+       4,
+       42
+      ],
+      [
+       [
+        1,
+        1,
+        9
+       ],
+       [
+        2,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      52,
+      [
+       2,
+       4,
+       43
+      ],
+      [
+       [
+        1,
+        1,
+        10
+       ],
+       [
+        2,
+        0,
+        1
+       ]
+      ]
+     ],
+     [
+      53,
+      [
+       2,
+       4,
+       44
+      ],
+      [
+       [
+        1,
+        1,
+        11
+       ],
+       [
+        2,
+        0,
+        2
+       ]
+      ]
+     ],
+     [
+      54,
+      [
+       2,
+       4,
+       45
+      ],
+      [
+       [
+        1,
+        1,
+        12
+       ],
+       [
+        2,
+        0,
+        3
+       ]
+      ]
+     ],
+     [
+      55,
+      [
+       2,
+       4,
+       46
+      ],
+      [
+       [
+        1,
+        1,
+        13
+       ],
+       [
+        2,
+        0,
+        4
+       ]
+      ]
+     ],
+     [
+      56,
+      [
+       2,
+       4,
+       47
+      ],
+      [
+       [
+        1,
+        1,
+        14
+       ],
+       [
+        2,
+        0,
+        5
+       ]
+      ]
+     ],
+     [
+      57,
+      [
+       2,
+       4,
+       48
+      ],
+      [
+       [
+        1,
+        1,
+        15
+       ],
+       [
+        2,
+        0,
+        6
+       ]
+      ]
+     ],
+     [
+      58,
+      [
+       2,
+       4,
+       49
+      ],
+      [
+       [
+        1,
+        1,
+        16
+       ],
+       [
+        2,
+        0,
+        7
+       ]
+      ]
+     ],
+     [
+      59,
+      [
+       2,
+       4,
+       50
+      ],
+      [
+       [
+        1,
+        1,
+        17
+       ],
+       [
+        2,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      60,
+      [
+       2,
+       4,
+       51
+      ],
+      [
+       [
+        1,
+        1,
+        18
+       ],
+       [
+        2,
+        1,
+        1
+       ]
+      ]
+     ],
+     [
+      61,
+      [
+       2,
+       4,
+       52
+      ],
+      [
+       [
+        1,
+        1,
+        19
+       ],
+       [
+        2,
+        1,
+        2
+       ]
+      ]
+     ],
+     [
+      62,
+      [
+       2,
+       4,
+       53
+      ],
+      [
+       [
+        1,
+        1,
+        20
+       ],
+       [
+        2,
+        1,
+        3
+       ]
+      ]
+     ],
+     [
+      63,
+      [
+       2,
+       4,
+       54
+      ],
+      [
+       [
+        1,
+        1,
+        21
+       ],
+       [
+        2,
+        1,
+        4
+       ]
+      ]
+     ],
+     [
+      64,
+      [
+       2,
+       4,
+       55
+      ],
+      [
+       [
+        1,
+        1,
+        22
+       ],
+       [
+        2,
+        1,
+        5
+       ]
+      ]
+     ],
+     [
+      65,
+      [
+       2,
+       4,
+       56
+      ],
+      [
+       [
+        1,
+        1,
+        23
+       ],
+       [
+        2,
+        1,
+        6
+       ]
+      ]
+     ],
+     [
+      66,
+      [
+       2,
+       4,
+       57
+      ],
+      [
+       [
+        1,
+        1,
+        24
+       ],
+       [
+        2,
+        1,
+        7
+       ]
+      ]
+     ],
+     [
+      67,
+      [
+       2,
+       4,
+       58
+      ],
+      [
+       [
+        1,
+        1,
+        25
+       ],
+       [
+        2,
+        2,
+        0
+       ]
+      ]
+     ],
+     [
+      68,
+      [
+       2,
+       4,
+       59
+      ],
+      [
+       [
+        1,
+        1,
+        26
+       ],
+       [
+        2,
+        2,
+        1
+       ]
+      ]
+     ],
+     [
+      69,
+      [
+       2,
+       4,
+       60
+      ],
+      [
+       [
+        1,
+        1,
+        27
+       ],
+       [
+        2,
+        2,
+        2
+       ]
+      ]
+     ],
+     [
+      70,
+      [
+       2,
+       4,
+       61
+      ],
+      [
+       [
+        1,
+        1,
+        28
+       ],
+       [
+        2,
+        2,
+        3
+       ]
+      ]
+     ],
+     [
+      71,
+      [
+       2,
+       4,
+       62
+      ],
+      [
+       [
+        1,
+        1,
+        29
+       ],
+       [
+        2,
+        2,
+        4
+       ]
+      ]
+     ],
+     [
+      72,
+      [
+       2,
+       4,
+       63
+      ],
+      [
+       [
+        1,
+        1,
+        30
+       ],
+       [
+        2,
+        2,
+        5
+       ]
+      ]
+     ],
+     [
+      73,
+      [
+       2,
+       4,
+       64
+      ],
+      [
+       [
+        1,
+        1,
+        31
+       ],
+       [
+        2,
+        2,
+        6
+       ]
+      ]
+     ],
+     [
+      74,
+      [
+       2,
+       4,
+       65
+      ],
+      [
+       [
+        1,
+        1,
+        32
+       ],
+       [
+        2,
+        2,
+        7
+       ]
+      ]
+     ],
+     [
+      75,
+      [
+       3,
+       3,
+       0
+      ],
+      []
+     ],
+     [
+      76,
+      [
+       3,
+       3,
+       1
+      ],
+      []
+     ],
+     [
+      77,
+      [
+       3,
+       3,
+       2
+      ],
+      []
+     ],
+     [
+      78,
+      [
+       3,
+       3,
+       3
+      ],
+      []
+     ],
+     [
+      79,
+      [
+       3,
+       3,
+       4
+      ],
+      []
+     ],
+     [
+      80,
+      [
+       3,
+       3,
+       5
+      ],
+      []
+     ],
+     [
+      81,
+      [
+       3,
+       3,
+       6
+      ],
+      []
+     ],
+     [
+      82,
+      [
+       3,
+       3,
+       7
+      ],
+      []
+     ]
+    ]
+   }
+  },
+  {
+   "seed": 20260927,
+   "n": 3000,
+   "max_gates": 40,
+   "cases_sha512": "aa0581bbd0b6152c3d382fcd86a8edcd17400a559d908a62d72bc4fd125036df305fdcc5d656c7564ccce58a9466592eaee368c2ef15c21f263aa6e32ee1ac94",
+   "expected_sha512": "8fd5307ac70921b3b406587ddb8f6cf27c5f6c7cb59c31964ef51ab301834b71b3a68c60438c8766c484f20872d0b1561bd81ada6d4707547d4e7edfd1cb9672",
+   "units": 267832,
+   "unit_kinds": [
+    "committed",
+    "dead",
+    "output"
+   ],
+   "first_case": {
+    "X": 16,
+    "calls": [
+     {
+      "call": 0,
+      "def": {
+       "separable": [
+        [
+         {
+          "prim": {
+           "params": true,
+           "wiring": false
+          }
+         },
+         3
+        ]
+       ]
+      }
+     },
+     {
+      "call": 2,
+      "def": {
+       "separable": [
+        [
+         {
+          "flat": {
+           "n": 30,
+           "src": [
+            13,
+            13,
+            7,
+            5,
+            6,
+            0,
+            22,
+            9,
+            6,
+            1,
+            4,
+            27,
+            24,
+            6,
+            16,
+            4,
+            1,
+            12,
+            11,
+            1,
+            2,
+            15,
+            5,
+            16,
+            11,
+            4,
+            18,
+            4,
+            8,
+            21,
+            0,
+            23,
+            3,
+            0,
+            5
+           ],
+           "dst": [
+            17,
+            16,
+            20,
+            13,
+            8,
+            6,
+            26,
+            26,
+            20,
+            24,
+            29,
+            28,
+            25,
+            7,
+            23,
+            9,
+            4,
+            15,
+            22,
+            7,
+            8,
+            23,
+            11,
+            29,
+            26,
+            19,
+            25,
+            14,
+            15,
+            27,
+            2,
+            26,
+            20,
+            13,
+            23
+           ],
+           "width": [
+            32,
+            8,
+            16,
+            1,
+            16,
+            16,
+            1,
+            8,
+            16,
+            8,
+            1,
+            8,
+            1,
+            16,
+            16,
+            16,
+            32,
+            1,
+            8,
+            8,
+            1,
+            1,
+            16,
+            1,
+            16,
+            16,
+            32,
+            32,
+            1,
+            32
+           ],
+           "outputs": [
+            6,
+            10,
+            2,
+            21
+           ],
+           "inputs": 0,
+           "input_reads": [],
+           "returned_inputs": [],
+           "total": 30,
+           "free": 0,
+           "recomputed": []
+          }
+         },
+         3
+        ]
+       ]
+      }
+     },
+     {
+      "call": 2,
+      "def": {
+       "flat": {
+        "n": 39,
+        "src": [
+         5,
+         28,
+         10,
+         14,
+         29,
+         0,
+         13,
+         6,
+         22,
+         25,
+         23,
+         19,
+         13,
+         18,
+         25,
+         1,
+         20,
+         4,
+         29,
+         7,
+         2,
+         15,
+         22,
+         8,
+         20,
+         5,
+         30,
+         13,
+         7,
+         6,
+         2,
+         2
+        ],
+        "dst": [
+         29,
+         38,
+         13,
+         24,
+         38,
+         2,
+         25,
+         18,
+         32,
+         36,
+         35,
+         36,
+         22,
+         19,
+         34,
+         21,
+         32,
+         38,
+         35,
+         37,
+         9,
+         24,
+         34,
+         23,
+         24,
+         12,
+         34,
+         29,
+         19,
+         33,
+         30,
+         25
+        ],
+        "width": [
+         1,
+         16,
+         8,
+         16,
+         16,
+         8,
+         8,
+         1,
+         32,
+         1,
+         16,
+         8,
+         1,
+         16,
+         16,
+         32,
+         1,
+         8,
+         32,
+         1,
+         32,
+         16,
+         32,
+         1,
+         1,
+         32,
+         8,
+         8,
+         16,
+         8,
+         8,
+         16,
+         32,
+         8,
+         8,
+         32,
+         32,
+         32,
+         32
+        ],
+        "outputs": [
+         24,
+         22,
+         34
+        ],
+        "inputs": 0,
+        "input_reads": [],
+        "returned_inputs": [],
+        "total": 39,
+        "free": 0,
+        "recomputed": []
+       }
+      },
+      "graph": {
+       "n": 39,
+       "src": [
+        5,
+        28,
+        10,
+        14,
+        29,
+        0,
+        13,
+        6,
+        22,
+        25,
+        23,
+        19,
+        13,
+        18,
+        25,
+        1,
+        20,
+        4,
+        29,
+        7,
+        2,
+        15,
+        22,
+        8,
+        20,
+        5,
+        30,
+        13,
+        7,
+        6,
+        2,
+        2
+       ],
+       "dst": [
+        29,
+        38,
+        13,
+        24,
+        38,
+        2,
+        25,
+        18,
+        32,
+        36,
+        35,
+        36,
+        22,
+        19,
+        34,
+        21,
+        32,
+        38,
+        35,
+        37,
+        9,
+        24,
+        34,
+        23,
+        24,
+        12,
+        34,
+        29,
+        19,
+        33,
+        30,
+        25
+       ],
+       "width": [
+        1,
+        16,
+        8,
+        16,
+        16,
+        8,
+        8,
+        1,
+        32,
+        1,
+        16,
+        8,
+        1,
+        16,
+        16,
+        32,
+        1,
+        8,
+        32,
+        1,
+        32,
+        16,
+        32,
+        1,
+        1,
+        32,
+        8,
+        8,
+        16,
+        8,
+        8,
+        16,
+        32,
+        8,
+        8,
+        32,
+        32,
+        32,
+        32
+       ],
+       "outputs": [
+        24,
+        22,
+        34
+       ],
+       "inputs": 0,
+       "input_reads": [],
+       "returned_inputs": [],
+       "total": 39,
+       "free": 0,
+       "recomputed": []
+      }
+     },
+     {
+      "call": 5,
+      "def": {
+       "separable": [
+        [
+         {
+          "flat": {
+           "n": 17,
+           "src": [
+            10,
+            6,
+            2,
+            3,
+            2,
+            7,
+            0,
+            3,
+            3,
+            8,
+            4,
+            6,
+            15,
+            8,
+            2,
+            7
+           ],
+           "dst": [
+            14,
+            11,
+            3,
+            16,
+            15,
+            11,
+            1,
+            5,
+            9,
+            10,
+            12,
+            10,
+            16,
+            15,
+            7,
+            15
+           ],
+           "width": [
+            32,
+            1,
+            32,
+            8,
+            16,
+            8,
+            32,
+            32,
+            16,
+            1,
+            8,
+            16,
+            8,
+            8,
+            32,
+            1,
+            32
+           ],
+           "outputs": [
+            12,
+            9,
+            11,
+            12
+           ],
+           "inputs": 0,
+           "input_reads": [],
+           "returned_inputs": [],
+           "total": 17,
+           "free": 0,
+           "recomputed": []
+          }
+         },
+         2
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "first_expected": {
+    "calls": [
+     {
+      "call": 0,
+      "owner": [
+       0,
+       1,
+       2
+      ],
+      "units": 3
+     },
+     {
+      "call": 2,
+      "owner": [
+       3,
+       4,
+       1,
+       5,
+       6,
+       7,
+       0,
+       8,
+       9,
+       10,
+       0,
+       11,
+       12,
+       13,
+       21,
+       14,
+       15,
+       22,
+       16,
+       23,
+       24,
+       2,
+       17,
+       18,
+       19,
+       25,
+       26,
+       20,
+       27,
+       28,
+       32,
+       33,
+       30,
+       34,
+       35,
+       36,
+       29,
+       37,
+       38,
+       39,
+       29,
+       40,
+       41,
+       42,
+       50,
+       43,
+       44,
+       51,
+       45,
+       52,
+       53,
+       31,
+       46,
+       47,
+       48,
+       54,
+       55,
+       49,
+       56,
+       57,
+       61,
+       62,
+       59,
+       63,
+       64,
+       65,
+       58,
+       66,
+       67,
+       68,
+       58,
+       69,
+       70,
+       71,
+       79,
+       72,
+       73,
+       80,
+       74,
+       81,
+       82,
+       60,
+       75,
+       76,
+       77,
+       83,
+       84,
+       78,
+       85,
+       86
+      ],
+      "units": 87
+     },
+     {
+      "call": 2,
+      "owner": [
+       16,
+       4,
+       16,
+       17,
+       5,
+       6,
+       7,
+       8,
+       9,
+       18,
+       3,
+       19,
+       20,
+       3,
+       0,
+       0,
+       21,
+       22,
+       10,
+       11,
+       0,
+       23,
+       1,
+       12,
+       0,
+       13,
+       24,
+       25,
+       14,
+       15,
+       2,
+       26,
+       0,
+       27,
+       2,
+       28,
+       29,
+       30,
+       31
+      ],
+      "units": 32,
+      "committed": [
+       1,
+       2,
+       4,
+       5,
+       6,
+       7,
+       8,
+       13,
+       18,
+       19,
+       22,
+       23,
+       24,
+       25,
+       28,
+       29,
+       34
+      ],
+      "kinds": [
+       "output",
+       "output",
+       "output",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "committed",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead",
+       "dead"
+      ],
+      "head": [
+       -1,
+       4,
+       16,
+       -1,
+       5,
+       6,
+       7,
+       8,
+       9,
+       -1,
+       -1,
+       -1,
+       -1,
+       3,
+       -1,
+       -1,
+       -1,
+       -1,
+       10,
+       11,
+       -1,
+       -1,
+       1,
+       12,
+       0,
+       13,
+       -1,
+       -1,
+       14,
+       15,
+       -1,
+       -1,
+       -1,
+       -1,
+       2,
+       -1,
+       -1,
+       -1,
+       -1
+      ]
+     },
+     {
+      "call": 5,
+      "owner": [
+       3,
+       10,
+       2,
+       4,
+       0,
+       11,
+       5,
+       6,
+       7,
+       0,
+       8,
+       1,
+       0,
+       12,
+       13,
+       9,
+       14,
+       18,
+       25,
+       17,
+       19,
+       15,
+       26,
+       20,
+       21,
+       22,
+       15,
+       23,
+       16,
+       15,
+       27,
+       28,
+       24,
+       29
+      ],
+      "units": 30
+     }
+    ],
+    "population": 152,
+    "locate": [
+     [
+      0,
+      [
+       0,
+       0,
+       0
+      ],
+      [
+       [
+        0,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      1,
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       [
+        0,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      2,
+      [
+       0,
+       0,
+       2
+      ],
+      [
+       [
+        0,
+        2,
+        0
+       ]
+      ]
+     ],
+     [
+      3,
+      [
+       1,
+       2,
+       0
+      ],
+      [
+       [
+        0,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      4,
+      [
+       1,
+       2,
+       1
+      ],
+      [
+       [
+        0,
+        0,
+        1
+       ]
+      ]
+     ],
+     [
+      5,
+      [
+       1,
+       2,
+       2
+      ],
+      [
+       [
+        0,
+        0,
+        2
+       ]
+      ]
+     ],
+     [
+      6,
+      [
+       1,
+       2,
+       3
+      ],
+      [
+       [
+        0,
+        0,
+        3
+       ]
+      ]
+     ],
+     [
+      7,
+      [
+       1,
+       2,
+       4
+      ],
+      [
+       [
+        0,
+        0,
+        4
+       ]
+      ]
+     ],
+     [
+      8,
+      [
+       1,
+       2,
+       5
+      ],
+      [
+       [
+        0,
+        0,
+        5
+       ]
+      ]
+     ],
+     [
+      9,
+      [
+       1,
+       2,
+       6
+      ],
+      [
+       [
+        0,
+        0,
+        6
+       ]
+      ]
+     ],
+     [
+      10,
+      [
+       1,
+       2,
+       7
+      ],
+      [
+       [
+        0,
+        0,
+        7
+       ]
+      ]
+     ],
+     [
+      11,
+      [
+       1,
+       2,
+       8
+      ],
+      [
+       [
+        0,
+        0,
+        8
+       ]
+      ]
+     ],
+     [
+      12,
+      [
+       1,
+       2,
+       9
+      ],
+      [
+       [
+        0,
+        0,
+        9
+       ]
+      ]
+     ],
+     [
+      13,
+      [
+       1,
+       2,
+       10
+      ],
+      [
+       [
+        0,
+        0,
+        10
+       ]
+      ]
+     ],
+     [
+      14,
+      [
+       1,
+       2,
+       11
+      ],
+      [
+       [
+        0,
+        0,
+        11
+       ]
+      ]
+     ],
+     [
+      15,
+      [
+       1,
+       2,
+       12
+      ],
+      [
+       [
+        0,
+        0,
+        12
+       ]
+      ]
+     ],
+     [
+      16,
+      [
+       1,
+       2,
+       13
+      ],
+      [
+       [
+        0,
+        0,
+        13
+       ]
+      ]
+     ],
+     [
+      17,
+      [
+       1,
+       2,
+       14
+      ],
+      [
+       [
+        0,
+        0,
+        14
+       ]
+      ]
+     ],
+     [
+      18,
+      [
+       1,
+       2,
+       15
+      ],
+      [
+       [
+        0,
+        0,
+        15
+       ]
+      ]
+     ],
+     [
+      19,
+      [
+       1,
+       2,
+       16
+      ],
+      [
+       [
+        0,
+        0,
+        16
+       ]
+      ]
+     ],
+     [
+      20,
+      [
+       1,
+       2,
+       17
+      ],
+      [
+       [
+        0,
+        0,
+        17
+       ]
+      ]
+     ],
+     [
+      21,
+      [
+       1,
+       2,
+       18
+      ],
+      [
+       [
+        0,
+        0,
+        18
+       ]
+      ]
+     ],
+     [
+      22,
+      [
+       1,
+       2,
+       19
+      ],
+      [
+       [
+        0,
+        0,
+        19
+       ]
+      ]
+     ],
+     [
+      23,
+      [
+       1,
+       2,
+       20
+      ],
+      [
+       [
+        0,
+        0,
+        20
+       ]
+      ]
+     ],
+     [
+      24,
+      [
+       1,
+       2,
+       21
+      ],
+      [
+       [
+        0,
+        0,
+        21
+       ]
+      ]
+     ],
+     [
+      25,
+      [
+       1,
+       2,
+       22
+      ],
+      [
+       [
+        0,
+        0,
+        22
+       ]
+      ]
+     ],
+     [
+      26,
+      [
+       1,
+       2,
+       23
+      ],
+      [
+       [
+        0,
+        0,
+        23
+       ]
+      ]
+     ],
+     [
+      27,
+      [
+       1,
+       2,
+       24
+      ],
+      [
+       [
+        0,
+        0,
+        24
+       ]
+      ]
+     ],
+     [
+      28,
+      [
+       1,
+       2,
+       25
+      ],
+      [
+       [
+        0,
+        0,
+        25
+       ]
+      ]
+     ],
+     [
+      29,
+      [
+       1,
+       2,
+       26
+      ],
+      [
+       [
+        0,
+        0,
+        26
+       ]
+      ]
+     ],
+     [
+      30,
+      [
+       1,
+       2,
+       27
+      ],
+      [
+       [
+        0,
+        0,
+        27
+       ]
+      ]
+     ],
+     [
+      31,
+      [
+       1,
+       2,
+       28
+      ],
+      [
+       [
+        0,
+        0,
+        28
+       ]
+      ]
+     ],
+     [
+      32,
+      [
+       1,
+       2,
+       29
+      ],
+      [
+       [
+        0,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      33,
+      [
+       1,
+       2,
+       30
+      ],
+      [
+       [
+        0,
+        1,
+        1
+       ]
+      ]
+     ],
+     [
+      34,
+      [
+       1,
+       2,
+       31
+      ],
+      [
+       [
+        0,
+        1,
+        2
+       ]
+      ]
+     ],
+     [
+      35,
+      [
+       1,
+       2,
+       32
+      ],
+      [
+       [
+        0,
+        1,
+        3
+       ]
+      ]
+     ],
+     [
+      36,
+      [
+       1,
+       2,
+       33
+      ],
+      [
+       [
+        0,
+        1,
+        4
+       ]
+      ]
+     ],
+     [
+      37,
+      [
+       1,
+       2,
+       34
+      ],
+      [
+       [
+        0,
+        1,
+        5
+       ]
+      ]
+     ],
+     [
+      38,
+      [
+       1,
+       2,
+       35
+      ],
+      [
+       [
+        0,
+        1,
+        6
+       ]
+      ]
+     ],
+     [
+      39,
+      [
+       1,
+       2,
+       36
+      ],
+      [
+       [
+        0,
+        1,
+        7
+       ]
+      ]
+     ],
+     [
+      40,
+      [
+       1,
+       2,
+       37
+      ],
+      [
+       [
+        0,
+        1,
+        8
+       ]
+      ]
+     ],
+     [
+      41,
+      [
+       1,
+       2,
+       38
+      ],
+      [
+       [
+        0,
+        1,
+        9
+       ]
+      ]
+     ],
+     [
+      42,
+      [
+       1,
+       2,
+       39
+      ],
+      [
+       [
+        0,
+        1,
+        10
+       ]
+      ]
+     ],
+     [
+      43,
+      [
+       1,
+       2,
+       40
+      ],
+      [
+       [
+        0,
+        1,
+        11
+       ]
+      ]
+     ],
+     [
+      44,
+      [
+       1,
+       2,
+       41
+      ],
+      [
+       [
+        0,
+        1,
+        12
+       ]
+      ]
+     ],
+     [
+      45,
+      [
+       1,
+       2,
+       42
+      ],
+      [
+       [
+        0,
+        1,
+        13
+       ]
+      ]
+     ],
+     [
+      46,
+      [
+       1,
+       2,
+       43
+      ],
+      [
+       [
+        0,
+        1,
+        14
+       ]
+      ]
+     ],
+     [
+      47,
+      [
+       1,
+       2,
+       44
+      ],
+      [
+       [
+        0,
+        1,
+        15
+       ]
+      ]
+     ],
+     [
+      48,
+      [
+       1,
+       2,
+       45
+      ],
+      [
+       [
+        0,
+        1,
+        16
+       ]
+      ]
+     ],
+     [
+      49,
+      [
+       1,
+       2,
+       46
+      ],
+      [
+       [
+        0,
+        1,
+        17
+       ]
+      ]
+     ],
+     [
+      50,
+      [
+       1,
+       2,
+       47
+      ],
+      [
+       [
+        0,
+        1,
+        18
+       ]
+      ]
+     ],
+     [
+      51,
+      [
+       1,
+       2,
+       48
+      ],
+      [
+       [
+        0,
+        1,
+        19
+       ]
+      ]
+     ],
+     [
+      52,
+      [
+       1,
+       2,
+       49
+      ],
+      [
+       [
+        0,
+        1,
+        20
+       ]
+      ]
+     ],
+     [
+      53,
+      [
+       1,
+       2,
+       50
+      ],
+      [
+       [
+        0,
+        1,
+        21
+       ]
+      ]
+     ],
+     [
+      54,
+      [
+       1,
+       2,
+       51
+      ],
+      [
+       [
+        0,
+        1,
+        22
+       ]
+      ]
+     ],
+     [
+      55,
+      [
+       1,
+       2,
+       52
+      ],
+      [
+       [
+        0,
+        1,
+        23
+       ]
+      ]
+     ],
+     [
+      56,
+      [
+       1,
+       2,
+       53
+      ],
+      [
+       [
+        0,
+        1,
+        24
+       ]
+      ]
+     ],
+     [
+      57,
+      [
+       1,
+       2,
+       54
+      ],
+      [
+       [
+        0,
+        1,
+        25
+       ]
+      ]
+     ],
+     [
+      58,
+      [
+       1,
+       2,
+       55
+      ],
+      [
+       [
+        0,
+        1,
+        26
+       ]
+      ]
+     ],
+     [
+      59,
+      [
+       1,
+       2,
+       56
+      ],
+      [
+       [
+        0,
+        1,
+        27
+       ]
+      ]
+     ],
+     [
+      60,
+      [
+       1,
+       2,
+       57
+      ],
+      [
+       [
+        0,
+        1,
+        28
+       ]
+      ]
+     ],
+     [
+      61,
+      [
+       1,
+       2,
+       58
+      ],
+      [
+       [
+        0,
+        2,
+        0
+       ]
+      ]
+     ],
+     [
+      62,
+      [
+       1,
+       2,
+       59
+      ],
+      [
+       [
+        0,
+        2,
+        1
+       ]
+      ]
+     ],
+     [
+      63,
+      [
+       1,
+       2,
+       60
+      ],
+      [
+       [
+        0,
+        2,
+        2
+       ]
+      ]
+     ],
+     [
+      64,
+      [
+       1,
+       2,
+       61
+      ],
+      [
+       [
+        0,
+        2,
+        3
+       ]
+      ]
+     ],
+     [
+      65,
+      [
+       1,
+       2,
+       62
+      ],
+      [
+       [
+        0,
+        2,
+        4
+       ]
+      ]
+     ],
+     [
+      66,
+      [
+       1,
+       2,
+       63
+      ],
+      [
+       [
+        0,
+        2,
+        5
+       ]
+      ]
+     ],
+     [
+      67,
+      [
+       1,
+       2,
+       64
+      ],
+      [
+       [
+        0,
+        2,
+        6
+       ]
+      ]
+     ],
+     [
+      68,
+      [
+       1,
+       2,
+       65
+      ],
+      [
+       [
+        0,
+        2,
+        7
+       ]
+      ]
+     ],
+     [
+      69,
+      [
+       1,
+       2,
+       66
+      ],
+      [
+       [
+        0,
+        2,
+        8
+       ]
+      ]
+     ],
+     [
+      70,
+      [
+       1,
+       2,
+       67
+      ],
+      [
+       [
+        0,
+        2,
+        9
+       ]
+      ]
+     ],
+     [
+      71,
+      [
+       1,
+       2,
+       68
+      ],
+      [
+       [
+        0,
+        2,
+        10
+       ]
+      ]
+     ],
+     [
+      72,
+      [
+       1,
+       2,
+       69
+      ],
+      [
+       [
+        0,
+        2,
+        11
+       ]
+      ]
+     ],
+     [
+      73,
+      [
+       1,
+       2,
+       70
+      ],
+      [
+       [
+        0,
+        2,
+        12
+       ]
+      ]
+     ],
+     [
+      74,
+      [
+       1,
+       2,
+       71
+      ],
+      [
+       [
+        0,
+        2,
+        13
+       ]
+      ]
+     ],
+     [
+      75,
+      [
+       1,
+       2,
+       72
+      ],
+      [
+       [
+        0,
+        2,
+        14
+       ]
+      ]
+     ],
+     [
+      76,
+      [
+       1,
+       2,
+       73
+      ],
+      [
+       [
+        0,
+        2,
+        15
+       ]
+      ]
+     ],
+     [
+      77,
+      [
+       1,
+       2,
+       74
+      ],
+      [
+       [
+        0,
+        2,
+        16
+       ]
+      ]
+     ],
+     [
+      78,
+      [
+       1,
+       2,
+       75
+      ],
+      [
+       [
+        0,
+        2,
+        17
+       ]
+      ]
+     ],
+     [
+      79,
+      [
+       1,
+       2,
+       76
+      ],
+      [
+       [
+        0,
+        2,
+        18
+       ]
+      ]
+     ],
+     [
+      80,
+      [
+       1,
+       2,
+       77
+      ],
+      [
+       [
+        0,
+        2,
+        19
+       ]
+      ]
+     ],
+     [
+      81,
+      [
+       1,
+       2,
+       78
+      ],
+      [
+       [
+        0,
+        2,
+        20
+       ]
+      ]
+     ],
+     [
+      82,
+      [
+       1,
+       2,
+       79
+      ],
+      [
+       [
+        0,
+        2,
+        21
+       ]
+      ]
+     ],
+     [
+      83,
+      [
+       1,
+       2,
+       80
+      ],
+      [
+       [
+        0,
+        2,
+        22
+       ]
+      ]
+     ],
+     [
+      84,
+      [
+       1,
+       2,
+       81
+      ],
+      [
+       [
+        0,
+        2,
+        23
+       ]
+      ]
+     ],
+     [
+      85,
+      [
+       1,
+       2,
+       82
+      ],
+      [
+       [
+        0,
+        2,
+        24
+       ]
+      ]
+     ],
+     [
+      86,
+      [
+       1,
+       2,
+       83
+      ],
+      [
+       [
+        0,
+        2,
+        25
+       ]
+      ]
+     ],
+     [
+      87,
+      [
+       1,
+       2,
+       84
+      ],
+      [
+       [
+        0,
+        2,
+        26
+       ]
+      ]
+     ],
+     [
+      88,
+      [
+       1,
+       2,
+       85
+      ],
+      [
+       [
+        0,
+        2,
+        27
+       ]
+      ]
+     ],
+     [
+      89,
+      [
+       1,
+       2,
+       86
+      ],
+      [
+       [
+        0,
+        2,
+        28
+       ]
+      ]
+     ],
+     [
+      90,
+      [
+       2,
+       2,
+       0
+      ],
+      []
+     ],
+     [
+      91,
+      [
+       2,
+       2,
+       1
+      ],
+      []
+     ],
+     [
+      92,
+      [
+       2,
+       2,
+       2
+      ],
+      []
+     ],
+     [
+      93,
+      [
+       2,
+       2,
+       3
+      ],
+      []
+     ],
+     [
+      94,
+      [
+       2,
+       2,
+       4
+      ],
+      []
+     ],
+     [
+      95,
+      [
+       2,
+       2,
+       5
+      ],
+      []
+     ],
+     [
+      96,
+      [
+       2,
+       2,
+       6
+      ],
+      []
+     ],
+     [
+      97,
+      [
+       2,
+       2,
+       7
+      ],
+      []
+     ],
+     [
+      98,
+      [
+       2,
+       2,
+       8
+      ],
+      []
+     ],
+     [
+      99,
+      [
+       2,
+       2,
+       9
+      ],
+      []
+     ],
+     [
+      100,
+      [
+       2,
+       2,
+       10
+      ],
+      []
+     ],
+     [
+      101,
+      [
+       2,
+       2,
+       11
+      ],
+      []
+     ],
+     [
+      102,
+      [
+       2,
+       2,
+       12
+      ],
+      []
+     ],
+     [
+      103,
+      [
+       2,
+       2,
+       13
+      ],
+      []
+     ],
+     [
+      104,
+      [
+       2,
+       2,
+       14
+      ],
+      []
+     ],
+     [
+      105,
+      [
+       2,
+       2,
+       15
+      ],
+      []
+     ],
+     [
+      106,
+      [
+       2,
+       2,
+       16
+      ],
+      []
+     ],
+     [
+      107,
+      [
+       2,
+       2,
+       17
+      ],
+      []
+     ],
+     [
+      108,
+      [
+       2,
+       2,
+       18
+      ],
+      []
+     ],
+     [
+      109,
+      [
+       2,
+       2,
+       19
+      ],
+      []
+     ],
+     [
+      110,
+      [
+       2,
+       2,
+       20
+      ],
+      []
+     ],
+     [
+      111,
+      [
+       2,
+       2,
+       21
+      ],
+      []
+     ],
+     [
+      112,
+      [
+       2,
+       2,
+       22
+      ],
+      []
+     ],
+     [
+      113,
+      [
+       2,
+       2,
+       23
+      ],
+      []
+     ],
+     [
+      114,
+      [
+       2,
+       2,
+       24
+      ],
+      []
+     ],
+     [
+      115,
+      [
+       2,
+       2,
+       25
+      ],
+      []
+     ],
+     [
+      116,
+      [
+       2,
+       2,
+       26
+      ],
+      []
+     ],
+     [
+      117,
+      [
+       2,
+       2,
+       27
+      ],
+      []
+     ],
+     [
+      118,
+      [
+       2,
+       2,
+       28
+      ],
+      []
+     ],
+     [
+      119,
+      [
+       2,
+       2,
+       29
+      ],
+      []
+     ],
+     [
+      120,
+      [
+       2,
+       2,
+       30
+      ],
+      []
+     ],
+     [
+      121,
+      [
+       2,
+       2,
+       31
+      ],
+      []
+     ],
+     [
+      122,
+      [
+       3,
+       5,
+       0
+      ],
+      [
+       [
+        0,
+        0,
+        0
+       ]
+      ]
+     ],
+     [
+      123,
+      [
+       3,
+       5,
+       1
+      ],
+      [
+       [
+        0,
+        0,
+        1
+       ]
+      ]
+     ],
+     [
+      124,
+      [
+       3,
+       5,
+       2
+      ],
+      [
+       [
+        0,
+        0,
+        2
+       ]
+      ]
+     ],
+     [
+      125,
+      [
+       3,
+       5,
+       3
+      ],
+      [
+       [
+        0,
+        0,
+        3
+       ]
+      ]
+     ],
+     [
+      126,
+      [
+       3,
+       5,
+       4
+      ],
+      [
+       [
+        0,
+        0,
+        4
+       ]
+      ]
+     ],
+     [
+      127,
+      [
+       3,
+       5,
+       5
+      ],
+      [
+       [
+        0,
+        0,
+        5
+       ]
+      ]
+     ],
+     [
+      128,
+      [
+       3,
+       5,
+       6
+      ],
+      [
+       [
+        0,
+        0,
+        6
+       ]
+      ]
+     ],
+     [
+      129,
+      [
+       3,
+       5,
+       7
+      ],
+      [
+       [
+        0,
+        0,
+        7
+       ]
+      ]
+     ],
+     [
+      130,
+      [
+       3,
+       5,
+       8
+      ],
+      [
+       [
+        0,
+        0,
+        8
+       ]
+      ]
+     ],
+     [
+      131,
+      [
+       3,
+       5,
+       9
+      ],
+      [
+       [
+        0,
+        0,
+        9
+       ]
+      ]
+     ],
+     [
+      132,
+      [
+       3,
+       5,
+       10
+      ],
+      [
+       [
+        0,
+        0,
+        10
+       ]
+      ]
+     ],
+     [
+      133,
+      [
+       3,
+       5,
+       11
+      ],
+      [
+       [
+        0,
+        0,
+        11
+       ]
+      ]
+     ],
+     [
+      134,
+      [
+       3,
+       5,
+       12
+      ],
+      [
+       [
+        0,
+        0,
+        12
+       ]
+      ]
+     ],
+     [
+      135,
+      [
+       3,
+       5,
+       13
+      ],
+      [
+       [
+        0,
+        0,
+        13
+       ]
+      ]
+     ],
+     [
+      136,
+      [
+       3,
+       5,
+       14
+      ],
+      [
+       [
+        0,
+        0,
+        14
+       ]
+      ]
+     ],
+     [
+      137,
+      [
+       3,
+       5,
+       15
+      ],
+      [
+       [
+        0,
+        1,
+        0
+       ]
+      ]
+     ],
+     [
+      138,
+      [
+       3,
+       5,
+       16
+      ],
+      [
+       [
+        0,
+        1,
+        1
+       ]
+      ]
+     ],
+     [
+      139,
+      [
+       3,
+       5,
+       17
+      ],
+      [
+       [
+        0,
+        1,
+        2
+       ]
+      ]
+     ],
+     [
+      140,
+      [
+       3,
+       5,
+       18
+      ],
+      [
+       [
+        0,
+        1,
+        3
+       ]
+      ]
+     ],
+     [
+      141,
+      [
+       3,
+       5,
+       19
+      ],
+      [
+       [
+        0,
+        1,
+        4
+       ]
+      ]
+     ],
+     [
+      142,
+      [
+       3,
+       5,
+       20
+      ],
+      [
+       [
+        0,
+        1,
+        5
+       ]
+      ]
+     ],
+     [
+      143,
+      [
+       3,
+       5,
+       21
+      ],
+      [
+       [
+        0,
+        1,
+        6
+       ]
+      ]
+     ],
+     [
+      144,
+      [
+       3,
+       5,
+       22
+      ],
+      [
+       [
+        0,
+        1,
+        7
+       ]
+      ]
+     ],
+     [
+      145,
+      [
+       3,
+       5,
+       23
+      ],
+      [
+       [
+        0,
+        1,
+        8
+       ]
+      ]
+     ],
+     [
+      146,
+      [
+       3,
+       5,
+       24
+      ],
+      [
+       [
+        0,
+        1,
+        9
+       ]
+      ]
+     ],
+     [
+      147,
+      [
+       3,
+       5,
+       25
+      ],
+      [
+       [
+        0,
+        1,
+        10
+       ]
+      ]
+     ],
+     [
+      148,
+      [
+       3,
+       5,
+       26
+      ],
+      [
+       [
+        0,
+        1,
+        11
+       ]
+      ]
+     ],
+     [
+      149,
+      [
+       3,
+       5,
+       27
+      ],
+      [
+       [
+        0,
+        1,
+        12
+       ]
+      ]
+     ],
+     [
+      150,
+      [
+       3,
+       5,
+       28
+      ],
+      [
+       [
+        0,
+        1,
+        13
+       ]
+      ]
+     ],
+     [
+      151,
+      [
+       3,
+       5,
+       29
+      ],
+      [
+       [
+        0,
+        1,
+        14
+       ]
+      ]
+     ]
+    ]
+   }
+  }
+ ],
+ "v2": {
+  "evaluations": [
+   [
+    "narrow",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "0bbba48b76f6893f4dd2f81d8c167ab088d54b0440709bd8652124ee81ec081d770b56b08147f73e7d537cfe94ecf290daaae2aef224e3284b61139efc617ee9",
+      "population": 5,
+      "owners_digest": "ae04f2c010f24761506b2d7dc0f7a3b3ffc463d925183ae511406c74c08c21d9f9dcb95f9c0f178d6121dad838c7f43edc3a7d32ae8ea23096831f4092be4099",
+      "calls": [
+       {
+        "call": 2,
+        "definition": "QNarrow_v1",
+        "graph": {
+         "total": 17,
+         "structure": 6,
+         "n": 11,
+         "keep": [
+          0,
+          1,
+          2,
+          3,
+          6,
+          7,
+          10,
+          11,
+          14,
+          15,
+          16
+         ],
+         "width": [
+          1,
+          1,
+          1,
+          1,
+          32,
+          16,
+          32,
+          16,
+          32,
+          16,
+          1
+         ],
+         "prim": [
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "BitAnd_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "src": [
+          4,
+          6,
+          8,
+          0
+         ],
+         "dst": [
+          5,
+          7,
+          9,
+          10
+         ],
+         "input_ids": [
+          0,
+          4,
+          1,
+          5,
+          2,
+          6,
+          3,
+          7
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           1
+          ],
+          [
+           4,
+           2
+          ],
+          [
+           5,
+           2
+          ],
+          [
+           6,
+           3
+          ],
+          [
+           7,
+           3
+          ],
+          [
+           0,
+           4
+          ],
+          [
+           1,
+           4
+          ],
+          [
+           2,
+           6
+          ],
+          [
+           3,
+           6
+          ],
+          [
+           4,
+           8
+          ]
+         ],
+         "outputs": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          7,
+          9,
+          10
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         0,
+         0,
+         1,
+         1,
+         2,
+         2,
+         3,
+         3,
+         4
+        ],
+        "units": 5,
+        "committed": [
+         0,
+         1,
+         2,
+         3,
+         5,
+         7,
+         9,
+         10
+        ],
+        "kinds": [
+         "output",
+         "output",
+         "output",
+         "output",
+         "output"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         2,
+         0
+        ],
+        []
+       ],
+       [
+        1,
+        [
+         0,
+         2,
+         1
+        ],
+        []
+       ],
+       [
+        2,
+        [
+         0,
+         2,
+         2
+        ],
+        []
+       ],
+       [
+        3,
+        [
+         0,
+         2,
+         3
+        ],
+        []
+       ],
+       [
+        4,
+        [
+         0,
+         2,
+         4
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     },
+     {
+      "X": 32,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 32,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "8d1ec85910995091ae3d4db54fbf71b6ff67f9b5a36b6de5579bd909d543199f73aa5f2fba3c6dc1a463eb27ef2064094efa06277d401c725c5f9f424980f893",
+      "population": 3,
+      "owners_digest": "8f0f3ba8eb1026396fc09fe6cff4944bede2cb1142036005951b28faa02025a7c0b767d59720c5a2bdf3b971e1114ec410a82b1b6ed0159b1fdcd57d6f2e56da",
+      "calls": [
+       {
+        "call": 2,
+        "definition": "QNarrow_v1",
+        "graph": {
+         "total": 17,
+         "structure": 6,
+         "n": 11,
+         "keep": [
+          0,
+          1,
+          2,
+          3,
+          6,
+          7,
+          10,
+          11,
+          14,
+          15,
+          16
+         ],
+         "width": [
+          1,
+          1,
+          1,
+          1,
+          32,
+          16,
+          32,
+          16,
+          32,
+          16,
+          1
+         ],
+         "prim": [
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "BitAnd_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "src": [
+          4,
+          6,
+          8,
+          0
+         ],
+         "dst": [
+          5,
+          7,
+          9,
+          10
+         ],
+         "input_ids": [
+          0,
+          4,
+          1,
+          5,
+          2,
+          6,
+          3,
+          7
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           1
+          ],
+          [
+           4,
+           2
+          ],
+          [
+           5,
+           2
+          ],
+          [
+           6,
+           3
+          ],
+          [
+           7,
+           3
+          ],
+          [
+           0,
+           4
+          ],
+          [
+           1,
+           4
+          ],
+          [
+           2,
+           6
+          ],
+          [
+           3,
+           6
+          ],
+          [
+           4,
+           8
+          ]
+         ],
+         "outputs": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          7,
+          9,
+          10
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         1,
+         1,
+         1,
+         1,
+         2
+        ],
+        "units": 3,
+        "committed": [
+         0,
+         1,
+         2,
+         3,
+         5,
+         7,
+         9,
+         10
+        ],
+        "kinds": [
+         "output",
+         "output",
+         "output"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         2,
+         0
+        ],
+        []
+       ],
+       [
+        1,
+        [
+         0,
+         2,
+         1
+        ],
+        []
+       ],
+       [
+        2,
+        [
+         0,
+         2,
+         2
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     },
+     {
+      "X": 64,
+      "W": 64,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 64,
+         "W": 64
+        }
+       }
+      },
+      "object_digest": "c66333d0fdfb5393f069c1287c4cec33712a345d2dbd7662d4f1f63c42791413c3f753c1cf11c44820eb8c974679cb28c2b34968f26a17e2face3bfbf5f82494",
+      "population": 1,
+      "owners_digest": "e618d6b35024130fe2251fa1a4ba515ebacdd9f22e48c52cdd45174437797f0d00d8d6afcd68bdb406405251df2dc0ab43bc78892a8f1253585d7054c2d875a4",
+      "calls": [
+       {
+        "call": 2,
+        "definition": "QNarrow_v1",
+        "graph": {
+         "total": 17,
+         "structure": 6,
+         "n": 11,
+         "keep": [
+          0,
+          1,
+          2,
+          3,
+          6,
+          7,
+          10,
+          11,
+          14,
+          15,
+          16
+         ],
+         "width": [
+          1,
+          1,
+          1,
+          1,
+          32,
+          16,
+          32,
+          16,
+          32,
+          16,
+          1
+         ],
+         "prim": [
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "Bf16GtStrict_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "F32Fmaxf_v1",
+          "F32ToBf16Rn_v1",
+          "BitAnd_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "src": [
+          4,
+          6,
+          8,
+          0
+         ],
+         "dst": [
+          5,
+          7,
+          9,
+          10
+         ],
+         "input_ids": [
+          0,
+          4,
+          1,
+          5,
+          2,
+          6,
+          3,
+          7
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           1
+          ],
+          [
+           4,
+           2
+          ],
+          [
+           5,
+           2
+          ],
+          [
+           6,
+           3
+          ],
+          [
+           7,
+           3
+          ],
+          [
+           0,
+           4
+          ],
+          [
+           1,
+           4
+          ],
+          [
+           2,
+           6
+          ],
+          [
+           3,
+           6
+          ],
+          [
+           4,
+           8
+          ]
+         ],
+         "outputs": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          7,
+          9,
+          10
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0
+        ],
+        "units": 1,
+        "committed": [
+         0,
+         1,
+         2,
+         3,
+         5,
+         7,
+         9,
+         10
+        ],
+        "kinds": [
+         "output"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         2,
+         0
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "wiring-and-dead",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "2e11019881584107bdd267a01032bf2d5af8c668d2c7d47c90d876797777752ff2f32e38b953d065b57dfd38b1cc0db54e0e818cb85b992f3918679ce2cf509f",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "220b423c79605d310a878f6c8a6597867441e4b052587088fffd3538a7368b720f8ddcca3fa66d39d72a893a2399c32e3d2d069c38dd98a0cf8a7a835da82693",
+      "population": 7,
+      "owners_digest": "f2034b3e78fba4becb0f866e6995db598e395572929240699627a3dbfe56024b99fe31418251a172fa659873cbca48990a05e4729972f519711e430c470887aa",
+      "calls": [
+       {
+        "call": 3,
+        "definition": "QWiring_v1",
+        "graph": {
+         "total": 8,
+         "structure": 6,
+         "n": 2,
+         "keep": [
+          5,
+          6
+         ],
+         "width": [
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          0,
+          1
+         ],
+         "src": [],
+         "dst": [],
+         "input_ids": [
+          0,
+          3,
+          1,
+          2
+         ],
+         "input_reads": [
+          [
+           3,
+           0
+          ],
+          [
+           0,
+           1
+          ],
+          [
+           2,
+           1
+          ]
+         ],
+         "outputs": [
+          0,
+          1
+         ],
+         "returned_inputs": [
+          0,
+          1,
+          2
+         ],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         1
+        ],
+        "units": 2,
+        "committed": [
+         0,
+         1
+        ],
+        "kinds": [
+         "output",
+         "output"
+        ]
+       },
+       {
+        "call": 4,
+        "definition": "QDead_v1",
+        "graph": {
+         "total": 5,
+         "structure": 0,
+         "n": 5,
+         "keep": [
+          0,
+          1,
+          2,
+          3,
+          4
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "I32Add_v1",
+          "I32Add_v1",
+          "I32Add_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1,
+          0,
+          1,
+          1
+         ],
+         "src": [
+          0,
+          1,
+          0,
+          1
+         ],
+         "dst": [
+          2,
+          2,
+          3,
+          4
+         ],
+         "input_ids": [
+          0,
+          1,
+          2,
+          3
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           1
+          ],
+          [
+           0,
+           3
+          ],
+          [
+           2,
+           4
+          ]
+         ],
+         "outputs": [
+          3,
+          4
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         2,
+         3,
+         4,
+         0,
+         1
+        ],
+        "units": 5,
+        "committed": [
+         0,
+         1,
+         3,
+         4
+        ],
+        "kinds": [
+         "output",
+         "output",
+         "committed",
+         "committed",
+         "dead"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         3,
+         0
+        ],
+        []
+       ],
+       [
+        1,
+        [
+         0,
+         3,
+         1
+        ],
+        []
+       ],
+       [
+        2,
+        [
+         1,
+         4,
+         0
+        ],
+        []
+       ],
+       [
+        3,
+        [
+         1,
+         4,
+         1
+        ],
+        []
+       ],
+       [
+        4,
+        [
+         1,
+         4,
+         2
+        ],
+        []
+       ],
+       [
+        5,
+        [
+         1,
+         4,
+         3
+        ],
+        []
+       ],
+       [
+        6,
+        [
+         1,
+         4,
+         4
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "wide",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "4b5d81f2616731da0a0c85ea3d4207eb3d88c832215b4b93be42bdd76527e9874afef81ceb4811e7c77947a6b7618dbf6ac71aa1c962e66d0c193a41e996c70a",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "146990d1a19a497336f3fbf7caec6514d0bc18d3f55cade5651b674344f53fe96da3fae3dd3597f6b860eef21da101612f794997ac3e729164e7f0eddf65411f",
+      "population": 2,
+      "owners_digest": "5493debf844e45338aae076b6b7f36f98cc13749a5edea9a7bda213b9f5bba500b6d18963575d07d29a8a73344b83e3776eb789b417c292cd65fec197e5c4484",
+      "calls": [
+       {
+        "call": 4,
+        "definition": "QTWideTwice_v1",
+        "graph": {
+         "total": 4,
+         "structure": 0,
+         "n": 4,
+         "keep": [
+          0,
+          1,
+          2,
+          3
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "TWide_v1",
+          "TWide_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          0
+         ],
+         "src": [
+          0,
+          0,
+          1,
+          2
+         ],
+         "dst": [
+          1,
+          2,
+          3,
+          3
+         ],
+         "input_ids": [
+          4096
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ]
+         ],
+         "outputs": [
+          3
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         0,
+         0
+        ],
+        "units": 1,
+        "committed": [
+         3
+        ],
+        "kinds": [
+         "output"
+        ]
+       },
+       {
+        "call": 5,
+        "definition": "QTNarrowTwice_v1",
+        "graph": {
+         "total": 4,
+         "structure": 0,
+         "n": 4,
+         "keep": [
+          0,
+          1,
+          2,
+          3
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "TNarrow_v1",
+          "TNarrow_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          0
+         ],
+         "src": [
+          0,
+          0,
+          1,
+          2
+         ],
+         "dst": [
+          1,
+          2,
+          3,
+          3
+         ],
+         "input_ids": [
+          4,
+          0,
+          1,
+          2,
+          3
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           1
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           1
+          ],
+          [
+           4,
+           1
+          ],
+          [
+           1,
+           2
+          ],
+          [
+           2,
+           2
+          ],
+          [
+           3,
+           2
+          ],
+          [
+           4,
+           2
+          ]
+         ],
+         "outputs": [
+          3
+         ],
+         "returned_inputs": [],
+         "recomputed": [
+          [
+           2,
+           1
+          ]
+         ]
+        },
+        "owner": [
+         0,
+         0,
+         0,
+         0
+        ],
+        "units": 1,
+        "committed": [
+         3
+        ],
+        "kinds": [
+         "output"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         4,
+         0
+        ],
+        []
+       ],
+       [
+        1,
+        [
+         1,
+         5,
+         0
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "separable",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "99ca1635ea6de4c2e6da602583d520f19e229afbe8fd3b8faf9d91ece4a53ceda038c3f4d3ae34e16af9a4b78e5dd25ee9100e459708ee0bd23c1da3097919d4",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "4e929731108c60cb6348e599af8f4967c76304559aa1c09e48d7c90b94244f082a865ee679b57c0acaec1c1b7fd3bdc77e68d2f401d65a4dc6345208d32f3a17",
+      "population": 8,
+      "owners_digest": "36365c1c793fed52015fe8f2db3fa13f292f166037c692b027261aa164fd43a9bc6e3da74597e16bf7c8f89bc1d7aa0dc946fc73c64d84bdd5b2a7029fea0daa",
+      "calls": [
+       {
+        "call": 5,
+        "definition": "QSepMixed_v1",
+        "graph": {
+         "total": 8,
+         "structure": 4,
+         "n": 4,
+         "keep": [
+          2,
+          4,
+          5,
+          7
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1"
+         ],
+         "external": [
+          1,
+          0,
+          1,
+          0
+         ],
+         "src": [
+          0,
+          2
+         ],
+         "dst": [
+          1,
+          3
+         ],
+         "input_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+         ],
+         "input_reads": [
+          [
+           2,
+           0
+          ],
+          [
+           3,
+           0
+          ],
+          [
+           4,
+           1
+          ],
+          [
+           5,
+           2
+          ],
+          [
+           6,
+           2
+          ],
+          [
+           7,
+           3
+          ]
+         ],
+         "outputs": [
+          1,
+          3
+         ],
+         "returned_inputs": [
+          0,
+          1
+         ],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         1,
+         1
+        ],
+        "units": 2,
+        "committed": [
+         1,
+         3
+        ]
+       },
+       {
+        "call": 6,
+        "definition": "QSepScan_v1",
+        "graph": {
+         "total": 3,
+         "structure": 0,
+         "n": 3,
+         "keep": [
+          0,
+          1,
+          2
+         ],
+         "width": [
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "I32Add_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1
+         ],
+         "src": [
+          0,
+          1
+         ],
+         "dst": [
+          1,
+          2
+         ],
+         "input_ids": [
+          3,
+          0,
+          1,
+          2
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           2
+          ]
+         ],
+         "outputs": [
+          2,
+          0,
+          1,
+          2
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         1,
+         2,
+         0
+        ],
+        "units": 3,
+        "committed": [
+         0,
+         1,
+         2
+        ],
+        "kinds": [
+         "output",
+         "output",
+         "output"
+        ]
+       },
+       {
+        "call": 7,
+        "definition": "QSepPartial_v1",
+        "graph": {
+         "total": 6,
+         "structure": 2,
+         "n": 4,
+         "keep": [
+          0,
+          2,
+          3,
+          5
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1",
+          "F32Fmaxf_v1"
+         ],
+         "external": [
+          1,
+          0,
+          1,
+          0
+         ],
+         "src": [
+          0,
+          2
+         ],
+         "dst": [
+          1,
+          3
+         ],
+         "input_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           2,
+           1
+          ],
+          [
+           3,
+           2
+          ],
+          [
+           4,
+           2
+          ],
+          [
+           5,
+           3
+          ]
+         ],
+         "outputs": [
+          1
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0,
+         0,
+         1,
+         2
+        ],
+        "units": 3,
+        "committed": [
+         1,
+         2
+        ],
+        "kinds": [
+         "output",
+         "committed",
+         "dead"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         5,
+         0
+        ],
+        [
+         [
+          1,
+          0,
+          0
+         ]
+        ]
+       ],
+       [
+        1,
+        [
+         0,
+         5,
+         1
+        ],
+        [
+         [
+          1,
+          1,
+          0
+         ]
+        ]
+       ],
+       [
+        2,
+        [
+         1,
+         6,
+         0
+        ],
+        []
+       ],
+       [
+        3,
+        [
+         1,
+         6,
+         1
+        ],
+        []
+       ],
+       [
+        4,
+        [
+         1,
+         6,
+         2
+        ],
+        []
+       ],
+       [
+        5,
+        [
+         2,
+         7,
+         0
+        ],
+        []
+       ],
+       [
+        6,
+        [
+         2,
+         7,
+         1
+        ],
+        []
+       ],
+       [
+        7,
+        [
+         2,
+         7,
+         2
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "primitive-calls",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "6f420e127fe2478ca02ca4fda4588eef43487a4ded11bd41f340933b876e6ee363d517602a5aa6857dcd627b65adf4e1d5241d3e6cb642d04c078733de7446b5",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "c00ca453ffe89a88488502759fdd0b340f4b2d9850a421ae51c54527f56b07be3eb74f23e057229ede891dcdc76025027a5413c48b796ac24883682d342b7353",
+      "population": 1,
+      "owners_digest": "2a86604d5b62068d4d4b43dfbe6d8f715c27b673efc198283ba082df1f3aa34f317bb8636edd0b2bdd8b9fca5793212e911e19fe053f636049b82cf4424a50cc",
+      "calls": [
+       {
+        "call": 1,
+        "definition": "I32Add_v1",
+        "graph": {
+         "total": 1,
+         "structure": 0,
+         "n": 1,
+         "keep": [
+          0
+         ],
+         "width": [
+          32
+         ],
+         "prim": [
+          "I32Add_v1"
+         ],
+         "external": [
+          1
+         ],
+         "src": [],
+         "dst": [],
+         "input_ids": [
+          0,
+          1
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ]
+         ],
+         "outputs": [
+          0
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         0
+        ],
+        "units": 1,
+        "committed": [
+         0
+        ],
+        "kinds": [
+         "output"
+        ]
+       },
+       {
+        "call": 2,
+        "definition": "F32Fabs_v1",
+        "graph": {
+         "total": 1,
+         "structure": 1,
+         "n": 0,
+         "keep": [],
+         "width": [],
+         "prim": [],
+         "external": [],
+         "src": [],
+         "dst": [],
+         "input_ids": [
+          0
+         ],
+         "input_reads": [],
+         "outputs": [],
+         "returned_inputs": [
+          0
+         ],
+         "recomputed": []
+        },
+        "owner": [],
+        "units": 0,
+        "committed": [],
+        "kinds": []
+       },
+       {
+        "call": 3,
+        "definition": "Const32[0x00000007]_v1",
+        "graph": {
+         "total": 1,
+         "structure": 1,
+         "n": 0,
+         "keep": [],
+         "width": [],
+         "prim": [],
+         "external": [],
+         "src": [],
+         "dst": [],
+         "input_ids": [],
+         "input_reads": [],
+         "outputs": [],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [],
+        "units": 0,
+        "committed": [],
+        "kinds": []
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         1,
+         0
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "wide-batched",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "0f6e73749585b4c407b22c8adfc7de2b8b63342c226e3e13e986692b9952d93fc0e44e23db4b219e17caaf5cbb077033e551ab524355d23ce73eac4150a4e837",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "2003b3455f3b44d0030dd1d1d77ee55fc1e4f60d8063407dfa3137152e9578dbfc9f3387d2adcba3c484684e9339064807b3d04fcfe69006e33f00bfcc20eae5",
+      "population": 4,
+      "owners_digest": "614a77d17bf44e4783a2b81ee0a339eeff5e260f8373d7475d9561b61c8df657802eebe04ad05200bd6c1d56955b0958ef28c02d68bb59da39ab161d630ab628",
+      "calls": [
+       {
+        "call": 3,
+        "definition": "QWideRows_v1",
+        "graph": {
+         "total": 6,
+         "structure": 0,
+         "n": 6,
+         "keep": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+         ],
+         "width": [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "TWide_v1",
+          "TWide_v1",
+          "TWide_v1",
+          "TWide_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          0
+         ],
+         "src": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          4
+         ],
+         "dst": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          5
+         ],
+         "input_ids": [
+          16384
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ]
+         ],
+         "outputs": [
+          5,
+          2,
+          3
+         ],
+         "returned_inputs": [],
+         "recomputed": []
+        },
+        "owner": [
+         3,
+         0,
+         1,
+         2,
+         0,
+         0
+        ],
+        "units": 4,
+        "committed": [
+         0,
+         2,
+         3,
+         5
+        ],
+        "kinds": [
+         "output",
+         "output",
+         "output",
+         "committed"
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         3,
+         0
+        ],
+        []
+       ],
+       [
+        1,
+        [
+         0,
+         3,
+         1
+        ],
+        []
+       ],
+       [
+        2,
+        [
+         0,
+         3,
+         2
+        ],
+        []
+       ],
+       [
+        3,
+        [
+         0,
+         3,
+         3
+        ],
+        []
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 0,
+        "gates": []
+       }
+      }
+     }
+    ]
+   ],
+   [
+    "recompute",
+    [
+     {
+      "X": 16,
+      "W": 32,
+      "object": {
+       "format": "verity/partition/v1",
+       "program": "dd1ffc28c0b130a7ca556eb7c07bc895c1e08e5bcd702989cd761d3d154a207485a394fdd57320fe9f6daf7e7ed4de95428d194f20992a779cdf669db9aba42e",
+       "query": {
+        "name": "Q_word",
+        "version": 2,
+        "params": {
+         "X": 16,
+         "W": 32
+        }
+       }
+      },
+      "object_digest": "cd9b3f74765c491423dccea32be9bb3edf99a7d97ff1f2df6919fb7695c8e4f8e3a8feacc19483b260223b53de85e9ff477e8d44a5ec7aef27902d07a6d1099e",
+      "population": 2,
+      "owners_digest": "33c40fdf8e27737ae5830cb85a9383fbf55d14c91e456e0d21a1b6839c515b3cf3059b6f9cd13d8034a809dc3b678d960ce8c69306a7d19258f26c32183d1da3",
+      "calls": [
+       {
+        "call": 1,
+        "definition": "QTwiceSep_v1",
+        "graph": {
+         "total": 2,
+         "structure": 0,
+         "n": 2,
+         "keep": [
+          0,
+          1
+         ],
+         "width": [
+          32,
+          32
+         ],
+         "prim": [
+          "I32Add_v1",
+          "I32Add_v1"
+         ],
+         "external": [
+          1,
+          1
+         ],
+         "src": [],
+         "dst": [],
+         "input_ids": [
+          0,
+          1
+         ],
+         "input_reads": [
+          [
+           0,
+           0
+          ],
+          [
+           1,
+           0
+          ],
+          [
+           0,
+           1
+          ],
+          [
+           1,
+           1
+          ]
+         ],
+         "outputs": [
+          0,
+          1
+         ],
+         "returned_inputs": [],
+         "recomputed": [
+          [
+           1,
+           0
+          ]
+         ]
+        },
+        "owner": [
+         0,
+         1
+        ],
+        "units": 2,
+        "committed": [
+         0,
+         1
+        ]
+       }
+      ],
+      "locate": [
+       [
+        0,
+        [
+         0,
+         1,
+         0
+        ],
+        [
+         [
+          0,
+          0,
+          0
+         ]
+        ]
+       ],
+       [
+        1,
+        [
+         0,
+         1,
+         1
+        ],
+        [
+         [
+          1,
+          0,
+          0
+         ]
+        ]
+       ]
+      ],
+      "verify": {
+       "ok": true,
+       "codes": [],
+       "cut": [],
+       "recomputed_across": {
+        "n": 1,
+        "gates": [
+         {
+          "call": 1,
+          "n": 1,
+          "gates": [
+           [
+            1,
+            0
+           ]
+          ]
+         }
+        ]
+       }
+      }
+     }
+    ]
+   ]
+  ],
+  "verify_refusals": [
+   [
+    "a value two units compute",
+    "recompute",
+    16,
+    32,
+    {
+     "ok": true,
+     "codes": [],
+     "cut": [],
+     "recomputed_across": {
+      "n": 1,
+      "gates": [
+       {
+        "call": 1,
+        "n": 1,
+        "gates": [
+         [
+          1,
+          0
+         ]
+        ]
+       }
+      ]
+     }
+    }
+   ],
+   [
+    "a 64-bit output at W = 32",
+    "too-wide",
+    16,
+    32,
+    {
+     "ok": false,
+     "codes": [
+      "cut"
+     ],
+     "cut": [
+      [
+       1,
+       [
+        "unit-too-wide"
+       ]
+      ]
+     ],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "32-bit outputs at W = 16",
+    "wiring-and-dead",
+    16,
+    16,
+    {
+     "ok": false,
+     "codes": [
+      "cut"
+     ],
+     "cut": [
+      [
+       3,
+       [
+        "unit-too-wide"
+       ]
+      ],
+      [
+       4,
+       [
+        "unit-too-wide"
+       ]
+      ]
+     ],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a root batch",
+    "root-batch",
+    16,
+    32,
+    {
+     "ok": false,
+     "codes": [
+      "query-inapplicable"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a root scan",
+    "root-scan",
+    16,
+    32,
+    {
+     "ok": false,
+     "codes": [
+      "query-inapplicable"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "another program",
+    "narrow",
+    16,
+    32,
+    {
+     "ok": false,
+     "codes": [
+      "program"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ]
+  ],
+  "served": [
+   [
+    "the derived sets",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      0,
+      1,
+      3,
+      4
+     ]
+    },
+    {
+     "ok": true,
+     "codes": [],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "nothing",
+    {},
+    {
+     "ok": false,
+     "codes": [
+      "served-missing"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a gate that is not an integer",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      "0",
+      "1",
+      "3",
+      "4"
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "served-malformed"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a gate listed twice",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      0,
+      1,
+      3,
+      4,
+      0
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "served-malformed"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "one Call left out",
+    {
+     "3": [
+      0,
+      1
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "served-missing"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a key that is no Call",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      0,
+      1,
+      3,
+      4
+     ],
+     "999": [
+      0
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "served-unknown"
+     ],
+     "cut": [],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a committed value left out",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      1,
+      3,
+      4
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "cut"
+     ],
+     "cut": [
+      [
+       4,
+       [
+        "read-uncommitted"
+       ]
+      ]
+     ],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "an output left out",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      0,
+      1,
+      3
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "cut"
+     ],
+     "cut": [
+      [
+       4,
+       [
+        "output-uncommitted"
+       ]
+      ]
+     ],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ],
+   [
+    "a dead gate served",
+    {
+     "3": [
+      0,
+      1
+     ],
+     "4": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    {
+     "ok": false,
+     "codes": [
+      "cut"
+     ],
+     "cut": [
+      [
+       4,
+       [
+        "committed-unread"
+       ]
+      ]
+     ],
+     "recomputed_across": {
+      "n": 0,
+      "gates": []
+     }
+    }
+   ]
+  ],
+  "object_refusals": [
+   [
+    "v2 without W",
+    {
+     "format": "verity/partition/v1",
+     "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+     "query": {
+      "name": "Q_word",
+      "version": 2,
+      "params": {
+       "X": 16
+      }
+     }
+    },
+    [
+     "query-params"
+    ]
+   ],
+   [
+    "v2 with X = 0",
+    {
+     "format": "verity/partition/v1",
+     "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+     "query": {
+      "name": "Q_word",
+      "version": 2,
+      "params": {
+       "X": 0,
+       "W": 32
+      }
+     }
+    },
+    [
+     "query-params"
+    ]
+   ],
+   [
+    "v2 with an EXTRAS",
+    {
+     "format": "verity/partition/v1",
+     "program": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+     "query": {
+      "name": "Q_word",
+      "version": 2,
+      "params": {
+       "X": 16,
+       "W": 32,
+       "EXTRAS": 0
+      }
+     }
+    },
+    [
+     "query-params"
+    ]
+   ]
+  ]
+ }
+}

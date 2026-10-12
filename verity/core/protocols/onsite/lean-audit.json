@@ -1,0 +1,16 @@
+{
+ "roots": ["CoreOnsite"],
+ "exempt": {
+  "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+ },
+ "layers": {
+  "CoreOnsite": {
+   "imports": ["CoreComposition.Cases", "CoreComposition.Stubs"],
+   "except": [],
+   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  }
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}

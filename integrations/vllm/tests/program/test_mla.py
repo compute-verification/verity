@@ -12,13 +12,13 @@ import itertools
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.defs import bind
-from verity_catalog.definitions import mufu as MU
-from verity_catalog.definitions.boolean import gemm as BG
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops import mufu as MU
+from verity.ml.circuits.ops.boolean import gemm as BG
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import mla as M
 from verity_vllm.program.registry import mla_capture as MC
@@ -35,19 +35,19 @@ def _decode(T: int, H: int = 2, DL: int = 16, DR: int = 16, SCALE: int = G["SCAL
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "TritonExpSub_v1": (6139, 13952, 564, "f950372f712402c4abe6192f0586997cb3b6334f86d45206d9919f9f1f4930dc"),
-    "TritonMlaGate_v1": (20, 14, 3, "ef75e551110c698057f2150b1f6773e226961b86d9a595b29c1d266eee81c387"),
-    "TritonMlaOut_v1": (3023, 5542, 257, "d18fd50d178e64330790d59532de6109fffd860f9336e199fb1a2e2ff10fdc6c"),
-    "F32MulConst_v1{K=1031798784}": (700, 948, 93, "5a3e57358b4d0200433583727865d780d6cc606abebc23963b8bfa2e03108666"),
+    "TritonExpSub_v1": (6139, 13952, 564, "a770f71187fbae2276536a59c16f83b42fa0a7011566e734fff66cd299fc9e512da88f4730234e6c8a191c83c29893ccac5ba92078710c9f8947fa345db0d589"),
+    "TritonMlaGate_v1": (20, 14, 3, "d99f1feab53e3f11e92f6938ae5fab2548bade966ab3c8f07ea0220a16526bb967b2afc4f5c437ea2e70bc641adec70f2987446a191670042173e65aa9147922"),
+    "TritonMlaOut_v1": (3023, 5542, 257, "090eb39de5ac5fcc6bd1d5a49fad435d308bbb24c7492b882dd56d64d88a7d0cfa2d96bbe5024ecacc284a719073d7cd4c63916a6c5d694b82ffdc6e4a5651d4"),
+    "F32MulConst_v1{K=1031798784}": (700, 948, 93, "bd652b800a1a2d62a22f3124617bd284560840386d839200c5a2cabc513fda41a73d2c9a0e53f799a4b3944248e99a227ba9346c7f014a40a96c0541f7bc0661"),
     "MoeSharedCombineElement_v1{RSF=1072064102}":
-        (1579, 2395, 239, "9d6df60a817c61d9b741038240c7137bf28ac064b4a4bb558f0c0a0f61470338"),
+        (1579, 2395, 239, "1d96a928f481d0ad9692c7b39f8e1b799f6b8b52861ae0fdc79847a9e722869598f2e3546c57d733a5532f19e4e10f3cc02de3944667f217286e3b953b92dddd"),
     "TritonMlaBlock_v1{DL=16,DR=16,NVIS=2,BN=32,SCALE=1031798784,DOT=HopperBF16WgmmaDot16_v2}":
-        (361161, 696299, 33251, "8a3515e7646580194e0eb02232ac0cfa1ef630233b7edc0dc442729807ae1bf2"),
+        (361161, 696299, 33251, "3d68126c42ced14d453378adf58424a0cbb41dc0d7e130791cb2b198ddee930270d8faea29037a6cc38c19ea0d562c4c22e60a955e8467f57c0a7b8dd8c61c7b"),
     "TritonMlaDecode_v1{H=1,T=2,DL=16,DR=16,BN=32,SPLITS=1,SCALE=1031798784,DOT=HopperBF16WgmmaDot16_v2}":
-        (410701, 790157, 37510, "455a941b8cbc7cd8807cdc84304fceab3b19130aecef2889ac73fa3c1e789596"),
+        (410701, 790157, 37510, "60189d9b465d3b237d40ebb4788e73bccf3f9b4e3ed53ec7a8504d30dc1c382a62806e9225ebc4b09054bf727fb30fcf0a2353a7c97f2c6690439e66a8099700"),
     "MlaBmm_v1{NHEADS=2,K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}":
-        (94860, 181176, 9222, "51c5602dcb27b5b1f92117841080e8fe8c1b5d19c6c669114360b12e34cfb41c"),
-    "MoeSharedCombine_v1{H=8,RSF=1072064102}": (12632, 19160, 1912, "0f88a41aa4dcf7260c39cb8c977b4bca4f7f1d16ea65ccbec73c907ae5f187c4"),
+        (94860, 181176, 9222, "732c8e4c85ba6e3c6128c9ae72f73ae40ad5ab509154829b0a440f5cb06f6edaec2f15dfae461612bd285421e4bbd6a8cba91ef6b4ae0d27d9e82d9613e08fcc"),
+    "MoeSharedCombine_v1{H=8,RSF=1072064102}": (12632, 19160, 1912, "8ada4e2f0dbaaa72f92b78bdf6b64ffd0211a1eae36a28023e3d0c502527e59169532c6bf51f26dc9025fa565b2f64ff5df4ad286bbb83698145ff63df534e7b"),
 }
 PINNED = [bind(M.TritonExpSub), bind(M.TritonMlaGate), bind(M.TritonMlaOut), bind(M.F32MulConst, K=G["SCALE"]),
           bind(M.MoeSharedCombineElement, RSF=G["RSF"]),

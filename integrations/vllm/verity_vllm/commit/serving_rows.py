@@ -1,6 +1,6 @@
 """Serving rows: the opt-in ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a run's units in M0's serving row leaf format
 (``verity_flock.circuit``'s statement rows, PR #83), with the registration, M0's public and prover files and the unit index the
-one-stage audit reads (``verity.protocols.verification.sampled_proofs.one_stage``).  Off by default: ``vllm-v1`` stays the record, and this commits beside it without
+one-stage audit reads (``verity.core.protocols.sampled_proofs.one_stage``).  Off by default: ``vllm-v1`` stays the record, and this commits beside it without
 touching any root of record, until the re-baseline switches the record.
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, each with its row ports and
@@ -17,7 +17,7 @@ blocks, committed under its own salt like an input row (an output is a value: no
   leaf    the ``frame-v3-sha512`` row leaf, schema ``hm96-sha512/row/v1``, over ``hm96.SHA512.tree_leaf(default_key, b || c)``
 
 Each port ``<descriptor id>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with the domain
-rule agreed with the one-stage lane: ``binding = identity_digest(DOMAIN_TAG, {program, partition, port, schema, leaves, run})``,
+rule agreed with the one-stage lane: ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port, schema, leaves, run})``,
 every field a registration field, so the verifier recomputes every domain from the registration.  The population is fixed
 before serving by the Build's Program and the verifier's partition file; serving refuses one that differs.  ``write`` puts into a
 window directory ``registration.json`` (source ``served``), ``index.json`` (unit -> served identity), per member ``m<k>-public.bin``
@@ -39,19 +39,20 @@ from typing import Any
 
 import numpy as np
 
-from verity.primitives.commitments import hm96
-from verity.primitives.commitments.identity import identity_digest
-from verity.primitives.commitments.indexed import RangeIndexedDomain
-from verity.primitives.commitments.merkle import CommitmentDomain
-from verity.primitives.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
-from verity.primitives.circuits.codec import canonical_json
+from verity.ml.commitments import hm96
+from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
+from verity.ml.circuits import codec
+from verity.ml.circuits.codec import canonical_json
 
 from .hiding import HidingLeaves
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW_SCHEMA = SCHEMA_HM96_SHA512_ROW
 WORD_SCHEMA = "u16"
-DOMAIN_TAG = "verity/one-stage/served-domain/v0"
+DOMAIN_TAG = "verity/one-stage/served-domain/v1"
 OWNER = -1
 REGISTRATION = "verity/one-stage/registration/v0"
 ORDER = "verity-vllm/serving-rows/order/v0"
@@ -235,8 +236,8 @@ class Window:
         return cls(d["partition"], d["partition_digest"], int(d["population"]), run, tuple(members))
 
     def binding(self, port: str, schema: str, leaves: int) -> bytes:
-        return bytes.fromhex(identity_digest(DOMAIN_TAG, {"program": self.partition["program"], "partition": self.partition_digest,
-                                                          "port": port, "schema": schema, "leaves": int(leaves), "run": self.run}))
+        return identity_digest_sha512(DOMAIN_TAG, {"program": self.partition["program"], "partition": self.partition_digest,
+                                                   "port": port, "schema": schema, "leaves": int(leaves), "run": self.run})
 
     def domain(self, port: str, schema: str, leaves: int) -> CommitmentDomain:
         return CommitmentDomain(self.binding(port, schema, leaves), OWNER, RangeIndexedDomain(0, leaves), hash="sha512")
@@ -456,7 +457,6 @@ def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir
     return {"pub": str(o / f"m{k}-pub-{n}.bin"), "inst": str(o / f"m{k}-inst-{n}.bin"), "circuit_sha512": head["circuit_sha512"], "class": cls}
 
 
-def program_sha512(program_dir: str | Path) -> str:
-    """SHA-512 over the canonical descriptor bytes core's ``program_digest`` hashes with SHA-256."""
-    desc = json.loads(gzip.open(Path(program_dir) / "descriptor.json.gz").read())
-    return hashlib.sha512(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
+def program_digest(program_dir: str | Path) -> str:
+    """Core's ``program_digest`` of the Build's ``descriptor.json.gz``."""
+    return codec.program_digest(json.loads(gzip.open(Path(program_dir) / "descriptor.json.gz").read()))

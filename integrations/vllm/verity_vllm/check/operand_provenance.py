@@ -54,11 +54,11 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, TritonLaunch
 from verity_vllm.observe.log import read_log
 from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view
 
-Run = tuple[str, int, int, int]      # (space, idx, lo, hi) — the same runs `verity.primitives.circuits.refs.runs` yields
+Run = tuple[str, int, int, int]      # (space, idx, lo, hi) — the same runs `verity.ml.circuits.refs.runs` yields
 
 
 # ---------------------------------------------------------------------------------------------------------
-# run arithmetic (independent of verity.primitives.circuits.refs)
+# run arithmetic (independent of verity.ml.circuits.refs)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -276,8 +276,31 @@ def _views_in(x: Any) -> list[ViewDesc]:
     return []
 
 
+#: A declared view of more element runs than this is its byte extent (coarse, a superset), e.g. the whole KV cache.
+DECLARED_RUNS_MAX = 20_000
+
+
+def _declared_regions(v: ViewDesc) -> list[tuple[int, int, int]]:
+    """`(alloc, byte lo, byte hi)` regions of a schema-declared written view: its element runs, not its byte extent (strided
+    views have holes), or the extent above `DECLARED_RUNS_MAX` runs.  The runs are walked with the dims in descending-stride
+    order, broadcast (stride-0) dims outermost: the same addresses, but a permuted-contiguous view such as a transposed weight
+    is one run instead of one per element."""
+    if v.numel == 0:
+        return []
+    dims = sorted(zip(v.shape, v.strides), key=lambda d: (d[1] != 0, -d[1]))
+    w = ViewDesc(v.alloc, v.offset, tuple(n for n, _ in dims), tuple(st for _, st in dims), v.dtype, v.device)
+    shape, strides = collapsed_dims(w)
+    runs = w.numel // shape[-1] if shape and strides[-1] == 1 else w.numel     # the runs `element_runs(w)` walks
+    if runs > DECLARED_RUNS_MAX:
+        lo, hi = byte_extent(v)
+        return [(v.alloc, lo, hi)]
+    eb = v.itemsize
+    return [(v.alloc, start * eb, (start + n) * eb) for start, n in element_runs(w)]
+
+
 def stream_and_schema_facts(log_path: str | Path, writes_by_event: dict[int, list[tuple[int, int, int]]]) -> tuple[dict, dict]:
-    """`writes_by_event`: event id -> [(alloc, byte lo, byte hi)] journaled writes.  Returns (streams, schema)."""
+    """`writes_by_event`: event id -> [(alloc, byte lo, byte hi)] regions of its journaled writes (`_declared_regions` of each
+    write's view, the rule the declared side uses).  Returns (streams, schema)."""
     streams: Counter = Counter()
     enters: dict[int, DispatchEnter] = {}
     parent: dict[int, int | None] = {}
@@ -313,30 +336,16 @@ def stream_and_schema_facts(log_path: str | Path, writes_by_event: dict[int, lis
             regions = declared.setdefault(r, [])
             names = _schema_arg_names(en.schema)
             mut = set(_schema_mutable_names(en.schema))
-            def add(v: ViewDesc) -> None:
-                eb = v.itemsize
-                if v.numel == 0:
-                    return
-                shape, strides = collapsed_dims(v)
-                rows = 1
-                for n, st in zip(shape, strides):
-                    if st != 1:
-                        rows *= n
-                if rows > 20_000:                           # e.g. the whole KV cache: the byte extent (coarse, a superset)
-                    lo, hi = byte_extent(v); regions.append((v.alloc, lo, hi))
-                    return
-                for start, n in element_runs(v):          # element runs, not the byte extent: strided views have holes
-                    regions.append((v.alloc, start * eb, (start + n) * eb))
             for i, arg in enumerate(en.args):
                 if i < len(names) and names[i] in mut:
                     for v in _views_in(arg):
-                        add(v)
+                        regions.extend(_declared_regions(v))
             for k, arg in en.kwargs.items():
                 if k in mut:
                     for v in _views_in(arg):
-                        add(v)
+                        regions.extend(_declared_regions(v))
             for v in _views_in(ev.outs):
-                add(v)
+                regions.extend(_declared_regions(v))
     # Roots whose subtree contains a Triton launch: the write set rests on the pattern contract (no schema).
     outside = 0
     outside_examples: list[dict] = []
@@ -394,11 +403,9 @@ def check(result, log_path: str | Path | None = None) -> dict:
         if acc["kind"] == "write" and acc["event"] is not None and acc["event"] >= 0:
             v = acc["view"]
             rows = acc.get("rows")
-            if rows is None:
-                lo, hi = byte_extent(v); writes_by_event.setdefault(acc["event"], []).append((v.alloc, lo, hi))
-            else:
-                for r in rows:
-                    rv = row_view(v, r); lo, hi = byte_extent(rv); writes_by_event.setdefault(acc["event"], []).append((rv.alloc, lo, hi))
+            # A journaled write is listed by the declared side's own rule: a strided write's byte extent spans its holes.
+            for u in ([v] if rows is None else [row_view(v, r) for r in rows]):
+                writes_by_event.setdefault(acc["event"], []).extend(_declared_regions(u))
     rep: dict[str, Any] = {"reads": ck.reads, "writes": ck.writes, "accesses": dict(ck.by_kind), "n_mismatch": ck.n_mismatch,
                            "uncovered": ck.uncovered, "mismatches": ck.mismatches, "instances": len(result.instances)}
     fails = []

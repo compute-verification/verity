@@ -149,7 +149,7 @@ def test_tier_b_budget_skips_are_partial_not_failures(consistent_toy, snapshots)
 def test_tier_b_localises_a_corrupted_snapshot(consistent_toy, tmp_path):
     r, weights, t, _ = consistent_toy
     att = next(m for m in r.instances if m["spec"].startswith("Attention"))
-    from verity.primitives.circuits.refs import runs
+    from verity.ml.circuits.refs import runs
     bad = next(idx for space, idx, _, _ in runs(r.body.nodes[att["node"]].args[1].refs) if space == "n")
     bad_meta = next(m for m in r.instances if m["node"] == bad)
     _write_snapshots(r, t, tmp_path, corrupt_node=bad)
@@ -165,7 +165,7 @@ def test_tier_b_localises_a_wrong_weight_and_cascades(consistent_toy, snapshots)
     """A flipped checkpoint bit: the first consumer of that leaf diverges, its computed value flows on, downstream
     diverges too (the cascade), and the first divergence names the culprit."""
     r, weights, _, _ = consistent_toy
-    from verity.primitives.circuits.refs import Affine, Coll
+    from verity.ml.circuits.refs import Affine, Coll
     wt = r.params[-1][1]
     leaf = Coll(wt, Affine("p", 1, 0, wt.leaves))["layers"][0]["o_w"].refs[5][2]
     bad_w = ToyWeights(wt.leaves)

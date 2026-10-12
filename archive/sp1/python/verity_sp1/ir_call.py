@@ -1,7 +1,7 @@
 """One IR function call as ``veritor.reduce-mufu@1`` obligations: the approved guest re-runs the IR's gate list.
 
-The IR oracle (:func:`verity.primitives.circuits.evaluation.reference.evaluate`) evaluates a specialised composite by flattening one
-call of it into primitive gates in canonical order (:func:`~verity.primitives.circuits.evaluation.reference.standalone_call`) and
+The IR oracle (:func:`verity.ml.circuits.evaluation.reference.evaluate`) evaluates a specialised composite by flattening one
+call of it into primitive gates in canonical order (:func:`~verity.ml.circuits.evaluation.reference.standalone_call`) and
 applying each primitive's evaluator.  :func:`lower_call` restates exactly that gate list as the subcircuit of a
 ``typed-obligation/v0`` object over the guest family ``veritor.reduce-mufu@1``, one obligation per instance, so the
 unmodified SP1 checker recomputes it gate for gate and compares with the committed outputs:
@@ -27,11 +27,11 @@ import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from verity.primitives.commitments.leaves import leaf_hash, levels, open_path, shape_text
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits.defs import SpecializedDefinition
-from verity.primitives.circuits.evaluate import evaluate_call
-from verity.primitives.circuits.types import Tuple as TupleT
+from verity.ml.commitments.leaves import leaf_hash, levels, open_path, shape_text
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits.defs import SpecializedDefinition
+from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.types import Tuple as TupleT
 from verity_sp1.proofs.elem_bf16 import make_elem_bf16_gate_set
 from verity_sp1.proofs.families import make_tc_ampere_bf16_gate_set
 from verity_sp1.proofs.gateset import GateSet

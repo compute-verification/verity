@@ -18,15 +18,16 @@ from waits import wait_runner
 REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
-REAL_ROOTS = ["tools/research/src", "tools/cluster/src", "archive/sp1/python", "benchmarks/numerical/python", "integrations/vllm",
-              "backends/flock/python", "tools/circuit_check/src", "catalog", "kernels", "experimental"]
+REAL_ROOTS = ["tools/research/src", "infra/cluster/src", "infra/ops", "archive/sp1/python", "benchmarks/numerical/python", "integrations/vllm",
+              "verity/ml/flock/python", "tools/verity/circuit_check/src", "tools/verity/cli", "verity/core/difftest/python"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
     d = P.import_roots_dir(REPO)
     assert d["roots"] == REAL_ROOTS and d["missing"] == [] and d["shim"] == ["verity"] and d["source"] == "pyproject.toml [tool.uv.workspace]"
-    names = ["research", "cluster", "verity", "verity.protocols.verification.sampled_proofs", "verity_vllm", "verity_sp1",
-             "verity_numerical", "verity_flock", "circuit_check", "verity_catalog", "verity_kernels", "verity_experimental"]
+    names = ["research", "cluster", "verity_ops", "verity", "verity.core.protocols.sampled_proofs", "verity_vllm", "verity_sp1",
+             "verity_numerical", "verity_flock", "circuit_check", "verity.ml.circuits", "verity.ml.kernels", "verity.core",
+             "verity_difftest"]
     probe = "import importlib.util as u, sys; [print(n, u.find_spec(n).origin) for n in sys.argv[1:]]"
     # -S: no site-packages, so an editable install elsewhere cannot answer; find_spec locates without importing (no torch)
     r = subprocess.run([PY, "-S", "-c", probe, *names], cwd=tmp_path, env={"PYTHONPATH": P.pythonpath(str(REPO), d)}, capture_output=True, text=True)
@@ -124,8 +125,10 @@ def test_a_workspace_root_that_is_a_package_is_reached_through_a_shim_never_the_
                        env={"PYTHONPATH": ":".join(path)}, capture_output=True, text=True)
     assert r.stdout.strip() == "[True, True, True, True, False]", r.stderr
     assert P.shim_dir(t, ["core"], tmp_path / "shims") == str(shim)                       # the same tree shares one shim
+    assert P.shim_packages(shim, t) == ["core"] and P.shim_packages(shim, t / "src") is None and P.shim_packages(t, t) is None
     (shim / "core").unlink()
     (shim / "core").symlink_to(tmp_path)
+    assert P.shim_packages(shim, t) is None and P.shim_packages(tmp_path / "absent", t) is None
     assert P.shim_dir(t, ["core"], tmp_path / "shims") == str(shim) and (shim / "core").resolve() == t / "core", "a stale link is rebuilt"
     assert sorted(os.listdir(tmp_path / "shims")) == [shim.name]
     assert str(t) not in P.tree_pythonpath(t).split(":"), "a render of a root-package tree does not add the root either"

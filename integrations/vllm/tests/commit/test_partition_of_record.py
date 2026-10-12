@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from verity_vllm.commit.partition import partition_of_record, program_sha512s, require_partition, word_check_refusal
+from verity_vllm.commit.partition import partition_of_record, program_digests, require_partition, word_check_refusal
 from verity_vllm.pipeline import research_tools
 from verity_vllm.query.compose import _with_partitions
 from verity_vllm.query.required import Q_MODULE_BODY_ID, Q_WORD_ID, QUERY_OF_RECORD, partition_of
@@ -97,8 +97,8 @@ def test_the_commit_reads_the_programs_the_builds_recorded(tmp_path):
     for name, sha in (("build_request_LP8_T2", SHA_A), ("build/rank1/build_request_LP8_T2", SHA_B), ("build_step", None)):
         d = tmp_path / name
         d.mkdir(parents=True)
-        (d / "result.json").write_text(json.dumps({"program": {"digest": "0" * 64, **({"sha512": sha} if sha else {})}}))
-    assert program_sha512s(str(tmp_path), None) == {SHA_A, SHA_B}
+        (d / "result.json").write_text(json.dumps({"program": {"digest": sha} if sha else {}}))
+    assert program_digests(str(tmp_path), None) == {SHA_A, SHA_B}
 
 
 def test_every_entry_point_records_the_query_of_record():

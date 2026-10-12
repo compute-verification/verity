@@ -1,0 +1,31 @@
+{
+ "definitions": {
+  "Bf16AddF2fp_v2": {
+   "and": 717
+  },
+  "Bf16Add_v2": {
+   "and": 717
+  },
+  "Bf16MulBf16_v2": {
+   "and": 799
+  },
+  "Bf16MulF32_v2": {
+   "and": 1220
+  },
+  "F32Add_v3": {
+   "and": 812
+  },
+  "F32Div_v3": {
+   "and": 2517
+  },
+  "F32Fma_v3": {
+   "and": 4485
+  },
+  "F32Mul_v3": {
+   "and": 2430
+  },
+  "I32Add_v2": {
+   "and": 31
+  }
+ }
+}

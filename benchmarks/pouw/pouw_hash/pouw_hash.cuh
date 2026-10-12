@@ -4,7 +4,7 @@
 // block), #468's `ncp2_tiles.cuh` (the SHA-256 compression) and the H100 `hash90` (Keccak's LOP3 form).
 //
 // Every function compiles for the host (g++ -x c++, no CUDA) and the device (nvcc, sm_120a). `pouw_hash_bench.cu check` prints
-// the same vectors from both, and `check.py` holds them to hashlib, the `blake3` package, verity.primitives.crypto.turboshake and
+// the same vectors from both, and `check.py` holds them to hashlib, the `blake3` package, verity.ml.crypto.turboshake and
 // Pearl-C's own `leaf` (benchmarks/pouw/tests/test_pouw_hash.py on the host; `run.sh` on the device before any timing).
 //
 // Words and lanes. A lane is 8 message bytes, little-endian: lane_u32x2(lo, hi) puts the word with the lower column (the
@@ -622,7 +622,7 @@ inline void quad_msg_digest_warp(const Frag& frag, uint8_t D, uint64_t out[32][4
   for (int lane = 0; lane < 32; ++lane) quad_final<A>(s[lane], D, out[lane]);
 }
 
-// ---- Pearl-C (`pearl-c-h100-v0/v1`, verity.protocols.accounting.work.pouw.schemes.pearl_c): which hash binds which words -----------------------------
+// ---- Pearl-C (`pearl-c-h100-v0/v1`, verity.core.protocols.pouw.schemes.pearl_c): which hash binds which words -----------------------------
 
 namespace pearlc {
 constexpr uint8_t D_MESSAGE = 0x21, D_LEAF = 0x22, D_ROWS = 0x23;

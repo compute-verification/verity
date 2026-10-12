@@ -34,10 +34,10 @@ validated against the registered specification — see `serve3_reference.py`).
 
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import bind, composite
-from verity.primitives.circuits.refs import Coll as _Coll
-from verity.primitives.circuits.refs import concat, tuple_of
-from verity.primitives.circuits.types import Array, Tuple
+from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.refs import Coll as _Coll
+from verity.ml.circuits.refs import concat, tuple_of
+from verity.ml.circuits.types import Array, Tuple
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.b1 import ZERO16, const, kv_type, weights_type

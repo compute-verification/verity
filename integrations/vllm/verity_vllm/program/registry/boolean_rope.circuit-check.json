@@ -1,0 +1,19 @@
+{
+ "definitions": {
+  "RoPEGptJ_v3{NHEADS=2,D=8}": {
+   "and": 47456
+  },
+  "RoPEHead_v2{D=8}": {
+   "and": 23728
+  },
+  "RoPE_v2{NHEADS=2,D=8}": {
+   "and": 47456
+  },
+  "RopeOutAdd_v2": {
+   "and": 2966
+  },
+  "RopeOut_v2": {
+   "and": 2966
+  }
+ }
+}

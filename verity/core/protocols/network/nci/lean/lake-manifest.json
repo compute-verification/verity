@@ -1,0 +1,13 @@
+{"version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "flock_verifier",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../../../service/flock",
+   "configFile": "lakefile.toml"}],
+ "name": "nci_check",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

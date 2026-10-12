@@ -1,4 +1,4 @@
-"""The GPU twin of `verity.protocols.accounting.space.pous.dense.DENSE`: one layer on the complete DAG, the overwrite chain over `Pi2`, no `P`.
+"""The GPU twin of `verity.core.protocols.pous.dense.DENSE`: one layer on the complete DAG, the overwrite chain over `Pi2`, no `P`.
 
 Per segment `s` with `tag_s = salt || u64(s)`, block `i` of `B` blocks of `L` bytes (`dense.POINT_64K`: 512 of 65,536):
 

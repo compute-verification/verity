@@ -1,7 +1,7 @@
 """PoUW's `ncp-v2` in the model Program: `NcpLinearRow_v1{K,N}` and `NcpLinearRowBias_v1{K,N}`, one row of a PoUW linear's
 served output without and with its bias.
 
-A PoUW linear's call is its own `NcpLinear_v1` Program call (`verity.protocols.accounting.work.pouw.circuit`), and its served y depends on x and W
+A PoUW linear's call is its own `NcpLinear_v1` Program call (`verity.core.protocols.pouw.circuit`), and its served y depends on x and W
 alone: the noise cancels in Z = A·Bᵀ, which is exact. So one row of the model Program at a PoUW site is this Definition.
 It quantizes the row and each weight row with the adapter's quantizer (`protocol_options.pouw.quantize`,
 ``verity.pouw.symmetric-int7-rowmax-rne-f32/v1``):
@@ -20,13 +20,13 @@ from __future__ import annotations
 import math
 import struct
 
-from verity.primitives.circuits.defs import bind, composite, primitive
-from verity.primitives.circuits.refs import array_of
-from verity.primitives.circuits.types import Array, Value
-from verity_catalog.definitions import fp32 as F
-from verity_catalog.definitions import prims as P
-from verity_catalog.definitions import scalar as SC
-from verity.protocols.accounting.work.pouw.circuit.ncp2 import NcpDequant
+from verity.ml.circuits.defs import bind, composite, primitive
+from verity.ml.circuits.refs import array_of
+from verity.ml.circuits.types import Array, Value
+from verity.ml.circuits.ops import fp32 as F
+from verity.ml.circuits.ops import prims as P
+from verity.ml.circuits.ops import scalar as SC
+from verity.core.protocols.pouw.circuit.ncp2 import NcpDequant
 
 BF16, F32, U32, I7, BIT = Value(16), Value(32), Value(32), Value(7), Value(1)
 A16I7 = Array(16, I7)

@@ -2,7 +2,7 @@
 
 The model's layers are a stand-in linear type (`pous.linear_types`), their weights byte strings (`pous.TENSORS`), and the
 band runs at a 128-byte segment (`pous._base`), so encoding takes milliseconds.  The codec, the commitment, the salt, the
-storage root and the audit are `verity.protocols.accounting.space.pous`'s own.
+storage root and the audit are `verity.core.protocols.pous`'s own.
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ class Model:
 
 @pytest.fixture
 def toy(monkeypatch):
-    from verity.protocols.accounting.space.pous import band
+    from verity.core.protocols.pous import band
     monkeypatch.setattr(pous, "TENSORS", Bytes())
     monkeypatch.setattr(pous, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(pous, "_base", lambda scheme: band.BandParams(16, 64, 12))
@@ -126,7 +126,7 @@ def test_with_pous_on_the_selector_refuses_an_option_that_keeps_a_weight_copy(mo
 
 
 def test_pous_serves_decoded_weights_releases_the_plaintext_and_passes_its_own_audit(toy):
-    from verity.protocols.accounting.space.pous import protocol
+    from verity.core.protocols.pous import protocol
     before = hooks.live()
     comp = PO.install(toy, _ctx(f"pous:{BAND}", settings={"pous": {"salt_source": SALT_SOURCE}}))
     opt = comp.get("pous")
@@ -149,9 +149,9 @@ def test_pous_serves_decoded_weights_releases_the_plaintext_and_passes_its_own_a
     assert bytes.fromhex(c["salt"]) == protocol.draw_salt(bytes.fromhex(SALT_SOURCE), bytes.fromhex(c["commitment"]))
     vk = protocol.verifier_key(s.scheme, bytes.fromhex(c["commitment"]), s.salt, w=s.layout.pack(toy.plain))
     assert vk.root.hex() == c["storage_root"]                                           # the verifier's own encoding agrees
-    v = protocol.Verifier(s.scheme, vk, protocol.challenge_key(b"audit", vk), k=20, research=True, clock=_ticks())
+    v = protocol.TimedAudit(s.scheme, vk, protocol.challenge_key(b"audit", vk), k=20, research=True, clock=_ticks())
     assert v.run(opt.answer).accepted and opt.answered == 20
-    lying = protocol.Verifier(s.scheme, vk, protocol.challenge_key(b"audit", vk), k=20, research=True, clock=_ticks())
+    lying = protocol.TimedAudit(s.scheme, vk, protocol.challenge_key(b"audit", vk), k=20, research=True, clock=_ticks())
     assert not lying.run(lambda i: bytes(len(s.blocks[i]))).accepted
     assert comp.verdict() == {"protocols": [f"pous:{BAND}"], "record": comp.record()["digest"]}
     assert comp.info()[f"pous:{BAND}"]["salt_source"] == "settings"

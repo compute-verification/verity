@@ -5,8 +5,8 @@ addressed to its owner, and a "cleared" reply in that thread when it ends:
 - a lease pool's `blocked` file exists (gpu_stray.py writes it, a person removes it): that pool's owner, with the file's text,
   which names the pid, pod and GPU;
 - the dispatcher's last 3 ticks failed, or it hasn't ticked for 10 minutes: circuits and infra, with the error. Its ticks are
-  read from both its tmux pane (the only place a failed tick, on stderr, shows) and `loop.log` (the pane's stdout, which can
-  go on ticking while the pane shows nothing);
+  read from `loop.log`, where vy-node1-dispatch.service writes its stdout and stderr (a failed tick is on stderr), and from
+  its old tmux pane while one is there;
 - node 1 can't be read for 10 minutes: infra.
 
 The same read takes each Kueue ClusterQueue's `spec.resourceGroups`. On 3 Oct node 1's quotas were changed by hand and the
@@ -36,14 +36,16 @@ from typing import Callable
 
 POOLS = {"/run/gpu-lease": "proofs", "/run/gpu-lease-circuits": "circuits"}
 DISPATCH = ("circuits", "infra")
-SESSION = "node1-dispatch"
+SESSION = "node1-dispatch"     # its tmux pane before vy-node1-dispatch.service; read while an older loop may still run there
+UNIT = "vy-node1-dispatch.service"
 LOOP_LOG = "/workspace/jobs/dispatch/loop.log"
 FAILS = 3
 STALL_S = 600
 UNREAD_S = 600
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 TICK_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick(?: failed: (.*)| )")
-KUBECTL = ["sudo", "-n", "k3s", "kubectl"]
+# a read-only kubeconfig's `kubectl` once research has no `sudo k3s` (pods/nebius/lockout: VY_KUBECTL=kubectl in its environment)
+KUBECTL = os.environ.get("VY_KUBECTL", "sudo -n k3s kubectl").split()
 QUOTA_LOG = "/workspace/verity-guest/quota-changes.log"
 QUOTA_WHO = ["infra"]
 UNSET = "(unset)"
@@ -105,12 +107,12 @@ def incidents(snap: dict) -> dict[str, tuple[list[str], str, str]]:
                                f"holders. `{d}/blocked` says: _{text[:400]}_ Once that process is gone, remove the file "
                                f"(`ssh n1 sudo rm {d}/blocked`).",
                                f"*Cleared:* `{d}/blocked` is gone, so the pool grants GPUs again.")
-    pane = f"`ssh n1 tmux capture-pane -pJ -t {SESSION}` and `ssh n1 tail {LOOP_LOG}`"
+    pane = f"`ssh n1 tail {LOOP_LOG}` (its stdout and stderr) and `ssh n1 systemctl status {UNIT}`"
     ticks = last_ticks(snap)
     if ticks is None:
-        out["dispatch"] = (list(DISPATCH), f"*Node 1's dispatcher can't be seen*: neither its pane (tmux `{SESSION}`) nor "
-                           f"`{LOOP_LOG}` can be read, so nobody can see whether it ticks. If it was restarted elsewhere, tell "
-                           "infra where.", "*Cleared:* node 1's dispatcher ticks again.")
+        out["dispatch"] = (list(DISPATCH), f"*Node 1's dispatcher can't be seen*: `{LOOP_LOG}` (where `{UNIT}` writes) can't "
+                           "be read, so nobody can see whether it ticks. If it was restarted elsewhere, tell infra where.",
+                           "*Cleared:* node 1's dispatcher ticks again.")
         return out
     ms = [m for m in map(TICK_RE.match, ticks) if m]
     if len(ms) >= FAILS and all(m[2] is not None for m in ms[-FAILS:]):

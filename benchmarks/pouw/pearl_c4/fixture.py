@@ -1,5 +1,5 @@
 """The device check's fixture for pearl_c4.cu: inputs and every buffer the kernels write, at a small shape, from the numpy
-twin (`twin.py`) and `verity.protocols.accounting.work.pouw.schemes.pearl_c4`'s hashing.  dev.py's check compares each device buffer with these
+twin (`twin.py`) and `verity.core.protocols.pouw.schemes.pearl_c4`'s hashing.  dev.py's check compares each device buffer with these
 byte for byte.
 
   uv run python benchmarks/pouw/pearl_c4/fixture.py OUT [--fmt nvfp4|mxfp4|both] [--shape MxNxK]
@@ -21,11 +21,11 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from verity.primitives.crypto.turboshake import turboshake128
-from verity.protocols.accounting.work.pouw import audit as AU
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-from verity.protocols.accounting.work.pouw.schemes import pearl_c4 as F
+from verity.ml.crypto.turboshake import turboshake128
+from verity.core.protocols.pouw import audit as AU
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
+from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.core.protocols.pouw.schemes import pearl_c4 as F
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import twin as T  # noqa: E402
@@ -45,8 +45,9 @@ def rows(name: str, count: int, k: int) -> np.ndarray:
 
 
 def raw_lines(seed: bytes, role: int, count: int) -> np.ndarray:
-    return np.frombuffer(b"".join(turboshake128(seed + bytes([role]) + i.to_bytes(4, "little"), F.D_LINE, 16)
-                                  for i in range(count)), np.uint8).reshape(count, 16)
+    blocks = b"".join(hashlib.sha512(F.LABEL_BLOCKS["line"] + seed + bytes([role]) + c.to_bytes(4, "little")).digest()
+                      for c in range(-(-count // 4)))
+    return np.frombuffer(blocks[:16 * count], np.uint8).reshape(count, 16)
 
 
 def nibbles(raw: np.ndarray) -> np.ndarray:

@@ -29,13 +29,14 @@ ALLOWED_EXTRA = (
     "archive/direct/V2_AIR.md",
     "archive/direct/encode/V2_SHAPE.md",
     "archive/vole/ASSUMPTIONS.md",
-    "backends/flock/verifier/lean/soundness/ASSUMPTIONS.md",
+    "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
     "benchmarks/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
-#: One file per entry behind an index document, so that no one document outgrows its cap: the Flock soundness package's
-#: detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and ligero-verify's discrepancies
-#: (indexed by its ``DISCREPANCIES.md``).
-SPLIT_DOCUMENT_DIRS = ("backends/flock/verifier/lean/soundness/assumptions/", "archive/ligero-verify/discrepancies/")
+#: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. C-Flock
+#: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and ligero-verify's
+#: discrepancies (indexed by its ``DISCREPANCIES.md``).
+SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+                       "archive/ligero-verify/discrepancies/": "archive/ligero-verify/DISCREPANCIES.md"}
 #: The one evidence file left in the tree: not read by code, kept with the rest of fixtures/redteam until the red team rules
 #: on it.  The frozen campaign evidence that code reads (the overhead ledger, the run results the frozen backends' report
 #: scripts compare against) is in the evidence store (``verity_numerical.bench.frozen``).
@@ -60,20 +61,20 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: silently. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
 #: (`research data fetch-fixtures`).
 ALLOWLIST = {
-    "catalog/census/workloads.json": 384 * 1024,
+    "benchmarks/census/workloads.json": 384 * 1024,
     "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
     "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/olmoe-1b-7b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/qwen25-15b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
-    "catalog/verity_catalog/definitions/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    "verity/ml/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
 #: what Daniel is shown when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
-#: executable verifier, `Flock`, took soundness's record past 2 MiB).
-AUDIT_RECORD_LIMIT = 4 * 1024 * 1024
+#: executable verifier, `Flock`, took soundness's record past 2 MiB, and `Security`'s holds every package's guarantees).
+AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be.
 DATA_BUDGET = 40 * 1024 * 1024
@@ -88,7 +89,7 @@ def _tracked() -> list[str]:
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
                  and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
-                 and not p.startswith(SPLIT_DOCUMENT_DIRS)]
+                 and not p.startswith(tuple(SPLIT_DOCUMENT_DIRS))]
     assert not offenders, (
         "tracked markdown that is not a maintained document (reports, handoffs and drafts belong in ~/.research/notes):\n"
         + "\n".join(offenders)
@@ -140,10 +141,9 @@ def test_pinned_evidence_still_exists() -> None:
 
 
 def split_dir(path: str) -> str | None:
-    """The `SPLIT_DOCUMENT_DIRS` directory behind ``path``: the one it sits in, or the one it indexes (``ASSUMPTIONS.md`` beside
-    ``assumptions/``); None for any other document."""
-    indexed = os.path.join(os.path.dirname(path), os.path.splitext(os.path.basename(path))[0].lower()) + "/"
-    return next((d for d in SPLIT_DOCUMENT_DIRS if path.startswith(d) or indexed == d), None)
+    """The `SPLIT_DOCUMENT_DIRS` directory behind ``path``: the one it sits in, or the one it indexes (``ASSUMPTIONS.md``
+    indexes ``assumption-notes/``); None for any other document."""
+    return next((d for d, index in SPLIT_DOCUMENT_DIRS.items() if path.startswith(d) or path == index), None)
 
 
 def markdown_over_cap(path: str, size: int) -> str | None:
@@ -156,12 +156,12 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 
 
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
-    soundness = "backends/flock/verifier/lean/soundness/"
+    soundness = "Security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")
-    for p in (soundness + "ASSUMPTIONS.md", soundness + "assumptions/e2e-checklist.md"):
-        assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumptions/")
+    for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
+        assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap("archive/ligero-verify/DISCREPANCIES.md", MD_SIZE_CAP + 1).endswith("archive/ligero-verify/discrepancies/")
     assert markdown_over_cap("archive/ligero-verify/README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
 
@@ -181,7 +181,7 @@ def test_markdown_size_caps() -> None:
 
 
 #: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (archive/README.md).
-UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "kernels/")
+UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "verity/ml/kernels/")
 
 
 def _testpaths(tracked: list[str]) -> list[str]:
@@ -196,7 +196,7 @@ def _testpaths(tracked: list[str]) -> list[str]:
 
 
 def test_every_test_file_is_in_a_suite() -> None:
-    """`tools/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
+    """`tools/verity/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
     directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests."""
     tracked = _tracked()
     testpaths = _testpaths(tracked)
@@ -301,6 +301,16 @@ def test_owned_paths_exist() -> None:
     stale = sorted(f"@{h['handle']}: {p}" for h in reg["handles"] for p in h.get("owns", [])
                    if not any(t == p or t.startswith(p if p.endswith("/") else p + "/") for t in tracked))
     assert not stale, "registry `owns` entries that match no tracked path; update them:\n" + "\n".join(stale)
+
+
+def test_every_path_has_owner() -> None:
+    """`research msg owners` names a handle for every tracked path, so a report about any directory reaches someone."""
+    from research.slack import owner
+
+    reg = json.loads((ROOT / ".agents/skills/using-slack/registry.json").read_text())
+    unowned = sorted({os.path.dirname(p) + "/" for p in _tracked() if owner(reg, p) is None})
+    assert not unowned, ("directories holding tracked files no handle owns; add each to its owner's `owns` in "
+                         ".agents/skills/using-slack/registry.json:\n" + "\n".join(unowned))
 
 
 def test_tracked_data_within_budget() -> None:

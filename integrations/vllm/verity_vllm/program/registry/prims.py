@@ -5,9 +5,9 @@ Encodings: bf16 = `Value<16>` (IEEE binary16-exponent bfloat16 bit pattern), f32
 encodings map to ordinary outputs following the registered semantics stated in each docstring.
 
 The FP32 and BF16 arithmetic primitives (`F32Add` … `GuardNegInfZero`, `Bf16Add` … `Bf16MulBf16`) and their encoding
-helpers are core's (`verity_catalog.definitions.fp32`) and are re-exported here under the same names, as are the MUFU primitives
+helpers are core's (`verity.ml.circuits.ops.fp32`) and are re-exported here under the same names, as are the MUFU primitives
 (`MufuEx2Ftz`, `MufuRcpFtz`, `Fa2InvSum`, `MufuSqrtFtz`, `DivFullRcp`, `DivFullScaleA`, `RsqrtApprox`, `MufuTanh`) and
-their measured sm_89 tables (`verity_catalog.definitions.mufu`).
+their measured sm_89 tables (`verity.ml.circuits.ops.mufu`).
 
 Hardware-shaped primitives wrap the existing exact models, they do not re-derive them:
   * `TcDot16` — `veritor.core.silicon_total` (`mma.sync.m16n8k16` k-step, total on every encoding), evaluated through
@@ -20,27 +20,26 @@ evidence measured on sm_89 — this pod is sm_80 (A100), so every table-backed p
 from __future__ import annotations
 
 import math
-from functools import lru_cache
 
 import numpy as np
 
-from verity.primitives.circuits.defs import PrimitiveDefinition, primitive
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.defs import PrimitiveDefinition, primitive
+from verity.ml.circuits.types import Array, Value
 # Re-exported: this package reaches the FP32/BF16 primitives and helpers through this module.
-from verity_catalog.definitions.fp32 import (BF16_NAN_F2FP, BF16_NAN_TORCH, F32_NAN, Bf16Add, Bf16AddF2fp, Bf16MulBf16, Bf16MulF32, F32Add,
+from verity.ml.circuits.ops.fp32 import (BF16_NAN_F2FP, BF16_NAN_TORCH, F32_NAN, Bf16Add, Bf16AddF2fp, Bf16MulBf16, Bf16MulF32, F32Add,
                             F32AddFtz, F32Div, F32Fma, F32FmaFtz, F32FmaSubFtz, F32Max, F32Mul, F32MulFtz, F32SubFtz,
                             F32AddV2, F32AddFtzV2, F32DivV2, F32FmaV2, F32FmaFtzV2, F32FmaSubFtzV2, F32MulV2, F32MulFtzV2,
                             F32SubFtzV2, GuardNegInfZero, bf16_to_f32_bits, bits_of, f32_add_bits, f32_div_bits,
                             f32_fma_bits, f32_gpu_nan, f32_is_nan, f32_max_bits, f32_mul_bits, f32_of, f32_sub_bits,
                             f32_to_bf16_rn_bits, ftz_bits)
-from verity_catalog.definitions.fp32 import f32_decode as _decode, f32_round as _round_f32
+from verity.ml.circuits.ops.fp32 import f32_decode as _decode, f32_round as _round_f32
 # Re-exported: the MUFU primitives and their tables are core's.
-from verity_catalog.definitions.mufu import (MUFU_TANH_RULES, MUFU_TANH_SHARD_FORMAT, MUFU_TANH_TABLE_DIR, MUFU_TANH_TABLE_FORMAT,
-                            MUFU_TANH_TABLE_MANIFEST, MUFU_TANH_TABLE_MANIFEST_SHA256, DivFullRcp, DivFullScaleA, Fa2InvSum,
+from verity.ml.circuits.ops.mufu import (MUFU_TANH_RULES, MUFU_TANH_SHARD_FORMAT, MUFU_TANH_TABLE_DIR, MUFU_TANH_TABLE_FORMAT,
+                            MUFU_TANH_TABLE_MANIFEST, MUFU_TANH_TABLE_MANIFEST_SHA512, DivFullRcp, DivFullScaleA, Fa2InvSum,
                             MufuEx2Ftz, MufuRcpFtz, MufuSqrtFtz, MufuTanh, MufuTanhUnmeasured, RsqrtApprox, mufu_tanh_coverage,
                             mufu_tanh_table_manifest)
-from verity_catalog.definitions.prims import AmpereBF16TcDot16, Bf16ToF32, F2fpBf16, F32ToBf16Rn   # the k16 tensor-core step: core's `_v2` (same function as the retired `_v1`)
-from verity_catalog.definitions.scalar import Bf16GtStrict, I32Add, I32Eq, I32Le, SelectBf16, SelectF32, SelectI32
+from verity.ml.circuits.ops.prims import AmpereBF16TcDot16, Bf16ToF32, F2fpBf16, F32ToBf16Rn   # the k16 tensor-core step: core's `_v2` (same function as the retired `_v1`)
+from verity.ml.circuits.ops.scalar import Bf16GtStrict, I32Add, I32Eq, I32Le, SelectBf16, SelectF32, SelectI32
 
 BF16, F32, I32, BIT = Value(16), Value(32), Value(32), Value(1)
 
@@ -95,23 +94,6 @@ def RopeOutAdd(x: int, y: int, c: int, s: int) -> int:
 
 
 A16 = Array(16, BF16)
-
-
-# ---------------------------------------------------------------------------------------------------------
-# the C++ models the MUFU primitives were transliterated from, with their tables (twins, the replay driver)
-# ---------------------------------------------------------------------------------------------------------
-
-
-@lru_cache(maxsize=None)
-def _fa2():
-    from verity_vllm.program.kernels import fa2_model, fa2_relation
-    return fa2_model, fa2_relation.tables()
-
-
-@lru_cache(maxsize=None)
-def _rms():
-    from verity_vllm.program.kernels import rms_relation, rms_triton_model
-    return rms_triton_model, rms_relation.tables("cuda")
 
 
 # ---------------------------------------------------------------------------------------------------------

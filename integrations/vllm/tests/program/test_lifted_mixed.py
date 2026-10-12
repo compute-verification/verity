@@ -27,16 +27,17 @@ from __future__ import annotations
 
 import pytest
 
-from verity.primitives.circuits import Program
-from verity.primitives.circuits.codec import _spec_id, encode_program, program_digest
-from verity.primitives.circuits.defs import REGISTRY, bind, composite
+from verity.ml.circuits import Program
+from verity.ml.circuits.codec import _spec_id, encode_program, program_digest
+from verity.ml.circuits.defs import REGISTRY, bind, composite
 from verity_vllm.program import workload as W
-from verity.primitives.circuits.refs import Coll, array_of, coll_concat, tuple_of
+from verity.ml.circuits.refs import Coll, array_of, coll_concat, tuple_of
 from verity_vllm.program.registry import b1, lifted as L
-from verity_vllm.program.registry import serve3_reference as ref
+from verity_vllm.program.lifting import lifted_compose
+from verity_vllm.program.kernels import serve3_reference as ref
 from verity_vllm.program.registry.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
-from verity.primitives.circuits.types import Array, Tuple, Value
+from verity.ml.circuits.types import Array, Tuple, Value
 
 I32 = Value(32)
 CAP = D_MAX + 1
@@ -64,7 +65,7 @@ def wl_u(component):
 
 @pytest.fixture(scope="module")
 def wl_l(component):
-    return L.lifted_workload(_requests(component), EOS, lag=0, boundary_prefix=BOUNDARY)
+    return lifted_compose.lifted_workload(_requests(component), EOS, lag=0, boundary_prefix=BOUNDARY)
 
 
 def _prompt_b():
@@ -159,16 +160,16 @@ def test_the_lifted_workload_is_gp01s_compose_over_lifted_components_with_a_fixe
     # the digest: a function of the manifest, the EOS set and LAG — of nothing served
     d0 = wl_l.digest
     assert d0 != wl_u.digest
-    assert L.lifted_workload(_requests(component), EOS, lag=0, boundary_prefix=BOUNDARY).digest == d0
-    assert L.lifted_workload(_requests(component), (63,), lag=0, boundary_prefix=BOUNDARY).digest != d0
-    assert L.lifted_workload(_requests(component), EOS, lag=1, boundary_prefix=BOUNDARY).digest != d0
-    assert L.lifted_workload(_requests(component, (0, 2)), EOS, lag=0, boundary_prefix=BOUNDARY).digest != d0  # arrivals are declared
+    assert lifted_compose.lifted_workload(_requests(component), EOS, lag=0, boundary_prefix=BOUNDARY).digest == d0
+    assert lifted_compose.lifted_workload(_requests(component), (63,), lag=0, boundary_prefix=BOUNDARY).digest != d0
+    assert lifted_compose.lifted_workload(_requests(component), EOS, lag=1, boundary_prefix=BOUNDARY).digest != d0
+    assert lifted_compose.lifted_workload(_requests(component, (0, 2)), EOS, lag=0, boundary_prefix=BOUNDARY).digest != d0  # arrivals are declared
     with pytest.raises(ValueError, match="never from a served length"):
-        L.lifted_workload([W.WorkloadRequest("A", 0, LP, CAP, 0, component, T=3)], EOS, lag=0, boundary_prefix=BOUNDARY)
+        lifted_compose.lifted_workload([W.WorkloadRequest("A", 0, LP, CAP, 0, component, T=3)], EOS, lag=0, boundary_prefix=BOUNDARY)
     with pytest.raises(ValueError, match="F-pad-15"):  # a component of a smaller cap under a larger declaration
-        L.lifted_workload([W.WorkloadRequest("A", 0, LP, CAP + 1, 0, component)], EOS, lag=0, boundary_prefix=BOUNDARY)
+        lifted_compose.lifted_workload([W.WorkloadRequest("A", 0, LP, CAP + 1, 0, component)], EOS, lag=0, boundary_prefix=BOUNDARY)
     with pytest.raises(TypeError):
-        L.lifted_workload(_requests(component), EOS, boundary_prefix=BOUNDARY)  # type: ignore[call-arg]  # the lag is declared
+        lifted_compose.lifted_workload(_requests(component), EOS, boundary_prefix=BOUNDARY)  # type: ignore[call-arg]  # the lag is declared
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -353,7 +354,7 @@ def LWorkloadS(B, S, *args):
 
 
 def _hook_run(component, arrivals, prompts, lag, eos=EOS):
-    wl = L.lifted_workload(_requests(component, arrivals), eos, lag=lag, boundary_prefix=BOUNDARY)
+    wl = lifted_compose.lifted_workload(_requests(component, arrivals), eos, lag=lag, boundary_prefix=BOUNDARY)
     wl_u = W.WorkloadProgram(_requests(component, arrivals), lag=lag)
     prog = Program(bind(LWorkloadS, WL=wl.fn, EOS=eos, LAG=lag, SMS=SMS, ARR=tuple(arrivals), CAP=CAP))
     t, outs = _run(prog, _inputs_for(wl_u.fn, prompts, True))
@@ -426,7 +427,7 @@ def test_the_hook_follows_declared_arrivals_and_S_is_bot_when_no_request_is_live
     with pytest.raises(ValueError, match="requests"):
         L.live_count_prim(65)
     with pytest.raises(ValueError, match="LAG=3"):
-        L.lifted_workload(_requests(component), EOS, lag=3, boundary_prefix=BOUNDARY)
+        lifted_compose.lifted_workload(_requests(component), EOS, lag=3, boundary_prefix=BOUNDARY)
 
 
 # F-pad-19 (padrev M-0245): GP-01's populations have UNEQUAL caps (its standard B2 fixture is cap 3 / cap 2). The hook takes one cap per request.
@@ -445,7 +446,7 @@ def test_f_pad_19_the_hook_takes_one_cap_per_request_and_refuses_a_served_length
     reqs = [W.WorkloadRequest("A", 0, LP, CAP, 0, component), W.WorkloadRequest("B", 1, LP, CAP_B, 0, component_b)]
     prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
     for lag in (0, 1):
-        wl = L.lifted_workload(reqs, EOS, lag=lag, boundary_prefix=BOUNDARY)
+        wl = lifted_compose.lifted_workload(reqs, EOS, lag=lag, boundary_prefix=BOUNDARY)
         wl_u = W.WorkloadProgram(reqs, lag=lag)
         # ONE cap for both is refused by name -- 9 would read B's out[4..8] (padrev measured an UNNAMED IndexError), 4 would truncate A's schedule
         for one_cap in (CAP, CAP_B):

@@ -21,7 +21,9 @@ Without a usable remote (no store.toml, or credentials not in this environment) 
 """
 from __future__ import annotations
 
-from typing import Any
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable
 
 from . import ids
 from . import labels_sync as LS
@@ -125,10 +127,13 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
     return rep
 
 
-def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback: bool = True) -> dict[str, Any]:
+def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback: bool = True, *, jobs: int = 1,
+          on_target: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
     """The gate over several targets (`head_fallback=False`: `recorded` stays offline, a caller that bounds what it reads back).  `preserved` is True iff every target is: for a run id, its attempt manifest is on the remote
     and every artifact it names is preserved (an attempt naming no artifact is preserved once its manifest is); for an art id, the
-    artifact is.  `not_preserved` lists what is not, with reasons."""
+    artifact is.  `not_preserved` lists what is not, with reasons.  `jobs` targets are checked at once (an artifact two targets name
+    is checked once); `on_target(target report)` is called, on this thread, as each one finishes.  The report is in `targets` order
+    whatever the completion order, and an exception while checking one target is that target's `error`, not the others'."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
     r = st.remote
@@ -136,43 +141,55 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
     if r is None and mode != "recorded":
         rep["reason"] = f"remote unusable: {st.remote_error}" if getattr(st, "remote_error", None) else "no remote configured"
     seen: dict[str, dict[str, Any]] = {}
+    art_locks: dict[str, threading.Lock] = {}
+    locks_lock = threading.Lock()
 
     def art(a: str) -> dict[str, Any]:
-        if a not in seen:
-            seen[a] = _check_artifact(st, a, mode, head_fallback)
-        return seen[a]
+        with locks_lock:
+            lock = art_locks.setdefault(a, threading.Lock())
+        with lock:
+            if a not in seen:
+                seen[a] = _check_artifact(st, a, mode, head_fallback)
+            return seen[a]
 
-    def labels_leg(t: str, label_targets: list[str]) -> tuple[bool | None, dict[str, Any] | None]:
-        """(ok | None when not checkable, report).  Missing or wrong-sized assertions land in not_preserved as kind `labels`."""
+    def labels_leg(t: str, label_targets: list[str], bad: list[dict[str, Any]]) -> tuple[bool | None, dict[str, Any] | None]:
+        """(ok | None when not checkable, report).  Missing or wrong-sized assertions land in `bad` as kind `labels`."""
         if mode == "recorded" or r is None:
             return None, None
         try:
             lrep = LS.verify_targets(st, label_targets)
         except Exception as e:  # noqa: BLE001
-            rep["not_preserved"].append({"id": t, "kind": "labels", "errors": [f"labels: {type(e).__name__}: {e}"]})
+            bad.append({"id": t, "kind": "labels", "errors": [f"labels: {type(e).__name__}: {e}"]})
             return False, {"error": f"{type(e).__name__}: {e}"}
         errors = [f"{k}: absent on the remote" for tt in lrep["targets"].values() for k in tt["missing"]]
         errors += [e for tt in lrep["targets"].values() for e in tt["errors"]]
         if errors:
-            rep["not_preserved"].append({"id": t, "kind": "labels", "errors": errors})
+            bad.append({"id": t, "kind": "labels", "errors": errors})
         return lrep["durable"], {"local": sum(x["local"] for x in lrep["targets"].values()), "remote": sum(x["remote"] for x in lrep["targets"].values()),
                                  "missing": sum(len(x["missing"]) for x in lrep["targets"].values()), "targets": lrep["targets"], "errors": errors}
 
-    for t in targets:
+    def one(t: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        bad: list[dict[str, Any]] = []
+        try:
+            return target(t, bad), bad
+        except Exception as e:  # noqa: BLE001
+            err = f"{type(e).__name__}: {e}"
+            return {"target": t, "kind": "?", "preserved": False, "error": err}, [*bad, {"id": t, "kind": "?", "errors": [err]}]
+
+    def target(t: str, bad: list[dict[str, Any]]) -> dict[str, Any]:
         if ids.is_short_art(t):
             hits = st.resolve_art(t)
             if len(hits) != 1:
                 err = f"{t} is {'ambiguous' if hits else 'unknown'} (local catalog{' and remote' if r is not None else ''})"
-                rep["targets"].append({"target": t, "kind": "?", "preserved": False, "error": err})
-                rep["not_preserved"].append({"id": t, "kind": "?", "errors": [err]})
-                continue
+                bad.append({"id": t, "kind": "?", "errors": [err]})
+                return {"target": t, "kind": "?", "preserved": False, "error": err}
             t = hits[0]
         if t.startswith("art:"):
             a = art(t)
             tr: dict[str, Any] = {"target": t, "kind": "artifact", "preserved": a["preserved"], "artifacts": {t: a}}
             if not a["preserved"]:
-                rep["not_preserved"].append({"id": t, "kind": a["kind"], "errors": a["errors"]})
-            lab_ok, tr["labels"] = labels_leg(t, [t])
+                bad.append({"id": t, "kind": a["kind"], "errors": a["errors"]})
+            lab_ok, tr["labels"] = labels_leg(t, [t], bad)
             tr["legs"] = {"artifacts": a["preserved"], "labels": lab_ok}
             tr["preserved"] = a["preserved"] and lab_ok is not False
         elif ids.is_run_id(t):
@@ -184,7 +201,7 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
                 tr["error"] = f"{type(e).__name__}: {e}"
             if doc is None:
                 tr.setdefault("error", f"attempt {t} is not in the store")
-                rep["not_preserved"].append({"id": t, "kind": "attempt", "errors": [tr["error"]]})
+                bad.append({"id": t, "kind": "attempt", "errors": [tr["error"]]})
             else:
                 if mode == "recorded":
                     tr["attempt_manifest"] = None                       # unknown offline; not counted against the gate
@@ -205,24 +222,45 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
                     why = (f"{attempt_key(t)}: {DIFFERS} for this run id (`research data "
                            f"reconcile-attempts {t}`)" if tr.get("attempt_manifest_differs") else
                            f"{attempt_key(t)}: absent on the remote" if r else rep.get("reason", "no remote"))
-                    rep["not_preserved"].append({"id": t, "kind": "attempt", "errors": [why]})
+                    bad.append({"id": t, "kind": "attempt", "errors": [why]})
                 named = attempt_artifacts(doc)
                 for name, a in named.items():
                     ar = art(a)
                     tr["artifacts"][a] = {**ar, "name": name}
                     if not ar["preserved"]:
                         tr["missing_names"].append(name)
-                        rep["not_preserved"].append({"id": a, "kind": ar["kind"], "name": f"{t}:{name}", "errors": ar["errors"]})
+                        bad.append({"id": a, "kind": ar["kind"], "name": f"{t}:{name}", "errors": ar["errors"]})
                 arts_ok = all(x["preserved"] for x in tr["artifacts"].values())
-                lab_ok, tr["labels"] = labels_leg(t, LS.attempt_targets(doc))
+                lab_ok, tr["labels"] = labels_leg(t, LS.attempt_targets(doc), bad)
                 tr["legs"] = {"manifest": man_ok, "artifacts": arts_ok, "labels": lab_ok}
                 tr["preserved"] = man_ok and arts_ok and lab_ok is not False
                 tr["n_artifacts"] = len(named)
         else:
             tr = {"target": t, "kind": "?", "preserved": False, "error": f"not an artifact or run id: {t!r}"}
-            rep["not_preserved"].append({"id": t, "kind": "?", "errors": [tr["error"]]})
+            bad.append({"id": t, "kind": "?", "errors": [tr["error"]]})
+        return tr
+
+    done: list[tuple[dict[str, Any], list[dict[str, Any]]] | None] = [None] * len(targets)
+    if jobs <= 1 or len(targets) <= 1:
+        for i, t in enumerate(targets):
+            done[i] = one(t)
+            if on_target:
+                on_target(done[i][0])
+    else:
+        _ = st.index                            # opened here: two workers opening it first would each open (and migrate) a catalog
+        ex = ThreadPoolExecutor(max_workers=min(jobs, len(targets)))
+        try:
+            futs = {ex.submit(one, t): i for i, t in enumerate(targets)}
+            for f in as_completed(futs):
+                done[futs[f]] = f.result()
+                if on_target:
+                    on_target(done[futs[f]][0])
+        finally:
+            ex.shutdown(cancel_futures=True)
+    for tr, bad in done:
         rep["targets"].append(tr)
-    rep["artifacts"] = seen
+        rep["not_preserved"] += bad
+    rep["artifacts"] = {a: seen[a] for tr in rep["targets"] for a in tr.get("artifacts", {})}
     rep["preserved"] = bool(targets) and all(t["preserved"] for t in rep["targets"])
     return rep
 
@@ -253,28 +291,29 @@ def _failing_legs(rep: dict[str, Any]) -> list[str]:
     return out
 
 
-def format_report(rep: dict[str, Any]) -> list[str]:
+def format_target(t: dict[str, Any]) -> list[str]:
+    """One target's lines of the report (`check`'s `on_target` prints them as it finishes)."""
+    if t["kind"] == "attempt":
+        if t.get("error"):
+            return [f"{t['target']}  attempt  NOT preserved: {t['error']}"]
+        man = t.get("attempt_manifest")
+        lines = [f"{t['target']}  attempt manifest  " + ("on remote" if man else "not checked (recorded mode)" if man is None else
+                 "DIFFERS from the remote's copy (research data reconcile-attempts)" if t.get("attempt_manifest_differs") else "ABSENT on remote")]
+        for a, ar in t["artifacts"].items():
+            lines.append(f"  {ar['name']:<22} {a}  {str(ar['kind']):<22} "
+                         + (f"PRESERVED ({ar.get('verified')})" if ar["preserved"] else "NOT preserved: " + "; ".join(ar["errors"] or ["?"])))
+        if not t["artifacts"]:
+            lines.append("  (no output artifacts named by this attempt)")
+        return [*lines, _labels_line(t)]
+    if t["kind"] == "artifact":
+        ar = t["artifacts"][t["target"]]
+        return [f"{t['target']}  {str(ar['kind']):<22} " + (f"PRESERVED ({ar.get('verified')})" if ar["preserved"] else "NOT preserved: " + "; ".join(ar["errors"] or ["?"])),
+                _labels_line(t)]
+    return [f"{t['target']}  NOT preserved: {t.get('error')}"]
+
+
+def format_summary(rep: dict[str, Any]) -> list[str]:
     lines: list[str] = []
-    for t in rep["targets"]:
-        if t["kind"] == "attempt":
-            if t.get("error"):
-                lines.append(f"{t['target']}  attempt  NOT preserved: {t['error']}")
-                continue
-            man = t.get("attempt_manifest")
-            lines.append(f"{t['target']}  attempt manifest  " + ("on remote" if man else "not checked (recorded mode)" if man is None else
-                         "DIFFERS from the remote's copy (research data reconcile-attempts)" if t.get("attempt_manifest_differs") else "ABSENT on remote"))
-            for a, ar in t["artifacts"].items():
-                lines.append(f"  {ar['name']:<22} {a}  {str(ar['kind']):<22} "
-                             + (f"PRESERVED ({ar.get('verified')})" if ar["preserved"] else "NOT preserved: " + "; ".join(ar["errors"] or ["?"])))
-            if not t["artifacts"]:
-                lines.append("  (no output artifacts named by this attempt)")
-            lines.append(_labels_line(t))
-        elif t["kind"] == "artifact":
-            ar = t["artifacts"][t["target"]]
-            lines.append(f"{t['target']}  {str(ar['kind']):<22} " + (f"PRESERVED ({ar.get('verified')})" if ar["preserved"] else "NOT preserved: " + "; ".join(ar["errors"] or ["?"])))
-            lines.append(_labels_line(t))
-        else:
-            lines.append(f"{t['target']}  NOT preserved: {t.get('error')}")
     n_bad = len(rep["not_preserved"])
     if rep.get("reason") and not rep["preserved"]:
         lines.append(f"remote: {rep['reason']}")
@@ -284,4 +323,8 @@ def format_report(rep: dict[str, Any]) -> list[str]:
     return lines
 
 
-__all__ = ["MODES", "attempt_artifacts", "check", "format_report"]
+def format_report(rep: dict[str, Any]) -> list[str]:
+    return [line for t in rep["targets"] for line in format_target(t)] + format_summary(rep)
+
+
+__all__ = ["MODES", "attempt_artifacts", "check", "format_report", "format_summary", "format_target"]

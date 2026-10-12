@@ -19,7 +19,7 @@ import inspect
 import itertools
 from pathlib import Path
 
-from verity.primitives.circuits.defs import SpecializedDefinition
+from verity.ml.circuits.defs import SpecializedDefinition
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.program.boolean import boolean_version
 from verity_vllm.program.frontend.rules.vocab import vocabulary_for

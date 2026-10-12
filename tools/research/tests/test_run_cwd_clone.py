@@ -5,6 +5,7 @@ Proofs ran one Lean audit twice at one sha with `--cwd source`; cancelling the d
 from __future__ import annotations
 
 import errno
+import importlib.machinery
 import json
 import os
 import shutil
@@ -16,9 +17,10 @@ from pathlib import Path
 
 import pytest
 
-from research import clone, remote
+from research import clone, gates, remote
 from research import runs as R
-from research.cli import main
+from research.cli import _clone_imports, main
+from research.pythonpath import import_roots_dir, pythonpath
 from research.store import attempt as A
 from research.telemetry.procs import stat_fields
 from waits import Gate, wait_runner
@@ -88,6 +90,18 @@ def _workspace(repo: Path) -> None:
         "OUT.write_text('figure')\n")
     _git(repo, "add", ".")
     _git(repo, "commit", "-q", "-m", "a workspace member")
+
+
+def _root_package(d: Path) -> None:
+    """A workspace whose root is itself the package `verity`, as this repository's is, beside a member `m`: a machine's PYTHONPATH
+    reaches `verity` through the tree's shim (`pythonpath.shim_dir`), never through the root."""
+    (d / "verity").mkdir(parents=True)
+    (d / "verity" / "__init__.py").write_text("")
+    (d / "m" / "src" / "other").mkdir(parents=True)
+    (d / "m" / "src" / "other" / "__init__.py").write_text("")
+    (d / "m" / "pyproject.toml").write_text('[project]\nname = "m"\nversion = "0"\n')
+    (d / "pyproject.toml").write_text('[project]\nname = "verity"\nversion = "0"\n[build-system]\nrequires = ["hatchling"]\n'
+                                      '[tool.hatch.build.targets.wheel]\npackages = ["verity"]\n[tool.uv.workspace]\nmembers = ["m"]\n')
 
 
 @pytest.fixture
@@ -194,6 +208,12 @@ def test_untracked_files_count_whatever_status_shows(tmp_path, repo, capsys):
     assert "has uncommitted or untracked files" in capsys.readouterr().err and _clones(tmp_path) == []
     with pytest.raises(remote.Refused, match="has uncommitted changes"):
         remote.ship_source(["false"], str(tmp_path / "machine"), repo)
+
+
+def test_a_clone_merges_lean_audit_json_with_the_record_driver(tmp_path, repo):
+    """A clone's config starts empty, so a workload that merged in it merged a `lean-audit.json` line by line."""
+    clone.make(repo, tmp_path / "c")
+    assert _git(tmp_path / "c", "config", "merge.lean-audit.driver") == gates.RECORD_DRIVER["merge.lean-audit.driver"]
 
 
 def test_the_callers_git_dir_does_not_point_the_clone_at_the_source(tmp_path, repo, monkeypatch):
@@ -382,6 +402,50 @@ def test_on_a_machine_a_clone_run_executes_the_shipped_code_not_the_shared_trees
     mod = machine / "src" / sha / "m" / "src" / "leaky" / "__init__.py"
     mod.write_text(mod.read_text() + "MARK = 'changed in the shared tree'\n")
     assert go(1)["mark"] is None
+
+
+def test_the_trees_shim_is_replaced_by_one_of_the_clone_so_nothing_on_pythonpath_reaches_the_shipped_tree(tmp_path, monkeypatch):
+    """On a machine the tree's shim (<root>/cache/pyshim/<key>, `verity -> <tree>/verity`) is not under the tree, so it stayed on
+    PYTHONPATH and its link took `import verity` to the shared tree: Lean audits under `--cwd clone` refused when difftest_vectors.py
+    found `verity` imported from there (runs r20261006-001503-1357, r20261006-032546-c760).  The clone's shim lives beside the clone
+    and goes with it; the shared one stays for the runs that share it."""
+    of, home = tmp_path / "src" / "sha", tmp_path / "scratch" / "r1"
+    _root_package(of)
+    tree = Path(shutil.copytree(of, home / "tree"))
+    path = pythonpath(str(of), import_roots_dir(of), extra="/mine", shim_base=tmp_path / "cache" / "pyshim").split(":")
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join(path))
+    remote_info = {"pythonpath": list(path)}
+    moved = _clone_imports(of, tree, home, remote_info)["PYTHONPATH"].split(os.pathsep)
+    assert remote_info["pythonpath"] == moved and moved[1:] == [str(tree / "m" / "src"), "/mine"], "in place, in order"
+    assert Path(moved[0]).parent == home / "pyshim" and os.listdir(moved[0]) == ["verity"]
+    reached = [os.path.realpath(p) for e in moved for p in (e, *(os.path.join(e, c) for c in (os.listdir(e) if os.path.isdir(e) else ())))]
+    assert not [p for p in reached if Path(p).is_relative_to(of.resolve())], "no entry, nor a link in one, reaches the shipped tree"
+    spec = importlib.machinery.PathFinder.find_spec("verity", moved)
+    assert Path(spec.origin).resolve() == (tree / "verity" / "__init__.py").resolve()
+    assert (Path(path[0]) / "verity").resolve() == (of / "verity").resolve(), "the shared tree's shim is left as it was"
+    assert clone.remove(home) is None and Path(path[0]).is_dir()
+
+
+def test_on_a_machine_a_clone_run_imports_the_root_package_from_the_clone(tmp_path, repo, machine):
+    _root_package(repo)
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "the root is a package")
+    probe = ("import json, os, verity; json.dump({'verity': os.path.realpath(verity.__file__), 'path': os.environ['PYTHONPATH']}, "
+             "open(os.path.join(os.environ['RESEARCH_RUN_DIR'], 'seen.json'), 'w'))")
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--source", str(repo), "--no-custody-r2",
+                 "--no-sampler", "--cwd", "clone/m", "--", PY, "-c", probe]) == 0              # `-c` in the root would find it in its cwd
+    [rid] = [p.name for p in (tmp_path / "runs").iterdir()]
+    run_dir = machine / "runs" / rid
+    wait_runner(run_dir)
+    tree = (machine / "scratch" / rid / "tree").resolve()
+    seen = _seen(run_dir)
+    assert Path(seen["verity"]) == tree / "verity" / "__init__.py", "not the shared tree's, through its shim"
+    shims = [p for p in seen["path"].split(os.pathsep) if "pyshim" in p]
+    assert shims and all(Path(p).parent == machine / "scratch" / rid / "pyshim" for p in shims)
+    shared = str((machine / "src" / _git(repo, "rev-parse", "HEAD")).resolve())
+    recorded = json.loads((run_dir / "job.json").read_text())["run"]["remote"]["pythonpath"]
+    assert not [p for p in recorded if shared in p or "cache/pyshim" in p], "the record names the clone's shim, not the shared tree's"
+    assert not (machine / "scratch" / rid).exists()
 
 
 def test_the_launcher_refuses_a_tree_shipped_without_git(tmp_path, repo, machine, monkeypatch, capsys):

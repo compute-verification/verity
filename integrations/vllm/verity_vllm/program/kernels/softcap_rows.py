@@ -26,7 +26,7 @@ _BLOCKS: dict[int, np.ndarray] = {}
 def mufu_tanh(x: np.ndarray, table: np.ndarray | None = None, lo: int | None = None) -> np.ndarray:
     """`MufuTanh_v1` on every word of `x`: NaN -> nan_out, |x| >= saturate_from -> +-1, |x| < identity_below -> x, else the measured
     table at |x| with the sign of x.  `table` (the shard's words from `lo`) replaces the lazily decoded blocks."""
-    from verity_catalog.definitions import mufu
+    from verity.ml.circuits.ops import mufu
 
     rules = mufu.MUFU_TANH_RULES
     u = np.asarray(x, dtype=np.uint32)
@@ -148,7 +148,7 @@ def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray], dot_id
 
 
 def check_targets(rng=None) -> list:
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import fa2_softcap, hopper
     from verity_vllm.program.registry import prims as P
 

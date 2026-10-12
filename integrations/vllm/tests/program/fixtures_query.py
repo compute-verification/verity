@@ -42,15 +42,15 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Callable, Iterable
 
-from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.primitives.circuits.layout import Scope, GateSelection
-from verity.primitives.circuits.parts import Item, Part, n_members
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.refs import array_of, tuple_of
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.layout import Scope, GateSelection
+from verity.ml.circuits.parts import Item, Part, n_members
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import array_of, tuple_of
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16, F32, I32
-from verity.primitives.circuits.types import Array, Tuple
+from verity.ml.circuits.types import Array, Tuple
 
 # ---------------------------------------------------------------------------------------------------------
 # registry programs (small statics)
@@ -111,7 +111,7 @@ def gemm_v2_program(K: int = 32, N: int = 6) -> Program:
 
 
 def layer_norm_aten_program(N: int = 32, EPS: float = 1e-5) -> Program:
-    from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as LN
+    from verity_vllm.program.registry import layer_norm as LN
     return Program(bind(LN.LayerNormAten, N=N, EPS=EPS))
 
 
@@ -132,7 +132,7 @@ def moe_sum_program(TOPK: int = 2, H: int = 4) -> Program:
 
 def gumbel_program(V: int = 8, SEED: int = 12345, POS: int = 3) -> Program:
     """`GumbelArgmaxBf16_v1{V,SEED,POS}`: the only supported family with gates wider than 32 bits (two `Const64`)."""
-    from verity_vllm.program.registry.quarantine.ov_sampling import gumbel as G
+    from verity_vllm.program.registry import sampling as G
     return Program(bind(G.GumbelArgmaxBf16, V=V, SEED=SEED, POS=POS))
 
 
@@ -493,7 +493,7 @@ def interface_w_out_bound(part: Part) -> int:
 
 
 def _type_widths(t) -> list[int]:
-    from verity.primitives.circuits.types import Record, Value
+    from verity.ml.circuits.types import Record, Value
     if isinstance(t, Value):
         return [t.w]
     if isinstance(t, Array):

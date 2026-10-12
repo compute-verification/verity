@@ -1,5 +1,5 @@
 """Verity-semantics replay producer: the registry Definition `AttentionHead_v3{T, D, BN}` (`verity_vllm/program/registry/b1.py`)
-evaluated gate by gate by the IR oracle (`verity.primitives.circuits.evaluate.evaluate_call`), with the committed stream of
+evaluated gate by gate by the IR oracle (`verity.ml.circuits.evaluate.evaluate_call`), with the committed stream of
 `encoding.py` read out of the execution transcript by walking the call tree.
 
 This is the "deterministic Verity-semantics reference" of the fixture in the strict sense: the values are the pinned
@@ -26,9 +26,9 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.evaluate import evaluate_call
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.program import Program
 from verity_vllm.program.registry import b1
 
 from .encoding import NLANES, RowLayout

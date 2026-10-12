@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.primitives.circuits.parts import Limits, Part
-from verity.primitives.circuits.partition import PartitionVerdict, validate_partition
+from verity.ml.circuits.parts import Limits, Part
+from verity.ml.circuits.partition import PartitionVerdict, validate_partition
 from tests.query.test_partition_stubs import (FakeProgram, IntervalSet, StubFamily, StubGateSet, family_of,
                                                   gemm_program, members_k, synth_program, tiling, whole_body)
 

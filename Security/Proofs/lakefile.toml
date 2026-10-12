@@ -1,0 +1,45 @@
+# The security analysis's proofs (untrusted): every proof of a guarantee `security` states, C-Flock's level3 and
+# soundness among them. Its modules sit beside the trusted text's (`srcDir = ".."`) under a root of their own, `Proofs`.
+name = "security_proofs"
+srcDir = ".."
+defaultTargets = ["Proofs"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "Arklib"
+git = "https://github.com/Verified-zkEVM/ArkLib"
+rev = "b2e456fc48db5bff1b69c7469fde73f9b83e94c2"
+
+[[require]]
+name = "security"
+path = ".."
+
+[[require]]
+name = "flock_verifier"
+path = "../../verity/core/service/flock"
+
+[[require]]
+name = "certifier_program"
+path = "../../verity/core/protocols/certifier/lean"
+
+[[require]]
+name = "core_randomness"
+path = "../../verity/core/primitives/randomness"
+
+# V*'s circuits as core code (`VStar`), which the bridge (`Proofs.Flock.VBridge.OfVStar`) is stated over
+[[require]]
+name = "core_vstar"
+path = "../../verity/core/service/vstar"
+
+# The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
+[[require]]
+name = "security_properties"
+path = "../Properties"
+
+[[lean_lib]]
+name = "Proofs"
+roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier", "Proofs.Flock",
+  "Proofs.Accounting"]

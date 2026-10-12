@@ -62,7 +62,7 @@ ligero-proof/v1      magic "LIGPRF01" | u8 hash (1 = blake3, 2 = sha256) | u8 ha
                      | D x q_len u32 q | D x v_len u32 v | t x u32 cols | M x t u32 opened (row-major)
                      | t x depth x 32 B paths (leaf level first)
 ligero-proof/v2      magic "LIGPRF02" | the v1 body | 3 x (u32 n_sib | n_sib x 32 B): the Merkle multiproofs of the
-                     a, b, y trees (canonical order of verity_experimental.commitments.multiproof; SHA-256 nodes)
+                     a, b, y trees (canonical order of verity.ml.commitments.multiproof; SHA-256 nodes)
 ligero-system/v4     magic "LIGSYS04" | the v3 body through the chain end (the chain block always in the v3 form:
                      u32 n_links | ...) | the fingerprint block (chain.py "Fingerprint constraints"): u32 n_op
                      | n_op x 16 u32 lane rows | u32 coords | u8 mode (0 = coin: rho from challenge 1, F a prover

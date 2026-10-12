@@ -1,11 +1,11 @@
 //! `authentication = included` (`archive/direct/ligero/auth.py`): the published boundary words are leaves of three
-//! SHA-256 indexed Merkle trees of `verity.primitives.commitments` (a: activations, b: weights, y: output words; one 16-bit
+//! SHA-256 indexed Merkle trees of `verity.ml.commitments` (a: activations, b: weights, y: output words; one 16-bit
 //! word per leaf, `schema = "u16"`, big-endian value), whose `(binding, owner, count, root)` references and the claimed
 //! VU indices are an `AuthBlock` of the statement (`ligero-statement/v3`), absorbed into the statement digest
 //! (`digest_bytes`).  The transcript (`ligero-proof/v2`) carries one canonical multiproof per tree; after the Ligero
 //! tests the verifier recomputes every leaf from the statement's words and folds the three multiproofs to the roots.
 //!
-//! Hash framing (wire constants of `verity/primitives/commitments/merkle.py` + `identity.py`, mirrored here from the Python):
+//! Hash framing (wire constants of `verity/ml/commitments/merkle.py` + `identity.py`, mirrored here from the Python):
 //!
 //! ~~~text
 //! frame(tag, parts)   = SHA-256("veritor/protocol/merkle/frame/v3\0" | u32be(len tag) | tag | Σ (u64be(len p) | p))
@@ -29,7 +29,7 @@ pub const RANGE_TAG: &[u8] = b"veritor/indexed-domain/range/v1";
 pub const VERSION: &str = "ligero-b/auth/v1";
 pub const SCHEMA: &str = "u16";
 pub const TREE_NAMES: [&str; 3] = ["a", "b", "y"];
-/// `verity.primitives.commitments.limits.VerificationLimits` defaults the Python verifier enforces.
+/// `verity.ml.commitments.limits.VerificationLimits` defaults the Python verifier enforces.
 pub const MAX_POSITIONS: u64 = 10_000_000;
 pub const MAX_OPENINGS: u64 = 10_000_000;
 pub const MAX_PROOF_BYTES: u64 = 64 << 20;
@@ -328,7 +328,7 @@ enum Src {
     Sibling(usize),
 }
 
-/// Fold a canonical multiproof (`verity_experimental.commitments.multiproof`): level by level the known nodes are visited in
+/// Fold a canonical multiproof (`verity.ml.commitments.multiproof`): level by level the known nodes are visited in
 /// ascending index order; an even node whose right neighbour is known is hashed with it, any other node with the
 /// next proof sibling; after `merkle_depth(count)` levels one node is left and the proof must be consumed exactly.
 /// `leaves` must be strictly ascending by rank, every rank `< count`.  The pairing plan of a level is fixed by the
@@ -464,7 +464,7 @@ mod tests {
         o
     }
 
-    // Pinned from the Python reference (verity.primitives.commitments.MerkleTree / multiproof on auth.build_word_tree):
+    // Pinned from the Python reference (verity.ml.commitments.MerkleTree / multiproof on auth.build_word_tree):
     // words [0x3f80, 0x0000, 0xbf80, 0x4000, 0x7f7f], binding = bytes(range(32)), owner -1 (tree "a"), count 5.
     const BINDING: [u8; 32] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
     const WORDS: [u16; 5] = [0x3f80, 0x0000, 0xbf80, 0x4000, 0x7f7f];
@@ -506,7 +506,7 @@ mod tests {
         // the pad leaf (rank 5) and level 1 node 0
         assert_eq!(hex(&pad(&dom, 5)), "8be67fa2ecf6b0a6886509e55a8332fb8b08436e4fa910e5deba8c8595bb6ce8");
         assert_eq!(hex(&node(&dom, 0, 0, &h(want[0]), &h(want[1]))), "516dbaaf3502018e6e7d0f4591fb0f7e2ace0ffff2cc23be3ce8a7f76512a169");
-        // full multiproof of ranks {1, 3} as verity_experimental.commitments.multiproof emits it
+        // full multiproof of ranks {1, 3} as verity.ml.commitments.multiproof emits it
         let sibs = [
             h("53c94bb782bf50fbb1b994d1a456cf6a5e29f4d1bed63050f60e05d6082d213b"),
             h("bad8e6963d4f80157eaa33bd844fefbd60e2b8f549c870ada02b4b38a8396c23"),

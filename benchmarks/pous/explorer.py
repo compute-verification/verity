@@ -3,17 +3,17 @@ the honest-latency presets as survival curves, the schemes' serving overhead, `�
 table the page looks `f₀` up in, and test vectors.
 
 The model (the explorer note, §1): challenges arrive at Poisson rate λ over a game of T seconds; an answer is a miss if it
-is wrong or later than τ = (d + 1) · call_ns(b) / m, just under the band's cliff; the verifier accepts iff the misses F ≤ f₀,
-the (1 − α) quantile of the honest miss count, Poisson with mean λT · S_H(τ).  Then P[accept and ε̄ > ε_proof(d) + g(f₀)]
-≤ β with g(f) = min over θ > 0 of (θf + ln(1/β)) / ((1 − e^−θ) λT).  The honest model sets only the false-alarm rate, never
-soundness.  ε_proof(d) is an ideal-permutation-model bound, and τ counts whole `Π₂` calls of `call_ns`, the model's unit: at
-the reference Feistel-SHAKE256 `Π₂` a prover rebuilds a label from 1.53% of `C` in 481 Keccak-f, about a tenth of a call, so
-neither bounds an adversary there (red team, 4 Oct 2026, art:7617c8017e80).
+is wrong or later than τ = (d + 1) · call_ns(b) / m, just under the band's cliff; the memory challenger accepts iff the
+misses F ≤ f₀, the (1 − α) quantile of the honest miss count, Poisson with mean λT · S_H(τ).  Then P[accept and ε̄ >
+ε_proof(d) + g(f₀)] ≤ β with g(f) = min over θ > 0 of (θf + ln(1/β)) / ((1 − e^−θ) λT).  The honest model sets only the
+false-alarm rate, never soundness.  ε_proof(d) is an ideal-permutation-model bound, and τ counts whole `Π₂` calls of
+`call_ns`, the model's unit: at the reference Feistel-SHAKE256 `Π₂` a prover rebuilds a label from 1.53% of `C` in 481
+Keccak-f, about a tenth of a call, so neither bounds an adversary there (red team, 4 Oct 2026, art:7617c8017e80).
 
 The page evaluates the file with plain floats and closed forms only (§6 "The rules"), and `evaluate` is that evaluation
 here, from the file alone:
 
-1. D = min(d, the deepest D in `eps_proof`), since the verifier refuses a deadline past its certificate; then
+1. D = min(d, the deepest D in `eps_proof`), since the memory challenger refuses a deadline past its certificate; then
    τ_us = (D + 1) · call_ns / m / 1000 − 0.001.
 2. p = S(τ_us), ln S interpolated linearly in ln t between the curve's points; S = 1 below the grid, the last segment's
    slope above it; S floored at `S_FLOOR`.
@@ -62,7 +62,8 @@ US_PER_KIB = 0.15
 Z99 = 2.3263478740408408
 
 #: ε_proof, the per-answer slack, by the adversary's effective call count D = d: lean's estimates at 64 KiB (from
-#: `PousProofs/Chain/Family.lean`'s certificate, not proved; D = 0 is the extracted single-segment value ≈ 0.21%)
+#: `Security/Proofs/Pous/Chain/Family.lean`'s certificate, not proved; D = 0 is the extracted single-segment
+#: value ≈ 0.21%)
 EPS_PROOF = (
     {"D": 0, "eps_proof_fraction": 0.0021, "status": "extracted", "source": "single-segment ε_proof(0) ≈ 0.21% from Chain/Family.lean's certificate (replaces the D = 1 placeholder 0.40%)"},
     {"D": 1, "eps_proof_fraction": 0.0040, "status": "estimate", "source": "lean, Slack 1790904948.520999 (k 93)"},
@@ -158,15 +159,16 @@ FINE = np.arange(int(1.002e5 / H_US) + 1) * H_US
 
 
 def call_ns(block_bytes: int) -> int:
-    """The fastest whole `Π₂` call on `block_bytes` labels (`verity.protocols.accounting.space.pous.primitives.pi2_call_ns`, in bits): the
+    """The fastest whole `Π₂` call on `block_bytes` labels (`verity.core.protocols.pous.primitives.pi2_call_ns`, in bits): the
     ideal-permutation model's unit, not the adversary's floor at the reference Feistel-SHAKE256 `Π₂`."""
-    from verity.protocols.accounting.space.pous.primitives import pi2_call_ns
+    from verity.core.protocols.pous.primitives import pi2_call_ns
 
     return pi2_call_ns(8 * block_bytes)
 
 
 def rounds(doc: dict[str, Any], d: int) -> int:
-    """Rule 1's D: the cliff d, capped at the deepest D with an ε_proof, since the verifier refuses a deadline past it."""
+    """Rule 1's D: the cliff d, capped at the deepest D with an ε_proof, since the memory challenger refuses a deadline
+    past it."""
     return min(d, max(e["D"] for e in doc["eps_proof"]))
 
 
@@ -294,7 +296,7 @@ def g_opt(f: int, n: float, beta: float) -> float:
     return min(vals[i], g_theta((a + b) / 2, f, n, beta))
 
 
-# Honest-latency presets: survival functions of the latency at the verifier (µs), at 64 KiB.
+# Honest-latency presets: survival functions of the latency at the memory challenger (µs), at 64 KiB.
 
 def lognormal_s(t: np.ndarray, median: float, p99: float) -> np.ndarray:
     sigma = math.log(p99 / median) / Z99
@@ -388,10 +390,10 @@ LABELS = {
     "measured": ("Same host, under vLLM load", "empirical",
                  ("Measured on loopback under vLLM generation (RTX PRO 6000, band d = 12 responder); past 750 µs continued "
                   "as a Pareto of exponent 1.8.")),
-    "rack": ("Verifier on another host in the rack", "assumed",
+    "rack": ("Memory challenger on another host in the rack", "assumed",
              ("The measured server side (12 µs of loopback removed) plus a round trip lognormal (median 25 µs, p99 60 µs), "
               "with a 1e-4 chance of a Pareto(200 µs, 2) delay.")),
-    "datacenter": ("Verifier a few hops away", "assumed",
+    "datacenter": ("Memory challenger a few hops away", "assumed",
                    ("The measured server side plus a round trip lognormal (median 120 µs, p99 400 µs), with a 1e-3 chance of "
                     "a Pareto(500 µs, 1.5) incast delay.")),
     "heavy-tail": ("Shared, noisy host", "assumed",
@@ -471,9 +473,9 @@ def tor_terms(params: dict[str, Any]) -> str:
 
 
 SOAK_PRESETS = {
-    "rack": ("tor_400_tuned", "Verifier on another host in the rack, 400 Gb/s"),
-    "rack-100g": ("tor_100_default", "Verifier on another host in the rack, 100 Gb/s, default NIC"),
-    "datacenter": ("tor_100_default", "Verifier a few hops away"),
+    "rack": ("tor_400_tuned", "Memory challenger on another host in the rack, 400 Gb/s"),
+    "rack-100g": ("tor_100_default", "Memory challenger on another host in the rack, 100 Gb/s, default NIC"),
+    "datacenter": ("tor_100_default", "Memory challenger a few hops away"),
 }
 
 

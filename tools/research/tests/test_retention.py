@@ -448,17 +448,17 @@ def test_a_run_dir_whose_record_custody_trimmed_is_never_deleted(tmp_path, vault
     """Custody marks a run dir preserved while its run record only lists an undeclared file over the cap (custody.select); those
     bytes are on no remote, so gc keeps the dir."""
     root = tmp_path / "ws"
-    d = run_dir(root, "research/runs/r1", extra={"out/big.bin": b"t" * UNIT})
+    d = run_dir(root, "research/runs/r1", extra={"work/big.bin": b"t" * UNIT})
     monkeypatch.setattr(CU, "UNDECLARED_CAP_BYTES", 0)
     st = LocalStore(vault_store)
     art = CU.put_run_record(st, d, "r1")
-    assert st.push(art, preserve=True)["preserved"] and [t["path"] for t in CU.trimmed_of(st, art)] == ["out/big.bin"]
+    assert st.push(art, preserve=True)["preserved"] and [t["path"] for t in CU.trimmed_of(st, art)] == ["work/big.bin"]
     (d / CU.MARKER).write_text(json.dumps({**json.loads((d / CU.MARKER).read_text()), "run_record": art}))
     assert CU.marker_problem(d) is None, "custody vouches for the dir"
     plan = run_gc(root, Disk(20 * UNIT, 18 * UNIT, []), apply=True, force=True, low_pct=0, remote_check=R.store_check(str(vault_store)))
-    assert d.exists() and (d / "out/big.bin").exists()
+    assert d.exists() and (d / "work/big.bin").exists()
     assert by_path(plan)["research/runs/r1"]["reason"] == (f"preserved {art} is not verified on the remote: 1 file(s) under it are not "
-                                                         "in the artifact at their size, e.g. out/big.bin")
+                                                         "in the artifact at their size, e.g. work/big.bin")
 
 
 # ---- the command line -----------------------------------------------------------------------------------------------------------------
@@ -521,11 +521,11 @@ REF = "C0C5RCXL66N/1791060198.615929"
 BY = "https://cursor.com/agents/bc-test"
 
 
-def passes(root: Path) -> list[Path]:
+def passes(root: Path, preserved: str | None = ART) -> list[Path]:
     """The 3 Oct shape: one record on pouw/mvp-e2e, owned by @compute-accounting and unexpired, over pass dirs without their own."""
     area = data(root, "pouw/mvp-e2e")
-    R.keep(area, root=root, owner="@compute-accounting", expires=FUTURE, priority="normal", why="PoUW served-path e2e", now=clock,
-           node=NODE)
+    R.keep(area, root=root, owner="@compute-accounting", expires=FUTURE, priority="normal", preserved=preserved,
+           why="PoUW served-path e2e", now=clock, node=NODE)
     return [data(root, f"pouw/mvp-e2e/passes/r{i}") for i in range(2)]
 
 
@@ -556,7 +556,7 @@ def test_rm_deletes_with_the_owners_yes_leaves_the_covering_record_and_logs_who(
     dry = R.rm([p0], approved_by="@compute-accounting", ref=REF, root=root, in_use=never_in_use, now=clock, node=NODE)
     assert dry["actions"][0]["action"] == "delete" and p0.exists() and not (root / R.LOG).exists(), "a dry run deletes and logs nothing"
     plan = R.rm([p0], approved_by="@compute-accounting", ref=REF, root=root, apply=True, by=BY, in_use=never_in_use, now=clock,
-                node=NODE)
+                node=NODE, remote_check=preserved_ok)
     assert not p0.exists() and p1.exists() and R.load(root / "pouw/mvp-e2e")["owner"] == "@compute-accounting"
     assert plan["freed_bytes"] == UNIT and plan["actions"][0]["reason"].endswith("and its owner said yes")
     (line,) = log_lines(root)
@@ -622,8 +622,26 @@ def test_rm_apply_needs_who_and_a_writable_log_and_rereads_the_records(tmp_path)
     assert plan["actions"][0]["error"] == "its records changed during rm: run it again" and log_lines(root)[-1]["action"] == "failed"
 
 
+def test_rm_deletes_passes_only_once_their_record_names_an_artifact_verified_on_the_remote(tmp_path):
+    root = tmp_path / "ws"
+    p0, _ = passes(root, preserved=None)
+    kw = {"approved_by": "@compute-accounting", "ref": REF, "root": root, "by": BY, "in_use": never_in_use, "now": clock, "node": NODE}
+    for p in (p0, root / "pouw/mvp-e2e"):
+        a = R.rm([p], apply=True, remote_check=preserved_ok, **kw)["actions"][0]
+        assert a["action"] == "refuse" and p.exists(), "the owner's yes alone deletes neither a pass nor the area that holds them"
+        assert a["reason"].startswith("it holds retained passes and pouw/mvp-e2e is kept by @compute-accounting")
+    passes(root)
+    seen = []
+    plan = R.rm([p0], apply=True, remote_check=lambda art, p: seen.append((art, p)) or "404 on the remote", **kw)
+    a = plan["actions"][0]
+    assert a["action"] == "failed" and p0.exists() and seen == [(ART, root / "pouw/mvp-e2e")], "the record's whole tree is checked"
+    assert a["error"] == f"it holds retained passes, and preserved {ART} is not verified on the remote: 404 on the remote"
+    assert R.rm([p0], remote_check=lambda *_: pytest.fail("a dry run reads no remote"), **kw)["actions"][0]["action"] == "delete"
+
+
 def test_rm_through_research(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(R, "utc_now", clock)
+    monkeypatch.setattr(R, "store_check", lambda _root: preserved_ok)
     monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
     monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
     root = tmp_path / "ws"

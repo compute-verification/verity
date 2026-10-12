@@ -36,9 +36,9 @@ from __future__ import annotations
 
 import types
 
-from verity.primitives.circuits.defs import CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, primitive
-from verity_catalog.definitions.prims import HopperBF16WgmmaDot16
-from verity_catalog.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
+from verity.ml.circuits.defs import CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, primitive
+from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
+from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import F32, f32_is_nan
@@ -49,20 +49,20 @@ from verity_vllm.program.registry.prims import F32, f32_is_nan
 
 
 def _hopper_total():
-    """The step's definition of record: `verity_catalog.silicon.total` (veritor's `core/silicon_total.py` promoted verbatim, stdlib only,
+    """The step's definition of record: `verity.ml.circuits.silicon.total` (veritor's `core/silicon_total.py` promoted verbatim, stdlib only,
     Python >= 3.12).  Until R19 the pods evaluated a pure-Python 3.11 port (`registry.tc_total`, held word-equal to this by
     tests); the Verity pod runtime is 3.12, so the definition itself evaluates."""
     return HOPPER_BF16_WGMMA_K16, tc_dot_total
 
 
-# `verity_catalog.silicon.total.HOPPER_BF16_WGMMA_K16` (lane HP's re-measured pipeline): the relation's parameters, stated once in core.
+# `verity.ml.circuits.silicon.total.HOPPER_BF16_WGMMA_K16` (lane HP's re-measured pipeline): the relation's parameters, stated once in core.
 HOPPER_WGMMA_K = HOPPER_BF16_WGMMA_K16.k                       # 16 operand pairs per step (one group: all sixteen products + acc)
 HOPPER_WGMMA_WIDTH = HOPPER_BF16_WGMMA_K16.width               # 26-bit adder
 HOPPER_WGMMA_ZERO_EXPONENT = HOPPER_BF16_WGMMA_K16.zero_exponent  # exponent floor -133
 
 
 def hopper_wgmma_dot16_total(acc_bits: int, a, b) -> int:
-    """`D = acc + sum_{k<16} a[k]*b[k]` on EVERY encoding as `verity_catalog.silicon.total.tc_dot_total(HOPPER_BF16_WGMMA_K16, ...)`
+    """`D = acc + sum_{k<16} a[k]*b[k]` on EVERY encoding as `verity.ml.circuits.silicon.total.tc_dot_total(HOPPER_BF16_WGMMA_K16, ...)`
     defines it (one group of sixteen products + the accumulator, 26-bit adder, floor -133, the NaN / infinity / sticky-overflow /
     +0 / subnormal rules of the total step) on the Hopper pipeline.  tests/program/test_derived_rows.py holds the registered primitive
     to it word for word."""

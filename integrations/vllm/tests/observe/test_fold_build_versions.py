@@ -4,7 +4,7 @@ A Match compares the fold's Program with the Build's spec for spec, so a fold pa
 the Build's vocabulary (`program/frontend/rules/vocab.py`) fails the Match on every instance of it.  Both sides are read off the code:
 
 * the fold: every registered composite Definition a fold pattern module names (a module defining a class with `match(self, node, ...)`;
-  each name resolved in the module, its local imports included).  A launch bound through a shared selector (`registry.targets`) or
+  each name resolved in the module, its local imports included).  A launch bound through a shared selector (`frontend.targets`) or
   through the vocabulary itself (`vocabulary_for(...).kind`) is the Build's choice by construction and names nothing here;
 * the Build: the Definitions each role of the vocabulary binds, over representative statics and every registered value of the statics
   that select among Definitions.
@@ -29,12 +29,12 @@ from pathlib import Path
 import pytest
 
 import verity_vllm
-from verity.primitives.circuits.defs import CompositeDefinition, SpecializedDefinition
+from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.registry.hopper import Fa3InvSum
 
 PACKAGE = Path(verity_vllm.__file__).parent

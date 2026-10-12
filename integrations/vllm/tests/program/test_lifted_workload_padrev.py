@@ -8,16 +8,17 @@ from __future__ import annotations
 
 import pytest
 
-from verity.primitives.circuits import Program
+from verity.ml.circuits import Program
 from verity_vllm.program import workload as W
-from verity.primitives.circuits.codec import encode_program
-from verity.primitives.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.codec import encode_program
+from verity.ml.circuits.defs import REGISTRY, bind
 from verity_vllm.program.registry import b1, lifted as L
+from verity_vllm.program.lifting import lifted_compose
 from tests.program import test_lifted_mixed as PM
 from tests.program.test_lifted_mixed import BOUNDARY, CAP, EOS, LP, SMS, TINY, _inputs, _inputs_for, _prompt_b, _request_outs, _requests, _run
 from tests.program.test_lifted_tiny_padrev import padrev_live_ref
 from tests.program.test_serve3 import Y_RAW
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.types import Array, Value
 
 I32 = Value(32)
 
@@ -43,7 +44,7 @@ def test_r1_the_lifted_workload_root_is_one_partitioned_namespace_and_every_guar
     [0, gates) (no gap, no overlap, no empty interval); the shared lifted weights are ONE interval every request maps onto; and each
     request's guard gates (the lifting's only additions) lie inside THAT request's interval — a guard gate outside its request, or shared
     between two, would be a second identity / a cross-request edge."""
-    wl = L.lifted_workload(_requests(component, (0, 2)), EOS, lag=lag, boundary_prefix=BOUNDARY)
+    wl = lifted_compose.lifted_workload(_requests(component, (0, 2)), EOS, lag=lag, boundary_prefix=BOUNDARY)
     am = wl.address_map()
     intervals = sorted([tuple(i["gates"]) for i in am["inputs"]] + [tuple(r["gates"]) for r in am["requests"]])
     assert intervals[0][0] == 0 and intervals[-1][1] == am["gates"] == wl.program.gates
@@ -84,7 +85,7 @@ def test_a1_a5_b_is_word_for_word_invariant_to_whether_a_stops_and_the_program_o
     (stops at a_A = 4) and A with B's never-stopping prompt — and require every word of B's call range AND of the shared weights range to
     be identical.  Any ⊥ that crossed a batch dimension (A1) or any state B reads that depends on A's activity would show as a differing
     word.  The Program is one object: no structure of it depends on what will be served (A5)."""
-    wl = L.lifted_workload(_requests(component), EOS, lag=0, boundary_prefix=BOUNDARY)
+    wl = lifted_compose.lifted_workload(_requests(component), EOS, lag=0, boundary_prefix=BOUNDARY)
     wl_u = W.WorkloadProgram(_requests(component), lag=0)  # R17-1: lag is a required static of Workload_v1 (moe a96a2071b); wl_u is used for fn/inputs
     pa, pb = list(_inputs()[0]), _prompt_b()
     t_stop, o_stop = _run(wl.program, _inputs_for(wl_u.fn, {"A": pa, "B": pb}, True))
@@ -163,7 +164,7 @@ def _mixed_requests(component, component_small, arrivals=(0, 0)):
 
 
 def test_t4_a_mixed_cap_population_composes_with_every_request_programmed_for_its_own_cap(component, component_small):
-    wl = L.lifted_workload(_mixed_requests(component, component_small), EOS, lag=0, boundary_prefix=BOUNDARY)
+    wl = lifted_compose.lifted_workload(_mixed_requests(component, component_small), EOS, lag=0, boundary_prefix=BOUNDARY)
     ch = wl.chronology()
     assert [r["programmed_steps"]["count"] for r in ch["requests"]] == [CAP, CAP_B] and ch["programmed_horizon_steps"] == CAP
     assert [len(e["members"]) for e in ch["engine_steps"]] == [2] * CAP_B + [1] * (CAP - CAP_B)
@@ -174,11 +175,11 @@ def test_t4_a_mixed_cap_population_composes_with_every_request_programmed_for_it
 # F-pad-19 CLOSED by pad 850393f65 (live_count_hook takes one cap PER REQUEST; a served-length out_r refused by name): strict xfail
 # flipped to PASS 07:08Z -- on the fixed hook the single-cap call below is REFUSED by name (the accepted outcome), see the per-request test after it
 def test_f_pad_19_the_hook_on_a_mixed_cap_population_takes_each_requests_own_cap_or_refuses_by_name(component, component_small):
-    from verity.primitives.circuits.defs import Builder, composite
-    from verity.primitives.circuits.refs import array_of, coll_concat, tuple_of
-    from verity.primitives.circuits.types import Tuple
+    from verity.ml.circuits.defs import Builder, composite
+    from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
+    from verity.ml.circuits.types import Tuple
     reqs = _mixed_requests(component, component_small)
-    wl = L.lifted_workload(reqs, EOS, lag=0, boundary_prefix=BOUNDARY)
+    wl = lifted_compose.lifted_workload(reqs, EOS, lag=0, boundary_prefix=BOUNDARY)
     wl_u = W.WorkloadProgram(reqs, lag=0)
     prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
 
@@ -210,9 +211,9 @@ def test_f_pad_19_the_hook_on_a_mixed_cap_population_takes_each_requests_own_cap
 
 
 def _padrev_mixed_s2():
-    from verity.primitives.circuits.defs import composite
-    from verity.primitives.circuits.refs import array_of, coll_concat, tuple_of
-    from verity.primitives.circuits.types import Tuple
+    from verity.ml.circuits.defs import composite
+    from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
+    from verity.ml.circuits.types import Tuple
 
     @composite("PadrevMixedS2", 1, ["WL", "EOS", "CAPS", "ARR", "LAG", "H"],
                lambda S: (S.WL.signature()[0], Tuple(S.WL.signature()[1], Array(S.H, Value(L.N_LIVE_BITS + 1)), Array(S.H, Value(L.SPLITS_BITS + 1)))),
@@ -238,7 +239,7 @@ def test_f_pad_19_per_request_caps_the_hook_equals_the_independent_reference_on_
     of [a_B, a_B + 4) ONLY -- a row of B outside its own cap would be an invented member), S = SplitsFor of that count and ⊥ exactly at 0;
     and the same call with ONE cap for both is refused by name in both directions (9 for B's 4 words, 4 for A's 9)."""
     reqs = _mixed_requests(component, component_small, arrivals)
-    wl = L.lifted_workload(reqs, EOS, lag=lag, boundary_prefix=BOUNDARY)
+    wl = lifted_compose.lifted_workload(reqs, EOS, lag=lag, boundary_prefix=BOUNDARY)
     wl_u = W.WorkloadProgram(reqs, lag=lag)
     prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
     caps = [CAP, CAP_B]
@@ -252,7 +253,7 @@ def test_f_pad_19_per_request_caps_the_hook_equals_the_independent_reference_on_
     want = [sum(ref[rid][t - a] for rid, a, c in zip(("A", "B"), arrivals, caps) if 0 <= t - a < c) for t in range(H)]
     assert [L.payload(L.N_LIVE_BITS, x) for x in n_live] == want and all(L.is_active(L.N_LIVE_BITS, x) for x in n_live)
     assert max(want) == 2 and 0 in want   # both live somewhere; A's window outlives both its stop and B's cap, so some step has no live request
-    from verity_vllm.program.registry.topp_split import splits_for
+    from verity_vllm.program.registry.topp_geometry import splits_for
     for t in range(H):
         if want[t] == 0:
             assert L.is_bot(L.SPLITS_BITS, S_t[t]), t

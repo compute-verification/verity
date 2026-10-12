@@ -31,18 +31,37 @@ def reg(tmp_path, monkeypatch) -> Path:
     d = tmp_path / "notes" / "machines.d"
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
     monkeypatch.setenv("RESEARCH_MACHINES_D", str(d))
+    monkeypatch.setenv("RESEARCH_NOTES", str(d.parent))
     return d
 
 
-def test_the_laptop_reads_machines_toml_alone_until_the_variable_is_set(tmp_path):
+def test_register_and_run_on_use_one_directory_with_or_without_machines_toml(tmp_path):
     mt = tmp_path / "machines.toml"
     mt.write_text('[machines.vy-x]\nprovider = "runpod"\npod_id = "abc123def45678"\nproject = "verity"\n')
-    (tmp_path / "notes" / "machines.d").mkdir(parents=True)
+    notes_d = tmp_path / "notes" / "machines.d"
+    notes_d.mkdir(parents=True)
     env = {"RESEARCH_NOTES": str(tmp_path / "notes")}
-    assert registry.registry_dir(mt, env) is None
-    assert registry.registry_dir(tmp_path / "absent.toml", env) == tmp_path / "notes" / "machines.d"   # a cloud VM: no machines.toml
-    assert registry.registry_dir(mt, {**env, "RESEARCH_MACHINES_D": "none"}) is None
-    assert registry.registry_dir(mt, {**env, "RESEARCH_MACHINES_D": str(tmp_path / "r")}) == tmp_path / "r"
+    for toml in (mt, tmp_path / "absent.toml"):
+        assert registry.registry_dir(toml, env) == registry.write_dir(toml, env) == notes_d
+    r = {**env, "RESEARCH_MACHINES_D": str(tmp_path / "r")}
+    assert registry.registry_dir(mt, r) == registry.write_dir(mt, r) == tmp_path / "r"
+    off = {**env, "RESEARCH_MACHINES_D": "none"}
+    assert registry.registry_dir(mt, off) is None
+    with pytest.raises(remote.Refused, match="registry is off"):
+        registry.write_dir(mt, off)
+
+
+def test_a_pod_registered_beside_machines_toml_is_one_run_on_resolves(tmp_path, monkeypatch):
+    mt = tmp_path / "machines.toml"
+    mt.write_text('[machines.vy-x]\nprovider = "runpod"\npod_id = "abc123def45678"\nproject = "verity"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(mt))
+    monkeypatch.setenv("RESEARCH_NOTES", str(tmp_path / "notes"))
+    monkeypatch.delenv("RESEARCH_MACHINES_D", raising=False)
+    (tmp_path / "notes").mkdir()
+    p, _ = registry.register("vy-lane-a", POD["id"], "verity", get_pod=pods(POD))
+    assert p == tmp_path / "notes" / "machines.d" / "vy-lane-a.toml"
+    assert remote.resolve_machine("vy-lane-a", "verity")["pod_id"] == POD["id"]
+    assert remote.resolve_machine("vy-x", "verity")["pod_id"] == "abc123def45678"
 
 
 def test_register_writes_one_file_and_run_on_resolves_it(reg):
@@ -148,6 +167,8 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def test_registrations_on_two_machines_both_reach_the_notes_remote(tmp_path, monkeypatch):
+    """Without being asked: vy-nebius-cpu-1 was registered at 15:20Z on 7 Oct and invisible to every other agent's `run --on`
+    until a notes sync at 19:25Z."""
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
     seed = tmp_path / "seed"
@@ -166,7 +187,7 @@ def test_registrations_on_two_machines_both_reach_the_notes_remote(tmp_path, mon
             _git(c, "config", k, v)
         clones.append(c)
     monkeypatch.setattr(runpod, "get", pods(POD, OTHER))
-    monkeypatch.setenv(notes_sync.SYNC_ENV, "1")
+    monkeypatch.delenv(notes_sync.SYNC_ENV, raising=False)
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "absent.toml"))
     monkeypatch.delenv("RESEARCH_MACHINES_D")
     for c, (name, pod) in zip(clones, (("vy-lane-a", POD), ("vy-lane-b", OTHER))):
@@ -177,3 +198,29 @@ def test_registrations_on_two_machines_both_reach_the_notes_remote(tmp_path, mon
     assert sorted(p.name for p in (check / "machines.d").glob("*.toml")) == ["vy-lane-a.toml", "vy-lane-b.toml"]
     monkeypatch.setenv("RESEARCH_NOTES", str(check))
     assert remote.resolve_machine("vy-lane-b", "verity")["pod_id"] == OTHER["id"]
+    head = _git(origin, "rev-parse", "main")
+    monkeypatch.setenv(notes_sync.SYNC_ENV, "0")
+    monkeypatch.setenv("RESEARCH_NOTES", str(clones[1]))
+    assert registry.main(["register", "vy-lane-c", "--pod-id", OTHER["id"], "--project", "verity", "--any-name"]) == 0
+    assert (clones[1] / "machines.d" / "vy-lane-c.toml").exists() and _git(origin, "rev-parse", "main") == head, "0 leaves it local"
+
+
+def test_an_override_directory_never_hides_a_machine_the_notes_clone_lists(tmp_path, monkeypatch):
+    """The lander's VM, 8 Oct 03:43Z: RESEARCH_MACHINES_D=/tmp/machines.d, copied by hand on 30 Sep, refused vy-nebius-cpu-1,
+    which had been in the notes' machines.d since 7 Oct 17:16Z."""
+    notes_d, override = tmp_path / "notes" / "machines.d", tmp_path / "copy"
+    for d, names in ((notes_d, ("vy-new", "vy-both")), (override, ("vy-both",))):
+        d.mkdir(parents=True)
+        for n in names:
+            host = "10.0.0.2" if d == override else "10.0.0.1"
+            (d / f"{n}.toml").write_text(f'provider = "ssh"\nhost = "{host}"\nproject = "verity"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    monkeypatch.setenv("RESEARCH_NOTES", str(tmp_path / "notes"))
+    monkeypatch.setenv("RESEARCH_MACHINES_D", str(override))
+    assert remote.resolve_machine("vy-new", "verity")["host"] == "10.0.0.1"
+    assert remote.resolve_machine("vy-both", "verity")["host"] == "10.0.0.2"          # the override still wins on its own names
+    with pytest.raises(remote.Refused, match="is not in"):
+        remote.resolve_machine("vy-absent", "verity")
+    monkeypatch.setenv("RESEARCH_MACHINES_D", "none")
+    with pytest.raises(remote.Refused, match="is not in"):
+        remote.resolve_machine("vy-new", "verity")                                     # off means machines.toml alone

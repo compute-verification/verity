@@ -142,7 +142,7 @@ _LAG_STATIC_RE = re.compile(r",lag=(-?\d+)\}$")
 def workload_lag_static(desc: dict) -> int | None:
     """[R17-1] the `lag` static of the workload Program AS THE CODEC WROTE IT, read from the descriptor (both places are inside the digest
     program_digest verifies): the codec inlines a specialization's binding record into its spec id in static-parameter order
-    (`Workload_v1{requests=[...],shared=[...],lag=1}`, verity.primitives.circuits.codec._spec_id), so `desc["program_fn"]` ends in `,lag=<n>}` and the
+    (`Workload_v1{requests=[...],shared=[...],lag=1}`, verity.ml.circuits.codec._spec_id), so `desc["program_fn"]` ends in `,lag=<n>}` and the
     root id `Root[Workload_v1{...,lag=<n>}]_v1` carries the same suffix; the two must agree.  A descriptor whose root definition carries an
     explicit `bindings.lag` (the mock form) is read from there.  None = a Program that declares no lag (every pre-R17-1 Build)."""
     ddefs = desc.get("definitions")
@@ -204,7 +204,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     digest_verification = {"verified": False, "why": "descriptor.json.gz not beside the artifact"}
     dpath = os.path.join(os.path.dirname(os.path.abspath(artifact_path)), "descriptor.json.gz")
     if os.path.exists(dpath):
-        from verity.primitives.circuits.codec import canonical_json, program_digest
+        from verity.ml.circuits.codec import canonical_json, program_digest
         with gzip.open(dpath, "rb") as f:
             desc = json.loads(f.read())
         recomputed = program_digest(desc)

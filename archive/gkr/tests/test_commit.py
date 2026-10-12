@@ -1,5 +1,5 @@
 """The operands-committed statement's harness side (``archive/gkr/gpu/commit.py``): row digests are the core
-frame-v3 reference's (``verity.primitives.commitments.frame_v3/vectors.json``), the domains are B-Ligero's (``hashauth``: same
+frame-v3 reference's (``verity.ml.commitments.frame_v3/vectors.json``), the domains are B-Ligero's (``hashauth``: same
 bindings, and the same roots for the BLAKE3 leaf it registers), and the statement extension adds exactly the 32
 digest-limb columns to the epilogue and to the chain's public line.
 """
@@ -20,7 +20,7 @@ for p in (GKR, REPO):
 
 from gpu import commit as CM  # noqa: E402
 
-VECTORS = REPO / "verity" / "primitives" / "commitments" / "frame_v3" / "vectors.json"
+VECTORS = REPO / "verity" / "ml" / "commitments" / "frame_v3" / "vectors.json"
 ISET = CM.InstanceSet("synthetic", "dev", "ab" * 32, 8, 16)
 
 
@@ -90,7 +90,7 @@ def test_changed_operand_changes_its_root_only():
 
 
 def test_vllm_v1_commitment_is_the_reference_schemes():
-    from verity.primitives.commitments.vllm_v1 import VllmV1, domain_digest, pos_leaf
+    from verity.ml.commitments.vllm_v1 import VllmV1, domain_digest, pos_leaf
 
     x, w, y = _rows(10, 5, 8, 16), _rows(11, 5, 8, 16), _rows(12, 5, 1, 16)
     c = CM.commit("vllm-v1", "bf16-ampere", ISET, 0, x, w, y, 2)

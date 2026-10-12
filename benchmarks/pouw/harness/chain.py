@@ -10,7 +10,7 @@ least `MIN_LENGTH`; call 0 derives from the last call of the previous replay. Va
   parts `arm.PARTS` makes of them (before: a_tree, forming; gemm: gemm, cleanup; after: tile_hash, screen, the movable
   groups), ``gemm`` (f, then the gemm part alone), ``before-gemm`` (f, before, gemm) and ``side`` (f, before, gemm and the
   screen on the timing stream, tile hashing (`arm.DEFERRED`) forked to a side stream after the gemm part: the served
-  ``deferred`` schedule, `verity.protocols.accounting.work.pouw.serving.DEFERRED`; the chain waits for call j - S's side work before deriving call
+  ``deferred`` schedule, `verity.core.protocols.pouw.serving.DEFERRED`; the chain waits for call j - S's side work before deriving call
   j's A, since call j reuses its operand set, and joins the side stream at its end, so the drain is timed once per L
   calls). v0.4's phases ``before``, ``gemm`` and ``after`` are each their part, and get no ``side``: their one ``after``
   can't be split into what the served schedule moves and what it keeps.

@@ -1,4 +1,4 @@
-"""Query API (`verity.primitives.circuits.query_ast`, `query.parse`, `query_codec`) on small-statics b1 Programs.
+"""Query API (`verity.ml.circuits.query_ast`, `query.parse`, `query_codec`) on small-statics b1 Programs.
 
 Every family is checked for `count == len(list(iter))`, `by_index(i) == list[i]`, `index_of(by_index(i)) == i`; sets are
 compared with the intervals the layout gives (`FunctionCall` regions / `Scope` offsets); partition properties are
@@ -9,15 +9,15 @@ import json
 
 import pytest
 
-from verity.primitives.circuits.defs import PrimitiveDefinition, bind
-from verity.primitives.circuits.layout import FunctionCall
-from verity.primitives.circuits.parts import Part, n_members
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.defs import PrimitiveDefinition, bind
+from verity.ml.circuits.layout import FunctionCall
+from verity.ml.circuits.parts import Part, n_members
+from verity.ml.circuits.program import Program
 from verity_vllm.program.registry import b1
-from verity.primitives.circuits import query_ast as G
-from verity.primitives.circuits.query_ast import GateSet, QueryError, evaluate
-from verity.primitives.circuits.query import parse, query
-from verity.primitives.circuits.query_codec import from_json, query_id, to_json
+from verity.ml.circuits import query_ast as G
+from verity.ml.circuits.query_ast import GateSet, QueryError, evaluate
+from verity.ml.circuits.query import parse, query
+from verity.ml.circuits.query_codec import from_json, query_id, to_json
 
 GEMM = 'members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")'
 ATTN = '''each("//AttentionHead_v3{*}",
@@ -444,7 +444,7 @@ def test_parse_and_json_roundtrip_stable_id():
         assert from_json(doc) == q
         assert from_json(json.loads(json.dumps(doc))) == q
         qid = query_id(q)
-        assert len(qid) == 64 and qid == query_id(from_json(doc))
+        assert len(qid) == 128 and qid == query_id(from_json(doc))
         assert qid not in seen
         seen.add(qid)
     # spelling-independent: whitespace / quotes / equivalent constructors

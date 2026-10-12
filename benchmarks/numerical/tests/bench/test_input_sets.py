@@ -20,7 +20,7 @@ from verity_numerical.bench import templates as TM
 DATA = Path(__file__).parent / "data" / "captured-101"
 CAPTURED = sorted((DATA / "manifests").glob("*.json"))
 SLICES = sorted(d for d in (DATA / "slices").iterdir() if d.is_dir())
-CENSUS = Path(__file__).resolve().parents[4] / "catalog" / "census"
+CENSUS = Path(__file__).resolve().parents[3] / "census"
 
 #: Small bindings of every template (fast under the gate reference too).
 SMALL = {"gemm-coordinate": dict(K=64), "attention-head": dict(D=16, BN=16, T="1:40"), "rope-head": dict(D=8),
@@ -79,7 +79,7 @@ def test_synthetic_set_has_the_captured_layout(synthetic, template):
     sub = s.subcircuit
     assert sub.id == TM.subcircuit(template, **SMALL[template]).id and s.name == sub.set_name
     digests = s.provenance["program_digests"]
-    assert digests and all(len(v) == 64 for v in digests.values())
+    assert digests and all(len(v) == 128 for v in digests.values())
     rec = s.provenance["recipe"]
     assert rec["seed"] == 11 and rec["subcircuit"] == sub.id and rec["n"] == s.n == 6
 
@@ -111,10 +111,10 @@ def test_draw_format_is_pinned():
     """Instance words are a function of (key, draw) alone: the counter stream's bytes and the word rule, fixed here."""
     sub = TM.subcircuit("gemm-coordinate", K=64)
     k = G.key_for(sub, 1)
-    assert k.stream(("x", 0), 8).hex() == "bf07a934b42bcac4"
+    assert k.stream(("x", 0), 8).hex() == "cbfb52e4ff385132"
     d = sub.draw(k, 0)
-    assert d.inputs["x"][:8].tolist() == [48095, 15706, 14853, 16912, 15198, 48432, 17159, 17042]
-    assert d.inputs["w"][:8].tolist() == [17252, 14907, 17181, 14606, 15076, 18320, 15426, 15512]
+    assert d.inputs["x"][:8].tolist() == [48997, 48895, 48786, 48679, 49141, 49163, 16398, 48634]
+    assert d.inputs["w"][:8].tolist() == [14769, 15487, 49039, 15187, 49013, 48260, 15627, 47538]
     assert TM.bf16_words(np.array([0, 1, 0xFFFFFFFF, 0x12345678, 0x01000000], dtype=np.uint32), 127, 4).tolist() == \
         [0, 0, 49407, 16572, 15744]
 
@@ -144,9 +144,9 @@ def test_evaluation_targets_equal_the_definitions():
     """Heads evaluate through a batch Definition that has a kernel; each equals the head's gate reference, and the captured
     vLLM GEMM step (core's AmpereBF16TcDot16_v2 since the re-baseline re-key; the retired _v1 evaluated the same function) equals the
     kernel."""
-    from verity.primitives.circuits.evaluation import evaluate_batch
-    from verity.primitives.circuits.defs import REGISTRY, bind
-    from verity_catalog.definitions import gemm
+    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.defs import REGISTRY, bind
+    from verity.ml.circuits.ops import gemm
 
     key = G.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)
     for sub, n in ((TM.subcircuit("attention-head", D=16, BN=16, T="17:40"), 4), (TM.subcircuit("rope-head", D=8), 16)):
@@ -190,9 +190,9 @@ FP8 = sorted(TM.GEMM_FP8)
 
 @pytest.mark.parametrize("sem", FP8)
 def test_fp8_sets_hold_the_backends_accumulators(tmp_path, sem):
-    """An FP8 set's y is the FP32 accumulator word of K/32 steps of the verity_catalog.silicon model the backends chain with (ADA_E4M3_M16N8K32,
-    HOPPER_E4M3_K32), from the IR reference (verity_kernels.tc ADA_E4M3_DOT / HOPPER_E4M3_DOT); every operand byte is finite."""
-    from verity_catalog.silicon import models
+    """An FP8 set's y is the FP32 accumulator word of K/32 steps of the verity.ml.circuits.silicon model the backends chain with (ADA_E4M3_M16N8K32,
+    HOPPER_E4M3_K32), from the IR reference (verity.ml.kernels.tc ADA_E4M3_DOT / HOPPER_E4M3_DOT); every operand byte is finite."""
+    from verity.ml.circuits.silicon import models
 
     sub = TM.subcircuit("gemm-coordinate", K=64, semantics=sem, tile=4)
     s = IS.InputSet.open(G.generate(sub, 12, 5, tmp_path)["path"])
@@ -214,8 +214,8 @@ def test_fp8_sets_hold_the_backends_accumulators(tmp_path, sem):
 
 def test_nvfp4_sets_hold_the_models_accumulator(tmp_path):
     """NVFP4 (sm120): y is models.BLACKWELL_SM120_NVF4's chain over the E2M1 codes and UE4M3 block-16 scales, from the IR reference
-    verity_kernels.tc.SM120_NVF4_DOT; codes span 0..15, scales the valid 0x00..0x7E."""
-    from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4 as M
+    verity.ml.kernels.tc.SM120_NVF4_DOT; codes span 0..15, scales the valid 0x00..0x7E."""
+    from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4 as M
 
     sid = "gemm-coordinate/k1536/sm120-mma-e2m1-nvf4"
     sub = TM.parse_subcircuit_id(sid)
@@ -237,7 +237,7 @@ def test_e4m3_words_are_pinned():
     assert sub.draw(G.key_for(sub, 1), 0).inputs["x"][:8].tolist() == PINNED_ADA_X
 
 
-PINNED_ADA_X = [177, 191, 177, 63, 5, 227, 161, 160]
+PINNED_ADA_X = [121, 85, 110, 206, 231, 247, 42, 81]
 
 
 def test_fp8_suite():

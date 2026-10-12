@@ -36,7 +36,7 @@ def _ty(shape, bits):
 
 def _program(fields):
     struct_ = "{" + ", ".join(f"{n}: {_ty(s, b)}" for n, s, b in fields) + "}"
-    return {"instances": {"rows": [], "params": [["weights", struct_]], "digest": "e" * 64}, "result": {"program_digest": "e" * 64}, "dir": "synthetic"}
+    return {"instances": {"rows": [], "params": [["weights", struct_]], "digest": "e" * 128}, "result": {"program_digest": "e" * 128}, "dir": "synthetic"}
 
 
 @pytest.fixture(params=["olmoe", "mixtral"])
@@ -88,7 +88,7 @@ def test_routed_experts_stacks_are_composed_from_the_per_expert_checkpoint_tenso
     r2 = by["model." + moe["w2"]]
     assert r2["rule"].startswith("fused experts w2 (vLLM RoutedExperts submodule) <- " + down) and len(r2["sources"]) == E
     # the honest served stacks (vLLM's _load_w13: gate first half, up second; _load_w2: down) pass with EVERY field compared
-    ok = WR.check(rec, live_digests(moe["served"]), program_digests_of_record={"e" * 64}, checkpoint_of_record={"repo": f"test/{moe['fam']}", "revision": "abc"})
+    ok = WR.check(rec, live_digests(moe["served"]), program_digests_of_record={"e" * 128}, checkpoint_of_record={"repo": f"test/{moe['fam']}", "revision": "abc"})
     assert ok["result"] is True and ok["compared"] == len(moe["fields"]) and ok["mismatched"] == [] and ok["missing"] == [], ok
     # the stacks are a function of the checkpoint bytes: the plain (pre-0.28) served name composes the SAME digests
     plain_fields = [(n.replace(".routed_experts.", "."), s, b) for n, s, b in moe["fields"]]
@@ -124,7 +124,7 @@ def test_expert_level_substitutions_fail_the_pin_by_name(moe):
     order is a named FAIL, whatever the scalar statistics (a permutation keeps every byte, only the order changes)."""
     rec = _record(moe)
     honest = moe["served"]
-    ctx = {"program_digests_of_record": {"e" * 64}, "checkpoint_of_record": {"repo": f"test/{moe['fam']}", "revision": "abc"}}
+    ctx = {"program_digests_of_record": {"e" * 128}, "checkpoint_of_record": {"repo": f"test/{moe['fam']}", "revision": "abc"}}
     assert WR.check(rec, live_digests(honest), **ctx)["result"] is True
 
     def _fails(served, field):

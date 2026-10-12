@@ -13,7 +13,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
 from verity_vllm.observe.fold.patterns.ops import base_op

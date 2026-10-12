@@ -1,4 +1,4 @@
-"""Completeness against ``verity_catalog.silicon.silicon``: gen(x) is accepted and yields y = tc_dot(x) on structured cases,
+"""Completeness against ``verity.ml.circuits.silicon.silicon``: gen(x) is accepted and yields y = tc_dot(x) on structured cases,
 random finite inputs, every all-finite golden record, and the K=1536 conformance vector through the VU."""
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ import pytest
 from conftest import bf16, golden_records, k1536_vector, random_cases, structured_cases
 
 from verity.errors import InvalidArtifact
-from verity_catalog.silicon.cast import f32_to_bf16_word
-from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot, tc_dot_chain
+from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot, tc_dot_chain
 from verity_numerical.checker import REAL, Reject, check_step, check_vu, gen_step, gen_vu, step_output, vu_output
 from verity_numerical.checker import reference
 

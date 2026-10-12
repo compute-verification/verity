@@ -1,4 +1,4 @@
-"""Adapters: ``verity_catalog.silicon.relation`` (over the integers or a prime field) and ``silicon.tc_dot`` as harness targets.
+"""Adapters: ``verity.ml.circuits.silicon.relation`` (over the integers or a prime field) and ``silicon.tc_dot`` as harness targets.
 
 The relation's acceptance predicate, as attacked here: the public input is ``(acc, a, b)``; the witness ``h`` is the
 dict tree ``step_witness`` produces, with ``h["in"]`` bound to ``decode_state(acc)`` and ``h["a"], h["b"]`` to the
@@ -13,9 +13,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from verity_catalog.silicon import relation as R
-from verity_catalog.silicon.silicon import Pipeline, tc_dot
-from verity_catalog.silicon.total import tc_dot_total
+from verity.ml.circuits.silicon import relation as R
+from verity.ml.circuits.silicon.silicon import Pipeline, tc_dot
+from verity.ml.circuits.silicon.total import tc_dot_total
 
 from .harness import BOOL, EXPONENT, MAGNITUDE, OTHER, POWER, REMAINDER, SELECTOR, SHIFT, SIGN, Column, Target
 

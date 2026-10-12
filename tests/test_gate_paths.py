@@ -5,7 +5,8 @@ stops requiring its step or its grant, a Tool's closure glob that matches nothin
 skips a Lean build whose package isn't there. So a directory move that misses one fails here instead.
 
 Paths resolve against `git ls-files`: a tracked file, or a directory holding one. What a gate names that is never tracked
-(build output, a file a shipped tree is given) is in `EXEMPT` with its reason, or is gitignored.
+(build output, a file a shipped tree is given, a directory of entry files that holds none yet) is in `EXEMPT` with its
+reason, or is gitignored.
 """
 from __future__ import annotations
 
@@ -23,10 +24,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 #: (file, path as written): never tracked, each with why
 EXEMPT = {
-    ("tools/check/pyproject.toml", "READY.json"): "the commit record check.py's shipped tree is given (`check.py`), never tracked",
+    ("tools/verity/check/pyproject.toml", "READY.json"): "the commit record check.py's shipped tree is given (`check.py`), never tracked",
+    ("tools/verity/circuit_check/src/circuit_check/known.py", "tools/verity/circuit_check/src/circuit_check/known/pieces"):
+        "KNOWN_PIECES' entry files, none while no lowering piece differs from its primitive; git keeps no empty directory",
 }
 #: the gate tooling whose module-level path constants are checked: what `check`, `research merge`, the queue and the audit read
-TOOLING = ("tools/check/", "tools/lean/", "tools/research/src/research/", "tools/circuit_check/src/")
+TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/research/src/research/", "tools/verity/circuit_check/src/")
 
 
 @functools.cache
@@ -75,24 +78,20 @@ def rule_dangling(rule: list[str], files: frozenset[str]) -> list[str]:
 
 
 def rules() -> dict[str, list[str]]:
-    """Every path rule a gate reads: `ci.toml`'s and `tool.py`'s `merge_requires` and the queue's grants."""
-    declaration = _module("gate_paths_declaration", ROOT / "tools" / "check" / "declaration.py")
-    tool = _module("gate_paths_check_tool", ROOT / "tools" / "check" / "tool.py")
-    from research import queue
+    """Every path rule a gate reads: `ci.toml`'s and `tool.py`'s `merge_requires`."""
+    declaration = _module("gate_paths_declaration", ROOT / "tools" / "verity" / "check" / "declaration.py")
+    tool = _module("gate_paths_check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
 
-    out = {f"tools/check/ci.toml job {j.name}": list(j.merge_requires) for j in declaration.load() if j.merge_requires}
-    out |= {f"tools/check/tool.py CHECK.merge_requires[{k!r}]": list(v) for k, v in tool.CHECK.merge_requires.items()}
-    source = next(p for p in (queue.RULES, queue.RULES_BEFORE_MOVE) if (ROOT / p).is_file())
-    out |= {f"{source} grant {g.role}": list(g.paths) for g in queue.Rules.parse((ROOT / source).read_text()).grants if g.paths}
+    out = {f"tools/verity/check/ci.toml job {j.name}": list(j.merge_requires) for j in declaration.load() if j.merge_requires}
+    out |= {f"tools/verity/check/tool.py CHECK.merge_requires[{k!r}]": list(v) for k, v in tool.CHECK.merge_requires.items()}
     return out
 
 
-def test_every_merge_requirement_and_grant_matches_tracked_files():
+def test_every_merge_requirement_matches_tracked_files():
     found = rules()
-    assert any("ci.toml" in k for k in found) and any("grant" in k for k in found), found
+    assert any("ci.toml" in k for k in found), found
     bad = {k: d for k, rule in found.items() if (d := rule_dangling(rule, tracked()))}
-    assert not bad, ("these gates name path prefixes no tracked file is under, so they would never require their step or "
-                     f"grant: {bad}")
+    assert not bad, f"these gates name path prefixes no tracked file is under, so they would never require their step: {bad}"
 
 
 def _suite_tables() -> dict[str, dict]:
@@ -108,7 +107,7 @@ def test_every_suite_input_and_artifact_is_in_this_tree():
     """A suite's inputs key its pass cache: one that isn't there keys nothing, and a test that skips on a missing file then
     passes with nothing checked. An artifact is a Lake build's output, so its package must be here."""
     tables = _suite_tables()
-    assert "verity/pyproject.toml" in tables
+    assert "verity/ml/circuits/pyproject.toml" in tables
     bad = [(f, i) for f, t in tables.items() for i in t.get("inputs", []) if (f, i) not in EXEMPT and not resolves(i)]
     bad += [(f, a) for f, t in tables.items() for a in t.get("artifacts", [])
             if not (ROOT / a.split("/.lake/")[0] / "lakefile.toml").is_file()]
@@ -196,12 +195,12 @@ _FORMAT_ID = re.compile(r"^verity/[\w.-]+/v\d+$")
 
 @functools.cache
 def _anchors():
-    return _module("gate_paths_anchors", ROOT / "tools" / "check" / "anchors.py")
+    return _module("gate_paths_anchors", ROOT / "tools" / "verity" / "check" / "anchors.py")
 
 
 def path_constants(rel: str, text: str, tops: frozenset[str]) -> list[tuple[int, str, str]]:
     """(line, the path, how it's written) for each repository path a module-level assignment of ``rel`` names: a string
-    whose first segment is one of ``tops``, or a join anchored on `__file__` (`tools/check/anchors.py` evaluates it)."""
+    whose first segment is one of ``tops``, or a join anchored on `__file__` (`tools/verity/check/anchors.py` evaluates it)."""
     anchor = _anchors().anchor
     out, names = [], {}
     for node in ast.parse(text).body:
@@ -232,7 +231,7 @@ def dangling_constants(files: frozenset[str], read=lambda f: (ROOT / f).read_tex
     for f in sorted(p for p in files if p.endswith(".py") and p.startswith(TOOLING) and "/tests/" not in p):
         here = f.rpartition("/")[0]
         for line, path, how in path_constants(f, read(f), tops):
-            if not resolves(path, files) and not resolves(f"{here}/{path}", files):
+            if (f, path) not in EXEMPT and not resolves(path, files) and not resolves(f"{here}/{path}", files):
                 found.append((f, line, path, how))
     unignored = set(p for _, _, p, _ in found) - (ignored([p for _, _, p, _ in found]) if files is tracked() else set())
     return [f"{f}:{line}: {path} ({how})" for f, line, path, how in found if path in unignored]
@@ -255,7 +254,7 @@ def test_the_latest_moves_new_paths_are_in_this_tree():
 
 
 def test_the_cluster_kinds_inputs_are_in_this_tree():
-    kinds = sorted(p for p in tracked() if p.startswith("tools/cluster/kinds/") and p.endswith(".toml"))
+    kinds = sorted(p for p in tracked() if p.startswith("infra/cluster/kinds/") and p.endswith(".toml"))
     assert kinds
     bad = [(k, i) for k in kinds for kind in tomllib.loads((ROOT / k).read_text()).get("kinds", {}).values()
            for i in kind.get("inputs", []) if not resolves(i)]
@@ -264,17 +263,17 @@ def test_the_cluster_kinds_inputs_are_in_this_tree():
 
 def test_each_check_catches_a_dangling_path():
     """The detectors above find what a move would leave behind, on a toy tree."""
-    files = frozenset({"backends/flock/live/lib.rs", "backends/flock/README.md", "tools/check/x.py", "tools/check/data/a.json"})
-    assert rule_dangling(["backends/flock/", "!README.md"], files) == []
-    assert rule_dangling(["backends/flock/", "verity/flock/", "!README.md"], files) == ["verity/flock/"]
-    assert rule_dangling(["tools/check/data/a.json"], files) == []
+    files = frozenset({"verity/ml/flock/live/lib.rs", "verity/ml/flock/README.md", "tools/verity/check/x.py", "tools/verity/check/data/a.json"})
+    assert rule_dangling(["verity/ml/flock/", "!README.md"], files) == []
+    assert rule_dangling(["verity/ml/flock/", "verity/flock/", "!README.md"], files) == ["verity/flock/"]
+    assert rule_dangling(["tools/verity/check/data/a.json"], files) == []
 
     from research.store.tool import Tool
 
-    tool = Tool(name="t", command=["bash", "backends/flock/run.sh"], closure=["backends/flock/live/**", "verity/**"],
-                after_land=["python", "tools/check/x.py"], merge_requires={"s": ["verity/flock/"]})
-    assert tool_problems("t", tool, files) == ["closure glob 'verity/**' matches no tracked file",
-                                               "command names 'backends/flock/run.sh', which isn't tracked",
+    tool = Tool(name="t", command=["bash", "verity/ml/flock/run.sh"], closure=["verity/ml/flock/live/**", "elsewhere/**"],
+                after_land=["python", "tools/verity/check/x.py"], merge_requires={"s": ["verity/flock/"]})
+    assert tool_problems("t", tool, files) == ["closure glob 'elsewhere/**' matches no tracked file",
+                                               "command names 'verity/ml/flock/run.sh', which isn't tracked",
                                                "merge_requires['s'] prefixes ['verity/flock/'] match no tracked file"]
     gkr = frozenset({"archive/gkr/gpu/tool.py", "archive/gkr/gpu/run.py"})
     tool = Tool(name="g", command=["python", "-m", "gpu.run"], closure=["archive/gkr/gpu/**"])
@@ -283,9 +282,9 @@ def test_each_check_catches_a_dangling_path():
     tool.spec = "elsewhere.gkr.gpu.tool:G"
     assert tool_problems("g", tool, gkr) == ["command runs -m gpu.run, which isn't a module here"]
 
-    text = ('from pathlib import Path\nROOT = Path(__file__).resolve().parents[2]\nA = ROOT / "tools" / "check" / "x.py"\n'
-            'B = ROOT / "tools" / "lean"\nC = "backends/flock/live"\nD = ("backends/gone/x.py", "data/a.json")\n'
+    text = ('from pathlib import Path\nROOT = Path(__file__).resolve().parents[3]\nA = ROOT / "tools" / "verity" / "check" / "x.py"\n'
+            'B = ROOT / "tools" / "verity" / "lean"\nC = "verity/ml/flock/live"\nD = ("verity/gone/x.py", "data/a.json")\n'
             'E = Path(__file__).parent / "data" / "b.json"\nF = "origin/main"\n')
-    got = dangling_constants(files | {"tools/check/y.py"}, read=lambda f: text if f == "tools/check/y.py" else "")
-    assert got == ["tools/check/y.py:4: tools/lean (join)", "tools/check/y.py:6: backends/gone/x.py (string)",
-                   "tools/check/y.py:7: tools/check/data/b.json (join)"]
+    got = dangling_constants(files | {"tools/verity/check/y.py"}, read=lambda f: text if f == "tools/verity/check/y.py" else "")
+    assert got == ["tools/verity/check/y.py:4: tools/verity/lean (join)", "tools/verity/check/y.py:6: verity/gone/x.py (string)",
+                   "tools/verity/check/y.py:7: tools/verity/check/data/b.json (join)"]

@@ -17,14 +17,14 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.batch import type_shape
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.defs import PrimitiveDefinition, bind
-from verity_catalog.definitions.boolean import mufu as MU
-from verity.primitives.circuits.boolean import trace as TR
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.batch import type_shape
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import PrimitiveDefinition, bind
+from verity.ml.circuits.ops.boolean import mufu as MU
+from verity.ml.circuits.boolean import trace as TR
 from verity_vllm.program.boolean import boolean_version
 from verity_vllm.program.registry import boolean_dense as BD
 from verity_vllm.program.registry import boolean_dense_norm as DN
@@ -44,9 +44,9 @@ H, EPS, ONE = 2304, 1e-6, 1.0
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "F32AddZero_v1": (399, 561, 61, "d75c70650ad64d29bb6236ff28aef56ffdd5ecc0942ae2119502a989afc9cd8d"),
-    "MeanDivTriton_v1{N=2304}": (1474, 2867, 112, "44449ab59d5afdb08e7a280ddf9ad1e6887beed19484c75ffaa111e5a816dce1"),
-    "NarrowF32ToBf16El_v1": (66, 98, 15, "aac6bea5e40d08dd643086e3bde296fd2749c358c94536dd738c20cb0148ecbc"),
+    "F32AddZero_v1": (399, 561, 61, "9502ae13c126d18de6fbd9001b1ea44ac3d1329287aaa96b1448afe6adf81316707cddcb6f3ff5f17e8240a449850acb17084451c088340efaefee7b7de847f9"),
+    "MeanDivTriton_v1{N=2304}": (1474, 2867, 112, "1f189ee81023cd14566f6b295d877636e14d91ea5714152ccc7ef786ed1cc37f33fb1b234200b16d14c096b42fea13887afdd0134a47227b9604b25b06eb61f5"),
+    "NarrowF32ToBf16El_v1": (66, 98, 15, "873fdddeca13183b3745db848fe24b91719dff5073a4a7fa1dcf2a7cd2d3a8ab89591a2dca2e6105bab45c8b61af62e65334cf4a2047619bbdeecdc33f948f1e"),
 }
 LEAVES = [bind(DN.F32AddZero), bind(DN.MeanDivTriton, N=H), bind(DN.NarrowF32ToBf16El)]
 

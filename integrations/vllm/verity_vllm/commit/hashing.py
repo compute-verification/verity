@@ -1,6 +1,6 @@
 """The one hash function of the POC and its tags.
 
-``H``, the leaf/node/lift/ids/empty tags and their rules are core's (:mod:`verity.primitives.commitments.leaves`); :func:`ids_digest`
+``H``, the leaf/node/lift/ids/empty tags and their rules are core's (:mod:`verity.ml.commitments.leaves`); :func:`ids_digest`
 here hashes the ids in the order given (callers pass them already in tree order).
 
 Byte layout of ``H(tag, *parts)`` (SHA-256 over a single stream)::
@@ -50,7 +50,7 @@ import json
 from collections.abc import Iterable
 from typing import Any
 
-from verity.primitives.commitments.leaves import (
+from verity.ml.commitments.leaves import (
     DIGEST_BYTES,
     EMPTY_TAG,
     IDS_TAG,

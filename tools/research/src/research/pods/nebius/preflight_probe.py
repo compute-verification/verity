@@ -12,7 +12,7 @@ thread once the preflight passes there again. Infra is the only reader, so each 
 Any other refusal (the machine held exclusively, ssh down) is only logged. A pass that passes leaves one Attempt (campaign
 `infra-probe`). It runs where `research run --on` and `research msg` work (infra's VM, tmux `preflight-probe`).
 
-Each pass also runs `research deploy drift` (research/deploy.py) and posts the same way whenever its findings change: the files on
+Each pass also runs `research deploy drift` (`ops deploy`) and posts the same way whenever its findings change: the files on
 the nodes that aren't main's, the processes still running old code, and the strays, with what's new since the last post.
 
   python3 preflight_probe.py --tree CHECKOUT [--machines vy-nebius-1 vy-nebius-2] [--every 3600] [--state PATH] [--once] [--dry-run]
@@ -50,7 +50,7 @@ def step(state: dict, results: dict[str, tuple[str, str]], post: Callable[[str, 
     for m, (v, detail) in sorted(results.items()):
         if v == "failed" and m not in state["open"]:
             text = (f"*Check's preflight fails on `{m}`*, so a check recorded there is refused: {detail[:600]} "
-                    f"Probe: `research run --on {m} --preflight check $(python tools/check/check.py --lean-deps-files) -- true`.")
+                    f"Probe: `research run --on {m} --preflight check $(python tools/verity/check/check.py --lean-deps-files) -- true`.")
             state["open"][m] = {"thread": post(text, None), "since": detail[:200]}
         elif v == "ok" and m in state["open"]:
             post(f"*Cleared:* check's preflight passes on `{m}` again (run {detail}).", state["open"][m]["thread"])
@@ -63,7 +63,7 @@ def probe(tree: Path, machines: list[str], dry: bool) -> dict[str, tuple[str, st
     subprocess.run([*git, "fetch", "-q", "origin", "main"], check=True, timeout=300)
     subprocess.run([*git, "checkout", "-q", "--detach", "origin/main"], check=True, timeout=120)
     env = {**os.environ, "PYTHONPATH": str(tree / "tools" / "research" / "src")}
-    send = subprocess.run([sys.executable, "tools/check/check.py", "--lean-deps-files"], cwd=tree, env=env, capture_output=True,
+    send = subprocess.run([sys.executable, "tools/verity/check/check.py", "--lean-deps-files"], cwd=tree, env=env, capture_output=True,
                           text=True, timeout=300).stdout.split()
     out = {}
     for m in machines:

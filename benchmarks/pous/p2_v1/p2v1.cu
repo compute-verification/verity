@@ -22,6 +22,19 @@
 
 #define P2V1_WARPS (P2_TPB / 32)
 
+#ifdef P2_FAST
+#include "p2sq.cuh"
+#endif
+#if defined(P2_KEYS) && defined(P2_KEYS4)
+#error "P2_KEYS (v1's SHAKE256 keys) and P2_KEYS4 (v4's SHA-512 keys) are one or the other"
+#endif
+#ifdef P2_KEYS
+#include "p2keys.cuh"
+#endif
+#ifdef P2_KEYS4
+#include "p2keys4.cuh"
+#endif
+
 #ifdef __CUDA_ARCH__
 // big-endian row of NL words -> little-endian limbs
 __device__ __forceinline__ void load_be(uint32_t *sm, const uint32_t *__restrict__ row, uint32_t lane) {
@@ -205,6 +218,18 @@ extern "C" int p2v1_width_bits() { return P2_BITS; }
 extern "C" int p2v1_decode(const void *c, void *m, const void *k, const void *t, uint32_t n, uint32_t c0, void *flags,
                            void *stream) {
   if (n == 0) return 0;
+#ifdef P2_FAST
+  {
+    int dev = 0, sms = 0, occ = 0;
+    cudaGetDevice(&dev);
+    cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, (const void *)decode_sq_kernel, 32 * P2SQ_WARPS, 0);
+    uint64_t full = ((uint64_t)n + P2SQ_WARPS - 1) / P2SQ_WARPS, cap = (uint64_t)(occ > 0 ? occ : 1) * (sms > 0 ? sms : 1);
+    decode_sq_kernel<<<(uint32_t)std::max<uint64_t>(1, std::min<uint64_t>(full, cap)), 32 * P2SQ_WARPS, 0, (cudaStream_t)stream>>>(
+        (const uint32_t *)c, (uint32_t *)m, (const uint32_t *)k, (const uint32_t *)t, n, c0, (uint32_t *)flags);
+    return (int)cudaGetLastError();
+  }
+#endif
   decode_v1_kernel<<<grid_for((const void *)decode_v1_kernel, n), P2_TPB, 0, (cudaStream_t)stream>>>(
       (const uint32_t *)c, (uint32_t *)m, (const uint32_t *)k, (const uint32_t *)t, n, c0, (uint32_t *)flags);
   return (int)cudaGetLastError();
@@ -217,3 +242,106 @@ extern "C" int p2v1_encode(const void *m, void *c, const void *k, const void *t,
       (const uint32_t *)m, (uint32_t *)c, (const uint32_t *)k, (const uint32_t *)t, n, c0, ea, en, er, (uint32_t *)flags);
   return (int)cudaGetLastError();
 }
+
+#ifdef P2_KEYS
+// K and t rows (as gpu.Kernels.keys) of blocks first .. first + count - 1, under the expansion prefix; -1 if it doesn't fit
+extern "C" int p2v1_keys(const uint8_t *prefix, int plen, uint64_t first, uint32_t count, uint64_t per_segment, void *k, void *t,
+                         void *stream) {
+  p2keys::Mid mid;
+  if (!p2keys::midstate(prefix, plen, mid)) return -1;
+  if (count == 0) return 0;
+  const uint32_t per = 32 * p2keys::WARPS;
+  p2keys::keys_kernel<<<(count + per - 1) / per, per, 0, (cudaStream_t)stream>>>(mid, first, count, per_segment, (uint64_t *)k,
+                                                                                  (uint64_t *)t);
+  return (int)cudaGetLastError();
+}
+#endif
+
+#ifdef P2_KEYS4
+// the key framing p2v1_keys expands (reference.keys, under reference.expand_prefix's 256-byte prefix)
+extern "C" int p2v1_keys_version() { return 4; }
+
+extern "C" int p2v1_keys(const uint8_t *prefix, int plen, uint64_t first, uint32_t count, uint64_t per_segment, void *k, void *t,
+                         void *stream) {
+  p2keys4::Mid mid;
+  if (!p2keys4::midstate(prefix, plen, mid)) return -1;
+  if (count == 0) return 0;
+  const uint64_t per = p2keys4::threads_per_purpose(count);
+  p2keys4::keys_kernel<<<(uint32_t)((2 * per + P2K4_TPB - 1) / P2K4_TPB), P2K4_TPB, 0, (cudaStream_t)stream>>>(
+      mid, first, count, per_segment, per, (uint64_t *)k, (uint64_t *)t);
+  return (int)cudaGetLastError();
+}
+#endif
+
+#if defined(P2_FUSED)
+#if !defined(P2_FAST) || !defined(P2_KEYS)
+#error "P2_FUSED expands P2_KEYS's keys inside P2_FAST's decode"
+#endif
+// The decode with its keys in one kernel: each warp takes a contiguous run of blocks and, for each 32 of them, first expands
+// their keys (a lane a block) into its own scratch rows, then decodes them one by one. The expansion is logic and the decode
+// multiplies, so while one warp expands the other on its scheduler keeps the multiplier busy (the two start half a batch apart);
+// the runs differ by at most one block.
+__global__ void __launch_bounds__(32 * P2SQ_WARPS, P2SQ_MINB) decode_keyed_kernel(
+    const __grid_constant__ p2keys::Mid mid, uint64_t first, uint64_t per_segment, const uint32_t *__restrict__ cin,
+    uint32_t *__restrict__ mout, uint32_t n, uint32_t c0, uint32_t *__restrict__ flags, uint64_t *__restrict__ scratch) {
+  using namespace p2sq;
+  static_assert(32 * p2keys::RW * 2 <= WARP_WORDS, "the keys' staging fits a warp's shared memory");
+  __shared__ __align__(16) uint32_t smem[P2SQ_WARPS][WARP_WORDS];
+  const uint32_t lane = threadIdx.x % 32, wid = threadIdx.x / 32;
+  uint32_t *sm = smem[wid], *snap = smem[wid] + E_WORDS;
+  const uint64_t warps = (uint64_t)gridDim.x * P2SQ_WARPS, w = (uint64_t)blockIdx.x * P2SQ_WARPS + wid;
+  const uint32_t lo = (uint32_t)(n * w / warps), hi = (uint32_t)(n * (w + 1) / warps);
+  constexpr size_t ROW = p2keys::OUT_WORDS;
+  uint64_t *K = scratch + w * 2 * 32 * ROW, *T = K + 32 * ROW;
+  uint32_t slot;
+  asm("mov.u32 %0, %%warpid;" : "=r"(slot));
+  uint32_t batch = (slot >> 2) & 1 ? 16 : 32;   // the two warps on a scheduler expand half a batch apart
+  for (uint32_t j0 = lo, rows; j0 < hi; j0 += rows, batch = 32) {
+    rows = hi - j0 < batch ? hi - j0 : batch;
+    __syncwarp();
+    p2keys::keys_rows(mid, first + j0, rows, per_segment, K, T, (uint64_t *)sm, lane);
+    __syncwarp();
+    for (uint32_t r = 0; r < rows; r++) {
+      const uint32_t j = j0 + r, jn = j + 1 < hi ? j + 1 : j;
+      const uint32_t *kr = (const uint32_t *)(K + r * ROW), *tr = (const uint32_t *)(T + r * ROW);
+#ifndef P2SQ_NO_PREFETCH
+      prefetch_row(kr, lane);
+      prefetch_row(tr, lane);
+      prefetch_row(cin + (size_t)jn * N, lane);
+#endif
+      decode_one(sm, snap, cin + (size_t)j * N, mout + (size_t)j * N, kr, tr, c0, flags, lane);
+    }
+  }
+}
+
+static struct {
+  void *buf = nullptr;
+  size_t cap = 0;
+} g_fused;
+
+// m for blocks first .. first + n - 1 from c alone: the keys under the expansion prefix are expanded on the way
+extern "C" int p2v1_decode_fused(const void *c, void *m, const uint8_t *prefix, int plen, uint64_t first, uint32_t n,
+                                 uint64_t per_segment, uint32_t c0, void *flags, void *stream) {
+  p2keys::Mid mid;
+  if (!p2keys::midstate(prefix, plen, mid)) return -1;
+  if (n == 0) return 0;
+  int dev = 0, sms = 0, occ = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, (const void *)decode_keyed_kernel, 32 * P2SQ_WARPS, 0);
+  const uint64_t full = ((uint64_t)n + 32 * P2SQ_WARPS - 1) / (32 * P2SQ_WARPS);
+  const uint32_t grid = (uint32_t)std::max<uint64_t>(1, std::min<uint64_t>(full, (uint64_t)std::max(occ, 1) * std::max(sms, 1)));
+  const size_t need = (size_t)grid * P2SQ_WARPS * 2 * 32 * (P2_BITS / 8);
+  auto &f = g_fused;
+  if (f.cap < need) {
+    cudaDeviceSynchronize();
+    if (f.buf) cudaFree(f.buf);
+    if (cudaMalloc(&f.buf, need) != cudaSuccess) { f.buf = nullptr; f.cap = 0; return (int)cudaGetLastError(); }
+    f.cap = need;
+  }
+  decode_keyed_kernel<<<grid, 32 * P2SQ_WARPS, 0, (cudaStream_t)stream>>>(mid, first, per_segment, (const uint32_t *)c,
+                                                                          (uint32_t *)m, n, c0, (uint32_t *)flags,
+                                                                          (uint64_t *)f.buf);
+  return (int)cudaGetLastError();
+}
+#endif

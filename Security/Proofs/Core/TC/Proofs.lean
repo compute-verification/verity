@@ -1,0 +1,9 @@
+import Proofs.Core.TC.Proofs.Step
+import Proofs.Core.TC.Proofs.Words
+import Proofs.Core.TC.Proofs.Norm
+import Proofs.Core.TC.Proofs.Fold
+import Proofs.Core.TC.Proofs.Group
+import Proofs.Core.TC.Proofs.SemGroup
+import Proofs.Core.TC.Proofs.Prod
+import Proofs.Core.TC.Proofs.Complete
+import Proofs.Core.TC.Proofs.Pack

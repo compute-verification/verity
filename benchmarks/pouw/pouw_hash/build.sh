@@ -9,7 +9,7 @@
 #   sass.json         registers, local memory and the opcode census per kernel; ptxas.txt
 #   run.sh, check.py, the sources, toolchain.txt, source.txt (the verity commit), MANIFEST.sha256
 # Usage: bash benchmarks/pouw/pouw_hash/build.sh [OUT]   (default /tmp/pouw-hash-ship; C9 names CUDA 12.9, default
-# /tmp/cuda-12.9.1 as the store's code/pouw-gpu-constants/h100/fetch_cuda.py 12.9.1 lays it out, or /usr/local/cuda-12.9). Ship it with benchmarks/pouw/pearl_c/ship.sh OUT REPO, then `research run --source REPO --cwd source`.
+# /tmp/cuda-12.9.1 as the store's code/pouw-gpu-constants/h100/fetch_cuda.py 12.9.1 lays it out, or /usr/local/cuda-12.9). Ship it with archive/pouw-blake3/pearl_c/ship.sh OUT REPO, then `research run --source REPO --cwd source`.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 C9=${C9:-/tmp/cuda-12.9.1}; OUT=${1:-/tmp/pouw-hash-ship}
@@ -35,7 +35,7 @@ rm "$OUT/sass.txt"
 NEW=$(objdump -T "$OUT/pouw_hash_bench" | grep -oE "GLIBC_2\.[0-9]+" | sort -uV | awk -F. '$2 > 35' | tr '\n' ' ')
 [ -z "$NEW" ] || { echo "REFUSED: pouw_hash_bench needs $NEW (newer than 2.35)" >&2; exit 1; }
 cp "$HERE/run.sh" "$HERE/check.py" "$HERE/pouw_hash.cuh" "$HERE/vectors.cuh" "$HERE/pouw_hash_check.cu" "$HERE/pouw_hash_bench.cu" "$OUT/"
-# every file 0644, as pearl_c/ship.sh commits them, so the shipped repo's checkout is clean for `research run --source`;
+# every file 0644, as archive/pouw-blake3/pearl_c/ship.sh commits them, so the shipped repo's checkout is clean for `research run --source`;
 # run.sh makes the binary executable on the machine
 chmod 0644 "$OUT/pouw_hash_bench"
 "$C9/bin/nvcc" --version | tail -2 > "$OUT/toolchain.txt"

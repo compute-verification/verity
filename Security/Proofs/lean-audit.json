@@ -1,0 +1,239 @@
+{
+ "roots": [
+  "Proofs.Core",
+  "Proofs.Nci",
+  "Proofs.Pous",
+  "Proofs.Pouw",
+  "Proofs.NetworkCertifier",
+  "Proofs.Flock",
+  "Proofs.Accounting"
+ ],
+ "exempt": {
+  "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
+  "Proofs.Pous.Targets": "open targets: every pinned statement as a sorry stub",
+  "Proofs.Pous.CheckAxioms": "the headline #print axioms list (`lake env lean CheckAxioms.lean`)",
+  "Proofs.NetworkCertifier.CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)"
+ },
+ "runs": {
+  "Proofs.Pouw.Bulk": {
+   "why": "every generated FP8 step and FP32 add, with red-team R1's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (29 Sep 01:10Z, granted by R1)",
+   "args": ["{conformance/steps.txt}", "176549", "{conformance/adds.txt}", "5000"],
+   "data": {
+    "conformance/adds.txt": "517e190bae67fd64ae9273eba6e52be524038f17cdcc1821b759311ca72b8a6b",
+    "conformance/steps.txt": "2d3c5317e24727543da4e12da608f9d8a1650538b4a6d4e65abf1047f58d9ce8"
+   },
+   "generate": [
+    "python3",
+    "{repo}/verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py",
+    "{repo}",
+    "--out",
+    "{out}"
+   ]
+  }
+ },
+ "compile_time": {
+  "Proofs.Flock.Soundness.Refine.Walk": {
+   "why": "walk_step, the tactic that steps through a successful computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
+   "digest": "c8e7697dd01461092e5dda778796c82404aa9f23e79fa67b532c5123f96f8333"
+  }
+ },
+ "layers": {
+  "Proofs.Pouw.Dimension.Lifting": {
+   "imports": ["Mathlib"],
+   "except": [],
+   "why": "the lifting worker's grid-density and slice lemmas (L2, L3) stand alone on Mathlib"
+  }
+ },
+ "upstream": {
+  "imports": [
+   "ArkLib",
+   "CompPoly.Fields.Binary.AdditiveNTT.NovelPolynomialBasis",
+   "Mathlib",
+   "VCVio.CryptoFoundations.HardnessAssumptions.CollisionResistance"
+  ],
+  "watch": {
+   "loomis-whitney": {
+    "about": "Nci.SecurityProofs.loomis_whitney: the discrete Loomis-Whitney inequality, proved by hand",
+    "mentions": ["Finset.card", "Finset.image", "HPow.hPow"],
+    "ack": [
+     "Finset.card_pow_quotient_mul_pow_inter_subgroup_le",
+     "Finset.le_card_quotient_mul_sq_inter_subgroup",
+     "Finset.prod_comp"
+    ]
+   },
+   "A1-johnson-mca": {
+    "about": "Assumptions.BCHKS25Thm46 (A1): the Johnson-range MCA bound the Ligerito folds assume",
+    "mentions": ["CoreDefinitions.mcaError", "CoreDefinitions.AffineLineGenerator", "ReedSolomon.code"],
+    "ack": [
+     "ProximityGap.rs_mcaError_le_of_le_relUDR",
+     "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_mcaError_le",
+     "ReedSolomon.FirstOrder.firstOrderBranch_finiteLength_mcaError_le",
+     "ReedSolomon.FirstOrder.lowRate_finiteLength_mcaError_le",
+     "ReedSolomon.HasCapacityLineAgreement.mcaError_le",
+     "ReedSolomon.automaticFirstOrder_hybrid_mcaError_le",
+     "ReedSolomon.automaticFirstOrder_rate_mcaError_le",
+     "ReedSolomon.exists_capacity_mcaError",
+     "ReedSolomon.mcaError_affineLine_fullRate_eq_zero",
+     "ReedSolomon.mcaError_affineLine_johnson_le",
+     "ReedSolomon.mcaError_affineLine_le_min_one_of_exactAgreement",
+     "ReedSolomon.mcaError_affineLine_le_of_exactAgreement",
+     "ReedSolomon.mcaError_affineLine_weightedJohnson_le",
+     "ToyProblem.Impl.IRS.exactGammaFailure_prob_le"
+    ]
+   },
+   "udr-mca": {
+    "about": "the unique-decoding fallback for the MCA bound",
+    "mentions": ["CoreDefinitions.mcaError", "Code.relativeUniqueDecodingRadius"],
+    "ack": ["ProximityGap.rs_mcaError_le_of_le_relUDR"]
+   },
+   "list-size": {
+    "about": "ListSize.closeMsgs_card_le: the Johnson list bound, 25·2^r at rate 2^-r",
+    "mentions": ["ReedSolomon.closePolynomialSet", "Set.ncard"],
+    "ack": [
+     "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_finiteSlack_bounds",
+     "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_rate_bounds",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_finiteLength_of_bounded_certificate",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_finiteLength_of_certificate",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_finiteLength_of_dimension_le_one",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_finiteLength_of_selector_certificate",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_inv_eta_of_certificate",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_inv_eta_of_dimension_le_one",
+     "ReedSolomon.FirstOrder.finiteLength_completeList_and_exceptionalMca_of_selector_certificates",
+     "ReedSolomon.FirstOrder.finiteLength_completeList_and_exceptionalMca_of_selector_certificates_inv_eta",
+     "ReedSolomon.FirstOrder.firstOrderBranch_finiteLength_finiteSlack_bounds",
+     "ReedSolomon.FirstOrder.firstOrderBranch_finiteLength_rate_bounds",
+     "ReedSolomon.FirstOrder.lowRate_closePolynomialSet_finite_and_card_le_finiteLength",
+     "ReedSolomon.FirstOrder.lowRate_closePolynomialSet_finite_and_card_le_inv_eta",
+     "ReedSolomon.FirstOrder.lowRate_finiteLength_completeList_and_exceptionalMca",
+     "ReedSolomon.FirstOrder.lowRate_finiteLength_completeList_and_exceptionalMca_inv_eta",
+     "ReedSolomon.FirstOrder.lowRate_finiteLength_rate_bounds",
+     "ReedSolomon.automaticFirstOrder_closePolynomialSet_at_ceil_finite_and_card_le",
+     "ReedSolomon.automaticFirstOrder_closePolynomialSet_finite_and_card_le",
+     "ReedSolomon.automaticFirstOrder_rate_bounds",
+     "ReedSolomon.automatic_first_order_list_bound",
+     "ReedSolomon.automatic_first_order_list_bound_of_slack",
+     "ReedSolomon.automatic_first_order_squarefree_list_bound_of_slack",
+     "ReedSolomon.closePolynomialSet_finite_and_ncard_le_of_differential_equation_and_gap",
+     "ReedSolomon.closePolynomialSet_finite_and_ncard_le_pairwiseJohnson",
+     "ReedSolomon.closePolynomialSet_finite_and_ncard_le_pairwiseJohnson_of_gap",
+     "ReedSolomon.closePolynomialSet_finite_and_ncard_mul_choose_le",
+     "ReedSolomon.closePolynomialSet_ncard_mul_choose_le",
+     "ReedSolomon.closePolynomialSet_one_ncard_le_div",
+     "ReedSolomon.close_list_bound_of_curve_certificate_directJetCoarse",
+     "ReedSolomon.close_list_bound_of_curve_certificate_of_jetCharacteristic",
+     "ReedSolomon.exists_ratePartition_list_bound",
+     "ReedSolomon.fixedRatePartitionOrder_list_bound",
+     "ReedSolomon.fixedRatePartitionOrder_list_bound_selected",
+     "ReedSolomon.lambda_le_ceil_of_closePolynomialSet_bound",
+     "ReedSolomon.mathematicalUniformRatePartition_close_list_bound",
+     "ReedSolomon.mathematicalUniform_capacity_list_bound",
+     "ReedSolomon.prescribed_geometric_close_list_bound",
+     "ReedSolomon.ratePartition_close_list_bound",
+     "ReedSolomon.uniformRatePartition_close_list_bound",
+     "ReedSolomon.uniform_capacity_list_bound"
+    ]
+   },
+   "list-size-code": {
+    "about": "ListSize.closeMsgs_card_le, stated as list decodability",
+    "mentions": ["Code.IsListDecodable", "ReedSolomon.code"],
+    "ack": [
+     "OutOfDomSmpl.out_of_dom_smpl_1",
+     "OutOfDomSmpl.out_of_dom_smpl_2",
+     "ReedSolomon.Interleaved.interleavedCodeSet_isListDecodable",
+     "ReedSolomon.code_isListDecodable_pairwiseJohnson",
+     "ReedSolomon.listDecodable_reedSolomon"
+    ]
+   },
+   "tensor-fold": {
+    "about": "the fold union in LigeritoLevels (2^k - 1 pairs per level, paper Lemma 9)",
+    "mentions": ["TensorMCA.tensorFoldBad"],
+    "ack": [
+     "ReedSolomon.interleavedRS_tensorFoldBad_card_le_heightThree",
+     "TensorMCA.hasFullTensorDecomposition_of_not_mem_bad",
+     "TensorMCA.tensorFoldBad_card_le",
+     "TensorMCA.tensorFoldBad_eq_empty_height_zero",
+     "TensorMCA.tensorFoldBad_probability_height_three",
+     "TensorMCA.tensorFoldBad_probability_le"
+    ]
+   },
+   "novel-basis": {
+    "about": "Arith.Correct.xhat_poly, proved per instance for L ≤ 40 (level3)",
+    "mentions": ["AdditiveNTT.novelPolynomialBasis"],
+    "ack": ["AdditiveNTT.novelPolynomialBasis_is_basisVectors"]
+   },
+   "collision-resistance": {
+    "about": "SHA512CRStrict (cr/sha-512) and SHA512CRExpected (ecr/sha-512, A2), and the explicit collision finders",
+    "mentions": ["CollisionResistance.crAdvantage"],
+    "ack": []
+   },
+   "keyed-cr": {
+    "about": "SHA512CRStrict and SHA512CRExpected, keyed form",
+    "mentions": ["CollisionResistance.keyedCRAdvantage"],
+    "ack": []
+   },
+   "rom-cr": {
+    "about": "the random-oracle shadow of SHA512CRStrict (the birthday bound) and SHA512CRExpected (an expected-query birthday bound)",
+    "mentions": ["CollisionResistance.romCRAdvantage"],
+    "ack": ["CollisionResistance.romCRAdvantage_le_birthday"]
+   },
+   "A3-uniform-bytes": {
+    "about": "A3 (UniformRandomBytes, uniform/io-getrandombytes): the operating system's bytes, which the live draw reads through IO.getRandomBytes, are independent and uniform",
+    "mentions": ["IO.getRandomBytes"],
+    "ack": []
+   },
+   "hm96-hiding": {
+    "about": "Assumptions.Hm96Hiding (zero knowledge's T1, hash-derived-key): (M·y, H(sp‖y)) is δ₁-close to (U, H(sp‖y)), the leftover hash lemma at the pinned key",
+    "mentions": ["PMF.tvDist", "Matrix.mulVec"],
+    "ack": []
+   },
+   "pad-nonvanishing": {
+    "about": "Assumptions.PadNonvanishing (zero knowledge): X_L + κ ≠ 0 on the level-0 domain, since Ŵ_cols(ω_q) is bit cols of q",
+    "mentions": ["AdditiveNTT.normalizedW", "Polynomial.eval"],
+    "ack": []
+   },
+   "hm-row-computes": {
+    "about": "HmRowComputes (circuit/hm96-sha512-row): the sha512x3 and hm96 slots compute SHA-512 and hm96's commit string, the value binding's circuit side (phase 2i)",
+    "mentions": ["Sha512.compress", "Sha512.hash"],
+    "ack": []
+   },
+   "live-verifier-custody": {
+    "about": "Assumptions.Zk.RecordCustodyZK (live-verifier): the record flock-verify verify --zk reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
+    "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
+    "ack": []
+   },
+   "live-verifier-custody-tables": {
+    "about": "Assumptions.Zk.RecordCustodyZKJ (live-verifier): RecordCustodyZK at J tables, the record flock-verify verify --zk --session-tables J reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own subset draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
+    "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
+    "ack": []
+   },
+   "A4-prf-sha512": {
+    "about": "A4 (KeyedStreamsUniform, prf/sha-512): verity.randomness's keyed streams at distinct indices pass a test as independent uniform streams do, up to eta, SHA-512's compression function keyed by a secret first block or by its chaining value being a PRF",
+    "mentions": ["PRFScheme.prfAdvantage"],
+    "ack": []
+   }
+  },
+  "scan": {
+   "Arklib": {
+    "baseline": "scripts/axiom_baseline.json",
+    "sources": ["ArkLib"]
+   }
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "Arklib": "dd87231a60935b888a323851a96eb3dc4d6b1dd859510a5eafccdaa0d1119015",
+  "CompPoly": "b35d6047fbdd4decc997b0e37de48c0a528d8b11b2d77c370bbc98b691cf572d",
+  "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
+  "PolyFun": "d6c4bf9613dfeab9b80598baff217484de34ac616a0475184a5ce2aefad5a502",
+  "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
+  "VCVio": "d8c0d42db31325df600f165e6fc5fd1ad5fb38da84ea81d52fcb92cc4dd73d22",
+  "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
+  "batteries": "83d6487a6f41072714347b765ec3e233bad10d8b25d822e8543ab47531f610be",
+  "cslib": "4fbda9ca9a3ebb5d9e1215ea17eca3ef36fb846b72ef716232fca52747cbfdb1",
+  "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
+  "mathlib": "4b2e37339cdaa30627ba7f4ee6e6e866f14180ea06b549d7e9a386ea89e52601",
+  "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
+  "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
+  "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ }
+}

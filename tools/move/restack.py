@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`tools/move/restack.py BRANCH... --move-commit SHA [--onto REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
+"""`tools/move/restack.py BRANCH... --move-commit SHA [--script S [--script-arg ARG]...] [--onto REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
 branch across a generated layout move by running the move's own script on it, instead of rebasing it.
 
 A layout move is one commit M that `python3 tools/move/layout.py` (with its map, `tools/move/layout_map.toml`) wrote by running at
@@ -15,11 +15,13 @@ same script rather than by rename detection:
    script run on B, so against it the branch's side holds only the branch's own changes, in moved paths and names, and the
    other side only what landed after the move: what conflicts here is real content. (Against B instead, a line the script
    rewrote next to one the branch edited would conflict.)
+4. run the result's own `tools/verity/check/pins.py --regen` at its root, which runs each stale pin's command, and commit what it
+   rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
 A branch that already contains M skips to step 3. The branch, its ref and the caller's checkout are never changed: the
 commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
-id), `up-to-date`, `conflicted` (the step and the files) or `script-failed` (the script's exit code and the tail of its
-output). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
+id), `up-to-date`, `conflicted` (the step and the files), `script-failed` (the script's exit code and the tail of its
+output) or `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
 pushes a clean result of one branch to a new branch on `--remote`, and refuses a name that already exists there. Exit 0 when
 every branch is clean or up to date, 1 otherwise.
 """
@@ -28,13 +30,23 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
 
 SCRIPT = "tools/move/layout.py"
+#: the arguments the move's script runs with (`--script-arg`; rename.py takes its map as `--map`)
+SCRIPT_ARGS: tuple[str, ...] = ()
+#: what a script takes on a branch's tree rather than main's: layout.py notes the branch's own references to a directory the map
+#: splits instead of failing on them (they're its owner's to check, and the move's commit is the same either way)
+BRANCH_ARGS = {"tools/move/layout.py": ("--report-splits",)}
 SCRIPT_DIR = "tools/move"
 TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
+#: the result's own list of pins, whose `--regen` runs every stale pin's command
+PINS = "tools/verity/check/pins.py"
 
 
 class ScriptFailed(Exception):
@@ -98,6 +110,27 @@ def move_base(move: str, cwd: str | None) -> str:
     return parents[0]
 
 
+def pinned_uv_env(base: str, tmp: str, cwd: str | None) -> dict[str, str] | None:
+    """The environment the move's script runs in: this one, unless the uv on the PATH isn't the version `base`'s
+    `tools/check/pod_setup.sh` pins, which layout.py refuses to `uv lock` with. Then a `uv` in `tmp` that runs the pinned
+    version through `uv tool run` goes first on the PATH, so the restack doesn't depend on which uv the caller has."""
+    found = git("show", f"{base}:tools/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode() or \
+        git("show", f"{base}:tools/verity/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode()
+    m = re.search(r"^UV_VERSION=\$\{UV_VERSION:-([^}]+)\}", found, re.M)
+    real = shutil.which("uv")
+    if not m or not real:
+        return None
+    got = subprocess.run([real, "--version"], capture_output=True, text=True).stdout.split()[1:2]
+    if got == [m.group(1)]:
+        return None
+    shim = os.path.join(tmp, "pinned-uv")
+    os.makedirs(shim, exist_ok=True)
+    with open(os.path.join(shim, "uv"), "w") as f:
+        f.write(f'#!/bin/sh\nexec {shlex.quote(real)} tool run --quiet uv@{shlex.quote(m.group(1))} "$@"\n')
+    os.chmod(os.path.join(shim, "uv"), 0o755)
+    return {**os.environ, "PATH": shim + os.pathsep + os.environ.get("PATH", "")}
+
+
 def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[str, list[str], list[str]]:
     """Check `merged` out in a scratch worktree, run `base`'s layout script at its root, and return the tree it leaves (every
     change staged, ignored files left out), the `tools/move/` paths whose branch copy was put back, and the tail of the
@@ -115,7 +148,7 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                 git("checkout", base, "--", SCRIPT_DIR, cwd=wt)
                 overlay = commit_tree(out("write-tree", cwd=wt), [merged], f"restack: {SCRIPT_DIR}/ as at {base}\n", wt)
                 git("reset", "-q", "--soft", overlay, cwd=wt)
-            p = subprocess.run([python, SCRIPT], cwd=wt, capture_output=True)
+            p = subprocess.run([python, SCRIPT, *BRANCH_ARGS.get(SCRIPT, ()), *SCRIPT_ARGS], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
@@ -131,13 +164,46 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
             git("worktree", "prune", cwd=cwd)
 
 
-_GENERATED: dict[tuple[str, str, str], str] = {}
+def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, list[str], bool]:
+    """Check `result` out in a scratch worktree and run its own `pins.py --regen` at the root: (the tree it leaves, or None when
+    it changed nothing, the tail of its output, whether every pin is fresh after). A tree without the list has no pins to run."""
+    if git("cat-file", "-e", f"{result}:{PINS}", cwd=cwd, ok=(0, 128)).returncode:
+        return None, [], True
+    with tempfile.TemporaryDirectory(prefix="restack-pins-") as tmp:
+        wt = os.path.join(tmp, os.path.basename(tmp))
+        git("worktree", "add", "--detach", "--quiet", wt, result, cwd=cwd)
+        try:
+            p = subprocess.run([python, PINS, "--regen"], cwd=wt, capture_output=True)
+            output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
+            git("add", "-A", cwd=wt)
+            tree = out("write-tree", cwd=wt)
+            return (None if tree == tree_of(result, cwd) else tree), output, p.returncode == 0
+        finally:
+            git("worktree", "remove", "--force", wt, cwd=cwd, ok=(0, 128))
+            git("worktree", "prune", cwd=cwd)
+
+
+def with_pins(r: dict, result: str, python: str, cwd: str | None, pins: bool) -> dict:
+    """``r`` as clean at ``result``, after ``result``'s stale pins are regenerated by their commands (`pins-stale` when one
+    still is, with the commands' output)."""
+    if not pins:
+        return {**r, "status": "clean", "result": result}
+    tree, output, fresh = regen_pins(result, python, cwd)
+    if tree is not None:
+        result = commit_tree(tree, [result], f"restack: regenerate stale pins ({PINS} --regen)\n", cwd)
+        r["steps"].append({"step": "pins", "commit": result, "output": output})
+    if not fresh:
+        return {**r, "status": "pins-stale", "result": result, "error": "\n".join(output)}
+    return {**r, "status": "clean", "result": result}
+
+
+_GENERATED: dict[tuple, str] = {}
 
 
 def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
     """Refuse a `move` whose tree isn't what `base`'s layout script writes: a later commit (the move branch's head, with its hand
     fixups) taken as the move would make the third merge undo them, while every branch still reported clean."""
-    key = (move, base, python)
+    key = (move, base, python, SCRIPT, SCRIPT_ARGS)
     if key not in _GENERATED:
         try:
             _GENERATED[key] = run_script(base, base, python, cwd)[0]
@@ -149,7 +215,7 @@ def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
 
 
 def restack(branch: str, move: str, onto: str | None = None, base: str | None = None, python: str = sys.executable,
-            cwd: str | None = None) -> dict:
+            cwd: str | None = None, pins: bool = True) -> dict:
     head, move = rev(branch, cwd), rev(move, cwd)
     base = rev(base, cwd) if base else move_base(move, cwd)
     onto = rev(onto, cwd) if onto else move
@@ -176,19 +242,19 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             return {**r, "status": "script-failed", "step": "script", "error": str(e)}
         ran = True
         if tree != tree_of(tip, cwd):
-            msg = (f"restack: rerun {SCRIPT} from {move[:12]} on {branch}\n\n"
+            msg = (f"restack: rerun {shlex.join([SCRIPT, *SCRIPT_ARGS])} from {move[:12]} on {branch}\n\n"
                    f"The layout move's codemod, run at the root of this tree as {move[:12]} was made from {base[:12]}.\n\n"
                    f"{TRAILER_MOVE}: {move}\n{TRAILER_OF}: {head}\n")
             tip = commit_tree(tree, [tip], msg, cwd)
             r["steps"].append({"step": "script", "commit": tip, "restored": restored, "output": output})
     if contains(onto, tip, cwd):
-        return {**r, "status": "clean", "result": tip}
+        return with_pins(r, tip, python, cwd, pins)
     tree, conflicts = merge_trees(tip, onto, cwd, base=move if ran else None)
     if conflicts:
         return {**r, "status": "conflicted", "step": "moved", "files": conflicts}
     result = commit_tree(tree, [tip, onto], f"Merge {onto[:12]} (the layout move) into {branch}, restacked\n", cwd)
     r["steps"].append({"step": "moved", "commit": result})
-    return {**r, "status": "clean", "result": result}
+    return with_pins(r, result, python, cwd, pins)
 
 
 def push(result: str, new: str, remote: str, cwd: str | None) -> None:
@@ -201,28 +267,39 @@ def line(r: dict) -> str:
     plain = f"plain merge {r['plain']['status']}" + (f" ({len(r['plain']['files'])})" if r["plain"]["files"] else "")
     if r["status"] in ("clean", "up-to-date"):
         return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]"
-    if r["status"] == "script-failed":
-        return f"{r['branch']}: script-failed  [{plain}]\n    " + r["error"].replace("\n", "\n    ")
+    if r["status"] in ("script-failed", "pins-stale"):
+        at = f" {r['result'][:12]}" if r["status"] == "pins-stale" else ""
+        return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ")
     return f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n" + "".join(f"    {f}\n" for f in r["files"])
 
 
 def main(argv: list[str] | None = None) -> int:
+    global SCRIPT, SCRIPT_ARGS
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("branches", nargs="+", metavar="BRANCH")
     ap.add_argument("--move-commit", required=True, metavar="SHA", help="the commit layout.py generated")
     ap.add_argument("--onto", metavar="REF", help="what to merge last: the moved main (default: the move commit)")
     ap.add_argument("--base", metavar="REF", help="the tree the move ran on (default: the move commit's parent)")
     ap.add_argument("--python", default=sys.executable, help="the interpreter that runs layout.py")
+    ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; the Lean "
+                                                    "move's is tools/move/lean.py, the rename move's tools/move/rename.py)")
+    ap.add_argument("--script-arg", action="append", default=[], metavar="ARG",
+                    help="an argument for the script, repeated in order; one that starts with - as --script-arg=ARG "
+                         "(the rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/security_map.toml)")
     ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")
+    ap.add_argument("--no-pins", action="store_true", help=f"don't run the result's {PINS} --regen")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+    if not a.script.startswith(SCRIPT_DIR + "/"):
+        ap.error(f"--script: a script under {SCRIPT_DIR}/")
+    SCRIPT, SCRIPT_ARGS = a.script, tuple(a.script_arg)
     if a.push_to and len(a.branches) != 1:
         ap.error("--push-to takes one branch")
     results = []
     for b in a.branches:
-        r = restack(b, a.move_commit, a.onto, a.base, a.python)
+        r = restack(b, a.move_commit, a.onto, a.base, a.python, pins=not a.no_pins)
         results.append(r)
         if not a.json:
             print(line(r), flush=True)

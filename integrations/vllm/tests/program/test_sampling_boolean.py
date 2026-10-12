@@ -1,7 +1,7 @@
 """`verity_vllm.program.registry.sampling_boolean`: the Boolean greedy path agrees with its word Definitions (`trace.word_of`):
 `ArgmaxStep_v2` with `ArgmaxStep_v1` on special and random carries, `TokenSelect_v2{V}` with `TokenSelect_v1{V}` on over 90,000
-logit rows (ties, signed zeros, infinities, NaNs, a NaN first logit) and at the served vocabularies (SmolLM2's 49,152, Gemma-2's
-256,000); its stages chained as root Calls give the same token, each stage is separable and partitions under `Q_word_v1` with
+logit rows (ties, signed zeros, infinities, NaNs, a NaN first logit) and at the served vocabularies (SmolLM2's 49,152,
+Llama-3.2's 128,256, Gemma-2's 256,000), the maximum at the first and the last index included; its stages chained as root Calls give the same token, each stage is separable and partitions under `Q_word_v1` with
 no violation at either vocabulary, and the Definitions carry exactly their builders' live ANDs, pinned by gate count and
 program digest. The f32 tree (`F32ArgmaxStage_v1`) gives the first maximum on over 80,000 f32 rows, a restatement tied to
 `GumbelSelectF32_v1` at temp 0, and partitions likewise."""
@@ -13,15 +13,15 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.cut import separable
-from verity.primitives.circuits.defs import REGISTRY, bind
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import Circuit
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.cut import separable
+from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import Circuit
 from verity_vllm.program.kernels import rows
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import sampling as SM
@@ -30,19 +30,20 @@ from verity_vllm.query import word as W
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "ArgmaxStep_v2": (134, 290, 20, "287e574afd405bbfe75099f548abd455d27c168fd4010ae36b2a5fe0caaa8780"),
-    "ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": (3415, 8032, 1261, "98838af65015f2151032e7c2bd7f020f85cbed9ae92797c7a5b30d5b5fbab282"),
-    "ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": (3431, 8061, 1261, "ca37d2fb5fa1787c7c76a5228402d100d1ff6cc6640bf1927603d8f06594c41d"),
-    "ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": (2577, 6036, 1197, "0baa92a7abaf8bc5ae77c85691213d81949a1aff8f47af0d43ea2d98d5e40300"),
-    "TokenSelect_v2{V=50}": (2661, 6252, 981, "b0f60b1de054e71834fde350139cc9c8b5d4d238249e2deb23cea9f33e5fba81"),
-    "TokenSelect_v2{V=200}": (10759, 25301, 3981, "5e7ac5c0747865d101a77d2ddc9d8ba72c6faf000719d9f302c759b8bb1ac90f"),
-    "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": (6455, 16144, 2269, "3c8f8e02b05350235db6a09b031bfe4c02dd0d0c34fb92a20a178a1477bdb57c"),
-    "F32ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": (6487, 16205, 2269, "3e515cd9eaecfd4b9623b7d9b863751590ba4a389bad6781b4e5e0b9f618f9e8"),
-    "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": (4593, 11076, 2205, "ef94f88b658a34b296fa33ec8aa7ceaafbb481701a582dee05cec7a6b87dddb5"),
+    "ArgmaxStep_v2": (134, 290, 20, "0422abdc1d8d51c1d43422cd68a396305832a3beabbc81352c8f28f63893ebc9c5b12d06c8ab61332e72e32aed2c2c594217babc149e3540a6059a171379957d"),
+    "ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": (3415, 8032, 1261, "bd47155e54f01c18fd094000c04cb90a58658e5787eec755d901f1b8b789fb8b1e832f09062cf062c2c5cd07b0a961424c77127652cf5640a31bd9111d6e5d53"),
+    "ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": (3431, 8061, 1261, "a27b946b783337eb9d4f94d01863d55cde9e3cf5fd50e5921cf359de3e30d30ad07b56bf3ac6720cac9496d281d46e5172044022fba1b83f6b3762c7e00ce707"),
+    "ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": (2577, 6036, 1197, "5cdd52545245b4001db977e2bc768d230e7b5ad508ef0be411cd3217b9bafad12da8b3beee93020ca1e5694e2bb222a58d0363136e2e1467090bb3ae22a92fc1"),
+    "TokenSelect_v2{V=50}": (2661, 6252, 981, "01242c512a75f2516c05b1e34532249ce4dee88a727ff61349e15416ee6792a41d1ea4401d0df4c9dbe349c4c6f4582d60208137f7029a343d9aa509bac6ebed"),
+    "TokenSelect_v2{V=200}": (10759, 25301, 3981, "e8b49b86aeef42b1d39cde82c945692e0e49fbfbdb87f79ca79df0b45e97b36fb9f4384927277df9b2b5ab2748cf110c412a6f9a9b2a978332bf4bdce079a194"),
+    "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": (6455, 16144, 2269, "7149b47805ec23902d0084386b1f46cdd902770543f841e47574d189d995034aa5ea37e04763187cad968233d16fbab6cab91f7f8cbd4df871b9dcafbecb80e8"),
+    "F32ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": (6487, 16205, 2269, "5d91cf8bbb8ac72e17104a66b42b9e7c4b4d1fe9e17ed1dcc7a180bef438e54d561c85560760d3eebf04019a130b8ee189040a3db9d5c3d24b9259e3794d6760"),
+    "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": (4593, 11076, 2205, "3d968ff678a8abe625ab3dd3996bad854ee21fda125b1cf3db7a31bb87cd22d3e00daf72a48e377796ff4810d4c5e1ed797205f15050c621bf1a641106bcd8d6"),
 }
 
 #: the served vocabularies: TokenSelect_v2{V}'s And gates (54 per logit) and the tree's candidate counts per level
-SERVED = {49152: (2654157, [49152, 768, 12, 1]), 256000: (13823948, [256000, 4000, 63, 1])}
+SERVED = {49152: (2654157, [49152, 768, 12, 1]), 128256: (6925774, [128256, 2004, 32, 1]),
+          256000: (13823948, [256000, 4000, 63, 1])}
 
 NEG_INF, POS_INF = 0xFF80, 0x7F80
 #: signed zeros, subnormals, ones, the largest finite values, infinities, and NaNs (quiet, signalling, all-ones, negative)
@@ -213,7 +214,7 @@ def test_one_logit_is_index_0() -> None:
 
 
 @pytest.mark.xfail(strict=True, reason="TokenSelect_v1{V=1} returns logits[0], not 0: its scan has no iterations, and "
-                   "verity.primitives.circuits.layout.resolve_gate reads a zero-length scan's carry from iteration n - 1 = -1 instead of from init")
+                   "verity.ml.circuits.layout.resolve_gate reads a zero-length scan's carry from iteration n - 1 = -1 instead of from init")
 def test_word_view_at_one_logit() -> None:
     x = SPECIALS[:, None]
     assert not E.evaluate_batch(bind(b1.TokenSelect, V=1), x).any()
@@ -297,13 +298,24 @@ def test_stages_partition(V, stage) -> None:
 @pytest.mark.slow
 @pytest.mark.parametrize("V", sorted(SERVED))
 def test_served_vocabulary(V) -> None:
-    """The served sizes (V = 256,000: about 25 s): the gate count, each stage's partition, and 64 rows against `first_max`,
-    which `test_first_max_is_the_word_definition` ties to the word Definition (its scan takes minutes on these rows)."""
+    """The served sizes (V = 256,000: about 25 s): the gate count and levels, each stage's partition, and 64 rows against
+    `first_max`, which `test_first_max_is_the_word_definition` ties to the word Definition (its scan takes minutes on these
+    rows); rows 16-35 put the maximum at the last index or tie it with the first, each with its token stated."""
     target = bind(SB.TokenSelect, V=V)
     assert BS.compile(target).counts["and"] == SERVED[V][0]
+    assert SB.levels(V) == SERVED[V][1]
     _partitions(V)
     x = logit_rows(V, 64, _rng("served", V))
     x[:8] = 0x7FC0
     x[8:16, 0] = 0x7FC1
+    x[16:36] = NEG_INF
+    x[16:20, V - 1] = 0x3F80             # the maximum alone at the last index
+    x[20:24, [0, V - 1]] = 0x4000        # tied at the first and the last index
+    x[24:28, 1:] = 0x7FC0                # NaNs never win: -0 at the last index beats -inf at the first
+    x[24:28, V - 1] = 0x8000
+    x[28:32, 0], x[28:32, V - 1] = 0x8000, 0x0000   # -0 and +0 tie
+    x[32:36, V - 1] = POS_INF            # +inf at the last index
+    x[32:36, V - 2] = 0x7F7F
     got = BS.evaluate_words(target, x).astype(np.int64).reshape(-1)
+    assert got[16:36].tolist() == [V - 1] * 4 + [0] * 4 + [V - 1] * 4 + [0] * 4 + [V - 1] * 4
     assert got.tolist() == first_max(x).tolist()

@@ -1,8 +1,8 @@
 """``authentication = included-hash``: the committed-object side of the self-hashing relation (``hashchain.py``).
 
-Three indexed Merkle trees of :mod:`verity.primitives.commitments` (the framing, domains and multiproofs of ``auth.py``, lane
+Three indexed Merkle trees of :mod:`verity.ml.commitments` (the framing, domains and multiproofs of ``auth.py``, lane
 auth-included, unchanged), with the operand trees now holding one **row** per leaf (``leaf/v2h``,
-:mod:`verity.primitives.commitments.rowleaf`): tree ``a`` commits the activation rows (one x row of K words = one leaf: the row's
+:mod:`verity.ml.commitments.rowleaf`): tree ``a`` commits the activation rows (one x row of K words = one leaf: the row's
 Poseidon2 digest, 8 BabyBear lanes as 32 big-endian bytes, schema ``poseidon2-babybear-w24/row/v2h``), tree ``b`` the
 weight columns (one W column of K words = one leaf), tree ``y`` the output words (``auth.py``'s word leaves, 2 or 4 bytes
 big-endian by the relation's ``y_bits``).  The verifier never hashes an operand word: the relation proved that the
@@ -23,9 +23,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from verity_experimental.commitments.multiproof import verify_multiproof
-from verity.primitives.commitments import identity_digest
-from verity.primitives.commitments.rowleaf import SCHEMA_ROW
+from verity.ml.commitments.multiproof import verify_multiproof
+from verity.ml.commitments import identity_digest
+from verity.ml.commitments.rowleaf import SCHEMA_ROW
 
 from . import frame_gpu
 from . import poseidon2 as h2
@@ -69,7 +69,7 @@ def binding_digest(*, dataset: str, tier: str, manifest_sha256: str, lo: int, hi
 # ---------------------------------------------------------------------------------------------------------------------
 
 def _levels(domain, leaves: list[bytes], count: int) -> list[np.ndarray]:
-    from verity.primitives.commitments import merkle_depth
+    from verity.ml.commitments import merkle_depth
     depth = merkle_depth(count)
     width = 1 << depth
     pads = b"".join(_pad_chunk((domain.domain_id, s + count, e + count)) for s, e in _chunks(width - count, 1 << 16))
@@ -232,7 +232,7 @@ def _vllm_trees(*, x_rows, w_cols, y_words, word_bits: int, y_bits: int, binding
             leaves = frame_gpu.fv3.sha256_rows(frame_gpu.cp.asarray(ybytes), lv.prefix(yb))
             trees["y"] = vllm_tree.build("y", bindings["y"], leaves, dom)
     else:
-        from verity.primitives.commitments.vllm_v1 import pos_leaf
+        from verity.ml.commitments.vllm_v1 import pos_leaf
         leaves = np.frombuffer(b"".join(pos_leaf(bytes(r)) for r in ybytes), dtype=np.uint8).reshape(count, 32)
         trees["y"] = vllm_tree.build("y", bindings["y"], leaves, dom)
     return trees, out
@@ -307,7 +307,7 @@ def digest_bytes(auth: HashAuth, leaf=None, vshape: tuple[int, int, int] | None 
             # PROTOCOL.md (vllm-v1) section 9.1: the verifier-held domain of every port, beside its bound root
             if vshape is None:
                 raise ValueError("a vllm-v1 statement's digest needs the relation's (K, word_bits, y_bytes)")
-            from verity.primitives.commitments.vllm_v1 import domain_digest
+            from verity.ml.commitments.vllm_v1 import domain_digest
             out += b"|domain=" + domain_digest(vllm_domain(t.name, t, vshape))
     return bytes(out)
 
@@ -412,7 +412,7 @@ def _verify_vllm(auth: HashAuth, siblings, *, digests, y_words, y_bits: int, sch
     """``verify_hash_auth`` under ``vllm-v1`` (PROTOCOL.md section 9): per port, the leaves at the verifier-fixed positions
     (the published digests for x / W, ``pos_leaf`` of each output word's little-endian bytes for y) fold through the
     port's own multiproof to a tree root whose step-root binding under the verifier's domain is the statement's root."""
-    from verity.primitives.commitments.vllm_v1 import pos_leaf
+    from verity.ml.commitments.vllm_v1 import pos_leaf
 
     from . import vllm_tree
     if vshape is None:

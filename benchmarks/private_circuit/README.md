@@ -1,7 +1,7 @@
 # Private-circuit runs
 
-Protocol 2 (the private circuit) end to end: a hidden netlist is a value of the public universal unit
-`UniversalUnit_v1{G, N_IN, N_OUT}` (`verity_experimental.private_circuits.universal`), proved by C-Flock's circuit prover under `--zk` and
+Protocol 2 (the private circuit) end to end: the private circuit's description is a value of the public universal unit
+`UniversalUnit_v1{G, N_IN, N_OUT}` (`verity.ml.private_circuits.universal`), proved by C-Flock's circuit prover under `--zk` and
 verified by the Lean verifier.
 
 - `universal.py`: the driver; its docstring says what it builds, what it checks and what a row records.

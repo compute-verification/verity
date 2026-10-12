@@ -41,7 +41,7 @@ def verify(v: dict, run_dir: Path, run_id: str, commit: str, arm: str, label: st
     values = {"python": sys.executable, "run_dir": str(run_dir), "run_id": run_id, "commit": commit, "arm": arm,
               "shape": label, "transcript": str(path), "dir": str(path.parent)}
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(
-        [str(ROOT / "verity" / "protocols" / "accounting" / "work" / "pouw"), str(ROOT), os.environ.get("PYTHONPATH", "")]))
+        [str(ROOT / "verity" / "core" / "protocols" / "pouw"), str(ROOT), os.environ.get("PYTHONPATH", "")]))
     exits, lines = [], []
     for cmd in v["commands"]:
         p = subprocess.run([x.format(**values) for x in cmd], capture_output=True, text=True, env=env)

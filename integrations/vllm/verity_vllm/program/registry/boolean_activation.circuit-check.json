@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "Bf16Tanh_v2{N=8}": {
+   "and": 3128
+  },
+  "TanhBf16_v2": {
+   "and": 391
+  }
+ }
+}

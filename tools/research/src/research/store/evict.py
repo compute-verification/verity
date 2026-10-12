@@ -6,6 +6,7 @@ Two kinds of local copy can go, and only these:
   `verified_utc` in the catalog (PRESERVED), the local object has the manifest's size, and the blob is at least `min_bytes`.
   Largest first, until the target free space is reached.  `LocalStore._resolve_blob` re-fetches an evicted blob on demand;
   `has_local` / `where` report the eviction honestly, and `index.set_presence(local=...)` is refreshed for every touched artifact.
+  A blob any artifact in `keep` holds stays (`--keep-registry`: the fixture registry, for a node that can't refetch from the remote).
   `trees/` (materialised tree copies) is a pure cache: its entries nobody fetched within `TREE_KEEP_S` go unless `keep_trees`
   (a fresher one may be open in a run's view; the node's hourly eviction runs below its mark all day).
 * **run-directory files** (`~/.research/runs/<run>/...`, `evict_runs`): the big files of a finished run that appear, with the same
@@ -13,6 +14,8 @@ Two kinds of local copy can go, and only these:
   `run_files`, or a typed output its `outputs.json` declares, laid out under that output's `tree` path (a Build's `outputs/build`).
   Oldest run first.  A run touched in the last `quiet_s` seconds, or whose status is not terminal, is left alone.
   `run-files.evicted.json` in the run dir lists what went and the `research data fetch`es that bring it back.
+  A sealed run dir (store.sealed) is the root helper's to change: `sudo -n vy-seal-runs evict` removes the files its
+  `.custody` lists at the size it recorded and unchanged since (`evict_custody`'s rule), as root.
 
 * **source trees** (`<root>/src/<sha>`, `evict_src`): the trees `research run --on` ships per commit (remote.py `ship_source`;
   up to 24 GB and 480k inodes with Lean builds), whose bytes are a commit's.  Oldest first, every one that meets root's three
@@ -27,12 +30,16 @@ Two kinds of local copy can go, and only these:
   run dir names it, no live check or Lean slot holder or waiter (`<root>/locks`) names it, no job script queued for the fill
   (`retention.JobScripts`) names it, and nothing in it changed and no run naming it was recorded within `SRC_KEEP_S`; (3) no run
   record holds it as its source's only copy: its READY.json names its own commit, and every run record naming it names that commit
-  as its clean source.  A tree with a `research keep` record is left to `research retention`.  Not on a free-space target: an
+  as its source, clean, or dirty with the dirty bytes in the run's preserved record (the runner's capture, env.DIRTY_CAPTURE, at the
+  size and sha256 job.json names, listed by the run's `.custody`; `_dirty_preserved`).  A tree with a `research keep` record is left
+  to `research retention`.  This pass is the only thing that deletes a whole source tree (`node_sweep.sh` no longer does).  Not on a free-space target: an
   unused tree costs inodes as much as bytes (node 1 at 74% inodes, 4 Oct), and `research run` re-ships one from
   `refs/research/src/<sha>`.  Before a deletion the tree is checked again, renamed to `.evicting-<sha>-<nonce>` (never executable
   by name), checked once more (renamed back when something uses it, or on any error) and removed READY.json first, one pass at a
   time (`<src>/.evict.lock`).  It fails closed: a condition
   it cannot establish (the repository unlisted, a process it cannot read, a record it cannot read) deletes nothing and says why.
+  The one process it passes over unread is an nginx worker whose configuration cannot name a tree (`_nginx_worker`): RunPod's
+  proxy, which runs as `nobody` on every pod, where the pass has no CAP_SYS_PTRACE.
 
 Never touched: pending (unpushed or unverified) objects, `manifests/`, `attempts/`, `labels/`, `catalog.sqlite`, `scratch/`.
 Artifacts that are flagged `remote` in the catalog but never verified are counted in `held_back_bytes` so the operator can
@@ -53,6 +60,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from . import sealed
 from .local import LocalStore, sha256_file
 from .model import utc_now
 
@@ -82,9 +90,11 @@ def flagged_remote(store: LocalStore) -> set[str]:
     return {r[0] for r in store.index.db.execute("SELECT id FROM artifacts WHERE remote=1")}
 
 
-def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, log: Callable[[str], None] | None = None) -> dict[str, Any]:
+def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, keep: frozenset[str] = frozenset(),
+               log: Callable[[str], None] | None = None) -> dict[str, Any]:
     """What could go: `candidates` = [(bytes, hex, holders)] largest first, `trees_bytes`, `held_back_bytes` (local blobs of
-    artifacts flagged remote but not verified), `skipped` (size mismatch / unreadable manifest)."""
+    artifacts flagged remote but not verified), `kept_bytes` (local blobs an artifact in `keep` holds), `skipped` (size mismatch /
+    unreadable manifest)."""
     say = log or (lambda s: None)
     verified, flagged = verified_remote(store), flagged_remote(store)
     holders: dict[str, set[str]] = {}
@@ -101,10 +111,13 @@ def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, log: Callable[[
             holders.setdefault(h, set()).add(art)
             sizes[h] = n
     cands: list[tuple[int, str, set[str]]] = []
-    held_back = 0
+    held_back = kept = 0
     for h, arts in holders.items():
         p = store.object_path(h)
         if not p.exists() or sizes[h] < min_bytes:
+            continue
+        if arts & keep:
+            kept += sizes[h]
             continue
         if not arts <= verified:
             if arts <= (verified | flagged):
@@ -119,7 +132,7 @@ def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, log: Callable[[
     trees = store.root / "trees"
     trees_bytes = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(trees) for f in fs) if trees.is_dir() else 0
     return {"candidates": cands, "evictable_bytes": sum(c[0] for c in cands), "trees_bytes": trees_bytes, "held_back_bytes": held_back,
-            "skipped": skipped, "verified_artifacts": len(verified)}
+            "kept_bytes": kept, "skipped": skipped, "verified_artifacts": len(verified)}
 
 
 def stale_trees(store: LocalStore, now: float) -> tuple[list[str], int, int]:
@@ -140,15 +153,16 @@ def stale_trees(store: LocalStore, now: float) -> tuple[list[str], int, int]:
 
 
 def evict_store(store: LocalStore, *, target_free_bytes: int, dry_run: bool = False, min_bytes: int = MIN_BYTES, keep_trees: bool = False,
-                free_fn: Callable[[], int] | None = None, log: Callable[[str], None] | None = None,
+                keep: frozenset[str] = frozenset(), free_fn: Callable[[], int] | None = None, log: Callable[[str], None] | None = None,
                 now: float | None = None) -> dict[str, Any]:
     """Evict verified-remote blobs (largest first) and the `trees/` entries not fetched within TREE_KEEP_S until `free_fn()` >=
     `target_free_bytes`.  The report says what was (or, with `dry_run`, would be) removed; nothing else is touched."""
     say = log or (lambda s: None)
     free = free_fn or (lambda: free_bytes(store.root))
-    plan = plan_store(store, min_bytes=min_bytes, log=log)
+    plan = plan_store(store, min_bytes=min_bytes, keep=keep, log=log)
     rep: dict[str, Any] = {"store": str(store.root), "dry_run": dry_run, "target_free_bytes": target_free_bytes, "free_before": free(),
                            "evictable_bytes": plan["evictable_bytes"], "evictable_blobs": len(plan["candidates"]), "held_back_bytes": plan["held_back_bytes"],
+                           "kept_bytes": plan["kept_bytes"],
                            "trees_bytes": plan["trees_bytes"], "trees_removed": False, "evicted_bytes": 0, "evicted_blobs": [], "artifacts_touched": [],
                            "skipped": plan["skipped"], "reached_target": False}
     say(f"free {rep['free_before'] / 1e9:.2f} GB, target {target_free_bytes / 1e9:.2f} GB; {len(plan['candidates'])} evictable blobs "
@@ -311,7 +325,15 @@ def evict_runs(store: LocalStore, runs_root: Path, *, target_free_bytes: int, dr
             break
         rd = Path(r["dir"])
         n = sum(f["bytes"] for f in r["files"])
-        if not dry_run:
+        if not dry_run and sealed.sealed(rd):
+            try:
+                got = sealed.evict(rd, min_bytes)
+            except (OSError, ValueError) as e:
+                say(f"{r['run']}: sealed, and vy-seal-runs refused to evict it: {e}")
+                continue
+            n = got["evicted_bytes"]
+            r = {**r, "files": got["files"]}
+        elif not dry_run:
             for f in r["files"]:
                 (rd / f["path"]).unlink(missing_ok=True)
             doc = {"schema": EVICTED_SCHEMA, "run_id": r["run"], "artifact": r["artifact"], "evicted_utc": utc_now(), "files": r["files"],
@@ -382,6 +404,7 @@ READY_FILE = "READY.json"    # remote.READY_FILE: the marker that makes <src>/<s
 LOCK = ".evict.lock"         # <src>/.evict.lock: one pass at a time
 ENDED = TERMINAL_STATES + ("refused",)
 PF_KTHREAD = 0x00200000      # /proc/<pid>/stat flags: a kernel thread, which opens no file of ours
+NGINX_CONF = Path("/etc/nginx/nginx.conf")  # a bare `/usr/sbin/nginx` master's configuration (Debian/Ubuntu build)
 _SHA = re.compile(r"[0-9a-f]{40}")
 
 
@@ -470,10 +493,37 @@ def _proc_texts(base: Path) -> list[str]:
     return [t for t in out if t]
 
 
-def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc"), inside: re.Pattern[str] | None = None) -> dict[str, set[str]]:
+def _field(status: str, key: str) -> list[str]:
+    return next((ln.split()[1:] for ln in status.splitlines() if ln.startswith(f"{key}:")), [])
+
+
+def _nginx_worker(proc: Path, pid: str, src_root: Path, conf: Path) -> bool:
+    """Whether unreadable process `pid` is an nginx worker that cannot name a tree: RunPod's proxy (a worker as `nobody` on every
+    pod, which a container without CAP_SYS_PTRACE can't read).  A worker is forked from its master without exec and opens only what
+    the master's configuration names, so it qualifies when it runs as a uid other than root, its parent is readable and is a bare
+    `/usr/sbin/nginx` master (no `-c`, `-p` or `-g`: the configuration is `conf`), and `conf` includes no other file, loads no
+    module and never names the top directory of `src_root`."""
+    status = _quiet((proc / pid / "status").read_text)
+    if not status or _field(status, "Name") != ["nginx"] or "0" in _field(status, "Uid") or not _field(status, "PPid"):
+        return False
+    parent = proc / _field(status, "PPid")[0]
+    try:
+        exe = os.readlink(parent / "exe")
+        title = (parent / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+        text = conf.read_text(errors="replace")
+    except OSError:
+        return False
+    tops = {Path(p).parts[1] for p in (os.path.abspath(src_root), os.path.realpath(src_root)) if len(Path(p).parts) > 1}
+    return (exe == "/usr/sbin/nginx" and title == "nginx: master process /usr/sbin/nginx"
+            and not re.search(r"\b(include|load_module)\b", text) and not any(t in text for t in tops))
+
+
+def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc"), inside: re.Pattern[str] | None = None,
+              src_root: Path | None = None, nginx_conf: Path = NGINX_CONF) -> dict[str, set[str]]:
     """{sha: reasons} for the trees a live process names; a process whose cwd `inside` matches (<src> or a tree in it) keeps every sha
     it names.  Unestablished when `proc` can't be listed or a live process outside the kernel can't be read: as anyone but root,
-    without CAP_SYS_PTRACE, most can't."""
+    without CAP_SYS_PTRACE, most can't.  Given `src_root`, an unreadable nginx worker that cannot name a tree under it
+    (`_nginx_worker`) is passed over; its master is read like any process."""
     try:
         pids = sorted((p for p in os.listdir(proc) if p.isdigit()), key=int)
     except OSError as e:
@@ -486,6 +536,8 @@ def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc"), inside: re.P
             texts = _proc_texts(proc / pid)
             cwd = (_quiet(lambda pid=pid: os.readlink(proc / pid / "cwd")) or "") if texts and inside else ""
         except PermissionError as e:
+            if src_root is not None and _nginx_worker(proc, pid, src_root, nginx_conf):
+                continue
             raise Unestablished(f"2: {proc / pid} is unreadable ({e.strerror}) as uid {os.geteuid()}: the pass needs root or "
                                 "CAP_SYS_PTRACE") from None
         joined = "\n".join(texts)
@@ -540,6 +592,18 @@ def _get(d: Any, *keys: str) -> Any:
     return d
 
 
+def _dirty_preserved(rd: Path, job: dict[str, Any], src: dict[str, Any]) -> bool:
+    """Whether the run's record on the remote holds its dirty source: job.json names a capture (`store.dirty_capture`, cli.py) of the
+    digest its conditions record, and the run's valid `.custody` (store.custody) lists that file at the capture's size and sha256."""
+    cap = _get(job, "store", "dirty_capture")
+    digest = src.get("dirty_digest")
+    if not isinstance(cap, dict) or not digest or digest == "too-large" or cap.get("dirty_digest") != digest:
+        return False
+    marker = _doc(_text(rd / ".custody"))
+    files = marker.get("files") if isinstance(marker, dict) and marker.get("preserved") is True else None
+    return isinstance(files, dict) and files.get(cap.get("path")) == [cap.get("bytes"), cap.get("sha256")]
+
+
 def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: Path, *, now: float,
                 keep_s: float = SRC_KEEP_S) -> dict[str, set[str]]:
     """{sha: reasons} from the run records that name a tree (job.json, launch.json, remote.json) and the requests: a run that has
@@ -576,8 +640,8 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
                 other = next((x for x in (sha, src.get("commit")) if x not in (None, t)), None)
                 if other:
                     add({t}, f"3: run {name} names it, and its source is {other}")
-                elif src.get("dirty"):
-                    add({t}, f"3: run {name}'s source is dirty")
+                elif src.get("dirty") and not _dirty_preserved(rd, job, src):
+                    add({t}, f"3: run {name}'s source is dirty, and no preserved record of the run holds its capture")
                 elif sha is None and src.get("commit") is None:
                     add({t}, f"3: run {name} names it and records no source commit")
     for name in _entries(requests_dir):
@@ -593,7 +657,7 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
 
 
 def slot_uses(pattern: re.Pattern[str], locks: Path, proc: Path = Path("/proc")) -> dict[str, set[str]]:
-    """{sha: reasons} from the check and Lean slots (`tools/check/slot.py`, `lean_slot.py`): a holder's `<locks>/*.who` and a waiter's
+    """{sha: reasons} from the check and Lean slots (`tools/verity/check/slot.py`, `lean_slot.py`): a holder's `<locks>/*.who` and a waiter's
     ticket in `<locks>/*line*/`, each `{"pid", "run", "tree", "by"}`, while its pid lives (a pid reused since only keeps more)."""
     files = [locks / n for n in _entries(locks) if n.endswith(".who")]
     files += [locks / d / n for d in _entries(locks) if "line" in d and (locks / d).is_dir() for n in _entries(locks / d)]
@@ -651,8 +715,8 @@ SHIP_CONFIG = re.compile(r"core\.(?:repositoryformatversion|filemode|bare|logall
 """The keys a ship's clone has in .git/config (every tree on vy-nebius-1, 4 Oct).  Any other key may change what `git status`
 reports (excludes, fsmonitor, filters, sparse checkout, an include) or run a command, so the tree is kept rather than trusted."""
 SHIP_EXCLUDE = frozenset({f"/{READY_FILE}"})
-REGENERABLE = re.compile(r"(?:^|/)(?:\.lake|\.venv|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|node_modules|target"
-                         r"|[^/]*\.egg-info)(?:/|$)|\.py[co]$")
+REGENERABLE = re.compile(r"(?:^|/)(?:\.lake|\.venv|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|\.hypothesis|node_modules"
+                         r"|target|[^/]*\.egg-info)(?:/|$)|\.py[co]$")
 """Ignored paths a build or test run regenerates.  Every other ignored path but READY.json and a fetched fixture (re-fetchable by
 its id) may be a workload's only output (`out/`, `results/`, `*.png`...) and keeps the tree."""
 _CLEAN_GIT = {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
@@ -793,7 +857,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
               runs_dirs: list[Path] | None = None, requests_dir: Path | None = None, locks_dir: Path | None = None,
               jobs_dirs: list[Path] | None = None, proc: Path = Path("/proc"), keep_s: float = SRC_KEEP_S,
               budget_s: float = SRC_BUDGET_S, now: float | None = None, clock: Callable[[], float] = time.monotonic,
-              log: Callable[[str], None] | None = None) -> dict[str, Any]:
+              log: Callable[[str], None] | None = None, nginx_conf: Path = NGINX_CONF) -> dict[str, Any]:
     """Delete, oldest first, the source trees under `src_root` (`<root>/src`) that meet every condition (module docstring), and the
     `.evicting-*` leftovers of an interrupted pass that nothing uses.  The report lists every tree deleted (inodes, bytes) and every
     tree kept with its reasons, each prefixed by what it is: `1:`/`2:`/`3:` (root's conditions), `recent:`, `record:`, `budget:`;
@@ -832,7 +896,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
     def live(shas: set[str]) -> dict[str, set[str]]:
         """Condition 2 and the run records' part of 3, read afresh."""
         why: dict[str, set[str]] = {}
-        for found in (proc_uses(pattern, proc, inside), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s),
+        for found in (proc_uses(pattern, proc, inside, src_root, nginx_conf), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s),
                       slot_uses(pattern, locks_dir, proc)):
             for s, rs in found.items():
                 if s in shas:

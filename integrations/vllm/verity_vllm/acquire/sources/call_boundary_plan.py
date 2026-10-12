@@ -281,7 +281,7 @@ def _plan_request(p: Plan, manifest: Mapping[str, Any], rid: str, ids: Sequence[
 
 def _definition(spec: str) -> tuple[Any, list[Any]]:
     """The registered Definition a Call's spec names and its parameters."""
-    from verity.primitives.circuits.evaluation.reference import signature_of
+    from verity.ml.circuits.evaluation.reference import signature_of
     from verity_vllm.query.call_scope import specialization
     from verity_vllm.query.manifest.format import spec_family
     from verity_vllm.query.program_view import spec_statics
@@ -373,7 +373,7 @@ class _Context:
         return spec
 
     def literal(self, cid: int) -> str:
-        from verity.primitives.circuits.evaluation import evaluate
+        from verity.ml.circuits.evaluation import evaluate
 
         spec = self.definition(cid)
         if spec not in self.plan.literals:
@@ -670,7 +670,7 @@ def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.n
 def _run(plan: Plan, levels: tuple, recipes: tuple, R: int, sv: Mapping[int, np.ndarray], ops: Sequence[np.ndarray],
          weight: Callable[[str], np.ndarray]) -> dict[int, np.ndarray]:
     """Position -> [R, leaves] of the Calls of `recipes` over R rows; `sv` the step-shared Values ("s") they read."""
-    from verity.primitives.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.program.kernels import rows  # noqa: F401  -- registers the row kernels evaluate_batch picks
 
     vals: dict[int, np.ndarray] = {}
@@ -702,9 +702,9 @@ def _run(plan: Plan, levels: tuple, recipes: tuple, R: int, sv: Mapping[int, np.
 def _kernel_rows(d: Any, spec: str, arrays: Sequence[np.ndarray]) -> np.ndarray:
     """`d` on every row of `arrays` by its row kernel alone (its batch form where it has one: `kernel_registry.register`); an
     instance the kernel declines is a ValueError naming it."""
-    from verity.primitives.circuits.evaluation import kernels
-    from verity.primitives.circuits.evaluation.batch import type_dtype, type_shape
-    from verity.primitives.circuits.evaluation.reference import signature_of, statics_of
+    from verity.ml.circuits.evaluation import kernels
+    from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
+    from verity.ml.circuits.evaluation.reference import signature_of, statics_of
     from verity_vllm.program.kernels.kernel_registry import Declined, instance
     from verity_vllm.program.kernels.rows import KERNEL
 

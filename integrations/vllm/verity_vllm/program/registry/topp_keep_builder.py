@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from collections import Counter
 from contextlib import contextmanager
-from functools import cache
 
 import numpy as np
 
-from verity_catalog.definitions.scalar import BitAnd, BitOr, SelectF32, SelectI32
+from verity.ml.circuits.ops.scalar import BitAnd, BitOr, SelectF32, SelectI32
+from verity_vllm.program.registry.topp_geometry import spt_for, z_group
 from verity_vllm.program.registry.topp_word_gates import CW, GATES, SIG, WIDTH, BitXor, SelectBit, U32Xor, f32_word, numeric
 
 SPLIT_COUNTS = (1, 2, 4, 8, 16, 32)
@@ -290,12 +290,6 @@ def pick(E: Engine, oh: Vec, vals: Vec, groups: int, kind: str = "f") -> Vec:
 
 # --- the pipeline ------------------------------------------------------------------------------------------------------------
 
-@cache
-def _ts():
-    from verity_vllm.program.registry import topp_split
-    return topp_split
-
-
 def _blocks(bounds, B):
     return [[(i, min(B, e - i)) for i in range(s0, e, B)] for s0, e in bounds]
 
@@ -488,12 +482,12 @@ def pipeline(E, x, p, S, p1, parts_of=None):
     """The keep bits of ``topp_split.topp_keep_row(x, p, S)`` (all ones where ``p1``). ``parts_of(E, r, S)``, when given, stands in
     for round r's step kernel (a test's constructed partials, as ``topp_split``'s own test substitutes them)."""
     V = len(x)
-    spt = _ts().spt_for(V, S)
+    spt = spt_for(V, S)
     L = -(-V // S)
     bounds = [(min(s * L, V), min(s * L + L, V)) for s in range(S)]
     off = np.arange(V) % L
-    h1 = _ts().z_group((off // spt) % 32, S)
-    h2 = _ts().z_group(off % 32, S)
+    h1 = z_group((off // spt) % 32, S)
+    h2 = z_group(off % 32, S)
     with E.at("stats kernel"):
         m, es, mn, anyf = stats_kernel(E, x, S, spt, bounds)
     with E.at("row stats"):

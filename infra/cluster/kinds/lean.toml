@@ -1,0 +1,7 @@
+[kinds.lean-audit]
+phase = "cpu-m"
+max_wall_min = 20
+question = "Do core's Lean proofs (Security) still check, with only the allowed axioms, no sorry, and every guarantee's record unchanged?"
+inputs = ["Security", "tools/verity/lean"]
+outputs = ["$RESEARCH_RUN_DIR/lean-audit"]
+restart = "idempotent"

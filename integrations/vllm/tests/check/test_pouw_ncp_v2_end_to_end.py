@@ -24,12 +24,14 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import random
 
 import numpy as np
 import pytest
 import torch
-from verity.protocols.accounting.work.pouw.circuit import plan as CPL
-from verity.protocols.accounting.work.pouw.circuit import reference as CR
+from verity.core.protocols.pouw.circuit import plan as CPL
+from verity.core.protocols.pouw.circuit import reference as CR
+from verity.core.protocols.pouw.coins import Challenger
 
 from verity_vllm import protocol_options as PO
 from verity_vllm.check.replay import driver as SR
@@ -44,7 +46,11 @@ from verity_vllm.query.required import Q_MODULE_BODY_ID
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, NU, LP, T = 8, 64, 16, 16, 1          # vocab, hidden (the PoUW linear's k), its n, prompt length, decode steps
 SITE = "model.layers.0.mlp.up_proj"         # the collector's path of the PoUW linear
-BEACON = "5a" * 32
+
+
+def _coins():
+    """The epoch's challenger on a seeded entropy: every world is served in one epoch, so their salts agree."""
+    return Challenger(0, random.Random(7).randbytes)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -137,7 +143,7 @@ class Run:
         monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
         self.model, self.w_up, self.tdir = Model(w_up), w_up, tmp_path
         ctx = PO.Context(stage="serve", enabled=("pouw:ncp-v2",),
-                         settings={"pouw": {"beacon": BEACON, "transcript_dir": str(tmp_path), **(settings or {})}})
+                         settings={"pouw": {"coins": _coins(), "transcript_dir": str(tmp_path), **(settings or {})}})
         with PO.install(self.model, ctx) as comp:
             self._run()
             opt = comp.get("pouw")
@@ -303,8 +309,8 @@ def test_the_build_lowers_only_the_pouw_site():
 def test_the_rows_native_evaluation_is_the_registered_definition():
     """`NcpLinearRow_v1` (`program.registry.pouw_rows`) evaluated by the IR reference is what the replay computes natively, on rows at
     three scales, a row of subnormals and a zero row."""
-    from verity.primitives.circuits.evaluation import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import pouw_rows
     rng = np.random.default_rng(1)
     d = bind(pouw_rows.NcpLinearRow, K=H, N=NU)
@@ -430,9 +436,9 @@ def test_an_a_strip_that_is_not_the_quantized_input_is_rejected(world):
 
 @pytest.mark.parametrize("scheme", ["ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"])
 def test_every_other_scheme_stays_refused_beside_sampled_proofs(scheme):
-    ctx = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
+    ctx = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": Challenger(0)}})
     assert any("no Definition" in r for r in PO.refusals(ctx))
-    ok = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
+    ok = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": Challenger(0)}})
     assert PO.refusals(ok) == ()
 
 

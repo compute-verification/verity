@@ -110,7 +110,7 @@ def gemm_coordinate(k: int, *, opened_accumulator: bool = False) -> Subcircuit:
 
 def gemm_accumulator_fp8(k: int, *, step_k: int = 32) -> Subcircuit:
     """``GemmAccumulator<K>`` over ``k`` (a multiple of ``step_k``) for the FP8 draft targets: the bare dot with the
-    FP32 word outgoing (:data:`verity_catalog.targets.target.FP8_HOPPER_WGMMA` / :data:`FP8_ADA_MMA`).
+    FP32 word outgoing (:data:`verity.ml.circuits.targets.target.FP8_HOPPER_WGMMA` / :data:`FP8_ADA_MMA`).
 
     Incoming values ``0 .. k`` are the A operands (8-bit E4M3 words), ``k .. 2k`` the B operands, ascending ``k``.
     Gate ``0`` is ``tc_dot{step_k}_0(a[0:step_k], b[0:step_k])``; gate ``s`` is ``tc_dot{step_k}(acc_{s-1}, ...)``;
@@ -137,7 +137,7 @@ def gemm_accumulator_fp8(k: int, *, step_k: int = 32) -> Subcircuit:
 
 def gemm_accumulator_nvfp4(k: int, *, step_k: int = 64, block: int = 16) -> Subcircuit:
     """``GemmAccumulator<K>`` over ``k`` (a multiple of ``step_k``) for the NVFP4 draft target
-    (:data:`verity_catalog.targets.target.NVFP4_SM120`): the bare block-scaled dot with the FP32 word outgoing.
+    (:data:`verity.ml.circuits.targets.target.NVFP4_SM120`): the bare block-scaled dot with the FP32 word outgoing.
 
     Incoming values: ``0 .. k`` the A element codes (4-bit E2M1), ``k .. k + k/block`` the A scale bytes (8-bit UE4M3,
     one per ``block`` codes, ascending), then the same two runs for B (``k + k/block .. 2k + k/block`` codes,

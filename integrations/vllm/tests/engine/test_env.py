@@ -76,7 +76,13 @@ def test_the_engine_profile_reads_this_table() -> None:
     from verity_vllm.engine import engine_profile as prof
 
     assert prof.DECLARED_ENV is env.ENGINE
-    assert env.ENGINE == {"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_V2_MODEL_RUNNER": "1",
-                          "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_USE_FLASHINFER_SAMPLER": "0"}
-    assert env.EXPORT == {"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_LAYERNAME": "0", "HF_HUB_OFFLINE": "1",
-                          "VLLM_LOGGING_LEVEL": "WARNING", "TOKENIZERS_PARALLELISM": "false"}
+    assert env.ENGINE == {"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_V2_MODEL_RUNNER": "1", "VLLM_ENABLE_V1_MULTIPROCESSING": "0",
+                          "VLLM_USE_FLASHINFER_SAMPLER": "0", "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1"}
+    assert env.EXPORT == {"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_LAYERNAME": "0", "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
+                          "HF_HUB_OFFLINE": "1", "VLLM_LOGGING_LEVEL": "WARNING", "TOKENIZERS_PARALLELISM": "false"}
+
+
+def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
+    """A Build orders a shared expert on the main stream, so a served run must run it there too: on two streams, its log's order
+    is not the execution order, and wiring (operand_provenance) fails."""
+    assert env.ENGINE["VLLM_DISABLE_SHARED_EXPERTS_STREAM"] == env.EXPORT["VLLM_DISABLE_SHARED_EXPERTS_STREAM"] == "1"

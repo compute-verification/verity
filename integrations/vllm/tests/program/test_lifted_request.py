@@ -25,15 +25,15 @@ from __future__ import annotations
 
 import pytest
 
-from verity.primitives.circuits import Program, bind
-from verity.primitives.circuits.codec import _spec_id, encode_program, program_digest
-from verity.primitives.circuits.defs import REGISTRY
+from verity.ml.circuits import Program, bind
+from verity.ml.circuits.codec import _spec_id, encode_program, program_digest
+from verity.ml.circuits.defs import REGISTRY
 from verity_vllm.program import workload as W
 from verity_vllm.program.registry import b1, lifted as L
-from verity_vllm.program.registry import serve3_reference as ref
+from verity_vllm.program.kernels import serve3_reference as ref
 from verity_vllm.program.registry.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.types import Array, Value
 
 I32 = Value(32)
 CAP = D_MAX + 1
@@ -239,8 +239,8 @@ def test_the_lift_is_a_function_of_the_manifest_and_refuses_by_name(component, l
 
 def test_boundary_detection_refuses_a_body_whose_steps_do_not_consume_the_token(component):
     """A body whose event tokens are returned but never read by a later node is not a request (nothing links the events)."""
-    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, Body, Node
-    from verity.primitives.circuits.refs import Coll, Affine, concat
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, Body, Node
+    from verity.ml.circuits.refs import Coll, Affine, concat
     tsel = bind(b1.TokenSelect, V=4)
     d = CompositeDefinition("FakeReq", 1, ("program_digest", "program_fn"), lambda S: ((), None), lambda *_: None, register=False)
     sp = SpecializedDefinition(W._REQUEST_DEF, {"program_digest": "x", "program_fn": "y"}, (("program_digest", "x"), ("program_fn", "y")))

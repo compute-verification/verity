@@ -13,7 +13,7 @@ its served y and its weight side). `replay` checks:
 3. each weight side's Y unit leaves open to its units root and its inputs (the weight's rows as read) to its inputs digest;
    each call's unit leaves open to its units root, its inputs (Y and c₀ as the call read them) to its inputs digest, and its
    served y to its dequantization units' leaves;
-4. the window's draw (`verity.protocols.accounting.work.pouw.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
+4. the window's draw (`verity.core.protocols.pouw.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
    on its `anchors.Receipt`, sealed before any key exists; `anchors.Ledger.open` derives the window's key from a fresh
    source, and each call draws its plan (`Traced.draw`) under #362's work law at its share of the window's budget
    (`plan.window_laws`). Every proved unit of a call is opened by the prover (`CallRecord.opening`, regenerated natively),
@@ -47,12 +47,12 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
-from verity.protocols.accounting.work.pouw.circuit import anchors as CA
-from verity.protocols.accounting.work.pouw.circuit import plan as CPL
-from verity.protocols.accounting.work.pouw.circuit.ncp2 import D
-from verity.protocols.accounting.work.pouw.protocol import DomainError
+from verity.core.protocols.pouw.circuit import anchors as CA
+from verity.core.protocols.pouw.circuit import plan as CPL
+from verity.core.protocols.pouw.circuit.ncp2 import D
+from verity.core.protocols.pouw.protocol import DomainError
 
-from verity.primitives.circuits.evaluation import evaluate
+from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.check.replay.delegate import Place, delegated
 from verity_vllm.program.kernels.kernel_registry import Declined
 from verity_vllm.protocol_options import pouw

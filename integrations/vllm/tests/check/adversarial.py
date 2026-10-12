@@ -36,11 +36,11 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.primitives.circuits.defs import bind, composite
-from verity.primitives.circuits.refs import Coll as _Coll, concat
+from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.refs import Coll as _Coll, concat
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
-from verity.primitives.circuits.types import Array
+from verity.ml.circuits.types import Array
 
 from verity_vllm.check import operand_provenance as provenance
 from verity_vllm.check.replay import replay
@@ -508,7 +508,7 @@ class ToyRecord:
                 BAKED[int(m["event"])] = tuple(int(w) for w in call_outs)
 
     def _returns(self, node: int):
-        from verity.primitives.circuits.layout import FunctionCall
+        from verity.ml.circuits.layout import FunctionCall
         circuit = self.genuine.program.circuit
         n_in = len(self.genuine.program.root.body.nodes) - len(self.genuine.body.nodes)
         return FunctionCall(circuit, circuit.root_scope, n_in + node).returns

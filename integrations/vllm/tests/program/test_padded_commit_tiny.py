@@ -21,7 +21,7 @@ def test_eos_at_event_1_lag0_every_required_word_committed_inactive_canonical_pi
     p = row["padded"]
     c, s, cm = p["counts"], p["inactive_sampling"], p["commit"]
     # build: the full padded Program, fixed, digested; the query of record at unlifted_width_max = 64
-    assert p["program"]["query"] == "default(64)" and p["program"]["verdict"]["status"] == "ok" and len(p["program"]["digest"]) == 64
+    assert p["program"]["query"] == "default(64)" and p["program"]["verdict"]["status"] == "ok" and len(p["program"]["digest"]) == 128
     # counts: the s6 fields; inactivity by enablement is whole owners at a time (no mixed VU); the inactive population is real
     assert c["total_population"] == c["active_population"] + c["inactive_population"] + c["empty_population"] and c["mixed_population"] == 0
     assert c["inactive_population"] > 10_000 and c["inv_population"] == 0 and c["sets_unsupported"] == 0

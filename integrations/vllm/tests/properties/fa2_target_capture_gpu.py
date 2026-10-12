@@ -136,7 +136,7 @@ def binary() -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------ mufu
 def mufu(work: Path, sm: str) -> dict[str, Any]:
-    from verity.primitives.circuits import library as L
+    from verity.ml.circuits import library as L
     from verity_vllm.program.kernels import fa2_relation
 
     pinned = fa2_relation.tables()
@@ -252,7 +252,7 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
     """One head of `Attention_v2{..., DOT=HopperBF16WgmmaDot16_v1, INV=Fa2InvSum_v1}` restated over the registered primitives by the
     reference evaluator, with FA2's `Check_inf` placement: block b guards the rescale's running max iff b >= gfrom; `max * scale` is guarded
     in every block.  `AttnBlock_v2`'s body otherwise, line for line (gfrom 0 is `AttentionHead_v2`)."""
-    from verity.primitives.circuits.evaluation.reference import evaluate
+    from verity.ml.circuits.evaluation.reference import evaluate
     from verity_vllm.program.registry import b1, hopper
     from verity_vllm.program.registry import prims as P
 
@@ -312,14 +312,14 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against the three constructions (a worker process: numpy words in, a record out)."""
-    from verity.primitives.circuits.evaluation.reference import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.registry import b1, hopper
     from verity_vllm.program.registry import fa2_check_inf as F2
     from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry import targets as TG
+    from verity_vllm.program.frontend import targets as TG
 
     c, D, q, k, v, o, bt = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"]
     tp = TargetProfile.default().with_overrides(compute_capability=tuple(job["cc"]), num_sms=int(job["sms"])) if job.get("cc") else None

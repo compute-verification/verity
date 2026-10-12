@@ -141,6 +141,6 @@ def test_digest_bytes_are_the_pre_registry_bytes() -> None:
     st = read_statement((FIXTURES / "fp8-ada-hash" / "sub_00.stmt").read_bytes())
     b = hashauth.digest_bytes(st.hash_auth)
     assert b == hashauth.digest_bytes(st.hash_auth, leaf="poseidon2") == hashauth.digest_bytes(st.hash_auth, leaf=Poseidon2Leaf())
-    from verity.primitives.commitments import poseidon2_babybear as h2
-    from verity.primitives.commitments.rowleaf import SCHEMA_ROW
+    from verity.ml.commitments import poseidon2_babybear as h2
+    from verity.ml.commitments.rowleaf import SCHEMA_ROW
     assert b.startswith(b"|auth=ligero-b/auth/v2h|schema=" + SCHEMA_ROW.encode() + b"|p2=" + bytes.fromhex(h2.CONSTANTS_SHA256) + b"|idx=")

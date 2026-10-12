@@ -7,7 +7,7 @@ User=research
 Nice=19
 IOSchedulingClass=idle
 CPUQuota=50%
-# the CPUs node 1 gives work that names no pool (tools/cluster/descriptions/nebius.toml); its Jobs are pinned there too
+# the CPUs node 1 gives work that names no pool (infra/cluster/descriptions/nebius.toml); its Jobs are pinned there too
 CPUAffinity=96-127
 # a round starts no Job after 20 min (VY_CUSTODY_PASS_S), and its last Job ends within 30 (activeDeadlineSeconds)
 TimeoutStartSec=80min

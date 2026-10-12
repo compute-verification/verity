@@ -1,20 +1,19 @@
 """Overhead of each PoUW scheme's honest GEMM against the plain GEMM of its datatype, on one RTX 4090.
 
-    python benchmarks/pouw/gemm_bench.py --out RESULT.json      (on the pod: torch with CUDA, verity and verity.protocols.accounting.work.pouw importable)
+    python benchmarks/pouw/gemm_bench.py --out RESULT.json      (on the pod: torch with CUDA, verity and verity.core.protocols.pouw importable)
 
 Gates, before any timing (the run refuses to time a kernel that fails its gate):
 - ``ncp``: the s8 GEMM's every 16-deep checkpoint, dumped at a small lead-domain shape and shifted to route U
-  (`ncp.route_u_shift`), gives the tile digests of `verity.protocols.accounting.work.pouw.schemes.ncp` (the reference), and its output is exactly
+  (`ncp.route_u_shift`), gives the tile digests of `verity.core.protocols.pouw.schemes.ncp` (the reference), and its output is exactly
   A·Bᵀ;
-- ``pearl``: the e4m3 GEMM on noisy-quantized operands from `verity.protocols.accounting.work.pouw.schemes.pearl_kw` equals the reference replay on
+- ``pearl``: the e4m3 GEMM on noisy-quantized operands from `verity.core.protocols.pouw.schemes.pearl_kw` equals the reference replay on
   the ``ada`` device, bit for bit.
 
 Timings, per workload shape (m, k, n), median of CUDA-event timed repetitions:
 - plain: the int8 GEMM (cuBLASLt ``torch._int_mm`` where it applies, and this kernel without reads), the e4m3 GEMM
   (cuBLASLt ``torch._scaled_mm``) and BF16 (``torch.mm``);
 - NCP: the (m, 3k, n) GEMM with every accumulator read once per 16-deep step, forming the three noised operands, and
-  SHAKE256 over the transcript (3k/16 words per output) at the research store's measured 650 GB/s (``gpu-constants.md``;
-  an estimate, not run here);
+  SHAKE256 over the transcript (3k/16 words per output) at a measured 650 GB/s (an estimate, not run here);
 - Pearl: the windowed e4m3 GEMM, noisy quantization of A (the rank-32 noise product and the elementwise BF16 steps), and
   the peel (A·F_B and the 2r correction columns, BF16).
 """
@@ -66,8 +65,8 @@ def s8(t: torch.Tensor) -> torch.Tensor:
 
 
 def gate_ncp(ext) -> dict:
-    from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile
-    from verity.protocols.accounting.work.pouw.schemes import ncp
+    from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
+    from verity.core.protocols.pouw.schemes import ncp
 
     m, k, n = 16, 1088, 256
     s, rng = ncp.NCP(n_min=64), random.Random(7)
@@ -100,8 +99,8 @@ def gate_ncp(ext) -> dict:
 
 
 def gate_pearl(ext) -> dict:
-    from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile
-    from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
+    from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
+    from verity.core.protocols.pouw.schemes import pearl_kw as P
 
     m, k, n = 16, 1024, 128
     rng = random.Random(11)

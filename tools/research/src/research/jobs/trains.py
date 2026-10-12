@@ -11,7 +11,7 @@ the tip.  The reconcile cron (`reconcile(now)`, beside the expire-leases cron) l
             in `research.merge.REFUSED_KINDS` and lists each step once (as `research merge` requires: it reads a step's first
             entry), and every step `main`'s `merge_requires` asks for the change (main..tip, `rule_touches`) passed in that
             result.  The worker's report of "passed" is never the verdict.  The declaration is `CHECK = Tool(...)` in main's
-            `tools/check/tool.py`, parsed and its keywords read as literals (`declared`), never run; one this can't read lands
+            `tools/verity/check/tool.py`, parsed and its keywords read as literals (`declared`), never run; one this can't read lands
             nothing.
   land      `main` is moved to the tip with `force: false`, so GitHub itself refuses anything but a fast-forward; a refusal (a
             push in between) rebuilds the train too.
@@ -21,7 +21,7 @@ the tip.  The reconcile cron (`reconcile(now)`, beside the expire-leases cron) l
 A train with `land: false` stops at `would-land`: the shadow run beside the RC's `research merge`.
 
 Lean records.  GitHub's Merges API runs no custom merge driver, so a merge step whose two sides both changed a `lean-audit.json`
-is prepared first: the service computes the record merge with `tools/lean/merge.py`'s `merge()` (#447), writes the result onto
+is prepared first: the service computes the record merge with `tools/verity/lean/merge.py`'s `merge()` (#447), writes the result onto
 both sides (one small commit on the train, one on top of the PR's head, through the Git Data API), and the Merges API then sees
 identical records and merges every other file as usual.  When `merge()` refuses, both sides get the train's record instead, the
 build carries on, and the train is `regenerating`: a `lean-regen` job rebuilds the refused packages' records on the train's tip,
@@ -54,7 +54,7 @@ _MISSING = object()
 REBUILDS = 3
 TRAIN_TIMEOUT_S = 2 * 3600
 LEASE_MARGIN_S = 900
-TOOL_PY = "tools/check/tool.py"
+TOOL_PY = "tools/verity/check/tool.py"
 TRAIN_STATES = ("regenerating", "checking", "landed", "would-land", "failed", "stuck", "refused", "cancelled")
 
 
@@ -188,7 +188,7 @@ def _entries(path, o, a, b, why, depth=1):
 def merge_record(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
     """merge.py's `merge()` for records without `reads` (the train cases have none): (the merged record, why it's refused)."""
     if any("reads" in r for r in (base, ours, theirs)):
-        raise NotImplementedError("the stand-in merges records without `reads`; the site ports tools/lean/merge.py")
+        raise NotImplementedError("the stand-in merges records without `reads`; the site ports tools/verity/lean/merge.py")
     why: list[str] = []
     out = {}
     for k in _keys("", ours, theirs):
@@ -377,7 +377,7 @@ class TrainService(JobService):
                 ours[path] = theirs[path] = record_text(merged)
         if not both:
             return head
-        msg = f"Train {tid}: lean-audit.json for #{p['number']}, merged by tools/lean/merge.py"
+        msg = f"Train {tid}: lean-audit.json for #{p['number']}, merged by tools/verity/lean/merge.py"
         if ours:
             gh.refs[branch] = gh.commit(f"{tip}.rec", tip, ours, msg)
         return gh.commit(f"{head}.rec", head, theirs, msg)

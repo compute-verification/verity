@@ -58,7 +58,7 @@ def clear_observations() -> None:
 
 
 def observe_launch_context(launch: dict | None) -> None:
-    """[R15 hopper HOP-03] The LAUNCH CONTEXT the request Program is built under (`registry.targets.parse_launch_context`: per request step
+    """[R15 hopper HOP-03] The LAUNCH CONTEXT the request Program is built under (`frontend.targets.parse_launch_context`: per request step
     the varlen launch's max_seqlen_q over ALL co-scheduled sequences).  The attention rule's FA3 tile selection reads it: a request's
     own rows are the launch's value only for a batch of one.  None = no declared context (own rows; B1 semantics, digests unchanged)."""
     _OBSERVED["launch_context"] = dict(launch) if launch else None
@@ -103,8 +103,8 @@ def _attn_pins_ok(obs: dict | None, layer_name: str) -> str | None:
                 "(observe_attention_impls(vllm_meta.attention_impls(model)) before derive) — refusing rather than assuming a backend")
     # [R13 hopper] the FA version pin is the ACTIVE target's effective one (`TargetProfile.effective_flash_attn_version`: the declared knob
     # or the selector's default for the capability), and only a version the target has a registered attention chain for is admitted
-    # (`registry.targets.check_flash_attn_registered`); every other field keeps the FA2 profile's pin.
-    from verity_vllm.program.registry import targets as T
+    # (`frontend.targets.check_flash_attn_registered`); every other field keeps the FA2 profile's pin.
+    from verity_vllm.program.frontend import targets as T
     tp = active_target_profile()
     try:
         want_fav = T.check_flash_attn_registered(tp)
@@ -170,7 +170,7 @@ def declared_derived_accounting(profile: TargetProfile | None = None, applied: d
 
 
 def _target_desc(profile: TargetProfile) -> dict:
-    from verity_vllm.program.registry import targets as T
+    from verity_vllm.program.frontend import targets as T
     try:
         d = T.describe(profile)
     except T.UnregisteredTarget as e:

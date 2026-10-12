@@ -1,0 +1,27 @@
+[project]
+name = "verity-pouw-window-difftest"
+version = "0.0.0"
+description = "The difftest of `pouw_window` against `verity.core.protocols.pouw.window`."
+requires-python = ">=3.12"
+dependencies = []
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: the harness (`verity_difftest`, which the workspace installs, and the Lean `lake` builds through the path require);
+# the reference, `window.py`, the packages above it and the core it imports (`verity.ml`'s circuits codec, commitments and
+# crypto, and `verity.errors`), and its pinned vectors; what `lake` reads through the path requires: PoUW's commitments
+# (`pouw_commit`), core's identity and randomness, and C-Flock's verifier with its configuration.
+inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/window.py",
+          "verity/core/protocols/pouw/tests/vectors/window.json",
+          "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
+          "verity/core/protocols/pouw/lean/commit", "verity/core/primitives/identity", "verity/core/primitives/randomness",
+          "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
+          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock"]

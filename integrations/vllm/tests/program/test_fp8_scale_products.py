@@ -1,4 +1,4 @@
-"""`registry.fp8.scale_products`: the scale products a host committer commits for `ScaledMmFp8BlockSharedScale_v1` are the IR's
+"""`kernels.fp8_twins.scale_products`: the scale products a host committer commits for `ScaledMmFp8BlockSharedScale_v1` are the IR's
 `F32Mul_v1(x_s[kb], w_s[nb][kb])` word for word -- the reference `evaluate` on every ordered pair of edge words where a host multiply can
 differ from it (two NaNs of different payloads and signs, in both orders; NaN against finite, zero and infinity; signed zeros,
 subnormals, +-max, +-inf; products that overflow, or underflow to a subnormal or to zero) -- and, fed to
@@ -10,9 +10,10 @@ import random
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import fp8
+from verity_vllm.program.kernels import fp8_twins
 from verity_vllm.program.registry import prims as P
 
 NAN = [0x7FC00000, 0xFFC00000, 0x7FC00001, 0xFFC00001, 0x7FFFFFFF, 0xFFFFFFFF, 0x7F800001, 0xFF800001, 0x7FA00000, 0xFFBFFFFF]
@@ -42,7 +43,7 @@ def _class(u: int) -> str:
 def test_every_ordered_edge_pair_is_f32mul():
     xs = np.asarray(EDGE, dtype=np.uint32)                       # x_s[kb] = EDGE[kb]
     ws = np.repeat(xs[:, None], len(EDGE), axis=1)               # w_s[nb][kb] = EDGE[nb]: every ordered pair (x_s, w_s) once
-    got = fp8.scale_products(xs, ws)
+    got = fp8_twins.scale_products(xs, ws)
     assert got.shape == (len(EDGE), len(EDGE)) and got.dtype == np.uint32
     bad = [(hex(a), hex(b), hex(int(got[nb, kb])), hex(_ref(a, b))) for nb, b in enumerate(EDGE) for kb, a in enumerate(EDGE)
            if int(got[nb, kb]) != _ref(a, b)]
@@ -65,13 +66,13 @@ def test_rows_and_shapes():
     rng = random.Random(0x5CA1E)
     ws = np.asarray([[rng.choice(EDGE) for _ in range(3)] for _ in range(4)], dtype=np.uint32)
     xs = np.asarray([[rng.choice(EDGE) for _ in range(3)] for _ in range(5)], dtype=np.uint32)
-    got = fp8.scale_products(xs, ws)
+    got = fp8_twins.scale_products(xs, ws)
     assert got.shape == (5, 4, 3)
     for r in range(5):
-        assert np.array_equal(got[r], fp8.scale_products(xs[r], ws))
+        assert np.array_equal(got[r], fp8_twins.scale_products(xs[r], ws))
     for bad in ((xs[0, :2], ws), (xs[0], ws[0]), (xs[None], ws)):
         with pytest.raises(ValueError):
-            fp8.scale_products(*bad)
+            fp8_twins.scale_products(*bad)
 
 
 def test_the_products_feed_the_new_coordinate_to_the_old_word():
@@ -83,5 +84,5 @@ def test_the_products_feed_the_new_coordinate_to_the_old_word():
         wrow = [rng.getrandbits(8) for _ in range(K)]
         pool = EDGE if k % 3 == 2 else [rng.randrange(100, 127) << 23 | rng.getrandbits(23) for _ in range(8)]
         sx, sw = [rng.choice(pool) for _ in range(K // G)], [rng.choice(pool) for _ in range(K // G)]
-        s = fp8.scale_products(np.asarray(sx, dtype=np.uint32), np.asarray([sw], dtype=np.uint32))[0]
+        s = fp8_twins.scale_products(np.asarray(sx, dtype=np.uint32), np.asarray([sw], dtype=np.uint32))[0]
         assert evaluate(new, xq, [int(v) for v in s], wrow) == evaluate(old, xq, sx, wrow, sw), (k, [hex(v) for v in sx + sw])

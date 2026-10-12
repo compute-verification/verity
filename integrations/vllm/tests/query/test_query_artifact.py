@@ -8,12 +8,12 @@ import json
 
 import pytest
 
-from verity.primitives.circuits import codec
+from verity.ml.circuits import codec
 from verity_vllm.query import query_artifact as QA
-from verity.primitives.circuits.codec import canonical_json
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.partition import PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.partition import PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict
+from verity.ml.circuits.program import Program
 from verity_vllm.program.registry import b1
 
 Q1 = {"op": "override", "base": {"op": "default", "w": 32},
@@ -40,9 +40,9 @@ def test_program_digest_is_the_codecs_untouched():
     assert QA.program_digest is codec.program_digest
 
 
-def test_query_id_is_sha256_of_canonical_json_and_stable():
+def test_query_id_is_sha512_of_canonical_json_and_stable():
     qid = QA.query_id(Q1)
-    assert qid == hashlib.sha256(canonical_json(Q1)).hexdigest()
+    assert qid == hashlib.sha512(canonical_json(Q1)).hexdigest()
     assert QA.query_id(json.loads(json.dumps(Q1))) == qid                         # key order / round trip irrelevant
     assert QA.query_id({"cases": Q1["cases"], "op": "override", "base": Q1["base"]}) == qid
     assert QA.query_id(Q2) != qid
@@ -75,7 +75,7 @@ def test_identities_are_independent(gemm, gemm8):
 
 def test_binding_id_construction_and_stability(gemm):
     q1, d1 = QA.query_id(Q1), QA.program_digest(gemm)
-    expected = hashlib.sha256(("verity-ir/query/v1" + q1 + d1).encode()).hexdigest()
+    expected = hashlib.sha512(("verity-ir/query/v1" + q1 + d1).encode()).hexdigest()
     assert QA.binding_id(q1, d1) == expected
     assert QA.query_document(Q1, gemm)["binding_id"] == expected
     assert QA.query_document(Q1, d1)["binding_id"] == expected                      # a digest string works too
@@ -95,7 +95,7 @@ def test_query_document_carries_no_use_configuration(gemm):
     assert any("use configuration" in p for p in QA.check_query_document(bad))
     tampered = dict(doc, query=Q2)
     assert any("query_id" in p for p in QA.check_query_document(tampered))
-    rebound = dict(doc, program_digest="0" * 64)
+    rebound = dict(doc, program_digest="0" * 128)
     assert any("binding_id" in p for p in QA.check_query_document(rebound))
 
 
@@ -111,13 +111,13 @@ def test_use_document_schema(gemm):
     assert udoc["evaluator"] == {"version": QA.EVALUATOR_VERSION, "utc": "2026-09-17T22:00:00Z"}
     json.dumps(udoc)
     assert QA.check_use_document(udoc, QA.program_digest(gemm), qdoc) == []
-    assert QA.check_use_document(udoc, "0" * 64, qdoc) != []                         # bound to another Program
-    assert QA.check_use_document(dict(udoc, binding_id="1" * 64), None, qdoc) != []
+    assert QA.check_use_document(udoc, "0" * 128, qdoc) != []                         # bound to another Program
+    assert QA.check_use_document(dict(udoc, binding_id="1" * 128), None, qdoc) != []
     assert QA.check_use_document({"schema": "verity-ir/query-use/v1"}) != []
 
 
 def test_use_document_from_plain_dict_verdict_and_default_utc():
-    udoc = QA.use_document("a" * 64, {"status": "fail"}, w_max=16)
+    udoc = QA.use_document("a" * 128, {"status": "fail"}, w_max=16)
     assert udoc["verdict"] == {"status": "fail"} and udoc["use"]["w_max"] == 16
     assert udoc["evaluator"]["utc"].endswith("Z") and len(udoc["evaluator"]["utc"]) == 20
     with pytest.raises(ValueError):

@@ -652,7 +652,7 @@ class CheckerLayer:
 V2_EXPORT_LAYERS: tuple[CheckerLayer, ...] = (CheckerLayer(5, 9, assertions=True), CheckerLayer(9, 9, assertions=False))
 
 
-# The census of ``verity_catalog.silicon.relation`` for AMPERE_BF16_M16N8K16, ALIGN_DIV: 146 mul, 104 lin, 172 lookups per
+# The census of ``verity.ml.circuits.silicon.relation`` for AMPERE_BF16_M16N8K16, ALIGN_DIV: 146 mul, 104 lin, 172 lookups per
 # 16-product update.  SUPERSEDED (2026-09-21): relation.py counts none of the red-team / WP2 repairs (RANGE(magW),
 # direct remainder ranges, tight quotient bounds, the decode of an arbitrary incoming accumulator); kept only so the
 # undercount can be shown (``security.census.diff_vs_relation``).

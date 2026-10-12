@@ -1,0 +1,67 @@
+{
+ "definitions": {
+  "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}": {
+   "and": 1673
+  },
+  "RMSNormInvTriton_v1": {
+   "and": 34
+  },
+  "RMSNormLaneCuda_v1{J=1}": {
+   "and": 1345
+  },
+  "RMSNormLaneCuda_v1{J=2}": {
+   "and": 4108
+  },
+  "RMSNormLanesCuda_v1{N=16,BLOCK=1024}": {
+   "and": 21520
+  },
+  "RMSNormMeanEpsTriton_v1{N=16,EPS=1e-05}": {
+   "and": 1982
+  },
+  "RMSNormOutCuda_v1": {
+   "and": 2370
+  },
+  "RMSNormOutRowCuda_v1{N=16}": {
+   "and": 37920
+  },
+  "RMSNormOutRowTriton_v1{N=16}": {
+   "and": 38176
+  },
+  "RMSNormOutTriton_v1": {
+   "and": 2386
+  },
+  "RMSNormScaleCuda_v1": {
+   "and": 50
+  },
+  "RMSNormSquareFma_v1": {
+   "and": 2046
+  },
+  "RMSNormSquare_v1": {
+   "and": 628
+  },
+  "RMSNormThreadTriton_v1": {
+   "and": 14950
+  },
+  "RMSNormThreadsTriton_v1{N=16}": {
+   "and": 29900
+  },
+  "RMSNormVarEpsCuda_v2{N=16,EPS=1e-05}": {
+   "and": 1673
+  },
+  "RMSNormVarEpsTriton_v2{N=16,EPS=1e-05}": {
+   "and": 1982
+  },
+  "RMSNormWarpCuda_v1{L=16}": {
+   "and": 12180
+  },
+  "RMSNormWarpTriton_v1{L=2}": {
+   "and": 812
+  },
+  "RMSNormWarpsCuda_v1{T=16}": {
+   "and": 12180
+  },
+  "RMSNormWarpsTriton_v1{N=16}": {
+   "and": 812
+  }
+ }
+}

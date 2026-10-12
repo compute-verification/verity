@@ -1,5 +1,5 @@
 """Batch forms of a served tile's replay for `served_debit.py`: every place a Pearl-C v1 tile's check runs the device's E4M3
-atom one word at a time, run over all of the tile's words at once on numpy (`verity_kernels.tc.group_sum_total_batch`, the
+atom one word at a time, run over all of the tile's words at once on numpy (`verity.ml.kernels.tc.group_sum_total_batch`, the
 atom's bit-exact batch form).
 
 - `_pairs`: `pearl_c.chain` on every (a, b) pair of two lists of code rows: C̃'s words (`checked`), the fused columns of the peel factors
@@ -11,7 +11,7 @@ atom's bit-exact batch form).
 Each returns exactly what its scalar reference returns.  Wherever a word, an accumulator or a promotion leaves the finite
 range, or an input is not the shape the batch takes, it calls the scalar reference instead, so a rejection (and any other
 exception) is the reference's own.  FP32 adds and products are numpy float32's, IEEE nearest-even with subnormals kept, as
-`verity_catalog.definitions.fp32` takes them; `install` refuses a process whose floating-point unit flushes subnormals.
+`verity.ml.circuits.ops.fp32` takes them; `install` refuses a process whose floating-point unit flushes subnormals.
 
 `install(scheme)` puts them in place of the scalar functions for a Pearl-C v1 scheme on a promoted device, with the `blake3`
 package's BLAKE3 (the same digests) for the plain-Python one, and returns the function that puts the scalar ones back:
@@ -23,11 +23,11 @@ import functools
 from collections.abc import Sequence
 
 import numpy as np
-from verity_kernels import tc as K
-from verity_catalog.silicon import fp32
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_debit as D
-from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
+from verity.ml.kernels import tc as K
+from verity.ml.circuits.silicon import fp32
+from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.core.protocols.pouw.schemes import pearl_c_debit as D
+from verity.core.protocols.pouw.schemes import pearl_kw as P
 
 _TOP = 0x7F7FFFFF
 _NEG_ZERO = np.uint32(0x80000000)
@@ -158,7 +158,7 @@ def form_v1(x_rows: Sequence[Sequence[int]], e_rows: Sequence[Sequence[int]], f:
     return out
 
 
-@functools.lru_cache(maxsize=48)
+@functools.lru_cache(maxsize=48, typed=True)
 def _gram(seed_b: bytes, k: int, norm: float, device) -> tuple[tuple[int, ...], ...]:
     fa, fb = C._basis(seed_b, 0, k, norm), C._basis(seed_b, 1, k, norm)
     fa_cols, fb_cols = [C._column(fa, q) for q in range(C.R)], [C._column(fb, p) for p in range(C.R)]
@@ -266,7 +266,7 @@ def _ieee() -> bool:
 
 
 def _native_blake3():
-    """(hash, keyed) on the `blake3` package, or None when it is absent: the same digests as `verity.primitives.crypto.blake3`."""
+    """(hash, keyed) on the `blake3` package, or None when it is absent: the same digests as `verity.ml.crypto.blake3`."""
     try:
         import blake3 as native
     except ImportError:
@@ -279,7 +279,7 @@ def install(scheme, debit: bool = True) -> callable:
     of the plain-Python one wherever a loaded module holds it; returns the undo.  ``debit=False`` leaves
     `pearl_c_debit.chain_debit` to the caller (`served_debit.py` records it through a wrapper of its own)."""
     import sys
-    from verity.primitives.crypto import blake3 as pure
+    from verity.ml.crypto import blake3 as pure
     if scheme.forming != "v1" or scheme.device.g is None:
         raise ValueError(f"{scheme.name}: the batch forms take Pearl-C v1 on a promoted device")
     if not _ieee():
@@ -317,7 +317,7 @@ def install(scheme, debit: bool = True) -> callable:
             for name, fn, new in (("blake3", pure.blake3, h), ("keyed", pure.keyed, kd)):
                 if getattr(mod, name, None) is fn and (mod is pure or mod.__name__.startswith(("verity", "pearl_c"))):
                     swap(mod, name, new)
-    swap(C, "_basis", functools.lru_cache(maxsize=48)(C._basis.__wrapped__))
+    swap(C, "_basis", functools.lru_cache(maxsize=48, typed=True)(C._basis.__wrapped__))
     swap(C, "form_v1", form_v1)
     swap(C, "gram", gram)
     swap(C, "peel_factors_a", peel_factors_a)

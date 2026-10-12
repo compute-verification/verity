@@ -8,7 +8,7 @@ any model: `profiles.generic.build_profile(role, world=N)` registers it for ever
 
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1_tp2
 
 from verity_vllm.observe.events import ViewDesc

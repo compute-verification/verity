@@ -11,15 +11,16 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Callable
 
-from verity.primitives.circuits.defs import bind as ir_bind
+from verity.ml.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
+from verity_vllm.program.registry import fp8_vocab as _fp8_vocab
 from verity_vllm.program.registry import moe as _moe
 from verity_vllm.program.registry import pouw_rows as _pouw_rows
-from verity_vllm.program.registry import targets as _targets
+from verity_vllm.program.frontend import targets as _targets
 from verity_vllm.program.registry import value_inputs as _vi
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
@@ -98,7 +99,7 @@ PROFILE_B1_EAGER = Vocabulary(
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "gemm_bias": lambda K, N: ir_bind(_gemm_bias.GemmBias, K=K, N=N),
         "rmsnorm": lambda N, EPS: ir_bind(b1.RMSNormTriton, N=N, EPS=EPS),
-        # `_C.fused_add_rms_norm` by the declared target (`registry.targets.rmsnorm_fused_spec`, which the fold calls too): the rule
+        # `_C.fused_add_rms_norm` by the declared target (`frontend.targets.rmsnorm_fused_spec`, which the fold calls too): the rule
         # states `TARGET`, and without it the role has no kind
         "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
@@ -182,8 +183,9 @@ from verity_vllm.program.registry import b1_tp2 as TP2
 from verity_vllm.program.registry import pad_prims as PP
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import sampling as _sampling  # [R15 stoch]
+from verity_vllm.program.registry import sampling_vocab
 from verity_vllm.program.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
-from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as _LN
+from verity_vllm.program.registry import layer_norm as _LN
 
 
 def _norm_v2(role: str):
@@ -305,6 +307,15 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
 
+def _moe_expert_dot(routed, E, K, N, DOT, G, KB, SWAP):
+    if G is None and KB is None and SWAP is None:
+        return ir_bind(_moe.MoeExpertGemmWV2 if routed else _moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT)
+    if G is None or KB is None or SWAP is None:
+        raise TypeError("the block-FP8 pair forms take G, KB and SWAP together")
+    from verity_vllm.program.registry import fp8_moe_experts as _x  # noqa: PLC0415
+    return ir_bind(_x.MoeExpertFp8GemmW if routed else _x.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=KB, SWAP=SWAP, DOT=DOT)
+
+
 def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
     if FA2_MASKED_FROM is None:
         raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
@@ -324,7 +335,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # `_C.silu_and_mul` as `SiluMul_v2` (registry.act): `SiluMul_v1` on every word but the red-team's edge words (expf's overflow,
            # up = -0, gate -inf / -0, NaN 0x7FFF); the older vocabularies keep `SiluMul_v1`
            "silu_mul": lambda I: ir_bind(_act.SiluMul, I=I),
-           # [R13 hopper] the target-keyed variants (`verity_vllm.program.registry.targets`): the same bodies with the k16 tensor-core step and (for
+           # [R13 hopper] the target-keyed variants (`verity_vllm.program.frontend.targets`): the same bodies with the k16 tensor-core step and (for
            # attention) the block size / epilogue as declared statics — bound by the vLLM rules when the active TargetProfile is not the
            # accepted records' (Ampere-family step under FA2); those keep `gemm` / `attention` above, so their digests do not move.
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
@@ -352,9 +363,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm": lambda E, K, N: ir_bind(_moe.MoeExpertGemm, E=E, K=K, N=N),
            "moe_expert_gemm_w": lambda E, K, N: ir_bind(_moe.MoeExpertGemmW, E=E, K=K, N=N),
            # the same launches with the k16 step as a static, bound when the active target's fused_moe_kernel runs another step than
-           # the Ampere/Ada one (`registry.targets.moe_expert_dot`); those above keep the `_v1` records' digests
-           "moe_expert_gemm_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT),
-           "moe_expert_gemm_w_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmWV2, E=E, K=K, N=N, DOT=DOT),
+           # the Ampere/Ada one (`frontend.targets.moe_expert_dot`); those above keep the `_v1` records' digests
+           # a `G` (with the launch's `KB`, `SWAP`) binds the block-FP8 pair forms with DOT the e4m3 step (`rules/vllm_moe_fp8.py`); optional
+           # statics, so the roles, their notes and this vocabulary's version stay as they were
+           "moe_expert_gemm_dot": lambda E, K, N, DOT, G=None, KB=None, SWAP=None: _moe_expert_dot(False, E, K, N, DOT, G, KB, SWAP),
+           "moe_expert_gemm_w_dot": lambda E, K, N, DOT, G=None, KB=None, SWAP=None: _moe_expert_dot(True, E, K, N, DOT, G, KB, SWAP),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),
            # [R17-42 route A (3)] the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot
@@ -375,8 +388,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # exact to vLLM d9105ea80 `_temperature_kernel` -> `_apply_topp_split` (S splits) -> `_gumbel_sample_kernel` + argmax; the seed, pos,
            # temperature, top_p and [R16, coord M-0169] the split count S (= SplitsFor_v1(|live|, num_SMs), a derived value of the workload the
            # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
-           # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling.select_for`; the role and its note stay as they were)
-           "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(_sampling.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
+           # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling_vocab.select_for`; the role and its note stay as they were)
+           "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
            # the same select at a constant split count S (a single-request workload): its top-p keep word as word gates
            # (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`, the same six operands), so a partition query cuts it
            "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),
@@ -384,11 +397,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`; FP8_DOT, given on a target whose blockwise step is not Hopper's
-           # (`registry.targets.fp8_block_dot`), binds the version 3 forms over it (the role and its note stay as they were).
+           # (`frontend.targets.fp8_block_dot`), binds the version 3 forms over it (the role and its note stay as they were).
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
-           "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8.block_gemm(K, N, G, SCALE, FP8_DOT),
+           "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8_vocab.block_gemm(K, N, G, SCALE, FP8_DOT),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
-           # (quarantine lane cov-ln, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
+           # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
            "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,

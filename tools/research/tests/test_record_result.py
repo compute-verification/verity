@@ -46,6 +46,28 @@ def test_v01_record_reads_with_unknown_not_defaults(tmp_path):
     assert s["run_id"] == "oom_own"                                    # v0.1: the job name stands in for the run id
 
 
+def test_a_running_run_whose_check_waits_for_a_slot_is_waiting(tmp_path, capsys):
+    """af2d (10 Oct) waited 95 min in node 1's check line and was reported running since its launch, and so cancelled as a
+    check 107 min in when it had checked for 12: its slot record (slot.py's) makes it `waiting` until it holds a slot."""
+    shutil.copy(FIXTURES / "job_v0.1.json", tmp_path / "job.json")
+    (tmp_path / "status.json").write_text(json.dumps({"state": "running"}))
+    assert R.summarize(tmp_path)["state"] == "running" and R.summarize(tmp_path)["slot"] is None
+    wait = {"state": "waiting", "since": "2026-10-10T16:56:27Z", "priority": True, "why": "every check slot is taken (a: busy; b: busy)"}
+    (tmp_path / R.SLOT_FILE).write_text(json.dumps(wait))
+    s = R.summarize(tmp_path)
+    assert s["state"] == "waiting" and s["state"] in R.ACTIVE and s["slot"] == wait
+    assert main(["inspect", str(tmp_path)]) == 0
+    assert "slot      waiting in the check line since 2026-10-10T16:56:27Z, not started: every check slot is taken" in capsys.readouterr().out
+    (tmp_path / R.SLOT_FILE).write_text(json.dumps({**wait, "state": "held", "slot": "a", "cores": "32-63", "took": "2026-10-10T18:31:22Z"}))
+    assert R.summarize(tmp_path)["state"] == "running"
+    assert main(["inspect", str(tmp_path)]) == 0
+    assert "slot      check slot a (cores 32-63) taken 2026-10-10T18:31:22Z, after waiting in line since 2026-10-10T16:56:27Z" \
+        in capsys.readouterr().out
+    (tmp_path / R.SLOT_FILE).write_text(json.dumps(wait))
+    (tmp_path / "status.json").write_text(json.dumps({"state": "cancelled"}))
+    assert R.summarize(tmp_path)["state"] == "cancelled"                # an ended run is what it ended as
+
+
 def test_extend_job_adds_sections_and_changes_nothing_else():
     v1 = json.loads((FIXTURES / "job_v0.1.json").read_text())
     v2 = record.extend_job(dict(v1), run_id="r1", runs_root=Path("/tmp/x"), expected_fingerprint={"elf_sha256": "abc"},
@@ -243,7 +265,7 @@ def test_compare_is_descriptive_and_labels_ratios(tmp_path):
     assert any("workload contract" in cv for cv in rep["caveats"]) and any("not a confidence interval" in cv for cv in rep["caveats"])
     text = C.render(rep)
     assert "candidate/baseline" in text and "x0.4000" in text and "elf_sha256" in text
-    assert main(["compare", b["id"], c["id"], "--runs-dir", str(tmp_path)]) == 0
+    assert main(["compare", b["id"], c["id"], "--dirs", "--runs-dir", str(tmp_path)]) == 0
 
 
 def test_compare_flags_missing_validation_and_units(tmp_path):

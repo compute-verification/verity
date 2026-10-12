@@ -1,4 +1,4 @@
-"""End to end on one RTX 4090: the GPU kernels prove, `verity.protocols.accounting.work.pouw.audit.Verifier` audits with the pure-Python reference.
+"""End to end on one RTX 4090: the GPU kernels prove, `verity.core.protocols.pouw.audit.Verifier` audits with the pure-Python reference.
 
     python benchmarks/pouw/e2e_audit.py --out RESULT.json
 
@@ -26,11 +26,11 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kernels import load  # noqa: E402
-from verity.protocols.accounting.work.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, reference_kernel  # noqa: E402
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import get  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import ncp as N  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.core.protocols.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, reference_kernel  # noqa: E402
+from verity.core.protocols.pouw.protocol import Matmul, Shape  # noqa: E402
+from verity.core.protocols.pouw.schemes import get  # noqa: E402
+from verity.core.protocols.pouw.schemes import ncp as N  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
 
 
 def ncp_noise_rows(tag: str, count: int, k: int, parts) -> np.ndarray:
@@ -72,7 +72,7 @@ def ncp_gpu_kernel(ext, corrupt: float = 0.0, seed: int = 0):
 
 def pearl_gpu_kernel(ext):
     def kernel(scheme, ctx, noise, a_rows, b_rows, tiles):
-        from verity.protocols.accounting.work.pouw.protocol import Tile
+        from verity.core.protocols.pouw.protocol import Tile
         full = Tile(tuple(range(len(a_rows))), tuple(range(len(b_rows))))
         ops = scheme.encode(ctx, noise, a_rows, b_rows, full)
         C = ext.fp8_gemm(torch.tensor(ops.a.codes, dtype=torch.uint8).cuda(), torch.tensor(ops.b.codes, dtype=torch.uint8).cuda(), 1).cpu()

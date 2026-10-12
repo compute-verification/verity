@@ -144,7 +144,7 @@ def test_public_decode_refuses_off_domain_words():
 
 
 def test_reference_vector_k1536_replays_through_the_hint_generator():
-    rec = json.loads((REPO / "catalog/verity_catalog/silicon/captures/vectors/nvfp4-sm120-mma-k1536.json").read_text())
+    rec = json.loads((REPO / "verity/ml/circuits/silicon/captures/vectors/nvfp4-sm120-mma-k1536.json").read_text())
     assert rec["instruction"] == "sm120.mma.m16n8k64.e2m1.nvf4" and rec["model"] == MODEL.name
     codes_a, sc_a = [int(x, 16) for x in rec["a"]], [int(x, 16) for x in rec["a_scales"]]
     codes_b, sc_b = [int(x, 16) for x in rec["b"]], [int(x, 16) for x in rec["b_scales"]]

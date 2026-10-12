@@ -16,7 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 def _repo_of_this_file():
     """[R18 infra, F-r17-tp-06] the tree THIS FILE lives in -- never $VERITY_TREE, never a default path.  The former
-    `REPO = os.environ.get(<tree variable>, <the pod's default tree>)` made a Commit under --gpu-tree without the variable import verity.primitives.circuits
+    `REPO = os.environ.get(<tree variable>, <the pod's default tree>)` made a Commit under --gpu-tree without the variable import verity.ml.circuits
     from the pod's DEFAULT tree while verity_vllm ran the release (tp M-1830).  This file is shipped at
     <tree>/verity_vllm/commit/committer/hidden_gpu_src/ and materialised at <tree>/out/gen/r9/cmt-hidden/src/ (pod_hidden_gpu.sh), so the tree
     is found by walking up to the first ancestor holding verity_vllm/ -- the same answer from either copy."""

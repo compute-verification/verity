@@ -5,10 +5,15 @@
 #     sudo, docker or adm), so it reads neither /home/research (0750) nor /etc/verity's keys. It never runs outside a unit
 #     vy-lean-sandbox starts: nothing else runs as it, and sshd lets only research in;
 #   - /build (root, 0755), where `vy-lean-sandbox checkout` makes /build/verity, and /opt/elan (root, 0755, empty), the toolchain's
-#     mount point inside the unit, which systemd would otherwise make on the host's disk.
+#     mount point inside the unit, which systemd would otherwise make on the host's disk;
+#   - DATA (/workspace/lean-build, root, 0755) with build/, bind-mounted on /build by /etc/fstab, and deps/, run-daily's copies of
+#     each package's dependencies: ~40 GB that would otherwise land on the root disk, which filled on 6 Oct. The line has nofail
+#     (a missing /workspace must not stop the boot); vy-lean-cache-daily.service requires the mount, so no build runs without it.
 # Then it checks all of that from lean-build's side, and exits 1 when something doesn't hold.
 set -euo pipefail
 U=${VY_LEAN_BUILD_USER:-lean-build}
+DATA=${VY_LEAN_BUILD_DATA:-/workspace/lean-build}
+BIND="$DATA/build /build none bind,nofail,x-systemd.requires-mounts-for=/workspace 0 0"
 FORBIDDEN="root research sudo wheel docker adm"
 log() { echo "vy-lean-build-setup: $*"; }
 [ "$(id -u)" = 0 ] || { log "run as root"; exit 2; }
@@ -25,7 +30,17 @@ for g in $(id -nG "$U"); do
 done
 [ "$(getent passwd "$U" | cut -d: -f7)" = /usr/sbin/nologin ] || usermod --shell /usr/sbin/nologin "$U"
 passwd -S "$U" | awk '{exit $2 == "L" ? 0 : 1}' || usermod --lock "$U"
-install -d -o root -g root -m 0755 /build /opt/elan
+install -d -o root -g root -m 0755 /build /opt/elan "$DATA" "$DATA/build" "$DATA/deps"
+if ! grep -qxF "$BIND" /etc/fstab; then
+  echo "$BIND" >> /etc/fstab
+  systemctl daemon-reload
+  log "added /build's bind from $DATA/build to /etc/fstab"
+fi
+if ! mountpoint -q /build; then
+  [ -z "$(ls -A /build)" ] || { log "/build isn't mounted and isn't empty: move what's in it to $DATA/build, then run again"; exit 1; }
+  mount /build
+  log "mounted $DATA/build on /build"
+fi
 
 bad=0
 fail() { log "FAIL: $*"; bad=1; }
@@ -43,8 +58,9 @@ for p in /etc/verity/* /etc/shadow; do
   [ -f "$p" ] || continue
   ! as test -r "$p" || fail "$U can read $p"
 done
-for p in / /build /opt/elan /usr/local/bin; do
+mountpoint -q /build && [ "$(stat -c %d /build)" = "$(stat -c %d "$DATA")" ] || fail "/build isn't $DATA/build mounted"
+for p in / /build /opt/elan /usr/local/bin "$DATA" "$DATA/deps"; do
   ! as test -w "$p" || fail "$U can write $p"
 done
 [ "$bad" = 0 ] || exit 1
-log "$U (uid $(id -u "$U")): no login, no sudo, in no group but its own; /build and /opt/elan root's"
+log "$U (uid $(id -u "$U")): no login, no sudo, in no group but its own; /build ($DATA/build), $DATA/deps and /opt/elan root's"

@@ -44,9 +44,9 @@ class Term:
 
 
 def ncp_terms(m: int, k: int, n: int) -> list[Term]:
-    """Route U at β = 128, f = 24, with sub-word extraction priced (``internal/pouw/new-crypto/ncp-accounting.md``, 03:50Z):
+    """Route U at β = 128, f = 24, with sub-word extraction priced (03:50Z):
     the schedule whose biased accumulator is ``ncp-v1``'s checked values (Lean `wrefU 24`).  The retired unbiased sums would
-    cost 36 units per position (γ = 1.08% at n = 2,048; ``route-u-checkpoints.md``)."""
+    cost 36 units per position (γ = 1.08% at n = 2,048)."""
     return [
         Term("GEMM m x 3k x n, int8 mma (u8 x s8)", 3 * m * k * n * MAC_INT8, True, "the credited work"),
         Term("E_1 fields from hash output, one LOP3 per 4", 4 * m * k, True),

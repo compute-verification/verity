@@ -74,7 +74,7 @@ def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None,
 
 
 def window_row(window_run: str, audit_run: str, audit: dict, proving: dict[str, str]) -> dict:
-    """A salt-to-deadline window's row from its audit (`benchmarks/pouw/exhaustion/audit.py`'s audit.json), refused unless
+    """A salt-to-deadline window's row from its audit (`archive/pouw-blake3/exhaustion/audit.py`'s audit.json), refused unless
     every check of the audit held."""
     if not audit.get("ok"):
         bad = [c["check"] for c in audit.get("checks", []) if not c["ok"]]
@@ -119,9 +119,9 @@ def markdown(table: dict) -> str:
                 lines.append(f"| {r['model']} | `{r['quality']['run']}` | {mode} | {q.get('scheme') or '—'} | "
                              f"{q['perplexity']:.4f} | {q.get('top1_agreement_vs_bf16', float('nan')):.4f} | "
                              f"{q.get('greedy_token_agreement_vs_bf16', float('nan')):.4f} |")
-        lines += ["", "The quality runs' pearlc-v1 is `pearl-c-sm120-v1-h1` (window.sh MODE=perplexity pins it), not the "
-                  "served `-h2`: the two differ only in their Merkle trees (`frame-b3` against `frame-b3s`). The noise seeds "
-                  "hash A's and B's roots, so an -h1 run draws other noise than an -h2 run, as another salt does; the "
+        lines += ["", "A quality run's scheme may name another hashing format than the served `-h3` (runs before 2026-10-06 "
+                  "ran `pearl-c-sm120-v1-h1`): the formats differ only in their hashes. The noise seeds hash A's and B's "
+                  "roots, so a run under one format draws other noise than a run under another, as another salt does; the "
                   "forming, the chain and the peel are the same."]
     for r in table["models"]:
         if "forming" in r:
@@ -148,7 +148,7 @@ def markdown(table: dict) -> str:
         fr = [w["fraction"] for w in windows]
         lines += ["", "A replay audit is a diagnostic, not a verification (Daniel, 2026-10-04 4:06 PM PDT): only a sampled "
                   "proof over C-Flock with ZK verifies a computation. Each window's audit recomputes its drawn tiles on the "
-                  "CPU (`benchmarks/pouw/exhaustion/audit.py`), so its fraction is the replay diagnostic: certified = "
+                  "CPU (`archive/pouw-blake3/exhaustion/audit.py`), so its fraction is the replay diagnostic: certified = "
                   "(1 − γ)(1 − ε_s)·credited / capacity, the lower end at δ_s = 1/20 over the audit's draws; uncertified = "
                   "credited / capacity, with capacity the cards' fastest cuBLASLt FP8 GEMMs in the window (before and after, "
                   "averaged). The overhead is capacity / credited, the served kernel's time per GEMM over cuBLASLt's. Proving "

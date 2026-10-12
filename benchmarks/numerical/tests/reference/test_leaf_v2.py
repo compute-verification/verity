@@ -12,7 +12,7 @@ from array import array
 from pathlib import Path
 
 import pytest
-from verity.primitives.commitments.leaves import LeafOpening, verify_opening
+from verity.ml.commitments.leaves import LeafOpening, verify_opening
 from verity_numerical.reference import leaf_v2 as v2
 
 REPO = Path(__file__).resolve().parents[4]
@@ -109,7 +109,7 @@ def test_layout_and_digest_structure(world):
     # a v1 LeafOpening-style path check works on the digest level unchanged
     op = LeafOpening(tree.tree_id, tree.root, 3, tree.index_of(x.canonical_id), x.canonical_id, "bfloat16", x.shape, b"", tree.path(x.canonical_id))
     assert verify_opening(tree.root, 3, op) is False            # v1 would hash the (empty) bytes: v2 digests are not v1 leaves
-    from verity.primitives.commitments.leaves import fold_path
+    from verity.ml.commitments.leaves import fold_path
     assert fold_path(x.digest, op.index, op.path) == tree.root
 
 

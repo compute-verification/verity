@@ -1,0 +1,19 @@
+{
+ "roots": ["MemoryChallenger"],
+ "exempt": {
+  "MemoryChallenger.Main": "the memory-challenger executable's entry point, one line; its command is Core.Protocol.main of MemoryChallenger.protocol, audited under MemoryChallenger",
+  "MemoryChallenger.TestMain": "the memory-challenger-test executable's entry point, one line; its command is Core.Protocol.main of MemoryChallenger.testProtocol, audited under MemoryChallenger",
+  "MemoryChallenger.VerdictMain": "the memory-challenger-verdict executable's entry point, one line; it serves MemoryChallenger.Judge.verdictFn, audited under MemoryChallenger, through the difftest server's line protocol",
+  "MemoryChallenger.DifftestMain": "the memory-challenger-difftest executable's entry point, one line; it serves MemoryChallenger.Difftest.table, audited under MemoryChallenger, a test and not a proof"
+ },
+ "layers": {
+  "MemoryChallenger": {
+   "imports": ["Flock", "Randomness", "Lms", "CoreProtocol", "MemoryChallenger"],
+   "except": ["MemoryChallenger.Difftest"],
+   "why": "the verdict is code: Lean core, C-Flock's hashes, bytes, canonical JSON and hm96, core's randomness, LMS and protocol interface; no Mathlib and nothing of Security. The difftest's table (MemoryChallenger.Difftest) also imports the difftest server"
+  }
+ },
+ "dependencies": {
+  "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
+ }
+}

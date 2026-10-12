@@ -6,10 +6,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.constants import program_data
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.constants import program_data
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.program import Program
 from verity_vllm.program.registry import b1, hopper
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import prims as P
@@ -95,7 +95,7 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
 
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
-    from verity_vllm.program.registry.serve3_reference import materialize
+    from verity_vllm.program.kernels.serve3_reference import materialize
 
     C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
     with torch.device("meta"):
