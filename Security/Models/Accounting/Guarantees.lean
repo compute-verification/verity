@@ -1,3 +1,4 @@
+import Models.Accounting.Guarantees.Memory
 import Models.Accounting.Guarantees.Sketch
 import Models.Accounting.Guarantees.Tag
 
