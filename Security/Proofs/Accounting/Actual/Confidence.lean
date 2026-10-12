@@ -70,7 +70,7 @@ theorem causalFrom_comp {Ω Ω' L : Type*} [LinearOrder L] {S : Ω → Actual.Ru
 theorem global_of_causal {Ω L : Type*} [LinearOrder L] {S : Ω → Actual.Run L} (h : CausalFrom S) (P : Finset L)
     (hP : ∀ r r', (S r).inputs ↑P = (S r').inputs ↑P) (t : ℕ) (r r' : Ω)
     (hr : (S r).crossing (↑P)ᶜ ↑P (Set.Iio t) = (S r').crossing (↑P)ᶜ ↑P (Set.Iio t)) :
-    (S r).acts ↑P (Set.Iio t) = (S r').acts ↑P (Set.Iio t) := by
+    (S r).acts P (Set.Iio t) = (S r').acts P (Set.Iio t) := by
   have hio : Set.Iio t = Set.Ico 0 t := by ext; simp
   rw [hio] at hr ⊢
   exact h P 0 t r r' (content_congr (by rw [state_zero, state_zero, hP r r'])) hr
