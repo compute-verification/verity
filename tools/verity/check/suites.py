@@ -1266,7 +1266,7 @@ def _durations() -> dict[str, float]:
 
 
 def longest(suite: Suite, n: int) -> list[str]:
-    """The ``n`` tests of ``suite`` whose calls took longest when their passes were last kept (`PerTest`), longest first: what
+    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: what
     the guard starts at the heads of the workers' shares (`heavy_first`). An order only, which no key or verdict reads."""
     d = per_test_dir(suite)
     last: dict[str, tuple[str, float]] = {}
@@ -1297,7 +1297,7 @@ class Result:
     watched: list | None = None      # workspace metadata files the tests read
     distributions: list | None = None    # installed distributions the tests imported
     missing: list | None = None      # top-level imports that found nothing
-    passed: dict | None = None       # node id -> call seconds, for each test that passed
+    passed: dict | None = None       # node id -> setup and call seconds, for each test that passed
     failed_tests: list | None = None     # node ids of the tests that failed
     reads: dict | None = None        # test module (or "*") -> the suite's other test modules it opened
     reused: int = 0                  # tests left out because a kept pass answers for them (`PerTest`)

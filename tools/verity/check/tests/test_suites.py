@@ -1278,6 +1278,20 @@ def _guard(monkeypatch):
     return mod
 
 
+def test_a_passed_test_s_seconds_hold_its_setup_so_a_module_fixture_s_first_test_counts_as_heavy(monkeypatch):
+    """Ordering by call alone started `test_lean_witness`'s tests late behind 1,270-1,475 s of their `f1` setup per worker
+    (proofs, 12 Oct); the teardown is not counted, and a failed phase still drops the test."""
+    from types import SimpleNamespace as R
+
+    G = _guard(monkeypatch)
+    for node, phases in (("t::fixture_first", [("setup", "passed", 1200.0), ("call", "passed", 1.5), ("teardown", "passed", 9.0)]),
+                         ("t::plain", [("setup", "passed", 0.25), ("call", "passed", 3.0), ("teardown", "passed", 0.0)]),
+                         ("t::bad", [("setup", "passed", 5.0), ("call", "failed", 1.0), ("teardown", "passed", 0.0)])):
+        for when, outcome, s in phases:
+            G.pytest_runtest_logreport(R(nodeid=node, when=when, outcome=outcome, duration=s, keywords={"slow": 1}))
+    assert G._outcomes == {"t::fixture_first": 1201.5, "t::plain": 3.25, "t::bad": None}
+
+
 def test_each_heavy_test_heads_its_own_worker_s_share_under_worksteal(monkeypatch):
     """The placement matches the split of the pinned pytest-xdist's `worksteal`: each worker is sent a contiguous share at
     once, and runs it from the head, while steals take from the tail."""
