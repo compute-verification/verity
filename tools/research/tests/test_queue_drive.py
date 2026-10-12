@@ -13,7 +13,7 @@ from test_queue import World, _git
 
 class Harness:
     def __init__(self, world: World, monkeypatch, **kw):
-        self.world, self.launched, self.posts, self.after = world, [], [], []
+        self.world, self.launched, self.posts, self.after, self.cancelled = world, [], [], [], []
         self.run_state: dict[str, tuple] = {}
         self.clock = 1_000_000.0
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
@@ -21,7 +21,8 @@ class Harness:
         monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
         self.q = world.queue(**kw)
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
-                        post=lambda text: self.posts.append(text) or True, now=lambda: self.clock)
+                        post=lambda text: self.posts.append(text) or True, now=lambda: self.clock,
+                        cancel=lambda repo, ids, reason: self.cancelled.extend(ids))
 
     def launch(self, repo, commit, machine, agreement):
         rid = f"r20261012-0000{len(self.launched):02d}-abcd"
@@ -227,3 +228,4 @@ def test_a_move_of_main_sharing_a_file_with_the_running_train_rebuilds_next(worl
     _git(world.dev, "push", "-q", "origin", f"{other}:refs/heads/main")
     h.tick()
     assert _tip(world) != old
+    assert h.cancelled == ["r20261012-000000-abcd"]               # the old tip's check, still waiting, is cancelled

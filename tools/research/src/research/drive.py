@@ -96,6 +96,12 @@ def run_states(repo: Path, ids: list[str]) -> dict[str, tuple[str, int | None, s
     return out
 
 
+def cancel_runs(repo: Path, ids: list[str], reason: str) -> None:
+    for rid in ids:
+        subprocess.run([sys.executable, "-m", "research", "cancel", rid, "--by", "ci", "--reason", reason], cwd=repo,
+                       capture_output=True, text=True)
+
+
 def merge_thread_post(text: str) -> bool:
     r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", "ci", "--thread", _merge_thread(), "--to", LANDER,
                         "--quiet", "--text", text], capture_output=True, text=True)
@@ -121,11 +127,11 @@ class Driver:
     def __init__(self, q: Queue, *, on: str, max_running: int = 2, train_size: int = 4,
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str], bool] = merge_thread_post,
-                 now: Callable[[], float] = time.time):
+                 now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
-        self.launch, self.states, self.post, self.now = launch, states, post, now
+        self.launch, self.states, self.post, self.now, self.cancel = launch, states, post, now, cancel
         self.repo = q.workdir
 
     # -- what the store says of a commit
@@ -303,6 +309,13 @@ class Driver:
         for n, c in state.get("conflicts", {}).items():
             self.refuse(drive, f"conflict:{n}@{c['head']}", f"#{n} at {c['head'][:8]} is out of `{q.branch}`: {c['why']}")
         on_chain = {m.commit for m in members}
+        for c, v in drive["launched"].items():
+            if c not in on_chain and not dry_run:
+                live = [rid for rid, (st, _, _) in self.states(self.repo, v["ids"]).items()
+                        if st in ACTIVE and st != "unknown"]
+                if live:
+                    self.cancel(self.repo, live, f"drive: {c[:12]} is no longer on `{q.branch}` (rebuilt); no check of it lands")
+                    q.log(f"research queue drive: cancelled {' '.join(live)}: {c[:12]} is no longer on `{q.branch}`")
         drive["launched"] = {c: v for c, v in drive["launched"].items() if c in on_chain}
         what = [f"landed #{landed.pr}"] if landed else []
         main = _out(self.repo, "rev-parse", "origin/main")
