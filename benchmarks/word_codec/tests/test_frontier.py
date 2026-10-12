@@ -38,10 +38,21 @@ def test_frontier_takes_the_lowest_y_at_x_at_least_x_star():
     assert F.x_star(0.6, budget) == pytest.approx(80.0) and F.x_star(0.6, budget, 1.6) == pytest.approx(200.0)
     pts = F.check([point(y_total=1.5, x=150.0), point(y_total=1.7), point(y_total=1.6), point(batch=32, y_total=1.9),
                    point(batch=32, y_total=2.0, x=300.0), point(y_total=1.0, reference=True)])
-    best = F.frontier(pts, budget)
+    best = F.frontier(pts, budget, idle=0.0, boost=1.0)
     assert best[1]["y_total"] == 1.6 and best[32]["y_total"] == 2.0
-    assert F.frontier(pts, budget, d=1.0)[1]["y_total"] == 1.5
-    assert "| 1 | 521 | 1 |" in F.table(pts, budget) and "none at x ≥ x*" in F.table(pts, budget, batches=(8,))
+    assert F.frontier(pts, budget, d=1.0, idle=0.0, boost=1.0)[1]["y_total"] == 1.5
+    assert "| 1 | 521 | 1 |" in F.table(pts, budget, idle=0.0, boost=1.0)
+    assert "none at x ≥ x*" in F.table(pts, budget, batches=(8,), idle=0.0, boost=1.0)
+
+
+def test_frontier_adds_the_idle_share_to_d_and_grants_the_adversary_the_boost():
+    budget = 0.005
+    # y 1.6 + idle 0.37 − τ 0.6 = 1.37: x* = 274; x 300 is 258.6 at 1.16×, 300 when the point says it is boosted
+    p, q = point(y_total=1.6, x=300.0), point(y_total=1.6, x=300.0, x_boosted=True, arithmetic="b")
+    assert F.step(p, None) == pytest.approx(1.97) and F.x_eff(p) == pytest.approx(300 / 1.16)
+    assert F.frontier(F.check([p]), budget) == {}
+    assert F.frontier(F.check([p, q]), budget)[1]["arithmetic"] == "b"
+    assert F.frontier(F.check([p]), budget, idle=0.10)[1]["x"] == 300.0
 
 
 def test_best_per_config_keeps_the_lowest_y_of_each_configuration():

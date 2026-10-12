@@ -9,16 +9,19 @@ and this script selects them all (`research data select --kind codec-frontier-po
 `--file` paths, and draws:
 - x, the encode time of one pass's data in native passes, on a log scale, with μ_rebuild = (d − τ)/x on a secondary
   axis (at d = 1 and `--tau`, default the median τ of the points); μ_rebuild's numerator is d − τ, d the step's time in
-  passes of E (the red team's correction: the adversary's spare compute is the whole step), so x* = (d − τ)/μ_budget is
-  a curve: a vertical line at x* for d = 1 at each tag's τ, and the boundary y = τ + μ_budget·x for d = y (μ_budget =
-  0.5% leaves γ = 1% after μ_chip and μ_sample, the brief's budget);
+  passes of E (the red team's F1: the adversary's spare compute is the whole step), so x* = (d − τ)/μ_budget is a
+  curve: a vertical line at x* for d = 1 at each tag's τ, and the boundary y = τ − idle + μ_budget·x for
+  d = y + idle (μ_budget = 0.5% leaves γ = 1% after μ_chip and μ_sample, the brief's budget). d is the point's y_total
+  plus `--idle`, the step's time outside the linears in passes of E (0.37 at 8B, 0.10 at 70B, the red team's), and x is
+  the point's over `--boost`, the adversary's clock over the locked clock the points were timed at (1.16), unless the
+  point's `x_boosted` says its x grants that already;
 - y, fused decode-step time over native at Llama-3.1-8B's linears, layer-weighted, as a stacked bar per point
   (base, decode, tag, commit) at batch 1 and batch 32 side by side, with a horizontal line at 2×;
 - measured points filled, modelled points hollow, reference points (P2) as stars;
 - one bar per configuration, the lowest y_total of each (lane, b, k, batch, measured) over runs and kernel variants
   (`--all` draws every point);
-and prints the frontier, the lowest y_total at x ≥ x* at each batch (d = the point's y_total unless `--d` fixes it).
-Never commit the image or the table.
+and prints the frontier, the lowest y_total at x ≥ x* at each batch (d = the point's y_total + idle unless `--d`
+fixes it). Never commit the image or the table.
 
 Schema `verity/codec-frontier-point/v0`, one object per (configuration, batch):
 
@@ -34,6 +37,7 @@ y_tag       the tag's increment, / native
 y_commit    the commit's time, / native
 y_base      optional: the fused kernel's time on payloads (no decode, no tag) / native; default y_total − the three
 x           encode time of one pass's data in native passes (the adversary's best encode)
+x_boosted   optional: true when x already grants the adversary the clock boost (default false: x at the locked clock)
 delta       decode's share of compute per native pass (Δ)
 tau         the tag's share (τ)
 measured    true for a measured point, false for a modelled one
@@ -56,6 +60,8 @@ from pathlib import Path
 SCHEMA = "verity/codec-frontier-point/v0"
 KIND = "codec-frontier-points/v0"
 REQUIRED = ("b", "k", "arithmetic", "batch", "y_total", "y_decode", "y_tag", "y_commit", "x", "tau")
+IDLE_8B = 0.37  # the step outside Llama-3.1-8B's linears, in passes of E (red team, F1)
+BOOST = 1.16    # the RTX PRO 6000's boost clock over the locked 2,092 MHz (red team)
 
 
 def research(*args: str) -> str:
@@ -93,15 +99,22 @@ def x_star(tau: float, budget: float, d: float = 1.0) -> float:
     return (d - tau) / budget
 
 
-def step(p: dict, d: float | None) -> float:
-    """d, the step's time in passes of E: `--d`, else the point's own y_total (at least one pass)."""
-    return max(1.0, p["y_total"]) if d is None else d
+def step(p: dict, d: float | None, idle: float = IDLE_8B) -> float:
+    """d, the step's time in passes of E: `--d`, else the point's own y_total plus the step's idle share (at least one
+    pass)."""
+    return max(1.0, p["y_total"] + idle) if d is None else d
 
 
-def frontier(points: list[dict], budget: float, d: float | None = None) -> dict[int, dict | None]:
+def x_eff(p: dict, boost: float = BOOST) -> float:
+    """The point's x at the adversary's clock."""
+    return p["x"] if p.get("x_boosted") else p["x"] / boost
+
+
+def frontier(points: list[dict], budget: float, d: float | None = None, idle: float = IDLE_8B,
+             boost: float = BOOST) -> dict[int, dict | None]:
     best = {}
     for p in points:
-        if p.get("reference") or p["x"] < x_star(p["tau"], budget, step(p, d)):
+        if p.get("reference") or x_eff(p, boost) < x_star(p["tau"], budget, step(p, d, idle)):
             continue
         b = best.get(p["batch"])
         if b is None or p["y_total"] < b["y_total"]:
@@ -109,18 +122,19 @@ def frontier(points: list[dict], budget: float, d: float | None = None) -> dict[
     return best
 
 
-def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = None) -> str:
-    lines = ["| batch | b | k | arithmetic | x | x* | μ_rebuild | y_total | decode | tag | commit | measured | source |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-    best = frontier(points, budget, d)
+def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = None, idle: float = IDLE_8B,
+          boost: float = BOOST) -> str:
+    lines = ["| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | y_total | decode | tag | commit | measured "
+             "| source |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    best = frontier(points, budget, d, idle, boost)
     for mb in batches:
         p = best.get(mb)
         if p is None:
             lines.append(f"| {mb} | none at x ≥ x* | | | | | | | | | | | |")
             continue
-        dd = step(p, d)
-        lines.append(f"| {mb} | {p['b']} | {p['k']} | {p['arithmetic']} | {p['x']:.0f} | {x_star(p['tau'], budget, dd):.0f} "
-                     f"| {(dd - p['tau']) / p['x'] * 100:.2f}% | {p['y_total']:.2f} | {p['y_decode']:.2f} "
+        dd, xe = step(p, d, idle), x_eff(p, boost)
+        lines.append(f"| {mb} | {p['b']} | {p['k']} | {p['arithmetic']} | {xe:.0f} | {x_star(p['tau'], budget, dd):.0f} "
+                     f"| {(dd - p['tau']) / xe * 100:.2f}% | {p['y_total']:.2f} | {p['y_decode']:.2f} "
                      f"| {p['y_tag']:.2f} | {p['y_commit']:.2f} | {'yes' if p['measured'] else 'model'} "
                      f"| {p.get('art') or p.get('run') or p.get('lane')} |")
     return "\n".join(lines)
@@ -138,7 +152,7 @@ def best_per_config(points: list[dict]) -> list[dict]:
 
 
 def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, batches=(1, 32),
-         show_all: bool = False) -> None:
+         show_all: bool = False, idle: float = IDLE_8B, boost: float = BOOST) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -156,7 +170,7 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
     colors = {"base": "#9e9e9e", "decode": "#1f77b4", "tag": "#ff7f0e", "commit": "#2ca02c"}
     offset = {mb: 1.0 + 0.09 * (i - (len(batches) - 1) / 2) for i, mb in enumerate(batches)}
     for p in pts:
-        xc = p["x"] * offset[p["batch"]]
+        xc = x_eff(p, boost) * offset[p["batch"]]
         width = xc * 0.07
         bottom = 0.0
         for part, key in (("base", "y_base"), ("decode", "y_decode"), ("tag", "y_tag"), ("commit", "y_commit")):
@@ -184,12 +198,13 @@ def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, ba
             ax.text(xs, ax.get_ylim()[1] * 0.97, f" x* (d=1, τ={tau:.2f})", fontsize=7, va="top", rotation=90)
     lo, hi = ax.get_xlim()
     xx = np.geomspace(lo, hi, 200)
-    ax.plot(xx, tau_ref + budget * xx, color="purple", linewidth=1)
-    ax.text(hi, tau_ref + budget * hi, f"y = τ + {budget:g}·x (x* at d = y, τ={tau_ref:.2f}) ", color="purple",
-            fontsize=7, ha="right", va="bottom")
+    ax.plot(xx, tau_ref - idle + budget * xx, color="purple", linewidth=1)
+    ax.text(hi, tau_ref - idle + budget * hi, f"y = τ − {idle:g} + {budget:g}·x (x* at d = y + {idle:g}, "
+            f"τ={tau_ref:.2f}) ", color="purple", fontsize=7, ha="right", va="bottom")
     ax.set_xlim(lo, hi)
     ax.set_ylim(0, max(3.0, max(p["y_total"] for p in pts) * 1.1))
-    ax.set_xlabel("x: encode time of one pass's data, in native passes (log)")
+    ax.set_xlabel(f"x: encode time of one pass's data, in native passes, at the adversary's clock (÷{boost:g} where "
+                  "timed locked; log)")
     ax.set_ylabel("y: fused decode step / native, Llama-3.1-8B linears, layer-weighted")
 
     def mu(x):
@@ -213,7 +228,12 @@ def main() -> int:
     ap.add_argument("--out", help="the image to write (not into the repository)")
     ap.add_argument("--budget", type=float, default=0.005, help="μ_rebuild's share of γ (default 0.5%%)")
     ap.add_argument("--tau", type=float, help="τ for the secondary axis (default: the points' median)")
-    ap.add_argument("--d", type=float, help="the step's time in passes of E for x* (default: each point's y_total)")
+    ap.add_argument("--d", type=float, help="the step's time in passes of E for x* (default: each point's y_total + "
+                    "--idle)")
+    ap.add_argument("--idle", type=float, default=IDLE_8B,
+                    help=f"the step outside the linears, in passes of E (default {IDLE_8B}, 8B; 0.10 at 70B)")
+    ap.add_argument("--boost", type=float, default=BOOST,
+                    help=f"the adversary's clock over the points' locked clock (default {BOOST})")
     ap.add_argument("--batches", default="1,32")
     ap.add_argument("--p2", help="X,Y,TAU: P2 as a modelled reference point")
     ap.add_argument("--all", action="store_true", help="draw every point, not the best of each configuration")
@@ -232,9 +252,9 @@ def main() -> int:
                            "y_total": y, "y_decode": 0.0, "y_tag": 0.0, "y_commit": 0.0, "y_base": y, "x": x,
                            "tau": tau, "measured": False, "reference": True, "label": "P2"})
     points = check(points)
-    print(table(points, a.budget, batches, a.d))
+    print(table(points, a.budget, batches, a.d, a.idle, a.boost))
     if a.out:
-        draw(points, Path(a.out), a.budget, a.tau, batches, a.all)
+        draw(points, Path(a.out), a.budget, a.tau, batches, a.all, a.idle, a.boost)
         print(f"wrote {a.out}")
     return 0
 
