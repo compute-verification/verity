@@ -282,7 +282,7 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
     # timing
     ring = {}
     for lay, (kr, wbuf) in layouts.items():
-        copies = max(2, -(-WB.L2_DEFEAT_BYTES // (wbuf.numel() * wbuf.element_size()))) if a.mode == "bench" else 1
+        copies = max(2, -(-a.ring_bytes // (wbuf.numel() * wbuf.element_size()))) if a.mode == "bench" else 1
         ring[lay] = [wbuf] + [wbuf.clone() for _ in range(copies - 1)]
     wring = [w] + [w.clone() for _ in range(len(ring["plain"]) - 1)]
     res["copies"] = {lay: len(r) for lay, r in ring.items()}
@@ -559,7 +559,6 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
                 times[k].append(t / len(ring[lay]))
                 host_max = max(host_max, h)
         med = {k: statistics.median(v) for k, v in times.items()}
-        native = min(med["cublas"], med["plain_ws"])
         # each arm at its fastest configuration
         best_s, best_cfg = {}, {}
         for k, v in med.items():
@@ -568,6 +567,8 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
             alts = [(v, cfg_name(cfg))] + [(med[f"{k}@{cfg_name(c)}"], cfg_name(c)) for c in extra
                                            if f"{k}@{cfg_name(c)}" in med]
             best_s[k], best_cfg[k] = min(alts)
+        # this kernel without the sketch is an FP8 GEMM too (faster than both under SK_L2_EF)
+        native = min(med["cublas"], med["plain_ws"], best_s["base_plain"])
         res["times"][mb] = {"median_s": med, "best_s": best_s, "best_cfg": best_cfg, "times_s": times,
                             "native_s": native, "launched": launched,
                             "host_enqueue_max_s": host_max, "host_bound": host_max > 0.8 * spin_s,
@@ -652,7 +653,7 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
                 stores[name] = WB.plain_layout(wb)
             sks[name] = Sketch(lib, torch, n, kd, S.PLAIN if kr == 0 else lib.bits, ks, nt, warps_of(n, kd))
         layer_bytes = sum(v.numel() * v.element_size() for v in stores.values())
-        nl = max(2, -(-WB.L2_DEFEAT_BYTES // layer_bytes))
+        nl = max(2, -(-a.ring_bytes // layer_bytes))
         ring = [stores] + [{k: v.clone() for k, v in stores.items()} for _ in range(nl - 1)]
         wring = [{k: v.t() for k, v in fp8.items()}] + [{k: v.clone().t() for k, v in fp8.items()}
                                                         for _ in range(nl - 1)]
@@ -915,6 +916,8 @@ def main() -> int:
                          "the rest for k=16, n=4096 (each arm's fastest is the frontier's)")
     ap.add_argument("--committers", type=int, default=2, help="committer warps a CTA in the fused arm")
     ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--ring-bytes", type=int, default=WB.L2_DEFEAT_BYTES,
+                    help="each timed ring's bytes (copies of a linear's store, or layers of the sequence)")
     ap.add_argument("--full-tags", default="o", help="the linear whose every tag is checked against the reference")
     ap.add_argument("--mode", default="bench", choices=["bench", "ncu"])
     a = ap.parse_args()
