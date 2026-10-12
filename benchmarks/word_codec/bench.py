@@ -316,6 +316,35 @@ def rates(lib: Lib, torch, sms: int, reps: int, log) -> dict:
     return out
 
 
+def additivity(lib: Lib, torch, sms: int, reps: int, log) -> dict:
+    """Whether the rebuild's work and the tag's or the commit's add on the SM or overlap on its pipes: chain_mix runs
+    U = 4 encode chains (k = 1) and one hash chain of R compressions a step in each thread, R chosen so the two alone take
+    about as long; additivity a = T(mix) / (T(encode alone) + T(hash alone)), 1 when they add, 1/2 when one hides the
+    other entirely. Balanced, the hash costs the rebuild 2a − 1 of its time alone."""
+    blocks, steps = sms * 6, 64
+    threads = blocks * 256
+    set_key(lib, torch, C.key(SEED, KMAX))
+    enc = chain_rate(lib, torch, 1, 1, 4, steps, sms, reps)
+    tstep = C.key(SEED, 1).tau * (4 * threads % C.P) % C.P
+    xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+    st = stream(torch)
+    out = {"steps": steps, "encode_alone_s": enc["median_s"], "encode_alone_times_s": enc["times_s"]}
+    for h, what, name in ((0, 4, "blake3_v0"), (1, 6, "blake3_v1"), (2, 5, "sha512")):
+        one = chain_rate(lib, torch, what, 1, 1, steps, sms, reps)
+        r = max(1, round(enc["median_s"] / one["median_s"]))
+        alone = chain_rate(lib, torch, what, 1, 1, steps * r, sms, reps)
+        ts = timed(torch, lambda: lib.call("wc_chain", 7, h, r, steps, tstep, ptr(xr), blocks, st), reps)
+        mix = statistics.median(ts)
+        total = enc["median_s"] + alone["median_s"]
+        out[name] = {"R": r, "hash_alone_s": alone["median_s"], "hash_alone_times_s": alone["times_s"], "mix_s": mix,
+                     "mix_times_s": ts, "additivity": mix / total,
+                     "max_over_sum": max(enc["median_s"], alone["median_s"]) / total}
+        log(f"additivity {lib.name} encode + {name} (R {r}): alone {enc['median_s'] * 1e3:.3f} + "
+            f"{alone['median_s'] * 1e3:.3f} ms, together {mix * 1e3:.3f} ms: a = {mix / total:.3f} "
+            f"(1 adds, {out[name]['max_over_sum']:.3f} hides)")
+    return out
+
+
 def tag_memory(lib: Lib, torch, store, sms: int, reps: int) -> dict:
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     ts = timed(torch, lambda: lib.call("wc_tag", ptr(store), store.numel(), 0x2545F491 & 0x7FFFFFFF, ptr(xr), sms * 16,
@@ -794,7 +823,9 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
     `window` is the timed window in native steps (the tagging step, or the audit pass and its commit); c, the commit's
     SHA-512 compressions (5 a leaf, 2 a node, leaves − 1 nodes) at the compute-only rate; and
     mu_rebuild_window = (window − τ − c) / x the rebuild term in it: the adversary, who knows the weights, skips the
-    decode and spends the window less the tag and the commit on rebuilding."""
+    decode and spends the window less the tag and the commit on rebuilding. That subtraction takes the tag's and the
+    commit's work to add to the rebuild's; mu_rebuild_window_overlap charges them only what the additivity chains measure
+    they cost beside it (τ (2a − 1), c (2a − 1), the BLAKE3 form cheapest so)."""
     cw = res.get("commit_window")
     rates_of = {l.name: res["libs"][l.name].get("rates", {}) for l in libs}
     enc_best, dec_best = {}, {}
@@ -804,6 +835,11 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                 best[int(k)] = max(best.get(int(k), 0.0), e["per_s"])
     b3_best = max((r["b3"]["compressions_s"] for r in rates_of.values() if "b3" in r), default=None)
     sha_best = max((r["sha512"]["compressions_s"] for r in rates_of.values() if "sha512" in r), default=None)
+    form_rates = {}
+    for r in rates_of.values():
+        for f, v in r.get("b3", {}).get("by_form", {}).items():
+            form_rates[f.split("_")[0]] = max(form_rates.get(f.split("_")[0], 0.0), v["per_s"])
+    add = res.get("additivity")
     points = []
     for key in [k for k in res if k == "gemm" or k.startswith("gemm_") and isinstance(res[k], dict)]:
         cases = res[key]
@@ -883,6 +919,14 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                         pt["mu_rebuild_native"] = (1 - pt["tau_native"]) / pt["x_native"]
                         pt["mu_rebuild_window"] = ((window - pt["tau_native"] - pt.get("c_commit_native", 0.0))
                                                    / pt["x_native"])
+                    if add and form_rates and "c_commit_native" in pt and "x_native" in pt:
+                        cost = {f: max(0.0, 2 * add[f"blake3_{f}"]["additivity"] - 1) for f in form_rates
+                                if f"blake3_{f}" in add}
+                        pt["tau_overlap"] = min(blocks * B3_LANE_COMPRESSIONS / form_rates[f] / nat * cost[f]
+                                                for f in cost)
+                        pt["c_overlap"] = pt["c_commit_native"] * max(0.0, 2 * add["sha512"]["additivity"] - 1)
+                        pt["mu_rebuild_window_overlap"] = ((window - pt["tau_overlap"] - pt["c_overlap"])
+                                                           / pt["x_native"])
                     points.append(pt)
     shared = [{"schema": "verity/codec-frontier-point/v0", "lane": "ra-word-codec", "b": 61, "k": p["k"],
                "arithmetic": f"cuda-int32/mersenne61/{p['lib']}/pb{p['payload_bits']}/ws/commit-{p['commit']}",
@@ -891,6 +935,7 @@ def frontier_points(res: dict, libs: list[Lib]) -> dict:
                "y_tag": p["stack"]["tag"], "y_commit": p["stack"]["commit"], "x": p["x_native"],
                "delta": p.get("delta_native"), "tau": p["tau_native"], "measured": True,
                "window": p["window"], "c_commit": p.get("c_commit_native"), "mu_window": p.get("mu_rebuild_window"),
+               "mu_window_overlap": p.get("mu_rebuild_window_overlap"),
                "label": f"Sloth p61, {p['payload_bits']}-bit packing, warp-specialized, "
                         + {"audit": "decode-only step, the tags an audit pass of their own, the leaves and the tree "
                                     "passes after it",
@@ -1044,6 +1089,7 @@ def main() -> int:
     else:
         gemm_lib = measure(res, libs, torch, a, sms, store_words, log, out_dir)
     res["gemm_lib"] = gemm_lib.name
+    res["additivity"] = additivity(gemm_lib, torch, sms, a.reps, log)
     for lib in [gemm_lib, *(l for l in libs if l is not gemm_lib and (a.gemm_only or l.bits != gemm_lib.bits))]:
         key = "gemm" if lib is gemm_lib else f"gemm_{lib.name}"
         res[key] = {}
@@ -1075,7 +1121,8 @@ def main() -> int:
                 f"x {p.get('x_native', 0):.1f}, tau {p.get('tau_native', 0):.3f}, "
                 f"commit compute {p.get('c_commit_native', 0):.3f}, window {p['window']:.3f}, rebuild "
                 f"{p.get('mu_rebuild_native', float('nan')):.4f} at one native pass, "
-                f"{p.get('mu_rebuild_window', float('nan')):.4f} in the window")
+                f"{p.get('mu_rebuild_window', float('nan')):.4f} in the window, "
+                f"{p.get('mu_rebuild_window_overlap', float('nan')):.4f} with the measured overlap")
     (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
     write_result(res, libs, out_dir)
     log("done" if res["ok"] else "done with a failed gate")

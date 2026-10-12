@@ -290,6 +290,44 @@ __global__ void __launch_bounds__(256) chain_encode(uint64_t steps, uint64_t tst
   atomicXor(xr, (unsigned long long)acc);
 }
 
+// The rebuild's work and the tag's or commit's in one thread, to test whether they add or overlap on the SM's pipes:
+// each step U encode chains (k = 1) advance a word and one hash chain R compressions (H: 0 BLAKE3 V0, 1 BLAKE3 V1,
+// 2 SHA-512), each as chain_encode<1>, chain_b3<1, H> and chain_sha512<1> alone.
+template <int H>
+__global__ void __launch_bounds__(256) chain_mix(uint64_t steps, int R, uint64_t tstep, bw::Key3 key,
+                                                 unsigned long long* xr) {
+  uint64_t id = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  uint64_t y[U], t[U];
+#pragma unroll
+  for (int u = 0; u < U; ++u) { y[u] = canon((id * U + u) * 0x9E3779B97F4A7C15ull & P); t[u] = mulmod(kTau, id * U + u); }
+  uint32_t h[8];
+  uint64_t hs[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) { h[i] = (uint32_t)id * 0x9E3779B9u + i; hs[i] = id * 0x9E3779B97F4A7C15ull + i; }
+  for (uint64_t s = 0; s < steps; ++s) {
+#pragma unroll
+    for (int u = 0; u < U; ++u) { y[u] = encode_word<1>(y[u], t[u]); t[u] = addmod(t[u], tstep); }
+#pragma unroll 1
+    for (int r = 0; r < R; ++r) {
+      if constexpr (H < 2) {
+        uint32_t m[16];
+#pragma unroll
+        for (int i = 0; i < 16; ++i) m[i] = i < 8 ? h[i] : (uint32_t)s + i + r;
+        b3c<H>(key.k, m, 0, 64, bw::B3_KEYED | bw::B3_CHUNK_START, h);
+      } else {
+        uint64_t w[16];
+#pragma unroll
+        for (int i = 0; i < 16; ++i) w[i] = i < 8 ? hs[i] : s + i + r;
+        bw::compress(hs, w);
+      }
+    }
+  }
+  uint64_t acc = (uint64_t)h[0] << 32 ^ h[1] ^ hs[0];
+#pragma unroll
+  for (int u = 0; u < U; ++u) acc ^= y[u];
+  atomicXor(xr, (unsigned long long)acc);
+}
+
 template <int UU>
 __global__ void __launch_bounds__(256) chain_square(uint64_t steps, unsigned long long* xr) {
   uint64_t id = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
@@ -1075,8 +1113,8 @@ int wc_tag(const uint64_t* store, uint64_t n, uint32_t g, unsigned long long* xr
 }
 
 // what: 0 decode, 1 encode (k rounds a step), 2 the bare squaring (59 a step, `ilp` chains a thread), 3 the tag (two
-// Horner steps a word, 2U words a thread), 4 and 6 ro-blake3/v1's compression (V0, V1), 5 SHA-512's. Steps: chain
-// steps a thread.
+// Horner steps a word, 2U words a thread), 4 and 6 ro-blake3/v1's compression (V0, V1), 5 SHA-512's, 7 chain_mix (k
+// its H, ilp its R). Steps: chain steps a thread.
 int wc_chain(int what, int k, int ilp, uint64_t steps, uint64_t tstep, unsigned long long* xr, int grid, cudaStream_t s) {
   if (what == 0) {
 #define F(K) chain_decode<K><<<grid, 256, 0, s>>>(steps, tstep, xr)
@@ -1112,6 +1150,16 @@ int wc_chain(int what, int k, int ilp, uint64_t steps, uint64_t tstep, unsigned 
     switch (ilp) {
       case 1: chain_sha512<1><<<grid, 256, 0, s>>>(steps, xr); break;
       case 2: chain_sha512<2><<<grid, 256, 0, s>>>(steps, xr); break;
+      default: return 1;
+    }
+  } else if (what == 7) {
+    bw::Key3 key;
+    for (int i = 0; i < 8; ++i) key.k[i] = 0x01000193u * (i + 1);
+    if (ilp < 0) return 1;
+    switch (k) {
+      case 0: chain_mix<0><<<grid, 256, 0, s>>>(steps, ilp, tstep, key, xr); break;
+      case 1: chain_mix<1><<<grid, 256, 0, s>>>(steps, ilp, tstep, key, xr); break;
+      case 2: chain_mix<2><<<grid, 256, 0, s>>>(steps, ilp, tstep, key, xr); break;
       default: return 1;
     }
   } else {
