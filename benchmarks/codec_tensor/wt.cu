@@ -224,6 +224,59 @@ __device__ __forceinline__ void negate(u32 (&x)[NL]) {
   }
 }
 
+// Carry chains in PTX (one SASS instruction a limb, against two to three for the u64 forms above). The flag lives
+// between consecutive asm volatile statements, which the compiler keeps in order.
+__device__ __forceinline__ u32 add_cc(u32 a, u32 b) { u32 r; asm volatile("add.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 addc_cc(u32 a, u32 b) { u32 r; asm volatile("addc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 addc(u32 a, u32 b) { u32 r; asm volatile("addc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 sub_cc(u32 a, u32 b) { u32 r; asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 subc_cc(u32 a, u32 b) { u32 r; asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 subc(u32 a, u32 b) { u32 r; asm volatile("subc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+
+// x < 2p to [0, p), as canon.
+__device__ __forceinline__ void canon_cc(u32 (&x)[NL]) {
+  u32 y[NL];
+  y[0] = add_cc(x[0], CF);
+#pragma unroll
+  for (int k = 1; k < NL - 1; ++k) y[k] = addc_cc(x[k], 0u);
+  y[NL - 1] = addc(x[NL - 1], 0u);
+  const bool ge = (y[Q] >> R) != 0;
+  y[Q] &= TOPMASK;
+#pragma unroll
+  for (int k = 0; k < NL; ++k) x[k] = ge ? y[k] : x[k];
+}
+
+// x = a + b, no carry out (a + b < 2^(32 NL)).
+__device__ __forceinline__ void add_nc(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
+  x[0] = add_cc(a[0], b[0]);
+#pragma unroll
+  for (int k = 1; k < NL - 1; ++k) x[k] = addc_cc(a[k], b[k]);
+  x[NL - 1] = addc(a[NL - 1], b[NL - 1]);
+}
+
+// q = p - q when neg, q canonical (so 0 becomes p).
+__device__ __forceinline__ void neg_if(u32 (&q)[NL], bool neg) {
+  u32 z[NL];
+  z[0] = sub_cc(kP[0], q[0]);
+#pragma unroll
+  for (int k = 1; k < NL - 1; ++k) z[k] = subc_cc(kP[k], q[k]);
+  z[NL - 1] = subc(kP[NL - 1], q[NL - 1]);
+#pragma unroll
+  for (int k = 0; k < NL; ++k) q[k] = neg ? z[k] : q[k];
+}
+
+// x = a - b mod p, a and b canonical, as submod.
+__device__ __forceinline__ void submod_cc(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
+  x[0] = sub_cc(a[0], b[0]);
+#pragma unroll
+  for (int k = 1; k < NL; ++k) x[k] = subc_cc(a[k], b[k]);
+  const u32 m = subc(0u, 0u);
+  x[0] = add_cc(x[0], kP[0] & m);
+#pragma unroll
+  for (int k = 1; k < NL - 1; ++k) x[k] = addc_cc(x[k], kP[k] & m);
+  x[NL - 1] = addc(x[NL - 1], kP[NL - 1] & m);
+}
+
 __device__ __forceinline__ void sqr_n(u32 (&x)[NL], int n) {
 #pragma unroll 1
   for (int i = 0; i < n; ++i) {
@@ -309,6 +362,25 @@ __device__ __forceinline__ void decode_word(u32 (&y)[NL], const u32 (&t)[NL]) {
     submod(y, t, x);
     copy(y, x);
   }
+}
+
+// One round's decode against w = -(c_0 + t) mod p (canonical), which the caller keeps in place of t:
+// rho^-1(y) - c_0 - t = (y^2 negated when y is odd) + w.
+__device__ __forceinline__ void decode_word_w(u32 (&y)[NL], const u32 (&w)[NL]) {
+  u32 q[NL];
+  sqr(y, q);
+  canon_cc(q);
+  neg_if(q, y[0] & 1);
+  add_nc(q, w, y);
+  canon_cc(y);
+}
+
+// w = -(c_0 + t) mod p.
+__device__ __forceinline__ void w_of(const u32 (&t)[NL], u32 (&w)[NL]) {
+  u32 c[NL];
+  load_key(0, c);
+  addmod(c, t, w);
+  negate(w);
 }
 
 template <int K>
@@ -409,6 +481,11 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
     mul_small(a, (u64)gridDim.x * WPB, step);
     mul_small(a, base + (u64)blockIdx.x * WPB + threadIdx.x, t);
   }
+  if constexpr (K == 1) {
+    u32 w[NL];
+    w_of(t, w);
+    copy(t, w);
+  }
   for (u64 first = (u64)blockIdx.x * WPB; first < n; first += (u64)gridDim.x * WPB) {
     __syncthreads();
     stage_words(store, first, n, sm);
@@ -417,7 +494,8 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
     if (i < n) {
       u32 y[NL];
       load_word_smem(sm + threadIdx.x * S, y);
-      decode_word<K>(y, t);
+      if constexpr (K == 1) decode_word_w(y, t);
+      else decode_word<K>(y, t);
       if (MODE == 2) {
 #pragma unroll
         for (int k = 0; k < NL; ++k) out[i * NL + k] = y[k];
@@ -425,7 +503,8 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
       acc ^= fold64(y);
     }
     u32 t2[NL];
-    addmod(t, step, t2);
+    if constexpr (K == 1) submod_cc(t, step, t2);
+    else addmod(t, step, t2);
     copy(t, t2);
   }
   atomicXor(xr, (unsigned long long)acc);
@@ -489,7 +568,8 @@ __global__ void __launch_bounds__(128, 1) chain_kernel(u64 steps, unsigned long 
         copy(x[w], y);
       }
     } else if (WHAT == 1) {
-      decode_word<K>(x[0], t);
+      if constexpr (K == 1) decode_word_w(x[0], t);
+      else decode_word<K>(x[0], t);
     } else {
       encode_word<K>(x[0], t);
     }
@@ -1160,15 +1240,18 @@ __device__ __forceinline__ void tag_quad(const uint8_t *__restrict__ E, u64 byte
   for (int i = 0; i < 8; ++i) y[i] = nch == 1 ? cv[i] : nch == 2 ? p[i] : r[i];
 }
 
-// The tag warps of a CTA: warp t takes the CTA's units t, t + T, ...; unit u is the 8 blocks from 8 (u grid + cta), a
-// quad each, so the device's tag front moves through E as its decode front does. tags[8 jl ..] gets block jl's tag as
-// little-endian words.
-__device__ __forceinline__ void tag_warp(const uint8_t *__restrict__ E, u64 bytes, u64 jbase, int t, int taggers,
-                                         u32 *__restrict__ tags) {
+// A CTA's tagging: its warps take the CTA's units from the shared counter *next, the tag warps from the start and the
+// others once their own work is done; unit u is the 8 blocks from 8 (u grid + cta), a quad each, so the device's tag
+// front moves through E as its decode front does. tags[8 jl ..] gets block jl's tag as little-endian words.
+__device__ __noinline__ void tag_warp(const uint8_t *__restrict__ E, u64 bytes, u64 jbase, u32 *next,
+                                      u32 *__restrict__ tags) {
   const int lane = threadIdx.x & 31, quad = lane >> 2, c = lane & 3;
   const u64 nblk = (bytes + TAG_BLOCK - 1) / TAG_BLOCK;
   const u32 one = kOne;
-  for (u64 u = t;; u += taggers) {
+  for (;;) {
+    u32 v = 0;
+    if (lane == 0) v = atomicAdd(next, 1u);
+    const u64 u = __shfl_sync(FULL, v, 0);
     const u64 jl0 = 8 * (u * gridDim.x + blockIdx.x);
     if (jl0 >= nblk) break;
     const u64 jl = jl0 + quad;
@@ -1350,26 +1433,95 @@ constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a ta
 
 template <int NB8>
 __host__ __device__ constexpr int fused_smem_bytes(int stages) {
-  return stages * SB + NB8 * 8 * XS_STRIDE + 4 * stages * 8;
+  return stages * SB + NB8 * 8 * XS_STRIDE + 4 * stages * 8 + 8;
 }
 
-// Bytes [o, o + PB) of the stage get y's low PB bytes: whole 32-bit words inside, single bytes at the two ends (they
-// share a word with the neighbours' payloads).
-__device__ __forceinline__ void put_payload(uint8_t *st, int o, const u32 (&y)[NL]) {
-  const int sh = 8 * (o & 3), w0 = o >> 2, e = o + PB;
-  u32 *sw = reinterpret_cast<u32 *>(st);
+// Bytes [o, o + PB) of the stage, o = PB w, get y's low PB bytes as whole aligned words: the lane writes each word
+// that starts inside its payload, taking the bytes past it from the next lane's first word (nxt). Past a task's last
+// word they are padding (TW PB + 3 <= SB, and every word of the task is loaded by now). Words shared with another warp's
+// lane go byte by byte: lane 0's head (its word's first bytes, in the word lane 31 of the warp before owns) and lane
+// 31's tail (unless its word is the task's last).
+constexpr int PAY_E = 4 * NL - PB;                      // y's bytes past the payload
+static_assert(PAY_E >= 1 && PAY_E <= 3 && TW * PB + 3 <= SB, "the payload's last limb and the stage's padding");
+__device__ __forceinline__ u32 top_byte(const u32 (&y)[NL], int b) {   // y's byte b, 4 (NL - 2) <= b < 4 NL
+  return ((b >= 4 * (NL - 1) ? y[NL - 1] : y[NL - 2]) >> (8 * (b & 3))) & 0xFFu;
+}
+__device__ __forceinline__ void put_payload_w(uint8_t *st, int w, int lane, const u32 (&y)[NL], u32 nxt) {
+  const int o = PB * w, d = (4 - (o & 3)) & 3, nw = (PB - d + 3) >> 2;
+  const bool split = lane == LANES - 1 && w != TW - 1 && ((o + PB) & 3) != 0;
+  const int whole = nw - (split ? 1 : 0);
+  u32 yx[NL + 1];
 #pragma unroll
-  for (int k = 0; k <= NL; ++k) {
-    const u32 lo = k > 0 ? y[k - 1] : 0u, hi = k < NL ? y[k] : 0u;
-    const u32 v = __funnelshift_l(lo, hi, sh);
-    const int a = 4 * (w0 + k);
-    if (a >= o && a + 4 <= e) {
-      sw[w0 + k] = v;
-    } else {
+  for (int k = 0; k < NL - 1; ++k) yx[k] = y[k];
+  yx[NL - 1] = (y[NL - 1] & ((1u << (8 * (4 - PAY_E))) - 1u)) | (nxt << (8 * (4 - PAY_E)));
+  yx[NL] = nxt >> (8 * PAY_E);
+  u32 *sw = reinterpret_cast<u32 *>(st) + ((o + d) >> 2);
 #pragma unroll
-      for (int b = 0; b < 4; ++b)
-        if (a + b >= o && a + b < e) st[a + b] = (uint8_t)(v >> (8 * b));
+  for (int k = 0; k < NL; ++k)
+    if (k < whole) sw[k] = __funnelshift_r(yx[k], yx[k + 1], 8 * d);
+  if (split) {
+    const int a = o + d + 4 * (nw - 1);
+#pragma unroll
+    for (int b = 0; b < 3; ++b)
+      if (a + b < o + PB) st[a + b] = (uint8_t)top_byte(y, a + b - o);
+  }
+  if (lane == 0 && w != 0) {
+#pragma unroll
+    for (int b = 0; b < 3; ++b)
+      if (b < d) st[o + b] = (uint8_t)(y[0] >> (8 * b));
+  }
+}
+
+// The decoder warps' loop (fused_kernel's comment). At k = 1 a lane keeps w = -(c_0 + t) in place of its tweak t and
+// steps it down. A payload's generic stores reach the stage before the next bulk copy into it (async proxy) only
+// behind a proxy fence.
+template <int K>
+__device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *full, u64 *loaded, u64 *decoded, int stages,
+                                             int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp, int lane,
+                                             const u32 *__restrict__ tsteps) {
+  const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
+  int i = (32 * warp + lane) / TW, w = (32 * warp + lane) % TW;
+  u32 t[NL];
+  tweak(base + (q0 + (u64)i * gq) * TW + w, t);
+  if constexpr (K == 1) {
+    u32 wn[NL];
+    w_of(t, wn);
+    copy(t, wn);
+  }
+  for (;;) {
+    const int lo = __shfl_sync(FULL, i, 0);
+    if (lo >= ntasks) break;
+    const int hi = min(__shfl_sync(FULL, i, LANES - 1), ntasks - 1);
+    const bool on = i < ntasks;
+    const int s = i % stages;
+    uint8_t *st = smem + s * SB;
+    mbar_wait(full + lo % stages, (lo / stages) & 1);
+    if (hi != lo) mbar_wait(full + hi % stages, (hi / stages) & 1);
+    u32 yw[NL];
+    yw[0] = 0;
+    if (on) {
+      load_word_smem(st + w * S, yw);
+      mbar_arrive(loaded + s);
+      if constexpr (K == 1) decode_word_w(yw, t);
+      else decode_word<K>(yw, t);
     }
+    const u32 nxt = __shfl_down_sync(FULL, yw[0], 1);
+    mbar_wait(loaded + lo % stages, (lo / stages) & 1);
+    if (hi != lo) mbar_wait(loaded + hi % stages, (hi / stages) & 1);
+    if (on) {
+      put_payload_w(st, w, lane, yw, nxt);
+      asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
+      mbar_arrive(decoded + s);
+    }
+    const bool wrap = w + rem >= TW;
+    u32 step[NL], t2[NL];
+#pragma unroll
+    for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + (wrap ? NL : 0) + k);
+    if constexpr (K == 1) submod_cc(t, step, t2);
+    else addmod(t, step, t2);
+    copy(t, t2);
+    w += wrap ? rem - TW : rem;
+    i += wrap ? adv + 1 : adv;
   }
 }
 
@@ -1385,6 +1537,7 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
   u64 *full = reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
   u64 *loaded = full + stages, *decoded = loaded + stages, *empty = decoded + stages;
+  u32 *tagq = reinterpret_cast<u32 *>(empty + stages);
   const int nchunks = Kd / TASK_COLS;
   const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks, nbs = N / 16;
   const int warp = threadIdx.x / 32, lane = threadIdx.x & 31;
@@ -1396,16 +1549,12 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
       mbar_init(decoded + s, TW);
       mbar_init(empty + s, LANES);
     }
+    *tagq = 0;
     asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
   }
   __syncthreads();
   const int ntasks = nbs > g0 ? (nbs - g0 + groups - 1) / groups : 0;
   const u64 q0 = (u64)g0 * nchunks + kc, gq = (u64)groups * nchunks;   // task i is the store's task q0 + i gq
-
-  if (warp > decoders + 1) {
-    tag_warp(wstore, (u64)nbs * nchunks * SB, tag_base, warp - decoders - 2, blockDim.x / 32 - decoders - 2, tags);
-    return;
-  }
 
   if (warp == decoders + 1) {
     if (lane == 0) {
@@ -1416,10 +1565,8 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
         bulk_load(smem + s * SB, wstore + (q0 + i * gq) * SB, SB, full + s);
       }
     }
-    return;
-  }
-
-  if (warp == decoders) {
+    __syncwarp();
+  } else if (warp == decoders) {
     const int g = lane >> 2, tq = lane & 3;
     for (int i = 0; i < ntasks; ++i) {
       const int s = i % stages;
@@ -1439,43 +1586,10 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
       }
       store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
     }
-    return;
+  } else if (warp < decoders) {
+    decode_tasks<K>(smem, full, loaded, decoded, stages, ntasks, q0, gq, base, decoders, warp, lane, tsteps);
   }
-
-  const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
-  int i = (32 * warp + lane) / TW, w = (32 * warp + lane) % TW;
-  u32 t[NL];
-  tweak(base + (q0 + (u64)i * gq) * TW + w, t);
-  for (;;) {
-    const int lo = __shfl_sync(~0u, i, 0);
-    if (lo >= ntasks) break;
-    const int hi = min(__shfl_sync(~0u, i, LANES - 1), ntasks - 1);
-    const bool on = i < ntasks;
-    const int s = i % stages;
-    uint8_t *st = smem + s * SB;
-    mbar_wait(full + lo % stages, (lo / stages) & 1);
-    if (hi != lo) mbar_wait(full + hi % stages, (hi / stages) & 1);
-    u32 yw[NL];
-    if (on) {
-      load_word_smem(st + w * S, yw);
-      mbar_arrive(loaded + s);
-      decode_word<K>(yw, t);
-    }
-    mbar_wait(loaded + lo % stages, (lo / stages) & 1);
-    if (hi != lo) mbar_wait(loaded + hi % stages, (hi / stages) & 1);
-    if (on) {
-      put_payload(st, PB * w, yw);
-      mbar_arrive(decoded + s);
-    }
-    const bool wrap = w + rem >= TW;
-    u32 step[NL], t2[NL];
-#pragma unroll
-    for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + (wrap ? NL : 0) + k);
-    addmod(t, step, t2);
-    copy(t, t2);
-    w += wrap ? rem - TW : rem;
-    i += wrap ? adv + 1 : adv;
-  }
+  if (tags) tag_warp(wstore, (u64)nbs * nchunks * SB, tag_base, tagq, tags);
 }
 
 __global__ void spin_kernel(long long cycles) {
