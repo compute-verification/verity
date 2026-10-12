@@ -86,6 +86,16 @@ def test_the_bench_stamps_its_model_and_70b_sets_its_linears_and_layers():
     assert bench.SHAPES == saved and wide_bench.LAYERS == 32
 
 
+def test_sketch_twins_keep_base_and_decode_and_replace_tag_and_commit():
+    pts = F.check([point(), point(arithmetic="a/commit-overlapped"), point(batch=32), point(measured=False),
+                   point(batch=8)])
+    twins = F.sketch_twins(pts, {1: 0.07, 32: 0.15})
+    assert [(t["batch"], t["arithmetic"]) for t in twins] == [(1, "a/sketch-model"), (32, "a/sketch-model")]
+    t = twins[0]
+    assert t["y_total"] == pytest.approx(1.0 + 0.3 + 0.07) and t["y_tag"] == 0.07 and t["y_commit"] == 0.0
+    assert t["tau"] == 0.0 and t["measured"] is False and t["x"] == 230.0
+
+
 def test_best_per_config_keeps_the_lowest_y_of_each_configuration():
     pts = F.check([point(y_total=1.7), point(y_total=1.6, arithmetic="b"), point(k=2, y_total=1.9),
                    point(lane="u", y_total=1.8), point(batch=32, y_total=2.0), point(y_total=1.0, measured=False)])

@@ -138,6 +138,22 @@ def adversary(points: list[dict], boost: float = BOOST, tau_cap: float | None = 
     return out
 
 
+def sketch_twins(points: list[dict], cost: dict[int, float], tau: float = 0.0) -> list[dict]:
+    """For each measured point (its commit serial: the overlapped twin has the same base and decode), a modelled twin
+    with the sketch-then-hash tag in place of the full-byte one: its own base and decode, plus `cost[batch]`, the
+    sketch's tag and commit together (ra-sketch-tag's measured y on a plain store), and τ the sketch's (0 grants the
+    adversary the most)."""
+    out = []
+    for p in points:
+        if (p.get("reference") or not p["measured"] or p["batch"] not in cost
+                or p["arithmetic"].endswith(("/commit-overlapped", "/sketch-model"))):
+            continue
+        y = p["y_base"] + p["y_decode"] + cost[p["batch"]]
+        out.append({**p, "arithmetic": p["arithmetic"] + "/sketch-model", "y_total": y, "y_tag": cost[p["batch"]],
+                    "y_commit": 0.0, "tau": tau, "measured": False, "label": f"{p.get('label', '')} + sketch (model)"})
+    return out
+
+
 def frontier(points: list[dict], budget: float, d: float | None = None, idle: float = IDLE_8B,
              boost: float = BOOST) -> dict[int, dict | None]:
     best = {}
@@ -161,7 +177,7 @@ def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = 
             lines.append(f"| {mb} | none at x ≥ x* | | | | | | | | | | | |")
             continue
         dd, xe = step(p, d, idle), x_eff(p, boost)
-        lines.append(f"| {mb} | {p['b']} | {p['k']} | {p['arithmetic']} | {xe:.0f} | {x_star(p['tau'], budget, dd):.0f} "
+        lines.append(f"| {mb} | {p['b']} | {p['k']:.3g} | {p['arithmetic']} | {xe:.0f} | {x_star(p['tau'], budget, dd):.0f} "
                      f"| {(dd - p['tau']) / xe * 100:.2f}% | {p['y_total']:.2f} | {p['y_decode']:.2f} "
                      f"| {p['y_tag']:.2f} | {p['y_commit']:.2f} | {'yes' if p['measured'] else 'model'} "
                      f"| {p.get('art') or p.get('run') or p.get('lane')} |")
@@ -271,6 +287,10 @@ def main() -> int:
     ap.add_argument("--own-x", action="store_true",
                     help="each point's own x, not the best encode any point of its width reports (`adversary`)")
     ap.add_argument("--tau-cap", type=float, help="τ at most this: the cheapest tag the adversary knows")
+    ap.add_argument("--sketch", help="BATCH:Y,...: add each measured point's modelled twin with the sketch-then-hash "
+                    "tag, Y its tag and commit at that batch (e.g. 1:0.073,32:0.150, ra-sketch-tag's plain store)")
+    ap.add_argument("--sketch-tau", type=float, default=0.0, help="the sketch twins' τ (default 0)")
+    ap.add_argument("--only-sketch", action="store_true", help="with --sketch: draw and rank only the twins")
     a = ap.parse_args()
     points = []
     arts = a.art or ([] if a.file else store_arts())
@@ -286,6 +306,10 @@ def main() -> int:
                            "y_total": y, "y_decode": 0.0, "y_tag": 0.0, "y_commit": 0.0, "y_base": y, "x": x,
                            "tau": tau, "measured": False, "reference": True, "label": "P2"})
     points = check(points)
+    if a.sketch:
+        cost = {int(b): float(y) for b, y in (kv.split(":") for kv in a.sketch.split(","))}
+        twins = sketch_twins(points, cost, a.sketch_tau)
+        points = twins + [p for p in points if p.get("reference")] if a.only_sketch else points + twins
     if not a.own_x:
         points = adversary(points, a.boost, a.tau_cap)
     elif a.tau_cap is not None:
