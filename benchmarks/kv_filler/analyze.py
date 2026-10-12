@@ -52,8 +52,9 @@ def shortfall(steps: list[dict], seconds: float, weight_bytes: int, filler_bytes
               token_bytes: int = lag.KV_TOKEN_BYTES) -> dict:
     """η, the share of R·T over [0, seconds) that no registered read covers, by where it falls: each phase's seconds,
     its steps' own fraction of R (the weights and each scheduled request's context, as `serve.py` counts a window),
-    and its share of η before filler (decode, prefill, empty steps that schedule nothing, idle time between steps).
-    The filler the run's top-up read comes off the total, wherever it fell."""
+    and its share of η before filler (decode, prefill, empty steps that schedule nothing; gaps, the engine's host time
+    between two steps that both schedule requests; idle, the rest of the time between steps). The filler the run's
+    top-up read comes off the total, wherever it fell."""
     cap = R * 1e9 * seconds
     out, busy = {}, 0.0
     for name, keep in (("decode", lambda s: s["tokens"] > 0 and s["prefill_tokens"] == 0),
@@ -63,7 +64,9 @@ def shortfall(steps: list[dict], seconds: float, weight_bytes: int, filler_bytes
         reads = sum(weight_bytes + s["kv_tokens"] * token_bytes for s in sel if s["tokens"] > 0)
         busy += t
         out[name] = {"s": t, "of_R": reads / (R * 1e9 * t) if t else 0.0, "eta": (R * 1e9 * t - reads) / cap}
-    idle = max(0.0, seconds - busy)
+    gaps = sum(max(0.0, b["t0"] - a["t1"]) for a, b in zip(steps, steps[1:]) if a["reqs"] > 0 and b["reqs"] > 0)
+    idle = max(0.0, seconds - busy - gaps)
+    out["gaps"] = {"s": gaps, "of_R": 0.0, "eta": gaps / seconds}
     out["idle"] = {"s": idle, "of_R": 0.0, "eta": idle / seconds}
     out["eta_before_filler"] = sum(v["eta"] for v in out.values())
     out["filler"] = filler_bytes / cap
@@ -116,7 +119,7 @@ def main() -> int:
             print(f"{pool:5s} {run['policy']:8s} {run['mode']:5s} η {eta['eta']:.3f} (before filler "
                   f"{eta['eta_before_filler']:.3f}: " + ", ".join(
                       f"{n} {eta[n]['s']:.1f} s at {eta[n]['of_R']:.3f} R, {eta[n]['eta']:.3f}"
-                      for n in ("decode", "prefill", "empty", "idle")) + f"; filler {eta['filler']:.3f})")
+                      for n in ("decode", "prefill", "empty", "gaps", "idle")) + f"; filler {eta['filler']:.3f})")
             for k, ar in by_k.items():
                 row = {"pool": pool, "policy": run["policy"], "mode": run["mode"], "k": k, "shortfall": eta,
                        "arms": price(run, ar, R)}
