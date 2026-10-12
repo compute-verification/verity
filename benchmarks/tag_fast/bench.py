@@ -152,6 +152,13 @@ CHUNK_TAG_FORMS = {1: ((4, 4),), 2: ((4, 4),), 4: ((4, 4), (2, 4), (4, 6)), 8: (
 CHUNK_GEMM_FORMS = ((4, 4), (2, 4), (4, 6), (2, 6))
 CHUNK_ONLY = (1, 4)
 CHUNK_SINK = 4
+CCOLS, CXS, QUAD_BYTES, SMEM_MAX = 2048, 2064, 2048, 99 * 1024
+
+
+def fits(m: int, mode: int, wc: int, st: int) -> bool:
+    """Whether a chunk form's shared memory (tf_fused2's x slice and weight ring) fits a CTA at batch m."""
+    nb8 = 1 if mode == MODE_TAGONLY or m <= 8 else 2 if m <= 16 else 4
+    return (0 if mode == MODE_TAGONLY else nb8 * 8 * CXS) + wc * st * QUAD_BYTES <= SMEM_MAX
 
 
 def leaf_bytes(nodes, count: int) -> bytes:
@@ -223,8 +230,9 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
                                                jb))
             for wc, st in CHUNK_TAG_FORMS[lanes]:
                 for mb in (1, 16, 32):
-                    check(f"t_w{wc}s{st}_m{mb}", lambda: fused2(lib, torch, lanes, MODE_TAGS, wc, st, 0, plain, xs[mb],
-                                                                y, tb, mb, n, k, jb))
+                    if fits(mb, MODE_TAGS, wc, st):
+                        check(f"t_w{wc}s{st}_m{mb}", lambda: fused2(lib, torch, lanes, MODE_TAGS, wc, st, 0, plain,
+                                                                    xs[mb], y, tb, mb, n, k, jb))
             if lanes == CHUNK_SINK:
                 for mb in (1, 16, 32):
                     xr.zero_()
@@ -293,6 +301,8 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
             forms += [(f"s{CHUNK_SINK}kw4s4", (CHUNK_SINK, MODE_SINK, 4, 4))]
             xr = torch.zeros(1, dtype=torch.int32, device="cuda")
             for label, (lanes, mode, wc, st) in forms:
+                if not fits(mb, mode, wc, st):
+                    continue
                 ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
                 fused2(lib, torch, lanes, mode, wc, st, 0, plain, x, ya, tb, mb, n, k, 0, xr)
                 e[f"{label}_rel"] = float(((ya - refp).abs() / scale).max())
@@ -499,10 +509,12 @@ def time_shape(lib: Lib, torch, name, n, k, w8, maps, batches, reps, log) -> dic
             arms[f"s{span}v1p1"] = arm_f(span, 1, MODE_SINK, 1)
         if groups:
             for wc, stages in CHUNK_GEMM_FORMS:
-                arms[f"g0kw{wc}s{stages}"] = arm_f2(1, MODE_GEMM, wc, stages)
+                if fits(mb, MODE_GEMM, wc, stages):
+                    arms[f"g0kw{wc}s{stages}"] = arm_f2(1, MODE_GEMM, wc, stages)
         for lanes in groups:
             for wc, stages in CHUNK_TAG_FORMS[lanes]:
-                arms[f"t{lanes}kw{wc}s{stages}"] = arm_f2(lanes, MODE_TAGS, wc, stages)
+                if fits(mb, MODE_TAGS, wc, stages):
+                    arms[f"t{lanes}kw{wc}s{stages}"] = arm_f2(lanes, MODE_TAGS, wc, stages)
             if lanes == CHUNK_SINK:
                 arms[f"s{lanes}kw4s4"] = arm_f2(lanes, MODE_SINK, 4, 4)
         r = interleave(lib, torch, arms, reps, copies)

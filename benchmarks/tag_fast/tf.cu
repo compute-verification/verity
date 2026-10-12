@@ -1043,7 +1043,8 @@ int tf_fused(int v, int span, int mode, int pd, int partials, const void* w, con
   }
 
 // The chunk-block GEMM (fused2_kernel, BLAKE3 variant 1). lanes: L, a block's chunks; mode as tf_fused's; wc: warps a
-// CTA (2 or 4); stages: the ring's quads. M <= 32, N a multiple of 16 wc, K of 2,048.
+// CTA (2 or 4); stages: the ring's quads. M <= 32, N a multiple of 16 wc, K of 2,048. 3: form not built; 4: its x slice
+// and ring exceed a CTA's shared memory.
 int tf_fused2(int lanes, int mode, int wc, int stages, int partials, const void* w, const uint8_t* x, float* y,
               uint32_t* tags, int M, int N, int Kd, uint64_t jbase, unsigned int* xr, cudaStream_t st) {
   if (M < 1 || M > 32 || (wc != 2 && wc != 4) || N % (16 * wc) || Kd % CCOLS || mode < 0 || mode > 3) return 1;
@@ -1059,6 +1060,7 @@ int tf_fused2(int lanes, int mode, int wc, int stages, int partials, const void*
   F2(4, 2, 4, 4, false) F2(1, 3, 4, 4, false) F2(4, 3, 4, 4, false)
   if (!kern) return 3;
   const int smem = (mode == MODE_TAGONLY ? 0 : nb8 * 8 * CXS) + wc * stages * QUAD_BYTES;
+  if (smem > 99 * 1024) return 4;
   if (smem > 48 * 1024 && cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, smem)) return 2;
   const int grid = (N / 16 / wc) * (Kd / CCOLS);
   kern<<<grid, wc * 32, smem, st>>>((const uint4*)w, x, y, tags, M, N, Kd, jbase, xr);
