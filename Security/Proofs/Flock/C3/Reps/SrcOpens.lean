@@ -1,5 +1,7 @@
 import Proofs.Flock.C3.Reps.Maps
 import Proofs.Flock.C3.Reps.OpensRead
+import Proofs.Flock.VBridge.Family.Opened
+import Proofs.Flock.VBridge.Renumber
 
 /-!
 # The reps' openings at G's values, read from the layers' read wires
