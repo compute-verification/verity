@@ -12,8 +12,10 @@ Nothing is timed before its gate passed, in this order:
   advancing), the bare squaring (best over ILP 1-8), the GF(2^31 - 1) Horner step of the bandwidth tag;
 - `gemm`: at Llama-3.1-8B's linears and batch 1-32, the fused kernel's partial sums equal the plain kernel's bit for bit
   at every k and both are within FP32 rounding of torch's; then interleaved reps of cuBLASLt FP8 (`torch._scaled_mm`), the
-  plain FP8 kernel and the fused kernel at each k, every call on cold weights (a ring of copies past the L2), each arm
-  queued behind a spin kernel so the device runs it back to back, beside an empty kernel at the GEMM's grid.
+  plain FP8 kernel and the fused kernel at each k, each in two forms (one task a warp, `wc_gemm`; persistent with the
+  next half-task's loads in flight, `wc_gemm_pipe`), every call on cold weights (a ring of copies past the L2), each
+  arm queued behind a spin kernel so the device runs it back to back, beside an empty kernel at the GEMM's grid.
+  Native is the fastest of cuBLASLt and the two plain kernels.
 `--mode ncu-decode` / `ncu-gemm` run one call of each kernel for Nsight Compute and time nothing.
 """
 from __future__ import annotations
@@ -54,6 +56,7 @@ class Lib:
         so.wc_chain.argtypes = [i, i, i, q, q, v, i, v]
         so.wc_gemm.argtypes = [i, v, v, v, i, i, i, q, i, v]
         so.wc_gemm_constants.argtypes = [v]
+        so.wc_gemm_pipe.argtypes = [i, v, v, v, i, i, i, q, i, i, v, v]
         so.wc_spin.argtypes = [ctypes.c_longlong, v]
         so.wc_empty.argtypes = [i, v]
         cs = (ctypes.c_int * 6)()
@@ -309,11 +312,15 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     nch = kd // C.TASK_COLS
     res = {"N": n, "K": kd, "weight_bytes": n * kd, "store_bytes": nwords * 8, "gate": {}, "times": {}}
 
-    def run(k, wbuf, x, y, partials):
-        lib.call("wc_gemm", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0, int(partials),
-                 stream(torch))
+    def run(k, wbuf, x, y, partials, pipe=False):
+        if pipe:
+            lib.call("wc_gemm_pipe", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0,
+                     int(partials), 0, None, stream(torch))
+        else:
+            lib.call("wc_gemm", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0, int(partials),
+                     stream(torch))
 
-    # gate: partial sums bit for bit, and torch's FP32 product within rounding
+    # gate: partial sums bit for bit (both kernels, every k), and torch's FP32 product within rounding
     for mb in batches:
         x = xs[mb]
         ref = (x.float() @ w.float().t())
@@ -322,21 +329,28 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         plain_sum = pp.view(nch, mb, n).sum(0)
         scale = (x.float().abs() @ w.float().abs().t()).clamp_min(1e-30)
         err = float(((plain_sum - ref).abs() / scale).max())
-        entry = {"plain_vs_torch_rel": err, "fused_equal_plain": {}}
-        for k in ks:
-            pf = torch.zeros_like(pp)
-            run(k, stores[k], x, pf, True)
-            entry["fused_equal_plain"][k] = bool(torch.equal(pf, pp))
+        entry = {"plain_vs_torch_rel": err, "fused_equal_plain": {}, "pipe_equal_plain": {}}
+        for k in [0, *ks]:
+            for pipe, key in ((False, "fused_equal_plain"), (True, "pipe_equal_plain")):
+                if k == 0 and not pipe:
+                    continue
+                pf = torch.zeros_like(pp)
+                run(k, plain if k == 0 else stores[k], x, pf, True, pipe)
+                entry[key][k] = bool(torch.equal(pf, pp))
         ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
         run(ks[-1], stores[ks[-1]], x, ya, False)
         entry["fused_atomic_vs_torch_rel"] = float(((ya - ref).abs() / scale).max())
+        ya.zero_()
+        run(ks[-1], stores[ks[-1]], x, ya, False, True)
+        entry["pipe_atomic_vs_torch_rel"] = float(((ya - ref).abs() / scale).max())
         try:
             yc = torch._scaled_mm(x, w.t(), torch.ones((), device="cuda"), torch.ones((), device="cuda"),
                                   out_dtype=torch.float32)
             entry["cublas_vs_torch_rel"] = float(((yc - ref).abs() / scale).max())
         except Exception as exc:  # noqa: BLE001
             entry["cublas_error"] = repr(exc)[:300]
-        entry["ok"] = err < 1e-5 and all(entry["fused_equal_plain"].values()) and entry["fused_atomic_vs_torch_rel"] < 1e-5
+        entry["ok"] = (err < 1e-5 and all(entry["fused_equal_plain"].values()) and all(entry["pipe_equal_plain"].values())
+                       and entry["fused_atomic_vs_torch_rel"] < 1e-5 and entry["pipe_atomic_vs_torch_rel"] < 1e-5)
         res["gate"][mb] = entry
         log(f"gemm gate {name} M={mb}: {'ok' if entry['ok'] else 'FAIL'} (plain rel {err:.1e})")
         if not entry["ok"]:
@@ -386,6 +400,23 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                     raise RuntimeError(f"wc_gemm k={k} M={mb}: error {rc}")
             return f
 
+        grids = {}
+
+        def arm_pipe(k):
+            ps = [ptr(b) for b in ring["plain" if k == 0 else k]]
+            launched = ctypes.c_int(0)
+            lib.call("wc_gemm_pipe", k, ps[0], xp, yp, mb, n, kd, 0, 0, 0, ctypes.byref(launched), st)
+            groups = launched.value // nch
+            grids[k] = launched.value
+
+            def f():
+                rc = 0
+                for p in ps:
+                    rc |= so.wc_gemm_pipe(k, p, xp, yp, mb, n, kd, 0, 0, groups, None, st)
+                if rc:
+                    raise RuntimeError(f"wc_gemm_pipe k={k} M={mb}: error {rc}")
+            return f
+
         def arm_empty():
             rc = 0
             for _ in range(copies):
@@ -393,9 +424,10 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             if rc:
                 raise RuntimeError(f"wc_empty: error {rc}")
 
-        arms = {"cublas": arm_cublas, "plain": arm(0), "empty": arm_empty}
+        arms = {"cublas": arm_cublas, "plain": arm(0), "plain_pipe": arm_pipe(0), "empty": arm_empty}
         for k in ks:
             arms[f"k{k}"] = arm(k)
+            arms[f"p{k}"] = arm_pipe(k)
         for f in arms.values():
             f()
         torch.cuda.synchronize()
@@ -410,17 +442,18 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 host[a].append(h)
         med = {a: statistics.median(v) for a, v in times.items()}
         host_max = max(max(v) for v in host.values())
-        native = min(med["cublas"], med["plain"])
+        native = min(med["cublas"], med["plain"], med["plain_pipe"])
         net = {a: (med[a] - med["empty"]) / (med["plain"] - med["empty"]) for a in med if a != "empty"}
         res["times"][mb] = {"median_s": med, "times_s": times, "cublas_m": mpad, "host_enqueue_max_s": host_max,
-                            "host_bound": host_max > 0.8 * spin_s,
-                            "ratio_vs_native": {a: med[a] / native for a in med},
+                            "host_bound": host_max > 0.8 * spin_s, "pipe_grids": grids,
+                            "native_s": native, "ratio_vs_native": {a: med[a] / native for a in med},
                             "ratio_vs_plain": {a: med[a] / med["plain"] for a in med},
                             "ratio_vs_plain_net_of_empty": net,
-                            "gbps_stored": {a: (nwords * 8 if a.startswith("k") else n * kd) / med[a] / 1e9
+                            "gbps_stored": {a: (nwords * 8 if a[0] in "kp" and a[1:].isdigit() else n * kd) / med[a] / 1e9
                                             for a in med if a != "empty"}}
         log(f"gemm {name} M={mb}: cublas {med['cublas'] * 1e6:.1f} us, plain {med['plain'] * 1e6:.1f} us, "
-            f"empty {med['empty'] * 1e6:.1f} us, " + ", ".join(f"k{k} {med[f'k{k}'] / native:.2f}x" for k in ks)
+            f"plain_pipe {med['plain_pipe'] * 1e6:.1f} us, empty {med['empty'] * 1e6:.1f} us; vs native "
+            + ", ".join(f"k{k} {med[f'k{k}'] / native:.2f}x/{med[f'p{k}'] / native:.2f}x" for k in ks)
             + (" HOST-BOUND" if host_max > 0.8 * spin_s else ""))
     del ring, wring, stores, plain, w
     torch.cuda.empty_cache()
@@ -437,7 +470,10 @@ def gemm_zeroing(torch, n: int, mb: int, reps: int) -> float:
 def analysis(read_gbps: float, best_dec: dict, best_enc: dict, best_sq: float, tag_bytes_s: float, b_side: float,
              theta: float) -> dict:
     """ε, r, τ, σ and the bound at each k: measured (the fastest decode and encode of the libraries) and at the squaring
-    floor (decode = k squarings, encode = 59 k, at the best squaring rate, no tag: every other op free)."""
+    floor (decode = k squarings, encode = 59 k, at the best squaring rate, no tag: every other op free).
+
+    `free` drops the draft's (1 - μ)ε: an adversary whose weights cost nothing to regenerate and whose audit tags the
+    stored words never decodes, so μ r ε + τ <= 1 + θ and the rebuild term is (1 + θ - τ) / (r ε)."""
     words_s = read_gbps * 1e9 / 8
     tau = read_gbps * 1e9 / tag_bytes_s
     out = {"read_gbps": read_gbps, "words_per_s": words_s, "tau": tau, "b_side_gbps": b_side, "theta": theta, "k": {}}
@@ -451,6 +487,9 @@ def analysis(read_gbps: float, best_dec: dict, best_enc: dict, best_sq: float, t
         eps_f = words_s * k / best_sq
         if eps_f < 1:
             row["floor"] = C.bound(eps_f, 59.0, 0.0, b_side, read_gbps) | {"eps": eps_f, "r": 59.0}
+        enc_f = 59.0 * eps_f
+        row["free"] = {"rebuild": (1 - tau) / (r * eps), "with_theta": (1 + theta - tau) / (r * eps), "r_eps": r * eps}
+        row["free_floor"] = {"rebuild": 1 / enc_f, "with_theta": (1 + theta) / enc_f, "r_eps": enc_f}
         out["k"][k] = row
     return out
 
@@ -467,7 +506,7 @@ def main() -> int:
     ap.add_argument("--batches", default=",".join(map(str, BATCHES)))
     ap.add_argument("--ks", default=",".join(map(str, range(1, KMAX + 1))))
     ap.add_argument("--b-side", type=float, default=63.0)
-    ap.add_argument("--theta", type=float, default=0.05, help="the tensor cores' encode capacity over the CUDA cores'")
+    ap.add_argument("--theta", type=float, default=0.11, help="the tensor cores' encode capacity over the CUDA cores'")
     a = ap.parse_args()
 
     import torch
@@ -512,9 +551,11 @@ def main() -> int:
             for mb in batches:
                 x = torch.randn(mb, kd, device="cuda").to(torch.float8_e4m3fn)
                 y = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
-                lib.call("wc_gemm", 0, ptr(plain), ptr(x.view(torch.uint8)), ptr(y), mb, n, kd, 0, 0, stream(torch))
-                for k in ks:
-                    lib.call("wc_gemm", k, ptr(pay), ptr(x.view(torch.uint8)), ptr(y), mb, n, kd, 0, 0, stream(torch))
+                for fn, extra in (("wc_gemm", ()), ("wc_gemm_pipe", (0, None))):
+                    lib.call(fn, 0, ptr(plain), ptr(x.view(torch.uint8)), ptr(y), mb, n, kd, 0, 0, *extra, stream(torch))
+                    for k in ks:
+                        lib.call(fn, k, ptr(pay), ptr(x.view(torch.uint8)), ptr(y), mb, n, kd, 0, 0, *extra,
+                                 stream(torch))
         torch.cuda.synchronize()
         return 0
 
@@ -557,7 +598,8 @@ def main() -> int:
     res["analysis"] = analysis(res["read"]["gbps"], best_dec, best_enc, best_sq, best_tag, a.b_side, a.theta)
     for k, row in res["analysis"]["k"].items():
         log(f"k={k}: eps {row['eps']:.3f} r {row['r']:.1f} tau {row['tau']:.3f} rebuild {row.get('rebuild', float('nan')):.4f}"
-            f" floor {row.get('floor', {}).get('rebuild', float('nan')):.4f}")
+            f" floor {row.get('floor', {}).get('rebuild', float('nan')):.4f} free {row['free']['rebuild']:.4f}"
+            f" free-floor {row['free_floor']['rebuild']:.4f}")
     (out_dir / "word-codec.json").write_text(json.dumps(res, indent=1))
 
     gemm_lib = max(libs, key=lambda l: res["libs"][l.name]["rates"]["decode"][KMAX]["per_s"])
@@ -589,6 +631,7 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
         ms += [{"name": f"r_k{k}", "value": row["r"], "unit": "1"}, {"name": f"eps_k{k}", "value": row["eps"], "unit": "1"}]
         if "rebuild" in row:
             ms.append({"name": f"rebuild_k{k}", "value": row["rebuild"], "unit": "1"})
+        ms.append({"name": f"rebuild_free_k{k}", "value": row["free"]["rebuild"], "unit": "1"})
     for name, g in res.get("gemm", {}).items():
         for mb, t in g.get("times", {}).items():
             for arm, ratio in t["ratio_vs_native"].items():

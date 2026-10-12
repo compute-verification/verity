@@ -230,14 +230,18 @@ __global__ void __launch_bounds__(256) chain_square(uint64_t steps, unsigned lon
   atomicXor(xr, (unsigned long long)acc);
 }
 
+// One 64-bit word a step feeds all 2U accumulators: the tag's two Horner steps a word, plus one 64-bit add a step for
+// 2U words (under 2% of the tag's own work).
 __global__ void __launch_bounds__(256) chain_tag(uint64_t steps, uint32_t g, unsigned long long* xr) {
   uint64_t id = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t a[2 * U];
 #pragma unroll
   for (int u = 0; u < 2 * U; ++u) a[u] = (uint32_t)(id * 2 * U + u) * 0x9E3779B9u;
+  uint64_t w = id * 0x9E3779B97F4A7C15ull;
   for (uint64_t s = 0; s < steps; ++s) {
+    w += 0x9E3779B97F4A7C15ull;
 #pragma unroll
-    for (int u = 0; u < 2 * U; ++u) a[u] = horner31(horner31(a[u], g, a[u] ^ 0x5bd1e995u), g, a[u] + 0x27d4eb2du);
+    for (int u = 0; u < 2 * U; ++u) a[u] = horner31(horner31(a[u], g, (uint32_t)w), g, (uint32_t)(w >> 32));
   }
   uint64_t acc = 0;
 #pragma unroll
@@ -330,6 +334,125 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_kernel(const void* __res
       if (b < M) {
         if constexpr (PARTIALS) y[((size_t)kc * M + b) * N + n] = acc[j][e];
         else atomicAdd(y + (size_t)b * N + n, acc[j][e]);
+      }
+    }
+  }
+}
+
+// The persistent form: a CTA keeps one 512-column chunk of x in shared memory and its warps walk the 16-row blocks
+// nb = g0 * GEMM_WARPS + warp + i * groups * GEMM_WARPS. A task is taken in two halves, tiles 0-7 from words 0-18 and
+// tiles 8-15 from word 18 and words 19-36, and each half's loads are in flight while the other half is decoded and
+// multiplied: the task's second half while its first is, the next task's first half while its second is. KR = 0 reads
+// plain fragments, eight tiles (16 words) a half.
+constexpr int H0 = (16 * TASK_TILES / 2 + 6) / 7;   // words 0..18 hold bytes 0..132
+constexpr int H1 = LANE_WORDS - H0;                 // words 19..36
+static_assert(H0 >= 16 && H1 >= 16 && 7 * (H0 - 1) <= 16 * TASK_TILES / 2, "a half's words");
+
+template <int KR>
+__device__ __forceinline__ void load_half(uint64_t* xw, const void* __restrict__ wstore, uint64_t q, int lane, int half) {
+  if constexpr (KR == 0) {
+    const uint4* wp = reinterpret_cast<const uint4*>(wstore) + (q * TASK_TILES + half * TASK_TILES / 2) * LANES + lane;
+#pragma unroll
+    for (int tt = 0; tt < TASK_TILES / 2; ++tt) {
+      uint4 v = __ldcs(wp + tt * LANES);
+      xw[2 * tt] = lohi(v.x, v.y);
+      xw[2 * tt + 1] = lohi(v.z, v.w);
+    }
+  } else {
+    const unsigned long long* wp =
+        reinterpret_cast<const unsigned long long*>(wstore) + q * TASK_WORDS + (half ? H0 : 0) * LANES + lane;
+    if (half) {
+#pragma unroll
+      for (int w = 0; w < H1; ++w) xw[w] = __ldcs(wp + w * LANES);
+    } else {
+#pragma unroll
+      for (int w = 0; w < H0; ++w) xw[w] = __ldcs(wp + w * LANES);
+    }
+  }
+}
+
+// Tiles t0 .. t0 + 7; xw[0] holds stream byte `off` (KR > 0) or tile t0's first 8 bytes (KR = 0).
+template <int KR, int NB8>
+__device__ __forceinline__ void half_tiles(float (&acc)[NB8][4], const uint64_t* xw, int t0, int off,
+                                           const uint8_t (*xs)[XS_STRIDE], int g, int tq) {
+#pragma unroll
+  for (int i = 0; i < TASK_TILES / 2; ++i) {
+    const int tt = t0 + i;
+    uint32_t a[4];
+    if constexpr (KR == 0) {
+      a[0] = (uint32_t)xw[2 * i]; a[1] = (uint32_t)(xw[2 * i] >> 32);
+      a[2] = (uint32_t)xw[2 * i + 1]; a[3] = (uint32_t)(xw[2 * i + 1] >> 32);
+    } else {
+      const int o = 16 * tt - off;
+      a[0] = take4(xw, o); a[1] = take4(xw, o + 4); a[2] = take4(xw, o + 8); a[3] = take4(xw, o + 12);
+    }
+#pragma unroll
+    for (int j = 0; j < NB8; ++j) {
+      uint32_t b0 = *reinterpret_cast<const uint32_t*>(&xs[8 * j + g][32 * tt + 4 * tq]);
+      uint32_t b1 = *reinterpret_cast<const uint32_t*>(&xs[8 * j + g][32 * tt + 16 + 4 * tq]);
+      mma_e4m3(acc[j], a, b0, b1);
+    }
+  }
+}
+
+template <int KR, int NB8, bool PARTIALS>
+__global__ void __launch_bounds__(GEMM_WARPS * 32) gemm_pipe_kernel(const void* __restrict__ wstore,
+                                                                    const uint8_t* __restrict__ x, float* __restrict__ y,
+                                                                    int M, int N, int Kd, uint64_t base, int groups) {
+  __shared__ __align__(16) uint8_t xs[NB8 * 8][XS_STRIDE];
+  const int nchunks = Kd / TASK_COLS;
+  const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks;
+  const int lane = threadIdx.x & 31, g = lane >> 2, tq = lane & 3, nbs = N / 16, stride = groups * GEMM_WARPS;
+  for (int e = threadIdx.x; e < NB8 * 8 * TASK_COLS / 16; e += GEMM_WARPS * 32) {
+    int b = e / (TASK_COLS / 16), c = e % (TASK_COLS / 16);
+    uint4 v = make_uint4(0, 0, 0, 0);
+    if (b < M) v = __ldg(reinterpret_cast<const uint4*>(x + (size_t)b * Kd + (size_t)kc * TASK_COLS) + c);
+    *reinterpret_cast<uint4*>(&xs[b][16 * c]) = v;
+  }
+  __syncthreads();
+  int nb = g0 * GEMM_WARPS + threadIdx.x / 32;
+  if (nb >= nbs) return;
+  const uint64_t t32 = KR > 0 ? mulmod(kTau, LANES) : 0;
+  uint64_t A[H0], B[H1];
+  load_half<KR>(A, wstore, (uint64_t)nb * nchunks + kc, lane, 0);
+  for (; nb < nbs; nb += stride) {
+    const uint64_t q = (uint64_t)nb * nchunks + kc;
+    load_half<KR>(B, wstore, q, lane, 1);
+    float acc[NB8][4];
+#pragma unroll
+    for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
+    uint64_t t = 0;
+    if constexpr (KR > 0) {
+      t = mulmod(kTau, (base + q * TASK_WORDS + lane) % P);
+#pragma unroll
+      for (int w = 0; w < H0; ++w) {
+        A[w] = decode_word<KR>(A[w], ~t);
+        t = addmod(t, t32);
+      }
+    }
+    half_tiles<KR, NB8>(acc, A, 0, 0, xs, g, tq);
+    uint64_t h[H1 + 1];
+    if constexpr (KR > 0) h[0] = A[H0 - 1];
+    if (nb + stride < nbs) load_half<KR>(A, wstore, (uint64_t)(nb + stride) * nchunks + kc, lane, 0);
+    if constexpr (KR > 0) {
+#pragma unroll
+      for (int w = 0; w < H1; ++w) {
+        h[w + 1] = decode_word<KR>(B[w], ~t);
+        t = addmod(t, t32);
+      }
+      half_tiles<KR, NB8>(acc, h, TASK_TILES / 2, 7 * (H0 - 1), xs, g, tq);
+    } else {
+      half_tiles<KR, NB8>(acc, B, TASK_TILES / 2, 0, xs, g, tq);
+    }
+#pragma unroll
+    for (int j = 0; j < NB8; ++j) {
+#pragma unroll
+      for (int e = 0; e < 4; ++e) {
+        int n = nb * 16 + g + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
+        if (b < M) {
+          if constexpr (PARTIALS) y[((size_t)kc * M + b) * N + n] = acc[j][e];
+          else atomicAdd(y + (size_t)b * N + n, acc[j][e]);
+        }
       }
     }
   }
@@ -449,6 +572,33 @@ int wc_gemm(int k, const void* w, const uint8_t* x, float* y, int M, int N, int 
   }
 #undef GK
 #undef G
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The persistent form. groups <= 0: as many CTAs as fit on the device at once, split evenly over the chunks; the grid
+// actually launched (groups x chunks) is returned in *launched when it isn't null.
+int wc_gemm_pipe(int k, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base, int partials,
+                 int groups, int* launched, cudaStream_t s) {
+  if (M < 1 || M > 32 || N % (16 * GEMM_WARPS) || Kd % TASK_COLS || k < 0 || k > MAXK) return 1;
+  const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, nchunks = Kd / TASK_COLS, nbg = N / 16 / GEMM_WARPS;
+  int sms = 0, per_sm = 0, dev = 0;
+  if (groups <= 0 && (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev))) return 2;
+#define G(KR, NB) do { \
+    auto kern = partials ? gemm_pipe_kernel<KR, NB, true> : gemm_pipe_kernel<KR, NB, false>; \
+    if (groups <= 0) { \
+      if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, kern, GEMM_WARPS * 32, 0)) return 2; \
+      groups = sms * per_sm / nchunks > 0 ? sms * per_sm / nchunks : 1; \
+    } \
+    if (groups > nbg) groups = nbg; \
+    kern<<<groups * nchunks, GEMM_WARPS * 32, 0, s>>>(w, x, y, M, N, Kd, base, groups); } while (0)
+#define GK(KR) do { if (nb8 == 1) G(KR, 1); else if (nb8 == 2) G(KR, 2); else G(KR, 4); } while (0)
+  switch (k) {
+    case 0: GK(0); break; case 1: GK(1); break; case 2: GK(2); break; case 3: GK(3); break; case 4: GK(4); break;
+    case 5: GK(5); break; case 6: GK(6); break; case 7: GK(7); break; case 8: GK(8); break;
+  }
+#undef GK
+#undef G
+  if (launched) *launched = groups * nchunks;
   return cudaGetLastError() ? 4 : 0;
 }
 

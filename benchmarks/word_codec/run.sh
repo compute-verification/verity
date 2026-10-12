@@ -23,8 +23,10 @@ nvcc "${FLAGS[@]}" -DWC_SQR=0 -o "$B/wc-split.so" $WC/wc.cu > "$O/wc-split.ptxas
 nvcc "${FLAGS[@]}" -DWC_SQR=1 -o "$B/wc-wide.so" $WC/wc.cu > "$O/wc-wide.ptxas" 2>&1 & P1=$!
 wait $P0 || { tail -30 "$O/wc-split.ptxas"; exit 4; }
 wait $P1 || { tail -30 "$O/wc-wide.ptxas"; exit 4; }
-cuobjdump -sass "$B/wc-split.so" > "$O/wc-split.sass" 2>&1
-cuobjdump -sass "$B/wc-wide.so" > "$O/wc-wide.sass" 2>&1
+SASS_KEEP='chain_squareILi1E|chain_encodeILi1E|decode_kernelILi[12]ELi0E|gemm_pipe_kernelILi[02]ELi1ELb0E'
+for lib in split wide; do
+  cuobjdump -sass "$B/wc-$lib.so" | awk -v keep="$SASS_KEEP" '/Function : /{p = ($0 ~ keep)} p' > "$O/wc-$lib.sass" 2>&1
+done
 sha256sum "$B"/*.so > "$O/libs.sha256"
 if "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $WC/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
@@ -50,7 +52,7 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
         > "$O/ncu-decode-$lib.log" 2>&1
       "$NCU_BIN" --import "$O/ncu-decode-$lib.ncu-rep" --csv --page raw > "$O/ncu-decode-$lib.csv" 2>&1
     done
-    "$NCU_BIN" "${S[@]}" -k "regex:gemm_kernel" -f -o "$O/ncu-gemm" \
+    "$NCU_BIN" "${S[@]}" -k "regex:gemm_kernel|gemm_pipe_kernel" -f -o "$O/ncu-gemm" \
       "$PY" $WC/bench.py "${LIBS[@]:0:2}" --out "$O/ncu-gemm" --mode ncu-gemm --shapes qkv,gate_up --batches 1,32 --ks 1,4,8 \
       > "$O/ncu-gemm.log" 2>&1
     "$NCU_BIN" --import "$O/ncu-gemm.ncu-rep" --csv --page raw > "$O/ncu-gemm.csv" 2>&1
