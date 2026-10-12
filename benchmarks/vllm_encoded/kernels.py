@@ -184,6 +184,8 @@ class TensorLib:
         so.wt_sketch_vectors.argtypes = [i, i, i, i]
         so.wt_sketch_vectors.restype = q
         so.wt_set_tag.argtypes = [v, v]
+        so.wt_tag_leaves.argtypes = [v, q, v, v]
+        so.wt_tag_tree.argtypes = [v, q, v, v]
         cs = (ctypes.c_int * 15)()
         so.wt_constants(cs)
         self.constants = list(cs)
@@ -201,7 +203,9 @@ class TensorLib:
         self.tag_seed: bytes | None = None
         self.sketch: dict | None = None
         self.tags: torch.Tensor | None = None
+        self.step: dict | None = None
         self._steps: dict[tuple, tuple[int, torch.Tensor]] = {}
+        self._vectors: dict[tuple, int] = {}
 
     def call(self, fn: str, *args) -> None:
         rc = getattr(self.so, fn)(*args)
@@ -242,7 +246,7 @@ class TensorLib:
         words = skt.sign_fragments(bits, skt.steps(self.sb), t)
         key, pre = ctypes.create_string_buffer(skt.key(seed)), ctypes.create_string_buffer(skt.leaf_prefix(seed))
         self.call("wt_set_tag", key, pre)
-        self.tag_seed = seed
+        self.tag_seed, self._vectors = seed, {}
         self.sketch = {"name": skt.NAME, "k": k, "t": t, "bits": bits,
                        "signs": torch.from_numpy(words.view("<i4").copy()).cuda()}
 
@@ -258,6 +262,34 @@ class TensorLib:
         if self.tags is None or self.tags.numel() < 8 * blocks:
             self.tags = torch.empty(8 * blocks, dtype=torch.int32, device="cuda")
         return self.tags
+
+    def vectors(self, n: int, kd: int, groups: int) -> int:
+        """The sketch vectors (tags) one sketched launch over an n × kd linear at ``groups`` CTA groups writes."""
+        at = (n, kd, groups)
+        if at not in self._vectors:
+            self._vectors[at] = self.so.wt_sketch_vectors(n, kd, groups, self.sketch["t"])
+        return self._vectors[at]
+
+    def commit_every_step(self, vectors: int) -> None:
+        """Commit each decode step (sketched only): the step's sketched launches write their tags one after another into
+        one buffer of at most ``vectors`` tags, vector v of a launch at index j = (the tags before it in the step) + v, and
+        the step's last linear hashes the leaves over them (16 tags a leaf) and the RFC 6962 tree over the leaves
+        (`wt_tag_leaves`, `wt_tag_tree`), on the stream, so a CUDA graph of the step holds the commit."""
+        if self.sketch is None:
+            raise ValueError("the in-step commit is the sketch tag's")
+        leaves = -(-vectors // 16)
+        self.step = {"tags": torch.empty(8 * vectors, dtype=torch.int32, device="cuda"),
+                     "nodes": torch.empty(8 * (2 * leaves + 64), dtype=torch.int64, device="cuda"),
+                     "vectors": vectors, "at": 0, "roots": {}}
+
+    def commit(self, nvec: int, m: int) -> None:
+        st = self.step
+        if not 0 < nvec <= st["vectors"]:
+            raise RuntimeError(f"a step's {nvec} tags overflow its commit buffer of {st['vectors']}")
+        root = ctypes.c_ulonglong(0)
+        self.call("wt_tag_leaves", st["tags"].data_ptr(), nvec, st["nodes"].data_ptr(), stream())
+        self.call("wt_tag_tree", st["nodes"].data_ptr(), -(-nvec // 16), ctypes.byref(root), stream())
+        st["roots"][m] = (nvec, root.value)
 
     def configs(self, tagged: bool) -> list[tuple[int, int, int, int, int]]:
         """(decoders, stages, taggers, k_s, sketchers) as ra-codec-tensor's `fused_cfgs("auto")` picks them: untagged
@@ -539,6 +571,8 @@ class TensorLinear(Linear):
                   stream())
         self.blocks = tlib.tag_vectors(self.n, self.kd)
         self.groups = 0
+        self.first = self.last = False
+        self.at: int | None = None
         self.payloads = payloads
 
     @property
@@ -557,10 +591,35 @@ class TensorLinear(Linear):
             raise ValueError(f"the tensor GEMM has one form, not {cfg.name}")
         t = self.tlib
         groups, steps = t.steps(x8.shape[0], self.n, self.kd, cfg)
-        tags = t.tag_buffer(self.blocks).data_ptr() if cfg.taggers >= 0 or cfg.sketchers else None
+        if self.at is not None:
+            tags, tag_base = t.step["tags"].data_ptr() + 32 * self.at, self.at
+        else:
+            tags = t.tag_buffer(self.blocks).data_ptr() if cfg.taggers >= 0 or cfg.sketchers else None
+            tag_base = self.tag_base
         t.fused(self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n, self.kd, self.base,
-                int(partials), cfg, groups, steps.data_ptr(), tags, self.tag_base)
+                int(partials), cfg, groups, steps.data_ptr(), tags, tag_base)
         self.groups = groups
+
+    def forward(self, x8: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
+        """As `Linear.forward`; under the lib's in-step commit, the step's first linear starts its tags at index 0, each
+        sketched launch writes its tags after the previous one's, and the last one commits them."""
+        t, m = self.tlib, x8.shape[0]
+        st = t.step
+        if st is None or m > MAX_ROWS:
+            return super().forward(x8, xs)
+        at = 0 if self.first else st["at"]
+        end = at + t.vectors(self.n, self.kd, t.steps(m, self.n, self.kd, self.config(m))[0])
+        if end > st["vectors"]:
+            raise RuntimeError(f"a step's tags overflow its commit buffer of {st['vectors']}")
+        self.at = at
+        try:
+            y = super().forward(x8, xs)
+        finally:
+            self.at = None
+        st["at"] = end
+        if self.last:
+            t.commit(end, m)
+        return y
 
     def sketch_vectors(self, vs: list[int], groups: int) -> np.ndarray:
         """Vectors ``vs`` of a sketched launch at ``groups`` CTA groups, as `sketching.vectors` lays them out (vector

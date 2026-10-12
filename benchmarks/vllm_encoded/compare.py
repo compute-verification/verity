@@ -15,8 +15,9 @@ Writes OUT/frontier.json too: the same points in the rate audit's shared schema 
 `benchmarks/word_codec/frontier.py`), with ``end_to_end: true``, the context and the model: y over stock vLLM compiled (the
 decode headline's baseline) of the compiled arms, as vLLM serves (-c) or without autotuning (-d, the step its gate ran; a
 little slower than -c, so its y errs high), split by the run's own arms in the same mode into base (the arm's kernel on plain payloads: `plain`, or the wide
-kernel at k = 0), decode (over base) and tag (the tagged arm over the same arm untagged); the step runs no commit, so
-y_commit is 0.  x, Δ (and τ for a tagged arm) are the codec lanes' measurements for the same field, k and packing (`CODEC`;
+kernel at k = 0), decode (over base), tag (the tagged arm over the same arm untagged) and commit (a committed sketch arm,
+serve.py --commit, over the same arm uncommitted; 0 when the step runs no commit).  x, Δ (and τ for a tagged arm) are the
+codec lanes' measurements for the same field, k and packing (`CODEC`;
 `TENSOR_CODEC` for the tensor kernel's fields, by name: its m521 and the wide kernel's p521 are one prime); a sketched arm's
 τ is 0, as ra-codec-tensor's points.py has it (the sketch's MMAs share the decode's CTA).
 Each point also carries d, the step's time in native passes of the weights (the encoded arm's step over the stock arms'
@@ -133,16 +134,23 @@ def config(a: dict) -> str:
 
 
 def tag_suffix(cod: dict) -> str:
-    """t for ro-blake3/v1, sK_S (sK_StT past T = 8 tasks a vector) for the sketch."""
+    """t for ro-blake3/v1, sK_S (sK_StT past T = 8 tasks a vector) for the sketch, then c when each step commits."""
     if cod.get("tag") != SKETCH:
         return "t" if cod.get("tag") else ""
-    return f"s{cod['sketch_k']}" + (f"t{cod['sketch_t']}" if cod["sketch_t"] != 8 else "")
+    return f"s{cod['sketch_k']}" + (f"t{cod['sketch_t']}" if cod["sketch_t"] != 8 else "") + ("c" if cod.get("commit") else "")
 
 
 def tag_blocks(cod: dict, batch: int) -> int:
     """The tags a decode step's calls write: a tensor store's blocks, or sketched, its vectors at the launch the batch's
     capture size selected (the CTA groups set them)."""
     return cod.get("tag_vectors", {}).get(str(batch), cod["tag_blocks"])
+
+
+def tag_bytes(cod: dict, batch: int) -> int:
+    """The tags' HBM bytes a step: each tag written (32 bytes), and with the commit also read back by the leaves, and
+    the tree's nodes (64 bytes, one a leaf of 16 tags and about as many above them) each written and read."""
+    n = tag_blocks(cod, batch)
+    return 32 * n + (32 * n + 4 * 64 * -(-n // 16) if cod.get("commit") else 0)
 
 
 def group_name(a: dict) -> str:
@@ -219,14 +227,15 @@ def main() -> int:
         base = (by.get(f"w{cod['word_bits']}-0" + md) if wide else None) or plain
         base_name = "wide k = 0" if base is not plain else "plain fragments"
         untagged = by.get(f"{a['arm'][0]}{cod['word_bits']}-{a['k']}" + md, []) if cod.get("tag") else []
+        uncommitted = by.get(config(a)[:-1] + md, []) if cod.get("commit") else []
         for b, ctx in keys:
             e, s, pl, sc = tps(group, b, ctx), tps(stock, b, ctx), tps(plain, b, ctx), tps(compiled, b, ctx)
             if e is None:
                 continue
             pt = next(p for p in a["points"] if p["batch"] == b and p["context"] == ctx)
             mean_ctx = ctx + pt.get("max_tokens", 0) / 2
-            tag_bytes = (32 * tag_blocks(cod, b) if "tag_blocks" in cod else inst["plain_bytes"] // 8) if cod.get("tag") else 0
-            ws = working_set(ms, b, mean_ctx, inst["store_bytes"], True, tag_bytes)
+            tb = (tag_bytes(cod, b) if "tag_blocks" in cod else inst["plain_bytes"] // 8) if cod.get("tag") else 0
+            ws = working_set(ms, b, mean_ctx, inst["store_bytes"], True, tb)
             ws_stock = working_set(ms, b, mean_ctx, inst["plain_bytes"], False)
             point = {
                 "lane": "ra-vllm-encoded", "end_to_end": True, "model": model,
@@ -251,11 +260,12 @@ def main() -> int:
                          ws["uncertified_share"]))
             ref = (TENSOR_CODEC.get((cod["field"], a["k"])) if tensor else
                    CODEC.get((cod["word_bits"], cod["payload_bits"], a["k"])))
-            bs, un = tps(base, b, ctx), tps(untagged, b, ctx)
+            bs, un, uc = tps(base, b, ctx), tps(untagged, b, ctx), tps(uncommitted, b, ctx)
             if md not in ("-c", "-d") or sc is None or bs is None or ref is None or not encoded(a):
                 continue
             y_total, y_base = sc / e, sc / bs
-            y_tag = sc / e - sc / un if un else 0.0
+            y_commit = sc / e - sc / uc if uc else 0.0
+            y_tag = sc / e - y_commit - sc / un if un else 0.0
             sketched = cod.get("tag") == SKETCH
             tau = ref[2] if cod.get("tag") and not sketched else 0.0
             pass_ms = native_pass.get(b)
@@ -266,17 +276,20 @@ def main() -> int:
                 "arithmetic": (f"cuda-int32/{cod['field']}/{'wt' if tensor else 'wide'}.cu" if wide or tensor else
                                "cuda-int32/mersenne61/pb56/ve.cu")
                               + (f"/sketch{cod['sketch_k']}" + (f"t{cod['sketch_t']}" if cod["sketch_t"] != 8 else "")
+                                 + ("/commit" if cod.get("commit") else "")
                                  if sketched else "/tag" if cod.get("tag") else ""),
                 "compiled": bool(a.get("compiled")), "mode": md, "batch": b, "context": ctx,
-                "y_total": y_total, "y_base": y_base, "y_decode": y_total - y_base - y_tag,
-                "y_tag": y_tag, "y_commit": 0.0, "x": ref[0], "delta": ref[1], "tau": tau,
+                "y_total": y_total, "y_base": y_base, "y_decode": y_total - y_base - y_tag - y_commit,
+                "y_tag": y_tag, "y_commit": y_commit, "x": ref[0], "delta": ref[1], "tau": tau,
                 "d": d, "native_pass_ms": pass_ms, "step_ms": b / e * 1e3,
                 "mu_rebuild": (d - tau) / ref[0] if d else None, "x_star": (d - tau) / MU_BUDGET if d else None,
                 "x_source": ref[3], "measured": True, "packing": cod["payload_bits"],
                 "label": f"vLLM end to end, {name}, ctx {ctx}: whole decode step over stock vLLM FP8 compiled; base = "
                          + base_name
                          + (", tag split by the untagged arm" if un else ", no tag split" if cod.get("tag") else "")
-                         + "; no commit in the step",
+                         + ("; the commit (leaves and root of the step's tags) in the step"
+                            + (", split by the uncommitted arm" if uc else ", not split") if cod.get("commit")
+                            else "; no commit in the step"),
                 "gpu": a["gpu"], "run": run_id, "art": None,
             })
     f = lambda x, fmt: "-" if x is None else format(x, fmt)

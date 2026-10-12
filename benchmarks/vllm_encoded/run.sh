@@ -14,7 +14,8 @@
 # ro-blake3/v1 tag of every block read, as decode runs), ra-codec-tensor's as tensor:FIELD:K or tensor:FIELD:K:tag (FIELD
 # 255, 511, 512, 521, 767, 768, 1023 or 1279, codec_tensor/wt.cu built for each the arms name; K >= 1, 512 and 768 being
 # full-slot fields at K = 1; tag: its tag warps tag the store's 4,088-byte blocks; skKS or skKStT, K = 1: its sketch
-# warps tag the store under ro-sketch-blake3/v0 at k_s = KS, 16 or 64, over vectors of T tasks, default 8), any arm with +c compiled as vLLM serves by default (serve.py
+# warps tag the store under ro-sketch-blake3/v0 at k_s = KS, 16 or 64, over vectors of T tasks, default 8; a last c
+# commits each decode step's tags, serve.py --commit), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
 # each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring); a last /g makes an arm its gates and one
 # point (batch 1, context 512, 16 steps); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).
@@ -120,7 +121,9 @@ fi
               tag=t$k-${lib%%:*}
               case $lib in
                 *:tag) A+=(--tag); tag+=t ;;
-                *:sk*) s=${lib##*:sk}; A+=(--sketch "${s%%t*}"); tag+=s$s
+                *:sk*) s=${lib##*:sk}; tag+=s$s
+                       case $s in *c) A+=(--commit); s=${s%c} ;; esac
+                       A+=(--sketch "${s%%t*}")
                        case $s in *t*) A+=(--sketch-t "${s##*t}") ;; esac ;;
               esac ;;
       plain) A=(--arm plain --lib "$B/ve-${k:-pb56}.so"); tag=plain${k:+-$k} ;;
