@@ -1,0 +1,56 @@
+"""η over `serve.py`'s runs (`serve-<pool>.json`), the leaderboard's rows: each run's η and its 1 s windows' mean, its
+TPOT against the same engine's `none` run, its token gate, and η before filler by phase (`analyze.shortfall`).
+Torch-free; writes `eta.json`.
+
+    python eta.py --serve serve-large.json [...] --out eta.json
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import analyze  # noqa: E402
+
+
+def rows(serve: dict, R: float) -> list[dict]:
+    base = next((r for r in serve["runs"] if r["policy"] == "none"), None)
+    out = []
+    for r in serve["runs"]:
+        steps = analyze.phases(r["step_records"])
+        sh = analyze.shortfall(steps, r["seconds"], serve["weight_bytes_per_step"], r["filler_bytes"], R)
+        out.append({
+            "policy": r["policy"], "mode": r["mode"], "token_gate": r.get("token_gate"), "eta": sh["eta"],
+            "windows_mean": next((w["mean"] for w in r["windows"] if w["width_s"] == 1.0), None),
+            "tpot_ms": r["tpot_ms_median"], "decode_step_ms": r["decode_step_ms_median"],
+            "tpot_x": r["tpot_ms_median"] / base["tpot_ms_median"] if base else None,
+            "filler": sh["filler"], "before_filler": {k: sh[k]["eta"] for k in ("decode", "prefill", "empty", "gaps", "idle")},
+        })
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--serve", type=Path, nargs="+", required=True)
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--R", type=float, default=None, help="GB/s (default: each serve file's own)")
+    a = ap.parse_args()
+    res = {}
+    for p in a.serve:
+        s = json.loads(p.read_text())
+        res[p.name] = rows(s, a.R or s["args"]["R"])
+        for r in res[p.name]:
+            b = r["before_filler"]
+            print(f"{p.name} {r['policy']:>12}/{r['mode']:<6} η {r['eta']:.3f} (1 s windows {1 - (r['windows_mean'] or 0):.3f})"
+                  f"  TPOT {r['tpot_ms']:.2f} ms ×{r['tpot_x'] or 0:.2f}  gate {r['token_gate']}  filler {r['filler']:.3f}"
+                  f"  before: decode {b['decode']:.3f} prefill {b['prefill']:.3f} gaps {b['gaps']:.3f}"
+                  f" idle {b['idle']:.3f} empty {b['empty']:.3f}")
+    a.out.write_text(json.dumps(res, indent=1))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
