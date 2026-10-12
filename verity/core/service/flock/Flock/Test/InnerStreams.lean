@@ -64,4 +64,99 @@ def srow (cs : InnerCommits) (value : String) (x : Nat) (sh : Option Flock.RecSp
 -- the other values are read as before with a shape
 #guard srow ics "rec-c1" 0 == ok 2
 
+/-! R's shape: `stackedRounds` is `rec_live.stacked_rounds` (36 rounds at m 22 to 24, the binding round first, the cap 128
+nodes; the three differ past it), and an R opening unit is held to the shape R's stream was. -/
+
+def r23 : StackedShape := ⟨23, 2⟩
+
+#guard [22, 23, 24].all fun m => ((stackedRounds ⟨m, 2⟩).map (·.size)) == some 36
+#guard ((stackedRounds r23).bind (·[0]?)) == some (7, #[128], 0, true)
+#guard ((stackedRounds r23).bind (·[3]?)) == some (16, #[], 1, true)
+#guard stackedRounds ⟨22, 2⟩ != stackedRounds r23 && stackedRounds ⟨24, 2⟩ != stackedRounds r23
+#guard stackedRounds ⟨23, 1⟩ != stackedRounds r23 && stackedRounds ⟨21, 2⟩ == none
+
+def held (sh : Option StackedShape) : InnerCommits := { ic with stacked := sh }
+
+def why (x : Flock.V Unit) : Option String := match x with | .error e => some e | .ok _ => none
+
+#guard (checkOpeningShape "rec-opening/m23-c2-p0" (held (some r23))).toOption.isSome
+#guard (checkOpeningShape "rec-opening/m23-c2-p3" (held (some r23))).toOption.isSome
+#guard why (checkOpeningShape "rec-opening/m24-c2-p0" (held (some r23))) == some
+  "FIREWALL-REFUSED: registration: rec-opening/m24-c2-p0 opens R at (m 24, claims 2), not at the shape staging committed R at (m 23, claims 2, META's stacked)"
+#guard (checkOpeningShape "rec-opening/m23-c3-p0" (held (some r23))).toOption.isNone
+#guard why (checkOpeningShape "rec-opening/m23-c2-p0" (held none)) == some
+  "FIREWALL-REFUSED: registration: rec-opening/m23-c2-p0 opens R at (m 23, claims 2), not at the shape staging committed R at (no shape, META's stacked)"
+#guard (checkOpeningShape "rec-sparse/n18-e13-s6-t0" (held none)).toOption.isSome
+
+/-! Candidate 3's V* list at the e2e's shape (m 25, k_log 22, the bucket's RecSparse (18, 13, 6, 0), R at (m 23, claims 2)):
+RecSparse, R's three levels at `fast100(23)` under names of their own, and R's opening. A list missing any is refused by
+name, as is an opening at a shape other than META's. -/
+
+def sp18 : Flock.RecSparse.Shape := ⟨18, 13, 6, 0⟩
+def c3 : Inner := { m := 25, kLog := 22, claims := 8, regions := 3, sparse := some sp18, stacked := some r23 }
+def gfs0 : Flock.RecOpen.GfS := ⟨[], []⟩
+def lv : List VStar.Stmt := [.recOpenStacked 0 64 4 218, .recOpenStacked 1 16 3 106, .recOpenStacked 2 16 1 71]
+def op (m : Nat) : VStar.Stmt := .opening m 2 0 gfs0 [] 1
+def full : List VStar.Stmt := [.sparse sp18 (hRound 25 22)] ++ lv ++ [op 23]
+def err (x : Except String Unit) : Option String := match x with | .error e => some e | .ok _ => none
+
+#guard hRound 25 22 == 38 && tableM sp18 == 23
+#guard (fast100 23).map (fun s => s.levels.toList.map fun l => (2 ^ l.lanes, l.d - l.cap, l.q)) ==
+  some [(64, 4, 218), (16, 3, 106), (16, 1, 71)]
+#guard lv.map (·.name) == ["rec-open-stacked/l64-h4", "rec-open-stacked/l16-h3", "rec-open-stacked/l16-h1"]
+#guard (VStar.Stmt.sparse sp18 38).name == "rec-sparse/n18-e13-s6-t0" && (op 23).name == "rec-opening/m23-c2-p0"
+#guard openingPortName 25 0 == "m0" && openingPortName 25 24 == "m24" && openingPortName 25 25 == "acc0" &&
+  openingPortName 25 26 == "acc1" && openingPortName 25 28 == "claim1"
+#guard ownPorts (.sparse sp18 38) == [("h", "rec-c38", #[some 0, some 1])]
+#guard ownPorts (.opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("claim0", 1)] 1) == [("m3", "rec-opening-c3", #[some 0])]
+
+#guard err (checkCandidate3 c3 full.toArray) == none
+#guard err (checkCandidate3 c3 (full.drop 1).toArray) ==
+  some "candidate 3's V* list has no RecSparse statement (rec-sparse/n18-e13-s6-t0), and the inner shape names its sparse phase"
+#guard err (checkCandidate3 c3 (full.filter (·.name != "rec-open-stacked/l16-h3")).toArray) ==
+  some "candidate 3's V* list has no level 1 of R's openings (rec-open-stacked/…), and the inner shape names R (m 23, claims 2)"
+#guard err (checkCandidate3 c3 full.dropLast.toArray) ==
+  some "candidate 3's V* list has no part of R's opening (rec-opening/m23-c2-p0), and the inner shape names R (m 23, claims 2)"
+#guard err (checkCandidate3 c3 (full.dropLast ++ [op 24]).toArray) ==
+  some "candidate 3's V* list: rec-opening/m24-c2-p0 opens R at (m 24, claims 2), not at R's shape (m 23, claims 2, META's stacked)"
+-- a session without candidate 3's phases needs none of them
+#guard err (checkCandidate3 { c3 with sparse := none, stacked := none } #[]) == none
+
+-- the inner shape's own refusals, before R's opening is computed
+#guard err ((candidate3Statements { c3 with sparse := none }).map fun _ => ()) == some
+  "candidate 3's V* list: the inner shape names R's shape (m 23, claims 2) and no RecSparse shape (rec-inner --sparse): R opens the sparse phase's claims, so RecSparse is missing"
+#guard err ((candidate3Statements { c3 with stacked := some ⟨24, 2⟩ }).map fun _ => ()) ==
+  some "candidate 3's V* list: R's m 24 is not rec-sparse/n18-e13-s6-t0's table_m 23"
+#guard err ((candidate3Statements { c3 with stacked := some ⟨23, 3⟩ }).map fun _ => ()) ==
+  some "candidate 3's V* list: R's claims 3, not the two reps' sparse claims (2)"
+#guard ((candidate3Statements { c3 with stacked := none }).map (·.toList.map (·.name))).toOption == some ["rec-sparse/n18-e13-s6-t0"]
+
+-- a unit under a name none of the list's is refused with why: an R level under the circuit table's name, an opening or a
+-- RecSparse at another shape
+#guard unlisted c3 "rec-open/l64-h4" full.toArray |>.startsWith
+  "rec-open/l64-h4: R's level stacked/L0 is rec-open-stacked/l64-h4, never under the circuit table's name rec-open/…; "
+#guard unlisted c3 "rec-opening/m24-c2-p0" full.toArray ==
+  "rec-opening/m24-c2-p0: opens R at (m 24, claims 2), not at R's shape (m 23, claims 2, the inner circuit's META's stacked)"
+#guard unlisted { c3 with stacked := none } "rec-opening/m23-c2-p0" #[] ==
+  "rec-opening/m23-c2-p0: one of R's opening parts, and the verifier's inner shape names no R (rec-inner: the inner circuit's META's stacked)"
+#guard unlisted c3 "rec-sparse/n18-e13-s6-t1" full.toArray ==
+  "rec-sparse/n18-e13-s6-t1: a RecSparse unit, and the bucket's is rec-sparse/n18-e13-s6-t0 (rec-inner --sparse)"
+#guard unlisted { c3 with sparse := none } "rec-sparse/n18-e13-s6-t0" #[] ==
+  "rec-sparse/n18-e13-s6-t0: a RecSparse unit, and the verifier's inner shape names no sparse phase (rec-inner --sparse)"
+#guard isVStar "rec-open-stacked/l16-h1" && isVStar "rec-sparse/n18-e13-s6-t0" && isVStar "rec-opening/m23-c2-p0"
+
+-- the inner shape covers the transcript: candidate 3's streams need the shapes, and R's is META's
+def c3cs (sh : Option StackedShape) : InnerCommits :=
+  { reps := ic.reps, streams := #[sparseStream 0 20 10, sparseStream 1 40 10] ++ ic.streams, stacked := sh }
+
+#guard why (checkCovers c3 (c3cs (some r23))) == none
+#guard why (checkCovers { c3 with sparse := none } (c3cs (some r23))) == some
+  "rec-inner: the inner transcript holds candidate 3's sparse phases, and the verifier's inner shape names no RecSparse shape (rec-inner --sparse): its V* list would have no RecSparse statement"
+#guard why (checkCovers c3 { reps := ic.reps }) == some
+  "rec-inner: the verifier's inner shape names a RecSparse shape (--sparse), and the inner transcript holds no sparse phase"
+#guard why (checkCovers { c3 with stacked := none } (c3cs (some r23))) == some
+  "rec-inner: the inner transcript holds R's stream (stacked/rep0), and the verifier's inner shape names no shape of R (stacked): its V* list would have no level of R's or R's opening"
+#guard why (checkCovers { c3 with stacked := some ⟨24, 2⟩ } (c3cs (some r23))) == some
+  "rec-inner: the verifier's inner shape names R's shape (m 24, claims 2), and the inner circuit's META (m 23, claims 2) (stacked)"
+
 end Flock.Test.InnerStreams

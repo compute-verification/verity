@@ -1,8 +1,8 @@
 """The Lean verifier's reading of the inner session's transcript (`RecVStar.innerCommits`, `verify --rec-inner-transcript`,
 `flock-verify rec-transcript`) on candidate 3's whole inner session: the fetched fixture `rec-c3-inner` is the coin server's
-record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of `r20261012-014245-8bec`
+record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of `r20261012-023435-3f97`
 (#1759's `pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1, with the relay keeping the prover's
-Hello and R's top registered at staging): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's
+Hello, R's top registered at staging and R's shape in META): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's
 record, which keeps z_partial's round 40 whole), both reps' sparse phases (33 each) and the stacked table R (36), whose root
 is no Hello table's but the top its stream's binding round commits. The reps' coins are checked against the prover's record,
 the sparse streams and R's are the coin server's alone; `session/session.json` is the relay's record, which is refused. The
@@ -12,11 +12,14 @@ statement's `verity/registration/v2` circuit registration, `circuit-registration
 META binds (`circuit-meta.txt`, the staged `circuit.txt`'s header): the verifier takes both (`--rec-inner-circuit`,
 `--rec-inner-registration`) and refuses, each with its `FIREWALL-REFUSED` reason, a record META does not bind, a session
 with R's stream and no registered top, and R's binding round committing a top other than the registered one; a
-registration naming R needs R's stream. The plain session (`rec-coins`' inner session) is read as before, its two reps'
+registration naming R needs R's stream. R's `m` and claims are META's `stacked`, the shape staging committed R at (the
+registered cap fixes neither: m 22 to 24 share it), and R's stream is held to that shape's rounds: a META naming no shape or
+another, and R's stream opened at another `m` over the registered cap, are refused by name. The plain session (`rec-coins`' inner session) is read as before, its two reps'
 `c_k` and nothing else."""
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import re
 import subprocess
@@ -47,7 +50,7 @@ def _fixture(d: Path) -> Path:
 
 
 def _inner(circuit: Path | None = None, registration: Path | None = None) -> list[str]:
-    """The inner circuit's header and its circuit registration, 8bec's when not given."""
+    """The inner circuit's header and its circuit registration, 3f97's when not given."""
     return ["--rec-inner-circuit", str(circuit or _fixture(C3) / "circuit-meta.txt"),
             "--rec-inner-registration", str(registration or C3 / "circuit-registration.json")]
 
@@ -57,8 +60,8 @@ def _meta_registration() -> str:
 
 
 def _registered(tmp_path: Path, change, bind: bool = True) -> list[str]:
-    """8bec's circuit registration changed by ``change``, and its circuit header with META's `registration` the changed
-    record's digest when ``bind`` (as a statement staged with that record would be), 8bec's own otherwise."""
+    """3f97's circuit registration changed by ``change``, and its circuit header with META's `registration` the changed
+    record's digest when ``bind`` (as a statement staged with that record would be), 3f97's own otherwise."""
     from verity.core.protocols.sampled_proofs.one_stage.registration import digest
 
     rec = json.loads((_fixture(C3) / "circuit-registration.json").read_text())
@@ -284,6 +287,84 @@ def test_meta_and_the_record_go_together(tmp_path):
                  "verifier holds none (--rec-inner-registration)")
 
 
+#: R's shape as staging committed R (META's `stacked`, `rec_session.stage_stacked`): `rec_sparse.table_m` at the bucket
+#: 18,13,6,0 and the two reps' claims
+R_SHAPE = {"m": 23, "claims": 2}
+SHAPE = ("FIREWALL-REFUSED: registration: stacked/rep0 is not R's stream at the shape staging committed R at (m {m}, claims "
+         "{claims}, META's stacked): ")
+
+
+def _meta(tmp_path: Path, change) -> list[str]:
+    """The inner circuit's header with META changed by ``change`` (its `registration` left as staged), and the record."""
+    head, meta = (_fixture(C3) / "circuit-meta.txt").read_text().splitlines()
+    m = json.loads(meta[5:])
+    change(m)
+    (tmp_path / "circuit-meta.txt").write_text(f"{head}\nMETA {json.dumps(m)}\n")
+    return _inner(tmp_path / "circuit-meta.txt")
+
+
+def test_rs_shape_is_metas():
+    """META carries R's shape, and R's stream is R's at it round for round (`RecVStar.stackedRounds`, Python's
+    `rec_live.stacked_rounds`)."""
+    from verity_flock.rec_live import stacked_rounds
+
+    m = json.loads((_fixture(C3) / "circuit-meta.txt").read_text().splitlines()[1][5:])
+    assert m["stacked"] == R_SHAPE
+    rs = sorted((r for r in json.loads((C3 / "public.json").read_text())["rounds"] if r["stream"] == "stacked/rep0"),
+                key=lambda r: r["k"])
+    assert [(len(r["coins"]), [len(t) for t in r["tops"]], r["level0"], bool(r["commits"])) for r in rs] == [
+        (n, tops, level0, bool(absorbs)) for n, tops, level0, absorbs in stacked_rounds(R_SHAPE["m"])]
+
+
+@pytest.mark.parametrize("change,why", [
+    (lambda m: m.__delitem__("stacked"), "FIREWALL-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's META "
+     "names no shape of R (stacked): R's m and claims are bound nowhere"),
+    (lambda m: m.__setitem__("stacked", {"m": 22, "claims": 2}), SHAPE.format(m=22, claims=2) +
+     "round 3 is (coins 16, tops [], level0 1, commits true), not (coins 15, tops [], level0 1, commits true)"),
+    (lambda m: m.__setitem__("stacked", {"m": 24, "claims": 2}), SHAPE.format(m=24, claims=2) +
+     "round 3 is (coins 16, tops [], level0 1, commits true), not (coins 17, tops [], level0 1, commits true)"),
+    (lambda m: m.__setitem__("stacked", {"m": 23, "claims": 3}), SHAPE.format(m=23, claims=3) +
+     "R is opened at the two reps' sparse claims, not 3"),
+    (lambda m: m.__setitem__("stacked", {"m": 40, "claims": 2}), SHAPE.format(m=40, claims=2) +
+     "no fast100 schedule at m 40"),
+    (lambda m: m.__setitem__("stacked", {"m": "23", "claims": 2}), "rec inner circuit: META's stacked is not R's shape (m, claims)"),
+], ids=["none", "m22", "m24", "claims3", "m40", "not-a-shape"])
+def test_a_meta_shape_other_than_rs_stream_is_refused(tmp_path, change, why):
+    """R's m and claims are META's alone: a META naming no shape, or one other than the shape R's stream was opened at, is
+    refused."""
+    assert _read(C3, inner=_meta(tmp_path, change)) == (1, None, why)
+
+
+def _fresh(*tag) -> str:
+    return (hashlib.sha512(repr(tag).encode()).digest() * 2).hex()
+
+
+def _opened_at(m: int):
+    """stacked/rep0 rebuilt as R's stream at ``m`` (`rec_live.stacked_rounds(m)`) over the registered cap: its binding round as
+    committed (R's registered top, the first claim's ring switch), every later round's coins, tops and `c_k` fresh."""
+    from verity_flock.rec_live import stacked_rounds
+
+    def change(t: dict) -> None:
+        s = "stacked/rep0"
+        out = [_round(t, s, k=0)]
+        for k, (n, tops, level0, absorbs) in list(enumerate(stacked_rounds(m)))[1:]:
+            out.append({"stream": s, "k": k, "n": n, "coins": [_fresh(m, k, "coin", i)[:32] for i in range(n)],
+                        "tops": [[_fresh(m, k, j, i) for i in range(w)] for j, w in enumerate(tops)], "level0": level0,
+                        "commits": [_fresh(m, k, "c")] if absorbs else []})
+        t["rounds"] = [r for r in t["rounds"] if r["stream"] != s] + out
+        t["streams"][s]["rounds"] = len(out)
+    return change
+
+
+@pytest.mark.parametrize("m,round3", [(22, 15), (24, 17)])
+def test_r_opened_at_another_m_over_the_registered_cap_is_refused(tmp_path, m, round3):
+    """The fourth control: R's binding round commits the registered cap, which three m share (m 22 to 24, cap depth 7, 36
+    rounds), and R's stream is opened at another m than META's from there on. The cap check passes and the shape check
+    refuses it."""
+    assert _read(C3, _changed(tmp_path, _opened_at(m))) == (1, None, SHAPE.format(**R_SHAPE) + (
+        f"round 3 is (coins {round3}, tops [], level0 1, commits true), not (coins 16, tops [], level0 1, commits true)"))
+
+
 @pytest.mark.parametrize("args,why", [
     (["--rec-inner-session", "P", "--rec-inner-circuit", "M", "--rec-inner-registration", "R"],
      "--rec-inner-registration goes with --rec-inner-transcript"),
@@ -463,3 +544,67 @@ def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse,
     assert p.returncode == 1, p.stdout + p.stderr
     assert re.fullmatch(rf"setup: rec-pub: {re.escape(unit)}: port {port}'s table row \d+ is not sparse/rep1's c_31 \(u, inner "
                         rf"round {flip.k}\) of the inner transcript", p.stdout.strip()), p.stdout
+
+
+def _shape(tmp_path: Path, sparse=SPARSE, stacked=R_SHAPE) -> list[str]:
+    """`rec-inner`'s line at 3f97's table shape (m 25, k_log 22, claims 8 over 3 regions), with the bucket's RecSparse shape
+    and R's when given (`rec-inner --sparse`, META's `stacked`)."""
+    j = {"format": "verity/rec-inner/v1", "m": 25, "k_log": 22, "claims": 8, "regions": 3,
+         **({"sparse": list(sparse)} if sparse else {}), **({"stacked": stacked} if stacked else {})}
+    return ["--rec-inner", str(_write(tmp_path / "rec-inner.json", j))]
+
+
+def _covers(tmp_path: Path, shape: list[str], transcript: Path | None = None) -> tuple[int, str]:
+    d = _fixture(C3)
+    p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(transcript or d / "public.json"),
+                        "--rec-inner-session", str(d / "prover"), *_inner(), *shape], capture_output=True, text=True)
+    return p.returncode, p.stderr.strip()
+
+
+NO_SPARSE = ("rec-inner: the inner transcript holds candidate 3's sparse phases, and the verifier's inner shape names no "
+             "RecSparse shape (rec-inner --sparse): its V* list would have no RecSparse statement")
+
+
+@pytest.mark.parametrize("sparse,stacked,why", [
+    (SPARSE, R_SHAPE, ""),
+    (None, R_SHAPE, NO_SPARSE),
+    (None, None, NO_SPARSE),
+    (SPARSE, None, "rec-inner: the inner transcript holds R's stream (stacked/rep0), and the verifier's inner shape names no "
+     "shape of R (stacked): its V* list would have no level of R's or R's opening"),
+    (SPARSE, {"m": 24, "claims": 2}, "rec-inner: the verifier's inner shape names R's shape (m 24, claims 2), and the inner "
+     "circuit's META (m 23, claims 2) (stacked)"),
+], ids=["honest", "no-sparse", "plain", "no-r", "r-m24"])
+def test_the_verifiers_inner_shape_covers_candidate_3s_session(tmp_path, sparse, stacked, why):
+    """`RecVStar.checkCovers`, as `verify` and `statement` run it beside the V* checks: 3f97's session has both sparse phases
+    and R's stream, so the verifier's inner shape names the bucket's RecSparse shape and META's R, else its V* list would
+    leave RecSparse, R's levels or R's opening out; each shape short of that is refused by name."""
+    assert _covers(tmp_path, _shape(tmp_path, sparse, stacked)) == (0 if not why else 1, why)
+
+
+def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_path):
+    """The plain session (`rec-coins`' inner session, two reps and no other stream) passes under its own inner shape, and is
+    refused under one naming the bucket's RecSparse shape: the shape names a phase the session does not have."""
+    d = _fixture(PLAIN)
+    run = lambda shape: subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(d / "public.json"),
+                                        "--rec-inner-session", str(d / "session"), *shape], capture_output=True, text=True)
+    p = run(["--rec-inner", str(_write(tmp_path / "plain.json", {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22,
+                                                                 "claims": 8, "regions": 3}))])
+    assert p.returncode == 0 and p.stdout.startswith('RECTRANSCRIPT {"reps":[78,78],"streams":[]}'), p
+    p = run(_shape(tmp_path, stacked=None))
+    assert p.returncode == 1 and p.stderr.strip() == (
+        "rec-inner: the verifier's inner shape names a RecSparse shape (--sparse), and the inner transcript holds no sparse "
+        "phase"), p
+
+
+def test_rec_inner_refuses_r_without_the_sparse_shape():
+    """`rec-inner` reads R's shape from the inner circuit's META (3f97's header) and refuses it without the bucket's RecSparse
+    shape (`--sparse`), before it reads the circuit's tables: R opens the sparse phase's claims. A `--sparse` that is not
+    four numbers is refused as the flag reads."""
+    d = _fixture(C3)
+    base = [str(BIN), "rec-inner", "--circuit", str(d / "circuit-meta.txt"), "--public", str(d / "public.json")]
+    p = subprocess.run(base, capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.strip() + p.stderr.strip() == (
+        "rec-inner: the inner circuit's META names R's shape (m 23, claims 2), and the verifier names no RecSparse shape "
+        "(--sparse NU,ELL,S_LOG,T_LOG): R opens the sparse phase's claims, so V*'s list would miss RecSparse"), p
+    p = subprocess.run([*base, "--sparse", "18,13,6"], capture_output=True, text=True)
+    assert p.returncode == 2 and p.stderr.strip() == "--sparse 18,13,6: NU,ELL,S_LOG,T_LOG, four natural numbers", p
