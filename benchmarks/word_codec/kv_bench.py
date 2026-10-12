@@ -360,9 +360,9 @@ def token_encode(lib: Lib, torch, ks, batches, reps: int, enc_rates: dict, log) 
 
 
 def attn_shape(lib: Lib) -> dict:
-    a = (ctypes.c_int * 7)()
+    a = (ctypes.c_int * 10)()
     lib.so.kv_attn_shape(ctypes.cast(a, ctypes.c_void_p))
-    return dict(zip(("heads", "kv_heads", "head_dim", "tlw", "tle", "tt", "part"), a))
+    return dict(zip(("heads", "kv_heads", "head_dim", "tlw", "tle", "tt", "part", "mw", "mma", "mt"), a))
 
 
 def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, log) -> dict:
