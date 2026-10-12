@@ -125,11 +125,13 @@
       "linear": "MEM",
       "owns": [
         "verity/core/protocols/pous/",
+        "verity/core/protocols/bandwidth/",
         "verity/core/devices/memory_challenger/",
         "Security/Definitions/Pous/",
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
+        "benchmarks/bandwidth/",
         "benchmarks/word_codec/"
       ]
     },
