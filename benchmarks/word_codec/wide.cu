@@ -60,6 +60,19 @@ static inline uint32_t __umulhi(uint32_t a, uint32_t b) { return (uint32_t)(((ui
 #ifndef WW_OCC
 #define WW_OCC 1
 #endif
+// WW_CC = 1: the limb additions and subtractions (and the Mersenne decode's fold) as PTX carry chains, one IADD3.X a
+// limb, rather than 64-bit accumulators (IADD.64 and the MOVs that build their register pairs). Device builds only.
+#ifndef WW_CC
+#define WW_CC 0
+#endif
+#if WW_CC && defined(WW_HOST)
+#error "WW_CC is PTX: device builds only"
+#endif
+// WW_B3U = 1: the rolled BLAKE3 (WW_ROLL) two rounds an iteration, so the message permutation's moves run three times a
+// compression rather than seven.
+#ifndef WW_B3U
+#define WW_B3U 0
+#endif
 
 namespace ww {
 
@@ -108,10 +121,71 @@ __constant__ uint32_t kI[N];        // p255: √−1, c1, c1·√−1
 __constant__ uint32_t kC1[N];
 __constant__ uint32_t kC1I[N];
 
+// --- carry chains (PTX) -------------------------------------------------------------------------------------------------
+
+#if WW_SQR == 1 || WW_CC
+__device__ __forceinline__ uint32_t madlo_cc(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm volatile("mad.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+__device__ __forceinline__ uint32_t madclo_cc(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm volatile("madc.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+__device__ __forceinline__ uint32_t madhi_cc(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm volatile("mad.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+__device__ __forceinline__ uint32_t madchi_cc(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm volatile("madc.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+__device__ __forceinline__ uint32_t addc0(uint32_t a) {
+  uint32_t r;
+  asm volatile("addc.u32 %0, %1, 0;" : "=r"(r) : "r"(a));
+  return r;
+}
+__device__ __forceinline__ uint32_t add_cc(uint32_t a, uint32_t b) {
+  uint32_t r;
+  asm volatile("add.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b));
+  return r;
+}
+__device__ __forceinline__ uint32_t addc_cc(uint32_t a, uint32_t b) {
+  uint32_t r;
+  asm volatile("addc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b));
+  return r;
+}
+__device__ __forceinline__ uint32_t sub_cc(uint32_t a, uint32_t b) {
+  uint32_t r;
+  asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b));
+  return r;
+}
+__device__ __forceinline__ uint32_t subc_cc(uint32_t a, uint32_t b) {
+  uint32_t r;
+  asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b));
+  return r;
+}
+__device__ __forceinline__ uint32_t subc0() {
+  uint32_t r;
+  asm volatile("subc.u32 %0, 0, 0;" : "=r"(r));
+  return r;
+}
+#endif
+
 // --- limbs ------------------------------------------------------------------------------------------------------------
 
 template <int K>
 __device__ __forceinline__ uint32_t add_k(uint32_t (&r)[K], const uint32_t (&a)[K], const uint32_t (&b)[K]) {
+#if WW_CC
+  r[0] = add_cc(a[0], b[0]);
+#pragma unroll
+  for (int e = 1; e < K; ++e) r[e] = addc_cc(a[e], b[e]);
+  return addc0(0);
+#else
   uint64_t c = 0;
 #pragma unroll
   for (int e = 0; e < K; ++e) {
@@ -120,10 +194,17 @@ __device__ __forceinline__ uint32_t add_k(uint32_t (&r)[K], const uint32_t (&a)[
     c >>= 32;
   }
   return (uint32_t)c;
+#endif
 }
 
 template <int K>
 __device__ __forceinline__ uint32_t sub_k(uint32_t (&r)[K], const uint32_t (&a)[K], const uint32_t (&b)[K]) {
+#if WW_CC
+  r[0] = sub_cc(a[0], b[0]);
+#pragma unroll
+  for (int e = 1; e < K; ++e) r[e] = subc_cc(a[e], b[e]);
+  return subc0() & 1;  // borrow
+#else
   int64_t c = 0;
 #pragma unroll
   for (int e = 0; e < K; ++e) {
@@ -132,6 +213,7 @@ __device__ __forceinline__ uint32_t sub_k(uint32_t (&r)[K], const uint32_t (&a)[
     c >>= 32;
   }
   return (uint32_t)(c & 1);  // borrow
+#endif
 }
 
 template <int K>
@@ -171,44 +253,6 @@ __host__ __device__ __forceinline__ void neg_el(uint32_t (&r)[N], const uint32_t
 }
 
 // --- products ---------------------------------------------------------------------------------------------------------
-
-#if WW_SQR == 1
-__device__ __forceinline__ uint32_t madlo_cc(uint32_t a, uint32_t b, uint32_t c) {
-  uint32_t r;
-  asm volatile("mad.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
-  return r;
-}
-__device__ __forceinline__ uint32_t madclo_cc(uint32_t a, uint32_t b, uint32_t c) {
-  uint32_t r;
-  asm volatile("madc.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
-  return r;
-}
-__device__ __forceinline__ uint32_t madhi_cc(uint32_t a, uint32_t b, uint32_t c) {
-  uint32_t r;
-  asm volatile("mad.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
-  return r;
-}
-__device__ __forceinline__ uint32_t madchi_cc(uint32_t a, uint32_t b, uint32_t c) {
-  uint32_t r;
-  asm volatile("madc.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
-  return r;
-}
-__device__ __forceinline__ uint32_t addc0(uint32_t a) {
-  uint32_t r;
-  asm volatile("addc.u32 %0, %1, 0;" : "=r"(r) : "r"(a));
-  return r;
-}
-__device__ __forceinline__ uint32_t add_cc(uint32_t a, uint32_t b) {
-  uint32_t r;
-  asm volatile("add.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b));
-  return r;
-}
-__device__ __forceinline__ uint32_t addc_cc(uint32_t a, uint32_t b) {
-  uint32_t r;
-  asm volatile("addc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b));
-  return r;
-}
-#endif
 
 // t = a·b, 2N limbs.
 __device__ __forceinline__ void mul_full(uint32_t (&t)[2 * N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
@@ -444,6 +488,13 @@ __device__ __forceinline__ void decode_word(uint32_t (&y)[N], const uint32_t (&t
 // r = a + b folded once mod a Mersenne p: a ≤ p + 1 and b ≤ p give r ≤ p + 1.
 __device__ __forceinline__ void add_fold(uint32_t (&r)[N], const uint32_t (&a)[N], const uint32_t (&b)[N]) {
   add_k<N>(r, a, b);
+#if WW_CC
+  uint32_t top[N];
+#pragma unroll
+  for (int e = 0; e < N; ++e) top[e] = e == 0 ? r[MB] >> MS : 0;
+  r[MB] &= (1u << MS) - 1;
+  add_k<N>(r, r, top);
+#else
   uint64_t c = r[MB] >> MS;
   r[MB] &= (1u << MS) - 1;
 #pragma unroll
@@ -452,6 +503,7 @@ __device__ __forceinline__ void add_fold(uint32_t (&r)[N], const uint32_t (&a)[N
     r[e] = (uint32_t)c;
     c >>= 32;
   }
+#endif
 }
 
 // y ← ρ⁻¹(y) − u for a Mersenne p, given nu ≡ −u below 2^(M+1). y² = lo + 2^M·hi ≡ lo + hi with lo, hi < 2^M, and
@@ -462,6 +514,22 @@ __device__ __forceinline__ void dec_round_mers(uint32_t (&y)[N], const uint32_t 
   const uint32_t m = 0u - (y[0] & 1);
   uint32_t t[2 * N];
   sqr_full(t, y);
+#if WW_CC
+  uint32_t a[N], b[N];
+#pragma unroll
+  for (int e = 0; e < N; ++e) {
+    const uint32_t pm = plimb(e) & m;
+    a[e] = (e < MB ? t[e] : t[e] & ((1u << MS) - 1)) ^ pm;
+    b[e] = __funnelshift_r(t[MB + e], t[MB + e + 1], MS) ^ pm;
+  }
+  const uint32_t c1 = add_k<N>(a, a, b);
+  const uint32_t c2 = add_k<N>(y, a, nu);
+  uint32_t top[N];
+#pragma unroll
+  for (int e = 0; e < N; ++e) top[e] = e == 0 ? (y[MB] >> MS) | ((c1 + c2) << (32 * N - M)) : 0;
+  y[MB] &= (1u << MS) - 1;
+  add_k<N>(y, y, top);
+#else
   uint64_t c = 0;
 #pragma unroll
   for (int e = 0; e < N; ++e) {
@@ -480,6 +548,7 @@ __device__ __forceinline__ void dec_round_mers(uint32_t (&y)[N], const uint32_t 
     y[e] = (uint32_t)top;
     top >>= 32;
   }
+#endif
   canon(y);
 }
 
@@ -796,20 +865,36 @@ __device__ __forceinline__ void b3_compress_rolled(uint32_t (&cv)[8], uint32_t (
   using bw::rotr32;
   uint32_t v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
   uint32_t v8 = B3_IV0, v9 = B3_IV1, v10 = B3_IV2, v11 = B3_IV3, v12 = 0, v13 = 0, v14 = len, v15 = flags;
+#define B3_ROUND(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15) \
+  B3_G(v0, v4, v8, v12, a0, a1);                                                        \
+  B3_G(v1, v5, v9, v13, a2, a3);                                                        \
+  B3_G(v2, v6, v10, v14, a4, a5);                                                       \
+  B3_G(v3, v7, v11, v15, a6, a7);                                                       \
+  B3_G(v0, v5, v10, v15, a8, a9);                                                       \
+  B3_G(v1, v6, v11, v12, a10, a11);                                                     \
+  B3_G(v2, v7, v8, v13, a12, a13);                                                      \
+  B3_G(v3, v4, v9, v14, a14, a15)
+#if WW_B3U
+  // two rounds an iteration, the second on σ(m) by renaming, then m ← σ²(m); the seventh round on σ⁶(m) unpermuted
+#pragma unroll 1
+  for (int r = 0; r < 3; ++r) {
+    B3_ROUND(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
+    B3_ROUND(m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13], m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]);
+    const uint32_t t[16] = {m[3], m[4], m[10], m[12], m[13], m[2], m[7], m[14], m[6], m[5], m[9], m[0], m[11], m[15], m[8], m[1]};
+#pragma unroll
+    for (int i = 0; i < 16; ++i) m[i] = t[i];
+  }
+  B3_ROUND(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
+#else
 #pragma unroll 1
   for (int r = 0; r < 7; ++r) {
-    B3_G(v0, v4, v8, v12, m[0], m[1]);
-    B3_G(v1, v5, v9, v13, m[2], m[3]);
-    B3_G(v2, v6, v10, v14, m[4], m[5]);
-    B3_G(v3, v7, v11, v15, m[6], m[7]);
-    B3_G(v0, v5, v10, v15, m[8], m[9]);
-    B3_G(v1, v6, v11, v12, m[10], m[11]);
-    B3_G(v2, v7, v8, v13, m[12], m[13]);
-    B3_G(v3, v4, v9, v14, m[14], m[15]);
+    B3_ROUND(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
     const uint32_t t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13], m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]};
 #pragma unroll
     for (int i = 0; i < 16; ++i) m[i] = t[i];
   }
+#endif
+#undef B3_ROUND
   cv[0] = v0 ^ v8, cv[1] = v1 ^ v9, cv[2] = v2 ^ v10, cv[3] = v3 ^ v11;
   cv[4] = v4 ^ v12, cv[5] = v5 ^ v13, cv[6] = v6 ^ v14, cv[7] = v7 ^ v15;
 }
@@ -1042,7 +1127,8 @@ extern "C" {
 
 int ww_constants(int* out) {
   out[0] = WW_BITS; out[1] = N; out[2] = PB; out[3] = L; out[4] = LANES; out[5] = TASK_TILES; out[6] = GEMM_WARPS;
-  out[7] = KMAX; out[8] = WW_SQR; out[9] = MSG_BLOCKS; out[10] = WW_ROLL; out[11] = WW_OCC;
+  out[7] = KMAX; out[8] = WW_SQR; out[9] = MSG_BLOCKS; out[10] = WW_ROLL; out[11] = WW_OCC; out[12] = WW_CC;
+  out[13] = WW_B3U;
   return 0;
 }
 

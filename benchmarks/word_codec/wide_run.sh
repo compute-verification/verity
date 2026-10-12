@@ -10,7 +10,8 @@
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to wide_bench.py; LIBSET
 # (default "p127s1 p255s1 p521s1": the carry-chain squaring, faster than operand scanning at every field in
-# r20261012-071155-d336; add p127s0 … for both; a suffix r builds WW_ROLL=1, rN also WW_OCC=N, as in p521s1r3) names
+# r20261012-071155-d336; add p127s0 … for both; a suffix r builds WW_ROLL=1, rN also WW_OCC=N, as in p521s1r3, and
+# trailing c and u WW_CC=1 and WW_B3U=1, as in p521s1rcu) names
 # the builds, KMAX_<bits> (defaults 4, 2, 2) the largest k each
 # holds, and WW_DEFS extra -D flags for every build. PROFILE=1 runs, instead of the bench, wide_profile.py under
 # `ncu --set full` on LIBSET's first library (PROFILE_ARGS: --shape, --batch, --k): out/profile.ncu-rep and
@@ -30,7 +31,12 @@ FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -
 declare -A PIDS=()
 for lib in $LIBSET; do
   bits=${lib:1:3} sqr=${lib:5:1} suf=${lib:6} defs=""
-  [[ $suf == r* ]] && defs="-DWW_ROLL=1" && [ -n "${suf#r}" ] && defs+=" -DWW_OCC=${suf#r}"
+  while [[ $suf == *[cu] ]]; do
+    [[ $suf == *c ]] && defs+=" -DWW_CC=1"
+    [[ $suf == *u ]] && defs+=" -DWW_B3U=1"
+    suf=${suf%?}
+  done
+  [[ $suf == r* ]] && defs+=" -DWW_ROLL=1" && [ -n "${suf#r}" ] && defs+=" -DWW_OCC=${suf#r}"
   # shellcheck disable=SC2086
   nvcc "${FLAGS[@]}" -DWW_BITS="$bits" -DWW_SQR="$sqr" -DWW_KMAX="${KMAX[$bits]}" $defs ${WW_DEFS:-} -o "$B/ww-$lib.so" \
     $WC/wide.cu > "$O/ww-$lib.ptxas" 2>&1 & PIDS[$lib]=$!
