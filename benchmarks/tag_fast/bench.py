@@ -75,7 +75,7 @@ class Lib:
             "tf_fused2": [i, i, i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3": [i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3d": [i, i, v, v, v, v, i, i, i, u64, v, v, v, v, v, v, i, i, v],
-            "tf_fused3p": [i, i, i, v, v, v, v, i, i, i, u64, v, i, v, i, i, i, v, v],
+            "tf_fused3p": [i, i, i, v, v, v, v, i, i, i, u64, v, i, v, i, i, v, v],
             "tf_subtree": [v, u64, u64, u64, i, v], "tf_tree_from": [v, u64, i, v],
             "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_tree": [v, u64, v],
             "tf_commit": [v, u64, u64, v, v],
@@ -274,10 +274,10 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
             if lanes in CHUNK_REG_PACKED and n % 64 == 0:
                 ctr = torch.zeros(2, dtype=torch.int32, device="cuda")
                 for mb in (1, 16, 32):
-                    for pd, l2q, form in ((1, 0, "r1p"), (2, 0, "r2p"), (1, 4, "r1l")):
-                        check(f"t_{form}_m{mb}", lambda: lib.call(
+                    for pd in (1, 2):
+                        check(f"t_r{pd}p_m{mb}", lambda: lib.call(
                             "tf_fused3p", lanes, MODE_TAGS, pd, ptr(plain), ptr(xs[mb].view(torch.uint8)), ptr(y),
-                            ptr(tb), mb, n, k, jb, ptr(ctr), 0, ptr(ctr) + 4, 0, 0, l2q, 0, stream(torch)))
+                            ptr(tb), mb, n, k, jb, ptr(ctr), 0, ptr(ctr) + 4, 0, 0, 0, stream(torch)))
                 for mb in (1, 16, 32):
                     check(f"t_r1c_m{mb}", lambda: fused3(lib, torch, lanes, MODE_TAGS, 1, plain, xs[mb], y, tb, mb, n, k,
                                                          jb, pk=1))
@@ -380,7 +380,7 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
                                            ("t4kr2p", 4, MODE_TAGS, 2)) if n % 64 == 0 else ():
                 ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
                 lib.call("tf_fused3p", lanes, mode, pd, ptr(plain), ptr(x.view(torch.uint8)), ptr(ya), ptr(tb), mb, n,
-                         k, 0, ptr(ctr), 0, ptr(ctr) + 4, 0, 0, 0, 0, stream(torch))
+                         k, 0, ptr(ctr), 0, ptr(ctr) + 4, 0, 0, 0, stream(torch))
                 e[f"{label}_rel"] = float(((ya - refp).abs() / scale).max())
             for label, (lanes, mode, wc, st) in forms:
                 if not fits(mb, mode, wc, st, n):
@@ -737,14 +737,15 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
 
 
 TR_WORDS = 8  # tf.cu's trace words a chain link
-PIPE_PLANS = ("px", "pl4")
+PIPE_PLANS = ("px",)
 # Per PDL chain, the shapes capped at ceil(CTAs / SMs) + n CTAs an SM (the others uncapped). Capping down too, or at
 # one more, loses (run r20261012-113150-e677): its CTAs then can't start beside gate_up's padded ones. So do two quads
-# of register prefetch on gate_up and down (run r20261012-114545-aca3: 1.089 vs px's 1.065 at M = 1), and letting the
-# next launch start as a launch starts, not after its loop (run r20261012-115317-093f: every shape 1.197 vs 1.089,
-# down 1.090; its spinning CTAs hold the SMs).
-CAP_PLANS = {"p": {}, **{p: {"qkv": 0, "o": 0, "gate_up": 0} for p in ("px", "pl2", "pl4")}}
-L2_PLANS = {"pl2": 2, "pl4": 4}  # quads each warp keeps in an L2 prefetch past its register prefetch
+# of register prefetch on gate_up and down (r20261012-114545-aca3: 1.089 vs 1.065 at M = 1), letting the next launch
+# start as a launch starts (r20261012-115317-093f: 1.197 vs 1.089; its CTAs spin on the SMs) and a bulk L2 prefetch
+# of each warp's next quads (r20261012-120131-7f5d: 1.163 at 2 quads, 1.241 at 4, vs 1.124); the last two's runtime
+# arguments alone slowed fused3p's loop (px 1.089 and 1.124), so tf.cu keeps neither.
+CAP_PLANS = {"p": {}, "px": {"qkv": 0, "o": 0, "gate_up": 0}, "py": {"qkv": 0, "o": 1, "gate_up": 0},
+             "pw": {"qkv": 1, "o": 1, "gate_up": 0}}
 TRACE_BATCHES = (1, 8)
 
 
@@ -765,9 +766,8 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     pipePL   tagPL (P in PIPE_PLANS) with the step before's leaves and tree on a low-priority stream beside it (the
              commit pipelined a step behind; the tags in two buffers, the second's gated like tagk)
     nativeP, tagPL, commitPL for P in CAP_PLANS  nativep, tagpL and commitpL with the plan's shapes at most
-             ceil(CTAs / SMs) + plan[shape] CTAs an SM, and each warp keeping L2_PLANS[P] quads past its register
-             prefetch in an L2 prefetch
-At TRACE_BATCHES, nativepx, tagpx4 and tagpl44 once more with tf.cu's trace (globaltimer stamps a launch), summarized per shape.
+             ceil(CTAs / SMs) + plan[shape] CTAs an SM
+At TRACE_BATCHES, nativepx, tagpx4 and tagpy4 once more with tf.cu's trace (globaltimer stamps a launch), summarized per shape.
     prober4  u4kr1 at every shape: tagr4 with 4-round BLAKE3, uncertified
     noend4   n4kr1 at every shape: tagr4 without the chunks' last quads and finishes (a sink, no tags): what the
              launches' chunk ends cost
@@ -822,8 +822,8 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpl44 once more with tf.cu's trace (glo
         def seq_pdl(g=None, trace=None, plan=None, tb=None):
             """g0kr1 (g None) or tagr's launches through tf_fused3p, tags into tb (tbs[g] if None), launch q waiting on
             ctr[q - 1] (and tracing into trace[q] if given); with CAP_PLANS[plan]'s shapes at most ceil(CTAs / SMs) + its
-            value CTAs an SM, each warp keeping L2_PLANS[plan] quads in an L2 prefetch."""
-            plan, l2q = CAP_PLANS[plan] if plan else {}, L2_PLANS.get(plan, 0)
+            value CTAs an SM."""
+            plan = CAP_PLANS[plan] if plan else {}
             tb = tbs[g] if g and tb is None else tb
             lanes, mode = (1, MODE_GEMM) if g is None else (g, MODE_TAGS)
             fs, off, prev = [lambda: (ctr.zero_(), 0)[1]], 0, 0
@@ -838,8 +838,7 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpl44 once more with tf.cu's trace (glo
                 occ = -(-grid // sms) + plan[name] if name in plan else 0
                 fs.append(lambda n=n, k=k, pl=pl, name=name, tp=tp, off=off, wc=wc, wn=prev, q=q, tr=tr, occ=occ:
                           lib.so.tf_fused3p(lanes, mode, 1, ptr(pl), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), tp,
-                                            mb, n, k, off, wc, wn, ptr(ctr) + 4 * q, int(q > 0), occ, l2q, tr,
-                                            stream(torch)))
+                                            mb, n, k, off, wc, wn, ptr(ctr) + 4 * q, int(q > 0), occ, tr, stream(torch)))
                 prev = grid
                 if g:
                     off += layout.chunk_block_count(n, k, g)
@@ -946,7 +945,7 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpl44 once more with tf.cu's trace (glo
         med = r["median_s"]
         if mb in TRACE_BATCHES:
             r["trace"] = {}
-            for arm, g, plan in (("nativepx", None, "px"), ("tagpx4", 4, "px"), ("tagpl44", 4, "pl4")):
+            for arm, g, plan in (("nativepx", None, "px"), ("tagpx4", 4, "px"), ("tagpy4", 4, "py")):
                 if arm not in arms:
                     continue
                 tr = torch.zeros(len(names) * layout.LAYERS, TR_WORDS, dtype=torch.int64, device="cuda")
