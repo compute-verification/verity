@@ -33,7 +33,9 @@ Schema `verity/codec-frontier-point/v0`, one object per (configuration, batch):
 schema      "verity/codec-frontier-point/v0"
 lane        the lane that produced it (ra-codec-wide, ra-word-codec, ra-codec-tensor, ...)
 model       optional: whose linears y is over, "llama-3.1-70b" or "llama-3.1-8b" (the default)
-b, k        word width in bits (61, 127, 256, 512, 521, 16448 for P2) and rounds; k may be a mean over linears
+b, k        word width in bits (61, 127, 256, 512, 521, 16448 for P2) and rounds
+ks          optional: each linear's k, when they differ; k and x are then the mean's, and `check` prices the point at
+            the smallest (the adversary rebuilds those words: red team F21), keeping the mean as k_mean
 arithmetic  e.g. "cuda-int32/mersenne/sqr0", "tensor-core/...", free text naming the decode's arithmetic
 batch       the decode step's batch (1 … 32)
 y_total     (fused decode + tag + commit time) / native, layer-weighted
@@ -148,6 +150,9 @@ def check(points: list[dict]) -> list[dict]:
             raise ValueError(f"a point lacks {missing}: {p}")
         p.setdefault("y_base", p["y_total"] - p["y_decode"] - p["y_tag"] - p["y_commit"])
         p.setdefault("measured", True)
+        if p.get("ks"):
+            k = min(p["ks"].values())
+            p.update(k_mean=p["k"], x=p["x"] * k / p["k"], k=k)
         out.append(p)
     return out
 

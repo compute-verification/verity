@@ -24,6 +24,11 @@ def test_check_fills_base_and_measured():
     assert p["y_base"] == pytest.approx(1.0) and p["measured"] is True
 
 
+def test_check_prices_a_mixed_k_point_at_its_smallest_k():
+    (p,) = F.check([point(k=1.75, x=437.5, ks={"a": 2, "b": 1})])
+    assert (p["k"], p["k_mean"], p["x"]) == (1, 1.75, pytest.approx(250.0))
+
+
 def test_check_refuses_other_schemas_and_missing_fields():
     with pytest.raises(ValueError):
         F.check([point(schema="other")])
