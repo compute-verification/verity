@@ -102,6 +102,14 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-12 (about 10:03 AM PDT, in memory accounting's thread): no protocol or guarantee assumes trusted prover
+  hardware ("in our setting we will never assume trusted prover hardware so forget about that more broadly"). Nothing
+  the prover runs or hosts is trusted: not its GPUs, its host, its links, a confidential-computing enclave or a process
+  on its machines. So the bandwidth audit treats host memory over PCIe as a slower tier of the prover's memory and
+  prices relayed tags with `RateAuditInteractive`, instead of a trusted host challenger.
+- 2026-10-12 (06:00Z, relayed by top): writing for Daniel puts its math in LaTeX, `\( \)` inline and `\[ \]`
+  displayed, quantities included, and states a protocol or guarantee as its security assumptions, then the protocol's
+  shape, then the properties provable under them.
 - 2026-10-11 (8:53 PM PDT, through his console): a part of `check` whose cold run takes more than about 10 minutes may
   run right after its train lands instead of before, on every landing that changed its inputs, and a failure there
   reverts the landing at once; a reused verdict stays in the gate, and the Lean check always runs before landing.
@@ -117,6 +125,9 @@ Newest first. Each is Daniel's unless it names the coordinator.
   owns it. From an owner's ready mark to `main` moving (the prep, the merge check, the landing, the sweep, the spec DM),
   no agent acts unless the automation refuses; the lander handles what it refuses (a conflict, a failed check, a
   revert), and infra hosts it.
+- 2026-10-11 (relayed by top): the store has no API server. Writers and guards use the bucket, and displays query an
+  index derived from it. D2–D4 (the keys, private metadata in the index, what is public) are as in the design,
+  note:verity-top/20261011T1758Z-draft-store-contract.
 - 2026-10-09 (7:04 PM PDT, relayed by top): the end goal is sampled proofs through recursion with hidden unit circuits,
   on four assumptions: record custody, the OS's randomness, the coin server's randomness, and SHA-512 entering only
   through reductions. The partition is hidden from the start. The auditor checks only padded counts. The outer proof

@@ -51,6 +51,7 @@ def _fill(r: dict[str, Path]) -> None:
     _write(r["check"] / "lean-changed" / "links.json", "{}")                 # check's early Lean step's tree
     _write(r["check"] / "lean-records" / "build-0" / "p" / "lean-audit.json", "{}")   # the Lean fast path's
     _write(r["check"] / "lean-builds" / "k" / "ir" / "P" / "M.setup.json", "{}")  # the Lean audit's kept builds
+    _write(r["check"] / "lean-artifacts" / "outputs" / "p" / "h.json", "{}")   # Lake's cache of built modules
 
 
 VERDICTS = ["check/circuit-check/v1/d/e1.json", "check/lean-agreement/k3.json", "check/lean-audit/k2.json", "tests/k1.json"]
@@ -128,7 +129,8 @@ def test_an_entry_that_goes_away_while_it_is_read_is_left_out(tmp_path, monkeypa
 
 SKIPPED = ["check/lean-deps/m.json", "tests/logs/a.json", "check/lean-changed/links.json",
            "check/lean-records/build-0/p/lean-audit.json", "tests/durations.json", "check/lean-audit-scratch-x1/p/lake-manifest.json",
-           "check/lean-changed/p/lean-audit.json", "check/lean-builds/k/ir/P/M.setup.json"]
+           "check/lean-changed/p/lean-audit.json", "check/lean-builds/k/ir/P/M.setup.json",
+           "check/lean-artifacts/outputs/p/h.json"]
 
 
 def _pack_with(tmp_path: Path, member: str) -> Path:
@@ -222,13 +224,18 @@ class _Store:
 
     remote = None
 
-    def __init__(self, tmp: Path, runs: dict[str, Path | None]):
-        self.tmp, self.runs = tmp, runs
+    def __init__(self, tmp: Path, runs: dict[str, Path | None], states: dict[str, str] | None = None):
+        self.tmp, self.runs, self.states = tmp, runs, states or {}
         self.index = self
 
     def sql(self, query: str, params: tuple = ()) -> list[tuple]:
-        assert "tool = 'check'" in query and "state = 'done'" in query
-        return [(rid,) for rid in list(self.runs)[:params[0]]]
+        import sqlite3
+
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT)")
+        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?)",
+                       [(rid, self.states.get(rid, "done"), f"2026-10-12T{99 - i:02d}") for i, rid in enumerate(self.runs)])
+        return db.execute(query, params).fetchall()
 
     def get_attempt(self, rid: str) -> dict:
         return {"outputs": {"run_files": f"art:{rid}"}}
@@ -286,6 +293,22 @@ def test_a_recorded_checks_pack_import_refuses_is_passed_over_by_name_and_a_refu
     assert V.import_(got) == (1, 0) and not (V.roots()["tests"] / "k7.json").exists()
     with pytest.raises(SystemExit, match="refused"):
         check.gather_verdicts(tmp_path / "x", _Store(tmp_path, {}), given=bad)
+
+
+def test_a_failed_or_cancelled_checks_pack_is_gathered_and_a_running_ones_is_not(tmp_path, monkeypatch, capsys):
+    """A pack holds only passes, each under a key of everything it read, so a check that failed or was cancelled (its passes
+    kept on SIGTERM, recorded `failed`) answers for them like one that passed."""
+    check = _load("check")
+    packs = {}
+    for name in ("failed", "cancelled", "running"):
+        r = _machine(tmp_path, monkeypatch, name)
+        _write(r["tests"] / f"{name}.json", name)
+        V.export(packs.setdefault(name, tmp_path / f"{name}.tar.gz"))
+    store = _Store(tmp_path, {f"r-{k}": p for k, p in packs.items()}, {f"r-{k}": k for k in packs})
+    got = check.gather_verdicts(tmp_path / "out", store)
+    assert "2 entries gathered from 2 recorded checks (r-failed, r-cancelled)" in capsys.readouterr().out
+    _machine(tmp_path, monkeypatch, "pod")
+    assert V.import_(got) == (2, 0)
 
 
 def test_a_store_that_cant_be_read_gathers_nothing_and_says_why(tmp_path, capsys):

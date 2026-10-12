@@ -760,7 +760,6 @@ theorem ligerito_of_run {ms : MerkleScheme} {sch : Flock.Schedule} {T : F128} {c
   rw [o0] at hcons0
   have hE0 := query_e (by rw [hs₁, hl0]) hmc0 (positions_size _ hlv0 _) hcons0
   unfold Flock.ligerito
-  refine RunsT.bind (RunsT.check (decide_eq_true (by omega))) ?_
   refine RunsT.bind (RunsT.check hcap) ?_
   refine RunsT.bind (RunsT.label _) ?_
   refine RunsT.bind (RunsT.absorbF _) ?_
