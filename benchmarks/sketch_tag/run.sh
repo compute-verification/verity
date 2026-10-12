@@ -8,7 +8,8 @@
 #     -- taskset -c 48-95 bash benchmarks/sketch_tag/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to bench.py; NCU=0 skips
-# the profiles; LIBSET (default "dense split") names the builds (dense1, split1: one sketch accumulator a sign block).
+# the profiles; LIBSET (default "dense split") names the builds (dense1, split1: one sketch accumulator a sign block;
+# dense4, dense16: four or sixteen chains; dense_ef: the store loaded L2 evict-first).
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -22,7 +23,7 @@ B=$(mktemp -d /tmp/sketch-tag.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DWC_KMAX=3 -DSK_KMAX=3)
 declare -A DEFS=([dense]="-DWC_PB=60" [split]="-DWC_PB=56" [dense1]="-DWC_PB=60 -DSK_CHAINS=1"
                  [split1]="-DWC_PB=56 -DSK_CHAINS=1" [dense4]="-DWC_PB=60 -DSK_CHAINS=4"
-                 [dense16]="-DWC_PB=60 -DSK_CHAINS=16")
+                 [dense16]="-DWC_PB=60 -DSK_CHAINS=16" [dense_ef]="-DWC_PB=60 -DSK_L2_EF=1")
 declare -A PIDS=()
 for lib in $LIBSET; do
   # shellcheck disable=SC2086

@@ -24,6 +24,19 @@ static const char* const NAME = "ro-sketch-blake3/v0";
 #ifndef SK_CHAINS
 #define SK_CHAINS 8
 #endif
+// SK_L2_EF = 1 loads the store with an L2 evict-first policy, so the stream does not evict what a later call reads back
+// from the L2 (the sketches a deferred commit hashes, the activations).
+#ifndef SK_L2_EF
+#define SK_L2_EF 0
+#endif
+
+__device__ __forceinline__ void bulk_load_ef(void* dst, const void* src, uint32_t bytes, uint64_t* bar, uint64_t pol) {
+  asm volatile(
+      "cp.async.bulk.shared::cluster.global.mbarrier::complete_tx::bytes.L2::cache_hint [%0], [%1], %2, [%3], %4;\n" ::"r"(
+          smem_u32(dst)),
+      "l"(src), "r"(bytes), "r"(smem_u32(bar)), "l"(pol)
+      : "memory");
+}
 
 template <int KR>
 __host__ __device__ constexpr int steps() { return KR > 0 ? (8 * LANE_WORDS + 15) / 16 : TASK_TILES; }
@@ -199,6 +212,8 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
 
   if (warp == consumers) {
     if (lane == 0) {
+      uint64_t pol = 0;
+      if (SK_L2_EF) asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;\n" : "=l"(pol));
       for (int u = 0;; ++u) {
         bool live = false;
         for (int c = 0; c < consumers; ++c) {
@@ -209,7 +224,10 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
           if (u >= per_consumer) mbar_wait(empty + s, (u / per_consumer - 1) & 1);
           const uint64_t q = (uint64_t)nb * nchunks + kc;
           mbar_expect_tx(full + s, SB);
-          bulk_load(smem + s * SB, static_cast<const uint8_t*>(wstore) + q * SB, SB, full + s);
+          if (SK_L2_EF)
+            bulk_load_ef(smem + s * SB, static_cast<const uint8_t*>(wstore) + q * SB, SB, full + s, pol);
+          else
+            bulk_load(smem + s * SB, static_cast<const uint8_t*>(wstore) + q * SB, SB, full + s);
         }
         if (!live) break;
       }
