@@ -16,8 +16,9 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   class, regions and schedule of `execClassAt st` with R's registered schedule `fast100`'s at `mReg`, `ν + pLog + tLog`
   padded to `PAD_TO` as the verifier opens R (the default, whose empty levels reject R, where `ℓ` is out of
   `[6, k_log]`, which the verifier refuses: `SparseRangeOk`).
-* `HoloReg`: the registered word `w` and its level-0 cap `cap`; `Opens` is the registrant's openings of every position
-  of `cap` to `w`'s columns, what defines `w` from `cap` (`RecursiveAudit`'s `_hreg` for an encoded table).
+* `HoloReg`: a word `w` and a level-0 cap `cap`, the inner statement; `Opens` is a registrant's openings of every
+  position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditC3` does
+  not take: its word is the one the prover's own runs open (`Recursive/RegExtract.lean`).
 * `StackedTop lv st reg cap`: `cap` is R's registered top, the `stacked` entry of the registration record `reg` (the
   verifier's `--rec-inner-registration`) that the inner statement's META binds by its digest (`metaRegistration st`,
   `RecVStar.registration`): the entry `topEntry` makes from one hm96 commit string per node, each over the node's row
@@ -26,14 +27,15 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   inner transcript holds against R's registration (`innerCommitsAt`), and check 5's sparse refusals pass
   (`SparseRangeOk`: `ℓ` in `[6, k_log]`, the unit range's slots inside the block). `UnitsOf`: the slots' units are the
   unit range's.
-* `holoInnerCL`, `holoInnerAt`: `schedInner` at `Model.holoTableCL` with `capReg := x.cap`; the statement is true when
-  some table `R` within the unique-decoding radius of `w` (`RegSchedule.Close`) has a satisfiable hidden statement at
-  the slots' types.
+* `holoInnerCL`, `holoInnerAt`: `schedInner` at `Model.holoTableCL` with `capReg := x.cap`, at a statement `x` a word
+  and a cap; it is true when some table `R` within the unique-decoding radius of `x.w` (`RegSchedule.Close`) has a
+  satisfiable hidden statement at the slots' types.
 * `holoError`: the link points, the two reps with their sparse phases (`sparseError`, each coin a degree over `qF`),
   and R's opening at the unique-decoding radius (`regOpenError`: the two claims' ring
   switches, `γ` and the out-of-domain batching coin, level 0's queries at `(1 + ρ)/2 + η`, and Ligerito's levels).
-* `ClashHL`, `clashPickHL`: two runs that clash on the reps (`ClashCL`), on R's stream (`ClashCL` at R's schedule), or
-  a run opening R's level 0 to a row other than `w`'s (`RegClash`); each a collision of `H` (`ClashHL.collision`).
+* `ClashRunHL`, `clashPickHL`: two runs that clash on the reps (`ClashCL`) or on R's stream (`ClashCL` at R's
+  schedule), each a collision of `H` (`ClashRunHL.collision`). `ClashHL` adds a run opening R's level 0 to a row other
+  than `w`'s (`RegClash`), a collision only beside a registrant's openings (`ClashHL.collision`).
 * `vstarCount ish`: the length of V*'s statement list as the verifier builds it (`RecVStar.statements`), zero where it
   refuses.
 -/
@@ -177,16 +179,16 @@ def UnitsOf (st : Flock.Stmt) (hp : HoloParams) : Prop :=
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
 /-- **Candidate 3's compiled inner protocol**: `schedInner` at `Model.holoTableCL` on the class's public statement,
-with R's registered cap the statement's. A statement is a registration whose registrant opens every level-0 position;
-it holds when some table within the unique-decoding radius of the registered word has a satisfiable hidden statement at
-the slots' types. -/
+with R's registered cap the statement's. A statement is a registration, a word and its cap; it holds when some table
+within the unique-decoding radius of the word has a satisfiable hidden statement at the slots' types. The table reads
+only the cap: the word is what the statement is about. -/
 noncomputable def holoInnerCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) : Inner :=
-  schedInner T CT {x : HoloReg F D // x.Opens H E Lf e.rsch.sch.level₀}
+  schedInner T CT (HoloReg F D)
     (fun x => holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts e.cls.shape
-      e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.1.cap)
+      e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap)
     (fun _ out => out.accepted = true)
-    (fun x => ∃ R : RegTable e.cls, e.rsch.Close A x.1.w R ∧ ∃ z, (R.toStatement e.τ e.regs).Satisfies z)
+    (fun x => ∃ R : RegTable e.cls, e.rsch.Close A x.w R ∧ ∃ z, (R.toStatement e.τ e.regs).Satisfies z)
 
 /-- **Candidate 3's inner protocol as the executable runs it**: `holoInnerCL` at `execArith` and SHA-512 with plain
 leaves, at `holoAt st hp`. -/
@@ -259,6 +261,23 @@ theorem ClashHL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf
   · exact h.collision hx
   · exact h.collision hx
 
+/-- **Two runs of candidate 3's table clash against each other**: on the reps (`ClashCL` at the reps' schedule) or on
+R's stream (`ClashCL` at R's, at the registered cap `cap`: a level-0 conflict there is two openings of one position of
+R's level 0 against `cap` to different rows). Unlike `ClashHL`, no registered word is read, so no registrant's
+openings are needed for a collision. -/
+def ClashRunHL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+    (sch rsch : Schedule) (cap : Cap D) (o o' : OutHL F D Sl) : Prop :=
+  ClashCL H E Lf sch o.circ o'.circ ∨ ClashCL H E Lf rsch (o.reg cap) (o'.reg cap)
+
+omit [Fintype F] [DecidableEq F] in
+/-- **A clash of two runs is a collision.** -/
+theorem ClashRunHL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {sch rsch : Schedule} {cap : Cap D} {o o' : OutHL F D Sl} (h : ClashRunHL H E Lf sch rsch cap o o') :
+    Merkle.Collision H := by
+  rcases h with h | h
+  · exact h.collision
+  · exact h.collision
+
 open Classical in
 /-- **Candidate 3's table's outcome on an inner transcript**: the outcome the transcript's steps play `holoTableCL` to
 at the statement `x`, when they play it to one. -/
@@ -270,13 +289,13 @@ noncomputable def outHL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (
   then some h.choose else none
 
 /-- **The inner fork's output at candidate 3's table**: on two inner transcripts whose steps play it to outcomes that
-clash (`ClashHL`), a collision of `H`, else nothing. -/
+clash against each other (`ClashRunHL`, at the statement's cap), a collision of `H`, else nothing. -/
 noncomputable def clashPickHL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : {x : HoloReg F D // x.Opens H E Lf e.rsch.sch.level₀})
+    (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : HoloReg F D)
     (t t' : List (List (SMsg T) × ((k : Fin r) → CT k))) : Pair :=
-  collOf H (∃ o o', outHL T CT A H E Lf e x.1 t = some o ∧ outHL T CT A H E Lf e x.1 t' = some o' ∧
-      ClashHL H E Lf e.sch e.rsch.sch x.1 o o')
-    fun ⟨_, _, _, _, hc⟩ => hc.collision x.2
+  collOf H (∃ o o', outHL T CT A H E Lf e x t = some o ∧ outHL T CT A H E Lf e x t' = some o' ∧
+      ClashRunHL H E Lf e.sch e.rsch.sch x.cap o o')
+    fun ⟨_, _, _, _, hc⟩ => hc.collision
 
 /-! ### V*'s statement list -/
 

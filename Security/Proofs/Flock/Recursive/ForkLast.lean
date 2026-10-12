@@ -328,11 +328,11 @@ theorem clashPickCL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
 omit [Fintype K] in
 /-- **`clashPickHL` ignores the last round's coin**: `outHL` reads a transcript only through `schedSteps`. -/
 theorem clashPickHL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : {x : HoloReg F D // x.Opens H E Lf e.rsch.sch.level₀}) :
+    (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : HoloReg F D) :
     PickLastFree (r + 1) (clashPickHL T CT A H E Lf e x) := by
   intro u₁ u₂ u₁' u₂' h₁ h₂ c₁ c₂
   have hout : ∀ t t' : List (List (SMsg T) × ((k : Fin r) → CT k)), schedSteps T CT 0 t = schedSteps T CT 0 t' →
-      outHL T CT A H E Lf e x.1 t = outHL T CT A H E Lf e x.1 t' := fun _ _ h => by
+      outHL T CT A H E Lf e x t = outHL T CT A H E Lf e x t' := fun _ _ h => by
     unfold outHL
     rw [h]
   unfold clashPickHL
