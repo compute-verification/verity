@@ -13,12 +13,15 @@ Nothing is timed before its gate passed, in this order:
 - `token`: one launch encoding a generated token's KV cache at Llama-3.1-70B (`kv.token_words`: 80 layers of 4,096
   bytes, K then V) for each batch of `--batches`, a thread a word, queued behind a spin, so its latency; beside the
   SM time the same words take at the compute-only rate;
+- `attention`: `kv_attn`, a layer's decode attention at Llama-3.1-70B's shape (64 query heads on 8 KV heads of 128,
+  one query token a sequence) for batch × context, over the plain cache and over its words decoding inside the kernel
+  at each k of `--attn-ks`, gated equal bit for bit and against float64 attention, timed beside torch's SDPA;
 - `native`: cuBLASLt FP8 (`torch._scaled_mm`) at Llama-3.1-70B's four linears and each batch, every call on cold
   weights (a ring of copies past the L2), times 80 layers: the decode step's linears, the token's cost's denominator.
 
 `model` restates the token's encode and the decode inside attention in passes of E (|E| = the 80 layers' linears in
-FP8, read at R) for batch × context; the attention bounds are the measured read-and-decode, and the read and the
-compute-only decode overlapped or added.
+FP8, read at R) for batch × context: the measured decode inside `kv_attn` (encoded minus plain, 80 layers), and the
+bounds from the read-and-decode, the read and the compute-only decode overlapped or added.
 """
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ import argparse
 import ctypes
 import hashlib
 import json
+import math
 import os
 import random
 import statistics
@@ -45,6 +49,12 @@ SHAPES_70B = {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192),
 E_70B = K.LAYERS * sum(n * kd for n, kd in SHAPES_70B.values())
 CONTEXTS = (512, 2048, 8192)
 GATE_BASES = (77, (1 << 32) - 20, (1 << 33) + 77)
+ATTN_CYCLE_BYTES = 1 << 30  # a cell's layers cover this much plain KV, 8x the L2
+ATTN_MAX_LAYERS = 256       # and at most this many, so a pass's launches queue behind one spin
+ATTN_SPIN_CYCLES = 60_000_000
+ATTN_CTAS_PER_SM = (1, 2, 4, 8)  # a cell's split counts: batch × splits about this many CTAs an SM,
+ATTN_MIN_SPLIT_TOKENS = 32       # each split at least this many tokens (a split's partials are 33 KB)
+ATTN_RTOL = 1e-3
 
 
 class Lib:
@@ -58,6 +68,8 @@ class Lib:
         so.kv_read.argtypes = [v, q, v, i, v]
         so.kv_chain.argtypes = [i, i, i, q, i, v, v]
         so.kv_spin.argtypes = [ctypes.c_longlong, v]
+        so.kv_attn_shape.argtypes = [v]
+        so.kv_attn.argtypes = [v, i, v, v, v, i, i, i, i, i, i, v]
         self.field = K.field(name)
         if so.kv_bits() != self.field.n:
             raise RuntimeError(f"{name}: the library is built for {so.kv_bits()} bits")
@@ -92,9 +104,9 @@ def timed(torch, fn, reps: int, warm: int = 1) -> list[float]:
     return out
 
 
-def queued(lib: Lib, torch, fn) -> float:
+def queued(lib: Lib, torch, fn, cycles: int = SPIN_CYCLES) -> float:
     a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-    lib.call("kv_spin", SPIN_CYCLES, stream(torch))
+    lib.call("kv_spin", cycles, stream(torch))
     a.record()
     fn()
     b.record()
@@ -298,6 +310,109 @@ def token_encode(lib: Lib, torch, ks, batches, reps: int, enc_rates: dict, log) 
     return out
 
 
+def attn_shape(lib: Lib) -> dict:
+    a = (ctypes.c_int * 7)()
+    lib.so.kv_attn_shape(ctypes.cast(a, ctypes.c_void_p))
+    return dict(zip(("heads", "kv_heads", "head_dim", "tlw", "tle", "tt", "part"), a))
+
+
+def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, log) -> dict:
+    """`kv_attn` at Llama-3.1-70B's attention, one layer of batch × context, over the plain cache and over its words at
+    k rounds. Each cell's cache holds L layers, as many as cover ATTN_CYCLE_BYTES of plain KV (at most ATTN_MAX_LAYERS),
+    and a timed pass runs every layer once, queued behind a spin, so a layer's time is the pass's over L with the L2
+    cold as in a decode step. Nothing is timed before the gate: at layers 0 and L - 1 the encoded form's output equals
+    the plain form's bit for bit, and the plain form's is within ATTN_RTOL of float64 attention over the same bf16
+    values, at every split count the cell tries (batch × splits about each of ATTN_CTAS_PER_SM CTAs an SM, at least
+    ATTN_MIN_SPLIT_TOKENS tokens a split); each form's time is its best split count's. torch's SDPA (GQA, bf16) over the
+    same K and V, laid out as it takes them, is timed beside it the same way."""
+    import torch.nn.functional as F
+
+    sh = attn_shape(lib)
+    if (sh["heads"], sh["kv_heads"], sh["head_dim"]) != (64, K.KV_HEADS, K.HEAD_DIM) or sh["tlw"] != K.token_layer_words(lib.field):
+        raise RuntimeError(f"{lib.name}: kv_attn_shape {sh} is not kv.py's")
+    set_key(lib, K.key(lib.field.name, SEED, k))
+    st = stream(torch)
+    tl, tle = K.TOKEN_LAYER_BYTES, sh["tle"]
+    scale = math.log2(math.e) / math.sqrt(K.HEAD_DIM)
+    out = {}
+    for b in batches:
+        for ctx in contexts:
+            cands = sorted({max(1, min(-(-ctx // ATTN_MIN_SPLIT_TOKENS), -(-c * sms // b))) for c in ATTN_CTAS_PER_SM})
+            per_layer = b * ctx * tl
+            layers = max(2, min(ATTN_MAX_LAYERS, -(-ATTN_CYCLE_BYTES // per_layer)))
+            g = torch.Generator(device="cuda").manual_seed(b * 100003 + ctx)
+            plain = torch.randn(b * ctx * layers * tl // 2, dtype=torch.float32, device="cuda", generator=g).to(
+                torch.bfloat16)
+            pad = torch.zeros(b * ctx * layers, tle, dtype=torch.uint8, device="cuda")
+            pad[:, :tl] = plain.view(torch.uint8).view(-1, tl)
+            enc = torch.empty_like(pad)
+            n_words = pad.numel() // lib.field.word_bytes
+            lib.call("kv_encode", ptr(pad), ptr(enc), n_words, 0, k, sms * 8, st)
+            del pad
+            q = (torch.randn(b, 64, K.HEAD_DIM, device="cuda", generator=g) * scale).to(torch.bfloat16).contiguous()
+            part = torch.empty(b * cands[-1] * sh["part"], dtype=torch.float32, device="cuda")
+            o_p = torch.empty(b, 64, K.HEAD_DIM, dtype=torch.float32, device="cuda")
+            o_e = torch.empty_like(o_p)
+
+            def run(store, encoded: int, o, layer: int, splits: int) -> None:
+                lib.call("kv_attn", ptr(store), encoded, ptr(q), ptr(o), ptr(part), b, ctx, layers, layer, splits, k, st)
+
+            kvl = plain.view(b, ctx, layers, 2, K.KV_HEADS, K.HEAD_DIM)
+            gate = {"layers": layers, "splits": cands, "equal": True, "rel_err": 0.0}
+            for layer in (0, layers - 1):
+                kk, vv = kvl[:, :, layer, 0].double(), kvl[:, :, layer, 1].double()
+                qq = q.double().view(b, K.KV_HEADS, 64 // K.KV_HEADS, K.HEAD_DIM)
+                s = torch.einsum("bgqd,btgd->bgqt", qq, kk)
+                p = torch.exp2(s - s.amax(-1, keepdim=True))
+                ref = torch.einsum("bgqt,btgd->bgqd", p / p.sum(-1, keepdim=True), vv).reshape(b, 64, K.HEAD_DIM)
+                del kk, vv, s, p
+                for sp in cands:
+                    run(plain, 0, o_p, layer, sp)
+                    run(enc, 1, o_e, layer, sp)
+                    torch.cuda.synchronize()
+                    gate["equal"] &= bool(torch.equal(o_p, o_e))
+                    err = float((o_p.double() - ref).abs().max() / ref.abs().max())
+                    gate["rel_err"] = max(gate["rel_err"], err)
+                del ref
+            gate["ok"] = gate["equal"] and gate["rel_err"] <= ATTN_RTOL
+            cell = {"batch": b, "context": ctx, "layers": layers, "plain_bytes": per_layer,
+                    "encoded_bytes": b * ctx * tle, "gate": gate}
+            if gate["ok"]:
+                spin = ATTN_SPIN_CYCLES
+                per = {}
+                for sp in cands:
+                    tp = [queued(lib, torch, lambda: [run(plain, 0, o_p, l, sp) for l in range(layers)], spin) / layers
+                          for _ in range(reps)]
+                    te = [queued(lib, torch, lambda: [run(enc, 1, o_e, l, sp) for l in range(layers)], spin) / layers
+                          for _ in range(reps)]
+                    per[sp] = {"plain_s": statistics.median(tp), "plain_times_s": tp,
+                               "encoded_s": statistics.median(te), "encoded_times_s": te}
+                kt = kvl.permute(2, 3, 0, 4, 1, 5).contiguous()  # layer, K/V, b, kv head, token, dim
+                qt = (q.float() / scale).to(torch.bfloat16).view(b, 64, 1, K.HEAD_DIM)
+                F.scaled_dot_product_attention(qt, kt[0, 0], kt[0, 1], enable_gqa=True)
+                tt = [queued(lib, torch, lambda: [F.scaled_dot_product_attention(qt, kt[l, 0], kt[l, 1], enable_gqa=True)
+                                                  for l in range(layers)], spin) / layers for _ in range(reps)]
+                del kt
+                sp_p = min(per, key=lambda sp: per[sp]["plain_s"])
+                sp_e = min(per, key=lambda sp: per[sp]["encoded_s"])
+                p_s, e_s, t_s = per[sp_p]["plain_s"], per[sp_e]["encoded_s"], statistics.median(tt)
+                cell.update({"by_splits": per, "plain_splits": sp_p, "encoded_splits": sp_e, "plain_s": p_s,
+                             "encoded_s": e_s, "torch_sdpa_s": t_s, "torch_sdpa_times_s": tt,
+                             "plain_gbps": per_layer / p_s / 1e9, "encoded_gbps": b * ctx * tle / e_s / 1e9,
+                             "encoded_over_plain": e_s / p_s, "plain_over_torch": p_s / t_s})
+                log(f"attention {lib.name} k={k} B={b} ctx={ctx}: gate ok (equal, rel err {gate['rel_err']:.1e}, "
+                    f"{layers} layers, splits {cands}); a layer plain {p_s * 1e6:.1f} us at {sp_p} splits "
+                    f"({cell['plain_gbps']:.0f} GB/s), encoded {e_s * 1e6:.1f} us at {sp_e} "
+                    f"({cell['encoded_gbps']:.0f} GB/s stored), {e_s / p_s:.3f}x; torch SDPA {t_s * 1e6:.1f} us "
+                    f"(plain {p_s / t_s:.2f}x torch)")
+            else:
+                log(f"attention {lib.name} k={k} B={b} ctx={ctx}: gate FAIL {gate}")
+            out[f"b{b}_ctx{ctx}"] = cell
+            del plain, enc, q, part, o_p, o_e, kvl
+            torch.cuda.empty_cache()
+    return out
+
+
 def native_70b(torch, batches, reps: int, log) -> dict:
     out = {}
     one = torch.ones((), device="cuda")
@@ -360,6 +475,13 @@ def model(res: dict, libs: list[Lib], batches, capacity: int) -> dict:
                         "decode_measured_passes": None if dec_m is None else kv / dec_m / e_pass - read,
                         "decode_overlap_passes": max(0.0, kv / dec_c / e_pass - read),
                         "decode_additive_passes": kv / dec_c / e_pass}
+                    cell = lr.get("attention", {}).get(k, {}).get(f"b{b}_ctx{ctx}", {})
+                    if "encoded_s" in cell:
+                        rows[f"k{k}_b{b}_ctx{ctx}"].update({
+                            "attn_plain_passes": K.LAYERS * cell["plain_s"] / e_pass,
+                            "attn_torch_passes": K.LAYERS * cell["torch_sdpa_s"] / e_pass,
+                            "attn_decode_passes": K.LAYERS * (cell["encoded_s"] - cell["plain_s"]) / e_pass,
+                            "attn_encoded_over_plain": cell["encoded_over_plain"]})
         out[lib.name] = {"stored_per_payload_byte": stored_per_byte, "rows": rows}
     return out
 
@@ -386,6 +508,12 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
             for b, t in lr.get("token", {}).get(k, {}).items():
                 ms.append({"name": f"{lib.name}_k{k}_b{b}_token_latency", "value": t["latency_s"], "unit": "s"})
                 ms.append({"name": f"{lib.name}_k{k}_b{b}_token_sm", "value": t["sm_s"], "unit": "s"})
+        for k, cells in lr.get("attention", {}).items():
+            for name, c in cells.items():
+                if "encoded_s" in c:
+                    ms.append({"name": f"{lib.name}_k{k}_{name}_attn_plain", "value": c["plain_s"], "unit": "s"})
+                    ms.append({"name": f"{lib.name}_k{k}_{name}_attn_encoded", "value": c["encoded_s"], "unit": "s"})
+                    ms.append({"name": f"{lib.name}_k{k}_{name}_attn_torch", "value": c["torch_sdpa_s"], "unit": "s"})
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/kv-codec.json", f"{rel}/kv.log"]
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
@@ -404,6 +532,7 @@ def main() -> int:
     ap.add_argument("--lib", action="append", required=True, help="NAME=PATH, NAME a field of kv.FIELDS")
     ap.add_argument("--out", required=True)
     ap.add_argument("--ks", default="1,2,4,6")
+    ap.add_argument("--attn-ks", default="1", help="the rounds `attention` decodes inside attention at (empty: none)")
     ap.add_argument("--batches", default="1,8,32")
     ap.add_argument("--store-gib", type=float, default=2.0)
     ap.add_argument("--gate-ref", type=int, default=48)
@@ -424,6 +553,7 @@ def main() -> int:
     import torch
 
     ks = [int(v) for v in a.ks.split(",")]
+    attn_ks = [int(v) for v in a.attn_ks.split(",") if v]
     batches = [int(v) for v in a.batches.split(",")]
     libs = [Lib(*spec.split("=", 1)) for spec in a.lib]
     props = torch.cuda.get_device_properties(0)
@@ -454,7 +584,9 @@ def main() -> int:
             del store
             torch.cuda.empty_cache()
             lr["token"] = token_encode(lib, torch, ks, batches, a.reps, lr["rates"]["encode"], log)
-            if not all(v["ok"] for v in lr["store"].values()):
+            lr["attention"] = {k: attention(lib, torch, batches, CONTEXTS, k, a.reps, sms, log) for k in attn_ks}
+            if not all(v["ok"] for v in lr["store"].values()) or not all(
+                    c["gate"]["ok"] for cells in lr["attention"].values() for c in cells.values()):
                 res["ok"] = False
         if not a.no_native:
             res["native"] = native_70b(torch, batches, a.reps, log)
