@@ -40,7 +40,7 @@ theorem sparseReadAt_of_plays {e : ExecHolo} {u : C3Run e}
   exact sps_prefix u
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
@@ -64,31 +64,6 @@ theorem sparseReadAt_of_ok {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Re
   fun R ω t R₂ τ o hacc => sparseReadAt_of_plays (h R ω t R₂ τ o hacc)
 
 end source
-
-section honest
-
-variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
-  {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
-  {hob : VStarParses Flock.Tags.circuit ish bind Vs}
-  {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
-    (Vs j).OuterR Reg'}
-  {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr}
-  {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
-  {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
-  {tr : Lean.Json} {record : String} {reg : Lean.Json} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-  {src : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) →
-    C3Run (holoAt st hp)}
-
-local notation "𝒵" => Flock.Guarantees.custodied zr hCust h
-local notation "𝓓" => C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc
-  (c3DecOf 𝒵 dg N k Rw src own sel) tr record reg
-
-/-- **`SparseRead` at the fixed decoder**, from the source's obligations and its sparse phases. -/
-theorem sparseRead_of_ok (hs : SrcOK 𝒵 dg N k Rw src own sel) (hsp : SrcSparseOK 𝒵 dg N k Rw src) :
-    SparseRead 𝓓 dg N k Rw :=
-  sparseRead_c3DecOf hs (sparseReadAt_of_ok hsp)
-
-end honest
 
 end
 
