@@ -1,6 +1,7 @@
 import Proofs.Flock.C3.Fork.Sound
 import Proofs.Flock.C3.Compose.Bridge
 import Proofs.Flock.C3.VStarList.Statements
+import Proofs.Flock.C3.VStarList.Shape
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
