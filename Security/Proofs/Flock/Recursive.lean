@@ -7,6 +7,7 @@ import Proofs.Flock.Recursive.Finds
 import Proofs.Flock.Recursive.Flock
 import Proofs.Flock.Recursive.Schedule
 import Proofs.Flock.Recursive.Target
+import Proofs.Flock.Recursive.Holo
 import Proofs.Flock.Recursive.Transfer
 import Proofs.Flock.Recursive.Stage
 import Proofs.Flock.Recursive.StageRead
@@ -34,7 +35,8 @@ import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
 import Proofs.Flock.Recursive.Witness
 
-/-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
+/-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
+registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
 system's salts (`OsSalts`), its soundness at the compiled inner
 protocol with the compile lemma open (`Compile`), the compile premise at a class whose schedule is `fast100`'s
