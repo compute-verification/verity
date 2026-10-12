@@ -1,4 +1,5 @@
 import Proofs.Flock.C3.Reps.RepsRead
+import Proofs.Flock.C3.Reps.Vals
 
 /-!
 # The reps' coins at `repsOfVals`, from the inner session's records
@@ -106,6 +107,8 @@ theorem unitCoins_eq (S : FlockSoundness.Model.Statement) (v : UnitVals) :
     (repIdx S v).map (coinArr fOf ∘ fun q => (v.t.rounds[q]!).coins) := by
   unfold consumed repIdx
   rw [← List.map_append, List.map_map]
+
+theorem cap_vals (b : ValsSrc) (sh : Flock.Shape) (d : RepData) : (b.vals sh d).p.cap = b.cap := rfl
 
 variable {r : ℕ} {CT : Fin r → Type}
 
@@ -217,12 +220,11 @@ theorem capRead_vals {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {
       capDig ((b Lb i).vals sh (rep Lb i)).p.cap = (stp R ω t Lb).cap₀) :
     CapRead zs dg N k Rw stp own sel := by
   intro R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' _
-  have e := hcap R ω t R₂ τ o hA 0 (halg R ω t R₂ τ o hA 0) (hacc R ω t R₂ τ o hA 0)
-  have e' := hcap R' ω' t' R₂' τ' o' hA' 0 (halg R' ω' t' R₂' τ' o' hA' 0) (hacc R' ω' t' R₂' τ' o' hA' 0)
-  show (stp R ω t _).cap₀ = (stp R' ω' t' _).cap₀
-  rw [← e, ← e']
-  show capDig (b _ 0).cap = capDig (b _ 0).cap
-  simp only [hb]
+  have e := (congrArg capDig ((cap_vals _ sh _).trans (hb _ 0))).symm.trans
+    (hcap R ω t R₂ τ o hA 0 (halg R ω t R₂ τ o hA 0) (hacc R ω t R₂ τ o hA 0))
+  have e' := (congrArg capDig ((cap_vals _ sh _).trans (hb _ 0))).symm.trans
+    (hcap R' ω' t' R₂' τ' o' hA' 0 (halg R' ω' t' R₂' τ' o' hA' 0) (hacc R' ω' t' R₂' τ' o' hA' 0))
+  exact e.symm.trans e'
 
 end
 
