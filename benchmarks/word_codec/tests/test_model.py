@@ -49,7 +49,7 @@ def test_mu_chip_by_model():
     assert chip[2] == pytest.approx(0.0032, abs=5e-4)
 
 
-@pytest.mark.parametrize("bits,c", [(64, 189), (128, 173), (256, 189), (512, 569)])
+@pytest.mark.parametrize("bits,c", [(64, 189), (128, 173), (256, 189), (512, 569), (768, 825), (1024, 105)])
 def test_full_slot_primes(bits, c):
     """Each is the smallest c with 2^bits − c prime and ≡ 3 mod 4, so Sloth's square root (x^((p+1)/4)) works."""
     p = (1 << bits) - c
@@ -58,7 +58,7 @@ def test_full_slot_primes(bits, c):
     assert G.mu_slot(bits - 2.0**-50, bits) < 1e-15
 
 
-@pytest.mark.parametrize("bits,c", [(64, 189), (256, 189), (512, 569)])
+@pytest.mark.parametrize("bits,c", [(64, 189), (256, 189), (512, 569), (768, 825)])
 def test_e4m3_payloads_fit_below_p(bits, c):
     """A payload of bits/8 E4M3 weights is below p: the largest has top byte 0xFE, since 0xFF is NaN."""
     p = (1 << bits) - c
