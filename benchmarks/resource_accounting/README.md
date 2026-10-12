@@ -29,7 +29,8 @@ certifies beside what it did.
   co-tenant at a time (a sleeping process, CPU spinners, an idle CUDA context) with the onset and offset of any change:
   why the chain ran faster beside the harness in a process of its own.
 - `run.sh`: the recorded run on node 2: GPU 1's ship built outside the lease, `chain.py` under one `gpu-lease 1`
-  (30 minutes at most), the retained pass verified after it. `POUS=1` (one shape, `--cwd clone`) adds the PoUS arm: P2's
+  (30 minutes at most), the retained pass verified after it. `LEASE` replaces the lease's GPU count and flags, so a timed
+  window's booking runs the same tree under `LEASE='8 --wait --timed'`, the chain on the first GPU leased. `POUS=1` (one shape, `--cwd clone`) adds the PoUS arm: P2's
   timed audit (`benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu`) on the same GPU, the chain running from its honest audit's
   start to its end and alone again after it; `POUS_IDLE=1` is its control, the chain idle through the same window.
   `JOINT=separate,inproc,joint,joint-v1` (one shape, native arms, `--cwd clone`) instead runs `chain.py` inside the

@@ -6,7 +6,8 @@
 # In order, the first failure ends the run:
 #  1. on the CPUs, outside the lease: GPU 1's ship (pearl_c_sm120/build.sh, its SASS gate) into scratch, unless ARMS has no
 #     Pearl-C arm; the ship's MANIFEST, SASS and toolchain records and the cubin's digest go to $OUT/ship;
-#  2. under `gpu-lease 1 --wait --preemptible --max-min $LEASE_MIN` (30 at most): GPU 1's device check on the cubin (run.py,
+#  2. under `gpu-lease $LEASE --max-min $LEASE_MIN` (30 at most; LEASE defaults to `1 --wait --preemptible`, and a timed
+#     window's booking gives `8 --wait --timed`, the chain on the first GPU leased): GPU 1's device check on the cubin (run.py,
 #     v1 only, no timing), then chain.py into $OUT/chain.json, its budget two minutes under the lease's;
 #  3. on the CPUs, after the lease: the retained pass (verify_run.py --fast, which must ACCEPT) and its no-write control
 #     (which must REJECT), from scratch; their verify.json files go to $OUT/verify.
@@ -35,7 +36,7 @@ WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python; CUDA=${CUDA:
 S=$(mktemp -d /workspace/tmp/ra-matmul.XXXXXX); trap 'rm -rf "$S"' EXIT
 SHAPES=${SHAPES:-o,qkv,gate_up,down,cube8192}; BATCHES=${BATCHES:-1,8,32,128,512,2048}; LENGTHS=${LENGTHS:-32}
 ARMS=${ARMS:-native-bf16,native-fp8,pearl-c,pearl-c-deferred,pearl-c-nohash}; REPS=${REPS:-5}
-LEASE_MIN=${LEASE_MIN:-30}; VERIFY_AT=${VERIFY_AT:-o:32}
+LEASE_MIN=${LEASE_MIN:-30}; VERIFY_AT=${VERIFY_AT:-o:32}; LEASE=${LEASE:-1 --wait --preemptible}
 [ "$LEASE_MIN" -le 30 ] || { echo "RUN_FAIL_LEASE: LEASE_MIN=$LEASE_MIN is over 30 minutes" >&2; exit 2; }
 stamp() { echo "ra-matmul: $* at $(date -u +%H:%M:%SZ)"; }
 export PYTHONPATH=$PWD:$PWD/catalog:$PWD/kernels:$PWD/experimental:$PWD/integrations/vllm:$PWD/benchmarks/pouw
@@ -76,10 +77,11 @@ if [ -n "${JOINT:-}" ]; then
   HOST="benchmarks/resource_accounting/chain.py --out $OUT/chain.json --shapes $SHAPES --batches $BATCHES --lengths $LENGTHS"
   HOST+=" --arms $ARMS --reps $REPS --budget-min $((LEASE_MIN - 3)) --rounds $JOINT $TAGGER ${PROBE:+--probe}"
   HOST+=" ${SIDECAR:+--sidecar} --host-bench"
-  stamp "the chain hosting the PoUS harness under gpu-lease 1 (at most $LEASE_MIN min)"
+  stamp "the chain hosting the PoUS harness under gpu-lease $LEASE (at most $LEASE_MIN min)"
   export OUT LEASE_MIN HOST POUS_WORK POUS_WS POUS_AUDITS POUS_SEGMENTS
   set +e
-  gpu-lease 1 --wait --preemptible --max-min "$LEASE_MIN" -- bash -c '
+  # shellcheck disable=SC2086
+  gpu-lease $LEASE --max-min "$LEASE_MIN" -- bash -c '
     set -euo pipefail
     export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
     UUID=${GPU_LEASE_UUID%%,*}; [ -n "$UUID" ] || { echo "RUN_FAIL_IDENTITY: no GPU_LEASE_UUID" >&2; exit 3; }
@@ -123,11 +125,12 @@ if [ -n "${POUS:-}" ]; then
            "bash benchmarks/pous/pod.sh RESEARCH_RUN_DIR=$OUT/pous IMPL=p2-v3-mc-gpu WORK=$POUS_WORK WS=$POUS_WS AUDITS=$POUS_AUDITS MAX_SEGMENTS=$POUS_SEGMENTS LOAD_TOKENS=0 TOKENS=1 WORKERS=8 VCPU=$VCPU RCPU=$RCPU")
 fi
 
-stamp "chain under gpu-lease 1 (at most $LEASE_MIN min)"
+stamp "chain under gpu-lease $LEASE (at most $LEASE_MIN min)"
 PROBE=${PROBE:-}; SIDECAR=${SIDECAR:-}
 export OUT PY CHECK SHAPES BATCHES LENGTHS ARMS REPS LEASE_MIN PROBE SIDECAR
 set +e
-gpu-lease 1 --wait --preemptible --max-min "$LEASE_MIN" -- bash -c '
+# shellcheck disable=SC2086
+gpu-lease $LEASE --max-min "$LEASE_MIN" -- bash -c '
   set -euo pipefail
   export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
   UUID=${GPU_LEASE_UUID%%,*}; [ -n "$UUID" ] || { echo "RUN_FAIL_IDENTITY: no GPU_LEASE_UUID" >&2; exit 3; }
