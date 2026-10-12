@@ -14,9 +14,10 @@
 # wide_run.sh's LIBSET suffix such as rcuem; K = 0 its plain payloads; tag: the ro-blake3/v1 tag of every block read, as
 # decode runs; sk16: the sketch-then-hash tag, and sk16c each decode step committed as it goes), ra-codec-tensor's as
 # tensor:FIELD:K or tensor:FIELD:K:tag (FIELD
-# 255, 511, 512, 521, 767, 768, 1023 or 1279, codec_tensor/wt.cu built for each the arms name; K >= 1, 512 and 768 being
-# full-slot fields at K = 1; tag: its tag warps tag the store's 4,088-byte blocks; skKS or skKStT, K = 1: its sketch
-# warps tag the store under ro-sketch-blake3/v0 at k_s = KS, 16 or 64, over vectors of T tasks, default 8; a last c
+# 255, 511, 512, 521, 767, 768, 1023, 1279, 1536 or 2048, codec_tensor/wt.cu built for each the arms name; K >= 1, 512,
+# 768, 1536 and 2048 being full-slot fields at K = 1; tag: its tag warps tag the store's 4,088-byte blocks; skKS or
+# skKStT, K = 1: its decoders sketch the words they decode under ro-sketch-blake3/v0 at k_s = KS, 16 or 64, over vectors
+# of T tasks, default 8, and its MMA warp tags the sketches; a last c
 # commits each decode step's tags, serve.py --commit), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
 # each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the carry-chain squaring); a last /g makes an arm its gates and one

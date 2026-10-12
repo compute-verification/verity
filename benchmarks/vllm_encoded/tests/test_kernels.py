@@ -41,6 +41,24 @@ def test_tag_vectors_bound_every_launch(n, kd, t):
     assert tlib.tag_vectors(n, kd) == most
 
 
+@pytest.mark.parametrize("tw,s,warps", [(86, 96, 12), (43, 192, 8), (128, 64, 16)])
+@pytest.mark.parametrize("sketch", [None, 16, 64])
+def test_tensor_configs_fit_the_fused_kernel(tw, s, warps, sketch):
+    """Every config the tensor arm launches passes `wt_fused_sketch`'s bounds and its shared memory at M = 32
+    (`fused_smem_bytes<4, k_s>`), for p768, p1536 and p512."""
+    tlib = object.__new__(K.TensorLib)
+    tlib.sb, tlib.task_words, tlib.fused_warps, tlib.fused_span = tw * s, tw, warps, (tw + 30) // 32 + 1
+    tlib.sketch = {"k": sketch, "t": 8} if sketch else None
+    for tagged in (False, True):
+        cfgs = tlib.configs(tagged)
+        assert cfgs
+        for d, st, t, ks in cfgs:
+            assert ks == (sketch or 0) and (t == -1 if sketch or not tagged else t >= 0)
+            assert d >= tlib.fused_span and d + 2 + max(t, 0) <= warps and st >= -(-32 * d // tw)
+            assert not ks or st < 2 * 8
+            assert st * tlib.sb + 4 * 8 * 528 + 16 * ((5 * st + 1) // 2) + 16 + 3 * 64 * ks <= K.SMEM_PER_BLOCK
+
+
 class StepLib:
     """A TensorLib's in-step commit without the library: `vectors` and `steps` are the shapes' own, `commit` is recorded."""
 

@@ -252,7 +252,7 @@ class TensorLib:
         so.wt_set_key.argtypes = [v, i, v, v]
         so.wt_encode.argtypes = [v, v, q, q, i, i, v]
         so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, i, v, v, i, v, v]
+        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, v, v, i, v, v]
         so.wt_sketch_vectors.argtypes = [i, i, i, i]
         so.wt_sketch_vectors.restype = q
         so.wt_set_tag.argtypes = [v, v]
@@ -363,15 +363,15 @@ class TensorLib:
         self.call("wt_tag_tree", st["nodes"].data_ptr(), -(-nvec // 16), ctypes.byref(root), stream())
         st["roots"][m] = (nvec, root.value)
 
-    def configs(self, tagged: bool) -> list[tuple[int, int, int, int, int]]:
-        """(decoders, stages, taggers, k_s, sketchers) as ra-codec-tensor's `fused_cfgs("auto")` picks them: untagged
-        (taggers -1), the most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32;
-        tagged, 0 or 2 of them tagging from the start instead (every other warp tags once its own work is done); sketched,
-        1 to 4 of them sketching, at 4 stages fewer than fit with the sketch's buffer.  Not 4 or 6 tag warps: with that
-        many gate_up's sums at M = 32 differ from launch to launch (p511 and p767, r20261012-092414-7dcc and
-        r20261012-092945-296e)."""
+    def configs(self, tagged: bool) -> list[tuple[int, int, int, int]]:
+        """(decoders, stages, taggers, k_s) as ra-codec-tensor's `fused_cfgs("auto")` picks them: untagged (taggers
+        -1), the most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32; tagged, 0
+        or 2 of them tagging from the start instead (every other warp tags once its own work is done); sketched, all of
+        them sketching the words they decode, at 2, 3 and 4 stages fewer than fit with the sketch's buffers and fewer
+        than 2 t.  Not 4 or 6 tag warps: with that many gate_up's sums at M = 32 differ from launch to launch (p511 and
+        p767, r20261012-092414-7dcc and r20261012-092945-296e)."""
         def smax(ks: int) -> int:
-            return (SMEM_PER_BLOCK - 4 * 8 * 528 - 16 - 64 * ks) // (self.sb + 48)
+            return (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 192 * ks) // (self.sb + 40)
 
         dmax = self.fused_warps - 2
 
@@ -379,19 +379,18 @@ class TensorLib:
             return -(-32 * d // self.task_words)
 
         if self.sketch is not None:
-            ks = self.sketch["k"]
-            return [(dmax - w, max(need(dmax - w), smax(ks) - 4), -1, ks, w) for w in (1, 2, 3, 4)
-                    if dmax - w >= self.fused_span]
+            ks, t = self.sketch["k"], self.sketch["t"]
+            return list(dict.fromkeys((dmax, min(2 * t - 1, max(need(dmax), smax(ks) - f)), -1, ks) for f in (2, 3, 4)))
         if not tagged:
-            return list(dict.fromkeys([(dmax, max(need(dmax), smax(0) - 4), -1, 0, 0),
-                                       (dmax, max(need(dmax), smax(0) - 6), -1, 0, 0)]))
-        return [(dmax - t, max(need(dmax - t), smax(0) - 4), t, 0, 0) for t in (0, 2) if dmax - t >= self.fused_span]
+            return list(dict.fromkeys([(dmax, max(need(dmax), smax(0) - 4), -1, 0),
+                                       (dmax, max(need(dmax), smax(0) - 6), -1, 0)]))
+        return [(dmax - t, max(need(dmax - t), smax(0) - 4), t, 0) for t in (0, 2) if dmax - t >= self.fused_span]
 
     def fused(self, k: int, w, x, y, m: int, n: int, kd: int, base: int, partials: int, cfg: Config, groups: int,
               tsteps, tags, tag_base: int, launched=None) -> None:
-        sk = self.sketch if cfg.sketchers else None
+        sk = self.sketch if cfg.sketch_k else None
         self.call("wt_fused_sketch", k, w, x, y, m, n, kd, base, partials, cfg.consumers, cfg.stages, groups,
-                  max(cfg.taggers, 0), tsteps, tags, tag_base, cfg.sketch_k, cfg.sketchers,
+                  max(cfg.taggers, 0), tsteps, tags, tag_base, cfg.sketch_k,
                   sk["signs"].data_ptr() if sk else None, None, sk["t"] if sk else 1, launched, stream())
 
     def steps(self, m: int, n: int, kd: int, cfg: Config) -> tuple[int, torch.Tensor]:
@@ -416,8 +415,8 @@ class TensorLib:
 class Config:
     """One GEMM form and its launch: `groups` CTA groups a chunk for the persistent forms (0: as many as fit), the
     warp-specialized form's consumer warps and ring stages (the tensor GEMM's decoder warps and stages), the wide GEMM's
-    L2 prefetch distance in CTAs, and the tensor GEMM's warps tagging from the start (-1: no tag) or its sketch warps
-    and k_s."""
+    L2 prefetch distance in CTAs, and the tensor GEMM's warps tagging from the start (-1: no tag) or its decoders'
+    sketch k_s."""
 
     form: int
     groups: int = 0
@@ -426,7 +425,6 @@ class Config:
     ahead: int = 0
     taggers: int = 0
     sketch_k: int = 0
-    sketchers: int = 0
 
     @property
     def name(self) -> str:
@@ -434,7 +432,7 @@ class Config:
             return "wide" + (f"-ahead{self.ahead}" if self.ahead else "")
         if self.form == 4:
             return f"tensor-d{self.consumers}s{self.stages}" + (
-                f"k{self.sketch_k}w{self.sketchers}" if self.sketchers else f"t{self.taggers}" if self.taggers >= 0 else "")
+                f"k{self.sketch_k}" if self.sketch_k else f"t{self.taggers}" if self.taggers >= 0 else "")
         return FORMS[self.form] + (f"-{self.consumers}x{self.stages}" if self.form == 2 else "")
 
 
@@ -708,8 +706,8 @@ class TensorLinear(Linear):
         return self.candidates(1)[0]
 
     def candidates(self, m: int) -> list[Config]:
-        return [Config(4, consumers=d, stages=s, taggers=t, sketch_k=ks, sketchers=w)
-                for d, s, t, ks, w in self.tlib.configs(self.tlib.tag_seed is not None)]
+        return [Config(4, consumers=d, stages=s, taggers=t, sketch_k=ks)
+                for d, s, t, ks in self.tlib.configs(self.tlib.tag_seed is not None)]
 
     def _launch(self, cfg: Config, x8: torch.Tensor, part: torch.Tensor, partials: bool) -> None:
         if cfg.form != 4:
@@ -719,7 +717,7 @@ class TensorLinear(Linear):
         if self.at is not None:
             tags, tag_base = t.step["tags"].data_ptr() + 32 * self.at, self.at
         else:
-            tags = t.tag_buffer(self.blocks).data_ptr() if cfg.taggers >= 0 or cfg.sketchers else None
+            tags = t.tag_buffer(self.blocks).data_ptr() if cfg.taggers >= 0 or cfg.sketch_k else None
             tag_base = self.tag_base
         t.fused(self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n, self.kd, self.base,
                 int(partials), cfg, groups, steps.data_ptr(), tags, tag_base)

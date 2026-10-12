@@ -14,8 +14,9 @@ Arms:
             ring that L2 holds, their leaves hashed (and folded) beside the next linear's GEMM, the tree after the last
   tensor    the same with ra-codec-tensor's fused GEMM (`wt.cu`, ``--tensor-lib``: Sloth over its field, decoder warps
             decoding in shared memory ahead of one MMA warp, k >= 1 rounds), with ``--tag`` its tag warps tagging the
-            store's 4,088-byte blocks (ro-blake3/v1) as decode runs, or with ``--sketch K_S`` (k = 1) its sketch warps
-            sketching the stored bytes on the tensor cores and tagging the sketches (ro-sketch-blake3/v0), and with
+            store's 4,088-byte blocks (ro-blake3/v1) as decode runs, or with ``--sketch K_S`` (k = 1) its decoder warps
+            sketching the stored words they decode on the tensor cores and its MMA warp tagging the sketches
+            (ro-sketch-blake3/v0), and with
             ``--commit`` also each decode step's commit: the step's tags in one buffer, their leaves and the tree's
             root, after the step's last linear
 

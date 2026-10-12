@@ -70,6 +70,11 @@ TENSOR_CODEC = {
 #: the full-slot fields at the x, Δ and τ measured for the field of their width (16 and 24 limbs), as ra-codec-theory
 #: prices 2^768 − 825 at p767's costs: no rates of their own yet
 TENSOR_CODEC |= {("p512", 1): TENSOR_CODEC[("p511", 1)], ("p768", 1): TENSOR_CODEC[("p767", 1)]}
+#: the 1,536- and 2,048-bit full-slot fields at their own k = 1 rates (r20261012-115146-b886: the CUDA-core root, their
+#: words being wider than the tensor-core squaring's 5 chunks; x over the same 1.16× clock), τ the tag's as above
+TENSOR_1536_POINTS = "art:a5459c87668c5c3c38329f057890e0529d308e391537369dd2fc752f085bdfca"
+TENSOR_CODEC |= {("p1536", 1): (1507.3083428871978 / 1.16, 1.0855995545095118, 0.48, TENSOR_1536_POINTS),
+                 ("p2048", 1): (2660.044909318239 / 1.16, 1.3364140923253431, 0.48, TENSOR_1536_POINTS)}
 ENCODED = ("enc", "wide", "tensor")
 SKETCH = "ro-sketch-blake3/v0"
 #: frontier.py's `model`, by (layers, hidden)
@@ -265,8 +270,9 @@ def main() -> int:
                            "GEMM" + (", each step committing as it goes from an L2 ring of tags" if cod.get("commit")
                                      else "") + ")" if wide and cod.get("tag") == SKETCH else
                            "benchmarks/word_codec/wide.cu ww_gemm (ra-codec-wide's fused decode + tag GEMM)" if wide else
-                           "benchmarks/codec_tensor/wt.cu wt_fused_sketch (ra-codec-tensor's decoder, MMA and tag or "
-                           "sketch warps), warps chosen per shape and batch" if tensor else
+                           "benchmarks/codec_tensor/wt.cu wt_fused_sketch (ra-codec-tensor's decoder, MMA and tag "
+                           "warps; sketched, the decoders sketch and the MMA warp tags), warps chosen per shape and "
+                           "batch" if tensor else
                            "benchmarks/vllm_encoded/ve.cu (word_codec wc.cu fused GEMM), form chosen per shape and batch"),
                 "batch": b, "context": ctx, "tokens_per_s": e, "step_ms": b / e * 1e3,
                 "native_stock_tokens_per_s": s, "native_plain_tokens_per_s": pl, "native_stock_compiled_tokens_per_s": sc,
