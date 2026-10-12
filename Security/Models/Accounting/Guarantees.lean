@@ -1,7 +1,9 @@
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Pouw
+import Models.Accounting.Guarantees.Remote
 import Models.Accounting.Guarantees.Sketch
 import Models.Accounting.Guarantees.Tag
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's guarantee as a
-joint run's compute guarantee, and the tag and sketch guarantees. -/
+joint run's compute guarantee, the remote bandwidth audit's conservation and node-level guarantees, and the tag and
+sketch guarantees. -/
