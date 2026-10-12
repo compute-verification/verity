@@ -377,10 +377,12 @@ def _failed(gates: dict[str, Any], facts: dict[str, Any], P: R.Params, segments:
 
 def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int, int, int], bytes], framing: type[V1] = V1,
         backend: Backend | None = None, params: R.Params | None = None, vectors: dict[str, Any] | None = None,
-        research: bool = False) -> dict[str, Any]:
+        research: bool = False, load: Callable[[Any, V1], Callable[[], Any] | None] | None = None) -> dict[str, Any]:
     """One run of P2's arm under `framing` (`V1`, the v4 spec's, or `V3`, `p2-16448/v4`'s).  `backend`, `params` and
     `vectors` replace the GPU kernels, the deployment point and the pinned vectors, and `research` lets `V3`'s memory
-    challenger audit where P2 has no certificate (the CPU tests)."""
+    challenger audit where P2 has no certificate (the CPU tests).  `load(c, framing)`, from a caller hosting this harness in
+    its own process, is called once `C` is on the device and before the limit is calibrated, and gives the honest audit's load
+    in place of `--load-tokens`' POUS forwards (None: no load)."""
     import torch
 
     base = params or R.DEPLOYMENT
@@ -494,10 +496,10 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     H.leave_reserved(a)
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
+    honest_load = load(c, fr) if load is not None else (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None
     cal = H.calibrate_limit(native_start, fields, live, out, a, leaves, "p2-calibrate")
     limit = int(cal.get("limit_ns") or 0)
-    honest = H.audit_round(native_start, fields, live, leaves, out, "p2-honest", a,
-                           (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync, extra)
+    honest = H.audit_round(native_start, fields, live, leaves, out, "p2-honest", a, honest_load, limit, sync, extra)
 
     def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: H.ControlResponder(nb, answer, real_delay=a.clock == "wall")  # noqa: E731

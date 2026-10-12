@@ -532,7 +532,9 @@ class P2Gpu:
 IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2V3Gpu, P2V3McGpu, P2Gpu)}
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, **kw: Any) -> int:
+    """`kw` goes to the implementation's `run` (the P2 arms: `p2_v1.harness.run`'s `load`, from a caller hosting this harness
+    in its own process)."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--scheme", default="band-chain/d12/v1", help="a registered name (verity.core.protocols.pous.schemes)")
     ap.add_argument("--impl", required=True, choices=sorted(IMPLS))
@@ -610,7 +612,7 @@ def main(argv: list[str] | None = None) -> int:
                            "experimental": experimental,
                            "source_commit": os.environ.get("RESEARCH_SOURCE_COMMIT"), "run_id": os.environ.get("RESEARCH_RUN_ID"),
                            "gates": {"conformance": conformance}}
-    body = impl.run(a, ws, out)
+    body = impl.run(a, ws, out, **kw)
     measurements = body.pop("measurements", [])
     doc["gates"].update(body.pop("gates"))
     doc.update(body)
