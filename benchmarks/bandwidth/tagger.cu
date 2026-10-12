@@ -1,10 +1,11 @@
 // The bandwidth audit's GPU tagger (verity/core/protocols/bandwidth/PROTOCOL.md §3-4): every block's tag over the store E
 // in device memory, the tags' leaves and the RFC 6962 root, for the three tag constructions.
 //
-//   ro-blake3/v1  one thread per block, the warp staging each 64-byte message block of its 32 rows through shared memory
-//                 (coalesced) while the next one is loaded into registers: the message u64be j ‖ E_j is three chunks
-//                 (16, 16 and 1 compressions under the window's key K), then two parent compressions.  A second kernel
-//                 hashes the leaves of 16 tags (`b3_leaves`, five SHA-512 compressions each).
+//   ro-blake3/v1  two lanes per block, one per 1,024-byte chunk of the message u64be j ‖ E_j (16 compressions each under
+//                 the window's key K), the warp staging each 64-byte message block of its 32 chunks through shared memory
+//                 while the next one is loaded into registers, with a 256-byte L2 fetch per miss; then the third chunk (one
+//                 compression) beside the parent, then the root.  A second kernel hashes the leaves of 16 tags
+//                 (`b3_leaves`, five SHA-512 compressions each).
 //   gf31-poly/v1  one warp per 32 blocks: lane l derives g for block base + l (one SHA-512 compression from the tag
 //                 prefix's midstate), then for each block the warp reads the row as 257 uint2 (u_q = w_2q·g + w_2q+1),
 //                 lane l runs Horner in H = g^64 over q = 32k + l (lane 0 also takes q = 256), and the lanes combine with
@@ -461,30 +462,37 @@ __device__ __forceinline__ uint64_t ld_l2_256(const uint64_t* p) {
 }
 
 constexpr int B3_WARPS = 4;
-constexpr int B3S = 9;  // shared-memory row stride, in u64
+constexpr int B3S = 9;  // shared-memory stream stride, in u64
 
-// ro-blake3/v1 over blocks [0, count): each tag as 8 little-endian words.  Message block g (0..31) of u64be j ‖ E_j is
-// E's u64 words 8g − 1 .. 8g + 6 (word −1 is j's): the warp loads them 4 rows × 64 bytes per instruction, one block ahead.
-__global__ void __launch_bounds__(B3_WARPS * 32, 4) b3_kernel(const uint64_t* __restrict__ E8, uint64_t count, Key3 key,
+// ro-blake3/v1 over blocks [0, count), 16 blocks a warp: lanes 2r and 2r + 1 hash block base + r's first and second
+// chunk, whose message block g (0..15) is E's u64 words 128c + 8g − 1 .. 128c + 8g + 6 (word −1 is u64be j), staged
+// through shared memory 4 streams × 64 bytes per load instruction, one message block ahead.  Then the odd lane hashes the
+// third chunk (E's words 255 and 256) while the even lane forms the parent, and the even lane forms the root.  Each tag
+// as 8 little-endian words.
+__global__ void __launch_bounds__(B3_WARPS * 32, 5) b3_kernel(const uint64_t* __restrict__ E8, uint64_t count, Key3 key,
                                                            uint32_t* __restrict__ tags) {
   __shared__ uint64_t sm[B3_WARPS][32 * B3S];
   const int lane = threadIdx.x & 31, sub = lane >> 3, wd = lane & 7;
-  const uint64_t base = ((blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) >> 5) * 32;
+  const uint32_t c = lane & 1;
+  const uint64_t base = ((blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) >> 5) * 16;
   if (base >= count) return;
   uint64_t* my = sm[threadIdx.x >> 5];
-  const uint64_t j = base + lane;
+  const uint64_t j = base + (lane >> 1);
   uint64_t pre[8];
   auto load = [&](int g) {
 #pragma unroll
     for (int i = 0; i < 8; ++i) {
-      const int r = 4 * i + sub, e = 8 * g - 1 + wd;
-      pre[i] = base + r < count && e >= 0 ? ld_l2_256(E8 + (base + r) * ROW_U64 + e) : 0;
+      const int s = 4 * i + sub, e = 128 * (s & 1) + 8 * g - 1 + wd;
+      const uint64_t r = base + (s >> 1);
+      pre[i] = r < count && e >= 0 ? ld_l2_256(E8 + r * ROW_U64 + e) : 0;
     }
   };
   load(0);
-  uint32_t cv[8], cv0[8];
+  uint32_t cv[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
 #pragma unroll 1
-  for (int g = 0; g < 32; ++g) {
+  for (int g = 0; g < 16; ++g) {
 #pragma unroll
     for (int i = 0; i < 8; ++i) my[(4 * i + sub) * B3S + wd] = pre[i];
     __syncwarp();
@@ -496,49 +504,41 @@ __global__ void __launch_bounds__(B3_WARPS * 32, 4) b3_kernel(const uint64_t* __
       m[2 * i + 1] = (uint32_t)(x >> 32);
     }
     __syncwarp();
-    if (g < 31) load(g + 1);
-    if (g == 0) {
+    if (g < 15) load(g + 1);
+    if (g == 0 && !c) {
       m[0] = bswap32((uint32_t)(j >> 32));
       m[1] = bswap32((uint32_t)j);
     }
-    const int t = g & 15;
-    if (t == 0)
-#pragma unroll
-      for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
-    b3_compress(cv, m, (uint32_t)(g >> 4), 64, B3_KEYED | (t == 0 ? B3_CHUNK_START : 0) | (t == 15 ? B3_CHUNK_END : 0), cv);
-    if (g == 15)
-#pragma unroll
-      for (int i = 0; i < 8; ++i) cv0[i] = cv[i];
+    b3_compress(cv, m, c, 64, B3_KEYED | (g == 0 ? B3_CHUNK_START : 0) | (g == 15 ? B3_CHUNK_END : 0), cv);
   }
-  uint32_t m[16], cv2[8], p[8], y[8];
-  uint64_t e255 = 0, e256 = 0;
-  if (j < count) {
-    e255 = ld_l2_256(E8 + j * ROW_U64 + 255);
-    e256 = ld_l2_256(E8 + j * ROW_U64 + 256);
-  }
-#pragma unroll
-  for (int i = 0; i < 16; ++i) m[i] = 0;
-  m[0] = (uint32_t)e255;
-  m[1] = (uint32_t)(e255 >> 32);
-  m[2] = (uint32_t)e256;
-  m[3] = (uint32_t)(e256 >> 32);
-  b3_compress(key.k, m, 2, 16, B3_KEYED | B3_CHUNK_START | B3_CHUNK_END, cv2);
+  uint32_t m[16], out[8];
 #pragma unroll
   for (int i = 0; i < 8; ++i) {
-    m[i] = cv0[i];
-    m[8 + i] = cv[i];
+    const uint32_t other = __shfl_xor_sync(FULL, cv[i], 1);
+    m[i] = c ? 0 : cv[i];
+    m[8 + i] = c ? 0 : other;
   }
-  b3_compress(key.k, m, 0, 64, B3_KEYED | B3_PARENT, p);
+  if (c && j < count) {
+    const uint64_t e255 = ld_l2_256(E8 + j * ROW_U64 + 255), e256 = ld_l2_256(E8 + j * ROW_U64 + 256);
+    m[0] = (uint32_t)e255;
+    m[1] = (uint32_t)(e255 >> 32);
+    m[2] = (uint32_t)e256;
+    m[3] = (uint32_t)(e256 >> 32);
+  }
+  b3_compress(key.k, m, c ? 2 : 0, c ? 16 : 64, B3_KEYED | (c ? B3_CHUNK_START | B3_CHUNK_END : B3_PARENT), out);
 #pragma unroll
   for (int i = 0; i < 8; ++i) {
-    m[i] = p[i];
-    m[8 + i] = cv2[i];
+    m[i] = out[i];
+    m[8 + i] = __shfl_xor_sync(FULL, out[i], 1);
   }
-  b3_compress(key.k, m, 0, 64, B3_KEYED | B3_PARENT | B3_ROOT, y);
-  if (j < count) {
-    uint4* o = (uint4*)(tags + j * 8);
-    o[0] = make_uint4(y[0], y[1], y[2], y[3]);
-    o[1] = make_uint4(y[4], y[5], y[6], y[7]);
+  if (!c) {
+    uint32_t y[8];
+    b3_compress(key.k, m, 0, 64, B3_KEYED | B3_PARENT | B3_ROOT, y);
+    if (j < count) {
+      uint4* o = (uint4*)(tags + j * 8);
+      o[0] = make_uint4(y[0], y[1], y[2], y[3]);
+      o[1] = make_uint4(y[4], y[5], y[6], y[7]);
+    }
   }
 }
 
@@ -718,7 +718,7 @@ static void launch_tags(const Pass& p, const void* E, const uint8_t seed[32], ui
   uint64_t warps = (count + 31) / 32;
   const unsigned leaf_grid = (unsigned)(((count + 15) / 16 + 127) / 128);
   if (p.tag == TAG_B3) {
-    unsigned grid = (unsigned)((warps + B3_WARPS - 1) / B3_WARPS);
+    unsigned grid = (unsigned)(((count + 15) / 16 + B3_WARPS - 1) / B3_WARPS);
     b3_kernel<<<grid, B3_WARPS * 32, 0, st>>>((const uint64_t*)E, count, b3_key(seed), p.tags);
     b3_leaves<<<leaf_grid, 128, 0, st>>>(p.tags, p.blocks, count, lm, p.nodes);
     return;
@@ -846,6 +846,19 @@ int bw_free(void* p) {
 
 int bw_memset(void* p, int value, size_t bytes) {
   CK(cudaMemset(p, value, bytes));
+  return 0;
+}
+
+// Reads `bytes` (a multiple of 16) of `buf` once and waits: an honest prover's step before a window, which leaves L2
+// holding clean lines of `buf` (no part of E, nothing dirty).
+int bw_read_scrub(const void* buf, size_t bytes) {
+  static uint32_t* sink = nullptr;
+  if (!sink) CK(cudaMalloc(&sink, 4));
+  int sms = 0;
+  CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
+  bw::read_kernel<<<sms * 8, 512>>>((const uint4*)buf, bytes / 16, sink);
+  CK(cudaGetLastError());
+  CK(cudaDeviceSynchronize());
   return 0;
 }
 
@@ -1053,13 +1066,14 @@ int main(int argc, char** argv) {
     return 3;
   }
 
-  // Timing.  E is the full store; every timed rep starts with L2 scrubbed by a 512 MiB write unless `warm`.
+  // Timing.  E is the full store; a tag's timed reps run under three L2 conditions (cold, warm, clean).
   void* E;
   CK(cudaMalloc(&E, blocks * bw::BLOCK_BYTES));
   if (bw_fill_test_store(E, blocks)) return 1;
   const size_t scrub_bytes = 512ull << 20;
   void* scrub;
   CK(cudaMalloc(&scrub, scrub_bytes));
+  CK(cudaMemset(scrub, 0, scrub_bytes));
   uint32_t* sink;
   CK(cudaMalloc(&sink, 4));
   cudaEvent_t e0, e1, e2;
@@ -1097,15 +1111,19 @@ int main(int argc, char** argv) {
     void* ws;
     CK(cudaMalloc(&ws, bw::workspace_bytes(tag, blocks)));
     Pass p = bw::make_pass(tag, blocks, ws);
-    for (int warm = 0; warm < 2; ++warm) {
+    // cold: L2 full of dirty lines (a 512 MiB write); warm: whatever the last pass left; clean: L2 holding clean lines
+    // of another buffer (a 512 MiB read), which an honest prover can arrange before every window.
+    const char* const conds[3] = {"cold", "warm", "clean"};
+    for (int cond = 0; cond < 3; ++cond) {
       std::vector<double> dev, tags_ms, tree_ms, host;
       for (int r = 0; r < reps; ++r) {
         uint8_t s[32], root[64];
         memcpy(s, seed, 32);
         s[0] ^= (uint8_t)r;
         s[1] ^= (uint8_t)(r >> 8);
-        s[2] ^= (uint8_t)(warm + 1);
-        if (!warm) CK(cudaMemsetAsync(scrub, r & 0xff, scrub_bytes));
+        s[2] ^= (uint8_t)(cond + 1);
+        if (cond == 0) CK(cudaMemsetAsync(scrub, r & 0xff, scrub_bytes));
+        if (cond == 2) bw::read_kernel<<<prop.multiProcessorCount * 8, 512>>>((const uint4*)scrub, scrub_bytes / 16, sink);
         CK(cudaDeviceSynchronize());
         auto h0 = std::chrono::steady_clock::now();
         CK(cudaEventRecord(e0));
@@ -1121,7 +1139,7 @@ int main(int argc, char** argv) {
         host.push_back(std::chrono::duration<double, std::milli>(h1 - h0).count());
       }
       fprintf(f, " \"%s_%s\": {\"device_ms\": %s, \"tags_ms\": %s, \"tree_ms\": %s, \"host_e2e_ms\": %s},\n", nm,
-              warm ? "warm" : "cold", js(stats(dev)).c_str(), js(stats(tags_ms)).c_str(), js(stats(tree_ms)).c_str(),
+              conds[cond], js(stats(dev)).c_str(), js(stats(tags_ms)).c_str(), js(stats(tree_ms)).c_str(),
               js(stats(host)).c_str());
     }
     // A prover that skips a fraction f of the blocks (and guesses their tags): the tag kernel over the rest.
