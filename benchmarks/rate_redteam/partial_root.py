@@ -22,7 +22,7 @@ import flint
 import gmpy2
 from gmpy2 import mpz
 
-FIELDS = {"p512": (512, 569), "p768": (768, 825), "p1536": (1536, 3453)}
+FIELDS = {"p512": (512, 569), "p768": (768, 825), "p1536": (1536, 3453), "p2048": (2048, 1557)}
 
 
 def rho(a: mpz, p: mpz, e: mpz) -> mpz:
