@@ -162,30 +162,22 @@ __device__ __forceinline__ void fold_column(u32 (&y)[NL], int j, u32 v, u32 &f) 
   f = (u32)(s >> 32);
 }
 
-// The 2N columns of the square of a[OFF..OFF + N), as `sqr_full` makes them, each handed to emit(m, column) in turn.
-template <int N, int OFF, int LEN, class F>
-__device__ __forceinline__ void sqr_columns(const u32 (&a)[LEN], F &&emit) {
-  u32 c0 = 0, c1 = 0;
+// Column m of the square of a[OFF..OFF + N) before its carry in: each pair once, doubled, and the square term.
+template <int N, int OFF, int LEN>
+__device__ __forceinline__ void sqr_column(const u32 (&a)[LEN], int m, u32 (&r)[3]) {
+  r[0] = r[1] = r[2] = 0;
 #pragma unroll
-  for (int m = 0; m < 2 * N - 1; ++m) {
-    u32 r[3] = {0, 0, 0};
-#pragma unroll
-    for (int i = (m < N ? 0 : m - N + 1); 2 * i < m; ++i) mac(r, a[OFF + i], a[OFF + m - i]);
-    r[2] = (r[2] << 1) | (r[1] >> 31);
-    r[1] = (r[1] << 1) | (r[0] >> 31);
-    r[0] <<= 1;
-    if ((m & 1) == 0) mac(r, a[OFF + m / 2], a[OFF + m / 2]);
-    add3(r, c0, c1);
-    emit(m, r[0]);
-    c0 = r[1];
-    c1 = r[2];
-  }
-  emit(2 * N - 1, c0);
+  for (int i = (m < N ? 0 : m - N + 1); 2 * i < m; ++i) mac(r, a[OFF + i], a[OFF + m - i]);
+  r[2] = (r[2] << 1) | (r[1] >> 31);
+  r[1] = (r[1] << 1) | (r[0] >> 31);
+  r[0] <<= 1;
+  if ((m & 1) == 0) mac(r, a[OFF + m / 2], a[OFF + m / 2]);
 }
 
-// One level of Karatsuba (KV_KARATSUBA=1): a = a0 + a1 B with B = 2^(n/2), so a^2 = L + (L + H - D) B + H B^2 with
-// L = a0^2, H = a1^2, D = (a0 - a1)^2, and B^2 = c mod p: three half squarings (3/4 of the products) whose columns
-// stream into y = L + c H and z = L + H - D (n + 1 bits); z B then folds into y, and y's carry words as in `fold`.
+// One level of Karatsuba (KV_KARATSUBA=1): a = a0 + a1 B with B = 2^(n/2), so a^2 = L + M B + H B^2 with L = a0^2,
+// H = a1^2, M = L + H - D, D = (a0 - a1)^2, and B^2 = c mod p: three half squarings, 3/4 of the products. Their
+// columns are made side by side (three carry chains a column), y = L + c H + M's low half B as they come, and M's
+// high half, which lands at B^2 and up, folds in as c times it at the end, then y's carry words as in `fold`.
 __device__ __forceinline__ void sqr_k1(const u32 (&a)[NL], u32 (&x)[NL]) {
   constexpr int H = NL / 2;
   u32 d[H], bw = 0;
@@ -203,31 +195,39 @@ __device__ __forceinline__ void sqr_k1(const u32 (&a)[NL], u32 (&x)[NL]) {
     d[i] = (u32)s;
     cy = (u32)(s >> 32);
   }
-  u32 y[NL], z[NL + 1];
-  sqr_columns<H, 0>(a, [&](int m, u32 v) { z[m] = v; });
-  u32 fy = 0, cz = 0;
-  sqr_columns<H, H>(a, [&](int m, u32 v) {
-    const u64 s = (u64)v * CF + z[m] + fy;
-    const u64 t = (u64)z[m] + v + cz;
+  u32 y[NL], ml[H], mh[H + 1];
+  u32 l0 = 0, l1 = 0, h0 = 0, h1 = 0, e0 = 0, e1 = 0, fy = 0;
+  long long cm = 0;
+#pragma unroll
+  for (int m = 0; m < NL; ++m) {
+    u32 lv = l0, hv = h0, dv = e0;
+    if (m < NL - 1) {
+      u32 r[3];
+      sqr_column<H, 0>(a, m, r);
+      add3(r, l0, l1);
+      lv = r[0], l0 = r[1], l1 = r[2];
+      sqr_column<H, H>(a, m, r);
+      add3(r, h0, h1);
+      hv = r[0], h0 = r[1], h1 = r[2];
+      sqr_column<H, 0>(d, m, r);
+      add3(r, e0, e1);
+      dv = r[0], e0 = r[1], e1 = r[2];
+    }
+    u64 s = (u64)hv * CF + lv + fy;
+    if (m >= H) s += ml[m - H];
     y[m] = (u32)s;
     fy = (u32)(s >> 32);
-    z[m] = (u32)t;
-    cz = (u32)(t >> 32);
-  });
-  z[NL] = cz;
-  u32 bz = 0;
-  sqr_columns<H, 0>(d, [&](int m, u32 v) {
-    const u64 s = (u64)z[m] - v - bz;
-    z[m] = (u32)s;
-    bz = (u32)(s >> 63);
-  });
-  z[NL] -= bz;
+    const long long t = (long long)lv + hv - dv + cm;
+    cm = t >> 32;
+    if (m < H) ml[m] = (u32)t;
+    else mh[m - H] = (u32)t;
+  }
+  mh[H] = (u32)cm;
   u32 g = 0;
 #pragma unroll
   for (int m = 0; m < NL; ++m) {
     u64 s = (u64)y[m] + g;
-    if (m >= H) s += z[m - H];
-    if (m <= H) s += (u64)z[m + H] * CF;
+    if (m <= H) s += (u64)mh[m] * CF;
     y[m] = (u32)s;
     g = (u32)(s >> 32);
   }
