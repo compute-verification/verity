@@ -7,10 +7,10 @@
 //                                    written by H2D, by SM stores, by the peer, and after an eviction
 //   paths landh  --gpu G             where the GPU's bytes land in the host: a CPU pointer chase over pinned memory just
 //                                    written by D2H or by SM stores, against flushed (DRAM) and CPU-written lines
-//   paths loop   --gpu G --what W --mib M --seconds S [--beside-read GIB [--read-hint normal|stream]]   a DMA loop
-//                                    for nsys's DRAM and PCIe sampling (W: h2d, d2h, zcw, zcr, p2pw, p2pce, smw, none),
-//                                    optionally beside a reader of GIB GiB on the device the ring lands in, its loads
-//                                    plain or evict-first
+//   paths loop   --gpu G --what W --mib M --seconds S [--beside-read GIB [--read-hint normal|stream] [--discard 1]]
+//                                    a DMA loop for nsys's DRAM and PCIe sampling (W: h2d, d2h, zcw, zcr, p2pw, p2pce,
+//                                    smw, none), optionally beside a reader of GIB GiB on the device the ring lands in,
+//                                    its loads plain or evict-first, and discarding the ring's lines from L2 as it goes
 //
 // Every timed path is gated first: its destination must equal its source byte for byte (exit 3 otherwise).
 // Output: one JSON object per line on stdout.
@@ -90,14 +90,22 @@ __global__ void k_xor(const uint4* __restrict__ src, size_t n, uint32_t* out) {
   atomicXor(out, acc);
 }
 // a competing reader, standing in for the GPU's own HBM traffic: `passes` passes over src, of plain loads or (STREAM)
-// evict-first ones (ld.global.cs), which a relay keeping a ring resident in L2 would use
+// evict-first ones (ld.global.cs), which a relay keeping a ring resident in L2 would use.  With a ring, every 16th
+// load is followed by dropping one of the ring's 128-byte lines from L2 without a write-back (discard.global.L2), as a
+// relay would once it has consumed the line; the threads together sweep the ring every few tens of microseconds.
 template <bool STREAM>
-__global__ void k_read_passes(const uint4* __restrict__ src, size_t n, int passes, uint32_t* sink) {
-  uint32_t acc = 0;
+__global__ void k_read_passes(const uint4* __restrict__ src, size_t n, int passes, uint32_t* sink, char* ring,
+                              size_t ring_lines) {
+  uint32_t acc = 0, k = 0;
+  size_t T = (size_t)gridDim.x * blockDim.x, d = blockIdx.x * (size_t)blockDim.x + threadIdx.x;
   for (int p = 0; p < passes; p++)
-    for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) {
+    for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += T) {
       uint4 v = STREAM ? __ldcs(src + i) : src[i];
       acc ^= (v.x ^ v.y ^ v.z ^ v.w) + p;
+      if (ring && (++k & 15) == 0) {
+        asm volatile("discard.global.L2 [%0], 128;" ::"l"(ring + (d % ring_lines) * 128) : "memory");
+        d += T;
+      }
     }
   if (acc == 0x12345678u) *sink = acc;
 }
@@ -117,6 +125,7 @@ struct Args {
   int gpu = 0, peer = -1, reps = 9;
   double seconds = 2.0;
   size_t mib = 256, read_gib = 0;
+  bool discard = false;
 };
 
 static Args parse(int argc, char** argv) {
@@ -132,6 +141,7 @@ static Args parse(int argc, char** argv) {
     else if (k == "--what") a.what = v;
     else if (k == "--beside-read") a.read_gib = strtoull(v.c_str(), 0, 10);
     else if (k == "--read-hint") a.read_hint = v;
+    else if (k == "--discard") a.discard = atoi(v.c_str()) != 0;
     else { fprintf(stderr, "unknown %s\n", k.c_str()); exit(2); }
   }
   return a;
@@ -585,9 +595,10 @@ static void mode_loop(const Args& a) {
   if (RB) {
     CK(cudaSetDevice(rdev));
     passes = std::max(1, (int)(a.seconds * 1.2e12 / RB));
+    char* ring = a.discard ? (char*)(p ? p : d) : nullptr;
     CK(cudaEventRecord(r0, rs));
-    if (stream) k_read_passes<true><<<2 * sms(rdev), 512, 0, rs>>>(rb, RB / 16, passes, rsink);
-    else k_read_passes<false><<<2 * sms(rdev), 512, 0, rs>>>(rb, RB / 16, passes, rsink);
+    if (stream) k_read_passes<true><<<2 * sms(rdev), 512, 0, rs>>>(rb, RB / 16, passes, rsink, ring, B / 128);
+    else k_read_passes<false><<<2 * sms(rdev), 512, 0, rs>>>(rb, RB / 16, passes, rsink, ring, B / 128);
     CK(cudaEventRecord(r1, rs));
     CK(cudaSetDevice(a.gpu));
   }
@@ -615,8 +626,8 @@ static void mode_loop(const Args& a) {
     float ms;
     CK(cudaEventSynchronize(r1));
     CK(cudaEventElapsedTime(&ms, r0, r1));
-    printf(", \"beside_read_gib\": %zu, \"read_hint\": \"%s\", \"read_device\": %d, \"read_gbps\": %.2f", a.read_gib,
-           a.read_hint.c_str(), rdev, (double)passes * RB / (ms * 1e-3) / 1e9);
+    printf(", \"beside_read_gib\": %zu, \"read_hint\": \"%s\", \"discard\": %s, \"read_device\": %d, \"read_gbps\": %.2f",
+           a.read_gib, a.read_hint.c_str(), a.discard ? "true" : "false", rdev, (double)passes * RB / (ms * 1e-3) / 1e9);
   }
   printf("}\n");
 }

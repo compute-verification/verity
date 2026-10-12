@@ -1,7 +1,7 @@
 // RDMA through node 2's NIC (mlx5_0) between two RC QPs of one process in loopback, gated byte for byte:
 //
 //   rdma_gate --op write|read --src host|gpu --dst host|gpu [--mib M] [--chunk BYTES] [--seconds S] [--inline N]
-//             [--gpu G] [--gid I] [--dev NAME] [--beside-read GIB [--read-hint normal|stream]]
+//             [--gpu G] [--gid I] [--dev NAME] [--beside-read GIB [--read-hint normal|stream] [--discard 1]]
 //
 // write: QP a writes src (its local memory) into dst (b's memory).  read: QP a reads src (b's memory) into dst (its
 // local memory), so with --src gpu the NIC reads the GPU (GPUDirect RDMA TX) and with --dst gpu it writes the GPU.
@@ -9,7 +9,8 @@
 // GPU memory is registered through nvidia_peermem (ibv_reg_mr), else as a dma-buf (ibv_reg_dmabuf_mr).
 // The whole of dst is written once and compared with src (exit 3 on a mismatch), then the same operations repeat for
 // `seconds` and the sustained rate is reported.  --beside-read GIB [--read-hint normal|stream]: meanwhile a kernel on
-// --gpu reads GIB GiB over and over (plain or evict-first loads), and the operations repeat for as long as it runs.
+// --gpu reads GIB GiB over and over (plain or evict-first loads), and the operations repeat for as long as it runs;
+// --discard 1: the reader also drops dst's lines from L2 without a write-back as it goes (--dst gpu).
 // Output: JSON lines on stdout.
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -39,13 +40,20 @@ static double now_s() {
   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
+// paths.cu's reader: with a ring, every 16th load drops one of its 128-byte lines from L2 without a write-back
 template <bool STREAM>
-__global__ void k_read_passes(const uint4* __restrict__ src, size_t n, int passes, uint32_t* sink) {
-  uint32_t acc = 0;
+__global__ void k_read_passes(const uint4* __restrict__ src, size_t n, int passes, uint32_t* sink, char* ring,
+                              size_t ring_lines) {
+  uint32_t acc = 0, k = 0;
+  size_t T = (size_t)gridDim.x * blockDim.x, d = blockIdx.x * (size_t)blockDim.x + threadIdx.x;
   for (int p = 0; p < passes; p++)
-    for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) {
+    for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += T) {
       uint4 v = STREAM ? __ldcs(src + i) : src[i];
       acc ^= (v.x ^ v.y ^ v.z ^ v.w) + p;
+      if (ring && (++k & 15) == 0) {
+        asm volatile("discard.global.L2 [%0], 128;" ::"l"(ring + (d % ring_lines) * 128) : "memory");
+        d += T;
+      }
     }
   if (acc == 0x12345678u) *sink = acc;
 }
@@ -138,6 +146,7 @@ static void to_rts(ibv_qp* qp, uint32_t dqpn, const ibv_gid& gid, int gidx, ibv_
 int main(int argc, char** argv) {
   std::string op = "write", src_s = "host", dst_s = "host", dev = "mlx5_0", hint = "normal";
   size_t mib = 64, chunk = 1 << 20, read_gib = 0;
+  bool discard = false;
   double seconds = 3.0;
   int inl = 0, gpu = 0, gidx = 3;
   for (int i = 1; i + 1 < argc; i += 2) {
@@ -154,6 +163,7 @@ int main(int argc, char** argv) {
     else if (k == "--dev") dev = v;
     else if (k == "--beside-read") read_gib = strtoull(v.c_str(), 0, 10);
     else if (k == "--read-hint") hint = v;
+    else if (k == "--discard") discard = atoi(v.c_str()) != 0;
     else DIE("unknown %s", k.c_str());
   }
   if (hint != "normal" && hint != "stream") DIE("--read-hint normal|stream");
@@ -264,8 +274,10 @@ int main(int argc, char** argv) {
     CK(cudaDeviceSynchronize());
     passes = std::max(1, (int)(seconds * 1.2e12 / RB));
     CK(cudaEventRecord(r0, rs));
-    if (hint == "stream") k_read_passes<true><<<2 * sms, 512, 0, rs>>>(rb, RB / 16, passes, rsink);
-    else k_read_passes<false><<<2 * sms, 512, 0, rs>>>(rb, RB / 16, passes, rsink);
+    if (discard && !dst.gpu) DIE("--discard drops the GPU destination's lines: --dst gpu");
+    char* ring = discard ? (char*)dst.p : nullptr;
+    if (hint == "stream") k_read_passes<true><<<2 * sms, 512, 0, rs>>>(rb, RB / 16, passes, rsink, ring, B / 128);
+    else k_read_passes<false><<<2 * sms, 512, 0, rs>>>(rb, RB / 16, passes, rsink, ring, B / 128);
     CK(cudaEventRecord(r1, rs));
   }
   size_t per = round_up(std::max<size_t>(chunks, 4096));
@@ -284,8 +296,8 @@ int main(int argc, char** argv) {
     float ms;
     CK(cudaEventSynchronize(r1));
     CK(cudaEventElapsedTime(&ms, r0, r1));
-    printf(", \"beside_read_gib\": %zu, \"read_hint\": \"%s\", \"read_gbps\": %.2f", read_gib, hint.c_str(),
-           (double)passes * RB / (ms * 1e-3) / 1e9);
+    printf(", \"beside_read_gib\": %zu, \"read_hint\": \"%s\", \"discard\": %s, \"read_gbps\": %.2f", read_gib,
+           hint.c_str(), discard ? "true" : "false", (double)passes * RB / (ms * 1e-3) / 1e9);
   }
   printf("}\n");
   return 0;

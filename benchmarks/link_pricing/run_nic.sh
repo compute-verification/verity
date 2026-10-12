@@ -10,7 +10,8 @@
 #
 # GPUS: the indices gpu-lease may take (default 4,5,6,7: NUMA node 1's, beside the NIC).  GID: the RoCE v2 IPv4 GID index (3).
 # PART=ibgda runs only the NVSHMEM put; PART=beside (1 GPU) only small rings beside a 16 GiB reader on the GPU, its
-# loads plain or evict-first: does a ring the NIC writes stay in L2 while the GPU streams its own HBM?
+# loads plain or evict-first: does a ring the NIC writes stay in L2 while the GPU streams its own HBM?  PART=discard
+# (1 GPU): the NIC's inbound rings beside a reader that also drops their lines from L2 unwritten.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, gate.jsonl (rdma_gate), nic.jsonl (perftest rows),
 # nsys.jsonl, nic_*.log, ibgda_*.log, port_counters.txt.
 set -uo pipefail
@@ -75,6 +76,11 @@ if [ "${1:-}" = leased ]; then
       gt "gpu_to_host_write_ring_8_read_$h" nsys --op write --src gpu --dst host --mib 8 --beside-read 16 --read-hint $h
     done
   fi
+  if [ -x "$G" ] && [ "$PART" = discard ]; then
+    for m in 8 32; do
+      gt "host_to_gpu_write_ring_${m}_read_discard" nsys --op write --src host --dst gpu --mib $m --beside-read 16 --discard 1
+    done
+  fi
   # perftest cross-check: pt NAME TOOL "SERVER ARGS" "CLIENT ARGS"
   port=18600
   pt() {
@@ -107,7 +113,7 @@ if [ "${1:-}" = leased ]; then
   BIN=$(find "$PT" -name 'shmem_put_bw' -type f | head -1)
   LIB=$(dirname "$(find /usr/lib /usr/lib64 /usr/local /opt -name 'libnvshmem_host.so.3' 2> /dev/null | head -1)")
   echo "{\"nvshmem_binary\": \"${BIN:-none}\", \"lib\": \"$LIB\"}" | tee -a "$O/nic.jsonl"
-  if [ -n "$BIN" ] && [ "$PART" != beside ]; then
+  if [ -n "$BIN" ] && { [ "$PART" = all ] || [ "$PART" = ibgda ]; }; then
     for transport in ibgda ibrc; do
       env LD_LIBRARY_PATH="$LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" NVSHMEM_DISABLE_P2P=1 NVSHMEM_HCA_LIST=$D:1 NVSHMEM_IB_GID_INDEX=$GID NVSHMEM_BOOTSTRAP=PMI \
         NVSHMEM_IB_ENABLE_IBGDA=$([ $transport = ibgda ] && echo 1 || echo 0) \
@@ -136,5 +142,5 @@ fi
 sha256sum run_nic.sh rdma_gate.cu nsys_metrics.py >> "$O/build.txt"
 [ -x "$S/rdma_gate" ] && sha256sum "$S/rdma_gate" >> "$O/build.txt"
 { ibv_devinfo -d $D | grep -E 'fw_ver|state|active_mtu|link_layer|max_qp_rd_atom|max_res_rd_atom'; } >> "$O/build.txt" 2>&1
-N=2; [ "$PART" = beside ] && N=1
+N=2; case $PART in beside | discard) N=1 ;; esac
 GPU_LEASE_WHO=ra-link-pricing gpu-lease $N --wait --on "${GPUS:-4,5,6,7}" --max-min 20 -- bash "$PWD/run_nic.sh" leased "$S"

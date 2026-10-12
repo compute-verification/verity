@@ -9,6 +9,7 @@
 # PHASE=two (2 GPUs): peer-to-peer, landing in a GPU written by its peer, nsys sampling of peer writes, and small
 #   inbound rings (H2D, peer, SM stores) beside a reader standing in for the receiving GPU's own HBM traffic.
 # PHASE=three (2 GPUs): the small inbound rings again, beside a reader of plain loads and one of evict-first loads.
+# PHASE=four (2 GPUs): the small inbound rings beside a reader that also drops the ring's lines from L2 unwritten.
 # GPUS: the indices gpu-lease may take (default 2,3: NUMA node 0's, beside verity's CPUs).
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, smi.csv, <mode>.jsonl, nsys.jsonl.
 set -euo pipefail
@@ -62,6 +63,12 @@ if [ "${1:-}" = leased ]; then
         for w in p2pw p2pce; do ns "${w}_8_read_$h" --gpu 0 --peer 1 --what $w --mib 8 $r; done
       done
       ;;
+    four)
+      r="--seconds 1.5 --beside-read 16 --discard 1"
+      ns read_alone_discard --gpu 0 --what none --mib 8 $r
+      for m in 8 32; do ns "h2d_${m}_read_discard" --gpu 0 --what h2d --mib $m $r; done
+      for w in p2pw p2pce; do ns "${w}_8_read_discard" --gpu 0 --peer 1 --what $w --mib 8 $r; done
+      ;;
     *) echo "unknown PHASE $PHASE"; exit 2 ;;
   esac
   cat "$O/nsys.jsonl" 2> /dev/null | cut -c1-2000
@@ -73,5 +80,6 @@ S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 { "$NVCC" --version | tail -2; } > "$O/build.txt"
 "$NVCC" -O3 -std=c++17 -arch=sm_120 -Xptxas -v paths.cu -o "$S/paths" >> "$O/build.txt" 2>&1 || { tail -30 "$O/build.txt"; exit 3; }
 sha256sum paths.cu nsys_metrics.py run_paths.sh "$S/paths" >> "$O/build.txt"
+echo "SASS lines naming CCTL or DISCARD (the reader's discard.global.L2): $("$(dirname "$NVCC")/cuobjdump" -sass "$S/paths" 2>&1 | grep -c -i -E 'CCTL|DISCARD')" >> "$O/build.txt"
 N=1; [ "$PHASE" = one ] || N=2
 GPU_LEASE_WHO=ra-link-pricing gpu-lease $N --wait --on "${GPUS:-2,3}" --max-min 25 -- bash "$PWD/run_paths.sh" leased "$S"
