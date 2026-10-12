@@ -11,7 +11,9 @@
 # WORK is the e2e's vLLM environment on node 2 (benchmarks/pouw/pearl_c_vllm/setup.sh).  ARMS (default
 # "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60),
 # ra-codec-wide's fused GEMM as wide:BITS:K or wide:BITS:K:tag (BITS 127, 255 or 521; K = 0 its plain payloads; tag: the
-# ro-blake3/v1 tag of every block read, as decode runs), any arm with +c compiled as vLLM serves by default (serve.py
+# ro-blake3/v1 tag of every block read, as decode runs), ra-codec-tensor's as tensor:FIELD:K or tensor:FIELD:K:tag (FIELD
+# 255, 511, 521, 767, 1023 or 1279, codec_tensor/wt.cu built for each the arms name; K >= 1; tag: its tag warps tag the
+# store's 4,088-byte blocks), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
 # each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring); a last /g makes an arm its gates and one
 # point (batch 1, context 512, 16 steps); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
@@ -29,8 +31,8 @@ export PATH=/usr/local/cuda-13.0/bin:$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARC
 export PYTHONPATH=$PWD:$PWD/integrations/vllm CUDA_DEVICE_ORDER=PCI_BUS_ID VLLM_ENABLE_V1_MULTIPROCESSING=0
 VE=benchmarks/vllm_encoded
 B=$(mktemp -d /tmp/vllm-encoded.XXXXXX); trap 'rm -rf "$B"' EXIT
-FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -I benchmarks/word_codec
-       -DWC_KMAX="${WC_KMAX:-3}")
+CU=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+FLAGS=("${CU[@]}" -I benchmarks/word_codec -DWC_KMAX="${WC_KMAX:-3}")
 declare -A DEFS=([pb56]="-DWC_PB=56" [pb60]="-DWC_PB=60")
 for lib in ${LIBSET:-pb56 pb60}; do
   # shellcheck disable=SC2086
@@ -43,9 +45,14 @@ for bits in $WIDE; do
   nvcc "${FLAGS[@]}" -I benchmarks/bandwidth -DWW_BITS="$bits" -DWW_SQR=1 -DWW_KMAX="${WW_KMAX:-2}" -o "$B/ww-p$bits.so" \
     benchmarks/word_codec/wide.cu > "$O/ww-p$bits.ptxas" 2>&1 &
 done
+TENSOR=$(for a in $ARMS; do case $a in tensor:*) a=${a#tensor:}; echo "${a%%:*}" ;; esac; done | sort -u)
+for n in $TENSOR; do
+  nvcc "${CU[@]}" -DWT_FIELD="$n" -o "$B/wt-$n.so" benchmarks/codec_tensor/wt.cu > "$O/wt-$n.ptxas" 2>&1 &
+done
 wait || true
 for lib in ${LIBSET:-pb56 pb60}; do [ -e "$B/ve-$lib.so" ] || { tail -30 "$O/ve-$lib.ptxas"; exit 4; }; done
 for bits in $WIDE; do [ -e "$B/ww-p$bits.so" ] || { tail -30 "$O/ww-p$bits.ptxas"; exit 4; }; done
+for n in $TENSOR; do [ -e "$B/wt-$n.so" ] || { tail -30 "$O/wt-$n.ptxas"; exit 4; }; done
 sha256sum "$B"/*.so > "$O/libs.sha256"
 (cd $VE && "$PY" -m pytest -q -p no:cacheprovider tests) > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 "$PY" -c 'import json, sys; d = json.load(open(sys.argv[1])); print(json.dumps({k: d[k] for k in ("model", "revision", "vllm", "torch")}))' \
@@ -104,6 +111,8 @@ fi
       enc) A=(--arm enc --k "$k" --lib "$B/ve-${lib:-pb56}.so"); tag=enc$k${lib:+-$lib} ;;
       wide) A=(--arm wide --k "${lib%%:*}" --lib "$B/ve-pb56.so" --wide-lib "$B/ww-p$k.so"); tag=w$k-${lib%%:*}
             case $lib in *:tag) A+=(--tag); tag+=t ;; esac ;;
+      tensor) A=(--arm tensor --k "${lib%%:*}" --lib "$B/ve-pb56.so" --tensor-lib "$B/wt-$k.so"); tag=t$k-${lib%%:*}
+              case $lib in *:tag) A+=(--tag); tag+=t ;; esac ;;
       plain) A=(--arm plain --lib "$B/ve-${k:-pb56}.so"); tag=plain${k:+-$k} ;;
       *) A=(--arm "$name"); tag=$name ;;
     esac

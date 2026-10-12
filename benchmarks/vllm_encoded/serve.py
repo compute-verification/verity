@@ -9,6 +9,9 @@ Arms:
   wide      the same with ra-codec-wide's fused GEMM (`wide.cu`, ``--wide-lib``: Sloth over p = 2^127 - 1, 2^255 - 19 or
             2^521 - 1, k rounds, k = 0 its plain payloads), with ``--tag`` also tagging every block of words it reads
             (ro-blake3/v1, the bandwidth audit's tag) as decode runs
+  tensor    the same with ra-codec-tensor's fused GEMM (`wt.cu`, ``--tensor-lib``: Sloth over its field, decoder warps
+            decoding in shared memory ahead of one MMA warp, k >= 1 rounds), with ``--tag`` its tag warps tagging the
+            store's 4,088-byte blocks (ro-blake3/v1) as decode runs
 
 Each arm runs the engine in compilation mode 0 with full CUDA graphs for decode, or with ``--compiled`` as vLLM serves by
 default (torch.compile, piecewise and full graphs; the fused linear is the opaque op ``ve_enc::linear``, and vLLM's activation
@@ -19,9 +22,9 @@ timing (inductor's deterministic mode), the same in every process.
 The plain and encoded arms install at the end of the model runner's `load_model` (before memory profiling, compilation and
 graph capture), through `verity_vllm.engine.hooks`.  Before anything is timed, each linear passes its gates: every GEMM form
 gives the same partial sums bit for bit (encoded against plain at every capture size), the plain sums agree with a float
-product, the encoded store decodes to the payloads on the device and in `codec.py` (`wide.py`), sampled tags equal the
-bandwidth audit's reference (`verity.core.protocols.bandwidth.tags`), and (encoded arms) no FP8 or plain fragment tensor
-of a linear's size is left anywhere in the process.  Each arm then generates fixed prompts greedily
+product, the encoded store decodes to the payloads on the device and in `codec.py` (`wide.py`, `codec_tensor/wide.py`),
+sampled tags equal the bandwidth audit's reference (`verity.core.protocols.bandwidth.tags`), and (encoded arms) no FP8 or
+plain fragment tensor of a linear's size is left anywhere in the process.  Each arm then generates fixed prompts greedily
 (`gate`), which `compare.py` requires to be bit-identical between plain and encoded arms (token ids and log-probs).
 
 A decode step's time is the interval between two consecutive scheduler updates that both scheduled exactly B decode tokens
@@ -51,6 +54,7 @@ import layout
 import torch
 
 CAPTURE = [1, 4, 8, 16, 32]
+ENCODED = ("enc", "wide", "tensor")
 SEED = hashlib.sha512(b"ra-vllm-encoded/key/v0").digest()[:32]
 TAG_SEED = hashlib.sha256(b"ra-vllm-encoded/tag-seed/v0").digest()
 TAG = "ro-blake3/v1"
@@ -107,9 +111,16 @@ class Install:
         if not layers:
             raise RuntimeError("no FP8 linear layers to install over")
         lib = K.Lib(args.lib)
-        wide = args.arm == "wide"
-        k = args.k if args.arm in ("enc", "wide") else 0
+        wide, tensor = args.arm == "wide", args.arm == "tensor"
+        k = args.k if args.arm in ENCODED else 0
         wlib = K.WideLib(args.wide_lib) if wide else None
+        tlib = K.TensorLib(args.tensor_lib) if tensor else None
+        if tensor:
+            tlib.set_key(SEED, k)
+            if args.tag:
+                tlib.set_tag(TAG_SEED)
+                tlib.tag_buffer(max(-(-layout.tasks(m.output_size_per_partition, m.input_size_per_partition) * tlib.sb
+                                      // tlib.tag_block) for _, m in layers))
         if wide:
             if k:
                 wlib.set_key(SEED, k)
@@ -124,7 +135,7 @@ class Install:
         gen = torch.Generator(device="cuda")
         cands: dict[tuple, list[K.Config]] = {}
         gates = {"layers": 0, "configs_checked": 0, "python_words": 0, "tags_checked": 0, "max_rel_err": 0.0}
-        base, plain_bytes, store_bytes, encode_s = 0, 0, 0, 0.0
+        base, tag_base, plain_bytes, store_bytes, encode_s = 0, 0, 0, 0, 0.0
         self.hooks = Hooks(tag="ra-vllm-encoded")
         for idx, (name, layer) in enumerate(layers):
             w = layer.weight.t()
@@ -138,7 +149,12 @@ class Install:
             if k or wide:
                 torch.cuda.synchronize()
                 te = time.perf_counter()
-                lin = K.WideLinear(lib, wlib, w, ws, k, base) if wide else K.EncodedLinear(lib, w, ws, k, base)
+                if tensor:
+                    lin = K.TensorLinear(lib, tlib, w, ws, k, base, tag_base)
+                elif wide:
+                    lin = K.WideLinear(lib, wlib, w, ws, k, base)
+                else:
+                    lin = K.EncodedLinear(lib, w, ws, k, base)
                 torch.cuda.synchronize()
                 encode_s += time.perf_counter() - te
             else:
@@ -160,7 +176,7 @@ class Install:
                     gates["max_rel_err"] = max(gates["max_rel_err"], err)
                     if err > 1e-3:
                         raise RuntimeError(f"gate: {name}: fused sums are {err:.2e} off the float product")
-            if wide and wlib.tag_seed is not None:
+            if args.tag:
                 gates["tags_checked"] += check_tags(lin, name, args.python_tags)
             if k or wide:
                 if not torch.equal(lin.decoded(), lin.payloads):
@@ -171,7 +187,8 @@ class Install:
                     check_words(lin, name, idx, args.python_words)
                     gates["python_words"] += args.python_words
                 lin.drop_payloads()
-                base += lin.words if wide else lin.store.numel()
+                base += lin.words if wide or tensor else lin.store.numel()
+                tag_base += lin.blocks if tensor else 0
                 del plain
             elif not torch.equal(lin.dense().view(torch.uint8), w.view(torch.uint8)):
                 raise RuntimeError(f"gate: {name}: the plain fragments are not the weight")
@@ -194,10 +211,17 @@ class Install:
         scan = plaintext_scan(min(lin.n * lin.kd for _, lin in self.linears))
         if k and (scan["fp8"] or scan["uint8"]):
             raise RuntimeError(f"gate: plaintext left in the process: {scan}")
-        codec = ({"field": wlib.field.name, "word_bits": wlib.bits, "payload_bits": wlib.payload, "limbs": wlib.limbs,
-                  "lane_words": wlib.lane_words, "wide_lib": Path(args.wide_lib).name, "kmax": wlib.kmax,
-                  "tag": TAG if wlib.tag_seed is not None else None}
-                 if wide else {"field": "p61", "word_bits": 61, "payload_bits": lib.bits, "tag": None})
+        if tensor:
+            codec = {"field": tlib.field.name, "word_bits": tlib.bits, "payload_bits": 8 * tlib.payload_bytes,
+                     "limbs": tlib.limbs, "word_bytes": tlib.word_bytes, "task_words": tlib.task_words,
+                     "tensor_lib": Path(args.tensor_lib).name, "kmax": tlib.kmax, "tag_blocks": tag_base,
+                     "tag": TAG if tlib.tag_seed is not None else None}
+        elif wide:
+            codec = {"field": wlib.field.name, "word_bits": wlib.bits, "payload_bits": wlib.payload, "limbs": wlib.limbs,
+                     "lane_words": wlib.lane_words, "wide_lib": Path(args.wide_lib).name, "kmax": wlib.kmax,
+                     "tag": TAG if wlib.tag_seed is not None else None}
+        else:
+            codec = {"field": "p61", "word_bits": 61, "payload_bits": lib.bits, "tag": None}
         self.record = {
             "arm": args.arm, "k": k, "lib": Path(args.lib).name, "bits": codec["payload_bits"], "kmax": lib.kmax,
             "codec": codec, "layers": len(layers),
@@ -236,8 +260,16 @@ class Install:
 
 
 def check_words(lin: K.Linear, name: str, idx: int, n: int) -> None:
-    """``n`` sampled words of the store decode to their payloads in the Python reference (`codec.py` or `wide.py`)."""
+    """``n`` sampled words of the store decode to their payloads in the Python reference (`codec.py`, `wide.py` or
+    `codec_tensor/wide.py`)."""
     rng = random.Random(idx)
+    if isinstance(lin, K.TensorLinear):
+        ct, t = K._ct(), lin.tlib
+        for j in [rng.randrange(lin.words) for _ in range(n)]:
+            y, want = layout.tensor_word(lin.store, j, t.word_bytes), layout.tensor_limb_word(lin.payloads, j, t.limbs)
+            if ct.decode_word(y, lin.base + j, t.key) != want:
+                raise RuntimeError(f"gate: {name}: codec_tensor/wide.py decodes word {lin.base + j} otherwise")
+        return
     if isinstance(lin, K.WideLinear):
         wide, w = K._wide(), lin.wlib
         for j in [rng.randrange(lin.words) for _ in range(n)]:
@@ -251,19 +283,25 @@ def check_words(lin: K.Linear, name: str, idx: int, n: int) -> None:
             raise RuntimeError(f"gate: {name}: codec.py decodes word {lin.base + j} otherwise")
 
 
-def check_tags(lin: K.WideLinear, name: str, n: int) -> int:
+def check_tags(lin: K.WideLinear | K.TensorLinear, name: str, n: int) -> int:
     """The last GEMM's tags of ``n`` sampled blocks and the last block equal the bandwidth audit's ro-blake3/v1 of the
-    block's encoded words at its index."""
+    block's encoded words at its index (a wide lane's L words, or 4,088 bytes of a tensor store, the last block short)."""
     from verity.core.protocols.bandwidth import tags
-    w = lin.wlib
+    tensor = isinstance(lin, K.TensorLinear)
+    w = lin.tlib if tensor else lin.wlib
     torch.cuda.synchronize()
     keyed = tags.get(TAG).keyed(w.tag_seed)
     rng = random.Random(lin.base)
     js = sorted({lin.blocks - 1, *(rng.randrange(lin.blocks) for _ in range(n))})
     got = w.tags[:8 * lin.blocks].view(-1, 8)[js].cpu().numpy()
+    first = lin.tag_base if tensor else lin.tag_block_base
     for j, t in zip(js, got):
-        if t.tobytes() != keyed(lin.tag_block_base + j, layout.wide_block(lin.store, j, w.lane_words, w.limbs)):
-            raise RuntimeError(f"gate: {name}: block {lin.tag_block_base + j}'s tag is not {TAG}'s")
+        if tensor:
+            block = lin.store[w.tag_block * j:w.tag_block * (j + 1)].cpu().numpy().tobytes()
+        else:
+            block = layout.wide_block(lin.store, j, w.lane_words, w.limbs)
+        if t.tobytes() != keyed(first + j, block):
+            raise RuntimeError(f"gate: {name}: block {first + j}'s tag is not {TAG}'s")
     return len(js)
 
 
@@ -454,7 +492,7 @@ def steady(rec: list, b: int) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", choices=("stock", "plain", "enc", "wide"), required=True)
+    ap.add_argument("--arm", choices=("stock", "plain", *ENCODED), required=True)
     ap.add_argument("--compiled", action="store_true",
                     help="vLLM's default compilation (torch.compile, piecewise and full CUDA graphs) instead of mode 0")
     ap.add_argument("--no-autotune", action="store_true",
@@ -462,9 +500,11 @@ def main() -> None:
                          "turns both on for each capture size), no combo-kernel benchmark, inductor's deterministic mode; "
                          "the compiled step is the same in every process (the compiled gate)")
     ap.add_argument("--k", type=int, default=2)
-    ap.add_argument("--lib", help="a build of ve.cu (plain, enc and wide arms; the wide arm reduces with it)")
+    ap.add_argument("--lib", help="a build of ve.cu (every arm but stock; the wide and tensor arms reduce with it)")
     ap.add_argument("--wide-lib", help="a build of wide.cu (wide arm)")
-    ap.add_argument("--tag", action="store_true", help="wide arm: tag every block the GEMMs read (ro-blake3/v1)")
+    ap.add_argument("--tensor-lib", help="a build of codec_tensor's wt.cu (tensor arm)")
+    ap.add_argument("--tag", action="store_true",
+                    help="wide and tensor arms: tag every block of the store the GEMMs read (ro-blake3/v1)")
     ap.add_argument("--python-tags", type=int, default=3, help="sampled tags a layer checked against the reference")
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")
@@ -503,9 +543,12 @@ def main() -> None:
 
     hooks = Hooks(tag="ra-vllm-encoded")
     install = Install(args)
-    if args.arm in ("plain", "enc", "wide"):
-        if not args.lib or (args.arm == "wide") != bool(args.wide_lib):
-            ap.error("--lib is required for the plain, enc and wide arms, and --wide-lib for the wide arm only")
+    if args.arm != "stock":
+        if not args.lib or (args.arm == "wide") != bool(args.wide_lib) or (args.arm == "tensor") != bool(args.tensor_lib):
+            ap.error("--lib is required for every arm but stock, --wide-lib for the wide arm only and --tensor-lib for the "
+                     "tensor arm only")
+        if args.tag and args.arm not in ("wide", "tensor"):
+            ap.error("--tag is the wide and tensor arms'")
         hook_runner(hooks, install)
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
@@ -540,8 +583,8 @@ def main() -> None:
     props = torch.cuda.get_device_properties(0)
     result = {
         "arm": args.arm, "compiled": args.compiled, "autotune": args.compiled and not args.no_autotune,
-        "k": args.k if args.arm in ("enc", "wide") else 0,
-        "codec_tag": TAG if args.arm == "wide" and args.tag else None, "model": args.model,
+        "k": args.k if args.arm in ENCODED else 0,
+        "codec_tag": TAG if args.tag else None, "model": args.model,
         "revision": args.revision,
         "vllm": vllm.__version__, "torch": torch.__version__, "cuda": torch.version.cuda, "gpu": props.name,
         "sms": props.multi_processor_count, "startup_s": startup_s, "kv_tokens": kv_tokens,

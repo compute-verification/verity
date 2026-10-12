@@ -226,16 +226,18 @@ class TensorLib:
         return self.tags
 
     def configs(self, tagged: bool) -> list[tuple[int, int, int]]:
-        """(decoders, stages, taggers) as ra-codec-tensor's `fused_cfgs("auto")` picks them: the most decoder warps the
-        field's registers allow at 4 and 6 stages fewer than fit at M = 32, or 2, 4 or 6 of them tagging instead."""
-        smax = (SMEM_PER_BLOCK - 4 * 8 * 528) // (self.sb + 32)
+        """(decoders, stages, taggers) as ra-codec-tensor's `fused_cfgs("auto")` picks them: untagged (taggers -1), the
+        most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32; tagged, 0, 2, 4 or 6
+        of them tagging from the start instead (every other warp tags once its own work is done)."""
+        smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 8) // (self.sb + 32)
         dmax = self.fused_warps - 2
+
         def need(d: int) -> int:
             return -(-32 * d // self.task_words)
 
         if not tagged:
-            return list(dict.fromkeys([(dmax, max(need(dmax), smax - 4), 0), (dmax, max(need(dmax), smax - 6), 0)]))
-        return [(dmax - t, max(need(dmax - t), smax - 4), t) for t in (2, 4, 6) if dmax - t >= self.fused_span]
+            return list(dict.fromkeys([(dmax, max(need(dmax), smax - 4), -1), (dmax, max(need(dmax), smax - 6), -1)]))
+        return [(dmax - t, max(need(dmax - t), smax - 4), t) for t in (0, 2, 4, 6) if dmax - t >= self.fused_span]
 
     def steps(self, m: int, n: int, kd: int, cfg: Config) -> tuple[int, torch.Tensor]:
         """The launch's CTA groups (as many as fill the device) and its tweak steps on the device (`bench.tsteps`): a
@@ -245,7 +247,7 @@ class TensorLib:
         if at not in self._steps:
             launched = ctypes.c_int(0)
             self.call("wt_fused", self.key.rounds, None, None, None, m, n, kd, 0, 0, cfg.consumers, cfg.stages, 0,
-                      cfg.taggers, None, None, 0, ctypes.byref(launched), stream())
+                      max(cfg.taggers, 0), None, None, 0, ctypes.byref(launched), stream())
             nch = kd // layout.TASK_COLS
             groups = launched.value // nch
             adv, rem = divmod(32 * cfg.consumers, self.task_words)
@@ -259,7 +261,8 @@ class TensorLib:
 @dataclass(frozen=True)
 class Config:
     """One GEMM form and its launch: `groups` CTA groups a chunk for the persistent forms (0: as many as fit), the
-    warp-specialized form's consumer warps and ring stages, and the wide GEMM's L2 prefetch distance in CTAs."""
+    warp-specialized form's consumer warps and ring stages (the tensor GEMM's decoder warps and stages), the wide GEMM's
+    L2 prefetch distance in CTAs, and the tensor GEMM's warps tagging from the start (-1: no tag)."""
 
     form: int
     groups: int = 0
@@ -273,7 +276,7 @@ class Config:
         if self.form == 3:
             return "wide" + (f"-ahead{self.ahead}" if self.ahead else "")
         if self.form == 4:
-            return f"tensor-d{self.consumers}s{self.stages}t{self.taggers}"
+            return f"tensor-d{self.consumers}s{self.stages}" + (f"t{self.taggers}" if self.taggers >= 0 else "")
         return FORMS[self.form] + (f"-{self.consumers}x{self.stages}" if self.form == 2 else "")
 
 
@@ -491,9 +494,9 @@ class TensorLinear(Linear):
             raise ValueError(f"the tensor GEMM has one form, not {cfg.name}")
         t = self.tlib
         groups, steps = t.steps(x8.shape[0], self.n, self.kd, cfg)
-        tags = t.tag_buffer(self.blocks).data_ptr() if cfg.taggers else None
+        tags = t.tag_buffer(self.blocks).data_ptr() if cfg.taggers >= 0 else None
         t.call("wt_fused", self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n, self.kd,
-               self.base, int(partials), cfg.consumers, cfg.stages, groups, cfg.taggers, steps.data_ptr(), tags,
+               self.base, int(partials), cfg.consumers, cfg.stages, groups, max(cfg.taggers, 0), steps.data_ptr(), tags,
                self.tag_base, None, stream())
 
     def decoded(self) -> torch.Tensor:
