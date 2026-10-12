@@ -330,8 +330,10 @@ devices' side sources ignore the oracle: the probability of `RateChainPaidRO`'s 
 
 **The reading.** The pass seed is Fiat–Shamir, so a prover may hash `G` candidate roots for pass `j − 1` with pass
 `j`'s seed and keep the root whose oracle suits it: the window's correct receipts are still paid for pass by pass, at
-`G` times the error. The pick here sees the whole family, values the prover never queried among them, so the factor
-reaches the guessing term too; a pick that sees only queried values would leave `N/2^h` alone (not stated).
+`G` times the error. The pick here sees the store and the whole family for free, so it can keep a candidate whose
+device guessed right, and the factor reaches the guessing term too. A pick that is part of the pass's device, seeing
+the store only through counted reads and the family only through counted queries, would leave `N/2^h` alone and add
+its queries to `q` (not stated).
 
 Proof: `Accounting.SecurityProofs.RateGrindPaidRO`, `RatePaidRO` at each pass of the chain that keeps each candidate,
 and a union bound over the passes and the candidates.
