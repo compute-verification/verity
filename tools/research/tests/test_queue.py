@@ -129,6 +129,17 @@ def test_ready_prs_merge_onto_next_in_number_order_drafts_too_and_held_ownerless
     assert [n for n, e in sorted(status.items()) if e.state == "queued"] == [1, 2, 3, 6] and status[3].position == 3
 
 
+def test_the_queues_merges_carry_the_time_they_are_made_whatever_date_the_caller_pins(world, monkeypatch):
+    """12 Oct: the hand-landing recipe pinned 2026-09-28T23:00Z for reproducible merge ids, a merge on `next` built under it
+    (ba87196a8) landed with that date, and `git log --since` over `main` stopped early there."""
+    world.gh.put(1, world.change({"a.txt": "a1\n"}))
+    monkeypatch.setenv("GIT_AUTHOR_DATE", "2026-09-28T23:00:00+0000")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2026-09-28T23:00:00+0000")
+    q = world.queue()
+    [m] = q.sync()[0]
+    assert "2026-09-28" not in _git(q.workdir, "log", "-1", "--format=%aI %cI", m.commit)
+
+
 def test_a_new_push_moves_its_pr_to_the_tip_and_keeps_the_commits_before_it(world):
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -139,6 +150,42 @@ def test_a_new_push_moves_its_pr_to_the_tip_and_keeps_the_commits_before_it(worl
     assert [m.pr for m in again] == [1, 3, 2]
     assert again[0].commit == first[0].commit                  # the unchanged prefix is kept, not re-merged
     assert again[2].head == world.gh.prs[2].head
+
+
+def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
+    """12 Oct: a flaky test on `main` failed 8577 and its fix (#1858) sat behind the next train; `--first` restacks `next` so the
+    next train starts with the fix.  A PR in `--first` that isn't ready is passed over, and another queue's sync without the
+    flag keeps the new order."""
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    world.queue().sync()
+    world.gh.put(9, world.change({"fix.txt": "fix\n"}))
+    world.gh.put(8, world.change({"other.txt": "x\n"}), ready=False)
+    members, _ = world.queue(first=(8, 9)).sync()
+    assert [m.pr for m in members] == [9, 1, 2, 3]
+    again, _ = world.queue().sync()
+    assert [m.commit for m in again] == [m.commit for m in members]
+
+
+def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world):
+    """`.gitattributes` names `lean-audit` for every lean-audit.json; the queue's own clone must define it, or two PRs that each
+    add a record conflict as text (12 Oct: #1806)."""
+    from research.clone import RECORD_DRIVER
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    tools = {f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}
+    rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    base = world.change({**tools, ".gitattributes": "lean-audit.json merge=lean-audit\n"})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    for n, g in ((1, "A"), (2, "B")):
+        world.gh.put(n, world.change({"pkg/lean-audit.json": json.dumps({**rec, "guarantees": {**rec["guarantees"], g: "1"}})}))
+    q = world.queue()
+    members, entries = q.sync()
+    for k, v in RECORD_DRIVER.items():
+        assert _git(q.workdir, "config", "--get", k) == v
+    assert [m.pr for m in members] == [1, 2], entries[2].why
+    merged = json.loads(_git(world.origin, "show", "refs/heads/next:pkg/lean-audit.json"))
+    assert set(merged["guarantees"]) == {"T", "A", "B"}
 
 
 def test_a_conflicting_pr_is_left_out_and_its_owner_told_which_queued_pr_touched_the_file(world):
@@ -403,6 +450,69 @@ def test_ready_marks_read_through_to_the_remote_and_without_that_pull_the_queue_
     monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", "R2_ENDPOINT,R2_BUCKET")
     with pytest.raises(QueueError, match=r"^STALE: .*R2_ENDPOINT, R2_BUCKET not in this shell .*fresh tmux login shell"):
         StoreLabels(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
+
+
+def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monkeypatch):
+    """`--marked-after`: a mark then means "land this now" (top, 12 Oct), and older marks need nothing from their owners."""
+    from research.queue import StoreLabels
+
+    head = "0123456789abcdef0123456789abcdef01234567"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    lane = LocalStore(tmp_path / "lane")
+    lane.add_label(label_target(12, head), vocab.READY, True, "lane-12", ts="2026-10-12T05:59:59Z")
+    assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
+    assert StoreLabels(LocalStore(tmp_path / "q1")).ready(12, head) is True
+    assert StoreLabels(LocalStore(tmp_path / "q2"), since="2026-10-12T06:00:00Z").ready(12, head) is False
+    lane.add_label(label_target(12, head), vocab.READY, True, "lane-12", ts="2026-10-12T06:00:00Z")
+    assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
+    assert StoreLabels(LocalStore(tmp_path / "q3"), since="2026-10-12T06:00:00Z").ready(12, head) is True
+    lane.add_label(label_target(12, head), vocab.READY, False, "memory-accounting", ts="2026-10-12T10:20:00Z")
+    assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
+    assert StoreLabels(LocalStore(tmp_path / "q4")).ready(12, head) is False         # an ejection, seen by every queue
+    lane.add_label(label_target(12, head), vocab.READY, True, "lane-12", ts="2026-10-12T11:00:00Z")
+    assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
+    assert StoreLabels(LocalStore(tmp_path / "q5")).ready(12, head) is True          # until its owner marks it again
+
+
+def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypatch, capsys):
+    """12 Oct: `research queue status` on architecture's VM, run without `--marked-after`, listed week-old marks (#1145, #1736)
+    as admitted though drive, with its cutoff, never took them.  The cutoff is `marked_after` in the rules on `main`, and a PR whose
+    mark it ignores says so, so its owner re-marks it or closes it (12 Oct: circuits' #1784, #1786, #1801 sat unseen)."""
+    import research.queue as Qm
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+    (world.dev / "ci" / "queue.toml").write_text(RULES + 'marked_after = "2026-10-12T06:00:00Z"\n')
+    _git(world.dev, "commit", "-qam", "the cutoff")
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
+    lane = LocalStore(world.tmp / "lane")
+    for n, ts in ((1, "2026-10-05T09:00:00Z"), (2, "2026-10-12T07:00:00Z")):
+        world.gh.put(n, head := world.change({f"{n}.txt": "x\n"}), ready=False)
+        lane.add_label(label_target(n, head), vocab.READY, True, f"lane-{n}", ts=ts)
+        assert labels_sync.push_targets(lane, [label_target(n, head)])["failed"] == []
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    argv = ["queue", "status", "--json", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin),
+            "--repo", "o/verity", "--store", str(world.tmp / "queue-store")]
+    assert research_main(argv) == 0
+    got = {e["pr"]: (e["state"], e["why"]) for e in json.loads(capsys.readouterr().out)}
+    assert got[1][0] == "waiting" and got[1][1].startswith("ignored: marked before cutoff") and "2026-10-05T09:00:00Z" in got[1][1]
+    assert got[2][0] == "ready"
+    assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
+    assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
+
+
+def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
+    """12 Oct: #1824's ejection lived in the ejecting VM's queue state; drive, on another VM, rebuilt `next` with it."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    q = world.queue()
+    q.eject(1, "held for Daniel's decision 10", "memory-accounting")
+    head = next(p.head for p in world.gh.open_prs() if p.number == 1)
+    (lab,) = world.store.labels(label_target(1, head), key=vocab.READY)
+    assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for Daniel's decision 10")
 
 
 def test_rules_name_the_hold_label_and_refuse_anything_else():
@@ -1089,8 +1199,9 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync and land only"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync and land only")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, land and drive only"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, land and drive only"),
+                      (["queue", "drive"], "drive needs --on MACHINE")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err

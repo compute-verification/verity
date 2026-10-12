@@ -541,6 +541,10 @@ def test_each_run_a_landing_names_gets_one_landed_label_on_the_remote_and_a_reru
     second = _git(repo, "rev-parse", "HEAD")
     assert [(r, c) for r, c, _ts in M.landed_runs(repo, start, second)] == [
         ("r20261010-104434-7273", first), ("r20261010-*-9827", first), ("r20261011-010203-abcd", second)]
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "queue: fast-forwarded, no trailer")
+    third = _git(repo, "rev-parse", "HEAD")
+    assert [(r, c) for r, c, _ts in M.landed_runs(repo, second, third, {third: "r20261011-020000-beef"})] == [
+        ("r20261011-020000-beef", third)], "a queue commit's run from `runs`, as landing_lines reads it"
     st, said = LocalStore(), []
     assert M.label_landed(repo, start, second, store=st, log=said.append), said
     for rid, commit in (("r20261010-104434-7273", first), ("r20261010-110000-9827", first), ("r20261011-010203-abcd", second)):
