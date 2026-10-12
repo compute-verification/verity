@@ -23,7 +23,7 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   rest does is a prefix-causal table keyed by what `X` sent it, of at most `2^e` entries; `localization_wires`, the
   per-run lemma on wires; memory over continuations bounds each run's state (`memory_of_memoryOver`).
 * `Actual/Device.lean`: the bridge to the device model: the schedule the actual circuit induces fits the device
-  (`fits`, `fits_of_feasible`).
+  (`fits`, `fits_of_feasible`) and charges what an account's gates use (`covers_ingress`, `covers_work`).
 * `Actual/Confidence.lean`: `Composition`, protocols sound alone compose into the confidence set at `∑ δ i`, and
   `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; causality's global form from the local one.
 -/
