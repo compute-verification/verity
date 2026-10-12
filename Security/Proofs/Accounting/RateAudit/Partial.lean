@@ -20,7 +20,8 @@ the oracle, under the certified stream, at the contents of at least `k` words (`
   (`card_compress_le`): the trace records `x` bits per completion of `x` (`PChip.trace_length`), and replaying the chip
   recomputes its queries (`PChip.replay_trace`).
 
-The honest device is `RateHonest`'s, as a partial device (`Device.toPartial`).
+The honest device is `RateHonest`'s, as a partial device (`Device.toPartial`), and the rebuild route
+(`RatePartialRebuild`) is `PChip.completed_mul_le` at the device.
 -/
 
 namespace Accounting.Rate
@@ -61,7 +62,7 @@ theorem taken_lt_of_floor (A : PartialDevice N b h ρ S L q) (E : Store N b) (R 
   have hQ := hk.trans (card_queried_le A E R O)
   have hL := (A.bounded (A.state E) (A.world E R O)).1
   have hG := PChip.completed_mul_le hw (A.world E R O) (A.chip (A.state E))
-  unfold PartialDevice.compute at hc
+  unfold PartialDevice.compute PartialDevice.work at hc
   unfold floor at hf
   unfold taken PartialDevice.completed
   generalize rounds * cRoot = cEnc at hf hG
@@ -269,6 +270,13 @@ theorem Device.toPartial_eq (A : Device N b h ρ S L q) (E : Store N b) (R : Bit
       (A.chip (A.state E)).toPartial.work cost (A.world E R O) = _
   rw [e5, ew]
 
+/-- Under `WorkHardness`, the bits a partial device completes, at `rounds · c_root` per `b` of them, cost at most its
+completions' compute. -/
+theorem PartialDevice.completed_mul_le {rounds cRoot : ℕ} {cost : ℕ → ℕ}
+    (hw : Assumptions.WorkHardness b rounds cRoot cost) (A : PartialDevice N b h ρ S L q) (E : Store N b)
+    (R : Bits ρ) (O : Oracle N b h ρ) : A.completed E R O * (rounds * cRoot) ≤ b * A.work cost E R O :=
+  PChip.completed_mul_le hw (A.world E R O) (A.chip (A.state E))
+
 end Accounting.Rate
 
 namespace Accounting.SecurityProofs
@@ -352,6 +360,10 @@ theorem RateAuditPartial : Accounting.Guarantees.RateAuditPartial := by
       exact A.card_compress_le y.1 k lam hk0)).trans (le_of_eq ?_)
     push_cast
     rfl
+
+/-- **The rebuild route** (`Accounting.Guarantees.RatePartialRebuild`). -/
+theorem RatePartialRebuild : Accounting.Guarantees.RatePartialRebuild :=
+  fun _ _ _ _ _ _ _ _ _ _ A hw E R O => A.completed_mul_le hw E R O
 
 /-- **Completeness of the rate audit with partial completion** (`Accounting.Guarantees.RatePartialHonest`):
 `RateHonest`'s device, as a partial device. -/

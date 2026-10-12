@@ -7,7 +7,7 @@ import Proofs.Accounting.RateAudit.Partial
 
 At a value of the other audits' coins, the run's bandwidth audit is a partial device of `RateAuditPartial`'s class at
 `S = S_chip`, `L = ∑ cap_i · T_bw` and `q = rate_oracle · T_bw`. On a bandwidth coin where the compute account did at
-least `W`, W (`ComputeAdditive`) puts the game's compute within `F·T − W`, and the game's footprint is at most its
+least `W`, W (`RateComputeAdditive`) puts the game's compute within `F·T − W`, and the game's footprint is at most its
 ingress, which the bandwidth account's reads cover: the joint event is inside `RateAuditPartial`'s at `F = F·T − W`
 (`RateOfAuditPartial`). The passes form follows from the floor by `x₁ · b · F ≤ c_root · BW` (`passes_floor`).
 
@@ -26,7 +26,7 @@ theorem computeAdditive_of_othersWork {N b h ρ s : ℕ} {ι : Type} [Fintype ι
     [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS} (real : RealizesRatePartial r) (p : Price)
     (cTag : ℕ) (cost : ℕ → ℕ)
     (hle : ∀ x y s', (real.dev (x, s')).compute cTag cost y.1 y.2.1 y.2.2.1 ≤ r.othersWork p (x, y, s')) :
-    Assumptions.ComputeAdditive p cTag cost real := fun x y s' => by
+    Assumptions.RateComputeAdditive p cTag cost real := fun x y s' => by
   have h1 := hle x y s'
   have h2 := r.work_add_othersWork p (x, y, s')
   omega

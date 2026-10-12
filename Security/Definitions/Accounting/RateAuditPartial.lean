@@ -13,7 +13,7 @@ needs in its on-chip state, device memory or side sources, which the audit count
 `complete j b _ id`, at `cost b`, so every device of `RateAudit.lean`'s game is one of this game.
 
 The cost is a parameter of the game, as `c_enc` is in `RateAudit.lean`. What it must be for a deployed codec is the
-named assumption `Accounting.Assumptions.WorkHardness` (`Models/Accounting/Assumptions.lean`): completing `x` of a word's
+named assumption `Accounting.Assumptions.WorkHardness` (`Models/Accounting/Assumptions/RateAudit.lean`): completing `x` of a word's
 `b` bits costs at least `x/b` of a word's price, `k·c_root` at `k` rounds. The game is generous to the device: a completion returns its bits
 whether or not the device holds the rest of the word, and its cost does not depend on what it holds, so a device that
 completes from a hint is a device of this game whose hint it reads as before. A completion takes one word, so the game
@@ -26,7 +26,7 @@ side link's `L` bits with the stream's `ρ` among them, the `q` queries, the sam
 
 `RealizesRatePartial` is `RealizesRate` (`RateAuditJoint.lean`) for a joint run whose bandwidth audit a partial device
 plays, without `RealizesRate`'s compute field: that the game's compute and the compute account's work share no work is
-the named assumption `Accounting.Assumptions.ComputeAdditive` (the actual-circuit model's W), which the guarantees take
+the named assumption `Accounting.Assumptions.RateComputeAdditive` (the actual-circuit model's W), which the guarantees take
 as a hypothesis.
 -/
 
@@ -148,10 +148,14 @@ def footprint (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (
 def completed (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).completed (A.world E R O)
 
+/-- The compute the device's completions cost in the window, at `cost x` per completion of `x` bits. -/
+def work (A : PartialDevice N b h ρ S L q) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+  (A.chip (A.state E)).work cost (A.world E R O)
+
 /-- The device's compute in the window, at `c_tag` per oracle query and `cost x` per completion of `x` bits. -/
 def compute (A : PartialDevice N b h ρ S L q) (cTag : ℕ) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : ℕ :=
-  ((A.chip (A.state E)).queries (A.world E R O)).length * cTag + (A.chip (A.state E)).work cost (A.world E R O)
+  ((A.chip (A.state E)).queries (A.world E R O)).length * cTag + A.work cost E R O
 
 /-- The verifier accepts: every sampled word's committed tag is the oracle's tag of that word under the stream. -/
 def Accepts {s : ℕ} (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
@@ -167,7 +171,7 @@ namespace Accounting
 /-- Run `r`'s bandwidth audit is the rate audit's game with partial completion, played at each value of the other
 audits' coins by a partial device within the device model's limits over the bandwidth window, whose ingress the
 bandwidth account's reads from device memory cover. Unlike `RealizesRate`, it says nothing of the game's compute: that
-it shares no work with the compute account is `Accounting.Assumptions.ComputeAdditive`. -/
+it shares no work with the compute account is `Accounting.Assumptions.RateComputeAdditive`. -/
 structure RealizesRatePartial {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α ΩW ΩS : Type} [Fintype α]
     (r : Run d α ΩW (RateCoins N b h ρ s) ΩS) where
   /-- the device of the game at the other audits' coins -/

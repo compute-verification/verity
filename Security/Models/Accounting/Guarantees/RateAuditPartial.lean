@@ -1,5 +1,5 @@
 import Definitions.Accounting.RateAuditPartial
-import Models.Accounting.Assumptions
+import Models.Accounting.Assumptions.RateAudit
 
 /-!
 # The rate audit with partial completion: what an accepted device held and read (trusted)
@@ -8,12 +8,15 @@ The game is `Security/Definitions/Accounting/RateAuditPartial.lean`: `RateAudit`
 `complete j x g`, which obtains any `x` of word `j`'s `b` bits at `cost x`. Proofs are in
 `Security/Proofs/Accounting/RateAudit/Partial*.lean`. The rebuild term rests on the named assumption
 `Accounting.Assumptions.WorkHardness b rounds c_root cost` (`rate-codec-work` in partial-completion form: `x` bits
-cost at least `x/b` of a word's `rounds · c_root`), and in a joint run on `Accounting.Assumptions.ComputeAdditive`
-(W: the compute account's work and the game's completions share no work).
+cost at least `x/b` of a word's `rounds · c_root`, `Models/Accounting/Assumptions/RateAudit.lean`), and in a joint run
+on `Accounting.Assumptions.RateComputeAdditive` (W: the compute account's work and the game's completions share no
+work).
 
 * `RateAuditPartial`: `RateAudit`'s bound, at its floor with `c_enc = rounds · c_root` and its error, for a device that
   may keep part of a word and complete the rest.
 * `RatePartialHonest`: the honest device of `RateHonest`, accepted on every coin, completing nothing.
+* `RatePartialRebuild`: on every run, the bits completed cost `c_word / b` each (the remote audit's route
+  `Accounting.Remote.Run.Rebuild` at `δ = 0`).
 * `RateOfAuditPartial`: in a joint run, the bandwidth account's reads, with the completions charged as compute through
   W, so a compute account that did `W` of work leaves `F·T − W` for them.
 * `RateOfAuditPartialPasses`: the same with the rebuild term in passes, `μ_rebuild ≤ (1 − τ)·d/(k·x₁) ≤ d/(k·x₁)`.
@@ -81,12 +84,33 @@ def RatePartialHonest : Prop :=
       A.Accepts E R O I ∧ A.footprint E R O = N * b ∧ A.ingress E R O = N * b ∧ A.completed E R O = 0 ∧
         A.compute cTag cost E R O = N * cTag
 
+/-- **The rebuild route: a partial device pays `c_word / b` per bit it completes.** For every partial device, if
+completions are as hard as `WorkHardness b rounds c_root cost` says, then on every store, stream and oracle the bits
+the device completed, at `c_word = rounds · c_root` per `b` of them, cost at most its completions' compute:
+
+  `completed · c_word ≤ b · work`.
+
+**The reading.** It is the remote audit's route `Accounting.Remote.Run.Rebuild` at `δ = 0`
+(`rebuilt · c_word ≤ b · rebuildWork`, lane ra-remote-theorem's node-level guarantee) for a run whose node completes
+words as a partial device does: its rebuilt bits are the device's completed bits, however it splits them into partial
+words, and its rebuild work covers the completions' compute. `RateAuditPartial` uses it to turn the compute
+`F − k·c_tag` into at most `(F − k·c_tag)·b/c_word` completed bits. Proof: `Accounting.SecurityProofs.RatePartialRebuild`,
+by induction on the chip program, one completion at a time.
+
+Frozen (no-function): a bound on every run of an abstract chip program, which no Lean function of the rate audit's
+code computes. -/
+def RatePartialRebuild : Prop :=
+  ∀ (N b h ρ S L q rounds cRoot : ℕ) (cost : ℕ → ℕ) (A : Rate.PartialDevice N b h ρ S L q),
+    Assumptions.WorkHardness b rounds cRoot cost →
+    ∀ (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ),
+      A.completed E R O * (rounds * cRoot) ≤ b * A.work cost E R O
+
 /-- **The rate audit with partial completion as a joint run's bandwidth guarantee, the adversary's idle compute
 charged through W.** For any run on any device whose bandwidth audit a partial device plays
 (`Accounting.RealizesRatePartial`: the game's device within the device model's limits over the bandwidth window, its
 ingress charged to the bandwidth account), at any value of the compute and capacity audits' coins, if completions are
 as hard as `WorkHardness b rounds c_root cost` says and the compute account's work and the game's compute add
-(`ComputeAdditive`, W), then for any `W`: the probability over the bandwidth coins that the bandwidth audit accepts, the
+(`RateComputeAdditive`, W), then for any `W`: the probability over the bandwidth coins that the bandwidth audit accepts, the
 compute account did at least `W` of work over the compute window, and the bandwidth account read fewer bits of device
 memory than the floor at the compute budget `F·T − W`,
 
@@ -108,7 +132,7 @@ Lean function. -/
 def RateOfAuditPartial : Prop :=
   ∀ (N b h ρ s k cTag rounds cRoot lam W : ℕ) (cost : ℕ → ℕ) (p : Price) (ι α ΩW ΩS : Type) [Fintype ι] [Fintype α]
     (d : Device ι) (r : Run d α ΩW (RateCoins N b h ρ s) ΩS) (real : RealizesRatePartial r),
-    Assumptions.WorkHardness b rounds cRoot cost → Assumptions.ComputeAdditive p cTag cost real →
+    Assumptions.WorkHardness b rounds cRoot cost → Assumptions.RateComputeAdditive p cTag cost real →
     ∀ (x : ΩW) (s' : ΩS),
       pr (fun y : RateCoins N b h ρ s =>
           r.accepts .bandwidth (x, y, s') ∧ W ≤ r.work p (x, y, s') ∧
@@ -141,7 +165,7 @@ Frozen (no-function, hash): as `RateOfAuditPartial`. -/
 def RateOfAuditPartialPasses : Prop :=
   ∀ (N b h ρ s k cTag rounds cRoot x₁ lam W : ℕ) (cost : ℕ → ℕ) (p : Price) (ι α ΩW ΩS : Type) [Fintype ι]
     [Fintype α] (d : Device ι) (r : Run d α ΩW (RateCoins N b h ρ s) ΩS) (real : RealizesRatePartial r),
-    Assumptions.WorkHardness b rounds cRoot cost → Assumptions.ComputeAdditive p cTag cost real →
+    Assumptions.WorkHardness b rounds cRoot cost → Assumptions.RateComputeAdditive p cTag cost real →
     x₁ * b * d.priced p ≤ cRoot * d.bw →
     ∀ (x : ΩW) (s' : ΩS),
       pr (fun y : RateCoins N b h ρ s =>

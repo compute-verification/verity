@@ -154,7 +154,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # falsified by a partial completion cheaper than x * c_enc / b: x bits of a word of E, rebuilt from setup, the weights
     # they encode and the rest of the word, in less than that of the compute account's units, by any schedule; at k = 1
     # with the payload known, the red team's F27 (r20261012-132841-565e) is such a completion; in partial-completion
-    # form it is `Accounting.Assumptions.WorkHardness` (Security/Models/Accounting/Assumptions.lean)
+    # form it is `Accounting.Assumptions.WorkHardness` (Security/Models/Accounting/Assumptions/RateAudit.lean)
     Entry("rate-codec-work", "assumption",
           "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
           "neither holds nor reads, from setup and the weights they encode, costs at least x * c_enc / b units of compute "
