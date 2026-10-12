@@ -424,9 +424,9 @@
    "why": "a guarantee is stated over the bandwidth audit's game, never over a proof"
   },
   "Definitions.Accounting": {
-   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Accounting"],
+   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Pous.Game.Prob", "Definitions.Accounting"],
    "except": [],
-   "why": "resource accounting's definitions are trusted text: the device model and a joint audit's run read PoUW's uniform probability and, for the compute audit's embedding, its game; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); they import no assumption, guarantee or proof"
+   "why": "resource accounting's definitions are trusted text: the device model and a joint audit's run read PoUW's uniform probability and, for the compute audit's embedding, its game; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); the bandwidth audit's game reads PoUS's uniform probability (Definitions.Pous.Game.Prob), the bandwidth-to-PoUS import Daniel allowed in decision 7; they import no assumption, guarantee or proof"
   },
   "Models.Accounting.Guarantees": {
    "imports": [
