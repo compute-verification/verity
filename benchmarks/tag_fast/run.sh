@@ -26,7 +26,7 @@ FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -
 { nvcc --version; echo "flags: ${FLAGS[*]}"; } > "$O/build.txt"
 nvcc "${FLAGS[@]}" -o "$B/libtf.so" $TF/tf.cu > "$O/tf.ptxas" 2>&1 || { tail -30 "$O/tf.ptxas"; exit 4; }
 cuobjdump -sass "$B/libtf.so" \
-  | awk '/Function : /{p = ($0 ~ /chain_b3|chain_keccak|fused_kernelILi[013]ELi32ELi1ELi1ELi1ELb0|fused2_kernelILi1ELi[48]ELi1ELi1ELi1ELi3ELb0/)} p' > "$O/tf.sass" 2>&1
+  | awk '/Function : /{p = ($0 ~ /chain_b3|chain_keccak|fused_kernelILi[013]ELi32ELi1ELi1ELi1ELb0|fused2_kernelILi1ELi4ELi1ELi1ELi4ELi2ELb0/)} p' > "$O/tf.sass" 2>&1
 sha256sum $TF/tf.cu "$B/libtf.so" >> "$O/build.txt"
 if "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $TF/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }

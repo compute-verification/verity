@@ -587,6 +587,18 @@ struct ChunkTag {
     b3<V, R>(cv, m, (uint32_t)pos, 64, fl, cv, k);
   }
 
+  // The tail chunk (the lane's first 8 bytes), once d0 d1 are known; the block's is lane L - 1's.
+  __device__ __forceinline__ void tail_chunk(uint32_t (&tl)[8], const Mul& k) const {
+    uint32_t key[8], m[16];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) key[i] = kKey[i];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) m[i] = 0;
+    m[0] = d0;
+    m[1] = d1;
+    b3<V, R>(key, m, (uint32_t)L, 8u, KEYED | START | END, tl, k);
+  }
+
   // The tag, in lanes with pos 0. Step 0: the tail chunk (every lane at L = 1, lane L - 1 otherwise) and the parents of
   // lane pairs; steps 1 .. log2 L - 1: the parents at distance 2^step; the last: the root over the subtree and the tail.
   __device__ __forceinline__ void finish(uint32_t y[8], int pos, const Mul& k) {
@@ -623,6 +635,56 @@ struct ChunkTag {
   }
 };
 
+// finish for a whole CTA: its W 32 chunk CVs and W 32 / L tail CVs into sh, then each level of parents on the threads
+// that have one (W 16, W 8, ...), then the roots; block b of the CTA is tag c0 + b. The tail of a single-wave kernel is
+// its finish, so it runs on as few warps as the parents need instead of on every warp's lanes at 1 / L.
+template <int V, int L, int W, int R>
+__device__ __forceinline__ void cta_finish(uint32_t* sh, const uint32_t (&cv)[8], const uint32_t (&tl)[8], int pos,
+                                           uint32_t* tags, uint64_t c0, const Mul& k) {
+  constexpr int NBK = W * 32 / L;
+  uint32_t* tls = sh + W * 32 * 8;
+  const int t = threadIdx.x;
+  uint32_t key[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) key[i] = kKey[i];
+  __syncthreads();
+#pragma unroll
+  for (int i = 0; i < 8; ++i) sh[t * 8 + i] = cv[i];
+  if (pos == L - 1) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) tls[(t / L) * 8 + i] = tl[i];
+  }
+  __syncthreads();
+#pragma unroll
+  for (int n = W * 16; n >= NBK; n /= 2) {
+    uint32_t o[8];
+    if (t < n) {
+      uint32_t m[16];
+#pragma unroll
+      for (int i = 0; i < 16; ++i) m[i] = sh[t * 16 + i];
+      b3<V, R>(key, m, 0u, 64u, KEYED | PARENT, o, k);
+    }
+    __syncthreads();
+    if (t < n) {
+#pragma unroll
+      for (int i = 0; i < 8; ++i) sh[t * 8 + i] = o[i];
+    }
+    __syncthreads();
+  }
+  if (t < NBK) {
+    uint32_t m[16], o[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      m[i] = sh[t * 8 + i];
+      m[8 + i] = tls[t * 8 + i];
+    }
+    b3<V, R>(key, m, 0u, 64u, KEYED | PARENT | ROOT, o, k);
+    uint4* out = reinterpret_cast<uint4*>(tags + (c0 + t) * 8);
+    out[0] = make_uint4(o[0], o[1], o[2], o[3]);
+    out[1] = make_uint4(o[4], o[5], o[6], o[7]);
+  }
+}
+
 // x in shared memory: at M <= 8 its M rows of the span's 2,048 columns, loaded once; above, eighths of them (256 columns,
 // two quads) double-buffered with cp.async, so the slice stays small enough for two CTAs an SM at M = 32.
 template <int NB8>
@@ -633,7 +695,7 @@ struct XSlice {
 
 // W warps a CTA on consecutive row blocks of one span s, each warp one unit. Modes and PARTIALS as fused_kernel's; tags at
 // tags[8 (j - jbase)] from the block's first lane. R < 7 rounds is not BLAKE3 (uncertified, a cost probe).
-template <int V, int L, int NB8, int MODE, int W, int ST, bool PARTIALS, int R = 7>
+template <int V, int L, int NB8, int MODE, int W, int ST, bool PARTIALS, int R = 7, bool PK = false>
 __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                        float* __restrict__ y, uint32_t* __restrict__ tags, int M, int N,
                                                        int Kd, uint64_t jbase, unsigned int* __restrict__ xr) {
@@ -680,7 +742,25 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
   float acc[NB8][4];
 #pragma unroll
   for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
+  auto gemm_out = [&]() {
+    if constexpr (GEMM) {
+#pragma unroll
+      for (int j = 0; j < NB8; ++j) {
+#pragma unroll
+        for (int e = 0; e < 4; ++e) {
+          const int n = nb * 16 + g8 + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
+          if (b < M) {
+            if constexpr (PARTIALS)
+              y[((size_t)s * M + b) * N + n] = acc[j][e];
+            else
+              atomicAdd(y + (size_t)b * N + n, acc[j][e]);
+          }
+        }
+      }
+    }
+  };
   ChunkTag<V, L, R> ct;
+  uint32_t tl[8];
   if constexpr (TAG) ct.begin();
 
 #pragma unroll 1
@@ -721,9 +801,18 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
       }
     }
     if constexpr (TAG) ct.absorb(q, qd, pos, jbase + jl, k);
+    if constexpr (TAG && PK)
+      if (qd == 0) ct.tail_chunk(tl, k);
   }
   cp_wait<0>();
 
+  if constexpr (PK) {
+    static_assert(MODE == MODE_TAGS || MODE == MODE_TAGONLY, "packed finish: tags only");
+    gemm_out();
+    cta_finish<V, L, W, R>(reinterpret_cast<uint32_t*>(smem + (GEMM ? X::BUFS * M * X::STRIDE : 0)), ct.cv, tl, pos,
+                           tags, ((uint64_t)s * rts + (blockIdx.x % per_span) * W) * (32 / L), k);
+    return;
+  }
   if constexpr (TAG) {
     uint32_t t[8];
     ct.finish(t, pos, k);
@@ -738,21 +827,7 @@ __global__ void __launch_bounds__(W * 32) fused2_kernel(const uint4* __restrict_
       o[1] = make_uint4(t[4], t[5], t[6], t[7]);
     }
   }
-  if constexpr (GEMM) {
-#pragma unroll
-    for (int j = 0; j < NB8; ++j) {
-#pragma unroll
-      for (int e = 0; e < 4; ++e) {
-        const int n = nb * 16 + g8 + 8 * (e >> 1), b = 8 * j + 2 * tq + (e & 1);
-        if (b < M) {
-          if constexpr (PARTIALS)
-            y[((size_t)s * M + b) * N + n] = acc[j][e];
-          else
-            atomicAdd(y + (size_t)b * N + n, acc[j][e]);
-        }
-      }
-    }
-  }
+  gemm_out();
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1034,14 +1109,14 @@ using namespace tf;
 
 using Kern2 = void (*)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, unsigned int*);
 
-template <int L, int MODE, int W, int ST, bool P, int R = 7>
+template <int L, int MODE, int W, int ST, bool P, int R = 7, bool PK = false>
 Kern2 pick2(int nb8) {
   if constexpr (MODE == MODE_TAGONLY)
-    return fused2_kernel<1, L, 1, MODE, W, ST, P, R>;
+    return fused2_kernel<1, L, 1, MODE, W, ST, P, R, PK>;
   else
-    return nb8 == 1 ? fused2_kernel<1, L, 1, MODE, W, ST, P, R>
-           : nb8 == 2 ? fused2_kernel<1, L, 2, MODE, W, ST, P, R>
-                      : fused2_kernel<1, L, 4, MODE, W, ST, P, R>;
+    return nb8 == 1 ? fused2_kernel<1, L, 1, MODE, W, ST, P, R, PK>
+           : nb8 == 2 ? fused2_kernel<1, L, 2, MODE, W, ST, P, R, PK>
+                      : fused2_kernel<1, L, 4, MODE, W, ST, P, R, PK>;
 }
 
 extern "C" {
@@ -1092,13 +1167,19 @@ int tf_fused(int v, int span, int mode, int pd, int partials, const void* w, con
 }
 
 #define F2(L, MODE, W, ST, P, R) \
-  if (lanes == L && mode == MODE && wc == W && stages == ST && partials == P && rounds == R) kern = pick2<L, MODE, W, ST, P, R>(nb8);
+  if (lanes == L && mode == MODE && wc == W && stages == ST && partials == P && rounds == R && !packed) \
+    kern = pick2<L, MODE, W, ST, P, R>(nb8);
+#define F2P(L, MODE, W, ST) \
+  if (lanes == L && mode == MODE && wc == W && stages == ST && !partials && rounds == 7 && packed) \
+    kern = pick2<L, MODE, W, ST, false, 7, true>(nb8);
 
 // The chunk-block GEMM (fused2_kernel, BLAKE3 variant 1). lanes: L, a block's chunks; mode as tf_fused's; wc: warps a
-// CTA; stages: the ring's quads; rounds 7, or 4 (not BLAKE3: uncertified). M <= 32, N a multiple of 16 wc, K of 2,048.
-// 3: form not built; 4: its x slice and ring exceed a CTA's shared memory.
-int tf_fused2(int lanes, int mode, int wc, int stages, int rounds, int partials, const void* w, const uint8_t* x,
-              float* y, uint32_t* tags, int M, int N, int Kd, uint64_t jbase, unsigned int* xr, cudaStream_t st) {
+// CTA; stages: the ring's quads; rounds 7, or 4 (not BLAKE3: uncertified); packed: the CTA's finish (cta_finish), tags
+// modes only. M <= 32, N a multiple of 16 wc, K of 2,048. 3: form not built; 4: its x slice and ring exceed a CTA's
+// shared memory.
+int tf_fused2(int lanes, int mode, int wc, int stages, int rounds, int packed, int partials, const void* w,
+              const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd, uint64_t jbase, unsigned int* xr,
+              cudaStream_t st) {
   if (M < 1 || M > 32 || wc < 1 || N % (16 * wc) || Kd % CCOLS || mode < 0 || mode > 3) return 1;
   const int nb8 = mode == MODE_TAGONLY ? 1 : M <= 8 ? 1 : M <= 16 ? 2 : 4;
   Kern2 kern = nullptr;
@@ -1114,6 +1195,9 @@ int tf_fused2(int lanes, int mode, int wc, int stages, int rounds, int partials,
   // + sink; tags only; the 4-round probes
   F2(4, 2, 4, 3, false, 7) F2(1, 3, 4, 3, false, 7) F2(4, 3, 4, 3, false, 7)
   F2(4, 1, 4, 3, false, 4) F2(4, 3, 4, 3, false, 4)
+  // packed finish: L = 4 and 8 at 2 and 4 warps, L = 1 at 4; tags only at L = 4
+  F2P(4, 1, 2, 3) F2P(4, 1, 4, 2) F2P(4, 1, 4, 3) F2P(8, 1, 2, 3) F2P(8, 1, 4, 2) F2P(8, 1, 4, 3) F2P(1, 1, 4, 3)
+  F2P(4, 3, 4, 3)
   if (!kern) return 3;
   const int xbytes = nb8 == 1 ? M * XSlice<1>::STRIDE : XSlice<2>::BUFS * M * XSlice<2>::STRIDE;
   const int smem = (mode == MODE_TAGONLY ? 0 : xbytes) + wc * stages * QUAD_BYTES;
