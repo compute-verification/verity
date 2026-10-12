@@ -1471,7 +1471,9 @@ def test_the_controls(tmp_path):
 
 def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path):
     """`run` reaps with `os.wait4`, so a step's `peak_gib` covers the grandchildren a `lake` runs, not only `lake` itself;
-    the output and exit code are what `subprocess.run` gave."""
+    the output and exit code are what `subprocess.run` gave. A child's `ru_maxrss` starts at its parent's high-water
+    resident set (Linux carries it across `exec`), so even `true` reports the test process's own size: the reset is
+    checked against a peak no process here reaches."""
     child = "import sys; b = bytearray(300 << 20); b[::4096] = b'x' * len(b[::4096]); print('out'); sys.exit(3)"
     rep = {"seconds": {}}
     A._peak.bytes = 0
@@ -1479,9 +1481,11 @@ def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path)
     assert (rc, text) == (3, "out\n") and (tmp_path / "step.log").read_text() == "out\n"
     A.took(rep, "replay", 0.0)
     assert rep["peak_gib"]["replay"] >= 0.3
+    A._peak.bytes = 64 << 30
+    A.took(rep, "big", 0.0)
     A.run(["true"], tmp_path)
     A.took(rep, "fresh", 0.0)
-    assert rep["peak_gib"]["fresh"] < 0.3                                   # each step's own peak, not the run's so far
+    assert rep["peak_gib"]["big"] == 64.0 and rep["peak_gib"]["fresh"] < 64  # each step's own peak, not the run's so far
 
 
 def hyp(name, at, reaches, module=None, source="binder"):
