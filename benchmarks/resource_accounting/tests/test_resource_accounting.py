@@ -47,9 +47,10 @@ def test_shapes_parse_by_name_and_refuse_what_they_dont_name():
         S.parse_shapes("attn")
 
 
-def test_gamma_is_the_pinned_twins_larger_price_at_the_cube_only():
-    """γ comes from the price twins at both FP32 prices, the larger published, on the path the draw's statement cites;
-    outside the pinned cubes it is missing, never filled in."""
+def test_gamma_is_the_pinned_twins_larger_price_at_each_linear_and_the_cube():
+    """γ comes from the price twins at both FP32 prices, the larger published, on the path the draw's statement cites, at a
+    cube or a Llama linear's (n, k); the layout's is the max over its linears; a shape no twin states is missing, never
+    filled in."""
     P = C.price_twins()
     g = C.gamma(8192, 8192)
     assert (g["statement"], g["path"], g["pins"], g["draws"]) == ("pearl-c-sm120/v1", "cast-8.72", ["pinned"], 27_713)
@@ -57,8 +58,13 @@ def test_gamma_is_the_pinned_twins_larger_price_at_the_cube_only():
              and t["reading"] == "forming-credited" and t["kind"] in ("unit", "value") and t.get("cap") == "1/1000"]
     assert Fraction(g["published"]) == max(Fraction(t["gamma"]) for t in twins)
     assert {Fraction(t["fadd"]) for t in twins} == set(P.FADD_PRICES)
-    llama = C.gamma(4096, 14336)
-    assert llama["published"] is None and "a pinned cube for (n, k) = (4096, 14336)" in llama["missing"][0]
+    linears = {name: C.gamma(n, k) for name, (n, k) in S.LLAMA31_8B.items()}
+    assert all(g["pins"] == ["pinned"] and g["published"] is not None for g in linears.values())
+    layout = C.gamma(None, None, C.LAYOUT)
+    assert layout["pins"] == ["pinned"] and Fraction(layout["published"]) == max(Fraction(g["published"]) for g in linears.values())
+    assert f"{float(Fraction(layout['published'])):.5%}" == "0.38912%"
+    off = C.gamma(8192, 1024)
+    assert off["published"] is None and "at (n, k) = (8192, 1024)" in off["missing"][0]
 
 
 def test_w_cert_and_the_residual_split():
@@ -71,9 +77,9 @@ def test_w_cert_and_the_residual_split():
     assert w["capacity"] == rate * seconds
     assert w["residual"] == pytest.approx(w["honest_overhead"] + w["soundness_slack"])
     assert 1.08 < float(wref) / (8192 * 8192 * rows) < 1.1
-    off = C.compute(4096, 4096, rows, seconds, rate)
-    assert off["w_cert"] is None and off["residual"] is None and "pinned cube" in off["unproved"]
-    assert off["unproved"].startswith("γ pin pending #1809 (")
+    assert C.compute(4096, 4096, rows, seconds, rate)["w_cert"] is not None
+    off = C.compute(8192, 1024, rows, seconds, rate)
+    assert off["w_cert"] is None and off["residual"] is None and off["unproved"].startswith("no γ (a forming-credited twin")
     assert off["honest_overhead"] == pytest.approx(rate * seconds - off["wref"])
 
 
@@ -118,6 +124,8 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     assert "S_chip – (this run recorded no registers a SM)" in R.markdown(doc_no_regs, {}, "fixture")
     assert "T = 1,354,057 ns with the RTT at P2's cap, 354,000 ns, so T + RTT = 1,708,057 ns" in md
     assert "not a per-run covert bound; lane ra-per-run is proving the per-run form" in md
+    assert ("larger FP32 price at the point's (n, k) (#1809): cube8192 (8192, 8192) 0.36949%; llama31_8b's layout, the max "
+            "over its linears, 0.38912%.") in md
     assert "sidecar" not in md
     assert ("Every arm ran beside a sidecar, an idle CUDA context in a second process held through the run (ready in 2.0 s)"
             in R.markdown({**_doc(), "sidecar": {"pid": 7, "ready_s": 2.04, "rc": 0}}, {}, "fixture"))

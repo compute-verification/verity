@@ -6,7 +6,8 @@
   reference work over the credited cells (`pearl_c_work.ticket_cell`; about 1.09 to 1.11 per MAC at the sweep's shapes).
   γ is looked up from the Lean-pinned price twins (`price_twins.lookup`) of the statement on the priced path the scheme's
   draw cites (`pearl_c_work.draw_wref`), at both FP32 prices, the larger published; it is never typed.  Twins are stated
-  at the cubes 8,192³ and 16,384³ only, so every other shape's W_cert is unproved.  ε_s = 0.1% at t = K = 27,713 draws
+  at the cubes 8,192³ and 16,384³ and at each of Llama-3.1-8B's linears (n, k) and its layout (#1809, `GAMMA_PIN`), so
+  every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 draws
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
   left unsure, a lower bound on the rows the records credit.
 * **Q_cert, bandwidth**: pending.  The guarantee is ``Bandwidth.SecurityProofs.AuditRO``, but no certified bandwidth rate is
@@ -41,8 +42,10 @@ TWINS = ROOT / "benchmarks" / "pouw" / "harness" / "price_twins.py"
 SCHEME, LINE, VERSION = "pearl-c-sm120-v1-h3", "pearl-c-sm120", "v1-h3"
 EPS_S = Fraction(1, 1000)
 DELTA = Fraction(1, 2 ** 40)
-#: the PR whose (n, k) lookup prices γ at a linear off the pinned cubes (compute-accounting's, stacked on #1808)
+#: the PR whose (n, k) and layout lookup prices γ at the Llama linears (compute-accounting's)
 GAMMA_PIN = "#1809"
+#: the served layout whose twin is γ's max over its linears
+LAYOUT = "llama31_8b"
 PENDING_Q = "pending: parameters not reviewed"
 Q_THEOREM = "Bandwidth.SecurityProofs.AuditRO"
 RESIDUAL = "residual, worst case over the audit's coins; per-run form pending"
@@ -104,9 +107,9 @@ def priced_path(s) -> str:
     return price_twins().CASTS[m.group(1)]
 
 
-def gamma(n: int, k: int) -> dict:
-    """γ for Pearl-C at (n, k): `price_twins.lookup`'s record (both prices, the larger published, what's missing), with the
-    statement's cap held to the scheme's and K to ε_s and δ."""
+def gamma(n: int | None, k: int | None, layout: str | None = None) -> dict:
+    """γ for Pearl-C at (n, k), or of a served `layout` (`LAYOUT`): `price_twins.lookup`'s record (both prices, the larger
+    published, what's missing), with the statement's cap held to the scheme's and K to ε_s and δ."""
     from verity.core.protocols.pouw.circuit import plan
     from verity.core.protocols.pouw.schemes import pearl_c_work as PW
     P, s = price_twins(), scheme()
@@ -115,7 +118,7 @@ def gamma(n: int, k: int) -> dict:
         raise ValueError(f"{stmt}: the twins' cap {P.CAPS[stmt]} is not the scheme's {s.cap}")
     if plan.record_k(EPS_S, DELTA) != plan.RECORD_K:
         raise ValueError(f"K at ε_s = {EPS_S}, δ = {DELTA} is not plan.RECORD_K")
-    out = P.lookup(P.load(), stmt, priced_path(s), n, k)
+    out = P.lookup(P.load(), stmt, priced_path(s), n, k, layout=layout)
     out["draws"] = plan.RECORD_K
     return out
 
@@ -137,7 +140,7 @@ def compute(n: int, k: int, credited_rows: int, seconds: float, native_rate: flo
            "w_cert": None, "unproved": None}
     if g["published"] is None or g["pins"] != ["pinned"]:
         why = "; ".join(g["missing"]) or f"γ's twins are {', '.join(g['pins'])}, not pinned"
-        out["unproved"] = f"γ pin pending {GAMMA_PIN} ({why})" if g["published"] is None else why
+        out["unproved"] = f"no γ ({why})" if g["published"] is None else why
     else:
         out["w_cert"] = float((1 - Fraction(g["published"])) * (1 - EPS_S) * wref)
     out.update(residual(None if native_rate is None else native_rate * seconds, out["wref"], out["w_cert"]))

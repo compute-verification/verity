@@ -13,7 +13,7 @@ certifies beside what it did.
   its gate with the known-bad variants rejected, then timed as the chain's L GEMMs on the chain's own operands. The FP8
   chain's weights have a per-tensor scale, which the registry's plain FP8 kernels don't read, so its pick is cuBLASLt's.
 - `certified.py`: the certified columns, pure: γ from the pinned price twins (`benchmarks/pouw/harness/price_twins.py`,
-  the larger of the two prices; only at a cube, so W_cert is unproved at the Llama shapes), W_cert = (1 − γ)(1 − εs)·ΣWref
+  the larger of the two prices, at each Llama linear's (n, k) and the cube, #1809), W_cert = (1 − γ)(1 − εs)·ΣWref
   over the credited rows, and each resource's covert residual split into honest overhead and soundness slack, in its weak
   form (worst case over each audit's own coins; the per-run form is not proved yet). S_cert is the PoUS arm's storage
   profile when it is certified (`storage`); Q_cert is pending until the red team has reviewed the bandwidth protocol's

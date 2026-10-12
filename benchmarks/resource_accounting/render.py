@@ -31,6 +31,7 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter
+from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -452,6 +453,18 @@ def hosted_lines(rounds: list[dict], memory: float | None) -> list[str]:
     return lines
 
 
+def gamma_lines(rs: list[dict]) -> list[str]:
+    """Which γ each W_cert used, and the served layout's, cited to the lookup's PR."""
+    shapes = {(r["shape"], r["n"], r["k"]): r["gamma"] for r in rs if r.get("gamma") is not None}
+    if not shapes:
+        return []
+    lay = C.gamma(None, None, C.LAYOUT)
+    at = "; ".join(f"{s} ({n}, {k}) {float(Fraction(g)):.5%}" for (s, n, k), g in sorted(shapes.items()))
+    layout = _f(lay["published"] and float(Fraction(lay["published"])), ".5%")
+    return [(f"γ is `price_twins.lookup`'s, the Lean-pinned price twins' larger FP32 price at the point's (n, k) ({C.GAMMA_PIN}): "
+             f"{at}; {C.LAYOUT}'s layout, the max over its linears, {layout}.")]
+
+
 def pause_lines(name: str, f: dict) -> list[str]:
     if not f["rows"] and f.get("error"):
         return ["", f"(f) Joint v1, round {name}: failed: {_last(f['error'])}"]
@@ -693,6 +706,7 @@ def markdown(doc: dict, verdicts: dict, source: str, result: dict | None = None,
         lines += ["", "W_cert unproved: " + "; ".join(notes)]
     lines += [("W_cert is in W1 (one dense FP8 MAC on the device), as 2·W_cert over the chain's time; ΣW_ref prices a credited "
                "cell at about 1.1 W1 per MAC at these shapes, so W_cert can exceed the useful rate."),
+              *gamma_lines(rows(doc)),
               *q_cert_lines(ident),
               "S_cert: " + (C.NO_POUS if p is None and hr is None else
                             "the table's chains ran alone; the PoUS sections' ran beside or inside its audit") + ".",

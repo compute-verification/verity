@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 #: Llama-3.1-8B's linears (n, k): what one decode layer's calls are
 LLAMA31_8B = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
-#: the cube Pearl-C's γ is pinned at (`price_twins.lookup`: twins are stated at 8192³ and 16384³)
+#: a cube, where Pearl-C's γ is stated too (`price_twins.lookup`: at 8192³ and 16384³ beside the Llama linears)
 CUBE = {"cube8192": (8192, 8192)}
 SHAPES = {**LLAMA31_8B, **CUBE}
 BATCHES = (1, 8, 32, 128, 512, 2048)
