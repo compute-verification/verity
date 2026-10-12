@@ -735,10 +735,10 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
 
 
 TR_WORDS = 8  # tf.cu's trace words a chain link
-PIPE_PLANS = ("po", "px")
-# Per PDL chain, the shapes capped at ceil(CTAs / SMs) + n CTAs an SM (the others uncapped).
-CAP_PLANS = {"p": {}, "po": {"qkv": 0, "o": 0, "gate_up": 0, "down": 0}, "px": {"qkv": 0, "o": 0, "gate_up": 0},
-             "py": {"qkv": 0, "o": 0, "gate_up": 0, "down": 1}}
+PIPE_PLANS = ("px",)
+# Per PDL chain, the shapes capped at ceil(CTAs / SMs) + n CTAs an SM (the others uncapped). Capping down too, or at
+# one more, loses (run r20261012-113150-e677): its CTAs then can't start beside gate_up's padded ones.
+CAP_PLANS = {"p": {}, "px": {"qkv": 0, "o": 0, "gate_up": 0}}
 TRACE_BATCHES = (1, 8)
 
 
@@ -759,9 +759,8 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
     pipePL   tagPL (P in PIPE_PLANS) with the step before's leaves and tree on a low-priority stream beside it (the
              commit pipelined a step behind; the tags in two buffers, the second's gated like tagk)
     nativeP, tagPL, commitPL for P in CAP_PLANS  nativep, tagpL and commitpL with the plan's shapes at most
-             ceil(CTAs / SMs) + plan[shape] CTAs an SM (nativepy not run)
-At TRACE_BATCHES, nativepo, tagpo4, tagpx4 and tagpy4 once more with tf.cu's trace (globaltimer stamps a launch),
-summarized per shape.
+             ceil(CTAs / SMs) + plan[shape] CTAs an SM
+At TRACE_BATCHES, nativepx and tagpx4 once more with tf.cu's trace (globaltimer stamps a launch), summarized per shape.
     prober4  u4kr1 at every shape: tagr4 with 4-round BLAKE3, uncertified
     noend4   n4kr1 at every shape: tagr4 without the chunks' last quads and finishes (a sink, no tags): what the
              launches' chunk ends cost
@@ -852,8 +851,7 @@ summarized per shape.
             return f
 
         arms = {"native": run(seq(lambda name: timing[name]["batches"][mb]["native_arm"]), "native"),
-                **{f"native{p}": run(seq_pdl(None, None, plan), f"native{p}") for p, plan in CAP_PLANS.items()
-                   if p != "py"}}
+                **{f"native{p}": run(seq_pdl(None, None, plan), f"native{p}") for p, plan in CAP_PLANS.items()}}
         picks, gates = {}, {}
         for g in groups:
             picks[g] = {name: best(name, f"t{g}k") for name in names}
@@ -940,8 +938,7 @@ summarized per shape.
         med = r["median_s"]
         if mb in TRACE_BATCHES:
             r["trace"] = {}
-            for arm, g, plan in (("nativepo", None, CAP_PLANS["po"]), ("tagpo4", 4, CAP_PLANS["po"]),
-                                 ("tagpx4", 4, CAP_PLANS["px"]), ("tagpy4", 4, CAP_PLANS["py"])):
+            for arm, g, plan in (("nativepx", None, CAP_PLANS["px"]), ("tagpx4", 4, CAP_PLANS["px"])):
                 if arm not in arms:
                     continue
                 tr = torch.zeros(len(names) * layout.LAYERS, TR_WORDS, dtype=torch.int64, device="cuda")
