@@ -14,7 +14,8 @@ Then, at each batch x context of `--cells`, one store holding the cell's whole K
 token-layers in kv.py's slot layout, so a layer's call reads 4 KB a token at the slots' stride) of random canonical
 words:
 - `read`: R over the store (kv_bench's read kernel), and the store's read-and-decode at each k, the floor where the
-  decode overlaps the read and nothing else runs;
+  decode overlaps the read and nothing else runs (gated first: its checksum at every timed grid, where each thread
+  steps its tweak, equals the checksum at one word a thread);
 - `attn`: a pass over every layer, each form at each split count, queued behind a spin, its best split count's time.
   Plain forms read the words as bf16 (their arithmetic's time doesn't depend on the values); encoded forms decode them.
   The read side's overhead a KV byte, in reads of the stored bytes at R, is (encoded - read) / read, and against the
@@ -144,6 +145,20 @@ def fit(ks, ys) -> dict:
     return {"c": c, "h": c * mk - my}
 
 
+def floor_gate(lib: B.Lib, torch, store, n_words: int, k: int, grids, st) -> list:
+    """The grids whose read-and-decode checksum differs from one word a thread's (no tweak stepping)."""
+    xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+
+    def checksum(grid):
+        xr.zero_()
+        lib.call("kv_decode", B.ptr(store), 0, n_words, 0, k, grid, B.ptr(xr), st)
+        torch.cuda.synchronize()
+        return int(xr.item()) & 0xFFFFFFFF
+
+    want = checksum(0)
+    return [g for g in grids if checksum(g) != want]
+
+
 def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sms: int, log) -> dict:
     sh, f = shape(lib), lib.field
     heads, layers, tle = sh["heads"], m["layers"], sh["tle"]
@@ -160,6 +175,11 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     for k in ks:
         B.set_key(lib, K.key(f.name, B.SEED, k))
+        bad = floor_gate(lib, torch, store, n_words, k, [sms * mult for mult in (4, 8, 16)], st)
+        if bad:
+            cell["floor"][k] = {"ok": False, "bad_grids": bad}
+            log(f"exhaust {lib.name} B={b} ctx={ctx} k={k}: read-and-decode checksum FAIL at grids {bad}")
+            continue
         best = None
         for mult in (4, 8, 16):
             ts = B.timed(torch, lambda: lib.call("kv_decode", B.ptr(store), 0, n_words, 0, k, sms * mult, B.ptr(xr), st),
@@ -169,7 +189,7 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
         cell["floor"][k] = {"grid_per_sm": best[0], "s": best[1], "times_s": best[2],
                             "over_read": best[1] * r / store.numel()}
     log(f"exhaust {lib.name} B={b} ctx={ctx}: read-and-decode " + ", ".join(
-        f"k={k} {v['over_read']:.3f}x the read" for k, v in cell["floor"].items()))
+        f"k={k} {v['over_read']:.3f}x the read" for k, v in cell["floor"].items() if "s" in v))
     q = (torch.randn(b, heads, K.HEAD_DIM, device="cuda") * 0.1).to(torch.bfloat16).contiguous()
     o = torch.empty(b, heads, K.HEAD_DIM, dtype=torch.float32, device="cuda")
     part = part_buffer(torch, sh, b)
@@ -201,7 +221,8 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
             row["overhead_vs_plain"] = (row["s"] - fp["s"]) / t_read
         fe["fit_vs_read"] = fit(ks, [fe[k]["overhead_vs_read"] for k in ks])
         fe["fit_vs_plain"] = fit(ks, [fe[k]["overhead_vs_plain"] for k in ks])
-    ks_f = list(cell["floor"])
+    ks_f = [k for k, v in cell["floor"].items() if v.get("ok", True)]
+    cell["ok"] = len(ks_f) == len(cell["floor"])
     cell["floor_fit"] = fit(ks_f, [cell["floor"][k]["over_read"] - 1.0 for k in ks_f])
     log(f"exhaust {lib.name} B={b} ctx={ctx}: overhead a KV byte over the read, " + "; ".join(
         f"{FORMS[fm]} " + ", ".join(f"k={k} {cell['forms'][FORMS[fm]][k]['overhead_vs_read']:+.3f}" for k in ks)
@@ -385,6 +406,10 @@ def main() -> int:
         for lib in libs:
             g = attn_gate(lib, torch, m, [(2, 100)], ks[:1], log, layers_override=2)
             res["ok"] &= all(c["ok"] for c in g.values())
+            B.set_key(lib, K.key(lib.field.name, B.SEED, ks[0]))
+            bad = floor_gate(lib, torch, B.random_words(torch, 5000, lib.field, 1), 5000, ks[0], [3], B.stream(torch))
+            log(f"floor gate {lib.name} k={ks[0]}: " + (f"FAIL at grids {bad}" if bad else "ok"))
+            res["ok"] &= not bad
         log("sanitize smoke done" if res["ok"] else "sanitize smoke FAILED")
         return 0 if res["ok"] else 1
     for lib in libs:
@@ -410,7 +435,8 @@ def main() -> int:
                 if need + (6 << 30) > props.total_memory:
                     log(f"exhaust {lib.name} B={b} ctx={ctx}: {need / 1e9:.1f} GB doesn't fit; skipped")
                     continue
-                lr["exhaust"][f"b{b}_ctx{ctx}"] = exhaust_cell(lib, torch, m, b, ctx, ks, a.reps, sms, log)
+                cell = lr["exhaust"][f"b{b}_ctx{ctx}"] = exhaust_cell(lib, torch, m, b, ctx, ks, a.reps, sms, log)
+                res["ok"] &= cell["ok"]
             wb = [int(v) for v in a.write_batches.split(",") if v] or sorted({b for b, _ in cells_of(a.cells)})
             if wb:
                 lr["write"] = write_side(lib, torch, m, wb, ks, a.reps, sms, lr["rates"]["encode"], log)

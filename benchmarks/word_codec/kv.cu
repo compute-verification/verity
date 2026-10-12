@@ -457,9 +457,8 @@ __device__ __forceinline__ void encode_word(u32 (&x)[NL], u64 i, int k) {
   }
 }
 
-__device__ __forceinline__ void decode_word(u32 (&x)[NL], u64 i, int k) {
-  u32 t[NL];
-  tweak(i, t);
+// The decode given its word's tweak t = t(i): loops that step i by a constant step t by one add_mod.
+__device__ __forceinline__ void decode_word_t(u32 (&x)[NL], const u32 (&t)[NL], int k) {
 #pragma unroll 1
   for (int j = k - 1; j >= 0; --j) {
     u32 c[NL];
@@ -468,6 +467,20 @@ __device__ __forceinline__ void decode_word(u32 (&x)[NL], u64 i, int k) {
     sub_mod(x, c);
     sub_mod(x, t);
   }
+}
+
+__device__ __forceinline__ void decode_word(u32 (&x)[NL], u64 i, int k) {
+  u32 t[NL];
+  tweak(i, t);
+  decode_word_t(x, t, k);
+}
+
+// t += tau d mod p, tau d read from shared memory (every thread's step the same).
+__device__ __forceinline__ void tweak_step(u32 (&t)[NL], const u32 *td) {
+  u32 s[NL];
+#pragma unroll
+  for (int l = 0; l < NL; ++l) s[l] = td[l];
+  add_mod(t, s);
 }
 
 __device__ __forceinline__ void load(const u32 *__restrict__ p, u32 (&x)[NL]) {
@@ -504,14 +517,25 @@ __global__ void __launch_bounds__(WPB) encode_kernel(const u32 *__restrict__ in,
   }
 }
 
-// out null: the decoded words XORed into xr (the read-and-decode rate).
+// out null: the decoded words XORed into xr (the read-and-decode rate). The grid-stride loop steps each thread's tweak.
 __global__ void __launch_bounds__(WPB) decode_kernel(const u32 *__restrict__ in, u32 *__restrict__ out, u64 n, u64 base,
                                                      int k, unsigned long long *xr) {
-  u32 acc = 0;
-  for (u64 w = (u64)blockIdx.x * WPB + threadIdx.x; w < n; w += (u64)gridDim.x * WPB) {
+  __shared__ u32 td[NL];
+  if (threadIdx.x == 0) {
+    u32 s[NL];
+    tweak((u64)gridDim.x * WPB, s);
+#pragma unroll
+    for (int l = 0; l < NL; ++l) td[l] = s[l];
+  }
+  __syncthreads();
+  u32 acc = 0, t[NL];
+  const u64 w0 = (u64)blockIdx.x * WPB + threadIdx.x;
+  if (w0 < n) tweak(base + w0, t);
+  for (u64 w = w0; w < n; w += (u64)gridDim.x * WPB) {
     u32 x[NL];
     load(in + w * NL, x);
-    decode_word(x, base + w, k);
+    if (w != w0) tweak_step(t, td);
+    decode_word_t(x, t, k);
     if (out) {
       store(out + w * NL, x);
     } else {
@@ -1025,7 +1049,7 @@ __global__ void __launch_bounds__(MTH, 2) attn_mma_kernel(const uint8_t *__restr
 // (full); the MW MMA warps fold each tile as in attn_mma_kernel and hand it back (empty). Shared memory holds only
 // decoded tiles, so two CTAs fit an SM, and the decode never waits on the tensor cores' barrier.
 constexpr int MNB = 2, MDW = MMA_OK ? MT * HW / 32 : 1, MWT = 32 * (MDW + MW);
-constexpr int mws_smem() { return MNB * MT * MTS + 2 * MNB * 8; }
+constexpr int mws_smem() { return MNB * MT * MTS + 2 * MNB * 8 + NL * 4; }
 static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's words in one warp");
 
 __device__ __forceinline__ void ldg_word(const u32 *p, u32 (&x)[NL]) {
@@ -1047,6 +1071,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
   if constexpr (MMA_OK) {
     extern __shared__ __align__(16) uint8_t sm[];
     uint64_t *full = reinterpret_cast<uint64_t *>(sm + MNB * MT * MTS), *empty = full + MNB;
+    u32 *td = reinterpret_cast<u32 *>(empty + MNB);
     const int g = blockIdx.x % KV_HEADS, sq = blockIdx.x / KV_HEADS, seq = sq / splits, split = sq % splits;
     const int t0 = split * per_split, t1 = min(ctx, t0 + per_split);
     const int ntiles = t1 > t0 ? (t1 - t0 + MT - 1) / MT : 0;
@@ -1056,13 +1081,18 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
         mbar_init(full + b, 32 * MDW);
         mbar_init(empty + b, 32 * MW);
       }
+      u32 s[NL];
+      tweak((u64)MT * layers * TLW, s);
+#pragma unroll
+      for (int l = 0; l < NL; ++l) td[l] = s[l];
     }
     __syncthreads();
     if (w >= MW) {
       const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
       const int wi = (j < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + g * (HB / WB) + j;
       const auto word = [&](int tile) { return (((u64)seq * ctx + t0 + tile * MT + t) * layers + layer) * TLW + wi; };
-      u32 nx[NL];
+      u32 nx[NL], tw[NL];
+      tweak(word(0), tw);
       if (ntiles && t < min(MT, t1 - t0)) ldg_word(reinterpret_cast<const u32 *>(kv) + word(0) * NL, nx);
       for (int tile = 0; tile < ntiles; ++tile) {
         const int nt = min(MT, t1 - t0 - tile * MT);
@@ -1070,7 +1100,8 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
         copy(x, nx);
         if (tile + 1 < ntiles && t < min(MT, t1 - t0 - (tile + 1) * MT))
           ldg_word(reinterpret_cast<const u32 *>(kv) + word(tile + 1) * NL, nx);
-        if (t < nt) decode_word(x, word(tile), k);
+        if (tile) tweak_step(tw, td);
+        if (t < nt) decode_word_t(x, tw, k);
         else for (int l = 0; l < NL; ++l) x[l] = 0u;
         if (tile >= MNB) mbar_wait(empty + tile % MNB, (tile / MNB - 1) & 1);
         store(reinterpret_cast<u32 *>(sm + (tile % MNB) * MT * MTS + t * MTS + j * WB), x);
