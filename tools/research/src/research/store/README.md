@@ -195,7 +195,8 @@ private=db)` rebuilds the public tables: the artifacts whose manifests are in th
 `PUBLIC_RUN_FIELDS`, and the `verified` / `verifier` / `proof_class` labels on them without `ref`; every cut is a whitelist.
 `research data index` builds `<store>/index.sqlite` (`--public`: `index-public.sqlite`; `--from DIR`: a directory as bucket;
 `--postgres`: both schemas of `$STORE_INDEXER_DATABASE_URL` through `psql`, rows only, so grants survive). The control pod runs
-it every 5 minutes (`infra/control/store_index.sh`).
+it every 5 minutes (`infra/control/store_index.sh`). Displays read it via `reader` (Neon's `store_private` with
+`$STORE_PRIVATE_READER_URL`, else `index.sqlite`, else the catalog), with its listing time and the records only here.
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
@@ -511,7 +512,7 @@ research data doctor [--clean] [--runs-dir D] [--json]
 research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs)
 research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
 research data reindex [--remote]
-research data sql "SELECT ..." [--json]      power-user escape hatch; read-only connection
+research data sql "SELECT ..." [--index] [--json]   read-only: the catalog, or the index (§5.1)
 research data mint-credential [--ttl 6h] [--permission P] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]   (§7.1)
 ~~~
 
