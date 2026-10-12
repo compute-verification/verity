@@ -220,7 +220,7 @@ Until reuse and the merge queue exist:
     (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
     `security_proofs`.
   - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
-    `NetworkCertifier`, `Flock`).
+    `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
     `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
