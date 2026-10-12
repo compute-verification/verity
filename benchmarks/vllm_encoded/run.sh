@@ -10,7 +10,9 @@
 #
 # WORK is the e2e's vLLM environment on node 2 (benchmarks/pouw/pearl_c_vllm/setup.sh).  ARMS (default
 # "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60);
-# SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).
+# SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).  MODE=selftest runs selftest.py
+# instead (no vLLM engine): its --check one launch at a time (under compute-sanitizer when SANITIZE=1), then its --time,
+# with SELFTEST_ARGS; SELFTEST_PY (default the pous benchmark's torch 2.14 cu130 venv) runs the check a second time.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
@@ -37,6 +39,33 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
 export B PY MODEL VE ARMS=${ARMS:-stock plain enc:2 enc:3 stock} SERVE_ARGS=${SERVE_ARGS:-} ARM_MIN=${ARM_MIN:-7}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
+if [ "${MODE:-}" = selftest ]; then
+  export SELFTEST_ARGS=${SELFTEST_ARGS:-} SANITIZE=${SANITIZE:-0}
+  export SELFTEST_PY=${SELFTEST_PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
+  # shellcheck disable=SC2016
+  "${LEASE[@]}" bash -c '
+    export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*}
+    lib=$B/ve-${LIB:-pb56}.so
+    S=(); [ "$SANITIZE" = 1 ] && S=(/usr/local/cuda-13.0/bin/compute-sanitizer --tool memcheck --print-limit 20)
+    # shellcheck disable=SC2086
+    CUDA_LAUNCH_BLOCKING=1 timeout 600 "${S[@]}" "$PY" $VE/selftest.py --lib "$lib" --check --out "$O/check.json" $SELFTEST_ARGS \
+      > "$O/check.log" 2>&1; rc=$?; echo "check $rc" >> "$O/arms.rc"
+    if [ $rc != 0 ] && [ "$SANITIZE" != 1 ]; then
+      timeout 600 /usr/local/cuda-13.0/bin/compute-sanitizer --tool memcheck --print-limit 20 "$PY" $VE/selftest.py --lib "$lib" \
+        --check --shapes o --batches 1 --ks 0 --out "$O/check-sanitized.json" > "$O/check-sanitized.log" 2>&1
+      echo "check-sanitized $?" >> "$O/arms.rc"
+    fi
+    if [ -x "$SELFTEST_PY" ]; then
+      # shellcheck disable=SC2086
+      CUDA_LAUNCH_BLOCKING=1 timeout 600 "$SELFTEST_PY" $VE/selftest.py --lib "$lib" --check --ks 0 --batches 1,32 \
+        --out "$O/check-cu130.json" > "$O/check-cu130.log" 2>&1; echo "check-cu130 $?" >> "$O/arms.rc"
+    fi
+    # shellcheck disable=SC2086
+    timeout 600 "$PY" $VE/selftest.py --lib "$lib" --time --out "$O/time.json" $SELFTEST_ARGS > "$O/time.log" 2>&1
+    echo "time $?" >> "$O/arms.rc"'
+  cat "$O/arms.rc"; tail -5 "$O/check.log"
+  exit 0
+fi
 # shellcheck disable=SC2016
 "${LEASE[@]}" bash -c '
   UUID=${GPU_LEASE_UUID%%,*}; export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*}
