@@ -306,6 +306,61 @@ def time_config(lins: list[K.Linear], x8: torch.Tensor, cfg: K.Config, trials: i
     return best * 1e3 / len(lins)
 
 
+def graph_ms(fn, trials: int) -> float:
+    """Milliseconds of ``fn``'s kernels captured in one CUDA graph: the fastest of ``trials`` timings of two replays."""
+    fn()
+    torch.cuda.synchronize()
+    g = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(g):
+        fn()
+    g.replay()
+    best = math.inf
+    for _ in range(trials):
+        e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        e0.record()
+        g.replay()
+        g.replay()
+        e1.record()
+        torch.cuda.synchronize()
+        best = min(best, e0.elapsed_time(e1) / 2)
+    del g
+    torch.cuda.empty_cache()
+    return best
+
+
+def native_pass(layers: list[tuple[str, torch.nn.Module]], ms: list[int], trials: int) -> list[dict]:
+    """One native pass of the weights at each batch m: every FP8 linear in model order through vLLM's own apply (its
+    activation quantization and GEMM, eager) and through ``torch._scaled_mm`` alone on FP8 activations (per-tensor
+    scales), each in one CUDA graph.  The rate audit's d is a step's time in such passes."""
+    gen = torch.Generator(device="cuda")
+    gen.manual_seed(11)
+    one = torch.ones((), dtype=torch.float32, device="cuda")
+    out = []
+    for m in ms:
+        xs = [torch.randn((m, layer.input_size_per_partition), generator=gen, device="cuda", dtype=torch.bfloat16)
+              for _, layer in layers]
+        x8 = [x.to(torch.float8_e4m3fn) for x in xs]
+
+        def run_apply(xs=xs):
+            for (_, layer), x in zip(layers, xs):
+                layer.quant_method.apply(layer, x)
+
+        def run_mm(x8=x8):
+            for (_, layer), x in zip(layers, x8):
+                torch._scaled_mm(x, layer.weight, scale_a=one, scale_b=layer.weight_scale.reshape(()),
+                                 out_dtype=torch.bfloat16)
+
+        point = {"batch": m, "apply_ms": graph_ms(run_apply, trials)}
+        try:
+            point["scaled_mm_ms"] = graph_ms(run_mm, trials)
+        except RuntimeError as e:
+            point["scaled_mm_error"] = str(e)[:300]
+        point["pass_ms"] = min(point["apply_ms"], point.get("scaled_mm_ms", math.inf))
+        out.append(point)
+        log("native pass", json.dumps(point))
+    return out
+
+
 def plaintext_scan(min_elems: int) -> dict:
     """CUDA tensors in the process at least one linear's size, by dtype: FP8 (a weight) and uint8 (plain fragments)."""
     gc.collect()
@@ -419,6 +474,8 @@ def main() -> None:
     ap.add_argument("--mem", type=float, default=0.75)
     ap.add_argument("--max-batched-tokens", type=int, default=16384)
     ap.add_argument("--select-trials", type=int, default=5)
+    ap.add_argument("--native-trials", type=int, default=10,
+                    help="stock arm: timings of one native pass of the weights at each batch (0: none)")
     ap.add_argument("--python-words", type=int, default=16)
     ap.add_argument("--gate-tokens", type=int, default=16)
     ap.add_argument("--profile-steps", type=int, default=0,
@@ -529,6 +586,8 @@ def main() -> None:
             result["points"].append(point)
             save()
             log("point", json.dumps(point))
+    if args.arm == "stock" and args.native_trials:
+        result["native_pass"] = native_pass(fp8_linears(model), batches, args.native_trials)
     hooks.uninstall()
     if install.hooks is not None:
         install.hooks.uninstall()

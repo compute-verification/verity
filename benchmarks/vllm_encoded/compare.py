@@ -16,6 +16,9 @@ Writes OUT/frontier.json too: the same points in the rate audit's shared schema 
 headline's baseline), split by the run's own arms into base (the arm's kernel on plain payloads: `plain`, or the wide
 kernel at k = 0), decode (over base) and tag (the tagged arm over the same arm untagged); the step runs no commit, so
 y_commit is 0.  x, Δ (and τ for a tagged arm) are the codec lanes' measurements for the same field, k and packing (`CODEC`).
+Each point also carries d, the step's time in native passes of the weights (the encoded arm's step over the stock arms'
+`native_pass`: every FP8 linear once through vLLM's own kernel, in one CUDA graph), which is μ_rebuild's numerator
+(d − τ)/x end to end, with x* = (d − τ)/0.5%; frontier.py's default d is y_total, which is a kernel-level point's d only.
 """
 from __future__ import annotations
 
@@ -28,6 +31,7 @@ from pathlib import Path
 TASK_COLS = 512
 FRONTIER = "verity/codec-frontier-point/v0"
 WORD_CODEC_POINTS = "art:615ddafdbdca40c9a79359dcd942422100b8b2d3e8d82b1e36073acdaedcb1de"  # ra-word-codec, r20261012-072836-5a84
+MU_BUDGET = 0.005  # μ_rebuild's share of γ = 1% (the overnight brief's budget)
 WIDE_POINTS = "art:96b9bcd36ce70e8e5f06a2da0faddc9a6aff4242ccc7c16f6c4faa0080fd9d53"  # ra-codec-wide, r20261012-074744-2f82
 #: (word bits, payload bits, k) -> the encode time of one pass's words in native passes (x), the decode's share of a pass's
 #: compute (Δ) and the ro-blake3/v1 tag's (τ), as the codec lanes measured them on the same GPU
@@ -153,6 +157,11 @@ def main() -> int:
 
     points, rows, frontier = [], [], []
     run_id = os.environ.get("RESEARCH_RUN_ID")
+    passes: dict[int, list[float]] = {}
+    for a in arms:
+        for p in a.get("native_pass", []):
+            passes.setdefault(p["batch"], []).append(p["pass_ms"])
+    native_pass = {b: statistics.median(v) for b, v in passes.items()}
     keys = sorted({(p["batch"], p["context"]) for a in arms for p in a["points"]})
     for name, group in by.items():
         a = group[0]
@@ -197,13 +206,18 @@ def main() -> int:
                 continue
             y_total, y_base = sc / e, sc / bs
             y_tag = sc / e - sc / un if un else 0.0
+            tau = ref[2] if cod.get("tag") else 0.0
+            pass_ms = native_pass.get(b)
+            d = b / e * 1e3 / pass_ms if pass_ms else None
             frontier.append({
                 "schema": FRONTIER, "lane": "ra-vllm-encoded", "end_to_end": True, "b": cod["word_bits"], "k": a["k"],
                 "arithmetic": ("cuda-int32/" + cod["field"] + "/wide.cu" if wide else "cuda-int32/mersenne61/pb56/ve.cu")
                               + ("/tag" if cod.get("tag") else ""),
                 "compiled": bool(a.get("compiled")), "mode": md, "batch": b, "context": ctx,
                 "y_total": y_total, "y_base": y_base, "y_decode": y_total - y_base - y_tag,
-                "y_tag": y_tag, "y_commit": 0.0, "x": ref[0], "delta": ref[1], "tau": ref[2] if cod.get("tag") else 0.0,
+                "y_tag": y_tag, "y_commit": 0.0, "x": ref[0], "delta": ref[1], "tau": tau,
+                "d": d, "native_pass_ms": pass_ms, "step_ms": b / e * 1e3,
+                "mu_rebuild": (d - tau) / ref[0] if d else None, "x_star": (d - tau) / MU_BUDGET if d else None,
                 "x_source": ref[3], "measured": True, "packing": cod["payload_bits"],
                 "label": f"vLLM end to end, {name}, ctx {ctx}: whole decode step over stock vLLM FP8 compiled; base = "
                          + base_name
@@ -235,7 +249,9 @@ def main() -> int:
     for p in frontier:
         if p["batch"] in (1, 32) and p["context"] == 512:
             print(f"frontier b={p['b']} k={p['k']} M={p['batch']} ctx={p['context']} {p['arithmetic']}: y_total "
-                  f"{p['y_total']:.3f} = base {p['y_base']:.3f} + decode {p['y_decode']:.3f} + tag {p['y_tag']:.3f}, x {p['x']:.1f}")
+                  f"{p['y_total']:.3f} = base {p['y_base']:.3f} + decode {p['y_decode']:.3f} + tag {p['y_tag']:.3f}, x {p['x']:.1f}"
+                  + (f", d {p['d']:.3f} (pass {p['native_pass_ms']:.3f} ms), x* {p['x_star']:.0f}, μ_rebuild "
+                     f"{p['mu_rebuild']:.2%}" if p["d"] else ", d unmeasured (no stock native pass)"))
     for x in fails:
         print("FAIL", x)
     return 1 if fails else 0
