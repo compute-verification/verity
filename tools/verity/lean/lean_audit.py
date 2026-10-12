@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import gzip
 import hashlib
 import importlib.util
 import json
@@ -78,6 +79,7 @@ import tempfile
 import time
 import tomllib
 import urllib.request
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -547,7 +549,7 @@ class WarmBuilds:
 ARTIFACTS_CAP = 20 << 30
 ARTIFACT = re.compile(r"[0-9a-f]{16}\.[a-z.]+")
 #: a bundle's members: Lake's cache layout, nothing else
-MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|outputs/[A-Za-z0-9_.-]+/[0-9a-f]{16}\.json")
+MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|outputs/(?!\.\.?/)[A-Za-z0-9_.-]+/[0-9a-f]{16}\.json")
 #: what one run's bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume
 BUNDLE_CAP = 3 << 30
 #: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
@@ -667,7 +669,8 @@ class LakeArtifacts:
         """Take in each bundle ``urls`` names (`SHARED` + its sha256) that this node hasn't: downloaded, checked against its
         sha256, and unpacked member by member, each a file of Lake's layout (`MEMBER`) that the cache lacks, outputs before
         the entries naming them; a file here is never replaced. The number of entries added. A bundle that fails is skipped,
-        and its modules are built. The URL is never logged: it grants a read until it expires."""
+        and its modules are built; one whose bytes fail (not the sha256 named, or not unpackable) is marked taken, since they
+        never change. The URL is never logged: it grants a read until it expires."""
         want = {k[len(SHARED):]: u for k, u in sorted(urls.items()) if k.startswith(SHARED)}
         taken = self.store / "taken"
         want = {h: u for h, u in want.items() if re.fullmatch(r"[0-9a-f]{64}", h) and not (taken / h).exists()}
@@ -687,6 +690,7 @@ class LakeArtifacts:
                 if d.hexdigest() == h:
                     return part
                 log(f"lean-audit: artifact bundle {h[:12]} is not the one named; skipped")
+                (taken / h).touch()
             except OSError as e:
                 log(f"lean-audit: artifact bundle {h[:12]} could not be fetched ({getattr(e, 'code', None) or type(e).__name__})")
             part.unlink(missing_ok=True)
@@ -701,7 +705,10 @@ class LakeArtifacts:
                 try:
                     n += self._unpack(part)
                     (taken / h).touch()
-                except (OSError, tarfile.TarError, EOFError) as e:
+                except (tarfile.TarError, EOFError, zlib.error, gzip.BadGzipFile) as e:
+                    log(f"lean-audit: artifact bundle {h[:12]} could not be unpacked ({type(e).__name__}); skipped")
+                    (taken / h).touch()
+                except OSError as e:
                     log(f"lean-audit: artifact bundle {h[:12]} could not be unpacked ({type(e).__name__}); skipped")
                 finally:
                     part.unlink(missing_ok=True)

@@ -329,6 +329,13 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     assert (got / "artifacts" / ("a" * 16 + ".olean")).read_text() == "node b's own"
     assert not os.stat(got / "artifacts" / ("d" * 16 + ".olean")).st_mode & 0o222
     assert b.take({LA.SHARED + h: dest.as_uri()}, logged.append) == 0 and logged[-1].startswith("lean-audit: 2 module")
+    junk = tmp_path / "junk.tar.gz"
+    junk.write_bytes(b"not a tar")
+    j = hashlib.sha256(junk.read_bytes()).hexdigest()
+    seen = len(logged)
+    assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0 and "could not be unpacked" in logged[seen]
+    assert b.take({LA.SHARED + j: junk.as_uri(), LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0
+    assert len(logged) == seen + 2                         # bytes that failed once are never fetched again
 
 
 def test_a_bundle_member_outside_lake_s_layout_or_an_entry_without_its_outputs_is_left_out(tmp_path):
@@ -337,7 +344,9 @@ def test_a_bundle_member_outside_lake_s_layout_or_an_entry_without_its_outputs_i
         for name, data in [("../escape", b"x"), ("artifacts/../../x.olean", b"x"), ("artifacts/" + "e" * 16 + ".olean", b"ok"),
                            ("outputs/p/" + "1" * 16 + ".json", json.dumps({"o": ["e" * 16 + ".olean"]}).encode()),
                            ("outputs/p/" + "2" * 16 + ".json", json.dumps({"o": ["9" * 16 + ".olean"]}).encode()),
-                           ("outputs/p/" + "3" * 16 + ".json", b"not json")]:
+                           ("outputs/p/" + "3" * 16 + ".json", b"not json"),
+                           ("outputs/../" + "4" * 16 + ".json", json.dumps({"o": ["e" * 16 + ".olean"]}).encode()),
+                           ("outputs/./" + "5" * 16 + ".json", json.dumps({"o": ["e" * 16 + ".olean"]}).encode())]:
             info = tarfile.TarInfo(name)
             info.size = len(data)
             t.addfile(info, io.BytesIO(data))
