@@ -20,19 +20,22 @@ theorem allInh_foldRounds (A : Arith F K) : ∀ (k : ℕ) (s : K) (q : Quad K), 
   | k + 1, _, _ => by
       simp only [foldRounds]
       refine AllInh.bind' (allInh_drawK A) fun _ => ?_
-      repeat' (first | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
+      repeat' (first
+        | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
         | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split | dsimp only)
       all_goals exact allInh_foldRounds A k _ _
 
 theorem allInh_twoOod (A : Arith F K) (dim split : ℕ) (s : K) (q : Quad K) : AllInh (twoOod A dim split s q) := by
   unfold twoOod
-  repeat' (first | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
+  repeat' (first
+    | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
     | refine AllInh.bind' ?_ fun _ => ?_)
 
 theorem allInh_queryAndBatch (A : Arith F K) (lv : Level) (C : Oracle F) (ch : List K) (start : ℕ) (st : LigState F K)
     (withMessage : Bool) : AllInh (queryAndBatch A lv C ch start st withMessage) := by
   unfold queryAndBatch
-  repeat' (first | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
+  repeat' (first
+    | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
     | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split)
 
 theorem allInh_recursiveRounds (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (ext : ℕ) :
@@ -41,12 +44,14 @@ theorem allInh_recursiveRounds (A : Arith F K) (n : ℕ) (b : ℕ → F) (initia
   | [lv], st => by
       simp only [recursiveRounds]
       refine AllInh.bind' (allInh_foldRounds A _ _ _) fun _ => ?_
-      repeat' (first | exact allInh_queryAndBatch A _ _ _ _ _ _ | exact AllInh.ret _ | exact AllInh.pure' _
+      repeat' (first
+        | exact allInh_queryAndBatch A _ _ _ _ _ _ | exact AllInh.ret _ | exact AllInh.pure' _
         | exact AllInh.recv' _ | exact AllInh.draw' _ | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split | dsimp only)
   | lv :: lv' :: rest, st => by
       simp only [recursiveRounds]
       refine AllInh.bind' (allInh_foldRounds A _ _ _) fun _ => ?_
-      repeat' (first | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
+      repeat' (first
+        | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
         | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split | dsimp only)
       all_goals first
         | exact allInh_twoOod A _ _ _ _
@@ -56,7 +61,8 @@ theorem allInh_recursiveRounds (A : Arith F K) (n : ℕ) (b : ℕ → F) (initia
 theorem allInh_ligerito (A : Arith F K) (sch : Schedule) (T : F) (b : ℕ → F) (C₀ : Oracle F) :
     AllInh (ligerito A sch T b C₀) := by
   unfold ligerito
-  repeat' (first | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
+  repeat' (first
+    | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
     | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split | dsimp only)
   all_goals first
     | exact allInh_foldRounds A _ _ _
@@ -66,7 +72,8 @@ theorem allInh_ligerito (A : Arith F K) (sch : Schedule) (T : F) (b : ℕ → F)
 
 theorem allInh_holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) : AllInh (holoLincheck A S zc) := by
   unfold holoLincheck
-  repeat' (first | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
+  repeat' (first
+    | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
     | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split | dsimp only)
   all_goals exact allInh_lincheckRounds _ _
 
@@ -80,14 +87,16 @@ theorem allInh_degRounds (k : ℕ) : ∀ (n : ℕ) (claim : F), AllInh (degRound
   | 0, _ => .ret _
   | n + 1, _ => by
       simp only [degRounds]
-      repeat' (first | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
+      repeat' (first
+        | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
         | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split | dsimp only)
       all_goals exact allInh_degRounds k n _
 
 theorem allInh_sparsePhase (A : Arith F K) (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ)
     (h : Fin 64 → F) : AllInh (sparsePhase A sh pub τ h) := by
   unfold sparsePhase
-  repeat' (first | exact allInh_drawFin _ | exact allInh_degRounds _ _ _ | exact AllInh.ret _ | exact AllInh.pure' _
+  repeat' (first
+    | exact allInh_drawFin _ | exact allInh_degRounds _ _ _ | exact AllInh.ret _ | exact AllInh.pure' _
     | exact AllInh.recv' _ | exact AllInh.draw' _ | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split | dsimp only)
 
 theorem allInh_regPhase {α : Type} (A : Arith F K) (S : Statement) (sh : SparseShape)
@@ -96,8 +105,20 @@ theorem allInh_regPhase {α : Type} (A : Arith F K) (S : Statement) (sh : Sparse
     (reps : Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) × Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6))) :
     AllInh (regPhase A S sh units τ no fin reps) := by
   unfold regPhase
-  repeat' (first | exact allInh_sparsePhase A sh _ τ _ | exact allInh_opening A _ _ | exact hfin _
-    | exact AllInh.ret _ | exact AllInh.pure' _ | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split)
+  split
+  · refine AllInh.bind' (allInh_sparsePhase A sh _ τ _) fun _ => ?_
+    split
+    · exact AllInh.pure' _
+    refine AllInh.bind' (allInh_sparsePhase A sh _ τ _) fun _ => ?_
+    split
+    · exact AllInh.pure' _
+    split
+    · refine AllInh.bind' (allInh_opening A _ _) fun _ => ?_
+      split
+      · exact AllInh.pure' _
+      exact hfin _
+    · exact AllInh.pure' _
+  · exact AllInh.pure' _
 
 theorem allInh_holoRep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) : AllInh (holoRep A S sch hm C₀ extra) := by
