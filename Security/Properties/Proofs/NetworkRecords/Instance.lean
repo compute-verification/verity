@@ -30,6 +30,7 @@ def p₀ : Params where
     by simp, by simp⟩
   lms := ⟨8, 1, 1⟩
   key := .empty
+  session := ⟨Array.replicate 32 0⟩
 
 def link₀ : Link := ⟨[], #[sync₀]⟩
 

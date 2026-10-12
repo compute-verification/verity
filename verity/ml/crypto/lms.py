@@ -5,7 +5,8 @@ certifier's certificates and the memory challenger's records, and the reference 
 **Use.** One key per device per role. ``keygen(DEPLOYED, seed)`` (seed: N = 64 secret bytes the device keeps), then once
 ``LeafState.create(path, public_key(key), DEPLOYED.H)``; to sign, ``sign(key, state, message)`` with ``state = LeafState(path,
 public_key(key), DEPLOYED.H)``; to check, ``verify(DEPLOYED, public, message, sig)``. The message is a role's digest
-(`certificate_message`, `memory_challenger_message`), never hand-rolled.
+(`certificate_message`, `memory_challenger_message`), never hand-rolled. A network certifier first starts its session on
+the state (``state.start(session)``), which refuses a session id the key has already started.
 
 **The hash.** ``H(x) = SHA-512(x)``, the whole output: N = 64, nothing truncated. The one other N, `TOY_N` = 8 (the
 first word of SHA-512's output, asked for by name with ``toy=True``), is circuit-check's binding of the verifier and is never
@@ -41,7 +42,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 __all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "DEPLOYED", "DIRECTIONS", "LeafState", "Params", "PrivateKey", "ROLES",
-           "Signature", "StateError", "certificate_message", "digits", "key", "keygen", "memory_challenger_message",
+           "SESSION_BYTES", "Signature", "StateError", "certificate_message", "digits", "key", "keygen", "memory_challenger_message",
            "public_key", "root_of", "sign", "sign_at", "verify", "TOY_N"]
 
 D_PBLC, D_MESG, D_LEAF, D_INTR = 0x8080, 0x8181, 0x8282, 0x8383
@@ -132,9 +133,13 @@ class Signature:
 
 # --- the messages ------------------------------------------------------------------------------------------------------------
 
-#: role -> its tag, which every digest of the role begins with
-ROLES = {"network-certificate": "verity/network-certificate/v1", "memory-challenger-record": "verity/memory-challenger-record/v1"}
+#: role -> its tag, which every digest of the role begins with. The network certificate's is the message's own,
+#: distinct from the ids of the checks that read it (`verity/network-certificate/v3`, `verity/network-records/v2`).
+ROLES = {"network-certificate": "verity/network-certificate-message/v2",
+         "memory-challenger-record": "verity/memory-challenger-record/v1"}
 DIRECTIONS = ("egress", "ingress")
+#: the length of a certifier session id, which the challenger draws for each session of the certifier
+SESSION_BYTES = 32
 
 
 def _field(b: bytes) -> bytes:
@@ -147,13 +152,16 @@ def _digest(role: str, I: bytes, context: bytes, record: bytes) -> bytes:
     return hashlib.sha512(_field(ROLES[role].encode()) + I + _field(context) + _field(record)).digest()
 
 
-def certificate_message(I: bytes, link: str, direction: str, window: int, record: bytes) -> bytes:
+def certificate_message(I: bytes, session: bytes, link: str, direction: str, window: int, record: bytes) -> bytes:
     """The message a network certificate signs: ``SHA-512(tag || I || context || record)``, the tag
-    ``verity/network-certificate/v1``, the context the link's name, the direction (``egress`` or ``ingress``) and the window's
-    index, each field but I prefixed with its length (u64)."""
+    ``verity/network-certificate-message/v2``, the context the certifier session's id (`SESSION_BYTES`), the link's name,
+    the direction (``egress`` or ``ingress``) and the window's index, each field but I and the window prefixed with its
+    length (u64)."""
     if direction not in DIRECTIONS or isinstance(window, bool) or not 0 <= window < 2 ** 64:
         raise ValueError(f"a certificate's direction is one of {DIRECTIONS} and its window a u64, not {direction!r}, {window!r}")
-    context = _field(link.encode()) + _field(direction.encode()) + window.to_bytes(8, "big")
+    if len(session) != SESSION_BYTES:
+        raise ValueError(f"a certifier session id is {SESSION_BYTES} bytes, not {len(session)}")
+    context = _field(bytes(session)) + _field(link.encode()) + _field(direction.encode()) + window.to_bytes(8, "big")
     return _digest("network-certificate", I, context, record)
 
 
@@ -295,7 +303,7 @@ def verify(params: Params, public: bytes, message: bytes, sig: Signature) -> boo
 
 class StateError(RuntimeError):
     """A refusal to sign: the leaf state is missing, unreadable, another key's, behind a leaf already used, held by another
-    signer, or used up."""
+    signer, or used up; or a refusal to start a session already started."""
 
 
 def _fsync_dir(d: Path) -> None:
@@ -307,28 +315,31 @@ def _fsync_dir(d: Path) -> None:
 
 
 class LeafState:
-    """The next unused leaf of one key, in a file that fails closed.
+    """The next unused leaf of one key, and the session ids it has started, in a file that fails closed.
 
-    ``path`` holds ``{"public", "H", "next", "check"}`` as JSON (``check`` the first 16 bytes of SHA-512 over the rest), and
-    ``path.journal`` every leaf reserved, one per line. Opening takes ``path.lock`` exclusively for the object's life (a second
-    signer on the same state is refused), and refuses a state that is missing, unreadable, another key's, or behind its own
-    journal or ``floor`` (the caller's next leaf known unused, such as 1 + the last q it published). `reserve` writes the
-    advanced state and its journal line and fsyncs both before it returns the leaf, so a crash never reuses one: at worst the
-    journal misses the one leaf the state already skipped. A restore of both files from one snapshot is past what a file can
-    see; ``floor`` is its guard.
+    ``path`` holds ``{"public", "H", "next", "sessions", "check"}`` as JSON (``sessions`` the ids `start` has recorded, in
+    hex, and ``check`` the first 16 bytes of SHA-512 over the rest), and ``path.journal`` every leaf reserved, one per line.
+    Opening takes ``path.lock`` exclusively for the object's life (a second signer on the same state is refused), and refuses
+    a state that is missing, unreadable, another key's, or behind its own journal or ``floor`` (the caller's next leaf known
+    unused, such as 1 + the last q it published). `reserve` writes the advanced state and its journal line and fsyncs both
+    before it returns the leaf, so a crash never reuses one: at worst the journal misses the one leaf the state already
+    skipped. `start` records a session id as started the same way, and refuses one already recorded, so no two signers of
+    the key run one session. A restore of both files from one snapshot is past what a file can see; ``floor`` is its guard
+    for leaves, and for session ids there is none: both rest on its host never restoring an earlier copy of the state.
     """
 
     def __init__(self, path: str | os.PathLike, public: bytes, H: int, *, floor: int = 0) -> None:
         self.path, self.public, self.H = Path(path), bytes(public), H
         self._journal = self.path.with_name(self.path.name + ".journal")
         self._lock = open(self.path.with_name(self.path.name + ".lock"), "a+")
+        self._session: bytes | None = None
         try:
             fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             self._lock.close()
             raise StateError(f"{self.path} is held by another signer") from None
         try:
-            self._next = self._read()
+            self._next, self._sessions = self._read()
             if self._next < floor:
                 raise StateError(f"{self.path}: next leaf {self._next} is behind the floor {floor}")
         except BaseException:
@@ -344,33 +355,35 @@ class LeafState:
             raise StateError(f"{p} already has a leaf state")
         with open(j, "x") as f:
             os.fsync(f.fileno())
-        LeafState._write(p, bytes(public), H, 0)
+        LeafState._write(p, bytes(public), H, 0, ())
 
     @staticmethod
-    def _body(public: bytes, H: int, nxt: int) -> dict:
-        b = {"public": public.hex(), "H": H, "next": nxt}
+    def _body(public: bytes, H: int, nxt: int, sessions: tuple[bytes, ...]) -> dict:
+        b = {"public": public.hex(), "H": H, "next": nxt, "sessions": [s.hex() for s in sessions]}
         b["check"] = hashlib.sha512(json.dumps(b, sort_keys=True).encode()).hexdigest()[:32]
         return b
 
     @staticmethod
-    def _write(p: Path, public: bytes, H: int, nxt: int) -> None:
+    def _write(p: Path, public: bytes, H: int, nxt: int, sessions: tuple[bytes, ...]) -> None:
         tmp = p.with_name(p.name + ".tmp")
         with open(tmp, "w") as f:
-            json.dump(LeafState._body(public, H, nxt), f, sort_keys=True)
+            json.dump(LeafState._body(public, H, nxt, sessions), f, sort_keys=True)
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, p)
         _fsync_dir(p.parent)
 
-    def _read(self) -> int:
+    def _read(self) -> tuple[int, tuple[bytes, ...]]:
         try:
             body = json.loads(self.path.read_text())
             used = [int(x) for x in self._journal.read_text().splitlines()]
+            sessions = tuple(bytes.fromhex(s) for s in body["sessions"]) if isinstance(body, dict) else ()
             intact = (isinstance(body, dict) and isinstance(body.get("next"), int)
-                      and body == self._body(bytes.fromhex(str(body.get("public"))), body.get("H"), body["next"]))
+                      and body == self._body(bytes.fromhex(str(body.get("public"))), body.get("H"), body["next"],
+                                             sessions))
         except FileNotFoundError as e:
             raise StateError(f"{e.filename}: missing") from None
-        except (OSError, ValueError, TypeError) as e:
+        except (OSError, ValueError, TypeError, KeyError) as e:
             raise StateError(f"{self.path}: unreadable ({type(e).__name__})") from None
         if not intact:
             raise StateError(f"{self.path}: unreadable (its check does not match)")
@@ -384,18 +397,36 @@ class LeafState:
             raise StateError(f"{self.path}: next leaf {nxt} is behind leaf {last}, already used")
         if last < nxt - 2:
             raise StateError(f"{self._journal}: behind its state (last leaf {last}, next {nxt})")
-        return nxt
+        return nxt, sessions
+
+    def _current(self) -> tuple[int, tuple[bytes, ...]]:
+        if self._lock.closed:
+            raise StateError(f"{self.path}: closed")
+        nxt, sessions = self._read()
+        if (nxt, sessions) != (self._next, self._sessions):
+            raise StateError(f"{self.path}: changed under this signer")
+        return nxt, sessions
+
+    def start(self, session: bytes) -> None:
+        """Start this signer's one session, ``session``, after the state on disk records it; refused when the state has
+        already started it, unless this signer did, or this signer has started another session."""
+        session = bytes(session)
+        nxt, sessions = self._current()
+        if self._session == session:
+            return
+        if self._session is not None:
+            raise StateError(f"{self.path}: this signer has already started a session")
+        if session in sessions:
+            raise StateError(f"{self.path}: session {session.hex()} is already started")
+        self._write(self.path, self.public, self.H, nxt, sessions + (session,))
+        self._sessions, self._session = sessions + (session,), session
 
     def reserve(self) -> int:
         """The next unused leaf, after the state on disk is past it."""
-        if self._lock.closed:
-            raise StateError(f"{self.path}: closed")
-        nxt = self._read()
-        if nxt != self._next:
-            raise StateError(f"{self.path}: next leaf {nxt} on disk, {self._next} here: changed under this signer")
+        nxt, sessions = self._current()
         if nxt >= 2 ** self.H:
             raise StateError(f"{self.path}: all 2^{self.H} leaves are used")
-        self._write(self.path, self.public, self.H, nxt + 1)
+        self._write(self.path, self.public, self.H, nxt + 1, sessions)
         with open(self._journal, "a") as f:
             f.write(f"{nxt}\n")
             f.flush()

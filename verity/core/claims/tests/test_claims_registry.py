@@ -69,3 +69,11 @@ def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> Non
             "random-oracle", "honest-verifier")
     assert all(get(i).id == i and get(i).kind == "assumption" for i in site)
     assert not [k for k in ENTRIES if any(r in k for r in ("beacon", "auditor", "challenger"))]
+
+
+def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
+    e = get("trusted-nebius-host")
+    assert (e.kind, e.standing) == ("assumption", "standard")
+    assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger, the bandwidth audit's "
+                      "challenger) runs its stated code on its Nebius host, and its host never restores an earlier copy "
+                      "of the state the device keeps there")
