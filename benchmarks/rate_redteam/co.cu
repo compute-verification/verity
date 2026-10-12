@@ -8,7 +8,8 @@
 //                                 compression chains also checked here against the host build of the same function
 //   co sweep WHAT K KEYFILE OUT   b3w = 0 … 8 at the occupancy limit, three reps each, JSON to OUT
 //
-// WHAT: 1 encode, 0 decode. KEYFILE: gate.py's "k c_0 … c_{k-1} tau tstep", decimal.
+// WHAT: 1 encode, 0 decode. KEYFILE: gate.py's "k c_0 … c_{k-1} tau tstep", decimal. Build with -DRT_B3V=1 for the
+// compression's V1 form (adds on the FMA pipe).
 #include "../word_codec/wc.cu"
 
 #include <algorithm>
@@ -25,6 +26,70 @@ constexpr int UB = 2;  // compression chains a thread
 constexpr int THREADS = 256;
 
 __host__ __device__ inline uint32_t b3_seed(uint64_t cid, int i) { return (uint32_t)cid * 0x9E3779B9u + i; }
+
+// RT_B3V=1: the compression with ra-codec-tensor's V1 split (wt.cu): each add an IMAD by a one ptxas can't fold, so it
+// issues on the FMA pipe, and the rotations by 16 and 8 as byte permutes. The gate still checks it against bw::b3_compress.
+#ifndef RT_B3V
+#define RT_B3V 0
+#endif
+__constant__ uint32_t kOne;
+
+__device__ __forceinline__ uint32_t imad1(uint32_t a, uint32_t one, uint32_t c) {
+  uint32_t d;
+  asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(d) : "r"(a), "r"(one), "r"(c));
+  return d;
+}
+
+#define RT_G1(a, b, c, d, x, y)                     \
+  a = imad1(b, one, imad1(x, one, a));              \
+  d = __byte_perm(d ^ a, 0, 0x1032);                \
+  c = imad1(d, one, c);                             \
+  b = __funnelshift_r(b ^ c, b ^ c, 12);            \
+  a = imad1(b, one, imad1(y, one, a));              \
+  d = __byte_perm(d ^ a, 0, 0x0321);                \
+  c = imad1(d, one, c);                             \
+  b = __funnelshift_r(b ^ c, b ^ c, 7)
+
+__device__ __forceinline__ void b3_compress_v1(const uint32_t cv[8], uint32_t m[16], uint32_t counter, uint32_t len,
+                                               uint32_t flags, uint32_t out[8]) {
+  const uint32_t one = kOne;
+  uint32_t v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
+  uint32_t v8 = B3_IV0, v9 = B3_IV1, v10 = B3_IV2, v11 = B3_IV3, v12 = counter, v13 = 0, v14 = len, v15 = flags;
+#pragma unroll
+  for (int r = 0; r < 7; ++r) {
+    RT_G1(v0, v4, v8, v12, m[0], m[1]);
+    RT_G1(v1, v5, v9, v13, m[2], m[3]);
+    RT_G1(v2, v6, v10, v14, m[4], m[5]);
+    RT_G1(v3, v7, v11, v15, m[6], m[7]);
+    RT_G1(v0, v5, v10, v15, m[8], m[9]);
+    RT_G1(v1, v6, v11, v12, m[10], m[11]);
+    RT_G1(v2, v7, v8, v13, m[12], m[13]);
+    RT_G1(v3, v4, v9, v14, m[14], m[15]);
+    if (r < 6) {
+      const uint32_t t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13], m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]};
+#pragma unroll
+      for (int i = 0; i < 16; ++i) m[i] = t[i];
+    }
+  }
+  out[0] = v0 ^ v8;
+  out[1] = v1 ^ v9;
+  out[2] = v2 ^ v10;
+  out[3] = v3 ^ v11;
+  out[4] = v4 ^ v12;
+  out[5] = v5 ^ v13;
+  out[6] = v6 ^ v14;
+  out[7] = v7 ^ v15;
+}
+#undef RT_G1
+
+__device__ __forceinline__ void b3_tag(const uint32_t cv[8], uint32_t m[16], uint32_t counter, uint32_t len, uint32_t flags,
+                                       uint32_t out[8]) {
+#if RT_B3V
+  b3_compress_v1(cv, m, counter, len, flags, out);
+#else
+  bw::b3_compress(cv, m, counter, len, flags, out);
+#endif
+}
 
 inline bw::Key3 b3_key() {
   bw::Key3 key;
@@ -54,7 +119,7 @@ __global__ void __launch_bounds__(THREADS) co_kernel(int b3w, long long cycles, 
         uint32_t m[16];
 #pragma unroll
         for (int i = 0; i < 16; ++i) m[i] = i < 8 ? h[u][i] : (uint32_t)s + i;
-        bw::b3_compress(key.k, m, 0, 64, bw::B3_KEYED | bw::B3_CHUNK_START, h[u]);
+        b3_tag(key.k, m, 0, 64, bw::B3_KEYED | bw::B3_CHUNK_START, h[u]);
       }
     }
     atomicAdd(&counts[0], n * UB);
@@ -164,9 +229,9 @@ int sweep(uint64_t tstep, const char* out, long long cycles) {
   const int grid = sms * per_sm;
   launch<WHAT, K>(grid, 4, cycles / 10, tstep, nullptr, nullptr);  // warm-up
   FILE* f = fopen(out, "w");
-  fprintf(f, "{\"what\": \"%s\", \"k\": %d, \"sqr\": %d, \"sms\": %d, \"blocks_per_sm\": %d, \"regs\": %d, "
+  fprintf(f, "{\"what\": \"%s\", \"k\": %d, \"sqr\": %d, \"b3v\": %d, \"sms\": %d, \"blocks_per_sm\": %d, \"regs\": %d, "
              "\"cycles\": %lld, \"ue\": %d, \"ub\": %d, \"rows\": [",
-          WHAT ? "encode" : "decode", K, WC_SQR, sms, per_sm, fa.numRegs, cycles, UE, UB);
+          WHAT ? "encode" : "decode", K, WC_SQR, RT_B3V, sms, per_sm, fa.numRegs, cycles, UE, UB);
   for (int b3w = 0; b3w <= 8; ++b3w) {
     std::vector<Run> r;
     for (int rep = 0; rep < 3; ++rep) r.push_back(launch<WHAT, K>(grid, b3w, cycles, tstep, nullptr, nullptr));
@@ -198,6 +263,8 @@ int main(int argc, char** argv) {
   for (int j = 0; j < k; ++j) kf >> c[j];
   kf >> tau >> tstep;
   if (!kf || wc_set_key(c, k, tau)) return 66;
+  const uint32_t one = 1;
+  if (cudaMemcpyToSymbol(rt::kOne, &one, sizeof one)) return 66;
   const long long cycles = argc > 6 ? atoll(argv[6]) : 400000000LL;
 #define RT_CASE(W, K)                                                                   \
   if (what == W && k == K) return mode == "gate" ? rt::gate<W, K>(tstep, argv[5])       \
