@@ -566,6 +566,9 @@
   "Accounting.SecurityProofs.RateConservationCapRO": {
    "owner": "@memory-accounting"
   },
+  "Accounting.SecurityProofs.RateConservationNamedRO": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.RateConservationRO": {
    "owner": "@memory-accounting"
   },
@@ -4262,6 +4265,7 @@
    "Accounting.SecurityProofs.RateHorizon": "frozen (no-function,hash): As Accounting.SecurityProofs.HorizonSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
    "Accounting.SecurityProofs.RateChainSampledRO": "frozen (no-function,hash): It joins Accounting.SecurityProofs.RateHorizon and Accounting.SecurityProofs.RateChainPaidRO by a union bound, a bound on a chained window of abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RateChainSampled": "frozen (no-function,hash): As Accounting.SecurityProofs.RateChainSampledRO, from Accounting.SecurityProofs.RateHorizon and Accounting.SecurityProofs.RateChainPaid.",
+   "Accounting.SecurityProofs.RateConservationNamedRO": "frozen (no-function,hash): As Accounting.SecurityProofs.RateConservationRO with the compression naming k of the N words, C(N, k) in place of C(q, k), and a collision term C(q, 2) / 2^h among the run's queries: an abstract chip program in the random-oracle model, not the rate audit's code; no sample is drawn.",
    "Accounting.SecurityProofs.RateAuditSketch": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose tags hash the certified stream and a digest of each tile, for a device that obtains sectors only whole and as they are (Security/Definitions/Accounting/RateAuditSketch.lean), with the device's bounds (held sectors within S_chip, the side link's cap * T, queries) as fields of the Device it ranges over and the digest, the compute budget, c_tag and c_enc as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work, rate-sketch-verbatim, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Accounting.SecurityProofs.RateAuditTensorSketch": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAuditSketch, it bounds acceptance of an abstract chip program in the random-oracle model, at the tensor-core sketch's digest (Accounting.RateSketch.sketch), not the rate audit's code.",
    "Accounting.SecurityProofs.SketchBinds": "frozen (premise): It is a property of Accounting.RateSketch.sketch under the hypothesis SectorsBind σ on the window's signs, which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketch prices the hypothesis as Pr_σ[¬ SectorsBind σ].",
