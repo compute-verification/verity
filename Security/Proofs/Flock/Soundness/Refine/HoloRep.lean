@@ -79,12 +79,12 @@ def holoRepProg (st : Setup) (sch : Flock.Schedule) (p : Proof) (hpart : Array F
   Flock.ligerito st.merkle sch T p.cap p.ligerito (Flock.basis sws)
 
 /-- The lincheck's messages with hidden units: `lcMsgs`, then `h`. -/
-def holoLcMsgs (kLog : ℕ) (p : LincheckProof) (hpart : Array F128) : List Msg :=
+def holoLcMsgs (kLog : ℕ) (p : LincheckProof) (hpart : Array F128) : List Game.Msg :=
   lcMsgs kLog p ++ [⟨Fin 64 → 𝔽, vecOf 64 hpart⟩]
 
 /-- **The messages of one rep with hidden units**: `repMsgs` with `h` after `z_partial`. -/
 def holoRepMsgs {D : Type} (st : Setup) (sch : Flock.Schedule) (nClaims : ℕ) (p : Proof) (hpart : Array F128)
-    (capD : Array ByteArray → Model.Cap D) : List Msg :=
+    (capD : Array ByteArray → Model.Cap D) : List Game.Msg :=
   zcMsgs st.m p.zerocheck ++ holoLcMsgs st.kLog p.lincheck hpart ++ opMsgs nClaims p.ringSwitches ++
     ligMsgs p.ligerito capD sch
 
@@ -101,7 +101,7 @@ theorem closeEmpty_ok {t t' : Transcript} (h : closeEmpty t = .ok ((), t')) :
     · simp [h1] at h
     · by_cases h2 : ¬ r.answers (framed t 2 0)
       · simp [h1, h2] at h
-      · simp only [h1, h2, if_false] at h
+      · simp only [h1, h2, ite_false] at h
         injection h with h
         obtain ⟨-, ht⟩ := Prod.mk.inj h
         exact ⟨r, hr, Decidable.of_not_not h1, Decidable.of_not_not h2, ht.symm⟩
@@ -118,7 +118,7 @@ theorem closeEmpty_bind {β : Type} {f : Unit → TM β} {t t' : Transcript} {b 
   have hget : t.rounds[t.k]! = r := by
     rw [getElem!_pos t.rounds t.k hlt]; exact Option.some.inj ((Array.getElem?_eq_getElem hlt).symm.trans hr)
   subst ht
-  exact ⟨hlt, by rw [hget]; exact hn, _, rfl, rfl, h₂⟩
+  exact ⟨hlt, by rw [hget]; exact hn, ⟨t.rounds, t.k + 1, ByteArray.empty⟩, rfl, rfl, h₂⟩
 
 /-- A round of no coins that answers the framed bytes `L` is closed by `closeEmpty`. -/
 theorem closeEmpty_answered {t : Transcript} {L : List UInt8} (hlt : t.k < t.rounds.size)
