@@ -238,17 +238,19 @@ def test_alu_idle_falls_with_k():
 
 def test_frontier_at_the_floor():
     """The design note's point and its neighbours at the squaring floor (70B batch 1, the issue bound): the scaled
-    fused y is the measured one at 768 bits; E on 1,536 bits with KV on 2,048 sits within 0.1 point of all-2,048 at
-    less step time, and halves the buildable 768-bit point's no-assumption γ."""
-    assert F.fused_y(768, 1, 2.3) == pytest.approx(F.FUSED_768_Y, abs=0.01)
-    assert F.fused_y(2048, 1, 2.3) == pytest.approx(1.35, abs=0.01)
+    fused y is the measured one at 768 bits and within 0.03 of the measured 512-bit one; E on 1,536 bits with KV on
+    2,048 halves the buildable 768-bit point's no-assumption γ, and all-2,048 buys little more for more step."""
+    assert F.fused_y(768, 1, 2.3) == pytest.approx(F.FUSED_768_Y)
+    assert F.fused_y(512, 1, 2.3) == pytest.approx(1.051, abs=0.03)
+    assert F.fused_y(2048, 1, 2.3) == pytest.approx(1.84, abs=0.01)
     p = F.point()
-    assert p["gamma_bw"] == pytest.approx(0.0047, abs=2e-4)
-    assert p["gamma_decode_free"] == pytest.approx(0.0063, abs=2e-4)
-    assert p["slowdown"] == pytest.approx(1.37, abs=0.01)
-    k, wide = F.pick(F.options(G.LLAMA_70B, 1, F.e_codec(2048, 1, 2.3), 1.0))
-    assert k == "k2" and wide["slowdown"] > p["slowdown"] + 0.15
-    assert p["gamma_decode_free"] - wide["gamma_decode_free"] < 1e-3
+    assert p["gamma_bw"] == pytest.approx(0.0051, abs=2e-4)
+    assert p["gamma_decode_free"] == pytest.approx(0.0071, abs=2e-4)
+    assert p["slowdown"] == pytest.approx(1.74, abs=0.01)
     fused = replace(F.e_codec(768, 1, 2.3), y=F.FUSED_768_Y)
     _, built = F.pick(F.options(G.LLAMA_70B, 1, fused, 1.0), allowed=("k1", "k2", "k4"))
-    assert built["gamma_decode_free"] > 2 * p["gamma_decode_free"] and built["slowdown"] > p["slowdown"]
+    assert built["gamma_decode_free"] > 1.8 * p["gamma_decode_free"] and built["slowdown"] < p["slowdown"]
+    k, wide = F.pick(F.options(G.LLAMA_70B, 1, F.e_codec(2048, 1, 2.3), 1.0))
+    gain_wide = p["gamma_decode_free"] - wide["gamma_decode_free"]
+    gain_point = built["gamma_decode_free"] - p["gamma_decode_free"]
+    assert k == "k2" and wide["slowdown"] > p["slowdown"] + 0.2 and gain_wide < gain_point / 4

@@ -17,7 +17,8 @@ IDLE = {"Llama-3.1-8B": 0.37, "Mistral-Small-24B": 0.15, "Llama-3.1-70B": 0.10}
 SHAPES = {"70": g.LLAMA_70B, "24": g.MISTRAL_24B, "8": g.LLAMA_8B}
 OUT_TOKENS = 512
 TAG = 0.227  # ra-sketch-tag's sketch (0.117) and its layer sequence (0.11), on top of the fused decode
-# ra-codec-tensor's 2^768 − 825 decode fused into the 70B layer at k = 1 (r20261012-095837-c1eb), tag not included.
+# ra-codec-tensor's 2^768 − 825 decode fused into the 70B layer at k = 1 (r20261012-095837-c1eb), tag not included;
+# 2^512 − 569 in the same run: 1.051 / 1.445.
 FUSED_768_Y = 1.159
 FUSED_768_Y32 = 1.386
 # How far today's squaring kernels sit above the issue bound (61, 255, 521, 768 bits: 1.9, 3.3, 3.0, 2.3).
@@ -30,10 +31,11 @@ def sq(bits: int, ops: float = 1.0) -> float:
 
 
 def fused_y(bits: int, batch: int, off: float) -> float:
-    """A fused decode's y scaled from the 768-bit kernel: its overhead over the read, on a decode whose ALU is
-    `off` times the issue bound and no longer hides once it passes a pass [estimate]."""
-    over = (FUSED_768_Y32 if batch >= 32 else FUSED_768_Y) - 1
-    return max(1.0, off * sq(bits)) + over
+    """A fused decode's y scaled from the 768-bit kernel [estimate]. Its decode is at the edge of the read (ε = 0.98
+    of a pass standalone, y = 1.159), so each further pass of squaring, at `off` times the issue bound, adds a pass
+    of step; at 512 bits this gives 1.02 against the measured 1.051."""
+    y768 = FUSED_768_Y32 if batch >= 32 else FUSED_768_Y
+    return y768 + off * (sq(bits) - sq(768))
 
 
 def e_codec(bits: int, batch: int, off: float) -> g.Codec:
