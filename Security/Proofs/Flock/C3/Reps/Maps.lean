@@ -1,0 +1,175 @@
+import Proofs.Flock.C3.Reps.AlgL
+import Proofs.Flock.C3.Reps.Vals
+import Proofs.Flock.VBridge.Family
+
+/-!
+# C3's rep decoder: the reps' unit maps, openings and values over a list of V*'s statements
+
+`RepMaps stmt Vs sh` is what (a)'s lemmas read of G's `VStarFamily`, generic in the list `stmt` so that it fits
+`Fin (vstarCount ish)` (it is not instantiated at `RecVStar.statements`, #1896): each part's and each opening's
+session and unit, and the values read off V*'s layers alone (`rep₀`, `rows`, `alpha`, `acc`), which stay fields.
+
+* `coef`, `ops`, `rep`: G's `VStarFamily.{coef, ops, rep}` at `rep₀` and `alpha`; `coefsAre` and `consAre` hold by
+  definition.
+* `algebraDecodes`, `accChains`: G's items 1–4 at `rep`, (a)'s `algebraDecodes_of_decodeLH` and `accChains_of_decodeL`
+  at the maps, each instance copy 0 (`Family.cp`, `Family.cpO`).
+* `ExtrasAt`, `CombFoldsAt`: S's two facts about the decoder (`RepExtrasAt`, `CombFolds`) at `rep`, the obligations
+  `proofOfVals_of_src` takes (`proofOfVals`). `rep`'s rounds, extras and comb are `rep₀`'s, so both are facts of
+  `rep₀`'s read off the layers, which this file leaves a field.
+-/
+
+namespace FlockC3.Reps
+
+noncomputable section
+
+open Flock FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open Flock.RecResiduals (portSizes groups)
+open Flock.RecAlgebra (structureOf verifierRows el)
+open FlockVBridge.Compiled (RepData Accepted layers AlgebraDecodes AccChains)
+open FlockVBridge.OfVStar (ResZeroAtLH)
+open FlockVBridge.AccChain (Openings CoefsAre ConsAre ReadsEnds levelLanes)
+open FlockVBridge.Family (OpensAtL)
+
+/-- **C3's rep decoder over V*'s statements `stmt`**: G's `VStarFamily`'s unit maps (part `p` of rep `r` is instance
+`r` of the statement tagged `.inner p`, opening `j` of level `ℓ` of rep `r` instance `r q + j` of the one tagged
+`.recOpen ℓ`) and the values it reads off the layers. -/
+structure RepMaps {S : ℕ} (stmt : Fin S → VStar.Stmt) (Vs : Fin S → VStmt) (sh : Shape) where
+  sess : ℕ → Fin S
+  hsess : ∀ p j, (∃ nm pt, stmt j = .inner p nm pt) → sess p = j
+  un : (p : ℕ) → Fin 2 → Fin (Vs (sess p)).nv
+  hun : ∀ p r, r.val < (Vs (sess p)).nv → (un p r).val = r.val
+  sessO : ℕ → Fin S
+  hsessO : ∀ ℓ j, (∃ LANES H m, stmt j = .recOpen ℓ LANES H m) → sessO ℓ = j
+  unO : (ℓ : ℕ) → Fin 2 → ℕ → Fin (Vs (sessO ℓ)).nv
+  hunO : ∀ ℓ r j, r.val * (sh.sched.levels[ℓ]!).q + j < (Vs (sessO ℓ)).nv →
+    (unO ℓ r j).val = r.val * (sh.sched.levels[ℓ]!).q + j
+  rep₀ : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData
+  rows : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ℕ → Array (Array F128)
+  alpha : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ℕ → Array F128
+  acc : ((j : Fin S) → (Vs j).Bits) → ℕ → Array F128
+
+namespace RepMaps
+
+variable {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt} {sh : Shape} (M : RepMaps stmt Vs sh)
+
+/-- Level `ℓ`'s queries of each rep. -/
+def q (_ : RepMaps stmt Vs sh) (ℓ : ℕ) : ℕ := (sh.sched.levels[ℓ]!).q
+
+/-- Each rep's openings. -/
+def nOpen : ℕ := ((List.range sh.sched.levels.size).map M.q).sum
+
+/-- The verifier's `coef` for opening `j` of level `ℓ` of rep `r`, at `rep₀`'s coins and `alpha` (G's `coef`). -/
+def coef (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) (ℓ j : ℕ) : Array F128 :=
+  match verifierRows sh (M.rep₀ l r).rounds (M.rep₀ l r).extras (M.rep₀ l r).comb with
+  | .ok (_, _, kappa) => FlockVBridge.coefAt (kappa[ℓ]!) (levelLanes sh ℓ) (eqTable (M.alpha l r ℓ))[j]!
+  | .error _ => #[]
+
+/-- **Rep `r`'s openings** (G's `ops`): level `ℓ`'s `q` queries from chain row `r · nOpen`. -/
+def ops (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) : Openings :=
+  ⟨r.val * M.nOpen, M.q, M.rows l r, M.alpha l r, M.coef l r⟩
+
+/-- **Rep `r`'s values** (G's `rep`): `rep₀`'s, with the levels' consistency sums of the opened rows. -/
+def rep (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) : RepData :=
+  { M.rep₀ l r with cons := fun ℓ i => Flock.RecAlgebra.consAt (M.rows l r ℓ) (M.q ℓ) (M.alpha l r ℓ) i }
+
+/-- **The verifier's coefficients are the openings'**, by definition of `coef` (G's `coefsAre`). -/
+theorem coefsAre (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) : CoefsAre sh (M.rep l r) (M.ops l r) := by
+  intro v info kappa h ℓ _ j _
+  have h' : verifierRows sh (M.rep₀ l r).rounds (M.rep₀ l r).extras (M.rep₀ l r).comb = .ok (v, info, kappa) := h
+  show M.coef l r ℓ j = FlockVBridge.coefAt (kappa[ℓ]!) (levelLanes sh ℓ) (eqTable (M.alpha l r ℓ))[j]!
+  unfold coef
+  rw [h']
+
+/-- **The rep's consistency sums are the opened rows'**, by definition of `rep`. -/
+theorem consAre (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) : ConsAre sh (M.rep l r) (M.ops l r) :=
+  fun _ _ _ _ => rfl
+
+section outer
+
+variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {Reg' Reg₂ : Type}
+
+/-- **G items 1–3 at the decoder**: `algebraDecodes_of_decodeLH` at `sess`, `un` and copy 0. -/
+theorem algebraDecodes (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) {GS : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
+    (hst : structureOf sh = .ok GS ∧ groups GS (portSizes sh) = .ok gs)
+    (hvr : ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r, ∃ v info kappa,
+      verifierRows sh (M.rep (layers zs dg N k Rw R ω t R₂ τ) r).rounds
+        (M.rep (layers zs dg N k Rw R ω t R₂ τ) r).extras (M.rep (layers zs dg N k Rw R ω t R₂ τ) r).comb =
+          .ok (v, info, kappa) ∧ v.size = GS.nv)
+    (hsz : ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r,
+      (M.rep (layers zs dg N k Rw R ω t R₂ τ) r).w.size = GS.nw ∧
+        (M.rep (layers zs dg N k Rw R ω t R₂ τ) r).comb.size = 64)
+    (hres : ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ p < gs.size,
+      ResZeroAtLH (zs R ω t R₂ (M.sess p)) (layers zs dg N k Rw R ω t R₂ τ (M.sess p)) (M.un p r)
+        (FlockVBridge.Family.cp p r) sh gs p (el (M.rep (layers zs dg N k Rw R ω t R₂ τ) r).w)
+        (M.rep (layers zs dg N k Rw R ω t R₂ τ) r).rounds (M.rep (layers zs dg N k Rw R ω t R₂ τ) r).extras
+        (M.rep (layers zs dg N k Rw R ω t R₂ τ) r).comb) :
+    AlgebraDecodes zs dg N k Rw sh M.rep :=
+  algebraDecodes_of_decodeLH zs dg N k Rw sh M.rep hst.1 (Flock.RecAlgebra.structureOf_bitsOk hst.1) hst.2 M.sess
+    M.un FlockVBridge.Family.cp hvr hsz hres
+
+/-- **G item 4 at the decoder**: `accChains_of_decodeL` at `ops`, `acc`, `sessO`, `unO` and copy 0, with `coefsAre`
+and `consAre`. -/
+theorem accChains (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (hu : ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < sh.sched.levels.size, ∀ j < M.q ℓ,
+      OpensAtL (Vs (M.sessO ℓ)) (layers zs dg N k Rw R ω t R₂ τ (M.sessO ℓ)) (M.unO ℓ r j)
+        (FlockVBridge.Family.cpO ℓ r j) (levelLanes sh ℓ) ((M.ops (layers zs dg N k Rw R ω t R₂ τ) r).rows ℓ)[j]!
+        #[(M.acc (layers zs dg N k Rw R ω t R₂ τ) ((M.ops (layers zs dg N k Rw R ω t R₂ τ) r).start ℓ + j))[0]!,
+          (M.acc (layers zs dg N k Rw R ω t R₂ τ) ((M.ops (layers zs dg N k Rw R ω t R₂ τ) r).start ℓ + j))[1]!]
+        ((M.ops (layers zs dg N k Rw R ω t R₂ τ) r).coef ℓ j)
+        (M.acc (layers zs dg N k Rw R ω t R₂ τ) ((M.ops (layers zs dg N k Rw R ω t R₂ τ) r).start ℓ + j + 1)))
+    (hrd : ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r,
+      ReadsEnds sh (M.rep (layers zs dg N k Rw R ω t R₂ τ) r) (M.acc (layers zs dg N k Rw R ω t R₂ τ))
+        (M.ops (layers zs dg N k Rw R ω t R₂ τ) r)) :
+    AccChains zs dg N k Rw sh M.rep :=
+  accChains_of_decodeL zs dg N k Rw sh M.rep M.acc M.ops M.sessO M.unO FlockVBridge.Family.cpO hu
+    (fun _ _ _ _ _ _ _ r => M.coefsAre _ r) (fun _ _ _ _ _ _ _ r => M.consAre _ r) hrd
+
+end outer
+
+section obligations
+
+variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+
+local notation "ℐ" => holoInnerAt T CT st hp
+
+/-- **Obligation: the decoder's extras** (S's `hx` at `rep`, as G's `rep_extras`): at every accepted outer proof, each
+rep's extras are the setup `stp`'s at some well-formed link point arrays at the source's `pts`. -/
+def ExtrasAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → FlockC3.Compose.C3Run (holoAt st hp))
+    (stp : ((j : Fin S) → (Vs j).Bits) → Fin 2 → Flock.Setup) : Prop :=
+  AtRep zs dg N k Rw sh M.rep fun R ω t Lb i =>
+    RepExtrasAt (stp Lb i) ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
+      (holoAt st hp).cls.mPts (src R ω t Lb).pts (M.rep Lb i)
+
+/-- **Obligation: the decoder's comb** (S's `hfold` at `rep`): at every accepted outer proof, each rep's comb is the
+lincheck's fold at the setup `stp` (`CombFolds`; G's `combFolds_of`: the comb `combOf` of the rounds, `FoldsOk`). -/
+def CombFoldsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (stp : ((j : Fin S) → (Vs j).Bits) → Fin 2 → Flock.Setup) : Prop :=
+  AtRep zs dg N k Rw sh M.rep fun _ _ _ Lb i => FlockVBridge.Family.CombFolds (stp Lb i) sh (M.rep Lb i)
+
+/-- **S's `ProofOfVals` at the decoder's values**: `proofOfVals_of_src` at `rep`, its `hx` and `hfold` the
+obligations. -/
+theorem proofOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → FlockC3.Compose.C3Run (holoAt st hp))
+    {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
+    (hset : AtRep zs dg N k Rw sh M.rep fun _ _ _ Lb i =>
+      FlockVBridge.Family.SetupRealizes (b Lb i).st ((holoAt st hp).cls.pubStatement (holoAt st hp).regs)
+        (b Lb i).sch (holoAt st hp).cls.ptLocal (holoAt st hp).cls.mPts)
+    (hsh : AtRep zs dg N k Rw sh M.rep fun _ _ _ Lb i => FlockVBridge.Family.ShapeIs sh (b Lb i).st (b Lb i).sch)
+    (hx : M.ExtrasAt zs dg N k Rw src fun Lb i => (b Lb i).st)
+    (hfold : M.CombFoldsAt zs dg N k Rw fun Lb i => (b Lb i).st) :
+    ProofOfVals zs dg N k Rw sh M.rep fun Lb i => (b Lb i).vals sh (M.rep Lb i) :=
+  proofOfVals_of_src (src := src) hset hsh hx hfold
+
+end obligations
+
+end RepMaps
+
+end
+
+end FlockC3.Reps
