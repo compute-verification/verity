@@ -60,7 +60,7 @@ def test_a_train_drive_fast_forwarded_main_to_is_a_landing_of_the_check_that_pas
     train = _git(repo, "rev-parse", "HEAD")
     _git(repo, "commit", "-q", "--allow-empty", "-m", "a lane's commit")
     lane = _git(repo, "rev-parse", "HEAD")
-    _git(repo, "push", "-q", "origin", f"{train}:main")
+    _git(repo, "push", "-q", "origin", f"{train}:refs/heads/main")
     _git(repo, "fetch", "-q", "origin")
     checked = {train: "r20261012-141854-3bba", lane: "r20261012-150000-0001"}
     monkeypatch.setattr(PT, "passed", checked.get)
