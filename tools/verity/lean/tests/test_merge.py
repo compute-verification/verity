@@ -214,3 +214,67 @@ def test_shape_entries_and_frozen_names_merge_one_by_one():
                                              "frozen": {"P.c": "lemma"}}
     _, why = M.merge(base, {"shape": {"frozen": {"P.a": "x"}}}, {"shape": {"frozen": {"P.a": "y"}}})
     assert why == ["shape[frozen][P.a]: changed on both sides, differently"]
+
+
+def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
+    """#1860 against #1842 (12 Oct): each side added imports to `Definitions.Accounting` and a clause to its `why`."""
+    base = {"layers": {"D": {"imports": ["Mathlib", "D"], "except": [], "why": "trusted text; they import no proof"},
+                       "E": {"imports": ["E"], "except": [], "why": "e"}}}
+    ours = {"layers": {"D": {"imports": ["Mathlib", "P.Audit", "D"], "except": [], "why": "trusted text; M reads P; they import no proof"},
+                       "E": {"imports": ["E"], "except": [], "why": "e"}}}
+    theirs = {"layers": {"D": {"imports": ["Mathlib", "Core", "D"], "except": [], "why": "trusted text; C reads Core; they import no proof"},
+                         "E": {"imports": ["E", "F"], "except": [], "why": "e"}}}
+    merged, why = M.merge(base, ours, theirs)
+    assert why == []
+    assert merged["layers"] == {"D": {"imports": ["Mathlib", "Core", "P.Audit", "D"], "except": [],
+                                      "why": "trusted text; C reads Core; M reads P; they import no proof"},
+                                "E": {"imports": ["E", "F"], "except": [], "why": "e"}}
+    gone = {"layers": {"D": {"imports": ["D"], "except": [], "why": "trusted text"}, "E": base["layers"]["E"]}}
+    merged, why = M.merge(base, gone, theirs)
+    assert why == [] and merged["layers"]["D"] == {"imports": ["Core", "D"], "except": [], "why": "trusted text; C reads Core"}, \
+        "what one side removed stays removed"
+    _, why = M.merge(base, {"layers": {"D": {**ours["layers"]["D"], "mode": "x"}}}, {"layers": {"D": {**ours["layers"]["D"], "mode": "y"}}})
+    assert why == ["layers[D].mode: added on both sides, differently"]
+
+
+def _lean(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp / n).write_text(t)
+    return M.lean(tmp / "base", tmp / "ours", tmp / "theirs")
+
+
+def test_a_lean_file_whose_sides_only_add_imports_merges_and_any_other_conflict_stays_git_s(tmp_path):
+    """#1860 against #1850 (12 Oct): each side added a module to Guarantees.lean's import list at the same place."""
+    base = "import G.Bandwidth\nimport G.Joint\n\ntheorem t : True := trivial\n"
+    ours = "import G.Memory\nimport G.Bandwidth\nimport G.Joint\n\ntheorem t : True := trivial\n"
+    theirs = "import G.Actual\nimport G.Bandwidth\nimport G.Joint\n\ntheorem t : True := by trivial\n"
+    assert _lean(tmp_path, base, ours, theirs) == (
+        "import G.Actual\nimport G.Memory\nimport G.Bandwidth\nimport G.Joint\n\ntheorem t : True := by trivial\n", 0)
+    text, left = _lean(tmp_path, base, ours.replace(":= trivial", ":= rfl"), theirs)
+    assert left == 1 and "<<<<<<< ours" in text and "import G.Actual\nimport G.Memory\n" in text
+
+
+def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installed_driver(tmp_path, monkeypatch):
+    for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
+        monkeypatch.setenv(k, v)
+    repo = tmp_path / "repo"
+    (repo / "tools" / "verity" / "lean").mkdir(parents=True)
+    for f in ("merge.py", "check.py"):
+        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+    shutil.copy(HERE.parents[3] / ".gitattributes", repo / ".gitattributes")
+    g = repo / "G.lean"
+    git(repo, "init", "-q", "-b", "main")
+    for name, first in (("main", ""), ("a", "import G.Memory\n"), ("b", "import G.Actual\n")):
+        if name != "main":
+            git(repo, "checkout", "-q", "-b", name, "main")
+        g.write_text(first + "import G.Joint\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", name)
+    git(repo, "checkout", "-q", "a")
+    plain = git(repo, "merge", "--no-edit", "b", check=False)
+    assert plain.returncode and "CONFLICT (content): Merge conflict in G.lean" in plain.stdout
+    git(repo, "merge", "--abort")
+    subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
+    git(repo, "merge", "--no-edit", "b")
+    assert g.read_text() == "import G.Actual\nimport G.Memory\nimport G.Joint\n"
