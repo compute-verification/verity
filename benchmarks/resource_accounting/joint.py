@@ -110,7 +110,7 @@ class Open:
 
 def open_window(v: audit.Verifier, n: int, prover: Prover, slot: int, tagged: int | None = None,
                 clock: Callable[[], int] = time.monotonic_ns) -> Open:
-    w = v.window(n)
+    w = v.window()
     seed = w.start()
     t0 = clock()
     p = prover.tag_pass(v.params.tag, seed, slot, tagged)
