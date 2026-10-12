@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.RegLevels.Chain
 import Proofs.Flock.C3.Compose.Honest
+import Proofs.Flock.C3.Compose.Plays
 import Proofs.Flock.VBridge.InnerAccepts
 import Proofs.Flock.Soundness.Refine.Basis
 import Proofs.Flock.Soundness.Refine.Paths
@@ -22,7 +23,7 @@ from the tape as `decodeRun` does (`HLgStages`, which the honest family has: `hL
 acceptance is the model's compiled Ligerito's run to a pending result that accepts the openings
 (`ligerito_accepts_opening`), a play on one tape in the order compiled Ligerito's shape fixes (`playsT_lig_of_tape`),
 whose openings pass the plain leaf's path checks against the proof's cap (`opensOK_of`); and a game plays on at most one
-prefix of a tape (`Read.stageOf_of_playsT`), so the stage the run decodes is that play.
+prefix of a tape (`stageOf_of_playsT`), so the stage the run decodes is that play.
 -/
 
 namespace FlockC3.RegLevels
@@ -33,47 +34,10 @@ namespace Read
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Model FlockSoundness.Refine FlockSoundness.Discharge.Exec
 open FlockSoundness.Discharge.PlaysCoin (coinArr toT_exact)
-open FlockC3.Compose (stageOf proverAt)
+open FlockC3.Compose (stageOf proverAt stageOf_of_playsT)
 
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
-
-/-- **A game plays on at most one prefix of a tape**, to one output. -/
-theorem playsT_prefix {α : Type} {g : Game α} {p : List Step} {a : α} (ha : PlaysT g p a) :
-    ∀ {p' : List Step} {a' : α} {l : List Step}, PlaysT g p' a' → p <+: l → p' <+: l → p' = p ∧ a' = a := by
-  induction ha with
-  | ret a => exact fun h _ _ => h.ret_inv
-  | send m _ ih =>
-      intro p' a' l h hp hp'
-      cases p' with
-      | nil => cases h
-      | cons s p' =>
-          obtain ⟨m', rfl, hk⟩ := h.send_inv
-          obtain ⟨t, rfl⟩ := hp
-          obtain ⟨e, hq⟩ := List.cons_prefix_cons.mp hp'
-          obtain rfl : m' = m := eq_of_heq (Sigma.mk.inj (Sum.inl.inj e)).2
-          obtain ⟨rfl, rfl⟩ := ih hk (List.prefix_append _ t) hq
-          exact ⟨rfl, rfl⟩
-  | coin x _ ih =>
-      intro p' a' l h hp hp'
-      cases p' with
-      | nil => cases h
-      | cons s p' =>
-          obtain ⟨x', rfl, hk⟩ := h.coin_inv
-          obtain ⟨t, rfl⟩ := hp
-          obtain ⟨e, hq⟩ := List.cons_prefix_cons.mp hp'
-          obtain rfl : x' = x := eq_of_heq (Sigma.mk.inj (Sum.inr.inj e)).2
-          obtain ⟨rfl, rfl⟩ := ih hk (List.prefix_append _ t) hq
-          exact ⟨rfl, rfl⟩
-
-/-- **A stage's decode is its play** on any prefix of the tape it plays on. -/
-theorem stageOf_of_playsT {α : Type} {g : Game α} {l p : List Step} {a : α} (d : α) (h : PlaysT g p a)
-    (hp : p <+: l) : stageOf g l d = (p, a) := by
-  have hex : ∃ q : List Step × α, q.1 <+: l ∧ PlaysT g q.1 q.2 := ⟨(p, a), hp, h⟩
-  unfold stageOf
-  rw [dite_eq_left hex]
-  obtain ⟨e₁, e₂⟩ := playsT_prefix h hex.choose_spec.2 hp hex.choose_spec.1
-  exact Prod.ext e₁ e₂
 
 /-- **A prover step's value is the step's**, where the step is one of `β`'s. -/
 theorem proverAt_of_eq {β : Type} {s : Option Step} {d b : β} (hs : s = some (.inl ⟨β, b⟩)) :
@@ -175,7 +139,7 @@ theorem regLevels_of_readAt {e : ExecHolo} {l : List Step} {u : C3Run e} {cap₀
     (fun ℓ _ j _ => show (os.1 2 ℓ j).1 = (openRow p sch ℓ j).1 from congrArg Prod.fst (ho ℓ j)) hwf hlig
   rw [hsch] at hpl
   have hT : PlaysT (ligAt e u) ts pend := Read.playsT_lig_of_tape hpl hk hl hr
-  rw [Read.stageOf_of_playsT PendL.reject hT hpre] at hlg hpR
+  rw [stageOf_of_playsT PendL.reject hT hpre] at hlg hpR
   dsimp only at hlg hpR
   have hos' : u.os = os := hos os (by rw [hlg]; exact hnext)
   rw [hlg, hpR, hos']
