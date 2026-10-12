@@ -17,6 +17,7 @@ registration naming R needs R's stream. The plain session (`rec-coins`' inner se
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import re
 import subprocess
@@ -282,6 +283,84 @@ def test_meta_and_the_record_go_together(tmp_path):
     assert _read(C3, inner=["--rec-inner-circuit", str(C3 / "circuit-meta.txt")]) == (
         1, None, f"FIREWALL-REFUSED: registration: META binds the circuit registration {_meta_registration()}, and the "
                  "verifier holds none (--rec-inner-registration)")
+
+
+#: R's shape as staging committed R (META's `stacked`, `rec_session.stage_stacked`): `rec_sparse.table_m` at the bucket
+#: 18,13,6,0 and the two reps' claims
+R_SHAPE = {"m": 23, "claims": 2}
+SHAPE = ("FIREWALL-REFUSED: registration: stacked/rep0 is not R's stream at the shape staging committed R at (m {m}, claims "
+         "{claims}, META's stacked): ")
+
+
+def _meta(tmp_path: Path, change) -> list[str]:
+    """The inner circuit's header with META changed by ``change`` (its `registration` left as staged), and the record."""
+    head, meta = (_fixture(C3) / "circuit-meta.txt").read_text().splitlines()
+    m = json.loads(meta[5:])
+    change(m)
+    (tmp_path / "circuit-meta.txt").write_text(f"{head}\nMETA {json.dumps(m)}\n")
+    return _inner(tmp_path / "circuit-meta.txt")
+
+
+def test_rs_shape_is_metas():
+    """META carries R's shape, and R's stream is R's at it round for round (`RecVStar.stackedRounds`, Python's
+    `rec_live.stacked_rounds`)."""
+    from verity_flock.rec_live import stacked_rounds
+
+    m = json.loads((_fixture(C3) / "circuit-meta.txt").read_text().splitlines()[1][5:])
+    assert m["stacked"] == R_SHAPE
+    rs = sorted((r for r in json.loads((C3 / "public.json").read_text())["rounds"] if r["stream"] == "stacked/rep0"),
+                key=lambda r: r["k"])
+    assert [(len(r["coins"]), [len(t) for t in r["tops"]], r["level0"], bool(r["commits"])) for r in rs] == [
+        (n, tops, level0, bool(absorbs)) for n, tops, level0, absorbs in stacked_rounds(R_SHAPE["m"])]
+
+
+@pytest.mark.parametrize("change,why", [
+    (lambda m: m.__delitem__("stacked"), "FIREWALL-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's META "
+     "names no shape of R (stacked): R's m and claims are bound nowhere"),
+    (lambda m: m.__setitem__("stacked", {"m": 22, "claims": 2}), SHAPE.format(m=22, claims=2) +
+     "round 3 is (coins 16, tops [], level0 1, commits true), not (coins 15, tops [], level0 1, commits true)"),
+    (lambda m: m.__setitem__("stacked", {"m": 24, "claims": 2}), SHAPE.format(m=24, claims=2) +
+     "round 3 is (coins 16, tops [], level0 1, commits true), not (coins 17, tops [], level0 1, commits true)"),
+    (lambda m: m.__setitem__("stacked", {"m": 23, "claims": 3}), SHAPE.format(m=23, claims=3) +
+     "R is opened at the two reps' sparse claims, not 3"),
+    (lambda m: m.__setitem__("stacked", {"m": 40, "claims": 2}), SHAPE.format(m=40, claims=2) +
+     "no fast100 schedule at m 40"),
+    (lambda m: m.__setitem__("stacked", {"m": "23", "claims": 2}), "rec inner circuit: META's stacked is not R's shape (m, claims)"),
+], ids=["none", "m22", "m24", "claims3", "m40", "not-a-shape"])
+def test_a_meta_shape_other_than_rs_stream_is_refused(tmp_path, change, why):
+    """R's m and claims are META's alone: a META naming no shape, or one other than the shape R's stream was opened at, is
+    refused."""
+    assert _read(C3, inner=_meta(tmp_path, change)) == (1, None, why)
+
+
+def _fresh(*tag) -> str:
+    return (hashlib.sha512(repr(tag).encode()).digest() * 2).hex()
+
+
+def _opened_at(m: int):
+    """stacked/rep0 rebuilt as R's stream at ``m`` (`rec_live.stacked_rounds(m)`) over the registered cap: its binding round as
+    committed (R's registered top, the first claim's ring switch), every later round's coins, tops and `c_k` fresh."""
+    from verity_flock.rec_live import stacked_rounds
+
+    def change(t: dict) -> None:
+        s = "stacked/rep0"
+        out = [_round(t, s, k=0)]
+        for k, (n, tops, level0, absorbs) in list(enumerate(stacked_rounds(m)))[1:]:
+            out.append({"stream": s, "k": k, "n": n, "coins": [_fresh(m, k, "coin", i)[:32] for i in range(n)],
+                        "tops": [[_fresh(m, k, j, i) for i in range(w)] for j, w in enumerate(tops)], "level0": level0,
+                        "commits": [_fresh(m, k, "c")] if absorbs else []})
+        t["rounds"] = [r for r in t["rounds"] if r["stream"] != s] + out
+        t["streams"][s]["rounds"] = len(out)
+    return change
+
+
+@pytest.mark.parametrize("m,round3", [(22, 15), (24, 17)])
+def test_r_opened_at_another_m_over_the_registered_cap_is_refused(tmp_path, m, round3):
+    """The fourth control: R's binding round commits the registered cap, which three m share (m 22 to 24, cap depth 7, 36
+    rounds), and R's stream is opened at another m than META's from there on. The cap check passes and the shape check
+    refuses it."""
+    assert _read(C3, _changed(tmp_path, _opened_at(m))) == (1, None, SHAPE.format(**R_SHAPE) + (
+        f"round 3 is (coins {round3}, tops [], level0 1, commits true), not (coins 16, tops [], level0 1, commits true)"))
 
 
 @pytest.mark.parametrize("args,why", [

@@ -702,6 +702,15 @@ def fixedRow (cs : InnerCommits) (value : String) (x : Nat) (sparse : Option Rec
     .ok (s!"{s}'s c_{i} ({p}, inner round {k})", c)
   | none, none, none, none => none
 
+/-- An R opening unit (`rec-opening/m<m>-c<claims>-p<j>`, `RecOpening.params`) opens R at the shape R's stream was held to
+(`InnerCommits.stacked`, META's): its unit name is the prover's, and R's `m` and claims are the inner statement's. Any other
+unit passes. -/
+def checkOpeningShape (unit : String) (cs : InnerCommits) : V Unit := do
+  let some (m, c, _) := RecOpening.params unit | return
+  if cs.stacked != some { m, claims := c } then
+    let held := (cs.stacked.map fun sh => s!"m {sh.m}, claims {sh.claims}").getD "no shape"
+    throw (refused s!"registration: {unit} opens R at (m {m}, claims {c}), not at the shape staging committed R at ({held}, META's {STACKED_SHAPE_KEY})")
+
 /-- **`pub.bin`'s rows at its reads of what the inner transcript fixes are the `b ‖ c` the verifier holds**: for each port of
 the verifier's reads file registering a value `fixedRow` names (`rec-c<i>`, and with R `rec-opening-c<i>` and
 `rec-top-stacked-L<l>`, and with a rec-sparse unit `rec-sparse-<p>`), every row of the port's table, at the registered
@@ -715,10 +724,7 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
   let some reg0 := regs[0]? | return
   let some cs := commits
     | throw s!"rec-pub: {unit}: the verifier holds no inner transcript (--rec-inner-transcript with --rec-inner-session), so no c_k to check port {reg0.name}'s rows of {reg0.value} against"
-  if let some (m, c, _) := RecOpening.params unit then
-    if cs.stacked != some { m, claims := c } then
-      let held := (cs.stacked.map fun sh => s!"m {sh.m}, claims {sh.claims}").getD "no shape"
-      throw (refused s!"registration: {unit} opens R at (m {m}, claims {c}), not at the shape staging committed R at ({held}, META's {STACKED_SHAPE_KEY})")
+  checkOpeningShape unit cs
   let some t := st.pub.tables | throw s!"rec-pub: {unit}: {reg0.name} is not a table of a shared-row file"
   for reg in regs do
     let some p := (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name)
