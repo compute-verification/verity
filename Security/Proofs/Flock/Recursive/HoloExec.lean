@@ -23,8 +23,8 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
 * `holoInnerCL`, `holoInnerAt`: `schedInner` at `Model.holoTableCL` with `capReg := x.cap`; the statement is true when
   some table `R` within the unique-decoding radius of `w` (`RegSchedule.Close`) has a satisfiable hidden statement at
   the slots' types.
-* `holoError`: the link points, the two reps with their sparse phases (`sparseError`, each coin a degree over `qF` at
-  the level-0 list bound), and R's opening at the unique-decoding radius (`regOpenError`: the two claims' ring
+* `holoError`: the link points, the two reps with their sparse phases (`sparseError`, each coin a degree over `qF`),
+  and R's opening at the unique-decoding radius (`regOpenError`: the two claims' ring
   switches, `γ` and the out-of-domain batching coin, level 0's queries at `(1 + ρ)/2 + η`, and Ligerito's levels).
 * `ClashHL`, `clashPickHL`: two runs that clash on the reps (`ClashCL`), on R's stream (`ClashCL` at R's schedule), or
   a run opening R's level 0 to a row other than `w`'s (`RegClash`); each a collision of `H` (`ClashHL.collision`).
@@ -50,7 +50,9 @@ structure HoloParams where
 abbrev HoloParams.EllOk (hp : HoloParams) (kLog : ℕ) : Prop := 6 ≤ hp.ell ∧ hp.ell ≤ kLog
 
 /-- **The holographic class of an executable class** at the sparse parameters `hp`: `c`'s fields, `ℓ` where it is in
-`[6, k_log]` (6 elsewhere, where `holoAt`'s registered schedule rejects). -/
+`[6, k_log]` (6 elsewhere, where `holoAt`'s registered schedule rejects), and each slot's unit slots below
+`2^(k_log − ℓ)`, the blocks a `2^k_log` table has: the sparse phase's `U` reads a unit's low `k_log − ℓ` bits
+(`holoPub`), so a unit past them would count a block the table does not have. -/
 def HoloClass.ofExec (c : HClass) (hp : HoloParams) : HoloClass where
   m := c.m
   kLog := c.kLog
@@ -66,7 +68,7 @@ def HoloClass.ofExec (c : HClass) (hp : HoloParams) : HoloClass where
   nu := hp.nu
   sLog := hp.sLog
   tLog := hp.tLog
-  units := hp.units
+  units := fun σ => (hp.units σ).filter fun u => u < 2 ^ (c.kLog - (if hp.EllOk c.kLog then hp.ell else 6))
   ptLocal := c.ptLocal
   mPts := c.mPts
 
@@ -142,10 +144,11 @@ noncomputable abbrev holoInnerAt (st : Flock.Stmt) (hp : HoloParams) : Inner :=
 
 /-! ### The error -/
 
-/-- **One rep's sparse phase**: H1's 6 coins and H2's 6 rounds of degree 1, H3's `ν` rounds of degree `2ℓ` and `sLog`
-of degree `2ℓ + 1`, H4's `pLog` coins and the type point's `tLog`, each over `qF`, at the level-0 list bound. -/
-noncomputable def sparseError (s : Schedule) (sh : SparseShape) : ℝ :=
-  ((s.listBound₀ * (12 + 2 * sh.ell * sh.nu + (2 * sh.ell + 1) * sh.sLog + sh.pLog + sh.tLog) : ℕ) : ℝ) / qF
+/-- **One rep's sparse phase**, each coin its degree over `qF`: H1's 6 coins, H2's 6 rounds of degree 2, H3's `ν` rounds
+of degree `2ℓ + 1` (`degRounds (2ℓ)`) and `sLog` of degree `2ℓ + 2`, H4's `pLog` coins and the type point's `tLog`. No
+list: the phase's claim is on R's table, which R's opening decodes uniquely (`regOpenError`). -/
+noncomputable def sparseError (sh : SparseShape) : ℝ :=
+  ((18 + (2 * sh.ell + 1) * sh.nu + (2 * sh.ell + 2) * sh.sLog + sh.pLog + sh.tLog : ℕ) : ℝ) / qF
 
 /-- Level `l`'s queries at the unique-decoding radius `(1 − ρ)/2 − η`. -/
 noncomputable def udQueryError (l : Level) : ℝ := ((1 + l.rate) / 2 + eta) ^ l.queries
@@ -159,7 +162,7 @@ noncomputable def regOpenError (s : Schedule) : ℝ :=
 squared), and R's opening. -/
 noncomputable def holoError (e : ExecHolo) : ℝ :=
   linkError e.sch ⟨e.cls.kLog, e.regs.length, e.cls.mPts⟩ +
-    (repError e.sch ⟨e.cls.kLog, e.regs.length, e.cls.mPts⟩ + sparseError e.sch e.cls.shape) ^ 2 +
+    (repError e.sch ⟨e.cls.kLog, e.regs.length, e.cls.mPts⟩ + sparseError e.cls.shape) ^ 2 +
     regOpenError e.rsch.sch
 
 /-! ### Clashes -/

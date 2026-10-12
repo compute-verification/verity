@@ -14,17 +14,19 @@ Sizes are estimates of the proof, in lines. Owners: **W** a parallel worker, **C
 
 | # | lemma (stub) | file | size | depends on | owner |
 |---|---|---|---|---|---|
-| a1 | `holoTableCL`'s model soundness (`holo_runs_sound`, `compiled_runs_sound`'s analogue; not yet stubbed: it is the body of a3) | new `C3/Fork/Runs.lean` | 1,000–1,500 | the sparse phase's Schwartz–Zippel count (`sparseError`), R's opening at unique decoding (`regOpenError`), the reps as `table_sound_compiledL` | W (sparse, R) + L (assembly) |
-| a3 | `FlockC3.Fork.holo_inner_sound_compiled` | `C3/Fork/Sound.lean` | 50 | a1, as `flock_inner_sound_compiled` from `compiled_runs_sound` | L |
-| a4 | `holoAt_fast100`, `holoAt_linkLayout`, `holoAt_rsch` | `C3/Fork/Sound.lean` | 30, 40, 30 | `compiledForkSound_execClassAt`'s lemmas; `schedAt`'s `UniqueDecoding` | W |
+| a1 | `FlockC3.Fork.holo_runs_sound`: `holoTableCL` on one prover's runs, `compiled_runs_sound`'s analogue | `C3/Fork/Runs.lean` | 500–800 | a1s, a1r; the reps as `compiled_runs_sound`; `sparseFold` at `R.bits` the lincheck fold's hidden part (`hunits`); every message's witness some `R.bits` | L |
+| a1s | `FlockC3.Fork.sparse_sound`: the sparse phase's Schwartz–Zippel count against `sparseError` | `C3/Fork/Sparse.lean` | 300–500 | `degRounds`' round step (the sum rule in characteristic 2), Schwartz–Zippel per `drawFin` coin; nothing in `Runs.lean` | W |
+| a1r | `FlockC3.Fork.regOpen_sound`: R's opening at unique decoding against `regOpenError` | `C3/Fork/RegOpen.lean` | 250–400 | `fast100_uniqueDecoding` (proved, beside it); `ligerito_sound`'s argument at the unique-decoding radius, one message and no list; `opening`'s ring-switch and `γ` count; nothing in `Runs.lean` | W |
+| a3 | `FlockC3.Fork.holo_inner_sound_compiled` | `C3/Fork/Sound.lean` | proved (round 2), from a1 | | |
+| a4 | `holoAt_fast100`, `holoAt_linkLayout`, `holoAt_rsch`, `holoAt_units` | `C3/Fork/Sound.lean` | proved (round 2) | | |
 | b1 | `FlockC3.Compose.holoTableCL_plays` | `C3/Compose/Tape.lean` | 100 | `playsT_interleave_first`, `PlaysT` bind lemmas, `regPhase` at two claims | W |
 | b2 | `FlockC3.Compose.vbridge_c3` | `C3/Compose/Bridge.lean` | 120 | b1, `HTape`; `vbridge_of_family`'s VCommits/VDecodes/VFull parts | W (after b1) |
 | h1 | `FlockC3.VStarList.stacked_of_openingShape`, `claims_of_stackedShape` | `C3/VStarList/Statements.lean` | 25, 25 | `Except` unfolding of `checkOpeningShape`, `checkStackedShape` | W |
 | h2 | `FlockC3.VStarList.vstarParses_of_list` (gap 4(c)); with gap 2, `mReg_of_list` (to state: the list's `rec-opening` units are at `m = (holoAt st hp).cls.shape.mReg`, `claims = STACKED_CLAIMS`) | `C3/VStarList/Statements.lean` | 400 | `HmRow.parse` of `circuitFile`'s output (a write-then-parse fact), gap 2 for the holo statements | C (gap 2) + W |
 | c1 | (c)'s `hpl` generalization: drop `sh.holo = false` / `holoOf c = .ok false` from `lincheck_of_residuals_holo` (`Algebra/Holo.lean`), `zclc_of_residuals`, `prog_of_zclc` (`Runs/ZcLc.lean`), `run_of_algebra`, `run_of_frames` (`Runs/Rep.lean`), `prog_of_algebra` (`Runs/Prog.lean`), `rs_of_residuals` (`Runs/Rs.lean`), `ligerito_of_residuals_at`, `hlg_of_residuals`, `hlg_of_frames` (`Runs/Lg.lean`), `ligerito_of_residuals`, `ringSwitch_of_residuals`, `zerocheck_of_residuals`, `lincheck_of_residuals`, `build_eval`, `residuals_eq_run`, `buildRes_spec`, `buildAll_spec`, `coefOps_spec`, `prodOps_spec` (`Algebra/`), `decode_part`, `ResZeroAt` (`AlgHolds.lean`), `decode_checkR`, `decode_partR`, `ResZeroAtL` (`ResLayer.lean`), `decode_check` (`ResUnit.lean`), with `check_part_holo` beside `check_part` for the hidden units' net | `VBridge/` (in place, under VBridge G's names) | 600 | none; `check_refuses_plain_on_holo`, `shape?_holo` and `atomOp_plain` stay (plain facts) | W |
 
-So four start at once: a1/a3 (L with a W on the sparse and R counts), a4 + h1 (W), b1 → b2 (W), c1 (W); h2
-builds on #1847's list.
+So these start at once: a1s and a1r (a W each, against their stubs alone), a1's assembly (L), h1 (W), b1 → b2 (W),
+c1 (W); h2 builds on #1847's list.
 
 ## Next: the honest decoder and the stage discharges
 
@@ -73,6 +75,15 @@ accepted layers is the next layer, stubbed when (b)'s family is fixed:
   is unchanged. `sparsePhase` computes the claim (`sparseVerdict`'s `batch`, `Σ_p eq(ζ_p, p)·u_p`), and RecSparse's
   `claim` port, which reads `rec-claim`'s row, checks the sent `c_k` against `u` and `ζ_p`. So n3 takes the round's
   value as RecSparse's `claim` check gives it, and n1's decoder folds the coinless round into the sparse steps.
+* Unit slots in range (round 2): `HoloClass.ofExec` keeps slot `σ`'s units below `2^(k_log − ℓ)`. The sparse phase's
+  `U_σ` reads a unit's low `k_log − ℓ` bits (`holoPub`'s `eqAt`), while `RegTable.side` places a template only at blocks
+  the table has, so a unit past them made the two disagree and a3 false. a3 and `holo_runs_sound` take `hunits`, which
+  `holoAt_units` gives. Open: the model's `U` is then over the filtered units, so the bridge (b2, with h2's `hp` the
+  verifier's own) needs the verifier's units in range, or a refusal of those past it; not yet checked against RecSparse.
+* `sparseError`, recounted (round 2): `18 + (2ℓ+1)ν + (2ℓ+2)·sLog + pLog + tLog` over `qF` (H2's six rounds are of
+  degree 2, H3's of `2ℓ + 1` and `2ℓ + 2`), where round 1 had `12 + 2ℓν + (2ℓ+1)·sLog + …` times the level-0 list
+  bound. No list factor: the phase's claims are on `R.bits`, which R's opening decodes uniquely. Only
+  `RecursiveAuditC3`'s record moves.
 
 ## Weakness
 
