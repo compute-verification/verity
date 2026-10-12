@@ -49,12 +49,14 @@ def phases(steps: list[dict]) -> list[dict]:
 
 
 def shortfall(steps: list[dict], seconds: float, weight_bytes: int, filler_bytes: int, R: float,
-              token_bytes: int = lag.KV_TOKEN_BYTES) -> dict:
+              token_bytes: int = lag.KV_TOKEN_BYTES, gpu_steps: list | None = None) -> dict:
     """η, the share of R·T over [0, seconds) that no registered read covers, by where it falls: each phase's seconds,
     its steps' own fraction of R (the weights and each scheduled request's context, as `serve.py` counts a window),
     and its share of η before filler (decode, prefill, empty steps that schedule nothing; gaps, the engine's host time
     between two steps that both schedule requests; idle, the rest of the time between steps). The filler the run's
-    top-up read comes off the total, wherever it fell."""
+    top-up read comes off the total, wherever it fell. With `gpu_steps` (each model step's [start, end] on the GPU),
+    `gpu` is the same split by the GPU's clock: its busy seconds, the steps' fraction of R over them, and its idle
+    time's share of η."""
     cap = R * 1e9 * seconds
     out, busy = {}, 0.0
     for name, keep in (("decode", lambda s: s["tokens"] > 0 and s["prefill_tokens"] == 0),
@@ -71,6 +73,15 @@ def shortfall(steps: list[dict], seconds: float, weight_bytes: int, filler_bytes
     out["eta_before_filler"] = sum(v["eta"] for v in out.values())
     out["filler"] = filler_bytes / cap
     out["eta"] = out["eta_before_filler"] - out["filler"]
+    if gpu_steps:
+        gbusy, edge = 0.0, float("-inf")
+        for g0, g1 in sorted(gpu_steps):
+            gbusy += max(0.0, g1 - max(g0, edge))
+            edge = max(edge, g1)
+        reads = sum(weight_bytes + s["kv_tokens"] * token_bytes for s in steps if s["tokens"] > 0)
+        gidle = max(0.0, seconds - gbusy)
+        out["gpu"] = {"busy_s": gbusy, "of_R": reads / (R * 1e9 * gbusy) if gbusy else 0.0, "idle_s": gidle,
+                      "eta_idle": gidle / seconds}
     return out
 
 
@@ -115,11 +126,14 @@ def main() -> int:
         pool = s["args"]["pool"]
         for run in s["runs"]:
             eta = shortfall(phases(run["step_records"]), run["seconds"], s["weight_bytes_per_step"],
-                            run["filler_bytes"], R)
+                            run["filler_bytes"], R, gpu_steps=run.get("gpu_steps"))
+            g = eta.get("gpu")
             print(f"{pool:5s} {run['policy']:8s} {run['mode']:5s} η {eta['eta']:.3f} (before filler "
                   f"{eta['eta_before_filler']:.3f}: " + ", ".join(
                       f"{n} {eta[n]['s']:.1f} s at {eta[n]['of_R']:.3f} R, {eta[n]['eta']:.3f}"
-                      for n in ("decode", "prefill", "empty", "gaps", "idle")) + f"; filler {eta['filler']:.3f})")
+                      for n in ("decode", "prefill", "empty", "gaps", "idle")) + f"; filler {eta['filler']:.3f})"
+                  + (f"; GPU busy {g['busy_s']:.1f} s at {g['of_R']:.3f} R, idle {g['idle_s']:.1f} s, "
+                     f"{g['eta_idle']:.3f}" if g else ""))
             for k, ar in by_k.items():
                 row = {"pool": pool, "policy": run["policy"], "mode": run["mode"], "k": k, "shortfall": eta,
                        "arms": price(run, ar, R)}

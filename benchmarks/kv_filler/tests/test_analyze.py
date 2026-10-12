@@ -32,6 +32,15 @@ def test_shortfall_splits_eta_by_phase_and_takes_filler_off_the_total():
     assert e["eta"] == pytest.approx(e["eta_before_filler"] - 0.2)
 
 
+def test_shortfall_on_the_gpus_clock_takes_the_union_of_its_model_steps():
+    # the host saw a gap between two steps, but the GPU ran the second during it: overlapping and abutting intervals
+    w = 10**8
+    steps = [step(0, 1, 1, 1, 0, 0), step(1.5, 2, 1, 1, 0, 0)]
+    e = analyze.shortfall(steps, 4.0, w, 0, 1.0, token_bytes=TB, gpu_steps=[[0, 1.2], [1.0, 2.0], [2.0, 2.5]])
+    assert e["gaps"]["s"] == 0.5
+    assert e["gpu"] == {"busy_s": 2.5, "of_R": pytest.approx(2 * w / 2.5e9), "idle_s": 1.5, "eta_idle": 0.375}
+
+
 def test_phases_counts_a_requests_tokens_past_its_first_as_prefill():
     # vLLM's batch queue puts num_computed_tokens a step ahead: a record may say 0 prefill tokens for a chunk
     s = analyze.phases([step(0, 1, 8192, 8, 0, 0), step(1, 2, 9, 9, 0, 0)])

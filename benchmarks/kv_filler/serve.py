@@ -21,7 +21,10 @@ the steps' reads of registered data inside it (the weights' bytes a step, every 
 scheduled request's context of KV, 128 KiB a token: its pages, a lower bound on attention's reads) plus the filler
 bytes the top-up read inside it, its chunks on the GPU's clock placed on the host's by one sync; R comes from
 `bench.py`'s read (`--R`). The trace is generated from `--seed` (bursts of requests at exponential gaps, each burst's
-requests at once), the same for every policy; a step's time is the host's between consecutive scheduler updates.
+requests at once), the same for every policy; a step's time is the host's between consecutive scheduler updates, and
+each model step's interval on the GPU is recorded beside it (`gpu_steps`: events before its forward and after its
+sampling). `--shared-prefix` puts one seeded prefix before every prompt, with prefix caching on; `--async-scheduling`
+sets vLLM's, which the record states either way.
 """
 from __future__ import annotations
 
@@ -136,6 +139,9 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--chunk-mib", type=int, default=256)
     ap.add_argument("--max-batched-tokens", type=int, default=8192)
+    ap.add_argument("--async-scheduling", choices=("default", "on", "off"), default="default")
+    ap.add_argument("--shared-prefix", type=int, default=0,
+                    help="tokens of one seeded prefix before every prompt, with prefix caching on (0: none, caching off)")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     LOGF = (a.out / "serve.log").open("a")
@@ -146,10 +152,13 @@ def main() -> int:
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
-    kw = {"model": a.model, "quantization": "fp8", "max_num_seqs": max(CAPTURE), "enable_prefix_caching": False,
-          "seed": 0, "max_model_len": max(a.prompts) + max(a.outputs) + 64, "max_num_batched_tokens": a.max_batched_tokens,
-          "enforce_eager": False,
+    kw = {"model": a.model, "quantization": "fp8", "max_num_seqs": max(CAPTURE),
+          "enable_prefix_caching": a.shared_prefix > 0, "seed": 0,
+          "max_model_len": a.shared_prefix + max(a.prompts) + max(a.outputs) + 64,
+          "max_num_batched_tokens": a.max_batched_tokens, "enforce_eager": False,
           "compilation_config": {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": CAPTURE}}
+    if a.async_scheduling != "default":
+        kw["async_scheduling"] = a.async_scheduling == "on"
     if a.pool == "large":
         kw["gpu_memory_utilization"] = a.mem
     else:
@@ -185,11 +194,15 @@ def main() -> int:
            "weight_bytes_resident": sum(p.numel() * p.element_size() for p in runner.model.parameters()),
            "kv_pool_bytes": pool_bytes, "static_filler_bytes": static if filler is not None else 0,
            "kv_blocks": int(cache.num_gpu_blocks), "block_size": int(cache.block_size),
-           "filler_bytes": sum(n for _, n in regions), "topup_regions": len(regions), "runs": []}
+           "filler_bytes": sum(n for _, n in regions), "topup_regions": len(regions), "runs": [],
+           "async_scheduling": getattr(eng.vllm_config.scheduler_config, "async_scheduling", None),
+           "batch_queue_size": getattr(getattr(getattr(eng, "engine_core", None), "engine_core", None),
+                                       "batch_queue_size", None)}
     res["unregistered_bytes"] = card - res["weight_bytes_resident"] - pool_bytes - res["static_filler_bytes"]
     log(f"weights read a step {weight_bytes / 1e9:.2f} GB; pool {pool_bytes / 1e9:.1f} GB in {len(kv_tensors)} tensors;"
         f" static filler {res['static_filler_bytes'] / 1e9:.1f} GB; top-up over {res['filler_bytes'] / 1e9:.1f} GB;"
-        f" card {card / 1e9:.1f} GB, {res['unregistered_bytes'] / 1e9:.1f} GB unregistered")
+        f" card {card / 1e9:.1f} GB, {res['unregistered_bytes'] / 1e9:.1f} GB unregistered; async scheduling "
+        f"{res['async_scheduling']}, batch queue {res['batch_queue_size']}")
 
     out_path = a.out / f"serve-{a.pool}.json"
 
@@ -256,19 +269,49 @@ def main() -> int:
 
     sched.update_from_output = update_from_output
 
+    # each model step's interval on the GPU: an event before its forward and one after its sampling, on the runner's
+    # stream (execute_model returns None when sample_tokens finishes the step)
+    ex_orig, st_orig = runner.execute_model, getattr(runner, "sample_tokens", None)
+
+    def mark() -> "torch.cuda.Event":
+        e = torch.cuda.Event(enable_timing=True)
+        e.record()
+        return e
+
+    def execute_model(*args, **kwargs):
+        e0 = mark()
+        out = ex_orig(*args, **kwargs)
+        if out is None and st_orig is not None:
+            cur["gpu_open"] = e0
+        elif "gpu" in cur:
+            cur["gpu"].append((e0, mark()))
+        return out
+
+    def sample_tokens(*args, **kwargs):
+        out = st_orig(*args, **kwargs)
+        e0 = cur.pop("gpu_open", None)
+        if e0 is not None and "gpu" in cur:
+            cur["gpu"].append((e0, mark()))
+        return out
+
+    runner.execute_model = execute_model
+    if st_orig is not None:
+        runner.sample_tokens = sample_tokens
+
     warm = SamplingParams(max_tokens=8, ignore_eos=True)
     llm.generate([TokensPrompt(prompt_token_ids=[1000 + i for i in range(64)])], warm, use_tqdm=False)
+    prefix = [random.Random(a.seed + 7).randrange(1000, vocab - 1000) for _ in range(a.shared_prefix)]
 
     reqs = trace(a.seed, a.seconds, a.burst_gap_s, a.burst_mean, a.prompts, a.outputs)
-    res["trace"] = {"requests": len(reqs), "prompt_tokens": sum(r["prompt"] for r in reqs),
-                    "output_tokens": sum(r["output"] for r in reqs)}
+    res["trace"] = {"requests": len(reqs), "prompt_tokens": sum(a.shared_prefix + r["prompt"] for r in reqs),
+                    "output_tokens": sum(r["output"] for r in reqs), "shared_prefix": a.shared_prefix}
     log(f"trace: {res['trace']}")
     for mode in a.modes:
         for policy in a.policies:
             if policy in ("none", "gemm") and mode != a.modes[0]:
                 continue
             cur.clear()
-            cur["steps"] = []
+            cur["steps"], cur["gpu"] = [], []
             # a step's interval runs from its engine.step call, or the previous step's update if later, to its update
             torch.cuda.synchronize()
             offset_ms = 0.0
@@ -281,6 +324,9 @@ def main() -> int:
                 offset_ms = g - time.perf_counter() * 1e3
             pending = sorted(reqs, key=lambda r: r["t"])
             k = 0
+            torch.cuda.synchronize()
+            base = mark()
+            base.synchronize()
             t_start = time.perf_counter()
             first: dict[str, float] = {}
             done: dict[str, float] = {}
@@ -290,7 +336,7 @@ def main() -> int:
                 while k < len(pending) and pending[k]["t"] <= now:
                     r = pending[k]
                     rr = random.Random(r["tokens_seed"])
-                    ids = [rr.randrange(1000, vocab - 1000) for _ in range(r["prompt"])]
+                    ids = prefix + [rr.randrange(1000, vocab - 1000) for _ in range(r["prompt"])]
                     eng.add_request(f"{policy}-{mode}-{r['id']}", TokensPrompt(prompt_token_ids=ids),
                                     SamplingParams(max_tokens=r["output"], ignore_eos=True, temperature=0.0))
                     k += 1
@@ -320,6 +366,13 @@ def main() -> int:
                         time.sleep(max(0.0, min(0.05, nxt - i0)))
                     idle.append((i0, time.perf_counter()))
             t_end = time.perf_counter()
+            torch.cuda.synchronize()
+            gpu_steps = [[round(base.elapsed_time(e0) / 1e3, 6), round(base.elapsed_time(e1) / 1e3, 6)]
+                         for e0, e1 in cur["gpu"]]
+            gpu_busy, edge = 0.0, 0.0
+            for g0, g1 in gpu_steps:
+                gpu_busy += max(0.0, g1 - max(g0, edge))
+                edge = max(edge, g1)
             recs = grecs
             if policy not in ("none", "gemm"):
                 tu.stop()
@@ -340,13 +393,15 @@ def main() -> int:
                    "windows": [windows(steps, idle, recs, offset_ms, t_start, t_end, w, a.R, weight_bytes)
                                for w in (0.25, 1.0, 5.0)],
                    "step_records": [{k2: (round(v - t_start, 5) if k2 in ("t0", "t1") else v) for k2, v in s.items()}
-                                    for s in steps]}
+                                    for s in steps],
+                   "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps}
             res["runs"].append(run)
             w1 = run["windows"][1]
             log(f"{policy}/{mode}: {run['seconds']:.1f} s, {len(steps)} steps, TTFT {run['ttft_s_median']:.3f} s, TPOT "
                 f"{run['tpot_ms_median']:.2f} ms, decode step {run['decode_step_ms_median']:.2f} ms, idle "
                 f"{run['idle_s']:.1f} s, filler {run['filler_bytes'] / 1e9:.0f} GB; 1 s windows mean "
-                f"{w1.get('mean', 0):.3f} p10 {w1.get('p10', 0):.3f} min {w1.get('min', 0):.3f} of R")
+                f"{w1.get('mean', 0):.3f} p10 {w1.get('p10', 0):.3f} min {w1.get('min', 0):.3f} of R; GPU busy "
+                f"{gpu_busy:.1f} s in {len(gpu_steps)} model steps")
             save()
     log("done")
     return 0
