@@ -814,6 +814,40 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
   }
 }
 
+// The audit's own pass over the store, no decode and no product: each thread tags lane blocks (32 q + l's words are
+// q TASK_WORDS + 32 w + l, a warp's loads coalesced), its words loaded a compression at a time. Its tags are
+// gemm_ws_kernel's.
+__global__ void __launch_bounds__(256) audit_tag_kernel(const uint64_t* __restrict__ store, uint64_t blocks,
+                                                        bw::Key3 key, uint64_t jbase, uint32_t* __restrict__ tags) {
+  constexpr int MSG = 2 + 2 * LANE_WORDS, BLOCKS = (MSG + 15) / 16;
+  for (uint64_t j = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x; j < blocks; j += (uint64_t)gridDim.x * blockDim.x) {
+    const unsigned long long* src =
+        reinterpret_cast<const unsigned long long*>(store) + (j / LANES) * TASK_WORDS + j % LANES;
+    const uint64_t jj = jbase + j;
+    uint32_t cv[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+#pragma unroll
+    for (int b = 0; b < BLOCKS; ++b) {
+      uint32_t m[16];
+#pragma unroll
+      for (int i = 0; i < 16; i += 2) {
+        const int u = 16 * b + i, w = (u - 2) / 2;
+        const uint64_t v = u == 0 ? 0 : u < MSG ? __ldcs(src + (size_t)w * LANES) : 0;
+        m[i] = u == 0 ? bw::bswap32((uint32_t)(jj >> 32)) : (uint32_t)v;
+        m[i + 1] = u == 0 ? bw::bswap32((uint32_t)jj) : (uint32_t)(v >> 32);
+      }
+      const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
+      const uint32_t flags =
+          bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
+      bw::b3_compress(cv, m, 0, len, flags, cv);
+    }
+    uint4* o = reinterpret_cast<uint4*>(tags + 8 * j);
+    o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
+    o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+  }
+}
+
 // A host launch through ctypes costs more than a small GEMM: a timed arm is queued behind `spin` so the device runs it
 // back to back, and `empty` (the GEMM's grid, no work) prices what back to back still costs a launch.
 __global__ void spin_kernel(long long cycles) {
@@ -1075,6 +1109,14 @@ int wc_gemm_ws(int k, const void* w, const uint8_t* x, float* y, int M, int N, i
                int consumers, int per_consumer, int groups, int* launched, cudaStream_t s) {
   return wc_gemm_ws_tag(k, w, x, y, M, N, Kd, base, partials, consumers, per_consumer, groups, launched, 1, nullptr, 0,
                         nullptr, 0, nullptr, 0, nullptr, s);
+}
+
+// The audit's own tag pass: `blocks` lane blocks of the encoded store, their tags into `tags` as gemm_ws_tag writes them.
+int wc_audit_tag(const void* store, uint64_t blocks, const uint8_t* seed, uint64_t jbase, uint32_t* tags, int grid,
+                 cudaStream_t s) {
+  if (!store || !seed || !tags || !blocks || grid < 1 || blocks % LANES) return 1;
+  audit_tag_kernel<<<grid, 256, 0, s>>>(static_cast<const uint64_t*>(store), blocks, ws_tag_keys(seed).key, jbase, tags);
+  return cudaGetLastError() ? 4 : 0;
 }
 
 // The commit's workspace for `blocks` tags (tagger.cu's layout: the tags, then every tree level, the leaves first).
