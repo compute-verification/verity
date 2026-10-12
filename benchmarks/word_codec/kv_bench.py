@@ -56,6 +56,7 @@ ATTN_CTAS_PER_SM = (1, 2, 4, 8)  # a cell's split counts: batch × splits about 
 ATTN_SPLIT_TILES = (1, 8)        # each split at least this many tiles (a split's partials are 33 KB; fewer tiles a
                                  # split hide more of a tile's decode latency at small batch)
 ATTN_RTOL = 1e-3
+ATTN_FORMS = {1: "phased", 2: "ws"}  # kv_attn's encoded forms: decode and attention in turn, or in their own warps
 
 
 class Lib:
@@ -321,11 +322,12 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
     """`kv_attn` at Llama-3.1-70B's attention, one layer of batch × context, over the plain cache and over its words at
     k rounds. Each cell's cache holds L layers, as many as cover ATTN_CYCLE_BYTES of plain KV (at most ATTN_MAX_LAYERS),
     and a timed pass runs every layer once, queued behind a spin, so a layer's time is the pass's over L with the L2
-    cold as in a decode step. Nothing is timed before the gate: at layers 0 and L - 1 the encoded form's output equals
-    the plain form's bit for bit, and the plain form's is within ATTN_RTOL of float64 attention over the same bf16
-    values, at every split count the cell tries (batch × splits about each of ATTN_CTAS_PER_SM CTAs an SM, at least
-    each of ATTN_SPLIT_TILES tiles a split); each form's time is its best split count's. torch's SDPA (GQA, bf16) over the
-    same K and V, laid out as it takes them, is timed beside it the same way."""
+    cold as in a decode step. Nothing is timed before the gate: at layers 0 and L - 1 each encoded form's output
+    (ATTN_FORMS) equals the plain form's bit for bit, and the plain form's is within ATTN_RTOL of float64 attention
+    over the same bf16 values, at every split count the cell tries (batch × splits about each of ATTN_CTAS_PER_SM CTAs
+    an SM, at least each of ATTN_SPLIT_TILES tiles a split); each form's time is its best split count's, and the
+    encoded time the best form's. torch's SDPA (GQA, bf16) over the same K and V, laid out as it takes them, is timed
+    beside it the same way."""
     import torch.nn.functional as F
 
     sh = attn_shape(lib)
@@ -370,11 +372,14 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
                 del kk, vv, s, p
                 for sp in cands:
                     run(plain, 0, o_p, layer, sp)
-                    run(enc, 1, o_e, layer, sp)
                     torch.cuda.synchronize()
-                    gate["equal"] &= bool(torch.equal(o_p, o_e))
                     err = float((o_p.double() - ref).abs().max() / ref.abs().max())
                     gate["rel_err"] = max(gate["rel_err"], err)
+                    for form in ATTN_FORMS:
+                        o_e.zero_()
+                        run(enc, form, o_e, layer, sp)
+                        torch.cuda.synchronize()
+                        gate["equal"] &= bool(torch.equal(o_p, o_e))
                 del ref
             gate["ok"] = gate["equal"] and gate["rel_err"] <= ATTN_RTOL
             cell = {"batch": b, "context": ctx, "layers": layers, "plain_bytes": per_layer,
@@ -385,10 +390,11 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
                 for sp in cands:
                     tp = [queued(lib, torch, lambda: [run(plain, 0, o_p, l, sp) for l in range(layers)], spin) / layers
                           for _ in range(reps)]
-                    te = [queued(lib, torch, lambda: [run(enc, 1, o_e, l, sp) for l in range(layers)], spin) / layers
-                          for _ in range(reps)]
-                    per[sp] = {"plain_s": statistics.median(tp), "plain_times_s": tp,
-                               "encoded_s": statistics.median(te), "encoded_times_s": te}
+                    per[sp] = {"plain_s": statistics.median(tp), "plain_times_s": tp}
+                    for form, fname in ATTN_FORMS.items():
+                        te = [queued(lib, torch, lambda: [run(enc, form, o_e, l, sp) for l in range(layers)], spin)
+                              / layers for _ in range(reps)]
+                        per[sp].update({f"{fname}_s": statistics.median(te), f"{fname}_times_s": te})
                 kt = kvl.permute(2, 3, 0, 4, 1, 5).contiguous()  # layer, K/V, b, kv head, token, dim
                 qt = (q.float() / scale).to(torch.bfloat16).view(b, 64, 1, K.HEAD_DIM)
                 F.scaled_dot_product_attention(qt, kt[0, 0], kt[0, 1], enable_gqa=True)
@@ -396,17 +402,22 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
                                                   for l in range(layers)], spin) / layers for _ in range(reps)]
                 del kt
                 sp_p = min(per, key=lambda sp: per[sp]["plain_s"])
-                sp_e = min(per, key=lambda sp: per[sp]["encoded_s"])
-                p_s, e_s, t_s = per[sp_p]["plain_s"], per[sp_e]["encoded_s"], statistics.median(tt)
-                cell.update({"by_splits": per, "plain_splits": sp_p, "encoded_splits": sp_e, "plain_s": p_s,
-                             "encoded_s": e_s, "torch_sdpa_s": t_s, "torch_sdpa_times_s": tt,
+                best = {f: min(per, key=lambda sp: per[sp][f"{f}_s"]) for f in ATTN_FORMS.values()}
+                form = min(best, key=lambda f: per[best[f]][f"{f}_s"])
+                p_s, e_s, t_s = per[sp_p]["plain_s"], per[best[form]][f"{form}_s"], statistics.median(tt)
+                cell.update({"by_splits": per, "plain_splits": sp_p, "encoded_form": form,
+                             "encoded_splits": best[form], "plain_s": p_s, "encoded_s": e_s,
+                             **{f"{f}_s": per[sp][f"{f}_s"] for f, sp in best.items()},
+                             **{f"{f}_splits": sp for f, sp in best.items()},
+                             "torch_sdpa_s": t_s, "torch_sdpa_times_s": tt,
                              "plain_gbps": per_layer / p_s / 1e9, "encoded_gbps": b * ctx * tle / e_s / 1e9,
                              "encoded_over_plain": e_s / p_s, "plain_over_torch": p_s / t_s})
                 log(f"attention {lib.name} k={k} B={b} ctx={ctx}: gate ok (equal, rel err {gate['rel_err']:.1e}, "
                     f"{layers} layers, splits {cands}); a layer plain {p_s * 1e6:.1f} us at {sp_p} splits "
-                    f"({cell['plain_gbps']:.0f} GB/s), encoded {e_s * 1e6:.1f} us at {sp_e} "
-                    f"({cell['encoded_gbps']:.0f} GB/s stored), {e_s / p_s:.3f}x; torch SDPA {t_s * 1e6:.1f} us "
-                    f"(plain {p_s / t_s:.2f}x torch)")
+                    f"({cell['plain_gbps']:.0f} GB/s), encoded " + ", ".join(
+                        f"{f} {per[sp][f'{f}_s'] * 1e6:.1f} us at {sp}" for f, sp in best.items())
+                    + f" ({cell['encoded_gbps']:.0f} GB/s stored at the best), {e_s / p_s:.3f}x; torch SDPA "
+                    f"{t_s * 1e6:.1f} us (plain {p_s / t_s:.2f}x torch)")
             else:
                 log(f"attention {lib.name} k={k} B={b} ctx={ctx}: gate FAIL {gate}")
             out[f"b{b}_ctx{ctx}"] = cell
