@@ -260,7 +260,7 @@ struct Seq {
 struct Ring {
   uint32_t* xr;
   uint32_t* cnt;
-  unsigned long long* t;
+  unsigned long long *t0, *t1;  // the globaltimer at the epoch's first and last unit done (min and max)
   uint32_t shift, mask;  // epoch = s >> shift, slot = epoch & mask
 };
 
@@ -303,9 +303,12 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, const
     const uint32_t w = unit(p, U * UNIT_BLOCKS, signs, Kp, pol, nullptr);
     if (lane == 0) {
       const uint32_t e = (uint32_t)(s >> ring.shift) & ring.mask;
+      const unsigned long long now = globaltimer();
+      atomicMin(ring.t0 + e, now);
+      atomicMax(ring.t1 + e, now);
       atomicXor(ring.xr + e, w);
       __threadfence();
-      if (atomicAdd(ring.cnt + e, 1u) == (1u << ring.shift) - 1u) ring.t[e] = globaltimer();
+      atomicAdd(ring.cnt + e, 1u);
     }
   }
 }

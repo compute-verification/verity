@@ -16,6 +16,10 @@ Top-up policies, each over the same trace in the same engine (`--policies`):
             `throttle@N` and `step@N` take N CTAs instead
   step      fill modes: every SM's CTA resident, `--throttle-ctas` of them let through the gate while a model step is on
             the GPU and all of them otherwise, the gate moved on the runner's stream at each step's start and end
+  seq       fill modes, fill-sk16/v1: a STEP kernel of `--throttle-ctas` CTAs beside each model step (launched on the
+            filler's step stream after the step's start on the runner's, and returning at its end), and IDLE kernels
+            of every SM's CTA, launched by the filler's thread, that read while no model step is on the GPU and return
+            once one is; `seq@0` is IDLE alone
   gemm      no top-up thread: while the engine has no work, FP8 GEMMs at M = 16 over the pool and the buffer in 64 MiB
             slices, 4 a sync, until the next arrival (the reader a receipt bound to a PoUW tile needs, without its
             sketch; once a run, like none)
@@ -58,7 +62,7 @@ os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from bench import FILL_WARPS, RUN_SEED, Codec, K, Topup, codec_gate, mode_of  # noqa: E402
+from bench import FILL_WARPS, RUN_SEED, Codec, K, Seq, Topup, codec_gate, mode_of  # noqa: E402
 
 KV_TOKEN_BYTES = 32 * 2 * 8 * 128 * 2  # Llama-3.1-8B, bf16 KV
 TOKEN_WORDS = KV_TOKEN_BYTES // 64
@@ -157,6 +161,7 @@ def main() -> int:
     ap.add_argument("--chunk-mib", type=int, default=256)
     ap.add_argument("--fill-chunk-mib", type=int, default=512)
     ap.add_argument("--token-gate", type=int, default=0)
+    ap.add_argument("--seq-shift", type=int, default=8, help="seq: epochs of 2^shift units of 128 KiB")
     ap.add_argument("--max-batched-tokens", type=int, default=8192)
     ap.add_argument("--async-scheduling", choices=("default", "on", "off"), default="default")
     ap.add_argument("--shared-prefix", type=int, default=0,
@@ -168,7 +173,7 @@ def main() -> int:
     for p in a.policies:
         top, _, enc = p.partition("+")
         top, _, at = top.partition("@")
-        if ((at and not at.isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always", "step")
+        if ((at and not at.isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always", "step", "seq")
                 or (enc and not enc.removeprefix("fused").isdigit())):
             ap.error(f"unknown policy {p}")
         if enc:
@@ -253,6 +258,7 @@ def main() -> int:
         out_path.write_text(json.dumps(res, indent=1) + "\n")
 
     tu = Topup(a.topup_lib)
+    sq = Seq(tu)
     tu.so.tu_pause.argtypes = [ctypes.c_int]
     tu.so.tu_throttle.argtypes = [ctypes.c_int]
     least, _ = torch.cuda.Stream.priority_range()
@@ -350,7 +356,12 @@ def main() -> int:
             cur["enc_base"] += dec * TOKEN_WORDS
 
     def gate(delta: int) -> None:
-        if cur.get("gate_steps"):
+        if "seq_step" in cur:
+            s = torch.cuda.current_stream().cuda_stream
+            rc = tu.so.sq_step_begin(cur["seq_step"], s) if delta > 0 else tu.so.sq_step_end(s)
+            if rc:
+                raise RuntimeError(f"sq_step error {rc}")
+        elif cur.get("gate_steps"):
             tu.so.tu_gate_step(delta, torch.cuda.current_stream().cuda_stream)
 
     def execute_model(*args, **kwargs):
@@ -426,7 +437,20 @@ def main() -> int:
             torch.cuda.synchronize()
             offset_ms = 0.0
             grecs: list[tuple[float, float, int]] = []
-            if top not in ("none", "gemm"):
+            if top == "seq":
+                if mode not in FILL_WARPS:
+                    continue
+                sq.start(regions, RUN_SEED, base_ctas=0, warps=FILL_WARPS[mode], shift=a.seq_shift, priority=least)
+                tu.so.sq_idle(1, 0)
+                cur["seq_step"] = ctas
+                if a.token_gate:
+                    gate_ids = gate_tokens()
+                    if not gate_ref:
+                        gate_ref.extend(gate_ids)
+                    cur["token_gate"] = gate_ids == list(gate_ref)
+                    log(f"{policy}/{mode}: token gate {'passed' if cur['token_gate'] else 'FAILED'}")
+                offset_ms = sq.now(0) - time.perf_counter() * 1e3
+            elif top not in ("none", "gemm"):
                 chunk = (a.fill_chunk_mib if mode in FILL_WARPS else a.chunk_mib) << 20
                 tu.start(regions, mode_of(mode), chunk, 3, least, RUN_SEED, ctas=ctas if top == "always" else 0,
                          warps=FILL_WARPS.get(mode, 4))
@@ -501,7 +525,11 @@ def main() -> int:
                 gpu_busy += max(0.0, g1 - max(g0, edge))
                 edge = max(edge, g1)
             recs = grecs
-            if top not in ("none", "gemm"):
+            if top == "seq":
+                cur.pop("seq_step")
+                sq.stop()
+                recs = tu.log()
+            elif top not in ("none", "gemm"):
                 tu.stop()
                 recs = tu.log()
             lag = sorted(w.elapsed_time(d) for w, d, _ in cur["enc"])

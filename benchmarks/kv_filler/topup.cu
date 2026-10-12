@@ -775,7 +775,7 @@ constexpr auto IDLE_BACKOFF = std::chrono::microseconds(200);
 struct State {
   int device = 0, warps = 4, base_ctas = 0, sms = 0;
   uint32_t shift = 8;
-  uint64_t base_budget = 4096, idle_budget = 4096, step_budget = 1ull << 22;
+  uint64_t base_budget = 4096, idle_budget = 1ull << 22, step_budget = 1ull << 22;
   std::atomic<int> idle_on{0};
   fl::Regions plan{};
   uint8_t seed[32];
@@ -814,13 +814,14 @@ static int launch(State& st, int role, int grid, unsigned long long* taken, uint
   return (int)cudaGetLastError();
 }
 
-// Logs every epoch from `next` on whose units are all done; with `last` (every kernel ended, `total` units taken),
-// the partial epoch after them too.
-static int harvest(State& st, uint64_t& next, double& t_prev, std::vector<uint32_t>& cnt, std::vector<uint32_t>& xr,
-                   std::vector<unsigned long long>& t, bool last, uint64_t total) {
+// Logs every epoch from `next` on whose units are all done, each over its first and last unit's completion; with `last`
+// (every kernel ended, `total` units taken), the partial epoch after them too.
+static int harvest(State& st, uint64_t& next, std::vector<uint32_t>& cnt, std::vector<uint32_t>& xr,
+                   std::vector<unsigned long long>& t0, std::vector<unsigned long long>& t1, bool last, uint64_t total) {
   cudaError_t e = cudaMemcpyAsync(cnt.data(), st.ring.cnt, 4 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
   if (e == cudaSuccess) e = cudaMemcpyAsync(xr.data(), st.ring.xr, 4 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
-  if (e == cudaSuccess) e = cudaMemcpyAsync(t.data(), st.ring.t, 8 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
+  if (e == cudaSuccess) e = cudaMemcpyAsync(t0.data(), st.ring.t0, 8 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
+  if (e == cudaSuccess) e = cudaMemcpyAsync(t1.data(), st.ring.t1, 8 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
   if (e == cudaSuccess) e = cudaStreamSynchronize(st.s_h);
   if (e != cudaSuccess) return (int)e;
   const uint32_t full = 1u << st.shift;
@@ -828,27 +829,21 @@ static int harvest(State& st, uint64_t& next, double& t_prev, std::vector<uint32
     const uint32_t slot = (uint32_t)(next & (EPOCHS - 1));
     const uint64_t first = next << st.shift;
     uint32_t n = cnt[slot];
-    double t1;
-    if (n == full) {
-      t1 = (double)(t[slot] - st.g0_h) / 1e6;
-    } else if (last && total > first) {
-      n = (uint32_t)(total - first);
-      if (cnt[slot] != n) return -2;  // every unit taken is done once every kernel has ended
-      float ms = 0;
-      cudaEventElapsedTime(&ms, st.start, st.idle_done);
-      t1 = std::max(t_prev, (double)ms);
-    } else {
-      return 0;
+    if (n != full) {
+      if (!last || total <= first) return 0;
+      if (n != total - first) return -2;  // every unit taken is done once every kernel has ended
     }
     {
       std::lock_guard<std::mutex> g(st.m);
-      st.log.push_back(tu::Rec{t_prev, t1, (uint64_t)n * fl::UNIT_BYTES, slot, xr[slot], next});
+      st.log.push_back(tu::Rec{(double)(t0[slot] - st.g0_h) / 1e6, (double)(t1[slot] - st.g0_h) / 1e6,
+                               (uint64_t)n * fl::UNIT_BYTES, slot, xr[slot], next});
     }
-    t_prev = t1;
     st.units_done += n;
     st.epochs_done += 1;
     e = cudaMemsetAsync(st.ring.cnt + slot, 0, 4, st.s_h);
     if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.xr + slot, 0, 4, st.s_h);
+    if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.t0 + slot, 0xFF, 8, st.s_h);
+    if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.t1 + slot, 0, 8, st.s_h);
     if (e != cudaSuccess) return (int)e;
     ++next;
     st.lim = limit(st.shift, next);
@@ -862,9 +857,8 @@ static void loop(State* sp) {
   State& st = *sp;
   cudaSetDevice(st.device);
   std::vector<uint32_t> cnt(EPOCHS), xr(EPOCHS);
-  std::vector<unsigned long long> t(EPOCHS);
+  std::vector<unsigned long long> t0(EPOCHS), t1(EPOCHS);
   uint64_t next = 0;
-  double t_prev = 0;
   bool base_busy[2] = {false, false}, idle_busy = false;
   auto idle_at = std::chrono::steady_clock::now();
   int rc = 0;
@@ -889,7 +883,7 @@ static void loop(State* sp) {
       if (!rc) rc = (int)cudaEventRecord(st.idle_done, st.s_idle);
       idle_busy = true;
     }
-    if (!rc) rc = harvest(st, next, t_prev, cnt, xr, t, false, 0);
+    if (!rc) rc = harvest(st, next, cnt, xr, t0, t1, false, 0);
     std::this_thread::sleep_for(std::chrono::microseconds(50));
   }
   if (!rc) {
@@ -899,11 +893,9 @@ static void loop(State* sp) {
   if (!rc) rc = (int)cudaStreamSynchronize(st.s_h);
   for (cudaStream_t s : {st.s_base, st.s_idle, st.s_step})
     if (!rc) rc = (int)cudaStreamSynchronize(s);
-  if (!rc) rc = (int)cudaEventRecord(st.idle_done, st.s_h);
-  if (!rc) rc = (int)cudaEventSynchronize(st.idle_done);
   unsigned long long total = 0;
   if (!rc) rc = (int)cudaMemcpy(&total, &st.seq->next, 8, cudaMemcpyDeviceToHost);
-  if (!rc) rc = harvest(st, next, t_prev, cnt, xr, t, true, total);
+  if (!rc) rc = harvest(st, next, cnt, xr, t0, t1, true, total);
   st.err = rc;
 }
 
@@ -950,7 +942,10 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   }
   CK(cudaMalloc(&st->ring.xr, 4 * sq::EPOCHS));
   CK(cudaMalloc(&st->ring.cnt, 4 * sq::EPOCHS));
-  CK(cudaMalloc(&st->ring.t, 8 * sq::EPOCHS));
+  CK(cudaMalloc(&st->ring.t0, 8 * sq::EPOCHS));
+  CK(cudaMalloc(&st->ring.t1, 8 * sq::EPOCHS));
+  CK(cudaMemset(st->ring.t0, 0xFF, 8 * sq::EPOCHS));
+  CK(cudaMemset(st->ring.t1, 0, 8 * sq::EPOCHS));
   CK(cudaMemset(st->ring.xr, 0, 4 * sq::EPOCHS));
   CK(cudaMemset(st->ring.cnt, 0, 4 * sq::EPOCHS));
   st->ring.shift = st->shift;
@@ -969,7 +964,7 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   return 0;
 }
 
-// IDLE kernels on (1) or off (0), `budget` units each (0: 4,096).
+// IDLE kernels on (1) or off (0), `budget` units each (0: the last set, at first 2^22: a kernel returns once a step starts).
 void sq_idle(int on, uint64_t budget) {
   if (!sq::S) return;
   if (budget) sq::S->idle_budget = budget;
@@ -1005,7 +1000,7 @@ int sq_stop() {
   tu::gate_set(-1, -1, true);
   for (cudaStream_t s : {st->s_base, st->s_idle, st->s_step, st->s_h}) cudaStreamDestroy(s);
   for (cudaEvent_t e : {st->start, st->base_done[0], st->base_done[1], st->idle_done, st->step_ev}) cudaEventDestroy(e);
-  for (void* p : {(void*)st->signs, (void*)st->seq, (void*)st->ring.xr, (void*)st->ring.cnt, (void*)st->ring.t,
+  for (void* p : {(void*)st->signs, (void*)st->seq, (void*)st->ring.xr, (void*)st->ring.cnt, (void*)st->ring.t0, (void*)st->ring.t1,
                   (void*)st->taken, (void*)st->g0})
     cudaFree(p);
   cudaFreeHost(st->taken_h);

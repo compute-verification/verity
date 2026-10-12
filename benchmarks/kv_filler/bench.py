@@ -480,6 +480,15 @@ def alone(tu: Topup, torch, filler, seconds: float, chunk: int, depth: int, leas
         span = (recs[-1][1] - recs[0][0]) / 1e3
         out[name] = {"GBps": sum(r[2] for r in recs) / span / 1e9, "chunks": len(recs),
                      "chunk_ms_median": statistics.median(r[1] - r[0] for r in recs)}
+    sq = Seq(tu)
+    for warps in sorted({FILL_WARPS[f] for f in fill_modes}):
+        sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=0, warps=warps, priority=least)
+        tu.so.sq_idle(1, 0)
+        time.sleep(seconds)
+        sq.stop()
+        recs = tu.log()[1:]
+        span = (recs[-1][1] - recs[0][1]) / 1e3
+        out[f"seq-idle-w{warps}"] = {"GBps": sum(r[2] for r in recs[1:]) / span / 1e9, "epochs": len(recs)}
     return out
 
 
