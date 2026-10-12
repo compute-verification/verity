@@ -1106,6 +1106,7 @@ def analysis(read_gbps: float, best_dec: dict, best_enc: dict, best_sq: float, t
 
 
 def main() -> int:
+    global MODEL, LAYERS, SHAPES
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--lib", action="append", required=True, help="NAME=PATH of a wc.cu build")
     ap.add_argument("--out", required=True)
@@ -1131,7 +1132,6 @@ def main() -> int:
                     help="after the gates, only the compute-only rates and the GEMM, with every library: no read, "
                          "standalone decode or analysis")
     a = ap.parse_args()
-    global MODEL, LAYERS, SHAPES
     MODEL = a.model
     LAYERS, SHAPES = MODELS[MODEL]
     a.shapes = a.shapes or ",".join(SHAPES)
