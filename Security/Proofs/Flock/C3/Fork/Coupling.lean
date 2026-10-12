@@ -1,4 +1,6 @@
 import Proofs.Flock.Recursive.HoloExec
+import Proofs.Flock.C3.Fork.CouplingProb
+import Proofs.Flock.C3.Fork.CouplingInh
 
 /-!
 # Piece (a), the coupling: candidate 3's compiled table against its oracle table
@@ -33,6 +35,20 @@ theorem holoTable_value_le_oracle (A : Arith F K) [Inhabited D] [Inhabited Sl] (
     value (fun o : OutHL F D Sl => o.accepted = true ∧ W o)
       (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts e.cls.shape
         e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap) ≤ ENNReal.ofReal ε := by
-  sorry
+  obtain ⟨hlen, hk0, -, -⟩ := fast100_shape _ _ hsch
+  have hsh : e.rsch.sch.levels = [] ∨
+      2 ≤ e.rsch.sch.levels.length ∧ (e.rsch.sch.levels.headD default).lanes = e.rsch.sch.k0 := by
+    rcases hR with h | h
+    · exact Or.inl h
+    · obtain ⟨h1, h2, -, -⟩ := fast100_shape _ _ h
+      exact Or.inr ⟨h1, h2⟩
+  exact value_le_of_forall_prob
+    (allInh_holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts e.cls.shape
+      e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap) fun σ =>
+    (holoTableCL_prob_le A H E Lf (e.cls.pubStatement e.regs) e.sch hlen hk0 e.cls.hm e.cls.ptLocal e.cls.mPts
+      e.cls.shape e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch hsh x W hW σ).trans
+    (value_le_of_forall_prob
+      (allInh_holoTable A (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts e.cls.shape
+        e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.w) horc)
 
 end FlockC3.Fork
