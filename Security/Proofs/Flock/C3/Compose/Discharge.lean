@@ -90,7 +90,8 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
     (hheld : ∀ h : Typed zr, HeldIs
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec tr record reg) own sel bc) :
     ∀ h : Typed zr, Flock.Premises.VBridgeC
-      (Flock.Guarantees.checkedC3 ish (innerCommitsAt tr record st reg).toOption coins bind rows zr hCust h) dg N k Rw
+      (Flock.Guarantees.checkedC3 ish (fun _ => (innerCommitsAt tr record st reg).toOption) (fun _ => coins) bind rows
+        zr hCust h) dg N k Rw
       (fun _ _ => Subtype.mk xR hreg)
       (wmsgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) (holoInnerAt T CT st hp).r dec) (skOf Vs own sel)
       (cmtOf Vs bc) (msgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) dec) := by
