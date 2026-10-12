@@ -12,14 +12,15 @@ The step, per GPU (``step``):
   for what hides under tensor-bound time (β·(FLOPs/Φ − reads)); the KV append's encode (k·x₁_h read-times a byte) hides
   in what tensor slack is left; attention pays o_kv + τ_kv + τ_bind a KV pass; the host tier slows the step by
   τ_host per b_zero_copy of host stream per GPU, and the all-reduce gets what the host stream leaves of each GPU's
-  PCIe receive side, min(b_p2p, b_pcie − stream).
+  PCIe receive side, min(b_p2p, b_pcie − stream); the host CPUs receipt ``host_cpu`` of the DRAM the GPUs don't
+  stream, at no cost to the step.
 - under ``cap``, memory left idle is filled with receipt-only reads of the store (τ_fill a pass, no decode: top-up),
   and the step may be padded with more of them (``pad``) when its ephemeral traffic is too large a share of it;
   under ``pass`` neither: the pass is the step's own reads, W + KV.
 
 γ (``gamma_cap``, ``gamma_pass``), as fractions of the node's read capacity ΣR = 8·R + b_host:
 - ``cap`` (the ruling: 99% of read bandwidth goes to registered data): μ_chip = S_chip/H, μ_rebuild = s·(1+h)/(k·x₁),
-  μ_partial, μ_host = (1 − host share)·b_host/ΣR, μ_unreg = the step's ephemeral bus time over its capacity,
+  μ_partial, μ_host = the host DRAM neither tier receipts over ΣR, μ_unreg = the step's ephemeral bus time over its capacity,
   μ_sample = ln(1/δ)/s, λ = (log₂q + log₂e − log₂N)/(8n), μ_sketch = 2^-k_s, μ_link (0 under the identity
   statement ``C``; ``link_n`` prices memory-only helpers over the NIC). The honest read shortfall η is unmeasured:
   the frontier holds ``eta_reserve`` back for it and reports what is left (``eta_allowance``).
@@ -131,6 +132,12 @@ def _allreduce(w: Workload, tp: int, b_p2p: float, v: dict[str, Any]) -> float:
     return 2 * w.shape.layers * (v["t_allreduce"] + 2 * (tp - 1) / tp * msg / (b_p2p * 1e9))
 
 
+def z_ratio(w: Workload, p: Params) -> float:
+    """|z|/|E| for a weight block: 4m/K with tile-output binding (K the hidden size), 4m/K_slice with k-slice
+    binding; above 1 the receipt folds the surplus z into its |E| bytes, at that many XORs a byte."""
+    return 4.0 * w.batch / (w.shape.hidden if p.binding == 0 else p.binding)
+
+
 def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     tp = layout(w, v)
     if tp is None:
@@ -156,7 +163,8 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     o_w = interp(v["o_w"][p.k], m)
     o_kv = interp(v["o_kv"][p.k], m)
 
-    cuda_w = t_rd * (o_w + tau_w + v["tau_bind"])
+    tau_bind = v["tau_bind"] * max(1.0, z_ratio(w, p))
+    cuda_w = t_rd * (o_w + tau_w + tau_bind)
     slack = v["beta"] * max(0.0, t_tc - t_rd)
     lin = max(t_rd, t_tc) + max(0.0, cuda_w - slack)
     slack = max(0.0, slack - cuda_w)
@@ -167,6 +175,7 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
 
     r_h = min(p.host_share * v["b_host"] / v["gpus"], v["b_zero_copy"])
     host = v["tau_host"] * r_h / v["b_zero_copy"]
+    host_cpu = v["host_cpu"] * max(0.0, v["b_host"] - v["gpus"] * r_h)
     t_ar = _allreduce(w, tp, max(1.0, min(v["b_p2p"], v["b_pcie"] - r_h)), v)
 
     core = lin + enc + attn + t_act + t_ar
@@ -178,7 +187,7 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     return {
         "tp": tp, "plain": plain, "cap": cap, "pass": core * (1.0 + host), "t_rd": t_rd, "t_tc": t_tc,
         "t_kv": t_kv, "t_act": t_act, "t_ar": t_ar, "lin": lin, "enc": enc, "attn": attn, "idle": idle,
-        "topup": topup, "pad": 0.0, "host": host, "host_stream": v["gpus"] * r_h, "W": W, "KV": KV,
+        "topup": topup, "pad": 0.0, "host": host, "host_stream": v["gpus"] * r_h, "host_cpu": host_cpu, "W": W, "KV": KV,
         "act": act + wr, "eph_read": act, "eph_write": wr,
         "f_kv_hbm": KV / v["H"],
         "f_kv_reads": t_kv / plain,
@@ -232,7 +241,7 @@ def gamma_cap(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -
     t = {
         "mu_chip": v["s_chip"] / v["H"] * hbm,
         "mu_rebuild": _rebuild(p, v) * hbm,
-        "mu_host": (v["b_host"] - st["host_stream"]) / sigma,
+        "mu_host": (v["b_host"] - st["host_stream"] - st["host_cpu"]) / sigma,
         "mu_unreg": st["act"] / (v["R"] * 1e9 * st["cap"]) * hbm,
         **_common(w, p, v),
     }
@@ -247,7 +256,7 @@ def gamma_pass(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) 
     t = {
         "mu_chip": min(1.0, v["s_chip"] / store),
         "mu_rebuild": d * _rebuild(p, v),
-        "mu_host": d * (v["b_host"] - st["host_stream"]) / (v["gpus"] * v["R"]),
+        "mu_host": d * (v["b_host"] - st["host_stream"] - st["host_cpu"]) / (v["gpus"] * v["R"]),
         **_common(w, p, v),
     }
     t["gamma"] = sum(x for n, x in t.items() if n.startswith("mu_") or n == "lambda")
@@ -257,18 +266,34 @@ def gamma_pass(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) 
 
 
 def link_n(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -> float:
-    """μ_link for memory-only helpers over the NIC: each class of reads a helper can serve from a copy, given what
-    the relay must move a byte (z for a weight block, q and the output for a sequence's KV, nothing for top-up)."""
+    """μ_link for memory-only helpers over the NIC: the reads a helper can serve from a copy, given what the relay must
+    move a byte (min(|z|, |E|) for a block bound to z, q and the output for a sequence's KV, nothing for a block bound
+    to no z), with the NIC shared across them.
+
+    A weight block is bound at ``z_ratio``. Each block needs its own z, so top-up and host blocks are bound (at 1) only
+    by the surplus of the step's z beyond its weights, and a block the host CPUs receipt only by z shipped down PCIe:
+    F30's window, with the surplus folded to |E| bytes before it ships."""
     sigma = v["gpus"] * v["R"] + v["b_host"]
     hbm = v["gpus"] * v["R"] / sigma
-    k_bind = w.shape.hidden if p.binding == 0 else p.binding
-    shares = {
-        "weights": (st["t_rd"] / st["cap"] * hbm, min(1.0, 4.0 * w.batch / k_bind)),
-        "kv": (st["t_kv"] / st["cap"] * hbm, min(1.0, 4.0 * w.shape.hidden / (w.ctx * w.shape.kv_bytes_per_token))),
-        "topup": (max(0.0, st["cap"] - st["t_rd"] - st["t_kv"] - st["t_act"]) / st["cap"] * hbm, 0.0),
-    }
-    nic = v["b_nic"] / sigma
-    return sum(share if r == 0 else min(share, nic / r) for share, r in shares.values())
+    per_s = hbm / (v["R"] * 1e9 * st["cap"])
+    r = z_ratio(w, p)
+    surplus = max(0.0, r - 1.0) * st["W"] * per_s
+    topup = max(0.0, st["cap"] - st["t_rd"] - st["t_kv"] - st["t_act"]) / st["cap"] * hbm
+    host_gpu, host_cpu = st["host_stream"] / sigma, st["host_cpu"] / sigma
+    bound_gpu = min(topup + host_gpu, surplus)
+    bound_cpu = min(host_cpu, surplus - bound_gpu, v["gpus"] * v["b_pcie"] / sigma)
+    classes = [
+        (st["t_rd"] / st["cap"] * hbm, min(1.0, r)),
+        (st["t_kv"] / st["cap"] * hbm, min(1.0, 4.0 * w.shape.hidden / (w.ctx * w.shape.kv_bytes_per_token))),
+        (bound_gpu + bound_cpu, 1.0),
+        (topup + host_gpu + host_cpu - bound_gpu - bound_cpu, 0.0),
+    ]
+    budget, relayed = v["b_nic"] / sigma, 0.0
+    for share, ratio in sorted(classes, key=lambda c: c[1]):
+        take = share if ratio == 0 else min(share, budget / ratio)
+        budget -= take * ratio
+        relayed += take
+    return relayed
 
 
 def evaluate(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, Any]:

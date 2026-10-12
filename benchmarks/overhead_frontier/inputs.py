@@ -40,7 +40,11 @@ INPUTS: dict[str, Input] = {
     "tau_host": Input(0.06, "of the step at b_zero_copy per GPU", "ra-pcie-exhaust: the HBM receipt pass 0.977–0.987 → "
                       "1.043–1.063 ms beside the 8-SM host fold (r20261012-114836-4a56, art:f3457bd3)", "measured",
                       0.03, "a host-tier receipt lighter than the 8-SM fold"),
-    "b_pcie": Input(56.4, "GB/s per GPU", "red team: PCIe H2D per GPU, 451 total (r20261012-165405-1810)", "measured"),
+    "b_pcie": Input(56.4, "GB/s per GPU", "red team: PCIe H2D per GPU, 451 total (r20261012-165405-1810); D2H taken "
+                    "equal", "measured"),
+    "host_cpu": Input(0.0, "of the host DRAM the GPUs don't stream", "no host-CPU receipt exists yet", "estimate", 1.0,
+                      "receipt host DRAM on the host CPUs, as F28's adversary sketches it (a VNNI ±1 sketch, ~19 GB/s a "
+                      "core: ~20 of 192 cores for 372 GB/s, estimate), z shipped down for statement N (F30)"),
     "b_nic": Input(50.0, "GB/s, node", "red team: one ConnectX VF at 400 Gb/s (r20261012-171910-14ba)", "measured"),
     "b_p2p": Input(25.0, "GB/s", "PCIe peer all-reduce bus bandwidth, no NVLink", "estimate"),
     "t_allreduce": Input(40e-6, "s per all-reduce", "NCCL small-message all-reduce over PCIe", "estimate"),

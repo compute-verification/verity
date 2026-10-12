@@ -9,7 +9,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import frontier as F  # noqa: E402
 import inputs as I  # noqa: E402
-from model import SHAPES, Params, Shape, Workload, evaluate, gamma_cap, gamma_pass, step  # noqa: E402
+from model import SHAPES, Params, Shape, Workload, evaluate, gamma_cap, gamma_pass, link_n, step  # noqa: E402
 
 
 NO_EPHEMERAL = {name: (0.0, 0.0) for name in SHAPES}
@@ -110,6 +110,23 @@ def test_kv_relay_takes_the_whole_kv_share():
     w = Workload(SHAPES["8B"], 64, 32768)
     r = evaluate(w, Params(2, 8192, 16, 32, 1.0), v)
     assert r["mu_link_n"] > r["step"]["t_kv"] / r["step"]["cap"] * 0.9
+
+
+def test_host_cpus_close_the_host_tier_and_f30_bounds_their_binding():
+    v = I.values()
+    v.update(host_cpu=1.0, b_host=819.0)
+    w = Workload(SHAPES["8B"], 64, 8192)
+    tile, sliced = Params(2, 8192, 16, 0, 0.0), Params(2, 8192, 16, 32, 0.0)
+    st = step(w, sliced, v)
+    assert st["host_cpu"] == 819.0 and gamma_cap(w, sliced, v, st)["mu_host"] == 0.0
+    sigma = 8 * 1540 + 819
+    host = 819 / sigma
+    # Tile binding leaves no z beyond the weights' own, so every host block is relayable for free.
+    assert link_n(w, tile, v, step(w, tile, v)) >= host
+    # k-slice 32 at m = 64 has 8× the weights in z: the host blocks bind up to what PCIe carries down (451 GB/s).
+    wide = {**v, "b_pcie": 1e6}
+    unbound = link_n(w, sliced, v, st) - link_n(w, sliced, wide, step(w, sliced, wide))
+    assert unbound == pytest.approx((819 - 8 * 56.4) / sigma, rel=0.01)
 
 
 def test_frontier_points_respect_gamma():
