@@ -262,7 +262,7 @@ def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installe
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
     for f in ("merge.py", "check.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
-    shutil.copy(HERE.parents[3] / ".gitattributes", repo / ".gitattributes")
+    (repo / ".gitattributes").write_text(f"*.lean merge={M.LEAN}\n")
     g = repo / "G.lean"
     git(repo, "init", "-q", "-b", "main")
     for name, first in (("main", ""), ("a", "import G.Memory\n"), ("b", "import G.Actual\n")):
