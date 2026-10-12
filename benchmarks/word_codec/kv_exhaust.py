@@ -489,11 +489,14 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                     for _ in range(layers):
                         lib.call("kv_rc_tag16", RECEIPT[fm], nblk, st)
 
+                def blocks_equal() -> bool:
+                    skn, tgn = sk.cpu().numpy(), tg[:nblk].cpu().numpy()
+                    return all(R.receipt(RC_SEED, RECEIPT[fm], u, skn[16 * u: 16 * u + 16])
+                               == tgn[u].astype("<i4").tobytes() for u in list(range(8)) + list(range(nblk - 8, nblk)))
+
                 tag16_pass()
                 tt = [B.queued(lib, torch, tag16_pass, SPIN) / layers for _ in range(reps)]
-                skn, tgn = sk.cpu().numpy(), tg[:nblk].cpu().numpy()
-                ok = all(R.receipt(RC_SEED, RECEIPT[fm], u, skn[16 * u: 16 * u + 16]) == tgn[u].astype("<i4").tobytes()
-                         for u in list(range(8)) + list(range(nblk - 8, nblk)))
+                ok = blocks_equal()
                 row["tag16"] = {"blocks": nblk, "s": statistics.median(tt), "times_s": tt,
                                 "over_read": statistics.median(tt) / t_read, "receipts_equal": ok}
                 log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: a receipt a block of 16 vectors, its "
@@ -501,6 +504,31 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
                     f"{nblk} receipts a layer; the first and last 8 equal kv_receipt's: {ok}")
                 if not ok:
                     raise SystemExit(f"{FORMS[fm]} k={k}: a block receipt differs from kv_receipt's")
+
+                def block_pass():
+                    for l in range(layers):
+                        lib.call("kv_rc_buffers", B.ptr(sk), None, None)
+                        attn_call(lib, st, store, fm, q, o, part, b, ctx, layers, l, sp, k)
+                        lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
+                        lib.call("kv_rc_tag16", RECEIPT[fm], nblk, st)
+
+                for l2 in (False, True):
+                    if l2:
+                        lib.call("kv_rc_l2", nvec * 64, st, ctypes.cast(win, ctypes.c_void_p))
+                    block_pass()
+                    tb = [B.queued(lib, torch, block_pass, SPIN) / layers for _ in range(reps)]
+                    lib.call("kv_rc_l2", 0, st, ctypes.cast(win, ctypes.c_void_p))
+                    ok = blocks_equal()
+                    key = "pass_l2" if l2 else "pass"
+                    row["tag16"][key] = {"s": statistics.median(tb), "times_s": tb,
+                                         "over_read": statistics.median(tb) / t_read, "receipts_equal": ok}
+                    log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: the sketch, then a receipt a block "
+                        f"of 16 vectors, a layer {row['tag16'][key]['s'] * 1e3:.3f} ms "
+                        f"({row['tag16'][key]['over_read']:.3f}x the read)"
+                        + (f", the sketches held in L2 ({win[1] / 1e6:.0f} MB persisting)" if l2 else "")
+                        + f"; the first and last 8 equal kv_receipt's: {ok}")
+                    if not ok:
+                        raise SystemExit(f"{FORMS[fm]} k={k}: a block receipt after the sketch differs from kv_receipt's")
             cell["forms"].setdefault(FORMS[fm], {})[k] = row
             log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]}" + ("" if fm in RTOL else f" k={k}")
                 + f": a layer {row['s'] * 1e3:.3f} ms at {sp} splits, {row['gbps']:.0f} GB/s, {row['over_read']:.3f}x"
