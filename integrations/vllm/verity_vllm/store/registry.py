@@ -22,10 +22,12 @@ seeded from the window's challenge and the root before it (`chain`): the session
 the registration's root before the session's first.  The reference computes every receipt from the bytes
 (`receipts`); a device reader hands `end_pass` its aligned segments' roots, or the pass's root.
 
-The seed, the plan digest and the tree are the remote bandwidth driver's (`remote_bandwidth.receipts`: `seed`,
-`Plan.digest` over the plan's canonical runs, and `tree`: frame-v3-sha512 over leaves of ``PER_LEAF`` receipts in plan
-order, each hidden as an hm96-sha512/row/v2 leaf under its salt).  A leaf's salt is `Store.salt`, a PRF of the
-store's secret key, so no salt is kept.
+The plan and the tree are the remote bandwidth driver's, imported (`rb`, its `receipts`): a pass's plan is its
+`Plan` (canonical runs of distinct blocks; `plan_digest` is its digest in numpy), its tree `rb.domain`'s
+frame-v3-sha512 over leaves of ``PER_LEAF`` receipts in plan order, each `rb.hidden` as an hm96-sha512/row/v2 leaf
+under its salt, and an opening verifies by `rb.verify_leaf`.  `RemoteBandwidthReceipt` is its receipt.  The seed is
+the chained one (`chain`, under its seed domain).  A leaf's salt is `Store.salt`, a PRF of the store's secret key, so
+no salt is kept.
 """
 from __future__ import annotations
 
@@ -41,6 +43,9 @@ from typing import Any
 
 import numpy as np
 
+from verity.core.protocols.remote_bandwidth import receipts as rb
+from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, SALT_BYTES, Plan
+from verity.ml.commitments import merkle_depth
 from verity_vllm.store.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
                                          PassCommitment, Receipt, Registration, RegionInfo, Segment, Source, Stale,
                                          WindowRecord)
@@ -49,12 +54,7 @@ CHALLENGE_BYTES = 32
 SEED_BYTES = 64
 KEY_BYTES = 32
 REGISTRATION_DOMAIN = b"verity/store/registration/v0\0"
-SEED_DOMAIN = b"verity/remote-bandwidth/seed/v0\0"
-PLAN_DOMAIN = b"verity/remote-bandwidth/plan/v0\0"
-TREE_DOMAIN = b"verity/remote-bandwidth/receipt-tree/v0\0"
 SALT_DOMAIN = b"verity/store/salt/v0\0"
-PER_LEAF = 16
-SALT_BYTES = 192
 
 FillerPlan = Callable[["Store", int], Sequence[tuple[str, Sequence[int]]]]
 
@@ -64,10 +64,11 @@ def frame(b: bytes) -> bytes:
 
 
 def chain(challenge: bytes, previous: bytes, index: int) -> bytes:
-    """Pass ``index``'s seed in a window: ``SHA512(D ‖ σ ‖ u32be index ‖ root before it)``, the driver's `seed`."""
+    """Pass ``index``'s seed in a window: ``SHA512(D ‖ σ ‖ u32be index ‖ root before it)``, the chained Fiat–Shamir
+    seed (Daniel, 19:00Z), under the driver's seed domain."""
     if len(challenge) != CHALLENGE_BYTES or len(previous) != 64 or not 0 <= index < 1 << 32:
         raise ValueError("a seed is of a 32-byte challenge, a u32 pass index and a 64-byte root")
-    return hashlib.sha512(SEED_DOMAIN + challenge + struct.pack(">I", index) + previous).digest()
+    return hashlib.sha512(rb.SEED_DOMAIN + challenge + struct.pack(">I", index) + previous).digest()
 
 
 def runs_of(blocks: np.ndarray) -> np.ndarray:
@@ -96,30 +97,20 @@ def distinct(runs: np.ndarray) -> bool:
 
 
 def plan_digest(runs: np.ndarray) -> bytes:
-    """The driver's `Plan.digest`: ``SHA512(D ‖ u32be R ‖ (u64be first ‖ u64be count) × R)`` over canonical runs."""
-    return hashlib.sha512(PLAN_DOMAIN + struct.pack(">I", len(runs)) + np.asarray(runs, ">u8").tobytes()).digest()
+    """`Plan.digest` of canonical ``runs``, without building the `Plan`: its construction and digest loop over the runs
+    in Python, about 200 ms a pass at the 245k runs of a step with scattered live pages."""
+    return hashlib.sha512(rb.PLAN_DOMAIN + struct.pack(">I", len(runs)) + np.asarray(runs, ">u8").tobytes()).digest()
 
 
-def tree_domain(seed: bytes, digest: bytes, positions: int):
-    """The driver's receipt tree of a pass of ``positions`` positions: frame-v3-sha512 over ``⌈positions / PER_LEAF⌉``
-    leaves, bound to ``SHA512(TREE_DOMAIN ‖ seed ‖ plan digest)``, owner 0."""
-    from verity.ml.commitments import CommitmentDomain, RangeIndexedDomain
-    binding = hashlib.sha512(TREE_DOMAIN + seed + digest).digest()
-    return CommitmentDomain(binding, 0, RangeIndexedDomain(0, -(-positions // PER_LEAF)), hash="sha512")
-
-
-def hidden(receipts: bytes, salt: bytes) -> bytes:
-    """A leaf's committed value: its receipts as an hm96-sha512/row/v2 leaf under ``salt`` (the driver's `hidden`)."""
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.rowleaf import sha512_row_v2_digest
-    h = hm96.SHA512
-    return h.tree_leaf(h.default_key, h.commit_string(h.default_key, sha512_row_v2_digest(receipts, 8 * len(receipts)),
-                                                      salt))
+def plan_of(runs: np.ndarray, blocks: int) -> Plan:
+    """The driver's `Plan` of canonical ``runs`` in a store of ``blocks`` blocks; it refuses a plan that reads a block
+    twice."""
+    return Plan(tuple(map(tuple, runs.tolist())), blocks)
 
 
 def leaf_digest(dom: Any, c: int, receipts: bytes, salt: bytes) -> bytes:
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-    return dom.leaf(c, c, SCHEMA_HM96_SHA512_ROW_V2, hidden(receipts, salt))
+    """Leaf ``c`` of the driver's receipt tree: its receipts `rb.hidden` under ``salt``."""
+    return dom.leaf(c, c, rb.SCHEMA, rb.hidden(receipts, salt))
 
 
 def node_of(segment: Segment) -> tuple[int, int]:
@@ -174,6 +165,19 @@ class TagReceipt:
     def keyed(self, seed: bytes):
         k = self.tag.keyed(seed[:KEY_BYTES])
         return lambda j, block, z=None: k(j, block)
+
+
+@dataclass(frozen=True)
+class RemoteBandwidthReceipt:
+    """The remote bandwidth driver's receipt (`rb.Receipter`): ``SHA512(Z(D ‖ frame(seed)) ‖ u64be j ‖ E_j ⊕
+    spread(z))`` of a 4 KiB block, bound to the output ``z`` of the tile before its read."""
+
+    name: str = "verity/remote-bandwidth/receipt/v0"
+    receipt_bytes: int = rb.DIGEST_BYTES
+    binds: tuple[str, ...] = ("z",)
+
+    def keyed(self, seed: bytes):
+        return rb.Receipter(seed)
 
 
 class ArrayBacking:
@@ -239,10 +243,19 @@ class _Pass:
     views: dict[int, tuple[int, int]] = field(default_factory=dict)    # array segments: (id of the part's, offset)
     epochs: dict[int, np.ndarray] = field(default_factory=dict)
     receipts: dict[int, list[bytes]] = field(default_factory=dict)
+    runs: np.ndarray | None = None              # inside a window: the plan's canonical runs, and their digest
     digest: bytes = b""
+    store_blocks: int = 0
     top: dict[tuple[int, int], bytes] | None = None     # the tree's nodes outside the aligned segments; None: the reader's
     positions: int = 0
     starts: list[int] = field(default_factory=list)
+    _plan: Plan | None = None
+
+    def plan(self) -> Plan:
+        """The driver's `Plan` of the pass, built when the store builds or opens its tree."""
+        if self._plan is None:
+            self._plan = plan_of(self.runs, self.store_blocks)
+        return self._plan
 
     def lay_out(self, parts: Sequence[tuple[str, int, int, np.ndarray | None, np.ndarray | None]]) -> None:
         """Segments from ``parts`` (region, start, count, blocks or None for a run, epochs or None) as subtrees: each
@@ -552,10 +565,12 @@ class Store:
                 parts.append((rn, int(blk[0]) if run else -1, len(blk), None if run else blk, ep))
         ps.lay_out(parts)
         if seed is not None:
-            runs = self.plan_runs(ps)
-            if not distinct(runs):
+            ps.runs, ps.store_blocks = self.plan_runs(ps), self._blocks
+            if not len(ps.runs):
+                raise ValueError(f"pass {j} reads no block")
+            if not distinct(ps.runs):
                 raise ValueError(f"pass {j}'s plan reads a block twice")
-            ps.digest = plan_digest(runs)
+            ps.digest = plan_digest(ps.runs)
         self._open_pass = ps
         self.counters.add("begin_pass", time.perf_counter() - t)
         return ps
@@ -623,12 +638,11 @@ class Store:
         if root is not None:
             pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, (), root)
         else:
-            from verity.ml.commitments import merkle_depth
-            dom = tree_domain(ps.seed, ps.digest, ps.positions)
+            dom = rb.domain(ps.seed, ps.plan())
             leaf, n = self._leaf(ps, dom, z), dom.count
             ps.top = {node_of(s): roots[k] if k in roots else _node(dom, n, *node_of(s), leaf, {})
                       for k, s in enumerate(ps.segments) if aligned(s)}
-            root = _node(dom, n, merkle_depth(n), 0, leaf, ps.top) if n else dom.empty_root()
+            root = _node(dom, n, merkle_depth(n), 0, leaf, ps.top)
             seg_roots = tuple(_node(dom, n, *node_of(s), leaf, ps.top) for s in ps.segments)
             pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, seg_roots, root)
         self._passes.append(pc)
@@ -663,7 +677,6 @@ class Store:
     def open(self, sample: Sequence[tuple[int, int]]) -> list[Opening]:
         """Each sampled (pass, position) as that pass read it.  A KV block re-registered since (its epoch moved) or
         dirty now raises `Stale`: the binder keeps freed pages out of reuse within a window."""
-        from verity.ml.commitments import merkle_depth
         out, inner = [], {}
         for j, position in sample:
             ps = self._retained.get(j)
@@ -680,7 +693,7 @@ class Store:
                 page, c = p.page_of[b], p.slot_of[b]
                 if p.epoch[page, c] != ps.epochs[k][q] or p.dirty[page, c]:
                     raise Stale(f"{seg.region} block {b} was rewritten after pass {j}")
-            dom = tree_domain(ps.seed, ps.digest, ps.positions)
+            dom = rb.domain(ps.seed, ps.plan())
             leaf, n, c, (level, _) = self._leaf(ps, dom), dom.count, position // PER_LEAF, node_of(seg)
             memo = inner.setdefault((j, k), {}) if aligned(seg) else ps.top
             path = [_node(dom, n, h, (c >> h) ^ 1, leaf, memo if h < level else ps.top) for h in range(merkle_depth(n))]
@@ -714,28 +727,30 @@ def _page_blocks(layout: PageLayout, block_bytes: int) -> tuple[np.ndarray, np.n
 def verify_opening(info: RegionInfo, pc: PassCommitment, plan: Sequence[int], o: Opening, receipt: Receipt,
                    decode: Callable[[bytes, int], bytes], payload: bytes | None, z: bytes | None = None) -> bool:
     """The verifier's side of one opening (the reference): the plan's block at the position, its digest, the receipt
-    recomputed from the block, its leaf (under the opened salt) and the leaf's path through its segment's node to the
-    pass's root (the two paths together are the driver's), and, with ``payload`` (what the block's registration
-    source names), the block decoding to it."""
-    from verity.ml.commitments import merkle_depth
+    recomputed from the block, its leaf (under the opened salt) through its segment's node, and the two paths together
+    to the pass's root (the driver's `rb.verify_leaf`), and, with ``payload`` (what the block's registration source
+    names), the block decoding to it."""
     k = bisect.bisect_right([s.position for s in pc.segments], o.position) - 1
     seg, c, positions = pc.segments[k], o.position // PER_LEAF, len(plan)
     if int(plan[o.position]) != o.block or seg.region != o.region or not info.first <= o.block < info.first + info.blocks:
         return False
     runs = canonical(runs_of(plan))
-    if not distinct(runs) or plan_digest(runs) != pc.plan_digest or sum(s.count for s in pc.segments) != positions:
+    try:
+        p = plan_of(runs, int((runs[:, 0] + runs[:, 1]).max()))
+    except ValueError:
+        return False
+    if p.digest != pc.plan_digest or sum(s.count for s in pc.segments) != positions:
         return False
     if receipt.keyed(pc.seed)(o.block, o.data, z) != o.receipt:
         return False
     if len(o.leaf_receipts) != min(PER_LEAF, positions - c * PER_LEAF) or o.leaf_receipts[o.position % PER_LEAF] != o.receipt:
         return False
-    dom = tree_domain(pc.seed, pc.plan_digest, positions)
-    level, _ = node_of(seg)
-    if len(o.leaf_path) != level or level + len(o.segment_path) != merkle_depth(dom.count):
+    leaf = b"".join(o.leaf_receipts)
+    dom, (level, _) = rb.domain(pc.seed, p), node_of(seg)
+    if len(o.leaf_path) != level:
         return False
-    node = _climb(dom, leaf_digest(dom, c, b"".join(o.leaf_receipts), o.salt), c, 0, o.leaf_path)
-    if pc.segment_roots and node != pc.segment_roots[k]:
+    if pc.segment_roots and _climb(dom, leaf_digest(dom, c, leaf, o.salt), c, 0, o.leaf_path) != pc.segment_roots[k]:
         return False
-    if _climb(dom, node, c, level, o.segment_path) != pc.root:
+    if not rb.verify_leaf(pc.seed, p, pc.root, o.position, leaf, o.salt, o.leaf_path + o.segment_path):
         return False
     return payload is None or decode(o.data, info.word_index(o.block - info.first)) == payload
