@@ -515,7 +515,9 @@ def main() -> int:
     ap.add_argument("--batches", default=",".join(map(str, BATCHES)))
     ap.add_argument("--ks", default=",".join(map(str, range(1, KMAX + 1))))
     ap.add_argument("--b-side", type=float, default=63.0)
-    ap.add_argument("--theta", type=float, default=0.11, help="the tensor cores' encode capacity over the CUDA cores'")
+    ap.add_argument("--theta", type=float, default=0.21,
+                    help="the tensor cores' encode capacity over the CUDA cores': MMA-bound, four squarings a "
+                         "mma.m16n8k32 at 4e14 MAC/s against 1.8e12 squarings/s")
     a = ap.parse_args()
 
     import torch
