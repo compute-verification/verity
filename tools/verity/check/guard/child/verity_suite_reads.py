@@ -11,9 +11,14 @@ It also traces what a per-test key narrowed to the files the tests use (`suites.
 - `F` a repository file opened or loaded as a shared library, outside the interpreter's environment and this tracer; a cached
   module (`__pycache__/*.pyc`) counts as its source, which the import read it for;
 - `L` a repository directory listed (`os.listdir`, `os.scandir`: imports, `glob`, `pkgutil` list what they search);
-- `X` a program started that this tracer won't see into, so what it reads is unknown: anything but a machine probe (`PROBES`)
-  or a Python that loads this tracer (the suite's PYTHONPATH, `VERITY_SUITE_READS` and a test module in `VERITY_SUITE_MODULE`,
-  and no `-I`, `-E` or `-S`).
+- `X` a program started that this tracer won't see into, so what it reads is unknown: anything but a machine probe (`PROBES`),
+  a Python that loads this tracer (the suite's PYTHONPATH, `VERITY_SUITE_READS` and a test module in `VERITY_SUITE_MODULE`,
+  and no `-I`, `-E` or `-S`), or one of the suite's declared build outputs (`VERITY_SUITE_PROGRAMS`, `given`).
+
+A declared build output (a Lean executable) reads what its arguments name and what it derives from them, and nothing else of the
+repository, so its start is traced as `F` reads instead: each argument (or `--flag=` value) that names a repository path, a file
+with every file beside it and a directory with every file under it, and `O` for those outside the inputs. `lake build` of
+declared outputs in their own package is traced as reading nothing: what it builds is the output, which the key holds.
 """
 from __future__ import annotations
 
@@ -27,6 +32,8 @@ _PYC = re.compile(r"^(.*?)(?:^|/)__pycache__/([^/]+?)\.[^/]+\.pyc(?:\.\d+)?$")
 _PYTHON = re.compile(r"^python(\d+(\.\d+)?)?$")
 #: programs that read no repository file, whatever they're given: they report on the machine (`platform` runs `uname`)
 PROBES = frozenset({"uname", "true", "false", "nproc", "getconf", "hostname", "id", "whoami", "ldconfig", "lscpu", "nvidia-smi"})
+#: more files than this under a declared output's argument: traced as a program no tracer sees into, not file by file
+GIVEN_MAX = 5000
 
 
 def _source(path: str) -> str:
@@ -47,6 +54,7 @@ class Reads:
         #: "0" for a suite whose keys leave Markdown out (`suites.markdown`): every `.md` it opens is outside its inputs
         self.markdown = env.get("VERITY_SUITE_MARKDOWN", "1") != "0"
         self.log = env.get("VERITY_SUITE_READS")
+        self.programs = frozenset(os.path.realpath(os.path.join(self.root, p)) for p in json.loads(env.get("VERITY_SUITE_PROGRAMS", "[]")))
         self.busy = False
         self.sent: set[tuple[str, str, str]] = set()
 
@@ -99,28 +107,64 @@ class Reads:
         return (all(env.get(k) for k in ("VERITY_SUITE_READS", "VERITY_SUITE_MODULE", "VERITY_SUITE_ROOT"))
                 and self.here.rstrip("/") in [os.path.realpath(p) for p in env.get("PYTHONPATH", "").split(os.pathsep) if p])
 
-    def trace(self, event: str, args: tuple) -> tuple[str, str] | None:
-        """(`F`, path), (`L`, directory) or (`X`, program) for an audit event, else None."""
+    def given(self, argv, cwd) -> list[str] | None:
+        """The repository files (from the root) a declared build output started with ``argv`` in ``cwd`` reads, [] for `lake build`
+        of declared outputs in their package, None for any other program."""
+        if not argv or not self.programs:
+            return None
+        cwd = os.fsdecode(os.fspath(cwd)) if cwd is not None else os.getcwd()
+        exe = os.fsdecode(os.fspath(argv[0]))
+        args = [os.fsdecode(os.fspath(a)) for a in argv[1:] if isinstance(a, (str, bytes, os.PathLike))]
+        if os.path.basename(exe) == "lake":
+            built = [os.path.realpath(os.path.join(cwd, ".lake", "build", "bin", t)) for t in args[1:]]
+            return [] if args[:1] == ["build"] and built and all(b in self.programs for b in built) else None
+        if os.sep not in exe or os.path.realpath(os.path.join(cwd, exe)) not in self.programs:
+            return None
+        files: set[str] = set()
+        for a in args:
+            value = a.split("=", 1)[1] if a.startswith("-") and "=" in a else a
+            if not value or value.startswith("-"):
+                continue
+            p = os.path.realpath(os.path.join(cwd, value))
+            if not p.startswith(self.inside) or p.startswith((*self.prefix, self.here)):
+                continue
+            if os.path.isdir(p):
+                found = [os.path.join(d, f) for d, _, fs in os.walk(p) for f in fs]
+            elif os.path.isfile(p):
+                d = os.path.dirname(p)
+                found = [os.path.join(d, f) for f in os.listdir(d) if os.path.isfile(os.path.join(d, f))]
+            else:
+                continue
+            files.update(os.path.relpath(f, self.root) for f in found)
+            if len(files) > GIVEN_MAX:
+                return None
+        return sorted(files)
+
+    def trace(self, event: str, args: tuple) -> list[tuple[str, str]]:
+        """(`F`, path), (`L`, directory), (`O`, path) or (`X`, program) for an audit event."""
         if event in ("open", "ctypes.dlopen"):
             if args and isinstance(args[0], (str, bytes, os.PathLike)) and (p := self.traced(os.fsdecode(args[0]))):
-                return "F", p
+                return [("F", p)]
         elif event in ("os.listdir", "os.scandir"):
             if args and not isinstance(args[0], int) and (p := self.traced(os.fsdecode(args[0]) if args[0] is not None else ".")):
-                return "L", p
-        elif event == "subprocess.Popen":
-            exe, argv, _cwd, env = (list(args) + [None] * 4)[:4]
-            argv = [argv] if isinstance(argv, (str, bytes)) else list(argv or [])
-            if exe is not None and argv:
-                argv = [exe, *argv[1:]]
-            if not self.seeable(argv, env):
-                return "X", os.fsdecode(argv[0]) if argv else "?"
-        elif event in ("os.exec", "os.posix_spawn"):
-            path, argv, env = (list(args) + [None] * 3)[:3]
-            if not self.seeable([path, *list(argv or [])[1:]], env):
-                return "X", os.fsdecode(path)
+                return [("L", p)]
+        elif event in ("subprocess.Popen", "os.exec", "os.posix_spawn"):
+            if event == "subprocess.Popen":
+                exe, argv, cwd, env = (list(args) + [None] * 4)[:4]
+                argv = [argv] if isinstance(argv, (str, bytes)) else list(argv or [])
+                if exe is not None and argv:
+                    argv = [exe, *argv[1:]]
+            else:
+                path, argv, env = (list(args) + [None] * 3)[:3]
+                argv, cwd = [path, *list(argv or [])[1:]], None
+            if self.seeable(argv, env):
+                return []
+            if (files := self.given(argv, cwd)) is None:
+                return [("X", os.fsdecode(argv[0]) if argv else "?")]
+            return [("F", f) for f in files] + [("O", f) for f in files if self.outside(os.path.join(self.root, f))]
         elif event in ("os.system", "os.spawn"):
-            return "X", event
-        return None
+            return [("X", event)]
+        return []
 
     def write(self, kind: str, module: str, rel: str, test: str = "") -> None:
         if not self.log:
@@ -146,12 +190,13 @@ class Reads:
             if (hit := self.classify(path)) is not None:
                 self.write(hit[0], module, hit[1], test if hit[0] == "O" else "")
         try:
-            hit = self.trace(event, args)
+            hits = self.trace(event, args)
         except (TypeError, ValueError):
-            hit = None
-        if hit is not None and (hit[0], module, hit[1]) not in self.sent:
-            self.sent.add((hit[0], module, hit[1]))
-            self.write(hit[0], module, hit[1])
+            hits = []
+        for kind, rel in hits:
+            if (kind, module, rel) not in self.sent:
+                self.sent.add((kind, module, rel))
+                self.write(kind, module, rel, test if kind == "O" else "")
 
     def install(self) -> None:
         """Trace this process (a child a test started): every open, attributed to the module it inherited."""

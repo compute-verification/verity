@@ -129,7 +129,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - `roots`: the modules the audit imports; every module under them is audited. `axioms` is optional.
 - `proved_in` (optional): the packages, as paths relative to this one, that prove its guarantees (below).
 - `runs`: the package's tests, compiled evaluation that no proof reads (a bulk conformance check over more vectors than
-  the kernel checks). Each is an exempt module, run after the replay by `lake env lean --run` in the build sandbox, and
+  the kernel checks). Each is an exempt module, run beside the facts and the replay by `lake env lean --run` in the build sandbox, and
   passes when it exits 0. An argument `{NAME}` is the path of data file NAME, which is what `generate` writes (run first,
   outside the sandbox, with `{repo}` the checkout, `--repo`, and `{out}` the directory it writes) or else the package's
   own file, either one possibly gzipped (`NAME.gz`). A file is used only with the SHA-256 under `data`: another fails the
@@ -377,8 +377,10 @@ module docstring has the layout and the rules. In short:
   `setup.sh` (the toolchain, Mathlib's cache, the dependencies' sources) and `cache.py get`, and compiles none of ArkLib.
 - A miss or a mismatch means building from source. So do a missing read credential (`LEAN_CACHE_R2_*`), the kill switch
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
-- The audit never reads the cache: `lake_env()` sets `LAKE_ARTIFACT_CACHE=false` and `LEAN_CACHE=off`, so the validator
-  builds from source.
+- The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off`, and `LAKE_ARTIFACT_CACHE=false` unless check's audit
+  names its node's own Lake cache (`--artifacts`, `lean_audit.LakeArtifacts`), which only a passing audit on that node
+  writes and the sandboxed builds only read. A module is then built from source or restored from an earlier passing audit,
+  as a kept build's modules are: Lake's input hash decides which, in both.
 - Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
   its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
   bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link

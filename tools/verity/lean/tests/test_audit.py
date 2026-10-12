@@ -311,6 +311,14 @@ def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
     assert text == [f"guarantee P.t: {A.REHASHED}", "definition P.f (P.Defs), read by P.t: changed", f"reads: 1 {A.REGROUPED}"]
 
 
+def test_facts_names_a_module_without_listing_every_module():
+    """`EnvironmentHeader.moduleNames` maps over every imported module on each call. Indexed once per constant a
+    guarantee's reads reach, it was 1,471 s of `Security`'s 1,504 s audit (check r20261012-005706-568f)."""
+    for tool in ("Facts.lean", "Upstream.lean"):
+        assert "moduleNames[" not in (HERE.parent / tool).read_text(), \
+            f"{tool}: name a module by `env.header.modules[i].module` (`moduleName env i`), not `env.header.moduleNames[i]`"
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
     pkg = tmp_path / "control"
@@ -1463,17 +1471,26 @@ def test_the_controls(tmp_path):
 
 def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path):
     """`run` reaps with `os.wait4`, so a step's `peak_gib` covers the grandchildren a `lake` runs, not only `lake` itself;
-    the output and exit code are what `subprocess.run` gave."""
+    the output and exit code are what `subprocess.run` gave.  It runs in an interpreter of its own: a child's `ru_maxrss`
+    counts the resident set it was forked with, so in a test worker grown past 0.3 GiB even `true` peaked there (8577, 12 Oct)."""
     child = "import sys; b = bytearray(300 << 20); b[::4096] = b'x' * len(b[::4096]); print('out'); sys.exit(3)"
-    rep = {"seconds": {}}
-    A._peak.bytes = 0
-    rc, text = A.run(["bash", "-c", f"{sys.executable} -c \"{child}\"; exit $?"], tmp_path, tmp_path / "step.log")
-    assert (rc, text) == (3, "out\n") and (tmp_path / "step.log").read_text() == "out\n"
-    A.took(rep, "replay", 0.0)
-    assert rep["peak_gib"]["replay"] >= 0.3
-    A.run(["true"], tmp_path)
-    A.took(rep, "fresh", 0.0)
-    assert rep["peak_gib"]["fresh"] < 0.3                                   # each step's own peak, not the run's so far
+    script = f"""import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("lean_audit", {str(HERE.parent / "check.py")!r})
+A = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(A)
+tmp = Path({str(tmp_path)!r})
+rep = {{"seconds": {{}}}}
+rc, text = A.run(["bash", "-c", sys.executable + " -c " + repr({child!r}) + "; exit $?"], tmp, tmp / "step.log")
+assert (rc, text) == (3, "out\\n") and (tmp / "step.log").read_text() == "out\\n", (rc, text)
+A.took(rep, "replay", 0.0)
+assert rep["peak_gib"]["replay"] >= 0.3, rep
+A.run(["true"], tmp)
+A.took(rep, "fresh", 0.0)
+assert rep["peak_gib"]["fresh"] < 0.3, rep                              # each step's own peak, not the run's so far
+"""
+    r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 def hyp(name, at, reaches, module=None, source="binder"):

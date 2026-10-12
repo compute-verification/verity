@@ -1020,6 +1020,26 @@ def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_o
     assert rows["bbbb"].get("step") is None and rows["bbbb"]["class"] == "CANCELLED_DEADMAN" and rows["bbbb"]["rc"] == 143
 
 
+def test_the_reader_waits_for_the_classification_of_a_run_that_ended_before_any_step_failed(tmp_path):
+    """`research run` writes failure.json a few seconds after status.json; read in between, a hand cancel was posted as
+    "unclassified: no reason recorded" (dc04, 12 Oct). One whose classification never comes is still listed, later."""
+    slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=143)
+    d = tmp_path / "runs" / "r20261003-200000-aaaa"
+
+    def rows():
+        script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
+        return json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True, text=True, check=True).stdout)["rows"]
+
+    assert rows() == []
+    (d / "failure.json").write_text(json.dumps({"class": "CANCELLED_MANUAL", "why": "by hand"}))
+    assert [r["class"] for r in rows()] == ["CANCELLED_MANUAL"]
+    (d / "failure.json").unlink()
+    for f in d.iterdir():
+        os.utime(f, (f.stat().st_mtime - M.CLASSIFY_S - 60,) * 2)
+    assert [(r["run"], r["class"]) for r in rows()] == [("r20261003-200000-aaaa", None)]
+
+
 def test_the_reader_names_a_suites_runs_failed_suite_as_it_happens_from_its_stdout(tmp_path):
     """A suites.py run writes no steps.jsonl: its first failed suite, and that suite's first failing line, come from stdout.log
     while it still runs (25ea, 8 Oct: verity-ops failed at 23:54Z and nobody heard until the run ended at 01:01Z)."""

@@ -136,11 +136,10 @@ theorem playsT_of_tape (r : ℕ) (S : Model.Statement) (sch : Accounting.Schedul
 
 /-! ## The inner statement's leaf -/
 
-/-- **The inner statement's leaf**: SHA-512 of the row's encoding, its salt ignored (a recursive session's inner
-statement has `flock-leaf/sha512-unsalted` leaves, Tags.lean:333-345; `MerkleScheme.sha512`'s `leaf`, Merkle.lean:35). -/
-def leafPlain : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512 where
-  leaf c _ := H512 (enc512.col c)
-  bind _ _ _ _ hc h := ⟨_, _, fun e => hc (enc512.col_inj e), h⟩
+/-- **The inner statement's leaf**, `Refine.leafPlain`: SHA-512 of the row's encoding, its salt ignored (a recursive
+session's inner statement has `flock-leaf/sha512-unsalted` leaves, `Tags.withPlainLeaves`; `MerkleScheme.sha512`'s
+`leaf`, `Refine.leafPlain_leaf`). -/
+abbrev leafPlain : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512 := Refine.leafPlain
 
 /-- **One table's accepted reps refine the compiled reps, for `flock-leaf/sha512-unsalted`**: `table_refines_hm96`
 (Tables.lean) with the unsalted path checks (`opensOK_of`), which at `leafPlain` are its salted ones. -/
