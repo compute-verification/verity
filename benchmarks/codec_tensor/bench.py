@@ -91,6 +91,7 @@ class Lib:
         so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, v, v, i, i, v, v]
         so.wt_set_pass.argtypes = [v, i, i]
         so.wt_pass.argtypes = [ctypes.c_uint, v, v, i, v]
+        so.wt_sign_frags.argtypes = [v, v, i, v]
         so.wt_pass_state.argtypes = [v]
         so.wt_sketch_vectors.argtypes = [i, i, i, i]
         so.wt_sketch_vectors.restype = q
@@ -478,6 +479,13 @@ def sketch_warps(cfg) -> int:
     return 2 if cfg[2] == -2 else 0
 
 
+def sign_frags(lib: Lib, torch, signs, sketch_t: int, st: int):
+    """The B fragments (wt_sign_frags) of the sign words on the device, for launches with two sketch warps."""
+    frags = torch.empty(4 * signs.numel(), dtype=torch.int32, device="cuda")
+    lib.call("wt_sign_frags", ptr(signs), ptr(frags), sketch_t, st)
+    return frags
+
+
 def fused_fits(lib: Lib, k: int, mb: int, n: int, kd: int, cfg, sketch_t: int) -> bool:
     """wt_fused_sketch takes cfg at M = mb (two sketch warps beside D decoders need D + 4 warps past M = 16)."""
     launched = ctypes.c_int(0)
@@ -574,15 +582,19 @@ def gate_pass(lib: Lib, torch, sketch_t: int, log, trials: int = 4) -> dict:
         j = (0, (1 << 32) - 1)[t] if t < 2 else rng.randrange(1 << 32)
         root = rng.randbytes(64)
         lib.call("wt_pass", j, ptr(to_dev(torch, root_words(root))), ptr(signs), sketch_t, st)
+        frags = sign_frags(lib, torch, signs, sketch_t, st)
         torch.cuda.synchronize()
         got = pass_state(lib)
         seed = SKT.pass_seed(TAG_SEED, j, root)
         ks = SKT.randomness().derive(seed, SKT.SIGN_DOMAIN, {"tag": SKT.NAME, "k": 16, "n": n}).value
-        want = SKT.sign_fragments(SKT.sign_bits(seed, 16, n), m, sketch_t)
+        bits = SKT.sign_bits(seed, 16, n)
+        want = SKT.sign_fragments(bits, m, sketch_t)
         ys = [rng.randbytes(32) for _ in range(40)]
         c = commit_gate(lib, torch, to_dev(torch, b"".join(ys)), len(ys), st, SKT.leaves, seed)
         rows.append({"j": j, "seed": got["seed"] == seed, "k_s": got["k_s"] == ks, "key": got["key"] == SKT.key(seed),
                      "signs": bool(np.array_equal(signs.cpu().numpy().view(np.uint32), want)),
+                     "frags": bool(np.array_equal(frags.cpu().numpy().view(np.uint32),
+                                                  SKT.b_fragments(bits, m, sketch_t))),
                      "leaves": c["leaves_ok"], "root": c["root_ok"]})
     ok = all(all(v for a, v in r.items() if a != "j") for r in rows)
     log(f"pass gate {lib.name}: {'ok' if ok else 'FAIL'} over {trials} (j, root): {rows if not ok else ''}")
@@ -708,6 +720,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         bits = SKT.sign_bits(TAG_SEED, s, SKT.vector_bytes(lib.sb, sketch_t))
         words = SKT.sign_fragments(bits, SKT.steps(lib.sb), sketch_t)
         sk[s] = {"bits": bits, "signs": torch.from_numpy(words.view(np.int32)).cuda()}
+        if s == 16:
+            sk[s]["frags"] = sign_frags(lib, torch, sk[s]["signs"], sketch_t, st)
     sk_bufs = {}
     sk_refs = {}
 
@@ -744,6 +758,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         set_pass(lib, sketch_t)
         signs = torch.empty_like(sk[16]["signs"])
         lib.call("wt_pass", j, ptr(to_dev(torch, root_words(root))), ptr(signs), sketch_t, st)
+        signs = sign_frags(lib, torch, signs, sketch_t, st)
         tb_dev, nvec = sk_tags_for(gr)
         tb_dev.fill_(0xFF)
         skb = torch.full((nvec * 16,), -1, dtype=torch.int32, device="cuda")
@@ -778,7 +793,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     def call(mode, k, wbuf, x, y, partials, cfg, knob=0, groups=0, steps=None, skout=None, signs=None):
         if mode == 3:
             tp = ptr(sk_tags_for(groups)[0]) if cfg[3] else ptr(tags_dev) if cfg[2] >= 0 else None
-            sg = signs if signs is not None else sk[cfg[3]]["signs"] if cfg[3] else None
+            sg = signs if signs is not None else (
+                sk[cfg[3]]["frags" if sketch_warps(cfg) else "signs"] if cfg[3] else None)
             lib.call("wt_fused_sketch", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0,
                      int(partials), cfg[0], cfg[1], groups, max(cfg[2], 0), ptr(steps), tp, TAG_BASE, cfg[3],
                      ptr(sg) if sg is not None else None, ptr(skout) if skout is not None else None, sketch_t,
@@ -936,8 +952,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             xrp = ptr(xr)
             tp = ptr(tags_dev) if mode == 3 and cfg[2] >= 0 else None
             nt = max(cfg[2], 0) if mode == 3 else 0
-            sks, sgp = (cfg[3], ptr(sk[cfg[3]]["signs"])) if mode == 3 and cfg[3] else (0, None)
             skw = sketch_warps(cfg) if mode == 3 else 0
+            sks, sgp = (cfg[3], ptr(sk[cfg[3]]["frags" if skw else "signs"])) if mode == 3 and cfg[3] else (0, None)
             if sks:
                 tp = ptr(sk_tags_for(gr)[0])
 

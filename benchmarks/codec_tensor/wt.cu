@@ -1880,7 +1880,8 @@ __host__ __device__ constexpr int sk_bufs() {
 #define WT_SK_DIAG 0
 #endif
 // sgs sign words (k_s = 16's signs, skt tasks' steps, a u32 a lane) after the sketch's buffers: wt_fused_sketch puts
-// them there when they fit beside the stages, and otherwise the decoders load them from global memory (sgs = 0).
+// them there when they fit beside the stages, and otherwise the decoders load them from global memory (sgs = 0). The
+// sketch warps' fragments are 4x the words, so they read them through L1 and L2 (sgs = 0 at SKW > 0).
 template <int NB8, int SKK, int SKW>
 __host__ __device__ constexpr int fused_smem_bytes(int stages, int sgs) {
   return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((6 * stages + 1) / 2) + 16 + sk_bufs<SKW>() * 64 * SKK + 4 * sgs;
@@ -2123,8 +2124,9 @@ __device__ __forceinline__ void sk_mma(const SkPart<KS> &P, const uint8_t *st, i
 }
 
 // ro-sketch-blake3/v0 on SKW sketch warps of their own (after the producer), so the decoders and the MMA warp do none
-// of it. Sketch warp q takes tasks ii = q, q + SKW, ... of each of the CTA's tiles: it loads the task's signs, waits
-// on `ready`, reads the stage's stored bytes (a step's A fragment a uint4 a lane, k_s / 8 MMAs) and arrives on
+// of it. Sketch warp q takes tasks ii = q, q + SKW, ... of each of the CTA's tiles: it loads the task's first B
+// fragments (k.signs, the rest PF steps ahead of their MMAs), waits on `ready`, reads the stage's stored bytes (a
+// step's A fragment a uint4 a lane, k_s / 8 MMAs) and arrives on
 // `sketched`, which the decoders wait on before they overwrite the stage in place. Its sums for the tile stay in its
 // MMAs' accumulators; at the tile's end the warps add them into the tile's buffer (tl % 2 NBT). At the end of each
 // batch of NBT tiles (and of the CTA's last tile) they meet at named barrier 1, and warp q copies out, hashes (a lane
@@ -2133,21 +2135,33 @@ __device__ __forceinline__ void sk_mma(const SkPart<KS> &P, const uint8_t *st, i
 // each at SKW = 2. Batch b + 2's adds come after batch b + 1's barrier, which follows batch b's zeroing.
 // Every warp runs every one of the CTA's tiles (tpc), its tasks or none, so the tiles past the CTA's tasks hash zeros.
 //
-// The B operand is SkB's (the interface a bound receipt drops into): SkB{}(sw, r, ii, p, lane) is B register r
-// (b0 at r = 2 blk, b1 at 2 blk + 1) of step p of the tile's task ii for this lane, from its sign word sw.
-// ro-sketch-blake3/v0's (SignB) is the ±1 prmt of sketching.sign_fragments; ro-bound-sketch/v0's would XOR the lane's
-// bytes of expand(z) into the 0x00 / 0xFF mask the same word selects.
+// The B operand is SkB's (the interface a bound receipt drops into): SkB{}(m, r, ii, p, lane) is B register r
+// (b0 at r = 2 blk, b1 at 2 blk + 1) of step p of the tile's task ii for this lane, from m, the lane's 4 words of the
+// pass's fragment array at that step (k.signs, in sign_frags_kernel's order, a uint4 a lane a step). For
+// ro-sketch-blake3/v0 the array holds the ±1 bytes and SignB takes them as they are; ro-bound-sketch/v0's would hold
+// the 0x00 / 0xFF mask M in the same order, and its SkB would XOR the lane's bytes of expand(z) into it.
 struct SignB {
-  __device__ __forceinline__ u32 operator()(u32 sw, int r, int, int, int) const {
-    return sk_sign((r % 6) / 3 ? sw >> 16 : sw, r % 3);
+  __device__ __forceinline__ u32 operator()(const uint4 &m, int r, int, int, int) const {
+    return r == 0 ? m.x : r == 1 ? m.y : r == 2 ? m.z : m.w;
   }
 };
+
+// sketching.sign_fragments' words (k_s = 16, a word a lane a step) as the sketch warps' B fragments: word e's 4 B
+// registers (the prmt each register's selector bits pick) at frags[e], so a sketch warp's step is one 16-byte load a
+// lane and no sign arithmetic.
+__global__ void sign_frags_kernel(const u32 *__restrict__ words, uint4 *__restrict__ frags, int n) {
+  const int e = blockIdx.x * blockDim.x + threadIdx.x;
+  if (e >= n) return;
+  const u32 sw = words[e];
+  frags[e] = make_uint4(sk_sign(sw, 0), sk_sign(sw, 1), sk_sign(sw, 2), sk_sign(sw >> 16, 0));
+}
 
 template <int KS, int SKW, class SkB>
 __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64 *sketched, int stages, int q,
                                             int lane, const Sketch &k) {
   static_assert(sk_words<KS>() == 1 && 16 % SKW == 0, "a sign word a lane a step; whole vectors a warp");
   constexpr int KB = KS / 8, VW = 16 / SKW, NBT = sk_batch<SKW>(), LEN = 8 + 4 * KS, NMB = (LEN + 63) / 64;
+  constexpr int PF = SK_M < 4 ? SK_M : 4;   // the steps whose fragments are in flight (L2 reads: 64 KiB at T = 8)
   const int g = lane >> 2, tq = lane & 3, swz = sk_swz<KS>(g);
   const u32 one = kOne;
   const SkB bop{};
@@ -2159,18 +2173,20 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
       const int i = tl * k.skt + ii;
       if (i >= k.ntasks) break;
       const int s = i % stages;
-      const u32 *sg = k.signs + (size_t)ii * SK_M * LANES + lane;
-      u32 sw[SK_M];
+      const uint4 *fg = reinterpret_cast<const uint4 *>(k.signs) + (size_t)ii * SK_M * LANES + lane;
+      uint4 mq[PF];
 #pragma unroll
-      for (int p = 0; p < SK_M; ++p) sw[p] = sg[p * LANES];
+      for (int p = 0; p < PF; ++p) mq[p] = __ldg(fg + p * LANES);
       mbar_wait(ready + s, (i / stages) & 1);
       const uint4 *st = reinterpret_cast<const uint4 *>(smem + (size_t)s * SB) + lane;
 #pragma unroll
       for (int p = 0; p < SK_M; ++p) {
+        const uint4 m = mq[p % PF];
+        if (p + PF < SK_M) mq[p % PF] = __ldg(fg + (p + PF) * LANES);
         const uint4 a = SB % SK_STEP == 0 || SK_STEP * p + 16 * lane < SB ? st[p * (SK_STEP / 16)]
                                                                           : make_uint4(0u, 0u, 0u, 0u);
 #pragma unroll
-        for (int b = 0; b < KB; ++b) mma_s8(acc[b], a, bop(sw[p], 2 * b, ii, p, lane), bop(sw[p], 2 * b + 1, ii, p, lane));
+        for (int b = 0; b < KB; ++b) mma_s8(acc[b], a, bop(m, 2 * b, ii, p, lane), bop(m, 2 * b + 1, ii, p, lane));
       }
       __syncwarp();
       if (lane == 0) mbar_arrive(sketched + s);
@@ -2626,7 +2642,8 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
 // k_s = sketch_k over tiles of skt tasks (stages < 2 skt), the signs as sketching.sign_fragments, each vector v's tag at
 // tag_base + v into tags[8 v ..] and, if sk_out, its sketch at sk_out[k_s v ..]; tags and sk_out hold
 // sketch_vectors(...) vectors. sketch_warps = 0: the decoders sketch and the MMA warp hashes; 2 (k_s = 16, full slot):
-// two sketch warps do both (sketch_warp), beside `decoders` decoders. The warps a launch may take are fused_warps'.
+// two sketch warps do both (sketch_warp), beside `decoders` decoders, and signs holds the words' B fragments
+// (wt_sign_frags), 4 u32 a word. The warps a launch may take are fused_warps'.
 int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
                     int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
                     int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,
@@ -2656,7 +2673,7 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
   };
 #define G(KK, NB, SK, SW)                                                                              \
   do {                                                                                                 \
-    const int sg = fused_smem_bytes<NB, SK, SW>(stages, signs16) <= optin ? signs16 : 0;                   \
+    const int sg = SW == 0 && fused_smem_bytes<NB, SK, SW>(stages, signs16) <= optin ? signs16 : 0;        \
     return partials ? go(fused_kernel<KK, NB, true, SK, SW>, fused_smem_bytes<NB, SK, SW>(stages, sg), sg) \
                     : go(fused_kernel<KK, NB, false, SK, SW>, fused_smem_bytes<NB, SK, SW>(stages, sg), sg); \
   } while (0)
@@ -2814,6 +2831,14 @@ int wt_pass_state(uint8_t *out) {
   memcpy(out + 32, p.ks, 32);
   memcpy(out + 96, p.leafmid, 64);
   return 0;
+}
+
+// The sketch warps' B fragments (frags, 4 u32 a word) from the k_s = 16 sign words of t tasks a tile (signs).
+int wt_sign_frags(const u32 *signs, u32 *frags, int t, cudaStream_t s) {
+  if (!signs || !frags || t < 1) return 1;
+  const int n = t * SK_M * LANES;
+  sign_frags_kernel<<<(n + 255) / 256, 256, 0, s>>>(signs, reinterpret_cast<uint4 *>(frags), n);
+  return cudaGetLastError() ? 4 : 0;
 }
 
 // leaves (ceil(nblk / 16) digests of 8 u64) from the tags of blocks [0, nblk).

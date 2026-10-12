@@ -311,6 +311,7 @@ class Step:
         st = BW.stream(torch)
         bits = SKT.sign_bits(BW.TAG_SEED, 16, SKT.vector_bytes(wt.sb, self.T))
         self.signs = torch.from_numpy(SKT.sign_fragments(bits, SKT.steps(wt.sb), self.T).view(np.int32)).cuda()
+        self.frags = BW.sign_frags(wt, torch, self.signs, self.T, st)   # the sketch warps' B fragments of the signs
         BW.set_pass(wt, self.T)
         self.pass_j = 0
         self.root0 = BW.to_dev(torch, BW.root_words(hashlib.sha512(b"verity/codec-tensor/step/registration").digest()))
@@ -373,17 +374,21 @@ class Step:
         y.zero_()
         o = self.off[(l, name)]
         to = self.tag_off[(k, l, name)]
+        sg = (self.frags if BW.sketch_warps(cfg) else self.signs).data_ptr() if sketch else None
         rc = self.wt.so.wt_fused_sketch(
             k, self.W.data_ptr() + o, self.x[kd].data_ptr(), y.data_ptr(), self.m, n, kd, o // self.wt.s, 0, cfg[0],
             cfg[1], gr, 0, steps.data_ptr(), self.tags.data_ptr() + 32 * to if sketch else None,
-            BW.TAG_BASE + to, 16 if sketch else 0, self.signs.data_ptr() if sketch else None, None, self.T,
+            BW.TAG_BASE + to, 16 if sketch else 0, sg, None, self.T,
             BW.sketch_warps(cfg), None, BW.stream(self.torch))
         if rc:
             raise RuntimeError(f"wt_fused_sketch {name} k={k}: error {rc}")
 
     def begin_pass(self) -> None:
-        """Pass j's signs, key and leaves' prefix from root_(j−1) (wt_pass, on the stream behind the last commit)."""
-        self.wt.call("wt_pass", self.pass_j, self.root_ptr, self.signs.data_ptr(), self.T, BW.stream(self.torch))
+        """Pass j's signs (and their B fragments), key and leaves' prefix from root_(j−1) (wt_pass, on the stream
+        behind the last commit)."""
+        st = BW.stream(self.torch)
+        self.wt.call("wt_pass", self.pass_j, self.root_ptr, self.signs.data_ptr(), self.T, st)
+        self.wt.call("wt_sign_frags", self.signs.data_ptr(), self.frags.data_ptr(), self.T, st)
 
     def commit(self, k: int) -> None:
         st = BW.stream(self.torch)

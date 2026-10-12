@@ -33,6 +33,19 @@ def test_fragments_equal_vectors(sb: int, k: int):
     assert np.array_equal(got, want)
 
 
+@pytest.mark.parametrize("t", [1, 2, 8])
+def test_b_fragments_are_the_prmt_registers(t: int):
+    """The sketch warps' fragments (wt_sign_frags: registers 0, 1, 2 the prmt of a word at e = 0, 1, 2, register 3 of
+    the word >> 16 at e = 0) are the B registers the prmt expansion of `sign_fragments` gives, and they carry S."""
+    m = SK.steps(8192)
+    bits = SK.sign_bits(SEED, 16, SK.vector_bytes(8192, t))
+    words, frags = SK.sign_fragments(bits, m, t), SK.b_fragments(bits, m, t)
+    want = [SK.prmt(*SK.PRMT[r % 3], (int(w) >> (16 if r == 3 else 0)) & 0xFFFF) for w in words for r in range(4)]
+    assert np.array_equal(frags, np.array(want, dtype=np.uint32))
+    signs = frags.view(np.uint8).view(np.int8).reshape(t, m, 8, 4, 2, 2, 4).astype(np.int64)   # ii, s, g, tq, blk, h, q
+    assert np.array_equal(signs.transpose(4, 2, 0, 1, 5, 3, 6).reshape(16, -1), 1 - 2 * bits.astype(np.int64))
+
+
 @pytest.mark.parametrize("sb", [8192, 8256])
 def test_vector_positions(sb: int):
     nbs, nchunks, groups, t = 7, 3, 3, 2

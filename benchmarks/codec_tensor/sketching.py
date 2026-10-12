@@ -13,6 +13,8 @@ vector   row r of a tile: position 32 (ii·m + s) + kk (task ii of the tile, ste
          n = 32 m T. Vector v = 16 (b·TPC + j) + r
 S        k × n signs: K_S = derive(σ, SIGN_DOMAIN, {"tag": NAME, "k": k, "n": n}), row c the first ⌈n / 8⌉ bytes of
          K_S.stream(("row", c)), bit p (byte p // 8, LSB first) 1 → −1, 0 → +1 (ra-sketch-tag's)
+B        S as the MMAs' B registers: `sign_fragments` (packed words, one prmt a register) and `b_fragments` (the
+         registers themselves, which the sketch warps load)
 sketch   σ_v = S · e_v over the integers (|σ_v[c]| ≤ 128 n < 2^24), k int32 little-endian words
 y_v      BLAKE3-keyed(K, u64be (jbase + v) ‖ σ_v), K = tags.Blake3Tag(name=NAME).key(σ); leaves (16 tags a leaf) and
          the RFC 6962 SHA-512 root as `tagging`
@@ -175,6 +177,19 @@ def sign_fragments(bits: np.ndarray, m: int, t: int) -> np.ndarray:
         for q in range(4):
             words[..., r // 6] |= b[..., r, q] << np.uint32(16 * ((r % 6) // 3) + 4 * q + r % 3)
     return words.reshape(-1)
+
+
+def b_fragments(bits: np.ndarray, m: int, t: int) -> np.ndarray:
+    """S at k = 16 as the sketch warps load it (`wt_sign_frags`, a uint4 a lane a step): u32 word
+    4 ((ii·m + s)·32 + lane) + r is B register r = 2 blk + h of step s of task ii for that lane, its byte q 0xFF (−1)
+    or 0x01 (+1) at S[8 blk + g][32 (ii·m + s) + 16 h + 4 tq + q]: `sign_fragments`' registers, expanded. A bound
+    receipt's mask (ro-bound-sketch/v0's M, 0xFF where its bit is 1) is in the same order."""
+    k, n = bits.shape
+    if k != 16 or n != 32 * m * t:
+        raise ValueError("S is 16 × 32 m T")
+    b = bits.reshape(2, 8, t, m, 2, 4, 4).transpose(2, 3, 1, 5, 0, 4, 6).reshape(t, m, LANES, 4, 4)
+    v = np.where(b == 1, np.uint32(0xFF), np.uint32(0x01)) << (np.uint32(8) * np.arange(4, dtype=np.uint32))
+    return np.bitwise_or.reduce(v, axis=-1).astype(np.uint32).reshape(-1)
 
 
 PRMT = ((0xFF01FF01, 0xFF01FF01), (0xFFFF0101, 0xFFFF0101), (0x01010101, 0xFFFFFFFF))
