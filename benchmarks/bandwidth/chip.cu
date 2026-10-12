@@ -15,9 +15,9 @@
 //   --ur      whether uniform register URn holds a value: urt rewritten (chip_ur.py) into chosen URs.
 //   const     a pointer chase through __constant__ memory (64 KiB, the bank's size), one thread: cycles per load against
 //             the footprint, at strides of 64 and 256 bytes (the line size from the ratio of the knees).
-//   tlb       a pointer chase over N pages of a 16 GiB allocation, one load a page (each in its own L2 set, L1
-//             bypassed, all held by L2), at 64 KiB and 2 MiB strides: cycles per load against N; the knees are the
-//             TLB levels' entries.
+//   tlb       a pointer chase over N pages of a 64 GiB allocation (or the largest of 48, 32, 16 GiB that fits), one
+//             load a page (each in its own L2 set, L1 bypassed, all held by L2), at 64 KiB and 2 MiB strides: cycles
+//             per load against N; the knees are the TLB levels' entries.
 //   l1        a pointer chase through F bytes on one SM, cached in L1 (no shared memory carved out): the L1's capacity.
 //   l2        a random pointer chase over F bytes by 4,096 chasers in 128-byte lines: the mean latency against F, from
 //             all hits to all misses, and the bytes L2 retained h(F)·F with h from the latencies at 16 MiB and 2 GiB.
@@ -153,14 +153,17 @@ static std::string unified_ptx(int n) {
 // with STEPS steps in block 0's first warp (its j at out[128], its cycles at cyc[lane]), and when thrash is 1 every
 // other block (one an SM) reads its `words` of `scrub` through
 // L2 (four times L2's size in all) after block 0's code and before its timed chase.  If the constants then come back
-// at the latency they had without the thrash, the level that holds them is not L2.
+// at the latency they had without the thrash, the level that holds them is not L2.  glevel is the control: the same
+// with the chases through L2 (ld.global.cg) over a 64 KiB buffer `g`, which shows what the thrash leaves of lines L2
+// holds.
 constexpr int CLEVEL_STEPS = 2048;
 
-static std::string clevel_ptx() {
-  std::string s = ptx_head() + ".const .align 4 .b32 cbank[16384];\n\n" +
+static std::string clevel_ptx(bool global) {
+  const std::string ld = global ? "ld.global.cg.u32" : "ld.const.u32";
+  std::string s = ptx_head() + (global ? "" : ".const .align 4 .b32 cbank[16384];\n\n") +
                   ".visible .entry clevel(.param .u64 out, .param .u64 cyc, .param .u32 warm, .param .u32 n, "
                   ".param .u32 y, .param .u32 mask, .param .u64 scrub, .param .u64 words, .param .u64 flags, "
-                  ".param .u32 thrash)\n{\n"
+                  ".param .u32 thrash, .param .u64 g)\n{\n"
                   " .reg .b32 %x<4>, %y, %i, %j, %k, %wm, %n, %m, %t, %th, %c, %b, %nb, %acc, %v;\n"
                   " .reg .b64 %base, %p, %o, %q, %w, %t0, %t1, %sc, %wd, %fl, %e, %end, %step;\n .reg .pred %z;\n"
                   " ld.param.u64 %o, [out];\n ld.param.u64 %q, [cyc];\n ld.param.u32 %wm, [warm];\n"
@@ -169,9 +172,10 @@ static std::string clevel_ptx() {
                   " ld.param.u32 %th, [thrash];\n cvta.to.global.u64 %o, %o;\n cvta.to.global.u64 %q, %q;\n"
                   " cvta.to.global.u64 %sc, %sc;\n cvta.to.global.u64 %fl, %fl;\n mov.u32 %b, %ctaid.x;\n"
                   " mov.u32 %nb, %nctaid.x;\n mov.u32 %i, %tid.x;\n setp.ne.u32 %z, %b, 0;\n @%z bra THRASH;\n"
-                  " setp.ge.u32 %z, %i, 32;\n @%z bra DONE;\n mov.u64 %base, cbank;\n"
+                  " setp.ge.u32 %z, %i, 32;\n @%z bra DONE;\n" +
+                  (global ? " ld.param.u64 %base, [g];\n cvta.to.global.u64 %base, %base;\n" : " mov.u64 %base, cbank;\n") +
                   " and.b32 %j, %i, %m;\n mov.u32 %k, 0;\n"  // warp 0, a per-thread j: both chases LDC
-                  "WARM:\n mul.wide.u32 %p, %j, 4;\n add.u64 %p, %p, %base;\n ld.const.u32 %j, [%p];\n"
+                  "WARM:\n mul.wide.u32 %p, %j, 4;\n add.u64 %p, %p, %base;\n " + ld + " %j, [%p];\n"
                   " add.u32 %k, %k, 1;\n setp.lt.u32 %z, %k, %wm;\n @%z bra WARM;\n and.b32 %t, %j, %m;\n";
   for (int k = 0; k < 4; ++k)
     s += " add.u32 %x" + std::to_string(k) + ", %i, " + std::to_string(k) + ";\n xor.b32 %x" + std::to_string(k) +
@@ -182,7 +186,7 @@ static std::string clevel_ptx() {
        "WAIT0:\n ld.volatile.global.u32 %c, [%fl+4];\n setp.lt.u32 %z, %c, %nb;\n @%z bra WAIT0;\n"
        "CHASE:\n mov.u32 %k, 0;\n mov.u64 %t0, 0;\n"
        "TIMED:\n setp.eq.u32 %z, %k, 1;\n @%z mov.u64 %t0, %clock64;\n mul.wide.u32 %p, %j, 4;\n"
-       " add.u64 %p, %p, %base;\n ld.const.u32 %j, [%p];\n add.u32 %k, %k, 1;\n setp.lt.u32 %z, %k, %n;\n"
+       " add.u64 %p, %p, %base;\n " + ld + " %j, [%p];\n add.u32 %k, %k, 1;\n setp.lt.u32 %z, %k, %n;\n"
        " @%z bra TIMED;\n mov.u64 %t1, %clock64;\n sub.u64 %t1, %t1, %t0;\n";
   ptx_store_chains(s, 4);
   s += " st.global.u32 [%o+512], %j;\n mul.wide.u32 %w, %i, 8;\n add.u64 %w, %w, %q;\n st.global.u64 [%w], %t1;\n"
@@ -289,6 +293,21 @@ __global__ void global_chase(const uint32_t* __restrict__ p, uint64_t start, int
   cycles[0] = t1 - t0;
 }
 
+// One thread chasing 32-bit indices of 128-byte lines (the next index in each line's first word) through L2 only: a
+// chase over up to 512 GiB.
+__global__ void line_chase(const uint32_t* __restrict__ p, uint32_t start, int warm, int n, uint32_t* out,
+                           unsigned long long* cycles) {
+  uint32_t i = start;
+#pragma unroll 1
+  for (int k = 0; k < warm; ++k) i = __ldcg(p + (uint64_t)i * 32);
+  const unsigned long long t0 = clock64();
+#pragma unroll 1
+  for (int k = 0; k < n; ++k) i = __ldcg(p + (uint64_t)i * 32);
+  const unsigned long long t1 = clock64();
+  out[0] = i;
+  cycles[0] = t1 - t0;
+}
+
 // Many chasers, one a warp, over one random cycle of line indices (each line's first word holds the next line).
 __global__ void l2_chase(const uint32_t* __restrict__ p, const uint32_t* __restrict__ starts, int n, uint32_t* out,
                          unsigned long long* cycles) {
@@ -338,7 +357,8 @@ static int emit_ptx(const std::string& dir) {
   for (int n : ICACHE8_STEPS) rc |= write_file(dir + "/icache8_" + std::to_string(n) + ".ptx", icache_ptx(n, 8));
   for (int n : UNIFIED_STEPS) rc |= write_file(dir + "/unified_" + std::to_string(n) + ".ptx", unified_ptx(n));
   for (int n : ICACHEF_STEPS) rc |= write_file(dir + "/icachef_" + std::to_string(n) + ".ptx", icachef_ptx(n));
-  rc |= write_file(dir + "/clevel_" + std::to_string(CLEVEL_STEPS) + ".ptx", clevel_ptx());
+  rc |= write_file(dir + "/clevel_" + std::to_string(CLEVEL_STEPS) + ".ptx", clevel_ptx(false));
+  rc |= write_file(dir + "/glevel_" + std::to_string(CLEVEL_STEPS) + ".ptx", clevel_ptx(true));
   rc |= write_file(dir + "/urt.ptx", urt_ptx());
   return rc;
 }
@@ -397,13 +417,18 @@ static int run_icachef(std::string& j, const std::string& dir) {
   return 0;
 }
 
-// The 64 KiB constant bank after 256 KiB of code, without and with the other SMs' L2 thrash between them.
-static int run_clevel(std::string& j, const std::string& dir, const Dev& d) {
+// The 64 KiB constant bank after 256 KiB of code, without and with the other SMs' L2 thrash between them; with
+// `global`, a 64 KiB buffer chased through L2 instead.
+static int run_clevel(std::string& j, const std::string& dir, const Dev& d, bool global) {
+  const std::string name = global ? "glevel" : "clevel";
   cudaLibrary_t lib;
-  cudaKernel_t fn = load_kernel(dir + "/clevel_" + std::to_string(CLEVEL_STEPS) + ".cubin", "clevel", &lib);
+  cudaKernel_t fn = load_kernel(dir + "/" + name + "_" + std::to_string(CLEVEL_STEPS) + ".cubin", "clevel", &lib);
   void* bank;
-  size_t bank_bytes;
-  OK(cudaLibraryGetGlobal(&bank, &bank_bytes, lib, "cbank"));
+  size_t bank_bytes = 65536;
+  if (global)
+    OK(cudaMalloc(&bank, bank_bytes));
+  else
+    OK(cudaLibraryGetGlobal(&bank, &bank_bytes, lib, "cbank"));
   const int count = 65536 / 64, sw = 16;
   std::vector<uint32_t> img(bank_bytes / 4, 0);
   for (int k = 0; k < count; ++k) img[k * sw] = ((k + 1) % count) * sw;
@@ -419,7 +444,7 @@ static int run_clevel(std::string& j, const std::string& dir, const Dev& d) {
   OK(cudaMalloc(&scrub, words * 4 * (blocks - 1)));
   OK(cudaMemset(scrub, 0x5A, words * 4 * (blocks - 1)));
   const uint32_t y = 0x2545F491u;
-  j += "\"clevel\":{\"code_bytes\":" + std::to_string(128 * CLEVEL_STEPS) +
+  j += "\"" + name + "\":{\"code_bytes\":" + std::to_string(128 * CLEVEL_STEPS) +
        ",\"const_footprint\":65536,\"stride\":64,\"thrash_bytes\":" + std::to_string(words * 4 * (blocks - 1)) +
        ",\"runs\":[";
   bool first = true;
@@ -427,7 +452,7 @@ static int run_clevel(std::string& j, const std::string& dir, const Dev& d) {
     int warm = 2 * count, loads = 2 * count;
     uint32_t yy = y, mask = 0, th = thrash;
     OK(cudaMemset(flags, 0, 4096));
-    void* args[] = {&out, &cyc, &warm, &loads, &yy, &mask, &scrub, &words, &flags, &th};
+    void* args[] = {&out, &cyc, &warm, &loads, &yy, &mask, &scrub, &words, &flags, &th, &bank};
     OK(cudaLaunchKernel((const void*)fn, dim3(blocks), dim3(256), args, 0, 0));
     OK(cudaGetLastError());
     OK(cudaDeviceSynchronize());
@@ -441,7 +466,7 @@ static int run_clevel(std::string& j, const std::string& dir, const Dev& d) {
     icache_host(31, CLEVEL_STEPS, 4, 1, y, x31);
     if (memcmp(x0, got, 16) || memcmp(x31, got + 124, 16) || got[128] != (uint32_t)(((warm + loads) % count) * sw) ||
         arrived != (thrash ? (uint32_t)(blocks - 1) : 0u))
-      return fail("clevel result, thrash=" + std::to_string(thrash));
+      return fail(name + " result, thrash=" + std::to_string(thrash));
     const double c = (double)*std::max_element(cy, cy + 32);
     j += std::string(first ? "" : ",") + "{\"thrash\":" + std::to_string(thrash) + ",\"cycles_per_load\":" +
          num(c / (loads - 1)) + "}";
@@ -449,6 +474,7 @@ static int run_clevel(std::string& j, const std::string& dir, const Dev& d) {
   }
   j += "]},";
   OK(cudaLibraryUnload(lib));
+  if (global) cudaFree(bank);
   cudaFree(out);
   cudaFree(cyc);
   cudaFree(flags);
@@ -660,10 +686,16 @@ static void link_chain(uint32_t* dev, const std::vector<uint64_t>& offs) {
 }
 
 static int run_tlb(std::string& j) {
-  const size_t span = 16ull << 30;
-  uint32_t* buf;
-  OK(cudaMalloc(&buf, span));
-  uint64_t* scratch;
+  size_t span = 0;
+  uint32_t* buf = nullptr;
+  for (size_t gib : {64, 48, 32, 16})
+    if (cudaMalloc(&buf, gib << 30) == cudaSuccess) {
+      span = gib << 30;
+      break;
+    }
+  (void)cudaGetLastError();
+  if (!span) return fail("tlb: no 16 GiB allocation");
+  uint32_t* scratch;
   unsigned long long* cyc;
   OK(cudaMalloc(&scratch, 8));
   OK(cudaMalloc(&cyc, 8));
@@ -671,17 +703,31 @@ static int run_tlb(std::string& j) {
   bool first = true;
   for (size_t page : {64ull << 10, 2ull << 20})
     for (int count : {4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096,
-                      6144, 8192}) {
+                      6144, 8192, 12288, 16384, 24576, 32768}) {
       if ((uint64_t)count * page > span) break;
-      // Element k at page k, line (k mod 512) of it: one load a page, each in its own L2 set, 4 KiB to 1 MiB in all.
-      std::vector<uint64_t> offs(count);
-      for (int k = 0; k < count; ++k) offs[k] = ((uint64_t)k * page + (uint64_t)(k % 512) * 128 % page) / 4;
-      if (offs.back() > UINT32_MAX) break;
-      link_chain(buf, offs);
-      double lat;
-      if (int rc = chase<false>(buf, nullptr, offs, &lat, scratch, cyc, "tlb chase")) return rc;
+      // Element k at page k, line (k mod 512) of it: one load a page, each in its own L2 set, 4 KiB to 4 MiB in all.
+      std::vector<uint64_t> lines(count);
+      for (int k = 0; k < count; ++k) lines[k] = (uint64_t)k * (page / 128) + (uint64_t)(k % 512) % (page / 128);
+      for (int k = 0; k < count; ++k) {
+        const uint32_t next = (uint32_t)lines[(k + 1) % count];
+        OK(cudaMemcpy(buf + lines[k] * 32, &next, 4, cudaMemcpyHostToDevice));
+      }
+      const int warm = 2 * count, n = std::max(4096, 4 * count);
+      std::vector<double> lat;
+      for (int t = 0; t < 4; ++t) {
+        line_chase<<<1, 1>>>(buf, (uint32_t)lines[0], warm, n, scratch, cyc);
+        OK(cudaGetLastError());
+        OK(cudaDeviceSynchronize());
+        uint32_t got;
+        unsigned long long c;
+        OK(cudaMemcpy(&got, scratch, 4, cudaMemcpyDeviceToHost));
+        OK(cudaMemcpy(&c, cyc, 8, cudaMemcpyDeviceToHost));
+        if (got != (uint32_t)lines[(warm + n) % count]) return fail("tlb chase");
+        if (t) lat.push_back((double)c / n);
+      }
+      std::sort(lat.begin(), lat.end());
       j += std::string(first ? "" : ",") + "{\"page\":" + std::to_string(page) + ",\"pages\":" + std::to_string(count) +
-           ",\"cycles_per_load\":" + num(lat) + "}";
+           ",\"cycles_per_load\":" + num(lat[1]) + "}";
       first = false;
     }
   j += "]},";
@@ -794,7 +840,7 @@ int main(int argc, char** argv) {
       fprintf(stderr,
               "usage: bwchip --emit DIR\n"
               "       bwchip --ur URT_CUBIN A B\n"
-              "       bwchip [--out DIR] [--ptx DIR_OF_CUBINS] [--only icache|icache8|unified|const|tlb|l1|l2]\n");
+              "       bwchip [--out DIR] [--ptx DIR_OF_CUBINS] [--only icache|icache8|unified|icachef|clevel|glevel|const|tlb|l1|l2]\n");
       return 2;
     }
   }
@@ -827,7 +873,8 @@ int main(int argc, char** argv) {
     sweep("icache8", [&](std::string& s) { return chip::run_icache(s, ptx_dir, 8); });
     sweep("unified", [&](std::string& s) { return chip::run_unified(s, ptx_dir); });
     sweep("icachef", [&](std::string& s) { return chip::run_icachef(s, ptx_dir); });
-    sweep("clevel", [&](std::string& s) { return chip::run_clevel(s, ptx_dir, d); });
+    sweep("clevel", [&](std::string& s) { return chip::run_clevel(s, ptx_dir, d, false); });
+    sweep("glevel", [&](std::string& s) { return chip::run_clevel(s, ptx_dir, d, true); });
   }
   sweep("const", [&](std::string& s) { return chip::run_const(s); });
   sweep("tlb", [&](std::string& s) { return chip::run_tlb(s); });
