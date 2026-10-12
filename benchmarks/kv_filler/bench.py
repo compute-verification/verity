@@ -157,11 +157,11 @@ class Seq:
         if rc:
             raise RuntimeError(f"sq_stop error {rc}")
 
-    def progress(self) -> tuple[int, int]:
-        """Bytes and epochs logged so far."""
-        p = (ctypes.c_uint64 * 2)()
+    def progress(self) -> tuple[int, int, int, int]:
+        """Bytes and epochs logged so far, steps begun, and STEP kernels launched."""
+        p = (ctypes.c_uint64 * 4)()
         self.so.sq_progress(p)
-        return p[0], p[1]
+        return p[0], p[1], p[2], p[3]
 
     def now(self, stream: int) -> float:
         return self.so.sq_now_ms(stream)

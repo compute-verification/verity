@@ -525,8 +525,11 @@ def main() -> int:
                 gpu_busy += max(0.0, g1 - max(g0, edge))
                 edge = max(edge, g1)
             recs = grecs
+            seq_counts = None
             if top == "seq":
                 cur.pop("seq_step")
+                _, _, n_steps, n_launches = sq.progress()
+                seq_counts = {"steps_begun": n_steps, "step_launches": n_launches}
                 sq.stop()
                 recs = tu.log()
             elif top not in ("none", "gemm"):
@@ -551,7 +554,7 @@ def main() -> int:
                                for w in (0.25, 1.0, 5.0)],
                    "step_records": [{k2: (round(v - t_start, 5) if k2 in ("t0", "t1") else v) for k2, v in s.items()}
                                     for s in steps],
-                   "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps}
+                   "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps, "seq": seq_counts}
             if ek:
                 run.update({"encode_k": ek, "encode_prefill_tokens": cur["enc_prefill_tokens"],
                             "encode_decode_tokens": cur["enc_decode_tokens"], "encode_decode_inline": not a.encode_grid,

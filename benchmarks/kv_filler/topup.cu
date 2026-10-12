@@ -788,11 +788,11 @@ struct State {
   unsigned long long g0_h = 0;
   uint64_t lim = 0;  // the host's copy of seq->limit, the source of its async copy
   cudaStream_t s_base = nullptr, s_idle = nullptr, s_step = nullptr, s_h = nullptr;
-  cudaEvent_t start = nullptr, base_done[2] = {nullptr, nullptr}, idle_done = nullptr, step_ev = nullptr;
+  cudaEvent_t start = nullptr, base_done[2] = {nullptr, nullptr}, idle_done = nullptr, step_ev = nullptr, step_done = nullptr;
   std::mutex step_mu;
   std::thread th;
   std::atomic<int> run{0}, err{0};
-  std::atomic<uint64_t> units_done{0}, epochs_done{0};
+  std::atomic<uint64_t> units_done{0}, epochs_done{0}, steps{0}, step_launches{0};
   std::mutex m;
   std::vector<tu::Rec> log;
 };
@@ -938,6 +938,7 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   CK(cudaEventCreateWithFlags(&st->base_done[1], cudaEventDisableTiming));
   CK(cudaEventCreate(&st->idle_done));
   CK(cudaEventCreateWithFlags(&st->step_ev, cudaEventDisableTiming));
+  CK(cudaEventCreateWithFlags(&st->step_done, cudaEventDisableTiming));
   std::vector<uint32_t> sg(fl::SIGN_WORDS);
   tu::fill_signs(seed, sg.data());
   CK(cudaMalloc(&st->signs, sg.size() * 4));
@@ -979,17 +980,23 @@ void sq_idle(int on, uint64_t budget) {
 }
 
 // A step's start on `stream`: the gate's busy count up, and (ctas > 0) a STEP kernel of `ctas` CTAs beside the step,
-// ordered after the count, on the filler's step stream.
+// ordered after the count, on the filler's step stream, unless the last one has not returned: it reads while any step
+// is on the GPU, so it covers this one, and a launch queued behind it would wait, and once the queue is full, block the
+// caller.
 int sq_step_begin(int ctas, void* stream) {
   sq::State* st = sq::S;
   if (!st) return 0;
   cudaStream_t s = (cudaStream_t)stream;
   fl::gate_step<<<1, 1, 0, s>>>(tu::gate, 1);
+  st->steps += 1;
   if (ctas <= 0) return (int)cudaGetLastError();
   std::lock_guard<std::mutex> g(st->step_mu);
+  if (cudaEventQuery(st->step_done) == cudaErrorNotReady) return (int)cudaGetLastError();
   CK(cudaEventRecord(st->step_ev, s));
   CK(cudaStreamWaitEvent(st->s_step, st->step_ev, 0));
-  return sq::launch(*st, fl::STEP, ctas, st->taken + 3, st->step_budget, st->s_step);
+  if (int rc = sq::launch(*st, fl::STEP, ctas, st->taken + 3, st->step_budget, st->s_step)) return rc;
+  st->step_launches += 1;
+  return (int)cudaEventRecord(st->step_done, st->s_step);
 }
 
 int sq_step_end(void* stream) {
@@ -1006,7 +1013,7 @@ int sq_stop() {
   int rc = st->err.load();
   tu::gate_set(-1, -1, true);
   for (cudaStream_t s : {st->s_base, st->s_idle, st->s_step, st->s_h}) cudaStreamDestroy(s);
-  for (cudaEvent_t e : {st->start, st->base_done[0], st->base_done[1], st->idle_done, st->step_ev}) cudaEventDestroy(e);
+  for (cudaEvent_t e : {st->start, st->base_done[0], st->base_done[1], st->idle_done, st->step_ev, st->step_done}) cudaEventDestroy(e);
   for (void* p : {(void*)st->signs, (void*)st->seq, (void*)st->ring.xr, (void*)st->ring.cnt, (void*)st->ring.t0, (void*)st->ring.t1,
                   (void*)st->taken, (void*)st->g0})
     cudaFree(p);
@@ -1017,9 +1024,12 @@ int sq_stop() {
   return rc;
 }
 
+// Bytes and epochs logged, steps begun, and STEP kernels launched.
 void sq_progress(uint64_t* out) {
   out[0] = sq::S ? sq::S->units_done.load() * fl::UNIT_BYTES : 0;
   out[1] = sq::S ? sq::S->epochs_done.load() : 0;
+  out[2] = sq::S ? sq::S->steps.load() : 0;
+  out[3] = sq::S ? sq::S->step_launches.load() : 0;
 }
 
 // An event recorded now on `stream`, on the start event's clock (ms), or -1.
