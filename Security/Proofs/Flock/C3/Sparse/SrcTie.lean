@@ -10,8 +10,8 @@ import Proofs.Flock.VBridge.AccUnits
 words `w` and coins `c` at the rep's values, held by a RecSparse unit V*'s check accepted (`SparseTie`): the circuit
 passes `RecSparse.check` at the session's shape (`unitShape`), the laid-out unit's rows hold at `v`, its input columns
 hold `w`, the verifier row at `c` and the slots' types (`tauArr`), and its residuals' output columns are zero. The tie
-states the rows as `LaidRows` of `RecSparse.unitLaid`; reading them off V*'s layers, as `ResLayer` does for
-`RecResiduals`, is not done here. `srcSparseOK_of_tie`: then the source's sparse phases play (`SrcSparseOK`).
+states the rows as `LaidRows` of `RecSparse.unitLaid`; `SrcLayer` reads them off V*'s layers, as `ResLayer` does for
+`RecResiduals` (`sparseTie_of_layer`). `srcSparseOK_of_tie`: then the source's sparse phases play (`SrcSparseOK`).
 `check_sparse` bounds `T_LOG`, and `laid_sparse` reads the zero columns as the unit's residuals being zero, so the unit
 accepts and plays its phase on its steps (`playsT_of_unit`).
 -/
