@@ -117,6 +117,18 @@ def test_a_tip_checked_before_main_moved_over_one_of_its_files_is_rebuilt_and_ch
     assert _git(world.origin, "rev-parse", "main") == other and h.launched[-1][0] == _tip(world) != old
 
 
+def test_a_main_that_changed_check_tooling_is_never_landed_on_unchecked(world, monkeypatch):
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    old = _tip(world)
+    _check(world, monkeypatch, old)
+    other = world.change({"tools/verity/check/check.py": "# a new step\n"})
+    _git(world.dev, "push", "-q", "origin", f"{other}:refs/heads/main")
+    assert h.tick().startswith("launched")
+    assert _git(world.origin, "rev-parse", "main") == other and h.launched[-1][0] == _tip(world) != old
+
+
 def test_a_failed_check_and_a_launch_that_registers_nothing_are_told_to_the_lander_once(world, monkeypatch):
     h = Harness(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))

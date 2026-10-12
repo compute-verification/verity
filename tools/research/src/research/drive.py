@@ -3,7 +3,8 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
 
 1. Land.  Walk the queue's branch down from its tip to the newest commit with a passing `check` and land it as the lander does:
    a merge commit onto `main` naming its PRs, with a `Checked:` trailer for the run.  On a `main` that moved outside the queue,
-   the commit still lands when the commits `main` gained share no file with it (`Skipped-check:` names them).  Then
+   the commit still lands when the commits `main` gained share no file with it (`Skipped-check:` names them) and change
+   no check tooling (`CHECK_TOOLING`), which would have checked it differently.  Then
    `merge.caught_up` (the spec DM, node 1's mirror, the post-train regression, the landing post) and the sweep.
 2. Sync `next` (`Queue.sync`): admit and drop PRs, rebuild on a moved `main`.
 3. Check `next` in trains of `train_size` PRs, each stacked on the one below (every `train_size`-th member's commit, and the
@@ -38,6 +39,8 @@ ACTIVE = ("submitted", "waiting", "running", "unknown")
 PUBLISH_GRACE_S = 1800
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
+#: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
+CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
 RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
 
 
@@ -184,9 +187,11 @@ class Driver:
                 continue
             members = chain[: i + 1]
             prs = " ".join(f"#{x.pr}" for x in members)
-            if moved and (shared := sorted(set(moved) & changed(self.repo, base, m.commit))):
+            if moved and ((shared := sorted(set(moved) & changed(self.repo, base, m.commit)))
+                          or (shared := [p for p in moved if p.startswith(CHECK_TOOLING)])):
                 q.log(f"research queue drive: {prs} passed ({v.attempt}) on {base[:12]}, but `main` moved to {main[:12]} and "
-                      f"shares {', '.join(shared[:5])} with it: the next sync rebuilds `{q.branch}` on `main` for a new check")
+                      f"{'shares' if set(shared) & changed(self.repo, base, m.commit) else 'changed check tooling in'} "
+                      f"{', '.join(shared[:5])}: the next sync rebuilds `{q.branch}` on `main` for a new check")
                 return None
             if dry_run or q.shadow:
                 q.log(f"research queue drive: would land {prs} ({m.commit[:12]}, check {v.attempt})"
