@@ -36,7 +36,6 @@ theorem zerocheck_emitted (m : ℕ) (hm : 14 ≤ m) (digest cap : ByteArray) (p 
   have e₂ := absorbBytes_emitted h₂
   obtain ⟨_, t₃, h₃, h⟩ := bind_ok h
   have e₃ := absorbBytes_emitted h₃
-  obtain ⟨-, h⟩ := check_bind h
   obtain ⟨_, t₄, h₄, h⟩ := bind_ok h
   have e₄ := label_emitted h₄
   have r₄ := e₄.retained (e₃.retained (e₂.retained (e₁.retained hret)))
