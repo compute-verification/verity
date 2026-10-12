@@ -15,6 +15,12 @@ coins (or, under Fiat–Shamir, the random oracle's, as in `Rate.Chain`).
 * `RateHorizon`: the bound for a chain's passes, with their correct receipts as the good sets.
 * `RateChainSampledRO`, `RateChainSampled`: the route `Sampled`: with `RateChainPaidRO`'s conservation, a window whose
   passes are all accepted read the words of more than `K` correct receipts, except with the two bounds' sum.
+* `RateWindowDraw`: the deployed window's draw, `d` openings pooled over its passes' `P·N` receipts after the last root.
+* `RateSessionDraw`: a session of such windows, each adapting to the earlier windows' draws: the horizon's shortfall and
+  every window's, at once.
+
+The prover is one undifferentiated resource (`Definitions/Accounting/RateAuditHorizon.lean`): these bound the correct
+receipts, and with conservation the words read, rebuilt or held, whichever devices or parties hold them.
 -/
 
 namespace Accounting.Guarantees
@@ -114,5 +120,52 @@ def RateChainSampled : Prop :=
           (K + 1) * b)
       ≤ ((K : ℝ≥0∞) / (P * N)) ^ (s * P) +
         (P : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam)
+
+/-- **A window's pooled draw.** For every chained prover over `P` passes (`Rate.Chain`), over a uniform store, each
+pass's uniform coins and one draw of `d` openings, each a pass and a word, uniform over the window's `P·N` receipts
+(`Rate.WindowCoins`): the probability that every opening lands on a correct receipt (`Chain.correctAll`) while the
+window holds at most `K` correct receipts is at most `(K / (P·N))^d`.
+
+**The reading.** The deployed window: its passes draw nothing of their own, and one draw from the openings coin, after
+the last root, opens `d` of all its passes' receipts. At `K = (1 − d̄)·P·N`, a window short of its receipts by `d̄`
+passes with probability at most `(1 − d̄)^d`, however its shortfall is spread over its passes.
+
+Proof: `Accounting.SecurityProofs.RateWindowDraw`: `HorizonSampling`'s one round at `M = P·N`: the draw is uniform and
+independent of the window's other coins, so at each value of them it lands in the correct receipts with probability
+`(#correct/(P·N))^d`.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RateWindowDraw : Prop :=
+  ∀ (P N b h ρ S L q r s d K : ℕ) (A : Rate.Chain P N b h ρ S L q r s),
+    pr (fun x : Store N b × WindowCoins P N b h ρ r s d =>
+        (∀ t, x.2.2 t ∈ A.correctAll x.1 x.2.1) ∧ (A.correctAll x.1 x.2.1).card ≤ K)
+      ≤ ((K : ℝ≥0∞) / (P * N)) ^ d
+
+/-- **A session's pooled draws: the horizon and every window.** For every session of `n` chained windows on one store
+(`Rate.Session`: window `w`'s chained prover any function of the earlier windows' coins, their draws among them), each
+closed by its pooled draw of `d` openings: the probability that every window's openings land on correct receipts while
+either the session holds at most `K` correct receipts in all or some window holds at most `K_w` is at most
+
+  `(K / (n·P·N))^(d·n) + (((n − 1)·P·N + K_w) / (n·P·N))^(d·n)`.
+
+**The reading.** The hybrid claim: at `K = (1 − d̄)·n·P·N` and `K_w = (1 − d_w)·P·N`, a session whose openings all pass
+was short by less than `d̄` over its horizon and by less than `d_w` in every window, except with
+`(1 − d̄)^(d·n) + (1 − d_w/n)^(d·n) ≤ (1 − d̄)^(d·n) + e^(−d·d_w)`. The floor needs no union over the windows: a prover
+can't make a short window pass more often by shorting several. At `2^-40` for each, `d̄ = 0.15%` needs `d·n ≥ 18,470`
+openings over the horizon and `d_w = 1%` needs `d ≥ 2,773` a window.
+
+Proof: `Accounting.SecurityProofs.RateSessionDraw`, `HorizonSampling` with the windows as rounds and `M = P·N` at each
+store, twice: with each window's correct receipts as its good set, and with every window's receipts good but the first
+window holding at most `K_w`, whose correct receipts are its good set.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RateSessionDraw : Prop :=
+  ∀ (n P N b h ρ S L q r s d K Kw : ℕ) (A : Rate.Session n P N b h ρ S L q r s d),
+    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.chain w x.2).correctAll x.1 (x.2 w).1) ∧
+          (∑ w, ((A.chain w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
+            ∃ w, ((A.chain w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw))
+      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
+        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n)
 
 end Accounting.Guarantees
