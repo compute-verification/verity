@@ -500,6 +500,12 @@
    "assumptions": [],
    "type_hash": "a21adbd046d00882c1e70e700d64da16422d54a36bf8750774eecbb17dc8992c"
   },
+  "Accounting.SecurityProofs.RateAuditInteractive": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditInteractiveRO": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.RateAuditWindows": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RateAuditWindows : Accounting.Guarantees.RateAuditWindows"],
@@ -517,6 +523,12 @@
    "signature": ["Accounting.SecurityProofs.RateOfAudit : Accounting.Guarantees.RateOfAudit"],
    "assumptions": [],
    "type_hash": "f06ccbbbc49c0aaf0044100fa98746c08622542d33f710ef72f4e32d0ab54702"
+  },
+  "Accounting.SecurityProofs.RateOfAuditInteractive": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateOfAuditInteractiveRO": {
+   "owner": "@memory-accounting"
   },
   "Bandwidth.SecurityProofs.AuditInteractive": {
    "owner": "@memory-accounting"
@@ -3821,7 +3833,11 @@
    "Bandwidth.SecurityProofs.HonestPasses": "completeness: an honest device (no on-chip state, side sources or regeneration, N queries) is accepted on every store, oracle and sample with ingress exactly N * b, so AuditRO's event is not vacuous and the gap between N * b and its floor k * b - S - c - G * b - lam is in the lock",
    "Bandwidth.SecurityProofs.AuditRelay": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose side sources may depend on the oracle (Security/Definitions/Accounting/Bandwidth/Relay.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the RelayDevice it ranges over, not the bandwidth audit's code; relayed tags count against the side budget, at m * b bits for m blocks.",
    "Bandwidth.SecurityProofs.AuditInteractive": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering any function of the store, the oracle and what was sent (Security/Definitions/Accounting/Bandwidth/Interactive.lean), with the device's bounds (S_chip, the side bits read, T / R_regen, queries) as a field of the InteractiveDevice it ranges over, not the bandwidth audit's code; sends are unbounded and free, and relayed tags count against the side budget as in AuditRelay.",
-   "Bandwidth.SecurityProofs.AuditInteractiveRO": "frozen (no-function,hash): As AuditInteractive, for side sources whose answers don't depend on the oracle, at AuditRO's bound."
+   "Bandwidth.SecurityProofs.AuditInteractiveRO": "frozen (no-function,hash): As AuditInteractive, for side sources whose answers don't depend on the oracle, at AuditRO's bound.",
+   "Accounting.SecurityProofs.RateAuditInteractiveRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering any function of the store, the certified stream and what was sent, but not of the oracle (Security/Definitions/Accounting/RateAuditInteractive.lean), at RateAudit's floor and error, with the device's bounds (S_chip, the side link's cap * T, queries) as fields of the InteractiveDevice it ranges over, not the rate audit's code; sends are unbounded and free.",
+   "Accounting.SecurityProofs.RateAuditInteractive": "frozen (no-function,hash): As Accounting.SecurityProofs.RateAuditInteractiveRO, for side sources whose answers may also depend on the oracle: relayed tags cost m * b of the floor (RateAudit's floor at k - m words) and C(N, m) * 2^L / 2^(h * m) in place of the tag-guessing term.",
+   "Accounting.SecurityProofs.RateOfAuditInteractive": "frozen (no-function,hash): It carries Accounting.SecurityProofs.RateAuditInteractive, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/RateAuditInteractive.lean), not to a Lean function, and bounds a Pous.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.RateOfAuditInteractiveRO": "frozen (no-function,hash): As Accounting.SecurityProofs.RateOfAuditInteractive, carrying Accounting.SecurityProofs.RateAuditInteractiveRO, for side sources whose answers ignore the oracle at every value of the other audits' coins."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
