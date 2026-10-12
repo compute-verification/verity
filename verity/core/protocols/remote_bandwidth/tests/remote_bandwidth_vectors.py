@@ -5,11 +5,12 @@ Payload blocks are generated, not stored: payload `j` is 64 words, word w the fi
 `SHA512("verity/remote-bandwidth/test-payload/v0\\0" ‖ u64be j ‖ u32be w)` with its top byte cleared (below p), and
 payload 0 is all zeros (the weights may be).  Every coin and salt comes from `entropy(label)`, SHA-512 in counter mode:
 call c returns the first n bytes of `SHA512(label ‖ u64be c) ‖ SHA512(label ‖ u64be c + 1) ‖ …`, the counter running on
-across calls (`Entropy`).  The challenger draws coin k and then its salt, k = 0 … 3; the payload salts are drawn in
-block order and the receipt leaves' salts pass by pass, leaf by leaf.  A GPU receipter fills its store with the same
-payloads, encodes them under the pinned codec seed, and checks its blocks, receipts and roots against these.  The middle
-pass reads a partial plan out of store order, so its receipt for position p is block plan[p]'s and its tree has 10
-positions.
+across calls (`Entropy`).  The challenger draws coin k and then its salt, k = 0, 1 (window 0's challenge, then its
+openings coin); the payload salts are drawn in block order and the receipt leaves' salts pass by pass, leaf by leaf.  The
+three passes are one window's chain: pass 0 follows the registration's digest and each later pass the root before it.
+A GPU receipter fills its store with the same payloads, encodes them under the pinned codec seed, and checks its blocks,
+receipts and roots against these.  The middle pass reads a partial plan out of store order, so its receipt for position
+p is block plan[p]'s and its tree has 10 positions.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ PAYLOAD_SALT_LABEL = b"verity remote bandwidth vector payload salts"
 LEAF_SALT_LABEL = b"verity remote bandwidth vector receipt salts"
 BLOCKS = 21
 PLANS = (receipts.Plan.whole(BLOCKS), receipts.Plan(((16, 5), (3, 4), (0, 1)), BLOCKS), receipts.Plan.whole(BLOCKS))
-PARAMS = audit.Params(blocks=BLOCKS, passes=len(PLANS), interval_ns=2, deadline_ns=10, windows=1, samples=7, delta=1e-6)
+PARAMS = audit.Params(blocks=BLOCKS, deadline_ns=10, windows=1, samples=7, delta=1e-6)
 
 
 class Entropy:
@@ -74,24 +75,26 @@ def generate() -> dict:
     challenger = coins.Challenger(reg.digest, 0, PARAMS.coins, entropy=Entropy(COIN_LABEL))
     leaf_salts = Entropy(LEAF_SALT_LABEL)
 
-    passes = []
-    for k, plan in enumerate(PLANS):
-        coin = challenger.open(k)
-        s = receipts.seed(coin.coin, k)
+    challenge = challenger.open(0)
+    passes, previous = [], reg.digest
+    for i, plan in enumerate(PLANS):
+        s = receipts.seed(challenge.coin, i, previous)
         receipter = receipts.Receipter(s)
         ys = [receipter(j, blocks[j], tiles.output(s, j)) for j in plan]
         ss = [leaf_salts(receipts.SALT_BYTES) for _ in range(receipts.leaves(plan.length))]
         leaf0 = b"".join(ys[:receipts.PER_LEAF])
-        passes.append({"k": k, "coin": coin.coin.hex(), "seed": s.hex(), "prefix": receipts.prefix(s).hex(),
+        root = receipts.tree(s, plan, ys, ss).commitment.root
+        passes.append({"i": i, "previous": previous.hex(), "seed": s.hex(), "prefix": receipts.prefix(s).hex(),
                        "plan": [list(r) for r in plan.runs], "plan_encoding": plan.encode().hex(),
                        "plan_digest": plan.digest.hex(), "binding": receipts.binding(s, plan).hex(),
                        "z_1": tiles.output(s, 1).hex(), "y": {str(p): ys[p].hex() for p in (0, 1, plan.length - 1)},
                        "receipts_sha512": _sha(b"".join(ys)),
                        "leaf_0": {"x": sha512_row_v2_digest(leaf0, 8 * len(leaf0)).hex(), "salt": ss[0].hex(),
                                   "value": receipts.hidden(leaf0, ss[0]).hex()},
-                       "root": receipts.tree(s, plan, ys, ss).commitment.root.hex()})
+                       "root": root.hex()})
+        previous = root
 
-    opening = challenger.open(PARAMS.windows * PARAMS.passes)
+    opening = challenger.open(PARAMS.windows)
     draw_key = derive(opening.coin, audit.OPENINGS_DOMAIN, {"registration": reg.digest, "window": 0})
     first = coins.Challenger(reg.digest, 0, PARAMS.coins, entropy=Entropy(COIN_LABEL)).open(0)
     z_short, z_long = bytes(range(100)), bytes((7 * u) % 251 for u in range(codec.BLOCK_BYTES + 1000))
@@ -115,7 +118,7 @@ def generate() -> dict:
                   "root": challenger.commitment.root.hex()},
         "spread": {"short": {"z": z_short.hex(), "sha512": _sha(receipts.spread(z_short))},
                    "long": {"z_len": len(z_long), "sha512": _sha(receipts.spread(z_long))}},
-        "passes": {"z_bytes": tiles.z_bytes, "passes": passes},
+        "passes": {"window": 0, "challenge": challenge.coin.hex(), "z_bytes": tiles.z_bytes, "passes": passes},
         "openings": {"coin": opening.coin.hex(), "index": opening.index, "units": sum(p.length for p in PLANS),
                      "draws": list(draw_key.subset(PARAMS.samples, sum(p.length for p in PLANS), "openings"))},
     }

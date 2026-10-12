@@ -1,8 +1,8 @@
-"""The challenger's coin stream for one session (`verity/remote-bandwidth/coins/v0`): one live coin a pass and one for
-each window's openings, every coin drawn and committed before the session and each opened once, on the schedule.
+"""The challenger's live coins for one session (`verity/remote-bandwidth/coins/v0`): two a window, its challenge and
+its openings coin, every coin drawn and committed before the session and each opened once.
 
 ~~~text
-K          W·(P + 1) coins for W windows of P passes: pass k's coin at k < W·P, window t's openings coin at W·P + t
+K          2W coins for W windows: window t's challenge σ_t at t, its openings coin at W + t
 c_k        32 bytes from the challenger's generator
 x_k        SHA512("verity/remote-bandwidth/coin/v0\0" ‖ c_k)
 value_k    hm96-sha512 tree_leaf(key, commit_string(key, x_k, y_k)), y_k a fresh 192-byte salt, key hm96-sha512's pinned key
@@ -12,9 +12,10 @@ root       frame-v3-sha512 over value_0 … value_(K−1): CommitmentDomain(SHA5
 
 The prover has the root before the first coin and checks every coin it is sent against it (`coin_reason`), so the
 challenger can't choose a coin after seeing a root.  hm96 keeps every unopened coin statistically hidden
-(`hm96/PROTOCOL.md`), so the root says nothing about a pass's seed before its coin is released.  The construction is
-PoUW's epoch coins' (`verity.core.protocols.pouw.coins`) over a stream: the coins are live and the verifier designated,
-and nothing is derived from the prover's messages.
+(`hm96/PROTOCOL.md`), so the root says nothing about a window's seeds or draws before its coins are released.  The
+construction is PoUW's epoch coins' (`verity.core.protocols.pouw.coins`): the coins are live and the verifier
+designated.  Within a window the passes' seeds are Fiat–Shamir, chained from the coin through the prover's roots
+(`receipts.seed`); the openings are drawn from a coin of their own.
 """
 
 from __future__ import annotations
