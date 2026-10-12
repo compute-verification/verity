@@ -1,13 +1,19 @@
 """The Lean verifier's reading of the inner session's transcript (`RecVStar.innerCommits`, `verify --rec-inner-transcript`,
 `flock-verify rec-transcript`) on candidate 3's whole inner session: the fetched fixture `rec-c3-inner` is the coin server's
-record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of `r20261011-181721-c16e`
+record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of `r20261012-014245-8bec`
 (#1759's `pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1, with the relay keeping the prover's
-Hello): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's record, which keeps z_partial's
-round 40 whole), both reps' sparse phases (33 each) and the stacked table R (36), whose root is no Hello table's but the top
-its stream's binding round commits. The reps' coins are checked against the prover's record, the sparse streams and R's are
-the coin server's alone; `session/session.json` is the relay's record, which is refused. The verifier holds every stream's
-`c_k` and tops, and refuses the session with a stream missing or a top another stream committed; the plain session
-(`rec-coins`' inner session) is read as before, its two reps' `c_k` and nothing else."""
+Hello and R's top registered at staging): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's
+record, which keeps z_partial's round 40 whole), both reps' sparse phases (33 each) and the stacked table R (36), whose root
+is no Hello table's but the top its stream's binding round commits. The reps' coins are checked against the prover's record,
+the sparse streams and R's are the coin server's alone; `session/session.json` is the relay's record, which is refused. The
+verifier holds every stream's `c_k` and tops, and refuses the session with a stream missing or a top another stream
+committed. R has no root at `Commit`, so its salted top is registered at staging (#1798: the entry `stacked` of the
+statement's `verity/registration/v2` circuit registration, `circuit-registration.json`), whose digest the inner circuit's
+META binds (`circuit-meta.txt`, the staged `circuit.txt`'s header): the verifier takes both (`--rec-inner-circuit`,
+`--rec-inner-registration`) and refuses, each with its `FIREWALL-REFUSED` reason, a record META does not bind, a session
+with R's stream and no registered top, and R's binding round committing a top other than the registered one; a
+registration naming R needs R's stream. The plain session (`rec-coins`' inner session) is read as before, its two reps'
+`c_k` and nothing else."""
 from __future__ import annotations
 
 import copy
@@ -40,10 +46,47 @@ def _fixture(d: Path) -> Path:
     return d
 
 
-def _read(d: Path, transcript: Path | None = None, record: Path | None = None) -> tuple[int, dict | None, str]:
+def _inner(circuit: Path | None = None, registration: Path | None = None) -> list[str]:
+    """The inner circuit's header and its circuit registration, 8bec's when not given."""
+    return ["--rec-inner-circuit", str(circuit or _fixture(C3) / "circuit-meta.txt"),
+            "--rec-inner-registration", str(registration or C3 / "circuit-registration.json")]
+
+
+def _meta_registration() -> str:
+    return json.loads((_fixture(C3) / "circuit-meta.txt").read_text().splitlines()[1][5:])["registration"]
+
+
+def _registered(tmp_path: Path, change, bind: bool = True) -> list[str]:
+    """8bec's circuit registration changed by ``change``, and its circuit header with META's `registration` the changed
+    record's digest when ``bind`` (as a statement staged with that record would be), 8bec's own otherwise."""
+    from verity.core.protocols.sampled_proofs.one_stage.registration import digest
+
+    rec = json.loads((_fixture(C3) / "circuit-registration.json").read_text())
+    change(rec)
+    (tmp_path / "circuit-registration.json").write_text(json.dumps(rec))
+    head, meta = (C3 / "circuit-meta.txt").read_text().splitlines()
+    m = json.loads(meta[5:])
+    if bind:
+        m["registration"] = digest(rec)
+    (tmp_path / "circuit-meta.txt").write_text(f"{head}\nMETA {json.dumps(m)}\n")
+    return _inner(tmp_path / "circuit-meta.txt", tmp_path / "circuit-registration.json")
+
+
+def _write(path: Path, j: dict) -> Path:
+    path.write_text(json.dumps(j))
+    return path
+
+
+HONEST = object()
+
+
+def _read(d: Path, transcript: Path | None = None, record: Path | None = None,
+          inner: list[str] | object = HONEST) -> tuple[int, dict | None, str]:
     record = record or (d / "prover" if (d / "prover").is_dir() else d / "session")
+    if inner is HONEST:
+        inner = _inner() if d == C3 else []
     p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(transcript or d / "public.json"),
-                        "--rec-inner-session", str(record)], capture_output=True, text=True)
+                        "--rec-inner-session", str(record), *inner], capture_output=True, text=True)
     line = [json.loads(ln[14:]) for ln in p.stdout.splitlines() if ln.startswith("RECTRANSCRIPT ")]
     return p.returncode, (line[0] if line else None), p.stderr.strip()
 
@@ -69,14 +112,18 @@ def test_the_verifier_holds_every_stream_of_candidate_3s_session():
 def test_verify_reads_candidate_3s_transcript(tmp_path):
     """`verify --rec-inner-transcript` reads the transcript among its inputs, before it sets anything up: on candidate 3's
     session it goes on to the statement (here none, so the session is refused for its files), and on the session with a
-    stream missing it stops there (exit 2)."""
-    (tmp_path / "coins.json").write_text("{}")
+    stream missing it stops there (exit 2). The inner statement is its circuit's header (whose META binds R's registration)
+    beside stand-ins for its public input and partition, which nothing reads before the session; `--rec-inner-coins` holds
+    no META, so it binds no registration."""
+    (tmp_path / "partition.json").write_text("{}")
     (tmp_path / "empty").write_text("")
 
     def verify(transcript: Path) -> subprocess.CompletedProcess:
         return subprocess.run([str(BIN), "verify", "--zk", "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"),
-                               "--rec-inner-coins", str(tmp_path / "coins.json"), "--rec-inner-session", str(C3 / "prover"),
-                               "--rec-inner-transcript", str(transcript), "--session", str(tmp_path / "none")],
+                               "--rec-inner-public", str(tmp_path / "empty"), "--rec-inner-partition",
+                               str(tmp_path / "partition.json"), "--rec-inner-session", str(C3 / "prover"),
+                               "--rec-inner-transcript", str(transcript), *_inner(),
+                               "--session", str(tmp_path / "none")],
                               capture_output=True, text=True)
 
     p = verify(_fixture(C3) / "public.json")
@@ -117,10 +164,137 @@ def test_a_stream_missing_is_refused(tmp_path, change, why):
 
 
 def test_the_sparse_streams_and_rs_are_the_coin_servers_alone(tmp_path):
-    """The prover's record holds the reps only, so whether the session committed R is the coin server's record's to say: a
-    transcript with R's stream gone from its rounds and its declarations is read as a session without R."""
-    rc, line, err = _read(C3, _changed(tmp_path, _drop_stacked_everywhere))
+    """The prover's record holds the reps only, so whether the session committed R is the coin server's record's to say,
+    held to the registration: a transcript with R's stream gone from its rounds and its declarations is read as a session
+    without R when no registration names R, and refused as a downgrade when the one META binds does."""
+    bad = _changed(tmp_path, _drop_stacked_everywhere)
+    rc, line, err = _read(C3, bad, inner=[])
     assert (rc, line) == (0, {"reps": [77, 77], "streams": C3_STREAMS[:4]}), err
+    rc, line, err = _read(C3, bad)
+    assert (rc, line, err) == (1, None, "rec inner transcript: the registration names R's top (stacked), and the session "
+                                        "has no stacked/rep0: R's stream is missing (a downgrade)")
+
+
+def _stacked(reg: dict) -> dict:
+    return next(e for e in reg["registered"] if e["value"] == "stacked")
+
+
+def _flip(x: str) -> str:
+    c = bytearray.fromhex(x)
+    c[-1] ^= 1
+    return c.hex()
+
+
+CAP = "FIREWALL-REFUSED: registration: stacked/rep0's binding round's top is not stacked's registered top"
+NO_TOP = "FIREWALL-REFUSED: registration: stacked has no root at Commit and no registered top"
+
+
+def _top(change):
+    def transcript(t: dict) -> None:
+        change(_round(t, "stacked/rep0", k=0)["tops"][0])
+    return transcript
+
+
+@pytest.mark.parametrize("change", [
+    _top(lambda top: top.__setitem__(0, _flip(top[0]))),
+    _top(lambda top: top.__setitem__(5, _flip(top[5]))),
+    _top(lambda top: top.__setitem__(127, _flip(top[127]))),
+    _top(lambda top: top.reverse()),
+], ids=["node-0", "node-5", "node-127", "reversed"])
+def test_a_cap_other_than_the_registered_top_is_refused(tmp_path, change):
+    """The registration fixed at staging, R's binding round commits another top: one bit off in its first, a middle or its
+    last node, or its nodes in another order."""
+    assert _read(C3, _changed(tmp_path, change)) == (1, None, CAP)
+
+
+@pytest.mark.parametrize("change", [
+    lambda r: _stacked(r).__setitem__("root", _flip(_stacked(r)["root"])),
+    lambda r: _stacked(r).__setitem__("domain", _flip(_stacked(r)["domain"])),
+    lambda r: _stacked(r).__setitem__("leaves", 64),
+    lambda r: _stacked(r).__setitem__("words", 32),
+    lambda r: _stacked(r).__setitem__("word_bits", 32),
+    lambda r: r.__setitem__("program", "cd" * 64),
+], ids=["root", "domain", "leaves", "words", "word-bits", "program"])
+def test_a_registered_entry_the_top_does_not_make_is_refused(tmp_path, change):
+    """A record META binds whose entry `stacked` is not the one R's binding round's top makes: its root, domain, leaf count
+    or row width another, or its program another (the domain is the program's, derived, never read from the entry)."""
+    assert _read(C3, inner=_registered(tmp_path, change)) == (1, None, CAP)
+
+
+def test_the_registered_entry_is_the_one_python_rebuilds(tmp_path):
+    """Lean's entry over R's top (`RecVStar.topEntry`) is `rec_live.top_entry`'s under any program: the record under another
+    program, its entry rebuilt for that program (so another domain), and META binding it, is accepted."""
+    from verity_flock.rec_live import top_entry
+
+    top = [bytes.fromhex(b) for b in _round(json.loads((C3 / "public.json").read_text()), "stacked/rep0", k=0)["tops"][0]]
+    honest = json.loads((C3 / "circuit-registration.json").read_text())
+    assert top_entry(honest["program"], "stacked", top) == _stacked(honest)
+
+    def change(r):
+        r["program"] = "cd" * 64
+        r["registered"] = [top_entry(r["program"], "stacked", top)]
+
+    rc, line, err = _read(C3, inner=_registered(tmp_path, change))
+    assert (rc, line) == (0, {"reps": [77, 77], "streams": C3_STREAMS}), err
+
+
+@pytest.mark.parametrize("change", [
+    lambda r: r.__setitem__("registered", []),
+    lambda r: r.__setitem__("registered", [{**_stacked(r), "value": "weights"}]),
+    lambda r: r["registered"].append(dict(_stacked(r))),
+    lambda r: r.__setitem__("registered", {"stacked": _stacked(r)}),
+    lambda r: r.__delitem__("registered"),
+    lambda r: r.__delitem__("program"),
+    lambda r: r.__setitem__("format", "verity/registration/v1"),
+], ids=["none", "another-value", "twice", "not-a-list", "no-registered", "no-program", "v1"])
+def test_an_r_stream_with_no_stacked_entry_is_refused(tmp_path, change):
+    """A record META binds that registers no top of R (no entry `stacked`, or none it can be read from): R's stream binds R
+    to nothing before the coins."""
+    assert _read(C3, inner=_registered(tmp_path, change)) == (1, None, NO_TOP)
+
+
+def test_an_r_stream_with_no_registration_is_refused():
+    """With neither the inner circuit nor its registration, nothing binds R before the coins."""
+    assert _read(C3, inner=[]) == (1, None, "FIREWALL-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's "
+                                            "META binds no circuit registration (--rec-inner-circuit, --rec-inner-registration)")
+
+
+@pytest.mark.parametrize("change", [
+    lambda r: r["window"].__setitem__("kind", "another"),
+    lambda r: r.__setitem__("population", 17),
+    lambda r: _stacked(r).__setitem__("root", _flip(_stacked(r)["root"])),
+    lambda r: r.__setitem__("registered", []),
+], ids=["window", "population", "root", "no-stacked"])
+def test_a_record_whose_digest_is_not_metas_is_refused(tmp_path, change):
+    """The record changed and META left as staged: whatever the change, the record is not the one META binds."""
+    why = f"FIREWALL-REFUSED: registration: the record is not the circuit registration META binds ({_meta_registration()})"
+    assert _read(C3, inner=_registered(tmp_path, change, bind=False)) == (1, None, why)
+
+
+def test_meta_and_the_record_go_together(tmp_path):
+    """A record with a META binding none is refused, and so is a META binding a record the verifier does not hold."""
+    head, meta = (_fixture(C3) / "circuit-meta.txt").read_text().splitlines()
+    m = json.loads(meta[5:])
+    del m["registration"]
+    (tmp_path / "circuit-meta.txt").write_text(f"{head}\nMETA {json.dumps(m)}\n")
+    assert _read(C3, inner=_inner(tmp_path / "circuit-meta.txt")) == (
+        1, None, "FIREWALL-REFUSED: registration: the record is not the circuit registration META binds (META binds none)")
+    assert _read(C3, inner=["--rec-inner-circuit", str(C3 / "circuit-meta.txt")]) == (
+        1, None, f"FIREWALL-REFUSED: registration: META binds the circuit registration {_meta_registration()}, and the "
+                 "verifier holds none (--rec-inner-registration)")
+
+
+@pytest.mark.parametrize("args,why", [
+    (["--rec-inner-session", "P", "--rec-inner-circuit", "M", "--rec-inner-registration", "R"],
+     "--rec-inner-registration goes with --rec-inner-transcript"),
+    (["--rec-inner-transcript", "T", "--rec-inner-session", "P", "--rec-inner-registration", "R"],
+     "--rec-inner-registration goes with --rec-inner-circuit, whose META binds it"),
+], ids=["no-transcript", "no-circuit"])
+def test_the_registration_goes_with_the_transcript_and_the_circuit(args, why):
+    paths = {"P": C3 / "prover", "M": C3 / "circuit-meta.txt", "R": C3 / "circuit-registration.json",
+             "T": C3 / "public.json"}
+    p = subprocess.run([str(BIN), "rec-transcript", *[str(paths.get(a, a)) for a in args]], capture_output=True, text=True)
+    assert (p.returncode, p.stderr.strip()) == (1, why), p.stderr
 
 
 REPS = "[circuit/rep0, circuit/rep1]"
@@ -219,6 +393,17 @@ def test_the_plain_session_is_read_as_before(tmp_path):
                                         "table's rep0 and rep1")
 
 
+def test_a_plain_session_under_rs_registration_is_a_downgrade(tmp_path):
+    """A registration of R's top holds the session to R's stream even when it has no candidate 3 stream at all, and even
+    when it declares `stacked/rep0` with no rounds."""
+    why = ("rec inner transcript: the registration names R's top (stacked), and the session has no stacked/rep0: R's stream "
+           "is missing (a downgrade)")
+    assert _read(_fixture(PLAIN), inner=_inner()) == (1, None, why)
+    t = json.loads((PLAIN / "public.json").read_text())
+    t["streams"]["stacked/rep0"] = json.loads((C3 / "public.json").read_text())["streams"]["stacked/rep0"]
+    assert _read(PLAIN, _write(tmp_path / "plain.json", t), inner=_inner()) == (1, None, why)
+
+
 #: the bucket's RecSparse shape b907 ran its sparse phase at, and META's range of its inner statement's hidden circuit
 #: (`pod/rec_inner.py stage --n 16 --plain-leaves`, circuit_sha512 e1148161…, which `rec_vstage stage --circuit` reads)
 SPARSE = (18, 13, 6, 0)
@@ -244,7 +429,8 @@ def sparse(tmp_path_factory) -> Path:
 
 
 def _statement(d: Path, transcript: Path | None = None) -> subprocess.CompletedProcess:
-    rec = [] if transcript is None else ["--rec-inner-transcript", str(transcript), "--rec-inner-session", str(C3 / "prover")]
+    rec = [] if transcript is None else ["--rec-inner-transcript", str(transcript), "--rec-inner-session", str(C3 / "prover"),
+                                         *_inner()]
     return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
                            "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program",
                            str(d / "program.json"), "--registered", str(d / "registered.json"), *rec],
