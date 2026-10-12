@@ -233,23 +233,30 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     dig = reader.commit(ys, 0, n // rb.PER_LEAF)
     steps["tree"] = lambda: reader.levels(dig, 0, pad=True)
     # The pass as the store reads it, in aligned segments: segment s's leaves and subtree on a side stream while
-    # segment s + 1 is receipted, its root what end_pass takes.
+    # segment s + 1 is receipted, its root what end_pass takes. With `lanes`, consecutive segments' receipts go to
+    # alternate streams, so one segment's last wave runs beside the next one's first.
     count, side, roots = n // SEGMENTS, torch.cuda.Stream(), {}
+    pair = (torch.cuda.Stream(), torch.cuda.Stream())
 
-    def segmented() -> None:
+    def segmented(lanes: int) -> None:
         main = torch.cuda.current_stream()
-        side.wait_stream(main)
+        for st in (*pair, side):
+            st.wait_stream(main)
         for s in range(SEGMENTS):
-            reader.receipts(data[s * count * BLOCK // 4:], s * count, count, ys[s * count:])
-            done = torch.cuda.Event()
-            done.record(main)
+            lane = pair[s % lanes]
+            with torch.cuda.stream(lane):
+                reader.receipts(data[s * count * BLOCK // 4:], s * count, count, ys[s * count:])
+                done = torch.cuda.Event()
+                done.record(lane)
             with torch.cuda.stream(side):
                 side.wait_event(done)
                 c0 = s * count // rb.PER_LEAF
                 roots[s] = reader.levels(reader.commit(ys[s * count:], c0, count // rb.PER_LEAF), c0)[-1]
-        main.wait_stream(side)
+        for st in (*pair, side):
+            main.wait_stream(st)
 
-    steps[f"segmented/{SEGMENTS}"] = segmented
+    steps[f"segmented/{SEGMENTS}"] = lambda: segmented(1)
+    steps[f"segmented/{SEGMENTS}/2"] = lambda: segmented(2)
     ms = {}
     for name, fn in steps.items():
         fn()
@@ -287,7 +294,8 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
         "compressions_per_block": compressions / n,
         "segments": SEGMENTS, "segment_roots_match": segment_roots,
         "tau_segmented_per_pass": ms[f"segmented/{SEGMENTS}"] / ms["read"],
-        "commit_marginal_segmented": (ms[f"segmented/{SEGMENTS}"] - ms["receipts/warp"]) / ms["read"],
+        "tau_segmented_2_per_pass": ms[f"segmented/{SEGMENTS}/2"] / ms["read"],
+        "commit_marginal_segmented_2": (ms[f"segmented/{SEGMENTS}/2"] - ms["receipts/warp"]) / ms["read"],
     }
 
 
