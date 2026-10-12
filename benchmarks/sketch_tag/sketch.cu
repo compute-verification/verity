@@ -250,13 +250,14 @@ __global__ void __launch_bounds__((WS_MAX_WARPS + SK_SW) * 32) sk_ws_kernel(cons
     if (k >= 0 && k < SK_SW) {
       // sketch warp k takes consumers k, k + SK_SW, ... task by task in the consumers' order, the next task's signs loaded
       // ahead; a task's sketch is added on its own (a run's first task of a whole tile stores, so the result is the
-      // consumers' whatever RUN). Every task of a later consumer or round has a larger run, so the first -1 ends it.
+      // consumers' whatever RUN). A round's runs grow with the consumer and a consumer's with the round, but a later
+      // consumer's run can end before an earlier one's next task (RUN > 1), so only the warp's first consumer ending ends it.
       const int nck = (consumers - k + SK_SW - 1) / SK_SW;
       auto next = [&](int& u, int& j) -> int {
         for (;;) {
           if (++j >= nck) { j = 0; ++u; }
           const int nb = task_nb(k + SK_SW * j, u);
-          if (nb != -2) return nb;
+          if (nb >= 0 || (nb == -1 && j == 0)) return nb;
         }
       };
       auto load_signs = [&](uint32_t (&sw)[4 * SG], int nb) {
