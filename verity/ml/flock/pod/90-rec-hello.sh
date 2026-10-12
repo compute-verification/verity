@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# Scratch job (cursor/rec-c3-hello-integration-8d57, never a PR): main + #1793 + #1786 + #1798 (cursor/rec-session-hello-8c79).
-# 88-rec-c3-inner.sh N=16 SPARSE=18,13,6,0 STACKED=1 with the relay that keeps the prover's Hello (R's root a round
-# commitment on stacked/rep0), then over its inner session: the two records' Hellos, rec-transcript (innerCommits), rec-coins
-# (check 5) on the relay's record and on the prover's, L3 staged (c3_e2e.py stage level3), proved by C-Flock --zk under the
-# verifier's draw (serve --draw subset:N), replayed by upstream, and Lean's verify under --rec-inner (plain) with check 5's
-# inputs on the prover's record (option (b)), with and without the inner transcript, the transcript with R's registered top
-# (the entry stacked of inner/circuit-registration.json, --rec-inner-registration) and refused without it or with its root a
-# bit off. Outputs under out/: honest/
-# (88's), e2e/ (fixture/: the inner session's files as rec-c3-inner holds them, with registration.json), exits.txt.
+# Scratch job (cursor/rec-c3-hello-integration-8d57, never a PR): main + #1798 c2de93776 + #1793 + #1786 + #1810.
+# 88-rec-c3-inner.sh N=16 SPARSE=18,13,6,0 STACKED=1 (R's top registered at staging in the statement's circuit registration,
+# which META binds), then over its inner session: the two records' Hellos, rec-transcript (innerCommits) with the inner
+# circuit and its registration, and its controls (a cap other than the registered top, a record with no entry stacked, a record
+# META does not bind, the downgrade), rec-coins (check 5) on both records, L3 staged (c3_e2e.py stage level3), proved by C-Flock
+# --zk under the verifier's draw (serve --draw subset:N), replayed by upstream, and Lean's verify of the drawn session under
+# --rec-inner with the transcript and the registration, and the same controls. Outputs under out/: honest/ (88's), e2e/
+# (fixture/: the inner session's files as rec-c3-inner holds them; controls/), exits.txt.
 #   research run --on vy-cpu-1 --mem-gb 40 --source . --cwd source --declared-output 'out/*' -- \
 #     python3 tools/verity/check/slot.py --by rec-hello -- bash $0
 set -uxo pipefail
@@ -46,23 +45,49 @@ print(json.dumps({"same_bytes": v["hello"] == p["hello"], "canonical": p["hello"
 EOF
 echo "hello exit $?" | tee -a $X
 
-REG=$H/inner/circuit-registration.json; BADREG=$E/circuit-registration-bad.json
-python3 -c '
+REG=$H/inner/circuit-registration.json; CT=$E/controls; mkdir -p $CT
+cmp $REG $ST/circuit-registration.json; echo "registration is the staged one: $?" | tee -a $X
+# the three controls, on the real session: (cap) R's binding round's top one bit off in node 0, the record as staged;
+# (nostacked) the record with no entry stacked and a circuit whose META binds it; (unbound) the record's window changed,
+# META as staged; and the downgrade: the transcript with R's stream gone, the record as staged
+python3 - $H/inner/public.json $REG $IC $CT <<'EOF2'
 import json, sys
-r = json.load(open(sys.argv[1])); (e,) = [e for e in r["registered"] if e["value"] == "stacked"]
-c = bytearray.fromhex(e["root"]); c[-1] ^= 1; e["root"] = c.hex()
-print(json.dumps(r))' $REG > $BADREG
+from pathlib import Path
+from verity.core.protocols.sampled_proofs.one_stage.registration import digest
+pub, reg, ic, ct = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4])
+t = json.loads(pub.read_text())
+r0 = next(r for r in t["rounds"] if r["stream"] == "stacked/rep0" and r["k"] == 0)
+c = bytearray.fromhex(r0["tops"][0][0]); c[-1] ^= 1; r0["tops"][0][0] = c.hex()
+(ct / "transcript-cap.json").write_text(json.dumps(t))
+t = json.loads(pub.read_text())
+t["rounds"] = [r for r in t["rounds"] if r["stream"] != "stacked/rep0"]; del t["streams"]["stacked/rep0"]
+(ct / "transcript-downgrade.json").write_text(json.dumps(t))
+rec = json.loads(reg.read_text()); rec["registered"] = []
+(ct / "registration-nostacked.json").write_text(json.dumps(rec))
+with ic.open("rb") as f, (ct / "circuit-nostacked.txt").open("wb") as g:
+    head = f.readline(); meta = json.loads(f.readline()[5:])
+    meta["registration"] = digest(rec)
+    g.write(head + b"META " + json.dumps(meta).encode() + b"\n")
+    while chunk := f.read(1 << 24):
+        g.write(chunk)
+rec = json.loads(reg.read_text()); rec["window"]["kind"] = "another"
+(ct / "registration-unbound.json").write_text(json.dumps(rec))
+EOF2
+echo "controls exit $?" | tee -a $X
 mkdir -p $E/fixture && cp -r $H/inner/public.json $H/inner/private.json $H/inner/prover $H/inner/session $REG $H/fold.json $H/points.json $E/fixture/
-for s in prover session; do
-  $LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/$s --rec-inner-registration $REG \
-    > $E/rec-transcript-$s.txt 2>&1
-  echo "rec-transcript $s exit $?" | tee -a $X
-done
-$LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/prover > $E/rec-transcript-noreg.txt 2>&1
-echo "rec-transcript prover-noreg exit $? (refused: 1)" | tee -a $X
-$LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/prover --rec-inner-registration $BADREG \
-  > $E/rec-transcript-badreg.txt 2>&1
-echo "rec-transcript prover-badreg exit $? (refused: 1)" | tee -a $X
+head -2 $IC > $E/fixture/circuit-meta.txt
+rt() {  # rt NAME ARGS...: rec-transcript on the prover's record
+  local n=$1; shift
+  $LEAN_BIN rec-transcript --rec-inner-session $H/inner/prover "$@" > $E/rec-transcript-$n.txt 2>&1
+  echo "rec-transcript $n exit $? $(tail -1 $E/rec-transcript-$n.txt | cut -c1-200)" | tee -a $X
+}
+rt prover --rec-inner-transcript $H/inner/public.json --rec-inner-circuit $IC --rec-inner-registration $REG
+rt cap --rec-inner-transcript $CT/transcript-cap.json --rec-inner-circuit $IC --rec-inner-registration $REG
+rt nostacked --rec-inner-transcript $H/inner/public.json --rec-inner-circuit $CT/circuit-nostacked.txt --rec-inner-registration $CT/registration-nostacked.json
+rt unbound --rec-inner-transcript $H/inner/public.json --rec-inner-circuit $IC --rec-inner-registration $CT/registration-unbound.json
+rt downgrade --rec-inner-transcript $CT/transcript-downgrade.json --rec-inner-circuit $IC --rec-inner-registration $REG
+rt noreg --rec-inner-transcript $H/inner/public.json --rec-inner-circuit $IC
+rt nometa --rec-inner-transcript $H/inner/public.json
 for s in session prover; do
   $LEAN_BIN rec-coins --rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-session $H/inner/$s \
     > $E/rec-coins-$s.json 2> $E/rec-coins-$s.err
@@ -116,17 +141,23 @@ $B replay --zk --instances $C/pub.bin --circuit $C/circuit.txt --sessions $SESS 
 
 LV=(--zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json
     --registered $C/registered.json $(cat $E/own.txt))
-IN=(--rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ)
+IN=(--rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-session $H/inner/prover)
 v() {  # v NAME ARGS...: Lean verify on the drawn session
   local n=$1; shift
   /usr/bin/time -v -o $D/time-lean-$n.txt $LEAN_BIN verify "${LV[@]}" "$@" --session $SESS > $D/lean-$n.log 2>&1
   echo "lean $n exit $?" | tee -a $X
 }
-v prover-transcript "${IN[@]}" --rec-inner-session $H/inner/prover --rec-inner-transcript $H/inner/public.json --rec-inner-registration $REG
-v prover-transcript-noreg "${IN[@]}" --rec-inner-session $H/inner/prover --rec-inner-transcript $H/inner/public.json
-v prover-transcript-badreg "${IN[@]}" --rec-inner-session $H/inner/prover --rec-inner-transcript $H/inner/public.json --rec-inner-registration $BADREG
-v prover "${IN[@]}" --rec-inner-session $H/inner/prover
+v prover-transcript "${IN[@]}" --rec-inner-circuit $IC --rec-inner-transcript $H/inner/public.json --rec-inner-registration $REG
+v cap "${IN[@]}" --rec-inner-circuit $IC --rec-inner-transcript $CT/transcript-cap.json --rec-inner-registration $REG
+v nostacked "${IN[@]}" --rec-inner-circuit $CT/circuit-nostacked.txt --rec-inner-transcript $H/inner/public.json \
+  --rec-inner-registration $CT/registration-nostacked.json
+v unbound "${IN[@]}" --rec-inner-circuit $IC --rec-inner-transcript $H/inner/public.json --rec-inner-registration $CT/registration-unbound.json
+v downgrade "${IN[@]}" --rec-inner-circuit $IC --rec-inner-transcript $CT/transcript-downgrade.json --rec-inner-registration $REG
+v noreg "${IN[@]}" --rec-inner-circuit $IC --rec-inner-transcript $H/inner/public.json
+v prover "${IN[@]}" --rec-inner-circuit $IC
+rm -f $CT/circuit-nostacked.txt
 cp $C/registered.json $C/partition.json $D/; head -1 $C/circuit.txt | cut -c1-300 > $D/unit.txt; du -sb $C/* > $D/sizes.txt
 for f in $D/lean-*.log; do echo "$(basename $f): $(grep -h '^VERDICT' $f | cut -c1-600)"; done > $E/verdicts.txt
 for f in $D/lean-*.log; do echo "== $f"; grep -v "^VERDICT" $f | tail -3; done >> $E/verdicts.txt
+cat $E/verdicts.txt
 cat $X
