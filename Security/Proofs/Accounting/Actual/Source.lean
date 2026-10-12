@@ -1,5 +1,5 @@
 import Definitions.Accounting.Actual.Source
-import Proofs.Accounting.Actual.Split
+import Proofs.Accounting.Actual.Physical
 
 /-!
 # Ingress by source
@@ -7,7 +7,8 @@ import Proofs.Accounting.Actual.Split
 Ingress from a source is part of ingress (`ingressFrom_le_ingress`) and grows with the source (`ingressFrom_mono`). It
 adds over disjoint sources (`ingressFrom_union`) and is all of ingress from a source that holds the whole outside
 (`ingressFrom_eq_ingress`), so ingress is the sum over a partition of the outside. A cover bounds it
-(`ingress_le_ingressFrom_add`).
+(`ingress_le_ingressFrom_add`). Under `Links`, ingress from `Y` is at most the capacity of the links from `Y` a tick
+(`ingressFrom_le`), as ingress is at most `β_X` (`ingress_le`).
 -/
 
 namespace Accounting.SecurityProofs.Actual
@@ -66,16 +67,26 @@ theorem ingressFrom_union (X Y Z : Finset L) (I : Set ℕ) (hd : Disjoint Y Z) :
     rw [mem_filter] at ha hb
     exact Finset.disjoint_left.1 hd ha.2.2 hb.2.2
 
-/-- Links by source bound ingress from a cover of the outside by two sources. -/
-theorem ingress_le_of_linksFrom {𝒮 : Set (Finset L × Finset L)} {β : Finset L → Finset L → ℕ}
-    (hL : A.LinksFrom 𝒮 β) (X Y Z : Finset L) (hY : (X, Y) ∈ 𝒮) (hZ : (X, Z) ∈ 𝒮)
-    (h : ∀ l, l ∉ X → l ∈ Y ∨ l ∈ Z) (a b : ℕ) :
-    A.ingress X (Set.Ico a b) ≤ (β X Y + β X Z) * (b - a) := by
-  have h1 := hL _ hY a b
-  have h2 := hL _ hZ a b
-  have := ingress_le_ingressFrom_add A X Y Z (Set.Ico a b) h
-  simp only at h1 h2
-  rw [add_mul]
-  omega
+/-- **Ingress from `Y` is at most the capacity of the links from `Y` a tick**:
+`in_X([a, b); Y) ≤ linkCapacityFrom ends β X Y · (b − a)`. A gate placed in `Y` that `A[X, I]` reads from outside `X`
+reaches it on a link across `X`'s boundary whose outer end is the gate's leaf, in `Y`. -/
+theorem ingressFrom_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
+    (h : A.Links ends β link) (X Y : Finset L) (a b : ℕ) :
+    A.ingressFrom X Y (Set.Ico a b) ≤ linkCapacityFrom ends β X Y * (b - a) := by
+  classical
+  unfold Placed.ingressFrom linkCapacityFrom
+  rw [Finset.sum_mul]
+  refine (width_mono A ?_).trans ((width_biUnion_le A _ _).trans
+    (Finset.sum_le_sum fun e _ => (h.2 e (inner ends X e) a b).1))
+  intro c hc
+  obtain ⟨hc, hcX, hcY⟩ := mem_filter.1 hc
+  obtain ⟨-, g, hg, hcg⟩ := (mem_into A).1 hc
+  obtain ⟨-, hgX, hgt⟩ := (mem_region A).1 hg
+  have hne : A.x c ≠ A.x g := fun h' => hcX (h' ▸ hgX)
+  have he := (h.1 g c hcg hne).2
+  refine mem_biUnion.2 ⟨link g c, mem_filter.2 ⟨mem_boundary hcX hgX he, ?_⟩, ?_⟩
+  · rcases he with he | he <;> rw [he] <;> simp [hcX, hcY]
+  · simp only [Placed.readOn, mem_filter, mem_univ, true_and]
+    exact ⟨g, hcg, hne, rfl, (inner_outer hcX hgX he).1.symm, hgt⟩
 
 end Accounting.SecurityProofs.Actual

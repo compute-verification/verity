@@ -1,19 +1,18 @@
-import Definitions.Accounting.Actual
+import Definitions.Accounting.Physical
 
 /-!
 # Ingress by source (trusted)
 
 `ingress X I` counts every gate placed outside `X` that `A[X, I]` reads, wherever it was placed. The bandwidth audit's
 guarantee on the actual circuit (B3 in `note:console/20261012T0645Z-draft-actual-circuit-model`) is about one source:
-the bits the cores read *from HBM* in the window, beside what they read over the side links. So it needs ingress from a
-unit `Y`, and capacities per source rather than per unit:
+the bits the cores read *from HBM* in the window, beside what they read over the side links, which count against the
+side budget `β_side (T + RTT)`. So it needs ingress from a location `Y`, and the capacity of the links from `Y`:
 
 * `ingressFrom X Y I`: `in_X(I; Y)`, the width of the gates placed in `Y` and outside `X` that `A[X, I]` reads;
-* `LinksFrom 𝒮 β`: for each pair `(X, Y)` of `𝒮`, at most `β X Y` bits a tick cross from `Y` into `X`, the model's
-  `β_e` summed over the links from `Y` to `X`.
+* `linkCapacityFrom ends β X Y`: the total capacity of the links across `X`'s boundary whose end outside `X` is in `Y`.
 
-Ingress is the sum over a partition of the outside into sources, and at most the sum over a cover
-(`Accounting.SecurityProofs.Actual.ingress_le_ingressFrom_add`).
+Ingress is the sum over a partition of the outside into sources, and at most the sum over a cover, and under `Links`
+ingress from `Y` is at most `linkCapacityFrom` a tick (`Accounting.SecurityProofs.Actual.ingressFrom_le`).
 -/
 
 namespace Accounting
@@ -29,10 +28,17 @@ open Classical in
 noncomputable def ingressFrom (X Y : Finset L) (I : Set ℕ) : ℕ :=
   A.width ((A.into (A.region X I)).filter fun a => A.x a ∉ X ∧ A.x a ∈ Y)
 
-/-- **Links by source**: for each pair `(X, Y)` of `𝒮`, at most `β X Y` bits a tick cross from `Y` into `X`. -/
-def LinksFrom (𝒮 : Set (Finset L × Finset L)) (β : Finset L → Finset L → ℕ) : Prop :=
-  ∀ p ∈ 𝒮, ∀ a b, A.ingressFrom p.1 p.2 (Set.Ico a b) ≤ β p.1 p.2 * (b - a)
-
 end Placed
+
+section Links
+
+variable {L E : Type*} [Fintype E]
+
+open Classical in
+/-- The total capacity of the links across `X`'s boundary whose end outside `X` is in `Y`. -/
+noncomputable def linkCapacityFrom (ends : E → L × L) (β : E → ℕ) (X Y : Finset L) : ℕ :=
+  ∑ e ∈ (boundary ends X).filter (fun e => ((ends e).1 ∉ X ∧ (ends e).1 ∈ Y) ∨ ((ends e).2 ∉ X ∧ (ends e).2 ∈ Y)), β e
+
+end Links
 
 end Accounting

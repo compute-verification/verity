@@ -2,7 +2,7 @@ import Definitions.Accounting.Actual
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
-# The split: what a region reads is what its unit carried in plus what crossed its boundary
+# The split: what a region reads is what its location carried in plus what crossed its boundary
 
 A gate that `A[X, [t, t'))` reads from outside itself is placed outside `X`, and counts in `ingress X [t, t')`, or in
 `X`. In `X` it is an input gate, or a computed gate placed before `t`: one placed at or after `t'` would be read by a gate
@@ -33,7 +33,7 @@ theorem width_union_le (S T : Finset (Fin A.N)) : A.width (S ∪ T) ≤ A.width 
   unfold Circuit.width
   omega
 
-/-- **The split** (model v1, section 1): what `A[X, [t, t'))` reads from outside itself is at most what `X` carries
+/-- **The split** (model v2, section 2): what `A[X, [t, t'))` reads from outside itself is at most what `X` carries
 across `t` plus what crossed `X`'s boundary during `[t, t')`, when wires run forward in time inside `X`. -/
 theorem width_into_region_le (X : Finset L) (t t' : ℕ) (h : A.Forward X) :
     A.width (A.into (A.region X (Set.Ico t t'))) ≤ A.state X t + A.ingress X (Set.Ico t t') := by
