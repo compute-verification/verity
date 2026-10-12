@@ -5,6 +5,7 @@ import Proofs.Flock.C3.Compose.Decoder
 import Proofs.Flock.C3.Compose.SrcClauses
 import Proofs.Flock.C3.Compose.Tied
 import Proofs.Flock.C3.Compose.LastRead
+import Proofs.Flock.C3.Compose.PartRead
 import Proofs.Flock.C3.Compose.Custody
 import Proofs.Flock.C3.Compose.DecodeFix
 import Proofs.Flock.Soundness.Refine.HoloRepConverse

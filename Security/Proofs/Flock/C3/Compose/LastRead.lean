@@ -427,7 +427,7 @@ theorem msgsReadC3_tied {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
     (partMsgsRead_norm (prev := repPart) (part := sparsePart) repPart_norm sparsePart_norm hsp)
     (partMsgsRead_norm (prev := sparsePart) (part := openPart) sparsePart_norm openPart_norm hop)
     (partMsgsRead_norm (prev := openPart) (part := ligPart) openPart_norm ligPart_norm hlg)
-    (fun R ω t R₂ τ o _ => osNormal_tie_norm (stp R ω t (layers zs dg N k Rw R ω t R₂ τ)))
+    (fun R ω t R₂ τ _ _ => osNormal_tie_norm (stp R ω t (layers zs dg N k Rw R ω t R₂ τ)))
     (fun s hs R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX =>
       (os_norm (stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) hs).trans
         ((hos s hs R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX).trans
