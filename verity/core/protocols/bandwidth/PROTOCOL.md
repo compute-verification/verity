@@ -144,8 +144,22 @@ whichever verifier opens it. A window the file shows open when the state is reop
 stopped; reopening records it closed, and no verifier can accept it. A file cannot detect being restored from a
 snapshot, nor a directory a copy of a state kept in another directory or on another host. That the challenger keeps
 one state directory and never rolls back or forks a state rests on `trusted-nebius-host`, the same assumption PoUS's
-memory challenger cites for its session-id log, and neither repeats a key unless the challenger's randomness also
-repeats a nonce.
+memory challenger cites for its session-id log, for the two properties below.
+
+**What the no-rollback presumption is for.** A single window's bound does not need it. AuditRO's bound for one
+accepted window (§5) needs only that the prover could not know `σ` or the samples before `σ` left, and both come from
+the window's key, which binds the verifier's secret and a 32-byte nonce from the challenger's own randomness. Two
+windows over a store share a key only if their nonces collide, with probability below `n²/2^257` over `n` windows, so
+keys are unique given fresh randomness alone; the state's refusal of a nonce it holds only catches a source that
+repeats. A state rolled back, restored or forked therefore replays no window unless the randomness repeats too. The
+presumption is still needed for two properties, both about windows that overlap in time:
+
+- **One open window per store.** The state enforces it through its record of the open window and its lock. A second
+  copy of the state, or one restored to before an open window's record, would let a second challenger open a window
+  over the store while that one is open, and two such windows can be answered from one read of each block.
+- **Additivity across windows.** The ingress of a store's windows over a period, or of a co-audited set's (§5), adds up
+  only because no two windows over a store are open at once. Without the presumption each accepted window's bound
+  still holds, but their sum does not bound the total.
 
 The verdict publishes one bit (`Verdict.public`); which check failed,
 which sample and the elapsed time stay with the verifier. Openings reveal blocks of `C*` to the verifier, so the
@@ -254,7 +268,9 @@ The claims registry (`verity.core.claims`, on #1806's branch) names what a deplo
   computing) beside its id (§2).
 - **`trusted-nebius-host`** (assumption, core's): the challenger runs its stated code on its Nebius host, which offers
   no attesting hardware. The audit cites it for two properties: the device id the challenger reads from the driver is
-  the UUID of the GPU it audits (§2), and the challenger's state is never rolled back (§3).
+  the UUID of the GPU it audits (§2), and the challenger keeps one state directory and never rolls back or forks a
+  state (§3), which one open window per store and additivity across windows need and a single window's bound does
+  not.
 - **`bandwidth-device`** (model): the device is a chip with device memory and side sources, all laid out before `σ`; it
   reads device memory only through counted ingress, computes every tag on chip, and commits before the samples.
 
