@@ -22,10 +22,16 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # lints the preflight names, and the Lean audit's tool directory: Lean's jobs (`lean_audit.py`, `lean_changed.py`, the pin
 # `lean-deps.json`), the sandbox lean_changed builds in, and the audit whose judgment of the guarantees it runs (a
 # directory, since loading `audit.py` reads and writes its `__pycache__`), the security proofs' manifest and record (a
-# shard's package), and the Slack registry, whose handles are the owners `ci.toml` may name.
+# shard's package), the Slack registry, whose handles are the owners `ci.toml` may name, and what of research the fixture
+# fetch and the run tooling import beyond its `exports`.
 inputs = [".agents/skills/using-slack/registry.json", "READY.json", "verity/ml/flock/check_build.sh", "verity/ml/flock/flock-glue-b684b12.patch",
           "verity/ml/flock/flock-gpu-link-b684b12.patch", "verity/ml/flock/flock-link-b684b12.patch",
           "verity/ml/flock/flock-sha512-b684b12.patch", "verity/ml/flock/flock-vtime-b684b12.patch",
           "verity/ml/flock/flock-zk-b684b12.patch", "verity/ml/flock/verifier", "verity/core/service/flock",
           "tests/test_no_wall_clock.py", "tests/test_repository.py",
-          "tools/verity/lean", "Security/Proofs/lake-manifest.json", "Security/Proofs/lean-audit.json"]
+          "tools/verity/lean", "Security/Proofs/lake-manifest.json", "Security/Proofs/lean-audit.json",
+          "tools/research/src/research/store/custody.py", "tools/research/src/research/store/evict.py",
+          "tools/research/src/research/store/fetchset.py", "tools/research/src/research/store/fixtures.py",
+          "tools/research/src/research/store/sealed.py", "tools/research/src/research/telemetry/cancel.py",
+          "tools/research/src/research/telemetry/classify.py", "tools/research/src/research/telemetry/procs.py",
+          "tools/research/src/research/telemetry/pyspy.py", "tools/research/src/research/telemetry/run.py"]
