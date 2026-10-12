@@ -161,6 +161,8 @@ def attribute_dir(out: Path) -> tuple[list[dict], list[str], int]:
             fails.append(f"{tag}: no {cf.name}")
             continue
         ws = windows(rows(cf))
+        if len(ws) == len(arm["profiled"]) + 1:
+            ws = ws[:-1]  # the window the arm's timeout killed, which steps.py never recorded
         if len(ws) != len(arm["profiled"]):
             fails.append(f"{tag}: {len(ws)} windows for {len(arm['profiled'])} profiled points")
             continue

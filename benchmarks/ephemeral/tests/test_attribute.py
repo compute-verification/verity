@@ -142,6 +142,18 @@ def test_main_passes_a_timing_only_run_and_fails_a_profiled_arm_without_its_csv(
     assert A.main() == 1
 
 
+def test_a_window_the_timeout_killed_is_dropped_and_two_extra_are_refused(tmp_path: Path):
+    pt = {"batch": 2, "context": 100, "tokens_open": 200, "tokens_close": 204}
+    (tmp_path / "8b-L4-0-node.json").write_text(json.dumps({**arm(layers=4), "profiled": [pt]}))
+    step = node_step(4, 202 * 2) * 2
+    (tmp_path / "ncu-8b-L4-0-node.csv").write_text(ncu_csv(([(SPIN, 0, 0)] + step) * 2 + [(SPIN, 0, 0), (GEMM, 9, 0)]))
+    result, fails, _ = A.attribute_dir(tmp_path)
+    assert fails == ["8b-L4-0-node: 3 windows for 1 profiled points"]
+    (tmp_path / "ncu-8b-L4-0-node.csv").write_text(ncu_csv(([(SPIN, 0, 0)] + step) * 2))
+    result, fails, _ = A.attribute_dir(tmp_path)
+    assert not fails and len(result) == 1 and result[0]["steps"] == 2
+
+
 def test_gamma_prefers_a_full_depth_graph_arm_and_divides_by_r_t(tmp_path: Path):
     G = load("gamma")
     pt = {"batch": 2, "context": 100, "tokens_open": 200, "tokens_close": 204}
