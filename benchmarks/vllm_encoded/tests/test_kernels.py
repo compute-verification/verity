@@ -82,6 +82,122 @@ def test_a_step_writes_its_tags_one_launch_after_another(monkeypatch):
     assert len(tlib.commits) == 3
 
 
+@pytest.mark.parametrize("bits,nbs,nchunks", [(512, 8, 2), (512, 5, 3), (256, 4, 1)])
+def test_wide_vectors_are_wide_sketchs(bits, nbs, nchunks):
+    """serve.py's per-vector cut of a wide store (a tile's T records) is `wide_sketch.vectors` over the whole store."""
+    import serve
+
+    ws, f = K._wide_sketch(), K._wide().field(bits)
+    wlib = object.__new__(K.WideLib)
+    wlib.lane_words, wlib.limbs, wlib.field = f.lane_words(), f.limbs, f
+    wlib.sketch = {"t": ws.T, "n": ws.vector_bytes(f)}
+    lin = object.__new__(K.WideLinear)
+    lin.wlib, lin.n, lin.nchunks = wlib, 16 * nbs, nchunks
+    g = torch.Generator().manual_seed(bits + nbs)
+    lin.store = torch.randint(-(1 << 31), (1 << 31) - 1, (nbs * nchunks * f.lane_words() * f.limbs * 32,), generator=g,
+                              dtype=torch.int64).to(torch.int32)
+    ref = ws.vectors(lin.store.numpy().astype("<i4").tobytes(), 16 * nbs, 512 * nchunks, f)
+    vs = list(range(ref.shape[0]))
+    assert ref.shape[0] == 16 * ws.tiles(16 * nbs, 512 * nchunks)
+    assert np.array_equal(serve.wide_vectors(lin, vs), ref)
+
+
+class Log(list):
+    def stream(self, name):
+        log = self
+
+        class Stream:
+            cuda_stream = name
+
+            def wait_event(self, e):
+                log.append(("wait", name, e.name))
+        return Stream()
+
+    def event(self):
+        log, n = self, sum(1 for x in self if x[0] == "event")
+        self.append(("event", n))
+
+        class Event:
+            name = n
+
+            def record(self, s):
+                log.append(("record", s.cuda_stream, n))
+        return Event()
+
+
+class Ptr:
+    def __init__(self, p: int) -> None:
+        self.p = p
+
+    def data_ptr(self) -> int:
+        return self.p
+
+
+class WideStepLib:
+    """A WideLib's in-step commit without the library: the ring's slots are pointers 100 and 200, and `leaves` and
+    `tree` are logged with their streams."""
+
+    def __init__(self, log: Log, capacity: int) -> None:
+        self.log, self.sketch = log, {"t": 4}
+        self.step = {"ring": [Ptr(100), Ptr(200)], "vectors": capacity, "at": 0, "slot": 0, "pending": None,
+                     "side": log.stream("side"), "roots": {}}
+
+    def leaves(self, tags, at, nvec, s):
+        self.log.append(("leaves", s, tags, at, nvec))
+
+    def tree(self, s):
+        self.log.append(("tree", s))
+
+
+def wide_step(monkeypatch, blocks: list[int], capacity: int):
+    log = Log()
+    w, lins = WideStepLib(log, capacity), []
+    for nv in blocks:
+        lin = object.__new__(K.WideLinear)
+        lin.wlib, lin.blocks, lin.at, lin.first, lin.last, lin.fork = w, nv, None, False, False, None
+        lins.append(lin)
+    lins[0].first = lins[-1].last = True
+    cur = log.stream("cur")
+    monkeypatch.setattr(K.torch.cuda, "current_stream", lambda: cur)
+    monkeypatch.setattr(K.torch.cuda, "Event", log.event)
+    monkeypatch.setattr(K.Linear, "forward", lambda self, x8, xs: log.append(
+        ("gemm", self.at, w.step["ring"][w.step["slot"]].data_ptr())) or x8)
+    return log, w, lins
+
+
+def test_a_wide_step_hashes_each_linears_leaves_beside_the_next_gemm(monkeypatch):
+    blocks = [32, 48, 16]
+    log, w, lins = wide_step(monkeypatch, blocks, 96)
+    for m in (1, 4):
+        del log[:]
+        for lin in lins:
+            lin.forward(torch.zeros(m, 8), None)
+        e = [x for x in log if x[0] != "event"]
+        f1, f2 = lins[1].fork.name, lins[2].fork.name
+        j1, j2 = lins[1].join.name, lins[2].join.name
+        assert e == [("gemm", 0, 100),
+                     ("record", "cur", f1), ("wait", "side", f1), ("leaves", "side", 100, 0, 32), ("record", "side", j1),
+                     ("gemm", 32, 200), ("wait", "cur", j1),
+                     ("record", "cur", f2), ("wait", "side", f2), ("leaves", "side", 200, 32, 48), ("record", "side", j2),
+                     ("gemm", 80, 100), ("wait", "cur", j2),
+                     ("leaves", "cur", 100, 80, 16), ("tree", "cur")]
+        assert w.step["roots"][m] == 96 and w.step["pending"] is None
+        assert all(lin.at is None for lin in lins)
+    monkeypatch.setattr(K.Linear, "forward", lambda self, x8, xs: x8)
+    del log[:]
+    for lin in lins:
+        lin.forward(torch.zeros(K.MAX_ROWS + 1, 8), None)
+    assert log == []
+
+
+def test_a_wide_step_refuses_to_overflow_its_commit(monkeypatch):
+    log, _, lins = wide_step(monkeypatch, [32, 48], 64)
+    lins[0].forward(torch.zeros(1, 8), None)
+    with pytest.raises(RuntimeError, match="overflow"):
+        lins[1].forward(torch.zeros(1, 8), None)
+    assert not any(x[0] in ("leaves", "tree") for x in log)
+
+
 def test_a_step_refuses_to_overflow_its_buffer(monkeypatch):
     tlib = StepLib(40)
     lin = object.__new__(K.TensorLinear)

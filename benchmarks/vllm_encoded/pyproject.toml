@@ -5,5 +5,6 @@
 testpaths = ["tests"]
 
 [tool.verity.tests]
-# the word codecs' references, which the layouts must equal
-inputs = ["benchmarks/word_codec/codec.py", "benchmarks/word_codec/wide.py", "benchmarks/codec_tensor/wide.py"]
+# the word codecs' references, which the layouts must equal, and the sketches' vector layouts
+inputs = ["benchmarks/word_codec/codec.py", "benchmarks/word_codec/wide.py", "benchmarks/word_codec/wide_sketch.py",
+          "benchmarks/codec_tensor/wide.py", "benchmarks/codec_tensor/sketching.py", "benchmarks/codec_tensor/tagging.py"]

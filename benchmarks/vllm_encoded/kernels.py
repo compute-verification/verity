@@ -9,9 +9,10 @@ decodes the layer into a scratch FP8 matrix for vLLM's CUTLASS GEMM: prefill is 
 
 Kernels are pluggable: a `Lib` is any build of `ve.cu` (packing, k range), and a later fused kernel (a tag stage, a wider
 codec) is another `Lib` whose `ve_gemm` takes the same arguments.  `WideLinear` runs ra-codec-wide's fused GEMM instead
-(`benchmarks/word_codec/wide.cu`, a `WideLib` a field: Sloth over p = 2^127 − 1, 2^255 − 19 or 2^521 − 1, and with a tag
-seed set the bandwidth audit's ro-blake3/v1 tag of every block of encoded words it reads); its chunk sums have the same
-layout, so `ve_reduce` turns them into the same BF16.  `TensorLinear` runs ra-codec-tensor's
+(`benchmarks/word_codec/wide.cu`, a `WideLib` a field: Sloth over p = 2^127 − 1, 2^255 − 19, 2^521 − 1, 2^256 − 189 or
+2^512 − 569, and with a tag seed set the bandwidth audit's ro-blake3/v1 tag of every block of encoded words it reads, or
+with its sketch set ro-sketch-blake3/v0 over the encoded words its CTAs hold, `wide_sketch`); its chunk sums have the
+same layout, so `ve_reduce` turns them into the same BF16.  `TensorLinear` runs ra-codec-tensor's
 (`benchmarks/codec_tensor/wt.cu`, a `TensorLib` a field: decoder warps decoding in shared memory ahead of one MMA warp, and
 tag warps hashing the store's 4,088-byte blocks, or sketch warps sketching the stored bytes on the tensor cores before the
 decoders overwrite them, ro-sketch-blake3/v0), with the same chunk sums.
@@ -50,6 +51,12 @@ def _codec():
 
 def _wide():
     return _load("wc_wide", "wide.py")
+
+
+def _wide_sketch():
+    _wide()
+    sys.modules.setdefault("wide", sys.modules["wc_wide"])  # wide_sketch.py imports its sibling as `wide`
+    return _load("wc_wide_sketch", "wide_sketch.py")
 
 
 def _ct():
@@ -118,10 +125,20 @@ class WideLib:
         so.ww_encode.argtypes = [v, v, q, q, i, i, v]
         so.ww_gemm.argtypes = [i, v, v, v, i, i, i, q, i, v, v, i, v]
         so.ww_gemm_occupancy.argtypes = [i, i, i, i]
-        cs = (ctypes.c_int * 10)()
+        so.ww_gemm_sketch.argtypes = [i, v, v, v, i, i, i, q, i, v, v, q, v, v, i, v]
+        so.ww_workspace_bytes.argtypes = [q]
+        so.ww_workspace_bytes.restype = ctypes.c_size_t
+        so.ww_workspace_tags.argtypes = [v, q]
+        so.ww_workspace_tags.restype = v
+        so.ww_sketch_commit.argtypes = [v, q, v, v, v]
+        so.ww_sketch_leaves.argtypes = [v, q, v, q, q, v, v]
+        so.ww_sketch_fold.argtypes = [v, q, q, q, v]
+        so.ww_sketch_tree.argtypes = [v, q, i, v, v]
+        cs = (ctypes.c_int * 32)()
         so.ww_constants(cs)
-        self.constants = list(cs)
+        self.constants = list(cs[:21])
         self.bits, self.limbs, self.payload, self.lane_words, self.kmax = (cs[0], cs[1], cs[2], cs[3], cs[7])
+        self.kw, self.sub = cs[15], cs[18]
         self.field = _wide().field(self.bits)
         f = self.field
         if ((self.limbs, self.payload, self.lane_words, cs[4], cs[5]) !=
@@ -132,11 +149,66 @@ class WideLib:
         self.tag_seed: bytes | None = None
         self._seed = None
         self.tags: torch.Tensor | None = None
+        self.sketch: dict | None = None
+        self.signs: torch.Tensor | None = None
+        self.step: dict | None = None
 
     def call(self, fn: str, *args) -> None:
         rc = getattr(self.so, fn)(*args)
         if rc:
             raise RuntimeError(f"{Path(self.path).name}: {fn} error {rc}")
+
+    def set_sketch(self, seed: bytes) -> None:
+        """Tag under ro-sketch-blake3/v0 with this window seed (`wide_sketch`: k_s = 16, a vector a row of a CTA's tile of
+        T row blocks at one chunk): the GEMMs sketch the encoded words they hold and hash the sketches."""
+        ws, f = _wide_sketch(), self.field
+        if self.kw != 1:
+            raise ValueError(f"{Path(self.path).name}: the sketch is a KW = 1 build's")
+        self.set_tag(seed)
+        self.sign_matrix = ws.signs(seed, f)
+        self.signs = torch.from_numpy(ws.sign_fragments(self.sign_matrix, ws.steps(f))).cuda()
+        self.sketch = {"name": ws.NAME, "k": ws.K, "t": ws.T, "n": ws.vector_bytes(f)}
+
+    def vectors(self, n: int, kd: int) -> int:
+        return 16 * _wide_sketch().tiles(n, kd)
+
+    def commit_every_step(self, per_linear: list[int]) -> None:
+        """Each decode step's commit as the step goes (``per_linear``: each linear's vectors, in step order): a linear's
+        tags go to one slot of a two-slot ring, which L2 holds, and the next linear hashes their leaves into the step's
+        tree (and folds them `sub` levels, when every linear's tags are whole 16·2^sub) on a second stream beside its
+        own GEMM; the step's last linear hashes its own and the tree."""
+        if self.sketch is None:
+            raise ValueError("the in-step commit is the sketch tag's")
+        vectors, n = sum(per_linear), -(-sum(per_linear) // 16)
+        nodes = 0
+        while True:
+            nodes += n
+            if n == 1:
+                break
+            n = (n + 1) // 2
+        nodes_t = torch.empty(8 * nodes, dtype=torch.int64, device="cuda")
+        # `ww_sketch_*` find the tree's nodes after a tag area of the step's tags that they never read: only the nodes
+        # are allocated, and the workspace pointer is placed that area before them.
+        tag_area = -(-32 * vectors // 256) * 256
+        self.step = {"ring": [torch.empty(8 * max(per_linear), dtype=torch.int32, device="cuda") for _ in range(2)],
+                     "nodes": nodes_t, "ws": nodes_t.data_ptr() - tag_area, "vectors": vectors,
+                     "fold": all(v % (16 << self.sub) == 0 for v in per_linear), "at": 0, "slot": 0, "pending": None,
+                     "side": torch.cuda.Stream(priority=-1), "roots": {}}
+
+    def leaves(self, tags: int, at: int, nvec: int, s: int) -> None:
+        """The step's leaves of its tags [at, at + nvec), read from ``tags``, folded when the step folds."""
+        st = self.step
+        self.call("ww_sketch_leaves", st["ws"], st["vectors"], tags, at, nvec, self._seed, s)
+        if st["fold"]:
+            self.call("ww_sketch_fold", st["ws"], st["vectors"], at, nvec, s)
+
+    def tree(self, s: int) -> None:
+        st = self.step
+        self.call("ww_sketch_tree", st["ws"], st["vectors"], self.sub if st["fold"] else 0, None, s)
+
+    def step_root(self) -> bytes:
+        """The root the step's tree left on the device (its last node; SHA-512's state words, big-endian)."""
+        return self.step["nodes"][-8:].cpu().numpy().astype(">i8").tobytes()
 
     def set_key(self, seed: bytes, k: int):
         wide, f = _wide(), self.field
@@ -492,10 +564,11 @@ class WideLinear(Linear):
     """Only the wide field's words: `store` (int32) holds W's payloads (`layout.wide_payloads`) encoded k rounds under the
     wide lib's key at word indices base, base + 1, ... (k = 0: the payloads themselves, the wide kernel's plain operand).
     With the lib's tag seed set, each GEMM also writes the ro-blake3/v1 tag of block j = base / L + 32·task + lane (that
-    lane's L encoded words) to the lib's tag buffer.  `lib` (a `ve.cu` build) only reduces the chunk sums."""
+    lane's L encoded words) to the lib's tag buffer, or with its sketch set, the ro-sketch-blake3/v0 tag of its vector v
+    at index tag_base + v.  `lib` (a `ve.cu` build) only reduces the chunk sums."""
 
     def __init__(self, lib: Lib, wlib: WideLib, w: torch.Tensor, weight_scale: torch.Tensor, k: int, base: int,
-                 grid: int = 0) -> None:
+                 grid: int = 0, tag_base: int | None = None) -> None:
         super().__init__(lib, *w.shape, weight_scale)
         if k and (wlib.key is None or wlib.key.rounds != k or not 1 <= k <= wlib.kmax):
             raise ValueError(f"the wide lib's key is not set for k = {k}")
@@ -503,7 +576,11 @@ class WideLinear(Linear):
             raise ValueError("a wide store starts at a multiple of 32·L words")
         self.wlib, self.k, self.base, self.bits = wlib, k, base, wlib.payload
         self.words = layout.wide_store_words(self.n, self.kd, wlib.payload)
-        self.blocks = self.words // wlib.lane_words
+        self.blocks = wlib.vectors(self.n, self.kd) if wlib.sketch else self.words // wlib.lane_words
+        self.tag_base = base // wlib.lane_words if tag_base is None else tag_base
+        self.first = self.last = False
+        self.at: int | None = None
+        self.fork = self.join = None
         payloads = layout.wide_payloads(w, wlib.payload, wlib.limbs)
         if k:
             self.store = torch.empty_like(payloads)
@@ -515,22 +592,70 @@ class WideLinear(Linear):
 
     @property
     def tag_block_base(self) -> int:
-        return self.base // self.wlib.lane_words
+        return self.tag_base
 
     def default(self) -> Config:
         return Config(3)
 
     def candidates(self, m: int) -> list[Config]:
-        occ = self.wlib.so.ww_gemm_occupancy(self.k, m, int(self.wlib.tag_seed is not None), 1)
-        return [Config(3)] + ([Config(3, ahead=occ * self.wlib.sms)] if occ > 0 else [])
+        w = self.wlib
+        occ = w.so.ww_gemm_occupancy(self.k, m, 3 if w.sketch else int(w.tag_seed is not None), 1)
+        return [Config(3)] + ([Config(3, ahead=occ * w.sms)] if occ > 0 else [])
 
     def _launch(self, cfg: Config, x8: torch.Tensor, part: torch.Tensor, partials: bool) -> None:
         if cfg.form != 3:
             raise ValueError(f"the wide GEMM has one form, not {cfg.name}")
         w = self.wlib
-        tags = w.tag_buffer(self.blocks).data_ptr() if w.tag_seed is not None else None
-        w.call("ww_gemm", self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n, self.kd,
-               self.base, int(partials), w._seed, tags, cfg.ahead, stream())
+        if w.sketch and self.at is not None:
+            self.sketched(x8, part, partials, cfg, w.step["ring"][w.step["slot"]].data_ptr(), self.at)
+        elif w.sketch:
+            self.sketched(x8, part, partials, cfg, w.tag_buffer(self.blocks).data_ptr(), self.tag_base)
+        else:
+            tags = w.tag_buffer(self.blocks).data_ptr() if w.tag_seed is not None else None
+            w.call("ww_gemm", self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n,
+                   self.kd, self.base, int(partials), w._seed, tags, cfg.ahead, stream())
+
+    def sketched(self, x8: torch.Tensor, part: torch.Tensor, partials: bool, cfg: Config, tags: int, jbase: int) -> None:
+        """The GEMM with its vectors' tags, vector v's (index jbase + v) at ``tags`` + 32 v."""
+        w = self.wlib
+        w.call("ww_gemm_sketch", self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n,
+               self.kd, self.base, int(partials), w.signs.data_ptr(), None, jbase, w._seed, tags, cfg.ahead, stream())
+
+    def forward(self, x8: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
+        """As `Linear.forward`; under the lib's in-step commit, the step's first linear starts its tags at index 0 and
+        each next one's after the previous one's, in the other ring slot, while the previous one's leaves are hashed on
+        the second stream (forked and joined within this call, so every CUDA graph vLLM captures holds both ends); the
+        last one hashes its own leaves and the tree."""
+        w, m = self.wlib, x8.shape[0]
+        st = w.step
+        if st is None or m > MAX_ROWS:
+            return super().forward(x8, xs)
+        if self.first:
+            st["at"], st["slot"], st["pending"] = 0, 1, None
+        at, end, pend = st["at"], st["at"] + self.blocks, st["pending"]
+        if end > st["vectors"]:
+            raise RuntimeError(f"a step's tags overflow its commit of {st['vectors']}")
+        cur = torch.cuda.current_stream()
+        if pend is not None:
+            if self.fork is None:
+                self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
+            self.fork.record(cur)
+            st["side"].wait_event(self.fork)
+            w.leaves(*pend, st["side"].cuda_stream)
+            self.join.record(st["side"])
+        st["slot"], self.at = 1 - st["slot"], at
+        try:
+            y = super().forward(x8, xs)
+        finally:
+            self.at = None
+        if pend is not None:
+            cur.wait_event(self.join)
+        st["at"], st["pending"] = end, (st["ring"][st["slot"]].data_ptr(), at, self.blocks)
+        if self.last:
+            w.leaves(*st["pending"], cur.cuda_stream)
+            w.tree(cur.cuda_stream)
+            st["pending"], st["roots"][m] = None, end
+        return y
 
     def decoded(self) -> torch.Tensor:
         if not self.k:

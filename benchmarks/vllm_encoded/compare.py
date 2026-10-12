@@ -18,8 +18,9 @@ little slower than -c, so its y errs high), split by the run's own arms in the s
 kernel at k = 0), decode (over base), tag (the tagged arm over the same arm untagged) and commit (a committed sketch arm,
 serve.py --commit, over the same arm uncommitted; 0 when the step runs no commit).  x, Δ (and τ for a tagged arm) are the
 codec lanes' measurements for the same field, k and packing (`CODEC`;
-`TENSOR_CODEC` for the tensor kernel's fields, by name: its m521 and the wide kernel's p521 are one prime); a sketched arm's
-τ is 0, as ra-codec-tensor's points.py has it (the sketch's MMAs share the decode's CTA).
+`TENSOR_CODEC` for the tensor kernel's fields, by name: its m521 and the wide kernel's p521 are one prime); a sketched
+tensor arm's τ is 0, as ra-codec-tensor's points.py has it (the sketch's MMAs share the decode's CTA), and a sketched wide
+arm's is ra-codec-wide's τ_sketch at p512 (`WIDE_SKETCH_TAU`).
 Each point also carries d, the step's time in native passes of the weights (the encoded arm's step over the stock arms'
 `native_pass`: every FP8 linear once through vLLM's own kernel, in one CUDA graph), which is μ_rebuild's numerator
 (d − τ)/x end to end, with x* = (d − τ)/0.5%; frontier.py's default d is y_total, which is a kernel-level point's d only.
@@ -37,6 +38,7 @@ FRONTIER = "verity/codec-frontier-point/v0"
 WORD_CODEC_POINTS = "art:615ddafdbdca40c9a79359dcd942422100b8b2d3e8d82b1e36073acdaedcb1de"  # ra-word-codec, r20261012-072836-5a84
 MU_BUDGET = 0.005  # μ_rebuild's share of γ = 1% (the overnight brief's budget)
 WIDE_POINTS = "art:96b9bcd36ce70e8e5f06a2da0faddc9a6aff4242ccc7c16f6c4faa0080fd9d53"  # ra-codec-wide, r20261012-074744-2f82
+WIDE512_POINTS = "art:abd163bfa9df2289377d531e64caded21af9264c60f2a7439eb438f9820b11b8"  # ra-codec-wide, r20261012-112605-e146
 #: (word bits, payload bits, k) -> the encode time of one pass's words in native passes (x), the decode's share of a pass's
 #: compute (Δ) and the ro-blake3/v1 tag's (τ), as the codec lanes measured them on the same GPU
 CODEC = {
@@ -48,7 +50,10 @@ CODEC = {
     (255, 254, 2): (218.45824934871789, 2.208046886523409, 0.8223356015334597, WIDE_POINTS),
     (521, 520, 1): (332.236924960776, 0.8769569643747882, 0.8224952428519756, WIDE_POINTS),
     (521, 520, 2): (664.473849921552, 1.6401752171760773, 0.8224952428519756, WIDE_POINTS),
+    (512, 512, 1): (326.151527648199, 0.691243128520072, 0.8264958893738357, WIDE512_POINTS),
 }
+#: the wide kernel's sketch-then-hash τ at p512 (the sketch's MMAs and hash in its CTA, as ra-codec-wide prices it)
+WIDE_SKETCH_TAU = 0.04132479446869178
 #: ra-codec-tensor's (its 08:55Z report: x with its tensor cores and the 1.16× clock, from r20261012-080525-4dcf's
 #: squaring rates; τ = 0.48 a stored pass, r20261012-083520-f31c), by (field, k)
 TENSOR_POINTS = ("art:a4a86704b3bb90121b67ecc1655443e133523e321700ba4fe153c751ce421a4b "
@@ -137,7 +142,12 @@ def tag_suffix(cod: dict) -> str:
     """t for ro-blake3/v1, sK_S (sK_StT past T = 8 tasks a vector) for the sketch, then c when each step commits."""
     if cod.get("tag") != SKETCH:
         return "t" if cod.get("tag") else ""
-    return f"s{cod['sketch_k']}" + (f"t{cod['sketch_t']}" if cod["sketch_t"] != 8 else "") + ("c" if cod.get("commit") else "")
+    return f"s{cod['sketch_k']}{sketch_t(cod)}" + ("c" if cod.get("commit") else "")
+
+
+def sketch_t(cod: dict) -> str:
+    """tT for a tensor sketch of T != 8 tasks a vector; the wide kernel's vectors (a CTA's tile) have no T."""
+    return f"t{cod['sketch_t']}" if cod.get("sketch_t") not in (None, 8) else ""
 
 
 def tag_blocks(cod: dict, batch: int) -> int:
@@ -148,8 +158,11 @@ def tag_blocks(cod: dict, batch: int) -> int:
 
 def tag_bytes(cod: dict, batch: int) -> int:
     """The tags' HBM bytes a step: each tag written (32 bytes), and with the commit also read back by the leaves, and
-    the tree's nodes (64 bytes, one a leaf of 16 tags and about as many above them) each written and read."""
+    the tree's nodes (64 bytes, one a leaf of 16 tags and about as many above them) each written and read; a commit
+    from a ring (the wide kernel's) keeps the tags in L2 and writes only the leaves and the nodes above them."""
     n = tag_blocks(cod, batch)
+    if cod.get("commit_ring"):
+        return 2 * 64 * -(-n // 16)
     return 32 * n + (32 * n + 4 * 64 * -(-n // 16) if cod.get("commit") else 0)
 
 
@@ -248,7 +261,10 @@ def main() -> int:
                 "gpu": a["gpu"],
                 "codec": {"field": cod["field"], "word_bits": cod["word_bits"], "rounds": a["k"],
                           "payload_bits": cod["payload_bits"], "tag": cod.get("tag")},
-                "kernel": ("benchmarks/word_codec/wide.cu ww_gemm (ra-codec-wide's fused decode + tag GEMM)" if wide else
+                "kernel": ("benchmarks/word_codec/wide.cu ww_gemm_sketch (ra-codec-wide's fused decode + sketch-then-hash "
+                           "GEMM" + (", each step committing as it goes from an L2 ring of tags" if cod.get("commit")
+                                     else "") + ")" if wide and cod.get("tag") == SKETCH else
+                           "benchmarks/word_codec/wide.cu ww_gemm (ra-codec-wide's fused decode + tag GEMM)" if wide else
                            "benchmarks/codec_tensor/wt.cu wt_fused_sketch (ra-codec-tensor's decoder, MMA and tag or "
                            "sketch warps), warps chosen per shape and batch" if tensor else
                            "benchmarks/vllm_encoded/ve.cu (word_codec wc.cu fused GEMM), form chosen per shape and batch"),
@@ -269,7 +285,7 @@ def main() -> int:
             y_commit = sc / e - sc / uc if uc else 0.0
             y_tag = sc / e - y_commit - sc / un if un else 0.0
             sketched = cod.get("tag") == SKETCH
-            tau = ref[2] if cod.get("tag") and not sketched else 0.0
+            tau = ref[2] if cod.get("tag") and not sketched else WIDE_SKETCH_TAU if sketched and wide else 0.0
             pass_ms = native_pass.get(b)
             d = b / e * 1e3 / pass_ms if pass_ms else None
             frontier.append({
@@ -277,8 +293,7 @@ def main() -> int:
                 "b": cod["word_bits"], "k": a["k"],
                 "arithmetic": (f"cuda-int32/{cod['field']}/{'wt' if tensor else 'wide'}.cu" if wide or tensor else
                                "cuda-int32/mersenne61/pb56/ve.cu")
-                              + (f"/sketch{cod['sketch_k']}" + (f"t{cod['sketch_t']}" if cod["sketch_t"] != 8 else "")
-                                 + ("/commit" if cod.get("commit") else "")
+                              + (f"/sketch{cod['sketch_k']}{sketch_t(cod)}" + ("/commit" if cod.get("commit") else "")
                                  if sketched else "/tag" if cod.get("tag") else ""),
                 "compiled": bool(a.get("compiled")), "mode": md, "batch": b, "context": ctx,
                 "y_total": y_total, "y_base": y_base, "y_decode": y_total - y_base - y_tag - y_commit,

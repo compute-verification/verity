@@ -10,14 +10,16 @@
 #
 # WORK is the e2e's vLLM environment on node 2 (benchmarks/pouw/pearl_c_vllm/setup.sh).  ARMS (default
 # "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60),
-# ra-codec-wide's fused GEMM as wide:BITS:K or wide:BITS:K:tag (BITS 127, 255 or 521; K = 0 its plain payloads; tag: the
-# ro-blake3/v1 tag of every block read, as decode runs), ra-codec-tensor's as tensor:FIELD:K or tensor:FIELD:K:tag (FIELD
+# ra-codec-wide's fused GEMM as wide:BITS:K, wide:BITS:K:tag or wide:BITS:K:sk16 (BITS 127, 255, 521, 256 or 512, then
+# wide_run.sh's LIBSET suffix such as rcuem; K = 0 its plain payloads; tag: the ro-blake3/v1 tag of every block read, as
+# decode runs; sk16: the sketch-then-hash tag, and sk16c each decode step committed as it goes), ra-codec-tensor's as
+# tensor:FIELD:K or tensor:FIELD:K:tag (FIELD
 # 255, 511, 512, 521, 767, 768, 1023 or 1279, codec_tensor/wt.cu built for each the arms name; K >= 1, 512 and 768 being
 # full-slot fields at K = 1; tag: its tag warps tag the store's 4,088-byte blocks; skKS or skKStT, K = 1: its sketch
 # warps tag the store under ro-sketch-blake3/v0 at k_s = KS, 16 or 64, over vectors of T tasks, default 8; a last c
 # commits each decode step's tags, serve.py --commit), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
-# each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the PTX-carry squaring); a last /g makes an arm its gates and one
+# each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the carry-chain squaring); a last /g makes an arm its gates and one
 # point (batch 1, context 512, 16 steps); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).
 # MODEL (default the e2e's Llama-3.1-8B-Instruct; for 70B the hub snapshot of unsloth/Meta-Llama-3.1-70B with SERVE_ARGS
 # "--mem 0.93") is read into the page cache before the lease, so each arm loads it from memory if the run's --mem-gb holds
@@ -46,9 +48,22 @@ done
 [ "${MODE:-}" = profile ] && ARMS=${ARMS:-stock enc:2}
 ARMS=${ARMS:-stock plain enc:2 enc:3 stock}
 WIDE=$(for a in $ARMS; do case $a in wide:*) a=${a#wide:}; echo "${a%%:*}" ;; esac; done | sort -u)
-for bits in $WIDE; do
-  nvcc "${FLAGS[@]}" -I benchmarks/bandwidth -DWW_BITS="$bits" -DWW_SQR=1 -DWW_KMAX="${WW_KMAX:-2}" -o "$B/ww-p$bits.so" \
-    benchmarks/word_codec/wide.cu > "$O/ww-p$bits.ptxas" 2>&1 &
+for spec in $WIDE; do
+  bits=${spec:0:3} suf=${spec:3} defs=""
+  while [[ $suf == *[cutwemk] ]]; do
+    [[ $suf == *k ]] && defs+=" -DWW_SKU=1"
+    [[ $suf == *m ]] && defs+=" -DWW_MAXREG=160"
+    [[ $suf == *e ]] && defs+=" -DWW_SKEND=1"
+    [[ $suf == *c ]] && defs+=" -DWW_CC=1"
+    [[ $suf == *u ]] && defs+=" -DWW_B3U=1"
+    [[ $suf == *t ]] && defs+=" -DWW_TB=2"
+    [[ $suf == *w ]] && defs+=" -DWW_KW=2"
+    suf=${suf%?}
+  done
+  [[ $suf == r* ]] && defs+=" -DWW_ROLL=1" && [ -n "${suf#r}" ] && defs+=" -DWW_OCC=${suf#r}"
+  # shellcheck disable=SC2086
+  nvcc "${FLAGS[@]}" -I benchmarks/bandwidth -DWW_BITS="$bits" -DWW_SQR=1 -DWW_KMAX="${WW_KMAX:-2}" $defs \
+    -o "$B/ww-p$spec.so" benchmarks/word_codec/wide.cu > "$O/ww-p$spec.ptxas" 2>&1 &
 done
 TENSOR=$(for a in $ARMS; do case $a in tensor:*) a=${a#tensor:}; echo "${a%%:*}" ;; esac; done | sort -u)
 for n in $TENSOR; do
@@ -57,7 +72,7 @@ done
 cat "$MODEL"/*.safetensors > /dev/null &
 wait || true
 for lib in ${LIBSET:-pb56 pb60}; do [ -e "$B/ve-$lib.so" ] || { tail -30 "$O/ve-$lib.ptxas"; exit 4; }; done
-for bits in $WIDE; do [ -e "$B/ww-p$bits.so" ] || { tail -30 "$O/ww-p$bits.ptxas"; exit 4; }; done
+for spec in $WIDE; do [ -e "$B/ww-p$spec.so" ] || { tail -30 "$O/ww-p$spec.ptxas"; exit 4; }; done
 for n in $TENSOR; do [ -e "$B/wt-$n.so" ] || { tail -30 "$O/wt-$n.ptxas"; exit 4; }; done
 sha256sum "$B"/*.so > "$O/libs.sha256"
 (cd $VE && "$PY" -m pytest -q -p no:cacheprovider tests) > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
@@ -116,7 +131,12 @@ fi
     case $name in
       enc) A=(--arm enc --k "$k" --lib "$B/ve-${lib:-pb56}.so"); tag=enc$k${lib:+-$lib} ;;
       wide) A=(--arm wide --k "${lib%%:*}" --lib "$B/ve-pb56.so" --wide-lib "$B/ww-p$k.so"); tag=w$k-${lib%%:*}
-            case $lib in *:tag) A+=(--tag); tag+=t ;; esac ;;
+            case $lib in
+              *:tag) A+=(--tag); tag+=t ;;
+              *:sk*) s=${lib##*:sk}; tag+=s$s
+                     case $s in *c) A+=(--commit); s=${s%c} ;; esac
+                     A+=(--sketch "$s") ;;
+            esac ;;
       tensor) A=(--arm tensor --k "${lib%%:*}" --lib "$B/ve-pb56.so" --tensor-lib "$B/wt-$k.so" --gate-reps 3)
               tag=t$k-${lib%%:*}
               case $lib in
