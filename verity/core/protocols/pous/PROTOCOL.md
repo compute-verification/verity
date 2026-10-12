@@ -749,6 +749,17 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   model. `HonestPassesRing` and
   `HonestPassesAccepts` prove that the honest full-state server passes P2's ring audit, and the end-to-end event, with
   probability 1.
+- `Pous.EndToEnd.EndToEndRingGraded`, the same game graded by the round boundaries at which the server begins short:
+  a `(D, Q, L)`-bounded server whose state between rounds may have any length (`AnyServer`) passes while holding at
+  most `⌊ρ·|C|⌋` bits at `m` or more of its 105 boundaries with probability at most `(501,578/2^19)^m + 2^-128`, for
+  every `m`. It is proved (`Pous.EndToEnd.SecurityProofs.endToEndRingGraded`) from the same two assumptions, through
+  `PousP2Round.graded_of_round`: `P2RingRoundSecure` bounds each round begun short whatever the history, so `m` such
+  rounds all answered right have probability at most `c^m + 105 · 2^-136`. At `m = 105` it is `EndToEndRing`'s
+  bound; each boundary held short multiplies the chance of passing by at most `501,578/2^19 ≈ 0.957`, so the event
+  has probability at least 1/2 only for `m ≤ 15`. `EndToEndRingGradedDeployed` is it at `D = 16,446`, `Q = 2^20`, `L = 2^64`. `ShortServerPasses` is
+  its non-vacuity: a server keeping 496,693 whole blocks (8,169,606,464 bits, at most `⌊ρ·|C|⌋`) passes short at all
+  105 boundaries with probability at least `(496,693/2^19)^105 ≈ 0.34%`, within a factor of three of the bound's
+  0.96%. It is not the graded audit of `Definitions/Pous/Model/Graded.lean`, which counts late answers.
 
 `EndToEndRing` reaches the deployed system only through four claims, each cited on its own:
 

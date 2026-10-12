@@ -366,4 +366,182 @@ theorem honestPassesAccepts : HonestPassesAccepts := by
   exact ⟨(splitAll x.2.2).1, v, fun j => uniformOn_split (x.2.2 j), hv,
     honest_answers _ W (sch.enc W x.1 ()).1 (sch.enc W x.1 ()).2 105 (splitAll x.2.2).1⟩
 
+/-! ### The graded ring game -/
+
+theorem rounds_eq {M : IdealModel} {ℓ B : ℕ} (f : M.Qry → M.Ans)
+    (step : ℕ → List Bool → Fin B → Prog M (Bits ℓ × List Bool)) :
+    ∀ (j : ℕ) (l : List (Fin B)) (σ : List Bool),
+      rounds f step j l σ = PousP2Round.trace (fun j σ i => (step j σ i).run f) j l σ
+  | _, [], _ => rfl
+  | j, i :: is, σ => by simp only [rounds, PousP2Round.trace, rounds_eq f step (j + 1) is]
+
+/-- The streams' draw is the uniform indices' (`ε_rs = 0`), for any event of the coin view and the indices. -/
+theorem pr_draw (session : ByteArray)
+    (G : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω → ByteArray × ByteArray → (Fin 105 → Fin (2 ^ 19)) → Prop) :
+    pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+        ∃ (I : Fin 105 → Fin (2 ^ 19)) (v : ByteArray × ByteArray),
+          (∀ j, FlockSoundness.Randomness.uniformOn (2 ^ 19) (bytesOf (x.2.2 j)) = some (I j).val) ∧
+            coinView session x.2.1 I = some v ∧ G x.1 v I) =
+      pr fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × (Fin 105 → Fin (2 ^ 19)) =>
+        ∃ v, coinView session x.2.1 x.2.2 = some v ∧ G x.1 v x.2.2 := by
+  have h : (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+      ∃ (I : Fin 105 → Fin (2 ^ 19)) (v : ByteArray × ByteArray),
+        (∀ j, FlockSoundness.Randomness.uniformOn (2 ^ 19) (bytesOf (x.2.2 j)) = some (I j).val) ∧
+          coinView session x.2.1 I = some v ∧ G x.1 v I) =
+      fun x => (fun ω c I => ∃ v, coinView session c I = some v ∧ G ω v I) x.1 x.2.1 (splitAll x.2.2).1 := by
+    funext x
+    apply propext
+    have hI : ∀ I : Fin 105 → Fin (2 ^ 19),
+        (∀ j, FlockSoundness.Randomness.uniformOn (2 ^ 19) (bytesOf (x.2.2 j)) = some (I j).val) ↔
+          I = (splitAll x.2.2).1 := by
+      intro I
+      simp only [uniformOn_split, Option.some.injEq]
+      constructor
+      · intro h; funext j; exact Fin.ext (h j).symm
+      · rintro rfl j; rfl
+    constructor
+    · rintro ⟨I, v, hu, hv, hG⟩
+      obtain rfl := (hI I).1 hu
+      exact ⟨v, hv, hG⟩
+    · rintro ⟨v, hv, hG⟩
+      exact ⟨_, v, (hI _).2 rfl, hv, hG⟩
+  rw [h]
+  exact pr_reindex splitAll fun ω c I => ∃ v, coinView session c I = some v ∧ G ω v I
+
+/-- The server passes on the indices `I` and the coin view `v`, beginning at least `m` rounds short. -/
+def EvS {D Q L : ℕ} (m : ℕ) (session binding : ByteArray) (W : Bits sch.n) (A : AnyServer D Q L)
+    (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) (v : Option (ByteArray × ByteArray))
+    (I : Fin 105 → Fin (2 ^ 19)) : Prop :=
+  ∃ v', v = some v' ∧
+    ((roundsOf session binding W A ω v' I).map Prod.fst = List.ofFn (fun j => (sch.enc W ω ()).2 (I j)) ∧
+      m ≤ (roundsOf session binding W A ω v' I).countP fun r => decide (r.2.length ≤ S))
+
+set_option exponentiation.threshold 20000 in
+/-- Every session commitment `v` turns the server into a responder of `PousP2Round.graded_of_round`. -/
+theorem graded_some_le {D Q L : ℕ} (hP : Pous.P2.Assumptions.P2RingRoundSecure D Q L) (session binding : ByteArray)
+    (W : Bits sch.n) (A : AnyServer D Q L) (m : ℕ) (v : ByteArray × ByteArray) :
+    pr (fun o : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × Unit × (Fin 105 → Fin (2 ^ 19)) =>
+        EvS m session binding W A o.1 (some v) o.2.2) ≤
+      ((501578 : ℝ≥0∞) / 2 ^ 19) ^ m + ((105 : ℕ) : ℝ≥0∞) * (2⁻¹ : ℝ≥0∞) ^ 136 := by
+  have h := PousP2Round.graded_of_round sch S D Q L 105 m _ _ hP W
+    (fun x => A.pre W (sch.enc W x.1 x.2).1 (sch.enc W x.1 x.2).2 x.1) (A.step (commitmentOf session binding v) W)
+    (A.bounded _ W)
+  rw [← PousThm1.pr_equiv (Equiv.prodAssoc (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω sch.Coins
+    (Fin 105 → Fin sch.B)).symm] at h
+  refine le_trans (pr_mono fun o ho => ?_) h
+  obtain ⟨v', hv, hs⟩ := ho
+  obtain rfl := Option.some.inj hv
+  simp only [roundsOf, rounds_eq] at hs
+  exact hs
+
+/-- `105 · 2^-136 + 2^-131 ≤ 2^-128`. -/
+theorem budget_graded : ((105 : ℕ) : ℝ≥0∞) * (2⁻¹ : ℝ≥0∞) ^ 136 + (2⁻¹ : ℝ≥0∞) ^ 131 ≤ Params.εMax :=
+  le_trans (add_le_add PousP2Round.eps_le le_rfl) (le_trans (add_le_add le_self_add le_rfl) budget)
+
+set_option exponentiation.threshold 20000 in
+theorem endToEndRingGraded : EndToEndRingGraded := by
+  intro hH D Q L hP session binding W A m
+  have h₀ := pr_draw session fun ω v I =>
+    (roundsOf session binding W A ω v I).map Prod.fst = List.ofFn (fun j => (sch.enc W ω ()).2 (I j)) ∧
+      m ≤ (roundsOf session binding W A ω v I).countP fun r => decide (r.2.length ≤ S)
+  have h₁ := hH session (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω (EvS m session binding W A)
+  have h₂ := pr_slice_le (Ω := (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) (C := HmCoins)
+    (I := Fin 105 → Fin (2 ^ 19)) (EvS m session binding W A) (coinView session)
+    (((501578 : ℝ≥0∞) / 2 ^ 19) ^ m + ((105 : ℕ) : ℝ≥0∞) * (2⁻¹ : ℝ≥0∞) ^ 136)
+    (fun _ _ ⟨_, h, _⟩ => by cases h) (graded_some_le hP session binding W A m)
+  calc pr (PassesShort m session binding W A) = _ := h₀
+    _ ≤ _ := h₁
+    _ ≤ _ := add_le_add h₂ le_rfl
+    _ ≤ _ := by rw [add_assoc]; exact add_le_add le_rfl budget_graded
+
+set_option exponentiation.threshold 20000 in
+theorem endToEndRingGradedDeployed : EndToEndRingGradedDeployed := fun hH hP => endToEndRingGraded hH _ _ _ hP
+
+/-! ### Non-vacuity: a server holding 496,693 blocks -/
+
+set_option exponentiation.threshold 20000 in
+/-- The first 496,693 blocks of `C`, as bits. -/
+@[irreducible] noncomputable def kept (C : sch.Code) : List Bool :=
+  List.ofFn fun k : Fin (496693 * 16448) =>
+    C ⟨k.val / 16448, show k.val / 16448 < 2 ^ 19 by have := k.isLt; omega⟩
+      ⟨k.val % 16448, show k.val % 16448 < 16448 from Nat.mod_lt _ (by norm_num)⟩
+
+set_option exponentiation.threshold 20000 in
+/-- A server that keeps the first 496,693 blocks of `C` and answers each index among them from its state, with no
+query. -/
+noncomputable def keeper : AnyServer 0 0 0 :=
+  ⟨fun _ _ C _ => kept C, fun _ _ _ _ σ i => .ret (fun b => σ.getD (i.val * 16448 + b.val) false, σ),
+    fun _ _ _ _ _ _ _ => ⟨le_rfl, le_rfl, le_rfl⟩⟩
+
+theorem keeper_run (f : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Qry → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ans)
+    (sc : SessionCommitment) (W : Bits sch.n) (pp : Bits sch.t) (j : ℕ) (σ : List Bool) (i : Fin sch.B) :
+    (keeper.step sc W pp j σ i).run f = (fun b => σ.getD (i.val * 16448 + b.val) false, σ) := rfl
+
+set_option exponentiation.threshold 20000 in
+theorem kept_block (C : sch.Code) (i : Fin sch.B) (hi : (i : ℕ) < 496693) (b : Fin sch.ℓ) :
+    (kept C).getD (i.val * 16448 + b.val) false = C i b := by
+  have hb : b.val < 16448 := b.isLt
+  have hk : i.val * 16448 + b.val < 496693 * 16448 := by omega
+  unfold kept
+  rw [List.getD_eq_getElem?_getD, List.getElem?_ofFn, dite_eq_left hk, Option.getD_some]
+  congr 1
+  · congr 1
+    show (i.val * 16448 + b.val) / 16448 = i.val
+    omega
+  · exact Fin.ext (show (i.val * 16448 + b.val) % 16448 = b.val by omega)
+
+set_option exponentiation.threshold 20000 in
+theorem length_kept (C : sch.Code) : (kept C).length ≤ S := by
+  have h : (kept C).length = 496693 * 16448 := by
+    unfold kept
+    exact List.length_ofFn
+  rw [h]
+  show 496693 * 16448 ≤ ⌊Params.ρ * ((2 ^ 19 * 16448 : ℕ) : ℚ)⌋₊
+  refine Nat.le_floor ?_
+  unfold Params.ρ
+  norm_num
+
+set_option exponentiation.threshold 20000 in
+theorem keeper_rounds (f : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Qry → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ans)
+    (sc : SessionCommitment) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code) :
+    ∀ (j : ℕ) (l : List (Fin sch.B)), (∀ i ∈ l, (i : ℕ) < 496693) →
+      rounds f (keeper.step sc W pp) j l (kept C) = l.map fun i => (C i, kept C)
+  | _, [], _ => rfl
+  | j, i :: is, h => by
+    simp only [rounds, keeper_run, List.map_cons]
+    rw [keeper_rounds f sc W pp C (j + 1) is fun i' hi' => h i' (List.mem_cons_of_mem _ hi')]
+    congr 2
+    funext b
+    exact kept_block C i (h i List.mem_cons_self) b
+
+set_option exponentiation.threshold 20000 in
+theorem shortServerPasses : ShortServerPasses := by
+  refine ⟨keeper, fun session hs binding W => ?_⟩
+  have hlow : pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+      ∀ j, ((splitAll x.2.2).1 j : ℕ) < 496693) = ((496693 : ℝ≥0∞) / 2 ^ 19) ^ 105 := by
+    refine (pr_reindex splitAll fun _ _ I => ∀ j, (I j : ℕ) < 496693).trans ?_
+    refine (pr_snd (α := (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
+      fun y : HmCoins × (Fin 105 → Fin (2 ^ 19)) => ∀ j, (y.2 j : ℕ) < 496693).trans ?_
+    refine (pr_snd (α := HmCoins) fun I : Fin 105 → Fin (2 ^ 19) => ∀ j, (I j : ℕ) < 496693).trans ?_
+    rw [pr_all_lt 105 (2 ^ 19) 496693 (by norm_num)]
+    norm_num
+  rw [← hlow]
+  refine pr_mono fun x hx => ?_
+  obtain ⟨v, hv⟩ := coinView_some session hs x.2.1 (splitAll x.2.2).1
+  refine ⟨(splitAll x.2.2).1, v, fun j => uniformOn_split (x.2.2 j), hv, ?_⟩
+  have hr := keeper_rounds ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1) (commitmentOf session binding v) W
+    (sch.enc W x.1 ()).1 (sch.enc W x.1 ()).2 0 (List.ofFn (splitAll x.2.2).1) fun i hi => by
+      obtain ⟨j, rfl⟩ := List.mem_ofFn.1 hi
+      exact hx j
+  have hro : roundsOf session binding W keeper x.1 v (splitAll x.2.2).1 =
+      (List.ofFn (splitAll x.2.2).1).map fun i => ((sch.enc W x.1 ()).2 i, kept (sch.enc W x.1 ()).2) := by
+    unfold roundsOf
+    exact hr
+  rw [hro]
+  refine ⟨?_, le_of_eq ((List.countP_eq_length.2 fun r hr => ?_).trans ?_).symm⟩
+  · exact List.map_map.trans List.map_ofFn
+  · obtain ⟨i, -, rfl⟩ := List.mem_map.1 hr
+    exact decide_eq_true (length_kept _)
+  · exact (List.length_map _).trans List.length_ofFn
+
 end Pous.EndToEnd.SecurityProofs

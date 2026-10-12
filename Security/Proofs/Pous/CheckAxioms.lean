@@ -134,5 +134,6 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms PousP2Ring.not_meetsOn_b19_k88
 -- the whole ring-model audit from its per-round form, and the per-round form's falsification tests
 #print axioms Pous.SecurityProofs.P2RingAuditSecureOfRound
+#print axioms PousP2Round.graded_of_round
 #print axioms PousP2Ring.not_roundSecure_tight
 #print axioms PousP2Ring.not_roundSecure_trunc

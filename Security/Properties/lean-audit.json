@@ -264,6 +264,16 @@
    "assumptions": [],
    "type_hash": "0cef57124c5093d2f8e3861680cb48d6367ac85be9af5d45d083d6d66c616544"
   },
+  "Pous.EndToEnd.SecurityProofs.endToEndRingGraded": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.EndToEnd.SecurityProofs.endToEndRingGraded : Pous.EndToEnd.EndToEndRingGraded"],
+   "assumptions": []
+  },
+  "Pous.EndToEnd.SecurityProofs.endToEndRingGradedDeployed": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.EndToEnd.SecurityProofs.endToEndRingGradedDeployed : Pous.EndToEnd.EndToEndRingGradedDeployed"],
+   "assumptions": []
+  },
   "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": {
    "owner": "@memory-accounting",
    "signature": ["Pous.EndToEnd.SecurityProofs.honestPassesAccepts : Pous.EndToEnd.HonestPassesAccepts"],
@@ -275,6 +285,11 @@
    "signature": ["Pous.EndToEnd.SecurityProofs.honestPassesRing : Pous.EndToEnd.HonestPassesRing"],
    "assumptions": [],
    "type_hash": "bb83fa9f7c1f0f11356af303c9c293fbbe6ec6816a2628509c5ba5006db0574e"
+  },
+  "Pous.EndToEnd.SecurityProofs.shortServerPasses": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.EndToEnd.SecurityProofs.shortServerPasses : Pous.EndToEnd.ShortServerPasses"],
+   "assumptions": []
   },
   "PousCheck.Properties.SecurityProofs.deployed": {
    "owner": "@memory-accounting",
@@ -1963,7 +1978,10 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so the whole audit's event (seqAcceptsOn, which P2RingAuditSecure bounds) and EndToEndRing's are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
-   "Pous.EndToEnd.RunCertifies": "unstated: the composed acceptance it is about is restated by hand (`Accepted`, G-2); no theorem proves it until the composed check exists in code"
+   "Pous.EndToEnd.RunCertifies": "unstated: the composed acceptance it is about is restated by hand (`Accepted`, G-2); no theorem proves it until the composed check exists in code",
+   "Pous.EndToEnd.SecurityProofs.endToEndRingGraded": "frozen: a bound on a game's probability in the ring model, graded by the round boundaries at which a server of any state holds at most S bits, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier not at all until G-1 (one session per audit) and G-2 (the composed setup-to-challenger check) are fixed in code",
+   "Pous.EndToEnd.SecurityProofs.endToEndRingGradedDeployed": "frozen: endToEndRingGraded at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
+   "Pous.EndToEnd.SecurityProofs.shortServerPasses": "completeness: a server keeping 496,693 whole blocks (at most S bits) passes holding at most S bits at all 105 boundaries with probability at least (496,693/2^19)^105, about 0.34% against the bound's 0.96%, so EndToEndRingGraded's event is not vacuous"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingRoundSecure": {

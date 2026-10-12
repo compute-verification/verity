@@ -218,6 +218,30 @@ theorem auditSecureOn_of_round {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B 
   · refine ⟨by rw [List.length_ofFn], ?_⟩
     simpa only [ofList_ofFn, run_progMap] using hx.2
 
+/-- **The graded audit from its rounds.** If one round of the audit over the ring bound is answered from an `S`-bit
+state with probability at most `c`, off `ε` (`RoundSecureOn`), then a `(D, Q, L)`-bounded sequential responder whose
+state may have any length passes `k` rounds, beginning at least `m` of them from at most `S` bits, with probability at
+most `c^m + k·ε`. -/
+theorem graded_of_round {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (S D Q L k m : ℕ) (c ε : ℝ≥0∞)
+    (h : RoundSecureOn sch S D Q L c ε) (W : Bits sch.n) (σ₀ : (ringRO B w p).Ω × sch.Coins → List Bool)
+    (step : Bits sch.t → ℕ → List Bool → Fin sch.B → Prog (ringRO B w p) (Bits sch.ℓ × List Bool))
+    (hb : ∀ pp j σ i, (step pp j σ i).RingBounded D Q L) :
+    pr (fun y : ((ringRO B w p).Ω × sch.Coins) × (Fin k → Fin sch.B) =>
+        (trace (fun j σ i => (step (sch.enc W y.1.1 y.1.2).1 j σ i).run ((ringRO B w p).answer y.1.1)) 0
+            (List.ofFn y.2) (σ₀ y.1)).map Prod.fst = List.ofFn (fun t => (sch.enc W y.1.1 y.1.2).2 (y.2 t)) ∧
+          m ≤ (trace (fun j σ i => (step (sch.enc W y.1.1 y.1.2).1 j σ i).run ((ringRO B w p).answer y.1.1)) 0
+            (List.ofFn y.2) (σ₀ y.1)).countP fun r => decide (r.2.length ≤ S)) ≤ c ^ m + k * ε := by
+  have : NeZero sch.B := ⟨sch.B_pos.ne'⟩
+  let nxt : (ringRO B w p).Ω × sch.Coins → ℕ → List Bool → Fin sch.B → Bits sch.ℓ × List Bool :=
+    fun x j σ i => (step (sch.enc W x.1 x.2).1 j σ i).run ((ringRO B w p).answer x.1)
+  refine le_trans (pr_mono fun y hy => ⟨hy.1, ?_⟩) (pr_held_le nxt σ₀ (fun x => (sch.enc W x.1 x.2).2)
+    (fun σ => decide (σ.length ≤ S)) c ε k m fun hist _ => le_trans (pr_mono fun x hx => ?_)
+      (h W (fun x => after (nxt x) 0 hist (σ₀ x)) (fun pp σ i => progMap Prod.fst (step pp hist.length σ i))
+        fun pp σ i => ringBounded_progMap _ (hb _ _ _ _)))
+  · exact ⟨of_decide_eq_true hx.1, by simpa only [run_progMap] using hx.2⟩
+  · rw [List.countP_map]
+    exact hy.2
+
 /-! ### At P2's parameters -/
 
 theorem c_eq : ((501578 : ℝ≥0∞) / 2 ^ 19) = ENNReal.ofReal ((501578 : ℝ) / 2 ^ 19) := by

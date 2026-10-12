@@ -20,13 +20,17 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
   per-block keys (`p2ring`), against a server that is a `Server S D Q L` of this module, with the memory challenger's
   coins drawn as the code draws them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from
   uniform bytes.
+* `EndToEndRingGraded`, `EndToEndRingGradedDeployed` and `ShortServerPasses`, in the same model and game, against a
+  server whose state between rounds may have any length (`AnyServer`): it passes while holding at most `S` bits at `m`
+  or more of its 105 round boundaries with probability at most `(501,578/2^19)^m + 2^-128`.
 
 The step from the ring game to the deployed system is four claims, each its own id in `verity.core.claims`, cited
 separately so that each can be rejected alone:
 
 1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded
    between setup, the session and its rounds, with one session per audit and the coins drawn online, after its state
-   is fixed. It names no number.
+   is fixed. It names no number. The graded statements need only that the deployed server is an `AnyServer`: a
+   `Server` of some `S`, its state written as a bit list.
 2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
    multiplication round, `Q + 1` key queries or `L + 1` ring operations within `Δ + RTT`, at the corollary's
    `D = 16,446`, `Q = 2^20` and `L = 2^64`; `EndToEndRingDeployed`'s docstring derives `D` and its margin.
@@ -302,5 +306,83 @@ always builds the coin tree, and the draw never fails (`ε_rs = 0`, `DrawExact`)
 def HonestPassesAccepts : Prop :=
   ∃ A : Server FULL 0 0 0, ∀ session : ByteArray, session.size = 32 → ∀ (binding : ByteArray) (W : Bits sch.n),
     pr (Passes session binding W A) = 1
+
+/-! ## The ring game graded by the rounds a server begins short
+
+Not the graded audit of `Definitions/Pous/Model/Graded.lean` (`GradedMeets`, `BandGradedMeetsFamily`), which counts
+late answers: these count the round boundaries at which a server holds at most `S` bits. -/
+
+set_option exponentiation.threshold 20000 in
+/-- **A server in the ring model whose state may have any length**: `Server`'s `pre` and `step` with a bit list for
+the state, so nothing bounds what it holds between rounds; each answer is within `(D, Q, L)`. A `Server S D Q L` is one
+whose state is `S` bits at every boundary. -/
+structure AnyServer (D Q L : ℕ) : Type where
+  pre : Bits sch.n → Bits sch.t → sch.Code → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω → List Bool
+  step : SessionCommitment → Bits sch.n → Bits sch.t → ℕ → List Bool → Fin sch.B →
+    Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)
+  bounded : ∀ sc W pp j σ i, (step sc W pp j σ i).RingBounded D Q L
+
+/-- A session's rounds from round `j` in state `σ`, for the indices `is`: each round's block, with the state the
+round began from (the state at its boundary). -/
+def rounds {M : IdealModel} {ℓ B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → List Bool → Fin B → Prog M (Bits ℓ × List Bool)) :
+    ℕ → List (Fin B) → List Bool → List (Bits ℓ × List Bool)
+  | _, [], _ => []
+  | j, i :: is, σ =>
+      let out := (step j σ i).run f
+      (out.1, σ) :: rounds f step (j + 1) is out.2
+
+/-- The 105 rounds an `AnyServer` plays over `ω`, shown the session commitment `v`, for the indices `I`: the first
+begins from all that survived setup. -/
+noncomputable def roundsOf {D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n) (A : AnyServer D Q L)
+    (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) (v : ByteArray × ByteArray) (I : Fin 105 → Fin (2 ^ 19)) :
+    List (Bits sch.ℓ × List Bool) :=
+  rounds ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω)
+    (A.step (commitmentOf session binding v) W (sch.enc W ω ()).1) 0 (List.ofFn I)
+    (A.pre W (sch.enc W ω ()).1 (sch.enc W ω ()).2 ω)
+
+/-- **The server passes the session, holding at most `S` bits at `m` or more of its 105 round boundaries**: the draw
+and the coin tree as in `Passes`, every one of the 105 blocks right, and at least `m` of the rounds began from a state
+of at most `S` bits. -/
+def PassesShort {D Q L : ℕ} (m : ℕ) (session binding : ByteArray) (W : Bits sch.n) (A : AnyServer D Q L)
+    (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) : Prop :=
+  ∃ (I : Fin 105 → Fin (2 ^ 19)) (v : ByteArray × ByteArray),
+    (∀ j, FlockSoundness.Randomness.uniformOn (2 ^ 19) (bytesOf (x.2.2 j)) = some (I j).val) ∧
+      coinView session x.2.1 I = some v ∧
+      (roundsOf session binding W A x.1 v I).map Prod.fst = List.ofFn (fun j => (sch.enc W x.1 ()).2 (I j)) ∧
+      m ≤ (roundsOf session binding W A x.1 v I).countP fun r => decide (r.2.length ≤ S)
+
+/-- **P2's audit in the ring model, graded by the rounds a server begins short, with `ω` uniform, at the deployed
+point.** For every `(D, Q, L)` at which P2 is secure in the ring model round by round (`P2RingRoundSecure`), and given
+that the coin commitments hide the indices up to `2^-131` (`CoinCommitHides`): for every session id and binding, every
+payload `W`, every `(D, Q, L)`-bounded server whatever it holds (`AnyServer`) and every `m`, the server passes the
+session while holding at most `S` bits at `m` or more of its 105 round boundaries with probability at most
+`(501,578/2^19)^m + 2^-128` over the primitive `ω`, the memory challenger's coins and its uniform streams.
+
+So a passing server is short at few boundaries: at `m = 105` the bound is `EndToEndRing`'s `1% + 2^-128`, and each
+boundary held short multiplies its chance of passing by at most `501,578/2^19`, about 0.957. The budget is the 105
+rounds' `2^-136` each (`105 · 2^-136 ≤ 2^-129`), the hiding's `2^-131` and `ε_rs = 0` (`DrawExact`). It speaks of the
+deployed system through the four claims of this module's header, `pous-ring-device` read for a server whose state
+between rounds has any length, and is cited as covering the deployed verifier only once G-1 and G-2 are fixed. -/
+def EndToEndRingGraded : Prop :=
+  Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
+    ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingRoundSecure D Q L →
+      ∀ (session binding : ByteArray) (W : Bits sch.n) (A : AnyServer D Q L) (m : ℕ),
+        pr (PassesShort m session binding W A) ≤ ((501578 : ℝ≥0∞) / 2 ^ 19) ^ m + Params.εMax
+
+/-- **`EndToEndRingGraded` at one root's depth: `D = 16,446`, `Q = 2^20`, `L = 2^64`**, `EndToEndRingDeployed`'s point,
+with its margin (`P2RingRoundSecure` is false at `D ≥ 32,894` and at `L ≥ 2^162`). -/
+def EndToEndRingGradedDeployed : Prop :=
+  Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
+    Pous.P2.Assumptions.P2RingRoundSecure 16446 (2 ^ 20) (2 ^ 64) →
+      ∀ (session binding : ByteArray) (W : Bits sch.n) (A : AnyServer 16446 (2 ^ 20) (2 ^ 64)) (m : ℕ),
+        pr (PassesShort m session binding W A) ≤ ((501578 : ℝ≥0∞) / 2 ^ 19) ^ m + Params.εMax
+
+/-- **Non-vacuity of `EndToEndRingGraded`'s event at `m = 105`, within a factor of three of its bound**: a server that
+keeps 496,693 whole blocks of `C` (8,169,606,464 bits, at most `S`) and answers from them with no query
+(`AnyServer 0 0 0`) passes holding at most `S` bits at all 105 boundaries with probability at least
+`(496,693/2^19)^105`, about 0.34%, for every 32-byte session id, binding and `W`; the bound is about 0.96%. -/
+def ShortServerPasses : Prop :=
+  ∃ A : AnyServer 0 0 0, ∀ session : ByteArray, session.size = 32 → ∀ (binding : ByteArray) (W : Bits sch.n),
+    ((496693 : ℝ≥0∞) / 2 ^ 19) ^ 105 ≤ pr (PassesShort 105 session binding W A)
 
 end Pous.EndToEnd
