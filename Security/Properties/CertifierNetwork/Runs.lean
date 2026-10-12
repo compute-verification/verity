@@ -29,8 +29,8 @@ session id: it signs nothing when its signing state has already started its issu
 key's whole signing history, the hash-then-sign composition behind `euf-cma/lms-sha512-n64`, not a break tied to the
 run: only a model of the key's runs would make it one. (b), and the one-time use of each leaf that the forgery reading
 already rests on (`DeviceInput.next` is the host's), rest on one presumption: the device's signing state (next leaf,
-used session ids) is not rolled back (claim `TBD`). No statement here takes it as a premise, since a statement of one
-run can't name other runs.
+used session ids) is not rolled back, the persistent-state part of `trusted-nebius-host`, whose part about one run is
+`NetTiming.DeviceIntact`. No statement here takes it as a premise, since a statement of one run can't name other runs.
 
 `Properties.Proofs.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
 `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) proves `AcceptedRunsAreProgramRuns` and the

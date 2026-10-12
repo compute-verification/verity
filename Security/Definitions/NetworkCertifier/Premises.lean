@@ -11,7 +11,10 @@ namespace NetTiming
 
 /-- **The certifier device runs as built**: on every input `x` (its configuration, its key and the trace the world gives
 it) the physical `device` returns what its `code` returns. The host changes none of it, and no attestation stands
-behind it: it is trust in the host (`trusted-nebius-host`). It doesn't say the device's key stays secret. -/
+behind it: it is trust in the host (`trusted-nebius-host`). It doesn't say the device's key stays secret. It is that
+claim's part about one run; the other part, that the host doesn't roll back the device's signing state (next leaf, used
+session ids), is about its runs together, and no property takes it as a premise
+(`Properties.NetworkCertifier`, "Other runs of the key"). -/
 def DeviceIntact {In Out : Type} (device code : In → Out) : Prop := ∀ x, device x = code x
 
 end NetTiming

@@ -114,10 +114,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean); no attestation hardware backs it
+    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean) states its part about one run; no
+    # attestation hardware backs it
     Entry("trusted-nebius-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host",
-          "Trusted Nebius host", "standard"),
+          "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host, "
+          "and the host keeps the device's persistent state (its next LMS leaf and the session ids it has started) from "
+          "being rolled back", "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
 )}
 
