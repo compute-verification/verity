@@ -476,10 +476,29 @@ def commit_gate(lib: Lib, torch, tags_dev, nblk: int, st: int) -> dict:
 def mismatch(pf, pp, nch: int, mb: int, n: int, groups: int) -> dict:
     """Where a fused run's partial sums differ from the plain kernel's: the tasks (K chunk kc, row block g; the CTA
     (kc, g mod groups) takes it as its task g // groups) and how many of their elements."""
-    d = (pf.view(nch, mb, n) != pp.view(nch, mb, n)).any(1).view(nch, n // 16, 16).sum(2)
+    f, p = pf.view(nch, mb, n), pp.view(nch, mb, n)
+    d = (f != p).any(1).view(nch, n // 16, 16).sum(2)
     idx = d.nonzero().tolist()
-    tasks = [{"kc": kc, "g": g, "cta_g0": g % groups, "i": g // groups, "cols": int(d[kc, g])} for kc, g in idx[:12]]
-    return {"tasks": len(idx), "elements": int((pf != pp).sum()), "first": tasks}
+    nbs = n // 16
+
+    def task(kc, g):
+        fb, out = f[kc, :, 16 * g:16 * g + 16], {"kc": kc, "g": g, "cta_g0": g % groups, "i": g // groups,
+                                                  "cols": int(d[kc, g])}
+        out["zeros"] = int((fb == 0).sum())
+        out["equals_task"] = [j for j in range(-8, 9) if j and 0 <= g + groups * j < nbs
+                              and torch_equal(fb, p[kc, :, 16 * (g + groups * j):16 * (g + groups * j) + 16])]
+        return out
+
+    ctas = {}
+    for kc, g in idx:
+        ctas.setdefault((kc, g % groups), []).append(g // groups)
+    return {"tasks": len(idx), "elements": int((f != p).sum()), "per_kc": [int(v) for v in (d > 0).sum(1).tolist()],
+            "ctas": len(ctas), "per_cta": [{"kc": kc, "g0": g0, "i": v} for (kc, g0), v in list(ctas.items())[:6]],
+            "first": [task(kc, g) for kc, g in idx[:6]]}
+
+
+def torch_equal(a, b) -> bool:
+    return bool((a == b).all())
 
 
 def commit_time(lib: Lib, torch, nblk: int, reps: int) -> dict:
