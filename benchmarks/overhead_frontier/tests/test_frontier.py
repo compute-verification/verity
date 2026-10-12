@@ -19,7 +19,8 @@ NO_EPHEMERAL = {name: (0.0, 0.0) for name in SHAPES}
 def _measured_step() -> dict:
     """ra-codec-tensor's step: one GPU, bf16 KV, no KV receipt, no binding, no host tier, no ephemeral traffic."""
     v = I.values()
-    v.update(tau_kv={2: 0.0, 3: 0.0}, tau_bind=0.0, eph_read=NO_EPHEMERAL, eph_write=NO_EPHEMERAL, t_gap=0.0)
+    v.update(tau_kv={2: 0.0, 3: 0.0}, tau_bind=0.0, tau_bind_kv={2: 0.0, 3: 0.0}, eph_read=NO_EPHEMERAL,
+             eph_write=NO_EPHEMERAL, t_gap=0.0)
     return v
 
 
@@ -27,7 +28,7 @@ def _measured_step() -> dict:
     ("8B", 32, 20608, 2, 1.330),  # r20261012-175841-5578
     ("8B", 32, 20608, 3, 1.834),
     ("8B", 80, 8256, 2, 1.275),  # r20261012-175906-b479
-    ("70B", 8, 9280, 2, 1.679),  # r20261012-175923-0080
+    ("70B", 8, 9280, 2, 1.484),  # r20261012-190554-dd7c, the receipt re-keyed every pass on sketch warps
     ("70B", 8, 9280, 3, 2.030),
 ])
 def test_reproduces_the_measured_step(name, batch, ctx, k, measured):
@@ -67,7 +68,7 @@ def test_gamma_terms_match_the_red_team():
     sigma = 8 * 1540 + 819
     assert g["mu_chip"] == pytest.approx(263.2e6 / (st["W"] + st["KV"]))
     assert gamma_cap(w, p, v, st)["mu_chip"] == pytest.approx(263.2e6 / (1540e9 * st["cap"]) * 8 * 1540 / sigma)
-    assert g["mu_rebuild"] == pytest.approx(g["d"] * 1.38 * 1.076 / (2 * 175))
+    assert g["mu_rebuild"] == pytest.approx(g["d"] * 1.38 * 1.129 / (2 * 175))
     assert g["mu_sketch"] == 2.0 ** -16
     n = 8 * v["H"] / 4096
     assert g["lambda"] == pytest.approx((64 + math.log2(math.e) - math.log2(n)) / (8 * 4096))
@@ -137,9 +138,11 @@ def test_the_squaring_scales_by_ra_squaring_ceilings_cycle_model_and_512_is_as_m
     assert sq_ratio(512) == 1.0 and sq_ratio(512) * 712.6 == pytest.approx(713, abs=1)
     assert sq_ratio(384) < 0.6 < sq_ratio(448) < 1.0 < sq_ratio(640)
     v = I.values()
-    for k in (2, 3):
-        for o in (0.159, 0.36, 0.73, 0.97):
+    for k, costs in ((2, (0.159, 0.36, 0.73, 0.97)), (3, (0.65, 0.97, 1.00))):
+        for o in costs:
             assert decode(o, k, v) == pytest.approx(o)
+        # no form decodes below the standalone floor
+        assert decode(0.0, k, v) == pytest.approx(v["decode_floor"][k])
     # a round decodes a word with one squaring: narrower words decode a byte cheaper, by less than they rebuild
     narrow = {**v, "bits": 384}
     assert decode(0.159, 2, narrow) < 0.159
@@ -163,6 +166,57 @@ def test_partial_completion_divides_the_rebuild_by_theta():
     assert g["mu_partial"] == pytest.approx(g["mu_rebuild"] / 3)
     v["theta"] = 1.0
     assert gamma_cap(w, p, v, step(w, p, v))["mu_partial"] == 0.0
+
+
+def test_the_mask_costs_its_xor_and_removes_partial_completion():
+    v = I.values()
+    masked = {**v, "masked": True}
+    for k, o in ((2, 0.160), (3, 0.650)):
+        assert decode(o, k, masked) == pytest.approx(o + v["mask_cost"][k])
+    w = Workload(SHAPES["70B"], 16, 8192)
+    p = Params(2, 8192, 16, 0, 0.0)
+    assert gamma_cap(w, p, v, step(w, p, v))["mu_partial"] > 0.0
+    assert gamma_cap(w, p, masked, step(w, p, masked))["mu_partial"] == 0.0
+    # at 640 bits plain k = 2 is past parity (θ < 1), and the mask holds
+    wide = {**v, "bits": 640, "theta": 1.0}
+    assert gamma_cap(w, p, wide, step(w, p, wide))["mu_partial"] > 0.0
+    assert gamma_cap(w, p, {**wide, "masked": True}, step(w, p, wide))["mu_partial"] == 0.0
+
+
+def test_a_relay_moves_half_the_distinct_z_bytes_as_ra_bound_receipt_bounds_it():
+    # ra-bound-receipt §4: tile binding at m = 1 on 70B leaves 1/2,611 distinct z bytes a block byte
+    assert 0.75 * 4 / 8192 == pytest.approx(1 / 2611, rel=0.05)
+    v = I.values()
+    w = Workload(SHAPES["70B"], 8, 8192)
+    sliced = Params(2, 8192, 16, 32, 0.0)
+    st = step(w, sliced, v)
+    free = link_n(w, sliced, {**v, "b_nic": 1e-9}, st)
+    kv = st["t_kv"] / st["cap"] * 8 * 1540 / (8 * 1540 + 819)
+    # slice 32 at m = 8 has |z| = |E|: the NIC relays 1/(½ · 0.75) as many bound bytes as the trivial relay would
+    bound = link_n(w, sliced, v, st) - free - kv
+    trivial = link_n(w, sliced, {**v, "rho": 1.0, "z_entropy": 1.0}, st) - free - kv
+    assert bound / trivial == pytest.approx(1 / 0.375, rel=0.01)
+
+
+def test_the_cpus_tile_work_adds_to_gamma_when_counted():
+    v = I.values()
+    w = Workload(SHAPES["70B"], 16, 8192)
+    p = Params(3, 8192, 16, 0, 0.0)
+    st = step(w, p, v)
+    g = gamma_cap(w, p, v, st)["gamma"]
+    v["mu_cpu"] = 0.005
+    assert gamma_cap(w, p, v, st)["gamma"] == pytest.approx(g + 0.005)
+    assert gamma_pass(w, p, v, st)["mu_cpu"] == 0.005
+
+
+def test_where_nothing_is_feasible_a_lever_is_scored_by_the_least_gamma():
+    v = I.values()
+    w = Workload(SHAPES["70B"], 16, 8192)
+    today = F.best(w, v, "cap", "C", (3,))
+    better = F.best(w, I.values(I.improved("host_cpu")), "cap", "C", (3,))
+    assert not today["feasible"] and today["gamma_least"] == today["gamma"]
+    c = F.compare([today], [better])
+    assert c["median_gain"] == 0.0 and c["gamma_drop"] > 0.004
 
 
 def test_timing_is_the_drivers():

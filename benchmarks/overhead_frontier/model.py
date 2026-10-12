@@ -10,7 +10,7 @@ The step, per GPU (``step``):
   all-reduces over PCIe;
 - audited: the linears' CUDA-core work (decode o_w, receipt τ_w, binding τ_bind, per weight pass) is exposed except
   for what hides under tensor-bound time (β·(FLOPs/Φ − reads)); the KV append's encode (k·x₁_h read-times a byte) hides
-  in what tensor slack is left; attention pays o_kv + τ_kv + τ_bind a KV pass; the host tier slows the step by
+  in what tensor slack is left; attention pays o_kv + τ_kv + τ_bind_kv a KV pass; the host tier slows the step by
   τ_host per b_zero_copy of host stream per GPU, and the all-reduce gets what the host stream leaves of each GPU's
   PCIe receive side, min(b_p2p, b_pcie − stream); the host's loop (its CPUs' receipts, with or without the GPUs'
   stream: ra-host-tier measured the same 0.89 either way) covers ``host_cpu`` of the DRAM ceiling at no cost to the
@@ -21,14 +21,16 @@ The step, per GPU (``step``):
   under ``pass`` neither: the pass is the step's own reads, W + KV.
 - the word width ``bits`` scales the squaring by ``sq_ratio``: the encode a byte (x₁, the adversary's and the honest
   append's) as the squaring, the decode a byte as the squaring over the word's bytes (``decode``); ``sq_speed`` is
-  the honest kernels' squaring against kv.cu's.
+  the honest kernels' squaring against kv.cu's. ``masked`` is ra-codec-mix's σ_K between rounds: its XOR a decoded
+  byte, and partial completion at ``theta_masked`` at every width.
 
 γ (``gamma_cap``, ``gamma_pass``), as fractions of the node's read capacity ΣR = 8·R + b_host:
 - ``cap`` (the ruling: 99% of read bandwidth goes to registered data): μ_chip = S_chip/(R·t_pass) and μ_hostcache =
   the host's caches over ΣR·t_pass, the state carried across each pass boundary (a pass is one step's plan, since a
   plan reads a block at most once, so short steps pay them most), μ_rebuild = s·(1+h)/(k·x₁(b)), μ_partial = μ_rebuild·(1/θ(b) − 1), μ_host = the host DRAM the loop
   leaves over ΣR, μ_unreg = the step's ephemeral bus time over its capacity, μ_timing = (RTT + pass)/(nT) + gap/pass,
-  μ_sample = ln(1/δ)/s, λ = (log₂q + log₂e − log₂N)/(8n), μ_sketch = 2^-k_s, μ_link (0 under the identity statement
+  μ_sample = ln(1/δ)/s, λ = (log₂q + log₂e − log₂N)/(8n), μ_sketch = 2^-k_s, μ_cpu = the host CPUs' tile work if this
+  audit must count it (0: under C it buys nothing without bytes from off the node), μ_link (0 under the identity statement
   ``C``; ``link_n`` prices memory-only helpers over the NIC). The honest read shortfall η is unmeasured: the frontier
   holds ``eta_reserve`` back for it and reports what is left (``eta_allowance``).
 - ``pass`` (the design's and the red team's): μ_chip = S_chip/(W + KV), μ_rebuild = d·s·(1+h)/(k·x₁) and
@@ -130,11 +132,12 @@ def margins(bits: int) -> dict[str, float]:
 def decode(o: float, k: int, v: dict[str, Any]) -> float:
     """A decode form's cost a pass at ``v``'s word width and squaring speed, from its cost ``o`` at 512 bits on kv.cu's
     squaring: the floor c·k − 1 where the decode outlasts the read, plus the share of c·k the form exposes beyond it.
-    A round decodes a word with one squaring, so c scales as the squaring's cost over the word's bytes."""
+    A round decodes a word with one squaring, so c scales as the squaring's cost over the word's bytes. ra-codec-mix's
+    σ_K adds its XOR a byte (``mask_cost``)."""
     x0 = 1.0 + v["decode_floor"][k]
-    f = (o - max(0.0, x0 - 1.0)) / x0
+    f = max(0.0, o - max(0.0, x0 - 1.0)) / x0
     x = x0 * sq_ratio(v["bits"]) * 512 / v["bits"] / v["sq_speed"]
-    return max(0.0, x - 1.0) + f * x
+    return max(0.0, x - 1.0) + f * x + (v["mask_cost"][k] if v["masked"] else 0.0)
 
 
 def interp(table: Any, m: float) -> float:
@@ -207,7 +210,7 @@ def step(w: Workload, p: Params, v: dict[str, Any]) -> dict[str, float]:
     t_enc = m * s.kv_bytes_per_token / tp * (1.0 + v["p_over_o"]) * p.k * x1_h / R
     enc = max(0.0, t_enc - slack)
     slack = max(0.0, slack - t_enc)
-    attn = t_kv * (1.0 + o_kv) + KV / R * (tau_kv + v["tau_bind"])
+    attn = t_kv * (1.0 + o_kv) + KV / R * (tau_kv + v["tau_bind_kv"][p.k])
 
     r_h = min(p.host_share * v["b_host"] / v["gpus"], v["b_zero_copy"])
     host = v["tau_host"] * r_h / v["b_zero_copy"]
@@ -293,8 +296,11 @@ def _rebuild(p: Params, v: dict[str, Any]) -> float:
 
 def _partial(p: Params, v: dict[str, Any]) -> float:
     """What completing a word's dropped tail adds to the rebuild: WorkHardness at θ·c_root divides the rebuild term by
-    θ (ra-partial-lean), with θ at this width from the red team's floor."""
-    theta = v["theta"] * margins(v["bits"])["floor_low"] / margins(512)["floor_low"]
+    θ (ra-partial-lean), with θ at this width from the red team's floor; with σ_K, ra-codec-mix's θ at every width."""
+    if v["masked"]:
+        theta = v["theta_masked"]
+    else:
+        theta = v["theta"] * margins(v["bits"])["floor_low"] / margins(512)["floor_low"]
     return _rebuild(p, v) * max(0.0, 1.0 / theta - 1.0)
 
 
@@ -316,6 +322,7 @@ def gamma_cap(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -
         "mu_host": (v["b_host"] - st["host_stream"] - st["host_cpu"]) / sigma,
         "mu_unreg": once["mu_unreg"] / st["cap"],
         "mu_timing": _timing(st["cap"], st["gap"], v),
+        "mu_cpu": v["mu_cpu"],
         **_common(w, p, v),
     }
     t["gamma"] = sum(x for n, x in t.items() if n.startswith("mu_") or n == "lambda")
@@ -332,6 +339,7 @@ def gamma_pass(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) 
         "mu_rebuild": d * _rebuild(p, v),
         "mu_partial": d * _partial(p, v),
         "mu_host": d * (v["b_host"] - st["host_stream"] - st["host_cpu"]) / (v["gpus"] * v["R"]),
+        "mu_cpu": v["mu_cpu"],
         **_common(w, p, v),
     }
     t["gamma"] = sum(x for n, x in t.items() if n.startswith("mu_") or n == "lambda")
@@ -342,8 +350,9 @@ def gamma_pass(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) 
 
 def link_n(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -> float:
     """μ_link for memory-only helpers over the NIC: the reads a helper can serve from a copy, given what the relay must
-    move a byte (min(|z|, |E|) for a block bound to z, q and the output for a sequence's KV, nothing for a block bound
-    to no z), with the NIC shared across them.
+    move a byte (ra-bound-receipt's ½·min(H(z), 8|E|) for a block bound to z, H(z) at ``z_entropy`` of |z|; q and the
+    output for a sequence's KV; nothing for a block bound to no z), with the NIC shared across them. A helper that can
+    sketch at rate computes NCP's z itself, so this prices memory-only helpers only.
 
     A weight block is bound at ``z_ratio``. Each block needs its own z, so top-up and host blocks are bound (at 1) only
     by the surplus of the step's z beyond its weights, and a block the host CPUs receipt only by z shipped down PCIe:
@@ -357,10 +366,11 @@ def link_n(w: Workload, p: Params, v: dict[str, Any], st: dict[str, float]) -> f
     host_gpu, host_cpu = st["host_stream"] / sigma, st["host_cpu"] / sigma
     bound_gpu = min(topup + host_gpu, surplus)
     bound_cpu = min(host_cpu, surplus - bound_gpu, v["gpus"] * v["b_pcie_down"] / sigma)
+    rho, h = v["rho"], v["z_entropy"]
     classes = [
-        (st["t_rd"] / st["cap"] * hbm, min(1.0, r)),
-        (st["t_kv"] / st["cap"] * hbm, min(1.0, 4.0 * w.shape.hidden / (w.ctx * w.shape.kv_bytes_per_token))),
-        (bound_gpu + bound_cpu, 1.0),
+        (st["t_rd"] / st["cap"] * hbm, rho * h * min(1.0, r)),
+        (st["t_kv"] / st["cap"] * hbm, rho * min(1.0, 4.0 * w.shape.hidden / (w.ctx * w.shape.kv_bytes_per_token))),
+        (bound_gpu + bound_cpu, rho * h),
         (topup + host_gpu + host_cpu - bound_gpu - bound_cpu, 0.0),
     ]
     budget, relayed = v["b_nic"] / sigma, 0.0

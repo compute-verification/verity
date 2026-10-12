@@ -60,13 +60,13 @@ INPUTS: dict[str, Input] = {
     # The adversary's rebuild (μ_rebuild).
     "x1": Input(175.0, "read-times per round", "ra-codec-tensor's p512 encode at the max clock "
                 "(r20261012-095329-3aac ÷ 1.16), the red team's x₁", "measured"),
-    "s_adv": Input(1.38, "× 5.13e10/s, clock-matched", "assumption 5 as ra-squaring-ceiling re-states it: the column "
-                   "form's ceiling at the measured instruction mix; FOLD 5 measures 1.27 (6.53e10/s, "
-                   "r20261012-182613-5df1, r20261012-183030-b044, art:38bdc4ec), above the old 1.2 cap",
-                   "assumption", 1.27,
-                   "a ceiling at FOLD 5's measured rate (its gap to 1.38 is per-column MOV and SEL, 1–2% recoverable)"),
-    "h_host_sq": Input(0.076, "of the GPUs' squaring rate", "ra-squaring-ceiling: AVX-512 IFMA, 2.84e8 squarings/s a "
-                       "physical core × 128 (r20261012-183544-2d44); 0.129 at the IFMA-only bound", "measured"),
+    "s_adv": Input(1.38, "× 5.13e10/s, clock-matched", "assumption 5 as ra-squaring-ceiling's final restates it: the "
+                   "column form's ceiling at the measured instruction mix (a fit over 11 forms, 1.34–1.39); FOLD 5 "
+                   "measures 1.27 (6.53e10/s, r20261012-182613-5df1, r20261012-183030-b044, art:38bdc4ec), so no "
+                   "measurement can lower it", "assumption"),
+    "h_host_sq": Input(0.129, "of the GPUs' squaring rate", "assumption 6 as ra-squaring-ceiling's final restates it "
+                       "(h ≤ 13%, the IFMA-only bound); AVX-512 IFMA measures 2.84e8 squarings/s a physical core × "
+                       "128, h = 0.076 (r20261012-183544-2d44)", "assumption"),
     "theta": Input(0.75, "of the per-bit claim", "red team: partial completion's cost at the 4D reduction's floor on "
                    "the GPU at 512 bits, k = 2, low end (centre 1.2, range 0.75–2.7, r20261012-170958-f49a); "
                    "ra-partial-lean's WorkHardness at θ·c_root divides the rebuild term by θ. k = 3 taken at k = 2's "
@@ -74,6 +74,16 @@ INPUTS: dict[str, Input] = {
                    "price assumption 7 at or above the per-bit claim (the floor's centre is 1.2; no agent may "
                    "measure it)"),
     "bits": Input(512, "bits", "the codec's word, p = 2^512 − 569 (ruling); `frontier.widths` sweeps it", "policy"),
+    "masked": Input(False, "switch", "plain Sloth rounds, the ruling's codec; `frontier` also runs ra-codec-mix's "
+                    "σ_K at k = 2 (``k2m``)", "policy"),
+    "mask_cost": Input({2: 0.032, 3: 0.059}, "per decoded pass", "ra-codec-mix: σ_K, a public XOR between rounds, "
+                       "fast path in mma-ws attention, +0.192 / +0.709 against +0.160 / +0.650 a KV byte at k = 2 / 3 "
+                       "(r20261012-182332-24e8, art:9c3b9e2724d6ca52); the weights taken at the same cost a byte",
+                       "measured"),
+    "theta_masked": Input(1.0, "of the per-bit claim", "ra-codec-mix: with σ_K the red team's 4D lattice completes "
+                          "0/200 words at every width (200/200 plain); a completion must compute the inner root, "
+                          "≥ 1.515 at the floor and ≥ 1.0 with Coppersmith to b/2 for free (art:ffca24ef); assumption "
+                          "7 becomes 'no completion skips the inner root'", "estimate"),
     "sq_speed": Input(1.0, "× kv.cu's squaring", "the honest kernels' squaring: kv.cu's carry chains (FOLD 1 in "
                       "ra-squaring-ceiling's harness, 5.71e10/s)", "measured", 1.14,
                       "FOLD 5's column-chained squaring (6.53e10/s, ra-squaring-ceiling, art:38bdc4ec) in the decode "
@@ -86,24 +96,36 @@ INPUTS: dict[str, Input] = {
                  "ra-codec-tensor 17:58Z: wt.cu decode at M=8 (70B, r20261012-175923-0080) and M=32 (8B, "
                  "r20261012-175841-5578)", "measured", {2: ((8, 0.20), (32, 0.20)), 3: ((8, 0.65), (32, 0.65))},
                  "port the KV path's warp-specialized mma-ws decode to the weight GEMM"),
-    "tau_w": Input({2: ((8, 0.50), (32, 0.70)), 3: ((8, 0.22), (32, 0.71))}, "per weight pass, k_s = 16, n = 4 KiB",
-                   "ra-codec-tensor 17:58Z: the sketch receipt with its commit in the p512 step (M=8 70B, M=32 8B; "
-                   "at 70B k = 3 it hides partly under the decode)", "measured",
+    "tau_w": Input({2: ((8, 0.232), (32, 0.70)), 3: ((8, 0.22), (32, 0.71))}, "per weight pass, k_s = 16, n = 4 KiB",
+                   "ra-codec-tensor: the sketch receipt with its commit in the p512 step; k = 2 at M=8 (70B) re-keyed "
+                   "every pass (F29) on sketch warps of its own, 19:25Z (r20261012-190554-dd7c); the rest 17:58Z, "
+                   "before the sketch warps (M=32 8B; at 70B k = 3 it hides partly under the decode)", "measured",
                    {2: ((8, 0.07), (32, 0.07)), 3: ((8, 0.07), (32, 0.07))},
                    "ra-sketch-tag's sketch warps and deferred commit (+3.6..4.6 + 0.4..2.6 points on an encoded "
                    "store, r20261012-131750-2a7a) in wt.cu"),
-    "tau_kv": Input({2: ((8, 0.50), (32, 0.70)), 3: ((8, 0.22), (32, 0.71))}, "per KV pass, k_s = 16, n = 4 KiB",
-                    "unmeasured: the KV is not receipted in any step yet; taken equal to the weights'", "estimate",
-                    {2: ((8, 0.07), (32, 0.07)), 3: ((8, 0.07), (32, 0.07))},
-                    "a sketch-warp receipt in the mma-ws attention kernel"),
+    "tau_kv": Input({2: 0.159, 3: 0.158}, "per KV pass, k_s = 16",
+                    "ra-word-codec 19:10Z: an unbound sketch-then-hash receipt on every 512-token KV block inside "
+                    "mma-ws attention, +0.319 / +0.808 against +0.160 / +0.650 unreceipted at k = 2 / 3 "
+                    "(r20261012-185147-b5db, art:830335f2)", "measured", {2: 0.07, 3: 0.07},
+                    "the sketch on warps of its own and the hash out of the decoders' issue slots, as wt.cu's"),
     "ks_ratio": Input({8: 0.73, 12: 0.87, 16: 1.0, 32: 3.54}, "× the k_s = 16 receipt",
                       "ra-sketch-tag: encoded store M=1, +21.1 / +22.35 / +34.3% at k_s 8 / 16 / 32 over the codec's "
                       "17.65%", "measured"),
     "tau_fill": Input({8: 0.002, 12: 0.010, 16: 0.019, 32: 0.085}, "per filler pass by k_s",
                       "ra-sketch-tag: the sketch receipt on a store that is read and not decoded (plain store M=32, "
                       "r20261012-133311-b8e1)", "measured"),
-    "tau_bind": Input(0.03, "per pass", "binding z_{j−1} into the sketch (a ±1 fold of z, k_s/32 ops a byte); "
-                      "ra-bound-receipt's question", "estimate", 0.01, "fold z into the sign matrix once a tile"),
+    "tau_bind": Input(0.05, "per weight pass", "ra-bound-receipt (ro-bound-sketch-blake3/v0, B = R ⊕ M): binding adds "
+                      "11–28% of the unbound receipt's own instructions, a static SASS count, not a timing; × τ_W ≈ "
+                      "0.23", "estimate", 0.02, "the bound sketch on wt.cu's sketch warps (the R ⊕ M functor, "
+                      "ra-codec-tensor's SkB interface)"),
+    "tau_bind_kv": Input({2: 0.069, 3: 0.063}, "per KV pass", "ra-word-codec: the receipt bound to attention's prior "
+                         "PV output (ro-bound-sketch/v0), +0.388 / +0.871 against the unbound +0.319 / +0.808 "
+                         "(r20261012-185147-b5db)", "measured", {2: 0.03, 3: 0.03},
+                         "the bound sketch on sketch warps of its own"),
+    "rho": Input(0.5, "of min(H(z), 8|E|)", "ra-bound-receipt §2: a relay that makes one bound receipt exchanges at "
+                 "least ½·min(H(z), 8|E|) bits (Lindsey's lemma over F₂₅₇)", "derived"),
+    "z_entropy": Input(0.75, "distinct z bytes over |z|", "ra-bound-receipt §4: 70B's layer, k-slice binding caps at "
+                       "0.75 (each 512-column chunk's first word has no earlier accumulator)", "derived"),
     "o_kv": Input({2: ((32, 0.225), (40, 0.177), (80, 0.162), (160, 0.159)),
                    3: ((32, 0.761), (40, 0.670), (80, 0.651), (160, 0.649))}, "per KV pass",
                   "ra-word-codec mma-ws (r20261012-172911-1184, art:47c171ef) at B40–160; ra-codec-tensor at B32 "
@@ -152,8 +174,14 @@ INPUTS: dict[str, Input] = {
                                "transcript instead of with the opening", "estimate", True,
                                "read z from PoUW's transcript"),
     "receipt_bits": Input(512, "bits", "a SHA-512 receipt", "policy"),
-    "eta_reserve": Input(0.0, "of capacity", "the honest read shortfall under cap: unmeasured (plain attention alone "
-                         "reads at 97.1% of the pass's rate; top-up beside it may close the gap)", "estimate"),
+    "eta_reserve": Input(0.0, "of capacity", "the audited engine's read shortfall under cap, unmeasured: the frontier "
+                         "reports what γ leaves for it. Stock vLLM 8B leaves η = 0.30–0.42 of R·T on two bursty "
+                         "traces, 0.27–0.34 with idle filler (ra-kv-filler 19:20Z): decode at 0.75–0.80 R, prefill, "
+                         "host gaps; ≤ 1% needs every phase to read at R itself", "estimate"),
+    "mu_cpu": Input(0.0, "of capacity", "the host CPUs' tile work (Daniel 18:55Z: a capacity to exhaust or count). "
+                    "Under C they are counted: their squarings in μ_rebuild (h), their DRAM in ΣR, their caches as "
+                    "per-pass state, and tile work buys nothing without bytes from off the node, which C excludes; "
+                    "ra-host-cpu, which would price it, is stopped by the usage filter", "policy"),
     # Chained passes (μ_timing): a pass is one step's plan, and its seed needs the previous pass's root.
     "t_gap": Input(100e-6, "s per pass", "ra-remote-driver: the root's reduction (an all-gather of the GPUs' subtree "
                    "roots, one SHA-512, a broadcast), 25–100 µs, unmeasured", "estimate"),
@@ -177,10 +205,10 @@ FLOOR: dict[str, tuple[Any, str]] = {
               "the sketch's cost on a store that is only read (ra-sketch-tag plain store M=32, +1.7..1.9%)"),
     "tau_kv": ({2: ((8, 0.019), (32, 0.019)), 3: ((8, 0.019), (32, 0.019))}, "the same on the KV"),
     "tau_bind": (0.0, "binding folded into the sign matrix for free"),
+    "tau_bind_kv": ({2: 0.0, 3: 0.0}, "the same in attention"),
     "tau_host": (0.0, "the host tier's stream costs the HBM stream nothing"),
     "eph_read": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte read from DRAM"),
     "eph_write": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte written to DRAM"),
-    "s_adv": (1.27, "the adversary squares no faster than FOLD 5, the best measured"),
     "host_cpu": (1.0, "the honest loop reads host DRAM at the adversary's ceiling"),
     "v_budget": (10.0, "a 10 Gb/s verifier link"),
     "x_from_transcript": (True, "z from PoUW's transcript"),
@@ -194,7 +222,8 @@ RISKS: dict[str, tuple[Any, str]] = {
     "b_host": (1024.0, "ra-host-tier's four halves of a socket at 256 GB/s (above DDR5-6400 spec, so only with faster "
                        "DIMMs the adversary may provision)"),
     "s_adv": (1.61, "the column form with every add free (ra-squaring-ceiling)"),
-    "h_host_sq": (0.129, "the host's IFMA-only bound (ra-squaring-ceiling)"),
+    "mu_cpu": (0.005, "the host CPUs' tile work counted against this audit at ra-pouw-zero's low end (a dual-socket "
+                      "AMX host is 0.5–2% of node HBM, extrapolated and untuned, r20261012-181859-f096)"),
     "write_bus": (1.5, "a write costs half a read more in bus turnaround"),
     "v_budget": (1.0, "a 1 Gb/s verifier link"),
     "t_gap": (500e-6, "a root reduction of 500 µs (ra-remote-driver's worst row)"),
