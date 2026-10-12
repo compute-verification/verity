@@ -382,10 +382,10 @@ class SessionLog:
     line cut short.  `claim` takes the file's lock, reads it again, refuses an id already in it and appends the id,
     fsynced, before it returns.  Nothing here rewrites or truncates the file, and `create` refuses one that exists.
 
-    One session an id rests on a presumption about the host, which no stated claim covers yet: the host keeps this file
-    as written, so it is never restored from a snapshot, a backup or another older copy, and the memory challenger is
-    never restarted onto host-held state older than the sessions it has run.  A file can see neither, and
-    `trusted-nebius-host` as stated covers neither a restart nor a rollback of host-held state."""
+    One session an id rests on the host keeping this file as written: it is never restored from a snapshot, a backup or
+    another older copy, and the memory challenger is never restarted onto host-held state older than the sessions it
+    has run.  A file can see neither; `trusted-nebius-host` (`verity.core.claims`) is the claim that the host does
+    neither."""
 
     def __init__(self, path: str | os.PathLike) -> None:
         self.path = Path(path)
