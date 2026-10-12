@@ -26,10 +26,9 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 /-- **(b) VBridge's acceptance part at candidate 3's table**, from its family's stage obligations. -/
 theorem vbridgeOff_c3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
-    (hreg : xR.Opens H512 enc512 leafPlain (holoAt st hp).rsch.sch.level₀)
     (htape : HTape F dg N k Rw) (hreps : HReps F dg N k Rw) (hsp : HSparse F dg N k Rw)
     (hop : HOpening F dg N k Rw) (hlv : HRegLevels F dg N k Rw) :
-    VBridgeOff (I := holoInnerAt T CT st hp) (RegColl F.zs) F.zs dg N k Rw (fun _ _ => Subtype.mk xR hreg) F.wmsg := by
+    VBridgeOff (I := holoInnerAt T CT st hp) (RegColl F.zs) F.zs dg N k Rw (fun _ _ => xR) F.wmsg := by
   intro R ω t R₂ hc τ o h₀
   have ht := htape R ω t R₂ τ o ⟨h₀, hc⟩
   obtain ⟨hr₀, hv₀, hk₀⟩ := hreps R ω t R₂ τ o ⟨h₀, hc⟩ 0
@@ -44,26 +43,24 @@ theorem vbridgeOff_c3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : By
 
 /-- **(b) VBridge at candidate 3's table**, from its family's stage obligations. -/
 theorem vbridge_c3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
-    (hreg : xR.Opens H512 enc512 leafPlain (holoAt st hp).rsch.sch.level₀)
     (htape : HTape F dg N k Rw) (hreps : HReps F dg N k Rw) (hsp : HSparse F dg N k Rw)
     (hop : HOpening F dg N k Rw) (hlv : HRegLevels F dg N k Rw)
     (hcm : VCommits F.zs F.Sk F.cmt) (hdec : VDecodesR F.wmsg (fun _ _ a b => a = b) F.Sk F.msg)
     (hfull : VFullR (holoInnerAt T CT st hp).r F.Sk) :
-    Flock.Assumptions.VBridge (I := holoInnerAt T CT st hp) F.zs dg N k Rw (fun _ _ => Subtype.mk xR hreg) F.wmsg F.Sk
+    Flock.Assumptions.VBridge (I := holoInnerAt T CT st hp) F.zs dg N k Rw (fun _ _ => xR) F.wmsg F.Sk
       F.cmt F.msg :=
-  ⟨vbridgeOff_c3 F dg N k Rw hreg htape hreps hsp hop hlv, hcm, hdec, hfull⟩
+  ⟨vbridgeOff_c3 F dg N k Rw htape hreps hsp hop hlv, hcm, hdec, hfull⟩
 
 /-- **(b) VBridge at the committed rounds at candidate 3's table** (`VBridgeC`), from its family's stage obligations
 and its commitments and decoding at the rounds before the last. -/
 theorem vbridgeC_c3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
-    (hreg : xR.Opens H512 enc512 leafPlain (holoAt st hp).rsch.sch.level₀)
     (htape : HTape F dg N k Rw) (hreps : HReps F dg N k Rw) (hsp : HSparse F dg N k Rw)
     (hop : HOpening F dg N k Rw) (hlv : HRegLevels F dg N k Rw)
     (hcm : VCommits F.zs (fun i j => if i + 1 < (holoInnerAt T CT st hp).r then F.Sk i j else ∅) F.cmt)
     (hdec : VDecodesR F.wmsg (fun i _ a b => i + 1 < (holoInnerAt T CT st hp).r → a = b)
       (fun i j => if i + 1 < (holoInnerAt T CT st hp).r then F.Sk i j else ∅) F.msg) :
-    Flock.Assumptions.VBridgeC (I := holoInnerAt T CT st hp) F.zs dg N k Rw (fun _ _ => Subtype.mk xR hreg) F.wmsg F.Sk
+    Flock.Assumptions.VBridgeC (I := holoInnerAt T CT st hp) F.zs dg N k Rw (fun _ _ => xR) F.wmsg F.Sk
       F.cmt F.msg :=
-  ⟨vbridgeOff_c3 F dg N k Rw hreg htape hreps hsp hop hlv, hcm, hdec, vFullR_of_read _ _⟩
+  ⟨vbridgeOff_c3 F dg N k Rw htape hreps hsp hop hlv, hcm, hdec, vFullR_of_read _ _⟩
 
 end FlockC3.Compose
