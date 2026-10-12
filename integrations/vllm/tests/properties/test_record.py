@@ -28,6 +28,7 @@ def test_the_registry_names_each_harness_schema_once():
         fa2_softcap_capture_gpu,
         fa2_target_capture_gpu,
         fp8_sm120_capture_gpu,
+        glm53_bf16_gemm_capture_gpu,
         glm53_block_fp8_capture_gpu,
         glm53_dsa_capture_gpu,
         sigmoid_router_capture_gpu,
@@ -38,6 +39,7 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["fa2_target_capture"].schema == fa2_target_capture_gpu.SCHEMA
     assert REGISTRY["fa2_softcap_capture"].schema == fa2_softcap_capture_gpu.SCHEMA
     assert REGISTRY["glm53_block_fp8_capture"].schema == glm53_block_fp8_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_bf16_gemm_capture"].schema == glm53_bf16_gemm_capture_gpu.SCHEMA
     assert REGISTRY["glm53_dsa_capture"].schema == glm53_dsa_capture_gpu.SCHEMA
     assert REGISTRY["blackwell_fp8_capture"].schema == fp8_sm120_capture_gpu.SCHEMA
     assert REGISTRY["sigmoid_router_capture"].schema == sigmoid_router_capture_gpu.SCHEMA
