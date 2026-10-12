@@ -79,7 +79,7 @@ class Topup:
         so.bw_fill_test_store.argtypes = [v, q]
         so.tu_fill_units.argtypes = [v, v, i, q, q, v, v, i, v]
         so.tu_fill_signs.argtypes = [v, v]
-        so.rd_read.argtypes = [i, i, v, q, i, v, v]
+        so.rd_read_reps.argtypes = [i, i, v, q, ctypes.c_uint32, i, v, v]
 
     def fill_units(self, regions, unit0: int, units: int, seed: bytes, sign_seed: bytes, ctas: int):
         ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
@@ -706,17 +706,18 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
                     got = overlap_bytes(tu.log(), t0, t1)
                 else:
                     kind, u = PC_READERS[reader]
-                    piece = (64 << 20) * max(1, ctas // 16)
+                    # a few long launches: a short one's CTAs wait for SMs the prefill's GEMMs hold
+                    region, pieces = min(filler.numel(), 1 << 30), 16
                     guess = min(R * 1e9, ctas * 40e9)  # a 16-byte-load CTA's rate alone, at most R
-                    pieces = int(guess * span_alone / 1e3 * 1.5 / piece) + 4
+                    reps = max(1, int(guess * span_alone / 1e3 * 2 / pieces / region) + 1)
+                    piece = region * reps
                     ref = torch.cuda.Event(enable_timing=True)
                     evs = [torch.cuda.Event(enable_timing=True) for _ in range(pieces)]
                     with torch.cuda.stream(side):
                         ref.record()
                         for k in range(pieces):
-                            off = (k * piece) % (filler.numel() - piece + 1) // 16384 * 16384
-                            tu.so.rd_read(kind, u, ctypes.c_void_p(filler.data_ptr() + off), piece, ctas,
-                                          ctypes.c_void_p(side.cuda_stream), ctypes.c_void_p(xr.data_ptr()))
+                            tu.so.rd_read_reps(kind, u, ctypes.c_void_p(filler.data_ptr()), region, reps, ctas,
+                                               ctypes.c_void_p(side.cuda_stream), ctypes.c_void_p(xr.data_ptr()))
                             evs[k].record()
                     a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
                     high.wait_event(ref)

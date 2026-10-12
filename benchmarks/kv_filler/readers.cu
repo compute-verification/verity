@@ -30,22 +30,25 @@ __device__ __forceinline__ uint4 ld_ef(const uint4* p, uint64_t pol) {
 }
 
 template <int U, bool EF>
-__global__ void __launch_bounds__(256) ld_kernel(const uint4* __restrict__ p, uint64_t n16, uint32_t* out) {
+__global__ void __launch_bounds__(256) ld_kernel(const uint4* __restrict__ p, uint64_t n16, uint32_t* out,
+                                                 uint32_t reps) {
   uint64_t pol = 0;
   if (EF) asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
   uint32_t acc = 0;
   const uint64_t stride = (uint64_t)gridDim.x * blockDim.x;
-  uint64_t i = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
-  for (; i + (U - 1) * stride < n16; i += U * stride) {
-    uint4 v[U];
+  for (uint32_t rep = 0; rep < reps; ++rep) {
+    uint64_t i = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+    for (; i + (U - 1) * stride < n16; i += U * stride) {
+      uint4 v[U];
 #pragma unroll
-    for (int u = 0; u < U; ++u) v[u] = EF ? ld_ef(p + i + u * stride, pol) : ld_na(p + i + u * stride);
+      for (int u = 0; u < U; ++u) v[u] = EF ? ld_ef(p + i + u * stride, pol) : ld_na(p + i + u * stride);
 #pragma unroll
-    for (int u = 0; u < U; ++u) acc ^= v[u].x ^ v[u].y ^ v[u].z ^ v[u].w;
-  }
-  for (; i < n16; i += stride) {
-    const uint4 v = ld_na(p + i);
-    acc ^= v.x ^ v.y ^ v.z ^ v.w;
+      for (int u = 0; u < U; ++u) acc ^= v[u].x ^ v[u].y ^ v[u].z ^ v[u].w;
+    }
+    for (; i < n16; i += stride) {
+      const uint4 v = ld_na(p + i);
+      acc ^= v.x ^ v.y ^ v.z ^ v.w;
+    }
   }
   if (acc == 0x9e3779b9u) atomicXor(out, acc);
 }
@@ -74,9 +77,11 @@ __device__ __forceinline__ void bulk_g2s(void* dst, const void* src, uint32_t by
       : "memory");
 }
 
-// CTA b takes BULK_BYTES pieces b, b + grid, ...; S stages in flight.
+// CTA b takes BULK_BYTES pieces b, b + grid, ... of n × `reps` (piece q at q mod n); S stages in flight.
 template <int S>
-__global__ void __launch_bounds__(128) bulk_kernel(const uint8_t* __restrict__ p, uint64_t pieces, uint32_t* out) {
+__global__ void __launch_bounds__(128) bulk_kernel(const uint8_t* __restrict__ p, uint64_t n, uint32_t* out,
+                                                   uint32_t reps) {
+  const uint64_t pieces = n * reps;
   extern __shared__ __align__(128) uint8_t sm[];
   __shared__ uint64_t bar[S];
   uint64_t pol;
@@ -91,7 +96,7 @@ __global__ void __launch_bounds__(128) bulk_kernel(const uint8_t* __restrict__ p
       const uint64_t q = first + s * step;
       if (q < pieces) {
         mbar_expect(bar + s, BULK_BYTES);
-        bulk_g2s(sm + s * BULK_BYTES, p + q * BULK_BYTES, BULK_BYTES, bar + s, pol);
+        bulk_g2s(sm + s * BULK_BYTES, p + (q % n) * BULK_BYTES, BULK_BYTES, bar + s, pol);
       }
     }
   uint32_t acc = 0;
@@ -109,17 +114,17 @@ __global__ void __launch_bounds__(128) bulk_kernel(const uint8_t* __restrict__ p
     const uint64_t nq = q + (uint64_t)S * step;
     if (threadIdx.x == 0 && nq < pieces) {
       mbar_expect(bar + s, BULK_BYTES);
-      bulk_g2s(sm + s * BULK_BYTES, p + nq * BULK_BYTES, BULK_BYTES, bar + s, pol);
+      bulk_g2s(sm + s * BULK_BYTES, p + (nq % n) * BULK_BYTES, BULK_BYTES, bar + s, pol);
     }
   }
   if (acc == 0x9e3779b9u) atomicXor(out, acc);
 }
 
 template <int S>
-static int launch_bulk(const void* p, uint64_t bytes, int grid, cudaStream_t st, uint32_t* xr) {
+static int launch_bulk(const void* p, uint64_t bytes, int grid, cudaStream_t st, uint32_t* xr, uint32_t reps) {
   const size_t smem = (size_t)S * BULK_BYTES;
   cudaFuncSetAttribute(bulk_kernel<S>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem);
-  bulk_kernel<S><<<grid, 128, smem, st>>>((const uint8_t*)p, bytes / BULK_BYTES, xr);
+  bulk_kernel<S><<<grid, 128, smem, st>>>((const uint8_t*)p, bytes / BULK_BYTES, xr, reps);
   return (int)cudaGetLastError();
 }
 
@@ -127,12 +132,13 @@ static int launch_bulk(const void* p, uint64_t bytes, int grid, cudaStream_t st,
 
 extern "C" {
 
-// Reader `kind` over `bytes` at `p` with `grid` CTAs: 0 ld<U>, 1 ldef<U>, 2 bulk<U>; U in {1, 2, 4, 8} (bulk: 2, 4, 6).
-int rd_read(int kind, int u, const void* p, uint64_t bytes, int grid, void* stream, uint32_t* xr) {
+// Reader `kind` over `bytes` at `p` `reps` times with `grid` CTAs: 0 ld<U>, 1 ldef<U>, 2 bulk<U>; U in {1, 2, 4, 8}
+// (bulk: 2, 4, 6).
+int rd_read_reps(int kind, int u, const void* p, uint64_t bytes, uint32_t reps, int grid, void* stream, uint32_t* xr) {
   cudaStream_t st = (cudaStream_t)stream;
   const uint64_t n16 = bytes / 16;
   using namespace rd;
-#define LD(U, EF) ld_kernel<U, EF><<<grid, 256, 0, st>>>((const uint4*)p, n16, xr)
+#define LD(U, EF) ld_kernel<U, EF><<<grid, 256, 0, st>>>((const uint4*)p, n16, xr, reps)
   if (kind == 0 || kind == 1) {
     const bool ef = kind == 1;
     switch (u) {
@@ -147,13 +153,17 @@ int rd_read(int kind, int u, const void* p, uint64_t bytes, int grid, void* stre
 #undef LD
   if (kind == 2) {
     switch (u) {
-      case 2: return launch_bulk<2>(p, bytes, grid, st, xr);
-      case 4: return launch_bulk<4>(p, bytes, grid, st, xr);
-      case 6: return launch_bulk<6>(p, bytes, grid, st, xr);
+      case 2: return launch_bulk<2>(p, bytes, grid, st, xr, reps);
+      case 4: return launch_bulk<4>(p, bytes, grid, st, xr, reps);
+      case 6: return launch_bulk<6>(p, bytes, grid, st, xr, reps);
       default: return -1;
     }
   }
   return -1;
+}
+
+int rd_read(int kind, int u, const void* p, uint64_t bytes, int grid, void* stream, uint32_t* xr) {
+  return rd_read_reps(kind, u, p, bytes, 1, grid, stream, xr);
 }
 
 int rd_sms() {
