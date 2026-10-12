@@ -224,7 +224,9 @@ def JointPerRunPriced : Prop :=
 account plus `pRead` per bit read by the accounts other than the compute and bandwidth accounts exceeds
 `(F + pRead·BW)·T − (W + pRead·Q)`, or the other accounts held more than `M − S` bits of device memory on average over
 the capacity window, is at most `εW + εQ + εS`. `F` is the device's priced work per tick, `BW` its bits read from device
-memory per tick and `T` the window's length. -/
+memory per tick and `T` the window's length. As for the certified amount, the bound is on the priced sum, the other
+accounts' work plus `pRead` per covert bit read: the residual is one priced budget, and a table that splits it into a
+bound on covert work and a separate bound on covert bits claims more than is proved. -/
 def CovertResidualPerRunPriced : Prop :=
   ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [DecidableEq α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW]
     [Nonempty ΩQ] [Nonempty ΩS] (d : Device ι) (r : Run d α ΩW ΩQ ΩS) (p : Price) (pRead W Q S εW εQ εS : ℝ),
