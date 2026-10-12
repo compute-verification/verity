@@ -20,10 +20,17 @@ on `O` or on `R`.
 **The device.** Before `σ` and `R` it lays out three things, each any function of `E`: its on-chip state (`S` bits),
 device memory (read only through `ingress`) and free side sources (read only through `side`). During the window the
 chip runs a program `Chip` from its state, querying the oracle, reading device memory, side sources and the certified
-stream (`stream i` returns bit `i` of `R`), and rebuilding words (`rebuild j` returns `E_j`). Side-source and stream
-bits both come in over the side link, which carries at most `L` bits per window (`L` stands for `cap · T`, every side
-channel's capacity over the window); the certified stream's `ρ` bits must come in too, because a tag absorbs all of
-`R`, so at most `L − ρ` bits of the link are free for anything else. The chip makes at most `q` oracle queries. It
+stream (`stream i` returns bit `i` of `R`), and rebuilding words (`rebuild j` returns `E_j`). A side source is read
+at an address the chip picks, so it answers any function of the store and of what the chip sent, and sending is free;
+it reaches the oracle only through what the chip sends it, so it relays no tag the chip did not query. Side-source and
+stream bits both come in over the side link, which carries at most `L` bits per window: in the actual-circuit model
+(`note:console/20261012T0645Z-draft-actual-circuit-model`, v2.4's B3 at `e = 0`), `L` is `c = β_side·(T + RTT)`, the
+side links' signals over the deadline and a round trip, timing included, with no `2^e` factor for what the chip sent.
+The certified stream's `ρ` bits (certified ingress) must come in too, because a tag absorbs all of `R`, so at most
+`L − ρ` bits of the link are free for anything else. The audited location is the chip: device memory is what HBM held
+when the seed arrived, and answers a read with the bit at its address (passive memory), so a bit DMA'd into HBM during
+the window crossed a side link, and the chip's read of it is a side read, counted in `L`. The chip makes at most `q`
+oracle queries. It
 outputs a tag for every word. The sample is drawn after the output and independently of it, which is what the
 commitment before the deadline enforces. A program remembers every answer it has had, so the chip's working memory in
 the window is unbounded: `S` bounds only what is on chip when the seed arrives.

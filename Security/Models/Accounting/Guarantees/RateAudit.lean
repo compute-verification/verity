@@ -44,13 +44,16 @@ least `(1 − μ)·|E|` bits, except with probability `ε = (1 − ε_s)^s + s·
 
   `μ = ε_s + (S + c_free + λ)/|E| + (F − tagging)/(N·c_enc)`,
 
-`c_free = L − ρ` is the side capacity the certified stream leaves free and `tagging = k·c_tag`. The footprint is the
-distinct device-memory bits the window read, so device memory held at least that much of the store's information
-(residency; the on-chip `S` is on the device too and counts against reads, not residency); the ingress counts every
-read, so it is at least the footprint (bandwidth). `(F − tagging)/(N·c_enc)` is `μ_rebuild`: with `x = N·c_enc/F`, the
-encode time of one pass's data in units of the window's compute, it is `(1 − τ)/x` when tagging takes the fraction `τ`
-of `F`, and in a joint run `F` is the compute residual (`RateOfAudit`). The bound holds at every `F`; a device whose
-compute is within `F` on every run has the conjunct always.
+`c_free = L − ρ` is the side capacity the certified stream leaves free and `tagging = k·c_tag`. Against the
+actual-circuit model's B3 (`note:console/20261012T0645Z-draft-actual-circuit-model`, v2.4, at `e = 0`), whose chip reads
+at least `k·b − M_chip − c − λ` bits from HBM with `c = β_side·(T + RTT)`: `S` is `M_chip`, `L` is `c` with no `2^e`
+factor, the certified stream (certified ingress) takes `ρ` of it, and DMA into HBM during the window is side traffic.
+The footprint is the distinct device-memory bits the window read, so device memory held at least that much of the
+store's information (residency; the on-chip `S` is on the device too and counts against reads, not residency); the
+ingress counts every read, so it is at least the footprint (bandwidth). `(F − tagging)/(N·c_enc)` is `μ_rebuild`: with
+`x = N·c_enc/F`, the encode time of one pass's data in units of the window's compute, it is `(1 − τ)/x` when tagging
+takes the fraction `τ` of `F`, and in a joint run `F` is the compute residual (`RateOfAudit`). The bound holds at every
+`F`; a device whose compute is within `F` on every run has the conjunct always.
 
 **The proof** (`Accounting.SecurityProofs.RateAudit`) generalizes `Bandwidth.Guarantees.AuditRO`'s. A sampled word
 passes either because the device queried the oracle at its contents under the stream, or by a guessed tag (`2^-h` per
@@ -124,7 +127,8 @@ account read fewer bits of device memory than the floor at the compute budget `F
   `read · c_enc < floor` at `S = S_chip`, `L = ∑ cap_i · T_bw`, `F = F·T − W`,
 
 is at most `RateAudit`'s error at `q = rate_oracle · T_bw`, where `F·T` is the device's priced work over the compute
-window and `T_bw` the bandwidth window's length.
+window and `T_bw` the bandwidth window's length. A bandwidth window that spans the deadline and a round trip,
+`T_bw = T + RTT`, makes `L` the actual-circuit model's `c = β_side·(T + RTT)`.
 
 **The reading.** Every op is charged once, to one account (`Step.Fits`), so the compute account's `W` leaves at most
 `F·T − W` for every other account, the rebuilds and tags among them: `μ_rebuild = (F·T − W − tagging)/(N·c_enc)`, which
