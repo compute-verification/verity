@@ -12,7 +12,7 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`)
-    research queue drive --on MACHINE [--max-running N] [--train-size N] [--dry-run]
+    research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
                                                    check `next` in trains with train.sh, tell the lander what it refuses
     research queue judge RUN [--on MACHINE] [--by LANE]
@@ -207,13 +207,14 @@ class StoreLabels:
     """Ready marks from the evidence store: `ready` labels on `pr:{n}@{head}`, pulled from the remote first.  Without that pull it
     raises: a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled."""
 
-    def __init__(self, store, log: Callable[[str], None] = print):
-        self.store, self.log = store, log
+    def __init__(self, store, log: Callable[[str], None] = print, since: str | None = None):
+        self.store, self.log, self.since = store, log, since
         self._pulled: set[int] = set()
 
     def ready(self, pr: int, head: str) -> bool:
-        """Whether someone asserted `ready = true` on `pr:{n}@{head}`."""
-        return any(str(lab.value).lower() == "true" for lab in self._labels(pr, head, vocab.READY))
+        """Whether someone asserted `ready = true` on `pr:{n}@{head}`, at or after ``since`` (`--marked-after`) when given."""
+        return any(str(lab.value).lower() == "true" and (self.since is None or lab.ts >= self.since)
+                   for lab in self._labels(pr, head, vocab.READY))
 
     def _other_heads(self, pr: int, head: str, key: str) -> dict[str, list]:
         """{head: its ``key`` labels} for each head of pull request ``pr`` but ``head`` that has some, after pulling every head's
@@ -971,7 +972,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
     ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once")
     ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
+    ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
+                                                                           "or after this time (a cutoff the driver announces)")
     a = ap.parse_args(argv)
+    if a.marked_after and not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", a.marked_after):
+        ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
     if a.dry_run and a.command not in ("sync", "land", "drive"):
         ap.error(f"--dry-run is for sync, land and drive only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
@@ -1002,7 +1007,7 @@ def main(argv: list[str]) -> int:
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
             return ready(GitHub(repo), store, a.pr, a.by, tier)
-        labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr))
+        labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
                   auth=credential_args(Path.cwd(), remote))

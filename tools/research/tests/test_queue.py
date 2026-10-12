@@ -405,6 +405,24 @@ def test_ready_marks_read_through_to_the_remote_and_without_that_pull_the_queue_
         StoreLabels(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
 
 
+def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monkeypatch):
+    """`--marked-after`: a mark then means "land this now" (top, 12 Oct), and older marks need nothing from their owners."""
+    from research.queue import StoreLabels
+
+    head = "0123456789abcdef0123456789abcdef01234567"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    lane = LocalStore(tmp_path / "lane")
+    lane.add_label(label_target(12, head), vocab.READY, True, "lane-12", ts="2026-10-12T05:59:59Z")
+    assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
+    assert StoreLabels(LocalStore(tmp_path / "q1")).ready(12, head) is True
+    assert StoreLabels(LocalStore(tmp_path / "q2"), since="2026-10-12T06:00:00Z").ready(12, head) is False
+    lane.add_label(label_target(12, head), vocab.READY, True, "lane-12", ts="2026-10-12T06:00:00Z")
+    assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
+    assert StoreLabels(LocalStore(tmp_path / "q3"), since="2026-10-12T06:00:00Z").ready(12, head) is True
+
+
 def test_rules_name_the_hold_label_and_refuse_anything_else():
     assert Rules.parse(RULES).hold_label == "hold" and Rules.parse("").hold_label == "hold"
     for bad in ('[[grant]]\nrole = "red-team"\npaths = ["x/"]\n', 'colour = "red"\n'):
