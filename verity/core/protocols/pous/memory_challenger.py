@@ -380,8 +380,12 @@ class SessionLog:
     fails closed.  The file is `SESSION_LOG`'s line, then one used id a line in lowercase hex.  Opening refuses a log that
     is missing or unreadable: a first line that is not `SESSION_LOG`, a line that is not an id, an id twice, or a last
     line cut short.  `claim` takes the file's lock, reads it again, refuses an id already in it and appends the id,
-    fsynced, before it returns.  Nothing here rewrites or truncates the file, and `create` refuses one that exists; a
-    restore of the file from a snapshot is past what a file can see."""
+    fsynced, before it returns.  Nothing here rewrites or truncates the file, and `create` refuses one that exists.
+
+    One session an id rests on a presumption about the host, which no stated claim covers yet: the host keeps this file
+    as written, so it is never restored from a snapshot, a backup or another older copy, and the memory challenger is
+    never restarted onto host-held state older than the sessions it has run.  A file can see neither, and
+    `trusted-nebius-host` as stated covers neither a restart nor a rollback of host-held state."""
 
     def __init__(self, path: str | os.PathLike) -> None:
         self.path = Path(path)
