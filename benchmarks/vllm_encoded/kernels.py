@@ -227,9 +227,10 @@ class TensorLib:
 
     def configs(self, tagged: bool) -> list[tuple[int, int, int]]:
         """(decoders, stages, taggers) as ra-codec-tensor's `fused_cfgs("auto")` picks them: untagged (taggers -1), the
-        most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32; tagged, 0, 2 or 4
-        of them tagging from the start instead (every other warp tags once its own work is done).  Not 6: with 6 tag
-        warps gate_up's sums at M = 32 differ from launch to launch (p511 and p767, r20261012-092414-7dcc)."""
+        most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32; tagged, 0 or 2 of
+        them tagging from the start instead (every other warp tags once its own work is done).  Not 4 or 6: with that
+        many tag warps gate_up's sums at M = 32 differ from launch to launch (p511 and p767, r20261012-092414-7dcc and
+        r20261012-092945-296e)."""
         smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 8) // (self.sb + 32)
         dmax = self.fused_warps - 2
 
@@ -238,7 +239,7 @@ class TensorLib:
 
         if not tagged:
             return list(dict.fromkeys([(dmax, max(need(dmax), smax - 4), -1), (dmax, max(need(dmax), smax - 6), -1)]))
-        return [(dmax - t, max(need(dmax - t), smax - 4), t) for t in (0, 2, 4) if dmax - t >= self.fused_span]
+        return [(dmax - t, max(need(dmax - t), smax - 4), t) for t in (0, 2) if dmax - t >= self.fused_span]
 
     def steps(self, m: int, n: int, kd: int, cfg: Config) -> tuple[int, torch.Tensor]:
         """The launch's CTA groups (as many as fill the device) and its tweak steps on the device (`bench.tsteps`): a
