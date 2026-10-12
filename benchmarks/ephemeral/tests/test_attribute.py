@@ -1,5 +1,6 @@
 """attribute.py and attn_bytes.py's attribution over synthetic Nsight Compute CSVs: windows split by the marker, the step
-counted by the lm_head kernel, the KV taken from the live tokens, and per-layer classes scaled to full depth."""
+counted by the lm_head kernel, the KV taken from the live tokens, and per-layer classes scaled to full depth; and gamma.py's
+choice of arm and its terms over R·T."""
 from __future__ import annotations
 
 import csv
@@ -122,3 +123,27 @@ def test_main_passes_a_timing_only_run_and_fails_a_profiled_arm_without_its_csv(
     (tmp_path / "8b-L8-0-node.json").write_text(json.dumps({"budget": budget, "profile_steps": 2, "points": [],
                                                            "profiled": [{"batch": 1, "context": 64}]}))
     assert A.main() == 1
+
+
+def test_gamma_prefers_a_full_depth_graph_arm_and_divides_by_r_t(tmp_path: Path):
+    G = load("gamma")
+    pt = {"batch": 2, "context": 100, "tokens_open": 200, "tokens_close": 204}
+    node, full = tmp_path / "a", tmp_path / "b"
+    node.mkdir(), full.mkdir()
+    (node / "8b-L4-0-node.json").write_text(json.dumps({**arm(layers=4), "profiled": [pt]}))
+    (node / "ncu-8b-L4-0-node.csv").write_text(ncu_csv([(SPIN, 0, 0)] + node_step(4, 202 * 2) * 2))
+    kv = 202 * 32 * 2
+    (full / "8b-L0-0-graph.json").write_text(json.dumps({**arm(layers=32), "profiled": [pt]}))
+    (full / "ncu-8b-L0-0-graph.csv").write_text(ncu_csv([(SPIN, 0, 0)] + [("graph", 1000 + kv + 50, 9.0), (LM, 500.0, 0.0),
+                                                                          (SAMPLE, 2.0, 0.0)] * 2))
+    (full / "8b-L0-0-time.json").write_text(json.dumps({"budget": arm(32)["budget"], "profile_steps": 0,
+                                                        "read_bytes_per_s": 1e6,
+                                                        "points": [{"batch": 2, "context": 100, "step_ms": 1.0}]}))
+    best, times, fails = G.collect([full, node])
+    assert not fails
+    (row,) = G.rows_of(best, times)
+    e = row["eager"]
+    assert e["source"] == "8b-L0-0-graph" and not e["per_kernel"]
+    assert e["rest"] == pytest.approx(52) and e["write"] == pytest.approx(9)
+    assert e["mu_eph"] == pytest.approx(52 / 1e3) and e["lm_time"] == pytest.approx(500 / 1e3)
+    assert "*" not in G.table([row], "8b")

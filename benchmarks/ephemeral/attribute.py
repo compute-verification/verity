@@ -141,8 +141,8 @@ def split(arm: dict, pt: dict, w: list[dict]) -> dict:
     return o
 
 
-def main() -> int:
-    out = Path(sys.argv[1])
+def attribute_dir(out: Path) -> tuple[list[dict], list[str], int]:
+    """Every profiled arm under OUT, split per point; the failures; and how many arms were profiled."""
     result, fails, profiled = [], [], 0
     for jf in sorted(out.glob("*.json")):
         if jf.name in ("ephemeral.json",) or jf.name.startswith("ready"):
@@ -165,6 +165,12 @@ def main() -> int:
             s = split(arm, pt, w)
             result.append({"tag": tag, "layers": arm["budget"]["layers"], "compiled": arm["compiled"],
                            **pt, "step_ms_under_ncu": timed.get("step_ms"), **s})
+    return result, fails, profiled
+
+
+def main() -> int:
+    out = Path(sys.argv[1])
+    result, fails, profiled = attribute_dir(out)
     print(f"{'arm':22} {'B':>3} {'ctx':>6} {'read GB':>8} {'lin GB':>7} {'kv GB':>7} {'lm GB':>6} "
           f"{'unreg':>7} {'unreg-lm':>8} {'full':>7} {'full-lm':>7}")
     for r in result:
