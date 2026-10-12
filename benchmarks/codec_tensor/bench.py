@@ -17,7 +17,8 @@ Nothing is timed before its gate passed, in this order:
   FP8 kernel, the plain kernel with `--mma-knobs` extra int8 MMAs a tile or `--imad-knobs` extra IMADs a tile a thread
   (the budget a decode on tensor or CUDA cores has before it slows the memory-bound step), and the fused decode at k = 1
   (and `--gemm-ks`); per batch, the layer's time over native with each linear at its best arm. With `--sketch`, the
-  fused decode at k = 1 also runs with ro-sketch-blake3/v0 (`sketching`) in place of ro-blake3/v1, gated on every
+  fused decode (k_s = 16 at each k, 64 at k = 1) also runs with ro-sketch-blake3/v0 (`sketching`) in place of
+  ro-blake3/v1, gated on every
   vector's sketch (a float32 GPU reference with TF32 off, exact), every tag (PyPI blake3, `tags.py` on a sample), and
   the leaves and root.
 """
@@ -698,7 +699,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         for k in ks:
             set_key(lib, torch, keys[k])
             for cfg in fused_cfgs:
-                if cfg[3] and k != 1:
+                if cfg[3] == 64 and k != 1:
                     continue
                 gr, sp = steps_for(k, mb, cfg)
                 bad, sk_bad = [], []
@@ -847,7 +848,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             arms[f"plain_c{cfg[0]}s{cfg[1]}"] = arm(0, 1, cfg)
         for k in ks:
             for cfg in fused_cfgs:
-                if not (cfg[3] and k != 1):
+                if not (cfg[3] == 64 and k != 1):
                     arms[fused_name(k, cfg)] = arm(3, k, cfg)
         for knob in mma_knobs:
             arms[f"mma{knob}"] = arm(1, 1, cfgs[0], knob)
@@ -883,8 +884,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             f"native {native * 1e6:.1f} us; "
             + ", ".join(f"fused k{k} {best(k, False)[0] / native:.2f}x ({best(k, False)[1]}), tagged "
                         f"{best(k, True)[0] / native:.2f}x ({best(k, True)[1]})" for k in ks)
-            + "".join(f", sketch {s} {best(1, False, s)[0] / native:.2f}x ({best(1, False, s)[1]})"
-                      for s in sorted({c[3] for c in sketched}))
+            + "".join(f", sketch {s} k{k} {best(k, False, s)[0] / native:.2f}x ({best(k, False, s)[1]})"
+                      for s in sorted({c[3] for c in sketched}) for k in ks if s == 16 or k == 1)
             + "; mma " + " ".join(f"{kn}:{med[f'mma{kn}'] / native:.2f}" for kn in mma_knobs)
             + "; imad " + " ".join(f"{kn}:{med[f'imad{kn}'] / native:.2f}" for kn in imad_knobs))
     del ring, wring, stores, plain, w
@@ -962,7 +963,7 @@ def main() -> int:
                     help="fused kernel DECODERSxSTAGES[xTAGGERS], or auto (fused_cfgs)")
     ap.add_argument("--dump", action="store_true",
                     help="after a failed fused gate, rerun it once dumping the MMA warp's operands (WT_DEBUG_DUMP build)")
-    ap.add_argument("--sketch", default="", help="k_s values (16, 64) for the sketched fused kernel at k = 1")
+    ap.add_argument("--sketch", default="", help="k_s values (16 at every k, 64 at k = 1) for the sketched fused kernel")
     ap.add_argument("--sketch-t", type=int, default=8, help="tasks a sketch tile (n = 32 ceil(SB / 512) T bytes)")
     ap.add_argument("--mma-knobs", default="8,16,32,48,64,96")
     ap.add_argument("--imad-knobs", default="32,64,128,192,256")
@@ -994,7 +995,7 @@ def main() -> int:
     res["layout"] = gate_layout(torch, log)
     res["ok"] &= res["layout"]["ok"]
     for lib in libs:
-        g = {k: gate_codec(lib, torch, k, a.gate_words, log) for k in (1, 2)}
+        g = {k: gate_codec(lib, torch, k, a.gate_words, log) for k in range(1, lib.kmax + 1)}
         e = {"path": lib.path, "constants": {"n": lib.n, "NL": lib.nl, "S": lib.s, "PB": lib.pb, "TW": lib.tw,
                                              "U": lib.u, "c": lib.c, "tc_mmas": lib.tc_mmas},
              "sha256": hashlib.sha256(Path(lib.path).read_bytes()).hexdigest(), "gate": g}

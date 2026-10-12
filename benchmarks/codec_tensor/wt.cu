@@ -70,7 +70,7 @@ constexpr bool TC_OK = S == 32 * U && NBITS == 8 * S - 1;
 static_assert(FULL_SLOT ? Q == NL : (R > 0 && Q == NL - 1), "the top limb holds bits 32Q .. n - 1");
 static_assert(CF % 4 == 1 && CF < 4096, "p = 3 mod 4, c small");
 static_assert(TW * PB >= 8192 && (TW * S) % 16 == 0, "a task's words");
-constexpr int MAXK = 2;
+constexpr int MAXK = 3;
 constexpr int TASK_BYTES = 8192;
 constexpr int SB = TW * S;                              // a task's stored bytes
 
@@ -2112,7 +2112,7 @@ static int launch_gemm(Kern kern, int smem, int threads, int groups, int nchunks
   return cudaGetLastError() ? 4 : 0;
 }
 
-#define WT_K_SWITCH(k, F) switch (k) { case 1: F(1); break; case 2: F(2); break; default: return 1; }
+#define WT_K_SWITCH(k, F) switch (k) { case 1: F(1); break; case 2: F(2); break; case 3: F(3); break; default: return 1; }
 
 extern "C" {
 
@@ -2242,7 +2242,7 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
 
 // The fused decode GEMM at k rounds: `decoders` decoder warps, an MMA warp, a producer and `taggers` tag warps (block
 // jl's ro-blake3/v1 tag, at index tag_base + jl, into tags[8 jl ..]), `stages` stored stages; tsteps as fused_kernel's.
-// wt_fused_sketch with sketch_k > 0 (k = 1, no tag warps) has the decoders sketch: ro-sketch-blake3/v0 at
+// wt_fused_sketch with sketch_k > 0 (16 at any k, 64 at k = 1; no tag warps) has the decoders sketch: ro-sketch-blake3/v0 at
 // k_s = sketch_k over tiles of skt tasks (stages < 2 skt), the signs as sketching.sign_fragments, each vector v's tag at
 // tag_base + v into tags[8 v ..] and, if sk_out, its sketch at sk_out[k_s v ..]; tags and sk_out hold
 // sketch_vectors(...) vectors.
@@ -2252,8 +2252,8 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
   if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || k < 1 || k > MAXK || decoders < FUSED_SPAN || taggers < 0 ||
       decoders + 2 + taggers > FUSED_WARPS || stages < (32 * decoders + TW - 1) / TW || (w && taggers && !tags))
     return 1;
-  if (sketch_k && ((sketch_k != 16 && sketch_k != 64) || k != 1 || taggers || stages >= (SK_BUFS - 1) * skt ||
-                   (w && (!signs || !(tags || sk_out)))))
+  if (sketch_k && ((sketch_k != 16 && sketch_k != 64) || (sketch_k == 64 && k != 1) || taggers ||
+                   stages >= (SK_BUFS - 1) * skt || (w && (!signs || !(tags || sk_out)))))
     return 1;
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
   const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (decoders + 2 + taggers) * 32;
@@ -2274,10 +2274,13 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
                     : go(fused_kernel<KK, NB, false, SK>, fused_smem_bytes<NB, SK>(stages, sg), sg); \
   } while (0)
 #define GN(KK, SK) do { if (nb8 == 1) G(KK, 1, SK); else if (nb8 == 2) G(KK, 2, SK); else G(KK, 4, SK); } while (0)
-  if (sketch_k == 16) GN(1, 16);
+  if (sketch_k == 16 && k == 1) GN(1, 16);
+  if (sketch_k == 16 && k == 2) GN(2, 16);
+  if (sketch_k == 16) GN(3, 16);
   if (sketch_k == 64) GN(1, 64);
   if (k == 1) GN(1, 0);
-  GN(2, 0);
+  if (k == 2) GN(2, 0);
+  GN(3, 0);
 #undef GN
 #undef G
 }
