@@ -1687,11 +1687,12 @@ int tf_fused3d(int lanes, int own_defer, const void* w, const uint8_t* x, float*
 
 // fused3p_kernel: tf_fused3's g0kr1 (mode GEMM), t4kr1 and t8kr1 (mode tags, lanes 4 or 8) as a link of a chain of
 // programmatic dependent launches (pdl 1; 0 a plain launch). wait_ctr null for the chain's first link; done_ctr
-// counts this launch's CTAs once their y is written, (N / 16 / FW) (Kd / 2,048) of them. trace: null, or this launch's
-// TR_WORDS words.
+// counts this launch's CTAs once their y is written, (N / 16 / FW) (Kd / 2,048) of them. occ > 0: at most occ CTAs an
+// SM (dynamic shared memory padded to a share of the SM's), so a launch placed beside the one before it can't crowd
+// some SMs. trace: null, or this launch's TR_WORDS words.
 int tf_fused3p(int lanes, int mode, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
-               uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, unsigned long long* trace,
-               cudaStream_t st) {
+               uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, int occ,
+               unsigned long long* trace, cudaStream_t st) {
   if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || (mode != MODE_GEMM && mode != MODE_TAGS) || !done_ctr)
     return 1;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
@@ -1705,10 +1706,17 @@ int tf_fused3p(int lanes, int mode, const void* w, const uint8_t* x, float* y, u
 #undef F3P
   if (!kern) return 3;
   if (const int rc = configure3((const void*)kern, M)) return rc;
+  static int sm_smem = 0, reserved = 0;
+  if (!sm_smem) {
+    int dev = 0;
+    if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sm_smem, cudaDevAttrMaxSharedMemoryPerMultiprocessor, dev) ||
+        cudaDeviceGetAttribute(&reserved, cudaDevAttrReservedSharedMemoryPerBlock, dev))
+      return 2;
+  }
   cudaLaunchConfig_t cfg = {};
   cfg.gridDim = dim3((N / 16 / FW) * (Kd / CCOLS));
   cfg.blockDim = dim3(FW * 32);
-  cfg.dynamicSmemBytes = M * CXS;
+  cfg.dynamicSmemBytes = std::max(M * CXS, occ > 0 ? std::min(sm_smem / occ - reserved, 99 * 1024) : 0);
   cfg.stream = st;
   cudaLaunchAttribute attr[1];
   attr[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
