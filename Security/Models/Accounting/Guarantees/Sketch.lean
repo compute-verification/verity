@@ -74,7 +74,7 @@ prover knows it once the seed is out), a block whose unread elements each take o
 product `c + unreadSum v ε` with `v_j = sgn (s j) · (b_j − a_j)`. The bound is attained (all `v_j = 1`, `t = ⌊u/2⌋`),
 so a single row does not make a few unread elements costly, and `k` rows need not either: a prover that leaves unread
 only elements whose columns of signs agree up to sign has all `k` inner products move with one such sum. The polynomial
-hash does (`Accounting.Guarantees.Tag.PolyUnpredictable`). -/
+hash does only while the guesser's view is words of the block (`Accounting.Guarantees.Tag.PolyUnpredictable`). -/
 def LittlewoodOfford : Prop :=
   ∀ (u : ℕ) (v : Fin u → ℤ) (t : ℤ),
     prob (PMF.uniformOfFintype (Fin u → Bool)) (fun ε => (∀ j, v j ≠ 0) ∧ unreadSum v ε = t) ≤

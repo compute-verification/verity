@@ -6,10 +6,15 @@ import Definitions.Accounting.Tag.Prob
 /-!
 # The keyed polynomial hash over `GF(2^31 − 1)` (trusted)
 
-The block tag of `benchmarks/pous/hbm_audit/digest.py`, which the bandwidth audit's polynomial-hash tag is. A block is
-`W` little-endian `uint32` words (`WORDS = 16384` for a 64 KiB block). Its hash at a key point `g` is Horner's rule
-over the words' residues mod `p = 2^31 − 1` (`reference_block_hash`), and the hashes of `R` blocks are folded at a second
-point `z` (`reference_digest`).
+The tag of the bandwidth audit's uncertified fast check: `benchmarks/pous/hbm_audit/digest.py`, `gf31-poly/v1`. No
+statement about it certifies bandwidth. A device with memory to spare can keep a structure computed from each block
+(a Kedlaya–Umans evaluation table) and answer the hash without reading the block's words, so the certified tag is a
+random oracle's (`Bandwidth.Guarantees.AuditRO`). The statements about this hash are inputs to a possible version in
+the joint model, under a capacity bound.
+
+A block is `W` little-endian `uint32` words (`WORDS = 16384` for a 64 KiB block). Its hash at a key point `g` is
+Horner's rule over the words' residues mod `p = 2^31 − 1` (`reference_block_hash`), and the hashes of `R` blocks are
+folded at a second point `z` (`reference_digest`).
 
 A word enters the field as its residue: `int(w) % MOD` in the reference, one Mersenne fold `(w & p) + (w >> 31)` on the
 GPU, which agrees mod `p`. Since `2^32 > 2p`, every word has another word with its residue (`w` and `w ± p`), so the

@@ -4,9 +4,10 @@ import Definitions.Accounting.Tag.PolyHash
 /-!
 # The block tags' statements (trusted)
 
-What the bandwidth audit needs from its block tag, `Tag(σ, j, E_j)`: a short exact function of a stored block, keyed by
-a fresh seed, that the prover must compute for every block. Here the tag is the keyed polynomial hash over
-`GF(2^31 − 1)` of `benchmarks/pous/hbm_audit/digest.py` (`Security/Definitions/Accounting/Tag/PolyHash.lean`).
+The tag of the bandwidth audit's uncertified fast check (`gf31-poly/v1`): the keyed polynomial hash over
+`GF(2^31 − 1)` of `benchmarks/pous/hbm_audit/digest.py` (`Security/Definitions/Accounting/Tag/PolyHash.lean`). None of
+these statements certifies bandwidth: the bandwidth audit's guarantee rests on a random oracle's tag
+(`Bandwidth.Guarantees.AuditRO`). They are inputs to a possible version in the joint model, under a capacity bound.
 
 * `PolyNonCollision`, `PolyNonCollisionKeyed`: two blocks fixed before the key, with different residues, hash alike with
   probability at most `(W − 1)/p` over a uniform key (at most `W − 1` times the largest point mass of any key
@@ -15,7 +16,8 @@ a fresh seed, that the prover must compute for every block. Here the tag is the 
   guesses the hash with probability at most `3` times its best guess of that word (`wordGuess`): `3 · 2^-32 ≈ 1.5/p`
   when the word is uniform. The `3` is the reduction: three 32-bit words share each of the residues `0` and `1`.
 * `PartialReadGuess`: for a block whose unread words are uniform and independent of what was read (`partialRead`), the
-  best guess of an unread word is `2^-32`, so `PolyUnpredictable` bounds the guess of the hash by `3 · 2^-32`.
+  best guess of an unread word is `2^-32`, so `PolyUnpredictable` bounds the guess of the hash by `3 · 2^-32`, for a
+  guesser whose view is words of the block.
 * `FoldNonCollision`: changing the list of block hashes (dropping, altering, reordering or inserting one) changes the
   fold except with probability at most `(n − 1)/p` over a uniform `z`, `n` the longer list's length.
 * `DigestNonCollision`: the two together, over a uniform `(g, z)`.
@@ -56,15 +58,21 @@ Given the other words the hash is `c + (x_j mod p) · g^(W − 1 − j)` with a 
 `x_j` lies in one residue class mod `p`, which holds at most three 32-bit words. For a word uniform and independent of the
 rest, `wordGuess μ j = 2^-32` and the bound is `3 · 2^-32 ≈ 1.5/p`; for a word of conditional min-entropy `h` it is
 `3 · 2^-h`. A word that other words, read or unread, determine has `wordGuess = 1`: the bound needs one unread word that
-the rest of the block leaves unpredictable. -/
+the rest of the block leaves unpredictable. The `2^-32` reading needs the guesser's view to be words of the block. A view
+of anything computed from the block is outside that model: a Kedlaya–Umans evaluation table, read in a few places, gives
+the hash, so conditioned on it `wordGuess μ j = 1` and the bound is vacuous. That case is why no bandwidth guarantee
+rests on this statement. -/
 def PolyUnpredictable : Prop :=
   ∀ (W : ℕ) (μ : PMF (Block W)) (j : Fin W) (g : (ZMod P)ˣ) (t : ZMod P),
     prob μ (fun x => blockHash (g : ZMod P) x = t) ≤ 3 * wordGuess μ j
 
 /-- **A partially read block's words.** For a block whose words outside `U` are fixed (`known`'s, what was read) and whose
 words in `U` are independent and uniform (`partialRead known U`), the best guess of word `j` from every other word is
-`2^-32` when `j` is unread (`j ∈ U`), and `1` when it was read. With `PolyUnpredictable`, any guess of the hash of a block
-with an unread word succeeds with probability at most `3 · 2^-32`, at every nonzero key. -/
+`2^-32` when `j` is unread (`j ∈ U`), and `1` when it was read. With `PolyUnpredictable`, a guesser whose view is the
+words it read guesses the hash of a block with an unread word with probability at most `3 · 2^-32`, at every nonzero
+key. The view here is words of the block. A view of anything computed from the block (a Kedlaya–Umans evaluation table,
+say) is outside the model and can give the hash outright, which is why no bandwidth guarantee rests on this
+statement. -/
 def PartialReadGuess : Prop :=
   ∀ (W : ℕ) (known : Block W) (U : Finset (Fin W)) (j : Fin W),
     wordGuess (partialRead known U) j = if j ∈ U then (2 ^ 32 : ℝ≥0∞)⁻¹ else 1
