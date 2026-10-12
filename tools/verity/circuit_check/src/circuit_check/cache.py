@@ -1547,6 +1547,9 @@ def version() -> str:
 
 
 _DISTRIBUTIONS: list[str] = []
+#: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
+#: `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in another
+UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
 
 
 def key(request: dict) -> dict:
@@ -1567,7 +1570,8 @@ def key(request: dict) -> dict:
             "distributions": _DISTRIBUTIONS[0],
             "path": _path_entries(_ROOT[0]) if _ROOT else list(sys.path),
             "registries": hashlib.sha256("\n".join(_REGISTRIES).encode()).hexdigest(),
-            "environment": {k: v for k, v in sorted(os.environ.items()) if k.startswith(("VERITY_", "CIRCUIT_CHECK_"))}}
+            "environment": {k: v for k, v in sorted(os.environ.items())
+                            if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED}}
 
 
 _OWN: dict[int, tuple[Any, str]] = {}
