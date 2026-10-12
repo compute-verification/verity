@@ -1661,9 +1661,11 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 //
 // An SM's registers fit FUSED_WARPS warps at the decode's register count (a sub-partition holds 16K: four warps at
 // 128 registers, three at 168, two at 255; 9 to 11 warps put three on one). The decode holds the word, its square and
-// the tweak. At full slot and NL > 24 it holds neither the double-width square nor the tweak (FRESH: sqr_fold, and
-// c_0 + t made a word at a time), which fits 12 warps at NL = 48.
-constexpr int FUSED_WARPS = FULL_SLOT && NL > 24 && NL <= 48 ? 12 : (NL <= 17 ? 16 : (NL <= 24 ? 12 : 8));
+// the tweak. At full slot and 24 < NL <= 48 the k = 1 decode holds neither the double-width square nor the tweak
+// (FRESH_DECODE: sqr_fold, and c_0 + t made a word at a time), which fits 12 warps at NL = 48. Elsewhere it buys no
+// warp and only costs time (p2048 at 8 warps: 2.92 against 2.59 untagged).
+constexpr bool FRESH_DECODE = FULL_SLOT && NL > 24 && NL <= 48;
+constexpr int FUSED_WARPS = FRESH_DECODE ? 12 : (NL <= 17 ? 16 : (NL <= 24 ? 12 : 8));
 constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
 
 constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
@@ -1890,7 +1892,7 @@ template <int K, int SKK>
 __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loaded, u64 *decoded, int stages,
                                              int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp, int lane,
                                              const u32 *__restrict__ tsteps, const Sketch &sk) {
-  constexpr bool FRESH = K == 1 && FULL_SLOT && NL > 24;   // the tweak's registers would cost decoder warps
+  constexpr bool FRESH = K == 1 && FRESH_DECODE;
   const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
   int i = (32 * warp + lane) / TW, w = (32 * warp + lane) % TW;
   u32 t[NL];
