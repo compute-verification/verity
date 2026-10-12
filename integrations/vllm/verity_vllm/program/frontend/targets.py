@@ -162,7 +162,7 @@ def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
 def moe_expert_fp8_dot(profile):
     """The e4m3 k32 step of the block-FP8 fused-MoE expert GEMMs (`TritonExperts`' `fused_moe_kernel`) on the declared target: the GEMM
     target's `fp8_moe_dot`, its own measurement rather than the per-tensor FP8 linear's (`fp8_dot`) or the blockwise one's
-    (`fp8_block_dot`); refused by name where the target records none (cc 9.0: GLM-5.3's experts bind `_v1` through their capture map)."""
+    (`fp8_block_dot`); refused by name where the target records none."""
     gt = gemm_target(profile)
     dot = FP8_DOTS.get(gt.fp8_moe_dot) if gt.fp8_moe_dot else None
     if dot is None:

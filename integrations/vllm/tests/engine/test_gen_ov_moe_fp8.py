@@ -5,7 +5,7 @@ quant, the w2 launch), at the Qwen3-30B-A3B TP2 rank shapes, on a cc 12.0 target
 It checks that the scope claims every event, binds both quants as `Fp8GroupQuant_v1{K,64}` and both launches as the block-FP8 pair forms
 with the target's e4m3 step, with operand rows the Definitions' parameters fit; and that it refuses, by name, a missing attestation, a
 bf16 launch, another block, another quant group, column-major or 128-grid scales, the fused SiLU-quant, a missing quant, and a target
-with no e4m3 step.
+with no e4m3 step; and that a cc 9.0 target folds the pinned tile on Hopper's wgmma step.
 """
 from __future__ import annotations
 
@@ -227,13 +227,22 @@ def test_block_fp8_scope_folds_both_quants_and_both_pair_forms_on_the_target_s_e
     ({"w13_scale_shape": scale_shapes(128)["w13"]}, {}, "b_scale is not the contiguous f32"),
     ({"fused_silu_quant": True}, {}, "fused_experts shape"),
     ({"input_quant": False}, {}, "two per_token_group_fp8_quant calls"),
-    ({}, {"target": TargetProfile(compute_capability=(9, 0), num_sms=132, moe_backend="triton")}, "no registered e4m3 step"),
+    ({}, {"target": TargetProfile(compute_capability=(8, 0), num_sms=108, moe_backend="triton")}, "no registered e4m3 step"),
     ({}, {"target": TargetProfile(compute_capability=(8, 9), num_sms=128, moe_backend="triton")}, "no registered e4m3 step"),
 ])
 def test_block_fp8_scope_refuses_by_name(kw, ctx_kw, needle):
     res, _ = _resolve(3, ctx_kw=ctx_kw, **kw)
     bad = [r for r in res if isinstance(r, Unsupported)]
     assert bad and needle in bad[0].reason, [getattr(r, "reason", r) for r in res]
+
+
+def test_a_cc9_target_folds_the_pinned_tile_on_the_wgmma_step():
+    """The pinned [64, 64] tile with four warps is a wgmma tile on cc 9.0, so both launches take Hopper's k32 step."""
+    h200 = TargetProfile(compute_capability=(9, 0), num_sms=132, moe_backend="triton")
+    res, _ = _resolve(3, ctx_kw={"target": h200})
+    assert len(res) == 1 and isinstance(res[0], Group), res
+    gemms = [p.spec.id for p in res[0].parts if isinstance(p, Compute) and p.spec.id.startswith("MoeExpertFp8Gemm")]
+    assert len(gemms) == 2 and all(g.endswith(",DOT=HopperE4m3QgmmaDot32_v1}") for g in gemms), gemms
 
 
 def test_the_bf16_scope_does_not_claim_a_block_fp8_scope():
