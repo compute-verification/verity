@@ -28,8 +28,8 @@
 // Built as libtopup.so (run.sh).  C ABI at the end.
 
 #include "../bandwidth/tagger.cu"
-#include "fill.cu"
 #include "readers.cu"
+#include "fill.cu"
 
 #include <atomic>
 #include <mutex>
@@ -775,6 +775,7 @@ constexpr auto IDLE_BACKOFF = std::chrono::microseconds(200);
 
 struct State {
   int device = 0, warps = 4, base_ctas = 0, sms = 0;
+  std::atomic<int> prefill_stages{0};  // the PREFILL role's TMA stages (fill.cu's fill_seq_bulk_kernel), 0: 16-byte loads
   uint32_t shift = 8;
   uint64_t base_budget = 4096, idle_budget = 1ull << 22, step_budget = 1ull << 22;
   std::atomic<int> idle_on{0};
@@ -805,6 +806,18 @@ static State* S = nullptr;
 static int launch(State& st, int role, int grid, unsigned long long* taken, uint64_t budget, cudaStream_t s) {
   cudaError_t e = cudaMemsetAsync(taken, 0, 8, s);
   if (e != cudaSuccess) return (int)e;
+#define SQ_B(S) \
+  fl::fill_seq_bulk_kernel<S><<<grid, 32, S * fl::TB_STAGE, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
+  if (const int stages = role == fl::PREFILL ? st.prefill_stages.load() : 0) {
+    switch (stages) {
+      case 2: SQ_B(2); break;
+      case 3: SQ_B(3); break;
+      case 4: SQ_B(4); break;
+      default: return -1;
+    }
+    return (int)cudaGetLastError();
+  }
+#undef SQ_B
 #define SQ_L(W) fl::fill_seq_kernel<W><<<grid, W * 32, 0, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
   switch (st.warps) {
     case 4: SQ_L(4); break;
@@ -983,6 +996,17 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   st->run = 1;
   sq::S = st;
   st->th = std::thread(sq::loop, st);
+  return 0;
+}
+
+// The PREFILL role's reader: 0 the 16-byte loads of every other role, 2–4 the TMA reader with that many stages.
+int sq_prefill_reader(int stages) {
+  if (!sq::S || (stages != 0 && (stages < 2 || stages > 4))) return -1;
+  for (const void* k : {(const void*)fl::fill_seq_bulk_kernel<2>, (const void*)fl::fill_seq_bulk_kernel<3>,
+                        (const void*)fl::fill_seq_bulk_kernel<4>})
+    if (cudaError_t e = cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, 4 * (int)fl::TB_STAGE))
+      return (int)e;
+  sq::S->prefill_stages = stages;
   return 0;
 }
 

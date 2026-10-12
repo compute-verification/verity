@@ -191,6 +191,8 @@ def main() -> int:
     ap.add_argument("--seq-step-priority", choices=("greatest", "default", "least"), default="greatest",
                     help="seq: the STEP and PREFILL kernels' stream priority (default: the runner's, 0; IDLE's is the "
                          "least)")
+    ap.add_argument("--seq-prefill-stages", type=int, default=0,
+                    help="seq: the PREFILL kernel's reader, 0 16-byte loads, 2-4 the TMA reader with that many stages")
     ap.add_argument("--max-batched-tokens", type=int, default=8192)
     ap.add_argument("--async-scheduling", choices=("default", "on", "off"), default="default")
     ap.add_argument("--shared-prefix", type=int, default=0,
@@ -474,8 +476,11 @@ def main() -> int:
                     continue
                 sq.start(regions, RUN_SEED, base_ctas=0, warps=FILL_WARPS[mode], shift=a.seq_shift, priority=least,
                          step_priority={"greatest": greatest, "default": 0, "least": least}[a.seq_step_priority])
+                if sq.prefill_reader(a.seq_prefill_stages):
+                    raise RuntimeError(f"sq_prefill_reader({a.seq_prefill_stages}) refused")
                 tu.so.sq_idle(1, 0)
                 cur["seq_step"], cur["seq_prefill"] = ctas, int(pat or 0)
+                cur["seq_prefill_stages"] = a.seq_prefill_stages
                 if a.token_gate:
                     gate_ids = gate_tokens()
                     if not gate_ref:

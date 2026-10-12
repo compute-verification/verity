@@ -16,7 +16,8 @@
 // MMAs (bytes 0–7, then 8–15), and expands its own 16 sign bits of rows g and g + 8 at the same bytes into A. A warp
 // runs four such groups of 8 blocks at once, and keeps DEPTH offsets of loads in flight.
 //
-// Included by topup.cu (mode 4) after ../bandwidth/tagger.cu, whose SHA-512 v2 uses; its C ABI is there.
+// Included by topup.cu (mode 4) after ../bandwidth/tagger.cu (v2's SHA-512) and readers.cu (its TMA copies); its C ABI
+// is there.
 #pragma once
 #include <cuda_runtime.h>
 #include <stdint.h>
@@ -122,8 +123,37 @@ __device__ __forceinline__ void mma(int (&d)[4], uint32_t a0, uint32_t a1, uint3
       : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
 }
 
+// One offset o (64 bytes of each block) of a group's 8 blocks: lane (g, c)'s 16 bytes `cur` of block g at 64 o + 16 c.
+__device__ __forceinline__ void sketch_step(int (&acc)[4], const uint32_t* sg, const uint32_t* sg8, int sh, int o,
+                                            uint4 cur) {
+  // plain loads, not __ldg: v2 rewrites a slot of signs while kernels run (see `acquire_signs`)
+  const uint32_t r0 = (sg[2 * o] >> sh) & 0xFFFFu, r8 = (sg8[2 * o] >> sh) & 0xFFFFu;
+  const uint32_t a0 = expand(r0 & 15), a2 = expand((r0 >> 4) & 15), a1 = expand(r8 & 15), a3 = expand((r8 >> 4) & 15);
+  const uint32_t e0 = expand((r0 >> 8) & 15), e2 = expand(r0 >> 12), e1 = expand((r8 >> 8) & 15), e3 = expand(r8 >> 12);
+  mma(acc, a0, a1, a2, a3, cur.x, cur.y);
+  mma(acc, e0, e1, e2, e3, cur.z, cur.w);
+}
+
+// Lane n's block n = 8q + col: D[r][col] of group q is in lane 4 (r % 8) + col / 2, register 2 (r / 8) + col % 2.
+__device__ __forceinline__ void gather(const int (&acc)[4][4], uint32_t (&m)[16]) {
+  const int lane = threadIdx.x & 31, q_me = lane >> 3, col = lane & 7;
+#pragma unroll
+  for (int q = 0; q < 4; ++q)
+#pragma unroll
+    for (int hi = 0; hi < 2; ++hi)
+#pragma unroll
+      for (int par = 0; par < 2; ++par) {
+        const int val = acc[q][2 * hi + par];
+#pragma unroll
+        for (int r8 = 0; r8 < 8; ++r8) {
+          const int got = __shfl_sync(0xffffffffu, val, 4 * r8 + (col >> 1));
+          if (q == q_me && par == (col & 1)) m[8 * hi + r8] = (uint32_t)got;
+        }
+      }
+}
+
 // The sketches of 32 blocks at `p` (block 8q + g of group q): lane n's block n, its 16 sums into m.
-__device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint32_t* __restrict__ signs, uint64_t pol,
+__device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint32_t* signs, uint64_t pol,
                                        uint32_t (&m)[16]) {
   const int lane = threadIdx.x & 31, g = lane >> 2, c = lane & 3;
   int acc[4][4];
@@ -151,35 +181,15 @@ __device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint
 #pragma unroll
       for (int q = 0; q < 4; ++q) v[slot][q] = ld_stream(src + (uint64_t)q * 8 * BLK + 64 * (o + DEPTH), pol);
     }
-    const uint32_t r0 = (__ldg(sg + 2 * o) >> sh) & 0xFFFFu, r8 = (__ldg(sg8 + 2 * o) >> sh) & 0xFFFFu;
-    const uint32_t a0 = expand(r0 & 15), a2 = expand((r0 >> 4) & 15), a1 = expand(r8 & 15), a3 = expand((r8 >> 4) & 15);
-    const uint32_t e0 = expand((r0 >> 8) & 15), e2 = expand(r0 >> 12), e1 = expand((r8 >> 8) & 15), e3 = expand(r8 >> 12);
 #pragma unroll
-    for (int q = 0; q < 4; ++q) {
-      mma(acc[q], a0, a1, a2, a3, cur[q].x, cur[q].y);
-      mma(acc[q], e0, e1, e2, e3, cur[q].z, cur[q].w);
-    }
+    for (int q = 0; q < 4; ++q) sketch_step(acc[q], sg, sg8, sh, o, cur[q]);
   }
-  // Lane n hashes block n = 8q + col: D[r][col] of group q is in lane 4 (r % 8) + col / 2, register 2 (r / 8) + col % 2.
-  const int q_me = lane >> 3, col = lane & 7;
-#pragma unroll
-  for (int q = 0; q < 4; ++q)
-#pragma unroll
-    for (int hi = 0; hi < 2; ++hi)
-#pragma unroll
-      for (int par = 0; par < 2; ++par) {
-        const int val = acc[q][2 * hi + par];
-#pragma unroll
-        for (int r8 = 0; r8 < 8; ++r8) {
-          const int got = __shfl_sync(0xffffffffu, val, 4 * r8 + (col >> 1));
-          if (q == q_me && par == (col & 1)) m[8 * hi + r8] = (uint32_t)got;
-        }
-      }
+  gather(acc, m);
 }
 
 // One v0 unit: 32 blocks at `p`, its root into out[0..7] (lane 0, unless out is null); returns the root's first word
 // (lane 0).
-__device__ __forceinline__ uint32_t unit(const uint8_t* __restrict__ p, uint64_t j0, const uint32_t* __restrict__ signs,
+__device__ __forceinline__ uint32_t unit(const uint8_t* __restrict__ p, uint64_t j0, const uint32_t* signs,
                                      const Key& K, uint64_t pol, uint32_t* __restrict__ out) {
   const int lane = threadIdx.x & 31;
   uint32_t m[16];
@@ -331,12 +341,9 @@ __device__ void derive_signs(const Signs& sg, uint64_t q, uint64_t P) {
   }
 }
 
-// One v2 unit: 32 blocks at `p` from plan block j0 in pass `pass` under its signs; returns the unit's word (every lane).
-__device__ __forceinline__ uint32_t unit_v2(const uint8_t* __restrict__ p, uint64_t j0, uint64_t pass,
-                                        const uint32_t* __restrict__ signs, uint64_t pol) {
+// The v2 word of the unit whose lane n holds block j0 + n's sums in pass `pass` (every lane).
+__device__ __forceinline__ uint32_t words_v2(const uint32_t (&m)[16], uint64_t j0, uint64_t pass) {
   const int lane = threadIdx.x & 31;
-  uint32_t m[16];
-  sketch(p, signs, pol, m);
   uint64_t w[16];
   w[0] = TAG_HI, w[1] = TAG_BLK;
 #pragma unroll
@@ -352,58 +359,173 @@ __device__ __forceinline__ uint32_t unit_v2(const uint8_t* __restrict__ p, uint6
   return x;
 }
 
+__device__ __forceinline__ uint32_t unit_v2(const uint8_t* __restrict__ p, uint64_t j0, uint64_t pass,
+                                        const uint32_t* signs, uint64_t pol) {
+  uint32_t m[16];
+  sketch(p, signs, pol, m);
+  return words_v2(m, j0, pass);
+}
+
+constexpr unsigned long long NONE = ~0ull;
+
+// The next unit of the sequence for this warp's role, or NONE once the role's condition fails (every lane).
+__device__ __forceinline__ unsigned long long take(const Gate* gate, Seq* seq, int role, unsigned long long* taken,
+                                                   unsigned long long budget) {
+  unsigned long long s = NONE;
+  if ((threadIdx.x & 31) == 0) {
+    const volatile Gate* g = gate;
+    const volatile Seq* q = seq;
+    const int busy = g->busy;
+    const uint32_t busy_ctas = g->busy_ctas, idle_ctas = g->idle_ctas;
+    const bool open = !q->stop && q->next < q->limit;
+    const volatile int* count = role == PREFILL ? &g->prefill : &g->busy;
+    bool go = open && (role == BASE                     ? !(busy_ctas == 0 && idle_ctas == 0)
+                       : role == STEP || role == PREFILL ? *count > 0
+                                                        : busy <= 0 && blockIdx.x < idle_ctas);
+    if (open && !go && (role == STEP || role == PREFILL)) {
+      // between pipelined steps the count is 0 for microseconds: a warp returning there would leave the kernel to
+      // dwindle, never relaunched while its last warp reads on
+      const unsigned long long until = globaltimer() + STEP_LINGER_NS;
+      while (!(go = *count > 0) && !q->stop && globaltimer() < until) __nanosleep(1000);
+    }
+    if (go && atomicAdd(taken, 1ull) < budget) s = atomicAdd(&seq->next, 1ull);
+  }
+  return __shfl_sync(0xffffffffu, s, 0);
+}
+
+// Waits for pass `pass`'s signs (every lane), unless this warp already has (`*have`). Each lane's acquire of the slot's
+// tag orders its later plain loads of the signs after their derivation; a slot holds one pass until every unit of it
+// is done, so one acquire a pass suffices.
+__device__ __forceinline__ void acquire_signs(const Signs& sg, uint64_t pass, unsigned long long* have) {
+  if (pass == *have) return;
+  const uint32_t slot = (uint32_t)(pass % SIGN_SLOTS);
+  if ((threadIdx.x & 31) == 0)
+    while (((volatile unsigned long long*)sg.pass)[slot] != pass) __nanosleep(500);
+  __syncwarp();
+  unsigned long long t;
+  asm volatile("ld.acquire.gpu.global.u64 %0, [%1];" : "=l"(t) : "l"(sg.pass + slot) : "memory");
+  *have = pass;
+}
+
+__device__ __forceinline__ const uint8_t* unit_at(const Regions& R, uint64_t U) {
+  int r = 0;
+  while (r + 1 < R.n && R.first_unit[r + 1] <= U) ++r;
+  return R.base[r] + (U - R.first_unit[r]) * UNIT_BYTES;
+}
+
+// Unit s's word into its epoch, and, if it is its pass's first, the next pass's signs.
+__device__ __forceinline__ void finish(const Signs& sg, const Ring& ring, unsigned long long s, uint64_t P, uint32_t w) {
+  const uint64_t U = s % P, pass = s / P;
+  if ((threadIdx.x & 31) == 0) {
+    const uint32_t e = (uint32_t)(s >> ring.shift) & ring.mask;
+    const unsigned long long now = globaltimer();
+    atomicMin(ring.t0 + e, now);
+    atomicMax(ring.t1 + e, now);
+    atomicXor(ring.xr + e, w);
+    __threadfence();
+    atomicAdd(ring.cnt + e, 1u);
+    atomicAdd(sg.done + pass % SIGN_SLOTS, 1ull);
+  }
+  if (U == 0) derive_signs(sg, pass + 1, P);
+}
+
 template <int W>
 __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, Signs sg, const Gate* gate, Seq* seq,
                                                           Ring ring, int role, unsigned long long* taken,
                                                           unsigned long long budget) {
   uint64_t pol;
   asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
-  const int lane = threadIdx.x & 31;
   const uint64_t P = R.first_unit[R.n];
-  const unsigned long long NONE = ~0ull;
+  unsigned long long have = NONE;
   for (;;) {
-    unsigned long long s = NONE;
-    if (lane == 0) {
-      const volatile Gate* g = gate;
-      const volatile Seq* q = seq;
-      const int busy = g->busy;
-      const uint32_t busy_ctas = g->busy_ctas, idle_ctas = g->idle_ctas;
-      const bool open = !q->stop && q->next < q->limit;
-      const volatile int* count = role == PREFILL ? &g->prefill : &g->busy;
-      bool go = open && (role == BASE                     ? !(busy_ctas == 0 && idle_ctas == 0)
-                         : role == STEP || role == PREFILL ? *count > 0
-                                                          : busy <= 0 && blockIdx.x < idle_ctas);
-      if (open && !go && (role == STEP || role == PREFILL)) {
-        // between pipelined steps the count is 0 for microseconds: a warp returning there would leave the kernel to
-        // dwindle, never relaunched while its last warp reads on
-        const unsigned long long until = globaltimer() + STEP_LINGER_NS;
-        while (!(go = *count > 0) && !q->stop && globaltimer() < until) __nanosleep(1000);
-      }
-      if (go && atomicAdd(taken, 1ull) < budget) s = atomicAdd(&seq->next, 1ull);
-    }
-    s = __shfl_sync(0xffffffffu, s, 0);
+    const unsigned long long s = take(gate, seq, role, taken, budget);
     if (s == NONE) return;
     const uint64_t U = s % P, pass = s / P;
-    const uint32_t slot = (uint32_t)(pass % SIGN_SLOTS);
-    if (lane == 0)
-      while (((volatile unsigned long long*)sg.pass)[slot] != pass) __nanosleep(500);
-    __syncwarp();
-    __threadfence();
-    int r = 0;
-    while (r + 1 < R.n && R.first_unit[r + 1] <= U) ++r;
-    const uint8_t* p = R.base[r] + (U - R.first_unit[r]) * UNIT_BYTES;
-    const uint32_t w = unit_v2(p, U * UNIT_BLOCKS, pass, sg.words + (uint64_t)slot * SIGN_WORDS, pol);
-    if (lane == 0) {
-      const uint32_t e = (uint32_t)(s >> ring.shift) & ring.mask;
-      const unsigned long long now = globaltimer();
-      atomicMin(ring.t0 + e, now);
-      atomicMax(ring.t1 + e, now);
-      atomicXor(ring.xr + e, w);
-      __threadfence();
-      atomicAdd(ring.cnt + e, 1u);
-      atomicAdd(sg.done + slot, 1ull);
+    acquire_signs(sg, pass, &have);
+    const uint32_t* signs = sg.words + (pass % SIGN_SLOTS) * SIGN_WORDS;
+    finish(sg, ring, s, P, unit_v2(unit_at(R, U), U * UNIT_BLOCKS, pass, signs, pol));
+  }
+}
+
+// The same sequence read through the TMA (the PREFILL role's reader): one warp a CTA, each unit as 8 pieces, piece k
+// the half k % 2 of group k / 2's 8 blocks, copied by cp.async.bulk into S stages of shared memory (each half-block at
+// a stride of 2,112 bytes, 64 mod 128, so the sketch's 16-byte loads hit distinct banks) and sketched from there. The
+// warp takes its next unit before it hashes this one, so copies stay in flight through the hash.
+constexpr uint32_t TB_HALF = BLK / 2, TB_STRIDE = TB_HALF + 64, TB_STAGE = 8 * TB_STRIDE;
+
+__device__ __forceinline__ void issue_piece(uint8_t* stage, uint64_t* bar, const uint8_t* p, int k, uint64_t pol) {
+  const int lane = threadIdx.x & 31;
+  asm volatile("fence.proxy.async.shared::cta;" ::: "memory");  // the stage's generic reads before the async writes
+  if (lane == 0) rd::mbar_expect(bar, 8 * TB_HALF);
+  __syncwarp();
+  if (lane < 8)
+    rd::bulk_g2s(stage + lane * TB_STRIDE, p + (uint64_t)(8 * (k >> 1) + lane) * BLK + (k & 1) * TB_HALF, TB_HALF, bar,
+                 pol);
+}
+
+template <int S>
+__global__ void __launch_bounds__(32) fill_seq_bulk_kernel(const Regions R, Signs sg, const Gate* gate, Seq* seq,
+                                                           Ring ring, int role, unsigned long long* taken,
+                                                           unsigned long long budget) {
+  extern __shared__ __align__(128) uint8_t sm[];
+  __shared__ uint64_t bar[S];
+  uint64_t pol;
+  asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+  const int lane = threadIdx.x & 31, g = lane >> 2, c = lane & 3, sh = (c & 1) * 16;
+  const uint64_t P = R.first_unit[R.n];
+  if (lane == 0) {
+    for (int k = 0; k < S; ++k) rd::mbar_init(bar + k, 1);
+    asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
+  }
+  __syncwarp();
+  unsigned long long have = NONE, s = take(gate, seq, role, taken, budget);
+  if (s == NONE) return;
+  const uint8_t* p = unit_at(R, s % P);
+  uint32_t issued = 0, used = 0;
+#pragma unroll
+  for (int k = 0; k < S; ++k, ++issued) issue_piece(sm + (issued % S) * TB_STAGE, bar + issued % S, p, k, pol);
+  for (;;) {
+    const uint64_t U = s % P, pass = s / P;
+    acquire_signs(sg, pass, &have);
+    const uint32_t* sgp = sg.words + (pass % SIGN_SLOTS) * SIGN_WORDS + g * (BLK / 32) + (c >> 1);
+    const uint32_t* sgp8 = sgp + 8 * (BLK / 32);
+    int acc[4][4];
+#pragma unroll
+    for (int q = 0; q < 4; ++q)
+#pragma unroll
+      for (int i = 0; i < 4; ++i) acc[q][i] = 0;
+    unsigned long long nx = NONE;
+    const uint8_t* np = nullptr;
+#pragma unroll
+    for (int k = 0; k < 8; ++k) {
+      const uint32_t st = used % S;
+      rd::mbar_wait(bar + st, (used / S) & 1);
+      const uint8_t* b = sm + st * TB_STAGE + g * TB_STRIDE + 16 * c;
+#pragma unroll 4
+      for (int o = 0; o < 32; ++o)
+        sketch_step(acc[k >> 1], sgp, sgp8, sh, 32 * (k & 1) + o, *reinterpret_cast<const uint4*>(b + 64 * o));
+      ++used;
+      __syncwarp();
+      if (k + S < 8) {
+        issue_piece(sm + (issued % S) * TB_STAGE, bar + issued % S, p, k + S, pol);
+        ++issued;
+      } else {
+        if (k + S == 8) {
+          nx = take(gate, seq, role, taken, budget);
+          if (nx != NONE) np = unit_at(R, nx % P);
+        }
+        if (nx != NONE) {
+          issue_piece(sm + (issued % S) * TB_STAGE, bar + issued % S, np, k + S - 8, pol);
+          ++issued;
+        }
+      }
     }
-    if (U == 0) derive_signs(sg, pass + 1, P);
+    uint32_t m[16];
+    gather(acc, m);
+    finish(sg, ring, s, P, words_v2(m, U * UNIT_BLOCKS, pass));
+    if (nx == NONE) return;
+    s = nx;
+    p = np;
   }
 }
 

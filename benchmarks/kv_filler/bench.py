@@ -146,6 +146,7 @@ class Seq:
         so.sq_step_begin_phase.argtypes = [i, i, i, v]
         so.sq_step_end_phase.argtypes = [i, v]
         so.sq_progress.argtypes = [v]
+        so.sq_prefill_reader.argtypes = [i]
         so.sq_now_ms.argtypes = [v]
         so.sq_now_ms.restype = d
 
@@ -172,6 +173,10 @@ class Seq:
 
     def now(self, stream: int) -> float:
         return self.so.sq_now_ms(stream)
+
+    def prefill_reader(self, stages: int) -> int:
+        """The PREFILL role's reader: 0 the 16-byte loads, 2–4 the TMA reader with that many stages."""
+        return self.so.sq_prefill_reader(stages)
 
 
 class Codec:
@@ -345,9 +350,9 @@ def gate_regions(torch):
 SEQ_SHIFT_GATE = 2  # 4 units an epoch: epochs cross the 15-unit plan's passes off their boundaries
 
 
-def seq_epochs_ok(recs, blobs, shift: int, check: int = 24) -> tuple[bool, int]:
+def seq_epochs_ok(recs, blobs, shift: int, check: int = 24, also=()) -> tuple[bool, int]:
     """A v2 log against `fill_ref.epoch`: epochs numbered 0, 1, ... in order, each full but the last, and the check
-    words of the first `check`, of the last, and of a spread between. Returns (ok, units)."""
+    words of the first `check`, of the last, of a spread between, and of the epochs `also`. Returns (ok, units)."""
     import fill_ref as F
     full = (1 << shift) * F.UNIT_BYTES
     ok, units = True, 0
@@ -358,7 +363,7 @@ def seq_epochs_ok(recs, blobs, shift: int, check: int = 24) -> tuple[bool, int]:
     if not ok:
         return False, units
     picks = sorted(set(range(min(check, len(recs)))) | {len(recs) - 1}
-                   | set(range(check, len(recs), max(1, len(recs) // 8))))
+                   | set(range(check, len(recs), max(1, len(recs) // 32))) | {k for k in also if 0 <= k < len(recs)})
     for k in picks:
         _, _, n, _, x, e = recs[k]
         ok &= x == F.epoch(blobs, e << shift, int(n) // F.UNIT_BYTES, RUN_SEED)
@@ -418,25 +423,30 @@ def seq_gate(tu: Topup, torch) -> dict:
     step_bytes = sq.progress()[0] - before_step - quiet
     after = sq.progress()[0]
     time.sleep(0.02)
-    tail = sq.progress()[0] - after
-    rc |= tu.so.sq_step_begin_phase(0, 1, 2, s.cuda_stream)
-    with torch.cuda.stream(s):
-        torch.cuda._sleep(50_000_000)
-    rc |= tu.so.sq_step_end_phase(1, s.cuda_stream)
-    s.synchronize()
-    time.sleep(0.01)
-    pre_bytes = sq.progress()[0] - after - tail
-    after = sq.progress()[0]
-    time.sleep(0.02)
-    pre_tail = sq.progress()[0] - after
+    tail = step_tail = sq.progress()[0] - after
+    pre_bytes, pre_tail, pre_epochs = [], [], []
+    for stages in (0, 2, 4):  # the 16-byte loads, then the TMA reader at 2 and 4 stages
+        rc |= sq.prefill_reader(stages)
+        rc |= tu.so.sq_step_begin_phase(0, 1, 2, s.cuda_stream)
+        with torch.cuda.stream(s):
+            torch.cuda._sleep(50_000_000)
+        rc |= tu.so.sq_step_end_phase(1, s.cuda_stream)
+        s.synchronize()
+        time.sleep(0.01)
+        pre_bytes.append(sq.progress()[0] - after - tail)
+        after = sq.progress()[0]
+        time.sleep(0.02)
+        tail = sq.progress()[0] - after
+        pre_tail.append(tail)
+        pre_epochs.append(sq.progress()[1] - 1)  # logged once its bracket ended, so read inside it
     launches = sq.progress()[2:]
     sq.stop()
-    ok, units = seq_epochs_ok(tu.log(), blobs, SEQ_SHIFT_GATE)
+    ok, units = seq_epochs_ok(tu.log(), blobs, SEQ_SHIFT_GATE, also=pre_epochs)
     out["seq_roles_receipts"] = ok and units > 0
     out["seq_roles_moves"] = (rc == 0 and still == 0 and idle_bytes > 0 and quiet == 0 and step_bytes > 0
-                              and tail == 0 and pre_bytes > 0 and pre_tail == 0 and launches == (2, 1, 1, 1))
+                              and step_tail == 0 and all(b > 0 for b in pre_bytes) and pre_tail == [0, 0, 0] and launches == (4, 1, 3, 3))
     out["seq_roles_bytes"] = {"before_idle": still, "idle": idle_bytes, "between": quiet, "step": step_bytes,
-                              "after_step": tail, "prefill": pre_bytes, "after_prefill": pre_tail,
+                              "after_step": step_tail, "prefill": pre_bytes, "after_prefill": pre_tail,
                               "launches": list(launches)}
     del store
     return out
@@ -662,8 +672,8 @@ PC_READERS = {"ldef4": (1, 4), "ld4": (0, 4), "bulk2": (2, 2), "bulk4": (2, 4)} 
 
 def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: int, greatest: int, log) -> list[dict]:
     """A synthetic prefill of each `--pc-prefill` length on the greatest-priority stream, alone and beside a reader of
-    each `--pc-ctas` CTAs on a stream of the same priority: `v2` (fill-sk16/v2's PREFILL role, each prefill bracketed
-    as serve.py brackets a prefilling step) and `readers.cu`'s plain readers (`PC_READERS`: 16-byte loads, and TMA bulk
+    each `--pc-ctas` CTAs on a stream of the same priority: `v2` and `v2b<S>` (fill-sk16/v2's PREFILL role with its
+    16-byte loads or its TMA reader of S stages, each prefill bracketed as serve.py brackets a prefilling step) and `readers.cu`'s plain readers (`PC_READERS`: 16-byte loads, and TMA bulk
     copies into S stages of 16 KiB of shared memory), each a train of launches timed by events. Each cell gives the
     prefill's slowdown, the reader's bytes inside the prefills' span, and their cost: the span's added time at R per
     reader byte."""
@@ -689,9 +699,11 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
         for reader in args.pc_readers:
             for ctas in args.pc_ctas:
                 torch.cuda.synchronize()
-                if reader == "v2":
+                if reader.startswith("v2"):
                     sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=0, priority=least,
                              step_priority=greatest)
+                    if sq.prefill_reader(int(reader[3:] or 0)):
+                        raise RuntimeError(f"prefill_reader({reader}) refused")
                     time.sleep(0.02)
 
                     def one():
@@ -935,8 +947,8 @@ def main() -> int:
     ap.add_argument("--throttle-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[2, 4, 8, 16, 32, 64])
     ap.add_argument("--fill-chunk-mib", type=int, default=1024)
     ap.add_argument("--pc-prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[4096])
-    ap.add_argument("--pc-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[16, 32, 64, 128])
-    ap.add_argument("--pc-readers", type=lambda s: s.split(","), default=["v2", "ldef4", "bulk2", "bulk4"])
+    ap.add_argument("--pc-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[8, 16, 32, 64])
+    ap.add_argument("--pc-readers", type=lambda s: s.split(","), default=["v2", "v2b2", "v2b3", "v2b4", "bulk2", "bulk4"])
     ap.add_argument("--pc-steps", type=int, default=6)
     ap.add_argument("--skip", type=lambda s: set(s.split(",")), default=set())
     a = ap.parse_args()
