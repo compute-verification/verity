@@ -310,6 +310,12 @@ class Driver:
             drive["told"].append(key)
         self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
 
+    def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
+        prs = " ".join(f"#{x.pr}" for x in members)
+        self.refuse(drive, f"failed:{m.commit}", f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}. "
+                                                "Eject the PR that broke it (`research queue eject N --reason ...`); "
+                                                "the next sync rebuilds without it")
+
     # -- the tick
 
     def tick(self, dry_run: bool = False) -> str:
@@ -331,6 +337,11 @@ class Driver:
                 q.save_state(state)
             q.log(f"research queue drive: {why}")
             return why
+        # before the sync: a rebuild takes a failed commit off `next`, and its failure would go untold (12 Oct 17:23Z: 3d11's)
+        chain, main = q.chain(), _out(self.repo, "rev-parse", "origin/main")
+        for i, m in enumerate(chain):
+            if m.commit in drive["launched"] and (v := self.verdict(m.commit, main, drive)).state == "failed":
+                self.failed(drive, m, chain[: i + 1], v)
         live = {c for c, v in drive["launched"].items()
                 if any(st in ACTIVE and st != "unknown" for st, _, _ in self.states(self.repo, v["ids"]).values())}
         q.hold = max((i + 1 for i, m in enumerate(q.chain()) if m.commit in live), default=0)
@@ -355,9 +366,7 @@ class Driver:
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
             v = self.verdict(m.commit, main, drive)
             if v.state == "failed":
-                self.refuse(drive, f"failed:{m.commit}", f"{m.commit[:12]} on `{q.branch}` ({prs}) failed its check: {v.why}. "
-                                                        "Eject the PR that broke it (`research queue eject N --reason ...`); "
-                                                        "the next sync rebuilds without it")
+                self.failed(drive, m, members[: i + 1], v)
                 what.append(f"{m.commit[:12]} failed")
                 break                                       # every train above it holds the failure too
             if v.state == "passed":

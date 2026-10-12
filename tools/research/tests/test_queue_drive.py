@@ -163,6 +163,18 @@ def test_a_failed_check_and_a_launch_that_registers_nothing_are_told_to_the_land
     assert len(h.posts) == 2 and "registered no run: train: no parent store key" in h.posts[1]
 
 
+def test_a_failure_is_told_even_when_the_same_ticks_rebuild_takes_its_commit_off_next(world, monkeypatch):
+    """12 Oct 17:23Z: check 3d11 failed, a re-mark of a `--first` PR rebuilt `next` in the tick that would have seen it, and the
+    failure was never told: the train's PRs went straight back into the next check."""
+    h = Harness(world, monkeypatch, first=(2,))
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))                 # `--first`: below #1, so #1's commit leaves `next`
+    h.tick()
+    assert len(h.posts) == 1 and "failed its check" in h.posts[0] and "(#1)" in h.posts[0]
+
+
 def test_a_launch_that_ended_without_an_attempt_is_lost_after_the_grace_and_one_whose_twins_never_started_is_relaunched(world, monkeypatch):
     h = Harness(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
