@@ -145,7 +145,7 @@ void sg_flush(const uint8_t* p, uint64_t n) {
 }
 
 // Writes p[0, n)'s dirty lines back to memory and leaves them cached and clean (clwb), fenced.
-void sg_clwb(const uint8_t* p, uint64_t n) {
+__attribute__((target("clwb"))) void sg_clwb(const uint8_t* p, uint64_t n) {
   for (uint64_t i = 0; i < n; i += 64) _mm_clwb(const_cast<uint8_t*>(p) + i);
   _mm_sfence();
 }
