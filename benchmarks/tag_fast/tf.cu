@@ -637,7 +637,8 @@ struct ChunkTag {
 
 // finish for a whole CTA: its W 32 chunk CVs and W 32 / L tail CVs into sh, then each level of parents on the threads
 // that have one (W 16, W 8, ...), then the roots; block b of the CTA is tag c0 + b. The tail of a single-wave kernel is
-// its finish, so it runs on as few warps as the parents need instead of on every warp's lanes at 1 / L.
+// its finish, so it runs on as few warps as the parents need instead of on every warp's lanes at 1 / L. Each level starts
+// at warp (CTA + level) mod W, so CTAs sharing an SM put their parents on different SMSPs.
 template <int V, int L, int W, int R>
 __device__ __forceinline__ void cta_finish(uint32_t* sh, const uint32_t (&cv)[8], const uint32_t (&tl)[8], int pos,
                                            uint32_t* tags, uint64_t c0, const Mul& k) {
@@ -655,31 +656,34 @@ __device__ __forceinline__ void cta_finish(uint32_t* sh, const uint32_t (&cv)[8]
     for (int i = 0; i < 8; ++i) tls[(t / L) * 8 + i] = tl[i];
   }
   __syncthreads();
+  int lv = blockIdx.x;
 #pragma unroll
-  for (int n = W * 16; n >= NBK; n /= 2) {
+  for (int n = W * 16; n >= NBK; n /= 2, ++lv) {
+    const int r = (t + 32 * (lv % W)) % (W * 32);
     uint32_t o[8];
-    if (t < n) {
+    if (r < n) {
       uint32_t m[16];
 #pragma unroll
-      for (int i = 0; i < 16; ++i) m[i] = sh[t * 16 + i];
+      for (int i = 0; i < 16; ++i) m[i] = sh[r * 16 + i];
       b3<V, R>(key, m, 0u, 64u, KEYED | PARENT, o, k);
     }
     __syncthreads();
-    if (t < n) {
+    if (r < n) {
 #pragma unroll
-      for (int i = 0; i < 8; ++i) sh[t * 8 + i] = o[i];
+      for (int i = 0; i < 8; ++i) sh[r * 8 + i] = o[i];
     }
     __syncthreads();
   }
-  if (t < NBK) {
+  const int r = (t + 32 * (lv % W)) % (W * 32);
+  if (r < NBK) {
     uint32_t m[16], o[8];
 #pragma unroll
     for (int i = 0; i < 8; ++i) {
-      m[i] = sh[t * 8 + i];
-      m[8 + i] = tls[t * 8 + i];
+      m[i] = sh[r * 8 + i];
+      m[8 + i] = tls[r * 8 + i];
     }
     b3<V, R>(key, m, 0u, 64u, KEYED | PARENT | ROOT, o, k);
-    uint4* out = reinterpret_cast<uint4*>(tags + (c0 + t) * 8);
+    uint4* out = reinterpret_cast<uint4*>(tags + (c0 + r) * 8);
     out[0] = make_uint4(o[0], o[1], o[2], o[3]);
     out[1] = make_uint4(o[4], o[5], o[6], o[7]);
   }
