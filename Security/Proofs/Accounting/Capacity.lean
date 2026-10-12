@@ -11,8 +11,8 @@ capacity coin bounds its memory at every tick of the window by `⌊B⌋` (`Run.m
 state `⌊B⌋ + S_chip + ∑ cap_i · round`, at most `S₀` when `B` is below the certificate's bit-ticks, and the game bounds
 its pass, which is the capacity audit's accept (`Run.capacitySound_of_state`). An account `w` beside the capacity account
 is one of the other accounts, so what it holds and what the rest hold together are the other accounts' memory
-(`Run.othersHeld_eq`), and an exceeded residual less `w`'s share is a failed capacity certificate
-(`Run.capacityShort_of_covertBut`).
+(`Run.othersHeld_eq`), and the other accounts beyond the residual less `w`'s share on every capacity coin leave the
+capacity account below the certificate on every one of them (`Run.capacityShort_of_covertBut`).
 -/
 
 namespace Accounting

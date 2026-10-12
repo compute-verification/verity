@@ -16,7 +16,9 @@ credited to the capacity audit, and the device's limits (`Step.Fits`) bound the 
 the game is also handed the game's public inputs (PoUS's `W`), so state it computes from them alone, without the
 operations the game charges (PoUS's ring operations and key queries), is not part of its bound. The weight-derived state
 a PoUW scheme keeps (Pearl-C's `B̃`) is such state: a device may keep it in another account, uncounted by the capacity
-certificate, and it then counts against the capacity residual (`Accounting.Guarantees.DerivedStateResidual`).
+certificate, and it then counts against the capacity residual (`Accounting.Guarantees.DerivedStateResidual`). Like
+every residual event here, the one that guarantee bounds (`Run.CapacityCovertBut`) holds only when the other accounts are
+beyond the residual on every one of the capacity audit's own coins.
 
 The game bounds the state at every round boundary at once, so it certifies the capacity account's peak: a run whose
 capacity account holds less than the game's bound at one tick and more at others is not one of its servers. The capacity
@@ -55,9 +57,9 @@ bit-ticks. -/
 def othersHeldBut (w : α) (ω : ΩW × ΩQ × ΩS) : ℕ :=
   ∑ a ∈ (Finset.univ.erase (r.acct .capacity)).erase w, (r.trace ω).held (r.win .capacity) a
 
-/-- The capacity residual `M - S`, less what account `w` holds, is exceeded at the other audits' coins: on every capacity
-coin, the accounts other than the capacity account and `w` hold more than `M - S` bits on average over the capacity
-window, less what `w` holds. -/
+/-- The accounts other than the capacity account and `w` are beyond the capacity residual `M - S`, less what `w` holds,
+at the other audits' coins: on every one of the capacity audit's own coins, they hold more than `M - S` bits on average
+over the capacity window, less what `w` holds. -/
 def CapacityCovertBut (w : α) (S : ℝ) (ω : ΩW × ΩQ × ΩS) : Prop :=
   ∀ s : ΩS, ((d.mem : ℝ) - S) * (r.win .capacity).len - (r.trace (ω.1, ω.2.1, s)).held (r.win .capacity) w <
     r.othersHeldBut w (ω.1, ω.2.1, s)

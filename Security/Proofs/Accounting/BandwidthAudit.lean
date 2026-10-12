@@ -6,8 +6,8 @@ import Proofs.Accounting.Bandwidth.AuditRO
 # Proof that the bandwidth audit's guarantee is a joint run's bandwidth guarantee
 
 At a value of the other audits' coins, a bound `B` below the certificate on the bandwidth account's reads on every
-bandwidth coin bounds the game's ingress, which those reads cover, so an accepted run is one where the game's device is
-accepted with its ingress, plus `S_chip + c + G·b + λ`, short of `k·b` bits. AuditRO bounds that event in `ℝ≥0∞`, and with
+bandwidth coin bounds the game's ingress, which those reads cover, so on a bandwidth coin where the audit accepts, the
+game's device is accepted with its ingress, plus `S_chip + c + G·b + λ`, short of `k·b` bits. AuditRO bounds that event in `ℝ≥0∞`, and with
 `N > 0` its bound is finite and is the certificate's error as a real number.
 -/
 

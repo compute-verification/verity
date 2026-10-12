@@ -7,13 +7,18 @@ import Definitions.Accounting.Capacity
 A capacity audit whose game is sound against every server with state at most `S₀` bits embeds into the device model: in
 a run that realizes the game (`Accounting.RealizesState`), the capacity audit has its guarantee
 (`Accounting.Run.CapacitySound`) at the game's error, at any certificate whose bit-ticks over the capacity window, with
-the chip and a round's side ingress, fit in `S₀` (`CapacityOfStateBound`). The game bounds the peak, so over a window of
-`T` ticks that certificate is `S₀ / T`, less the rest: the full certificate over a window of one tick.
+the chip and a round's side ingress, fit in `S₀` (`CapacityOfStateBound`). Its conclusion is `CapacitySound`, about a
+bound on the capacity account's bit-ticks on every one of the capacity audit's own coins: the account's worst case over
+them, not its charge at the coin drawn. The game
+bounds the peak, so over a window of `T` ticks that certificate is `(S₀ − S_chip − ∑ cap_i · round) / T` bits on
+average: the full peak only over a window of one tick.
 
 State derived from the game's public inputs (Pearl-C's weight state `B̃`, a function of PoUW's public weights) needs no
 room in a server's state, so a device may keep it in an account other than the capacity account, and the capacity
 certificate does not count it. It then shares the capacity residual `M − S` with every other account's state
-(`DerivedStateResidual`).
+(`DerivedStateResidual`). Like `CovertResidual`, that bounds the other accounts being beyond the residual on every one
+of the capacity audit's own coins, not at the coin drawn: outside the error, some capacity coin leaves them within it. A
+per-run reading is not claimed yet; lane `ra-per-run` is proving it by truncation.
 
 Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.Capacity`).
 -/
@@ -36,8 +41,10 @@ def CapacityOfStateBound : Prop :=
 /-- **Derived state shares the capacity residual.** On any device and any run whose capacity audit has its guarantee at
 certificate `S` and error `εS`, and for any account `w` other than the capacity account (one holding weight-derived
 state such as Pearl-C's `B̃`, which the capacity certificate does not count), the probability over the three audits'
-coins that the capacity audit accepts and the accounts other than the capacity account and `w` hold more than `M − S`
-bits on average over the capacity window, less what `w` holds, is at most `εS`. -/
+coins that the capacity audit accepts and, on every one of the capacity audit's own coins (at the other audits' coins
+drawn), the accounts other than the capacity account and `w` hold more than `M − S` bits on average over the capacity
+window, less what `w` holds, is at most `εS`. Outside that probability, some capacity coin leaves them within the
+residual, not necessarily the coin drawn; a per-run reading is not claimed yet. -/
 def DerivedStateResidual : Prop :=
   ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [DecidableEq α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW]
     [Nonempty ΩQ] [Nonempty ΩS] (d : Device ι) (r : Run d α ΩW ΩQ ΩS) (w : α) (S εS : ℝ),
