@@ -12,8 +12,9 @@ b squarings and b/5 multiplies of products only (`root_limb_muls_32`), as is the
 The same model predicts k = 1's 2D Gauss reduction (k1_gauss_steps × 3-5 word multiplies, plus 2 entries of ¾·b bits
 a step over g): `partial_floor.py` measured that floor at half of GMP's gcdext, 0.025 of a root at 512 bits.
 
-`python3 partial_model.py COUNTS.jsonl` prints one JSON line a field: each floor's range over one root, and the
-per-bit claim 2x/b.
+`python3 partial_model.py COUNTS.jsonl [FLOOR.jsonl]` prints one JSON line a field: each floor's range over one root,
+and the per-bit claim 2x/b. Given `partial_floor.py`'s output, it also places the measured 2D floor in the model's 2D
+range and reads the 4D floor at the same place (`*_centre`).
 """
 
 from __future__ import annotations
@@ -22,7 +23,15 @@ import json
 import sys
 
 
-def main(path: str) -> None:
+def measured_k1(path: str | None) -> dict[int, float]:
+    if not path:
+        return {}
+    rows = (json.loads(line) for line in open(path))
+    return {r["bits"]: r["gcdext_over_root"] / 2 for r in rows if r.get("k") == 1}
+
+
+def main(path: str, floor: str | None = None) -> None:
+    k1_measured = measured_k1(floor)
     for line in open(path):
         r = json.loads(line)
         b, x = r["bits"], r["x"]
@@ -36,13 +45,22 @@ def main(path: str) -> None:
         gpu = {k: (4 * lead[k] + full32[k]) / root32 for k in ("lo", "hi")}
         g = r["k1_gauss_steps"]
         k1 = {k: (g * c + g * 2 * (0.75 * b / 64) / gg) / (root32 / 4) for k, c, gg in (("lo", 3, 4), ("hi", 5, 1))}
-        print(json.dumps({"field": r["field"], "bits": b, "x": x, "claim_over_root": round(claim, 4),
-                          "host_floor_over_root": [round(host["lo"], 3), round(host["hi"], 3)],
-                          "gpu_floor_over_root": [round(gpu["lo"], 3), round(gpu["hi"], 3)],
-                          "margin_host": [round(host["lo"] / claim, 2), round(host["hi"] / claim, 2)],
-                          "margin_gpu": [round(gpu["lo"] / claim, 2), round(gpu["hi"] / claim, 2)],
-                          "k1_2d_model_over_root": [round(k1["lo"], 4), round(k1["hi"], 4)]}))
+        row = {"field": r["field"], "bits": b, "x": x, "claim_over_root": round(claim, 4),
+               "host_floor_over_root": [round(host["lo"], 3), round(host["hi"], 3)],
+               "gpu_floor_over_root": [round(gpu["lo"], 3), round(gpu["hi"], 3)],
+               "margin_host": [round(host["lo"] / claim, 2), round(host["hi"] / claim, 2)],
+               "margin_gpu": [round(gpu["lo"] / claim, 2), round(gpu["hi"] / claim, 2)],
+               "k1_2d_model_over_root": [round(k1["lo"], 4), round(k1["hi"], 4)]}
+        if b in k1_measured:
+            at = (k1_measured[b] - k1["lo"]) / (k1["hi"] - k1["lo"])
+            row["k1_measured_over_root"] = round(k1_measured[b], 4)
+            row["k1_measured_at"] = round(at, 2)
+            for name, f in (("host", host), ("gpu", gpu)):
+                centre = f["lo"] + at * (f["hi"] - f["lo"])
+                row[f"{name}_centre_over_root"] = round(centre, 3)
+                row[f"margin_{name}_centre"] = round(centre / claim, 2)
+        print(json.dumps(row))
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)
