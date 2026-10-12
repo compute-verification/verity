@@ -1,5 +1,5 @@
-// Squarings mod p = 2^b - c on the CUDA cores (sm_120), a thread a word (b = SQ_BITS: 768, 1536 or 2048, the codec
-// theory's 2^768 - 825, 2^1536 - 3453 and 2^2048 - 1557): the codec lanes' column form beside a row
+// Squarings mod p = 2^b - c on the CUDA cores (sm_120), a thread a word (b = SQ_BITS: 512, 768, 1536 or 2048, the codec
+// theory's 2^512 - 569, 2^768 - 825, 2^1536 - 3453 and 2^2048 - 1557): the codec lanes' column form beside a row
 // form and a Karatsuba form, to bound how far their squaring sits above a tuned one (the rebuild's x is the
 // adversary's squaring rate).
 //
@@ -34,8 +34,8 @@ using u64 = uint64_t;
 #define SQ_BITS 768
 #endif
 constexpr int NL = SQ_BITS / 32;
-constexpr u32 CF = SQ_BITS == 768 ? 825 : SQ_BITS == 1536 ? 3453 : SQ_BITS == 2048 ? 1557 : 0;
-static_assert(CF != 0 && NL % 2 == 0, "SQ_BITS is 768, 1536 or 2048");
+constexpr u32 CF = SQ_BITS == 512 ? 569 : SQ_BITS == 768 ? 825 : SQ_BITS == 1536 ? 3453 : SQ_BITS == 2048 ? 1557 : 0;
+static_assert(CF != 0 && NL % 2 == 0, "SQ_BITS is 512, 768, 1536 or 2048");
 
 __device__ __forceinline__ void mac(u32 *r, u32 a, u32 b) {
   asm("mad.lo.cc.u32 %0, %3, %4, %0;\n\tmadc.hi.cc.u32 %1, %3, %4, %1;\n\taddc.u32 %2, %2, 0;"
