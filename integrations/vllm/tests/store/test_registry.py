@@ -197,6 +197,22 @@ def test_windows_chain_through_the_session():
         s.begin_window(b"sigma")
 
 
+def test_the_sessions_first_window_chains_from_the_verifiers_registration_digest():
+    """The driver's `Registration.digest`, not the store's own log root, is the root before the session's first pass;
+    a later window takes none."""
+    from verity.core.protocols.remote_bandwidth import audit
+    s = Store()
+    weights(s)
+    digest = audit.register(bytes(32), b"node", s.layout().blocks, bytes(64), nonce=bytes(32)).digest
+    s.begin_window(SIGMA, digest)
+    s.begin_pass()
+    s.end_pass()
+    w = s.end_window()
+    assert w.passes[0].seed == rb.seed(SIGMA, 0, digest) != chain(SIGMA, s.registration().root, 0)
+    with pytest.raises(ValueError, match="first window"):
+        s.begin_window(SIGMA2, digest)
+
+
 def test_a_plan_is_its_runs_each_block_once():
     s = Store(filler_plan=lambda st, j: [("kv/0", [0, 1, 5])])
     weights(s)

@@ -853,13 +853,12 @@ def main() -> None:
         hook_runner(hooks, install)
     binder = None
     if args.store:
-        from verity_vllm.store.binder import Binder
+        from verity_vllm.store.binder import Binder, Every
         from verity_vllm.store.registry import Store
         window = {}
         if args.store_window:
-            window = {"challenge": lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32],
-                      "window_passes": args.store_window,
-                      "reader": lambda segments: bytes(64)}
+            sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
+            window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64)}
         binder = Binder(Store(), weights=lambda r: store_weights(r, install, args), **window).install()
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}

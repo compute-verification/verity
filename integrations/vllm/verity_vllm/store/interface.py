@@ -11,10 +11,11 @@ receipt     a keyed hash of one block read in a pass, `keyed(seed)(j, block, z)`
             prior tile's output reads (None for receipts that bind only the block)
 registration  putting a block into the store: its bytes are the codec's encoding of a payload a `Source` names; every
             registration is a record in the log, and `Registration.root` commits the log
-window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`
+window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`, which the verifier's boundary
+            message ends (the next window's challenge, or the close after the last)
 pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
-            is chained, seed_j = H(σ, j, commitment before it) across windows (the registration's root before the
-            session's first), so pass j's receipts can't start before the pass before it is committed
+            is chained, seed_j = H(σ, j, commitment before it) across windows (the verifier's registration digest
+            before the session's first), so pass j's receipts can't start before the pass before it is committed
 segment     some of one region's blocks read in a pass, in read order; one reader (a fused GEMM, attention, the filler
             sweep) receipts it.  The store lays a pass's segments out as subtrees of its tree (whole leaves, a power
             of two of them, from a multiple of their number), but for a tail of the parts' last blocks
@@ -223,9 +224,11 @@ class Stale(RuntimeError):
 @runtime_checkable
 class StoreView(Protocol):
     """All a protocol driver sees of the store.  `layout` and `registration` go to the verifier at registration (and
-    `registration` again whenever the log grows); `begin_window` takes a window's challenge; the engine's passes run
-    inside it; `end_window` returns its pass commitments (each seeded by the root before it, the first by the
-    previous window's last, the session's first by the registration's root); `plan` is a pass's blocks in read order
+    `registration` again whenever the log grows); `begin_window` takes a window's challenge, and for the session's
+    first window the verifier's registration digest (the driver's `Registration.digest`); the engine's passes run
+    inside it; `end_window`, on the verifier's boundary message, returns its pass commitments (each seeded by the root
+    before it, the first by the previous window's last, the session's first by the registration digest, or the
+    store's registration root without one); `plan` is a pass's blocks in read order
     (store indices, each once; their runs' digest is in the commitment); `open` answers the
     verifier's sample with each block as that pass read it, or raises `Stale`."""
 
@@ -233,7 +236,7 @@ class StoreView(Protocol):
 
     def registration(self) -> Registration: ...
 
-    def begin_window(self, challenge: bytes) -> None: ...
+    def begin_window(self, challenge: bytes, registration: bytes | None = None) -> None: ...
 
     def end_window(self) -> WindowRecord: ...
 

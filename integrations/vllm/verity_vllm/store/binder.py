@@ -9,8 +9,8 @@ BlockPool.free_blocks               after: kv_free of the pages it freed, moved 
                                     reuse, so a page freed inside a window is reused as late as the pool allows)
 BlockPool.touch                     refused: a prefix-cache hit would bring a page back with its KV (run without it)
 Scheduler.schedule                  after: kv_append of the scheduled tokens' slots, then begin_pass over the
-                                    allocated pages (a pass still open from an earlier schedule is ended first; with
-                                    a challenge, a window ends after its passes and the next begins)
+                                    allocated pages (a pass still open from an earlier schedule is ended first; a
+                                    verifier's message since then ends the window, the next challenge begins one)
 Scheduler.update_from_output        before: end_pass, with the device reader's roots
 ~~~
 
@@ -24,6 +24,7 @@ import importlib
 import importlib.util
 import math
 import time
+from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -180,29 +181,64 @@ def _unwrap(m: Any) -> Any:
     return m
 
 
+class Inbox:
+    """The verifier's messages as they arrive: `put` (from any thread) each window's 32-byte challenge, `σ_0` first,
+    then at each window's end the next one's or None, the close after the last (the driver's `Session.start` and
+    `Session.boundary`).  Called, it hands over those not yet taken, in order."""
+
+    def __init__(self) -> None:
+        self._q: deque[bytes | None] = deque()
+
+    def put(self, message: bytes | None) -> None:
+        self._q.append(message)
+
+    def __call__(self) -> list[bytes | None]:
+        out = []
+        while self._q:
+            out.append(self._q.popleft())
+        return out
+
+
+class Every:
+    """Messages on a fixed schedule, for a run with no verifier: ``challenge(t)`` at pass ``t · passes``, and with
+    ``windows`` the close after the last window's passes."""
+
+    def __init__(self, passes: int, challenge: Callable[[int], bytes], windows: int | None = None) -> None:
+        if passes < 1:
+            raise ValueError("a window is at least one pass")
+        self.passes, self.challenge, self.windows, self._calls = passes, challenge, windows, 0
+
+    def __call__(self) -> list[bytes | None]:
+        t, i = divmod(self._calls, self.passes)
+        self._calls += 1
+        if i or (self.windows is not None and t > self.windows):
+            return []
+        return [None] if t == self.windows else [self.challenge(t)]
+
+
 class Binder:
     """The store's hooks.  ``weights(runner)`` lists the weight regions after load (default `model_weights`);
     ``reader(segments)``, if given, returns the step's aligned segments' roots (by segment number), or the pass's root
-    when it built the whole tree, for `end_pass`; ``fifo``
-    reuses freed pages in the order they were freed.  With ``challenge``, the steps run in windows of ``window_passes``
-    passes, window ``t`` under ``challenge(t)``, each window's record handed to ``on_window``; without a reader, a
-    window's receipts are the reference's, every block read on the CPU."""
+    when it built the whole tree, for `end_pass`; ``fifo`` reuses freed pages in the order they were freed.
+    ``messages()``, polled at each pass's start, returns the verifier's messages since the last poll (`Inbox`, or
+    `Every` for a fixed schedule): each ends the open window, whose last pass is the one that just ended, and a
+    challenge begins the next, the session's first chained from ``registration`` (the driver's
+    `Registration.digest`).  Each window's record goes to ``on_window``; without a reader, a window's receipts are the
+    reference's, every block read on the CPU."""
 
     def __init__(self, store: Store, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
                  reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
-                 challenge: Callable[[int], bytes] | None = None, window_passes: int = 0,
+                 messages: Callable[[], Sequence[bytes | None]] | None = None, registration: bytes | None = None,
                  on_window: Callable[[WindowRecord], None] | None = None) -> None:
-        if challenge is not None and window_passes < 1:
-            raise ValueError("a window is at least one pass")
         self.store, self.block_bytes, self.kv_codec = store, block_bytes, kv_codec
         self.receipt = receipt or default_receipt()
         self.weights, self.reader, self.fifo = weights, reader, fifo
-        self.challenge, self.window_passes, self.on_window = challenge, window_passes, on_window
+        self.messages, self.registration, self.on_window = messages, registration, on_window
         self.hooks: Hooks | None = None
         self.step = 0
         self.windows = 0
-        self._in_window = 0
+        self._in_window = False
         self._segments: Sequence[Segment] = ()
         self.unregistered: dict[str, int] = {}
         self.slots = 0
@@ -288,12 +324,11 @@ class Binder:
         self.store.counters.add("appends", time.perf_counter() - t)
         self.store.kv_append(apps, self.step)
         self.step += 1
-        if self.challenge is not None:
-            if self._in_window == self.window_passes:
-                self.end_window()
-            if not self._in_window:
-                self.store.begin_window(self.challenge(self.windows))
-            self._in_window += 1
+        for m in self.messages() if self.messages is not None else ():
+            self.end_window()
+            if m is not None:
+                self.store.begin_window(m, None if self.windows else self.registration)
+                self._in_window = True
         self._segments = self.store.begin_pass(None).segments
 
     def end(self) -> None:
@@ -307,7 +342,7 @@ class Binder:
         if self._in_window:
             rec = self.store.end_window()
             self.windows += 1
-            self._in_window = 0
+            self._in_window = False
             if self.on_window is not None:
                 self.on_window(rec)
 

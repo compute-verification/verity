@@ -9,7 +9,9 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.store.binder import Binder, PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
+from verity_vllm.store.binder import (  # noqa: E402
+    Binder, Every, Inbox, PagedBacking, TorchBacking, page_layout, storage_bytes,
+)
 from verity_vllm.store.interface import Append  # noqa: E402
 from verity_vllm.store.registry import Store  # noqa: E402
 
@@ -141,20 +143,52 @@ def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
     assert not s.pool.allocated[[1, 2]].any() and s.pool.allocated[3]
 
 
+EMPTY = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(
+    single_type_managers=[SimpleNamespace(req_to_blocks={})])), requests={})
+
+
 def test_steps_run_in_chained_windows_with_the_readers_roots():
     from verity_vllm.store.registry import chain
     s, recs = Store(), []
     sigma = [bytes([t]) * 32 for t in range(3)]
-    b = Binder(s, block_bytes=1024, challenge=sigma.__getitem__, window_passes=2, on_window=recs.append,
+    b = Binder(s, block_bytes=1024, messages=Every(2, sigma.__getitem__, windows=3), on_window=recs.append,
                reader=lambda segments: b"\x01" * 64)
     r = runner()
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
-    sched = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(
-        single_type_managers=[SimpleNamespace(req_to_blocks={})])), requests={})
-    for _ in range(5):
-        b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={}))
-    b.end_window()
-    assert [len(w.passes) for w in recs] == [2, 2, 1] and [w.challenge for w in recs] == sigma
+    for _ in range(8):
+        b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+    assert [len(w.passes) for w in recs] == [2, 2, 2] and [w.challenge for w in recs] == sigma
     assert recs[1].passes[0].seed == chain(sigma[1], recs[0].passes[-1].root, 0)
     assert (recs[0].passes[0].root, recs[0].passes[0].segment_roots) == (b"\x01" * 64, ()) and b.stats()["windows"] == 3
+    assert s._open_pass.seed is None
+    b.end_window()
+    assert len(recs) == 3 and not s.in_pass
+
+
+def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_registration():
+    """The verifier's message ends the window at the next pass's start, however many passes it held; σ_0's window
+    chains from the registration digest the binder was given."""
+    from verity.core.protocols.remote_bandwidth import receipts as rb
+    s, recs, inbox = Store(), [], Inbox()
+    digest = bytes(range(64))
+    b = Binder(s, block_bytes=1024, messages=inbox, registration=digest, on_window=recs.append,
+               reader=lambda segments: b"\x02" * 64)
+    r = runner()
+    b.on_load(r)
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    step = lambda: b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+    step()
+    assert s._open_pass.seed is None
+    sigma = [bytes([t + 7]) * 32 for t in range(2)]
+    inbox.put(sigma[0])
+    for _ in range(3):
+        step()
+    inbox.put(sigma[1])
+    step()
+    inbox.put(None)
+    step()
+    b.end()
+    assert [len(w.passes) for w in recs] == [3, 1] and [w.challenge for w in recs] == sigma
+    assert recs[0].passes[0].seed == rb.seed(sigma[0], 0, digest)
+    assert recs[1].passes[0].seed == rb.seed(sigma[1], 0, b"\x02" * 64) and b.windows == 2

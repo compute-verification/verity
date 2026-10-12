@@ -64,11 +64,9 @@ def frame(b: bytes) -> bytes:
 
 
 def chain(challenge: bytes, previous: bytes, index: int) -> bytes:
-    """Pass ``index``'s seed in a window: ``SHA512(D ‖ σ ‖ u32be index ‖ root before it)``, the chained Fiat–Shamir
-    seed (Daniel, 19:00Z), under the driver's seed domain."""
-    if len(challenge) != CHALLENGE_BYTES or len(previous) != 64 or not 0 <= index < 1 << 32:
-        raise ValueError("a seed is of a 32-byte challenge, a u32 pass index and a 64-byte root")
-    return hashlib.sha512(rb.SEED_DOMAIN + challenge + struct.pack(">I", index) + previous).digest()
+    """Pass ``index``'s seed in a window: the driver's chained `rb.seed`, ``SHA512(D ‖ σ ‖ u32be index ‖ root before
+    it)``."""
+    return rb.seed(challenge, index, previous)
 
 
 def runs_of(blocks: np.ndarray) -> np.ndarray:
@@ -517,9 +515,10 @@ class Store:
     def in_pass(self) -> bool:
         return self._open_pass is not None
 
-    def begin_window(self, challenge: bytes) -> None:
-        """Open a window under ``challenge`` (32 bytes).  Its first pass chains from the session's last root, or from
-        the registration's root for the session's first window."""
+    def begin_window(self, challenge: bytes, registration: bytes | None = None) -> None:
+        """Open a window under ``challenge`` (32 bytes).  Its first pass chains from the session's last root.  The
+        session's first window chains from ``registration``, the verifier's registration digest (the driver's
+        `Registration.digest`), or without one from the store's own registration root."""
         if self._open_pass is not None:
             raise RuntimeError("a window begins between passes")
         if self._challenge is not None:
@@ -527,7 +526,9 @@ class Store:
         if len(challenge) != CHALLENGE_BYTES:
             raise ValueError(f"a window's challenge is {CHALLENGE_BYTES} bytes")
         if self._last_root is None:
-            self._last_root = self._log_root
+            self._last_root = self._log_root if registration is None else registration
+        elif registration is not None:
+            raise ValueError("only a session's first window chains from the registration")
         self._challenge, self._passes, self._retained = challenge, [], {}
 
     def end_window(self) -> WindowRecord:
