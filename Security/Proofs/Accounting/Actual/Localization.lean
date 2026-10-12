@@ -3,6 +3,7 @@ import Definitions.Accounting.Localization
 import Definitions.Accounting.Physical
 import Proofs.Accounting.Actual.Split
 import Proofs.Accounting.Actual.Confidence
+import Mathlib.Tactic.FinCases
 
 /-!
 # Localization, proved
@@ -12,6 +13,8 @@ import Proofs.Accounting.Actual.Confidence
 and what it heard from the leaves in neither during `W`, cut at `u`. With its inputs fixed, causality's global form
 (`global_of_causal`) makes what the rest does before `u` a function of what `X` sent. The table picks a run for
 each key, and the count is the image's. `memory_of_mem`: memory per run on the state bounds the circuit's `state`.
+`markov_mem`: memory accounting's `not_markov` circuit (a gate of `X` reading nothing, with the coin's value) has
+`mem X 2 ≥ 1` at some coin in every strategy causal from every tick, whatever it holds (`markov_holding`: it can).
 
 `localization_wires` is the per-run lemma (not the model's `e = 0`, which reads the strategy): under causality a gate
 downstream of `C` runs at or after `C`'s ticks (`le_t_of_downstream`), so one that `A[Y, W]` reads runs during `W`; and
@@ -126,6 +129,68 @@ theorem memory_of_mem {L : Type*} {R : Actual.Run L} {𝒳 : Set (Finset L)} {M 
   obtain ⟨hai, hx⟩ := Finset.mem_filter.1 ha
   simp only [Actual.Run.state, Finset.mem_filter, Finset.mem_univ, true_and]
   exact Or.inr ⟨hai, hx⟩
+
+/-- The actual circuit of memory accounting's `not_markov` at coin `b`, over leaves `true` (the verifier) and `false`
+(`X`): the verifier's input `g0` and its copy `g1` at tick 0, `g2` at `X` at tick 1 reading `g1`, and `g3` at `X` at
+tick 3, reading nothing, with value `b`. -/
+abbrev markovPlaced (b : Bool) : Placed Bool where
+  N := 4
+  w _ := 1
+  isInput g := decide (g = 0)
+  reads g := if g = 1 then {0} else if g = 2 then {1} else ∅
+  reads_lt g a ha := by fin_cases g <;> simp_all
+  input_reads g hg := by fin_cases g <;> simp_all
+  op g v := if g = 1 then v 0 else if g = 2 then v 1 else BitVec.ofBool b
+  op_congr g v v' h := by fin_cases g <;> simp_all
+  outputs := ∅
+  x g := decide (g.val < 2)
+  t g := if g.val = 2 then 1 else if g.val = 3 then 3 else 0
+
+/-- Its run at coin `b`, every gate's value `b`, with what each leaf holds given by `held`. -/
+abbrev markovRun (b : Bool) (held : Bool → ℕ → Finset (Fin 4)) (h : (markovPlaced b).Holding held) :
+    Actual.Run Bool where
+  A := markovPlaced b
+  val _ := BitVec.ofBool b
+  faithful g hg := by fin_cases g <;> simp_all
+  held := held
+  holding := h
+
+/-- **`not_markov` is closed** (memory accounting's counterexample to v2.1's per-run memory): a strategy running that
+circuit at each coin, holding anything `Holding` allows, and causal from every tick has `mem X 2 ≥ 1` at some coin, so
+`M_X = 0` fails there. `g3`'s value is what `X` does during `[2, 4)` and nothing reaches `X` then, so `X`'s state at
+tick 2 tells the coins apart: `b` is held at `X` across tick 2. -/
+theorem markov_mem (held : Bool → Bool → ℕ → Finset (Fin 4)) (h : ∀ b, (markovPlaced b).Holding (held b))
+    (hc : CausalFrom fun b => markovRun b (held b) (h b)) : ∃ b, 1 ≤ (markovRun b (held b) (h b)).mem {false} 2 := by
+  by_contra hne
+  push Not at hne
+  have hs : ∀ b, (markovRun b (held b) (h b)).state {false} 2 = ∅ := fun b => by
+    have := hne b
+    simp only [Actual.Run.mem, Verity.Circuit.width, sum_const, smul_eq_mul, mul_one, Nat.lt_one_iff,
+      card_eq_zero] at this
+    exact this
+  have hx : ∀ b, (markovRun b (held b) (h b)).crossing (↑({false} : Finset Bool))ᶜ ↑({false} : Finset Bool)
+      (Set.Ico 2 4) = ∅ := fun b => by
+    ext p
+    simp only [Actual.Run.crossing, Set.mem_ofPred_eq, Set.mem_empty_iff_false, iff_false, not_exists, not_and]
+    intro g a ha hxa hxg hg
+    fin_cases g <;> fin_cases a <;> simp_all
+  have key := congrArg Prod.fst
+    (hc {false} 2 4 false true (by simp only [hs, coe_empty, Set.image_empty]) (by simp only [hx]))
+  have : ((3 : ℕ), false, 1, 1) ∈ ((markovRun true (held true) (h true)).acts ↑({false} : Finset Bool)
+      (Set.Ico 2 4)).1 := ⟨3, by simp, by simp, rfl⟩
+  rw [← key] at this
+  obtain ⟨g, hg, ht, he⟩ := this
+  fin_cases g <;> simp_all [Actual.Run.seen]
+
+/-- The circuit admits a holding (the verifier's input at tick 0, nothing else), so `markov_mem` turns on
+`CausalFrom`, not on `Holding`. -/
+theorem markov_holding (b : Bool) :
+    (markovPlaced b).Holding fun y t => if y = true ∧ t = 0 then {0} else ∅ := by
+  refine ⟨fun y t a ha => ?_, fun a ha => ?_, fun g a ha hx s hs hst => ?_⟩
+  · simp only at ha
+    split_ifs at ha with hy <;> simp_all
+  · fin_cases a <;> simp_all
+  · fin_cases g <;> fin_cases a <;> simp_all
 
 end Actual
 
