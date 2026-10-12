@@ -13,14 +13,21 @@ import json
 import os
 import queue
 import random
+import re
+import shutil
 import socket
 import threading
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as RG, registration as R
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.ops.boolean.gf2k import mul
+from verity.ml.circuits.types import Value
+from verity_flock import circuit as FC
+from verity_flock import inner_registered as IR
 from verity_flock import rec_algebra as A
 from verity_flock import rec_live as RL
 from verity_flock import rec_outer as O
@@ -35,6 +42,34 @@ SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
 STATEMENT = {"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3}
 M, K_LOG = STATEMENT["dense_m"], STATEMENT["k_log"]
+_XOR8 = PrimitiveDefinition("RecSessionTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
+                            register=False)
+_UNIT = bind(CompositeDefinition("RecSessionTestUnit", 0, (), lambda S: ((("x", Value(8)), ("w", Value(8))), Value(8)),
+                                 lambda B, S, x, w: B.call(_XOR8, x, w), register=False))
+
+
+def _private(n: int = 3):
+    """A private circuit's program and query: ``n`` instances of a toy unit."""
+    return P.population_program(_UNIT, n), P.template_instance_query(_UNIT)
+
+
+def _partition():
+    """`_private`'s program and its ``verity/partition/v1`` object, which the toy statements' META names."""
+    program, query = _private()
+    return program, P.partition(program, query)
+
+
+def _registered_top(stage: Path, cap: bytes, seed: int) -> tuple[dict, str, dict]:
+    """``cap`` registered with the statement staged in ``stage`` as the value stacked (`rec_live.register_top` under salts
+    from ``seed``, `inner_registered.bind`), read back as `rec_session.serve` reads it (`rec_session.staged_stacked`): the
+    circuit registration META binds, its digest and the prover's opening."""
+    program, part = _partition()
+    g = random.Random(seed)
+    reg = RL.register_top(part["program"], RL.STACKED, cap, lambda: g.randbytes(192))
+    IR.bind(stage, program, part, [reg["entry"]], {RL.STACKED: {"nodes": reg["nodes"], "salts": reg["salts"]}})
+    rec, bound, own = RS.staged_stacked(stage)
+    assert own == {k: reg[k] for k in ("nodes", "salts", "top")}
+    return rec, bound, own
 
 
 @pytest.mark.parametrize("shape", [(25, 22, 8), (22, 10, 2)], ids=str)
@@ -323,19 +358,25 @@ def test_the_relay_splits_z_partials_round_and_refuses_another():
         assert [r[3] for r in proxy.reqs] == ([0] if why.startswith("h") else [])
 
 
+#: the statement digest every binding round of `_stacked_session` absorbs
+STATEMENT_DIGEST = bytes(range(32))
+
+
 def _stacked_session(proxy, roots: dict, sh: tuple, m_r: int | None, order=("circuit/rep0", "circuit/rep1", "stacked/rep0"),
-                     binds=None, prover: bool = False):
+                     binds=None, prover: bool = False, digests=None):
     """A holo session at ``sh`` and the stacked table's stream at ``m_r``, as the relay would hand them to the proxy: Hello
-    naming the stacked table after the circuit's, Commit with R's cap among the roots, then each stream's rounds built
-    from its round tuples (a rep's first round binds its table: the r1cs label, a digest, its root; then its fresh tops,
-    its other copies of the root, its free message, the ring switch's nonce, its squeeze), its proof and Finish. ``binds``:
-    the caps the rounds bind and copy, if not the committed ones. ``prover``: the reps' rounds as the prover sends them to
-    the relay (z_partial's round whole, `rec_live.rep_rounds`)."""
+    (canonical JSON, as the prover writes it) naming the tables of ``roots`` and Commit with their caps, then each stream's
+    rounds built from its round tuples (a stream's first round binds its table: the r1cs label, the statement digest, its root; then its
+    fresh tops, its other copies of the root, its free message, the ring switch's nonce, its squeeze), its proof and Finish.
+    ``binds``: the caps the rounds bind and copy, if not the committed ones; a table with no root in ``roots`` (R) binds its
+    own, the first of its binding round's tops. ``prover``: the reps' rounds as the prover sends them to the relay
+    (z_partial's round whole, `rec_live.rep_rounds`). ``digests``: by stream, the statement digest its binding round
+    absorbs, if not `STATEMENT_DIGEST`."""
     m, k_log, claims = sh
     g, binds = random.Random(5), binds or roots
     hello = {"profile": "fast100", "reps": 2, "flavor": "rs", "tables": list(roots), "rounds": "bytes retained",
              "digests": "sha512", "link": {"sigma": "ab" * 64, "m": RL.PT_LOCAL + m - k_log, "points": 2}}
-    out = [proxy.handle(RL.encode_req(RL.REQ_HELLO, json.dumps(hello))),
+    out = [proxy.handle(RL.encode_req(RL.REQ_HELLO, RL.canonical(hello))),
            proxy.handle(RL.encode_req(RL.REQ_COMMIT, b"root-f", list(roots.items()), [])),
            proxy.handle(RL.encode_req(RL.REQ_LINK, bytes(32)))]
     b = lambda p: RS._frame(RL.OP_BYTES, 0, len(p), p)
@@ -345,8 +386,9 @@ def _stacked_session(proxy, roots: dict, sh: tuple, m_r: int | None, order=("cir
         label = f"flock-circuit/{table}/fast100/rep{s[-1]}" if table == RL.STACKED else f"flock-circuit/fast100/rep{s[-1]}"
         out.append(proxy.handle(RL.encode_req(RL.REQ_OPEN, s, "", label.encode(), 0)))
         for k, (n, tops, level0, e) in enumerate(rounds):
-            c = RS._frame(RL.OP_LABEL, 0, len(RL.LABEL_R1CS), RL.LABEL_R1CS) + b(g.randbytes(32)) + b(binds[table]) if k == 0 else b""
-            c += b"".join(b(g.randbytes(64 * t)) for t in tops) + b(binds[table]) * (level0 - (k == 0))
+            own = k == 0 and table not in roots
+            c = RS._frame(RL.OP_LABEL, 0, len(RL.LABEL_R1CS), RL.LABEL_R1CS) + b((digests or {}).get(s, STATEMENT_DIGEST)) + b(binds[table]) if k == 0 else b""
+            c += b"".join(b(g.randbytes(64 * t)) for t in tops[own:]) + b(binds[table]) * (level0 - (k == 0 and not own))
             c += (RS.observe([g.getrandbits(128) for _ in range(e)]) if e else b"") + (b(g.randbytes(8)) if e == 128 else b"")
             out.append(proxy.handle(RL.encode_req(RL.REQ_ROUND, s, c + RS._frame(RL.OP_SQUEEZE, RL.KIND_SLICE, n), n)))
         out.append(proxy.handle(RL.encode_req(RL.REQ_PROOF, table, int(s[-1]), f"{s} proof".encode())))
@@ -355,16 +397,18 @@ def _stacked_session(proxy, roots: dict, sh: tuple, m_r: int | None, order=("cir
 
 
 def test_the_stacked_stream_is_held_to_the_schedule_the_opening_only_prover_runs(tmp_path):
-    """`schedule_for(..., stacked=m_R)` is rec-stage-2's interface (``flock-circuit stacked``): Hello names ``stacked`` after
-    the circuit's table, Commit holds R's 2^7-node cap, and ``stacked/rep0`` is ``[(7, [], 1, 128)] + rep_rounds(m_R, 6,
-    2)[m_R + 1:]`` after both reps. A session sending that stream as the subcommand does (binding round with the r1cs label,
-    R's digest and cap, s_hat_v and a nonce) is held to it whole; its binding round must bind R's cap, and it must follow
-    the circuit's reps."""
+    """`schedule_for(..., stacked=m_R)` is rec-stage-2's interface (``flock-circuit stacked``): Hello and Commit are the
+    statement's alone (the circuit table's), and ``stacked/rep0`` is ``[(7, [128], 0, 128)] + rep_rounds(m_R, 6, 2)[m_R +
+    1:]`` after both reps: its binding round commits R's 2^7-node cap as a salted top, and Ligerito's copy of it later is a
+    level-0 copy. A session sending that stream as the subcommand does (binding round with the r1cs label, the statement digest
+    and R's cap, s_hat_v and a nonce) is held to it whole: the verifier's record has the prover's Hello, byte for byte, and R's
+    level 0 is that round's top. Its binding round must commit a cap no other stream bound, it must follow the circuit's
+    reps, and a Hello naming R is refused."""
     sh, m_r = (22, 10, 2), 22
     statement = {"dense_m": sh[0], "k_log": sh[1], "nbl": sh[0] - sh[1], "regions": 0}
     plain, sch = RL.schedule_for(statement, holo=True), RL.schedule_for(statement, holo=True, stacked=23)
-    rs = [(7, [], 1, 128)] + RL.rep_rounds(23, 6, 2)[24:]
-    assert sch["hello"] == {**plain["hello"], "tables": ["circuit", "stacked"]} and sch["roots"] == {**plain["roots"], "stacked": 128}
+    rs = [(7, [128], 0, 128)] + RL.rep_rounds(23, 6, 2)[24:]
+    assert sch["hello"] == plain["hello"] and sch["hello"]["tables"] == ["circuit"] and sch["roots"] == plain["roots"]
     assert sch["streams"] == {**plain["streams"], "stacked/rep0": {"parent": "", "at": 0, "rounds": len(rs)}}
     assert sch["rounds"][:len(plain["rounds"])] == plain["rounds"]
     assert [(r["n"], r["tops"], r["level0"], r["commits"]) for r in sch["rounds"][len(plain["rounds"]):]] == \
@@ -373,46 +417,240 @@ def test_the_stacked_stream_is_held_to_the_schedule_the_opening_only_prover_runs
         RL.stacked_rounds(21)
 
     sch = RL.schedule_for(statement, holo=True, stacked=m_r)
-    roots = {"circuit": random.Random(1).randbytes(64 << 7), "stacked": random.Random(2).randbytes(64 << 7)}
+    roots = {"circuit": random.Random(1).randbytes(64 << 7)}
+    binds = {**roots, "stacked": random.Random(2).randbytes(64 << 7)}
+    registration, bound, reg = _registered_top(_toy_circuit(tmp_path, 8)[0].parent, binds["stacked"], 6)
     coins = RL.CoinServer(random.Random(3).randbytes)
-    proxy = RL.Proxy(coins, lambda: random.Random(4).randbytes(192), schedule=sch)
-    resp = _stacked_session(proxy, roots, sh, m_r)
+    salts = random.Random(4)
+    proxy = RL.Proxy(coins, lambda: salts.randbytes(192), schedule=sch, registration=registration, registered={RL.STACKED: reg},
+                     bound=bound)
+    resp = _stacked_session(proxy, roots, sh, m_r, binds=binds)
     assert all(r[0] != RL.RESP_REFUSED for r in resp) and json.loads(resp[-1][1])["accepted"] is None, proxy.stopped
     rec = coins.record()
-    assert RL.schedule_of(rec) == sch and sorted(rec["link"]["roots"]) == ["circuit", "stacked"]
+    assert RL.schedule_of(rec) == sch and list(rec["link"]["roots"]) == ["circuit"] and rec["hello"]["tables"] == ["circuit"]
     first = next(r for r in rec["rounds"] if r["stream"] == "stacked/rep0")
-    assert (first["k"], first["n"], first["level0"], len(first["commits"]), first["tops"]) == (0, 7, 1, 1, [])
+    assert (first["k"], first["n"], first["level0"], len(first["commits"]), [len(t) for t in first["tops"]]) == (0, 7, 0, 1, [128])
+    assert first["tops"][0] == reg["top"]
+    assert sum(r["level0"] for r in rec["rounds"] if r["stream"] == "stacked/rep0") == 1
     sess = proxy.write(tmp_path)
-    st = {s["stream"]: s for s in json.loads((sess / "session.json").read_text())["streams"]}
-    assert st["stacked/rep0"]["root_sha512"] == RL._dg(roots["stacked"])
+    record = json.loads((sess / "session.json").read_text())
+    assert record["hello"] == proxy.hello == RL.canonical(json.loads(record["hello"]))
+    assert json.loads(record["hello"])["tables"] == ["circuit"] and list(record["link"]["root_b"]) == ["circuit"]
+    st = {s["stream"]: s for s in record["streams"]}
+    assert st["stacked/rep0"]["root_sha512"] == RL._dg(binds["stacked"])
     assert (sess / "stacked.rep0.bin").read_bytes() == b"stacked/rep0 proof"
+    public, private = (json.loads((tmp_path / f).read_text()) for f in ("public.json", "private.json"))
+    r_tops = V.tops(public, private, "stacked/rep0", RL.STACKED)
+    assert b"".join(r_tops[0].nodes) == binds["stacked"] and list(r_tops[0].bcs) == [bytes.fromhex(x) for x in first["tops"][0]]
+    assert len(r_tops) == sum(len(r["tops"]) for r in rec["rounds"] if r["stream"] == "stacked/rep0")
+    assert b"".join(V.tops(public, private, "circuit/rep0")[0].nodes) == roots["circuit"]
+    assert json.loads((tmp_path / RL.REGISTRATION).read_text()) == registration
+    assert RL.top_entry(registration["program"], RL.STACKED, [bytes.fromhex(b) for b in first["tops"][0]]) == \
+        RL.registered_entry(registration, RL.STACKED)
+    V.registered(public, registration, bound)
+    other = RL.register_top(registration["program"], RL.STACKED, binds["stacked"], lambda g=random.Random(9): g.randbytes(192))
+    (tmp_path / RL.REGISTRATION).write_text(json.dumps(IR.registration_record(*_partition(), [other["entry"]])))
+    with pytest.raises(ValueError, match="a registration other than the one this session was held to"):
+        proxy.write(tmp_path)
 
-    bad = {**roots, "stacked": roots["circuit"]}
-    for kw, why in [({"binds": bad}, "stacked/rep0: the binding round's cap is not the committed root_B"),
-                    ({"order": ("circuit/rep0", "stacked/rep0", "circuit/rep1")}, "FIREWALL-REFUSED: round "),
-                    ({"roots": {"circuit": roots["circuit"]}, "binds": roots}, "FIREWALL-REFUSED: Hello")]:
-        proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch)
+    for kw, why in [({"binds": {**roots, "stacked": roots["circuit"]}}, "stacked/rep0: the binding round's cap is not stacked's registered top"),
+                    ({"binds": {**roots, "stacked": random.Random(7).randbytes(64 << 7)}},
+                     "stacked/rep0: the binding round's cap is not stacked's registered top"),
+                    ({"binds": binds, "digests": {"stacked/rep0": bytes(32)}},
+                     "stacked/rep0: the binding round's statement digest is not the circuit reps'"),
+                    ({"binds": binds, "digests": {"circuit/rep1": bytes(32)}},
+                     "circuit/rep1: the binding round's statement digest is not the other reps'"),
+                    ({"binds": binds, "order": ("circuit/rep0", "stacked/rep0", "circuit/rep1")}, "FIREWALL-REFUSED: round "),
+                    ({"roots": binds}, "FIREWALL-REFUSED: Hello")]:
+        proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch, registration=registration,
+                         registered={RL.STACKED: reg}, bound=bound)
         _stacked_session(proxy, **{"roots": roots, "sh": sh, "m_r": m_r, **kw})
         assert why in (proxy.stopped or ""), (why, proxy.stopped)
 
 
+def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_path):
+    """The hole the registration closes: R is built from the hidden circuit after the coins that fix its opening point, and
+    its root reaches the coin server only at ``stacked/rep0``'s binding round. So R's top is registered with the statement
+    at staging (`rec_live.register_top`, `inner_registered.bind`): one more registered value, ``stacked``, of the circuit
+    registration, the ``verity/registration/v2`` record one-stage ``registration.record`` writes over the partition object
+    META names (one-stage's ``stratified`` law, the statement's scheme, no roots, window ``stand-in``), beside the other
+    values registered at staging (a description's): 128 rows of 64 words, one a node, each under its own salt, which only
+    the prover's file holds. META's ``registration`` is the record's digest, so the circuit's SHA-512 (both files' headers)
+    and the statement digest bind it, and the same circuit and salts give the same record. The firewall refuses a
+    registration whose digest is not META's, a binding round when R has no registered top, or binds a cap that is not it;
+    a top is registered only before Hello and before any coin, once, only with an opening that opens it and whose top makes
+    the registration's entry, and never for a table whose root Commit carries. The schedule names no registered value.
+    `rec_vstar.registered` refuses a record whose digest is not META's, rebuilds the entry from the binding round's top and
+    refuses a record whose entry is another, and one that has none."""
+    sh, m_r = (22, 10, 2), 22
+    statement = {"dense_m": sh[0], "k_log": sh[1], "nbl": sh[0] - sh[1], "regions": 0}
+    sch = RL.schedule_for(statement, holo=True, stacked=m_r)
+    roots = {"circuit": random.Random(1).randbytes(64 << 7)}
+    binds = {**roots, "stacked": random.Random(2).randbytes(64 << 7)}
+    program, part = _partition()
+    stage = _toy_circuit(tmp_path, 8)[0].parent
+    desc = RG.Registered.commit(part["program"], "prog", [[1, 2, 3]])
+    with_desc = IR.bind(stage, program, part, [desc.entry()])
+    assert IR.meta(stage)[IR.REGISTRATION_KEY] == R.digest(with_desc) and IR.bound(stage) == with_desc
+    with pytest.raises(ValueError, match="carries no stacked entry: R was not registered at staging"):
+        RS.staged_stacked(stage)
+    registration, bound, reg = _registered_top(stage, binds["stacked"], 6)
+    meta, text = IR.meta(stage), (stage / "circuit.txt").read_text()
+    entry = RL.registered_entry(registration, RL.STACKED)
+    assert bound == meta[IR.REGISTRATION_KEY] == R.digest(registration)
+    assert registration == IR.registration_record(program, part, [desc.entry(), entry])
+    assert (registration["program"], registration["partition"]) == (meta["program_sha512"], meta["partition"]["digest"])
+    assert (registration["scheme"], registration["roots"], registration["window"]) == (FC.SCHEME, [], IR.WINDOW)
+    for f in ("pub-1.bin", "inst-1.bin"):
+        head = json.loads((stage / f).read_bytes().split(b"\n", 1)[0])
+        assert head["circuit_sha512"] == FC.digest(text) and head["units"]["classes"] == [FC.class_digest(text)]
+    again = _toy_circuit(tmp_path / "again", 8)[0].parent
+    IR.bind(again, program, part, [desc.entry()])
+    assert _registered_top(again, binds["stacked"], 6) == (registration, bound, reg), "the circuit and the salts alone"
+    dom = RG.domain(registration["program"], RL.STACKED, RL.ROW_WORDS, 128)
+    assert registration["format"] == R.FORMAT_V2 and entry == \
+        {"value": "stacked", "root": entry["root"], "leaves": 128, "words": 64, "domain": dom.domain_id.hex()}
+    assert reg["top"] == [b.hex() for b in RL.commit_top(binds["stacked"], [bytes.fromhex(s) for s in reg["salts"]])]
+    assert len(set(reg["salts"])) == 128 and "registered" not in json.dumps(RL.check_schedule(sch))
+    assert entry["root"] not in json.dumps(sch)
+    assert not any(x in json.dumps(registration) + text for x in reg["salts"]), "the salts are the prover's alone"
+    with pytest.raises(ValueError, match="a value is registered once"):
+        IR.bind(stage, program, part, [entry])
+    with pytest.raises(ValueError, match="META binds program"):
+        IR.bind(stage, *(lambda pq: (pq[0], P.partition(*pq)))(_private(4)), [desc.entry()])
+    (stage / IR.REGISTRATION).write_text(json.dumps(with_desc))
+    for read in (IR.bound, RS.staged_stacked):
+        with pytest.raises(ValueError, match="is not the registration META binds"):
+            read(stage)
+    (stage / IR.REGISTRATION).write_text(json.dumps(registration))
+
+    proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch)
+    _stacked_session(proxy, roots, sh, m_r, binds=binds)
+    assert proxy.stopped == "rec proxy: FIREWALL-REFUSED: stacked/rep0: stacked has no root at Commit and no registered top"
+
+    proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch, registration=registration, bound=bound)
+    proxy.register(RL.STACKED, reg)
+    with pytest.raises(ValueError, match="registered twice"):
+        proxy.register(RL.STACKED, reg)
+    with pytest.raises(ValueError, match="registered twice, or a table whose root is committed at Commit"):
+        RL.Proxy(RL.CoinServer(), schedule=sch, registration=registration, registered={"circuit": reg}, bound=bound)
+    with pytest.raises(ValueError, match="does not open it"):
+        RL.Proxy(RL.CoinServer(), schedule=sch, registration=registration, bound=bound,
+                 registered={RL.STACKED: {**reg, "salts": reg["salts"][::-1]}})
+    other = RL.register_top(registration["program"], RL.STACKED, binds["stacked"], lambda g=random.Random(8): g.randbytes(192))
+    forged = IR.registration_record(program, part, [desc.entry(), other["entry"]])
+    v1 = {**registration, "format": R.FORMAT}
+    not_meta = "the registration is not the one the statement's META binds"
+    for bad, dg, why in [(with_desc, R.digest(with_desc), "the private circuit's registration (verity/registration/v2) names no stacked"),
+                         (v1, R.digest(v1), "names no stacked"), (None, bound, not_meta), (registration, None, not_meta),
+                         (forged, bound, not_meta), (forged, R.digest(forged), "the registered top is not the registration's stacked")]:
+        with pytest.raises(ValueError, match=re.escape(why)):
+            RL.Proxy(RL.CoinServer(), schedule=sch, registration=bad, registered={RL.STACKED: reg}, bound=dg)
+    late = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch, registration=registration, bound=bound)
+    _stacked_session(late, roots, sh, m_r, binds=binds, order=())
+    with pytest.raises(ValueError, match="registered before the session, never after Hello or a coin"):
+        late.register(RL.STACKED, reg)
+    early = RL.CoinServer(random.Random(3).randbytes)
+    early.commit_coins(sch, lambda: bytes(192))
+    with pytest.raises(ValueError, match="never after Hello or a coin"):
+        RL.Proxy(early, schedule=sch, registration=registration, registered={RL.STACKED: reg}, bound=bound)
+
+    proxy = RL.Proxy(coins := RL.CoinServer(random.Random(3).randbytes), schedule=sch, registration=registration,
+                     registered={RL.STACKED: reg}, bound=bound)
+    _stacked_session(proxy, roots, sh, m_r, binds=binds)
+    assert proxy.stopped is None
+    public = coins.record()
+    first = next(r for r in public["rounds"] if r["stream"] == "stacked/rep0" and r["k"] == 0)
+    assert first["tops"][0] == reg["top"]
+    assert not any(x in json.dumps(public) for x in reg["salts"])
+    V.registered(public, registration, bound)
+    moved = {**registration, "registered": [desc.entry(), {**entry, "domain": desc.entry()["domain"]}]}
+    not_meta = "the record is not the circuit registration META binds"
+    for bad, dg, why in [(forged, R.digest(forged), "stacked/rep0's binding round's top is not stacked's registered top"),
+                         (moved, R.digest(moved), "stacked/rep0's binding round's top is not stacked's registered top"),
+                         (forged, bound, not_meta), (registration, None, not_meta), (None, bound, not_meta),
+                         (with_desc, R.digest(with_desc), "stacked has no root at Commit and no registered top"),
+                         (v1, R.digest(v1), "stacked has no root at Commit and no registered top")]:
+        with pytest.raises(ValueError, match=re.escape(f"FIREWALL-REFUSED: registration: {why}")):
+            V.registered(public, bad, dg)
+
+
+def test_serve_refuses_to_start_without_the_stacked_entry_meta_binds(tmp_path):
+    """`rec_session.serve` with the stacked table reads R's registration from the staged statement beside its circuit
+    (`staged_stacked`), and refuses before it listens when META binds no circuit registration, when the record carries
+    no ``stacked`` entry, when the staged record's digest is not META's, or when the prover holds no opening of the entry."""
+    circuit, _ = _toy_circuit(tmp_path, 8)
+    stage, out = circuit.parent, tmp_path / "out"
+    statement = {"dense_m": 22, "k_log": 10, "nbl": 12, "regions": 0}
+
+    def serve():
+        RS.serve("127.0.0.1:0", out, statement, circuit, sparse=SP.Shape(9, 7, 2, 0), stacked=Path("flock-circuit"),
+                 ready=lambda addr: pytest.fail(f"served on {addr}"))
+
+    with pytest.raises(ValueError, match="META binds no circuit registration"):
+        serve()
+    program, part = _partition()
+    IR.bind(stage, program, part, [RG.Registered.commit(part["program"], "prog", [[1, 2, 3]]).entry()])
+    with pytest.raises(ValueError, match="carries no stacked entry"):
+        serve()
+    registration, _, _ = _registered_top(stage, random.Random(2).randbytes(64 << 7), 6)
+    (stage / IR.REGISTRATION).write_text(json.dumps({**registration, "window": {"kind": "stand-in", "of": "another"}}))
+    with pytest.raises(ValueError, match="is not the registration META binds"):
+        serve()
+    (stage / IR.REGISTRATION).write_text(json.dumps(registration))
+    (stage / IR.PRIVATE).unlink()
+    with pytest.raises(ValueError, match="the prover holds no opening of the registered value stacked"):
+        serve()
+    assert not out.exists()
+
 def _toy_circuit(d: Path, seed: int) -> tuple[Path, dict]:
-    """A circuit file at k_log 10 whose one hidden circuit ``unit`` (100 rows of 2^7-bit slots) has a range of 3 slots at 4."""
+    """A statement staged in ``d/stage-<seed>``: its circuit file at k_log 10 whose one hidden circuit ``unit`` (100 rows of
+    2^7-bit slots) has a range of 3 slots at 4, META naming `_partition`'s program and partition object, and the instance
+    files' headers (what `inner_registered.bind` rewrites)."""
     lines = _unit_text("unit", 100, random.Random(seed), 128)
     rng = {"type": "unit", "net": "unit", "slot_log": 7, "pos0": 4, "count": 3}
-    text = ["flock-circuit toy", "META " + json.dumps({"k_log": 10, "ranges": [rng]}), f"CIRCUIT unit {len(lines)}", *lines]
-    (d / f"circuit-{seed}.txt").write_text("\n".join(text) + "\n")
-    return d / f"circuit-{seed}.txt", rng
+    part = _partition()[1]
+    meta = {"k_log": 10, "ranges": [rng], "program_sha512": part["program"], "partition": {"rule": P.FORMAT, "digest": P.digest(part)}}
+    text = "\n".join(["flock-circuit toy", "META " + json.dumps(meta), f"CIRCUIT unit {len(lines)}", *lines]) + "\n"
+    stage = d / f"stage-{seed}"
+    stage.mkdir(parents=True)
+    (stage / "circuit.txt").write_text(text)
+    head = {"circuit_sha512": FC.digest(text), "instances": 1, "units": {"classes": [FC.class_digest(text)]}}
+    for f in ("inst-1.bin", "pub-1.bin"):
+        (stage / f).write_bytes(json.dumps(head).encode() + b"\n")
+    return stage / "circuit.txt", rng
 
 
 def _sparse_relay(circuit: Path, phase_of=lambda ph: ph, stacked: dict | None = None):
+    """The relay's sparse phase on ``circuit``'s hidden circuit; with ``stacked`` (``bin``, ``dir``, ``forge``), R staged
+    with a copy of ``circuit``'s statement in ``dir/stage`` (`rec_session.stage_stacked`, ``forge`` ``cell`` at staging) and
+    read back as `rec_session.serve` reads it (`staged_stacked`, R.bin and ROOT.json copied into ``dir``), then opened."""
     sp, statement = SP.Shape(9, 7, 2, 0), {"dense_m": 22, "k_log": 10, "nbl": 12, "regions": 0}
     nets, ranges, _ = RS.hidden_circuits(circuit)
     phase = phase_of((sp, SP.entries(sp, nets["unit"]["a"], nets["unit"]["b"]), ranges[0]))
     sch = RL.schedule_for(statement, holo=True, sparse=sp, stacked=stacked and SP.table_m(sp))
     salts = random.Random(4)
-    proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), lambda: salts.randbytes(192), schedule=sch)
-    relay = RS.Relay(proxy, 22, 10, lambda p: RS.hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, 2, stacked)
+    registration, bound, registered, st = None, None, {}, None
+    if stacked:
+        d = Path(stacked["dir"])
+        stage = d / "stage"
+        shutil.copytree(circuit.parent, stage)
+        forge = stacked.get("forge")
+        RS.stage_stacked(stage, stacked["bin"], sp, *_partition(), "cell" if forge == "cell" else None, lambda: salts.randbytes(192))
+        registration, bound, registered[RL.STACKED] = RS.staged_stacked(stage)
+        for f in (RS.STACKED_TABLE, RS.STACKED_ROOT):
+            shutil.copy(stage / f, d / f)
+        st = {"bin": stacked["bin"], "dir": d, "forge": forge, "raw": (d / RS.STACKED_TABLE).read_bytes(), "stage": stage}
+    draws, coin_rng = [], random.Random(3)
+
+    def rand(n: int) -> bytes:
+        draws.append(dict(registered))
+        return coin_rng.randbytes(n)
+
+    proxy = RL.Proxy(RL.CoinServer(rand), lambda: salts.randbytes(192), schedule=sch, registration=registration,
+                     registered=registered, bound=bound)
+    proxy.draws = draws
+    relay = RS.Relay(proxy, 22, 10, lambda p: RS.hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, 2, st)
     resp = _stacked_session(relay, {"circuit": random.Random(1).randbytes(64 << 7)}, (22, 10, 2), None,
                             order=("circuit/rep0", "circuit/rep1"), prover=True)
     return relay, sch, resp
@@ -502,14 +740,21 @@ def _opening(d: Path, relay, rng) -> SimpleNamespace:
 
 
 def test_the_relay_commits_r_and_opens_it_at_the_sparse_claims_in_the_same_session(stacked_session, tmp_path):
-    """With ``flock-circuit stacked`` (P5) the relay adds ``stacked`` to the prover's Hello and R's root (`rec_sparse.table`
-    of the hidden circuit's entries, ``--root-out``) to its Commit, and once both reps' sparse streams have run opens R at
-    their registered claims (P.json) on a connection of its own into the same session, answering its Finish itself: the
-    record is `schedule_for(..., sparse=, stacked=table_m)`'s, R's stream last, its binding round binding ROOT.json's cap;
-    `rec_vstar` accepts R's openings, and the opening-only model's residuals at the verifier's points and the sparse
-    phase's claims are zero; the prover's own record keeps its Hello and Commit. R committed with cell 0 flipped fails both
-    claims' ring switches; rep 0's point one bit off in P.json (in ``x[1:]``, which the prover's ring switch reads) fails
-    rep 0's and Ligerito's c0 and c1, whose batched sums are at the verifier's points: each session runs to its Finish."""
+    """With ``flock-circuit stacked`` (P5) R (`rec_sparse.table` of the hidden circuit's entries, ``--root-out``) is
+    registered at staging (`rec_session.stage_stacked`: its top salted once, the entry ``stacked`` of the circuit
+    registration whose digest META binds, its salts in the prover's file alone, and read back by `staged_stacked`), the relay
+    passes the prover's Hello and Commit on as they are, and once both reps' sparse streams have run opens R at their
+    registered claims (P.json) on a connection of its own into the same session, answering its Finish itself: the record is
+    `schedule_for(..., sparse=, stacked=table_m)`'s, R's stream last, its binding round absorbing the circuit reps'
+    statement digest (``--statement-digest``, the firewall's) and committing ROOT.json's cap as the
+    registered top, ``b || c`` for ``b || c`` (`rec_vstar.registered` accepts it); `rec_vstar` accepts R's openings, and the
+    opening-only model's residuals at the verifier's points and the sparse phase's claims are zero; the verifier's record
+    and the prover's have one Hello, the prover's bytes, and the circuit table's Commit. R registered with cell 0 flipped
+    fails both claims' ring switches; rep 0's point one bit off in P.json (in ``x[1:]``, which the prover's ring switch
+    reads) fails rep 0's and Ligerito's c0 and c1, whose batched sums are at the verifier's points: each session runs to its
+    Finish. R's cell 0 flipped after its registration is refused at R's binding round, before any of R's coins; another
+    circuit's R has another registered top. No salt of R's top is in a file the verifier reads: the staged statement's
+    circuit, public file and circuit registration, the session's record, its public coins and its registration copy."""
     ss = stacked_session
     proxy = ss.relay.proxy
     assert proxy.stopped is None and json.loads(ss.resp[-1][1])["accepted"] is None
@@ -518,15 +763,42 @@ def test_the_relay_commits_r_and_opens_it_at_the_sparse_claims_in_the_same_sessi
     assert RL.schedule_of(rec) == ss.sch and ss.sch["streams"]["stacked/rep0"]["rounds"] == len(RL.stacked_rounds(22))
     assert [r["stream"] for r in rec["rounds"]] == sorted((r["stream"] for r in rec["rounds"]), key=order.index)
     assert proxy.streams["stacked/rep0"]["cap"].hex() == json.loads((ss.d / "stacked" / "ROOT.json").read_text())["cap"]
-    pr = ss.relay.prover_record()
-    assert json.loads(pr["hello"])["tables"] == ["circuit"] and list(pr["link"]["root_b"]) == ["circuit"]
+    assert [len(t) for t in next(r for r in rec["rounds"] if r["stream"] == "stacked/rep0")["tops"]] == [128]
+    pr, vr = ss.relay.prover_record(), proxy.session_record()
+    assert vr["hello"] == pr["hello"] == RL.canonical(json.loads(pr["hello"])) and list(rec["link"]["roots"]) == ["circuit"]
+    assert json.loads(pr["hello"])["tables"] == ["circuit"] and list(pr["link"]["root_b"]) == list(vr["link"]["root_b"]) == ["circuit"]
     assert pr["config"]["tables"] == [{"name": "circuit", "binding": pr["config"]["tables"][0]["binding"]}]
     assert ss.read.vstar["accepted"] and ss.read.residuals == []
+    reg = proxy.registered[RL.STACKED]
+    assert proxy.statement_digest == STATEMENT_DIGEST and proxy.draws and all(d == {RL.STACKED: reg} for d in proxy.draws)
+    assert "".join(reg["nodes"]) == json.loads((ss.d / "stacked" / "ROOT.json").read_text())["cap"]
+    assert next(r for r in rec["rounds"] if r["stream"] == "stacked/rep0")["tops"][0] == reg["top"]
+    assert (ss.d / "stacked" / "R.bin").read_bytes() == SP.table(*ss.relay.sparse[:2])
+    stage = ss.relay.stacked["stage"]
+    registration = json.loads((ss.d / "inner" / RL.REGISTRATION).read_text())
+    entry = RL.registered_entry(registration, RL.STACKED)
+    assert registration == proxy.registration == IR.bound(stage) and proxy.bound == IR.meta(stage)[IR.REGISTRATION_KEY]
+    assert entry == RL.top_entry(registration["program"], RL.STACKED, [bytes.fromhex(b) for b in reg["top"]])
+    assert registration["format"] == R.FORMAT_V2 and (entry["leaves"], entry["words"]) == (128, 64)
+    V.registered(ss.read.public, registration, proxy.bound)
+    assert IR.private(stage, RL.STACKED)["salts"] == reg["salts"]
+    visible = [stage / "circuit.txt", stage / "pub-1.bin", stage / IR.REGISTRATION, ss.d / "inner" / "public.json",
+               ss.d / "inner" / RL.REGISTRATION, *sorted((ss.d / "inner" / "session").iterdir())]
+    for f in visible:
+        b = f.read_bytes()
+        assert not any(x.encode() in b or bytes.fromhex(x) in b for x in reg["salts"]), f"{f} holds a salt of R's top"
     for forge, bad in [("cell", [0, 1]), ("point", [0, 2, 3])]:
         relay, _, resp = _sparse_relay(ss.circuit, stacked={"bin": BIN, "dir": tmp_path / forge, "forge": forge})
         assert relay.proxy.stopped is None and json.loads(resp[-1][1])["accepted"] is None, relay.proxy.stopped
         got = _opening(tmp_path / forge / "inner", relay, ss.rng)
         assert got.vstar["accepted"] and got.residuals == bad, (forge, got.residuals)
+    relay, _, resp = _sparse_relay(ss.circuit, stacked={"bin": BIN, "dir": tmp_path / "late", "forge": "late"})
+    assert relay.proxy.stopped == "rec proxy: FIREWALL-REFUSED: stacked/rep0: the binding round's cap is not stacked's registered top"
+    assert json.loads(resp[-1][1]) == {"accepted": False, "why": relay.proxy.stopped}
+    assert not any(r["stream"] == "stacked/rep0" for r in relay.proxy.coins.rounds)
+    other = _toy_circuit(tmp_path, 9)[0].parent
+    other = RS.stage_stacked(other, BIN, ss.relay.sparse[0], *_partition())
+    assert other["nodes"] != reg["nodes"] and other["entry"]["root"] != entry["root"]
 
 
 def test_rs_opening_registers_its_messages_in_the_verifiers_round_order(stacked_session):
