@@ -930,6 +930,20 @@ __device__ __forceinline__ void mma_e4m3(float (&d)[4], const uint32_t (&a)[4], 
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
 }
 
+__device__ __forceinline__ void mma_s8(int (&d)[4], const uint32_t (&a)[4], uint32_t b0, uint32_t b1) {
+  asm volatile(
+      "mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+      : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
+}
+
+// The sketch-then-hash tag (`wide_sketch`): a lane's record is SK_M steps of 16 bytes, its limbs in (word, limb) order.
+constexpr int SK_K = 16, SK_M = (L * N + 3) / 4;
+constexpr int SK_ROW = SK_K + 1;  // a vector's row in shared memory, padded against bank conflicts
+
+// Limb x of the lane's record in (word, limb) order, 0 past its end; x a constant.
+__device__ __forceinline__ uint32_t rec_limb(const uint32_t (&w)[L][N], int x) { return x < L * N ? w[x / N][x % N] : 0; }
+
 // Stream bits bit … bit + 31 of the lane's payloads (word w carries bits w·PB … w·PB + PB − 1); `bit` is a constant.
 __device__ __forceinline__ uint32_t take4(const uint32_t (&x)[L][N], int bit) {
   const int w = bit / PB, sh = bit % PB, e = sh / 32, s = sh % 32;
@@ -997,6 +1011,28 @@ __device__ __forceinline__ void tag_compress(uint32_t (&cv)[8], uint32_t (&m)[16
   else bw::b3_compress(cv, m, 0, len, flags, cv);
 }
 
+__device__ __forceinline__ void sk_compress(uint32_t (&cv)[8], uint32_t (&m)[16], uint32_t len, uint32_t flags) {
+  if constexpr (WW_ROLL) b3_compress_rolled(cv, m, len, flags);
+  else bw::b3_compress(cv, m, 0, len, flags, cv);
+}
+
+// ro-sketch-blake3/v0's tag of one vector: BLAKE3-keyed(key, u64be j ‖ its 16 int32 words), two compressions.
+__device__ __forceinline__ void sketch_tag(const bw::Key3& key, uint64_t j, const int32_t* s, uint32_t (&cv)[8]) {
+  uint32_t m[16];
+  m[0] = bw::bswap32((uint32_t)(j >> 32));
+  m[1] = bw::bswap32((uint32_t)j);
+#pragma unroll
+  for (int i = 0; i < 14; ++i) m[2 + i] = (uint32_t)s[i];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+  sk_compress(cv, m, 64, bw::B3_KEYED | bw::B3_CHUNK_START);
+  m[0] = (uint32_t)s[14];
+  m[1] = (uint32_t)s[15];
+#pragma unroll
+  for (int i = 2; i < 16; ++i) m[i] = 0;
+  sk_compress(cv, m, 8, bw::B3_KEYED | bw::B3_CHUNK_END | bw::B3_ROOT);
+}
+
 // Compression b of block j, b reading only header and the first record (b < SPLIT when TB = 2), from its registers.
 __device__ __forceinline__ void tag_step(uint32_t (&cv)[8], const uint32_t (&w)[L][N], uint64_t j, int b) {
   uint32_t m[16];
@@ -1038,13 +1074,20 @@ __device__ __forceinline__ void pair_sync() {
 // the tag on its own record. ahead > 0: once its own record is in registers, each warp prefetches into the L2 the
 // record of the same warp `ahead` CTAs on (a wave later when ahead is the resident CTAs), so the next wave's HBM reads
 // overlap this wave's arithmetic.
-template <int KR, int NB8, bool PARTIALS, bool TAG>
+// SK > 0 (KW = 1, no TAG): the sketch of the encoded words (`wide_sketch`), the CTA being tile blockIdx.x and warp i its
+// task i: each warp's mma.m16n8k32.s8 over its record against `signs` (`wide_sketch.sign_fragments`) before the
+// decode, the four accumulators summed in shared memory, and the tile's 16 vectors at sk[256 · blockIdx.x …] when sk is
+// non-null. SK = 2: warp 0 also hashes them (ro-sketch-blake3/v0 under key, vector v of the call at index jbase + v)
+// into tags[8 v …] before its decode, its upper 16 lanes repeating the lower's so the warp never diverges.
+template <int KR, int NB8, bool PARTIALS, bool TAG, int SK>
 __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uint32_t* __restrict__ E, const uint8_t* __restrict__ x,
                                                                float* __restrict__ y, int Mb, int Nn, int Kd,
                                                                uint64_t wbase, uint64_t jbase, bw::Key3 key,
-                                                               uint32_t* __restrict__ tags, int ahead) {
+                                                               uint32_t* __restrict__ tags, int ahead,
+                                                               const uint4* __restrict__ signs, int32_t* __restrict__ sk) {
   constexpr int RG = GEMM_WARPS / KW, UNITS = TASK_COLS / 16;
   static_assert(TB == 1 || RG == 2, "two warp pairs a CTA, named barriers 1 and 2");
+  static_assert(SK == 0 || (KW == 1 && !TAG), "the sketch's tile is four row blocks at one chunk, and replaces the tag");
   __shared__ __align__(16) uint8_t xs[KW][NB8 * 8][TASK_COLS];  // row r's 16-byte unit c at c ^ (r mod 8): no conflicts
   const int nchunks = Kd / TASK_COLS, nk = nchunks / KW;
   const int warp = threadIdx.x / 32, h = warp % KW, pair = warp / KW;
@@ -1070,6 +1113,44 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
     const unsigned bx = blockIdx.x + (unsigned)ahead;
     const int nb2 = (int)(bx / nk) * RG + pair;
     if (nb2 * 16 < Nn) nxt = E + ((uint64_t)nb2 * nchunks + (bx % nk) * KW + h) * (32ull * L * N);
+  }
+  if constexpr (SK > 0) {
+    __shared__ int32_t skp[GEMM_WARPS][16][SK_ROW];
+    int d[2][4] = {};
+    const uint4* sg = signs + (size_t)warp * SK_M * 32 + lane;
+#pragma unroll
+    for (int s = 0; s < SK_M; ++s) {
+      const uint32_t a[4] = {rec_limb(w, 4 * s), rec_limb(w, 4 * s + 1), rec_limb(w, 4 * s + 2), rec_limb(w, 4 * s + 3)};
+      const uint4 b = __ldg(sg + 32 * s);
+      mma_s8(d[0], a, b.x, b.y);
+      mma_s8(d[1], a, b.z, b.w);
+    }
+#pragma unroll
+    for (int c8 = 0; c8 < 2; ++c8)
+#pragma unroll
+      for (int e = 0; e < 4; ++e) skp[warp][g + 8 * (e >> 1)][8 * c8 + 2 * tq + (e & 1)] = d[c8][e];
+    __syncthreads();
+    for (int i = threadIdx.x; i < 16 * SK_K; i += GEMM_WARPS * 32) {
+      const int r = i / SK_K, c = i % SK_K;
+      int v = 0;
+#pragma unroll
+      for (int u = 0; u < GEMM_WARPS; ++u) v += skp[u][r][c];
+      skp[0][r][c] = v;
+      if (sk) sk[(size_t)blockIdx.x * (16 * SK_K) + i] = v;
+    }
+    if constexpr (SK == 2) {
+      __syncthreads();
+      if (warp == 0) {
+        const int r = lane & 15;
+        uint32_t cv[8];
+        sketch_tag(key, jbase + 16ull * blockIdx.x + r, skp[0][r], cv);
+        if (lane < 16) {
+          uint4* o = reinterpret_cast<uint4*>(tags + 8 * (16ull * blockIdx.x + r));
+          o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
+          o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+        }
+      }
+    }
   }
 
   // The tag's compressions in order, each word decoded in place once the last compression that reads it is done, so
@@ -1179,6 +1260,26 @@ __global__ void __launch_bounds__(GEMM_WARPS * 32, WW_OCC) gemm_kernel(const uin
   }
 }
 
+// ro-sketch-blake3/v0's tags apart from the GEMM: a thread a vector of sk (16 int32 each), vector v's tag (index
+// jbase + v) at tags[8 v …].
+__global__ void __launch_bounds__(128) sketch_tags_kernel(const int32_t* __restrict__ sk, uint64_t n, uint64_t jbase,
+                                                          bw::Key3 key, uint32_t* __restrict__ tags) {
+  const uint64_t v = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x;
+  if (v >= n) return;
+  int32_t s[SK_K];
+  const int4* p = reinterpret_cast<const int4*>(sk + SK_K * v);
+#pragma unroll
+  for (int i = 0; i < SK_K / 4; ++i) {
+    const int4 q = __ldcs(p + i);
+    s[4 * i] = q.x, s[4 * i + 1] = q.y, s[4 * i + 2] = q.z, s[4 * i + 3] = q.w;
+  }
+  uint32_t cv[8];
+  sketch_tag(key, jbase + v, s, cv);
+  uint4* o = reinterpret_cast<uint4*>(tags + 8 * v);
+  o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
+  o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+}
+
 __global__ void dtw_kernel(uint32_t* out) {
   uint32_t v[N], dv[N];
   tw_init(v, dv, 0, LANES);
@@ -1268,12 +1369,40 @@ int main() {
 
 static bw::Key3 key_of(const uint8_t* seed) { return bw::b3_key(seed); }
 
+static const char SKETCH_NAME[] = "ro-sketch-blake3/v0";
+
+// ro-sketch-blake3/v0's key: `bw::b3_key` under its name.
+static bw::Key3 sketch_key(const uint8_t* seed) {
+  std::vector<uint8_t> p = bw::prefix_block(bw::TAG_DOMAIN, SKETCH_NAME, seed);
+  uint64_t d[8];
+  bw::sha512_host(p.data(), p.size(), d);
+  bw::Key3 k;
+  for (int i = 0; i < 8; ++i) {
+    const uint32_t be = (uint32_t)(i & 1 ? d[i / 2] : d[i / 2] >> 32);
+    k.k[i] = (be >> 24) | ((be >> 8) & 0xff00u) | ((be << 8) & 0xff0000u) | (be << 24);
+  }
+  return k;
+}
+
+// The leaves (16 tags each) and tree over `blocks` tags of the workspace under the tag's name.
+static int commit_named(void* workspace, uint64_t blocks, const char* name, const uint8_t* seed, uint8_t* root,
+                        cudaStream_t s) {
+  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
+  bw::Mid lm = bw::prefix_midstate(bw::LEAF_DOMAIN, name, seed);
+  const unsigned leaf_grid = (unsigned)(((blocks + 15) / 16 + 127) / 128);
+  bw::b3_leaves<<<leaf_grid, 128, 0, s>>>(p.tags, p.blocks, blocks, lm, p.nodes);
+  bw::launch_tree(p, s);
+  if (cudaGetLastError()) return 4;
+  if (root) return bw::read_root(p, root, s);
+  return 0;
+}
+
 extern "C" {
 
 int ww_constants(int* out) {
   out[0] = WW_BITS; out[1] = N; out[2] = PB; out[3] = L; out[4] = LANES; out[5] = TASK_TILES; out[6] = GEMM_WARPS;
   out[7] = KMAX; out[8] = WW_SQR; out[9] = TAG_BLOCKS; out[10] = WW_ROLL; out[11] = WW_OCC; out[12] = WW_CC;
-  out[13] = WW_B3U; out[14] = TB; out[15] = KW;
+  out[13] = WW_B3U; out[14] = TB; out[15] = KW; out[16] = SK_M;
   return 0;
 }
 
@@ -1374,11 +1503,11 @@ int ww_gemm(int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn
 #define G(KR, NB, T)                                                                                             \
   do {                                                                                                           \
     if (partials)                                                                                                \
-      gemm_kernel<KR, NB, true, T><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key, tags, \
-                                                                    ahead);                                      \
+      gemm_kernel<KR, NB, true, T, 0><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key,    \
+                                                                       tags, ahead, nullptr, nullptr);           \
     else                                                                                                         \
-      gemm_kernel<KR, NB, false, T><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key, tags, \
-                                                                     ahead);                                     \
+      gemm_kernel<KR, NB, false, T, 0><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key,   \
+                                                                        tags, ahead, nullptr, nullptr);          \
   } while (0)
 #define GT(KR, NB) do { if (tag_seed) G(KR, NB, true); else G(KR, NB, false); } while (0)
 #define GK(KR) do { if (nb8 == 1) GT(KR, 1); else if (nb8 == 2) GT(KR, 2); else GT(KR, 4); } while (0)
@@ -1393,17 +1522,77 @@ int ww_gemm(int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn
   return cudaGetLastError() ? 4 : 0;
 }
 
-// The fused GEMM's resident CTAs an SM for k, Mb and tag (as `ww_gemm` would launch it), or −1.
+// The fused GEMM with the sketch-then-hash tag in place of ro-blake3/v1 (`wide_sketch`; KW = 1 builds): signs is the
+// window's `wide_sketch.sign_fragments` (T · SK_M · 512 bytes), sk null or 16 · SK_K int32 a tile (the grid's CTAs,
+// `wide_sketch.tiles`); with seed and tags non-null the kernel hashes each tile's vectors too, vector v of this call
+// (index jbase + v) at tags[8 v …], else ww_sketch_tags hashes sk afterwards.
+int ww_gemm_sketch(int k, const uint32_t* E, const uint8_t* x, float* y, int Mb, int Nn, int Kd, uint64_t wbase,
+                   int partials, const void* signs, int32_t* sk, uint64_t jbase, const uint8_t* seed, uint32_t* tags,
+                   int ahead, cudaStream_t s) {
+  if (KW != 1 || !signs || (seed != nullptr) != (tags != nullptr)) return 1;
+  if (Mb < 1 || Mb > 32 || Nn % (16 * GEMM_WARPS) || Kd % TASK_COLS || k < 0 || k > KMAX || ahead < 0) return 1;
+  if (wbase % (32ull * L)) return 1;
+  const int nb8 = Mb <= 8 ? 1 : Mb <= 16 ? 2 : 4;
+  const int grid = (Nn / 16 / GEMM_WARPS) * (Kd / TASK_COLS);
+  bw::Key3 key = {};
+  if (seed) key = sketch_key(seed);
+#if WW_KW == 1
+  const uint4* sg = reinterpret_cast<const uint4*>(signs);
+#define G(KR, NB, S)                                                                                             \
+  do {                                                                                                           \
+    if (partials)                                                                                                \
+      gemm_kernel<KR, NB, true, false, S><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase, key, \
+                                                                           tags, ahead, sg, sk);                 \
+    else                                                                                                         \
+      gemm_kernel<KR, NB, false, false, S><<<grid, GEMM_WARPS * 32, 0, s>>>(E, x, y, Mb, Nn, Kd, wbase, jbase,     \
+                                                                            key, tags, ahead, sg, sk);           \
+  } while (0)
+#define GT(KR, NB) do { if (tags) G(KR, NB, 2); else G(KR, NB, 1); } while (0)
+#define GK(KR) do { if (nb8 == 1) GT(KR, 1); else if (nb8 == 2) GT(KR, 2); else GT(KR, 4); } while (0)
+  switch (k) {
+    case 0: GK(0); break;
+    WW_CASES(GK)
+    default: return 1;
+  }
+#undef GK
+#undef GT
+#undef G
+  return cudaGetLastError() ? 4 : 0;
+#else
+  return 1;
+#endif
+}
+
+// ro-sketch-blake3/v0's tags of n vectors of sk (16 int32 each), vector v's (index jbase + v) at tags[8 v …].
+int ww_sketch_tags(const int32_t* sk, uint64_t n, uint64_t jbase, const uint8_t* seed, uint32_t* tags, cudaStream_t s) {
+  if (!n) return 0;
+  sketch_tags_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(sk, n, jbase, sketch_key(seed), tags);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The fused GEMM's resident CTAs an SM for k, Mb and tag (0 none, 1 ro-blake3/v1, 2 the sketch, 3 the sketch hashed in
+// the kernel), as `ww_gemm` or `ww_gemm_sketch` would launch it, or −1.
 int ww_gemm_occupancy(int k, int Mb, int tag, int partials) {
-  if (Mb < 1 || Mb > 32 || k < 0 || k > KMAX) return -1;
+  if (Mb < 1 || Mb > 32 || k < 0 || k > KMAX || tag < 0 || tag > 3 || (tag >= 2 && KW != 1)) return -1;
   const int nb8 = Mb <= 8 ? 1 : Mb <= 16 ? 2 : 4;
   int r = -1;
-#define G(KR, NB, T)                                                                                             \
+#define G(KR, NB, T, S)                                                                                          \
   do {                                                                                                           \
-    if (partials) cudaOccupancyMaxActiveBlocksPerMultiprocessor(&r, gemm_kernel<KR, NB, true, T>, GEMM_WARPS * 32, 0); \
-    else cudaOccupancyMaxActiveBlocksPerMultiprocessor(&r, gemm_kernel<KR, NB, false, T>, GEMM_WARPS * 32, 0);    \
+    if (partials) cudaOccupancyMaxActiveBlocksPerMultiprocessor(&r, gemm_kernel<KR, NB, true, T, S>, GEMM_WARPS * 32, 0); \
+    else cudaOccupancyMaxActiveBlocksPerMultiprocessor(&r, gemm_kernel<KR, NB, false, T, S>, GEMM_WARPS * 32, 0);    \
   } while (0)
-#define GT(KR, NB) do { if (tag) G(KR, NB, true); else G(KR, NB, false); } while (0)
+#if WW_KW == 1
+#define GS(KR, NB, S) G(KR, NB, false, S)
+#else
+#define GS(KR, NB, S) r = -1
+#endif
+#define GT(KR, NB)                       \
+  do {                                   \
+    if (tag == 1) G(KR, NB, true, 0);    \
+    else if (tag == 2) GS(KR, NB, 1);    \
+    else if (tag == 3) GS(KR, NB, 2);    \
+    else G(KR, NB, false, 0);            \
+  } while (0)
 #define GK(KR) do { if (nb8 == 1) GT(KR, 1); else if (nb8 == 2) GT(KR, 2); else GT(KR, 4); } while (0)
   switch (k) {
     case 0: GK(0); break;
@@ -1412,6 +1601,7 @@ int ww_gemm_occupancy(int k, int Mb, int tag, int partials) {
   }
 #undef GK
 #undef GT
+#undef GS
 #undef G
   return r;
 }
@@ -1422,14 +1612,12 @@ uint32_t* ww_workspace_tags(void* workspace, uint64_t blocks) { return bw::make_
 
 // The tags' leaves and tree over `blocks` blocks; with root non-null, the root's 64 bytes (and a sync).
 int ww_commit(void* workspace, uint64_t blocks, const uint8_t* seed, uint8_t* root, cudaStream_t s) {
-  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
-  bw::Mid lm = bw::prefix_midstate(bw::LEAF_DOMAIN, bw::TAG_NAMES[bw::TAG_B3], seed);
-  const unsigned leaf_grid = (unsigned)(((blocks + 15) / 16 + 127) / 128);
-  bw::b3_leaves<<<leaf_grid, 128, 0, s>>>(p.tags, p.blocks, blocks, lm, p.nodes);
-  bw::launch_tree(p, s);
-  if (cudaGetLastError()) return 4;
-  if (root) return bw::read_root(p, root, s);
-  return 0;
+  return commit_named(workspace, blocks, bw::TAG_NAMES[bw::TAG_B3], seed, root, s);
+}
+
+// `ww_commit` over n ro-sketch-blake3/v0 tags (a leaf a tile).
+int ww_sketch_commit(void* workspace, uint64_t n, const uint8_t* seed, uint8_t* root, cudaStream_t s) {
+  return commit_named(workspace, n, SKETCH_NAME, seed, root, s);
 }
 
 // The commit workspace's leaves (64 bytes each, big-endian u64 words), for the gate.

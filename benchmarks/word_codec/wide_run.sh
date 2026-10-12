@@ -50,7 +50,7 @@ for lib in "${!PIDS[@]}"; do
   wait "${PIDS[$lib]}" || { tail -30 "$O/ww-$lib.ptxas" "$O/wc-plain.ptxas"; exit 4; }
 done
 for lib in $LIBSET; do
-  cuobjdump -sass "$B/ww-$lib.so" | awk '/Function : /{p = ($0 ~ /chain_squareILi1E|chain_encodeILi1ELi1E|gemm_kernelILi1ELi1ELb0ELb1E/)} p' \
+  cuobjdump -sass "$B/ww-$lib.so" | awk '/Function : /{p = ($0 ~ /chain_squareILi1E|chain_encodeILi1ELi1E|gemm_kernelILi1ELi1ELb0ELb1E|gemm_kernelILi1ELi1ELb0ELb0ELi2E/)} p' \
     > "$O/ww-$lib.sass" 2>&1
 done
 sha256sum "$B"/*.so > "$O/libs.sha256"

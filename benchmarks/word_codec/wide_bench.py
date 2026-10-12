@@ -17,7 +17,11 @@ Nothing is timed before its gate passed, in this order:
   `wc.cu`'s plain FP8 kernels (`--wc`), the wide kernel on the payload store (`ww0`), decode only (`d<k>`), decode and
   tag (`t<k>`; `t<k>_ahead` with the L2 prefetch of the next wave's records, a wave being `ww_gemm_occupancy` × the
   SMs), tag only (`t0`) and the commit, every call on cold weights (a ring of copies past the L2), each arm queued
-  behind a spin kernel. Native is the fastest of cuBLASLt and the plain kernels.
+  behind a spin kernel. Native is the fastest of cuBLASLt and the plain kernels. A KW = 1 library also gates and times
+  the sketch-then-hash tag (`wide_sketch`, ro-sketch-blake3/v0) in place of ro-blake3/v1: its partial sums equal the
+  payload store's, sampled tiles' sketches equal `wide_sketch`'s over their records, sampled tags its tags, the tag
+  kernel apart the fused hash on every vector, and the root `wide_sketch.root`; arms `s<k>` (the sketch written out),
+  `h<k>` (hashed in the kernel) and `sx<k>` (written, then `ww_sketch_tags` after each call).
 
 The frontier's quantities, per field and k (`wide.json` "frontier"):
   x        k · (L / 256) · R / (encode roots/s at k = 1): the encode time of the whole store per native pass at R, from the
@@ -25,6 +29,8 @@ The frontier's quantities, per field and k (`wide.json` "frontier"):
   Δ        (L / 256) · R / (decode words/s at k): decode's share, compute only
   τ        (TAG_BLOCKS / TB / 256) · R / (BLAKE3 compressions/s): the tag's share, compute only (a WW_TB = 2 library's
            tag covers two records in TAG_BLOCKS = 9 compressions)
+  τ_sketch 2 R / (n · BLAKE3 compressions/s): the sketch's hash (two compressions a vector of n stored bytes), its
+           int8 MMAs left out (a smaller τ, a larger μ)
   μ        (1 − τ) / x, the rebuild bound
   y        layer-weighted fused time over native: total = t<k> / native + commit, decode = (d<k> − ww0) / native,
            tag = (t<k> − d<k>) / native; the rest (ww0 / native) is the layout's base. The commit is the window's, once
@@ -55,6 +61,7 @@ sys.path.insert(0, str(HERE))
 
 import bench as B  # noqa: E402
 import wide as W  # noqa: E402
+import wide_sketch as WS  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/word-codec/wide/bench/seed").digest()
 TAG_SEED = hashlib.sha256(b"verity/word-codec/wide/bench/tag-seed").digest()
@@ -98,15 +105,19 @@ class WLib:
         so.ww_workspace_tags.argtypes = [v, q]
         so.ww_workspace_tags.restype = v
         so.ww_commit.argtypes = [v, q, v, v, v]
-        cs = (ctypes.c_int * 16)()
+        so.ww_gemm_sketch.argtypes = [i, v, v, v, i, i, i, q, i, v, v, q, v, v, i, v]
+        so.ww_sketch_tags.argtypes = [v, q, q, v, v, v]
+        so.ww_sketch_commit.argtypes = [v, q, v, v, v]
+        cs = (ctypes.c_int * 17)()
         so.ww_constants(cs)
         (self.bits, self.limbs, self.payload, self.lane_words, lanes, tiles, self.gemm_warps, self.kmax, self.sqr,
-         self.msg_blocks, self.roll, self.occ, self.cc, self.b3u, self.tb, self.kw) = list(cs)
+         self.msg_blocks, self.roll, self.occ, self.cc, self.b3u, self.tb, self.kw, self.sk_m) = list(cs)
         self.field = W.field(self.bits)
         f = self.field
-        if (self.limbs, self.payload, self.lane_words, lanes, tiles) != (f.limbs, f.payload, f.lane_words(), W.LANES,
-                                                                          W.TASK_TILES):
+        if (self.limbs, self.payload, self.lane_words, lanes, tiles, self.sk_m) != (
+                f.limbs, f.payload, f.lane_words(), W.LANES, W.TASK_TILES, WS.steps(f)):
             raise RuntimeError(f"{name}: constants {list(cs)} are not wide.py's")
+        self.sketch = self.kw == 1 and self.gemm_warps == WS.T
 
     def call(self, fn: str, *args) -> None:
         rc = getattr(self.so, fn)(*args)
@@ -211,6 +222,27 @@ def record_block(store, f: W.Field, j: int, tb: int = 1) -> bytes:
 def tag_bytes(tags_u32) -> list[bytes]:
     raw = tags_u32.cpu().numpy().tobytes()
     return [raw[32 * j:32 * j + 32] for j in range(len(raw) // 32)]
+
+
+def sign_tensor(torch, f: W.Field):
+    """The window's sign matrix as the fused GEMM's B operands (`wide_sketch.sign_fragments`), on the device."""
+    frag = WS.sign_fragments(WS.signs(TAG_SEED, f), WS.steps(f))
+    return torch.from_numpy(frag.copy()).to(DEV)
+
+
+def tile_sketch(store, f: W.Field, n: int, kd: int, t: int, s):
+    """`wide_sketch`'s sketch of tile t of the device store (16 × 16 int64), from its four records alone."""
+    nch, rec = kd // W.TASK_COLS, W.LANES * f.lane_words() * f.limbs
+    G, kc = divmod(t, nch)
+    parts = []
+    for i in range(WS.T):
+        nb = WS.T * G + i
+        if nb < n // 16:
+            q = nb * nch + kc
+            parts.append(store[q * rec:(q + 1) * rec].cpu().numpy().tobytes())
+        else:
+            parts.append(bytes(4 * rec))
+    return WS.sketch(WS.vectors(b"".join(parts), 16 * WS.T, W.TASK_COLS, f), s)
 
 
 # --- gates -------------------------------------------------------------------------------------------------------------
@@ -328,7 +360,8 @@ def frontier_quantities(f: W.Field, lw: int, msg_blocks: float, read_gbps: float
     for k in ks:
         x = k * lw / W.LANE_BYTES * r / roots_s
         delta = lw / W.LANE_BYTES * r / dec[k]
-        out[k] = {"x": x, "delta": delta, "tau": tau, "mu_rebuild": (1 - tau) / x}
+        out[k] = {"x": x, "delta": delta, "tau": tau, "mu_rebuild": (1 - tau) / x,
+                  "tau_sketch": 2 / WS.vector_bytes(f) * r / comp_s}
     return out
 
 
@@ -377,6 +410,77 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
 
     def commit(root=None):
         lib.call("ww_commit", ptr(ws), blocks, seed_buf, root, stream(torch))
+
+    ntiles = WS.tiles(n, kd)
+    nvec = 16 * ntiles
+    if lib.sketch:
+        import numpy as np
+
+        sgn = sign_tensor(torch, f)
+        signs_np = WS.signs(TAG_SEED, f)
+        sk = torch.empty(ntiles * 256, dtype=torch.int32, device="cuda")
+        sws = torch.empty(lib.so.ww_workspace_bytes(nvec), dtype=torch.uint8, device="cuda")
+        stags_p = lib.so.ww_workspace_tags(ptr(sws), nvec)
+        stags = torch.as_strided(sws.view(torch.int32), (nvec * 8,), (1,), 0)
+        assert stags.data_ptr() == stags_p
+        res["sketch_vectors"] = nvec
+
+    def run_sk(k, store, x, y, partials, hashed, with_sk=True):
+        lib.call("ww_gemm_sketch", k, ptr(store), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0,
+                 int(partials), ptr(sgn), ptr(sk) if with_sk else None, 0, seed_buf if hashed else None,
+                 stags_p if hashed else None, 0, stream(torch))
+
+    def sketch_gate(k, x, pp, first: bool, kept: dict) -> dict:
+        """The sketch's gate at k: partial sums = the payload store's with the sketch and with its hash, every tile's
+        sketch written and the same under both, sampled tiles = `wide_sketch` over their records, sampled tags =
+        ro-sketch-blake3/v0 over the device's sketches, the tag kernel apart = the fused hash on every vector, the root
+        = `wide_sketch.root` over the device's tags; then later batches give the same sketches and tags."""
+        poison = POISON - (1 << 32)
+        g = {}
+        sk.fill_(poison)
+        pf = torch.full_like(pp, float("nan"))
+        run_sk(k, stores[k], x, pf, True, False)
+        torch.cuda.synchronize()
+        g["partials_equal"] = bool(torch.equal(pf, pp))
+        g["written"] = not bool((sk.view(-1, 16) == poison).all(1).any())
+        sk1 = sk.clone()
+        sk.fill_(poison)
+        stags.fill_(poison)
+        pf.fill_(float("nan"))
+        run_sk(k, stores[k], x, pf, True, True)
+        torch.cuda.synchronize()
+        g["hashed_partials_equal"] = bool(torch.equal(pf, pp))
+        g["stable"] = bool(torch.equal(sk, sk1))
+        g["tags_written"] = not bool((stags.view(-1, 8) == poison).all(1).any())
+        if first:
+            rng = random.Random(100 + k)
+            sample = sorted({0, ntiles - 1, *rng.sample(range(ntiles), min(6, ntiles))})
+            dev = sk1.view(ntiles, 16, 16).cpu().numpy()
+            g["sketch_vs_reference"] = {"sampled": len(sample), "mismatch": [
+                t for t in sample if not np.array_equal(tile_sketch(stores[k], f, n, kd, t, signs_np), dev[t])]}
+            vs = sorted({0, nvec - 1, *rng.sample(range(nvec), min(30, nvec))})
+            want = WS.tags_of(TAG_SEED, dev.reshape(-1, 16).astype(np.int64), 0, which=vs)
+            devt = stags.view(-1, 8)
+            g["tags_vs_reference"] = {"sampled": len(vs), "mismatch": [
+                v for v, y in zip(vs, want) if devt[v].cpu().numpy().tobytes() != y][:8]}
+            fused = stags.clone()
+            stags.fill_(poison)
+            lib.call("ww_sketch_tags", ptr(sk1), nvec, 0, seed_buf, stags_p, stream(torch))
+            torch.cuda.synchronize()
+            g["apart_equal"] = bool(torch.equal(stags, fused))
+            root = ctypes.create_string_buffer(64)
+            lib.call("ww_sketch_commit", ptr(sws), nvec, seed_buf, root, stream(torch))
+            g["root_vs_reference"] = root.raw == WS.root(TAG_SEED, tag_bytes(stags))
+            kept[k] = (sk1, stags.clone())
+        else:
+            g["batch_stable"] = bool(torch.equal(sk1, kept[k][0]) and torch.equal(stags, kept[k][1]))
+        g["ok"] = (g["partials_equal"] and g["written"] and g["hashed_partials_equal"] and g["stable"]
+                   and g["tags_written"] and g.get("batch_stable", True)
+                   and (not first or (not g["sketch_vs_reference"]["mismatch"] and not g["tags_vs_reference"]["mismatch"]
+                                      and g["apart_equal"] and g["root_vs_reference"])))
+        return g
+
+    sk_kept = {}
 
     keyed = None
     for gi, mb in enumerate(batches):
@@ -427,6 +531,8 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
                 res.setdefault("first_tags_ok", {})[k] = not bad
             else:
                 entry["tags_stable"][k] = bool(torch.equal(tags, res["_first_tags"][k]))
+            if lib.sketch:
+                entry.setdefault("sketch", {})[k] = sketch_gate(k, x, pp, gi == 0, sk_kept)
         if gi == 0:
             res["_first_tags"] = first_tags
         ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
@@ -438,7 +544,8 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
                        and all(entry["prefetch_equal"].values())
                        and all(not v["mismatch"] for v in entry["tags_vs_reference"].values())
                        and all(entry["root_vs_reference"].values()) and all(entry["tags_stable"].values())
-                       and entry["atomic_vs_torch_rel"] < 1e-5)
+                       and entry["atomic_vs_torch_rel"] < 1e-5
+                       and all(g["ok"] for g in entry.get("sketch", {}).values()))
         res["gate"][mb] = entry
         log(f"gemm gate {lib.name} {name} M={mb}: {'ok' if entry['ok'] else 'FAIL'} (payload rel {err:.1e})"
             + ("" if entry["ok"] else f" {entry}"))
@@ -524,6 +631,26 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
             arms[f"d{k}"] = arm(k, False)
             arms[f"t{k}"] = arm(k, True)
             arms[f"t{k}_ahead"] = arm(k, True, prefetch=True)
+        if lib.sketch:
+            skp, sgp = ptr(sk), ptr(sgn)
+
+            def arm_sk(k, hashed, apart=False):
+                ps = [ptr(b) for b in ring[k]]
+                sp, tp, skx = (seed_buf, stags_p, None) if hashed else (None, None, skp)
+
+                def go():
+                    rc = 0
+                    for p in ps:
+                        rc |= so.ww_gemm_sketch(k, p, xp, yp, mb, n, kd, 0, 0, sgp, skx, 0, sp, tp, 0, st)
+                        if apart:
+                            rc |= so.ww_sketch_tags(skp, nvec, 0, seed_buf, stags_p, st)
+                    if rc:
+                        raise RuntimeError(f"ww_gemm_sketch k={k} hashed={hashed} M={mb}: error {rc}")
+                return go
+            for k in ks:
+                arms[f"s{k}"] = arm_sk(k, False)
+                arms[f"h{k}"] = arm_sk(k, True)
+                arms[f"sx{k}"] = arm_sk(k, False, apart=True)
         lib.set_key(W.key(f, SEED, max(ks)))
         for fn in arms.values():
             fn()
@@ -542,7 +669,10 @@ def gemm_case(lib: WLib, torch, name: str, n: int, kd: int, batches, ks, reps: i
             + (f", wc {med['wc_plain'] * 1e6:.1f}, wc_pipe {med['wc_pipe'] * 1e6:.1f}" if "wc_plain" in med else "")
             + f"); ww0 {med['ww0'] / native:.2f}x, t0 {med['t0'] / native:.2f}x, commit {med['commit'] / native:.2f}x, "
             + ", ".join(f"d{k} {med[f'd{k}'] / native:.2f}x t{k} {med[f't{k}'] / native:.2f}x "
-                        f"(L2 prefetch {med[f't{k}_ahead'] / native:.2f}x, wave {wave(k, mb, True)} CTAs)" for k in ks))
+                        f"(L2 prefetch {med[f't{k}_ahead'] / native:.2f}x, wave {wave(k, mb, True)} CTAs)" for k in ks)
+            + ("".join(f"; sketch k{k}: s {med[f's{k}'] / native:.3f}x, hashed {med[f'h{k}'] / native:.3f}x, "
+                       f"tags apart {med[f'sx{k}'] / native:.3f}x (wave {wave(k, mb, 3)} CTAs)" for k in ks)
+               if lib.sketch else ""))
     del ring, wring, stores, pay, w, ws, plain_ring
     torch.cuda.empty_cache()
     return res
@@ -575,12 +705,39 @@ def pass_commit(lib: WLib, torch, reps: int, log) -> dict:
     return {"blocks": blocks, "median_s": med, "times_s": times}
 
 
-def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log) -> dict:
+def pass_vectors() -> int:
+    """The sketch's vectors (and tags) of one pass: 16 a tile, LAYERS layers of the four shapes."""
+    return LAYERS * sum(16 * WS.tiles(n, kd) for n, kd in B.SHAPES.values())
+
+
+def pass_sketch_commit(lib: WLib, torch, reps: int, log) -> dict:
+    """`pass_commit` for the sketch's tags: the leaves (a tile each) and tree over the pass's vectors."""
+    nv = pass_vectors()
+    ws = torch.empty(lib.so.ww_workspace_bytes(nv), dtype=torch.uint8, device="cuda")
+    torch.as_strided(ws.view(torch.int32), (nv * 8,), (1,), 0).random_(-(1 << 31), (1 << 31) - 1)
+    seed_buf = ctypes.create_string_buffer(TAG_SEED, 32)
+    so, st = lib.so, stream(torch)
+
+    def go():
+        if so.ww_sketch_commit(ptr(ws), nv, seed_buf, None, st):
+            raise RuntimeError("ww_sketch_commit: error")
+    go()
+    torch.cuda.synchronize()
+    times = [queued(lib, torch, go) for _ in range(reps)]
+    med = statistics.median(times)
+    log(f"pass sketch commit {lib.name}: {nv} tags in {med * 1e3:.3f} ms ({nv / med / 1e9:.2f} G tags/s)")
+    del ws
+    torch.cuda.empty_cache()
+    return {"vectors": nv, "median_s": med, "times_s": times}
+
+
+def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log, sketch: bool = False) -> dict:
     """One pass of fused GEMMs (decode and tag at k: LAYERS layers of the four linears in order, 232 MB of store a
     layer at p521, so each linear's store is cold again by its next layer) alone, and with the previous window's
     commit (`pass_commit`'s, over the pass's tags) on a second stream from the pass's start. y_commit_overlap is the
     second's excess over the first, over LAYERS times the four linears' native time: the commit's cost to a prover that
-    commits window n while it steps through window n + 1. The kernels, stores and key are the ones `gemm_case` gated."""
+    commits window n while it steps through window n + 1. The kernels, stores and key are the ones `gemm_case` gated.
+    sketch: the GEMMs hash their sketches (`ww_gemm_sketch`), and the commit is the sketch's (`pass_sketch_commit`)."""
     f = lib.field
     lib.set_key(W.key(f, SEED, k))
     stores, wss = {}, {}
@@ -590,17 +747,19 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log)
         s = torch.empty_like(pay)
         lib.call("ww_encode", ptr(pay), ptr(s), pay.numel() // f.limbs, 0, k, 188 * 4, stream(torch))
         torch.cuda.synchronize()
-        blocks = pay.numel() // f.limbs // lib.lane_words // lib.tb
+        blocks = 16 * WS.tiles(n, kd) if sketch else pay.numel() // f.limbs // lib.lane_words // lib.tb
         ws = torch.empty(lib.so.ww_workspace_bytes(blocks), dtype=torch.uint8, device="cuda")
         stores[name], wss[name] = s, (ws, lib.so.ww_workspace_tags(ptr(ws), blocks))
         del pay
-    pblocks = pass_blocks(lib)
+    pblocks = pass_vectors() if sketch else pass_blocks(lib)
     pws = torch.empty(lib.so.ww_workspace_bytes(pblocks), dtype=torch.uint8, device="cuda")
     torch.as_strided(pws.view(torch.int32), (pblocks * 8,), (1,), 0).random_(-(1 << 31), (1 << 31) - 1)
     seed_buf = ctypes.create_string_buffer(TAG_SEED, 32)
+    sgn = sign_tensor(torch, f) if sketch else None
+    commit_fn = "ww_sketch_commit" if sketch else "ww_commit"
     sa, sb = torch.cuda.Stream(), torch.cuda.Stream()
     so = lib.so
-    out = {"k": k, "per_batch": {}}
+    out = {"k": k, "sketch": sketch, "per_batch": {}}
     for mb in batches:
         xs = {name: torch.randn(mb, B.SHAPES[name][1], device="cuda").to(torch.float8_e4m3fn) for name in cases}
         ys = {name: torch.zeros(mb, B.SHAPES[name][0], dtype=torch.float32, device="cuda") for name in cases}
@@ -613,15 +772,20 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log)
                 a.record(sa)
             if with_commit:
                 sb.wait_event(a)
-                if so.ww_commit(ptr(pws), pblocks, seed_buf, None, sb.cuda_stream):
-                    raise RuntimeError("ww_commit: error")
+                if getattr(so, commit_fn)(ptr(pws), pblocks, seed_buf, None, sb.cuda_stream):
+                    raise RuntimeError(f"{commit_fn}: error")
                 c_end.record(sb)
             rc = 0
             for _ in range(LAYERS):
                 for name in cases:
                     n, kd = B.SHAPES[name]
-                    rc |= so.ww_gemm(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), mb, n, kd,
-                                     0, 0, seed_buf, wss[name][1], 0, sa.cuda_stream)
+                    if sketch:
+                        rc |= so.ww_gemm_sketch(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]),
+                                                mb, n, kd, 0, 0, ptr(sgn), None, 0, seed_buf, wss[name][1], 0,
+                                                sa.cuda_stream)
+                    else:
+                        rc |= so.ww_gemm(k, ptr(stores[name]), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), mb, n,
+                                         kd, 0, 0, seed_buf, wss[name][1], 0, sa.cuda_stream)
             if rc:
                 raise RuntimeError(f"ww_gemm k={k} M={mb}: error {rc}")
             if with_commit:
@@ -638,18 +802,22 @@ def pass_overlap(lib: WLib, torch, cases: dict, k: int, batches, reps: int, log)
         ta, tb = statistics.median(alone), statistics.median(both)
         out["per_batch"][mb] = {"alone_s": alone, "with_commit_s": both, "native_pass_s": native,
                                 "y_pass": ta / native, "y_commit_overlap": (tb - ta) / native}
-        log(f"pass overlap {lib.name} k={k} M={mb}: a pass of fused GEMMs {ta * 1e3:.2f} ms ({ta / native:.2f}x native),"
-            f" with the commit beside it {tb * 1e3:.2f} ms: commit +{(tb - ta) / native:.3f}")
+        log(f"pass overlap {lib.name}{' sketch' if sketch else ''} k={k} M={mb}: a pass of fused GEMMs "
+            f"{ta * 1e3:.2f} ms ({ta / native:.2f}x native), with the commit beside it {tb * 1e3:.2f} ms: "
+            f"commit +{(tb - ta) / native:.3f}")
         del xs, ys
     del stores, wss, pws
     torch.cuda.empty_cache()
     return out
 
 
-def breakdown(cases: dict, batches, ks, commit_s: float) -> dict:
+def breakdown(cases: dict, batches, ks, commit_s: float, sketch_commit_s: float | None = None) -> dict:
     """Layer-weighted: Σ over the four linears of each arm's time over Σ of native's, per batch and k. The commit is
     the window's, once a pass (`pass_commit`), over LAYERS times the four linears' native time; `y_commit_linear` is a
-    commit launched per linear, for comparison."""
+    commit launched per linear, for comparison. With the sketch's arms, row[k]["sketch"]: total = h<k> / native + its
+    pass commit (`pass_sketch_commit`), tag = (h<k> − d<k>) / native (the sketch and its hash in the kernel),
+    sketch_only = (s<k> − d<k>) / native (the sketch written out, unhashed) and total_apart = sx<k> / native + the
+    commit (the sketch hashed by `ww_sketch_tags` after each call)."""
     out = {}
     for mb in batches:
         t = [c["times"][mb] for c in cases.values()]
@@ -662,14 +830,22 @@ def breakdown(cases: dict, batches, ks, commit_s: float) -> dict:
                       "y_tag": (s[f"t{k}"] - s[f"d{k}"]) / native, "y_commit": y_commit,
                       "y_commit_linear": s["commit"] / native, "y_base": s["ww0"] / native,
                       "y_total_prefetch": s[f"t{k}_ahead"] / native + y_commit}
+            if sketch_commit_s is not None and f"h{k}" in s:
+                y_cs = sketch_commit_s / (LAYERS * native)
+                row[k]["sketch"] = {"y_total": s[f"h{k}"] / native + y_cs, "y_decode": row[k]["y_decode"],
+                                    "y_tag": (s[f"h{k}"] - s[f"d{k}"]) / native, "y_commit": y_cs,
+                                    "y_base": row[k]["y_base"], "y_sketch_only": (s[f"s{k}"] - s[f"d{k}"]) / native,
+                                    "y_total_apart": s[f"sx{k}"] / native + y_cs,
+                                    "y_tag_apart": (s[f"sx{k}"] - s[f"d{k}"]) / native}
         out[mb] = row
     return out
 
 
-def mixed(cases: dict, batches, ks, commit_s: float) -> dict:
+def mixed(cases: dict, batches, ks, commit_s: float, tag_arm: str = "t") -> dict:
     """Each linear at a k of its own (public and fixed per linear), from the same arms as `breakdown`: per batch, the
     assignments on the lower envelope of y_total against k_mean, the mean k over the stored words (the linears
-    weighted by their weights' bytes), which x and Δ scale with. The uniform assignments are `breakdown`'s rows."""
+    weighted by their weights' bytes), which x and Δ scale with. The uniform assignments are `breakdown`'s rows.
+    tag_arm "h": the sketch hashed in the kernel, commit_s the sketch's."""
     names = list(cases)
     wbytes = {nm: cases[nm]["weight_bytes"] for nm in names}
     out = {}
@@ -685,8 +861,8 @@ def mixed(cases: dict, batches, ks, commit_s: float) -> dict:
                 return sum(t[nm]["median_s"][a.format(k=kk[nm])] for nm in names) / native
             share = {nm: wbytes[nm] / sum(wbytes.values()) for nm in names}
             rows.append({"ks": kk, "share": share, "k_mean": sum(share[nm] * kk[nm] for nm in names),
-                         "y_total": arm("t{k}") + y_commit, "y_decode": arm("d{k}") - arm("ww0"),
-                         "y_tag": arm("t{k}") - arm("d{k}"), "y_commit": y_commit, "y_base": arm("ww0")})
+                         "y_total": arm(tag_arm + "{k}") + y_commit, "y_decode": arm("d{k}") - arm("ww0"),
+                         "y_tag": arm(tag_arm + "{k}") - arm("d{k}"), "y_commit": y_commit, "y_base": arm("ww0")})
         env = []
         for r in sorted(rows, key=lambda r: (-r["k_mean"], r["y_total"])):
             if not env or r["y_total"] < env[-1]["y_total"]:
@@ -724,11 +900,13 @@ def clocks(lib: WLib, torch, log, what: str, squarings_s: float) -> dict:
 
 
 def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: float | None = None,
-           po: dict | None = None, mx: dict | None = None) -> list[dict]:
+           po: dict | None = None, mx: dict | None = None, po_sk: dict | None = None,
+           mx_sk: dict | None = None) -> list[dict]:
     """One point per batch and k with the commit serial after the pass, and, where `pass_overlap` measured it, one
     with the commit beside the next pass (arithmetic ".../commit-overlapped"); and from `mixed`'s envelope
     (".../mixed-k"), for each quarter step of the mean k, the first non-uniform assignment at or above it (the whole
-    envelope is in wide.json)."""
+    envelope is in wide.json). The sketch's rows give the same under ".../sketch" (hashed in the kernel, τ the
+    sketch's), and ".../sketch-apart" (hashed by a kernel after each call)."""
     f = lib.field
     arith = (f"cuda-int32/{'mersenne' if f.p == (1 << f.bits) - 1 else 'pseudo-mersenne'}/sqr{lib.sqr}"
              + ("/rolled" if lib.roll else "") + (f"/occ{lib.occ}" if lib.occ > 1 else "")
@@ -746,6 +924,9 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
                 "measured": True, "label": f"{f.name} k={k} {lib.name}{suffix}", "run": run_id, "art": None,
                 "gpu": gpu, "sm_mhz": sm_mhz}
 
+    def sketch_q(q: dict) -> dict:
+        return dict(q, tau=q["tau_sketch"], mu_rebuild=(1 - q["tau_sketch"]) / q["x"])
+
     for mb, row in bd.items():
         for k, q in fq.items():
             if k not in row:
@@ -754,21 +935,36 @@ def points(lib: WLib, fq: dict, bd: dict, run_id: str | None, gpu: str, sm_mhz: 
             o = (po or {}).get(k, {}).get("per_batch", {}).get(mb)
             if o is not None:
                 out.append(point(k, mb, q, row[k], max(0.0, o["y_commit_overlap"]), "/commit-overlapped"))
-    for mb, rows in (mx or {}).items():
-        picked = []
-        for g in (i / 4 for i in range(4, 4 * max(fq) + 1)):
-            r = next((r for r in rows if r["k_mean"] >= g - 1e-9), None)
-            if r is not None and len(set(r["ks"].values())) > 1 and r not in picked:
-                picked.append(r)
-        for r in picked:
-            km = r["k_mean"]
-            q = {"x": km * fq[min(fq)]["x"] / min(fq), "tau": fq[min(fq)]["tau"],
-                 "delta": sum(sh * fq[r["ks"][nm]]["delta"] for nm, sh in r["share"].items())}
-            q["mu_rebuild"] = (1 - q["tau"]) / q["x"]
-            p = point(km, mb, q, r, r["y_commit"], "/mixed-k")
-            p["ks"] = r["ks"]
-            p["label"] = f"{f.name} k=" + "".join(f"{nm[0]}{k}" for nm, k in r["ks"].items()) + f" {lib.name}/mixed-k"
-            out.append(p)
+            y = row[k].get("sketch")
+            if y is None:
+                continue
+            out.append(point(k, mb, sketch_q(q), y, y["y_commit"], "/sketch"))
+            out.append(point(k, mb, sketch_q(q), dict(y, y_total=y["y_total_apart"], y_tag=y["y_tag_apart"]),
+                             y["y_commit"], "/sketch-apart"))
+            o = (po_sk or {}).get(k, {}).get("per_batch", {}).get(mb)
+            if o is not None:
+                out.append(point(k, mb, sketch_q(q), y, max(0.0, o["y_commit_overlap"]), "/sketch/commit-overlapped"))
+
+    def mixed_points(mxd: dict, suffix: str, tau_key: str) -> None:
+        for mb, rows in mxd.items():
+            picked = []
+            for g in (i / 4 for i in range(4, 4 * max(fq) + 1)):
+                r = next((r for r in rows if r["k_mean"] >= g - 1e-9), None)
+                if r is not None and len(set(r["ks"].values())) > 1 and r not in picked:
+                    picked.append(r)
+            for r in picked:
+                km = r["k_mean"]
+                q = {"x": km * fq[min(fq)]["x"] / min(fq), "tau": fq[min(fq)][tau_key],
+                     "delta": sum(sh * fq[r["ks"][nm]]["delta"] for nm, sh in r["share"].items())}
+                q["mu_rebuild"] = (1 - q["tau"]) / q["x"]
+                p = point(km, mb, q, r, r["y_commit"], suffix)
+                p["ks"] = r["ks"]
+                p["label"] = (f"{f.name} k=" + "".join(f"{nm[0]}{k}" for nm, k in r["ks"].items())
+                              + f" {lib.name}{suffix}")
+                out.append(p)
+
+    mixed_points(mx or {}, "/mixed-k", "tau")
+    mixed_points(mx_sk or {}, "/sketch/mixed-k", "tau_sketch")
     return out
 
 
@@ -890,23 +1086,38 @@ def main() -> int:
                 if not cases[name].get("ok", False):
                     break
             if all(c.get("ok", False) for c in cases.values()) and len(cases) == len(B.SHAPES):
+                lr = res["libs"][lib.name]
                 pc = pass_commit(lib, torch, a.reps, log)
-                res["libs"][lib.name]["pass_commit"] = pc
-                bd = breakdown(cases, batches, ks, pc["median_s"])
-                res["libs"][lib.name]["breakdown"] = bd
-                mx = mixed(cases, [mb for mb in (1, 32) if mb in batches], ks, pc["median_s"])
-                res["libs"][lib.name]["mixed"] = mx
-                save()
+                lr["pass_commit"] = pc
+                psc = pass_sketch_commit(lib, torch, a.reps, log) if lib.sketch else None
+                lr["pass_sketch_commit"] = psc
+                bd = breakdown(cases, batches, ks, pc["median_s"], psc["median_s"] if psc else None)
+                lr["breakdown"] = bd
                 fb = [mb for mb in (1, 32) if mb in batches]
-                po = {k: pass_overlap(lib, torch, cases, k, fb, a.reps, log) for k in ks}
-                res["libs"][lib.name]["pass_overlap"] = po
-                fq = res["libs"][lib.name]["frontier"]
-                res["points"] += points(lib, fq, bd, os.environ.get("RESEARCH_RUN_ID"), props.name,
-                                        res["libs"][lib.name].get("clock", {}).get("sm_mhz"), po, mx)
+                mx = mixed(cases, fb, ks, pc["median_s"])
+                mx_sk = mixed(cases, fb, ks, psc["median_s"], "h") if psc else None
+                lr["mixed"], lr["mixed_sketch"] = mx, mx_sk
+                save()
                 for mb, row in bd.items():
                     log(f"layer-weighted {lib.name} M={mb}: base {row['base']:.2f}, " + ", ".join(
                         f"k{k} total {row[k]['y_total']:.2f} (decode {row[k]['y_decode']:.2f}, tag {row[k]['y_tag']:.2f}"
                         f", commit {row[k]['y_commit']:.3f}; per linear {row[k]['y_commit_linear']:.2f})" for k in ks))
+                    for k in ks:
+                        y = row[k].get("sketch")
+                        if y:
+                            log(f"layer-weighted {lib.name} sketch M={mb} k{k}: total {y['y_total']:.3f} (decode "
+                                f"{y['y_decode']:.3f}, sketch+hash {y['y_tag']:.3f}, sketch alone "
+                                f"{y['y_sketch_only']:.3f}, commit {y['y_commit']:.4f}); hashed apart "
+                                f"{y['y_total_apart']:.3f}")
+                po_sk = ({k: pass_overlap(lib, torch, cases, k, fb, a.reps, log, sketch=True) for k in ks}
+                         if lib.sketch else None)
+                lr["pass_overlap_sketch"] = po_sk
+                save()
+                po = {k: pass_overlap(lib, torch, cases, k, fb, a.reps, log) for k in ks}
+                lr["pass_overlap"] = po
+                fq = lr["frontier"]
+                res["points"] += points(lib, fq, bd, os.environ.get("RESEARCH_RUN_ID"), props.name,
+                                        lr.get("clock", {}).get("sm_mhz"), po, mx, po_sk, mx_sk)
             save()
     (out_dir / "points.json").write_text(json.dumps(res["points"], indent=1))
     save()
