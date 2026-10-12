@@ -27,6 +27,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
+
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.store.interface import IDENTITY, Append, Codec, PageLayout, Receipt
 from verity_vllm.store.registry import Store, TagReceipt
@@ -53,19 +55,50 @@ class TorchBacking:
         flat = t.detach().reshape(-1).view(_torch().uint8)
         return cls(flat, flat.numel() // block_bytes * block_bytes)
 
-    @classmethod
-    def of_storage(cls, t: Any) -> TorchBacking:
-        """A tensor's whole storage (a KV layer's pages under any view)."""
-        torch = _torch()
-        flat = torch.empty(0, dtype=torch.uint8, device=t.device).set_(t.untyped_storage())
-        return cls(flat, flat.numel())
-
     def read(self, offset: int, n: int) -> bytes:
         return self.flat[offset:offset + n].cpu().numpy().tobytes()
 
     def write(self, offset: int, data: bytes) -> None:
         torch = _torch()
         self.flat[offset:offset + len(data)].copy_(torch.frombuffer(bytearray(data), dtype=torch.uint8))
+
+
+def storage_bytes(t: Any) -> Any:
+    """A tensor's whole storage as a flat uint8 tensor."""
+    torch = _torch()
+    return torch.empty(0, dtype=torch.uint8, device=t.device).set_(t.untyped_storage())
+
+
+class PagedBacking:
+    """A KV layer's pages as one region, wherever its planes sit in a storage it may share with other layers: the
+    region's bytes are its pages in order, a page's planes in order (`PageLayout`'s default strides), and plane ``k``
+    of page ``p`` is ``plane_bytes`` at byte ``base + p * page_stride + k * plane_stride`` of ``flat``."""
+
+    def __init__(self, flat: Any, base: int, physical: PageLayout) -> None:
+        self.flat, self.base, self.physical = flat, base, physical
+        self.plane = physical.plane_bytes
+        self.nbytes = physical.pages * physical.planes * self.plane
+
+    def where(self, offset: int) -> int:
+        """The storage byte of region byte ``offset``."""
+        q, x = divmod(offset, self.plane)
+        p, k = divmod(q, self.physical.planes)
+        ps, ks = self.physical.strides()
+        return self.base + p * ps + k * ks + x
+
+    def _runs(self, offset: int, n: int):
+        while n > 0:
+            c = min(n, self.plane - offset % self.plane)
+            yield offset, self.where(offset), c
+            offset, n = offset + c, n - c
+
+    def read(self, offset: int, n: int) -> bytes:
+        return b"".join(self.flat[w:w + c].cpu().numpy().tobytes() for _, w, c in self._runs(offset, n))
+
+    def write(self, offset: int, data: bytes) -> None:
+        torch = _torch()
+        for o, w, c in self._runs(offset, len(data)):
+            self.flat[w:w + c].copy_(torch.frombuffer(bytearray(data[o - offset:o - offset + c]), dtype=torch.uint8))
 
 
 def _torch():
@@ -118,6 +151,17 @@ def model_weights(runner: Any) -> list[WeightRegion]:
     return out
 
 
+def _check_disjoint(starts: list[tuple[int, np.ndarray]], plane_bytes: int) -> None:
+    """No two layers' planes overlap in a storage."""
+    by: dict[int, list[np.ndarray]] = {}
+    for key, xs in starts:
+        by.setdefault(key, []).append(xs)
+    for xs in by.values():
+        a = np.sort(np.concatenate(xs))
+        if (np.diff(a) < plane_bytes).any():
+            raise ValueError("two KV layers' pages overlap in one storage")
+
+
 def _unwrap(m: Any) -> Any:
     while not hasattr(m, "named_parameters") and hasattr(m, "runnable"):
         m = m.runnable
@@ -155,21 +199,37 @@ class Binder:
                                 receipt=w.receipt or self.receipt, source=w.source, encode=w.encode)
 
     def on_kv(self, runner: Any, kv_cache_config: Any) -> None:
+        """Register the KV pool: each attention layer's pages a region (`PagedBacking`, so layers that share one
+        storage are each their own pages); the storages' bytes no layer's page holds are counted unregistered."""
         caches = list(getattr(runner, "kv_caches", None) or ())
         if not caches:
             raise RuntimeError("the model runner bound no KV caches")
-        if len({c.untyped_storage().data_ptr() for c in caches}) != len(caches):
-            raise NotImplementedError("layers sharing one KV tensor (cross-layer KV sharing)")
         slots = int(runner.cache_config.block_size)
         kbs = getattr(runner, "_kernel_block_sizes", None) or [slots]
         if any(int(k) != slots for k in kbs):
             raise NotImplementedError(f"kernel block sizes {kbs} other than the manager's {slots}")
         pages = int(kv_cache_config.num_blocks)
-        layout = page_layout(caches[0], pages, slots)
+        flats: dict[int, Any] = {}
+        backings, starts, layout = [], [], None
+        for t in caches:
+            phys = page_layout(t, pages, slots)
+            key = t.untyped_storage().data_ptr()
+            flat = flats.setdefault(key, storage_bytes(t))
+            b = PagedBacking(flat, t.storage_offset() * t.element_size(), phys)
+            ps, ks = phys.strides()
+            starts.append((key, (b.base + np.arange(pages)[:, None] * ps + np.arange(phys.planes)[None, :] * ks).ravel()))
+            backings.append(b)
+            lay = PageLayout(pages, slots, phys.slot_bytes, phys.planes, slot_major=phys.slot_major)
+            if layout not in (None, lay):
+                raise NotImplementedError("KV layers of different page shapes")
+            layout = lay
+        _check_disjoint(starts, layout.plane_bytes)
+        held = sum(f.numel() for f in flats.values()) - sum(b.nbytes for b in backings)
+        if held:
+            self.unregistered["kv[unpaged]"] = held
         self.slots = slots
-        self.store.register_kv_pool("kv", [TorchBacking.of_storage(c) for c in caches], layout,
-                                    block_bytes=self.block_bytes, codec=self.kv_codec, receipt=self.receipt,
-                                    encode=False)
+        self.store.register_kv_pool("kv", backings, layout, block_bytes=self.block_bytes, codec=self.kv_codec,
+                                    receipt=self.receipt, encode=False)
 
     # --- the scheduler's steps --------------------------------------------------------------------------------------
 

@@ -9,7 +9,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.store.binder import Binder, TorchBacking, page_layout  # noqa: E402
+from verity_vllm.store.binder import Binder, PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
 from verity_vllm.store.interface import Append  # noqa: E402
 from verity_vllm.store.registry import Store  # noqa: E402
 
@@ -53,24 +53,41 @@ class Queue:
         self.q.extend(bs)
 
 
-def runner():
+def runner(shared: bool = False):
     model = torch.nn.Sequential(torch.nn.Linear(64, 32, bias=False), torch.nn.LayerNorm(32))
-    caches = [torch.zeros(2, PAGES, SLOTS, HEADS, DIM, dtype=torch.bfloat16) for _ in range(3)]
+    if shared:
+        whole = torch.zeros(PAGES, 3, 2, SLOTS, HEADS, DIM, dtype=torch.bfloat16)
+        caches = [whole[:, i] for i in range(3)]
+    else:
+        caches = [torch.zeros(2, PAGES, SLOTS, HEADS, DIM, dtype=torch.bfloat16) for _ in range(3)]
     return SimpleNamespace(model=model, kv_caches=caches, cache_config=SimpleNamespace(block_size=SLOTS),
                            _kernel_block_sizes=[SLOTS])
 
 
-def test_registration_from_a_runner():
+def test_a_layer_of_a_shared_storage_reads_as_its_own_pages():
+    r = runner(shared=True)
+    t = r.kv_caches[1]
+    t[2, 1, 0, 0, 0] = 7.0
+    b = PagedBacking(storage_bytes(t), t.storage_offset() * 2, page_layout(t, PAGES, SLOTS))
+    assert b.nbytes == PAGES * 2 * 2048
+    k = (2 * 2 + 1) * 2048
+    assert b.read(k, 2) == torch.tensor([7.0], dtype=torch.bfloat16).view(torch.uint8).numpy().tobytes()
+    b.write(k + 2046, b"\x01\x02\x03\x04")
+    assert t[2, 1, -1, -1, -1:].view(torch.uint8).tolist() == [1, 2] and t[3, 0, 0, 0, :1].view(torch.uint8).tolist() == [3, 4]
+
+
+@pytest.mark.parametrize("shared", [False, True])
+def test_registration_from_a_runner(shared):
     s = Store()
     b = Binder(s, block_bytes=1024)
-    r = runner()
+    r = runner(shared)
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     st = b.stats()
     assert st["bytes_by_kind"] == {"weights": 64 * 32 * 4, "kv": 3 * 2 * PAGES * 2048}
     assert st["unregistered"] == 2 and st["unregistered_bytes"] == 2 * 32 * 4
     assert [x.name for x in s.layout().regions][:1] == ["0.weight"]
-    assert s.pool.ids.shape == (PAGES, 4) and s.pool.ids[1].tolist() == [2, 3, 2 * PAGES + 2, 2 * PAGES + 3]
+    assert s.pool.ids.shape == (PAGES, 4) and s.pool.ids[1].tolist() == [4, 5, 6, 7]
 
 
 def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
@@ -91,7 +108,7 @@ def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
     so = SimpleNamespace(num_scheduled_tokens={"a": 20, "c": 3})
     assert b.appends(sched, so) == [Append(1, 0, 16), Append(2, 0, 4), Append(3, 0, 3)]
     b.on_schedule(sched, so)
-    assert s.in_pass and s._open_pass.blocks[0].tolist() == [2, 3, 2 * PAGES + 2, 2 * PAGES + 3]
+    assert s.in_pass and s._open_pass.blocks[0].tolist() == [4, 5, 6, 7]
     b.end()
     assert not s.in_pass and b.step == 1
     reqs["a"].num_computed_tokens = 21
