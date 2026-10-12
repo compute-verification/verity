@@ -7,6 +7,7 @@ import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
 import Proofs.Flock.C3.RegLevels.Top
+import Proofs.Flock.C3.Opening.Read
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
@@ -23,7 +24,8 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
   n0) and `_hbr` at it from n1–n5 (`hbr_honest`).
 * (c) `C3/HoloValues/`, `FlockC3.HoloValues`: each rep plays `holoRepC` (`HReps`; at the honest family, n2).
 * (d) `C3/Sparse/`, `FlockC3.Sparse`: each rep's sparse phase at session level (`HSparse`; n3).
-* (e) `C3/Opening/`, `FlockC3.Opening`: R's opening on the two claims (`HOpening`; n4).
+* (e) `C3/Opening/`, `FlockC3.Opening`: R's opening on the two claims (`HOpening`; n4), at the honest family from
+  its read fact (`OpeningRead`, `hOpening_of_read`).
 * (f) `C3/RegLevels/`, `FlockC3.RegLevels`: R's levels against the registered cap (`HRegLevels`; n5) and R's
   registered top from the verifier's hold of the inner transcript (`stackedTop_of_innerCommits`, t0).
 * (g) `C3/PubRows/`, `FlockC3.PubRows`: the public rows per value prefix (`HPubRows`) and the tape (`HTape`), at the
