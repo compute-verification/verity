@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Scratch job (cursor/rec-reg-integration-b8d8, never a PR): main + #1798 (R's top registered at staging) + #1793 + #1786.
+# Scratch job (cursor/rec-r-shape-integration-8e55, never a PR): main + #1798 (R's top registered at staging, R's shape in
+# META: rec-r-shape-staging-8e55) + #1793 (rec-c3-r-shape-8e55) + #1786 + #1810.
 # 88-rec-c3-inner.sh N=16 SPARSE=18,13,6,0 STACKED=1, R's salted top registered at staging (the entry stacked of the staged
 # statement's circuit registration, stage/circuit-registration.json, whose digest META binds; the proxy holds stacked/rep0's
 # binding round to it and to the circuit reps' statement digest), then over its inner session:
@@ -25,6 +26,8 @@ E=$O/e2e; mkdir -p $E; X=$O/exits.txt
 H=$O/honest/out; ST=$K/honest/stage; IC=$ST/circuit.txt; IP=$ST/pub-16.bin; IQ=$ST/partition.json; IG=$ST/program.json
 [ -f $H/inner/session/session.json ] && [ -f $IQ ] || { echo "no inner session or partition" | tee -a $X; exit 1; }
 sha256sum $LEAN_BIN $B > $E/bins.sha256
+# the fixture rec-c3-inner's statement files: the staged circuit's header (its META) and the circuit registration META binds
+head -2 $IC > $E/circuit-meta.txt; cp $ST/circuit-registration.json $E/
 
 python3 - $H/inner > $E/hello.json <<'EOF'
 import json, sys
@@ -71,7 +74,7 @@ print(json.dumps({"format": reg["format"], "values": [e["value"] for e in reg["r
                   "statement_digests": digests, "one_statement_digest": len(set(digests.values())) == 1,
                   "program_is_metas": reg["program"] == meta["program_sha512"] == stage.get("program_sha512"),
                   "partition_is_metas": reg["partition"] == meta["partition"]["digest"] == stage.get("partition_digest"),
-                  "salts": len(salts), "salt_leaks": leaks, "visible_checked": [str(f) for f in visible if f.exists()],
+                  "stacked_shape": meta.get("stacked"), "salts": len(salts), "salt_leaks": leaks, "visible_checked": [str(f) for f in visible if f.exists()],
                   "end": pub["end"]}))
 ok = R.digest(reg) == meta[IR.REGISTRATION_KEY] and copy == reg and len(set(digests.values())) == 1 and not leaks
 sys.exit(0 if ok else 1)
@@ -79,7 +82,8 @@ EOF2
 echo "registration exit $?" | tee -a $X
 
 for s in session prover; do
-  $LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/$s > $E/rec-transcript-$s.txt 2>&1
+  $LEAN_BIN rec-transcript --rec-inner-transcript $H/inner/public.json --rec-inner-session $H/inner/$s --rec-inner-circuit $IC \
+    --rec-inner-registration $ST/circuit-registration.json > $E/rec-transcript-$s.txt 2>&1
   echo "rec-transcript $s exit $?" | tee -a $X
 done
 for s in session prover; do
@@ -135,7 +139,7 @@ $B replay --zk --instances $C/pub.bin --circuit $C/circuit.txt --sessions $SESS 
 
 LV=(--zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json
     --registered $C/registered.json $(cat $E/own.txt))
-IN=(--rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ)
+IN=(--rec-inner-circuit $IC --rec-inner-public $IP --rec-inner-partition $IQ --rec-inner-registration $ST/circuit-registration.json)
 v() {  # v NAME ARGS...: Lean verify on the drawn session
   local n=$1; shift
   /usr/bin/time -v -o $D/time-lean-$n.txt $LEAN_BIN verify "${LV[@]}" "$@" --session $SESS > $D/lean-$n.log 2>&1
