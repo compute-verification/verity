@@ -517,8 +517,8 @@ def course_lines(course: dict) -> list[str]:
                   f"(both only for an effect of at least {P.COURSE_EFFECT:.0%}). SM / memory MHz before and after each: "
                   + "; ".join(f"{k} {'/'.join(str(x or '–') for x in c['clocks'][:2])} to "
                               f"{'/'.join(str(x or '–') for x in c['clocks'][2:])}" for k, c in course.items()) + "."),
-             "", "| co-tenant | arm | ready at s | before | starting | ready | effect | onset s | after it exited, each second | "
-                 "offset s |", "|---|---|---|---|---|---|---|---|---|---|"]
+             "", ("| co-tenant | arm | ready at s | before | starting | ready | effect | onset s | after it exited, each second "
+                  "| offset s |"), "|---|---|---|---|---|---|---|---|---|---|"]
     for name, c in course.items():
         who = name if (c["count"] or 1) == 1 else f"{name} ×{c['count']}"
         for arm, s in c["summary"].items():

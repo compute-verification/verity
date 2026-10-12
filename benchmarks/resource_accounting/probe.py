@@ -90,26 +90,30 @@ def course_summary(series: list[list], marks: dict, after_s: float = COURSE_S[2]
     in each whole second after it exited; with an effect (ready against before) of at least `COURSE_EFFECT`, the onset (the
     first item from its start nearer the ready median than the before one) and the offset (the first item after it exited
     from which every later item is nearer the before median)."""
-    med = lambda xs: statistics.median(xs) * 1e3 if xs else None
     ready, close, exited = (marks.get(k) for k in ("ready", "close", "exited"))
     out = {}
     for arm in dict.fromkeys(a for _, a, _ in series):
         xs = [(t, d) for t, a, d in series if a == arm]
-        span = lambda lo, hi: med([d for t, d in xs if (lo is None or t >= lo) and (hi is None or t < hi)])
-        s = {"before_ms": span(None, 0.0), "starting_ms": span(0.0, ready), "ready_ms": span(ready, close),
-             "closing_ms": span(close, exited),
-             "after_ms": [span(exited + b, exited + b + 1) for b in range(int(after_s))] if exited is not None else []}
+        s = {"before_ms": _span_ms(xs, None, 0.0), "starting_ms": _span_ms(xs, 0.0, ready),
+             "ready_ms": _span_ms(xs, ready, close), "closing_ms": _span_ms(xs, close, exited),
+             "after_ms": [_span_ms(xs, exited + b, exited + b + 1) for b in range(int(after_s))] if exited is not None else []}
         slow, fast = s["before_ms"], s["ready_ms"]
         s["effect"] = (slow - fast) / slow if slow and fast else None
         s["onset_s"] = s["offset_s"] = None
         if s["effect"] is not None and abs(s["effect"]) >= COURSE_EFFECT:
-            nearer_fast = lambda d: abs(d * 1e3 - fast) < abs(d * 1e3 - slow)
-            s["onset_s"] = next((t for t, d in xs if t >= 0 and nearer_fast(d)), None)
-            post = [(t, d) for t, d in xs if exited is not None and t >= exited]
-            last = max((i for i, (_, d) in enumerate(post) if nearer_fast(d)), default=-1)
+            nearer = [abs(d * 1e3 - fast) < abs(d * 1e3 - slow) for _, d in xs]
+            s["onset_s"] = next((t for (t, _), f in zip(xs, nearer) if t >= 0 and f), None)
+            post = [(t, f) for (t, _), f in zip(xs, nearer) if exited is not None and t >= exited]
+            last = max((i for i, (_, f) in enumerate(post) if f), default=-1)
             s["offset_s"] = post[last + 1][0] - exited if last + 1 < len(post) else None
         out[arm] = s
     return out
+
+
+def _span_ms(xs: list[tuple[float, float]], lo: float | None, hi: float | None) -> float | None:
+    """The median device ms of the items ``(t_s, device_s)`` with ``lo <= t_s < hi`` (None: unbounded)."""
+    ds = [d for t, d in xs if (lo is None or t >= lo) and (hi is None or t < hi)]
+    return statistics.median(ds) * 1e3 if ds else None
 
 
 def course(natives: dict, chains: dict[str, int], script: str, args: list[str], count: int,
