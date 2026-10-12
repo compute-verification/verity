@@ -147,10 +147,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean); no attestation hardware backs it
+    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean) states its part about one run; no
+    # attestation hardware backs it
     Entry("trusted-nebius-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host",
-          "Trusted Nebius host", "standard"),
+          "An auditor-trusted device (a network certifier, the memory challenger, the bandwidth audit's challenger) runs "
+          "its stated code on its Nebius host, and its host never restores an earlier copy of the state the device keeps "
+          "there", "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation
