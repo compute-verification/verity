@@ -495,14 +495,17 @@
    "assumptions": [],
    "type_hash": "127843c8302e3bbea90f0839428dd250efab959ceaa293546d56ac1ebe9ddffa"
   },
-  "Flock.SecurityProofs.RecursiveAuditC3": {
-   "owner": "@proofs"
-  },
   "Flock.SecurityProofs.RanRegisteredRun": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RanRegisteredRun : Flock.Guarantees.RanRegisteredRun"],
    "assumptions": [],
    "type_hash": "6a209c7ca35c0c87663d813e3cdd72ba1735b8675038b6ed046f1875d985113d"
+  },
+  "Flock.SecurityProofs.RecursiveAuditC3": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3"],
+   "assumptions": [],
+   "type_hash": "9b73b88919bb15a1bcfcc8e00e9f5afd9440726ebdcdaa80b26e5136b59e456b"
   },
   "Flock.SecurityProofs.RecursiveCircuitIndist": {
    "owner": "@proofs",
@@ -7738,6 +7741,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
@@ -7798,6 +7802,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -7934,6 +7939,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -8035,6 +8041,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -8095,6 +8102,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -8166,6 +8174,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -8211,6 +8220,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -8330,6 +8340,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -8416,6 +8427,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -8536,6 +8548,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -8597,6 +8610,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -8696,6 +8710,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -8823,7 +8838,7 @@
     "Flock.Firewall.withField": "01df28778990720c0c30488fd37c7ab025edd9638ca863221989a8f69c62ebe5",
     "Flock.Firewall.without": "14d1a8b48f7b16a0e97020b6665cbcf3e8472fa0f8b5885ae88ab19a454b8b93"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Flock.Hash": {
    "digest": "be4fcf4725e1f56ad99e47db13931b065c9ff34d64a0edfdfe6cb6e67952543e",
@@ -8855,6 +8870,7 @@
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RanRegisteredRun",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
@@ -8938,6 +8954,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
@@ -9087,6 +9104,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -9283,6 +9301,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -9404,6 +9423,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -9456,6 +9476,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -9545,6 +9566,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -9612,6 +9634,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -9674,6 +9697,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -9769,6 +9793,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -9827,6 +9852,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -9913,6 +9939,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -9993,6 +10020,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -10161,6 +10189,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -10267,6 +10296,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -10318,6 +10348,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
@@ -10359,6 +10390,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -10455,6 +10487,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -10512,6 +10545,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -10771,6 +10805,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -10879,6 +10914,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -10953,6 +10989,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -11032,6 +11069,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -11125,6 +11163,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -11154,7 +11193,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "15a354200a740ec5be9f109fe1c3736bb1f283325ece044fb1b8a391f2008a17",
+   "digest": "c0125120ff9376c38c235812bdd7bacd45cff7a78a970b1c243d3218ae1b73ed",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.Inner": "489744c7fb9b4b9fe53cd1607cdaef7d04e3e74a7b7c59746ba30c5430b204bb",
@@ -11163,6 +11202,10 @@
     "Flock.RecVStar.Inner.kLog": "3d931debeeb9a5a6c14ff188e2c13d814be643ad25c96aef052a32215fe27acf",
     "Flock.RecVStar.Inner.m": "5e2a9dc0c3410c24a777c86a46f6db6007f37911248cb05cfef7813e37af4f51",
     "Flock.RecVStar.Inner.regions": "815dd887f0c4073fd47e0aaa65da9abcdc04bdafbb57acc1f4d405f0bd5fc8d9",
+    "Flock.RecVStar.REGISTRATION_FORMAT": "455d7c4860331c98c5ea13a48f9ddc89588a0e1400afe916623746787a109c17",
+    "Flock.RecVStar.STACKED": "d4aa182a43e7e9728723e5f71d1c6cb589ec1581822b9f5baae35097e1ed610d",
+    "Flock.RecVStar.STACKED_CLAIMS": "89a7d7e15ae61858c23ba6dc81d516e23de7a4d94f2cb9073597493e159e4cfb",
+    "Flock.RecVStar.TOP_ROW_WORDS": "c92f71d3120b32d6615530b1ca13222a9ebc351734a92531f6cc67d9ba1e44d8",
     "Flock.RecVStar.accPorts": "52b35a8988b41b3f960b83657821b91607b00274b788c5fa2fc0740e31194660",
     "Flock.RecVStar.bindingsOf": "88fa73ce28541a6fe3d49c73a746f0d0f94bad254b27b3436a9752d267583ea3",
     "Flock.RecVStar.cIndex": "7ad06946523455bd1c42f936d6b3a4cf696f7257cbfa36d7462c0c4dcfc6d67e",
@@ -11187,12 +11230,17 @@
     "Flock.RecVStar.ownPorts": "6b1fbb69060829e32193ab7daa0c4f9eea6f6f967dff2481bcb323755090958a",
     "Flock.RecVStar.population": "2a41ae08f10ede678cf208852812d2048e712c9c726ed84cd5caaf3a38cd6c94",
     "Flock.RecVStar.portDiff?": "fa3e403d42061786f84d4ba22a5a1346021dfb62680eee9a33f024229a1feae0",
+    "Flock.RecVStar.refused": "433c0358c0382ad1c9958b8a66f5fe6f01c0184244e47098d2313ad4a150534f",
+    "Flock.RecVStar.registration": "c441b38783a75ac460114c3a2bc327b5dfb905bd38fbbffc5b42bb712851d804",
+    "Flock.RecVStar.registration._sparseCasesOn_3": "ee76c351af1760ba6b71352e6862a2aa8f18a3fd3cd33d7bb0940f4b057519f5",
+    "Flock.RecVStar.registrationDigest": "1a852850976f66059599db6afc3b2a516327a448f5477a47eeeedd7e3f43e867",
     "Flock.RecVStar.rowPorts": "1167696d89bf646284193ed1ad45fc689a6f04029b5d53583241bdf201ce0931",
     "Flock.RecVStar.showPort": "d69b99beea1be78574295a455a98f21432097de3fb4b597f321569edfeed48b3",
     "Flock.RecVStar.showReads": "cd51ce985366a0d5ad559fe14f0d581122583decf5d8d32572dbaba88eb920d2",
-    "Flock.RecVStar.statements": "70da04021e6b4857223c41f89af55ffc4695ae2cb342e9d099f053394786416c"
+    "Flock.RecVStar.statements": "70da04021e6b4857223c41f89af55ffc4695ae2cb342e9d099f053394786416c",
+    "Flock.RecVStar.topEntry": "1d481f2bf7ee5616b53a939f84ba3a0df4da1dbf30746b9f422cdf080bd10b5f"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Flock.Record": {
    "digest": "697ae51ec236fcac0660648d58f086c1c39e2a404c7b943fde2e6d3f35e06bc5",
@@ -11246,6 +11294,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
@@ -11268,7 +11317,7 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "55f251dbbb1df58ff6f149ef2c9d3d3ec7733b38ca90aad183a946f9923aac93",
+   "digest": "24bef9b67d98d982bcb993876498b520bdad4f3f5aca479cb0da0b1d6b912097",
    "definitions": {
     "Flock.Registered.Port": "aade65f635f88322beebf73b54575522406e962788786d682837b0c542626389",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
@@ -11280,6 +11329,10 @@
     "Flock.Registered.Port.value": "0e786a8a95f5c0b0ce5d90c31260b5db6e8b19aa1f9bd5873b687a82c52d937a",
     "Flock.Registered.Port.wordBits": "4153e5bcb6e701f20eb95adeb2852736654025c5aa1b3e4fff9c50e2cb8f42a6",
     "Flock.Registered.Port.words": "3e8bba1c473fc079f1865b6c9d8e96d04528b0fdfdb23931fde1226a46b491a3",
+    "Flock.Registered.REGISTERED_DOMAIN": "401efe3b64e8bc755df43de17ecc93d34d0659af14512977e7541f56f42d3009",
+    "Flock.Registered.WIDTHS": "f4977ebbfc1f56b3a8b18966d93bca3730eb80a89722073817b69365af01fb60",
+    "Flock.Registered.WIDTH_KEY": "622d07ccba61c2e7c41c90ab6fdc3227805b4c267753ea215026fa7f9a71b5a0",
+    "Flock.Registered.WORD_BITS": "4542d084de1788925e0a2fcbecfc92a7faea54947782d73e5ba18998b41cf3aa",
     "Flock.Registered.badInstance": "03932f62b94f8fdcdc0c2b285ed7e2c1eab64c21ef5edd38e49948a21faf7e66",
     "Flock.Registered.badRow": "c702aa7a7cdef880a0d0811966e322facce83d1237b04bf8749c4ae9112249d1",
     "Flock.Registered.check": "4b228ade32bb7e63505ba499fc5023ce7c1ad20c174e074192993e5297df771b",
@@ -11288,6 +11341,7 @@
     "Flock.Registered.climb": "409e735c27b6bbb1fbec2014a3beb48e70858eeff6e95502f99f10f95e6f56f3",
     "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
     "Flock.Registered.derived": "0751ce4385fd006c40af04446d935a4b7c9662e4b00d77c14606451776ffcac6",
+    "Flock.Registered.domain": "2004c3cadc9987e7a4937852f500cf610965135abf26fb71b99bd94c4700e444",
     "Flock.Registered.entry": "33679b79172b2252c0e954b11fd386a06a136aa56539287c7e076683f87af733",
     "Flock.Registered.instInhabitedPort": "66c979034b83f555a0b34d3b796ea3e82209fb60da72742bda30a1d80c35c982",
     "Flock.Registered.instInhabitedPort.default": "f7a1aa90cfe8a131f282f7001109736fbf71e156038c8bc0304ffdb51ff7f67e",
@@ -11304,12 +11358,14 @@
     "Flock.Registered.sibs": "b434bb6941f9571a60856e1147aa3dae7ad6ff6fef41efb6677b956aa8e4b147",
     "Flock.Registered.tableRow": "d282b834f17e1c68b1a02f3e11d6eccad176108d6236f9ee3bd6bf55eb99b8ec",
     "Flock.Registered.unitIndices": "4f5d727b9688ad178fa4bdc618244d345d29ab47a0bc03ef4d00419ba6494a22",
-    "Flock.checkRegistered": "8f020acbd0b4638ea2eb647402e29a6bce245720bdedf9b6c29e930eb0f58aaa"
+    "Flock.checkRegistered": "8f020acbd0b4638ea2eb647402e29a6bce245720bdedf9b6c29e930eb0f58aaa",
+    "_private.Flock.Registered.0.Flock.Registered.tagged": "57d4d01156f6691bd7c899ff653c3c5f75b8fa9183ad7afbcaef5d134b584330"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
@@ -11346,6 +11402,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -11410,6 +11467,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -11510,6 +11568,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -11632,6 +11691,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -11704,6 +11764,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -11774,6 +11835,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
@@ -11854,6 +11916,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -11913,6 +11976,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
@@ -12019,6 +12083,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -12076,6 +12141,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -12143,6 +12209,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
@@ -13008,6 +13075,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13048,6 +13116,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13071,6 +13140,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13094,6 +13164,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13123,6 +13194,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13165,6 +13237,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13194,6 +13267,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13216,6 +13290,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13238,6 +13313,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13266,6 +13342,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -13289,6 +13366,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13315,6 +13393,13 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
+  "Proofs.Flock.Recursive.AuditC3": {
+   "digest": "2d461ee295de4782dbc575cbb74cbbb715ff9e1e58c2df47c5991b8ac80fe51e",
+   "definitions": {
+    "Flock.Guarantees.RecursiveAuditC3": "c469ca264749a6796b60c40d1647b87a0d2089f5b74c3794d2999aaad2b2f01d"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
+  },
   "Proofs.Flock.Recursive.Compile": {
    "digest": "0540e9c48b522d77e1a004e68af54e491c5e7f2fae33d056926abd2a75fc24fe",
    "definitions": {
@@ -13324,7 +13409,7 @@
     "FlockSoundness.Discharge.Recursion.decodedV": "012d2c605bf71e7948fc9b4d3c4653a392b494ca1f08cdbbaf336d070ef6d380",
     "FlockSoundness.Discharge.Recursion.outCL": "1cf169a11c069e9636552157f17a6b93a50bc3bcae940b6accae89d8433cf128"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Defs": {
    "digest": "02df7a8da88c2316b5e5410fc80dc274a2bd8defe00a3228d3ec7ae4a76835d8",
@@ -13352,6 +13437,7 @@
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RanRegisteredRun",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13372,7 +13458,7 @@
     "FlockSoundness.Discharge.Recursion.shapeOf": "e15cc97b4b0bc3902cece8c4581a12eb5cd7946c2e44b4f0a8996a13a1f2a87a",
     "FlockSoundness.Discharge.Recursion.stripBytes": "18df699fc8551a6f2f5c1cd0f9c29900d1e6dff37a4d198346736b3222666045"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Finds": {
    "digest": "062c6113ad81bd49f003ac2f24b77931f31f449eca3a5fb200641cf82c9ed7b2",
@@ -13390,6 +13476,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13406,7 +13493,7 @@
     "Flock.Guarantees.fwRealPr": "a192a8586ac815830dff5b2cc77d0314b1d4b3f921b469c01fb670a460a34f81",
     "Flock.Guarantees.fwSimPr": "82487753f85aa6b99f3734460a0c39d75c739b89d2d2a77045ccd40d25567e25"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Flock": {
    "digest": "583d36cb0b1f2715675532d09c82c501e3ef9dac19aae9bab0c63f15ee96627e",
@@ -13464,6 +13551,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13482,9 +13570,83 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
+  },
+  "Proofs.Flock.Recursive.Holo": {
+   "digest": "86ef8f4c2fdd104e7d90beca4d6f7ab45cf9bbf5d0d5e9445603977b5f1a3466",
+   "definitions": {
+    "FlockSoundness.Discharge.Recursion.HoloClass": "f36de5db87993423bc22be2a56fc52b5a4a4edaeef03b98cfbe91d02c7b7830b",
+    "FlockSoundness.Discharge.Recursion.HoloClass.A₀pub": "9c0c00a23e9dfddc40053deb542f1aaaedd691c714f084c20b874cd010870a7c",
+    "FlockSoundness.Discharge.Recursion.HoloClass.B₀pub": "0c423016f79a90d8dbbe2d44ec8d34e9fe819a0c8fa831d7b82c9c8bbeb755b7",
+    "FlockSoundness.Discharge.Recursion.HoloClass.kLog": "8fd0ba30297123ef764bdc47ba9895303c7b7acb5e79bc7862a759b6552f16a0",
+    "FlockSoundness.Discharge.Recursion.HoloClass.m": "770ef3bbea1d815a58016edd543e10e6de8cedfeaa8887de0001ee335850125c",
+    "FlockSoundness.Discharge.Recursion.HoloClass.mPts": "b76356687aec0ecc8b80b8ac7e7a6b47b7db92f92e02c732db49824ffae8360b",
+    "FlockSoundness.Discharge.Recursion.HoloClass.nu": "7ee81330752abf17d8db3ab291ee7b4f4757ee7c74b51c22468d279b700b5d8e",
+    "FlockSoundness.Discharge.Recursion.HoloClass.pin": "126db0038b09ddd07755f8770060690bd18634cd2fea35d610b1e9b74ba533f0",
+    "FlockSoundness.Discharge.Recursion.HoloClass.ptLocal": "74a3643f9f1c1cf339a3bcd9f5db807116c2c6f554efd850ee69160c31a23f8f",
+    "FlockSoundness.Discharge.Recursion.HoloClass.pubStatement": "8166e3d443f02d169443d69acfee7408e69e972b0ddeb45240351f3760a31a90",
+    "FlockSoundness.Discharge.Recursion.HoloClass.sLog": "b66a06005ca724df4fb10400821311f6639094a1a023d7f21fb3dd45729703ea",
+    "FlockSoundness.Discharge.Recursion.HoloClass.shape": "fd095cec1566ecbb7fda8b811635922dc9b6bb3d191d92d99fa056fa4cde53a3",
+    "FlockSoundness.Discharge.Recursion.HoloClass.slotLog": "2de27b42fd7ca9934acda7115403b69a254b371f4403e15f3906f1949f42d615",
+    "FlockSoundness.Discharge.Recursion.HoloClass.tLog": "73acf8db90fdf0a0bdd6b46ee207dda7905fd575d1b846ab9828023f5a20cf51",
+    "FlockSoundness.Discharge.Recursion.HoloClass.units": "d91a811c178308db2fba361b8d3f8f2b5aeace2d1ee5eda9a3f7f67625b69da8",
+    "FlockSoundness.Discharge.Recursion.RegSchedule": "52ac18f85812fc54c08a98ce42b0933f18b266df89ad82c2ebaba060e9839614",
+    "FlockSoundness.Discharge.Recursion.RegSchedule.Close": "8c612e43200d029ae18cb65c9c1911df8d4b54a7eae2b4777b48c59ad408ec94",
+    "FlockSoundness.Discharge.Recursion.RegSchedule.radius": "6ace4ce459f67c3426f9aabf4ed0201971ec0d42633fb5ad875e0bf21132a574",
+    "FlockSoundness.Discharge.Recursion.RegSchedule.sch": "99b2b6052819ccc280f6d74a56ea7d650d93f4048a9e011a285ce1c36a76d395",
+    "FlockSoundness.Discharge.Recursion.RegTable": "af85a544f4509628484c0de7cbc774e488a000a57c5b109d3a323de34b73f7cb",
+    "FlockSoundness.Discharge.Recursion.RegTable.bits": "eeed412419c70447606bc947f8d8755a4d2be92c3744331f85256dd487348624",
+    "FlockSoundness.Discharge.Recursion.RegTable.plane": "b40d06717e010ef574e6d6657751168cca086c9db0bb51e2519bc005e5c53a86",
+    "FlockSoundness.Discharge.Recursion.RegTable.side": "54331d953d7145ae652d3d30dfddcd1ed9d377109c64a339db4d83a5fa8a6772",
+    "FlockSoundness.Discharge.Recursion.RegTable.tmpl": "d520c0a3f82b6660857f3f06a106f412b79f1c8a67e3654966e03c5e46b80dd6",
+    "FlockSoundness.Discharge.Recursion.RegTable.toStatement": "3ad2df7d254e7dcdb3065ff85adb7b35088a1b47144c3636edbf6624787a7f9d",
+    "FlockSoundness.Discharge.Recursion.RegTable.word": "7de4392f6984197025c20a9a12895662afb3bbc758e35674d3eac9a77dd6481a"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
+  },
+  "Proofs.Flock.Recursive.HoloExec": {
+   "digest": "5e80988a51162c7cf402f9534324afe3eb7ab81715b7cc7b02d4cc324aaf5569",
+   "definitions": {
+    "FlockSoundness.Discharge.Recursion.ClashHL": "cf6eaa2c83985618f755e75620bffa461559a051a904fe7b2d2000974bc1a08b",
+    "FlockSoundness.Discharge.Recursion.ExecHolo": "a5d0f5bb9ab7ad14b847badb37db7f315c16b088d400f391e02e43322e5a98a2",
+    "FlockSoundness.Discharge.Recursion.ExecHolo.cls": "a4d6f581a6a1486f6d00e502189afcbb3cbb4d5fe01746b8b649df801b273079",
+    "FlockSoundness.Discharge.Recursion.ExecHolo.regs": "338190cee83d581527c39063e63ca3ad98c527964995b4c48b36f34bd8784897",
+    "FlockSoundness.Discharge.Recursion.ExecHolo.rsch": "fe734dcc3894c50e51a7fc43ce6bed6b39b39504dbe795890fd8fdceb63a4838",
+    "FlockSoundness.Discharge.Recursion.ExecHolo.sch": "a954c4c3adfb3c9289c2e68b3f5d1532c4096b817ecc2c73b8606e6ee0a435d1",
+    "FlockSoundness.Discharge.Recursion.ExecHolo.τ": "aea7fd65f4e930b53c85ac987dab1ee7e8aa877aa0b5df75c5ae36552cf04469",
+    "FlockSoundness.Discharge.Recursion.HoloClass.ofExec": "569dd3112f4d3b1556ae6c3025f597b57b1ba2f5367289056a677fc8354fa278",
+    "FlockSoundness.Discharge.Recursion.HoloParams": "07db9ce59a5ce783ffeec493dafa259fc84f01b7fddf7c8f23141c6348170885",
+    "FlockSoundness.Discharge.Recursion.HoloParams.EllOk": "9b17644fdac36c01d05fdcc843f6d6a37b94094b233e4c4235af0be82bc3b39b",
+    "FlockSoundness.Discharge.Recursion.HoloParams.ell": "c9422b9a8bac489ddcc43fce4628cd90cf8347563eb1f84ea95b81e60f4e45c4",
+    "FlockSoundness.Discharge.Recursion.HoloParams.nu": "fdc6093080fdd836c7c0dc29ddf4efab05cff60663a616bb85e6d99ef7ca300a",
+    "FlockSoundness.Discharge.Recursion.HoloParams.sLog": "bc32a5065b9b9aae3b55af0890134b2e4e907f168749d9b15040c4614e1103b6",
+    "FlockSoundness.Discharge.Recursion.HoloParams.tLog": "9d1b08cc448c5961ea354b7970a709c30f150d2227f62ac58ecdff5eb8282eff",
+    "FlockSoundness.Discharge.Recursion.HoloParams.units": "118f08b7e947862e61cade3c28aa9ac04c263c482544089b852df45479337b02",
+    "FlockSoundness.Discharge.Recursion.HoloParams.τ": "d6c98ae403a93018beb866158632778a18a5f5cc5d7342812b056ac2d405506d",
+    "FlockSoundness.Discharge.Recursion.HoloReg": "489041822e0b4fb4a48308817b929fe3bd3f73328bc840203b3d37f0995238c3",
+    "FlockSoundness.Discharge.Recursion.HoloReg.Opens": "6b28014fdd77c0610a6cdaab165654c34a1f74ec596403919f5b5794e1ab8ae2",
+    "FlockSoundness.Discharge.Recursion.HoloReg.cap": "55c7338887d8076edf485dc3dcfa0c528a5bb6af4482277470ca9dc232447a76",
+    "FlockSoundness.Discharge.Recursion.HoloReg.column": "17cd86da78def62b98e8cce0f44f6387da62c16b857ca37456c8585cdf3984cc",
+    "FlockSoundness.Discharge.Recursion.HoloReg.w": "09a206cbf4c7103eb92d97daa2ea4e20459c8b638dd5a9385bc9118be5b27932",
+    "FlockSoundness.Discharge.Recursion.RegClash": "4e99ab47d2132174490ea837c55e8c174e77941acdb9954dbfc49daa3f03cefc",
+    "FlockSoundness.Discharge.Recursion.StackedTop": "7fdfa0da4ffc015adeb6ae26ace6517766d32704cd7a4e7de588f305bffeac93",
+    "FlockSoundness.Discharge.Recursion.clashPickHL": "c05251956e622dc23cf5228b43334750135ab78ad485e0385b4cd1d87e71f9ca",
+    "FlockSoundness.Discharge.Recursion.holoAt": "ea56c3301d8dcd818dfd6ec57fb66bc88d96dcef3ffb31efda35763838cb778d",
+    "FlockSoundness.Discharge.Recursion.holoError": "d575aab997d767b28b45cea8fa71254c8a8a82bfb4dde5f9a031654f08bfe767",
+    "FlockSoundness.Discharge.Recursion.holoInnerAt": "d6fcf65efd1df6a3798a31cb471523cd0a8dbac5462dfd80dcba1684716bd25c",
+    "FlockSoundness.Discharge.Recursion.holoInnerCL": "1e8d903fa96443369d068fe9106406431f90135008010e1cfebe3b3df91c8fff",
+    "FlockSoundness.Discharge.Recursion.outHL": "5a6bf846e3f6ffb7568477fe79dfbcaa19dc1c540f7273b0e28f2e99be38e6ce",
+    "FlockSoundness.Discharge.Recursion.regOpenError": "b80f13552f874d3d465d153a5205c31eeb2b2d144352871a094072c822691432",
+    "FlockSoundness.Discharge.Recursion.sparseError": "3429b4f2b2a88685b0f24879dde74916e2e4632b9f8a944837ca6ccc765690ce",
+    "FlockSoundness.Discharge.Recursion.udQueryError": "3356855eb1ee3d2dbe807aab786bbe980bf953c428768cc886c3d17f98c40f72",
+    "FlockSoundness.Discharge.Recursion.vstarCount": "5fdf2b98261f00ce6bdb53910c61dc11e65cdd9d83573749dc8019af71c7e92b",
+    "FlockSoundness.Model.OutHL.circ": "a89f806838e1b3d244042a719adfa4d2dd6e47a3c47b2ccfc443c5d18b057f29",
+    "FlockSoundness.Model.OutHL.reg": "e59646b5ef76724c688d815f7bec780c7fb2a1d9bd894dedbcc57ed2405d9607"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Multi": {
    "digest": "345f0dd84f9f246849f5377f5862ca5157109feee2067ac9feb923c963793a81",
@@ -13496,6 +13658,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13505,7 +13668,7 @@
    "definitions": {
     "FlockSoundness.ZK.Table.Stops": "6f39fb2377740e367041c8fec9545eb6f75c105c1fcb267f7028732a909546c2"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Premises": {
    "digest": "0e5b0265f085f4512958c64c007cf2ca1da2c8b2294be38bfb07d0356c2c481b",
@@ -13514,7 +13677,7 @@
     "Flock.Premises.UniformRandomBytes": "10dd4f26d2074bc44191e45cdff4bcb3e1726dacf0cca34843cc954b3581cd8a",
     "Flock.Premises.VBridge": "e0c65f8e2c6f7af7ef0272696af4fa1fe1a0180c98b659d55af0a6f170b5c8f7"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Property": {
    "digest": "681c63e29d5f57b3ebee70032541fee2c6e812e35968912a723838f89f76e51f",
@@ -13529,7 +13692,7 @@
     "Flock.Guarantees.outerStatementsAt": "6dd572846dfcdd3800aa27323228f40517a99a279ff259d83876fc61b99a60b5",
     "Flock.Guarantees.transported": "4e6c21e828542839e25d3fad43a56a892910253680122f19362e31314f2e8c28"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.PublicAudit": {
    "digest": "b294dea4695f3722836f3c32665a13721f19ecebad3751c0d591832dbd32a8d1",
@@ -13538,7 +13701,7 @@
     "Flock.Guarantees.PublicAudit": "92ab0e7df25bc645537e1423a5b439e60fb2de682bb3f5facde2b0527fc23434",
     "Flock.Guarantees.publicHidden": "dc2d1ec9cc575620aa5285ed98f211af9345f59f698c59fe2009ee4bc3c54b99"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Raw": {
    "digest": "ff84d263cd2f8c84acd8eb645037c9b0da81f2fcf0c965e20f6a0419f9d8187c",
@@ -13578,7 +13741,7 @@
     "FlockSoundness.Discharge.Recursion.sessionsR": "45638e6741b42dbe66242303b9b3c52816e8e9ca54191ef0e3bd0a021939c717",
     "FlockSoundness.Discharge.Recursion.zsOf": "fa420596ce48d4fd466237579dc6fa47ad6d6889667ecc20a47fb037d6176225"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Registrants": {
    "digest": "785942e2aa7ffa66328856efd171640f575893b54865b23a659d187bccdf0be0",
@@ -13590,6 +13753,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13601,7 +13765,7 @@
     "FlockSoundness.Discharge.Recursion.schedInner": "3824c3c2d700535eca51871f3d79ce7ea00ef16a9ef2ef5a1ad4a55ea202fed1",
     "FlockSoundness.Discharge.Recursion.schedSteps": "f13aab272fa64a8411362355106491498b64627f612c4d46ee9b5bcaa244fc07"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Sessions": {
    "digest": "20e1451b58925db35deded974e51ae30cc099276a58e4fb8458a8a99396ab6dd",
@@ -13645,7 +13809,7 @@
     "FlockSoundness.Discharge.Recursion.OuterZK.proverExe": "ff2d29dbff0767d4446d0a52164da696f6b63d8cf244b9d49969c48ccc75b23e",
     "FlockSoundness.Discharge.Recursion.OuterZK.w0": "185727b9e510f966b9eac89ee4343d8d02c4d255912ef407541a694d98b291b0"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Sound": {
    "digest": "29ef4c0941d8b0311bd6e029cb4bb556087c16d26aa484dc0e921951f800b167",
@@ -13654,6 +13818,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13685,6 +13850,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13711,6 +13877,7 @@
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RanRegisteredRun",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
@@ -13744,7 +13911,7 @@
     "FlockSoundness.Discharge.Recursion.Hidden.toStatement": "ce8b3c10c209d8f2c1f6dacb7f16067786586197d52865c9e1cc9942ef5161e2",
     "FlockSoundness.Discharge.Recursion.flockInnerCL": "57f5a301740f3249a083f108213ad18781e4e368120677c39a51886f36909e5a"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Transfer": {
    "digest": "e786bb54d4d444e8755f5483c6002dd06c18e57c442e442daf19eb6d60031121",
@@ -13753,6 +13920,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13762,7 +13930,7 @@
    "definitions": {
     "FlockSoundness.Discharge.Recursion.HClass.ofStmt": "1217894d400d7b81952f74ec6550eafaae237ebe3d5b558118db06fb30ccded6"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.VStarCheck": {
    "digest": "d6b2b06ffb2cc0b35933f1e7d1f6112ba55f1e918a2a5665bdae28669e6bfe22",
@@ -13774,7 +13942,7 @@
     "FlockSoundness.Discharge.Recursion.TagsFound": "0ee7f4f5a7cb4eb6d7e2721b91f4c60bd200fe89b523bd06fc0727bc26c854f4",
     "FlockSoundness.Discharge.Recursion.VStarParses": "6228a8c643a154d53d9b08e6d715e4862e344561d591d9f2c641f35fb8c15bcf"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.ZkReg.DrawnRefines": {
    "digest": "03dde6640e365e244ae39bfc2f6341c3433ea98fb333c69bf835507fb95c41f9",
@@ -13783,6 +13951,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13795,6 +13964,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13807,6 +13977,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13819,6 +13990,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -13861,6 +14033,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13907,6 +14080,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -13960,6 +14134,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -14020,6 +14195,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -14065,6 +14241,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -14078,6 +14255,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -14094,7 +14272,8 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.PublicAudit"
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3"
    ]
   },
   "Proofs.Flock.Soundness.Audit.Circuit": {
@@ -14137,6 +14316,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
@@ -14175,6 +14355,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -14220,6 +14401,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -14285,6 +14467,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Law.closure_escape",
@@ -14345,6 +14528,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
@@ -14525,6 +14709,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -14554,6 +14739,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RanRegisteredRun",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -14580,6 +14766,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -14632,6 +14819,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -14646,6 +14834,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
@@ -14687,6 +14876,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -14708,6 +14898,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -14738,6 +14929,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -14793,6 +14985,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -14847,6 +15040,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -14894,6 +15088,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -14960,6 +15155,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -15057,6 +15253,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -15077,6 +15274,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -15095,6 +15293,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -15113,6 +15312,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -15133,6 +15333,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15155,6 +15356,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15174,6 +15376,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15226,6 +15429,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15247,6 +15451,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -15288,6 +15493,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15307,6 +15513,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15347,6 +15554,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -15529,6 +15737,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -15637,6 +15846,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
@@ -15664,6 +15874,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15681,6 +15892,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15699,6 +15911,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15717,6 +15930,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15736,6 +15950,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15753,6 +15968,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15770,6 +15986,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15798,6 +16015,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15840,6 +16058,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15877,6 +16096,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15894,6 +16114,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15912,6 +16133,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15930,6 +16152,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -15971,6 +16194,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -16016,6 +16240,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
@@ -16066,6 +16291,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16149,6 +16375,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -16179,6 +16406,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16213,6 +16441,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16248,6 +16477,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16268,6 +16498,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16292,6 +16523,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16311,6 +16543,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16352,6 +16585,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16371,6 +16605,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16393,6 +16628,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16419,6 +16655,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16445,6 +16682,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16486,6 +16724,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16529,6 +16768,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16554,6 +16794,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -16631,6 +16872,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -16651,6 +16893,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -16709,6 +16952,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -16784,6 +17028,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -16810,6 +17055,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -16848,6 +17094,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -16859,7 +17106,7 @@
     "FlockSoundness.Discharge.ZkEveryCoin.sentAt": "893b5d653312149ff0b70e07f3aac8e84603017eb0f7aa98161dca06a07b162f",
     "FlockSoundness.Discharge.ZkEveryCoin.simAll": "ae764581175f3216d662644b40a51ad382a8d6fb86371c0f2c7599e09da82051"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Soundness.Discharge.ZkExec.Event": {
    "digest": "f4c121a3a3a163068eb5575394f10f0e3fd9eb4f8267ccda71d20e4fe55f4a31",
@@ -16880,6 +17127,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -16944,6 +17192,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -16964,6 +17213,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -17008,6 +17258,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -17073,6 +17324,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -17108,6 +17360,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17147,6 +17400,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17218,6 +17472,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17253,6 +17508,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17274,6 +17530,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
     "FlockSoundness.Discharge.Composed.e2e_forces_mPts",
@@ -17325,6 +17582,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17354,6 +17612,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17393,6 +17652,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17417,6 +17677,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17462,6 +17723,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17481,6 +17743,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17507,6 +17770,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17545,6 +17809,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -17580,6 +17845,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17595,6 +17861,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
@@ -17612,6 +17879,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -17663,6 +17931,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -17699,6 +17968,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -17734,6 +18004,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -17774,6 +18045,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -17848,6 +18120,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
@@ -17861,7 +18134,7 @@
    "definitions": {
     "FlockSoundness.Discharge.ZkView.saltOfBytes": "999d847a9ec4115a1a375867a871e6cf739bd6e95b6255c166d951892f193781"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Soundness.E2E": {
    "digest": "1db3a643205e932c92a6c046e63aff4d16da8216cccf4171d9a761b1200183d4",
@@ -17882,6 +18155,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -17901,6 +18175,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -17924,6 +18199,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -17945,6 +18221,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -17983,6 +18260,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18012,6 +18290,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18053,6 +18332,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18073,6 +18353,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18093,6 +18374,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18132,6 +18414,7 @@
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RanRegisteredRun",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
@@ -18213,6 +18496,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18234,6 +18518,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18254,6 +18539,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18298,6 +18584,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18317,6 +18604,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
@@ -18345,6 +18633,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18364,6 +18653,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -18388,6 +18678,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -18409,6 +18700,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -18441,6 +18733,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -18463,6 +18756,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18482,6 +18776,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -18543,6 +18838,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18582,6 +18878,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18616,6 +18913,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -18680,11 +18978,40 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
+  },
+  "Proofs.Flock.Soundness.Model.Holo": {
+   "digest": "f226291272fd4914571fe3b0ec8fc54772fe232dd572683d4b9d7c63c80c9c6d",
+   "definitions": {
+    "FlockSoundness.Model.RegClaim.coord": "7e7dd3a32f48d47dc85aaedad5c81f7582982e295b50346bd21e963b58fa1773",
+    "FlockSoundness.Model.RegClaim.toClaim": "1147ba226ed1483a2b3498651f03b22cf49cce4884489d05f39551c4d35d619c",
+    "FlockSoundness.Model.SparseShape.mReg": "bc5c336a064a3aecdfa66724aa5b310dd62c1442dd751c447f425b2a6a44de55",
+    "FlockSoundness.Model.holoPub": "28c4995b731c90637ee4a329402bbb93e0ab50be23513b2e8210f0a2852acb15",
+    "FlockSoundness.Model.holoRep.match_1": "d0639294f4a91b9798b4eb3a741d28f3c217c6089a3ba8eddf5bda7c6315ad26",
+    "FlockSoundness.Model.regPhase": "85a94d1944f23af293760f3eb6de9ab4a39ff8ea5a7e73491bf6c12984f7fdda",
+    "FlockSoundness.Model.regPhase._sparseCasesOn_3": "7a63ce598bb81d93c76eb4f519acbefebced81e28431b6ddbce90de224835f62"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
+  },
+  "Proofs.Flock.Soundness.Model.HoloCompiled": {
+   "digest": "f804fa18f7b21ffa945c8765dddcc6a089c38dc4d5be613d4904a52a003661a6",
+   "definitions": {
+    "FlockSoundness.Model.OutHL": "58f679630b400ce705235c23739892dda742aab4e2a5ee0b8ad32738d8ac43a2",
+    "FlockSoundness.Model.OutHL.accepted": "b5aaba1bc0b981a5a23386784f1109677856c20a5f633bc042b4478f8a1d3f6d",
+    "FlockSoundness.Model.OutHL.cap₀": "4edd45831404db8bc8d2d0c890cd967b245ad8c274b321651907ff7951c06679",
+    "FlockSoundness.Model.OutHL.opens": "adcf380cd4ef38162242a9733676bad1388847bc5bf6149165872ec98aa68473",
+    "FlockSoundness.Model.OutHL.pend": "365248c7152810ff0f1fa45cc3c829ed186bb7268eb9b9eb42ab55c9372b0c3b",
+    "FlockSoundness.Model.OutHL.pendR": "ad645d8b6c3e7753ad6df7c27e7669ccfdb8aca72ceefe3e66841143a2de9007",
+    "FlockSoundness.Model.OutHL.salts": "4ee29831db0df831356c4b1359854ce1034106867c4a70221f502a3e7e998c89",
+    "FlockSoundness.Model.holoRepC": "fb90db1a9c8090668bbfd225e7bf0959f92775ee4887be2bd429d68945c702c2",
+    "FlockSoundness.Model.holoTableCL": "c9ffb41a2bf9b077400ee01befd2dfb99da7e3305c7f933227986e777152980e"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Soundness.Model.Ligerito": {
    "digest": "7e3804295a472c38be2b7bbb8d006ed9dac133b77474834ab4d3686f77d730f6",
@@ -18738,6 +19065,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18765,6 +19093,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -18806,6 +19135,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -18834,6 +19164,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18842,6 +19173,43 @@
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
    ]
+  },
+  "Proofs.Flock.Soundness.Model.Sparse": {
+   "digest": "c23e2df99e8c2e8b247e489a1c2cfad622ba7334c129c7f2b84fe6f0082cd56c",
+   "definitions": {
+    "FlockSoundness.Model.HoloLcOut": "5c95f33e1fd55ee13f6beb9706719c874caa174bb1cf87f455eeb7fbdc8e1164",
+    "FlockSoundness.Model.HoloLcOut.ab": "ae6c2a014dc2dd24a597651eeec14143493db22d6f4aa6b719ff6dc7def33f60",
+    "FlockSoundness.Model.HoloLcOut.alpha": "ba14589c6a2b161ec26083fb9dd4cdc3f1630f7876140dacc335c75f4ab364ca",
+    "FlockSoundness.Model.HoloLcOut.h": "cc8cc9eaf95bbc35e55da2ffbc8cac0105b999de1c44bdd7d668a94c3fba62ef",
+    "FlockSoundness.Model.HoloLcOut.ts": "5f98317c4ea6a2769774447162d25783ee122bb023a123bb1b71f4c90b4fbdb7",
+    "FlockSoundness.Model.RegClaim": "1a6b3535eebc54e69637b6f1b5f95514a80c382b1e286df476e3cf6e05af88b4",
+    "FlockSoundness.Model.RegClaim.rho": "96b63f468ae5b3b980fc7cc06c16d5428da67df85fd40241ae9683cacda67b52",
+    "FlockSoundness.Model.RegClaim.rk": "8cd8a9d69d0aec378b717013ae8b8bdf38d4e73fb00335b2c83e1ebfd4905ef4",
+    "FlockSoundness.Model.RegClaim.value": "8bc1419287ffc890b1776aad477bc84d0e0559de11792c5252877bf007a6d0c9",
+    "FlockSoundness.Model.RegClaim.zetaP": "2d6c9cf5b892881aa7b4b0eea120f619e94972f04f175b1fbf8706e08fe669b4",
+    "FlockSoundness.Model.SparsePub": "c9e63a4f15f3cab66582bcce72e182009be57798601ad65b40dba41b085dde16",
+    "FlockSoundness.Model.SparsePub.U": "5ceb104a02b63c70ab9a91d6978ca9c01ac90833225d089c9d82054fd3c3f8a6",
+    "FlockSoundness.Model.SparsePub.alpha": "7b3785e029b822f3cf0294ef1813ae34ae499a592e5fc295f3b921e44921fc8b",
+    "FlockSoundness.Model.SparsePub.xRest": "bd09e895496231912d45c3f2cdad9e57b3067e8c6ea6f039e8952145a01fce3a",
+    "FlockSoundness.Model.SparsePub.yRest": "3eed2ca1f331ed33486a196cd2aa0ebea41a09d1ffb95273d04480faeb2c0231",
+    "FlockSoundness.Model.SparsePub.z": "3e995f2a0af1255fad80daaa35608f2f23b6d672827a12a21f29e60fea88db3a",
+    "FlockSoundness.Model.SparseShape": "0663e5dbe68189cc18992e34625021ca9b89b0311e35cfdbf45907603e7a2808",
+    "FlockSoundness.Model.SparseShape.ell": "130449c97ba11102318cb36a0fbc5654edc4a3d11005eb45dd1ff4e20a103965",
+    "FlockSoundness.Model.SparseShape.nu": "63bdf81b294697f3848d8ff9536f609dd095ae34b285d7086420c46e88bb106b",
+    "FlockSoundness.Model.SparseShape.pLog": "c0b095ef43f41d725d5b3ecb61cb0932a82c93b5a5c1a4a7eb26fb7164c7838d",
+    "FlockSoundness.Model.SparseShape.sLog": "6b14321572aea74621f542a321944042c928e5d2674419452050dc437057cf09",
+    "FlockSoundness.Model.SparseShape.tLog": "ebe059feae09e311d889bf82915dcad9945082bb2080e9e73057391339e111d2",
+    "FlockSoundness.Model.cat6": "484588817f07b1d2d185e2d5fe0c4d8f95f8ebf388cabad4ad9cc4a800e96bae",
+    "FlockSoundness.Model.degNext": "41e3255d20851f678cd64739b3961ec260d264cdaa49d46994ca604916ffce59",
+    "FlockSoundness.Model.degRounds": "31632d121ace9be5fa6b2add5013fa1d8c04523227463ba7f1ec0e8d295c255c",
+    "FlockSoundness.Model.drawFin": "ce6302a32194d4bef215be35db9f03c0d2a3998521afa712bd893b4f0ffc5116",
+    "FlockSoundness.Model.holoLincheck": "d27e79b1991c9941377a919d7ab6b17c8853850a33c8a1dc1f42e01d246b9e04",
+    "FlockSoundness.Model.sparsePhase": "e0007c385005fc7943f9e870f19a435827d8ea2321207807b175d244eabdd053",
+    "FlockSoundness.Model.sparsePhi": "368e26d1b5113470bb765c6b979b7b33c63e9e1ad6d03daa1f7014e09eebcc6e",
+    "FlockSoundness.Model.sparseVerdict": "96ffd599385da2578925511af859a2b1d12bb4386860cb9f5941f7eebf515be8",
+    "FlockSoundness.Model.vget": "53ddbc40159f9ee1f1264e8a77ee101541961d6bb751bf631a7bde6cd65da037"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Soundness.Model.Statement": {
    "digest": "0effe086280c361ccdeb973354736cc7ae694daee5ace718e081a85c0200a57f",
@@ -18882,6 +19250,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -18906,6 +19275,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -18925,6 +19295,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -18943,6 +19314,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18977,6 +19349,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -18996,6 +19369,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19046,6 +19420,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19100,6 +19475,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19127,6 +19503,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RanRegisteredRun",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19151,6 +19528,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -19192,6 +19570,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19214,6 +19593,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19236,6 +19616,7 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -19286,6 +19667,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -19317,6 +19699,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19338,6 +19721,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
@@ -19361,6 +19745,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -19385,6 +19770,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -19403,6 +19789,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19431,6 +19818,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19461,6 +19849,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -19492,6 +19881,7 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -19505,7 +19895,7 @@
     "FlockSoundness.ZK.Table.abort": "d150cdac287e3473abb8dcf60c2d11602ea82ee9d2f7e5966877067b29fec76a",
     "FlockSoundness.ZK.Table.pubAbort": "bf45cb9999a02afefc9646e5af6249536572fc6954a7b3109103b8c74691796c"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Soundness.ZK.Cut": {
    "digest": "03c3d2b6c7e0b3fd348f91667ef35385819089f20f4772eb01797b238b921f49",
@@ -19540,14 +19930,14 @@
     "FlockSoundness.ZK.Table.Sent.y1": "f9db7b92c97ad8895e6c43db8bed695a9254ffe94248b1414ef47ccc02c86884",
     "FlockSoundness.ZK.Table.cut": "f42a8965da2b95b1c79cde671f07ec64daca5d5e14790b45429ce327d99a9e33"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Soundness.ZK.HidingAdaptive": {
    "digest": "dbf253e2bd8c3360ac656cfea57d2825e2530700b5697e7dbe7c2df15be20397",
    "definitions": {
     "FlockSoundness.ZK.adaptiveLeaves": "10db79863f9214eb7cc73907adb547ea15db92476a9eca40833345dffaa0fe5a"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Soundness.ZK.RealView": {
    "digest": "c39f87a8f09ec3fc0b4d3f52967786fd4e2b18db79a2a6e373e4cb56a42b293f",
@@ -19558,6 +19948,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -19571,6 +19962,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -19673,6 +20065,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -19684,6 +20077,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -19903,6 +20297,7 @@
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
@@ -20066,7 +20461,7 @@
     "VStar.Algebra.vx": "f5a224fc4eed400b9381c75e0e87d62f1742a12e11309f790098a7decce9c2dd",
     "VStar.Algebra.vxAll": "cb53fe8ec7af739d5567d44abfaf34476b844e2339f6906718215367968b19cb"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "VStar.Compose": {
    "digest": "1bbc1957d961a39659b6c5b755491a74013e8abe709f0d342eb6d9adcd672e0b",
@@ -20127,7 +20522,7 @@
     "VStar.zeroOutputs": "083ba81982f8ff3de028a0d1312c225a79c4dedcaab9fbfcecfb159f1f16218d",
     "VStar.zeroSaltBc": "df1c4cb897da0ca1561d6eb925653ff0574d9177695850e0b9d5ce1313dfafcc"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "VStar.InnerRepCheck": {
    "digest": "1425d2e164e0924dd8c22dd85287b85d2b74150fd909db584819f065993c49eb",
@@ -20142,7 +20537,7 @@
     "VStar.instInhabitedRepS.default": "a142874645e463b54f4a8ce4ac75caffd362ff668dacf3dec7e25594378f4cb8",
     "VStar.portWordsOf": "c32108d67f8af8408eb97a67bc306fe44b4f2f257a41eb57414c3a7a8e3b58a1"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "VStar.Parts": {
    "digest": "b63e8fbd7976118f61d561dea5920e5fada99d70002d6cca2ed3041bd5ec84ef",
@@ -20160,7 +20555,7 @@
     "VStar.sortDedup": "4853310772e8f8c5eee009c13fa239720ca67086fedd3606cf04d40abe4bb872",
     "VStar.touched": "879688302e971f4980576d5aba90aa4ef85ff7c4820fba6072760cc3056f5bdb"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "VStar.PyJson": {
    "digest": "cc3bc635b3033a4fc4600ee3983694984a45683225068cc50a40972d03f6301a",
@@ -20170,7 +20565,7 @@
     "VStar.pyDumpsAt": "fa28078ce22cca7e66723c38cccaff16732ff5694717d26bcf5b22ae86fb6289",
     "VStar.pyStr": "048c83edc990813ca68537f935a8d15338a0307e0b6ab6ce699864d32a8a2c95"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "VStar.RecOpen": {
    "digest": "51a16de9044057119f94d24560aa5024d3c669acec9fc7ead0c31cd1a786aa5d",
@@ -20193,7 +20588,7 @@
     "VStar.slices": "b38b85830baea14c248c33fd39b7695fa33463fdc0814038bcce078a308faefd",
     "VStar.swap": "8315538d44cacfd78b88002383ce73c2fa0848ab89f863d563a991ba1439540e"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "VStar.Residuals": {
    "digest": "919636040ebbd709e20f4cbe05665623bf89f59466bfde384073712fccd45b75",
@@ -20235,7 +20630,7 @@
     "VStar.xorAll": "3b4ad9cd2fdb81aa1349bf4920927b30a936cec41525bf51ff685037cdd22211",
     "VStar.xorL": "bc30ea393ed7345556e19aa3df4f801966a65716f789dd08fe2f0749ce0576b0"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "VStar.Sha": {
    "digest": "c1006c5528d1ea084e2fb6333d2f0898b6729ed621180f24a000c3c11f9658fa",
@@ -20252,7 +20647,7 @@
     "VStar.shaMsg": "8280261b7254ee502f0a1c4c366663f5789f0a137135b04c04e0e4730a2db273",
     "VStar.zeroPad": "69ee6e06904e5a90be7946040157352bf618f6fc8a544951f1573f3a7324d6d0"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "VStar.Stage": {
    "digest": "54b139365fc32950f92678037f81d1d17448de4a962d7bd1e45d85c7997d6c15",
@@ -20270,7 +20665,7 @@
     "VStar.recOpenSub": "73a4a1e2e0e9221955fa6d109e663b99057409cb200e71aa678ba416ba40ef2f",
     "VStar.statements": "31a051b589a97bc40cc05501f0da95d12fa2036ee7cf7c1e73733c0c853bb56f"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "VStar.Stream": {
    "digest": "2ca262af5ad1601a4b46e6e369f11e10e7057c4337132eca58b2eb467a682f6b",
@@ -20294,7 +20689,7 @@
     "VStar.Sha512S.update": "0423e2d6e8d830530a20d9beed57c847684187e872a748426979a779d2a699b6",
     "VStar.hashPut": "471fba6534a7b11f05acec70c01b0aef52ae8a79a7718bce1cec75a5ffd073db"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "VStar.Unit": {
    "digest": "9985dd503494506fd3cef28efdfbd6962f3aae85d428efd3fcfa03fcc3ce3ab9",
@@ -20320,7 +20715,7 @@
     "VStar.recOpenUnit._sparseCasesOn_2": "da4fc0b6b4169950a11c1f36f527e7a988695999a7b449bc2c518a4785f31278",
     "VStar.rowLine": "ab93587c702fbaa39c07489ba4bea6c2afc786fd4db8544e4db97136c0f577c1"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   }
  },
  "dependencies": {
