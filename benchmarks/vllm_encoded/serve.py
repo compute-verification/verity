@@ -571,6 +571,38 @@ def apply(idx: int, quant):
     return fn
 
 
+class DeviceWords:
+    """The name and word of a codec whose words the arm's install encoded on the device (`verity_vllm.store` registers
+    them as they are, ``encode=False``)."""
+
+    def __init__(self, name: str, word_bytes: int) -> None:
+        self.name, self.word_bytes, self.payload_bytes = name, word_bytes, word_bytes
+
+    def encode(self, payload: bytes, index: int) -> bytes:
+        raise NotImplementedError(f"{self.name} encodes on the device")
+
+    decode = encode
+
+
+def store_weights(runner, install: Install, args) -> list:
+    """The store's weight regions: every parameter left after the install (identity), and each encoded linear's words."""
+    from verity_vllm.store.binder import WeightRegion, model_weights
+    out = model_weights(runner)
+    for name, lin in install.linears:
+        nbytes = lin.store.numel() * lin.store.element_size()
+        words = getattr(lin, "words", None) or lin.store.numel()
+        codec = DeviceWords(f"{args.arm}-p{getattr(lin, 'bits', 0)}-k{lin.k}", nbytes // words)
+        out.append(WeightRegion(f"{name}.store", lin.store, f"{codec.name}:{name}@{lin.base}", codec=codec))
+    return out
+
+
+def store_delta(binder, before: dict, steps: int) -> dict:
+    """The store hooks' host microseconds a step since ``before`` (`Counters.seconds`), and their calls."""
+    c = binder.store.counters
+    return {k: {"calls": c.calls[k] - before.get(k, (0, 0.0))[0],
+                "us_per_step": 1e6 * (c.seconds[k] - before.get(k, (0, 0.0))[1]) / max(steps, 1)} for k in c.calls}
+
+
 def time_config(lins: list[K.Linear], x8: torch.Tensor, cfg: K.Config, trials: int) -> float:
     """Microseconds a layer: the shape's layers in turn, captured in one CUDA graph as decode runs them (one partials
     buffer, as the graph pool reuses a freed one), the fastest of ``trials`` timings of two replays each."""
@@ -782,6 +814,9 @@ def main() -> None:
     ap.add_argument("--gate-tokens", type=int, default=16)
     ap.add_argument("--profile-steps", type=int, default=0,
                     help="open a profiler window (cudaProfilerStart/Stop) over this many steady decode steps a point")
+    ap.add_argument("--store", action="store_true",
+                    help="register the node's store through `verity_vllm.store`'s binder: weights (the arm's encoded words, "
+                         "identity for the rest), the KV pool and its pages' life, a pass a step")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     batches = [int(x) for x in args.batches.split(",")]
@@ -812,6 +847,11 @@ def main() -> None:
         if args.tag and args.arm not in ("wide", "tensor"):
             ap.error("--tag is the wide and tensor arms'")
         hook_runner(hooks, install)
+    binder = None
+    if args.store:
+        from verity_vllm.store.binder import Binder
+        from verity_vllm.store.registry import Store
+        binder = Binder(Store(), weights=lambda r: store_weights(r, install, args)).install()
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
     if not args.compiled:
@@ -858,6 +898,7 @@ def main() -> None:
                         hf.hidden_size // hf.num_attention_heads, "intermediate": hf.intermediate_size,
                         "vocab": hf.vocab_size, "tied": bool(getattr(hf, "tie_word_embeddings", False))},
         "gate": [], "points": [], "profile_steps": args.profile_steps, "profiled": window.windows,
+        "store": binder.stats() if binder else None,
     }
     if args.arm == "stock":
         layers = fp8_linears(model)
@@ -892,16 +933,23 @@ def main() -> None:
             mt = args.steps + math.ceil(b * ctx / args.max_batched_tokens) + 8
             rec.clear()
             window.begin(b, ctx)
+            before = {k: (binder.store.counters.calls[k], binder.store.counters.seconds[k])
+                      for k in binder.store.counters.calls} if binder else {}
             t = time.perf_counter()
             llm.generate(prompts, SamplingParams(temperature=0.0, max_tokens=mt, ignore_eos=True, detokenize=False),
                          use_tqdm=False)
             window.end()
             point.update(steady(rec, b), wall_s=time.perf_counter() - t, max_tokens=mt, updates=len(rec))
+            if binder:
+                point["store"] = store_delta(binder, before, len(rec))
             result["points"].append(point)
             save()
             log("point", json.dumps(point))
     if args.arm == "stock" and args.native_trials:
         result["native_pass"] = native_pass(fp8_linears(model), batches, args.native_trials)
+    if binder:
+        result["store"] = binder.stats()
+        binder.uninstall()
     hooks.uninstall()
     if install.hooks is not None:
         install.hooks.uninstall()

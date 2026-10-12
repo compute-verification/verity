@@ -173,8 +173,31 @@ def tag_bytes(cod: dict, batch: int) -> int:
 
 
 def group_name(a: dict) -> str:
-    """The configuration with its mode: -c when compiled, -d when compiled without autotuning."""
-    return config(a) + mode(a)
+    """The configuration with its mode: -c when compiled, -d when compiled without autotuning; +s when the arm registered
+    the node's store (serve.py --store)."""
+    return config(a) + mode(a) + ("+s" if a.get("store") else "")
+
+
+def store_points(by: dict, keys: list) -> list[dict]:
+    """Each +s group against the same configuration without the store: the decode step's ratio (median tokens/s) and
+    the store hooks' host microseconds a step."""
+    out = []
+    for name, group in by.items():
+        base = by.get(name[:-2]) if name.endswith("+s") else None
+        if not base:
+            continue
+        for b, ctx in keys:
+            with_s = [p for a in group for p in a["points"] if p["batch"] == b and p["context"] == ctx and "tokens_per_s" in p]
+            without = [p["tokens_per_s"] for a in base for p in a["points"]
+                       if p["batch"] == b and p["context"] == ctx and "tokens_per_s" in p]
+            if not with_s or not without:
+                continue
+            e, s0 = statistics.median(p["tokens_per_s"] for p in with_s), statistics.median(without)
+            hooks = {k: v["us_per_step"] for k, v in (with_s[0].get("store") or {}).items()}
+            out.append({"arm": name, "batch": b, "context": ctx, "tokens_per_s": e, "tokens_per_s_without": s0,
+                        "step_ratio": s0 / e, "hook_us_per_step": hooks, "hook_us_total": sum(hooks.values()),
+                        "step_ms": b / e * 1e3, "store": group[0].get("store")})
+    return out
 
 
 def codec_tag(a: dict) -> str | None:
@@ -336,6 +359,13 @@ def main() -> int:
                          "kv_tokens": a.get("kv_tokens"), "attention": a.get("attention"), "startup_s": a.get("startup_s")}
                         for a in arms]}
     (out / "points.json").write_text(json.dumps(summary, indent=1))
+    sp = store_points(by, keys)
+    if sp:
+        (out / "store.json").write_text(json.dumps(sp, indent=1))
+        for p in sp:
+            print(f"store {p['arm']:16} B={p['batch']:3d} ctx={p['context']:5d} step {p['step_ms']:.3f} ms, x{p['step_ratio']:.4f} "
+                  f"of the arm without the store, hooks {p['hook_us_total']:.1f} us a step "
+                  + json.dumps({k: round(v, 1) for k, v in p["hook_us_per_step"].items()}))
     (out / "frontier.json").write_text(json.dumps(frontier, indent=1))
     for p in frontier:
         if p["batch"] in (1, 32) and p["context"] == 512:

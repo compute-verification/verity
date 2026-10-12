@@ -386,6 +386,10 @@ class Store:
 
     # --- windows and passes -----------------------------------------------------------------------------------------
 
+    @property
+    def in_pass(self) -> bool:
+        return self._open_pass is not None
+
     def begin_window(self, challenge: bytes) -> None:
         if self._open_pass is not None:
             raise RuntimeError("a window begins between passes")
@@ -402,9 +406,10 @@ class Store:
         self._challenge = None
         return rec
 
-    def begin_pass(self, live_pages: Sequence[int] = ()) -> _Pass:
-        """Plan pass j: every weights region whole, each KV layer over ``live_pages``' blocks that attention reads,
-        then the filler plan's runs.  Outside a window the pass has no seed and commits nothing."""
+    def begin_pass(self, live_pages: Sequence[int] | None = ()) -> _Pass:
+        """Plan pass j: every weights region whole, each KV layer over ``live_pages``' blocks that attention reads
+        (None: every allocated page), then the filler plan's.  Outside a window the pass has no seed and commits
+        nothing."""
         t = time.perf_counter()
         if self._open_pass is not None:
             raise RuntimeError("a pass is already open")
@@ -417,6 +422,8 @@ class Store:
             if r.info.kind == "weights":
                 ps.segments.append(Segment(r.info.name, 0, r.info.blocks, 0))
                 ps.blocks.append(np.arange(r.info.blocks, dtype=np.int64))
+        if self._pool is not None and live_pages is None:
+            live_pages = np.nonzero(self._pool.allocated)[0]
         if self._pool is not None and len(live_pages):
             p = self._pool
             pages = np.unique(np.asarray(live_pages, np.int64))

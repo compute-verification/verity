@@ -20,7 +20,8 @@
 # of T tasks, default 8, and its MMA warp tags the sketches; a last c
 # commits each decode step's tags, serve.py --commit), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
-# each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the carry-chain squaring); a last /g makes an arm its gates and one
+# each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the carry-chain squaring); +s (before any /g) registers the node's store
+# through `verity_vllm.store`'s binder (serve.py --store); a last /g makes an arm its gates and one
 # point (batch 1, context 512, 16 steps); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).
 # MODEL (default the e2e's Llama-3.1-8B-Instruct; for 70B the hub snapshot of unsloth/Meta-Llama-3.1-70B with SERVE_ARGS
 # "--mem 0.93") is read into the page cache before the lease, so each arm loads it from memory if the run's --mem-gb holds
@@ -122,8 +123,9 @@ fi
           --format=csv,noheader -i "$UUID" | sed "s/^/$1, /" >> "$O/gpu.txt" 2>&1; }
   i=0
   for arm in $ARMS; do
-    i=$((i + 1)); C=(); c=; G=(); g=
+    i=$((i + 1)); C=(); c=; G=(); g=; ST=(); st=
     case $arm in */g) G=(--batches 1 --contexts 512 --steps 16); g=-g; arm=${arm%/g} ;; esac
+    case $arm in *+s) ST=(--store); st=-s; arm=${arm%+s} ;; esac
     case $arm in
       *+c) C=(--compiled); c=-c; arm=${arm%+c} ;;
       *+d) C=(--compiled --no-autotune); c=-d; arm=${arm%+d} ;;
@@ -150,7 +152,7 @@ fi
       plain) A=(--arm plain --lib "$B/ve-${k:-pb56}.so"); tag=plain${k:+-$k} ;;
       *) A=(--arm "$name"); tag=$name ;;
     esac
-    A+=("${C[@]}" "${G[@]}"); tag=$i-$tag$c$g; q "$tag start"
+    A+=("${C[@]}" "${G[@]}" "${ST[@]}"); tag=$i-$tag$c$st$g; q "$tag start"
     # shellcheck disable=SC2206
     P=(); [ -n "$NCU_ARGS" ] && P=("$NCU_BIN" $NCU_ARGS -f -o "$O/ncu-$tag")
     # shellcheck disable=SC2086
