@@ -226,22 +226,36 @@ __global__ void fold_chunks(const uint4* __restrict__ p, uint64_t chunks, uint4*
 // order) covers them.  Thread 0 reads the frontier only when the last value it read doesn't cover the step, so with
 // the host ahead a CTA reads it rarely: system-scope reads of host memory are slow and serialized (a flag read per 4 KiB
 // held the fold to 7-10 GB/s and slowed the tag pass 25-50%).  The loads after the step's barrier depend on what thread
-// 0 read; the read scrub between windows leaves no line of the buffer in L1 or L2.  chunks is a multiple of 4.
+// 0 read; the read scrub between windows leaves no line of the buffer in L1 or L2.  With deadline_ns, a CTA starts no
+// step later than that after its own start, and steps[b] is the steps CTA b finished.  chunks is a multiple of 4.
 __global__ void fold_live(const uint4* __restrict__ p, uint64_t chunks, uint4* __restrict__ out,
-                          const unsigned long long* frontier, uint64_t slot_chunks, uint32_t epoch) {
+                          const unsigned long long* frontier, uint64_t slot_chunks, uint32_t epoch, uint64_t deadline_ns,
+                          uint32_t* steps) {
+  __shared__ int stop[2];  // alternating, so that thread 0 never rewrites a step's flag before every thread has read it
   const uint32_t lane = threadIdx.x & 31;
   const uint64_t per = 4 * (blockDim.x >> 5);
-  uint64_t known = 0;  // thread 0's: the chunks the frontier has covered
-  for (uint64_t base = blockIdx.x * per; base < chunks; base += gridDim.x * per) {
+  uint64_t known = 0, t0 = 0;  // thread 0's: the chunks the frontier has covered, and the CTA's start
+  if (threadIdx.x == 0) asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t0));
+  uint32_t step = 0;
+  for (uint64_t base = blockIdx.x * per; base < chunks; base += gridDim.x * per, ++step) {
     const uint64_t need = min(base + per, chunks);
-    // bounded (about 2 s of polls), so that a lost frontier fails the fold's check instead of hanging the run
-    for (uint32_t tries = 0; threadIdx.x == 0 && known < need && ++tries < (1u << 22);) {
-      unsigned long long v;
-      asm volatile("ld.relaxed.sys.global.u64 %0, [%1];" : "=l"(v) : "l"(frontier) : "memory");
-      known = (v >> 32) == epoch ? (v & 0xffffffffu) * slot_chunks : 0;
-      if (known < need) __nanosleep(256);
+    if (threadIdx.x == 0) {
+      bool late = false;
+      // bounded (about 2 s of polls), so that a lost frontier fails the fold's check instead of hanging the run
+      for (uint32_t tries = 0;; ++tries) {
+        uint64_t t;
+        asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+        late = deadline_ns && t - t0 >= deadline_ns;
+        if (late || known >= need || tries >= (1u << 22)) break;
+        unsigned long long v;
+        asm volatile("ld.relaxed.sys.global.u64 %0, [%1];" : "=l"(v) : "l"(frontier) : "memory");
+        known = (v >> 32) == epoch ? (v & 0xffffffffu) * slot_chunks : 0;
+        if (known < need) __nanosleep(256);
+      }
+      stop[step & 1] = late;
     }
     __syncthreads();
+    if (stop[step & 1]) break;
     const uint64_t c0 = base + 4 * (threadIdx.x >> 5);
     if (c0 >= chunks) continue;
     uint4 x[4], y[4];
@@ -263,6 +277,7 @@ __global__ void fold_live(const uint4* __restrict__ p, uint64_t chunks, uint4* _
       if (lane == 0) out[c0 + k] = v;
     }
   }
+  if (threadIdx.x == 0 && steps) steps[blockIdx.x] = step;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -766,6 +781,8 @@ struct Args {
   bool flush = false;  // window --live: evict the challenger's buffer from the host's caches before σ
   size_t piece = 1 << 20, interfere_mib = 64, first_piece = 2 << 20;
   std::vector<size_t> sizes_mib = {16, 32, 48, 56, 60, 64};
+  double deadline_us = 0;              // foldlive: fold_live stops this long after it starts (0: never)
+  std::vector<int> fold_ctas = {2, 4, 8};  // foldlive: the grids, in whole SMs
 };
 
 static Device dev;
@@ -1714,12 +1731,14 @@ static int mode_fold(const Args& a) {
 // The fold of a live stream: at σ the challenger starts generating S on --live G pinned threads, LIVE_SLOT slots taken
 // in order, and a publisher thread advances the frontier (mapped host memory) over the slots written, in order;
 // fold_live reads the stream zero-copy behind the frontier.  Beside the tag pass, alone, alone with S written and the
-// frontier set before σ, and fold_chunks over that, for each size in --sizes-mib and for 2, 4 and 8 whole SMs.  The
-// buffer is evicted from the host's caches before σ; every fold is checked against S regenerated from K_s, every root
-// against an untimed pass.
+// frontier set before σ, and fold_chunks over that, for each size in --sizes-mib and for 2, 4 and 8 whole SMs.  With
+// --deadline-us D, fold_live stops D after it starts, and the window certifies the chunks it folded: every fold is
+// either S's (regenerated from K_s) or untouched, and the folds that match are the CTAs' finished steps.  The buffer is
+// evicted from the host's caches before σ; every root is checked against an untimed pass.
 static int mode_fold_live(const Args& a) {
-  if (a.live < 1 || a.live + 2 > (int)cpus.size()) {
-    fprintf(stderr, "foldlive takes --live G and G + 2 CPUs\n");
+  if (a.live < 1 || a.live + 2 > (int)cpus.size() ||
+      std::any_of(a.fold_ctas.begin(), a.fold_ctas.end(), [](int c) { return c < 1 || c > 64; })) {
+    fprintf(stderr, "foldlive takes --live G, G + 2 CPUs and --fold-ctas from 1 to 64\n");
     return 2;
   }
   Store E = make_store(a);
@@ -1748,6 +1767,8 @@ static int mode_fold_live(const Args& a) {
   std::vector<uint32_t> ref(nmax / 1024 * 4), got(nmax / 1024 * 4);
   uint4* dout;
   OK(cudaMalloc(&dout, nmax / 1024 * 16));
+  uint32_t* dsteps;
+  OK(cudaMalloc(&dsteps, 64 * 4));
   uint8_t seed[32], throwaway[32] = {0}, root[64], want[64];
   fresh(seed, 32);
   if (bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, want, s_tag)) return fail("tag pass");
@@ -1755,14 +1776,16 @@ static int mode_fold_live(const Args& a) {
   uint32_t epoch = 0;
   int bad = 0;
   Timer ft;
+  const uint64_t deadline_ns = (uint64_t)(a.deadline_us * 1e3);
   std::string j = "{\"blocks\":" + std::to_string(a.blocks) + ",\"live_generators\":" + std::to_string(a.live) +
-                  ",\"live_slot\":" + std::to_string(LIVE_SLOT) + ",\"runs\":[";
+                  ",\"live_slot\":" + std::to_string(LIVE_SLOT) + ",\"deadline_us\":" + num(a.deadline_us) +
+                  ",\"runs\":[";
   bool first = true;
-  for (int ctas : {2, 4, 8})
+  for (int ctas : a.fold_ctas)
     for (size_t m : a.sizes_mib) {
       const size_t n = m << 20, chunks = n / 1024, slots = n / LIVE_SLOT;
       // arm 0 beside the tag pass, 1 alone, 2 alone with S written and the frontier set before σ, 3 fold_chunks over that
-      std::vector<double> pass, wall[4], fold_ms[4];
+      std::vector<double> pass, wall[4], fold_ms[4], landed_mb[4];
       for (int arm = 0; arm < 4; ++arm)
         for (int r = 0; r < a.windows; ++r) {
           uint8_t ks[16];
@@ -1789,7 +1812,7 @@ static int mode_fold_live(const Args& a) {
             fold_chunks<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout);
           else
             fold_live<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout, frontier_dev, LIVE_SLOT / 1024,
-                                                 epoch);
+                                                 epoch, deadline_ns, dsteps);
           OK(cudaEventRecord(ft.b, s_fold));
           if (arm < 2) {
             for (auto& g : gens)
@@ -1827,7 +1850,21 @@ static int mode_fold_live(const Args& a) {
               for (size_t w = 0; w < 256; ++w) ref[4 * c + w % 4] ^= ((const uint32_t*)regen.get())[256 * c + w];
           });
           OK(cudaMemcpy(got.data(), dout, chunks * 16, cudaMemcpyDeviceToHost));
-          bad += memcmp(got.data(), ref.data(), chunks * 16) != 0;
+          uint64_t match = 0, wrong = 0, finished = chunks;
+          for (size_t c = 0; c < chunks; ++c) {
+            const bool same = !memcmp(&got[4 * c], &ref[4 * c], 16);
+            const bool zero = !(got[4 * c] | got[4 * c + 1] | got[4 * c + 2] | got[4 * c + 3]);
+            match += same;
+            wrong += !same && !zero;
+          }
+          if (arm < 3) {
+            uint32_t st[64];
+            OK(cudaMemcpy(st, dsteps, ctas * 4, cudaMemcpyDeviceToHost));
+            finished = 0;
+            for (int b = 0; b < ctas; ++b) finished += (uint64_t)st[b] * 128;
+          }
+          bad += wrong || match != finished || (!deadline_ns && match != chunks);
+          landed_mb[arm].push_back(match * 1024 / 1e6);
         }
       auto gbs = [&](const std::vector<double>& ms) { return n / (median(ms) * 1e-3) / 1e9; };
       j += std::string(first ? "" : ",") + "{\"ctas\":" + std::to_string(ctas) + ",\"threads\":1024,\"bytes\":" +
@@ -1836,12 +1873,15 @@ static int mode_fold_live(const Args& a) {
            stats(wall[1]) + ",\"fold_alone_ms\":" + stats(fold_ms[1]) + ",\"fold_alone_gbs\":" +
            num(gbs(fold_ms[1])) + ",\"ready_window_ms\":" + stats(wall[2]) + ",\"fold_ready_ms\":" +
            stats(fold_ms[2]) + ",\"fold_ready_gbs\":" + num(gbs(fold_ms[2])) + ",\"fold_unflagged_ms\":" +
-           stats(fold_ms[3]) + ",\"fold_unflagged_gbs\":" + num(gbs(fold_ms[3])) + "}";
+           stats(fold_ms[3]) + ",\"fold_unflagged_gbs\":" + num(gbs(fold_ms[3])) + ",\"landed_mb\":" +
+           stats(landed_mb[0]) + ",\"alone_landed_mb\":" + stats(landed_mb[1]) + ",\"ready_landed_mb\":" +
+           stats(landed_mb[2]) + "}";
       first = false;
     }
   j += "],\"bad\":" + std::to_string(bad) + "}";
   write(a, "fold_live", j);
   cudaFree(dout);
+  cudaFree(dsteps);
   cudaFreeHost(hm);
   cudaFreeHost(frontier);
   return bad ? fail("a live fold or a root") : 0;
@@ -1871,6 +1911,13 @@ int main(int argc, char** argv) {
     else if (k == "--priority") a.priority = v();
     else if (k == "--suffix") a.suffix = v();
     else if (k == "--interfere-mib") a.interfere_mib = std::stoull(v());
+    else if (k == "--deadline-us") a.deadline_us = std::stod(v());
+    else if (k == "--fold-ctas") {
+      a.fold_ctas.clear();
+      std::stringstream ss(v());
+      std::string x;
+      while (std::getline(ss, x, ',')) a.fold_ctas.push_back(std::stoi(x));
+    }
     else if (k == "--sizes-mib") {
       a.sizes_mib.clear();
       std::stringstream ss(v());
