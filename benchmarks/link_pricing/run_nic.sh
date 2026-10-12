@@ -9,7 +9,8 @@
 #     --declared-output 'out/*' -- taskset -c 48-95 bash benchmarks/link_pricing/run_nic.sh
 #
 # GPUS: the indices gpu-lease may take (default 4,5,6,7: NUMA node 1's, beside the NIC).  GID: the RoCE v2 IPv4 GID index (3).
-# PART=ibgda runs only the NVSHMEM put.
+# PART=ibgda runs only the NVSHMEM put; PART=beside (1 GPU) only small rings beside a 16 GiB reader on the GPU, its
+# loads plain or evict-first: does a ring the NIC writes stay in L2 while the GPU streams its own HBM?
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, gate.jsonl (rdma_gate), nic.jsonl (perftest rows),
 # nsys.jsonl, nic_*.log, ibgda_*.log, port_counters.txt.
 set -uo pipefail
@@ -31,8 +32,10 @@ if [ "${1:-}" = leased ]; then
   gt() {
     local name=$1; shift
     local prof=; [ "${1:-}" = nsys ] && { prof=1; shift; }
+    # a test with a reader beside it is traced, so the reader's kernel sets the span nsys_metrics averages over
+    local tr=none; [[ " $* " == *" --beside-read "* ]] && tr=cuda
     if [ -n "$prof" ]; then
-      nsys profile --trace=none --sample=none --cpuctxsw=none --gpu-metrics-devices=cuda-visible --gpu-metrics-set=gb20x \
+      nsys profile --trace=$tr --sample=none --cpuctxsw=none --gpu-metrics-devices=cuda-visible --gpu-metrics-set=gb20x \
         --gpu-metrics-frequency=10000 --export=sqlite --force-overwrite=true -o "$S/g_$name" \
         timeout 60 "$G" --gid $GID "$@" > "$O/g_$name.log" 2>&1
       python3 nsys_metrics.py "$S/g_$name.sqlite" "$name" >> "$O/nsys.jsonl" 2>> "$O/nsys.err"
@@ -61,6 +64,15 @@ if [ "${1:-}" = leased ]; then
       gt "inline_write_$s" --op write --src host --dst host --mib 3 --inline $s
       gt "dma_write_$s" --op write --src host --dst host --mib 3 --chunk $s
       gt "dma_write_gpu_src_$s" --op write --src gpu --dst host --mib 3 --chunk $s
+    done
+  fi
+  if [ -x "$G" ] && [ "$PART" = beside ]; then
+    for h in normal stream; do
+      gt "reader_alone_$h" nsys --op write --src host --dst host --mib 8 --beside-read 16 --read-hint $h
+      for m in 8 32; do
+        gt "host_to_gpu_write_ring_${m}_read_$h" nsys --op write --src host --dst gpu --mib $m --beside-read 16 --read-hint $h
+      done
+      gt "gpu_to_host_write_ring_8_read_$h" nsys --op write --src gpu --dst host --mib 8 --beside-read 16 --read-hint $h
     done
   fi
   # perftest cross-check: pt NAME TOOL "SERVER ARGS" "CLIENT ARGS"
@@ -95,7 +107,7 @@ if [ "${1:-}" = leased ]; then
   BIN=$(find "$PT" -name 'shmem_put_bw' -type f | head -1)
   LIB=$(dirname "$(find /usr/lib /usr/lib64 /usr/local /opt -name 'libnvshmem_host.so.3' 2> /dev/null | head -1)")
   echo "{\"nvshmem_binary\": \"${BIN:-none}\", \"lib\": \"$LIB\"}" | tee -a "$O/nic.jsonl"
-  if [ -n "$BIN" ]; then
+  if [ -n "$BIN" ] && [ "$PART" != beside ]; then
     for transport in ibgda ibrc; do
       env LD_LIBRARY_PATH="$LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" NVSHMEM_DISABLE_P2P=1 NVSHMEM_HCA_LIST=$D:1 NVSHMEM_IB_GID_INDEX=$GID NVSHMEM_BOOTSTRAP=PMI \
         NVSHMEM_IB_ENABLE_IBGDA=$([ $transport = ibgda ] && echo 1 || echo 0) \
@@ -119,9 +131,10 @@ if [ ! -e /usr/include/infiniband/verbs.h ]; then
   INC="-I$S/hdr/usr/include"
   ln -sf /usr/lib/x86_64-linux-gnu/libibverbs.so.1 "$S/libibverbs.so"
 fi
-"$NVCC" -O3 -std=c++17 $INC rdma_gate.cu -o "$S/rdma_gate" -L"$S" -libverbs -lcuda >> "$O/build.txt" 2>&1 ||
+"$NVCC" -O3 -std=c++17 -arch=sm_120 $INC rdma_gate.cu -o "$S/rdma_gate" -L"$S" -libverbs -lcuda >> "$O/build.txt" 2>&1 ||
   echo "rdma_gate did not build" | tee -a "$O/build.txt"
 sha256sum run_nic.sh rdma_gate.cu nsys_metrics.py >> "$O/build.txt"
 [ -x "$S/rdma_gate" ] && sha256sum "$S/rdma_gate" >> "$O/build.txt"
 { ibv_devinfo -d $D | grep -E 'fw_ver|state|active_mtu|link_layer|max_qp_rd_atom|max_res_rd_atom'; } >> "$O/build.txt" 2>&1
-GPU_LEASE_WHO=ra-link-pricing gpu-lease 2 --wait --on "${GPUS:-4,5,6,7}" --max-min 20 -- bash "$PWD/run_nic.sh" leased "$S"
+N=2; [ "$PART" = beside ] && N=1
+GPU_LEASE_WHO=ra-link-pricing gpu-lease $N --wait --on "${GPUS:-4,5,6,7}" --max-min 20 -- bash "$PWD/run_nic.sh" leased "$S"

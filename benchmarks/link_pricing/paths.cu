@@ -7,9 +7,10 @@
 //                                    written by H2D, by SM stores, by the peer, and after an eviction
 //   paths landh  --gpu G             where the GPU's bytes land in the host: a CPU pointer chase over pinned memory just
 //                                    written by D2H or by SM stores, against flushed (DRAM) and CPU-written lines
-//   paths loop   --gpu G --what W --mib M --seconds S [--beside-read GIB]   a DMA loop for nsys's DRAM and PCIe
-//                                    sampling (W: h2d, d2h, zcw, zcr, p2pw, p2pce, smw, none), optionally beside a
-//                                    reader of GIB GiB on the device the ring lands in
+//   paths loop   --gpu G --what W --mib M --seconds S [--beside-read GIB [--read-hint normal|stream]]   a DMA loop
+//                                    for nsys's DRAM and PCIe sampling (W: h2d, d2h, zcw, zcr, p2pw, p2pce, smw, none),
+//                                    optionally beside a reader of GIB GiB on the device the ring lands in, its loads
+//                                    plain or evict-first
 //
 // Every timed path is gated first: its destination must equal its source byte for byte (exit 3 otherwise).
 // Output: one JSON object per line on stdout.
@@ -88,12 +89,14 @@ __global__ void k_xor(const uint4* __restrict__ src, size_t n, uint32_t* out) {
   }
   atomicXor(out, acc);
 }
-// a competing reader, standing in for the GPU's own HBM traffic: `passes` plain-load passes over src
+// a competing reader, standing in for the GPU's own HBM traffic: `passes` passes over src, of plain loads or (STREAM)
+// evict-first ones (ld.global.cs), which a relay keeping a ring resident in L2 would use
+template <bool STREAM>
 __global__ void k_read_passes(const uint4* __restrict__ src, size_t n, int passes, uint32_t* sink) {
   uint32_t acc = 0;
   for (int p = 0; p < passes; p++)
     for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) {
-      uint4 v = src[i];
+      uint4 v = STREAM ? __ldcs(src + i) : src[i];
       acc ^= (v.x ^ v.y ^ v.z ^ v.w) + p;
     }
   if (acc == 0x12345678u) *sink = acc;
@@ -110,7 +113,7 @@ __global__ void k_chase(const uint32_t* __restrict__ next, uint32_t start, int l
 }
 
 struct Args {
-  std::string mode, what = "h2d";
+  std::string mode, what = "h2d", read_hint = "normal";
   int gpu = 0, peer = -1, reps = 9;
   double seconds = 2.0;
   size_t mib = 256, read_gib = 0;
@@ -128,6 +131,7 @@ static Args parse(int argc, char** argv) {
     else if (k == "--seconds") a.seconds = atof(v.c_str());
     else if (k == "--what") a.what = v;
     else if (k == "--beside-read") a.read_gib = strtoull(v.c_str(), 0, 10);
+    else if (k == "--read-hint") a.read_hint = v;
     else { fprintf(stderr, "unknown %s\n", k.c_str()); exit(2); }
   }
   return a;
@@ -555,7 +559,10 @@ static void mode_loop(const Args& a) {
     if (e != cudaSuccess) CK(e);
   }
   // --beside-read G: a reader of G GiB on the device the ring lands in (the peer for p2p), running as long as the ring
+  // and launched only after every device synchronize, so the ring never waits for it
   int rdev = p ? a.peer : a.gpu, passes = 0;
+  bool stream = a.read_hint == "stream";
+  if (!stream && a.read_hint != "normal") { fprintf(stderr, "--read-hint normal|stream\n"); exit(2); }
   uint4* rb = nullptr;
   uint32_t* rsink = nullptr;
   cudaStream_t rs = nullptr;
@@ -570,15 +577,20 @@ static void mode_loop(const Args& a) {
     CK(cudaEventCreate(&r0));
     CK(cudaEventCreate(&r1));
     CK(cudaDeviceSynchronize());
-    passes = std::max(1, (int)(a.seconds * 1.2e12 / RB));
-    CK(cudaEventRecord(r0, rs));
-    k_read_passes<<<2 * sms(rdev), 512, 0, rs>>>(rb, RB / 16, passes, rsink);
-    CK(cudaEventRecord(r1, rs));
     CK(cudaSetDevice(a.gpu));
   }
   cudaStream_t s;
   CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
   CK(cudaDeviceSynchronize());
+  if (RB) {
+    CK(cudaSetDevice(rdev));
+    passes = std::max(1, (int)(a.seconds * 1.2e12 / RB));
+    CK(cudaEventRecord(r0, rs));
+    if (stream) k_read_passes<true><<<2 * sms(rdev), 512, 0, rs>>>(rb, RB / 16, passes, rsink);
+    else k_read_passes<false><<<2 * sms(rdev), 512, 0, rs>>>(rb, RB / 16, passes, rsink);
+    CK(cudaEventRecord(r1, rs));
+    CK(cudaSetDevice(a.gpu));
+  }
   double t0 = now_s(), t;
   size_t moved = 0;
   int S = sms(a.gpu);
@@ -603,8 +615,8 @@ static void mode_loop(const Args& a) {
     float ms;
     CK(cudaEventSynchronize(r1));
     CK(cudaEventElapsedTime(&ms, r0, r1));
-    printf(", \"beside_read_gib\": %zu, \"read_device\": %d, \"read_gbps\": %.2f", a.read_gib, rdev,
-           (double)passes * RB / (ms * 1e-3) / 1e9);
+    printf(", \"beside_read_gib\": %zu, \"read_hint\": \"%s\", \"read_device\": %d, \"read_gbps\": %.2f", a.read_gib,
+           a.read_hint.c_str(), rdev, (double)passes * RB / (ms * 1e-3) / 1e9);
   }
   printf("}\n");
 }
