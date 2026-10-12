@@ -144,9 +144,12 @@ challenger last wrote it opens no window. The challenger holds the file's lock w
 store's state at a time. A nonce in the file is never drawn again, and one window over the store is open at a time,
 whichever verifier opens it. A window the file shows open when the state is reopened belonged to a challenger that
 stopped; reopening records it closed, and no verifier can accept it. A file cannot detect being restored from a
-snapshot, nor a directory a copy of a state kept in another directory or on another host. That the challenger keeps
-one state directory and never rolls back or forks a state rests on `trusted-nebius-host`, the same assumption PoUS's
-memory challenger cites for its session-id log, for the two properties below.
+snapshot, nor a directory a copy of a state kept in another directory or on another host. Both rest on
+`trusted-nebius-host`, which network-accounting widens under the same id to say that the device runs its stated code
+on its Nebius host, "…, and its host never restores an earlier copy of the state the device keeps there", pending
+network-accounting's widening (Daniel, decision 2). The challenger's stated code keeps one state directory and never
+copies a state, and its host never brings an earlier copy back. PoUS's memory challenger cites the same assumption for
+its session-id log. The audit needs it for the two properties below.
 
 **What the no-rollback presumption is for.** A single window's bound does not need it. AuditRO's bound for one
 accepted window (§5) needs only that the prover could not know `σ` or the samples before `σ` left, and both come from
@@ -269,10 +272,11 @@ The claims registry (`verity.core.claims`, on #1806's branch) names what a deplo
   x16 (no NVLink, no chip-to-chip link). A deployment records the SKU the device attests (it supports confidential
   computing) beside its id (§2).
 - **`trusted-nebius-host`** (assumption, core's): the challenger runs its stated code on its Nebius host, which offers
-  no attesting hardware. The audit cites it for two properties: the device id the challenger reads from the driver is
-  the UUID of the GPU it audits (§2), and the challenger keeps one state directory and never rolls back or forks a
-  state (§3), which one open window per store and additivity across windows need and a single window's bound does
-  not.
+  no attesting hardware, "…, and its host never restores an earlier copy of the state the device keeps there", the
+  wording network-accounting adds under the same id, pending network-accounting's widening (Daniel, decision 2). The
+  audit cites it for two properties: the device id the challenger reads from the driver is the UUID of the GPU it
+  audits (§2), and the challenger keeps one state directory, never copies a state and never gets an earlier copy back
+  (§3), which one open window per store and additivity across windows need and a single window's bound does not.
 - **`bandwidth-device`** (model): the device is a chip with device memory and side sources, all laid out before `σ`; it
   reads device memory only through counted ingress, computes every tag on chip, and commits before the samples.
 
@@ -282,21 +286,26 @@ The claims registry (`verity.core.claims`, on #1806's branch) names what a deplo
   of another device's store with its own pass, at its measured read rate (1,476 GB/s), covers
   `(T + RTT)` × 1,476 GB/s less its own `I`: about 500,000 blocks, 96% of `N`, at `T = 1.2 ms` (the red team counted
   92% at the earlier `I`). Charging that against `k` leaves nothing, so a per-device figure means something only for
-  a device no helper reaches. **Which of two readings `bandwidth-device` states is a model choice for Daniel:**
+  a device no helper reaches. **`bandwidth-device` is therefore stated for a co-audited set** (Daniel, decision 4,
+  11 Oct 2026, 8:54 PM PDT):
 
-  1. **A co-audited set** (the red team's recommendation). The devices of a set run their windows at the same time,
-     with one start and one deadline (an offset is a helper's time); their stores are pairwise distinct (§2); and
-     every device that could hold a copy of any of their stores is in the set or isolated. The set's chips are then
-     one chip, and the same compression argument gives
-     `Σ_i I_i ≥ Σ_i k·b − Σ_i S_i − c_ext − Σ_i λ` bits, except with probability the sum of the devices' errors,
-     where `c_ext` counts only links from outside the set. Traffic between the set's devices stays inside it, so a
-     helper's slack is counted and the residual disappears. For `m` RTX PRO 6000s, each on its own PCIe link,
-     `c_ext ≤ m · cap_side · (T + RTT)`, so the set's total is `m` times the per-device figure, which then bounds the
-     set's total, not any one device. AuditRO is stated for one store;
-     this reading needs it for `m` stores sampled separately, which is not in Lean yet.
-  2. **Per device, for isolated devices only.** `I ≥ k·b − S − c − λ` for one device whose side links carry nothing
-     computed from any copy of its store during the window. This is the statement AuditRO makes now. A device that is
-     neither isolated nor in a co-audited set gets no figure.
+  - **Which devices count.** Whole GPUs whose only link is PCIe: no MIG slice (§2) and no NVLink. Every device
+    that could hold a copy of a set's stores is in the set or isolated. An NVLink domain is certified as one set
+    later.
+  - **What a set certifies.** The devices of a set run their windows at the same time, with one start and one
+    deadline (an offset is a helper's time), over pairwise-distinct stores (§2). The set's chips are then one chip,
+    and the same compression argument gives `Σ_i I_i ≥ Σ_i k·b − Σ_i S_i − c_ext − Σ_i λ` bits, except with
+    probability the sum of the devices' errors, where `c_ext` counts only links from outside the set. Traffic between
+    the set's devices stays inside it, so a helper's slack is counted and the residual disappears. For `m`
+    RTX PRO 6000s, each on its own PCIe link, `c_ext ≤ m · cap_side · (T + RTT)`, so the set's total is at least `m`
+    times the per-device figure; that bounds the set's total, not any one device. This is AuditRO for `m` stores
+    sampled separately, which lane `ra-bandwidth-lean` is proving; the set's figure is certified once it lands.
+  - **What is certified now.** Per device, for an isolated device: `I ≥ k·b − S − c − λ` for one device whose side
+    links carry nothing computed from any copy of its store during the window, the statement AuditRO makes. A peer
+    that relays tags in over the side link is charged inside the side budget by `AuditRelay` (#1819), at `m·b` bits
+    beyond `c` for `m` relayed blocks with `m·(h − log₂ N) ≥ c + μ`; at the full PCIe cap that is more blocks than
+    `N`, so a device a peer can reach gets its figure only in a co-audited set. A device that is neither isolated nor
+    in a co-audited set gets no figure.
 
 Host RAM is not part of the allowed hardware (Daniel, 3 Oct 2026); the RTX PRO 6000 Server has no NVLink, so its side
 paths are the PCIe link, shared by host, NVMe, NIC and peer GPUs.
@@ -311,8 +320,8 @@ fixed by the red team at `f18c1854a`.
 An accepted `ro-blake3/v1` window at `T = 1.2 ms` and `s = 1,849` certifies that the device's memory delivered at least
 741,353,308 bytes of `E` (68.8%) within `T + RTT`: 618 GB/s with `RTT = 0`, and 722,448,693 bytes (67.0%), 482 GB/s,
 with a 0.3 ms `RTT` allowance. The error is `2^-40.42`. The last table of this section is `audit.bound` at these
-parameters. Which reading of `bandwidth-device` Daniel picks (§5) decides whether the rate is per device or a share of
-a co-audited set's total.
+parameters. Under Daniel's reading of `bandwidth-device` (§5), the rate is certified now for an isolated device, and
+for a co-audited set it is each device's share of the set's total once AuditRO for `m` stores lands.
 
 The GPU tagger (`benchmarks/bandwidth/run.sh`) on one RTX PRO 6000 Blackwell Server Edition of vy-nebius-2, under a
 timed lease, SM clock 2,085 to 2,092 MHz throughout. Every run's gates passed before anything was timed: SHA-512's and
@@ -406,9 +415,9 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
    candidate, was not built: on the same device it hashes 4.95 bytes per SM per clock against BLAKE3's 5.88 (notes
    `kb/sm120/tried-techniques.md`, run `r20260930-061717-3e84`), a compute floor of 0.56 ms on this store against
    0.51 ms.
-3. **The helper residual** (§5): an interleaving helper covers most of another device's blocks, so `bandwidth-device`
-   states either the bound for a co-audited set or a per-device bound for isolated devices only. Daniel picks; the
-   set's reading needs AuditRO for `m` stores.
+3. **The helper residual** (§5): an interleaving helper covers most of another device's blocks, so Daniel stated
+   `bandwidth-device` for a co-audited set of whole PCIe-only GPUs (decision 4). The set's figure needs AuditRO for `m`
+   stores (lane `ra-bandwidth-lean`); until then the per-device bound covers an isolated device.
 4. **The store's leaves are PoUS's, not P2 spec §4's.** `vk`'s leaf is the 99-byte little-endian leaf of
    `pous.verifier`; the P2 spec's is 107 bytes, big-endian (`benchmarks/pous/p2_v1/wire.py`). The audit uses what PoUS
    uses on `main` and inherits its resolution.
@@ -418,8 +427,8 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
    them on the RTX PRO 6000 is open.
 6. **Openings disclose sampled blocks** of `C*` (an encoding of `W`) to the verifier; the memory challenger already
    holds `vk` and publishes only verdicts, so nothing leaves it.
-7. **The audit imports PoUS** (`pous.codec`, `pous.schemes.p2`, `pous.verifier`) for its store and setup. The import
-   boundary for protocols is Daniel's to rule on; until then `tests/test_boundaries.py` carries the edge.
+7. **The audit imports PoUS** (`pous.codec`, `pous.schemes.p2`, `pous.verifier`) for its store and setup. Daniel
+   allowed this import edge (decision 7, 11 Oct 2026), and `tests/test_boundaries.py` enforces it.
 
 ## 8. Code
 
