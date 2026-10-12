@@ -91,8 +91,9 @@ theorem not_acceptsZKR_keepOwn {Q : VStmt} {z : Q.Outer Reg'}
 
 /-- **The checked sessions accept only at a whole history**, wherever V* has a statement: at a shorter history no
 session keeps its own list (`checkedC3`), so the first accepts nothing (`not_acceptsZKR_keepOwn`). -/
-theorem hLeafC3_checked {ish : RecVStar.Inner} {cs : Option Flock.RecVStar.InnerCommits}
-    {coins : Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+theorem hLeafC3_checked {ish : RecVStar.Inner} {cs : List (Cm × (ℐ).Coin) → Option Flock.RecVStar.InnerCommits}
+    {coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg'}
     {hC : Flock.Premises.RecordCustody zr} {h : Typed zr} (hS : 0 < S) (dg : ByteArray → ByteArray) (N k Rw : ℕ) :
     HLeafC3 (Flock.Guarantees.checkedC3 ish cs coins bind rows zr hC h) dg N k Rw := by
@@ -100,7 +101,7 @@ theorem hLeafC3_checked {ish : RecVStar.Inner} {cs : Option Flock.RecVStar.Inner
   by_contra hlt
   exact not_acceptsZKR_keepOwn (z := Flock.Guarantees.custodied zr hC h R ω t R₂ ⟨0, hS⟩)
     (P := fun J own tr => (ℐ).r ≤ t.length ∧
-      Flock.Guarantees.ChecksC3 ish cs coins (⟨0, hS⟩ : Fin S) (bind ⟨0, hS⟩) rows J own tr)
+      Flock.Guarantees.ChecksC3 ish (cs t) (coins t) (⟨0, hS⟩ : Fin S) (bind ⟨0, hS⟩) rows J own tr)
     (fun _ _ _ hp => hlt hp.1) _ (hacc.1 ⟨0, hS⟩).1
 
 /-- **The table's round-`i` messages are read from stage `i`'s commit strings** (G's `MsgsRead`): two accepted outer
