@@ -25,9 +25,9 @@ static const char* const NAME = "ro-sketch-blake3/v0";
 #define SK_CHAINS 8
 #endif
 // SK_L2_EF = 1 loads the store with an L2 evict-first policy, so the stream does not evict what a later call reads back
-// from the L2 (the sketches a deferred commit hashes, the activations).
+// from the L2 (the sketches a deferred commit hashes, in a deployment's two rotating slots; the activations).
 #ifndef SK_L2_EF
-#define SK_L2_EF 0
+#define SK_L2_EF 1
 #endif
 
 __device__ __forceinline__ void bulk_load_ef(void* dst, const void* src, uint32_t bytes, uint64_t* bar, uint64_t pol) {

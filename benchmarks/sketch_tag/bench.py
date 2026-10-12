@@ -944,8 +944,9 @@ def main() -> int:
                          "the rest for k=16, n=4096 (each arm's fastest is the frontier's)")
     ap.add_argument("--committers", type=int, default=2, help="committer warps a CTA in the fused arm")
     ap.add_argument("--reps", type=int, default=5)
-    ap.add_argument("--ring-bytes", type=int, default=WB.L2_DEFEAT_BYTES,
-                    help="each timed ring's bytes (copies of a linear's store, or layers of the sequence)")
+    ap.add_argument("--ring-bytes", type=int, default=8 << 30,
+                    help="each timed ring's bytes (copies of a linear's store, or layers of the sequence): about "
+                         "Llama-3.1-8B's FP8 weights, as an evict-first stream keeps part of a smaller ring in the L2")
     ap.add_argument("--full-tags", default="o", help="the linear whose every tag is checked against the reference")
     ap.add_argument("--mode", default="bench", choices=["bench", "ncu"])
     a = ap.parse_args()
