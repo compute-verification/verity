@@ -221,27 +221,32 @@ __global__ void fold_chunks(const uint4* __restrict__ p, uint64_t chunks, uint4*
   }
 }
 
-__device__ __forceinline__ uint32_t load_acquire_sys(const uint32_t* p) {
+// A flag in mapped host memory, read at system scope: as an acquire (acquire = 1), or relaxed, in which case the reads
+// that depend on its value are ordered after it only by that dependence.
+__device__ __forceinline__ uint32_t load_flag(const uint32_t* p, int acquire) {
   uint32_t v;
-  asm volatile("ld.acquire.sys.global.u32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
+  if (acquire)
+    asm volatile("ld.acquire.sys.global.u32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
+  else
+    asm volatile("ld.relaxed.sys.global.u32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
   return v;
 }
 
 // fold_chunks over a stream the host is still writing: a warp reads a chunk group only once flags[slot] (mapped host
 // memory, one per slot_chunks chunks) holds this window's epoch.  The next group's flag is read while this group's
 // loads are in flight, and the loads are weak and skip L1 (the read scrub between windows leaves no line of the
-// buffer in L2).  slot_chunks is a multiple of 4, and chunks of slot_chunks.
+// buffer in L2, so no stale line can be hit).  slot_chunks is a multiple of 4, and chunks of slot_chunks.
 __global__ void fold_live(const uint4* __restrict__ p, uint64_t chunks, uint4* __restrict__ out, const uint32_t* flags,
-                          uint64_t slot_chunks, uint32_t epoch) {
+                          uint64_t slot_chunks, uint32_t epoch, int acquire) {
   const uint32_t lane = threadIdx.x & 31;
   const uint64_t warp = (blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) >> 5;
   const uint64_t warps = ((uint64_t)gridDim.x * blockDim.x) >> 5;
-  uint32_t seen = 4 * warp < chunks ? load_acquire_sys(flags + 4 * warp / slot_chunks) : 0;
+  uint32_t seen = 4 * warp < chunks ? load_flag(flags + 4 * warp / slot_chunks, acquire) : 0;
   for (uint64_t c0 = 4 * warp; c0 < chunks; c0 += 4 * warps) {
     // bounded (about 2 s of polls), so that a lost flag fails the fold's check instead of hanging the run
     for (uint32_t tries = 0; seen != epoch && ++tries < (1u << 22);) {
       __nanosleep(256);
-      seen = load_acquire_sys(flags + c0 / slot_chunks);
+      seen = load_flag(flags + c0 / slot_chunks, acquire);
     }
     uint4 x[4], y[4];
 #pragma unroll
@@ -249,7 +254,7 @@ __global__ void fold_live(const uint4* __restrict__ p, uint64_t chunks, uint4* _
       x[k] = __ldcg(p + (c0 + k) * 64 + lane);
       y[k] = __ldcg(p + (c0 + k) * 64 + 32 + lane);
     }
-    if (c0 + 4 * warps < chunks) seen = load_acquire_sys(flags + (c0 + 4 * warps) / slot_chunks);
+    if (c0 + 4 * warps < chunks) seen = load_flag(flags + (c0 + 4 * warps) / slot_chunks, acquire);
 #pragma unroll
     for (int k = 0; k < 4; ++k) {
       uint4 v = make_uint4(x[k].x ^ y[k].x, x[k].y ^ y[k].y, x[k].z ^ y[k].z, x[k].w ^ y[k].w);
@@ -764,6 +769,7 @@ struct Args {
   uint64_t blocks = 524288;
   int reps = 7, windows = 20, samples = 1849, gen_threads = 16, live = 0;
   bool flush = false;  // window --live: evict the challenger's buffer from the host's caches before σ
+  bool fold_acquire = false;  // foldlive: read each slot's flag as an acquire (else relaxed)
   size_t piece = 1 << 20, interfere_mib = 64, first_piece = 2 << 20;
   std::vector<size_t> sizes_mib = {16, 32, 48, 56, 60, 64};
 };
@@ -1713,8 +1719,8 @@ static int mode_fold(const Args& a) {
 
 // The fold of a live stream: at σ the challenger starts generating S on --live G pinned threads, LIVE_SLOT slots taken
 // in order, each slot's flag (mapped host memory) set to the window's epoch once its bytes are written; fold_live reads
-// each slot zero-copy once its flag is set, beside the tag pass and then alone, for each size in --sizes-mib and for 4
-// and 8 whole SMs.  The buffer is evicted from the host's caches before σ; every fold is checked against S regenerated
+// each slot zero-copy once its flag is set (relaxed, or --fold-acquire), beside the tag pass, alone, and alone with S
+// written and every flag set before σ, for each size in --sizes-mib and for 4 and 8 whole SMs.  The buffer is evicted from the host's caches before σ; every fold is checked against S regenerated
 // from K_s, every root against an untimed pass.
 static int mode_fold_live(const Args& a) {
   if (a.live < 1 || a.live + 1 > (int)cpus.size()) {
@@ -1752,13 +1758,15 @@ static int mode_fold_live(const Args& a) {
   int bad = 0;
   Timer ft;
   std::string j = "{\"blocks\":" + std::to_string(a.blocks) + ",\"live_generators\":" + std::to_string(a.live) +
-                  ",\"live_slot\":" + std::to_string(LIVE_SLOT) + ",\"runs\":[";
+                  ",\"live_slot\":" + std::to_string(LIVE_SLOT) + ",\"flag\":\"" +
+                  (a.fold_acquire ? "acquire" : "relaxed") + "\",\"runs\":[";
   bool first = true;
   for (int ctas : {4, 8})
     for (size_t m : a.sizes_mib) {
       const size_t n = m << 20, chunks = n / 1024, slots = n / LIVE_SLOT;
-      std::vector<double> wall, pass, fold_ms, alone_wall, alone_ms;
-      for (int alone = 0; alone < 2; ++alone)
+      // arm 0 beside the tag pass, 1 alone, 2 alone with S written and every flag set before σ
+      std::vector<double> pass, wall[3], fold_ms[3];
+      for (int arm = 0; arm < 3; ++arm)
         for (int r = 0; r < a.windows; ++r) {
           uint8_t ks[16];
           fresh(ks, 16);
@@ -1770,13 +1778,18 @@ static int mode_fold_live(const Args& a) {
           parallel(a.gen_threads, cpus, [&](int t) {
             if (t * per < n) sg_flush(hm + t * per, std::min(per, n - t * per));
           });
+          if (arm == 2) {
+            generate(gen, hm, n, a.gen_threads, cpus);
+            for (size_t k = 0; k < slots; ++k) __atomic_store_n(flags + k, epoch, __ATOMIC_RELEASE);
+          }
           OK(cudaMemsetAsync(dout, 0, chunks * 16, s_fold));
           OK(cudaStreamSynchronize(s_fold));
-          next.store(0, std::memory_order_release);
+          next.store(arm == 2 ? slots : 0, std::memory_order_release);
           // σ: from here the window's clock runs.
           const double t0 = now_s();
           OK(cudaEventRecord(ft.a, s_fold));
-          fold_live<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout, flags_dev, LIVE_SLOT / 1024, epoch);
+          fold_live<<<ctas, 1024, 0, s_fold>>>((const uint4*)hm_dev, chunks, dout, flags_dev, LIVE_SLOT / 1024, epoch,
+                                               a.fold_acquire);
           OK(cudaEventRecord(ft.b, s_fold));
           for (auto& g : gens)
             g->post([&] {
@@ -1785,18 +1798,18 @@ static int mode_fold_live(const Args& a) {
                 __atomic_store_n(flags + k, epoch, __ATOMIC_RELEASE);
               }
             });
-          if (!alone) bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, root, s_tag);
+          if (arm == 0) bw_tag_pass(bw::TAG_B3, E.E, a.blocks, seed, E.ws, root, s_tag);
           OK(cudaStreamSynchronize(s_fold));
           const double t1 = now_s();
           for (auto& g : gens) g->wait();
-          if (!alone) {
+          if (arm == 0) {
             float tags_ms = 0, pass_ms = 0;
             bw_last_pass_ms(&tags_ms, &pass_ms);
             pass.push_back(pass_ms);
             bad += memcmp(root, want, 64) != 0;
           }
-          (alone ? alone_wall : wall).push_back((t1 - t0) * 1e3);
-          (alone ? alone_ms : fold_ms).push_back(ft.ms());
+          wall[arm].push_back((t1 - t0) * 1e3);
+          fold_ms[arm].push_back(ft.ms());
           generate(gen, regen.get(), n, a.gen_threads, cpus);
           std::fill(ref.begin(), ref.begin() + chunks * 4, 0);
           parallel(a.gen_threads, cpus, [&](int t) {
@@ -1808,10 +1821,11 @@ static int mode_fold_live(const Args& a) {
         }
       auto gbs = [&](const std::vector<double>& ms) { return n / (median(ms) * 1e-3) / 1e9; };
       j += std::string(first ? "" : ",") + "{\"ctas\":" + std::to_string(ctas) + ",\"threads\":1024,\"bytes\":" +
-           std::to_string(n) + ",\"window_ms\":" + stats(wall) + ",\"device_pass_ms\":" + stats(pass) +
-           ",\"fold_ms\":" + stats(fold_ms) + ",\"fold_gbs\":" + num(gbs(fold_ms)) + ",\"alone_window_ms\":" +
-           stats(alone_wall) + ",\"fold_alone_ms\":" + stats(alone_ms) + ",\"fold_alone_gbs\":" + num(gbs(alone_ms)) +
-           "}";
+           std::to_string(n) + ",\"window_ms\":" + stats(wall[0]) + ",\"device_pass_ms\":" + stats(pass) +
+           ",\"fold_ms\":" + stats(fold_ms[0]) + ",\"fold_gbs\":" + num(gbs(fold_ms[0])) + ",\"alone_window_ms\":" +
+           stats(wall[1]) + ",\"fold_alone_ms\":" + stats(fold_ms[1]) + ",\"fold_alone_gbs\":" +
+           num(gbs(fold_ms[1])) + ",\"ready_window_ms\":" + stats(wall[2]) + ",\"fold_ready_ms\":" +
+           stats(fold_ms[2]) + ",\"fold_ready_gbs\":" + num(gbs(fold_ms[2])) + "}";
       first = false;
     }
   j += "],\"bad\":" + std::to_string(bad) + "}";
@@ -1842,6 +1856,7 @@ int main(int argc, char** argv) {
     else if (k == "--live") a.live = std::stoi(v());
     else if (k == "--first-piece") a.first_piece = std::stoull(v());
     else if (k == "--flush") a.flush = true;
+    else if (k == "--fold-acquire") a.fold_acquire = true;
     else if (k == "--path") a.path = v();
     else if (k == "--priority") a.priority = v();
     else if (k == "--suffix") a.suffix = v();
