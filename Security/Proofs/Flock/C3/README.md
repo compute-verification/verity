@@ -39,18 +39,25 @@ c1 (W); h2 builds on #1847's list.
 Pieces (c)–(g) are obligations of a free decoder (`C3Family`'s `run`, `row`), as G's H-props are of `VStarFamily`'s
 free fields. n0 fixes the decoder (`C3Family.honest`, `C3/Compose/Honest.lean`): `run` decodes the inner transcript's
 steps stage by stage on the prefix each stage's game plays (`decodeRun`), `row` is the verifier's `fixedRow` at its
-hold of the inner transcript (`heldRow`). `hbr_honest` (`C3/Compose/Discharge.lean`, proved from the stubs) is the
-guarantee's `_hbr` at it; `_hob` is h2's `vstarParses_of_list`. The stubs form a chain, each taking the ones before:
+hold of the inner transcript (`heldRow`). `hbr_honest` (`C3/Compose/Discharge.lean`, proved) is the guarantee's `_hbr`
+at it, from n1 and the four stages at it as hypotheses; `_hob` is h2's `vstarParses_of_list`. n0's decoder `dec` is
+free, and every stage reads `dec`'s messages, so a stage does not follow from the public rows: perturb one message on
+a stage's rounds and every stage still plays a prefix of the same length while that stage's verdict fails (Worker S's
+counterexample, at rep 0's `v₂`). So n2–n5 are restated on read facts (round 4): `hX_of_read`, over any family, from
+its stage's read fact (its rounds' messages on the tape are its prover's for a witness its verifier row accepts), and
+n6 gives the read facts at a decoder that reads the sessions' values. The stubs `hX_honest` in the pieces' files are
+false as stated at some `dec` and unused; round 5 replaces them by `hX_of_read`.
 
 | # | lemma (stub) | file | size | depends on | owner |
 |---|---|---|---|---|---|
-| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTop` | `C3/RegLevels/Top.lean` | 60 | `checkStackedShape`, `candidate3`'s every-round-from-0 hold | W |
+| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTop`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean` | 60 | `checkStackedShape`, `candidate3`'s every-round-from-0 hold | W |
 | n1 | `hPubRows_of_check` (from `ChecksPubRows`); `hTape_honest` (from n2–n5: the stages' prefixes and the openings are the whole tape) | `C3/PubRows/Honest.lean` | 150, 300 | n1b; `Registered.entry` at the session's reads | W |
-| n2 | `hReps_honest`, from `HPubRows` | `C3/HoloValues/Honest.lean` | 250 | n2a, c1's holo forms (`zclc_of_residuals_dec`, `lincheck_of_residuals_hw`, `decode_check_holo`, `decode_part_holo`, `ResZeroAtH`); not `repProg` | W |
+| n2 | `hReps_of_read`: `HReps` from `HPubRows` and the reps' read fact | `C3/HoloValues/Read.lean` | 250 | n2a, c1's holo forms (`zclc_of_residuals_dec`, `lincheck_of_residuals_hw`, `decode_check_holo`, `decode_part_holo`, `ResZeroAtH`); not `repProg` | W |
 | n2a | a transcript-level holo rep program (RepConverse's `repProg` with the `h` round before r′) and its converse, and its refinement to `holoRepC` (only abstract today); no definition states it yet, so it is a row, not a stub | `Soundness/Refine/` | 300 | c1 | W |
-| n3 | `hSparse_honest`, from `HPubRows`, `HReps` | `C3/Sparse/Honest.lean` | 250 | `sparse_refines`, `sparsePhase_plays`; the claim round's `c_k` as RecSparse's `claim` check | W |
-| n4 | `hOpening_honest`, from `HPubRows`, `HReps`, `HSparse`: O1–O6 at `mReg` (`seven_le_mReg`) | `C3/Opening/Honest.lean` | 300 | c1's `ringSwitch_of_residuals` | W |
-| n5 | `hRegLevels_honest`, from `HPubRows`, n2–n4 and R's top (`∃ lv, StackedTop lv st reg xR.cap`, t0's) | `C3/RegLevels/Honest.lean` | 250 | c1's `ligerito_of_residuals_at` | W |
+| n3 | `hSparse_of_read`: `HSparse` from `HPubRows`, `HReps` and `SparseRead` | `C3/Sparse/Read.lean` | 250 | `sparse_refines`, `sparsePhase_plays`; the claim round's `c_k` as RecSparse's `claim` check | W |
+| n4 | `hOpening_of_read`: `HOpening` from `HPubRows`, `HReps`, `HSparse` and the opening's read fact (`HOpenSteps`): O1–O6 at `mReg` (`seven_le_mReg`) | `C3/Opening/Read.lean` | 300 | c1's `ringSwitch_of_residuals` | W |
+| n5 | `hRegLevels_of_read`: `HRegLevels` from `HPubRows`, n2–n4, R's top (`∃ lv, StackedTop lv st reg xR.cap`, `_hstk`) and Ligerito's read fact | `C3/RegLevels/Read.lean` | 250 | c1's `ligerito_of_residuals_at` | W |
+| n6 | the read facts at the honest family, at a fixed decoder: round `i`'s message at stage `i`'s read wires is the value V*'s registered rows hold for round `i` at an accepted outcome that reads them there (G's `decOf`, typed by `toSs`), with `MsgsRead`'s obligation that round `i`'s values are read only from stage `i`'s commit strings, and each session's acceptance of its stage's verifier row | `C3/Compose/` | 500–900 | the four read facts; a C3 `tableMsgs` from V*'s layers, as G's `Family/Transcript.lean` | L |
 
 `hCommits_honest` (`VCommits` at the honest family, G's `hCommits_of` after `pubCommits_of_pubRows`) is proved; `hdec` is
 `vDecodesR_wmsgOf` and `hfull` is `vFullR_of_read`. What `hbr_honest` takes beyond the stubs, and is no premise of the

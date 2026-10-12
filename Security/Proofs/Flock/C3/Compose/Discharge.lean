@@ -9,12 +9,14 @@ import Proofs.Flock.C3.RegLevels.Honest
 # The guarantee's `_hbr` at the honest family
 
 `hbr_honest`: the guarantee's `_hbr` at G's commit strings, digests and messages (`skOf`, `cmtOf`, `wmsgOf`, `msgOf`):
-VBridge at every typed session, by `vbridge_c3` at `C3Family.honest`, from n1–n5 (stubs, in their pieces'
-directories), `hCommits_honest`, `vDecodesR_wmsgOf` and `vFullR_of_read`. Its `Vs` and `hob` are the guarantee's: at the
-verifier's list they are `vstarParses_of_list`'s (`VStarList/Statements.lean`, modulo `circuitFile_parses`), which is
-`_hob`. What it takes beyond the stubs is the verifier's: its list builds (`hss`), R's registered top is `xR`'s cap
-(`htop`), it checks the accepted sessions' public rows (`hchk`), their reads are its own (`hown`), and the rows it holds
-are the history's commitments (`hheld`).
+VBridge at every typed session, by `vbridge_c3` at `C3Family.honest`, from n1 (a stub, `C3/PubRows/`), the stages at
+the honest family, `hCommits_honest`, `vDecodesR_wmsgOf` and `vFullR_of_read`. Its `Vs` and `hob` are the guarantee's:
+at the verifier's list they are `vstarParses_of_list`'s (`VStarList/Statements.lean`, modulo `circuitFile_parses`),
+which is `_hob`. The decoder `dec` is free, and a stage's messages are `dec`'s, so no stage follows from the public rows
+alone (n2–n5 as stated in their pieces' files are false at some `dec`): the stages are hypotheses, each from its read
+fact (n2–n5, `hX_of_read`) at a decoder that reads the sessions' values (n6). What it takes besides is the verifier's:
+its list builds (`hss`), R's registered top is `xR`'s cap (`_htop`), it checks the accepted sessions' public rows
+(`hchk`), their reads are its own (`hown`), and the rows it holds are the history's commitments (`hheld`).
 -/
 
 namespace FlockC3.Compose
@@ -45,7 +47,10 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(step 7) The guarantee's `_hbr` at the honest family**: VBridge at every typed session of `zr`, at G's commit
-strings, digests and messages, from the stubs n1–n5 and the verifier's checks. -/
+strings, digests and messages, from n1, the verifier's checks and the stages at the honest family (`hreps`, `hsp`,
+`hop`, `hlv`). The decoder `dec` is free, so the stages are hypotheses: each holds where `dec`'s messages on its rounds
+are its prover's for a witness its verifier row accepts (its read fact, `hX_of_read`), which a fixed decoder and the
+sessions' acceptance give (n6). R's top (`_htop`) is what n5's read fact reads. -/
 theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVStar.statements ish = .ok ss)
     (bind : Fin (vstarCount ish) → VStar.Bindings) {Vs : Fin (vstarCount ish) → VStmt}
     (hob : VStarParses Flock.Tags.circuit ish bind Vs)
@@ -57,7 +62,15 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (tr : Lean.Json) (record : String) (reg : Lean.Json)
     (hreg : xR.Opens H512 enc512 leafPlain (holoAt st hp).rsch.sch.level₀)
-    (htop : ∃ lv, StackedTop lv st reg xR.cap) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (_htop : ∃ lv, StackedTop lv st reg xR.cap) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (hreps : ∀ h : Typed zr,
+      HReps (C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc dec tr record reg) dg N k Rw)
+    (hsp : ∀ h : Typed zr,
+      HSparse (C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc dec tr record reg) dg N k Rw)
+    (hop : ∀ h : Typed zr,
+      HOpening (C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc dec tr record reg) dg N k Rw)
+    (hlv : ∀ h : Typed zr,
+      HRegLevels (C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc dec tr record reg) dg N k Rw)
     (hchk : ∀ h : Typed zr, ChecksPubRows
       (C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc dec tr record reg) tr record reg)
     (hown : ∀ h : Typed zr, OwnIs
@@ -69,12 +82,9 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
       (cmtOf Vs bc) (msgOf Vs (skOf Vs own sel) dec) := by
   intro h
   have hrows := hPubRows_of_check (hchk h)
-  have hreps := hReps_honest (dg := dg) (N := N) (k := k) (Rw := Rw) hrows
-  have hsp := hSparse_honest hrows hreps
-  have hop := hOpening_honest hrows hreps hsp
-  have hlv := hRegLevels_honest htop hrows hreps hsp hop
   exact vbridge_c3 (C3Family.honest (xR := xR) ish hss bind hob zr hCust h own sel bc dec tr record reg) dg N k Rw hreg
-    (hTape_honest hrows hreps hsp hop hlv) hreps hsp hop hlv (hCommits_honest hrows (hown h) (hheld h))
+    (hTape_honest hrows (hreps h) (hsp h) (hop h) (hlv h)) (hreps h) (hsp h) (hop h) (hlv h)
+    (hCommits_honest hrows (hown h) (hheld h))
     (vDecodesR_wmsgOf (I := holoInnerAt T CT st hp) (skOf Vs own sel) dec) (vFullR_of_read _ _)
 
 end FlockC3.Compose
