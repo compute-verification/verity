@@ -205,7 +205,7 @@ def gate_compress(lib: Lib, torch, log) -> dict:
         cv = [rng.getrandbits(32) for _ in range(8)]
         m = bytes(rng.getrandbits(8) for _ in range(64))
         cases.append((cv, m, rng.getrandbits(32), rng.choice([0, 8, 17, 64]), rng.getrandbits(5)))
-    for var in range(5):
+    for var in range(7):
         ok = True
         for cv, m, ctr, ln, fl in cases:
             words = cv + list(layout._words(m)) + [ctr, ln, fl]
@@ -671,7 +671,7 @@ def chains(lib: Lib, torch, sms: int, clock_hz: float, reps: int, log) -> dict:
     grid, block = sms * 8, 256
     threads = grid * block
     out = {}
-    cases = [(f"b3_v{v}_r7", 0, v, 7, 64, 2000) for v in range(5)]
+    cases = [(f"b3_v{v}_r7", 0, v, 7, 64, 2000) for v in range(7)]
     cases += [("b3_v0_r4_uncertified", 0, 0, 4, 64, 2000), ("b3_v1_r4_uncertified", 0, 1, 4, 64, 2000),
               ("b3_v1_r5_uncertified", 0, 1, 5, 64, 2000), ("keccak_p1600_12", 1, 0, 12, 168, 600),
               ("sha512", 2, 0, 80, 128, 600)]
@@ -737,7 +737,7 @@ def launcher(lib: Lib, torch, arm: str, n, k, mb, mpad, pl, wf, x, xc, y, tags_p
 
 
 TR_WORDS = 8  # tf.cu's trace words a chain link
-PIPE_PLANS = ("px", "pk")
+PIPE_PLANS = ("px", "p5")
 # Per PDL chain, the shapes capped at ceil(CTAs / SMs) + n CTAs an SM (the others uncapped). Capping down too, or at
 # one more, loses (run r20261012-113150-e677): its CTAs then can't start beside gate_up's padded ones. So do two quads
 # of register prefetch on gate_up and down (r20261012-114545-aca3: 1.089 vs 1.065 at M = 1), letting the next launch
@@ -747,11 +747,15 @@ PIPE_PLANS = ("px", "pk")
 # o, and qkv, one CTA an SM more (py, pw) lose too (r20261012-120827-5b76: 1.093, 1.099 vs 1.066; o's CTAs then
 # double up beside qkv's).
 # o leaving room for one gate_up CTA beside it (pv) is a wash (r20261012-122740-a072: 1.064 vs 1.065; gate_up's link
-# 1.7 µs shorter, down's 2.4 longer).
-CAP_PLANS = {"p": {}, "px": {"qkv": 0, "o": 0, "gate_up": 0}, "pk": {"qkv": 0, "o": 0, "gate_up": 0}}
+# 1.7 µs shorter, down's 2.4 longer). The packed CTA finish in px's chain (pk) loses too (r20261012-123745-ced2: 1.084
+# vs 1.064; 78 registers).
+PX = {"qkv": 0, "o": 0, "gate_up": 0}
+CAP_PLANS = {"p": {}, "px": PX, "p5": PX, "p6": PX}
 # Per plan, shapes whose padding leaves room for one CTA of the named next shape (its CTAs then start beside them).
 LEAVE_PLANS: dict[str, dict[str, str]] = {}
-PROBE_PLANS = {"pk": 3}  # tf_fused3p's probe for the plan's tag chain (4 KiB only): 3 the packed CTA finish
+# tf_fused3p's probe for the plan's tag chain (4 KiB only): 3 and 4 BLAKE3 variants 5 and 6, the certified tag with
+# five or three of a round's 7-bit rotations as IMAD pairs
+PROBE_PLANS = {"p5": 3, "p6": 4}
 TRACE_BATCHES = (1, 8)
 
 
@@ -773,7 +777,7 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
              commit pipelined a step behind; the tags in two buffers, the second's gated like tagk)
     nativeP, tagPL, commitPL for P in CAP_PLANS  nativep, tagpL and commitpL with the plan's shapes at most
              ceil(CTAs / SMs) + plan[shape] CTAs an SM
-At TRACE_BATCHES, nativepx, tagpx4 and tagpk4 once more with tf.cu's trace (globaltimer stamps a launch), summarized per shape.
+At TRACE_BATCHES, nativepx, tagpx4 and tagp54 once more with tf.cu's trace (globaltimer stamps a launch), summarized per shape.
     prober4  u4kr1 at every shape: tagr4 with 4-round BLAKE3, uncertified
     noend4   n4kr1 at every shape: tagr4 without the chunks' last quads and finishes (a sink, no tags): what the
              launches' chunk ends cost
@@ -830,7 +834,7 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpk4 once more with tf.cu's trace (glob
             """g0kr1 (g None) or tagr's launches through tf_fused3p, tags into tb (tbs[g] if None), launch q waiting on
             ctr[q - 1] (and tracing into trace[q] if given); with CAP_PLANS[plan]'s shapes at most ceil(CTAs / SMs) + its
             value CTAs an SM, LEAVE_PLANS[plan]'s leaving room for one CTA of the next; probe 1 (g 4) four-round
-            BLAKE3, 2 no chunk ends (a sink)."""
+            BLAKE3, 2 no chunk ends (a sink), 3 and 4 BLAKE3 variants 5 and 6."""
             probe = PROBE_PLANS.get(plan, probe)
             leaves, plan = LEAVE_PLANS.get(plan, {}), CAP_PLANS[plan] if plan else {}
             tb = tbs[g] if g and tb is None else tb
@@ -964,7 +968,7 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpk4 once more with tf.cu's trace (glob
         med = r["median_s"]
         if mb in TRACE_BATCHES:
             r["trace"] = {}
-            for arm, g, plan in (("nativepx", None, "px"), ("tagpx4", 4, "px"), ("tagpk4", 4, "pk")):
+            for arm, g, plan in (("nativepx", None, "px"), ("tagpx4", 4, "px"), ("tagp54", 4, "p5")):
                 if arm not in arms:
                     continue
                 tr = torch.zeros(len(names) * layout.LAYERS, TR_WORDS, dtype=torch.int64, device="cuda")

@@ -206,6 +206,11 @@ __device__ __forceinline__ uint32_t imul(uint32_t a, uint32_t b) {
 // rotr(x, n) with p = 2^(32 - n): x p's low word is x << (32 - n) and its high word x >> n, disjoint, so their sum is
 // their OR.
 __device__ __forceinline__ uint32_t rotr_fma(uint32_t x, uint32_t p) { return imadhi(x, p, imul(x, p)); }
+// The same as one wide multiply and an add: SASS's IMAD.HI takes a 64-bit addend, so rotr_fma costs a MOV besides.
+__device__ __forceinline__ uint32_t rotr_wide(uint32_t x, uint32_t p, uint32_t one) {
+  const uint64_t w = (uint64_t)x * p;
+  return imad((uint32_t)(w >> 32), one, (uint32_t)w);
+}
 
 template <int V>
 struct Var;
@@ -229,8 +234,23 @@ template <>
 struct Var<4> {
   static constexpr int A3 = 0, A2 = 1, R = 0;
 };
-
+// V1 with the 7-bit rotation of a round's first R7 G functions on the FMA pipe (rotr_wide), so the ALU and FMA pipes
+// balance (V1 is 448 ALU and 336 FMA instructions a compression; each such rotation moves one ALU instruction to two).
+template <>
+struct Var<5> {
+  static constexpr int A3 = 1, A2 = 1, R = 0, R7 = 5;
+};
+template <>
+struct Var<6> {
+  static constexpr int A3 = 1, A2 = 1, R = 0, R7 = 3;
+};
 template <int V>
+__host__ __device__ constexpr int r7_of() {
+  if constexpr (V >= 5) return Var<V>::R7;
+  return 0;
+}
+
+template <int V, bool R7 = false>
 __device__ __forceinline__ void g(uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d, uint32_t x, uint32_t y,
                                   const Mul& k) {
   using P = Var<V>;
@@ -245,7 +265,7 @@ __device__ __forceinline__ void g(uint32_t& a, uint32_t& b, uint32_t& c, uint32_
   d = __byte_perm(d, 0, 0x0321);
   c = P::A2 ? imad(d, k.one, c) : c + d;
   b ^= c;
-  b = P::R ? rotr_fma(b, k.p25) : __funnelshift_r(b, b, 7);
+  b = P::R ? rotr_fma(b, k.p25) : R7 ? rotr_wide(b, k.p25, k.one) : __funnelshift_r(b, b, 7);
 }
 
 // One compression; `out` gets the first 8 words of the output (the next chaining value, or under ROOT the hash). It may
@@ -260,14 +280,15 @@ __device__ __forceinline__ void b3(const uint32_t cv[8], const uint32_t min[16],
   uint32_t v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
   uint32_t v8 = IV0, v9 = IV1, v10 = IV2, v11 = IV3, v12 = counter, v13 = 0, v14 = len, v15 = flags;
   auto round = [&]() {
-    g<V>(v0, v4, v8, v12, m[0], m[1], k);
-    g<V>(v1, v5, v9, v13, m[2], m[3], k);
-    g<V>(v2, v6, v10, v14, m[4], m[5], k);
-    g<V>(v3, v7, v11, v15, m[6], m[7], k);
-    g<V>(v0, v5, v10, v15, m[8], m[9], k);
-    g<V>(v1, v6, v11, v12, m[10], m[11], k);
-    g<V>(v2, v7, v8, v13, m[12], m[13], k);
-    g<V>(v3, v4, v9, v14, m[14], m[15], k);
+    constexpr int r7 = r7_of<V>();
+    g<V, (r7 > 0)>(v0, v4, v8, v12, m[0], m[1], k);
+    g<V, (r7 > 1)>(v1, v5, v9, v13, m[2], m[3], k);
+    g<V, (r7 > 2)>(v2, v6, v10, v14, m[4], m[5], k);
+    g<V, (r7 > 3)>(v3, v7, v11, v15, m[6], m[7], k);
+    g<V, (r7 > 4)>(v0, v5, v10, v15, m[8], m[9], k);
+    g<V, (r7 > 5)>(v1, v6, v11, v12, m[10], m[11], k);
+    g<V, (r7 > 6)>(v2, v7, v8, v13, m[12], m[13], k);
+    g<V, (r7 > 7)>(v3, v4, v9, v14, m[14], m[15], k);
   };
   auto permute = [&]() {
     const uint32_t t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13],
@@ -1184,14 +1205,14 @@ __global__ void __launch_bounds__(FW * 32) fused3p_kernel(const uint4* __restric
   if (trace && threadIdx.x == 0) atomicMax(trace + TR_EXIT, globaltimer());
 }
 
-// fused3p_kernel's variants, a kernel of their own so fused3p_kernel's code stays as timed: PK the packed CTA finish
-// (f3_finish), R rounds, or NE no chunk ends (a sink, its xor into tags[0]), as fused3_kernel's; L 4, one quad ahead.
-template <int NB8, int MODE, int R, bool NE, bool PK = false>
+// fused3p_kernel's variants, a kernel of their own so fused3p_kernel's code stays as timed: V the BLAKE3 variant, R
+// rounds, or NE no chunk ends (a sink, its xor into tags[0]), as fused3_kernel's; L 4, one quad ahead.
+template <int NB8, int MODE, int R, bool NE, int V = 1>
 __global__ void __launch_bounds__(FW * 32) fused3q_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                           float* __restrict__ y, uint32_t* __restrict__ tags, int M,
                                                           int N, int Kd, uint64_t jbase, const int* wait_ctr, int wait_n,
                                                           int* done_ctr, unsigned long long* trace) {
-  fused3_body<1, 4, NB8, MODE, 1, PK, false, false, R, NE>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase,
+  fused3_body<V, 4, NB8, MODE, 1, false, false, false, R, NE>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase,
                                                                reinterpret_cast<unsigned int*>(tags), Tail{}, nullptr,
                                                                nullptr, wait_ctr, wait_n, done_ctr, trace);
   asm volatile("griddepcontrol.wait;" ::: "memory");
@@ -1705,13 +1726,13 @@ int tf_fused3d(int lanes, int own_defer, const void* w, const uint8_t* x, float*
 // SM (dynamic shared memory padded to a share of the SM's), so a launch placed beside the one before it can't crowd
 // some SMs; leave > 0: of the SM's shared memory less a leave-th, so one CTA of a launch capped at leave fits beside.
 // pd: quads of register prefetch, 1 or 2. probe (pd 1, lanes 4): 1 four-round BLAKE3 (tags, uncertified), 2 no chunk
-// ends (mode sink, its xor into tags[0]), 3 the packed CTA finish (the certified tag); 0 fused3p_kernel. trace: null,
-// or this launch's TR_WORDS words.
+// ends (mode sink, its xor into tags[0]), 3 and 4 BLAKE3 variants 5 and 6 (the certified tag); 0 fused3p_kernel. trace:
+// null, or this launch's TR_WORDS words.
 int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
                uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, int occ, int leave, int probe,
                unsigned long long* trace, cudaStream_t st) {
   if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || !done_ctr || pd < 1 || pd > 2 || leave < 0 || probe < 0 ||
-      probe > 3 || (probe ? pd != 1 || lanes != 4 || mode != (probe == 2 ? MODE_SINK : MODE_TAGS)
+      probe > 4 || (probe ? pd != 1 || lanes != 4 || mode != (probe == 2 ? MODE_SINK : MODE_TAGS)
                           : mode != MODE_GEMM && mode != MODE_TAGS))
     return 1;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
@@ -1734,10 +1755,14 @@ int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, flo
     kern = nb8 == 1   ? fused3q_kernel<1, MODE_SINK, 7, true>
            : nb8 == 2 ? fused3q_kernel<2, MODE_SINK, 7, true>
                       : fused3q_kernel<4, MODE_SINK, 7, true>;
+  } else if (probe == 3) {
+    kern = nb8 == 1   ? fused3q_kernel<1, MODE_TAGS, 7, false, 5>
+           : nb8 == 2 ? fused3q_kernel<2, MODE_TAGS, 7, false, 5>
+                      : fused3q_kernel<4, MODE_TAGS, 7, false, 5>;
   } else {
-    kern = nb8 == 1   ? fused3q_kernel<1, MODE_TAGS, 7, false, true>
-           : nb8 == 2 ? fused3q_kernel<2, MODE_TAGS, 7, false, true>
-                      : fused3q_kernel<4, MODE_TAGS, 7, false, true>;
+    kern = nb8 == 1   ? fused3q_kernel<1, MODE_TAGS, 7, false, 6>
+           : nb8 == 2 ? fused3q_kernel<2, MODE_TAGS, 7, false, 6>
+                      : fused3q_kernel<4, MODE_TAGS, 7, false, 6>;
   }
 #undef F3P
 #undef F3PD
@@ -1754,8 +1779,7 @@ int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, flo
   cfg.gridDim = dim3((N / 16 / FW) * (Kd / CCOLS));
   cfg.blockDim = dim3(FW * 32);
   const int share = sm_smem - (leave > 0 ? sm_smem / leave : 0);
-  cfg.dynamicSmemBytes = std::max({M * CXS, occ > 0 ? std::min(share / occ - reserved, 99 * 1024) : 0,
-                                   probe == 3 ? F3_FINISH_BYTES : 0});
+  cfg.dynamicSmemBytes = std::max(M * CXS, occ > 0 ? std::min(share / occ - reserved, 99 * 1024) : 0);
   cfg.stream = st;
   cudaLaunchAttribute attr[1];
   attr[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
@@ -1848,7 +1872,7 @@ int tf_chain(int what, int v, int rounds, uint64_t steps, unsigned int* xr, int 
     chain_sha512<<<grid, block, 0, st>>>(steps, xr);
   } else if (what == 0) {
 #define CH(V, R) if (v == V && rounds == R) { chain_b3<V, R><<<grid, block, 0, st>>>(steps, xr); return cudaGetLastError() ? 2 : 0; }
-    CH(0, 7) CH(1, 7) CH(2, 7) CH(3, 7) CH(4, 7) CH(0, 4) CH(1, 4) CH(1, 5)
+    CH(0, 7) CH(1, 7) CH(2, 7) CH(3, 7) CH(4, 7) CH(5, 7) CH(6, 7) CH(0, 4) CH(1, 4) CH(1, 5)
 #undef CH
     return 3;
   } else {
@@ -1865,6 +1889,8 @@ int tf_b3_one(int v, const uint32_t* in, uint32_t* out, cudaStream_t st) {
     case 2: b3_one<2><<<1, 1, 0, st>>>(in, out); break;
     case 3: b3_one<3><<<1, 1, 0, st>>>(in, out); break;
     case 4: b3_one<4><<<1, 1, 0, st>>>(in, out); break;
+    case 5: b3_one<5><<<1, 1, 0, st>>>(in, out); break;
+    case 6: b3_one<6><<<1, 1, 0, st>>>(in, out); break;
     default: return 1;
   }
   return cudaGetLastError() ? 2 : 0;
