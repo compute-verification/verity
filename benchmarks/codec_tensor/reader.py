@@ -317,26 +317,36 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     side, roots = torch.cuda.Stream(), {}
     pair = (torch.cuda.Stream(), torch.cuda.Stream())
 
-    def segmented(segments: int, lanes: int) -> None:
-        count, main = n // segments, torch.cuda.current_stream()
+    # With `sketch`, the receipts are sketch-sha512's, into ys_sk.
+    ys_sk = torch.empty_like(ys)
+
+    def segmented(segments: int, lanes: int, sketch: bool = False) -> None:
+        count, main, out = n // segments, torch.cuda.current_stream(), ys_sk if sketch else ys
         for st in (*pair, side):
             st.wait_stream(main)
         for s in range(segments):
             lane = pair[s % lanes]
             with torch.cuda.stream(lane):
-                reader.receipts(data[s * count * BLOCK // 4:], s * count, count, ys[s * count:])
+                at = data[s * count * BLOCK // 4:]
+                if sketch:
+                    reader.sketch_receipts(at, s * count, count, out[s * count:], sk=sk[s * count:])
+                else:
+                    reader.receipts(at, s * count, count, out[s * count:])
                 done = torch.cuda.Event()
                 done.record(lane)
             with torch.cuda.stream(side):
                 side.wait_event(done)
                 c0 = s * count // rb.PER_LEAF
-                roots[segments, s] = reader.levels(reader.commit(ys[s * count:], c0, count // rb.PER_LEAF), c0)[-1]
+                roots[sketch, segments, s] = reader.levels(reader.commit(out[s * count:], c0, count // rb.PER_LEAF),
+                                                           c0)[-1]
         for st in (*pair, side):
             main.wait_stream(st)
 
     for segments in SEGMENTS:
         for lanes in (1, 2):
             steps[f"segmented/{segments}/{lanes}"] = lambda segments=segments, lanes=lanes: segmented(segments, lanes)
+            steps[f"sketch_segmented/{segments}/{lanes}"] = lambda segments=segments, lanes=lanes: segmented(
+                segments, lanes, True)
     ms = {}
     for name, fn in steps.items():
         fn()
@@ -350,9 +360,11 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
             torch.cuda.synchronize()
             best.append(a.elapsed_time(b))
         ms[name] = min(best)
-    full = reader.levels(reader.commit(ys, 0, n // rb.PER_LEAF), 0, pad=True)
-    segment_roots = all([digest(roots[S, s][0]) for s in range(S)]
-                        == [digest(x) for x in full[merkle_depth(n // S // rb.PER_LEAF)]] for S in SEGMENTS)
+    segment_roots = True
+    for sketch, out in ((False, ys), (True, ys_sk)):
+        full = reader.levels(reader.commit(out, 0, n // rb.PER_LEAF), 0, pad=True)
+        segment_roots &= all([digest(roots[sketch, S, s][0]) for s in range(S)]
+                             == [digest(x) for x in full[merkle_depth(n // S // rb.PER_LEAF)]] for S in SEGMENTS)
     nbytes = n * BLOCK
     by_load = {load: {"gb_s": nbytes / ms[f"receipts/{load}"] / 1e6,
                       "z_gb_s": nbytes / (ms[f"receipts_z_half/{load}"] * n / half) / 1e6,
@@ -372,6 +384,8 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
         "tau_leaves_and_tree": commit / read,
         # what a kernel that sketches the bytes it already holds (the weight GEMM's) adds past its sketch warps
         "tau_after_sketch": (ms["sketch_hash"] + commit) / read,
+        "tau_segmented_per_pass": {k.split("/", 1)[1]: v / read for k, v in ms.items()
+                                   if k.startswith("sketch_segmented/")},
         "compressions_per_block": (n + n // rb.PER_LEAF * 15) / n,
     }
     return {
