@@ -40,11 +40,12 @@ structure C3Run (e : ExecHolo) where
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
 /-- **Candidate 3's family** at the inner statement `st`, the sparse parameters `hp` and R's registration `xR`: V*'s
-statements over the verifier's list at the inner shape `ish`, their bindings, circuits and sessions (each session's
-file is its statement's, `hfile`, with one instance per unit, `hnv`), the messages V*'s layers hold and the rounds'
-commit strings, the inner run each history's layers decode to (`run`), and the `b ‖ c` the inner transcript holds at
-each registered value's row (`row`, by `RecVStar.fixedRow`'s prefixes: a rep's round, R's stream's round, a node of
-R's level top, a sparse stream's round). -/
+statements over the verifier's list at the inner shape `ish`, their bindings, circuits and sessions (each statement's
+file under its binding parses to its circuit, with one instance per unit: `hob`, the guarantee's `_hob`; a session's
+file is its statement's where the verifier accepts it, `RecVStar.checkStmt`), the messages V*'s layers hold and the
+rounds' commit strings, the inner run each history's layers decode to (`run`), and the `b ‖ c` the inner transcript
+holds at each registered value's row (`row`, by `RecVStar.fixedRow`'s prefixes: a rep's round, R's stream's round, a
+node of R's level top, a sparse stream's round). -/
 structure C3Family (st : Flock.Stmt) (hp : HoloParams) (xR : HoloReg GF128 Dig) {n : ℕ} (L : Law n)
     (Reg Cm Reg' Reg₂ : Type) where
   ish : RecVStar.Inner
@@ -52,10 +53,8 @@ structure C3Family (st : Flock.Stmt) (hp : HoloParams) (xR : HoloReg GF128 Dig) 
   hstmts : RecVStar.statements ish = .ok stmts
   bind : Fin (vstarCount ish) → VStar.Bindings
   Vs : Fin (vstarCount ish) → VStmt
+  hob : VStarParses Flock.Tags.circuit ish bind Vs
   zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).Outer Reg'
-  hfile : ∀ R ω t R₂ (j : Fin (vstarCount ish)) s, stmts[(j : ℕ)]? = some s →
-    RecVStar.circuitFile s (bind j) = .ok (zs R ω t R₂ j).I.circuitFile
-  hnv : ∀ (j : Fin (vstarCount ish)) s, stmts[(j : ℕ)]? = some s → (Vs j).nv = s.instances
   wmsg : ((j : Fin (vstarCount ish)) → (Vs j).Bits) → List (holoInnerAt T CT st hp).Msg
   Sk : ℕ → (j : Fin (vstarCount ish)) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)
   cmt : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg

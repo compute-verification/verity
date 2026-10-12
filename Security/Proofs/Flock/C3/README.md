@@ -22,26 +22,44 @@ Sizes are estimates of the proof, in lines. Owners: **W** a parallel worker, **C
 | b1 | `FlockC3.Compose.holoTableCL_plays` | `C3/Compose/Tape.lean` | 100 | `playsT_interleave_first`, `PlaysT` bind lemmas, `regPhase` at two claims | W |
 | b2 | `FlockC3.Compose.vbridge_c3` | `C3/Compose/Bridge.lean` | 120 | b1, `HTape`; `vbridge_of_family`'s VCommits/VDecodes/VFull parts | W (after b1) |
 | h1 | `FlockC3.VStarList.stacked_of_openingShape`, `claims_of_stackedShape` | `C3/VStarList/Statements.lean` | 25, 25 | `Except` unfolding of `checkOpeningShape`, `checkStackedShape` | W |
-| h2 | `FlockC3.VStarList.vstarParses_of_list` (gap 4(c)); with gap 2, `mReg_of_list` (to state: the list's `rec-opening` units are at `m = (holoAt st hp).cls.shape.mReg`, `claims = STACKED_CLAIMS`) | `C3/VStarList/Statements.lean` | 400 | `HmRow.parse` of `circuitFile`'s output (a write-then-parse fact), gap 2 for the holo statements | C (gap 2) + W |
+| h2 | `FlockC3.VStarList.vstarParses_of_list` (gap 4(c)), modulo `circuitFile_parses`; with gap 2, `mReg_of_list` (the list's `rec-opening` units are at `m = (holoAt st hp).cls.shape.mReg`, `claims = STACKED_CLAIMS`; no `hpad`, since `mReg` is padded to `PAD_TO`, and `ℓ`'s range is `ellOk_of_sparseRange`'s) | `C3/VStarList/Statements.lean`, `Shape.lean`, `Range.lean` | 400 | `HmRow.parse` of `circuitFile`'s output (a write-then-parse fact), gap 2 for the holo statements | C (gap 2) + W |
 | c1 | (c)'s `hpl` generalization: drop `sh.holo = false` / `holoOf c = .ok false` from `lincheck_of_residuals_holo` (`Algebra/Holo.lean`), `zclc_of_residuals`, `prog_of_zclc` (`Runs/ZcLc.lean`), `run_of_algebra`, `run_of_frames` (`Runs/Rep.lean`), `prog_of_algebra` (`Runs/Prog.lean`), `rs_of_residuals` (`Runs/Rs.lean`), `ligerito_of_residuals_at`, `hlg_of_residuals`, `hlg_of_frames` (`Runs/Lg.lean`), `ligerito_of_residuals`, `ringSwitch_of_residuals`, `zerocheck_of_residuals`, `lincheck_of_residuals`, `build_eval`, `residuals_eq_run`, `buildRes_spec`, `buildAll_spec`, `coefOps_spec`, `prodOps_spec` (`Algebra/`), `decode_part`, `ResZeroAt` (`AlgHolds.lean`), `decode_checkR`, `decode_partR`, `ResZeroAtL` (`ResLayer.lean`), `decode_check` (`ResUnit.lean`), with `check_part_holo` beside `check_part` for the hidden units' net | `VBridge/` (in place, under VBridge G's names) | 600 | none; `check_refuses_plain_on_holo`, `shape?_holo` and `atomOp_plain` stay (plain facts) | W |
 
 So these start at once: a1s and a1r (a W each, against their stubs alone), a1's assembly (L), h1 (W), b1 → b2 (W),
 c1 (W); h2 builds on #1847's list.
 
-## Next: the honest decoder and the stage discharges
+## Next: the honest decoder and the stage discharges (stated, round 3)
 
-Pieces (c)–(g) are stated as obligations of a free decoder (`C3Family`'s `run`, `row`), as G's H-props are of
-`VStarFamily`'s free fields; they are only jointly meaningful through `HTape`. Their discharge at the decoder of V*'s
-accepted layers is the next layer, stubbed when (b)'s family is fixed:
+Pieces (c)–(g) are obligations of a free decoder (`C3Family`'s `run`, `row`), as G's H-props are of `VStarFamily`'s
+free fields. n0 fixes the decoder (`C3Family.honest`, `C3/Compose/Honest.lean`): `run` decodes the inner transcript's
+steps stage by stage on the prefix each stage's game plays (`decodeRun`), `row` is the verifier's `fixedRow` at its
+hold of the inner transcript (`heldRow`). `hbr_honest` (`C3/Compose/Discharge.lean`, proved from the stubs) is the
+guarantee's `_hbr` at it; `_hob` is h2's `vstarParses_of_list`. The stubs form a chain, each taking the ones before:
 
-| # | lemma (to state) | size | depends on | owner |
-|---|---|---|---|---|
-| n0 | `C3Family.honest`: the family at `custodied zr _hCust h`, `run` the decode of V*'s layers stage by stage, `row` by `fixedRow`'s prefixes | 400 | b2, h2 | L |
-| n1 | `hTape_honest`, `hPubRows_of_check` (g), from `checkPubRows`/`fixedRow` per prefix | 300 | n0 | W |
-| n2 | `hReps_honest` (c) | 250 | n0, c1 | W |
-| n3 | `hSparse_honest` (d), from `sparse_refines`, `sparsePhase_plays`, with the claim round's `c_k` as RecSparse's `claim` check | 250 | n0 | W |
-| n4 | `hOpening_honest` (e): RecOpening's algebra at opening-only shape (`rec-opening/m<m>-c2-p<j>`; no zerocheck or lincheck, O1–O6 at `mReg`) | 300 | n0, c1's `ringSwitch_of_residuals` | W |
-| n5 | `hRegLevels_honest` (f): R's levels on `stacked/rep0` after both reps, `rec-top-stacked-L<l>` tops, the binding round against `StackedTop`'s cap | 250 | n0, c1's `ligerito_of_residuals_at` | W |
+| # | lemma (stub) | file | size | depends on | owner |
+|---|---|---|---|---|---|
+| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTop` | `C3/RegLevels/Top.lean` | 60 | `checkStackedShape`, `candidate3`'s every-round-from-0 hold | W |
+| n1 | `hPubRows_of_check` (from `ChecksPubRows`); `hTape_honest` (from n2–n5: the stages' prefixes and the openings are the whole tape) | `C3/PubRows/Honest.lean` | 150, 300 | n1b; `Registered.entry` at the session's reads | W |
+| n2 | `hReps_honest`, from `HPubRows` | `C3/HoloValues/Honest.lean` | 250 | n2a, c1's holo forms (`zclc_of_residuals_dec`, `lincheck_of_residuals_hw`, `decode_check_holo`, `decode_part_holo`, `ResZeroAtH`); not `repProg` | W |
+| n2a | a transcript-level holo rep program (RepConverse's `repProg` with the `h` round before r′) and its converse, and its refinement to `holoRepC` (only abstract today); no definition states it yet, so it is a row, not a stub | `Soundness/Refine/` | 300 | c1 | W |
+| n3 | `hSparse_honest`, from `HPubRows`, `HReps` | `C3/Sparse/Honest.lean` | 250 | `sparse_refines`, `sparsePhase_plays`; the claim round's `c_k` as RecSparse's `claim` check | W |
+| n4 | `hOpening_honest`, from `HPubRows`, `HReps`, `HSparse`: O1–O6 at `mReg` (`seven_le_mReg`) | `C3/Opening/Honest.lean` | 300 | c1's `ringSwitch_of_residuals` | W |
+| n5 | `hRegLevels_honest`, from `HPubRows`, n2–n4 and R's top (`∃ lv, StackedTop lv st reg xR.cap`, t0's) | `C3/RegLevels/Honest.lean` | 250 | c1's `ligerito_of_residuals_at` | W |
+
+`hCommits_honest` (`VCommits` at the honest family, G's `hCommits_of` after `pubCommits_of_pubRows`) is proved; `hdec` is
+`vDecodesR_wmsgOf` and `hfull` is `vFullR_of_read`. What `hbr_honest` takes beyond the stubs, and is no premise of the
+guarantee yet:
+
+* n1b, the V* session checks: VBridge reads V*'s sessions' acceptance as `AcceptsZKR`, which does not include the
+  checks the verifier makes of them under `--rec-inner` (`checkPubRows`, check 5's, `checkStmt`). `hchk`
+  (`ChecksPubRows`) is the first; the guarantee's event says the verifier accepted, but VBridge is a premise at every
+  outcome, so either VBridge's acceptance gains those checks or the event's acceptance reaches the sessions (L, to size).
+* n1c, the record–history link: `row` reads the verifier's fixed record `tr`, while the history `t` ranges, so
+  `hheld` (`HeldIs`: at each accepted history the held row is `t`'s commitment) needs custody of `tr` as the live
+  history's record, beside `RecordCustody` (L, to state).
+* `hown` (`OwnIs`): each accepted session's reads are the verifier's own `own`; G's `HOwn` at the honest family.
+* `hss` and `htop` are the event's (`AcceptsC3`'s list and hold of the inner transcript, with t0): `_hbr` at the honest
+  family is used only where they hold.
 
 ## Circuits' code
 
@@ -60,13 +78,31 @@ accepted layers is the next layer, stubbed when (b)'s family is fixed:
 * Sparse-phase order: the recorded one. `holoTableCL` plays each rep's sparse phase after both reps, reading only that
   rep's zerocheck, lincheck and `h`, fixed before its coins, so the bridge replays the record round for round and no
   reordering lemma is needed.
-* `Creg`: the inner statement's `x.cap`, tied by `StackedTop` (`_hstk`) to the META-bound record's `stacked` entry; the
+* `Creg`: the inner statement's `x.cap`, tied by `StackedTop` to the META-bound record's `stacked` entry; the
   registrant's openings of every level-0 position are `_hreg` (`HoloReg.Opens`). Closeness is in `holds`, not a hypothesis.
-* `_hstk`'s tie (round 2): the digest is `metaRegistration st`, META's `registration` of the inner statement's circuit,
-  which the verifier reads off `--rec-inner-circuit` (`innerMetaRegistration`), the file `AcceptsPublic` sets `st` up
-  from; `reg` is the verifier of record's `--rec-inner-registration`, an input as `bind` and `rows` are. The verifier
-  holds the tie in `RecVStar.innerCommits` (`registration`), which `VerifiesVStar` does not model, so it stays a
-  hypothesis, but one `st` fixes: SHA-512 and the root bind `reg`, its `stacked` entry and so the cap to `st`'s META.
+* The tie is the verifier's (round 3, ruling 1): the event's `AcceptsC3` holds the inner transcript against `reg`
+  (`innerCommitsAt`, `RecVStar.innerCommits` at the verifier's own `tr`, `record` and `reg`), whose binding round's top
+  must make the `stacked` entry, compared canonically (`TopOf`); `_hstk` is gone, and t0 derives `StackedTop` from that
+  hold. The digest is `metaRegistration st`, META's `registration` of the inner circuit the verifier reads off
+  `--rec-inner-circuit`, the file `AcceptsPublic` sets `st` up from.
+* Who registers R: the inner session's prover. Its staging commits R's table and writes the registration record, and
+  the verifier checks only that META binds the record's digest and that the binding round's top makes its `stacked`
+  entry; nothing checks that the cap is a tree over some word. `_hreg` takes the registrant's openings of every level-0
+  position, so a prover who registers a cap with no preimage is outside the statement (Weakness, below).
+* `ℓ` and the slots' units come from check 5 (round 3, ruling 2 and 4): `SparseRangeOk` (in the event) is
+  `RecSparse.Shape.valid`, `sparseV`'s shortness check and `layoutFactors` at the inner circuit's unit range, so
+  `ellOk_of_sparseRange` gives `hp.EllOk` and `units_of_sparseRange` gives the slots' units at `UnitsOf`. Check 5 runs
+  only with `--rec-inner-*` and the coin server's coins, and reads inner points as `k_log − 6` coordinates.
+* `mReg` is padded (ruling 4): `mReg = max PAD_TO (…)` and R's bits are zero-padded to it, so `7 ≤ mReg` is free
+  (`seven_le_mReg`) and `mReg_of_list` has no `hpad`. Workers on a1s and a1r: a proof that unfolds `mReg` meets the
+  `max`.
+* `_hob` and the writer's round trip (ruling 5, assessed, not done): `VStarParses` could be met from the verifier's own
+  parse (`ScopeZR.parseH` and `checkStmt`'s byte compare) in place of `circuitFile_parses`, about 80–100 lines: Loads'
+  `prob_sessionsR_untypable` and `prob_recT_le` take a loads hypothesis in place of `hob` (proofs only), and a weaker
+  predicate (the file under `bind j` parses to `(Vs j).c`) is built from the verifier's parse. Blocked on one fact: at
+  hidden outputs the verifier checks `scopeOkH` (`v1Ports || bitRows`), while `VStmt.hscope` needs `scopeOk`
+  (`v1Ports`). Circuits' item: under `--rec-inner`, refuse a V* file whose parse uses `bitRows` ports (require
+  `scopeOk`); or a writer fact that V*'s files have `v1Ports`, much smaller than the round trip.
 * `m` and claims: derived, not hypotheses. The model's R schedule is `fast100` at `mReg` (`holoAt`), and `claims` is the
   constant `STACKED_CLAIMS` (`regPhase` opens two, `regOpenError` counts two). The verifier's link is transitive: each
   `rec-opening` unit matches META's `stacked` (`stacked_of_openingShape`), which opens two claims at `fast100`'s rounds
@@ -78,8 +114,8 @@ accepted layers is the next layer, stubbed when (b)'s family is fixed:
 * Unit slots in range (round 2): `HoloClass.ofExec` keeps slot `σ`'s units below `2^(k_log − ℓ)`. The sparse phase's
   `U_σ` reads a unit's low `k_log − ℓ` bits (`holoPub`'s `eqAt`), while `RegTable.side` places a template only at blocks
   the table has, so a unit past them made the two disagree and a3 false. a3 and `holo_runs_sound` take `hunits`, which
-  `holoAt_units` gives. Open: the model's `U` is then over the filtered units, so the bridge (b2, with h2's `hp` the
-  verifier's own) needs the verifier's units in range, or a refusal of those past it; not yet checked against RecSparse.
+  `holoAt_units` gives. The verifier refuses units past the block (check 5's `layoutFactors`; resolved in round 3 by
+  `units_of_sparseRange`).
 * `sparseError`, recounted (round 2): `18 + (2ℓ+1)ν + (2ℓ+2)·sLog + pLog + tLog` over `qF` (H2's six rounds are of
   degree 2, H3's of `2ℓ + 1` and `2ℓ + 2`), where round 1 had `12 + 2ℓν + (2ℓ+1)·sLog + …` times the level-0 list
   bound. No list factor: the phase's claims are on `R.bits`, which R's opening decodes uniquely. Only
@@ -88,7 +124,11 @@ accepted layers is the next layer, stubbed when (b)'s family is fixed:
 ## Weakness
 
 R's level 0 at `fast100` is queried at the unique-decoding radius (rate 1/2, 218 queries): `udQueryError` is about
-2^-88.4, so `holoError` is at least that, against PublicAudit's list-decoding terms.
+2^-88.4, so `holoError` is at least that, against PublicAudit's list-decoding terms. Bits to cite: 88, not `fast100`'s
+100, which is its list-decoding figure; 100 bits at the unique-decoding radius needs about 247 level-0 queries for R.
+
+A prover registers R (Decisions), and the statement covers only a registration whose cap the registrant can open at
+every level-0 position (`_hreg`): a prover who registers a cap with no preimage is in no event the guarantee bounds.
 
 ## Stopped: gap 4(b)
 
