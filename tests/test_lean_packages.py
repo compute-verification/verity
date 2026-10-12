@@ -170,27 +170,9 @@ def test_every_upstream_watch_is_scanned():
     assert "Arklib" in json.loads((PROOFS / "lean-audit.json").read_text())["upstream"]["scan"]
 
 
-def _lean_test_holds(test: str) -> bool:
-    """A Lean falsification test, ``PATH.lean (Namespace.decl)`` pairs joined by " and ", then ", built by check": each file
-    declares ``decl`` inside ``namespace Namespace``."""
-    if not test.endswith(", built by check"):
-        return False
-    pairs = re.findall(r"(\S+\.lean) \(([\w.]+)\.(\w+)\)", test)
-    if not pairs or " and ".join(f"{f} ({n}.{d})" for f, n, d in pairs) + ", built by check" != test:
-        return False
-    for f, ns, decl in pairs:
-        text = (ROOT / f).read_text() if (ROOT / f).is_file() else ""
-        if not (re.search(rf"^namespace {re.escape(ns)}$", text, re.M)
-                and re.search(rf"^(?:private )?(?:theorem|lemma|def) {re.escape(decl)}\b", text, re.M)):
-            return False
-    return True
-
-
 def test_every_open_conjecture_names_a_test_that_exists():
-    """An open entry of a lock's `shape.conjectures` names its falsification test, and the test is in the tree (Daniel,
-    8 Oct: each conjecture's test runs). A pytest test is its node id, `PATH::NAME` from the repository's root, defined
-    in that file. A Lean test is ``PATH.lean (Namespace.decl)`` pairs, then ", built by check" (`_lean_test_holds`), since
-    check builds every Lean file."""
+    """An open entry of a lock's `shape.conjectures` names its falsification test as a pytest node id, `PATH::NAME` from
+    the repository's root, and that file defines the test (Daniel, 8 Oct: each conjecture's test runs)."""
     bad = []
     for p in sorted(ROOT.rglob("lean-audit.json")):
         if ".lake" in p.parts:
@@ -198,11 +180,8 @@ def test_every_open_conjecture_names_a_test_that_exists():
         for name, c in json.loads(p.read_text()).get("shape", {}).get("conjectures", {}).items():
             if c.get("status") != "open":
                 continue
-            test = str(c.get("test", ""))
-            path, _, node = test.partition("::")
-            node = node.split("[")[0]
-            pytest_ok = bool(node) and (ROOT / path).is_file() and re.search(rf"^def {re.escape(node)}\(", (ROOT / path).read_text(), re.M)
-            if not (pytest_ok or _lean_test_holds(test)):
-                bad.append(f"{p.relative_to(ROOT)}: {name}'s test {test!r} is neither PATH::NAME of a test in the tree nor "
-                           "'PATH.lean (Namespace.decl) [and ...], built by check' of a declaration in the tree")
+            path, _, test = str(c.get("test", "")).partition("::")
+            node = test.split("[")[0]
+            if not (ROOT / path).is_file() or not re.search(rf"^def {re.escape(node)}\(", (ROOT / path).read_text(), re.M):
+                bad.append(f"{p.relative_to(ROOT)}: {name}'s test {c.get('test')!r} is not PATH::NAME of a test in the tree")
     assert not bad, bad
