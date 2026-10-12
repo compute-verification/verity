@@ -7,7 +7,7 @@ import json
 
 import remote_bandwidth_vectors as rv
 
-from verity.core.protocols.remote_bandwidth import codec
+from verity.core.protocols.remote_bandwidth import audit, codec
 
 # `benchmarks/word_codec/tests/kv_vectors.json` ("p512/k2", cursor/ra-word-codec-10bf at 56818bb77): the kv/v0 codec
 # the KV kernel (`kv.cu`) implements, under its vector seed SHA256("verity/word-codec/kv/vectors").
@@ -37,6 +37,19 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_a_chain
     assert chain[0]["previous"] == pinned["registration"]["digest"]
     assert all(b["previous"] == a["root"] for a, b in zip(chain, chain[1:]))
     assert chain[0]["plan_digest"] == chain[2]["plan_digest"] != chain[1]["plan_digest"]
+
+
+def test_the_provers_passes_reproduce_the_pinned_chain() -> None:
+    """The generator computes receipts on its own; the audit's `Prover` must agree with it."""
+    payloads = [rv.payload(j) for j in range(rv.BLOCKS)]
+    root = audit.payload_tree(rv.NODE, payloads).commitment.root
+    reg = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, nonce=rv.NONCE)
+    prover = audit.Prover(audit.Store(reg, payloads), audit.NoiseTiles(96))
+    previous = reg.digest
+    for i, (plan, pinned) in enumerate(zip(rv.PLANS, json.loads(rv.PATH.read_text())["chain"]["passes"], strict=True)):
+        ps = prover.run(0, rv.CHALLENGE, i, previous, plan)
+        assert ps.root.hex() == pinned["root"] and ps.plan.runs == tuple(map(tuple, pinned["plan"]))
+        previous = ps.root
 
 
 def test_codec_is_kv_v0_at_p512() -> None:

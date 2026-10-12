@@ -130,6 +130,15 @@ def test_a_plan_maps_positions_to_blocks_and_is_canonical() -> None:
         plan.block(6)
 
 
+def test_a_receipt_depends_on_its_block_not_its_position(store) -> None:
+    """The plan's order is only the tree's: the same blocks listed in another order give each block the same receipt
+    (z is the tile before the block's read), and a different root."""
+    prover, challenge = audit.Prover(store, audit.NoiseTiles(96)), bytes(range(32))
+    a = prover.run(0, challenge, 0, store.registration.digest, receipts.Plan(((0, 10),), N))
+    b = prover.run(0, challenge, 0, store.registration.digest, receipts.Plan.of(list(reversed(range(10))), N))
+    assert a.receipts == tuple(reversed(b.receipts)) and a.root != b.root
+
+
 @pytest.mark.parametrize("runs", [
     ((0, 5), (3, 4)),            # block 3 twice
     ((10, 5), (0, 11)),          # block 10 twice, in a later run

@@ -51,7 +51,7 @@ def generate() -> dict:
     for i, plan in enumerate(PLANS):
         s = receipts.seed(CHALLENGE, i, previous)
         receipter = receipts.Receipter(s)
-        ys = [receipter(j, blocks[j], tiles.output(s, p)) for p, j in enumerate(plan)]
+        ys = [receipter(j, blocks[j], tiles.output(s, j)) for j in plan]
         root = receipts.tree(s, plan, ys).commitment.root
         chain.append({"i": i, "previous": previous.hex(), "seed": s.hex(), "prefix": receipts.prefix(s).hex(),
                       "plan": [list(r) for r in plan.runs], "plan_encoding": plan.encode().hex(),

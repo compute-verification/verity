@@ -11,7 +11,7 @@ plan_(t,i)    R runs (first, count) in read order: count ≥ 1, inside the store
               digest SHA512(PLAN_DOMAIN ‖ u32be R ‖ (u64be first ‖ u64be count) × R),  PLAN_DOMAIN = "…/plan/v0\0"
 spread(z)     z laid over b = 4096 bytes: byte u of z XORed into byte u mod b (a z of b bytes or more folds), a shorter
               z repeated
-y_(i,p)       SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ (E_j ⊕ spread(z_(i,p)))),  j = plan_i[p],
+y_(i,p)       SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ (E_j ⊕ spread(z_(i,j)))),  j = plan_i[p],
               RECEIPT_DOMAIN = "verity/remote-bandwidth/receipt/v0\0"                                     64 bytes
 leaf c        y_(16c) ‖ … ‖ y_(16c+15), positions in plan order, the last leaf short
 root_(t,i)    frame-v3-sha512 over the leaves: CommitmentDomain(binding = SHA512(TREE_DOMAIN ‖ seed_i ‖ plan digest),
@@ -19,12 +19,13 @@ root_(t,i)    frame-v3-sha512 over the leaves: CommitmentDomain(binding = SHA512
 ~~~
 
 `frame` is `verity.ml.randomness.frame`.  A receipt is seed-first: the seed fills the first SHA-512 block, so no state
-over a block's bytes exists before the seed, and the seed exists only after the previous pass's root.  `z_(i,p)` is
-PoUW's noised output of the tile before the pass's p-th read; it enters elementwise, before any compression, so a relay
-that meets the block and z over a link carries `min(|z|, b)` bytes per block, not a digest of one side.
+over a block's bytes exists before the seed, and the seed exists only after the previous pass's root.  `z_(i,j)` is
+PoUW's noised output of the tile before block j's read in pass i; it enters elementwise, before any compression, so a
+relay that meets the block and z over a link carries `min(|z|, b)` bytes per block, not a digest of one side.
 
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
-that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.
+that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is
+the tree's, not necessarily the reads': listed in store order, a plan is one run per contiguous range it reads.
 """
 
 from __future__ import annotations

@@ -156,37 +156,37 @@ def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, round
 
 
 class Tiles(Protocol):
-    """PoUW's side of a receipt.  `output(seed, p)` is `z_(i,p)`, the noised output of the tile the prover computes
-    before the p-th read of the pass whose seed is `seed`; `evidence` is what PoUW's check reads to recompute it; and
-    `recompute`, the verifier's, returns `z_(i,p)` from that evidence or None if PoUW's check fails.  PoUW's noise for a
-    pass is derived from the pass's seed, so `z` differs every pass whatever the weights and activations, and each
-    position has a tile of its own, so no `z` unlocks two receipts."""
+    """PoUW's side of a receipt.  `output(seed, j)` is `z_(i,j)`, the noised output of the tile the prover computes
+    before reading block j in the pass whose seed is `seed`; `evidence` is what PoUW's check reads to recompute it; and
+    `recompute`, the verifier's, returns `z_(i,j)` from that evidence or None if PoUW's check fails.  PoUW's noise for a
+    pass is derived from the pass's seed, so `z` differs every pass whatever the weights and activations, and a pass
+    reads each block once, with a tile of its own, so no `z` unlocks two receipts."""
 
-    def output(self, seed: bytes, p: int) -> bytes: ...
+    def output(self, seed: bytes, j: int) -> bytes: ...
 
-    def evidence(self, seed: bytes, p: int) -> bytes: ...
+    def evidence(self, seed: bytes, j: int) -> bytes: ...
 
-    def recompute(self, seed: bytes, p: int, evidence: bytes) -> bytes | None: ...
+    def recompute(self, seed: bytes, j: int, evidence: bytes) -> bytes | None: ...
 
 
 @dataclass(frozen=True, slots=True)
 class NoiseTiles:
-    """A stub of PoUW's tile recompute: `z_(i,p)` is `z_bytes` bytes of SHA-512 in counter mode over
-    TILE_DOMAIN ‖ seed ‖ u64be p, and the evidence is empty.  It stands where PoUW's noised product goes; it does no
+    """A stub of PoUW's tile recompute: `z_(i,j)` is `z_bytes` bytes of SHA-512 in counter mode over
+    TILE_DOMAIN ‖ seed ‖ u64be j, and the evidence is empty.  It stands where PoUW's noised product goes; it does no
     tensor work and certifies none."""
 
     z_bytes: int = 64
 
-    def output(self, seed: bytes, p: int) -> bytes:
-        m = TILE_DOMAIN + seed + p.to_bytes(8, "big")
+    def output(self, seed: bytes, j: int) -> bytes:
+        m = TILE_DOMAIN + seed + j.to_bytes(8, "big")
         out = b"".join(hashlib.sha512(m + c.to_bytes(4, "big")).digest() for c in range(-(-self.z_bytes // 64)))
         return out[:self.z_bytes]
 
-    def evidence(self, seed: bytes, p: int) -> bytes:
+    def evidence(self, seed: bytes, j: int) -> bytes:
         return b""
 
-    def recompute(self, seed: bytes, p: int, evidence: bytes) -> bytes | None:
-        return self.output(seed, p) if evidence == b"" else None
+    def recompute(self, seed: bytes, j: int, evidence: bytes) -> bytes | None:
+        return self.output(seed, j) if evidence == b"" else None
 
 
 class Store:
@@ -222,8 +222,8 @@ class Pass:
 
 @dataclass(frozen=True, slots=True)
 class Opening:
-    """Receipt (i, p) of a window opened, position p of pass i: the block, its receipt leaf and that leaf's path to pass
-    i's root, the payload's path to the payload root, and PoUW's evidence for `z_(i,p)`."""
+    """Receipt (i, p) of a window opened, position p of pass i, block j = plan_i[p]: the block, its receipt leaf and
+    that leaf's path to pass i's root, the payload's path to the payload root, and PoUW's evidence for `z_(i,j)`."""
 
     pass_index: int
     position: int
@@ -251,14 +251,14 @@ class Prover:
         plan = plan or Plan.whole(self.store.registration.blocks)
         s = receipts.seed(challenge, i, previous)
         receipter = receipts.Receipter(s)
-        ys = tuple(receipter(j, self.store.blocks[j], self.tiles.output(s, p)) for p, j in enumerate(plan))
+        ys = tuple(receipter(j, self.store.blocks[j], self.tiles.output(s, j)) for j in plan)
         return Pass(window, i, s, plan, ys, receipts.tree(s, plan, ys))
 
     def open(self, ps: Pass, p: int) -> Opening:
         j = ps.plan.block(p)
         leaf = ps.tree.open(p // receipts.PER_LEAF)
         return Opening(ps.index, p, self.store.blocks[j], leaf.value, leaf.path, self.store.payload_tree.open(j).path,
-                       self.tiles.evidence(ps.seed, p))
+                       self.tiles.evidence(ps.seed, j))
 
 
 @dataclass(frozen=True, slots=True)
@@ -492,7 +492,7 @@ class Session:
         if not verify_opening(self._payload_domain, Commitment(self.registration.payload_root, N), opening, PAYLOAD_SCHEMA,
                               LIMITS):
             return "payload-path"
-        z = self.tiles.recompute(seed, p, o.tile)
+        z = self.tiles.recompute(seed, j, o.tile)
         if type(z) is not bytes or not z:
             return "tile"
         if receipts.Receipter(seed)(j, o.block, z) != y:

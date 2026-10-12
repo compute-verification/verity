@@ -108,7 +108,7 @@ seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ 
 plan_(t,i)  R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, no run starting where
             the one before it ends.  Position p is the p-th block of the runs concatenated; L_i positions in all.
             digest SHA512("verity/remote-bandwidth/plan/v0\0" ‖ u32be R ‖ (u64be first ‖ u64be count) × R)
-y_(i,p)     SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖ (E_j ⊕ spread(z_(i,p)))),
+y_(i,p)     SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖ (E_j ⊕ spread(z_(i,j)))),
             j = plan_(t,i)[p]
 spread(z)   z over 4096 bytes: byte u of z XORed into byte u mod 4096 (folded), or a shorter z repeated
 leaf c      y_(16c) ‖ … ‖ y_(16c+15), positions in plan order, the last leaf short
@@ -135,25 +135,27 @@ credits each pass with its plan's \(L_i\) blocks, no more. Three rules make that
   \(s/2N\).)
 - **Bound to the root.** The tree's binding is the seed and the plan's digest, and its size is \(\lceil L_i/16\rceil\)
   leaves, so a root opens only under the plan sent with it, and the next pass's seed chains from both.
-- **Canonical.** No two consecutive runs continue each other, so a read sequence has one plan and one digest
-  (`Plan.of` builds it from block indices in read order, the prover-side registry's form).
+- **Canonical.** No two consecutive runs continue each other, so a block sequence has one plan and one digest
+  (`Plan.of` builds it from block indices, the prover-side registry's form).
 
-The prover may choose the plan after reading, since it is credited only with what it receipts and every receipt is
-sampled; what it can't do is credit one read twice.
+The plan's order is the tree's, not necessarily the order of the reads: nothing in a receipt depends on its position,
+so the prover may list a pass's blocks in store order whatever order it reads them in, which makes the plan one run
+per contiguous range read (§8). It may choose the plan after reading, since it is credited only with what it receipts
+and every receipt is sampled; what it can't do is credit one read twice.
 
-**\(z_{(i,p)}\)** is PoUW's noised output of the tile the prover computes before the pass's \(p\)-th read (`Tiles`).
-Three choices in it are load-bearing:
+**\(z_{(i,j)}\)** is PoUW's noised output of the tile the prover computes before reading block \(j\) in pass \(i\)
+(`Tiles`). Three choices in it are load-bearing:
 
 - **PoUW's noise for a pass is derived from the pass's seed,** so \(z\) differs every pass even when the weights and
   activations don't (all-zero weights). Otherwise a pass's \(z\) would be known before its seed.
-- **Each position has its own tile,** so distinct receipts bind independent \(z\). If one \(z\) served \(n\)
-  receipts, shipping it across a link would unlock \(n b\) bytes of receipts, and \(\mu_{\text{link}}\)'s \(b/|z|\)
-  would not hold.
+- **Each block of a pass has its own tile,** so distinct receipts bind independent \(z\) (a pass reads a block once).
+  If one \(z\) served \(n\) receipts, shipping it across a link would unlock \(n b\) bytes of receipts, and
+  \(\mu_{\text{link}}\)'s \(b/|z|\) would not hold.
 - **\(z\) enters elementwise, before any compression.** The block and \(z\) must then meet in one place for each
   receipt, so a relay between them carries \(\min(|z|, b)\) bytes per block. Hashing a digest of \(z\) instead would let
   a 64-byte midstate cross.
 
-`NoiseTiles` is the stub: SHA-512 in counter mode over the seed and \(p\), with empty evidence. Deployed, `output` is
+`NoiseTiles` is the stub: SHA-512 in counter mode over the seed and \(j\), with empty evidence. Deployed, `output` is
 the GPU's tile output and `recompute` is PoUW's check of a sampled tile.
 
 ## 5. Deadlines
@@ -181,7 +183,7 @@ sum \(L_0 + \dots + L_i\) exceeds \(u\), and the position is \(u\) less the pass
 
 The prover opens each draw (`Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
 leaf with the leaf's path to \(\text{root}_{(t,i)}\), the payload's path to the payload root, and PoUW's evidence for
-\(z_{(i,p)}\). Openings aren't timed, because the roots already bind every receipt.
+\(z_{(i,j)}\). Openings aren't timed, because the roots already bind every receipt.
 
 The verifier checks each opening in order (`Session.verify`):
 
@@ -190,7 +192,7 @@ The verifier checks each opening in order (`Session.verify`):
    received with the root, has its path to \(\text{root}_{(t,i)}\) (`receipt-path`);
 3. the block's words are canonical (`codec`), and their decoding has its path to the payload root at \(j\)
    (`payload-path`);
-4. PoUW's check recomputes \(z_{(i,p)}\) from the evidence (`tile`);
+4. PoUW's check recomputes \(z_{(i,j)}\) from the evidence (`tile`);
 5. \(y_{(i,p)}\), recomputed from \(j\), the block and \(z\), is the leaf's receipt at \(p\) (`receipt`).
 
 A window is accepted only if every opening checks. A rejected window ends its session: every later call is refused,
@@ -223,9 +225,13 @@ plus the node's capacities.
   \(z\) as bytes of any length.
 - **The schedule.** Which tile precedes position \(p\) of a pass is the prover-side registry's (ra-vllm-hooks).
   `Tiles` takes it as given.
-- **The plan on the wire.** \(4 + 16R\) bytes a pass. A decode step's plan is one run for the weights (if they are
-  registered in read order), a run or a few per KV layer's live pages, and the filler's: hundreds of bytes per pass,
-  so tens of kB/s at 20–150 ms passes, beside the openings' Gb/s. The verifier's check is \(O(R \log R)\) a pass.
+- **The plan on the wire.** The reference takes \(4 + 16R\) bytes a pass, which is too many for KV. Listed in store
+  order, the weights are a run per region and a full pass is one run, but live KV pages are scattered through the
+  pool. At worst (every other page live) a 60 GB pool of 64 KiB layer-pages (16 tokens, 8 KV heads of 128, bf16 K and
+  V) is 458k runs, 7.3 MB a pass: 2.9 Gb/s per GPU at 20 ms passes, twice that for a plane-major cache. Deployed, a
+  plan is sent as its change from the previous pass's plan. A decode step at batch 64 allocates or frees about 4
+  pages a layer, 128 runs over 32 layers, about 4 KB a step, and the verifier updates its sorted copy and checks
+  distinctness in \(O(\text{changes} \cdot \log R)\).
 - **What the plan shows.** The plan is in the clear, so the verifier sees which KV pages were live in each pass: the
   batch's shape and context lengths over time, not their contents. Hiding it means committing the plan and proving its
   distinctness and each opening's \(j = \text{plan}[p]\) in zero knowledge, with only \(L_i\) public (the draws need
