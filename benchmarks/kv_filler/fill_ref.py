@@ -84,3 +84,20 @@ def chunk_seed(run_seed: bytes, c: int) -> bytes:
     for k in range(8):
         s[k] ^= (c >> (8 * k)) & 0xFF
     return bytes(s)
+
+
+# --- verity/kv-filler/fill-sk16/v1: units by sequence number, check words by epoch ---------------------------------
+# Unit s of a run is plan unit s mod P under pass s div P's key (the run seed's first 8 bytes XORed with the pass, as
+# v0 keys a chunk), its root v0's; an epoch is 2^shift consecutive s, its check word the XOR of their roots' first
+# words. The signs are v0's.
+
+def epoch(regions: list[bytes], s0: int, n: int, run_seed: bytes, sign_seed: bytes) -> int:
+    """The check word of units s0 .. s0 + n − 1."""
+    P = len(plan([len(r) for r in regions]))
+    x, s = 0, s0
+    while s < s0 + n:
+        p, u = divmod(s, P)
+        k = min(P - u, s0 + n - s)
+        x ^= chunk(regions, u, k, chunk_seed(run_seed, p), sign_seed)[1]
+        s += k
+    return x

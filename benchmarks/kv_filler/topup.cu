@@ -757,3 +757,290 @@ int tu_fill_warps(int w) {
 void tu_fill_signs(const uint8_t* seed, uint8_t* out) { tu::fill_signs(seed, (uint32_t*)out); }
 
 }  // extern "C"
+
+// --- fill-sk16/v1: the filler by sequence number (fill.cu's fill_seq_kernel) ----------------------------------------
+// One thread keeps BASE kernels of `base_ctas` CTAs queued (two deep, `base_budget` units each) and, with idle on, one
+// IDLE kernel of every SM's CTA at a time, launched again at once after one that took units and after `IDLE_BACKOFF`
+// after one that took none; sq_step_begin/sq_step_end bracket a step on its own stream (the gate's busy count) and
+// launch a STEP kernel of `ctas` CTAs beside it. Each epoch of 2^shift units is logged once all its units are done
+// (t0 the previous epoch's end, t1 its own, on the start event's clock), and the last, partial one at sq_stop.
+namespace sq {
+
+constexpr uint32_t EPOCHS = 4096;
+constexpr auto IDLE_BACKOFF = std::chrono::microseconds(200);
+
+struct State {
+  int device = 0, warps = 4, base_ctas = 0, sms = 0;
+  uint32_t shift = 8;
+  uint64_t base_budget = 4096, idle_budget = 4096, step_budget = 1ull << 22;
+  std::atomic<int> idle_on{0};
+  fl::Regions plan{};
+  uint8_t seed[32];
+  uint32_t* signs = nullptr;
+  fl::Seq* seq = nullptr;
+  fl::Ring ring{};
+  unsigned long long* taken = nullptr;  // [0, 1] the base slots', [2] idle's, [3] step's
+  unsigned long long* taken_h = nullptr;  // pinned: idle's after it ends
+  unsigned long long* g0 = nullptr;  // the globaltimer at the start event
+  unsigned long long g0_h = 0;
+  cudaStream_t s_base = nullptr, s_idle = nullptr, s_step = nullptr, s_h = nullptr;
+  cudaEvent_t start = nullptr, base_done[2] = {nullptr, nullptr}, idle_done = nullptr, step_ev = nullptr;
+  std::mutex step_mu;
+  std::thread th;
+  std::atomic<int> run{0}, err{0};
+  std::atomic<uint64_t> units_done{0}, epochs_done{0};
+  std::mutex m;
+  std::vector<tu::Rec> log;
+};
+
+static State* S = nullptr;
+
+static int launch(State& st, int role, int grid, unsigned long long* taken, uint64_t budget, cudaStream_t s) {
+  cudaError_t e = cudaMemsetAsync(taken, 0, 8, s);
+  if (e != cudaSuccess) return (int)e;
+  const fl::Key K = tu::fill_key(st.seed);
+#define SQ_L(W) fl::fill_seq_kernel<W><<<grid, W * 32, 0, s>>>(st.plan, st.signs, K, tu::gate, st.seq, st.ring, role, taken, budget)
+  switch (st.warps) {
+    case 4: SQ_L(4); break;
+    case 8: SQ_L(8); break;
+    case 16: SQ_L(16); break;
+    default: return -1;
+  }
+#undef SQ_L
+  return (int)cudaGetLastError();
+}
+
+// Logs every epoch from `next` on whose units are all done; with `last` (every kernel ended, `total` units taken),
+// the partial epoch after them too.
+static int harvest(State& st, uint64_t& next, double& t_prev, std::vector<uint32_t>& cnt, std::vector<uint32_t>& xr,
+                   std::vector<unsigned long long>& t, bool last, uint64_t total) {
+  cudaError_t e = cudaMemcpyAsync(cnt.data(), st.ring.cnt, 4 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
+  if (e == cudaSuccess) e = cudaMemcpyAsync(xr.data(), st.ring.xr, 4 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
+  if (e == cudaSuccess) e = cudaMemcpyAsync(t.data(), st.ring.t, 8 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
+  if (e == cudaSuccess) e = cudaStreamSynchronize(st.s_h);
+  if (e != cudaSuccess) return (int)e;
+  const uint32_t full = 1u << st.shift;
+  for (;;) {
+    const uint32_t slot = (uint32_t)(next & (EPOCHS - 1));
+    const uint64_t first = next << st.shift;
+    uint32_t n = cnt[slot];
+    double t1;
+    if (n == full) {
+      t1 = (double)(t[slot] - st.g0_h) / 1e6;
+    } else if (last && total > first) {
+      n = (uint32_t)(total - first);
+      if (cnt[slot] != n) return -2;  // every unit taken is done once every kernel has ended
+      float ms = 0;
+      cudaEventElapsedTime(&ms, st.start, st.idle_done);
+      t1 = std::max(t_prev, (double)ms);
+    } else {
+      return 0;
+    }
+    {
+      std::lock_guard<std::mutex> g(st.m);
+      st.log.push_back(tu::Rec{t_prev, t1, (uint64_t)n * fl::UNIT_BYTES, slot, xr[slot], next});
+    }
+    t_prev = t1;
+    st.units_done += n;
+    st.epochs_done += 1;
+    e = cudaMemsetAsync(st.ring.cnt + slot, 0, 4, st.s_h);
+    if (e == cudaSuccess) e = cudaMemsetAsync(st.ring.xr + slot, 0, 4, st.s_h);
+    if (e != cudaSuccess) return (int)e;
+    ++next;
+    if (n != full) return 0;
+  }
+}
+
+static void loop(State* sp) {
+  State& st = *sp;
+  cudaSetDevice(st.device);
+  std::vector<uint32_t> cnt(EPOCHS), xr(EPOCHS);
+  std::vector<unsigned long long> t(EPOCHS);
+  uint64_t next = 0;
+  double t_prev = 0;
+  bool base_busy[2] = {false, false}, idle_busy = false;
+  auto idle_at = std::chrono::steady_clock::now();
+  int rc = 0;
+  while (st.run.load() && !rc) {
+    const bool closed = tu::gate_closed.load();
+    for (int i = 0; i < 2 && !rc; ++i) {
+      if (base_busy[i] && cudaEventQuery(st.base_done[i]) == cudaSuccess) base_busy[i] = false;
+      if (!base_busy[i] && st.base_ctas > 0 && !closed) {
+        rc = launch(st, fl::BASE, st.base_ctas, st.taken + i, st.base_budget, st.s_base);
+        if (!rc) rc = (int)cudaEventRecord(st.base_done[i], st.s_base);
+        base_busy[i] = true;
+      }
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (idle_busy && cudaEventQuery(st.idle_done) == cudaSuccess) {
+      idle_busy = false;
+      idle_at = *st.taken_h ? now : now + IDLE_BACKOFF;
+    }
+    if (!rc && !idle_busy && st.idle_on.load() && !closed && now >= idle_at) {
+      rc = launch(st, fl::IDLE, st.sms, st.taken + 2, st.idle_budget, st.s_idle);
+      if (!rc) rc = (int)cudaMemcpyAsync(st.taken_h, st.taken + 2, 8, cudaMemcpyDeviceToHost, st.s_idle);
+      if (!rc) rc = (int)cudaEventRecord(st.idle_done, st.s_idle);
+      idle_busy = true;
+    }
+    if (!rc) rc = harvest(st, next, t_prev, cnt, xr, t, false, 0);
+    std::this_thread::sleep_for(std::chrono::microseconds(50));
+  }
+  if (!rc) {
+    fl::Seq stop{0, 1};
+    rc = (int)cudaMemcpyAsync(&st.seq->stop, &stop.stop, 8, cudaMemcpyHostToDevice, st.s_h);
+  }
+  if (!rc) rc = (int)cudaStreamSynchronize(st.s_h);
+  for (cudaStream_t s : {st.s_base, st.s_idle, st.s_step})
+    if (!rc) rc = (int)cudaStreamSynchronize(s);
+  if (!rc) rc = (int)cudaEventRecord(st.idle_done, st.s_h);
+  if (!rc) rc = (int)cudaEventSynchronize(st.idle_done);
+  unsigned long long total = 0;
+  if (!rc) rc = (int)cudaMemcpy(&total, &st.seq->next, 8, cudaMemcpyDeviceToHost);
+  if (!rc) rc = harvest(st, next, t_prev, cnt, xr, t, true, total);
+  st.err = rc;
+}
+
+}  // namespace sq
+
+extern "C" {
+
+// Starts fill-sk16/v1 on `device` over `n` regions (16-byte aligned) under `seed`: BASE kernels of `base_ctas` CTAs
+// (0: none) of `warps` warps, `base_budget` units each; epochs of 2^shift units. The IDLE kernels wait for sq_idle(1).
+int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, const uint8_t* seed, int base_ctas,
+             int warps, uint64_t base_budget, int shift, int priority) {
+  if (sq::S || n <= 0 || shift < 0 || shift > 20 || (warps != 4 && warps != 8 && warps != 16)) return -1;
+  std::vector<tu::Region> regions;
+  for (int k = 0; k < n; ++k) regions.push_back(tu::Region{(const uint8_t*)ptrs[k], bytes[k]});
+  if (!tu::fill_ok(regions)) return -1;
+  auto* st = new sq::State();
+  st->device = device;
+  st->warps = warps;
+  st->base_ctas = base_ctas;
+  st->base_budget = base_budget ? base_budget : 4096;
+  st->shift = (uint32_t)shift;
+  st->plan = tu::fill_regions(regions);
+  if (st->plan.first_unit[st->plan.n] == 0) return -1;
+  memcpy(st->seed, seed, 32);
+  CK(cudaSetDevice(device));
+  CK(cudaDeviceGetAttribute(&st->sms, cudaDevAttrMultiProcessorCount, device));
+  if (int rc = tu::gate_set(-1, -1, true)) return rc;
+  for (cudaStream_t* s : {&st->s_base, &st->s_idle, &st->s_step})
+    CK(cudaStreamCreateWithPriority(s, cudaStreamNonBlocking, priority));
+  CK(cudaStreamCreateWithFlags(&st->s_h, cudaStreamNonBlocking));
+  CK(cudaEventCreate(&st->start));
+  CK(cudaEventCreateWithFlags(&st->base_done[0], cudaEventDisableTiming));
+  CK(cudaEventCreateWithFlags(&st->base_done[1], cudaEventDisableTiming));
+  CK(cudaEventCreate(&st->idle_done));
+  CK(cudaEventCreateWithFlags(&st->step_ev, cudaEventDisableTiming));
+  std::vector<uint32_t> sg(fl::SIGN_WORDS);
+  tu::fill_signs(seed, sg.data());
+  CK(cudaMalloc(&st->signs, sg.size() * 4));
+  CK(cudaMemcpy(st->signs, sg.data(), sg.size() * 4, cudaMemcpyHostToDevice));
+  CK(cudaMalloc(&st->seq, sizeof(fl::Seq)));
+  CK(cudaMemset(st->seq, 0, sizeof(fl::Seq)));
+  CK(cudaMalloc(&st->ring.xr, 4 * sq::EPOCHS));
+  CK(cudaMalloc(&st->ring.cnt, 4 * sq::EPOCHS));
+  CK(cudaMalloc(&st->ring.t, 8 * sq::EPOCHS));
+  CK(cudaMemset(st->ring.xr, 0, 4 * sq::EPOCHS));
+  CK(cudaMemset(st->ring.cnt, 0, 4 * sq::EPOCHS));
+  st->ring.shift = st->shift;
+  st->ring.mask = sq::EPOCHS - 1;
+  CK(cudaMalloc(&st->taken, 4 * 8));
+  CK(cudaMallocHost(&st->taken_h, 8));
+  CK(cudaMalloc(&st->g0, 8));
+  CK(cudaEventRecord(st->start, st->s_h));
+  fl::stamp<<<1, 1, 0, st->s_h>>>(st->g0);
+  CK(cudaMemcpyAsync(&st->g0_h, st->g0, 8, cudaMemcpyDeviceToHost, st->s_h));
+  CK(cudaStreamSynchronize(st->s_h));
+  st->log.reserve(1 << 20);
+  st->run = 1;
+  sq::S = st;
+  st->th = std::thread(sq::loop, st);
+  return 0;
+}
+
+// IDLE kernels on (1) or off (0), `budget` units each (0: 4,096).
+void sq_idle(int on, uint64_t budget) {
+  if (!sq::S) return;
+  if (budget) sq::S->idle_budget = budget;
+  sq::S->idle_on = on;
+}
+
+// A step's start on `stream`: the gate's busy count up, and (ctas > 0) a STEP kernel of `ctas` CTAs beside the step,
+// ordered after the count, on the filler's step stream.
+int sq_step_begin(int ctas, void* stream) {
+  sq::State* st = sq::S;
+  if (!st) return 0;
+  cudaStream_t s = (cudaStream_t)stream;
+  fl::gate_step<<<1, 1, 0, s>>>(tu::gate, 1);
+  if (ctas <= 0) return (int)cudaGetLastError();
+  std::lock_guard<std::mutex> g(st->step_mu);
+  CK(cudaEventRecord(st->step_ev, s));
+  CK(cudaStreamWaitEvent(st->s_step, st->step_ev, 0));
+  return sq::launch(*st, fl::STEP, ctas, st->taken + 3, st->step_budget, st->s_step);
+}
+
+int sq_step_end(void* stream) {
+  if (!sq::S) return 0;
+  fl::gate_step<<<1, 1, 0, (cudaStream_t)stream>>>(tu::gate, -1);
+  return (int)cudaGetLastError();
+}
+
+int sq_stop() {
+  sq::State* st = sq::S;
+  if (!st) return -1;
+  st->run = 0;
+  st->th.join();
+  int rc = st->err.load();
+  tu::gate_set(-1, -1, true);
+  for (cudaStream_t s : {st->s_base, st->s_idle, st->s_step, st->s_h}) cudaStreamDestroy(s);
+  for (cudaEvent_t e : {st->start, st->base_done[0], st->base_done[1], st->idle_done, st->step_ev}) cudaEventDestroy(e);
+  for (void* p : {(void*)st->signs, (void*)st->seq, (void*)st->ring.xr, (void*)st->ring.cnt, (void*)st->ring.t,
+                  (void*)st->taken, (void*)st->g0})
+    cudaFree(p);
+  cudaFreeHost(st->taken_h);
+  tu::last_log = std::move(st->log);
+  delete st;
+  sq::S = nullptr;
+  return rc;
+}
+
+void sq_progress(uint64_t* out) {
+  out[0] = sq::S ? sq::S->units_done.load() * fl::UNIT_BYTES : 0;
+  out[1] = sq::S ? sq::S->epochs_done.load() : 0;
+}
+
+// An event recorded now on `stream`, on the start event's clock (ms), or -1.
+double sq_now_ms(void* stream) {
+  sq::State* st = sq::S;
+  if (!st) return -1;
+  cudaEvent_t e;
+  if (cudaEventCreate(&e) != cudaSuccess) return -1;
+  float ms = -1;
+  if (cudaEventRecord(e, (cudaStream_t)stream) == cudaSuccess && cudaEventSynchronize(e) == cudaSuccess)
+    cudaEventElapsedTime(&ms, st->start, e);
+  cudaEventDestroy(e);
+  return ms;
+}
+
+// The running v1 filler's log, as tu_log reads a stopped run's (the stopped one's is tu_log's).
+int sq_log(uint64_t first, double* out, int max) {
+  sq::State* st = sq::S;
+  std::unique_lock<std::mutex> g;
+  if (st) g = std::unique_lock<std::mutex>(st->m);
+  const std::vector<tu::Rec>& log = st ? st->log : tu::last_log;
+  int n = 0;
+  for (uint64_t k = first; k < log.size() && n < max; ++k, ++n) {
+    const tu::Rec& r = log[k];
+    double* o = out + 6 * n;
+    o[0] = r.t0_ms;
+    o[1] = r.t1_ms;
+    o[2] = (double)r.bytes;
+    o[3] = r.region;
+    o[4] = r.root4;
+    o[5] = (double)r.chunk;
+  }
+  return n;
+}
+
+}  // extern "C"

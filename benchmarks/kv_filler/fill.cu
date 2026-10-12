@@ -121,8 +121,9 @@ __device__ __forceinline__ void mma(int (&d)[4], uint32_t a0, uint32_t a1, uint3
       : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
 }
 
-// One unit: 32 blocks at `p` (block 8q + g of group q), its root into out[0..7] (lane 0).
-__device__ __forceinline__ void unit(const uint8_t* __restrict__ p, uint64_t j0, const uint32_t* __restrict__ signs,
+// One unit: 32 blocks at `p` (block 8q + g of group q), its root into out[0..7] (lane 0, unless out is null); returns
+// the root's first word (lane 0).
+__device__ __forceinline__ uint32_t unit(const uint8_t* __restrict__ p, uint64_t j0, const uint32_t* __restrict__ signs,
                                      const Key& K, uint64_t pol, uint32_t* __restrict__ out) {
   const int lane = threadIdx.x & 31, g = lane >> 2, c = lane & 3;
   int acc[4][4];
@@ -192,11 +193,12 @@ __device__ __forceinline__ void unit(const uint8_t* __restrict__ p, uint64_t j0,
 #pragma unroll
       for (int i = 0; i < 8; ++i) node[i] = up[i];
   }
-  if (lane == 0) {
+  if (lane == 0 && out) {
     uint4* o4 = reinterpret_cast<uint4*>(out);
     o4[0] = make_uint4(node[0], node[1], node[2], node[3]);
     o4[1] = make_uint4(node[4], node[5], node[6], node[7]);
   }
+  return node[0];
 }
 
 // Units [unit0, unit0 + units) of the plan over `R`, W warps a CTA, taken a warp at a time from `ctr` (zeroed before the launch); unit
@@ -238,6 +240,75 @@ __global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t 
     if (lane == 0) atomicXor(xr, o[0]);
   }
 }
+
+// fill-sk16/v1 (`fill_ref.epoch`): every kernel of a run takes units from one sequence `next`; unit s is plan unit
+// s mod P under pass s div P's key (K with its first two words XORed with the pass), and lands in epoch s >> shift of a
+// ring of `epochs` (a power of 2): its root's first word XORed into xr[e], cnt[e] counted, and the epoch's last unit
+// stamps t[e] with the GPU's globaltimer. A kernel takes at most `budget` units (its own counter `taken`), so nothing
+// waiting on the device waits long, and returns as soon as its role's condition fails:
+//   BASE  while the gate isn't closed both ways
+//   STEP  while a step is open (gate busy > 0): launched beside a step, it ends with it
+//   IDLE  while no step is open and blockIdx < idle_ctas: launched by the thread, it gives way to the next step
+enum Role : int { BASE = 0, STEP = 1, IDLE = 2 };
+
+struct Seq {
+  unsigned long long next, stop;
+};
+
+struct Ring {
+  uint32_t* xr;
+  uint32_t* cnt;
+  unsigned long long* t;
+  uint32_t shift, mask;  // epoch = s >> shift, slot = epoch & mask
+};
+
+__device__ __forceinline__ unsigned long long globaltimer() {
+  unsigned long long t;
+  asm volatile("mov.u64 %0, %globaltimer;" : "=l"(t));
+  return t;
+}
+
+template <int W>
+__global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, const uint32_t* __restrict__ signs, Key K,
+                                                          const Gate* gate, Seq* seq, Ring ring, int role,
+                                                          unsigned long long* taken, unsigned long long budget) {
+  uint64_t pol;
+  asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+  const int lane = threadIdx.x & 31;
+  const uint64_t P = R.first_unit[R.n];
+  const unsigned long long NONE = ~0ull;
+  for (;;) {
+    unsigned long long s = NONE;
+    if (lane == 0) {
+      const volatile Gate* g = gate;
+      const volatile Seq* q = seq;
+      const int busy = g->busy;
+      const uint32_t busy_ctas = g->busy_ctas, idle_ctas = g->idle_ctas;
+      const bool go = !q->stop && (role == BASE   ? !(busy_ctas == 0 && idle_ctas == 0)
+                                   : role == STEP ? busy > 0
+                                                  : busy <= 0 && blockIdx.x < idle_ctas);
+      if (go && atomicAdd(taken, 1ull) < budget) s = atomicAdd(&seq->next, 1ull);
+    }
+    s = __shfl_sync(0xffffffffu, s, 0);
+    if (s == NONE) return;
+    const uint64_t U = s % P, pass = s / P;
+    Key Kp = K;
+    Kp.k[0] ^= (uint32_t)pass;
+    Kp.k[1] ^= (uint32_t)(pass >> 32);
+    int r = 0;
+    while (r + 1 < R.n && R.first_unit[r + 1] <= U) ++r;
+    const uint8_t* p = R.base[r] + (U - R.first_unit[r]) * UNIT_BYTES;
+    const uint32_t w = unit(p, U * UNIT_BLOCKS, signs, Kp, pol, nullptr);
+    if (lane == 0) {
+      const uint32_t e = (uint32_t)(s >> ring.shift) & ring.mask;
+      atomicXor(ring.xr + e, w);
+      __threadfence();
+      if (atomicAdd(ring.cnt + e, 1u) == (1u << ring.shift) - 1u) ring.t[e] = globaltimer();
+    }
+  }
+}
+
+__global__ void stamp(unsigned long long* t) { *t = globaltimer(); }
 
 __global__ void gate_set(Gate* g, uint32_t busy_ctas, uint32_t idle_ctas, int reset) {
   if (reset) g->busy = 0;
