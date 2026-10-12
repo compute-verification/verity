@@ -45,6 +45,7 @@ def judge(declared: dict, rows: list[dict]) -> dict:
         if m["kernel"] != d["kernel"] or w is None:
             return {"status": "unmeasured", "why": f"profiled {m['kernel']} with {sorted(m)}, declared {d['kernel']}"}
         row = {**d, "write_sectors": w, "atom_sectors": a, "dram_write_bytes": m.get(DRAM),
+               "read_sectors": m.get("lts__t_sectors_op_read.sum"), "dram_read_bytes": m.get("dram__bytes_read.sum"),
                "write_ratio": w / d["declared_write_sectors"],
                "atom_ratio": a / d["declared_atom_sectors"] if d["declared_atom_sectors"] else (0.0 if a == 0 else float("inf"))}
         row["pass"] = w <= d["declared_write_sectors"] and a <= d["declared_atom_sectors"]

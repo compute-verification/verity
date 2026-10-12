@@ -262,7 +262,8 @@ extern "C" __global__ void smid_of(const Args a) {
 
 static int launch(const void* fn, int grid, int block, int smem, const Args* a, cudaStream_t s) {
   void* argv[] = {const_cast<Args*>(a)};
-  if (smem > 48 * 1024 && cudaFuncSetAttribute(fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem) != cudaSuccess) return -1;
+  // static shared memory counts against the default 48 KB too, so opt in whenever there is dynamic shared memory
+  if (smem > 0 && cudaFuncSetAttribute(fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem) != cudaSuccess) return -1;
   return (int)cudaLaunchKernel(fn, dim3(grid), dim3(block), argv, (size_t)smem, s);
 }
 
