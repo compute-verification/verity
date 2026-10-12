@@ -171,16 +171,82 @@ __device__ __forceinline__ void fold(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
   }
 }
 
+// At full slot, limb k of the lazy x takes t's columns k and k + NL at once (r and h, each pair once), so t is never
+// held: x = sum (r_k + c h_k + carry) 2^(32k), then fold's second stage. That sum is t mod 2^n + c (t >> n) < (c + 1)
+// 2^n, so its carry out of 2^n is at most c and x equals fold(t)'s.
+__device__ __forceinline__ void fold_limb(u32 &x, u32 &c0, u32 &c1, const u32 (&r)[3], const u32 (&h)[3]) {
+  u64 v = (u64)h[0] * CF + r[0] + c0;
+  x = (u32)v;
+  v = (v >> 32) + (u64)h[1] * CF + r[1] + c1;
+  c0 = (u32)v;
+  c1 = (u32)(v >> 32) + h[2] * CF + r[2];
+}
+__device__ __forceinline__ void fold_top(u32 (&x)[NL], u32 c0) {
+  u64 c = (u64)c0 * CF;
+#pragma unroll
+  for (int k = 0; k < NL; ++k) {
+    c += x[k];
+    x[k] = (u32)c;
+    c >>= 32;
+  }
+  x[0] += (u32)c * CF;
+}
+__device__ __forceinline__ void dbl3(u32 (&r)[3]) {
+  r[2] = (r[2] << 1) | (r[1] >> 31);
+  r[1] = (r[1] << 1) | (r[0] >> 31);
+  r[0] <<= 1;
+}
+
+__device__ __forceinline__ void sqr_fold(const u32 (&a)[NL], u32 (&x)[NL]) {
+  u32 c0 = 0, c1 = 0;
+#pragma unroll
+  for (int k = 0; k < NL; ++k) {
+    u32 r[3] = {0, 0, 0}, h[3] = {0, 0, 0};
+#pragma unroll
+    for (int i = 0; 2 * i < k; ++i) mac(r, a[i], a[k - i]);
+#pragma unroll
+    for (int i = k + 1; 2 * i < k + NL; ++i) mac(h, a[i], a[k + NL - i]);
+    dbl3(r);
+    dbl3(h);
+    if ((k & 1) == 0) mac(r, a[k / 2], a[k / 2]);
+    if (((k + NL) & 1) == 0) mac(h, a[(k + NL) / 2], a[(k + NL) / 2]);
+    fold_limb(x[k], c0, c1, r, h);
+  }
+  fold_top(x, c0);
+}
+
+__device__ __forceinline__ void mul_fold(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
+  u32 c0 = 0, c1 = 0;
+#pragma unroll
+  for (int k = 0; k < NL; ++k) {
+    u32 r[3] = {0, 0, 0}, h[3] = {0, 0, 0};
+#pragma unroll
+    for (int i = 0; i <= k; ++i) mac(r, a[i], b[k - i]);
+#pragma unroll
+    for (int i = k + 1; i < NL; ++i) mac(h, a[i], b[k + NL - i]);
+    fold_limb(x[k], c0, c1, r, h);
+  }
+  fold_top(x, c0);
+}
+
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
-  u32 t[2 * NL];
-  sqr_full(a, t);
-  fold(t, x);
+  if constexpr (FULL_SLOT) {
+    sqr_fold(a, x);
+  } else {
+    u32 t[2 * NL];
+    sqr_full(a, t);
+    fold(t, x);
+  }
 }
 
 __device__ __forceinline__ void mul(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
-  u32 t[2 * NL];
-  mul_full(a, b, t);
-  fold(t, x);
+  if constexpr (FULL_SLOT) {
+    mul_fold(a, b, x);
+  } else {
+    u32 t[2 * NL];
+    mul_full(a, b, t);
+    fold(t, x);
+  }
 }
 
 __device__ __forceinline__ void copy(u32 (&d)[NL], const u32 (&s)[NL]) {
@@ -454,6 +520,50 @@ __device__ __forceinline__ void decode_word_w(u32 (&y)[NL], const u32 (&w)[NL]) 
     add_nc(q, w, y);
     canon_cc(y);
   }
+}
+
+// u = (c_0 + tau i) mod p, canonical, at full slot and without a double-width product: limb k sums c_0's, tau_k lo
+// and tau_(k-1) hi into the carry (three words), and the part above 2^n (< 2^66) comes back times c.
+__device__ __forceinline__ void ct_of(u64 i, u32 (&u)[NL]) {
+  static_assert(FULL_SLOT, "2^n = c");
+  const u32 lo = (u32)i, hi = (u32)(i >> 32);
+  u32 r[3] = {0, 0, 0};
+#pragma unroll
+  for (int k = 0; k < NL; ++k) {
+    mac(r, kTau[k], lo);
+    if (k > 0) mac(r, kTau[k - 1], hi);
+    add3(r, kC[0][k], 0u);
+    u[k] = r[0];
+    r[0] = r[1];
+    r[1] = r[2];
+    r[2] = 0;
+  }
+  mac(r, kTau[NL - 1], hi);
+  u64 v = (u64)r[0] * CF;
+  const u32 a0 = (u32)v;
+  v = (v >> 32) + (u64)r[1] * CF;
+  const u32 a1 = (u32)v;
+  const u32 a2 = (u32)(v >> 32) + r[2] * CF;
+  u[0] = add_cc(u[0], a0);
+  u[1] = addc_cc(u[1], a1);
+  u[2] = addc_cc(u[2], a2);
+#pragma unroll
+  for (int k = 3; k < NL; ++k) u[k] = addc_cc(u[k], 0u);
+  const u32 co = addc(0u, 0u);   // then u < c 2^66, so the c below carries at most into u[2]
+  u[0] = add_cc(u[0], co * CF);
+  u[1] = addc_cc(u[1], 0u);
+  u[2] = addc(u[2], 0u);
+  canon_cc(u);
+}
+
+// decode_word_w with c_0 + t made from the word's index after the square (ct_of), so no tweak is held across words.
+__device__ __forceinline__ void decode_word_fresh(u32 (&y)[NL], u64 i) {
+  u32 q[NL], u[NL];
+  sqr(y, q);
+  canon_cc(q);
+  neg_if(q, y[0] & 1);
+  ct_of(i, u);
+  submod_cc(q, u, y);
 }
 
 // w = -(c_0 + t) mod p.
@@ -1569,8 +1679,9 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 // loads: an earlier arrive lets the next bulk copy (async proxy) overwrite the stage under loads still in flight.
 //
 // An SM's registers fit FUSED_WARPS warps at the decode's register count (a sub-partition holds 16K: four warps at
-// 128 registers, three at 168, two at 255).
-constexpr int FUSED_WARPS = NL <= 17 ? 16 : (NL <= 24 ? 12 : 8);
+// 128 registers, three at 168, two at 255; 9 to 11 warps put three on one). The decode holds the word and its square,
+// at full slot (sqr_fold) not the double-width square, and the tweak unless it is made a word at a time (FRESH).
+constexpr int FUSED_WARPS = FULL_SLOT ? (NL <= 24 ? 16 : (NL <= 48 ? 12 : 8)) : (NL <= 17 ? 16 : (NL <= 24 ? 12 : 8));
 constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
 
 constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
@@ -1795,11 +1906,12 @@ template <int K, int SKK>
 __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loaded, u64 *decoded, int stages,
                                              int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp, int lane,
                                              const u32 *__restrict__ tsteps, const Sketch &sk) {
+  constexpr bool FRESH = K == 1 && FULL_SLOT && NL > 24;   // the tweak's registers would cost decoder warps
   const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
   int i = (32 * warp + lane) / TW, w = (32 * warp + lane) % TW;
   u32 t[NL];
-  tweak(base + (q0 + (u64)i * gq) * TW + w, t);
-  if constexpr (K == 1) {
+  if constexpr (!FRESH) tweak(base + (q0 + (u64)i * gq) * TW + w, t);
+  if constexpr (K == 1 && !FRESH) {
     u32 wn[NL];
     w_of(t, wn);
     copy(t, wn);
@@ -1829,7 +1941,8 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
     if (on) {
       load_word_smem(st + w * S, yw);
       if constexpr (PAY_E > 0) mbar_arrive(loaded + s);
-      if constexpr (K == 1) decode_word_w(yw, t);
+      if constexpr (FRESH) decode_word_fresh(yw, base + (q0 + (u64)i * gq) * TW + w);
+      else if constexpr (K == 1) decode_word_w(yw, t);
       else decode_word<K>(yw, t);
     }
     if constexpr (PAY_E == 0) {
@@ -1851,12 +1964,14 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
       }
     }
     const bool wrap = w + rem >= TW;
-    u32 step[NL], t2[NL];
+    if constexpr (!FRESH) {
+      u32 step[NL], t2[NL];
 #pragma unroll
-    for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + (wrap ? NL : 0) + k);
-    if constexpr (K == 1) submod_cc(t, step, t2);
-    else addmod(t, step, t2);
-    copy(t, t2);
+      for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + (wrap ? NL : 0) + k);
+      if constexpr (K == 1) submod_cc(t, step, t2);
+      else addmod(t, step, t2);
+      copy(t, t2);
+    }
     w += wrap ? rem - TW : rem;
     i += wrap ? adv + 1 : adv;
   }
