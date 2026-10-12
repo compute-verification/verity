@@ -29,7 +29,7 @@ gates off `V i` depend on no coin of protocol `i`: all accept and some `E i` fai
 (`x ↦ S (update r i x)` at `r i`), for at most a `∑ δ i` fraction of the coins. -/
 def Composition : Prop :=
   ∀ {L : Type*} [LinearOrder L] {k : ℕ} (Ω : Fin k → Type) [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
-    (𝓕 : Set (Actual.Run L)) (V : Fin k → Finset L) (acc : Fin k → Set (ℕ × L × ℕ × ℕ) → Prop)
+    (𝓕 : Set (Actual.Run L)) (V : Fin k → Finset L) (acc : Fin k → Set (ℕ × L × ℕ × ℕ × ℕ) → Prop)
     (E : (i : Fin k) → (Ω i → Actual.Run L) → Ω i → Prop) (δ : Fin k → ℝ) (S : ((i : Fin k) → Ω i) → Actual.Run L),
     (∀ i, Sound (Ω i) 𝓕 (V i) (acc i) (E i) (δ i)) → (∀ r, S r ∈ 𝓕) → CausalFrom S →
     (∀ i r r', (∀ j, j ≠ i → r j = r' j) → (S r).inputs (↑(V i))ᶜ = (S r').inputs (↑(V i))ᶜ) →

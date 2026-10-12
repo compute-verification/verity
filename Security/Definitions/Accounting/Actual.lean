@@ -8,9 +8,11 @@ import Mathlib.Order.Interval.Set.Defs
 
 The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2), section 2. The *actual circuit* of a run is
 the circuit of everything the hardware did (`Verity.Circuit`): a gate for each operation, a wire for each dependence,
-and each gate placed at a leaf `x g` of the tree of locations and a tick `t g` (`Placed`). A location is a set of leaves
-(`Finset L`); the tree is laminar and never needed explicitly. Its input gates are the values that existed before the
-run, such as stored weights and the prover's secrets (the model places them at tick 0; nothing here needs it).
+and each gate placed at a leaf `x g` of the tree of locations, a cell `cell g` of that leaf and a tick `t g` (`Placed`;
+the cell is v2.5's: a leaf's memory is its cells, a program reads cells, and a cell takes at most one gate a tick). A
+location is a set of leaves (`Finset L`); the tree is laminar and never needed explicitly. Its input gates are the
+values that existed before the run, such as stored weights and the prover's secrets (the model places them at tick 0;
+nothing here needs it).
 
 For a location `X` and a set `I` of ticks (an interval `[a, b)`, `Set.Ico a b`, or `[t, ∞)`, `Set.Ici t`):
 * `region X I`: `A[X, I]`, the computed gates placed in `X` during `I`. Input gates are in no region, as they are in no
@@ -37,12 +39,17 @@ namespace Accounting
 
 open Verity Finset
 
-/-- **An actual circuit**: a circuit, each gate `g` placed at a leaf `x g` of the tree of locations and a tick `t g`. -/
+/-- **An actual circuit**: a circuit, each gate `g` placed at a leaf `x g` of the tree of locations, a cell `cell g`
+of that leaf and a tick `t g`, a cell taking at most one gate a tick. -/
 structure Placed (L : Type*) extends Circuit where
   /-- The leaf at which gate `g` ran. -/
   x : Fin N → L
   /-- The tick at which gate `g` ran. -/
   t : Fin N → ℕ
+  /-- The cell of its leaf at which gate `g` ran (v2.5). -/
+  cell : Fin N → ℕ
+  /-- A cell takes at most one gate a tick. -/
+  cell_inj : Function.Injective fun g => (x g, cell g, t g)
 
 namespace Placed
 

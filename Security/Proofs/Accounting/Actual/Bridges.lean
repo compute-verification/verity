@@ -162,7 +162,7 @@ theorem workIn_add_le {L : Type*} (ρ : Actual.Run L) (π : Fin ρ.A.N → ℕ) 
 
 /-- `CM_A`'s programs reach the oracle only through counted queries, the hash's gates: a prover carries it. -/
 theorem costModel_queries (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] (𝓕 : Set (Actual.Run L))
-    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ) → Pouw.Transcript)
+    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ) :
     (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).Queries :=
   fun P U act σ s => P.queries U act σ s
@@ -202,7 +202,7 @@ theorem prover_cost_window {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L]
 itself is the program `HonestClock` asks for. Its cost, the prover's work in `[tₛ + ℓ, t_d − ℓ)`, is at most what
 the run spends in `(tₛ, td]`, the prover's work placed in `[tₛ, td)`. -/
 theorem honestClock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)} {V : Finset L}
-    {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ) → Pouw.Transcript}
+    {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript}
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ} (hst : tₛ ≤ t_d)
     (U : Pouw.Workload) (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) {td : ℝ}
     (htd : (t_d : ℝ) ≤ td) :
@@ -235,9 +235,9 @@ theorem B4 : Guarantees.B4 := by
     · simp [hO, hy]
   let K := (Finset.Ico a b).image bucket
   let B := Actual.uncertified ends cert X
-  let sig : ↥B × ↥(Finset.Ico a b) → Ω → Set (ℕ × L × ℕ × ℕ) := fun i r =>
+  let sig : ↥B × ↥(Finset.Ico a b) → Ω → Set (ℕ × L × ℕ × ℕ × ℕ) := fun i r =>
     (S r).signal (link r) i.1 (Actual.outer ends X i.1) i.2
-  let rec_ : Ω → Set (ℕ × L × ℕ × ℕ) := fun r =>
+  let rec_ : Ω → Set (ℕ × L × ℕ × ℕ × ℕ) := fun r =>
     (S r).seen '' ↑((record r).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)
   have hfac : ∀ r r', (rec_ r, (fun k : ↥K => J r k), fun i => sig i r) =
       (rec_ r', (fun k : ↥K => J r' k), fun i => sig i r') →

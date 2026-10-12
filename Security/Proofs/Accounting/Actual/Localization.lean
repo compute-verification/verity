@@ -135,7 +135,7 @@ theorem memory_of_mem {L : Type*} {R : Actual.Run L} {𝒳 : Set (Finset L)} {M 
 
 /-- The actual circuit of memory accounting's `not_markov` at coin `b`, over leaves `true` (the verifier) and `false`
 (`X`): the verifier's input `g0` and its copy `g1` at tick 0, `g2` at `X` at tick 1 reading `g1`, and `g3` at `X` at
-tick 3, reading nothing, with value `b`. -/
+tick 3, reading nothing, with value `b`; gate `gi` in cell `i`. -/
 abbrev markovPlaced (b : Bool) : Placed Bool where
   N := 4
   w _ := 1
@@ -148,6 +148,8 @@ abbrev markovPlaced (b : Bool) : Placed Bool where
   outputs := ∅
   x g := decide (g.val < 2)
   t g := if g.val = 2 then 1 else if g.val = 3 then 3 else 0
+  cell g := g.val
+  cell_inj _ _ h := Fin.ext (congrArg (fun p => p.2.1) h)
 
 /-- Its run at coin `b`, every gate's value `b`, with what each leaf holds given by `held`. -/
 abbrev markovRun (b : Bool) (held : Bool → ℕ → Finset (Fin 4)) (h : (markovPlaced b).Holding held) :
@@ -179,7 +181,7 @@ theorem markov_mem (held : Bool → Bool → ℕ → Finset (Fin 4)) (h : ∀ b,
     fin_cases g <;> fin_cases a <;> simp_all
   have key := congrArg Prod.fst
     (hc {false} 2 4 false true (by simp only [Actual.Run.content, hs, image_empty, sort_empty]) (by simp only [hx]))
-  have : ((3 : ℕ), false, 1, 1) ∈ ((markovRun true (held true) (h true)).acts ↑({false} : Finset Bool)
+  have : ((3 : ℕ), false, 3, 1, 1) ∈ ((markovRun true (held true) (h true)).acts ↑({false} : Finset Bool)
       (Set.Ico 2 4)).1 := ⟨3, by simp, by simp, rfl⟩
   rw [← key] at this
   obtain ⟨g, hg, ht, he⟩ := this
@@ -195,9 +197,78 @@ theorem markov_holding (b : Bool) :
   · fin_cases a <;> simp_all
   · fin_cases g <;> fin_cases a <;> simp_all
 
+/-- The honest location of the 09:35Z `MODEL:` line, at one leaf: the inputs `g0` and `g1` at tick 0, in cells 0 and
+1, and `g2` at tick 1, in cell 2, computing `g0 ∧ ¬g1`. -/
+abbrev andPlaced : Placed Unit where
+  N := 3
+  w _ := 1
+  isInput g := decide (g.val < 2)
+  reads g := if g = 2 then {0, 1} else ∅
+  reads_lt g a ha := by fin_cases g <;> fin_cases a <;> simp_all
+  input_reads g hg := by fin_cases g <;> simp_all
+  op g v := if g = 2 then BitVec.ofBool ((v 0).getLsbD 0 && !(v 1).getLsbD 0) else 0
+  op_congr g v v' h := by fin_cases g <;> simp_all
+  outputs := ∅
+  x _ := ()
+  t g := if g.val = 2 then 1 else 0
+  cell g := g.val
+  cell_inj _ _ h := Fin.ext (congrArg (fun p => p.2.1) h)
+
+/-- Its run at coins `c = (a, b)`, the inputs held through tick 1. -/
+abbrev andRun (c : Bool × Bool) : Actual.Run Unit where
+  A := andPlaced
+  val g := BitVec.ofBool (if g.val = 0 then c.1 else if g.val = 1 then c.2 else c.1 && !c.2)
+  faithful g hg := by fin_cases g <;> simp_all
+  held _ t := if t ≤ 1 then {0, 1} else ∅
+  holding := by
+    refine ⟨fun y t a ha => ?_, fun a ha => ?_, fun g a ha _ s _ hs => ?_⟩
+    · simp only at ha
+      split_ifs at ha <;> fin_cases a <;> simp_all
+    · fin_cases a <;> simp_all
+    · fin_cases g <;> fin_cases a <;> simp_all
+
+/-- Through tick 1 its content is `[a, b]`: the inputs, in the order of their cells. -/
+theorem and_content (c : Bool × Bool) {t : ℕ} (ht : t ≤ 1) : (andRun c).content univ t = [c.1, c.2] := by
+  obtain ⟨a, b⟩ := c
+  have hs : (andRun (a, b)).state univ t = {0, 1} := by
+    ext g
+    simp only [Actual.Run.state, Placed.region, Verity.Circuit.into, Verity.Circuit.computed, mem_filter, mem_univ,
+      true_and, Set.mem_Ici]
+    fin_cases g <;> simp_all
+  rw [Actual.Run.content, hs, image_insert, image_singleton, image_insert, image_singleton,
+    sort_insert (h₁ := fun p hp => by
+      rw [mem_singleton.1 hp]
+      exact Prod.Lex.toLex_le_toLex.2 (Or.inr ⟨rfl, Prod.Lex.toLex_le_toLex.2 (Or.inl Nat.zero_lt_one)⟩))
+      (h₂ := by simp [Actual.position, Actual.Run.seen]), sort_singleton]
+  cases a <;> cases b <;> rfl
+
+/-- **The honest location is causal** (v2.5): `g0` and `g1` are in different cells, so the coins `(0, 1)` and
+`(1, 0)` have contents `[false, true]` and `[true, false]`, and the strategy running it at each coin is causal from
+every tick. Without cells, the content order put them by value, alike at those coins, while `g2` tells them apart. -/
+theorem and_causal : CausalFrom andRun := by
+  intro X t u r r' hc _
+  rcases X.eq_empty_or_nonempty with rfl | ⟨⟨⟩, hx⟩
+  · simp [Actual.Run.acts, Actual.Run.sent]
+  · obtain rfl : X = univ := eq_univ_iff_forall.2 fun _ => hx
+    by_cases ht : t ≤ 1
+    · rw [and_content r ht, and_content r' ht] at hc
+      simp only [List.cons.injEq, and_true] at hc
+      rw [Prod.ext hc.1 hc.2]
+    · have h0 : ∀ c, (andRun c).acts ↑(univ : Finset Unit) (Set.Ico t u) = (∅, ∅, ∅) := fun c => by
+        simp only [Actual.Run.acts, Actual.Run.sent, Prod.mk.injEq]
+        refine ⟨?_, ?_, ?_⟩ <;> ext p <;> simp only [Set.mem_ofPred_eq, Set.mem_empty_iff_false, iff_false]
+        · rintro ⟨g, -, hg, -⟩
+          fin_cases g <;> simp_all [Set.mem_Ico]; omega
+        · rintro ⟨g, a, -, -, hg, -⟩
+          exact hg (mem_univ _)
+        · rintro ⟨y, v, a, -, hv, ha, -⟩
+          simp only [Set.mem_Ico] at hv
+          simp [show ¬v + 1 ≤ 1 by omega] at ha
+      rw [h0 r, h0 r']
+
 /-- The actual circuit of memory accounting's `zero_link` at coin `b`, over leaves `true` (the verifier) and `false`
 (`X`): the verifier's input `g0` at tick 0, `g1` at the verifier of width 0 at tick `b`, reading `g0`, and `g2` at `X`
-at tick 3, reading `g1`. Every gate is `b` at its width. -/
+at tick 3, reading `g1`. Every gate is `b` at its width; gate `gi` in cell `i`. -/
 abbrev zeroPlaced (b : Bool) : Placed Bool where
   N := 3
   w g := if g.val = 1 then 0 else 1
@@ -210,6 +281,8 @@ abbrev zeroPlaced (b : Bool) : Placed Bool where
   outputs := ∅
   x g := decide (g.val < 2)
   t g := if g.val = 1 then b.toNat else if g.val = 2 then 3 else 0
+  cell g := g.val
+  cell_inj _ _ h := Fin.ext (congrArg (fun p => p.2.1) h)
 
 /-- Its run at coin `b`, with what each leaf holds given by `held`. -/
 abbrev zeroRun (b : Bool) (held : Bool → ℕ → Finset (Fin 3)) (h : (zeroPlaced b).Holding held) :
@@ -244,7 +317,7 @@ theorem zero_link_alphabet (held : Bool → Bool → ℕ → Finset (Fin 3)) (h 
   have hle : (Set.range fun b => (zeroRun b (held b) (h b)).signal (fun _ _ => ()) () false 3).encard ≤ 1 := by
     simpa using hA () false 3
   have h1 := Set.encard_le_one_iff.1 hle _ _ (Set.mem_range_self false) (Set.mem_range_self true)
-  have : ((0 : ℕ), true, 0, 0) ∈ (zeroRun false (held false) (h false)).signal (fun _ _ => ()) () false 3 :=
+  have : ((0 : ℕ), true, 1, 0, 0) ∈ (zeroRun false (held false) (h false)).signal (fun _ _ => ()) () false 3 :=
     ⟨2, 1, by simp, by simp, rfl, by simp, by simp, rfl⟩
   rw [h1] at this
   obtain ⟨g, a, ha, -, -, hg, ht, he⟩ := this
@@ -262,8 +335,8 @@ theorem Localization : Guarantees.Localization := by
     intro u hu r r' hx
     refine Actual.global_of_causal hc Y hin u r r' ?_
     rw [Actual.crossing_split (S r) hXY hu, Actual.crossing_split (S r') hXY hu, hpre r r', hx, hv r r']
-  have table : ∀ u ≤ t₁, ∃ T : Set (ℕ × L × ℕ × L × ℕ × ℕ) →
-      Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ),
+  have table : ∀ u ≤ t₁, ∃ T : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) →
+      Set (ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ × ℕ),
       ∀ r, (S r).acts ↑Y (Set.Iio u) = T ((S r).crossing ↑X ↑Y (Set.Ico t₀ u)) := by
     intro u hu
     have hf : Function.FactorsThrough (fun r => (S r).acts ↑Y (Set.Iio u))

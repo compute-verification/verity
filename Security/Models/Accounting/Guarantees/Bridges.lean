@@ -31,7 +31,7 @@ a program is a prover, a strategy with runs in `𝓕` causal from every tick who
 (`Accounting.SecurityProofs.Actual.honestClock`), `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline` then bounds the
 work between the salt and the deadline. -/
 def B1 (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : Type} [LinearOrder L] [Fintype L]
-    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ) → Pouw.Transcript)
+    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ)
     (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   Pouw.Assumptions.TT (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π) P D γ₀ ε

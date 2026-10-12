@@ -24,7 +24,8 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   the window's start and what it hears from the verifier fixed, what the rest does is a prefix-causal table keyed by
   what `X` sent it, of at most `2^e` entries; `localization_wires`, the per-run lemma on wires; memory per run on the
   state bounds the circuit's `state` (`memory_of_mem`), and binds on memory accounting's `not_markov` circuit
-  (`markov_mem`); `Recall`, B2's count: what a location does is a function of its state's content, at most `mem`
+  (`markov_mem`), and admits the honest location that holds two inputs in two cells and computes `a ∧ ¬b`
+  (`and_causal`); `Recall`, B2's count: what a location does is a function of its state's content, at most `mem`
   bits; `zero_link` fails `Alphabet` at capacity 0 while meeting `Links` (`zero_link_alphabet`, `zero_links`).
 * `Actual/Device.lean`: the bridge to the device model: the schedule a run induces, its chip and memory charges what
   those locations hold, fits the device (`fits`, `fits_of_feasible`) and charges what an account's gates use
