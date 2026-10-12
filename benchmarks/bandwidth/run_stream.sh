@@ -51,7 +51,8 @@ if [ "${1:-}" = leased ]; then
   if [ -n "${MPS:-}" ]; then
     command -v nvidia-cuda-mps-control > /dev/null || { echo "REFUSED: MPS=1 but no nvidia-cuda-mps-control"; exit 3; }
     export MPSDIR=$S/mps-pipe MPSLOG=$S/mps-log; mkdir -p "$MPSDIR" "$MPSLOG"
-    CUDA_MPS_PIPE_DIRECTORY=$MPSDIR CUDA_MPS_LOG_DIRECTORY=$MPSLOG ${MPS_CPUS:+taskset -c "$MPS_CPUS"} nvidia-cuda-mps-control -d
+    CUDA_VISIBLE_DEVICES=$UUID CUDA_MPS_PIPE_DIRECTORY=$MPSDIR CUDA_MPS_LOG_DIRECTORY=$MPSLOG \
+      ${MPS_CPUS:+taskset -c "$MPS_CPUS"} nvidia-cuda-mps-control -d
     trap 'echo quit | CUDA_MPS_PIPE_DIRECTORY=$MPSDIR nvidia-cuda-mps-control; sleep 1; cp "$MPSLOG"/*.log "$O"/ 2> /dev/null;
           nvidia-smi -i "$UUID" --query-compute-apps=pid,process_name,used_memory --format=csv > "$O/mps_after.txt" 2>&1;
           kill $SMI 2> /dev/null || true' EXIT
@@ -60,7 +61,10 @@ if [ "${1:-}" = leased ]; then
   IFS=';' read -ra extra <<< "${WINDOWS_ALSO:-}"
   for e in "${extra[@]}"; do
     args=${e#*:}; args=${args//@MPS@/${MPSDIR:-}}
-    "$S/bwstream" --mode window "${common[@]}" --suffix "${e%%:*}" $args || { rc=$?; echo "window ${e%%:*} exited $rc"; exit $rc; }
+    # an MPS client names its GPU within the server's visible set, where the leased GPU is device 0
+    cvd=$CUDA_VISIBLE_DEVICES; [[ $args == *--mps-dir* ]] && cvd=0
+    CUDA_VISIBLE_DEVICES=$cvd "$S/bwstream" --mode window "${common[@]}" --suffix "${e%%:*}" $args ||
+      { rc=$?; echo "window ${e%%:*} exited $rc"; exit $rc; }
   done
   exit 0
 fi
