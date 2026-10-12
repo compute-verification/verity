@@ -1,9 +1,10 @@
 """`pous-run` (`PousCheck.Run`) against `run.check_at`, through the core difftest harness: the outcome, its reason word for
 word, on runs drawn at reduced points (a setup's public outputs, the table of `C*`'s row digests, one session the memory
-challenger signed bound to the setup's root), honest and under one edit of the setup, the table, the point or the session,
-the session edits among them every one of `mc_cases.MUTATIONS`, and runs whose JSON is not exactly what it decodes to.
-Then `pous-run SETUP.json DIGESTS.bin SESSION.json`, the deployed check, on a run at the deployed point signed by a key at
-S1's deployed parameters: both accept it, and both refuse it once one row of the table is another."""
+challenger signed bound to the setup's root, the id the auditor designated), honest and under one edit of the setup, the
+table, the point, the session or the designated id, the session edits among them every one of `mc_cases.MUTATIONS`, and runs
+whose JSON is not exactly what it decodes to. Then `pous-run SETUP.json DIGESTS.bin SESSION.json SESSION_ID`, the deployed
+check, on a run at the deployed point signed by a key at S1's deployed parameters: both accept it, and both refuse it once
+one row of the table is another or the designated id is another."""
 
 from __future__ import annotations
 
@@ -48,6 +49,7 @@ class Run:
     setup: run.Setup
     session: M.Session
     schemes: tuple[str, ...]
+    session_id: bytes
 
     @property
     def digests(self) -> bytes:
@@ -58,7 +60,7 @@ class Run:
         return {"point": {"params": {"blocks_per_segment": q.blocks_per_segment, "c0": q.c0, "segments": q.segments, "w": q.w},
                           "k": self.point.k, "limit_ns": self.point.limit_ns},
                 "schemes": list(self.schemes), "setup": self.setup.to_json(), "digests": self.digests.hex(),
-                "session": session_of(self.session).to_json()}
+                "session": session_of(self.session).to_json(), "session_id": self.session_id.hex()}
 
 
 def session_of(s: M.Session) -> run.Session:
@@ -72,7 +74,7 @@ def rows_of(q: P2.P2Params, tag: int) -> tuple[bytes, ...]:
 @st.composite
 def runs(draw, signer: M.AtLeaf | None = None) -> Run:
     """An honest run: a setup at a drawn reduced point, the memory challenger's session over its `C*` (some rounds late, some
-    answers tampered) at the point's `k`, a limit within the point's, bound to the setup's root."""
+    answers tampered) at the point's `k`, a limit within the point's, bound to the setup's root, under the designated id."""
     w, c0 = draw(st.sampled_from(WIDTHS))
     q = P2.P2Params(w, c0, draw(st.integers(1, 4)), draw(st.integers(1, 3)))
     k, limit = draw(st.integers(1, 4)), draw(st.integers(2, 10 ** 6))
@@ -92,7 +94,8 @@ def runs(draw, signer: M.AtLeaf | None = None) -> Run:
     spends = draw(st.lists(st.sampled_from([0, 1, session_limit, session_limit + 1]), min_size=k, max_size=k))
     tampered = draw(st.sets(st.integers(0, k - 1), max_size=1))
     clock = M.Clock(draw(st.integers(0, 2 ** 40)))
-    c = mc.MemoryChallenger(tree, signer, limit_ns=session_limit, block_bytes=q.block_bytes, binding=root, clock=clock)
+    c = mc.MemoryChallenger(tree, signer, log=M.ts.session_log(), limit_ns=session_limit, block_bytes=q.block_bytes,
+                            binding=root, clock=clock)
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()
@@ -100,7 +103,7 @@ def runs(draw, signer: M.AtLeaf | None = None) -> Run:
         b = M.block(tag * 1000 + i, q.block_bytes)
         c.receive(b[:-1] + bytes([b[-1] ^ 1]) if j in tampered else b)
     s = M.Session(c.close(), c.commitment, c.openings(), rows, (signer.public_key,), signer)
-    return Run(point, setup, s, draw(st.sampled_from([(signer.scheme,), (signer.scheme, mc.LMS), (mc.LMS,)])))
+    return Run(point, setup, s, draw(st.sampled_from([(signer.scheme,), (signer.scheme, mc.LMS), (mc.LMS,)])), session_id)
 
 
 def _published(r: Run, **edits) -> Run:
@@ -157,6 +160,9 @@ RUN_MUTATIONS = [
     lambda r, x: dataclasses.replace(r, session=dataclasses.replace(r.session, trusted=r.session.trusted * 2)),
     lambda r, x: dataclasses.replace(r, schemes=()),
     lambda r, x: dataclasses.replace(r, schemes=tuple(KNOWN)),
+    lambda r, x: dataclasses.replace(r, session_id=hashlib.sha512(b"another session %d" % (x % 3)).digest()[:32]),
+    lambda r, x: dataclasses.replace(r, session_id=r.session_id[:-1 - x % 32]),
+    lambda r, x: _published(r, session=hashlib.sha512(b"another session %d" % (x % 3)).digest()[:32]),
 ]
 #: The memory challenger's session edits, each reason printable (`test_verdict.records`).
 SESSION_MUTATIONS = [M._printable_scheme if m is M._scheme else m for m in M.MUTATIONS]
@@ -180,6 +186,8 @@ JSON_MUTATIONS = [
     _edit((), lambda j, x: j | {"digests": j["digests"].upper() or "A"}),
     _edit((), lambda j, x: j | {"digests": j["digests"] + "0"}),
     _edit((), lambda j, x: {k: v for k, v in j.items() if k != sorted(j)[x % len(j)]}),
+    _edit((), lambda j, x: j | {"session_id": j["session_id"].upper()}),
+    _edit((), lambda j, x: j | {"session_id": j["session_id"] + "0"}),
     _edit(("session",), lambda s, x: s | {"extra": x}),
     _edit(("session",), lambda s, x: {k: v for k, v in s.items() if k != sorted(s)[x % len(s)]}),
     _edit(("session",), lambda s, x: s | {"trusted": [t.upper() for t in s["trusted"]] or ["A"]}),
@@ -221,8 +229,9 @@ def reference(j: Any) -> dict:
     setup = M._exactly(_decode_setup, M._get(j, "setup"))
     digests = M.hex_(j, "digests")
     session = M._exactly(_decode_session, M._get(j, "session"))
+    session_id = M.hex_(j, "session_id")
     try:
-        run.check_at(point, {i: KNOWN[i] for i in ids}, setup, digests, session)
+        run.check_at(point, {i: KNOWN[i] for i in ids}, setup, digests, session, session_id)
     except run.Refused as e:
         return {"accepted": False, "reason": str(e)}
     return {"accepted": True}
@@ -268,7 +277,8 @@ def test_run_agrees(server):
 
 def test_named_runs_agree(server):
     """An honest run accepted, and one run under each run edit, through the port: the Lean's outcome is the Python's, and
-    each edit is refused for a reason of the check's own before the verdict, or by the verdict."""
+    each edit is refused for a reason of the check's own before the verdict, or by the verdict; the designated id's edits,
+    and a session published under another id, for the id's reason."""
     p = port(st.none())
     r = _named(M.test_signer(M.SECRETS[0], 1, 0))
     assert D.replay(p, r.doc(), server) == ("output", D.canonical({"accepted": True}))
@@ -279,7 +289,8 @@ def test_named_runs_agree(server):
         reasons[i] = json.loads(out[1]).get("reason")
     accepted = {i for i, why in reasons.items() if why is None}
     assert accepted == {15, 21, 23}, reasons
-    assert len(set(reasons.values())) >= 14, reasons
+    assert len(set(reasons.values())) >= 15, reasons
+    assert {reasons[i] for i in (24, 25, 26)} == {"the session does not run under the id the auditor designated"}, reasons
 
 
 def _named(signer: M.AtLeaf) -> Run:
@@ -291,13 +302,14 @@ def _named(signer: M.AtLeaf) -> Run:
     root = VerifierKey.from_row_digests(q, salt, list(rows)).root
     tree = mc.CoinTree.draw(b"named source", bytes(32), q.blocks, 3, key=M.COIN_KEYS[0], salts=[bytes([j]) * 192 for j in range(3)])
     clock = M.Clock(1_000)
-    c = mc.MemoryChallenger(tree, signer, limit_ns=1_000, block_bytes=q.block_bytes, binding=root, clock=clock)
+    c = mc.MemoryChallenger(tree, signer, log=M.ts.session_log(), limit_ns=1_000, block_bytes=q.block_bytes, binding=root,
+                            clock=clock)
     while not c.done:
         i = c.challenge()
         clock.now += 10
         c.receive(M.block(i, q.block_bytes))
     s = M.Session(c.close(), c.commitment, c.openings(), rows, (signer.public_key,), signer)
-    return Run(point, run.Setup(q.blocks, bytes(64), root, salt), s, (signer.scheme,))
+    return Run(point, run.Setup(q.blocks, bytes(64), root, salt), s, (signer.scheme,), bytes(32))
 
 
 def _deployed_run(tmp: Path, tampered: int | None = None) -> tuple[Path, Path, Path, run.Setup, bytes, run.Session]:
@@ -315,7 +327,8 @@ def _deployed_run(tmp: Path, tampered: int | None = None) -> tuple[Path, Path, P
         rows[i] = mc.block_digest(M.block(i, q.block_bytes))
     root = VerifierKey.from_row_digests(q, salt, rows).root
     signer, clock = M.deployed_signer(), M.Clock(10 ** 9)
-    c = mc.MemoryChallenger(tree, signer, limit_ns=d.limit_ns, block_bytes=q.block_bytes, binding=root, clock=clock)
+    c = mc.MemoryChallenger(tree, signer, log=M.ts.session_log(), limit_ns=d.limit_ns, block_bytes=q.block_bytes,
+                            binding=root, clock=clock)
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()
@@ -332,9 +345,9 @@ def _deployed_run(tmp: Path, tampered: int | None = None) -> tuple[Path, Path, P
     return *paths, setup, digests, session
 
 
-def _python_outcome(setup: run.Setup, digests: bytes, session: run.Session) -> dict:
+def _python_outcome(setup: run.Setup, digests: bytes, session: run.Session, session_id: bytes) -> dict:
     try:
-        run.check(setup, digests, session)
+        run.check(setup, digests, session, session_id)
     except run.Refused as e:
         return {"accepted": False, "reason": str(e)}
     return {"accepted": True}
@@ -342,19 +355,28 @@ def _python_outcome(setup: run.Setup, digests: bytes, session: run.Session) -> d
 
 @pytest.mark.slow
 def test_the_deployed_check_agrees_from_its_files(tmp_path):
-    """`pous-run`'s three files at the deployed point (`2^19` rows, `k = 105`, S1's LMS at its deployed parameters):
-    `PousCheck.Run.check` and `run.check` accept the honest run and refuse, for the same reason, the run one of whose answers
-    is not its block. What `test_run_agrees` can't: that `check` itself, not `checkAt` at a drawn point, is the deployed
-    point under `SCHEMES`, in Lean."""
+    """`pous-run`'s three files and the designated id at the deployed point (`2^19` rows, `k = 105`, S1's LMS at its deployed
+    parameters): `PousCheck.Run.check` and `run.check` accept the honest run and refuse, for the same reason, the run one of
+    whose answers is not its block and the honest run under another designated id; `pous-run` refuses an id that is not
+    lowercase hex. What `test_run_agrees` can't: that `check` itself, not `checkAt` at a drawn point, is the deployed point
+    under `SCHEMES`, in Lean."""
     exe = D.build(LEAN, "pous-run")
+    another = hashlib.sha512(b"another deployed session").digest()[:32]
     for tampered in (None, 7):
         sub = tmp_path / str(tampered)
         sub.mkdir()
-        setup_path, digests_path, session_path, *args = _deployed_run(sub, tampered)
-        python = _python_outcome(*args)
-        assert python == ({"accepted": True} if tampered is None else
-                          {"accepted": False, "reason": "1 answers are not their blocks of C"}), python
-        out = subprocess.run([str(exe), str(setup_path), str(digests_path), str(session_path)], capture_output=True, text=True,
-                             check=False)
-        assert out.returncode == (0 if tampered is None else 1), out.stderr
-        assert out.stdout == D.canonical(python) + "\n"
+        setup_path, digests_path, session_path, setup, digests, session = _deployed_run(sub, tampered)
+        files = [str(exe), str(setup_path), str(digests_path), str(session_path)]
+        designated = session.commitment.session
+        expect = {designated: "1 answers are not their blocks of C"} if tampered is not None else {
+            designated: None, another: "the session does not run under the id the auditor designated"}
+        for sid, reason in expect.items():
+            python = _python_outcome(setup, digests, session, sid)
+            assert python == ({"accepted": True} if reason is None else {"accepted": False, "reason": reason}), python
+            out = subprocess.run([*files, sid.hex()], capture_output=True, text=True, check=False)
+            assert out.returncode == (0 if python["accepted"] else 1), out.stderr
+            assert out.stdout == D.canonical(python) + "\n"
+        if tampered is None:
+            out = subprocess.run([*files, designated.hex().upper()], capture_output=True, text=True, check=False)
+            assert (out.returncode, out.stdout) == (1, D.canonical({"accepted": False, "reason": "session id: not lowercase hex"})
+                                                    + "\n"), out

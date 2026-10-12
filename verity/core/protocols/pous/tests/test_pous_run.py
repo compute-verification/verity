@@ -1,6 +1,7 @@
-"""`run.check`, the composed check of a recorded PoUS run: an honest run at a reduced point is accepted, each refusal is the
-first that applies, its reason word for word, and `check` is `check_at` at the deployed point under S1's LMS.  Every clock is
-injected."""
+"""`run.check`, the composed check of a recorded PoUS run: an honest run at a reduced point is accepted under the id the
+auditor designated, each refusal is the first that applies, its reason word for word, an audit has at most one session the
+check accepts, and `check` is `check_at` at the deployed point under S1's LMS.  Every clock is injected, and every session
+log is a temporary file."""
 from __future__ import annotations
 
 import dataclasses
@@ -29,6 +30,8 @@ DIGESTS = b"".join(ROWS)
 ROOT = VerifierKey.from_row_digests(Q, SALT, ROWS).root
 SETUP = run.Setup(Q.blocks, hashlib.sha512(b"the commitment to W").digest(), ROOT, SALT)
 OTHER_ROOT = VerifierKey.from_row_digests(Q, bytes(run.SALT_BYTES), ROWS).root
+SID = hashlib.sha512(b"session").digest()[:32]
+OTHER_SID = hashlib.sha512(b"another session").digest()[:32]
 
 
 class Clock:
@@ -40,12 +43,14 @@ class Clock:
 
 
 def session(*, blocks: int = Q.blocks, k: int = POINT.k, limit_ns: int = POINT.limit_ns, block_bytes: int = Q.block_bytes,
-            binding: bytes = ROOT, spend: int = 10, respond=None, signer=None) -> run.Session:
+            binding: bytes = ROOT, sid: bytes = SID, spend: int = 10, respond=None, signer=None,
+            log: mc.SessionLog | None = None) -> run.Session:
     signer = signer or ts.TestSigner(b"run challenger", height=1)
-    tree = mc.CoinTree.draw(b"source", hashlib.sha512(b"session").digest()[:32], blocks, k, key=KEY,
+    tree = mc.CoinTree.draw(b"source", sid, blocks, k, key=KEY,
                             salts=[hashlib.sha512(b"salt%d" % j).digest() * 3 for j in range(k)])
     clock = Clock()
-    c = mc.MemoryChallenger(tree, signer, limit_ns=limit_ns, block_bytes=block_bytes, binding=binding, clock=clock)
+    c = mc.MemoryChallenger(tree, signer, log=log or ts.session_log(), limit_ns=limit_ns, block_bytes=block_bytes,
+                            binding=binding, clock=clock)
 
     def answer(i: int) -> bytes:
         clock.now += spend
@@ -56,9 +61,9 @@ def session(*, blocks: int = Q.blocks, k: int = POINT.k, limit_ns: int = POINT.l
 
 
 def outcome(setup: run.Setup = SETUP, digests: bytes = DIGESTS, s: run.Session | None = None, point: run.Point = POINT,
-            schemes=ts.SCHEMES) -> str | None:
+            schemes=ts.SCHEMES, session_id: bytes = SID) -> str | None:
     try:
-        run.check_at(point, schemes, setup, digests, s or session())
+        run.check_at(point, schemes, setup, digests, s or session(), session_id)
     except run.Refused as e:
         return str(e)
     return None
@@ -95,9 +100,25 @@ def test_each_refusal_is_the_first_that_applies():
         "block bytes": (dict(s=session(block_bytes=2 * Q.block_bytes)),
                         f"the session's answers are {2 * Q.block_bytes} bytes, not the point's {Q.block_bytes}"),
         "binding": (dict(s=session(binding=OTHER_ROOT)), "the session is not bound to the root the setup published"),
+        "another session's id": (dict(s=session(sid=OTHER_SID)),
+                                 "the session does not run under the id the auditor designated"),
+        "another designated id": (dict(session_id=OTHER_SID),
+                                  "the session does not run under the id the auditor designated"),
+        "a short designated id": (dict(session_id=SID[:31]),
+                                  "the session does not run under the id the auditor designated"),
     }
     for name, (kw, reason) in cases.items():
         assert outcome(**kw) == reason, name
+
+
+def test_an_audit_has_at_most_one_session_the_check_accepts():
+    """The device refuses a second session under the designated id, so the only other sessions it can sign run under other
+    ids, which the check refuses."""
+    log = ts.session_log()
+    assert outcome(s=session(log=log)) is None
+    with pytest.raises(mc.SessionLogError, match="the memory challenger runs one session under an id"):
+        session(log=log)
+    assert outcome(s=session(sid=OTHER_SID, log=log)) == "the session does not run under the id the auditor designated"
 
 
 def test_the_verdict_refuses_last():
@@ -137,7 +158,8 @@ def test_check_is_the_deployed_point_under_s1s_lms():
     root = VerifierKey.from_row_digests(q, SALT, rows).root
     setup = run.Setup(q.blocks, SETUP.commitment, root, SALT)
     signer, clock = ts.TestSigner(b"deployed challenger", height=1), Clock()
-    c = mc.MemoryChallenger(tree, signer, limit_ns=d.limit_ns, block_bytes=q.block_bytes, binding=root, clock=clock)
+    c = mc.MemoryChallenger(tree, signer, log=ts.session_log(), limit_ns=d.limit_ns, block_bytes=q.block_bytes, binding=root,
+                            clock=clock)
 
     def answer(i: int) -> bytes:
         clock.now += 20_000
@@ -145,8 +167,8 @@ def test_check_is_the_deployed_point_under_s1s_lms():
 
     s = run.Session(c.run(answer), c.commitment, c.openings(), (signer.public_key,))
     table = b"".join(rows)
-    run.check_at(d, ts.SCHEMES, setup, table, s)
+    run.check_at(d, ts.SCHEMES, setup, table, s, tree_session)
     with pytest.raises(run.Refused, match=f"^signature scheme {ts.scheme(1)!r} is not accepted$"):
-        run.check(setup, table, s)
+        run.check(setup, table, s, tree_session)
     with pytest.raises(run.Refused, match=f"^the setup published {Q.blocks} blocks, not the point's {2 ** 19}$"):
-        run.check(SETUP, DIGESTS, session())
+        run.check(SETUP, DIGESTS, session(), SID)

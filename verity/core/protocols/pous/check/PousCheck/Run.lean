@@ -8,22 +8,25 @@ import PousCheck.Merkle
 `verity/core/protocols/pous/run.py`'s `check`: what setup published and what the memory challenger signed, joined. A run
 is the setup's public outputs (`SetupProtocol.Public`, `root` the root of `C*`'s leaves under `salt`), the memory
 challenger's table of `C*` (every block's `sha512/row/v2` digest in block order, `blockDigest`: the harness's
-`DIGESTS.bin`) and one signed session (`Session`). `check` accepts it at P2's deployed point (`DEPLOYED`) under S1's LMS
-(`SCHEMES`) when, in order:
+`DIGESTS.bin`) and one signed session (`Session`), checked against the id the auditor designated for the audit's session.
+`check` accepts it at P2's deployed point (`DEPLOYED`) under S1's LMS (`SCHEMES`) when, in order:
 
 1. the setup published the point's block count and a 24-byte salt;
 2. the table holds one 64-byte digest a block, and its leaves under that salt (`rowLeaf`, `verifier.row_leaf`) have the
    root the setup published, so the table is the one of the `C*` setup checked;
 3. the session audits that setup at the point: every block, the point's `k`, a limit within the point's `Δ + RTT`,
    answers of the point's block size, and its `binding` the published root;
-4. `verdict` accepts the session against the table.
+4. the session runs under the designated id (`session`, in the signed header), which the memory challenger runs at most
+   one session under, so an audit has at most one session `check` accepts;
+5. `verdict` accepts the session against the table.
 
 The first refusal is the reason, word for word the Python's. `checkAt` takes another point and other schemes, for the
 difftest.
 
-`pous-run SETUP.json DIGESTS.bin SESSION.json` (`run`) prints `{"accepted": true}` or `{"accepted": false, "reason": …}`
-and exits 0 iff accepted; `SETUP.json` is the setup's public outputs (`Public.toJson`) and `SESSION.json`
-`{"commitment", "openings", "signed", "trusted"}`, each exactly the canonical JSON of what it decodes to.
+`pous-run SETUP.json DIGESTS.bin SESSION.json SESSION_ID` (`run`) prints `{"accepted": true}` or
+`{"accepted": false, "reason": …}` and exits 0 iff accepted; `SETUP.json` is the setup's public outputs
+(`Public.toJson`), `SESSION.json` `{"commitment", "openings", "signed", "trusted"}`, each exactly the canonical JSON of
+what it decodes to, and `SESSION_ID` the designated id in lowercase hex.
 -/
 
 namespace PousCheck.Run
@@ -69,8 +72,8 @@ def expected (q : P2.Params) (digests : ByteArray) (i : Nat) : Option ByteArray 
 def need (ok : Bool) (reason : String) : Except String Unit := if ok then pure () else throw reason
 
 /-- `check` at `pt` under `schemes`. -/
-def checkAt (schemes : Schemes) (pt : Point) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Session) :
-    Except String Unit := do
+def checkAt (schemes : Schemes) (pt : Point) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Session)
+    (sid : ByteArray) : Except String Unit := do
   let q := pt.params
   let sc := r.commitment
   need (pub.blocks == q.blocks) s!"the setup published {pub.blocks} blocks, not the point's {q.blocks}"
@@ -85,12 +88,13 @@ def checkAt (schemes : Schemes) (pt : Point) (pub : SetupProtocol.Public) (diges
     s!"the session's limit of {sc.limitNs} ns is past the point's Δ + RTT = {pt.limitNs} ns"
   need (sc.blockBytes == q.blockBytes) s!"the session's answers are {sc.blockBytes} bytes, not the point's {q.blockBytes}"
   need (sc.binding == pub.root) "the session is not bound to the root the setup published"
+  need (sc.session == sid) "the session does not run under the id the auditor designated"
   let v := verdict schemes r.trusted.toList (expected q digests) r.signed sc r.openings
   need v.accepted ("; ".intercalate v.reasons.toList)
 
 /-- The composed check of a run (module docstring). -/
-def check (pub : SetupProtocol.Public) (digests : ByteArray) (r : Session) : Except String Unit :=
-  checkAt SCHEMES DEPLOYED pub digests r
+def check (pub : SetupProtocol.Public) (digests : ByteArray) (r : Session) (sid : ByteArray) : Except String Unit :=
+  checkAt SCHEMES DEPLOYED pub digests r sid
 
 /-! ## Its formats -/
 
@@ -122,8 +126,8 @@ def Point.ofJson (j : Json) : V Point := do
     ← J.nat p "segments" ctx⟩
   pure ⟨q, ← J.nat j "k" ctx, ← J.nat j "limit_ns" ctx⟩
 
-/-- `checkAt` on the difftest's line: `{"point", "schemes": [id, …], "setup", "digests": hex, "session"}`, the schemes
-by id among those `MemoryChallenger` verifies. -/
+/-- `checkAt` on the difftest's line: `{"point", "schemes": [id, …], "setup", "digests": hex, "session",
+"session_id": hex}`, the schemes by id among those `MemoryChallenger` verifies. -/
 def runFn (j : Json) : V Json := do
   let ctx := "run"
   let pt ← Point.ofJson (← J.get j "point" ctx)
@@ -131,20 +135,25 @@ def runFn (j : Json) : V Json := do
   let digests ← match unhex (← J.str j "digests" ctx) with
     | .ok b => pure b
     | .error e => throw s!"{ctx}.digests: {e}"
+  let sid ← match unhex (← J.str j "session_id" ctx) with
+    | .ok b => pure b
+    | .error e => throw s!"{ctx}.session_id: {e}"
   pure (outcomeJson (checkAt schemes pt (← decodeSetup (← J.get j "setup" ctx)) digests
-    (← decodeSession (← J.get j "session" ctx))))
+    (← decodeSession (← J.get j "session" ctx)) sid))
 
 private def readJson {α : Type} (path : String) (f : Json → V α) : IO (V α) := do
   return (Json.parse (← IO.FS.readFile path)).bind f
 
-/-- `pous-run SETUP.json DIGESTS.bin SESSION.json`: `check`'s outcome as one canonical JSON line; exit 0 iff accepted. A
-file that is not JSON, or not exactly what it decodes to, is refused with the decoder's reason. -/
-def run (setupPath digestsPath sessionPath : String) : IO UInt32 := do
+/-- `pous-run SETUP.json DIGESTS.bin SESSION.json SESSION_ID`: `check`'s outcome as one canonical JSON line; exit 0 iff
+accepted. A file that is not JSON, or not exactly what it decodes to, or an id that is not lowercase hex, is refused with
+the decoder's reason. -/
+def run (setupPath digestsPath sessionPath sessionId : String) : IO UInt32 := do
   let digests ← IO.FS.readBinFile digestsPath
-  let out := match ← readJson setupPath decodeSetup, ← readJson sessionPath decodeSession with
-    | .ok pub, .ok r => check pub digests r
-    | .error e, _ => .error s!"setup: {e}"
-    | _, .error e => .error s!"session: {e}"
+  let out := match ← readJson setupPath decodeSetup, ← readJson sessionPath decodeSession, unhex sessionId with
+    | .ok pub, .ok r, .ok sid => check pub digests r sid
+    | .error e, _, _ => .error s!"setup: {e}"
+    | _, .error e, _ => .error s!"session: {e}"
+    | _, _, .error e => .error s!"session id: {e}"
   match canon (outcomeJson out) with
   | .ok text => IO.println text
   | .error e => IO.eprintln e; return 2

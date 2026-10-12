@@ -3,16 +3,19 @@
 A run is the setup's public outputs (`verity/pous/p2/v4/setup` on acceptance, `{"blocks", "commitment", "root", "salt"}`,
 `root` the root of `C*`'s leaves under `salt`), the memory challenger's table of `C*` (every block's `sha512/row/v2` digest
 in block order, `memory_challenger.block_digest`: the harness's `DIGESTS.bin`) and one signed session (`Session`: the signed
-session, the commitment published before it, its coin openings and the trusted memory challengers' keys).  `check` accepts
-it at P2's deployed point (`DEPLOYED`: `2^19` blocks of 2,056 bytes in 8 segments, `k = 105`, `Δ + RTT ≤ 854,000 ns`)
-under S1's LMS (`memory_challenger.SCHEMES`) when, in order:
+session, the commitment published before it, its coin openings and the trusted memory challengers' keys), checked against
+the 32-byte id the auditor designated for the audit's session.  `check` accepts it at P2's deployed point (`DEPLOYED`:
+`2^19` blocks of 2,056 bytes in 8 segments, `k = 105`, `Δ + RTT ≤ 854,000 ns`) under S1's LMS
+(`memory_challenger.SCHEMES`) when, in order:
 
 1. the setup published the point's block count and a 24-byte salt;
 2. the table holds one 64-byte digest a block, and its leaves under that salt (`verifier.row_leaf`) have the root the setup
    published, so the table is the one of the `C*` setup checked;
 3. the session audits that setup at the point: every block, the point's `k`, a limit within the point's `Δ + RTT`, answers
    of the point's block size, and its `binding` the published root;
-4. `memory_challenger.verdict` accepts the session against the table.
+4. the session runs under the designated id (`session`, in the signed header), which the memory challenger runs at most
+   one session under (`memory_challenger.SessionLog`), so an audit has at most one session `check` accepts;
+5. `memory_challenger.verdict` accepts the session against the table.
 
 The first refusal is the reason (`Refused`).  `check_at` takes another point and other schemes, for tests.
 `PousCheck.Run` (`pous-run`, in `check/`) is the check in Lean, held to this by `check/tests/test_run.py`; what its
@@ -91,7 +94,8 @@ def _need(ok: bool, reason: str) -> None:
         raise Refused(reason)
 
 
-def check_at(point: Point, schemes: Mapping[str, mc.Verify], setup: Setup, digests: bytes, session: Session) -> None:
+def check_at(point: Point, schemes: Mapping[str, mc.Verify], setup: Setup, digests: bytes, session: Session,
+             session_id: bytes) -> None:
     """`check` at `point` under `schemes`."""
     q, sc = point.params, session.commitment
     _need(setup.blocks == q.blocks, f"the setup published {setup.blocks} blocks, not the point's {q.blocks}")
@@ -107,14 +111,15 @@ def check_at(point: Point, schemes: Mapping[str, mc.Verify], setup: Setup, diges
           f"the session's limit of {sc.limit_ns} ns is past the point's Δ + RTT = {point.limit_ns} ns")
     _need(sc.block_bytes == q.block_bytes, f"the session's answers are {sc.block_bytes} bytes, not the point's {q.block_bytes}")
     _need(sc.binding == setup.root, "the session is not bound to the root the setup published")
+    _need(sc.session == session_id, "the session does not run under the id the auditor designated")
     v = mc.verdict(session.signed, sc, session.openings, lambda i: rows[i] if 0 <= i < q.blocks else None,
                    trusted=frozenset(session.trusted), schemes=schemes)
     _need(v.accepted, "; ".join(v.reasons))
 
 
-def check(setup: Setup, digests: bytes, session: Session) -> None:
+def check(setup: Setup, digests: bytes, session: Session, session_id: bytes) -> None:
     """Accept the run, or raise `Refused` with the first reason (module docstring)."""
-    check_at(DEPLOYED, mc.SCHEMES, setup, digests, session)
+    check_at(DEPLOYED, mc.SCHEMES, setup, digests, session, session_id)
 
 
 __all__ = ["DEPLOYED", "SALT_BYTES", "Point", "Refused", "Session", "Setup", "check", "check_at"]

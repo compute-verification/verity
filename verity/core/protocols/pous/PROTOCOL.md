@@ -724,11 +724,12 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
 
 - `Pous.EndToEnd.RunCheckAccepts` and `RunCertifies`, about the deployed code, deterministic and with no assumption.
   When the composed check (`run.check`, Lean's `PousCheck.Run.check`) accepts the setup's public outputs, the memory
-  challenger's table and its signed session, the session audits that setup at the deployed point (`AuditsSetup`: every
-  block, `k = 105`, within `Δ + RTT`, 2,056-byte answers, bound to the published root) under a trusted key, and for
-  every `C*` of the point's shape whose leaves have the published root, every one of the device's 105 recorded answers
-  was the challenged block of `C*` on time on the device's own clock; or the run holds a SHA-512 collision or an LMS
-  forgery. `RunCheckAccepts` is proved (`Pous.EndToEnd.SecurityProofs.runCheckAccepts`). `RunCertifies` adds setup's
+  challenger's table and its signed session under the id the auditor designated, the session audits that setup at the
+  deployed point (`AuditsSetup`: every block, `k = 105`, within `Δ + RTT`, 2,056-byte answers, bound to the published
+  root), runs under the designated id and is signed under a trusted key, and for every `C*` of the point's shape
+  whose leaves have the published root, every one of the device's 105 recorded answers was the challenged block of
+  `C*` on time on the device's own clock; or the run holds a SHA-512 collision or an LMS forgery. `RunCheckAccepts` is
+  proved (`Pous.EndToEnd.SecurityProofs.runCheckAccepts`). `RunCertifies` adds setup's
   acceptance (`Accepted`): `C*` decodes to the committed `W` and its root is published. It follows from
   `RunCheckAccepts` and setup's `AcceptsDecodes` and `PublishesRoot` (`runCertifies_of`), which are open, so it is a
   statement no guarantee states yet (`unstated`).

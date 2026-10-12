@@ -14,12 +14,13 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
 
 * `RunCheckAccepts` and `RunCertifies`, about the deployed code, deterministic and assumption free. The composed check
   of a run (`PousCheck.Run.check`, `pous-run`, Python `run.check`) reads the setup's public outputs, the memory
-  challenger's table of `C*`'s row digests and its signed session; when it accepts, the session audits that setup at
-  the deployed point (`AuditsSetup`: every block, `k = 105`, within `Δ + RTT`, blocks of 2,056 bytes, bound to the
-  published root) under a trusted key, and for every `C*` of the point's shape (`Shaped`) whose leaves have the
-  published root, the memory challenger holding that key ran a session with that commitment in which every one of the
-  105 answers it received was the challenged block of that `C*`, within `Δ + RTT` on its own clock; or the run's own
-  data holds a SHA-512 collision (`RunBreak`, `TableBreak`) or an LMS forgery (`RunBreak`). `RunCertifies` adds the
+  challenger's table of `C*`'s row digests, its signed session and the id the auditor designated for the session; when
+  it accepts, the session audits that setup at the deployed point (`AuditsSetup`: every block, `k = 105`, within
+  `Δ + RTT`, blocks of 2,056 bytes, bound to the published root), runs under the designated id and is signed under a
+  trusted key, and for every `C*` of the point's shape (`Shaped`) whose leaves have the published root, the memory
+  challenger holding that key ran a session with that commitment in which every one of the 105 answers it received was
+  the challenged block of that `C*`, within `Δ + RTT` on its own clock; or the run's own data holds a SHA-512
+  collision (`RunBreak`, `TableBreak`) or an LMS forgery (`RunBreak`). `RunCertifies` adds the
   setup check's acceptance of `C*` (`Accepted`): `C*` decodes to the committed `W` and setup published its root, so
   every `C*` setup accepts is one `RunCheckAccepts` speaks of. `RunCheckAccepts` is proved; `RunCertifies` follows from
   it and the setup check's `AcceptsDecodes` and `PublishesRoot`, which are open.
@@ -49,15 +50,15 @@ separately so that each can be rejected alone:
 The ring game takes one more named assumption, `Pous.P2.Assumptions.CoinCommitHides` (`statistical-hiding`), because
 it hands the server the session commitment, and `P2RingAuditSecure`, the conjecture that P2 is secure in the ring model.
 
-Two gaps stood between these statements and the deployed verifier:
+Two gaps stood between these statements and the deployed verifier, and both are fixed in code:
 
-* **G-1**, open: a session's `binding` is required and is the setup's root (`run.check` refuses any other), so a session
-  names the setup it audits; but nothing in code refuses a second session bound to the same root, so the one session
-  per audit of the ring game is still a property of the deployment, not of a check;
+* **G-1**, fixed: a session's `binding` is required and is the setup's root (`Run.check` refuses any other), so a
+  session names the setup it audits; and its id is the one the auditor designated for the audit (`Run.check` refuses
+  any other), which the memory challenger runs at most one session under (`memory_challenger.SessionLog`, a file of its
+  own, recorded before the session's first challenge). So an audit has at most one session the check accepts.
+  `RunCheckAccepts` states the check's side; the device's refusal of a used id is its code and log, not modeled here;
 * **G-2**, fixed: the composed setup-to-challenger check is `PousCheck.Run.check`, and `RunCheckAccepts` is what its
   acceptance gives.
-
-Nothing may cite either kind of statement as covering the deployed verifier until G-1 is fixed in code.
 -/
 
 open MemoryChallenger MemoryChallenger.Properties
@@ -163,39 +164,42 @@ def TableBreak (pub : SetupProtocol.Public) (digests : ByteArray) (C : Array (Ar
 
 /-- **An accepted run is the device's honest record of the setup's blocks, or carries a break.** Deterministic and
 assumption free: if the composed check (`Run.check`) accepts the setup's public outputs `pub`, the memory challenger's
-table `digests` and its session `r`, then the session audits `pub` at the deployed point (`AuditsSetup`) and its key is
-trusted; and for every device and every `C*` of the point's shape whose leaves have the published root, the trusted
+table `digests` and its session `r` under the designated id `sid`, then the session audits `pub` at the deployed point
+(`AuditsSetup`), runs under `sid` and its key is trusted; and for every device and every `C*` of the point's shape whose
+leaves have the published root, the trusted
 key's holder ran a session with the session's commitment in which every recorded answer is the challenged block of
 `C*`, on time on its own clock, or the run's own data holds a SHA-512 collision or an LMS forgery. The times are the
 device's own readings: what the server reports about its latency enters nowhere. The table is the memory challenger's
 own: whichever table it held, an accepted one has the published root, so it is `C*`'s or there is a collision. -/
 def RunCheckAccepts : Prop :=
-  ∀ (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session), Run.check pub digests r = .ok () →
+  ∀ (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray),
+    Run.check pub digests r sid = .ok () →
     ∀ (dev : Device) (C : Array (Array ByteArray)),
-      AuditsSetup pub r.commitment ∧ r.signed.publicKey ∈ r.trusted.toList ∧
+      AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧ r.signed.publicKey ∈ r.trusted.toList ∧
         (Shaped C → Merkle.root (leaves pub.salt C) = some pub.root →
           (∃ run ∈ dev.sessions r.signed.publicKey, run.commitment = r.commitment ∧ AnsweredOnTime run C) ∨
             RunBreak r.trusted.toList r.signed dev C ∨ TableBreak pub digests C)
 
 /-- **What a run must pass**, the verifier's whole decision: setup accepts `C*` against the server's commitment and
-salt and publishes `pub`, and the composed check accepts `pub`, the memory challenger's table and its session. -/
+salt and publishes `pub`, and the composed check accepts `pub`, the memory challenger's table and its session under the
+id `sid` the auditor designated. -/
 def Accepted (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public)
-    (digests : ByteArray) (r : Run.Session) : Prop :=
-  SetupProtocol.protocol.check q c C = .accept pub () ∧ Run.check pub digests r = .ok ()
+    (digests : ByteArray) (r : Run.Session) (sid : ByteArray) : Prop :=
+  SetupProtocol.protocol.check q c C = .accept pub () ∧ Run.check pub digests r sid = .ok ()
 
 /-- **An accepted run certifies `C*`.** For every device, if setup and the composed check accept a run (`Accepted`),
 then `C*` decodes to a payload with the server's commitment, setup published its root (`Published`: `Merkle.root
 (leaves c.salt C) = some pub.root`, so the session's `binding` is the root of the `C*` setup checked), the session audits
-that setup at the deployed point, and the trusted key's holder ran a session with the accepted commitment in which
-every recorded answer is the challenged block of `C*`, on time on its own clock; or the run's own data holds a SHA-512
-collision or an LMS forgery. A dishonest commitment (`C*` decoding to a `W'` other than the `W` the server was handed)
-is `CommitBreak`'s. It rests on the setup check's `AcceptsDecodes` and `PublishesRoot`, which are open. Not cited as
-covering the deployed verifier until G-1 is fixed. -/
+that setup at the deployed point under the designated id, and the trusted key's holder ran a session with the accepted
+commitment in which every recorded answer is the challenged block of `C*`, on time on its own clock; or the run's own
+data holds a SHA-512 collision or an LMS forgery. A dishonest commitment (`C*` decoding to a `W'` other than the `W` the
+server was handed) is `CommitBreak`'s. It rests on the setup check's `AcceptsDecodes` and `PublishesRoot`, which are
+open. -/
 def RunCertifies : Prop :=
   ∀ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray)
-    (r : Run.Session) (dev : Device),
-    Accepted c C pub digests r →
-      DecodesToCommitment q c C ∧ Published q c C pub ∧ AuditsSetup pub r.commitment ∧
+    (r : Run.Session) (sid : ByteArray) (dev : Device),
+    Accepted c C pub digests r sid →
+      DecodesToCommitment q c C ∧ Published q c C pub ∧ AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧
         ((∃ run ∈ dev.sessions r.signed.publicKey, run.commitment = r.commitment ∧ AnsweredOnTime run C) ∨
           RunBreak r.trusted.toList r.signed dev C ∨ TableBreak pub digests C)
 
@@ -297,8 +301,8 @@ It speaks of the deployed system only through the four claims of this module's h
 `pous-ring-device` (the deployed server is a `Server`: state bounded between rounds, one session, online coins),
 `pous-ring-speed` (the hardware's `D`, `Q` and `L` within `Δ + RTT`, by measurement), `pous-ring-instantiation` (P2 with
 `φ = id`, SHA-512-CTR keys and its public root is no easier than `p2ring` with uniform `ω`) and `prf/sha-512` (the
-derived streams are as good as uniform bytes). Nothing may cite it as covering the deployed verifier until G-1 (one
-session per audit) and G-2 (the composed check) are fixed in code. -/
+derived streams are as good as uniform bytes). G-1 (one session per audit) and G-2 (the composed check) are fixed in
+code (this module's header): what the deployed verifier's acceptance gives is `RunCheckAccepts`. -/
 def EndToEndRing : Prop :=
   Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
     ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
