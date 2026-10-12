@@ -81,7 +81,7 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
   fi
   if [ $rc = 0 ] && [ -n "${L2PROBE:-}" ]; then
     lib=${LIBSET%% *}
-    M=dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sectors_op_read_lookup_hit.sum,lts__t_sectors_op_read_lookup_miss.sum
+    M=dram__bytes_op_read.sum,dram__bytes_op_write.sum,lts__t_sectors_op_read_lookup_hit.sum,lts__t_sectors_op_read_lookup_miss.sum
     # shellcheck disable=SC2086
     ncu --profile-from-start off --cache-control none --replay-mode application --metrics $M --csv \
       --log-file "$O/l2probe.csv" "$PY" $WC/wide_profile.py --lib "$lib=$B/ww-$lib.so" --out "$O" --l2 "$L2PROBE" \
