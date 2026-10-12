@@ -53,7 +53,8 @@ structure Device (ι : Type) where
   /-- bits in over side channel `i` per tick -/
   cap : ι → ℕ
 
-/-- One tick of an execution, its charges split by account `α`. -/
+/-- One tick of an execution, its charges split by account `α`. Each op is charged once, to the account that runs it,
+not once per use of its result: PoUW's outputs are useful by design, so the residual counts ops, not information. -/
 structure Step (ι α : Type) where
   /-- the ops of class `o` that account `a` ran -/
   ops : α → Op → ℕ
