@@ -75,7 +75,7 @@ class Lib:
             "tf_fused2": [i, i, i, i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3": [i, i, i, i, v, v, v, v, i, i, i, u64, v, v],
             "tf_fused3d": [i, i, v, v, v, v, i, i, i, u64, v, v, v, v, v, v, i, i, v],
-            "tf_fused3p": [i, i, i, v, v, v, v, i, i, i, u64, v, i, v, i, i, v, v],
+            "tf_fused3p": [i, i, i, v, v, v, v, i, i, i, u64, v, i, v, i, i, i, i, v, v],
             "tf_subtree": [v, u64, u64, u64, i, v], "tf_tree_from": [v, u64, i, v],
             "tf_plain": [v, v, v, i, i, i, i, v], "tf_leaves": [v, u64, u64, v, v], "tf_tree": [v, u64, v],
             "tf_commit": [v, u64, u64, v, v],
@@ -277,7 +277,7 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
                     for pd in (1, 2):
                         check(f"t_r{pd}p_m{mb}", lambda: lib.call(
                             "tf_fused3p", lanes, MODE_TAGS, pd, ptr(plain), ptr(xs[mb].view(torch.uint8)), ptr(y),
-                            ptr(tb), mb, n, k, jb, ptr(ctr), 0, ptr(ctr) + 4, 0, 0, 0, stream(torch)))
+                            ptr(tb), mb, n, k, jb, ptr(ctr), 0, ptr(ctr) + 4, 0, 0, 0, 0, 0, stream(torch)))
                 for mb in (1, 16, 32):
                     check(f"t_r1c_m{mb}", lambda: fused3(lib, torch, lanes, MODE_TAGS, 1, plain, xs[mb], y, tb, mb, n, k,
                                                          jb, pk=1))
@@ -380,7 +380,7 @@ def gate_store(lib: Lib, torch, name, n, k, w8, ref: dict, batches, log) -> dict
                                            ("t4kr2p", 4, MODE_TAGS, 2)) if n % 64 == 0 else ():
                 ya = torch.zeros(mb, n, dtype=torch.float32, device="cuda")
                 lib.call("tf_fused3p", lanes, mode, pd, ptr(plain), ptr(x.view(torch.uint8)), ptr(ya), ptr(tb), mb, n,
-                         k, 0, ptr(ctr), 0, ptr(ctr) + 4, 0, 0, 0, stream(torch))
+                         k, 0, ptr(ctr), 0, ptr(ctr) + 4, 0, 0, 0, 0, 0, stream(torch))
                 e[f"{label}_rel"] = float(((ya - refp).abs() / scale).max())
             for label, (lanes, mode, wc, st) in forms:
                 if not fits(mb, mode, wc, st, n):
@@ -744,8 +744,11 @@ PIPE_PLANS = ("px",)
 # start as a launch starts (r20261012-115317-093f: 1.197 vs 1.089; its CTAs spin on the SMs) and a bulk L2 prefetch
 # of each warp's next quads (r20261012-120131-7f5d: 1.163 at 2 quads, 1.241 at 4, vs 1.124); the last two's runtime
 # arguments alone slowed fused3p's loop (px 1.089 and 1.124), so tf.cu keeps neither.
-CAP_PLANS = {"p": {}, "px": {"qkv": 0, "o": 0, "gate_up": 0}, "py": {"qkv": 0, "o": 1, "gate_up": 0},
-             "pw": {"qkv": 1, "o": 1, "gate_up": 0}}
+# o, and qkv, one CTA an SM more (py, pw) lose too (r20261012-120827-5b76: 1.093, 1.099 vs 1.066; o's CTAs then
+# double up beside qkv's).
+CAP_PLANS = {"p": {}, "px": {"qkv": 0, "o": 0, "gate_up": 0}, "pv": {"qkv": 0, "o": 0, "gate_up": 0}}
+# Per plan, shapes whose padding leaves room for one CTA of the named next shape (its CTAs then start beside them).
+LEAVE_PLANS = {"pv": {"o": "gate_up"}}
 TRACE_BATCHES = (1, 8)
 
 
@@ -767,10 +770,11 @@ def time_step(lib: Lib, torch, weights: dict, timing: dict, batches, groups, rep
              commit pipelined a step behind; the tags in two buffers, the second's gated like tagk)
     nativeP, tagPL, commitPL for P in CAP_PLANS  nativep, tagpL and commitpL with the plan's shapes at most
              ceil(CTAs / SMs) + plan[shape] CTAs an SM
-At TRACE_BATCHES, nativepx, tagpx4 and tagpy4 once more with tf.cu's trace (globaltimer stamps a launch), summarized per shape.
+At TRACE_BATCHES, nativepx, tagpx4 and tagpv4 once more with tf.cu's trace (globaltimer stamps a launch), summarized per shape.
     prober4  u4kr1 at every shape: tagr4 with 4-round BLAKE3, uncertified
     noend4   n4kr1 at every shape: tagr4 without the chunks' last quads and finishes (a sink, no tags): what the
              launches' chunk ends cost
+    proberpx4, noendpx4  the same two in tagpx4's chain
     """
     names = list(layout.SHAPES)
     copies = {name: [] for name in names}
@@ -819,26 +823,35 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpy4 once more with tf.cu's trace (glob
 
         ctr = torch.zeros(len(names) * layout.LAYERS, dtype=torch.int32, device="cuda")
 
-        def seq_pdl(g=None, trace=None, plan=None, tb=None):
+        def seq_pdl(g=None, trace=None, plan=None, tb=None, probe=0):
             """g0kr1 (g None) or tagr's launches through tf_fused3p, tags into tb (tbs[g] if None), launch q waiting on
             ctr[q - 1] (and tracing into trace[q] if given); with CAP_PLANS[plan]'s shapes at most ceil(CTAs / SMs) + its
-            value CTAs an SM."""
-            plan = CAP_PLANS[plan] if plan else {}
+            value CTAs an SM, LEAVE_PLANS[plan]'s leaving room for one CTA of the next; probe 1 (g 4) four-round
+            BLAKE3, 2 no chunk ends (a sink)."""
+            leaves, plan = LEAVE_PLANS.get(plan, {}), CAP_PLANS[plan] if plan else {}
             tb = tbs[g] if g and tb is None else tb
-            lanes, mode = (1, MODE_GEMM) if g is None else (g, MODE_TAGS)
+            lanes, mode = (1, MODE_GEMM) if g is None else (g, MODE_SINK if probe == 2 else MODE_TAGS)
+
+            def occ_of(name):
+                n, k, _ = weights[name]
+                grid = (n // 16 // 4) * (k // (layout.TILE_COLS * layout.CHUNK_TILES))
+                return -(-grid // sms) + plan[name] if name in plan else 0
+
             fs, off, prev = [lambda: (ctr.zero_(), 0)[1]], 0, 0
             order = [(layer, name) for layer in range(layout.LAYERS) for name in names]
             for q, (layer, name) in enumerate(order):
                 n, k, _ = weights[name]
                 pl = copies[name][layer][0]
-                tp = ptr(tb) + 32 * off if g else 0
+                tp = ptr(xr) if probe == 2 else ptr(tb) + 32 * off if g else 0
                 wc = ptr(ctr) + 4 * (q - 1) if q else 0
                 tr = ptr(trace) + 8 * TR_WORDS * q if trace is not None else 0
                 grid = (n // 16 // 4) * (k // (layout.TILE_COLS * layout.CHUNK_TILES))
-                occ = -(-grid // sms) + plan[name] if name in plan else 0
-                fs.append(lambda n=n, k=k, pl=pl, name=name, tp=tp, off=off, wc=wc, wn=prev, q=q, tr=tr, occ=occ:
+                occ, lv = occ_of(name), occ_of(leaves[name]) if name in leaves else 0
+                fs.append(lambda n=n, k=k, pl=pl, name=name, tp=tp, off=off, wc=wc, wn=prev, q=q, tr=tr, occ=occ,
+                          lv=lv:
                           lib.so.tf_fused3p(lanes, mode, 1, ptr(pl), ptr(xs[name].view(torch.uint8)), ptr(ys[name]), tp,
-                                            mb, n, k, off, wc, wn, ptr(ctr) + 4 * q, int(q > 0), occ, tr, stream(torch)))
+                                            mb, n, k, off, wc, wn, ptr(ctr) + 4 * q, int(q > 0), occ, lv, probe, tr,
+                                            stream(torch)))
                 prev = grid
                 if g:
                     off += layout.chunk_block_count(n, k, g)
@@ -940,12 +953,14 @@ At TRACE_BATCHES, nativepx, tagpx4 and tagpy4 once more with tf.cu's trace (glob
         if 4 in groups:
             arms["prober4"] = run(seq(lambda name: "u4kr1", 4), "prober4")
             arms["noend4"] = run(seq(lambda name: "n4kr1"), "noend4")
+            arms["proberpx4"] = run(seq_pdl(4, None, "px", probe=1), "proberpx4")
+            arms["noendpx4"] = run(seq_pdl(4, None, "px", probe=2), "noendpx4")
         with torch.cuda.stream(hp):
             r = interleave(lib, torch, arms, reps, 1)
         med = r["median_s"]
         if mb in TRACE_BATCHES:
             r["trace"] = {}
-            for arm, g, plan in (("nativepx", None, "px"), ("tagpx4", 4, "px"), ("tagpy4", 4, "py")):
+            for arm, g, plan in (("nativepx", None, "px"), ("tagpx4", 4, "px"), ("tagpv4", 4, "pv")):
                 if arm not in arms:
                     continue
                 tr = torch.zeros(len(names) * layout.LAYERS, TR_WORDS, dtype=torch.int64, device="cuda")
@@ -1041,13 +1056,13 @@ def points(res: dict, batches, run: str | None) -> list[dict]:
             what, g = re.fullmatch(r"([a-z]+)(\d*)", a).groups()
             if what.startswith("native"):
                 continue
-            stage = ("tag without chunk ends (diagnostic)" if what == "noend" else
+            stage = ("tag without chunk ends (diagnostic)" if what.startswith("noend") else
                      "tag+commit" if what.startswith("commit") else
                      "tag+commit (the step before's, pipelined)" if what.startswith("pipe") else "tag")
             out.append({**base, "block_bytes": 1024 * int(g), "form": a, "batch": mb, "y": y, "weighting": "step",
                         "stage": stage,
-                        **({"certified": False, "rounds": PROBE_ROUNDS} if what == "prober" else {}),
-                        **({"certified": False, "diagnostic": True} if what == "noend" else {})})
+                        **({"certified": False, "rounds": PROBE_ROUNDS} if what.startswith("prober") else {}),
+                        **({"certified": False, "diagnostic": True} if what.startswith("noend") else {})})
     return out
 
 

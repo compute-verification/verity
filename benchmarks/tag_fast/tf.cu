@@ -1184,6 +1184,20 @@ __global__ void __launch_bounds__(FW * 32) fused3p_kernel(const uint4* __restric
   if (trace && threadIdx.x == 0) atomicMax(trace + TR_EXIT, globaltimer());
 }
 
+// fused3p_kernel's probes, a kernel of their own so fused3p_kernel's code stays as timed: R rounds, or NE no chunk
+// ends (a sink, its xor into tags[0]), as fused3_kernel's.
+template <int NB8, int MODE, int R, bool NE>
+__global__ void __launch_bounds__(FW * 32) fused3q_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
+                                                          float* __restrict__ y, uint32_t* __restrict__ tags, int M,
+                                                          int N, int Kd, uint64_t jbase, const int* wait_ctr, int wait_n,
+                                                          int* done_ctr, unsigned long long* trace) {
+  fused3_body<1, 4, NB8, MODE, 1, false, false, false, R, NE>(blockIdx.x, wstore, x, y, tags, M, N, Kd, jbase,
+                                                               reinterpret_cast<unsigned int*>(tags), Tail{}, nullptr,
+                                                               nullptr, wait_ctr, wait_n, done_ctr, trace);
+  asm volatile("griddepcontrol.wait;" ::: "memory");
+  if (trace && threadIdx.x == 0) atomicMax(trace + TR_EXIT, globaltimer());
+}
+
 template <int V, int L, int NB8, bool DOWN>
 __global__ void __launch_bounds__(FW * 32, 5) fused3d_kernel(const uint4* __restrict__ wstore, const uint8_t* __restrict__ x,
                                                           float* __restrict__ y, uint32_t* __restrict__ tags, int M,
@@ -1689,12 +1703,15 @@ int tf_fused3d(int lanes, int own_defer, const void* w, const uint8_t* x, float*
 // programmatic dependent launches (pdl 1; 0 a plain launch). wait_ctr null for the chain's first link; done_ctr
 // counts this launch's CTAs once their y is written, (N / 16 / FW) (Kd / 2,048) of them. occ > 0: at most occ CTAs an
 // SM (dynamic shared memory padded to a share of the SM's), so a launch placed beside the one before it can't crowd
-// some SMs. pd: quads of register prefetch, 1 or 2. trace: null, or this launch's TR_WORDS words.
+// some SMs; leave > 0: of the SM's shared memory less a leave-th, so one CTA of a launch capped at leave fits beside.
+// pd: quads of register prefetch, 1 or 2. probe (pd 1, lanes 4): 1 four-round BLAKE3 (tags, uncertified), 2 no chunk
+// ends (mode sink, its xor into tags[0]); 0 the certified tag. trace: null, or this launch's TR_WORDS words.
 int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, float* y, uint32_t* tags, int M, int N, int Kd,
-               uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, int occ,
+               uint64_t jbase, const int* wait_ctr, int wait_n, int* done_ctr, int pdl, int occ, int leave, int probe,
                unsigned long long* trace, cudaStream_t st) {
-  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || (mode != MODE_GEMM && mode != MODE_TAGS) || !done_ctr ||
-      pd < 1 || pd > 2)
+  if (M < 1 || M > 32 || N % (16 * FW) || Kd % CCOLS || !done_ctr || pd < 1 || pd > 2 || leave < 0 || probe < 0 ||
+      probe > 2 || (probe ? pd != 1 || lanes != 4 || mode != (probe == 1 ? MODE_TAGS : MODE_SINK)
+                          : mode != MODE_GEMM && mode != MODE_TAGS))
     return 1;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4;
   using KernP = void (*)(const uint4*, const uint8_t*, float*, uint32_t*, int, int, int, uint64_t, const int*, int,
@@ -1706,7 +1723,17 @@ int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, flo
            : nb8 == 2 ? fused3p_kernel<1, L, 2, MD, P>                                                                 \
                       : fused3p_kernel<1, L, 4, MD, P>;
 #define F3P(L, MD) F3PD(L, MD, 1) F3PD(L, MD, 2)
-  F3P(1, MODE_GEMM) F3P(4, MODE_TAGS) F3P(8, MODE_TAGS)
+  if (!probe) {
+    F3P(1, MODE_GEMM) F3P(4, MODE_TAGS) F3P(8, MODE_TAGS)
+  } else if (probe == 1) {
+    kern = nb8 == 1   ? fused3q_kernel<1, MODE_TAGS, 4, false>
+           : nb8 == 2 ? fused3q_kernel<2, MODE_TAGS, 4, false>
+                      : fused3q_kernel<4, MODE_TAGS, 4, false>;
+  } else {
+    kern = nb8 == 1 ? fused3q_kernel<1, MODE_SINK, 7, true>
+           : nb8 == 2 ? fused3q_kernel<2, MODE_SINK, 7, true>
+                      : fused3q_kernel<4, MODE_SINK, 7, true>;
+  }
 #undef F3P
 #undef F3PD
   if (!kern) return 3;
@@ -1721,7 +1748,8 @@ int tf_fused3p(int lanes, int mode, int pd, const void* w, const uint8_t* x, flo
   cudaLaunchConfig_t cfg = {};
   cfg.gridDim = dim3((N / 16 / FW) * (Kd / CCOLS));
   cfg.blockDim = dim3(FW * 32);
-  cfg.dynamicSmemBytes = std::max(M * CXS, occ > 0 ? std::min(sm_smem / occ - reserved, 99 * 1024) : 0);
+  const int share = sm_smem - (leave > 0 ? sm_smem / leave : 0);
+  cfg.dynamicSmemBytes = std::max(M * CXS, occ > 0 ? std::min(share / occ - reserved, 99 * 1024) : 0);
   cfg.stream = st;
   cudaLaunchAttribute attr[1];
   attr[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
