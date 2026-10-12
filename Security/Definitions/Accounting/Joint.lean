@@ -6,7 +6,7 @@ import Definitions.Pouw.Basic.Prob
 
 A joint audit runs three audits on one device at once: the compute audit (PoUW), the bandwidth audit and the capacity
 audit (PoUS). Each draws coins of its own (`ΩW`, `ΩQ`, `ΩS`), uniformly and independently (`Pouw.pr` over the product),
-and has an account and a window of its own. The device sees every coin, so its trace is a function of all three.
+and has an account and a window of its own. The device sees every coin, so its schedule is a function of all three.
 
 Each audit's guarantee is stated in the shape of PoUW's `Pouw.Guarantees.EndToEnd`, on its own account and its own
 coins: whatever the other two audits' coins are (the device may know them), a run whose account uses at most `B` of
@@ -16,8 +16,8 @@ account's charge alone: what the other accounts use is neither credited to it no
 
 * `ComputeSound p W ε`: the compute account's work at price `p`, certificate W (W_cert).
 * `BandwidthSound Q ε`: the bits the bandwidth account read from device memory, certificate Q (Q_cert).
-* `CapacitySound S ε`: the device memory the capacity account held over its window, certificate S bits on average
-  (S_cert; `S * len` bit-ticks).
+* `CapacitySound S ε`: the device memory the capacity account held over its window, in bit-ticks (one bit held for one
+  tick is one bit-tick), certificate `S * len` bit-ticks, which is S bits on average (S_cert).
 
 The events these guarantees bound quantify over the audit's own coins; they are not about the coin drawn. At a value of
 the other audits' coins, an account is short when its charge is below the certificate on every one of the audit's own
@@ -30,28 +30,28 @@ reading, at the coins drawn, is not claimed yet; lane `ra-per-run` is proving it
 
 namespace Accounting
 
-/-- The audits of a joint audit. -/
-inductive Audit
-  /-- PoUW's compute audit -/
+/-- The resources a joint audit certifies, each by an audit of its own. -/
+inductive Resource
+  /-- work, which PoUW's compute audit certifies -/
   | compute
-  /-- the bandwidth audit -/
+  /-- bits read from device memory, which the bandwidth audit certifies -/
   | bandwidth
-  /-- PoUS's capacity audit -/
+  /-- device memory held, which PoUS's capacity audit certifies -/
   | capacity
 
-/-- A joint audit's run on device `d` with accounts `α`: each audit's account and window, the trace at each value of
-the compute, bandwidth and capacity audits' coins, which fits the device, and each audit's verdict. -/
+/-- A joint audit's run on device `d` with accounts `α`: each resource's account and window, the schedule at each value
+of the compute, bandwidth and capacity audits' coins, which fits the device, and each audit's verdict. -/
 structure Run {ι : Type} (d : Device ι) (α : Type) [Fintype α] (ΩW ΩQ ΩS : Type) where
-  /-- the account an audit's resource is charged to -/
-  acct : Audit → α
-  /-- the window an audit measures -/
-  win : Audit → Window
-  /-- the execution at the audits' coins -/
-  trace : ΩW × ΩQ × ΩS → Trace ι α
-  /-- every execution fits the device -/
-  fits : ∀ ω, (trace ω).Fits d
-  /-- an audit's verdict at the audits' coins -/
-  accepts : Audit → ΩW × ΩQ × ΩS → Prop
+  /-- the account a resource is charged to -/
+  acct : Resource → α
+  /-- the window a resource's audit measures -/
+  win : Resource → Window
+  /-- the schedule at the audits' coins -/
+  schedule : ΩW × ΩQ × ΩS → Schedule ι α
+  /-- every schedule fits the device -/
+  fits : ∀ ω, (schedule ω).Fits d
+  /-- the verdict of a resource's audit at the audits' coins -/
+  accepts : Resource → ΩW × ΩQ × ΩS → Prop
 
 namespace Run
 
@@ -61,13 +61,14 @@ variable {ι : Type} {d : Device ι} {α ΩW ΩQ ΩS : Type} [Fintype α] (r : R
 def Accepted (ω : ΩW × ΩQ × ΩS) : Prop := ∀ a, r.accepts a ω
 
 /-- The compute account's work over the compute window at price `p`. -/
-def work (p : Price) (ω : ΩW × ΩQ × ΩS) : ℕ := (r.trace ω).work (r.win .compute) (r.acct .compute) p
+def work (p : Price) (ω : ΩW × ΩQ × ΩS) : ℕ := (r.schedule ω).work (r.win .compute) (r.acct .compute) p
 
 /-- The bits the bandwidth account read from device memory over the bandwidth window. -/
-def read (ω : ΩW × ΩQ × ΩS) : ℕ := (r.trace ω).read (r.win .bandwidth) (r.acct .bandwidth)
+def read (ω : ΩW × ΩQ × ΩS) : ℕ := (r.schedule ω).read (r.win .bandwidth) (r.acct .bandwidth)
 
-/-- The device memory the capacity account held over the capacity window, in bit-ticks. -/
-def held (ω : ΩW × ΩQ × ΩS) : ℕ := (r.trace ω).held (r.win .capacity) (r.acct .capacity)
+/-- The device memory the capacity account held over the capacity window, in bit-ticks (`Schedule.held`): `S` bits on
+average over a window of `len` ticks is `S * len` bit-ticks. -/
+def held (ω : ΩW × ΩQ × ΩS) : ℕ := (r.schedule ω).held (r.win .capacity) (r.acct .capacity)
 
 /-- The compute account is short of the certificate `W` at the other audits' coins `ω.2`: its work is below `W` on every
 one of the compute audit's own coins. -/
@@ -88,15 +89,15 @@ variable [DecidableEq α]
 
 /-- The other accounts' work over the compute window at price `p`. -/
 def othersWork (p : Price) (ω : ΩW × ΩQ × ΩS) : ℕ :=
-  ∑ a ∈ Finset.univ.erase (r.acct .compute), (r.trace ω).work (r.win .compute) a p
+  ∑ a ∈ Finset.univ.erase (r.acct .compute), (r.schedule ω).work (r.win .compute) a p
 
 /-- The bits the other accounts read from device memory over the bandwidth window. -/
 def othersRead (ω : ΩW × ΩQ × ΩS) : ℕ :=
-  ∑ a ∈ Finset.univ.erase (r.acct .bandwidth), (r.trace ω).read (r.win .bandwidth) a
+  ∑ a ∈ Finset.univ.erase (r.acct .bandwidth), (r.schedule ω).read (r.win .bandwidth) a
 
 /-- The device memory the other accounts held over the capacity window, in bit-ticks. -/
 def othersHeld (ω : ΩW × ΩQ × ΩS) : ℕ :=
-  ∑ a ∈ Finset.univ.erase (r.acct .capacity), (r.trace ω).held (r.win .capacity) a
+  ∑ a ∈ Finset.univ.erase (r.acct .capacity), (r.schedule ω).held (r.win .capacity) a
 
 /-- The other accounts are beyond the compute residual `F·T - W` at the other audits' coins: on every one of the compute
 audit's own coins, their work over the compute window is more than the device's priced work over it less `W`. -/
@@ -133,9 +134,10 @@ def BandwidthSound (Q ε : ℝ) : Prop :=
   ∀ (x : ΩW) (s : ΩS) (B : ℝ), 0 ≤ B → (∀ q : ΩQ, (r.read (x, q, s) : ℝ) ≤ B) →
     Pouw.pr (fun q : ΩQ => r.accepts .bandwidth (x, q, s) ∧ B < Q) ≤ ε
 
-/-- **The capacity audit's guarantee, at certificate `S` bits on average and error `ε`**: at any value of the other
-audits' coins, if the capacity account holds at most `B` bit-ticks of device memory over its window on every capacity
-coin, the capacity audit accepts with `B < S * len` with probability at most `ε` over the capacity coins. -/
+/-- **The capacity audit's guarantee, at certificate `S` and error `ε`**: capacity is counted in bit-ticks over the
+capacity window, so the certificate is `S * len` bit-ticks, `S` bits on average. At any value of the other audits'
+coins, if the capacity account holds at most `B` bit-ticks of device memory over its window on every capacity coin, the
+capacity audit accepts with `B < S * len` with probability at most `ε` over the capacity coins. -/
 def CapacitySound (S ε : ℝ) : Prop :=
   ∀ (x : ΩW) (q : ΩQ) (B : ℝ), 0 ≤ B → (∀ s : ΩS, (r.held (x, q, s) : ℝ) ≤ B) →
     Pouw.pr (fun s : ΩS => r.accepts .capacity (x, q, s) ∧ B < S * (r.win .capacity).len) ≤ ε

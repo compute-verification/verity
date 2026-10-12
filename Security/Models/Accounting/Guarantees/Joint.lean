@@ -13,8 +13,9 @@ BW·T − Q_cert of reads and M − S_cert of capacity on average (`CovertResidu
 
 Both bound an account's worst case over its audit's own coins, not its charge at the coins drawn. Outside the error, in
 an accepted run, `Joint` says each account reaches its certificate on some coin of its audit, and `CovertResidual` that
-some coin of each audit leaves the other accounts within its residual. A device could do little charged work and a lot of covert work on a few of the compute coins. A per-run
-reading, at the coins drawn, is not claimed yet; lane `ra-per-run` is proving it by truncation.
+some coin of each audit leaves the other accounts within its residual. A device could do little charged work and a lot
+of covert work on a few of the compute coins. A per-run reading, at the coins drawn, is not claimed yet; lane
+`ra-per-run` is proving it by truncation.
 
 Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.Joint`).
 -/

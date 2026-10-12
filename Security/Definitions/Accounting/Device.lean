@@ -16,12 +16,14 @@ it computes, and when.
 * **Time.** A tick is the device's unit of time, and a window is `len` consecutive ticks from `start`, so its duration
   T is `len`.
 
-An execution is a trace, one step per tick. A step charges every resource it uses to an account (`α`): the ops of
+A schedule is the device's step at each tick. A step charges every resource it uses to an account (`α`): the ops of
 each class, the bits read from device memory and over each side channel, and the on-chip state and device memory held
 at the end of the tick. A step fits the device (`Step.Fits`) when, for every resource, the charges of all accounts
 together are within the device's limit. So each unit of a resource (one tensor-core cycle, one bit read, one bit held
-for a tick) is charged once, to one account, and no two accounts can both claim it. A window's totals (`Trace.ops`,
-`Trace.read`, `Trace.held`, ...) sum an account's charges over the window's ticks.
+for a tick) is charged once, to one account, and no two accounts can both claim it. A window's totals (`Schedule.ops`,
+`Schedule.read`, `Schedule.held`, ...) sum an account's charges over the window's ticks. Memory held is counted in
+bit-ticks: one bit held for one tick is one bit-tick, so `Schedule.held` over a window of `len` ticks is `len` times the
+account's average in bits.
 -/
 
 namespace Accounting
@@ -53,7 +55,7 @@ structure Device (ι : Type) where
   /-- bits in over side channel `i` per tick -/
   cap : ι → ℕ
 
-/-- One tick of an execution, its charges split by account `α`. Each op is charged once, to the account that runs it,
+/-- One tick of a schedule, its charges split by account `α`. Each op is charged once, to the account that runs it,
 not once per use of its result: PoUW's outputs are useful by design, so the residual counts ops, not information. -/
 structure Step (ι α : Type) where
   /-- the ops of class `o` that account `a` ran -/
@@ -67,8 +69,8 @@ structure Step (ι α : Type) where
   /-- the device memory account `a` holds at the end of the tick, in bits -/
   mem : α → ℕ
 
-/-- An execution: its step at each tick. -/
-abbrev Trace (ι α : Type) : Type := ℕ → Step ι α
+/-- A schedule: the device's step at each tick. -/
+abbrev Schedule (ι α : Type) : Type := ℕ → Step ι α
 
 /-- A window of `len` ticks from tick `start`; `len` is its duration T. -/
 structure Window where
@@ -93,31 +95,32 @@ def Step.Fits (d : Device ι) (st : Step ι α) : Prop :=
   (∀ o, ∑ a, st.ops a o ≤ d.rate o) ∧ ∑ a, st.read a ≤ d.bw ∧ (∀ i, ∑ a, st.side a i ≤ d.cap i) ∧
     ∑ a, st.chip a ≤ d.chip ∧ ∑ a, st.mem a ≤ d.mem
 
-/-- A trace fits the device: every step does. -/
-def Trace.Fits (d : Device ι) (tr : Trace ι α) : Prop := ∀ t, (tr t).Fits d
+/-- A schedule fits the device: every step does. -/
+def Schedule.Fits (d : Device ι) (sc : Schedule ι α) : Prop := ∀ t, (sc t).Fits d
 
-namespace Trace
+namespace Schedule
 
-variable (tr : Trace ι α) (w : Window) (a : α)
+variable (sc : Schedule ι α) (w : Window) (a : α)
 
 /-- The ops of class `o` account `a` ran over window `w`. -/
-def ops (o : Op) : ℕ := ∑ t ∈ w.ticks, (tr t).ops a o
+def ops (o : Op) : ℕ := ∑ t ∈ w.ticks, (sc t).ops a o
 
 /-- Account `a`'s work over window `w` at price `p`. -/
-def work (p : Price) : ℕ := ∑ o, p o * tr.ops w a o
+def work (p : Price) : ℕ := ∑ o, p o * sc.ops w a o
 
 /-- The bits account `a` read from device memory over window `w`. -/
-def read : ℕ := ∑ t ∈ w.ticks, (tr t).read a
+def read : ℕ := ∑ t ∈ w.ticks, (sc t).read a
 
 /-- The bits account `a` took in over side channel `i` over window `w`. -/
-def side (i : ι) : ℕ := ∑ t ∈ w.ticks, (tr t).side a i
+def side (i : ι) : ℕ := ∑ t ∈ w.ticks, (sc t).side a i
 
-/-- The device memory account `a` held over window `w`, in bit-ticks: `held / len` is its average in bits. -/
-def held : ℕ := ∑ t ∈ w.ticks, (tr t).mem a
+/-- The device memory account `a` held over window `w`, in bit-ticks: the bits it holds at the end of each of the
+window's ticks, summed. One bit held for one tick is one bit-tick, so `held / len` is its average in bits. -/
+def held : ℕ := ∑ t ∈ w.ticks, (sc t).mem a
 
 /-- The on-chip state account `a` held over window `w`, in bit-ticks. -/
-def chipHeld : ℕ := ∑ t ∈ w.ticks, (tr t).chip a
+def chipHeld : ℕ := ∑ t ∈ w.ticks, (sc t).chip a
 
-end Trace
+end Schedule
 
 end Accounting

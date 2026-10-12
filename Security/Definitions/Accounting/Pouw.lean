@@ -38,6 +38,6 @@ structure RealizesPouw {Q R S : Type} (CM : Pouw.CostModel Q R S) (P : Pouw.Prot
   cost_le : ∀ x o, CM.cost (adv o).online x.1 U (adv o).act ((adv o).pre.eval x.1) x.2.1 ≤ (r.work p (x, o) : ℝ)
   /-- the compute account's oracle queries cover the adversary's oracle calls -/
   calls_le : ∀ x o, (adv o).pre.calls x.1 + CM.calls (adv o).online x.1 U (adv o).act ((adv o).pre.eval x.1) x.2.1 ≤
-    (r.trace (x, o)).ops (r.win .compute) (r.acct .compute) .oracle
+    (r.schedule (x, o)).ops (r.win .compute) (r.acct .compute) .oracle
 
 end Accounting
