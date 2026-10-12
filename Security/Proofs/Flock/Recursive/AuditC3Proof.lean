@@ -27,9 +27,9 @@ Candidate 3's table ignores the last round's coin, as its pick does (`schedInner
 gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerC`).
 
 `_hstk` is not read here: VBridgeC is a premise, and `_hstk` is what its discharge at the honest family takes as `htop`
-(`FlockC3.Compose.hbr_honest`, at `⟨_, _hstk⟩`, which gives VBridge at the checked sessions, and VBridgeC through
-`Flock.Assumptions.vbridgeC_of_vbridge`); `vbridge_checked` and `vbridgeC_checked` carry either from the typed sessions
-to the checked ones.
+(`FlockC3.Compose.hbr_honest`, at `⟨_, _hstk⟩`, which gives VBridgeC at the checked sessions, its decoder reading the
+last round from the layers in full); `vbridge_checked` and `vbridgeC_checked` carry VBridge and VBridgeC from the typed
+sessions to the checked ones.
 
 (ii) is `RecursiveFirewallPrivate`.
 -/

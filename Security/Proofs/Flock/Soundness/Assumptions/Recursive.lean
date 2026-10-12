@@ -87,6 +87,17 @@ def VBridgeC {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ
     VDecodesR wmsg (fun i _ a b => i + 1 < I.r → a = b) (fun i j => if i + 1 < I.r then Sk i j else ∅) msg ∧
     VFullR I.r (fun i j => if i + 1 < I.r then Sk i j else ∅)
 
+/-- `VCommits` at the commit strings of the rounds before the last of `r`. -/
+theorem vCommits_masked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type} {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
+    {cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg} (r : ℕ)
+    (h : VCommits zs Sk cmt) : VCommits zs (fun i j => if i + 1 < r then Sk i j else ∅) cmt := by
+  intro i R ω t e he R₂ j hacc pos hp R'
+  by_cases hc : i + 1 < r
+  · exact h i R ω t e he R₂ j hacc pos (by simpa [hc] using hp) R'
+  · exact absurd hp (by simp [hc])
+
 /-- **`VBridge` gives `VBridgeC`** (this direction only), at a decoder that holds a message at the last round, as
 `wmsgOf`'s does at every round: the committed rounds' fields are `VBridge`'s, and at the last round `VBridgeC` asks only
 that message. -/
@@ -99,18 +110,15 @@ theorem vbridgeC_of_vbridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm :
     {msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg}
     (hb : VBridge zs dg N k Rw x wmsg Sk cmt msg) (hlast : ∀ Xt, I.r - 1 < (wmsg Xt).length) :
     VBridgeC zs dg N k Rw x wmsg Sk cmt msg := by
-  refine ⟨hb.1, fun i R ω t e he R₂ j hacc pos hp R' => ?_, fun i hi ρs Xt v hX => ?_, vFullR_of_read _ _⟩
-  · by_cases hc : i + 1 < I.r
-    · exact hb.2.1 i R ω t e he R₂ j hacc pos (by simpa [hc] using hp) R'
-    · exact absurd hp (by simp [hc])
-  · by_cases hc : i + 1 < I.r
-    · have h := hb.2.2.1 i hi ρs Xt v fun j g hg hr => hX j g (by simpa [hc] using hg) hr
-      revert h
-      generalize (wmsg Xt)[i]? = o
-      intro h
-      cases h with
-      | some h => exact Option.Rel.some (by intro _; exact h)
-    · rw [List.getElem?_eq_getElem (by have := hlast Xt; omega)]
-      exact Option.Rel.some (by intro h; exact absurd h hc)
+  refine ⟨hb.1, vCommits_masked I.r hb.2.1, fun i hi ρs Xt v hX => ?_, vFullR_of_read _ _⟩
+  by_cases hc : i + 1 < I.r
+  · have h := hb.2.2.1 i hi ρs Xt v fun j g hg hr => hX j g (by simpa [hc] using hg) hr
+    revert h
+    generalize (wmsg Xt)[i]? = o
+    intro h
+    cases h with
+    | some h => exact Option.Rel.some (by intro _; exact h)
+  · rw [List.getElem?_eq_getElem (by have := hlast Xt; omega)]
+    exact Option.Rel.some (by intro h; exact absurd h hc)
 
 end Flock.Assumptions
