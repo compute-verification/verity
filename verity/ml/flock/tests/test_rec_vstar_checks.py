@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -510,12 +511,18 @@ def test_r_levels_circuit_file_is_v_stars_under_its_own_name(l16_h1, tmp_path):
 
 def test_rec_sparses_circuit_file_is_v_stars(tmp_path):
     """RecSparse at a small shape (NU 1, ELL 6, S_LOG 1), as `rec_sparse.statement` writes it over the two reps, is V*'s file
-    byte for byte as the sparse-only session's statement after V*'s, and its own port is `h` under the table's h round
+    byte for byte as the sparse-only session's statement after V*'s (its bindings `rec_bindings`' alone, which registers
+    RecSparse itself), and its own port is `h` under the table's h round
     (`rec-c38` at m 25, k_log 22) at both reps' rows; at an inner shape naming another RecSparse it is refused by the shape."""
     from verity_flock import rec_sparse as SP
 
     st = SP.statement(SP.Shape(1, 6, 1, 0), 2)
     own = _staged(tmp_path / "sparse", st.text, st.part, st.program)
+    fresh = subprocess.run([sys.executable, "-c", "import json, sys; from verity_flock import rec_bindings as RB; "
+                            "print(json.dumps(RB.bindings(*(json.load(open(f)) for f in sys.argv[1:]))))",
+                            str(tmp_path / "sparse" / "partition.json"), str(tmp_path / "sparse" / "program.json")],
+                           capture_output=True, text=True)
+    assert fresh.returncode == 0 and json.loads(fresh.stdout) == json.loads(own.read_text()), fresh.stderr
     j = len(_v_star(*C3))
     flags = ["--circuit", str(tmp_path / "sparse" / "circuit.txt"), "--instances", "2", "--rec-part", str(j),
              "--rec-bindings", str(own)]
