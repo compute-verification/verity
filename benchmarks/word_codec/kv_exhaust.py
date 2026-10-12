@@ -184,7 +184,7 @@ def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: in
                     orc.fill_(float("nan"))
                     attn_call(lib, st, enc, fm, q, orc, part, b, ctx, layers, layer, sp, k)
                     torch.cuda.synchronize()
-                    if per == per5:
+                    if per == per5 or min(per, per5) >= ctx:
                         cell["equal"][key] = cell["equal"].get(key, True) and bool(torch.equal(orc, o5))
                     skn, zdn = sk.cpu().numpy(), None if zd is None else zd.cpu().numpy().view(np.uint32)
                     partn = part.cpu().numpy().view(np.uint32)
