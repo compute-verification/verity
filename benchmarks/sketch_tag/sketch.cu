@@ -100,8 +100,9 @@ __device__ __forceinline__ void sk_tag(int* __restrict__ src, uint64_t j, const 
   o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
 }
 
-// The commit inside the GEMM: `committers` warps a CTA hash the previous call's nvec sketches (sk, ks int32 each) into
-// tags (32 bytes each, block jbase + v) and their leaves (16 tags, one tile, a leaf), two tiles a warp at a time.
+// The commit inside the GEMM: `committers` warps a CTA hash a previous call's nvec sketches (sk, ks int32 each) into
+// tags (32 bytes each, block jbase + v), and either their leaves (16 tags, one tile, a leaf) or, when ltags is set, the
+// leaves of an earlier call's lnvec tags.
 struct SkCommit {
   bw::Key3 key;
   bw::Mid leafmid;
@@ -110,6 +111,9 @@ struct SkCommit {
   uint64_t jbase;
   uint32_t* tags;
   uint64_t* leaves;
+  uint32_t* ltags;
+  uint64_t* lleaves;
+  uint64_t lnvec;
   int committers;
   int clear;
 };
@@ -167,6 +171,24 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) sk_ws_kernel(const void* __
         if (!live) break;
       }
     }
+    return;
+  }
+  if (warp > consumers && cm.ltags) {
+    // the leaves 32 tiles a warp (one a lane, so no lane idles through a leaf's five serial SHA-512 compressions), those
+    // warps spread over the CTAs; the tags over the other warps, a contiguous share each
+    const uint64_t nw = (uint64_t)gridDim.x * cm.committers;
+    const uint64_t wid = (uint64_t)blockIdx.x * cm.committers + (warp - consumers - 1);
+    const uint64_t lt = cm.lnvec / 16, nlb = (lt + 31) / 32, nlw = min(nlb, nw), stride = nw / nlw;
+    const bool leafw = wid % stride == 0 && wid / stride < nlw;
+    if (leafw)
+      for (uint64_t b = wid / stride; b < nlb; b += nlw)
+        if (32 * b + lane < lt) b3_leaf(cm.ltags, cm.lnvec, 32 * b + lane, cm.leafmid, cm.lleaves);
+    const uint64_t ntw = nw > nlw ? nw - nlw : nw;
+    if (leafw && ntw != nw) return;
+    const uint64_t tw = ntw == nw ? wid : wid - min(nlw, (wid + stride - 1) / stride);
+    const uint64_t vs = (cm.nvec + ntw - 1) / ntw, v_end = min(cm.nvec, (tw + 1) * vs);
+    for (uint64_t v = tw * vs + lane; v < v_end; v += 32)
+      sk_tag<KS>(cm.sk + v * KS, cm.jbase + v, cm.key, cm.clear, cm.tags + 8 * v);
     return;
   }
   if (warp > consumers) {
@@ -349,15 +371,31 @@ static sk::SkCommit sk_keys(const uint8_t* seed) {
 // (ks, T); sk gets tile t's 16 × ks int32 at 16 ks t. groups <= 0: as many CTAs as fit (times -groups), split over the
 // chunks. committers > 0 warps a CTA hash csk's cnvec sketches (a previous call's, ks each) into the commit workspace
 // cws (wc_commit_bytes(cnvec)): tags at block cjbase + v and their leaves, zeroing csk behind them when clear.
+int sk_gemm_deferred(int kr, int ks, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base,
+                     int partials, int consumers, int per_consumer, int groups, int* launched, int T, int RUN,
+                     const void* signs, int* skout, int decode, const uint8_t* seed, int committers, int* csk,
+                     uint64_t cnvec, uint64_t cjbase, void* cws, int clear, uint64_t lnvec, void* lws, cudaStream_t s);
+
 int sk_gemm(int kr, int ks, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base, int partials,
             int consumers, int per_consumer, int groups, int* launched, int T, int RUN, const void* signs, int* skout,
             int decode, const uint8_t* seed, int committers, int* csk, uint64_t cnvec, uint64_t cjbase, void* cws,
             int clear, cudaStream_t s) {
+  return sk_gemm_deferred(kr, ks, w, x, y, M, N, Kd, base, partials, consumers, per_consumer, groups, launched, T, RUN,
+                          signs, skout, decode, seed, committers, csk, cnvec, cjbase, cws, clear, 0, nullptr, s);
+}
+
+// sk_gemm, but with lws (a commit workspace whose lnvec tags an earlier call wrote) the committer warps compute lws's
+// leaves instead of the leaves of the tags they write.
+int sk_gemm_deferred(int kr, int ks, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base,
+                     int partials, int consumers, int per_consumer, int groups, int* launched, int T, int RUN,
+                     const void* signs, int* skout, int decode, const uint8_t* seed, int committers, int* csk,
+                     uint64_t cnvec, uint64_t cjbase, void* cws, int clear, uint64_t lnvec, void* lws, cudaStream_t s) {
   if (M < 1 || M > 32 || N % 16 || Kd % wc::TASK_COLS || kr < 0 || kr > SK_KMAX || consumers < 1 ||
       consumers > wc::WS_MAX_CONSUMERS || per_consumer < 1 || consumers * per_consumer > 32 || T < 1 || RUN < 1 ||
       T % RUN || (ks && (!signs || !skout)) || (ks != 0 && ks != 8 && ks != 16 && ks != 32) || committers < 0 ||
       consumers + 1 + committers > wc::WS_MAX_WARPS ||
-      (committers && (!ks || !seed || !csk || !cws || !cnvec || cnvec % 16)))
+      (committers && (!ks || !seed || !csk || !cws || !cnvec || cnvec % 16)) ||
+      (lws && (!committers || !lnvec || lnvec % 16 || lws == cws)))
     return 1;
   sk::SkCommit cm{};
   if (committers) {
@@ -370,6 +408,12 @@ int sk_gemm(int kr, int ks, const void* w, const uint8_t* x, float* y, int M, in
     cm.leaves = p.nodes;
     cm.committers = committers;
     cm.clear = clear;
+    if (lws) {
+      bw::Pass l = bw::make_pass(bw::TAG_B3, lnvec, lws);
+      cm.ltags = l.tags;
+      cm.lleaves = l.nodes;
+      cm.lnvec = lnvec;
+    }
   }
   const int stages = consumers * per_consumer;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, nchunks = Kd / wc::TASK_COLS, nbs = N / 16;

@@ -54,6 +54,7 @@ class Lib(WB.Lib):
         v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
         so = self.so
         so.sk_gemm.argtypes = [i, i, v, v, v, i, i, i, q, i, i, i, i, v, i, i, v, v, i, ctypes.c_char_p, i, v, q, q, v, i, v]
+        so.sk_gemm_deferred.argtypes = so.sk_gemm.argtypes[:-1] + [q, v, v]
         so.sk_hash.argtypes = [i, v, q, ctypes.c_char_p, q, v, i, v]
         so.sk_leaves.argtypes = [v, q, ctypes.c_char_p, v]
         cs = (ctypes.c_int * 8)()
@@ -582,10 +583,16 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
     """A transformer layer's four linears in order over a ring of layers past the L2, with the commit deferred to the
     large calls' committer warps: gate_up hashes the previous layer's qkv, o and down sketches (one buffer, in that
     order), down its own layer's gate_up. Per batch the layer's time against the sum of the linears' native times, for
-    the GEMMs alone (base: plain, or with the decode), with the sketch, and with the deferred commit."""
-    ks, nt, cfg = 16 if 16 in a.ks else a.ks[0], 4096 if 4096 in a.ns else a.ns[0], a.cfgs[0]
-    cn = min(a.committers, WB.WS_MAX_WARPS - 1 - cfg[0])
-    res = {"k": ks, "n_target": nt, "cfg": cfg_name(cfg), "committers": cn, "layouts": {}, "ok": True}
+    the GEMMs alone (base: plain, or with the decode), with the sketch, and with the deferred commit: fused (each
+    committing call writes its tags' leaves) or split (gate_up writes the leaves of the previous down's tags, down those
+    of its own gate_up's). Every call runs at its arm's fastest configuration in `cases`."""
+    ks, nt = 16 if 16 in a.ks else a.ks[0], 4096 if 4096 in a.ns else a.ns[0]
+    res = {"k": ks, "n_target": nt, "cfg": "each call at its arm's fastest", "committers": a.committers,
+           "layouts": {}, "ok": True}
+
+    def best_cfg(name, arm, mb):
+        c = cases.get(name, {}).get("times", {}).get(mb, {}).get("best_cfg", {}).get(arm)
+        return tuple(int(v) for v in c[1:].split("s")) if c else a.cfgs[0]
     so, st = lib.so, WB.stream(torch)
     gx = torch.Generator(device="cuda").manual_seed(7)
     xs = {(mb, kd): torch.randn(mb, kd, device="cuda", generator=gx).to(torch.float8_e4m3fn)
@@ -626,24 +633,32 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
             """The ring's calls as sk_gemm argument tuples (groups fixed by a first launch of each)."""
             xp = {kd: WB.ptr(x) for (b, kd), x in xs.items() if b == mb}
             calls = []
+            commits = mode in ("fused", "split")
             for li in range(nl):
                 prev = (li - 1) % nl
                 for name in SEQ:
                     sko, (n, kd) = sks[name], SHAPES[name]
                     k_ = 0 if mode == "base" else ks
+                    arm = (("base_plain" if lay == "plain" else "dec_enc") if mode == "base"
+                           else f"fused_{lay}_{ks}_{nt}" if commits and name in ("gate_up", "down")
+                           else f"sk_{lay}_{ks}_{nt}")
+                    cfg = best_cfg(name, arm, mb)
+                    cn = min(a.committers, WB.WS_MAX_WARPS - 1 - cfg[0])
                     skp = (None if not k_ else WB.ptr(gu[li]) if name == "gate_up"
                            else WB.ptr(rest[li]) + 4 * ks * off[name])
-                    commit = (0, None, 0, 0, None, 0)
-                    if mode == "fused" and name == "gate_up":
-                        commit = (cn, WB.ptr(rest[prev]), nrest, 0, crest[prev].ptr, 1)
-                    elif mode == "fused" and name == "down":
-                        commit = (cn, WB.ptr(gu[li]), ngu, 0, cgu[li].ptr, 1)
+                    commit = (0, None, 0, 0, None, 0, 0, None)
+                    if commits and name == "gate_up":
+                        lv = (ngu, cgu[prev].ptr) if mode == "split" else (0, None)
+                        commit = (cn, WB.ptr(rest[prev]), nrest, 0, crest[prev].ptr, 1, *lv)
+                    elif commits and name == "down":
+                        lv = (nrest, crest[prev].ptr) if mode == "split" else (0, None)
+                        commit = (cn, WB.ptr(gu[li]), ngu, 0, cgu[li].ptr, 1, *lv)
                     calls.append([kr, k_, WB.ptr(ring[li][name]), xp[kd], WB.ptr(ys[name]), mb, n, kd, 0, 0, cfg[0],
                                   cfg[1], 0, None, sko.t, sko.run, fps[name] if k_ else None, skp, 1, SKETCH_SEED,
                                   *commit, st])
             for c in calls[:len(SEQ)]:
                 lc = ctypes.c_int(0)
-                lib.call("sk_gemm", *c[:13], ctypes.byref(lc), *c[14:])
+                lib.call("sk_gemm_deferred", *c[:13], ctypes.byref(lc), *c[14:])
                 for c2 in calls:
                     if c2[6:8] == c[6:8]:
                         c2[12] = lc.value // (c[7] // C.TASK_COLS)
@@ -651,43 +666,53 @@ def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
             def f():
                 rc = 0
                 for c in calls:
-                    rc |= so.sk_gemm(*c)
+                    rc |= so.sk_gemm_deferred(*c)
                 if rc:
                     raise RuntimeError(f"sequence {lay} {mode}: error {rc}")
             return f
 
         # the deferred commit's tags and leaves are the separate kernels' over the same sketches
         mb0 = a.batches[0]
-        f0 = plan("fused", mb0)
-        for b in rest + gu:
-            b.zero_()
-        f0()
         sep_r, sep_g = torch.zeros_like(rest[0]), torch.zeros_like(gu[0])
         cr, cg = WB.Commit(lib, torch, nrest), WB.Commit(lib, torch, ngu)
         for name in SEQ:
             sko, (n, kd) = sks[name], SHAPES[name]
             dst = sep_g if name == "gate_up" else sep_r[ks * off[name]:]
             yy = torch.zeros(kd // C.TASK_COLS * mb0 * n, dtype=torch.float32, device="cuda")
-            gemm(lib, torch, kr, ks, ring[0][name], xs[(mb0, kd)], yy, n, kd, True, cfg, sko.t, sko.run, sko.frag, dst)
+            gemm(lib, torch, kr, ks, ring[0][name], xs[(mb0, kd)], yy, n, kd, True, a.cfgs[0], sko.t, sko.run,
+                 sko.frag, dst)
         for buf, cm, nv in ((sep_r, cr, nrest), (sep_g, cg, ngu)):
             lib.call("sk_hash", ks, WB.ptr(buf), nv, SKETCH_SEED, 0, cm.tags, 1, st)
             lib.call("sk_leaves", cm.ptr, nv, SKETCH_SEED, st)
         torch.cuda.synchronize()
-        lr["commit_equal"] = (crest[0].tag_list() == cr.tag_list() and crest[0].leaf_list() == cr.leaf_list()
-                              and cgu[0].tag_list() == cg.tag_list() and cgu[0].leaf_list() == cg.leaf_list())
-        res["ok"] &= lr["commit_equal"]
-        log(f"sequence {lay}: {nl} layers, deferred commit {'ok' if lr['commit_equal'] else 'FAIL'}")
+        want = (cr.tag_list(), cr.leaf_list(), cg.tag_list(), cg.leaf_list())
         del sep_r, sep_g, cr, cg
-        if not lr["commit_equal"] or a.mode != "bench":
+        lr["commit_equal"] = {}
+        for mode in ("fused", "split"):
+            f0 = plan(mode, mb0)
+            for b in rest + gu:
+                b.zero_()
+            for cm in crest + cgu:
+                cm.buf.zero_()
+            f0()
+            torch.cuda.synchronize()
+            got = (crest[0].tag_list(), crest[0].leaf_list(), cgu[0].tag_list(), cgu[0].leaf_list())
+            lr["commit_equal"][mode] = got == want
+        ok = all(lr["commit_equal"].values())
+        res["ok"] &= ok
+        log(f"sequence {lay}: {nl} layers, deferred commit "
+            + ", ".join(f"{m} {'ok' if v else 'FAIL'}" for m, v in lr["commit_equal"].items()))
+        if not ok or a.mode != "bench":
             continue
         for mb in a.batches:
-            arms = {m: plan(m, mb) for m in ("base", "sk", "fused")}
+            arms = {m: plan(m, mb) for m in ("base", "sk", "fused", "split")}
             for f in arms.values():
                 f()
             torch.cuda.synchronize()
             times = {m: [] for m in arms}
             for rep in range(a.reps):
-                for m in list(arms)[rep % 3:] + list(arms)[:rep % 3]:
+                names = list(arms)
+                for m in names[rep % len(names):] + names[:rep % len(names)]:
                     times[m].append(WB.queued(lib, torch, arms[m])[0] / nl)
             med = {m: statistics.median(v) for m, v in times.items()}
             native = sum(cases[s]["times"][mb]["native_s"] for s in SEQ)
@@ -707,13 +732,17 @@ def sequence_points(seq: dict | None, lib: Lib, a) -> list[dict]:
         for mb, t in lr["times"].items():
             r, nat = t["ratio_vs_native"], t["native_s"]
             enc = lay == "enc"
+            mode = min(("fused", "split"), key=lambda m: r.get(m, float("inf")))
             points.append({
                 "schema": "verity/codec-frontier-point/v0", "lane": "ra-sketch-tag", "b": 61 if enc else 8,
                 "k": a.kr if enc else 0, "batch": int(mb),
                 "arithmetic": f"cuda-int8-mma/sketch-k{seq['k']}-n{seq['n_target']}/" +
                               (f"{lib.name}/pb{lib.bits}" if enc else "plain") + "/layer-sequence",
-                "y_total": r["fused"] - 1, "commit_mode": "deferred (gate_up: previous qkv, o, down; down: gate_up)",
-                "y_base": r["base"] - 1, "y_sketch": r["sk"] - r["base"], "y_commit": r["fused"] - r["sk"],
+                "y_total": r[mode] - 1,
+                "commit_mode": f"deferred, {mode} (gate_up tags the previous qkv, o, down; down its gate_up" +
+                               ("; each call the leaves of the tags before)" if mode == "split" else ")"),
+                "y_total_fused": r["fused"] - 1, "y_total_split": r["split"] - 1 if "split" in r else None,
+                "y_base": r["base"] - 1, "y_sketch": r["sk"] - r["base"], "y_commit": r[mode] - r["sk"],
                 "y_hash": None, "x": None, "delta": None, "tau": None, "measured": True,
                 "label": f"sketch-then-hash k={seq['k']} n~{seq['n_target']} layer sequence "
                          f"({'encoded' if enc else 'plain'}), commit in the large calls' committer warps",
