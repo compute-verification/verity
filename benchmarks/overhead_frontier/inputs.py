@@ -1,9 +1,10 @@
 """Every input to the overhead frontier: its value, a realistic improvement, and the run that measured it.
 
-A value is a number, a table by batch (``((m, value), ...)``, interpolated linearly in m and held flat outside), or a
-dict by rounds k of either. ``improved`` is the value one realistic piece of work would bring (``lever`` names it);
+A value is a number, a table by batch or by word width (``((m, value), ...)``, interpolated linearly and held flat
+outside), or a dict by rounds k of either. ``improved`` is the value one realistic piece of work would bring (``lever`` names it);
 an input without one is a fixed fact or a ruling. ``status`` is ``measured``, ``derived`` (arithmetic on measured
-values), ``estimate`` (no measurement yet), ``assumption`` (a named assumption of the design) or ``policy``.
+values), ``estimate`` (no measurement yet), ``assumption`` (a named assumption of the design), ``proved`` (a
+guarantee in Lean) or ``policy``.
 
 Units: bandwidths in GB/s (1e9 B/s), bytes in B, a cost "per pass" in native read passes over the bytes it covers (0.36
 a weight pass is 0.36 × the time to read those weights once at R).
@@ -33,50 +34,35 @@ INPUTS: dict[str, Input] = {
     "phi": Input(370e12, "FLOP/s per GPU, FP8", "ra-word-codec: cuBLASLt's sm89 FP8 kernels at B160 (datasheet dense "
                  "935.6 TFLOPS at 2,430 MHz)", "measured", 600e12, "a native sm_120 FP8 GEMM"),
     "s_chip": Input(263.2e6, "B per GPU", "ra-pcie-exhaust: SMEM + L2 + registers (art:f3457bd3)", "measured"),
-    "b_host": Input(819.0, "GB/s, node", "the adversary's host DRAM read at DDR5-6400 spec (red team F28): half of "
-                    "socket 0 already reads 266 with two GPUs' copy engines and still rises with cores (ra-host-tier "
-                    "r20261012-183019-a547), so the spec is the bound until the whole-node run", "derived"),
-    "b_zero_copy": Input(51.0, "GB/s per GPU", "ra-pcie-exhaust: zero-copy host read (H2D 56.4, r20261012-165405-1810)",
-                         "measured"),
-    "tau_host": Input(0.06, "of the step at b_zero_copy per GPU", "ra-pcie-exhaust: the HBM receipt pass 0.977–0.987 → "
-                      "1.043–1.063 ms beside the 8-SM host fold (r20261012-114836-4a56, art:f3457bd3)", "measured",
-                      0.03, "a host-tier receipt lighter than the 8-SM fold"),
-    "b_pcie": Input(56.4, "GB/s per GPU", "red team: PCIe H2D per GPU, 451 total (r20261012-165405-1810)", "measured"),
-    "b_pcie_down": Input(25.6, "GB/s per GPU", "ra-host-tier: D2H beside a zero-copy read stream, 25.2–25.7 "
-                         "(r20261012-183019-a547; 57.3 alone), the PCIe-down F30 has for z", "measured"),
-    "host_cpu": Input(0.96, "of the host DRAM ceiling", "ra-host-tier v3–v4: the honest loop (GPU H2D receipts + the "
-                      "CPUs' receipts under the latest z, masked from all of z) reads 259.9–261.4 GB/s against the "
-                      "adversary's C = 264.2–266.4 on half a socket with two GPUs, 244–250 against 254–257 with one, "
-                      "2–4% below C from 10 to 22 cores (r20261012-190920-6238, r20261012-193152-cee9, "
-                      "r20261012-194238-4d34); the node taken at the same ratio", "measured", 0.98,
-                      "the loop's best reps (0.976–0.989 of C on two GPUs), which the quiet whole-node window measures "
-                      "(μ_host ≤ 0.1% needs 0.992–0.994), estimate"),
-    "b_nic": Input(100.0, "GB/s, node", "ra-link-pricing: one ConnectX VF at 400 Gb/s each way, and inbound bytes "
-                   "into a small GPU or host ring land in neither counted tier, so both directions count "
-                   "(r20261012-183152-39a5, art:d1040f91)", "measured"),
-    "s_hostcache": Input(0.906e9, "B, node", "ra-link-pricing §4: the host's L3 672 MiB + L2 192 MiB, a store outside "
-                         "both tiers, read back at 51–57 GB/s a GPU (r20261012-181459-46ae)", "derived"),
+    "capacity": Input("hbm", "tier", "Daniel 21:00Z: the remote guarantee is Conservation alone, and the declared "
+                      "capacity HBM alone, so the host tier, μ_link and the identity terms leave γ", "policy"),
     "b_p2p": Input(25.0, "GB/s", "PCIe peer all-reduce bus bandwidth, no NVLink", "estimate"),
     "t_allreduce": Input(40e-6, "s per all-reduce", "NCCL small-message all-reduce over PCIe", "estimate"),
-    # The adversary's rebuild (μ_rebuild).
-    "x1": Input(175.0, "read-times per round", "ra-codec-tensor's p512 encode at the max clock "
-                "(r20261012-095329-3aac ÷ 1.16), the red team's x₁", "measured"),
-    "s_adv": Input(1.38, "× 5.13e10/s, clock-matched", "assumption 5 as ra-squaring-ceiling's final restates it: the "
-                   "column form's ceiling at the measured instruction mix (a fit over 11 forms, 1.34–1.39); FOLD 5 "
-                   "measures 1.27 (6.53e10/s, r20261012-182613-5df1, r20261012-183030-b044, art:38bdc4ec), so no "
-                   "measurement can lower it", "assumption"),
-    "h_host_sq": Input(0.129, "of the GPUs' squaring rate", "assumption 6 as ra-squaring-ceiling's final restates it "
-                       "(h ≤ 13%, the IFMA-only bound); AVX-512 IFMA measures 2.84e8 squarings/s a physical core × "
-                       "128, h = 0.076 (r20261012-183544-2d44)", "assumption"),
+    # The adversary's rebuild (μ_rebuild), by word width: ra-squaring-ceiling's `wide.py` (cursor/ra-squaring-ceiling-e3cd
+    # at 687c86282; STEERING 21:22Z).
+    "x1": Input(((512, 175.0), (768, 338.6), (1024, 600.0)), "read-times per round",
+                "the red team's 175 at p512 (ra-codec-tensor's encode at the max clock, r20261012-095329-3aac ÷ 1.16), "
+                "scaled by kv.cu's root bytes a second at each width (`wide.x1_ref`; ra-codec-mix's kv-codec.json, "
+                "r20261012-183859-2055, art:c1625f3cebececb0)", "measured"),
+    "s_adv": Input(((512, 1.388), (768, 1.394), (1024, 1.420)), "× R_ref(b), clock-matched",
+                   "assumption 5 per width (`wide.adversaries`' stated row): the best form less its MOV and SEL; the "
+                   "best forms measure 1.268 / 1.260 / 1.309 (FOLD 5 at 512, r20261012-183030-b044; FOLD 6 at 768, "
+                   "r20261012-194528-b277, and at 1,024, r20261012-194557-c72f), so no measurement can lower it",
+                   "assumption"),
+    "h_host_sq": Input(((512, 0.129), (768, 0.120), (1024, 0.125)), "of the GPUs' squaring rate",
+                       "assumption 6 per width (h at the host's IFMA bound, `wide.h_of`); the host's IFMA measures "
+                       "7.6% / 7.5% / 6.4% (r20261012-183544-2d44, r20261012-195420-b71d, r20261012-195829-3929)",
+                       "assumption"),
     "theta": Input(0.75, "of the per-bit claim", "red team: partial completion's cost at the 4D reduction's floor on "
                    "the GPU at 512 bits, k = 2, low end (centre 1.2, range 0.75–2.7, r20261012-170958-f49a); "
                    "ra-partial-lean's WorkHardness at θ·c_root divides the rebuild term by θ. k = 3 taken at k = 2's "
                    "θ (its completion window is narrower; unpriced)", "estimate", 1.0,
                    "price assumption 7 at or above the per-bit claim (the floor's centre is 1.2; no agent may "
                    "measure it)"),
-    "bits": Input(512, "bits", "the codec's word, p = 2^512 − 569 (ruling); `frontier.widths` sweeps it", "policy"),
-    "masked": Input(False, "switch", "plain Sloth rounds, the ruling's codec; `frontier` also runs ra-codec-mix's "
-                    "σ_K at k = 2 (``k2m``)", "policy"),
+    "bits": Input(1024, "bits", "the stated codec's word, p = 2^1024 − 105 (Daniel 20:55Z: secure and slow first); "
+                  "512 bits is a later upgrade, and `frontier.widths` sweeps 512–1,024", "policy"),
+    "masked": Input(True, "switch", "σ_K between rounds, the stated codec (Daniel 20:55Z): masked p1024 at k = 3, "
+                    "with k = 2 the fallback if k = 3's step exceeds about 4×", "policy"),
     "mask_cost": Input({2: 0.032, 3: 0.059}, "per decoded pass", "ra-codec-mix: σ_K, a public XOR between rounds, "
                        "fast path in mma-ws attention, +0.192 / +0.709 against +0.160 / +0.650 a KV byte at k = 2 / 3 "
                        "(r20261012-182332-24e8, art:9c3b9e2724d6ca52); the weights taken at the same cost a byte",
@@ -85,49 +71,54 @@ INPUTS: dict[str, Input] = {
                           "0/200 words at every width (200/200 plain); a completion must compute the inner root, "
                           "≥ 1.515 at the floor and ≥ 1.0 with Coppersmith to b/2 for free (art:ffca24ef); assumption "
                           "7 becomes 'no completion skips the inner root'", "estimate"),
-    "sq_speed": Input(1.0, "× kv.cu's squaring", "the honest kernels' squaring: kv.cu's carry chains (FOLD 1 in "
-                      "ra-squaring-ceiling's harness, 5.71e10/s)", "measured", 1.14,
-                      "FOLD 5's column-chained squaring (6.53e10/s, ra-squaring-ceiling, art:38bdc4ec) in the decode "
-                      "and encode kernels"),
+    "sq_speed": Input(1.0, "× kv.cu's squaring", "the honest kernels' squaring: kv.cu's carry chains", "measured",
+                      ((512, 1.162), (768, 1.154), (1024, 1.226)),
+                      "the best measured squaring forms (FOLD 5 at 512, FOLD 6 at 768 and 1,024: `wide.py`'s "
+                      "\"× kv.cu\", r20261012-183030-b044, -194528-b277, -194557-c72f) in the decode and encode "
+                      "kernels"),
+    "dec_ratio": Input(((512, 1.0), (768, 1.33), (1024, 1.68)), "× p512's decode a byte at equal k",
+                       "1,024: ra-codec-mix's masked attention at 8B B80, +0.989 / +1.829 a KV byte at k = 2 / 3 "
+                       "(r20261012-190027-eaee, art:f940d8b9a4b6c43b), 1.684 / 1.678 through `decode` (kv.cu's "
+                       "squaring alone gives 1.52 / 1.54); 768: kv.cu's 1.21 at the same 1.10 (a tensor-core layout's "
+                       "projection, estimate); the weights taken at attention's ratio (no wide weight kernel yet)",
+                       "measured"),
     "decode_floor": Input({2: 0.052, 3: 0.503}, "per pass at 512 bits", "ra-word-codec: the standalone "
                           "read-and-decode at 24 warps, c·k − 1 with c = 0.526 / 0.501 (r20261012-172911-1184); "
                           "below it a form exposes a share of c·k (mma-ws: 0.10)", "measured"),
     # The honest prover's codec costs, per pass over the bytes they cover.
-    "o_w": Input({2: ((8, 0.36), (32, 0.73)), 3: ((8, 0.97), (32, 1.00))}, "per weight pass",
-                 "ra-codec-tensor 17:58Z: wt.cu decode at M=8 (70B, r20261012-175923-0080) and M=32 (8B, "
-                 "r20261012-175841-5578)", "measured", {2: ((8, 0.20), (32, 0.20)), 3: ((8, 0.65), (32, 0.65))},
-                 "port the KV path's warp-specialized mma-ws decode to the weight GEMM"),
-    "tau_w": Input({2: ((8, 0.232), (32, 0.70)), 3: ((8, 0.22), (32, 0.71))}, "per weight pass, k_s = 16, n = 4 KiB",
-                   "ra-codec-tensor: the sketch receipt with its commit in the p512 step; k = 2 at M=8 (70B) re-keyed "
-                   "every pass (F29) on sketch warps of its own, 19:25Z (r20261012-190554-dd7c); the rest 17:58Z, "
-                   "before the sketch warps (M=32 8B; at 70B k = 3 it hides partly under the decode)", "measured",
-                   {2: ((8, 0.07), (32, 0.07)), 3: ((8, 0.07), (32, 0.07))},
-                   "ra-sketch-tag's sketch warps and deferred commit (+3.6..4.6 + 0.4..2.6 points on an encoded "
-                   "store, r20261012-131750-2a7a) in wt.cu"),
-    "tau_kv": Input({2: 0.159, 3: 0.158}, "per KV pass, k_s = 16",
-                    "ra-word-codec 19:10Z: an unbound sketch-then-hash receipt on every 512-token KV block inside "
-                    "mma-ws attention, +0.319 / +0.808 against +0.160 / +0.650 unreceipted at k = 2 / 3 "
-                    "(r20261012-185147-b5db, art:830335f2)", "measured", {2: 0.07, 3: 0.07},
-                    "the sketch on warps of its own and the hash out of the decoders' issue slots, as wt.cu's"),
+    "o_w": Input({2: ((8, 0.286), (16, 0.284), (32, 0.348)), 3: ((8, 0.806), (16, 0.814), (32, 0.884))},
+                 "per weight pass", "ra-codec-tensor 20:40Z: 70B's four linears over native, untagged, at 16 decoders "
+                 "in 20 warps (r20261012-194908-391b; in the step at B8, k = 2's o_W is 0.294, r20261012-194958-0f97)",
+                 "measured", {2: ((8, 0.20), (32, 0.20)), 3: ((8, 0.64), (32, 0.64))},
+                 "the fused kernel at its decode alone (1.20 / 1.64 reads at k = 2 / 3, ra-codec-tensor §2)"),
+    "tau_w": Input({2: ((8, 0.114), (16, 0.132), (32, 0.138)), 3: ((8, 0.117), (16, 0.104), (32, 0.113))},
+                   "per weight pass, k_s = 16, n = 4 KiB",
+                   "ra-codec-tensor 20:40Z: the receipt re-keyed every pass on sketch warps of its own, +0.084 / "
+                   "+0.102 / +0.108 at k = 2 and +0.087 / +0.074 / +0.083 at k = 3 (M = 8 / 16 / 32, "
+                   "r20261012-194908-391b), plus its SHA-512 commit between passes, 0.030 a weight pass at 70B",
+                   "measured",
+                   {2: ((8, 0.094), (16, 0.112), (32, 0.118)), 3: ((8, 0.097), (16, 0.084), (32, 0.093))},
+                   "BLAKE3 leaves and tree for the commit (ra-codec-tensor Ask 1 (a): 0.030 → about 0.01)"),
+    "tau_kv": Input({2: 0.113, 3: 0.120}, "per KV pass, k_s = 16",
+                    "ra-word-codec 20:20Z: an unbound sketch inside mma-ws attention, then a receipt for each "
+                    "16-vector block, +0.270 / +0.766 against +0.157 / +0.646 unreceipted at k = 2 / 3 "
+                    "(r20261012-201014-31b3, art:0ef2da98)", "measured", {2: 0.085, 3: 0.092},
+                    "layer l's block receipts on a low-priority stream beside layer l + 1's attention, hiding most "
+                    "of their 0.031 (ra-word-codec, built at 15012d062, unmeasured)"),
     "ks_ratio": Input({8: 0.73, 12: 0.87, 16: 1.0, 32: 3.54}, "× the k_s = 16 receipt",
                       "ra-sketch-tag: encoded store M=1, +21.1 / +22.35 / +34.3% at k_s 8 / 16 / 32 over the codec's "
                       "17.65%", "measured"),
     "tau_fill": Input({8: 0.002, 12: 0.010, 16: 0.019, 32: 0.085}, "per filler pass by k_s",
                       "ra-sketch-tag: the sketch receipt on a store that is read and not decoded (plain store M=32, "
                       "r20261012-133311-b8e1)", "measured"),
+    "bound": Input(False, "switch", "Daniel 21:00Z: binding receipts to z isn't needed for Conservation; it stays the "
+                   "optional PoUW join (one hash), priced by ``tau_bind`` and ``tau_bind_kv`` when on", "policy"),
     "tau_bind": Input(0.06, "per weight pass", "ra-bound-receipt (ro-bound-sketch-blake3/v0, B = R ⊕ M) on "
-                      "Llama-3.1-70B's linears, against cuBLASLt FP8: the bound receipt over the unbound at batch 1 and "
-                      "8, +0.04 at k = 2 and +0.05–0.06 at k = 3; +0.05–0.08 at every mode and batch "
-                      "(r20261012-191645-25bd)", "measured", 0.02,
-                      "the bound sketch on wt.cu's sketch warps (the R ⊕ M functor, ra-codec-tensor's SkB interface)"),
-    "tau_bind_kv": Input({2: 0.069, 3: 0.063}, "per KV pass", "ra-word-codec: the receipt bound to attention's prior "
-                         "PV output (ro-bound-sketch/v0), +0.388 / +0.871 against the unbound +0.319 / +0.808 "
-                         "(r20261012-185147-b5db)", "measured", {2: 0.03, 3: 0.03},
-                         "the bound sketch on sketch warps of its own"),
-    "rho": Input(0.5, "of min(H(z), 8|E|)", "ra-bound-receipt §2: a relay that makes one bound receipt exchanges at "
-                 "least ½·min(H(z), 8|E|) bits (Lindsey's lemma over F₂₅₇)", "derived"),
-    "z_entropy": Input(0.75, "distinct z bytes over |z|", "ra-bound-receipt §4: 70B's layer, k-slice binding caps at "
-                       "0.75 (each 512-column chunk's first word has no earlier accumulator)", "derived"),
+                      "Llama-3.1-70B's linears, against cuBLASLt FP8: the bound receipt over the unbound, +0.05–0.08 "
+                      "at every mode and batch (r20261012-191645-25bd)", "measured"),
+    "tau_bind_kv": Input({2: 0.019, 3: 0.017}, "per KV pass", "ra-word-codec 20:20Z: the block receipt bound to "
+                         "attention's PV output two tiles back, +0.289 / +0.783 against the unbound +0.270 / +0.766 "
+                         "(r20261012-201014-31b3)", "measured"),
     "o_kv": Input({2: ((32, 0.225), (40, 0.177), (80, 0.162), (160, 0.159)),
                    3: ((32, 0.761), (40, 0.670), (80, 0.651), (160, 0.649))}, "per KV pass",
                   "ra-word-codec mma-ws (r20261012-172911-1184, art:47c171ef) at B40–160; ra-codec-tensor at B32 "
@@ -159,30 +150,30 @@ INPUTS: dict[str, Input] = {
     "write_bus": Input(1.0, "read-times per written byte", "a DRAM write holds the bus as long as a read (turnaround "
                        "not counted)", "estimate"),
     # The verifier's sample (μ_sample) and the counting slack (λ).
-    "v_budget": Input(2.0, "Gb/s per node", "the verifier's download for openings; s ≈ 3 × 10^4 a window at 4 KiB "
-                      "(the design's μ_sample ≈ 0.1%)", "policy", 10.0, "a 10 Gb/s verifier link"),
+    "v_budget": Input(2.0, "Gb/s per node", "the verifier's download for openings, a cap on the hybrid's", "policy"),
     "t_window": Input(1.0, "s", "the window", "policy"),
-    "opening_bytes": Input(1850.0, "B an opening beyond the block and z",
-                           "ra-openings §3: one multiproof per tree, 5,959 B at 4 KiB and s = 18,470 (store paths 793, "
-                           "receipt paths 1,006, the receipt 64); 4.0 KB at 2 KiB, 9.8 KB at 8 KiB", "derived"),
-    "lambda_named": Input(False, "switch", "λ = (log₂q + log₂e − log₂N)/(8n), the proved theorem with C(q, k) ≤ "
-                          "(eq/k)^k (ra-openings §2; a change to audit.bound, nothing in Lean)", "derived", True,
-                          "name the certified blocks in the compression (ra-openings' proposal, λ ≈ H₂(γ)/(8n); "
-                          "needs a Lean statement)"),
-    "horizon": Input(1, "windows", "a claim per 1-s window", "policy", 600,
-                     "a claim averaged over 10 minutes (ra-openings' causal horizon bound: 31 openings a window, "
-                     "165 KB/s; needs its Lean statement and Daniel's ruling)"),
+    "window_max": Input(0.01, "of a window", "the hybrid (Daniel 20:55Z): every window's sampling at most 1%, so "
+                        "ln(2^40)/0.01 = 2,773 openings a window (ra-openings §1: 2,761, 12.5 MB/s at 2 KiB)",
+                        "policy"),
+    "opening_bytes": Input(2500.0, "B an opening beyond the block and z",
+                           "ra-openings §1's hybrid row: 4,522 B an opening at 2 KiB and s = 2,761, multiproofs per "
+                           "tree and one node for an adjacent PoUW leaf included", "derived"),
+    "mu_serve": Input(0.0001, "of the reads", "ra-openings §9: serving the hybrid's draw, 64 receipts a kept node "
+                      "(3.7 GB kept a window), reads no pass certifies: 0.010%", "derived"),
+    "lambda_named": Input(True, "switch", "named λ, N + 40 bits a pass at every count, 0.003% at 4 KiB "
+                          "(`RatePaidNamedRO`; `RateConservationNamedRO` gives N·H(μ) + 40), PR #1900 (STEERING "
+                          "21:00Z)", "proved"),
+    "horizon": Input(600, "windows", "the hybrid's 10-minute horizon (Daniel 20:55Z), by the causal horizon bound "
+                     "(`HorizonSampling`, `RateHorizon`, PR #1900)", "proved"),
     "log2_inv_delta": Input(40.0, "bits", "δ = 2^-40 (ra-bandwidth-lean)", "policy"),
     "log2_q": Input(64.0, "bits", "q ≤ 2^64 oracle queries (ra-bandwidth-protocol 4c3352875: λ = 64k + 41)", "policy"),
-    "x_from_transcript": Input(False, "switch", "the verifier takes z_{j−1} for an opened block from PoUW's "
-                               "transcript instead of with the opening", "estimate", True,
-                               "read z from PoUW's transcript"),
+    "x_from_transcript": Input(False, "switch", "a bound receipt's opening carries its z; the verifier could take "
+                               "z_{j−1} from PoUW's transcript instead", "estimate"),
     "receipt_bits": Input(512, "bits", "a SHA-512 receipt", "policy"),
     # η, the share of R·T the honest engine leaves unread, by phase: stock vLLM 8B on ra-kv-filler's bursty trace 1
     # (trace 2, decode-heavy, in each source).
-    "eta_counted": Input(False, "switch", "exhaustion against a declared load: the frontier's step reads at R by "
-                         "construction, so η is what γ leaves (``eta_allowance``); against R·T, γ adds the phases "
-                         "(with Daniel, STEERING 19:40Z)", "policy"),
+    "eta_counted": Input(True, "switch", "\"99%\" is against R·T (Daniel 20:55Z): γ adds the honest engine's "
+                         "unread share by phase, which ra-fill-bandwidth and ra-fill-compute hill-climb", "policy"),
     "eta_decode": Input(0.190, "of R·T", "ra-kv-filler §7: decode steps read at 0.75 R (trace 2: 0.80 R, 0.172), "
                         "the step's own shortfall (r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)",
                         "measured", 0.05,
@@ -199,10 +190,6 @@ INPUTS: dict[str, Input] = {
     "eta_idle": Input(0.095, "of R·T", "ra-kv-filler §7: no request running (trace 2: 0.034; "
                       "r20261012-183434-0d4b, r20261012-190215-6752, art:231e0b01)", "measured", 0.005,
                       "the idle top-up's plain read, which fills 0.88–0.95 of it at +0.1% TPOT (ra-kv-filler)"),
-    "mu_cpu": Input(0.0, "of capacity", "the host CPUs' tile work (Daniel 18:55Z: a capacity to exhaust or count). "
-                    "Under C they are counted: their squarings in μ_rebuild (h), their DRAM in ΣR, their caches as "
-                    "per-pass state, and tile work buys nothing without bytes from off the node, which C excludes; "
-                    "ra-host-cpu's first result prices it as a risk", "policy"),
     # Chained passes (μ_timing): a pass is one step's plan, and its seed needs the previous pass's root.
     "t_gap": Input(100e-6, "s per pass", "ra-remote-driver: the root's reduction (an all-gather of the GPUs' subtree "
                    "roots, one SHA-512, a broadcast), 25–100 µs, unmeasured", "estimate"),
@@ -215,8 +202,8 @@ INPUTS: dict[str, Input] = {
                     "c steps and pays its carried state once (design: the append encodes c times; needs the driver's "
                     "plan format and the red team)"),
     "rtt": Input(0.020, "s", "ra-remote-driver's verifier round trip", "policy"),
-    "n_session": Input(100, "windows", "ra-remote-driver's session of chained windows", "policy", 1000,
-                       "sessions of 1,000 chained windows (17 minutes), so a padded pass's tail costs a tenth"),
+    "n_session": Input(1000, "windows", "sessions of at least 1,000 chained windows, the default policy "
+                       "(Daniel 20:55Z, this lane's Ask 2)", "policy"),
     "p_over_o": Input(0.47, "prompt tokens per output token", "ra-kv-filler's decode-heavy trace 2 (93,312 prompt and "
                       "200,192 output tokens): each step also encodes P/O prompt tokens a sequence, k·x₁ a byte over "
                       "the reads it gets; the prompt encode was +7.3% / +11.0% of busy time at k = 2 / 3 "
@@ -232,15 +219,8 @@ FLOOR: dict[str, tuple[Any, str]] = {
     "tau_w": ({2: ((8, 0.019), (32, 0.019)), 3: ((8, 0.019), (32, 0.019))},
               "the sketch's cost on a store that is only read (ra-sketch-tag plain store M=32, +1.7..1.9%)"),
     "tau_kv": ({2: ((8, 0.019), (32, 0.019)), 3: ((8, 0.019), (32, 0.019))}, "the same on the KV"),
-    "tau_bind": (0.0, "binding folded into the sign matrix for free"),
-    "tau_bind_kv": ({2: 0.0, 3: 0.0}, "the same in attention"),
-    "tau_host": (0.0, "the host tier's stream costs the HBM stream nothing"),
     "eph_read": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte read from DRAM"),
     "eph_write": ({"8B": (0.0, 0.0), "70B": (0.0, 0.0), "405B": (0.0, 0.0)}, "no ephemeral byte written to DRAM"),
-    "host_cpu": (1.0, "the honest loop reads host DRAM at the adversary's ceiling"),
-    "v_budget": (10.0, "a 10 Gb/s verifier link"),
-    "x_from_transcript": (True, "z from PoUW's transcript"),
-    "lambda_named": (True, "named λ"),
     "eta_decode": (0.0, "every phase reads at R, as the frontier's step does"),
     "eta_prefill": (0.0, "every phase reads at R"),
     "eta_idle": (0.0, "every phase reads at R"),
@@ -248,16 +228,13 @@ FLOOR: dict[str, tuple[Any, str]] = {
 
 # Values an input may take that make the frontier worse, each with why it is plausible.
 RISKS: dict[str, tuple[Any, str]] = {
-    "eta_counted": (True, "exhaustion against R·T: γ counts the honest engine's unread share by phase"),
-    "b_host": (1024.0, "ra-host-tier's four halves of a socket at 256 GB/s (above DDR5-6400 spec, so only with faster "
-                       "DIMMs the adversary may provision)"),
-    "s_adv": (1.61, "the column form with every add free (ra-squaring-ceiling)"),
-    "mu_cpu": (((1, 0.017), (8, 0.009), (16, 0.006), (32, 0.002), (64, 0.0012), (128, 0.0006)),
-               "the host CPUs' exact Pearl-C tile work counted against this audit: ra-host-cpu's whole-host rate over "
-               "ΣR by batch, 24 busy cores × 4 (r20261012-200416-57d5, art:d604d1da); NCP's 1.2–2.8% is host DRAM / 3 "
-               "and comes out of μ_host's slack, not on top"),
+    "s_adv": (((512, 1.535), (768, 1.514), (1024, 1.676)), "Karatsuba at the probe's mix at its best depth "
+              "(`wide.adversaries`' conservative row, 1.885 at 1,024 bits with h at the bound)"),
+    "dec_ratio": (((512, 1.0), (768, 1.42), (1024, 1.83)), "the decode a byte at ra-squaring-ceiling's cycle model "
+                  "(a squaring's cycles over the word's bytes), above both measurements"),
     "write_bus": (1.5, "a write costs half a read more in bus turnaround"),
-    "v_budget": (1.0, "a 1 Gb/s verifier link"),
+    "v_budget": (0.2, "a 200 Mb/s verifier link, which carries the hybrid's 2,773 openings a window at blocks of "
+                 "4 KiB at most"),
     "t_gap": (500e-6, "a root reduction of 500 µs (ra-remote-driver's worst row)"),
     "p_over_o": (3.63, "ra-kv-filler's trace 1 (160,256 prompt and 44,160 output tokens), where the prompt encode was "
                        "+17% / +25% of busy time at k = 2 / 3"),
