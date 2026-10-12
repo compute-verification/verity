@@ -43,6 +43,7 @@ TAG_BASE = (1 << 32) + 3                                                      # 
 B3_PER_BLOCK = (67, 72)        # compressions a block (4,096 message bytes): the fewest (64 chunk, 3 parent), and the
                                # tag warps' (4 lanes, 16 + 2 each)
 LAYERS = 32                    # Llama-3.1-8B's, for the tree's share of a layer
+PIPE_OPS = ("imad_wide", "imad", "iadd", "mac")   # wt_chain 5's ops
 SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
 BATCHES = (1, 2, 4, 8, 16, 32)
 L2_DEFEAT_BYTES = 1 << 30
@@ -794,6 +795,19 @@ def main() -> int:
         log(f"b3: {r['per_s']:.3e} compressions/s, {r['bytes_per_s']['fewest'] / 1e12:.2f} TB/s of message at the "
             f"fewest compressions ({r['bytes_per_s']['tag_warps'] / 1e12:.2f} at the tag warps'), tau per stored pass "
             f"{r['tau']['fewest']:.3f}")
+        save()
+    if "pipes" in phases:
+        xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+        clock_hz = torch.cuda.clock_rate() * 1e6
+        res["pipes"] = {"clock_hz": clock_hz}
+        for op, name in enumerate(PIPE_OPS):
+            r = max((dict(calibrated(torch, lambda s: libs[0].call("wt_chain", 5, 1, op, s, ptr(xr), sms * m,
+                                                                   stream(torch)), sms * m * 128 * 8, 0.08, a.reps),
+                          grid_per_sm=m) for m in (4, 8, 16)), key=lambda v: v["per_s"])
+            r["lanes_per_sm_clock"] = r["per_s"] / (sms * clock_hz)
+            res["pipes"][name] = r
+            log(f"pipe {name}: {r['per_s']:.3e}/s, {r['lanes_per_sm_clock']:.1f} lanes an SM a clock "
+                f"(at {clock_hz / 1e6:.0f} MHz)")
         save()
     if "gemm" in phases:
         names = a.gemm_libs.split(",") if a.gemm_libs else [l.name for l in libs]

@@ -1265,6 +1265,37 @@ __device__ __noinline__ void tag_warp(const uint8_t *__restrict__ E, u64 bytes, 
   }
 }
 
+// Compute-only pipe rates: `steps` times eight independent ops a thread, op 0 mad.wide.u32 (IMAD.WIDE.U32), 1 mad.lo.u32
+// (IMAD), 2 add.u32 (IADD3), 3 the squaring's mac (mad.lo.cc, madc.hi.cc, addc): the floor a squaring's products set.
+template <int OP>
+__global__ void __launch_bounds__(128) pipe_kernel(u64 steps, unsigned long long *xr) {
+  const u32 id = blockIdx.x * blockDim.x + threadIdx.x, b = id | 1;
+  u32 a[8], r[8][3];
+  u64 acc[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    a[i] = id * 0x9E3779B9u + i;
+    acc[i] = a[i];
+    r[i][0] = r[i][1] = r[i][2] = a[i];
+  }
+#pragma unroll 1
+  for (u64 s = 0; s < steps; ++s) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      if constexpr (OP == 0)
+        asm volatile("{\n .reg .u32 lo, hi;\n mov.b64 {lo, hi}, %0;\n mad.wide.u32 %0, lo, %1, %0;\n}" : "+l"(acc[i])
+                     : "r"(b));
+      if constexpr (OP == 1) asm volatile("mad.lo.u32 %0, %0, %1, %2;" : "+r"(a[i]) : "r"(b), "r"(id));
+      if constexpr (OP == 2) asm volatile("add.u32 %0, %0, %1;" : "+r"(a[i]) : "r"(b));
+      if constexpr (OP == 3) mac(r[i], r[i][1], b);
+    }
+  }
+  u64 h = 0;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) h ^= acc[i] ^ a[i] ^ r[i][0] ^ ((u64)r[i][1] << 17) ^ ((u64)r[i][2] << 40);
+  if (h == 0x123456789ull) atomicXor(xr, h);
+}
+
 // Compute-only: `steps` chained compressions a thread (the tag's ALU rate, which sets tau).
 __global__ void __launch_bounds__(128) b3_chain_kernel(u64 steps, unsigned long long *xr) {
   const u32 id = blockIdx.x * blockDim.x + threadIdx.x, one = kOne;
@@ -1706,6 +1737,12 @@ int wt_chain(int what, int k, int ilp, u64 steps, unsigned long long *xr, int gr
 #undef F
   } else if (what == 4) {
     b3_chain_kernel<<<grid, 128, 0, s>>>(steps, xr);
+  } else if (what == 5) {
+    if (ilp == 0) pipe_kernel<0><<<grid, 128, 0, s>>>(steps, xr);
+    else if (ilp == 1) pipe_kernel<1><<<grid, 128, 0, s>>>(steps, xr);
+    else if (ilp == 2) pipe_kernel<2><<<grid, 128, 0, s>>>(steps, xr);
+    else if (ilp == 3) pipe_kernel<3><<<grid, 128, 0, s>>>(steps, xr);
+    else return 1;
   } else if (what == 3) {
     if constexpr (!TC_OK) return 5;
     if (ilp == 1) tc_chain_kernel<1><<<grid, TC_WARPS * 32, 0, s>>>(steps, xr);
