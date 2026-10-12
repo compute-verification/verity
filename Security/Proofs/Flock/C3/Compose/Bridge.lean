@@ -33,6 +33,19 @@ theorem vbridge_c3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteA
     (hfull : VFullR (holoInnerAt T CT st hp).r F.Sk) :
     Flock.Assumptions.VBridge (I := holoInnerAt T CT st hp) F.zs dg N k Rw (fun _ _ => Subtype.mk xR hreg) F.wmsg F.Sk
       F.cmt F.msg := by
-  sorry
+  refine ⟨fun R ω t R₂ hc τ o h₀ => ?_, hcm, hdec, hfull⟩
+  have ht := htape R ω t R₂ τ o ⟨h₀, hc⟩
+  obtain ⟨hr₀, hv₀, hk₀⟩ := hreps R ω t R₂ τ o ⟨h₀, hc⟩ 0
+  obtain ⟨hr₁, hv₁, hk₁⟩ := hreps R ω t R₂ τ o ⟨h₀, hc⟩ 1
+  have hs₀ := hsp R ω t R₂ τ o ⟨h₀, hc⟩ 0
+  have hs₁ := hsp R ω t R₂ τ o ⟨h₀, hc⟩ 1
+  obtain ⟨hR, ho⟩ := hop R ω t R₂ τ o ⟨h₀, hc⟩
+  obtain ⟨hl, hvR, hkR⟩ := hlv R ω t R₂ τ o ⟨h₀, hc⟩
+  obtain ⟨out, hpl, hacc⟩ := holoTableCL_plays (capReg := xR.cap) (hreg := hR) (h₀ := hr₀) (h₁ := hr₁)
+    (hs₀ := hs₀) (hs₁ := hs₁) (ho := ho) (hl := hl) (hv := ⟨hv₀, hv₁, hvR⟩) (hok := ⟨hk₀, hk₁, hkR⟩)
+  try dsimp only at ht
+  first
+  | (rw [← ht] at hpl; exact ⟨out, hpl, hacc⟩)
+  | exact ⟨out, (congrArg (fun l => PlaysT _ l out) ht).mpr hpl, hacc⟩
 
 end FlockC3.Compose
