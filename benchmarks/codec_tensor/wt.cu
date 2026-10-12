@@ -407,6 +407,11 @@ __device__ __forceinline__ void neg_if(u32 (&q)[NL], bool neg) {
       for (int k = 1; k < NL; ++k) q[k] ^= m;
       return;
     }
+    q[0] = sub_cc(0u - CF, q[0]);
+#pragma unroll
+    for (int k = 1; k < NL - 1; ++k) q[k] = subc_cc(0xffffffffu, q[k]);
+    q[NL - 1] = subc(0xffffffffu, q[NL - 1]);
+    return;
   }
   u32 z[NL];
   z[0] = sub_cc(kP[0], q[0]);
