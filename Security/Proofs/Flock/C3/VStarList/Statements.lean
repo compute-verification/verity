@@ -5,8 +5,8 @@ import Proofs.Flock.Recursive.AuditC3
 
 `vstarParses_of_list`: at the inner shape `ish`, a family of V*'s statements indexed by the verifier's own list
 (`RecVStar.statements`, `vstarCount`) whose files parse (`VStarParses`, the guarantee's `_hob`), at any outer law. It
-discharges `_hob` once the list names candidate 3's statements (circuits' gap 2); until then the list refuses holo and
-the guarantee is vacuous.
+discharges `_hob`. At candidate 3's inner shape the list is circuits' gap 2's eleven statements, in the writer's order:
+four `rec-open`, two `rec-residuals`, one `rec-sparse`, R's three levels (`rec-open-stacked`) and one `rec-opening`.
 
 R's shape is derived, not a hypothesis: each `rec-opening/m<m>-c<c>-p<j>` unit the verifier checks opens R at META's
 `stacked` entry (`stacked_of_openingShape`, `checkOpeningShape`), and that entry opens exactly `STACKED_CLAIMS` claims

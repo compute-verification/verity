@@ -4,9 +4,9 @@
 `Recursive/AuditC3Proof.lean`) is PublicAudit's proof at candidate 3's table (`holoInnerAt`, R from the registration's
 `stacked` entry, V*'s statements over the verifier's own list). Its only `sorry`s are the stubs below; the guarantee's
 proof itself has none. It takes VBridge (`_hbr`) and V*'s parse (`_hob`) as PublicAudit does; pieces (b)–(h) discharge
-them. It is vacuous until `RecVStar.statements` lists candidate 3's statements (circuits' gap 2): today the list
-refuses holo, so `(RecVStar.statements ish).isOk` is false at a holo shape, and at a plain one V*'s statements check the
-plain table, of which VBridge at `holoInnerAt` (`_hbr`) is not to be had.
+them. V*'s statements are indexed by the verifier's own list (`vstarCount ish`), which at candidate 3's inner shape is
+circuits' gap 2's (#1847, merged here at `0a6530f4a`): eleven statements in the writer's order, 0–3 `rec-open`, 4–5
+`rec-residuals`, 6 `rec-sparse`, 7–9 R's levels `rec-open-stacked`, 10 `rec-opening` at META's `stacked` shape.
 
 Sizes are estimates of the proof, in lines. Owners: **W** a parallel worker, **C** circuits' code, **L** rec-lean.
 
@@ -24,7 +24,7 @@ Sizes are estimates of the proof, in lines. Owners: **W** a parallel worker, **C
 | c1 | (c)'s `hpl` generalization: drop `sh.holo = false` / `holoOf c = .ok false` from `lincheck_of_residuals_holo` (`Algebra/Holo.lean`), `zclc_of_residuals`, `prog_of_zclc` (`Runs/ZcLc.lean`), `run_of_algebra`, `run_of_frames` (`Runs/Rep.lean`), `prog_of_algebra` (`Runs/Prog.lean`), `rs_of_residuals` (`Runs/Rs.lean`), `ligerito_of_residuals_at`, `hlg_of_residuals`, `hlg_of_frames` (`Runs/Lg.lean`), `ligerito_of_residuals`, `ringSwitch_of_residuals`, `zerocheck_of_residuals`, `lincheck_of_residuals`, `build_eval`, `residuals_eq_run`, `buildRes_spec`, `buildAll_spec`, `coefOps_spec`, `prodOps_spec` (`Algebra/`), `decode_part`, `ResZeroAt` (`AlgHolds.lean`), `decode_checkR`, `decode_partR`, `ResZeroAtL` (`ResLayer.lean`), `decode_check` (`ResUnit.lean`), with `check_part_holo` beside `check_part` for the hidden units' net | `VBridge/` (in place, under VBridge G's names) | 600 | none; `check_refuses_plain_on_holo`, `shape?_holo` and `atomOp_plain` stay (plain facts) | W |
 
 So four start at once: a1/a3 (L with a W on the sparse and R counts), a4 + h1 (W), b1 → b2 (W), c1 (W); h2
-waits on gap 2's writer only for its holo cases.
+builds on #1847's list.
 
 ## Next: the honest decoder and the stage discharges
 
@@ -43,11 +43,15 @@ accepted layers is the next layer, stubbed when (b)'s family is fixed:
 
 ## Circuits' code
 
-* Gap 2: `RecVStar.statements` lists candidate 3's statements: each rep's `rec-sparse` units, R's levels and tops, and the
-  outer program's `rec-opening` units at `m = table_m(bucket)`, `claims = STACKED_CLAIMS`. Until then the guarantee is
-  vacuous.
-* The guarantee holds at every `hp : HoloParams`; the list must make V* check the table at the `hp` the verifier's own
-  setup fixes (gap 2 again).
+* Gap 2 is #1847 (draft): the eleven statements, a list missing RecSparse, an R level or the opening refused by name, an
+  opening at another shape refused. It moves `PublicAudit`'s and this guarantee's read records (`RecVStar.statements`).
+* `RecCoins.check` (check 5) covers only `rec-open/` and `rec-residuals/`: extending it to `rec-sparse/`,
+  `rec-open-stacked/` and `rec-opening/` is circuits' verifier code. No statement here takes those kinds' coins as a
+  hypothesis.
+* Gap 4, the verifier's own `rec-claim`, is circuits': the statement takes V*'s bindings (`bind`) as the verifier of
+  record's inputs, so the claim it cites is the one the verifier computes.
+* The guarantee holds at every `hp : HoloParams`; to state with h2: `hp` is the verifier's own, the inner shape's
+  `sparse` entry (`RecVStar.Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`).
 
 ## Decisions
 

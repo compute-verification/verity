@@ -41,8 +41,8 @@ What it takes, against `PublicAudit`:
 
 Its proof is `Flock.SecurityProofs.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3Proof`), from piece (a)
 (`FlockC3.Fork.holoForkSound_holoAt`). Its non-vacuity needs VBridge at candidate 3 (piece (b), `FlockC3.Compose`) and
-the verifier's list with candidate 3's statements (circuits' gap 2): until then `RecVStar.statements` refuses a holo
-inner shape and the event is empty there.
+V*'s statements over the verifier's list (piece (h)), which at candidate 3's inner shape is circuits' gap 2's eleven:
+`rec-open`, `rec-residuals`, `rec-sparse`, R's levels (`rec-open-stacked`) and `rec-opening` at META's `stacked`.
 -/
 
 namespace Flock.Guarantees
