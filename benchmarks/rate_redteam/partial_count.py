@@ -100,7 +100,7 @@ def main(words: int, fields: list[str]) -> None:
                 tot[key] += c[key]
             ok += babai_k2(red, y >> x, x, a, cp, s2, p) == y
             m = IntegerMatrix.from_matrix(rows)
-            r = LLL.Reduction(GSO.Mat(m, float_type="double"))
+            r = LLL.Reduction(GSO.Mat(m, float_type="dpe"))
             r()
             fswaps += r.nswaps
         x1 = n // 3 - 4
