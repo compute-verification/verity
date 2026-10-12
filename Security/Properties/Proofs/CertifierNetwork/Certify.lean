@@ -54,6 +54,15 @@ theorem certify_ok {i : Issuer} (hk : ValidKey i.key) {r : Record} {d : NetworkC
   rw [hprep]
   simp only [bind, Except.bind, hs, pure, Except.pure]
 
+/-- **A refused start signs nothing.** `certifyWith` hands a start of the session that the signer's state refuses (one it
+has already started, `Core.World.start`) to `finish` as a refused reservation: no certificate, and the link-window is
+listed in `refused`. -/
+theorem finish_refused (i : Issuer) (e : String) (r : Record) (d : NetworkCheck.Direction)
+    (prepared : NetworkCheck.RecordHead × ByteArray × ByteArray) :
+    i.finish (.error e) r d prepared = .ok ({ i with refused := i.refused.push (r.link, d, r.window) }, none) := by
+  obtain ⟨_, _, _⟩ := prepared
+  rfl
+
 /-- What the assembly issues for record `r`: a certificate of the head `record_head` makes of `r` under its grid's
 parameters digest, naming `r`'s link-window, of the key's identifier, signing the head's digest, and verifying under
 the key over its message. -/

@@ -106,6 +106,13 @@ theorem deviceCode_certificates {x : DeviceInput} {cr : CertifiedRecord} (h : cr
   · cases h
   · exact h
 
+/-- **A second run under a started session signs nothing**: where the signer's state has started the issuer's session
+(it is in `x.sessions`), the device's code issues no certificate. -/
+theorem deviceCode_started {x : DeviceInput} (h : x.issuer.session ∈ x.sessions) : (deviceCode x).certificates = [] := by
+  unfold deviceCode
+  dsimp only
+  exact ite_eq_left (List.any_eq_true.2 ⟨_, h, decide_eq_true rfl⟩)
+
 /-! ## One record per link-window -/
 
 theorem nodup_windows {l : String} {P : List Record} {n : Nat} (h : windowsOn l P = List.range n) {r r' : Record}
