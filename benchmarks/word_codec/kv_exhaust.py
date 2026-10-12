@@ -38,6 +38,7 @@ import hashlib
 import json
 import math
 import os
+import random
 import statistics
 import sys
 import time
@@ -48,6 +49,7 @@ sys.path.insert(0, str(HERE))
 
 import kv as K  # noqa: E402
 import kv_bench as B  # noqa: E402
+import kv_twin as T  # noqa: E402
 
 MODELS = {
     "8b": {"heads": 32, "layers": 32,
@@ -152,6 +154,29 @@ def fit(ks, ys) -> dict:
     mk, my = sum(ks) / n, sum(ys) / n
     c = sum((a - mk) * (b - my) for a, b in zip(ks, ys)) / sum((a - mk) ** 2 for a in ks)
     return {"c": c, "h": c * mk - my}
+
+
+def prim_gate(lib: B.Lib, torch, log) -> dict:
+    """kv_prim's ops at the twin's rare_cases (each op's rare carry or borrow, edges, random words) against
+    kv_twin.prim_want, bit for bit."""
+    v, i = ctypes.c_void_p, ctypes.c_int
+    lib.so.kv_prim.argtypes = [i, v, v, v, i, v]
+    f = lib.field
+    out, st = {}, B.stream(torch)
+    for op, cases in T.rare_cases(f, random.Random(f.n + 7)).items():
+        a = B.to_device(torch, [x for x, _ in cases], f)
+        b = B.to_device(torch, [y for _, y in cases], f)
+        y = torch.empty_like(a)
+        lib.call("kv_prim", op, B.ptr(a), B.ptr(b), B.ptr(y), len(cases), st)
+        torch.cuda.synchronize()
+        got = B.from_device(y, f)
+        bad = [j for j, ((x, z), g) in enumerate(zip(cases, got)) if g != T.prim_want(f, op, x, z)]
+        out[op] = {"cases": len(cases), "bad": bad, "ok": not bad}
+    ok = all(r["ok"] for r in out.values())
+    log(f"prim gate {lib.name}: " + ("ok" if ok else "FAIL") + " (" + ", ".join(
+        f"{T.PRIMS[op]} {r['cases']}" + (f" bad {r['bad']}" if r["bad"] else "")
+        for op, r in out.items()) + ")")
+    return {"ok": ok, "ops": out}
 
 
 def floor_gate(lib: B.Lib, torch, store, n_words: int, k: int, grids, st) -> list:
@@ -480,14 +505,15 @@ def main() -> int:
             B.set_key(lib, K.key(lib.field.name, B.SEED, ks[0]))
             bad = floor_gate(lib, torch, B.random_words(torch, 5000, lib.field, 1), 5000, ks[0], [3], B.stream(torch))
             log(f"floor gate {lib.name} k={ks[0]}: " + (f"FAIL at grids {bad}" if bad else "ok"))
-            res["ok"] &= not bad
+            res["ok"] &= not bad and prim_gate(lib, torch, log)["ok"]
         log("sanitize smoke done" if res["ok"] else "sanitize smoke FAILED")
         return 0 if res["ok"] else 1
     for lib in libs:
+        pg = prim_gate(lib, torch, log)
         g = B.gate(lib, torch, ks, 48, 1 << 16, log)
         ag = attn_gate(lib, torch, m, cells_of(a.gate_cells), ks, log)
-        res["libs"][lib.name] = {"gate": g, "attn_gate": ag}
-        res["ok"] &= all(v["ok"] for v in g.values()) and all(c["ok"] for c in ag.values())
+        res["libs"][lib.name] = {"prim_gate": pg, "gate": g, "attn_gate": ag}
+        res["ok"] &= pg["ok"] and all(v["ok"] for v in g.values()) and all(c["ok"] for c in ag.values())
     if not res["ok"]:
         log("a gate failed: nothing timed")
     else:
