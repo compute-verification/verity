@@ -464,7 +464,7 @@ def main() -> None:
     props = torch.cuda.get_device_properties(0)
     result = {
         "arm": args.arm, "compiled": args.compiled, "k": args.k if args.arm in ("enc", "wide") else 0,
-        "tag": TAG if args.arm == "wide" and args.tag else None, "model": args.model,
+        "codec_tag": TAG if args.arm == "wide" and args.tag else None, "model": args.model,
         "revision": args.revision,
         "vllm": vllm.__version__, "torch": torch.__version__, "cuda": torch.version.cuda, "gpu": props.name,
         "sms": props.multi_processor_count, "startup_s": startup_s, "kv_tokens": kv_tokens,

@@ -61,7 +61,7 @@ def main() -> int:
             continue
         inst = a["install"]
         weights = inst["store_bytes"] if a["arm"] in ("enc", "wide") else inst["plain_bytes"]
-        tags = inst["plain_bytes"] // 8 if a.get("tag") else 0
+        tags = inst["plain_bytes"] // 8 if compare.codec_tag(a) else 0
         for pt, w in zip(a["profiled"], ws):
             graphs = sum(r["read"] >= GRAPH_MIN for r in w)
             if not graphs:

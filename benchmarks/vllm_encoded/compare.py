@@ -82,8 +82,13 @@ def group_name(a: dict) -> str:
     if a["arm"] == "enc":
         return f"enc{a['k']}-{a['install'].get('bits')}" + mode(a)
     if a["arm"] == "wide":
-        return f"w{a['install']['codec']['word_bits']}-{a['k']}{'t' if a.get('tag') else ''}" + mode(a)
+        return f"w{a['install']['codec']['word_bits']}-{a['k']}{'t' if codec_tag(a) else ''}" + mode(a)
     return a["arm"] + mode(a)
+
+
+def codec_tag(a: dict) -> str | None:
+    """The tag the arm's GEMMs compute (``a["tag"]`` is the arm's file tag)."""
+    return a.get("install", {}).get("codec", {}).get("tag")
 
 
 def encoded(a: dict) -> bool:
