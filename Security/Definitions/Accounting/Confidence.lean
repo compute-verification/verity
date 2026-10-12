@@ -1,4 +1,5 @@
 import Definitions.Accounting.Actual
+import Mathlib.Data.ENat.Lattice
 import Mathlib.Basic.Real.Basic
 import Mathlib.Data.Set.Card
 import Mathlib.Data.Finset.Sort
@@ -24,6 +25,10 @@ keyed by the source's tick: the sender chooses what crosses, to whom and when) a
 outside during `[t, u)`; the state is the run's own, so fixing coins keeps it. What `X` can tell at `t` (`history`:
 its inputs, its gates before `t` and what it read from outside before `t`) and links as alphabets (`Alphabet`, by
 `signal`) are further hypotheses on a strategy.
+
+The *runtime* `t_A(P)` (v2.7, section 7; `Actual.runtime`) reads the strategy too: the least `t` such that, for every
+value of `P`'s inputs put in place of `A`'s, the run has `P`'s outputs among the values of the developer's gates placed
+before `t` (`Actual.Computes`).
 
 A guarantee `E` reads a strategy and a coin (a property of the run, or of how the strategy varies with the coins). It
 is *sound at `δ`* against the feasible runs `𝓕` (`Sound`) when every strategy causal from every tick with runs in `𝓕`
@@ -142,6 +147,22 @@ def CausalFrom {Ω L : Type*} [LinearOrder L] (S : Ω → Actual.Run L) : Prop :
   ∀ (X : Finset L) t u r r', (S r).content X t = (S r').content X t →
     (S r).crossing (↑X)ᶜ ↑X (Set.Ico t u) = (S r').crossing (↑X)ᶜ ↑X (Set.Ico t u) →
     (S r).acts X (Set.Ico t u) = (S r').acts X (Set.Ico t u)
+
+/-- **The developer at `X` has `P`'s outputs before `t`** (v2.7), across the runs `S v`, one for each value `v` of `P`'s
+inputs (`P.eval v` reads only them): `S v` is the strategy's run with `v` in place of `A`'s values at `P`'s inputs, the
+other inputs and the coins the same, which this takes as given. In each, every output of `P` at `v` is the value, at its
+width, of a gate placed in `X` before `t`. -/
+def Actual.Computes {L : Type*} {P : Verity.Circuit} (S : P.Transcript → Actual.Run L) (X : Finset L) (t : ℕ) :
+    Prop :=
+  ∀ v, ∀ o ∈ P.outputs, ∃ g, (S v).A.x g ∈ X ∧ (S v).A.t g < t ∧ (S v).A.w g = P.w o ∧
+    ((S v).val g).toNat = (P.eval v o).toNat
+
+/-- **The runtime** `t_A(P)` (v2.7) of a circuit `P` at the developer's leaves `X`, read off the strategy: the least `t`
+at which every run `S v` has `P`'s outputs at `v` among the values of its gates placed in `X` before `t`
+(`Actual.Computes`); `⊤` when no `t` does. One run holds only the branches its data took, so no one run says this. -/
+noncomputable def Actual.runtime {L : Type*} {P : Verity.Circuit} (S : P.Transcript → Actual.Run L) (X : Finset L) :
+    ℕ∞ :=
+  ⨅ (t : ℕ) (_ : Actual.Computes S X t), (t : ℕ∞)
 
 /-- **A link is an alphabet** (v2.2), across the runs of `S`: each way, at each tick, link `e` delivers one of at most
 `2^{β e}` signals (delivering nothing is one of them). -/

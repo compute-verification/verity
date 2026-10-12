@@ -1,6 +1,5 @@
 import Definitions.Core.Circuit
 import Definitions.Core.Declaration
-import Mathlib.Data.ENat.Lattice
 import Mathlib.Order.Interval.Set.Defs
 
 /-!
@@ -29,10 +28,9 @@ What a region reads from outside itself is what its location carried in plus wha
 causality at latency 0, inside `X`, for computed sources, which is all the split needs.
 
 `cut S` is a set `S` of gates as a circuit whose inputs are what it reads: `A` with every gate outside `S` an input gate,
-and the gates of `S` its outputs. The *runtime* `t_A(P)` of a circuit `P` on `A` at the developer's locations, whose
-leaves are `X` (`runtime X P`), is the least `t` at which `A[X, [0, t))`, so cut, implements `P`, and `⊤` when no `t`
-does. `declaration X t θ` is that cut with the baseline `θ_A`, the input gates committed before the run, as NCI's
-`Declaration`.
+and the gates of `S` its outputs. `declaration X t θ` is `A[X, [0, t))` so cut, with the baseline `θ_A`, the input gates
+committed before the run, as NCI's `Declaration`. The runtime `t_A(P)` reads the strategy, not one run
+(`Accounting.Actual.runtime`, v2.7).
 -/
 
 namespace Accounting
@@ -108,12 +106,6 @@ noncomputable def cut (S : Finset (Fin A.N)) : Circuit where
       exact A.op_congr g v v' hv
     · simp [hS]
   outputs := S
-
-/-- **The runtime** `t_A(P)` of a circuit `P` at the developer's locations, whose leaves are `X`: the least `t` at which
-the developer's region `A[X, [0, t))`, as a circuit whose inputs are what it reads, implements `P`; `⊤` when it never
-does. -/
-noncomputable def runtime (X : Finset L) (P : Circuit) : ℕ∞ :=
-  ⨅ (t : ℕ) (_ : Implements P (A.cut (A.region X (Set.Iio t)))), (t : ℕ∞)
 
 /-- **The developer's declaration** over `[0, t)`: `A[X, [0, t))` as a circuit whose inputs are what it reads, with the
 baseline `θ`, input gates of `A` (the model's `θ_A`, those committed before the run). Every input gate of `A` is an
