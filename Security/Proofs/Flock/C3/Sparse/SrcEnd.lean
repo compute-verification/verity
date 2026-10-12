@@ -88,11 +88,11 @@ theorem sparseCoins_sizes {c3 : Flock.RecCoins.C3} {unit : String} {k : ℕ} {sc
     simp only [bne_iff_ne, ne_eq, not_not] at hb
     dsimp only
     refine ⟨by simp, ?_, ?_⟩
-    · rw [size_of_sizes hb (by simp <;> omega), append_get!_left _ _ (by simp <;> omega),
-        append_get!_right _ _ (j := 0) (by simp <;> omega) (by simp)]
-      all_goals first | rfl | simp
-  · rw [size_of_sizes hb (by simp <;> omega), append_get!_right _ _ (j := 0) (by simp <;> omega) (by simp)]
-    all_goals first | rfl | simp
+    · rw [size_of_sizes hb (by simp; omega), append_get!_left _ _ (by simp; omega),
+        append_get!_right _ _ (j := 0) (by simp; omega) (by simp)]
+      rfl
+  · rw [size_of_sizes hb (by simp; omega), append_get!_right _ _ (j := 0) (by simp; omega) (by simp)]
+    rfl
   · simp only [Flock.RecSparse.Shape.stacked, decide_eq_true_eq] at hst
     show (0 : ℕ) = _
     omega
