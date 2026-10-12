@@ -14,7 +14,9 @@
 # plain form, V0, not V1's IMAD adds)
 # and WC_KMAX (default 8) the largest k they hold.
 # KV=1 runs the KV cache's codec instead: kv.cu built at each width of KV_FIELDS (default 512 768; a width tagged k1
-# squares by one level of Karatsuba, o1 builds at ptxas -O1, as in 1536k1o1), then kv_bench.py with KV_ARGS.
+# squares by one level of Karatsuba, o1 builds at ptxas -O1, h32 at 32 query heads (8B's attention), t16 with the
+# tensor-core attention's tiles of 16 tokens, as in 1536k1o1 or 512h32), then KV_SCRIPT (default kv_bench.py) with
+# KV_ARGS; SANITIZE=1 runs KV_SCRIPT's --sanitize smoke under compute-sanitizer's memcheck, racecheck and synccheck.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -32,6 +34,8 @@ if [ "${KV:-0}" = 1 ]; then
     lib=p$n${tag:+-$tag}
     [[ $tag == *k1* ]] && flags+=(-DKV_KARATSUBA=1)
     [[ $tag == *o1* ]] && flags+=(-Xptxas -O1)
+    [[ $tag == *h32* ]] && flags+=(-DKV_QHEADS=32)
+    [[ $tag == *t16* ]] && flags+=(-DKV_MT=16)
     nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=$n \
       "${flags[@]}" -o "$B/kv-$lib.so" $WC/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
     LIBS+=(--lib "$lib=$B/kv-$lib.so")
@@ -40,9 +44,20 @@ if [ "${KV:-0}" = 1 ]; then
   if "$PY" -c 'import pytest' 2> /dev/null; then
     "$PY" -m pytest -q -p no:cacheprovider $WC/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
   fi
+  KV_SCRIPT=${KV_SCRIPT:-kv_bench.py}
+  if [ "${SANITIZE:-0}" = 1 ]; then
+    SAN=/usr/local/cuda-13.0/bin/compute-sanitizer
+    # shellcheck disable=SC2086
+    gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- bash -c '
+      for tool in memcheck racecheck synccheck; do
+        "$0" --tool $tool --error-exitcode 9 "$1" "$2" "${@:4}" --out "$3/san-$tool" --sanitize > "$3/san-$tool.log" 2>&1
+        echo "$tool rc=$?"; tail -4 "$3/san-$tool.log"
+      done' "$SAN" "$PY" $WC/$KV_SCRIPT "$O" "${LIBS[@]}" ${KV_ARGS:-}
+    exit $?
+  fi
   # shellcheck disable=SC2086
   gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- \
-    "$PY" $WC/kv_bench.py "${LIBS[@]}" --out "$O" ${KV_ARGS:-}
+    "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" --out "$O" ${KV_ARGS:-}
   exit $?
 fi
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DWC_KMAX="${WC_KMAX:-8}")
