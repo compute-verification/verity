@@ -102,6 +102,20 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-12 (4:08 PM PDT, to top): Daniel took every recommendation then open in top's walkthrough of his decisions,
+  unread, for maximum research velocity, and may revisit any of them later. The ones that set rules:
+  - The network certifier and the memory challenger are the auditor's hardware, so they survive the 10:03 AM ruling
+    below, on two conditions: each runs on a machine the prover doesn't control (the auditor's own VM or box, under the
+    auditor's account, never a process on the prover's node), and `trusted-nebius-host` trusts only such a device and
+    its host provider, never a host the prover controls. The bandwidth audit's challenger runs on the GPU's own node,
+    so it is prover hardware and not one of them.
+  - PoUS keeps sending each challenge when the last answer arrives, and the actual-circuit model's bridge covers that
+    schedule, rather than PoUS moving to a fixed one.
+  - PoUS's conjecture is restated once, per round and for any store size in a stated range, with today's whole-audit
+    form at 2^19 blocks derived from it.
+  - PoUW's machine stop restates `TT_OUT` with a per-coin budget, and the static refund stays held.
+  - P2 at 2^25 blocks may land first as a stopgap, with the sampled setup check at k = 140, while the word codec is
+    the direction.
 - 2026-10-12 (about 10:03 AM PDT, in memory accounting's thread): no protocol or guarantee assumes trusted prover
   hardware ("in our setting we will never assume trusted prover hardware so forget about that more broadly"). Nothing
   the prover runs or hosts is trusted: not its GPUs, its host, its links, a confidential-computing enclave or a process
@@ -258,7 +272,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   - a train member needs no quick-tier pass (its own line below);
   - a flaky test is deleted, not rerun or fixed (testing skill, "Write tests that mean something");
   - an auditor-trusted device runs on Nebius, with trust in Nebius a named assumption, rather than on hardware that
-    attests.
+    attests (since 12 Oct: on a machine the prover doesn't control, 4:08 PM PDT above).
 - 2026-10-06 (8:14 AM PDT): a protocol carries no policy parameter. It surfaces what its draw established (ε at δ, in the
   integrity profile), and accounting decides later what it accepts. The model's size is public.
 - 2026-10-06 (7:51 to 8:14 AM PDT): one hash, SHA-512 with its whole output, everywhere: Pearl-C's `-h3` (its cost over
