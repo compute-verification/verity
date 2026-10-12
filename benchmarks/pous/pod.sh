@@ -66,7 +66,8 @@ IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
 # lake: the pod image's /opt/elan, else the user's elan (node 2's research user); verity_difftest serves the memory
 # challenger's Lean verdict (its Server and build need only the stdlib)
 export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
-export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/tools/research/src:$REPO/verity/core/difftest/python
+# Every entry must exist: importlib.metadata opens a missing one as a zip, and the suite guard counts that open as a read.
+export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/core/difftest/python
 # PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
 # p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
 # (pous-timed-audit, band_gpu's judge) where its lakefile declares one. Run it from a clone (--cwd clone: the build writes
