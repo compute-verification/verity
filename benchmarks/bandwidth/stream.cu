@@ -806,6 +806,7 @@ struct Args {
   int dma_streams = 1;
   int mps_challenger_pct = 0, mps_prover_pct = 0;  // foldtwo: each process's CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (0: unset)
   bool prover_first = false;                       // foldtwo: the challenger's context waits for the prover's store
+  bool challenger_first = false;                   // foldtwo: the prover's context waits for the challenger's buffers
 };
 
 static Device dev;
@@ -2043,7 +2044,7 @@ static int mode_fold_live(const Args& a) {
 // the window ends when both have.  Arms: 0 both, 1 the tag pass alone (the challenger idle), 2 the fold alone.
 struct Two {
   static constexpr uint32_t MAX = 1 << 14;
-  std::atomic<uint32_t> ready{0}, go{0}, launched{0}, done{0}, prover_ready{0};
+  std::atomic<uint32_t> ready{0}, go{0}, launched{0}, done{0}, prover_ready{0}, challenger_ready{0};
   std::atomic<int> bad{0};
   double fold_end[MAX], fold_ms[MAX], landed_mb[MAX];
 };
@@ -2087,6 +2088,8 @@ static int fold_two_challenger(const Args& a, Two& sh) {
   std::atomic<uint64_t> next{0};
   uint32_t w = 0, epoch = 0;
   Timer ft;
+  OK(cudaDeviceSynchronize());
+  sh.challenger_ready.store(1, std::memory_order_release);
   const uint64_t deadline_ns = (uint64_t)(a.deadline_us * 1e3);
   for (int ctas : a.fold_ctas)
     for (size_t m : a.sizes_mib) {
@@ -2187,7 +2190,8 @@ static int fold_two_prover(const Args& a, Two& sh, pid_t child) {
                   ",\"live_slot\":" + std::to_string(a.live_slot) + transport(a) + ",\"deadline_us\":" + num(a.deadline_us) +
                   ",\"mps\":" + (mps && *mps ? "true" : "false") + ",\"mps_challenger_pct\":" +
                   std::to_string(a.mps_challenger_pct) + ",\"mps_prover_pct\":" + std::to_string(a.mps_prover_pct) +
-                  ",\"prover_first\":" + (a.prover_first ? "true" : "false") + ",\"runs\":[";
+                  ",\"prover_first\":" + (a.prover_first ? "true" : "false") +
+                  ",\"challenger_first\":" + (a.challenger_first ? "true" : "false") + ",\"runs\":[";
   uint32_t w = 0;
   int bad = 0;
   bool first = true;
@@ -2507,6 +2511,7 @@ int main(int argc, char** argv) {
     else if (k == "--live-slot-kib") a.live_slot = std::stoull(v()) << 10;
     else if (k == "--temporal") a.temporal = true;
     else if (k == "--prover-first") a.prover_first = true;
+    else if (k == "--challenger-first") a.challenger_first = true;
     else if (k == "--dma-piece-kib") a.dma_piece = std::stoull(v()) << 10;
     else if (k == "--dma-streams") a.dma_streams = std::stoi(v());
     else if (k == "--mps-challenger-pct") a.mps_challenger_pct = std::stoi(v());
@@ -2542,8 +2547,9 @@ int main(int argc, char** argv) {
   }
   if (a.mode == "foldtwo") {
     if (a.live < 1 || a.live + 3 > (int)st::cpus.size() || !st::slots_ok(a) || !st::carry_ok(a) ||
+        (a.prover_first && a.challenger_first) ||
         std::any_of(a.fold_ctas.begin(), a.fold_ctas.end(), [](int c) { return c < 1 || c > 64; })) {
-      fprintf(stderr, "foldtwo takes --live G, G + 3 CPUs, --fold-ctas from 1 to 64 and sizes in whole slots\n");
+      fprintf(stderr, "foldtwo takes --live G, G + 3 CPUs, --fold-ctas from 1 to 64, sizes in whole slots and at most one of --prover-first and --challenger-first\n");
       return 2;
     }
     void* p = mmap(nullptr, sizeof(st::Two), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -2558,6 +2564,10 @@ int main(int argc, char** argv) {
     if (child == 0 && a.prover_first)
       while (two->prover_ready.load(std::memory_order_acquire) == 0)
         if (getppid() != parent) return st::fail("the prover died");
+    // --challenger-first: the other order, the prover's context made only once the challenger's buffers are allocated
+    if (child > 0 && a.challenger_first)
+      while (two->challenger_ready.load(std::memory_order_acquire) == 0)
+        if (waitpid(child, nullptr, WNOHANG) != 0) return st::fail("the challenger died");
     // read by each process's own MPS client at context creation, so the two can hold different shares of the SMs
     const int pct = child == 0 ? a.mps_challenger_pct : a.mps_prover_pct;
     if (pct > 0) setenv("CUDA_MPS_ACTIVE_THREAD_PERCENTAGE", std::to_string(pct).c_str(), 1);
