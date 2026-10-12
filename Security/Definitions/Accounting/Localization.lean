@@ -25,12 +25,6 @@ open Classical in
 noncomputable def downstream (C : Finset (Fin A.N)) : Finset (Fin A.N) :=
   univ.filter fun g => ∃ c ∈ C, Relation.ReflTransGen (fun a g => a ∈ A.reads g) c g
 
-open Classical in
-/-- **Downstream of `C` avoiding `Z`**: the gates that a path of wires from a gate of `C` reaches with every gate before
-its last outside `Z`, those that depend on `C` other than through `Z`. -/
-noncomputable def downstreamAvoiding (Z C : Finset (Fin A.N)) : Finset (Fin A.N) :=
-  univ.filter fun g => ∃ c ∈ C, Relation.ReflTransGen (fun a g => a ∈ A.reads g ∧ a ∉ Z) c g
-
 /-- **`C` reaches the prover through `X` during `W`**, `Y` the rest of the prover: every gate of `A[Y, W]` reads no gate
 of `C`, and of the verifier's (placed in neither `X` nor `Y`) none downstream of `C`. -/
 def Reaches (C : Finset (Fin A.N)) (X Y : Finset L) (W : Set ℕ) : Prop :=
