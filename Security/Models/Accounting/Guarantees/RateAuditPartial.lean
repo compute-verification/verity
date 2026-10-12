@@ -96,8 +96,8 @@ the device completed, at `c_word = rounds · c_root` per `b` of them, cost at mo
 
 **The reading.** It is the remote audit's route `Accounting.Remote.Run.Rebuild` at `δ = 0`
 (`rebuilt · c_word ≤ b · rebuildWork`, lane ra-remote-theorem's node-level guarantee) for a run whose node completes
-words as a partial device does: its rebuilt bits are the device's completed bits, however it splits them into partial
-words, and its rebuild work covers the completions' compute. `RateAuditPartial` uses it to turn the compute
+words as a partial device does: its rebuilt bits (the correct receipts' share) are at most the device's completed bits,
+however it splits them into partial words, and its rebuild work covers the completions' compute. `RateAuditPartial` uses it to turn the compute
 `F − k·c_tag` into at most `(F − k·c_tag)·b/c_word` completed bits. Proof: `Accounting.SecurityProofs.RatePartialRebuild`,
 by induction on the chip program, one completion at a time.
 
