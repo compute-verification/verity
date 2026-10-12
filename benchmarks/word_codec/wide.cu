@@ -1124,6 +1124,8 @@ static_assert(WW_KMAX >= 1 && WW_KMAX <= 8, "WW_KMAX");
     break;
 #if WW_KMAX >= 4
 #define WW_CASES(F) WW_CASE(1, F) WW_CASE(2, F) WW_CASE(3, F) WW_CASE(4, F)
+#elif WW_KMAX >= 3
+#define WW_CASES(F) WW_CASE(1, F) WW_CASE(2, F) WW_CASE(3, F)
 #elif WW_KMAX >= 2
 #define WW_CASES(F) WW_CASE(1, F) WW_CASE(2, F)
 #else
