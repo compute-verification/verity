@@ -163,8 +163,9 @@ unchanged. `--record` runs `check` through `research run` as an Attempt of the c
 
 Landing, as Daniel set it (7 Oct; the CI page in Notion): `main` always passes the whole `check`, and the check is to stay
 fast by reusing a part's verdict whenever its inputs haven't changed. Each verdict is to be keyed on a hash of the part's
-declared inputs (the read guard enforces them), the base image and the check's own code, so that a docs-only change reruns
-nothing, a deleted test reruns its suite, and a layout move or a change to the check's own code reruns everything. The merge
+declared inputs (the read guard enforces them), the base image and the code that decides that verdict (a suite's runner and
+harness, not every line of the check tool; Daniel, 9 Oct), so that a docs-only change reruns nothing, a deleted test reruns
+its suite, and a layout move or a change to the runner reruns everything. The merge
 queue is to run the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
 something it doesn't declare, and it is fixed in the check, not by reverting anyone's change.
 

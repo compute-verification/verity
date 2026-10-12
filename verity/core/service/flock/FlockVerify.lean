@@ -134,7 +134,6 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
     let st ← if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program publicInputs
       else Stmt.setupH tags circuitB pubB coins tables draw partition program
     if tags.plainLeaves then checkDescription st registered else checkRegistered st registered
-    Registered.checkFull registered draw
     checkIdentifier st identifier
     return st
   else do
@@ -330,18 +329,19 @@ def recTranscriptInput (args : List String) (record : Option String) :
     | .ok j => some <$> RecVStar.innerCommits j record rj
     | .error e => throw s!"rec inner transcript: not JSON: {e}"
 
-/-- `rec-inner --circuit F --public F [--partition F] [--program F]`: the shape of V*'s inner session (`RecVStar.innerOf`)
-from the inner statement, as one `verity/rec-inner/v1` line, for `verify --rec-inner`. -/
+/-- `rec-inner --circuit F --public F [--partition F] [--program F] [--hide]`: the shape of V*'s inner session
+(`RecVStar.innerOf`) from the inner statement, as one `verity/rec-inner/v1` line, for `verify --rec-inner`; `--hide`: the
+verifier's own word that the inner session's circuits are private (`RecVStar.Inner.holo`). -/
 def recInnerCmd (args : List String) : IO UInt32 := do
   let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify rec-inner --circuit F --public F [--partition F] [--program F]"; return 2
+    | IO.eprintln "usage: flock-verify rec-inner --circuit F --public F [--partition F] [--program F] [--hide]"; return 2
   let partition ← match ← partitionInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
   let program ← match ← programInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  match RecVStar.innerOf (← IO.FS.readBinFile circuit) (← IO.FS.readBinFile pub) partition program with
+  match RecVStar.innerOf (← IO.FS.readBinFile circuit) (← IO.FS.readBinFile pub) partition program (args.contains "--hide") with
   | .ok i => IO.println i.toJson.compress; return 0
   | .error e => IO.eprintln s!"rec-inner: {e}"; return 1
 
@@ -633,7 +633,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
     let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
       (if part.isNull then [] else [("partition", part)]) ++
       (match registered with | some r => [("registered", Registered.finding r)] | none => []) ++
-      (match identifier with | some (j, _) => [("identifier", j)] | none => []))
+      (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
+      -- the verifier's own inner shape's word, never the prover's META
+      (match recInner with | some i => [("private_circuit", Lean.Json.bool i.holo)] | none => []))
     IO.println s!"VERDICT {line.compress}"
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)

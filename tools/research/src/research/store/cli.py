@@ -49,6 +49,9 @@
                                                    fetches them all back through a public front end into a scratch store, checking every byte
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
+  research data index [--db F] [--from DIR] [--public [--public-db F]] [--full] [--jobs N] [--json]
+                                                   the derived index (bucket_index.py): list the bucket, read the records the index lacks, write
+                                                   records/fields/edges/listings; --public then rebuilds the public index from the export bucket
   research data refresh [--jobs N] [--json] [--payloads KIND ...] [--payload-max-bytes N]
                                                    incremental: fetch and index only the manifests/attempts/labels the remote has and we lack;
                                                    --payloads also makes local the small file payloads of those kinds (what a render reads)
@@ -75,6 +78,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -616,6 +620,66 @@ def cmd_reindex(argv: list[str]) -> int:
     _dump(n) if ns.json else print(f"reindexed {st.root}: {n['artifacts']} artifacts, {n['attempts']} attempts, {n['labels']} labels"
                                    + (f" ({pulled} pulled from the remote)" if pulled is not None else ""))
     return 0
+
+
+def cmd_index(argv: list[str]) -> int:
+    """The derived index (README §5.1).  Exit 1 when a record failed its check (it is left out and read again next pass)."""
+    from . import bucket_index as BI  # noqa: PLC0415
+    from .remote import FsRemote, load_export  # noqa: PLC0415
+
+    ap = _ap("index")
+    ap.add_argument("--db", type=Path, help="the private index (default <store>/index.sqlite)")
+    ap.add_argument("--from", dest="source", type=Path, metavar="DIR", help="index a directory laid out like the bucket instead of the remote")
+    ap.add_argument("--public", action="store_true", help="then rebuild the public index from the export bucket's manifests")
+    ap.add_argument("--public-db", type=Path, help="the public index (default <store>/index-public.sqlite)")
+    ap.add_argument("--full", action="store_true", help="list every run, not only those after the newest indexed one")
+    ap.add_argument("--postgres", action="store_true",
+                    help="write the schemas store_private and store_public of the database $STORE_INDEXER_DATABASE_URL names, not SQLite files")
+    ap.add_argument("--jobs", type=int, default=32, metavar="N")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    root = store_root(ns.store)
+    if ns.postgres and not os.environ.get("STORE_INDEXER_DATABASE_URL"):
+        print("research data index: --postgres needs STORE_INDEXER_DATABASE_URL in the environment", file=sys.stderr)
+        return 2
+    if ns.source:
+        remote = FsRemote(ns.source)
+    else:
+        st = LocalStore(ns.store)
+        if st.remote is None:
+            print(f"research data index: no usable remote ({st.remote_error or 'none configured'}); --from DIR indexes a directory", file=sys.stderr)
+            return 2
+        remote = st.remote
+    log = None if ns.json else (lambda m: print(m, file=sys.stderr))
+    export = None
+    if ns.public and (export := load_export()) is None:
+        print("research data index: --public needs the export bucket (`research data export`'s config)", file=sys.stderr)
+        return 2
+    if ns.postgres:
+        url = os.environ["STORE_INDEXER_DATABASE_URL"]
+        db, public_db = BI.PostgresIndex(url, "store_private"), (BI.PostgresIndex(url, "store_public") if ns.public else None)
+    else:
+        db, public_db = ns.db or BI.default_path(root), ns.public_db or BI.default_path(root, BI.PUBLIC)
+    reps = [BI.index(remote, db, jobs=ns.jobs, full=ns.full, log=log)]
+    if ns.public:
+        reps.append(BI.index(export, public_db, policy=BI.PUBLIC, private=db, jobs=ns.jobs))
+    for rep, where in zip(reps, (db, public_db)):
+        idx = where if isinstance(where, BI.PostgresIndex) else BI.SqliteIndex(where)
+        rep["db"], rep["size"] = (f"postgres {where.schema}" if isinstance(where, BI.PostgresIndex) else str(where)), idx.size()
+        idx.close()
+    if ns.json:
+        _dump(reps)
+    else:
+        for rep in reps:
+            for e in rep["errors"][:20]:
+                print(f"research data index: {e}", file=sys.stderr)
+            s = rep["size"]
+            print(f"{rep['policy']} index {rep['db']}: listed " + ", ".join(f"{p} {n}" for p, n in rep["listed"].items())
+                  + "; added " + ", ".join(f"{n} {t}s" for t, n in rep["added"].items()) + f" in {rep['seconds']}s"
+                  + (f"; {len(rep['errors'])} error(s)" if rep["errors"] else "")
+                  + f"; {s['records']['rows']} records ({s['records']['doc_bytes'] / 1e6:.1f} MB of doc), {s['fields']['rows']} fields, "
+                  f"{s['edges']['rows']} edges, {(s['file_bytes'] or 0) / 1e6:.1f} MB on disk")
+    return 1 if any(r["errors"] for r in reps) else 0
 
 
 def cmd_pending(argv: list[str]) -> int:
@@ -1218,7 +1282,7 @@ def expand_short_ids(cmd: str, argv: list[str]) -> list[str]:
 COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "preserved": cmd_preserved, "select": cmd_select,
     "snapshot": cmd_snapshot,
-    "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
+    "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "index": cmd_index, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
     "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,

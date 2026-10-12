@@ -162,9 +162,9 @@ theorem foldsOk_modelSetup (S : Model.Statement) (ptLocal mPts : ℕ) {sh : Shap
 
 /-! ## The round sizes `verifierRows` takes -/
 
-theorem round_size {rounds : Array (Array F128)} {k c : ℕ} {v : Array F128}
+theorem round_size {rounds : Array (Array F128)} {k c : ℕ} {v : Array F128} (hne : Flock.RecAlgebra.NoEmpty rounds)
     (h : (Flock.RecAlgebra.Coins.ofRounds rounds).round k c = .ok v) : k < rounds.size ∧ (rounds[k]!).size = c := by
-  obtain ⟨h1, h2⟩ := Flock.RecAlgebra.ofRounds_get? h
+  obtain ⟨h1, h2⟩ := Flock.RecAlgebra.ofRounds_get? hne h
   obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.mp h1
   exact ⟨hk, by rw [getElem!_pos rounds k hk]; exact h2⟩
 
@@ -181,8 +181,9 @@ theorem roundSizes_shaped {sh : Shape} {S : Flock.RecAlgebra.GfS} (hS : Flock.Re
       (roundSizes sh).length = 3 + (sh.m - 6) + 2 + (sh.kLog - 6) + 1 + (2 + n) + 1 + L := by
   have hsz : (Flock.RecAlgebra.zeroRounds (roundSizes sh)).size = (roundSizes sh).length := by
     simp [Flock.RecAlgebra.zeroRounds]
-  obtain ⟨x, hx⟩ := (roundSizes_spec hS (Flock.RecAlgebra.zeroRounds (roundSizes sh))
-    (Flock.RecAlgebra.extrasLike sh) #[]).2 ⟨zeroRounds_sizes _, by simp [Flock.RecAlgebra.extrasLike]; omega⟩
+  have hneZ := Flock.RecAlgebra.noEmpty_zeroRounds (roundSizes_ne hS)
+  obtain ⟨x, hx⟩ := (roundSizes_spec hS hneZ (Flock.RecAlgebra.extrasLike sh) #[]).2
+    ⟨zeroRounds_sizes _, by simp [Flock.RecAlgebra.extrasLike]; omega⟩
   obtain ⟨v, info, kappa⟩ := x
   obtain ⟨lins, hl⟩ := residualLins_of_verifierRows hx
   obtain ⟨j, hj⟩ := Flock.RecAlgebra.residualLins_run hl
@@ -198,23 +199,23 @@ theorem roundSizes_shaped {sh : Shape} {S : Flock.RecAlgebra.GfS} (hS : Flock.Re
   rw [hzc] at hk1 ezc
   rw [hlc] at hk2 elc er
   rw [hcs] at eg hk3
-  have hlt := (round_size eg).1
+  have hlt := (round_size hneZ eg).1
   refine ⟨(Flock.RecAlgebra.zeroRounds (roundSizes sh)).size - k3,
-    ⟨by omega, size_at (by omega) (round_size e0).2, size_at (by omega) (round_size e1).2,
-      size_at (by omega) (round_size e2).2, fun i hi => ?_, fun i hi => ?_, fun i hi => ?_,
-      size_at (by omega) (round_size eg).2⟩, by omega⟩
+    ⟨by omega, size_at (by omega) (round_size hneZ e0).2, size_at (by omega) (round_size hneZ e1).2,
+      size_at (by omega) (round_size hneZ e2).2, fun i hi => ?_, fun i hi => ?_, fun i hi => ?_,
+      size_at (by omega) (round_size hneZ eg).2⟩, by omega⟩
   · obtain ⟨c, hc, -⟩ := ezc i hi
-    exact size_at (by omega) (round_size hc).2
+    exact size_at (by omega) (round_size hneZ hc).2
   · by_cases hi0 : i = 0
-    · exact size_at (by omega) (round_size eα).2
+    · exact size_at (by omega) (round_size hneZ eα).2
     by_cases hi1 : i = 1
-    · exact size_at (by omega) (round_size eβ).2
+    · exact size_at (by omega) (round_size hneZ eβ).2
     by_cases hil : i = 2 + (sh.kLog - 6)
-    · exact size_at (by omega) (round_size er).2
+    · exact size_at (by omega) (round_size hneZ er).2
     obtain ⟨c, hc, -⟩ := elc (i - 2) (by omega)
-    exact size_at (by omega) (round_size hc).2
+    exact size_at (by omega) (round_size hneZ hc).2
   · obtain ⟨c, hc, -⟩ := ers i (by omega)
-    exact size_at (by omega) (round_size hc).2
+    exact size_at (by omega) (round_size hneZ hc).2
 
 /-- **Ligerito's rounds are at most those `verifierRows` takes after ring switching**: the rounds a Ligerito run's
 frames close (`chunks (ligFrames …)`, `.sq` frames of the schedule's counts only, FramesLigerito.lean:130-141, 207-219)
@@ -233,8 +234,8 @@ coin, `k0` challenges, two intros, the query fold, then the levels'. -/
 def ligCoins (sch : Flock.Schedule) : ℕ :=
   sch.k0 + 9 + ((List.range' 0 (sch.levels.size - 1)).map (levelCoins (sch.levels.size - 1))).sum
 
-theorem levelsLoop_k {c : Array (Array F128)} {M : Flock.RecAlgebra.Messages F128} {sch : Flock.Schedule} {R : ℕ}
-    (hq : ∀ i ≤ R, (sch.levels.getD i default).q ≠ 0) :
+theorem levelsLoop_k {c : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty c)] {M : Flock.RecAlgebra.Messages F128}
+    {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.levels.getD i default).q ≠ 0) :
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : Flock.RecAlgebra.LSt F128) (k : ℕ)
       (out : Array (Array F256) × ℕ) (st' : Flock.RecAlgebra.LSt F128) (k' : ℕ), i + fuel ≤ R →
       Flock.RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Flock.RecAlgebra.Coins.ofRounds c) =
@@ -277,8 +278,9 @@ theorem levelsLoop_k {c : Array (Array F128)} {M : Flock.RecAlgebra.Messages F12
       omega
 
 /-- **Ligerito up to its final check draws `ligCoins` rounds** at a schedule of the seams (`DimSeam`, `LevelSeam`). -/
-theorem ligeritoRun_k {c : Array (Array F128)} {sch : Flock.Schedule} {M : Flock.RecAlgebra.Messages F128}
-    {st₀ : Flock.RecAlgebra.LSt F128} {k₀ k' : ℕ} {out : Array F256 × Array (Array F256) × ℕ}
+theorem ligeritoRun_k {c : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty c)] {sch : Flock.Schedule}
+    {M : Flock.RecAlgebra.Messages F128} {st₀ : Flock.RecAlgebra.LSt F128} {k₀ k' : ℕ}
+    {out : Array F256 × Array (Array F256) × ℕ}
     {stV : Flock.RecAlgebra.LSt F128} (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (hrun : (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k₀ (Flock.RecAlgebra.Coins.ofRounds c) =
@@ -422,8 +424,9 @@ theorem ligRoundsLe_of {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Sche
   intro T cap lig
   have hsz : (Flock.RecAlgebra.zeroRounds (roundSizes sh)).size = (roundSizes sh).length := by
     simp [Flock.RecAlgebra.zeroRounds]
-  obtain ⟨x, hx⟩ := (roundSizes_spec hS (Flock.RecAlgebra.zeroRounds (roundSizes sh))
-    (Flock.RecAlgebra.extrasLike sh) #[]).2 ⟨zeroRounds_sizes _, by simp [Flock.RecAlgebra.extrasLike]; omega⟩
+  have hneZ := Flock.RecAlgebra.noEmpty_zeroRounds (roundSizes_ne hS)
+  obtain ⟨x, hx⟩ := (roundSizes_spec hS hneZ (Flock.RecAlgebra.extrasLike sh) #[]).2
+    ⟨zeroRounds_sizes _, by simp [Flock.RecAlgebra.extrasLike]; omega⟩
   obtain ⟨v, info, kappa⟩ := x
   obtain ⟨lins, hl⟩ := residualLins_of_verifierRows hx
   obtain ⟨j, hj⟩ := Flock.RecAlgebra.residualLins_run hl
@@ -442,8 +445,11 @@ theorem ligRoundsLe_of {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Sche
   have h3' := Flock.RecAlgebra.ligerito_sim (Flock.RecAlgebra.Lin.eval_hom fun _ => 0) _ _ _ _ _ _ _ _ h3
   obtain ⟨st₀, out, stV, k₄, hrun, hdr⟩ := ligerito_drawn h3'
   rw [hsch] at hrun
+  have : Fact (Flock.RecAlgebra.NoEmpty (Flock.RecAlgebra.zeroRounds (roundSizes sh))) := ⟨hneZ⟩
   have hk := ligeritoRun_k hdim hlv hrun
-  have hd : k₄ = (Flock.RecAlgebra.zeroRounds (roundSizes sh)).size := beq_iff_eq.mp hdr
+  have hd : k₄ = (Flock.RecAlgebra.zeroRounds (roundSizes sh)).size := by
+    have e : k₄ = ((Flock.RecAlgebra.zeroRounds (roundSizes sh)).filter (·.size ≠ 0)).size := beq_iff_eq.mp hdr
+    rwa [Flock.RecAlgebra.filter_noEmpty hneZ] at e
   have := chunks_ligFrames_le sch T cap lig
   omega
 
@@ -452,7 +458,7 @@ theorem coinsAgree_of {st : Setup} {sh : Shape} {sch : Flock.Schedule} {n : ℕ}
     (hS : Flock.RecAlgebra.structureOf sh = .ok S) (hcl : sh.claims = 2 + n) (hm : st.m = sh.m)
     (hk : st.fold.kLog = sh.kLog) (h14 : 14 ≤ sh.m) (hlig : LigRoundsLe sh sch) : CoinsAgree st sh sch n := by
   obtain ⟨L, hL, hlen⟩ := roundSizes_shaped hS hcl h14
-  refine ⟨L, by rw [hm, hk]; exact hL, fun T cap lig => ?_⟩
+  refine ⟨L, by rw [hm, hk]; exact hL, fun T cap lig => ?_, roundSizes_ne hS⟩
   have := hlig T cap lig
   omega
 

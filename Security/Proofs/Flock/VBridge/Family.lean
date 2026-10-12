@@ -178,6 +178,9 @@ structure VStarFamily where
   zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin stmts.size) → (Vs j).Outer Reg'
   hfile : ∀ R ω t R₂ j, circuitFile stmts[j] (bind j) = .ok (zs R ω t R₂ j).I.circuitFile
   hnv : ∀ j, (Vs j).nv = stmts[j].instances
+  /-- Each statement's circuit is over plain parts: its META carries no `holo` (`VStar.metaHead` writes none, so
+  `hfile`'s bytes say so, but no META parse is stated here). -/
+  hplain : ∀ j, RecResiduals.holoOf (Vs j).c = .ok false
   /-- The statement of part `p`. -/
   sess : ℕ → Fin stmts.size
   hsess : ∀ p (j : Fin stmts.size), (∃ nm pt, stmts[j] = .inner p nm pt) → sess p = j
@@ -285,11 +288,11 @@ def HStruct (GS : Flock.RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × A
 
 /-- **`HStruct` from the verifier's check of one part**: a circuit `RecResiduals.check` passes (`flock-verify` runs it on
 every circuit it reads), its unit named part `p` at a shape `RecResiduals.shape?` gives as `sh`, has the structure and
-the groups return at `sh` (`RecResiduals.part` computes both). -/
+the groups return at `sh` (`RecResiduals.part` computes both), its parts plain (`holoOf`). -/
 theorem hStruct_of_check {c : Flock.Circuit} (hc : RecResiduals.check c = .ok ()) {m k cl p : ℕ}
-    (hp : RecResiduals.params c.unit.name = some (m, k, cl, p)) (hsh : RecResiduals.shape? m k cl = some F.sh) :
-    ∃ GS gs, F.HStruct GS gs := by
-  obtain ⟨S, ns, nv, hpart, -⟩ := FlockVBridge.OfVStar.check_part hc hp hsh
+    (hp : RecResiduals.params c.unit.name = some (m, k, cl, p)) (hsh : RecResiduals.shape? m k cl = some F.sh)
+    (hh : RecResiduals.holoOf c = .ok false) : ∃ GS gs, F.HStruct GS gs := by
+  obtain ⟨S, ns, nv, hpart, -⟩ := FlockVBridge.OfVStar.check_part hc hp hsh hh
   unfold RecResiduals.part at hpart
   obtain ⟨GS, hGS, hpart⟩ := FlockVBridge.PartS.bind_ok hpart
   dsimp only at hpart

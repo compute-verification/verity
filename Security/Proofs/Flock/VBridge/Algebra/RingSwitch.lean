@@ -22,11 +22,12 @@ open Flock FlockSoundness.Refine
 
 /-! ## Where the ring switches are in w -/
 
-/-- The rounds before the ring switches (`rounds`, rec_algebra.py:748–772): zerocheck's, then lincheck's. -/
+/-- The rounds before the ring switches (`rounds`, rec_algebra.py:748–772): zerocheck's, then lincheck's, then a holo
+shape's `h` (`hRound`). -/
 def preRounds (sh : Shape) : Array (Array Key) :=
   #[(Array.range 64).map .ab ++ (Array.range 64).map .c] ++
     (Array.range (sh.m - 6)).map (fun i => #[.g1 i, .ginf i]) ++ #[#[.fa, .fb]] ++
-    (Array.range (sh.kLog - 6)).map (fun j => #[.q1 j, .qinf j]) ++ #[(Array.range 64).map .zp]
+    (Array.range (sh.kLog - 6)).map (fun j => #[.q1 j, .qinf j]) ++ #[(Array.range 64).map .zp] ++ hRound sh
 
 /-- The ring switches' rounds: `c` blocks of 128, block `k` entry `v` being `g k v`. -/
 def blocks (g : Nat → Nat → Key) (c : Nat) : Array Key :=
@@ -56,7 +57,7 @@ theorem rounds_split (sh : Shape) :
       ligRounds sh.sched := rfl
 
 theorem rs_not_pre (sh : Shape) (j v : Nat) : Key.rs j v ∉ (preRounds sh).flatten := by
-  simp [preRounds, Array.mem_flatten]
+  cases h : sh.holo <;> simp [preRounds, hRound, h, Array.mem_flatten]
 
 theorem idxOf?_of {xs : Array Key} {a : Key} {i : Nat} (hi : xs[i]? = some a) (hlt : ∀ j < i, xs[j]? ≠ some a) :
     xs.idxOf? a = some i := by
@@ -271,7 +272,7 @@ check on the ring switches w holds (`decoded`), and the `T` w holds, Ligerito's,
 (Opening.lean:83–88) at the coins `verifierRows` returns. -/
 theorem ringSwitch_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}
+    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hpl : sh.holo = false)
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : w.size = S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum kappa r cons)
@@ -282,7 +283,7 @@ theorem ringSwitch_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat �
       valOf sh w comb cons .T = dot info.rs.gamma
         ((List.range sh.claims).map fun j =>
           dot (eqTable (info.rs.sws[j]!).rpp) (tOf (decoded sh w comb cons).rs[j]!)).toArray := by
-  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hrows hS hw hc hacc
+  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hpl hrows hS hw hc hacc
   rw [hres] at hres'
   cases hres'
   obtain ⟨hcl, r0, r1, rsr, lgr, k1, k2, k3, -, -, h3, -, hrs⟩ := run_stages hrun

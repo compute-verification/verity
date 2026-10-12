@@ -111,6 +111,7 @@ EXPIRES_S = 2592000                                              # 30 days; a la
 PAGE = 200
 ROUTER_DOWN = "the router's events route doesn't answer"         # its owner's alert, by which the next sender sees it was sent
 ROUTER_ALERT_S = 21600                                           # 6 hours: one alert per outage, again if it outlasts that
+ROUTER_RECHECK_S = 300                                           # how stale a long-lived Routes' idea of the router may get
 ASK_DANIEL = "https://website-docs-sage.vercel.app/api/agent-approvals"   # the cards' route, and its OIDC token's audience
 ASK_CHANNEL = "ask-daniel"
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -911,8 +912,11 @@ class Routes:
         """Whether the console site's events route rings the doorbells: `routes.d/router.json` says `"mode": "server"` as
         published and in the clone, each that can be read, and its `url` answers.  Either saying otherwise means the sender
         rings them, so switching back to `cli` reaches every sender at once, a clone not yet pulled included; a route that
-        doesn't answer leaves `router_down` = (url, why, owner) for `deliver` to alert its owner."""
-        if not hasattr(self, "_mode"):
+        doesn't answer leaves `router_down` = (url, why, owner) for `deliver` to alert its owner.  A process that holds one
+        `Routes` for days (the monitors' relay, n1_alerts) reads all of this again every ROUTER_RECHECK_S."""
+        now = _now().timestamp()
+        if now - getattr(self, "_mode_at", -ROUTER_RECHECK_S) >= ROUTER_RECHECK_S:
+            self._mode_at, self.router_down = now, None
             p, routers = self.root / ROUTES_DIR / "router.json", []
             for read in (lambda: self.get(f"{self.base}router.json"), lambda: p.read_bytes() if p.is_file() else None):
                 try:
@@ -1623,6 +1627,9 @@ def _now_stamp() -> str:
 def cmd_inbox(ns: argparse.Namespace, reg: dict) -> int:
     routes = routes_of(ns)
     if ns.verb == "list":
+        for h in reg["handles"]:                                    # a clone not pulled since the name opened lists it too
+            if h["handle"] not in routes.local:
+                routes.get_route(h["handle"])
         rows = sorted({**routes.local, **routes.all()}.values(), key=lambda r: r["name"])
         if ns.json:
             print(json.dumps(rows, indent=2))

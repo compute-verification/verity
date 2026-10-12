@@ -502,7 +502,7 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
             vs[0][-64] ^= 1
         res["algebra"] = []
         for j, p in enumerate(RR.parts(RR.spec(sh))):
-            st = RR.statement(p.S, f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", 2)
+            st = RR.statement(p.S, f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", 2, holo=sh.holo)
             names = [nm for nm, _ in p.S["ports"]]
             d = out / "alg" / f"p{j}"
             s = RR.write(st, {nm: reads[nm] for nm in names}, [[v[i] for i in p.v] for v in vs], d, evaluate=evaluate,

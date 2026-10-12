@@ -1541,6 +1541,9 @@ def _count(r: Result) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
+    # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check left a 42 GB one on vy-cpu-2, 11 Oct)
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
     argv = sys.argv[1:] if argv is None else argv
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
     argv = argv[:argv.index("--")] if "--" in argv else argv

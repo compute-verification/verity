@@ -11,7 +11,7 @@ round `i`. Two facts bound it:
   consistency sums enter a message; `final_c` (`fcOf`) reads the comb but is not one of `repMsgs`;
 * the last round's messages are the openings (`tableTape`'s last step, `opensOf`), which V*'s units read from their
   private `row` and `aux` ports or from `rec-rows-L<level>` (`rec_outer.py:1-40`), never a round commitment
-  (`SelRounds`: `rec-c<i>` or `rec-top-L<level>`, `Flock/Registered.lean:180-182`). Two accepted outer proofs that
+  (`SelRounds`: `rec-c<i>` or `rec-top-L<level>` at V*'s, `Flock/Registered.lean:182-193`). Two accepted outer proofs that
   differ only in the last inner coin agree on every committed row yet open different positions
   (`rec_vstar.positions`), so `MsgsRead` is false at `i = r − 1` for every `sel` with `SelRounds sel`.
 

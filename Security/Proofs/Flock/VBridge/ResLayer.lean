@@ -202,6 +202,7 @@ theorem decode_checkR {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAg
     (hc : RecResiduals.check c = .ok ()) {m k cl p : ℕ} (hp : RecResiduals.params c.unit.name = some (m, k, cl, p))
     {sh : Flock.Shape} (hsh : RecResiduals.shape? m k cl = some sh) {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     (hpart : RecResiduals.part sh p = .ok (S, ns, nv)) (hu : c.unit.unitLog ≤ 32)
+    (hh : RecResiduals.holoOf c = .ok false)
     (rounds : Array (Array Flock.F128)) (extras : Array Flock.Claim) (comb : Array Flock.F128)
     (w : ℕ → Flock.F128) (wI V : Array ℕ) (hwI : wI.size ≤ ns.sum) (hV : V.size ≤ nv)
     (hw : ∀ q < 128 * ns.sum, ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 q) →
@@ -210,7 +211,7 @@ theorem decode_checkR {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAg
     ∃ w' v' : ℕ → Flock.F128, (∀ k (hk : k < wI.size), w' k = w wI[k]) ∧
       (∀ k (hk : k < V.size), v' k = vOf sh rounds extras comb V[k]) ∧
       PartCols S w' v' (copyVal (keyInst hU nU (Layout.outsOf c hU nU) u) bits hj) (partBase S ns nv) := by
-  obtain ⟨S', ns', nv', hpart', hn⟩ := check_part hc hp hsh
+  obtain ⟨S', ns', nv', hpart', hn⟩ := check_part hc hp hsh hh
   rw [hpart] at hpart'
   cases hpart'
   exact ⟨sub wI w, sub V (vOf sh rounds extras comb), sub_lt wI w, sub_lt V _,
@@ -224,6 +225,7 @@ theorem decode_partR {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgr
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : structureOf sh = .ok S0) (hg : groups S0 (portSizes sh) = .ok gs)
     (hpg : p < gs.size) {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     (hpart : RecResiduals.part sh p = .ok (S, ns, nv)) (hu : c.unit.unitLog ≤ 32)
+    (hh : RecResiduals.holoOf c = .ok false)
     (rounds : Array (Array Flock.F128)) (extras : Array Flock.Claim) (comb : Array Flock.F128) (w : ℕ → Flock.F128)
     (hw : ∀ q < 128 * ns.sum, ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 q) →
       RegBit zo u j (rowCol (partRep ns nv).ports 0 q) (wbit (sub (wIdx (portSizes sh) gs[p].2.1) w) q))
@@ -236,7 +238,7 @@ theorem decode_partR {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgr
       PartCols S w' v' (copyVal (keyInst hU nU (Layout.outsOf c hU nU) u) bits hj) (partBase S ns nv) := by
   obtain ⟨hS', -, -⟩ := part_eq hS hg hpg hpart
   obtain ⟨hwI, hV⟩ := part_sizes hS hg hpg hpart
-  exact ⟨hS', decode_checkR zo hA u hj hone hc hp hsh hpart hu rounds extras comb w _ _ hwI.le hV.le hw hv⟩
+  exact ⟨hS', decode_checkR zo hA u hj hone hc hp hsh hpart hu hh rounds extras comb w _ _ hwI.le hV.le hw hv⟩
 
 /-- **Copy `j` of unit `u` is part `p` of the groups `gs`, its outputs 0 in the layer**: `ResZeroAt`'s facts, with the
 row ports registered bits of `w` only at the columns some computed row of the unit reads (`ReadCol`), and every output
@@ -246,7 +248,7 @@ def ResZeroAtL (bits : Fin (Layout.keyN c hU nU) → Bool) (u : Fin nU) (j : ℕ
     (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (p : ℕ) (w : ℕ → F128) (rounds : Array (Array F128))
     (extras : Array Claim) (comb : Array F128) : Prop :=
   ∃ (hpg : p < gs.size) (hj : j < c.upv), bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true ∧
-    RecResiduals.check c = .ok () ∧ c.unit.unitLog ≤ 32 ∧
+    RecResiduals.check c = .ok () ∧ RecResiduals.holoOf c = .ok false ∧ c.unit.unitLog ≤ 32 ∧
     ∃ m k cl, RecResiduals.params c.unit.name = some (m, k, cl, p) ∧ RecResiduals.shape? m k cl = some sh ∧
     ∃ S ns nv, RecResiduals.part sh p = .ok (S, ns, nv) ∧
       (∀ q < 128 * ns.sum, ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 q) →
@@ -266,9 +268,9 @@ theorem partCols_of_resZeroAtL {bits : Fin (Layout.keyN c hU nU) → Bool} (hG :
         (∀ k (hk : k < (wIdx (portSizes sh) gs[p].2.1).size), w' k = w (wIdx (portSizes sh) gs[p].2.1)[k]) ∧
         (∀ k (hk : k < gs[p].2.2.size), v' k = vOf sh rounds extras comb gs[p].2.2[k]) ∧
         PartCols S' w' v' col base ∧ ∀ t < 128 * S'.res.length, col (base + t) = false := by
-  obtain ⟨hpg, hj, hone, hc, hu, m, k, cl, hp, hsh, S, ns, nv, hpart, hw, hv, hz⟩ := h
+  obtain ⟨hpg, hj, hone, hc, hh, hu, m, k, cl, hp, hsh, S, ns, nv, hpart, hw, hv, hz⟩ := h
   obtain ⟨hS', w', v', hw', hv', hcols⟩ :=
-    decode_partR zo hG.2 u hj hone hc hp hsh hS hg hpg hpart hu rounds extras comb w hw hv
+    decode_partR zo hG.2 u hj hone hc hp hsh hS hg hpg hpart hu hh rounds extras comb w hw hv
   have hsmall := part_small hpart
   exact ⟨hpg, S, hS', w', v', _, _, hw', hv', hcols, fun t ht => hz t (by omega)⟩
 

@@ -15,7 +15,7 @@ array at the length `decodeProof` reads (Proof.lean:94-151) by construction, so 
 * `ligOf ms l r`: rep `r`'s openings. Level `ℓ`'s opening `j` is copy 0 of unit `unO ℓ r j` of the level's session
   (`openCol`): its row the first `2^lanes` elements of its `row` columns (`rowsOf`'s), its `h`-th sibling the 64 bytes
   from column `128 · 2^lanes + 512 h` (its `aux`, `RecOpen.sibForms`); no salts, the inner statement's leaves being
-  unsalted (`flock-leaf/sha512-unsalted`, Tags.lean:333-345). Rep `r`'s recursive caps are the caps among `ms` after
+  unsalted (`flock-leaf/sha512-unsalted`, `Tags.withPlainLeaves`). Rep `r`'s recursive caps are the caps among `ms` after
   the level-0 one, rep 0's first (`tableTape`: rep 0's tape, then rep 1's), in level order (`ligMsgs`). The nonces are zero: the verifier absorbs them
   and checks nothing of them (Ligerito.lean:143, 146, `Transcript.pow`). The messages, the out-of-domain values and `yr`
   are empty: `proofOf` sets them from the rep's values.

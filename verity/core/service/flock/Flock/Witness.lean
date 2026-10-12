@@ -135,7 +135,7 @@ def acceptsStmt (cf pf : ByteArray) (partition : Option Json) (program : Option 
 
 /-- The verifier's own inner shape at the inner statement `st` set up with `spec` (`innerAt`, `RecVStar.innerOf`'s value). -/
 def shapeOf (spec : SessionSpec) (st : Stmt) : RecVStar.Inner :=
-  ⟨st.m, st.c.kLog, 2 + spec.points * st.regions.size, st.regions.size⟩
+  { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size }
 
 /-- The number of V*'s outer statements over an inner session of `m` variables, `k_log` and `claims` claims: the body of
 `Proofs.Flock.Recursive.outerParts`, which is this by `rfl`. -/

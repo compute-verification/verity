@@ -200,7 +200,7 @@ theorem regBit_of_hResL {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Ar
       (bitOf (el (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).w (wIOf F.sh p)[a]) b) := by
   have hP : partsOf F.sh = gs := partsOf_eq hst.1 hst.2
   have hpg : p < gs.size := by rw [← hP]; exact hp
-  obtain ⟨hpg', -, -, -, -, -, -, -, -, -, S, ns, nv, hpart, hrow, -, -⟩ := hres R ω t R₂ τ o h r p hpg
+  obtain ⟨hpg', -, -, -, -, -, -, -, -, -, -, S, ns, nv, hpart, hrow, -, -⟩ := hres R ω t R₂ τ o h r p hpg
   obtain ⟨-, hns, hnv⟩ := FlockVBridge.OfVStar.part_eq hst.1 hst.2 hpg hpart
   have hgp : (partsOf F.sh)[p]! = gs[p] := by rw [hP, getElem!_pos gs p hpg]
   have hnsp : nsOf F.sh p = ns := by rw [nsOf, hgp, hns]
