@@ -13,8 +13,8 @@
 # "split wide dense") names the builds (split8, dense8: words decoded 8 at a time, not 4; densev0: the tags in BLAKE3's
 # plain form, V0, not V1's IMAD adds)
 # and WC_KMAX (default 8) the largest k they hold.
-# KV=1 runs the KV cache's codec instead: kv.cu built at each width of KV_FIELDS (default 512 768), then kv_bench.py with
-# KV_ARGS.
+# KV=1 runs the KV cache's codec instead: kv.cu built at each width of KV_FIELDS (default 512 768; a width tagged k1
+# squares by one level of Karatsuba, o1 builds at ptxas -O1, as in 1536k1o1), then kv_bench.py with KV_ARGS.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -28,10 +28,12 @@ B=$(mktemp -d /tmp/word-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 if [ "${KV:-0}" = 1 ]; then
   LIBS=()
   for f in ${KV_FIELDS:-512 768}; do
-    n=${f%k1} lib=p${f/k1/-k1} kara=0
-    [ "$f" != "$n" ] && kara=1
+    n=${f%%[a-z]*} tag=${f#"${f%%[a-z]*}"} flags=()
+    lib=p$n${tag:+-$tag}
+    [[ $tag == *k1* ]] && flags+=(-DKV_KARATSUBA=1)
+    [[ $tag == *o1* ]] && flags+=(-Xptxas -O1)
     nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=$n \
-      -DKV_KARATSUBA=$kara -o "$B/kv-$lib.so" $WC/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
+      "${flags[@]}" -o "$B/kv-$lib.so" $WC/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
     LIBS+=(--lib "$lib=$B/kv-$lib.so")
   done
   sha256sum "$B"/*.so > "$O/libs.sha256"

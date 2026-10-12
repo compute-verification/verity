@@ -525,8 +525,8 @@ __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ s, 
 
 // what 0: `steps` squarings of ILP words a thread; 1: `steps` decodes of k rounds; 2: `steps` encodes of k rounds, each
 // step's input the previous output and the index advancing. The words start canonical (top limb below p's).
-template <int ILP>
-__global__ void __launch_bounds__(WPB) chain_kernel(int what, int k, u64 steps, unsigned long long *xr) {
+template <int WHAT, int ILP>
+__global__ void __launch_bounds__(WPB) chain_kernel(int k, u64 steps, unsigned long long *xr) {
   const u64 gid = (u64)blockIdx.x * WPB + threadIdx.x;
   u32 x[ILP][NL];
 #pragma unroll
@@ -539,13 +539,13 @@ __global__ void __launch_bounds__(WPB) chain_kernel(int what, int k, u64 steps, 
     }
     x[w][NL - 1] &= 0x7fffffffu;
   }
-  if (what == 0) {
+  if constexpr (WHAT == 0) {
 #pragma unroll 1
     for (u64 s = 0; s < steps; ++s) {
 #pragma unroll
       for (int w = 0; w < ILP; ++w) sqr(x[w], x[w]);
     }
-  } else if (what == 1) {
+  } else if constexpr (WHAT == 1) {
 #pragma unroll 1
     for (u64 s = 0; s < steps; ++s) decode_word(x[0], gid + s, k);
   } else {
@@ -912,8 +912,10 @@ int kv_read(const void *store, uint64_t bytes, unsigned long long *xr, int grid,
 
 int kv_chain(int what, int k, int ilp, uint64_t steps, int grid, unsigned long long *xr, cudaStream_t s) {
   if (what < 0 || what > 2 || ((what > 0) && (k < 1 || k > kv::KMAX))) return -1;
-  if (ilp == 1) kv::chain_kernel<1><<<grid, kv::WPB, 0, s>>>(what, k, steps, xr);
-  else if (ilp == 2) kv::chain_kernel<2><<<grid, kv::WPB, 0, s>>>(what, k, steps, xr);
+  if (what == 0 && ilp == 1) kv::chain_kernel<0, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
+  else if (what == 0 && ilp == 2) kv::chain_kernel<0, 2><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
+  else if (what == 1) kv::chain_kernel<1, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
+  else if (what == 2) kv::chain_kernel<2, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
   else return -1;
   return launched();
 }
