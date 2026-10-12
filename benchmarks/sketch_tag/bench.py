@@ -575,6 +575,153 @@ def case(lib: Lib, torch, name: str, n: int, kd: int, a, warps_of, log) -> dict:
     return res
 
 
+SEQ = ("qkv", "o", "gate_up", "down")
+
+
+def sequence(lib: Lib, torch, a, warps_of, cases: dict, log) -> dict:
+    """A transformer layer's four linears in order over a ring of layers past the L2, with the commit deferred to the
+    large calls' committer warps: gate_up hashes the previous layer's qkv, o and down sketches (one buffer, in that
+    order), down its own layer's gate_up. Per batch the layer's time against the sum of the linears' native times, for
+    the GEMMs alone (base: plain, or with the decode), with the sketch, and with the deferred commit."""
+    ks, nt, cfg = 16 if 16 in a.ks else a.ks[0], 4096 if 4096 in a.ns else a.ns[0], a.cfgs[0]
+    cn = min(a.committers, WB.WS_MAX_WARPS - 1 - cfg[0])
+    res = {"k": ks, "n_target": nt, "cfg": cfg_name(cfg), "committers": cn, "layouts": {}, "ok": True}
+    so, st = lib.so, WB.stream(torch)
+    gx = torch.Generator(device="cuda").manual_seed(7)
+    xs = {(mb, kd): torch.randn(mb, kd, device="cuda", generator=gx).to(torch.float8_e4m3fn)
+          for mb in a.batches for kd in {SHAPES[s][1] for s in SEQ}}
+    ys = {s: torch.zeros(32, SHAPES[s][0], dtype=torch.float32, device="cuda") for s in SEQ}
+    for lay in ("plain", "enc") if a.kr else ("plain",):
+        kr = 0 if lay == "plain" else a.kr
+        stores, sks = {}, {}
+        for name in SEQ:
+            n, kd = SHAPES[name]
+            wb = WB.fp8_weights(torch, n, kd, 100 + n + kd).view(torch.uint8)
+            if kr:
+                payloads = WB.fragment_payloads(torch, wb, lib.bits)
+                WB.set_key(lib, torch, C.key(SEED, kr))
+                enc = torch.empty_like(payloads)
+                lib.call("wc_encode", WB.ptr(payloads), WB.ptr(enc), payloads.numel(), 0, kr, 188 * 6, st)
+                WB.set_key(lib, torch, C.key(SEED, WB.KMAX))
+                torch.cuda.synchronize()
+                del payloads
+                stores[name] = enc
+            else:
+                stores[name] = WB.plain_layout(wb)
+            sks[name] = Sketch(lib, torch, n, kd, S.PLAIN if kr == 0 else lib.bits, ks, nt, warps_of(n, kd))
+        layer_bytes = sum(v.numel() * v.element_size() for v in stores.values())
+        nl = max(2, -(-WB.L2_DEFEAT_BYTES // layer_bytes))
+        ring = [stores] + [{k: v.clone() for k, v in stores.items()} for _ in range(nl - 1)]
+        off = {"qkv": 0, "o": sks["qkv"].nvec, "down": sks["qkv"].nvec + sks["o"].nvec}
+        nrest, ngu = off["down"] + sks["down"].nvec, sks["gate_up"].nvec
+        rest = [torch.zeros(nrest * ks, dtype=torch.int32, device="cuda") for _ in range(nl)]
+        gu = [torch.zeros(ngu * ks, dtype=torch.int32, device="cuda") for _ in range(nl)]
+        crest = [WB.Commit(lib, torch, nrest) for _ in range(nl)]
+        cgu = [WB.Commit(lib, torch, ngu) for _ in range(nl)]
+        fps = {s: WB.ptr(sks[s].frag) for s in SEQ}
+        lr = {"layers": nl, "layer_store_bytes": layer_bytes, "times": {}}
+        res["layouts"][lay] = lr
+
+        def plan(mode, mb):
+            """The ring's calls as sk_gemm argument tuples (groups fixed by a first launch of each)."""
+            xp = {kd: WB.ptr(x) for (b, kd), x in xs.items() if b == mb}
+            calls = []
+            for li in range(nl):
+                prev = (li - 1) % nl
+                for name in SEQ:
+                    sko, (n, kd) = sks[name], SHAPES[name]
+                    k_ = 0 if mode == "base" else ks
+                    skp = (None if not k_ else WB.ptr(gu[li]) if name == "gate_up"
+                           else WB.ptr(rest[li]) + 4 * ks * off[name])
+                    commit = (0, None, 0, 0, None, 0)
+                    if mode == "fused" and name == "gate_up":
+                        commit = (cn, WB.ptr(rest[prev]), nrest, 0, crest[prev].ptr, 1)
+                    elif mode == "fused" and name == "down":
+                        commit = (cn, WB.ptr(gu[li]), ngu, 0, cgu[li].ptr, 1)
+                    calls.append([kr, k_, WB.ptr(ring[li][name]), xp[kd], WB.ptr(ys[name]), mb, n, kd, 0, 0, cfg[0],
+                                  cfg[1], 0, None, sko.t, sko.run, fps[name] if k_ else None, skp, 1, SKETCH_SEED,
+                                  *commit, st])
+            for c in calls[:len(SEQ)]:
+                lc = ctypes.c_int(0)
+                lib.call("sk_gemm", *c[:13], ctypes.byref(lc), *c[14:])
+                for c2 in calls:
+                    if c2[6:8] == c[6:8]:
+                        c2[12] = lc.value // (c[7] // C.TASK_COLS)
+
+            def f():
+                rc = 0
+                for c in calls:
+                    rc |= so.sk_gemm(*c)
+                if rc:
+                    raise RuntimeError(f"sequence {lay} {mode}: error {rc}")
+            return f
+
+        # the deferred commit's tags and leaves are the separate kernels' over the same sketches
+        mb0 = a.batches[0]
+        for b in rest + gu:
+            b.zero_()
+        plan("fused", mb0)()
+        sep_r, sep_g = torch.zeros_like(rest[0]), torch.zeros_like(gu[0])
+        cr, cg = WB.Commit(lib, torch, nrest), WB.Commit(lib, torch, ngu)
+        for name in SEQ:
+            sko, (n, kd) = sks[name], SHAPES[name]
+            dst = sep_g if name == "gate_up" else sep_r[ks * off[name]:]
+            yy = torch.zeros(kd // C.TASK_COLS * mb0 * n, dtype=torch.float32, device="cuda")
+            gemm(lib, torch, kr, ks, ring[0][name], xs[(mb0, kd)], yy, n, kd, True, cfg, sko.t, sko.run, sko.frag, dst)
+        for buf, cm, nv in ((sep_r, cr, nrest), (sep_g, cg, ngu)):
+            lib.call("sk_hash", ks, WB.ptr(buf), nv, SKETCH_SEED, 0, cm.tags, 1, st)
+            lib.call("sk_leaves", cm.ptr, nv, SKETCH_SEED, st)
+        torch.cuda.synchronize()
+        lr["commit_equal"] = (crest[0].tag_list() == cr.tag_list() and crest[0].leaf_list() == cr.leaf_list()
+                              and cgu[0].tag_list() == cg.tag_list() and cgu[0].leaf_list() == cg.leaf_list())
+        res["ok"] &= lr["commit_equal"]
+        log(f"sequence {lay}: {nl} layers, deferred commit {'ok' if lr['commit_equal'] else 'FAIL'}")
+        del sep_r, sep_g, cr, cg
+        if not lr["commit_equal"] or a.mode != "bench":
+            continue
+        for mb in a.batches:
+            arms = {m: plan(m, mb) for m in ("base", "sk", "fused")}
+            for f in arms.values():
+                f()
+            torch.cuda.synchronize()
+            times = {m: [] for m in arms}
+            for rep in range(a.reps):
+                for m in list(arms)[rep % 3:] + list(arms)[:rep % 3]:
+                    times[m].append(WB.queued(lib, torch, arms[m])[0] / nl)
+            med = {m: statistics.median(v) for m, v in times.items()}
+            native = sum(cases[s]["times"][mb]["native_s"] for s in SEQ)
+            lr["times"][mb] = {"median_s": med, "times_s": times, "native_s": native,
+                               "ratio_vs_native": {m: v / native for m, v in med.items()}}
+            log(f"sequence {lay} M={mb}: native {native * 1e6:.1f} us a layer; "
+                + ", ".join(f"{m} {v / native:.3f}x" for m, v in med.items()))
+        del ring, rest, gu, crest, cgu, stores, sks
+        torch.cuda.empty_cache()
+    return res
+
+
+def sequence_points(seq: dict | None, lib: Lib, a) -> list[dict]:
+    """The layer sequence's points: y_total = (the layer with the deferred commit) / native - 1."""
+    points = []
+    for lay, lr in (seq or {}).get("layouts", {}).items():
+        for mb, t in lr["times"].items():
+            r, nat = t["ratio_vs_native"], t["native_s"]
+            enc = lay == "enc"
+            points.append({
+                "schema": "verity/codec-frontier-point/v0", "lane": "ra-sketch-tag", "b": 61 if enc else 8,
+                "k": a.kr if enc else 0, "batch": int(mb),
+                "arithmetic": f"cuda-int8-mma/sketch-k{seq['k']}-n{seq['n_target']}/" +
+                              (f"{lib.name}/pb{lib.bits}" if enc else "plain") + "/layer-sequence",
+                "y_total": r["fused"] - 1, "commit_mode": "deferred (gate_up: previous qkv, o, down; down: gate_up)",
+                "y_base": r["base"] - 1, "y_sketch": r["sk"] - r["base"], "y_commit": r["fused"] - r["sk"],
+                "y_hash": None, "x": None, "delta": None, "tau": None, "measured": True,
+                "label": f"sketch-then-hash k={seq['k']} n~{seq['n_target']} layer sequence "
+                         f"({'encoded' if enc else 'plain'}), commit in the large calls' committer warps",
+                "sketch_k": seq["k"], "sketch_n_target": seq["n_target"], "layers": lr["layers"],
+                "native_step_s": nat, "layer_s": t["median_s"], "committers": seq["committers"], "cfg": seq["cfg"],
+                "run": os.environ.get("RESEARCH_RUN_ID"), "art": None})
+    return points
+
+
 def frontier(res: dict, lib: Lib, a) -> list[dict]:
     """Layer-weighted (the four linears' sum) per layout, k, n and batch: y_total = the sum of each linear's fastest
     commit (separate kernels behind the GEMM, committer warps inside it, a side stream, or one pass over the window's
@@ -650,7 +797,8 @@ def write_result(ok: bool, points: list[dict], libs: list[Lib], out: Path) -> No
     ms = []
     for p in points:
         lay = "enc" if p["b"] == 61 else "plain"
-        stem = f"{lay}_k{p['sketch_k']}_n{p['sketch_n']}_m{p['batch']}"
+        stem = (f"seq_{lay}_k{p['sketch_k']}_m{p['batch']}" if "layers" in p
+                else f"{lay}_k{p['sketch_k']}_n{p['sketch_n']}_m{p['batch']}")
         ms += [{"name": f"y_{f}_{stem}", "value": p[f"y_{f}"], "unit": "1"}
                for f in ("total", "total_fused", "total_side", "total_window", "total_separate", "sketch", "hash",
                          "commit", "commit_window") if p.get(f"y_{f}") is not None]
@@ -735,8 +883,12 @@ def main() -> int:
             ok &= g.get("ok", False)
             if not g.get("ok", False):
                 break
+        if ok and a.mode == "bench" and all(s in lr["gemm"] for s in SEQ):
+            log(f"{lib.name}: layer sequence")
+            lr["sequence"] = sequence(lib, torch, a, warps_of, lr["gemm"], log)
+            ok &= lr["sequence"]["ok"]
         if ok and a.mode == "bench":
-            lr["points"] = frontier(lr, lib, a)
+            lr["points"] = frontier(lr, lib, a) + sequence_points(lr.get("sequence"), lib, a)
     res["ok"] = ok
     res["elapsed_s"] = time.time() - t0
     (out / "sketch-tag.json").write_text(json.dumps(res, indent=1))
