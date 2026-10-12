@@ -13,6 +13,7 @@ from verity_vllm.store.registry import ArrayBacking, Store, TagReceipt, chain, v
 
 WORD = 64
 BLOCK = 256
+SIGMA, SIGMA2 = bytes(range(32)), bytes(range(1, 33))
 
 
 class FakeCodec:
@@ -178,11 +179,43 @@ def test_passes_are_chained_from_the_challenge():
         b, _ = weights(s)
         if flip:
             b.write(0, bytes([b.read(0, 1)[0] ^ 1]))
-        return _window(s, b"sigma", [((), None), ((), None), ((), None)])[1]
-    w, w2 = run(False), run(True)
-    assert w.passes[0].seed == chain(b"sigma", None, 0)
-    assert [p.seed for p in w.passes[1:]] == [chain(b"sigma", p.root, p.index + 1) for p in w.passes[:-1]]
+        return _window(s, SIGMA, [((), None), ((), None), ((), None)])[1], s.registration().root
+    (w, reg), (w2, _) = run(False), run(True)
+    assert w.passes[0].seed == chain(SIGMA, reg, 0)
+    assert [p.seed for p in w.passes[1:]] == [chain(SIGMA, p.root, p.index + 1) for p in w.passes[:-1]]
     assert w.passes[0].seed == w2.passes[0].seed and w.passes[1].seed != w2.passes[1].seed
+    assert chain(SIGMA, reg, 0) == hashlib.sha512(b"verity/remote-bandwidth/seed/v0\0" + SIGMA + bytes(4) + reg).digest()
+
+
+def test_windows_chain_through_the_session():
+    s = Store()
+    weights(s)
+    _, w1 = _window(s, SIGMA, [((), None), ((), None)])
+    _, w2 = _window(s, SIGMA2, [((), None)])
+    assert w2.passes[0].seed == chain(SIGMA2, w1.passes[-1].root, 0)
+    with pytest.raises(ValueError):
+        s.begin_window(b"sigma")
+
+
+def test_a_plan_is_its_runs_each_block_once():
+    s = Store(filler_plan=lambda st, j: [("kv/0", [0, 1, 5])])
+    weights(s)
+    weights(s, "w2", 2, seed=1)
+    pool(s)
+    s.kv_alloc([2])
+    s.kv_write_reference([Append(2, 0, 8)], kv_payload, step=0)
+    (pc,), w = _window(s, SIGMA, [([2], None)])
+    runs = [(0, 8), (16, 4), (32, 4), (8, 2), (13, 1)]
+    assert s.plan(0).tolist() == [b for f, c in runs for b in range(f, f + c)]
+    want = b"verity/remote-bandwidth/plan/v0\0" + struct.pack(">I", 5) + b"".join(struct.pack(">QQ", *r) for r in runs)
+    assert pc.plan_digest == hashlib.sha512(want).digest()
+    t = Store(filler_plan=lambda st, j: [("kv/0", [0, 8])])
+    pool(t)
+    t.kv_alloc([2])
+    t.kv_write_reference([Append(2, 0, 8)], kv_payload, step=0)
+    t.begin_window(SIGMA)
+    with pytest.raises(ValueError):
+        t.begin_pass([2])
 
 
 def test_outside_a_window_a_pass_commits_nothing():
@@ -201,7 +234,7 @@ def test_openings_verify_and_a_tampered_one_does_not():
     s.register("dram", "host", "filler", host, block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, source="zeros")
     s.kv_alloc([0, 3])
     s.kv_write_reference([Append(0, 0, 8), Append(3, 0, 4)], kv_payload, step=0)
-    passes, w = _window(s, b"sigma", [([0, 3], None), ([0, 3], [Append(3, 4, 4)]), ([0, 3], None)])
+    passes, w = _window(s, SIGMA, [([0, 3], None), ([0, 3], [Append(3, 4, 4)]), ([0, 3], None)])
     assert len(w.passes) == 3 and w.passes[2].blocks == 6 + 2 * 6 + 4 + 3 + 2 * 2
     lay = s.layout()
     for j, pc in enumerate(w.passes):
@@ -225,7 +258,7 @@ def test_an_opening_of_a_rewritten_block_is_stale():
     pool(s)
     s.kv_alloc([0])
     s.kv_write_reference([Append(0, 0, 8)], kv_payload, step=0)
-    _, w = _window(s, b"s", [([0], None)])
+    _, w = _window(s, SIGMA, [([0], None)])
     s.kv_free([0])
     s.kv_alloc([0])
     s.kv_write_reference([Append(0, 0, 2)], kv_payload, step=1)
@@ -237,7 +270,7 @@ def test_an_opening_of_a_rewritten_block_is_stale():
 def test_a_device_reader_hands_in_segment_roots():
     s = Store()
     weights(s)
-    s.begin_window(b"s")
+    s.begin_window(SIGMA)
     s.begin_pass()
     pc = s.end_pass(roots={0: b"\x07" * 64})
     assert pc.segment_roots == (b"\x07" * 64,)
@@ -252,6 +285,6 @@ def test_identity_codec_and_tag_receipts():
     rec = TagReceipt(tags.get("ro-blake3/v1"))
     s.register("w", "hbm", "weights", b, block_bytes=BLOCK, codec=IDENTITY, receipt=rec, source="arange")
     assert b.read(0, b.nbytes) == raw.tobytes()
-    _, w = _window(s, b"s", [((), None)])
+    _, w = _window(s, SIGMA, [((), None)])
     o = s.open([(0, 1)])[0]
     assert verify_opening(s.region("w"), w.passes[0], s.plan(0), o, rec, IDENTITY.decode, raw.tobytes()[BLOCK:])

@@ -12,12 +12,14 @@ receipt     a keyed hash of one block read in a pass, `keyed(seed)(j, block, z)`
 registration  putting a block into the store: its bytes are the codec's encoding of a payload a `Source` names; every
             registration is a record in the log, and `Registration.root` commits the log
 window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`
-pass        one read of the live store: weights, the batch's written KV, and filler to top up; its seed is chained,
-            seed_0 = H(σ), seed_j = H(σ, commitment_(j-1)), so pass j's receipts can't start before pass j-1 is committed
+pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
+            is chained, seed_j = H(σ, j, commitment before it) across windows (the registration's root before the
+            session's first), so pass j's receipts can't start before the pass before it is committed
 segment     a run of one region's blocks read in a pass, in read order; one reader (a fused GEMM, attention, the filler
             sweep) receipts it and its receipts make one subtree
-commitment  a pass's root: SHA-512 over the pass index, its seed, the plan's digest and the RFC 6962 tree over its
-            segments' roots, each segment's root the tree over its receipt leaves (`tags.leaf_hash`, `per_leaf` a leaf)
+commitment  a pass's root: SHA-512 over the pass index, its seed, the plan's digest (over the plan's runs of store
+            indices), its segments' sizes and the RFC 6962 tree over their roots, each segment's root the tree over its
+            receipt leaves (`tags.leaf_hash`, `per_leaf` a leaf)
 opening     for a sampled (pass, position): the block's bytes as read, its receipt, its paths to the pass's root and
             its registration record, from which the verifier recomputes the receipt and checks the decoding
 ~~~
@@ -165,8 +167,9 @@ class Segment:
 
 @dataclass(frozen=True)
 class PassCommitment:
-    """Pass ``index`` of its window: its seed, its plan (the segments in read order, and ``plan_digest`` over every
-    block each reads, `StoreView.plan`), each segment's root and the pass's root, which seeds the next pass."""
+    """Pass ``index`` of its window: its seed, its plan (the segments in read order, and ``plan_digest`` over the
+    plan's runs of store indices, `StoreView.plan`), each segment's root and the pass's root, which seeds the next
+    pass, in this window or the next."""
 
     index: int
     seed: bytes
@@ -216,8 +219,9 @@ class Stale(RuntimeError):
 class StoreView(Protocol):
     """All a protocol driver sees of the store.  `layout` and `registration` go to the verifier at registration (and
     `registration` again whenever the log grows); `begin_window` takes a window's challenge; the engine's passes run
-    inside it; `end_window` returns its pass commitments (each seeded by the previous, chained from the challenge);
-    `plan` is a pass's blocks in read order (store indices; their digest is in the commitment); `open` answers the
+    inside it; `end_window` returns its pass commitments (each seeded by the root before it, the first by the
+    previous window's last, the session's first by the registration's root); `plan` is a pass's blocks in read order
+    (store indices, each once; their runs' digest is in the commitment); `open` answers the
     verifier's sample with each block as that pass read it, or raises `Stale`."""
 
     def layout(self) -> Layout: ...

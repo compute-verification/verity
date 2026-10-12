@@ -15,8 +15,13 @@ a block of a page is *registered* unless a write reached it and has not complete
 A pass's plan is the weights' regions whole, then each KV layer region over the blocks attention reads (the live
 pages' blocks that writes completed), then the filler the `filler_plan` policy picks (`idle_blocks` lists the
 registered blocks no attention reads: free pages, and allocated pages' blocks no write reached).  Positions run in
-that order.  Inside a window each pass is seeded from the challenge and the previous pass's root (`chain`).  The
-reference computes every receipt from the bytes (`receipts`); a device reader hands each segment's root to `end_pass`.
+that order, and no block is read twice in a pass (a plan that repeats one is refused).  Inside a window each pass is
+seeded from the window's challenge and the root before it (`chain`): the session's previous pass, across windows, and
+the registration's root before the session's first.  The reference computes every receipt from the bytes
+(`receipts`); a device reader hands each segment's root to `end_pass`.
+
+The seed and the plan digest are the remote bandwidth driver's (`remote_bandwidth.receipts`: `seed`, `Plan.digest`
+over the plan's canonical runs); the tree over a pass's receipts is this store's (each segment's tree, then theirs).
 """
 from __future__ import annotations
 
@@ -34,11 +39,13 @@ from verity_vllm.store.interface import (KINDS, TIERS, Append, Backing, Codec, C
                                          PassCommitment, Receipt, Registration, RegionInfo, Segment, Source, Stale,
                                          WindowRecord)
 
-SEED_BYTES = 32
+CHALLENGE_BYTES = 32
+SEED_BYTES = 64
+KEY_BYTES = 32
 REGISTRATION_DOMAIN = b"verity/store/registration/v0\0"
-SEED_DOMAIN = b"verity/store/pass-seed/v0\0"
-PLAN_DOMAIN = b"verity/store/plan/v0\0"
-PASS_DOMAIN = b"verity/store/pass/v0\0"
+SEED_DOMAIN = b"verity/remote-bandwidth/seed/v0\0"
+PLAN_DOMAIN = b"verity/remote-bandwidth/plan/v0\0"
+PASS_DOMAIN = b"verity/store/pass/v1\0"
 EMPTY_ROOT = hashlib.sha512(b"").digest()
 
 FillerPlan = Callable[["Store", int], Sequence[tuple[str, Sequence[int]]]]
@@ -48,15 +55,46 @@ def frame(b: bytes) -> bytes:
     return struct.pack(">Q", len(b)) + b
 
 
-def chain(challenge: bytes, prev_root: bytes | None, index: int) -> bytes:
-    """Pass ``index``'s seed: ``H(σ, index)`` for the first pass of a window, ``H(σ, index, root_(index-1))`` after."""
-    body = SEED_DOMAIN + frame(challenge) + struct.pack(">Q", index) + frame(prev_root or b"")
-    return hashlib.sha512(body).digest()[:SEED_BYTES]
+def chain(challenge: bytes, previous: bytes, index: int) -> bytes:
+    """Pass ``index``'s seed in a window: ``SHA512(D ‖ σ ‖ u32be index ‖ root before it)``, the driver's `seed`."""
+    if len(challenge) != CHALLENGE_BYTES or len(previous) != 64 or not 0 <= index < 1 << 32:
+        raise ValueError("a seed is of a 32-byte challenge, a u32 pass index and a 64-byte root")
+    return hashlib.sha512(SEED_DOMAIN + challenge + struct.pack(">I", index) + previous).digest()
+
+
+def runs_of(blocks: np.ndarray) -> np.ndarray:
+    """``(R, 2)`` int64 ``(first, count)``: ``blocks`` (in read order) as runs of consecutive indices."""
+    b = np.asarray(blocks, np.int64)
+    if not len(b):
+        return np.zeros((0, 2), np.int64)
+    cut = np.flatnonzero(np.diff(b) != 1) + 1
+    starts = np.concatenate([[0], cut])
+    return np.stack([b[starts], np.diff(np.concatenate([starts, [len(b)]]))], axis=1)
+
+
+def canonical(runs: np.ndarray) -> np.ndarray:
+    """``runs`` with each run that starts where the one before it ends merged into it (the driver's canonical plan)."""
+    if len(runs) < 2:
+        return runs
+    new = np.concatenate([[True], runs[1:, 0] != runs[:-1, 0] + runs[:-1, 1]])
+    at = np.flatnonzero(new)
+    return np.stack([runs[at, 0], np.add.reduceat(runs[:, 1], at)], axis=1)
+
+
+def distinct(runs: np.ndarray) -> bool:
+    """No block is in two runs."""
+    r = runs[np.argsort(runs[:, 0], kind="stable")]
+    return bool((r[:-1, 0] + r[:-1, 1] <= r[1:, 0]).all())
+
+
+def plan_digest(runs: np.ndarray) -> bytes:
+    """The driver's `Plan.digest`: ``SHA512(D ‖ u32be R ‖ (u64be first ‖ u64be count) × R)`` over canonical runs."""
+    return hashlib.sha512(PLAN_DOMAIN + struct.pack(">I", len(runs)) + np.asarray(runs, ">u8").tobytes()).digest()
 
 
 def _leaves(receipt: Receipt, seed: bytes, ys: Sequence[bytes]) -> list[bytes]:
     from verity.core.protocols.bandwidth import tags
-    head, per = tags.leaf_head(receipt, seed), receipt.per_leaf
+    head, per = tags.leaf_head(receipt, seed[:KEY_BYTES]), receipt.per_leaf
     return [tags.leaf_hash(head, c, ys[c * per:(c + 1) * per]) for c in range(-(-len(ys) // per))]
 
 
@@ -71,18 +109,12 @@ def segment_root(receipt: Receipt, seed: bytes, ys: Sequence[bytes]) -> bytes:
     return _tree(_leaves(receipt, seed, ys)).root if ys else EMPTY_ROOT
 
 
-def pass_root(index: int, seed: bytes, plan_digest: bytes, roots: Sequence[bytes]) -> bytes:
-    body = PASS_DOMAIN + struct.pack(">Q", index) + seed + plan_digest
+def pass_root(index: int, seed: bytes, plan_digest: bytes, segments: Sequence[Segment],
+              roots: Sequence[bytes]) -> bytes:
+    """``SHA512(D ‖ u32be j ‖ seed ‖ plan digest ‖ u32be S ‖ (u64be count) × S ‖ tree(segment roots))``."""
+    body = (PASS_DOMAIN + struct.pack(">I", index) + seed + plan_digest + struct.pack(">I", len(segments))
+            + b"".join(struct.pack(">Q", s.count) for s in segments))
     return hashlib.sha512(body + (_tree(list(roots)).root if roots else EMPTY_ROOT)).digest()
-
-
-def plan_digest(index: int, segments: Sequence[Segment], blocks: Sequence[np.ndarray]) -> bytes:
-    """SHA-512 over the pass's segments and every block each reads (store indices, u64be, in read order)."""
-    h = hashlib.sha512(PLAN_DOMAIN + struct.pack(">Q", index))
-    for s, b in zip(segments, blocks, strict=True):
-        h.update(frame(s.region.encode()) + struct.pack(">qQQ", s.start, s.count, s.position))
-        h.update(np.asarray(b, ">u8").tobytes())
-    return h.digest()
 
 
 @dataclass(frozen=True)
@@ -105,7 +137,7 @@ class TagReceipt:
         return self.tag.per_leaf
 
     def keyed(self, seed: bytes):
-        k = self.tag.keyed(seed)
+        k = self.tag.keyed(seed[:KEY_BYTES])
         return lambda j, block, z=None: k(j, block)
 
 
@@ -168,10 +200,18 @@ class _Pass:
     index: int
     seed: bytes | None
     segments: list[Segment]
-    blocks: list[np.ndarray]                    # each segment's region blocks, in read order
+    blocks: list[np.ndarray | None]             # each segment's region blocks in read order; None: its run
     epochs: dict[int, np.ndarray] = field(default_factory=dict)
     receipts: dict[int, list[bytes]] = field(default_factory=dict)
     digest: bytes = b""
+
+    def segment_blocks(self, i: int) -> np.ndarray:
+        b, s = self.blocks[i], self.segments[i]
+        return np.arange(s.start, s.start + s.count, dtype=np.int64) if b is None else b
+
+    def block(self, i: int, q: int) -> int:
+        b = self.blocks[i]
+        return self.segments[i].start + q if b is None else int(b[q])
 
 
 class Store:
@@ -180,7 +220,7 @@ class Store:
     (`chain`)."""
 
     def __init__(self, *, filler_plan: FillerPlan | None = None,
-                 chaining: Callable[[bytes, bytes | None, int], bytes] = chain) -> None:
+                 chaining: Callable[[bytes, bytes, int], bytes] = chain) -> None:
         self._regions: list[_Region] = []
         self._by_name: dict[str, _Region] = {}
         self._blocks = 0
@@ -189,6 +229,7 @@ class Store:
         self._log_root = hashlib.sha512(REGISTRATION_DOMAIN).digest()
         self._pool: _Pool | None = None
         self._challenge: bytes | None = None
+        self._last_root: bytes | None = None
         self._passes: list[PassCommitment] = []
         self._retained: dict[int, _Pass] = {}
         self._open_pass: _Pass | None = None
@@ -391,10 +432,16 @@ class Store:
         return self._open_pass is not None
 
     def begin_window(self, challenge: bytes) -> None:
+        """Open a window under ``challenge`` (32 bytes).  Its first pass chains from the session's last root, or from
+        the registration's root for the session's first window."""
         if self._open_pass is not None:
             raise RuntimeError("a window begins between passes")
         if self._challenge is not None:
             raise RuntimeError("a window is already open")
+        if len(challenge) != CHALLENGE_BYTES:
+            raise ValueError(f"a window's challenge is {CHALLENGE_BYTES} bytes")
+        if self._last_root is None:
+            self._last_root = self._log_root
         self._challenge, self._passes, self._retained = challenge, [], {}
 
     def end_window(self) -> WindowRecord:
@@ -416,43 +463,59 @@ class Store:
         j = len(self._passes)
         seed = None
         if self._challenge is not None:
-            seed = self.chaining(self._challenge, self._passes[-1].root if self._passes else None, j)
+            seed = self.chaining(self._challenge, self._last_root, j)
         ps = _Pass(j, seed, [], [])
         for r in self._regions:
             if r.info.kind == "weights":
                 ps.segments.append(Segment(r.info.name, 0, r.info.blocks, 0))
-                ps.blocks.append(np.arange(r.info.blocks, dtype=np.int64))
+                ps.blocks.append(None)
         if self._pool is not None and live_pages is None:
             live_pages = np.nonzero(self._pool.allocated)[0]
         if self._pool is not None and len(live_pages):
             p = self._pool
             pages = np.unique(np.asarray(live_pages, np.int64))
             read = p.read(pages)
-            ids = p.ids[pages][read]
+            ids, epochs = p.ids[pages][read], p.epoch[pages][read]
             for rn in p.regions:
                 ps.segments.append(Segment(rn, -1, len(ids), 0))
                 ps.blocks.append(ids)
-                ps.epochs[len(ps.segments) - 1] = p.epoch[pages][read]
+                ps.epochs[len(ps.segments) - 1] = epochs
         if self.filler_plan is not None:
             for rn, blocks in self.filler_plan(self, j):
                 blk = np.asarray(blocks, np.int64)
                 run = len(blk) > 0 and bool((np.diff(blk) == 1).all())
                 ps.segments.append(Segment(rn, int(blk[0]) if run else -1, len(blk), 0))
-                ps.blocks.append(blk)
+                ps.blocks.append(None if run else blk)
                 r = self._by_name[rn]
                 if r.pool is not None:
-                    blk = ps.blocks[-1]
                     ps.epochs[len(ps.segments) - 1] = r.pool.epoch[r.pool.page_of[blk], r.pool.slot_of[blk]]
         pos = 0
         for i, s in enumerate(ps.segments):
             ps.segments[i] = Segment(s.region, s.start, s.count, pos)
             pos += s.count
         if seed is not None:
-            ps.digest = plan_digest(j, ps.segments, [self._by_name[s.region].info.first + b
-                                                     for s, b in zip(ps.segments, ps.blocks)])
+            runs = self.plan_runs(ps)
+            if not distinct(runs):
+                raise ValueError(f"pass {j}'s plan reads a block twice")
+            ps.digest = plan_digest(runs)
         self._open_pass = ps
         self.counters.add("begin_pass", time.perf_counter() - t)
         return ps
+
+    def plan_runs(self, ps: _Pass) -> np.ndarray:
+        """The pass's plan as canonical runs of store indices, in read order (``(R, 2)``: first, count)."""
+        parts, local = [], {}
+        for i, s in enumerate(ps.segments):
+            first, b = self._by_name[s.region].info.first, ps.blocks[i]
+            if b is None:
+                if s.count:
+                    parts.append(np.array([[first + s.start, s.count]], np.int64))
+                continue
+            key = id(b)
+            if key not in local:
+                local[key] = runs_of(b)
+            parts.append(local[key] + np.array([first, 0], np.int64))
+        return canonical(np.concatenate(parts)) if parts else np.zeros((0, 2), np.int64)
 
     def receipts(self, ps: _Pass, index: int, z: Callable[[str, int], bytes | None] | None = None) -> list[bytes]:
         """The reference reader: segment ``index``'s receipts, from its blocks' bytes now."""
@@ -460,7 +523,7 @@ class Store:
         r = self._by_name[seg.region]
         keyed, bb, first = r.receipt.keyed(ps.seed), r.info.block_bytes, r.info.first
         return [keyed(first + b, r.backing.read(b * bb, bb), z(seg.region, b) if z else None)
-                for b in ps.blocks[index].tolist()]
+                for b in ps.segment_blocks(index).tolist()]
 
     def end_pass(self, roots: dict[int, bytes] | None = None,
                  z: Callable[[str, int], bytes | None] | None = None) -> PassCommitment | None:
@@ -481,9 +544,10 @@ class Store:
                 continue
             ps.receipts[i] = self.receipts(ps, i, z)
             seg_roots.append(segment_root(self._by_name[s.region].receipt, ps.seed, ps.receipts[i]))
-        root = pass_root(ps.index, ps.seed, ps.digest, seg_roots)
+        root = pass_root(ps.index, ps.seed, ps.digest, ps.segments, seg_roots)
         pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, tuple(seg_roots), root)
         self._passes.append(pc)
+        self._last_root = root
         self._retained[ps.index] = ps
         self.counters.add("end_pass", time.perf_counter() - t)
         return pc
@@ -492,7 +556,7 @@ class Store:
 
     def plan(self, pass_index: int) -> np.ndarray:
         ps = self._retained[pass_index]
-        parts = [self._by_name[s.region].info.first + b for s, b in zip(ps.segments, ps.blocks)]
+        parts = [self._by_name[s.region].info.first + ps.segment_blocks(i) for i, s in enumerate(ps.segments)]
         return np.concatenate(parts) if parts else np.zeros(0, np.int64)
 
     def source(self, region: str, block: int) -> Source:
@@ -522,7 +586,7 @@ class Store:
             k = next(i for i, s in enumerate(ps.segments) if s.position <= position < s.position + s.count)
             seg, q = ps.segments[k], position - ps.segments[k].position
             r = self._by_name[seg.region]
-            b = int(ps.blocks[k][q])
+            b = ps.block(k, q)
             if k in ps.epochs:
                 p = r.pool
                 page, c = p.page_of[b], p.slot_of[b]
@@ -571,17 +635,17 @@ def verify_opening(info: RegionInfo, pc: PassCommitment, plan: Sequence[int], o:
     q = o.position - seg.position
     if int(plan[o.position]) != o.block or seg.region != o.region or not info.first <= o.block < info.first + info.blocks:
         return False
-    parts = [np.asarray(plan[s.position:s.position + s.count]) for s in pc.segments]
-    if plan_digest(pc.index, pc.segments, parts) != pc.plan_digest:
+    runs = canonical(runs_of(plan))
+    if not distinct(runs) or plan_digest(runs) != pc.plan_digest or sum(s.count for s in pc.segments) != len(plan):
         return False
     if receipt.keyed(pc.seed)(o.block, o.data, z) != o.receipt or o.leaf_receipts[q % per] != o.receipt:
         return False
-    leaf = tags.leaf_hash(tags.leaf_head(receipt, pc.seed), q // per, o.leaf_receipts)
+    leaf = tags.leaf_hash(tags.leaf_head(receipt, pc.seed[:KEY_BYTES]), q // per, o.leaf_receipts)
     if not verify_path(pc.segment_roots[k], -(-seg.count // per), q // per, leaf, o.leaf_path):
         return False
     if not verify_path(_tree(list(pc.segment_roots)).root, len(pc.segment_roots), k, pc.segment_roots[k],
                        o.segment_path):
         return False
-    if pass_root(pc.index, pc.seed, pc.plan_digest, pc.segment_roots) != pc.root:
+    if pass_root(pc.index, pc.seed, pc.plan_digest, pc.segments, pc.segment_roots) != pc.root:
         return False
     return payload is None or decode(o.data, info.word_index(o.block - info.first)) == payload
