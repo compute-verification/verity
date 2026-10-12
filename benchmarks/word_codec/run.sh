@@ -18,7 +18,7 @@
 # tensor-core attention's tiles of 16 tokens, p0 without the occupancy form's L2 prefetch, as in 1536k1o1 or 512h32),
 # then KV_SCRIPT (default kv_bench.py) with
 # KV_ARGS; SANITIZE=1 runs KV_SCRIPT's --sanitize smoke under compute-sanitizer's memcheck, racecheck and synccheck,
-# and SANITIZE=2 runs KV_SCRIPT after it if every tool passed.
+# and SANITIZE=2 runs KV_SCRIPT after it if every tool passed. KV_NCU=1 profiles KV_SCRIPT --ncu instead of timing it.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -62,6 +62,21 @@ if [ "${KV:-0}" = 1 ]; then
       exit $rc' "$SAN" "$PY" $WC/$KV_SCRIPT "$O" "${LIBS[@]}" ${KV_ARGS:-} || exit 6
     # SANITIZE=2: the timed run follows a clean smoke
     [ "$SANITIZE" = 2 ] || exit 0
+  fi
+  # KV_NCU=1 profiles KV_SCRIPT --ncu under Nsight Compute instead of timing it (the kernels matching KV_NCU_K) and
+  # exports the raw metrics and the per-instruction SASS samples
+  if [ "${KV_NCU:-0}" = 1 ]; then
+    # shellcheck disable=SC2086,SC2016
+    gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- bash -c '
+      ncu=$1 o=$2; shift 2
+      "$ncu" --clock-control none --section SpeedOfLight --section ComputeWorkloadAnalysis --section InstructionStats \
+        --section Occupancy --section MemoryWorkloadAnalysis --section WarpStateStats --section SchedulerStats \
+        --section SourceCounters -k "regex:${KV_NCU_K:-attn_mma_ws|rc_tag}" -f -o "$o/ncu-kv" "$@" --out "$o" --ncu \
+        > "$o/ncu-kv.log" 2>&1 || { tail -20 "$o/ncu-kv.log"; exit 7; }
+      "$ncu" --import "$o/ncu-kv.ncu-rep" --csv --page raw > "$o/ncu-kv.csv" 2>&1
+      "$ncu" --import "$o/ncu-kv.ncu-rep" --csv --page source --print-source sass > "$o/ncu-kv-sass.csv" 2>&1
+      exit 0' "$NCU_BIN" "$O" "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" ${KV_ARGS:-}
+    exit $?
   fi
   # KV_REPEAT=N (default 1) runs KV_SCRIPT N times in one lease, each its own process, writing under $O/repI
   if [ "${KV_REPEAT:-1}" = 1 ]; then

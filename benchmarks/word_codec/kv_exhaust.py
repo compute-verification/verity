@@ -685,6 +685,9 @@ def main() -> int:
     ap.add_argument("--write-only", action="store_true",
                     help="time the write side only (the cells give the model check's step, not timed)")
     ap.add_argument("--sanitize", action="store_true", help="one tiny gate cell of 2 layers, then stop")
+    ap.add_argument("--ncu", action="store_true", help="launch each form of --forms once on one layer of the first "
+                    "cell at the first k (plain forms at k = 1) and --ncu-splits, for Nsight Compute, then stop")
+    ap.add_argument("--ncu-splits", type=int, default=8)
     a = ap.parse_args()
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -721,6 +724,25 @@ def main() -> int:
             res["ok"] &= not bad and prim_gate(lib, torch, log)["ok"]
         log("sanitize smoke done" if res["ok"] else "sanitize smoke FAILED")
         return 0 if res["ok"] else 1
+    if a.ncu:
+        lib, (b, ctx) = libs[0], cells_of(a.cells)[0]
+        sh, st = shape(lib), B.stream(torch)
+        store = B.random_words(torch, b * ctx * sh["tlw"], lib.field, b * 7919 + ctx)
+        q = (torch.randn(b, sh["heads"], K.HEAD_DIM, device="cuda") * 0.1).to(torch.bfloat16).contiguous()
+        o = torch.empty(b, sh["heads"], K.HEAD_DIM, dtype=torch.float32, device="cuda")
+        part = part_buffer(torch, sh, b)
+        nvec = receipt_vectors(sh, rc_shape(lib), b, ctx)
+        sk, tg = (torch.empty(nvec, w, dtype=torch.int32, device="cuda") for w in (16, 8))
+        rc_setup(lib, RC_SEED)
+        for fm in forms_of(sh, only):
+            k = 1 if fm in RTOL else ks[0]
+            B.set_key(lib, K.key(lib.field.name, B.SEED, k))
+            if fm in RECEIPT:
+                lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
+            attn_call(lib, st, store, fm, q, o, part, b, ctx, 1, 0, a.ncu_splits, k)
+            torch.cuda.synchronize()
+            log(f"ncu {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k} at {a.ncu_splits} splits launched")
+        return 0
     for lib in libs:
         occ = attn_occ(lib)
         log(f"occupancy {lib.name}: " + ", ".join(f"{n} {v['ctas_per_sm']} CTAs an SM, {v['decoder_warps_per_sm']} "
