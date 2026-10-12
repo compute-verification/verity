@@ -818,9 +818,9 @@ def main() -> None:
                     help="register the node's store through `verity_vllm.store`'s binder: weights (the arm's encoded words, "
                          "identity for the rest), the KV pool and its pages' life, a pass a step")
     ap.add_argument("--store-window", type=int, default=0,
-                    help="with --store, run the passes in windows of this many (chained seeds and plan digests, each "
-                         "pass's root a placeholder for the device's tree: the store's host work without a device "
-                         "reader); 0: no windows")
+                    help="with --store, run the passes in windows of this many (chained seeds and plan digests, the "
+                         "driver's receipt over PoUW's stub tiles, each pass's root a placeholder for the device's "
+                         "tree: the store's host work without a device reader); 0: no windows")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     batches = [int(x) for x in args.batches.split(",")]
@@ -857,8 +857,10 @@ def main() -> None:
         from verity_vllm.store.registry import Store
         window = {}
         if args.store_window:
+            from verity.core.protocols.remote_bandwidth.audit import NoiseTiles
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
-            window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64)}
+            window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
+                      "tiles": NoiseTiles()}
         binder = Binder(Store(), weights=lambda r: store_weights(r, install, args), **window).install()
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
