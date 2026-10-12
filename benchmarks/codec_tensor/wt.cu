@@ -1685,8 +1685,11 @@ constexpr int FUSED_WARPS = FULL_SLOT ? (NL <= 24 ? 16 : (NL <= 48 ? 12 : 8)) : 
 constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
 
 constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
-// At k_s = 16 the signs (skt tasks' steps, a u32 a lane) sit in shared memory after the buffers.
-__host__ __device__ constexpr int sk_smem_signs(int skt, int skk) { return skk == 16 ? skt * ((SB + 511) / 512) * 32 : 0; }
+// At k_s = 16 the signs (skt tasks' steps, a u32 a lane) sit in shared memory after the buffers when they take at
+// most 24 KB (skt <= 11 at SB = 8,256), which leaves room for the stages; larger tiles load them from global memory.
+__host__ __device__ constexpr int sk_smem_signs(int skt, int skk) {
+  return skk == 16 && skt * ((SB + 511) / 512) * 128 <= 24576 ? skt * ((SB + 511) / 512) * 32 : 0;
+}
 template <int NB8, int SKK>
 __host__ __device__ constexpr int fused_smem_bytes(int stages, int skt) {
   return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((5 * stages + 1) / 2) + 16 + SK_BUFS * 64 * SKK +

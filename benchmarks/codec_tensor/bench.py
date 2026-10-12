@@ -419,7 +419,8 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
     fewer stages; sketched, for each k_s in `sketch`, all of them sketching at 2, 3 and 4 fewer stages (the sketch's
     buffers already take some). Four or more tag warps (with the decoders that leave) fail some gates in some runs, on
     early tasks of random CTAs, unexplained, so auto leaves them out."""
-    signs = 128 * sketch_t * -(-lib.sb // 512)  # k_s = 16's signs in shared memory
+    signs = 128 * sketch_t * -(-lib.sb // 512)  # k_s = 16's signs in shared memory, up to 24 KB (sk_smem_signs)
+    signs = signs if signs <= 24576 else 0
     smax = lambda ks: (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 192 * ks - (signs if ks == 16 else 0)) // (lib.sb + 40)  # noqa: E731
     dmax = lib.fused_warps - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
