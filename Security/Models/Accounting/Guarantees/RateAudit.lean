@@ -71,6 +71,11 @@ it at least `k·b + ρ − S − L − λ` bits of footprint and rebuilt words, 
 `F − k·c_tag` that tagging leaves. The stream is what makes `L − ρ`, not `L`, the link's share: its bits are fresh,
 so the link's bits that carried them carried nothing about the store. Its completeness is `RateHonest`.
 
+The game's `rebuild j` is all-or-nothing: it returns the whole word at `c_enc`. Completing part of a word from the rest
+(the red team's F27: at one codec round with the payload known, a lattice completes a word's bottom third far below
+its per-bit price) is outside the game, and the claim `rate-codec-work`, stated for codecs with `k ≥ 2` rounds,
+carries it.
+
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the rate audit's code computes. -/
 def RateAudit : Prop :=

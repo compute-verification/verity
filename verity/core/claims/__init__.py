@@ -151,12 +151,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "answering a read at an address the chip picks as a function of E fixed before the window, never of what the chip "
           "sent, the stream or the oracle; a word the device neither holds nor reads it rebuilds with the codec's inverse, "
           "whose ops are charged to accounts other than the compute account", "Rate device"),
-    # falsified by a faster rebuild on the stated device: x bits of E, rebuilt from setup and the weights they encode, in
-    # less than x * c_enc / b of the compute account's units, by any schedule (one word alone, or many at once)
+    # falsified by a partial completion cheaper than x * c_enc / b: x bits of a word of E, rebuilt from setup, the weights
+    # they encode and the rest of the word, in less than that of the compute account's units, by any schedule; at k = 1
+    # with the payload known, the red team's F27 (r20261012-132841-565e) is such a completion
     Entry("rate-codec-work", "assumption",
-          "Rate codec work: on the stated device, rebuilding x bits of E that it neither holds nor reads, from setup and "
-          "the weights they encode, costs at least x * c_enc / b units of compute (b the word's bits), with no amortization "
-          "across words", "Rate codec work", "measured"),
+          "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
+          "neither holds nor reads, from setup and the weights they encode, costs at least x * c_enc / b units of compute "
+          "(b the word's bits), with no amortization across words; at k = 1 it is false when the payload is known (F27: "
+          "keeping a word's top two-thirds, a 2-dimensional lattice completes the rest for about 0.094 of a root at 1,536 "
+          "bits), and holds only for words whose payload is unknown, under Incompressible(W)",
+          "Rate codec work", "measured"),
     # the sketch-then-hash rate audit's device (Accounting.Guarantees.RateAuditSketch,
     # Security/Models/Accounting/Guarantees/RateAuditSketch.lean): falsified by a device or host that passes while holding,
     # reading or sending something other than E's sectors as they are

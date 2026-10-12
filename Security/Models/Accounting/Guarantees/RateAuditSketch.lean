@@ -53,7 +53,9 @@ misses the tiles never queried with chance `((k − 1)/N)^s`. A correct query fo
 the stream's, the run never obtained (held, read, taken in or rebuilt) is a guess: resampling that sector leaves the
 run as it is, so at most `g` of its `|X|` values make the query right (`q·g/|X|` over the queries). Otherwise the `k`
 queried tiles and the stream are `k·m + ρ` sectors the run obtained: at most `S/w` held, `footprint/w` read, `L/w` over
-the link, and the rest rebuilt at `c_enc` each from the `F − k·c_tag` that tagging leaves.
+the link, and the rest rebuilt at `c_enc` each from the `F − k·c_tag` that tagging leaves. As in `RateAudit`, a
+rebuild is all-or-nothing, a whole sector at `c_enc`: partial completion (the red team's F27) is outside the game, and
+`rate-codec-work`, stated for codecs with `k ≥ 2` rounds, carries it.
 
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the rate audit's code computes. -/
