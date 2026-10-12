@@ -586,7 +586,9 @@ def test_the_pause_hook_drains_prepares_and_times_each_window(small_store, monke
     passes = out["passes"]
     assert len(passes["start"]) == len(passes["end"]) == J.ALONE_START
     assert [(s["key"], s["arm"], len(s["passes"])) for s in passes["segments"]] == [(key, arm, J.ALONE_SEGMENT)]
-    assert passes["start"][0] == {"host_ns": 1_000_000, "device_tags_ms": 0.4, "device_ms": 0.5}
+    first = passes["start"][0]
+    assert first["t_ns"] - out["anchor"]["clock_ns"] == 1_000_000 and set(out["anchor"]) == {"clock_ns", "unix_ns"}
+    assert {k: v for k, v in first.items() if k != "t_ns"} == {"host_ns": 1_000_000, "device_tags_ms": 0.4, "device_ms": 0.5}
     assert [s["every"] for s in segs] == ["none", "10ms", "10ms-noprep"] and out["error"] is None
     assert segs[0]["windows"] == [] and segs[0]["chains"] == 49 and segs[0]["wall_ns"] == 51_000_000
     assert chain.calls[:4] == ["launch", "launch", ("wait", 1), "launch"]

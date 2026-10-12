@@ -411,6 +411,8 @@ class Pause:
         self.skip: tuple[int, Pass, int] | None = None
         prover.tag_pass(JOINT_TAG, THROWAWAY, 0)  # loads the kernels, untimed
         self.rtt = remote.ping(PINGS)
+        # puts the passes' and windows' clock readings on a device sampler's wall time (run.sh SMI_MS)
+        self.anchor = {"clock_ns": self.clock(), "unix_ns": time.time_ns()}
         self.passes = {"start": self.alone(ALONE_START), "segments": [], "end": []}
 
     def alone(self, n: int) -> list[dict]:
@@ -420,7 +422,8 @@ class Pause:
             self.prover.scrub()
             t0 = self.clock()
             tp = self.prover.tag_pass(JOINT_TAG, THROWAWAY, 0)
-            out.append({"host_ns": self.clock() - t0, "device_tags_ms": tp.device_tags_ms, "device_ms": tp.device_ms})
+            out.append({"t_ns": t0, "host_ns": self.clock() - t0, "device_tags_ms": tp.device_tags_ms,
+                        "device_ms": tp.device_ms})
         return out
 
     def next(self) -> dict:
@@ -531,7 +534,7 @@ class Pause:
         return {"tag": JOINT_TAG, **params_record(self.params), "every": [e.label for e in self.every],
                 "seconds": self.seconds, "lookahead": self.lookahead, "judge_each": self.judge_each, "rtt": self.rtt,
                 "windows_started": self.n, "segments": self.segments, "judged": judged, "skip": skip, "passes": self.passes,
-                "error": self.error}
+                "anchor": self.anchor, "error": self.error}
 
 
 # ---- on the device ----------------------------------------------------------------------------------------------------

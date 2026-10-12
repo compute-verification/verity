@@ -25,6 +25,8 @@
 # each round with the chain as the honest audit's load. POUS_AUDITS (default 100 here), POUS_WS and POUS_SEGMENTS as for
 # POUS=1; the outputs go to $OUT/pous, each round's harness under $OUT/pous/bench/<round>. PROBE=1 adds chain.py --probe, in
 # either mode, and SIDECAR=1 chain.py --sidecar (an idle CUDA context in a second process through the run; not with PROBE).
+# SMI_MS=<ms> (JOINT) samples the leased GPU's clocks, power, temperatures and clock event reasons every <ms> through the
+# lease into $OUT/smi.csv (nvidia-smi, no CUDA context), on the wall time joint.py's anchor maps its passes to.
 # TUNED=<build dir|art:id> (ARMS with native-bf16-tuned or native-fp8-tuned) is the PoUW harness's library for the tuned
 # arms (tuned.py), a build.sh output such as `pouw-harness-build/v1`: before the lease its jobs/env.sh gives the cuBLASLt and
 # CUDA runtime 12.9 wheels it links (sonames .so.12, which torch's .so.13 never resolve to) on LD_LIBRARY_PATH, and
@@ -78,7 +80,8 @@ if [ -n "${JOINT:-}" ]; then
   HOST+=" --arms $ARMS --reps $REPS --budget-min $((LEASE_MIN - 3)) --rounds $JOINT $TAGGER ${PROBE:+--probe}"
   HOST+=" ${SIDECAR:+--sidecar} --host-bench"
   stamp "the chain hosting the PoUS harness under gpu-lease $LEASE (at most $LEASE_MIN min)"
-  export OUT LEASE_MIN HOST POUS_WORK POUS_WS POUS_AUDITS POUS_SEGMENTS
+  SMI_MS=${SMI_MS:-}
+  export OUT LEASE_MIN HOST POUS_WORK POUS_WS POUS_AUDITS POUS_SEGMENTS SMI_MS
   set +e
   # shellcheck disable=SC2086
   gpu-lease $LEASE --max-min "$LEASE_MIN" -- bash -c '
@@ -86,9 +89,18 @@ if [ -n "${JOINT:-}" ]; then
     export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
     UUID=${GPU_LEASE_UUID%%,*}; [ -n "$UUID" ] || { echo "RUN_FAIL_IDENTITY: no GPU_LEASE_UUID" >&2; exit 3; }
     nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
-    exec timeout $((LEASE_MIN * 60 - 30)) bash benchmarks/pous/pod.sh RESEARCH_RUN_DIR="$OUT/pous" IMPL=p2-v3-mc-gpu \
+    SMI=
+    if [ -n "$SMI_MS" ]; then
+      nvidia-smi -i "$UUID" --format=csv -lms "$SMI_MS" --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,temperature.memory,clocks_event_reasons.active \
+        > "$OUT/smi.csv" 2>&1 &
+      SMI=$!
+    fi
+    rc=0
+    timeout $((LEASE_MIN * 60 - 30)) bash benchmarks/pous/pod.sh RESEARCH_RUN_DIR="$OUT/pous" IMPL=p2-v3-mc-gpu \
       WORK="$POUS_WORK" WS="$POUS_WS" AUDITS="$POUS_AUDITS" MAX_SEGMENTS="$POUS_SEGMENTS" LOAD_TOKENS=0 TOKENS=1 WORKERS=8 \
-      BENCH_HOST="$HOST"
+      BENCH_HOST="$HOST" || rc=$?
+    [ -z "$SMI" ] || kill "$SMI"
+    exit "$rc"
   ' 2>&1 | tee "$OUT/chain.log"
   rc=${PIPESTATUS[0]}
   set -e
