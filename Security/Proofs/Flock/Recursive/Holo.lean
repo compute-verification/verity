@@ -130,11 +130,13 @@ variable {cls : HoloClass} (rsch : RegSchedule cls)
 noncomputable def radius : ℝ := (1 - rsch.sch.level₀.rate) / 2 - eta
 
 /-- The registered word `w` is close to the registered table `R`: some level-0 message whose encoding is within the
-unique-decoding radius of `w` packs `R`'s stacked bits. -/
+unique-decoding radius of `w` packs `R`'s stacked bits in its cells. The padding's bits past them (`SparseShape.mReg`)
+are the registrant's: no claim reads them (`RegClaim.coord` is zero there) and the verifier never sees them. -/
 def Close {F K : Type} [Field F] [Field K] (A : Arith F K) (w : Oracle F) (R : RegTable cls) : Prop :=
   ∃ M : Message F rsch.sch.k0 rsch.sch.level₀.logCols,
     Model.Close rsch.radius (asTable rsch.sch w) (encode A rsch.sch.level₀.logLen M) ∧
-      witnessOf A cls.shape.mReg rsch.sch.k0 rsch.sch.level₀.logCols M = R.bits
+      ∀ a : Fin (2 ^ cls.shape.mReg), a.val < 2 ^ (cls.nu + cls.shape.pLog + cls.tLog) →
+        witnessOf A cls.shape.mReg rsch.sch.k0 rsch.sch.level₀.logCols M a = R.bits a
 
 /-- **Level 0 decodes uniquely**: the schedule is for the stacked table's `ν + pLog + tLog` bits, its level 0 holds
 them exactly (`2^k₀` lanes of `2^logCols` packed elements of 128 bits), and level 0's rate is at most `1/2`, so that

@@ -14,7 +14,9 @@ Sizes are estimates of the proof, in lines. Owners: **W** a parallel worker, **C
 
 | # | lemma (stub) | file | size | depends on | owner |
 |---|---|---|---|---|---|
-| a1 | `FlockC3.Fork.holo_runs_sound`: `holoTableCL` on one prover's runs, `compiled_runs_sound`'s analogue | `C3/Fork/Runs.lean` | 500–800 | a1s, a1r; the reps as `compiled_runs_sound`; `sparseFold` at `R.bits` the lincheck fold's hidden part (`hunits`); every message's witness some `R.bits` | L |
+| a1 | `FlockC3.Fork.holo_runs_sound`: `holoTableCL` on one prover's runs, `compiled_runs_sound`'s analogue | `C3/Fork/Runs.lean` | proved (round 4) from a1o and a1l, as `compiled_runs_sound` is from `table_value_clashFree` | a1o, a1l | |
+| a1o | `FlockC3.Fork.holoTable_sound`: the oracle table (`holoTableOf`) accepts while no table close to `w` is committed with probability at most `holoError`; `table_sound`'s analogue, where a1s and a1r are used | `C3/Fork/OracleTable.lean` | 900–1400 | a1s, a1r; at most one message near `w` (`card_closeL_ud_le`), its cells a table `R`, and claims read only the cells; `holoLincheck` at `h = sparseFold` at `R.bits` is the lincheck of `R.toStatement` (`hunits`), so `rep_sound`'s phases and `link_sound`; each rep with its sparse phase on its own coins, multiplied as `value_interleave_le` does (`(repError + sparseError)^2`) | W |
+| a1l | `FlockC3.Fork.holoTable_value_le_oracle`: on a clash-free set, the compiled table is accepted no more often than the oracle table at `w`; `table_prob_clashFree`'s analogue | `C3/Fork/Coupling.lean` | 900–1300 | `CompiledL`'s lockstep (`lockTableL`, `compiled_le_bad_on`, `bad_zero_of_fixed`) with `regPhase` and R's stream as a third table whose level 0 is fixed (`x.w`, by no `RegClash`) | W |
 | a1s | `FlockC3.Fork.sparse_sound`: the sparse phase's Schwartz–Zippel count against `sparseError` | `C3/Fork/Sparse.lean` | 300–500 | `degRounds`' round step (the sum rule in characteristic 2), Schwartz–Zippel per `drawFin` coin; nothing in `Runs.lean` | W |
 | a1r | `FlockC3.Fork.regOpen_sound`: R's opening at unique decoding against `regOpenError` | `C3/Fork/RegOpen.lean` | 250–400 | `fast100_uniqueDecoding` (proved, beside it); `ligerito_sound`'s argument at the unique-decoding radius, one message and no list; `opening`'s ring-switch and `γ` count; nothing in `Runs.lean` | W (proved, `cursor/c3-fork-regopen-95d4` @ `7c61afbd8`; lands with a1s in a1's assembly) |
 | a1c | cleanup, not soundness: generalize level 0's Ligerito lemmas in `Soundness/` over the radius (they hard-code Johnson's) and drop a1r's copies (`udDecode`, `udPhaseA`, `ligerito_sound_ud`, …) | `C3/Fork/RegOpen.lean`, `Soundness/` | −480 | a1r | W |
@@ -26,6 +28,9 @@ Sizes are estimates of the proof, in lines. Owners: **W** a parallel worker, **C
 | h2 | `FlockC3.VStarList.vstarParses_of_list` (gap 4(c)), modulo `circuitFile_parses`; with gap 2, `mReg_of_list` (the list's `rec-opening` units are at `m = (holoAt st hp).cls.shape.mReg`, `claims = STACKED_CLAIMS`; no `hpad`, since `mReg` is padded to `PAD_TO`, and `ℓ`'s range is `ellOk_of_sparseRange`'s) | `C3/VStarList/Statements.lean`, `Shape.lean`, `Range.lean` | 400 | `HmRow.parse` of `circuitFile`'s output (a write-then-parse fact), gap 2 for the holo statements | C (gap 2) + W |
 | c1 | (c)'s `hpl` generalization: drop `sh.holo = false` / `holoOf c = .ok false` from `lincheck_of_residuals_holo` (`Algebra/Holo.lean`), `zclc_of_residuals`, `prog_of_zclc` (`Runs/ZcLc.lean`), `run_of_algebra`, `run_of_frames` (`Runs/Rep.lean`), `prog_of_algebra` (`Runs/Prog.lean`), `rs_of_residuals` (`Runs/Rs.lean`), `ligerito_of_residuals_at`, `hlg_of_residuals`, `hlg_of_frames` (`Runs/Lg.lean`), `ligerito_of_residuals`, `ringSwitch_of_residuals`, `zerocheck_of_residuals`, `lincheck_of_residuals`, `build_eval`, `residuals_eq_run`, `buildRes_spec`, `buildAll_spec`, `coefOps_spec`, `prodOps_spec` (`Algebra/`), `decode_part`, `ResZeroAt` (`AlgHolds.lean`), `decode_checkR`, `decode_partR`, `ResZeroAtL` (`ResLayer.lean`), `decode_check` (`ResUnit.lean`), with `check_part_holo` beside `check_part` for the hidden units' net | `VBridge/` (in place, under VBridge G's names) | 600 | none; `check_refuses_plain_on_holo`, `shape?_holo` and `atomOp_plain` stay (plain facts) | W |
 
+a1's 500–800 (rounds 1–3) counted only the composition: the plain chain under `compiled_runs_sound` (`table_sound`'s
+oracle count and `CompiledL`'s lockstep, about 3,500 lines) has no holographic analogue yet, so a1o and a1l are new.
+
 So these start at once: a1s and a1r (a W each, against their stubs alone), a1's assembly (L), h1 (W), b1 → b2 (W),
 c1 (W); h2 builds on #1847's list.
 
@@ -34,18 +39,25 @@ c1 (W); h2 builds on #1847's list.
 Pieces (c)–(g) are obligations of a free decoder (`C3Family`'s `run`, `row`), as G's H-props are of `VStarFamily`'s
 free fields. n0 fixes the decoder (`C3Family.honest`, `C3/Compose/Honest.lean`): `run` decodes the inner transcript's
 steps stage by stage on the prefix each stage's game plays (`decodeRun`), `row` is the verifier's `fixedRow` at its
-hold of the inner transcript (`heldRow`). `hbr_honest` (`C3/Compose/Discharge.lean`, proved from the stubs) is the
-guarantee's `_hbr` at it; `_hob` is h2's `vstarParses_of_list`. The stubs form a chain, each taking the ones before:
+hold of the inner transcript (`heldRow`). `hbr_honest` (`C3/Compose/Discharge.lean`, proved) is the guarantee's `_hbr`
+at it, from n1 and the four stages at it as hypotheses; `_hob` is h2's `vstarParses_of_list`. n0's decoder `dec` is
+free, and every stage reads `dec`'s messages, so a stage does not follow from the public rows: perturb one message on
+a stage's rounds and every stage still plays a prefix of the same length while that stage's verdict fails (Worker S's
+counterexample, at rep 0's `v₂`). So n2–n5 are restated on read facts (round 4): `hX_of_read`, over any family, from
+its stage's read fact (its rounds' messages on the tape are its prover's for a witness its verifier row accepts), and
+n6 gives the read facts at a decoder that reads the sessions' values. The stubs `hX_honest` in the pieces' files are
+false as stated at some `dec` and unused; round 5 replaces them by `hX_of_read`.
 
 | # | lemma (stub) | file | size | depends on | owner |
 |---|---|---|---|---|---|
-| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTop` | `C3/RegLevels/Top.lean` | 60 | `checkStackedShape`, `candidate3`'s every-round-from-0 hold | W |
+| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTop`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean` | 60 | `checkStackedShape`, `candidate3`'s every-round-from-0 hold | W |
 | n1 | `hPubRows_of_check` (from `ChecksPubRows`); `hTape_honest` (from n2–n5: the stages' prefixes and the openings are the whole tape) | `C3/PubRows/Honest.lean` | 150, 300 | n1b; `Registered.entry` at the session's reads | W |
-| n2 | `hReps_honest`, from `HPubRows` | `C3/HoloValues/Honest.lean` | 250 | n2a, c1's holo forms (`zclc_of_residuals_dec`, `lincheck_of_residuals_hw`, `decode_check_holo`, `decode_part_holo`, `ResZeroAtH`); not `repProg` | W |
+| n2 | `hReps_of_read`: `HReps` from `HPubRows` and the reps' read fact | `C3/HoloValues/Read.lean` | 250 | n2a, c1's holo forms (`zclc_of_residuals_dec`, `lincheck_of_residuals_hw`, `decode_check_holo`, `decode_part_holo`, `ResZeroAtH`); not `repProg` | W |
 | n2a | a transcript-level holo rep program (RepConverse's `repProg` with the `h` round before r′) and its converse, and its refinement to `holoRepC` (only abstract today); no definition states it yet, so it is a row, not a stub | `Soundness/Refine/` | 300 | c1 | W |
-| n3 | `hSparse_honest`, from `HPubRows`, `HReps` | `C3/Sparse/Honest.lean` | 250 | `sparse_refines`, `sparsePhase_plays`; the claim round's `c_k` as RecSparse's `claim` check | W |
-| n4 | `hOpening_honest`, from `HPubRows`, `HReps`, `HSparse`: O1–O6 at `mReg` (`seven_le_mReg`) | `C3/Opening/Honest.lean` | 300 | c1's `ringSwitch_of_residuals` | W |
-| n5 | `hRegLevels_honest`, from `HPubRows`, n2–n4 and R's top (`∃ lv, StackedTop lv st reg xR.cap`, t0's) | `C3/RegLevels/Honest.lean` | 250 | c1's `ligerito_of_residuals_at` | W |
+| n3 | `hSparse_of_read`: `HSparse` from `HPubRows`, `HReps` and `SparseRead` | `C3/Sparse/Read.lean` | 250 | `sparse_refines`, `sparsePhase_plays`; the claim round's `c_k` as RecSparse's `claim` check | W |
+| n4 | `hOpening_of_read`: `HOpening` from `HPubRows`, `HReps`, `HSparse` and the opening's read fact (`HOpenSteps`): O1–O6 at `mReg` (`seven_le_mReg`) | `C3/Opening/Read.lean` | 300 | c1's `ringSwitch_of_residuals` | W |
+| n5 | `hRegLevels_of_read`: `HRegLevels` from `HPubRows`, n2–n4, R's top (`∃ lv, StackedTop lv st reg xR.cap`, `_hstk`) and Ligerito's read fact | `C3/RegLevels/Read.lean` | 250 | c1's `ligerito_of_residuals_at` | W |
+| n6 | the read facts at the honest family, at a fixed decoder: round `i`'s message at stage `i`'s read wires is the value V*'s registered rows hold for round `i` at an accepted outcome that reads them there (G's `decOf`, typed by `toSs`), with `MsgsRead`'s obligation that round `i`'s values are read only from stage `i`'s commit strings, and each session's acceptance of its stage's verifier row | `C3/Compose/` | 500–900 | the four read facts; a C3 `tableMsgs` from V*'s layers, as G's `Family/Transcript.lean` | L |
 
 `hCommits_honest` (`VCommits` at the honest family, G's `hCommits_of` after `pubCommits_of_pubRows`) is proved; `hdec` is
 `vDecodesR_wmsgOf` and `hfull` is `vFullR_of_read`. What `hbr_honest` takes beyond the stubs, and is no premise of the
@@ -57,7 +69,10 @@ guarantee yet:
   outcome, so either VBridge's acceptance gains those checks or the event's acceptance reaches the sessions (L, to size).
 * n1c, the record–history link: `row` reads the verifier's fixed record `tr`, while the history `t` ranges, so
   `hheld` (`HeldIs`: at each accepted history the held row is `t`'s commitment) needs custody of `tr` as the live
-  history's record, beside `RecordCustody` (L, to state).
+  history's record, beside `RecordCustody`: stated as `Compose.InnerRecordCustody` (`C3/Compose/Custody.lean`, at
+  the coin server's writer `wr` of the inner record), which gives `HeldIs` (`heldIs_of_custody`, proved). It is
+  `live-verifier` at the inner session: no premise and no check of the verifier's gives it, so it is a new named
+  assumption, and the guarantee would read the record at the history (`wr t`) in place of `tr` and `record`.
 * `hown` (`OwnIs`): each accepted session's reads are the verifier's own `own`; G's `HOwn` at the honest family.
 * `hss` and `htop` are the event's (`AcceptsC3`'s list and hold of the inner transcript, with t0): `_hbr` at the honest
   family is used only where they hold.
@@ -97,6 +112,11 @@ guarantee yet:
 * `mReg` is padded (ruling 4): `mReg = max PAD_TO (…)` and R's bits are zero-padded to it, so `7 ≤ mReg` is free
   (`seven_le_mReg`) and `mReg_of_list` has no `hpad`. Workers on a1s and a1r: a proof that unfolds `mReg` meets the
   `max`.
+* The padding is the registrant's (round 4): nothing checks that R's padding bits are zero, and no claim reads them
+  (`RegClaim.coord` is zero past the cells). So `RegSchedule.Close` compares only the cells of the message near `w`
+  with `R.bits`. Comparing every bit, as round 3 left it, made the inner statement false at a word whose padding is not
+  zero while the table in its cells is satisfiable, and an honest prover there is accepted, so `holo_runs_sound` (and
+  the guarantee's proof) could not hold.
 * `_hob` and the writer's round trip (ruling 5, assessed, not done): `VStarParses` could be met from the verifier's own
   parse (`ScopeZR.parseH` and `checkStmt`'s byte compare) in place of `circuitFile_parses`, about 80–100 lines: Loads'
   `prob_sessionsR_untypable` and `prob_recT_le` take a loads hypothesis in place of `hob` (proofs only), and a weaker
