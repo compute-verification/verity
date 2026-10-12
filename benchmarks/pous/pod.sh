@@ -17,7 +17,8 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2  # build check: kernels built, gates run
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6 [WS=...]   # the band at in-degree d (>= 5; side-by-side's band arm too)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-scale [SCALE_STAGES=gpu,audit] [SCALE_LOG2=19,25] [FIT_PYTHON=<vLLM's python>
-#          FIT_CPUS=...]   # p2_v1/scale.py into $OUT: the device encode rate, the store of 2^e blocks audited, vLLM beside it
+#          FIT_CPUS=... FIT_MODEL=<id, or a snapshot directory when the HF cache has no refs>]   # p2_v1/scale.py into $OUT:
+#          the device encode rate, the store of 2^e blocks audited, vLLM beside it
 #
 # On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
 # the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
@@ -243,7 +244,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
     case ",${SCALE_STAGES:-gpu,audit}," in *,audit,*)
       "$PY" benchmarks/pous/p2_v1/scale.py audit --out "$SO" --p2-lib "$P2LIB" --build-dir "$POUS_BUILD" --scratch "$SC" \
         --log2 "${SCALE_LOG2:-19,25}" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" --workers "$WORKERS" --audits "$AUDITS" \
-        ${FIT_PYTHON:+--fit-python "$FIT_PYTHON"} ${FIT_CPUS:+--fit-cpus "$FIT_CPUS"} \
+           ${FIT_PYTHON:+--fit-python "$FIT_PYTHON"} ${FIT_MODEL:+--fit-model "$FIT_MODEL"} ${FIT_CPUS:+--fit-cpus "$FIT_CPUS"} \
         ${FIT_BATCHES:+--fit-batches "$FIT_BATCHES"} || RC=1 ;;
     esac
     clocks after
