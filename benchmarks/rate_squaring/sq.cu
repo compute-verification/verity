@@ -16,13 +16,20 @@
 //   FOLD 7  FOLD 5's square, then a fold of one 64-bit multiply-add a limb.
 //   FOLD 8, 9   FOLD 6 held to 6 and 7 blocks of 128 a SM (80 and 72 registers), where its 96 registers allow 5.
 //   FOLD 10     FOLD 5 held to 8 blocks a SM (64 registers), where its 72 allow 7.
-// All keep x lazily below 2^512; the host reduces below p.
+//   FOLD 11, 12 two and three Karatsuba levels over FOLD 5's squares (NL/4- and NL/8-limb), then FOLD 1's fold.
+// All keep x lazily below 2^512; the host reduces below p. Other widths build with -DSQ_BITS=768 -DSQ_C=825 or
+// -DSQ_BITS=1024 -DSQ_C=105 (`kv.py`'s primes), with the forms that matter there (FOLD 1, 5, 6, 7, 11, 12 at ILP 1).
 //
 //   sq gate FOLD ILP K N           N words from a fixed seed, K squarings: "x0 xK" in hex, canonical
 //   sq time FOLD ILP K TPB WAVES REPS   timed launches at the occupancy's blocks a SM times WAVES
 //   sq probe P W A ITERS WAVES     the pipe probe (below), its digests checked against the host's, then timed
 //   sq clock                       the SM clock off a timed clock64 spin
 #include <cuda_runtime.h>
+
+#ifndef SQ_BITS
+#define SQ_BITS 512
+#define SQ_C 569
+#endif
 
 #include <algorithm>
 #include <cstdint>
@@ -35,8 +42,9 @@ namespace sq {
 
 using u32 = uint32_t;
 using u64 = uint64_t;
-constexpr int NL = 16;
-constexpr u32 CF = 569;
+constexpr int NL = SQ_BITS / 32;
+constexpr u32 CF = SQ_C;
+static_assert(SQ_BITS % 64 == 0 && CF % 4 == 1 && (u64)CF * CF < (1ull << 31), "p = 2^SQ_BITS - SQ_C = 3 mod 4, SQ_C small");
 
 __device__ __forceinline__ void mac(u32 *r, u32 a, u32 b) {
   asm("mad.lo.cc.u32 %0, %3, %4, %0;\n\tmadc.hi.cc.u32 %1, %3, %4, %1;\n\taddc.u32 %2, %2, 0;"
@@ -115,7 +123,7 @@ __device__ __forceinline__ u32 madchi(u32 a, u32 b, u32 c) {
 }
 
 // x += a (a < 2^32) into NL limbs; returns the carry out of 2^512. The carry leaves limb 0 with probability a / 2^32
-// (every caller's a is below c^2 + c < 2^19), so the rest of the chain is a branch.
+// (every caller's a is below c^2 + c < 2^20), so the rest of the chain is a branch.
 __device__ __forceinline__ u32 add_small(u32 (&x)[NL], u32 a) {
   x[0] += a;
   if (x[0] >= a) return 0u;
@@ -305,10 +313,11 @@ __device__ __forceinline__ u32 subc(u32 a, u32 b) { u32 r; asm volatile("subc.u3
 
 // FOLD 4: one level of Karatsuba (the red team's `sqr_kara` at 512 bits): a = a1 2^256 + a0, a^2 = C 2^512 +
 // (A + C - D) 2^256 + A with A = a0^2, C = a1^2, D = (a0 - a1)^2, three 8-limb column squares (108 products in place of
-// 136), then FOLD 1's fold. M = A + C - D = 2 a0 a1 < 2^513: 16 limbs and a top bit m.
-template <bool DBL>
-__device__ __forceinline__ void sqr_kara(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
-  constexpr int H = NL / 2;
+// 136), then FOLD 1's fold. M = A + C - D = 2 a0 a1 < 2^513: 16 limbs and a top bit m. Over N limbs, LEV levels deep:
+// each half's square is LEV - 1 levels of the same, down to FOLD 5's (DBL) or the plain column square.
+template <int N, bool DBL, int LEV>
+__device__ __forceinline__ void sqr_kara_n(const u32 (&a)[N], u32 (&t)[2 * N]) {
+  constexpr int H = N / 2;
   u32 x0[H], x1[H], d[H], e[H];
 #pragma unroll
   for (int k = 0; k < H; ++k) {
@@ -325,7 +334,11 @@ __device__ __forceinline__ void sqr_kara(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
 #pragma unroll
   for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
   u32 A[2 * H], C[2 * H], D[2 * H], M[2 * H];
-  if (DBL) {
+  if constexpr (LEV > 1) {
+    sqr_kara_n<H, DBL, LEV - 1>(x0, A);
+    sqr_kara_n<H, DBL, LEV - 1>(x1, C);
+    sqr_kara_n<H, DBL, LEV - 1>(d, D);
+  } else if constexpr (DBL) {
     sqr_dbl_n<H>(x0, A);
     sqr_dbl_n<H>(x1, C);
     sqr_dbl_n<H>(d, D);
@@ -356,6 +369,9 @@ __device__ __forceinline__ void sqr_kara(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
   t[4 * H - 1] = addc(t[4 * H - 1], 0u);
 }
 
+template <bool DBL, int LEV = 1>
+__device__ __forceinline__ void sqr_kara(const u32 (&a)[NL], u32 (&t)[2 * NL]) { sqr_kara_n<NL, DBL, LEV>(a, t); }
+
 template <int FOLD>
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
   if (FOLD == 3) {
@@ -365,6 +381,8 @@ __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
   u32 t[2 * NL];
   if (FOLD == 4) sqr_kara<false>(a, t);
   else if (FOLD == 6 || FOLD == 8 || FOLD == 9) sqr_kara<true>(a, t);
+  else if (FOLD == 11) sqr_kara<true, 2>(a, t);
+  else if (FOLD == 12) sqr_kara<true, 3>(a, t);
   else if (FOLD == 5 || FOLD == 7 || FOLD == 10) sqr_dbl(a, t);
   else sqr_cols(a, t);
   if (FOLD == 0) fold_cols(t, x);
@@ -496,11 +514,14 @@ static void fill(std::vector<uint32_t> &h, int n) {
 using Kernel = void (*)(uint32_t *, int, int);
 static Kernel kernel(int fold, int ilp) {
 #define K_(F, I) if (fold == F && ilp == I) return sq::chain<F, I>;
+#if SQ_BITS == 512
   K_(0, 1) K_(0, 2) K_(1, 1) K_(1, 2) K_(1, 4) K_(2, 1) K_(2, 2) K_(2, 4) K_(3, 1) K_(3, 2) K_(4, 1) K_(4, 2) K_(5, 1) K_(5, 2) K_(6, 1) K_(7, 1) K_(7, 2)
-#undef K_
 #define H_(F, I, B) if (fold == F && ilp == I) return sq::chain_held<F, I, B>;
   H_(8, 1, 6) H_(9, 1, 7) H_(10, 1, 8)
 #undef H_
+#endif
+  K_(1, 1) K_(5, 1) K_(6, 1) K_(7, 1) K_(11, 1) K_(12, 1)
+#undef K_
   fprintf(stderr, "no kernel for fold %d ilp %d\n", fold, ilp);
   exit(2);
 }
@@ -569,7 +590,7 @@ int main(int argc, char **argv) {
     h.resize(h0.size());
     CK(cudaMemcpy(h.data(), d, h.size() * 4, cudaMemcpyDeviceToHost));
     for (int w = 0; w < n; ++w) {
-      printf("%d %d 512 %u ", fold * 10 + ilp, K, sq::CF);
+      printf("%d %d %d %u ", fold * 10 + ilp, K, SQ_BITS, sq::CF);
       print_canon(h0, n, w);
       printf(" ");
       print_canon(h, n, w);
@@ -646,9 +667,9 @@ int main(int argc, char **argv) {
       rate.push_back((double)n * K / (ms * 1e-3));
     }
     std::sort(rate.begin(), rate.end());
-    printf("{\"bits\": 512, \"fold\": %d, \"ilp\": %d, \"K\": %d, \"tpb\": %d, \"waves\": %d, \"blocks_per_sm\": %d, "
+    printf("{\"bits\": %d, \"fold\": %d, \"ilp\": %d, \"K\": %d, \"tpb\": %d, \"waves\": %d, \"blocks_per_sm\": %d, "
            "\"regs\": %d, \"words\": %d, \"sms\": %d, \"sq_per_s_max\": %.4e, \"sq_per_s_median\": %.4e}\n",
-           fold, ilp, K, tpb, waves, per_sm, attr.numRegs, n, prop.multiProcessorCount, rate.back(),
+           SQ_BITS, fold, ilp, K, tpb, waves, per_sm, attr.numRegs, n, prop.multiProcessorCount, rate.back(),
            rate[rate.size() / 2]);
     return 0;
   }

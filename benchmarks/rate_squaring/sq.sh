@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# sq.cu on one GPU (cwd = the source tree): squarings mod 2^512 - 569 for every (FOLD, ILP) in $FORMS, each gated
-# against Python's pow (512 words at K = 1, 777 and 1,000) before it is timed, with the SASS opcode mix of every
-# kernel, ncu's pipe and issue counts and its stall reasons; then each pipe probe in $PROBES (P:W:A), its digests
-# checked against the host's before it is timed. Results in $RESEARCH_RUN_DIR/out.
+# sq.cu on one GPU (cwd = the source tree): squarings mod 2^$BITS - $C (default 2^512 - 569) for every (FOLD, ILP) in
+# $FORMS, each gated against Python's pow (512 words at K = 1, 777 and 1,000) before it is timed, with the SASS opcode
+# mix of every kernel, ncu's pipe and issue counts and its stall reasons; then each pipe probe in $PROBES (P:W:A; set
+# it empty for none), its digests checked against the host's before it is timed. Results in $RESEARCH_RUN_DIR/out.
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign resource-accounting \
 #     --declared-output 'out/*' --env GPU_LEASE_WHO=ra-squaring-ceiling -- taskset -c 48-95 bash benchmarks/rate_squaring/sq.sh
@@ -12,8 +12,10 @@ export PATH=/usr/local/cuda-13.0/bin:$PATH
 export D=benchmarks/rate_squaring
 export B; B=$(mktemp -d /tmp/rate-squaring.XXXXXX); trap 'rm -rf "$B"' EXIT
 export FORMS=${FORMS:-"0:1 0:2 1:1 1:2 1:4 2:1 2:2 2:4 3:1 3:2 4:1 4:2"}
-export PROBES=${PROBES:-"0:16:0 0:16:16 0:16:32 1:16:0 1:16:16"}
-nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xptxas -v -o "$B/sq" $D/sq.cu > "$O/build.log" 2>&1 \
+export PROBES=${PROBES-"0:16:0 0:16:16 0:16:32 1:16:0 1:16:16"}
+BITS=${BITS:-512}; C=${C:-569}
+nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xptxas -v -DSQ_BITS="$BITS" -DSQ_C="$C" -o "$B/sq" $D/sq.cu \
+  > "$O/build.log" 2>&1 \
   || { tail -40 "$O/build.log"; exit 4; }
 nvcc --version > "$O/nvcc.txt"
 cuobjdump -sass "$B/sq" > "$B/sq.sass" 2>&1
