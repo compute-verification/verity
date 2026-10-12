@@ -405,13 +405,14 @@ def fused_cfgs(lib: Lib, spec: str) -> list[tuple[int, int, int]]:
     """DECODERSxSTAGES (untagged, T = -1) or DECODERSxSTAGESxT (tagged: T tag warps from the start, and every other
     warp tags once its own work is done), each checked against wt_fused's bounds. `auto`: untagged, the most decoder
     warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32 (fewer stages leave more L1); tagged,
-    0, 2, 4 and 6 of those warps tagging from the start, at 4 fewer stages."""
+    0 and 2 of those warps tagging from the start, at 4 fewer stages. Four or more tag warps (with the decoders that
+    leave) fail some gates in some runs, on early tasks of random CTAs, unexplained, so auto leaves them out."""
     smax = (SMEM_PER_BLOCK - 4 * 8 * 528 - 8) // (lib.sb + 40)
     dmax = lib.fused_warps - 2
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     if spec == "auto":
         cfgs = [(dmax, max(need(dmax), smax - 4), -1), (dmax, max(need(dmax), smax - 6), -1)]
-        cfgs += [(dmax - t, max(need(dmax - t), smax - 4), t) for t in (0, 2, 4, 6) if dmax - t >= lib.fused_span]
+        cfgs += [(dmax - t, max(need(dmax - t), smax - 4), t) for t in (0, 2) if dmax - t >= lib.fused_span]
     else:
         cfgs = [c if len(c) == 3 else (*c, -1) for c in parse(spec)]
     out = []
