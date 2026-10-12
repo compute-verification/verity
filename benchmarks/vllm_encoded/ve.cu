@@ -59,7 +59,7 @@ int ve_prepare(int k, int stages) {
 
 // form 0 simple, 1 persistent, 2 warp-specialized; CTAs an SM holds at batch M, or a negative error.
 int ve_occupancy(int form, int k, int M, int consumers, int stages) {
-  if (k < 0 || k > WC_KMAX || M < 1 || M > 32) return -1;
+  if (k < 0 || k > WC_KMAX || M < 1 || M > 32 || (form == 2 && (stages < consumers || stages > 32))) return -1;
   const int nb8 = VE_NB(M);
   int per_sm = 0;
   cudaError_t e = cudaSuccess;
@@ -86,7 +86,9 @@ int ve_gemm(int form, int k, const void* w, const uint8_t* x, float* part, int M
             int partials, int groups, int consumers, int stages, cudaStream_t s) {
   if (M < 1 || M > 32 || N % 16 || Kd % TASK_COLS || k < 0 || k > WC_KMAX) return 1;
   if (form != 2 && N % (16 * GEMM_WARPS)) return 1;
-  if (form == 2 && (consumers < 1 || consumers > WS_MAX_CONSUMERS || stages < 1 || stages > 32)) return 1;
+  // stages < consumers: a consumer's first task waits on a stage's second fill, whose parity the barrier's first phase
+  // already satisfies (the kernel faults on the sm_120 card)
+  if (form == 2 && (consumers < 1 || consumers > WS_MAX_CONSUMERS || stages < consumers || stages > 32)) return 1;
   if (form != 0 && groups < 1) return 1;
   const int nb8 = VE_NB(M), nchunks = Kd / TASK_COLS, nbs = N / 16;
 #define L0(KR, NB, PT) gemm_kernel<KR, NB, PT><<<(nbs / GEMM_WARPS) * nchunks, GEMM_WARPS * 32, 0, s>>>( \

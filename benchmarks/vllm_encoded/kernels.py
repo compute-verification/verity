@@ -93,7 +93,8 @@ class Config:
         return FORMS[self.form] + (f"-{self.consumers}x{self.stages}" if self.form == 2 else "")
 
 
-WS = ((2, 2), (4, 3), (4, 4), (8, 4), (8, 6))
+#: the warp-specialized form's (consumers, stages): a consumer's first task must be its stage's first fill, so stages >= consumers
+WS = ((2, 2), (2, 4), (4, 4), (4, 6), (4, 8), (8, 8))
 
 
 def candidates(lib: Lib, k: int, m: int, nchunks: int) -> list[Config]:
