@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
-# A tactic that walks a successful executable computation
+# Tactics that walk an executable computation
 
 `walk_step` takes one step through `h : x = .ok v` for a computation `x` in the executable's monad `V`, chosen by `x`'s
 head: a bind is split into its halves (`ebind_ok`), an `if` or `dite` is split on its condition, a `match` is split, and a

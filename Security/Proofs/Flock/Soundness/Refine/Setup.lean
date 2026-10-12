@@ -140,7 +140,7 @@ theorem hm_parse_check_any {tags : Tags} {bytes : ByteArray} {tables : List (Str
   show Ret (HmRow.parse tags bytes tables t pre) fun c => ∃ ls, HmRow.check c tags ls = .ok ()
   rw [HmRow.parse.eq_def]
   ret_walk [HmRow.check]
-  all_goals exact ⟨_, by assumption⟩
+  all_goals exact ⟨_, by with_reducible assumption⟩
 
 /-- An untyped `HmRow.parse` ends with `HmRow.check`. -/
 theorem hm_parse_check_none {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
@@ -233,9 +233,11 @@ theorem setupH_wf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Co
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     obtain ⟨_, hc⟩ : ∃ ls, HmRow.check _ tags ls = .ok () := by
-      first | exact hm_parse_check (by assumption) | exact hm_parseTyped_check (by assumption)
-    exact ⟨wf_of_facts (hm_check_slots hc) (hm_pin_ok (by assumption)) rfl, rfl, rfl,
-      hm_regions_wf (by assumption)⟩
+      first
+      | exact hm_parse_check (by with_reducible assumption)
+      | exact hm_parseTyped_check (by with_reducible assumption)
+    exact ⟨wf_of_facts (hm_check_slots hc) (hm_pin_ok (by with_reducible assumption)) rfl, rfl, rfl,
+      hm_regions_wf (by with_reducible assumption)⟩
 
 theorem filterMap_fin_nodup (kl : ℕ) (L : List ℕ) (h : L.Nodup) :
     (L.filterMap fun b => if h : b < kl then some (⟨b, h⟩ : Fin kl) else none).Nodup :=
@@ -294,7 +296,9 @@ theorem setupH_mask {tags : Tags} {circuitFile publicFile : ByteArray} {coins : 
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     obtain ⟨_, hc⟩ : ∃ ls, HmRow.check _ tags ls = .ok () := by
-      first | exact hm_parse_check (by assumption) | exact hm_parseTyped_check (by assumption)
+      first
+      | exact hm_parse_check (by with_reducible assumption)
+      | exact hm_parseTyped_check (by with_reducible assumption)
     exact ⟨hm_check_mask hc, rfl⟩
 
 end FlockSoundness.Refine
