@@ -49,6 +49,8 @@ import Proofs.Flock.C3.RegLevels.SrcUnits
 import Proofs.Flock.C3.RegLevels.SrcOpenRel
 import Proofs.Flock.C3.RegLevels.RsT
 import Proofs.Flock.C3.RegLevels.Kappa
+import Proofs.Flock.C3.RegLevels.StackedReg
+import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
 
 /-!
