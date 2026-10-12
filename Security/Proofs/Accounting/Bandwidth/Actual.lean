@@ -72,6 +72,9 @@ namespace SecurityProofs.Actual
 
 open Bandwidth.Actual
 
+variable {N b h S G q : ℕ} {L : Type*} {cores hbm rest : Finset L} {t₀ t₁ : ℕ}
+  {run : Store N b → Oracle N b h → Placed L} {tags : Store N b → Oracle N b h → Fin N → Bits h}
+
 /-- **B3 given a simulation**: with `c` the capacity of the links from `rest` across the cores' boundary over the
 window, the probability that the verifier accepts the run's tags while the cores read fewer than
 `k·b − (S + c + m·b + G·b + λ)` bits from HBM in the window is at most `AuditInteractive`'s bound. -/
