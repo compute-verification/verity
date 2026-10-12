@@ -8,6 +8,7 @@ import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
 import Proofs.Flock.C3.RegLevels.Top
 import Proofs.Flock.C3.Opening.Read
+import Proofs.Flock.C3.RegLevels.Read
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
