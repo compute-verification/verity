@@ -137,6 +137,9 @@ class Tuner:
                     failed.append({"name": c.name, **{k: v for k, v in r.items() if k != "ok"}})
             rec.update(tried=len(lts) + len(cuts), gated=len(passed), failed=failed[:8], failed_count=len(failed),
                        controls=self.controls(fam, shape, gops, passed[0]) if passed else None)
+        except Exception:
+            self.release(lts, None)
+            raise
         finally:
             so.free(dev)
             dev.sync()

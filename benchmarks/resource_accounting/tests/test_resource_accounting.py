@@ -180,6 +180,88 @@ def test_the_tune_takes_the_fastest_eligible_and_times_each_library_s_best_besid
     assert T.finalists(timed[5:]) == []
 
 
+def test_the_tuner_gates_refuses_a_known_bad_variant_accepted_and_keeps_only_the_pick_s_plan(monkeypatch):
+    """`Tuner.pick` over a fake harness: the gate's failures are dropped, both known-bad variants are run and must be
+    rejected, the FP8 pick is the fastest eligible finalist with the fastest scale-less kernel recorded beside it, and every
+    cuBLASLt plan but the pick's is released, all of them when a known-bad variant passes."""
+    from types import SimpleNamespace as NS
+    T = _load("tuned")
+
+    class Cand:
+        def __init__(self, name, source="cublaslt", cutlass=None, plan=None, library="lt"):
+            self.name, self.source, self.cutlass, self.sf_bytes = name, source, cutlass, (0, 0)
+            self.config = {"library": library} if source == "cublaslt" else {}
+            self.lt = None if plan is None else (NS(value=plan), None)
+
+    lts = {"lt": [Cand("lt_a", plan=1), Cand("lt_b", plan=1), Cand("lt_bad", plan=1)], "lt13": [Cand("lt13_a", plan=2, library="lt13")]}
+    cuts = [Cand("cutlass_x", "cutlass", cutlass=0)]
+    released, ran, accept_bad = [], [], []
+
+    class Call:
+        def __init__(self, dev, cand, shape, ops, ws):
+            self.cand = cand
+
+        def free(self):
+            pass
+
+    def gate(dev, fam, shape, call, seed, corrupt=False):
+        ran.append((call.cand.name, corrupt))
+        return {"ok": bool(accept_bad) or (not corrupt and call.cand.name not in ("lt_bad", "half"))}
+
+    B = NS(FAMILIES={"bf16": NS(name="bf16"), "fp8-e4m3": NS(name="fp8-e4m3")}, LT_CANDIDATES=32, BaselineCall=Call, gate=gate,
+           cutlass_candidates=lambda dev, fam, shape, kernels, sched: (cuts, [{"name": "no"}]),
+           allocate=lambda *a: NS(ops=lambda fam, s: "gate set", free=lambda dev: None),
+           lt_candidates=lambda dev, fam, shape, ops, want, refused, lt: list(lts[lt]), hash_seed=hash,
+           Operands=lambda *a: a, half_k_call=lambda dev, fam, shape, ops, ws: Call(dev, Cand("half", plan=3), shape, ops, ws),
+           release_plans=lambda dev, cands: released.extend(c.name for c in cands))
+    A = NS(Shape=lambda label, m, k, n: NS(label=label, m=m, k=k, n=n), Buffer=lambda ptr, nbytes: ptr)
+    monkeypatch.setattr(T, "harness", lambda: (A, B, None))
+    ms = {"lt_a": 1.0, "lt_b": 0.8, "lt13_a": 1.2, "cutlass_x": 0.5}
+    monkeypatch.setattr(T.Tuner, "item", staticmethod(lambda g, reps: ms[g] / 1e3))
+    monkeypatch.setattr(T.Tuner, "graph", lambda self, calls: calls[0].cand.name)
+
+    class Tensor:
+        def __init__(self, *shape):
+            self.shape = shape
+
+        def data_ptr(self):
+            return id(self)
+
+        def numel(self):
+            return 1
+
+        def element_size(self):
+            return 1
+
+    def tuner():
+        t = object.__new__(T.Tuner)
+        t.A, t.B, t.dev, t.kernels, t.sched, t.lt_ws, t.want, t.seed, t.picks = (
+            A, B, NS(lts=["lt", "lt13"], sync=lambda: None), [], True, None, 32, 1, {})
+        return t
+
+    W, x0, ys = [Tensor(64, 32) for _ in range(4)], Tensor(8, 32), [Tensor(8, 64) for _ in range(4)]
+    tu = tuner()
+    pick = tu.pick("native-fp8-tuned", W, [Tensor()] * 4, Tensor(), x0, ys)
+    rec = pick.record
+    assert pick.cand.name == "lt_b" and rec["pick"] == {"name": "lt_b", "source": "cublaslt", "library": "lt", "config": {"library": "lt"},
+                                                        "ms": 0.8}
+    assert (rec["tried"], rec["gated"], rec["failed_count"], rec["cutlass_unimplementable"]) == (5, 4, 1, 1)
+    assert rec["controls"] == {"flipped": {"candidate": "lt_a", "rejected": True}, "half_k": {"candidate": "half", "rejected": True}}
+    assert ("lt_a", True) in ran and ("half", False) in ran
+    assert set(rec["finals"]) == {"lt_b", "lt_a", "lt13_a"} and len(rec["finals"]["lt_b"]["ms"]) == T.FINAL_ROUNDS
+    assert rec["fastest_ineligible"]["name"] == "cutlass_x" and rec["fastest_ineligible"]["ms"] == 0.5
+    assert released == ["half", "lt13_a"]
+    assert tu.pick("native-fp8-tuned", W, [Tensor()] * 4, Tensor(), x0, ys) is pick
+    released.clear()
+    assert tuner().pick("native-bf16-tuned", W, None, Tensor(), x0, ys).cand.name == "cutlass_x"
+    assert released == ["half", "lt_a", "lt_b", "lt_bad", "lt13_a"]
+    released.clear()
+    accept_bad.append(True)
+    with pytest.raises(RuntimeError, match="known-bad variants"):
+        tuner().pick("native-bf16-tuned", W, None, Tensor(), x0, ys)
+    assert released == ["half", "lt_a", "lt_b", "lt_bad", "lt13_a"]
+
+
 def test_render_reads_a_chain_json_and_refuses_another_schema(tmp_path):
     p = tmp_path / "chain.json"
     p.write_text(json.dumps(_doc()))
