@@ -86,18 +86,43 @@ def chunk_seed(run_seed: bytes, c: int) -> bytes:
     return bytes(s)
 
 
-# --- verity/kv-filler/fill-sk16/v1: units by sequence number, check words by epoch ---------------------------------
-# Unit s of a run is plan unit s mod P under pass s div P's key (the run seed's first 8 bytes XORed with the pass, as
-# v0 keys a chunk), its root v0's; an epoch is 2^shift consecutive s, its check word the XOR of their roots' first
-# words. The signs are v0's.
+# --- verity/kv-filler/fill-sk16/v2: sketch-then-SHA-512, units by sequence number, check words by epoch -------------
+# Unit s of a run is plan unit s mod P in pass p = s div P. Pass p's signs are its own (`signs_v2`). Block j's (its plan
+# index) word is the first 4 bytes, big-endian, of SHA-512(TAG_BLK ‖ its 16 sums as i32be ‖ u64be j ‖ u64be p), one
+# compression; a unit's word is the XOR of its 32 blocks', and an epoch's (2^shift consecutive s) the XOR of its units'.
 
-def epoch(regions: list[bytes], s0: int, n: int, run_seed: bytes, sign_seed: bytes) -> int:
+NAME_V2 = "verity/kv-filler/fill-sk16/v2"
+TAG_BLK, TAG_SGN = b"fill-sk16/v2/blk", b"fill-sk16/v2/sgn"
+
+
+def signs_v2(run_seed: bytes, p: int) -> bytes:
+    """Pass p's 8 KiB: SHA-512(TAG_SGN ‖ run seed ‖ u64be p ‖ u64be i), i = 0..127; bit 4096 r + i (LSB first) is σ(r, i)'s."""
+    head = TAG_SGN + run_seed + p.to_bytes(8, "big")
+    return b"".join(hashlib.sha512(head + i.to_bytes(8, "big")).digest() for i in range(128))
+
+
+def block_word(s: np.ndarray, j: int, p: int) -> int:
+    msg = TAG_BLK + s.astype(">i4").tobytes() + j.to_bytes(8, "big") + p.to_bytes(8, "big")
+    return int.from_bytes(hashlib.sha512(msg).digest()[:4], "big")
+
+
+def unit_word(unit: bytes, u: int, p: int, sigma: np.ndarray) -> int:
+    s = sketches(np.frombuffer(unit, dtype=np.uint8).reshape(UNIT_BLOCKS, BLK), sigma)
+    x = 0
+    for b in range(UNIT_BLOCKS):
+        x ^= block_word(s[b], u * UNIT_BLOCKS + b, p)
+    return x
+
+
+def epoch(regions: list[bytes], s0: int, n: int, run_seed: bytes) -> int:
     """The check word of units s0 .. s0 + n − 1."""
-    P = len(plan([len(r) for r in regions]))
-    x, s = 0, s0
-    while s < s0 + n:
+    where = plan([len(r) for r in regions])
+    P = len(where)
+    x, sigma_of = 0, {}
+    for s in range(s0, s0 + n):
         p, u = divmod(s, P)
-        k = min(P - u, s0 + n - s)
-        x ^= chunk(regions, u, k, chunk_seed(run_seed, p), sign_seed)[1]
-        s += k
+        if p not in sigma_of:
+            sigma_of = {p: sign_matrix(signs_v2(run_seed, p))}
+        r, off = where[u]
+        x ^= unit_word(regions[r][off:off + UNIT_BYTES], u, p, sigma_of[p])
     return x

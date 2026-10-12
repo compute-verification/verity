@@ -129,7 +129,7 @@ class Topup:
 
 
 class Seq:
-    """fill-sk16/v1 through `topup.cu`'s sq_* ABI; its log is `Topup.log`'s (an epoch's number where a chunk's is, its
+    """fill-sk16/v2 through `topup.cu`'s sq_* ABI; its log is `Topup.log`'s (an epoch's number where a chunk's is, its
     ring slot where a chunk's region is)."""
 
     def __init__(self, tu: Topup) -> None:
@@ -343,7 +343,7 @@ SEQ_SHIFT_GATE = 2  # 4 units an epoch: epochs cross the 15-unit plan's passes o
 
 
 def seq_epochs_ok(recs, blobs, shift: int, check: int = 24) -> tuple[bool, int]:
-    """A v1 log against `fill_ref.epoch`: epochs numbered 0, 1, ... in order, each full but the last, and the check
+    """A v2 log against `fill_ref.epoch`: epochs numbered 0, 1, ... in order, each full but the last, and the check
     words of the first `check`, of the last, and of a spread between. Returns (ok, units)."""
     import fill_ref as F
     full = (1 << shift) * F.UNIT_BYTES
@@ -358,12 +358,12 @@ def seq_epochs_ok(recs, blobs, shift: int, check: int = 24) -> tuple[bool, int]:
                    | set(range(check, len(recs), max(1, len(recs) // 8))))
     for k in picks:
         _, _, n, _, x, e = recs[k]
-        ok &= x == F.epoch(blobs, e << shift, int(n) // F.UNIT_BYTES, RUN_SEED, RUN_SEED)
+        ok &= x == F.epoch(blobs, e << shift, int(n) // F.UNIT_BYTES, RUN_SEED)
     return ok, units
 
 
 def seq_gate(tu: Topup, torch) -> dict:
-    """fill-sk16/v1 against `fill_ref.epoch`, over `gate_regions`' 15-unit plan in epochs of 4 units, each role alone:
+    """fill-sk16/v2 against `fill_ref.epoch`, over `gate_regions`' 15-unit plan in epochs of 4 units, each role alone:
     BASE (3 CTAs, 5 units a launch) through the gate's settings (open, one CTA, closed: none taken, then open);
     then IDLE alone (no BASE): nothing taken while it is off, units while on; then STEP alone: nothing taken until a
     step's begin on a stream, units while the step runs (a sleep kernel), none once it has ended; then PREFILL alone

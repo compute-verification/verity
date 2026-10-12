@@ -71,15 +71,37 @@ def test_the_key_and_the_signs_change_the_root():
     assert F.chunk([bytes(flipped)], 0, 1, SEED, SEED)[0][0] != base
 
 
-def test_a_v1_epoch_across_passes_xors_each_pass_chunk_under_its_pass_key():
+def test_a_v2_block_word_is_one_sha512_compression_of_the_tag_the_sketch_the_block_and_the_pass():
+    s = np.arange(-8, 8, dtype=np.int64) * 1000
+    msg = F.TAG_BLK + b"".join(int(v).to_bytes(4, "big", signed=True) for v in s) + (77).to_bytes(8, "big") + (3).to_bytes(8, "big")
+    assert len(msg) == 96 and len(msg) <= 128 - 17  # one compression with its padding
+    assert F.block_word(s, 77, 3) == int.from_bytes(hashlib.sha512(msg).digest()[:4], "big")
+    assert F.block_word(s, 77, 4) != F.block_word(s, 77, 3) != F.block_word(s, 78, 3)
+
+
+def test_v2_signs_are_fresh_each_pass_and_one_compression_each():
+    a, b = F.signs_v2(SEED, 0), F.signs_v2(SEED, 1)
+    assert len(a) == F.ROWS * F.BLK // 8 and a != b
+    assert a[64:128] == hashlib.sha512(F.TAG_SGN + SEED + (0).to_bytes(8, "big") + (1).to_bytes(8, "big")).digest()
+    assert len(F.TAG_SGN + SEED) + 16 <= 128 - 17
+
+
+def test_a_v2_epoch_across_passes_xors_each_unit_word_under_its_pass_signs():
     rng = np.random.default_rng(4)
     regions = [rng.integers(0, 256, size=n, dtype=np.uint8).tobytes() for n in (2 * F.UNIT_BYTES, F.UNIT_BYTES + 9)]
+    units = [regions[0][:F.UNIT_BYTES], regions[0][F.UNIT_BYTES:], regions[1][:F.UNIT_BYTES]]
     # the plan is 3 units: s = 2 .. 6 is pass 0's unit 2, pass 1's units 0 .. 2 and pass 2's unit 0
-    want = (F.chunk(regions, 2, 1, F.chunk_seed(SEED, 0), SEED)[1] ^ F.chunk(regions, 0, 3, F.chunk_seed(SEED, 1), SEED)[1]
-            ^ F.chunk(regions, 0, 1, F.chunk_seed(SEED, 2), SEED)[1])
-    assert F.epoch(regions, 2, 5, SEED, SEED) == want
-    assert F.epoch(regions, 3, 3, SEED, SEED) == F.chunk(regions, 0, 3, F.chunk_seed(SEED, 1), SEED)[1]
-    assert F.epoch(regions, 2, 5, SEED, SEED) != F.epoch(regions, 5, 5, SEED, SEED)
+    want = 0
+    for s in range(2, 7):
+        p, u = divmod(s, 3)
+        want ^= F.unit_word(units[u], u, p, F.sign_matrix(F.signs_v2(SEED, p)))
+    assert F.epoch(regions, 2, 5, SEED) == want
+    assert F.epoch(regions, 3, 1, SEED) != F.epoch(regions, 6, 1, SEED)  # unit 0 in passes 1 and 2
+
+
+def test_pinned_v2_epoch():
+    unit = bytes(range(256)) * (F.UNIT_BYTES // 256)
+    assert F.epoch([unit, unit], 0, 3, SEED) == PINNED_V2
 
 
 def test_pinned_root():
@@ -88,3 +110,4 @@ def test_pinned_root():
 
 
 PINNED = "00016451699de1ac6c130afeb67e713b66e93ed1d442c4be95821de368186235"
+PINNED_V2 = 0xB1B8ED4C

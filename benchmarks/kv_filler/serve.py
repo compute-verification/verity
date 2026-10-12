@@ -16,7 +16,7 @@ Top-up policies, each over the same trace in the same engine (`--policies`):
             `throttle@N` and `step@N` take N CTAs instead
   step      fill modes: every SM's CTA resident, `--throttle-ctas` of them let through the gate while a model step is on
             the GPU and all of them otherwise, the gate moved on the runner's stream at each step's start and end
-  seq       fill modes, fill-sk16/v1: a STEP kernel of `--throttle-ctas` CTAs beside each model step (launched on the
+  seq       fill modes, fill-sk16/v2: a STEP kernel of `--throttle-ctas` CTAs beside each model step (launched on the
             filler's step stream after the step's start on the runner's, and returning at its end), and IDLE kernels
             of every SM's CTA, launched by the filler's thread, that read while no model step is on the GPU and return
             once one is; `seq@0` is IDLE alone. `seq@N/P` adds a PREFILL kernel of P CTAs beside each step that

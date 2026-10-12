@@ -16,7 +16,7 @@
 // MMAs (bytes 0–7, then 8–15), and expands its own 16 sign bits of rows g and g + 8 at the same bytes into A. A warp
 // runs four such groups of 8 blocks at once, and keeps DEPTH offsets of loads in flight.
 //
-// Included by topup.cu (mode 4); its C ABI is there.
+// Included by topup.cu (mode 4) after ../bandwidth/tagger.cu, whose SHA-512 v2 uses; its C ABI is there.
 #pragma once
 #include <cuda_runtime.h>
 #include <stdint.h>
@@ -40,7 +40,7 @@ struct Key {
 struct Gate {
   int busy;
   uint32_t busy_ctas, idle_ctas;
-  int prefill;  // the steps on the GPU that prefill (v1's PREFILL role reads while it is > 0)
+  int prefill;  // the steps on the GPU that prefill (the PREFILL role reads while it is > 0)
 };
 constexpr uint32_t ALL = 0xFFFFFFFFu;
 
@@ -122,10 +122,9 @@ __device__ __forceinline__ void mma(int (&d)[4], uint32_t a0, uint32_t a1, uint3
       : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
 }
 
-// One unit: 32 blocks at `p` (block 8q + g of group q), its root into out[0..7] (lane 0, unless out is null); returns
-// the root's first word (lane 0).
-__device__ __forceinline__ uint32_t unit(const uint8_t* __restrict__ p, uint64_t j0, const uint32_t* __restrict__ signs,
-                                     const Key& K, uint64_t pol, uint32_t* __restrict__ out) {
+// The sketches of 32 blocks at `p` (block 8q + g of group q): lane n's block n, its 16 sums into m.
+__device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint32_t* __restrict__ signs, uint64_t pol,
+                                       uint32_t (&m)[16]) {
   const int lane = threadIdx.x & 31, g = lane >> 2, c = lane & 3;
   int acc[4][4];
 #pragma unroll
@@ -163,7 +162,6 @@ __device__ __forceinline__ uint32_t unit(const uint8_t* __restrict__ p, uint64_t
   }
   // Lane n hashes block n = 8q + col: D[r][col] of group q is in lane 4 (r % 8) + col / 2, register 2 (r / 8) + col % 2.
   const int q_me = lane >> 3, col = lane & 7;
-  uint32_t m[16];
 #pragma unroll
   for (int q = 0; q < 4; ++q)
 #pragma unroll
@@ -177,6 +175,15 @@ __device__ __forceinline__ uint32_t unit(const uint8_t* __restrict__ p, uint64_t
           if (q == q_me && par == (col & 1)) m[8 * hi + r8] = (uint32_t)got;
         }
       }
+}
+
+// One v0 unit: 32 blocks at `p`, its root into out[0..7] (lane 0, unless out is null); returns the root's first word
+// (lane 0).
+__device__ __forceinline__ uint32_t unit(const uint8_t* __restrict__ p, uint64_t j0, const uint32_t* __restrict__ signs,
+                                     const Key& K, uint64_t pol, uint32_t* __restrict__ out) {
+  const int lane = threadIdx.x & 31;
+  uint32_t m[16];
+  sketch(p, signs, pol, m);
   uint32_t node[8];
   compress(K.k, m, j0 + lane, F_KEYED | F_START | F_END, node);
 #pragma unroll
@@ -242,11 +249,14 @@ __global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t 
   }
 }
 
-// fill-sk16/v1 (`fill_ref.epoch`): every kernel of a run takes units from one sequence `next`; unit s is plan unit
-// s mod P under pass s div P's key (K with its first two words XORed with the pass), and lands in epoch s >> shift of a
-// ring of `epochs` (a power of 2): its root's first word XORed into xr[e], cnt[e] counted, and the epoch's last unit
-// stamps t[e] with the GPU's globaltimer. A kernel takes at most `budget` units (its own counter `taken`), so nothing
-// waiting on the device waits long, and returns as soon as its role's condition fails:
+// fill-sk16/v2 (`fill_ref.epoch`), sketch-then-SHA-512: every kernel of a run takes units from one sequence `next`;
+// unit s is plan unit s mod P in pass p = s div P, and lands in epoch s >> shift of a ring of `epochs` (a power of 2).
+// Pass p's signs are its own: string byte 64 i + b is byte b of SHA-512(TAG_SGN ‖ run seed ‖ u64be p ‖ u64be i),
+// i < 128 (one compression each). Block j's (its plan index) word is the first 4 bytes, big-endian, of
+// SHA-512(TAG_BLK ‖ its 16 sums as i32be ‖ u64be j ‖ u64be p), 96 bytes and one compression; a unit's word is the XOR of
+// its blocks', XORed into xr[e], cnt[e] counted, and the unit's completion stamps t0[e] (min) and t1[e] (max) with the
+// GPU's globaltimer. A kernel takes at most `budget` units (its own counter `taken`), so nothing waiting on the device
+// waits long, and returns as soon as its role's condition fails:
 //   BASE  while the gate isn't closed both ways
 //   STEP  while a step is open (gate busy > 0): launched beside a step, it ends with it
 //   IDLE  while no step is open and blockIdx < idle_ctas: launched by the thread, it gives way to the next step
@@ -272,10 +282,80 @@ __device__ __forceinline__ unsigned long long globaltimer() {
   return t;
 }
 
+// fill-sk16/v2's domain tags, as SHA-512's big-endian words: "fill-sk16/v2/blk" and "fill-sk16/v2/sgn".
+constexpr uint64_t TAG_HI = 0x66696c6c2d736b31ull, TAG_BLK = 0x362f76322f626c6bull, TAG_SGN = 0x362f76322f73676eull;
+
+// The signs of the passes in flight: pass p's in slot p mod SIGN_SLOTS once pass[slot] == p. The warp that takes a
+// pass's first unit derives the next pass's, after every unit of the pass that held its slot is done (done[slot] == P):
+// those units were taken before it, so the wait ends, and no unit reads signs that are being replaced.
+constexpr uint32_t SIGN_SLOTS = 4;
+struct Signs {
+  uint32_t* words;  // SIGN_SLOTS × SIGN_WORDS, each a sign string's bytes as little-endian words
+  unsigned long long* pass;  // which pass each slot holds (~0: none)
+  unsigned long long* done;  // the units done of the pass each slot holds
+  uint64_t seed[4];  // the run seed as big-endian words
+};
+
+__device__ __forceinline__ uint32_t bswap32(uint32_t x) { return __byte_perm(x, 0, 0x0123); }
+
+// Pass q's signs into its slot, by one warp (every lane).
+__device__ void derive_signs(const Signs& sg, uint64_t q, uint64_t P) {
+  const int lane = threadIdx.x & 31;
+  const uint32_t slot = (uint32_t)(q % SIGN_SLOTS);
+  if (lane == 0) {
+    if (q >= SIGN_SLOTS)
+      while (((volatile unsigned long long*)sg.done)[slot] != P) __nanosleep(500);
+    sg.done[slot] = 0;
+  }
+  __syncwarp();
+  uint32_t* out = sg.words + (uint64_t)slot * SIGN_WORDS;
+#pragma unroll 1
+  for (uint32_t i = lane; i < 128; i += 32) {
+    uint64_t w[16] = {TAG_HI, TAG_SGN, sg.seed[0], sg.seed[1], sg.seed[2], sg.seed[3], q, i, 1ull << 63, 0, 0, 0, 0, 0, 0,
+                      512};
+    uint64_t s[8];
+#pragma unroll
+    for (int k = 0; k < 8; ++k) s[k] = bw::IV_DEV[k];
+    bw::compress(s, w);
+#pragma unroll
+    for (int k = 0; k < 8; ++k) {
+      out[16 * i + 2 * k] = bswap32((uint32_t)(s[k] >> 32));
+      out[16 * i + 2 * k + 1] = bswap32((uint32_t)s[k]);
+    }
+  }
+  __threadfence();
+  __syncwarp();
+  if (lane == 0) {
+    ((volatile unsigned long long*)sg.pass)[slot] = q;
+    __threadfence();
+  }
+}
+
+// One v2 unit: 32 blocks at `p` from plan block j0 in pass `pass` under its signs; returns the unit's word (every lane).
+__device__ __forceinline__ uint32_t unit_v2(const uint8_t* __restrict__ p, uint64_t j0, uint64_t pass,
+                                        const uint32_t* __restrict__ signs, uint64_t pol) {
+  const int lane = threadIdx.x & 31;
+  uint32_t m[16];
+  sketch(p, signs, pol, m);
+  uint64_t w[16];
+  w[0] = TAG_HI, w[1] = TAG_BLK;
+#pragma unroll
+  for (int k = 0; k < 8; ++k) w[2 + k] = ((uint64_t)m[2 * k] << 32) | m[2 * k + 1];
+  w[10] = j0 + lane, w[11] = pass, w[12] = 1ull << 63, w[13] = 0, w[14] = 0, w[15] = 768;
+  uint64_t s[8];
+#pragma unroll
+  for (int k = 0; k < 8; ++k) s[k] = bw::IV_DEV[k];
+  bw::compress(s, w);
+  uint32_t x = (uint32_t)(s[0] >> 32);
+#pragma unroll
+  for (int o = 16; o; o >>= 1) x ^= __shfl_xor_sync(0xffffffffu, x, o);
+  return x;
+}
+
 template <int W>
-__global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, const uint32_t* __restrict__ signs, Key K,
-                                                          const Gate* gate, Seq* seq, Ring ring, int role,
-                                                          unsigned long long* taken, unsigned long long budget) {
+__global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, Signs sg, const Gate* gate, Seq* seq,
+                                                          Ring ring, int role, unsigned long long* taken,
+                                                          unsigned long long budget) {
   uint64_t pol;
   asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
   const int lane = threadIdx.x & 31;
@@ -304,13 +384,15 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, const
     s = __shfl_sync(0xffffffffu, s, 0);
     if (s == NONE) return;
     const uint64_t U = s % P, pass = s / P;
-    Key Kp = K;
-    Kp.k[0] ^= (uint32_t)pass;
-    Kp.k[1] ^= (uint32_t)(pass >> 32);
+    const uint32_t slot = (uint32_t)(pass % SIGN_SLOTS);
+    if (lane == 0)
+      while (((volatile unsigned long long*)sg.pass)[slot] != pass) __nanosleep(500);
+    __syncwarp();
+    __threadfence();
     int r = 0;
     while (r + 1 < R.n && R.first_unit[r + 1] <= U) ++r;
     const uint8_t* p = R.base[r] + (U - R.first_unit[r]) * UNIT_BYTES;
-    const uint32_t w = unit(p, U * UNIT_BLOCKS, signs, Kp, pol, nullptr);
+    const uint32_t w = unit_v2(p, U * UNIT_BLOCKS, pass, sg.words + (uint64_t)slot * SIGN_WORDS, pol);
     if (lane == 0) {
       const uint32_t e = (uint32_t)(s >> ring.shift) & ring.mask;
       const unsigned long long now = globaltimer();
@@ -319,9 +401,14 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, const
       atomicXor(ring.xr + e, w);
       __threadfence();
       atomicAdd(ring.cnt + e, 1u);
+      atomicAdd(sg.done + slot, 1ull);
     }
+    if (U == 0) derive_signs(sg, pass + 1, P);
   }
 }
+
+// Pass 0's signs, before the first kernel of a run (one warp).
+__global__ void signs_first(Signs sg) { derive_signs(sg, 0, 0); }
 
 __global__ void stamp(unsigned long long* t) { *t = globaltimer(); }
 

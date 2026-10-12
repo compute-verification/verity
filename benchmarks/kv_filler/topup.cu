@@ -758,7 +758,7 @@ void tu_fill_signs(const uint8_t* seed, uint8_t* out) { tu::fill_signs(seed, (ui
 
 }  // extern "C"
 
-// --- fill-sk16/v1: the filler by sequence number (fill.cu's fill_seq_kernel) ----------------------------------------
+// --- fill-sk16/v2: the filler by sequence number (fill.cu's fill_seq_kernel) ----------------------------------------
 // One thread keeps BASE kernels of `base_ctas` CTAs queued (two deep, `base_budget` units each) and, with idle on, one
 // IDLE kernel of every SM's CTA at a time, launched again at once after one that took units and after `IDLE_BACKOFF`
 // after one that took none; sq_step_begin/sq_step_end bracket a step on its own stream (the gate's busy count) and
@@ -779,7 +779,7 @@ struct State {
   std::atomic<int> idle_on{0};
   fl::Regions plan{};
   uint8_t seed[32];
-  uint32_t* signs = nullptr;
+  fl::Signs sg{};
   fl::Seq* seq = nullptr;
   fl::Ring ring{};
   unsigned long long* taken = nullptr;  // [0, 1] the base slots', [2] idle's, [3] step's, [4] prefill's
@@ -804,8 +804,7 @@ static State* S = nullptr;
 static int launch(State& st, int role, int grid, unsigned long long* taken, uint64_t budget, cudaStream_t s) {
   cudaError_t e = cudaMemsetAsync(taken, 0, 8, s);
   if (e != cudaSuccess) return (int)e;
-  const fl::Key K = tu::fill_key(st.seed);
-#define SQ_L(W) fl::fill_seq_kernel<W><<<grid, W * 32, 0, s>>>(st.plan, st.signs, K, tu::gate, st.seq, st.ring, role, taken, budget)
+#define SQ_L(W) fl::fill_seq_kernel<W><<<grid, W * 32, 0, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
   switch (st.warps) {
     case 4: SQ_L(4); break;
     case 8: SQ_L(8); break;
@@ -912,7 +911,7 @@ static void loop(State* sp) {
 
 extern "C" {
 
-// Starts fill-sk16/v1 on `device` over `n` regions (16-byte aligned) under `seed`: BASE kernels of `base_ctas` CTAs
+// Starts fill-sk16/v2 on `device` over `n` regions (16-byte aligned) under `seed`: BASE kernels of `base_ctas` CTAs
 // (0: none) of `warps` warps, `base_budget` units each; epochs of 2^shift units. The IDLE kernels wait for sq_idle(1).
 // BASE and IDLE run at stream `priority`, STEP at `step_priority`.
 int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, const uint8_t* seed, int base_ctas,
@@ -945,10 +944,18 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   CK(cudaEventCreateWithFlags(&st->step_ev, cudaEventDisableTiming));
   CK(cudaEventCreateWithFlags(&st->step_done, cudaEventDisableTiming));
   CK(cudaEventCreateWithFlags(&st->pre_done, cudaEventDisableTiming));
-  std::vector<uint32_t> sg(fl::SIGN_WORDS);
-  tu::fill_signs(seed, sg.data());
-  CK(cudaMalloc(&st->signs, sg.size() * 4));
-  CK(cudaMemcpy(st->signs, sg.data(), sg.size() * 4, cudaMemcpyHostToDevice));
+  CK(cudaMalloc(&st->sg.words, 4ull * fl::SIGN_SLOTS * fl::SIGN_WORDS));
+  CK(cudaMalloc(&st->sg.pass, 8 * fl::SIGN_SLOTS));
+  CK(cudaMalloc(&st->sg.done, 8 * fl::SIGN_SLOTS));
+  CK(cudaMemset(st->sg.pass, 0xFF, 8 * fl::SIGN_SLOTS));
+  CK(cudaMemset(st->sg.done, 0, 8 * fl::SIGN_SLOTS));
+  for (int k = 0; k < 4; ++k) {
+    st->sg.seed[k] = 0;
+    for (int b = 0; b < 8; ++b) st->sg.seed[k] = (st->sg.seed[k] << 8) | seed[8 * k + b];
+  }
+  fl::signs_first<<<1, 32>>>(st->sg);
+  CK(cudaGetLastError());
+  CK(cudaDeviceSynchronize());
   CK(cudaMalloc(&st->seq, sizeof(fl::Seq)));
   {
     const fl::Seq q0{0, 0, sq::limit(st->shift, 0)};
@@ -1043,7 +1050,7 @@ int sq_stop() {
   for (cudaStream_t s : {st->s_base, st->s_idle, st->s_step, st->s_pre, st->s_h}) cudaStreamDestroy(s);
   for (cudaEvent_t e : {st->start, st->base_done[0], st->base_done[1], st->idle_done, st->step_ev, st->step_done, st->pre_done})
     cudaEventDestroy(e);
-  for (void* p : {(void*)st->signs, (void*)st->seq, (void*)st->ring.xr, (void*)st->ring.cnt, (void*)st->ring.t0, (void*)st->ring.t1,
+  for (void* p : {(void*)st->sg.words, (void*)st->sg.pass, (void*)st->sg.done, (void*)st->seq, (void*)st->ring.xr, (void*)st->ring.cnt, (void*)st->ring.t0, (void*)st->ring.t1,
                   (void*)st->taken, (void*)st->g0})
     cudaFree(p);
   cudaFreeHost(st->taken_h);
@@ -1076,7 +1083,7 @@ double sq_now_ms(void* stream) {
   return ms;
 }
 
-// The running v1 filler's log, as tu_log reads a stopped run's (the stopped one's is tu_log's).
+// The running v2 filler's log, as tu_log reads a stopped run's (the stopped one's is tu_log's).
 int sq_log(uint64_t first, double* out, int max) {
   sq::State* st = sq::S;
   std::unique_lock<std::mutex> g;
