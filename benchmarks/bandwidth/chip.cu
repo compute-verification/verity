@@ -53,43 +53,105 @@ __host__ __device__ constexpr uint32_t imm(uint32_t i) {
   return i & 0x7fffffffu;
 }
 
-// nvcc takes minutes over straight-line code this long, so bwchip writes each size's kernel as PTX (--emit-icache DIR,
-// icache_N.ptx), run_chip.sh assembles it with ptxas (seconds) and records its SASS, and the sweep loads the cubins.
-static const int ICACHE_STEPS[] = {16,  32,  48,  64,   96,   128,  192,  256,  320,  384,  448,
-                                   512, 640, 768, 1024, 1280, 1536, 2048, 3072, 4096, 6144, 8192};
+// nvcc takes minutes over straight-line code this long, so bwchip writes each kernel as PTX (--emit DIR), run_chip.sh
+// assembles it with ptxas (seconds) and records its SASS, and the sweeps load the cubins.
+static const int ICACHE_STEPS[] = {16,  32,  48,  64,  96,  128, 192,  256,  320,  384,  448,  512,  640,  768,
+                                   832, 896, 960, 1024, 1088, 1152, 1280, 1536, 2048, 3072, 4096, 6144, 8192};
+// With 8 chains a step is 16 instructions, 256 bytes, and a warp can issue every cycle: what 4 chains (one issue every
+// other cycle) leave hidden behind the L1 instruction cache, an L0 that can't keep up with it.
+static const int ICACHE8_STEPS[] = {4, 8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 2048};
 
-// icache(out, cycles, reps, y): reps passes over the n steps (pass 0 cold and untimed); thread t writes its four chains
-// to out[4t..4t+3] and the timed passes' cycles to cycles[t].
-static std::string icache_ptx(int n) {
-  std::string s =
-      ".version 8.7\n.target sm_120\n.address_size 64\n\n"
-      ".visible .entry icache(.param .u64 out, .param .u64 cyc, .param .u32 reps, .param .u32 y)\n{\n"
-      " .reg .b32 %a, %b, %c, %d, %y, %r, %n, %i;\n .reg .b64 %t0, %t1, %o, %q, %w;\n .reg .pred %p, %z;\n"
-      " ld.param.u64 %o, [out];\n ld.param.u64 %q, [cyc];\n ld.param.u32 %n, [reps];\n ld.param.u32 %y, [y];\n"
-      " cvta.to.global.u64 %o, %o;\n cvta.to.global.u64 %q, %q;\n mov.u32 %i, %tid.x;\n"
-      " mov.u32 %a, %i;\n add.u32 %b, %i, 1;\n add.u32 %c, %i, 2;\n add.u32 %d, %i, 3;\n"
-      " mov.u32 %r, 0;\n mov.u64 %t0, 0;\nLOOP:\n setp.eq.u32 %z, %r, 1;\n @%z mov.u64 %t0, %clock64;\n";
-  s.reserve(s.size() + (size_t)n * 4 * 64);
+static const char* const CHAIN[8] = {"%x0", "%x1", "%x2", "%x3", "%x4", "%x5", "%x6", "%x7"};
+
+static std::string ptx_head() { return ".version 8.7\n.target sm_120\n.address_size 64\n\n"; }
+
+// n steps of `chains` chains, each step x_k = (x_k + y) ^ imm(chains·step + k).
+static void ptx_steps(std::string& s, int n, int chains) {
+  s.reserve(s.size() + (size_t)n * chains * 48);
   char line[96];
-  const char* reg[4] = {"%a", "%b", "%c", "%d"};
   for (int i = 0; i < n; ++i)
-    for (int k = 0; k < 4; ++k) {
-      snprintf(line, sizeof line, " add.u32 %s, %s, %%y;\n xor.b32 %s, %s, %u;\n", reg[k], reg[k], reg[k], reg[k],
-               imm(4 * i + k));
+    for (int k = 0; k < chains; ++k) {
+      snprintf(line, sizeof line, " add.u32 %s, %s, %%y;\n xor.b32 %s, %s, %u;\n", CHAIN[k], CHAIN[k], CHAIN[k],
+               CHAIN[k], imm(chains * i + k));
       s += line;
     }
+}
+
+// Thread t's chains to out[chains·t ..], from x0 .. x_{chains-1}.
+static void ptx_store_chains(std::string& s, int chains) {
+  s += " mul.wide.u32 %w, %i, " + std::to_string(4 * chains) + ";\n add.u64 %w, %w, %o;\n";
+  for (int k = 0; k < chains; k += 4)
+    s += " st.global.v4.u32 [%w+" + std::to_string(4 * k) + "], {%x" + std::to_string(k) + ", %x" +
+         std::to_string(k + 1) + ", %x" + std::to_string(k + 2) + ", %x" + std::to_string(k + 3) + "};\n";
+}
+
+// icache(out, cycles, reps, y): reps passes over the n steps (pass 0 cold and untimed); thread t writes its chains to
+// out[chains·t ..] and the timed passes' cycles to cycles[t].
+static std::string icache_ptx(int n, int chains) {
+  std::string s = ptx_head() +
+                  ".visible .entry icache(.param .u64 out, .param .u64 cyc, .param .u32 reps, .param .u32 y)\n{\n"
+                  " .reg .b32 %x<8>, %y, %r, %n, %i;\n .reg .b64 %t0, %t1, %o, %q, %w;\n .reg .pred %p, %z;\n"
+                  " ld.param.u64 %o, [out];\n ld.param.u64 %q, [cyc];\n ld.param.u32 %n, [reps];\n"
+                  " ld.param.u32 %y, [y];\n cvta.to.global.u64 %o, %o;\n cvta.to.global.u64 %q, %q;\n"
+                  " mov.u32 %i, %tid.x;\n";
+  for (int k = 0; k < chains; ++k) s += " add.u32 %x" + std::to_string(k) + ", %i, " + std::to_string(k) + ";\n";
+  s += " mov.u32 %r, 0;\n mov.u64 %t0, 0;\nLOOP:\n setp.eq.u32 %z, %r, 1;\n @%z mov.u64 %t0, %clock64;\n";
+  ptx_steps(s, n, chains);
   s += " add.u32 %r, %r, 1;\n setp.lt.u32 %p, %r, %n;\n @%p bra LOOP;\n mov.u64 %t1, %clock64;\n"
-       " sub.u64 %t1, %t1, %t0;\n mul.wide.u32 %w, %i, 16;\n add.u64 %w, %w, %o;\n"
-       " st.global.v4.u32 [%w], {%a, %b, %c, %d};\n mul.wide.u32 %w, %i, 8;\n add.u64 %w, %w, %q;\n"
-       " st.global.u64 [%w], %t1;\n ret;\n}\n";
+       " sub.u64 %t1, %t1, %t0;\n";
+  ptx_store_chains(s, chains);
+  s += " mul.wide.u32 %w, %i, 8;\n add.u64 %w, %w, %q;\n st.global.u64 [%w], %t1;\n ret;\n}\n";
   return s;
 }
 
-static void icache_host(uint32_t tid, int n, int reps, uint32_t y, uint32_t x[4]) {
-  x[0] = tid, x[1] = tid + 1, x[2] = tid + 2, x[3] = tid + 3;
+static void icache_host(uint32_t tid, int n, int chains, int reps, uint32_t y, uint32_t* x) {
+  for (int k = 0; k < chains; ++k) x[k] = tid + k;
   for (int r = 0; r < reps; ++r)
     for (int s = 0; s < n; ++s)
-      for (int k = 0; k < 4; ++k) x[k] = (x[k] + y) ^ imm(4 * s + k);
+      for (int k = 0; k < chains; ++k) x[k] = (x[k] + y) ^ imm(chains * s + k);
+}
+
+// Whether constants and code share a cache: unified(out, cyc, warm, n, y, mask) chases its .const bank `warm` times,
+// runs n steps of code once (seeded by the chase through `mask`, which is 0), then chases the bank again, n loads
+// timed (seeded by the code).  If the code evicts the constants, the second chase runs at the next level's latency.
+static const int UNIFIED_STEPS[] = {0, 128, 256, 384, 512, 640, 768, 1024, 1536, 2048, 4096};
+
+static std::string unified_ptx(int n) {
+  std::string s = ptx_head() + ".const .align 4 .b32 cbank[16384];\n\n" +
+                  ".visible .entry unified(.param .u64 out, .param .u64 cyc, .param .u32 warm, .param .u32 n, "
+                  ".param .u32 y, .param .u32 mask)\n{\n"
+                  " .reg .b32 %x<4>, %y, %i, %j, %k, %wm, %n, %m, %t;\n .reg .b64 %base, %p, %o, %q, %w, %t0, %t1;\n"
+                  " .reg .pred %z;\n"
+                  " ld.param.u64 %o, [out];\n ld.param.u64 %q, [cyc];\n ld.param.u32 %wm, [warm];\n"
+                  " ld.param.u32 %n, [n];\n ld.param.u32 %y, [y];\n ld.param.u32 %m, [mask];\n"
+                  " cvta.to.global.u64 %o, %o;\n cvta.to.global.u64 %q, %q;\n mov.u64 %base, cbank;\n"
+                  " mov.u32 %i, %tid.x;\n and.b32 %j, %i, %m;\n mov.u32 %k, 0;\n"  // a per-thread j: both chases LDC
+
+                  "WARM:\n mul.wide.u32 %p, %j, 4;\n add.u64 %p, %p, %base;\n ld.const.u32 %j, [%p];\n"
+                  " add.u32 %k, %k, 1;\n setp.lt.u32 %z, %k, %wm;\n @%z bra WARM;\n"
+                  " and.b32 %t, %j, %m;\n";
+  for (int k = 0; k < 4; ++k)
+    s += " add.u32 %x" + std::to_string(k) + ", %i, " + std::to_string(k) + ";\n xor.b32 %x" + std::to_string(k) +
+         ", %x" + std::to_string(k) + ", %t;\n";
+  ptx_steps(s, n, 4);
+  s += " and.b32 %t, %x0, %m;\n xor.b32 %j, %j, %t;\n mov.u32 %k, 0;\n mov.u64 %t0, 0;\n"
+       "TIMED:\n setp.eq.u32 %z, %k, 1;\n @%z mov.u64 %t0, %clock64;\n mul.wide.u32 %p, %j, 4;\n"
+       " add.u64 %p, %p, %base;\n ld.const.u32 %j, [%p];\n add.u32 %k, %k, 1;\n setp.lt.u32 %z, %k, %n;\n"
+       " @%z bra TIMED;\n mov.u64 %t1, %clock64;\n sub.u64 %t1, %t1, %t0;\n";
+  ptx_store_chains(s, 4);
+  s += " st.global.u32 [%o+16], %j;\n st.global.u64 [%q], %t1;\n ret;\n}\n";
+  return s;
+}
+
+// urt(out, v1, pad, v2): thread t writes t·v1 and t ^ v2 to out[2t], out[2t+1]; chip_ur.py moves v1 and v2 into
+// chosen uniform registers.
+static std::string urt_ptx() {
+  return ptx_head() +
+         ".visible .entry urt(.param .u64 out, .param .u32 v1, .param .u64 pad, .param .u32 v2)\n{\n"
+         " .reg .b32 %v1, %v2, %t, %x1, %x2;\n .reg .b64 %o, %w;\n ld.param.u64 %o, [out];\n"
+         " ld.param.u32 %v1, [v1];\n ld.param.u32 %v2, [v2];\n cvta.to.global.u64 %o, %o;\n mov.u32 %t, %tid.x;\n"
+         " mul.lo.u32 %x1, %t, %v1;\n xor.b32 %x2, %t, %v2;\n mul.wide.u32 %w, %t, 8;\n add.u64 %w, %w, %o;\n"
+         " st.global.v2.u32 [%w], {%x1, %x2};\n ret;\n}\n";
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -159,33 +221,49 @@ struct Dev {
   size_t l2 = 0;
 };
 
-static int emit_icache(const std::string& dir) {
-  for (int n : ICACHE_STEPS) {
-    const std::string path = dir + "/icache_" + std::to_string(n) + ".ptx";
-    FILE* f = fopen(path.c_str(), "w");
-    if (!f) return fail("cannot write " + path);
-    const std::string s = icache_ptx(n);
-    fwrite(s.data(), 1, s.size(), f);
-    fclose(f);
-  }
+static int write_file(const std::string& path, const std::string& s) {
+  FILE* f = fopen(path.c_str(), "w");
+  if (!f) return fail("cannot write " + path);
+  fwrite(s.data(), 1, s.size(), f);
+  fclose(f);
   return 0;
 }
 
-static int run_icache(std::string& j, const std::string& dir) {
+// icache_N.ptx (4 chains), icache8_N.ptx (8 chains), unified_N.ptx and urt.ptx.
+static int emit_ptx(const std::string& dir) {
+  int rc = 0;
+  for (int n : ICACHE_STEPS) rc |= write_file(dir + "/icache_" + std::to_string(n) + ".ptx", icache_ptx(n, 4));
+  for (int n : ICACHE8_STEPS) rc |= write_file(dir + "/icache8_" + std::to_string(n) + ".ptx", icache_ptx(n, 8));
+  for (int n : UNIFIED_STEPS) rc |= write_file(dir + "/unified_" + std::to_string(n) + ".ptx", unified_ptx(n));
+  rc |= write_file(dir + "/urt.ptx", urt_ptx());
+  return rc;
+}
+
+static cudaKernel_t load_kernel(const std::string& path, const char* name, cudaLibrary_t* lib) {
+  cudaKernel_t fn;
+  OK(cudaLibraryLoadFromFile(lib, path.c_str(), nullptr, nullptr, 0, nullptr, nullptr, 0));
+  OK(cudaLibraryGetKernel(&fn, *lib, name));
+  return fn;
+}
+
+static int run_icache(std::string& j, const std::string& dir, int chains) {
   uint32_t* out;
   unsigned long long* cyc;
-  OK(cudaMalloc(&out, 128 * 16));
+  OK(cudaMalloc(&out, 128 * 4 * chains));
   OK(cudaMalloc(&cyc, 128 * 8));
   const uint32_t y = 0x5bd1e995u;
-  j += "\"icache\":{\"bytes_per_step\":128,\"instructions_per_step\":8,\"runs\":[";
+  const int per_step = 2 * chains;
+  const std::string name = chains == 4 ? "icache" : "icache" + std::to_string(chains);
+  j += "\"" + name + "\":{\"bytes_per_step\":" + std::to_string(16 * per_step) +
+       ",\"instructions_per_step\":" + std::to_string(per_step) + ",\"runs\":[";
   bool first = true;
-  for (int n : ICACHE_STEPS) {
-    const std::string path = dir + "/icache_" + std::to_string(n) + ".cubin";
+  const int* steps = chains == 4 ? ICACHE_STEPS : ICACHE8_STEPS;
+  const size_t count = chains == 4 ? sizeof ICACHE_STEPS / sizeof(int) : sizeof ICACHE8_STEPS / sizeof(int);
+  for (size_t c = 0; c < count; ++c) {
+    const int n = steps[c];
     cudaLibrary_t lib;
-    cudaKernel_t fn;
-    OK(cudaLibraryLoadFromFile(&lib, path.c_str(), nullptr, nullptr, 0, nullptr, nullptr, 0));
-    OK(cudaLibraryGetKernel(&fn, lib, "icache"));
-    const int reps = std::max(4, (1 << 21) / (8 * n));
+    cudaKernel_t fn = load_kernel(dir + "/" + name + "_" + std::to_string(n) + ".cubin", "icache", &lib);
+    const int reps = std::max(4, (1 << 21) / (per_step * n));
     for (int warps : {1, 4}) {
       std::vector<double> cpi;
       for (int t = 0; t < 3; ++t) {
@@ -195,23 +273,24 @@ static int run_icache(std::string& j, const std::string& dir) {
         OK(cudaLaunchKernel((const void*)fn, dim3(1), dim3(32 * warps), args, 0, 0));
         OK(cudaGetLastError());
         OK(cudaDeviceSynchronize());
-        std::vector<uint32_t> got(4 * 32 * warps);
-        std::vector<unsigned long long> c(32 * warps);
+        std::vector<uint32_t> got(chains * 32 * warps);
+        std::vector<unsigned long long> cy(32 * warps);
         OK(cudaMemcpy(got.data(), out, got.size() * 4, cudaMemcpyDeviceToHost));
-        OK(cudaMemcpy(c.data(), cyc, c.size() * 8, cudaMemcpyDeviceToHost));
+        OK(cudaMemcpy(cy.data(), cyc, cy.size() * 8, cudaMemcpyDeviceToHost));
         for (uint32_t tid = 0; tid < 32u * warps; tid += 7) {
-          uint32_t x[4];
-          icache_host(tid, n, reps, y, x);
-          if (memcmp(x, &got[4 * tid], 16)) return fail("icache result, n=" + std::to_string(n));
+          uint32_t x[8];
+          icache_host(tid, n, chains, reps, y, x);
+          if (memcmp(x, &got[chains * tid], 4 * chains)) return fail(name + " result, n=" + std::to_string(n));
         }
         double worst = 0;
-        for (auto x : c) worst = std::max(worst, (double)x);
-        cpi.push_back(worst / ((double)(reps - 1) * 8 * n));
+        for (auto x : cy) worst = std::max(worst, (double)x);
+        cpi.push_back(worst / ((double)(reps - 1) * per_step * n));
       }
       std::sort(cpi.begin(), cpi.end());
       j += std::string(first ? "" : ",") + "{\"steps\":" + std::to_string(n) + ",\"code_bytes\":" +
-           std::to_string(128 * n) + ",\"warps\":" + std::to_string(warps) + ",\"reps\":" + std::to_string(reps) +
-           ",\"cycles_per_instruction\":" + num(cpi[1]) + ",\"min\":" + num(cpi[0]) + ",\"max\":" + num(cpi[2]) + "}";
+           std::to_string(16 * per_step * n) + ",\"warps\":" + std::to_string(warps) + ",\"reps\":" +
+           std::to_string(reps) + ",\"cycles_per_instruction\":" + num(cpi[1]) + ",\"min\":" + num(cpi[0]) +
+           ",\"max\":" + num(cpi[2]) + "}";
       first = false;
     }
     OK(cudaLibraryUnload(lib));
@@ -220,6 +299,81 @@ static int run_icache(std::string& j, const std::string& dir) {
   cudaFree(out);
   cudaFree(cyc);
   return 0;
+}
+
+// For each code size, constant footprints of 16, 32 and 64 KiB at a 64-byte stride: cycles a load of the second chase.
+static int run_unified(std::string& j, const std::string& dir) {
+  uint32_t* out;
+  unsigned long long* cyc;
+  OK(cudaMalloc(&out, 64));
+  OK(cudaMalloc(&cyc, 8));
+  const uint32_t y = 0x2545F491u;
+  j += "\"unified\":{\"bytes_per_step\":128,\"stride\":64,\"runs\":[";
+  bool first = true;
+  for (int n : UNIFIED_STEPS) {
+    cudaLibrary_t lib;
+    cudaKernel_t fn = load_kernel(dir + "/unified_" + std::to_string(n) + ".cubin", "unified", &lib);
+    void* bank;
+    size_t bank_bytes;
+    OK(cudaLibraryGetGlobal(&bank, &bank_bytes, lib, "cbank"));
+    for (int fp : {16384, 32768, 65536}) {
+      const int count = fp / 64, sw = 16;
+      std::vector<uint32_t> img(bank_bytes / 4, 0);
+      for (int k = 0; k < count; ++k) img[k * sw] = ((k + 1) % count) * sw;
+      OK(cudaMemcpy(bank, img.data(), bank_bytes, cudaMemcpyHostToDevice));
+      int warm = 2 * count, loads = 2 * count;
+      uint32_t yy = y, mask = 0;
+      std::vector<double> lat;
+      for (int t = 0; t < 3; ++t) {
+        void* args[] = {&out, &cyc, &warm, &loads, &yy, &mask};
+        OK(cudaLaunchKernel((const void*)fn, dim3(1), dim3(1), args, 0, 0));
+        OK(cudaGetLastError());
+        OK(cudaDeviceSynchronize());
+        uint32_t got[5];
+        unsigned long long c;
+        OK(cudaMemcpy(got, out, 20, cudaMemcpyDeviceToHost));
+        OK(cudaMemcpy(&c, cyc, 8, cudaMemcpyDeviceToHost));
+        uint32_t x[8];
+        icache_host(0, n, 4, 1, y, x);
+        if (memcmp(x, got, 16) || got[4] != (uint32_t)(((warm + loads) % count) * sw))
+          return fail("unified result, n=" + std::to_string(n));
+        lat.push_back((double)c / (loads - 1));
+      }
+      std::sort(lat.begin(), lat.end());
+      j += std::string(first ? "" : ",") + "{\"steps\":" + std::to_string(n) + ",\"code_bytes\":" +
+           std::to_string(128 * n) + ",\"const_footprint\":" + std::to_string(fp) + ",\"cycles_per_load\":" +
+           num(lat[1]) + "}";
+      first = false;
+    }
+    OK(cudaLibraryUnload(lib));
+  }
+  j += "]},";
+  cudaFree(out);
+  cudaFree(cyc);
+  return 0;
+}
+
+// One process a pair: urt rewritten (chip_ur.py) to hold v1 in URa and v2 in URb.  Prints whether both came back.
+static int run_ur(const std::string& cubin, int a, int b) {
+  OK(cudaSetDevice(0));
+  cudaLibrary_t lib;
+  cudaKernel_t fn = load_kernel(cubin, "urt", &lib);
+  uint32_t* out;
+  OK(cudaMalloc(&out, 32 * 8));
+  OK(cudaMemset(out, 0, 32 * 8));
+  uint32_t v1 = 0x9E3779B1u, v2 = 0x7F4A7C15u;
+  uint64_t pad = 0;
+  void* args[] = {&out, &v1, &pad, &v2};
+  OK(cudaLaunchKernel((const void*)fn, dim3(1), dim3(32), args, 0, 0));
+  OK(cudaGetLastError());
+  OK(cudaDeviceSynchronize());
+  uint32_t got[64];
+  OK(cudaMemcpy(got, out, sizeof got, cudaMemcpyDeviceToHost));
+  int bad1 = 0, bad2 = 0;
+  for (uint32_t t = 0; t < 32; ++t) bad1 += got[2 * t] != t * v1, bad2 += got[2 * t + 1] != (t ^ v2);
+  printf("{\"a\":%d,\"b\":%d,\"a_held\":%s,\"b_held\":%s,\"a_word1\":%u,\"b_word1\":%u}\n", a, b,
+         bad1 ? "false" : "true", bad2 ? "false" : "true", got[2], got[3]);
+  return bad1 || bad2 ? 3 : 0;
 }
 
 static int run_const(std::string& j) {
@@ -417,21 +571,25 @@ static int run_l2(std::string& j, const Dev& d) {
 }  // namespace chip
 
 int main(int argc, char** argv) {
-  std::string out = ".", only, icache_dir, emit;
+  std::string out = ".", only, ptx_dir, emit, ur;
+  int ur_a = -1, ur_b = -1;
   for (int i = 1; i < argc; ++i) {
     std::string k = argv[i];
     if (k == "--out" && i + 1 < argc) out = argv[++i];
     else if (k == "--only" && i + 1 < argc) only = argv[++i];
-    else if (k == "--icache" && i + 1 < argc) icache_dir = argv[++i];
-    else if (k == "--emit-icache" && i + 1 < argc) emit = argv[++i];
+    else if (k == "--ptx" && i + 1 < argc) ptx_dir = argv[++i];
+    else if (k == "--emit" && i + 1 < argc) emit = argv[++i];
+    else if (k == "--ur" && i + 3 < argc) ur = argv[++i], ur_a = atoi(argv[++i]), ur_b = atoi(argv[++i]);
     else {
       fprintf(stderr,
-              "usage: bwchip --emit-icache DIR\n"
-              "       bwchip [--out DIR] [--icache DIR_OF_CUBINS] [--only icache|const|tlb|l1|l2]\n");
+              "usage: bwchip --emit DIR\n"
+              "       bwchip --ur URT_CUBIN A B\n"
+              "       bwchip [--out DIR] [--ptx DIR_OF_CUBINS] [--only icache|icache8|unified|const|tlb|l1|l2]\n");
       return 2;
     }
   }
-  if (!emit.empty()) return chip::emit_icache(emit);
+  if (!emit.empty()) return chip::emit_ptx(emit);
+  if (!ur.empty()) return chip::run_ur(ur, ur_a, ur_b);
   OK(cudaSetDevice(0));
   cudaDeviceProp p;
   OK(cudaGetDeviceProperties(&p, 0));
@@ -454,7 +612,11 @@ int main(int argc, char** argv) {
     if (run(s)) failed += std::string(failed.empty() ? "\"" : ",\"") + name + "\"";
     else j += s;
   };
-  if (!icache_dir.empty()) sweep("icache", [&](std::string& s) { return chip::run_icache(s, icache_dir); });
+  if (!ptx_dir.empty()) {
+    sweep("icache", [&](std::string& s) { return chip::run_icache(s, ptx_dir, 4); });
+    sweep("icache8", [&](std::string& s) { return chip::run_icache(s, ptx_dir, 8); });
+    sweep("unified", [&](std::string& s) { return chip::run_unified(s, ptx_dir); });
+  }
   sweep("const", [&](std::string& s) { return chip::run_const(s); });
   sweep("tlb", [&](std::string& s) { return chip::run_tlb(s); });
   sweep("l1", [&](std::string& s) { return chip::run_l1(s); });
