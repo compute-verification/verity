@@ -1,6 +1,7 @@
 import Proofs.Accounting.Joint
 import Proofs.Accounting.Bandwidth.Honest
 import Proofs.Accounting.RateAudit.Honest
+import Proofs.Accounting.RateAudit.Interactive
 import Definitions.Accounting.BandwidthAudit
 import Definitions.Accounting.RateAuditJoint
 
@@ -16,7 +17,9 @@ queries and `N·b` bits of device memory bandwidth per tick, over a one-tick win
 `Accounting.Guarantees.BandwidthOfAudit` is not vacuous either. The rate audit's honest device realizes its game in the
 same way, on a device whose one side channel carries the certified stream's `ρ` bits per tick, with the tags charged to
 the bandwidth account and the compute account idle (`rateRun_realizesRate`), so `Accounting.Guarantees.RateOfAudit` is
-not vacuous.
+not vacuous. Its device never sends, so the same run realizes the game with interactive side sources, with sources that
+ignore the oracle (`rateRun_realizesRateInteractive`), and `Accounting.Guarantees.RateOfAuditInteractive` and
+`Accounting.Guarantees.RateOfAuditInteractiveRO` are not vacuous either.
 -/
 
 namespace Accounting.Run
@@ -102,5 +105,13 @@ theorem rateRun_realizesRate (N b h ρ s cTag cEnc : ℕ) :
       refine le_of_eq ((Rate.Completeness.honest_accepts cTag cEnc y.1 y.2.1 y.2.2.1 y.2.2.2).2.2.2.trans ?_)
       have he : ({true, false} : Finset Bool).erase false = {true} := by decide
       simp [Run.othersWork, Schedule.work, Schedule.ops, Window.ticks, rateRun, tagPrice, he, mul_comm] }⟩
+
+/-- `RateOfAuditInteractive`'s and `RateOfAuditInteractiveRO`'s hypotheses hold: the honest rate run realizes the game
+with interactive side sources, by a device whose side sources ignore the oracle. -/
+theorem rateRun_realizesRateInteractive (N b h ρ s cTag cEnc : ℕ) :
+    ∃ real : RealizesRateInteractive (tagPrice cTag) cTag cEnc (rateRun N b h ρ s),
+      ∀ (x : Unit) (s' : Unit) E R O O', (real.dev (x, s')).side E R O = (real.dev (x, s')).side E R O' :=
+  let ⟨real⟩ := rateRun_realizesRate N b h ρ s cTag cEnc
+  ⟨real.toInteractive, real.toInteractive_side⟩
 
 end Accounting.Sanity

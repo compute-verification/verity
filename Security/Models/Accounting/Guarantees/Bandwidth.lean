@@ -78,4 +78,38 @@ def AuditRelay : Prop :=
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ c / 2 ^ (h * m)
         + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
 
+/-- **The bandwidth audit v0 with interactive side sources, in the random-oracle model.** `AuditRelay`'s bound for an
+`InteractiveDevice`, whose chip may send bits and whose side sources answer each read as any function of the store,
+the oracle and every bit sent so far. `c` bounds only the side bits the chip read, and sends are free: however many
+bits the chip sends, and however they depend on the seed, the deficit is `S + c + m·b + G·b + λ`, as for a relay
+device.
+
+In the actual-circuit model (`note:console/20261012T0645Z-draft-actual-circuit-model`, section 6), the rest of the
+prover answers the cores as such a source. So the bandwidth audit's help term is the side bits the cores read in the
+window, `β_side·(T + RTT)`, not `2^e` times it for `e` seed-dependent bits sent. Proof:
+`Bandwidth.SecurityProofs.AuditInteractive`, from `AuditRelay`: such a device is a relay device whose side source is
+addressed by what was sent and where.
+
+Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
+the bandwidth audit's code computes. -/
+def AuditInteractive : Prop :=
+  ∀ (N b h S c G q s k m lam : ℕ) (A : InteractiveDevice N b h S c G q),
+    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+        A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + m * b + G * b + lam < k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ c / 2 ^ (h * m)
+        + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
+
+/-- **The bandwidth audit v0 with interactive side sources that ignore the oracle.** `AuditRO`'s bound for an
+`InteractiveDevice` whose side sources' answers don't depend on the oracle. They may still depend on everything the
+chip sent, including tags it computed. No relayed-tag term: the deficit is `S + c + G·b + λ` at `AuditRO`'s error,
+with `c` the side bits read. Proof: `Bandwidth.SecurityProofs.AuditInteractiveRO`, from `AuditRO`.
+
+Frozen (no-function, hash): as `AuditInteractive`. -/
+def AuditInteractiveRO : Prop :=
+  ∀ (N b h S c G q s k lam : ℕ) (A : InteractiveDevice N b h S c G q),
+    (∀ E O O', A.side E O = A.side E O') →
+    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+        A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
+
 end Bandwidth.Guarantees
