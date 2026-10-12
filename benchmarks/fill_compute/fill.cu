@@ -246,9 +246,19 @@ FILL(2, 2)
 extern "C" __global__ void stamp(const Args a) { *reinterpret_cast<uint64_t*>(a.p[0]) = gtimer(); }
 // p0 a u32 flag, set to i0
 extern "C" __global__ void set_flag(const Args a) { *reinterpret_cast<volatile unsigned*>(a.p[0]) = (unsigned)a.i[0]; }
+// p0 a u32 per CTA: the SM it ran on, after holding it for i0 ns (so a partition's SMs all take CTAs)
+extern "C" __global__ void smid_of(const Args a) {
+  const uint64_t t0 = gtimer();
+  while (gtimer() - t0 < (uint64_t)a.i[0]) {
+  }
+  unsigned s;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(s));
+  if (threadIdx.x == 0) reinterpret_cast<unsigned*>(a.p[0])[blockIdx.x] = s;
+}
 
 // ---------------------------------------------------------------- host side (ctypes)
 #include <cuda_runtime.h>
+#include <cuda.h>
 
 static int launch(const void* fn, int grid, int block, int smem, const Args* a, cudaStream_t s) {
   void* argv[] = {const_cast<Args*>(a)};
@@ -281,12 +291,65 @@ extern "C" int stamp_at(void* slot, void* stream) {
   a.p[0] = (uint64_t)slot;
   return launch((const void*)stamp, 1, 1, 0, &a, (cudaStream_t)stream);
 }
+extern "C" int smid_at(void* out, int grid, int hold_ns, void* stream) {
+  Args a{};
+  a.p[0] = (uint64_t)out;
+  a.i[0] = hold_ns;
+  return launch((const void*)smid_of, grid, 32, 0, &a, (cudaStream_t)stream);
+}
 extern "C" int flag_set(void* flag, int v, void* stream) {
   Args a{};
   a.p[0] = (uint64_t)flag;
   a.i[0] = v;
   return launch((const void*)set_flag, 1, 1, 0, &a, (cudaStream_t)stream);
 }
+// Green contexts: the device's SMs split into the step's (at least n_step, as the driver rounds) and the rest, a stream in
+// each (the driver API through dlopen, so the library needs no libcuda stub at link time).  got: the step's SMs, the
+// filler's, the minimum partition and the co-scheduled alignment.  *s_fill is null when nothing remains.  Returns 0, or
+// 1000 * the failing stage + its CUresult (stage 1 a missing driver symbol).
+#include <dlfcn.h>
+template <class F> static F drv(const char* name) {
+  static void* h = dlopen("libcuda.so.1", RTLD_NOW | RTLD_GLOBAL);
+  return h ? reinterpret_cast<F>(dlsym(h, name)) : nullptr;
+}
+static int green(CUdevResource* r, CUdevice dev, int prio, CUstream* s) {
+  auto gen = drv<decltype(&cuDevResourceGenerateDesc)>("cuDevResourceGenerateDesc");
+  auto mk = drv<decltype(&cuGreenCtxCreate)>("cuGreenCtxCreate");
+  auto st = drv<decltype(&cuGreenCtxStreamCreate)>("cuGreenCtxStreamCreate");
+  if (!gen || !mk || !st) return 1000;
+  CUdevResourceDesc d;
+  CUgreenCtx g;
+  int e;
+  if ((e = gen(&d, r, 1))) return 4000 + e;
+  if ((e = mk(&g, d, dev, CU_GREEN_CTX_DEFAULT_STREAM))) return 5000 + e;
+  if ((e = st(s, g, CU_STREAM_NON_BLOCKING, prio))) return 6000 + e;
+  return 0;
+}
+extern "C" int gc_split(int n_step, int prio_step, int prio_fill, void** s_step, void** s_fill, int* got) {
+  auto dget = drv<decltype(&cuDeviceGet)>("cuDeviceGet");
+  auto res = drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");
+  auto split = drv<decltype(&cuDevSmResourceSplitByCount)>("cuDevSmResourceSplitByCount");
+  if (!dget || !res || !split) return 1000;
+  cudaFree(nullptr);
+  CUdevice dev;
+  CUdevResource all{}, part{}, rest{};
+  unsigned nb = 1;
+  int e;
+  if ((e = dget(&dev, 0))) return 2000 + e;
+  if ((e = res(dev, &all, CU_DEV_RESOURCE_TYPE_SM))) return 2000 + e;
+  if ((e = split(&part, &nb, &all, &rest, 0, (unsigned)n_step))) return 3000 + e;
+  got[0] = (int)part.sm.smCount;
+  got[1] = (int)rest.sm.smCount;
+  got[2] = (int)all.sm.minSmPartitionSize;
+  got[3] = (int)all.sm.smCoscheduledAlignment;
+  CUstream a = nullptr, b = nullptr;
+  if ((e = green(&part, dev, prio_step, &a))) return e;
+  if (rest.sm.smCount && (e = green(&rest, dev, prio_fill, &b))) return e;
+  *s_step = a;
+  *s_fill = b;
+  return 0;
+}
+
 // the filler's resident CTAs per SM at its dynamic shared memory, and its registers per thread
 extern "C" int fill_occupancy(int persist, int minb, int store, int* regs) {
   int n = 0;
