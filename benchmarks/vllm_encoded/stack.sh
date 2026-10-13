@@ -8,7 +8,7 @@
 #     --env QUEUED=1 --env MODE=paged -- bash benchmarks/vllm_encoded/stack.sh
 #
 # Under the queue (QUEUED=1) the GPU is leased around the whole job and gpu-lease is skipped.
-# MODE=paged runs paged_gate.py (ARGS passes through). MODE=serve also builds wt.cu (WT_RECEIPT at
+# MODE=paged runs paged_gate.py (ARGS passes through), MODE=splits paged_splits.py (paged.cu's kernels timed). MODE=serve also builds wt.cu (WT_RECEIPT at
 # KV_FIELD, masked, WT_FOLD6 default 1) and reader.cu, then runs serve.py's ARMS (default "stock pstack stack") in order,
 # each with SERVE_ARGS (default one gate-sized point), into $O/arm-<arm>[-<i>].json, and stack_compare.py over them.
 # DISCARD=N leaves each arm's first N repeats out of the points (a warm-up round). MODE=wgate is serve (ARMS
@@ -25,7 +25,7 @@ F=${KV_FIELD:-1024}
 KVDEFS=(-DKV_FIELD="$F" -DKV_MASK="${KV_MASK:-1}" -DKV_FOLD6="${KV_FOLD6:-1}" -DKV_QHEADS=32)
 WTDEFS=(-DWT_FIELD="$F" -DWT_MASK="${KV_MASK:-1}" -DWT_FOLD6="${WT_FOLD6:-1}" -DWT_RECEIPT=1)
 { nvcc --version; echo "flags: ${CU[*]} paged ${KVDEFS[*]} wt ${WTDEFS[*]}"; } > "$O/build.txt"
-if [ "${MODE:-paged}" != paged ]; then
+if [ "${MODE:-paged}" != paged ] && [ "${MODE:-paged}" != splits ]; then
   CT=benchmarks/codec_tensor
   nvcc "${CU[@]}" "${WTDEFS[@]}" -o "$B/wt.so" $CT/wt.cu > "$O/wt.ptxas" 2>&1 &
   nvcc "${CU[@]}" -o "$B/reader.so" $CT/reader.cu > "$O/reader.ptxas" 2>&1 &
@@ -40,6 +40,9 @@ case ${MODE:-paged} in
   paged)
     # shellcheck disable=SC2086
     "${LEASE[@]}" "$PY" $VE/paged_gate.py --lib "p$F=$B/paged.so" --out "$O" ${ARGS:-} ;;
+  splits)
+    # shellcheck disable=SC2086
+    "${LEASE[@]}" "$PY" $VE/paged_splits.py --lib "p$F=$B/paged.so" --out "$O" ${ARGS:-} ;;
   serve|wgate)
     MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
     export PATH=$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f HF_HOME=${HF_HOME:-/workspace/hf}
