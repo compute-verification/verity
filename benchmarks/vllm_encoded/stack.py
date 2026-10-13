@@ -109,7 +109,7 @@ class Stack:
         self.frags = BW.sign_frags(wt, torch, self.signs, T, st)
         self.root = BW.to_dev(torch, BW.root_words(ROOT0)).view(torch.int64)
         self.reader = BW.READER = RD.Reader(args.reader_lib, torch)
-        self.j, self.at, self.pass_m, self.open = 0, 0, None, False
+        self.j, self.at, self.pass_m, self.open, self.ready = 0, 0, None, False, False
         self.pass_ptrs = (ctypes.c_void_p * 2)()
         self.wt.call("wt_pass_ptrs", ctypes.addressof(self.pass_ptrs))
         self.rows = MAX_ROWS if encoded else PLAIN_ROWS   # a launch's most rows
@@ -147,7 +147,7 @@ class Stack:
             if self.attention.epoch is not None:
                 self.attention.epoch.fill_(self.j + 1)
             self.plib.call("kv_rc_pass", self.signs.data_ptr(), self.pass_ptrs[1], s)
-        self.j, self.pass_m, self.passes, self.open = self.j + 1, m, self.passes + 1, True
+        self.j, self.pass_m, self.passes, self.open, self.ready = self.j + 1, m, self.passes + 1, True, False
 
     def step_plan(self, m: int, slots=()):
         """The registered blocks a step's receipts at m credit (`receipts.plan_of` under store-order/v0): a WT_RECEIPT
@@ -203,7 +203,7 @@ class Stack:
             if rc:
                 raise RuntimeError(f"the step's commit: error {rc}")
         self.root.copy_(self.dig[0] if width == 1 else self.up[width - 2])
-        self.open = False
+        self.open = self.ready = False
 
 
 class StackLinear:
@@ -429,6 +429,7 @@ class LmHead:
         if commit:
             # A graph replay executes the receipt writes but not `run`'s Python update of the receipt cursor.
             st.at = self.lin.at[st.pass_m] + self.lin.receipts(m)
+            st.ready = True
         if bias is not None:
             y = y + bias
         return y.reshape(*x.shape[:-1], self.v)
@@ -604,6 +605,11 @@ class Attention:
         """
         st = self.st
         if not st.encoded or not st.open:
+            return
+        if not st.ready:
+            # vLLM profiles and warms graphs with forwards that do not execute every receipted linear.  They are not
+            # served passes and cannot form a tree; the old eager finalization likewise committed only from lm_head.
+            st.open = False
             return
         if not st.kv_receipts:
             st.commit(st.pass_m)
