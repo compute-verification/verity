@@ -326,21 +326,16 @@ def innerMetaRegistration (args : List String) :
     IO (Except String (Option String × Option RecVStar.StackedShape)) := do
   let some f := argOf args "--rec-inner-circuit" | return .ok (none, none)
   let mj ← innerMeta f
-  return do
-    let m ← mj
-    let sh ← RecVStar.stackedShapeOf m
-    match m.getObjVal? "registration" with
-    | .error _ => pure (none, sh)
-    | .ok (.str d) => pure (some d, sh)
-    | .ok _ => throw "rec inner circuit: META's registration is not a digest"
+  return do RecSetup.metaBound (← mj)
 
 /-- `--rec-inner-transcript F`: the coin server's record of V*'s inner session (`rec/inner-transcript/v1`), with the inner
 session's record `record` (`--rec-inner-session`) that its coins must match: each rep's `c_k`, and with candidate 3's
 streams every stream's `c_k` and tops (`RecVStar.innerCommits`). `--rec-inner-registration F`: the circuit registration
 (`verity/registration/v2`, written at staging, `inner_registered.REGISTRATION`) that the inner circuit's META binds
-(`--rec-inner-circuit`, `innerMetaRegistration`), whose entry `stacked` is R's registered top (`RecVStar.registration`),
-which a session with R's stream needs. -/
-def recTranscriptInput (args : List String) (record : Option String) :
+(`--rec-inner-circuit`, whose META the verifier read as `bound`, `innerMetaRegistration`), whose entry `stacked` is R's
+registered top (`RecVStar.registration`), which a session with R's stream needs (`RecSetup.commits`). -/
+def recTranscriptInput (args : List String) (record : Option String)
+    (bound : Except String (Option String × Option RecVStar.StackedShape)) :
     IO (Except String (Option RecVStar.InnerCommits)) := do
   let reg := argOf args "--rec-inner-registration"
   let some f := argOf args "--rec-inner-transcript"
@@ -348,21 +343,11 @@ def recTranscriptInput (args : List String) (record : Option String) :
   let some record := record | return .error "--rec-inner-transcript goes with the inner session (--rec-inner-session and its three files)"
   if reg.isSome && (argOf args "--rec-inner-circuit").isNone then
     return .error "--rec-inner-registration goes with --rec-inner-circuit, whose META binds it"
-  let bound ← innerMetaRegistration args
   let t ← try pure (Except.ok (← IO.FS.readFile f)) catch e => pure (Except.error s!"rec inner transcript: {e}")
   let r ← match reg with
     | none => pure (Except.ok none)
     | some g => try pure (Except.ok (some (← IO.FS.readFile g))) catch e => pure (Except.error s!"rec inner registration: {e}")
-  return do
-    let rj ← match ← r with
-      | none => pure none
-      | some s => match Lean.Json.parse s with
-        | .ok j => pure (some j)
-        | .error e => throw s!"rec inner registration: not JSON: {e}"
-    let (bound, shape) ← bound
-    match Lean.Json.parse (← t) with
-    | .ok j => some <$> RecVStar.innerCommits j record rj bound shape
-    | .error e => throw s!"rec inner transcript: not JSON: {e}"
+  return some <$> RecSetup.commits t r bound record
 
 /-- `--sparse NU,ELL,S_LOG,T_LOG`: the bucket's RecSparse shape, the verifier's own word for candidate 3's sparse phase. -/
 def sparseInput (args : List String) : Except String (Option RecSparse.Shape) :=
@@ -420,20 +405,13 @@ def recCoinsCmd (args : List String) : IO UInt32 := do
 session's transcript (`RecVStar.innerCommits`), as one `RECTRANSCRIPT` line: each rep's message rounds, and each stream's
 message rounds and its tops' node counts by level; with `--rec-inner`, that the verifier's inner shape covers it
 (`RecVStar.checkCovers`, as `verify` checks it); exit 1 when the transcript is refused. -/
-def recTranscriptOfSession (args : List String) : IO (Except String (Option RecVStar.InnerCommits)) := do
+def recTranscriptOfSession (args : List String) (bound : Except String (Option String × Option RecVStar.StackedShape)) :
+    IO (Except String (Option RecVStar.InnerCommits)) := do
   let some dir := argOf args "--rec-inner-session"
     | return if (argOf args "--rec-inner-transcript").isSome then .error "--rec-inner-transcript goes with --rec-inner-session" else .ok none
   let record ← try pure (← IO.FS.readFile (dir ++ "/session.json"))
     catch e => return .error s!"rec inner session: {e}"
-  recTranscriptInput args (some record)
-
-/-- Candidate 3's check 5 inputs: the verifier's RecSparse shape (`rec-inner --sparse`) and R's, its own inner shape's or
-else the shape the inner transcript held R's stream to, and the coin server's record of the inner session. -/
-def recC3 (inner : Option RecVStar.Inner) (commits : Option RecVStar.InnerCommits) : Option RecCoins.C3 := do
-  let i ← inner
-  let cs ← commits
-  let sp ← i.sparse
-  pure { sparse := sp, stacked := i.stacked.or cs.stacked, commits := cs }
+  recTranscriptInput args (some record) bound
 
 def recTranscriptCmd (args : List String) : IO UInt32 := do
   let some _ := argOf args "--rec-inner-session"
@@ -441,7 +419,7 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
   let inner ← match ← recInnerInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
-  match ← recTranscriptOfSession args with
+  match ← recTranscriptOfSession args (← innerMetaRegistration args) with
   | .ok (some ic) =>
     if let some i := inner then
       if let .error e := RecVStar.checkCovers i ic then IO.eprintln e; return 1
@@ -627,7 +605,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let recCoins ← match ← RecCoins.filesInput args with
     | .ok f => pure f
     | .error e => IO.eprintln e; return 2
-  let recCommits ← match ← recTranscriptInput args (recCoins.map (·.record)) with
+  let recBound ← innerMetaRegistration args
+  let recCommits ← match ← recTranscriptInput args (recCoins.map (·.record)) recBound with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
   let recRows ← match ← registeredInput args "--rec-rows" "rec rows" with
@@ -649,10 +628,10 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        r.2.forM (RecVStar.checkStmt recInner stmtTags tables · circuitB partition program registered recPart recBindings recRows)
-        if let (some i, some cs) := (recInner, recCommits) then RecVStar.checkCovers i cs
+        RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
+          recBindings recRows
         if zk then r.2.forM Zk.shapeOk
-        r.2.forM (RecCoins.check · registered recCoins (recC3 recInner recCommits))
+        r.2.forM (RecCoins.check · registered recCoins (RecSetup.c3 recInner recCommits))
         r.2.forM (RecVStar.checkPubRows · registered recCommits (recInner.bind (·.sparse)))
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
@@ -759,7 +738,8 @@ def statementCmd (args : List String) : IO UInt32 := do
   let recRows ← match ← registeredInput args "--rec-rows" "rec rows" with
     | .ok r => pure r
     | .error e => IO.eprintln e; return 2
-  let recCommits ← match ← recTranscriptOfSession args with
+  let recBound ← innerMetaRegistration args
+  let recCommits ← match ← recTranscriptOfSession args recBound with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
   let recCoins ← if (argOf args "--rec-inner-public").isSome || (argOf args "--rec-inner-coins").isSome then
@@ -767,12 +747,13 @@ def statementCmd (args : List String) : IO UInt32 := do
       | .ok f => pure f
       | .error e => IO.eprintln e; return 2
     else pure none
-  let c3 := recC3 recInner recCommits
+  let c3 := RecSetup.c3 recInner recCommits
   match (do
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
-      if recInner.isSome then RecVStar.checkStmt recInner stmtTags tables st circuitB partition program registered recPart recBindings recRows
-      if let (some i, some cs) := (recInner, recCommits) then RecVStar.checkCovers i cs
+      if recInner.isSome then
+        RecSetup.checks recInner recCommits stmtTags tables #[st] circuitB partition program registered recPart
+          recBindings recRows
       if recCommits.isSome then RecVStar.checkPubRows st registered recCommits (recInner.bind (·.sparse))
       let u := st.c.unit.name
       if recCoins.isSome || (c3.isSome && ((RecCoins.stackedParams u).isSome || (RecOpening.params u).isSome)) then
