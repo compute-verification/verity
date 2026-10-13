@@ -108,6 +108,7 @@ class ProverSide:
         self.kept: dict[tuple[int, int], object] = {}
         self.dropped: set[int] = set()
         self.lock = threading.Lock()
+        self.open_enabled = threading.Event()
         threading.Thread(target=self._read, daemon=True).start()
         threading.Thread(target=self._open, daemon=True).start()
 
@@ -127,6 +128,10 @@ class ProverSide:
     def _open(self) -> None:
         while True:
             t, draws = self.jobs.get()
+            # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
+            # the verifier may check after all roots are final, and this also makes the measured pass span contain
+            # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
+            self.open_enabled.wait()
             c0 = time.perf_counter_ns()
             by_pass = defaultdict(list)
             for k, (i, p) in enumerate(draws):
@@ -191,6 +196,7 @@ class ProverSide:
         dropped = set(self.rng.sample(range(N), round(fraction * N))) if mode == "skip" else set()
         self.backend.arm(dropped)
         self.dropped, self.opened = dropped, []
+        self.open_enabled.clear()
         self.conn.send({"type": "armed", "k": k})
         head, _, _ = self.expect("coin")
         coin = wire.coin_of(head["coin"])
@@ -239,6 +245,7 @@ class ProverSide:
                 elif msg["type"] in ("lost", "bye"):
                     raise wire.Closed(msg.get("why", "bye"))
         self.conn.send({"type": "closed", "k": k})
+        self.open_enabled.set()
         if ended is None:
             ended, _, _ = self.expect("end")
         self.jobs.join()
