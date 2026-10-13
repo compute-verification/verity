@@ -3,7 +3,7 @@ import Proofs.Flock.C3.Compose.Honest
 import Proofs.Flock.C3.Compose.Plays
 import Proofs.Flock.VBridge.Sparse.Refine
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
-import Proofs.Flock.C3.Sparse.Kinds
+import Proofs.Flock.Recursive.StageKinds
 
 /-!
 # n3's read fact: each rep's sparse phase from the tape
@@ -32,7 +32,7 @@ open FlockVBridge.Sparse (SCoins nw nc verifierRow phaseMsgs coinTape SparseAcce
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The sparse phase's shape (`sparseKinds`, `Kinds.lean`) -/
+/-! ## The sparse phase's shape (`sparseKinds`, `Recursive/StageKinds.lean`) -/
 
 theorem exact_recv (M : Type) : Exact (recv M) [.msg M] := .send fun m => .ret m
 

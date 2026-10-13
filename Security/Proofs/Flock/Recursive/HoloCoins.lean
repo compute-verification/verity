@@ -1,6 +1,6 @@
 import Proofs.Flock.Recursive.HoloExec
 import Proofs.Flock.C3.HoloValues.Shape
-import Proofs.Flock.C3.Sparse.Kinds
+import Proofs.Flock.Recursive.StageKinds
 
 /-!
 # Candidate 3's coin types
