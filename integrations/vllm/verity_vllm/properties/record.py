@@ -42,12 +42,15 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "fused_moe_kernel (TritonExperts) for its experts, every expert launch runs its dot as k32 e4m3 wgmma, and at GLM-5.3's "
              "shapes every output word of every launch equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v1 at the launch's "
              "statics, and every activation quant equals Fp8GroupQuant_v1, bit for bit."),
-    Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v1",
-             "On the capture's 8 Hopper GPUs, GLM-5.3's fused_allreduce_rms_norm runs FlashInfer's MNNVL all-reduce + residual add + "
-             "RMSNorm up to 42 tokens at the strategy mnnvl_shot names, every normed and residual word equals "
-             "AllReduceRmsNormMnnvl_v1 at the shot's decided FMA, and under VLLM_ALLREDUCE_USE_SYMM_MEM=0 every "
-             "tensor_model_parallel_all_reduce to 682 tokens runs vLLM's custom all-reduce at custom_stage and every word equals "
-             "AllReduceCustom_v1, bit for bit, on every rank."),
+    Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v2",
+             "On the capture's 8 Hopper GPUs under the served engine's settings, GLM-5.3's fused_allreduce_rms_norm runs FlashInfer's "
+             "MNNVL all-reduce + residual add + RMSNorm up to 42 tokens at the strategy mnnvl_shot names, every normed and residual "
+             "word equals AllReduceRmsNormMnnvl_v1 at the shot's decided FMA, and every tensor_model_parallel_all_reduce to 42 tokens "
+             "runs FlashInfer's MNNVL all-reduce and equals AllReduceMnnvl_v1; past it, prefill's route is either served (torch's "
+             "multimem_all_reduce_, whose pair probes name one add tree per owner rank, the same in every probe and in two sets of "
+             "rank processes, with FTZ decided, and every word equals AllReduceMultimem_v1 at those trees and FTZ) or switch (under "
+             "VLLM_ALLREDUCE_USE_SYMM_MEM=0 with the custom all-reduce on, every all-reduce to 682 tokens runs vLLM's custom "
+             "all-reduce at custom_stage and equals AllReduceCustom_v1), bit for bit, on every rank."),
     Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v1",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
