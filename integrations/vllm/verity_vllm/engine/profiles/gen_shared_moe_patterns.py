@@ -28,7 +28,10 @@ routed)` folds, in `_forward_impl`'s order (fused_moe/runner/moe_runner.py:875-9
     `fused_moe_kernel` (w2, weighted)                   -> MoeExpertFp8GemmW_v1{E,K=I,N=H,G,KB,SWAP,DOT}
     `_moe_C.moe_sum`                                    -> MoeSum_v1{TOPK,H}, writing the op's second output
 
-Everything else in the scope is aten glue (empties, views), each a move or alloc in log order.  Outside the op, `shared + routed`
+Everything else in the scope is aten glue, each a move or alloc in log order: the weights' `numpy_T`, the column-major scales'
+`permute`, `to.dtype`, `empty` / `empty_like` / `full` (the naive path's `num_tokens_post_padded`), and the workspace's slice,
+`view.dtype`, reshape, flatten and view chain.  Rank 0's H200 log pins all of it (`tests/engine/test_gen_shared_moe_fp8_recorded.py`).
+Outside the op, `shared + routed`
 (moe_runner.py:780) is the base `ResidualAddPattern`'s `ResidualAdd_v1{N=H}`; the block has no all-reduce (`reduce_results=False`: the
 next layer's fused all-reduce and RMSNorm reduce the sum).  The shared expert's linears are quantised at the scope's G, which is the
 checkpoint's weight block whenever the MoE block is not refined at the rank; another block refuses by name.
@@ -397,10 +400,11 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
         return out
 
     def _silu_quant(self, node, sc: _Scope, c1: ViewDesc, s_dn, P: int, I: int, G: int, hint: str, fm) -> Compute | Unsupported:
-        """`_C.silu_and_mul_per_block_quant(q!, cache1 as [P, 2I], scale!, G, None, False)`, the writer of the w2 launch's A and a_scale."""
+        """`_C.silu_and_mul_per_block_quant(q!, cache1 as [P, 2I], scale!, G)`, the writer of the w2 launch's A and a_scale; triton_moe.py
+        passes four arguments, so `scale_ub` and `is_scale_transposed` take the schema's defaults (None, False)."""
         a = bound_args(sc.squant)
         x, q, s = _quant_io(sc.squant)
-        if a.get("group_size") != G or a.get("scale_ub") is not None or a.get("is_scale_transposed") is not False:
+        if a.get("group_size") != G or a.get("scale_ub") is not None or a.get("is_scale_transposed", False) is not False:
             return unsupported(node, f"{K_SILU_QUANT} is not the group-{G}, unbounded, row-scale call SiluMulFp8BlockQuant_v1 states",
                                group_size=a.get("group_size"), scale_ub=repr(a.get("scale_ub")), is_scale_transposed=a.get("is_scale_transposed"))
         if not isinstance(x, ViewDesc) or x.shape != (P, 2 * I) or not _contig(x) or x.dtype != "bfloat16" \
