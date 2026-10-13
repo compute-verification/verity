@@ -93,6 +93,23 @@ def test_reader_sketch64_fragments_are_the_64_row_sketch():
     assert not np.array_equal(SR.signs(SEED, RD.ROWS64)[:SR.ROWS], SR.signs(SEED))
 
 
+def test_attention_sketches_each_token_layer():
+    """kv_attn form 13: the KV heads' MMA shares over their words (`kv_fragment_sketch` from the A table
+    `kv_sign_frags`) sum to σ of each token-layer, the heads' words partition the block, each head's share is S at its
+    positions, and the receipts' map is the KV region's blocks in store order."""
+    blocks = np.random.default_rng(13).integers(0, 256, (6, SR.BLOCK), dtype=np.uint8)
+    blocks[0], blocks[1] = 0x80, 0x7F
+    s, e = SR.signs(SEED), blocks.view(np.int8).astype(np.int64)
+    sigma = SR.sketches(s, blocks)
+    assert np.array_equal(SR.kv_fragment_sketch(blocks, SR.kv_sign_frags(SR.sign_bits(SEED))), sigma)
+    pos = [SR.kv_positions(g) for g in range(SR.KV_HEADS)]
+    assert np.array_equal(np.sort(np.concatenate(pos)), np.arange(SR.BLOCK))
+    assert np.array_equal(sum(e[:, p] @ s[:, p].T.astype(np.int64) for p in pos), sigma)
+    slots, layers, nvec = 3, 2, 7
+    assert SR.rb.plan_of(SR.kv_vectors(slots, layers, nvec * SR.BLOCK), nvec + slots * layers) == SR.rb.Plan.of(
+        range(nvec, nvec + slots * layers), nvec + slots * layers)
+
+
 def test_gemm_blocks_refuse_other_widths():
     with pytest.raises(ValueError, match="4096-byte blocks"):
         SR.gemm_blocks(np.zeros(6144, dtype=np.uint8), 6144)

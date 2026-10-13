@@ -1,8 +1,9 @@
 """Red team ra-remote-redteam-impl against the device side of the remote bandwidth audit: the fused weight GEMM's
-receipt blocks (`sketch_receipt.gemm_vectors`, wt.cu's sketch warps) and attention's KV receipts (`kv_receipt`), each
-against what the driver (`remote_bandwidth.receipts`, `audit.Session`) credits and opens.  Each test asserts the
-property the driver's ledger needs and is marked xfail with its finding id while the device breaks it (the report is
-note:memory-accounting/ra-remote-redteam-impl); RB-D1's pass since store-order/v0."""
+receipt blocks (`sketch_receipt.gemm_vectors`, wt.cu's sketch warps) and attention's KV receipts (`kv_vectors`,
+`kv_fragment_sketch`: kv.cu's form 13), each against what the driver (`remote_bandwidth.receipts`, `audit.Session`)
+credits and opens.  Each test asserts the property the driver's ledger needs and was marked xfail with its finding id
+while the device broke it (the report is note:memory-accounting/ra-remote-redteam-impl); RB-D1's pass since
+store-order/v0, RB-D2's since form 13."""
 from __future__ import annotations
 
 import hashlib
@@ -14,9 +15,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[1] / "word_codec"))
 
-import kv_receipt as KR  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 
 SEED = SR.rb.seed(bytes(range(32)), 3, bytes(64))
@@ -83,26 +82,19 @@ def test_rbd1_a_block_is_a_function_of_the_store_and_its_index() -> None:
     assert np.array_equal(a, b) and np.array_equal(a, vectors_of_store_bytes(32, 1, 32))
 
 
-@pytest.mark.xfail(strict=True, reason="RB-D2: attention's KV receipts are a third kind: other signs, another hash "
-                                       "domain, and 4,096 bytes from 16 tokens' head shares under a half-block index")
 def test_rbd2_a_kv_receipt_is_a_driver_receipt_of_one_registered_block() -> None:
-    """The step commits its KV receipts in the pass's one tree after the weights' (`kv_rc_sha8_at`).  A half-block's
-    receipt is SHA512(Z(kv-receipt domain ‖ frame(σ)) ‖ u64be half ‖ 8 sketches) under ro-sketch-blake3's signs over
-    n = 32·S·RT bytes; its 8 vectors are half the bytes of 16 tokens.  The driver's block is one token-layer and its
-    receipt `SketchReceipter`'s, so `Session.verify` rejects every honest KV opening."""
-    rt, mdw, wb = 2, 4, 128                                          # p1024: 32 tokens a tile, 8 a decoder warp
-    tiles = rt
-    tile, warp, lane = np.meshgrid(np.arange(tiles), np.arange(mdw), np.arange(32), indexing="ij")
-    token = (tile * 32 + 8 * warp + lane // 4)[..., None].repeat(wb, axis=3)
-    tok = np.zeros(KR.vectors(np.zeros((tiles, mdw, 32, wb), np.uint8), rt).shape, np.int64)
-    for b in range(2):
-        tok += KR.vectors(((token >> (8 * b)) & 255).astype(np.uint8), rt).view(np.uint8).astype(np.int64) << (8 * b)
-    half = tok[0, 0, :8]                                             # warp 0's first half-block: 8 vectors
-    assert half.size == SR.BLOCK and len(np.unique(half)) == 16
-
-    lanes = np.random.default_rng(2).integers(0, 256, (tiles, mdw, 32, wb), dtype=np.uint8)
-    n = 32 * (wb // 16) * rt
-    sk = KR.sketch(lanes, KR.sign_bits(SEED, 1, n), rt)[0, 0, :8]
-    kv = KR.sha_receipt(SEED, 0, sk)
-    block = KR.vectors(lanes, rt)[0, 0, :8].tobytes()
-    assert kv == SR.SketchReceipter(SEED)(0, block, b"\0")
+    """The step commits its KV receipts in the pass's one tree after the weights' (kv_attn form 13, `kv_rc_receipts`).
+    Token-layer u·layers + l of the KV region is the store's block nvec + u·layers + l, 32 whole words of 128 bytes, and
+    has one receipt at that index: σ is the KV heads' shares of form 13's MMA over the words its decoder lanes read
+    (`kv_fragment_sketch`) under the pass's signs, and the receipt is `SketchReceipter`'s, so `Session.verify` takes an
+    honest KV opening.  It was a third kind: other signs, another hash domain, and 4,096 bytes from 16 tokens' head
+    shares under a half-block index."""
+    slots, layers, nvec = 5, 3, 4
+    blocks = nvec + slots * layers
+    store = np.random.default_rng(2).integers(0, 256, blocks * SR.BLOCK, dtype=np.uint8)
+    m = SR.kv_vectors(slots, layers, nvec * SR.BLOCK)
+    assert SR.rb.plan_of(m, blocks) == SR.rb.Plan.of(range(nvec, blocks), blocks)
+    sk = SR.kv_fragment_sketch(store[m], SR.kv_sign_frags(SR.sign_bits(SEED)))
+    receipter = SR.SketchReceipter(SEED)
+    assert SR.receipts_of(SEED, sk, nvec) == [receipter(j, store[j * SR.BLOCK:(j + 1) * SR.BLOCK].tobytes(), b"\0")
+                                              for j in range(nvec, blocks)]

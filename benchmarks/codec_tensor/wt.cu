@@ -3413,6 +3413,16 @@ int wt_pass_state(uint8_t *out) {
   return 0;
 }
 
+// Where wt_pass leaves the pass's state on the device, for other libraries' kernels in stream order after it: out[0]
+// its seed (64 bytes), out[1] its leaves' (sketch-sha512: receipts') prefix midstate (8 u64).
+int wt_pass_ptrs(const void **out) {
+  void *gp = nullptr;
+  if (!out || cudaGetSymbolAddress(&gp, g_pass)) return 4;
+  out[0] = static_cast<uint8_t *>(gp) + offsetof(PassState, seed);
+  out[1] = static_cast<uint8_t *>(gp) + offsetof(PassState, leafmid);
+  return 0;
+}
+
 // The sketch warps' B fragments (frags, 4 u32 a word) from the k_s = 16 sign words of t tasks a tile (signs); in a
 // WT_RECEIPT build their A selectors (sketch_receipt.sign_frags, 4,096 u32) from the pass's bits (sign_words, 2,048).
 int wt_sign_frags(const u32 *signs, u32 *frags, int t, cudaStream_t s) {

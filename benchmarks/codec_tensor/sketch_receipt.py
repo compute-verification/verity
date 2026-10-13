@@ -12,7 +12,10 @@ E_j      the store's block j, its 4096 bytes 4096 j … in store order, whole co
          store-order/v0). A weight GEMM's store (wt.cu's fused decode GEMM, SB = 8192 bytes a task at p1024 and p512)
          is two blocks a task, task q's halves blocks 2 q and 2 q + 1 (`gemm_blocks`), so a launch receipts its own
          store's blocks j0 + v, whatever its groups and grid: the sketch warps (receipt_warp) take a block a B column
-         of mma.m16n8k32, each byte against its own position's sign (`fragment_sketch`)
+         of mma.m16n8k32, each byte against its own position's sign (`fragment_sketch`). The KV's block is a
+         token-layer (kv.cu at 128-byte words: 32 words, 4 KiB, whole), and attention (kv_attn form 13) sketches it
+         a KV head's 4 words at a time, a token a B column, A the signs at those words' positions
+         (`kv_fragment_sketch`), the 8 heads' shares summed before the hash
 e_j      E_j ⊕ spread(z_(i,j)), its 4096 bytes as int8
 σ_j      S_i · e_j over the integers (|σ_j[c]| ≤ 2^19), k_s int32 little-endian: 64 bytes at 16 rows
 y_(i,p)  SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ σ_j),  j = plan_i[p]: one compression after the
@@ -45,6 +48,8 @@ LANES = 32
 SK_G = 4                                  # receipt_warp's tasks a group: 2 SK_G blocks, mma.m16n8k32's B columns
 SIGN_WORDS = ROWS * BLOCK // 32           # a WT_RECEIPT pass's signs (`sign_words`)
 FRAG_WORDS = 2 * SIGN_WORDS               # receipt_warp's selectors (`sign_frags`)
+KV_HEADS, KV_WORD = 8, 128                # kv.cu form 13: a token-layer's KV heads and its codec words' bytes
+KV_STEPS = KV_WORD // 8                   # its k-steps a tile: 8 bytes of each of a head's 4 words
 
 
 def sign_bits(seed: bytes, rows: int = ROWS) -> np.ndarray:
@@ -186,6 +191,73 @@ def fragment_sketch(store: np.ndarray, nbs: int, nchunks: int, sb: int, groups: 
                 if out[2 * q + h, 0] != np.iinfo(np.int64).min:
                     raise AssertionError(f"receipt {2 * q + h} twice")
                 out[2 * q + h] = acc[:, n]
+    return out
+
+
+def kv_head_words(g: int) -> list[int]:
+    """KV head g's words of a token-layer at 128-byte words, its K words then its V words (kv.cu's decoder lane j's
+    wi)."""
+    half = BLOCK // 2 // KV_WORD
+    return [2 * g, 2 * g + 1, half + 2 * g, half + 2 * g + 1]
+
+
+def kv_positions(g: int) -> np.ndarray:
+    """The 512 positions of a token-layer's block that head g's words hold."""
+    return np.concatenate([np.arange(KV_WORD * w, KV_WORD * (w + 1)) for w in kv_head_words(g)])
+
+
+def kv_sign_frags(bits: np.ndarray) -> np.ndarray:
+    """kv_rc_pass's A table (kv.cu's kRcA, rc_a_kernel) from S's bits (`sign_bits`): (KV_HEADS, KV_STEPS, 32, 4) u32,
+    lane (g', t') of head g at k-step κ the signs of rows g' and g' + 8 at positions 128 wi + 8κ … + 3 (registers 0 and
+    1) and + 4 … + 7 (2 and 3), wi = kv_head_words(g)[t'], as bytes 0x01 (+1) and 0xFF (−1), LSB first."""
+    b = np.asarray(bits, np.uint8)
+    if b.shape != (ROWS, BLOCK // 8):
+        raise ValueError(f"S's bits are {ROWS} × {BLOCK // 8} bytes")
+    u = np.unpackbits(b, axis=1, bitorder="little").astype(np.uint32)
+    g, kk, lane, q = np.meshgrid(np.arange(KV_HEADS), np.arange(KV_STEPS), np.arange(LANES), np.arange(4),
+                                 indexing="ij")
+    wi = np.array([kv_head_words(h) for h in range(KV_HEADS)])[g, lane & 3]
+    pos = KV_WORD * wi + 8 * kk + 4 * (q >> 1)
+    row = (lane >> 2) + 8 * (q & 1)
+    out = np.zeros(g.shape, np.uint32)
+    for c in range(4):
+        out |= np.where(u[row, pos + c] == 1, 0xFF, 0x01).astype(np.uint32) << np.uint32(8 * c)
+    return out
+
+
+def kv_fragment_sketch(blocks: np.ndarray, frags: np.ndarray) -> np.ndarray:
+    """σ of token-layers (n × 4096 bytes) as kv_attn form 13 computes it, n × 16: per head g and k-step κ one
+    mma.m16n8k32 of A (16 × 32, each lane's registers of `kv_sign_frags`) by B (32 × n, lane (g', t')'s b0 and b1 the
+    bytes 8κ … + 3 and 8κ + 4 … + 7 of word kv_head_words(g)[t'] of token g'), the heads' shares summed."""
+    blk = np.asarray(blocks, np.uint8).reshape(-1, BLOCK)
+    n = blk.shape[0]
+    by = _int8(np.asarray(frags, np.uint32).reshape(KV_HEADS, KV_STEPS, LANES, 4, 1).astype(np.int64)
+               >> (8 * np.arange(4)))
+    a = np.zeros((KV_HEADS, KV_STEPS, ROWS, 32), np.int64)
+    b = np.zeros((KV_HEADS, KV_STEPS, 32, n), np.int64)
+    words = blk.view(np.int8).astype(np.int64).reshape(n, BLOCK // KV_WORD, KV_STEPS, 2, 4)
+    for lane in range(LANES):
+        gid, t = divmod(lane, 4)
+        for q in range(4):
+            a[:, :, gid + 8 * (q & 1), 16 * (q >> 1) + 4 * t:16 * (q >> 1) + 4 * t + 4] = by[:, :, lane, q]
+    for g in range(KV_HEADS):
+        for t, wi in enumerate(kv_head_words(g)):
+            for h in range(2):
+                b[g, :, 16 * h + 4 * t:16 * h + 4 * t + 4] = words[:, wi, :, h].transpose(1, 2, 0)
+    return np.einsum("gkrc,gkcn->nr", a, b)
+
+
+def kv_vectors(slots: int, layers: int, w0: int = 0) -> np.ndarray:
+    """kv_attn form 13's map from its receipts' bytes to the store's (`receipts.plan_of`'s `vectors`): row
+    u layers + l, slot u's token-layer at layer l, whose byte 128 wi + 8κ + 4h + c (the position its sign in A is at)
+    meets the store byte w0 + 4096 (u layers + l) + 128 wi + 8κ + 4h + c (kv.cu's decoder lane's raw word wi of head g,
+    k-step κ, register h, byte c); the KV region starts at the store's byte w0."""
+    g, kk, t, h, c = np.meshgrid(np.arange(KV_HEADS), np.arange(KV_STEPS), np.arange(4), np.arange(2), np.arange(4),
+                                 indexing="ij")
+    wi = np.array([kv_head_words(x) for x in range(KV_HEADS)])[g, t]
+    pos = (KV_WORD * wi + 8 * kk + 4 * h + c).reshape(-1)
+    out = np.full((slots * layers, BLOCK), -1, np.int64)
+    out[:, pos] = w0 + BLOCK * np.arange(slots * layers)[:, None] + pos[None, :]
     return out
 
 
