@@ -107,12 +107,13 @@ def codec_named(name: str) -> rcodec.Codec:
 def registration_json(r: audit.Registration) -> dict:
     return {"node": r.node.hex(), "blocks": r.blocks, "payload_root": r.payload_root.hex(),
             "codec_seed": r.codec_seed.hex(), "codec": r.codec.name, "receipt": r.receipt, "bind": r.bind,
-            "digest": r.digest.hex()}
+            "layout": r.layout, "rows": r.rows, "digest": r.digest.hex()}
 
 
 def registration_of(d: dict) -> audit.Registration:
     r = audit.Registration(bytes.fromhex(d["node"]), d["blocks"], bytes.fromhex(d["payload_root"]),
-                           bytes.fromhex(d["codec_seed"]), codec_named(d["codec"]), d["receipt"], d["bind"])
+                           bytes.fromhex(d["codec_seed"]), codec_named(d["codec"]), d["receipt"], d["bind"],
+                           d["layout"], d["rows"])
     if r.digest.hex() != d["digest"]:
         raise ValueError("the registration's digest is not its fields'")
     return r

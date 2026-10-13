@@ -77,7 +77,7 @@ class CpuBackend:
         self.dropped = dropped
 
     def run_pass(self, seed: bytes):
-        r = rb.receipter(self.store.registration.receipt, seed)
+        r = rb.receipter(self.store.registration.receipt, seed, self.store.registration.rows)
         ys = tuple(r(j, bytes(rcodec.BLOCK_BYTES) if j in self.dropped else self.store.blocks[j]) for j in self.plan)
         salts = tuple(self.rng.randbytes(rb.SALT_BYTES) for _ in range(rb.leaves(self.blocks)))
         tree = rb.tree(seed, self.plan, ys, salts)
@@ -162,10 +162,10 @@ class ProverSide:
             if head["type"] in ("lost", "bye"):
                 raise wire.Closed(head.get("why", "bye"))
 
-    def register(self, codec: rcodec.Codec = rcodec.DEFAULT, receipt: str = rb.DEFAULT) -> dict:
+    def register(self, codec: rcodec.Codec = rcodec.DEFAULT, receipt: str = rb.DEFAULT, rows: int | None = None) -> dict:
         root = self.backend.payload_root(self.node)
         self.conn.send({"type": "hello", "node": self.node.hex(), "blocks": self.backend.blocks,
-                        "payload_root": root.hex(), "codec": codec.name, "receipt": receipt})
+                        "payload_root": root.hex(), "codec": codec.name, "receipt": receipt, "rows": rows})
         head, _, _ = self.expect("registration")
         self.registration = wire.registration_of(head["registration"])
         if self.registration.payload_root != root or self.registration.blocks != self.backend.blocks:

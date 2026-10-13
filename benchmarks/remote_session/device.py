@@ -388,7 +388,7 @@ class Device:
         out["encode"] = all(encoded[j] == rcodec.encode(payloads[j], j, key) for j in (0, 1, small.blocks - 1))
         out["decode"] = all(rcodec.decode(encoded[j], j, key) == payloads[j] for j in range(small.blocks))
         reg = audit.Registration(registration.node, small.blocks, root, registration.codec_seed, registration.codec,
-                                 registration.receipt, registration.bind)
+                                 registration.receipt, registration.bind, registration.layout, registration.rows)
         seed = rb.seed(self.rng.bytes(32), 0, reg.digest)
         with torch.cuda.stream(self.main_stream):
             got, _ = small.run_pass(seed)
@@ -407,8 +407,10 @@ class Device:
     def gate_session(self, small: DeviceStore, reg: audit.Registration, dropped: set[int]) -> dict:
         """Two windows of two passes each over `small` under a clock the gate turns, checked by `audit.Session`."""
         now = [0]
-        params = audit.Params(reg.blocks, 1000, 2, 24, 2.0 ** -40, codec=reg.codec, receipt=reg.receipt)
-        session = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: now[0])
+        params = audit.Params(reg.blocks, 1000, 2, 24, 2.0 ** -40, window_ns=1, codec=reg.codec, receipt=reg.receipt,
+                              rows=reg.rows)
+        session = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: now[0],
+                                not_before_ns=0)
         with self.torch.cuda.stream(self.main_stream):
             small.arm(dropped)
         coin, prev, kept, verdicts = session.start(), reg.digest, {}, []

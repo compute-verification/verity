@@ -41,10 +41,7 @@ import wire  # noqa: E402
 
 SPEC_BYTES_PER_S = 1597e9
 """The RTX PRO 6000 Server Edition's datasheet memory bandwidth (`benchmarks/census/hardware.json`)."""
-S_CHIP_BYTES = 239_992_832
-"""The RTX PRO 6000's on-chip storage at raw capacity, `S_chip` of the local bandwidth audit
-(`verity/core/protocols/bandwidth/PROTOCOL.md`): 128 MiB of L2 and each of 188 SMs' registers, L1/shared memory and
-other stores."""
+S_CHIP_BYTES = timing.CHIP_BYTES
 
 
 class RealClock:
@@ -120,7 +117,8 @@ class Verifier:
         hello, _, _ = self.expect("hello")
         self.registration = audit.register(self.source, bytes.fromhex(hello["node"]), hello["blocks"],
                                            bytes.fromhex(hello["payload_root"]), wire.codec_named(hello["codec"]),
-                                           hello["receipt"])
+                                           hello["receipt"], rows=hello.get("rows"))
+        self.registered_ns = self.clock.now()
         self.conn.send({"type": "registration", "registration": wire.registration_json(self.registration)})
         ready, _, _ = self.expect("ready")
         self.calibration = ready["calibration"]
@@ -143,16 +141,17 @@ class Verifier:
 
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None) -> dict:
         W, reg = self.W, self.registration
-        params = audit.Params(reg.blocks, allowance_ns, W, self.samples, self.delta, codec=reg.codec, receipt=reg.receipt)
+        params = audit.Params(reg.blocks, allowance_ns, W, self.samples, self.delta, window_ns=self.T, codec=reg.codec,
+                              receipt=reg.receipt, rows=reg.rows)
+        not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         challenger = coins.Challenger(reg.digest, k, params.coins)
         session = audit.Session(params, reg, None, challenger, clock=self._now, not_before_ns=not_before_ns)
         self.conn.send({"type": "session", "k": k, "windows": W, "commitment": session.commitment.to_json()})
         self.expect("armed")
-        if not_before_ns is not None:
-            while self.clock.now() < not_before_ns:
-                item = self.clock.wait(self.inbox, not_before_ns)
-                if item is not None:
-                    self.log(f"verifier: skipped a {item[0]['type']} before the session's first coin")
+        while self.clock.now() < not_before_ns:
+            item = self.clock.wait(self.inbox, not_before_ns)
+            if item is not None:
+                self.log(f"verifier: skipped a {item[0]['type']} before the session's first coin")
         self.conn.send({"type": "coin", "coin": wire.coin_json(session.start())})
         self.clock.busy()
         start = session.windows[0].released_ns
@@ -267,22 +266,22 @@ class Verifier:
     def ledgers(self, record: audit.Record) -> dict:
         cal = self.calibration
         measured = float(cal["read_bytes_per_s"])
-        rebuild = {name: float(cal["encode_bytes_per_s"]) / r for name, r in
-                   (("spec", max(SPEC_BYTES_PER_S, measured)), ("measured", measured))}
+        rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
         out = {"inputs": {"spec_bytes_per_s": SPEC_BYTES_PER_S, "measured_read_bytes_per_s": measured,
                           "chip_bytes": S_CHIP_BYTES, "encode_bytes_per_s": cal["encode_bytes_per_s"],
+                          "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
                           "reads_bytes": record.receipts * record.block_bytes}}
         for name, r in (("spec", max(SPEC_BYTES_PER_S, measured)), ("measured", measured)):
             try:
-                lg = audit.ledger(record, capacity_bytes_per_s=r, chip_bytes=S_CHIP_BYTES, rebuild=rebuild[name])
+                lg = audit.ledger(record, capacity_bytes_per_s=r, chip_bytes=S_CHIP_BYTES, rebuild=rebuild)
                 out[name] = {"capacity_bytes_per_s": r, **lg.to_json()}
             except ValueError as e:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
         # RateAuditSketch's term: every compression the GPU could make over the span a guess or a key.
         compressions = math.ceil(timing.SHA512_PER_S * record.span_ns / 1e9)
         out["sketch_failure"] = {"compressions": compressions,
-                                 "log2": timing.log2(timing.sketch_failure(compressions, record.passes))}
+                                 "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows))}
         return out
 
 
