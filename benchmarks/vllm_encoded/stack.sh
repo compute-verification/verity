@@ -3,10 +3,11 @@
 # gather) at the stack's codec (KV_FIELD, default 1024, masked, FOLD6 on, 32 query heads) outside the lease, then under
 # one gpu-lease 1 --wait --max-min MAXMIN (default 20) MODE's job. Results go to $RESEARCH_RUN_DIR/out.
 #
-#   research run --on vy-nebius-1 --project verity --source . --cwd source --campaign resource-accounting \
-#     --declared-output 'out/*' --env GPU_LEASE_WHO=ra-vllm-encoded-stack --env MODE=paged \
-#     -- bash benchmarks/vllm_encoded/stack.sh
+#   research run --queue --on vy-nebius-1 --gpus 1 --max-min 30 --project verity --source . --cwd source \
+#     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-vllm-encoded-stack \
+#     --env QUEUED=1 --env MODE=paged -- bash benchmarks/vllm_encoded/stack.sh
 #
+# Under the queue (QUEUED=1) the GPU is leased around the whole job and gpu-lease is skipped.
 # MODE=paged runs paged_gate.py (ARGS passes through).
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
@@ -22,6 +23,7 @@ KVDEFS=(-DKV_FIELD="$F" -DKV_MASK="${KV_MASK:-1}" -DKV_FOLD6="${KV_FOLD6:-1}" -D
 nvcc "${CU[@]}" "${KVDEFS[@]}" -o "$B/paged.so" $VE/paged.cu > "$O/paged.ptxas" 2>&1 || { tail -30 "$O/paged.ptxas"; exit 4; }
 sha256sum $VE/paged.cu benchmarks/word_codec/kv.cu "$B"/*.so >> "$O/build.txt"
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-20}" --)
+[ "${QUEUED:-0}" = 1 ] && LEASE=()
 case ${MODE:-paged} in
   paged)
     # shellcheck disable=SC2086
