@@ -1,7 +1,7 @@
-"""GLM-5.3's H200 DSA observer folds.
+"""GLM-5.3's cc 9.0 DSA observer folds.
 
 The patterns in this module are deliberately the recorded vLLM d9105ea80,
-sm_90 specialisations.  They turn the two Triton fusion kernels, DeepGEMM's
+cc 9.0 specialisations.  They turn the two Triton fusion kernels, DeepGEMM's
 unobserved MQA launch, the short-row top-k and FA3 sparse MLA into the same
 Definitions used by the export frontend.
 """
