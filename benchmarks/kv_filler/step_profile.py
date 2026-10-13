@@ -6,7 +6,9 @@ copies) against nothing registered. `native` re-times the step with the GEMMs at
 native linears: 6.98 GB in 4.71 ms at M = 1, 0.96 R) and the rest as measured; `native_all` puts attention at that
 rate too. Writes `step_profile.json` and `step_profile.log` under `--out`. `--stack stack|pstack` profiles the encoded
 stack's step instead (`stack_hook.py`): its fused decode + GEMM + receipts and its lm_head's decode are GEMMs against its
-stores, paged.cu's attention, KV append and gather are attention, and its receipt tree is among the rest.
+stores, paged.cu's attention, KV append and gather are attention, and its receipt tree is among the rest. `--prefill N`
+then profiles one prompt of N tokens alone, each of its chunks of `--max-batched-tokens` a step of its own; every step
+records its wall time beside the kernels'.
 """
 from __future__ import annotations
 
@@ -23,13 +25,13 @@ from pathlib import Path
 os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from serve import CAPTURE, KV_TOKEN_BYTES  # noqa: E402
+from serve import CAPTURE, KV_TOKEN_BYTES
 
 # Attention is matched first: FlashAttention's kernels are cutlass templates named `flash_fwd_splitkv`.
 CLASSES = (("attention", re.compile(r"flash|attn|attention|fmha|batchdecode|batchprefill|mergestate|merge_state|pg_append|"
-                                    r"pg_gather|pg_combine", re.I)),
+                                    r"pg_gather|pg_combine", re.IGNORECASE)),
            ("gemm", re.compile(r"gemm|gemv|cutlass|xmma|cublas|nvjet|matmul|scaled_mm|splitk|wt::|(^|\W)fused_kernel|"
-                               r"(^|\W)decode_kernel|pg_reduce", re.I)))
+                               r"(^|\W)decode_kernel|pg_reduce", re.IGNORECASE)))
 
 
 def classify(name: str) -> str:
@@ -70,6 +72,14 @@ def split(kernels: list[dict], steps: int, weight_bytes: int, kv_bytes: float, R
             "native_all_of_R": (weight_bytes + kv_bytes) / (rate * native_all_ms),
             "kernels": [{"name": n[:160], "class": classify(n), "ms": round(t, 4)}
                         for n, t in sorted(by.items(), key=lambda kv: -kv[1])]}
+
+
+def traced(prof) -> list[dict]:
+    """A torch profile's kernel events (`name`, `ts`, `dur` in µs)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "trace.json"
+        prof.export_chrome_trace(str(path))
+        return [e for e in json.loads(path.read_text())["traceEvents"] if e.get("cat") == "kernel" and e.get("ph") == "X"]
 
 
 NCU_METRICS = ("gpu__time_duration.sum", "dram__bytes_op_read.sum", "dram__bytes_op_write.sum",
@@ -129,6 +139,10 @@ def main() -> int:
     ap.add_argument("--shapes", type=lambda s: [tuple(int(v) for v in x.split("x")) for x in s.split(",")],
                     default=[(1, 2048), (8, 4096), (64, 2048), (128, 1024)])
     ap.add_argument("--steps", type=int, default=40)
+    ap.add_argument("--max-batched-tokens", type=int, default=8192)
+    ap.add_argument("--prefill", type=int, default=0,
+                    help="after the shapes, one prompt of this many tokens alone, each of its prefill chunks "
+                         "(--max-batched-tokens) profiled as a step of its own")
     ap.add_argument("--R", type=float, default=1540.0)
     ap.add_argument("--native-R", type=float, default=0.96)
     ap.add_argument("--ncu", action="store_true",
@@ -180,7 +194,8 @@ def main() -> int:
         stack = stack_hook.install(a.stack, a.stack_k, a.wt_lib, a.reader_lib, a.paged_lib)
         capture = stack[2]
     llm = LLM(model=a.model, quantization="fp8", max_num_seqs=max(CAPTURE), enable_prefix_caching=False, seed=0,
-              max_model_len=max(c for _, c in a.shapes) + a.steps + 128, max_num_batched_tokens=8192,
+              max_model_len=max([c for _, c in a.shapes] + [a.prefill]) + a.steps + 128,
+              max_num_batched_tokens=a.max_batched_tokens,
               enforce_eager=False, gpu_memory_utilization=a.mem,
               compilation_config={"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": capture})
     eng = llm.llm_engine
@@ -231,21 +246,19 @@ def main() -> int:
             (a.out / "step_profile-ncu.json").write_text(json.dumps(res, indent=1) + "\n")
             log(f"{batch}x{ctx}: {steps} steps under ncu")
             continue
+        t0 = time.perf_counter()
         with profile(activities=[ProfilerActivity.CUDA]) as prof:
             for _ in range(a.steps):
                 eng.step()
             torch.cuda.synchronize()
+        wall = time.perf_counter() - t0
         steps = count[0]
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "trace.json"
-            prof.export_chrome_trace(str(path))
-            kernels = [e for e in json.loads(path.read_text())["traceEvents"]
-                       if e.get("cat") == "kernel" and e.get("ph") == "X"]
+        kernels = traced(prof)
         eng.abort_request(ids)
         while eng.has_unfinished_requests():
             eng.step()
         kv_bytes = batch * (ctx + 4 + a.steps / 2) * KV_TOKEN_BYTES
-        s = {"batch": batch, "ctx": ctx, "steps": steps, "kv_bytes_per_step": kv_bytes,
+        s = {"batch": batch, "ctx": ctx, "steps": steps, "kv_bytes_per_step": kv_bytes, "wall_ms": wall * 1e3 / steps,
              **split(kernels, steps, weight_bytes, kv_bytes, a.R, a.native_R)}
         res["shapes"].append(s)
         log(f"{batch}x{ctx}: {steps} steps, {s['kernels_a_step']:.0f} kernels a step, kernels {s['kernel_ms']:.3f} ms "
@@ -255,6 +268,32 @@ def main() -> int:
             f"{s['native_of_R']:.3f} R, every read native {s['native_all_of_R']:.3f} R; idle between kernels in a step "
             f"{s['idle_in_step_ms']:.3f} ms ({s['idle_in_step_gaps']:.0f} gaps), between steps "
             f"{s['idle_between_steps_ms']:.3f} ms")
+        (a.out / "step_profile.json").write_text(json.dumps(res, indent=1) + "\n")
+    if a.prefill:
+        # Each chunk's step: the GEMMs against the weights, attention against the KV of the chunk's context (its own
+        # tokens and the earlier chunks', each read once).
+        eng.add_request("prefill", TokensPrompt(prompt_token_ids=[rng.randrange(1000, vocab - 1000)
+                                                                  for _ in range(a.prefill)]),
+                        SamplingParams(max_tokens=1, ignore_eos=True, temperature=0.0))
+        torch.cuda.synchronize()
+        res["prefill"], done = [], 0
+        while eng.has_unfinished_requests():
+            count[0] = 0
+            t0 = time.perf_counter()
+            with profile(activities=[ProfilerActivity.CUDA]) as prof:
+                eng.step()
+                torch.cuda.synchronize()
+            wall = time.perf_counter() - t0
+            if not count[0]:
+                continue
+            chunk = min(a.max_batched_tokens, a.prefill - done)
+            done += chunk
+            s = {"chunk": chunk, "context": done, "steps": count[0], "wall_ms": wall * 1e3,
+                 **split(traced(prof), count[0], weight_bytes, done * KV_TOKEN_BYTES, a.R, a.native_R)}
+            res["prefill"].append(s)
+            log(f"prefill chunk of {chunk} at context {done}: wall {s['wall_ms']:.2f} ms, kernels {s['kernel_ms']:.3f} "
+                f"ms (span {s['span_ms']:.3f}): GEMM {s['ms']['gemm']:.3f}, attention {s['ms']['attention']:.3f}, other "
+                f"{s['ms']['other']:.3f}; idle in step {s['idle_in_step_ms']:.3f} ms")
         (a.out / "step_profile.json").write_text(json.dumps(res, indent=1) + "\n")
     log("done")
     return 0
