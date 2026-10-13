@@ -1,8 +1,9 @@
 """`registry.cublas_bf16` and `registry.ll_bf16`, GLM-5.3's bf16 GEMMs on sm_90: on bits they are Boolean and are the Boolean
 versions of their words; they agree with their words (the reference evaluator) and with `bf16_gemm_check`'s numpy models of the
 kernels on random words and on words at every class edge (signed zeros, subnormals, infinities, NaNs, and products that overflow
-or underflow f32, the only inputs on which the dotprod's contraction changes a word); the dotprod's steps agree with the f32 words
-they widen into, on accumulators that cancel the product too; `BatchedGemm_v2` is `mla.MlaBmm_v1`'s
+or underflow f32, the only inputs on which the dotprod's contraction changes a word); each chain step's parts, composed,
+agree with its word from +0 and from any accumulator (the dotprod's on accumulators that cancel the product too) and no
+body on bits computes a value twice; `BatchedGemm_v2` is `mla.MlaBmm_v1`'s
 function; the words at GLM-5.3's gate statics (K 6144) agree with the models; `dispatch_sm90` is vLLM's table; and each is pinned
 by gate count and program digest."""
 from __future__ import annotations
@@ -13,7 +14,7 @@ import pytest
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.batch import type_shape
 from verity.ml.circuits.evaluation.reference import evaluate, standalone_call
@@ -26,6 +27,7 @@ from verity_vllm.program.registry import cublas_bf16 as CB
 from verity_vllm.program.registry import ll_bf16 as LL
 from verity_vllm.program.registry import mla
 from verity_vllm.program.registry import mla_check as MK
+from verity_vllm.query import word as WQ
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16
@@ -33,27 +35,48 @@ HOPW = word_of(HOP)
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
+    "LlBf16FmaStepFirstX_v1":
+        (50, 69, 11, "00c7dd696d037eecad8b486bd618f9303f98da65c74a37b1b027a56550c25bcdcb64db8a6d4a9ef6626c747299de705c7d018205c04f677212beb5cdf2445502"),
+    "LlBf16FmaStepFirst_v1":
+        (1237, 1797, 127, "7e12ede269d688d500bfb630116b9a28ba3e0ccd4b5167b951d35b8f32895fc761615ebd91ab72bffcbe6d50a932f46da2b7bd3f49e3de58e215531843bcf2c1"),
+    "LlBf16FmaStepX_v1":
+        (50, 69, 11, "c81ca3c8a3c3875b65db3af5826dce1c83af9e9310f707928a72fabb65a7519590111c39e8b58b0ee199db52e9f9609e57318532f6ffe76c4c6367fd20ce2258"),
     "LlBf16FmaStep_v1":
-        (2167, 3453, 201, "f6ded7743772c6c349b96e32f829ff932af4750b8774e1bb40bc75d68dcaa3b57820d91381f9d6229c2ff0657984fea9d91b074be401c67ef8233fc2c46bd084"),
+        (2117, 3384, 190, "3019c559bfdbea2f058663d56cc77145b26320c30ddbfe5a5894f258fe841572149720931cf9e64cf04e893a699f0d32421be3a3f2061c36a8afcc0ef861eea9"),
+    "LlBf16MulAddStepFirstX_v1":
+        (18, 30, 2, "f5e1249bc607aaa7f2c468845588b31df5e1e777e124139f7d26626a37989e78bb0b0497fd48500e68a93410f96297e105ec6d2aa4b0ca606a38a97d6bb50320"),
+    "LlBf16MulAddStepFirst_v1":
+        (1503, 2256, 185, "fb3ebc96c6eb322c27181106dbf7bb52257748de60832314d7ad44ec36f0b3fcfb06e5d2b54b6c0c2aacfd4361ee1d40dff4f4929176b1e4af5b52b011b30a89"),
+    "LlBf16MulAddStepX_v1":
+        (18, 30, 2, "813339c8e135d08aea58fff55baa05bc6c6c7ada8a6238f37ee81a3a546bd3e086efc59b3f9977295692b398b6157b09931aecd37da0d13e0e5f92ddf781321d"),
     "LlBf16MulAddStep_v1":
-        (1561, 2492, 191, "b14dad780cce876d2ab12111a04ac0d3dfc337a95890c7c91ac1ff57c225eb0acb7070c7445ebfc376cf84ef1c47a0f8d5e9a7a9f8b8d8ef6b8c0d3a57d80e62"),
+        (1543, 2462, 189, "7085a40ed37813b1ee263ceef120976bb25af92706417ad7b940f9c90c17b1aff9b2dab378a53a7ccd72de99eb0c9f6ecaa7c08c7d0d2b55026b1499e4d0f2fd"),
+    "HopperBf16Dot16StepFirstX_v1":
+        (784, 912, 80, "edab596801c5774b1063b84554aa0e4d459793d93b2071ac1a3a09d818d4308adf8214d1de0ed34b26a02bf0f5ef50f92a64142031a61e11c40cac9162aa6a08"),
+    "HopperBf16Dot16StepFirst_v1":
+        (6789, 13568, 649, "f0ab2c741a0eafd9de47a6baff27a751f07f34323716a0de09d55f01115350a9ea475cacf21136507c1a81f00996fd47d4987664f8faebb49b40a9353ec18bea"),
+    "HopperBf16Dot16StepX_v1":
+        (784, 912, 80, "ea8f98a5d54e6d0347798318e61f4daada6556497e8f1c12bb90fdaa1a1313c6d060b6698a07b3c2f76808b795091c0ed077645c27f44bc6e71650f026ef856a"),
+    "HopperBf16Dot16Step_v1":
+        (7088, 14137, 681, "3165af824cf09d3786ecd742f5dddab7e65a74a768c7cf4d56098532c5d1091624d4fe6cc254ebe48e62bf136b8b87403ab05afd6c3007d83c9917c8b99e9e05"),
     "GemmF32Out_v2{K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}":
-        (47232, 90294, 4566, "3f63d9f7123b765e7ce6a1d981accb6b9bf30ddd8857db8c619cf9da3d3b461536d3ad9c6b0e0746417cb0853e5a4bde0c29cdbf3d6428e1d4adbf899040628b"),
+        (43199, 84939, 4150, "dc461c922a161552a39cf88a5ab81de7f9bea85f12de679d7327b37dd55aa8a026b35ba8c2f6b41670f7ed2d9519fb180b2a94f0a25ff2a77a331e95e960b02c"),
     "BatchedGemm_v2{B=2,K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}":
-        (94860, 181176, 9222, "d1b876b03912d35319d3a8d818e86459dd37556f384e309a370e5cc1ff4c78b6eb17e6ef9fae3a98dca67af35d2616b69d93f55be5e51ba24777fee38f772ee4"),
+        (86794, 170466, 8390, "a5628461bd73e30a57648857b606dc09260abb3a795cc75efc45eef4eb1165d7225f86cd7812c469abb1755ab8ec51afb79deaa5be1748bfbe133c7ff6abb5f1"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=1}":
-        (606720, 973248, 58816, "a7b83ce34457940e8ef318a1a9834c7d451004d9cf6752071277cdf704b83d6f70471a4284e427fe6ef2d835c250b6f03490e21f14dd48d682da82067d5468ff"),
+        (550400, 871680, 54784, "310290be808e36bd3308147d713f3bf718561ee1512a5b9dc2b5b5c3e5b297308b555d436a583357cdefeef7314aa303466916d65cd181c2131406ed3e1c2979"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=0}":
-        (451584, 727232, 56256, "4513f97fa91da6198b5a9a3b6cf112723c6f5718ca3fcb9fcfe06ee6c474df22f97cb2f7ac231d58d8234768a15cb46bfb8649c8eefaa78230b6d1893ed2658a"),
+        (449024, 714048, 56000, "1bdbc6c31ccaaf30aaadedaf8452b46bcdb580b123d8b2e4bad5d7c5ea8dd1d23a7456a6797f3a58d28ae97fd6d9514c759f82df5edce70b65a5d8522a9e5fbc"),
     "LlBf16SplitKDot_v2{K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT=HopperBF16WgmmaDot16_v2}":
-        (67848, 128762, 6778, "438a7d3e324cfcb4d025466be392931c8872377c9019ee676a5331eb5b1212a59b859aec141b190fdd0ef9aa20b099fcb26685cf5c624bc54809978696ae59eb"),
+        (66652, 126486, 6650, "ad93c680dafa712fcb77ce24a5988acc56d34b39d713aedd99c76e16de918ed54c29df59c010bd8053c88f8e68e43d91c3a9d68ec1099a9857dd8bedf37496c2"),
     "LlBf16DotprodGemm_v2{N=2,K=128,BS=64,VEC=2,FMA=1}":
-        (658688, 1062528, 66176, "5012d48a02849357a616fce904f2d516a20376c184e77089674ec5dc66b83b75ea249758b87b4664e00928ba4e7969f95ee3891b44267b7dbfadee18e560428c"),
+        (539648, 850560, 56704, "8e24b5216820e71b4c04d87bcdef4b47dcedf6b58ec7cf423e9c304991c270aa04883a8178e478ce35e6f6b2971e8f1457df2d56b9aaf39a0338dcf8a0aaba88"),
     "LlBf16SplitKGemm_v2{N=2,K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT=HopperBF16WgmmaDot16_v2}":
-        (135696, 257524, 13556, "aec7c44c327014f6ffd016196643cdc5618d4daf01e1b83b689234b67c61e45c4d2ce171218a4f54620f20b17e29ade587f157bea43d41fbac7f2e173e9feffb"),
+        (127032, 245676, 12660, "59acc816f055ceff29d80e961536aa56fed7db5b8a4db5fbba909248cb9284404832377d9cd76322a8db7547ca5357d5e69a11bed385e2fab2e67aeaf6b4c940"),
 }
-#: the dotprod's steps, element Definitions with no word of their own
-STEPS = [bind(LL.LlBf16FmaStep), bind(LL.LlBf16MulAddStep)]
+#: the chain steps on bits, each four element Definitions with no word of their own (`cublas_bf16.ChainStep`)
+CHAIN_STEPS = {"LlBf16FmaStep": LL.LL_FMA_STEP, "LlBf16MulAddStep": LL.LL_MUL_ADD_STEP, "HopperBf16Dot16Step": CB.HOPPER_STEP}
+STEPS = [bind(d) for st in CHAIN_STEPS.values() for d in st]
 PINNED = [bind(CB.GemmF32Out, K=32, N=3, DOT=HOP), bind(CB.BatchedGemm, B=2, K=32, N=3, DOT=HOP),
           bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=1), bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=0),
           bind(LL.LlBf16SplitKDot, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP),
@@ -121,27 +144,54 @@ def test_bits_agree_with_the_word(target) -> None:
         assert np.array_equal(got.astype(np.int64), want.astype(np.int64)), (target.id, kind)
 
 
-#: each step's words: fma(f32(x), f32(w), acc), and acc + f32(x) * f32(w)
-STEP_WORDS = {"LlBf16FmaStep_v1": lambda x, w, acc: W.F32Fma.evaluate(P.Bf16ToF32.evaluate(x), P.Bf16ToF32.evaluate(w), acc),
-              "LlBf16MulAddStep_v1": lambda x, w, acc: W.F32Add.evaluate(acc, W.F32Mul.evaluate(P.Bf16ToF32.evaluate(x),
-                                                                                                P.Bf16ToF32.evaluate(w)))}
+def _f32(x: int) -> int:
+    return P.Bf16ToF32.evaluate(x)
 
 
-@pytest.mark.parametrize("target", STEPS, ids=[t.id for t in STEPS])
-def test_steps_agree_with_their_words(target) -> None:
-    """The dotprod's steps on bits against `F32Fma_v1`, and `F32Mul_v1` then `F32Add_v1`, on the widened words: 256 instances of
-    each kind, and accumulators that cancel the product exactly (a bf16 product is exact in f32), where the sum's zero takes its
-    sign from the rounding mode."""
+#: each chain step's word on (acc, x, w): fma(f32(x), f32(w), acc), acc + f32(x) * f32(w), and the wgmma k16 step
+STEP_WORDS = {"LlBf16FmaStep": lambda acc, x, w: W.F32Fma.evaluate(_f32(x), _f32(w), acc),
+              "LlBf16MulAddStep": lambda acc, x, w: W.F32Add.evaluate(acc, W.F32Mul.evaluate(_f32(x), _f32(w))),
+              "HopperBf16Dot16Step": lambda acc, a, b: P.HopperBF16WgmmaDot16.evaluate(acc, *a, *b)}
+
+
+def _composed(st, first: bool) -> CompositeDefinition:
+    """``st``'s first step (from +0) or a later one as one Definition: x's own gates, then the rest."""
+    part, own = (st.first, st.first_x) if first else (st.step, st.x)
+    params = bind(part).signature()[0][:-1]
+    x = 0 if first else 1
+    return CompositeDefinition(f"{part.name}Composed", 1, (), lambda S: (params, CB.F32),
+                               lambda B, S, *a: B.call(part, *a, B.call(own, a[x])), register=False)
+
+
+@pytest.mark.parametrize("name", sorted(CHAIN_STEPS))
+def test_chain_steps_agree_with_their_words(name: str) -> None:
+    """Each chain step's parts, composed, against its word: a later step on 256 instances of each kind, and the dotprod's also on
+    accumulators that cancel the product exactly (a bf16 product is exact in f32), where the sum's zero takes its sign from the
+    rounding mode; the first step on the same operands from +0."""
     rng = np.random.default_rng(8)
-    word = STEP_WORDS[target.id]
-    cases = [(_bf16_words(rng, (256,), k), _bf16_words(rng, (256,), k), _f32_words(rng, (256,), k)) for k in KINDS]
-    x, w = _bf16_words(rng, (256,), "spread"), _bf16_words(rng, (256,), "spread")
-    product = (x.astype(U32) << 16).view(np.float32) * (w.astype(U32) << 16).view(np.float32)
-    cases.append((x, w, MK.u32(-product)))
-    for x, w, acc in cases:
-        got = np.asarray(BS.evaluate_words(target, x, w, acc)).astype(np.int64)
-        want = [word(int(a), int(b), int(c)) for a, b, c in zip(x, w, acc)]
-        assert np.array_equal(got, np.array(want, np.int64)), target.id
+    st, word = CHAIN_STEPS[name], STEP_WORDS[name]
+    shape = (256,) if name.startswith("Ll") else (256, 16)
+    cases = [(_f32_words(rng, (256,), k), _bf16_words(rng, shape, k), _bf16_words(rng, shape, k)) for k in KINDS]
+    if name.startswith("Ll"):
+        x, w = _bf16_words(rng, shape, "spread"), _bf16_words(rng, shape, "spread")
+        product = (x.astype(U32) << 16).view(np.float32) * (w.astype(U32) << 16).view(np.float32)
+        cases.append((MK.u32(-product), x, w))
+    ops = (lambda a: int(a)) if name.startswith("Ll") else (lambda a: [int(v) for v in a])
+    first, later = _composed(st, True), _composed(st, False)
+    for acc, x, w in cases:
+        got = np.asarray(BS.evaluate_words(later, acc, x, w)).astype(np.int64)
+        assert np.array_equal(got, np.array([word(int(c), ops(a), ops(b)) for c, a, b in zip(acc, x, w)], np.int64)), name
+        got = np.asarray(BS.evaluate_words(first, x, w)).astype(np.int64)
+        assert np.array_equal(got, np.array([word(0, ops(a), ops(b)) for a, b in zip(x, w)], np.int64)), name
+
+
+@pytest.mark.slow
+def test_no_body_on_bits_computes_a_value_twice() -> None:
+    """No value is computed twice anywhere in a Definition on bits (`word.Graph.recomputed`), with each chain's first step
+    reading the +0 accumulator and several W rows sharing x: `circuit-check`'s redundant-gates rule, at small statics."""
+    for t in [bind(LL.LlBf16DotprodGemm, N=2, K=64, BS=32, VEC=2, FMA=f) for f in (1, 0)] + [
+            bind(CB.BatchedGemm, B=2, K=32, N=3, DOT=HOP), bind(LL.LlBf16SplitKGemm, N=2, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP)]:
+        assert WQ.Graph(t).recomputed == [], t.id
 
 
 @pytest.mark.parametrize("FMA", [1, 0])
