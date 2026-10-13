@@ -9,9 +9,10 @@ other caller keep vLLM's arguments.  It pins one split unless `ENV` is ``"0"`` (
 Every process that builds a served engine pins it before the model's first forward (a CUDA graph captures the call's arguments).
 Importing this module `arm`\\ s the pin: it is installed when the backend module is imported, and nothing is imported for it, so a
 process that loads this module without serving (a committer, a CPU test) imports no vLLM.  Each tensor-parallel rank imports it
-through `engine.rank_worker` when vLLM mixes the extension into its Worker; the driver (`engine.build.build_engine`) and the meta
-inventory `install` it outright.  `num_splits` reads the switch back from the process: `meta_inventory`'s selections, which the
-capture map's ``target.switches`` holds.
+through `engine.rank_worker` when vLLM mixes the extension into its Worker; the driver (`engine.build.build_engine`) arms it
+before vLLM builds the model (a forked rank inherits the armed finder), and the meta inventory `install`\\ s it outright.
+`num_splits` reads the switch back from the process: `meta_inventory`'s selections, which the capture map's ``target.switches``
+holds.
 """
 from __future__ import annotations
 

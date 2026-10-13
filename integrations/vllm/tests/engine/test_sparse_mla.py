@@ -84,4 +84,4 @@ def test_a_rank_arms_the_switch_at_import_and_the_driver_before_it_builds() -> N
     assert any(isinstance(n, ast.ImportFrom) and n.module == "verity_vllm.engine" and "sparse_mla" in {a.name for a in n.names}
                for n in ast.parse(inspect.getsource(rank_worker)).body)
     src = inspect.getsource(build.build_engine)
-    assert src.index("sparse_mla.install()") < src.index("llm = LLM(**kw)")
+    assert src.index("sparse_mla.arm()") < src.index("llm = LLM(**kw)")

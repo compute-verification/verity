@@ -193,7 +193,7 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     from vllm import LLM  # noqa: E402  (after apply_env)
 
     from verity_vllm.engine import sparse_mla
-    sparse_mla.install()
+    sparse_mla.arm()
 
     if verify_weights:
         prof.verify_local_weights(cp)
