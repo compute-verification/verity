@@ -14,8 +14,8 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
 
 What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns: a failed
 check, a conflict, a check that ran and passed but lacks a step the gate needs, a launch that registered no run.  A failed
-check whose failing tests' files and tracebacks only one PR of the train changes (`implicated`) ejects that PR itself
-(`research queue eject`, by `ci`); otherwise `@ci` ejects the PR that broke it.  The next sync rebuilds `next` without it.
+check whose failing tests' files and the files their failures name (a traceback's frames, a lint's offender) only one
+PR of the train changes (`implicated`) ejects that PR itself (`research queue eject`, by `ci`); otherwise `@ci` ejects the PR that broke it.  The next sync rebuilds `next` without it.
 
 `--shadow` drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
@@ -40,6 +40,11 @@ from .queue import IDENTITY, Member, Queue, QueueError, _git, _out
 CI = "@ci"
 #: a pytest location (`tests/test_x.py:503: NameError`) or a traceback frame (`File "/.../x.py", line 12`) in a suite's log
 TRACE_RE = re.compile(r'^\s*([\w./+-]+\.py):\d+:|File "([^"]+\.py)", line \d+', re.M)
+#: a repository path a pytest failure report names (`E   tools/x/README.md: 48 KB > 48 KB`, 13 Oct: a lint's offender is in
+#: its assertion, not its traceback); relative, with a directory
+NAMED_RE = re.compile(r"(?<![\w./-])((?:[\w+-]+/)+[\w+.-]*\w\.\w+)")
+#: pytest's failing tests in its short summary
+FAILED_RE = re.compile(r"^FAILED ([^\s:]+)::", re.M)
 #: states `research status` reports for a run that may still publish an attempt
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: after a launched run ends, how long its attempt may take to reach the store before the launch counts as lost
@@ -214,26 +219,51 @@ def evidence(repo: Path, ids: list[str]) -> list[Path]:
     for rid in ids:
         if (d := _fetch(repo, rid, [*PROGRESS, "suites.json", "suites-lean.json"])) is None:
             continue
-        if logs := [f"suites/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log")]:
+        logs = [f"suites/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log")]
+        logs += [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in ("pytest", "lean-suites")]
+        if logs:
             _fetch(repo, rid, logs)
         dirs.append(d)
     return dirs
 
 
-def implicated(run_dir: Path) -> set[str] | None:
-    """The paths a failed check's failure points at: each failed suite's failing test files and the files its log's tracebacks
-    name (relative to the repository, or absolute as the log wrote them); None when a step other than the suites failed, or a
-    failed suite names no failing test (a timeout, a kill), so no file says what broke it."""
-    steps = []
+def failed_steps(run_dir: Path) -> list[dict]:
+    out = []
     with contextlib.suppress(OSError):
         for line in (run_dir / PROGRESS[0]).read_text().splitlines():
             with contextlib.suppress(ValueError):
                 if (rec := json.loads(line)).get("status") == "failed":
-                    steps.append(rec.get("step"))
-    suites = failed_suites(run_dir)
-    if not suites or any(st not in ("pytest", "lean-suites") for st in steps):
-        return None
+                    out.append(rec)
+    return out
+
+
+def _named(log: str, base: str) -> set[str]:
+    """The files a pytest log's failures name: its tracebacks' frames, and the repository paths in its failure report."""
+    rel = lambda p: p if p.startswith("/") else os.path.normpath(os.path.join(base, p))  # noqa: E731
+    paths = {rel(m[1] or m[2]) for m in TRACE_RE.finditer(log)}
+    report = log.partition("= FAILURES =")[2].partition("short test summary info")[0]
+    return paths | {rel(m[1]) for m in NAMED_RE.finditer(report)}
+
+
+def implicated(run_dir: Path) -> set[str] | None:
+    """The paths a failed check's failure points at: each failed suite's failing test files and the files its log's failures
+    name (`_named`: relative to the repository, or absolute as the log wrote them), and the same of a failed step that runs
+    pytest on the repository's own tests (`preflight-lints`); None when another step failed, or a failed suite or step names
+    no failing test (a timeout, a kill), so no file says what broke it."""
     paths: set[str] = set()
+    for st in failed_steps(run_dir):
+        if st.get("step") in ("pytest", "lean-suites"):
+            continue
+        try:
+            log = (run_dir / Path(st.get("log") or "").name).read_text(errors="replace") if st.get("log") else ""
+        except OSError:
+            log = ""
+        if not (tests := FAILED_RE.findall(log)):
+            return None
+        paths |= {os.path.normpath(t) for t in tests} | _named(log, "")
+    suites = failed_suites(run_dir)
+    if not suites and not paths:
+        return None
     for s in suites:
         base, tests = s.get("suite") or "", s.get("failed_tests") or []
         if not tests:
@@ -241,9 +271,7 @@ def implicated(run_dir: Path) -> set[str] | None:
         paths |= {os.path.normpath(os.path.join(base, t.split("::")[0])) for t in tests}
         if s.get("log"):
             with contextlib.suppress(OSError):
-                for m in TRACE_RE.finditer((run_dir / "suites" / Path(s["log"]).name).read_text(errors="replace")):
-                    p = m[1] or m[2]
-                    paths.add(p if p.startswith("/") else os.path.normpath(os.path.join(base, p)))
+                paths |= _named((run_dir / "suites" / Path(s["log"]).name).read_text(errors="replace"), base)
     return paths
 
 
@@ -444,13 +472,15 @@ class Driver:
         found: set[str] = set()
         for d in self.evidence(self.repo, v.attempt.split()):
             if (paths := implicated(d)) is None:
-                return None, [], "a failure no test file accounts for"
+                return None, [], "the failure names no file (a step failed with no failing test)"
             found |= paths
         if not found:
-            return None, [], "no failed suite's report"
+            return None, [], "no failed suite's report reached drive"
         hits = [(x, touches(changed(self.repo, f"{x.commit}^1", x.commit), found)) for x in members]
         hits = [(x, t) for x, t in hits if t]
-        what = ", ".join(sorted({f for _, t in hits for f in t})) or ", ".join(sorted(found)[:4])
+        if not hits:
+            return None, [], f"no PR's change touches a file the failure names ({', '.join(sorted(found)[:4])})"
+        what = ", ".join(sorted({f for _, t in hits for f in t}))
         return (hits[0][0] if len(hits) == 1 else None), [x for x, _ in hits], what
 
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
@@ -459,7 +489,7 @@ class Driver:
             return
         head = f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}"
         pick, hit, what = self.culprit(members, v)
-        why = (f"{len(hit)} PRs ({' '.join(f'#{x.pr}' for x in hit)}) touch {what}" if hit else f"no PR's change is in {what}")
+        why = f"{len(hit)} PRs ({' '.join(f'#{x.pr}' for x in hit)}) touch {what}" if hit else what
         if pick is not None:
             reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which only #{pick.pr} changes"
             if self.q.shadow or self.dry_run:
