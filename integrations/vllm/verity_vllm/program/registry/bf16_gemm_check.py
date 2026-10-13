@@ -9,7 +9,9 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   ascend, so its chain is `DotBf16` over those columns (`mla_check.dot_chain`), then the warps' and the ranks' ordered sums;
 * `f32out_rows`: `GemmF32Out_v1{DOT=HopperBF16WgmmaDot16_v1}` (also DeepSeek-V4-Pro's compressor GEMMs); `linear_rows`: core's
   `Gemm_v2` (lm_head, GLM-5.3's indexer `wk_weights_proj`, DeepSeek-V4-Pro's `weights_proj`); `bmm_rows`: `BatchedGemm_v1`,
-  `mla_check.bmm_rows`.
+  `mla_check.bmm_rows`;
+* `cublas_splitk_rows`: the default cuBLAS hypothesis in `cublas_bf16`: balanced contiguous k16 intervals, f32 partials and a
+  serial increasing-order f32 reduction. `cublas_splitk_hypotheses` supplies the crafted capture's alternatives.
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
@@ -53,6 +55,70 @@ def _ordered_sum(parts) -> np.ndarray:
     for p in parts:
         out = MK.add(out, p)
     return out
+
+
+def _reduce(parts: list[np.ndarray], order: str) -> np.ndarray:
+    """F32-add partials in a hypothesized reduction order."""
+    if order == "forward":
+        return _ordered_sum(parts)
+    if order == "reverse":
+        return _ordered_sum(parts[::-1])
+    if order == "tree":
+        level = list(parts)
+        while len(level) > 1:
+            level = [MK.add(level[i], level[i + 1]) if i + 1 < len(level) else level[i] for i in range(0, len(level), 2)]
+        return level[0]
+    raise ValueError(f"unknown reduction order {order!r}")
+
+
+def _split_cols(K: int, splits: int, partition: str) -> list[np.ndarray]:
+    """k16-block columns under the contiguous or round-robin partition hypothesis."""
+    if K <= 0 or K % 16 or not 1 < splits <= K // 16:
+        raise ValueError(f"cublas split-k: K {K}, splits {splits}")
+    blocks = K // 16
+    if partition == "contiguous":
+        return [np.arange(16 * (z * blocks // splits), 16 * ((z + 1) * blocks // splits)) for z in range(splits)]
+    if partition == "strided":
+        return [np.concatenate([np.arange(16 * b, 16 * b + 16) for b in range(z, blocks, splits)]) for z in range(splits)]
+    raise ValueError(f"unknown split partition {partition!r}")
+
+
+def cublas_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int, *, partition: str = "contiguous",
+                       partial: str = "f32", reduction: str = "forward", out: str = "f32") -> np.ndarray:
+    """One cuBLAS split-K hypothesis: k16 chains from +0, then a reduction of the partials and the requested output rounding."""
+    x, w = np.asarray(x, np.uint16), np.asarray(w, np.uint16)
+    if x.ndim != 2 or w.ndim != 2 or x.shape[1] != w.shape[1]:
+        raise ValueError(f"cublas split-k: x {x.shape}, W {w.shape}")
+    parts = [MK.dot_chain(x[:, cols], w[:, cols]) for cols in _split_cols(x.shape[1], SPLIT_K, partition)]
+    if partial == "bf16":
+        parts = [DR.bf16_to_f32_words(MK.bf16_of(p)) for p in parts]
+    elif partial != "f32":
+        raise ValueError(f"unknown partial precision {partial!r}")
+    result = _reduce(parts, reduction)
+    if out == "bf16":
+        return MK.bf16_of(result)
+    if out != "f32":
+        raise ValueError(f"unknown output precision {out!r}")
+    return result
+
+
+CUBLAS_SPLITK_HYPOTHESIS = "contiguous-f32-forward"
+CUBLAS_SPLITK_ALTERNATIVES = (
+    CUBLAS_SPLITK_HYPOTHESIS,
+    "strided-f32-forward",
+    "contiguous-f32-reverse",
+    "contiguous-f32-tree",
+    "contiguous-bf16-forward",
+)
+
+
+def cublas_splitk_hypotheses(x: np.ndarray, w: np.ndarray, SPLIT_K: int, *, out: str) -> dict[str, np.ndarray]:
+    """The capture probe's split partition, partial precision and reduction-order alternatives."""
+    ans = {}
+    for name in CUBLAS_SPLITK_ALTERNATIVES:
+        partition, partial, reduction = name.split("-")
+        ans[name] = cublas_splitk_rows(x, w, SPLIT_K, partition=partition, partial=partial, reduction=reduction, out=out)
+    return ans
 
 
 def dotprod_rounds(K: int, BS: int, VEC: int) -> list[np.ndarray]:

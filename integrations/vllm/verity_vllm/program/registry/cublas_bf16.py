@@ -1,13 +1,17 @@
-"""cuBLAS's bf16 GEMMs on sm_90 with split-K off, the configuration under which each output coordinate is one ascending chain of
-k16 tensor-core steps from the zero accumulator: GLM-5.3's MoE router gate past the cuteDSL tier (`torch.mm(x, W.T,
-out_dtype=float32)`, `GateLinear` tier 4) and its MLA absorbs (`torch.bmm` of the queries against `W_UK_T`, of the attention output
-against `W_UV`).  Its bf16-output linears (`lm_head`, the indexer's `wk_weights_proj`) are core's `Gemm_v2{K, N, DOT}`.
+"""cuBLAS's bf16 GEMMs on sm_90: GLM-5.3's and DeepSeek-V4-Pro's MoE router gates past the cuteDSL tier (`torch.mm(x, W.T,
+out_dtype=float32)`, `GateLinear` tier 4), their bf16-output linears, DeepSeek-V4-Pro's compressor `torch.mm(...,
+out_dtype=float32)` calls, and GLM-5.3's MLA absorbs (`torch.bmm` of the queries against `W_UK_T`, of the attention output against
+`W_UV`).
 
     GemmF32Out_v1{K, N, DOT}        (x: Array<K, BF16>, w: Array<N, Array<K, BF16>>) -> Array<N, F32>
                                     `DotBf16_v2{K, DOT}` of x against each W row: the f32 accumulator is the output
     BatchedGemm_v1{B, K, N, DOT}    (x: Array<B, Array<K, BF16>>, w: Array<B, Array<N, Array<K, BF16>>>) -> Array<B, Array<N, BF16>>
                                     `Gemm_v2{K, N, DOT}` of member b's x against member b's W, ``w[b][n][k]`` the right operand at
                                     ``[b, k, n]``
+    CublasSplitKGemmF32Out_v1{K, N, SPLIT_K, DOT}
+                                    the default cuBLAS split-K hypothesis for f32 output
+    CublasSplitKGemm_v1{K, N, SPLIT_K, DOT}
+                                    the same split-K hypothesis, rounded once to bf16 after reduction
 
 on words, and each one's v2 the same function on bits (its ``word`` the v1, so `boolean.boolean_version` finds it): `GemmF32Out_v2`
 takes the K/16 steps of every W row at once, each step one batch over the rows, and `BatchedGemm_v2` is `GemmF32Out_v2` of each
@@ -18,11 +22,12 @@ row computes a value another computes, nor a step a value its accumulator's cons
 of `mla.MlaBmm_v1` (vLLM's batch-invariant Triton `bmm_kernel` on sm_120), which names no word; `tests/program/test_bf16_gemm.py`
 checks that they agree.  `bf16_gemm_check` holds the numpy models.
 
-The split-K-off configuration is vLLM's batch-invariant one on cc 9.0 (`enable_batch_invariant_mode`): CUBLAS_WORKSPACE_CONFIG=:16:8,
-CUBLASLT_WORKSPACE_SIZE=1, `allow_bf16_reduced_precision_reduction = (False, False)`, `preferred_blas_library("cublaslt")`.  Under it the
-H100's bf16 linear is `Gemm_v2{K, N, HopperBF16WgmmaDot16_v1}` word for word (`kernels.derived_rows`, the R17 probe); torch's defaults
-split K at small M.  GLM-5.3's and DeepSeek-V4-Pro's shapes on the H200 are pinned by
-`tests/properties/glm53_bf16_gemm_capture_gpu.py`.
+The two split-K Definitions deliberately state a closed-source hypothesis, not an established cuBLAS contract: split the sequence
+of k16 blocks into balanced contiguous intervals; run each interval's ascending `HopperBF16WgmmaDot16_v1` chain from +0; store f32
+partials; and have the separate reduction kernel add them serially in increasing split order in f32, rounding only the final result
+for a bf16 output.  The H200 capture records cuBLAS's version, each selected kernel and launch grid (whose z dimension pins
+`SPLIT_K`), and fits crafted cancellation rows against this hypothesis and alternatives (strided partition, reverse/tree reduction,
+and bf16 partials).  Until that capture passes, conformance remains not established.
 """
 from __future__ import annotations
 
@@ -36,10 +41,13 @@ from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.refs import array_of
 from verity.ml.circuits.types import Array, Type
 
-__all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP", "HopperBf16Dot16Step",
-           "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX", "chain_step", "dot_step"]
+__all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSplitKGemm", "CublasSplitKGemmF32Out",
+           "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord", "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP",
+           "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX", "chain_step",
+           "dot_step", "split_bounds"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 CONFORMANCE = ("not-yet-established: GLM-5.3's and DeepSeek-V4-Pro's shapes on the H200 "
@@ -132,8 +140,33 @@ def _batched_bits(B, S, x, w):
     return out.reshape(Array(S.B, Array(S.N, BF16)))
 
 
+def split_bounds(K: int, splits: int) -> list[tuple[int, int]]:
+    """Balanced contiguous intervals of k16 blocks, the default cuBLAS split-K partition hypothesis."""
+    if K <= 0 or K % 16:
+        raise ValueError("CublasSplitK: unsupported statics (K_positive_multiple_of_16)")
+    blocks = K // 16
+    if not 1 < splits <= blocks:
+        raise ValueError("CublasSplitK: unsupported statics (SPLIT_K_in_2_to_K_over_16)")
+    return [(16 * (z * blocks // splits), 16 * ((z + 1) * blocks // splits)) for z in range(splits)]
+
+
+def _splitk(gemm, add, cast=None):
+    def body(B, S, x, w):
+        parts = []
+        for lo, hi in split_bounds(S.K, S.SPLIT_K):
+            ws = array_of([w[n][lo:hi] for n in range(S.N)])
+            parts.append(B.call(bind(gemm, K=hi - lo, N=S.N, DOT=S.DOT), x[lo:hi], ws))
+        acc = parts[0]
+        for p in parts[1:]:
+            acc = B.batch(add, acc, p, axes=(0, 0))
+        return B.batch(cast, acc, axes=(0,)) if cast is not None else acc
+    return body
+
+
 GEMM_F32_DOC = "`x[K] @ W[N, K]^T` with the f32 accumulator as the output: `DotBf16{K, DOT}` on each W row (torch.mm out_dtype=float32)"
 BATCHED_DOC = "torch.bmm on bf16: `Gemm{K, N, DOT}` of each member's x against its W (w[b][n][k] the operand at [b, k, n])"
+SPLITK_DOC = ("default cuBLAS split-K hypothesis: balanced contiguous k16 intervals, one ascending DOT chain from +0 per interval, "
+              "then a separate serial f32 reduction in increasing split order")
 
 GemmF32OutWord = CompositeDefinition("GemmF32Out", 1, ("K", "N", "DOT"), _gemm_f32_type(P.BF16, P.F32), _gemm_f32(G.DotBf16),
                                      doc=GEMM_F32_DOC, conformance=CONFORMANCE)
@@ -146,5 +179,21 @@ GemmF32Out = CompositeDefinition("GemmF32Out", 2, ("K", "N", "DOT"), _gemm_f32_t
 BatchedGemm = CompositeDefinition("BatchedGemm", 2, ("B", "K", "N", "DOT"), _batched_type(BF16), _batched_bits,
                                   doc=f"{BATCHED_DOC} (on bits: `GemmF32Out_v2` of each member, then `F2fpBf16_v2` of each word)",
                                   conformance=CONFORMANCE)
+CublasSplitKGemmF32OutWord = CompositeDefinition(
+    "CublasSplitKGemmF32Out", 1, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(P.BF16, P.F32),
+    _splitk(GemmF32OutWord, P.F32Add), doc=f"{SPLITK_DOC}; f32 output", conformance=CONFORMANCE)
+CublasSplitKGemmWord = CompositeDefinition(
+    "CublasSplitKGemm", 1, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(P.BF16, P.BF16),
+    _splitk(GemmF32OutWord, P.F32Add, P.F2fpBf16), doc=f"{SPLITK_DOC}; one final bf16 rounding", conformance=CONFORMANCE)
+CublasSplitKGemmF32Out = CompositeDefinition(
+    "CublasSplitKGemmF32Out", 2, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(BF16, F32),
+    _splitk(GemmF32Out, EW.F32Add), doc=f"{SPLITK_DOC}; f32 output, on bits", conformance=CONFORMANCE)
+CublasSplitKGemm = CompositeDefinition(
+    "CublasSplitKGemm", 2, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(BF16, BF16),
+    _splitk(GemmF32Out, EW.F32Add, BG.F2fpBf16), doc=f"{SPLITK_DOC}; one final bf16 rounding, on bits", conformance=CONFORMANCE)
 GemmF32Out.word = lambda b: bind(GemmF32OutWord, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 BatchedGemm.word = lambda b: bind(BatchedGemmWord, B=b["B"], K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+CublasSplitKGemmF32Out.word = lambda b: bind(CublasSplitKGemmF32OutWord, K=b["K"], N=b["N"], SPLIT_K=b["SPLIT_K"],  # type: ignore[attr-defined]
+                                                      DOT=word_of(b["DOT"]))
+CublasSplitKGemm.word = lambda b: bind(CublasSplitKGemmWord, K=b["K"], N=b["N"], SPLIT_K=b["SPLIT_K"],  # type: ignore[attr-defined]
+                                                DOT=word_of(b["DOT"]))

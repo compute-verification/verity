@@ -83,6 +83,8 @@ PINS = {
 CHAIN_STEPS = {"LlBf16FmaStep": LL.LL_FMA_STEP, "LlBf16MulAddStep": LL.LL_MUL_ADD_STEP, "HopperBf16Dot16Step": CB.HOPPER_STEP}
 STEPS = [bind(d) for st in CHAIN_STEPS.values() for d in st]
 PINNED = [bind(CB.GemmF32Out, K=32, N=3, DOT=HOP), bind(CB.BatchedGemm, B=2, K=32, N=3, DOT=HOP),
+          bind(CB.CublasSplitKGemmF32Out, K=64, N=3, SPLIT_K=4, DOT=HOP),
+          bind(CB.CublasSplitKGemm, K=64, N=3, SPLIT_K=4, DOT=HOP),
           bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=1), bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=0),
           bind(LL.LlBf16DotprodDot, K=101, BS=32, VEC=2, FMA=1),
           bind(LL.LlBf16SplitKDot, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP),
@@ -238,6 +240,31 @@ def test_f32out_and_batched_gemm_agree_with_the_models() -> None:
         assert np.array_equal(got, want), kind
 
 
+def test_cublas_splitk_definitions_agree_with_the_hypothesis() -> None:
+    """Both Boolean split-K output types agree with the word and numpy twins at a nontrivial four-way partition."""
+    rng = np.random.default_rng(41)
+    for kind in KINDS:
+        x, w = _bf16_words(rng, (12, 64), kind), _bf16_words(rng, (3, 64), kind)
+        f32 = _bits_rows(bind(CB.CublasSplitKGemmF32Out, K=64, N=3, SPLIT_K=4, DOT=HOP), x, w)
+        bf16 = np.asarray(BS.evaluate_words(bind(CB.CublasSplitKGemm, K=64, N=3, SPLIT_K=4, DOT=HOP), x,
+                                            np.broadcast_to(w, (len(x), *w.shape)))).astype(U16)
+        assert _f32_equal(f32, C.cublas_splitk_rows(x, w, 4))
+        assert np.array_equal(bf16, C.cublas_splitk_rows(x, w, 4, out="bf16"))
+
+
+def test_cublas_splitk_probe_tells_the_hypotheses_apart() -> None:
+    """Crafted finite words distinguish the stated contiguous/f32/forward hypothesis from every capture alternative."""
+    rng = np.random.default_rng(42)
+    x = _bf16_words(rng, (16, 256), "wide")
+    w = _bf16_words(rng, (8, 256), "wide")
+    # Keep products finite while retaining a broad exponent spread and cancellation.
+    x = ((x & U16(0x807F)) | (rng.integers(112, 143, x.shape, dtype=U16) << U16(7))).astype(U16)
+    w = ((w & U16(0x807F)) | (rng.integers(112, 143, w.shape, dtype=U16) << U16(7))).astype(U16)
+    got = C.cublas_splitk_hypotheses(x, w, 8, out="f32")
+    candidate = got[C.CUBLAS_SPLITK_HYPOTHESIS]
+    assert all(not _f32_equal(candidate, words) for name, words in got.items() if name != C.CUBLAS_SPLITK_HYPOTHESIS)
+
+
 def test_batched_gemm_is_mla_bmm() -> None:
     """`BatchedGemm_v2` and `mla.MlaBmm_v1` (sm_120's Triton bmm, no word of its own) are one function."""
     rng = np.random.default_rng(5)
@@ -337,6 +364,8 @@ def test_the_definitions_refuse_what_they_do_not_model() -> None:
         _ = bind(LL.LlBf16SplitKDot, K=96, SPLIT_K=1, TILE_K=48, WARPS=2, DOT=HOP).body
     with pytest.raises(ValueError, match="SPLIT_K_at_most_tiles"):
         _ = bind(LL.LlBf16SplitKDot, K=64, SPLIT_K=3, TILE_K=32, WARPS=2, DOT=HOP).body
+    with pytest.raises(ValueError, match="SPLIT_K_in_2_to_K_over_16"):
+        _ = bind(CB.CublasSplitKGemmF32Out, K=64, N=2, SPLIT_K=5, DOT=HOP).body
 
 
 @pytest.mark.parametrize("target", STEPS + PINNED, ids=[t.id for t in STEPS + PINNED])
