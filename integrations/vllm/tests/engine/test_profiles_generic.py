@@ -229,7 +229,7 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
     """GLM-5.3's facts resolve over a TP8 rank and register every DSA fold before the shared-expert MoE scope."""
     from pathlib import Path
 
-    from verity_vllm.engine.profiles.gen_dsa_patterns import (
+    from verity_vllm.observe.fold.patterns.dsa import (
         INDEX_SHARE_SRC_SHA,
         NORM_SRC_SHA,
         Q_SRC_SHA,

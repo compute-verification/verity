@@ -80,8 +80,8 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "equals DsaRMSNorm_v1{N,EPS=1e-05}, bit for bit, the MLA cache holding the kv_c words, while each competing model "
              "(RMSNormTriton_v1's reduction and epilogue among them) is refuted."),
     Property("glm53_cuda_rmsnorm_capture", "verity-vllm/glm53-cuda-rmsnorm-capture/v1",
-             "On the capture's H200, vLLM's default non-batch-invariant BF16 rms_norm and fused_add_rms_norm launch their pinned "
-             "width-8 paths and block sizes at GLM-5.3 and DeepSeek-V4-Pro widths, and every output and residual word equals the "
+             "On the capture's cc 9.0 GPU, vLLM's default non-batch-invariant BF16 rms_norm and fused_add_rms_norm launch their pinned "
+             "width-8 paths and block sizes at the two recorded model widths, and every output and residual word equals the "
              "registered CUDA vector-8 Definitions, including planted finite, subnormal, infinity and NaN rows."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "

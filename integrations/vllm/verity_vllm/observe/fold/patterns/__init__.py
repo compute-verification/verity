@@ -33,3 +33,9 @@ from verity_vllm.observe.fold.patterns.target import GEMM_TARGET_SCRATCH_KEY, X0
 from verity_vllm.observe.fold.patterns.transparent import (ALIAS_OPS, TransparentAten, TransparentTritonMetadata, classify_transparent,
                                                            find_descendants, scope_transparents, widened_source)
 from verity_vllm.observe.fold.resolver import PerRow, Shared
+
+
+def dsa_patterns() -> list:
+    """Load GLM-5.3's DSA patterns without making the shared package import them."""
+    from verity_vllm.observe.fold.patterns.dsa import dsa_patterns as build
+    return build()

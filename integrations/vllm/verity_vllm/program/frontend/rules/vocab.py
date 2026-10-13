@@ -492,7 +492,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "all_reduce_mnnvl": "AllReduceMnnvl_v1{WORLD,N,SHOT}: FlashInfer MNNVL all-reduce on a captured route",
            "all_reduce_multimem": "AllReduceMultimem_v1{WORLD,SIZE,TREES,FTZ}: torch symmetric-memory multimem all-reduce on captured trees",
            "all_reduce_custom": "AllReduceCustom_v1{WORLD,SIZE,STAGE}: vLLM custom all-reduce on a captured route",
-           "all_reduce_rmsnorm_mnnvl": "AllReduceRmsNormMnnvl_v1{WORLD,N,SHOT,CLUSTER,EPS,FMA}: FlashInfer fused all-reduce + RMSNorm",
+           "all_reduce_rmsnorm_mnnvl": "AllReduceRmsNormMnnvl_v1{WORLD,N,SHOT,CLUSTER,EPS,FMA}: FlashInfer fused all-reduce + RMS norm",
            "all_gather": "AllGather_v1{WORLD,N}: vllm.all_gather of WORLD>2 [N] shards along the trailing axis = the [WORLD*N] concatenation (b1_tp2)",
            "embedding_shard": "EmbeddingShard_v1{VS,H,START}: one rank of VocabParallelEmbedding — shard[id-START] if START<=id<START+VS else 0 (b1_tp2)",
            "fp8_group_quant": "Fp8GroupQuant_v1{K,G}: _C.per_token_group_fp8_quant on one bf16 row -> (x_q e4m3[K], x_s f32[K/G]); per group absmax fmaxf-fold "
@@ -513,7 +513,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                              "HopperE4m3QgmmaDot32 steps, relu x weight summed per quad lane (the first two heads contracted), x the slot's scale",
            "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
                                  "-- slot i = i < len ? i : -1",
-           "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's sm_90 PTX reduction",
+           "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "dsa_kv_rope": "RoPEHeadGptJ_v2{D}: _fused_norm_rope_kernel's interleaved k_pe head",
            "dsa_q_rope": "RoPEHeadGptJ_v2{D}: _fused_q_kernel's interleaved q_pe head",
            "sparse_mla": "SparseMla_v1{T,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3's sparse MLA (_vllm_fa3_C.fwd, FLASH_ATTN_MLA_SPARSE) of one "

@@ -210,6 +210,45 @@ def test_export_shims_restore_torch_and_vllm() -> None:
     assert hooks.live() == live
 
 
+def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() -> None:
+    """A plain kernel object keeps the original scale object; the shim refreshes it after export swaps the module Parameter."""
+    torch = pytest.importorskip("torch")
+    from verity_vllm.program.frontend.export_compat import _expert_weight_scales_through_owner
+
+    class Experts:
+        def __init__(self, w1_scale, w2_scale) -> None:
+            self.w1_scale, self.w2_scale = w1_scale, w2_scale
+
+        def apply(self, x):
+            return x * self.w1_scale + self.w2_scale
+
+    class Layer(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.w13_weight_scale_inv = torch.nn.Parameter(torch.ones(4), requires_grad=False)
+            self.w2_weight_scale_inv = torch.nn.Parameter(torch.full((4,), 2.0), requires_grad=False)
+            experts = Experts(self.w13_weight_scale_inv, self.w2_weight_scale_inv)
+            self.quant_method = SimpleNamespace(moe_kernel=SimpleNamespace(experts=experts))
+
+        def forward(self, x):
+            return self.quant_method.moe_kernel.experts.apply(x)
+
+    layer = Layer()
+    inputs = (torch.ones(4),)
+    unshimmed = torch.export.export(layer, inputs, strict=False)
+    assert set(unshimmed.graph_signature.inputs_to_lifted_tensor_constants.values()) == {"lifted_tensor_0", "lifted_tensor_1"}
+    assert set(unshimmed.graph_signature.inputs_to_parameters.values()) == {"w13_weight_scale_inv", "w2_weight_scale_inv"}
+
+    h = hooks.Hooks()
+    _expert_weight_scales_through_owner(layer, layer.quant_method, h)
+    with h:
+        shimmed = torch.export.export(layer, inputs, strict=False)
+        assert not shimmed.graph_signature.inputs_to_lifted_tensor_constants
+        assert set(shimmed.graph_signature.inputs_to_parameters.values()) == {"w13_weight_scale_inv", "w2_weight_scale_inv"}
+    assert layer.quant_method.moe_kernel.experts.w1_scale is layer.w13_weight_scale_inv
+    assert layer.quant_method.moe_kernel.experts.w2_scale is layer.w2_weight_scale_inv
+
+
 def test_tp_group_override_restores_the_group() -> None:
     pytest.importorskip("vllm")
     from vllm.distributed import parallel_state as ps

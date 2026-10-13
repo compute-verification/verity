@@ -1,7 +1,7 @@
-"""GLM-5.3's H200 DSA observer folds.
+"""GLM-5.3's cc 9.0 DSA observer folds.
 
 The patterns in this module are deliberately the recorded vLLM d9105ea80,
-sm_90 specialisations.  They turn the two Triton fusion kernels, DeepGEMM's
+cc 9.0 specialisations.  They turn the two Triton fusion kernels, DeepGEMM's
 unobserved MQA launch, the short-row top-k and FA3 sparse MLA into the same
 Definitions used by the export frontend.
 """
@@ -14,10 +14,12 @@ from typing import Any
 
 from verity.ml.circuits.defs import bind
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import bound_args, is_row_major, op_name, target_of, triton_name, unsupported
-from verity_vllm.observe.fold.patterns.geometry import GeometryError
+from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_row_major
 from verity_vllm.observe.fold.patterns.kv_cache import kv_slots
+from verity_vllm.observe.fold.patterns.ops import bound_args, op_name, triton_name
+from verity_vllm.observe.fold.patterns.resolutions import unsupported
 from verity_vllm.observe.fold.patterns.rotary import _positions_ok
+from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.resolver import (
     Compute,
     Const,
@@ -138,7 +140,7 @@ class DsaNormRope:
             return None
         a, c = bound_args(node), node.enter.constexprs
         if node.enter.src_sha != NORM_SRC_SHA or node.enter.num_warps != 4 or node.enter.num_stages != 3:
-            return unsupported(node, "fused norm/RoPE source or launch geometry differs from the GLM-5.3 H200 pin",
+            return unsupported(node, "fused norm/RoPE source or launch geometry differs from the recorded GLM-5.3 pin",
                                src_sha=node.enter.src_sha, num_warps=node.enter.num_warps, num_stages=node.enter.num_stages)
         pins = {
             "Q_DIM": 2048, "Q_BLOCK_SIZE": 2048, "KV_DIM": 512, "KPE_HALF_ROT_DIM": 32,
@@ -148,7 +150,7 @@ class DsaNormRope:
         }
         bad = {k: (c.get(k), v) for k, v in pins.items() if c.get(k) != v}
         if bad:
-            return unsupported(node, "fused norm/RoPE constexprs differ from the GLM-5.3 H200 pin", mismatches=bad)
+            return unsupported(node, "fused norm/RoPE constexprs differ from the recorded GLM-5.3 pin", mismatches=bad)
         q, qo, qw = a.get("q_c_ptr"), a.get("q_c_out_ptr"), a.get("q_rms_norm_w_ptr")
         kv, kvw = a.get("kv_ptr"), a.get("kv_rms_norm_w_ptr")
         kpe, cs = a.get("kpe_ptr"), a.get("kpe_rope_cos_sin_cache_ptr")
@@ -199,7 +201,7 @@ class DsaNormRope:
             if not all(isinstance(v, ViewDesc) for v in (ik, iw, ib, ics, ikc, isc)):
                 return unsupported(node, "indexer-layer norm/RoPE pointers are not bound")
             if c.get("INDEX_K_DIM") != 128 or c.get("INDEX_K_BLOCK_SIZE") != 128 or c.get("INDEX_K_HALF_ROT_DIM") != 32:
-                return unsupported(node, "index-K dimensions differ from the GLM-5.3 H200 pin")
+                return unsupported(node, "index-K dimensions differ from the recorded GLM-5.3 pin")
             if ik.shape != (M, 128) or iw.shape != (128,) or ib.shape != (128,) or ics.rank != 2 or ics.shape[1] != 64:
                 return unsupported(node, "index-K inputs have the wrong shape", index_k=repr(ik), weight=repr(iw), bias=repr(ib), cs=repr(ics))
             try:
@@ -235,13 +237,13 @@ class DsaQ:
             return None
         a, c = bound_args(node), node.enter.constexprs
         if node.enter.src_sha != Q_SRC_SHA or node.enter.num_warps != 1 or node.enter.num_stages != 3:
-            return unsupported(node, "fused-q source or launch geometry differs from the GLM-5.3 H200 pin",
+            return unsupported(node, "fused-q source or launch geometry differs from the recorded GLM-5.3 pin",
                                src_sha=node.enter.src_sha, num_warps=node.enter.num_warps, num_stages=node.enter.num_stages)
         pins = {"NUM_Q_HEADS": 8, "Q_PE_HALF_ROT_DIM": 32, "QL_NOPE_DIM": 512, "QL_NOPE_BLOCK": 512,
                 "INDEX_ROPE_INTERLEAVE": True, "QUANTIZE_MQA": False}
         bad = {k: (c.get(k), v) for k, v in pins.items() if c.get(k) != v}
         if bad:
-            return unsupported(node, "fused-q constexprs differ from the GLM-5.3 H200 pin", mismatches=bad)
+            return unsupported(node, "fused-q constexprs differ from the recorded GLM-5.3 pin", mismatches=bad)
         q, qo, cs = a.get("q_pe_ptr"), a.get("q_pe_out_ptr"), a.get("q_pe_cos_sin_ptr")
         if not all(isinstance(v, ViewDesc) for v in (q, qo, cs)):
             return unsupported(node, "fused-q RoPE pointers are not bound")
@@ -264,7 +266,7 @@ class DsaQ:
             if not all(isinstance(v, ViewDesc) for v in (iq, ics, iw, iqo, iwo)):
                 return unsupported(node, "indexer-layer fused-q pointers are not bound")
             if c.get("NUM_INDEX_Q_HEADS") != 32 or c.get("INDEX_Q_HEAD_DIM") != 128 or c.get("INDEX_Q_HALF_ROT_DIM") != 32:
-                return unsupported(node, "index-Q dimensions differ from the GLM-5.3 H200 pin")
+                return unsupported(node, "index-Q dimensions differ from the recorded GLM-5.3 pin")
             if iq.shape != (M, 32, 128) or iw.shape != (M, 32) or iqo.shape != (M, 32, 128) or iwo.shape != (M, 32):
                 return unsupported(node, "index-Q views have the wrong shape", q=repr(iq), weights=repr(iw), q_out=repr(iqo), weights_out=repr(iwo))
             ss, hs = float(a.get("index_weights_softmax_scale")), float(a.get("index_weights_head_scale"))
@@ -386,7 +388,7 @@ class DsaIndexShare:
         }
         bad = {k: (c.get(k), v) for k, v in pins.items() if c.get(k) != v}
         if node.enter.src_sha != INDEX_SHARE_SRC_SHA or node.enter.num_warps != 8 or node.enter.num_stages != 3 or bad:
-            return unsupported(node, "IndexShare conversion source or launch geometry differs from the GLM-5.3 H200 pin",
+            return unsupported(node, "IndexShare conversion source or launch geometry differs from the recorded GLM-5.3 pin",
                                src_sha=node.enter.src_sha, num_warps=node.enter.num_warps, num_stages=node.enter.num_stages,
                                mismatches=bad)
         req, blocks, source, out, valid = (a.get(k) for k in
@@ -458,7 +460,7 @@ class DsaSparseMla:
         valid = [int(position) + 1 for _, position in ctx.start.rows]
         tp = target_of(ctx)[0]
         if int(tp.num_sms) != 132:
-            return unsupported(node, "GLM-5.3 sparse split heuristic is pinned to the H200's 132 SMs", num_sms=tp.num_sms)
+            return unsupported(node, "GLM-5.3 sparse split heuristic is pinned to the record target's 132-SM launch", num_sms=tp.num_sms)
         splits = launch_num_splits(valid, int(tp.num_sms), 2048, ns_arg)
         parts = []
         for i, ((req, position), n, ns) in enumerate(zip(ctx.start.rows, valid, splits)):
