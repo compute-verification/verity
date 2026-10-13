@@ -1261,14 +1261,19 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - its input ports must total the part's (`16·P(n)` bits a row port of `n` elements and `v`, `P(n) = 64·⌈8n/64⌉`) and
     its output ports 2048, compared before the verifier builds its net;
   - the net must be `Flock.RecResiduals`' builder of `rec_residuals.unit_circuit` on part `j`'s S, laid out as
-    `ir_lower.layout` lays it out, one 16-bit port per word.
+    `ir_lower.layout` lays it out, one 16-bit port per word;
+  - its computed rows must read each row-port element in all 128 bits or in none (`RecResiduals.partlyRead`), refused
+    by the first element read in part and how many of its bits are.
 
   So must a unit net whose name starts with `rec-opening/` (a part of R's opening, `rec_residuals.stage_opening`):
   - its name must be `rec-opening/m<m>-c<claims>-p<j>`, with a `fast100` schedule at `m` and `claims ≥ 1`;
   - the circuit must have one unit per VU (`units_per_vu = 1`), so each part is one copy of its unit, refused before
     the structure is computed;
   - the rest is a `rec-residuals/` part's (the claims bounded by the input bits, part `j`'s bits, the net), at the
-    opening's S (`Flock.RecOpening.structureOf`, `rec_algebra.structure` at an opening-only shape) and its row ports.
+    opening's S (`Flock.RecOpening.structureOf`, `rec_algebra.structure` at an opening-only shape) and its row ports;
+  - its computed rows must read each element of a claim's ring switch the part holds in all 128 bits
+    (`RecOpening.rsUnread`), refused by the first that is not and how many of its bits are, and each other element in
+    all 128 or in none (`RecResiduals.partlyRead`), refused as a `rec-residuals/` part is.
 
   Any other unit is not checked against a builder (D13, §17.1).
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only

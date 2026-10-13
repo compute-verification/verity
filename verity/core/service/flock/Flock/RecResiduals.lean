@@ -268,6 +268,30 @@ def unitLaid (S : RecOpen.GfS) (ns : List Nat) (nv : Nat) : Laid :=
   let r := (unitNet' S ns nv).run St.empty
   layout r.2 (Array.replicate ((portWords ns nv).foldl (· + ·) 0) 16) (Array.replicate RES_OUT_WORDS 16) r.1.toArray
 
+/-! ## Whole reads -/
+
+/-- The input columns the net's computed rows read: rows `min (inWords · WORD) constPos … constPos − 1`, in A and in B
+(the audit's `Rows.ofNet`). -/
+def readIns (g : Net) : Array Bool :=
+  let nIn := min (g.inWords * WORD) g.constPos
+  (List.range' nIn (g.constPos - nIn)).foldl
+    (fun rd r => (g.a.row r ++ g.b.row r).foldl (fun rd c => rd.setIfInBounds c true) rd)
+    (Array.replicate nIn false)
+
+/-- The input column of bit `q` of the row ports' elements, the ports of `ns` elements from column `k`, each
+`16 · portWordsOf n` columns (`unitNet'`'s `w`). -/
+def rowCol : List Nat → Nat → Nat → Nat
+  | [], k, _ => k
+  | n :: ns, k, q => if q < 128 * n then k + q else rowCol ns (k + 16 * portWordsOf n) (q - 128 * n)
+
+/-- How many of row-port element `q`'s 128 columns `rd` marks read. -/
+def readBits (rd : Array Bool) (ns : List Nat) (q : Nat) : Nat :=
+  ((List.range 128).filter fun b => rd.getD (rowCol ns 0 (128 * q + b)) false).length
+
+/-- The first row-port element some but not all of whose 128 columns are read, with how many are. -/
+def partlyRead (rd : Array Bool) (ns : List Nat) : Option (Nat × Nat) :=
+  ((List.range ns.sum).map fun q => (q, readBits rd ns q)).find? fun (_, k) => k != 0 && k != 128
+
 /-- Part `j` of the shape's algebra: its S, its row ports' elements and its v elements' number. -/
 def part (sh : Shape) (j : Nat) : Except String (RecOpen.GfS × List Nat × Nat) := do
   let S ← RecAlgebra.structureOf sh
@@ -288,9 +312,10 @@ def holoOf (c : Circuit) : V Bool :=
   | .ok _ => throw s!"circuit {c.name}: META {HOLO_KEY} is not a boolean"
 
 /-- A unit named `rec-residuals/…` is the verifier's part at the shape and part its name gives, holo when the statement
-says so (`holoOf`), equal in every field; any other unit passes. The shape is bounded by the file's unit before the
-structure is computed, and the part's input and output bits are compared before its net is built. Irreducible, so that no
-unification against it builds the net. -/
+says so (`holoOf`), equal in every field, and its computed rows read each row-port element in all 128 bits or in none
+(`partlyRead`); any other unit passes. The shape is bounded by the file's unit before the structure is computed, and the
+part's input and output bits are compared before its net is built. Irreducible, so that no unification against it builds
+the net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some (m, k, cl, j) =>
@@ -315,7 +340,10 @@ unification against it builds the net. -/
           else match netOf (unitName m k cl j) (unitLaid S ns nv) with
             | .error e => throw e
             | .ok g =>
-              if c.unit = g then pure ()
+              if c.unit = g then
+                match partlyRead (readIns g) ns with
+                | none => pure ()
+                | some (q, n) => throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of row-port element {q}'s 128 bits"
               else throw s!"circuit {c.name}: not the verifier's {kind} {c.unit.name} ({firstDiff c.unit g})"
   | none =>
     if c.unit.name.startsWith "rec-residuals/" then
