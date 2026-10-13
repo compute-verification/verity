@@ -374,8 +374,8 @@ def MhcPost(B, S, x, residual, post, comb):
 
 
 def _check_split(N: int, TH: int) -> None:
-    if not (TH > 0 and TH % 32 == 0 and N % TH == 0):
-        raise ValueError(f"mhc_fused: each thread takes N / TH elements, TH a whole number of warps (N={N}, TH={TH})")
+    if not (TH > 0 and (TH % 32 == 0 or 32 % TH == 0) and N % TH == 0):
+        raise ValueError(f"mhc_fused: each thread takes N / TH elements, TH whole warps or a power of two below 32 (N={N}, TH={TH})")
 
 
 def _sig_split(S, bf16=BF16, f32=F32):
@@ -403,8 +403,10 @@ def fused_split(o: D.Ops, S, x, residual, post, comb, fn):
                 for j in range(HC):
                     acc[oi][t] = o.fma(fn[oi][j][h], nr[h][j], acc[oi][t])
 
+    lanes = min(32, TH)
+
     def reduce(v):
-        return chain(o, [D.halving_tree(v[32 * w:32 * w + 32], o.add) for w in range(TH // 32)])
+        return chain(o, [D.halving_tree(v[lanes * w:lanes * w + lanes], o.add) for w in range(TH // lanes)])
     res = _grid([[o.bf16(nr[h][j]) for h in range(N)] for j in range(HC)])
     return tuple_of(res, stack([reduce(acc[oi]) for oi in range(OUT)]), reduce(sqr))
 
@@ -414,7 +416,8 @@ def MhcFusedSplit(B, S, x, residual, post, comb, fn):
     """One (token, split) of `mhc_fused_tilelang` (tilelang_kernels.py:531-612; TH threads, thread t elements h = TH it + t):
     the new residual `new_residual` at each element, stored as bf16; the f32 values themselves, unrounded, feed the thread's
     chains from +0, per element `sqr = fma(nr[j], nr[j], sqr)` over j, then `acc[o] = fma(fn[o][j][h], nr[j], acc[o])` over j for
-    each o; each sum a warp's halving tree, then the chain from +0 over the TH / 32 warps: (residual', yp, rp)."""
+    each o; each sum a warp's halving tree, then the chain from +0 over the TH / 32 warps: (residual', yp, rp).  A TH below 32 (a
+    power of two) is one partial warp, its halving tree over TH lanes."""
     return fused_split(word_ops(B), S, x, residual, post, comb, fn)
 
 

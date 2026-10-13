@@ -3,6 +3,9 @@
   "HopperTf32WgmmaDot8_v2": {
    "and": 5388
   },
+  "MhcPost_v2{HC=2,N=2}": {
+   "and": 34420
+  },
   "MhcSigmoid_v2": {
    "and": 15167
   }
