@@ -43,7 +43,8 @@ CURRENT = sorted(n for n, v in PROFILES.items() if n and v.kinds == PROFILES[DEF
 
 #: a representative value of every static a vocabulary role takes; an optional static is also tried at its default
 STATICS = dict(K=64, N=64, I=8, H=64, E=8, TOPK=2, VPT=8, T=4, NH=2, KVH=1, D=64, BN=128, EPS=1e-6, V=16, C=1.0, G=128, S=1, WORLD=4,
-               VS=8, START=0, NHEADS=2, W=32, BITS=0, CAP=50.0, MASKED_FROM=1, FA2_MASKED_FROM=1)
+               VS=8, START=0, NHEADS=2, W=32, BITS=0, CAP=50.0, MASKED_FROM=1, FA2_MASKED_FROM=1, RSF=2.5, KERNEL="block",
+               ROPE=32, DR=16, DV=16, SM_SCALE=0.0625)
 #: the statics that select among Definitions, at every registered value
 SELECTING = {"DOT": tuple(TG.DOTS.values()), "INV": (P.Fa2InvSum, Fa3InvSum), "SCALE": TargetProfile.FP8_SCALE_CONSTRUCTIONS,
              "CONSTRUCTION": TargetProfile.SAMPLER_CONSTRUCTIONS,

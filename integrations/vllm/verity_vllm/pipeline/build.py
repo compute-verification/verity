@@ -105,7 +105,8 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
                          "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
-                         "verity_vllm/program/frontend/rules/vllm_moe_fp8.py",
+                         "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
+                         "verity_vllm/program/frontend/rules/vllm_dsa.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
                          "verity_vllm/program/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)

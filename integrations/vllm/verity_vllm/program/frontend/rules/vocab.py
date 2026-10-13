@@ -14,6 +14,7 @@ from typing import Callable
 from verity.ml.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
+from verity_vllm.program.registry import dsa as _dsa, sparse_mla as _sparse_mla
 from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
@@ -412,7 +413,15 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
-           "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N)},
+           "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N),
+           # [GLM-5.3] DeepSeek sparse attention on the H200 (registry.dsa, registry.sparse_mla): the indexer's K slot and query, DeepGEMM's
+           # MQA logits, the top-k of a row of at most TOPK keys, and FA3's sparse MLA over the selected rows. `rules/vllm_dsa.py` asks for them.
+           "dsa_indexer_k_row": lambda D, ROPE, EPS: ir_bind(_dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=EPS),
+           "dsa_indexer_q": lambda H, D, ROPE: ir_bind(_dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
+           "dsa_mqa_logits": lambda N, H, D: ir_bind(_dsa.DsaMqaLogitsV3, N=N, H=H, D=D),
+           "dsa_topk_short_row": lambda TOPK: ir_bind(_dsa.DsaTopKShortRow, TOPK=TOPK),
+           "sparse_mla": lambda T, NH, DR, DV, BN, DOT, INV, SM_SCALE:
+               ir_bind(_sparse_mla.SparseMla, T=T, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -469,7 +478,18 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "layer_norm_aten": "LayerNormAten_v1{N,EPS}: aten.layer_norm on a bf16 row with bf16 weight and bias -- torch 2.13 "
                               "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
                               "bf16(w * (rstd * (x - mean)) + b)",
-           "layer_norm_aten_value": "LayerNormAten_v2{N}(x, w, b, eps): LayerNormAten_v1's body with eps an input"})
+           "layer_norm_aten_value": "LayerNormAten_v2{N}(x, w, b, eps): LayerNormAten_v1's body with eps an input",
+           "dsa_indexer_k_row": "DsaIndexerKRow_v1{D,ROPE,EPS}: one index-K cache slot of _fused_norm_rope_kernel -- f32 LayerNorm (w, b f32), "
+                                "the interleaved RoPE of the first ROPE elements, DsaUe8m0Quant_v1{D} -> (e4m3[D], f32 scale)",
+           "dsa_indexer_q": "DsaIndexerQ_v1{H,D,ROPE}: _fused_q_kernel's indexer outputs for one token -- per head the interleaved RoPE, "
+                            "DsaUe8m0Quant_v1{D} and the weight scale(q) * D^-0.5 * H^-0.5 -> (e4m3[H,D], f32[H])",
+           "dsa_mqa_logits": "DsaMqaLogits_v3{N,H,D}: DeepGEMM's sm90 fp8 MQA logits of one query over N index-K slots -- per head D/32 "
+                             "HopperE4m3QgmmaDot32 steps, relu x weight summed per quad lane (the first two heads contracted), x the slot's scale",
+           "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
+                                 "-- slot i = i < len ? i : -1",
+           "sparse_mla": "SparseMla_v1{T,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3's sparse MLA (_vllm_fa3_C.fwd, FLASH_ATTN_MLA_SPARSE) of one "
+                         "query token's NH heads over its T selected [kv_c | k_pe] rows -- the k16 wgmma chain over [q_rope | q_nope], "
+                         "AttnBlock_v4's online softmax over BN-key blocks last to first, AttentionHead_v4's epilogue"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:
