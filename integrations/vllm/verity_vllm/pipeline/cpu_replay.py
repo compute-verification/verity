@@ -156,6 +156,8 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
         src, raw = "bundle", np.fromfile(bundle / "weights" / "extra" / f"{i}.bin", dtype=np.uint8)
     else:
         src = "checkpoint"
+        if ck is None:
+            return src, None, "no checkpoint given", False
         try:
             words, _note = WR.compose(name, list(shape), WORDS[dt][0], ck, **({"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}))
         except (KeyError, ValueError) as e:
@@ -225,8 +227,9 @@ def _write(p: Path, text: str) -> None:
     os.replace(tmp, p)
 
 
-def of_record(b: dict[str, Any], out: Path) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any], Any, Any]:
-    """(runs.jsonl rows, the deferred run's row, verdict.json, store, run) once the bundle is shown to be this record's; else Refused."""
+def of_record(b: dict[str, Any], out: Path, *, awaiting: bool = True) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any], Any, Any]:
+    """(runs.jsonl rows, the deferred run's row, verdict.json, store, run) once the bundle is shown to be this record's; else Refused.
+    ``awaiting=False``: the run's record may be decided already (a reader of the bundle that decides nothing)."""
     ctx, bdir, pair = b["context"], Path(b["path"]), int(b["context"]["pair"])
     verdict = json.loads((out / "verdict.json").read_text())
     ent = next((x for x in ((verdict.get("replay_deferred") or {}).get("bundles") or []) if int(x["pair"]) == pair), None)
@@ -234,13 +237,16 @@ def of_record(b: dict[str, Any], out: Path) -> tuple[list[dict[str, Any]], dict[
         raise Refused(f"the Commit's verdict names no bundle of pair {pair} with manifest sha256 {b['manifest_sha256'][:16]}")
     rows = [json.loads(ln) for ln in (out / "runs.jsonl").read_text().splitlines() if ln.strip()]
     row = next((r for r in rows if r["pair"] == pair and r["arm"] != "control"), None)
-    if "keep" in b and row is not None and not RB.awaits_replay(row.get("commit") or {}):
+    if not awaiting:
+        if row is None:
+            raise Refused(f"pair {pair}: no instrumented run in {out / 'runs.jsonl'}")
+    elif "keep" in b and row is not None and not RB.awaits_replay(row.get("commit") or {}):
         done = next((x for x in ((verdict.get("replay_deferred") or {}).get("replayed") or [])
                      if int(x["pair"]) == pair and x.get("manifest_sha256") == b["manifest_sha256"]), None)
         if done is None:
             raise Refused(f"pair {pair}: the record was not decided by a replay of the bundle {b['manifest_sha256'][:16]} this keep was cut from")
         undecided(row["commit"], done["bundle"])
-    if row is None or not RB.awaits_replay(row.get("commit") or {}):
+    if awaiting and (row is None or not RB.awaits_replay(row.get("commit") or {})):
         raise Refused(f"pair {pair}: no instrumented run awaiting its deferred replay in {out / 'runs.jsonl'}")
     store, run = SD.load(bdir / "store")
     c = row["commit"]
