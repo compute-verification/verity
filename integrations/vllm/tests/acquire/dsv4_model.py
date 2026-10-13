@@ -16,7 +16,7 @@ rows and `_forward_decode`, and so `flash_mla_with_kvcache`, on the decode rows)
 `fused_inv_rope_fp8_quant` and `fp8_einsum`; wo_b is a tanh).  The indexer returns (None, None, None) on its short route, when the
 step's longest sequence has at most TOPK * CSA_R tokens, after its compressor and the top-k fill.  A compressor writes its state
 rows and, for each token whose position + 1 is a multiple of its ratio and whose slots are set, a compressed row, as the pinned
-kernels do; the caches are paged as vLLM's are (a padded block stride; a byte cache's block holds every slot's data bytes, then
+kernels do (and the step's compressed slots are set at exactly those tokens, as vLLM's are); the caches are paged as vLLM's are (a padded block stride; a byte cache's block holds every slot's data bytes, then
 every slot's scale bytes), and the step's per-cache metadata is the forward context's (`CONTEXT`, which `run_step` sets).
 Each module keeps what it computed (`seen`) for the tests to compare with what a source bound."""
 from __future__ import annotations
@@ -441,8 +441,12 @@ def metadata(*, decodes: int = 0, prefill_tokens: int = 0, max_seq_len: int = 64
 def step_metadata(model: torch.nn.Module, positions: torch.Tensor, skip: tuple[int, ...] = (),
                   unslotted: tuple[int, ...] = ()) -> dict[str, Any]:
     """The forward context's metadata of one step, per cache prefix (none for a layer in `skip`): the SWA slots, each compressor's
-    state slots (and on an HCA layer whether a position + 1 is a multiple of HCA_R) and its compressed cache's slots, -1 at the
-    tokens `unslotted`."""
+    state slots (and on an HCA layer whether a position + 1 is a multiple of HCA_R) and its compressed cache's slots, which are -1
+    wherever the token's position + 1 is not a multiple of the compressor's ratio, as the pinned vLLM's
+    `get_compressed_slot_mapping` gives them (v1/attention/backends/mla/compressor_utils.py:59-85), and -1 at the tokens
+    `unslotted` too.  The pinned vLLM gives every real token a state slot and every boundary token a compressed slot
+    (v1/worker/block_table.py:429-475 pads only past the step's tokens or a token another context-parallel rank holds), so
+    `unslotted` is a fault a test injects, not a step that vLLM serves."""
     p = positions.long()
     unset = torch.zeros(len(p), dtype=torch.bool)
     unset[list(unslotted)] = True
@@ -458,7 +462,8 @@ def step_metadata(model: torch.nn.Module, positions: torch.Tensor, skip: tuple[i
             bs = int(comp.state_cache.kv_cache.shape[1])
             boundary = bool(((p + 1) % HCA_R == 0).any()) if comp.compress_ratio == HCA_R else None
             out[comp.state_cache.prefix] = types.SimpleNamespace(slot_mapping=(5 * p + 1) % (NB * bs), block_size=bs, c128_boundary=boundary)
-            out[comp.k_cache_prefix] = types.SimpleNamespace(slot_mapping=torch.where(unset, -1, (7 * p + 5) % (NB * KV_BS)))
+            off = unset | ((p + 1) % comp.compress_ratio != 0)
+            out[comp.k_cache_prefix] = types.SimpleNamespace(slot_mapping=torch.where(off, -1, (7 * p + 5) % (NB * KV_BS)))
     return out
 
 
@@ -475,7 +480,7 @@ STEPS = [(metadata(decodes=4), ("decode-tokens", "hc-fused", "indexer-short"), "
 def run_step(model: torch.nn.Module, md: Any, first_position: int = 0, skip: tuple[int, ...] = (), unslotted: tuple[int, ...] = ()) -> None:
     """The model's forward on one step of `md.num_actual_tokens` tokens at positions from `first_position`; the layers in `skip`
     take a step without metadata (their attention runs no FlashMLA path, writes no cache, and their indexer takes no route), and
-    the tokens `unslotted` have no compressed slot."""
+    the tokens `unslotted` have no compressed slot (a fault: `step_metadata`)."""
     for i in range(L):
         a = model.model.layers[i].attn
         a.md = md if i not in skip else metadata()

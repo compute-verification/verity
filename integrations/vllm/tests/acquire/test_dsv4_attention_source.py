@@ -1,15 +1,16 @@
 """The DeepSeek-V4 attention source on CPU (`verity_vllm/acquire/sources/dsv4_attention_source.py`) against the DeepSeek-V4-Pro
 capture map: the stand-in of `tests/acquire/dsv4_model.py` runs the pinned vLLM's attention call structure (its methods, the
-call-time globals, the paged caches in their layouts, the compressors' masks) on a short decode, a scored decode, a prefill with a
-token that has no compressed slot, a mixed step and a decode that crosses no 128 boundary, on and off the target, and a real
-`NativeHostCommitter`, whose `_acquire` records a copy on CPU, commits what the source binds.
+call-time globals, the paged caches in their layouts, the compressors' masks and slots) on a short decode, a scored decode, a
+prefill, a mixed step and a decode that crosses no 128 boundary, on and off the target, and a real `NativeHostCommitter`, whose
+`_acquire` records a copy on CPU, commits what the source binds.
 
 It catches a name the map lists that a step does not bind, binds twice, or binds off its route or off the target; a value from the
 wrong call, layer, rows or cache layout (a padded paged cache's data and scale bytes regrouped per row); a compressed row of a token
 the kernels' mask skips; a global called outside a layer's forward; a layer attending at other positions than the first; a
 compressor whose ratio is not its row count's; a step the route source admits without its names; and the row-count rule: a step on
 which a compressor writes no row commits without that name, and one fails whose names, or whose source's record of the names it
-found empty, are not what its committed positions give."""
+found empty, are not what its committed positions give.  A boundary token with no compressed slot (`dsv4_model.step_metadata`'s
+`unslotted`) is a fault the test injects, which the pinned vLLM does not give."""
 from __future__ import annotations
 
 import sys
@@ -32,13 +33,15 @@ TAPS_ = [t for t in CMAP["taps"] if (t.get("commit") or {}).get("binder") == DS.
 #: committed name -> (role, layer)
 ROLE_OF = {CM.at_layer(t["commit"]["name"], i): (DS.role_of(t), i) for t in TAPS_ for i in CM.tap_layers(CMAP, t, ENV)}
 HCA = [i for i in range(L) if i not in CSA]
-#: (metadata, first position, tokens with no compressed slot, routes, phase)
-STEPS = [(metadata(decodes=4), 124, (), ("decode-tokens", "hc-fused", "indexer-short"), "decode"),
-         (metadata(decodes=4, max_seq_len=LONG), 252, (), ("decode-tokens", "hc-fused", "indexer-scored"), "decode"),
-         (metadata(prefill_tokens=20, max_seq_len=LONG), 108, (3,), ("hc-split", "indexer-scored", "prefill-tokens"), "prefill"),
-         (metadata(decodes=2, prefill_tokens=18, max_seq_len=LONG), 236, (),
+#: (metadata, first position, routes, phase)
+STEPS = [(metadata(decodes=4), 124, ("decode-tokens", "hc-fused", "indexer-short"), "decode"),
+         (metadata(decodes=4, max_seq_len=LONG), 252, ("decode-tokens", "hc-fused", "indexer-scored"), "decode"),
+         (metadata(prefill_tokens=20, max_seq_len=LONG), 108, ("hc-split", "indexer-scored", "prefill-tokens"), "prefill"),
+         (metadata(decodes=2, prefill_tokens=18, max_seq_len=LONG), 236,
           ("decode-tokens", "hc-split", "indexer-scored", "prefill-tokens"), "prefill"),
-         (metadata(decodes=4), 0, (), ("decode-tokens", "hc-fused", "indexer-short"), "decode")]
+         (metadata(decodes=4), 0, ("decode-tokens", "hc-fused", "indexer-short"), "decode")]
+#: the prefill at positions 108..127: five CSA rows (111, 115, ..., 127) and one HCA row (127)
+PREFILL = 2
 #: the step on which no HCA compressor writes a row (positions 0..3)
 NO_C128 = 4
 
@@ -120,8 +123,8 @@ def runs() -> dict[bool, AttnRun]:
     for target in (True, False):
         r = AttnRun(target)
         try:
-            for k, (md, first, unslotted, _routes, _phase) in enumerate(STEPS):
-                r.step(k, md, first, unslotted)
+            for k, (md, first, _routes, _phase) in enumerate(STEPS):
+                r.step(k, md, first)
         finally:
             r.close()
         out[target] = r
@@ -153,7 +156,7 @@ def test_every_step_binds_the_map_names_of_its_routes_once(runs, capsys):
     hca_rows = {f"model.layers.{i}.attn/compressed_rows" for i in HCA}
     for target, r in runs.items():
         assert r.attn.empty == {NO_C128: sorted(hca_rows, key=lambda n: int(n.split(".")[2]))}, target
-        for k, (_md, _first, _unslotted, routes, phase) in enumerate(STEPS):
+        for k, (_md, _first, routes, phase) in enumerate(STEPS):
             want = set(CM.committer_names(CMAP, ENV, phase=phase, routes=routes, rank=3, binders=(DS.BINDER,), on_target=target))
             assert Counter(r.names(k)) == Counter(want - set(r.attn.empty.get(k, ()))), (target, k)
             if target:
@@ -174,7 +177,7 @@ def test_each_bound_value_is_the_value_it_names(runs):
     r = runs[True]
     rows = {k: (r.bound(k, "model.layers.2.attn/compressed_rows").shape[0], r.bound(k, "model.layers.2.attn.indexer.k_cache/rows").shape[0],
                 r.bound(k, "model.layers.3.attn/compressed_rows").shape[0]) for k in range(NO_C128)}
-    assert rows == {0: (1, 1, 1), 1: (1, 1, 1), 2: (4, 4, 1), 3: (5, 5, 1)}, "the prefill's token 3 has no compressed slot"
+    assert rows == {0: (1, 1, 1), 1: (1, 1, 1), PREFILL: (5, 5, 1), 3: (5, 5, 1)}, "the prefill writes a CSA row at 111, 115, ..., 127"
     assert r.bound(2, "model.layers.2.attn/compressed_rows").shape[1] == SWAB and r.bound(2, "model.layers.2.attn.indexer.k_cache/rows").shape[1] == IKB
     swa = r.model.model.layers[5].attn.swa_cache_layer.kv_cache
     assert swa.stride(0) > swa.shape[1] * SWAB, "the stand-in's caches have a padded block stride"
@@ -210,8 +213,8 @@ def test_a_cache_in_another_layout_is_not_bound_and_the_step_fails_by_its_name(c
     r = AttnRun()
     try:
         r.model.model.layers[5].attn.swa_cache_layer.kv_cache = _paged(6, 16, SWAB, torch.float32)
-        md, first, unslotted, routes, phase = STEPS[0]
-        r.step(0, md, first, unslotted)
+        md, first, routes, phase = STEPS[0]
+        r.step(0, md, first)
         gone = "model.layers.5.attn.swa_cache_layer/rows"
         assert gone not in r.names(0) and r.attn.stats["layout_refused"] == 1
         got = r.check({0: map_names(capsys, routes, phase, binders=OTHERS) + r.names(0)})
@@ -245,7 +248,7 @@ def test_a_global_called_outside_every_layer_s_forward_fails_the_step():
 
 def committed(r: AttnRun, capsys) -> dict[int, list[str]]:
     """Each step's committed names: the other binders' names on its routes, then what the attention source bound."""
-    return {k: map_names(capsys, routes, phase, binders=OTHERS) + r.names(k) for k, (_md, _f, _u, routes, phase) in enumerate(STEPS)}
+    return {k: map_names(capsys, routes, phase, binders=OTHERS) + r.names(k) for k, (_md, _f, routes, phase) in enumerate(STEPS)}
 
 
 def test_an_hca_decode_step_with_no_compressed_row_commits_without_its_nc128_names(runs, capsys):
@@ -255,7 +258,7 @@ def test_an_hca_decode_step_with_no_compressed_row_commits_without_its_nc128_nam
     hca_rows = {f"model.layers.{i}.attn/compressed_rows" for i in HCA}
     positions = r.attn.positions[NO_C128]
     assert positions == (0, 1, 2, 3) and CM.row_counts(CMAP, ENV, positions) == {"NC4": 1, "NC128": 0}
-    _md, _f, _u, routes, phase = STEPS[NO_C128]
+    _md, _f, routes, phase = STEPS[NO_C128]
     assert r.src.empty_at(tuple(sorted(routes)), phase, positions) == hca_rows == set(r.attn.empty[NO_C128])
     steps = committed(r, capsys)
     assert not hca_rows & set(steps[NO_C128]) and hca_rows <= set(steps[0])
@@ -267,12 +270,12 @@ def test_an_hca_decode_step_with_no_compressed_row_commits_without_its_nc128_nam
 
 
 def test_a_step_the_source_found_empty_where_the_positions_give_rows_fails(capsys):
-    """A decode at positions 124..127 whose last token, the step's only 4 and 128 boundary, has no compressed slot: every
+    """A decode at positions 124..127 whose last token, the step's only 4 and 128 boundary, has no compressed slot (a fault): every
     compressor writes no row, so the source finds every compressed-rows name empty, while the committed positions give one row of
     each.  The identity check fails the step by the reason and by every such name."""
     r = AttnRun()
     try:
-        md, first, _u, routes, phase = STEPS[0]
+        md, first, routes, phase = STEPS[0]
         r.step(0, md, first, unslotted=(3,))
         rows = {f"model.layers.{i}.attn/compressed_rows" for i in range(L)} | {f"model.layers.{i}.attn.indexer.k_cache/rows" for i in CSA}
         assert set(r.attn.empty[0]) == rows and CM.row_counts(CMAP, ENV, r.attn.positions[0]) == {"NC4": 1, "NC128": 1}
