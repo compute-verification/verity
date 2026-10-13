@@ -21,9 +21,9 @@ Top-up policies, each over the same trace in the same engine (`--policies`):
             of every SM's CTA, launched by the filler's thread, that read while no model step is on the GPU and return
             once one is; `seq@0` is IDLE alone. `seq@N/P` adds a PREFILL kernel of P CTAs beside each step that
             prefills, reading until no such step is on the GPU
-  part      fill modes, with `--partition F`: fill-sk16/v2's BASE kernels on the filler's F SMs throughout (`part@N`: N
-            CTAs, default F, of `--part-warps` warps, two deep, `--part-budget` units each), and its IDLE kernels on
-            every SM while no model step is on the GPU, as seq@0's
+  part      fill modes, with `--partition F`: fill-sk16/v2's BASE kernels on the filler's F SMs throughout (`part@N/W`: N
+            CTAs, default (or 0) F, of W warps, default `--part-warps`, two deep, `--part-budget` units each), and its
+            IDLE kernels on every SM while no model step is on the GPU, as seq@0's
   gemm      no top-up thread: while the engine has no work, FP8 GEMMs at M = 16 over the pool and the buffer in 64 MiB
             slices, 4 a sync, until the next arrival (the reader a receipt bound to a PoUW tile needs, without its
             sketch; once a run, like none)
@@ -321,7 +321,7 @@ def main() -> int:
     for p in a.policies:
         top, _, enc = p.partition("+")
         top, _, at = top.partition("@")
-        if ((at and not at.replace("/", "", 1 if top == "seq" else 0).isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always", "step", "seq", "part")
+        if ((at and not at.replace("/", "", 1 if top in ("seq", "part") else 0).isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always", "step", "seq", "part")
                 or (enc and not enc.removeprefix("fused").isdigit())):
             ap.error(f"unknown policy {p}")
         if top == "part" and not a.partition:
@@ -638,14 +638,15 @@ def main() -> int:
             elif top == "part":
                 if mode not in FILL_WARPS:
                     continue
-                nbase = int(at) if at else green["fill_sms"]
-                sq.start(regions, RUN_SEED, base_ctas=nbase, warps=a.part_warps, base_budget=a.part_budget,
+                nbase = int(at) if at and int(at) else green["fill_sms"]
+                warps = int(pat) if pat else a.part_warps
+                sq.start(regions, RUN_SEED, base_ctas=nbase, warps=warps, base_budget=a.part_budget,
                          shift=a.seq_shift, priority=least, step_priority=least)
                 if sq.shape(0, a.seq_depth):
                     raise RuntimeError(f"sq_shape(0, {a.seq_depth}) refused")
                 tu.so.sq_idle(1, 0)
                 cur["seq_step"], cur["seq_prefill"] = 0, 0
-                cur["part"] = {"base_ctas": nbase, "warps": a.part_warps, "budget_units": a.part_budget}
+                cur["part"] = {"base_ctas": nbase, "warps": warps, "budget_units": a.part_budget}
                 if a.token_gate:
                     gate_ids = gate_tokens()
                     if not gate_ref:
