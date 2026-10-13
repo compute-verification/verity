@@ -786,6 +786,8 @@ theorem unitMsgs_lig_getD_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d
         unitMsgs_lig nX sh d' (b'.vals sh d')
           (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k) (k := k)
           (congrArg₂ (fun m kLog => m - 6 + 2 + (kLog - 6 + 2) + (2 + nX) + k) hm hkLog)]
+      change (ligMsgs (FlockVBridge.Family.proofOf sh b.params b.cap b.lig d).ligerito capDig b.sch)[k]? =
+        (ligMsgs (FlockVBridge.Family.proofOf sh b'.params b'.cap b'.lig d').ligerito capDig b'.sch)[k]?
       rw [← hsch]
       have hp := ligMsgs_proofOf_read sh (params := b.params) (params' := b'.params) (cap := b.cap)
         (cap' := b'.cap) (lig := b.lig) (lig' := b'.lig) (d := d) (d' := d') capDig b.sch hc
@@ -1061,7 +1063,7 @@ theorem msgsOfKeys_unit (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
   · have hkeys : KeysRead sh (M.rep R ω t Lb ρ) (M.rep R' ω' t' Lb' ρ) (zcKeys sh.m m) := by
       simpa [unitKeys, z, l, hz] using hread'
     exact unitMsgs_zc_read nX sh hM (by simpa [z, hm] using hz)
-      (by simpa only [Lb, Lb', ← hm] using hkeys)
+      (by simpa only [KeysRead, Lb, Lb', ← hm] using hkeys)
   by_cases hl : m < z + l
   · have hj : m - z < (b Lb ρ).st.kLog - 6 + 2 := by simp only [← hkLog]; omega
     have hi : (b Lb ρ).st.m - 6 + 2 + (m - z) = m := by simp only [← hm]; omega
@@ -1069,7 +1071,7 @@ theorem msgsOfKeys_unit (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
         (lcKeys sh.kLog (m - z)) := by
       simpa [unitKeys, z, l, hz, hl] using hread'
     simpa only [Lb, Lb', hi] using unitMsgs_lc_read nX hh hM hK hj
-      (by simpa only [Lb, Lb', ← hkLog] using hkeys)
+      (by simpa only [KeysRead, Lb, Lb', ← hkLog] using hkeys)
   by_cases hr : m < z + l + (2 + nX)
   · have hj : m - z - l < 2 + nX := by omega
     have hi : (b Lb ρ).st.m - 6 + 2 + ((b Lb ρ).st.kLog - 6 + 2) + (m - z - l) = m := by
@@ -1086,9 +1088,11 @@ theorem msgsOfKeys_unit (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
     have hkeys : KeysRead sh (M.rep R ω t Lb ρ) (M.rep R' ω' t' Lb' ρ)
         ((ligKeys sh.sched).getD (m - z - l - (2 + nX)) []) := by
       simpa [unitKeys, z, l, hz, hl, hr] using hread'
-    simpa only [Lb, Lb', hi] using unitMsgs_lig_getD_read nX sh hM hK hS
+    have hlig := unitMsgs_lig_getD_read nX sh hM hK hS
       (hcaps s ρ R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX) _
       (by simpa only [Lb, Lb', hsch] using hkeys)
+    rw [hi] at hlig
+    exact hlig
 
 /-- **Each message is read on its stage**, from its keys' read at the stage (`WCombRead` at `sentK`). -/
 theorem weaveMsgsRead_of_keys {σ : List Exec.Kind} {c₀ : ℕ} {keys : ℕ → List Flock.RecAlgebra.Key}
