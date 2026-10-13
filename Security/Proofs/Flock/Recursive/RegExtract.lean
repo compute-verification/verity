@@ -1,6 +1,7 @@
 import Proofs.Flock.Recursive.AuditC3
 import Proofs.Flock.Recursive.ForkInnerC
 import Proofs.Flock.C3.Fork.Sound
+import Proofs.Flock.C3.Fork.Extract
 
 /-!
 # Recursion: gap 2 at the word the prover's runs open (the knowledge form)
@@ -15,7 +16,7 @@ draw are the inner fork at round 0 (`forkG pick 0`, `StrictCR.twoRuns`).
 
 * `holo_runs_knowledge`: piece (a)'s runs (`holo_runs_sound`) with the clash split: two runs that clash against each
   other (`ClashRunHL`), a run that opens R's level 0 off the statement's word (`RegClash`), or the bound.
-* `zk_sessions_recursive_fork_reg`, **a stub** (`sorry`): `zk_sessions_recursive_fork_innerC` at `regStmt` and
+* `zk_sessions_recursive_fork_reg`: `zk_sessions_recursive_fork_innerC` at `regStmt` and
   `clashPickHL`, with candidate 3's runs (`holo_runs_knowledge` at `holoAt st hp`, from the class checks) in place of
   `InnerSoundForkOn`. Its proof is the extraction: `zk_sessions_recursive_fork_innerC`'s, with
   `innerAtLeavesL_of_forkOn`'s argument at each draw reading `holo_runs_knowledge`, where a leaf strategy's run that
@@ -75,7 +76,7 @@ open Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBi
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : Law n} {Reg Cm : Type}
 
-/-- **Gap 2 at the word the prover's runs open** (a stub: the extraction, a worker's).
+/-- **Gap 2 at the word the prover's runs open** (the extraction, `C3/Fork/Extract.lean`).
 `zk_sessions_recursive_fork_innerC` at candidate 3's inner protocol, at a statement whose class checks pass, with the hidden statement the word the
 prover's runs open at R's level 0 against `cap` at each draw (`regStmt`) and the pick `clashPickHL`, which reads only
 clashes of two runs: a registrant fork, a round fork, a session fork, an inner fork of `σ`'s own runs, or the bound
@@ -106,7 +107,8 @@ theorem zk_sessions_recursive_fork_reg {nT r : ℕ} (T : Fin nT → Type) (CT : 
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
           ((holoInnerAt T CT st hp).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
-          ENNReal.ofReal (holoError (holoAt st hp)) := by
-  sorry
+          ENNReal.ofReal (holoError (holoAt st hp)) :=
+  zk_sessions_recursive_fork_innerL _hA3 zs dg N _hk _hRw _hM _hρ _hr σ _ wmsg Sk cmt msg _hbr Refine.H512 _
+    (Nat.succ_pos r) (innerAtLeavesL_reg T CT hp _hcls zs dg N k Rw σ wmsg cap)
 
 end FlockSoundness.Discharge.Recursion
