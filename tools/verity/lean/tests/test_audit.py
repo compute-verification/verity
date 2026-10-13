@@ -245,6 +245,23 @@ def test_a_sorry_for_an_unreported_error_is_named_apart_from_a_written_one():
         "unreported: ../Proofs's Q.x hold")
 
 
+def test_a_declaration_the_olean_does_not_hold_is_dropped(tmp_path):
+    """Lean can drop a declaration with no error (PartRead at a1b479d26: the theorems after a `variable` using a local
+    notation are in no `.olean`), so no axiom shows it: the source's declaration lines are matched to the module's spans.
+    Keywords in comments, docstrings and strings, indented ones and `example` start none."""
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "Thms.lean").write_text(
+        "/-- A doc.\ntheorem in_doc : True := trivial -/\n@[simp] theorem kept : True :=\n  trivial\n"
+        "-- def in_comment\nexample : True := trivial\nprivate noncomputable def gone := 1\n"
+        "structure S where\n  def_like : Nat\ninstance : Inhabited S := ⟨⟨0⟩⟩\n")
+    files = {"P.Thms": "P/Thms.lean"}
+    held = {"P.Thms": [[1, 4], [8, 9]]}
+    (d,) = A.dropped(tmp_path, files, {"spans": held}, "../Proofs's ")
+    assert d.startswith("dropped: ../Proofs's P/Thms.lean:7 (def), P/Thms.lean:10 (instance) start a declaration")
+    assert A.dropped(tmp_path, files, {"spans": held | {"P.Thms": [[1, 4], [7, 7], [8, 10]]}}) == []
+    assert A.dropped(tmp_path, files, {}) == []
+
+
 def test_escapes_must_be_listed_and_listed_ones_must_exist():
     esc = [{"name": "P.loop", "module": "P.Defs", "why": ["opaque"]}]
     fails = A.judge(recorded(), facts(escapes=esc), FILES)[0]

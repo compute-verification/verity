@@ -15,6 +15,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  made for an error it did not report (`sorryAx _ true`): its module built with a warning only, and the
                  proofs it stands for never ran. `lean_changed.py --records` on a spec package audits no proving package
                  but reads each one's facts, so this fails its fast path as well, where `axioms` does not
+    dropped      a top-level declaration in an audited module's source (or a proving package's) is in no declaration
+                 range its `.olean` holds: Lean elaborated nothing there and reported nothing (a `variable` whose
+                 binders use a local notation over section variables can make it drop the declarations after it; so
+                 does `#exit`), so the build passed without them
     declared     an audited module declares an `axiom` (assumptions are named `Prop`s, taken as hypotheses)
     escapes      a declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`, `@[implemented_by]`,
                  `@[extern]`) is not listed in `escapes` with a reason, or a listed one no longer is one
@@ -882,6 +886,29 @@ def unreported(facts: dict, where: str = "") -> list[str]:
             f"notation or macro over section variables is one way; Lean warns only `declaration uses 'sorry'`)"]
 
 
+DECLARES = re.compile(r"(?:(?:@\[[^\]]*\]|private|protected|public|noncomputable|nonrec|partial|unsafe|meta)\s+)*"
+                      r"(theorem|lemma|def|abbrev|instance|opaque|axiom|structure|class|inductive)(?![\w'!?.])")
+
+
+def dropped(pkg: Path, files: dict[str, str], facts: dict, where: str = "") -> list[str]:
+    """The `dropped` failure of ``pkg``'s sources (``files``) against ``facts``' `spans`: each line of an audited module
+    that starts a declaration (`DECLARES`, at the first column) inside none of the declaration ranges its `.olean`
+    holds."""
+    spans, found = facts.get("spans", {}), []
+    for m, rel in sorted(files.items()):
+        if (held := spans.get(m)) is None or not (pkg / rel).is_file():
+            continue
+        for i, line in enumerate(strip_comments((pkg / rel).read_text(errors="replace")).split("\n"), 1):
+            if (k := DECLARES.match(line)) and not any(s <= i <= e for s, e in held):
+                found.append(f"{rel}:{i} ({k.group(1)})")
+    if not found:
+        return []
+    more = f" and {len(found) - 8} more" if len(found) > 8 else ""
+    return [f"dropped: {where}{', '.join(found[:8])}{more} start a declaration its module's `.olean` does not hold: Lean "
+            f"elaborated nothing there and reported nothing, so the build passed without it (a `variable` whose binders use "
+            f"a local notation over section variables can make Lean drop every declaration after it; so does `#exit`)"]
+
+
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None
           ) -> tuple[list[str], dict]:
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
@@ -1482,7 +1509,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                     hit := sorted({p["module"], *(r["module"] for r in p.get("reads", []))} & set(listed))):
                 fails.append(f"compile-time: {entry} lists {', '.join(hit)} under `compile_time`, where {n} is declared or "
                              f"read; move the compile-time code or the declarations to another module")
-        fails += unreported(qf, f"{entry}'s ")
+        fails += unreported(qf, f"{entry}'s ") + dropped(q, files, qf, f"{entry}'s ")
         sources.append((entry, qf, files))
         conflicts += qf.get("moved_conflicts", [])
     pins, more, by = assign(policy.get("guarantees", {}), sources)
@@ -1996,7 +2023,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             rep["failures"].append(f"lift: {e}")
         return rep
     fails, new = judge(current, facts, files, update, owner)
-    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current)) + shape(current, facts)
+    fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current)) + \
+        shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     s = time.monotonic()
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)

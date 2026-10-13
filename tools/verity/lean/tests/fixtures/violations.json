@@ -9,6 +9,11 @@
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
   "fails": "unreported: Control.unrun hold a `sorry` Lean made for an elaboration error it did not report"
  },
+ "dropped": {
+  "write": {"Control/Bad.lean": "namespace Control\n\ntheorem kept : True := trivial\n\n#exit\n\ntheorem never : 1 = 2 := rfl\n\nend Control\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "dropped: Control/Bad.lean:7 (theorem) start a declaration its module's `.olean` does not hold"
+ },
  "anonymous_instance": {
   "write": {"Control/Bad.lean": "instance : Inhabited (Fin 2) := ⟨0⟩\n"},
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
