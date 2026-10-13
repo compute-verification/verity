@@ -73,11 +73,4 @@ theorem coinArr_roundWords {st : Flock.Stmt} {hp : HoloParams} {L : List (HoloSt
   rw [dif_pos h]
   exact coinArr_coinWords ⟨a, ha.symm.trans (Sigma.ext e (cast_heq e _).symm).symm⟩
 
-#print axioms holoSizes
-#print axioms HoloCoinTys
-#print axioms nthTy_map
-#print axioms holoCTs_succ
-#print axioms coinArr_coinWords
-#print axioms coinArr_roundWords
-
 end FlockC3.Compose
