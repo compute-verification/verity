@@ -65,7 +65,14 @@ theorem log2ceil_two_pow (k : Nat) : log2ceil (2 ^ k) = k := by
   | succ k =>
     unfold log2ceil
     rw [if_neg (by have := Nat.two_pow_pos k; rw [Nat.pow_succ]; omega)]
-    rw [Nat.log2_pred_pow]
+    have hlog : Nat.log2 (2 ^ (k + 1) - 1) = k := by
+      apply (Nat.log2_eq_iff (by have := Nat.two_pow_pos k; rw [Nat.pow_succ]; omega)).2
+      constructor
+      · rw [Nat.pow_succ]
+        have := Nat.two_pow_pos k
+        omega
+      · omega
+    rw [hlog]
 
 theorem log2ceil_nextPow2 (n : Nat) : log2ceil (nextPow2 n) = log2ceil n := by
   exact log2ceil_two_pow (log2ceil n)
@@ -100,7 +107,7 @@ theorem root_eq (dom : ByteArray) (leaves : Array ByteArray) :
       (fun level depth => next dom depth level) (base dom leaves)).getD 0 ByteArray.empty =
       (lev dom leaves (log2ceil leaves.size))[0]!
   rw [show base dom leaves = lev dom leaves 0 by rfl, fold_eq]
-  rfl
+  rw [Nat.zero_add, getElem!_eq_getD]
 
 theorem get!_mem {a : Array ByteArray} {i : Nat} (h : i < a.size) : a[i]! ∈ a := by
   rw [getElem!_pos a i h]
@@ -265,10 +272,10 @@ theorem top_bind {dom : ByteArray} {bcs bcs' : Array ByteArray}
   have erow := cf _ (List.mem_append_left _ (row_mem hi)) _
     (List.mem_append_right _ (row_mem hi')) e
   have eleaf := Registered.leafIn_inj
-    (by rw [Sha512.hash_size, Sha512.hash_size]) erow
+    (by unfold Hm96.Default512.treeLeaf; rw [Sha512.hash_size, Sha512.hash_size]) erow
   have ehm := cf _ (List.mem_append_left _ (hm_mem hi)) _
     (List.mem_append_right _ (hm_mem hi')) eleaf
-  have ebc := ByteArray.append_right_inj Hm96.Default512.leafPrefix ehm
+  have ebc := (ByteArray.append_right_inj Hm96.Default512.leafPrefix).mp ehm
   rwa [getElem!_pos _ i hi, getElem!_pos _ i hi'] at ebc
 
 end TopRoot
