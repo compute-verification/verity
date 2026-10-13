@@ -77,7 +77,7 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
     | cases h
   · rename_i hsz
     obtain ⟨rr, hr, h⟩ := checkBind_ok h
-    obtain ⟨_, hloop, -⟩ := checkBind_ok h
+    have hloop := h
     have hall := forIn_each (fun a : String × Array (Nat × ByteArray) × Array SchedRound =>
         a.2.1.toList.map (·.1) = commitRounds a.2.2) (fun a r hb => by
           obtain ⟨s, cm, rs⟩ := a
