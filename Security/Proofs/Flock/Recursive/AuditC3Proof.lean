@@ -26,8 +26,9 @@ Candidate 3's table ignores the last round's coin, as its pick does (`schedInner
 gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerC`, which the stub's proof reads).
 
 `_hstk` is not read here: VBridgeC is a premise, and `_hstk` is what its discharge at the honest family takes as `htop`
-(`FlockC3.Compose.hbr_honest`, at `⟨_, _hstk⟩`, which gives VBridgeC at the checked sessions, so far at a fixed word,
-its decoder reading the last round from the layers in full); `vbridge_checked` and `vbridgeC_checked` carry VBridge and
+(`FlockC3.Compose.hbr_honest_reg`, at `⟨_, _hstk⟩`, which gives VBridgeC at the checked sessions and the word the runs
+open, `_hbr`'s form, from `hbr_honest` at a fixed word of R's cap, since candidate 3's table reads only the cap; its
+decoder reads the last round from the layers in full); `vbridge_checked` and `vbridgeC_checked` carry VBridge and
 VBridgeC from the typed sessions to the checked ones.
 
 (ii) is `RecursiveFirewallPrivate`.
@@ -151,7 +152,7 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
-  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _hstk ish Vs zr hCust _im _hIC
+  intro r CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _hstk ish Vs zr hCust _im _hIC
     bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
@@ -177,7 +178,7 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
       exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
-  rcases zk_sessions_recursive_fork_reg T CT hp (classOk_of_accepts hacc.acceptsStmt) hA3
+  rcases zk_sessions_recursive_fork_reg (Flock.Guarantees.holoTys st hp) CT hp (classOk_of_accepts hacc.acceptsStmt) hA3
     (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
       hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
@@ -192,7 +193,8 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
       (fun R ω t R₂ j => And.left (hCust R ω t R₂ j)) hT hF σ _
       (fun o => AcceptsV (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-        ¬ (holoInnerAt T CT st hp).holds (Flock.Guarantees.regStmt T CT st hp
+        ¬ (holoInnerAt (Flock.Guarantees.holoTys st hp) CT st hp).holds
+          (Flock.Guarantees.regStmt (Flock.Guarantees.holoTys st hp) CT st hp
           (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
             hCust hT) dg N k Rw wmsg
           (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
