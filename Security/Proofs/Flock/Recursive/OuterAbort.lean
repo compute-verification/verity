@@ -101,7 +101,7 @@ theorem coin_close_at (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flo
           + 2 * Fintype.card (LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
   by_cases hA : C.Admits c
   · simp only [outExe, simAll, hA, ite_true]
-    obtain ⟨h1, h2⟩ := zkViewAt_of_ok C hC hKey c hA
+    obtain ⟨h1, h2⟩ := zkViewAtReg_of_ok C hC hKey c hA
       (fun v => (Sum.inl (v 0) : (C.T c).tab.View ⊕ (C.T c).tab.Cut)) (fun _ => w) (fun _ => w0) (fun _ => hv)
       (fun _ => hreg) E
     have eR := ZK.prCoin_congr_equiv (Equiv.funUnique (Fin 1) ((C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt)))
@@ -210,7 +210,7 @@ theorem zkViewAtJS_of {J : ℕ} {C : Fin J → CoinedSetup} {δ₁ : ℝ≥0∞}
   have hs : ∀ p, sendsJ C c enc w stopped p = enc fun j => ((C j).T (c j)).viewExe (w j) (p j).1 (p j).2 :=
     sendsJ_honest hC hc hv hreg enc stopped
   simp only [hs]
-  exact h c hc enc w w0 hv hreg E
+  exact h c hc enc w w0 hv E
 
 /-! ## At every coin vector -/
 

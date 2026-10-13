@@ -24,6 +24,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # deploy installs research's pod tooling and reads its pods/nebius/deploy.toml, the environment files and units it names and the
-# keeper; its test reads the Slack registry for owners. What verity_ops imports of research is research's `exports`.
-inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/registry.json"]
+# keeper; its test reads the Slack registry for owners. What verity_ops imports of research is research's `exports`, and the
+# telemetry modules its run cancelling and classifying import.
+inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/registry.json",
+          "tools/research/src/research/telemetry/cancel.py", "tools/research/src/research/telemetry/classify.py",
+          "tools/research/src/research/telemetry/procs.py", "tools/research/src/research/telemetry/pyspy.py",
+          "tools/research/src/research/telemetry/run.py"]
 parallel = true

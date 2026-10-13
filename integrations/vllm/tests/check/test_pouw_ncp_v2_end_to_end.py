@@ -29,6 +29,7 @@ import random
 import numpy as np
 import pytest
 import torch
+from verity.core.protocols.pouw.circuit import anchors as CA
 from verity.core.protocols.pouw.circuit import plan as CPL
 from verity.core.protocols.pouw.circuit import reference as CR
 from verity.core.protocols.pouw.coins import Challenger
@@ -354,6 +355,17 @@ def test_the_honest_run_is_accepted(world):
     assert issues == []
     assert pw["proved_by_role"]["tile"] == 3 and set(pw["proved_by_role"]) == {"digest", "node", "key", "form_y", "form_x", "tile", "dequant"}
     assert pw["weights"] == 1 and pw["draw"]["domain"] == CPL.DRAW_DOMAIN and len(bytes.fromhex(pw["draw"]["source"])) == 32
+
+
+@pytest.mark.slow
+def test_a_second_window_of_the_salt_continues_its_forwards(world):
+    """A salt's windows share no call index (`CA.SaltWindows`): the run's calls, replayed as a second window of its salt,
+    are refused, since that window's forwards start after the first window's last one."""
+    windows = CA.SaltWindows(bytes.fromhex(world.commitment["salt"]))
+    first = RC.replay(world.records, world.commitment, 1, windows)
+    assert first["result"] is True and windows.next_forward == 1 + max(r.call.forward for r in world.records), first["why"]
+    second = RC.replay(world.records, world.commitment, 1, windows)
+    assert second["result"] is False and any("anchored forward is not the verifier's" in w for w in second["why"]), second["why"]
 
 
 def test_without_the_delegate_the_pouw_rows_are_named_unreplayable_never_evaluated(world):
