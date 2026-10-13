@@ -157,7 +157,7 @@ theorem rsKeys {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j 
     {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128} :
     RsKeys zs dg N k Rw sh w := by
   intro i _ gs s un j p hO S0 hS hg hpg S₁ ns nv hpart q e t he hwi b hb q' kk _ hkey
-  obtain ⟨-, hcol, -⟩ := openCopy_key hO hS hg hpg hpart he hb
+  obtain ⟨-, hcol, -⟩ := openCopy_key hO hS hg hpg hpart he hwi hb
   have hrc : rowCol (partRep ns nv).ports 0 (128 * q + b) = RecResiduals.rowCol ns 0 (128 * q + b) :=
     (FlockC3.Reps.ReadWhole.rowCol_eq ns 0 _).symm
   rw [FlockSoundness.Discharge.Layout.ofNet_nIn_eq, hrc] at hkey hcol
