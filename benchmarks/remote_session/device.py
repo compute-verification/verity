@@ -487,8 +487,10 @@ class Device:
         self.gen.manual_seed(seed)
         self.rng = np.random.default_rng(seed)
         self.salt_key = self.rng.bytes(32)
-        self.main_stream = torch.cuda.Stream()
-        self.open_stream = torch.cuda.Stream()
+        # A window's reconstructed subtrees must not take SMs from the pass whose root is on the deadline path.
+        # CUDA exposes two priorities on this device: the pass and its side tree are high, openings are low.
+        self.main_stream = torch.cuda.Stream(priority=-1)
+        self.open_stream = torch.cuda.Stream(priority=0)
         self.gates: dict = {}
         with torch.cuda.stream(self.main_stream):
             self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, self.gen,
