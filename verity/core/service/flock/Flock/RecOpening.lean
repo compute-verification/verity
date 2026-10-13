@@ -189,10 +189,26 @@ def part (sh : Shape) (j : Nat) : Except String (RecOpen.GfS × List Nat × Nat)
   let some (R, P, V) := gs[j]? | throw s!"part {j} of {gs.size}"
   pure (← RecResiduals.partS S sizes R P V, P.toList.map (sizes[·]!), V.size)
 
+/-- Part `j`'s w: the opening's w slots of its row ports' elements, in order (`RecResiduals.partS`' `wIdx`). -/
+def partW (sh : Shape) (j : Nat) : Except String (Array Nat) := do
+  let sizes := portSizes sh
+  let gs ← RecResiduals.groups (← structureOf sh) sizes
+  let some (_, P, _) := gs[j]? | throw s!"part {j} of {gs.size}"
+  let st := RecResiduals.starts sizes
+  pure (P.flatMap fun p => (Array.range sizes[p]!).map (st[p]! + ·))
+
+/-- The first element of a part's w (`W`, its slots in the opening's w) that is a claim's ring switch's (`.rs k u`) and
+not read in all 128 bits, with how many are. -/
+def rsUnread (sh : Shape) (W : Array Nat) (rd : Array Bool) (ns : List Nat) : Option (Nat × Nat) :=
+  ((List.range W.size).filterMap fun q => match ((wNames sh)[W[q]!]? : Option Key) with
+    | some (.rs _ _) => let n := RecResiduals.readBits rd ns q; if n != 128 then some (q, n) else none
+    | _ => none).head?
+
 /-- A unit named `rec-opening/…` is the verifier's part at the `m`, claims and part its name gives, equal in every
-field, at one unit per VU (each part is one copy of its unit); any other unit passes. The claims are bounded by the
-file's unit before the structure is computed, and the part's input and output bits are compared before its net is
-built. Irreducible, so that no unification against it builds the net. -/
+field, at one unit per VU (each part is one copy of its unit), and its computed rows read each element of a claim's ring
+switch it holds in all 128 bits (`rsUnread`); any other unit passes. The claims are bounded by the file's unit before the
+structure is computed, and the part's input and output bits are compared before its net is built. Irreducible, so that
+no unification against it builds the net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some (m, cl, j) =>
@@ -213,7 +229,13 @@ built. Irreducible, so that no unification against it builds the net. -/
           else match netOf (unitName m cl j) (RecResiduals.unitLaid S ns nv) with
             | .error e => throw e
             | .ok g =>
-              if c.unit = g then pure ()
+              if c.unit = g then
+                match partW sh j with
+                | .error e => throw s!"circuit {c.name}: unit {c.unit.name}: {e}"
+                | .ok W => match rsUnread sh W (RecResiduals.readIns g) ns with
+                  | none => pure ()
+                  | some (q, n) =>
+                    throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of ring-switch element {q}'s 128 bits"
               else throw s!"circuit {c.name}: not the verifier's {c.unit.name} ({firstDiff c.unit g})"
   | none =>
     if c.unit.name.startsWith "rec-opening/" then
