@@ -67,12 +67,12 @@ theorem planZHJ_get_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : 
 
 /-- **Zero knowledge at `J` `CoinedSetup`s, at `δ₁` per hidden leaf** (`ZkViewAt` at `J` tables): at any coin vector of
 each table that the honest prover doesn't refuse (`CoinedSetup.Admits`), for any encoding `enc` of the joint view and any
-event `E`, the real joint view at valid witnesses `w j` whose registered values are the public ones and the simulators' at
-any `w0 j`, each table's prover randomness independent, are within `Σ_j 2·|Hid_j|·δ₁`, both ways. -/
+event `E`, the real joint view at valid witnesses `w j` and the simulators' at any `w0 j`, each table's prover
+randomness independent, are within `Σ_j 2·|Hid_j|·δ₁`, both ways. -/
 def ZkViewAtJ {J : ℕ} (C : Fin J → CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
   ∀ (c : ∀ j, CoinsZK (C j).Rest), (∀ j, (C j).Admits (c j)) → ∀ {Out : Type}
     (enc : (∀ j, ((C j).T (c j)).tab.View) → Out) (w w0 : ∀ j, Witness (C j).S.m), (∀ j, (C j).Valid (w j)) →
-    ∀ (_hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg) (E : Out → Prop),
+    ∀ (E : Out → Prop),
     Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
         E (enc fun j => ((C j).T (c j)).viewExe (w j) (p j).1 (p j).2))
         ≤ Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.SimRand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
@@ -102,11 +102,14 @@ set_option maxRecDepth 8000 in
 set_option maxHeartbeats 4000000 in
 /-- **Zero knowledge at `J` `CoinedSetup`s from their facts**: Lemma B (`table_shvzk_hm96`) at each table, their leaves'
 hiding at any hm96 hiding bound `δ₁` (`hT1`), row (ii) `padOnto_M1`'s from `PadNonvanishing` (`ZK.padNonvanishing40`), composed over the tables' independent
-randomness (`prCoin_pi_close`). -/
+randomness (`prCoin_pi_close`), where every valid witness's registered values are the public ones (`hreg`,
+`coinedOf_reg`). -/
 theorem zkViewAtJ_of_ok {J : ℕ} (C : Fin J → CoinedSetup) (hC : ∀ j, CoinedOK execArith (fOf Zk.PAD_C) (C j))
+    (hreg : ∀ j c w, (C j).Valid w → ((C j).T c).tab.sReg w = ((C j).T c).tab.pubReg)
     {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ₁) :
     ZkViewAtJ C δ₁ := by
-  intro c hc Out enc w w0 hv hreg E
+  intro c hc Out enc w w0 hv E
+  have hreg := fun j => hreg j (c j) (w j) (hv j)
   have one : ∀ j (E' : ((C j).T (c j)).tab.View → Prop),
       Game.prCoin (fun p : ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
           E' (((C j).T (c j)).viewExe (w j) p.1 p.2))
@@ -153,6 +156,7 @@ theorem zk_session_viewH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ 
       ZkViewAt (coinedOf P (tablesAtZKH (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
   fun S R y => zkViewAt_of_ok _ (coinedOf_setup_of P _ y.x.st y.x.wf.1 (by rw [tablesAtZKH_eq dj y₀ S R y]; rfl)
     (maskSetup_of_setupHidden ((ZkExec.zkTags_typed I).trans ht) y.x.h) (hdm S y)).2.2.2.2.2
+    (coinedOf_reg P _ y.x.st y.x.wf.1 y.x.wf.2 (by rw [tablesAtZKH_eq dj y₀ S R y]; rfl) (setupHidden_whole y.x.h))
     (δ₁ := (2 : ℝ≥0∞) ^ (-193 : ℤ)) hKey
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is zero knowledge, at the coins it doesn't refuse**: at every
@@ -177,7 +181,9 @@ theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀
   fun S R ys => zkViewAtJ_of_ok _ (fun j => (coinedOf_setup_of P _ (ys j).x.st (ys j).x.wf.1
     (by rw [planZHJ_get_eq dj y₀ S R j (ys j)]; rfl)
     (maskSetup_of_setupHidden ((tagsAt_typed _ _ _).trans ((ZkExec.zkTags_typed I).trans ht)) (ys j).x.h)
-    (hdm S j (ys j))).2.2.2.2.2) hT1
+    (hdm S j (ys j))).2.2.2.2.2)
+    (fun j => coinedOf_reg P _ (ys j).x.st (ys j).x.wf.1 (ys j).x.wf.2 (by rw [planZHJ_get_eq dj y₀ S R j (ys j)]; rfl)
+      (setupHidden_whole (ys j).x.h)) hT1
 
 /-- **One hidden-output `--zk` sampled session of `J` tables, sound and zero knowledge**: `zk_session_soundHJ` and
 `zk_session_viewHJ` on the same plan `planZHJ dj y₀`.

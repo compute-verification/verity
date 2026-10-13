@@ -88,8 +88,8 @@ def _flip(rng: random.Random, b: bytes, lo: int = 0, hi: int | None = None) -> b
 
 def _message(rng: random.Random) -> bytes:
     if rng.random() < 0.3:
-        return lms.certificate_message(rng.randbytes(16), f"link{rng.randrange(9)}", rng.choice(lms.DIRECTIONS),
-                                       rng.randrange(1 << 20), rng.randbytes(64))
+        return lms.certificate_message(rng.randbytes(16), rng.randbytes(lms.SESSION_BYTES), f"link{rng.randrange(9)}",
+                                       rng.choice(lms.DIRECTIONS), rng.randrange(1 << 20), rng.randbytes(64))
     return rng.randbytes(rng.choice([0, 1, 31, 32, 64, 100]))
 
 

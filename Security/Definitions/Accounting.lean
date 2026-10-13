@@ -1,5 +1,8 @@
+import Definitions.Accounting.Memory
+import Definitions.Accounting.Bandwidth
 import Definitions.Accounting.Device
 import Definitions.Accounting.Joint
+import Definitions.Accounting.PerRun
 import Definitions.Accounting.Pouw
 import Definitions.Accounting.BandwidthAudit
 import Definitions.Accounting.Capacity
@@ -17,4 +20,5 @@ how PoUW's game, the bandwidth audit's game and a state-bounded capacity game re
 capacity audits, the rate audit's game with its embedding as a bandwidth audit whose rebuilds are charged as compute,
 with side sources that answer what the chip sent, and its sketch-then-hash variant for a device that reads sectors
 verbatim, with such side sources too, the tags and sketches the audits read, the generic-mix game of receipts bound
-to the matmul on two locations, and the deployed bound receipt's sketch as a two-party protocol. -/
+to the matmul on two locations, the deployed bound receipt's sketch as a two-party protocol, and what a run's guarantee
+per run is. -/
