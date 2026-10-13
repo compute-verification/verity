@@ -148,3 +148,12 @@ theorem vbridge_compiled (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
 end target
 
 end FlockVBridge.Compiled
+
+#print axioms FlockVBridge.Compiled.RepData
+#print axioms FlockVBridge.Compiled.AlgebraHolds
+#print axioms FlockVBridge.Compiled.AccHolds
+#print axioms FlockVBridge.Compiled.Accepted
+#print axioms FlockVBridge.Compiled.AlgebraDecodes
+#print axioms FlockVBridge.Compiled.AccChains
+#print axioms FlockVBridge.Compiled.StagesAccept
+#print axioms FlockVBridge.Compiled.vbridge_compiled

@@ -185,3 +185,18 @@ end RepMaps
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.natOfBits_congr
+#print axioms FlockC3.Reps.elems_congr
+#print axioms FlockC3.Reps.bytesAt_congr
+#print axioms FlockC3.Reps.levelOf_congr
+#print axioms FlockC3.Reps.openRow_ligOfRead_congr
+#print axioms FlockC3.Reps.colOf_mask
+#print axioms FlockC3.Reps.RepMaps.openCol
+#print axioms FlockC3.Reps.RepMaps.ligRead
+#print axioms FlockC3.Reps.RepMaps.OpenCols
+#print axioms FlockC3.Reps.RepMaps.rdOpen
+#print axioms FlockC3.Reps.RepMaps.openCol_mask
+#print axioms FlockC3.Reps.RepMaps.openRow_mask
+#print axioms FlockC3.Reps.RepMaps.srcOpensOfLayers
+#print axioms FlockC3.Reps.RepMaps.opensReadAt

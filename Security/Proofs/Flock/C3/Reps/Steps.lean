@@ -109,3 +109,12 @@ theorem stepsOfVals_of_woven {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → 
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.TapeAlong
+#print axioms FlockC3.Reps.tapeAlong_of_plays
+#print axioms FlockC3.Reps.Woven
+#print axioms FlockC3.Reps.Woven.steps
+#print axioms FlockC3.Reps.UnitWoven
+#print axioms FlockC3.Reps.unitSteps_of_woven
+#print axioms FlockC3.Reps.RepStepsWoven
+#print axioms FlockC3.Reps.stepsOfVals_of_woven

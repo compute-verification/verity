@@ -152,3 +152,15 @@ end RepMaps
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.recCheck
+#print axioms FlockC3.Reps.lt_nIn_of_params
+#print axioms FlockC3.Reps.copyVal_maskOf
+#print axioms FlockC3.Reps.posK_of_key
+#print axioms FlockC3.Reps.SelPort
+#print axioms FlockC3.Reps.RepMaps.OpenParams
+#print axioms FlockC3.Reps.RepMaps.openCols_of
+#print axioms FlockC3.Reps.RepMaps.RowKeys
+#print axioms FlockC3.Reps.RepMaps.RowSel
+#print axioms FlockC3.Reps.RepMaps.rowColsRead_of
+#print axioms FlockC3.Reps.RepMaps.rowColsRead_of_noCons

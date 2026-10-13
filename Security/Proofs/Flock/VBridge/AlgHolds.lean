@@ -334,3 +334,17 @@ end outer
 end Sessions
 
 end FlockVBridge.OfVStar
+
+#print axioms FlockVBridge.OfVStar.part_eq
+#print axioms FlockVBridge.OfVStar.wIdx_size
+#print axioms FlockVBridge.OfVStar.part_sizes
+#print axioms FlockVBridge.OfVStar.decode_part
+#print axioms FlockVBridge.OfVStar.decode_part_holo
+#print axioms FlockVBridge.OfVStar.algebraHolds_of_parts
+#print axioms FlockVBridge.OfVStar.ResZeroAt
+#print axioms FlockVBridge.OfVStar.partCols_of_resZeroAt
+#print axioms FlockVBridge.OfVStar.ResZeroAtH
+#print axioms FlockVBridge.OfVStar.partCols_of_resZeroAtH
+#print axioms FlockVBridge.OfVStar.algebraHolds_of_decode
+#print axioms FlockVBridge.OfVStar.algebraHolds_of_decodeH
+#print axioms FlockVBridge.OfVStar.algebraDecodes_of_decode

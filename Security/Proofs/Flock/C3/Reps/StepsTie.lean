@@ -138,3 +138,12 @@ theorem stepsOfVals_repsOfVals (hpr : ProofOfVals zs dg N k Rw sh rep vals)
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.unitWeave
+#print axioms FlockC3.Reps.tapeAlong_of_parts
+#print axioms FlockC3.Reps.RepWeaveAt
+#print axioms FlockC3.Reps.repStepsWoven_of_tie
+#print axioms FlockC3.Reps.repsOfVals
+#print axioms FlockC3.Reps.repWeaveAt_repsOfVals
+#print axioms FlockC3.Reps.hos_repsOfVals
+#print axioms FlockC3.Reps.stepsOfVals_repsOfVals

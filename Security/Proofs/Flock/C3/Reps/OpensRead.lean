@@ -143,3 +143,13 @@ theorem opensReadAt_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.maskOf_congr
+#print axioms FlockC3.Reps.readAgree_of_skLeaf
+#print axioms FlockC3.Reps.OpensOfLayers
+#print axioms FlockC3.Reps.SrcOpensOfLayers
+#print axioms FlockC3.Reps.openRow_vals
+#print axioms FlockC3.Reps.opensOfLayers_vals
+#print axioms FlockC3.Reps.opensReadAt_of_layers
+#print axioms FlockC3.Reps.opensReadAt_repsOfVals
+#print axioms FlockC3.Reps.opensReadAt_src

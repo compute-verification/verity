@@ -222,3 +222,23 @@ theorem repsMsgsRead_repsOfVals (hc : CapRead zs dg N k Rw stp own sel)
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.nCoins
+#print axioms FlockC3.Reps.cutOf_eq_groups
+#print axioms FlockC3.Reps.consHead_succ
+#print axioms FlockC3.Reps.consHead_zero
+#print axioms FlockC3.Reps.groups_append_lt
+#print axioms FlockC3.Reps.groups_append_succ
+#print axioms FlockC3.Reps.groups_append_coins
+#print axioms FlockC3.Reps.mark
+#print axioms FlockC3.Reps.nCoins_firstSteps
+#print axioms FlockC3.Reps.groups_firstSteps
+#print axioms FlockC3.Reps.repsTape
+#print axioms FlockC3.Reps.RoundsAgree
+#print axioms FlockC3.Reps.repsTape_round
+#print axioms FlockC3.Reps.repPart_eq
+#print axioms FlockC3.Reps.ReadAt
+#print axioms FlockC3.Reps.CapRead
+#print axioms FlockC3.Reps.TsRead
+#print axioms FlockC3.Reps.repsMsgsRead_of_read
+#print axioms FlockC3.Reps.repsMsgsRead_repsOfVals

@@ -135,3 +135,8 @@ theorem hStruct_of_checkH {c : Flock.Circuit} (hc : RecResiduals.check c = .ok (
     exact ⟨GS, gs, hGS, hgs⟩
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.algebraDecodes_of_decodeLH
+#print axioms FlockC3.Reps.algebraDecodes_of_decodeL
+#print axioms FlockC3.Reps.accChains_of_decodeL
+#print axioms FlockC3.Reps.hStruct_of_checkH

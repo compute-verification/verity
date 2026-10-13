@@ -252,3 +252,26 @@ end StackedMaps
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.RepMaps
+#print axioms FlockC3.Reps.RepMaps.q
+#print axioms FlockC3.Reps.RepMaps.nOpen
+#print axioms FlockC3.Reps.RepMaps.coef
+#print axioms FlockC3.Reps.RepMaps.ops
+#print axioms FlockC3.Reps.RepMaps.rep
+#print axioms FlockC3.Reps.RepMaps.coefsAre
+#print axioms FlockC3.Reps.RepMaps.consAre
+#print axioms FlockC3.Reps.RepMaps.algebraDecodes
+#print axioms FlockC3.Reps.RepMaps.accChains
+#print axioms FlockC3.Reps.RepMaps.ExtrasAt
+#print axioms FlockC3.Reps.RepMaps.CombFoldsAt
+#print axioms FlockC3.Reps.RepMaps.proofOfVals
+#print axioms FlockC3.Reps.homUnit
+#print axioms FlockC3.Reps.skel
+#print axioms FlockC3.Reps.map_skel
+#print axioms FlockC3.Reps.runAlpha
+#print axioms FlockC3.Reps.StackedMaps
+#print axioms FlockC3.Reps.StackedMaps.ops
+#print axioms FlockC3.Reps.StackedMaps.rows_size
+#print axioms FlockC3.Reps.StackedMaps.rows_get
+#print axioms FlockC3.Reps.StackedMaps.coef_eq

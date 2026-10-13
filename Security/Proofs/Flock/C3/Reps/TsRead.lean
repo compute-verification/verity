@@ -186,3 +186,18 @@ theorem formsRead_maps (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) {K :
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.LinReads
+#print axioms FlockC3.Reps.linEval_congr
+#print axioms FlockC3.Reps.valOf_cons
+#print axioms FlockC3.Reps.valOf_read
+#print axioms FlockC3.Reps.consAt_congr
+#print axioms FlockC3.Reps.colsAt
+#print axioms FlockC3.Reps.rows_congr
+#print axioms FlockC3.Reps.rep_w
+#print axioms FlockC3.Reps.rep_comb
+#print axioms FlockC3.Reps.rep_cons
+#print axioms FlockC3.Reps.WCombRead
+#print axioms FlockC3.Reps.RowColsRead
+#print axioms FlockC3.Reps.AlphaRead
+#print axioms FlockC3.Reps.formsRead_maps

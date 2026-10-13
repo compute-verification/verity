@@ -157,3 +157,8 @@ theorem framesOfVals_holo' {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Re
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.HoloFramed
+#print axioms FlockC3.Reps.unitFrames_holo
+#print axioms FlockC3.Reps.framesOfVals_holo
+#print axioms FlockC3.Reps.framesOfVals_holo'
