@@ -337,7 +337,6 @@ def main(a: Options) -> int:
     platform = prepare(target, a.tp)
     import torch
     import vllm
-    from vllm.model_executor.model_loader.utils import get_model_architecture
 
     from verity_vllm.program.frontend.export_compat import apply_target_profile, read_back_applied
 
@@ -348,6 +347,9 @@ def main(a: Options) -> int:
                            "env": target.env(), "tp": a.tp, "num_layers": a.num_layers, "max_model_len": a.max_model_len,
                            "kv_cache_dtype": a.kv_cache_dtype, "ranks": {}}
     with apply_target_profile(target):
+        # inside the target: vLLM's kernel modules read the device capability when imported (`kernels.oink_ops`)
+        from vllm.model_executor.model_loader.utils import get_model_architecture
+
         for r in a.ranks:
             model, cfg, secs = build(model_dir, target, tp=a.tp, rank=r, device_name=a.device_name,
                                      memory_gb=a.device_memory_gb, max_model_len=a.max_model_len,
