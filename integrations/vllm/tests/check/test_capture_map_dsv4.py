@@ -39,7 +39,6 @@ TP = CMAP["target"]["tensor_parallel_size"]
 ENV = CM.symbols(CMAP, CONFIG, TP)
 #: each `tonight` Program -> the branch of the row that writes its Definitions
 OWNERS = {
-    "cursor/dsv4-prep-8c79": {"marlin-mxfp4-moe"},
     "cursor/glm53-committed-ops-8c79": {"cublas-f32-out", "router-gemm"},
     "cursor/deepgemm-sm90-8c79": {"fp8-block-linear-deepgemm", "fp8-einsum-deepgemm"},
     "cursor/dsv4-flashmla-8c79": {"flashmla-sparse-decode"},
@@ -256,15 +255,15 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 38, "port": 6, "copy": 1, "committed-only": 27})
+        42, 28, {"exists": 5, "tonight": 36, "port": 8, "copy": 1, "committed-only": 27})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        63, 2538, {"exists": 125, "tonight": 1704, "port": 154, "copy": 1, "committed-only": 554}, 122)
+        63, 2538, {"exists": 125, "tonight": 1582, "port": 276, "copy": 1, "committed-only": 554}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        67, 2658, {"exists": 125, "tonight": 1734, "port": 184, "copy": 1, "committed-only": 614}, 242)
+        67, 2658, {"exists": 125, "tonight": 1612, "port": 306, "copy": 1, "committed-only": 614}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
-        62, 2414, {"exists": 125, "tonight": 1189, "port": 184, "copy": 1, "committed-only": 915}, 726)
+        62, 2414, {"exists": 125, "tonight": 1067, "port": 306, "copy": 1, "committed-only": 915}, 726)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        68, 2719, {"exists": 125, "tonight": 1250, "port": 184, "copy": 1, "committed-only": 1159}, 787)
+        68, 2719, {"exists": 125, "tonight": 1128, "port": 306, "copy": 1, "committed-only": 1159}, 787)
 
 
 def test_the_bound_tap_counts():
