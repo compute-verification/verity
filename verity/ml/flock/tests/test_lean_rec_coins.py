@@ -19,7 +19,6 @@ rows (`--rec-rows`); and check 5 on `rec-coins`' record of the inner session in 
 from __future__ import annotations
 
 import concurrent.futures as cf
-import fcntl
 import functools
 import hashlib
 import json
@@ -49,21 +48,6 @@ S2_R7 = "S2/R7: the session parameters are not the verifier's"
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
 
-def _once(factory, name: str, make) -> Path:
-    """The directory `make` fills, made once in the whole run: xdist's workers share their base directory's parent, and the
-    first to take the lock makes it while the others wait for it."""
-    root = factory.getbasetemp().parent if os.environ.get("PYTEST_XDIST_WORKER") else factory.getbasetemp()
-    d = root / f"rec-coins-{name}"
-    with open(f"{d}.lock", "w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        if not (d / "done").exists():
-            shutil.rmtree(d, ignore_errors=True)
-            d.mkdir()
-            make(d)
-            (d / "done").touch()
-    return d
-
-
 @pytest.fixture(scope="module")
 def built() -> None:
     assert (SET / "u" / "stage" / "circuit.txt").is_file(), (
@@ -72,7 +56,7 @@ def built() -> None:
 
 
 @pytest.fixture(scope="module")
-def forged(built, tmp_path_factory) -> Path:
+def forged(built, once) -> Path:
     """Level 3 staged with rep 0's opening 0 `coef` one bit off (bit 0 of its first word) where V* computes it, so its
     registration, the running sums and the prover's row all agree with it. The circuit, program and partition do not read
     the coefficients: they are the recorded level's."""
@@ -91,7 +75,7 @@ def forged(built, tmp_path_factory) -> Path:
                           algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
         assert res["levels"][f"L{LEVEL}"]["opened"] == res["levels"][f"L{LEVEL}"]["instances"] == 106
 
-    out = _once(tmp_path_factory, "forged", make) / f"L{LEVEL}"
+    out = once("rec-coins-forged", make) / f"L{LEVEL}"
     assert hashlib.sha512((out / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
     return out
 
@@ -151,7 +135,7 @@ def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | 
 
 
 @pytest.fixture(scope="module")
-def coins(built, tmp_path_factory) -> Path:
+def coins(built, once) -> Path:
     """`rec-coins`' record of what check 5 reads of the honest inner session, set up once from the inner statement."""
     u = SET / "u" / "stage"
 
@@ -161,7 +145,7 @@ def coins(built, tmp_path_factory) -> Path:
                             str(SET / "inner-honest" / "session")], capture_output=True, text=True, check=True)
         (d / "coins.json").write_text(p.stdout)
 
-    return _once(tmp_path_factory, "coins", make) / "coins.json"
+    return once("rec-coins-coins", make) / "coins.json"
 
 
 def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | Path | None, *extra: str,
@@ -251,27 +235,27 @@ def undrawn(tmp_path_factory) -> Path:
 
 
 @pytest.fixture(scope="module")
-def algebra(built, tmp_path_factory) -> Path:
+def algebra(built, once) -> Path:
     """V*'s algebra parts (`p<j>`) staged over the honest inner session."""
-    return _once(tmp_path_factory, "algebra", lambda d: _stage(d, levels=[], algebra=True, evaluate=False)) / "alg"
+    return once("rec-coins-algebra", lambda d: _stage(d, levels=[], algebra=True, evaluate=False)) / "alg"
 
 
 @pytest.fixture(scope="module")
-def comb(built, tmp_path_factory) -> Path:
+def comb(built, once) -> Path:
     """The algebra staged with rep 0's first comb element of v one bit off (`rec_vstage --forge comb`)."""
-    return _once(tmp_path_factory, "comb", lambda d: _stage(d, levels=[], algebra=True, evaluate=False, forge="comb")) / (
+    return once("rec-coins-comb", lambda d: _stage(d, levels=[], algebra=True, evaluate=False, forge="comb")) / (
         "forged-comb/alg")
 
 
 @pytest.fixture(scope="module")
-def salted(built, tmp_path_factory) -> Path:
+def salted(built, once) -> Path:
     """Level 3 and the algebra staged under another salt of the running sums' row 0 (`_salted`)."""
     def make(d):
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(S, "acc_salts", _salted)
             _stage(d, levels=[LEVEL], algebra=True, evaluate=False)
 
-    return _once(tmp_path_factory, "salted", make)
+    return once("rec-coins-salted", make)
 
 
 def _rec_rows(dst: Path, parts: list[Path]) -> Path:

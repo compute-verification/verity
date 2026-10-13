@@ -469,7 +469,6 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
         sch.ext (yrOf p sch.ext) (gOf stF.s) := by
   obtain ⟨hn7, h2, hl0, hc0, hl4, hcols, hext⟩ := hdim
   unfold Flock.ligerito at h
-  obtain ⟨hR, h⟩ := check_bind h
   obtain ⟨hcap, h⟩ := check_bind h
   obtain ⟨t₁, k₁, h⟩ := label_bind h
   obtain ⟨t₂, k₂, h⟩ := absorbF_bind h
