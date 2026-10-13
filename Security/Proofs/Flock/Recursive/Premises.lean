@@ -3,6 +3,7 @@ import Proofs.Flock.Recursive.Raw
 import Proofs.Flock.Soundness.Assumptions.Recursive
 import Proofs.Flock.Soundness.Assumptions.Zk
 import Proofs.Flock.Soundness.Assumptions.Inner
+import Proofs.Flock.Soundness.Assumptions.Registrant
 
 /-!
 # The premises the recursive audit's property takes
@@ -27,6 +28,9 @@ abbreviates, unchanged.
   sessions reads are the challenger's of the live session of its statement's `J` tables and the verifier's own draw, at every history (one premise
   over V*'s sessions as the prover supplies them, `ZkOuterR`, so the shape check reads its head; the property builds the
   typed sessions from them and it).
+* `RegistrantCovers` (`Assumptions.RegistrantCovers`): at each typing of each of V*'s sessions as the prover supplies
+  them, every row of a port the session's reads file names is a registered read of its record, the registrant's
+  openings no accepted run carries (one premise over `ZkOuterR`, as `RecordCustody`).
 * `InnerRecordCustody` (`live-verifier` at the inner session, `Assumptions.InnerRecordCustody`): the inner transcript
   and session record the coin server writes at each history hold that history's commitments and coins where a map of
   the rounds says they go (one premise over the writer `wr`, as the verifier holds what it writes).
@@ -85,6 +89,12 @@ abbrev RecordCustody {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') : Prop :=
   ∀ R ω t R₂ j, FlockSoundness.Assumptions.Zk.RecordCustodyZKJ (zr R ω t R₂ j).I (zr R ω t R₂ j).dj
     (fun _ _ => (Vs j).J) (zr R ω t R₂ j).wr (Vs j).nv
+
+/-- **The registrant's record covers the rows its reads file names**, at every one of V*'s sessions:
+`Assumptions.RegistrantCovers` at each session as the prover supplies it. -/
+abbrev RegistrantCovers {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
+    (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') : Prop :=
+  ∀ R ω t R₂ j, Flock.Assumptions.RegistrantCovers (zr R ω t R₂ j)
 
 /-- **live-verifier** at the inner session: `Assumptions.InnerRecordCustody`. -/
 abbrev InnerRecordCustody {Cm Coin : Type} (wr : List (Cm × Coin) → Lean.Json × String)

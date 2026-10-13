@@ -14,7 +14,8 @@ at every unit. At the checked family (`C3Family.checked`) the sessions' records 
 
 * `CoversAt`, `RowsCovered`: the record form, over `rd` and `own` alone, with no outcome, layer or transcript;
   `rowsRegisteredC3_of_covered` gives `RowsRegisteredC3` from it at every outcome, reached or not.
-* `RegistrantCovers`: the premise on the prover's sessions `zr`, the record form at each typing of each raw session.
+* `Flock.Premises.RegistrantCovers` (`Proofs.Flock.Recursive.Premises`): the premise on the prover's sessions `zr`, the
+  record form at each typing of each raw session.
 * `rowsCovered_checked`: `RowsCovered` at the checked family from `RegistrantCovers zr`; `keepOwn` and `ZkOuter.refuse`
   only narrow `own` to `freshOwn`, which names no port of the circuit (`fresh_not_named`).
 -/
@@ -29,19 +30,6 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL Floc
 of `rd`, at every unit. -/
 def CoversAt {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg') : Prop :=
   ∀ (u : Fin Q.nv) (q : Fin Q.c.ports.size), (∃ pt ∈ z.own, pt.name = Q.c.ports[q].name) → z.rd.isRead (.inl (u, q))
-
-/-- Premise, standing in for the one-run extraction of the registrant's openings: no accepted run carries them, since a `--zk` transcript holds a registered row's `b ‖ c` and path only, and
-`ReadsX.committed` asks for the row and salt under it. **The registrant's record covers the rows its reads file names.**
-At every history and registration, at each typing of V*'s session `j` as the prover supplies it, every row of a port the
-session's reads file `own` names is a registered read of the session's record `rd`, at every unit. The records are the
-inner session's prover's: it committed each round's rows and salts behind the firewall (each row's `b ‖ c` is the round's
-commitment the coin server records, `InnerRecordCustody`), and the registered roots and positions are the verifier's
-own (`own`, `--registered`). -/
-def RegistrantCovers {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
-    (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') : Prop :=
-  ∀ R ω t R₂ j ht S₀ d₀ y₀ hc hpub (u : Fin (Vs j).nv) (q : Fin (Vs j).c.ports.size),
-    (∃ pt ∈ (zr R ω t R₂ j).own, pt.name = (Vs j).c.ports[q].name) →
-      ((zr R ω t R₂ j).rd ht S₀ d₀ y₀ hc hpub).isRead (.inl (u, q))
 
 /-- `freshOwn c` names no port of `c`. -/
 theorem fresh_not_named {c : Flock.Circuit} (q : Fin c.ports.size) {pt : Flock.Registered.Port}
@@ -68,7 +56,7 @@ theorem coversAt_refuse {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg') : CoversAt 
   fun _ q ⟨_, hpt, hn⟩ => absurd hn (fresh_not_named q hpt)
 
 theorem coversAt_zsOf {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
-    {zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg'} (hcov : RegistrantCovers zr)
+    {zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg'} (hcov : Flock.Premises.RegistrantCovers zr)
     (hRec : ∀ R ω t R₂ j, RecordsLiveZKJ (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (fun _ _ => (Vs j).J)
       (zr R ω t R₂ j).wr) (h : Typed zr) (R : A) (ω : B) (t : C) (R₂ : D) (j : Fin S) :
     CoversAt (zsOf zr hRec h R ω t R₂ j) := by
@@ -118,7 +106,7 @@ theorem rowsCovered_checked (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss 
     (bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8)
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json)
-    (hcov : RegistrantCovers zr) :
+    (hcov : Flock.Premises.RegistrantCovers zr) :
     (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).RowsCovered :=
   fun R ω t R₂ j => by
     refine coversAt_keepOwn ?_
@@ -302,7 +290,7 @@ noncomputable def coveredR {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type
 theorem registrantCovers_coveredR {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') (hO : ∀ R ω t R₂ j, RegistrantOpens (zr R ω t R₂ j))
     (hN : ∀ j, NamesOnce (Vs j).c) (hL : ∀ R ω t R₂ j, LabelsSelf (zr R ω t R₂ j)) :
-    RegistrantCovers (coveredR zr hO hN hL) :=
+    Flock.Premises.RegistrantCovers (coveredR zr hO hN hL) :=
   fun R ω t R₂ j ht S₀ d₀ y₀ hc hpub u q hn =>
     And.intro ((hO R ω t R₂ j ht S₀ d₀ y₀ hc hpub).choose_spec u q hn).1 ⟨u, q, rfl, hn⟩
 
@@ -320,7 +308,8 @@ theorem registrantCovers_attained {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D
       S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     (hT : Typed zr) (dg : ByteArray → ByteArray) (N : ℕ) :
     ∃ zr' : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg',
-      RegistrantCovers zr' ∧ Flock.Premises.RecordCustody zr' ∧ (∀ R ω t R₂ j, TagsFound (zr' R ω t R₂ j).I) ∧
+      Flock.Premises.RegistrantCovers zr' ∧ Flock.Premises.RecordCustody zr' ∧
+      (∀ R ω t R₂ j, TagsFound (zr' R ω t R₂ j).I) ∧
       (∀ R ω t R₂ j S₀ (d₀ : Lean.Json)
         (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr' R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
         rateZ (ZkHidden.planZHJ (Reg := Reg') (zr' R ω t R₂ j).dj y₀ S' R') i k ≤ ρ) ∧

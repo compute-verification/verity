@@ -291,6 +291,8 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
       (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
+    -- the registrant's records cover the rows the sessions' reads files name
+    (_hRC : Flock.Premises.RegistrantCovers zr)
     -- the table's prefix in the inner transcript and the `b ‖ c` a round's commitment gives a value's row, and the
     -- custody of the inner session's records where the map says each round's commitment and coins go
     (tbl : String) (bc : Cm → String → Nat → List UInt8)
