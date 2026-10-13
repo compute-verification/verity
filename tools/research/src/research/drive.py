@@ -12,9 +12,10 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
    tip): `train.sh COMMIT MACHINE`, with `--agreement` when the train changes a `lean-audit.json` (the lander's rule; train.sh
    itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run.
 
-What it refuses goes to the lander in the merge thread, once per commit or head: a failed check, a conflict, a check that ran
-and passed but lacks a step the gate needs, a launch that registered no run.  The lander ejects the PR that broke it
-(`research queue eject`), and the next sync rebuilds `next` without it.
+What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns: a failed
+check, a conflict, a check that ran and passed but lacks a step the gate needs, a launch that registered no run.  A failed
+check whose failing tests' files and tracebacks only one PR of the train changes (`implicated`) ejects that PR itself
+(`research queue eject`, by `ci`); otherwise `@ci` ejects the PR that broke it.  The next sync rebuilds `next` without it.
 
 `--shadow` drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
@@ -33,9 +34,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .queue import IDENTITY, Member, Queue, _git, _out
+from .queue import IDENTITY, Member, Queue, QueueError, _git, _out
 
-LANDER = "@old-circuits-and-proofs"
+#: who hears what drive can't settle (13 Oct: the other Project's lander, its addressee before, acts on none of it)
+CI = "@ci"
+#: a pytest location (`tests/test_x.py:503: NameError`) or a traceback frame (`File "/.../x.py", line 12`) in a suite's log
+TRACE_RE = re.compile(r'^\s*([\w./+-]+\.py):\d+:|File "([^"]+\.py)", line \d+', re.M)
 #: states `research status` reports for a run that may still publish an attempt
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: after a launched run ends, how long its attempt may take to reach the store before the launch counts as lost
@@ -155,7 +159,7 @@ def cancel_runs(repo: Path, ids: list[str], reason: str) -> None:
                        capture_output=True, text=True)
 
 
-def merge_thread_post(text: str, to: tuple[str, ...] = (LANDER,)) -> bool:
+def merge_thread_post(text: str, to: tuple[str, ...] = (CI,)) -> bool:
     r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", "ci", "--thread", _merge_thread(), "--to", *to,
                         "--quiet", "--text", text], capture_output=True, text=True)
     return r.returncode == 0
@@ -176,16 +180,90 @@ def _utc(ts: str | None) -> float | None:
         return None
 
 
+
+def _docs(run_dir: Path, *names: str) -> list[dict]:
+    out = []
+    for name in names:
+        try:
+            doc = json.loads((run_dir / name).read_text())
+        except (OSError, ValueError):
+            continue
+        out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else []
+    return out
+
+
+def failed_suites(run_dir: Path) -> list[dict]:
+    """Each failed suite's record: from `suites.json` and `suites-lean.json` once the check ended, else from what it has written
+    of its failures so far (`PROGRESS`)."""
+    done = [s for s in _docs(run_dir, "suites.json", "suites-lean.json") if s.get("status") == "failed"]
+    return done or _docs(run_dir, *PROGRESS[1:])
+
+
+def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
+    also = [x for n in names for x in ("--also", n)]
+    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
+    try:
+        return Path(json.loads(r.stdout)["runs"][0]["dir"])
+    except (ValueError, KeyError, IndexError, TypeError):
+        return None
+
+
+def evidence(repo: Path, ids: list[str]) -> list[Path]:
+    """The local run dirs of ``ids`` with their steps, suite reports and failed suites' logs fetched (`research status --also`)."""
+    dirs = []
+    for rid in ids:
+        if (d := _fetch(repo, rid, [*PROGRESS, "suites.json", "suites-lean.json"])) is None:
+            continue
+        if logs := [f"suites/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log")]:
+            _fetch(repo, rid, logs)
+        dirs.append(d)
+    return dirs
+
+
+def implicated(run_dir: Path) -> set[str] | None:
+    """The paths a failed check's failure points at: each failed suite's failing test files and the files its log's tracebacks
+    name (relative to the repository, or absolute as the log wrote them); None when a step other than the suites failed, or a
+    failed suite names no failing test (a timeout, a kill), so no file says what broke it."""
+    steps = []
+    with contextlib.suppress(OSError):
+        for line in (run_dir / PROGRESS[0]).read_text().splitlines():
+            with contextlib.suppress(ValueError):
+                if (rec := json.loads(line)).get("status") == "failed":
+                    steps.append(rec.get("step"))
+    suites = failed_suites(run_dir)
+    if not suites or any(st not in ("pytest", "lean-suites") for st in steps):
+        return None
+    paths: set[str] = set()
+    for s in suites:
+        base, tests = s.get("suite") or "", s.get("failed_tests") or []
+        if not tests:
+            return None
+        paths |= {os.path.normpath(os.path.join(base, t.split("::")[0])) for t in tests}
+        if s.get("log"):
+            with contextlib.suppress(OSError):
+                for m in TRACE_RE.finditer((run_dir / "suites" / Path(s["log"]).name).read_text(errors="replace")):
+                    p = m[1] or m[2]
+                    paths.add(p if p.startswith("/") else os.path.normpath(os.path.join(base, p)))
+    return paths
+
+
+def touches(files: set[str], paths: set[str]) -> set[str]:
+    """The ``files`` (repository paths) among ``paths``, an absolute path matching the file it ends in when that file is under a
+    directory (a bare `conftest.py` would match every conftest an installed package has)."""
+    return {f for f in files for p in paths if p == f or ("/" in f and p.startswith("/") and p.endswith("/" + f))}
+
+
 class Driver:
     def __init__(self, q: Queue, *, on: str, max_running: int = 2, train_size: int = 4,
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
-                 now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs):
+                 now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs,
+                 evidence: Callable[[Path, list[str]], list[Path]] = evidence):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
-        self.launch, self.states, self.post, self.now, self.cancel = launch, states, post, now, cancel
-        self.repo, self.dry_run, self._seen = q.workdir, False, {}
+        self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
+        self.repo, self.dry_run, self._seen, self._prs = q.workdir, False, {}, None
 
     # -- what the store says of a commit
 
@@ -342,12 +420,12 @@ class Driver:
 
     # -- refusals
 
-    def refuse(self, drive: dict, key: str, text: str, handle: str | None = None) -> None:
-        """Tell the lander once per key, and ``handle``, the PR's owning lane, beside it so the owner hears without a relay;
-        with --shadow or --dry-run, only log it."""
+    def refuse(self, drive: dict, key: str, text: str, *handles: str | None) -> None:
+        """Tell `CI` once per key, and ``handles``, the owning lanes of the PRs it concerns, beside it so each owner hears
+        without a relay; with --shadow or --dry-run, only log it."""
         if key in drive["told"]:
             return
-        to = (LANDER, *([f"@{handle}"] if handle and f"@{handle}" != LANDER else []))
+        to = tuple(dict.fromkeys((CI, *(f"@{h}" for h in handles if h))))
         if self.q.shadow or self.dry_run:
             self.q.log(f"research queue drive: would tell {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
             return
@@ -355,17 +433,54 @@ class Driver:
             drive["told"].append(key)
         self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
 
+    def _handle(self, pr: int) -> str | None:
+        if self._prs is None:
+            self._prs = {p.number: p for p in self.q.github.open_prs()}
+        return self.q.handle(self._prs[pr]) if pr in self._prs else None
+
+    def culprit(self, members: list[Member], v: Verdict) -> tuple[Member | None, list[Member], str]:
+        """The one member of a failed train whose own change (its merge commit against the one below) touches a file the
+        failure points at (`implicated`), else None; with the members that touch one, and what the failure points at."""
+        found: set[str] = set()
+        for d in self.evidence(self.repo, v.attempt.split()):
+            if (paths := implicated(d)) is None:
+                return None, [], "a failure no test file accounts for"
+            found |= paths
+        if not found:
+            return None, [], "no failed suite's report"
+        hits = [(x, touches(changed(self.repo, f"{x.commit}^1", x.commit), found)) for x in members]
+        hits = [(x, t) for x, t in hits if t]
+        what = ", ".join(sorted({f for _, t in hits for f in t})) or ", ".join(sorted(found)[:4])
+        return (hits[0][0] if len(hits) == 1 else None), [x for x, _ in hits], what
+
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
-        prs = " ".join(f"#{x.pr}" for x in members)
-        self.refuse(drive, f"failed:{m.commit}", f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}. "
-                                                "Eject the PR that broke it (`research queue eject N --reason ...`); "
-                                                "the next sync rebuilds without it")
+        key, prs = f"failed:{m.commit}", " ".join(f"#{x.pr}" for x in members)
+        if key in drive["told"]:
+            return
+        head = f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}"
+        pick, hit, what = self.culprit(members, v)
+        why = (f"{len(hit)} PRs ({' '.join(f'#{x.pr}' for x in hit)}) touch {what}" if hit else f"no PR's change is in {what}")
+        if pick is not None:
+            reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which only #{pick.pr} changes"
+            if self.q.shadow or self.dry_run:
+                self.q.log(f"research queue drive: would eject #{pick.pr}: {reason}")
+            else:
+                try:
+                    self.q.eject(pick.pr, reason, "ci")
+                except QueueError as e:
+                    pick, why = None, f"only #{pick.pr} touches {what}, but ejecting it failed: {e}"
+        if pick is not None:
+            self.refuse(drive, key, f"{head}. Ejected #{pick.pr}: its change is the only one in {what}; the next sync rebuilds "
+                                    f"without it. Fix it and re-mark it", self._handle(pick.pr))
+            return
+        self.refuse(drive, key, f"{head}. Not ejected: {why}. Eject the PR that broke it (`research queue eject N --reason ...`); "
+                                "the next sync rebuilds without it", *(self._handle(x.pr) for x in hit))
 
     # -- the tick
 
     def tick(self, dry_run: bool = False) -> str:
         q = self.q
-        self.dry_run, self._seen = dry_run, {}
+        self.dry_run, self._seen, self._prs = dry_run, {}, None
         q._clone()
         q.fetch()
         if q.store is not None and q.store.remote is not None:
@@ -449,6 +564,7 @@ class Driver:
             what.append(f"launched {' '.join(ids)}")
             running += 1
         if not dry_run:
+            state["ejected"] = {**state.get("ejected", {}), **q.load_state().get("ejected", {})}   # what `failed` ejected since
             q.save_state(state)
         q.log(f"research queue drive: {'; '.join(what) or 'nothing queued'}")
         return "; ".join(what) or "idle"

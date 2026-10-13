@@ -1287,7 +1287,7 @@ def cmd_status(argv: list[str]) -> int:
             return 1
     if ns.refresh or one:
         for s in [R.summarize(one)] if one else R.list_runs(root):
-            if s.get("remote_rec") and s["state"] not in R.TERMINAL and (s["remote_rec"].get("remote_run_dir")):
+            if s.get("remote_rec") and (s["state"] not in R.TERMINAL or (one and ns.also)) and (s["remote_rec"].get("remote_run_dir")):
                 try:
                     remote.fetch(Path(s["dir"]), also=tuple(ns.also) if one else ())
                 except remote.Refused as e:

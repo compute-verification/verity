@@ -1816,9 +1816,10 @@ def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
 
 def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = ()) -> dict[str, Any]:
     """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
-    records (plain names: the workload's own small progress files).  Unreachable -> observed_utc unchanged, reason recorded."""
-    if bad := [n for n in also if not n or "/" in n or n.startswith(".")]:
-        raise Refused(f"--also takes plain file names in the run dir, not {', '.join(map(repr, bad))}")
+    records (paths under the run dir: the workload's own small progress files and logs).  Unreachable -> observed_utc
+    unchanged, reason recorded."""
+    if bad := [n for n in also if not n or n.startswith("/") or any(p in ("", "..") or p.startswith(".") for p in n.split("/"))]:
+        raise Refused(f"--also takes paths of files under the run dir, not {', '.join(map(repr, bad))}")
     rec = _read_json(local_dir / "remote.json")
     if not rec or not rec.get("remote_run_dir"):
         raise Refused(f"{local_dir} is not a launched remote run")
