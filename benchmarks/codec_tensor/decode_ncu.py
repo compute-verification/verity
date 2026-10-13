@@ -85,7 +85,7 @@ def main() -> int:
     cmd = [ncu, "--clock-control", "none", "--import-source", "no", "-k", "regex:fused_kernel|decode_kernel", "-f",
            "-o", str(rep)] + [x for sec in SECTIONS for x in ("--section", sec)] + [
         sys.executable, __file__, "--child"] + [f"--{k.replace('_', '-')}={v}" for k, v in vars(a).items()
-                                                 if k not in ("child", "out")]
+                                                 if k != "child"]
     p = subprocess.run(cmd, capture_output=True, text=True, check=False)
     (out / "decode-ncu.log").write_text(p.stdout + "\n--- stderr ---\n" + p.stderr)
     if p.returncode != 0:
