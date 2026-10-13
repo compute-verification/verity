@@ -4,7 +4,7 @@ import Flock.RecVStar
 # Candidate 3's inner schedule, and where its transcript holds each fixed value
 
 Mirrors of `rec_live`'s schedule of candidate 3's inner session (`schedule_for` with `holo`, `sparse` and `stacked`),
-which the guarantee's fixed record map (`InnerRecordMap`'s `sel` and `selC`) is to read:
+which the guarantee's record map (`holoMap`, `Recursive/HoloMap.lean`) reads:
 * a rep's rounds with hidden unit circuits (`holoRounds`, `rec_live.holo_rounds`), a rep's sparse phase's
   (`sparseRounds`, `rec_live.sparse_rounds`) and R's (`RecVStar.stackedRounds`), and the session's streams in
   `schedule_for`'s order (`holoStreams`);
