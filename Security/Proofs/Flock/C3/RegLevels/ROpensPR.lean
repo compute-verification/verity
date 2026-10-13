@@ -252,8 +252,9 @@ theorem stackedParams_of_checked {xR : HoloReg GF128 Dig} (F : C3Family T CT st 
     {r : Flock.RecVStar.StackedShape} (hr : F.ish.stacked = some r) {shR : Flock.Shape} (hm : shR.m = r.m)
     (hf : Flock.fast100 shR.m = some shR.sched)
     (hck : ∀ ℓ < shR.sched.levels.size, ∃ (sj : Flock.Stmt) (tags : _) (tables : _) (circuitB : _) (partition : _)
-      (program : _) (own : _) (rows : _), sj.c = (F.Vs (M.sess ℓ)).c ∧ Flock.RecVStar.checkStmt (some F.ish) tags tables sj circuitB partition program
-        (some own) (some (M.sess ℓ : ℕ)) (some (F.bind (M.sess ℓ))) rows = .ok ()) :
+      (program : _) (own : _) (rows : _), sj.c = (F.Vs (M.sess ℓ)).c ∧
+        Flock.RecVStar.checkStmt (some F.ish) tags tables sj circuitB partition program (some own)
+          (some (M.sess ℓ : ℕ)) (some (F.bind (M.sess ℓ))) rows = .ok ()) :
     StackedParams M shR := by
   obtain ⟨⟨R, ω, R₂⟩⟩ := hne
   intro ℓ hℓ
