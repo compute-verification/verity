@@ -604,6 +604,23 @@ def test_a_failed_gate_runs_nothing(tmp_path, monkeypatch, capsys) -> None:
     assert json.loads((tmp_path / X.RECORD).read_text())["ok"] is False
 
 
+def test_the_gate_wants_flashinfer_jit_tools(monkeypatch) -> None:
+    """Each rank JIT-builds FlashInfer's TRT-LLM all-reduce, so without ninja or nvcc on PATH the gate fails before a rank spawns."""
+    import subprocess
+
+    import torch
+
+    monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True, "checks": {"driver": True}})
+    monkeypatch.setattr(X.C, "_run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=""))
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: X.WORLD)
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda i: "NVIDIA H200")
+    monkeypatch.setattr(X.shutil, "which", lambda t: f"/usr/bin/{t}")
+    assert X.gate(575, "9.0", 132)["ok"]
+    monkeypatch.setattr(X.shutil, "which", lambda t: None if t == "ninja" else f"/usr/bin/{t}")
+    rec = X.gate(575, "9.0", 132)
+    assert not rec["ok"] and rec["checks"]["jit_tools"] is False and rec["jit_tools"]["ninja"] is None
+
+
 def test_the_record_is_a_registered_property() -> None:
     from verity_vllm.properties.record import seal
 

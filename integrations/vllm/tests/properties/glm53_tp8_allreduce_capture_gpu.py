@@ -18,7 +18,8 @@ vLLM's own calls on their rank's operands and save their words, and compares tho
 `NO-GO` with the route prefill takes, its trees and FTZ, and each shot's FMA.  The device gate runs first and nothing else runs
 when it fails (exit 3).
 
-  gate       driver, cc 9.0, 132 SMs, `WORLD` GPUs of one name (an 8x H200 node); the NVLink topology is recorded.
+  gate       driver, cc 9.0, 132 SMs, `WORLD` GPUs of one name (an 8x H200 node), ninja and nvcc on PATH (FlashInfer JIT-builds
+             its TRT-LLM all-reduce when a rank first makes its workspace); the NVLink topology is recorded.
   fused      (served) at M in `FUSED_M` (both shots of `mnnvl_shot` and every cluster geometry of `mnnvl_grid`), the special tokens
              and one screened probe call per shot: every call on FlashInfer's "mnnvl" workspace at `mnnvl_shot(M)`, weight_bias 0,
              eps `EPS`, and past `FUSED_MAX` on the all-reduce then the norm module; every rank's normed and residual words against
@@ -44,7 +45,8 @@ owner, the same in every probe and in both sets of rank processes, FTZ decided, 
 custom all-reduce word equal).  Every launch must also run on its expected path, deterministically, with every rank's words equal
 and the references equal.
 
-    cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as verity_vllm/ops/pod_bootstrap.sh sets it
+    cd integrations/vllm; PY=/workspace/cp/venv312/bin/python  # vy-glm53-h8's venv; PYTHONPATH as verity_vllm/ops/pod_bootstrap.sh sets it
+    export CUDA_HOME=/usr/local/cuda PATH=/workspace/cp/venv312/bin:/usr/local/cuda/bin:$PATH
     $PY tests/properties/glm53_tp8_allreduce_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--only fused,allreduce,probe,again,switch]
 """
 from __future__ import annotations
@@ -916,8 +918,9 @@ def gate(min_driver: int, want_cc: str, want_sms: int) -> dict[str, Any]:
     rec = C.gate(min_driver, want_cc, want_sms)
     n = torch.cuda.device_count()
     names = [torch.cuda.get_device_name(i) for i in range(n)]
-    rec.update(gpus=n, names=names, topology=C._run(["nvidia-smi", "topo", "-m"]).stdout[-4000:])
-    rec["checks"].update(world=n >= WORLD, one_kind=len(set(names)) == 1)
+    rec.update(gpus=n, names=names, topology=C._run(["nvidia-smi", "topo", "-m"]).stdout[-4000:],
+               jit_tools={t: shutil.which(t) for t in ("ninja", "nvcc")})
+    rec["checks"].update(world=n >= WORLD, one_kind=len(set(names)) == 1, jit_tools=all(rec["jit_tools"].values()))
     rec["ok"] = all(rec["checks"].values())
     return rec
 
