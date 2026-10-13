@@ -176,30 +176,33 @@ def _activation(gen, M: int, K: int, probe: bool = False):
     return x.to(torch.bfloat16).contiguous()
 
 
-def splitk_probe_words(K: int, N: int = 32, seed: int = 20261013) -> tuple[np.ndarray, np.ndarray]:
-    """Finite bf16 cancellation operands for row 0 / the first W rows of every default cuBLAS case.
+def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int = 20261013) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Craft finite cancellation rows that distinguish every modeled split-K hypothesis at these statics."""
+    from verity_vllm.program.registry import bf16_gemm_check as BC
 
-    Their k16 blocks span signs, mantissas and moderate exponents.  They distinguish contiguous from strided splits, f32 from
-    bf16 partial storage, and forward from reverse/tree reduction without relying on overflow or NaN behavior.
-    """
-    rng = np.random.default_rng(seed + K + N)
-    def words(shape):
-        sign = rng.integers(0, 2, shape, dtype=np.uint16) << np.uint16(15)
-        exp = rng.integers(107, 148, shape, dtype=np.uint16) << np.uint16(7)
-        mant = rng.integers(0, 128, shape, dtype=np.uint16)
-        return (sign | exp | mant).astype(np.uint16)
-    return words((K,)), words((N, K))
+    rng = np.random.default_rng(seed + K + splits + N + (output == "bf16"))
+    values = np.array([s * 2.0 ** e for e in (-20, -10, -1, 0, 1, 10, 20, 30, 50) for s in (-1, 1)] + [0.0], np.float32)
+    pool = (values.view(np.uint32) >> np.uint32(16)).astype(np.uint16)
+    x = np.full((1, K), 0x3F80, np.uint16)
+    w = np.zeros((N, K), np.uint16)
+    w[:, 0:K:16] = rng.choice(pool, (N, K // 16))
+    models = BC.cublas_splitk_hypotheses(x, w, splits, out=output)
+    candidate = models[BC.CUBLAS_SPLITK_HYPOTHESIS]
+    differ = {name: int(np.count_nonzero(candidate != words)) for name, words in models.items()}
+    if any(v == 0 for name, v in differ.items() if name != BC.CUBLAS_SPLITK_HYPOTHESIS):
+        raise ValueError(f"split-K probe does not distinguish every hypothesis: K={K}, splits={splits}, output={output}, {differ}")
+    return x[0], w, differ
 
 
-def _install_splitk_probe(x, w) -> int:
+def _install_splitk_probe(x, w, splits: int, output: str) -> dict[str, Any]:
     """Install the crafted probe in one token row and as many leading W rows as this shape has."""
     import torch
 
     n = min(32, w.shape[0])
-    px, pw = splitk_probe_words(x.shape[1], n)
+    px, pw, differ = splitk_probe_words(x.shape[1], splits, output, n)
     x[0].copy_(torch.from_numpy(px.view(np.int16)).view(torch.bfloat16).to(x.device))
     w[:n].copy_(torch.from_numpy(pw.view(np.int16)).view(torch.bfloat16).to(w.device))
-    return n
+    return {"columns": n, "discriminator": differ}
 
 
 def _u16(t) -> np.ndarray:
@@ -440,12 +443,13 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
     gen = torch.Generator(device="cuda").manual_seed(seed)
     rec: dict[str, Any] = {"model": model, "phase": phase, "case": name, "M": M}
     d = work / model / f"{phase}_{name}_M{M}"
+    probe_w = None
     if phase == "router":
         m, gate = MODELS[model], gates[model]
         w, wpath = weights.get(model, "mlp.gate")
         gate.weight.data.copy_(w)
         x = _activation(gen, M, m.hidden, probe=name == PROBE)
-        probe_n = _install_splitk_probe(x, gate.weight.data) if served_default and name != PROBE and M > 16 else 0
+        probe_w = gate.weight.data
         with DispatchTap() as tap:
             outs = [gate(x)[0].clone() for _ in range(2)]
         rec.update(K=m.hidden, N=m.experts, kernel=_kernel_of(tap.keys), expected=expected_kernel(M, model), dispatches=tap.keys)
@@ -460,7 +464,7 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
         w, wpath = weights.get(model, name)
         K, N = w.shape[1], w.shape[0]
         x = _activation(gen, M, K)
-        probe_n = _install_splitk_probe(x, w) if served_default else 0
+        probe_w = w
         if phase == "linear":
             gemm, layer = dispatch_unquantized_gemm(), torch.nn.Module()
             fn = lambda: gemm(layer, x, w, None)                                   # noqa: E731
@@ -471,7 +475,6 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
         rec.update(K=K, N=N, operands_ok=outs[0].dtype == dtype and list(outs[0].shape) == [M, N])
         paths = {**wpath, **_save(d, x=_u16(x), w=_u16(w), out=(_u16 if phase == "linear" else _u32)(outs[0]))}
     else:
-        probe_n = 0
         b, wpath = weights.get(model, name)
         K, N = b.shape[1], b.shape[2]
         if name == "q_nope_absorb":
@@ -501,9 +504,20 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
         rec["profile"] = _kernels(fn, d / "profile.json")
     except Exception as e:  # noqa: BLE001
         rec["profile"] = {"error": _error(e), "ok": False}
-    rec["probe_columns"] = probe_n
+    probe_paths, probe = None, None
+    if served_default and probe_w is not None and rec["profile"].get("split_k"):
+        n = min(32, probe_w.shape[0])
+        old_w = probe_w[:n].clone()
+        output = "f32" if phase in ("router", "f32out") else "bf16"
+        probe = _install_splitk_probe(x, probe_w, rec["profile"]["split_k"], output)
+        probe_out = fn()
+        torch.cuda.synchronize()
+        probe_paths = _save(d / "splitk_probe", x=_u16(x[0:1]), w=_u16(probe_w[:n]),
+                            out=(_u32 if output == "f32" else _u16)(probe_out[0:1, :n]))
+        probe_w[:n].copy_(old_w)
+    rec["splitk_probe"] = probe
     job = {"model": model, "phase": phase, "case": name, "M": M, "K": rec["K"], "N": rec["N"], "kernel": rec.get("kernel"),
-           "paths": paths, "split_k": rec["profile"].get("split_k"), "probe_columns": probe_n}
+           "paths": paths, "split_k": rec["profile"].get("split_k"), "probe_paths": probe_paths}
     return rec, job
 
 
@@ -604,11 +618,11 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
                 rec["reference_coords"] += 1
                 rec["twin_mismatch"] += not bool(MK._words_equal(np.asarray(y[0], wv.dtype), wv[r - r0, n], f32_words=f32))
     hypotheses = None
-    if job.get("split_k") and r0 == 0 and job.get("probe_columns"):
-        n = job["probe_columns"]
+    if job.get("split_k") and r0 == 0 and job.get("probe_paths"):
+        probe = _load(job["probe_paths"])
         output = "f32" if job["phase"] in ("router", "f32out") else "bf16"
-        models = BC.cublas_splitk_hypotheses(np.asarray(a["x"][0:1]), np.asarray(a["w"][:n]), job["split_k"], out=output)
-        actual = np.asarray(a["out"][0:1, :n])
+        models = BC.cublas_splitk_hypotheses(np.asarray(probe["x"]), np.asarray(probe["w"]), job["split_k"], out=output)
+        actual = np.asarray(probe["out"])
         hypotheses = {
             name: int((~MK._words_equal(actual, words, f32_words=output == "f32")).sum())
             for name, words in models.items()

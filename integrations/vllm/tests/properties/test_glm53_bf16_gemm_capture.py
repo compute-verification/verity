@@ -113,12 +113,14 @@ def test_the_stress_rows_decide_the_dotprod_contraction(tmp_path, fma: int) -> N
 
 
 def test_the_splitk_probe_distinguishes_every_hypothesis() -> None:
-    x, w = X.splitk_probe_words(256)
     for output in ("f32", "bf16"):
+        x, w, differ = X.splitk_probe_words(256, 8, output)
         models = BC.cublas_splitk_hypotheses(x[None], w, 8, out=output)
         candidate = models[BC.CUBLAS_SPLITK_HYPOTHESIS]
         assert all(not np.array_equal(candidate, words) for name, words in models.items()
                    if name != BC.CUBLAS_SPLITK_HYPOTHESIS), output
+        assert differ[BC.CUBLAS_SPLITK_HYPOTHESIS] == 0 and all(v > 0 for k, v in differ.items()
+                                                                 if k != BC.CUBLAS_SPLITK_HYPOTHESIS)
 
 
 def test_the_profiler_record_pins_grid_split_count_and_reduction() -> None:
