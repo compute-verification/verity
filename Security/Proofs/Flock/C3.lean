@@ -51,6 +51,7 @@ import Proofs.Flock.C3.Reps.TsRead
 import Proofs.Flock.C3.Reps.ReadCol
 import Proofs.Flock.C3.Reps.IoCols
 import Proofs.Flock.C3.Reps.ReadRow
+import Proofs.Flock.C3.Reps.SentKeys
 import Proofs.Flock.C3.Opening.Session
 import Proofs.Flock.C3.Opening.SrcOpening
 import Proofs.Flock.C3.Opening.ClaimTie
