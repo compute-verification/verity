@@ -90,6 +90,34 @@ def model_shapes(name: str):
     return layers, dict(shapes), LM_HEAD[name]
 
 
+def store_layout(model: str) -> tuple[int, list[tuple[int, str]], dict, dict, int]:
+    """The store's weights in store order: the layers, the linears (each layer's ORDER, then the lm_head), their (N, Kd),
+    each one's first byte, and the weights' bytes, after which the KV's token-layers follow."""
+    layers, shapes, lm = model_shapes(model)
+    shapes = {**shapes, "lm_head": lm}
+    lins = [(l, name) for l in range(layers) for name in ORDER] + [(layers, "lm_head")]
+    off, o = {}, 0
+    for l, name in lins:
+        off[(l, name)] = o
+        o += shapes[name][0] * shapes[name][1]
+    return layers, lins, shapes, off, o
+
+
+def pass_vectors(model: str, groups: dict, slots: int, sb: int = 2 * SR.BLOCK) -> np.ndarray:
+    """A sketch-sha512 step's pass as `receipts.plan_of`'s map (row r receipt r of the pass's one buffer, its byte x the
+    store byte it holds): each linear's launch at groups[name] (`sketch_receipt.gemm_vectors`, at the linear's first
+    byte), its receipts after the previous linear's as `Step` places them (`tag_off`), then the KV's token-layers (kv_attn
+    form 13, `kv_vectors`) after the weights', `slots` = batch · ctx of them a layer."""
+    layers, lins, shapes, off, w_bytes = store_layout(model)
+    parts = []
+    for l, name in lins:
+        n, kd = shapes[name]
+        v = SR.gemm_vectors(n // 16, kd // 512, sb, groups[name])
+        parts.append(np.where(v >= 0, v + off[(l, name)], -1))
+    parts.append(SR.kv_vectors(slots, layers, w_bytes))
+    return np.concatenate(parts)
+
+
 def splits_for(b: int, ctx: int, tt: int, sms: int) -> list[int]:
     """kv_bench's split counts for a cell: batch × splits about 1, 2, 4 or 8 CTAs an SM, a split at least 1 or 8 tiles."""
     return sorted({max(1, min(-(-ctx // (t * tt)), -(-c * sms // b)))
@@ -344,19 +372,11 @@ class Step:
                  log, rc: bool = False) -> None:
         self.wt, self.kv, self.torch, self.b, self.ctx, self.ks, self.T = wt, kv, torch, b, ctx, list(ks), sketch_t
         self.m, self.rc = m, rc
-        self.layers, shapes, lm = model_shapes(model)
-        self.shapes = {**shapes, "lm_head": lm}
+        self.layers, self.lins, self.shapes, self.off, self.w_bytes = store_layout(model)
         self.picks = picks
         f = kv.field
         self.tlw, self.wb = K.token_layer_words(f), f.word_bytes
         self.sh = KB.attn_shape(kv)
-        self.lins = [(l, name) for l in range(self.layers) for name in ORDER] + [(self.layers, "lm_head")]
-        self.off, o = {}, 0
-        for l, name in self.lins:
-            n, kd = self.shapes[name]
-            self.off[(l, name)] = o
-            o += n * kd
-        self.w_bytes = o
         self.kv_bytes = b * ctx * self.layers * K.TOKEN_LAYER_BYTES
         log(f"step: {model}, B={b} (linears at M={m}), ctx={ctx}: weights {self.w_bytes / 1e9:.2f} GB, KV {self.kv_bytes / 1e9:.2f} GB")
         self.W = torch.empty(self.w_bytes, dtype=torch.uint8, device="cuda")
