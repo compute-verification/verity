@@ -1577,6 +1577,14 @@ __device__ __forceinline__ void mbar_inval(u64 *bar) {
 __device__ __forceinline__ void mbar_arrive(u64 *bar) {
   asm volatile("mbarrier.arrive.shared::cta.b64 _, [%0];\n" ::"r"(smem_u32(bar)) : "memory");
 }
+__device__ __forceinline__ void st_release(u32 *p, u32 v) {
+  asm volatile("st.release.cta.shared::cta.u32 [%0], %1;\n" ::"r"(smem_u32(p)), "r"(v) : "memory");
+}
+__device__ __forceinline__ u32 ld_acquire(const u32 *p) {
+  u32 v;
+  asm volatile("ld.acquire.cta.shared::cta.u32 %0, [%1];\n" : "=r"(v) : "r"(smem_u32(p)) : "memory");
+  return v;
+}
 __device__ __forceinline__ void mbar_expect_tx(u64 *bar, u32 bytes) {
   asm volatile("mbarrier.arrive.expect_tx.shared::cta.b64 _, [%0], %1;\n" ::"r"(smem_u32(bar)), "r"(bytes) : "memory");
 }
@@ -2593,7 +2601,10 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
 // (sketch_receipt.sign_planes, word 2 s + r / 2 for k-step 2 p + s), and m-tile mt's register r is the plane ANDed
 // with 0x01010101 << ρ, ρ = 2 mt + r % 2: the accumulator holds 2^ρ Σ bit e (−2^7 at ρ = 7), a fifth MMA of ones
 // holds T = Σ e, and σ = T − 2 (acc >> ρ) (T + 2 (acc >> 7) at ρ = 7); a group is 640 MMAs. The warp waits on `ready`
-// for the group's tasks and arrives on `sketched` for each once it has read them, so a launch has stages >= GT, the
+// for the group's tasks, task t's only once the producer has relayed task t - stages (`relayed`: a parity names just
+// a barrier's current phase and the one before, and at stages < SKW GT a group's wait would otherwise meet its
+// stage's phase before last and pass at once), and arrives on `sketched` for each once it has read them, so a launch
+// has stages >= GT, the
 // tasks a group: SK_G, or 2 (receipt_tasks: 128 rows of x leave room for 3 stages), whose groups leave blocks 4 .. 7
 // of the MMAs' columns zero and their lanes out of the hash. It
 // keeps each group's 8 sketches in its batch buffer (rows of sk_rs(KS) words, so the C fragments' stores and the
@@ -2601,8 +2612,8 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
 // bytes after the prefix's midstate, one compression at KS = 16, three at 64. Only the segment's tasks have blocks, so
 // no receipt is of padding, and neither the launch's groups nor its grid moves any block.
 template <int SKW, int KS, int GT = SK_G>
-__device__ __forceinline__ void receipt_warp(const uint8_t *smem, u64 *ready, u64 *sketched, int stages, int q,
-                                             int lane, const Sketch &k) {
+__device__ __forceinline__ void receipt_warp(const uint8_t *smem, u64 *ready, u64 *sketched, const u32 *relayed,
+                                             int stages, int q, int lane, const Sketch &k) {
   constexpr int NB = 2 * SK_G, HB = SB / 2, RS = sk_rs(KS), LEN = 8 + 4 * KS, NMB = (LEN + 17 + 127) / 128;
   constexpr u32 ONES = 0x01010101u;
   static_assert(HB == 4096 && (KS == 16 || KS == 64) && SKW * SK_GB * NB * RS <= sk_buf_ints<KS, SKW>() && 1 <= GT &&
@@ -2615,7 +2626,12 @@ __device__ __forceinline__ void receipt_warp(const uint8_t *smem, u64 *ready, u6
   int nb = 0, a0 = q;   // the batch's groups so far, and its first
   for (int a = q; a < ng; a += SKW) {
     const int i0 = GT * a, ni = min(GT, k.ntasks - i0);
-    for (int x = 0; x < ni; ++x) mbar_wait(ready + (i0 + x) % stages, ((i0 + x) / stages) & 1);
+    for (int x = 0; x < ni; ++x) {
+      const int t = i0 + x;
+      while (t >= stages && (int)ld_acquire(relayed) <= t - stages) {
+      }
+      mbar_wait(ready + t % stages, (t / stages) & 1);
+    }
     const bool have = (g >> 1) < ni;
     const uint8_t *bp = smem + (size_t)((i0 + (g >> 1)) % stages) * SB + HB * (g & 1) + 16 * t;
     int *r = buf + (NB * nb + 2 * t) * RS + g;   // C: rows g, g + 8 of blocks 2 t, 2 t + 1
@@ -2913,7 +2929,8 @@ __device__ __forceinline__ int opaque(int v) {
 }
 
 // The fused kernel's shared memory: the stages, xs, the stages' barriers (full, loaded, decoded, empty, ready,
-// sketched), tagq (the tag warps' queue head, then the segment Cut::next found), the sketch buffers and the signs.
+// sketched), tagq (the tag warps' queue head, or beside receipt warps the segment's tasks relayed to `ready`, then the
+// segment Cut::next found), the sketch buffers and the signs.
 template <int NB8, int SKK, int SKW>
 struct FusedSmem {
   uint8_t (*xs)[XS_STRIDE];
@@ -2937,6 +2954,7 @@ struct FusedSmem {
       mbar_init(ready + s, 1);
       mbar_init(sketched + s, 1);
     }
+    if constexpr (WT_RECEIPT && SKW > 0) tagq[0] = 0;
     asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
     const Cut::Seg g = Cut(nbs, nchunks, groups, tskt).next(b);
     tagq[1] = g.b, tagq[2] = g.j0, tagq[3] = g.j1;
@@ -2981,17 +2999,21 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
   if (warp == decoders + MW) {
     if (lane == 0) {
       int r = 0;   // the next copy to relay
+      const auto relay = [&] {
+        mbar_arrive(ready + r++ % stages);
+        if constexpr (WT_RECEIPT && SKW > 0) st_release(S.tagq, r);
+      };
       for (int i = 0; i < ntasks; ++i) {
         const int s = i % stages;
         if (i >= stages)
           while (!mbar_try(empty + s, (i / stages - 1) & 1, 128))
-            while (r < i && mbar_test(full + r % stages, (r / stages) & 1)) mbar_arrive(ready + r++ % stages);
+            while (r < i && mbar_test(full + r % stages, (r / stages) & 1)) relay();
         mbar_expect_tx(full + s, SB);
         bulk_load(smem + s * SB, wstore + (q0 + i * gq) * SB, SB, full + s);
       }
-      for (; r < ntasks; ++r) {
+      while (r < ntasks) {
         mbar_wait(full + r % stages, (r / stages) & 1);
-        mbar_arrive(ready + r % stages);
+        relay();
       }
     }
     __syncwarp();
@@ -3061,7 +3083,8 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
     if (warp < decoders + 1 + MW + SKW) {
       const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, tile0, skt, tiles, ntasks, q0, gq};
 #if WT_RECEIPT
-      receipt_warp<SKW, SKK, receipt_tasks<NB8>()>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
+      receipt_warp<SKW, SKK, receipt_tasks<NB8>()>(smem, ready, sketched, S.tagq, stages, warp - decoders - 1 - MW,
+                                                    lane, sk);
 #else
       sketch_warp<SKK, SKW, SignB>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
 #endif
