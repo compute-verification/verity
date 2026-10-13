@@ -48,7 +48,8 @@ The registration also names its block layout (`LAYOUTS`): how a kernel's sketch 
 each block j the encoded store's bytes 4096·j … 4096·j + 4095, whole codec words.  Under store-order/v0, the only one,
 a vector is one registered block's bytes in store order.  `plan_of` takes a kernel's map from its vectors' bytes to
 the store's and returns the plan its vectors are, refusing padding, a codec word split across vectors and a block
-twice, so that only registered blocks' bytes are credited.
+twice, so that only registered blocks' bytes are credited.  The fused GEMM's fragment cut is refused until the byte
+permutation ra-codec-tensor proposes for it is a layout of its own here.
 
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
 that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is

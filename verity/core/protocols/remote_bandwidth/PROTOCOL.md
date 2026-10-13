@@ -405,7 +405,9 @@ never a position, and a vector of padding alone, whose receipt the seed alone de
 fragment cut that `gemm_blocks` builds splits every 128-byte word across 4 vectors (RB-D1, #1916), so `plan_of` refuses
 it. A kernel that keeps it needs a layout of its own, one whose every vector is still one whole registered block (a
 fixed permutation of the block's bytes, which the verifier applies to the opened block before its sketch), named in
-`LAYOUTS` and here before any of its receipts is credited.
+`LAYOUTS` and here before any of its receipts is credited. ra-codec-tensor proposes the permutation its fused GEMM
+can produce, and it is added as a named layout with its check and vectors (Daniel, 13 Oct). Until then the fused
+GEMM's vectors are refused: store-order/v0 is the only layout.
 
 **\(z_{(i,j)}\)**, under a registration that binds \(z\) only, is PoUW's noised output of the tile the prover computes
 before reading block \(j\) in pass \(i\) (`Tiles`). A registration that doesn't bind it takes no tiles: its receipts
