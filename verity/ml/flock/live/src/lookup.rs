@@ -20,12 +20,13 @@ use crate::ir_block::{Group, IrUnitNet};
 
 /// The library (core's `verity.ml.circuits.library`, the verifier's `Flock/Library.lean`): name, SHA-512 of the raw u32 LE words,
 /// index bits, value bits. A table is `library` exactly when its SHA-512 is listed, and `program` otherwise.
-pub const LIBRARY: [(&str, &str, usize, usize); 5] = [
+pub const LIBRARY: [(&str, &str, usize, usize); 6] = [
     ("rsq", "39f7b912bc25b913618d926725a18974af9eb246f6f36ce06ef63ffdb293d80bc222623c6d182d2c23e16f5ada2b8db9e7e6a53b3e42046763f7794ac3cef378", 24, 31),
     ("sqrt", "33d076106efaa955e6452200d45651a799628e76d1d1cc682168f464a03100b937bee08533761d9fa8f8a114cee2a32d322888d5f08fd320bfeb17805a5c2536", 24, 31),
     ("rcp", "8a317adbcc078bf70ae01959b679d49f97cd9c8a93d6f39b7325c93d0fd550fa4396a4c3a0568d2387c2ff2f33eb76453b33a7b8890d97752d86cc1d971aeacc", 23, 31),
     ("ex2", "5cb768c1725369ad905e725437463729d5b6054ca9adc498e755247e2ba848b510e3325e1c3fecad1242832aca5fa0afd463b16002a7f34050a7b377ed107877", 23, 31),
     ("tanh_mufu", "f83e87737a231de2ec109f5a7ea9f8dac78089ef9978ac19ce540c03cefd356ce542948ba8ffb11952b68a2d0f63fe4c6e2e84d218739a262a9b4bb07dd66985", 27, 31),
+    ("lg2", "6f498dcd26e75335dcec0acdbfadae425c206b36d5a071a417c646db018a53b0b5482455c913c9ed94ab09c0aa5ccbc8d2e4188abae767050df4544ec4d3e550", 23, 31),
 ];
 
 /// The SHA-512 (hex) of a table's raw u32 LE words: its archive key, and what decides its label.
