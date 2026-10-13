@@ -9,7 +9,7 @@ One connection serves one registration and then `--sessions` sessions over it, e
    calibration (pass times, the gap, its measured read rate);
 2. the round trip, measured by pings;
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
-   and gaps (`--quantile`), the measured round trip's worst and `--jitter-ms`; the coin commitment sent first, then
+   and gaps and of the measured round trip (`--quantile`), and `--jitter-ms`; the coin commitment sent first, then
    σ_0, a boundary message every window, each root fed to `Session.receive` stamped with the time its last byte was
    read, each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
@@ -141,16 +141,19 @@ class Verifier:
             _, _, stamp = self.expect("pong")
             rtts.append(stamp - t0)
         rtts.sort()
-        return {"n": n, "min_ns": rtts[0], "median_ns": rtts[n // 2], "max_ns": rtts[-1]}
+        at = lambda q: rtts[min(n - 1, int(q * n))]
+        return {"n": n, "min_ns": rtts[0], "median_ns": rtts[n // 2], "max_ns": rtts[-1], "p50": at(0.5),
+                "p99": at(0.99), "p999": at(0.999), "max": rtts[-1]}
 
     def allowance(self, rtt: dict, quantile: str = "p999") -> int:
-        """`timing.deadline` at the calibration's pass and gap at `quantile` (p50, p99, p999 or max) and the round
-        trip's worst, plus the jitter allowed each way."""
+        """`timing.deadline` at the calibration's pass, gap and round trip at `quantile` (p50, p99, p999 or max),
+        plus the jitter allowed each way."""
         cal = self.calibration
         pass_ns = cal["pass_ns"][quantile] if "pass_ns" in cal else cal["pass_ns_max"]
         gap_ns = cal["gap_ns"][quantile] if "gap_ns" in cal else cal["gap_ns_max"]
-        return timing.deadline(int(pass_ns), gap_ns=int(gap_ns), down_ns=rtt["max_ns"] // 2 + 1,
-                               up_ns=rtt["max_ns"] - rtt["max_ns"] // 2 + 1, jitter_ns=self.jitter_ns)
+        r = rtt[quantile]
+        return timing.deadline(int(pass_ns), gap_ns=int(gap_ns), down_ns=r // 2 + 1, up_ns=r - r // 2 + 1,
+                               jitter_ns=self.jitter_ns)
 
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None) -> dict:
         W, reg = self.W, self.registration
@@ -344,11 +347,11 @@ def main() -> int:
     ap.add_argument("--delta-log2", type=float, default=-40.0)
     ap.add_argument("--jitter-ms", type=float, default=2.0)
     ap.add_argument("--sessions", type=int, default=1)
-    ap.add_argument("--pings", type=int, default=200)
+    ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--check-workers", type=int, default=len(os.sched_getaffinity(0)) - 1,
                     help="processes checking openings (0: one thread of the verifier's own)")
     ap.add_argument("--quantile", default="p999", choices=("p50", "p99", "p999", "max"),
-                    help="the calibration's pass and gap the allowance takes")
+                    help="the calibration's pass and gap and the round trip the allowance takes")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     sys.setswitchinterval(2e-4)

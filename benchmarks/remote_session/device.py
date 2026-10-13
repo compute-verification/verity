@@ -393,7 +393,7 @@ class Device:
     """The prover's backend (`prover.ProverSide`): the store, its gates and calibration, its passes and openings."""
 
     def __init__(self, torch, lib_path: str, kv_path: str, blocks: int, *, seed: int, log=print,
-                 gate_blocks: int = 4096, gate_chunk: int = 1024, calibration_passes: int = 1000,
+                 gate_blocks: int = 4096, gate_chunk: int = 1024, calibration_passes: int = 4000,
                  warm_openings: int = 2773, chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks, warm_openings
         self.gate_blocks, self.gate_chunk, self.calibration_passes = gate_blocks, gate_chunk, calibration_passes
@@ -592,7 +592,8 @@ def add_arguments(ap) -> None:
     ap.add_argument("--kv", required=True, help="kv.so at the registration's codec (p1024 masked)")
     ap.add_argument("--gib", type=float, default=16.0, help="the store's size; N = 16 · 2^h blocks")
     ap.add_argument("--gate-blocks", type=int, default=4096)
-    ap.add_argument("--calibration-passes", type=int, default=1000)
+    ap.add_argument("--calibration-passes", type=int, default=4000,
+                    help="so the allowance's p99.9 is a few passes in, not the worst")
     ap.add_argument("--warm-openings", type=int, default=2773, help="a window's openings, opened once in calibration")
     ap.add_argument("--chunk-blocks", type=int, default=1 << 18, help="a pass's chunk (`rs_pass`)")
     ap.add_argument("--kept-from", type=int, default=6, help="h0: the pass tree's levels kept for the openings")
