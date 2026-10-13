@@ -464,6 +464,48 @@ def checkAcc (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Optio
   if let some d := portDiff? a w false then
     throw s!"{s.name}: its {ACC_VALUE} port {a.name} is not the verifier's {ACC_VALUE} registration (--rec-rows acc0): {d}"
 
+/-- A rep's openings at schedule `sch`'s levels below `l` (every level's at `l = sch.levels.size`). -/
+def opensBelow (sch : Schedule) (l : Nat) : Nat := ((List.range l).map fun k => (sch.levels[k]!).q).sum
+
+/-- **The rows of `rec-acc` a level's units read as `acc`** (`rec_outer.chain_order`: every opening's (rep, level, j),
+rep-major, then by level and query; `acc_out` reads the next row): at the table's level `l` (`fast100` at the inner `m`,
+`n` openings a rep), unit `r · q + j`, rep `r`'s opening `j`, reads row `r · n + opensBelow l + j`; at R's level `l`
+(`fast100` at R's `m`; R's openings follow both reps' in the chain, `rec_vstage.stage_stacked`), unit `j` reads row
+`2 · n + opensBelow' l + j`. None at a statement that is no level. -/
+def accReads (i : Inner) : VStar.Stmt → V (Option (Array (Option Nat)))
+  | .recOpen l .. => do
+    let some sch := fast100 i.m | throw s!"the inner session's m {i.m} has no fast100 schedule"
+    let q := (sch.levels[l]!).q
+    let n := opensBelow sch sch.levels.size
+    pure (some ((Array.range (2 * q)).map fun u => some (u / q * n + opensBelow sch l + u % q)))
+  | .recOpenStacked l .. => do
+    let some sch := fast100 i.m | throw s!"the inner session's m {i.m} has no fast100 schedule"
+    let some r := i.stacked
+      | throw s!"R's level {l}: the inner shape names no R (rec-inner: the inner circuit's META's {STACKED_SHAPE_KEY})"
+    let some sr := fast100 r.m | throw s!"R's m {r.m} has no fast100 schedule"
+    let n := opensBelow sch sch.levels.size
+    pure (some ((Array.range (sr.levels[l]!).q).map fun j => some (2 * n + opensBelow sr l + j)))
+  | _ => pure none
+
+private def showRead : Option (Option Nat) → String
+  | some (some p) => toString p
+  | some none => "null"
+  | none => "nothing"
+
+/-- **A level's `acc` and `acc_out` read `rec-acc` at its openings' rows of the chain** (`accReads`; `OpenKeysS`'
+positions, which `checkAcc`'s one registration leaves open): unit `u`'s `acc` reads its opening's row, its `acc_out` the
+next. -/
+def checkAccReads (i : Inner) (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := do
+  let some want ← accReads i s | return
+  for (nm, d) in [("acc", 0), ("acc_out", 1)] do
+    let some p := registered.find? (·.name == nm)
+      | throw s!"{s.name}: its port {nm} is not a port of the registered reads ({registered.toList.map (·.name)})"
+    let w := want.map (·.map (· + d))
+    if p.reads != w then
+      let u := ((List.range (max p.reads.size w.size)).find? fun u => p.reads[u]? != w[u]?).getD 0
+      throw (s!"{s.name}: its port {nm} reads {ACC_VALUE} at {showRead p.reads[u]?} in unit {u}, not at " ++
+        s!"{showRead w[u]?} (the chain runs rep-major, then by level and query)")
+
 def TRANSCRIPT_FORMAT : String := "rec/inner-transcript/v1"
 
 /-- A round's coins, as hex strings. -/
@@ -949,8 +991,8 @@ bindings (`bindings`, `--rec-bindings F`); its circuit must be in `ProvedScope.s
 (`v1Ports`), never `scopeOkH`'s `bitRows`, which `ProvedScope.check` admits under hidden outputs and V*'s statement
 (`VStmt.hscope`) does not cover; then `checkOwnBindings` of those bindings against the partition object and
 program, `checkCircuit` on the statement's circuit and population as statement `part` under those bindings, and
-`checkOwn`, `checkRows` and `checkAcc` (against the verifier's shared rows `rows`, `--rec-rows`) on the verifier's own
-registered reads. -/
+`checkOwn`, `checkRows` and `checkAcc` (against the verifier's shared rows `rows`, `--rec-rows`) and `checkAccReads` on
+the verifier's own registered reads. -/
 def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × ByteArray)) (st : Stmt) (circuitB : ByteArray)
     (partition : Option Json := none)
     (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none) (part : Option Nat := none)
@@ -976,6 +1018,7 @@ def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × Byt
       checkOwn s r
       checkRows s r rows
       checkAcc s r rows
+      checkAccReads i s r
   | none =>
     if isVStar name then
       throw s!"{name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"
