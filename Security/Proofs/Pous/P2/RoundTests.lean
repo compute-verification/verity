@@ -106,7 +106,14 @@ theorem round_trunc (hP : PrimeP16448) (p ε₀ : ℝ≥0∞) (D Q L t : ℕ) (h
 /-- **At `2^19` blocks, truncation refutes `p = 0.043` from `L = 2^167`**: keeping `501,757` blocks without their low
 `166` bits (`16,282` bits a block, within `S₀ = 8,169,621,180`) passes a round with probability
 `501757/2^19 ≈ 0.95703 > 0.957 + 2^-130`. So `P2RingRoundSecure (43/1000) ε₀ D Q L` is false at `D ≥ 2`, `Q ≥ 2`,
-`L ≥ 2^167` whenever `ε₀ ≤ 2^-130`, if `p` is prime. -/
+`L ≥ 2^167` whenever `ε₀ ≤ 2^-130`, if `p` is prime.
+
+`t = 166` and `167` (rates `0.957026` and `0.957085`) sit in the window `(1 − p, 0.01^(1/105)] = (0.957, 0.957089]`
+in which only the per-round form fails: the same truncation could refute the 105-challenge whole-audit form
+`P2RingAuditSecure` only from `t = 168`, where its rate's 105th power first exceeds `1%`. `L ≥ 2^167` is `round_trunc`'s decoder, which tries `2^(t+1)` candidates. A
+meet-in-the-middle decoder takes one root of the stored value (depth `16,446`, both signs compared locally) and then
+one squaring per candidate, about `2^166 + 2^16` multiplications, so the true threshold is about `L ≥ 2^166` at
+`D ≥ 16,446`. That decoder is not proved here. -/
 theorem round_trunc_b19 (hP : PrimeP16448) (ε₀ : ℝ≥0∞) (D Q L : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q)
     (hL : 2 ^ 167 ≤ L) (hε : ε₀ ≤ (2⁻¹ : ℝ≥0∞) ^ 130) : ¬ P2RingRoundSecure (43 / 1000) ε₀ D Q L := by
   intro h
