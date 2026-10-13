@@ -206,7 +206,7 @@ DsaMqaLogitsV2 = flat(
     _logits, D.DsaMqaLogits)
 
 
-def _logit_v3(B, S, q, w, k, ks):
+def _logit_contracted(B, S, q, w, k, ks):
     """`DsaMqaLogit_v3`'s body on bits."""
     return D.mqa_logit(bit_ops(B), S.H, S.D, q, w, k, ks, contracted=True)
 
@@ -214,10 +214,10 @@ def _logit_v3(B, S, q, w, k, ks):
 DsaMqaLogitV4 = flat(
     "DsaMqaLogit", 4, ["H", "D"],
     lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.D, E4M3)), ("ks", F32)), F32),
-    _logit_v3, D.DsaMqaLogitV3)
+    _logit_contracted, D.DsaMqaLogitV3)
 
 
-def _logits_v3(B, S, q, w, k, ks):
+def _logits_contracted(B, S, q, w, k, ks):
     """`DsaMqaLogits_v3`'s body on bits."""
     return B.batch(bind(DsaMqaLogitV4, H=S.H, D=S.D), q, w, k, ks, axes=(None, None, 0, 0))
 
@@ -226,7 +226,7 @@ DsaMqaLogitsV4 = flat(
     "DsaMqaLogits", 4, ["N", "H", "D"],
     lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
                 ("ks", Array(S.N, F32))), Array(S.N, F32)),
-    _logits_v3, D.DsaMqaLogitsV3)
+    _logits_contracted, D.DsaMqaLogitsV3)
 
 
 def _topk(S):
