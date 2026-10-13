@@ -12,8 +12,9 @@ import Proofs.Flock.C3.RegLevels.StackedReg
   `opensTopAt_of_regs`: `OpensTopAt`'s `a`, `rest`, `cf` and `A` are those bytes, from columns that are registered.
 * `dirs_of_check`: an accepted `rec-open-stacked/l<LANES>-h<H>` unit registered `dirsRow pos H` at each opening's
   position (`RecCoins.checkStackedLevel`, `dirsLevel_of_check`), the run's from round 0 of `stacked/rep0`'s coins
-  (`lg_eq_of_opening`). Where the opening's `dirs` columns are the bits of the first word of the rows `checkValue`
-  accepted (`hval`), they are the position's low `H` bits, at `H ≤ 16`: `dirsRow` holds them in one 16-bit word.
+  (`lg_eq_of_opening`). Where the opening's `dirs` columns are the bits of the first two words of the rows
+  `checkValue` accepted (`hval`), they are the position's low `H` bits, at every valid `H` (`H ≤ 32`): `dirsRow` holds
+  them 16 a word.
 -/
 
 namespace FlockC3.RegLevels
@@ -145,17 +146,27 @@ end Copy
 
 /-! ## The `dirs` the verifier registers -/
 
-theorem dirsRow_zero (pos H : ℕ) : (Flock.RecCoins.dirsRow pos H)[0]! = pos % 2 ^ H := by
+theorem dirsRow_zero (pos H : ℕ) : (Flock.RecCoins.dirsRow pos H)[0]! = pos % 2 ^ H % 2 ^ 16 := by
   rw [Flock.RecCoins.dirsRow,
-    getElem!_pos (#[pos % 2 ^ H] ++ Array.replicate (Flock.RecCoins.DIRS_WORDS - 1) 0) 0
-      (by simp [Flock.RecCoins.DIRS_WORDS]),
+    getElem!_pos (#[pos % 2 ^ H % 2 ^ 16, pos % 2 ^ H / 2 ^ 16] ++
+      Array.replicate (Flock.RecCoins.DIRS_WORDS - 2) 0) 0 (by simp [Flock.RecCoins.DIRS_WORDS]),
     Array.getElem_append_left (by simp)] <;> rfl
 
-/-- Bit `b < H` of `dirsRow pos H`'s first word is the position's. -/
-theorem dirsRow_testBit (pos H : ℕ) {b : ℕ} (hb : b < H) :
-    ((Flock.RecCoins.dirsRow pos H)[0]!).testBit b = pos.testBit b := by
-  rw [dirsRow_zero, Nat.testBit_mod_two_pow]
-  simp [hb]
+theorem dirsRow_one (pos H : ℕ) : (Flock.RecCoins.dirsRow pos H)[1]! = pos % 2 ^ H / 2 ^ 16 := by
+  rw [Flock.RecCoins.dirsRow,
+    getElem!_pos (#[pos % 2 ^ H % 2 ^ 16, pos % 2 ^ H / 2 ^ 16] ++
+      Array.replicate (Flock.RecCoins.DIRS_WORDS - 2) 0) 1 (by simp [Flock.RecCoins.DIRS_WORDS]),
+    Array.getElem_append_left (by simp)] <;> rfl
+
+/-- Bit `b < H` of the position, `b < 32`, is bit `b % 16` of `dirsRow pos H`'s word `b / 16`. -/
+theorem dirsRow_testBit (pos H : ℕ) {b : ℕ} (hb : b < H) (h32 : b < 32) :
+    ((Flock.RecCoins.dirsRow pos H)[b / 16]!).testBit (b % 16) = pos.testBit b := by
+  rcases Nat.lt_or_ge b 16 with h | h
+  · rw [Nat.div_eq_of_lt h, Nat.mod_eq_of_lt h, dirsRow_zero, Nat.testBit_mod_two_pow, Nat.testBit_mod_two_pow]
+    simp [h, hb]
+  · rw [show b / 16 = 1 by omega, dirsRow_one, Nat.testBit_div_two_pow, show b % 16 + 16 = b by omega,
+      Nat.testBit_mod_two_pow]
+    simp [hb]
 
 theorem getElem!_map_range {α : Type} [Inhabited α] (f : ℕ → α) {n j : ℕ} (hj : j < n) :
     ((Array.range n).map f)[j]! = f j := by
@@ -189,18 +200,19 @@ theorem dirsLevel_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : F
   · cases h
 
 /-- **An accepted `rec-open-stacked` unit's `dirs` are its openings' positions' bits** (`hdir`): at the level `ℓ` the
-unit names, where opening `j`'s `dirs` columns hold bit `b` of the first word of row `j` of the rows `checkValue`
-accepted (`P j b`, `hval`), they hold bit `b < H` of the verifier's position (`dirsRow_testBit`; it is the run's at
-`lg_eq_of_opening`). `H ≤ 16`: `dirsRow` holds the position's low `H` bits in its first 16-bit word. -/
+unit names, where opening `j`'s `dirs` column `b < 32` holds bit `b % 16` of word `b / 16` of row `j` of the rows
+`checkValue` accepted (`P j b`, `hval`), it holds bit `b < H` of the verifier's position (`dirsRow_testBit`; it is the
+run's at `lg_eq_of_opening`), at every valid `H` (`H ≤ 32`, `RecOpen.valid`): `dirsRow` holds the position's low `H` bits
+16 a word in its first two words. -/
 theorem dirs_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ()) {o : Flock.RecCoins.Opening}
     (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ} (hℓ : ℓ < o.sh.sched.levels.size)
     (hL : 2 ^ (o.sh.sched.levels[ℓ]!).lanes = LANES)
-    (hH : (o.sh.sched.levels[ℓ]!).d - (o.sh.sched.levels[ℓ]!).cap = H) (h16 : H ≤ 16) (P : ℕ → ℕ → Bool → Prop)
+    (hH : (o.sh.sched.levels[ℓ]!).d - (o.sh.sched.levels[ℓ]!).cap = H) (h32 : H ≤ 32) (P : ℕ → ℕ → Bool → Prop)
     (hval : ∀ (rows : Array (Array ℕ)) (what : ℕ → String),
       Flock.RecCoins.checkValue c pub own "dirs" Flock.RecCoins.DIRS_VALUE rows what = .ok () →
-      ∀ j < rows.size, ∀ b < 16, P j b ((rows[j]!)[0]!.testBit b)) :
+      ∀ j < rows.size, ∀ b < 32, P j b ((rows[j]!)[b / 16]!.testBit (b % 16))) :
     ∀ j < (o.sh.sched.levels[ℓ]!).q, ∀ b < H, P j b (((o.lg.conss[ℓ]!).pos[j]!).testBit b) := by
   obtain ⟨o', l, what, hop', hu, hdv⟩ := dirsLevel_of_check h
   have ho : o' = o := Except.ok.inj (hop'.symm.trans hop)
@@ -209,7 +221,7 @@ theorem dirs_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.
   subst hl
   intro j hj b hb
   have e := hval _ what hdv j (by simpa using hj) b (by omega)
-  rwa [getElem!_map_range _ hj, dirsRow_testBit _ _ hb] at e
+  rwa [getElem!_map_range _ hj, dirsRow_testBit _ _ hb (by omega)] at e
 
 #print axioms regBits_of_cols
 #print axioms regOuts_of_cols
