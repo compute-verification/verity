@@ -153,8 +153,8 @@ def _quant_config_for_profile(cfg: dict[str, Any], arch: str) -> dict[str, Any] 
     qc = cfg.get("quantization_config")
     if not isinstance(qc, dict) or arch != "dsa-moe":
         return qc
-    routers = {f"model.layers.{n}.mlp.gate" for n in range(int(cfg.get("num_hidden_layers") or 0))}
-    return {**qc, "modules_to_not_convert": [name for name in qc.get("modules_to_not_convert", ()) if name in routers]}
+    routers = [f"model.layers.{n}.mlp.gate" for n in range(int(cfg.get("num_hidden_layers") or 0))]
+    return {**qc, "modules_to_not_convert": routers}
 
 
 def structural_refusal(cfg: dict[str, Any]) -> str | None:
