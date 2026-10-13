@@ -3,7 +3,8 @@
 `16 · portWordsOf n` columns), an element read in no bit or in all 128 passes, and the first element read in some but not
 all is named with how many, wherever it sits among held elements read in no bit. `readIns` marks the input columns the
 computed rows read and nothing past the inputs. `RecOpening.rsUnread` on m = 22's shape: w's slot 0 is a claim's ring
-switch's (`.rs 0 0`), named unless read in all 128 bits, and slot 256 (Ligerito's first) is not one.
+switch's (`.rs 0 0`) and slots 362–365 the running sums' (`.acc0 0` to `.acc1 1`), each named unless read in all 128
+bits, and slot 256 (Ligerito's first) is neither.
 -/
 import Flock.RecOpening
 
@@ -46,5 +47,12 @@ def rsUnread (W : Array Nat) (reads : List (List Nat)) : Option (Nat × Nat) :=
 #guard rsUnread #[0] [] == some (0, 0)
 #guard rsUnread #[256, 0] [List.range' 1024 128] == none
 #guard rsUnread #[256, 0] [List.range 128] == some (1, 0)
+#guard (RecOpening.shape? 22 2).map (fun sh => [.acc0 0, .acc0 1, .acc1 0, .acc1 1].map (RecOpening.wi sh)) ==
+  some [some 362, some 363, some 364, some 365]
+#guard rsUnread #[362] [List.range 128] == none
+#guard rsUnread #[363] [List.range 100] == some (0, 100)
+#guard rsUnread #[364] [] == some (0, 0)
+#guard rsUnread #[256, 365] [List.range 128] == some (1, 0)
+#guard rsUnread #[362, 363, 364, 365] [List.range 128, List.range' 1024 128, List.range' 2048 128] == some (3, 0)
 
 end Flock.Test.ReadWhole

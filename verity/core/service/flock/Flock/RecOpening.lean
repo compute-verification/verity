@@ -197,16 +197,17 @@ def partW (sh : Shape) (j : Nat) : Except String (Array Nat) := do
   let st := RecResiduals.starts sizes
   pure (P.flatMap fun p => (Array.range sizes[p]!).map (st[p]! + ·))
 
-/-- The first element of a part's w (`W`, its slots in the opening's w) that is a claim's ring switch's (`.rs k u`) and
-not read in all 128 bits, with how many are. -/
+/-- The first element of a part's w (`W`, its slots in the opening's w) that is a claim's ring switch's (`.rs k u`) or
+a running sum's of Ligerito's final check (`.acc0 r`, `.acc1 r`) and not read in all 128 bits, with how many are. -/
 def rsUnread (sh : Shape) (W : Array Nat) (rd : Array Bool) (ns : List Nat) : Option (Nat × Nat) :=
   ((List.range W.size).filterMap fun q => match ((wNames sh)[W[q]!]? : Option Key) with
-    | some (.rs _ _) => let n := RecResiduals.readBits rd ns q; if n != 128 then some (q, n) else none
+    | some (.rs _ _) | some (.acc0 _) | some (.acc1 _) =>
+      let n := RecResiduals.readBits rd ns q; if n != 128 then some (q, n) else none
     | _ => none).head?
 
 /-- A unit named `rec-opening/…` is the verifier's part at the `m`, claims and part its name gives, equal in every
 field, at one unit per VU (each part is one copy of its unit), and its computed rows read each element of a claim's ring
-switch it holds in all 128 bits (`rsUnread`) and each other element it holds in all 128 bits or none
+switch or of a running sum it holds in all 128 bits (`rsUnread`) and each other element it holds in all 128 bits or none
 (`RecResiduals.partlyRead`); any other unit passes. The claims are bounded by the file's unit before the structure is
 computed, and the part's input and output bits are compared before its net is built. Irreducible, so that no
 unification against it builds the net. -/
@@ -239,7 +240,8 @@ unification against it builds the net. -/
                     | some (q, n) =>
                       throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of row-port element {q}'s 128 bits"
                   | some (q, n) =>
-                    throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of ring-switch element {q}'s 128 bits"
+                    throw (s!"circuit {c.name}: unit {c.unit.name} reads {n} of ring-switch or running-sum element " ++
+                      s!"{q}'s 128 bits")
               else throw s!"circuit {c.name}: not the verifier's {c.unit.name} ({firstDiff c.unit g})"
   | none =>
     if c.unit.name.startsWith "rec-opening/" then
