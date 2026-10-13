@@ -78,11 +78,24 @@ static_assert(TW * PB >= 8192 && (TW * S) % 16 == 0, "a task's words");
 constexpr int MAXK = 3;
 constexpr int TASK_BYTES = 8192;
 constexpr int SB = TW * S;                              // a task's stored bytes
+// WT_MASK=1: `wide.py`'s masked word, σ_K (kMask) between consecutive rounds. WT_FOLD6=1: sqr is ra-squaring-ceiling's
+// FOLD 6 (`benchmarks/word_codec/kv.cu`'s KV_FOLD6), which holds the double-width square and spills in the p1024 fused
+// kernels; 2: its half squares folded as they are made (sqr_fold6_lean), which fits the 12-warp ones.
+#ifndef WT_MASK
+#define WT_MASK 0
+#endif
+#ifndef WT_FOLD6
+#define WT_FOLD6 0
+#endif
+constexpr bool MASKED = WT_MASK, FOLD6 = WT_FOLD6;
+static_assert(!MASKED || FULL_SLOT, "σ_K's test against p is the full-slot one");
+static_assert(!FOLD6 || (FULL_SLOT && NL % 2 == 0), "FOLD 6 halves the limbs, and folds at full slot");
 
 __constant__ u32 kC[MAXK][NL];
 __constant__ u32 kD[MAXK][NL];   // (c_0 - c_j) mod p, the decode's round j against w = -(c_0 + t)
 __constant__ u32 kTau[NL];
 __constant__ u32 kP[NL];
+__constant__ u32 kMask[NL];
 #ifdef WT_DEBUG_DUMP
 __device__ uint8_t *g_dbg;   // the fused MMA warp's operand bytes, TASK_BYTES a store task
 #endif
@@ -108,6 +121,21 @@ __device__ __forceinline__ u32 addc(u32 a, u32 b) { u32 r; asm volatile("addc.u3
 __device__ __forceinline__ u32 sub_cc(u32 a, u32 b) { u32 r; asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
 __device__ __forceinline__ u32 subc_cc(u32 a, u32 b) { u32 r; asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
 __device__ __forceinline__ u32 subc(u32 a, u32 b) { u32 r; asm volatile("subc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 madlo_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("mad.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madclo_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("madc.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madhi_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("mad.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madchi_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("madc.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madchi(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("madc.hi.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
 
 // x += a (a < 2^32) into NL limbs; returns the carry out of 2^(32 NL). The carry leaves limb 0 with probability
 // a / 2^32 (every caller's a is at most c^2 + c < 2^24), so the rest of the chain is a branch.
@@ -237,10 +265,217 @@ __device__ __forceinline__ void sqr_fold(const u32 (&a)[NL], u32 (&x)[NL]) {
   fold_top(x, c0, c1);
 }
 
+// WT_FOLD6=1: ra-squaring-ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`, as `benchmarks/word_codec/kv.cu`'s
+// KV_FOLD6). sqr_dbl_n is its FOLD 5 square: the off-diagonal products column by column, each column's accumulator
+// starting at the previous one's carry, then y = 2 S + sum a_i^2 2^(64 i) in one carry chain.
+template <int N>
+__device__ __forceinline__ void sqr_dbl_n(const u32 (&a)[N], u32 (&y)[2 * N]) {
+  u32 s[2 * N];
+  u32 c0 = 0, c1 = 0;
+  s[0] = 0;
+#pragma unroll
+  for (int m = 1; m < 2 * N - 2; ++m) {
+    u32 r[3] = {c0, c1, 0};
+#pragma unroll
+    for (int i = (m < N ? 0 : m - N + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+    s[m] = r[0];
+    c0 = r[1];
+    c1 = r[2];
+  }
+  s[2 * N - 2] = c0;
+  s[2 * N - 1] = c1;
+  u32 d[2 * N];
+  d[0] = 0;
+#pragma unroll
+  for (int k = 1; k < 2 * N; ++k) d[k] = __funnelshift_l(s[k - 1], s[k], 1);
+  y[0] = madlo_cc(a[0], a[0], d[0]);
+  y[1] = madchi_cc(a[0], a[0], d[1]);
+#pragma unroll
+  for (int i = 1; i < N; ++i) {
+    y[2 * i] = madclo_cc(a[i], a[i], d[2 * i]);
+    y[2 * i + 1] = madchi_cc(a[i], a[i], d[2 * i + 1]);
+  }
+}
+
+// FOLD 6's square: one Karatsuba level, a = a1 B + a0, a^2 = C B^2 + (A + C - D) B + A with A = a0^2, C = a1^2,
+// D = |a0 - a1|^2, each a FOLD 5 square.
+__device__ __forceinline__ void sqr_fold6(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
+  constexpr int H = NL / 2;
+  u32 x0[H], x1[H], d[H], e[H];
+#pragma unroll
+  for (int k = 0; k < H; ++k) {
+    x0[k] = a[k];
+    x1[k] = a[H + k];
+  }
+  d[0] = sub_cc(x0[0], x1[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) d[k] = subc_cc(x0[k], x1[k]);
+  const u32 mask = subc(0u, 0u);
+  e[0] = sub_cc(x1[0], x0[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) e[k] = subc_cc(x1[k], x0[k]);
+#pragma unroll
+  for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
+  u32 A[2 * H], C[2 * H], D[2 * H], M[2 * H];
+  sqr_dbl_n<H>(x0, A);
+  sqr_dbl_n<H>(x1, C);
+  sqr_dbl_n<H>(d, D);
+  M[0] = add_cc(A[0], C[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) M[k] = addc_cc(A[k], C[k]);
+  u32 m = addc(0u, 0u);
+  M[0] = sub_cc(M[0], D[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) M[k] = subc_cc(M[k], D[k]);
+  m = subc(m, 0u);
+#pragma unroll
+  for (int k = 0; k < 2 * H; ++k) {
+    t[k] = A[k];
+    t[2 * H + k] = C[k];
+  }
+  t[H] = add_cc(t[H], M[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) t[H + k] = addc_cc(t[H + k], M[k]);
+  t[3 * H] = addc_cc(t[3 * H], m);
+#pragma unroll
+  for (int k = 3 * H + 1; k < 4 * H - 1; ++k) t[k] = addc_cc(t[k], 0u);
+  t[4 * H - 1] = addc(t[4 * H - 1], 0u);
+}
+
+// fold at full slot as FOLD 1's carry chains (kv.cu's fold): lo + c hi, the low products' chain then the high ones'
+// a limb up, whose carry word h <= c; then h c into the low limbs, and c once more if that carried out. The same x.
+__device__ __forceinline__ void fold_cc(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
+  x[0] = madlo_cc(t[NL], CF, t[0]);
+#pragma unroll
+  for (int k = 1; k < NL; ++k) x[k] = madclo_cc(t[NL + k], CF, t[k]);
+  u32 h = addc(0u, 0u);
+  x[1] = madhi_cc(t[NL], CF, x[1]);
+#pragma unroll
+  for (int k = 2; k < NL; ++k) x[k] = madchi_cc(t[NL + k - 1], CF, x[k]);
+  h = madchi(t[2 * NL - 1], CF, h);
+  if (add_small(x, h * CF)) add_small(x, CF);
+}
+
+__device__ __forceinline__ u32 sub_small(u32 (&x)[NL], u32 b) {
+  const u32 lo = x[0];
+  x[0] = lo - b;
+  if (lo >= b) return 0u;
+  x[1] = sub_cc(x[1], 1u);
+#pragma unroll
+  for (int k = 2; k < NL; ++k) x[k] = subc_cc(x[k], 0u);
+  return subc(0u, 0u) & 1u;
+}
+
+// x[H..NL) += Y[0..H): B Y_lo; the carry into h.
+template <int H>
+__device__ __forceinline__ void add_lo_high(u32 (&x)[NL], const u32 (&Y)[NL], u32 &h) {
+  x[H] = add_cc(x[H], Y[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) x[H + k] = addc_cc(x[H + k], Y[k]);
+  h = addc(h, 0u);
+}
+
+// x[0..H] += c Y[H..2H): B Y_hi = c Y_hi (mod p); the carries out of limb H into cm.
+template <int H>
+__device__ __forceinline__ void add_hi_low(u32 (&x)[NL], const u32 (&Y)[NL], u32 &cm) {
+  x[0] = madlo_cc(Y[H], CF, x[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) x[k] = madclo_cc(Y[H + k], CF, x[k]);
+  x[H] = addc_cc(x[H], 0u);
+  cm = addc(cm, 0u);
+  x[1] = madhi_cc(Y[H], CF, x[1]);
+#pragma unroll
+  for (int k = 2; k <= H; ++k) x[k] = madchi_cc(Y[H + k - 1], CF, x[k]);
+  cm = addc(cm, 0u);
+}
+
+// WT_FOLD6=2: FOLD 6's three half squares (A = a0^2, C = a1^2, D = |a0 - a1|^2 with B = 2^(n/2)), each folded into x as
+// soon as it is made, so neither the double-width square nor the Karatsuba sum is held: B^2 = 2^n = c (mod p), so
+// a^2 = A (1 + B) + C (c + B) - B D, and B Y = B Y_lo + c Y_hi for each. The carries out of limb H wait in cm and those
+// out of 2^n in h (both signed, two's complement) until the end. x < 2^n, x = a^2 (mod p).
+__device__ __forceinline__ void sqr_fold6_lean(const u32 (&a)[NL], u32 (&x)[NL]) {
+  constexpr int H = NL / 2;
+  u32 a0[H], a1[H], d[H], e[H];
+#pragma unroll
+  for (int k = 0; k < H; ++k) {
+    a0[k] = a[k];
+    a1[k] = a[H + k];
+  }
+  d[0] = sub_cc(a0[0], a1[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) d[k] = subc_cc(a0[k], a1[k]);
+  const u32 mask = subc(0u, 0u);
+  e[0] = sub_cc(a1[0], a0[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) e[k] = subc_cc(a1[k], a0[k]);
+#pragma unroll
+  for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
+  u32 Y[NL], h = 0, cm = 0;
+  // Each half square's inputs take h >> 16 (always 0: h <= 2c + 4) after the previous one is folded, so the compiler
+  // makes them one at a time and holds one half square's columns, not three.
+  sqr_dbl_n<H>(a0, Y);
+#pragma unroll
+  for (int k = 0; k < NL; ++k) x[k] = Y[k];
+  add_lo_high<H>(x, Y, h);
+  add_hi_low<H>(x, Y, cm);
+#pragma unroll
+  for (int k = 0; k < H; ++k) a1[k] ^= (h + cm) >> 16;
+  sqr_dbl_n<H>(a1, Y);
+  x[0] = madlo_cc(Y[0], CF, x[0]);
+#pragma unroll
+  for (int k = 1; k < NL; ++k) x[k] = madclo_cc(Y[k], CF, x[k]);
+  h = addc(h, 0u);
+  x[1] = madhi_cc(Y[0], CF, x[1]);
+#pragma unroll
+  for (int k = 2; k < NL; ++k) x[k] = madchi_cc(Y[k - 1], CF, x[k]);
+  h = madchi(Y[NL - 1], CF, h);
+  add_lo_high<H>(x, Y, h);
+  add_hi_low<H>(x, Y, cm);
+#pragma unroll
+  for (int k = 0; k < H; ++k) d[k] ^= (h + cm) >> 16;
+  sqr_dbl_n<H>(d, Y);
+  x[H] = sub_cc(x[H], Y[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) x[H + k] = subc_cc(x[H + k], Y[k]);
+  h = subc(h, 0u);
+  u32 P[H + 1];
+#pragma unroll
+  for (int k = 0; k < H; ++k) P[k] = Y[H + k] * CF;
+  P[H] = 0u;
+  P[1] = madhi_cc(Y[H], CF, P[1]);
+#pragma unroll
+  for (int k = 2; k < H; ++k) P[k] = madchi_cc(Y[H + k - 1], CF, P[k]);
+  P[H] = madchi(Y[2 * H - 1], CF, 0u);
+  x[0] = sub_cc(x[0], P[0]);
+#pragma unroll
+  for (int k = 1; k <= H; ++k) x[k] = subc_cc(x[k], P[k]);
+  cm = subc(cm, 0u);
+  const u32 ext = (u32)((int)cm >> 31);
+  x[H + 1] = add_cc(x[H + 1], cm);
+#pragma unroll
+  for (int k = H + 2; k < NL; ++k) x[k] = addc_cc(x[k], ext);
+  h = addc(h, ext);
+  const int hs = (int)h;
+  if (hs >= 0) {
+    if (add_small(x, (u32)hs * CF)) add_small(x, CF);
+  } else if (sub_small(x, (u32)(-hs) * CF)) {
+    sub_small(x, CF);
+  }
+}
+
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
+  if constexpr (WT_FOLD6 == 2) {
+    sqr_fold6_lean(a, x);
+    return;
+  }
   u32 t[2 * NL];
-  sqr_full(a, t);
-  fold(t, x);
+  if constexpr (FOLD6) {
+    sqr_fold6(a, t);
+    fold_cc(t, x);
+  } else {
+    sqr_full(a, t);
+    fold(t, x);
+  }
 }
 
 __device__ __forceinline__ void mul(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
@@ -367,6 +602,31 @@ __device__ __forceinline__ void canon_cc(u32 (&x)[NL]) {
   }
 #pragma unroll
   for (int k = 0; k < NL; ++k) x[k] = ge ? y[k] : x[k];
+}
+
+// σ_K(x) = x ^ K when that is below p, else x, x canonical at full slot (kv.cu's sigma): x ^ K >= p needs its limbs
+// above the lowest all ones and its lowest at least 2^32 - c, when the XOR is undone. Its top limb all ones
+// (probability 2^-32) is the one test on the fast path.
+__device__ __forceinline__ void sigma(u32 (&x)[NL], const u32 (&m)[NL]) {
+#pragma unroll
+  for (int k = 0; k < NL; ++k) x[k] ^= m[k];
+  if (__builtin_expect(x[NL - 1] != 0xffffffffu, 1)) return;
+  u32 all = x[1];
+#pragma unroll
+  for (int k = 2; k < NL - 1; ++k) all &= x[k];
+  if (all == 0xffffffffu && x[0] >= 0u - CF) {
+#pragma unroll
+    for (int k = 0; k < NL; ++k) x[k] ^= m[k];
+  }
+}
+
+__device__ __forceinline__ void sigma_k(u32 (&x)[NL]) {
+  if constexpr (MASKED) {
+    u32 m[NL];
+#pragma unroll
+    for (int k = 0; k < NL; ++k) m[k] = kMask[k];
+    sigma(x, m);
+  }
 }
 
 // x = a + b mod p, a + b < 2p, as addmod. At full slot, when s = a + b carries out of 2^n, s - p = (s - 2^n) + c < p
@@ -543,32 +803,38 @@ __device__ __forceinline__ void decode_word_w(u32 (&y)[NL], const u32 (&w)[NL]) 
   addmod_lt2p(q, w, y);
 }
 
-// K rounds against w as decode_word_w: round j's rho^-1(y) - c_j - t is decode_word_w's plus kD[j] = (c_0 - c_j) mod p.
+// Round j >= 1's rho^-1(y) - c_j - t from rho^-1(y) - c_0 - t (in y): plus kD[j] = (c_0 - c_j) mod p, then σ_K.
+__device__ __forceinline__ void undo_round(u32 (&y)[NL], int j) {
+  u32 d[NL], z[NL];
+#pragma unroll
+  for (int k = 0; k < NL; ++k) d[k] = kD[j][k];
+  addmod_lt2p(y, d, z);
+  copy(y, z);
+  sigma_k(y);
+}
+
+// K rounds against w as decode_word_w.
 template <int K>
 __device__ __forceinline__ void decode_word_wk(u32 (&y)[NL], const u32 (&w)[NL]) {
 #pragma unroll 1
   for (int j = K - 1; j > 0; --j) {
-    u32 d[NL], z[NL];
     decode_word_w(y, w);
-#pragma unroll
-    for (int k = 0; k < NL; ++k) d[k] = kD[j][k];
-    addmod_lt2p(y, d, z);
-    copy(y, z);
+    undo_round(y, j);
   }
   decode_word_w(y, w);
 }
 
-// u = (c_0 + tau i) mod p, canonical, at full slot (2^n = c; FRESH_DECODE, its one caller, is full slot only) and
-// without a double-width product: limb k sums c_0's, tau_k lo and tau_(k-1) hi into the carry (three words), and the
+// u = (c_j + tau i) mod p, canonical, at full slot (2^n = c; FRESH_DECODE, its one caller, is full slot only) and
+// without a double-width product: limb k sums c_j's, tau_k lo and tau_(k-1) hi into the carry (three words), and the
 // part above 2^n (< 2^66) comes back times c.
-__device__ __forceinline__ void ct_of(u64 i, u32 (&u)[NL]) {
+__device__ __forceinline__ void ct_of(u64 i, int j, u32 (&u)[NL]) {
   const u32 lo = (u32)i, hi = (u32)(i >> 32);
   u32 r[3] = {0, 0, 0};
 #pragma unroll
   for (int k = 0; k < NL; ++k) {
     mac(r, kTau[k], lo);
     if (k > 0) mac(r, kTau[k - 1], hi);
-    add3(r, kC[0][k], 0u);
+    add3(r, kC[j][k], 0u);
     u[k] = r[0];
     r[0] = r[1];
     r[1] = r[2];
@@ -592,14 +858,29 @@ __device__ __forceinline__ void ct_of(u64 i, u32 (&u)[NL]) {
   canon_cc(u);
 }
 
-// decode_word_w with c_0 + t made from the word's index after the square (ct_of), so no tweak is held across words.
-__device__ __forceinline__ void decode_word_fresh(u32 (&y)[NL], u64 i) {
+// Round j's decode rho^-1(y) - c_j - t with c_j + t made from the word's index after the square (ct_of), so no tweak
+// is held across words. F6: FOLD 6's square (sqr), else the column square.
+template <bool F6>
+__device__ __forceinline__ void decode_word_fresh(u32 (&y)[NL], u64 i, int j) {
   u32 q[NL], u[NL];
-  sqr_fold(y, q);
+  if constexpr (F6) sqr(y, q);
+  else sqr_fold(y, q);
   canon_cc(q);
   neg_if(q, y[0] & 1);
-  ct_of(i, u);
+  ct_of(i, j, u);
   submod_cc(q, u, y);
+}
+
+// K rounds as decode_word_fresh, σ_K after each but the last. One loop over every round: with the last peeled, k = 2's
+// one-trip loop unrolls into two rounds' straight line, which spills at 128 registers. At k >= 2 (only at 128
+// registers, fresh_decode) the rounds square by columns even in a FOLD 6 build: lean FOLD 6 there spills 16 bytes.
+template <int K>
+__device__ __forceinline__ void decode_word_freshk(u32 (&y)[NL], u64 i) {
+#pragma unroll 1
+  for (int j = K - 1; j >= 0; --j) {
+    decode_word_fresh<FOLD6 && K == 1>(y, i, j);
+    if (j > 0) sigma_k(y);
+  }
 }
 
 // w = -(c_0 + t) mod p.
@@ -615,6 +896,7 @@ __device__ __forceinline__ void encode_word(u32 (&x)[NL], const u32 (&t)[NL]) {
 #pragma unroll 1
   for (int j = 0; j < K; ++j) {
     u32 c[NL], u[NL], a[NL];
+    if (j > 0) sigma_k(x);
     load_key(j, c);
     addmod(c, t, u);
     addmod(x, u, a);
@@ -736,7 +1018,8 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
 }
 
 // The decode's field primitives a word a thread, for the gate at their rare carries (`kv_twin.rare_cases`): op 0
-// addmod_cc(a, b), 1 submod_cc(a, b), 2 neg_if(a, b odd), 3 canon_cc(a), 4 sqr(a).
+// addmod_cc(a, b), 1 submod_cc(a, b), 2 neg_if(a, b odd), 3 canon_cc(a), 4 sqr(a), and at full slot 5 sigma(a) with b
+// as K and 6 sqr_fold(a), the fused decoders' column square.
 __global__ void __launch_bounds__(WPB) prim_kernel(int op, const u32 *__restrict__ a, const u32 *__restrict__ b,
                                                    u32 *__restrict__ out, int n) {
   const int w = blockIdx.x * WPB + threadIdx.x;
@@ -757,8 +1040,15 @@ __global__ void __launch_bounds__(WPB) prim_kernel(int op, const u32 *__restrict
   } else if (op == 3) {
     copy(z, x);
     canon_cc(z);
-  } else {
+  } else if (op == 4) {
     sqr(x, z);
+  } else if constexpr (FULL_SLOT) {
+    if (op == 5) {
+      copy(z, x);
+      sigma(z, y);
+    } else {
+      sqr_fold(x, z);
+    }
   }
 #pragma unroll
   for (int k = 0; k < NL; ++k) out[(u64)w * NL + k] = z[k];
@@ -802,24 +1092,26 @@ __device__ __forceinline__ void seed_word(u64 id, u32 (&x)[NL]) {
   else x[Q % NL] &= TOPMASK >> 1;
 }
 
-// what 0: `steps` squarings of ILP words a thread (lazy); 1: `steps` decodes of K rounds; 2: `steps` encodes of K rounds.
+// what 0: `steps` squarings of ILP words a thread (lazy, sqr); 1: `steps` decodes of K rounds; 2: `steps` encodes of K
+// rounds; 3: as 0 with sqr_fold, the fused decoders' column square (full slot).
 template <int WHAT, int K, int ILP>
 __global__ void __launch_bounds__(128, 1) chain_kernel(u64 steps, unsigned long long *xr) {
   const u64 id = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   u32 x[ILP][NL], t[NL];
 #pragma unroll
   for (int w = 0; w < ILP; ++w) seed_word(id * ILP + w, x[w]);
-  if (WHAT != 0) {
+  if (WHAT == 1 || WHAT == 2) {
     canon(x[0]);
     tweak(id, t);
   }
 #pragma unroll 1
   for (u64 s = 0; s < steps; ++s) {
-    if (WHAT == 0) {
+    if (WHAT == 0 || WHAT == 3) {
 #pragma unroll
       for (int w = 0; w < ILP; ++w) {
         u32 y[NL];
-        sqr(x[w], y);
+        if constexpr (WHAT == 3) sqr_fold(x[w], y);
+        else sqr(x[w], y);
         copy(x[w], y);
       }
     } else if (WHAT == 1) {
@@ -1852,6 +2144,14 @@ __host__ __device__ constexpr int fused_warps() {
 // The MMA warps after the decoders: at NB8 = 4 (64 MMAs a task) and k <= 2 two, taking alternate tasks (one warp's
 // MMAs at M = 32 run at 1.45 reads, above the k <= 2 decode; the k = 3 decode is slower, and wants the warp back),
 // except where the MMA warp also hashes the decoders' sketches (SKK > 0, SKW = 0).
+// The decoders' fresh decode (decode_word_freshk, c_j + t made each round) where four warps share a sub-partition
+// (WARPS > 12, 128 registers a thread): the held w doesn't fit there at k >= 2 (p1024's 14 warps spilled 112-136
+// bytes). At 12 warps (168 registers) the k >= 2 decoders hold w.
+template <int K, int WARPS>
+__host__ __device__ constexpr bool fresh_decode() {
+  return FRESH_DECODE && (K == 1 || WARPS > 12);
+}
+
 template <int K, int NB8, int SKK, int SKW>
 __host__ __device__ constexpr int fused_mma_warps() {
   return NB8 == 4 && K <= 2 && !(SKK > 0 && SKW == 0) ? 2 : 1;
@@ -2238,11 +2538,10 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
 // the stage's stored bytes is then before the lane's arrive on `loaded` (the warp's, behind __syncwarp), and its
 // sums are in before its lanes arrive on `decoded`. With SKW > 0 the sketch warps sketch instead (sketch_warp), and a
 // lane writes its payload over the stored bytes only once its task's are `sketched`.
-template <int K, int SKK, int SKW>
+template <int K, int SKK, int SKW, bool FRESH>
 __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loaded, u64 *decoded, u64 *sketched,
                                              int stages, int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp,
                                              int lane, const u32 *__restrict__ tsteps, const Sketch &sk) {
-  constexpr bool FRESH = K == 1 && FRESH_DECODE;
   const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
   int i = (32 * warp + lane) / TW, w = (32 * warp + lane) % TW;
   u32 t[NL];
@@ -2277,7 +2576,7 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
     if (on) {
       load_word_smem(st + w * S, yw);
       if constexpr (PAY_E > 0) mbar_arrive(loaded + s);
-      if constexpr (FRESH) decode_word_fresh(yw, base + (q0 + (u64)i * gq) * TW + w);
+      if constexpr (FRESH) decode_word_freshk<K>(yw, base + (q0 + (u64)i * gq) * TW + w);
       else decode_word_wk<K>(yw, t);
     }
     if constexpr (PAY_E == 0) {
@@ -2319,8 +2618,9 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
 // With SKK > 0 the decoders sketch (sk_begin) and the MMA warp hashes each tile (SkJob) into sk_out and tags
 // (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps; with SKW > 0 as well, SKW sketch warps after
 // the producer do all of it (sketch_warp).
-template <int K, int NB8, bool PARTIALS, int SKK, int SKW>
-__global__ void __launch_bounds__(fused_warps<NB8, SKK, SKW>() * 32, 1) fused_kernel(
+// WARPS, the warps the launch bounds allow, is fused_warps' or fewer (wt_fused_sketch).
+template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS = fused_warps<NB8, SKK, SKW>()>
+__global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
     const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
     u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps, u32 *__restrict__ tags,
     u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt, int sgs) {
@@ -2430,8 +2730,8 @@ __global__ void __launch_bounds__(fused_warps<NB8, SKK, SKW>() * 32, 1) fused_ke
     }
   } else if (warp < decoders) {
     const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
-    decode_tasks<K, SKK, SKW>(smem, ready, loaded, decoded, sketched, stages, ntasks, q0, gq, base, decoders, warp,
-                              lane, tsteps, sk);
+    decode_tasks<K, SKK, SKW, fresh_decode<K, WARPS>()>(smem, ready, loaded, decoded, sketched, stages, ntasks, q0,
+                                                        gq, base, decoders, warp, lane, tsteps, sk);
   } else if constexpr (SKW > 0) {
     if (warp < decoders + 1 + MW + SKW) {
       const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
@@ -2486,8 +2786,15 @@ int wt_constants(int *out) {
   out[0] = NBITS; out[1] = NL; out[2] = S; out[3] = PB; out[4] = TW; out[5] = U; out[6] = (int)CF; out[7] = WPB;
   out[8] = TC_OK ? 2 * (U + 1) : 0; out[9] = TC_WORD_BYTES; out[10] = MAXK; out[11] = SB; out[12] = FUSED_WARPS;
   out[13] = FUSED_SPAN; out[14] = TAG_BLOCK; out[15] = WT_SK_DIAG; out[16] = fused_warps<1, 0, 0>();
-  out[17] = WT_RECEIPT;
+  out[17] = WT_RECEIPT; out[18] = WT_MASK; out[19] = WT_FOLD6;
   return 0;
+}
+
+// K, NL limbs in host memory (WT_MASK=1).
+int wt_set_mask(const u32 *mask) {
+  if (!MASKED) return 1;
+  if (cudaMemcpyToSymbol(kMask, mask, NL * 4)) return 2;
+  return cudaDeviceSynchronize() ? 3 : 0;
 }
 
 // c (k elements of NL limbs), tau and p in host memory.
@@ -2531,7 +2838,7 @@ int wt_decode(const uint8_t *store, u32 *out, u64 n, u64 base, int k, unsigned l
 }
 
 int wt_prim(int op, const u32 *a, const u32 *b, u32 *out, int n, cudaStream_t s) {
-  if (op < 0 || op > 4 || n < 1) return 1;
+  if (op < 0 || op > 6 || (op >= 5 && !FULL_SLOT) || n < 1) return 1;
   prim_kernel<<<(n + WPB - 1) / WPB, WPB, 0, s>>>(op, a, b, out, n);
   return cudaGetLastError() ? 4 : 0;
 }
@@ -2546,6 +2853,7 @@ int wt_tc_decode(const uint8_t *store, u32 *out, u64 n, u64 base, int k, unsigne
   if constexpr (!TC_OK) {
     return 5;
   } else {
+    if (MASKED && k > 1) return 5;   // tc_decode has no σ_K
 #define F(K) do { if (out) tc_decode_kernel<K, 2><<<grid, TC_WARPS * 32, 0, s>>>(store, out, n, base, xr); \
                   else tc_decode_kernel<K, 0><<<grid, TC_WARPS * 32, 0, s>>>(store, out, n, base, xr); } while (0)
     WT_K_SWITCH(k, F)
@@ -2561,7 +2869,8 @@ int wt_tc_square_gate(const u32 *in, u32 *out, int n, cudaStream_t s) {
 }
 
 // what 0: CUDA-core squarings (ilp words a thread); 1: CUDA-core decodes; 2: CUDA-core encodes; 3: tensor-core
-// squarings (ilp words a warp). steps a thread (or warp). block: threads a CTA for 0-2.
+// squarings (ilp words a warp); 4 b3_chain_kernel; 5 pipe_kernel; 6: as 0 with sqr_fold, a word a thread (full slot).
+// steps a thread (or warp).
 int wt_chain(int what, int k, int ilp, u64 steps, unsigned long long *xr, int grid, cudaStream_t s) {
   if (what == 0) {
     if (ilp == 1) chain_kernel<0, 1, 1><<<grid, 128, 0, s>>>(steps, xr);
@@ -2588,6 +2897,9 @@ int wt_chain(int what, int k, int ilp, u64 steps, unsigned long long *xr, int gr
     if (ilp == 1) tc_chain_kernel<1><<<grid, TC_WARPS * 32, 0, s>>>(steps, xr);
     else if (ilp == 2) tc_chain_kernel<2><<<grid, TC_WARPS * 32, 0, s>>>(steps, xr);
     else return 1;
+  } else if (what == 6) {
+    if (!FULL_SLOT || ilp != 1) return 1;
+    chain_kernel<3, 1, 1><<<grid, 128, 0, s>>>(steps, xr);
   } else {
     return 1;
   }
@@ -2664,11 +2976,16 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
                                                stages, tsteps, tags, tag_base, signs, sk_out, skt, sgs);
     });
   };
-#define G(KK, NB, SK, SW)                                                                              \
-  do {                                                                                                 \
-    const int sg = SW == 0 && fused_smem_bytes<NB, SK, SW>(stages, signs16) <= optin ? signs16 : 0;        \
-    return partials ? go(fused_kernel<KK, NB, true, SK, SW>, fused_smem_bytes<NB, SK, SW>(stages, sg), sg) \
-                    : go(fused_kernel<KK, NB, false, SK, SW>, fused_smem_bytes<NB, SK, SW>(stages, sg), sg); \
+  // A launch of at most 12 warps at k >= 2 takes the 12-warp kernel (fresh_decode), where fused_warps allows more.
+#define G(KK, NB, SK, SW)                                                                                            \
+  do {                                                                                                               \
+    const int sg = SW == 0 && fused_smem_bytes<NB, SK, SW>(stages, signs16) <= optin ? signs16 : 0;                  \
+    const int sm = fused_smem_bytes<NB, SK, SW>(stages, sg);                                                         \
+    constexpr int W12 = FRESH_DECODE && KK >= 2 ? 12 : fused_warps<NB, SK, SW>();                                    \
+    if (warps <= W12)                                                                                                \
+      return partials ? go(fused_kernel<KK, NB, true, SK, SW, W12>, sm, sg)                                          \
+                      : go(fused_kernel<KK, NB, false, SK, SW, W12>, sm, sg);                                        \
+    return partials ? go(fused_kernel<KK, NB, true, SK, SW>, sm, sg) : go(fused_kernel<KK, NB, false, SK, SW>, sm, sg); \
   } while (0)
 #define GN(KK, SK, SW) \
   do { if (nb8 == 1) G(KK, 1, SK, SW); else if (nb8 == 2) G(KK, 2, SK, SW); else G(KK, 4, SK, SW); } while (0)

@@ -84,6 +84,7 @@ class Lib:
         self.path, self.so = path, ctypes.CDLL(path)
         so = self.so
         so.wt_set_key.argtypes = [v, i, v, v]
+        so.wt_set_mask.argtypes = [v]
         so.wt_encode.argtypes = [v, v, q, q, i, i, v]
         so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
         so.wt_tc_decode.argtypes = [v, v, q, q, i, v, i, v]
@@ -106,10 +107,12 @@ class Lib:
         so.wt_tag_tree.argtypes = [v, q, v, v]
         so.wt_spin.argtypes = [ctypes.c_longlong, v]
         so.wt_empty.argtypes = [i, v]
-        cs = (ctypes.c_int * 18)()
+        cs = (ctypes.c_int * 20)()
         so.wt_constants(cs)
         (self.n, self.nl, self.s, self.pb, self.tw, self.u, self.c, self.wpb, self.tc_mmas, self.tc_bytes, self.kmax,
-         self.sb, self.fused_warps, self.fused_span, self.tag_block, self.diag, self.fused_most, self.receipt) = list(cs)
+         self.sb, self.fused_warps, self.fused_span, self.tag_block, self.diag, self.fused_most, self.receipt, mask,
+         fold6) = list(cs)
+        self.mask, self.fold6 = bool(mask), fold6   # fold6: 0 the column square, 1 FOLD 6, 2 FOLD 6 folded as made
         self.field = next(f for f in W.FIELDS.values() if f.n == self.n)
         f = self.field
         if (self.s, self.pb, self.tw, self.c, self.sb) != (f.word_bytes, f.payload_bytes, W.TASK_WORDS[f.name], f.c,
@@ -117,7 +120,8 @@ class Lib:
             raise RuntimeError(f"{path}: constants {list(cs)} are not wide.py's {f}")
         if self.tag_block != TG.TAG_BLOCK:
             raise RuntimeError(f"{path}: tag blocks of {self.tag_block} bytes, tagging.py's are {TG.TAG_BLOCK}")
-        self.name = f.name + (f"-diag{self.diag}" if self.diag else "") + ("-sha512" if self.receipt else "")
+        self.name = (f.name + ("-masked" if self.mask else "") + (f"-fold6{'' if self.fold6 == 1 else 'lean'}" if self.fold6 else "")
+                     + (f"-diag{self.diag}" if self.diag else "") + ("-sha512" if self.receipt else ""))
         self.tc = self.tc_mmas > 0
         self.tag_bytes = 64 if self.receipt else 32          # a sketch vector's receipt
         self.jbase = 0 if self.receipt else TAG_BASE          # sketch-sha512: vector v of a launch is the store's block v
@@ -188,25 +192,38 @@ def set_tag(lib: Lib) -> None:
     lib.call("wt_set_tag", ctypes.addressof(k), ctypes.addressof(pre))
 
 
+def lib_key(lib: Lib, k: int) -> W.Key:
+    """The bench's k-round key at SEED, masked when the library is (WT_MASK)."""
+    return W.key(lib.field.name, SEED, k, mask=lib.mask)
+
+
 def set_key(lib: Lib, torch, key: W.Key) -> None:
     """The key into the library's constant memory, from host buffers."""
+    if (key.mask is not None) != lib.mask:
+        raise ValueError(f"{lib.name}: a {'masked' if key.mask is not None else 'plain'} key")
     c = ctypes.create_string_buffer(b"".join(limbs_bytes(x, lib.nl) for x in key.c))
     tau = ctypes.create_string_buffer(limbs_bytes(key.tau, lib.nl))
     p = ctypes.create_string_buffer(limbs_bytes(lib.field.p, lib.nl))
     lib.call("wt_set_key", ctypes.addressof(c), key.rounds, ctypes.addressof(tau), ctypes.addressof(p))
+    if lib.mask:
+        m = ctypes.create_string_buffer(limbs_bytes(key.mask, lib.nl))
+        lib.call("wt_set_mask", ctypes.addressof(m))
 
 
 # --- gates -------------------------------------------------------------------------------------------------------------
 
 def gate_codec(lib: Lib, torch, k: int, n_words: int, log) -> dict:
     f = lib.field
-    key = W.key(f.name, SEED, k)
+    key = lib_key(lib, k)
     set_key(lib, torch, key)
     rng = random.Random(7 + k + f.n)
     top = f.max_payload
-    payloads = [0, 1, 2, top, top - 1, 1 << (8 * f.payload_bytes - 1)]
-    payloads += [rng.randrange(top + 1) for _ in range(n_words - len(payloads))]
     base = (1 << 40) + 12345
+    payloads = [0, 1, 2, top, top - 1, 1 << (8 * f.payload_bytes - 1)]
+    if lib.mask and k > 1:   # σ_K's rare branch at word len(payloads) on
+        payloads += W.sigma_rare_payloads(key, base + len(payloads))[:1]
+        payloads += W.sigma_rare_payloads(key, base + len(payloads))[-1:]
+    payloads += [rng.randrange(top + 1) for _ in range(n_words - len(payloads))]
     m = to_dev(torch, b"".join(limbs_bytes(x, lib.nl) for x in payloads))
     store = torch.zeros(n_words * f.word_bytes, dtype=torch.uint8, device="cuda")
     out = torch.zeros(n_words * 4 * lib.nl, dtype=torch.uint8, device="cuda")
@@ -219,7 +236,7 @@ def gate_codec(lib: Lib, torch, k: int, n_words: int, log) -> dict:
                != want[i * f.word_bytes:(i + 1) * f.word_bytes]]
     res = {"words": n_words, "encode_mismatch": bad_enc[:8], "encode_ok": not bad_enc}
     for fn, name in (("wt_decode", "cuda"), ("wt_tc_decode", "tc")):
-        if name == "tc" and not lib.tc:
+        if name == "tc" and not (lib.tc and (k == 1 or not lib.mask)):   # tc_decode has no σ_K
             continue
         out.zero_()
         lib.call(fn, ptr(store), ptr(out), n_words, base, k, ptr(xr), 32, stream(torch))
@@ -325,6 +342,14 @@ def rates(lib: Lib, torch, sms: int, reps: int, log) -> dict:
     best_c = max(out["square_cuda"].values(), key=lambda r: r["per_s"])
     log(f"rates {lib.name}: CUDA squarings/s best {best_c['per_s']:.3e} ("
         + ", ".join(f"{k} {r['per_s']:.2e}" for k, r in out["square_cuda"].items()) + ")")
+    if lib.field.full_slot:
+        out["square_cuda_column"] = {}
+        for mult in (2, 4, 8):
+            grid = sms * mult
+            out["square_cuda_column"][f"ilp1_g{mult}"] = calibrated(
+                torch, lambda s: lib.call("wt_chain", 6, 1, 1, s, ptr(xr), grid, st), grid * 128, 0.08, reps)
+        best = max(out["square_cuda_column"].values(), key=lambda r: r["per_s"])
+        log(f"rates {lib.name}: CUDA column squarings (sqr_fold, the fused decoders') /s best {best['per_s']:.3e}")
     for k in (1, 2):
         grid = sms * 4
         out["decode"][k] = calibrated(torch, lambda s: lib.call("wt_chain", 1, k, 1, s, ptr(xr), grid, st), grid * 128,
@@ -377,12 +402,12 @@ def standalone_decode(lib: Lib, torch, store_bytes: int, sms: int, reps: int, lo
     out = {}
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     for k in (1, 2):
-        set_key(lib, torch, W.key(f.name, SEED, k))
+        set_key(lib, torch, lib_key(lib, k))
         store, enc_s = encode_store(lib, torch, m, k, sms)
         back = torch.empty_like(m)
         entry = {"words": n, "store_bytes": n * f.word_bytes, "setup_encode_s": enc_s}
         for fn, name, mults in (("wt_decode", "cuda", (4, 8, 16)), ("wt_tc_decode", "tc", (4, 8, 16, 24))):
-            if name == "tc" and not lib.tc:
+            if name == "tc" and not (lib.tc and (k == 1 or not lib.mask)):
                 continue
             back.zero_()
             lib.call(fn, ptr(store), ptr(back), n, 0, k, ptr(xr), sms * 8, stream(torch))
@@ -765,7 +790,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     m = task_payload_limbs(lib, torch, plain)
     keys, stores = {}, {}
     for k in ks:
-        keys[k] = W.key(lib.field.name, SEED, k)
+        keys[k] = lib_key(lib, k)
         set_key(lib, torch, keys[k])
         stores[k], _ = encode_store(lib, torch, m, k, 188)
     del m
@@ -1233,7 +1258,7 @@ def main() -> int:
     log(f"read {res['read']['gbps']:.0f} GB/s")
     for lib in libs:
         e = res["libs"][lib.name]
-        set_key(lib, torch, W.key(lib.field.name, SEED, 2))
+        set_key(lib, torch, lib_key(lib, 2))
         if "rates" in phases:
             e["rates"] = rates(lib, torch, sms, a.reps, log)
             e["analysis"] = analysis(lib, res["read"]["gbps"], e["rates"])
