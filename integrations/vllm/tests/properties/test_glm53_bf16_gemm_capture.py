@@ -153,6 +153,14 @@ def test_cutedsl_dispatch_wins_over_legacy_profile_split_count(tmp_path) -> None
     assert (t["words"], t["mismatch"], t["twin_mismatch"]) == (5 * 16, 0, 0)
 
 
+def test_the_default_cublas_split_counts_are_pinned_by_shape_and_m() -> None:
+    assert [BC.default_cublas_split_k("router", M, 6144, 256) for M in (17, 32, 128, 256)] == [4, 4, 4, 3]
+    assert [BC.default_cublas_split_k("router", M, 7168, 384) for M in (17, 32, 128, 256)] == [5, 5, 4, 4]
+    assert [BC.default_cublas_split_k("linear", M, 6144, 160) for M in X.LINEAR_M] == [4] * len(X.LINEAR_M)
+    assert [BC.default_cublas_split_k("linear", M, 7168, 64) for M in X.LINEAR_M] == [5] * len(X.LINEAR_M)
+    assert BC.default_cublas_split_k("f32out", 256, 7168, 2048) is None       # c4 M256 is the non-split kernel
+
+
 def test_the_default_operand_dump_keeps_reduction_routes_and_deduplicates_weights(tmp_path) -> None:
     profile = {"launches": [{"name": "main_splitK", "grid": [4, 8, 1]}],
                "reduction_kernels": [{"name": "splitKreduce_kernel", "grid": [8, 2, 1]}]}

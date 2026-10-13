@@ -285,7 +285,7 @@
     "CublasSplitKGemm_v1",
     "CublasSplitKGemm_v2"
    ],
-   "note": "cuBLAS/cuBLASLt BF16 GEMM at vLLM's default: a non-split output coordinate is core's Gemm_v2{K, N, HopperBF16WgmmaDot16_v1} (Boolean Gemm_v3); a split-K bf16 output is cublas_bf16.CublasSplitKGemm_v1{K, N, SPLIT_K, DOT} / _v2, with SPLIT_K read from the capture's profiled launch. q_nope_absorb and v_absorb (torch.bmm on the load-derived W_UK_T / W_UV views) are cublas_bf16.BatchedGemm_v1{NHL, K, N, DOT} / _v2. tests/properties/glm53_bf16_gemm_capture_gpu.py pins each kernel, grid, split count, cuBLAS version, hypothesis fit and every output word on the H200; its split-K-off run remains a named comparison variant"
+   "note": "cuBLAS/cuBLASLt BF16 GEMM at vLLM's default: a non-split output coordinate is core's Gemm_v2{K, N, HopperBF16WgmmaDot16_v1} (Boolean Gemm_v3); a split-K bf16 output is cublas_bf16.CublasSplitKGemm_v1{K, N, SPLIT_K, DOT} / _v2, with SPLIT_K pinned by bf16_gemm_check.default_cublas_split_k for cuBLAS 12.9.1 on the H200. q_nope_absorb and v_absorb (torch.bmm on the load-derived W_UK_T / W_UV views) are cublas_bf16.BatchedGemm_v1{NHL, K, N, DOT} / _v2. tests/properties/glm53_bf16_gemm_capture_gpu.py pins each kernel, grid, split count, cuBLAS version, hypothesis fit and every output word on the H200; its split-K-off run remains a named comparison variant"
   },
   "router-gemm": {
    "status": "port",
@@ -303,7 +303,7 @@
     "CublasSplitKGemmF32Out_v1",
     "CublasSplitKGemmF32Out_v2"
    ],
-   "note": "GateLinear bf16 x bf16 -> f32, by M as bf16_gemm_check.dispatch_sm90 names vLLM's kernel: M <= 4 cuteDSL ll_bf16 dotprod (LlBf16DotprodGemm_v1{256, 6144, BS 128, VEC 8, FMA}; FMA the H200 capture decides), 5 <= M <= 16 ll_bf16 split-K (LlBf16SplitKGemm_v1{256, 6144, SPLIT_K 6, or 8 at M 9 and 11, TILE_K 256, WARPS 4, HopperBF16WgmmaDot16_v1}), M > 16 default cuBLAS torch.mm(out_dtype=f32), either GemmF32Out_v1 / _v2 or CublasSplitKGemmF32Out_v1 / _v2 at the captured split count. tests/properties/glm53_bf16_gemm_capture_gpu.py pins the dispatch, cuBLAS selection, hypotheses and words on the H200"
+   "note": "GateLinear bf16 x bf16 -> f32, by M as bf16_gemm_check.dispatch_sm90 names vLLM's kernel: M <= 4 cuteDSL ll_bf16 dotprod (LlBf16DotprodGemm_v1{256, 6144, BS 128, VEC 8, FMA}; FMA the H200 capture decides), 5 <= M <= 16 ll_bf16 split-K (LlBf16SplitKGemm_v1{256, 6144, SPLIT_K 6, or 8 at M 9 and 11, TILE_K 256, WARPS 4, HopperBF16WgmmaDot16_v1}), M > 16 default cuBLAS torch.mm(out_dtype=f32), either GemmF32Out_v1 / _v2 or CublasSplitKGemmF32Out_v1 / _v2 at bf16_gemm_check.default_cublas_split_k's H200 split count. tests/properties/glm53_bf16_gemm_capture_gpu.py pins the dispatch, cuBLAS selection, hypotheses and words on the H200"
   },
   "fa3-prefill-attention": {
    "status": "port",

@@ -529,6 +529,13 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
         rec["profile"] = _kernels(fn, d / "profile.json")
     except Exception as e:  # noqa: BLE001
         rec["profile"] = {"error": _error(e), "ok": False}
+    if served_default and rec["profile"].get("reduction_kernels"):
+        from verity_vllm.program.registry import bf16_gemm_check as BC
+
+        rec["profile"]["split_k"] = BC.default_cublas_split_k(phase, M, rec["K"], rec["N"])
+        rec["profile"]["ok"] = (rec["profile"]["split_k"] is not None
+                                and any("splitk" in x["name"].lower() and "reduce" not in x["name"].lower()
+                                        for x in rec["profile"]["launches"]))
     probe_paths, probe = None, None
     profiled_split_k = rec["profile"].get("split_k")
     if served_default and probe_w is not None and _cublas_split_k({"split_k": profiled_split_k, "kernel": rec.get("kernel")}):

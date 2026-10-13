@@ -22,12 +22,11 @@ row computes a value another computes, nor a step a value its accumulator's cons
 of `mla.MlaBmm_v1` (vLLM's batch-invariant Triton `bmm_kernel` on sm_120), which names no word; `tests/program/test_bf16_gemm.py`
 checks that they agree.  `bf16_gemm_check` holds the numpy models.
 
-The two split-K Definitions deliberately state a closed-source hypothesis, not an established cuBLAS contract: split the sequence
-of k16 blocks into balanced contiguous intervals; run each interval's ascending `HopperBF16WgmmaDot16_v1` chain from +0; store f32
-partials; and have the separate reduction kernel add them serially in increasing split order in f32, rounding only the final result
-for a bf16 output.  The H200 capture records cuBLAS's version, each selected kernel and launch grid (whose z dimension pins
-`SPLIT_K`), and fits crafted cancellation rows against this hypothesis and alternatives (strided partition, reverse/tree reduction,
-and bf16 partials).  Until that capture passes, conformance remains not established.
+The two split-K Definitions model cuBLAS 12.9.1's H200 route: split K into equal 64-element-aligned chunks (the final chunk holds
+the remainder); run each chunk's ascending `HopperBF16WgmmaDot16_v1` chain from +0; store f32 partials; and have the separate
+reduction kernel add them serially in increasing split order in f32, rounding only the final result for a bf16 output.  The H200
+capture records cuBLAS's version, each selected kernel and launch grid, pins `SPLIT_K` by (M,K,N), and fits crafted cancellation
+rows against partition, reduction-order and partial-type alternatives.
 """
 from __future__ import annotations
 
@@ -142,13 +141,18 @@ def _batched_bits(B, S, x, w):
 
 
 def split_bounds(K: int, splits: int) -> list[tuple[int, int]]:
-    """Balanced contiguous intervals of k16 blocks, the default cuBLAS split-K partition hypothesis."""
+    """cuBLAS 12.9.1's contiguous split-K intervals: equal 64-element chunks, then the final remainder."""
     if K <= 0 or K % 16:
         raise ValueError("CublasSplitK: unsupported statics (K_positive_multiple_of_16)")
     blocks = K // 16
     if not 1 < splits <= blocks:
         raise ValueError("CublasSplitK: unsupported statics (SPLIT_K_in_2_to_K_over_16)")
-    return [(16 * (z * blocks // splits), 16 * ((z + 1) * blocks // splits)) for z in range(splits)]
+    chunk = ((K + splits - 1) // splits + 63) // 64 * 64
+    bounds = list(range(0, K, chunk)) + [K]
+    if len(bounds) != splits + 1:
+        # Small circuit-check/test statics cannot hold `splits` 64-element chunks; their exact k16 partition remains total.
+        bounds = [16 * (z * blocks // splits) for z in range(splits)] + [K]
+    return list(zip(bounds, bounds[1:]))
 
 
 def _splitk(gemm, add, cast=None):
@@ -166,8 +170,8 @@ def _splitk(gemm, add, cast=None):
 
 GEMM_F32_DOC = "`x[K] @ W[N, K]^T` with the f32 accumulator as the output: `DotBf16{K, DOT}` on each W row (torch.mm out_dtype=float32)"
 BATCHED_DOC = "torch.bmm on bf16: `Gemm{K, N, DOT}` of each member's x against its W (w[b][n][k] the operand at [b, k, n])"
-SPLITK_DOC = ("default cuBLAS split-K hypothesis: balanced contiguous k16 intervals, one ascending DOT chain from +0 per interval, "
-              "then a separate serial f32 reduction in increasing split order")
+SPLITK_DOC = ("cuBLAS 12.9.1's H200 split-K: equal 64-element-aligned contiguous chunks and a final remainder, one ascending DOT "
+              "chain from +0 per chunk, then a separate serial f32 reduction in increasing split order")
 
 GemmF32OutWord = CompositeDefinition("GemmF32Out", 1, ("K", "N", "DOT"), _gemm_f32_type(P.BF16, P.F32), _gemm_f32(G.DotBf16),
                                      doc=GEMM_F32_DOC, conformance=CONFORMANCE)

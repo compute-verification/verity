@@ -10,8 +10,8 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
 * `f32out_rows`: `GemmF32Out_v1{DOT=HopperBF16WgmmaDot16_v1}` (also DeepSeek-V4-Pro's compressor GEMMs); `linear_rows`: core's
   `Gemm_v2` (lm_head, GLM-5.3's indexer `wk_weights_proj`, DeepSeek-V4-Pro's `weights_proj`); `bmm_rows`: `BatchedGemm_v1`,
   `mla_check.bmm_rows`;
-* `cublas_splitk_rows`: the default cuBLAS hypothesis in `cublas_bf16`: balanced contiguous k16 intervals, f32 partials and a
-  serial increasing-order f32 reduction. `cublas_splitk_hypotheses` supplies the crafted capture's alternatives.
+* `cublas_splitk_rows`: cuBLAS 12.9.1's H200 route in `cublas_bf16`: equal 64-element-aligned contiguous chunks, a final
+  remainder, f32 partials and a serial increasing-order f32 reduction. `default_cublas_split_k` pins the selected split count.
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
@@ -34,6 +34,20 @@ SM90_SPLITK = {(4096, 256): {**{m: 8 for m in range(5, 8)}, 10: 8, 11: 8, 13: 8,
                (6144, 256): {9: 8, 11: 8},
                (7168, 384): {m: (8 if m in (6, 8, 12) else 7) for m in range(6, 17)}}
 LL_MAX_M = 16
+DEFAULT_CUBLAS_SPLIT_K = {
+    ("router", 6144, 256): {17: 4, 32: 4, 128: 4, 256: 3},
+    ("router", 7168, 384): {17: 5, 32: 5, 128: 4, 256: 4},
+    ("linear", 6144, 160): {m: 4 for m in (1, 4, 16, 128, 256)},
+    ("linear", 7168, 64): {m: 5 for m in (1, 4, 16, 128, 256)},
+    ("f32out", 7168, 2048): {1: 3, 4: 3, 16: 3, 128: 2},
+    ("f32out", 7168, 1024): {1: 5, 4: 5, 16: 5, 128: 3, 256: 2},
+    ("f32out", 7168, 512): {1: 5, 4: 5, 16: 5, 128: 3, 256: 3},
+}
+
+
+def default_cublas_split_k(phase: str, M: int, K: int, N: int) -> int | None:
+    """The split count selected by cuBLAS 12.9.1 on the pinned H200, or None for its non-split routes."""
+    return DEFAULT_CUBLAS_SPLIT_K.get((phase, K, N), {}).get(M)
 
 
 def dispatch_sm90(M: int, K: int, N: int) -> tuple[str, dict]:
@@ -77,7 +91,11 @@ def _split_cols(K: int, splits: int, partition: str) -> list[np.ndarray]:
         raise ValueError(f"cublas split-k: K {K}, splits {splits}")
     blocks = K // 16
     if partition == "contiguous":
-        return [np.arange(16 * (z * blocks // splits), 16 * ((z + 1) * blocks // splits)) for z in range(splits)]
+        chunk = ((K + splits - 1) // splits + 63) // 64 * 64
+        bounds = list(range(0, K, chunk)) + [K]
+        if len(bounds) != splits + 1:
+            bounds = [16 * (z * blocks // splits) for z in range(splits)] + [K]
+        return [np.arange(lo, hi) for lo, hi in zip(bounds, bounds[1:])]
     if partition == "strided":
         return [np.concatenate([np.arange(16 * b, 16 * b + 16) for b in range(z, blocks, splits)]) for z in range(splits)]
     raise ValueError(f"unknown split partition {partition!r}")

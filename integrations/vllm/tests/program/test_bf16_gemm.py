@@ -256,6 +256,11 @@ def test_cublas_splitk_definitions_agree_with_the_hypothesis() -> None:
         assert np.array_equal(bf16, C.cublas_splitk_rows(x, w, 4, out="bf16"))
 
 
+def test_cublas_default_split_bounds_are_equal_64_element_chunks_then_a_remainder() -> None:
+    assert CB.split_bounds(7168, 5) == [(0, 1472), (1472, 2944), (2944, 4416), (4416, 5888), (5888, 7168)]
+    assert CB.split_bounds(7168, 3) == [(0, 2432), (2432, 4864), (4864, 7168)]
+
+
 def test_cublas_splitk_probe_tells_the_hypotheses_apart() -> None:
     """Crafted finite words distinguish the stated contiguous/f32/forward hypothesis from every capture alternative."""
     rng = np.random.default_rng(42)
