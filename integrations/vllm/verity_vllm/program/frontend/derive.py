@@ -183,7 +183,8 @@ class Ctx:
                  vocab, module, ep, B: Builder, user_inputs: dict[str, Coll], weights_coll: Coll | None, weights: list[WeightLeaf],
                  placeholder_to_weight: dict[str, int], lifted_constants: dict[str, str], registration: Registration | None = None,
                  weights_param: int | None = None, committed_inputs: dict[Any, Coll] | None = None,
-                 committed_units: list[dict[str, Any]] | None = None) -> None:
+                 committed_units: list[dict[str, Any]] | None = None,
+                 committed_writes: dict[Any, list[Any]] | None = None) -> None:
         self.mode, self.profile, self.config, self.allowed_dims, self.name = mode, profile, dict(config or {}), dict(allowed_dims or {}), name
         self.ruleset, self.vocab, self.module, self.ep, self.B = ruleset, vocab, module, ep, B
         self.user_inputs, self.weights_coll, self.weights = user_inputs, weights_coll, weights
@@ -191,6 +192,7 @@ class Ctx:
         self.registration, self.weights_param = registration, weights_param   # the registered inputs (`registered_values`)
         self.committed_inputs = dict(committed_inputs or {})
         self.committed_units = list(committed_units or [])
+        self.committed_writes = dict(committed_writes or {})
         self.env: dict[Any, Any] = {}
         self.storage: _Storage = _Storage()  # node -> storage base node (alias groups); absent: own storage
         self.stale: dict[Any, str] = {}  # node -> why its value may no longer be read (alias of a mutated tensor)
@@ -716,6 +718,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
             refuse("dynamic_control_flow", ph_nodes[un], None, f"input {un} is not a tensor (symbolic scalar inputs are not static structure)")
         params.append((un, type_of_tensor(v)))
     committed_nodes: list[tuple[Any, dict[str, Any], str]] = []
+    committed_writes: dict[Any, list[Any]] = {}
     matched_entries: set[int] = set()
     if committed_entries:
         from verity_vllm.pipeline.committed_units import matches as committed_matches
@@ -729,13 +732,20 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
             if hit is None:
                 continue
             k, entry = hit
+            writes = _written_operands(node)
             try:
-                output_type = type_of(node.meta.get("val"), node.name)
+                if writes:
+                    write_types = [type_of(arg.meta.get("val"), arg.name) for arg in writes]
+                    output_type = write_types[0] if len(write_types) == 1 else TupleT(*write_types)
+                else:
+                    output_type = type_of(node.meta.get("val"), node.name)
             except FrontendError as e:
                 refuse("shape", node, module_path, f"committed-only output cannot be typed: {e.message}")
             input_name = f"committed_{len(committed_nodes)}"
             params.append((input_name, output_type))
             committed_nodes.append((node, dict(entry), module_path))
+            if writes:
+                committed_writes[node] = writes
             matched_entries.add(k)
         missing = [dict(entry) for k, entry in enumerate(committed_entries) if k not in matched_entries]
         if missing:
@@ -751,13 +761,14 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     committed_offset = len(user_names)
     committed_inputs = {node: pcolls[committed_offset + k] for k, (node, _entry, _module) in enumerate(committed_nodes)}
     committed_provenance = [{"input": f"committed_{k}", "op": str(node.target), "module": module, "reason": entry["reason"],
-                             "list_entry": entry, "node": node.name, "type": str(params[committed_offset + k][1])}
+                             "list_entry": entry, "node": node.name, "type": str(params[committed_offset + k][1]),
+                             **({"writes": [arg.name for arg in committed_writes[node]]} if node in committed_writes else {})}
                             for k, (node, entry, module) in enumerate(committed_nodes)]
     weights_coll = pcolls[-1] if wrec_t is not None else None
     ctx = Ctx(mode=mode, profile=profile, config=config, allowed_dims=allowed_dims, name=name, ruleset=ruleset, vocab=vocab, module=module,
               ep=ep, B=B, user_inputs=user_inputs, weights_coll=weights_coll, weights=leaves, placeholder_to_weight=placeholder_to_weight,
               lifted_constants=lifted, registration=registration, weights_param=len(params) - 1 if wrec_t is not None else None,
-              committed_inputs=committed_inputs, committed_units=committed_provenance)
+              committed_inputs=committed_inputs, committed_units=committed_provenance, committed_writes=committed_writes)
     if _ctx_holder is not None:
         _ctx_holder.append(ctx)
     out = _translate(ctx)
@@ -821,7 +832,17 @@ def _translate(ctx: Ctx) -> Coll:
                 unit = ctx.committed_units[list(ctx.committed_inputs).index(node)]
                 unit["module"] = ctx.stack_path(node)
                 unit["operand_refs"] = operands
-                ctx.define(node, ctx.committed_inputs[node])
+                committed = ctx.committed_inputs[node]
+                writes = ctx.committed_writes.get(node, ())
+                if writes:
+                    for k, arg in enumerate(writes):
+                        ctx.env[arg] = committed if len(writes) == 1 else committed[k]
+                    if node.meta.get("val") is not None:
+                        ctx.define(node, committed if len(writes) == 1 else committed[0])
+                    else:
+                        ctx.env[node] = None
+                else:
+                    ctx.define(node, committed)
                 continue
             _translate_node(ctx, node)
         else:
@@ -958,6 +979,21 @@ def _mutates(t) -> bool:
     if schema is None:
         return False
     return any(arg.alias_info is not None and arg.alias_info.is_write for arg in schema.arguments)
+
+
+def _written_operands(node) -> list[Any]:
+    """FX tensor operands a mutable op writes, in schema order."""
+    schema = getattr(node.target, "_schema", None)
+    if schema is None:
+        return []
+    out = []
+    for k, arg in enumerate(schema.arguments):
+        if arg.alias_info is None or not arg.alias_info.is_write:
+            continue
+        value = node.args[k] if k < len(node.args) else node.kwargs.get(arg.name)
+        if isinstance(value, torch.fx.Node):
+            out.append(value)
+    return out
 
 
 def fx_arg_nodes(node) -> list[tuple[int, Any]]:
