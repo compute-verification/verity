@@ -12,6 +12,7 @@ The roles with no Definition on this branch (`dsa_rmsnorm`, `dsa_kv_rope`, `dsa_
 (`RMSNormTriton_v1`, `RoPE_v1`, a batch of `Gemm_v2`), and FA3's sparse geometry is registered at rope 16, latent 16."""
 from __future__ import annotations
 
+import sys
 import types
 
 import numpy as np
@@ -183,7 +184,7 @@ def _inputs(model: _Model, seed: int = 1) -> tuple:
 def _observation(**over) -> dict:
     return {"kind": "mla", "impl": IMPL, "backend": "FLASH_ATTN_MLA_SPARSE", "kv_cache_dtype": "auto", "layer_kv_cache_dtype": "auto",
             "num_heads": NH, "scale": SCALE, "kv_lora_rank": L, "qk_rope_head_dim": R, "dcp_world_size": 1, "use_pcp": False,
-            "use_sparse": True, "prefill_backend": None, **over}
+            "use_sparse": True, "prefill_backend": None, "num_splits": 1, **over}
 
 
 @pytest.fixture
@@ -192,7 +193,6 @@ def served(monkeypatch):
     saved = dict(VB._OBSERVED)
     monkeypatch.setitem(PROFILES, STANDIN.name, STANDIN)
     monkeypatch.setitem(vllm_dsa.FA3_SPARSE_GEOMETRY, (R, L), {"BN": BN, "DOT": DOT, "INV": hopper.Fa3InvSum})
-    monkeypatch.setenv("VERITY_SPARSE_MLA_NUM_SPLITS", "1")
     VB.observe_target_profile(H200)
     VB.observe_attention_impls({n: _observation() for n in NAMES})
     yield
@@ -303,10 +303,10 @@ GATE_SITE.ll_bf16_gemm = _cuda_only
 class _Gate(nn.Module):
     """`GateLinear.forward`'s tier 1: `ll_bf16_gemm` read from its module at the call."""
 
-    def __init__(self, rng, out_dtype=torch.float32) -> None:
+    def __init__(self, rng, out_dtype=torch.float32, allow: bool = True) -> None:
         super().__init__()
         self.weight = nn.Parameter(_bf16(rng, 6, 8), requires_grad=False)
-        self.out_dtype = out_dtype
+        self.out_dtype, self.allow_ll_bf16_gemm = out_dtype, allow
 
     def forward(self, x):
         return GATE_SITE.ll_bf16_gemm(x, self.weight, self.out_dtype)
@@ -316,14 +316,53 @@ class _Gate(nn.Module):
 def test_the_gate_shim_exports_the_cutedsl_gemm_as_a_leaf_and_unwinds(M):
     from verity_vllm.program.frontend.export_compat import moe_gate_leaf
     rng = np.random.default_rng(3)
-    with moe_gate_leaf(GATE_SITE):
-        ep = torch.export.export(_Gate(rng), (_bf16(rng, M, 8),), strict=False)
+    gate = _Gate(rng)
+    with moe_gate_leaf(gate, site=GATE_SITE):
+        ep = torch.export.export(gate, (_bf16(rng, M, 8),), strict=False)
     assert GATE_SITE.ll_bf16_gemm is _cuda_only
     (leaf,) = [n for n in ep.graph.nodes if n.op == "call_function"]
     assert str(leaf.target) == "vllm_iface.ll_bf16_gemm.default"
     assert tuple(leaf.meta["val"].shape) == (M, 6) and leaf.meta["val"].dtype == torch.float32
-    with moe_gate_leaf(GATE_SITE), pytest.raises(NotImplementedError, match="ll_bf16_gemm with output dtype torch.bfloat16"):
-        torch.export.export(_Gate(rng, torch.bfloat16), (_bf16(rng, M, 8),), strict=False)
+    gate = _Gate(rng, torch.bfloat16)
+    with moe_gate_leaf(gate, site=GATE_SITE), pytest.raises(NotImplementedError, match="ll_bf16_gemm with output dtype torch.bfloat16"):
+        torch.export.export(gate, (_bf16(rng, M, 8),), strict=False)
+
+
+def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):
+    """`vllm_meta.attention_impls` reads an MLA layer's FA3 split count from the `flash_attn_varlen_func` its impl's module calls:
+    the one-split pin's marker, else None (vLLM's heuristic)."""
+    from verity_vllm.program.frontend import vllm_meta as vm
+    attention = types.ModuleType("vllm.model_executor.layers.attention")
+    attention.Attention, attention.MLAAttention = type("Attention", (nn.Module,), {}), type("MLAAttention", (nn.Module,), {})
+    monkeypatch.setitem(sys.modules, attention.__name__, attention)
+    backend = types.ModuleType("sparse_backend_standin")
+    exec("class Impl:\n    dcp_world_size = 1\n", backend.__dict__)
+    monkeypatch.setitem(sys.modules, backend.__name__, backend)
+    layer = attention.MLAAttention()
+    layer.impl, layer.layer_name = backend.Impl(), NAMES[0]
+    model = nn.Sequential(layer)
+    backend.flash_attn_varlen_func = lambda *a, **k: None
+    assert vm.attention_impls(model)[NAMES[0]]["num_splits"] is None
+    backend.flash_attn_varlen_func.verity_sparse_mla_splits = 1
+    assert vm.attention_impls(model)[NAMES[0]]["num_splits"] == 1
+
+
+def test_the_shims_leave_a_model_without_their_layers_unchanged(monkeypatch):
+    """A gate that does not take tier 1 and a model without a sparse attention layer patch nothing (and import no vLLM site); the
+    DSA kernels are patched in the module the layer's `forward` is defined in."""
+    from verity_vllm.program.frontend.export_compat import dsa_ops_leaf, moe_gate_leaf
+    rng = np.random.default_rng(3)
+    with moe_gate_leaf(_Gate(rng, allow=False)), dsa_ops_leaf(_Gate(rng)):
+        assert GATE_SITE.ll_bf16_gemm is _cuda_only
+    site = types.ModuleType("dsa_forward_site")
+    site.fused_norm_rope = site.fused_q = _unpatched
+    site._Layer = _Layer
+    exec("class Attn(_Layer):\n    def forward(self, *a):\n        return fused_norm_rope(*a)\n", site.__dict__)
+    monkeypatch.setitem(sys.modules, site.__name__, site)
+    layer = site.Attn(NAMES[0], indexer=True, seed=0)
+    with dsa_ops_leaf(layer):
+        assert site.fused_norm_rope is not _unpatched and site.fused_q is not _unpatched
+    assert site.fused_norm_rope is _unpatched and site.fused_q is _unpatched
 
 
 # -- the rules ----------------------------------------------------------------------------------------------------------------
@@ -395,14 +434,13 @@ def test_the_served_vocabulary_names_the_roles_it_lacks(served):
     ("shared-first", "IndexShare layer 'layers.0.self_attn.attn' reads a top-k no indexer layer selected for positions 0..1"),
     ("prefill-backend", "has the dense-MHA prefill backend 'FlashAttnMLAPrefill'"),
     ("impl", "runs 'FlashMLASparseImpl'; SparseMla_v1 states FLASH_ATTN_MLA_SPARSE"),
-    ("target", "SparseMla_v1 is FA3 on sm_90; the target is"),
+    ("target", "SparseMla_v1 is FA3 at compute capability 9.0; the target is"),
 ])
-def test_each_attention_precondition_refuses_by_name(case, needle, served, monkeypatch):
+def test_each_attention_precondition_refuses_by_name(case, needle, served):
     model = _model(order=(False, True) if case == "shared-first" else (True, False), topk=2 if case == "topk" else TOPK)
-    if case == "splits":
-        monkeypatch.delenv("VERITY_SPARSE_MLA_NUM_SPLITS")
-    if case in ("prefill-backend", "impl"):
-        over = {"prefill_backend": "FlashAttnMLAPrefill"} if case == "prefill-backend" else {"impl": "FlashMLASparseImpl"}
+    over = {"splits": {"num_splits": None}, "prefill-backend": {"prefill_backend": "FlashAttnMLAPrefill"},
+            "impl": {"impl": "FlashMLASparseImpl"}}.get(case)
+    if over:
         VB.observe_attention_impls({n: _observation(**over) for n in NAMES})
     if case == "target":
         VB.observe_target_profile(TargetProfile(compute_capability=(8, 0), num_sms=108, batch_invariant=False))

@@ -479,11 +479,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                               "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
                               "bf16(w * (rstd * (x - mean)) + b)",
            "layer_norm_aten_value": "LayerNormAten_v2{N}(x, w, b, eps): LayerNormAten_v1's body with eps an input",
-           "dsa_indexer_k_row": "DsaIndexerKRow_v1{D,ROPE,EPS}: one index-K cache slot of _fused_norm_rope_kernel -- f32 LayerNorm (w, b f32), "
+           "dsa_indexer_k_row": "DsaIndexerKRow_v1{D,ROPE,EPS}: one index-K cache slot of _fused_norm_rope_kernel -- f32 layer norm (w, b f32), "
                                 "the interleaved RoPE of the first ROPE elements, DsaUe8m0Quant_v1{D} -> (e4m3[D], f32 scale)",
            "dsa_indexer_q": "DsaIndexerQ_v1{H,D,ROPE}: _fused_q_kernel's indexer outputs for one token -- per head the interleaved RoPE, "
                             "DsaUe8m0Quant_v1{D} and the weight scale(q) * D^-0.5 * H^-0.5 -> (e4m3[H,D], f32[H])",
-           "dsa_mqa_logits": "DsaMqaLogits_v3{N,H,D}: DeepGEMM's sm90 fp8 MQA logits of one query over N index-K slots -- per head D/32 "
+           "dsa_mqa_logits": "DsaMqaLogits_v3{N,H,D}: DeepGEMM's Hopper fp8 MQA logits of one query over N index-K slots -- per head D/32 "
                              "HopperE4m3QgmmaDot32 steps, relu x weight summed per quad lane (the first two heads contracted), x the slot's scale",
            "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
                                  "-- slot i = i < len ? i : -1",

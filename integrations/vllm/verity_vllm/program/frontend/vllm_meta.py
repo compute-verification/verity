@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
 from contextlib import contextmanager
 from typing import Any
 
@@ -243,11 +244,8 @@ def mla_absorbed_weights_as_the_loader_does(model: nn.Module, vllm_config) -> di
     never loads, so each MLA layer without them gets them here, empty, in the served shapes and the activation dtype: the Program then
     reads them as weights under the served names, the roots the collector commits.  A layer on the AMX or aiter bmm paths (other
     platforms' packed `W_K` / `W_V`) is listed, not given them."""
+    from vllm.model_executor.layers.attention import MLAAttention
     fact: dict[str, Any] = {"layers": [], "skipped": []}
-    try:
-        from vllm.model_executor.layers.attention import MLAAttention
-    except ImportError:
-        return fact
     dt = vllm_config.model_config.dtype
     for name, m in model.named_modules():
         if not isinstance(m, MLAAttention) or (hasattr(m, "W_UV") and hasattr(m, "W_UK_T")):
@@ -262,8 +260,8 @@ def mla_absorbed_weights_as_the_loader_does(model: nn.Module, vllm_config) -> di
         fact["layers"].append(name)
     if fact["layers"]:
         fact.update(dtype=str(dt).removeprefix("torch."), W_UK_T=[N, P, L], W_UV=[N, L, V],
-                    rule="MLAAttention.process_weights_after_loading: replace_parameter(W_UV = W_UV.transpose(0, 1), "
-                         "W_UK_T = W_UK.permute(1, 2, 0)) from kv_b_proj")
+                    rule=f"{MLAAttention.__qualname__}.process_weights_after_loading: replace_parameter(W_UV = "
+                         "W_UV.transpose(0, 1), W_UK_T = W_UK.permute(1, 2, 0)) from kv_b_proj")
     return fact
 
 
@@ -598,9 +596,10 @@ def attention_impls(model: nn.Module) -> dict:
     (`layer.impl` class, `layer.backend`), the FA version, window / soft cap / alibi / sinks, kv dtype, and whether the impl runs
     in batch-invariant mode (single-split combine). Keyed by `layer_name` — what the exported `unified_attention_with_output`
     node carries — so the attention rule can select the Definition from the layer that will run, not from an env string.  Each
-    `MLAAttention` layer has an entry with `"kind": "mla"`: its impl, backend name, kv dtype, heads, scale, context-parallel sizes
-    and dense-MHA prefill backend (what `rules/vllm_dsa.py` reads)."""
-    from vllm.model_executor.layers.attention import Attention
+    `MLAAttention` layer has an entry with `"kind": "mla"`: its impl, backend name, kv dtype, heads, scale, context-parallel sizes,
+    dense-MHA prefill backend and the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
+    `engine.sparse_mla`'s pin marks, None for vLLM's heuristic), what `rules/vllm_dsa.py` reads."""
+    from vllm.model_executor.layers.attention import Attention, MLAAttention
     out = {}
     for name, mod in model.named_modules():
         if not isinstance(mod, Attention):
@@ -617,16 +616,13 @@ def attention_impls(model: nn.Module) -> dict:
             v = getattr(impl, k, "<absent>")
             obs[k] = list(v) if isinstance(v, tuple) else (None if isinstance(v, torch.Tensor) and v.numel() == 0 else ("tensor" if isinstance(v, torch.Tensor) else v))
         out[getattr(mod, "layer_name", name)] = obs
-    try:
-        from vllm.model_executor.layers.attention import MLAAttention
-    except ImportError:
-        return out
     for name, mod in model.named_modules():
         if not isinstance(mod, MLAAttention):
             continue
         impl = mod.impl
         backend = getattr(mod, "attn_backend", None)
         pb = getattr(mod, "prefill_backend", None)
+        fa = getattr(sys.modules.get(type(impl).__module__), "flash_attn_varlen_func", None)
         out[getattr(mod, "layer_name", name)] = {
             "prefill_backend": None if pb is None else f"{type(pb).__module__}.{type(pb).__qualname__}",
             "kind": "mla", "impl": f"{type(impl).__module__}.{type(impl).__qualname__}",
@@ -635,7 +631,7 @@ def attention_impls(model: nn.Module) -> dict:
             "num_heads": getattr(impl, "num_heads", None), "scale": getattr(impl, "scale", None),
             "kv_lora_rank": getattr(mod, "kv_lora_rank", None), "qk_rope_head_dim": getattr(mod, "qk_rope_head_dim", None),
             "dcp_world_size": getattr(impl, "dcp_world_size", None), "use_pcp": getattr(mod, "use_pcp", None),
-            "use_sparse": getattr(mod, "use_sparse", None)}
+            "use_sparse": getattr(mod, "use_sparse", None), "num_splits": getattr(fa, "verity_sparse_mla_splits", None)}
     return out
 
 

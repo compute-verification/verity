@@ -345,7 +345,9 @@ class _ExportWorkspaceManager:
         return self._locked
 
 
-_DSA_SITE = "vllm.models.deepseek_v32.attention"
+def _dsa_layers(model) -> list:
+    return [m for m in (model.modules() if model is not None else ())
+            if hasattr(m, "_sparse_indexer_and_attn") and hasattr(m, "fused_qkv_a_proj")]
 
 
 @contextmanager
@@ -353,14 +355,15 @@ def dsa_ops_leaf(model=None):
     """4. DeepSeek sparse attention (`DeepseekV32Attention.forward`, GLM-5.3, DeepSeek-V3.2) as three leaf ops.  Its two Triton kernels
     run outside the MLA attention op and write the MLA and indexer caches through the forward context's slot mapping, which the meta
     export has no cache for (`fused_norm_rope` asserts `slot_mapping is not None`); its attention reads those caches back through the
-    same context.  See `dsa_leaves`.  Without vLLM it is a no-op."""
-    try:
-        import importlib
-        site = importlib.import_module(_DSA_SITE)
-    except Exception:  # noqa: BLE001
+    same context.  The kernels are patched in the module the layers' `forward` is defined in, the globals it reads them from.  See
+    `dsa_leaves`.  A model without a sparse attention layer is unchanged."""
+    sites = {sys.modules[type(m).forward.__module__] for m in _dsa_layers(model)}
+    if len(sites) > 1:
+        raise NotImplementedError(f"dsa_ops_leaf: sparse attention layers whose forward reads its kernels from {len(sites)} modules")
+    if not sites:
         yield
         return
-    with dsa_leaves(site, model):
+    with dsa_leaves(sites.pop(), model):
         yield
 
 
@@ -417,9 +420,7 @@ def dsa_leaves(site, model=None):
 
     h.patch(site, "fused_norm_rope", fused_norm_rope)
     h.patch(site, "fused_q", fused_q)
-    for m in (model.modules() if model is not None else ()):
-        if not (hasattr(m, "_sparse_indexer_and_attn") and hasattr(m, "fused_qkv_a_proj")):
-            continue
+    for m in _dsa_layers(model):
         h.patch(m, "_sparse_indexer_and_attn", indexer_and_attn(m))
     with h:
         yield
@@ -429,19 +430,18 @@ _LL_BF16_SITE = "vllm.model_executor.kernels.linear.cute_dsl.ll_bf16"
 
 
 @contextmanager
-def moe_gate_leaf(site=None):
+def moe_gate_leaf(model=None, site=None):
     """5. `GateLinear.forward`'s tier 1 (router/gate_linear.py:181-187, M <= 16 on sm_90+ wherever CUTLASS DSL imports) calls
-    `ll_bf16_gemm`, a CUTLASS DSL kernel that checks its operands are on a CUDA device and leaves no dispatcher op behind.  For the
-    duration, ``site``'s (default vLLM's `cute_dsl.ll_bf16`, which `forward` imports it from at every call) is
-    `vllm_iface.ll_bf16_gemm(x, w)`, so the tier the declared target takes is the node the rules bind; any output dtype but f32
-    refuses at export.  Without vLLM it is a no-op."""
+    `ll_bf16_gemm`, a CUTLASS DSL kernel that checks its operands are on a CUDA device and leaves no dispatcher op behind.  When a
+    module of ``model`` would take that tier (`allow_ll_bf16_gemm`), for the duration ``site``'s (default vLLM's `cute_dsl.ll_bf16`,
+    which `forward` imports it from at every call) is `vllm_iface.ll_bf16_gemm(x, w)`, so the tier the declared target takes is the
+    node the rules bind; any output dtype but f32 refuses at export.  A model without such a gate is unchanged."""
+    if not any(getattr(m, "allow_ll_bf16_gemm", False) for m in (model.modules() if model is not None else ())):
+        yield
+        return
     if site is None:
-        try:
-            import importlib
-            site = importlib.import_module(_LL_BF16_SITE)
-        except Exception:  # noqa: BLE001
-            yield
-            return
+        import importlib
+        site = importlib.import_module(_LL_BF16_SITE)
     from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the op)
 
     def ll_bf16_gemm(hidden_states, router_weight, output_dtype=torch.float32):
@@ -461,7 +461,7 @@ def export_compat(profile=None, model=None):
     if profile is None:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         profile = TargetProfile.default()
-    with tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model), moe_gate_leaf():
+    with tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model), moe_gate_leaf(model):
         yield
 
 

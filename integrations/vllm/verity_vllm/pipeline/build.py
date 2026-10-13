@@ -470,6 +470,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": bool(cfg.parallel_config.disable_custom_all_reduce)}
                 res["tp"]["env_required"] = {"NCCL_P2P_DISABLE": "1"}   # pod fact (cp-tp2 GPU0<->GPU1 `SYS`; P2P all-reduce hangs) — recorded, not consulted here
                 res["tp"]["collective_backend"] = "pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)"
+            from verity_vllm.engine import sparse_mla
+            sparse_mla.arm()   # FA3's sparse-MLA split pin, armed as a serving process arms it before vLLM builds the model
             model = vm.instantiate_meta(cfg)
             # [R15 fp8] loader parity: a checkpoint that ships a redundant `lm_head.weight` under `tie_word_embeddings` is untied by
             # vLLM for loading and RE-TIED after it iff the two tensors are equal (Qwen3-4B-Instruct-2507-FP8); the same decision from the

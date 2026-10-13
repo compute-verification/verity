@@ -355,6 +355,9 @@ def _observed_sparse_mla(layer_name: str) -> str | None:
     if obs.get("prefill_backend") is not None:
         return (f"numerics_unregistered: {layer_name!r} has the dense-MHA prefill backend {obs['prefill_backend']!r}: a prefill of at most "
                 f"TOPK keys would take it, and no Definition states it")
+    if obs.get("num_splits") != 1:
+        return (f"numerics_unregistered: {layer_name!r} serves FA3's sparse MLA at vLLM's num_splits heuristic (engine.sparse_mla's pin "
+                f"is not installed): the split-combine has no Definition; SparseMla_v1 is num_splits=1")
     return None
 
 
@@ -367,8 +370,9 @@ class DsaIndexerAttnRule(StateRule):
     modes = frozenset({"profile"})
     info = RuleInfo("DsaIndexerAttn[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_indexer_attn(...) (" + ", ".join(_ATTN) + ")",
                     preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism "
-                                   "or a dense-MHA prefill backend (so every step takes the top-k MQA path)",
-                                   "the target is sm_90 and FA3's sparse MLA is pinned to one split (engine.sparse_mla, VERITY_SPARSE_MLA_NUM_SPLITS=1)",
+                                   "or a dense-MHA prefill backend (so every step takes the top-k MQA path), serving FA3 at one split "
+                                   "(engine.sparse_mla's pin, VERITY_SPARSE_MLA_NUM_SPLITS=1)",
+                                   "the target's compute capability is 9.0 (FA3)",
                                    "positions are T consecutive rows continuing the layer's history; ql_nope [T, NH, L], q_pe [T, NH, R], kv_c [T, L], k_pe [T, R] bf16",
                                    "the index operands all given (index_q [T, H, D] e4m3, index_weights [T, H] f32, index_k [T, D] e4m3, "
                                    "index_k_scale [T] f32) or all None, then the last indexer layer selected for these positions",
@@ -393,15 +397,7 @@ class DsaIndexerAttnRule(StateRule):
             return r
         tp = active_target_profile()
         if tp.compute_capability != (9, 0):
-            return f"numerics_unregistered: SparseMla_v1 is FA3 on sm_90; the target is {tp.capability_str}"
-        from verity_vllm.engine import sparse_mla as SM
-        try:
-            splits = SM.wanted()
-        except ValueError as e:
-            return f"numerics_unregistered: {e}"
-        if splits != SM.SPLITS:
-            return (f"numerics_unregistered: FA3's sparse MLA at vLLM's num_splits heuristic ({SM.ENV} unset or 0): the split-combine has no "
-                    f"Definition; SparseMla_v1 is num_splits=1")
+            return f"numerics_unregistered: SparseMla_v1 is FA3 at compute capability 9.0; the target is {tp.capability_str}"
         pos = _positions(ctx, a["positions"])
         if isinstance(pos, str):
             return pos
@@ -491,11 +487,9 @@ class DsaIndexerAttnRule(StateRule):
             outs.append(ctx.call(attn, ql[i], qr[i], Coll(Array(n, Array(L + R, Value(16))), latent.cut(n)), node=node, rule=self,
                                  name=f"{h}[t={P}]"))
         ctx.define(node, array_of(outs))
-        from verity_vllm.engine import sparse_mla as SM
         ctx.record(self, node, {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_rows_after": P0 + T, "NH": NH, "DR": R, "DV": L,
                                 "BN": G["BN"], "DOT": G["DOT"].name, "INV": G["INV"].name, "scale": scale, "TOPK": TOPK, "indexer": has,
                                 "top_k_from": source, "selection": "rows 0..n-1 in order (n <= TOPK: DsaTopKShortRow_v1's slots)",
-                                "num_splits": SM.SPLITS, "num_splits_switch": SM.ENV,
                                 "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
                    emitted=f"{attn.id} x{T}" + (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T}" if has else f" (top-k of {source})"))
 
