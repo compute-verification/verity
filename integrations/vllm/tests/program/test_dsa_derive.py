@@ -2,6 +2,7 @@
 
 * `export_compat.dsa_leaves` exports `fused_norm_rope`, `fused_q` and `_sparse_indexer_and_attn` as the `vllm_iface` leaves (the
   meta export has no KV cache, so the kernels' slot-mapping asserts never run) and unwinds; what it does not model refuses at export;
+  `export_compat.moe_gate_leaf` does the same for the MoE gate's cuteDSL `ll_bf16_gemm`, which checks for CUDA operands;
 * `rules/vllm_dsa.py` derives an indexer layer and an IndexShare layer over a prefill and a decode step: per token the norms and
   RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and `SparseMla_v1{T=n}` over
   the layer's first n history rows, equal to those Definitions composed by hand;
