@@ -204,6 +204,18 @@ def test_the_insert_writes_flashmlas_model1_rows() -> None:
         assert np.array_equal(got, w)
 
 
+def test_the_launch_checks_both_caches(padded) -> None:
+    """The twin's insert on both fills passes; a byte written outside the slots (into the page padding, or a skipped slot's) fails
+    `untouched`, and a written byte that differs between the runs fails `rerun`."""
+    o, _, at = padded
+    rows = W.cache_rows(*W.kv_rows(o["kv"][:o["slots"].size], o["cs"][:o["slots"].size], DR=X.DR, QB=X.QB))
+    g1, g2 = (W.scatter(f, o["slots"], *rows, X.PBS) for f in o["fills"])
+    assert X.cache_checks(o["slots"], o["fills"], g1, g2) == {"rerun": True, "untouched": True}
+    for where in ((0, M.page_bytes(X.PBS) - 1), at["unwritten"]):
+        assert X.cache_checks(o["slots"], o["fills"], g1, _flip(g2, where)) == {"rerun": True, "untouched": False}
+    assert X.cache_checks(o["slots"], o["fills"], g1, _flip(g2, at["nope"])) == {"rerun": False, "untouched": True}
+
+
 def test_the_insert_jobs_take_the_kernel_words(padded) -> None:
     """The q job over every word of 48 tokens' 64 heads (the pad heads and the DP-padded rows among them), the cache job over every
     byte of the cache and each slot's row as FlashMLA reads it; both flipped q words found, the first where it is; a flipped

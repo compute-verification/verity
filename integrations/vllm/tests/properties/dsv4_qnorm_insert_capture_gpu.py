@@ -288,6 +288,13 @@ def written(slots: np.ndarray, nb: int) -> np.ndarray:
     return W.scatter(np.zeros((nb, M.page_bytes(PBS)), np.uint8), slots, data, scale, PBS).astype(bool)
 
 
+def cache_checks(slots: np.ndarray, fills: np.ndarray, g1: np.ndarray, g2: np.ndarray) -> dict[str, bool]:
+    """The caches two inserts of the same operands left on fills 0 and 1: the bytes `written` equal between them, every other
+    byte of the second its fill's."""
+    mask = written(slots, g1.shape[0])
+    return {"rerun": bool(np.array_equal(g1[mask], g2[mask])), "untouched": bool(np.array_equal(g2[~mask], fills[1][~mask]))}
+
+
 def insert_twin(a: dict[str, np.ndarray], lo: int, hi: int):
     """The twin's insert of tokens [lo, hi): q (n, NHP, D), nope, scale, rope."""
     return W.insert(np.asarray(a["q"][lo:hi]), np.asarray(a["kv"][lo:hi]), np.asarray(a["cs"][lo:hi]), NHP=NHP, DR=DR, QB=QB,
@@ -531,13 +538,12 @@ def launch_insert(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], l
     out2, c2 = run(o["fills"][1])
     torch.cuda.synchronize()
     g1, g2 = c1.cpu().numpy(), c2.cpu().numpy()
-    mask = written(o["slots"], g1.shape[0])
+    cc = cache_checks(o["slots"], o["fills"], g1, g2)
     rec = {"phase": "insert", "case": case, "b": T_, "inserted": int(o["slots"].size), "skipped": int((o["slots"] < 0).sum()),
            "blocks": int(g1.shape[0]), "grid": "warp" if T_ < INSERT_CUTOFF else "reduced",
            "checks": {"shape": tuple(out1.shape) == (T_, NHP, D) and out1.dtype == torch.bfloat16,
-                      "rerun": bool(torch.equal(out1.view(torch.int16), out2.view(torch.int16))
-                                    and np.array_equal(g1[mask], g2[mask])),
-                      "untouched": bool(np.array_equal(g2[~mask], o["fills"][1][~mask])),
+                      "rerun": bool(torch.equal(out1.view(torch.int16), out2.view(torch.int16))) and cc["rerun"],
+                      "untouched": cc["untouched"],
                       "inputs": bool(np.array_equal(_u16(q), o["q"]) and np.array_equal(_u16(kv), o["kv"]))}}
     paths = _save(work / f"insert-{case}", q=o["q"], kv=o["kv"], cs=o["cs"], slots=o["slots"], fills=o["fills"][:1],
                   q_out=_u16(out1), cache=g1)
