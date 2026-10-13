@@ -990,11 +990,14 @@ __device__ __forceinline__ u64 fold64(const u32 (&x)[NL]) {
 }
 
 // mode 0: decode and XOR (checksum); mode 2: also write the result's limbs (out: NL u32 a word), through shared memory so
-// a warp's stores are consecutive u32s (whole sectors), not each thread's word at a stride of NL u32s.
+// a warp's stores are consecutive u32s (whole sectors), not each thread's word at a stride of NL u32s; mode 3: the words
+// are an N × K FP8 matrix's plain fragments (bench.plain_layout, bk = K / 512 chunks a row), written as the matrix, row
+// major (vllm_encoded.stack's unplain): a fragment u32's (A, B, C, D, E, F, G) at strides (2048 bk, 2048, 128, 16, 4, 2,
+// 1) is row 16 A + 8 G + D, u32 column 128 B + 8 C + 4 F + E, so a warp's 32 still fill four 32-byte sectors.
 template <int K, int MODE>
 __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__ store, u32 *__restrict__ out, u64 n,
-                                                     u64 base, unsigned long long *xr) {
-  __shared__ __align__(16) uint8_t sm[MODE == 2 && WPB * NL * 4 > STAGE_BYTES ? WPB * NL * 4 : STAGE_BYTES];
+                                                     u64 base, unsigned long long *xr, u32 bk = 0) {
+  __shared__ __align__(16) uint8_t sm[MODE >= 2 && WPB * NL * 4 > STAGE_BYTES ? WPB * NL * 4 : STAGE_BYTES];
   u64 acc = 0;
   u32 t[NL], step[NL];
   {
@@ -1020,7 +1023,7 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
       decode_word_wk<K>(y, t);
       acc ^= fold64(y);
     }
-    if (MODE == 2) {
+    if (MODE >= 2) {
       u32 *so = reinterpret_cast<u32 *>(sm);   // word w's limb l at w NL + (l + w) % NL: no bank conflicts either way
       __syncthreads();
       if (i < n) {
@@ -1031,7 +1034,14 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
       const u32 c = (u32)min((u64)WPB, n - first) * NL;
       for (u32 x = threadIdx.x; x < c; x += WPB) {
         const u32 w = x / NL, l = x % NL;
-        out[first * NL + x] = so[w * NL + (l + w) % NL];
+        const u64 f = first * NL + x;
+        if constexpr (MODE == 3) {
+          const u64 r = f >> 11, a = r / bk, b = r % bk;
+          out[(16 * a + 8 * (f & 1) + ((f >> 4) & 7)) * 128 * bk + 128 * b + 8 * ((f >> 7) & 15) + 4 * ((f >> 1) & 1) +
+              ((f >> 2) & 3)] = so[w * NL + (l + w) % NL];
+        } else {
+          out[f] = so[w * NL + (l + w) % NL];
+        }
       }
     }
     u32 t2[NL];
@@ -2883,6 +2893,17 @@ int wt_encode(const u32 *in, uint8_t *store, u64 n, u64 base, int k, int grid, c
 int wt_decode(const uint8_t *store, u32 *out, u64 n, u64 base, int k, unsigned long long *xr, int grid, cudaStream_t s) {
 #define F(K) do { if (out) decode_kernel<K, 2><<<grid, WPB, 0, s>>>(store, out, n, base, xr); \
                   else decode_kernel<K, 0><<<grid, WPB, 0, s>>>(store, out, n, base, xr); } while (0)
+  WT_K_SWITCH(k, F)
+#undef F
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// wt_decode's words as an N × K FP8 matrix, row major (decode_kernel's mode 3): n words of a linear's plain fragments,
+// N × K bytes, K a multiple of 512.
+int wt_decode_rows(const uint8_t *store, u32 *out, u64 n, u64 base, int k, int kd, unsigned long long *xr, int grid,
+                   cudaStream_t s) {
+  if (!out || kd < 512 || kd % 512 || (n * S) % ((u64)kd * 16) || S != 4 * NL) return 1;
+#define F(K) decode_kernel<K, 3><<<grid, WPB, 0, s>>>(store, out, n, base, xr, (u32)(kd / 512))
   WT_K_SWITCH(k, F)
 #undef F
   return cudaGetLastError() ? 4 : 0;

@@ -87,6 +87,7 @@ class Lib:
         so.wt_set_mask.argtypes = [v]
         so.wt_encode.argtypes = [v, v, q, q, i, i, v]
         so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
+        so.wt_decode_rows.argtypes = [v, v, q, q, i, i, v, i, v]
         so.wt_tc_decode.argtypes = [v, v, q, q, i, v, i, v]
         so.wt_read.argtypes = [v, q, v, i, v]
         so.wt_tc_square_gate.argtypes = [v, v, i, v]

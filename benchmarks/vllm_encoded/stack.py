@@ -5,8 +5,9 @@ codec words, and the plain stack, the same engine over the same kernels' plain f
 ~~~text
 linears   stack: wt.cu (WT_RECEIPT, full slot, masked) fused decode + FP8 MMA + sketch-sha512 receipts on two sketch
           warps, at M <= 32 rows; the chunks' sums reduced in order (paged.cu's pg_reduce). pstack: wt_gemm over the plain
-          fragments, the same sums bit for bit (gated). M > 32 (prefill): the layer decoded (stack) or unpermuted
-          (pstack) into an ephemeral scratch for vLLM's CUTLASS GEMM.
+          fragments, the same sums bit for bit (gated). M > 32 (prefill): the layer decoded straight into an ephemeral
+          scratch as its N × K matrix (stack, wt_decode_rows; gated against the weight) or unpermuted (pstack) for
+          vLLM's CUTLASS GEMM.
 receipts  a decode step is a pass: before the model's forward (eager, the runner's _model_forward) wt_pass derives pass
           j's seed, signs and receipt prefix from root_(j−1) on the device; each linear writes its vectors' receipts
           at the step's running offset; after the last linear (inside the step's CUDA graph) reader.cu's leaves, pads
@@ -248,12 +249,23 @@ class StackLinear:
                         self.st.xr.data_ptr(), 8 * self.st.sms, stream())
         return out.view(torch.uint8)
 
+    def rows(self, scratch: torch.Tensor | None = None) -> torch.Tensor:
+        """The N × K matrix (uint8), row major: the store decoded straight into it (into scratch, int32), or the plain
+        fragments unpermuted."""
+        if not self.st.encoded:
+            return unplain(self.store, self.n, self.kd)
+        out = scratch[: self.store.numel() // 2] if scratch is not None else torch.empty(
+            self.store.numel() // 2, dtype=torch.int32, device="cuda")
+        self.st.wt.call("wt_decode_rows", self.store.data_ptr(), out.data_ptr(), self.words, self.base, self.k, self.kd,
+                        self.st.xr.data_ptr(), 8 * self.st.sms, stream())
+        return out.view(torch.uint8).view(self.n, self.kd)
+
     def forward(self, x8: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
         m, st = x8.shape[0], self.st
         xs = xs.reshape(-1).float().contiguous()
         if m > K.MAX_ROWS:
             from vllm import _custom_ops as ops
-            w = unplain(self.fragments(st.scratch), self.n, self.kd).view(torch.float8_e4m3fn)
+            w = self.rows(st.scratch).view(torch.float8_e4m3fn)
             return ops.cutlass_scaled_mm(x8, w.t(), out_dtype=torch.bfloat16, scale_a=xs, scale_b=self.ws, bias=None)
         if self.idx == 0:
             st.at = 0
@@ -764,7 +776,7 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
     st = Stack(args, encoded=args.arm == "stack")
     torch.cuda.synchronize()
     alloc0 = torch.cuda.memory_allocated()
-    gates = {"layers": 0, "configs_checked": 0, "python_words": 0, "max_rel_err": 0.0}
+    gates = {"layers": 0, "configs_checked": 0, "python_words": 0, "max_rel_err": 0.0, "rows_checked": 0}
     gen = torch.Generator(device="cuda").manual_seed(1000)
     plain_bytes = encode_s = 0.0
     for name, layer in layers:
@@ -782,6 +794,12 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
         plain = BW.plain_layout(w.view(torch.uint8)) if st.encoded else lin.store
         gate_linear(st, lin, w, plain, gen, gates)
         del plain
+        if st.encoded:
+            rows = lin.rows()
+            if not torch.equal(rows, w.view(torch.uint8)):
+                raise RuntimeError(f"gate: {name}'s store does not decode, row major, to its weight")
+            del rows
+            gates["rows_checked"] += 1
         plain_bytes += w.numel()
         del w
         layer._parameters["weight"] = torch.nn.Parameter(
