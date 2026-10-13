@@ -348,7 +348,7 @@ def RecursiveAuditC3 : Prop :=
             (fun R₂ j τ =>
               (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t R₂
                 j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
-          ((holoInnerAt T CT st hp).r : ℝ≥0∞) *
+          ((holoInnerAt (holoTys st hp) CT st hp).r : ℝ≥0∞) *
             expAt (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) (fun ω t s =>
               sumV (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t) dg N
               (fun R₂ j τ =>
