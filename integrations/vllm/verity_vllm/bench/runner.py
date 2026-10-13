@@ -6,7 +6,6 @@ import hashlib
 import json
 import math
 import multiprocessing as mp
-import os
 import statistics
 import subprocess
 import time
@@ -194,9 +193,6 @@ def _aggregate(
 
 
 def _git_head() -> str:
-    value = os.environ.get("VERITY_GIT_COMMIT")
-    if value:
-        return value
     return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
 
@@ -490,14 +486,14 @@ def _worker(conn: Any, arm: Arm, preset: Preset, resident: bool, eager: bool) ->
                 break
             value = getattr(engine, name)(arg) if arg is not None else getattr(engine, name)()
             conn.send({"value": value})
-    except BaseException as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         conn.send({"error": f"{type(e).__name__}: {e}", "capacity": _capacity_error(str(e)),
                    "trace": traceback.format_exc()[-4000:]})
     finally:
         if engine is not None:
             try:
                 engine.close()
-            except BaseException:  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 pass
         conn.close()
 
