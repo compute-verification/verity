@@ -81,6 +81,9 @@ class CpuBackend:
         tree = rb.tree(seed, self.plan, ys, salts)
         return tree.commitment.root, (ys, salts, tree)
 
+    def open_window(self, items) -> list[list[tuple]]:
+        return [self.open(handle, positions) for handle, positions in items]
+
     def open(self, handle, positions: list[int]) -> list[tuple]:
         ys, salts, tree = handle
         out = []
@@ -126,18 +129,23 @@ class ProverSide:
             for k, (i, p) in enumerate(draws):
                 by_pass[i].append((k, p))
             out: list = [None] * len(draws)
-            for i, items in sorted(by_pass.items()):
-                with self.lock:
-                    handle = self.kept[(t, i)]
-                fields = self.backend.open(handle, [p for _, p in items])
-                for (k, p), f in zip(items, fields):
+            passes = sorted(by_pass.items())
+            with self.lock:
+                handles = [self.kept[(t, i)] for i, _ in passes]
+            c1 = time.perf_counter_ns()
+            fields = self.backend.open_window([(h, [p for _, p in items]) for h, (_, items) in zip(handles, passes)])
+            c2 = time.perf_counter_ns()
+            for (i, items), got in zip(passes, fields):
+                for (k, p), f in zip(items, got):
                     out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"")
             body = wire.encode_openings(out)
+            c3 = time.perf_counter_ns()
             self.conn.send({"type": "openings", "t": t, "n": len(out)}, body)
             with self.lock:
                 for key in [key for key in self.kept if key[0] == t]:
                     del self.kept[key]
             self.opened.append({"t": t, "n": len(out), "bytes": len(body), "ns": time.perf_counter_ns() - c0,
+                                "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
                                 "on_dropped": sum(p in self.dropped for _, p in draws)})
             self.jobs.task_done()
 

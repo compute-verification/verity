@@ -4,8 +4,8 @@
 //   payload leaf j   x = SHA512(P(32768) ‖ payload_j) (sha512/row/v2 of the 4 KiB block), then the reader's hm96 leaf
 //                    under salt_j = SHAKE256(D(store salt) ‖ key ‖ label ‖ u64be j) and its frame-v3-sha512 leaf
 //                    digest at position j: the driver's `receipts.hidden(payload_j, salt_j)` in `audit.payload_tree`
-//   indexed receipt  sketch-sha512's y = SHA512(seed block ‖ u64be j_q ‖ σ_q) for sketches whose store indices are
-//                    not consecutive (an opening's leaves, gathered from the store)
+//   gather           64-byte rows from a list of device addresses (a window's openings, across its passes' kept
+//                    receipts and trees)
 //
 // rb_set takes the payload tree's constants as it takes a pass's: row_prefix = sha512_row_v2_prefix(32768), the
 // payload domain's id, salt_in = D(store salt) ‖ key ‖ label, positions = N.
@@ -95,26 +95,13 @@ __global__ void __launch_bounds__(128) payload_leaves_kernel(const uint4 *__rest
   store_digest(dig, tid, n, d);
 }
 
-__global__ void __launch_bounds__(128) sketch_hash_idx_kernel(const uint4 *__restrict__ sk,
-                                                              const u64 *__restrict__ js, u64 n,
-                                                              u64 *__restrict__ ys) {
-  const u64 q = blockIdx.x * (u64)blockDim.x + threadIdx.x;
-  if (q >= n) return;
-  u64 w[16], s[8];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = 0;
-  w[0] = js[q];
-#pragma unroll
-  for (int i = 0; i < 4; ++i) {
-    const uint4 v = __ldg(sk + 4 * q + i);
-    w[1 + 2 * i] = be_word(v.x, v.y), w[2 + 2 * i] = be_word(v.z, v.w);
-  }
-  w[9] = 0x80ULL << 56, w[15] = (u64)(128 + 8 + 4 * SK_ROWS) * 8;
-#pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kSketchMid[i];
-  sha512_compress(s, w);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) ys[8 * q + i] = s[i];
+// Row q of out is the 64 bytes at device address addrs[q]: a window's openings (receipts, tree nodes of every pass and
+// of the payload tree) gathered in one launch, so the opener waits on the passes' kernels once a window.
+__global__ void __launch_bounds__(128) gather64_kernel(const u64 *__restrict__ addrs, u64 n, uint4 *__restrict__ out) {
+  const u64 t = blockIdx.x * (u64)blockDim.x + threadIdx.x;
+  if (t >= 4 * n) return;
+  const uint4 *src = reinterpret_cast<const uint4 *>(addrs[t >> 2]);
+  out[t] = src[t & 3];
 }
 
 }  // namespace rb
@@ -127,9 +114,9 @@ int rs_payload_leaves(const void *data, uint64_t c0, uint64_t n, uint64_t *dig, 
   return cudaGetLastError() ? 4 : 0;
 }
 
-int rs_sketch_hash_idx(const int *sk, const uint64_t *js, uint64_t n, uint64_t *ys, cudaStream_t s) {
-  if (!sk || !js || !ys || n < 1) return 1;
-  sketch_hash_idx_kernel<<<grid(n, 128), 128, 0, s>>>((const uint4 *)sk, js, n, ys);
+int rs_gather64(const uint64_t *addrs, uint64_t n, uint64_t *out, cudaStream_t s) {
+  if (!addrs || !out || n < 1) return 1;
+  gather64_kernel<<<grid(4 * n, 128), 128, 0, s>>>(addrs, n, (uint4 *)out);
   return cudaGetLastError() ? 4 : 0;
 }
 

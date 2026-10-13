@@ -8,9 +8,9 @@ store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.
 pass       sketch-sha512 receipts of every block in store order (`rb_sketch`, `rb_sketch_hash`), the leaves under
            salt_c = SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be c) (`rb_leaves`) and the whole tree (`rb_tree`); its
            leaves and tree are kept for the window's openings, its receipts are not
-opening    the drawn leaf's 16 blocks gathered from the store, sketched and hashed again under the pass's signs
-           (`rs_sketch_hash_idx`), on a stream and a second copy of the library of its own (a library's pass constants
-           are global), with the paths from the kept trees
+opening    a window's draws at once, on a stream of their own: the drawn leaves' receipts and the paths gathered from
+           the passes' kept receipts and trees and from the payload tree in one launch (`rs_gather64`), the blocks in
+           another; a pass keeps its receipts (64 bytes a block) until its window is opened
 skip       the dropped blocks zeroed on the device, their true blocks kept on the host for openings
 ~~~
 
@@ -23,10 +23,8 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
-import shutil
 import struct
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -71,7 +69,7 @@ class Lib:
         self.so.rb_sketch.argtypes = [v, v, u64, v, v, i, v]
         self.so.rb_sketch_hash.argtypes = [v, u64, u64, v, v]
         self.so.rs_payload_leaves.argtypes = [v, u64, u64, v, v]
-        self.so.rs_sketch_hash_idx.argtypes = [v, v, u64, v, v]
+        self.so.rs_gather64.argtypes = [v, u64, v, v]
 
     def call(self, fn: str, *args) -> None:
         rc = getattr(self.so, fn)(*args, self.torch.cuda.current_stream().cuda_stream)
@@ -129,25 +127,28 @@ def levels_of(torch, dig, up) -> list:
     return out
 
 
-def paths(torch, levels: list, idx: list[int]) -> list[tuple[bytes, ...]]:
-    """Each leaf's path in `idx`, sibling by sibling up to the root, in one copy from the device."""
-    if len(levels) == 1:
-        return [() for _ in idx]
-    rows = torch.cat([lv[torch.tensor([(c >> h) ^ 1 for c in idx], device=lv.device)]
-                      for h, lv in enumerate(levels[:-1])])
-    flat = digests(rows)
-    H, n = len(levels) - 1, len(idx)
-    return [tuple(flat[h * n + q] for h in range(H)) for q in range(n)]
+def path_rows(dig, up, leaves: int, idx: np.ndarray) -> np.ndarray:
+    """The device addresses of each leaf's path in `idx` (a whole tree of `leaves` leaves: level 0 in dig, the levels
+    above it one after another in up), sibling by sibling up to the root: len(idx) x log2(leaves)."""
+    H = leaves.bit_length() - 1
+    out = np.empty((len(idx), H), dtype=np.uint64)
+    if H:
+        out[:, 0] = np.uint64(dig.data_ptr()) + np.uint64(64) * (idx ^ 1).astype(np.uint64)
+    at, width = 0, leaves // 2
+    for h in range(1, H):
+        out[:, h] = np.uint64(up.data_ptr()) + np.uint64(64) * (at + ((idx >> h) ^ 1)).astype(np.uint64)
+        at, width = at + width, width // 2
+    return out
 
 
 class DeviceStore:
     """N blocks on the GPU: the payload, its tree, then the encoded store, and the passes over it."""
 
-    def __init__(self, torch, lib: Lib, opener: Lib, kv: Kv, blocks: int, key: bytes, generator) -> None:
+    def __init__(self, torch, lib: Lib, kv: Kv, blocks: int, key: bytes, generator) -> None:
         nl = blocks // PER_LEAF
         if blocks % PER_LEAF or nl & (nl - 1):
             raise ValueError(f"{blocks} blocks: the harness takes N = 16 · 2^h, so every tree is whole")
-        self.torch, self.lib, self.opener, self.kv, self.blocks, self.key = torch, lib, opener, kv, blocks, key
+        self.torch, self.lib, self.kv, self.blocks, self.key = torch, lib, kv, blocks, key
         self.data = torch.empty(blocks * BLOCK, dtype=torch.uint8, device="cuda")
         chunk = 1 << 18
         for j in range(0, blocks, chunk):
@@ -158,7 +159,6 @@ class DeviceStore:
             v.view(-1, 128)[:, 127] &= 0x7F
         self.plan = rb.Plan.whole(blocks)
         self.sk = torch.empty((blocks, skr.ROWS), dtype=torch.int32, device="cuda")
-        self.ys = torch.empty((blocks, 8), dtype=torch.int64, device="cuda")
         self.dropped: dict[int, bytes] = {}
         self.pass_gpu_ms: list[float] = []
 
@@ -177,8 +177,8 @@ class DeviceStore:
         self.lib.call("rs_payload_leaves", self.data.data_ptr(), 0, N, dig.data_ptr())
         up = torch.empty((N - 1, 8), dtype=torch.int64, device="cuda")
         self.lib.call("rb_tree", dig.data_ptr(), N, 0, up.data_ptr())
-        self.payload_levels = levels_of(torch, dig, up)
-        self.payload_root = digests(self.payload_levels[-1])[0]
+        self.payload_tree_parts = (dig, up)
+        self.payload_root = digests(up[N - 2:N - 1])[0]
         return self.payload_root
 
     def encode(self, key: rcodec.Key, chunk: int = 1 << 16) -> float:
@@ -204,16 +204,17 @@ class DeviceStore:
         a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         a.record()
         self.lib.call("rb_sketch", self.data.data_ptr(), None, N, signs.data_ptr(), self.sk.data_ptr(), 0)
-        self.lib.call("rb_sketch_hash", self.sk.data_ptr(), 0, N, self.ys.data_ptr())
+        ys = torch.empty((N, 8), dtype=torch.int64, device="cuda")
+        self.lib.call("rb_sketch_hash", self.sk.data_ptr(), 0, N, ys.data_ptr())
         dig = torch.empty((nl, 8), dtype=torch.int64, device="cuda")
-        self.lib.call("rb_leaves", self.ys.data_ptr(), 0, nl, dig.data_ptr(), None)
+        self.lib.call("rb_leaves", ys.data_ptr(), 0, nl, dig.data_ptr(), None)
         up = torch.empty((max(nl - 1, 1), 8), dtype=torch.int64, device="cuda")
         if nl > 1:
             self.lib.call("rb_tree", dig.data_ptr(), nl, 0, up.data_ptr())
         b.record()
         root = digests((up[nl - 2] if nl > 1 else dig[0]).cpu())[0]
         self.pass_gpu_ms.append(a.elapsed_time(b))
-        return root, (seed, signs, dig, up if nl > 1 else up[:0])
+        return root, (seed, ys, dig, up)
 
     def arm(self, dropped: set[int]) -> None:
         """Restore the blocks dropped before, then drop `dropped`: zeroed, their true blocks kept on the host."""
@@ -225,32 +226,44 @@ class DeviceStore:
             self.data[j * BLOCK:(j + 1) * BLOCK].zero_()
         self.torch.cuda.synchronize()
 
-    def open(self, handle, positions: list[int]) -> list[tuple]:
-        """Each position's (block, leaf, leaf salt, receipt path, payload salt, payload path), on the opener's stream
-        and library."""
-        torch = self.torch
-        seed, signs, dig, up = handle
-        cs = sorted({p // PER_LEAF for p in positions})
-        js = torch.tensor([PER_LEAF * c + r for c in cs for r in range(PER_LEAF)], dtype=torch.int64, device="cuda")
-        blocks = self.data.view(-1, BLOCK)[js].contiguous()
-        self.opener.call("rb_sketch_set", skr.prefix(seed))
-        sk = torch.empty((len(js), skr.ROWS), dtype=torch.int32, device="cuda")
-        ys = torch.empty((len(js), 8), dtype=torch.int64, device="cuda")
-        self.opener.call("rb_sketch", blocks.data_ptr(), None, len(js), signs.data_ptr(), sk.data_ptr(), 0)
-        self.opener.call("rs_sketch_hash_idx", sk.data_ptr(), js.data_ptr(), len(js), ys.data_ptr())
-        ys = digests(ys)
-        leaf_of = {c: b"".join(ys[PER_LEAF * q:PER_LEAF * (q + 1)]) for q, c in enumerate(cs)}
-        rpath = dict(zip(cs, paths(torch, levels_of(torch, dig, up), cs)))
-        ppath = paths(torch, self.payload_levels, positions)
-        ptensor = torch.tensor(positions, dtype=torch.int64, device="cuda")
-        raw = self.data.view(-1, BLOCK)[ptensor].cpu().numpy()
-        out = []
-        for q, p in enumerate(positions):
+    def open_window(self, items: list[tuple[object, list[int]]]) -> list[list[tuple]]:
+        """For each (pass, positions) of a window, each position's (block, leaf, leaf salt, receipt path, payload salt,
+        payload path): two gathers on the device and two copies from it for the whole window."""
+        torch, N = self.torch, self.blocks
+        nl = N // PER_LEAF
+        hr, hp = nl.bit_length() - 1, N.bit_length() - 1
+        rows, flat = [], []
+        for (seed, ys, dig, up), positions in items:
+            p = np.asarray(positions, dtype=np.int64)
             c = p // PER_LEAF
-            blk = self.dropped.get(p) or raw[q].tobytes()
-            out.append((blk, leaf_of[c], store_salt(self.key, seed, c), rpath[c], store_salt(self.key, PAYLOAD_LABEL, p),
-                        ppath[q]))
+            leaf = np.uint64(ys.data_ptr()) + np.uint64(64) * (PER_LEAF * c[:, None] + np.arange(PER_LEAF)).astype(np.uint64)
+            rows.append(np.concatenate([leaf, path_rows(dig, up, nl, c),
+                                        path_rows(*self.payload_tree_parts, N, p)], axis=1))
+            flat.extend(positions)
+        addrs = np.concatenate(rows)
+        n = addrs.size
+        dev = torch.from_numpy(addrs.reshape(-1).view(np.int64)).cuda()
+        got = torch.empty((n, 8), dtype=torch.int64, device="cuda")
+        self.lib.call("rs_gather64", dev.data_ptr(), n, got.data_ptr())
+        blocks = self.data.view(-1, BLOCK)[torch.tensor(flat, dtype=torch.int64, device="cuda")]
+        raw = got.cpu().numpy().astype(np.uint64).astype(">u8").reshape(len(flat), -1, 8)
+        braw = blocks.cpu().numpy()
+        out, q = [], 0
+        for (seed, *_), positions in items:
+            mine = []
+            for p in positions:
+                r = raw[q]
+                d = [r[k].tobytes() for k in range(PER_LEAF + hr + hp)]
+                c = p // PER_LEAF
+                mine.append((self.dropped.get(p) or braw[q].tobytes(), b"".join(d[:PER_LEAF]),
+                             store_salt(self.key, seed, c), tuple(d[PER_LEAF:PER_LEAF + hr]),
+                             store_salt(self.key, PAYLOAD_LABEL, p), tuple(d[PER_LEAF + hr:])))
+                q += 1
+            out.append(mine)
         return out
+
+    def open(self, handle, positions: list[int]) -> list[tuple]:
+        return self.open_window([(handle, positions)])[0]
 
 
 class Device:
@@ -261,9 +274,6 @@ class Device:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks, warm_openings
         self.gate_blocks, self.calibration_passes = gate_blocks, calibration_passes
         self.lib = Lib(lib_path, torch)
-        self.tmp = tempfile.mkdtemp(prefix="rs-opener.")
-        twin = shutil.copy(lib_path, str(Path(self.tmp) / "session-opener.so"))
-        self.opener = Lib(twin, torch)
         self.kv = Kv(kv_path, torch)
         self.gen = torch.Generator(device="cuda")
         self.gen.manual_seed(seed)
@@ -273,7 +283,7 @@ class Device:
         self.open_stream = torch.cuda.Stream()
         self.gates: dict = {}
         with torch.cuda.stream(self.main_stream):
-            self.store = DeviceStore(torch, self.lib, self.opener, self.kv, blocks, self.salt_key, self.gen)
+            self.store = DeviceStore(torch, self.lib, self.kv, blocks, self.salt_key, self.gen)
         torch.cuda.synchronize()
 
     def payload_root(self, node: bytes) -> bytes:
@@ -329,8 +339,7 @@ class Device:
         # its allocations here and not in a session, where growing them stalls the passes.
         draws = [(int(self.rng.integers(len(kept))), int(self.rng.integers(s.blocks))) for _ in range(self.warm_openings)]
         o0 = time.perf_counter_ns()
-        for i in sorted({i for i, _ in draws}):
-            self.open(kept[i], [p for k, p in draws if k == i])
+        self.open_window([(kept[i], [p for k, p in draws if k == i]) for i in sorted({i for i, _ in draws})])
         open_ns = time.perf_counter_ns() - o0
         del kept
         gpu = s.pass_gpu_ms[-self.calibration_passes:]
@@ -352,9 +361,9 @@ class Device:
         with self.torch.cuda.stream(self.main_stream):
             return self.store.run_pass(seed)
 
-    def open(self, handle, positions: list[int]) -> list[tuple]:
+    def open_window(self, items: list[tuple[object, list[int]]]) -> list[list[tuple]]:
         with self.torch.cuda.stream(self.open_stream):
-            return self.store.open(handle, positions)
+            return self.store.open_window(items)
 
     def session_stats(self) -> dict:
         gpu = self.store.pass_gpu_ms
@@ -368,7 +377,7 @@ class Device:
         g = torch.Generator(device="cuda")
         g.manual_seed(int(self.rng.integers(1 << 62)))
         with torch.cuda.stream(self.main_stream):
-            small = DeviceStore(torch, self.lib, self.opener, self.kv, self.gate_blocks, self.salt_key, g)
+            small = DeviceStore(torch, self.lib, self.kv, self.gate_blocks, self.salt_key, g)
             payloads = small.host_blocks(0, small.blocks)
             root = small.payload_tree(self.node)
             salts = [store_salt(self.salt_key, PAYLOAD_LABEL, j) for j in range(small.blocks)]
@@ -418,11 +427,9 @@ class Device:
             draws = session.close(t)
             if isinstance(draws, audit.Verdict):
                 return {"accepted": False, "failure": draws.failure}
-            openings = []
-            for i, p in draws:
-                with self.torch.cuda.stream(self.open_stream):
-                    f = small.open(kept[t, i], [p])[0]
-                openings.append(audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b""))
+            with self.torch.cuda.stream(self.open_stream):
+                fields = small.open_window([(kept[t, i], [p]) for i, p in draws])
+            openings = [audit.Opening(i, p, f[0], f[1], f[2], f[3], f[4], f[5], b"") for (i, p), (f,) in zip(draws, fields)]
             v = session.verify(t, openings)
             verdicts.append(v)
             if not v.accepted:
