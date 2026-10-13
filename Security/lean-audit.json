@@ -2871,11 +2871,23 @@
    "assumptions": [],
    "type_hash": "05bf449ca7a72f4551d03acdd98f3572f4d629baf10ecc648236c2b7512006f5"
   },
+  "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide : Pous.Guarantees.P2SlackFamilyFreeBlocksWide"],
+   "assumptions": [],
+   "type_hash": "cacfdd8984b6e2a95ed18482048205dd62cc80cb2f14970865122be9bdf84c13"
+  },
   "Pous.SecurityProofs.P2SlackFamilyUncond": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2SlackFamilyUncond : Pous.Guarantees.P2SlackFamilyUncond"],
    "assumptions": [],
    "type_hash": "a7362ea74a7037fe8af6f390997f4cf697055cf410f55bde27c35526c4b2b7c4"
+  },
+  "Pous.SecurityProofs.P2SlackFamilyWide": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.P2SlackFamilyWide : Pous.Guarantees.P2SlackFamilyWide"],
+   "assumptions": [],
+   "type_hash": "1e9d375b3380a98bb5c4d162a97f159519f4781908aa6e3b8590aa78a0b05341"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": {
    "owner": "@compute-accounting",
@@ -4335,7 +4347,9 @@
    "Accounting.SecurityProofs.pouwRow": "frozen (conjecture,no-function): It takes B1 (Accounting.Guarantees.B1), the named open conjecture TT (Pouw.Assumptions.TT) at the cost model of an arbitrary actual circuit's provers (Accounting.Actual.costModel), as a hypothesis, and is about PoUW's audit of an abstract protocol (Pouw.Protocol) against those provers, not a Lean function.",
    "Accounting.SecurityProofs.Composition": "frozen (no-function): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick and each protocol's soundness alone, hypotheses about them rather than a Lean function's acceptance, and bounds a count of coins, not an event of shape.events.",
    "Accounting.SecurityProofs.Fit": "frozen (no-function): It is stated over arbitrary sets of runs (Accounting.Actual.Run) and a quantity on them, with additivity as a hypothesis, not a Lean function's acceptance.",
-   "Nci.SecurityProofs.UpdatedMatMulReads": "falsified (conjecture,no-function): It is UpdatedMatMul before its division by alpha, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it."
+   "Nci.SecurityProofs.UpdatedMatMulReads": "falsified (conjecture,no-function): It is UpdatedMatMul before its division by alpha, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
+   "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide": "frozen (no-function,hash): It is about the abstract m1p model in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:19-21 says none states that the deployed P2 is secure.",
+   "Pous.SecurityProofs.P2SlackFamilyWide": "frozen (no-function,hash): It is about the abstract m1p model in the random-oracle model (Security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and Security/Models/Pous/Guarantees/P2.lean:19-21 says none states that the deployed P2 is secure."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -5147,7 +5161,9 @@
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
-    "Pous.SecurityProofs.P2SlackFamilyUncond"
+    "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P2SlackFamilyWide"
    ]
   },
   "Definitions.Pous.Game.Oracle": {
@@ -5194,7 +5210,9 @@
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
-    "Pous.SecurityProofs.P2SlackFamilyUncond"
+    "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P2SlackFamilyWide"
    ]
   },
   "Definitions.Pous.Game.Prob": {
@@ -5227,7 +5245,9 @@
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
-    "Pous.SecurityProofs.P2SlackFamilyUncond"
+    "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P2SlackFamilyWide"
    ]
   },
   "Definitions.Pous.Model.Audit": {
@@ -5271,7 +5291,9 @@
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
-    "Pous.SecurityProofs.P2SlackFamilyUncond"
+    "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P2SlackFamilyWide"
    ]
   },
   "Definitions.Pous.Model.BandChain": {
@@ -5321,7 +5343,7 @@
     "Pous.FreeSet.free": "17be3784544c827a37ee21d3faffef04872afcabcbb85a2a5199fbca8c80ffdd",
     "Pous.seqAcceptsFree": "ecca55f049e68dbc35b244f105dcf40eaaa507b060b4f85229f6f4da62f89976"
    },
-   "guarantees": ["Pous.SecurityProofs.P2SlackFamilyFreeBlocks"]
+   "guarantees": ["Pous.SecurityProofs.P2SlackFamilyFreeBlocks", "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide"]
   },
   "Definitions.Pous.Model.Labelling": {
    "digest": "4ca764fa447189edbc157b1653ec4f0b5b1c2d7481eabfa2adb334d38802a23c",
@@ -5359,7 +5381,9 @@
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
-    "Pous.SecurityProofs.P2SlackFamilyUncond"
+    "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P2SlackFamilyWide"
    ]
   },
   "Definitions.Pous.Model.M1p": {
@@ -5386,7 +5410,9 @@
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
-    "Pous.SecurityProofs.P2SlackFamilyUncond"
+    "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P2SlackFamilyWide"
    ]
   },
   "Definitions.Pous.Model.P3Chain": {
@@ -5465,7 +5491,9 @@
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
-    "Pous.SecurityProofs.P2SlackFamilyUncond"
+    "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P2SlackFamilyWide"
    ]
   },
   "Definitions.Pous.P2.Cost": {
@@ -13580,7 +13608,7 @@
    ]
   },
   "Models.Pous.Guarantees.P2": {
-   "digest": "d66f9220f1b6f770ce28fe6b5df70bc9377d40a2899375044e634ead2791c886",
+   "digest": "2948b2be72830629edae733323e112f2ed3dd67f7fbf46151d808ed97c95ff17",
    "definitions": {
     "Pous.Guarantees.P2ErrorSplitB19Uncond": "33dbfe54712b1673b846f461fba5102a07cc39e17bebd04c496626e5e20f0ce8",
     "Pous.Guarantees.P2MeetsM1pB19Uncond": "5e6b9f544f812c9cf559bc3393bb707c226713af948f5fcec94709ca6d0c7df1",
@@ -13589,7 +13617,9 @@
     "Pous.Guarantees.P2RingAuditSecureOfReduces": "30d2bf23a3e55e003e53b14f82cdf917bb6422b70be6a005ff1b8a777a669ba7",
     "Pous.Guarantees.P2SlackB19Uncond": "29abf694f38211f455a2a46a228f6e968f6320e447ed414279fde6a9be57d863",
     "Pous.Guarantees.P2SlackFamilyFreeBlocks": "902a58831f71201cb27e6cdd2eb12899621d32c867c0fe282ce1ef3aee9f3198",
-    "Pous.Guarantees.P2SlackFamilyUncond": "56aa4860fbb0c6a834054089ba0cb9b580789ca4ac9e4188a48b59a75bf76fd5"
+    "Pous.Guarantees.P2SlackFamilyFreeBlocksWide": "3aac484d00d141117cd337f9b5c665168144c2e2a9dd0c3462b8f35d77336969",
+    "Pous.Guarantees.P2SlackFamilyUncond": "56aa4860fbb0c6a834054089ba0cb9b580789ca4ac9e4188a48b59a75bf76fd5",
+    "Pous.Guarantees.P2SlackFamilyWide": "ac60c0237fa6b1bf772e2a58bb8e153ad84e7b688b22382568a118ea89e9885f"
    },
    "guarantees": [
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
@@ -13599,7 +13629,9 @@
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2SlackB19Uncond",
     "Pous.SecurityProofs.P2SlackFamilyFreeBlocks",
-    "Pous.SecurityProofs.P2SlackFamilyUncond"
+    "Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide",
+    "Pous.SecurityProofs.P2SlackFamilyUncond",
+    "Pous.SecurityProofs.P2SlackFamilyWide"
    ]
   },
   "Models.Pouw.Assumptions.Dimension.Assumptions": {
