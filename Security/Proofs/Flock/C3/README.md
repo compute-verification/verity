@@ -86,12 +86,15 @@ takes, each with who discharges it:
   the typed sessions'. `vbridge_checked` gives VBridge at `checkedC3` from VBridge at the typed sessions; `hbr_honest`
   is at the checked family itself (round 6), where the public-row and statement checks are the kept sessions'
   (`ChecksAccepted`: where a session accepts, some transcript it accepts passes them, `checks_of_keepOwn`).
-* n1c, the record–history link: `row` reads the verifier's fixed record `tr`, while the history `t` ranges, so
-  `hheld` (`HeldIs`: at each accepted history the held row is `t`'s commitment) needs custody of `tr` as the live
-  history's record, beside `RecordCustody`: stated as `Compose.InnerRecordCustody` (`C3/Compose/Custody.lean`, at
-  the coin server's writer `wr` of the inner record), which gives `HeldIs` (`heldIs_of_custody`, proved). It is
-  `live-verifier` at the inner session: no premise and no check of the verifier's gives it, so it is a new named
-  assumption, and the guarantee would read the record at the history (`wr t`) in place of `tr` and `record`.
+* n1c, the record–history link: `row` reads the records the coin server writes at the history (`wr t`, round 10;
+  the guarantee reads them there, `innerHeld`), so `hheld` (`HeldIs`: at each accepted history the held row is `t`'s
+  commitment) is custody of those records as the history's, beside `RecordCustody`: `InnerRecordCustody`
+  (`Soundness/Assumptions/Inner.lean`, `live-verifier` at the inner session, the guarantee's `_hIC` at the map `im`),
+  which gives `HeldIs` (`heldIs_of_custody`, proved, its `hrow` `rfl` at the honest family).
+* The guarantee's form: `hbr_honest` is at the fixed word `fun _ _ => xR`; `hbr_honest_reg` is `_hbr` itself, at the
+  word the runs open (`regStmt`), whose cap is `cap`: candidate 3's table reads only the cap (`holoAccepts_of_cap`), so
+  VBridgeC moves between statements of one cap (`vbridgeC_of_cap`). The guarantee's message types are the stages'
+  (`holoTys st hp`, round 10), which `ShapeTys` reads.
 
 ## Circuits' code
 
