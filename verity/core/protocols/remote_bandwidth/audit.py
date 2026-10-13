@@ -375,10 +375,10 @@ class WindowRecord:
 @dataclass(frozen=True, slots=True)
 class Record:
     """An accepted session: its registration, its coin commitment's root, its store's `blocks`, every window's record,
-    and the receipt kind the registration names and whether its receipts bind z (its digest binds both; the record
-    repeats them, since what a receipt rests on depends on them).  `public` is what acceptance makes public; `profile`
-    is the protocol's profile, each window's schedule and openings law (the γ terms need the node's capacities:
-    `ledger`)."""
+    and the receipt kind the registration names, whether its receipts bind z and its codec (its digest binds all three;
+    the record repeats them, since what a receipt rests on depends on the first two and μ_rebuild on the codec).
+    `public` is what acceptance makes public; `profile` is the protocol's profile, each window's schedule and openings
+    law (the γ terms need the node's capacities: `ledger`)."""
 
     registration: bytes
     coins: bytes
@@ -387,6 +387,7 @@ class Record:
     windows: tuple[WindowRecord, ...]
     receipt: str = receipts.DEFAULT
     bind: bool = False
+    codec: Codec = codec.DEFAULT
 
     @property
     def start_ns(self) -> int:
@@ -411,7 +412,8 @@ class Record:
         return sum(w.receipts for w in self.windows)
 
     def public(self) -> dict:
-        return {"bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks, "coins": self.coins.hex(),
+        return {"bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks, "codec": self.codec.name,
+                "codec_params": self.codec.to_json(), "coins": self.coins.hex(),
                 "passes": [w.passes for w in self.windows], "protocol": PROTOCOL_ID, "receipt": self.receipt,
                 "receipts": [w.receipts for w in self.windows], "registration": self.registration.hex(),
                 "span_ns": self.span_ns}
@@ -632,7 +634,7 @@ class Session:
                                        self.params.delta, drawn={"receipt": len(w.draws)})
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile))
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
-                      self.registration.receipt, self.registration.bind)
+                      self.registration.receipt, self.registration.bind, self.registration.codec)
 
 
 LEDGER_SOURCES = {

@@ -492,9 +492,12 @@ opening.
 ## 7. The record
 
 `Session.record()` returns a `Record` once every window is accepted. `public()` holds the registration digest, the coin
-commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z\), each window's passes and receipts
-\(U_t\), and the session's span. The digest binds both already, but the record names them as well, since what its
-receipts rest on depends on them (§4), and `ledger` takes a link term only from a record that binds \(z\). Each
+commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z\), the codec's name and parameters
+(`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), each window's passes and receipts \(U_t\), and
+the session's span. The digest binds the kind, `bind` and the codec already, but the record names them as well: what
+its receipts rest on depends on the first two (§4), and `ledger` takes a link term only from a record that binds
+\(z\); \(\mu_{\text{rebuild}}\)'s model is priced under the codec (§3), so a record is re-checked against the model's
+codec by name. Each
 `WindowRecord` carries its passes' lengths \(L_{t,i}\), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so
 its span \(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`. That is every input of
 \(\gamma_t\) but the node's measured \(R\) and \(S_{\text{chip}}\) and the models, so the every-window claim is

@@ -95,6 +95,11 @@ class Codec:
         """The most blocks a store under it holds: its words' indices fit a u64 (2^59 at p1024, 2^58 at p512)."""
         return WORD_INDICES // self.field.block_words
 
+    def to_json(self) -> dict:
+        """Its parameters: the field `p = 2^n − c`, k, and the mask."""
+        return {"c": self.field.c, "field": self.field.name, "masked": self.masked, "n": self.field.n,
+                "rounds": self.rounds}
+
 
 DEFAULT = Codec(P1024, 3, True)
 FALLBACK = Codec(P1024, 2, True)

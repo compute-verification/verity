@@ -1,6 +1,7 @@
 """Red team ra-remote-redteam-impl against the remote bandwidth audit as implemented: each test asserts the property the
-audit's claim needs and is marked xfail with its finding id while the reference breaks it (the report is
-note:memory-accounting/ra-remote-redteam-impl).  The exploits run on `test_remote_bandwidth`'s store and drivers."""
+audit's claim needs, and was marked xfail with its finding id while the reference broke it (the report is
+note:memory-accounting/ra-remote-redteam-impl); RB-1, RB-2 and RB-3 are fixed and pass.  The exploits run on
+`test_remote_bandwidth`'s store and drivers."""
 
 from __future__ import annotations
 
@@ -41,17 +42,17 @@ def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:  # noqa:
     assert led.worst.window == led.worst_horizon.window == led.to_json()["worst"]["window"] == idle
 
 
-@pytest.mark.xfail(strict=True, reason="RB-2: the record names the receipt kind and bind but not the codec, which "
-                                       "μ_rebuild depends on")
 def test_rb2_the_record_names_its_codec(store) -> None:  # noqa: F811
     """`Record.public()` repeats the receipt kind and `bind` "since what its receipts rest on depends on them", and
-    `ledger` checks `link` against `bind`.  μ_rebuild rests on the codec (field, k, mask), and the record omits it: a
-    session under `p512/k2`, unmasked and resting on the unmeasured assumption 7, has a public record of the same shape
-    as one under the stated `p1024/k3/masked`, and `ledger` takes any `rebuild` for either."""
+    `ledger` checks `link` against `bind`.  μ_rebuild rests on the codec (field, k, mask), and the record omitted it: a
+    session under `p512/k2`, unmasked and resting on the unmeasured assumption 7, had a public record of the same shape
+    as one under the stated `p1024/k3/masked`, and `ledger` takes any `rebuild` for either.  Fixed: the record names
+    the codec and its parameters."""
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     assert store.registration.codec.name == "p1024/k2/masked"
     assert store.registration.codec.name in s.record().public().values()
+    assert s.record().public()["codec_params"] == {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2}
 
 
 def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, bytes], reads: list[int],
