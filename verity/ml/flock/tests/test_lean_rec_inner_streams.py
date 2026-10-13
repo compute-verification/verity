@@ -649,6 +649,21 @@ def test_rs_c_k_off_its_schedule_is_refused(tmp_path):
         "level0 0, commits true)")
 
 
+def test_a_third_sparse_stream_is_refused(tmp_path):
+    """A `sparse/rep2` beside the two reps' sparse phases (sparse/rep1's rounds, each `c_k` fresh) is refused under the
+    honest inner shape: `candidate3` holds the session's streams to the reps', their sparse phases and R's before
+    `checkCommitRounds`, which reads `sparse/rep0` and `sparse/rep1` only, refuses any other held `sparse/…` stream (its
+    refusal is the Lean guards' in `Test/InnerStreams.lean`)."""
+    def change(t: dict) -> None:
+        t["streams"]["sparse/rep2"] = dict(t["streams"]["sparse/rep1"])
+        t["rounds"] += [{**r, "stream": "sparse/rep2", "commits": [_fresh("rep2", r["k"])] if r["commits"] else []}
+                        for r in t["rounds"] if r["stream"] == "sparse/rep1"]
+    assert _covers(tmp_path, _shape(tmp_path), _changed(tmp_path, change)) == (
+        1, "rec inner transcript: its message rounds' streams [circuit/rep0, circuit/rep1, sparse/rep0, sparse/rep1, "
+        "stacked/rep0, sparse/rep2] are not one table's rep0 and rep1, both reps' sparse phases and at most R's stream "
+        "([circuit/rep0, circuit/rep1, sparse/rep0, sparse/rep1, stacked/rep0])")
+
+
 def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_path):
     """The plain session (`rec-coins`' inner session, two reps and no other stream) passes under its own inner shape, and is
     refused under one naming the bucket's RecSparse shape: the shape names a phase the session does not have."""
