@@ -183,10 +183,10 @@ theorem leafRun_of_rec (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
         (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outerV (zs σ.1 ω t) dg N) s')) O := by
     rw [map_ofMap]
     exact hb
-  obtain ⟨b, hb, rfl⟩ := outcome_of_map _ _ _ hb'
+  obtain ⟨b, hb₂, rfl⟩ := outcome_of_map _ _ _ hb'
   show LeafRun zs dg N k Rw wmsg σ ω (decodedV zs dg N k Rw wmsg σ.1 ω t b)
   unfold LeafRun
-  exact hl _ _ (outcome_oneRun _ _ _ hb)
+  exact hl _ _ (outcome_oneRun _ _ _ hb₂)
 
 theorem regWord_of {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
     {st : Flock.Stmt} (hp : HoloParams)
@@ -363,7 +363,7 @@ theorem zk_sessions_recursive_fork_innerL
       ∃ m, l.zip (t.map Prod.snd) = relabelL (ref ω) m t := by
     intro ref ω t l ht h
     obtain ⟨m, hm⟩ := exists_of_rel (h (t.length - 1) (by omega)) (by
-      simp only [ne_eq, Option.map_eq_none_iff, List.getElem?_eq_none_iff, Nat.not_le] <;> omega)
+      simp only [ne_eq, Option.map_eq_none_iff, List.getElem?_eq_none_iff, Nat.not_le]; omega)
     exact ⟨m, zip_eq_relabelL (ref ω) m t l hm fun k hk =>
       option_eq_of_rel (R := fun a b => k + 1 < I.r → a = b) (fun _ _ hab => hab (by omega)) (h k (by omega))⟩
   rcases zk_sessions_recursive_fork_on hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun i _ a b => i + 1 < I.r → a = b)
