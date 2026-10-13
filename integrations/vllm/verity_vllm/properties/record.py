@@ -97,6 +97,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "the row's TP8 statics (ratio 4's top-k of 1024, ratio 128's at widths 256, 896 and 8192, the 128-token window) every "
              "ratio-128 prefill top-k row equals Dsv4ShortContextTopK_v1 and every row of workspace indices and its length "
              "Dsv4CombineTopkSwa_v1, at served chunks and at the int32 edges of its domain, bit for bit."),
+    Property("dsv4_decode_index_row_capture", "verity-vllm/dsv4-decode-index-row-capture/v1",
+             "On the capture's Hopper GPU, the DSV4 row's ratio-4 FlashMLA decode calls vLLM's Triton "
+             "compute_global_topk_indices_and_lens (Triton 3.7.1) at block size 64, whose PTX holds the arithmetic the Definition "
+             "was read from, and at the row's TP8 statics (the top-k of 1024, the block table's row at max_model_len 1,048,576 and "
+             "4096) every slot id and length it writes for a decode token, padding tokens and bytes other than 0 and 1 included, "
+             "equals Dsv4GlobalTopk_v1, at served steps and at the int32 edges of its domain, bit for bit."),
     Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
              "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
              "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),
