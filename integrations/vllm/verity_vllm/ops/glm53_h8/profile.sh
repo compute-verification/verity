@@ -2,7 +2,7 @@
 # which is stated over a partition's proof units and the verifier's draw: with no Build there is no partition and nothing is drawn,
 # so no unit is checked, nothing is bounded and there is no delta. Each family says whether it is committed, whether it has a
 # Program, and what the H200 established about that Program (the runs of internal/glm53/h200-go-no-go.md, and the TP8 all-reduce
-# capture when $AR_RUN names it). Reads the Commit's records from $SWEEP_DIR/commit-probe.
+# and bf16 GEMM captures under $SWEEP_DIR, named by $AR_RUN and $BF16_RUN). Reads the Commit's records from $SWEEP_DIR/commit-probe.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 stamp profile | tee "$O/profile.log"
 "$PY" - "$CMAP" "$SWEEP_DIR/commit-probe" "$SWEEP_DIR/ar-capture" "$SWEEP_DIR/bf16-gemm-capture" "$O" "${COMMIT_RUN:-}" "${AR_RUN:-}" \
@@ -38,7 +38,6 @@ H200 = {
     "cublas-bf16-gemm": {"verdict": "no Program in this tree", "runs": [],
                          "what": "Programs on cursor/glm53-committed-ops-8c79 under a split-K-off cuBLAS switch this Commit does not serve"},
 }
-AR_FAMILIES = ("tp-allreduce", "fused-allreduce-rmsnorm")
 # The map still says "tonight" for these, but their Programs are registered in this tree.
 IN_TREE = {"sigmoid-router": ["MoeRouterSigmoidBias_v1"],
            "fp8-moe-triton": ["MoeExpertFp8BlockGemm_v1", "MoeExpertFp8BlockGemmW_v1", "MoeExpertFp8BlockCoordinate_v1",
@@ -51,11 +50,19 @@ def capture(rec: Path, run: str, phases: tuple[str, ...] | None = None) -> dict 
     doc = json.loads(rec.read_text())
     cases = {k: c for k, c in (doc.get("cases") or {}).items() if phases is None or k.split("/")[0] in phases}
     ok = bool(doc.get("ok")) if phases is None else bool(cases) and all(c.get("ok") for c in cases.values())
+    changed = (doc.get("served_default") or {}).get("changed")
     return {"run": run or None, "verdict": "GO" if ok else "NO-GO", "digest": doc.get("digest"), "record": str(rec), "cases": len(cases),
-            "no_go_cases": sorted(k for k, c in cases.items() if not c.get("ok")), "errors": sorted(doc.get("errors") or [])}
+            "no_go_cases": sorted(k for k, c in cases.items() if not c.get("ok")), "errors": sorted(doc.get("errors") or []),
+            # The cases whose result differs when the capture's switch is off, as this Commit's engine served them.
+            "served_default_changed": sorted(k for k in changed if k in cases) if isinstance(changed, list) else None}
 
 
-ar = capture(Path(ar_dir) / "glm53_tp8_allreduce_capture.json", ar_run)
+ar_rec = Path(ar_dir) / "glm53_tp8_allreduce_capture.json"
+AR = {"tp-allreduce": (capture(ar_rec, ar_run, ("allreduce",)), "its all-reduce phase: GO where vLLM dispatched the custom all-reduce "
+                       "(ca_comm), which this Commit's engine disables; NO-GO where it dispatched FlashInfer's (fi_ar_comm), as this "
+                       "Commit's engine serves, consistent with its AllReduce_v2 cross-rank mismatches"),
+      "fused-allreduce-rmsnorm": (capture(ar_rec, ar_run, ("fused",)), "its fused phase, FlashInfer's all-reduce + RMSNorm as the served "
+                                  "decoder layers run it")}
 bf16_rec = Path(bf16_dir) / "glm53_bf16_gemm_capture.json"
 BF16 = {"router-gemm": (capture(bf16_rec, bf16_run, ("router",)), "GateLinear at M <= 16 on cuteDSL ll_bf16_gemm as served, past 16 "
                         "cuBLAS under the split-K-off switch"),
@@ -72,7 +79,8 @@ commit = None if summary is None else {
     "run": commit_run or None, "dir": commit_dir, "of_record": False,
     "why_not_of_record": "no Build: tp-commit ran without --required-manifest, so no sampled replay, no weights pin, no Program digests",
     "tp_run_roots": summary.get("tp_run_roots"), "per_rank_roots": summary.get("per_rank_roots"),
-    "per_rank_coverage": cov, "bytes_bound_total": sum(int(v.get("bytes_bound") or 0) for v in (cov[0] or {}).values()),
+    "per_rank_coverage": cov, "bytes_bound_all_ranks": sum(int(v.get("bytes_bound") or 0) for v in (cov[0] or {}).values()),
+    "bytes_bound_per_rank": {r: int(v.get("bytes_bound") or 0) for r, v in (cov[0] or {}).items()},
     "commit_pass": summary.get("commit_pass"), "pass": summary.get("pass"), "tokens_equal": summary.get("tokens_equal"),
     "cross_rank_collectives": summary.get("cross_rank_collectives"), "weights_pin": summary.get("weights_pin"),
     "sampled_replay": summary.get("sampled_replay"), "required_classes": summary.get("required_classes")}
@@ -85,11 +93,10 @@ for name, prog in cmap["programs"].items():
     defs = prog.get("definitions") or IN_TREE.get(name) or []
     has_program = (prog.get("status") in ("exists", "port") and bool(defs)) or name in IN_TREE
     h = H200.get(name)
-    if name in AR_FAMILIES:
-        h = (ar | {"runs": [ar["run"]] if ar["run"] else [],
-                   "what": "glm53_tp8_allreduce_capture_gpu.py at cursor/glm53-tp8-allreduce-3d06 against that branch's Programs (not "
-                           "merged into this tree); its all-reduce phase is vLLM's custom all-reduce, which this Commit's engine disables "
-                           "(disable_custom_all_reduce), so only its fused phase describes the served decoder layers"} if ar else
+    if name in AR:
+        c, what = AR[name]
+        h = (c | {"runs": [c["run"]] if c["run"] else [], "what": "glm53_tp8_allreduce_capture_gpu.py at cursor/glm53-tp8-allreduce-3d06 "
+                  f"against that branch's Programs, not merged into this tree: {what}"} if c else
              {"verdict": "not captured", "runs": [], "what": "Programs on cursor/glm53-tp8-allreduce-3d06, not merged"})
     if name in BF16 and BF16[name][0]:
         c, what = BF16[name]
@@ -116,7 +123,7 @@ Path(out, "profile.json").write_text(json.dumps(doc, indent=1, default=str))
 print(f"[profile] integrity profile: none ({doc['why']})")
 if commit:
     print(f"[profile] commit (not of record): tp_run_roots={commit['tp_run_roots']} pass={commit['pass']} commit_pass={commit['commit_pass']} "
-          f"bytes_bound(rank 0..)={commit['bytes_bound_total']}")
+          f"bytes_bound={commit['bytes_bound_all_ranks']} over {len(commit['bytes_bound_per_rank'])} ranks")
     print(f"[profile] cross-rank collectives: {json.dumps((commit['cross_rank_collectives'] or {}).get('by_family'))}")
 groups = defaultdict(list)
 for f in fams:
@@ -129,6 +136,7 @@ for k, v in groups.items():
     print(f"[profile] {k}: {', '.join(v)}")
 for f in fams:
     print(f"[profile] {f['family']:24s} {f['map_status']:15s} committed={len(f['committed'])} unbound={f['unbound_by_design']} "
-          f"h200={f['h200']['verdict']} {f['h200'].get('runs')}")
+          f"h200={f['h200']['verdict']} {f['h200'].get('runs')}"
+          + (f" served_default_changed={f['h200']['served_default_changed']}" if f["h200"].get("served_default_changed") else ""))
 EOF
 [ -f "$O/profile.json" ]
