@@ -14,7 +14,8 @@
   "checkpoint": {
    "repo": "deepseek-ai/DeepSeek-V4-Pro",
    "revision": "b5968e9190ef611bbf34a7229255be88a0e937c1",
-   "config_sha256": "5fe4568daee51c208cb8a79538eaeda090ae011ade1dee2c386aa95f569c810e"
+   "config_sha256": "5fe4568daee51c208cb8a79538eaeda090ae011ade1dee2c386aa95f569c810e",
+   "staged": "vy-dsv4-fs:/workspace/fs/dsv4/b5968e9190ef611bbf34a7229255be88a0e937c1 (864.7 GB, every file's hash verified against the hub)"
   },
   "kernels": {
    "deep_gemm": "8b1392b9 (fp8_gemm_nt, fp8_einsum, tf32_hc_prenorm_gemm, fp8_mqa_logits / fp8_paged_mqa_logits)",
@@ -41,6 +42,15 @@
   "dtype": "bfloat16",
   "quantization": "deepseek_v4_fp8",
   "max_decode_batch": 16,
+  "engine_args": {
+   "tensor_parallel_size": 8,
+   "pipeline_parallel_size": 1,
+   "enforce_eager": true,
+   "kv_cache_dtype": "auto",
+   "max_num_seqs": 16,
+   "speculative_config": null,
+   "enable_expert_parallel": false
+  },
   "profile": {
    "compute_capability": [
     9,
@@ -65,7 +75,8 @@
    "VLLM_USE_DEEP_GEMM": "left at its default (1): the checkpoint's FP8 scales are ue8m0 (quantization_config.scale_fmt) and every dense FP8 linear runs DeepGemmFp8BlockScaledMMKernel with e8m0 activation scales. VLLM_USE_DEEP_GEMM=0 would move them to CUTLASS with f32 scales, a different function from the one the checkpoint was trained to; the mHC TF32 GEMM, the o-projection einsum and the indexer logits call DeepGEMM whatever the variable says",
    "VLLM_BATCH_INVARIANT": "not set: the Commit runs without it and replay uses the same batch layout",
    "kv_cache_dtype": "auto: DeepseekV4Attention rewrites it to fp8_ds_mla (_resolve_dsv4_kv_cache_dtype), the UE8M0 paged layout, 584 bytes per token (448 e4m3 NoPE + 64 bf16 RoPE + 8 scale bytes)",
-   "max_decode_batch": "the serve's decode batch limit: a step of at most 16 tokens takes the fused FMA mHC kernel (route hc-fused); a larger one the TF32 path"
+   "max_decode_batch": "the serve's decode batch limit (max_num_seqs 16) until the TF32 mHC is pinned: a step of at most 16 tokens takes the fused FMA mHC kernel (route hc-fused); a larger one the TF32 path (hc-split), whose taps are committed-only",
+   "engine_args": "vLLM's default Hopper kernels, chosen by the engine and held by the expectations: DeepGEMM for the FP8 linears, the o-projection einsum, the TF32 mHC GEMM and the indexer logits; Marlin for the MXFP4 experts; FlashMLA for attention; the FP8 indexer cache. No MTP (speculative_config None: num_nextn_predict_layers 1 is not built), no expert parallelism (MegaMoE is sm_100 only)"
   }
  },
  "selections": {
@@ -79,6 +90,7 @@
   "mhc": "hc_mult 4, 20 Sinkhorn iterations. Layer 0's pre is mhc_pre_broadcast_tilelang (DeepGEMM tf32_hc_prenorm_gemm at every token count); every later pre is fused with the previous post (mhc_fused_post_pre_tilelang): FMA for M <= 16, DeepGEMM TF32 above. After the last layer, mhc_post_tilelang and hc_head_fused_kernel_tilelang, then model.norm",
   "compressors": "every layer has one: compress_ratios[i] 4 (CSA, with an indexer) or 128 (HCA). The kv / score GEMM is torch.mm(out_dtype=float32) on fused_wkv_wgate's weight; save_partial_states keeps f32 state rows; at a ratio boundary compress_norm_rope_store_cutedsl (head 512) or _triton (the indexer's, head 128) writes one compressed cache row",
   "rotary": "one DeepseekV4ScalingRotaryEmbedding (deepseek_yarn, compress_rope_theta 160000, factor 16, GPT-J interleaved, cos_sin_cache [1048576, 64] f32) shared by every layer, its compressor and its indexer",
+  "indexer_cache": "FP8: each compressed key 128 e4m3 bytes and one f32 ue8m0 scale, 132 bytes (use_fp4_kv false; the MXFP4 indexer cache is sm_10x only)",
   "embedding": "VocabParallelEmbedding sharded (16160 rows per rank, use_fused_embedding): masked gather then all-reduce",
   "mtp": "num_nextn_predict_layers 1 is not built: no speculative decoding in the serve command"
  },
@@ -244,73 +256,81 @@
   "fp8-block-linear-deepgemm": {
    "status": "tonight",
    "definitions": [],
-   "note": "DeepGemmFp8BlockScaledMMKernel: per_token_group_quant_fp8 of the input with ue8m0 (power-of-two) scales per 1x128, then DeepGEMM sm90 fp8_gemm_nt against the checkpoint's e4m3 weight and ue8m0 128x128 block scales: per output the wgmma e4m3 k32 chain of each 128-wide K block, promoted into an f32 accumulator with the product of the two scales, rounded to bf16",
-   "branch": "cursor/dsv4-prep-8c79"
+   "note": "DeepGemmFp8BlockScaledMMKernel: per_token_group_quant_fp8 of the input with ue8m0 (power-of-two) scales per 1x128, then DeepGEMM sm90 fp8_gemm_nt against the checkpoint's e4m3 weight and ue8m0 128x128 block scales: per output the wgmma e4m3 k32 chain of each 128-wide K block, promoted into an f32 accumulator with the product of the two scales, rounded to bf16. Row SHARED-DG",
+   "branch": "cursor/deepgemm-sm90-8c79"
   },
   "fp8-einsum-deepgemm": {
    "status": "tonight",
    "definitions": [],
-   "note": "DeepGEMM fp8_einsum('bhr,hdr->bhd', recipe (1, 128, 128)): per token and o-group g, z[g] = the block-FP8 product of o_fp8[g] (scales o_scale[g]) and wo_a's weight rows of group g (e4m3, 128x128 ue8m0 block scales), bf16 out",
-   "branch": "cursor/dsv4-prep-8c79"
+   "note": "DeepGEMM fp8_einsum('bhr,hdr->bhd', recipe (1, 128, 128)): per token and o-group g, z[g] = the block-FP8 product of o_fp8[g] (scales o_scale[g]) and wo_a's weight rows of group g (e4m3, 128x128 ue8m0 block scales), bf16 out. Row SHARED-DG",
+   "branch": "cursor/deepgemm-sm90-8c79"
   },
   "flashmla-sparse-decode": {
    "status": "tonight",
    "definitions": [],
-   "note": "FlashMLA flash_mla_with_kvcache, sm90 sparse FP8 decode (is_fp8_kvcache, head_dim_v 512): per decode token and padded head the online softmax at softmax_scale = HD^-0.5 over the SWA rows at swa_indices (swa_lens of them) then the compressed rows at the layer's extra indices (extra_topk_length), each row dequantized from the 584-byte fp8_ds_mla layout, the head's attn_sink in the denominator; NHP heads written, NHL kept",
-   "branch": "cursor/dsv4-prep-8c79"
+   "note": "FlashMLA flash_mla_with_kvcache, sm90 sparse FP8 decode (is_fp8_kvcache, head_dim_v 512): per decode token and padded head the online softmax at softmax_scale = HD^-0.5 over the SWA rows at swa_indices (swa_lens of them) then the compressed rows at the layer's extra indices (extra_topk_length), each row dequantized from the 584-byte fp8_ds_mla layout, the head's attn_sink in the denominator; NHP heads written, NHL kept. Row DSV4-MLA (FlashMlaDecode_v1 and its parts)",
+   "branch": "cursor/dsv4-flashmla-8c79"
   },
   "flashmla-sparse-prefill": {
    "status": "committed-only",
    "definitions": [],
-   "note": "FlashMLA flash_mla_sparse_fwd per prefill chunk over dequantize_and_gather_k_cache's bf16 rows at combine_topk_swa_indices' indices, with attn_sink: committed-only on this target (prefill is verified after decode)"
+   "note": "FlashMLA flash_mla_sparse_fwd per prefill chunk over dequantize_and_gather_k_cache's bf16 rows at combine_topk_swa_indices' indices, with attn_sink: committed-only on this target (prefill is verified after decode). Row DSV4-MLA states it (FlashMlaPrefill_v1, FlashMlaGatherRow_v1 on its branch); it moves to tonight when the target verifies prefill"
   },
   "mhc-post-pre-fma": {
    "status": "tonight",
    "definitions": [],
-   "note": "mhc_fused_post_pre_tilelang at M <= 16: mhc_fused_tilelang (the post: new residual[s] = post_mix[s] * x + sum_t comb_mix[t, s] * residual[t] in bf16 streams; the pre's 24 mix logits of the new residual against hc_fn and its square sum, by FMA in 4 K-splits) and mhc_pre_big_fuse_with_norm_tilelang (split sums, rsqrt RMS, scale and base, sigmoid pre / post mixes, 20 Sinkhorn iterations for comb_mix, the layer input as the pre-mix of the streams, then the attn_norm / ffn_norm RMSNorm)",
-   "branch": "cursor/dsv4-prep-8c79"
+   "note": "mhc_fused_post_pre_tilelang at M <= 16: mhc_fused_tilelang (the post: new residual[s] = post_mix[s] * x + sum_t comb_mix[t, s] * residual[t] in bf16 streams; the pre's 24 mix logits of the new residual against hc_fn and its square sum, by FMA in 4 K-splits) and mhc_pre_big_fuse_with_norm_tilelang (split sums, rsqrt RMS, scale and base, sigmoid pre / post mixes, 20 Sinkhorn iterations for comb_mix, the layer input as the pre-mix of the streams, then the attn_norm / ffn_norm RMSNorm). Row DSV4-MHC",
+   "branch": "cursor/dsv4-mhc-8c79"
   },
   "mhc-tf32": {
    "status": "committed-only",
    "definitions": [],
-   "note": "the TF32 pre: DeepGEMM tf32_hc_prenorm_gemm (TF32 tensor cores, n_splits from compute_num_split) then mhc_pre_big_fuse(_broadcast)_with_norm_tilelang. Layer 0's mhc_pre_broadcast_tilelang takes it at every token count, so one mHC pre per step stays committed-only on decode; every later pre at M > 16 (route hc-split)"
+   "note": "the TF32 pre: DeepGEMM tf32_hc_prenorm_gemm (TF32 tensor cores, n_splits from compute_num_split) then mhc_pre_big_fuse(_broadcast)_with_norm_tilelang. Layer 0's mhc_pre_broadcast_tilelang takes it at every token count, so one mHC pre per step stays committed-only on decode; every later pre at M > 16 (route hc-split). The decode batch limit of 16 lifts when TF32 is pinned"
   },
   "mhc-post": {
    "status": "tonight",
    "definitions": [],
-   "note": "mhc_post_tilelang after the last layer: out[s] = post_mix[s] * x + sum_t comb_mix[t, s] * residual[t], [M, HC, H] bf16 (the same post the hc-split path runs inside each layer)",
-   "branch": "cursor/dsv4-prep-8c79"
+   "note": "mhc_post_tilelang after the last layer: out[s] = post_mix[s] * x + sum_t comb_mix[t, s] * residual[t], [M, HC, H] bf16 (the same post the hc-split path runs inside each layer). Row DSV4-MHC",
+   "branch": "cursor/dsv4-mhc-8c79"
   },
   "hc-head": {
    "status": "tonight",
    "definitions": [],
-   "note": "hc_head_fused_kernel_tilelang: the HC stream mixes of the final residual against hc_head_fn (f32), RMS-scaled, times hc_head_scale plus hc_head_base, sigmoid + hc_eps, then the weighted sum of the streams to [M, H] bf16",
-   "branch": "cursor/dsv4-prep-8c79"
+   "note": "hc_head_fused_kernel_tilelang: the HC stream mixes of the final residual against hc_head_fn (f32), RMS-scaled, times hc_head_scale plus hc_head_base, sigmoid + hc_eps, then the weighted sum of the streams to [M, H] bf16. Row DSV4-MHC",
+   "branch": "cursor/dsv4-mhc-8c79"
   },
   "dsv4-qnorm-rope-kv-insert": {
    "status": "committed-only",
    "definitions": [],
-   "note": "torch.ops._C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert: per head the weightless RMSNorm of q and GPT-J RoPE on its last DR dims, zero-filled to NHP heads; the kv row's RoPE, ue8m0 FP8 quantisation of its NoPE part and the 584-byte insert into the SWA cache at the step's slot mapping"
+   "note": "torch.ops._C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert: per head the weightless RMSNorm of q and GPT-J RoPE on its last DR dims, zero-filled to NHP heads; the kv row's RoPE, ue8m0 FP8 quantisation of its NoPE part and the 584-byte insert into the SWA cache at the step's slot mapping. No row owns it yet"
   },
-  "dsv4-compressor": {
+  "dsv4-compressor-state": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "save_partial_states (_save_partial_states_kernel), every compressor: the state row [kv | score + ape[pos % ratio]] in f32, the kv half a copy of kv_score's. Row DSV4-IDX: Dsv4CompressorScore_v1{W}, W-generic (W = 2 * HD, HD or 2 * ID here)",
+   "branch": "cursor/dsv4-indexer-8c79"
+  },
+  "dsv4-indexer-compress": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "compress_norm_rope_store_triton (the indexer's compressor, head ID): at a ratio boundary the softmax over the 8 overlapping state rows' scores weighting their kv, the compressor norm's RMSNorm, GPT-J RoPE on the last DR words and the ue8m0 FP8 cache entry (ID e4m3 bytes and an f32 scale). Row DSV4-IDX: Dsv4IndexerCompress_v1{D, ROPE, EPS}",
+   "branch": "cursor/dsv4-indexer-8c79"
+  },
+  "dsv4-compress-512": {
    "status": "committed-only",
    "definitions": [],
-   "note": "DeepseekCompressor.forward: save_partial_states (the kv half and the score half + ape[pos % ratio] as f32 state rows), then at each ratio boundary the softmax-over-score pooling of the window's states (CSA: overlapping windows of 2 * ratio), RMSNorm (the compressor's norm), GPT-J RoPE at the block's position, and the quantised cache row: compress_norm_rope_store_cutedsl (head 512: fp8_ds_mla, 584 bytes) or compress_norm_rope_store_triton (the indexer's, head 128: 128 e4m3 + one f32 ue8m0 scale)"
+   "note": "compress_norm_rope_store_cutedsl (head HD, the main attention's compressed rows on CSA and HCA layers): the pooling, norm and RoPE as the indexer's, then the 584-byte fp8_ds_mla row. No row owns it yet (open between DSV4-IDX and DSV4-MLA)"
   },
   "dsv4-indexer-q": {
    "status": "committed-only",
    "definitions": [],
-   "note": "fused_indexer_q_rope_quant (CuTe DSL fused_indexer_q_rope_quant_fp8_cutedsl when has_cutedsl(), as in the pinned venv; else Triton): GPT-J RoPE on the last DR dims of each of the IH heads, ue8m0 FP8 per head; the head weight (weights_proj's bf16 output) times q scale, ID^-0.5 and IH^-0.5. Not DsaIndexerQ_v1 (GLM-5.3's Triton _fused_q_kernel)"
+   "note": "fused_indexer_q_rope_quant (CuTe DSL fused_indexer_q_rope_quant_fp8_cutedsl when has_cutedsl(), as in the pinned venv; else Triton): GPT-J RoPE on the last DR dims of each of the IH heads, ue8m0 FP8 per head; the head weight (weights_proj's bf16 output) times q scale, ID^-0.5 and IH^-0.5. Not DsaIndexerQ_v1 (GLM-5.3's Triton _fused_q_kernel); not in row DSV4-IDX"
   },
   "dsa-mqa-logits": {
-   "status": "port",
-   "definitions": [
-    "DsaMqaLogits_v1",
-    "DsaMqaLogit_v1",
-    "DsaMqaLogits_v2",
-    "DsaMqaLogit_v2"
-   ],
-   "note": "DeepGEMM fp8_mqa_logits (prefill) / fp8_paged_mqa_logits (decode): per (query row, compressed key) the sum over the IH heads of relu(q_h . k) * w_h, times the key's scale: DsaMqaLogits_v1{N=keys, H=64, D=128}. GLM-5.3's H = 32 kernel is the one pinned; the H = 64 epilogue must be captured"
+   "status": "tonight",
+   "definitions": [],
+   "note": "DeepGEMM fp8_fp4_mqa_logits (prefill) / fp8_fp4_paged_mqa_logits (decode) with q = (values, None): per (query row, compressed key) the sum over the IH heads of relu(q_h . k) * w_h, times the key's scale. Row DSV4-IDX binds DsaMqaLogit_v3{H=64, D=128} (bits _v4: each sum's first product contracted, as the H200 does, from GLM-H1's branch); main's DsaMqaLogit_v1 is the uncontracted order",
+   "branch": "cursor/dsv4-indexer-8c79"
   },
   "dsa-topk": {
    "status": "port",
@@ -318,50 +338,49 @@
     "DsaTopKShortRow_v1",
     "DsaTopKShortRow_v2"
    ],
-   "note": "SparseAttnIndexer's top-TOPK (top_k_per_row_prefill / cooperative_topk / persistent_topk): a row of at most TOPK keys takes each kernel's shortcut, DsaTopKShortRow_v1{TOPK}; a longer row is a radix selection no Definition states",
+   "note": "SparseAttnIndexer's top-TOPK (top_k_per_row_prefill; decode cooperative_topk on sm_90 up to 64 rows, else persistent_topk): a row of at most TOPK keys takes each kernel's shortcut, DsaTopKShortRow_v1{TOPK}; a longer row is a radix selection no Definition states. Row DSV4-IDX's capture pins it at TOPK = 1024",
    "when": "every row has at most TOPK compressed keys"
   },
   "dsa-topk-fill": {
-   "status": "port",
-   "definitions": [
-    "DsaTopKShortRow_v1",
-    "DsaTopKShortRow_v2"
-   ],
-   "note": "_fill_short_context_topk_indices (attention.py:72, Triton, num_warps 8): slot j = j when j < (pos + 1) // CSA_R, else -1, DsaTopKShortRow_v1{TOPK} at len = (pos + 1) // CSA_R; the int64 position arithmetic is not yet in the Definition"
+   "status": "tonight",
+   "definitions": [],
+   "note": "_fill_short_context_topk_indices (attention.py:72, Triton, num_warps 8): slot j = j when j < (pos + 1) // CSA_R in int64, else -1. Row DSV4-IDX: Dsv4ShortContextTopK_v1{TOPK, RATIO}",
+   "branch": "cursor/dsv4-indexer-8c79"
   },
   "dsv4-decode-indices": {
    "status": "committed-only",
    "definitions": [],
-   "note": "the decode attention's indices: decode_swa_indices / decode_swa_lens (the metadata builder: the last SW tokens' SWA slots), compute_global_topk_indices_and_lens (CSA: the indexer's local top-k through the block table, padding tokens length 0) and c128a_global_decode_topk_indices / _lens (HCA: every compressed block so far)"
+   "note": "the decode attention's indices: decode_swa_indices / decode_swa_lens (the metadata builder: the last SW tokens' SWA slots), compute_global_topk_indices_and_lens (CSA: the indexer's local top-k through the block table, padding tokens length 0) and c128a_global_decode_topk_indices / _lens (HCA: every compressed block so far). FlashMlaDecode_v1 takes them as inputs; no row states them yet"
   },
   "inv-rope-fp8-quant": {
-   "status": "committed-only",
+   "status": "tonight",
    "definitions": [],
-   "note": "fused_inv_rope_fp8_quant: the inverse GPT-J RoPE of each head's last DR dims, then e4m3 with one f32 scale per 1x128 group, regrouped to [M, OGL, HPG * HD] (tma_aligned_scales false on sm_90)"
+   "note": "fused_inv_rope_fp8_quant: the inverse GPT-J RoPE of each head's last DR dims, then e4m3 with one f32 scale per 1x128 group, regrouped to [M, OGL, HPG * HD] (tma_aligned_scales false on sm_90). Row DSV4-IDX: Dsv4InvRopeQuantHead_v1{CHUNKS, QG, ROPE}",
+   "branch": "cursor/dsv4-indexer-8c79"
   },
   "sqrtsoftplus-router": {
    "status": "tonight",
    "definitions": [],
-   "note": "fused_topk_bias -> dsv4_topk (router/dsv4_topk.py): s = sqrt(softplus(logit)) in f32, the top K of E by s + e_score_correction_bias (selection only), weights s / sum(s) * routed_scaling_factor (2.5), ids int32",
-   "branch": "cursor/dsv4-prep-8c79"
+   "note": "fused_topk_bias -> dsv4_topk (router/dsv4_topk.py): s = sqrt(softplus(logit)) in f32, the top K of E by s + e_score_correction_bias (selection only), weights s / sum(s) * routed_scaling_factor (2.5), ids int32. Row DSV4-ROUTE",
+   "branch": "cursor/dsv4-routers-8c79"
   },
   "hash-router": {
    "status": "tonight",
    "definitions": [],
-   "note": "fused_topk_bias -> ops.topk_hash_softplus_sqrt on the first HASH layers: ids = tid2eid[input_id] (K per token), weights sqrt(softplus(logit)) at those ids, renormalised, x 2.5",
-   "branch": "cursor/dsv4-prep-8c79"
+   "note": "fused_topk_bias -> ops.topk_hash_softplus_sqrt on the first HASH layers: ids = tid2eid[input_id] (K per token), weights sqrt(softplus(logit)) at those ids, renormalised, x 2.5. Row DSV4-ROUTE",
+   "branch": "cursor/dsv4-routers-8c79"
   },
   "marlin-mxfp4-moe": {
    "status": "tonight",
    "definitions": [],
-   "note": "fused_marlin_moe (experts/marlin_moe.py) with Mxfp4 weights: moe_align_block_size, ops.moe_wna16_marlin_gemm for w13 (float4_e2m1f weights dequantized against e8m0 group-32 scales, bf16 activations, mma.sync bf16, use_fp32_reduce, no router weight) and for w2 (top_k 1, mul_topk_weights). The weights are the checkpoint's, repacked to Marlin's tile layout at load",
+   "note": "fused_marlin_moe (experts/marlin_moe.py) with Mxfp4 weights: moe_align_block_size, ops.moe_wna16_marlin_gemm for w13 (float4_e2m1f weights dequantized against e8m0 group-32 scales, bf16 activations, mma.sync bf16, use_fp32_reduce, no router weight) and for w2 (top_k 1, mul_topk_weights). The weights are the checkpoint's, repacked to Marlin's tile layout at load. Row DSV4-PREP",
    "branch": "cursor/dsv4-prep-8c79"
   },
   "silu-mul-clamp": {
    "status": "tonight",
    "definitions": [],
-   "note": "torch.ops._C.silu_and_mul_with_clamp(out, x, limit = swiglu_limit (10.0), alpha 1.0, beta 0.0): silu(min(gate, limit)) * clamp(up, -limit, limit) per element in f32, to bf16. The routed experts reach it through apply_moe_activation (no expert map); the shared expert through SiluAndMulWithClamp.forward_cuda",
-   "branch": "cursor/dsv4-prep-8c79"
+   "note": "torch.ops._C.silu_and_mul_with_clamp(out, x, limit = swiglu_limit (10.0), alpha 1.0, beta 0.0): silu(min(gate, limit)) * clamp(up, -limit, limit) per element in f32, to bf16. The routed experts reach it through apply_moe_activation (no expert map); the shared expert through SiluAndMulWithClamp.forward_cuda. Row DSV4-ROUTE",
+   "branch": "cursor/dsv4-routers-8c79"
   }
  },
  "binders": {
@@ -1581,7 +1600,7 @@
     "M",
     "=4 * HD"
    ],
-   "program": "dsv4-compressor",
+   "program": "dsv4-compressor-state",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1615,7 +1634,7 @@
     "NC4",
     "SWAB"
    ],
-   "program": "dsv4-compressor",
+   "program": "dsv4-compress-512",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1687,7 +1706,7 @@
     "M",
     "=2 * HD"
    ],
-   "program": "dsv4-compressor",
+   "program": "dsv4-compressor-state",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1721,7 +1740,7 @@
     "NC128",
     "SWAB"
    ],
-   "program": "dsv4-compressor",
+   "program": "dsv4-compress-512",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1827,7 +1846,7 @@
     "M",
     "=4 * ID"
    ],
-   "program": "dsv4-compressor",
+   "program": "dsv4-compressor-state",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1860,7 +1879,7 @@
     "NC4",
     "IKB"
    ],
-   "program": "dsv4-compressor",
+   "program": "dsv4-indexer-compress",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,

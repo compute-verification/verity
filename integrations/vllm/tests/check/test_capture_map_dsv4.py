@@ -37,7 +37,17 @@ DOC = json.loads((FIX / "inventory-tp8-rank0.json").read_text())
 RANK0 = DOC["ranks"]["0"]
 TP = CMAP["target"]["tensor_parallel_size"]
 ENV = CM.symbols(CMAP, CONFIG, TP)
-MINE, WSA = "cursor/dsv4-prep-8c79", "cursor/glm53-committed-ops-8c79"
+#: each `tonight` Program -> the branch of the row that writes its Definitions
+OWNERS = {
+    "cursor/dsv4-prep-8c79": {"marlin-mxfp4-moe"},
+    "cursor/glm53-committed-ops-8c79": {"cublas-f32-out", "router-gemm"},
+    "cursor/deepgemm-sm90-8c79": {"fp8-block-linear-deepgemm", "fp8-einsum-deepgemm"},
+    "cursor/dsv4-flashmla-8c79": {"flashmla-sparse-decode"},
+    "cursor/dsv4-mhc-8c79": {"mhc-post-pre-fma", "mhc-post", "hc-head"},
+    "cursor/dsv4-routers-8c79": {"sqrtsoftplus-router", "hash-router", "silu-mul-clamp"},
+    "cursor/dsv4-indexer-8c79": {"dsv4-compressor-state", "dsv4-indexer-compress", "dsa-mqa-logits", "dsa-topk-fill",
+                                 "inv-rope-fp8-quant"},
+}
 
 DECODE = ("hc-fused", "indexer-short", "decode-tokens")
 STEPS = {
@@ -87,6 +97,16 @@ def test_the_map_covers_the_inventory_with_no_problems(registry):
 def test_every_module_type_the_inventory_lists_is_in_the_map():
     assert {m["type"] for m in CMAP["modules"]} == set(RANK0["module_types"])
     assert len(RANK0["module_types"]) == 28 and len(CMAP["modules"]) == len(RANK0["groups"]) == 42
+
+
+def test_the_serve_profile():
+    """The serve keeps every decode step on the FMA mHC route (at most 16 tokens) and builds no MTP layer; the indexer cache is FP8."""
+    target = CMAP["target"]
+    args = target["engine_args"]
+    assert args["max_num_seqs"] == target["max_decode_batch"] == 16 and args["speculative_config"] is None
+    assert (args["tensor_parallel_size"], args["enforce_eager"], args["kv_cache_dtype"]) == (TP, True, target["kv_cache_dtype"])
+    assert CONFIG["num_nextn_predict_layers"] == 1 and not any("mtp" in g["pattern"].lower() for g in RANK0["groups"])
+    assert _group("model.layers.{i}.attn.indexer")["flags"]["use_fp4_kv"] is False
 
 
 @pytest.mark.parametrize("k", range(len(CMAP["modules"])), ids=lambda k: CMAP["modules"][k]["pattern"] or "<root>")
@@ -171,19 +191,21 @@ def test_the_exists_programs_cite_what_the_build_binds():
 
 
 def test_the_program_statuses():
-    """What has no Definition on main is `tonight` on the branch that writes it: this one for the decode families, workstream A's
-    for the f32-out cuBLAS GEMM and the router GEMM. Prefill's FlashMLA and the TF32 mHC pre are committed-only on this target."""
+    """What has no Definition on main is `tonight` on the branch of the row that writes it; prefill's FlashMLA and the TF32 mHC
+    pre are committed-only on this target, and so are the kernels no row owns yet."""
     statuses = {pid: p["status"] for pid, p in CMAP["programs"].items()}
     assert {statuses[t["program"]] for t in CMAP["taps"]} == set(CM.STATUSES)
-    tonight = {pid: p["branch"] for pid, p in CMAP["programs"].items() if p["status"] == "tonight"}
-    assert {pid for pid, b in tonight.items() if b == WSA} == {"cublas-f32-out", "router-gemm"}
-    assert {pid for pid, b in tonight.items() if b == MINE} == {
-        "fp8-block-linear-deepgemm", "fp8-einsum-deepgemm", "flashmla-sparse-decode", "mhc-post-pre-fma", "mhc-post", "hc-head",
-        "sqrtsoftplus-router", "hash-router", "marlin-mxfp4-moe", "silu-mul-clamp"}
-    assert set(tonight.values()) == {MINE, WSA}
-    assert {"flashmla-sparse-prefill", "mhc-tf32", "tp-allreduce"} <= {pid for pid, s in statuses.items() if s == "committed-only"}
+    tonight: dict[str, set[str]] = {}
+    for pid, p in CMAP["programs"].items():
+        if p["status"] == "tonight":
+            tonight.setdefault(p["branch"], set()).add(pid)
+    assert tonight == OWNERS
+    assert {pid for pid, s in statuses.items() if s == "committed-only"} == {
+        "tp-allreduce", "flashmla-sparse-prefill", "mhc-tf32", "dsv4-qnorm-rope-kv-insert", "dsv4-compress-512", "dsv4-indexer-q",
+        "dsv4-decode-indices"}
     for p in CMAP["programs"].values():
         assert p["status"] != "exists" or p["definitions"]
+        assert p["status"] != "tonight" or not p["definitions"]
 
 
 def test_a_decode_step_leaves_one_mhc_pre_and_the_attention_bookkeeping_committed_only():
@@ -195,7 +217,7 @@ def test_a_decode_step_leaves_one_mhc_pre_and_the_attention_bookkeeping_committe
     assert tf32 == [(f"hc_attn.first.{v}", 0) for v in ("residual", "post_mix", "comb_mix", "x")]
     assert not any(t["program"] == "flashmla-sparse-prefill" for t, _ in taps)
     assert {t["program"] for t, _ in taps if status[t["program"]] == "committed-only"} == {
-        "mhc-tf32", "tp-allreduce", "dsv4-qnorm-rope-kv-insert", "dsv4-compressor", "dsv4-decode-indices", "inv-rope-fp8-quant"}
+        "mhc-tf32", "tp-allreduce", "dsv4-qnorm-rope-kv-insert", "dsv4-compress-512", "dsv4-decode-indices"}
 
 
 @pytest.mark.parametrize("step", sorted(STEPS))
@@ -234,15 +256,15 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 30, "port": 8, "copy": 1, "committed-only": 33})
+        42, 28, {"exists": 5, "tonight": 38, "port": 6, "copy": 1, "committed-only": 27})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        63, 2538, {"exists": 125, "tonight": 1431, "port": 184, "copy": 1, "committed-only": 797}, 122)
+        63, 2538, {"exists": 125, "tonight": 1704, "port": 154, "copy": 1, "committed-only": 554}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        67, 2658, {"exists": 125, "tonight": 1461, "port": 214, "copy": 1, "committed-only": 857}, 242)
+        67, 2658, {"exists": 125, "tonight": 1734, "port": 184, "copy": 1, "committed-only": 614}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
-        62, 2414, {"exists": 125, "tonight": 916, "port": 214, "copy": 1, "committed-only": 1158}, 726)
+        62, 2414, {"exists": 125, "tonight": 1189, "port": 184, "copy": 1, "committed-only": 915}, 726)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        68, 2719, {"exists": 125, "tonight": 977, "port": 214, "copy": 1, "committed-only": 1402}, 787)
+        68, 2719, {"exists": 125, "tonight": 1250, "port": 184, "copy": 1, "committed-only": 1159}, 787)
 
 
 def test_the_bound_tap_counts():
