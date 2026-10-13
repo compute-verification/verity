@@ -26,11 +26,16 @@ class CommittedUnitSource:
         if not sites:
             raise ValueError("committed units: the manifest names no committed-only values")
         self.c, self.model, self.sites = committer, model, sites
-        self.by_key: dict[tuple[int, str, str], list[dict[str, Any]]] = defaultdict(list)
+        rows_by_key: dict[tuple[int, str, str], list[dict[str, Any]]] = defaultdict(list)
         for row in sites:
-            self.by_key[(int(row["step"]), str(row["op_path"]), str(row["op"]))].append(row)
-        for rows in self.by_key.values():
-            rows.sort(key=lambda r: int(str(r["output_member"]).split("_", 1)[-1].split("/", 1)[0]))
+            rows_by_key[(int(row["step"]), str(row["op_path"]), str(row["op"]))].append(row)
+        self.by_key: dict[tuple[int, str, str], list[list[dict[str, Any]]]] = {}
+        for key, rows in rows_by_key.items():
+            units: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for row in rows:
+                units[str(row["output_member"]).split("/", 1)[0]].append(row)
+            self.by_key[key] = [sorted(units[name], key=lambda r: str(r["output_member"]))
+                                for name in sorted(units, key=lambda n: int(n.split("_", 1)[-1]))]
         self.modules = {str(r["op_path"]) for r in sites}
         self._handles: list[Any] = []
         self._active: list[tuple[str, Any]] = []
@@ -96,27 +101,28 @@ class CommittedUnitSource:
         if job is None:
             return
         key = (int(job.step), module, op)
-        rows = self.by_key.get(key)
-        if not rows:
+        units = self.by_key.get(key)
+        if not units:
             return
         occurrence = self._seen.get(key, 0)
         self._seen[key] = occurrence + 1
-        if occurrence >= len(rows):
+        if occurrence >= len(units):
             self.c.errors.append(f"committed units: extra {op} occurrence under {module} at step {job.step}"[:300])
             self.stats["errors"] += 1
             return
-        row = rows[occurrence]
+        rows = units[occurrence]
         tensors = _tensors(out)
-        if len(tensors) != 1:
+        if len(tensors) != len(rows):
             self.c.errors.append(
-                f"committed units: {op} under {module} returned {len(tensors)} tensors; manifest member {row['output_member']} needs one"[:300])
+                f"committed units: {op} under {module} returned {len(tensors)} tensors; "
+                f"manifest unit {rows[0]['output_member'].split('/', 1)[0]} names {len(rows)}"[:300])
             self.stats["errors"] += 1
             return
-        tensor = tensors[0]
-        self._held.append(tensor)
-        self.c._acquire(f"{module}/{row['output_member']}".lstrip("/"), tensor, job)
-        self.stats["tensors"] += 1
-        self.stats["bytes"] += int(tensor.numel()) * int(tensor.element_size())
+        for row, tensor in zip(rows, tensors):
+            self._held.append(tensor)
+            self.c._acquire(f"{module}/{row['output_member']}".lstrip("/"), tensor, job)
+            self.stats["tensors"] += 1
+            self.stats["bytes"] += int(tensor.numel()) * int(tensor.element_size())
 
     def declaration_classes(self) -> list[dict[str, Any]]:
         return [{"class": FAMILY, "how": "bound-as-leaf", "rule": None, "count": self.stats["tensors"],
