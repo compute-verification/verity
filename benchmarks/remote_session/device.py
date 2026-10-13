@@ -154,7 +154,8 @@ class DeviceStore:
         if blocks % PER_LEAF or nl & (nl - 1):
             raise ValueError(f"{blocks} blocks: the harness takes N = 16 · 2^h, so every tree is whole")
         self.torch, self.lib, self.lib_open, self.kv, self.blocks, self.key = torch, lib, lib_open, kv, blocks, key
-        self.H, self.side = nl.bit_length() - 1, torch.cuda.Stream()
+        self.H = nl.bit_length() - 1
+        self.side = torch.cuda.Stream(priority=-1)
         self.shape(chunk, kept_from, sketch_ctas)
         self.data = torch.empty(blocks * BLOCK, dtype=torch.uint8, device="cuda")
         chunk = 1 << 18
