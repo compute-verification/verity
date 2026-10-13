@@ -618,6 +618,35 @@ def writes(tu: Topup, torch, filler, seconds: float, least: int, sleeps, log) ->
     return out
 
 
+def few_ctas(tu: Topup, torch, filler, R: float, seconds: float, least: int, ctas_list, reps: int, log) -> dict:
+    """What a few CTAs of fill-sk16/v2 read alone, the STEP role's reach while the step's light kernels and the gaps
+    between kernels leave the bus to it: BASE kernels (STEP's `fill_seq_kernel`, queued two deep) of `ctas` CTAs at
+    each kernel shape (warps, offsets of loads in flight a warp) that compiles without spills, `reps` windows of
+    `seconds` each, GB/s as progress over host time."""
+    sq = Seq(tu)
+    out: dict = {"R_GBps": R, "arms": []}
+    for ctas in ctas_list:
+        for warps, depth in sorted(SEQ_SHAPES, key=lambda s: (-s[0], s[1])):
+            rs = []
+            for _ in range(reps):
+                sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=ctas, warps=warps,
+                         base_budget=1 << 15, priority=least)
+                if sq.shape(0, depth):
+                    raise RuntimeError(f"sq_shape(0, {depth}) refused")
+                time.sleep(0.05)
+                p0, t0 = sq.progress()[0], time.perf_counter()
+                time.sleep(seconds)
+                p1, t1 = sq.progress()[0], time.perf_counter()
+                sq.stop()
+                rs.append((p1 - p0) / (t1 - t0) / 1e9)
+            arm = {"ctas": ctas, "warps": warps, "depth": depth, "GBps": statistics.mean(rs), "min_GBps": min(rs),
+                   "max_GBps": max(rs), "of_R": statistics.mean(rs) / R, "windows": rs}
+            out["arms"].append(arm)
+            log(f"few_ctas: {ctas} CTAs × {warps} warps, depth {depth}: {arm['GBps']:.0f} GB/s, {arm['of_R']:.3f} R "
+                f"[{min(rs) / R:.3f}, {max(rs) / R:.3f}]")
+    return out
+
+
 READERS = {"weights": (False, 64 << 10), "kv16": (True, 16 * 2048), "kv32": (True, 32 * 2048), "kv64": (True, 64 * 2048)}
 
 
@@ -1154,6 +1183,8 @@ def main() -> int:
                     default=[12, 24, 47, 94, 188, 376, 752],
                     help="`reads`: the step-like readers' grid, one arm each")
     ap.add_argument("--read-reps", type=int, default=5)
+    ap.add_argument("--few-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[16, 32, 48, 64, 96],
+                    help="`few_ctas`: BASE's grid, one arm each at every kernel shape")
     ap.add_argument("--skip", type=lambda s: set(s.split(",")), default=set())
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -1195,6 +1226,9 @@ def main() -> int:
     save()
     if "writes" not in a.skip:
         res["writes"] = writes(tu, torch, filler, a.alone_s, least, a.write_sleeps, log)
+        save()
+    if "few_ctas" not in a.skip:
+        res["few_ctas"] = few_ctas(tu, torch, filler, R, a.alone_s, least, a.few_ctas, a.read_reps, log)
         save()
     if "reads" not in a.skip:
         res["reads"] = reads(tu, torch, filler, R, a.alone_s, least, a.read_ctas, a.read_reps, log)
