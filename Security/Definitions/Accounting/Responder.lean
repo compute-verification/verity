@@ -45,9 +45,9 @@ def Passes {I : Pous.IdealModel} (sch : Pous.Scheme I) {k : ℕ} (W : Pous.Bits 
     (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) (x : Pous.Outcome sch k) : Prop :=
   Timely (t x) span k ∧ ∀ j : Fin k, ans j ((S x).acts X (window (t x) j)) = (sch.enc W x.1 x.2.1).2 (x.2.2 j)
 
-/-- **The ticks are read off the run** (PoUS's protocol, v2.10): challenge `j + 1`'s tick is a function of what
-happened before it, the help, challenge `j`, its tick and what `X` does from it on. Two outcomes that agree on those
-over `[t j, v)` both have `t (j + 1) = v`, or neither has. -/
+/-- **The ticks are read off the run** (PoUS's protocol, v2.10): challenge `j + 1`'s tick is a function of the help,
+challenge `j`, its tick and what `X` does from it on, so the answer's arrival is `X`'s doing, with no delay from
+anything outside `X`. Two outcomes that agree on those over `[t j, v)` both have `t (j + 1) = v`, or neither has. -/
 def ArrivalRule {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} (S : Pous.Outcome sch k → Actual.Run L)
     (X : Finset L) (t : Pous.Outcome sch k → ℕ → ℕ) {α : Type*} (help : Pous.Outcome sch k → α) : Prop :=
   ∀ x x' (j : Fin k) v, help x = help x' → x.2.2 j = x'.2.2 j → t x j = t x' j → t x j < v →
