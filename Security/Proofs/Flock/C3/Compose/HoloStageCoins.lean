@@ -124,12 +124,3 @@ end src
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.kindCoinTys_length
-#print axioms FlockC3.Compose.kindCoins_append
-#print axioms FlockC3.Compose.repKinds_of_tie
-#print axioms FlockC3.Compose.sparseKinds_of_tie
-#print axioms FlockC3.Compose.stageCoins_holoCTs
-#print axioms FlockC3.Compose.stageCoins_holo
-#print axioms FlockSoundness.Discharge.Recursion.check_ok
-#print axioms FlockSoundness.Discharge.Recursion.checkStmt_ok
