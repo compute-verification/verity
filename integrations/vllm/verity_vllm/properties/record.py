@@ -47,7 +47,9 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v1, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
-             "the k_pe and q_pe RoPE words are each one named contraction."),
+             "every longer top-k row the claim covers (no NaN, no value whose half is -inf, its threshold bin within the kernel "
+             "path's tie capacity), at top-2048 and top-1024 on prefill, cooperative_topk and persistent_topk, a selection "
+             "DsaTopKSelection_v1 accepts; the k_pe and q_pe RoPE words are each one named contraction."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
              "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "

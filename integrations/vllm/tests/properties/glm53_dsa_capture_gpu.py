@@ -1,8 +1,9 @@
 """GLM-5.3's sparse attention on Hopper against its Programs: the H200's go/no-go for binding the DSA indexer's `dsa.DsaIndexerKRow_v1`
 (Triton `_fused_norm_rope_kernel` program 0) and `dsa.DsaIndexerQ_v1` (`_fused_q_kernel` program 1), `dsa.DsaMqaLogit_v1` (DeepGEMM
-`fp8_fp4_mqa_logits` and `fp8_fp4_paged_mqa_logits`), `dsa.DsaTopKShortRow_v1` (vLLM's `top_k_per_row_prefill`, `cooperative_topk`
-and `persistent_topk`) and `sparse_mla.SparseMlaHead_v1` (FA3, `FLASH_ATTN_MLA_SPARSE`) at GLM-5.3's statics on one TP8 rank (8 MLA
-heads; the indexer's 32 heads replicated), and the run that settles the RoPE contraction of the two Triton kernels.
+`fp8_fp4_mqa_logits` and `fp8_fp4_paged_mqa_logits`), `dsa.DsaTopKShortRow_v1` and `dsa.DsaTopKSelection_v1` (vLLM's
+`top_k_per_row_prefill`, `cooperative_topk` and `persistent_topk`) and `sparse_mla.SparseMlaHead_v1` (FA3, `FLASH_ATTN_MLA_SPARSE`)
+at GLM-5.3's statics on one TP8 rank (8 MLA heads; the indexer's 32 heads replicated), and the run that settles the RoPE contraction
+of the two Triton kernels.
 
 One GPU process writes `<out>/glm53_dsa_capture.json`, the property record `glm53_dsa_capture` (`properties.record`), and the two
 Triton kernels' PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one line per phase, a `ROPE`
@@ -33,8 +34,12 @@ A phase that raises records its error and fails the verdict without stopping the
              `cooperative_topk` where vLLM calls it (not on sm_120; 10 and 8 rows, its clusters of 4 and 8 on sm_90), both
              sparse_attn_indexer.py:617-656, and the `top_k_per_row_decode` fallback (recorded) on synthetic rows
              of TOPK_LENS keys, tie rows and a negative length: every row of at most 2048 keys against `DsaTopKShortRow_v1{2048}`
-             (closed form `topk_short`, the reference on its lengths); a longer row a valid top-2048 set (recorded: no Definition
-             states its order or its ties).
+             (closed form `topk_short`, the reference on its lengths); a longer row's indices a selection `DsaTopKSelection_v1`
+             accepts (twin `dsa.selection_ok`; the reference against it on a sample, `selection_reference`) wherever the claim
+             covers it (`topk_overflow`: no NaN, no value whose half is -inf, and the threshold bin's keys within the path's tie
+             capacity), the others recorded.  The long rows (`_long_rows`, at top-2048 and DeepSeek-V4's top-1024): LONG_LENS keys,
+             rows whose threshold falls in equal words or in one coarse bin's crowd, signed zeros and infinities, through prefill's
+             two variants, cooperative's clusters of 8, 4 and 2, the persistent kernel and FilteredTopK (`_long_topk`).
   attn       FA3's sparse decode (`forward_mqa`, flashattn_mla_sparse.py:201-250) for ATTN_TOKENS on their prefill top-k rows: the
              index conversion (`triton_convert_req_index_to_global_index`) against `convert_rows`, FA3 twice, every (token, head)
              output against `SparseMlaHead_v1{T,64,512,64,...}` (T the row's valid count) of the token's q and its selected rows.
@@ -106,6 +111,13 @@ FULL_ROWS = (0, 1, 2, 5, 6, 63, 64, 65, 127, 128, 2047, 2048, 2049, 3071)
 RANDOM_ROWS, RANDOM_PAIRS = 8, 50_000
 DECODE_LENS = (1, 2, 63, 64, 65, 2048, 2049, 3000)
 TOPK_LENS = (0, 1, 2, 2047, 2048, 2049, 4096)
+#: the long top-k rows (`_long_rows`): lengths at and past each kernel's path boundaries (persistent's hist2048 to 8192 and hist256 to
+#: 32768, cooperative's register path to 16384, FilteredTopK's to 32768), the width they share (a multiple of 4, cooperative's TMA),
+#: and the top-k they run at: GLM-5.3's 2048 and DeepSeek-V4's indexer's 1024
+LONG_LENS = (2049, 4097, 8192, 8193, 16384, 16385, 32768, 32769, 65536, 131073, 262144)
+LONG_WIDTH, LONG_TOPKS = 262152, (TOPK, 1024)
+#: sampler.cu:851-875: `top_k_per_row_prefill`'s rows from this index on run its radix-sort variant
+PREFILL_RADIX_ROW = 12288
 ATTN_TOKENS = (0, 1, 4, 63, 64, 65, 127, 128, 129, 1000, 2046, 2047, 2048, 3071)
 QUICK_ATTN_TOKENS = (0, 65, 2048)
 QUICK_Q_TOKENS = 256
@@ -262,20 +274,103 @@ def topk_short(lens: np.ndarray, width: int = TOPK) -> np.ndarray:
     return np.where(j < np.asarray(lens, dtype=np.int64)[:, None], j, -1).astype(np.int32)
 
 
-def topk_valid(vals: np.ndarray, n: int, idx: np.ndarray) -> dict[str, Any]:
-    """Whether ``idx`` (TOPK int32) is a top-TOPK set of the n > TOPK values ``vals[:n]``: TOPK distinct keys below n, none
-    unselected above the least selected; the ties at that threshold left out, and whether the indices ascend."""
-    sel = idx[idx >= 0].astype(np.int64)
-    ok = bool(sel.size == TOPK and np.unique(sel).size == sel.size and (sel < n).all())
+def topk_long(vals: np.ndarray, n: int, idx: np.ndarray) -> dict[str, Any]:
+    """A row of n keys past its top-k (k = len(idx)): whether ``idx`` is a selection `DsaTopKSelection_v1` accepts (its twin
+    `dsa.selection_ok` on the row's words), how many unselected keys tie the least selected one in its order, whether the indices
+    ascend."""
+    from verity_vllm.program.registry import dsa
+
+    idx = np.asarray(idx, dtype=np.int64)
+    v = np.asarray(vals, dtype=np.float32)
+    ok = dsa.selection_ok(v, n, idx)
     ties = None
     if ok:
-        v = np.asarray(vals[:n], dtype=np.float32)
+        key = dsa.order_keys(v[:n])
         mask = np.zeros(n, dtype=bool)
-        mask[sel] = True
-        thr = v[mask].min()
-        ok = not bool((v[~mask] > thr).any())
-        ties = int((v[~mask] == thr).sum())
-    return {"valid": ok, "ties_left_out": ties, "ascending": bool(np.all(np.diff(sel) > 0))}
+        mask[idx] = True
+        ties = int((key[~mask] == key[mask].min()).sum())
+    return {"valid": ok, "ties_left_out": ties, "ascending": bool(np.all(np.diff(idx) > 0))}
+
+
+def half_bins(vals: np.ndarray, bits: int) -> np.ndarray:
+    """The kernels' coarse bin of each f32 (`extract_coarse_bin_N<bits>`, topk_histogram_4096.cuh:78-85; `decode_bin` at 11 bits,
+    `convert_to_uint8` and FilteredTopK's `ToCoarseKey` at 8, persistent_topk.cuh:55-61, 151-157, 1012-1019): the value rounded
+    to half, its bits made ascending (all inverted under a sign, else the sign set), their top ``bits``."""
+    with np.errstate(over="ignore"):
+        h = np.asarray(vals, dtype=np.float32).astype(np.float16).view(np.uint16)
+    return (np.where(h & 0x8000, ~h, h | 0x8000).astype(np.uint16) >> (16 - bits)).astype(np.int64)
+
+
+def threshold_bin(bins: np.ndarray, topk: int) -> tuple[int, int, int]:
+    """A coarse histogram's threshold bin (the highest whose suffix holds topk keys), the keys above it and the keys in it."""
+    hist = np.bincount(bins)
+    suffix = np.cumsum(hist[::-1])[::-1]
+    b = int(np.flatnonzero(suffix >= topk)[-1])
+    return b, int(suffix[b] - hist[b]), int(hist[b])
+
+
+def cooperative_cluster(rows: int) -> int:
+    """`cooperative_topk`'s cluster size for a launch of ``rows`` rows on sm_90 (cooperative_topk.cu:94-102; 16 needs sm_100)."""
+    return 8 if rows <= 8 else 4 if rows <= 33 else 2
+
+
+def cooperative_blocks(n: int, cs: int) -> list[tuple[int, int]]:
+    """The cluster's split of a row past 16384 keys over its cs blocks (cooperative_topk.cuh:270-280): float4 units, one more to
+    each of the first ``units % cs``; each block's [start, end)."""
+    base, extra = divmod(-(-n // 4), cs)
+    out = []
+    for r in range(cs):
+        start = (r * base + min(r, extra)) * 4
+        out.append((start, min(start + (base + (r < extra)) * 4, n)))
+    return out
+
+
+def topk_path(kernel: str, n: int, topk: int, rows: int) -> str:
+    """The path of `kernel` ("prefill", "cooperative", "persistent" or "decode") a row of n keys takes in a launch of ``rows`` rows
+    on an H200: "trivial" to topk keys; cooperative's register path "hist4096" to 16384 keys (cooperative_topk.cuh:504-511), else
+    its "cluster" path; persistent_topk past 32 rows FilteredTopK (topk.cu:39, 128 KB of shared memory), its "hist4096" to 32768
+    keys (persistent_topk.cuh:1071-1078), else "filtered", and to 32 rows the persistent kernel's "hist2048" to 8192 keys, "hist256"
+    to 32768, else "radix" (persistent_topk.cuh:849-858)."""
+    if n <= topk:
+        return "trivial"
+    if kernel == "cooperative":
+        return "hist4096" if n <= 16384 else "cluster"
+    if kernel == "persistent":
+        if rows > 32:
+            return "hist4096" if n <= 32768 else "filtered"
+        return "hist2048" if n <= 8192 else "hist256" if n <= 32768 else "radix"
+    return kernel
+
+
+def topk_overflow(kernel: str, vals: np.ndarray, n: int, topk: int, rows: int) -> str | None:
+    """Why `kernel`, in a launch of ``rows`` rows, may write a top-`topk` set of ``vals[:n]`` that `DsaTopKSelection_v1` rejects, or
+    None when it must write one the check accepts.  Outside the claim: a NaN, or a value whose half is -inf (the -inf padding of
+    `load_float4_predicated` that hist2048 counts, persistent_topk.cuh:97-104, 266-268, and the -FLT_MAX of prefill's radix pass,
+    sampler.cu:471, and of the 64-tie ballot's sentinel, topk_histogram_4096.cuh:519, sit beside it).  Past a coarse path's tie capacity, the keys in its
+    threshold bin past those its atomics reach first are dropped: topk on hist4096 (topk_histogram_4096.cuh:470, 485), 3708 on
+    hist2048 (persistent_topk.cuh:171, 294), 4096 on hist256 (512, 582), 16384 on FilteredTopK's (1190, 1267); on cooperative's
+    cluster path 1024 in one block (cooperative_topk.cuh:372, 394-396) and max(topk, 1024) in the cluster (445-472).  Prefill and
+    the radix path keep every tie (sampler.cu:341)."""
+    path = topk_path(kernel, n, topk, rows)
+    if path == "trivial":
+        return None
+    v = np.asarray(vals[:n], dtype=np.float32)
+    if np.isnan(v).any():
+        return "nan"
+    with np.errstate(over="ignore"):
+        if (v.astype(np.float16) == -np.inf).any():
+            return "half -inf"
+    bits = {"hist4096": 12, "cluster": 10, "hist2048": 11, "hist256": 8, "filtered": 8}.get(path)
+    if bits is None:
+        return None
+    bins = half_bins(v, bits)
+    b, _, equal = threshold_bin(bins, topk)
+    if path == "cluster":
+        block = max(int((bins[s:e] == b).sum()) for s, e in cooperative_blocks(n, cooperative_cluster(rows)))
+        if block > 1024:
+            return f"cluster: {block} ties in one block > 1024"
+    cap = {"hist4096": topk, "cluster": max(topk, 1024), "hist2048": 3708, "hist256": 4096, "filtered": 16384}[path]
+    return f"{path}: {equal} ties > {cap}" if equal > cap else None
 
 
 def convert_rows(topk: np.ndarray, block_table: np.ndarray, block_stride_rows: int) -> tuple[np.ndarray, np.ndarray]:
@@ -851,21 +946,181 @@ def _topk_rows(gen_seed: int) -> tuple[np.ndarray, np.ndarray, list[str]]:
     return vals, np.array(lens, dtype=np.int32), names
 
 
-def _check_topk(vals: np.ndarray, lens: np.ndarray, out: np.ndarray, start: int = 0) -> dict[str, Any]:
-    """Rows of at most TOPK keys against `topk_short` (lengths clamped at 0); longer rows `topk_valid`."""
+def _check_topk(vals: np.ndarray, lens: np.ndarray, out: np.ndarray, start: int = 0, kernel: str = "prefill", launch=None,
+                names: list[str] | None = None) -> dict[str, Any]:
+    """Rows of at most k keys (k = out's width) against `topk_short` (lengths clamped at 0); a longer row `topk_long`, with its path
+    and `topk_overflow` in a launch of ``launch`` rows (one count, or one per row; default all of them): every row the claim covers
+    (no overflow) must be a selection `DsaTopKSelection_v1` accepts (`_topk_ok`); the others are recorded."""
     lens = np.asarray(lens, dtype=np.int64)
-    short = lens <= TOPK
-    want = topk_short(np.maximum(lens[short], 0))
-    long_rows = [topk_valid(vals[i, start:], int(lens[i]), out[i]) for i in np.flatnonzero(~short)]
+    k = out.shape[1]
+    launch = np.broadcast_to(np.asarray(len(lens) if launch is None else launch, dtype=np.int64), lens.shape)
+    short = lens <= k
+    want = topk_short(np.maximum(lens[short], 0), k)
+    long_rows = []
+    for i in np.flatnonzero(~short):
+        n, row, m = int(lens[i]), vals[i, start:], int(launch[i])
+        long_rows.append({"row": names[i] if names else int(i), "len": n, "path": topk_path(kernel, n, k, m),
+                          "overflow": topk_overflow(kernel, row, n, k, m), **topk_long(row, n, out[i])})
+    claimed = [r for r in long_rows if r["overflow"] is None]
     return {"short_rows": int(short.sum()), "short_mismatch": int((want != out[short]).any(axis=1).sum()),
-            "long_rows": len(long_rows), "long_valid": sum(r["valid"] for r in long_rows),
+            "long_rows": len(long_rows), "long_claimed": len(claimed), "long_claimed_valid": sum(r["valid"] for r in claimed),
+            "long_overflow": len(long_rows) - len(claimed),
+            "long_overflow_valid": sum(r["valid"] for r in long_rows if r["overflow"] is not None),
             "long_ascending": sum(r["ascending"] for r in long_rows), "long_with_ties": sum(bool(r["ties_left_out"]) for r in long_rows),
             "long": long_rows}
 
 
+def _topk_ok(r: dict[str, Any]) -> bool:
+    return r["short_mismatch"] == 0 and r["long_claimed_valid"] == r["long_claimed"]
+
+
+def _long_rows(topk: int, seed: int) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Synthetic rows of LONG_WIDTH words past ``topk`` keys (past each length +inf, which no kernel may read): random values at
+    LONG_LENS; at 8192, 16385 and 32769 keys (each kernel's paths) rows whose threshold falls in m equal words (`ties<m>`) or in m
+    consecutive f32 words from 1.0, one coarse bin of every histogram (`crowd<m>`), m // 2 of them in the top set beside topk - m // 2
+    keys above (in [100, 200)) and the rest below (in [-200, -100)), so m picks the tie path (to 32 the ballot, to 64 its two-lane
+    form, past it the radix refinement) and past a tie capacity the crowd overflows; three +0 and four -0 at the threshold (`zeros`:
+    the +0 in, the -0 out); ten +inf (`pinf`); and outside the claim (`topk_overflow`) -inf at the threshold of a length 3 mod 4
+    (`ninf`) and NaNs of both signs (`nan`)."""
+    rng = np.random.default_rng(seed)
+    rows: list[tuple[str, np.ndarray]] = [(f"len{n}", rng.standard_normal(n).astype(np.float32)) for n in LONG_LENS]
+
+    def around(n: int, middle: np.ndarray) -> np.ndarray:
+        a = max(topk - middle.size // 2, 0)
+        v = np.concatenate([rng.uniform(100, 200, a), middle, rng.uniform(-200, -100, n - a - middle.size)]).astype(np.float32)
+        return v[rng.permutation(n)]
+
+    one = np.float32(1.0).view(np.uint32)
+    for n in (8192, 16385, 32769):
+        rows += [(f"ties{m}_len{n}", around(n, np.full(m, 2.0, dtype=np.float32))) for m in (20, 50, 1500, 5000)]
+        rows += [(f"crowd{m}_len{n}", around(n, (one + np.arange(m, dtype=np.uint32)).view(np.float32)))
+                 for m in (20, 50, 1000, 3000) + ((20000,) if n == 32769 else ())]
+    rows += [(f"zeros_len{n}", around(n, np.array([0.0] * 3 + [-0.0] * 4, dtype=np.float32))) for n in (4097, 32769)]
+    pinf = rng.standard_normal(16385).astype(np.float32)
+    pinf[rng.choice(16385, 10, replace=False)] = np.inf
+    ninf = np.full(4099, -np.inf, dtype=np.float32)
+    ninf[rng.choice(4099, topk - 100, replace=False)] = rng.standard_normal(topk - 100)
+    nan = rng.standard_normal(8193).astype(np.float32)
+    nan[rng.choice(8193, 10, replace=False)] = np.array([0x7FC00000] * 5 + [0xFFC00000] * 5, dtype=np.uint32).view(np.float32)
+    rows += [("pinf_len16385", pinf), ("ninf_len4099", ninf), ("nan_len8193", nan)]
+    vals = np.full((len(rows), LONG_WIDTH), np.inf, dtype=np.float32)
+    for i, (_, v) in enumerate(rows):
+        vals[i, :v.size] = v
+    return vals, np.array([v.size for _, v in rows], dtype=np.int32), [name for name, _ in rows]
+
+
+def _long_topk(vals: np.ndarray, lens: np.ndarray, names: list[str], topk: int, cooperative: bool,
+               device: str = "cuda") -> dict[str, Any]:
+    """The kernels at top-``topk`` on the long rows, each launch twice: `top_k_per_row_prefill` as one launch of PREFILL_RADIX_ROW + R
+    rows over one buffer (stride0 0, each row's start its offset), the R rows first and again from PREFILL_RADIX_ROW so both its
+    variants run, the rows between empty; `cooperative_topk` (where vLLM calls it) in launches of 8, 16 and R rows, its clusters of
+    8, 4 and 2 on sm_90; `persistent_topk` in launches of 32 rows (the persistent kernel) and of R (FilteredTopK); and the
+    `top_k_per_row_decode` fallback (recorded).  Each against `_check_topk` at its kernel, with whether the two launches wrote the
+    same words and the same sets."""
+    import torch
+    from vllm import _custom_ops as ops
+    from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
+
+    R, W = vals.shape
+    assert R > 33, "the R-row launches must take cooperative's cluster of 2 and FilteredTopK"
+    dev = torch.from_numpy(vals).to(device)
+    sl = torch.from_numpy(lens).to(device).reshape(R, 1).contiguous()
+    ws = lambda: torch.zeros(RADIX_TOPK_WORKSPACE_SIZE, dtype=torch.uint8, device=device)  # noqa: E731
+    rec: dict[str, Any] = {"rows": names, "lens": lens.tolist(), "cases": {}, "errors": {}}
+
+    def prefill() -> tuple[np.ndarray, np.ndarray]:
+        nrows = PREFILL_RADIX_ROW + R
+        starts, ends = np.zeros(nrows, dtype=np.int32), np.zeros(nrows, dtype=np.int32)
+        for base in (0, PREFILL_RADIX_ROW):
+            starts[base:base + R] = np.arange(R, dtype=np.int32) * W
+            ends[base:base + R] = starts[base:base + R] + np.maximum(lens, 0)
+        out = torch.full((nrows, topk), -1, dtype=torch.int32, device=device)
+        ops.top_k_per_row_prefill(dev, torch.from_numpy(starts).to(device), torch.from_numpy(ends).to(device), out, nrows, 0, 1, topk)
+        o = out.cpu().numpy()
+        return o[:R], o[PREFILL_RADIX_ROW:]
+
+    def chunked(call, size: int) -> tuple[np.ndarray, np.ndarray]:
+        out, launch = np.full((R, topk), -1, dtype=np.int32), np.zeros(R, dtype=np.int64)
+        for s in range(0, R, size):
+            e = min(s + size, R)
+            o = torch.full((e - s, topk), -1, dtype=torch.int32, device=device)
+            call(dev[s:e], sl[s:e], o, int(lens[s:e].max()))
+            out[s:e], launch[s:e] = o.cpu().numpy(), e - s
+        return out, launch
+
+    def record(name: str, kernel: str, outs: list[tuple[np.ndarray, np.ndarray]]) -> None:
+        r = _check_topk(vals, lens, outs[0][0], kernel=kernel, launch=outs[0][1], names=names)
+        r["deterministic"] = bool(np.array_equal(outs[0][0], outs[1][0]))
+        r["same_sets"] = bool(np.array_equal(np.sort(outs[0][0], axis=1), np.sort(outs[1][0], axis=1)))
+        rec["cases"][name] = r
+
+    try:
+        runs = [prefill() for _ in range(2)]
+        for v, name in enumerate(("prefill_insertion", "prefill_radix")):
+            record(name, "prefill", [(o[v], np.full(R, PREFILL_RADIX_ROW + R)) for o in runs])
+    except Exception as e:  # noqa: BLE001
+        rec["errors"]["prefill"] = _error(e)
+        _clear_launch_error()
+    pers = lambda d, s, o, m: torch.ops._C.persistent_topk(d, s, o, ws(), topk, d.shape[1])  # noqa: E731
+    launches = [("persistent", "persistent", pers, 32), ("filtered", "persistent", pers, R)]
+    if cooperative:
+        coop = lambda d, s, o, m: torch.ops._C.cooperative_topk(d, s, o, ws(), topk, m)  # noqa: E731
+        launches += [(f"cooperative_cs{cooperative_cluster(n)}", "cooperative", coop, n) for n in (8, 16, R)]
+    launches.append(("decode_fallback", "decode", lambda d, s, o, m: ops.top_k_per_row_decode(d, 1, s, o, d.shape[0], d.stride(0),
+                                                                                             d.stride(1), topk), R))
+    for name, kernel, call, size in launches:
+        try:
+            record(name, kernel, [chunked(call, size) for _ in range(2)])
+        except Exception as e:  # noqa: BLE001
+            rec["errors"][name] = _error(e)
+            _clear_launch_error()
+    return rec
+
+
+#: the long rows' launches that gate (`_long_ok`); `decode_fallback` is recorded: on CUDA vLLM calls it only at a top-k other than
+#: 512, 1024 or 2048 (sparse_attn_indexer.py:625-629)
+LONG_GATING = ("prefill_insertion", "prefill_radix", "persistent", "filtered")
+LONG_GATING_COOPERATIVE = ("cooperative_cs8", "cooperative_cs4", "cooperative_cs2")
+
+
+def _long_ok(long: dict[str, Any], cooperative: bool) -> bool:
+    """Every gating launch at every top-k ran, the claim covered some of its rows, and each of those is a selection."""
+    gating = LONG_GATING + (LONG_GATING_COOPERATIVE if cooperative else ())
+    return all(str(t) in long and g in long[str(t)]["cases"] and long[str(t)]["cases"][g]["long_claimed"] > 0
+               and _topk_ok(long[str(t)]["cases"][g]) for t in LONG_TOPKS for g in gating)
+
+
+def selection_reference(seed: int) -> dict[str, Any]:
+    """`DsaTopKSelection_v1{TOPK=16,N=64}` (the IR oracle) against its twin `dsa.selection_ok` on a row with ties and both zeros: the
+    shortcut at a short length, top sets in any order, a duplicate, an index at len, the least selected key swapped for a lower
+    one, and +0 taken over -0 and not."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+    from verity_vllm.program.registry import dsa
+
+    T, N = 16, 64
+    rng = np.random.default_rng(seed)
+    w = rng.standard_normal(N).astype(np.float32)
+    w[rng.choice(N, 12, replace=False)] = 0.5
+    cases = [(w, 5, list(range(5)) + [-1] * (T - 5))]
+    for n in (T + 1, 40, N):
+        order = np.argsort(-dsa.order_keys(w[:n]), kind="stable")
+        top = [int(i) for i in order[:T]]
+        cases += [(w, n, top), (w, n, top[::-1]), (w, n, top[:-1] + [top[0]]), (w, n, top[:-1] + [n]),
+                  (w, n, top[:-1] + [int(order[-1])])]
+    z = np.full(N, -1.0, dtype=np.float32)
+    z[:T - 1], z[30], z[31] = 1.0, 0.0, -0.0
+    cases += [(z, N, list(range(T - 1)) + [30]), (z, N, list(range(T - 1)) + [31])]
+    fn = bind(dsa.DsaTopKSelection, TOPK=T, N=N)
+    got = [bool(evaluate(fn, [int(x) for x in v.view(np.uint32)], n, [i & 0xFFFFFFFF for i in idx])[0]) for v, n, idx in cases]
+    twin = [dsa.selection_ok(v, n, idx) for v, n, idx in cases]
+    return {"cases": len(cases), "accepted": sum(twin), "ok": got == twin and 0 < sum(twin) < len(cases)}
+
+
 def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     """vLLM's top-k kernels: prefill on the served logits (twice) and on synthetic rows from row start 5; the decode kernels on
-    synthetic rows; the reference `DsaTopKShortRow_v1{2048}` on the lengths the rows take."""
+    synthetic rows; every kernel on the long rows at each of LONG_TOPKS (`_long_topk`); the reference `DsaTopKShortRow_v1{2048}` on
+    the lengths the rows take and `DsaTopKSelection_v1` against its twin (`selection_reference`)."""
     import torch
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
@@ -886,7 +1141,7 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
             out = torch.full((SEQ, TOPK), -1, dtype=torch.int32, device="cuda")
             ops.top_k_per_row_prefill(logits, ks, ke, out, SEQ, logits.stride(0), logits.stride(1), TOPK)
             outs.append(out.cpu().numpy())
-        served = _check_topk(logits.cpu().numpy(), np.arange(1, SEQ + 1), outs[0])
+        served = _check_topk(logits.cpu().numpy(), np.arange(1, SEQ + 1), outs[0], kernel="prefill")
         served["deterministic_short"] = bool(np.array_equal(outs[0][:TOPK], outs[1][:TOPK]))
         served["deterministic_long"] = bool(np.array_equal(outs[0][TOPK:], outs[1][TOPK:]))
         rec["cases"]["prefill_served"] = served
@@ -902,20 +1157,21 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     pke = (pks + torch.from_numpy(np.maximum(lens, 0)).to("cuda")).to(torch.int32)
     pout = torch.full((rows, TOPK), -1, dtype=torch.int32, device="cuda")
     ops.top_k_per_row_prefill(pl, pks, pke, pout, rows, pl.stride(0), pl.stride(1), TOPK)
-    rec["cases"]["prefill_start5"] = _check_topk(wide, np.maximum(lens, 0), pout.cpu().numpy(), start)
+    rec["cases"]["prefill_start5"] = _check_topk(wide, np.maximum(lens, 0), pout.cpu().numpy(), start, names=names)
     dl = torch.from_numpy(vals).to("cuda")
     seq_lens = torch.from_numpy(lens).to("cuda").reshape(rows, 1).contiguous()
     # sparse_attn_indexer.py:617-623 at k = 2048, rows <= 64 and stride % 4 == 0 (both hold here)
     rec["cooperative_served"] = cooperative = bool(current_platform.has_device_capability(90)
                                                     and not current_platform.is_device_capability_family(120))
-    kernels = [("persistent", rows, lambda d, sl, out, ws, m: torch.ops._C.persistent_topk(d, sl, out, ws, TOPK, d.shape[1]))]
+    kernels = [("persistent", "persistent", rows,
+                lambda d, sl, out, ws, m: torch.ops._C.persistent_topk(d, sl, out, ws, TOPK, d.shape[1]))]
     if cooperative:
         # on sm_90, 10 rows take clusters of 4 and 8 rows clusters of 8 (cooperative_topk.cu:94-102)
-        kernels += [(name, n, lambda d, sl, out, ws, m: torch.ops._C.cooperative_topk(d, sl, out, ws, TOPK, m))
+        kernels += [(name, "cooperative", n, lambda d, sl, out, ws, m: torch.ops._C.cooperative_topk(d, sl, out, ws, TOPK, m))
                     for name, n in (("cooperative", rows), ("cooperative_8rows", 8))]
-    kernels.append(("decode_fallback", rows, lambda d, sl, out, ws, m: ops.top_k_per_row_decode(d, 1, sl, out, d.shape[0], d.stride(0),
-                                                                                                d.stride(1), TOPK)))
-    for name, n, call in kernels:
+    kernels.append(("decode_fallback", "decode", rows,
+                    lambda d, sl, out, ws, m: ops.top_k_per_row_decode(d, 1, sl, out, d.shape[0], d.stride(0), d.stride(1), TOPK)))
+    for name, kernel, n, call in kernels:
         try:
             outs = []
             for _ in range(2):
@@ -923,21 +1179,26 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
                 call(dl[:n], seq_lens[:n], out, torch.zeros(RADIX_TOPK_WORKSPACE_SIZE, dtype=torch.uint8, device="cuda"),
                      int(lens[:n].max()))
                 outs.append(out.cpu().numpy())
-            r = _check_topk(vals[:n], lens[:n], outs[0])
+            r = _check_topk(vals[:n], lens[:n], outs[0], kernel=kernel, launch=n, names=names[:n])
             r["deterministic_short"] = bool(np.array_equal(outs[0][lens[:n] <= TOPK], outs[1][lens[:n] <= TOPK]))
             rec["cases"][name] = r
         except Exception as e:  # noqa: BLE001
             rec["errors"][name] = _error(e)
             _clear_launch_error()
+    rec["long"] = {}
+    for t in LONG_TOPKS:
+        lv, ll, ln = _long_rows(t, 13 + t)
+        rec["long"][str(t)] = _long_topk(lv, ll, ln, t, cooperative)
     ref_lens = sorted({0, 1, 2, TOPK - 1, TOPK, -3})
     fn = bind(dsa.DsaTopKShortRow, TOPK=TOPK)
     rec["reference_lengths"] = ref_lens
     rec["reference_ok"] = all(list(evaluate(fn, n & 0xFFFFFFFF)) == (topk_short(np.array([max(n, 0)]))[0].astype(np.int64)
                                                                      & 0xFFFFFFFF).tolist() for n in ref_lens)
+    rec["selection_reference"] = selection_reference(17)
     gating = ("prefill_served", "prefill_start5", "persistent") + (("cooperative", "cooperative_8rows") if cooperative else ())
-    rec["ok"] = bool(rec["reference_ok"] and all(g in rec["cases"] and rec["cases"][g]["short_rows"] > 0
-                                                 and rec["cases"][g]["short_mismatch"] == 0 for g in gating)
-                     and rec["cases"]["prefill_served"]["deterministic_short"])
+    rec["ok"] = bool(rec["reference_ok"] and rec["selection_reference"]["ok"]
+                     and all(g in rec["cases"] and rec["cases"][g]["short_rows"] > 0 and _topk_ok(rec["cases"][g]) for g in gating)
+                     and rec["cases"]["prefill_served"]["deterministic_short"] and _long_ok(rec["long"], cooperative))
     return rec
 
 
@@ -1134,6 +1395,8 @@ def bind_check() -> dict[str, Any]:
                f"DsaMqaLogit_v1{{H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogit, H=H, D=D),
                f"DsaMqaLogits_v1{{N=64,H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogits, N=64, H=H, D=D),
                f"DsaTopKShortRow_v1{{TOPK={TOPK}}}": lambda: bind(dsa.DsaTopKShortRow, TOPK=TOPK),
+               **{f"DsaTopKSelection_v1{{TOPK={t},N={MAXPOS}}}": lambda t=t: bind(dsa.DsaTopKSelection, TOPK=t, N=MAXPOS)
+                  for t in LONG_TOPKS},
                f"RoPEHeadGptJ_v1{{D={DR}}}": lambda: bind(RP.RoPEHeadGptJ, D=DR),
                f"RoPEGptJ_v1{{NHEADS={NH},D={DR}}}": lambda: bind(RP.RoPEGptJ, NHEADS=NH, D=DR)}
     for T in (1, 64, 65, TOPK):
@@ -1191,7 +1454,11 @@ def gpu(work: Path, outdir: Path, quick: bool, doc: dict[str, Any]) -> list[dict
     doc["topk"] = topk or {"ok": False}
     brief = {k: {f: v for f, v in g.items() if f != "long"} for k, g in doc["topk"].get("cases", {}).items()}
     print(f"[glm53-dsa] topk ok={doc['topk'].get('ok')} {json.dumps(brief)[:1500]} "
-          f"errors={list(doc['topk'].get('errors', {}))}", flush=True)
+          f"errors={list(doc['topk'].get('errors', {}))} selection_reference={doc['topk'].get('selection_reference')}", flush=True)
+    for t, lg in doc["topk"].get("long", {}).items():
+        fields = ("long_claimed", "long_claimed_valid", "long_overflow", "long_overflow_valid", "deterministic", "same_sets")
+        print(f"[glm53-dsa] topk long k={t} {json.dumps({k: [g[f] for f in fields] for k, g in lg['cases'].items()})} "
+              f"errors={list(lg['errors'])}", flush=True)
     r = step("attn", lambda: phase_attn(work, o, st["k"], st["q"], st["topk"], quick))
     if r is not None:
         doc["launches"] += r[0]

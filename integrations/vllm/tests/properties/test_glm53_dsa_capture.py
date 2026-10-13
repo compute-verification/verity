@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -308,18 +309,179 @@ def test_the_topk_checks() -> None:
     for i in np.flatnonzero(lens > X.TOPK):
         out[i] = np.sort(np.argsort(-vals[i, :lens[i]], kind="stable")[:X.TOPK])
     got = X._check_topk(vals, lens, out)
-    assert (got["short_rows"], got["short_mismatch"], got["long_rows"], got["long_valid"]) == (6, 0, 4, 4)
-    assert got["long_ascending"] == 4 and got["long_with_ties"] == 2
+    assert (got["short_rows"], got["short_mismatch"], got["long_rows"], got["long_claimed"], got["long_claimed_valid"]) == (6, 0, 4, 4, 4)
+    assert got["long_ascending"] == 4 and got["long_with_ties"] == 2 and X._topk_ok(got)
+    coop = X._check_topk(vals, lens, out, kernel="cooperative", launch=len(lens), names=names)
+    assert [r["row"] for r in coop["long"] if r["overflow"]] == ["ties_all_equal"] and coop["long_overflow_valid"] == 1
     bad = out.copy()
     bad[2, 1] = -1
     bad[lens.tolist().index(4096), 7] = bad[lens.tolist().index(4096), 8]
     got = X._check_topk(vals, lens, bad)
-    assert got["short_mismatch"] == 1 and got["long_valid"] == 3
+    assert got["short_mismatch"] == 1 and got["long_claimed_valid"] == 3 and not X._topk_ok(got)
     ones = lens.tolist().index(2100)
     sel = out[ones]
     worse = sel.copy()
     worse[np.flatnonzero(vals[ones, sel] == 1)[0]] = np.setdiff1d(np.flatnonzero(vals[ones, :2100] == 0), sel)[0]
-    assert X.topk_valid(vals[ones], 2100, sel)["valid"] and X.topk_valid(vals[ones], 2100, worse)["valid"] is False
+    assert X.topk_long(vals[ones], 2100, sel)["valid"] and X.topk_long(vals[ones], 2100, worse)["valid"] is False
+
+
+def _exact_top(vals: np.ndarray, lens: np.ndarray, topk: int) -> np.ndarray:
+    """A top-``topk`` set of each row under `DsaTopKSelection_v1`'s order, ascending (short rows the shortcut)."""
+    out = X.topk_short(np.maximum(lens, 0), topk)
+    for i in np.flatnonzero(lens > topk):
+        out[i] = np.sort(np.argsort(-dsa.order_keys(vals[i, :lens[i]]), kind="stable")[:topk])
+    return out
+
+
+def test_the_coarse_bins_follow_the_order() -> None:
+    """Every coarse histogram's bins ascend with `DsaTopKSelection_v1`'s order (so a bin above the threshold holds only selected
+    keys), +0 and -0 never share a bin (so no kernel's float compare sees the pair), and an f32 whose half is -inf shares the bin of
+    hist2048's padding."""
+    rng = np.random.default_rng(3)
+    special = np.array([0.0, -0.0, np.inf, -np.inf, 65504, 65519.99, 65520, -65520, -65504, 1e-8, -1e-8, 6e-5, -6e-5, 1.0, 1.0009766,
+                        3.4e38, -3.4e38, 1e-45, -1e-45], dtype=np.float32)
+    v = np.concatenate([special, (rng.standard_normal(20000) * 10.0 ** rng.integers(-8, 6, 20000)).astype(np.float32),
+                        (np.float32(1.0).view(np.uint32) + np.arange(5000, dtype=np.uint32)).view(np.float32)])
+    assert v.dtype == np.float32
+    v = v[np.argsort(dsa.order_keys(v), kind="stable")]
+    for bits in (8, 10, 11, 12):
+        b = X.half_bins(v, bits)
+        assert (np.diff(b) >= 0).all(), bits
+        assert X.half_bins(np.float32([0.0]), bits)[0] == X.half_bins(np.float32([-0.0]), bits)[0] + 1
+    assert X.half_bins(np.float32([-np.inf, -65520.0, -3.4e38]), 11).tolist() == [31, 31, 31]
+    assert X.half_bins(np.float32([-65504.0]), 11)[0] == 32
+    assert X.threshold_bin(np.array([0, 1, 1, 2, 2, 2]), 4) == (1, 3, 2)
+    assert X.cooperative_blocks(16385, 8)[-1] == (14340, 16385) and X.cooperative_blocks(16385, 8)[0] == (0, 2052)
+    assert [X.cooperative_cluster(n) for n in (1, 8, 9, 33, 34, 64)] == [8, 8, 4, 4, 2, 2]
+
+
+def test_the_long_rows_and_their_claim() -> None:
+    """The long rows at each top-k: an exact top set passes on every row at every kernel's launches, and the claim
+    (`topk_overflow`) leaves out exactly the rows whose threshold bin overflows that path's tie capacity, the NaN row and the -inf
+    row; a +0 swapped for a -0 fails; the kernels' tie handling run past its capacity (the first ties by index kept) misses a crowd's
+    top keys, so a crowd the claim leaves out does tell an overflow."""
+    for topk in X.LONG_TOPKS:
+        vals, lens, names = X._long_rows(topk, 13 + topk)
+        R = len(lens)
+        assert R > 33 and (lens > topk).all() and lens.max() <= X.LONG_WIDTH and X.LONG_WIDTH % 4 == 0
+        assert np.isinf(vals[0, lens[0]:]).all()
+        out = _exact_top(vals, lens, topk)
+        at = {n: i for i, n in enumerate(names)}
+        over = {}
+        for kernel, launch in (("prefill", R), ("cooperative", 8), ("cooperative", 16), ("cooperative", R), ("persistent", 32),
+                               ("persistent", R)):
+            got = X._check_topk(vals, lens, out, kernel=kernel, launch=launch, names=names)
+            assert X._topk_ok(got) and got["long_overflow_valid"] == got["long_overflow"] and got["long_claimed"] > 0, (kernel, launch)
+            over[kernel, launch] = {r["row"]: r["overflow"] for r in got["long"] if r["overflow"]}
+        outside = {"nan_len8193": "nan", "ninf_len4099": "half -inf"}
+        assert over["prefill", R] == outside
+        assert over["persistent", 32] == {**outside, "ties5000_len8192": "hist2048: 5000 ties > 3708",
+                                          "ties5000_len16385": "hist256: 5000 ties > 4096"}
+        middle = {n: (int(m[2]), int(m[3])) for n in names if (m := re.fullmatch(r"(ties|crowd)(\d+)_len(\d+)", n))}
+        assert over["persistent", R] == {**outside, **{n: f"hist4096: {m} ties > {topk}" for n, (m, k) in middle.items()
+                                                       if m > topk and k <= 32768},
+                                         "crowd20000_len32769": "filtered: 20000 ties > 16384"}
+        for launch in (8, 16, R):
+            assert {n for n in over["cooperative", launch] if n in middle} == {n for n, (m, k) in middle.items()
+                                                                               if m > max(topk, 1024 if k > 16384 else 0)}
+            assert over["cooperative", launch].keys() - middle.keys() == outside.keys()
+        assert over["cooperative", 8]["crowd3000_len32769"] == f"cluster: 3000 ties > {max(topk, 1024)}"
+        assert re.fullmatch(r"cluster: 1[45]\d\d ties in one block > 1024", over["cooperative", R]["crowd3000_len32769"])
+        z = at["zeros_len4097"]
+        swapped = out.copy()
+        plus, minus = np.flatnonzero(vals[z, :lens[z]] == 0.0), None
+        minus = [j for j in plus if np.signbit(vals[z, j])]
+        plus = [j for j in plus if not np.signbit(vals[z, j])]
+        assert len(plus) == 3 and len(minus) == 4 and set(plus) <= set(out[z]) and not set(minus) & set(out[z])
+        swapped[z, list(out[z]).index(plus[0])] = minus[0]
+        assert X._check_topk(vals, lens, swapped)["long_claimed_valid"] == X._check_topk(vals, lens, out)["long_claimed_valid"] - 1
+        c = at["crowd3000_len8192"]
+        v = vals[c, :lens[c]]
+        bins = X.half_bins(v, 12)
+        b, above, _ = X.threshold_bin(bins, topk)
+        kept = np.flatnonzero(bins == b)[:topk]
+        pick = kept[np.argsort(-dsa.order_keys(v[kept]), kind="stable")[:topk - above]]
+        assert not dsa.selection_ok(v, lens[c], np.concatenate([np.flatnonzero(bins > b), pick]))
+
+
+def _stub_topk_ops(monkeypatch, calls: list, persistent_dup: bool = False) -> None:
+    """vLLM's four top-k ops stood in for by exact numpy ones on CPU tensors, with their calling conventions: prefill reads each row
+    from the buffer's start plus rowStarts (stride0 0 here) and writes indices relative to it, the decode ops take a row per
+    launch row; each call recorded.  ``persistent_dup`` makes the persistent kernel (launches to 32 rows) repeat an index in its
+    first row past top-k."""
+    import sys
+    import types
+
+    def top(row: np.ndarray, n: int, topk: int) -> np.ndarray:
+        if n <= topk:
+            return np.where(np.arange(topk) < max(n, 0), np.arange(topk), -1).astype(np.int32)
+        return np.sort(np.argsort(-dsa.order_keys(row[:n]), kind="stable")[:topk]).astype(np.int32)
+
+    def rows(name, d, lens, out, topk, dup=False):
+        calls.append((name, d.shape[0], topk))
+        v, ls = d.numpy(), lens.reshape(-1).tolist()
+        for i, n in enumerate(ls):
+            out[i] = torch.from_numpy(top(v[i], n, topk))
+        long = [i for i, n in enumerate(ls) if n > topk]
+        if dup and long:
+            out[long[0], 1] = out[long[0], 0]
+
+    def prefill(logits, starts, ends, out, nrows, stride0, stride1, topk):
+        assert (stride0, stride1) == (0, 1) and out.shape == (nrows, topk)
+        calls.append(("prefill", nrows, topk))
+        flat = logits.reshape(-1).numpy()
+        for r, (s, e) in enumerate(zip(starts.tolist(), ends.tolist())):
+            out[r] = torch.from_numpy(top(flat[s:], e - s, topk))
+
+    ops = types.ModuleType("vllm._custom_ops")
+    ops.top_k_per_row_prefill = prefill
+    ops.top_k_per_row_decode = lambda d, next_n, sl, out, nr, s0, s1, topk: rows("decode", d, sl, out, topk)
+    vllm = types.ModuleType("vllm")
+    vllm._custom_ops = ops
+    sai = types.ModuleType("vllm.model_executor.layers.sparse_attn_indexer")
+    sai.RADIX_TOPK_WORKSPACE_SIZE = 1 << 20
+    for name, mod in (("vllm", vllm), ("vllm._custom_ops", ops), ("vllm.model_executor", types.ModuleType("vllm.model_executor")),
+                      ("vllm.model_executor.layers", types.ModuleType("vllm.model_executor.layers")),
+                      ("vllm.model_executor.layers.sparse_attn_indexer", sai)):
+        monkeypatch.setitem(sys.modules, name, mod)
+
+    def persistent(d, sl, out, ws, topk, max_len):
+        assert ws.numel() == 1 << 20 and max_len == d.shape[1]
+        rows("persistent", d, sl, out, topk, persistent_dup and d.shape[0] <= 32)
+
+    def cooperative(d, sl, out, ws, topk, max_len):
+        assert ws.numel() == 1 << 20 and d.stride(0) % 4 == 0 and max_len == int(sl.max())
+        rows("cooperative", d, sl, out, topk)
+
+    monkeypatch.setattr(torch.ops, "_C", types.SimpleNamespace(persistent_topk=persistent, cooperative_topk=cooperative), raising=False)
+
+
+def test_the_long_launches_on_stubbed_kernels(monkeypatch) -> None:
+    """`_long_topk` with the ops stood in for (`_stub_topk_ops`): every launch at both top-k values, prefill's two variants in one
+    launch of PREFILL_RADIX_ROW + R rows, cooperative in launches of 8, 16 and R rows, persistent in 32 and R; exact ops pass
+    `_long_ok` with the claim's overflow rows recorded valid, and a persistent kernel that repeats an index fails it there only."""
+    monkeypatch.setattr(X, "PREFILL_RADIX_ROW", 48)
+    calls: list = []
+    _stub_topk_ops(monkeypatch, calls)
+    long = {}
+    for topk in X.LONG_TOPKS:
+        vals, lens, names = X._long_rows(topk, 13 + topk)
+        long[str(topk)] = r = X._long_topk(vals, lens, names, topk, True, device="cpu")
+        assert not r["errors"] and set(r["cases"]) == set(X.LONG_GATING + X.LONG_GATING_COOPERATIVE) | {"decode_fallback"}
+        assert all(c["deterministic"] and c["same_sets"] and c["long_overflow_valid"] == c["long_overflow"] for c in r["cases"].values())
+        assert r["cases"]["prefill_radix"]["long"] == r["cases"]["prefill_insertion"]["long"]
+        R = len(lens)
+        sizes = lambda name: [n for c, n, t in calls if c == name and t == topk]  # noqa: E731
+        assert sizes("prefill") == [48 + R] * 2 and sizes("decode") == [R] * 2
+        assert sizes("cooperative") == [8] * 5 + [1] + [8] * 5 + [1] + [16, 16, 9] * 2 + [R] * 2 and R == 41
+        assert sizes("persistent") == [32, R - 32] * 2 + [R] * 2
+    assert X._long_ok(long, True)
+    _stub_topk_ops(monkeypatch, calls, persistent_dup=True)
+    vals, lens, names = X._long_rows(X.TOPK, 13 + X.TOPK)
+    bad = X._long_topk(vals, lens, names, X.TOPK, True, device="cpu")
+    assert not X._long_ok({**long, str(X.TOPK): bad}, True)
+    failing = {n for n, c in bad["cases"].items() if not X._topk_ok(c)}
+    assert failing == {"persistent"} and bad["cases"]["persistent"]["long_claimed_valid"] == bad["cases"]["persistent"]["long_claimed"] - 2
 
 
 # ------------------------------------------------------------------------------------------------------------ slots, ptx

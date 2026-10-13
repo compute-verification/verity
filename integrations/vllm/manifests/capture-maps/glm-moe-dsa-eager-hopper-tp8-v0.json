@@ -333,10 +333,12 @@
    "status": "port",
    "definitions": [
     "DsaTopKShortRow_v1",
-    "DsaTopKShortRow_v2"
+    "DsaTopKShortRow_v2",
+    "DsaTopKSelection_v1",
+    "DsaTopKSelection_v2"
    ],
-   "when": "every row has at most TOPK = 2048 keys",
-   "note": "top_k_per_row_prefill (prefill) / cooperative_topk (decode, at most 64 rows; else persistent_topk): a row of at most 2048 keys takes each kernel's shortcut, slot i = i when i < the row's length, else -1: DsaTopKShortRow_v1{TOPK=2048}. A longer row is a radix selection whose order (ties included) the kernels leave to their atomics, with no Definition; port until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) pins the kernel variant and a Build rule binds it"
+   "when": "a row of at most TOPK = 2048 keys DsaTopKShortRow; a longer one DsaTopKSelection, over the indices the kernel wrote",
+   "note": "top_k_per_row_prefill (prefill) / cooperative_topk (decode, at most 64 rows; else persistent_topk, FilteredTopK past 32 rows): a row of at most 2048 keys takes each kernel's shortcut, slot i = i when i < the row's length, else -1: DsaTopKShortRow_v1{TOPK=2048}. A longer row is a histogram or radix selection whose tie choice and output order the kernels leave to their atomics, so its Definition is a check whose input is the kernel's own indices: DsaTopKSelection_v1{TOPK=2048,N=row width} (2048 distinct indices below the length whose least key in the order of convert_to_uint32_v2 is at least every unselected key's; Boolean DsaTopKSelection_v2). A row whose threshold bin overflows a path's tie capacity may fail the check (dsa.py's top-k order paragraph); port until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) pins the kernel variant and a Build rule binds it"
   }
  },
  "binders": {
