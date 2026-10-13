@@ -992,7 +992,8 @@ def prove(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pts: Mapping, U:
           draw: Callable[[list[int], int], list[int]], workers: int = 1) -> tuple[Coins, dict]:
     """One rep's sparse phase at T = 1 (the module docstring): ``ents`` the hidden circuit's `entries`, ``pts`` the rep's
     `inner_points` (``alpha``, ``z``, ``x_rest``, ``y_rest``), ``U`` its slots' `layout_factors`, ``h`` the 64 elements of the
-    rep's h round. Each round's message goes to ``draw(elements, n)``, which answers its n coins (v2's round none);
+    rep's h round. Each round's message goes to ``draw(elements, n)``, which answers its n coins (v2's and the claim's
+    rounds none: the claim goes last, so the coin server records the ``c_k`` that ``rec-claim``'s rows must be);
     ``workers`` processes share H3's entry rounds. Returns the coins and the messages as `rows` takes them (``claim`` the
     registered claim's value). AssertionError if a sum the phase sends is not the claim before it (``ents`` are not the
     circuit h was folded from)."""
@@ -1054,5 +1055,7 @@ def prove(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pts: Mapping, U:
     if claim != mul(Ut[0], phi):
         raise AssertionError("H3: the claim is not Ũ(r_s) Φ(u)")
     zeta_p = tuple(draw(u, sh.P_LOG))
+    claim = _dot(eq_table(zeta_p), u)
+    draw([claim], 0)
     coins = Coins(alpha, pts["z"], x_rest, y_rest, zeta_c, tuple(pre), tuple(rk + rs), zeta_p, (), tuple(U))
-    return coins, {"h": list(h), "pre": pre_msgs, "v2": v2, "sc": sc, "u": u, "claim": _dot(eq_table(zeta_p), u)}
+    return coins, {"h": list(h), "pre": pre_msgs, "v2": v2, "sc": sc, "u": u, "claim": claim}
