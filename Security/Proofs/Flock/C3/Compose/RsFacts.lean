@@ -15,9 +15,10 @@ import Proofs.Flock.Recursive.Loads
   (`nv_of_copy`: that statement is one of R's opening parts, of one instance).
 * `OpenAll` from V*'s sessions (`SessionAt`'s (a)), `openAll_of_session`.
 * `RsSk` from the reads file at the ports keying the ring switches' columns (`RsSel`, S's `SelPort`), `rsSk_of_sel`:
-  the column's key (`OpeningZeroAt`'s `RegBit`) puts its wire at the port's commit string (`posK_of_keyAt`).
-* `RsIo` from the unit reading its ring switches' columns (`RsReadCol`, S's `ReadCol`), `rsIo_of_readCol`: copy `j`
-  reads a column its computed rows read (`mem_io_of_readCol`, `ioColAt_of_readCol` at copy `j`).
+  the column's key (`OpeningZeroAtL`'s `RegBit`) puts its wire at the port's commit string (`posK_of_keyAt`).
+* `RsIo` from the unit reading its ring switches' columns (`RsReadCol`, S's `ReadCol`, which the opening's check gives,
+  `rsReadCol`), `rsIo_of_readCol`: copy `j` reads a column its computed rows read (`mem_io_of_readCol`,
+  `ioColAt_of_readCol` at copy `j`).
 
 `rsRead_of_facts` composes them. `RsSel` is at the round commitments (`rsSel_of_rounds`): ring switch `i`'s columns
 are keyed by port `m<i>` (`RsKeys`, a circuit fact), whose reads-file entry is `rec-opening-c<i>`, read at the unit
@@ -36,7 +37,7 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockVBridge (keyInst)
 open FlockVBridge.Family (skOf mem_skOf_inl)
-open FlockVBridge.OfVStar (OpeningZeroAt rowCol partRep part_eqOpening wIdx_size ReadCol)
+open FlockVBridge.OfVStar (rowCol partRep readCol_rsAt part_eqOpening wIdx_size ReadCol)
 open FlockVBridge.PartS (wIdx)
 open FlockC3.Reps (SelPort)
 
@@ -328,9 +329,9 @@ theorem openAll_of_session {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Re
   obtain rfl : gs = gs' := Except.ok.inj (hg.symm.trans hg')
   exact ⟨sess p, un p, cp p, _, hparts p hp⟩
 
-/-- **A copy's row-port column is a keyed input** (`OpeningZeroAt`'s `RegBit`): at a copy registering w as part `p`,
-bit `b` of the part's row-port element `q` is a column below the unit's inputs' end, keyed at copy `j` by a bit of a
-row port. -/
+/-- **A copy's ring-switch column is a keyed input** (`OpeningZeroAtL`'s `RegBit`, read by `readCol_rsAt`): at a copy
+registering w as part `p`, bit `b` of the part's row-port element `q` holding ring switch `i`'s slot `t` is a column
+below the unit's inputs' end, keyed at copy `j` by a bit of a row port. -/
 theorem openCopy_key {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
     {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}
@@ -338,19 +339,21 @@ theorem openCopy_key {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     (hO : OpenCopy zs dg N k Rw sh w gs s un j p) {S0 : RecAlgebra.GfS} (hS : RecOpening.structureOf sh = .ok S0)
     (hg : Flock.RecResiduals.groups S0 (RecOpening.portSizes sh) = .ok gs) (hpg : p < gs.size) {S₁ : RecOpen.GfS}
     {ns : List ℕ} {nv : ℕ} (hpart : RecOpening.part sh p = .ok (S₁, ns, nv)) {q e : ℕ}
-    (he : (wIdx (RecOpening.portSizes sh) gs[p].2.1)[q]? = some e) {b : ℕ} (hb : b < 128) :
+    (he : (wIdx (RecOpening.portSizes sh) gs[p].2.1)[q]? = some e) {i t : ℕ}
+    (hwi : RecOpening.wi sh (.rs i t) = some e) {b : ℕ} (hb : b < 128) :
     128 * q + b < 128 * ns.sum ∧ rowCol (partRep ns nv).ports 0 (128 * q + b) < (Rows.ofNet (Vs s).hU).nIn ∧
       ∃ (q' : Fin (Vs s).c.ports.size) (kk : ℕ) (_ : kk < Layout.portRowW (Vs s).c q'),
         Aliased.srcKey (Vs s).c (j * (Rows.ofNet (Vs s).hU).nIn + rowCol (partRep ns nv).ports 0 (128 * q + b)) =
           .msg q'.val (kk / 8) (kk % 8) := by
   obtain ⟨_, _, _, _, _, _, _, -, hz⟩ := hO
+  have hrd := readCol_rsAt _ hz hS hg hpg hpart he hwi hb
   obtain ⟨_, _, _, _, _, _, _, _, _, S₂, ns₂, nv₂, hpart₂, hw, -⟩ := hz
   obtain ⟨rfl, rfl, rfl⟩ : S₁ = S₂ ∧ ns = ns₂ ∧ nv = nv₂ := by
     simpa only [Prod.mk.injEq] using Except.ok.inj (hpart.symm.trans hpart₂)
   obtain ⟨-, hns, -⟩ := part_eqOpening hS hg hpg hpart
   obtain ⟨hk, -⟩ := Array.getElem?_eq_some_iff.mp he
   have hq : q < ns.sum := by rw [hns, ← wIdx_size]; exact hk
-  obtain ⟨hcol, q', kk, hkk, hkey, -⟩ := hw (128 * q + b) (by omega)
+  obtain ⟨hcol, q', kk, hkk, hkey, -⟩ := hw (128 * q + b) (by omega) hrd
   exact ⟨by omega, hcol, q', kk, hkk, hkey⟩
 
 /-- **Hypothesis on the reads file: stage `c₀ + i` reads the ports keying ring switch `i`'s columns** (`SelPort`, as
@@ -378,11 +381,11 @@ theorem rsSk_of_sel {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     (hsel : RsSel zs dg N k Rw sh w own sel c₀) : RsSk zs dg N k Rw sh w own sel c₀ := by
   intro i hi s un g hW
   obtain ⟨gs, j, p, hj, hpg, S0, S₁, ns, nv, q, t, e, b, hc, hO, hS, hg, hpart, he, hwi, hb, rfl⟩ := hW
-  obtain ⟨-, hcol, q', kk, hkk, hkey⟩ := openCopy_key hO hS hg hpg hpart he hb
+  obtain ⟨-, hcol, q', kk, hkk, hkey⟩ := openCopy_key hO hS hg hpg hpart he hwi hb
   rw [posK_of_keyAt un hj hcol hkk hkey hc]
   exact mem_skOf_inl.2 (hsel i hi gs s un j p hO hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey)
 
-/-- **The `rec-opening` unit reads its ring switches' columns** (named, S's `ReadCol`): at a copy registering w as
+/-- **The `rec-opening` unit reads its ring switches' columns** (S's `ReadCol`, `rsReadCol`): at a copy registering w as
 part `p`, a column of bit `b` of the part's row-port element `q` holding ring switch `i`'s slot `t`, an input column
 keyed at copy `j` by a bit of a row port `q'` (`openCopy_key`'s), is one a computed row of the unit reads. A part's
 other row-port columns need not be: touched ports bring whole ports into a part. -/
@@ -401,29 +404,37 @@ def RsReadCol (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j :
             .msg q'.val (kk / 8) (kk % 8) →
           ReadCol (Rows.ofNet (Vs s).hU) (rowCol (partRep ns nv).ports 0 (128 * q + b))
 
-/-- **`RsIo` from the unit reading its ring switches' columns** (`openCopy_key`, `mem_io_of_readCol`). -/
+/-- **The `rec-opening` unit reads its ring switches' columns** (`RsReadCol`): `OpenCopy` carries the opening's check,
+which refuses a unit reading an element of a claim's ring switch in fewer than 128 bits (`readCol_rsAt`). -/
+theorem rsReadCol {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
+    {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128} :
+    RsReadCol zs dg N k Rw sh w := by
+  intro i _ gs s un j p hO S0 hS hg hpg S₁ ns nv hpart q e t he hwi b hb _ _ _ _ _ _
+  obtain ⟨_, _, _, _, _, _, _, -, hz⟩ := hO
+  exact readCol_rsAt _ hz hS hg hpg hpart he hwi hb
+
+/-- **`RsIo` from the unit reading its ring switches' columns** (`openCopy_key`, `rsReadCol`, `mem_io_of_readCol`). -/
 theorem rsIo_of_readCol {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
-    {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}
-    (hr : RsReadCol zs dg N k Rw sh w) : RsIo zs dg N k Rw sh w := by
+    {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128} : RsIo zs dg N k Rw sh w := by
   intro i hi s un g hW
   obtain ⟨gs, j, p, hj, hpg, S0, S₁, ns, nv, q, t, e, b, hc, hO, hS, hg, hpart, he, hwi, hb, rfl⟩ := hW
-  obtain ⟨hq, hcol, q', kk, hkk, hkey⟩ := openCopy_key hO hS hg hpg hpart he hb
+  obtain ⟨hq, hcol, q', kk, hkk, hkey⟩ := openCopy_key hO hS hg hpg hpart he hwi hb
   exact mem_io_of_readCol un hj hcol
-    (hr i hi gs s un j p hO S0 hS hg hpg S₁ ns nv hpart q e t he hwi b hb hq hcol q' kk hkk hkey) hc
+    (rsReadCol i hi gs s un j p hO S0 hS hg hpg S₁ ns nv hpart q e t he hwi b hb hq hcol q' kk hkk hkey) hc
 
 /-- **R's ring switches are read at their rounds** (`RsRead`) from V*'s statements and sessions, the verifier's
-`rec-opening` check of one copy, V*'s sessions' copies at every part, the reads file at the ring switches' ports and
-the unit reading its row ports' columns. -/
+`rec-opening` check of one copy, V*'s sessions' copies at every part and the reads file at the ring switches' ports. -/
 theorem rsRead_of_facts {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
     {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}
     {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs) (hst : SessStmt ish bind zs dg N k Rw)
-    (hall : OpenAll zs dg N k Rw sh w) (hsel : RsSel zs dg N k Rw sh w own sel c₀)
-    (hr : RsReadCol zs dg N k Rw sh w) : RsRead zs dg N k Rw sh w own sel c₀ :=
-  rsRead_of_layer (oneCopy_of hob hst) hall (rsSk_of_sel hsel) (rsIo_of_readCol hr)
+    (hall : OpenAll zs dg N k Rw sh w) (hsel : RsSel zs dg N k Rw sh w own sel c₀) :
+    RsRead zs dg N k Rw sh w own sel c₀ :=
+  rsRead_of_layer (oneCopy_of hob hst) hall (rsSk_of_sel hsel) rsIo_of_readCol
 
 /-! ## `RsSel` at the round commitments -/
 
@@ -529,9 +540,8 @@ theorem rsRead_of_accepted {xR : HoloReg GF128 Dig} {F : C3Family T CT st hp xR 
     {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → Array F128}
     {own : Fin (vstarCount F.ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
     (hall : OpenAll F.zs dg N k Rw sh w) (hk : RsKeys F.zs dg N k Rw sh w)
-    (hr : RoundReads F.zs dg N k Rw sh w own sel c₀) (hrc : RsReadCol F.zs dg N k Rw sh w) :
-    RsRead F.zs dg N k Rw sh w own sel c₀ :=
-  rsRead_of_facts F.hob (sessStmt_of_accepted hca hF) hall (rsSel_of_rounds hk hr) hrc
+    (hr : RoundReads F.zs dg N k Rw sh w own sel c₀) : RsRead F.zs dg N k Rw sh w own sel c₀ :=
+  rsRead_of_facts F.hob (sessStmt_of_accepted hca hF) hall (rsSel_of_rounds hk hr)
 
 /-- **R's ring switches are read at their rounds at the checked family** (`C3Family.checked`, `rsRead_of_accepted`):
 the checked sessions pass the verifier's checks (`checksAccepted_checked`) and carry the prover's inputs
@@ -553,9 +563,7 @@ theorem rsRead_checked {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
     (hk : RsKeys (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs
       dg N k Rw sh w)
     (hr : RoundReads (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs
-      dg N k Rw sh w own sel c₀)
-    (hrc : RsReadCol (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs
-      dg N k Rw sh w) :
+      dg N k Rw sh w own sel c₀) :
     RsRead (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs
       dg N k Rw sh w own sel c₀ :=
   rsRead_of_accepted
@@ -563,7 +571,7 @@ theorem rsRead_checked {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
     FlockC3.PubRows.checksAccepted_checked
     (tagsFound_checked (ish := ish) (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2)
       (bind := bind) (rows := rows) (hC := hCust) (h := h) hF)
-    hall hk hr hrc
+    hall hk hr
 
 /-- **R's opening's committed rounds at the checked family** (`OpenMsgsRead`, `openMsgsRead_of_layer`): the sparse
 phases' part ends at `c₀` coins (`PartEnds`), R's opening is tied to V*'s layers (`OpenTieL`), and its ring switches are
@@ -601,12 +609,10 @@ theorem openMsgsRead_checked {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss
     (hk : RsKeys (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs
       dg N k Rw sh w)
     (hr : RoundReads (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs
-      dg N k Rw sh w own sel c₀)
-    (hrc : RsReadCol (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs
-      dg N k Rw sh w) :
+      dg N k Rw sh w own sel c₀) :
     OpenMsgsRead (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs
       dg N k Rw src own sel :=
-  openMsgsRead_of_layer he htie (rsRead_checked hF hall hk hr hrc)
+  openMsgsRead_of_layer he htie (rsRead_checked hF hall hk hr)
 
 end
 

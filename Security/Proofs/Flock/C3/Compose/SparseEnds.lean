@@ -183,7 +183,7 @@ open FlockC3.Sparse (SparseTie SrcSparseTie sparseKinds)
 open FlockVBridge.InnerAccepts (firstSteps)
 open FlockVBridge (keyInst)
 open FlockVBridge.Family (skOf maskOf)
-open FlockVBridge.OfVStar (OpeningZeroAt rowCol partRep fill_rowCol part_eqOpening wIdx_size)
+open FlockVBridge.OfVStar (OpeningZeroAtL rowCol partRep fill_rowCol readCol_rsAt part_eqOpening wIdx_size)
 open FlockVBridge.PartS (wIdx)
 
 /-- **The sparse phases' part's coins**: the points', two reps' at the class's statement, extra claims (two per
@@ -242,13 +242,14 @@ theorem partEnds_sparse
 /-! ## R's ring switches read at their rounds -/
 
 /-- **A copy of the `rec-opening` unit registering w at an accepted outer proof**: copy `j` of unit `un` in session `s`
-is part `p` of the groups `gs` of the opening at `sh`, its row ports w's (`OpeningZeroAt`, `RsAt`'s copy). -/
+is part `p` of the groups `gs` of the opening at `sh`, its row ports w's where they are read (`OpeningZeroAtL`, `RsAt`'s
+copy). -/
 def OpenCopy (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128)
     (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (s : Fin S) (un : Fin (Vs s).nv) (j p : ℕ) : Prop :=
   ∃ R ω t R₂ τ o v, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o ∧
-    OpeningZeroAt (zs R ω t R₂ s) (layers zs dg N k Rw R ω t R₂ τ s) un j sh gs p
+    OpeningZeroAtL (zs R ω t R₂ s) (layers zs dg N k Rw R ω t R₂ τ s) un j sh gs p
       (RecAlgebra.el (w R ω t (layers zs dg N k Rw R ω t R₂ τ))) v
 
 /-- **One copy of each part's `rec-opening` unit at `sh`** (named): the copies registering w at accepted outer proofs
@@ -269,7 +270,7 @@ def OpenAll (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : F
     ∀ (S0 : RecAlgebra.GfS) gs, RecOpening.structureOf sh = .ok S0 →
       Flock.RecResiduals.groups S0 (RecOpening.portSizes sh) = .ok gs → ∀ p < gs.size,
         ∃ (s : Fin S) (un : Fin (Vs s).nv) (j : ℕ) (v : ℕ → F128),
-          OpeningZeroAt (zs R ω t R₂ s) (layers zs dg N k Rw R ω t R₂ τ s) un j sh gs p
+          OpeningZeroAtL (zs R ω t R₂ s) (layers zs dg N k Rw R ω t R₂ τ s) un j sh gs p
             (RecAlgebra.el (w R ω t (layers zs dg N k Rw R ω t R₂ τ))) v
 
 /-- **A wire of ring switch `i`'s columns**: at a copy of the `rec-opening` unit registering w, part `p` of the groups
@@ -307,7 +308,8 @@ def RsIo (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin 
 
 /-- **R's ring switches are read at their rounds** (`RsRead`): each run's ring switch is w's at its slots
 (`eq_of_rsAt`); the second run has a copy at the first's part (`OpenAll`), which is the first's copy (`OneCopy`), so a
-bit of w's element there is the filled layer's at one wire in both (`fill_rowCol`, `copyVal_input`), the layer's there,
+bit of w's element there, which the copy reads (`readCol_rsAt`), is the filled layer's at one wire in both
+(`fill_rowCol`, `copyVal_input`), the layer's there,
 the layers being good (`fill_io`), and a read wire of stage `c₀ + i`'s commit strings (`RsSk`, `RsIo`). -/
 theorem rsRead_of_layer
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
@@ -339,7 +341,8 @@ theorem rsRead_of_layer
   refine FlockVBridge.AccChain.eq_of_bitOf fun b hb₀ => ?_
   obtain ⟨-, hns, -⟩ := part_eqOpening hS hg hpg hpart
   have hq : k₀ + tt.val < ns.sum := by rw [hns, ← wIdx_size]; exact hk
-  obtain ⟨hcn, -⟩ := hw (128 * (k₀ + tt.val) + b) (by omega)
+  have hrd := readCol_rsAt (zs R ω t R₂ s) hz hS hg hpg hpart he hwi hb₀
+  obtain ⟨hcn, -⟩ := hw (128 * (k₀ + tt.val) + b) (by omega) hrd
   have hcw : rowCol (partRep ns nv).ports 0 (128 * (k₀ + tt.val) + b) < (Rows.ofNet (Vs s).hU).w := by
     simp only [Rows.w]; omega
   obtain ⟨g, hgd⟩ : ∃ g : Fin (Layout.keyN (Vs s).c (Vs s).hU (Vs s).nv),
@@ -354,8 +357,8 @@ theorem rsRead_of_layer
     · exact h
     · exact (hC ⟨hsk i hi s un g hW, un, hio i hi s un g hW⟩).elim
   subst hgd
-  rw [RecAlgebra.getElem!_el, RecAlgebra.getElem!_el, ← hke, ← fill_rowCol _ hz hj hS hg hpg hpart hk hb₀,
-    ← fill_rowCol _ hz₂ hj hS hg hpg hpart hk hb₀]
+  rw [RecAlgebra.getElem!_el, RecAlgebra.getElem!_el, ← hke, ← fill_rowCol _ hz hj hS hg hpg hpart hk hb₀ hrd,
+    ← fill_rowCol _ hz₂ hj hS hg hpg hpart hk hb₀ hrd]
   refine (FlockVBridge.copyVal_input _ _ hj hcn).trans (Eq.trans ?_ (FlockVBridge.copyVal_input _ _ hj hcn).symm)
   exact (FlockVBridge.Decode.fill_io _ hAg (hio i hi s un _ hW)).trans
     (hm.trans (FlockVBridge.Decode.fill_io _ hAg' (hio i hi s un _ hW)).symm)
