@@ -1,4 +1,5 @@
 import Proofs.Flock.C3.Reps.IoCols
+import Proofs.Flock.C3.Reps.RepCoins
 import Proofs.Flock.C3.Sparse.MsgsRead
 
 /-!
@@ -21,9 +22,14 @@ Stage `s`'s keys for rep `ρ` are the keys of the messages rep `ρ` sends at sta
   count fixed by `extraClaims_length`), so `tsRead_repsOfVals` gives `TsRead` there from the lengths, `MsgsOfKeys` and
   `WColsAt`.
 * The slices, at `ValsSrc`'s values: a rep's first `m_z − 4` messages, the zerocheck's, read only `zcKeys`
-  (`unitMsgs_zc_read`), and its next `k_log − 4`, the lincheck's with `h`, only `lcKeys` at a holo shape
-  (`unitMsgs_lc_read`). No key of either is `.cons`, so `rep₀`'s consistency sums stand in for the rep's
-  (`valOf_cons_irrel`).
+  (`unitMsgs_zc_read`), its next `k_log − 4`, the lincheck's with `h`, only `lcKeys` at a holo shape
+  (`unitMsgs_lc_read`), and its next `2 + n_X`, the ring switches', only `rsKeys` (`unitMsgs_rs_read`). No key of
+  any is `.cons`, so `rep₀`'s consistency sums stand in for the rep's (`valOf_cons_irrel`).
+* `wColsAt_of_w`: `WColsAt` from L's side of the decoder (`WDecodes`: `rep₀` reads each element of `w` off columns),
+  S's reads file per key (`WSel`, `SelPort`) and the keys being elements of `w` (`WKeys`, `valOf_w`).
+* At `ValsSrc`'s values: `hb_of_shape` gives `tsRead_valsSrc`' `hb` from V*'s shape; a constant source cap gives
+  `CapRead` (`capRead_of_const`, reading no history) and the cap tie (`capTie_vals`); `RepsDrawn` at the identity `ix`
+  is a statement on `b` alone (`DrawnOf`, `repsDrawn_valsSrc`), the rep's consumed rounds `repIdxB` starting at 0.
 -/
 
 namespace FlockC3.Reps
@@ -94,6 +100,19 @@ theorem unitCoins_length (S : Model.Statement) {v v' : UnitVals} (hk : v.t.k = v
     (h₄ : v.t₄.k = v'.t₄.k) : (unitCoins S v).length = (unitCoins S v').length := by
   simp only [unitCoins, consumed, List.length_map, List.length_append, List.length_range', hk, hst, h₄]
 
+/-- **A rep's messages' count** reads only its setup's `m` and `k_log` and its schedule. -/
+theorem unitMsgs_length_of (nX : ℕ) {sh sh' : Flock.Shape} {d d' : FlockVBridge.Compiled.RepData}
+    {v v' : UnitVals} (hm : v.st.m = v'.st.m) (hk : v.st.kLog = v'.st.kLog) (hs : v.sch = v'.sch) :
+    (unitMsgs nX sh d v).length = (unitMsgs nX sh' d' v').length := by
+  simp only [unitMsgs, holoRepMsgs, holoLcMsgs, zcMsgs, lcMsgs, opMsgs, List.length_append, List.length_cons,
+    List.length_map, List.length_range, List.length_nil, hm, hk, hs,
+    ligMsgs_length v.p.ligerito v'.p.ligerito capDig capDig v'.sch]
+
+/-- **A rep's coins' count** reads only its setup's `m` and its transcripts' rounds. -/
+theorem unitCoins_length_of (S : Model.Statement) {v v' : UnitVals} (hk : v.t.k = v'.t.k) (hm : v.st.m = v'.st.m)
+    (h₄ : v.t₄.k = v'.t₄.k) : (unitCoins S v).length = (unitCoins S v').length := by
+  simp only [unitCoins, consumed, List.length_map, List.length_append, List.length_range', hk, hm, h₄]
+
 end unit
 
 open Flock
@@ -132,7 +151,7 @@ section slices
 
 universe u
 
-open FlockSoundness.Refine (zcMsgs lcMsgs holoLcMsgs holoRepMsgs vecOf pairOf fOf)
+open FlockSoundness.Refine (zcMsgs lcMsgs holoLcMsgs holoRepMsgs opMsgs vecOf pairOf fOf)
 open FlockVBridge.Compiled (RepData)
 
 theorem list3_get {α : Type u} {a a' z z' : α} {f f' : ℕ → α} {n m : ℕ} (h0 : m = 0 → a = a')
@@ -212,6 +231,23 @@ theorem pairs_read {K L F : Type} [Inhabited F] (var : K → L) (eval : (K → F
       (h hi).1, (h hi).2]
   · simp only [getElem!_def, Array.getElem?_map, Array.getElem?_range, hi, ↓reduceIte, Option.map_none]
 
+/-- **An evaluated row of variables reads only its keys.** -/
+theorem rows_read {K L F : Type} (var : K → L) (eval : (K → F) → L → F) (heval : ∀ v k, eval v (var k) = v k)
+    (n c i : ℕ) (key : ℕ → ℕ → K) {v v' : K → F} (h : ∀ j < c, v (key i j) = v' (key i j)) :
+    (((Array.range n).map fun k => (Array.range c).map (var ∘ key k)).map (·.map (eval v)))[i]! =
+      (((Array.range n).map fun k => (Array.range c).map (var ∘ key k)).map (·.map (eval v')))[i]! := by
+  by_cases hi : i < n
+  · simp only [getElem!_def, Array.getElem?_map, Array.getElem?_range, hi, ↓reduceIte, Option.map_some]
+    exact vars_read var eval heval c (key i) h
+  · simp only [getElem!_def, Array.getElem?_map, Array.getElem?_range, hi, ↓reduceIte, Option.map_none]
+
+theorem map_range_get {α : Type u} {f f' : ℕ → α} {n m : ℕ} (h : m < n → f m = f' m) :
+    ((List.range n).map f)[m]? = ((List.range n).map f')[m]? := by
+  rcases Nat.lt_or_ge m n with hm | hm
+  · rw [List.getElem?_map, List.getElem?_map, List.getElem?_range hm, Option.map_some, Option.map_some, h hm]
+  · rw [List.getElem?_eq_none (by rw [List.length_map, List.length_range]; exact hm),
+      List.getElem?_eq_none (by rw [List.length_map, List.length_range]; exact hm)]
+
 /-- **A key that is not a consistency sum reads no consistency sum.** -/
 theorem valOf_cons_irrel (sh : Flock.Shape) (w comb : Array F128) (c c' : ℕ → ℕ → F128)
     {x : Flock.RecAlgebra.Key} (hx : ∀ ℓ l, x ≠ .cons ℓ l) :
@@ -219,6 +255,22 @@ theorem valOf_cons_irrel (sh : Flock.Shape) (w comb : Array F128) (c c' : ℕ �
   cases x with
   | cons ℓ l => exact absurd rfl (hx ℓ l)
   | _ => rfl
+
+/-- **A key `w` holds is its element of `w`**: not a ring switch's transpose, a comb element or a consistency sum. -/
+theorem valOf_w {sh : Flock.Shape} {w comb : Array F128} {c : ℕ → ℕ → F128} {x : Flock.RecAlgebra.Key} {i : ℕ}
+    (hi : Flock.RecAlgebra.wi sh x = some i) (h₁ : ∀ k u, x ≠ .rsT k u) (h₂ : ∀ l, x ≠ .comb l)
+    (h₃ : ∀ ℓ l, x ≠ .cons ℓ l) : Flock.RecAlgebra.valOf sh w comb c x = w[i]! := by
+  have e : Flock.RecAlgebra.valOf sh w comb c x =
+      match Flock.RecAlgebra.wi sh x with
+      | some j => w[j]!
+      | none => 0 := by
+    cases x with
+    | rsT k u => exact absurd rfl (h₁ k u)
+    | comb l => exact absurd rfl (h₂ l)
+    | cons ℓ l => exact absurd rfl (h₃ ℓ l)
+    | _ => rfl
+  rw [e]
+  simp only [hi]
 
 /-- The keys of the zerocheck's message `m` at `m_z` variables: `(ab, c)`, round `m − 1`'s `(g1, ginf)`, then
 `(fa, fb)`. -/
@@ -402,6 +454,68 @@ theorem unitMsgs_lc_read (nX : ℕ) {sh : Flock.Shape} (hh : sh.holo = true) {b 
     (valOf_cons_irrel sh d.w d.comb d.cons (fun _ _ => 0) (lcKeys_noCons hx)).trans
       ((h x hx (lcKeys_noCons hx)).trans (valOf_cons_irrel sh d'.w d'.comb (fun _ _ => 0) d'.cons (lcKeys_noCons hx)))
 
+/-- The keys of ring switch `k`'s message: its 128 words. -/
+def rsKeys (k : ℕ) : List Flock.RecAlgebra.Key := (List.range 128).map (.rs k)
+
+theorem rsKeys_noCons {k : ℕ} {x : Flock.RecAlgebra.Key} (hx : x ∈ rsKeys k) : ∀ ℓ l, x ≠ .cons ℓ l := by
+  rintro ℓ l rfl
+  simp [rsKeys] at hx
+
+/-- **Ring switch `k`'s message of G's proof file reads only `rsKeys k`.** -/
+theorem opMsgs_read (n : ℕ) (sh : Flock.Shape) {params params' : Flock.PcsParams} {cap cap' : Array ByteArray}
+    {lig lig' : Flock.LigeritoProof} {d d' : RepData} (k : ℕ)
+    (h : ∀ x ∈ rsKeys k,
+      Flock.RecAlgebra.valOf sh d.w d.comb d.cons x = Flock.RecAlgebra.valOf sh d'.w d'.comb d'.cons x) :
+    (opMsgs n (FlockVBridge.Family.proofOf sh params cap lig d).ringSwitches)[k]? =
+      (opMsgs n (FlockVBridge.Family.proofOf sh params' cap' lig' d').ringSwitches)[k]? := by
+  have hrs : (RecAlgebra.decoded sh d.w d.comb d.cons).rs[k]! = (RecAlgebra.decoded sh d'.w d'.comb d'.cons).rs[k]! :=
+    rows_read RecAlgebra.Lin.var RecAlgebra.Lin.eval RecAlgebra.Lin.eval_var sh.claims 128 k RecAlgebra.Key.rs
+      fun v hv => h _ (List.mem_map_of_mem (List.mem_range.2 hv))
+  unfold opMsgs
+  exact map_range_get fun _ => by
+    show (⟨_, vecOf 128 (RecAlgebra.decoded sh d.w d.comb d.cons).rs[k]!⟩ : FlockSoundness.Game.Msg) =
+      ⟨_, vecOf 128 (RecAlgebra.decoded sh d'.w d'.comb d'.cons).rs[k]!⟩
+    rw [hrs]
+
+theorem opMsgs_length (n : ℕ) (rs : Array (Array F128)) : (opMsgs n rs).length = n := by
+  rw [opMsgs, List.length_map, List.length_range]
+
+/-- **A rep's next `2 + n_X` messages are its ring switches'.** -/
+theorem unitMsgs_rs (nX : ℕ) (sh : Flock.Shape) (d : RepData) (v : UnitVals) {i k : ℕ}
+    (hi : i = v.st.m - 6 + 2 + (v.st.kLog - 6 + 2) + k) (hk : k < 2 + nX) :
+    (unitMsgs nX sh d v)[i]? = (opMsgs (2 + nX) v.p.ringSwitches)[k]? := by
+  have hz : (zcMsgs v.st.m v.p.zerocheck).length ≤ i := by rw [zcMsgs_length]; omega
+  have hz' : (holoLcMsgs v.st.kLog v.p.lincheck (RecAlgebra.hOfW sh d.w)).length ≤
+      i - (zcMsgs v.st.m v.p.zerocheck).length := by
+    rw [zcMsgs_length, holoLcMsgs_length]; omega
+  have hl : i - (zcMsgs v.st.m v.p.zerocheck).length -
+      (holoLcMsgs v.st.kLog v.p.lincheck (RecAlgebra.hOfW sh d.w)).length <
+        (opMsgs (2 + nX) v.p.ringSwitches).length := by
+    rw [zcMsgs_length, holoLcMsgs_length, opMsgs_length]; omega
+  have he : i - (zcMsgs v.st.m v.p.zerocheck).length -
+      (holoLcMsgs v.st.kLog v.p.lincheck (RecAlgebra.hOfW sh d.w)).length = k := by
+    rw [zcMsgs_length, holoLcMsgs_length]; omega
+  rw [unitMsgs, holoRepMsgs, List.append_assoc, List.append_assoc, List.getElem?_append_right hz,
+    List.getElem?_append_right hz', List.getElem?_append_left hl, he]
+
+/-- **The ring-switch slice at `ValsSrc`'s values**: a rep's message `m_z − 4 + k_log − 4 + k`, `k < 2 + n_X`, reads
+only `rsKeys k`, none a consistency sum. -/
+theorem unitMsgs_rs_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : RepData} (hst : b.st = b'.st) {k : ℕ}
+    (hk : k < 2 + nX)
+    (h : ∀ x ∈ rsKeys k, (∀ ℓ l, x ≠ .cons ℓ l) →
+      Flock.RecAlgebra.valOf sh d.w d.comb (fun _ _ => 0) x =
+        Flock.RecAlgebra.valOf sh d'.w d'.comb (fun _ _ => 0) x) :
+    (unitMsgs nX sh d (b.vals sh d))[b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + k]? =
+      (unitMsgs nX sh d' (b'.vals sh d'))[b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + k]? := by
+  rw [unitMsgs_rs nX sh d (b.vals sh d) (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + k) rfl hk,
+    unitMsgs_rs nX sh d' (b'.vals sh d') (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + k)
+      (congrArg (fun s : Flock.Setup => s.m - 6 + 2 + (s.kLog - 6 + 2) + k) hst) hk]
+  show (opMsgs (2 + nX) (FlockVBridge.Family.proofOf sh b.params b.cap b.lig d).ringSwitches)[k]? =
+    (opMsgs (2 + nX) (FlockVBridge.Family.proofOf sh b'.params b'.cap b'.lig d').ringSwitches)[k]?
+  exact opMsgs_read (2 + nX) sh k fun x hx =>
+    (valOf_cons_irrel sh d.w d.comb d.cons (fun _ _ => 0) (rsKeys_noCons hx)).trans
+      ((h x hx (rsKeys_noCons hx)).trans (valOf_cons_irrel sh d'.w d'.comb (fun _ _ => 0) d'.cons (rsKeys_noCons hx)))
+
 end slices
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -418,33 +532,37 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {dg : ByteArray → ByteArray} {N k Rw : ℕ}
   {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {stp : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-  {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-  {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+  {rep : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+  {vals : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
 /-! ## No `.cons` key: `AlphaRead` and `RowColsRead` vacuously -/
 
 /-- **`AlphaRead` where no stage's keys read a consistency sum.** -/
-theorem alphaRead_of_noCons (M : RepMaps stmt Vs sh) {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
+theorem alphaRead_of_noCons (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
+    {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
     (hK : ∀ s ρ ℓ l, ¬ K s ρ (.cons ℓ l)) : AlphaRead (st := st) (hp := hp) zs dg N k Rw own sel M K := by
   intro s ρ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ℓ l hk
   exact absurd hk (hK s ρ ℓ l)
 
 /-- **The forms a stage's sent keys read, at the decoder**: `formsRead_maps` at `sentK`, `AlphaRead` and `RowColsRead`
 vacuous there. -/
-theorem formsRead_sent (M : RepMaps stmt Vs sh) {σ : List Exec.Kind} {c₀ : ℕ} {keys : ℕ → List Flock.RecAlgebra.Key}
+theorem formsRead_sent (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) {σ : List Exec.Kind} {c₀ : ℕ}
+    {keys : ℕ → List Flock.RecAlgebra.Key}
     (hu : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
       ∀ (ρ : Fin 2), ∀ ℓ < sh.sched.levels.size,
       ∀ j < M.q ℓ, ∃ a cf A, FlockVBridge.Family.OpensAtL (Vs (M.sessO ℓ))
         (layers zs dg N k Rw R ω t R₂ τ (M.sessO ℓ)) (M.unO ℓ ρ j) (FlockVBridge.Family.cpO ℓ ρ j) (levelLanes sh ℓ)
         ((M.rows (layers zs dg N k Rw R ω t R₂ τ) ρ ℓ)[j]!) a cf A)
     (hwc : WCombRead (st := st) (hp := hp) zs dg N k Rw own sel M (sentK σ c₀ keys)) (s : ℕ) (ρ : Fin 2) :
-    ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun _ _ _ Lb _ _ _ Lb' =>
+    ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun R ω t Lb R' ω' t' Lb' =>
       ∀ f : Flock.RecAlgebra.Lin, LinReads f (sentK σ c₀ keys s ρ) →
-        Flock.RecAlgebra.Lin.eval (Flock.RecAlgebra.valOf sh (M.rep Lb ρ).w (M.rep Lb ρ).comb (M.rep Lb ρ).cons) f =
+        Flock.RecAlgebra.Lin.eval
+            (Flock.RecAlgebra.valOf sh (M.rep R ω t Lb ρ).w (M.rep R ω t Lb ρ).comb (M.rep R ω t Lb ρ).cons) f =
           Flock.RecAlgebra.Lin.eval
-            (Flock.RecAlgebra.valOf sh (M.rep Lb' ρ).w (M.rep Lb' ρ).comb (M.rep Lb' ρ).cons) f :=
+            (Flock.RecAlgebra.valOf sh (M.rep R' ω' t' Lb' ρ).w (M.rep R' ω' t' Lb' ρ).comb
+              (M.rep R' ω' t' Lb' ρ).cons) f :=
   formsRead_maps M hu hwc (M.rowColsRead_of_noCons sentK_noCons) (alphaRead_of_noCons M sentK_noCons) s ρ
 
 /-! ## `WCombRead` from the reads file -/
@@ -453,8 +571,8 @@ theorem formsRead_sent (M : RepMaps stmt Vs sh) {σ : List Exec.Kind} {c₀ : �
 `K s ρ` but the `.cons` keys, `rep₀` gives `x` the same value at any two layers agreeing on a set `C` of copy 0's
 columns of a unit `u` of a session `j`, each an input column a row reads (`IoColAt`), keyed by bit `kq` of a row port
 `q` that stage `s` reads (`SelPort`). -/
-def WColsAt (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) (M : RepMaps stmt Vs sh)
-    (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
+def WColsAt (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
+    (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
   ∀ s (ρ : Fin 2) x, K s ρ x → (∀ ℓ l, x ≠ .cons ℓ l) →
     ∃ (j : Fin S) (u : Fin (Vs j).nv) (hj : 0 < (Vs j).c.upv) (C : ℕ → Prop),
       (∀ c, C c → c < (Rows.ofNet (Vs j).hU).nIn ∧ IoColAt (Vs j) u c ∧
@@ -472,7 +590,7 @@ def WColsAt (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String 
 
 /-- **A stage key's value, from layers agreeing under the stage's mask**: each of its columns is the same in either
 layer as in its mask (`copyVal_maskOf`, the column at its port's commit string, `posK_of_key`). -/
-theorem valOf_of_mask {M : RepMaps stmt Vs sh} {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
+theorem valOf_of_mask {M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)} {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
     (hw : WColsAt own sel M K) {s : ℕ} {ρ : Fin 2} {x : Flock.RecAlgebra.Key} (hx : K s ρ x)
     (hnc : ∀ ℓ l, x ≠ .cons ℓ l) (Lb Lb' : (y : Fin S) → (Vs y).Bits)
     (he : maskOf Vs (skOf Vs own sel) s Lb = maskOf Vs (skOf Vs own sel) s Lb') :
@@ -492,17 +610,68 @@ theorem valOf_of_mask {M : RepMaps stmt Vs sh} {K : ℕ → Fin 2 → Flock.RecA
   rw [← hm Lb, ← hm Lb', he]
 
 /-- **`WCombRead` from the decoder's columns and the reads file.** -/
-theorem wCombRead_of {M : RepMaps stmt Vs sh} {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
+theorem wCombRead_of {M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)} {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
     (hw : WColsAt own sel M K) : WCombRead (st := st) (hp := hp) zs dg N k Rw own sel M K := by
   intro s ρ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hX x hx hnc
   exact valOf_of_mask hw hx hnc _ _ hX
 
+/-- **Hypothesis on the decoder (L's side): `rep₀` reads each element of `w` off input columns of one copy**: element
+`i` of rep `ρ`'s `w`, where a key names it, is the same at any two layers agreeing on a set `cols ρ i` of copy 0's
+columns of unit `un ρ i` of session `ses ρ i`, each an input column a row reads (`IoColAt`), keyed by bit `kq` of a row
+port `q`. -/
+def WDecodes (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) (ses : Fin 2 → ℕ → Fin S)
+    (un : (ρ : Fin 2) → (i : ℕ) → Fin (Vs (ses ρ i)).nv) (cols : Fin 2 → ℕ → ℕ → Prop) : Prop :=
+  ∀ (ρ : Fin 2) (x : Flock.RecAlgebra.Key) (i : ℕ), Flock.RecAlgebra.wi sh x = some i →
+    ∃ hj : 0 < (Vs (ses ρ i)).c.upv,
+      (∀ c, cols ρ i c → c < (Rows.ofNet (Vs (ses ρ i)).hU).nIn ∧ IoColAt (Vs (ses ρ i)) (un ρ i) c ∧
+        ∃ (q : Fin (Vs (ses ρ i)).c.ports.size) (kq : ℕ), kq < Layout.portRowW (Vs (ses ρ i)).c q ∧
+          Aliased.srcKey (Vs (ses ρ i)).c (0 * (Rows.ofNet (Vs (ses ρ i)).hU).nIn + c) = .msg q.val (kq / 8) (kq % 8)) ∧
+      ∀ Lb Lb' : (y : Fin S) → (Vs y).Bits,
+        (∀ c, cols ρ i c →
+          FlockVBridge.copyVal (FlockVBridge.keyInst (Vs (ses ρ i)).hU (Vs (ses ρ i)).nv
+              (Layout.outsOf (Vs (ses ρ i)).c (Vs (ses ρ i)).hU (Vs (ses ρ i)).nv) (un ρ i)) (Lb (ses ρ i)) hj c =
+            FlockVBridge.copyVal (FlockVBridge.keyInst (Vs (ses ρ i)).hU (Vs (ses ρ i)).nv
+              (Layout.outsOf (Vs (ses ρ i)).c (Vs (ses ρ i)).hU (Vs (ses ρ i)).nv) (un ρ i)) (Lb' (ses ρ i)) hj c) →
+        (M.rep₀ Lb ρ).w[i]! = (M.rep₀ Lb' ρ).w[i]!
+
+/-- **Hypothesis on the reads file (S's `SelPort`, per key)**: where stage `s`'s key `x` of rep `ρ` is element `i` of
+`w`, stage `s` reads every port keying a column of `cols ρ i`. -/
+def WSel (sh : Flock.Shape) (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
+    (ses : Fin 2 → ℕ → Fin S) (un : (ρ : Fin 2) → (i : ℕ) → Fin (Vs (ses ρ i)).nv) (cols : Fin 2 → ℕ → ℕ → Prop)
+    (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
+  ∀ s (ρ : Fin 2) x i, K s ρ x → (∀ ℓ l, x ≠ .cons ℓ l) → Flock.RecAlgebra.wi sh x = some i → ∀ c, cols ρ i c →
+    ∀ (q : Fin (Vs (ses ρ i)).c.ports.size) (kq : ℕ), kq < Layout.portRowW (Vs (ses ρ i)).c q →
+      Aliased.srcKey (Vs (ses ρ i)).c (0 * (Rows.ofNet (Vs (ses ρ i)).hU).nIn + c) = .msg q.val (kq / 8) (kq % 8) →
+        SelPort Vs own sel s (ses ρ i) (un ρ i) q
+
+/-- **Every stage key but the `.cons` keys is an element of `w`**: `w` names it, and it is not a ring switch's transpose
+or a comb element. -/
+def WKeys (sh : Flock.Shape) (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
+  ∀ s (ρ : Fin 2) x, K s ρ x → (∀ ℓ l, x ≠ .cons ℓ l) →
+    (∃ i, Flock.RecAlgebra.wi sh x = some i) ∧ (∀ k u, x ≠ .rsT k u) ∧ ∀ l, x ≠ .comb l
+
+/-- **`WColsAt` from the decoder's columns of `w` and the reads file per key**: each key's value is its element of `w`
+(`valOf_w`), which `rep₀` reads off `cols`. -/
+theorem wColsAt_of_w {M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)} {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
+    {ses : Fin 2 → ℕ → Fin S} {un : (ρ : Fin 2) → (i : ℕ) → Fin (Vs (ses ρ i)).nv} {cols : Fin 2 → ℕ → ℕ → Prop}
+    (hK : WKeys sh K) (hd : WDecodes M ses un cols) (hs : WSel sh own sel ses un cols K) : WColsAt own sel M K := by
+  intro s ρ x hx hnc
+  obtain ⟨⟨i, hi⟩, h₁, h₂⟩ := hK s ρ x hx hnc
+  obtain ⟨hj, hc, hv⟩ := hd ρ x i hi
+  refine ⟨ses ρ i, un ρ i, hj, cols ρ i, fun c hcc => ?_, fun Lb Lb' he => ?_⟩
+  · obtain ⟨hn, hio, q, kq, hkq, hkey⟩ := hc c hcc
+    exact ⟨hn, hio, q, kq, hkq, hkey, hs s ρ x i hx hnc hi c hcc q kq hkq hkey⟩
+  · rw [valOf_w hi h₁ h₂ hnc, valOf_w hi h₁ h₂ hnc]
+    exact hv Lb Lb' he
+
 /-- **`WCombRead` reads `hOfW`'s entries at the `.h` keys** at a holo shape. -/
-theorem hOfW_read (hh : sh.holo = true) (M : RepMaps stmt Vs sh) {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
+theorem hOfW_read (hh : sh.holo = true) (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
+    {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
     (hwc : WCombRead (st := st) (hp := hp) zs dg N k Rw own sel M K) (i : ℕ) (ρ : Fin 2) :
-    ReadAt (st := st) (hp := hp) zs dg N k Rw own sel i fun _ _ _ Lb _ _ _ Lb' =>
+    ReadAt (st := st) (hp := hp) zs dg N k Rw own sel i fun R ω t Lb R' ω' t' Lb' =>
       ∀ l < 64, K i ρ (.h l) →
-        (Flock.RecAlgebra.hOfW sh (M.rep Lb ρ).w)[l]! = (Flock.RecAlgebra.hOfW sh (M.rep Lb' ρ).w)[l]! := by
+        (Flock.RecAlgebra.hOfW sh (M.rep R ω t Lb ρ).w)[l]! =
+          (Flock.RecAlgebra.hOfW sh (M.rep R' ω' t' Lb' ρ).w)[l]! := by
   intro R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX l hl hk
   rw [hOfW_valOf hh _ (M.rep₀ (layers zs dg N k Rw R ω t R₂ τ) ρ).comb (fun _ _ => 0) hl,
     hOfW_valOf hh _ (M.rep₀ (layers zs dg N k Rw R' ω' t' R₂' τ') ρ).comb (fun _ _ => 0) hl]
@@ -515,26 +684,28 @@ at every accepted outer proof. -/
 def WovenAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
-    (σ : List Exec.Kind) (ms cs : ((j : Fin S) → (Vs j).Bits) → Fin 2 → List Msg) (nm nc : Fin 2 → ℕ) : Prop :=
+    (σ : List Exec.Kind) (ms cs : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → List Msg)
+    (nm nc : Fin 2 → ℕ) : Prop :=
   ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ ρ : Fin 2,
     (src R ω t (layers zs dg N k Rw R ω t R₂ τ)).ts ρ =
-        weave σ (ms (layers zs dg N k Rw R ω t R₂ τ) ρ) (cs (layers zs dg N k Rw R ω t R₂ τ) ρ) ∧
-      (ms (layers zs dg N k Rw R ω t R₂ τ) ρ).length = nm ρ ∧ (cs (layers zs dg N k Rw R ω t R₂ τ) ρ).length = nc ρ
+        weave σ (ms R ω t (layers zs dg N k Rw R ω t R₂ τ) ρ) (cs R ω t (layers zs dg N k Rw R ω t R₂ τ) ρ) ∧
+      (ms R ω t (layers zs dg N k Rw R ω t R₂ τ) ρ).length = nm ρ ∧
+        (cs R ω t (layers zs dg N k Rw R ω t R₂ τ) ρ).length = nc ρ
 
 /-- **Hypothesis: each message is read on its stage's commit strings**: at two accepted outer proofs whose layers agree
 under stage `s`'s mask, rep `ρ`'s messages at stage `s` are the same. -/
 def WeaveMsgsRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (own : Fin S → Array Flock.Registered.Port)
     (sel : ℕ → String → ℕ → Prop) (σ : List Exec.Kind) (c₀ : ℕ)
-    (ms : ((j : Fin S) → (Vs j).Bits) → Fin 2 → List Msg) : Prop :=
-  ∀ s (ρ : Fin 2), ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun _ _ _ Lb _ _ _ Lb' =>
-    ∀ m, stageOf σ c₀ ρ m = s → (ms Lb ρ)[m]? = (ms Lb' ρ)[m]?
+    (ms : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → List Msg) : Prop :=
+  ∀ s (ρ : Fin 2), ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun R ω t Lb R' ω' t' Lb' =>
+    ∀ m, stageOf σ c₀ ρ m = s → (ms R ω t Lb ρ)[m]? = (ms R' ω' t' Lb' ρ)[m]?
 
 /-- **`TsRead` from the weave**: rep 0's coins are `coins₀` at the fixed lengths (`nCoins_weave`), and each rep's round
 is its messages of that round (`groups_weave`), each read on its stage. -/
 theorem tsRead_of_woven {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {σ : List Exec.Kind} {ms cs : ((j : Fin S) → (Vs j).Bits) → Fin 2 → List Msg} {nm nc : Fin 2 → ℕ}
-    (hw : WovenAt zs dg N k Rw src σ ms cs nm nc)
+    {σ : List Exec.Kind} {ms cs : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → List Msg}
+    {nm nc : Fin 2 → ℕ} (hw : WovenAt zs dg N k Rw src σ ms cs nm nc)
     (hr : WeaveMsgsRead (st := st) (hp := hp) zs dg N k Rw own sel σ (coins₀ σ (nm 0) (nc 0)) ms) :
     TsRead zs dg N k Rw src own sel := by
   intro i R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX
@@ -566,17 +737,19 @@ under stage `s`'s mask, rep `ρ`'s message `m` at stage `s` is the same where `r
 def MsgsOfKeys (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (own : Fin S → Array Flock.Registered.Port)
     (sel : ℕ → String → ℕ → Prop) (σ : List Exec.Kind) (c₀ : ℕ) (keys : ℕ → List Flock.RecAlgebra.Key)
-    (M : RepMaps stmt Vs sh) (ms : ((j : Fin S) → (Vs j).Bits) → Fin 2 → List Msg) : Prop :=
-  ∀ s (ρ : Fin 2), ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun _ _ _ Lb _ _ _ Lb' =>
+    (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
+    (ms : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → List Msg) : Prop :=
+  ∀ s (ρ : Fin 2), ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun R ω t Lb R' ω' t' Lb' =>
     ∀ m, stageOf σ c₀ ρ m = s →
       (∀ x ∈ keys m, (∀ ℓ l, x ≠ .cons ℓ l) →
         Flock.RecAlgebra.valOf sh (M.rep₀ Lb ρ).w (M.rep₀ Lb ρ).comb (fun _ _ => 0) x =
           Flock.RecAlgebra.valOf sh (M.rep₀ Lb' ρ).w (M.rep₀ Lb' ρ).comb (fun _ _ => 0) x) →
-      (ms Lb ρ)[m]? = (ms Lb' ρ)[m]?
+      (ms R ω t Lb ρ)[m]? = (ms R' ω' t' Lb' ρ)[m]?
 
 /-- **Each message is read on its stage**, from its keys' read at the stage (`WCombRead` at `sentK`). -/
 theorem weaveMsgsRead_of_keys {σ : List Exec.Kind} {c₀ : ℕ} {keys : ℕ → List Flock.RecAlgebra.Key}
-    {M : RepMaps stmt Vs sh} {ms : ((j : Fin S) → (Vs j).Bits) → Fin 2 → List Msg}
+    {M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)}
+    {ms : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → List Msg}
     (hk : MsgsOfKeys (st := st) (hp := hp) zs dg N k Rw own sel σ c₀ keys M ms)
     (hwc : WCombRead (st := st) (hp := hp) zs dg N k Rw own sel M (sentK σ c₀ keys)) :
     WeaveMsgsRead (st := st) (hp := hp) zs dg N k Rw own sel σ c₀ ms := by
@@ -594,14 +767,15 @@ def nXOf (st : Flock.Stmt) (hp : HoloParams) : ℕ :=
 /-- **At `repsOfVals` each rep's steps are `unitWeave`'s weave**, along a shape its extra claims' points don't change. -/
 theorem wovenAt_repsOfVals {nm nc : Fin 2 → ℕ}
     (hlen : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ ρ : Fin 2,
-      (unitMsgs (nXOf st hp) sh (rep (layers zs dg N k Rw R ω t R₂ τ) ρ)
-          (vals (layers zs dg N k Rw R ω t R₂ τ) ρ)).length = nm ρ ∧
+      (unitMsgs (nXOf st hp) sh (rep R ω t (layers zs dg N k Rw R ω t R₂ τ) ρ)
+          (vals R ω t (layers zs dg N k Rw R ω t R₂ τ) ρ)).length = nm ρ ∧
         (unitCoins ((holoAt st hp).cls.pubStatement (holoAt st hp).regs)
-          (vals (layers zs dg N k Rw R ω t R₂ τ) ρ)).length = nc ρ) :
+          (vals R ω t (layers zs dg N k Rw R ω t R₂ τ) ρ)).length = nc ρ) :
     WovenAt zs dg N k Rw (repsOfVals stp sh rep vals)
       (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
-      (fun Lb ρ => unitMsgs (nXOf st hp) sh (rep Lb ρ) (vals Lb ρ))
-      (fun Lb ρ => unitCoins ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals Lb ρ)) nm nc := by
+      (fun R ω t Lb ρ => unitMsgs (nXOf st hp) sh (rep R ω t Lb ρ) (vals R ω t Lb ρ))
+      (fun R ω t Lb ρ => unitCoins ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals R ω t Lb ρ))
+      nm nc := by
   intro R ω t R₂ τ o hA ρ
   refine ⟨?_, hlen R ω t R₂ τ o hA ρ⟩
   show unitWeave _ _ (Model.extraClaims _ _ _ (stp R ω t (layers zs dg N k Rw R ω t R₂ τ)).pts).length sh _ _ = _
@@ -610,16 +784,17 @@ theorem wovenAt_repsOfVals {nm nc : Fin 2 → ℕ}
 
 /-- **`TsRead` at `repsOfVals`**, from the reps' fixed lengths, the slices (`MsgsOfKeys`) and the decoder's columns at
 the sent keys (`WColsAt`). -/
-theorem tsRead_repsOfVals (M : RepMaps stmt Vs sh) {nm nc : Fin 2 → ℕ} {keys : ℕ → List Flock.RecAlgebra.Key}
+theorem tsRead_repsOfVals (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) {nm nc : Fin 2 → ℕ}
+    {keys : ℕ → List Flock.RecAlgebra.Key}
     (hlen : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ ρ : Fin 2,
-      (unitMsgs (nXOf st hp) sh (M.rep (layers zs dg N k Rw R ω t R₂ τ) ρ)
-          (vals (layers zs dg N k Rw R ω t R₂ τ) ρ)).length = nm ρ ∧
+      (unitMsgs (nXOf st hp) sh (M.rep R ω t (layers zs dg N k Rw R ω t R₂ τ) ρ)
+          (vals R ω t (layers zs dg N k Rw R ω t R₂ τ) ρ)).length = nm ρ ∧
         (unitCoins ((holoAt st hp).cls.pubStatement (holoAt st hp).regs)
-          (vals (layers zs dg N k Rw R ω t R₂ τ) ρ)).length = nc ρ)
+          (vals R ω t (layers zs dg N k Rw R ω t R₂ τ) ρ)).length = nc ρ)
     (hk : MsgsOfKeys (st := st) (hp := hp) zs dg N k Rw own sel
       (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
       (coins₀ (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
-        (nm 0) (nc 0)) keys M (fun Lb ρ => unitMsgs (nXOf st hp) sh (M.rep Lb ρ) (vals Lb ρ)))
+        (nm 0) (nc 0)) keys M (fun R ω t Lb ρ => unitMsgs (nXOf st hp) sh (M.rep R ω t Lb ρ) (vals R ω t Lb ρ)))
     (hc : WColsAt own sel M (sentK
       (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
       (coins₀ (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
@@ -627,38 +802,89 @@ theorem tsRead_repsOfVals (M : RepMaps stmt Vs sh) {nm nc : Fin 2 → ℕ} {keys
     TsRead zs dg N k Rw (repsOfVals stp sh M.rep vals) own sel :=
   tsRead_of_woven (wovenAt_repsOfVals hlen) (weaveMsgsRead_of_keys hk (wCombRead_of hc))
 
-/-- **The reps' lengths at `ValsSrc.vals`** are `b₀`'s where `b`'s setup, schedule and closing round are `b₀`'s (the
-transcript starts at round 0 at either). -/
-theorem lengths_vals (nX : ℕ) (S₀ : Model.Statement) (b b₀ : ValsSrc) (d d₀ : RepData) (hst : b.st = b₀.st)
-    (hs : b.sch = b₀.sch) (h₄ : b.t₄.k = b₀.t₄.k) :
+/-- **The reps' lengths at `ValsSrc.vals`** are `b₀`'s where `b`'s setup's `m` and `k_log`, schedule and closing round
+are `b₀`'s (the transcript starts at round 0 at either). -/
+theorem lengths_vals (nX : ℕ) (S₀ : Model.Statement) (b b₀ : ValsSrc) (d d₀ : RepData) (hm : b.st.m = b₀.st.m)
+    (hk : b.st.kLog = b₀.st.kLog) (hs : b.sch = b₀.sch) (h₄ : b.t₄.k = b₀.t₄.k) :
     (unitMsgs nX sh d (b.vals sh d)).length = (unitMsgs nX sh d₀ (b₀.vals sh d₀)).length ∧
       (unitCoins S₀ (b.vals sh d)).length = (unitCoins S₀ (b₀.vals sh d₀)).length :=
-  ⟨unitMsgs_length nX (v := b.vals sh d) (v' := b₀.vals sh d₀) hst hs,
-    unitCoins_length S₀ (v := b.vals sh d) (v' := b₀.vals sh d₀) rfl hst h₄⟩
+  ⟨unitMsgs_length_of nX (v := b.vals sh d) (v' := b₀.vals sh d₀) hm hk hs,
+    unitCoins_length_of S₀ (v := b.vals sh d) (v' := b₀.vals sh d₀) rfl hm h₄⟩
 
 /-- **`TsRead` at `repsOfVals` of `ValsSrc`'s values**, `tsRead_repsOfVals` with the lengths `b₀`'s (`lengths_vals`),
-where every `b` has `b₀`'s setup, schedule and closing round. -/
-theorem tsRead_valsSrc (M : RepMaps stmt Vs sh) {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} (b₀ : ValsSrc)
-    (d₀ : RepData) {keys : ℕ → List Flock.RecAlgebra.Key}
-    (hb : ∀ Lb i, (b Lb i).st = b₀.st ∧ (b Lb i).sch = b₀.sch ∧ (b Lb i).t₄.k = b₀.t₄.k)
+where every `b` has `b₀`'s setup's `m` and `k_log`, schedule and closing round. -/
+theorem tsRead_valsSrc (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
+    {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} (b₀ : ValsSrc) (d₀ : RepData)
+    {keys : ℕ → List Flock.RecAlgebra.Key}
+    (hb : ∀ Lb i, (b Lb i).st.m = b₀.st.m ∧ (b Lb i).st.kLog = b₀.st.kLog ∧ (b Lb i).sch = b₀.sch ∧
+      (b Lb i).t₄.k = b₀.t₄.k)
     (hk : MsgsOfKeys (st := st) (hp := hp) zs dg N k Rw own sel
       (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
       (coins₀ (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
         (unitMsgs (nXOf st hp) sh d₀ (b₀.vals sh d₀)).length
         (unitCoins ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (b₀.vals sh d₀)).length) keys M
-      (fun Lb ρ => unitMsgs (nXOf st hp) sh (M.rep Lb ρ) ((b Lb ρ).vals sh (M.rep Lb ρ))))
+      (fun R ω t Lb ρ => unitMsgs (nXOf st hp) sh (M.rep R ω t Lb ρ) ((b Lb ρ).vals sh (M.rep R ω t Lb ρ))))
     (hc : WColsAt own sel M (sentK
       (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
       (coins₀ (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
         (unitMsgs (nXOf st hp) sh d₀ (b₀.vals sh d₀)).length
         (unitCoins ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (b₀.vals sh d₀)).length) keys)) :
-    TsRead zs dg N k Rw (repsOfVals stp sh M.rep fun Lb i => (b Lb i).vals sh (M.rep Lb i)) own sel :=
+    TsRead zs dg N k Rw (repsOfVals stp sh M.rep fun R ω t Lb i => (b Lb i).vals sh (M.rep R ω t Lb i)) own sel :=
   tsRead_repsOfVals M (nm := fun _ => (unitMsgs (nXOf st hp) sh d₀ (b₀.vals sh d₀)).length)
     (nc := fun _ => (unitCoins ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (b₀.vals sh d₀)).length)
     (fun R ω t R₂ τ o _ ρ => by
-      obtain ⟨h₁, h₂, h₃⟩ := hb (layers zs dg N k Rw R ω t R₂ τ) ρ
-      exact lengths_vals _ _ _ _ _ _ h₁ h₂ h₃)
+      obtain ⟨h₁, h₂, h₃, h₄⟩ := hb (layers zs dg N k Rw R ω t R₂ τ) ρ
+      exact lengths_vals _ _ _ _ _ _ h₁ h₂ h₃ h₄)
     hk hc
+
+/-- **`tsRead_valsSrc`' `hb` from V*'s shape**: where V*'s shape is every `b`'s setup's and schedule's and `b₀`'s
+(`ShapeIs`), and every `b` closes at `b₀`'s round. -/
+theorem hb_of_shape {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {b₀ : ValsSrc}
+    (h : ∀ Lb i, FlockVBridge.Family.ShapeIs sh (b Lb i).st (b Lb i).sch ∧ (b Lb i).t₄.k = b₀.t₄.k)
+    (h₀ : FlockVBridge.Family.ShapeIs sh b₀.st b₀.sch) :
+    ∀ Lb i, (b Lb i).st.m = b₀.st.m ∧ (b Lb i).st.kLog = b₀.st.kLog ∧ (b Lb i).sch = b₀.sch ∧
+      (b Lb i).t₄.k = b₀.t₄.k :=
+  fun Lb i => ⟨(h Lb i).1.1.symm.trans h₀.1, (h Lb i).1.2.1.symm.trans h₀.2.1, (h Lb i).1.2.2.symm.trans h₀.2.2,
+    (h Lb i).2⟩
+
+/-! ## The cap and the reps' draws at `ValsSrc`'s values -/
+
+/-- **`CapRead` where the source's cap is one constant** at every accepted outer proof: it reads no layer. -/
+theorem capRead_of_const {cap : Array ByteArray} (hcs : AtSrc zs dg N k Rw stp fun _ u => u.cap₀ = capDig cap) :
+    CapRead zs dg N k Rw stp own sel :=
+  fun R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' _ =>
+    Eq.trans (hcs R ω t R₂ τ o hA) (Eq.symm (hcs R' ω' t' R₂' τ' o' hA'))
+
+/-- **The cap tie at `ValsSrc`'s values** (`stepsOfVals_repsOfVals`' `hcap`): every `b`'s cap is `cap` (`proofOf`'s
+cap is `ValsSrc.cap`), and so is the source's. -/
+theorem capTie_vals {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {cap : Array ByteArray}
+    (hb : ∀ Lb i, (b Lb i).cap = cap) (hcs : AtSrc zs dg N k Rw stp fun _ u => u.cap₀ = capDig cap) :
+    AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
+      capDig ((b Lb i).vals sh (rep R ω t Lb i)).p.cap = (stp R ω t Lb).cap₀ :=
+  fun R ω t R₂ τ o hA i _ _ =>
+    Eq.trans (congrArg capDig ((cap_vals _ sh _).trans (hb (layers zs dg N k Rw R ω t R₂ τ) i)))
+      (Eq.symm (hcs R ω t R₂ τ o hA))
+
+/-- A rep's consumed rounds (`repIdx`) at `ValsSrc`'s values, which start at round 0: `b`'s alone. -/
+def repIdxB (S₀ : Model.Statement) (b : ValsSrc) : List ℕ :=
+  List.range' 0 (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6)) ++
+    List.range' (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6) + 1) (b.t₄.k - (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6) + 1))
+
+theorem repIdx_vals (S₀ : Model.Statement) (b : ValsSrc) (sh : Flock.Shape) (d : RepData) :
+    repIdx S₀ (b.vals sh d) = repIdxB S₀ b := rfl
+
+/-- **`RepsDrawn` on `b` alone**: at every layers, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed
+rounds) draws round `q` of stream `s i`, `q` the `p`-th of rep `i`'s (`repIdxB`), and those rounds are below `r`. -/
+def DrawnOf (S₀ : Model.Statement) (r : ℕ) (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc)
+    (selC : ℕ → String → ℕ → Prop) (s : Fin 2 → String) : Prop :=
+  ∀ Lb i, repStart (repIdxB S₀ (b Lb 0)).length i + (repIdxB S₀ (b Lb i)).length ≤ r ∧
+    ∀ p q, (repIdxB S₀ (b Lb i))[p]? = some q → selC (repStart (repIdxB S₀ (b Lb 0)).length i + p) (s i) q
+
+/-- **`RepsDrawn` at `ValsSrc`'s values and the identity `ix`** (`repRoundsHeld_of_rounds`'), from `DrawnOf`. -/
+theorem repsDrawn_valsSrc {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {selC : ℕ → String → ℕ → Prop}
+    {s : Fin 2 → String} (h : DrawnOf ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) r b selC s) :
+    RepsDrawn zs dg N k Rw sh rep (fun R ω t Lb i => (b Lb i).vals sh (rep R ω t Lb i)) selC s fun _ q => q :=
+  fun R ω t R₂ τ _ _ i _ _ => h (layers zs dg N k Rw R ω t R₂ τ) i
 
 end
 
@@ -701,3 +927,19 @@ end FlockC3.Reps
 #print axioms FlockC3.Reps.holoLcMsgs_length
 #print axioms FlockC3.Reps.unitMsgs_lc
 #print axioms FlockC3.Reps.unitMsgs_lc_read
+#print axioms FlockC3.Reps.unitMsgs_length_of
+#print axioms FlockC3.Reps.unitCoins_length_of
+#print axioms FlockC3.Reps.rows_read
+#print axioms FlockC3.Reps.map_range_get
+#print axioms FlockC3.Reps.valOf_w
+#print axioms FlockC3.Reps.rsKeys_noCons
+#print axioms FlockC3.Reps.opMsgs_read
+#print axioms FlockC3.Reps.opMsgs_length
+#print axioms FlockC3.Reps.unitMsgs_rs
+#print axioms FlockC3.Reps.unitMsgs_rs_read
+#print axioms FlockC3.Reps.wColsAt_of_w
+#print axioms FlockC3.Reps.hb_of_shape
+#print axioms FlockC3.Reps.capRead_of_const
+#print axioms FlockC3.Reps.capTie_vals
+#print axioms FlockC3.Reps.repIdx_vals
+#print axioms FlockC3.Reps.repsDrawn_valsSrc
