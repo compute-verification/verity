@@ -1744,14 +1744,14 @@ __global__ void __launch_bounds__(128) rc_a_kernel(const uint8_t *__restrict__ b
   kRcA[g][kk][lane] = make_uint4(pm(lo), pm(hi), pm(lo >> 4), pm(hi >> 4));
 }
 
-__device__ __forceinline__ uint4 be_pair(u64 x, u64 y) {
-  return make_uint4(__byte_perm((u32)(x >> 32), 0, 0x0123), __byte_perm((u32)x, 0, 0x0123),
-                    __byte_perm((u32)(y >> 32), 0, 0x0123), __byte_perm((u32)y, 0, 0x0123));
+__device__ __forceinline__ uint4 u64_pair(u64 x, u64 y) {
+  return make_uint4((u32)x, (u32)(x >> 32), (u32)y, (u32)(y >> 32));
 }
 
 // Form 13's receipts of one layer: slot u's σ is the sum of its KV_HEADS shares in sk (16 int32 each, kv_attn form
 // 13), and its receipt SHA512(P ‖ u64be(jbase + u layers + layer) ‖ σ as 16 int32 LE), one compression from P's
-// midstate kKvMid (kv_rc_pass), 64 bytes at tags[16 (u layers + layer)]. Lanes 2a and 2a + 1 hash slots u and u + 1
+// midstate kKvMid (kv_rc_pass), its 8 state words as u64 at tags[16 (u layers + layer)] (wt.cu's receipts' layout,
+// which reader.cu's leaves read). Lanes 2a and 2a + 1 hash slots u and u + 1
 // and store their receipts' four sectors together, a 16-byte half each, so each store writes whole 32-byte sectors.
 __global__ void __launch_bounds__(128) rc_receipt_kernel(const int *__restrict__ sk, u32 *__restrict__ tags, u64 n,
                                                          int layers, int layer, u64 jbase) {
@@ -1800,12 +1800,12 @@ __global__ void __launch_bounds__(128) rc_receipt_kernel(const int *__restrict__
       const int c = s & 1, r = s >> 1;
       const bool own = r == odd;
       *reinterpret_cast<uint4 *>(r0 + 16 * (u64)layers * r + 8 * c + 4 * odd) =
-          be_pair(own ? mine[2 * c] : got[2 * c], own ? mine[2 * c + 1] : got[2 * c + 1]);
+          u64_pair(own ? mine[2 * c] : got[2 * c], own ? mine[2 * c + 1] : got[2 * c + 1]);
     }
   } else {
     uint4 *o = reinterpret_cast<uint4 *>(tags + 16 * (u * layers + layer));
 #pragma unroll
-    for (int i = 0; i < 4; ++i) o[i] = be_pair(h[2 * i], h[2 * i + 1]);
+    for (int i = 0; i < 4; ++i) o[i] = u64_pair(h[2 * i], h[2 * i + 1]);
   }
 }
 
@@ -2292,7 +2292,7 @@ void kv_rc_shape(int *out) {
 
 // Form 13's pass: its sign bits (16 rows of 4,096, row c's 512 bytes at bits[128 c ..], bit u of byte u / 8 set for
 // −1: wt.cu's wt_pass signs in a WT_RECEIPT build, sketch_receipt.sign_words) as kRcA, and its receipt prefix's
-// midstate (8 u64 on the device: wt.cu's wt_pass_mid) into kKvMid, both on stream s.
+// midstate (8 u64 on the device: wt.cu's g_pass.leafmid, wt_pass_ptrs' out[1]) into kKvMid, both on stream s.
 int kv_rc_pass(const uint32_t *bits, const uint64_t *mid, cudaStream_t s) {
   if (!kv::RC3_OK) return -2;
   if (!bits || !mid) return -1;

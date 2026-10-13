@@ -5,9 +5,6 @@
 // kv_append writes `batch` sequences' new token at slot t, layers l0 .. l0 + nl - 1, into the cache in kv_attn's layout:
 // encoded at k rounds (word w of token-layer (b ctx + t) layers + l at index (((b ctx + t) layers + l) TLW + w)), or
 // plain at k = 0. `in` holds the tokens' plain words, [batch][nl][TLW] of NL limbs.
-//
-// kv_rc_sha8_at is kv_rc_sha8 at receipt indices jbase .. jbase + n - 1 into `tags` (64 bytes each): the step's layers
-// take turns in kv_rc_buffers' sketches, and their receipts follow the weights' in the pass's one receipt buffer.
 #include "../word_codec/kv.cu"
 
 namespace kv {
@@ -51,11 +48,5 @@ extern "C" int kv_append(const void *in, void *cache, int batch, int ctx, int la
   const unsigned long long words = (unsigned long long)batch * nl * kv::TLW;
   kv::append_kernel<<<(unsigned)((words + kv::APPEND_THREADS - 1) / kv::APPEND_THREADS), kv::APPEND_THREADS, 0, s>>>(
       static_cast<const uint32_t *>(in), static_cast<uint32_t *>(cache), batch, ctx, layers, l0, nl, t, k);
-  return launched();
-}
-
-extern "C" int kv_rc_sha8_at(uint32_t *tags, uint64_t n, uint64_t jbase, cudaStream_t s) {
-  if (!rc_sk || !tags) return -1;
-  kv::rc_sha8_kernel<<<(unsigned)((n + 63) / 64), 64, 0, s>>>(rc_sk, tags, n, jbase);
   return launched();
 }

@@ -99,6 +99,7 @@ class Lib:
         so.wt_pass.argtypes = [ctypes.c_uint, v, v, i, v]
         so.wt_sign_frags.argtypes = [v, v, i, v]
         so.wt_pass_state.argtypes = [v]
+        so.wt_pass_ptrs.argtypes = [v]
         so.wt_sketch_vectors.argtypes = [i, i, i, i]
         so.wt_sketch_vectors.restype = q
         so.wt_set_tag.argtypes = [v, v]
