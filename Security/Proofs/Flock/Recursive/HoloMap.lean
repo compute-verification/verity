@@ -102,13 +102,4 @@ noncomputable def holoMap (st : Flock.Stmt) (hp : HoloParams) (Cm : Type) (ish :
   points c := Array.ofFn fun a : Fin 2 => Array.ofFn fun b : Fin (holoAt st hp).cls.mPts =>
     GF128.val ((c ⟨0, by omega⟩ : Fin 2 → Fin (holoAt st hp).cls.mPts → GF128) a b)
 
-#print axioms HoloStream.idx
-#print axioms HoloStream.group
-#print axioms heldBefore
-#print axioms roundIn
-#print axioms roundAt
-#print axioms coinWords
-#print axioms roundWords
-#print axioms holoMap
-
 end Flock.Guarantees
