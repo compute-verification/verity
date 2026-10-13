@@ -645,3 +645,6 @@ theorem regCols_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
 end Keyed
 
 end FlockC3.RegLevels
+
+#print axioms FlockC3.RegLevels.checkAcc_of_checkStmt
+#print axioms FlockC3.RegLevels.acc_of_checkStmt

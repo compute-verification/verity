@@ -148,3 +148,7 @@ theorem holoSelOne_repName {ish : RecVStar.Inner} {tbl : String} {rs : Array Sch
   holoSelOne_rep hS (find?_repName tbl rs L i) hq
 
 end FlockC3.Compose
+
+#print axioms FlockC3.Compose.repName_ne
+#print axioms FlockC3.Compose.roundIn_cons_self
+#print axioms FlockC3.Compose.roundIn_cons_ne
