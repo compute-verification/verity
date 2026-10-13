@@ -134,22 +134,3 @@ theorem rsKeys_all {sh : Flock.Shape} {k : ℕ} (hk : k < sh.claims) : (rsKeys k
     exact wKey_of_mem (rs_mem hk (List.mem_range.1 hu)) (fun _ _ e => by cases e) fun _ e => by cases e
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.mem_wNames
-#print axioms FlockC3.Reps.wKey_of_mem
-#print axioms FlockC3.Reps.ab_mem
-#print axioms FlockC3.Reps.c_mem
-#print axioms FlockC3.Reps.g1_mem
-#print axioms FlockC3.Reps.ginf_mem
-#print axioms FlockC3.Reps.fa_mem
-#print axioms FlockC3.Reps.fb_mem
-#print axioms FlockC3.Reps.q1_mem
-#print axioms FlockC3.Reps.qinf_mem
-#print axioms FlockC3.Reps.zp_mem
-#print axioms FlockC3.Reps.h_mem
-#print axioms FlockC3.Reps.rs_mem
-#print axioms FlockC3.Reps.acc0_mem
-#print axioms FlockC3.Reps.acc1_mem
-#print axioms FlockC3.Reps.zcKeys_all
-#print axioms FlockC3.Reps.lcKeys_all
-#print axioms FlockC3.Reps.rsKeys_all
