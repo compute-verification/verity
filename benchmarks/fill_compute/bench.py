@@ -789,7 +789,7 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
     as long as the judged launch. Every kernel's launches are then repeated with the stop flag off (`variant: nostop`, each
     with its own controls), which no launch then reads: the chunked kernels' constant 2 sectors over their control follow
     the read of the pinned stop flag or they don't. `all`@128 runs 2 x SMs tiles (62 MB of outputs at 188 SMs) where the
-    others run 4 x SMs: at 123 MB a launch, half again the 128 MB L2, every kernel writes 9-13 sectors over its floor
+    others run 4 x SMs: at 123 MB a launch, about the 128 MB L2, every kernel writes 9-13 sectors over its floor
     whatever its tile (r20261013-030846-7784, ruling 03:30Z); `--l2-sweep` measures that effect."""
     f64 = random_filler(4096, 4096, 1024, qcap=4 * sms)
     lo = torch.cuda.Stream()
