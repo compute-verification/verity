@@ -12230,7 +12230,7 @@
    ]
   },
   "Flock.RecOpening": {
-   "digest": "21806d1a99c143a15402fa1618afee5be8e04bc02a203287c2ee3e1603f3edfe",
+   "digest": "4d8052d8b2e659ec31e47cfde31afc186c9aa25dec29c8834bbc97cd64e8d33f",
    "definitions": {
     "Flock.RecOpening.accTerms": "cf83e68f83f74ca25a9c5680b5fbbc9db61cf78eeb92268f6d5be87bc957af99",
     "Flock.RecOpening.atomTerm": "29c955bc5bef0dfce6a8fdda4ca7971fc7f4487ad03641e33d11a58c1f9d0061",
@@ -12238,7 +12238,7 @@
     "Flock.RecOpening.build": "1db2a971fc7e7002d4f3d28fdd76643aefdc6c2889f266dea0fc79174ef9b208",
     "Flock.RecOpening.buildAll": "63f8ff5f52e3c274e63c2c91795cb3f15fc10af84aa6b94775f43844a1cb74f0",
     "Flock.RecOpening.buildRes": "e501b31934d9ecef5e435154f8d9d82a788b5cb600abb07b9865f969fd34af45",
-    "Flock.RecOpening.check": "68b2010e892436f10d5ff3846d559c5f84e31f43226a65c4f4024225c7004e18",
+    "Flock.RecOpening.check": "3280ad960c77be8f7ca0e2deb2dd959bd7fef5e9ebfc2f8f865dec067e357d0d",
     "Flock.RecOpening.claimW": "0c4e3ccd74875b6f4f3d9c1ddcbf5d25b24725cfa3f188e22e548db6d4459928",
     "Flock.RecOpening.claimsLike": "3bb944a7f0e248c0a8614bbd2d150b16bc6f7710f78def235a4a6ec317de4225",
     "Flock.RecOpening.coefOps": "29682e62e6cd86d9827aa43e74077cc5c616183f3e344a3bd0541ec401690df4",
@@ -12255,8 +12255,8 @@
     "Flock.RecOpening.portSizes": "96e7de90921e440516603d393929d620a233349a1a7d0ee83eccc2bce0d1f288",
     "Flock.RecOpening.prodOps": "91cc4e851801e757f7d593396c31337562a77b7b910018c18d7e503b64b9eeac",
     "Flock.RecOpening.rounds": "d0841cbea6891e5c1893068e9c6c40a2a127051e5a3f151d168f4331e36d9c35",
-    "Flock.RecOpening.rsUnread": "100f90a56e66bcb3aaafd93545552a2e44a397451d501704d31740f4d04be002",
-    "Flock.RecOpening.rsUnread._sparseCasesOn_1": "cc72ff0fe928c32e1ef9b7a796ee0e4c1cb75439cc13a18cb5b29fe1016d7b49",
+    "Flock.RecOpening.rsUnread": "495a9af0b6f3cc4ef84ab28e41ab1c7daf43bf5034677dc5a25ed2f207b83452",
+    "Flock.RecOpening.rsUnread._sparseCasesOn_1": "a96362fe32080f6b97cd5abf8b827fc82d3c2baef76d547aebf77785fdd0c7cd",
     "Flock.RecOpening.run": "db53ecffac8d52a9f11072c8da7c5db99a5ae9fcd034054353fffd35eae3aec2",
     "Flock.RecOpening.shape?": "c37077854875ee1595da14d9360418aa769aeeb1626b459938fd58d1f64fc11d",
     "Flock.RecOpening.structureOf": "85f849a065144ab4b71d479808ab9553126b350b23c82f32d49147b1d3decf97",
