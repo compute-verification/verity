@@ -1,11 +1,13 @@
 """`verity_vllm.program.registry.boolean_marlin_moe`: the Boolean versions of `marlin_moe`'s Definitions agree with the numpy twin
 (`kernels.marlin_moe_rows`) and their word Definitions: the group on every code at every scale byte, and its quiet-NaN form; the
 divider on edge and random words; the schedule on random and edge words; the steps on random operands at every special scale byte
-and on special activations; the coordinates over every cut pattern; a pair launch of both kinds over two experts, one outside the
-expert axis; and the switch finds each word GEMM's Boolean version."""
+and on special activations, and their halves cut at x, which have exactly the step's gates; the coordinates over every cut
+pattern; a pair launch of both kinds over two experts, one outside the expert axis; and the switch finds each word GEMM's Boolean
+version."""
 from __future__ import annotations
 
 import itertools
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -97,6 +99,12 @@ def test_step_is_its_word_step_at_every_special_scale(from_zero: bool) -> None:
     for i in range(n):
         args = ([[int(acc[i])]] if not from_zero else []) + [x[i].tolist(), q[i].tolist(), [int(s[i])]]
         assert evaluate(ref, *args) == (int(got[i]),), i
+    own, column = ((BM.MarlinMxfp4StepFromZeroActivation, BM.MarlinMxfp4StepFromZeroColumn) if from_zero
+                   else (BM.MarlinMxfp4StepActivation, BM.MarlinMxfp4StepColumn))
+    S = SimpleNamespace(DOT=DOT)
+    assert {k: own.traced(S).counts[k] + column.traced(S).counts[k] for k in ("and", "xor", "not")} == fam.traced(S).counts
+    xd = np.asarray(BS.evaluate_words(bind(own, DOT=DOT), x)).reshape(n, -1)
+    assert (np.asarray(BS.evaluate_words(bind(column, DOT=DOT), *lead, x, q, s, xd)).reshape(n) == got).all()
 
 
 @pytest.mark.parametrize("routed", [False, True])

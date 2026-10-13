@@ -223,20 +223,20 @@ def warp_tree(add, acc: list):
 
 
 class Ops:
-    """The steps a coordinate takes: ``step(acc, x32, q32, s)`` (`MarlinMxfp4Step`), ``first(zero, x32, q32, s)`` (the step from
-    +0: ``first`` the Definition that starts there, else ``step`` on ``zero``), ``add``, ``select(c, a, b)`` (32-bit words, c a cut
-    bit) and ``zero()`` (+0.0, made once per coordinate); `word_ops` binds the word Definitions, `boolean_marlin_moe` their Boolean
-    ones, so the body is written once."""
+    """The steps a coordinate takes: ``step(acc, x32, q32, s, g)`` (`MarlinMxfp4Step` over scale group g),
+    ``first(zero, x32, q32, s, g)`` (the step from +0: ``first`` the Definition that starts there, else ``step`` on ``zero``),
+    ``add``, ``select(c, a, b)`` (32-bit words, c a cut bit) and ``zero()`` (+0.0, made once per coordinate); `word_ops` binds the
+    word Definitions, `boolean_marlin_moe` their Boolean ones, so the body is written once."""
 
     def __init__(self, B, step, first, add, select, zero, bit=lambda c: c):
         self.B, self._step, self._first, self._add, self._select, self._zero = B, step, first, add, select, zero
         self._bit = bit
 
-    def step(self, acc, x, q, s):
+    def step(self, acc, x, q, s, g):
         return self.B.call(self._step, acc, x, q, s)
 
-    def first(self, zero, x, q, s):
-        return self.step(zero, x, q, s) if self._first is None else self.B.call(self._first, x, q, s)
+    def first(self, zero, x, q, s, g):
+        return self.step(zero, x, q, s, g) if self._first is None else self.B.call(self._first, x, q, s)
 
     def add(self, a, b):
         return self.B.call(self._add, a, b)
@@ -264,8 +264,9 @@ def marlin_acc(o: Ops, K: int, TK: int, x, cut, wq, ws):
     for t in range(KT):
         for r in range(W):
             k = t * TK + GROUP * r
-            xs, q, s = x[k:k + GROUP], wq[k:k + GROUP], ws[k // GROUP]
-            acc[r] = o.first(zero, xs, q, s) if t == 0 else o.step(o.select(cut[t - 1], zero, acc[r]), xs, q, s)
+            g = k // GROUP
+            xs, q, s = x[k:k + GROUP], wq[k:k + GROUP], ws[g]
+            acc[r] = o.first(zero, xs, q, s, g) if t == 0 else o.step(o.select(cut[t - 1], zero, acc[r]), xs, q, s, g)
         trees.append(warp_tree(o.add, acc))
     R = trees[-1]
     for t in reversed(range(KT - 1)):

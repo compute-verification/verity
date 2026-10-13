@@ -9,6 +9,10 @@ so each one's word view is its `_v1` at the same statics (`elementwise.on_bits`)
     GatherE2m1x{E}_v2, GatherE8m0x{E}_v2, MoeExpertE2m1Row_v2{E,K}, MoeExpertE8m0Row_v2{E,K}
     MarlinMoeExpertCoordinate(W)_v2{E,K,TK,DOT}, MarlinMoeExpertGemm(W)_v2{E,K,N,TK,TN,GRID,DOT}
 
+    MarlinMxfp4Step(FromZero)Activation_v1{DOT}      (x: 32 bf16) -> xd: 1-bit words         the step's gates that read only x
+    MarlinMxfp4Step(FromZero)Column_v1{DOT}          ([acc], x, q, s, xd) -> f32             the rest, from them
+    MarlinMoeExpertColumn(W)_v1{E,K,TK,DOT}          a pair GEMM's output word over its activation gates (no word view)
+
 The group is one circuit: the scale byte's features (s - 1, and s in {0, 1, 253, 254, 255}) once, then per weight its sign, the
 biased exponent s - 1 + e (e the code's exponent field; the value 0.5 of code 1 is e = 0), and the cases Bf16MulBf16_v1 of two
 exact operands has: +-0 (a zero code or a zero scale), the subnormal 2^-127 (code 1 at s = 1), +-inf (an exponent of 255 or more,
@@ -23,6 +27,11 @@ constants too.  The coordinates' other callees are `F32Add_v3`, `SelectI32_v2` (
 `F2fpBf16_v2` and `Bf16MulBf16_v2`; the gathers are `boolean_gather`'s multiplexer tree over the id's bits (E <= 1024).  No table or
 lookup gate.
 
+A pair GEMM computes no value twice: each of its N columns runs a step over every scale group of the same x, so each step is cut
+at x (`elementwise.shared_specialized`), its gates that read only x one `...Activation_v1` Call per pair and scale group, and each
+column a `MarlinMoeExpertColumn(W)_v1`: `MarlinMoeExpertCoordinate(W)_v2`'s body with each step its `...Column_v1` over those
+gates, and w2's product with the routed weight `boolean_dense`'s `Bf16MulScalarTensorElement_v1` over g's own gates, made once.
+
 Each cut bit is an element of its own (`Array<1, Value<1>>`): an `Array<n, Value<1>>` is one n-bit word in the word view, and the
 word Definitions' cuts are n 1-bit words.
 """
@@ -31,11 +40,13 @@ from __future__ import annotations
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition, word_of
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import scalar as SC
+from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
+from verity_vllm.program.registry import boolean_dense as BDN
 from verity_vllm.program.registry import boolean_fp8_moe as BFM
 from verity_vllm.program.registry import fp8_moe_experts as X
 from verity_vllm.program.registry import marlin_moe as MM
@@ -114,6 +125,15 @@ MarlinMxfp4StepFromZeroV2 = EW.specialized(
     "MarlinMxfp4StepFromZero", 2, ["DOT"], _step(True), MM.step_sig(True, E2M1, E8M0, BF16, F32),
     word=_step_word(MM.MarlinMxfp4StepFromZero),
     doc="MarlinMxfp4StepFromZero_v1 on bits: MarlinMxfp4Step_v2 with the +0 accumulator folded in")
+MarlinMxfp4StepActivation, MarlinMxfp4StepColumn = EW.shared_specialized(
+    ("MarlinMxfp4StepActivation", "MarlinMxfp4StepColumn"), 1, ["DOT"], _step(False), MM.step_sig(False, E2M1, E8M0, BF16, F32), 1,
+    ("the gates of MarlinMxfp4Step_v2 that read only x: once per pair and scale group",
+     "MarlinMxfp4Step_v2 from x's own gates xd: once per column"), element=CUT)
+MarlinMxfp4StepFromZeroActivation, MarlinMxfp4StepFromZeroColumn = EW.shared_specialized(
+    ("MarlinMxfp4StepFromZeroActivation", "MarlinMxfp4StepFromZeroColumn"), 1, ["DOT"], _step(True),
+    MM.step_sig(True, E2M1, E8M0, BF16, F32), 0,
+    ("the gates of MarlinMxfp4StepFromZero_v2 that read only x: once per pair and scale group of k-tile 0",
+     "MarlinMxfp4StepFromZero_v2 from x's own gates xd: once per column"), element=CUT)
 
 
 def _neg_if(C, c, w):
@@ -261,17 +281,87 @@ MarlinMoeExpertCoordinateWV2 = EW.on_bits("MarlinMoeExpertCoordinateW", 2, _PAIR
                                           MM.MarlinMoeExpertCoordinateW, lifted=["DOT"])
 
 
+class _ColumnOps(MM.Ops):
+    """`_ops` whose steps are the column halves, each reading its scale group's activation gates ``xd[g]``."""
+
+    def __init__(self, B, S, xd):
+        c = _Bits(B)
+        super().__init__(B, bind(MarlinMxfp4StepColumn, DOT=S.DOT), bind(MarlinMxfp4StepFromZeroColumn, DOT=S.DOT), EW.F32Add,
+                         SC.SelectI32, lambda: c.word(MM.ZERO, 32), bit=lambda b: b[0])
+        self.xd = xd
+
+    def step(self, acc, x, q, s, g):
+        return self.B.call(self._step, acc, x, q, s, self.xd[g])
+
+    def first(self, zero, x, q, s, g):
+        return self.B.call(self._first, x, q, s, self.xd[g])
+
+
+def _activation_types(S) -> tuple[Array, Array]:
+    """The types of a pair's activation gates: k-tile 0's TK/32 scale groups' (the step from +0's), and the other groups'."""
+    W = S.TK // MM.GROUP
+    return (Array(W, MarlinMxfp4StepFromZeroActivation.signature(S)[1]),
+            Array(S.K // MM.GROUP - W, MarlinMxfp4StepActivation.signature(S)[1]))
+
+
+def _activation(B, S, x) -> tuple[Coll, Coll]:
+    """Every step's activation gates of one pair, made once, as `_activation_types`."""
+    W = S.TK // MM.GROUP
+    first, step = bind(MarlinMxfp4StepFromZeroActivation, DOT=S.DOT), bind(MarlinMxfp4StepActivation, DOT=S.DOT)
+    parts = [B.call(first if g < W else step, x[MM.GROUP * g:MM.GROUP * (g + 1)]) for g in range(S.K // MM.GROUP)]
+    return tuple(Coll(t, concat([p.refs for p in ps])) for t, ps in zip(_activation_types(S), (parts[:W], parts[W:])))
+
+
+def _column_sig(routed: bool):
+    pair = MM.pair_coordinate_sig(routed, E2M1, E8M0, BF16, I32, CUT)
+
+    def sig(S):
+        (x, cut, *mid, wq, ws), ret = pair(S)
+        gd = (("gd", BDN.Bf16MulScalarTensorScalar.signature(S)[1]),) if routed else ()
+        xd0, xd1 = _activation_types(S)
+        return (x, cut, ("xd0", xd0), ("xd1", xd1), *mid, *gd, wq, ws), ret
+    return sig
+
+
+def _column_acc(B, S, x, cut, xd0, xd1, e, wq, ws):
+    W, KG = S.TK // MM.GROUP, S.K // MM.GROUP
+    o = _ColumnOps(B, S, [xd0[g] for g in range(W)] + [xd1[g] for g in range(KG - W)])
+    return MM.marlin_acc(o, S.K, S.TK, x, cut, *_rows(B, S, e, wq, ws))
+
+
+def _column(B, S, x, cut, xd0, xd1, e, wq, ws):
+    """One output word of `MarlinMoeExpertGemm_v2`: `MarlinMoeExpertCoordinate_v2`'s body with each step its column half, over the
+    pair's activation gates (``xd0`` k-tile 0's scale groups', ``xd1`` the others')."""
+    return B.call(BG.F2fpBf16, _column_acc(B, S, x, cut, xd0, xd1, e, wq, ws))
+
+
+def _column_w(B, S, x, cut, xd0, xd1, e, g, gd, wq, ws):
+    """One output word of `MarlinMoeExpertGemmW_v2`: `MarlinMoeExpertCoordinateW_v2`'s body over the pair's activation gates, as
+    `MarlinMoeExpertColumn_v1`, and the routed weight's own gates of `Bf16MulBf16_v1` ``gd``."""
+    y = B.call(BG.F2fpBf16, _column_acc(B, S, x, cut, xd0, xd1, e, wq, ws))
+    return B.call(BDN.Bf16MulScalarTensorElement, y, g, gd)
+
+
+MarlinMoeExpertColumn = CompositeDefinition("MarlinMoeExpertColumn", 1, _PAIR, _column_sig(False), _column, doc=_column.__doc__,
+                                            conformance="exact-model-tested")
+MarlinMoeExpertColumnW = CompositeDefinition("MarlinMoeExpertColumnW", 1, _PAIR, _column_sig(True), _column_w,
+                                             doc=_column_w.__doc__, conformance="exact-model-tested")
+
+
 def _gemm(B, S, x, e, blk, par, wq, ws):
-    """`MarlinMoeExpertGemm_v1`'s body on bits."""
-    coord = bind(MarlinMoeExpertCoordinateV2, E=S.E, **MM.coordinate(S))
-    return MM.pair_rows(B, S, bind(MarlinMoeScheduleV2, **MM.schedule_of(S)), coord, (x, e), blk, par, wq, ws, BF16, E2M1, E8M0)
+    """`MarlinMoeExpertGemm_v1`'s body on bits, each column a `MarlinMoeExpertColumn_v1` over the activation gates made once."""
+    col = bind(MarlinMoeExpertColumn, E=S.E, **MM.coordinate(S))
+    lead = (x, *_activation(B, S, x), e)
+    return MM.pair_rows(B, S, bind(MarlinMoeScheduleV2, **MM.schedule_of(S)), col, lead, blk, par, wq, ws, BF16, E2M1, E8M0)
 
 
 def _gemm_w(B, S, x, e, g, blk, par, wq, ws):
-    """`MarlinMoeExpertGemmW_v1`'s body on bits."""
-    coord = bind(MarlinMoeExpertCoordinateWV2, E=S.E, **MM.coordinate(S))
+    """`MarlinMoeExpertGemmW_v1`'s body on bits, each column a `MarlinMoeExpertColumnW_v1` over the activation gates and the
+    routed weight's own gates, made once."""
+    col = bind(MarlinMoeExpertColumnW, E=S.E, **MM.coordinate(S))
     gb = B.call(BG.F2fpBf16, g)
-    return MM.pair_rows(B, S, bind(MarlinMoeScheduleV2, **MM.schedule_of(S)), coord, (x, e, gb), blk, par, wq, ws, BF16, E2M1, E8M0)
+    lead = (x, *_activation(B, S, x), e, gb, B.call(BDN.Bf16MulScalarTensorScalar, gb))
+    return MM.pair_rows(B, S, bind(MarlinMoeScheduleV2, **MM.schedule_of(S)), col, lead, blk, par, wq, ws, BF16, E2M1, E8M0)
 
 
 MarlinMoeExpertGemmV2 = EW.on_bits("MarlinMoeExpertGemm", 2, MM.GEMM_STATICS, MM.gemm_sig(False, E2M1, E8M0, BF16, F32, I32), _gemm,
