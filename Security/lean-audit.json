@@ -4390,8 +4390,8 @@
    },
    "Pous.P2.Assumptions.P2RingRoundSecure": {
     "status": "open",
-    "test": "Security/Proofs/Pous/P2/RoundTests.lean (PousP2Rounds.round_tight, PousP2Rounds.round_trunc, PousP2Rounds.round_trunc_b19), built by check",
-    "why": "P2 in the ring model per round, at every block count from 2^19 to 2^25: at a boundary held at most rho*|C| bits, outside an event of mass k*eps0 over k rounds, a uniform challenge is answered with probability at most 1 - p given the earlier answers; open, and, if p is prime, it forces p = 0 at D >= 32,894 (Q >= 2, L >= 65,789) whenever eps0 < 1 and m/N <= 1 - p + eps0 at L >= 2^(t+1) for m blocks kept without t low bits (p = 0.043 false from L >= 2^167 at 2^19 when eps0 <= 2^-130), which its tests prove."
+    "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
+    "why": "P2 in the ring model per round, at every block count from 2^19 to 2^25: at a boundary held at most rho*|C| bits, outside an event of mass k*eps0 over k rounds, a uniform challenge is answered with probability at most 1 - p given the earlier answers; open, and, if p is prime, it forces p = 0 at D >= 32,894 (Q >= 2, L >= 65,789) whenever eps0 < 1 and m/N <= 1 - p + eps0 at L >= 2^(t+1) for m blocks kept without t low bits (p = 0.043 false from L >= 2^167 at 2^19 when eps0 <= 2^-130), which Security/Proofs/Pous/P2/RoundTests.lean proves."
    },
    "Pouw.Fp8Atom.H1T.DistinctLiveH1T": {
     "status": "open",
