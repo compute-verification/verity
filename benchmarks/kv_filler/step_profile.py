@@ -4,7 +4,9 @@ class: the GEMMs (the four linears in FP8 and the LM head) against the weights' 
 reads (each request's context, 128 KiB a token), and the rest (norms, rotary, activation quantization, sampling,
 copies) against nothing registered. `native` re-times the step with the GEMMs at `--native-R` of R (ra-tag-fast's
 native linears: 6.98 GB in 4.71 ms at M = 1, 0.96 R) and the rest as measured; `native_all` puts attention at that
-rate too. Writes `step_profile.json` and `step_profile.log` under `--out`.
+rate too. Writes `step_profile.json` and `step_profile.log` under `--out`. `--stack stack|pstack` profiles the encoded
+stack's step instead (`stack_hook.py`): its fused decode + GEMM + receipts and its lm_head's decode are GEMMs against its
+stores, paged.cu's attention, KV append and gather are attention, and its receipt tree is among the rest.
 """
 from __future__ import annotations
 
@@ -24,8 +26,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from serve import CAPTURE, KV_TOKEN_BYTES  # noqa: E402
 
 # Attention is matched first: FlashAttention's kernels are cutlass templates named `flash_fwd_splitkv`.
-CLASSES = (("attention", re.compile(r"flash|attn|attention|fmha|batchdecode|batchprefill|mergestate|merge_state", re.I)),
-           ("gemm", re.compile(r"gemm|gemv|cutlass|xmma|cublas|nvjet|matmul|scaled_mm|splitk", re.I)))
+CLASSES = (("attention", re.compile(r"flash|attn|attention|fmha|batchdecode|batchprefill|mergestate|merge_state|pg_append|"
+                                    r"pg_gather|pg_combine", re.I)),
+           ("gemm", re.compile(r"gemm|gemv|cutlass|xmma|cublas|nvjet|matmul|scaled_mm|splitk|wt::|(^|\W)fused_kernel|"
+                               r"(^|\W)decode_kernel|pg_reduce", re.I)))
 
 
 def classify(name: str) -> str:
@@ -133,7 +137,14 @@ def main() -> int:
     ap.add_argument("--from-ncu", type=Path,
                     help="no vLLM: split the kernels of `ncu --import … --csv --page raw --print-units base` against "
                          "the bytes step_profile-ncu.json registers; writes step_profile-ncu-split.json")
+    ap.add_argument("--stack", choices=("pstack", "stack"), default=None, help="the encoded stack's step (stack_hook.py)")
+    ap.add_argument("--stack-k", type=int, default=3)
+    ap.add_argument("--wt-lib")
+    ap.add_argument("--reader-lib")
+    ap.add_argument("--paged-lib")
     a = ap.parse_args()
+    if a.stack and not (a.wt_lib and a.reader_lib and a.paged_lib):
+        ap.error("--stack takes --wt-lib, --reader-lib and --paged-lib")
     a.out.mkdir(parents=True, exist_ok=True)
     if a.from_ncu:
         meta = json.loads((a.out / "step_profile-ncu.json").read_text())
@@ -163,14 +174,21 @@ def main() -> int:
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
+    stack, capture = None, CAPTURE
+    if a.stack:
+        import stack_hook
+        stack = stack_hook.install(a.stack, a.stack_k, a.wt_lib, a.reader_lib, a.paged_lib)
+        capture = stack[2]
     llm = LLM(model=a.model, quantization="fp8", max_num_seqs=max(CAPTURE), enable_prefix_caching=False, seed=0,
               max_model_len=max(c for _, c in a.shapes) + a.steps + 128, max_num_batched_tokens=8192,
               enforce_eager=False, gpu_memory_utilization=a.mem,
-              compilation_config={"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": CAPTURE})
+              compilation_config={"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": capture})
     eng = llm.llm_engine
     runner = get_model_runner(llm)
     weight_bytes = sum(p.numel() * p.element_size() for n, p in runner.model.named_parameters()
                        if "embed_tokens" not in n)
+    if stack:
+        weight_bytes = stack_hook.weight_bytes(stack[1], runner.model)
     vocab = eng.vllm_config.model_config.hf_config.vocab_size
     count = [0]
     ex_orig = runner.execute_model
@@ -182,7 +200,8 @@ def main() -> int:
     runner.execute_model = execute_model
     res = {"format": "verity-kv-filler/step-profile/v0", "args": {k: v for k, v in vars(a).items() if k != "out"},
            "vllm": vllm.__version__, "torch": torch.__version__, "gpu": torch.cuda.get_device_name(),
-           "weight_bytes_per_step": weight_bytes,
+           "weight_bytes_per_step": weight_bytes, "stack": a.stack, "cudagraph_capture_sizes": capture,
+           "stack_install": {k: v for k, v in stack[1].record.items() if k != "selection"} if stack else None,
            "async_scheduling": getattr(eng.vllm_config.scheduler_config, "async_scheduling", None), "shapes": []}
     log(f"weights read a step {weight_bytes / 1e9:.2f} GB; async scheduling {res['async_scheduling']}")
     rng = random.Random(3)

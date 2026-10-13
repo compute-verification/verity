@@ -35,6 +35,20 @@ nvcc "${FLAGS[@]}" -o "$B/libtopup.so" $KF/topup.cu > "$O/topup.ptxas" 2>&1 &
 P1=$!
 nvcc "${FLAGS[@]}" -DKV_FIELD=512 -o "$B/libkv-p512.so" benchmarks/word_codec/kv.cu > "$O/kv-p512.ptxas" 2>&1 &
 P2=$!
+STACK_ARGS=()
+if [ -n "${STACK:-}" ]; then
+  # STACK=stack|pstack: serve.py and step_profile.py on the encoded stack (stack_hook.py), its builds as
+  # vllm_encoded/stack.sh's at KV_FIELD (default 1024), K rounds (default 3)
+  SF=${KV_FIELD:-1024}
+  nvcc "${FLAGS[@]}" -DWT_FIELD="$SF" -DWT_MASK=1 -DWT_FOLD6=1 -DWT_RECEIPT=1 -o "$B/wt.so" benchmarks/codec_tensor/wt.cu \
+    > "$O/wt.ptxas" 2>&1 || { tail -30 "$O/wt.ptxas"; exit 4; }
+  nvcc "${FLAGS[@]}" -o "$B/reader.so" benchmarks/codec_tensor/reader.cu > "$O/reader.ptxas" 2>&1 \
+    || { tail -30 "$O/reader.ptxas"; exit 4; }
+  nvcc "${FLAGS[@]}" -DKV_FIELD="$SF" -DKV_MASK=1 -DKV_FOLD6=1 -DKV_QHEADS=32 -o "$B/paged.so" \
+    benchmarks/vllm_encoded/paged.cu > "$O/paged.ptxas" 2>&1 || { tail -30 "$O/paged.ptxas"; exit 4; }
+  sha256sum benchmarks/codec_tensor/wt.cu benchmarks/codec_tensor/reader.cu benchmarks/vllm_encoded/paged.cu >> "$O/build.txt"
+  STACK_ARGS=(--stack "$STACK" --stack-k "${K:-3}" --wt-lib "$B/wt.so" --reader-lib "$B/reader.so" --paged-lib "$B/paged.so")
+fi
 wait $P1 || { tail -30 "$O/topup.ptxas"; exit 4; }
 wait $P2 || { tail -30 "$O/kv-p512.ptxas"; exit 4; }
 if grep -E "[1-9][0-9]* bytes spill" "$O/topup.ptxas"; then echo "REFUSED: a top-up kernel spills"; exit 4; fi
@@ -50,7 +64,7 @@ if [ "$SCRIPT" = serve.py ]; then
   "${LEASE[@]}" bash -c '
     rc=0
     for pool in $POOLS; do "$@" --pool "$pool" || rc=$?; done
-    exit $rc' _ "$PY" $KF/serve.py --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" ${ARGS:-}
+    exit $rc' _ "$PY" $KF/serve.py --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" "${STACK_ARGS[@]}" ${ARGS:-}
   exit $?
 fi
 if [ "$SCRIPT" = step_profile.py ] && [ -n "${NCU_SHAPES:-}" ]; then
@@ -64,17 +78,17 @@ if [ "$SCRIPT" = step_profile.py ] && [ -n "${NCU_SHAPES:-}" ]; then
       d=$O/ncu-$shape; mkdir -p "$d"
       $NCUB --target-processes all --profile-from-start off --cache-control none --clock-control none \
         --graph-profiling node --metrics gpu__time_duration.sum,dram__bytes_op_read.sum,dram__bytes_op_write.sum,lts__t_sectors_op_read.sum,lts__t_sectors_op_write.sum,dram__cycles_active.sum,dram__cycles_elapsed.sum \
-        -f -o "$d/step" "$PY" $KF/step_profile.py --out "$d" --ncu --shapes "$shape" --steps "${NCU_STEPS:-3}" > "$d/ncu.log" 2>&1 \
+        -f -o "$d/step" "$PY" $KF/step_profile.py --out "$d" --ncu --shapes "$shape" --steps "${NCU_STEPS:-3}" "$@" > "$d/ncu.log" 2>&1 \
         || { tail -40 "$d/ncu.log"; exit 6; }
       $NCUB --import "$d/step.ncu-rep" --csv --page raw --print-units base > "$d/ncu.csv"
       "$PY" $KF/step_profile.py --out "$d" --from-ncu "$d/ncu.csv" | tee "$d/split.txt"
     done
-    "$PY" $KF/step_profile.py --out "$O" --shapes "$(echo $NCU_SHAPES | tr " " ,)" ${ARGS:-}' 
+    "$PY" $KF/step_profile.py --out "$O" --shapes "$(echo $NCU_SHAPES | tr " " ,)" "$@" ${ARGS:-}' _ "${STACK_ARGS[@]}"
   exit $?
 fi
 if [ "$SCRIPT" = step_profile.py ]; then
   # shellcheck disable=SC2086
-  "${LEASE[@]}" "$PY" $KF/step_profile.py --out "$O" ${ARGS:-}
+  "${LEASE[@]}" "$PY" $KF/step_profile.py --out "$O" "${STACK_ARGS[@]}" ${ARGS:-}
   exit $?
 fi
 # shellcheck disable=SC2086

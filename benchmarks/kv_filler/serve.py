@@ -43,6 +43,10 @@ each model step's interval on the GPU is recorded beside it (`gpu_steps`: events
 sampling). `--shared-prefix` puts one seeded prefix before every prompt, with prefix caching on; `--async-scheduling`
 sets vLLM's, which the record states either way. The prefix cache is emptied before each policy.
 
+`--stack stack` serves on the encoded stack (`stack_hook.py`: `vllm_encoded/stack.py`'s linears, lm_head, attention and
+KV append, with `--wt-lib`, `--reader-lib` and `--paged-lib`), `--stack pstack` on its plain form; a step's registered
+weight bytes are then the stack's stores, and the engine captures the stack's decode sizes.
+
 `--token-gate N` checks, before each policy's trace, that the top-up changes no token: N fixed prompts, generated
 together (so the schedule doesn't depend on time) with the top-up in the state it has while the engine works, give the
 same token ids as the first policy's (`token_gate` in each run; a mismatch refuses the run's timing).
@@ -228,7 +232,15 @@ def main() -> int:
                     help="tokens of one seeded prefix before every prompt, with prefix caching on (0: none, caching off)")
     ap.add_argument("--encode-grid", type=int, default=128,
                     help="CTAs of a decode step's encode on the side stream (0: on the step's own stream, full grid)")
+    ap.add_argument("--stack", choices=("pstack", "stack"), default=None,
+                    help="serve on the encoded stack (stack) or its plain form (pstack): stack_hook.py")
+    ap.add_argument("--stack-k", type=int, default=3, help="--stack stack: the codec's rounds")
+    ap.add_argument("--wt-lib", help="--stack: a WT_RECEIPT build of codec_tensor's wt.cu at a full-slot field")
+    ap.add_argument("--reader-lib", help="--stack: a build of codec_tensor's reader.cu")
+    ap.add_argument("--paged-lib", help="--stack: a build of vllm_encoded's paged.cu at wt.cu's field")
     a = ap.parse_args()
+    if a.stack and not (a.wt_lib and a.reader_lib and a.paged_lib):
+        ap.error("--stack takes --wt-lib, --reader-lib and --paged-lib")
     encode_ks = set()
     for p in a.policies:
         top, _, enc = p.partition("+")
@@ -249,11 +261,17 @@ def main() -> int:
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
+    stack = None
+    capture = CAPTURE
+    if a.stack:
+        import stack_hook
+        stack = stack_hook.install(a.stack, a.stack_k, a.wt_lib, a.reader_lib, a.paged_lib)
+        capture = stack[2]
     kw = {"model": a.model, "quantization": "fp8", "max_num_seqs": max(CAPTURE),
           "enable_prefix_caching": a.shared_prefix > 0, "seed": 0,
           "max_model_len": a.shared_prefix + max(a.prompts) + max(a.outputs) + 64,
           "max_num_batched_tokens": a.max_batched_tokens, "enforce_eager": False,
-          "compilation_config": {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": CAPTURE}}
+          "compilation_config": {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": capture}}
     if a.async_scheduling != "default":
         kw["async_scheduling"] = a.async_scheduling == "on"
     if a.pool == "large":
@@ -269,6 +287,9 @@ def main() -> int:
     cache = eng.vllm_config.cache_config
     weight_bytes = sum(p.numel() * p.element_size() for n, p in runner.model.named_parameters()
                        if "embed_tokens" not in n)
+    if stack:
+        weight_bytes = stack_hook.weight_bytes(stack[1], runner.model)
+        log(f"stack {a.stack}: {json.dumps({k: v for k, v in stack[1].record.items() if k != 'selection'})}")
     kv_tensors = []
     for kc in runner.kv_caches:
         for tns in (kc if isinstance(kc, (list, tuple)) else [kc]):
@@ -299,10 +320,13 @@ def main() -> int:
     res = {"format": "verity-kv-filler/serve/v0", "args": {k: v for k, v in vars(a).items() if k != "out"},
            "vllm": vllm.__version__, "torch": torch.__version__, "gpu": torch.cuda.get_device_name(),
            "card_bytes": card, "weight_bytes_per_step": weight_bytes,
-           "weight_bytes_resident": sum(p.numel() * p.element_size() for p in runner.model.parameters()),
+           "weight_bytes_resident": sum(p.numel() * p.element_size() for p in runner.model.parameters()) + (
+               sum(lin.nbytes for lin in stack[1].stack.linears) + stack[1].stack.lm.nbytes if stack else 0),
            "kv_pool_bytes": pool_bytes, "static_filler_bytes": static if filler is not None else 0,
            "kv_blocks": int(cache.num_gpu_blocks), "block_size": int(cache.block_size),
            "filler_bytes": sum(n for _, n in regions), "topup_regions": len(regions), "runs": [],
+           "stack": {"arm": a.stack, "install": stack[1].record} if stack else None,
+           "cudagraph_capture_sizes": capture,
            "async_scheduling": getattr(eng.vllm_config.scheduler_config, "async_scheduling", None),
            "batch_queue_size": getattr(getattr(getattr(eng, "engine_core", None), "engine_core", None),
                                        "batch_queue_size", None), "codec_gate": gate}
@@ -639,6 +663,8 @@ def main() -> int:
                                                 round(base.elapsed_time(d) / 1e3, 6), n] for w, d, n in cur["enc"]],
                             "encode_lag_ms": {"median": statistics.median(lag), "p90": lag[int(0.9 * (len(lag) - 1))],
                                               "max": lag[-1]} if lag else None})
+            if stack:
+                run["stack"] = stack[0].summary(stack[1].stack)
             res["runs"].append(run)
             w1 = run["windows"][1]
             log(f"{policy}/{mode}: {run['seconds']:.1f} s, {len(steps)} steps, TTFT {run['ttft_s_median']:.3f} s, TPOT "
