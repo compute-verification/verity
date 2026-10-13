@@ -46,8 +46,11 @@ What it takes, against `PublicAudit`:
   table's prefix in the inner transcript `tbl` and the `b ‖ c` a round's commitment gives a value's row `bc`;
 * V*'s statements indexed by the verifier's own list (`vstarCount ish`, `RecVStar.statements`; gap 4(c)), in place of
   the formula `outerStatementsAt st`; the event adds the verifier's checks at candidate 3 of its own inputs
-  (`AcceptsC3`): its list builds, it holds the inner transcript against `reg`, and check 5's sparse refusals pass, so
-  `ℓ` is in `[6, k_log]` and the unit range's slots are inside the block (`SparseRangeOk`);
+  (`AcceptsC3`): its list builds, it holds the inner transcript against `reg`, the covers check passes there (all of
+  `RecVStar.checkCovers`: the sparse-presence, stacked-presence and stacked-shape refusals and each stream's rounds),
+  and check 5's sparse refusals pass, so `ℓ` is in `[6, k_log]` and the unit range's slots are inside the block
+  (`SparseRangeOk`). These are not the whole compiled acceptance (`AcceptsPublic` and `ChecksVR` carry the rest). The
+  verifier's acceptance gives all of `AcceptsC3` (`FlockC3.VStarList.acceptsC3_of_verify`);
 * R's `m`: Lean's verifier never compares META's `stacked.m` with the bucket's `table_m`; it holds R's stream and each
   `rec-opening` unit to META's shape, and the unit names come from the outer program it compiles (the list). The model
   takes R's `m` from the class (`mReg`), and VBridge (`_hbr`, V*'s circuits compute this inner verifier at the list's
@@ -82,7 +85,7 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **Check 5's inputs at candidate 3**, as the verifier forms them (`FlockVerify.recC3`): the inner shape's RecSparse
+/-- **Check 5's inputs at candidate 3**, as the verifier forms them (`RecSetup.c3`): the inner shape's RecSparse
 shape (`--sparse`), R's shape, the inner shape's or else the one the inner transcript held R's stream to, and the
 verifier's hold of the inner transcript `cs`. -/
 def c3Of (ish : RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits) : Option Flock.RecCoins.C3 := do

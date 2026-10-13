@@ -56,8 +56,9 @@ theorem topCounts_eq (rs : Array SchedRound) : topCounts rs = (topRounds rs).map
   exact (List.map_id _).symm
 
 /-- **`checkCommitRounds` accepting**: two reps, each's `c_k` rounds the reps' schedule's message rounds,
-`sparse/rep0`'s and `sparse/rep1`'s the sparse phase's, `stacked/rep0`'s those of `stackedRounds` of the
-verifier's R shape, its tops of the node counts those rounds commit, and no other held stream named `sparse/…`. -/
+`sparse/rep0`'s and `sparse/rep1`'s the sparse phase's, and `stacked/rep0`'s those of `stackedRounds` of the
+verifier's R shape, its tops of the node counts those rounds commit. Its refusals of a stream off the reps' rounds and
+of another `sparse/…` stream come first, and are not read here. -/
 theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
     (h : checkCommitRounds i cs = .ok ()) :
@@ -72,27 +73,18 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
   unfold checkCommitRounds at h
   rw [hsch] at h
   try simp only at h
+  obtain ⟨_, -, h⟩ := checkBind_ok h
   split at h
   · first
     | exact absurd h (checkThrow_ne _ _)
     | exact absurd (checkBind_ok h) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
     | cases h
   · rename_i hsz
-    rcases hf : cs.streams.find? (fun st => st.name.startsWith s!"{SPARSE}/" &&
-        st.name != s!"{SPARSE}/rep0" && st.name != s!"{SPARSE}/rep1") with _ | stx
-    rotate_left
+    split at h
     · first
-      | rw [hf] at h
-      | simp only [hf] at h
-      try simp only at h
-      first
       | exact absurd h (checkThrow_ne _ _)
       | exact absurd (checkBind_ok h) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
       | cases h
-    first
-    | rw [hf] at h
-    | simp only [hf] at h
-    try simp only at h
     rcases hs : cs.stream? s!"{STACKED}/rep0" with _ | st₀
     · first
       | rw [hs] at h

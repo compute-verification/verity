@@ -34,6 +34,11 @@ oracle count and `CompiledL`'s lockstep, about 3,500 lines) has no holographic a
 So these start at once: a1s and a1r (a W each, against their stubs alone), a1's assembly (L), h1 (W), b1 → b2 (W),
 c1 (W); h2 builds on #1847's list.
 
+v1, closed (round 20): verify ⇒ `SparseRangeOk`. `acceptsC3_of_verify` (`C3/VStarList/Accepts.lean`) concludes all of
+`AcceptsC3` from the verifier's acceptance at both setups: each runs check 5's range check on the inner files first
+(`RecSetup.checkInner`, `RecCoins.checkAtC3`), and `sparseRangeOk_of_check` reads its verdict at the event's `st`, set
+up from the same circuit and public file (`setupHidden_same`).
+
 ## Next: the honest decoder and the stage discharges (stated, round 3)
 
 Pieces (c)–(g) are obligations of a free decoder (`C3Family`'s `run`, `row`), as G's H-props are of `VStarFamily`'s
@@ -128,8 +133,9 @@ takes, each with who discharges it:
   position, so a prover who registers a cap with no preimage is outside the statement (Weakness, below).
 * `ℓ` and the slots' units come from check 5 (round 3, ruling 2 and 4): `SparseRangeOk` (in the event) is
   `RecSparse.Shape.valid`, `sparseV`'s shortness check and `layoutFactors` at the inner circuit's unit range, so
-  `ellOk_of_sparseRange` gives `hp.EllOk` and `units_of_sparseRange` gives the slots' units at `UnitsOf`. Check 5 runs
-  only with `--rec-inner-*` and the coin server's coins, and reads inner points as `k_log − 6` coordinates.
+  `ellOk_of_sparseRange` gives `hp.EllOk` and `units_of_sparseRange` gives the slots' units at `UnitsOf`. Every
+  candidate-3 session's setup evaluates it on the inner statement from its files, whatever the unit, and refuses a
+  session without them (`RecCoins.checkAtC3`); `sparseRangeOk_of_check` reads it off that check at `ClassOk`.
 * `mReg` is padded (ruling 4): `mReg = max PAD_TO (…)` and R's bits are zero-padded to it, so `7 ≤ mReg` is free
   (`seven_le_mReg`) and `mReg_of_list` has no `hpad`. Workers on a1s and a1r: a proof that unfolds `mReg` meets the
   `max`.

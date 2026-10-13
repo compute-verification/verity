@@ -100,8 +100,7 @@ theorem srcOK_holo_rs {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arra
     subst hzs
     exact openMsgsRead_checked hF he htie hall hk hr hrc
   exact srcOK_holo (ish := ish) (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2)
-    (bind := bind) (rows := rows) (zr := zr) (hC := hCust) (h := h) hzs hS hcoins hrp hsp hop hlg hos hrt hst hot
-    hlt
+    (bind := bind) (rows := rows) (zr := zr) (hC := hCust) (h := h) hzs hS hcoins hrp hsp hop hlg hos hrt hst hot hlt
 
 end
 

@@ -858,6 +858,11 @@ any other held stream named `sparse/…`. -/
 def checkCommitRounds (i : Inner) (cs : InnerCommits) : V Unit := do
   let some rep := (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
     | throw s!"rec-inner: the inner shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) has no fast100 schedule"
+  for st in cs.streams do
+    if !st.name.startsWith s!"{SPARSE}/" && !st.name.startsWith s!"{STACKED}/" &&
+        st.coins.map (·.size) != rep.map (·.1) then
+      throw (s!"rec inner transcript: {st.name} holds {st.coins.size} rounds, and its schedule " ++
+        s!"(m {i.m}, k_log {i.kLog}, claims {i.claims}) {rep.size}")
   if cs.reps.size != 2 then throw s!"rec inner transcript: {cs.reps.size} reps, not the circuit table's two"
   if let some st := cs.streams.find? fun st => st.name.startsWith s!"{SPARSE}/" &&
       st.name != s!"{SPARSE}/rep0" && st.name != s!"{SPARSE}/rep1" then
