@@ -16,6 +16,10 @@ c_j        LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be j)[0 : S + 8]) mod p, j = 
 t(i)       τ · i mod p, i the word's index in the store
 round j    x ↦ ρ(x + c_j + t(i)); encode is rounds 0 … k − 1 from the payload, decode rounds k − 1 … 0 inverted,
            x ↦ ρ⁻¹(x) − c_j − t(i), and a word decodes only if the result is < 2^(8B) (every word, at full slot)
+K          a masked key's (`key(..., mask=True)`): LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be 2^32 − 2)[0 : S]) mod 2^n, not
+           reduced mod p
+σ_K(x)     x ⊕ K if that is below p, else x: an involution on [0, p), applied to x before each round j ≥ 1 of a masked
+           word's encode and after each inverted round j ≥ 1 of its decode (`benchmarks/word_codec/kv.py`'s, ra-codec-mix's)
 ~~~
 
 The seed is drawn after the weights are registered. Decoding a word costs k squarings; encoding it k roots, each
@@ -36,6 +40,7 @@ from dataclasses import dataclass
 DOMAIN = b"verity/word-codec/wide/v0\0"
 SEED_BYTES = 32
 TWEAK_INDEX = (1 << 32) - 1
+MASK_INDEX = (1 << 32) - 2
 TASK_BYTES = 8192
 
 
@@ -101,6 +106,7 @@ class Key:
     field: Field
     c: tuple[int, ...]
     tau: int
+    mask: int | None = None
 
     @property
     def rounds(self) -> int:
@@ -108,6 +114,10 @@ class Key:
 
     def tweak(self, i: int) -> int:
         return self.tau * i % self.field.p
+
+    def sigma(self, x: int) -> int:
+        v = x ^ self.mask
+        return v if v < self.field.p else x
 
 
 def xof(message: bytes, length: int) -> bytes:
@@ -119,19 +129,23 @@ def xof(message: bytes, length: int) -> bytes:
     return out[:length]
 
 
-def _element(f: Field, seed: bytes, j: int) -> int:
+def _message(f: Field, seed: bytes, j: int) -> bytes:
     name = f.name.encode()
-    msg = DOMAIN + bytes([len(name)]) + name + seed + struct.pack(">I", j)
-    return int.from_bytes(xof(msg, f.word_bytes + 8), "little") % f.p
+    return DOMAIN + bytes([len(name)]) + name + seed + struct.pack(">I", j)
 
 
-def key(name: str, seed: bytes, rounds: int) -> Key:
+def _element(f: Field, seed: bytes, j: int) -> int:
+    return int.from_bytes(xof(_message(f, seed, j), f.word_bytes + 8), "little") % f.p
+
+
+def key(name: str, seed: bytes, rounds: int, mask: bool = False) -> Key:
     f = field(name)
     if type(seed) is not bytes or len(seed) != SEED_BYTES:
         raise ValueError(f"a seed is {SEED_BYTES} bytes")
-    if not 1 <= rounds < TWEAK_INDEX:
+    if not 1 <= rounds < MASK_INDEX:
         raise ValueError("a word has at least one round")
-    return Key(f, tuple(_element(f, seed, j) for j in range(rounds)), _element(f, seed, TWEAK_INDEX) or 1)
+    k = int.from_bytes(xof(_message(f, seed, MASK_INDEX), f.word_bytes), "little") % (1 << f.n) if mask else None
+    return Key(f, tuple(_element(f, seed, j) for j in range(rounds)), _element(f, seed, TWEAK_INDEX) or 1, k)
 
 
 def rho(a: int, f: Field) -> int:
@@ -159,7 +173,9 @@ def encode_word(m: int, i: int, k: Key) -> int:
         raise ValueError(f"a payload is {f.payload_bytes} bytes" + (", below p" if f.full_slot else ""))
     t = k.tweak(i)
     x = m
-    for c in k.c:
+    for j, c in enumerate(k.c):
+        if j and k.mask is not None:
+            x = k.sigma(x)
         x = rho((x + c + t) % f.p, f)
     return x
 
@@ -171,8 +187,10 @@ def decode_word(y: int, i: int, k: Key) -> int:
         raise ValueError("a word is a canonical element")
     t = k.tweak(i)
     x = y
-    for c in reversed(k.c):
-        x = (rho_inv(x, f) - c - t) % f.p
+    for j in reversed(range(k.rounds)):
+        x = (rho_inv(x, f) - k.c[j] - t) % f.p
+        if j and k.mask is not None:
+            x = k.sigma(x)
     if x > f.max_payload:
         raise ValueError(f"word {i} decodes to no payload")
     return x

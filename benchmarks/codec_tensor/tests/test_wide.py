@@ -111,6 +111,43 @@ def test_key_derivation():
         W.key("p767", SEED[:31], 1)
     with pytest.raises(ValueError, match="round"):
         W.key("p767", SEED, 0)
+    with pytest.raises(ValueError, match="round"):
+        W.key("p767", SEED, W.MASK_INDEX)
+
+
+@pytest.mark.parametrize("name", list(W.FIELDS))
+@pytest.mark.parametrize("rounds", [1, 2, 3])
+def test_masked_round_trip(name, rounds):
+    plain, k = W.key(name, SEED, rounds), W.key(name, SEED, rounds, mask=True)
+    f = k.field
+    assert k.c == plain.c and k.tau == plain.tau and plain.mask is None
+    assert k.mask.bit_length() <= f.n and abs(k.mask.bit_count() - f.n / 2) < f.n / 8
+    rng = random.Random(f"{name}/{rounds}/mask")
+    top = f.max_payload
+    for i, m in enumerate([0, 1, top] + [rng.randrange(top + 1) for _ in range(6)]):
+        y = W.encode_word(m, 1000 + i, k)
+        assert 0 <= y < f.p and W.decode_word(y, 1000 + i, k) == m
+        assert (y == W.encode_word(m, 1000 + i, plain)) == (rounds == 1)
+
+
+def masked_rare_payloads(k: W.Key, i: int) -> list[int]:
+    """At full slot, payloads whose first round's output x has x ⊕ K at or above p (σ_K leaves x), and next to them:
+    σ_K's rare branch, which a random word takes with probability c / 2^n."""
+    f, t = k.field, k.tweak(i)
+    xs = [(f.p + r) ^ k.mask for r in (0, 1, f.c - 1)] + [(f.p - 1) ^ k.mask]
+    return [(W.rho_inv(x, f) - k.c[0] - t) % f.p for x in xs if x < f.p]
+
+
+@pytest.mark.parametrize("name", [n for n, f in W.FIELDS.items() if f.full_slot])
+def test_sigma_rare_branch(name):
+    k = W.key(name, SEED, 2, mask=True)
+    f = k.field
+    ms = masked_rare_payloads(k, 77)
+    assert len(ms) == 4
+    for j, m in enumerate(ms):
+        x = W.rho((m + k.c[0] + k.tweak(77)) % f.p, f)
+        assert (k.sigma(x) == x) == (j < 3) and k.sigma(k.sigma(x)) == x
+        assert W.decode_word(W.encode_word(m, 77, k), 77, k) == m
 
 
 @pytest.mark.parametrize("name", list(W.FIELDS))
@@ -161,8 +198,9 @@ def test_vectors():
     vectors = json.loads((HERE / "vectors.json").read_text())
     assert vectors["seed"] == SEED.hex()
     assert {v["field"] for v in vectors["words"]} == set(W.FIELDS)
+    assert {v["field"] for v in vectors["words"] if v.get("mask")} == {n for n, f in W.FIELDS.items() if f.full_slot}
     for v in vectors["words"]:
-        k = W.key(v["field"], SEED, v["rounds"])
+        k = W.key(v["field"], SEED, v["rounds"], mask=v.get("mask", False))
         f = k.field
         m = int.from_bytes(bytes.fromhex(v["payload"]), "little")
         y = W.encode_word(m, v["index"], k)
