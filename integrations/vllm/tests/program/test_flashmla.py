@@ -4,8 +4,8 @@
 * the primitives on their edge words, and the libm pieces against float64 and at their special words;
 * the decode against float64 softmax with the sink at DeepSeek-V4-Pro's statics, split or not;
 * the scheduler port on the cases whose splits are known, and on random batches: every request's splits tile its blocks;
-* the small Boolean Definitions against their word views; the large ones (a head is about a million ANDs, compiled flat) are
-  circuit-check's (`boolean_flashmla.circuit-check.py`).
+* the small Boolean Definitions against their word views; the large ones (compiled flat, a block is about half a million ANDs)
+  are circuit-check's (`boolean_flashmla.circuit-check.py`).
 """
 from __future__ import annotations
 
