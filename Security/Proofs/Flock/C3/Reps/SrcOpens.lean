@@ -105,7 +105,7 @@ local notation "ℐ" => holoInnerAt T CT st hp
 
 namespace RepMaps
 
-variable (M : RepMaps stmt Vs sh)
+variable {Ω C : Type} (M : RepMaps stmt Vs sh Reg Ω C)
 
 /-- Copy 0 of opening `j` of level `ℓ` of rep `r`'s unit, in the layers `l` (`VStarFamily.openCol`). -/
 def openCol (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) (ℓ j : ℕ) : ℕ → Bool :=
@@ -169,13 +169,15 @@ theorem srcOpensOfLayers {sch : Flock.Schedule} (hk : M.OpenCols sch)
 theorem opensReadAt {sch : Flock.Schedule} (hk : M.OpenCols sch)
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData} {nm : C3Run (holoAt st hp) → C3Run (holoAt st hp)}
+    {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {nm : C3Run (holoAt st hp) → C3Run (holoAt st hp)}
     (hnm : ∀ u (i : Fin 2), (nm u).os.1 i = u.os.1 i) {cp : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ℕ → ℕ → ByteArray}
     {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
     (hb : ∀ Lb i, (b Lb i).sch = sch ∧ (b Lb i).lig = ligOfRead 64 none sch (M.ligRead sch (cp Lb i) Lb i))
     (i : Fin 2) :
     OpensReadAt zs dg N k Rw
-      (tiedSrc fun R ω t Lb => nm (repsOfVals stp sh rep (fun Lb i => (b Lb i).vals sh (rep Lb i)) R ω t Lb)) i :=
+      (tiedSrc fun R ω t Lb => nm (repsOfVals stp sh rep (fun R ω t Lb i => (b Lb i).vals sh (rep R ω t Lb i)) R ω t
+        Lb)) i :=
   opensReadAt_src hnm (M.srcOpensOfLayers hk (zs := zs) (dg := dg) (N := N) (k := k) (Rw := Rw) hb) i
 
 end RepMaps

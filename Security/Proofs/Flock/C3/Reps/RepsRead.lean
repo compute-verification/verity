@@ -163,8 +163,9 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
   {dg : ByteArray → ByteArray} {N k Rw : ℕ}
   {stp : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-  {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-  {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+  {sh : Flock.Shape}
+  {rep : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+  {vals : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
   {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
 
 local notation "ℐ" => holoInnerAt T CT st hp
@@ -211,7 +212,8 @@ theorem repsMsgsRead_of_read
     (h i R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX)
 
 /-- **`RepsMsgsRead` at the source that reads its reps off the values**, from `stp`'s cap read and the values' weave's
-read on the layers: `TsRead` at `repsOfVals`, where rep `r`'s steps are `unitWeave` of `rep Lb r` and `vals Lb r`. -/
+read on the layers: `TsRead` at `repsOfVals`, where rep `r`'s steps are `unitWeave` of `rep R ω t Lb r` and
+`vals R ω t Lb r`. -/
 theorem repsMsgsRead_repsOfVals (hc : CapRead zs dg N k Rw stp own sel)
     (h : TsRead zs dg N k Rw (repsOfVals stp sh rep vals) own sel) :
     RepsMsgsRead zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) own sel :=
