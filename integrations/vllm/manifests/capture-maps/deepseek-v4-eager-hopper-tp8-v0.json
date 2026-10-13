@@ -436,10 +436,19 @@
    "note": "_fill_short_context_topk_indices (attention.py:72, Triton, num_warps 8): slot j = j when j < (pos + 1) // CSA_R in int64, else -1. Row DSV4-IDX: Dsv4ShortContextTopK_v1{TOPK, RATIO}",
    "branch": "cursor/dsv4-indexer-8c79"
   },
+  "dsv4-csa-decode-indices": {
+   "status": "port",
+   "definitions": [
+    "Dsv4GlobalTopk_v1",
+    "Dsv4GlobalTopk_v2"
+   ],
+   "note": "compute_global_topk_indices_and_lens (common/ops/cache_utils.py:435-517, Triton, one program per decode token; nvidia/flashmla.py:193-203), a CSA layer's decode: the token's row of the indexer's top-k (indexer.topk_short or indexer.topk, rows [0, MD)) through its request's block-table row, blocks[x / BS] * BS + x % BS in int32 and -1 where x < 0, and its length, the count of x >= 0, 0 for a padding token (is_valid_token = slot_mapping >= 0). Dsv4GlobalTopk_v1{TOPK, BS, NB} at TOPK = index_topk, BS = block_size / 4 = 64 and NB the block table's row, cdiv(max_model_len, 256) (Boolean _v2). The block-table row and is_valid_token are the step's schedule metadata; the kernel reads no position. tests/properties/dsv4_decode_index_row_capture_gpu.py pins it on the H200",
+   "when": "every valid index names a block of its request's own row (x / BS < NB, as a served index below (position + 1) / CSA_R does)"
+  },
   "dsv4-decode-indices": {
    "status": "committed-only",
    "definitions": [],
-   "note": "the decode attention's indices: decode_swa_indices / decode_swa_lens (the metadata builder: the last SW tokens' SWA slots), compute_global_topk_indices_and_lens (CSA: the indexer's local top-k through the block table, padding tokens length 0) and c128a_global_decode_topk_indices / _lens (HCA: every compressed block so far). FlashMlaDecode_v1 takes them as inputs; no row states them yet"
+   "note": "the decode attention's other indices: decode_swa_indices / decode_swa_lens (the metadata builder: the last SW tokens' SWA slots) and c128a_global_decode_topk_indices / _lens (HCA: every compressed block so far). FlashMlaDecode_v1 takes them as inputs; no row states them yet (CSA's are dsv4-csa-decode-indices)"
   },
   "inv-rope-fp8-quant": {
    "status": "tonight",
@@ -2272,7 +2281,7 @@
     "MD",
     "TOPK"
    ],
-   "program": "dsv4-decode-indices",
+   "program": "dsv4-csa-decode-indices",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -2311,15 +2320,41 @@
    }
   },
   {
-   "id": "attn.extra_lens",
+   "id": "attn.extra_lens.csa",
    "op": "layers.{i}.attn.decode_indices",
    "port": 3,
-   "layers": "all",
+   "layers": "csa",
    "module": "model.layers.{i}.attn",
    "site": {
     "kind": "launch_wrap",
     "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:flash_mla_with_kvcache",
-    "detail": "extra_topk_length (CSA: from compute_global_topk_indices_and_lens; HCA: c128a_decode_topk_lens)"
+    "detail": "extra_topk_length: compute_global_topk_indices_and_lens' lengths"
+   },
+   "dtype": "int32",
+   "shape": [
+    "MD"
+   ],
+   "program": "dsv4-csa-decode-indices",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "decode-tokens",
+   "commit": {
+    "name": "model.layers.{i}.attn/extra_lens",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.extra_lens.hca",
+   "op": "layers.{i}.attn.decode_indices",
+   "port": 3,
+   "layers": "hca",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:flash_mla_with_kvcache",
+    "detail": "extra_topk_length: c128a_decode_topk_lens"
    },
    "dtype": "int32",
    "shape": [
@@ -3148,7 +3183,8 @@
     "attn.swa_lens",
     "attn.extra_indices.csa",
     "attn.extra_indices.hca",
-    "attn.extra_lens",
+    "attn.extra_lens.csa",
+    "attn.extra_lens.hca",
     "attn.out.decode",
     "attn.out.prefill",
     "attn.o_fp8",
