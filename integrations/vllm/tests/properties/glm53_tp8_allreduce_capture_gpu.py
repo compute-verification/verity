@@ -178,11 +178,12 @@ def expected_comm(M: int, setting: str, N: int | None = None) -> str:
     """The communicator `CudaCommunicator.all_reduce` hands M tokens of N bf16 (default `HIDDEN`) to at 8 ranks on cc 9.0, one node
     with NVSwitch, at `setting` (`tp_allreduce.SETTINGS`).  vLLM d9105ea80, `vllm/distributed/device_communicators/`:
 
-    * the order is `cuda_communicator.py:305-377`: FlashInfer's all-reduce (:306-311, :335-339); NCCL's symmetric memory (:315-322),
-      off unless ``VLLM_USE_NCCL_SYMM_MEM`` (`vllm/envs.py:2017-2019`, `pynccl_allocator.py:48-50`), which every rank unsets
-      (`UNSET`); quick all-reduce (:323-331, ROCm); FlashInfer's PCIe IPC all-reduce (:332-334, off unless
-      ``VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC``, `vllm/envs.py:1898-1900`); aiter (:340-348, ROCm); the custom all-reduce
-      (:349-357); torch's symmetric memory (:358-362); NCCL (:363-377);
+    * the order is `cuda_communicator.py:305-377`: NCCL's symmetric memory when FlashInfer's all-reduce would not take the call
+      (decided at :306-311; :315-322), off unless ``VLLM_USE_NCCL_SYMM_MEM`` (`vllm/envs.py:2017-2019`, `pynccl_allocator.py:48-50`),
+      which every rank unsets (`UNSET`); quick all-reduce (:323-331, ROCm); FlashInfer's PCIe IPC all-reduce (:332-334, off unless
+      ``VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC``, `vllm/envs.py:1898-1900`); FlashInfer's all-reduce (:335-339); aiter (:340-348,
+      ROCm); the custom all-reduce (:349-357); torch's symmetric memory (:358-362); NCCL (:363-377). On 8 H200s that leaves
+      FlashInfer's, the custom all-reduce, torch's symmetric memory and NCCL, in that order;
     * FlashInfer takes ``nbytes <= max_workspace_size`` and ``M <= max_workspace_size // (N * 2)`` (`flashinfer_all_reduce.py:441-450`),
       0.5 MiB at 8 ranks on sm_90 (`vllm/compilation/passes/fusion/allreduce_rms_fusion.py:104-109`; `all_reduce_utils.py:87-92`
       tunes no sm_90 size), and its workspace's buffer check (:467-472) admitted every M to 42 at 6144 in the GO runs: 42 tokens
@@ -191,7 +192,10 @@ def expected_comm(M: int, setting: str, N: int | None = None) -> str:
       `vllm/v1/worker/gpu_worker.py:1492`; `cuda_communicator.py:58-60, 141-149`), takes ``nbytes < max_size``
       (`custom_all_reduce.py:405-420`), 8 MiB (:125) cut to ``CUSTOM_ALL_REDUCE_MAX_SIZES["9.0"][8]`` = 256 KiB when symmetric memory
       is on (:206-220, `all_reduce_utils.py:31-37`): 21 tokens at 6144, 18 at 7168, which FlashInfer has already taken, so it takes
-      none at "defaults"; under "switch" it runs to 682 tokens at 6144;
+      none at "defaults"; under "switch" it runs to 682 tokens at 6144. Its all-gather and reduce-scatter (:379-389) serve only
+      sequence-parallel MoE (`vllm/models/common/ops/sequence_parallel.py:15-39`), which needs expert parallelism and DP > 1
+      (`vllm/config/parallel.py:706-721`), and `all_gather` and `reduce_scatter` (:391-452) are NCCL's, so at TP 8 turning it on
+      reroutes nothing else;
     * torch's symmetric memory, on unless ``VLLM_ALLREDUCE_USE_SYMM_MEM=0`` (`vllm/envs.py:1888-1890`), takes ``nbytes <= 64 MiB``
       (`symm_mem.py:117-125`, `all_reduce_utils.py:58-63`), multimem at 8 ranks on cc 9.0 (`symm_mem.py:26-31, 143-150`): 5461
       tokens at 6144, 4681 at 7168;

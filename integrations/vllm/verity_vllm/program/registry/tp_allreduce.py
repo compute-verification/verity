@@ -21,13 +21,14 @@ Which kernel reduces a call (vLLM d9105ea80):
   two-shot (`twoshotAllreduceKernel` then `rmsNormLamport`). `AllReduceRmsNormMnnvl_v1` is either, one token.
 * Otherwise the call is `tensor_model_parallel_all_reduce` then `RMSNorm.forward_cuda` (`fused_add_rms_norm`,
   `b1.RMSNormFusedCuda_v2`). `_can_use_flashinfer` reads none of the settings below, so this split is the same under each.
-* `tensor_model_parallel_all_reduce` (`CudaCommunicator.all_reduce`, `cuda_communicator.py:305-377`) tries, in order, FlashInfer's
-  MNNVL all-reduce (``fi_ar_comm``) within the same 0.5 MiB; vLLM's custom all-reduce (``ca_comm``, `AllReduceCustom_v1`) when it
-  is on, below its ``max_size``; torch's symmetric memory (``symm_mem_comm``, `AllReduceMultimem_v1`) to 64 MiB when it is on;
-  then NCCL. The custom all-reduce's ``max_size`` is 8 MiB (`CUSTOM_MAX_BYTES`), cut to `CUSTOM_SYMM_MAX_BYTES` (256 KiB at 8 ranks
-  on cc 9.0, `custom_all_reduce.py:206-220`) when symmetric memory is on, which FlashInfer's 0.5 MiB holds: at vLLM's defaults
-  (`SETTINGS`) it takes none of these all-reduces, and runs only with ``VLLM_ALLREDUCE_USE_SYMM_MEM=0`` (the "switch"), up to 8 MiB
-  (`custom_stage` picks its kernel, ``VLLM_CUSTOM_ALLREDUCE_ALGO`` pins it).
+* `tensor_model_parallel_all_reduce` (`CudaCommunicator.all_reduce`, `cuda_communicator.py:305-377`) tries, of the routes on at
+  TP 8 on cc 9.0, in order, FlashInfer's MNNVL all-reduce (``fi_ar_comm``) within the same 0.5 MiB; vLLM's custom all-reduce
+  (``ca_comm``, `AllReduceCustom_v1`) when it is on, below its ``max_size``; torch's symmetric memory (``symm_mem_comm``,
+  `AllReduceMultimem_v1`) to 64 MiB when it is on; then NCCL. The custom all-reduce's ``max_size`` is 8 MiB (`CUSTOM_MAX_BYTES`),
+  cut to `CUSTOM_SYMM_MAX_BYTES` (256 KiB at 8 ranks on cc 9.0, `custom_all_reduce.py:206-220`) when symmetric memory is on, which
+  FlashInfer's 0.5 MiB holds: at vLLM's defaults (`SETTINGS`) it takes none of these all-reduces, and runs only with
+  ``VLLM_ALLREDUCE_USE_SYMM_MEM=0`` (the "switch"), up to 8 MiB (`custom_stage` picks its kernel, ``VLLM_CUSTOM_ALLREDUCE_ALGO``
+  pins it).
 
 What the 8-GPU capture (`tests/properties/glm53_tp8_allreduce_capture_gpu.py`) has shown, per setting, hidden size and route, is
 `CAPTURED`; `covered` answers for one call, and a route it does not name is not covered, whatever the dispatch says. Nothing at
