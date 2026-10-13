@@ -239,3 +239,5 @@ end read
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.openingZeroAtL_wReadO

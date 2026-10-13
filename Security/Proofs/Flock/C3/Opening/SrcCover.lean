@@ -329,3 +329,5 @@ theorem openTieL_of_openTie {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s :
 end Sessions
 
 end FlockC3.Opening
+
+#print axioms FlockC3.Opening.openTieL_of_session

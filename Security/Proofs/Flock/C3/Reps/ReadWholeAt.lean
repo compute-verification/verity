@@ -47,3 +47,5 @@ theorem resReadCol {S : ℕ} {Vs : Fin S → VStmt} {sh : Flock.Shape} {sess : �
   exact ReadWhole.readCol_whole (Vs (sess p)).hU hu hn hw hq hb hr hb₀
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.resReadCol

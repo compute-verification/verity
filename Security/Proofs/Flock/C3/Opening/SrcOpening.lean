@@ -117,3 +117,5 @@ theorem openingReadAt_src
   exact List.prefix_append _ _
 
 end FlockC3.Opening
+
+#print axioms FlockC3.Opening.openingReadAt_of_sessionAt

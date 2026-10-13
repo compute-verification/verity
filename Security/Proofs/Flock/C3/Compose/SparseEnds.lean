@@ -366,3 +366,5 @@ theorem rsRead_of_layer
 end
 
 end FlockC3.Compose
+
+#print axioms FlockC3.Compose.rsRead_of_layer

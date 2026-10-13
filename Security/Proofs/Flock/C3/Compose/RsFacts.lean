@@ -617,3 +617,10 @@ theorem openMsgsRead_checked {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss
 end
 
 end FlockC3.Compose
+
+#print axioms FlockC3.Compose.openCopy_key
+#print axioms FlockC3.Compose.rsReadCol
+#print axioms FlockC3.Compose.rsIo_of_readCol
+#print axioms FlockC3.Compose.rsRead_of_facts
+#print axioms FlockC3.Compose.rsRead_checked
+#print axioms FlockC3.Compose.openMsgsRead_checked

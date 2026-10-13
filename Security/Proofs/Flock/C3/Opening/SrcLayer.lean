@@ -187,3 +187,7 @@ theorem openingReadAt_srcL
     openTie_of_layer hsh _ (htie R ω t R₂ τ o hacc)
 
 end FlockC3.Opening
+
+#print axioms FlockVBridge.OfVStar.fill_rowCol
+#print axioms FlockVBridge.OfVStar.readCol_rsAt
+#print axioms FlockC3.Opening.eq_of_rsAt

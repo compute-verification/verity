@@ -120,3 +120,5 @@ theorem openingRead_of_session (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     hacc_of_units hbuild hu hcoef hrd, hres, hzero, hclaim R ω t R₂ τ o hacc a b ha hb, hpre⟩
 
 end FlockC3.Opening
+
+#print axioms FlockC3.Opening.openingRead_of_session
