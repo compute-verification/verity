@@ -41,6 +41,12 @@ where block-sha512 takes 33, and the signs, derived from the pass's seed, exist 
 the seed does.  Leaves, salts and the tree are the same under either kind.  What each kind rests on is `PROTOCOL.md`
 §4.
 
+The registration also names its block layout (`LAYOUTS`): how a kernel's sketch vectors map to the registered blocks,
+each block j the encoded store's bytes 4096·j … 4096·j + 4095, whole codec words.  Under store-order/v0, the only one,
+a vector is one registered block's bytes in store order.  `plan_of` takes a kernel's map from its vectors' bytes to
+the store's and returns the plan its vectors are, refusing padding, a codec word split across vectors and a block
+twice, so that only registered blocks' bytes are credited.
+
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
 that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is
 the tree's, not necessarily the reads': listed in store order, a plan is one run per contiguous range it reads.
@@ -342,6 +348,46 @@ def receipt_kind(kind: object) -> str:
 def receipter(kind: str, seed: bytes) -> Receipter | SketchReceipter:
     """The receipter of `kind` under one pass's seed."""
     return RECEIPTERS[receipt_kind(kind)](seed)
+
+
+STORE_ORDER = "store-order/v0"
+LAYOUTS = (STORE_ORDER,)
+LAYOUT = STORE_ORDER
+
+
+def block_layout(name: object) -> str:
+    """`name`, if it is one of `LAYOUTS`: how a kernel's sketch vectors map to the registered blocks."""
+    if type(name) is not str or name not in LAYOUTS:
+        raise ValueError(f"a block layout is one of {list(LAYOUTS)}")
+    return name
+
+
+def plan_of(vectors: object, blocks: int, layout: str = LAYOUT) -> Plan:
+    """The plan a kernel's sketch vectors are under `layout`, the registered blocks it may credit, or ValueError.
+    `vectors[v][x]` is the encoded store's byte that byte x of vector v holds (block j's are 4096·j …), or −1 where it
+    holds none, padding; a numpy array is read through `tolist`.  Under store-order/v0 vector v is one registered
+    block's 4,096 bytes in store order, so whole codec words (32 at p1024, 64 at p512): a vector with padding, a byte
+    past the store, a codec word split with another vector, or a block another vector already is, is refused."""
+    block_layout(layout)
+    store_blocks(blocks)
+    rows = vectors.tolist() if hasattr(vectors, "tolist") else vectors
+    if not isinstance(rows, Sequence) or not rows:
+        raise ValueError("a layout maps one or more vectors")
+    order = []
+    for v, row in enumerate(rows):
+        if not isinstance(row, Sequence) or len(row) != BLOCK_BYTES:
+            raise ValueError(f"vector {v} is not {BLOCK_BYTES} bytes")
+        first = row[0]
+        if type(first) is not int or first < 0 or first % BLOCK_BYTES or first >= blocks * BLOCK_BYTES:
+            raise ValueError(f"vector {v} does not start at a registered block: its first byte is {first!r}")
+        if list(row) != list(range(first, first + BLOCK_BYTES)):
+            raise ValueError(f"vector {v} is not block {first // BLOCK_BYTES}'s {BLOCK_BYTES} bytes in store order: it "
+                             "holds padding, another block's bytes or a codec word split with another vector")
+        order.append(first // BLOCK_BYTES)
+    try:
+        return Plan.of(order, blocks)
+    except ValueError as e:
+        raise ValueError(f"the vectors repeat a registered block: {e}") from None
 
 
 def leaves(positions: int) -> int:

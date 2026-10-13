@@ -91,6 +91,7 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 | `codec` | the store's codec, the one its registration names (§3): `p1024/k3/masked` unless another is named |
 | `receipt` | the receipt kind, the one its registration names (§4): `sketch-sha512` unless `block-sha512` is named |
 | `bind` | whether receipts bind PoUW's tile output \(z\), as its registration says (§4): no unless it binds them |
+| `layout` | how a kernel's sketch vectors map to registered blocks, the one its registration names (§4): `store-order/v0` |
 
 The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by window. It is not a parameter.
 
@@ -105,15 +106,16 @@ The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by
    `node` is the node's id, 1 to 64 bytes. This is the leaf PoUS's answer circuit proves over a block.
 2. Only after the payload root has arrived does the verifier draw the codec seed from its own secret and a fresh
    32-byte nonce: `derive(source, "verity/remote-bandwidth/codec/v0", {node, blocks, payload, codec, nonce}).stream("codec",
-   32)`, `codec` the name of the codec the registration names. The registration also names its receipt kind and
-   whether its receipts bind \(z\) (§4), neither in this context: the store depends on neither.
+   32)`, `codec` the name of the codec the registration names. The registration also names its receipt kind, whether
+   its receipts bind \(z\) and its block layout (§4), none of them in this context: the store depends on none of them.
 3. The prover encodes every block under that seed with that codec (`codec.py`, below):
    \(E_j = \text{encode}(\text{payload}_j)\).
 4. `Registration.digest = SHA512("verity/remote-bandwidth/registration/v0\0" ‖ frame(node) ‖ u64be N ‖ payload root ‖
-   codec seed ‖ frame(codec name) ‖ frame(receipt kind) ‖ u8 bind)`, `frame` being `verity.ml.randomness.frame` ("s" ‖
-   u64be length ‖ the name in UTF-8) and bind 1 if the receipts bind \(z\), else 0. A record cites this digest, each
-   session's coin commitment binds it, and each session's chain starts from it, so a session's coins and seeds are
-   bound to its kind and to whether it binds \(z\).
+   codec seed ‖ frame(codec name) ‖ frame(receipt kind) ‖ u8 bind ‖ frame(block layout))`, `frame` being
+   `verity.ml.randomness.frame` ("s" ‖ u64be length ‖ the name in UTF-8) and bind 1 if the receipts bind \(z\), else 0.
+   A record cites this digest, each session's coin commitment binds it, and each session's chain starts from it, so a
+   session's coins and seeds are bound to its kind, to whether it binds \(z\) and to the block cut its kernels' sketch
+   vectors follow.
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT` (Daniel, 12 Oct, #1884). The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -359,6 +361,26 @@ so the prover may list a pass's blocks in store order whatever order it reads th
 per contiguous range read (§8). It may choose the plan after reading, since it is credited only with what it receipts
 and every receipt is sampled; what it can't do is credit one read twice.
 
+**The block layout.** The registration fixes the store's block cut: block \(j\) is the encoded store's bytes \(4096j\)
+to \(4096j + 4095\), whole codec words (the 32 words \(32j, \dots, 32j + 31\) at p1024, 64 at p512), the cut the payload
+tree's leaves and the opening check (§6, check 3) use. A kernel need not read a block as one vector: a tensor-core
+GEMM reads its operand as fragments, 32 bytes of each 512-byte step a lane. So the registration also names a block
+layout, how a kernel's sketch vectors map to registered blocks (`receipts.LAYOUTS`; `Params.layout` names the same),
+and its digest binds the name. The layout is the registration's, never the launch's: the prover's launch parameters
+(the GEMM's `groups`, its tile) can't move the cut. store-order/v0, the default and so far the only one, makes a
+vector one registered block's 4,096 bytes in store order. Its check is `receipts.plan_of`: from a kernel's byte map
+(for each byte of each vector, the store byte it holds, or −1 where it holds none), the plan the vectors are, refusing
+a vector with padding, a byte past the store, a codec word split with another vector, bytes of two blocks, or a block
+twice. A layout the verifier can't map to whole registered blocks is refused, at registration and by `Params`.
+
+Only registered blocks' bytes are credited. A pass's plan is `plan_of` of its kernel's vectors under the registered
+layout, and the record credits \(b\) bytes a position, so padding (a CTA's last tile zero-filled past its tasks) is
+never a position, and a vector of padding alone, whose receipt the seed alone determines, is never credited. The
+fragment cut that `gemm_blocks` builds splits every 128-byte word across 4 vectors (RB-D1, #1916), so `plan_of` refuses
+it. A kernel that keeps it needs a layout of its own, one whose every vector is still one whole registered block (a
+fixed permutation of the block's bytes, which the verifier applies to the opened block before its sketch), named in
+`LAYOUTS` and here before any of its receipts is credited.
+
 **\(z_{(i,j)}\)**, under a registration that binds \(z\) only, is PoUW's noised output of the tile the prover computes
 before reading block \(j\) in pass \(i\) (`Tiles`). A registration that doesn't bind it takes no tiles: its receipts
 are of the block alone, and its openings carry no tile evidence. Three choices in the binding form are load-bearing:
@@ -493,11 +515,11 @@ opening.
 
 `Session.record()` returns a `Record` once every window is accepted. `public()` holds the registration digest, the coin
 commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z\), the codec's name and parameters
-(`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), each window's passes and receipts \(U_t\), and
-the session's span. The digest binds the kind, `bind` and the codec already, but the record names them as well: what
-its receipts rest on depends on the first two (§4), and `ledger` takes a link term only from a record that binds
-\(z\); \(\mu_{\text{rebuild}}\)'s model is priced under the codec (§3), so a record is re-checked against the model's
-codec by name. Each
+(`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), the block layout, each window's passes and
+receipts \(U_t\), and the session's span. The digest binds the kind, `bind`, the codec and the layout already, but the
+record names them as well: what its receipts rest on depends on the first two (§4), and `ledger` takes a link term
+only from a record that binds \(z\); \(\mu_{\text{rebuild}}\)'s model is priced under the codec (§3), so a record is
+re-checked against the model's codec by name; and the layout says which bytes a credited block is (§4). Each
 `WindowRecord` carries its passes' lengths \(L_{t,i}\), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so
 its span \(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`. That is every input of
 \(\gamma_t\) but the node's measured \(R\) and \(S_{\text{chip}}\) and the models, so the every-window claim is

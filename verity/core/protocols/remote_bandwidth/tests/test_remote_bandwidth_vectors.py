@@ -131,11 +131,13 @@ def test_the_registration_and_the_codecs_words_reproduce_the_pinned_ones() -> No
     assert pinned["registration"]["codec"] == pinned["codec"]["name"] == reg.codec.name == "p1024/k3/masked"
     assert pinned["registration"]["receipt"] == reg.receipt == receipts.DEFAULT == "sketch-sha512"
     assert pinned["registration"]["bind"] is reg.bind is False
+    assert pinned["registration"]["layout"] == reg.layout == receipts.LAYOUT == "store-order/v0"
     assert set(pinned["variants"]) == {rv.name(kind, bind) for kind, bind in rv.VARIANTS} and len(rv.VARIANTS) == 3
     for kind, bind in rv.VARIANTS:
         v = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, reg.codec, kind, bind=bind, nonce=rv.NONCE)
         assert pinned["variants"][rv.name(kind, bind)]["registration"] == {
-            "receipt": kind, "bind": bind, "codec_seed": reg.codec_seed.hex(), "digest": v.digest.hex()}
+            "receipt": kind, "bind": bind, "layout": receipts.LAYOUT, "codec_seed": reg.codec_seed.hex(),
+            "digest": v.digest.hex()}
     k, f = reg.key, reg.codec.field
     assert pinned["codec"]["c"] == [format(c, "x") for c in k.c] and pinned["codec"]["tau"] == format(k.tau, "x")
     assert pinned["codec"]["mask"] == format(k.mask, "x") and pinned["codec"]["seed"] == reg.codec_seed.hex()

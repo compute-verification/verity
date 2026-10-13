@@ -162,7 +162,8 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
     assert SCHEDULE.passes == (4, 3, 3) and SCHEDULE.deadlines == (1000 + A, 2000 + A, 3000 + A)
     assert r.public() == {"bind": False, "block_bytes": 4096, "blocks": N, "codec": "p1024/k2/masked",
                           "codec_params": {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2},
-                          "coins": s.commitment.root.hex(), "passes": [4, 3, 3], "protocol": audit.PROTOCOL_ID,
+                          "coins": s.commitment.root.hex(), "layout": "store-order/v0", "passes": [4, 3, 3],
+                          "protocol": audit.PROTOCOL_ID,
                           "receipt": "sketch-sha512", "receipts": [4 * N, 3 * N, 3 * N],
                           "registration": store.registration.digest.hex(), "span_ns": 3000 + A}
     assert r.codec == store.registration.codec == codec.FALLBACK
@@ -207,6 +208,45 @@ def test_a_plan_maps_positions_to_blocks_and_is_canonical() -> None:
     assert receipts.Plan.whole(N).runs == ((0, N),)
     with pytest.raises(IndexError):
         plan.block(6)
+
+
+def store_order(blocks: list[int]) -> np.ndarray:
+    """The byte map of vectors that are `blocks`' bytes in store order: row v, byte x is 4096·blocks[v] + x."""
+    return np.array(blocks, np.int64)[:, None] * 4096 + np.arange(4096, dtype=np.int64)
+
+
+def fragments(blocks: int) -> np.ndarray:
+    """A tensor-core fragment cut of `blocks` blocks (RB-D1's `gemm_blocks`): vector v holds 32-byte sector v mod 4 of
+    every 128-byte codec word of blocks 4·(v // 4) … 4·(v // 4) + 3, so each word is split across 4 vectors."""
+    words = np.arange(blocks * 32, dtype=np.int64).reshape(-1, 1, 128, 1)        # (group of 4 blocks, 1, word, 1)
+    sectors = np.arange(4, dtype=np.int64).reshape(1, 4, 1, 1) * 32 + np.arange(32, dtype=np.int64)
+    return (words * 128 + sectors).reshape(-1, 4096)
+
+
+def test_a_kernels_vectors_are_credited_only_as_whole_registered_blocks() -> None:
+    """`plan_of`: under store-order/v0 a kernel's sketch vector is one registered block's 4,096 bytes in store order
+    (32 whole codec words at p1024), and the plan it credits is those blocks.  A fragment cut that splits each word
+    across 4 vectors, padding, a byte past the store, a block twice and a layout the verifier can't map are refused."""
+    assert receipts.plan_of(store_order([3, 4, 5, 0]), N) == receipts.Plan(((3, 3), (0, 1)), N)
+    assert receipts.plan_of(store_order([3, 4, 5, 0]).tolist(), N).runs == ((3, 3), (0, 1))
+    assert receipts.plan_of(store_order(list(range(N))), N) == receipts.Plan.whole(N)
+    cut = fragments(8)
+    assert sorted(cut.ravel().tolist()) == list(range(8 * 4096))                  # every stored byte once, no padding
+    assert {len({int(v) for v in np.nonzero((cut // 128) == w)[0]}) for w in range(8 * 32)} == {4}
+    padded = store_order([0, 1])
+    padded[1, 4000:] = -1                                                         # a tail past the stored bytes
+    permuted = store_order([2])
+    permuted[0, 128:384] = np.roll(permuted[0, 128:384], 128)                     # whole words, out of store order
+    for vectors, match in [(cut, "not block 0's 4096 bytes in store order"), (padded, "vector 1 is not block 1's"),
+                           (store_order([N]), "does not start at a registered block"),
+                           (np.full((1, 4096), -1, np.int64), "does not start at a registered block"),
+                           (permuted, "not block 2's"), (store_order([1, 2, 1]), "repeat a registered block"),
+                           (store_order([0])[:, :4095], "is not 4096 bytes"), ([], "one or more vectors"),
+                           (store_order([0]).astype(np.float64), "does not start at a registered block")]:
+        with pytest.raises(ValueError, match=match):
+            receipts.plan_of(vectors, N)
+    with pytest.raises(ValueError, match="a block layout is one of"):
+        receipts.plan_of(store_order([0]), N, "gemm-a-fragment/v0")
 
 
 @pytest.mark.parametrize("bind", [False, True])
@@ -390,9 +430,17 @@ def test_the_codec_seed_is_drawn_after_and_bound_to_the_payload_root() -> None:
     assert bound == dataclasses.replace(a, bind=True)                          # nor is bind in the codec seed's context
     assert bound.digest not in {a.digest, blocked.digest, *(o.digest for o in others)}   # the digest binds it
     assert a.digest == hashlib.sha512(audit.REGISTRATION_DOMAIN + frame(NODE) + N.to_bytes(8, "big") + root
-                                      + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\0").digest()
+                                      + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\0"
+                                      + frame("store-order/v0")).digest()
     assert bound.digest == hashlib.sha512(audit.REGISTRATION_DOMAIN + frame(NODE) + N.to_bytes(8, "big") + root
-                                          + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\1").digest()
+                                          + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\1"
+                                          + frame("store-order/v0")).digest()
+    assert a.layout == receipts.LAYOUT == receipts.STORE_ORDER == receipts.LAYOUTS[0]
+    assert dataclasses.replace(a, layout="gemm-a-fragment/v0").digest != a.digest   # the digest binds the layout
+    with pytest.raises(ValueError, match="a block layout is one of"):                # one the verifier can't map
+        audit.register(SOURCE, NODE, N, root, layout="gemm-a-fragment/v0", nonce=bytes(32))
+    with pytest.raises(ValueError, match="a block layout is one of"):
+        params(layout="gemm-a-fragment/v0")
     with pytest.raises(ValueError, match="a receipt kind is one of"):
         audit.register(SOURCE, NODE, N, root, codec.DEFAULT, "sha512", nonce=bytes(32))
     with pytest.raises(ValueError, match="bind is True or False"):
@@ -413,6 +461,10 @@ def test_a_session_refuses_parameters_that_are_not_the_registrations(store, stor
         with pytest.raises(ValueError, match="not the registration's"):
             Session(p, st.registration, audit.NoiseTiles(96) if p.bind else None, challenger(st, p), not_before_ns=0,
                     clock=Clock())
+    other = copy.copy(store)
+    other.registration = dataclasses.replace(store.registration, layout="gemm-a-fragment/v0")
+    with pytest.raises(ValueError, match="not the registration's"):                # a layout the session can't map
+        Session(params(), other.registration, None, challenger(other, params()), not_before_ns=0, clock=Clock())
     with pytest.raises(ValueError, match="a receipt kind is one of"):
         params(receipt="sha512")
     with pytest.raises(ValueError, match="bind is True or False"):

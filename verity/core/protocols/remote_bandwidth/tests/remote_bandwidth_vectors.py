@@ -144,8 +144,8 @@ def variant(kind: str, bind: bool) -> dict:
     st = registered(kind, bind)
     reg = st.registration
     challenge, passes, opening, challenger = chain(st)
-    return {"registration": {"receipt": reg.receipt, "bind": reg.bind, "codec_seed": reg.codec_seed.hex(),
-                             "digest": reg.digest.hex()},
+    return {"registration": {"receipt": reg.receipt, "bind": reg.bind, "layout": reg.layout,
+                             "codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()},
             "coins_root": challenger.commitment.root.hex(), "passes": _passes(st, challenge, passes),
             "openings": {"coin": opening.coin.hex(), "draws": draws(reg, opening)}}
 
@@ -175,7 +175,8 @@ def generate() -> dict:
                     "root": tree.commitment.root.hex()},
         "registration": {"source": SOURCE.hex(), "node": NODE.hex(), "blocks": BLOCKS, "nonce": NONCE.hex(),
                          "payload_root": reg.payload_root.hex(), "codec": reg.codec.name, "receipt": reg.receipt,
-                         "bind": reg.bind, "codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()},
+                         "bind": reg.bind, "layout": reg.layout, "codec_seed": reg.codec_seed.hex(),
+                         "digest": reg.digest.hex()},
         "coins": {"scheme": coins.SCHEME, "session": 0, "count": PARAMS.coins,
                   "binding": coins.domain(reg.digest, 0, PARAMS.coins).binding.hex(),
                   "coin_0": {"coin": first.coin.hex(), "salt": first.salt.hex(),
