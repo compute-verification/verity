@@ -1,11 +1,12 @@
 import Definitions.Accounting.RateAuditSketch
 import Definitions.Accounting.RateAuditSketchInteractive
+import Definitions.Accounting.RateAuditSketchLayout
 
 /-!
 # The rate audit with a sketch-then-hash tag (trusted)
 
 The game is `Security/Definitions/Accounting/RateAuditSketch.lean`; proofs are in
-`Security/Proofs/Accounting/RateAudit/Sketch.lean` and `SketchHonest.lean`. No named assumption: the device's bounds
+`Security/Proofs/Accounting/RateAudit/Sketch.lean`, `SketchHonest.lean` and `SketchTable.lean`. No named assumption: the device's bounds
 (on-chip state `S`, side link `L`, oracle queries `q`, the compute budget `F` at `c_tag` per tag and `c_enc` per rebuilt
 sector) and its class, a device that obtains sectors only whole and verbatim, define what the guarantees quantify over;
 the claims registry carries the class to a deployed device (`rate-sketch-verbatim`) beside `RateAudit`'s.
@@ -17,6 +18,9 @@ the claims registry carries the class to a deployed device (`rate-sketch-verbati
   sectors at addresses picked from what it sent.
 * `SketchBinds`: signs that bind sectors make the tensor-core sketch's fiber `1`.
 * `RateAuditTensorSketch`: the two at the deployed tag, 32-byte sectors and INT8 sketches into INT32 accumulators.
+* `RateSketchTable`: outside the verbatim class, for a prover whose memory holds any function of the store, every
+  digest of at most `2^d` values has a device accepted on every coin that reads `d` bits per tile.
+* `RateTensorSketchTable`: the same at the deployed tag, `32·k_s` bits per tile, at any number of rows `k_s`.
 -/
 
 namespace Accounting.Guarantees
@@ -143,5 +147,56 @@ def RateAuditTensorSketch : Prop :=
           A.footprint x.2.1 x.2.2.1 x.1 * cEnc < RateSketch.floor m 256 ρ S L F cTag cEnc k)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + pr (fun σ : SketchSigns ks m => ¬ SectorsBind σ) +
         (q : ℝ≥0∞) / 2 ^ 256
+
+/-- **Outside the verbatim class the sketch rate audit charges a prover only for its digest: the table.** For every
+digest `dig σ` of a tile of `m` sectors that takes at most `2^d` values, there is a prover of `LayoutDevice`'s class
+(`Security/Definitions/Accounting/RateAuditSketchLayout.lean`: memory laid out before the signs as any function of
+the store and read one bit at an address, nothing held on chip, a side link that carries the certified stream's `ρ`
+sectors and nothing else, nothing rebuilt) whose memory is `|Sig|·N·d` bits, the table `T[σ, t] = dig σ (tile t)` over
+every signs `σ` and tile `t`, and which, at every signs, oracle and data, commits every tile's right tag, so is
+accepted at every sample, makes `N` oracle queries and reads `N·d` bits of memory.
+
+**The reading.** At `RateSketchHonest`'s budgets (`S = 0`, `L = ρ·w`, `q = N`, `F = N·c_tag`), `RateAuditSketch`'s
+floor is `k·m·w − (N − k)·c_tag·w/c_enc` bits. This prover is accepted on every coin and reads `N·d` bits, every bit
+that conservation counts (Daniel, 12 Oct, #1884: one prover, the reads of every tier of its memory). At 4 KiB tiles
+(`m = 128`, `w = 256`) and `k_s = 16` rows (`d = 512`) that is 1/64 of the store, at `k_s = 64` (`d = 2048`) 1/16
+(`RateTensorSketchTable`). So no bound of `RateAuditSketch`'s form, at any number of rows and any rank of the signs,
+holds for a prover whose memory may hold any function of the store, which is `RateAudit`'s model: a digest that
+compresses the tile is what the verbatim class (`rate-sketch-verbatim`) is there for. `RateAudit`'s tag pays in that
+model because it hashes the tile itself, so its table is the store. What rules the table out is capacity, not reads:
+it is `|Sig|·N·d` bits (`2^65536·N·512` at `k_s = 16`, `2^κ·N·d` with signs drawn from the oracle at a `κ`-bit seed),
+and one cut to `M` bits covers a fraction `M/(|Sig|·N·d)` of the signs. A bound for an arbitrary prover must bound its
+memory, and with memory near the store's size it is a static cell-probe lower bound for random `±1` sketches, which
+this statement neither proves nor refutes.
+
+Proof: `Accounting.SecurityProofs.RateSketchTable`: the chip takes in the stream, then for each tile reads the `d`
+bits of its table entry at the signs and queries the oracle at the digest they encode.
+
+Frozen (completeness): like `RateSketchHonest`, a device accepted on every coin, here one whose reads fall below
+`RateAuditSketch`'s floor: a counterexample outside the verbatim class, not a property of a function. -/
+def RateSketchTable : Prop :=
+  ∀ (N m ρ h d : ℕ) (X Sig Dg : Type) [Inhabited X] [Fintype Sig] [Fintype Dg] (dig : Sig → (Fin m → X) → Dg),
+    Fintype.card Dg ≤ 2 ^ d →
+    ∃ A : LayoutDevice N m ρ h X Sig Dg,
+      (∀ (E : Fin N × Fin m → X) (a : ℕ), Fintype.card Sig * (N * d) ≤ a → A.mem E a = false) ∧
+      ∀ (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X),
+        (∀ t, A.tags σ O D t = O (D.stream, t, dig σ (D.tile t))) ∧ (A.queries σ O D).length = N ∧
+          A.reads σ O D = N * d ∧ A.linkSteps σ O D = ρ
+
+/-- **The table at the deployed tag.** `RateSketchTable` for 32-byte sectors, uniform `k_s × n` signs (`2^(32·k_s·m)`
+of them) and the tensor-core sketch into `k_s` INT32 accumulators (`d = 32·k_s`): a prover whose memory is a table of
+`2^(32·k_s·m)·N·32·k_s` bits, accepted on every coin, that reads `32·k_s` bits per tile. At `k_s = 64` the signs bind
+sectors but for a small chance (`SketchBinds`), and the table still reads 1/16 of a 4 KiB tile: more rows make the
+digest bind, which prices a guess, and do not make the reads pay for the tile. Proof:
+`Accounting.SecurityProofs.RateTensorSketchTable`, from `RateSketchTable`.
+
+Frozen (completeness): as `RateSketchTable`, a counterexample outside the verbatim class, not a property of a
+function. -/
+def RateTensorSketchTable : Prop :=
+  ∀ (N m ρ h ks : ℕ), ∃ A : LayoutDevice N m ρ h Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)),
+    (∀ (E : Fin N × Fin m → Sector) (a : ℕ), 2 ^ (ks * m * 32) * (N * (32 * ks)) ≤ a → A.mem E a = false) ∧
+    ∀ (σ : SketchSigns ks m) (O : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) (D : Data N m ρ Sector),
+      (∀ t, A.tags σ O D t = O (D.stream, t, sketch σ (D.tile t))) ∧ (A.queries σ O D).length = N ∧
+        A.reads σ O D = N * (32 * ks) ∧ A.linkSteps σ O D = ρ
 
 end Accounting.Guarantees
