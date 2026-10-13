@@ -171,20 +171,35 @@ def main() -> int:
             opened["ns"] = time.perf_counter_ns() - t0
             done.set()
 
+        stalls = []
+
+        def probe() -> None:
+            while not done.is_set():
+                t0 = time.perf_counter_ns()
+                time.sleep(0.0005)
+                if time.perf_counter_ns() - t0 > 20_000_000:
+                    stalls.append((t0, time.perf_counter_ns() - t0))
+
         host, g0, prev = [], len(store.pass_gpu_ms), bytes(64)
         with torch.cuda.stream(ps):
-            th = threading.Thread(target=opener)
+            th, pr = threading.Thread(target=opener), threading.Thread(target=probe)
             th.start()
+            pr.start()
             while not done.is_set():
                 t0 = time.perf_counter_ns()
                 prev, _ = store.run_pass(rb.seed(b"\5" * 32, len(host), prev))
                 host.append(time.perf_counter_ns() - t0)
             th.join()
+            pr.join()
         gpu = store.pass_gpu_ms[g0:]
+        st = store.open_stats[-1]
+        marks = [st["at_ns"], st["at_ns"] + st["subtrees_ns"], st["at_ns"] + st["subtrees_ns"] + st["gather_ns"]]
+        stalls = [{"after_open_ms": (t - marks[0]) / 1e6, "ms": d / 1e6,
+                   "phase": ("before", "subtrees", "gather", "assemble")[sum(t >= m for m in marks)]} for t, d in stalls]
         row = {"pass_priority": int(pass_prio), "open_priority": int(open_prio), "switch_ms": float(switch_ms),
                "passes": len(host), "open_ns": opened["ns"], "host_ns": percentiles(sorted(host)),
                "gpu_ms": percentiles(sorted(gpu)), "excess_ms": sum(host) / 1e6 - len(host) * read_ms,
-               "open_stats": store.open_stats[-1]}
+               "open_stats": st, "gil_stalls": stalls}
         out["contended"].append(row)
         print(json.dumps(row), flush=True)
     sys.setswitchinterval(0.005)

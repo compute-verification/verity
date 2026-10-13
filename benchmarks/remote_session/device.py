@@ -360,22 +360,28 @@ class DeviceStore:
         blocks = self.data.view(-1, BLOCK)[torch.tensor(flat, dtype=torch.int64, device="cuda")]
         hr, hp = self.H, N.bit_length() - 1
         cols = PER_LEAF + hr + hp
-        raw = got.cpu().numpy().astype(np.uint64).astype(">u8").tobytes()
-        braw = blocks.cpu().numpy().tobytes()
+        # Byte order on the device and pinned copies (GIL released), so the pass thread is never held behind a
+        # host-side byteswap or tobytes of a window's 100+ MB.
+        raw_t = torch.empty((n, 64), dtype=torch.uint8, pin_memory=True)
+        raw_t.copy_(got.view(torch.uint8).view(n, 8, 8).flip(-1).reshape(n, 64))
+        braw_t = torch.empty((len(flat), BLOCK), dtype=torch.uint8, pin_memory=True)
+        braw_t.copy_(blocks)
+        raw, braw = memoryview(raw_t.numpy().reshape(-1)), memoryview(braw_t.numpy().reshape(-1))
         t2 = time.perf_counter_ns()
         out, q = [], 0
         for (seed, *_), positions in items:
             mine = []
             for p in positions:
                 r = 64 * cols * q
-                d = [raw[r + 64 * k:r + 64 * k + 64] for k in range(PER_LEAF, cols)]
+                d = [bytes(raw[r + 64 * k:r + 64 * k + 64]) for k in range(PER_LEAF, cols)]
                 c = p // PER_LEAF
-                mine.append((self.dropped.get(p) or braw[BLOCK * q:BLOCK * (q + 1)], raw[r:r + 64 * PER_LEAF],
-                             store_salt(self.key, seed, c), tuple(d[:hr]),
+                mine.append((self.dropped.get(p) or bytes(braw[BLOCK * q:BLOCK * (q + 1)]),
+                             bytes(raw[r:r + 64 * PER_LEAF]), store_salt(self.key, seed, c), tuple(d[:hr]),
                              store_salt(self.key, PAYLOAD_LABEL, p), tuple(d[hr:])))
                 q += 1
             out.append(mine)
-        self.open_stats.append({"openings": len(flat), "subtrees": total, "subtrees_ns": t1 - t0,
+        del raw, braw
+        self.open_stats.append({"at_ns": t0, "openings": len(flat), "subtrees": total, "subtrees_ns": t1 - t0,
                                 "gather_ns": t2 - t1, "assemble_ns": time.perf_counter_ns() - t2})
         return out
 
