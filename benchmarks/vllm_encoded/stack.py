@@ -375,7 +375,8 @@ class LmHead:
                 graph = torch.cuda.CUDAGraph()
                 if self.cap is None:
                     self.cap = new_stream()
-                with torch.cuda.graph(graph, stream=self.cap):
+                # captured mid-serve, beside the filler's thread: under "global" its CUDA calls invalidate the capture
+                with torch.cuda.graph(graph, stream=self.cap, capture_error_mode="thread_local"):
                     self.run(xs, commit)
                 g = self.graphs[key] = (graph, xs)
             g[1].copy_(x2)
