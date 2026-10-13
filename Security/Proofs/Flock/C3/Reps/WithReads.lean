@@ -171,12 +171,3 @@ end RepMaps
 end
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.infoAlpha_of_rows
-#print axioms FlockC3.Reps.wKey_spec
-#print axioms FlockC3.Reps.wKeys_sentK
-#print axioms FlockC3.Reps.RepMaps.withReads_roundsHeld
-#print axioms FlockC3.Reps.RepMaps.withReads_alpha
-#print axioms FlockC3.Reps.RepMaps.withReads_wDecodes
-#print axioms FlockC3.Reps.RepMaps.withReads_wColsAt
-#print axioms FlockC3.Reps.RepMaps.withReads_algebraDecodes
