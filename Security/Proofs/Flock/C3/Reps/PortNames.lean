@@ -258,7 +258,7 @@ theorem wSel_of_rounds {S : ℕ} {Vs : Fin S → VStmt} {sh : Flock.Shape} {sess
   rintro s ρ x i ⟨m, rfl, hxm, -⟩ - hwi c ⟨hex, b, hb, rfl⟩ q kq - hkey
   have hloc : WLoc Vs sh sess i (wLoc Vs sh sess i) := by
     unfold wLoc
-    rw [dif_pos hex]
+    rw [dite_eq_left hex]
     exact Classical.choose_spec hex
   exact selPort_of_part hck hr hloc.1 hloc.2.1 hwi (hkr m x hxm) ρ hb q hkey
 
