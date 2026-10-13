@@ -11,10 +11,12 @@ permutations of `[0, p)`, forward queries only), at the block counts, widths and
 against, in namespace `Pous.Guarantees` with the rest. The proofs are in `Security/Proofs/Pous/P2/`
 (`Pous.SecurityProofs.P2MeetsM1pB19Uncond` and the others in `Security/Proofs/Pous.lean`); a docstring's
 `lean/submissions/efficient-crypto/…` path names the store draft each was graded from. A seventh,
-`P2SlackFamilyFreeBlocks` (the sampled setup's free blocks), is proved in `Security/Proofs/Pous/FreeBlocks/`. The last,
-`P2RingAuditSecureOfReduces`, carries the `m1p` row to P2 in the ring model under the reduction the spec states.
+`P2SlackFamilyFreeBlocks` (the sampled setup's free blocks), is proved in `Security/Proofs/Pous/FreeBlocks/`. Two more,
+`P2SlackFamilyWide` and `P2SlackFamilyFreeBlocksWide`, carry the families from `2^23` to `2^64` blocks
+(`Security/Proofs/Pous/P2/Wide.lean`). The last, `P2RingAuditSecureOfReduces`, carries the `m1p` row to P2 in the ring
+model under the reduction the spec states.
 
-The first seven are theorems about `m1p` only, not about the concrete P2: none models square–mask–square, SHAKE256,
+All but the last are theorems about `m1p` only, not about the concrete P2: none models square–mask–square, SHAKE256,
 roots or time. The last reaches square–mask–square only in the ring model (`p2ring`) and only under its hypothesis, a
 named conjecture. So none of them says the deployed P2 is secure.
 -/
@@ -178,6 +180,62 @@ term is slack. Scope: as `P2SlackB19Uncond`.
 Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
 def P2SlackFamilyFreeBlocks : Prop :=
   ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
+    let sch := m1p B 16448 (2 ^ 16448 - 21065) b
+    AuditSecureFree sch (B / 100) (sch.stateBound (Params.ρ * (99 / 100)) + 128 * sch.B) D (2 ^ 20) 140
+      (ENNReal.ofReal Params.δ) (Params.εMax + (2⁻¹ : ℝ≥0∞) ^ 129)
+
+/-! ## The families to `2^64` blocks -/
+
+/-- **Unconditional (no hypothesis): the slack rows and the `λ = 0` row for block counts from 2^8 to 2^64, at
+`ε = 2^-129`.** For every `B` with `2^8 ≤ B ≤ 2^64` and every `b` with `20·16448 ≤ 21·b` and `b ≤ 16447`,
+`m1p B 16448 (2^16448 − 21065) b` is correct, holds `W`, and is within the space bound. Every adversary holding
+`⌊ρ·|C|⌋ + λ·B` bits, with sequential reveal, `2^20` forward queries per answer and any depth, is accepted with
+probability at most `1% + 2^-129`, at:
+
+- `λ = 0`: `k = 88`;
+- `λ = 64`: `k = 96`, and `k = 95` for `B ≥ 2^10`;
+- `λ = 128`: `k = 105`, and `k = 104` for `B ≥ 2^9`;
+- `λ = 256`: `k = 128`, and `k = 127` for `B ≥ 2^10`.
+
+It is `P2SlackFamilyUncond` with `P2MeetsM1pFamilyUncond`'s `λ = 0` row, both at the error split's `2^-129`
+(`P2ErrorSplitB19Uncond` at every `B`), and with the cap `2^23` raised to `2^64`: the families' cap came only from
+the domain hypothesis `2·B·21065 ≤ 2^16448`, which holds to `2^64` (`PousP2Wide.hBc_64`), and the uniform
+certificates `g = ⌊c·B⌋ + 1` keep their `c` and margins above `2^23` (`PousP2Wide.famw_*`). So the ideal term's
+error at `k = 105` does not grow with the store: the 1% term is `c^k` for a fixed `c`, and the `2^-129` term is
+met with more room as `B` grows. Statement non-vacuity: as `P2SlackB19Uncond`, at `B = 2^19`. Scope: as
+`P2SlackB19Uncond`.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
+def P2SlackFamilyWide : Prop :=
+  ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 64 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
+    let sch := m1p B 16448 (2 ^ 16448 - 21065) b
+    sch.Correct ∧ sch.CodeHoldsW ∧ sch.SpaceBound Params.expansion ∧
+      AuditSecure sch .sequential (sch.stateBound Params.ρ) D (2 ^ 20) 88 (ENNReal.ofReal Params.δ)
+        ((2⁻¹ : ℝ≥0∞) ^ 129) ∧
+      AuditSecure sch .sequential (sch.stateBound Params.ρ + 64 * sch.B) D (2 ^ 20) 96 (ENNReal.ofReal Params.δ)
+        ((2⁻¹ : ℝ≥0∞) ^ 129) ∧
+      AuditSecure sch .sequential (sch.stateBound Params.ρ + 128 * sch.B) D (2 ^ 20) 105 (ENNReal.ofReal Params.δ)
+        ((2⁻¹ : ℝ≥0∞) ^ 129) ∧
+      AuditSecure sch .sequential (sch.stateBound Params.ρ + 256 * sch.B) D (2 ^ 20) 128 (ENNReal.ofReal Params.δ)
+        ((2⁻¹ : ℝ≥0∞) ^ 129) ∧
+      (2 ^ 9 ≤ B → AuditSecure sch .sequential (sch.stateBound Params.ρ + 128 * sch.B) D (2 ^ 20) 104
+        (ENNReal.ofReal Params.δ) ((2⁻¹ : ℝ≥0∞) ^ 129)) ∧
+      (2 ^ 10 ≤ B →
+        AuditSecure sch .sequential (sch.stateBound Params.ρ + 64 * sch.B) D (2 ^ 20) 95 (ENNReal.ofReal Params.δ)
+          ((2⁻¹ : ℝ≥0∞) ^ 129) ∧
+        AuditSecure sch .sequential (sch.stateBound Params.ρ + 256 * sch.B) D (2 ^ 20) 127 (ENNReal.ofReal Params.δ)
+          ((2⁻¹ : ℝ≥0∞) ^ 129))
+
+/-- **The sampled setup's free blocks, for block counts from 2^8 to 2^64.** `P2SlackFamilyFreeBlocks` with the cap
+`2^23` raised to `2^64`, by the same certificate (`g = ⌊0.9576·B⌋ + 1`) and the domain hypothesis at `2^64`
+(`PousP2Wide.p2_slack_family_free_blocks_wide`): the `k = 140` audit with at most `⌊B/100⌋` free blocks
+accepts every adversary holding `⌊ρ_eff·|C|⌋ + 128·B` bits, `ρ_eff = 18/19 · 99/100`, with probability at most
+`1% + 2^-128 + 2^-129`. The sampled setup it pairs with checks `s = 8,828` blocks whatever `B` is. Scope: as
+`P2SlackB19Uncond`.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
+def P2SlackFamilyFreeBlocksWide : Prop :=
+  ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 64 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
     let sch := m1p B 16448 (2 ^ 16448 - 21065) b
     AuditSecureFree sch (B / 100) (sch.stateBound (Params.ρ * (99 / 100)) + 128 * sch.B) D (2 ^ 20) 140
       (ENNReal.ofReal Params.δ) (Params.εMax + (2⁻¹ : ℝ≥0∞) ^ 129)
