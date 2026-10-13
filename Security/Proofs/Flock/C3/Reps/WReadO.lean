@@ -184,7 +184,7 @@ theorem bitOf_wReadO {Reg' : Type} {zs : (s : Fin S) → (Vs s).Outer Reg'}
         RegBit (zs (sess p₁)) (un p₁) 0 (rowColOfO sh p₁ (128 * a + b))
           (FlockVBridge.bitOf (w (wIOfO sh p₁)[a]) b) := by
     intro p₁ hp₁ a ha b hb hrd
-    obtain ⟨_, hj, _, _, _, _, _, _, _, P, ns, nv, hpart, hw, _, _⟩ := h p₁ hp₁
+    obtain ⟨_, hj, _, _, _, _, _, _, _, _, ns, nv, hpart, hw, _, _⟩ := h p₁ hp₁
     obtain ⟨hns, hnv, hwI, hsz⟩ := ofO_part hS hg hp₁ hpart
     have hq : 128 * a + b < 128 * ns.sum := by rw [← hsz]; omega
     rw [rowColOfO, hns, hnv] at hrd ⊢
@@ -262,7 +262,7 @@ theorem el_wReadO_acc {Reg' : Type} {zs : (s : Fin S) → (Vs s).Outer Reg'}
     (hp : p < gs.size) (he : (wIdx (Flock.RecOpening.portSizes sh) gs[p].2.1)[q]? = some e)
     (hwi : Flock.RecOpening.wi sh (.acc0 r) = some e ∨ Flock.RecOpening.wi sh (.acc1 r) = some e) :
     Flock.RecAlgebra.el (wReadO Vs sh sess un Lb) e = w e := by
-  obtain ⟨-, -, -, hc, hu, m, cl, hpm, hsh, P, ns, nv, hpart, -⟩ := h p hp
+  obtain ⟨_, _, _, hc, hu, _, _, hpm, hsh, _, ns, nv, hpart, -⟩ := h p hp
   obtain ⟨hns, hnv, hwI, -⟩ := ofO_part hS hg hp hpart
   have he' : (wIOfO sh p)[q]? = some e := by rw [hwI]; exact he
   obtain ⟨hq, rfl⟩ := Array.getElem?_eq_some_iff.1 he'
@@ -292,12 +292,12 @@ theorem sessionAt_wReadO {Reg' : Type} {zs : (s : Fin S) → (Vs s).Outer Reg'} 
       (Flock.RecAlgebra.el o.v)) (hcov : AccHeldO sh gs) :
     FlockC3.Opening.SessionAt zs Lb sh unit c3 (wReadO Vs sh sess un Lb) ops := by
   obtain ⟨o', ho', hsh, -, -, acc, sA, uA, cA, hop, hcoef, hrd⟩ := hs
-  obtain rfl : o' = o := Except.ok.inj (ho'.symm.trans ho)
+  obtain rfl : o = o' := Except.ok.inj (ho.symm.trans ho')
   have hval : ∀ r < 2, ∀ k : Flock.RecAlgebra.Key, (k = .acc0 r ∨ k = .acc1 r) →
       FlockC3.Opening.valO sh (wReadO Vs sh sess un Lb) (FlockC3.Opening.consO ops) k =
         FlockC3.Opening.valO sh w (FlockC3.Opening.consO ops) k := by
     intro r hr k hk
-    obtain ⟨p, e, q, hp, hwi, he⟩ := hcov r hr k hk
+    obtain ⟨p, e, _, hp, hwi, he⟩ := hcov r hr k hk
     rcases hk with rfl | rfl
     · simp only [FlockC3.Opening.valO, hwi, Flock.RecAlgebra.getElem!_el, el_wReadO_acc hA hS hg h hp he (.inl hwi)]
     · simp only [FlockC3.Opening.valO, hwi, Flock.RecAlgebra.getElem!_el, el_wReadO_acc hA hS hg h hp he (.inr hwi)]
