@@ -1288,10 +1288,23 @@ static_assert(RLAG >= 1 && (ZW & (ZW - 1)) == 0 && ZW >= 512 && GROUP % 2 == 0, 
 // words). Sizing RC = 1's by RCW keeps two CTAs an SM at 70B's GROUP = 8 (ZW = 2048 words would take 16 KiB of slots).
 constexpr int RS = NL / 4, RCW = 128 * RS;
 constexpr bool RC1_OK = MMA_OK, RC2_OK = MMA_OK && RS == 4;
+// Form 13 (RC = 3) is the remote bandwidth driver's sketch-sha512 receipt of each token-layer, the store's 4 KiB block
+// of whole words (store-order/v0), under the pass's own 16 sign rows S (wt.cu's wt_pass). A decoder lane's raw word of
+// each tile is B, column g' its token 8 i + g' of warp i's eight: k-step κ (0..RK - 1) is registers x[2κ], x[2κ + 1],
+// the word's bytes 8κ .. 8κ + 7, against A, S's rows at those bytes' positions in the block (kRcA[g][κ][lane], lane
+// (g', t') = S[g'] and S[g' + 8] at 128 wi + 8κ .. 8κ + 3, then 8κ + 4 .. 8κ + 7, wi its word of head g, as ±1 bytes;
+// kv_rc_pass). After the tile lane (g', t') holds head g's share of σ for tokens 2t' and 2t' + 1, rows g' and g' + 8,
+// which go to rc_sk[(slot KV_HEADS + g) 16 + row]; rc_receipt_kernel sums a slot's KV_HEADS shares and hashes σ.
+constexpr int RK = WB / 8;
+constexpr bool RC3_OK = MMA_OK && HW == 4 && TLE == 4096 && TL_BYTES == 4096;
 __host__ __device__ constexpr int rc_slot(int rc) { return rc == 2 ? ZW : RCW; }
-constexpr int rc_smem(int rc) { return mws_smem() + (rc ? ZB * rc_slot(rc) * 4 + ZB * 8 : 0); }
+constexpr int rc_smem(int rc) {
+  return mws_smem() + (rc == 3 ? RK * 32 * 16 : rc ? ZB * rc_slot(rc) * 4 + ZB * 8 : 0);
+}
 __device__ uint4 kRcB[2][RT * RCW / 4];
 __constant__ uint32_t kRcKey[2][8];
+__device__ uint4 kRcA[KV_HEADS][RK][32];
+__constant__ u64 kKvMid[8];
 
 __device__ __forceinline__ void imma16832(int (&d)[4], u32 a0, u32 a1, u32 a2, u32 a3, u32 b0, u32 b1) {
   asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, "
@@ -1355,18 +1368,21 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
     const int t0 = split * per_split, t1 = min(ctx, t0 + per_split);
     const int ntiles = t1 > t0 ? (t1 - t0 + MT - 1) / MT : 0;
     const int w = threadIdx.x / 32, lane = threadIdx.x % 32;
+    constexpr bool RCB = RC == 1 || RC == 2;
     if (threadIdx.x == 0) {
       for (int b = 0; b < MNB; ++b) {
         mbar_init(full + b, 32 * MDW);
         mbar_init(empty + b, 32 * MW);
       }
-      if (RC > 0)
+      if (RCB)
         for (int b = 0; b < ZB; ++b) mbar_init(bfull + b, 32 * MW);
       u32 s[NL];
       tweak((u64)MT * layers * TLW, s);
 #pragma unroll
       for (int l = 0; l < NL; ++l) td[l] = s[l];
     }
+    if constexpr (RC == 3)
+      for (int v = threadIdx.x; v < RK * 32; v += MWT) reinterpret_cast<uint4 *>(bbuf)[v] = kRcA[g][v / 32][v % 32];
     __syncthreads();
     if (w >= MW) {
       const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
@@ -1384,7 +1400,23 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
         const bool next = has(tile + 1);
         if (next) prefetch_word_l2(reinterpret_cast<const u32 *>(kv) + word(tile + 1) * NL);
         if (tile) tweak_step(tw, td);
-        if constexpr (RC > 0) {
+        if constexpr (RC == 3) {
+          int c[4] = {};
+          const uint4 *a = reinterpret_cast<const uint4 *>(bbuf) + lane;
+#pragma unroll
+          for (int kk = 0; kk < RK; ++kk) {
+            const uint4 v = a[32 * kk];
+            imma16832(c, v.x, v.y, v.z, v.w, x[2 * kk], x[2 * kk + 1]);
+          }
+          const int i = w - MW, gid = lane >> 2, t4 = lane & 3;
+          const u64 s0 = (u64)seq * ctx + t0 + tile * MT + 8 * i;
+#pragma unroll
+          for (int e = 0; e < 4; ++e) {
+            const int n = 2 * t4 + (e & 1);
+            if (8 * i + n < nt) rc_sk[((s0 + n) * KV_HEADS + g) * 16 + gid + 8 * (e >> 1)] = c[e];
+          }
+        }
+        if constexpr (RCB) {
           const int i = w - MW;
           if (t >= nt)
             for (int l = 0; l < NL; ++l) x[l] = 0u;
@@ -1427,7 +1459,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
     float m_own = -INFINITY, l_own = 0.f;
     mma_load_q(q, seq, g, lane, qa);
     const int rem = t1 - t0;
-    if constexpr (RC > 0) {
+    if constexpr (RCB) {
       for (int jt = 0; jt < RLAG && jt * MT < rem; ++jt) {
         rc_fill<RC>(bbuf + jt * SLOT, t0 / MT + jt, 32 * w + lane);
         mbar_arrive(bfull + jt);
@@ -1439,7 +1471,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
       if (nt > 16 * w)
         mma_chunk(smem_u32(sm + b * MT * MTS + 16 * w * MTS), qa, lane, min(16, nt - 16 * w), o, m_own, l_own);
       mbar_arrive(empty + b);
-      if constexpr (RC > 0) {
+      if constexpr (RCB) {
         const int jt = tile + RLAG;
         const bool next = jt * MT < rem;
         u32 *bs = bbuf + tile % ZB * SLOT;
@@ -1691,6 +1723,89 @@ __global__ void __launch_bounds__(128) rc_sha8_kernel(const int *__restrict__ sk
     const u64 x = s[2 * i], y = s[2 * i + 1];
     o[i] = make_uint4(__byte_perm((u32)(x >> 32), 0, 0x0123), __byte_perm((u32)x, 0, 0x0123),
                       __byte_perm((u32)(y >> 32), 0, 0x0123), __byte_perm((u32)y, 0, 0x0123));
+  }
+}
+
+// Form 13's A table (kv_rc_pass) from the pass's sign bits, row c's 512 bytes at bits + 512 c (bit u of byte u / 8 set
+// for −1): kRcA[g][κ][lane] for lane (g', t') of head g's word wi, the signs of rows g' and g' + 8 at block positions
+// WB wi + 8κ .. + 3 (x, y) and + 4 .. + 7 (z, w), as bytes 0x01 (+1) and 0xFF (−1).
+__global__ void __launch_bounds__(128) rc_a_kernel(const uint8_t *__restrict__ bits) {
+  const int e = blockIdx.x * blockDim.x + threadIdx.x;
+  if (e >= KV_HEADS * RK * 32) return;
+  const int g = e / (RK * 32), kk = e / 32 % RK, lane = e % 32, gid = lane >> 2, t4 = lane & 3;
+  const int wi = (t4 < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + g * (HB / WB) + t4, byte = (WB * wi + 8 * kk) / 8;
+  const u32 lo = bits[512 * gid + byte], hi = bits[512 * (gid + 8) + byte];
+  const auto pm = [](u32 b) {
+    u32 r = 0;
+#pragma unroll
+    for (int i = 0; i < 4; ++i) r |= (b >> i & 1 ? 0xFFu : 0x01u) << 8 * i;
+    return r;
+  };
+  kRcA[g][kk][lane] = make_uint4(pm(lo), pm(hi), pm(lo >> 4), pm(hi >> 4));
+}
+
+__device__ __forceinline__ uint4 u64_pair(u64 x, u64 y) {
+  return make_uint4((u32)x, (u32)(x >> 32), (u32)y, (u32)(y >> 32));
+}
+
+// Form 13's receipts of one layer: slot u's σ is the sum of its KV_HEADS shares in sk (16 int32 each, kv_attn form
+// 13), and its receipt SHA512(P ‖ u64be(jbase + u layers + layer) ‖ σ as 16 int32 LE), one compression from P's
+// midstate kKvMid (kv_rc_pass), its 8 state words as u64 at tags[16 (u layers + layer)] (wt.cu's receipts' layout,
+// which reader.cu's leaves read). Lanes 2a and 2a + 1 hash slots u and u + 1
+// and store their receipts' four sectors together, a 16-byte half each, so each store writes whole 32-byte sectors.
+__global__ void __launch_bounds__(128) rc_receipt_kernel(const int *__restrict__ sk, u32 *__restrict__ tags, u64 n,
+                                                         int layers, int layer, u64 jbase) {
+  const u64 u = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  const int odd = threadIdx.x & 1;
+  u64 h[8] = {};
+  if (u < n) {
+    int sg[16] = {};
+    const int4 *p = reinterpret_cast<const int4 *>(sk + u * KV_HEADS * 16);
+#pragma unroll
+    for (int g = 0; g < KV_HEADS; ++g)
+#pragma unroll
+      for (int v = 0; v < 4; ++v) {
+        const int4 q = __ldcs(p + 4 * g + v);
+        sg[4 * v] += q.x, sg[4 * v + 1] += q.y, sg[4 * v + 2] += q.z, sg[4 * v + 3] += q.w;
+      }
+    u64 w[16];
+    w[0] = jbase + u * layers + layer;
+#pragma unroll
+    for (int i = 0; i < 8; ++i) w[1 + i] = be64((u32)sg[2 * i], (u32)sg[2 * i + 1]);
+    w[9] = 0x8000000000000000ull;
+#pragma unroll
+    for (int i = 10; i < 15; ++i) w[i] = 0;
+    w[15] = (128 + 72) * 8;
+#pragma unroll
+    for (int i = 0; i < 8; ++i) h[i] = kKvMid[i];
+    sha512_compress(h, w);
+  }
+  // Sector c of slot v + r is h[4c ..] of that slot's receipt: lane v + r's 16-byte half is h[4c + 2 odd ..], its own
+  // (mine) where r = odd, else its partner's (got).
+  u64 mine[4], got[4];
+#pragma unroll
+  for (int c = 0; c < 2; ++c)
+#pragma unroll
+    for (int e = 0; e < 2; ++e) {
+      const u64 lo = h[4 * c + e], hi = h[4 * c + 2 + e];
+      mine[2 * c + e] = odd ? hi : lo;
+      got[2 * c + e] = __shfl_xor_sync(0xffffffffu, odd ? lo : hi, 1);
+    }
+  if (u >= n) return;
+  const u64 v = u - odd;
+  if ((v | 1) < n) {
+    u32 *r0 = tags + 16 * (v * layers + layer);
+#pragma unroll
+    for (int s = 0; s < 4; ++s) {
+      const int c = s & 1, r = s >> 1;
+      const bool own = r == odd;
+      *reinterpret_cast<uint4 *>(r0 + 16 * (u64)layers * r + 8 * c + 4 * odd) =
+          u64_pair(own ? mine[2 * c] : got[2 * c], own ? mine[2 * c + 1] : got[2 * c + 1]);
+    }
+  } else {
+    uint4 *o = reinterpret_cast<uint4 *>(tags + 16 * (u * layers + layer));
+#pragma unroll
+    for (int i = 0; i < 4; ++i) o[i] = u64_pair(h[2 * i], h[2 * i + 1]);
   }
 }
 
@@ -2172,7 +2287,28 @@ static uint32_t *rc_tags = nullptr, *rc_zdump = nullptr;
 // sketch's steps a tile (a word's bytes / 16), and the forms this build runs (bit rc - 1).
 void kv_rc_shape(int *out) {
   out[0] = kv::RT; out[1] = kv::RLAG; out[2] = kv::ZW; out[3] = kv::MDW; out[4] = kv::MT; out[5] = kv::RS;
-  out[6] = (kv::RC1_OK ? 1 : 0) | (kv::RC2_OK ? 2 : 0);
+  out[6] = (kv::RC1_OK ? 1 : 0) | (kv::RC2_OK ? 2 : 0) | (kv::RC3_OK ? 4 : 0);
+}
+
+// Form 13's pass: its sign bits (16 rows of 4,096, row c's 512 bytes at bits[128 c ..], bit u of byte u / 8 set for
+// −1: wt.cu's wt_pass signs in a WT_RECEIPT build, sketch_receipt.sign_words) as kRcA, and its receipt prefix's
+// midstate (8 u64 on the device: wt.cu's g_pass.leafmid, wt_pass_ptrs' out[1]) into kKvMid, both on stream s.
+int kv_rc_pass(const uint32_t *bits, const uint64_t *mid, cudaStream_t s) {
+  if (!kv::RC3_OK) return -2;
+  if (!bits || !mid) return -1;
+  kv::rc_a_kernel<<<kv::KV_HEADS * kv::RK * 32 / 128, 128, 0, s>>>(reinterpret_cast<const uint8_t *>(bits));
+  if (cudaMemcpyToSymbolAsync(kv::kKvMid, mid, sizeof(uint64_t) * 8, 0, cudaMemcpyDeviceToDevice, s) != cudaSuccess)
+    return launched();
+  return launched();
+}
+
+// Form 13's receipts of layer `layer`'s n slots (sequence ctx + token) from kv_rc_buffers' head shares (kv_attn
+// form 13's): slot u's at tags[16 (u layers + layer)], receipt index jbase + u layers + layer, 64 bytes each.
+int kv_rc_receipts(uint32_t *tags, uint64_t n, int layers, int layer, uint64_t jbase, cudaStream_t s) {
+  if (!kv::RC3_OK) return -2;
+  if (!rc_sk || !tags || n < 1 || layers < 1 || layer < 0 || layer >= layers) return -1;
+  kv::rc_receipt_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(rc_sk, tags, n, layers, layer, jbase);
+  return launched();
 }
 
 // kv_attn forms 10 (rc = 1) and 11 (rc = 2): a block's sign rows (RT * RCW u32, kv_receipt.rows) and the BLAKE3 key
@@ -2266,15 +2402,32 @@ int kv_rc_l2(uint64_t bytes, cudaStream_t s, uint64_t *out) {
 // SMs hold at once, fewer if a pair would span more than 16 of them; encoded = 10 and 11 mma-ws with the unbound and the
 // bound receipt (the same output as 5 at the same split, in whole blocks of RT tiles), into kv_rc_buffers' sketches,
 // and their receipts if it has a receipt buffer; encoded = 12 mma-ws's work items folded by a CTA pair an SM as a
-// counter hands them out (the same output as 5 at the same split).
+// counter hands them out (the same output as 5 at the same split); encoded = 13 mma-ws with the pass's sketch-sha512
+// receipt of each token-layer (kv_rc_pass; the same output as 5 at the same split), each (slot, KV head)'s share of σ
+// into kv_rc_buffers' sketches (batch ctx KV_HEADS 16 int32), which kv_rc_receipts hashes.
 // q bf16 [batch][HEADS][128] pre-scaled by log2(e)/sqrt(128), out fp32 [batch][HEADS][128], part at least batch *
 // splits * kv_attn_shape's out[6] floats (times out[7] from 3 on; batch * 16 * out[6] * out[7] for 8 and 9). The tokens
 // are split into at most `splits` ranges of whole tiles.
 int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *part, int batch, int ctx, int layers,
             int layer, int splits, int k, cudaStream_t s) {
-  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 12 ||
+  if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 13 ||
       (encoded != 0 && encoded != 3 && encoded != 6 && encoded != 8 && (k < 1 || k > kv::KMAX)))
     return -1;
+  if (encoded == 13) {
+    if (!kv::RC3_OK) return -2;
+    if (!rc_sk) return -1;
+    static bool set = false;
+    if (!set) {
+      cudaFuncSetAttribute(kv::attn_mma_ws_kernel<3>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::rc_smem(3));
+      set = true;
+    }
+    const int per = (ctx + splits - 1) / splits, per_split = (per + kv::MT - 1) / kv::MT * kv::MT;
+    const int sp = (ctx + per_split - 1) / per_split, grid = batch * sp * kv::KV_HEADS;
+    kv::attn_mma_ws_kernel<3><<<grid, kv::MWT, kv::rc_smem(3), s>>>(static_cast<const uint8_t *>(kv_), q, part, ctx,
+                                                                     layers, layer, per_split, sp, k, rc_sk, nullptr);
+    kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, sp * kv::MW);
+    return launched();
+  }
   if (encoded == 12) {
     if (!kv::MMA_OK) return -2;
     static int slots = 0;
