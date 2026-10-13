@@ -775,7 +775,7 @@ def statementCmd (args : List String) : IO UInt32 := do
       if let (some i, some cs) := (recInner, recCommits) then RecVStar.checkCovers i cs
       if recCommits.isSome then RecVStar.checkPubRows st registered recCommits (recInner.bind (·.sparse))
       let u := st.c.unit.name
-      if recCoins.isSome || (c3.isSome && ((RecCoins.stackedParams u).isSome || (RecOpening.params u).isSome)) then
+      if recCoins.isSome || (c3.isSome && ((RecOpen.stackedParams u).isSome || (RecOpening.params u).isSome)) then
         RecCoins.check st registered recCoins c3
       pure st) with
   | .ok st =>

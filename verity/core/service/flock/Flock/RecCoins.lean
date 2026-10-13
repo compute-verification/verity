@@ -26,6 +26,7 @@ the session (`C3`, `--rec-inner-transcript` with the verifier's inner shape `rec
 import Flock.Keccak
 import Flock.Registered
 import Flock.Firewall
+import Flock.RecOpen
 import Flock.RecOpening
 import Flock.RecSparse
 import Flock.RecVStar
@@ -406,13 +407,6 @@ def checkOpening (c3 : C3) (c : Circuit) (pub : Public) (own : Array Registered.
   checkValue c pub own "v" V_VALUE #[padTo (words (vs.map (o.v[·]!))) (RecResiduals.portWordsOf vs.size)]
     fun _ => s!"part {j}'s {vs.size} elements of R's opening's v"
 
-/-- `LANES` and `H` of a level of R's openings, `rec-open-stacked/l<LANES>-h<H>` in that exact form. -/
-def stackedParams (name : String) : Option (Nat × Nat) :=
-  if !name.startsWith "rec-open-stacked/" then none else
-  match RecOpen.params s!"rec-open/{(name.drop 17).toString}" with
-  | some (L, H) => if s!"rec-open-stacked/l{L}-h{H}" == name then some (L, H) else none
-  | none => none
-
 def COINS_FORMAT : String := "verity/rec-coins/v1"
 
 def f128Json (x : F128) : Json := Json.arr #[Lean.toJson x.lo.toNat, Lean.toJson x.hi.toNat]
@@ -502,7 +496,7 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Sou
   let o := RecOpen.params unit
   let res := RecResiduals.params unit
   let sp := RecSparse.params unit
-  let so := stackedParams unit
+  let so := RecOpen.stackedParams unit
   let op := RecOpening.params unit
   if o.isNone && res.isNone && sp.isNone && so.isNone && op.isNone then return
   let some own := own
