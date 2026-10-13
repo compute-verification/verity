@@ -8,12 +8,14 @@
   tests/kernels/attention/test_deepgemm_attention.py:67-91 at d9105ea80) within the tolerance those tests allow: 1 fp8 step;
 * the ue8m0 scale near every power of two and at its edge words (amax 0, subnormal, 1e-4, the largest finite, inf, NaN), where
   `__nv_log2f`'s ceiling is not torch's `ceil(log2)`;
-* the short-row top-k against `i < len ? i : -1`.
+* the short-row top-k against `i < len ? i : -1`;
+* the logit against eight an H200 computed (`data/dsa_h200_logits.npz`): `DsaMqaLogit_v3`'s words, none of them v1's.
 """
 from __future__ import annotations
 
 import math
 from fractions import Fraction
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -216,10 +218,11 @@ def q_head(q: list[int], cs: list[int], w: int, nh: int, rope: int = 64) -> tupl
     return qb, weight
 
 
-def logit(q: list[list[int]], w: list[int], k: list[int], ks: int) -> int:
+def logit(q: list[list[int]], w: list[int], k: list[int], ks: int, contracted: bool = True) -> int:
     """DeepGEMM's sm90 MQA logits epilogue for one (token, key) (sm90_fp8_mqa_logits.cuh:270-302): the m64nN accumulator gives
-    quad lane c heads 8j + 2c + {0, 1}; each lane's two sums of relu * w by FFMA in ascending j, `(s0 + s1) * ks`, and the
-    quad's xor-1 then xor-2 shuffle adds."""
+    quad lane c heads 8j + 2c + {0, 1}; each lane's two sums of relu * w, `(s0 + s1) * ks`, and the quad's xor-1 then xor-2
+    shuffle adds.  A sum is FFMAs in ascending j from j = 0's product, which nvcc contracts into j = 1's add (``contracted``, the
+    SASS: `fma(r0, w0, r1 * w1)`) or which is its own FMUL (the source as written)."""
     H, Dd = len(q), len(k)
     relu = []
     for h in range(H):
@@ -232,8 +235,11 @@ def logit(q: list[list[int]], w: list[int], k: list[int], ks: int) -> int:
         sums = []
         for p in (0, 1):
             heads = [8 * j + 2 * c + p for j in range(H // 8)]
-            s = _fmul(relu[heads[0]], w[heads[0]])
-            for h in heads[1:]:
+            if contracted and len(heads) > 1:
+                s, rest = _ffma(relu[heads[0]], w[heads[0]], _fmul(relu[heads[1]], w[heads[1]])), heads[2:]
+            else:
+                s, rest = _fmul(relu[heads[0]], w[heads[0]]), heads[1:]
+            for h in rest:
                 s = _ffma(relu[h], w[h], s)
             sums.append(s)
         lane.append(_fmul(_fadd(sums[0], sums[1]), ks))
@@ -265,7 +271,12 @@ def _flat(out) -> list[int]:
 
 KROW = bind(D.DsaIndexerKRow, D=128, ROPE=64, EPS=1e-6)
 QHEAD = bind(D.DsaIndexerQHead, D=128, ROPE=64, NH=32)
-LOGIT = bind(D.DsaMqaLogit, H=32, D=128)
+LOGIT = bind(D.DsaMqaLogitV3, H=32, D=128)
+LOGIT_V1 = bind(D.DsaMqaLogit, H=32, D=128)
+#: eight (token, key) logits of an H200's DeepGEMM sm90 kernels (property glm53_dsa_capture, run r20261012-222325-ce92), four
+#: prefill and four paged (``paged``), each the first ones of its kind where `DsaMqaLogit_v1` differs: q (8, 32, 128) and k (8, 128)
+#: e4m3 bytes, w (8, 32) and ks (8,) f32 words, the kernel's logit (8,)
+H200_LOGITS = Path(__file__).parent / "data" / "dsa_h200_logits.npz"
 
 
 # --- the scale ---------------------------------------------------------------------------------------------------------------
@@ -392,26 +403,49 @@ def _e4m3_row(rng, n: int) -> list[int]:
     return (v | (rng.integers(0, 2, n) << 7)).astype(int).tolist()
 
 
-def test_logit_matches_the_epilogue_model() -> None:
+@pytest.mark.parametrize("fn,contracted", [(LOGIT, True), (LOGIT_V1, False)], ids=["v3", "v1"])
+def test_logit_matches_the_epilogue_model(fn, contracted: bool) -> None:
     rng = np.random.default_rng(6)
     for _ in range(6):
         q = [_e4m3_row(rng, 128) for _ in range(32)]
         w, k, ks = _f32(rng, 32, 0.0, 0.05), _e4m3_row(rng, 128), D.f32_bits(2.0 ** int(rng.integers(-12, 4)))
-        assert evaluate(LOGIT, [v for r in q for v in r], w, k, ks)[0] == logit(q, w, k, ks)
+        assert evaluate(fn, [v for r in q for v in r], w, k, ks)[0] == logit(q, w, k, ks, contracted)
     q = [[0x7F] + _e4m3_row(rng, 127) for _ in range(32)]                                  # NaN products: relu drops them
     w, k = _f32(rng, 32, 0.0, 0.05), _e4m3_row(rng, 128)
-    assert evaluate(LOGIT, [v for r in q for v in r], w, k, 0x3F800000)[0] == logit(q, w, k, 0x3F800000)
+    assert evaluate(fn, [v for r in q for v in r], w, k, 0x3F800000)[0] == logit(q, w, k, 0x3F800000, contracted)
 
 
-def test_logits_are_the_logit_per_key() -> None:
+def test_the_h200s_logits_are_v3s_and_refute_v1() -> None:
+    """Every kept logit is `DsaMqaLogit_v3`'s word and none is v1's: the H200's SASS contracts each sum's first product."""
+    z = np.load(H200_LOGITS)
+    assert sorted(z["paged"].tolist()) == [0] * 4 + [1] * 4
+    for q, w, k, ks, want in zip(z["q"], z["w"], z["k"], z["ks"], z["logit"]):
+        args = (q.reshape(-1).tolist(), w.tolist(), k.tolist(), int(ks))
+        assert evaluate(LOGIT, *args)[0] == int(want)
+        assert evaluate(LOGIT_V1, *args)[0] != int(want)
+        assert logit(q.tolist(), w.tolist(), k.tolist(), int(ks)) == int(want)
+
+
+def test_at_one_head_per_sum_v3_is_v1() -> None:
+    """At H = 8 each lane's sum has one product, so there is nothing to contract: v3 and v1 are the same function."""
+    rng = np.random.default_rng(12)
+    v1, v3 = bind(D.DsaMqaLogit, H=8, D=64), bind(D.DsaMqaLogitV3, H=8, D=64)
+    for _ in range(4):
+        q, w, k, ks = [_e4m3_row(rng, 64) for _ in range(8)], _f32(rng, 8, 0.0, 0.05), _e4m3_row(rng, 64), D.f32_bits(0.25)
+        args = ([v for r in q for v in r], w, k, ks)
+        assert evaluate(v3, *args) == evaluate(v1, *args)
+
+
+@pytest.mark.parametrize("fn,contracted", [(D.DsaMqaLogitsV3, True), (D.DsaMqaLogits, False)], ids=["v3", "v1"])
+def test_logits_are_the_logit_per_key(fn, contracted: bool) -> None:
     rng = np.random.default_rng(7)
     N = 3
     q = [_e4m3_row(rng, 128) for _ in range(32)]
     w = _f32(rng, 32, 0.0, 0.05)
     ks = [_e4m3_row(rng, 128) for _ in range(N)]
     sc = [D.f32_bits(0.5), D.f32_bits(0.125), D.f32_bits(4.0)]
-    got = _flat(evaluate(bind(D.DsaMqaLogits, N=N, H=32, D=128), [v for r in q for v in r], w, [v for r in ks for v in r], sc))
-    assert got == [logit(q, w, ks[n], sc[n]) for n in range(N)]
+    got = _flat(evaluate(bind(fn, N=N, H=32, D=128), [v for r in q for v in r], w, [v for r in ks for v in r], sc))
+    assert got == [logit(q, w, ks[n], sc[n], contracted) for n in range(N)]
 
 
 @pytest.mark.parametrize("TOPK", [16, 2048])
@@ -509,7 +543,7 @@ def test_logit_against_vllm_reference() -> None:
     w = _f32(rng, 32, 0.0, 0.05)
     ks = [_e4m3_row(rng, 128) for _ in range(N)]
     sc = [D.f32_bits(2.0 ** -int(rng.integers(0, 6))) for _ in range(N)]
-    got = np.asarray(_flat(evaluate(bind(D.DsaMqaLogits, N=N, H=32, D=128), [v for r in q for v in r], w,
+    got = np.asarray(_flat(evaluate(bind(D.DsaMqaLogitsV3, N=N, H=32, D=128), [v for r in q for v in r], w,
                                     [v for r in ks for v in r], sc)), np.uint32).view(np.float32).astype(np.float64)
     qt = torch.tensor(q, dtype=torch.uint8).view(torch.float8_e4m3fn).double()
     kt = torch.tensor(ks, dtype=torch.uint8).view(torch.float8_e4m3fn).double()
