@@ -6,6 +6,10 @@
                                               (parts, res: Array<N, bf16>, w: Array<N, bf16>) -> (normed, residual')
     AllReduceCustomCoordinate_v1{WORLD,START} (col: Array<WORLD, bf16>) -> bf16
     AllReduceCustom_v1{WORLD,SIZE,STAGE}      (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
+    AllReduceMultimemCoordinate_v1{WORLD,TREE,FTZ}
+                                              (col: Array<WORLD, bf16>) -> bf16
+    AllReduceMultimem_v1{WORLD,SIZE,TREES,FTZ}
+                                              (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
 
 Which kernel reduces a call (vLLM d9105ea80):
 
