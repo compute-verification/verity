@@ -91,3 +91,12 @@ def test_smaller_dry_excess_keeps_the_strict_rule():
 def test_dry_controls_hit_less_often_keep_the_strict_rule():
     res = G.judge(*with_dry(EXCESS * 3, [14] * 19, [14] * 17 + [14 + 2500]))
     assert res["external_dry"]["fisher_p_judged_hit_more"] < G.ALPHA and res["rule"] == "strict"
+
+
+def test_a_variant_is_judged_against_its_own_controls():
+    d, rows = probe([DECLARED + 15] * 3, [13] * 4, "fill_chunk_1_3")
+    d2, rows2 = probe([DECLARED + 13] * 3, [13] * 4, "fill_chunk_1_3")
+    for x in d2["launches"]:
+        x["variant"] = "nostop"
+    res = G.judge({"launches": d["launches"] + d2["launches"]}, rows + rows2)
+    assert res["by_kernel"] == {"fill_chunk_1_3": "REFUSED", "fill_chunk_1_3/nostop": "passed"}

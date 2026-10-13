@@ -74,6 +74,11 @@ def external(judged: list[dict], controls: list[dict]) -> dict:
             "external": bool(ch) and p >= ALPHA and mc >= mj}
 
 
+def unit(d: dict) -> str:
+    """What a verdict and a floor belong to: the kernel, or the kernel under a launch variant (`kernel/variant`)."""
+    return f"{d['kernel']}/{d['variant']}" if d.get("variant") else d["kernel"]
+
+
 def judge(declared: dict, rows: list[dict]) -> dict:
     launches = declared["launches"]
     if len(rows) != len(launches):
@@ -81,16 +86,16 @@ def judge(declared: dict, rows: list[dict]) -> dict:
     floors: dict[str, float] = {}
     for d, m in zip(launches, rows):
         if d.get("control"):
-            floors[d["kernel"]] = min(floors.get(d["kernel"], math.inf), m.get(WRITE) or 0.0)
+            floors[unit(d)] = min(floors.get(unit(d), math.inf), m.get(WRITE) or 0.0)
     out, bad = [], []
     for d, m in zip(launches, rows):
         w, a = m.get(WRITE), (m.get(ATOM) or 0.0) + (m.get(RED) or 0.0)
         if m["kernel"] != d["kernel"] or w is None:
             return {"status": "unmeasured", "why": f"profiled {m['kernel']} with {sorted(m)}, declared {d['kernel']}"}
-        row = {**d, "write_sectors": w, "atom_sectors": a, "dram_write_bytes": m.get(DRAM),
+        row = {**d, "unit": unit(d), "write_sectors": w, "atom_sectors": a, "dram_write_bytes": m.get(DRAM),
                "read_sectors": m.get("lts__t_sectors_op_read.sum"), "dram_read_bytes": m.get("dram__bytes_read.sum"),
                "write_ratio": ratio(w, d["declared_write_sectors"]), "atom_ratio": ratio(a, d["declared_atom_sectors"])}
-        floor = floors.get(d["kernel"], 0.0)
+        floor = floors.get(unit(d), 0.0)
         row["floor"] = 0.0 if d.get("control") else floor
         row["excess"] = w - floor if d.get("control") else w - d["declared_write_sectors"] - floor
         row["pass"] = w <= d["declared_write_sectors"] + row["floor"] and a <= d["declared_atom_sectors"]
@@ -100,25 +105,25 @@ def judge(declared: dict, rows: list[dict]) -> dict:
     dry = [r for r in out if r.get("dry")]
     test_dry = external(judged, dry) if dry else None
     rule = "min" if test_dry is not None and test_dry["external"] else "strict"
-    kernels = list(dict.fromkeys(r["kernel"] for r in judged))
-    strict = {k: all(r["pass"] for r in judged if r["kernel"] == k) for k in kernels}
-    least = {k: min((r for r in judged if r["kernel"] == k), key=lambda r: r["write_sectors"])["pass"]
-             and all(r["atom_sectors"] <= r["declared_atom_sectors"] for r in judged if r["kernel"] == k) for k in kernels}
+    kernels = list(dict.fromkeys(r["unit"] for r in judged))
+    strict = {k: all(r["pass"] for r in judged if r["unit"] == k) for k in kernels}
+    least = {k: min((r for r in judged if r["unit"] == k), key=lambda r: r["write_sectors"])["pass"]
+             and all(r["atom_sectors"] <= r["declared_atom_sectors"] for r in judged if r["unit"] == k) for k in kernels}
     verdict = least if rule == "min" else strict
     for r in judged:
-        if not r["pass"] and not verdict[r["kernel"]]:
-            bad.append(f"{r['kernel']}: {r['write_sectors']:.0f} write / {r['declared_write_sectors']} declared + "
+        if not r["pass"] and not verdict[r["unit"]]:
+            bad.append(f"{r['unit']}: {r['write_sectors']:.0f} write / {r['declared_write_sectors']} declared + "
                        f"{r['floor']:.0f} floor, {r['atom_sectors']:.0f} atomic / {r['declared_atom_sectors']} declared")
     by_store = {}
     for r in judged:
-        by_store[r["store"]] = by_store.get(r["store"], True) and verdict[r["kernel"]]
+        by_store[r["store"]] = by_store.get(r["store"], True) and verdict[r["unit"]]
     word = {True: "passed", False: "REFUSED"}
     return {"status": "REFUSED" if bad else "passed", "rule": rule, "external": test, "external_dry": test_dry,
             "by_store": {s: word[p] for s, p in by_store.items()},
             "by_kernel": {k: word[verdict[k]] for k in kernels},
             "by_kernel_strict": {k: word[strict[k]] for k in kernels}, "by_kernel_min": {k: word[least[k]] for k in kernels},
             "spread": {k: [min(ws), max(ws)] for k in kernels
-                       for ws in [[r["write_sectors"] for r in judged if r["kernel"] == k]]},
+                       for ws in [[r["write_sectors"] for r in judged if r["unit"] == k]]},
             "refusals": bad, "launches": out,
             "controls": [{k: r[k] for k in ("kernel", "write_sectors", "atom_sectors", "declared_atom_sectors")} for r in out
                          if r.get("control")],
@@ -134,6 +139,6 @@ if __name__ == "__main__":
     else:
         res = judge(json.loads(dec.read_text()), measured(csv_path.read_text()))
     Path(sys.argv[3]).write_text(json.dumps(res, indent=1) + "\n")
-    print(f"L2 write gate: {res['status']} (rule {res.get('rule')}, external test {res.get('external')})",
+    print(f"L2 write gate: {res['status']} (rule {res.get('rule')}, dry test {res.get('external_dry')})",
           *res.get("refusals", []), res.get("why", ""))
     sys.exit({"passed": 0, "REFUSED": 7}.get(res["status"], 3))

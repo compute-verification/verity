@@ -786,7 +786,9 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
     not others, r20261012-224930-ae0c, r20261013-002059-3970) comes to controls as it comes to judged launches. A zero-tile
     control lasts microseconds where a judged launch lasts milliseconds, so each fold kernel's launches also interleave
     L2_REPEATS dry launches (`dry`, not judged): the same tiles with the log off, which declare no write sectors and last
-    as long as the judged launch."""
+    as long as the judged launch. Every kernel's launches are then repeated with the stop flag off (`variant: nostop`, each
+    with its own controls), which no launch then reads: the chunked kernels' constant 2 sectors over their control follow
+    the read of the pinned stop flag or they don't."""
     f64 = random_filler(4096, 4096, 1024, qcap=4 * sms)
     lo = torch.cuda.Stream()
     rows = []
@@ -796,15 +798,18 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
         suffix = "" if T == TILE else "128"
         for store, code in STORES.items():
             for persist in (0, 1):
-                seq = ((0, False),) + ((4 * sms, False), (0, False)) * L2_REPEATS
+                n = 4 * sms
+                seq = ((0, False, True),) + ((n, False, True), (0, False, True)) * L2_REPEATS
                 if store == "fold":
-                    seq = ((0, False),) + ((4 * sms, False), (4 * sms, True), (0, False)) * L2_REPEATS
-                for n, dry in seq:
+                    seq = ((0, False, True),) + ((n, False, True), (n, True, True), (0, False, True)) * L2_REPEATS
+                seq += ((0, False, False),) + ((n, False, False), (0, False, False)) * L2_REPEATS
+                for n, dry, stop in seq:
                     f.poison()
                     torch.cuda.synchronize()
-                    lib.fill(persist, code, sms, f.args(0, n, log=not dry), lo, f.minb)
+                    lib.fill(persist, code, sms, f.args(0, n, log=not dry, stop=stop), lo, f.minb)
                     torch.cuda.synchronize()
                     rows.append({"kernel": f"fill_{'persist' if persist else 'chunk'}{suffix}_1_{code}",
+                                 **({} if stop else {"variant": "nostop"}),
                                  "store": store if T == TILE else f"{store}@{T}", "tile": T, "tiles": n, "control": n == 0,
                                  "dry": dry, "logged": int((f.log > 0).sum()),
                                  "declared_write_sectors": 0 if dry else n * (out_sectors[store] + 1),
