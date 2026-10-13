@@ -38,7 +38,7 @@ from typing import Any, Callable
 
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage
+from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage, dsa_patterns
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
@@ -48,7 +48,6 @@ from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as base
 from verity_vllm.engine.profiles.gen_dense2_patterns import with_dense2_patterns
 from verity_vllm.engine.profiles.gen_dense_gemma2_patterns import with_gemma2_patterns
 from verity_vllm.engine.profiles.gen_dense_softcap_patterns import with_softcap_patterns
-from verity_vllm.observe.fold.patterns.dsa import dsa_patterns
 from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, with_tuned_gemm
 from verity_vllm.engine.profiles.gen_ln_patterns import with_ln_patterns
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
