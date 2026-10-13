@@ -33,6 +33,9 @@
   "HopperBF16WgmmaDot16_v1": {
    "and": 8233
   },
+  "HopperE4m3MmaV2Dot32_v1": {
+   "and": 10367
+  },
   "HopperE4m3QgmmaDot32_v1": {
    "and": 7377
   }

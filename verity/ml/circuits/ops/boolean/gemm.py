@@ -10,6 +10,7 @@
                                 -> Array<N, Array<16, Value<1>>>                                      word view: Gemm_v2{K, N, DOT'}
     HopperE4m3QgmmaDot32_v2     (acc: Array<32, Value<1>>, a, b: Array<32, Array<8, Value<1>>>)
                                 -> Array<32, Value<1>>                                                word view: HopperE4m3QgmmaDot32_v1
+    HopperE4m3MmaV2Dot32_v2     the same signature                                                    word view: HopperE4m3MmaV2Dot32_v1
     BlackwellE4m3QmmaDot32_v2   the same signature                                                    word view: BlackwellE4m3QmmaDot32_v1
     BlackwellE5m2QmmaDot32_v2   the same signature (E5M2 operands)                                    word view: BlackwellE5m2QmmaDot32_v1
     GemmCoordinateE4m3_v2{K, DOT}  (x, wrow: Array<K, Array<8, Value<1>>>) -> Array<16, Value<1>>     word view: GemmCoordinateE4m3_v1{K, DOT'}
@@ -21,7 +22,8 @@
 The steps and the cast are traced from `fp`'s builders (`trace.definition`): their bodies are And/Xor/Not gates, with exactly
 the builders' live ANDs. `GemmCoordinate_v3` is `GemmCoordinate_v2`'s body on bits: K/16 calls of `DOT` from the zero
 accumulator (32 constant-0 bits), then `F2fpBf16_v2`; `DotBf16_v3` is the same steps without the cast, and `Gemm_v3` is
-`Gemm_v2`'s: the coordinate batched over W's N rows. The E4M3 steps are `fp.tc_dot_e4m3` at each step's adder width and floor (the E5M2 step `fp.tc_dot_e5m2`),
+`Gemm_v2`'s: the coordinate batched over W's N rows. The E4M3 steps are `fp.tc_dot_e4m3` at each step's groups, adder width and floor
+(`HopperE4m3MmaV2Dot32_v2` on the operands in `MMAV2_E4M3_K_ORDER`; the E5M2 step `fp.tc_dot_e5m2`),
 and `GemmCoordinateE4m3_v2` is K/32 of them, then the cast; the FP4 steps are `fp4.step_total` and their coordinates K/64 of
 them. Each names its word
 Definition (`trace.word_of`; ``DOT'`` is `DOT`'s); the tests check that the two agree, on random and special words and on the
@@ -37,12 +39,13 @@ from verity.ml.circuits.types import Array
 from .. import gemm as G
 from .. import prims as P
 from verity.ml.circuits.silicon import fp, fp4
+from verity.ml.circuits.silicon.total_fp8 import MMAV2_E4M3_K_ORDER
 from verity.ml.circuits.boolean.trace import definition, word_of
 
 __all__ = ["AmpereBF16TcDot16", "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64", "DotBf16", "F2fpBf16",
-           "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_HOPPER_E4M3", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "Gemm",
+           "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_HOPPER_E4M3", "GEMM_HOPPER_E4M3_MMAV2", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "Gemm",
            "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "HopperBF16WgmmaDot16",
-           "HopperE4m3QgmmaDot32"]
+           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -75,6 +78,13 @@ HopperE4m3QgmmaDot32 = definition(
     lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, list(ab[:32]), list(ab[32:]), groups=(32,), W=14, F=-139),
     (("acc", F32), ("a", A32_8), ("b", A32_8)), F32, word=P.HopperE4m3QgmmaDot32,
     doc="wgmma.m64nNk32 e4m3, one accumulator coordinate, on bits: HopperE4m3QgmmaDot32_v1")
+HopperE4m3MmaV2Dot32 = definition(
+    "HopperE4m3MmaV2Dot32", 2,
+    lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, [ab[k] for k in MMAV2_E4M3_K_ORDER], [ab[32 + k] for k in MMAV2_E4M3_K_ORDER],
+                                       groups=(16, 16), W=26, F=-133),
+    (("acc", F32), ("a", A32_8), ("b", A32_8)), F32, word=P.HopperE4m3MmaV2Dot32,
+    doc="Triton's MMAv2 e4m3 k32 step on sm_90 (two chained f16 mma.sync.m16n8k16 over k mod 4 in {0, 1} then {2, 3}), one "
+        "accumulator coordinate, on bits: HopperE4m3MmaV2Dot32_v1")
 BlackwellE4m3QmmaDot32 = definition(
     "BlackwellE4m3QmmaDot32", 2,
     lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, list(ab[:32]), list(ab[32:]), groups=(32,), W=26, F=-133),
@@ -177,6 +187,7 @@ GemmCoordinateMxf4.word = lambda b: bind(G.GemmCoordinateMxf4, K=b["K"], DOT=wor
 GEMM_AMPERE: dict = {"DOT": AmpereBF16TcDot16}
 GEMM_HOPPER: dict = {"DOT": HopperBF16WgmmaDot16}
 GEMM_HOPPER_E4M3: dict = {"DOT": HopperE4m3QgmmaDot32}
+GEMM_HOPPER_E4M3_MMAV2: dict = {"DOT": HopperE4m3MmaV2Dot32}
 GEMM_SM120_E4M3: dict = {"DOT": BlackwellE4m3QmmaDot32}
 GEMM_SM120_NVF4: dict = {"DOT": BlackwellNvf4OmmaDot64}
 GEMM_SM120_MXF4: dict = {"DOT": BlackwellMxf4OmmaDot64}
