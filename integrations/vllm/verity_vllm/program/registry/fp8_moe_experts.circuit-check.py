@@ -21,11 +21,12 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                              DOT=BlackwellE4m3QmmaDot32)),
         ("MoeExpertFp8GemmW_v1", lambda: bind(fp8_moe_experts.MoeExpertFp8GemmW, E=4, K=64, N=48, G=32, KB=32, SWAP=False,
                                               DOT=BlackwellE4m3QmmaDot32)),
-        # Hopper's wgmma k32 step on the tuned tiles' SWAP_AB: GLM-5.3's 256 experts at a TP8 rank's w2 coordinate, and the pairs
-        ("MoeExpertFp8CoordinateW_v1/hopper", lambda: bind(fp8_moe_experts.MoeExpertFp8CoordinateW, E=256, K=256, G=128, KB=32, SWAP=True,
+        # Hopper's wgmma k32 step on the H200's tuned tiles (BLOCK_SIZE_K 128, SWAP_AB): GLM-5.3's 256 experts at a TP8 rank's w2
+        # coordinate as rank 0's log serves it, and pairs over two K tiles and a partial weight block
+        ("MoeExpertFp8CoordinateW_v1/hopper", lambda: bind(fp8_moe_experts.MoeExpertFp8CoordinateW, E=256, K=256, G=128, KB=128, SWAP=True,
                                                            DOT=HopperE4m3QgmmaDot32)),
-        ("MoeExpertFp8Gemm_v1/hopper", lambda: bind(fp8_moe_experts.MoeExpertFp8Gemm, E=4, K=128, N=80, G=64, KB=32, SWAP=True,
+        ("MoeExpertFp8Gemm_v1/hopper", lambda: bind(fp8_moe_experts.MoeExpertFp8Gemm, E=4, K=256, N=80, G=128, KB=128, SWAP=True,
                                                     DOT=HopperE4m3QgmmaDot32)),
-        ("MoeExpertFp8GemmW_v1/hopper", lambda: bind(fp8_moe_experts.MoeExpertFp8GemmW, E=4, K=64, N=48, G=32, KB=32, SWAP=True,
+        ("MoeExpertFp8GemmW_v1/hopper", lambda: bind(fp8_moe_experts.MoeExpertFp8GemmW, E=4, K=256, N=48, G=128, KB=128, SWAP=True,
                                                      DOT=HopperE4m3QgmmaDot32)),
     ]
