@@ -303,10 +303,16 @@ def _kernels(fn, trace_path: Path) -> dict[str, Any]:
 
 def cublas_version() -> int | None:
     """The runtime cuBLAS version selected by this process, via cuBLAS's public API."""
-    path = ctypes.util.find_library("cublas")
-    if not path:
+    paths = [p for p in (ctypes.util.find_library("cublas"), "libcublas.so.12", "libcublas.so") if p]
+    lib = next((lib for p in paths if (lib := _load_library(p)) is not None), None)
+    if lib is None:
         return None
-    lib = ctypes.CDLL(path)
+    lib.cublasCreate_v2.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+    lib.cublasCreate_v2.restype = ctypes.c_int
+    lib.cublasGetVersion_v2.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int)]
+    lib.cublasGetVersion_v2.restype = ctypes.c_int
+    lib.cublasDestroy_v2.argtypes = [ctypes.c_void_p]
+    lib.cublasDestroy_v2.restype = ctypes.c_int
     handle, version = ctypes.c_void_p(), ctypes.c_int()
     if lib.cublasCreate_v2(ctypes.byref(handle)) != 0:
         return None
@@ -314,6 +320,13 @@ def cublas_version() -> int | None:
         return int(version.value) if lib.cublasGetVersion_v2(handle, ctypes.byref(version)) == 0 else None
     finally:
         lib.cublasDestroy_v2(handle)
+
+
+def _load_library(path: str):
+    try:
+        return ctypes.CDLL(path)
+    except OSError:
+        return None
 
 
 # ------------------------------------------------------------------------------------------------------------------- selection
