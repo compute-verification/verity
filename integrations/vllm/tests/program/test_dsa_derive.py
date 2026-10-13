@@ -431,14 +431,14 @@ def test_large_mla_absorb_is_bound_before_its_composite_transpose(served):
     (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "MlaAbsorbTranspose[vllm-dsa]_v1"]
     assert app["preconditions_checked"]["chain"] == ["transpose", "bmm", "transpose_1"]
     assert app["preconditions_checked"]["M"] == 256
-    assert app["emitted"].startswith("BatchedGemm_v2") and app["emitted"].endswith("x256")
+    assert app["emitted"].startswith("BatchedGemm_v1") and app["emitted"].endswith("x256")
     assert rep.provenance["weight_roles"]["weight"]["role"] == "mla.absorb"
 
 
 def test_large_mla_absorb_refuses_when_the_bmm_intermediate_escapes(served):
     rep = _large_absorb(escape_bmm=True)
     assert rep.program is None and rep.unsupported.reason == "unsupported_view"
-    assert "transpose of 131072 leaves over a composite reference sequence has no O(1) form" in rep.unsupported.hint
+    assert "permute (1, 0, 2) of 131072 leaves over a composite reference sequence has no O(1) form" in rep.unsupported.hint
 
 
 def test_default_sparse_mla_uses_each_tokens_launched_split_count(served):
