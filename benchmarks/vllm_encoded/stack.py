@@ -142,10 +142,7 @@ class Stack:
         s = stream()
         self.wt.call("wt_pass", self.j & 0xFFFFFFFF, self.root.data_ptr(), self.signs.data_ptr(), T, s)
         self.wt.call("wt_sign_frags", self.signs.data_ptr(), self.frags.data_ptr(), T, s)
-        if self.attention is None:  # install's weight-only step gate
-            self.reader.chain_begin(self.step_plan(m), BW.STORE_KEY)
-            self.reader.chain(self.pass_ptrs[0])
-        else:
+        if self.attention is not None:
             self.attention.epoch.fill_(self.j + 1)
             self.plib.call("kv_rc_pass", self.signs.data_ptr(), self.pass_ptrs[1], s)
         self.j, self.pass_m, self.passes, self.open = self.j + 1, m, self.passes + 1, True
@@ -183,8 +180,7 @@ class Stack:
         plan = self.step_plan(m, slots)
         if plan.length != n:
             raise RuntimeError(f"a step at m = {m} has {n} receipts, its plan has {plan.length}")
-        self.reader.chain_begin(plan, BW.STORE_KEY)
-        self.reader.chain(self.pass_ptrs[0])
+        self.reader.begin(BW.RECEIPT_SEED, plan, BW.STORE_KEY)
         so, s = self.reader.so, stream()
         nl = -(-n // SR.rb.PER_LEAF)
         width = 1 << max(0, (nl - 1).bit_length())
@@ -530,7 +526,16 @@ class Attention:
             self.lay = lay
             slots = lay.blocks * lay.bs
             if self.pool_slots and slots != self.pool_slots:
-                raise RuntimeError(f"layer {idx}'s cache has {slots} slots, the others have {self.pool_slots}")
+                if idx or torch.cuda.is_current_stream_capturing():
+                    raise RuntimeError(f"layer {idx}'s cache has {slots} slots, the others have {self.pool_slots}")
+                # vLLM profiles with a small temporary cache before allocating the serving pool. Layer zero starts
+                # that new pool; no captured graph may retain the temporary cache's receipt buffers or append table.
+                self.layers.clear()
+                self.staged.clear()
+                self.pending.clear()
+                self.graph_tab = None
+                self.pool_slots = 0
+                self.rc_sk = self.used = self.epoch = self.sparse_tags = None
             if self.st.encoded and not self.pool_slots:
                 if torch.cuda.is_current_stream_capturing():
                     raise RuntimeError("the paged receipt buffers were first needed during CUDA graph capture")
