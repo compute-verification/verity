@@ -34,12 +34,13 @@ def mufu_lg2_words(x, c0: str = "C0") -> np.ndarray:
     return np.where(E == 0, W.NEG_INF, out).astype(U32)
 
 
-def undetermined_words(x) -> np.ndarray:
-    """`sparse_mla_split.mufu_lg2_undetermined` on f32 words."""
+def undetermined_words(x, words=None) -> np.ndarray:
+    """`sparse_mla_split.mufu_lg2_undetermined` on f32 words; ``words`` is `mufu_lg2_words(x)` when the caller has it."""
     x = np.asarray(x, dtype=U32)
     E, m = (x >> 23) & 0xFF, x & 0x7FFFFF
     normal = ((x >> 31) == 0) & (E != 0) & (E != 255)
-    return normal & (((m == 0) & (E < 127)) | (mufu_lg2_words(x) != mufu_lg2_words(x, "C0_max")))
+    words = mufu_lg2_words(x) if words is None else np.asarray(words, dtype=U32)
+    return normal & (((m == 0) & (E < 127)) | (words != mufu_lg2_words(x, "C0_max")))
 
 
 def nez(x) -> np.ndarray:
