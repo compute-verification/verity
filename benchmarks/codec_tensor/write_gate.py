@@ -6,7 +6,12 @@ past that (a spill, a stack, a stray store) shows as write sectors over the rece
 launch passes with no local stores and its L2 writes and reductions within 1% (and a 4 KiB floor) of its outputs plus
 partials; a commit with none and its writes within 1% of its digests.
 
-    python write_gate.py --wt-lib wt.so [--reader-lib reader.so] --step-json OUT/step.json --out OUT
+With --kv-lib (step.cu) the same for the KV side: attention at each k in the form and split count the step picked
+(`kv_attn` over two layers of the step's batch × context), whose outputs are o and its split partials (at most the
+step's partial buffer for that form and split, `step.part_floats`), and the append of a token at every layer, whose
+outputs are its words.
+
+    python write_gate.py --wt-lib wt.so [--kv-lib step.so] [--reader-lib reader.so] --step-json OUT/step.json --out OUT
 """
 from __future__ import annotations
 
@@ -25,13 +30,15 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import bench as BW  # noqa: E402
+import bench as BW  # noqa: E402  (before kv_bench, as in step.py)
 import sketching as SKT  # noqa: E402
-import wide as W  # noqa: E402
+
+sys.path.insert(0, str(HERE.parent / "word_codec"))
+import kv_bench as BW_KV  # noqa: E402
 
 METRICS = ("lts__t_sectors_op_write.sum", "lts__t_sectors_srcunit_tex_op_write.sum", "lts__t_sectors_op_red.sum",
            "lts__t_sectors_op_atom.sum", "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum", "dram__bytes_write.sum")
-KERNELS = "regex:fused_kernel|leaves_kernel|level_kernel|pads_kernel"
+KERNELS = "regex:fused_kernel|leaves_kernel|level_kernel|pads_kernel|attn_|append_kernel"
 
 
 def launches(a) -> list[dict]:
@@ -55,7 +62,7 @@ def launches(a) -> list[dict]:
         x = torch.randn(m, kd, device="cuda").to(torch.float8_e4m3fn)
         y = torch.zeros(m, n, dtype=torch.float32, device="cuda")
         for k in step["ks"]:
-            key = W.key(lib.field.name, BW.SEED, k)
+            key = BW.lib_key(lib, k)
             BW.set_key(lib, torch, key)
             for var in ("sketch", "untagged"):
                 cfg = tuple(step["picks"][name]["k"][str(k)][var])
@@ -86,6 +93,45 @@ def launches(a) -> list[dict]:
         torch.cuda.synchronize()
         out.append({"kernel": "commit", "blocks": n, "leaves": rd.leaves, "leaf_bytes": 64 * rd.leaves,
                     "node_bytes": 64 * (rd.leaves - 1)})
+    if a.kv_lib:
+        out += kv_launches(a, step, torch, st)
+    return out
+
+
+def kv_launches(a, step: dict, torch, st) -> list[dict]:
+    """Attention at each k in the step's form and split count, then the append at every layer at each k."""
+    import step as STEP
+
+    kv = BW_KV.Lib(BW.Lib(a.wt_lib).field.name, a.kv_lib)
+    v, i = ctypes.c_void_p, ctypes.c_int
+    kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
+    sh = BW_KV.attn_shape(kv)
+    b, ctx, layers = step["batch"], step["ctx"], 2
+    f, tlw = kv.field, sh["tlw"]
+    cache = torch.empty(b * ctx * layers * sh["tle"], dtype=torch.uint8, device="cuda").random_(0, 256)
+    q = torch.randn(b, sh["heads"], STEP.K.HEAD_DIM, device="cuda").to(torch.bfloat16).contiguous()
+    o = torch.empty(b, sh["heads"], STEP.K.HEAD_DIM, dtype=torch.float32, device="cuda")
+    out = []
+    for k in step["ks"]:
+        BW_KV.set_key(kv, BW_KV.lib_key(kv, k))
+        form = step["splits"][f"k{k}_form"]
+        sp = step["splits"][f"form{form}_k{k}"]["best"]
+        part = torch.empty(STEP.part_floats(sh, b, {form: [sp]}), dtype=torch.float32, device="cuda")
+        kv.call("kv_attn", BW_KV.ptr(cache), form, BW_KV.ptr(q), BW_KV.ptr(o), BW_KV.ptr(part), b, ctx, layers, 1, sp,
+                k, st)
+        torch.cuda.synchronize()
+        out.append({"kernel": "attention", "k": k, "form": form, "splits": sp, "batch": b, "ctx": ctx,
+                    "out_bytes": o.numel() * 4, "part_bytes": part.numel() * 4})
+    del cache
+    model_layers = BW.MODELS[step["model_name"]][0]
+    new = BW_KV.random_words(torch, b * model_layers * tlw, f, 23)
+    cache = torch.empty(b * 2 * model_layers * tlw * f.word_bytes, dtype=torch.uint8, device="cuda")
+    for k in step["ks"]:
+        BW_KV.set_key(kv, BW_KV.lib_key(kv, k))
+        kv.call("kv_append", BW_KV.ptr(new), BW_KV.ptr(cache), b, 2, model_layers, 0, model_layers, 1, k, st)
+        torch.cuda.synchronize()
+        out.append({"kernel": "append", "k": k, "batch": b, "layers": model_layers,
+                    "word_bytes": b * model_layers * tlw * f.word_bytes})
     return out
 
 
@@ -127,6 +173,35 @@ def summarize(stdout: str, rc: int) -> dict:
         lb = sum(bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum") for kv in ck)
         rows_out.append({**commit[0], "kernels": len(ck), "l2_write_bytes": wb, "local_store_bytes": lb,
                          "write_over_digests": wb / must, "ok": lb == 0 and wb <= 1.01 * must + 4096 * len(ck)})
+    attn = [w for w in want if w["kernel"] == "attention"]
+    groups: list[list[dict]] = []
+    for kv in kernels:
+        if "attn_" in kv["name"]:
+            if "attn_combine" in kv["name"] and groups:
+                groups[-1].append(kv)
+            else:
+                groups.append([kv])
+    if len(groups) != len(attn):
+        res["ok"] = False
+        res["rows"] = rows_out
+        return res
+    for w, g in zip(attn, groups):
+        wb = sum(bytes_of(kv, "lts__t_sectors_op_write.sum") + bytes_of(kv, "lts__t_sectors_op_red.sum") for kv in g)
+        lb = sum(bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum") for kv in g)
+        must = w["out_bytes"] + w["part_bytes"]
+        rows_out.append({**w, "kernels": [kv["name"][:40] for kv in g], "l2_write_bytes": wb, "local_store_bytes": lb,
+                         "write_over_outputs_and_partials": wb / must, "ok": lb == 0 and wb <= 1.01 * must + 4096 * len(g)})
+    app = [w for w in want if w["kernel"] == "append"]
+    ak = [kv for kv in kernels if "append_kernel" in kv["name"]]
+    if len(ak) != len(app):
+        res["ok"] = False
+        res["rows"] = rows_out
+        return res
+    for w, kv in zip(app, ak):
+        wb = bytes_of(kv, "lts__t_sectors_op_write.sum")
+        lb = bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum")
+        rows_out.append({**w, "l2_write_bytes": wb, "local_store_bytes": lb, "write_over_words": wb / w["word_bytes"],
+                         "ok": lb == 0 and wb <= 1.01 * w["word_bytes"] + 4096})
     res["rows"] = rows_out
     res["ok"] = all(r["ok"] for r in rows_out)
     return res
@@ -135,6 +210,7 @@ def summarize(stdout: str, rc: int) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--wt-lib", default="")
+    ap.add_argument("--kv-lib", default="", help="step.cu: also attention and the append")
     ap.add_argument("--reader-lib", default="")
     ap.add_argument("--step-json", default="")
     ap.add_argument("--linears", default="qkv,down")
@@ -153,7 +229,8 @@ def main() -> int:
         cmd = [ncu, "--csv", "--print-units", "base", "--target-processes", "all", "--kernel-name", KERNELS,
                "--metrics", ",".join(METRICS),
                sys.executable, __file__, "--child", "--wt-lib", a.wt_lib, "--step-json", a.step_json, "--linears",
-               a.linears] + (["--reader-lib", a.reader_lib] if a.reader_lib else [])
+               a.linears] + (["--reader-lib", a.reader_lib] if a.reader_lib else []) + (
+                   ["--kv-lib", a.kv_lib] if a.kv_lib else [])
         p = subprocess.run(cmd, capture_output=True, text=True, check=False)
         (out / "write-gate.ncu.txt").write_text(p.stdout + "\n--- stderr ---\n" + p.stderr)
         res = summarize(p.stdout, p.returncode)
