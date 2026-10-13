@@ -29,6 +29,10 @@ FP8 blocks of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 rank):
                 N(0, 0.02) bf16 weight row quantized per 128 the same way.  K = 6144 is fused_qkv_a and the dense and
                 shared experts' gate_up; 2048 is q_b, the indexer's wq_b and o_proj (one TP8 rank); 256 is the shared
                 expert's down_proj on one rank.  The routed experts run Triton's fused MoE (`moe-w13`, `moe-w2`).
+    dsa-topk-chunk, dsa-topk-final
+                `DsaTopKSelection_v4{TOPK,N,C=16384}`'s units (`boolean_dsa.topk_selection_calls`): chunk H's
+                `DsaTopKChunk_v1` and the `DsaTopKFinal_v1`, Boolean, their rows packed; GLM-5.3's top-2048 of 131,072 keys
+                (TOPK=1024,N=262144 is DeepSeek-V4-Pro's).
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -54,6 +58,7 @@ from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import act, b1, dsa, fp8_moe, moe, ref_prims, sparse_mla
+from verity_vllm.program.registry import boolean_dsa as BD
 from verity_vllm.program.registry import boolean_fp8 as BF
 
 
@@ -101,11 +106,14 @@ UNITS: dict[str, Unit] = {
 
 @dataclass(frozen=True)
 class Part:
-    """A unit type cut from a word Definition: the family, bound at statics ``S`` (``C``, the class's rank, is not one)."""
+    """A unit type cut from a word Definition: the family, bound at statics ``S`` (``C``, the class's rank, is not one).
+    ``packed``: words narrower than a u16 leaf share it (`class_statement.stage`'s), so a Boolean Definition's input bits take
+    16 to a leaf and not one each."""
 
     family: object
     defaults: dict
     fixed: tuple = ()
+    packed: bool = False
 
     def definition(self, S: dict):
         return bind(self.family, **{k: v for k, v in S.items() if k != "C"}, **dict(self.fixed))
@@ -126,6 +134,8 @@ PARTS: dict[str, Part] = {
     "dsa-q": Part(dsa.DsaIndexerQ, {"H": 32, "D": 128, "ROPE": 64}),
     "dsa-logits": Part(dsa.DsaMqaLogits, {"N": 2, "H": 32, "D": 128}),
     "dsa-topk": Part(dsa.DsaTopKShortRow, {"TOPK": 2048}),
+    "dsa-topk-chunk": Part(BD.DsaTopKChunk, {"TOPK": 2048, "N": 131072, "H": 0}, (("C", BD.CHUNK),), packed=True),
+    "dsa-topk-final": Part(BD.DsaTopKFinal, {"TOPK": 2048, "N": 131072}, (("C", BD.CHUNK),), packed=True),
     "sparse-mla-head": Part(sparse_mla.SparseMlaHead, {"T": 2048, "DR": 64, "DV": 512, "BN": 64, "SCALE": 0.0625}, _MLA),
     "token-select": Part(b1.TokenSelect, {"V": 154880}),
 }
@@ -171,7 +181,7 @@ def stage_part(name: str, part: Part, S: dict, tag: str, n: int, out: Path, t0: 
     lanes = CS.class_lanes(units, cl, key, n, CS.broadcast_params(units))
     t_draw = time.time() - t0
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
-    st = CS.stage(units, "q-word", s, cl, lanes, out, salt_key, packed=False, share_rows=False)
+    st = CS.stage(units, "q-word", s, cl, lanes, out, salt_key, packed=part.packed, share_rows=False)
     (out / f"inst-{st['n']}.bin").rename(out / "inst.bin")
     (out / f"pub-{st['n']}.bin").rename(out / "pub.bin")
     (out / "partition.json").write_text(json.dumps(PO.build(units.program, units.query), sort_keys=True))
