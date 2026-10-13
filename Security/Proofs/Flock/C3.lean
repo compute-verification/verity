@@ -62,6 +62,7 @@ import Proofs.Flock.C3.Reps.SentKeys
 import Proofs.Flock.C3.Reps.RepsCounted
 import Proofs.Flock.C3.Reps.WRead
 import Proofs.Flock.C3.Reps.ReadWhole
+import Proofs.Flock.C3.Reps.PortNames
 import Proofs.Flock.C3.Reps.WithReads
 import Proofs.Flock.C3.Reps.KeysInW
 import Proofs.Flock.C3.Reps.LigNames

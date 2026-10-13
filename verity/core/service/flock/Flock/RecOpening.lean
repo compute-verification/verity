@@ -204,12 +204,20 @@ def rsUnread (sh : Shape) (W : Array Nat) (rd : Array Bool) (ns : List Nat) : Op
     | some (.rs _ _) => let n := RecResiduals.readBits rd ns q; if n != 128 then some (q, n) else none
     | _ => none).head?
 
+/-- The row port `rec_residuals.spec` names for a part's element `a` (`W`, its slots in the opening's w) that is claim
+`i`'s ring switch's (`.rs i u`): round `i`'s, `m<i>`; none for any other. -/
+def rsName (sh : Shape) (W : Array Nat) (a : Nat) : List String :=
+  match ((wNames sh)[W[a]!]? : Option Key) with
+  | some (.rs i _) => [s!"m{i}"]
+  | _ => []
+
 /-- A unit named `rec-opening/…` is the verifier's part at the `m`, claims and part its name gives, equal in every
-field, at one unit per VU (each part is one copy of its unit), and its computed rows read each element of a claim's ring
+field, at one unit per VU (each part is one copy of its unit), its computed rows read each element of a claim's ring
 switch it holds in all 128 bits (`rsUnread`) and each other element it holds in all 128 bits or none
-(`RecResiduals.partlyRead`); any other unit passes. The claims are bounded by the file's unit before the structure is
-computed, and the part's input and output bits are compared before its net is built. Irreducible, so that no
-unification against it builds the net. -/
+(`RecResiduals.partlyRead`), and each bit of claim `i`'s ring switch's elements is keyed by a circuit port named `m<i>`
+where a port keys it (`RecResiduals.misnamed`, `rsName`); any other unit passes. The claims are bounded by the file's
+unit before the structure is computed, and the part's input and output bits are compared before its net is built.
+Irreducible, so that no unification against it builds the net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some (m, cl, j) =>
@@ -235,7 +243,11 @@ unification against it builds the net. -/
                 | .error e => throw s!"circuit {c.name}: unit {c.unit.name}: {e}"
                 | .ok W => match rsUnread sh W (RecResiduals.readIns g) ns with
                   | none => match RecResiduals.partlyRead (RecResiduals.readIns g) ns with
-                    | none => pure ()
+                    | none => match RecResiduals.misnamed c ns W.size (rsName sh W) with
+                      | none => pure ()
+                      | some (k, a, b, q) =>
+                        throw (s!"circuit {c.name}: unit {c.unit.name}'s copy {k} keys bit {b} of ring-switch element " ++
+                          s!"{a} by port {c.ports[q]!.name}, not {rsName sh W a}")
                     | some (q, n) =>
                       throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of row-port element {q}'s 128 bits"
                   | some (q, n) =>
@@ -246,11 +258,13 @@ unification against it builds the net. -/
       throw s!"circuit {c.name}: unit {c.unit.name} is not rec-opening/m<m>-c<claims>-p<j>"
     else pure ()
 
-/-- `check` reads a circuit's name, unit and units per VU only. -/
-theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) (hv : c.upv = c'.upv := by rfl) :
+/-- `check` reads a circuit's name, unit, units per VU, ports and leaves only (the last three by `rfl` where the two
+share them). -/
+theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) (hv : c.upv = c'.upv := by rfl)
+    (hp : c.ports = c'.ports := by rfl) (hl : c.leavesIn = c'.leavesIn := by rfl) :
     check c = check c' := by
   unfold check
-  rw [hn, hu, hv]
+  rw [hn, hu, hv, RecResiduals.misnamed_congr hu hp hl hv, hp]
 
 end RecOpening
 end Flock
