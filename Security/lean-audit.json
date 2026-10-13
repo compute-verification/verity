@@ -12116,7 +12116,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Flock.RecOpen": {
-   "digest": "cc4a0bcf2f9ca6bed29915b187071ec01a69231060be3e1f2d2233413fb4b9c8",
+   "digest": "70e58cabb0ea488efe6015c7b4d3278d76cf6c6eebc8c2ea3f9291f6b0dc381e",
    "definitions": {
     "Flock.RecOpen.GfS": "4e758955dfda986b6a5b9d74b5d185d2888099d3df70b16f0076774d6f759a71",
     "Flock.RecOpen.GfS.ops": "82ad386d68752b6de1339bf39daa6068672737f748f1cbd7306b1f0a062331fe",
@@ -12141,7 +12141,8 @@
     "Flock.RecOpen.bitsOf": "809d68b3679db66f270612ab447bca86551c4970e4d8e28c227cc499c634282a",
     "Flock.RecOpen.blockAt": "a1fd1b10768307eb0fdada811e59255b7256e56241c23c5fb112806b0951aba6",
     "Flock.RecOpen.byteBit": "994b9593ed9c74dbf9ce3e0e77a659d74b82ff84818b415ea9fa4244d20aa0ce",
-    "Flock.RecOpen.check": "0972d66a5fbcf4635c40641edd1737fbd8b644c05520b82a07c5f1925d28cb45",
+    "Flock.RecOpen.check": "1c14d5363c81bd2797095f5fc39dec08fe0df9986d14565dc3ef54d583aaec58",
+    "Flock.RecOpen.checkAt": "80a8f156a7917c3eb829790d640605f2a54297fd729f5ba24e86db2319efe3d0",
     "Flock.RecOpen.climbFrom": "58f4cd8efb66ed056bb9928e7f0a967e663773b41c818424ebbb3d5ec9adf5c7",
     "Flock.RecOpen.climbRow": "b609cef47ff26e6409b177324fe2aad8cb9bd25279c91a07820d9e98b3f89e4a",
     "Flock.RecOpen.consStructure": "d896d8555c615983e2c9151b833c205e3ea97318fa17e08ed04f5faa1d5f09ab",
@@ -12175,11 +12176,12 @@
     "Flock.RecOpen.shaMsg": "a5d0ef6bffc336417953540b1e46b93f5e6704304d61b25dcd53cab251b60ecb",
     "Flock.RecOpen.shiftL": "a006c60bd00a26e80333342e2eb0740e39fc942111b3bd9f5223517dc95144b7",
     "Flock.RecOpen.sibForms": "f1f68ee109e10646294a450a02fe5f7b9fedcfd8c9bc0e05e658e20ec98b55b9",
+    "Flock.RecOpen.stackedName": "c8cab37b13a703698a3f5b45b5dc5a4bb8af5cab22f339096956f5a8199a96ac",
+    "Flock.RecOpen.stackedParams": "a3b345f1ea99580dfb33542abfdf4e672b66281fa149d276f6116434b880784a",
     "Flock.RecOpen.swap": "2eb5a0a238dafd5724360df985fca794a3c8c0d0d7da3e7c827cb1934639c9e5",
     "Flock.RecOpen.termForms": "b7947db716c2bf0d20a42fba4646e0e83f1633fcac3ba1c0c8f9c2ab4df20c70",
     "Flock.RecOpen.unitLaid": "7b29440e214e91d276ae1fcd4a46d57dcd1a5d569680a705a13fe86df02d8d58",
     "Flock.RecOpen.unitName": "20667d31e2f56b6d30575d65fdeac301403d5a5ca598ada4e521dc238dd7c475",
-    "Flock.RecOpen.unitNet": "3ccadcff55cadb943a9229990c4b6947d44cfa25b0d8ac88c22a83defcf4b2f0",
     "Flock.RecOpen.valid": "c75983d3e7540f78626bd938a7d6741210874d33e4c11a600babe4630bdd68c6",
     "Flock.RecOpen.wordPorts": "e0286627e96a3b359833aadd2efe3de01cc338999487b6d06d84ee1ee3a6ccc5",
     "Flock.RecOpen.xorAll": "89c743dc809478a084e99aae65a4d5b9250c2e2c6a6ccfb7f2c283ad87868995",

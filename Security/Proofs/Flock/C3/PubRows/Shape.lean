@@ -13,7 +13,8 @@ shape's `sparse` entry (`sparse_of_name`: the other statements' names start `rec
 injective, and candidate 3's statements after RecSparse are R's levels and opening, `candidate3_rest`).
 
 * `SparseAtShapeChecked`: `SparseAtShape` at a statement of `Vs j`'s circuit that `checkStmt` passes;
-  `sparseAtShapeChecked` proves it of every family.
+  `sparseAtShapeChecked` proves it of every family. `NameChecked` (`nameChecked`, the same way): such a circuit is
+  named as the family's list's statement `j`.
 * `ChecksAccepted`: where a session accepts, a transcript it accepts passes `checkPubRows` (`PubRowsChecked`) and
   `checkStmt` (`StmtsChecked`, `AcceptsZKV`'s second conjunct), n1b's checks; the checked family meets it
   (`checksAccepted_checked`, by `checks_of_keepOwn`), and `hPubRows_of_checked` is `hPubRows_of_check'` with it and
@@ -261,6 +262,23 @@ theorem sparseAtShapeChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) :
   intro j sj _ _ _ _ _ _ _ hc h sh sh₀ hsh h₀
   rw [← hc] at hsh
   exact Option.some.inj ((sparse_of_checkStmt h hsh).symm.trans h₀)
+
+/-- **A circuit the verifier checked as V*'s statement `j` is named as the list's statement `j`**: where
+`RecVStar.checkStmt` at the inner shape, `j` and `j`'s binding passes on a statement of `Vs j`'s circuit, the family's
+list has a statement at `j`, and its name is `Vs j`'s unit's. -/
+def NameChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
+  ∀ j (sj : Flock.Stmt) tags tables circuitB partition program own rows, sj.c = (F.Vs j).c →
+    RecVStar.checkStmt (some F.ish) tags tables sj circuitB partition program (some own) (some (j : ℕ))
+      (some (F.bind j)) rows = .ok () →
+    ∃ s, F.stmts[(j : ℕ)]? = some s ∧ s.name = (F.Vs j).c.unit.name
+
+/-- **Every family's checked circuits are named as its list's statements** (`checkStmt_ok`, as `sparse_of_checkStmt`;
+the list `checkStmt` reads is the family's, `hstmts`). -/
+theorem nameChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : NameChecked F := by
+  intro j sj _ _ _ _ _ _ _ hc h
+  obtain ⟨-, -, ss, s, hss, hj, hname, -⟩ := FlockSoundness.Discharge.Recursion.checkStmt_ok h
+  obtain rfl := Except.ok.inj (hss.symm.trans F.hstmts)
+  exact ⟨s, hj, by rw [hname, hc]⟩
 
 /-- **(n1b) Where a session accepts, a transcript it accepts passes the verifier's checks** of its public rows against
 its hold of the inner transcript (`PubRowsChecked`) and of its statements as V*'s statement of its index
