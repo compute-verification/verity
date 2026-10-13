@@ -561,6 +561,19 @@ def topEntry (program : String) (bcs : Array ByteArray) : V Json := do
   return Json.mkObj [("value", Json.str STACKED), ("root", Json.str (hexOf root)), ("leaves", toJson bcs.size),
     ("words", toJson TOP_ROW_WORDS), ("domain", Json.str (hexOf dom))]
 
+/-- The five fields that bind a `stacked` registration entry to the binding round's concrete top. This is deliberately
+checked structurally beside the canonical-JSON comparison: proofs use these field equalities, while keeping the old
+comparison makes the verifier accept no new entry. -/
+def topEntryFields (program : String) (bcs : Array ByteArray) (e : Json) : V Bool := do
+  let dom ← Registered.domain program STACKED TOP_ROW_WORDS bcs.size Registered.WORD_BITS
+  let leaves := bcs.mapIdx fun i bc => Registered.rowLeaf dom i (Hm96.Default512.treeLeaf bc)
+  let root := FV3.root dom leaves Sha512.hash
+  return e.getObjValAs? String "value" == .ok STACKED &&
+    e.getObjValAs? String "root" == .ok (hexOf root) &&
+    e.getObjValAs? Nat "leaves" == .ok bcs.size &&
+    e.getObjValAs? Nat "words" == .ok TOP_ROW_WORDS &&
+    e.getObjValAs? String "domain" == .ok (hexOf dom)
+
 /-- **R's registration**: the circuit registration (`--rec-inner-registration`, one-stage `registration.record`'s
 `verity/registration/v2` record, written at staging, `inner_registered.REGISTRATION`) whose digest the inner circuit's META
 binds (`bound`, META's `registration`), and its entry named `stacked` (R's registered top, `rec_live.register_top`) with the
@@ -753,7 +766,9 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
         let bcs ← hexList s!"{s} round {k}'s top {i}" top
         if table == some STACKED && k == 0 && i == 0 then
           let made ← match regR with
-            | some (program, e) => do pure ((← canon (← topEntry program bcs)) == (← canon e))
+            | some (program, e) => do
+                let structural ← topEntryFields program bcs e
+                pure (structural && (← canon (← topEntry program bcs)) == (← canon e))
             | none => pure false
           if !made then throw (refused s!"registration: {s}'s binding round's top is not {STACKED}'s registered top")
         tops := tops.push bcs
