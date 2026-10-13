@@ -12,8 +12,8 @@ import Proofs.Flock.VBridge.Net
   the climb runs keeps an input bit out of its output forms when its inputs keep it out (`av_and` through `av_shaFrom`,
   and `av_swap`): its forms are XORs of its inputs' forms, constants, and variables it makes.
 * The witness (`reads_swap`, `rdN_climbFrom`): below level `h` every node and sibling avoids sibling bit `u`, so the swap
-  at level `h` makes a row reading it. The residual forms come first and only add rows past the inputs
-  (`fresh_residualsGo`), and direction bit `h` is an input bit as `H ≤ 32` (`sibReads_unit`).
+  at level `h` makes a row reading it. The residual forms come first and only add rows past the inputs (they are V*'s,
+  `residualForms_eq`, and `fresh_residualsGo`), and direction bit `h` is an input bit as `H ≤ 32` (`sibReads_unit`).
 * The unit (`rowReads_all`, `laid_reads_of`, `readCol_of_laid`): with `ReadRow`'s row bits, a builder row reads each of
   the first `128 · LANES + 512 · H` input bits, and its laid-out row is a computed row of the net reading that column.
 -/
@@ -388,13 +388,15 @@ theorem rdN_of_good {α β : Type} {m : M α} {f : α → M β} {N : Nat} (hN : 
   have h := (hm N s hs).1
   exact hf (m.run s).1 (m.run s).2 (by omega)
 
-/-- **The opening's builder leaves a row reading each sibling bit**: residual forms only add rows past the inputs
-(`fresh_residualsGo`), then the climb reads it (`rdN_climbRow`) at direction bit `h`, an input bit as `H ≤ 32`. -/
+/-- **The opening's builder leaves a row reading each sibling bit**: residual forms (V*'s, `residualForms_eq`) only add
+rows past the inputs (`fresh_residualsGo`), then the climb reads it (`rdN_climbRow`) at direction bit `h`, an input bit
+as `H ≤ 32`. -/
 theorem sibReads_unit (LANES H : Nat) (hH : H ≤ 32) {h i : Nat} (hh : h < H) (hi : i < 512) :
     RowReads ((recOpenNet LANES H (ports LANES H)).run St.empty).2 (128 * LANES + 512 * h + i) := by
   have hm := Nat.le_max_right 1 ((H + 1) / 2)
   rw [recOpenNet_run]
   unfold recOpen
+  rw [FlockVBridge.residualForms_eq]
   refine rdN_of_good ?_ (FlockVBridge.fresh_residualsGo _ _ _ _) (fun _ => RdN.bind_left ?_ fun _ => Keeps.pure' _)
     (good_start _)
   · simp only [St.empty, ports]
