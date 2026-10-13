@@ -204,11 +204,17 @@ class ProverSide:
             return coin.coin
 
         challenge = take(coin)
+        chained = getattr(self.backend, "run_chained", None)
+        begin_window = getattr(self.backend, "begin_window", None)
+        if begin_window is not None:
+            begin_window(challenge, prev)
         closing = False
         while not closing and ended is None:
-            seed = rb.seed(challenge, i, prev)
             c0 = time.perf_counter_ns()
-            root, handle = self.backend.run_pass(seed)
+            if chained is None:
+                root, handle = self.backend.run_pass(rb.seed(challenge, i, prev))
+            else:
+                root, handle = chained(i)
             c1 = time.perf_counter_ns()
             with self.lock:
                 self.kept[(t, i)] = handle
@@ -223,6 +229,8 @@ class ProverSide:
                 if msg["type"] == "coin":
                     t, i = t + 1, 0
                     challenge = take(wire.coin_of(msg["coin"]))
+                    if begin_window is not None:
+                        begin_window(challenge, None)
                     break
                 elif msg["type"] == "close":
                     closing = True

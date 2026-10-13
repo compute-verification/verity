@@ -48,6 +48,7 @@ from verity.ml.commitments.rowleaf import sha512_row_v2_prefix  # noqa: E402
 from verity.ml import randomness  # noqa: E402
 
 import sketch_receipt as skr  # noqa: E402
+import reader as rdr  # noqa: E402
 from prover import PAYLOAD_LABEL  # noqa: E402
 
 BLOCK = rcodec.BLOCK_BYTES
@@ -94,8 +95,12 @@ class Lib:
         self.so.rs_pass.argtypes = [v, u64, v, v, v, v, v, v, i, u64, i, v, v]
         self.so.rs_subtrees.argtypes = [v, v, v, u64, i, v, v, v]
         self.so.rs_signs16.argtypes = [b, i, v, v]
+        self.so.rs_chain_set.argtypes = [b, v]
+        self.so.rs_chain_prepare.argtypes = [ctypes.c_uint, v, v, v, v]
         self.so.rs_pack16.argtypes = [v, v, v]
         self.so.rs_sketch16_receipts.argtypes = [v, u64, u64, v, v, i, v]
+        self.so.rb_chain_set.argtypes = [b, i, b, b, b, b, b, b, i, i, b, i, i, b, i, b, i, i, u64, v]
+        self.so.rb_chain.argtypes = [v, v]
 
     def call(self, fn: str, *args) -> None:
         rc = getattr(self.so, fn)(*args, self.torch.cuda.current_stream().cuda_stream)
@@ -107,6 +112,21 @@ class Lib:
         self.call("rb_set", receipt_prefix, sha512_row_v2_prefix(8 * row_bytes), sha512_row_v2_prefix(8 * last_row_bytes),
                   rb.HM96.salt_prefix, rb.HM96.leaf_prefix(rb.KEY), rb.KEY, domain_id, rb.SCHEMA.encode(),
                   len(rb.SCHEMA), salt_in, len(salt_in), positions)
+
+    def set_chain(self, plan: rb.Plan, key: bytes) -> None:
+        """Install `rb_chain`'s fixed templates for this plan and salt key."""
+        n, leaves = plan.length, rb.leaves(plan.length)
+        last = n - PER_LEAF * (leaves - 1)
+        m = rdr.chain_messages(plan, key)
+        self.call("rb_chain_set", *m["receipt"], sha512_row_v2_prefix(8 * rb.DIGEST_BYTES * PER_LEAF),
+                  sha512_row_v2_prefix(8 * rb.DIGEST_BYTES * last), rb.HM96.salt_prefix,
+                  rb.HM96.leaf_prefix(rb.KEY), rb.KEY, m["binding"][0], len(m["binding"][0]), m["binding"][1],
+                  m["domain"][0], len(m["domain"][0]), m["domain"][1], rb.SCHEMA.encode(), len(rb.SCHEMA),
+                  m["salt"][0], len(m["salt"][0]), m["salt"][1], n)
+
+    def chain(self, seed) -> None:
+        """Restore the receipt-tree constants from a pass seed held on this device."""
+        self.call("rb_chain", seed.data_ptr())
 
 
 class Kv:
@@ -179,10 +199,14 @@ class DeviceStore:
                                                     device="cuda", generator=generator))
             v.view(-1, 128)[:, 127] &= 0x7F
         self.plan = rb.Plan.whole(blocks)
+        self.lib.set_chain(self.plan, self.key)
+        self.lib_open.set_chain(self.plan, self.key)
         self.dropped: dict[int, bytes] = {}
         self.pass_gpu_ms: list[float] = []
         self.open_stats: list[dict] = []
         self.pass_host_phases: list[tuple] = []
+        self.chain_host_phases: list[tuple] = []
+        self.chain_previous = None
         self.root_host = torch.empty((1, 8), dtype=torch.int64, pin_memory=True)
 
     def shape(self, chunk: int, kept_from: int, sketch_ctas: int) -> None:
@@ -271,6 +295,50 @@ class DeviceStore:
         self.pass_host_phases.append((t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, time.perf_counter_ns() - t5))
         return root, (seed, pk, kept)
 
+    def start_chain(self, challenge: bytes, previous: bytes | None) -> None:
+        """Set one window's challenge, and optionally its first previous root, once rather than once per pass."""
+        if type(challenge) is not bytes or len(challenge) != rb.CHALLENGE_BYTES:
+            raise ValueError("a chained window's challenge is 32 bytes")
+        self.lib.call("rs_chain_set", challenge)
+        if previous is not None:
+            words = np.frombuffer(rb._digest(previous, "a previous root"), dtype=">u8").astype(np.uint64).view(np.int64)
+            self.chain_previous = self.torch.from_numpy(words.copy()).cuda().reshape(1, 8)
+        if self.chain_previous is None:
+            raise ValueError("the first chained window needs its previous root")
+
+    def run_chain(self, i: int):
+        """Pass `i` with its seed, signs, and receipt-tree constants derived on the device from `chain_previous`."""
+        if self.chain_previous is None or not 0 <= i < 1 << 32:
+            raise ValueError("a chained pass needs a previous root and a u32 index")
+        torch = self.torch
+        t0 = time.perf_counter_ns()
+        seed = torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device="cuda")
+        pk = torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda")
+        kept = torch.empty((self.kept_at[self.H + 1], 8), dtype=torch.int64, device="cuda")
+        ctr, ys, dig, up = self.ring
+        a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        t1 = time.perf_counter_ns()
+        a.record()
+        main = torch.cuda.current_stream().cuda_stream
+        rc = self.lib.so.rs_chain_prepare(i, self.chain_previous.data_ptr(), seed.data_ptr(), pk.data_ptr(), main)
+        if not rc:
+            rc = self.lib.so.rs_pass(self.data.data_ptr(), self.blocks, pk.data_ptr(), ctr.data_ptr(), ys.data_ptr(),
+                                     dig.data_ptr(), up.data_ptr(), kept.data_ptr(), self.h0, self.chunk,
+                                     self.sketch_ctas, main, self.side.cuda_stream)
+        if rc:
+            raise RuntimeError(f"chained rs_pass: {rc}")
+        b.record()
+        t2 = time.perf_counter_ns()
+        b.synchronize()
+        t3 = time.perf_counter_ns()
+        self.root_host.copy_(kept[-1:], non_blocking=True)
+        torch.cuda.current_stream().synchronize()
+        root = self.root_host.numpy().astype(np.uint64).astype(">u8").tobytes()
+        self.chain_previous = kept[-1:]
+        self.pass_gpu_ms.append(a.elapsed_time(b))
+        self.chain_host_phases.append((t1 - t0, t2 - t1, t3 - t2, time.perf_counter_ns() - t3))
+        return root, (seed, pk, kept)
+
     def warm(self, passes: int) -> None:
         """What `passes` passes keep (`run_pass`'s packed signs and kept levels), allocated once and freed, so the
         allocator holds them before anything is timed."""
@@ -337,7 +405,10 @@ class DeviceStore:
         t0 = time.perf_counter_ns()
         cs = torch.from_numpy(np.concatenate(firsts) if firsts else np.zeros(0, dtype=np.int64)).cuda()
         for ((seed, pk, kept), positions), first in zip(items, firsts):
-            self.set_pass(lib, seed)
+            if isinstance(seed, bytes):
+                self.set_pass(lib, seed)
+            else:
+                lib.chain(seed)
             rc = lib.so.rs_subtrees(self.data.data_ptr(), pk.data_ptr(), cs.data_ptr() + 8 * q0, len(first), h0,
                                     ys.data_ptr() + 64 * S * q0, nodes.data_ptr() + 64 * per * q0, stream)
             if rc:
@@ -471,24 +542,29 @@ class Device:
             gc.collect()
             gc.freeze()
             gc.disable()
+            s.start_chain(challenge, prev)
+            first = None
             for i in range(self.calibration_passes):
                 t0 = time.perf_counter_ns()
-                seed = rb.seed(challenge, i, prev)
-                t1 = time.perf_counter_ns()
-                prev, handle = s.run_pass(seed)
+                want_seed = rb.seed(challenge, i, prev)
+                prev, handle = s.run_chain(i)
                 kept.append(handle)
-                t2 = time.perf_counter_ns()
+                t1 = time.perf_counter_ns()
+                if first is None:
+                    first = (want_seed, prev, handle[0])
                 if t_end is not None:
-                    gap_ns.append(t1 - t_end)
-                pass_ns.append(t2 - t1)
-                t_end = t2
+                    gap_ns.append(t0 - t_end)
+                pass_ns.append(t1 - t0)
+                t_end = t1
             gc.enable()
             gc.unfreeze()
-            seed = rb.seed(challenge, 0, bytes(64))
-            self.gates["plain_root"] = s.plain_root(seed) == s.run_pass(seed)[0]
-            s.pass_gpu_ms.pop()
+            seed, chained_root, seed_dev = first
+            self.gates["device_seed"] = bytes(seed_dev.cpu().numpy()) == seed
+            self.gates["plain_root"] = s.plain_root(seed) == chained_root
             self.gates["device_signs"] = all(s.signs_match(rb.seed(challenge, i, bytes(64))) for i in range(4))
         torch.cuda.synchronize()
+        if not self.gates["device_seed"]:
+            raise RuntimeError("the device's chained seed is not the driver's")
         if not self.gates["plain_root"]:
             raise RuntimeError("the pipelined pass's root is not the plain pass's")
         if not self.gates["device_signs"]:
@@ -521,6 +597,14 @@ class Device:
     def run_pass(self, seed: bytes):
         with self.torch.cuda.stream(self.main_stream):
             return self.store.run_pass(seed)
+
+    def begin_window(self, challenge: bytes, previous: bytes | None) -> None:
+        with self.torch.cuda.stream(self.main_stream):
+            self.store.start_chain(challenge, previous)
+
+    def run_chained(self, i: int):
+        with self.torch.cuda.stream(self.main_stream):
+            return self.store.run_chain(i)
 
     def open_window(self, items: list[tuple[object, list[int]]]) -> list[list[tuple]]:
         with self.torch.cuda.stream(self.open_stream):
@@ -578,9 +662,11 @@ class Device:
             small.arm(dropped)
         coin, prev, kept, verdicts = session.start(), reg.digest, {}, []
         for t in range(2):
+            with self.torch.cuda.stream(self.main_stream):
+                small.start_chain(coin.coin, prev if t == 0 else None)
             for i in range(2):
                 with self.torch.cuda.stream(self.main_stream):
-                    prev, kept[t, i] = small.run_pass(rb.seed(coin.coin, i, prev))
+                    prev, kept[t, i] = small.run_chain(i)
                 now[0] += 1
                 if session.receive(t, i, prev) is not None:
                     return {"accepted": False, "failure": session.failed.failure}

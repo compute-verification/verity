@@ -125,9 +125,31 @@ def main() -> int:
             row = {"chunk_log2": c, "ctas": ctas, "h0": s.h0, "root_ok": ok, "host_phases_p50_ns": phases,
                    "gpu_ms": percentiles(sorted(gpu)), "host_ns": percentiles(sorted(host)),
                    "tau": sorted(gpu)[len(gpu) // 2] / read_ms, "tau_host": sorted(host)[len(host) // 2] / 1e6 / read_ms}
+            challenge, prev_host = b"\x06" * 32, bytes(64)
+            s.start_chain(challenge, prev_host)
+            chain_gpu, chain_host, chain_ok, p0 = [], [], True, len(s.chain_host_phases)
+            for i in range(a.passes):
+                want_seed = rb.seed(challenge, i, prev_host)
+                t0 = time.perf_counter_ns()
+                prev_host, handle = s.run_chain(i)
+                chain_host.append(time.perf_counter_ns() - t0)
+                chain_gpu.append(s.pass_gpu_ms[-1])
+                chain_ok = chain_ok and bytes(handle[0].cpu().numpy()) == want_seed
+                chain_ok = chain_ok and prev_host == s.plain_root(want_seed)
+            chain_ph = s.chain_host_phases[p0:]
+            chain_names = ("alloc", "launch", "wait", "root")
+            row.update({"chain_root_ok": chain_ok,
+                        "chain_host_phases_p50_ns": {
+                            k: sorted(x[j] for x in chain_ph)[len(chain_ph) // 2] for j, k in enumerate(chain_names)
+                        },
+                        "chain_gpu_ms": percentiles(sorted(chain_gpu)),
+                        "chain_host_ns": percentiles(sorted(chain_host)),
+                        "chain_tau": sorted(chain_gpu)[len(chain_gpu) // 2] / read_ms,
+                        "chain_tau_host": sorted(chain_host)[len(chain_host) // 2] / 1e6 / read_ms})
             out["pipelined"].append(row)
             print(json.dumps(row), flush=True)
             s.pass_gpu_ms.clear()
+            s.chain_host_phases.clear()
     t = []
     for i in range(20):
         t0 = time.perf_counter_ns()

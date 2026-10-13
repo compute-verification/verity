@@ -227,6 +227,81 @@ __global__ void __launch_bounds__(128) signs16_kernel(const StreamHead h, u32 *_
   }
 }
 
+// A chained pass derives everything whose input is the previous pass's root on the device.  The host sets the
+// window's challenge once (`rs_chain_set`); pass i then computes
+//
+//   seed_i = SHA512(SEED_DOMAIN || challenge || u32be(i) || root_(i-1)),
+//
+// the sketch-sign key and row streams, and the sketch receipt's first-block midstate.  `rb_chain` (reader.cu)
+// completes the receipt tree's constants from that seed.  Thus no seed, sign key, or tree constant crosses the host
+// between passes.  The 64-byte seed is retained with the pass because the opener's second library uses it to restore
+// that pass's constants.
+constexpr int CHAIN_THREADS = 128, CHAIN_BITS_BYTES = SK_ROWS * (BLOCK / 8);
+
+struct ChainPass {
+  uint8_t seed[160], derive[256], receipt[128], row[128];
+  int seed_len, seed_i, seed_root, derive_len, derive_seed, receipt_seed;
+  int row_len, row_key, row_c, row_ctr;
+};
+
+struct ChainPassState {
+  u64 receipt_mid[8];
+};
+
+__constant__ ChainPass kChainPass;
+__device__ ChainPassState gChainPass;
+
+__global__ void __launch_bounds__(CHAIN_THREADS) chain_prepare_kernel(unsigned pass, const u64 *__restrict__ previous,
+                                                                      uint8_t *__restrict__ seed_out,
+                                                                      u32 *__restrict__ pk) {
+  __shared__ uint8_t seed[64], key[32], bits[SK_ROWS][BLOCK / 8];
+  const int tid = threadIdx.x;
+  uint8_t m[256];
+  u64 h[8];
+  if (tid == 0) {
+    for (int b = 0; b < kChainPass.seed_len; ++b) m[b] = kChainPass.seed[b];
+    for (int b = 0; b < 4; ++b) m[kChainPass.seed_i + b] = (uint8_t)(pass >> (24 - 8 * b));
+    for (int b = 0; b < 64; ++b)
+      m[kChainPass.seed_root + b] = (uint8_t)(previous[b >> 3] >> (56 - 8 * (b & 7)));
+    sha512_bytes(m, kChainPass.seed_len, h, seed);
+    for (int b = 0; b < 64; ++b) seed_out[b] = seed[b];
+  }
+  __syncthreads();
+  if (tid == 0) {
+    for (int b = 0; b < kChainPass.derive_len; ++b) m[b] = kChainPass.derive[b];
+    for (int b = 0; b < 64; ++b) m[kChainPass.derive_seed + b] = seed[b];
+    sha512_bytes(m, kChainPass.derive_len, h, nullptr);
+    for (int b = 0; b < 32; ++b) key[b] = (uint8_t)(h[b >> 3] >> (56 - 8 * (b & 7)));
+    for (int b = 0; b < 128; ++b) m[b] = kChainPass.receipt[b];
+    for (int b = 0; b < 64; ++b) m[kChainPass.receipt_seed + b] = seed[b];
+    sha512_bytes(m, -1, h, nullptr);
+    for (int k = 0; k < 8; ++k) gChainPass.receipt_mid[k] = h[k];
+  }
+  __syncthreads();
+  {
+    const int c = tid >> 3, block = tid & 7;
+    for (int b = 0; b < kChainPass.row_len; ++b) m[b] = kChainPass.row[b];
+    for (int b = 0; b < 32; ++b) m[kChainPass.row_key + b] = key[b];
+    m[kChainPass.row_c] = (uint8_t)c;
+    for (int b = 0; b < 8; ++b) m[kChainPass.row_ctr + b] = (uint8_t)((u64)block >> (56 - 8 * b));
+    uint8_t *out = &bits[c][64 * block];
+    sha512_bytes(m, kChainPass.row_len, h, out);
+  }
+  __syncthreads();
+  for (int q = tid; q < SK16_PACK; q += CHAIN_THREADS) {
+    const int p = q >> 5, g = (q & 31) >> 2, t = q & 3;
+    u32 w = 0;
+#pragma unroll
+    for (int r = 0; r < 8; ++r) {
+      const int nt = r >> 2, s = (r >> 1) & 1, b = r & 1, u = 64 * p + 16 * t + 8 * s + 4 * b;
+#pragma unroll
+      for (int x = 0; x < 4; ++x)
+        w |= (u32)((bits[8 * nt + g][(u + x) >> 3] >> ((u + x) & 7)) & 1) << (8 * x + r);
+    }
+    pk[q] = w;
+  }
+}
+
 __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_receipts_kernel(const uint4 *__restrict__ data, u64 j0,
                                                                                u64 n, const u32 *__restrict__ pk,
                                                                                u64 *__restrict__ ys) {
@@ -389,6 +464,91 @@ int rs_signs16(const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) 
   h.n = head_len;
   signs16_kernel<<<1, 128, 0, s>>>(h, pk);
   return cudaGetLastError() ? 4 : 0;
+}
+
+// The fixed messages for `chain_prepare_kernel`, at one window's challenge.  The framing is
+// `verity.ml.randomness` v2, exactly as `benchmarks/codec_tensor/wt.cu::wt_set_pass` constructs it for
+// WT_RECEIPT=1.
+int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
+  if (!challenge) return 1;
+  ChainPass P{};
+  auto put = [](uint8_t *m, int &o, const void *src, int len) {
+    memcpy(m + o, src, len);
+    o += len;
+  };
+  auto frame = [&](uint8_t *m, int &o, char tag, const void *body, int len) {
+    m[o++] = (uint8_t)tag;
+    for (int b = 7; b >= 0; --b) m[o++] = (uint8_t)((u64)len >> (8 * b));
+    put(m, o, body, len);
+  };
+  auto frame_int = [&](uint8_t *m, int &o, u64 v) {
+    uint8_t be[8];
+    int len = 0;
+    for (int b = 7; b >= 0; --b)
+      if (len || (v >> (8 * b)) & 0xFF || b == 0) be[len++] = (uint8_t)(v >> (8 * b));
+    frame(m, o, 'i', be, len);
+  };
+  const uint8_t zero[64] = {};
+  int o = 0;
+  put(P.seed, o, "verity/remote-bandwidth/seed/v0", 32);
+  put(P.seed, o, challenge, 32);
+  P.seed_i = o;
+  put(P.seed, o, zero, 4);
+  P.seed_root = o;
+  put(P.seed, o, zero, 64);
+  P.seed_len = o;
+
+  o = 0;
+  put(P.derive, o, "verity/randomness/derive/v2", 28);
+  P.derive_seed = o + 9;
+  frame(P.derive, o, 'b', zero, 64);
+  const char *sign_domain = "verity/remote-bandwidth/sketch-signs/v0";
+  frame(P.derive, o, 's', sign_domain, (int)strlen(sign_domain));
+  uint8_t ctx[128];
+  int c = 0;
+  frame(ctx, c, 's', "k", 1);
+  frame_int(ctx, c, SK_ROWS);
+  frame(ctx, c, 's', "n", 1);
+  frame_int(ctx, c, BLOCK);
+  frame(ctx, c, 's', "tag", 3);
+  const char *name = "sketch-sha512";
+  frame(ctx, c, 's', name, (int)strlen(name));
+  frame(P.derive, o, 'b', ctx, c);
+  P.derive_len = o;
+
+  o = 0;
+  put(P.receipt, o, "verity/remote-bandwidth/sketch-receipt/v0", 42);
+  P.receipt_seed = o + 9;
+  frame(P.receipt, o, 'b', zero, 64);
+
+  o = 0;
+  put(P.row, o, "verity/randomness/stream/v2", 28);
+  P.row_key = o;
+  put(P.row, o, zero, 32);
+  uint8_t idx[32];
+  c = 0;
+  frame(idx, c, 's', "row", 3);
+  frame_int(idx, c, 0);
+  frame(P.row, o, 'b', idx, c);
+  P.row_c = o - 1;
+  P.row_ctr = o;
+  put(P.row, o, zero, 8);
+  P.row_len = o;
+  return cudaMemcpyToSymbolAsync(kChainPass, &P, sizeof P, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;
+}
+
+// Prepare pass `i` from the previous root, put its seed and packed signs in device memory, and install both the sketch
+// receipt and receipt-tree constants on this stream.
+int rs_chain_prepare(unsigned i, const uint64_t *previous, uint8_t *seed, uint32_t *pk, cudaStream_t s) {
+  if (!previous || !seed || !pk) return 1;
+  chain_prepare_kernel<<<1, CHAIN_THREADS, 0, s>>>(i, previous, seed, pk);
+  void *state = nullptr;
+  if (cudaGetLastError() || cudaGetSymbolAddress(&state, gChainPass)) return 4;
+  uint8_t *p = static_cast<uint8_t *>(state);
+  if (cudaMemcpyToSymbolAsync(kSketchMid, p + offsetof(ChainPassState, receipt_mid), 64, 0,
+                              cudaMemcpyDeviceToDevice, s))
+    return 4;
+  return rb_chain(seed, s);
 }
 
 int rs_sketch16_receipts(const void *data, uint64_t j0, uint64_t n, const uint32_t *pk, uint64_t *ys, int ctas,
