@@ -21,4 +21,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaTopKShortRow_v2", lambda: bind(boolean_dsa.DsaTopKShortRowV2, TOPK=16)),
         ("DsaTopKSelection_v2", lambda: bind(boolean_dsa.DsaTopKSelectionV2, TOPK=16, N=64)),
         ("DsaTopKSelection_v2 ragged", lambda: bind(boolean_dsa.DsaTopKSelectionV2, TOPK=5, N=37)),
+        # four chunks of 16; and four of 8 with a ragged last one of 5 positions (W < 2^w)
+        ("DsaTopKSelection_v4", lambda: bind(boolean_dsa.DsaTopKSelectionV4, TOPK=16, N=64, C=16)),
+        ("DsaTopKSelection_v4 ragged", lambda: bind(boolean_dsa.DsaTopKSelectionV4, TOPK=5, N=37, C=8)),
     ]

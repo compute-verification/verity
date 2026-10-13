@@ -7,6 +7,8 @@ Definitions (the bodies are `dsa`'s, written once over `dsa.Ops`), so each one's
     DsaMqaLogit_v2{H,D}, DsaMqaLogits_v2{N,H,D}
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
     DsaTopKSelection_v2{TOPK,N}                         traced at its statics: a decoder per slot, unsigned keys
+    DsaTopKSelection_v4{TOPK,N,C}                       DsaTopKSelection_v3{TOPK,N}: a DsaTopKChunk_v1{TOPK,N,C,H} per chunk of
+                                                        C positions, then DsaTopKFinal_v1{TOPK,N,C}
 
 The callees are core's Boolean FP32 pieces (`verity.ml.circuits.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
@@ -21,6 +23,8 @@ from __future__ import annotations
 import operator
 from collections.abc import Callable, Sequence
 from functools import reduce
+
+import numpy as np
 
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits import boolean as BL
@@ -37,6 +41,7 @@ from verity.ml.circuits.ops.boolean import scalar as SC
 from verity.ml.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, compress_columns, const_bits, mux, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition
 from verity_vllm.program.registry import dsa as D
+from verity_vllm.program.registry import sampling_boolean as SB
 from verity_vllm.program.registry.boolean_attention import _Bits
 from verity_vllm.program.registry.topp_word_gates import I32ToF32 as I32ToF32V1
 
@@ -275,5 +280,262 @@ DsaTopKSelectionV2 = EW.specialized(
     lambda S: ((("logits", Array(S.N, F32)), ("len", I32), ("idx", Array(S.TOPK, I32))), BIT),
     doc=_selection.__doc__, word=lambda b: bind(D.DsaTopKSelection, TOPK=b["TOPK"], N=b["N"]))
 
+
+# --- DsaTopKSelection_v4: DsaTopKSelection_v3 chunk by chunk ----------------------------------------------------------------------
+
+#: the positions of one chunk at the served statics: a chunk's unit reads 2^14 logits, whose row hashes fit C-Flock's 2^27 block
+CHUNK = 1 << 14
+#: the form size past which a comparator's swap (four ANDs for its one) or a move (one more) writes fresh bits, so no form, and
+#: no matrix row, grows with the network
+FORM_BOUND = 8
+
+
+def _or(C, a, b):
+    """a OR b as one fresh bit (`forms.OR`'s form also carries a and b)."""
+    return NOT(C.AND(NOT(a), NOT(b)))
+
+
+def _maj(C, x, y, c):
+    """maj(x, y, c) in one AND whose form is the smaller of x and y and that bit, so a carry chain's forms stay bounded
+    (`forms.maj` keeps the carry's, which grows along the chain); with a constant operand, one fresh bit."""
+    for a, b, k in ((x, y, c), (x, c, y), (y, c, x)):
+        if k.is_const():
+            return _or(C, a, b) if k.c else C.AND(a, b)
+    p, q = (x, y) if len(x.s) <= len(y.s) else (y, x)
+    return p ^ C.AND(p ^ q, p ^ c)
+
+
+def _carry(C, a, b, cin):
+    """The carry out of a + b + cin, unsigned, a and b of one width."""
+    for x, y in zip(a, b, strict=True):
+        cin = _maj(C, x, y, cin)
+    return cin
+
+
+def gt_u(C, a, b):
+    """a > b unsigned: the carry out of a + ~b."""
+    return _carry(C, a, [NOT(y) for y in b], ZERO)
+
+
+def _plus(C, a, k: int) -> list:
+    """(a + k) mod 2^len(a) for the constant k, each carry one fresh bit."""
+    out, c = [], ZERO
+    for i, x in enumerate(a):
+        kb = ONE if (k >> i) & 1 else ZERO
+        out.append(x ^ kb ^ c)
+        if i + 1 < len(a):
+            c = _maj(C, x, kb, c)
+    return out
+
+
+def _eq(C, a, b):
+    return and_reduce(C, [NOT(x ^ y) for x, y in zip(a, b, strict=True)])
+
+
+def _key(v):
+    """`order_key ^ 2^31` on bits (`convert_to_uint32_v2`): bit 31 the sign's NOT, bit b < 31 x_b ^ x_31."""
+    return [b ^ v[31] for b in v[:31]] + [NOT(v[31])]
+
+
+def merge_sort_layers(n: int) -> list[list[tuple[int, int]]]:
+    """Batcher's odd-even merge sort on n keys as layers of disjoint comparators (a, b), a < b: the network on the next power of
+    two without the comparators that reach position n or past it, which meet only the +inf padding (it never moves)."""
+    layers = []
+    p = 1
+    while p < n:
+        k = p
+        while k >= 1:
+            layer = [(i + j, i + j + k) for j in range(k % p, n - k, 2 * k) for i in range(min(k, n - j - k))
+                     if (i + j) // (2 * p) == (i + j + k) // (2 * p)]
+            if layer:
+                layers.append(layer)
+            k //= 2
+        p *= 2
+    return layers
+
+
+def _swap(C, s, a, b):
+    """(s ? b : a, s ? a : b) for one bit: one AND, each output a's or b's form and that bit, or past `FORM_BOUND` four fresh ANDs."""
+    if len(a.s) + len(b.s) <= FORM_BOUND:
+        m = C.AND(s, a ^ b)
+        return a ^ m, b ^ m
+    return C.AND(NOT(s), a) ^ C.AND(s, b), C.AND(s, a) ^ C.AND(NOT(s), b)
+
+
+def sort_keys(C, keys: list) -> list:
+    """``keys`` (unsigned, LSB first, one width) in ascending order by `merge_sort_layers`."""
+    keys = list(keys)
+    for layer in merge_sort_layers(len(keys)):
+        for a, b in layer:
+            s = gt_u(C, keys[a], keys[b])
+            keys[a], keys[b] = map(list, zip(*(_swap(C, s, x, y) for x, y in zip(keys[a], keys[b]))))
+    return keys
+
+
+def therm(C, x: list, n: int) -> list:
+    """[x > j] for j < n, x unsigned (LSB first): by its top bit, the rest's line ORed (j below the top bit's weight) or ANDed (at
+    or above it), each line one fresh bit."""
+    if n <= 0:
+        return []
+    if not x:
+        return [ZERO] * n
+    top, rest = x[-1], x[:-1]
+    h = 1 << len(rest)
+    sub = therm(C, rest, max(min(n, h), n - h))
+    return [_or(C, top, t) for t in sub[:min(n, h)]] + [C.AND(top, t) for t in sub[:max(0, n - h)]]
+
+
+def below(C, n, base: int, W: int) -> list:
+    """[base + j < len] for j < W, len signed: r = len - base in 33 bits; r >= 2^w (w the bits of W - 1) is every line, and
+    0 <= r < 2^w the thermometer of r's low w bits."""
+    w = (W - 1).bit_length()
+    r = _plus(C, list(n) + [n[31]], (-base) % (1 << 33))
+    pos = NOT(r[32])
+    hi = NOT(and_reduce(C, [NOT(b) for b in r[w:32]]))
+    every, low = C.AND(pos, hi), C.AND(pos, NOT(hi))
+    return [every ^ C.AND(low, t) for t in therm(C, r[:w], W)]
+
+
+def expand(C, valid: list, off: list, W: int) -> list:
+    """The membership bits of W positions from the sorted slots (``valid`` first, ``off`` strictly increasing over them): slot q
+    carries d = off - q (zero when not valid) and moves right by 2^k when bit k of d is set, k from the top down.  The moves
+    keep every slot's position below the next's (d does not decrease), so no two meet: a position's valid bit is the one staying
+    (`AND(~b, V)`, fresh) XOR the one arriving (its bit b), and each payload bit the stayer's (its form and one AND, or past
+    `FORM_BOUND` fresh) XOR the arrival's (`AND(b, bit)`, the bit the mover leaves behind)."""
+    w = (W - 1).bit_length()
+    m = len(valid)
+    V = [valid[q] if q < m else ZERO for q in range(W)]
+    A = [[C.AND(valid[q], d) for d in _plus(C, off[q], -q % (1 << w))] if q < m else [ZERO] * w for q in range(W)]
+    for k in reversed(range(w)):
+        step = 1 << k
+        b = [a[k] for a in A]
+        mv = [[C.AND(b[q], A[q][i]) for i in range(k)] for q in range(W)]
+        nV, nA = [], []
+        for q in range(W):
+            src = q - step
+            nV.append(C.AND(NOT(b[q]), V[q]) ^ (b[src] if src >= 0 else ZERO))
+            stay = [C.AND(NOT(b[q]), a) if len(a.s) > FORM_BOUND else a ^ t for a, t in zip(A[q][:k], mv[q])]
+            nA.append([s ^ mv[src][i] if src >= 0 else s for i, s in enumerate(stay)])
+        V, A = nV, nA
+    return V
+
+
+def check_chunk_statics(TOPK: int, N: int, C: int, H: int | None = None) -> None:
+    D.check_selection_statics(TOPK, N)
+    if not (C > 0 and C & (C - 1) == 0):
+        raise ValueError(f"DsaTopKSelection_v4: a chunk spans a power of two positions (C={C})")
+    if H is not None and not 0 <= H < -(-N // C):
+        raise ValueError(f"DsaTopKSelection_v4: the row of {N} positions has chunks 0..{-(-N // C) - 1} of {C} (H={H})")
+
+
+def chunk_width(S) -> int:
+    return min(S.C, S.N - S.H * S.C)
+
+
+def topk_chunk(C, S, *els):
+    """`DsaTopKChunk_v1{TOPK,N,C,H}`'s bit (`DsaTopKChunk`)."""
+    check_chunk_statics(S.TOPK, S.N, S.C, S.H)
+    T, W, base = S.TOPK, chunk_width(S), S.H * S.C
+    w = (W - 1).bit_length()
+    x, n, idx, thr = els[:W], els[W], els[W + 1:W + 1 + T], els[W + 1 + T]
+    keys = []
+    for v in idx:
+        hit = [v[b] if (base >> b) & 1 else NOT(v[b]) for b in range(w, 32)]
+        if W < 1 << w:
+            hit.append(gt_u(C, const_bits(W, w), list(v[:w])))
+        keys.append(list(v[:w]) + [NOT(and_reduce(C, hit))])
+    srt = sort_keys(C, keys)
+    valid, off = [NOT(k[w]) for k in srt], [k[:w] for k in srt]
+    strict = and_reduce(C, [NOT(C.AND(valid[i + 1], _eq(C, off[i], off[i + 1]))) for i in range(min(T - 1, W))])
+    member = expand(C, valid[:min(T, W)], off, W)
+    t = [NOT(b) for b in _key(thr)]
+    fits = [NOT(m ^ C.AND(lt, _carry(C, _key(x[j]), t, m))) for j, (m, lt) in enumerate(zip(member, below(C, n, base, W)))]
+    return [C.AND(strict, and_reduce(C, fits))]
+
+
+def topk_final(C, S, *els):
+    """`DsaTopKFinal_v1{TOPK,N,C}`'s bit (`DsaTopKFinal`)."""
+    check_chunk_statics(S.TOPK, S.N, S.C)
+    T = S.TOPK
+    ok, n, idx = els[0], els[1], els[2:]
+    lines = below(C, n, 0, T + 1)
+    short = and_reduce(C, [b if (i >> k) & 1 else b ^ lines[i] for i in range(T) for k, b in enumerate(idx[i])])
+    inside = [gt_u(C, list(n), list(v)) for v in idx]
+    long_ok = and_reduce(C, inside + [NOT(gt_u(C, list(n), const_bits(S.N, 32)))] + list(ok))
+    return [long_ok ^ C.AND(NOT(lines[T]), short ^ long_ok)]
+
+
+def chunk_ok(words, n: int, idx, thr, TOPK: int, N: int, C: int, H: int) -> bool:
+    """`DsaTopKChunk_v1{TOPK,N,C,H}` in numpy: ``words`` the chunk's W f32 words, ``thr`` an f32 word (float32, or bits)."""
+    check_chunk_statics(TOPK, N, C, H)
+    base, W = H * C, min(C, N - H * C)
+    u = np.asarray(idx).astype(np.int64).reshape(-1) & D.M32
+    offs = u[(u >= base) & (u < base + W)] - base
+    if np.unique(offs).size != offs.size:
+        return False
+    member = np.zeros(W, dtype=bool)
+    member[offs] = True
+    live = base + np.arange(W) < int(D._signed(n))
+    key, t = D.order_keys(np.asarray(words).reshape(-1)), int(D.order_keys(np.asarray([thr]))[0])
+    return bool(not (member & ~live).any() and (key[member] >= t).all() and (key[~member & live] <= t).all())
+
+
+def final_ok(ok, n: int, idx, TOPK: int, N: int) -> bool:
+    """`DsaTopKFinal_v1{TOPK,N,C}` in numpy, ``ok`` its chunks' bits."""
+    D.check_selection_statics(TOPK, N)
+    s, n = D._signed(idx).reshape(-1), int(D._signed(n))
+    j = np.arange(TOPK)
+    if n <= TOPK:
+        return bool(np.array_equal(s, np.where(j < n, j, -1)))
+    return bool(((s & D.M32) < n).all() and n <= N and np.asarray(ok).all())
+
+
+def _chunk_sig(S):
+    check_chunk_statics(S.TOPK, S.N, S.C, S.H)
+    return (("x", Array(chunk_width(S), F32)), ("len", I32), ("idx", Array(S.TOPK, I32)), ("thr", F32)), BIT
+
+
+def _row_sig(S):
+    check_chunk_statics(S.TOPK, S.N, S.C)
+    return (("logits", Array(S.N, F32)), ("len", I32), ("idx", Array(S.TOPK, I32)), ("thr", F32))
+
+
+DsaTopKChunk = SB.traced_family(
+    "DsaTopKChunk", 1, ("TOPK", "N", "C", "H"), _chunk_sig, topk_chunk,
+    "Chunk H of `DsaTopKSelection_v3{TOPK,N}`'s key check: positions H*C + j, j < W = min(C, N - H*C), with x = logits[H*C : "
+    "H*C + W].  An index is in the chunk when it lies in [H*C, H*C + W) (its bits from w = bits(W - 1) up are H*C's, its low w "
+    "bits below W); the TOPK keys (low w bits, not-in-chunk on top) are sorted (`sort_keys`), and the bit is 1 when no two "
+    "sorted in-chunk indices are equal and every position j fits the threshold: with its membership bit m (`expand`) and t = "
+    "`order_key(thr)`, the carry out of key(x[j]) + ~t + m (key >= t for a member, key > t for a non-member) is m when H*C + j < "
+    "len (`below`), and m is 0 past len.")
+DsaTopKFinal = SB.traced_family(
+    "DsaTopKFinal", 1, ("TOPK", "N", "C"),
+    lambda S: ((("ok", Array(-(-S.N // S.C), BIT)), ("len", I32), ("idx", Array(S.TOPK, I32))), BIT), topk_final,
+    "`DsaTopKSelection_v3{TOPK,N}`'s bit from its chunks' bits ``ok`` (`DsaTopKChunk_v1{TOPK,N,C,H}` for each H): for len <= "
+    "TOPK the shortcut's words, else every index below len (unsigned, as len > TOPK > 0 there), len <= N and every chunk's bit.")
+
+
+def topk_selection_calls(call, logits: Coll, n: Coll, idx: Coll, thr: Coll, TOPK: int, N: int, C: int = CHUNK) -> Coll:
+    """``DsaTopKSelection_v4{TOPK,N,C}`` as its Calls: chunk H's `DsaTopKChunk_v1{TOPK,N,C,H}` on its logits and the row's len,
+    idx and thr, then `DsaTopKFinal_v1` on their bits.  ``call(fn, *args)`` emits one (``Builder.call``).  At a Program's root
+    each chunk is a unit of its own under `Q_word` and `Q_call`; one Call of v4 is one unit (its body's single output bit
+    reads every gate).  Returns the bit."""
+    K = -(-N // C)
+    ok = [call(bind(DsaTopKChunk, TOPK=TOPK, N=N, C=C, H=h), logits[h * C:min(N, (h + 1) * C)], n, idx, thr) for h in range(K)]
+    return call(bind(DsaTopKFinal, TOPK=TOPK, N=N, C=C), Coll(Array(K, BIT), concat([o.refs for o in ok])), n, idx)
+
+
+def _selection_v4(B, S, logits, n, idx, thr):
+    return topk_selection_calls(B.call, logits, n, idx, thr, S.TOPK, S.N, S.C)
+
+
+DsaTopKSelectionV4 = CompositeDefinition(
+    "DsaTopKSelection", 4, ("TOPK", "N", "C"), lambda S: (_row_sig(S), BIT), _selection_v4, conformance="exact-model-tested",
+    doc="`DsaTopKSelection_v3{TOPK,N}` on bits in chunks of C positions: `DsaTopKChunk_v1{TOPK,N,C,H}` for each chunk H, then "
+        "`DsaTopKFinal_v1{TOPK,N,C}` (`topk_selection_calls`).")
+DsaTopKSelectionV4.word = lambda b: bind(D.DsaTopKSelectionV3, TOPK=b["TOPK"], N=b["N"])  # type: ignore[attr-defined]
+DsaTopKSelectionV4.word_statics = {"C": CHUNK}  # type: ignore[attr-defined]
+
 BOOLEAN_DSA = [U32AndV2, I32SubV2, I32ToF32V2, F32CeilFtzV2, DsaUe8m0ScaleV2, DsaUe8m0QuantV2, DsaIndexerKRowV2, DsaIndexerQHeadV2,
-               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaTopKShortRowV2, DsaTopKSelectionV2]
+               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaTopKShortRowV2, DsaTopKSelectionV2, DsaTopKChunk, DsaTopKFinal,
+               DsaTopKSelectionV4]
