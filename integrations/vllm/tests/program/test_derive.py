@@ -492,19 +492,38 @@ def test_neg_profile_mode_refuses_f32_linear():
     assert isinstance(r, Unsupported) and r.reason in ("numerics_unregistered", "decomposition"), r
 
 
-@pytest.mark.parametrize("op", ["aten.linear", "_C.rms_norm"])
-def test_neg_profile_mode_refuses_a_batch_invariant_kind_on_a_target_without_batch_invariance(op, monkeypatch):
-    """On a target without batch invariance `aten.linear` is the GEMM vLLM's unquantized linear dispatches to and `_C.rms_norm` the
-    CUDA `rms_norm_kernel`, which the profile's `gemm` and `rmsnorm` kinds (the batch-invariant Triton kernels) do not state; the
-    default target derives both."""
+def test_neg_profile_mode_refuses_a_batch_invariant_linear_on_a_target_without_batch_invariance(monkeypatch):
+    """Without batch invariance, unquantized `aten.linear` is cuBLAS and cannot bind the profile's Triton GEMM."""
     from verity_vllm.program.frontend.rules.vllm_bindings import observations as VB
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    m = torch.nn.Linear(16, 8, bias=False).to(torch.bfloat16) if op == "aten.linear" else ex.RMSNorm(16, 1e-5)
+    m = torch.nn.Linear(16, 8, bias=False).to(torch.bfloat16)
     x = (torch.empty(4, 16, dtype=torch.bfloat16),)
     assert derive_report(m, x, **PROF).ok
     monkeypatch.setitem(VB._OBSERVED, "target_profile", TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False))
     r = derive(m, x, **PROF)
-    assert isinstance(r, Unsupported) and f"{op} on a target without batch invariance" in r.hint, r
+    assert isinstance(r, Unsupported) and "aten.linear on a target without batch invariance" in r.hint, r
+
+
+@pytest.mark.parametrize(
+    "fused,expected",
+    [
+        (False, "RMSNormCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=768}"),
+        (True, "RMSNormFusedCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=1024}"),
+    ],
+)
+def test_profile_mode_binds_the_non_batch_invariant_cuda_rmsnorm(fused, expected, monkeypatch):
+    """The rule asks #1970's selector for the served M=4 block and binds one CUDA vector-8 call per token."""
+    from verity_vllm.program.frontend.rules.vllm_bindings import observations as VB
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    monkeypatch.setitem(VB._OBSERVED, "target_profile", TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False))
+    m = ex.RMSNorm(6144, 1e-5)
+    x = torch.empty(4, 6144, dtype=torch.bfloat16)
+    rep = derive_report(m, (x, x.clone()) if fused else (x,), **PROF)
+    assert rep.ok, rep.unsupported
+    calls = [node.fn.id for node in rep.program.fn.body.nodes]
+    assert calls == [expected] * 4
+    rule = "FusedAddRmsNorm[vllm-cuda]_v1" if fused else "RmsNorm[vllm-cuda]_v1"
+    assert [a["emitted"] for a in rep.provenance["applications"] if a["rule"] == rule] == [f"{expected} x4"]
 
 
 def test_returned_parameter_is_recorded_explicitly():
