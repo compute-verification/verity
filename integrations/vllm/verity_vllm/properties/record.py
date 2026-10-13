@@ -56,6 +56,13 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "multiply, and every output word of every launch, and of every accepted forced config on an input whose summation "
              "orders show, equals MarlinMoeExpertGemm_v1 (w13) or MarlinMoeExpertGemmW_v1 (w2) at the launch's statics, bit for "
              "bit."),
+    Property("dsv4_indexer_capture", "verity-vllm/dsv4-indexer-capture/v1",
+             "On the capture's Hopper GPU, from the vLLM sources the Definitions were read from, vLLM selects the FP8 indexer cache, "
+             "the one-stage head-128 compressor and f32 o-projection scales for the DSV4 indexer row, and at the row's TP8 statics "
+             "every compared state score row equals Dsv4CompressorScore_v1, every "
+             "written indexer-cache entry Dsv4IndexerCompress_v1 of the state rows the kernel reads, every short-context fill row "
+             "Dsv4ShortContextTopK_v1, every inverse-RoPE FP8 head Dsv4InvRopeQuantHead_v1, every compared prefill and paged logit "
+             "DsaMqaLogit_v3 at 64 heads and every top-k row of at most 1024 keys DsaTopKShortRow_v1, bit for bit."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
              "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "
@@ -72,6 +79,24 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, MUFU ex2 / rcp are core's tables on every input, and vLLM's fused sigmoid noaux_tc router "
              "(_moe_C.grouped_topk, 256 experts, top-8, renormalized, x2.5) returns through its block and its warp kernel exactly the "
              "ids and weights of MoeRouterSigmoidBias_v1 for that kernel on every captured row and every logit whose sigmoid reads MUFU."),
+    Property("dsv4_flashmla_capture", "verity-vllm/dsv4-flashmla-capture/v1",
+             "On the capture's Hopper GPU, vLLM selects the FlashMLA sparse decode and prefill it vendors from FlashMLA 6bc49418 "
+             "and the CuTe K-cache gather for the DSV4 row's MLA, its planner's metadata is get_mla_metadata_kernel's, and at the "
+             "row's TP8 statics (16 heads padded to 64, the 128-token window, compress-ratio 4 and 128 rows, the sink) every "
+             "output word of every decode launch equals FlashMlaDecode_v1 at the token's SPLITS, every gathered workspace row "
+             "FlashMlaGatherRow_v1, and every output word of every prefill launch FlashMlaPrefill_v1 at the token's NP, bit for bit."),
+    Property("dsv4_compressor_capture", "verity-vllm/dsv4-compressor-capture/v1",
+             "On the capture's Hopper GPU, vLLM takes the CuTe DSL head-512 compressor (nvidia-cutlass-dsl 4.6.2) into the "
+             "fp8_ds_mla cache for the DSV4 row's MLA, its three kernels' PTX holds the arithmetic the Definitions were read from, "
+             "and at the row's TP8 statics on a ratio-4 and a ratio-128 layer every state score word save_partial_states writes "
+             "equals Dsv4CompressorScore_v1, every column of the ratio-128 compress Dsv4MlaC128Column_v1, and every byte of every "
+             "compressed cache row Dsv4MlaCompressC4_v1 or Dsv4MlaCompressC128_v1, bit for bit."),
+    Property("dsv4_indices_capture", "verity-vllm/dsv4-indices-capture/v1",
+             "On the capture's Hopper GPU, the DSV4 row's FlashMLA prefill calls vLLM's Triton combine_topk_swa_indices (Triton "
+             "3.7.1), whose PTX and the ratio-128 prefill row builder's hold the arithmetic the Definitions were read from, and at "
+             "the row's TP8 statics (ratio 4's top-k of 1024, ratio 128's at widths 256, 896 and 8192, the 128-token window) every "
+             "ratio-128 prefill top-k row equals Dsv4ShortContextTopK_v1 and every row of workspace indices and its length "
+             "Dsv4CombineTopkSwa_v1, at served chunks and at the int32 edges of its domain, bit for bit."),
     Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
              "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
              "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),

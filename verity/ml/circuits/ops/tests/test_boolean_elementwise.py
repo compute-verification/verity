@@ -1,4 +1,5 @@
-"""`verity.ml.circuits.ops.boolean.elementwise`: the Boolean element-wise operations agree with their word primitives (`trace.word_of`) on
+"""`verity.ml.circuits.ops.boolean.elementwise`: the Boolean element-wise operations (the f32 ones with the IR's NaN words and,
+as the `_v4`s, with the GPU's) agree with their word primitives (`trace.word_of`) on
 every pair (triple) of special words, on random words and on words chosen to land in the subnormal range (a bf16 operation also
 on every word against a few specials, and a product at f32's subnormal and overflow ends), carry exactly their
 builders' live ANDs, and are pinned by gate count and program digest. Bf16AddF2fp_v2 is checked on every pair of words when
@@ -27,8 +28,11 @@ from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit, const_bits
 
-DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div, EW.Bf16AddF2fp, EW.Bf16Add, EW.Bf16MulBf16, EW.Bf16MulF32, EW.I32Add]
-F32_DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div]
+DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div, EW.F32AddV4, EW.F32MulV4, EW.F32FmaV4, EW.F32DivV4, EW.Bf16AddF2fp, EW.Bf16Add,
+        EW.Bf16MulBf16, EW.Bf16MulF32, EW.I32Add]
+F32_DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div, EW.F32AddV4, EW.F32MulV4, EW.F32FmaV4, EW.F32DivV4]
+#: the Boolean versions of the `_v2` words (every NaN the GPU's)
+GPU_NAN_DEFS = (EW.F32AddV4, EW.F32MulV4, EW.F32FmaV4, EW.F32DivV4)
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -36,6 +40,10 @@ PINS = {
     "F32Mul_v3": (2430, 4650, 110, "460ec851f41d5b72ef4d1b3db8fa735af47da1e623aac240bb9b88000baf47ffa4c2640ad4ce655e7d10a7ee93a77c6eca86a9156f5a509170da1af6f44bc8fa"),
     "F32Fma_v3": (4485, 7863, 267, "ca2f047972f3e47ee47974f7630c5c06bc0ed20cd310752b26b45f37914f812242a37dc85949a0a7c21a9c452240f0d0b69e7e40100728183cb4cd4a65476d39"),
     "F32Div_v3": (2517, 5592, 252, "3ad9a8fd80800cb597f9c2917ae4330295ec896c2c68a1329c68e6527d7db44750d24d5afd88db4c450e44ea4d0676c7739735ad881d96fb24d70e545266587d"),
+    "F32Add_v4": (781, 1331, 145, "07df5c280827efc30d031c71d770dd4493430b9558db3994d8bfc928cec024a75e1edf664c74c01e484480f8e115861a4f4f256d61ba4755046ba33db7f6d872"),
+    "F32Mul_v4": (2398, 4562, 140, "b23d22f4e857ccc18fa6a80af073de34aeea0543296f588bfa00ad6defc76954b716d9407d919fa3b28f2ae05855cc8fb0101bd756e59ae6aeb668c53d349fce"),
+    "F32Fma_v4": (4485, 7863, 289, "6e4b6f08cff8f870a0e06b454f7d873a3904b204d1ba095b80db51038ba1a313a16538d67111cd4acb9fb7a7bc8941c480498f8ca02cc4484cd144fa48ce091e"),
+    "F32Div_v4": (2485, 5497, 282, "dae9b11e607f5b7c5b19d2653be51f6b81ec34793888f2d9ac896e45444c229206843ded4f10f6d8746c84b97bc5850d0212f478f83e65836677a2605c232902"),
     "Bf16AddF2fp_v2": (717, 1061, 122, "af94f0b01e383e1bf6f82c75cd5a2868df0cb37e37239be6fc3a4b62da62bfdde5b5ec385b173fc8cd0290f4400d8a25fc3919850cbc4c69edfe4434fb068c3e"),
     "Bf16Add_v2": (717, 1061, 116, "b193b3c82b68e72f8455d10d00641426c678a0bd9dba986e9d63ca23ff17e52747ee71d9557ebb4d43c9807d454704f16dbf7238cd5aac344af4c85fdcc66e81"),
     "Bf16MulBf16_v2": (799, 1155, 99, "70537fa2f156108040b07271de5bd1a530b06e4edba1bb5c644ce0ab001b07169afc5b720c7ec4e428bdc22cba14a35be842fccc6994b4d671293e686f369ecb"),
@@ -83,7 +91,7 @@ def _agree(target, inputs) -> None:
     assert not bad.size, f"{target.id}: {bad.size} of {len(ref)} differ from {word.id}, first {bad[:5]}"
 
 
-@pytest.mark.parametrize("d", DEFS, ids=lambda d: d.name)
+@pytest.mark.parametrize("d", DEFS, ids=lambda d: f"{d.name}_v{d.version}")
 def test_pinned_counts_and_digests(d) -> None:
     target = bind(d)
     ands, xors, nots, digest = PINS[target.id]
@@ -96,7 +104,7 @@ def test_pinned_counts_and_digests(d) -> None:
     assert D.gates == prog.gates and codec.program_digest(codec.encode_program(D)) == digest
 
 
-@pytest.mark.parametrize("d", DEFS, ids=lambda d: d.name)
+@pytest.mark.parametrize("d", DEFS, ids=lambda d: f"{d.name}_v{d.version}")
 def test_the_ands_are_the_builders_live_ands(d) -> None:
     T = d.traced()
     params = [t for _, t in d.signature(None)[0]]
@@ -106,16 +114,16 @@ def test_the_ands_are_the_builders_live_ands(d) -> None:
     assert T.counts["and"] == C.counts()["ands"] == PINS[f"{d.name}_v{d.version}"][0]
 
 
-@pytest.mark.parametrize("d", DEFS, ids=lambda d: d.name)
+@pytest.mark.parametrize("d", DEFS, ids=lambda d: f"{d.name}_v{d.version}")
 def test_its_word_view_is_its_word_primitive(d) -> None:
     target = bind(d)
     word = TR.word_of(target)
-    assert (word.name, word.version) == (d.name, 1)
+    assert (word.name, word.version) == (d.name, 2 if d in GPU_NAN_DEFS else 1)
     (params, ret), (word_params, word_ret) = E.batch.signature_of(target), E.batch.signature_of(word)
     assert [BL.word_type(t) for t in params] == list(word_params) and BL.word_type(ret) == word_ret
 
 
-@pytest.mark.parametrize("d", F32_DEFS, ids=lambda d: d.name)
+@pytest.mark.parametrize("d", F32_DEFS, ids=lambda d: f"{d.name}_v{d.version}")
 def test_the_f32_operations_agree_with_their_word_primitives(d) -> None:
     _agree(bind(d), _f32_inputs(len(d.signature(None)[0]), np.random.default_rng(zlib.crc32(d.name.encode()))))
 

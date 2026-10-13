@@ -9,6 +9,9 @@
   "E4m3ToF32_v2": {
    "and": 15
   },
+  "F32Eq_v2": {
+   "and": 117
+  },
   "F32Fabs_v2": {
    "and": 0
   },
@@ -26,6 +29,9 @@
   },
   "SelectBf16_v2": {
    "and": 16
+  },
+  "SelectF32_v2": {
+   "and": 32
   },
   "SelectI32_v2": {
    "and": 32
