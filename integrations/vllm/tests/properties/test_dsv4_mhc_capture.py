@@ -140,6 +140,7 @@ def test_the_failed_h200_capture_is_pinned() -> None:
     rec = json.loads(path.read_text())
     assert rec["run"] == "r20261013-115825-580e" and rec["head"] == "c07829364"
     assert rec["raw_arrays_preserved"] is False
+    assert rec["operand_source"].startswith("seed-regenerated from the capture's deterministic")
     assert rec["probe"] == {"step": ["g8_w26_f133"], "rounding": ["rne"], "sqrsum": [],
                             "rounding_mismatch": {"trunc": 862, "rna": 109, "rne": 0},
                             "sqrsum_mismatch": {"lo": 8, "hi": 35, "mul": 18}}
@@ -148,33 +149,20 @@ def test_the_failed_h200_capture_is_pinned() -> None:
 
 
 def test_the_recorded_tf32_cases_replay_with_rne() -> None:
-    """Every failed TF32/broadcast case's recorded first yp word replays through both the fixed twin and Definition."""
+    """Every failed case's recorded first yp word replays from its fixture operand slice through the fixed twin and Definition."""
     path = Path(__file__).with_name("fixtures") / "dsv4_mhc_capture_20261013.json"
-    samples = json.loads(path.read_text())["first_yp"]
-    wts = X.weights(X.SEED)
-    fn = wts["fn"].reshape(X.OUT, X.HC, X.H)
-    fnb = fn[:, 0]
-    for j in range(1, X.HC):
-        fnb = W.add(fnb, fn[:, j])
+    rec = json.loads(path.read_text())
     seen = {}
-    for phase, counts in (("tf32", X.TF32_T), ("broadcast", X.BROADCAST_T)):
-        for T in counts:
-            key = f"{phase}/T{T}"
-            td = X.tokens(X.SEED + 1000 * X.PHASES.index(phase) + T, T)
-            if phase == "tf32":
-                a = W.post(td["x"][:1], td["residual"][:1], td["post"][:1], td["comb"][:1]).reshape(1, -1)
-                b = wts["fn"]
-            else:
-                a, b = td["x"][:1], fnb
-            off, n = R.tf32_ranges(a.shape[1], X._splits_for(phase, T))[0]
-            aa, bb = a[:, off:off + n], b[:1, off:off + n]
-            old = int(W.tf32_split(aa, bb, b_round="trunc")[0][0, 0])
-            fixed = int(W.tf32_split(aa, bb)[0][0, 0])
-            definition = bind(R.MhcPrenormTf32Split, K=n, OUT=1)
-            word = int(evaluate(definition, aa[0].tolist(), bb.reshape(-1).tolist())[0])
-            assert (old, fixed, word) == (samples[key]["old"], samples[key]["kernel"], samples[key]["kernel"]), key
-            seen[key] = fixed
-    assert seen.keys() == samples.keys()
+    for key, sample in rec["samples"].items():
+        aa = np.asarray(sample["a"], np.uint16).reshape(1, sample["K"])
+        bb = np.asarray(sample["b"], np.uint32).reshape(1, sample["K"])
+        old = int(W.tf32_split(aa, bb, b_round="trunc")[0][0, 0])
+        fixed = int(W.tf32_split(aa, bb)[0][0, 0])
+        definition = bind(R.MhcPrenormTf32Split, K=sample["K"], OUT=1)
+        word = int(evaluate(definition, aa[0].tolist(), bb.reshape(-1).tolist())[0])
+        assert (old, fixed, word) == (sample["old"], sample["kernel"], sample["kernel"]), key
+        seen[key] = fixed
+    assert seen.keys() == rec["case_mismatches"].keys()
 
 
 # ---------------------------------------------------------------------------------------------------------------- the layers
