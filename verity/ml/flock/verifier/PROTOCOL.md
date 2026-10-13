@@ -1231,6 +1231,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - its input ports must total `384·LANES + 1024·max(1, ⌈H/2⌉) + 2048` bits and its output ports 2048, compared before
     the verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's
     rows allow;
+  - the statement's first five rows must be `row, aux, acc, coef, dirs` at the input widths below (`out` and `acc_out`
+    follow), and every copy's input word `i` must read leaf `i` (`leaves_in[u] = [0, 1, …]`), so each copy reads its
+    opening's rows in that order; both are compared before the net is built (`RecOpen.rowsOk`, `RecOpen.leavesOk`);
   - the net must be `Flock.RecOpen`'s builder of `rec_open._steps` at those parameters, laid out as `ir_lower.layout`
     lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·max(1, ⌈H/2⌉)` (at `H = 0` one row the net does
     not read), `64`, `16·LANES` and `64` u16 words, and outputs `out` then `acc_out` of 64 words each, one 16-bit port
@@ -1739,9 +1742,11 @@ expectation):
 - **D13:** a unit net named `rec-open/…` or `rec-open-stacked/…` is the verifier's V* opening net (`Flock.RecOpen`,
   §16.10). Upstream takes the unit's net as the file gives it. The spec refuses such a unit whose name is not
   `rec-open/l<LANES>-h<H>` (or `rec-open-stacked/l<LANES>-h<H>`) at valid parameters, one whose port bits are not the
-  opening's at them, and one whose net differs from the verifier's. No vector exercises it;
-  `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean verifier, and
-  `test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening` a stacked unit's acceptance and its net's.
+  opening's at them, one whose rows or copies' leaves are not the opening's inputs in order, and one whose net differs
+  from the verifier's. No vector exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs
+  the bits' refusal on the Lean verifier, `verity/core/service/flock/Flock/Test/RecOpenLeaves.lean` the rows' and
+  leaves', and `test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening` a stacked unit's acceptance and
+  its net's.
 - **D14:** U4 (§7.3, §16.10): a drawn statement must draw in full each unit that reads a round's commitment. Upstream
   ignores the header's `registered` (D5) and so cannot tell which units read one; the spec refuses the draw at setup. No
   vector exercises it: no set's draw meets a port of a round's commitment (`rec-c<i>`, `rec-top-L<l>`, R's and the sparse
