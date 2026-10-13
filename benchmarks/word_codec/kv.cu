@@ -335,10 +335,69 @@ __device__ __forceinline__ void sqr_fold6(const u32 (&a)[NL], u32 (&t)[2 * NL]) 
   t[4 * H - 1] = addc(t[4 * H - 1], 0u);
 }
 
+// sqr_fold6's product with its half squares ordered for the warp-specialized decoders' 168 registers (sqr<true>):
+// A and D come first and go into E = A_hi + (A - D) (2H limbs and a signed top word es) before C starts: a1 is remade from a0 and d (a0 - d, or a0 + d
+// when a0 < a1) with a dependence on es ((es + 1) >> 2 = 0), so neither a1 nor A and D are held across C, and two half
+// squares' columns are in flight at once with no third's inputs beside them (`benchmarks/codec_tensor/wt.cu`'s, which
+// fits its 168-register decoders). a^2 = A_lo + B (E + es B^2) + B C + B^2 C.
+__device__ __forceinline__ void sqr_fold6_ad(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
+  constexpr int H = NL / 2;
+  u32 x0[H], d[H], e[H];
+#pragma unroll
+  for (int k = 0; k < H; ++k) x0[k] = a[k];
+  d[0] = sub_cc(a[0], a[H]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) d[k] = subc_cc(a[k], a[H + k]);
+  const u32 mask = subc(0u, 0u);   // a0 < a1
+  e[0] = sub_cc(a[H], a[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) e[k] = subc_cc(a[H + k], a[k]);
+#pragma unroll
+  for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
+  u32 A[2 * H], D[2 * H], F[2 * H], E[2 * H];
+  sqr_dbl_n<H>(x0, A);
+  sqr_dbl_n<H>(d, D);
+  F[0] = sub_cc(A[0], D[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) F[k] = subc_cc(A[k], D[k]);
+  const u32 f = subc(0u, 0u);   // A - D's sign word
+  E[0] = add_cc(A[H], F[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) E[k] = addc_cc(A[H + k], F[k]);
+#pragma unroll
+  for (int k = H; k < 2 * H; ++k) E[k] = addc_cc(F[k], 0u);
+  const u32 es = addc(f, 0u);   // -1, 0 or 1
+  // a1 = a0 + (d ^ nm) + (nm & 1): nm all ones (a0 - d) or 0 (a0 + d); nm + nm carries nm & 1 in.
+  const u32 nm = ~mask | ((es + 1u) >> 2);
+  u32 x1[H];
+  x1[0] = add_cc(nm, nm);
+  x1[0] = addc_cc(x0[0], d[0] ^ nm);
+#pragma unroll
+  for (int k = 1; k < H; ++k) x1[k] = addc_cc(x0[k], d[k] ^ nm);
+  u32 C[2 * H];
+  sqr_dbl_n<H>(x1, C);
+#pragma unroll
+  for (int k = 0; k < H; ++k) t[k] = A[k];
+  t[H] = add_cc(E[0], C[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) t[H + k] = addc_cc(E[k], C[k]);
+  const u32 top = addc(es, 0u);   // es plus the carry, signed, sign-extended to 2^(64 H)
+  const u32 ext = (u32)((int)top >> 31);
+  t[3 * H] = top;
+#pragma unroll
+  for (int k = 3 * H + 1; k < 4 * H; ++k) t[k] = ext;
+  t[2 * H] = add_cc(t[2 * H], C[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H - 1; ++k) t[2 * H + k] = addc_cc(t[2 * H + k], C[k]);
+  t[4 * H - 1] = addc(t[4 * H - 1], C[2 * H - 1]);
+}
+
+template <bool AD = false>
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
   if constexpr (FOLD6) {
     u32 t[2 * NL];
-    sqr_fold6(a, t);
+    if constexpr (AD) sqr_fold6_ad(a, t);
+    else sqr_fold6(a, t);
     fold(t, x);
   } else if constexpr (KARATSUBA) {
     sqr_k1(a, x);
@@ -492,10 +551,11 @@ __device__ __forceinline__ void rho(u32 (&x)[NL]) {
 }
 
 // y odd is nonzero, so its square is too.
+template <bool AD = false>
 __device__ __forceinline__ void rho_inv(u32 (&y)[NL]) {
   const bool odd = y[0] & 1;
   u32 q[NL];
-  sqr(y, q);
+  sqr<AD>(y, q);
   canon(q);
   neg_if(q, odd);
   copy(y, q);
@@ -574,13 +634,14 @@ __device__ __forceinline__ void encode_word(u32 (&x)[NL], u64 i, int k) {
   }
 }
 
-// The decode given its word's tweak t = t(i): loops that step i by a constant step t by one add_mod.
+// The decode given its word's tweak t = t(i): loops that step i by a constant step t by one add_mod. AD: sqr<true>.
+template <bool AD = false>
 __device__ __forceinline__ void decode_word_t(u32 (&x)[NL], const u32 (&t)[NL], int k) {
 #pragma unroll 1
   for (int j = k - 1; j >= 0; --j) {
     u32 c[NL];
     round_constant(j, c);
-    rho_inv(x);
+    rho_inv<AD>(x);
     sub_mod(x, c);
     sub_mod(x, t);
     if (MASK && j > 0) sigma(x, kMask);
@@ -1270,6 +1331,13 @@ __device__ __forceinline__ void ldg_word(const u32 *p, u32 (&x)[NL]) {
   }
 }
 
+// The lines of a word at p (4 NL bytes) into L2: one a 128 bytes and the last's.
+__device__ __forceinline__ void prefetch_word_l2(const u32 *p) {
+#pragma unroll
+  for (int b = 0; b < 4 * NL; b += 128) asm volatile("prefetch.global.L2 [%0];" ::"l"(p + b / 4));
+  if constexpr (4 * NL % 128 != 0) asm volatile("prefetch.global.L2 [%0];" ::"l"(p + NL - 1));
+}
+
 template <int RC = 0>
 __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__restrict__ kv,
                                                             const uint16_t *__restrict__ q, float *__restrict__ part,
@@ -1304,16 +1372,17 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
       const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
       const int wi = (j < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + g * (HB / WB) + j;
       const auto word = [&](int tile) { return (((u64)seq * ctx + t0 + tile * MT + t) * layers + layer) * TLW + wi; };
-      u32 nx[NL], tw[NL];
+      // The next tile's word goes to L2 at the top of a tile and into registers only after this one's is stored, so
+      // the decode doesn't hold it (at 1,024 bits it spilled 96-104 bytes at 168 registers).
+      const auto has = [&](int tile) { return tile < ntiles && t < min(MT, t1 - t0 - tile * MT); };
+      u32 x[NL], tw[NL];
       int acc[2][4] = {};
       tweak(word(0), tw);
-      if (ntiles && t < min(MT, t1 - t0)) ldg_word(reinterpret_cast<const u32 *>(kv) + word(0) * NL, nx);
+      if (has(0)) ldg_word(reinterpret_cast<const u32 *>(kv) + word(0) * NL, x);
       for (int tile = 0; tile < ntiles; ++tile) {
         const int nt = min(MT, t1 - t0 - tile * MT);
-        u32 x[NL];
-        copy(x, nx);
-        if (tile + 1 < ntiles && t < min(MT, t1 - t0 - (tile + 1) * MT))
-          ldg_word(reinterpret_cast<const u32 *>(kv) + word(tile + 1) * NL, nx);
+        const bool next = has(tile + 1);
+        if (next) prefetch_word_l2(reinterpret_cast<const u32 *>(kv) + word(tile + 1) * NL);
         if (tile) tweak_step(tw, td);
         if constexpr (RC > 0) {
           const int i = w - MW;
@@ -1344,11 +1413,12 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
             for (int v = 0; v < 4; ++v) acc[0][v] = acc[1][v] = 0;
           }
         }
-        if (t < nt) decode_word_t(x, tw, k);
+        if (t < nt) decode_word_t<true>(x, tw, k);
         else for (int l = 0; l < NL; ++l) x[l] = 0u;
         if (tile >= MNB) mbar_wait(empty + tile % MNB, (tile / MNB - 1) & 1);
         store(reinterpret_cast<u32 *>(sm + (tile % MNB) * MT * MTS + t * MTS + j * WB), x);
         mbar_arrive(full + tile % MNB);
+        if (next) ldg_word(reinterpret_cast<const u32 *>(kv) + word(tile + 1) * NL, x);
       }
       return;
     }
