@@ -50,8 +50,7 @@ __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSplitKGemm", "C
            "dot_step", "split_bounds"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
-CONFORMANCE = ("not-yet-established: GLM-5.3's and DeepSeek-V4-Pro's shapes on the H200 "
-               "(tests/properties/glm53_bf16_gemm_capture_gpu.py)")
+CONFORMANCE = "not-yet-established: the capture's served shapes (tests/properties/glm53_bf16_gemm_capture_gpu.py)"
 
 
 class ChainStep(NamedTuple):
@@ -170,7 +169,7 @@ def _splitk(gemm, add, cast=None):
 
 GEMM_F32_DOC = "`x[K] @ W[N, K]^T` with the f32 accumulator as the output: `DotBf16{K, DOT}` on each W row (torch.mm out_dtype=float32)"
 BATCHED_DOC = "torch.bmm on bf16: `Gemm{K, N, DOT}` of each member's x against its W (w[b][n][k] the operand at [b, k, n])"
-SPLITK_DOC = ("cuBLAS 12.9.1's H200 split-K: equal 64-element-aligned contiguous chunks and a final remainder, one ascending DOT "
+SPLITK_DOC = ("cuBLAS 12.9.1's captured split-K: equal 64-element-aligned contiguous chunks and a final remainder, one ascending DOT "
               "chain from +0 per chunk, then a separate serial f32 reduction in increasing split order")
 
 GemmF32OutWord = CompositeDefinition("GemmF32Out", 1, ("K", "N", "DOT"), _gemm_f32_type(P.BF16, P.F32), _gemm_f32(G.DotBf16),

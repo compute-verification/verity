@@ -48,7 +48,7 @@ IMPL = "vllm.v1.attention.backends.mla.flashattn_mla_sparse.FlashAttnMLASparseIm
 
 STANDIN = Vocabulary("dsa-standin", "profile", "dsa-standin",
                      kinds={**PROFILE_B1_EAGER_V3.kinds, "dsa_rmsnorm": PROFILE_B1_EAGER_V3.kinds["rmsnorm"],
-                            "batched_gemm": lambda B, K, N, DOT: bind(cublas_bf16.BatchedGemm, B=B, K=K, N=N, DOT=DOT)},
+                            "batched_gemm": lambda B, K, N, DOT: bind(cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=DOT)},
                      notes=dict(PROFILE_B1_EAGER_V3.notes))
 
 
@@ -226,8 +226,8 @@ def _reference(model: _Model, inputs) -> list[int]:
     `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped])."""
     qn, kn = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(b1.RMSNormTriton, N=L, EPS=EPS)
     rope1 = ropeh = bind(RoPEHeadGptJV2, D=R)
-    up = bind(cublas_bf16.BatchedGemm, B=NH, K=P, N=L, DOT=DOT)
-    down = bind(cublas_bf16.BatchedGemm, B=NH, K=L, N=V, DOT=DOT)
+    up = bind(cublas_bf16.BatchedGemmWord, B=NH, K=P, N=L, DOT=DOT)
+    down = bind(cublas_bf16.BatchedGemmWord, B=NH, K=L, N=V, DOT=DOT)
     hist = {n: [] for n in NAMES}
     out, k = [], 0
     for p0, T in model.steps:
@@ -376,8 +376,8 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     norm_q = bind(b1.RMSNormTriton, N=NQ, EPS=EPS).id
     norm_kv = bind(b1.RMSNormTriton, N=L, EPS=EPS).id
     kr = qr = bind(RoPEHeadGptJV2, D=R).id
-    up = bind(cublas_bf16.BatchedGemm, B=NH, K=P, N=L, DOT=DOT).id
-    down = bind(cublas_bf16.BatchedGemm, B=NH, K=L, N=V, DOT=DOT).id
+    up = bind(cublas_bf16.BatchedGemmWord, B=NH, K=P, N=L, DOT=DOT).id
+    down = bind(cublas_bf16.BatchedGemmWord, B=NH, K=L, N=V, DOT=DOT).id
     krow, iq = bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=EPS).id, bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE).id
     sel = bind(dsa.DsaTopKShortRow, TOPK=TOPK).id
 

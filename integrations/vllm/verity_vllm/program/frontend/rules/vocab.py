@@ -435,12 +435,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
            "dsa_q_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
            "cublas_splitk_gemm": lambda K, N, SPLIT_K, DOT:
-               ir_bind(_cublas_bf16.CublasSplitKGemm, K=K, N=N, SPLIT_K=SPLIT_K, DOT=DOT),
-           "batched_gemm": lambda B, K, N, DOT: ir_bind(_cublas_bf16.BatchedGemm, B=B, K=K, N=N, DOT=DOT),
+               ir_bind(_cublas_bf16.CublasSplitKGemmWord, K=K, N=N, SPLIT_K=SPLIT_K, DOT=DOT),
+           "batched_gemm": lambda B, K, N, DOT: ir_bind(_cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=DOT),
            "ll_bf16_dotprod": lambda N, K, BS, VEC, FMA:
-               ir_bind(_ll_bf16.LlBf16DotprodGemm, N=N, K=K, BS=BS, VEC=VEC, FMA=FMA),
+               ir_bind(_ll_bf16.LlBf16DotprodGemmWord, N=N, K=K, BS=BS, VEC=VEC, FMA=FMA),
            "ll_bf16_splitk": lambda N, K, SPLIT_K, TILE_K, WARPS, DOT:
-               ir_bind(_ll_bf16.LlBf16SplitKGemm, N=N, K=K, SPLIT_K=SPLIT_K, TILE_K=TILE_K, WARPS=WARPS, DOT=DOT),
+               ir_bind(_ll_bf16.LlBf16SplitKGemmWord, N=N, K=K, SPLIT_K=SPLIT_K, TILE_K=TILE_K, WARPS=WARPS, DOT=DOT),
            "sparse_mla": lambda T, NH, DR, DV, BN, DOT, INV, SM_SCALE:
                ir_bind(_sparse_mla.SparseMla, T=T, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
            "sparse_mla_split": lambda T, NS, NH, DR, DV, BN, DOT, INV, SM_SCALE:

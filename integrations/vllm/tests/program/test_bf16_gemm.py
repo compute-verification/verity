@@ -380,14 +380,14 @@ def test_the_definitions_refuse_what_they_do_not_model() -> None:
 
 def test_profile_vocabulary_binds_the_served_default_glm53_families() -> None:
     v = PROFILE_B1_EAGER_V3
-    assert v.kind("cublas_splitk_gemm", K=6144, N=160, SPLIT_K=4, DOT=HOP).id == \
-        bind(CB.CublasSplitKGemm, K=6144, N=160, SPLIT_K=4, DOT=HOP).id
-    assert v.kind("batched_gemm", B=8, K=192, N=512, DOT=HOP).id == bind(CB.BatchedGemm, B=8, K=192, N=512, DOT=HOP).id
-    assert v.kind("batched_gemm", B=8, K=512, N=256, DOT=HOP).id == bind(CB.BatchedGemm, B=8, K=512, N=256, DOT=HOP).id
+    assert v.kind("cublas_splitk_gemm", K=6144, N=160, SPLIT_K=4, DOT=HOPW).id == \
+        bind(CB.CublasSplitKGemmWord, K=6144, N=160, SPLIT_K=4, DOT=HOPW).id
+    assert v.kind("batched_gemm", B=8, K=192, N=512, DOT=HOPW).id == bind(CB.BatchedGemmWord, B=8, K=192, N=512, DOT=HOPW).id
+    assert v.kind("batched_gemm", B=8, K=512, N=256, DOT=HOPW).id == bind(CB.BatchedGemmWord, B=8, K=512, N=256, DOT=HOPW).id
     assert v.kind("ll_bf16_dotprod", N=256, K=6144, BS=128, VEC=8, FMA=1).id == \
-        bind(LL.LlBf16DotprodGemm, N=256, K=6144, BS=128, VEC=8, FMA=1).id
-    assert v.kind("ll_bf16_splitk", N=256, K=6144, SPLIT_K=6, TILE_K=256, WARPS=4, DOT=HOP).id == \
-        bind(LL.LlBf16SplitKGemm, N=256, K=6144, SPLIT_K=6, TILE_K=256, WARPS=4, DOT=HOP).id
+        bind(LL.LlBf16DotprodGemmWord, N=256, K=6144, BS=128, VEC=8, FMA=1).id
+    assert v.kind("ll_bf16_splitk", N=256, K=6144, SPLIT_K=6, TILE_K=256, WARPS=4, DOT=HOPW).id == \
+        bind(LL.LlBf16SplitKGemmWord, N=256, K=6144, SPLIT_K=6, TILE_K=256, WARPS=4, DOT=HOPW).id
 
 
 @pytest.mark.parametrize("target", STEPS + PINNED, ids=[t.id for t in STEPS + PINNED])

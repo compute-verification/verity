@@ -57,10 +57,10 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "tensor_model_parallel_all_reduce (the hidden-7168 pass): FlashInfer's to 36 tokens, multimem past it at its own probe's "
              "trees and FTZ."),
     Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v3",
-             "On the capture's Hopper GPU, GLM-5.3's and DeepSeek-V4-Pro's MoE gates (GateLinear) run cuteDSL ll_bf16_gemm on the "
-             "kernel dispatch_sm90 names at M <= 16 and cuBLAS past it, and under vLLM's default cuBLAS route every f32 gate word "
+             "On the capture's Hopper GPU, the two served workloads' MoE gates (GateLinear) run cuteDSL ll_bf16_gemm on the "
+             "kernel's registered dispatch at M <= 16 and cuBLAS past it, and under vLLM's default cuBLAS route every f32 gate word "
              "equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1, GemmF32Out_v1 or "
-             "CublasSplitKGemmF32Out_v1 at the captured split count, every DeepSeek-V4-Pro compressor word the selected f32-output "
+             "CublasSplitKGemmF32Out_v1 at the captured split count, every recorded compressor word the selected f32-output "
              "form, every lm_head-shard and indexer-projection word the selected core or split-K bf16-output form, and every "
              "GLM-5.3 q_nope / v absorb word BatchedGemm_v1, bit for bit."),
     Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v2",
