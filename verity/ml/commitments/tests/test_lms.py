@@ -19,9 +19,10 @@ SMALL = R.Params(64, 1, 4)
 #: SMALL's key from SEED: its public key, and the first 16 bytes of SHA-512 over the encoded signatures sign_at gives at
 #: (q, message) for q = 0 (a certificate) and q = 15 (a memory challenger record)
 PUBLIC = "326497cc0d59b0a4b1cebb5b8e7786372ccf46cb21f1a8b37ca0d33c24e43004743eacee9765553fc4097cd7b3e1af1d71c372488ea4bdb6b63bd8d48de09b676f1760513adca36d48ea256bac3edeb6"
-CERTIFICATE = "7f9a8469362072097be54bf65fc3c4827d0b42a61a0a747b43bde27e405da23b065742d4779db9d07e4825e1dfae9d0ad15c59ac9270dfebb32a0d82524c23d7"
+CERTIFICATE = "2938e044ad925de2abad3ecd70b4af8cba031498ffb0e79fee74138a19f130bee81651e4aba07b823d9addde6c039be951ea4172ba38f46275fc9232c2273c37"
 RECORD = "7e50764d622125f1e625bf8af2a01c86545171c2cf8f6d9e20adc9ec41bbb1701ee99c3fc97f57de3c6c7faef614f6b63b94a4acdd5150c5b608948fcd594562"
-SIGNATURES = {0: "f36d4f46a1620d8709bb2959dd6d81ff", 15: "5c2f9cf77f3a00a187acb34605474f5a"}
+SIGNATURES = {0: "35983e360efbad1fabb2b44b0b67b10e", 15: "5c2f9cf77f3a00a187acb34605474f5a"}
+SESSION = bytes(range(32))
 
 
 class _Sha256(R.Params):
@@ -72,7 +73,7 @@ def test_the_parameter_table_is_rfc8554s() -> None:
 
 def test_pinned_vectors(small) -> None:
     assert R.public_key(small).hex() == PUBLIC
-    msgs = {0: R.certificate_message(small.I, "responses", "egress", 7, b"record"),
+    msgs = {0: R.certificate_message(small.I, SESSION, "responses", "egress", 7, b"record"),
             15: R.memory_challenger_message(small.I, "session-1", b"record")}
     assert (msgs[0].hex(), msgs[15].hex()) == (CERTIFICATE, RECORD)
     for q, m in msgs.items():
@@ -87,21 +88,27 @@ def test_keygen_in_workers_is_the_same_key(small) -> None:
 
 def test_role_digests_separate_roles_and_contexts(small) -> None:
     I = small.I
-    base = R.certificate_message(I, "l", "egress", 1, b"r")
-    others = [R.certificate_message(I, "l", "ingress", 1, b"r"), R.certificate_message(I, "l", "egress", 2, b"r"),
-              R.certificate_message(I, "m", "egress", 1, b"r"), R.certificate_message(bytes(16), "l", "egress", 1, b"r"),
-              R.certificate_message(I, "l", "egress", 1, b"s"), R.memory_challenger_message(I, "l", b"r"),
-              R.certificate_message(I, "l", "egress", 1, b"r\x00")]
+    S = SESSION
+    base = R.certificate_message(I, S, "l", "egress", 1, b"r")
+    others = [R.certificate_message(I, S, "l", "ingress", 1, b"r"), R.certificate_message(I, S, "l", "egress", 2, b"r"),
+              R.certificate_message(I, S, "m", "egress", 1, b"r"), R.certificate_message(bytes(16), S, "l", "egress", 1, b"r"),
+              R.certificate_message(I, S, "l", "egress", 1, b"s"), R.memory_challenger_message(I, "l", b"r"),
+              R.certificate_message(I, S, "l", "egress", 1, b"r\x00"),
+              R.certificate_message(I, bytes(32), "l", "egress", 1, b"r")]
     assert len(base) == 64 and len({base, *others}) == 1 + len(others)
+    assert R.ROLES["network-certificate"] == "verity/network-certificate-message/v2"
     assert R.memory_challenger_message(I, "s", b"r") == R.memory_challenger_message(I, b"s", b"r")
     with pytest.raises(ValueError, match="direction"):
-        R.certificate_message(I, "l", "up", 1, b"r")
+        R.certificate_message(I, S, "l", "up", 1, b"r")
     with pytest.raises(ValueError, match="u64"):
-        R.certificate_message(I, "l", "egress", -1, b"r")
+        R.certificate_message(I, S, "l", "egress", -1, b"r")
+    for n in (0, 31, 33):
+        with pytest.raises(ValueError, match="session id is 32 bytes"):
+            R.certificate_message(I, bytes(n), "l", "egress", 1, b"r")
 
 
 def test_tampered_signatures_are_refused(small) -> None:
-    pk, m = R.public_key(small), R.certificate_message(small.I, "l", "egress", 3, b"r")
+    pk, m = R.public_key(small), R.certificate_message(small.I, SESSION, "l", "egress", 3, b"r")
     s = R.sign_at(small, 5, m)
     flip = lambda b: bytes([b[0] ^ 1]) + b[1:]  # noqa: E731
     bad = [R.Signature(6, s.C, s.y, s.path), R.Signature(s.q, flip(s.C), s.y, s.path),
@@ -237,3 +244,34 @@ def test_every_leaf_is_used_once_then_signing_is_refused(tmp_path) -> None:
         with pytest.raises(R.StateError, match="used"):
             R.sign(k, st, b"m")
     assert os.path.getsize(p.with_name("s.journal")) == 4
+
+
+def test_a_session_is_started_once_on_disk(state, small) -> None:
+    """`start` records the session id before it returns; a signer starts one session, and no later signer of the state
+    starts it again, after a restart or once other sessions have run."""
+    a, b = bytes(32), b"\x01" * 32
+    with _open(state, small) as st:
+        st.start(a)
+        st.start(a)
+        assert json.loads(state.read_text())["sessions"] == [a.hex()]
+        with pytest.raises(R.StateError, match="already started a session"):
+            st.start(b)
+        assert R.sign(small, st, b"m").q == 0
+    with _open(state, small) as st:
+        with pytest.raises(R.StateError, match="already started"):
+            st.start(a)
+        st.start(b)
+        assert R.sign(small, st, b"m").q == 1
+    with _open(state, small) as st:
+        for s in (a, b):
+            with pytest.raises(R.StateError, match="already started"):
+                st.start(s)
+    assert json.loads(state.read_text())["sessions"] == [a.hex(), b.hex()]
+
+
+def test_a_state_without_its_sessions_is_refused(state, small) -> None:
+    body = json.loads(state.read_text())
+    del body["sessions"]
+    state.write_text(json.dumps(body))
+    with pytest.raises(R.StateError, match="unreadable"):
+        _open(state, small)

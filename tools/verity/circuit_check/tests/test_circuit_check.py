@@ -760,3 +760,16 @@ def test_the_cache_key_is_the_same_on_hosts_that_differ_only_in_their_kernel(mon
     assert CC.key({"target": "F32Mul_v1"}) == here
     monkeypatch.setattr(platform, "machine", lambda: "aarch64")
     assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine
+
+
+def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
+    """Each check slot keeps its tests' results apart (`VERITY_TEST_CACHE`, `tools/verity/check/slot.py`); a report one slot
+    stored must count in another, while a variable that can change what a check computes still keys it."""
+    from circuit_check import cache as CC
+
+    monkeypatch.setenv("VERITY_TEST_CACHE", "/home/research/.cache/verity/tests-slot-a")
+    here = CC.key({"target": "F32Mul_v1"})
+    monkeypatch.setenv("VERITY_TEST_CACHE", "/home/research/.cache/verity/tests-slot-b")
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
+    assert CC.key({"target": "F32Mul_v1"}) != here
