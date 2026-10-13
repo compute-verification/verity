@@ -191,7 +191,7 @@ def alternatives(kind: str, x: np.ndarray, res: np.ndarray, w: np.ndarray, block
 
     arg = D.add_rn(D.div_rn(R.cub_sum(
         R._pure_partials(D.bf16_to_f32_words(x), block) if kind == "rms_norm" else
-        R._fused_partials(model["residual"], block)),
+        R._fused_partials(D.bf16_to_f32_words(model["residual"]), block)),
         np.full(len(x), P.bits_of(float(n)), np.uint32)), np.full(len(x), P.bits_of(EPS), np.uint32))
     with np.errstate(invalid="ignore", divide="ignore"):
         sqrt_scale = D.as_u32((np.float32(1.0) / np.sqrt(D.as_f32(arg))).astype(np.float32))

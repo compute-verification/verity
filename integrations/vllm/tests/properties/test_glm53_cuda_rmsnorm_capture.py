@@ -43,6 +43,9 @@ def test_planted_rows_and_numpy_models_include_both_in_place_outputs() -> None:
     got = R.fused_add_rms_norm_rows(x, res, w, X.EPS, 64)
     assert got["out"].shape == got["residual"].shape == x.shape
     assert got["out"].dtype == got["residual"].dtype == np.uint16
+    alt = X.alternatives("fused_add_rms_norm", x, res, w, 64, got)
+    assert set(alt) == {"batch_invariant_block", "linear_f64_reduction", "sqrt_div_epilogue"}
+    assert all(isinstance(v, int) and v >= 0 for v in alt.values())
 
 
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
