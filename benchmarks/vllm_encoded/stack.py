@@ -143,7 +143,8 @@ class Stack:
         self.wt.call("wt_pass", self.j & 0xFFFFFFFF, self.root.data_ptr(), self.signs.data_ptr(), T, s)
         self.wt.call("wt_sign_frags", self.signs.data_ptr(), self.frags.data_ptr(), T, s)
         if self.attention is not None:
-            self.attention.epoch.fill_(self.j + 1)
+            if self.attention.epoch is not None:
+                self.attention.epoch.fill_(self.j + 1)
             self.plib.call("kv_rc_pass", self.signs.data_ptr(), self.pass_ptrs[1], s)
         self.j, self.pass_m, self.passes, self.open = self.j + 1, m, self.passes + 1, True
 
@@ -510,6 +511,47 @@ class Attention:
             self.splits[b] = P.splits_for(b, self.st.sms, self.lib.shape["kv_heads"])
         return self.splits[b]
 
+    def reserve(self, caches) -> None:
+        """Reserve sparse receipt state for the cache pool before vLLM captures graphs over that pool."""
+        def tensors(x):
+            if isinstance(x, torch.Tensor):
+                yield x
+            elif isinstance(x, dict):
+                for y in x.values():
+                    yield from tensors(y)
+            elif isinstance(x, (list, tuple)):
+                for y in x:
+                    yield from tensors(y)
+            elif isinstance(getattr(x, "tensor", None), torch.Tensor):
+                yield x.tensor
+
+        for cache in tensors(caches):
+            try:
+                lay = P.layout(cache, self.lib.shape["kv_heads"], self.lib.shape["wb"])
+            except ValueError:
+                continue
+            self.reserve_slots(lay.blocks * lay.bs)
+            return
+
+    def reserve_slots(self, slots: int) -> None:
+        if slots == self.pool_slots:
+            return
+        if torch.cuda.is_current_stream_capturing():
+            raise RuntimeError(f"the paged receipt pool changed from {self.pool_slots} to {slots} during CUDA graph capture")
+        # vLLM profiles with a small temporary cache before allocating the serving pool. No captured graph may retain
+        # that temporary cache's receipt buffers or append table.
+        self.layers.clear()
+        self.staged.clear()
+        self.pending.clear()
+        self.graph_tab = None
+        self.pool_slots = slots
+        self.rc_sk = self.used = self.epoch = self.sparse_tags = None
+        if self.st.encoded:
+            self.rc_sk = torch.empty((slots, self.lib.shape["kv_heads"], 16), dtype=torch.int32, device="cuda")
+            self.used = torch.full((slots,), -1, dtype=torch.int32, device="cuda")
+            self.epoch = torch.full((1,), self.st.j, dtype=torch.int32, device="cuda")
+            self.sparse_tags = torch.empty((slots, self.nl, 8), dtype=torch.int64, device="cuda")
+
     @staticmethod
     def index(layer) -> int:
         return int(layer.layer_name.split(".layers.")[1].split(".")[0])
@@ -525,27 +567,10 @@ class Attention:
                 raise RuntimeError(f"layer {idx}'s cache layout {lay} is not the others' {self.lay}")
             self.lay = lay
             slots = lay.blocks * lay.bs
-            if self.pool_slots and slots != self.pool_slots:
-                if idx or torch.cuda.is_current_stream_capturing():
+            if slots != self.pool_slots:
+                if idx:
                     raise RuntimeError(f"layer {idx}'s cache has {slots} slots, the others have {self.pool_slots}")
-                # vLLM profiles with a small temporary cache before allocating the serving pool. Layer zero starts
-                # that new pool; no captured graph may retain the temporary cache's receipt buffers or append table.
-                self.layers.clear()
-                self.staged.clear()
-                self.pending.clear()
-                self.graph_tab = None
-                self.pool_slots = 0
-                self.rc_sk = self.used = self.epoch = self.sparse_tags = None
-            if self.st.encoded and not self.pool_slots:
-                if torch.cuda.is_current_stream_capturing():
-                    raise RuntimeError("the paged receipt buffers were first needed during CUDA graph capture")
-                self.pool_slots = slots
-                self.rc_sk = torch.empty((slots, self.lib.shape["kv_heads"], 16), dtype=torch.int32, device="cuda")
-                self.used = torch.full((slots,), -1, dtype=torch.int32, device="cuda")
-                self.epoch = torch.zeros(1, dtype=torch.int32, device="cuda")
-                self.sparse_tags = torch.empty((slots, self.nl, 8), dtype=torch.int64, device="cuda")
-            elif not self.pool_slots:
-                self.pool_slots = slots
+                self.reserve_slots(slots)
             L = self.layers[key] = _Layer(lay, idx)
         return L
 

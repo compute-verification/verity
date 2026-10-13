@@ -732,6 +732,14 @@ def hook_runner(hooks, install: Install) -> None:
                 return r
             return load_model
         hooks.wrap(cls, "load_model", make)
+        if hasattr(cls, "capture_model"):
+            def make_capture(orig):
+                def capture_model(self, *a, **kw):
+                    if install.stack is not None:
+                        install.stack.attention.reserve(getattr(self, "kv_caches", ()))
+                    return orig(self, *a, **kw)
+                return capture_model
+            hooks.wrap(cls, "capture_model", make_capture)
 
 
 class Window:
