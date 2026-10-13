@@ -2635,7 +2635,8 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
 // empty). Counting the tasks of the format's CTAs before b, tile (b, j) starts at task s, and launch CTA p of P takes
 // the tiles with floor(s P / T) = p, T = nbs nchunks (the last CTA those at s = T too). Each run of one b's tiles is a
 // segment, which the launch CTA runs as b would, so any grid gives the format's outputs, and as many CTAs as the SMs
-// hold share the tasks to within a tile.
+// hold share the tasks to within a tile. A grid of the format's groups nchunks CTAs runs them one to one: the even
+// split would cut its CTAs of n(g0) = a + 1 tasks.
 struct Cut {
   int nchunks, groups, skt, tpc, a, r;   // nbs = a groups + r
   long long lo, hi;                      // the launch CTA's tiles start in [lo, hi)
@@ -2659,6 +2660,10 @@ struct Cut {
   // the last.
   __device__ void next(int b, u32 *out) const {
     const int B = groups * nchunks;
+    if (gridDim.x == B) {   // the format's own grid: launch CTA b is the format's CTA b, one segment
+      out[0] = b < 0 ? blockIdx.x : B, out[1] = 0, out[2] = tpc;
+      return;
+    }
     if (b < 0) {   // the first b whose tiles can start at or past lo
       b = min(B - 1, (int)(lo * B / first(B)));
       while (b > 0 && first(b) >= lo) --b;
