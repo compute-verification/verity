@@ -1,19 +1,22 @@
 import Proofs.Accounting.RateAudit.Audit
+import Proofs.Accounting.RateAudit.Chain
+import Proofs.Accounting.RateAudit.Conservation
+import Proofs.Accounting.RateAudit.Deployed
+import Proofs.Accounting.RateAudit.DeployedRelay
+import Proofs.Accounting.RateAudit.DeployedRun
 import Proofs.Accounting.RateAudit.Honest
-import Proofs.Accounting.RateAudit.Windows
-import Proofs.Accounting.RateAudit.Joint
-import Proofs.Accounting.RateAudit.Relay
+import Proofs.Accounting.RateAudit.Horizon
 import Proofs.Accounting.RateAudit.Interactive
+import Proofs.Accounting.RateAudit.Joint
+import Proofs.Accounting.RateAudit.Named
 import Proofs.Accounting.RateAudit.Partial
 import Proofs.Accounting.RateAudit.PartialJoint
+import Proofs.Accounting.RateAudit.Relay
+import Proofs.Accounting.RateAudit.Session
 import Proofs.Accounting.RateAudit.Sketch
 import Proofs.Accounting.RateAudit.SketchHonest
 import Proofs.Accounting.RateAudit.SketchInteractive
-import Proofs.Accounting.RateAudit.Conservation
-import Proofs.Accounting.RateAudit.Chain
-import Proofs.Accounting.RateAudit.Horizon
-import Proofs.Accounting.RateAudit.Named
-import Proofs.Accounting.RateAudit.Session
+import Proofs.Accounting.RateAudit.Windows
 
 /-! The rate audit's proofs: the guarantee in the random-oracle model (`Accounting.SecurityProofs.RateAudit`), its
 completeness (`Accounting.SecurityProofs.RateHonest`), its time average over windows
@@ -38,4 +41,10 @@ count, for a pass and for a window (`Accounting.SecurityProofs.RatePaidRO`, `Rat
 words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`), with its route `Sampled`
 (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled draw of a window and of a session of windows,
 over the horizon and in every window (`Accounting.SecurityProofs.RateWindowDraw`, `RateSessionDraw`), with its route
-`Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`). -/
+`Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`), and the remote bandwidth audit as deployed, one
+guarantee over a session of ground, chained windows of devices with partial completion
+(`Accounting.SecurityProofs.RemoteSessionConservation`, at the deployed parameters
+`RemoteSessionConservationDeployed`), and the same session as a run of the remote audit, meeting its routes
+(`Accounting.SecurityProofs.RemoteSessionRoutes`) and conserving over the horizon and in each window at the same `γ`
+(`RemoteSessionRunConservation`, `RemoteWindowRunConservation`), and all three with side sources that may relay
+receipts (`RemoteSessionConservationRelay`, `RemoteSessionRunConservationRelay`, `RemoteWindowRunConservationRelay`). -/

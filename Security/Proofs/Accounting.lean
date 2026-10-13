@@ -8,6 +8,7 @@ import Proofs.Accounting.BandwidthAudit
 import Proofs.Accounting.RateAudit
 import Proofs.Accounting.BoundReceipt
 import Proofs.Accounting.Capacity
+import Proofs.Accounting.Remote
 import Proofs.Accounting.PerRunTruncation
 import Proofs.Accounting.PerRunPouw
 import Proofs.Accounting.PerRunJoint

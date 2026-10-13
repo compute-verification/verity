@@ -6,6 +6,10 @@
    "owner": "@memory-accounting",
    "digest": "9d865547ca23af09cf67e3ad5149642660839a871ec3c4cb85abd72829fdb257"
   },
+  "Accounting.Assumptions.SquaringCeiling": {
+   "owner": "@memory-accounting",
+   "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
+  },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
@@ -1059,6 +1063,66 @@
    "signature": ["Accounting.SecurityProofs.Recall.{u_1, u_2} : Accounting.Guarantees.Recall"],
    "assumptions": [],
    "type_hash": "6f9da408630883d8770f358eaddf47063f1b76099677faea7bdb35c5e45d777a"
+  },
+  "Accounting.SecurityProofs.RemoteSessionConservation": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RemoteSessionConservation : Accounting.Guarantees.RemoteSessionConservation"],
+   "assumptions": [],
+   "type_hash": "d1d6bcf9548e52afbf537c8b8063546191e1775d937dd871062cca627006932d"
+  },
+  "Accounting.SecurityProofs.RemoteSessionConservationDeployed": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RemoteSessionConservationDeployed : Accounting.Guarantees.RemoteSessionConservationDeployed"
+   ],
+   "assumptions": [],
+   "type_hash": "753e8962c63271ce1e020916d50978296e9ff02db0839977381987f1162ec8bc"
+  },
+  "Accounting.SecurityProofs.RemoteSessionConservationRelay": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RemoteSessionConservationRelay : Accounting.Guarantees.RemoteSessionConservationRelay"
+   ],
+   "assumptions": [],
+   "type_hash": "aacbdc6e96631e4cce10ab559eaa9649053358ae15a63805e27d2f656fb6f754"
+  },
+  "Accounting.SecurityProofs.RemoteSessionRoutes": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RemoteSessionRoutes : Accounting.Guarantees.RemoteSessionRoutes"],
+   "assumptions": [],
+   "type_hash": "86bf00365dddab0f78e374352cd32b634143177aae0191aea7a0de3016df23b2"
+  },
+  "Accounting.SecurityProofs.RemoteSessionRunConservation": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RemoteSessionRunConservation : Accounting.Guarantees.RemoteSessionRunConservation"
+   ],
+   "assumptions": [],
+   "type_hash": "66caa1c1db57c388f316392b25c773b022ae51bacea96cacf900204c83a6e0a6"
+  },
+  "Accounting.SecurityProofs.RemoteSessionRunConservationRelay": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay : Accounting.Guarantees.RemoteSessionRunConservationRelay"
+   ],
+   "assumptions": [],
+   "type_hash": "b6cf4e92a0f2a47199a63cac897cd2cdbe8490edcbbbf2d917b38f07b84b327d"
+  },
+  "Accounting.SecurityProofs.RemoteWindowRunConservation": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RemoteWindowRunConservation : Accounting.Guarantees.RemoteWindowRunConservation"
+   ],
+   "assumptions": [],
+   "type_hash": "f16007e559551482e09b2fb005e4f43cd9bb16de7397eb1915c03f1cec34e3d1"
+  },
+  "Accounting.SecurityProofs.RemoteWindowRunConservationRelay": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay : Accounting.Guarantees.RemoteWindowRunConservationRelay"
+   ],
+   "assumptions": [],
+   "type_hash": "8d29d2e533802015098f254806edb1e99d0a93e33acf916a76ca12484b570e3e"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -4924,7 +4988,15 @@
    "Bandwidth.SecurityProofs.B3Capacity": "frozen (no-function,world-unlisted): As B3, with HBM hearing only the chip (HearsChip: what HBM's ports deliver is a function of the store and of what the chip did) in place of passive memory, and every tick's HBM signal counted at its ports' capacities summed (B3's capacity form).",
    "Bandwidth.SecurityProofs.B3CapacityRO": "frozen (no-function,world-unlisted): As B3RO, in B3Capacity's capacity form.",
    "Bandwidth.SecurityProofs.Mbw": "frozen (no-function,world-unlisted): As B3RO, for a strategy over the store, n bits z (uniform and independent of the store and the oracle) and the oracle, whose chip's view (its content at the window's start and what crosses into it in the window) determines z: the floor moves up by n, so an accept gives n <= reads - cert_bw at AuditRO's error (the console's Mbw, bandwidth additivity by counting, on a strategy's runs).",
-   "Bandwidth.SecurityProofs.MbwCapacity": "frozen (no-function,world-unlisted): As Mbw, in B3Capacity's capacity form: an accept gives n <= beta_HBM * T - cert_bw."
+   "Bandwidth.SecurityProofs.MbwCapacity": "frozen (no-function,world-unlisted): As Mbw, in B3Capacity's capacity form: an accept gives n <= beta_HBM * T - cert_bw.",
+   "Accounting.SecurityProofs.RemoteSessionConservation": "frozen (no-function,hash): It composes Accounting.SecurityProofs.RatePaidNamedRO at each pass device of a session of ground, chained windows with partial completion (simulated by an interactive device whose link carries the completed bits, under WorkHardness and SquaringCeiling) with the session's pooled draws: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionConservationDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservation at the deployed parameters, with the draw's two terms bounded by 2^-40: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionRoutes": "frozen (no-function,hash): It reads Accounting.Guarantees.RemoteSessionConservation's deployed session as a run of the remote audit (Accounting.Remote.Run.ofDeployed) and proves for it the routes Sampled (the horizon's draw, DeployedSession.pr_draws_horizon_le) and Paid (RatePaidNamedRO at each pass, a union over the G candidates): abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionRunConservation": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at Accounting.SecurityProofs.RemoteSessionRoutes' routes, read at the node: the run's payments other than its tier reads are the passes' S + (L - rho) + X bits, so its tier reads are at least (1 - (dbar + gammaPass)) of C, RemoteSessionConservation's horizon reading: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteWindowRunConservation": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at each window's run (Accounting.Remote.Run.ofDeployedWindow), with Sampled at the window's draw (DeployedSession.pr_draws_window_le) and Paid at the window's P G terms, read at the node at gamma_w, RemoteSessionConservation's per-window reading: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionConservationRelay": "frozen (no-function,hash): Accounting.Guarantees.RemoteSessionConservation without the hypothesis that the side sources ignore the oracle: each pass device simulated with its completions read from device memory (PIDevice.toInteractiveMem) on its own link, RatePaid at each pass with m relayed words, a union over the G candidates, and the session's pooled draws: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionRunConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at the deployed session's run (Accounting.Remote.Run.ofDeployed) with side sources that may relay receipts, Sampled at the horizon's draw and Paid at RatePaid's terms with the run's slack lam + m b, read at the node: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteWindowRunConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at each window's run (Accounting.Remote.Run.ofDeployedWindow) with side sources that may relay receipts, Sampled at the window's draw and Paid at RatePaid's P G terms with the run's slack lam + m b, read at the node at gamma_w: abstract chip programs in the random-oracle model, not the rate audit's code."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -5558,7 +5630,75 @@
     "Accounting.SecurityProofs.RatePartialRebuild",
     "Accounting.SecurityProofs.RateSessionDraw",
     "Accounting.SecurityProofs.RateSessionSampledNamedRO",
-    "Accounting.SecurityProofs.RateWindowDraw"
+    "Accounting.SecurityProofs.RateWindowDraw",
+    "Accounting.SecurityProofs.RemoteSessionConservation",
+    "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+    "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+   ]
+  },
+  "Definitions.Accounting.RateAuditDeployed": {
+   "digest": "2e41fae75efb04c287b2545df30f7c05d23f35762830fe83a1f634b83d31db84",
+   "definitions": {
+    "Accounting.Rate.Deployed.gammaPass": "79e80c3a32166b69b57fd4619932e1d538a81d1ea0e067012fdfc3cdbaa00a0f",
+    "Accounting.Rate.Deployed.muChip": "cf01b6fff74d28d7ec18b8c05f184c4c2fb65af384d924c7401837fd45d847ff",
+    "Accounting.Rate.Deployed.muLambda": "83c86da0fa53265126cc8608941b5e7fb9cbb0669a776972dc50161d510128f6",
+    "Accounting.Rate.Deployed.muLink": "494264d1c6add1f99573551bb370cd0a57b717015b188570c59daacc06839e92",
+    "Accounting.Rate.Deployed.muRebuild": "86d1e10f9a85881192b136784dc77e38e5b672f60e2e8b299aa241ace6748344",
+    "Accounting.Rate.Deployed.rebuildBits": "992c3b6c6a529362c81001f8174bb3969865445fc81074a0101b8f555f4dc29c",
+    "Accounting.Rate.DeployedSession": "2269591d341a0448d0d1c8a11d46264a77425e7550d52754b889f728d14bbaf9",
+    "Accounting.Rate.DeployedSession.win": "aa3aeaeaec28120edbdae5565931bc313429847583800065cc0e5489c1a33930",
+    "Accounting.Rate.DeployedSession.window": "8cec132371a7f24a364ea90e81e6b2509a7bd77053385e71751c50f0abf8f4e5",
+    "Accounting.Rate.DeployedWindow": "a312508e61723caafe7fd1a0a5759e94c7d63ef33b1e1ddbfa380f977616c5f0",
+    "Accounting.Rate.DeployedWindow.cand": "f1421f3e9b8bc8478672b970e0c8f0d7d1f5f7c462aad77134589c7f7cd85399",
+    "Accounting.Rate.DeployedWindow.correctAll": "fe8e3b1a941a8d35b8ec1703a50a7621b5fa28970cab2a419e808ab04470e3b8",
+    "Accounting.Rate.DeployedWindow.dev": "c7ba8a0b5048b1fdaeb32f4cbafddaa34d97fb992ddefecee922bf16b73b3f73",
+    "Accounting.Rate.DeployedWindow.device": "ed057f50bb9548d5caccf78b34a90e72b4467e758f66c6ec083cd6cca017d3ab",
+    "Accounting.Rate.DeployedWindow.kept": "0e09ddc3626db9eea41dc692336594e91ceb7fa6d37d12247002bde711d29c10",
+    "Accounting.Rate.DeployedWindow.oracle": "844e10346d697fe791ac68e3a97c2dba70ffd1f98826c5fc32a62bbf40a3ea58",
+    "Accounting.Rate.DeployedWindow.pick": "5e4a394b0bea5fbcea63dc132c7e0197db0dbbf9f5929e01db154b3c4891f72c",
+    "Accounting.Rate.DeployedWindow.reads": "626a542b98ca1efac2631c8a2b526eeccb8e45fb9a38f6eed2d4dbd87b2ebac0",
+    "Accounting.Rate.PIChip": "ec3619a00614b7d7b425719ade29447b575d7589a6c3a75637dd987b6308a0f0",
+    "Accounting.Rate.PIChip.below": "26dc420a30485f552c0c39c858da04afb525ef1d338eb138895bacf39c7a354e",
+    "Accounting.Rate.PIChip.brecOn": "230ca8a92bfb539646297ac9d4c30075f00e0947ff30677d28360726523f2630",
+    "Accounting.Rate.PIChip.brecOn.go": "b49c0e31d92cc53a3c333641bccdcc964bbb3539a3324cd8cd309b23b8e7f339",
+    "Accounting.Rate.PIChip.casesOn": "c2f24feefcd52fd838d4d6408a833304203d4182e848d95d07abae6ee0378adb",
+    "Accounting.Rate.PIChip.complete": "6fd9085d350b8a07ae0e1a563a884630505319db47b1cf912e7ec91c6be3ad37",
+    "Accounting.Rate.PIChip.done": "f433fc03e23e74c5d644fad458ccfae2c340e403f8909525e54943b87cb260eb",
+    "Accounting.Rate.PIChip.ingress": "afc409ab886cffd7cfd66dbf486ff3a90e62f9317d29667cb3c416d8692bfed7",
+    "Accounting.Rate.PIChip.linkBits": "65d0ac6fffe6d6a2cc52183b5c28bb601abe8b87d1a20b4ddb3d7e31e2802f45",
+    "Accounting.Rate.PIChip.queries": "a35f16c61c7ed1129445f433cd18b0ba97a0394f8046b59ed7349d9de5c25e64",
+    "Accounting.Rate.PIChip.rec": "42733ccd9ced4de4788befb9769c708ec52fb12689a023a7a74b75aa3df9d7f5",
+    "Accounting.Rate.PIChip.run": "6bfc3cce852a10d5caacdf1ecfa875c0c45239e9298fcf3f16d99fa3835efd0b",
+    "Accounting.Rate.PIChip.send": "ef3dd4667f37af12303ff39ef3907d2d99ef7c2391d22cde97910a20da91b0c9",
+    "Accounting.Rate.PIChip.side": "ca3869b649404b8e0a7bb0ba792bfe34f1317610712a7a1297273b0e7793bba2",
+    "Accounting.Rate.PIChip.stream": "f67ac16c7e955a09841868639eb97cf27123d95ed02c2d16f859de7867727ca2",
+    "Accounting.Rate.PIChip.tag": "0f9a82fa40604ab89d91699504c2dab160d08be3bed0ef3f5f88d238b0f88612",
+    "Accounting.Rate.PIChip.tierBits": "61fad5c3357af68e47a06c14b94435b8f9fce47608cfc1429c869d6782c11f28",
+    "Accounting.Rate.PIChip.work": "080070a9947e00e19bf94b392a9650db787b457afc5645d77b511ef1206b9cb9",
+    "Accounting.Rate.PIDevice": "f7355017458b75aa81dba035afa697e27dfebff12464675c1acc0806cb546005",
+    "Accounting.Rate.PIDevice.chip": "058527306893b63f3958bdfe73874477394f26a6b37eb69ef7e46ff5bc4d7ec7",
+    "Accounting.Rate.PIDevice.correct": "10dfc96056c521821e0b4cc546ef676ef8d0639a839121b8d8a9601e8d533bc5",
+    "Accounting.Rate.PIDevice.mem": "724a24c2f4e19121d56fa6bb848e5d001df303ed44da45d9901a0373c74a5f89",
+    "Accounting.Rate.PIDevice.side": "b02d8c9c90ed3c2ad68d01b8fda05cca3cc9a3930b997471b54ee7d4b600c214",
+    "Accounting.Rate.PIDevice.state": "c4bf6924d6c3aa55a9a4ad08997d5635672395a3f0303911045311e7d0b34e6e",
+    "Accounting.Rate.PIDevice.tags": "c6c3e95939aaf0981294067922a1a3cb15751a0a47bf43d16482d638edeb2857",
+    "Accounting.Rate.PIDevice.tierReads": "b6b6816e48044bbf91d39060b09a9703750af97e02e009b3f666ce4f2a48417e",
+    "Accounting.Rate.PIDevice.world": "636dadc8e309bdf6c5e2f71b400631ea1f60e0b231e64788906bd88380d983f8"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RemoteSessionConservation",
+    "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+    "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditHorizon": {
@@ -5577,7 +5717,15 @@
     "Accounting.SecurityProofs.HorizonSampling",
     "Accounting.SecurityProofs.RateSessionDraw",
     "Accounting.SecurityProofs.RateSessionSampledNamedRO",
-    "Accounting.SecurityProofs.RateWindowDraw"
+    "Accounting.SecurityProofs.RateWindowDraw",
+    "Accounting.SecurityProofs.RemoteSessionConservation",
+    "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+    "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditInteractive": {
@@ -5650,7 +5798,15 @@
     "Accounting.SecurityProofs.RatePaidRO",
     "Accounting.SecurityProofs.RateSessionDraw",
     "Accounting.SecurityProofs.RateSessionSampledNamedRO",
-    "Accounting.SecurityProofs.RateWindowDraw"
+    "Accounting.SecurityProofs.RateWindowDraw",
+    "Accounting.SecurityProofs.RemoteSessionConservation",
+    "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+    "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditJoint": {
@@ -5760,7 +5916,15 @@
     "Accounting.SecurityProofs.RatePaidRO",
     "Accounting.SecurityProofs.RateSessionDraw",
     "Accounting.SecurityProofs.RateSessionSampledNamedRO",
-    "Accounting.SecurityProofs.RateWindowDraw"
+    "Accounting.SecurityProofs.RateWindowDraw",
+    "Accounting.SecurityProofs.RemoteSessionConservation",
+    "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+    "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditSketch": {
@@ -5845,6 +6009,66 @@
     "Accounting.RateSketch.InteractiveDevice.tags": "a6c4e02c8cdefb2ece164df5472e52d40af9a68040986d3b5522103908f71fe0"
    },
    "guarantees": ["Accounting.SecurityProofs.RateAuditSketchInteractiveRO"]
+  },
+  "Definitions.Accounting.Remote.Deployed": {
+   "digest": "0198bf0d38ebe58014fae8cf3a8213402ce1b02ae9b0411b86c2dd497a4ee69e",
+   "definitions": {
+    "Accounting.Remote.Run.ofDeployed": "938e245a00144c2a0bcd16a9402a6ae9f3f581d8ae5b4fb1be5c7b5328ae58a6",
+    "Accounting.Remote.Run.ofDeployedWindow": "a526544dfbd5f07304efa4cf37bedf53497485105da2f8b31e4db70b28099e64"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+   ]
+  },
+  "Definitions.Accounting.Remote.Node": {
+   "digest": "3ced36c3ec6c09e23dd55b57b41035d8deb9eeabd9805652c774d7a51937a2b8",
+   "definitions": {
+    "Accounting.Remote.Audit": "076f0b4fde91f8235dc297a41f164b886aeff62281b35f5212d45896c7abb3fc",
+    "Accounting.Remote.Audit.P": "0916c76e605a6912875b349077cb0c4735ffe54daa7dad9b34cbe5c23daa05e3",
+    "Accounting.Remote.Audit.T": "2c1bf2924409cb7984aa7d0f93ae2cbd23404fdfcc8126308f06f3e0f8357e3f",
+    "Accounting.Remote.Audit.b": "e13c5769a9cc2f4936b8e4634c930a774b0bb55f3e7fd1948a38446a2e5a2f53",
+    "Accounting.Remote.Audit.lam": "342accb4ab8658132d5f65c5b847c2475ab9a62165fa3377a48a8ddf6d432ce1",
+    "Accounting.Remote.Node": "12870ff9532ae5b6e3cc61c7ff739a7b72ffbb2b03c58d7831ea684014850752",
+    "Accounting.Remote.Node.declared": "1e8f015633d4c925781801d28dc9d66a73cbdb955056e84cb6aa0b10e1763df3",
+    "Accounting.Remote.Node.rate": "d3ba8e1eb4abea3fd097b26a60af97f89db14bd428410773e0c3b46ee1fbb58d"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+   ]
+  },
+  "Definitions.Accounting.Remote.Run": {
+   "digest": "57f6439b5cfb8419eea613c599b00b1f72393b8f0d099ddc7dd1a671f95ebd06",
+   "definitions": {
+    "Accounting.Remote.Run": "b419a6bbc8247d432ad329ee43f75bb86128e27d0c8b5486b513b7901999aa0a",
+    "Accounting.Remote.Run.Holds": "caefba17b77542a48a63c39786752dc9b2b05ff01a4b95b94dea26990c0c063d",
+    "Accounting.Remote.Run.Paid": "78016630693a7e7895e26d483a5db6ccb52ff45b4aeb4ddc12bf4d51de3bf87e",
+    "Accounting.Remote.Run.Sampled": "493a89d0ba4ebb242658639afb84d16edf09fce5a3ff15fd64c82cca9ad324a0",
+    "Accounting.Remote.Run.accepts": "cec27f6dae1bd5f2b89e07a41ea9caef81bd50d8893befe2546fffb11f83776a",
+    "Accounting.Remote.Run.correct": "5dcb80e1387b0d61b347f99f5461087e15558cd378948d4bacd102441df95fbd",
+    "Accounting.Remote.Run.paid": "edeff472a5b7c4a8b4b3a064bf90dc53f973932a658cc205838ead9fbcbdd371",
+    "Accounting.Remote.Run.read": "2cb31b62530c75e04ea124031ae9517592d263ad2bf93bbc4b2d66e56b819ec7",
+    "Accounting.Remote.Run.readOut": "cc18dccf842738ac38b4df052586eebc30977a9dbd1fb9858d75b488fd2d131f",
+    "Accounting.Remote.Run.reads": "372c484a8f4e6597ad318693c4577d942dfce35a4eb0eb64ac86164ba0156c4c",
+    "Accounting.Remote.Run.rebuilt": "9b8ac2ddac1ca45f01d084ef2ef8e9fdb3593090abce9f266ae5db405bac6008",
+    "Accounting.Remote.Run.rebuiltOut": "8d85f20ac924ce9dfc622ac29f2cc544362abd5f989a96256d103770bb25b388",
+    "Accounting.Remote.Run.state": "a251a1eface9c3ffbedbc8d55dcb4c8edc83854f3bd91b745c810abea5c8a7fb",
+    "Accounting.Remote.Run.stateOut": "f4c2a6c67bf54b19cff28699b366cd3efdb05e36176076f9ab4053e1e2b7c569"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+   ]
   },
   "Definitions.Accounting.Responder": {
    "digest": "826e7bc03f2aeb2a6bb4cf4e3bd71f425ce4dabd983d488123c8a8c0ad4fea6b",
@@ -6531,6 +6755,14 @@
     "Accounting.SecurityProofs.RateSessionSampledNamedRO",
     "Accounting.SecurityProofs.RateSketchHonest",
     "Accounting.SecurityProofs.RateWindowDraw",
+    "Accounting.SecurityProofs.RemoteSessionConservation",
+    "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+    "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
@@ -6977,6 +7209,11 @@
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
     "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
     "Accounting.SecurityProofs.TileUnpredictableMono",
     "Accounting.SecurityProofs.TileUnpredictableOfNCPU",
     "Accounting.SecurityProofs.TileUnpredictableOfTT",
@@ -14700,7 +14937,31 @@
     "Accounting.SecurityProofs.RateAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartialPasses",
-    "Accounting.SecurityProofs.RatePartialRebuild"
+    "Accounting.SecurityProofs.RatePartialRebuild",
+    "Accounting.SecurityProofs.RemoteSessionConservation",
+    "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+    "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+   ]
+  },
+  "Models.Accounting.Assumptions.RateAuditDeployed": {
+   "digest": "f2f71d53163680f54c69c2b2c63dfbd582f381d06f492eb80f69ce8c0f66ef17",
+   "definitions": {
+    "Accounting.Assumptions.SquaringCeiling": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RemoteSessionConservation",
+    "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+    "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
   "Models.Accounting.Guarantees.Actual": {
@@ -14914,6 +15175,29 @@
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO"
+   ]
+  },
+  "Models.Accounting.Guarantees.RateAuditDeployed": {
+   "digest": "e3737ebe54b79ba7d6c7f085597e3e3b4dc819c5ed971d2062e31802381ffdd8",
+   "definitions": {
+    "Accounting.Guarantees.RemoteSessionConservation": "3f4411a964fa206d9530e594bd14116ff5f7cedbf7f9b2e2560182b381143ea6",
+    "Accounting.Guarantees.RemoteSessionConservationDeployed": "b77ed5b9ba11dfd9eac1b11c65741b7f341d3404d6d77388387d18281eae0741",
+    "Accounting.Guarantees.RemoteSessionConservationRelay": "e60e4d3f4bc74723b17528be1f7f72902c09635211e36cd9cf8a1c1e6958f8c0",
+    "Accounting.Guarantees.RemoteSessionRoutes": "6813a372a70745fa98988fc999a8ff17869588001d426c30cccba8453372bf77",
+    "Accounting.Guarantees.RemoteSessionRunConservation": "4587d6124824128a52413a2aaaaf458558c3a967a571e4776d972931cd45deb1",
+    "Accounting.Guarantees.RemoteSessionRunConservationRelay": "d09517c694d81239ec79c958a0d54a316ce89945920f4cf2ca4b4fedbde9a509",
+    "Accounting.Guarantees.RemoteWindowRunConservation": "7853d90eb3bb03b9472c5adce8a5619fa42299d79ffa14cc7f29f0af96167137",
+    "Accounting.Guarantees.RemoteWindowRunConservationRelay": "20208100b72b9e2f2a14e788ee609961a00153fa996fc1e7ac5e14649da15a57"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RemoteSessionConservation",
+    "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+    "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionRoutes",
+    "Accounting.SecurityProofs.RemoteSessionRunConservation",
+    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
+    "Accounting.SecurityProofs.RemoteWindowRunConservation",
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
   "Models.Accounting.Guarantees.RateAuditHorizon": {
