@@ -63,7 +63,8 @@ def HeldAt (cs : InnerCommits) (stacked : Option (Array SchedRound)) (s : HoloSt
     Prop :=
   (∃ (cm : Array (Nat × ByteArray)) (i : Nat), heldCommits cs s = some cm ∧ cm[i]? = some (k, c)) ∨
     ∃ (rs : Array SchedRound) (st : InnerStream) (l n : Nat), s = .stacked ∧ stacked = some rs ∧
-      cs.stream? s!"{STACKED}/rep0" = some st ∧ (topRounds rs)[l]? = some (k, n) ∧ (st.tops[l]?).bind (·[x]?) = some c
+      cs.stream? s!"{STACKED}/rep0" = some st ∧
+      (topRounds rs)[l]? = some (k, n) ∧ (st.tops[l]?).bind (·[x]?) = some c
 
 theorem msgRounds_getElem? {cm : Array (Nat × ByteArray)} {rs : Array SchedRound} (h : CommitsAt cm rs) (i : Nat) :
     (msgRounds rs)[i]? = (cm[i]?).map (·.1) := by
@@ -103,21 +104,26 @@ theorem sparseRow_ok {cs : InnerCommits} {sh : RecSparse.Shape} {p : String} {x 
   | none => simp [sparseRow, hi] at h
   | some i =>
     cases hs : cs.stream? s!"{SPARSE}/rep{x}" with
-    | none => simp [sparseRow, hi, hs, -Nat.toString_eq_repr] at h
+    | none => simp only [sparseRow, hi, hs] at h <;> cases h
     | some st =>
+      simp only [sparseRow, hi, hs] at h
       obtain ⟨hil, -⟩ := List.idxOf?_eq_some_iff.1 hi
       by_cases hn : st.commits.size = (sparseMessages sh).length
       · have hix : i < st.commits.size := by omega
         cases hk : st.commits[i]'hix with
         | mk k c' =>
           have hc : c' = c := by
-            simp [sparseRow, hi, hs, hn, getElem!_pos st.commits i hix, hk, bind, Except.bind, pure,
-              Except.pure, -Nat.toString_eq_repr] at h
-            exact h.2
+            split at h
+            · cases h
+            · rw [getElem!_pos st.commits i hix, hk] at h
+              exact (Prod.mk.inj (Except.ok.inj h)).2
           subst hc
           refine ⟨i, st, k, by first | rfl | exact hi, by first | rfl | exact hs, ?_⟩
           rw [Array.getElem?_eq_getElem hix, hk]
-      · simp [sparseRow, hi, hs, hn, bind, Except.bind, -Nat.toString_eq_repr] at h
+      · split at h
+        · cases h
+        · rename_i hne
+          exact absurd (by simpa using hne) hn
 
 theorem fixedRow_sparse_eq {cs : InnerCommits} {sh : RecSparse.Shape} {v p : String} {x : Nat}
     (hci : cIndex v = none) (hoi : openingIndex v = none) (hti : stackedTopLevel v = none)
@@ -247,22 +253,5 @@ theorem fixedRow_valueRound {cs : InnerCommits} {rep : Array SchedRound} {sparse
         cases hpi : sparsePort v with
         | some p => exact fixedRow_sparseRound hci hoi hti hpi hsp h
         | none => simp [fixedRow, hci, hoi, hti, hpi] at h
-
-#print axioms msgRounds_getElem?
-#print axioms topRounds_getElem?
-#print axioms heldCommits_sparse
-#print axioms heldCommits_stacked
-#print axioms claim_or_sparse
-#print axioms sparseRow_ok
-#print axioms fixedRow_sparse_eq
-#print axioms fixedRow_repRound
-#print axioms fixedRow_openingRound
-#print axioms fixedRow_topRound
-#print axioms fixedRow_sparseRound
-#print axioms fixedRow_valueRound
-#print axioms RepsCommitsAt
-#print axioms SparseCommitsAt
-#print axioms StackedAt
-#print axioms ClaimReadsAt
 
 end Flock.Guarantees

@@ -136,11 +136,6 @@ theorem laterCoins_of_held {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} {Cm : 
 
 end
 
-#print axioms FlockC3.Reps.coinsAt_held
-#print axioms FlockC3.Reps.coinsAt_stageHeld
-#print axioms FlockC3.Reps.linkPoints_of_custody
-#print axioms laterCoins_of_held
-
 end FlockC3.Compose
 
 namespace FlockC3.Reps
@@ -216,9 +211,6 @@ theorem stageHeld_repsOfVals
   refine ⟨s0, ?_⟩
   rw [h0]
   exact (one 1).2
-
-#print axioms nCoins_of
-#print axioms stageHeld_repsOfVals
 
 end
 
