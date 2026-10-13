@@ -604,9 +604,4 @@ end
 
 end FlockC3.RegLevels
 
-#print axioms FlockC3.RegLevels.shape?_opening
 #print axioms FlockC3.RegLevels.stackedParams_of_checked
-#print axioms FlockC3.RegLevels.ligSteps_of_plays
-#print axioms FlockC3.RegLevels.lg_tied_repsOfVals_ligOfVals
-#print axioms FlockC3.RegLevels.os_two_ligOfVals
-#print axioms FlockC3.RegLevels.os_two_tied_repsOfVals_ligOfVals
