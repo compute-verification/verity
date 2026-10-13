@@ -8,7 +8,9 @@
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
 * each precondition refuses by name.
 
-Only `batched_gemm`, which remains outside this change, is a stand-in here; FA3's sparse geometry is registered at rope 16, latent 16."""
+`batched_gemm`, which remains outside this change, is a stand-in here.  The tiny fixture also substitutes the old norm because
+`DsaRMSNorm_v1` is pinned to the real 128-thread widths (512/2048); a direct vocabulary assertion below checks its binding.
+FA3's sparse geometry is registered at rope 16, latent 16."""
 from __future__ import annotations
 
 import sys
@@ -53,7 +55,7 @@ def BatchedGemmStandIn(B, S, x, w):
 
 
 STANDIN = Vocabulary("dsa-standin", "profile", "dsa-standin",
-                     kinds={**PROFILE_B1_EAGER_V3.kinds,
+                     kinds={**PROFILE_B1_EAGER_V3.kinds, "dsa_rmsnorm": PROFILE_B1_EAGER_V3.kinds["rmsnorm"],
                             "batched_gemm": lambda B, K, N, DOT: bind(BatchedGemmStandIn, B=B, K=K, N=N, DOT=DOT)},
                      notes=dict(PROFILE_B1_EAGER_V3.notes))
 
@@ -230,7 +232,7 @@ def _run(rep, model: _Model, inputs) -> list[int]:
 def _reference(model: _Model, inputs) -> list[int]:
     """The module's outputs as the Definitions compose them: per token the norms, the RoPEs and the absorptions, and per row
     `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped])."""
-    qn, kn = bind(dsa_norm.DsaRMSNorm, N=NQ, EPS=EPS), bind(dsa_norm.DsaRMSNorm, N=L, EPS=EPS)
+    qn, kn = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(b1.RMSNormTriton, N=L, EPS=EPS)
     rope1 = ropeh = bind(RoPEHeadGptJV2, D=R)
     up, down = bind(BatchedGemmStandIn, B=NH, K=P, N=L, DOT=DOT), bind(BatchedGemmStandIn, B=NH, K=L, N=V, DOT=DOT)
     hist = {n: [] for n in NAMES}
@@ -378,8 +380,8 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     rep = _derive(model, xs)
     assert rep.program is not None, rep.unsupported
     ids = _ids(rep)
-    norm_q = bind(dsa_norm.DsaRMSNorm, N=NQ, EPS=EPS).id
-    norm_kv = bind(dsa_norm.DsaRMSNorm, N=L, EPS=EPS).id
+    norm_q = bind(b1.RMSNormTriton, N=NQ, EPS=EPS).id
+    norm_kv = bind(b1.RMSNormTriton, N=L, EPS=EPS).id
     kr = qr = bind(RoPEHeadGptJV2, D=R).id
     up = bind(BatchedGemmStandIn, B=NH, K=P, N=L, DOT=DOT).id
     down = bind(BatchedGemmStandIn, B=NH, K=L, N=V, DOT=DOT).id
