@@ -152,7 +152,7 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
-  intro r CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _hstk ish Vs zr hCust _im _hIC
+  intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _hstk ish Vs zr hCust _im _hIC
     bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
@@ -178,7 +178,8 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
       exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
-  rcases zk_sessions_recursive_fork_reg (Flock.Guarantees.holoTys st hp) CT hp (classOk_of_accepts hacc.acceptsStmt) hA3
+  rcases zk_sessions_recursive_fork_reg (Flock.Guarantees.holoTys st hp) (Flock.Guarantees.holoCTs st hp) hp
+    (classOk_of_accepts hacc.acceptsStmt) hA3
     (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
       hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
@@ -193,8 +194,8 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
       (fun R ω t R₂ j => And.left (hCust R ω t R₂ j)) hT hF σ _
       (fun o => AcceptsV (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-        ¬ (holoInnerAt (Flock.Guarantees.holoTys st hp) CT st hp).holds
-          (Flock.Guarantees.regStmt (Flock.Guarantees.holoTys st hp) CT st hp
+        ¬ (holoInnerAt (Flock.Guarantees.holoTys st hp) (Flock.Guarantees.holoCTs st hp) st hp).holds
+          (Flock.Guarantees.regStmt (Flock.Guarantees.holoTys st hp) (Flock.Guarantees.holoCTs st hp) st hp
           (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
             hCust hT) dg N k Rw wmsg
           (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
