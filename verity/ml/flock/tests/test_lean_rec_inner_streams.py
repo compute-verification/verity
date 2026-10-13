@@ -679,6 +679,38 @@ def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_p
         "phase"), p
 
 
+#: `rec-coins`' inner statement, a whole inner circuit (plain, with no registration and no R in its META)
+STAGE = PLAIN.parent / "u" / "stage"
+
+
+@pytest.mark.parametrize("circuit,why", [
+    ("header", "rec inner circuit: circuit: no unit circuit"),
+    (None, "rec inner circuit: candidate 3's session needs the inner circuit (--rec-inner-circuit), whose META binds "
+     "R's registration and shape"),
+    ("whole", "unit-class/77279c8f61f2206d-packed: one of V*'s statements, which are verity/flock-circuit statements "
+     "(--statement verity/flock-circuit), not verity/flock-circuit+plain-leaves"),
+], ids=["header", "none", "whole"])
+def test_candidate_3s_inner_circuit_is_its_headers(tmp_path, circuit, why):
+    """`RecSetup.checkMeta`: the verifier holds candidate 3's transcript to what the inner circuit's header's META binds
+    (R's registration and shape), and setup holds the circuit itself to that META, before the V* checks. `statement` on
+    `rec-coins`' inner statement (any statement that sets up reaches them) at candidate 3's inner shape refuses 2d61's
+    session with its circuit's header alone, which does not parse as the inner statement's circuit, and 2d61's session
+    without R (no registration to bind) with no inner circuit at all; with a whole circuit, whose META is its header's,
+    it goes on to `checkStmt`, which refuses that statement as no V* statement."""
+    _fixture(PLAIN)
+    if circuit == "header":
+        transcript, shape, inner = _fixture(C3) / "public.json", _shape(tmp_path), _inner()
+    else:
+        transcript, shape = _changed(tmp_path, _drop_stacked_everywhere), _shape(tmp_path, stacked=None)
+        inner = [] if circuit is None else ["--rec-inner-circuit", str(STAGE / "circuit.txt")]
+    p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit+plain-leaves", "--circuit",
+                        str(STAGE / "circuit.txt"), "--public", str(STAGE / "pub-64.bin"), "--partition",
+                        str(STAGE / "partition.json"), "--coins", "os", *shape, "--rec-inner-transcript",
+                        str(transcript), "--rec-inner-session", str(C3 / "prover"), *inner],
+                       capture_output=True, text=True)
+    assert (p.returncode, p.stdout.strip()) == (1, f"setup: {why}"), p.stdout + p.stderr
+
+
 def test_rec_inner_refuses_r_without_the_sparse_shape():
     """`rec-inner` reads R's shape from the inner circuit's META (2d61's header) and refuses it without the bucket's RecSparse
     shape (`--sparse`), before it reads the circuit's tables: R opens the sparse phase's claims. A `--sparse` that is not

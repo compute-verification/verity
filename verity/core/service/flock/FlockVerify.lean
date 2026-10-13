@@ -612,6 +612,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let recRows ← match ← registeredInput args "--rec-rows" "rec rows" with
     | .ok r => pure r
     | .error e => IO.eprintln e; return 2
+  let recCircuit := match recCoins with
+    | some (.files f) => some f.circuit
+    | _ => none
   let work := match ownK, table with
     | some k, some t => some (k, t)
     | _, _ => none
@@ -628,8 +631,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
-          recBindings recRows
+        RecSetup.checks recInner recCommits recCircuit recBound stmtTags tables r.2 circuitB partition program
+          registered recPart recBindings recRows
         if zk then r.2.forM Zk.shapeOk
         r.2.forM (RecCoins.check · registered recCoins (RecSetup.c3 recInner recCommits))
         r.2.forM (RecVStar.checkPubRows · registered recCommits (recInner.bind (·.sparse)))
@@ -748,12 +751,23 @@ def statementCmd (args : List String) : IO UInt32 := do
       | .error e => IO.eprintln e; return 2
     else pure none
   let c3 := RecSetup.c3 recInner recCommits
+  -- candidate 3's inner circuit, which `RecSetup.checkMeta` holds to the header's META: check 5's bytes if it has them
+  let recCircuit ← match recCoins, argOf args "--rec-inner-circuit" with
+    | some (.files f), _ => pure (some f.circuit)
+    | _, some f =>
+      if (recInner.bind (·.sparse)).isSome && recCommits.isSome then
+        let b ← try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"rec inner circuit: {e}")
+        match b with
+        | .ok b => pure (some b)
+        | .error e => IO.eprintln e; return 2
+      else pure none
+    | _, none => pure none
   match (do
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
       if recInner.isSome then
-        RecSetup.checks recInner recCommits stmtTags tables #[st] circuitB partition program registered recPart
-          recBindings recRows
+        RecSetup.checks recInner recCommits recCircuit recBound stmtTags tables #[st] circuitB partition program
+          registered recPart recBindings recRows
       if recCommits.isSome then RecVStar.checkPubRows st registered recCommits (recInner.bind (·.sparse))
       let u := st.c.unit.name
       if recCoins.isSome || (c3.isSome && ((RecCoins.stackedParams u).isSome || (RecOpening.params u).isSome)) then

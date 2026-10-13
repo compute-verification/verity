@@ -2,7 +2,7 @@
 `RecVStar.fixedRow` on an inner session of two reps of two message rounds each and R's stream (one message round, a level-0
 top of two nodes and a level-1 top of one): what row `x` of each value the inner transcript fixes is.
 -/
-import Flock.RecVStar
+import Flock.RecSetup
 
 namespace Flock.Test.InnerStreams
 
@@ -244,5 +244,21 @@ def otherSparse (n : String) : Option String :=
 #guard ["sparse/rep2", "sparse/rep10", "sparse/rep01", "sparse/x", "sparse/"].all fun n => otherSparse n ==
   some s!"rec inner transcript: it holds {n}, and a sparse phase is one of the two reps' (sparse/rep0, sparse/rep1)"
 #guard otherSparse "sparse-rep2" == none && otherSparse "sparse/rep1" == none
+
+-- candidate 3's inner circuit is the one whose header's META the verifier read (`RecSetup.checkMeta`): a session
+-- without it, or with bytes that do not parse as the inner statement's circuit, is refused before the V* checks, and a
+-- session whose inner shape names no RecSparse shape reads none
+def checksAt (i : Inner) (circuit : Option ByteArray) : Option String :=
+  why (Flock.RecSetup.checks (some i) (some (c3cs (some r23))) circuit (.ok (none, some r23)) Flock.Tags.circuit [] #[]
+    ByteArray.empty none none none none none none)
+
+#guard checksAt c3 none == some ("rec inner circuit: candidate 3's session needs the inner circuit " ++
+  "(--rec-inner-circuit), whose META binds R's registration and shape")
+#guard (checksAt c3 (some ByteArray.empty)).map (·.startsWith "rec inner circuit: circuit: ") == some true
+#guard checksAt { c3 with sparse := none } none == why (checkCovers { c3 with sparse := none } (c3cs (some r23)))
+#guard Flock.RecSetup.boundKey (some "a", some r23) != Flock.RecSetup.boundKey (some "a", some ⟨24, 2⟩) &&
+  Flock.RecSetup.boundKey (some "a", some r23) != Flock.RecSetup.boundKey (some "a", some ⟨23, 3⟩) &&
+  Flock.RecSetup.boundKey (none, some r23) != Flock.RecSetup.boundKey (some "a", some r23) &&
+  Flock.RecSetup.boundKey (some "a", none) != Flock.RecSetup.boundKey (some "a", some r23)
 
 end Flock.Test.InnerStreams

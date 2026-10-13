@@ -44,12 +44,35 @@ def c3 (inner : Option RecVStar.Inner) (commits : Option RecVStar.InnerCommits) 
   let sp ← i.sparse
   pure { sparse := sp, stacked := i.stacked.or cs.stacked, commits := cs }
 
-/-- The V* checks of setup on the statements `sts`: each is one of V*'s at the verifier's inner shape
-(`RecVStar.checkStmt`), and the inner shape covers the inner transcript the verifier holds (`RecVStar.checkCovers`). -/
-def checks (inner : Option RecVStar.Inner) (commits : Option RecVStar.InnerCommits) (tags : Tags)
-    (tables : List (String × ByteArray)) (sts : Array Stmt) (circuitB : ByteArray) (partition : Option Json)
-    (program : Option ByteArray) (registered : Option (Array Registered.Port)) (part : Option Nat)
-    (bindings : Option VStar.Bindings) (rows : Option (Array Registered.Port)) : V Unit := do
+/-- What `checkMeta` compares of a META's binding: the registration's digest and R's `m` and claims. -/
+def boundKey (b : Option String × Option RecVStar.StackedShape) : Option String × Option (Nat × Nat) :=
+  (b.1, b.2.map fun s => (s.m, s.claims))
+
+/-- **The inner circuit's META is its header's**: the inner circuit `circuit` (`--rec-inner-circuit`, the bytes check
+5 sets the inner statement up from) parses as the inner statement's circuit (`HmOut.parse` under
+`RecVStar.innerTags`), and what its META binds (`metaBound`) is `bound`, what the verifier read off the file's header
+before it held the inner transcript to it (`RecSetup.commits`). The header is read apart from the file, so nothing
+else ties the two. -/
+def checkMeta (circuit : Option ByteArray) (bound : V (Option String × Option RecVStar.StackedShape)) : V Unit := do
+  let some cf := circuit
+    | throw ("rec inner circuit: candidate 3's session needs the inner circuit (--rec-inner-circuit), whose META " ++
+        "binds R's registration and shape")
+  let c ← (HmOut.parse RecVStar.innerTags cf).mapError (s!"rec inner circuit: " ++ ·)
+  let b ← metaBound c.metaJ
+  if boundKey (← bound) ≠ boundKey b then
+    throw "rec inner circuit: the registration and R's shape its header's META binds are not its circuit's META's"
+
+/-- The V* checks of setup on the statements `sts`: at candidate 3's session (the verifier's inner shape names a
+RecSparse shape and it holds the inner transcript), that the inner circuit's META is the header's it read
+(`checkMeta`); each statement is one of V*'s at the verifier's inner shape (`RecVStar.checkStmt`); and the inner shape
+covers the inner transcript the verifier holds (`RecVStar.checkCovers`). -/
+def checks (inner : Option RecVStar.Inner) (commits : Option RecVStar.InnerCommits) (circuit : Option ByteArray)
+    (bound : V (Option String × Option RecVStar.StackedShape)) (tags : Tags) (tables : List (String × ByteArray))
+    (sts : Array Stmt) (circuitB : ByteArray) (partition : Option Json) (program : Option ByteArray)
+    (registered : Option (Array Registered.Port)) (part : Option Nat) (bindings : Option VStar.Bindings)
+    (rows : Option (Array Registered.Port)) : V Unit := do
+  if let (some i, some _) := (inner, commits) then
+    if i.sparse.isSome then checkMeta circuit bound
   sts.forM (RecVStar.checkStmt inner tags tables · circuitB partition program registered part bindings rows)
   if let (some i, some cs) := (inner, commits) then RecVStar.checkCovers i cs
 
