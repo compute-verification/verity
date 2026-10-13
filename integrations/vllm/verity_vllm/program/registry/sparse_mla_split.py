@@ -32,9 +32,9 @@ from column 19, square_shift 1, shift 2), and v(0) = 0.  With E the exponent fie
 `t << 36 | v` for E >= 127 and its complement below (|log2 x| 2^36 less one), and the word is M truncated to 24 significant bits:
 exponent bit_length(M) + 90, sign E < 127, +0 at M = 0.  A zero or subnormal gives -inf, a negative word or a NaN the MUFU NaN
 0x7FFFFFFF, +inf +inf.  The coefficients reproduce every mantissa at [1, 2) and 2^20 random words measured on sm_120 (run
-r20261004-060203-ba52); the measurements leave C0 a range in 39 segments, and `mufu_lg2_undetermined` names the words the range's ends
-disagree on and the mantissa-0 words below 1.  FA3 takes the log of a split's sum, in [1 - 2^-24, 2^12), where none is.  sm_90 is
-unmeasured: `tests/properties/glm53_fa3_split_capture_gpu.py` measures it.
+r20261004-060203-ba52); the measurements leave C0 a range in 39 segments, which moves v in three and no word at any exponent (the
+tests scan them), so `mufu_lg2_undetermined` names only the 126 powers of two below 1, where v(0) = 0 is unmeasured.  FA3 takes the
+log of a split's sum, in [1 - 2^-24, 2^12).  sm_90 is unmeasured: `tests/properties/glm53_fa3_split_capture_gpu.py` measures it.
 
 Registered functions (all `Name_v1`):
   MufuLg2Ftz                                    (x: f32) -> f32
@@ -135,7 +135,7 @@ def mufu_lg2_bits(x: int, c0: str = "C0") -> int:
 
 def mufu_lg2_undetermined(x: int) -> bool:
     """Whether the measurements leave the word of ``x`` open: a positive normal x whose word the two ends of C0's range give
-    differently, or a power of two below 1 (v(0) = 0 is measured at E = 127 only)."""
+    differently (none), or a power of two below 1 (v(0) = 0 is measured at E = 127 only)."""
     x &= 0xFFFFFFFF
     E, m = (x >> 23) & 0xFF, x & 0x7FFFFF
     if x >> 31 or E in (0, 255):
