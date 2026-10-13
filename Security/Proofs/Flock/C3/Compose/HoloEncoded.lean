@@ -120,10 +120,8 @@ theorem holoSelOne_rep {ish : RecVStar.Inner} {tbl s : String} {rs : Array Sched
 theorem repName_ne (t : String) : (HoloStream.rep 0).name t ≠ (HoloStream.rep 1).name t := by
   intro h
   have h := congrArg String.toList h
-  simp only [HoloStream.name, String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h <;>
-    first
-    | exact absurd (List.append_cancel_left (List.append_cancel_left h)) (by decide)
-    | exact absurd h (by decide)
+  simp only [HoloStream.name, String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h
+  exact absurd h (by decide)
 
 /-- **`holoStreams`' order finds rep `i` by its name**: rep 0's and rep 1's streams first, the name rep `i`'s
 (`repName_ne`). -/
