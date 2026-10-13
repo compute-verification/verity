@@ -345,6 +345,14 @@ def test_a_rank_replays_its_bundle_with_the_commits_seed_against_its_own_shards(
     assert stubbed["load"][0]["programs"] == {"0": "/here/r0", "1": "/here/r1"} and stubbed["load"][1] == 0
 
 
+def test_the_ranks_one_process_replays_share_one_checkpoint_index(deferred, stubbed, monkeypatch):
+    built, opened, stub = [], [], CPU.open_weights
+    monkeypatch.setattr(WR, "CheckpointIndex", lambda *a, **k: built.append(object()) or built[-1])
+    monkeypatch.setattr(CPU, "open_weights", lambda bdir, tree, root, ck, **k: opened.append(ck) or stub(bdir, tree, root, ck, **k))
+    assert TPR.main(TPR.Options(commit_out=str(deferred.out), checkpoint_dir="/ck")) == 0
+    assert len(built) == 1 and opened == built * WORLD
+
+
 def test_a_replay_that_cannot_run_is_not_evaluated_and_fails_the_rank(deferred, stubbed, monkeypatch):
     monkeypatch.setattr(RR, "load", lambda *a: (_ for _ in ()).throw(RuntimeError("rank 0: REFUSED (not the Program of record): r0: dddd")))
     assert TPR.main(TPR.Options(commit_out=str(deferred.out), checkpoint_dir="/ck")) == 3
