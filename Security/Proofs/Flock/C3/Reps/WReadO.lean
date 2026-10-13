@@ -6,9 +6,9 @@ import Proofs.Flock.C3.Opening.Session
 # R's opening's `w` read off the layers: `wReadO`, and each part's `OpeningZeroAtL` at it
 
 As `wRead` reads `rep₀`'s `w` off the `rec-residuals` parts, `wReadO` reads R's opening's off its `rec-opening` parts
-(`RecOpening.part`, `RecResiduals.groups` of the opening's S): element `i`'s bit `b` is copy 0's at column `128 a + b` of
-the unit of a part `p` holding it at position `a` of its row ports, all 128 of whose columns a computed row reads and a
-row-port bit keys (`WLocO`, one chosen by `wLocO`), and 0 where no part has it so.
+(`RecOpening.part`, `RecResiduals.groups` of the opening's S): element `i`'s bit `b` is copy 0's at
+column `128 a + b` of the unit of a part `p` holding it at position `a` of its row ports, all 128 of whose columns a
+computed row reads and a row-port bit keys (`WLocO`, one chosen by `wLocO`), and 0 where no part has it so.
 
 * `partsOfO`, `wIOfO`, `nsOfO`, `nvOfO`, `rowColOfO`: the opening's parts, as `partsOf` … `rowColOf` are V*'s algebra's;
   `structureOf_nwO`, `part_nwO`: the row ports' elements are w's `nw`.
@@ -275,7 +275,7 @@ running sums as terms, `RecOpening.accTerms`, and a part holding a residual hold
 **Some part holds each running sum's element**: `acc0 r` and `acc1 r` (`r < 2`) are each element `e` of w at some
 position of some part's row ports. -/
 def AccHeldO (sh : Flock.Shape) (gs : Array (Array ℕ × Array ℕ × Array ℕ)) : Prop :=
-  ∀ r < 2, ∀ k : Flock.RecAlgebra.Key, (k = .acc0 r ∨ k = .acc1 r) → ∃ p e q, ∃ _ : p < gs.size,
+  ∀ r < 2, ∀ k : Flock.RecAlgebra.Key, (k = .acc0 r ∨ k = .acc1 r) → ∃ (p e q : ℕ) (_ : p < gs.size),
     Flock.RecOpening.wi sh k = some e ∧ (wIdx (Flock.RecOpening.portSizes sh) gs[p].2.1)[q]? = some e
 
 /-- **`SessionAt` at `wReadO`**: R's opening in V*'s sessions at one `w` (`SessionAt`), each part `p` of the groups `gs`
