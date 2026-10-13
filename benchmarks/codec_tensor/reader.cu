@@ -801,9 +801,11 @@ struct Chain {
 __device__ Chain g_chain;
 __device__ Consts g_stage;
 
-__device__ void be_load(const uint8_t *b, u64 *w, int n) {
-  for (int i = 0; i < n; ++i) {
+__device__ __forceinline__ void be_load(const uint8_t *b, u64 *w) {
+#pragma unroll
+  for (int i = 0; i < 16; ++i) {
     u64 v = 0;
+#pragma unroll
     for (int k = 0; k < 8; ++k) v = v << 8 | b[8 * i + k];
     w[i] = v;
   }
@@ -815,26 +817,37 @@ __device__ void sha512_bytes(uint8_t *m, int n, u64 (&s)[8], uint8_t *out) {
     m[n] = 0x80;
     for (int k = 0; k < 8; ++k) m[128 * nb - 1 - k] = (uint8_t)((u64)n * 8 >> (8 * k));
   }
+#pragma unroll
   for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
   for (int b = 0; b < nb; ++b) {
     u64 w[16];
-    be_load(m + 128 * b, w, 16);
+    be_load(m + 128 * b, w);
     sha512_compress(s, w);
   }
   if (out)
+#pragma unroll
     for (int i = 0; i < 64; ++i) out[i] = (uint8_t)(s[i / 8] >> (56 - 8 * (i % 8)));
 }
 
+constexpr int CONST_WORDS = sizeof(Consts) / 8;
+static_assert(sizeof(Consts) % 8 == 0, "Consts is whole u64 words");
+
+// The pass's constants are made in shared memory (the messages too, so nothing goes to a stack) from g_stage's
+// seed-free ones, and stored back whole, a warp's stores whole sectors.
 __global__ void __launch_bounds__(NODE_LEVELS) chain_kernel(const uint8_t *__restrict__ seed) {
-  __shared__ uint8_t node[128];
+  __shared__ Consts sc;
+  __shared__ uint8_t m[256], d[64];
+  u64 *sw = reinterpret_cast<u64 *>(&sc), *gw = reinterpret_cast<u64 *>(&g_stage);
+  for (int i = threadIdx.x; i < CONST_WORDS; i += NODE_LEVELS) sw[i] = gw[i];
+  __syncthreads();
   const Chain &c = g_chain;
   if (threadIdx.x == 0) {
-    uint8_t m[256], d[64];
     u64 s[8];
     for (int i = 0; i < 256; ++i) m[i] = i < 128 ? c.receipt[i] : 0;
     for (int i = 0; i < 64; ++i) m[c.receipt_at + i] = seed[i];
     sha512_bytes(m, -1, s, nullptr);
-    for (int i = 0; i < 8; ++i) g_stage.receipt_mid[i] = s[i];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) sc.receipt_mid[i] = s[i];
     for (int i = 0; i < 256; ++i) m[i] = c.binding[i];
     for (int i = 0; i < 64; ++i) m[c.binding_at + i] = seed[i];
     sha512_bytes(m, c.binding_len, s, d);
@@ -843,24 +856,28 @@ __global__ void __launch_bounds__(NODE_LEVELS) chain_kernel(const uint8_t *__res
     sha512_bytes(m, c.domain_len, s, d);   // the domain id
     for (int t = 0; t < 3; ++t) {
       for (int i = 0; i < 128; ++i) m[i] = c.heads[t][i];
-      for (int i = 0; i < 64; ++i) m[g_stage.head_len[t] - 64 + i] = d[i];
-      be_load(m, g_stage.head[t], 16);
-      if (t == HEAD_NODE)
-        for (int i = 0; i < 128; ++i) node[i] = i < NODE_HEAD ? m[i] : 0;
+      for (int i = 0; i < 64; ++i) m[sc.head_len[t] - 64 + i] = d[i];
+      be_load(m, sc.head[t]);
     }
-    for (int i = 0; i < 17; ++i) g_stage.salt_block[i] = c.salt_block[i];
+    for (int i = 0; i < 17; ++i) sc.salt_block[i] = c.salt_block[i];
     for (int i = 0; i < 64; ++i) {
       const int p = c.salt_at + i;
-      g_stage.salt_block[p / 8] |= (u64)seed[i] << 8 * (p % 8);
+      sc.salt_block[p / 8] |= (u64)seed[i] << 8 * (p % 8);
     }
   }
   __syncthreads();
-  uint8_t first[128];
-  for (int i = 0; i < 128; ++i) first[i] = node[i];
-  first[NODE_HEAD + 7] = 1, first[NODE_HEAD + 8] = (uint8_t)threadIdx.x;
-  u64 s[8];
-  sha512_bytes(first, -1, s, nullptr);
-  for (int i = 0; i < 8; ++i) g_stage.node_mid[threadIdx.x][i] = s[i];
+  u64 w[16], s[8];   // level threadIdx.x's first block: the node head (zero past NODE_HEAD), u64be 1, then the level
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = sc.head[HEAD_NODE][i];
+  w[(NODE_HEAD + 7) / 8] |= 1ull << 8 * (7 - (NODE_HEAD + 7) % 8);
+  w[(NODE_HEAD + 8) / 8] |= (u64)threadIdx.x << 8 * (7 - (NODE_HEAD + 8) % 8);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  sha512_compress(s, w);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) sc.node_mid[threadIdx.x][i] = s[i];
+  __syncthreads();
+  for (int i = threadIdx.x; i < CONST_WORDS; i += NODE_LEVELS) gw[i] = sw[i];
 }
 
 void midstate(const uint8_t *block, u64 *out) {
