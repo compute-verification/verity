@@ -90,8 +90,8 @@ theorem encardAcceptedObservationsLe : EncardAcceptedObservationsLe := by
   by_cases hb : ∃ o x c e a, AcceptedRun cfg key device frames op linkOf o x c e a ∧
       ((∃ y ∈ runStrings x (device x) c e, ∃ z ∈ runStrings x (device x) c e, y ≠ z ∧
           Flock.Sha512.hash y = Flock.Sha512.hash z) ∨
-        ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧ LmsVerifies (deviceParams x) m r.certificate.signature ∧
-          ¬ Signed (device x) m)
+        ∃ r ∈ c.records.toList, ∃ m, certMessage x.issuer.session r = some m ∧
+          LmsVerifies (deviceParams x) m r.certificate.signature ∧ ¬ Signed x.issuer.session (device x) m)
   · exact Or.inr hb
   refine Or.inl (le_trans (Set.encard_le_encard ?_)
     (NetTiming.encard_accSeqs_le_constantRate (S := cfg.egress.allocation) cfg.egress.buckets cfg.windows

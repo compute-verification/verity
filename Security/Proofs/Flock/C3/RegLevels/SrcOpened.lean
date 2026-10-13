@@ -7,12 +7,14 @@ import Proofs.Flock.VBridge.Family.Opened
 `levelTie_of_run` asks that every consistency check of R's opening run pass against the proof's cap (`Opened`). G
 proves it at V*'s plain openings (`openedAllAt_plain`) by climbing each `rec-open` unit, read with `keyProg_parse` at
 the name `RecOpen.params` parses. R's openings are `rec-open-stacked/l<LANES>-h<H>` units, a name `RecOpen.params` does
-not parse, so the climb here is `decode_recOpen`'s, from the unit facts `OpensAt` bundles (`SessionAt` (c)).
+not parse, so the climb here is `decode_recOpen`'s, at the copy's own row and sibling columns (`decode_recOpenCols`).
 
-* `OpensTopAt`: `OpensAt` at a given depth `H`, position `pos` (the `dirs` registered, `RecCoins.checkStackedLevel`'s
-  `dirsRow`) and siblings `ss`, with the climb's 512 output columns registered as the node `top` (a
-  `rec-top-stacked-L<ℓ>` read). It gives `OpensAt` (`opensAt_of_opensTop`), and the climb from the row's plain leaf
-  is `top` (`climb_of_opensTop`).
+* `OpensTopAt`: the unit facts `OpensAt` bundles (`SessionAt` (c)) at a given depth `H`, position `pos` (the `dirs`
+  registered, `RecCoins.checkStackedLevel`'s `dirsRow`) and siblings `ss`, with the row and the siblings in the copy's
+  own input columns, each an input wire of the unit (how R's map reads them, `readMaps`: R's units register neither),
+  and the climb's 512 output columns registered as the node `top` (a `rec-top-stacked-L<ℓ>` read). Those columns are
+  `fill`'s (`colsHold_fill_of_io`), so `decode_recOpen`'s argument holds there (`decode_recOpenCols`), and the climb
+  from the row's plain leaf is `top` (`climb_of_opensTop`).
 * `opened_of_climbs`: `Opened` at every context of a run whose contexts are its levels in order (`ConssAt`), from the
   proof's openings and caps, each query's climb to its cap entry, and the messages' consistency sums.
 * `opened_of_units`: the same from R's units in V*'s sessions (`OpensTopAt`), at the messages w holds (`decodedO`) with
@@ -57,10 +59,12 @@ section Copy
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **Copy `j` of unit `u` opens row `r` at position `pos` through the siblings `ss` to the node `top`**: `OpensAt`'s
-facts at the depth `H`, with the `dirs` columns registered as `pos`'s bits (`RecCoins.checkStackedLevel` registers
-`dirsRow pos[j] H`) and the `aux` columns as `ss`, and the climb's 512 output columns registered as `top`'s bits (the
-`rec-top-stacked-L<ℓ>` read of R's level node). -/
+/-- **Copy `j` of unit `u` opens row `r` at position `pos` through the siblings `ss` to the node `top`**: the unit is
+`recOpenLaid`'s at the depth `H`; the copy's own input columns hold the row and the siblings in the layer (how R's map
+reads them, `readMaps`; R's units register neither), each an input wire of the unit; `acc`, the coefficients and the
+`dirs` columns are registered, the last as `pos`'s bits (`RecCoins.checkStackedLevel` registers `dirsRow pos[j] H`);
+and the climb's 512 output columns are registered as `top`'s bits (the `rec-top-stacked-L<ℓ>` read of R's level
+node). -/
 def OpensTopAt (bits : Fin (Layout.keyN c hU nv) → Bool) (u : Fin nv) (j LANES : ℕ) (r a cf A : Array F128)
     (H pos : ℕ) (ss : List ByteArray) (top : ByteArray) : Prop :=
   ∃ (hj : j < c.upv), bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true ∧
@@ -71,10 +75,12 @@ def OpensTopAt (bits : Fin (Layout.keyN c hU nv) → Bool) (u : Fin nv) (j LANES
     r.size = LANES ∧ a.size = 2 ∧ ss.length = H ∧
     p.row = 8 * (MerkleScheme.rowBytes r).size ∧ 512 * H ≤ p.aux ∧
     p.acc = 8 * (MerkleScheme.rowBytes a ++ rest).size ∧ p.coef = 8 * (MerkleScheme.rowBytes cf).size ∧ H ≤ p.dirs ∧
-    (∀ t < 8 * (MerkleScheme.rowBytes r).size,
-      RegBit zo u j (0 + t) (bitL (MerkleScheme.rowBytes r).data.toList t)) ∧
+    (∀ col < p.row + 512 * H, col < (Rows.ofNet hU).nIn ∧ ∀ (hc : col < (Rows.ofNet hU).w),
+      (keyInst hU nv (Layout.outsOf c hU nv) u).wire ((Rows.ofNet hU).stackCol c.upv hj ⟨col, hc⟩) ∈
+        ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u) ∧
+    ColsHold (copyVal (keyInst hU nv (Layout.outsOf c hU nv) u) bits hj) 0 (MerkleScheme.rowBytes r) ∧
     (∀ i (hi : i < ss.length), ss[i].size = 64 ∧
-      ∀ t < 8 * ss[i].size, RegBit zo u j (p.row + 512 * i + t) (bitL ss[i].data.toList t)) ∧
+      ColsHold (copyVal (keyInst hU nv (Layout.outsOf c hU nv) u) bits hj) (p.row + 512 * i) ss[i]) ∧
     (∀ t < 8 * (MerkleScheme.rowBytes a ++ rest).size,
       RegBit zo u j (p.row + p.aux + t) (bitL (MerkleScheme.rowBytes a ++ rest).data.toList t)) ∧
     (∀ t < 8 * (MerkleScheme.rowBytes cf).size,
@@ -85,25 +91,77 @@ def OpensTopAt (bits : Fin (Layout.keyN c hU nv) → Bool) (u : Fin nv) (j LANES
     top.size = 64 ∧ ∀ t < 512, RegOut zo u hj
       (Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits + t) (bitL top.data.toList t)
 
-theorem opensAt_of_opensTop {bits : Fin (Layout.keyN c hU nv) → Bool} {u : Fin nv} {j LANES H pos : ℕ}
-    {r a cf A : Array F128} {ss : List ByteArray} {top : ByteArray}
-    (h : OpensTopAt zo bits u j LANES r a cf A H pos ss top) : OpensAt zo bits u j LANES r a cf A := by
-  obtain ⟨hj, hone, ms, hms, p, outBits, name, rest, hH, hl, hu, hout, hr, ha, hss, hrowN, hauxN, haccN, hcoefN,
-    hdirsN, hrow, haux, hacc, hcoef, hdir, haout, -⟩ := h
-  exact ⟨hj, hone, ms, hms, H, p, outBits, name, rest, pos, ss, hH, hl, hu, hout, hr, ha, hss, hrowN, hauxN, haccN,
-    hcoefN, hdirsN, hrow, haux, hacc, hcoef, hdir, haout⟩
+/-- **A unit's input wires hold in `fill` what they hold in the layer** (`fill_io`): where copy `j`'s columns from
+`base` hold `B` in a layer agreeing with the registrant, each an input wire of unit `u`, they hold `B` in `fill`. -/
+theorem colsHold_fill_of_io {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.RegAgree bits) {u : Fin nv} {j : ℕ}
+    (hj : j < c.upv) {base : ℕ} {B : ByteArray}
+    (hio : ∀ t < 8 * B.size, base + t < (Rows.ofNet hU).nIn ∧ ∀ (hc : base + t < (Rows.ofNet hU).w),
+      (keyInst hU nv (Layout.outsOf c hU nv) u).wire ((Rows.ofNet hU).stackCol c.upv hj ⟨base + t, hc⟩) ∈
+        ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u)
+    (h : ColsHold (copyVal (keyInst hU nv (Layout.outsOf c hU nv) u) bits hj) base B) :
+    ColsHold (copyVal (keyInst hU nv (Layout.outsOf c hU nv) u) (Decode.fill zo bits) hj) base B := by
+  intro t ht
+  obtain ⟨hin, hw⟩ := hio t ht
+  refine Eq.trans ?_ (h t ht)
+  refine (copyVal_input _ _ hj hin).trans (Eq.trans ?_ (copyVal_input _ _ hj hin).symm)
+  exact Decode.fill_io zo hA (hw _)
 
-/-- **An opening's climb is its registered node** (`decode_recOpen`): in a `Good` layer, the copy's first 512 output
-columns hold the climb under SHA-512 from the plain leaf of its row through `ss` at `pos`, and they are registered as
-`top`'s bits. -/
+/-- **`decode_recOpen` at the copy's own row and sibling columns**: as `decode_recOpen`, with the row's and the
+siblings' columns holding them in the layer itself, each an input wire of the unit (so in `fill` too,
+`colsHold_fill_of_io`), in place of `RegBit`; `acc`, the coefficients and the position's bits are registered as
+there. -/
+theorem decode_recOpenCols {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.RegAgree bits) (u : Fin nv) {j : ℕ}
+    (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true)
+    (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
+    (p : Ports) (outBits : Array ℕ) {name : String}
+    (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit)
+    (hu : c.unit.unitLog ≤ 32) (hout : (recOpenOuts LANES H p).length ≤ outBits.foldl (· + ·) 0)
+    (r a cf : Array F128) (rest : ByteArray) (idx : ℕ) (ss : List ByteArray)
+    (hr : r.size = LANES) (ha : a.size = 2) (hss : ss.length = H)
+    (hrowN : p.row = 8 * (MerkleScheme.rowBytes r).size) (hauxN : 512 * H ≤ p.aux)
+    (haccN : p.acc = 8 * (MerkleScheme.rowBytes a ++ rest).size)
+    (hcoefN : p.coef = 8 * (MerkleScheme.rowBytes cf).size) (hdirsN : H ≤ p.dirs)
+    (hio : ∀ col < p.row + 512 * H, col < (Rows.ofNet hU).nIn ∧ ∀ (hc : col < (Rows.ofNet hU).w),
+      (keyInst hU nv (Layout.outsOf c hU nv) u).wire ((Rows.ofNet hU).stackCol c.upv hj ⟨col, hc⟩) ∈
+        ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u)
+    (hrow : ColsHold (copyVal (keyInst hU nv (Layout.outsOf c hU nv) u) bits hj) 0 (MerkleScheme.rowBytes r))
+    (haux : ∀ i (hi : i < ss.length), ss[i].size = 64 ∧
+      ColsHold (copyVal (keyInst hU nv (Layout.outsOf c hU nv) u) bits hj) (p.row + 512 * i) ss[i])
+    (hacc : ∀ t < 8 * (MerkleScheme.rowBytes a ++ rest).size,
+      RegBit zo u j (p.row + p.aux + t) (bitL (MerkleScheme.rowBytes a ++ rest).data.toList t))
+    (hcoef : ∀ t < 8 * (MerkleScheme.rowBytes cf).size,
+      RegBit zo u j (p.row + p.aux + p.acc + t) (bitL (MerkleScheme.rowBytes cf).data.toList t))
+    (hdir : ∀ h < H, RegBit zo u j (p.row + p.aux + p.acc + p.coef + h) (idx.testBit h)) :
+    ColsHold (copyVal (keyInst hU nv (Layout.outsOf c hU nv) u) bits hj)
+      (Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits)
+      ((climb ms (Sha512.hash (MerkleScheme.rowBytes r)) idx ss ++ ⟨Array.replicate 64 0⟩) ++
+        (MerkleScheme.rowBytes #[FlockVBridge.consTerm LANES r a cf 0, FlockVBridge.consTerm LANES r a cf 1] ++
+          rest)) := by
+  have hone' : Decode.fill zo bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true := by
+    rw [← keyInst_one hU nv (Layout.outsOf c hU nv) u, Decode.fill_one zo hA _ hj, keyInst_one]
+    exact hone
+  have hO := keyProg_recOpen hU nv (Layout.outsOf c hU nv) (Decode.fill zo bits) u hj hone' ms hms LANES H hH p
+    outBits hl hu hout r a cf rest idx ss hr ha hss hrowN hauxN haccN hcoefN hdirsN
+    (colsHold_fill_of_io zo hA hj (fun t ht => hio _ (by omega)) hrow)
+    (fun i hi => ⟨(haux i hi).1, colsHold_fill_of_io zo hA hj
+      (fun t ht => hio _ (by have := (haux i hi).1; omega)) (haux i hi).2⟩)
+    (Decode.colsHold_fill zo bits hj _ _ hacc) (Decode.colsHold_fill zo bits hj _ _ hcoef)
+    (fun h hh => Decode.copyVal_regBit zo bits hj (hdir h hh))
+  refine Decode.colsHold_of_fill zo hA hj ?_ hO
+  rw [Layout.ofNet_nIn_eq, inWords_recOpen hl]
+  exact Decode.inRows_le_outStart _ _ _
+
+/-- **An opening's climb is its registered node** (`decode_recOpenCols`): in a `Good` layer, the copy's first 512
+output columns hold the climb under SHA-512 from the plain leaf of its row through `ss` at `pos`, and they are
+registered as `top`'s bits. -/
 theorem climb_of_opensTop {bits : Fin (Layout.keyN c hU nv) → Bool} (hG : zo.Good bits) {u : Fin nv}
     {j LANES H pos : ℕ} {r a cf A : Array F128} {ss : List ByteArray} {top : ByteArray}
     (h : OpensTopAt zo bits u j LANES r a cf A H pos ss top) (msId : String) :
     climb (MerkleScheme.sha512 msId) (Sha512.hash (MerkleScheme.rowBytes r)) pos ss = top := by
   obtain ⟨hj, hone, ms, hms, p, outBits, name, rest, hH, hl, hu, hout, hr, ha, hss, hrowN, hauxN, haccN, hcoefN,
-    hdirsN, hrow, haux, hacc, hcoef, hdir, -, htop, hT⟩ := h
-  have hO := Decode.decode_recOpen zo hG.2 u hj hone ms hms LANES H hH p outBits hl hu hout r a cf rest pos ss hr ha
-    hss hrowN hauxN haccN hcoefN hdirsN hrow haux hacc hcoef hdir
+    hdirsN, hio, hrow, haux, hacc, hcoef, hdir, -, htop, hT⟩ := h
+  have hO := decode_recOpenCols zo hG.2 u hj hone ms hms LANES H hH p outBits hl hu hout r a cf rest pos ss hr ha
+    hss hrowN hauxN haccN hcoefN hdirsN hio hrow haux hacc hcoef hdir
   have hnIn : (Rows.ofNet hU).nIn ≤
       Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits := by
     rw [Layout.ofNet_nIn_eq, inWords_recOpen hl]

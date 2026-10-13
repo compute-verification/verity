@@ -24,8 +24,8 @@ every draw `S` at which `verify --zk` sets every one of the session's `J = nTab 
 registration `R`, the joint view of the session's plan `planZHJ dj y₀` (the plan `EndToEndHidden` is sound on), table
 `j` at its executable statement, is within `Σ_j 2·|Hid_j|·δ_{K*}` of the per-table simulators' joint view, both ways
 (`ZkViewAtJ`): at any coin vector per table that the honest prover doesn't refuse (`CoinedSetup.Admits`), for any
-encoding of the joint view and any event on it, the real view at valid witnesses whose registered values are the public
-ones, and the simulators' at any witnesses, each table's prover randomness independent. `|Hid_j|` is the number of
+encoding of the joint view and any event on it, the real view at valid witnesses and the simulators' at any
+witnesses, each table's prover randomness independent. `|Hid_j|` is the number of
 table `j`'s leaves the final message doesn't open, and the prover `P` is any prover of Ligerito's levels ≥ 1
 (`LigProver`).
 

@@ -1,5 +1,5 @@
 """The anchored inputs' anchors (`verity.core.protocols.pouw.circuit.anchors`): the verifier builds them, refuses a prover's that differ,
-and refuses a repeated call index in a window (the red team's X-SPC-72); a tile check's are public input regions, their
+and refuses a repeated call index in a window or across a salt's windows (the red team's X-SPC-72); a tile check's are public input regions, their
 values unpacked into whole words."""
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ import pouw_regions_vectors as RV
 from verity.ml.crypto.blake3 import blake3, keyed
 from verity.core.protocols.pouw.circuit import ncp2, pc4, pc8, traced_as
 from verity.core.protocols.pouw.circuit import reference as R
-from verity.core.protocols.pouw.circuit.anchors import ANCHORED, Anchors, Ledger, public_ports, region_bytes, region_words
+from verity.core.protocols.pouw.circuit.anchors import (ANCHORED, Anchors, Ledger, Receipt, SaltWindows, public_ports, region_bytes,
+                                                        region_words)
 from verity.core.protocols.pouw.protocol import DomainError
 
 SHAPE = ncp2.Shape(32, 64, 32)
@@ -176,3 +177,26 @@ def test_a_window_refuses_a_repeated_call_index():
     ledger.admit(Anchors(call.salt, call.forward + 1, call.layer, call.site, call.weight, tuple(call.rowids), tuple(call.colids)), SHAPE)
     with pytest.raises(DomainError):
         ledger.admit(_anchors(call), SHAPE)
+
+
+def test_a_salt_s_windows_share_no_call_index():
+    """A call's noise key reads the salt and its call index, so a call index names one call across every window of a
+    salt: a later window that lists one an earlier window listed is refused before its ledger opens, a window under
+    another salt is refused, and the next window's forwards start after the last one used."""
+    call = F.call(32, 64, 32)
+
+    def receipt(*forwards, salt=call.salt):
+        ans = [Anchors(salt, f, call.layer, call.site, call.weight, tuple(call.rowids), tuple(call.colids)) for f in forwards]
+        return Receipt(tuple((a, SHAPE, hashlib.sha512(repr(a).encode()).digest()) for a in ans))
+
+    windows = SaltWindows(call.salt)
+    assert windows.next_forward == 0
+    assert windows.open(receipt(0, 1)).key is not None and windows.next_forward == 2
+    with pytest.raises(DomainError, match=r"\(1, \d+\) is on an earlier window of this salt"):
+        windows.open(receipt(2, 1))
+    with pytest.raises(DomainError, match="another salt"):
+        windows.open(receipt(2, salt=bytes(32) if call.salt != bytes(32) else b"\x01" * 32))
+    assert windows.next_forward == 2
+    windows.open(receipt(2, 5))
+    assert windows.next_forward == 6
+    assert SaltWindows(bytes(32)).next_forward == 0
