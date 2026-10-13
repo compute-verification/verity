@@ -595,6 +595,7 @@ class Attention:
             P.receipts_sparse(self.lib, torch, self.rc_sk, self.sparse_tags, self.used, self.epoch, self.pool_slots,
                               self.nl, layer, self.st.words * self.st.wt.s // SR.BLOCK)
 
+    @torch.inference_mode()
     def finish_pass(self) -> None:
         """Compact the pending step's selected slots, configure its public plan, and commit all receipts.
 
