@@ -5,7 +5,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue land [--dry-run]                fast-forward `main` to the newest commit on `next` that passed `check`, push it
-    research queue eject PR --reason TEXT          keep the PR's current head out of `next`; a new push or ready mark re-admits it
+    research queue eject PR --reason TEXT [--by HANDLE]
+                                                   keep the PR's current head out of `next`; a new push or ready mark re-admits it;
+                                                   posted as HANDLE to @ci and the owner in the merge thread (exit 1 if it couldn't be)
     research queue ready PR (--on MACHINE | --local | --mark) [--by LANE]
                                                    the owner's word that the PR is ready at its current head (a new push needs it again),
                                                    once the quick tier passes there: as a run on MACHINE in a check slot
@@ -569,7 +571,7 @@ class Queue:
             self.save_state(state)
         return members, entries
 
-    def eject(self, pr: int, reason: str, by: str) -> None:
+    def eject(self, pr: int, reason: str, by: str) -> PR:
         self._clone()
         prs = {p.number: p for p in self.github.open_prs()}
         if pr not in prs:
@@ -587,6 +589,28 @@ class Queue:
                 raise QueueError(f"#{pr}'s withdrawn mark didn't reach the store's remote, so other queues may still admit it: {said}")
         self.notify(Entry(prs[pr]), "eject", f"ejected from `{self.branch}`: {reason}", state, False)
         self.save_state(state)
+        return prs[pr]
+
+    def tell_ejected(self, p: PR, reason: str, by: str, post: Callable[..., bool] | None = None) -> int:
+        """A hand ejection's notice, posted as ``by`` in the merge thread to `@ci` and the lane that owns ``p``: the handoff note
+        `notify` writes reaches no one from a VM that doesn't sync its notes, and only a handle's holder may post as it.  Drive's
+        own ejections are told by `Driver.refuse`.  1, with the text to send, when the post failed."""
+        from .drive import CI, _merge_thread, merge_thread_post
+
+        owner = self.handle(p)
+        to = tuple(dict.fromkeys((CI, *([f"@{owner}"] if owner else []))))
+        text = (f"{' '.join(to)} queue: #{p.number} at {p.head[:8]} is ejected from `{self.branch}` by {by}: {reason}. "
+                f"Fix it and re-mark it; the next sync rebuilds `{self.branch}` without it")
+        if self.shadow:
+            self.log(f"research queue: would tell {' '.join(to)}: {text} [shadow]")
+            return 0
+        if (post or merge_thread_post)(text, to, sender=by):
+            self.log(f"research queue: told {' '.join(to)} as @{by}: #{p.number} ejected")
+            return 0
+        print(f"research queue: #{p.number} is ejected, but posting its notice as @{by} failed, so no one was told. Send it as "
+              f"your own handle: research msg send --as HANDLE --thread {_merge_thread()} --to {' '.join(to)} --text {text!r}",
+              file=sys.stderr)
+        return 1
 
     # -- landing
 
@@ -659,7 +683,7 @@ class Queue:
         state["notified"].append(key)
         if os.environ.get("RESEARCH_NOTES_SYNC") == "1":
             subprocess.run([sys.executable, "-m", "research", "notes", "sync", "--path", f"lanes/{lane}"], capture_output=True)
-        self.log(f"research queue: told {owner}: {p}")
+        self.log(f"research queue: wrote {owner}'s handoff note: {p}")
 
     # -- status
 
@@ -1075,7 +1099,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
-                    help="eject, ready, judge: who ejects it (default merge-queue) or says it's ready (no default: the owner's lane), "
+                    help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
+                         "one holds, so the notice fails) or says it's ready (no default: the owner's lane), "
                          "default $RESEARCH_LANE")
     ap.add_argument("--shadow", action="store_true", help=f"build `{SHADOW_BRANCH}`, never push `main`, send no notices")
     ap.add_argument("--dry-run", action="store_true", help="sync/land/drive: decide and report, push and launch nothing, tell no one")
@@ -1165,9 +1190,9 @@ def main(argv: list[str]) -> int:
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
-        q.eject(a.pr, a.reason, a.by)
+        told = q.tell_ejected(q.eject(a.pr, a.reason, a.by), a.reason, a.by)
         q.sync()
-        return 0
+        return told
     except QueueError as e:
         print(f"research queue: {e}", file=sys.stderr)
         return 1
