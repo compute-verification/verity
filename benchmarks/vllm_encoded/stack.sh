@@ -67,5 +67,8 @@ case ${MODE:-paged} in
       tail -40 "$O/stack-write-gate.log"
     fi
     exit $rc ;;
+  probe)
+    "${LEASE[@]}" timeout 10m "$PY" $VE/fused_probe.py --wt-lib "$B/wt.so" --reader-lib "$B/reader.so" \
+      --paged-lib "$B/paged.so" --out "$O" > "$O/probe.log" 2>&1; r=$?; tail -20 "$O/probe.log"; exit $r ;;
   *) echo "unknown MODE ${MODE}"; exit 2 ;;
 esac
