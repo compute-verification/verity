@@ -92,7 +92,33 @@ theorem repIdxB_of_counted {S₀ : Model.Statement} {b : ValsSrc} {sh : Flock.Sh
     repIdxB S₀ b = coinRounds rs :=
   repIdxB_of_size hcl hrs hm hkl (t₄k_of_counted hc hs hn hd hk)
 
+/-- **`t₄k_of_counted` through `ProofOfVals`' coins**, at any rep unit's values `v`: the proof's record coins are the
+rep's rounds (`UnitProof.coins`), so the transcript's rounds are as many as the held stream's. -/
+theorem t₄k_of_coins {cs : InnerCommits} {rep : Array SchedRound} {s : String} {st : InnerStream}
+    {d : FlockVBridge.Compiled.RepData} {v : UnitVals}
+    (hc : RepRoundsCounted cs rep) (hs : cs.stream? s = some st)
+    (hn : (s.startsWith s!"{SPARSE}/" || s.startsWith s!"{STACKED}/") = false)
+    (hd : d.rounds = heldRounds (.ok cs) s) (hpc : d.rounds = v.t.rounds.map (·.coins))
+    (hk : v.t₄.k = v.t.rounds.size) : v.t₄.k = rep.size := by
+  rw [hk, ← heldRounds_size_of_counted hc hs hn, ← hd, hpc, Array.size_map]
+
+/-- **RepsDrawn (ii)'s count at the verifier's round-for-round check** (H's, in `checkCommitRounds` on
+`cursor/c3-n19-bridge-95d4`: every held stream but the sparse phases' and R's holds the reps' schedule's rounds, round
+for round). -/
+theorem repIdxB_of_rounds {S₀ : Model.Statement} {b : ValsSrc} {sh : Flock.Shape}
+    {d : FlockVBridge.Compiled.RepData} {m kLog claims : ℕ} {rs : Array SchedRound} {cs : InnerCommits} {s : String}
+    {st : InnerStream} (hcl : 0 < claims) (hrs : holoRepRounds m kLog claims = some rs) (hm : b.st.m = m)
+    (hkl : S₀.kLog = kLog)
+    (hr : ∀ st ∈ cs.streams, (st.name.startsWith s!"{SPARSE}/" || st.name.startsWith s!"{STACKED}/") = false →
+      st.coins.map (·.size) = rs.map (·.1))
+    (hs : cs.stream? s = some st) (hn : (s.startsWith s!"{SPARSE}/" || s.startsWith s!"{STACKED}/") = false)
+    (hd : d.rounds = heldRounds (.ok cs) s) (hk : b.t₄.k = (b.vals sh d).t.rounds.size) :
+    repIdxB S₀ b = coinRounds rs :=
+  repIdxB_of_counted hcl hrs hm hkl (repRoundsCounted_of_rounds hr) hs hn hd hk
+
 #print axioms t₄k_of_counted
 #print axioms repIdxB_of_counted
+#print axioms t₄k_of_coins
+#print axioms repIdxB_of_rounds
 
 end FlockC3.Reps
