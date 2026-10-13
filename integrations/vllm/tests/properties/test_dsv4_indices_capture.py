@@ -227,14 +227,18 @@ def test_the_references_agree_with_the_twins(observed) -> None:
     """The reference Definitions on one token of each job kind (the first served token, an edge token at each int32 end, a c128a
     row at INT64_MAX) agree with the twins on every word."""
     for case, ob in observed.items():
+        seen = set()
         for j in ob.jobs:
             a = X._load(j["paths"])
             pos = np.asarray(a["pos"]) if j["kind"] == "c128a" else T.s32(a["pos"])
             lo, hi = j["rows"]
             picks = [i for i in range(lo, hi) if int(pos[i]) in (0, X.I32_MAX - 1, X.I32_MIN + 127, X.I64_MAX)]
-            for i in picks[:2]:
+            for i in picks[:4]:
                 r = X.compare({**j, "rows": [i, i + 1], "ref_every": 1})
                 assert r["reference"] == 1 and r["twin_mismatch"] == 0 and r["mismatch"] == 0, (case, j["case"], int(pos[i]))
+                seen.add((j["kind"], int(pos[i])))
+        want = {("combine", p) for p in (0, X.I32_MAX - 1, X.I32_MIN + 127)}
+        assert want | ({("c128a", 0), ("c128a", X.I64_MAX)} if X.CASES_L[case].ratio == 128 else set()) <= seen, seen
 
 
 def test_the_jobs_reference_every_instance_or_a_sample(observed, tmp_path) -> None:
