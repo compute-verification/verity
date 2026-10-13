@@ -14,6 +14,7 @@ from typing import Callable
 from verity.ml.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
+from verity_vllm.program.registry import cublas_bf16 as _cublas_bf16, ll_bf16 as _ll_bf16
 from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm
 from verity_vllm.program.registry import boolean_rope as _rope
 from verity_vllm.program.registry import sparse_mla as _sparse_mla, sparse_mla_split as _sparse_mla_split
@@ -433,6 +434,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
            "dsa_q_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
+           "cublas_linear": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
+           "batched_gemm": lambda B, K, N, DOT: ir_bind(_cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=DOT),
+           "ll_bf16_dotprod": lambda N, K, BS, VEC, FMA:
+               ir_bind(_ll_bf16.LlBf16DotprodGemmWord, N=N, K=K, BS=BS, VEC=VEC, FMA=FMA),
+           "ll_bf16_splitk": lambda N, K, SPLIT_K, TILE_K, WARPS, DOT:
+               ir_bind(_ll_bf16.LlBf16SplitKGemmWord, N=N, K=K, SPLIT_K=SPLIT_K, TILE_K=TILE_K, WARPS=WARPS, DOT=DOT),
            "sparse_mla": lambda T, NH, DR, DV, BN, DOT, INV, SM_SCALE:
                ir_bind(_sparse_mla.SparseMla, T=T, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
            "sparse_mla_split": lambda T, NS, NH, DR, DV, BN, DOT, INV, SM_SCALE:
