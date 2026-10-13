@@ -14,6 +14,7 @@ import Proofs.Accounting.RateAudit.Named
 import Proofs.Accounting.RateAudit.Session
 import Proofs.Accounting.RateAudit.Deployed
 import Proofs.Accounting.RateAudit.DeployedRun
+import Proofs.Accounting.RateAudit.DeployedRelay
 import Proofs.Accounting.RateAudit.SketchHonest
 import Proofs.Accounting.RateAudit.SketchInteractive
 
@@ -45,4 +46,5 @@ guarantee over a session of ground, chained windows of devices with partial comp
 (`Accounting.SecurityProofs.RemoteSessionConservation`, at the deployed parameters
 `RemoteSessionConservationDeployed`), and the same session as a run of the remote audit, meeting its routes
 (`Accounting.SecurityProofs.RemoteSessionRoutes`) and conserving over the horizon and in each window at the same `γ`
-(`RemoteSessionRunConservation`, `RemoteWindowRunConservation`). -/
+(`RemoteSessionRunConservation`, `RemoteWindowRunConservation`), and all three with side sources that may relay
+receipts (`RemoteSessionConservationRelay`, `RemoteSessionRunConservationRelay`, `RemoteWindowRunConservationRelay`). -/

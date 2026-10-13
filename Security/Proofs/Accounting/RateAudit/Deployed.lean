@@ -540,23 +540,20 @@ theorem pr_unpaid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G)
           (fun C y => C.reads tier y.1 y.2.1 + P * slack < (C.correctAll y.1 y.2.1).card * b) _ (hε w))
     _ = (n : ℝ≥0∞) * ε := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- **The session's words, in counts**: every opening passes while the session's reads and `n·P` slacks fall short of
-`K + 1` words, or some window's reads and `P` slacks of `K_w + 1`, at most the draws' bound and `n·P·G·ε`. -/
-theorem pr_paid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X slack K Kw : ℕ)
-    (ε : ℝ≥0∞) (hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ X)
-    (hε : ∀ w η j ι c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
-        ∑ t, (((A.window w η).device j ι c).toInteractive X).tierReads tier t x.1 x.2.1 x.2.2 +
-            (((A.window w η).device j ι c).toInteractive X).rebuilt x.1 x.2.1 x.2.2 * b + slack <
-          ((((A.window w η).device j ι c).toInteractive X).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
+/-- **The session's words, in counts, from a per-window bound**: every opening passes while the session's reads and
+`n·P` slacks fall short of `K + 1` words, or some window's reads and `P` slacks of `K_w + 1`, at most the draws' bound
+and `n·ε`. -/
+theorem pr_paid_of_window {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (slack K Kw : ℕ)
+    (ε : ℝ≥0∞) (hε : ∀ w η, pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
+        (A.window w η).reads tier y.1 y.2.1 + P * slack < ((A.window w η).correctAll y.1 y.2.1).card * b) ≤ ε) :
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           (∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + n * (P * slack) < (K + 1) * b ∨
             ∃ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack < (Kw + 1) * b))
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
-        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + (n : ℝ≥0∞) * (P * (G * ε)) := by
+        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + (n : ℝ≥0∞) * ε := by
   have h₁ := pr_draws_le A K Kw
-  have h₂ := pr_unpaid_le A tier slack _ (fun w η =>
-    (A.window w η).pr_unpaid_draw_le tier X slack d ε (hX w η) (hε w η))
+  have h₂ := pr_unpaid_le A tier slack _ hε
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ h₂))
   obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
   · by_cases hD : ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
@@ -576,6 +573,22 @@ theorem pr_paid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (
     · exact Or.inl ⟨hall, hD⟩
     push Not at hD
     exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
+
+/-- **The session's words, in counts**: `pr_paid_of_window` at `pr_unpaid_draw_le`'s `P·G·ε` a window. -/
+theorem pr_paid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X slack K Kw : ℕ)
+    (ε : ℝ≥0∞) (hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ X)
+    (hε : ∀ w η j ι c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∑ t, (((A.window w η).device j ι c).toInteractive X).tierReads tier t x.1 x.2.1 x.2.2 +
+            (((A.window w η).device j ι c).toInteractive X).rebuilt x.1 x.2.1 x.2.2 * b + slack <
+          ((((A.window w η).device j ι c).toInteractive X).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
+    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
+          (∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + n * (P * slack) < (K + 1) * b ∨
+            ∃ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack < (Kw + 1) * b))
+      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
+        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + (n : ℝ≥0∞) * (P * (G * ε)) :=
+  pr_paid_of_window A tier slack K Kw _ (fun w η =>
+    (A.window w η).pr_unpaid_draw_le tier X slack d ε (hX w η) (hε w η))
 
 end DeployedSession
 
