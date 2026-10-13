@@ -589,9 +589,20 @@ def _selections(w: np.ndarray, n: np.ndarray, idx: np.ndarray, thr: np.ndarray |
     return np.where(s[:, 0] <= T, short, tight & fits).astype(np.int64)
 
 
+def _at_root(T: int, N: int, C: int):
+    """v4's chunks and final as Calls at a Definition's root (`topk_selection_calls`), as a served Program places them."""
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity_vllm.program.registry import boolean_dsa as BD
+
+    params, ret = bind(BD.DsaTopKSelectionV4, TOPK=T, N=N, C=C).signature()
+    return CompositeDefinition(f"DsaTopKAtRoot{T}x{N}x{C}", 1, (), lambda S: (tuple(params), ret),
+                               lambda B, S, *x: BD.topk_selection_calls(B.call, *x, T, N, C), register=False)
+
+
 def _threshold_agrees(T: int, N: int, Cs, cases, ir: int = 48, twins: int = 2000) -> np.ndarray:
     """v1 on ``cases`` is 1 exactly when v3 is 1 at some threshold class, and is v3 at `selection_threshold`; v4 at each chunk
-    width of ``Cs`` is v3 at every class (a row of len <= TOPK or past N at two thresholds, 0 and all ones).  v1 and v3 are
+    width of ``Cs``, and its chunks and final as Calls (`_at_root`), are v3 at every class (a row of len <= TOPK or past N at
+    two thresholds, 0 and all ones).  v1 and v3 are
     `_selections` here, checked against the IR oracle on ``ir`` instances spread over them and against the twins
     (`selection_ok`, `selection_ok_thr`, and `boolean_dsa`'s `chunk_ok` and `final_ok` composed) on ``twins``.  Returns v1."""
     from verity.ml.circuits import evaluation as E
@@ -612,12 +623,12 @@ def _threshold_agrees(T: int, N: int, Cs, cases, ir: int = 48, twins: int = 2000
     rep = np.repeat(np.arange(len(n)), [len(c) for c in cls])
     thr = np.array([t for c in cls for t in c], np.uint32)
     got1, got3 = _selections(w, n, idx), np.empty(len(rep), np.int64)
+    forms = [f for C in Cs for f in (bind(BD.DsaTopKSelectionV4, TOPK=T, N=N, C=C), _at_root(T, N, C))]
     for lo in range(0, len(rep), _BATCH):
         r = rep[lo:lo + _BATCH]
         args = (w[r], n[r], idx[r], thr[lo:lo + _BATCH])
         got3[lo:lo + _BATCH] = _selections(*args)
-        for C in Cs:
-            fn = bind(BD.DsaTopKSelectionV4, TOPK=T, N=N, C=C)
+        for fn in forms:
             assert np.array_equal(_bit(BS.evaluate_words(fn, *args)), got3[lo:lo + _BATCH]), (fn.id, lo)
     assert np.array_equal(np.bincount(rep, got3, len(n)) > 0, got1 == 1)
     best = np.array([D.selection_threshold(*c) for c in cases], np.uint32)
@@ -764,7 +775,8 @@ def test_threshold_twin_on_the_capture_rows() -> None:
 
 def test_v4_is_v3_on_bits_and_its_chunks_are_units_at_the_root() -> None:
     """The switch maps v3 to v4 at the served chunk (v1 still to v2); under `Q_word` and `Q_call` one Call of v4 is one unit, and
-    v4's body at a Program's root (`topk_selection_calls`) is one unit per chunk and the final."""
+    its chunks and final at a Program's root (`topk_selection_calls`) one unit each; traced as one circuit, v4 has fewer ANDs
+    than its chunks and final apart, by what they share."""
     from verity.ml.circuits import partition_object as PO
     from verity.ml.circuits.boolean import trace as TR
     from verity.ml.circuits.defs import CompositeDefinition
@@ -780,11 +792,15 @@ def test_v4_is_v3_on_bits_and_its_chunks_are_units_at_the_root() -> None:
     params, ret = v4.signature()
     one = Program(CompositeDefinition("OneCallOfV4", 1, (), lambda S: (tuple(params), ret), lambda B, S, *x: B.call(v4, *x),
                                       register=False))
+    root = Program(_at_root(16, 64, 16))
     for q in (PO.query(), PO.call_query()):
         assert PO.evaluate(one, q).population == 1
-        assert PO.evaluate(Program(v4), q).population == 5
-    assert [fn.id for _k, fn in PO.calls(Program(v4))] == [f"DsaTopKChunk_v1{{TOPK=16,N=64,C=16,H={h}}}" for h in range(4)] + [
+        assert PO.evaluate(root, q).population == 5
+    calls = [fn for _k, fn in PO.calls(root)]
+    assert [fn.id for fn in calls] == [f"DsaTopKChunk_v1{{TOPK=16,N=64,C=16,H={h}}}" for h in range(4)] + [
         "DsaTopKFinal_v1{TOPK=16,N=64,C=16}"]
+    ands = lambda fn: fn.defn.traced(fn).counts["and"]  # noqa: E731
+    assert ands(v4) < sum(map(ands, calls))
 
 
 #: v4's chunks at the served statics on the capture's rows (``VERITY_VLLM_DSA_SERVED``): GLM-5.3's top-2048 of 131,072 keys in 8

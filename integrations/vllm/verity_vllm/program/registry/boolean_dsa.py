@@ -7,8 +7,9 @@ Definitions (the bodies are `dsa`'s, written once over `dsa.Ops`), so each one's
     DsaMqaLogit_v2{H,D}, DsaMqaLogits_v2{N,H,D}
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
     DsaTopKSelection_v2{TOPK,N}                         traced at its statics: a decoder per slot, unsigned keys
-    DsaTopKSelection_v4{TOPK,N,C}                       DsaTopKSelection_v3{TOPK,N}: a DsaTopKChunk_v1{TOPK,N,C,H} per chunk of
-                                                        C positions, then DsaTopKFinal_v1{TOPK,N,C}
+    DsaTopKSelection_v4{TOPK,N,C}                       DsaTopKSelection_v3{TOPK,N}, traced: DsaTopKChunk_v1{TOPK,N,C,H}'s check
+                                                        per chunk of C positions, then DsaTopKFinal_v1{TOPK,N,C}'s; at the served
+                                                        statics a Program calls those at its root (`topk_selection_calls`)
 
 The callees are core's Boolean FP32 pieces (`verity.ml.circuits.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
@@ -516,23 +517,31 @@ DsaTopKFinal = SB.traced_family(
 
 
 def topk_selection_calls(call, logits: Coll, n: Coll, idx: Coll, thr: Coll, TOPK: int, N: int, C: int = CHUNK) -> Coll:
-    """``DsaTopKSelection_v4{TOPK,N,C}`` as its Calls: chunk H's `DsaTopKChunk_v1{TOPK,N,C,H}` on its logits and the row's len,
-    idx and thr, then `DsaTopKFinal_v1` on their bits.  ``call(fn, *args)`` emits one (``Builder.call``).  At a Program's root
-    each chunk is a unit of its own under `Q_word` and `Q_call`; one Call of v4 is one unit (its body's single output bit
-    reads every gate).  Returns the bit."""
+    """``DsaTopKSelection_v4{TOPK,N,C}``'s checks as Calls: chunk H's `DsaTopKChunk_v1{TOPK,N,C,H}` on its logits and the row's
+    len, idx and thr, then `DsaTopKFinal_v1` on their bits.  ``call(fn, *args)`` emits one (``Builder.call``).  At a Program's
+    root each is a unit of its own under `Q_word` and `Q_call`, each recomputing what it reads of idx, len and thr; one Call of
+    v4 is one unit (its single output bit reads every gate), past `K_MAX` at the served statics.  Returns the bit."""
     K = -(-N // C)
     ok = [call(bind(DsaTopKChunk, TOPK=TOPK, N=N, C=C, H=h), logits[h * C:min(N, (h + 1) * C)], n, idx, thr) for h in range(K)]
     return call(bind(DsaTopKFinal, TOPK=TOPK, N=N, C=C), Coll(Array(K, BIT), concat([o.refs for o in ok])), n, idx)
 
 
-def _selection_v4(B, S, logits, n, idx, thr):
-    return topk_selection_calls(B.call, logits, n, idx, thr, S.TOPK, S.N, S.C)
+def topk_selection(C, S, *els):
+    """`DsaTopKSelection_v4{TOPK,N,C}`'s bit: each chunk's `topk_chunk` and then `topk_final` on one builder, so what two of them
+    compute alike (idx's NOTs, the in-chunk tests' common ANDs, key(thr), the first sort layer's low carries) is one gate."""
+    check_chunk_statics(S.TOPK, S.N, S.C)
+    T, N, W = S.TOPK, S.N, S.C
+    x, n, idx, thr = els[:N], els[N], els[N + 1:N + 1 + T], els[N + 1 + T]
+    ok = [topk_chunk(C, bind(DsaTopKChunk, TOPK=T, N=N, C=W, H=h).S(), *x[h * W:(h + 1) * W], n, *idx, thr)[0]
+          for h in range(-(-N // W))]
+    return topk_final(C, S, ok, n, *idx)
 
 
-DsaTopKSelectionV4 = CompositeDefinition(
-    "DsaTopKSelection", 4, ("TOPK", "N", "C"), lambda S: (_row_sig(S), BIT), _selection_v4, conformance="exact-model-tested",
-    doc="`DsaTopKSelection_v3{TOPK,N}` on bits in chunks of C positions: `DsaTopKChunk_v1{TOPK,N,C,H}` for each chunk H, then "
-        "`DsaTopKFinal_v1{TOPK,N,C}` (`topk_selection_calls`).")
+DsaTopKSelectionV4 = SB.traced_family(
+    "DsaTopKSelection", 4, ("TOPK", "N", "C"), lambda S: (_row_sig(S), BIT), topk_selection,
+    "`DsaTopKSelection_v3{TOPK,N}` on bits in chunks of C positions: `DsaTopKChunk_v1{TOPK,N,C,H}`'s check for each chunk H, "
+    "then `DsaTopKFinal_v1{TOPK,N,C}`'s, traced as one circuit (`topk_selection`).  A Program at the served statics calls those "
+    "Definitions at its root instead (`topk_selection_calls`), a unit each.")
 DsaTopKSelectionV4.word = lambda b: bind(D.DsaTopKSelectionV3, TOPK=b["TOPK"], N=b["N"])  # type: ignore[attr-defined]
 DsaTopKSelectionV4.word_statics = {"C": CHUNK}  # type: ignore[attr-defined]
 
