@@ -36,9 +36,10 @@ VERIFY=(--port "$PORT" --out "$O" --windows "$WINDOWS" --window-ms "$WINDOW_MS" 
 if [ "$ROLE" = verifier ]; then
   read -ra TO <<< "$(grep "^${PEER:?} " /etc/vy/peers | cut -d' ' -f2-)"
   [ ${#TO[@]} -gt 0 ] || { echo "no peer $PEER in /etc/vy/peers"; exit 3; }
-  # A tty makes the session interactive, so ssh and sshd set TCP_NODELAY: a forward without one (-N) lets Nagle hold a
-  # coin behind a delayed ACK for 40 ms, long enough for the prover to run a pass of the window that has ended.
-  ssh -tt -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o IPQoS=lowdelay \
+  # A tty makes the session interactive, so ssh and sshd set TCP_NODELAY (under -N roots were held ~30 ms every few
+  # seconds, enough to make a boundary pass's root late); and with keystroke-timing obfuscation off, since it sends an
+  # interactive session's packets on a 20 ms clock (tunnel_rtt.py measures each).
+  ssh -tt -o ObscureKeystrokeTiming=no -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
   "$PY" $RS/verifier.py --host 127.0.0.1 "${VERIFY[@]}" > "$O/verifier.log" 2>&1 & V=$!
   while kill -0 $V 2> /dev/null; do

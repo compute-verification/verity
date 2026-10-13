@@ -17,6 +17,7 @@ skip:F          a fraction F of the blocks dropped from the store before the ses
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import queue
@@ -137,19 +138,25 @@ class ProverSide:
             c1 = time.perf_counter_ns()
             fields = self.backend.open_window([(h, [p for _, p in items]) for h, (_, items) in zip(handles, passes)])
             c2 = time.perf_counter_ns()
-            for (i, items), got in zip(passes, fields):
+            for j, ((i, items), got) in enumerate(zip(passes, fields)):
                 for (k, p), f in zip(items, got):
                     out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"")
+                fields[j] = None
+            del fields
             parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
+            n = len(out)
+            del out
             c3, sent = time.perf_counter_ns(), 0
-            for k, part in enumerate(parts):
-                body = wire.encode_openings(part)
-                self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(part)}, body)
+            for k in range(len(parts)):
+                body = wire.encode_openings(parts[k])
+                self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(parts[k])}, body)
+                parts[k] = None
                 sent += len(body)
+                del body
             with self.lock:
                 for key in [key for key in self.kept if key[0] == t]:
                     del self.kept[key]
-            self.opened.append({"t": t, "n": len(out), "bytes": sent, "ns": time.perf_counter_ns() - c0,
+            self.opened.append({"t": t, "n": n, "bytes": sent, "ns": time.perf_counter_ns() - c0,
                                 "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
                                 "on_dropped": sum(p in self.dropped for _, p in draws)})
             self.jobs.task_done()
@@ -269,7 +276,16 @@ def main() -> int:
             head, _, _ = p.expect("session")
         except wire.Closed:
             break
-        r = p.session(head, mode, fraction)
+        # A collection (or a window's openings freed at once) holds the GIL for tens of ms, long enough to make a
+        # boundary pass's root late: no collector during a session, and the opener frees what it sent part by part.
+        gc.collect()
+        gc.freeze()
+        gc.disable()
+        try:
+            r = p.session(head, mode, fraction)
+        finally:
+            gc.enable()
+            gc.unfreeze()
         results.append(r)
         print(f"prover: session {r['k']} ({mode}:{fraction}): accepted={r['accepted']} passes={r['passes']}", flush=True)
         (a.out / "prover.json").write_text(json.dumps(

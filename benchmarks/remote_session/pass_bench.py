@@ -179,8 +179,10 @@ def main() -> int:
         def opener() -> None:
             t0 = time.perf_counter_ns()
             with torch.cuda.stream(os_):
-                store.open_window(items)
+                got = store.open_window(items)
                 os_.synchronize()
+            while got:
+                got.pop()
             opened["ns"] = time.perf_counter_ns() - t0
             done.set()
 
