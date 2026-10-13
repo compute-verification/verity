@@ -166,7 +166,7 @@ def test_an_api_head_ahead_of_its_pull_ref_waits_without_blocking_the_queue(worl
     assert [m.pr for m in members] == [1]
     assert entries[2].state == "waiting"
     assert entries[2].why == f"GitHub's API head {new[:12]} and pull ref {old[:12]} disagree; retrying next sync"
-    assert q.logs[-2] == f"research queue: #2's API head {new[:12]} and fetched pull ref {old[:12]} disagree; retrying next sync"
+    assert world.logs[-2] == f"research queue: #2's API head {new[:12]} and fetched pull ref {old[:12]} disagree; retrying next sync"
 
     world.gh.put(2, new)
     assert [m.pr for m in q.sync()[0]] == [1, 2]
