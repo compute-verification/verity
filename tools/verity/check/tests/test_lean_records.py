@@ -34,8 +34,8 @@ with open(os.environ["AUDIT_LOG"], "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "threads": os.environ.get("LEAN_NUM_THREADS"),
                         "locks": sorted(p for p in held if p.endswith(".lock")),
                         **({"lean_slot": os.environ["LEAN_SLOT"]} if "LEAN_SLOT" in os.environ else {})}) + "\\n")
-rc = int(os.environ.get("AUDIT_RC", "0"))
 out, pkg = sys.argv[sys.argv.index("--out") + 1], sys.argv[-1]
+rc = int(os.environ.get("AUDIT_RC", "0")) or int(os.path.basename(pkg) == os.environ.get("AUDIT_FAILS"))
 rep = {"package": pkg, "seconds": {"build": 1.0, "audit": 2.0}, "failures": ["audit: no"] if rc else []}
 os.makedirs(os.path.join(out, "audit-x"), exist_ok=True)
 with open(os.path.join(out, "audit-x", "report.json"), "w") as f:
@@ -73,7 +73,8 @@ def repo(tmp_path, monkeypatch) -> Path:
     monkeypatch.setattr(LC, "AUDIT_PY", tmp_path / "audit.py")
     monkeypatch.setenv("AUDIT_LOG", str(tmp_path / "audit.log"))
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache"))
-    for k in (LC.LEAN_SLOT.HELD, "LEAN_SLOT_POOL", "RESEARCH_LANE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "CHECK_SLOT"):
+    for k in (LC.LEAN_SLOT.HELD, "LEAN_SLOT_POOL", "RESEARCH_LANE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "CHECK_SLOT",
+              "AUDIT_RC", "AUDIT_FAILS"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "no-lean-slots")
     return root
@@ -206,6 +207,35 @@ def test_without_the_audits_dependencies_the_tree_fetches_its_own_once(repo, tmp
     assert "fetched cold" not in out and "copied" not in out, "the tree keeps what it fetched"
     assert LC.audit_records("p", deps, tree) == 0 and json.loads((tree / LC.LINKS).read_text()) == {"a": k}, \
         "a package that fetches nothing needs none"
+
+
+def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tmp_path, monkeypatch, capsys):
+    """`--records Security` left `Security/Properties`' records, which read `Security`'s build, unchecked, and an unintended
+    change to three of them surfaced only at a train's check (#1793). `a` requires `p` by path and lists a guarantee, so
+    `--records p` audits `a` after it, never with `--update`; `c`, which doesn't require `p`, and a package that lists no
+    guarantee are not audited."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    (repo / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
+    assert LC.requirers("p", LC.LA.packages(LC.LA.COMMON.tracked_files())) == ["a"]
+    k = LC.LA.deps_key(repo / "a")
+    (deps / k / "dep").mkdir(parents=True)
+    out = tmp_path / "reports"
+    assert LC.audit_records("p", deps, tree, update=True, out=out) == 0
+    calls = _calls(tmp_path)
+    assert [c["argv"] for c in calls] == [
+        ["--build", "--no-replay", "--no-runs", "--update", "--out", str(out), str(tree / "p")],
+        ["--build", "--no-replay", "--no-runs", "--out", str(out / "requirer-a"), str(tree / "a")]]
+    assert json.loads((out / "requirer-a" / "audit.json").read_text())["kind"] == LC.FAST_KIND
+    assert json.loads((tree / LC.LINKS).read_text()) == {"a": k}
+    assert LC.audit_records("a", deps, tree) == 0 and len(_calls(tmp_path)) == 1, "nothing requires a"
+
+    monkeypatch.setenv("AUDIT_FAILS", "a")
+    capsys.readouterr()
+    assert LC.audit_records("p", deps, tree) == 1, "a requirer's failure is the run's"
+    assert "lean-records: a requires p, and its records fail on this tree" in capsys.readouterr().out
+    _calls(tmp_path)
+    (repo / "a" / "lean-audit.json").write_text("{}")
+    assert LC.audit_records("p", deps, tree) == 0 and len(_calls(tmp_path)) == 1
 
 
 def test_a_tree_keeps_one_packages_dependencies(repo, tmp_path):

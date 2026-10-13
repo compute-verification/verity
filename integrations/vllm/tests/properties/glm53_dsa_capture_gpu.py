@@ -1,7 +1,7 @@
 """GLM-5.3's sparse attention on Hopper against its Programs: the H200's go/no-go for binding the DSA indexer's `dsa.DsaIndexerKRow_v1`
 (Triton `_fused_norm_rope_kernel` program 0) and `dsa.DsaIndexerQ_v1` (`_fused_q_kernel` program 1), `dsa.DsaMqaLogit_v3` (DeepGEMM
 `fp8_fp4_mqa_logits` and `fp8_fp4_paged_mqa_logits`), `dsa.DsaTopKShortRow_v1` (vLLM's `top_k_per_row_prefill`, `cooperative_topk`
-and `persistent_topk`) and `sparse_mla.SparseMlaHead_v1` (FA3, `FLASH_ATTN_MLA_SPARSE`) at GLM-5.3's statics on one TP8 rank (8 MLA
+and `persistent_topk`) and `sparse_mla_split.SparseMlaHeadSplit_v1` (FA3, `FLASH_ATTN_MLA_SPARSE`) at GLM-5.3's statics on one TP8 rank (8 MLA
 heads; the indexer's 32 heads replicated), and the run that settles the RoPE contraction of the two Triton kernels.
 
 One GPU process writes `<out>/glm53_dsa_capture.json`, the property record `glm53_dsa_capture` (`properties.record`), and the two
@@ -37,7 +37,9 @@ A phase that raises records its error and fails the verdict without stopping the
              states its order or its ties).
   attn       FA3's sparse decode (`forward_mqa`, flashattn_mla_sparse.py:201-250) for ATTN_TOKENS on their prefill top-k rows: the
              index conversion (`triton_convert_req_index_to_global_index`) against `convert_rows`, FA3 twice, every (token, head)
-             output against `SparseMlaHead_v1{T,64,512,64,...}` (T the row's valid count) of the token's q and its selected rows.
+             output against `SparseMlaHead_v1{T,64,512,64,...}` (T the row's valid count) of the token's q and its selected rows,
+             or `SparseMlaHeadSplit_v1{T,NS,...}` where the launch splits the token's keys (NS its split count, `split_counts`:
+             vLLM passes no `num_splits`, so FA3 splits by its heuristic).
   ptx        the Triton cache holds one specialization of each of `_fused_norm_rope_kernel` and `_fused_q_kernel` (so the probes ran
              the served kernels): their PTX instruction counts, copied to `<out>/ptx/`.
   bind       the Programs bind at the served statics.
@@ -297,6 +299,14 @@ def convert_rows(topk: np.ndarray, block_table: np.ndarray, block_stride_rows: i
         out[r, :int(ok.sum())] = g[ok]
         counts[r] = int(ok.sum())
     return out, counts
+
+
+def split_counts(valid, num_sm: int, num_splits: int = 0) -> list[int]:
+    """Each token's FA3 split count in one sparse decode launch over the valid counts ``valid`` on ``num_sm`` SMs, the call's
+    ``num_splits`` 0 (none, as `forward_mqa` passes) or the count it gives (`sparse_mla_split.launch_num_splits`)."""
+    from verity_vllm.program.registry import sparse_mla_split as W
+
+    return W.launch_num_splits(valid, num_sm, TOPK, num_splits)
 
 
 # ------------------------------------------------------------------------------------------------------------------ RoPE forms
@@ -993,9 +1003,11 @@ def phase_attn(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str
                       "deterministic": bool(torch.equal(out1.view(torch.int16), out2.view(torch.int16))),
                       "shape": list(out1.shape) == [S, NH, DV] and out1.dtype == torch.bfloat16}}
     jobs = []
+    rec["num_splits"] = ns = split_counts(n.tolist(), torch.cuda.get_device_properties(0).multi_processor_count)
     for i, t in enumerate(toks):
         paths = _save(work / f"attn_{t}", qn=qn[i], qr=qr[i], kv=kvr[g[i, :n[i]]], out=out[i])
-        jobs += [{"phase": "attn", "case": f"token{t}", "kind": "attn", "paths": paths, "T": int(n[i]), "head": h} for h in range(NH)]
+        jobs += [{"phase": "attn", "case": f"token{t}", "kind": "attn", "paths": paths, "T": int(n[i]), "NS": ns[i], "head": h}
+                 for h in range(NH)]
     return [rec], jobs
 
 
@@ -1066,14 +1078,17 @@ def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 
 def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
-    """One (token, head) of FA3's sparse output against `SparseMlaHead_v1{T,...}` (the reference itself)."""
+    """One (token, head) of FA3's sparse output against `SparseMlaHead_v1{T,...}`, or `SparseMlaHeadSplit_v1{T,NS,...}` where
+    the launch splits the token's keys (the reference itself)."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import sparse_mla as M
+    from verity_vllm.program.registry import sparse_mla_split as W
 
     a = _load(job["paths"])
-    h, T = job["head"], job["T"]
-    fn = bind(M.SparseMlaHead, T=T, **{k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"})
+    h, T, NS = job["head"], job["T"], job["NS"]
+    mla = {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
+    fn = bind(M.SparseMlaHead, T=T, **mla) if NS == 1 else bind(W.SparseMlaHeadSplit, T=T, NS=NS, **mla)
     y = np.array(evaluate(fn, a["qn"][h].tolist(), a["qr"][h].tolist(), np.asarray(a["kv"]).reshape(-1).tolist()), dtype=np.int64)
     got = np.asarray(a["out"][h], dtype=np.int64)
     bad = np.flatnonzero(y != got)
@@ -1081,7 +1096,7 @@ def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
     rec["reference"] += 1
     rec["mismatch"] += int(bad.size)
     if bad.size and rec["first_mismatch"] is None:
-        rec["first_mismatch"] = {"head": h, "T": T, "word": int(bad[0]), "want": int(y[bad[0]]), "kernel": int(got[bad[0]])}
+        rec["first_mismatch"] = {"head": h, "T": T, "NS": NS, "word": int(bad[0]), "want": int(y[bad[0]]), "kernel": int(got[bad[0]])}
 
 
 COMPARE = {"kslots": compare_kslots, "qtok": compare_qtok, "logits": compare_logits, "attn": compare_attn}
@@ -1141,6 +1156,7 @@ def bind_check() -> dict[str, Any]:
     from verity_vllm.program.registry import boolean_rope as BR
     from verity_vllm.program.registry import dsa
     from verity_vllm.program.registry import sparse_mla as M
+    from verity_vllm.program.registry import sparse_mla_split as W
 
     mla = {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
     targets = {f"DsaIndexerKRow_v1{{D={D},ROPE={ROPE},EPS={K_EPS}}}": lambda: bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS),
@@ -1153,6 +1169,8 @@ def bind_check() -> dict[str, Any]:
     for T in (1, 64, 65, TOPK):
         targets[f"SparseMlaHead_v1{{T={T},...}}"] = lambda T=T: bind(M.SparseMlaHead, T=T, **mla)
     targets[f"SparseMla_v1{{T={TOPK},NH={NH},...}}"] = lambda: bind(M.SparseMla, T=TOPK, **M.SPARSE_MLA_GLM53)
+    for T, NS in ((130, 2), (1001, 8), (TOPK, 16), (TOPK, 28)):
+        targets[f"SparseMlaHeadSplit_v1{{T={T},NS={NS},...}}"] = lambda T=T, NS=NS: bind(W.SparseMlaHeadSplit, T=T, NS=NS, **mla)
     out = {}
     for name, make in targets.items():
         try:

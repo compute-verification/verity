@@ -24,6 +24,8 @@
 # Waiting is first come, first served, so a whole-node request (`gpu-lease 8 --wait`) is not starved by shorter leases starting
 # around it: a --wait request that can't be met at once queues as $GPU_LEASE_DIR/wait.<ns>.<pid>, locked while it waits, and
 # every later request (waiting or not) leaves the GPUs to the older waiters: a request without --wait exits 75 naming them.
+# A waiter with --on LIST holds back only the GPUs in LIST, so a later request may still take a free GPU outside every older
+# waiter's list.
 # `status` lists the waiters.  A waiter that dies drops its lock, and the next reader removes its file.
 #
 # --max-min M ends CMD after M minutes (SIGTERM, SIGKILL 20 s later; exit 124) and records `until=` in the lease, and it lets the
@@ -162,6 +164,30 @@ live_waiters() {
 ahead() {
   # the waiters this request must leave the GPUs to: all of them, or for a queued waiter the older ones
   live_waiters | awk -v me="${MYWAIT:-}" 'me == "" || $0 < me'
+}
+
+reserved() {
+  # the GPUs the waiters ahead may take, one index per line: their --on lists, or all of ALL once one has none (or is unreadable)
+  local f on g
+  for f in $(ahead); do
+    on=$(sed -n 's/.* on=\([^ ]*\).*/\1/p' "$f" 2>/dev/null)
+    [ -n "$on" ] || { printf '%s\n' "${ALL[@]}"; return; }
+    for g in $(echo "$on" | tr ',' ' '); do
+      case $g in GPU-*) echo "$table" | awk -v u="$g" '$2 == u {print $1}' ;; *) echo "$g" ;; esac
+    done
+  done
+}
+
+take_unreserved() {
+  # take N from the GPUs no waiter ahead may take
+  local i rc
+  local -a res
+  mapfile -t res < <(reserved)
+  CANDIDATES=()
+  for i in "${ALL[@]}"; do printf '%s\n' "${res[@]}" | grep -qx "$i" || CANDIDATES+=("$i"); done
+  take "$1"; rc=$?
+  CANDIDATES=("${ALL[@]}")
+  return $rc
 }
 
 free_by() {
@@ -467,7 +493,7 @@ while :; do
     sleep "${GPU_LEASE_AGENT_POLL_S:-0.5}"
     continue
   fi
-  { [ -z "$(ahead)" ] || may_backfill; } && take "$n" && break
+  if [ -z "$(ahead)" ] || may_backfill; then take "$n" && break; else take_unreserved "$n" && break; fi
   if [ "$wait" != 1 ]; then
     [ -z "$MYWAIT" ] || rm -f "$MYWAIT"
     first=$(ahead | head -1)

@@ -60,6 +60,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v3, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
+             "where FA3 splits a row's keys, SparseMlaHeadSplit_v1 at its split count in the launch (launch_num_splits) in its place; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
     Property("glm53_fa3_prefill_capture", "verity-vllm/glm53-fa3-prefill-capture/v1",
              "On the capture's Hopper GPU, vLLM selects FA3 for GLM-5.3's dense MHA prefill at head dim 256, MUFU ex2 / rcp are core's "
@@ -88,6 +89,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, MUFU ex2 / rcp are core's tables on every input, and vLLM's fused sigmoid noaux_tc router "
              "(_moe_C.grouped_topk, 256 experts, top-8, renormalized, x2.5) returns through its block and its warp kernel exactly the "
              "ids and weights of MoeRouterSigmoidBias_v1 for that kernel on every captured row and every logit whose sigmoid reads MUFU."),
+    Property("glm53_fa3_split_capture", "verity-vllm/glm53-fa3-split-capture/v1",
+             "On the capture's Hopper GPU, at GLM-5.3's TP8 statics, every compared output word of vLLM's FA3 sparse MLA decode "
+             "(FLASH_ATTN_MLA_SPARSE without num_splits, as vLLM calls it, and with an explicit one) equals SparseMlaHeadSplit_v1 at "
+             "the token's valid count and the split count launch_num_splits derives from the batch and the SM count, bit for bit; "
+             "lg2.approx.ftz.f32 equals MufuLg2Ftz_v1 on every word of the compared exponents and the sweep but the powers of two "
+             "below 1, and ex2 / rcp.approx.ftz.f32 are core's tables on every input."),
     Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
              "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
              "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),
