@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.Sparse.MsgsRead
 import Proofs.Flock.C3.Sparse.SessionAt
+import Proofs.Flock.C3.Reps.IoCols
 
 /-!
 # The sparse phases' messages from V*'s sessions
@@ -12,10 +13,10 @@ import Proofs.Flock.C3.Sparse.SessionAt
   message columns.
 * `bitAt_mask`: a registered bit is the same in the layer masked to a stage whose commit strings hold its row, the row
   `(u, q)` of the port `q` its key reads.
-* `SparseSessionsAt`, `SparseCols`, `SparseSel` (named): `SparseSessionAt`'s message clause and `SparseSrcAt` at the
-  map; every message column an input column a row reads (`OpenCols`' form; the support question rec-lean decides); stage
-  `c₀ + i · nS + roundOf m` selects, in `own (sess i)`, the port each column of message `m`'s words reads (`skOf`'s
-  form). `sparseMsgsOfLayers_of_sessions`: the three give `SparseMsgsOfLayers` at `rdOf`.
+* `SparseSessionsAt`, `SparseCols`, `SparseSel` (named): `SparseSessionAt`'s copy (`SparseCopyAt`) and `SparseSrcAt` at
+  the map; every message column an input column a row reads (`OpenCols`' form; the support question rec-lean decides);
+  stage `c₀ + i · nS + roundOf m` reads, at unit `un i` of `sess i`, the port each column of message `m`'s words reads
+  (S's `SelPort`). `sparseMsgsOfLayers_of_sessions`: the three give `SparseMsgsOfLayers` at `rdOf`.
 -/
 
 namespace FlockC3.Sparse
@@ -31,6 +32,7 @@ open FlockVBridge.OfVStar (ReadCol rowCol)
 open FlockVBridge.AccChain (eq_of_bitOf)
 open FlockVBridge.Family (skOf maskOf mem_skOf_inl bitAt IoColAt bitAt_of_regBit ioColAt_of_readCol)
 open FlockVBridge.Sparse (phaseMsgs vtTape msgTape msg2 msg3 uOf nR degSum tw wPre wV2 wSc wU wVt wClaim nw)
+open FlockC3.Reps (SelPort)
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -179,16 +181,15 @@ def SparseCols (mp : List (String × ℕ)) (sess : Fin 2 → Fin S) : Prop :=
   ∀ i : Fin 2, ∀ q < 128 * (mp.map (·.2)).sum,
     rowCol mp 0 q < (Rows.ofNet (Vs (sess i)).hU).nIn ∧ ReadCol (Rows.ofNet (Vs (sess i)).hU) (rowCol mp 0 q)
 
-/-- **Hypothesis: stage `c₀ + i · nS + roundOf m` selects port `m + 1` in `own (sess i)`** (`skOf`'s form): at each
-column of message `m`'s words, the reads file registers a port of the name of the port `q` its key reads, under a value
-whose row unit `un i` reads holds that stage's message. -/
+/-- **Hypothesis: stage `c₀ + i · nS + roundOf m` reads port `m + 1` of unit `un i` of `sess i`** (S's `SelPort`, the
+reads-file fact `skOf` membership is): at each column of message `m`'s words, that stage reads the port `q` its key
+reads. -/
 def SparseSel (sh : SparseShape) (mp : List (String × ℕ)) (own : Fin S → Array Flock.Registered.Port)
     (sel : ℕ → String → ℕ → Prop) (c₀ : ℕ) (sess : Fin 2 → Fin S) (un : (i : Fin 2) → Fin (Vs (sess i)).nv) : Prop :=
   ∀ (i : Fin 2) (m e t : ℕ), wStart sh m ≤ e → e < wStart sh (m + 1) → t < 128 →
     ∀ (q : Fin (Vs (sess i)).c.ports.size) (byte bit : ℕ),
       Aliased.srcKey (Vs (sess i)).c (rowCol mp 0 (128 * e + t)) = .msg q.val byte bit →
-      ∃ p ∈ own (sess i), p.name = (Vs (sess i)).c.ports[q].name ∧ ∃ x, p.reads[(un i).val]? = some (some x) ∧
-        sel (c₀ + i.val * nS sh + roundOf (sparseKinds 𝔽 sh) m) p.value x
+        SelPort Vs own sel (c₀ + i.val * nS sh + roundOf (sparseKinds 𝔽 sh) m) (sess i) (un i) q
 
 variable {Vs}
 
@@ -239,20 +240,17 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **Hypothesis: rep `i`'s sparse phase at copy 0 of unit `un i` of session `sess i`** (`SparseSessionAt`'s message
-clause at the map, with `SparseSrcAt`): at every accepted outer proof, rep `i`'s sparse steps are `stepsOf` at w and
-coins `c`, and the copy registers w at the message columns some computed row reads. -/
+/-- **Hypothesis: rep `i`'s sparse phase at copy 0 of unit `un i` of session `sess i`** (`SparseSessionAt`'s copy,
+`SparseCopyAt`, at the map, with `SparseSrcAt`): at every accepted outer proof, rep `i`'s sparse steps are `stepsOf` at
+w and coins `c`, and that copy holds the phase at w and `c`. -/
 def SparseSessionsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
     (sess : Fin 2 → Fin S) (un : (i : Fin 2) → Fin (Vs (sess i)).nv) : Prop :=
   ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ i : Fin 2,
-    ∃ (w : Array Flock.F128) (c : FlockVBridge.Sparse.SCoins),
-      SparseSrcAt (holoAt st hp) (src R ω t (layers zs dg N k Rw R ω t R₂ τ)) i w c ∧ 0 < (Vs (sess i)).c.upv ∧
-      ∀ q < 128 * ((Flock.RecSparse.messagePorts (unitShape (holoAt st hp))).map (·.2)).sum,
-        ReadCol (Rows.ofNet (Vs (sess i)).hU) (rowCol (Flock.RecSparse.messagePorts (unitShape (holoAt st hp))) 0 q) →
-          RegBit (zs R ω t R₂ (sess i)) (un i) 0
-            (rowCol (Flock.RecSparse.messagePorts (unitShape (holoAt st hp))) 0 q) (wbit (w[·]!) q)
+    ∃ (w : Array Flock.F128) (c : FlockVBridge.Sparse.SCoins) (hj : 0 < (Vs (sess i)).c.upv),
+      SparseSrcAt (holoAt st hp) (src R ω t (layers zs dg N k Rw R ω t R₂ τ)) i w c ∧
+        SparseCopyAt (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (holoAt st hp) w c (sess i) (un i) 0 hj
 
 /-- **`SparseMsgsOfLayers` from V*'s sessions**: each word message `m` reads (`phaseMsgs_congr`) has its bits at the
 message columns, which a row reads (`SparseCols`), registered there (`SparseSessionsAt`) and so the layer's
@@ -269,7 +267,7 @@ theorem sparseMsgsOfLayers_of_sessions
     SparseMsgsOfLayers zs dg N k Rw src own sel c₀
       (rdOf Vs (holoAt st hp).cls.shape (Flock.RecSparse.messagePorts (unitShape (holoAt st hp))) sess un) := by
   intro R ω t R₂ τ o hA i
-  obtain ⟨w, c, ⟨-, -, hst⟩, hj, hrb⟩ := hS R ω t R₂ τ o hA i
+  obtain ⟨w, c, hj, ⟨-, -, hst⟩, -, -, -, -, hrb, -⟩ := hS R ω t R₂ τ o hA i
   refine ⟨w, c.cs, hst, fun m => ?_⟩
   unfold rdOf
   refine phaseMsgs_congr fun e he he' => ?_

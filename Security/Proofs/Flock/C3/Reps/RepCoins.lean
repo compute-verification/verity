@@ -11,6 +11,7 @@ import Proofs.Flock.Soundness.Assumptions.Inner
 coins half (`Assumptions.InnerRecordCustody` at a map `m`, round `i` drawing round `q` of `s` where `m.selC i s q`) holds
 that round's coin, the rep's rounds are the record's (`RepRoundsHeld`), and the map's coins are the round's coordinate
 (`CoinsEncoded`).
+`repRoundsHeld_of_rounds`: `RepRoundsHeld` by definition at reps whose rounds are the record's (`heldRounds`).
 `capRead_vals`: `CapRead` at values whose cap is one constant.
 -/
 
@@ -138,8 +139,9 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
   {dg : ByteArray → ByteArray} {N k Rw : ℕ}
   {stp : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-  {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-  {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+  {sh : Flock.Shape}
+  {rep : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+  {vals : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
   {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String}
   {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
@@ -150,25 +152,50 @@ local notation "ℐ" => holoInnerAt T CT st hp
 /-- **Hypothesis: the reps' rounds are the inner session record's** (premise 2): at every accepted outer proof whose
 rep `i` meets E's preconditions, its round `q`'s coins are those the verifier holds at round `ix i q` of stream `s i`. -/
 def RepRoundsHeld (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape) (rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
+    (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
     (wr : List (Cm × (ℐ).Coin) → Lean.Json × String)
     (held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits) (s : Fin 2 → String)
     (ix : Fin 2 → ℕ → ℕ) : Prop :=
-  AtRep zs dg N k Rw sh rep fun _ _ t Lb i => ∀ q c,
-    heldCoins (held (wr t)) (s i) (ix i q) = some c → (rep Lb i).rounds[q]? = some c
+  AtRep zs dg N k Rw sh rep fun R ω t Lb i => ∀ q c,
+    heldCoins (held (wr t)) (s i) (ix i q) = some c → (rep R ω t Lb i).rounds[q]? = some c
+
+/-- **The coins the verifier holds of stream `s`**, every round's in round order (`heldCoins`' at each); none where it
+holds none. -/
+def heldRounds (cs : Except String Flock.RecVStar.InnerCommits) (s : String) : Array (Array Flock.F128) :=
+  match cs with
+  | .ok cs => ((cs.stream? s).map (·.coins)).getD #[]
+  | .error _ => #[]
+
+theorem heldCoins_eq (cs : Except String Flock.RecVStar.InnerCommits) (s : String) (k : ℕ) :
+    heldCoins cs s k = (heldRounds cs s)[k]? := by
+  cases cs with
+  | error _ => exact (getElem?_neg (#[] : Array (Array Flock.F128)) k (Nat.not_lt_zero k)).symm
+  | ok cs =>
+    show (cs.stream? s).bind (·.coins[k]?) = (((cs.stream? s).map (·.coins)).getD #[])[k]?
+    cases cs.stream? s with
+    | none => exact (getElem?_neg (#[] : Array (Array Flock.F128)) k (Nat.not_lt_zero k)).symm
+    | some st => rfl
+
+/-- **`RepRoundsHeld` by definition** at reps whose rounds are read off the history through the record (`heldRounds`),
+round `q` at record round `q`. -/
+theorem repRoundsHeld_of_rounds (h : ∀ R ω t Lb i, (rep R ω t Lb i).rounds = heldRounds (held (wr t)) (s i)) :
+    RepRoundsHeld zs dg N k Rw sh rep wr held s fun _ q => q :=
+  fun R ω t _ _ _ _ i _ _ q c hc => by rw [h, ← heldCoins_eq]; exact hc
 
 /-- **Hypothesis: the map draws the reps' consumed rounds** (`InnerRecordMap.selC`, `selC`): at every accepted outer proof
 whose rep `i` meets E's preconditions, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed rounds) draws
 round `ix i q` of stream `s i`, `q` the `p`-th of rep `i`'s, and those rounds are below `r`. -/
 def RepsDrawn (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape) (rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
-    (vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals)
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
+    (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
+    (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals)
     (selC : ℕ → String → ℕ → Prop) (s : Fin 2 → String) (ix : Fin 2 → ℕ → ℕ) : Prop :=
-  AtRep zs dg N k Rw sh rep fun _ _ _ Lb i =>
-    repStart (repIdx ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals Lb 0)).length i +
-        (repIdx ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals Lb i)).length ≤ r ∧
-      ∀ p q, (repIdx ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals Lb i))[p]? = some q →
-        selC (repStart (repIdx ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals Lb 0)).length i + p)
+  AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
+    repStart (repIdx ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals R ω t Lb 0)).length i +
+        (repIdx ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals R ω t Lb i)).length ≤ r ∧
+      ∀ p q, (repIdx ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals R ω t Lb i))[p]? = some q →
+        selC (repStart (repIdx ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals R ω t Lb 0)).length i + p)
           (s i) (ix i q)
 
 /-- **The reps' `StageCoins` conjuncts at `repsOfVals`**, from custody's coins half: rep 0's coins from the history's
@@ -192,7 +219,8 @@ theorem repCoins_repsOfVals (hleaf : HLeafC3 zs dg N k Rw)
     coinsAt_rep (CT := CT)
       (ts := (tiedSrc (repsOfVals stp sh rep vals) R ω t (layers zs dg N k Rw R ω t R₂ τ)).ts i)
       ((Woven.steps (hw R ω t R₂ τ o hA i ha hc)).2.2.trans
-        (unitCoins_eq ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (vals (layers zs dg N k Rw R ω t R₂ τ) i)))
+        (unitCoins_eq ((holoAt st hp).cls.pubStatement (holoAt st hp).regs)
+          (vals R ω t (layers zs dg N k Rw R ω t R₂ τ) i)))
       hcus henc (hheld R ω t R₂ τ o hA i ha hc) (hpr R ω t R₂ τ o hA i ha hc).coins
       (hdr R ω t R₂ τ o hA i ha hc) (hleaf R ω t R₂ τ o hA)
   obtain ⟨h0, c0⟩ := one 0
@@ -206,7 +234,7 @@ theorem capRead_vals {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {
     (hb : ∀ Lb i, (b Lb i).cap = cap)
     (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
     (hcap : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
-      capDig ((b Lb i).vals sh (rep Lb i)).p.cap = (stp R ω t Lb).cap₀) :
+      capDig ((b Lb i).vals sh (rep R ω t Lb i)).p.cap = (stp R ω t Lb).cap₀) :
     CapRead zs dg N k Rw stp own sel := by
   intro R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' _
   have e := (congrArg capDig ((cap_vals _ sh _).trans (hb _ 0))).symm.trans

@@ -7,16 +7,16 @@ import Proofs.Flock.VBridge.Net
 # The values the reps' forms read at a stage, at L's decoder
 
 At `ValsSrc.vals`, rep `ρ`'s messages are `b`'s constants, `hOfW sh w` and the forms of `decoded sh w comb cons`
-(`symbolic sh` at `valOf`) at the decoder's values `M.rep Lb ρ`, so `TsRead` there is a read fact of the values those
-forms read. `formsRead_maps`: at stage `s`, the forms of rep `ρ` reading only the keys `K s ρ` take the same values at
-two accepted outer proofs whose layers agree under stage `s`'s mask, from three named facts.
+(`symbolic sh` at `valOf`) at the decoder's values `M.rep R ω t Lb ρ`, so `TsRead` there is a read fact of the values
+those forms read. `formsRead_maps`: at stage `s`, the forms of rep `ρ` reading only the keys `K s ρ` take the same
+values at two accepted outer proofs whose layers agree under stage `s`'s mask, from three named facts.
 
 * A form reads only its keys (`linEval_congr`, `LinReads`).
 * A consistency sum `cons ℓ l` (a `.cons` key) is `consAt` of level `ℓ`'s opened rows and `α`. The rows are pinned by
   the layers at every accepted proof (`OpensAtL`'s row columns, `rows_congr`), so they agree where the copies' row
-  columns are read (`RowColsRead`). `α` is not in the layers (only `coef`, `κ`-weighted, is): `AlphaRead`.
+  columns are read (`RowColsRead`). `α` is the history's, not the layers': `AlphaRead`.
 * Every other key reads `rep₀`'s `w` and `comb` only (`valOf_cons`), which stage `s` reads (`WCombRead`).
-* `rep₀`'s `rounds` and `extras` enter no form.
+* The history's `rounds` and `extras` enter no form.
 -/
 
 namespace FlockC3.Reps
@@ -104,28 +104,31 @@ open FlockC3.Compose
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
-  {stmt : Fin S → VStar.Stmt} {sh : Flock.Shape}
+  {stmt : Fin S → VStar.Stmt} {sh : Flock.Shape} {Ω C : Type}
   {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
   {dg : ByteArray → ByteArray} {N k Rw : ℕ}
   {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-theorem rep_w (M : RepMaps stmt Vs sh) (l : (j : Fin S) → (Vs j).Bits) (ρ : Fin 2) : (M.rep l ρ).w = (M.rep₀ l ρ).w :=
+theorem rep_w (M : RepMaps stmt Vs sh Reg Ω C) (R : Reg) (ω : Ω) (t : List C) (l : (j : Fin S) → (Vs j).Bits)
+    (ρ : Fin 2) : (M.rep R ω t l ρ).w = (M.rep₀ l ρ).w :=
   rfl
 
-theorem rep_comb (M : RepMaps stmt Vs sh) (l : (j : Fin S) → (Vs j).Bits) (ρ : Fin 2) :
-    (M.rep l ρ).comb = (M.rep₀ l ρ).comb := rfl
+theorem rep_comb (M : RepMaps stmt Vs sh Reg Ω C) (R : Reg) (ω : Ω) (t : List C) (l : (j : Fin S) → (Vs j).Bits)
+    (ρ : Fin 2) : (M.rep R ω t l ρ).comb = (M.rep₀ l ρ).comb := rfl
 
-theorem rep_cons (M : RepMaps stmt Vs sh) (l : (j : Fin S) → (Vs j).Bits) (ρ : Fin 2) :
-    (M.rep l ρ).cons = fun ℓ i => Flock.RecAlgebra.consAt (M.rows l ρ ℓ) (M.q ℓ) (M.alpha l ρ ℓ) i := rfl
+theorem rep_cons (M : RepMaps stmt Vs sh Reg Ω C) (R : Reg) (ω : Ω) (t : List C) (l : (j : Fin S) → (Vs j).Bits)
+    (ρ : Fin 2) :
+    (M.rep R ω t l ρ).cons = fun ℓ i => Flock.RecAlgebra.consAt (M.rows l ρ ℓ) (M.q ℓ) (M.alpha R ω t ρ ℓ) i := rfl
 
 /-- **Hypothesis: stage `s` reads the `w` and `comb` its forms read** (the fact about V*'s statements): at two accepted
 outer proofs whose layers agree under stage `s`'s mask, rep `ρ`'s `rep₀` gives every key of `K s ρ` but the `.cons`
 keys the same value. -/
 def WCombRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (own : Fin S → Array Flock.Registered.Port)
-    (sel : ℕ → String → ℕ → Prop) (M : RepMaps stmt Vs sh) (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
+    (sel : ℕ → String → ℕ → Prop) (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
+    (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
   ∀ s (ρ : Fin 2), ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun _ _ _ Lb _ _ _ Lb' =>
     ∀ x, K s ρ x → (∀ ℓ l, x ≠ .cons ℓ l) →
       Flock.RecAlgebra.valOf sh (M.rep₀ Lb ρ).w (M.rep₀ Lb ρ).comb (fun _ _ => 0) x =
@@ -134,8 +137,8 @@ def WCombRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j :
 /-- **Hypothesis: level `ℓ`'s opened rows are read where stage `s` reads them**: wherever rep `ρ`'s stage-`s` keys read a
 consistency sum of level `ℓ`, `ℓ` is a level, and layers agreeing under stage `s`'s mask agree on the row columns of
 every copy of rep `ρ`'s level-`ℓ` openings. -/
-def RowColsRead (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) (M : RepMaps stmt Vs sh)
-    (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
+def RowColsRead (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
+    (M : RepMaps stmt Vs sh Reg Ω C) (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
   ∀ s (ρ : Fin 2) ℓ l, K s ρ (.cons ℓ l) → ℓ < sh.sched.levels.size ∧ ∀ j < M.q ℓ,
     ∀ (hj : cpO ℓ ρ j < (Vs (M.sessO ℓ)).c.upv) (Lb Lb' : (x : Fin S) → (Vs x).Bits),
       maskOf Vs (skOf Vs own sel) s Lb = maskOf Vs (skOf Vs own sel) s Lb' → ∀ t < 128 * levelLanes sh ℓ,
@@ -143,17 +146,18 @@ def RowColsRead (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → Str
           colsAt (Vs (M.sessO ℓ)) (Lb' (M.sessO ℓ)) (M.unO ℓ ρ j) hj t
 
 /-- **Hypothesis: stage `s` reads `α` at the levels its sums read**: at two accepted outer proofs whose layers agree
-under stage `s`'s mask, rep `ρ`'s `α` agrees at every level `ℓ` of a `.cons ℓ l` key of `K s ρ`. -/
+under stage `s`'s mask, rep `ρ`'s `α` at their histories agrees at every level `ℓ` of a `.cons ℓ l` key of `K s ρ`. -/
 def AlphaRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (own : Fin S → Array Flock.Registered.Port)
-    (sel : ℕ → String → ℕ → Prop) (M : RepMaps stmt Vs sh) (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
-  ∀ s (ρ : Fin 2), ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun _ _ _ Lb _ _ _ Lb' =>
-    ∀ ℓ l, K s ρ (.cons ℓ l) → M.alpha Lb ρ ℓ = M.alpha Lb' ρ ℓ
+    (sel : ℕ → String → ℕ → Prop) (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
+    (K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop) : Prop :=
+  ∀ s (ρ : Fin 2), ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun R ω t _ R' ω' t' _ =>
+    ∀ ℓ l, K s ρ (.cons ℓ l) → M.alpha R ω t ρ ℓ = M.alpha R' ω' t' ρ ℓ
 
 /-- **The values rep `ρ`'s stage-`s` forms read, at the decoder** (`TsRead`'s read fact at `ValsSrc.vals`): every form
 reading only `K s ρ` takes the same value at `M.rep` of two accepted outer proofs whose layers agree under stage `s`'s
 mask. `hu` is `accChains`' openings, their `acc` and `coef` forgotten. -/
-theorem formsRead_maps (M : RepMaps stmt Vs sh) {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
+theorem formsRead_maps (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) {K : ℕ → Fin 2 → Flock.RecAlgebra.Key → Prop}
     (hu : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
       ∀ (ρ : Fin 2), ∀ ℓ < sh.sched.levels.size,
       ∀ j < M.q ℓ, ∃ a cf A, FlockVBridge.Family.OpensAtL (Vs (M.sessO ℓ))
@@ -161,11 +165,13 @@ theorem formsRead_maps (M : RepMaps stmt Vs sh) {K : ℕ → Fin 2 → Flock.Rec
         ((M.rows (layers zs dg N k Rw R ω t R₂ τ) ρ ℓ)[j]!) a cf A)
     (hwc : WCombRead (st := st) (hp := hp) zs dg N k Rw own sel M K) (hcols : RowColsRead own sel M K)
     (hal : AlphaRead (st := st) (hp := hp) zs dg N k Rw own sel M K) (s : ℕ) (ρ : Fin 2) :
-    ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun _ _ _ Lb _ _ _ Lb' =>
+    ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun R ω t Lb R' ω' t' Lb' =>
       ∀ f : Flock.RecAlgebra.Lin, LinReads f (K s ρ) →
-        Flock.RecAlgebra.Lin.eval (Flock.RecAlgebra.valOf sh (M.rep Lb ρ).w (M.rep Lb ρ).comb (M.rep Lb ρ).cons) f =
+        Flock.RecAlgebra.Lin.eval
+            (Flock.RecAlgebra.valOf sh (M.rep R ω t Lb ρ).w (M.rep R ω t Lb ρ).comb (M.rep R ω t Lb ρ).cons) f =
           Flock.RecAlgebra.Lin.eval
-            (Flock.RecAlgebra.valOf sh (M.rep Lb' ρ).w (M.rep Lb' ρ).comb (M.rep Lb' ρ).cons) f := by
+            (Flock.RecAlgebra.valOf sh (M.rep R' ω' t' Lb' ρ).w (M.rep R' ω' t' Lb' ρ).comb
+              (M.rep R' ω' t' Lb' ρ).cons) f := by
   intro R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX f hf
   simp only [rep_w, rep_comb, rep_cons]
   apply linEval_congr hf

@@ -135,18 +135,22 @@ local notation "ℐ" => holoInnerAt T CT st hp
 /-- **`FramesOfVals` at holo**, from `LigShift`, when every rep unit's values meet `HoloFramed` at some domain. -/
 theorem framesOfVals_holo (hsh : FlockC3.HoloValues.LigShift)
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
-    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-    {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
-    (h : AtRep zs dg N k Rw sh rep fun _ _ _ Lb i => ∃ dom, HoloFramed sh (rep Lb i) (vals Lb i) dom) :
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
+    {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    (h : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
+      ∃ dom, HoloFramed sh (rep R ω t Lb i) (vals R ω t Lb i) dom) :
     FramesOfVals zs dg N k Rw sh rep vals := fun R ω t R₂ τ o hA i halg hacc =>
   (h R ω t R₂ τ o hA i halg hacc).elim fun _ H => unitFrames_holo hsh halg hacc H
 
 /-- **`FramesOfVals` at holo** when every rep unit's values meet `HoloFramed` at some domain (`framesOfVals_holo` at
 `ligShift`). -/
 theorem framesOfVals_holo' {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
-    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-    {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
-    (h : AtRep zs dg N k Rw sh rep fun _ _ _ Lb i => ∃ dom, HoloFramed sh (rep Lb i) (vals Lb i) dom) :
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
+    {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    (h : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
+      ∃ dom, HoloFramed sh (rep R ω t Lb i) (vals R ω t Lb i) dom) :
     FramesOfVals zs dg N k Rw sh rep vals :=
   framesOfVals_holo FlockC3.HoloValues.ligShift h
 
