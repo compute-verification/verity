@@ -54,6 +54,8 @@ kernel, and the references equal.
 from __future__ import annotations
 
 import argparse
+import ctypes
+import ctypes.util
 import json
 import multiprocessing
 import os
@@ -71,7 +73,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v2"
+SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v3"
 RECORD = "glm53_bf16_gemm_capture.json"
 #: GLM-5.3's MLA at one TP8 rank: heads, the nope and rope query widths, the latent rank and the value width
 NHL, QK_NOPE, QK_ROPE, KV_LORA, V_HEAD = 8, 192, 64, 512, 256
@@ -144,7 +146,7 @@ def switch(served_default: bool) -> dict[str, Any]:
     rec = {"torch": torch.__version__, "allow_fp16_reduced_precision_reduction": repr(m.allow_fp16_reduced_precision_reduction),
            "allow_bf16_reduced_precision_reduction": repr(m.allow_bf16_reduced_precision_reduction),
            "preferred_blas_library": str(torch.backends.cuda.preferred_blas_library()),
-           "env": {k: os.environ.get(k) for k in SWITCH_ENV}}
+           "env": {k: os.environ.get(k) for k in SWITCH_ENV}, "cublas_version": cublas_version()}
     rec["ok"] = served_default or (rec["env"] == SWITCH_ENV and "cublaslt" in rec["preferred_blas_library"].lower()
                                    and all(v in ("(False, False)", "False") for v in (rec["allow_fp16_reduced_precision_reduction"],
                                                                                      rec["allow_bf16_reduced_precision_reduction"])))
@@ -172,6 +174,32 @@ def _activation(gen, M: int, K: int, probe: bool = False):
         x[2, 7] = 2.0 ** 12
         x[3] = torch.randn(K, generator=gen, device="cuda") * STRESS_SCALE
     return x.to(torch.bfloat16).contiguous()
+
+
+def splitk_probe_words(K: int, N: int = 32, seed: int = 20261013) -> tuple[np.ndarray, np.ndarray]:
+    """Finite bf16 cancellation operands for row 0 / the first W rows of every default cuBLAS case.
+
+    Their k16 blocks span signs, mantissas and moderate exponents.  They distinguish contiguous from strided splits, f32 from
+    bf16 partial storage, and forward from reverse/tree reduction without relying on overflow or NaN behavior.
+    """
+    rng = np.random.default_rng(seed + K + N)
+    def words(shape):
+        sign = rng.integers(0, 2, shape, dtype=np.uint16) << np.uint16(15)
+        exp = rng.integers(107, 148, shape, dtype=np.uint16) << np.uint16(7)
+        mant = rng.integers(0, 128, shape, dtype=np.uint16)
+        return (sign | exp | mant).astype(np.uint16)
+    return words((K,)), words((N, K))
+
+
+def _install_splitk_probe(x, w) -> int:
+    """Install the crafted probe in one token row and as many leading W rows as this shape has."""
+    import torch
+
+    n = min(32, w.shape[0])
+    px, pw = splitk_probe_words(x.shape[1], n)
+    x[0].copy_(torch.from_numpy(px.view(np.int16)).view(torch.bfloat16).to(x.device))
+    w[:n].copy_(torch.from_numpy(pw.view(np.int16)).view(torch.bfloat16).to(w.device))
+    return n
 
 
 def _u16(t) -> np.ndarray:
@@ -221,14 +249,66 @@ def _time_us(fn) -> float:
     return float(np.median(times))
 
 
-def _kernels(fn) -> list[str]:
-    """The CUDA kernels one launch of `fn` runs, by the profiler's names."""
+def _grid(args: dict[str, Any]) -> list[int] | None:
+    """A Kineto trace event's grid, accepting the spellings emitted by torch 2.13 and older profilers."""
+    grid = args.get("grid")
+    if isinstance(grid, (list, tuple)) and len(grid) == 3:
+        return [int(v) for v in grid]
+    if isinstance(grid, str):
+        try:
+            values = [int(v.strip()) for v in grid.strip("()[]").split(",")]
+            return values if len(values) == 3 else None
+        except ValueError:
+            pass
+    keys = next((ks for ks in (("gridX", "gridY", "gridZ"), ("grid_x", "grid_y", "grid_z"),
+                               ("Grid X", "Grid Y", "Grid Z")) if all(k in args for k in ks)), None)
+    return [int(args[k]) for k in keys] if keys else None
+
+
+def _profile_record(trace: dict[str, Any]) -> dict[str, Any]:
+    """Kernel names, grids, the main split-K count and any separate reduction kernel from a Kineto Chrome trace."""
+    launches = []
+    for e in trace.get("traceEvents", []):
+        args = e.get("args") or {}
+        grid = _grid(args)
+        cat = str(e.get("cat", "")).lower()
+        if grid is None or ("kernel" not in cat and "kernel" not in str(args.get("kernel type", "")).lower()):
+            continue
+        block_keys = next((ks for ks in (("blockX", "blockY", "blockZ"), ("block_x", "block_y", "block_z"),
+                                         ("Block X", "Block Y", "Block Z")) if all(k in args for k in ks)), None)
+        launches.append({"name": str(e.get("name", "")), "grid": grid,
+                         "block": [int(args[k]) for k in block_keys] if block_keys else None})
+    main = [x for x in launches if "splitk" in x["name"].lower() and "reduce" not in x["name"].lower()]
+    reductions = [x for x in launches if "splitkreduce" in x["name"].lower()]
+    split_k = main[-1]["grid"][2] if main and main[-1]["grid"][2] > 1 else None
+    return {"launches": launches, "split_k": split_k, "reduction_kernels": reductions,
+            "ok": not main or (split_k is not None and bool(reductions))}
+
+
+def _kernels(fn, trace_path: Path) -> dict[str, Any]:
+    """One launch's CUDA kernels and launch geometry, by Kineto's Chrome trace."""
     import torch
 
     with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA]) as prof:
         fn()
         torch.cuda.synchronize()
-    return sorted({e.name for e in prof.events() if str(getattr(e, "device_type", "")).endswith("CUDA")})
+    prof.export_chrome_trace(str(trace_path))
+    return _profile_record(json.loads(trace_path.read_text()))
+
+
+def cublas_version() -> int | None:
+    """The runtime cuBLAS version selected by this process, via cuBLAS's public API."""
+    path = ctypes.util.find_library("cublas")
+    if not path:
+        return None
+    lib = ctypes.CDLL(path)
+    handle, version = ctypes.c_void_p(), ctypes.c_int()
+    if lib.cublasCreate_v2(ctypes.byref(handle)) != 0:
+        return None
+    try:
+        return int(version.value) if lib.cublasGetVersion_v2(handle, ctypes.byref(version)) == 0 else None
+    finally:
+        lib.cublasDestroy_v2(handle)
 
 
 # ------------------------------------------------------------------------------------------------------------------- selection
@@ -353,7 +433,7 @@ def _kernel_of(keys: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phase: str, name: str, M: int,
-           seed: int) -> tuple[dict[str, Any], dict[str, Any]]:
+           seed: int, served_default: bool) -> tuple[dict[str, Any], dict[str, Any]]:
     """One case on the GPU, twice, timed and profiled; returns (launch record, comparison job)."""
     import torch
 
@@ -365,6 +445,7 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
         w, wpath = weights.get(model, "mlp.gate")
         gate.weight.data.copy_(w)
         x = _activation(gen, M, m.hidden, probe=name == PROBE)
+        probe_n = _install_splitk_probe(x, gate.weight.data) if served_default and name != PROBE and M > 16 else 0
         with DispatchTap() as tap:
             outs = [gate(x)[0].clone() for _ in range(2)]
         rec.update(K=m.hidden, N=m.experts, kernel=_kernel_of(tap.keys), expected=expected_kernel(M, model), dispatches=tap.keys)
@@ -372,13 +453,14 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
                               and all(k["pdl"] == (M == 1) and (k["K"], k["N"]) == (m.hidden, m.experts) for k in tap.keys))
         rec["operands_ok"] = outs[0].dtype == torch.float32 and list(outs[0].shape) == [M, m.experts]
         fn = lambda: gate(x)                                                       # noqa: E731
-        paths = {**wpath, **_save(d, x=_u16(x), out=_u32(outs[0]))}
+        paths = {**wpath, **_save(d, x=_u16(x), w=_u16(gate.weight.data), out=_u32(outs[0]))}
     elif phase in ("linear", "f32out"):
         from vllm.model_executor.layers.utils import dispatch_unquantized_gemm
 
         w, wpath = weights.get(model, name)
         K, N = w.shape[1], w.shape[0]
         x = _activation(gen, M, K)
+        probe_n = _install_splitk_probe(x, w) if served_default else 0
         if phase == "linear":
             gemm, layer = dispatch_unquantized_gemm(), torch.nn.Module()
             fn = lambda: gemm(layer, x, w, None)                                   # noqa: E731
@@ -387,8 +469,9 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
         outs = [fn().clone() for _ in range(2)]
         dtype = torch.bfloat16 if phase == "linear" else torch.float32
         rec.update(K=K, N=N, operands_ok=outs[0].dtype == dtype and list(outs[0].shape) == [M, N])
-        paths = {**wpath, **_save(d, x=_u16(x), out=(_u16 if phase == "linear" else _u32)(outs[0]))}
+        paths = {**wpath, **_save(d, x=_u16(x), w=_u16(w), out=(_u16 if phase == "linear" else _u32)(outs[0]))}
     else:
+        probe_n = 0
         b, wpath = weights.get(model, name)
         K, N = b.shape[1], b.shape[2]
         if name == "q_nope_absorb":
@@ -415,11 +498,12 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
     rec["deterministic"] = bool(torch.equal(outs[0], outs[1]))
     rec["us"] = _time_us(fn)
     try:
-        rec["kernels"] = _kernels(fn)
+        rec["profile"] = _kernels(fn, d / "profile.json")
     except Exception as e:  # noqa: BLE001
-        rec["kernels"] = {"error": _error(e)}
+        rec["profile"] = {"error": _error(e), "ok": False}
+    rec["probe_columns"] = probe_n
     job = {"model": model, "phase": phase, "case": name, "M": M, "K": rec["K"], "N": rec["N"], "kernel": rec.get("kernel"),
-           "paths": paths}
+           "paths": paths, "split_k": rec["profile"].get("split_k"), "probe_columns": probe_n}
     return rec, job
 
 
@@ -452,6 +536,9 @@ def _reference(job: dict[str, Any], a: dict[str, np.ndarray], r: int, n: int, fm
         return evaluate(bind(CB.BatchedGemmWord, B=1, K=K, N=1, DOT=hop), a["a"][h, r].tolist(), np.asarray(a["b"][h][:, c]).tolist())
     x = a["x"][r].tolist()
     w = a["w"][n].tolist()
+    if job.get("split_k"):
+        target = CB.CublasSplitKGemmF32OutWord if job["phase"] in ("router", "f32out") else CB.CublasSplitKGemmWord
+        return evaluate(bind(target, K=K, N=1, SPLIT_K=job["split_k"], DOT=hop), x, w)
     if job["phase"] == "linear":
         return evaluate(bind(CG.Gemm, K=K, N=1, DOT=hop), x, w)
     k = job.get("kernel") or {}
@@ -484,7 +571,10 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
         want = {None: BC.bmm_rows(np.asarray(a["a"][:, r0:r1]), np.asarray(a["b"])).transpose(1, 0, 2).reshape(r1 - r0, -1)}
     else:
         x, w, got = np.asarray(a["x"][r0:r1]), np.asarray(a["w"]), np.asarray(a["out"][r0:r1])
-        if job["phase"] == "linear":
+        if job.get("split_k"):
+            output = "f32" if job["phase"] in ("router", "f32out") else "bf16"
+            want = {None: BC.cublas_splitk_rows(x, w, job["split_k"], out=output)}
+        elif job["phase"] == "linear":
             want = {None: BC.linear_rows(x, w)}
         elif k.get("kind") == "dotprod":
             want = {f: BC.dotprod_rows(x, w, BS=k["BS"], VEC=k["VEC"], FMA=f) for f in (1, 0)}
@@ -513,12 +603,23 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
                 y = _reference(job, a, r, n, f)
                 rec["reference_coords"] += 1
                 rec["twin_mismatch"] += not bool(MK._words_equal(np.asarray(y[0], wv.dtype), wv[r - r0, n], f32_words=f32))
-    return {"model": job["model"], "phase": job["phase"], "case": job["case"], "M": job["M"], "rows": job["rows"], **rec}
+    hypotheses = None
+    if job.get("split_k") and r0 == 0 and job.get("probe_columns"):
+        n = job["probe_columns"]
+        output = "f32" if job["phase"] in ("router", "f32out") else "bf16"
+        models = BC.cublas_splitk_hypotheses(np.asarray(a["x"][0:1]), np.asarray(a["w"][:n]), job["split_k"], out=output)
+        actual = np.asarray(a["out"][0:1, :n])
+        hypotheses = {
+            name: int((~MK._words_equal(actual, words, f32_words=output == "f32")).sum())
+            for name, words in models.items()
+        }
+    return {"model": job["model"], "phase": job["phase"], "case": job["case"], "M": job["M"], "rows": job["rows"],
+            "hypothesis_mismatch": hypotheses, **rec}
 
 
 # ------------------------------------------------------------------------------------------------------------------------ bind
-def bind_check(models: list[str] = list(MODELS)) -> dict[str, Any]:
-    """Every Definition binds at each model's statics, its operands at the served shapes."""
+def bind_check(models: list[str] = list(MODELS), launches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Every Definition binds at each model's statics, including each default split count read from the profiler."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.batch import type_shape
@@ -544,6 +645,12 @@ def bind_check(models: list[str] = list(MODELS)) -> dict[str, Any]:
         targets += [(bind(CG.Gemm, K=K, N=N, DOT=hop), [[K], [N, K], [N]]) for _, K, N in m.linear]
         targets += [(bind(CB.GemmF32OutWord, K=K, N=N, DOT=hop), [[K], [N, K], [N]]) for _, K, N in m.f32out]
         targets += [(bind(CB.BatchedGemmWord, B=NHL, K=K, N=N, DOT=hop), [[NHL, K], [NHL, N, K], [NHL, N]]) for _, K, N in m.bmm]
+    for x in launches or []:
+        splits = x.get("profile", {}).get("split_k")
+        if not splits:
+            continue
+        target = CB.CublasSplitKGemmF32OutWord if x["phase"] in ("router", "f32out") else CB.CublasSplitKGemmWord
+        targets.append((bind(target, K=x["K"], N=x["N"], SPLIT_K=splits, DOT=hop), [[x["K"]], [x["N"], x["K"]], [x["N"]]]))
     out = {}
     for t, want in targets:
         params, ret = t.signature()
@@ -553,7 +660,8 @@ def bind_check(models: list[str] = list(MODELS)) -> dict[str, Any]:
 
 # -------------------------------------------------------------------------------------------------------------------- verdict
 def _launch_ok(x: dict[str, Any]) -> bool:
-    return bool(x["deterministic"] and x.get("operands_ok", True) and x.get("dispatch_ok", True))
+    return bool(x["deterministic"] and x.get("operands_ok", True) and x.get("dispatch_ok", True)
+                and x.get("profile", {}).get("ok", True))
 
 
 def fma_of(t: dict[str, Any]) -> int | None:
@@ -585,10 +693,12 @@ def case_verdicts(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 c["totals"][k] += r[k]
     fma = doc.get("fma")
     failed = {"/".join(p[:4]) for p in (e.split("/") for e in doc["errors"]) if len(p) >= 4 and p[1] in PHASES}
+    split = {_case(x) for x in doc["launches"] if x.get("profile", {}).get("split_k")}
     for key, c in out.items():
         t = c["totals"]
         fma_ok = t["dotprod_words"] == 0 or (fma is not None and t[f"fma{fma}_mismatch"] == 0)
-        c["ok"] = c["launch_ok"] and _words_ok(t) and fma_ok and key not in failed
+        c["hypothesis_ok"] = key not in split or doc.get("splitk_hypotheses", {}).get(key, {}).get("ok") is True
+        c["ok"] = c["launch_ok"] and _words_ok(t) and fma_ok and c["hypothesis_ok"] and key not in failed
     for key in sorted(failed - set(out)):
         out[key] = {"launch_ok": False, "totals": {k: 0 for k in TOTALS}, "ok": False}
     return out
@@ -602,10 +712,12 @@ def model_verdicts(doc: dict[str, Any]) -> dict[str, bool]:
 
 def _verdict(doc: dict[str, Any]) -> bool:
     return (doc["gate"]["ok"] and not doc["errors"] and doc["switch"].get("ok") is True
+            and isinstance(doc["switch"].get("cublas_version"), int)
             and all(s.get("ok") is True for s in doc["selection"].values()) and bool(doc["selection"])
             and doc["bind"].get("ok") is True and {_case(x) for x in doc["launches"]} == set(doc["expected"])
             and all(_launch_ok(x) for x in doc["launches"]) and _words_ok(doc["totals"]) and doc.get("fma") is not None
-            and all(c["ok"] for c in doc["cases"].values()) and all(model_verdicts(doc).values()))
+            and all(c["ok"] for c in doc["cases"].values()) and all(model_verdicts(doc).values())
+            and (not doc.get("require_served_default") or doc.get("served_default", {}).get("ok") is True))
 
 
 # --------------------------------------------------------------------------------------------------------------------- default
@@ -621,6 +733,9 @@ def default_run(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
     (outdir / "served_default.log").write_text(proc.stdout + proc.stderr)
     doc = json.loads((sub / RECORD).read_text())
     return {"returncode": proc.returncode, "ok": doc["ok"], "digest": doc["digest"], "errors": sorted(doc["errors"]),
+            "model_verdicts": doc.get("model_verdicts"), "cublas_version": doc.get("switch", {}).get("cublas_version"),
+            "profiles": {_case(x): x.get("profile") for x in doc["launches"]},
+            "splitk_hypotheses": doc.get("splitk_hypotheses"),
             "changed": sorted(k for k, c in doc["cases"].items() if not c["ok"]), "us": {k: c.get("us") for k, c in doc["cases"].items()}}
 
 
@@ -643,10 +758,13 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     env = environment(a.served_default, work / "triton_cache")
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
+    from verity_vllm.program.registry import bf16_gemm_check as BC
 
     tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")
     todo = cases(a.quick, only, models)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": a.quick, "served_default": a.served_default,
+                           "variant": "served_default" if a.served_default else "split_k_off",
+                           "require_served_default": not a.served_default and not a.no_default,
                            "models": models, "expected": [case_key(*c) for c in todo], "environment": G._environment(),
                            "gate": C.gate(a.min_driver, a.want_cc, a.want_sms), "errors": {}}
     print(f"[glm53-bf16-gemm] gate {json.dumps(doc['gate'])}", flush=True)
@@ -676,7 +794,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         for i, (model, phase, name, M) in enumerate(todo):
             key = case_key(model, phase, name, M)
             try:
-                launch_rec, job = launch(work, weights, gates, model, phase, name, M, 7000 + i)
+                launch_rec, job = launch(work, weights, gates, model, phase, name, M, 7000 + i, a.served_default)
                 doc["launches"].append(launch_rec)
                 jobs += jobs_of(job)
                 print(f"[glm53-bf16-gemm] {key:48s} K={launch_rec['K']:5d} N={launch_rec['N']:5d} kernel={launch_rec.get('kernel')} "
@@ -688,7 +806,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         del weights
         torch.cuda.empty_cache()
     try:
-        doc["bind"] = bind_check(models)
+        doc["bind"] = bind_check(models, doc["launches"])
     except Exception as e:  # noqa: BLE001
         doc["errors"]["bind"] = _error(e)
         doc["bind"] = {"ok": False}
@@ -701,12 +819,23 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                 doc["errors"][case_key(*key) + "/compare"] = res["error"]
                 continue
             agg = results.setdefault(key, {"model": key[0], "phase": key[1], "case": key[2], "M": key[3], **{k: 0 for k in TOTALS},
-                                           "first_mismatch": None})
+                                           "first_mismatch": None, "hypothesis_mismatch": None})
             for k in TOTALS:
                 agg[k] += res[k]
             agg["first_mismatch"] = agg["first_mismatch"] or res["first_mismatch"]
+            agg["hypothesis_mismatch"] = agg["hypothesis_mismatch"] or res.get("hypothesis_mismatch")
     doc["comparisons"] = list(results.values())
     doc["totals"] = {k: sum(r[k] for r in doc["comparisons"]) for k in TOTALS}
+    doc["splitk_hypotheses"] = {}
+    for r in doc["comparisons"]:
+        if r.get("hypothesis_mismatch"):
+            fit = sorted(k for k, v in r["hypothesis_mismatch"].items() if v == 0)
+            doc["splitk_hypotheses"][_case(r)] = {
+                "hypothesis": BC.CUBLAS_SPLITK_HYPOTHESIS,
+                "mismatch": r["hypothesis_mismatch"],
+                "fits": fit,
+                "ok": fit == [BC.CUBLAS_SPLITK_HYPOTHESIS],
+            }
     doc["fma"] = fma_of(doc["totals"])
     doc["cases"] = case_verdicts(doc)
     for key, c in doc["cases"].items():
@@ -727,8 +856,10 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
     verdicts = " ".join(f"{m}={'GO' if ok else 'NO-GO'}" for m, ok in doc["model_verdicts"].items())
+    default_verdict = (" standalone" if a.served_default or a.no_default else
+                       f" served_default={'GO' if doc.get('served_default', {}).get('ok') else 'NO-GO'}")
     print(f"{tag} {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} {verdicts} fma={doc['fma']} totals={json.dumps(doc['totals'])} "
-          f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}", flush=True)
+          f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}{default_verdict}", flush=True)
     return doc
 
 

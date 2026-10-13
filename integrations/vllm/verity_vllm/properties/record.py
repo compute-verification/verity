@@ -42,7 +42,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "fused_moe_kernel (TritonExperts) for its experts, every expert launch runs its dot as k32 e4m3 wgmma, and at GLM-5.3's "
              "shapes every output word of every launch equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v1 at the launch's "
              "statics, and every activation quant equals Fp8GroupQuant_v1, bit for bit."),
-    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v2",
+    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v3",
              "On the capture's Hopper GPU, GLM-5.3's and DeepSeek-V4-Pro's MoE gates (GateLinear) run cuteDSL ll_bf16_gemm on the "
              "kernel dispatch_sm90 names at M <= 16 and cuBLAS past it, and under the split-K-off cuBLAS switch every f32 gate word "
              "equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1 or GemmF32Out_v1, every DeepSeek-V4-Pro "

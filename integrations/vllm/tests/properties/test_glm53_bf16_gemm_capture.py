@@ -112,6 +112,28 @@ def test_the_stress_rows_decide_the_dotprod_contraction(tmp_path, fma: int) -> N
     assert X.fma_of({**t, "fma_differ": 3, "fma0_mismatch": 1, "fma1_mismatch": 2}) is None
 
 
+def test_the_splitk_probe_distinguishes_every_hypothesis() -> None:
+    x, w = X.splitk_probe_words(256)
+    for output in ("f32", "bf16"):
+        models = BC.cublas_splitk_hypotheses(x[None], w, 8, out=output)
+        candidate = models[BC.CUBLAS_SPLITK_HYPOTHESIS]
+        assert all(not np.array_equal(candidate, words) for name, words in models.items()
+                   if name != BC.CUBLAS_SPLITK_HYPOTHESIS), output
+
+
+def test_the_profiler_record_pins_grid_split_count_and_reduction() -> None:
+    trace = {"traceEvents": [
+        {"cat": "kernel", "name": "nvjet_bz_splitK_TNT",
+         "args": {"gridX": 4, "gridY": 3, "gridZ": 8, "blockX": 256, "blockY": 1, "blockZ": 1}},
+        {"cat": "kernel", "name": "void cublasLt::splitKreduce_kernel<32>()", "args": {"grid": [12, 1, 1]}},
+    ]}
+    got = X._profile_record(trace)
+    assert got["ok"] and got["split_k"] == 8
+    assert got["launches"][0]["grid"] == [4, 3, 8] and got["launches"][0]["block"] == [256, 1, 1]
+    assert got["reduction_kernels"][0]["name"].startswith("void cublasLt::splitKreduce")
+    assert not X._profile_record({"traceEvents": trace["traceEvents"][:1]})["ok"]
+
+
 def test_the_gate_kernel_record_is_dispatch_sm90s() -> None:
     assert X._kernel_of([]) == {"kind": "cublas"}
     dot = {"backend": "dotprod", "bs": 128, "split_k": 0, "num_stages": 0}
@@ -199,7 +221,8 @@ def _doc() -> dict:
              {**g, "phase": "bmm", "case": "v_absorb", "M": 1, **NONE, "words": 4, "reference_coords": 1},
              {**d, "phase": "f32out", "case": "compressor.kv_score.c4", "M": 1, **NONE, "words": 4, "reference_coords": 1}]
     doc = {"schema": X.SCHEMA, "models": list(X.MODELS), "expected": [X._case(x) for x in launches], "gate": {"ok": True}, "errors": {},
-           "switch": {"ok": True}, "selection": {m: {"ok": True} for m in X.MODELS}, "bind": {"ok": True}, "launches": launches,
+           "switch": {"ok": True, "cublas_version": 120900}, "selection": {m: {"ok": True} for m in X.MODELS}, "bind": {"ok": True},
+           "launches": launches,
            "comparisons": comps, "totals": dict(TOTALS)}
     doc["fma"] = X.fma_of(doc["totals"])
     doc["cases"] = X.case_verdicts(doc)
@@ -258,7 +281,9 @@ def test_the_default_run_is_a_second_process(tmp_path, monkeypatch) -> None:
         sub = tmp_path / "served_default"
         sub.mkdir()
         cases = {lm: {"ok": False, "us": 6.0}, va: {"ok": True, "us": 3.0}}
-        (sub / X.RECORD).write_text(json.dumps({"ok": False, "digest": "d", "errors": {}, "cases": cases}))
+        (sub / X.RECORD).write_text(json.dumps({"ok": False, "digest": "d", "errors": {}, "cases": cases, "launches": [],
+                                                "switch": {"cublas_version": 120900}, "model_verdicts": {"glm53": False},
+                                                "splitk_hypotheses": {}}))
         return type("P", (), {"returncode": 1, "stdout": "out", "stderr": ""})()
 
     monkeypatch.setattr(X.subprocess, "run", fake_run)
@@ -291,7 +316,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
         monkeypatch.setenv(k, "")
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
-    monkeypatch.setattr(X, "switch", lambda served_default: {"ok": True})
+    monkeypatch.setattr(X, "switch", lambda served_default: {"ok": True, "cublas_version": 120900})
     monkeypatch.setattr(X, "make_gate", lambda cfg, model: object())
     monkeypatch.setattr(X, "selection", lambda gate: {"ok": True})
     todo = [("glm53", "router", "mlp.gate", 5), ("glm53", "router", "mlp.gate", 6), ("glm53", "linear", "lm_head.shard", 5),
@@ -301,7 +326,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
             ("glm53", "linear", 5): _job(tmp_path, "linear", flip=(1, 2)), ("glm53", "bmm", 5): _job(tmp_path, "bmm"),
             ("dsv4-pro", "router", 5): _job(tmp_path, "tail", fma=0), ("dsv4-pro", "f32out", 5): _job(tmp_path, "f32out")}
 
-    def launch(work, weights, gates, model, phase, name, M, seed):
+    def launch(work, weights, gates, model, phase, name, M, seed, served_default):
         job = jobs[(model, phase, M)]
         rec = {"model": model, "phase": phase, "case": name, "M": M, "K": job["K"], "N": job["N"], "deterministic": True,
                "operands_ok": True, "us": 2.0}
@@ -331,6 +356,8 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert doc["models"] == ["dsv4-pro"] and doc["model_verdicts"] == {"dsv4-pro": True} and len(doc["cases"]) == 2
     assert "GLM53-BF16-GEMM GO" in capsys.readouterr().out
     jobs[("glm53", "linear", 5)] = _job(tmp_path, "linear")
+    monkeypatch.setattr(X, "default_run", lambda a, outdir: {"ok": True, "changed": [],
+                                                             "us": {"glm53/router/mlp.gate/M5": 1.0}})
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default"]) == 0
     assert "GLM53-BF16-GEMM GO" in (printed := capsys.readouterr().out) and "glm53=GO dsv4-pro=GO" in printed
 
