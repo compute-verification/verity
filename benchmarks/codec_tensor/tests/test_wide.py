@@ -51,7 +51,7 @@ def test_fields():
         assert not any(_probably_prime((1 << f.n) - c) for c in range(1, f.c, 4)), f"{f.name}: c is the smallest"
         if W.tc_ok(f):
             assert f.n % 256 == 255 and (1 << (8 * f.word_bytes)) % f.p == 2 * f.c
-    full = ["p512", "p768", "p1536", "p2048"]
+    full = ["p512", "p768", "p1024", "p1536", "p2048"]
     assert [n for n, f in W.FIELDS.items() if f.full_slot] == full
     for name in full:
         f = W.field(name)
@@ -111,6 +111,35 @@ def test_key_derivation():
         W.key("p767", SEED[:31], 1)
     with pytest.raises(ValueError, match="round"):
         W.key("p767", SEED, 0)
+    with pytest.raises(ValueError, match="round"):
+        W.key("p767", SEED, W.MASK_INDEX)
+
+
+@pytest.mark.parametrize("name", list(W.FIELDS))
+@pytest.mark.parametrize("rounds", [1, 2, 3])
+def test_masked_round_trip(name, rounds):
+    plain, k = W.key(name, SEED, rounds), W.key(name, SEED, rounds, mask=True)
+    f = k.field
+    assert k.c == plain.c and k.tau == plain.tau and plain.mask is None
+    assert k.mask.bit_length() <= f.n and abs(k.mask.bit_count() - f.n / 2) < f.n / 8
+    rng = random.Random(f"{name}/{rounds}/mask")
+    top = f.max_payload
+    for i, m in enumerate([0, 1, top] + [rng.randrange(top + 1) for _ in range(6)]):
+        y = W.encode_word(m, 1000 + i, k)
+        assert 0 <= y < f.p and W.decode_word(y, 1000 + i, k) == m
+        assert (y == W.encode_word(m, 1000 + i, plain)) == (rounds == 1)
+
+
+@pytest.mark.parametrize("name", [n for n, f in W.FIELDS.items() if f.full_slot])
+def test_sigma_rare_branch(name):
+    k = W.key(name, SEED, 2, mask=True)
+    f = k.field
+    ms = W.sigma_rare_payloads(k, 77)
+    assert len(ms) == 4
+    for j, m in enumerate(ms):
+        x = W.rho((m + k.c[0] + k.tweak(77)) % f.p, f)
+        assert (k.sigma(x) == x) == (j < 3) and k.sigma(k.sigma(x)) == x
+        assert W.decode_word(W.encode_word(m, 77, k), 77, k) == m
 
 
 @pytest.mark.parametrize("name", list(W.FIELDS))
@@ -140,7 +169,7 @@ def test_word_round_trip(name, rounds):
         pytest.fail("every random word decoded")
 
 
-@pytest.mark.parametrize("name", ["p255", "m521", "m1279", "p512", "p768", "p1536", "p2048"])
+@pytest.mark.parametrize("name", ["p255", "m521", "m1279", "p512", "p768", "p1024", "p1536", "p2048"])
 def test_tasks_round_trip(name):
     k = W.key(name, SEED, 1)
     f = k.field
@@ -161,8 +190,9 @@ def test_vectors():
     vectors = json.loads((HERE / "vectors.json").read_text())
     assert vectors["seed"] == SEED.hex()
     assert {v["field"] for v in vectors["words"]} == set(W.FIELDS)
+    assert {v["field"] for v in vectors["words"] if v.get("mask")} == {n for n, f in W.FIELDS.items() if f.full_slot}
     for v in vectors["words"]:
-        k = W.key(v["field"], SEED, v["rounds"])
+        k = W.key(v["field"], SEED, v["rounds"], mask=v.get("mask", False))
         f = k.field
         m = int.from_bytes(bytes.fromhex(v["payload"]), "little")
         y = W.encode_word(m, v["index"], k)

@@ -133,7 +133,8 @@
         "benchmarks/pous/",
         "benchmarks/bandwidth/",
         "benchmarks/vllm_encoded/",
-        "benchmarks/word_codec/"
+        "benchmarks/word_codec/",
+        "benchmarks/codec_tensor/"
       ]
     },
     {

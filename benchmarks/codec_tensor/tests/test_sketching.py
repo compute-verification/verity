@@ -3,6 +3,7 @@ stored bytes, B from the prmt-expanded sign words) equals S · e_v over `vectors
 the module docstring says (and nowhere else), and the signs and tags are pinned."""
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -30,6 +31,19 @@ def test_fragments_equal_vectors(sb: int, k: int):
     got = SK.fragment_sketch(store, nbs, nchunks, sb, groups, t, SK.sign_fragments(bits, m, t), k)
     assert want.shape == (groups * nchunks * SK.tiles_per_cta(nbs, groups, t) * 16, k)
     assert np.array_equal(got, want)
+
+
+@pytest.mark.parametrize("t", [1, 2, 8])
+def test_b_fragments_are_the_prmt_registers(t: int):
+    """The sketch warps' fragments (wt_sign_frags: registers 0, 1, 2 the prmt of a word at e = 0, 1, 2, register 3 of
+    the word >> 16 at e = 0) are the B registers the prmt expansion of `sign_fragments` gives, and they carry S."""
+    m = SK.steps(8192)
+    bits = SK.sign_bits(SEED, 16, SK.vector_bytes(8192, t))
+    words, frags = SK.sign_fragments(bits, m, t), SK.b_fragments(bits, m, t)
+    want = [SK.prmt(*SK.PRMT[r % 3], (int(w) >> (16 if r == 3 else 0)) & 0xFFFF) for w in words for r in range(4)]
+    assert np.array_equal(frags, np.array(want, dtype=np.uint32))
+    signs = frags.view(np.uint8).view(np.int8).reshape(t, m, 8, 4, 2, 2, 4).astype(np.int64)   # ii, s, g, tq, blk, h, q
+    assert np.array_equal(signs.transpose(4, 2, 0, 1, 5, 3, 6).reshape(16, -1), 1 - 2 * bits.astype(np.int64))
 
 
 @pytest.mark.parametrize("sb", [8192, 8256])
@@ -78,7 +92,23 @@ def test_pins():
     assert fast is None or fast == tags
 
 
+def test_pass_seed():
+    """Pass j's seed binds σ, j and every byte of root_(j−1), so each pass's signs are fresh (red team F29)."""
+    root = bytes(range(64))
+    s = SK.pass_seed(SEED, 3, root)
+    assert s == hashlib.sha512(b"verity/remote-bandwidth/seed/v0\0" + SEED + (3).to_bytes(4, "big") + root).digest()[:32]
+    assert s.hex() == PIN_PASS_SEED
+    others = {SK.pass_seed(SEED, 4, root), SK.pass_seed(SEED, 3, root[:63] + b"\xff"), SK.pass_seed(s, 3, root)}
+    assert len(others | {s}) == 4
+    assert not np.array_equal(SK.sign_bits(s, 16, 4096), SK.sign_bits(SK.pass_seed(SEED, 4, root), 16, 4096))
+    with pytest.raises(ValueError):
+        SK.pass_seed(SEED, 1 << 32, root)
+
+
 # Equal to ra-sketch-tag's `sketch.sign_bits` and `sketch.tags_of` (benchmarks/sketch_tag, checked 12 Oct).
 PIN_SIGNS = "b8d365fd851a03a15a362aacdf5279ae"
 PIN_TAG0 = "adeb6d8a23d278c83f228c489fe3cba9c65e1734f16509c3a763fe68417fe773"
 PIN_TAG15 = "cc570da7530a446ef5c196da1da0ea452237cc4ad57921584745487a129a5b42"
+# The first 32 bytes of ra-remote-driver's `receipts.seed(SEED, 3, bytes(range(64)))` (cursor/ra-remote-driver-e45e,
+# checked 12 Oct).
+PIN_PASS_SEED = "2a07234e952d7eba243f5e881fbbfba3ac2597accaaf9bbffe3e9a2a4978d97f"

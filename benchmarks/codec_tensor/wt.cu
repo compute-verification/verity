@@ -1,5 +1,5 @@
 // Sloth over one wide word on the RTX PRO 6000 (sm_120): `wide.py` is the reference. One build per field, WT_FIELD = n
-// (255, 511, 521, 767, 1023, 1279, or the full-slot 512, 768, 1536 and 2048; p = 2^n - c as in `wide.FIELDS`).
+// (255, 511, 521, 767, 1023, 1279, or the full-slot 512, 768, 1024, 1536 and 2048; p = 2^n - c as in `wide.FIELDS`).
 //
 // Two squarings mod p:
 //   CUDA cores   a thread per word, NL 32-bit limbs; the square column by column (mad.lo.cc / madc.hi.cc / addc, each
@@ -16,7 +16,9 @@
 // cores, the squaring on tensor cores, and both at once in one CTA (the adversary's rate with both units); the FP8 GEMM in
 // its warp-specialized form (`benchmarks/word_codec/wc.cu`'s gemm_ws) on plain fragments, with a knob of extra int8 MMAs
 // or IMADs a tile (the tensor-core and CUDA-core budget of the memory-bound step), and fused with the decode of each task.
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <cuda_runtime.h>
 
 #ifndef WT_FIELD
@@ -52,6 +54,9 @@ constexpr u32 CF = 569;
 #elif WT_FIELD == 768
 constexpr int NBITS = 768, TW = 86;
 constexpr u32 CF = 825;
+#elif WT_FIELD == 1024
+constexpr int NBITS = 1024, TW = 64;
+constexpr u32 CF = 105;
 #elif WT_FIELD == 1536
 constexpr int NBITS = 1536, TW = 43;
 constexpr u32 CF = 3453;
@@ -70,13 +75,27 @@ constexpr bool TC_OK = S == 32 * U && NBITS == 8 * S - 1;
 static_assert(FULL_SLOT ? Q == NL : (R > 0 && Q == NL - 1), "the top limb holds bits 32Q .. n - 1");
 static_assert(CF % 4 == 1 && CF < 4096, "p = 3 mod 4, c small");
 static_assert(TW * PB >= 8192 && (TW * S) % 16 == 0, "a task's words");
-constexpr int MAXK = 2;
+constexpr int MAXK = 3;
 constexpr int TASK_BYTES = 8192;
 constexpr int SB = TW * S;                              // a task's stored bytes
+// WT_MASK=1: `wide.py`'s masked word, σ_K (kMask) between consecutive rounds. WT_FOLD6=1: sqr is ra-squaring-ceiling's
+// FOLD 6 (`benchmarks/word_codec/kv.cu`'s KV_FOLD6), its half squares ordered to fit the p1024 12-warp fused kernels;
+// 2: its half squares folded as they are made (sqr_fold6_lean).
+#ifndef WT_MASK
+#define WT_MASK 0
+#endif
+#ifndef WT_FOLD6
+#define WT_FOLD6 0
+#endif
+constexpr bool MASKED = WT_MASK, FOLD6 = WT_FOLD6;
+static_assert(!MASKED || FULL_SLOT, "σ_K's test against p is the full-slot one");
+static_assert(!FOLD6 || (FULL_SLOT && NL % 2 == 0), "FOLD 6 halves the limbs, and folds at full slot");
 
 __constant__ u32 kC[MAXK][NL];
+__constant__ u32 kD[MAXK][NL];   // (c_0 - c_j) mod p, the decode's round j against w = -(c_0 + t)
 __constant__ u32 kTau[NL];
 __constant__ u32 kP[NL];
+__constant__ u32 kMask[NL];
 #ifdef WT_DEBUG_DUMP
 __device__ uint8_t *g_dbg;   // the fused MMA warp's operand bytes, TASK_BYTES a store task
 #endif
@@ -92,6 +111,41 @@ __device__ __forceinline__ void mac(u32 *r, u32 a, u32 b) {
 __device__ __forceinline__ void add3(u32 *r, u32 a, u32 b) {
   asm("add.cc.u32 %0, %0, %3;\n\taddc.cc.u32 %1, %1, %4;\n\taddc.u32 %2, %2, 0;" : "+r"(r[0]), "+r"(r[1]), "+r"(r[2])
       : "r"(a), "r"(b));
+}
+
+// Carry chains in PTX (one SASS instruction a limb, against two to three for the u64 forms below). The flag lives
+// between consecutive asm volatile statements, which the compiler keeps in order.
+__device__ __forceinline__ u32 add_cc(u32 a, u32 b) { u32 r; asm volatile("add.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 addc_cc(u32 a, u32 b) { u32 r; asm volatile("addc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 addc(u32 a, u32 b) { u32 r; asm volatile("addc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 sub_cc(u32 a, u32 b) { u32 r; asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 subc_cc(u32 a, u32 b) { u32 r; asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 subc(u32 a, u32 b) { u32 r; asm volatile("subc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
+__device__ __forceinline__ u32 madlo_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("mad.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madclo_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("madc.lo.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madhi_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("mad.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madchi_cc(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("madc.hi.cc.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+__device__ __forceinline__ u32 madchi(u32 a, u32 b, u32 c) {
+  u32 r; asm volatile("madc.hi.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(b), "r"(c)); return r;
+}
+
+// x += a (a < 2^32) into NL limbs; returns the carry out of 2^(32 NL). The carry leaves limb 0 with probability
+// a / 2^32 (every caller's a is at most c^2 + c < 2^24), so the rest of the chain is a branch.
+__device__ __forceinline__ u32 add_small(u32 (&x)[NL], u32 a) {
+  x[0] += a;
+  if (x[0] >= a) return 0u;
+  x[1] = add_cc(x[1], 1u);
+#pragma unroll
+  for (int k = 2; k < NL; ++k) x[k] = addc_cc(x[k], 0u);
+  return addc(0u, 0u);
 }
 
 // t = a^2, a < 2^(32 NL): column m sums each unordered pair once, doubles, adds the diagonal and the carry in.
@@ -140,14 +194,7 @@ __device__ __forceinline__ void fold(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
       x[k] = (u32)v;
       carry = v >> 32;
     }
-    u64 c = carry * CF;
-#pragma unroll
-    for (int k = 0; k < NL; ++k) {
-      c += x[k];
-      x[k] = (u32)c;
-      c >>= 32;
-    }
-    x[0] += (u32)c * CF;
+    if (add_small(x, (u32)carry * CF)) add_small(x, CF);
   } else {
     constexpr int QY = Q % NL;
     u32 y[NL + 1];
@@ -218,10 +265,230 @@ __device__ __forceinline__ void sqr_fold(const u32 (&a)[NL], u32 (&x)[NL]) {
   fold_top(x, c0, c1);
 }
 
+// WT_FOLD6=1: ra-squaring-ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`, as `benchmarks/word_codec/kv.cu`'s
+// KV_FOLD6). sqr_dbl_n is its FOLD 5 square: the off-diagonal products column by column, each column's accumulator
+// starting at the previous one's carry, then y = 2 S + sum a_i^2 2^(64 i) in one carry chain.
+template <int N>
+__device__ __forceinline__ void sqr_dbl_n(const u32 (&a)[N], u32 (&y)[2 * N]) {
+  u32 s[2 * N];
+  u32 c0 = 0, c1 = 0;
+  s[0] = 0;
+#pragma unroll
+  for (int m = 1; m < 2 * N - 2; ++m) {
+    u32 r[3] = {c0, c1, 0};
+#pragma unroll
+    for (int i = (m < N ? 0 : m - N + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+    s[m] = r[0];
+    c0 = r[1];
+    c1 = r[2];
+  }
+  s[2 * N - 2] = c0;
+  s[2 * N - 1] = c1;
+  u32 d[2 * N];
+  d[0] = 0;
+#pragma unroll
+  for (int k = 1; k < 2 * N; ++k) d[k] = __funnelshift_l(s[k - 1], s[k], 1);
+  y[0] = madlo_cc(a[0], a[0], d[0]);
+  y[1] = madchi_cc(a[0], a[0], d[1]);
+#pragma unroll
+  for (int i = 1; i < N; ++i) {
+    y[2 * i] = madclo_cc(a[i], a[i], d[2 * i]);
+    y[2 * i + 1] = madchi_cc(a[i], a[i], d[2 * i + 1]);
+  }
+}
+
+// FOLD 6's square: one Karatsuba level, a = a1 B + a0, a^2 = C B^2 + (A + C - D) B + A with A = a0^2, C = a1^2,
+// D = |a0 - a1|^2, each a FOLD 5 square. A and D come first and go into E = A_hi + (A - D) (2H limbs and a signed
+// top word es) before C starts: a1 is remade from a0 and d (a0 - d, or a0 + d when a0 < a1) with a dependence on es
+// ((es + 1) >> 2 = 0), so neither a1 nor A and D are held across C. Two half squares' columns are in flight at once
+// and no third's inputs wait beside them, which the 12-warp fused decoders' 168 registers hold beside the tweak
+// (A, C, then D spilled 16-32 bytes there). a^2 = A_lo + B (E + es B^2) + B C + B^2 C.
+__device__ __forceinline__ void sqr_fold6(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
+  constexpr int H = NL / 2;
+  u32 x0[H], d[H], e[H];
+#pragma unroll
+  for (int k = 0; k < H; ++k) x0[k] = a[k];
+  d[0] = sub_cc(a[0], a[H]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) d[k] = subc_cc(a[k], a[H + k]);
+  const u32 mask = subc(0u, 0u);   // a0 < a1
+  e[0] = sub_cc(a[H], a[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) e[k] = subc_cc(a[H + k], a[k]);
+#pragma unroll
+  for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
+  u32 A[2 * H], D[2 * H], F[2 * H], E[2 * H];
+  sqr_dbl_n<H>(x0, A);
+  sqr_dbl_n<H>(d, D);
+  F[0] = sub_cc(A[0], D[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) F[k] = subc_cc(A[k], D[k]);
+  const u32 f = subc(0u, 0u);   // A - D's sign word
+  E[0] = add_cc(A[H], F[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) E[k] = addc_cc(A[H + k], F[k]);
+#pragma unroll
+  for (int k = H; k < 2 * H; ++k) E[k] = addc_cc(F[k], 0u);
+  const u32 es = addc(f, 0u);   // -1, 0 or 1
+  // a1 = a0 + (d ^ nm) + (nm & 1): nm all ones (a0 - d) or 0 (a0 + d); nm + nm carries nm & 1 in.
+  const u32 nm = ~mask | ((es + 1u) >> 2);
+  u32 x1[H];
+  x1[0] = add_cc(nm, nm);
+  x1[0] = addc_cc(x0[0], d[0] ^ nm);
+#pragma unroll
+  for (int k = 1; k < H; ++k) x1[k] = addc_cc(x0[k], d[k] ^ nm);
+  u32 C[2 * H];
+  sqr_dbl_n<H>(x1, C);
+#pragma unroll
+  for (int k = 0; k < H; ++k) t[k] = A[k];
+  t[H] = add_cc(E[0], C[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) t[H + k] = addc_cc(E[k], C[k]);
+  const u32 top = addc(es, 0u);   // es plus the carry, signed, sign-extended to 2^(64 H)
+  const u32 ext = (u32)((int)top >> 31);
+  t[3 * H] = top;
+#pragma unroll
+  for (int k = 3 * H + 1; k < 4 * H; ++k) t[k] = ext;
+  t[2 * H] = add_cc(t[2 * H], C[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H - 1; ++k) t[2 * H + k] = addc_cc(t[2 * H + k], C[k]);
+  t[4 * H - 1] = addc(t[4 * H - 1], C[2 * H - 1]);
+}
+
+// fold at full slot as FOLD 1's carry chains (kv.cu's fold): lo + c hi, the low products' chain then the high ones'
+// a limb up, whose carry word h <= c; then h c into the low limbs, and c once more if that carried out. The same x.
+__device__ __forceinline__ void fold_cc(const u32 (&t)[2 * NL], u32 (&x)[NL]) {
+  x[0] = madlo_cc(t[NL], CF, t[0]);
+#pragma unroll
+  for (int k = 1; k < NL; ++k) x[k] = madclo_cc(t[NL + k], CF, t[k]);
+  u32 h = addc(0u, 0u);
+  x[1] = madhi_cc(t[NL], CF, x[1]);
+#pragma unroll
+  for (int k = 2; k < NL; ++k) x[k] = madchi_cc(t[NL + k - 1], CF, x[k]);
+  h = madchi(t[2 * NL - 1], CF, h);
+  if (add_small(x, h * CF)) add_small(x, CF);
+}
+
+__device__ __forceinline__ u32 sub_small(u32 (&x)[NL], u32 b) {
+  const u32 lo = x[0];
+  x[0] = lo - b;
+  if (lo >= b) return 0u;
+  x[1] = sub_cc(x[1], 1u);
+#pragma unroll
+  for (int k = 2; k < NL; ++k) x[k] = subc_cc(x[k], 0u);
+  return subc(0u, 0u) & 1u;
+}
+
+// x[H..NL) += Y[0..H): B Y_lo; the carry into h.
+template <int H>
+__device__ __forceinline__ void add_lo_high(u32 (&x)[NL], const u32 (&Y)[NL], u32 &h) {
+  x[H] = add_cc(x[H], Y[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) x[H + k] = addc_cc(x[H + k], Y[k]);
+  h = addc(h, 0u);
+}
+
+// x[0..H] += c Y[H..2H): B Y_hi = c Y_hi (mod p); the carries out of limb H into cm.
+template <int H>
+__device__ __forceinline__ void add_hi_low(u32 (&x)[NL], const u32 (&Y)[NL], u32 &cm) {
+  x[0] = madlo_cc(Y[H], CF, x[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) x[k] = madclo_cc(Y[H + k], CF, x[k]);
+  x[H] = addc_cc(x[H], 0u);
+  cm = addc(cm, 0u);
+  x[1] = madhi_cc(Y[H], CF, x[1]);
+#pragma unroll
+  for (int k = 2; k <= H; ++k) x[k] = madchi_cc(Y[H + k - 1], CF, x[k]);
+  cm = addc(cm, 0u);
+}
+
+// WT_FOLD6=2: FOLD 6's three half squares (A = a0^2, C = a1^2, D = |a0 - a1|^2 with B = 2^(n/2)), each folded into x as
+// soon as it is made, so neither the double-width square nor the Karatsuba sum is held: B^2 = 2^n = c (mod p), so
+// a^2 = A (1 + B) + C (c + B) - B D, and B Y = B Y_lo + c Y_hi for each. The carries out of limb H wait in cm and those
+// out of 2^n in h (both signed, two's complement) until the end. x < 2^n, x = a^2 (mod p).
+__device__ __forceinline__ void sqr_fold6_lean(const u32 (&a)[NL], u32 (&x)[NL]) {
+  constexpr int H = NL / 2;
+  u32 a0[H], a1[H], d[H], e[H];
+#pragma unroll
+  for (int k = 0; k < H; ++k) {
+    a0[k] = a[k];
+    a1[k] = a[H + k];
+  }
+  d[0] = sub_cc(a0[0], a1[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) d[k] = subc_cc(a0[k], a1[k]);
+  const u32 mask = subc(0u, 0u);
+  e[0] = sub_cc(a1[0], a0[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) e[k] = subc_cc(a1[k], a0[k]);
+#pragma unroll
+  for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
+  u32 Y[NL], h = 0, cm = 0;
+  // Each half square's inputs take h >> 16 (always 0: h <= 2c + 4) after the previous one is folded, so the compiler
+  // makes them one at a time and holds one half square's columns, not three.
+  sqr_dbl_n<H>(a0, Y);
+#pragma unroll
+  for (int k = 0; k < NL; ++k) x[k] = Y[k];
+  add_lo_high<H>(x, Y, h);
+  add_hi_low<H>(x, Y, cm);
+#pragma unroll
+  for (int k = 0; k < H; ++k) a1[k] ^= (h + cm) >> 16;
+  sqr_dbl_n<H>(a1, Y);
+  x[0] = madlo_cc(Y[0], CF, x[0]);
+#pragma unroll
+  for (int k = 1; k < NL; ++k) x[k] = madclo_cc(Y[k], CF, x[k]);
+  h = addc(h, 0u);
+  x[1] = madhi_cc(Y[0], CF, x[1]);
+#pragma unroll
+  for (int k = 2; k < NL; ++k) x[k] = madchi_cc(Y[k - 1], CF, x[k]);
+  h = madchi(Y[NL - 1], CF, h);
+  add_lo_high<H>(x, Y, h);
+  add_hi_low<H>(x, Y, cm);
+#pragma unroll
+  for (int k = 0; k < H; ++k) d[k] ^= (h + cm) >> 16;
+  sqr_dbl_n<H>(d, Y);
+  x[H] = sub_cc(x[H], Y[0]);
+#pragma unroll
+  for (int k = 1; k < H; ++k) x[H + k] = subc_cc(x[H + k], Y[k]);
+  h = subc(h, 0u);
+  u32 P[H + 1];
+#pragma unroll
+  for (int k = 0; k < H; ++k) P[k] = Y[H + k] * CF;
+  P[H] = 0u;
+  P[1] = madhi_cc(Y[H], CF, P[1]);
+#pragma unroll
+  for (int k = 2; k < H; ++k) P[k] = madchi_cc(Y[H + k - 1], CF, P[k]);
+  P[H] = madchi(Y[2 * H - 1], CF, 0u);
+  x[0] = sub_cc(x[0], P[0]);
+#pragma unroll
+  for (int k = 1; k <= H; ++k) x[k] = subc_cc(x[k], P[k]);
+  cm = subc(cm, 0u);
+  const u32 ext = (u32)((int)cm >> 31);
+  x[H + 1] = add_cc(x[H + 1], cm);
+#pragma unroll
+  for (int k = H + 2; k < NL; ++k) x[k] = addc_cc(x[k], ext);
+  h = addc(h, ext);
+  const int hs = (int)h;
+  if (hs >= 0) {
+    if (add_small(x, (u32)hs * CF)) add_small(x, CF);
+  } else if (sub_small(x, (u32)(-hs) * CF)) {
+    sub_small(x, CF);
+  }
+}
+
 __device__ __forceinline__ void sqr(const u32 (&a)[NL], u32 (&x)[NL]) {
+  if constexpr (WT_FOLD6 == 2) {
+    sqr_fold6_lean(a, x);
+    return;
+  }
   u32 t[2 * NL];
-  sqr_full(a, t);
-  fold(t, x);
+  if constexpr (FOLD6) {
+    sqr_fold6(a, t);
+    fold_cc(t, x);
+  } else {
+    sqr_full(a, t);
+    fold(t, x);
+  }
 }
 
 __device__ __forceinline__ void mul(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
@@ -327,17 +594,12 @@ __device__ __forceinline__ void negate(u32 (&x)[NL]) {
   }
 }
 
-// Carry chains in PTX (one SASS instruction a limb, against two to three for the u64 forms above). The flag lives
-// between consecutive asm volatile statements, which the compiler keeps in order.
-__device__ __forceinline__ u32 add_cc(u32 a, u32 b) { u32 r; asm volatile("add.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-__device__ __forceinline__ u32 addc_cc(u32 a, u32 b) { u32 r; asm volatile("addc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-__device__ __forceinline__ u32 addc(u32 a, u32 b) { u32 r; asm volatile("addc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-__device__ __forceinline__ u32 sub_cc(u32 a, u32 b) { u32 r; asm volatile("sub.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-__device__ __forceinline__ u32 subc_cc(u32 a, u32 b) { u32 r; asm volatile("subc.cc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-__device__ __forceinline__ u32 subc(u32 a, u32 b) { u32 r; asm volatile("subc.u32 %0, %1, %2;" : "=r"(r) : "r"(a), "r"(b)); return r; }
-
-// x < 2p to [0, p), as canon.
+// x < 2p to [0, p), as canon. At full slot x >= p needs x's top limb all ones (p's limbs above the lowest are, c < 2^32),
+// with probability 2^-32 a word.
 __device__ __forceinline__ void canon_cc(u32 (&x)[NL]) {
+  if constexpr (FULL_SLOT) {
+    if (x[NL - 1] != 0xffffffffu) return;
+  }
   u32 y[NL];
   y[0] = add_cc(x[0], CF);
 #pragma unroll
@@ -355,8 +617,42 @@ __device__ __forceinline__ void canon_cc(u32 (&x)[NL]) {
   for (int k = 0; k < NL; ++k) x[k] = ge ? y[k] : x[k];
 }
 
-// x = a + b mod p, a + b < 2p, as addmod.
+// σ_K(x) = x ^ K when that is below p, else x, x canonical at full slot (kv.cu's sigma): x ^ K >= p needs its limbs
+// above the lowest all ones and its lowest at least 2^32 - c, when the XOR is undone. Its top limb all ones
+// (probability 2^-32) is the one test on the fast path.
+__device__ __forceinline__ void sigma(u32 (&x)[NL], const u32 (&m)[NL]) {
+#pragma unroll
+  for (int k = 0; k < NL; ++k) x[k] ^= m[k];
+  if (__builtin_expect(x[NL - 1] != 0xffffffffu, 1)) return;
+  u32 all = x[1];
+#pragma unroll
+  for (int k = 2; k < NL - 1; ++k) all &= x[k];
+  if (all == 0xffffffffu && x[0] >= 0u - CF) {
+#pragma unroll
+    for (int k = 0; k < NL; ++k) x[k] ^= m[k];
+  }
+}
+
+__device__ __forceinline__ void sigma_k(u32 (&x)[NL]) {
+  if constexpr (MASKED) {
+    u32 m[NL];
+#pragma unroll
+    for (int k = 0; k < NL; ++k) m[k] = kMask[k];
+    sigma(x, m);
+  }
+}
+
+// x = a + b mod p, a + b < 2p, as addmod. At full slot, when s = a + b carries out of 2^n, s - p = (s - 2^n) + c < p
+// carries out of limb 0 only rarely (add_small); otherwise s < 2^n and canon_cc takes off p if s >= p.
 __device__ __forceinline__ void addmod_cc(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
+  if constexpr (FULL_SLOT) {
+    x[0] = add_cc(a[0], b[0]);
+#pragma unroll
+    for (int k = 1; k < NL; ++k) x[k] = addc_cc(a[k], b[k]);
+    add_small(x, CF & (0u - addc(0u, 0u)));
+    canon_cc(x);
+    return;
+  }
   u32 s[NL], y[NL];
   s[0] = add_cc(a[0], b[0]);
 #pragma unroll
@@ -378,8 +674,23 @@ __device__ __forceinline__ void add_nc(const u32 (&a)[NL], const u32 (&b)[NL], u
   x[NL - 1] = addc(a[NL - 1], b[NL - 1]);
 }
 
-// q = p - q when neg, q canonical (so 0 becomes p).
+// q = p - q when neg, q canonical (so 0 becomes p). At full slot p's limbs above the lowest are all ones, so p - q
+// complements them unless the lowest limb borrows (q[0] > 2^32 - c, rare).
 __device__ __forceinline__ void neg_if(u32 (&q)[NL], bool neg) {
+  if constexpr (FULL_SLOT) {
+    if (!neg || q[0] <= 0u - CF) {
+      const u32 m = 0u - (u32)neg;
+      q[0] = neg ? (0u - CF) - q[0] : q[0];
+#pragma unroll
+      for (int k = 1; k < NL; ++k) q[k] ^= m;
+      return;
+    }
+    q[0] = sub_cc(0u - CF, q[0]);
+#pragma unroll
+    for (int k = 1; k < NL - 1; ++k) q[k] = subc_cc(0xffffffffu, q[k]);
+    q[NL - 1] = subc(0xffffffffu, q[NL - 1]);
+    return;
+  }
   u32 z[NL];
   z[0] = sub_cc(kP[0], q[0]);
 #pragma unroll
@@ -389,11 +700,21 @@ __device__ __forceinline__ void neg_if(u32 (&q)[NL], bool neg) {
   for (int k = 0; k < NL; ++k) q[k] = neg ? z[k] : q[k];
 }
 
-// x = a - b mod p, a and b canonical, as submod.
+// x = a - b mod p, a and b canonical, as submod. At full slot, on a borrow r = a - b + 2^n >= c + 1 and a - b + p = r - c,
+// which borrows past limb 0 only when r's low limb is below c.
 __device__ __forceinline__ void submod_cc(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
   x[0] = sub_cc(a[0], b[0]);
 #pragma unroll
   for (int k = 1; k < NL; ++k) x[k] = subc_cc(a[k], b[k]);
+  if constexpr (FULL_SLOT) {
+    const u32 d = CF & subc(0u, 0u), lo = x[0];
+    x[0] = lo - d;
+    if (lo >= d) return;
+    x[1] = sub_cc(x[1], 1u);
+#pragma unroll
+    for (int k = 2; k < NL; ++k) x[k] = subc_cc(x[k], 0u);
+    return;
+  }
   const u32 m = subc(0u, 0u);
   x[0] = add_cc(x[0], kP[0] & m);
 #pragma unroll
@@ -475,16 +796,13 @@ __device__ __forceinline__ void load_key(int j, u32 (&c)[NL]) {
   for (int k = 0; k < NL; ++k) c[k] = kC[j][k];
 }
 
-template <int K>
-__device__ __forceinline__ void decode_word(u32 (&y)[NL], const u32 (&t)[NL]) {
-#pragma unroll
-  for (int j = K - 1; j >= 0; --j) {
-    u32 c[NL], x[NL];
-    load_key(j, c);
-    rho_inv(y, x);
-    submod(x, c, y);
-    submod(y, t, x);
-    copy(y, x);
+// x = a + b mod p, a + b < 2p, a and b below 2^n.
+__device__ __forceinline__ void addmod_lt2p(const u32 (&a)[NL], const u32 (&b)[NL], u32 (&x)[NL]) {
+  if constexpr (FULL_SLOT) {
+    addmod_cc(a, b, x);
+  } else {
+    add_nc(a, b, x);
+    canon_cc(x);
   }
 }
 
@@ -495,25 +813,41 @@ __device__ __forceinline__ void decode_word_w(u32 (&y)[NL], const u32 (&w)[NL]) 
   sqr(y, q);
   canon_cc(q);
   neg_if(q, y[0] & 1);
-  if constexpr (FULL_SLOT) {
-    addmod_cc(q, w, y);
-  } else {
-    add_nc(q, w, y);
-    canon_cc(y);
+  addmod_lt2p(q, w, y);
+}
+
+// Round j >= 1's rho^-1(y) - c_j - t from rho^-1(y) - c_0 - t (in y): plus kD[j] = (c_0 - c_j) mod p, then σ_K.
+__device__ __forceinline__ void undo_round(u32 (&y)[NL], int j) {
+  u32 d[NL], z[NL];
+#pragma unroll
+  for (int k = 0; k < NL; ++k) d[k] = kD[j][k];
+  addmod_lt2p(y, d, z);
+  copy(y, z);
+  sigma_k(y);
+}
+
+// K rounds against w as decode_word_w, in one loop: peeling the last round puts a second copy of the round's code
+// (1,800 instructions at p1024) in every decoder.
+template <int K>
+__device__ __forceinline__ void decode_word_wk(u32 (&y)[NL], const u32 (&w)[NL]) {
+#pragma unroll 1
+  for (int j = K - 1; j >= 0; --j) {
+    decode_word_w(y, w);
+    if (j > 0) undo_round(y, j);
   }
 }
 
-// u = (c_0 + tau i) mod p, canonical, at full slot and without a double-width product: limb k sums c_0's, tau_k lo
-// and tau_(k-1) hi into the carry (three words), and the part above 2^n (< 2^66) comes back times c.
-__device__ __forceinline__ void ct_of(u64 i, u32 (&u)[NL]) {
-  static_assert(FULL_SLOT, "2^n = c");
+// u = (c_j + tau i) mod p, canonical, at full slot (2^n = c; FRESH_DECODE, its one caller, is full slot only) and
+// without a double-width product: limb k sums c_j's, tau_k lo and tau_(k-1) hi into the carry (three words), and the
+// part above 2^n (< 2^66) comes back times c.
+__device__ __forceinline__ void ct_of(u64 i, int j, u32 (&u)[NL]) {
   const u32 lo = (u32)i, hi = (u32)(i >> 32);
   u32 r[3] = {0, 0, 0};
 #pragma unroll
   for (int k = 0; k < NL; ++k) {
     mac(r, kTau[k], lo);
     if (k > 0) mac(r, kTau[k - 1], hi);
-    add3(r, kC[0][k], 0u);
+    add3(r, kC[j][k], 0u);
     u[k] = r[0];
     r[0] = r[1];
     r[1] = r[2];
@@ -537,14 +871,29 @@ __device__ __forceinline__ void ct_of(u64 i, u32 (&u)[NL]) {
   canon_cc(u);
 }
 
-// decode_word_w with c_0 + t made from the word's index after the square (ct_of), so no tweak is held across words.
-__device__ __forceinline__ void decode_word_fresh(u32 (&y)[NL], u64 i) {
+// Round j's decode rho^-1(y) - c_j - t with c_j + t made from the word's index after the square (ct_of), so no tweak
+// is held across words. F6: FOLD 6's square (sqr), else the column square.
+template <bool F6>
+__device__ __forceinline__ void decode_word_fresh(u32 (&y)[NL], u64 i, int j) {
   u32 q[NL], u[NL];
-  sqr_fold(y, q);
+  if constexpr (F6) sqr(y, q);
+  else sqr_fold(y, q);
   canon_cc(q);
   neg_if(q, y[0] & 1);
-  ct_of(i, u);
+  ct_of(i, j, u);
   submod_cc(q, u, y);
+}
+
+// K rounds as decode_word_fresh, σ_K after each but the last. One loop over every round: with the last peeled, k = 2's
+// one-trip loop unrolls into two rounds' straight line, which spills at 128 registers. At k >= 2 (only at 128
+// registers, fresh_decode) the rounds square by columns even in a FOLD 6 build: lean FOLD 6 there spills 16 bytes.
+template <int K>
+__device__ __forceinline__ void decode_word_freshk(u32 (&y)[NL], u64 i) {
+#pragma unroll 1
+  for (int j = K - 1; j >= 0; --j) {
+    decode_word_fresh<FOLD6 && K == 1>(y, i, j);
+    if (j > 0) sigma_k(y);
+  }
 }
 
 // w = -(c_0 + t) mod p.
@@ -560,6 +909,7 @@ __device__ __forceinline__ void encode_word(u32 (&x)[NL], const u32 (&t)[NL]) {
 #pragma unroll 1
   for (int j = 0; j < K; ++j) {
     u32 c[NL], u[NL], a[NL];
+    if (j > 0) sigma_k(x);
     load_key(j, c);
     addmod(c, t, u);
     addmod(x, u, a);
@@ -653,7 +1003,7 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
     mul_small(a, (u64)gridDim.x * WPB, step);
     mul_small(a, base + (u64)blockIdx.x * WPB + threadIdx.x, t);
   }
-  if constexpr (K == 1) {
+  {
     u32 w[NL];
     w_of(t, w);
     copy(t, w);
@@ -666,8 +1016,7 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
     if (i < n) {
       u32 y[NL];
       load_word_smem(sm + threadIdx.x * S, y);
-      if constexpr (K == 1) decode_word_w(y, t);
-      else decode_word<K>(y, t);
+      decode_word_wk<K>(y, t);
       if (MODE == 2) {
 #pragma unroll
         for (int k = 0; k < NL; ++k) out[i * NL + k] = y[k];
@@ -675,11 +1024,47 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
       acc ^= fold64(y);
     }
     u32 t2[NL];
-    if constexpr (K == 1) submod_cc(t, step, t2);
-    else addmod(t, step, t2);
+    submod_cc(t, step, t2);
     copy(t, t2);
   }
   atomicXor(xr, (unsigned long long)acc);
+}
+
+// The decode's field primitives a word a thread, for the gate at their rare carries (`kv_twin.rare_cases`): op 0
+// addmod_cc(a, b), 1 submod_cc(a, b), 2 neg_if(a, b odd), 3 canon_cc(a), 4 sqr(a), and at full slot 5 sigma(a) with b
+// as K and 6 sqr_fold(a), the fused decoders' column square.
+__global__ void __launch_bounds__(WPB) prim_kernel(int op, const u32 *__restrict__ a, const u32 *__restrict__ b,
+                                                   u32 *__restrict__ out, int n) {
+  const int w = blockIdx.x * WPB + threadIdx.x;
+  if (w >= n) return;
+  u32 x[NL], y[NL], z[NL];
+#pragma unroll
+  for (int k = 0; k < NL; ++k) {
+    x[k] = a[(u64)w * NL + k];
+    y[k] = b[(u64)w * NL + k];
+  }
+  if (op == 0) {
+    addmod_cc(x, y, z);
+  } else if (op == 1) {
+    submod_cc(x, y, z);
+  } else if (op == 2) {
+    copy(z, x);
+    neg_if(z, y[0] & 1);
+  } else if (op == 3) {
+    copy(z, x);
+    canon_cc(z);
+  } else if (op == 4) {
+    sqr(x, z);
+  } else if constexpr (FULL_SLOT) {
+    if (op == 5) {
+      copy(z, x);
+      sigma(z, y);
+    } else {
+      sqr_fold(x, z);
+    }
+  }
+#pragma unroll
+  for (int k = 0; k < NL; ++k) out[(u64)w * NL + k] = z[k];
 }
 
 __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ store, u64 n16, unsigned long long *xr) {
@@ -720,29 +1105,30 @@ __device__ __forceinline__ void seed_word(u64 id, u32 (&x)[NL]) {
   else x[Q % NL] &= TOPMASK >> 1;
 }
 
-// what 0: `steps` squarings of ILP words a thread (lazy); 1: `steps` decodes of K rounds; 2: `steps` encodes of K rounds.
+// what 0: `steps` squarings of ILP words a thread (lazy, sqr); 1: `steps` decodes of K rounds; 2: `steps` encodes of K
+// rounds; 3: as 0 with sqr_fold, the fused decoders' column square (full slot).
 template <int WHAT, int K, int ILP>
 __global__ void __launch_bounds__(128, 1) chain_kernel(u64 steps, unsigned long long *xr) {
   const u64 id = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   u32 x[ILP][NL], t[NL];
 #pragma unroll
   for (int w = 0; w < ILP; ++w) seed_word(id * ILP + w, x[w]);
-  if (WHAT != 0) {
+  if (WHAT == 1 || WHAT == 2) {
     canon(x[0]);
     tweak(id, t);
   }
 #pragma unroll 1
   for (u64 s = 0; s < steps; ++s) {
-    if (WHAT == 0) {
+    if (WHAT == 0 || WHAT == 3) {
 #pragma unroll
       for (int w = 0; w < ILP; ++w) {
         u32 y[NL];
-        sqr(x[w], y);
+        if constexpr (WHAT == 3) sqr_fold(x[w], y);
+        else sqr(x[w], y);
         copy(x[w], y);
       }
     } else if (WHAT == 1) {
-      if constexpr (K == 1) decode_word_w(x[0], t);
-      else decode_word<K>(x[0], t);
+      decode_word_wk<K>(x[0], t);
     } else {
       encode_word<K>(x[0], t);
     }
@@ -1190,6 +1576,15 @@ __device__ __forceinline__ void bulk_load(void *dst, const void *src, u32 bytes,
                "l"(src), "r"(bytes), "r"(smem_u32(bar))
                : "memory");
 }
+__device__ __forceinline__ void bulk_prefetch_l2(const void *src, u32 bytes) {
+  asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;\n" ::"l"(src), "r"(bytes) : "memory");
+}
+
+// WT_L2PF=1: the fused kernel's producer, as it copies task i into its stage, prefetches into the L2 the task that
+// next takes that stage (i + stages), so the copy a released stage waits on reads the L2 rather than HBM.
+#ifndef WT_L2PF
+#define WT_L2PF 1
+#endif
 
 template <int NB8>
 __device__ __forceinline__ void load_xs(uint8_t (*xs)[XS_STRIDE], const uint8_t *__restrict__ x, int M, int Kd, int kc) {
@@ -1281,6 +1676,7 @@ __global__ void __maxnreg__(168) gemm_ws_kernel(const void *__restrict__ wstore,
     uint4 wv[TASK_TILES];
 #pragma unroll
     for (int tt = 0; tt < TASK_TILES; ++tt) wv[tt] = sp[tt * LANES];
+    asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");   // before `empty`, as fused_kernel's MMA warp
     __syncwarp();
     if (lane == 0) mbar_arrive(empty + s);
 #pragma unroll
@@ -1506,78 +1902,18 @@ __global__ void __launch_bounds__(128) b3_chain_kernel(u64 steps, unsigned long 
   if ((cv[0] ^ cv[5]) == 0x12345679u) atomicXor(xr, (unsigned long long)cv[1]);
 }
 
-#define WT_SHA512_K                                                                                              \
-  {0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL, 0xb5c0fbcfec4d3b2fULL, 0xe9b5dba58189dbbcULL, 0x3956c25bf348b538ULL, \
-   0x59f111f1b605d019ULL, 0x923f82a4af194f9bULL, 0xab1c5ed5da6d8118ULL, 0xd807aa98a3030242ULL, 0x12835b0145706fbeULL, \
-   0x243185be4ee4b28cULL, 0x550c7dc3d5ffb4e2ULL, 0x72be5d74f27b896fULL, 0x80deb1fe3b1696b1ULL, 0x9bdc06a725c71235ULL, \
-   0xc19bf174cf692694ULL, 0xe49b69c19ef14ad2ULL, 0xefbe4786384f25e3ULL, 0x0fc19dc68b8cd5b5ULL, 0x240ca1cc77ac9c65ULL, \
-   0x2de92c6f592b0275ULL, 0x4a7484aa6ea6e483ULL, 0x5cb0a9dcbd41fbd4ULL, 0x76f988da831153b5ULL, 0x983e5152ee66dfabULL, \
-   0xa831c66d2db43210ULL, 0xb00327c898fb213fULL, 0xbf597fc7beef0ee4ULL, 0xc6e00bf33da88fc2ULL, 0xd5a79147930aa725ULL, \
-   0x06ca6351e003826fULL, 0x142929670a0e6e70ULL, 0x27b70a8546d22ffcULL, 0x2e1b21385c26c926ULL, 0x4d2c6dfc5ac42aedULL, \
-   0x53380d139d95b3dfULL, 0x650a73548baf63deULL, 0x766a0abb3c77b2a8ULL, 0x81c2c92e47edaee6ULL, 0x92722c851482353bULL, \
-   0xa2bfe8a14cf10364ULL, 0xa81a664bbc423001ULL, 0xc24b8b70d0f89791ULL, 0xc76c51a30654be30ULL, 0xd192e819d6ef5218ULL, \
-   0xd69906245565a910ULL, 0xf40e35855771202aULL, 0x106aa07032bbd1b8ULL, 0x19a4c116b8d2d0c8ULL, 0x1e376c085141ab53ULL, \
-   0x2748774cdf8eeb99ULL, 0x34b0bcb5e19b48a8ULL, 0x391c0cb3c5c95a63ULL, 0x4ed8aa4ae3418acbULL, 0x5b9cca4f7763e373ULL, \
-   0x682e6ff3d6b2b8a3ULL, 0x748f82ee5defb2fcULL, 0x78a5636f43172f60ULL, 0x84c87814a1f0ab72ULL, 0x8cc702081a6439ecULL, \
-   0x90befffa23631e28ULL, 0xa4506cebde82bde9ULL, 0xbef9a3f7b2c67915ULL, 0xc67178f2e372532bULL, 0xca273eceea26619cULL, \
-   0xd186b8c721c0c207ULL, 0xeada7dd6cde0eb1eULL, 0xf57d4f7fee6ed178ULL, 0x06f067aa72176fbaULL, 0x0a637dc5a2c898a6ULL, \
-   0x113f9804bef90daeULL, 0x1b710b35131c471bULL, 0x28db77f523047d84ULL, 0x32caab7b40c72493ULL, 0x3c9ebe0a15c9bebcULL, \
-   0x431d67c49c100d4cULL, 0x4cc5d4becb3e42b6ULL, 0x597f299cfc657e2aULL, 0x5fcb6fab3ad6faecULL, 0x6c44198c4a475817ULL}
-#define WT_SHA512_IV                                                                                            \
-  {0x6a09e667f3bcc908ULL, 0xbb67ae8584caa73bULL, 0x3c6ef372fe94f82bULL, 0xa54ff53a5f1d36f1ULL, 0x510e527fade682d1ULL, \
-   0x9b05688c2b3e6c1fULL, 0x1f83d9abfb41bd6bULL, 0x5be0cd19137e2179ULL}
-__constant__ u64 kSha512K[80] = WT_SHA512_K;
-__constant__ u64 kSha512Iv[8] = WT_SHA512_IV;
-[[maybe_unused]] static const u64 SHA512_K_HOST[80] = WT_SHA512_K;
-static const u64 SHA512_IV_HOST[8] = WT_SHA512_IV;
+#include "sha512.cuh"
 
 struct Mid {
   u64 h[8];
 };
 
-__host__ __device__ __forceinline__ u64 rotr64(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
-
-// One SHA-512 compression of the big-endian words w (clobbered) into s (`benchmarks/bandwidth/tagger.cu`'s).
-__host__ __device__ __forceinline__ void sha512_compress(u64 s[8], u64 w[16]) {
-#ifdef __CUDA_ARCH__
-  const u64 *K = kSha512K;
-#else
-  const u64 *K = SHA512_K_HOST;
-#endif
-  u64 a = s[0], b = s[1], c = s[2], d = s[3], e = s[4], f = s[5], g = s[6], h = s[7];
-#pragma unroll 1
-  for (int r = 0; r < 80; r += 16) {
-#pragma unroll
-    for (int t = 0; t < 16; ++t) {
-      if (r) {
-        const u64 w15 = w[(t + 1) & 15], w2 = w[(t + 14) & 15];
-        w[t] += (rotr64(w15, 1) ^ rotr64(w15, 8) ^ (w15 >> 7)) + w[(t + 9) & 15] +
-                (rotr64(w2, 19) ^ rotr64(w2, 61) ^ (w2 >> 6));
-      }
-      const u64 t1 = h + (rotr64(e, 14) ^ rotr64(e, 18) ^ rotr64(e, 41)) + ((e & f) ^ (~e & g)) + K[r + t] + w[t];
-      const u64 t2 = (rotr64(a, 28) ^ rotr64(a, 34) ^ rotr64(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
-      h = g;
-      g = f;
-      f = e;
-      e = d + t1;
-      d = c;
-      c = b;
-      b = a;
-      a = t1 + t2;
-    }
-  }
-  s[0] += a;
-  s[1] += b;
-  s[2] += c;
-  s[3] += d;
-  s[4] += e;
-  s[5] += f;
-  s[6] += g;
-  s[7] += h;
-}
+// The leaves' prefix midstate: wt_set_tag's (one window's), or pass_kernel's (its pass's).
+__device__ Mid g_leafmid;
 
 // The leaves over the tags of blocks [0, nblk), a thread a leaf; each digest as SHA-512's 8 state words.
-__global__ void tag_leaves_kernel(const u32 *__restrict__ tags, u64 nblk, Mid leafmid, u64 *__restrict__ leaves) {
+__global__ void tag_leaves_kernel(const u32 *__restrict__ tags, u64 nblk, u64 *__restrict__ leaves) {
+  const Mid leafmid = g_leafmid;
   const u64 leaf = blockIdx.x * (u64)blockDim.x + threadIdx.x, first = leaf * 16;
   if (first >= nblk) return;
   const int n = (int)(nblk - first < 16 ? nblk - first : 16);
@@ -1639,6 +1975,130 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
     for (int k = 0; k < 8; ++k) out[8 * i + k] = in[16 * i + k];
 }
 
+// --- the pass's receipt key (red team F29) ----------------------------------------------------------------------------
+//
+// Pass j's seed s_j = SHA512(PASS_DOMAIN ‖ σ ‖ u32be j ‖ root_(j−1))[:32] (sketching.pass_seed), and its receipt is
+// ro-sketch-blake3/v0 under s_j: the signs K_S = derive(s_j, SIGN_DOMAIN, {k, n, tag}), the key and the leaves'
+// prefix. So the ±1 matrix is fresh every pass, and no pass's receipts exist before the previous pass's root.
+// wt_set_pass puts the messages' fixed bytes in kPass (zeros where s_j, j, the root, K_S and the row go); pass_kernel,
+// one CTA on the stream after the previous commit, fills them in, so the chain needs no host round trip.
+//
+// A WT_RECEIPT = 1 build's receipt is sketch-sha512 instead (`sketch_receipt.py`, the remote bandwidth driver's kind):
+// s_j is the whole 64-byte SHA-512 (`receipts.seed`), K_S = derive(s_j, "verity/remote-bandwidth/sketch-signs/v0",
+// {"k": 16, "n": 4096, "tag": "sketch-sha512"}), the store's block j is the GEMM's vector j (n = 4096 at T = 8), and
+// y_j = SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(s_j)) ‖ u64be j ‖ σ_j): one compression from the prefix's midstate
+// (kRcptMid, the leaf slot's), 64 bytes a vector. Its leaves and tree are the driver's (reader.cu's rb_leaves, rb_tree).
+#ifndef WT_RECEIPT
+#define WT_RECEIPT 0
+#endif
+constexpr int KPASS_ROWS = 16, PASS_BITS_BYTES = 16 * 1024, PASS_THREADS = 256, SEED_BYTES = WT_RECEIPT ? 64 : 32;
+struct PassMsgs {
+  uint8_t seed[160], derive[256], tag[128], leaf[128], row[128];
+  int seed_len, derive_len, row_len, derive_s, tag_s, leaf_s, row_key, row_c, row_ctr, ks, n;
+};
+struct PassState {
+  uint8_t seed[64], ks[32];
+  u32 key[8];
+  u64 leafmid[8];
+};
+__constant__ PassMsgs kPass;
+__device__ PassState g_pass;
+__constant__ u64 kRcptMid[8];
+
+// SHA-512 of the len bytes at m (big-endian words, the standard padding).
+__device__ void sha512_bytes(const uint8_t *m, int len, u64 (&s)[8]) {
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  const int nb = (len + 17 + 127) / 128;
+  for (int blk = 0; blk < nb; ++blk) {
+    u64 w[16];
+    for (int i = 0; i < 16; ++i) {
+      u64 v = 0;
+      for (int b = 0; b < 8; ++b) {
+        const int o = 128 * blk + 8 * i + b;
+        const u64 x = o < len ? m[o] : o == len ? 0x80u : 0u;
+        v = (v << 8) | x;
+      }
+      w[i] = v;
+    }
+    if (blk == nb - 1) w[15] = (u64)len * 8;
+    sha512_compress(s, w);
+  }
+}
+
+__device__ __forceinline__ void be_bytes(const u64 (&s)[8], uint8_t *out, int len) {
+  for (int b = 0; b < len; ++b) out[b] = (uint8_t)(s[b >> 3] >> (56 - 8 * (b & 7)));
+}
+
+__global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u64 *__restrict__ root,
+                                                            u32 *__restrict__ signs, int t) {
+  __shared__ uint8_t sd[64], ksd[32];
+  __shared__ uint8_t bits[PASS_BITS_BYTES];
+  const int tid = threadIdx.x, rb = kPass.n / 8, nb = (rb + 63) / 64;
+  uint8_t m[256];
+  u64 h[8];
+  if (tid == 0) {
+    for (int b = 0; b < kPass.seed_len; ++b) m[b] = kPass.seed[b];
+    for (int b = 0; b < 4; ++b) m[64 + b] = (uint8_t)(j >> (24 - 8 * b));
+    for (int b = 0; b < 64; ++b) m[68 + b] = (uint8_t)(root[b >> 3] >> (56 - 8 * (b & 7)));
+    sha512_bytes(m, kPass.seed_len, h);
+    be_bytes(h, sd, 64);
+  }
+  __syncthreads();
+  if (tid == 0) {
+    for (int b = 0; b < kPass.derive_len; ++b) m[b] = kPass.derive[b];
+    for (int b = 0; b < SEED_BYTES; ++b) m[kPass.derive_s + b] = sd[b];
+    sha512_bytes(m, kPass.derive_len, h);
+    be_bytes(h, ksd, 32);
+    for (int b = 0; b < 32; ++b) g_pass.ks[b] = ksd[b];
+    for (int b = 0; b < 64; ++b) g_pass.seed[b] = sd[b];
+  } else if (tid == 32) {
+    for (int b = 0; b < 128; ++b) m[b] = kPass.tag[b];
+    for (int b = 0; b < 32; ++b) m[kPass.tag_s + b] = sd[b];
+    sha512_bytes(m, 128, h);
+    uint8_t kb[32];
+    be_bytes(h, kb, 32);
+    for (int i = 0; i < 8; ++i) g_pass.key[i] = kb[4 * i] | kb[4 * i + 1] << 8 | kb[4 * i + 2] << 16 | (u32)kb[4 * i + 3] << 24;
+  } else if (tid == 64) {
+    for (int b = 0; b < 128; ++b) m[b] = kPass.leaf[b];
+    for (int b = 0; b < SEED_BYTES; ++b) m[kPass.leaf_s + b] = sd[b];
+    u64 w[16];
+    for (int i = 0; i < 16; ++i) {
+      u64 v = 0;
+      for (int b = 0; b < 8; ++b) v = (v << 8) | m[8 * i + b];
+      w[i] = v;
+    }
+    for (int i = 0; i < 8; ++i) h[i] = kSha512Iv[i];
+    sha512_compress(h, w);
+    for (int i = 0; i < 8; ++i) g_pass.leafmid[i] = g_leafmid.h[i] = h[i];
+  }
+  __syncthreads();
+  for (int e = tid; e < kPass.ks * nb; e += PASS_THREADS) {   // row c's stream block b
+    const int c = e / nb, b = e % nb;
+    for (int x = 0; x < kPass.row_len; ++x) m[x] = kPass.row[x];
+    for (int x = 0; x < 32; ++x) m[kPass.row_key + x] = ksd[x];
+    m[kPass.row_c] = (uint8_t)c;
+    for (int x = 0; x < 8; ++x) m[kPass.row_ctr + x] = (uint8_t)((u64)b >> (56 - 8 * x));
+    sha512_bytes(m, kPass.row_len, h);
+    uint8_t blk[64];
+    be_bytes(h, blk, 64);
+    for (int x = 0; x < 64 && 64 * b + x < rb; ++x) bits[c * rb + 64 * b + x] = blk[x];
+  }
+  __syncthreads();
+  const int msteps = (SB + 511) / 512;
+  for (int e = tid; e < t * msteps * 32; e += PASS_THREADS) {   // sketching.sign_fragments at k_s = 16 (a word a lane)
+    const int lane = e & 31, st = (e >> 5) % msteps, ii = (e >> 5) / msteps, g = lane >> 2, tq = lane & 3;
+    u32 wd = 0;
+    for (int r = 0; r < 4; ++r)
+      for (int q = 0; q < 4; ++q) {
+        const int row = 8 * (r >> 1) + g, col = 32 * (ii * msteps + st) + 16 * (r & 1) + 4 * tq + q;
+        const u32 bit = (bits[row * rb + (col >> 3)] >> (col & 7)) & 1u;
+        wd |= bit << (16 * ((r % 6) / 3) + 4 * q + r % 3);
+      }
+    signs[e] = wd;
+  }
+}
+
 // --- the fused decode GEMM --------------------------------------------------------------------------------------------
 //
 // Warp D + 1's lane 0 bulk-copies task i's TW stored words (SB bytes) into stage i mod stages; the D decoder warps
@@ -1661,17 +2121,73 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 //
 // An SM's registers fit FUSED_WARPS warps at the decode's register count (a sub-partition holds 16K: four warps at
 // 128 registers, three at 168, two at 255; 9 to 11 warps put three on one). The decode holds the word, its square and
-// the tweak. At full slot and NL > 24 it holds neither the double-width square nor the tweak (FRESH: sqr_fold, and
-// c_0 + t made a word at a time), which fits 12 warps at NL = 48.
-constexpr int FUSED_WARPS = FULL_SLOT && NL > 24 && NL <= 48 ? 12 : (NL <= 17 ? 16 : (NL <= 24 ? 12 : 8));
+// the tweak. At full slot and 24 < NL <= 48 the k = 1 decode holds neither the double-width square nor the tweak
+// (FRESH_DECODE: sqr_fold, and c_0 + t made a word at a time), which fits 12 warps at NL = 48. Elsewhere it buys no
+// warp and only costs time (p2048 at 8 warps: 2.92 against 2.59 untagged).
+constexpr bool FRESH_DECODE = FULL_SLOT && NL > 24 && NL <= 48;
+constexpr int FUSED_WARPS = FRESH_DECODE ? 12 : (NL <= 17 ? 16 : (NL <= 24 ? 12 : 8));
 constexpr int FUSED_SPAN = (TW + 30) / 32 + 1;            // the most units a task's words touch
 
 constexpr int SK_BUFS = 3;   // the sketch's tile buffers (sk_begin)
+// sketch_warp hashes the tiles of a batch at once, a lane a vector (16 / SKW vectors of each tile a warp), from two
+// sets of a batch's buffers.
+template <int SKW>
+__host__ __device__ constexpr int sk_batch() {
+  return SKW ? 32 / (16 / SKW) : 1;
+}
+template <int SKW>
+__host__ __device__ constexpr int sk_bufs() {
+  return SKW ? 2 * sk_batch<SKW>() : SK_BUFS;
+}
+// A diagnostic build (WT_SK_DIAG, bits) drops parts of the sketch to time them, so its sketches and tags are wrong
+// (bench.py gates only its partial sums): 1 the MMA warp's hash, 2 the decoders' MMAs and adds, 4 their sign loads.
+#ifndef WT_SK_DIAG
+#define WT_SK_DIAG 0
+#endif
 // sgs sign words (k_s = 16's signs, skt tasks' steps, a u32 a lane) after the sketch's buffers: wt_fused_sketch puts
-// them there when they fit beside the stages, and otherwise the decoders load them from global memory (sgs = 0).
-template <int NB8, int SKK>
+// them there when they fit beside the stages, and otherwise the decoders load them from global memory (sgs = 0). The
+// sketch warps' fragments are 4x the words, so they read them through L1 and L2 (sgs = 0 at SKW > 0).
+template <int NB8, int SKK, int SKW>
 __host__ __device__ constexpr int fused_smem_bytes(int stages, int sgs) {
-  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((5 * stages + 1) / 2) + 16 + SK_BUFS * 64 * SKK + 4 * sgs;
+  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((6 * stages + 1) / 2) + 16 + sk_bufs<SKW>() * 64 * SKK + 4 * sgs;
+}
+
+// The CTA's warps: FUSED_WARPS, and with SKW sketch warps (sketch_warp) SKW more where the registers allow (the MMA
+// warp's accumulators at NB8 = 4 don't fit 18 warps' 96 registers a thread, so there the sketch warps take decoders').
+// At full slot the kernel fits 96 registers untagged and beside the sketch warps (the MMA warp holding half a task's A
+// fragments at NB8 = 4), and a sub-partition holds five warps at 96: there 20, so 16 decoders put four on every
+// sub-partition and the MMA warps, the producer and the sketch warps one on each (14 put four on two and three on two,
+// and three a sub-partition leave its issue idle at k >= 2).
+template <int NB8, int SKK, int SKW>
+__host__ __device__ constexpr int fused_warps() {
+  if (FULL_SLOT && NL <= 17 && (SKW > 0 || SKK == 0)) return 20;
+  return FUSED_WARPS + (NB8 <= 2 ? SKW : 0);
+}
+
+// The MMA warps after the decoders: at NB8 = 4 (64 MMAs a task) and k <= 2 two, taking alternate tasks (one warp's
+// MMAs at M = 32 run at 1.45 reads, above the k <= 2 decode; the k = 3 decode is slower, and wants the warp back),
+// except where the MMA warp also hashes the decoders' sketches (SKK > 0, SKW = 0).
+// The decoders' fresh decode (decode_word_freshk, c_j + t made each round) where four warps share a sub-partition
+// (WARPS > 12, 128 registers a thread): the held w doesn't fit there at k >= 2 (p1024's 14 warps spilled 112-136
+// bytes). At 12 warps (168 registers) the k >= 2 decoders hold w.
+template <int K, int WARPS>
+__host__ __device__ constexpr bool fresh_decode() {
+  return FRESH_DECODE && (K == 1 || WARPS > 12);
+}
+
+template <int K, int NB8, int SKK, int SKW>
+__host__ __device__ constexpr int fused_mma_warps() {
+  return NB8 == 4 && K <= 2 && !(SKK > 0 && SKW == 0) ? 2 : 1;
+}
+
+template <int SKK, int SKW>
+int fused_cap(int nb8) {
+  return nb8 == 1 ? fused_warps<1, SKK, SKW>() : (nb8 == 2 ? fused_warps<2, SKK, SKW>() : fused_warps<4, SKK, SKW>());
+}
+
+template <int SKK, int SKW>
+int fused_mma(int k, int nb8) {
+  return nb8 == 4 && k <= 2 ? fused_mma_warps<1, 4, SKK, SKW>() : fused_mma_warps<3, 1, SKK, SKW>();
 }
 
 // Bytes [o, o + PB) of the stage, o = PB w, get y's low PB bytes as whole aligned words: the lane writes each word
@@ -1771,7 +2287,7 @@ __device__ __forceinline__ void sk_hash_block(SkJob &J, int lane, const Sketch &
   constexpr int LEN = 8 + 4 * KS, NMB = (LEN + 63) / 64;
   int *b = k.buf + (J.tile % SK_BUFS) * 16 * KS;
   const int blk = J.blk;
-  if (k.tags && lane < 16) {
+  if (!(WT_SK_DIAG & 1) && k.tags && lane < 16) {
     const u64 j = k.jbase + 16 * (k.tile0 + J.tile) + lane;
     const int *w = b + lane * KS, swz = sk_swz<KS>(lane & 7);
     u32 m[16];
@@ -1880,23 +2396,181 @@ __device__ __forceinline__ void sk_mma(const SkPart<KS> &P, const uint8_t *st, i
   }
 }
 
-// The decoder warps' loop (fused_kernel's comment). At k = 1 a lane keeps w = -(c_0 + t) in place of its tweak t and
-// steps it down. A payload's generic stores reach the stage before the next bulk copy into it (async proxy) only
+// ro-sketch-blake3/v0 on SKW sketch warps of their own (after the producer), so the decoders and the MMA warp do none
+// of it. Sketch warp q takes tasks ii = q, q + SKW, ... of each of the CTA's tiles: it loads the task's first B
+// fragments (k.signs, the rest PF steps ahead of their MMAs), waits on `ready`, reads the stage's stored bytes (a
+// step's A fragment a uint4 a lane, k_s / 8 MMAs) and arrives on
+// `sketched`, which the decoders wait on before they overwrite the stage in place. Its sums for the tile stay in its
+// MMAs' accumulators; at the tile's end the warps add them into the tile's buffer (tl % 2 NBT). At the end of each
+// batch of NBT tiles (and of the CTA's last tile) they meet at named barrier 1, and warp q copies out, hashes (a lane
+// a vector, from the window's or pass's kTagKey) and zeroes vectors 16 q / SKW .. 16 (q + 1) / SKW - 1 of each of the
+// batch's tiles: a hash's instructions issue once for all 32 lanes, so the batch takes a quarter of a tile's issue
+// each at SKW = 2. Batch b + 2's adds come after batch b + 1's barrier, which follows batch b's zeroing.
+// Every warp runs every one of the CTA's tiles (tpc), its tasks or none, so the tiles past the CTA's tasks hash zeros.
+//
+// The B operand is SkB's (the interface a bound receipt drops into): SkB{}(m, r, ii, p, lane) is B register r
+// (b0 at r = 2 blk, b1 at 2 blk + 1) of step p of the tile's task ii for this lane, from m, the lane's 4 words of the
+// pass's fragment array at that step (k.signs, in sign_frags_kernel's order, a uint4 a lane a step). For
+// ro-sketch-blake3/v0 the array holds the ±1 bytes and SignB takes them as they are; ro-bound-sketch/v0's would hold
+// the 0x00 / 0xFF mask M in the same order, and its SkB would XOR the lane's bytes of expand(z) into it.
+struct SignB {
+  __device__ __forceinline__ u32 operator()(const uint4 &m, int r, int, int, int) const {
+    return r == 0 ? m.x : r == 1 ? m.y : r == 2 ? m.z : m.w;
+  }
+};
+
+// sketching.sign_fragments' words (k_s = 16, a word a lane a step) as the sketch warps' B fragments: word e's 4 B
+// registers (the prmt each register's selector bits pick) at frags[e], so a sketch warp's step is one 16-byte load a
+// lane and no sign arithmetic.
+__global__ void sign_frags_kernel(const u32 *__restrict__ words, uint4 *__restrict__ frags, int n) {
+  const int e = blockIdx.x * blockDim.x + threadIdx.x;
+  if (e >= n) return;
+  const u32 sw = words[e];
+  frags[e] = make_uint4(sk_sign(sw, 0), sk_sign(sw, 1), sk_sign(sw, 2), sk_sign(sw >> 16, 0));
+}
+
+template <int KS, int SKW, class SkB>
+__device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64 *sketched, int stages, int q,
+                                            int lane, const Sketch &k) {
+  static_assert(sk_words<KS>() == 1 && 16 % SKW == 0, "a sign word a lane a step; whole vectors a warp");
+  constexpr int KB = KS / 8, VW = 16 / SKW, NBT = sk_batch<SKW>(), LEN = 8 + 4 * KS;
+  constexpr int PF = SK_M < 4 ? SK_M : 4;   // the steps whose fragments are in flight (L2 reads: 64 KiB at T = 8)
+  const int g = lane >> 2, tq = lane & 3, swz = sk_swz<KS>(g);
+#if !WT_RECEIPT
+  constexpr int NMB = (LEN + 63) / 64;
+  const u32 one = kOne;
+#endif
+  const SkB bop{};
+  for (int tl = 0; tl < k.tpc; ++tl) {
+    int acc[KB][4];
+#pragma unroll
+    for (int b = 0; b < KB; ++b) acc[b][0] = acc[b][1] = acc[b][2] = acc[b][3] = 0;
+    for (int ii = q; ii < k.skt; ii += SKW) {
+      const int i = tl * k.skt + ii;
+      if (i >= k.ntasks) break;
+      const int s = i % stages;
+      const uint4 *fg = reinterpret_cast<const uint4 *>(k.signs) + (size_t)ii * SK_M * LANES + lane;
+      uint4 mq[PF];
+#pragma unroll
+      for (int p = 0; p < PF; ++p) mq[p] = __ldg(fg + p * LANES);
+      mbar_wait(ready + s, (i / stages) & 1);
+      const uint4 *st = reinterpret_cast<const uint4 *>(smem + (size_t)s * SB) + lane;
+#pragma unroll
+      for (int p = 0; p < SK_M; ++p) {
+        const uint4 m = mq[p % PF];
+        if (p + PF < SK_M) mq[p % PF] = __ldg(fg + (p + PF) * LANES);
+        const uint4 a = SB % SK_STEP == 0 || SK_STEP * p + 16 * lane < SB ? st[p * (SK_STEP / 16)]
+                                                                          : make_uint4(0u, 0u, 0u, 0u);
+#pragma unroll
+        for (int b = 0; b < KB; ++b) mma_s8(acc[b], a, bop(m, 2 * b, ii, p, lane), bop(m, 2 * b + 1, ii, p, lane));
+      }
+      __syncwarp();
+      if (lane == 0) mbar_arrive(sketched + s);
+    }
+    int *buf = k.buf + (tl % (2 * NBT)) * 16 * KS;
+#pragma unroll
+    for (int b = 0; b < KB; ++b) {
+      int *r0 = buf + g * KS, *r1 = r0 + 8 * KS;
+      const int c = (8 * b + 2 * tq) ^ swz;
+      atomicAdd(r0 + c, acc[b][0]);
+      atomicAdd(r0 + (c ^ 1), acc[b][1]);
+      atomicAdd(r1 + c, acc[b][2]);
+      atomicAdd(r1 + (c ^ 1), acc[b][3]);
+    }
+    if (tl % NBT != NBT - 1 && tl != k.tpc - 1) continue;
+    asm volatile("bar.sync 1, %0;\n" ::"r"(32 * SKW) : "memory");
+    const int tb = tl - tl % NBT, nt = tl - tb + 1;   // the batch's tiles, whose buffers follow one another
+    int *bb = k.buf + (tb % (2 * NBT)) * 16 * KS;
+    if (k.out)
+      for (int e = lane; e < nt * VW * KS; e += 32) {
+        const int t = e / (VW * KS), row = VW * q + e / KS % VW, col = e % KS;
+        k.out[(16 * (k.tile0 + tb + t) + row) * KS + col] = bb[(16 * t + row) * KS + (col ^ sk_swz<KS>(row & 7))];
+      }
+    if (k.tags && lane < nt * VW) {
+      const int t = lane / VW, r = VW * q + lane % VW, sz = sk_swz<KS>(r & 7);
+      const int *w = bb + (16 * t + r) * KS;
+      const u64 vi = 16 * (k.tile0 + tb + t) + r, j = k.jbase + vi;
+#if WT_RECEIPT
+      static_assert(KS == 16, "sketch-sha512's σ is 16 words");
+      u64 h[8], m[16];
+#pragma unroll
+      for (int i = 0; i < 8; ++i) h[i] = kRcptMid[i];
+      m[0] = j;
+#pragma unroll
+      for (int i = 0; i < 8; ++i)
+        m[1 + i] = (u64)bswap32((u32)w[(2 * i) ^ sz]) << 32 | bswap32((u32)w[(2 * i + 1) ^ sz]);
+      m[9] = 0x80ULL << 56;
+#pragma unroll
+      for (int i = 10; i < 15; ++i) m[i] = 0;
+      m[15] = (128 + LEN) * 8;
+      sha512_compress(h, m);
+      // Lanes 2a and 2a + 1 hold vectors vi and vi + 1 and write their 128 bytes as four whole 32-byte sectors, each
+      // half from one lane: a lane's own four 16-byte stores would each fill half a sector.
+      // Sector s of the pair is words 4 (s % 2) … of vector vi + s / 2; the even lane writes its first 16 bytes and the
+      // odd lane its last. Each lane keeps its own words 0, 1, 4, 5 (even) or 2, 3, 6, 7 (odd) and takes the other's.
+      static_assert(VW % 2 == 0, "a lane pair's vectors are adjacent");
+      const int odd = lane & 1, nl = nt * VW;
+      const u32 act = nl >= 32 ? 0xffffffffu : (1u << nl) - 1;
+      u64 mine[4], theirs[4];
+#pragma unroll
+      for (int i = 0; i < 4; ++i) {
+        const int w0 = 4 * (i >> 1) + (i & 1);
+        mine[i] = odd ? h[w0 + 2] : h[w0];
+        theirs[i] = __shfl_xor_sync(act, odd ? h[w0] : h[w0 + 2], 1);
+      }
+      uint4 *o = reinterpret_cast<uint4 *>(k.tags + 16 * (vi & ~(u64)1));
+#pragma unroll
+      for (int s = 0; s < 4; ++s) {
+        const bool own = (s < 2) != (odd == 1);
+        const u64 a = own ? mine[2 * (s & 1)] : theirs[2 * (s & 1)];
+        const u64 b = own ? mine[2 * (s & 1) + 1] : theirs[2 * (s & 1) + 1];
+        o[2 * s + odd] = make_uint4((u32)a, (u32)(a >> 32), (u32)b, (u32)(b >> 32));
+      }
+#else
+      u32 cv[8];
+#pragma unroll
+      for (int i = 0; i < 8; ++i) cv[i] = kTagKey[i];
+#pragma unroll
+      for (int blk = 0; blk < NMB; ++blk) {
+        u32 m[16];
+#pragma unroll
+        for (int i = 0; i < 16; ++i) {
+          const int x = 16 * blk + i - 2;
+          const u32 v = x >= 0 && x < KS ? (u32)w[x ^ sz] : 0u;
+          m[i] = blk == 0 && i == 0 ? bswap32((u32)(j >> 32)) : blk == 0 && i == 1 ? bswap32((u32)j) : v;
+        }
+        const bool last = blk == NMB - 1;
+        b3(cv, m, 0, last ? LEN - 64 * blk : 64,
+           B3_KEYED | (blk == 0 ? B3_START : 0) | (last ? B3_END | B3_ROOT : 0), cv, one);
+      }
+      uint4 *o = reinterpret_cast<uint4 *>(k.tags + 8 * vi);
+      o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
+      o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+#endif
+    }
+    __syncwarp();
+    for (int e = lane; e < nt * VW * KS; e += 32) bb[(16 * (e / (VW * KS)) + VW * q) * KS + e % (VW * KS)] = 0;
+    __syncwarp();
+  }
+}
+
+// The decoder warps' loop (fused_kernel's comment). A lane keeps w = -(c_0 + t) in place of its tweak t and steps it
+// down (decode_word_wk). A payload's generic stores reach the stage before the next bulk copy into it (async proxy) only
 // behind a proxy fence. At full slot a payload is its own word's bytes, so a lane writes it in place without `loaded`.
 // With SKK > 0 the warp sketches its units of lo and hi (sk_begin, sk_mma) before it loads its words: every read of
 // the stage's stored bytes is then before the lane's arrive on `loaded` (the warp's, behind __syncwarp), and its
-// sums are in before its lanes arrive on `decoded`.
-template <int K, int SKK>
-__device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loaded, u64 *decoded, int stages,
-                                             int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp, int lane,
-                                             const u32 *__restrict__ tsteps, const Sketch &sk) {
-  constexpr bool FRESH = K == 1 && FULL_SLOT && NL > 24;   // the tweak's registers would cost decoder warps
+// sums are in before its lanes arrive on `decoded`. With SKW > 0 the sketch warps sketch instead (sketch_warp), and a
+// lane writes its payload over the stored bytes only once its task's are `sketched`.
+template <int K, int SKK, int SKW, bool FRESH>
+__device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loaded, u64 *decoded, u64 *sketched,
+                                             int stages, int ntasks, u64 q0, u64 gq, u64 base, int decoders, int warp,
+                                             int lane, const u32 *__restrict__ tsteps, const Sketch &sk) {
   const int adv = 32 * decoders / TW, rem = 32 * decoders % TW;
   int i = (32 * warp + lane) / TW, w = (32 * warp + lane) % TW;
   u32 t[NL];
-  if constexpr (!FRESH) tweak(base + (q0 + (u64)i * gq) * TW + w, t);
-  if constexpr (K == 1 && !FRESH) {
+  if constexpr (!FRESH) {
     u32 wn[NL];
+    tweak(base + (q0 + (u64)i * gq) * TW + w, t);
     w_of(t, wn);
     copy(t, wn);
   }
@@ -1909,13 +2583,13 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
     uint8_t *st = smem + s * SB;
     constexpr bool SPLIT = TW % 32 != 0;   // else a warp's lanes are in one task
     SkPart<(SKK > 0 ? SKK : 16)> P0, P1;
-    if constexpr (SKK > 0) {
+    if constexpr (SKK > 0 && SKW == 0 && !(WT_SK_DIAG & 4)) {
       sk_begin(P0, lo, on && i == lo, w, lane, sk);
       if (SPLIT && hi != lo) sk_begin(P1, hi, on && i == hi, w, lane, sk);
     }
     mbar_wait(ready + lo % stages, (lo / stages) & 1);
     if (hi != lo) mbar_wait(ready + hi % stages, (hi / stages) & 1);
-    if constexpr (SKK > 0) {
+    if constexpr (SKK > 0 && SKW == 0 && !(WT_SK_DIAG & 2)) {
       sk_mma(P0, smem + (lo % stages) * SB, lane, sk);
       if (SPLIT && hi != lo) sk_mma(P1, smem + (hi % stages) * SB, lane, sk);
       __syncwarp();
@@ -1925,12 +2599,12 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
     if (on) {
       load_word_smem(st + w * S, yw);
       if constexpr (PAY_E > 0) mbar_arrive(loaded + s);
-      if constexpr (FRESH) decode_word_fresh(yw, base + (q0 + (u64)i * gq) * TW + w);
-      else if constexpr (K == 1) decode_word_w(yw, t);
-      else decode_word<K>(yw, t);
+      if constexpr (FRESH) decode_word_freshk<K>(yw, base + (q0 + (u64)i * gq) * TW + w);
+      else decode_word_wk<K>(yw, t);
     }
     if constexpr (PAY_E == 0) {
       if (on) {
+        if constexpr (SKW > 0) mbar_wait(sketched + s, (i / stages) & 1);
         uint4 *o = reinterpret_cast<uint4 *>(st + w * S);
 #pragma unroll
         for (int k = 0; k < NL / 4; ++k) o[k] = make_uint4(yw[4 * k], yw[4 * k + 1], yw[4 * k + 2], yw[4 * k + 3]);
@@ -1942,6 +2616,7 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
       mbar_wait(loaded + lo % stages, (lo / stages) & 1);
       if (hi != lo) mbar_wait(loaded + hi % stages, (hi / stages) & 1);
       if (on) {
+        if constexpr (SKW > 0) mbar_wait(sketched + s, (i / stages) & 1);
         put_payload_w(st, w, lane, yw, nxt);
         asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
         mbar_arrive(decoded + s);
@@ -1952,8 +2627,7 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
       u32 step[NL], t2[NL];
 #pragma unroll
       for (int k = 0; k < NL; ++k) step[k] = __ldg(tsteps + (wrap ? NL : 0) + k);
-      if constexpr (K == 1) submod_cc(t, step, t2);
-      else addmod(t, step, t2);
+      submod_cc(t, step, t2);
       copy(t, t2);
     }
     w += wrap ? rem - TW : rem;
@@ -1965,9 +2639,11 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
 // store's tasks between the CTA's consecutive ones: the tweak's step to a lane's next unit, its task advancing A or
 // A + 1.
 // With SKK > 0 the decoders sketch (sk_begin) and the MMA warp hashes each tile (SkJob) into sk_out and tags
-// (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps.
-template <int K, int NB8, bool PARTIALS, int SKK>
-__global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
+// (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps; with SKW > 0 as well, SKW sketch warps after
+// the producer do all of it (sketch_warp).
+// WARPS, the warps the launch bounds allow, is fused_warps' or fewer (wt_fused_sketch).
+template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS = fused_warps<NB8, SKK, SKW>()>
+__global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
     const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
     u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps, u32 *__restrict__ tags,
     u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt, int sgs) {
@@ -1975,14 +2651,16 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
   uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
   u64 *full = reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
   u64 *loaded = full + stages, *decoded = loaded + stages, *empty = decoded + stages, *ready = empty + stages;
-  u32 *tagq = reinterpret_cast<u32 *>(full + 2 * ((5 * stages + 1) / 2));
+  u64 *sketched = ready + stages;
+  u32 *tagq = reinterpret_cast<u32 *>(full + 2 * ((6 * stages + 1) / 2));
   int *skbuf = reinterpret_cast<int *>(tagq + 4);   // 16-byte aligned
   const int nchunks = Kd / TASK_COLS;
   const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks, nbs = N / 16;
   const int warp = threadIdx.x / 32, lane = threadIdx.x & 31;
+  constexpr int MW = fused_mma_warps<K, NB8, SKK, SKW>();
   load_xs<NB8>(xs, x, M, Kd, kc);
-  for (int e = threadIdx.x; e < SK_BUFS * 16 * SKK; e += blockDim.x) skbuf[e] = 0;
-  u32 *sksg = reinterpret_cast<u32 *>(skbuf + SK_BUFS * 16 * SKK);
+  for (int e = threadIdx.x; e < sk_bufs<SKW>() * 16 * SKK; e += blockDim.x) skbuf[e] = 0;
+  u32 *sksg = reinterpret_cast<u32 *>(skbuf + sk_bufs<SKW>() * 16 * SKK);
   if (sgs && signs)
     for (int e = threadIdx.x; e < sgs; e += blockDim.x) sksg[e] = __ldg(signs + e);
   const u32 *sgn = sgs ? sksg : signs;
@@ -1993,6 +2671,7 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
       mbar_init(decoded + s, TW);
       mbar_init(empty + s, LANES);
       mbar_init(ready + s, 1);
+      mbar_init(sketched + s, 1);
     }
     tagq[0] = tagq[1] = tagq[2] = tagq[3] = 0;
     asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
@@ -2002,7 +2681,7 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
   const u64 q0 = (u64)g0 * nchunks + kc, gq = (u64)groups * nchunks;   // task i is the store's task q0 + i gq
   [[maybe_unused]] const int tpc = ((nbs + groups - 1) / groups + skt - 1) / skt;   // the sketch's tiles a CTA
 
-  if (warp == decoders + 1) {
+  if (warp == decoders + MW) {
     if (lane == 0) {
       int r = 0;   // the next copy to relay
       for (int i = 0; i < ntasks; ++i) {
@@ -2012,6 +2691,7 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
             while (r < i && mbar_test(full + r % stages, (r / stages) & 1)) mbar_arrive(ready + r++ % stages);
         mbar_expect_tx(full + s, SB);
         bulk_load(smem + s * SB, wstore + (q0 + i * gq) * SB, SB, full + s);
+        if (WT_L2PF && i + stages < ntasks) bulk_prefetch_l2(wstore + (q0 + (u64)(i + stages) * gq) * SB, SB);
       }
       for (; r < ntasks; ++r) {
         mbar_wait(full + r % stages, (r / stages) & 1);
@@ -2019,7 +2699,7 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
       }
     }
     __syncwarp();
-  } else if (warp == decoders) {
+  } else if (warp >= decoders && warp < decoders + MW) {
     const int g = lane >> 2, tq = lane & 3;
     [[maybe_unused]] const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
     [[maybe_unused]] SkJob J;
@@ -2027,39 +2707,49 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
     int hashed = 0;   // the tiles whose hash has started
     for (int i = 0; i < ntasks; ++i) {
       const int s = i % stages;
-      if constexpr (SKK > 0)
+      if constexpr (SKK > 0 && SKW == 0)
         while (J.blk >= 0 && !mbar_test(decoded + s, (i / stages) & 1)) sk_hash_block<SKK>(J, lane, sk);
+      // Every MMA warp waits out every task's phase in turn, so none waits on a stage's parity a phase early.
       mbar_wait(decoded + s, (i / stages) & 1);
+      if (MW > 1 && i % MW != warp - decoders) continue;
       float acc[NB8][4];
 #pragma unroll
       for (int j = 0; j < NB8; ++j) acc[j][0] = acc[j][1] = acc[j][2] = acc[j][3] = 0.f;
       const uint4 *sp = reinterpret_cast<const uint4 *>(smem + s * SB) + lane;
-      uint4 wv[TASK_TILES];
+      constexpr int WH = NB8 == 4 ? TASK_TILES / 2 : TASK_TILES;   // the A fragments held at once (fused_warps)
 #pragma unroll
-      for (int tt = 0; tt < TASK_TILES; ++tt) wv[tt] = sp[tt * LANES];
+      for (int h = 0; h < TASK_TILES; h += WH) {
+        uint4 wv[WH];
+#pragma unroll
+        for (int tt = 0; tt < WH; ++tt) wv[tt] = sp[(h + tt) * LANES];
 #ifdef WT_DEBUG_DUMP
-      if (g_dbg) {
-        uint4 *o = reinterpret_cast<uint4 *>(g_dbg + (q0 + (u64)i * gq) * TASK_BYTES) + lane;
+        if (g_dbg) {
+          uint4 *o = reinterpret_cast<uint4 *>(g_dbg + (q0 + (u64)i * gq) * TASK_BYTES) + lane;
 #pragma unroll
-        for (int tt = 0; tt < TASK_TILES; ++tt) o[tt * LANES] = wv[tt];
-      }
+          for (int tt = 0; tt < WH; ++tt) o[(h + tt) * LANES] = wv[tt];
+        }
 #endif
 #pragma unroll
-      for (int tt = 0; tt < TASK_TILES; ++tt) {
-        const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
-        mma_tile<NB8>(acc, a, xs, tt, g, tq);
+        for (int tt = 0; tt < WH; ++tt) {
+          const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
+          mma_tile<NB8>(acc, a, xs, h + tt, g, tq);
+        }
       }
-      if constexpr (SKK > 0)
+      if constexpr (SKK > 0 && SKW == 0)
         if (J.blk >= 0 && skt * (J.tile + SK_BUFS) <= i + stages) sk_finish<SKK>(J, lane, sk);
+      // `empty` hands the stage to the next bulk copy (the async proxy): only a proxy fence orders this warp's shared
+      // loads before it, as ptxas issues the arrive straight after the last fragment's load. The decoders' and the
+      // sketch warps' reads precede the decoders' stores, which the decoders fence.
+      asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
       mbar_arrive(empty + s);
       store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
-      if constexpr (SKK > 0)
+      if constexpr (SKK > 0 && SKW == 0)
         while (hashed * skt < ntasks && i == min(skt * (hashed + 1), ntasks - 1)) {
           sk_finish<SKK>(J, lane, sk);
           sk_start<SKK>(J, hashed++, lane, sk);
         }
     }
-    if constexpr (SKK > 0) {
+    if constexpr (SKK > 0 && SKW == 0) {
       sk_finish<SKK>(J, lane, sk);
       for (; hashed < tpc; ++hashed) {   // the CTA's tiles past its tasks: zero sketches
         sk_start<SKK>(J, hashed, lane, sk);
@@ -2068,7 +2758,13 @@ __global__ void __launch_bounds__(FUSED_WARPS * 32, 1) fused_kernel(
     }
   } else if (warp < decoders) {
     const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
-    decode_tasks<K, SKK>(smem, ready, loaded, decoded, stages, ntasks, q0, gq, base, decoders, warp, lane, tsteps, sk);
+    decode_tasks<K, SKK, SKW, fresh_decode<K, WARPS>()>(smem, ready, loaded, decoded, sketched, stages, ntasks, q0,
+                                                        gq, base, decoders, warp, lane, tsteps, sk);
+  } else if constexpr (SKW > 0) {
+    if (warp < decoders + 1 + MW + SKW) {
+      const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
+      sketch_warp<SKK, SKW, SignB>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
+    }
   }
   if constexpr (SKK == 0)
     if (tags) tag_warp(wstore, (u64)nbs * nchunks * SB, tag_base, tagq, tags);
@@ -2110,24 +2806,46 @@ static int launch_gemm(Kern kern, int smem, int threads, int groups, int nchunks
   return cudaGetLastError() ? 4 : 0;
 }
 
-#define WT_K_SWITCH(k, F) switch (k) { case 1: F(1); break; case 2: F(2); break; default: return 1; }
+#define WT_K_SWITCH(k, F) switch (k) { case 1: F(1); break; case 2: F(2); break; case 3: F(3); break; default: return 1; }
 
 extern "C" {
 
 int wt_constants(int *out) {
   out[0] = NBITS; out[1] = NL; out[2] = S; out[3] = PB; out[4] = TW; out[5] = U; out[6] = (int)CF; out[7] = WPB;
   out[8] = TC_OK ? 2 * (U + 1) : 0; out[9] = TC_WORD_BYTES; out[10] = MAXK; out[11] = SB; out[12] = FUSED_WARPS;
-  out[13] = FUSED_SPAN; out[14] = TAG_BLOCK;
+  out[13] = FUSED_SPAN; out[14] = TAG_BLOCK; out[15] = WT_SK_DIAG; out[16] = fused_warps<1, 0, 0>();
+  out[17] = WT_RECEIPT; out[18] = WT_MASK; out[19] = WT_FOLD6;
   return 0;
+}
+
+// K, NL limbs in host memory (WT_MASK=1).
+int wt_set_mask(const u32 *mask) {
+  if (!MASKED) return 1;
+  if (cudaMemcpyToSymbol(kMask, mask, NL * 4)) return 2;
+  return cudaDeviceSynchronize() ? 3 : 0;
 }
 
 // c (k elements of NL limbs), tau and p in host memory.
 int wt_set_key(const u32 *c, int k, const u32 *tau, const u32 *p) {
   if (k < 1 || k > MAXK) return 1;
-  u32 cc[MAXK][NL] = {};
+  u32 cc[MAXK][NL] = {}, dd[MAXK][NL] = {};
   for (int j = 0; j < k; ++j)
     for (int i = 0; i < NL; ++i) cc[j][i] = c[j * NL + i];
-  if (cudaMemcpyToSymbol(kC, cc, sizeof cc) || cudaMemcpyToSymbol(kTau, tau, NL * 4) || cudaMemcpyToSymbol(kP, p, NL * 4))
+  for (int j = 1; j < k; ++j) {
+    u64 br = 0, cy = 0;
+    for (int i = 0; i < NL; ++i) {
+      const u64 v = (u64)cc[0][i] - cc[j][i] - br;
+      dd[j][i] = (u32)v;
+      br = (v >> 32) & 1;
+    }
+    for (int i = 0; br && i < NL; ++i) {
+      cy += (u64)dd[j][i] + p[i];
+      dd[j][i] = (u32)cy;
+      cy >>= 32;
+    }
+  }
+  if (cudaMemcpyToSymbol(kC, cc, sizeof cc) || cudaMemcpyToSymbol(kD, dd, sizeof dd) ||
+      cudaMemcpyToSymbol(kTau, tau, NL * 4) || cudaMemcpyToSymbol(kP, p, NL * 4))
     return 2;
   return cudaDeviceSynchronize() ? 3 : 0;
 }
@@ -2147,6 +2865,12 @@ int wt_decode(const uint8_t *store, u32 *out, u64 n, u64 base, int k, unsigned l
   return cudaGetLastError() ? 4 : 0;
 }
 
+int wt_prim(int op, const u32 *a, const u32 *b, u32 *out, int n, cudaStream_t s) {
+  if (op < 0 || op > 6 || (op >= 5 && !FULL_SLOT) || n < 1) return 1;
+  prim_kernel<<<(n + WPB - 1) / WPB, WPB, 0, s>>>(op, a, b, out, n);
+  return cudaGetLastError() ? 4 : 0;
+}
+
 int wt_read(const void *store, u64 bytes, unsigned long long *xr, int grid, cudaStream_t s) {
   read_kernel<<<grid, 256, 0, s>>>(reinterpret_cast<const uint4 *>(store), bytes / 16, xr);
   return cudaGetLastError() ? 4 : 0;
@@ -2157,6 +2881,7 @@ int wt_tc_decode(const uint8_t *store, u32 *out, u64 n, u64 base, int k, unsigne
   if constexpr (!TC_OK) {
     return 5;
   } else {
+    if (MASKED && k > 1) return 5;   // tc_decode has no σ_K
 #define F(K) do { if (out) tc_decode_kernel<K, 2><<<grid, TC_WARPS * 32, 0, s>>>(store, out, n, base, xr); \
                   else tc_decode_kernel<K, 0><<<grid, TC_WARPS * 32, 0, s>>>(store, out, n, base, xr); } while (0)
     WT_K_SWITCH(k, F)
@@ -2172,7 +2897,8 @@ int wt_tc_square_gate(const u32 *in, u32 *out, int n, cudaStream_t s) {
 }
 
 // what 0: CUDA-core squarings (ilp words a thread); 1: CUDA-core decodes; 2: CUDA-core encodes; 3: tensor-core
-// squarings (ilp words a warp). steps a thread (or warp). block: threads a CTA for 0-2.
+// squarings (ilp words a warp); 4 b3_chain_kernel; 5 pipe_kernel; 6: as 0 with sqr_fold, a word a thread (full slot).
+// steps a thread (or warp).
 int wt_chain(int what, int k, int ilp, u64 steps, unsigned long long *xr, int grid, cudaStream_t s) {
   if (what == 0) {
     if (ilp == 1) chain_kernel<0, 1, 1><<<grid, 128, 0, s>>>(steps, xr);
@@ -2199,6 +2925,9 @@ int wt_chain(int what, int k, int ilp, u64 steps, unsigned long long *xr, int gr
     if (ilp == 1) tc_chain_kernel<1><<<grid, TC_WARPS * 32, 0, s>>>(steps, xr);
     else if (ilp == 2) tc_chain_kernel<2><<<grid, TC_WARPS * 32, 0, s>>>(steps, xr);
     else return 1;
+  } else if (what == 6) {
+    if (!FULL_SLOT || ilp != 1) return 1;
+    chain_kernel<3, 1, 1><<<grid, 128, 0, s>>>(steps, xr);
   } else {
     return 1;
   }
@@ -2238,23 +2967,33 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
 #undef G
 }
 
-// The fused decode GEMM at k rounds: `decoders` decoder warps, an MMA warp, a producer and `taggers` tag warps (block
-// jl's ro-blake3/v1 tag, at index tag_base + jl, into tags[8 jl ..]), `stages` stored stages; tsteps as fused_kernel's.
-// wt_fused_sketch with sketch_k > 0 (k = 1, no tag warps) has the decoders sketch: ro-sketch-blake3/v0 at
+// The fused decode GEMM at k rounds: `decoders` decoder warps, the MMA warps (fused_mma_warps), a producer and `taggers`
+// tag warps (block jl's ro-blake3/v1 tag, at index tag_base + jl, into tags[8 jl ..]), `stages` stored stages; tsteps
+// as fused_kernel's.
+// wt_fused_sketch with sketch_k > 0 (16 at any k, 64 at k = 1; no tag warps) computes ro-sketch-blake3/v0 at
 // k_s = sketch_k over tiles of skt tasks (stages < 2 skt), the signs as sketching.sign_fragments, each vector v's tag at
 // tag_base + v into tags[8 v ..] and, if sk_out, its sketch at sk_out[k_s v ..]; tags and sk_out hold
-// sketch_vectors(...) vectors.
+// sketch_vectors(...) vectors. sketch_warps = 0: the decoders sketch and the MMA warp hashes; 2 (k_s = 16, full slot):
+// two sketch warps do both (sketch_warp), beside `decoders` decoders, and signs holds the words' B fragments
+// (wt_sign_frags), 4 u32 a word. The warps a launch may take are fused_warps'.
 int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
                     int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
-                    int sketch_k, const u32 *signs, int *sk_out, int skt, int *launched, cudaStream_t s) {
-  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || k < 1 || k > MAXK || decoders < FUSED_SPAN || taggers < 0 ||
-      decoders + 2 + taggers > FUSED_WARPS || stages < (32 * decoders + TW - 1) / TW || (w && taggers && !tags))
-    return 1;
-  if (sketch_k && ((sketch_k != 16 && sketch_k != 64) || k != 1 || taggers || stages >= (SK_BUFS - 1) * skt ||
-                   (w && (!signs || !(tags || sk_out)))))
-    return 1;
+                    int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,
+                    cudaStream_t s) {
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
-  const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (decoders + 2 + taggers) * 32;
+  const int cap = sketch_warps ? fused_cap<16, 2>(nb8) : (sketch_k ? fused_cap<16, 0>(nb8) : fused_cap<0, 0>(nb8));
+  const int mw =
+      sketch_warps ? fused_mma<16, 2>(k, nb8) : (sketch_k ? fused_mma<16, 0>(k, nb8) : fused_mma<0, 0>(k, nb8));
+  const int warps = decoders + mw + 1 + taggers + sketch_warps;
+  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || k < 1 || k > MAXK || decoders < FUSED_SPAN || taggers < 0 ||
+      warps > cap || stages < (32 * decoders + TW - 1) / TW || (w && taggers && !tags))
+    return 1;
+  if (sketch_k && ((sketch_k != 16 && sketch_k != 64) || (sketch_k == 64 && k != 1) || taggers ||
+                   stages >= (SK_BUFS - 1) * skt || (w && (!signs || !(tags || sk_out)))))
+    return 1;
+  if (sketch_warps && (sketch_warps != 2 || sketch_k != 16 || PAY_E != 0)) return 1;
+  if (WT_RECEIPT && sketch_k && !sketch_warps) return 1;   // only the sketch warps hash sketch-sha512
+  const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = warps * 32;
   int dev = 0, optin = 0;
   cudaGetDevice(&dev);
   cudaDeviceGetAttribute(&optin, cudaDevAttrMaxSharedMemoryPerBlockOptin, dev);
@@ -2265,17 +3004,29 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
                                                stages, tsteps, tags, tag_base, signs, sk_out, skt, sgs);
     });
   };
-#define G(KK, NB, SK)                                                                              \
-  do {                                                                                             \
-    const int sg = fused_smem_bytes<NB, SK>(stages, signs16) <= optin ? signs16 : 0;               \
-    return partials ? go(fused_kernel<KK, NB, true, SK>, fused_smem_bytes<NB, SK>(stages, sg), sg) \
-                    : go(fused_kernel<KK, NB, false, SK>, fused_smem_bytes<NB, SK>(stages, sg), sg); \
+  // A launch of at most 12 warps at k >= 2 takes the 12-warp kernel (fresh_decode), where fused_warps allows more.
+#define G(KK, NB, SK, SW)                                                                                            \
+  do {                                                                                                               \
+    const int sg = SW == 0 && fused_smem_bytes<NB, SK, SW>(stages, signs16) <= optin ? signs16 : 0;                  \
+    const int sm = fused_smem_bytes<NB, SK, SW>(stages, sg);                                                         \
+    constexpr int W12 = FRESH_DECODE && KK >= 2 ? 12 : fused_warps<NB, SK, SW>();                                    \
+    if (warps <= W12)                                                                                                \
+      return partials ? go(fused_kernel<KK, NB, true, SK, SW, W12>, sm, sg)                                          \
+                      : go(fused_kernel<KK, NB, false, SK, SW, W12>, sm, sg);                                        \
+    return partials ? go(fused_kernel<KK, NB, true, SK, SW>, sm, sg) : go(fused_kernel<KK, NB, false, SK, SW>, sm, sg); \
   } while (0)
-#define GN(KK, SK) do { if (nb8 == 1) G(KK, 1, SK); else if (nb8 == 2) G(KK, 2, SK); else G(KK, 4, SK); } while (0)
-  if (sketch_k == 16) GN(1, 16);
-  if (sketch_k == 64) GN(1, 64);
-  if (k == 1) GN(1, 0);
-  GN(2, 0);
+#define GN(KK, SK, SW) \
+  do { if (nb8 == 1) G(KK, 1, SK, SW); else if (nb8 == 2) G(KK, 2, SK, SW); else G(KK, 4, SK, SW); } while (0)
+  if (sketch_warps && k == 1) GN(1, 16, 2);
+  if (sketch_warps && k == 2) GN(2, 16, 2);
+  if (sketch_warps) GN(3, 16, 2);
+  if (sketch_k == 16 && k == 1) GN(1, 16, 0);
+  if (sketch_k == 16 && k == 2) GN(2, 16, 0);
+  if (sketch_k == 16) GN(3, 16, 0);
+  if (sketch_k == 64) GN(1, 64, 0);
+  if (k == 1) GN(1, 0, 0);
+  if (k == 2) GN(2, 0, 0);
+  GN(3, 0, 0);
 #undef GN
 #undef G
 }
@@ -2284,7 +3035,7 @@ int wt_fused(int k, const void *w, const uint8_t *x, float *y, int M, int N, int
              int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
              int *launched, cudaStream_t s) {
   return wt_fused_sketch(k, w, x, y, M, N, Kd, base, partials, decoders, stages, groups, taggers, tsteps, tags, tag_base,
-                         0, nullptr, nullptr, 1, launched, s);
+                         0, nullptr, nullptr, 1, 0, launched, s);
 }
 
 // The vectors a sketched launch tags: 16 a tile, ceil(ceil(nbs / groups) / skt) tiles a CTA.
@@ -2292,10 +3043,6 @@ u64 wt_sketch_vectors(int N, int Kd, int groups, int skt) {
   const u64 nbs = N / 16, per = (nbs + groups - 1) / groups;
   return (u64)groups * (Kd / TASK_COLS) * ((per + skt - 1) / skt) * 16;
 }
-
-// ro-blake3/v1 for one window: K as BLAKE3's 8 little-endian key words, and the leaves' prefix block
-// Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(σ)) (128 bytes), whose midstate the leaves start from.
-static Mid g_leafmid;
 
 int wt_set_dbg(uint8_t *p) {
 #ifdef WT_DEBUG_DUMP
@@ -2305,6 +3052,9 @@ int wt_set_dbg(uint8_t *p) {
 #endif
 }
 
+// One window's tag (ro-blake3/v1 or ro-sketch-blake3/v0): K as BLAKE3's 8 little-endian key words, and the leaves'
+// prefix block Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(σ)) (128 bytes), whose midstate the leaves start from. A
+// WT_RECEIPT build's sketch warps start from the same midstate: there leaf_prefix is sketch_receipt.prefix(seed).
 int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
   u64 w[16];
   for (int i = 0; i < 16; ++i) {
@@ -2312,17 +3062,135 @@ int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
     for (int b = 0; b < 8; ++b) v = (v << 8) | leaf_prefix[8 * i + b];
     w[i] = v;
   }
-  for (int i = 0; i < 8; ++i) g_leafmid.h[i] = SHA512_IV_HOST[i];
-  sha512_compress(g_leafmid.h, w);
+  Mid mid;
+  for (int i = 0; i < 8; ++i) mid.h[i] = SHA512_IV_HOST[i];
+  sha512_compress(mid.h, w);
   const u32 one = 1;
-  if (cudaMemcpyToSymbol(kTagKey, key, 8 * 4) || cudaMemcpyToSymbol(kOne, &one, 4)) return 2;
+  if (cudaMemcpyToSymbol(kTagKey, key, 8 * 4) || cudaMemcpyToSymbol(kOne, &one, 4) ||
+      cudaMemcpyToSymbol(g_leafmid, &mid, sizeof mid) || cudaMemcpyToSymbol(kRcptMid, mid.h, sizeof mid.h))
+    return 2;
   return cudaDeviceSynchronize() ? 3 : 0;
+}
+
+// The fixed bytes of a pass's messages (pass_kernel) at σ (32 bytes), k_s and n.
+static int g_pass_n = 0;
+int wt_set_pass(const uint8_t *sigma, int ks, int n) {
+  if (ks != 16 || n < 8 || n % 8 || KPASS_ROWS * (n / 8) > PASS_BITS_BYTES || (WT_RECEIPT && n != 4096)) return 1;
+  PassMsgs P{};
+  auto put = [](uint8_t *m, int &o, const void *src, int len) {
+    memcpy(m + o, src, len);
+    o += len;
+  };
+  auto frame = [&](uint8_t *m, int &o, char tag, const void *body, int len) {
+    m[o++] = (uint8_t)tag;
+    for (int b = 7; b >= 0; --b) m[o++] = (uint8_t)((u64)len >> (8 * b));
+    put(m, o, body, len);
+  };
+  auto frame_int = [&](uint8_t *m, int &o, u64 v) {
+    uint8_t be[8];
+    int len = 0;
+    for (int b = 7; b >= 0; --b)
+      if (len || (v >> (8 * b)) & 0xFF || b == 0) be[len++] = (uint8_t)(v >> (8 * b));
+    frame(m, o, 'i', be, len);
+  };
+  const uint8_t zero[4 + 64] = {};
+  const char *name = WT_RECEIPT ? "sketch-sha512" : "ro-sketch-blake3/v0";
+  const char *sign_domain = WT_RECEIPT ? "verity/remote-bandwidth/sketch-signs/v0" : "verity/bandwidth/sketch-signs/v0";
+  const int nl = (int)strlen(name);
+  int o = 0;   // SHA512(PASS_DOMAIN ‖ σ ‖ u32be j ‖ root)
+  put(P.seed, o, "verity/remote-bandwidth/seed/v0", 32);
+  put(P.seed, o, sigma, 32);
+  put(P.seed, o, zero, 4 + 64);
+  P.seed_len = o;
+  o = 0;   // derive(s, SIGN_DOMAIN, {"k": ks, "n": n, "tag": name})
+  put(P.derive, o, "verity/randomness/derive/v2", 28);
+  P.derive_s = o + 9;
+  frame(P.derive, o, 'b', zero, SEED_BYTES);
+  frame(P.derive, o, 's', sign_domain, (int)strlen(sign_domain));
+  uint8_t ctx[128];
+  int c = 0;
+  frame(ctx, c, 's', "k", 1);
+  frame_int(ctx, c, (u64)ks);
+  frame(ctx, c, 's', "n", 1);
+  frame_int(ctx, c, (u64)n);
+  frame(ctx, c, 's', "tag", 3);
+  frame(ctx, c, 's', name, nl);
+  frame(P.derive, o, 'b', ctx, c);
+  P.derive_len = o;
+  o = 0;   // Z(TAG_DOMAIN ‖ frame(name) ‖ frame(s)): the key
+  put(P.tag, o, "verity/bandwidth/tag/v1", 24);
+  frame(P.tag, o, 's', name, nl);
+  P.tag_s = o + 9;
+  frame(P.tag, o, 'b', zero, 32);
+  o = 0;   // Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(s)): the leaves' prefix; sketch-sha512's receipt prefix
+#if WT_RECEIPT
+  put(P.leaf, o, "verity/remote-bandwidth/sketch-receipt/v0", 42);
+#else
+  put(P.leaf, o, "verity/bandwidth/tag-leaf/v1", 29);
+  frame(P.leaf, o, 's', name, nl);
+#endif
+  P.leaf_s = o + 9;
+  frame(P.leaf, o, 'b', zero, SEED_BYTES);
+  o = 0;   // a row's stream block: STREAM ‖ K_S ‖ frame(frames(("row", c))) ‖ u64be block
+  put(P.row, o, "verity/randomness/stream/v2", 28);
+  P.row_key = o;
+  put(P.row, o, zero, 32);
+  uint8_t idx[32];
+  c = 0;
+  frame(idx, c, 's', "row", 3);
+  frame_int(idx, c, 0);
+  frame(P.row, o, 'b', idx, c);
+  P.row_c = o - 1;
+  P.row_ctr = o;
+  put(P.row, o, zero, 8);
+  P.row_len = o;
+  P.ks = ks;
+  P.n = n;
+  if (cudaMemcpyToSymbol(kPass, &P, sizeof P)) return 2;
+  g_pass_n = n;
+  return cudaDeviceSynchronize() ? 3 : 0;
+}
+
+// Pass j's receipt state from the previous pass's root (8 SHA-512 state words on the device, as wt_tag_tree's
+// nodes): its seed, its signs (sketching.sign_fragments at T tasks a tile, signs[]) and, in stream order, its key
+// (kTagKey) and leaves' prefix, for every sketched launch and commit after it on the stream.
+int wt_pass(unsigned j, const u64 *root, u32 *signs, int t, cudaStream_t s) {
+  if (!root || !signs || t < 1 || 32 * ((SB + 511) / 512) * t != g_pass_n) return 1;
+  pass_kernel<<<1, PASS_THREADS, 0, s>>>(j, root, signs, t);
+  void *gp = nullptr;
+  if (cudaGetLastError() || cudaGetSymbolAddress(&gp, g_pass)) return 4;
+  uint8_t *g = static_cast<uint8_t *>(gp);
+  if (WT_RECEIPT && cudaMemcpyToSymbolAsync(kRcptMid, g + offsetof(PassState, leafmid), 64, 0,
+                                            cudaMemcpyDeviceToDevice, s))
+    return 4;
+  return cudaMemcpyToSymbolAsync(kTagKey, g + offsetof(PassState, key), 32, 0, cudaMemcpyDeviceToDevice, s) ? 4 : 0;
+}
+
+// The last pass's seed (the whole SHA-512, 64 bytes; ro-sketch-blake3/v0's s_j is its first 32), K_S (32), key (32,
+// kTagKey's) and leaves' (sketch-sha512: receipts') midstate (8 u64, kRcptMid's) into out (192 bytes).
+int wt_pass_state(uint8_t *out) {
+  PassState p;
+  if (cudaDeviceSynchronize() || cudaMemcpyFromSymbol(&p, g_pass, sizeof p) ||
+      cudaMemcpyFromSymbol(out + 96, kTagKey, 32) || cudaMemcpyFromSymbol(out + 128, kRcptMid, 64))
+    return 2;
+  memcpy(out, p.seed, 64);
+  memcpy(out + 64, p.ks, 32);
+  if (!WT_RECEIPT) memcpy(out + 128, p.leafmid, 64);
+  return 0;
+}
+
+// The sketch warps' B fragments (frags, 4 u32 a word) from the k_s = 16 sign words of t tasks a tile (signs).
+int wt_sign_frags(const u32 *signs, u32 *frags, int t, cudaStream_t s) {
+  if (!signs || !frags || t < 1) return 1;
+  const int n = t * SK_M * LANES;
+  sign_frags_kernel<<<(n + 255) / 256, 256, 0, s>>>(signs, reinterpret_cast<uint4 *>(frags), n);
+  return cudaGetLastError() ? 4 : 0;
 }
 
 // leaves (ceil(nblk / 16) digests of 8 u64) from the tags of blocks [0, nblk).
 int wt_tag_leaves(const u32 *tags, u64 nblk, u64 *leaves, cudaStream_t s) {
   const u64 n = (nblk + 15) / 16;
-  tag_leaves_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(tags, nblk, g_leafmid, leaves);
+  tag_leaves_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(tags, nblk, leaves);
   return cudaGetLastError() ? 4 : 0;
 }
 
