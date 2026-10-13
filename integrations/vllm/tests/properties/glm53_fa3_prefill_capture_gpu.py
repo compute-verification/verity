@@ -11,7 +11,8 @@ The device gate runs first and nothing else runs when it fails (exit 3):
   mufu     `fa2_target_capture_gpu.mufu`: the ex2 / rcp tables (FA3's `--use_fast_math` exp2f and 1/x, the combine's too) on all
            2^32 inputs.
   launch   every launch's kernels (torch.profiler): one `FlashAttnFwdSm90` instantiation at TileShape 128x80x256, kHeadDimV 256,
-           causal, varlen, not paged, MmaPV_is_RS, IntraWGOverlap, Split exactly when `fa3_model.split_plan` says the launch splits;
+           causal unless FA3 drops the mask (`want_causal`: a launch whose longest sequence is one token), varlen, not paged,
+           PackGQA, MmaPV_is_RS, IntraWGOverlap, Split exactly when `fa3_model.split_plan` says the launch splits;
            then, exactly when it splits, one `FlashAttnFwdCombine` instantiation, `WANT_COMBINE` (`SparseMlaCombine_v1`'s: 8 x 128
            tiles, 2^5 = 32 split lanes, which holds the plan's split count; vllm-flash-attn's `run_mha_fwd_combine_` picks it for
            dv > 64 and num_splits <= 32), and, counted in the launch's profiler window (`kernel_counts`), one forward kernel a call and
@@ -78,8 +79,11 @@ TOTALS = ("rows", "heads", "mismatch", "nonfinite", "lg2_open", "reference", "tw
 CLASSES = ("pinned", "served", "served_split")
 FLAGS = ("Is_causal", "Is_local", "Has_softcap", "Varlen", "PagedKVNonTMA", "AppendKV", "HasQv", "MmaPV_is_RS", "IntraWGOverlap",
          "PackGQA", "Split", "V_colmajor")
-WANT_FLAGS = {"Is_causal": True, "Is_local": False, "Has_softcap": False, "Varlen": True, "PagedKVNonTMA": False, "AppendKV": False,
-              "HasQv": False, "MmaPV_is_RS": True, "IntraWGOverlap": True, "V_colmajor": False}
+#: the flags every launch of vLLM's call instantiates (`Is_causal` is `want_causal`'s, `Split` the plan's).  `PackGQA` is the constant
+#: `true` of hopper/flash_api.cpp:309 under the build's FLASHATTENTION_PACKGQA_ONLY (CMakeLists.txt:311), whatever `get_pack_gqa`
+#: says, and at one query head a KV head it packs nothing
+WANT_FLAGS = {"Is_local": False, "Has_softcap": False, "Varlen": True, "PagedKVNonTMA": False, "AppendKV": False, "HasQv": False,
+              "MmaPV_is_RS": True, "IntraWGOverlap": True, "PackGQA": True, "V_colmajor": False}
 _TUPLE = r"cute::tuple<\s*cute::C<(\d+)>\s*,\s*cute::C<(\d+)>\s*,\s*cute::C<(\d+)>\s*>"
 _FWD = re.compile(r"CollectiveMainloopFwdSm90<\s*(\d+)\s*,\s*" + _TUPLE + r"\s*,\s*" + _TUPLE + r"\s*,\s*(\d+)\s*,\s*cutlass::bfloat16_t\s*,"
                   r"\s*float\s*,\s*cutlass::arch::Sm90\s*,\s*((?:true|false)(?:\s*,\s*(?:true|false)){11})")
@@ -113,18 +117,26 @@ def plan(seqlens: list[int], num_splits: int) -> dict[str, Any]:
     return {"static": static, "dynamic": dyn}
 
 
-def launch_geometry(names: list[str], static: int, counts: dict[str, int] | None = None) -> dict[str, Any]:
+def want_causal(max_seqlen_q: int, head_size: int = D, paged: bool = False) -> bool:
+    """`Is_causal` of a launch of vLLM's causal call (window (-1, -1)): `mha_fwd` drops the mask when the varlen `seqlen_q`, the
+    launch's `max_seqlen_q` (hopper/flash_api.cpp:827 at vllm-flash-attn 506341a1), is 1, at a head outside (64, 128] or without a
+    page table (:866-873).  Each sequence of such a launch here is one token, which reads one key block, its first, guarded either
+    way, so `Attention_v4` is both instantiations' word."""
+    return not (max_seqlen_q == 1 and (head_size <= 64 or head_size > 128 or not paged))
+
+
+def launch_geometry(names: list[str], static: int, max_seqlen_q: int, counts: dict[str, int] | None = None) -> dict[str, Any]:
     """The `FlashAttnFwdSm90` and `FlashAttnFwdCombine` instantiations among a launch's kernel names, against the 128 x 80 x 256 tile
-    and the flags vLLM's call sets, with `Split` and exactly `WANT_COMBINE` where the plan splits the launch (and no combine where it
-    doesn't); with ``counts`` (`kernel_counts`), the window's `CALLS` calls each ran one forward kernel, and one combine exactly when
-    the launch splits."""
+    and the flags vLLM's call sets at the launch's ``max_seqlen_q``, with `Split` and exactly `WANT_COMBINE` where the plan splits the
+    launch (and no combine where it doesn't); with ``counts`` (`kernel_counts`), the window's `CALLS` calls each ran one forward
+    kernel, and one combine exactly when the launch splits."""
     split = static > 1
     fwd = sorted({(int(m[0]), (int(m[4]), int(m[5]), int(m[6])), int(m[7]), tuple(x.strip() == "true" for x in m[8].split(",")))
                   for n in names for m in _FWD.findall(n)})
     combines = [dict(zip(COMBINE_FIELDS, ([int(m[0]), int(m[1])], int(m[2]), int(m[3]), int(m[4]), m[5] == "true", m[6] == "true")))
                 for m in sorted({m for n in names for m in _COMBINE.findall(n)})]
     parsed = all(_COMBINE.search(n) for n in names if "FlashAttnFwdCombine" in n)
-    want = dict(WANT_FLAGS, Split=split)
+    want = dict(WANT_FLAGS, Is_causal=want_causal(max_seqlen_q), Split=split)
     want_counts = {"fwd": CALLS, "combine": CALLS if split else 0}
     rec: dict[str, Any] = {"instantiations": [{"stages": s, "tile": list(t), "headdim_v": dv, "flags": dict(zip(FLAGS, f))}
                                               for s, t, dv, f in fwd],
@@ -234,7 +246,8 @@ def gpu(work: Path, outdir: Path, quick: bool, only: list[str] | None, doc: dict
             del t
     names, counts = C.kernels_by_launch(prof), kernel_counts(prof)
     for i, launch in enumerate(doc["launches"]):
-        launch.update(launch_geometry(names.get(i, []), launch["plan"]["static"], counts.get(i, {"fwd": 0, "combine": 0})))
+        launch.update(launch_geometry(names.get(i, []), launch["plan"]["static"], max(launch["seqlens"]),
+                                      counts.get(i, {"fwd": 0, "combine": 0})))
         print(f"[glm53-fa3] launch {launch['case']:18s} {launch['mode']:6s} plan={launch['plan']['static']}/{launch['plan']['dynamic']} "
               f"ok={launch['ok']} det={launch['deterministic']} tiles={[x['tile'] for x in launch['instantiations']]} "
               f"combine={launch['combine']} counts={launch['counts']}", flush=True)

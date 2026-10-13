@@ -1,5 +1,6 @@
-"""The GLM-5.3 FA3 prefill capture without a GPU: the launch check reads the tile, the flags, the combine instantiation and the kernel
-counts from FA3's kernel names, the cases reach every sampled row and all three classes, a comparison job takes the twin's words as
+"""The GLM-5.3 FA3 prefill capture without a GPU: the launch check reads the tile, the flags (non-causal where FA3 drops the mask of a
+one-token launch), the combine instantiation and the kernel counts from FA3's kernel names, the cases reach every sampled row and all
+three classes, a comparison job takes the twin's words as
 the kernel's (unsplit, and split by `fa3_split_twins.split_call`) and finds a flipped one, a non-finite head takes the reference
 evaluator's words, the verdict needs every class, and `main` end to end (the GPU run is
 `tests/properties/glm53_fa3_prefill_capture_gpu.py --out ...` on an H200)."""
@@ -37,8 +38,17 @@ def _combine(tile=(8, 128), log=5, threads=256, align=1, even=False, varlen=True
     return f"void cutlass::device_kernel<{inner} >({t}::Params)"
 
 
+#: len1's forward kernel on the H200 (r20261013-115825-b440, as its record keeps it: the first 600 characters), `Is_causal` false
+LEN1_H200 = ("void cutlass::device_kernel<flash::enable_sm90_or_later<flash::FlashAttnFwdSm90<flash::CollectiveMainloopFwdSm90<2, "
+             "cute::tuple<cute::C<1>, cute::C<1>, cute::C<1> >, cute::tuple<cute::C<128>, cute::C<80>, cute::C<256> >, 256, "
+             "cutlass::bfloat16_t, float, cutlass::arch::Sm90, false, false, false, true, false, false, false, true, true, true, false, "
+             "false, cutlass::bfloat16_t, 1>, flash::CollectiveEpilogueFwd<cute::tuple<cute::C<128>, cute::C<256>, cute::C<80> >, "
+             "cute::tuple<cute::C<1>, cute::C<1>, cute::C<1> >, cutlass::bfloat16_t, cutlass::arch::Sm90, 256, true, true, false, false, "
+             "1>, flash::Va")
+
+
 def _fwd(tile=(128, 80, 256), dv=256, **flags) -> str:
-    f = dict(X.WANT_FLAGS, PackGQA=True, Split=False) | flags
+    f = dict(X.WANT_FLAGS, Is_causal=True, Split=False) | flags
     b = ", ".join("true" if f[k] else "false" for k in X.FLAGS)
     return ("void cutlass::device_kernel<flash::enable_sm90_or_later<flash::FlashAttnFwdSm90<flash::CollectiveMainloopFwdSm90<2, "
             f"cute::tuple<cute::C<1>, cute::C<1>, cute::C<1> >, cute::tuple<cute::C<{tile[0]}>, cute::C<{tile[1]}>, cute::C<{tile[2]}> >, "
@@ -51,18 +61,20 @@ def _bf16(rng, shape):
 
 
 def test_the_launch_check_reads_the_tile_the_flags_and_the_combine() -> None:
-    pinned = X.launch_geometry([PREPARE, _fwd(), _fwd()], 1, UNSPLIT)
+    pinned = X.launch_geometry([PREPARE, _fwd(), _fwd()], 1, 512, UNSPLIT)
     assert pinned["ok"] and pinned["instantiations"] == [{"stages": 2, "tile": [128, 80, 256], "headdim_v": 256,
-                                                          "flags": dict(X.WANT_FLAGS, PackGQA=True, Split=False)}]
-    split = X.launch_geometry([PREPARE, _fwd(Split=True), _combine()], 5, SPLIT)
+                                                          "flags": dict(X.WANT_FLAGS, Is_causal=True, Split=False)}]
+    assert set(pinned["want"]["flags"]) == set(X.FLAGS)
+    split = X.launch_geometry([PREPARE, _fwd(Split=True), _combine()], 5, 512, SPLIT)
     assert split["ok"] and split["combine"] == [X.WANT_COMBINE] and split["counts"] == SPLIT
-    assert X.launch_geometry([PREPARE, _fwd(Split=True), _combine(wrapped=True)], 5, SPLIT)["ok"]
-    assert X.launch_geometry([_fwd(Split=True), _combine()], 5)["ok"]                  # counts not read
-    assert X.launch_geometry([_fwd(Split=True), _combine(), _combine(wrapped=True)], 32, SPLIT)["ok"]   # one instantiation, two spellings
+    assert X.launch_geometry([PREPARE, _fwd(Split=True), _combine(wrapped=True)], 5, 512, SPLIT)["ok"]
+    assert X.launch_geometry([_fwd(Split=True), _combine()], 5, 512)["ok"]             # counts not read
+    assert X.launch_geometry([_fwd(Split=True), _combine(), _combine(wrapped=True)], 32, 512, SPLIT)["ok"]   # one instantiation, two spellings
     for names, static, counts in (
             ([_fwd()], 5, SPLIT), ([_fwd(Split=True)], 5, SPLIT), ([_fwd(Split=True), _combine()], 1, UNSPLIT),
             ([_fwd(), _combine()], 1, UNSPLIT), ([_fwd(tile=(128, 128, 128), dv=128)], 1, UNSPLIT),
             ([_fwd(IntraWGOverlap=False)], 1, UNSPLIT), ([_fwd(PagedKVNonTMA=True)], 1, UNSPLIT),
+            ([_fwd(PackGQA=False)], 1, UNSPLIT), ([_fwd(Is_causal=False)], 1, UNSPLIT),
             ([_fwd(), _fwd(tile=(128, 64, 256))], 1, UNSPLIT), ([PREPARE], 1, UNSPLIT), ([], 1, UNSPLIT),
             ([_fwd(Split=True), _combine(log=4)], 5, SPLIT),                     # the <= 16 splits combine (kBlockM >= 16 only)
             ([_fwd(Split=True), _combine(tile=(16, 64))], 5, SPLIT),             # dv <= 64's
@@ -73,9 +85,25 @@ def test_the_launch_check_reads_the_tile_the_flags_and_the_combine() -> None:
             ([_fwd(Split=True), _combine()], 5, {"fwd": X.CALLS, "combine": 1}),
             ([_fwd(Split=True), _combine()], 5, {"fwd": 1, "combine": X.CALLS}),
             ([_fwd()], 1, {"fwd": X.CALLS, "combine": X.CALLS})):
-        assert not X.launch_geometry(names, static, counts)["ok"], (names, static, counts)
-    assert X.launch_geometry([_fwd(PackGQA=False)], 1, UNSPLIT)["ok"]   # recorded only: one query head a KV head packs nothing
+        assert not X.launch_geometry(names, static, 512, counts)["ok"], (names, static, counts)
     assert 1 << X.WANT_COMBINE["log_max_splits"] == W.LANES
+
+
+def test_a_launch_of_one_token_sequences_is_not_causal() -> None:
+    """FA3 drops the causal mask of a launch whose max_seqlen_q is 1 at head 256 (hopper/flash_api.cpp:866-873): len1's instantiation
+    on the H200 passes, a causal one there doesn't, and a launch with a one-token sequence beside longer ones stays causal."""
+    assert X.plan([1], 0) == X.plan([1], 1) == {"static": 1, "dynamic": [1]}
+    for mode, ns in X.MODES:
+        rec = X.launch_geometry([PREPARE, LEN1_H200], X.plan([1], ns)["static"], 1, UNSPLIT)
+        assert rec["ok"] and rec["want"]["flags"]["Is_causal"] is False and rec["instantiations"][0]["flags"]["PackGQA"], mode
+    assert X.launch_geometry([PREPARE, _fwd(Is_causal=False)], 1, 1, UNSPLIT)["ok"]
+    assert not X.launch_geometry([PREPARE, _fwd()], 1, 1, UNSPLIT)["ok"]
+    blocks = max(X.VARLEN["varlen_blocks"])                                      # [1, 80, 81, 300]
+    assert X.launch_geometry([PREPARE, _fwd()], 1, blocks, UNSPLIT)["ok"]
+    assert not X.launch_geometry([PREPARE, LEN1_H200], 1, blocks, UNSPLIT)["ok"]
+    assert [X.want_causal(n) for n in (1, 2, 2048)] == [False, True, True]
+    assert X.want_causal(1, head_size=128, paged=True)                          # the hdim-128 paged decode keeps kBlockN 128
+    assert not X.want_causal(1, head_size=128) and not X.want_causal(1, head_size=64, paged=True)
 
 
 def test_the_cases_reach_every_sampled_row_and_all_three_classes() -> None:
