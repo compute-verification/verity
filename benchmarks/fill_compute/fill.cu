@@ -224,7 +224,15 @@ template <int STORE, int T> DEV void tile_at(const Args& a, uint8_t* smem, int t
 
 DEV bool stopped(const Args& a) { return a.p[13] && *reinterpret_cast<volatile unsigned*>(a.p[13]); }
 
-// A chunk: queue positions i4 .. i4 + i5 - 1, strided over the grid; a CTA leaves at the stop flag (checked per tile).
+DEV void idle(const Args& a) {
+  if (a.i[6] > 0) {
+    const uint64_t t1 = gtimer();
+    while (gtimer() - t1 < (uint64_t)a.i[6]) __nanosleep(2000);
+  }
+}
+
+// A chunk: queue positions i4 .. i4 + i5 - 1, strided over the grid; a CTA leaves at the stop flag (checked per tile), and
+// i6 > 0 throttles it as persist_body's.
 template <int STORE, int T> DEV void chunk_body(const Args& a) {
   extern __shared__ __align__(128) uint8_t smem[];
   __shared__ int halt;
@@ -233,6 +241,7 @@ template <int STORE, int T> DEV void chunk_body(const Args& a) {
     __syncthreads();
     if (halt) return;
     tile_at<STORE, T>(a, smem, a.i[4] + t);
+    idle(a);
   }
 }
 
@@ -249,10 +258,7 @@ template <int STORE, int T> DEV void persist_body(const Args& a) {
     __syncthreads();
     if (t < 0 || t >= a.i[5]) return;
     tile_at<STORE, T>(a, smem, t);
-    if (a.i[6] > 0) {
-      const uint64_t t1 = gtimer();
-      while (gtimer() - t1 < (uint64_t)a.i[6]) __nanosleep(2000);
-    }
+    idle(a);
   }
 }
 

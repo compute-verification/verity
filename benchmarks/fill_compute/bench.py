@@ -565,6 +565,10 @@ def gate_fixture(lib: Lib, d: Path, lo: torch.cuda.Stream, step: Step | None, lo
         f.poison()
         lib.fill(1, store, 3, f.args(0, f.tiles, gap_ns=20000), lo, f.minb)
         check("persist grid=3 throttled 20 us a tile", store)
+        f.poison()
+        for pos in range(0, f.tiles, 3 * 5):
+            lib.fill(0, store, 3, f.args(pos, min(3 * 5, f.tiles - pos), gap_ns=20000), lo, f.minb)
+        check("chunk grid=3 per=5 throttled 20 us a tile", store)
         if step is not None:
             f.poison()
             step.replay(1)

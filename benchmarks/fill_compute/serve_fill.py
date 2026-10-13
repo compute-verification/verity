@@ -7,6 +7,7 @@ Arms (``--arm``):
   gc:N        the step on a green context of N SMs (fill.cu's `gc_split`), no filler
   gc:N:fill   the same, and the 128 x 128 fold filler (bench.py's best arm) on the rest through every timed point, launched
               in bounded chunks by fill.cu's native pump (`Fill`)
+  gc:N:fill:D the same at duty D: each CTA idles TILE_NS x (1 / D - 1) after each tile
 
 How the step is confined: before vLLM starts, the step's green-context stream becomes torch's current stream, so vLLM
 captures its CUDA graphs and launches its eager kernels there (`gc_split`'s `sm_spread` check: a green context's
@@ -51,6 +52,8 @@ GATE_PROMPTS = [
     "A haiku about the sea:",
 ]
 CAPTURE = [1, 4, 8, 16, 32]
+# one 128 x 128 fold tile's time on one SM, the filler alone on all 188 (1,853,568 tiles/s, r20261013-002059-3970)
+TILE_NS = 101_400
 
 
 def log(*a) -> None:
@@ -73,8 +76,11 @@ class Fill:
     filler would hold it forever), and every position launched is a tile computed."""
 
     def __init__(self, lib: B.Lib, stream, fsms: int, sms: int, M: int = 4096, N: int = 4096, K: int = 8192,
-                 per: int = 2, depth: int = 2):
+                 per: int = 2, depth: int = 2, duty: float = 1.0):
+        if not 0 < duty <= 1:
+            raise ValueError(f"duty {duty}")
         self.lib, self.stream, self.fsms, self.sms, self.per, self.depth = lib, stream, fsms, sms, per, depth
+        self.duty, self.gap_ns = duty, int(TILE_NS * (1 / duty - 1))
         base = B.random_filler(M, N, K, qcap=1)
         self.f = base.with_tile(128, qcap=1)
         self.credit = B.credit_tile(M, N, K, 128)
@@ -89,7 +95,7 @@ class Fill:
         f = self.f
         f.poison()
         torch.cuda.synchronize()
-        self.args = f.args(0, 0, log=False, stop=False)
+        self.args = f.args(0, 0, log=False, stop=False, gap_ns=self.gap_ns)
         rc = self.lib.l.fill_pump_start(f.minb, B.STORES["fold"], self.fsms, self.per, self.depth, C.byref(self.args),
                                         C.c_void_p(self.stream.cuda_stream))
         if rc:
@@ -130,8 +136,8 @@ def main() -> None:
     batches = [int(x) for x in args.batches.split(",")]
     contexts = [int(x) for x in args.contexts.split(",")]
     parts = args.arm.split(":")
-    if parts[0] not in ("stock", "gc") or (parts[0] == "gc" and len(parts) not in (2, 3)):
-        ap.error("--arm stock | gc:N | gc:N:fill")
+    if parts[0] not in ("stock", "gc") or (parts[0] == "gc" and len(parts) not in (2, 3, 4)):
+        ap.error("--arm stock | gc:N | gc:N:fill | gc:N:fill:D")
 
     lib = B.Lib(args.lib)
     sms = torch.cuda.get_device_properties(0).multi_processor_count
@@ -145,10 +151,10 @@ def main() -> None:
         result["green"]["spread_step_graph"] = lib.sm_spread(g["step"], 4 * sms, graph=True)
         torch.cuda.set_stream(g["step"])
         result["step_stream"] = g["step"].cuda_stream
-        if len(parts) == 3:
-            fill = Fill(lib, g["fill"], g["fill_sms"], sms)
+        if len(parts) >= 3:
+            fill = Fill(lib, g["fill"], g["fill_sms"], sms, duty=float(parts[3]) if len(parts) == 4 else 1.0)
             result["filler"] = {"tile": 128, "store": "fold", "grid": g["fill_sms"], "shape": [4096, 4096, 8192],
-                                "credit_w1_per_tile": fill.credit}
+                                "credit_w1_per_tile": fill.credit, "duty": fill.duty, "gap_ns": fill.gap_ns}
 
     import vllm
     from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler
