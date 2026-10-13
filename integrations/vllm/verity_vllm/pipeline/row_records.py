@@ -155,10 +155,14 @@ def build_summary(d: str) -> str:
                   "program_digest": (r.get("program") or {}).get("digest") or a.get("program_digest"), "identity": a.get("identity"),
                   "correspondence_digest": (r.get("program") or {}).get("correspondence_digest") or a.get("correspondence_digest"),
                   "target": (a.get("target_profile") or {}), "applicability": a.get("applicability")}
+        if r.get("committed_units"):
+            out[w]["committed_units"] = r["committed_units"]
     for p in sorted(glob.glob(f"{d}/build_request_LP*_T*/result.json")):
         r = json.load(open(p)); w = os.path.basename(os.path.dirname(p))
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "message": (r.get("message") or "")[:300], "program_digest": (r.get("program") or {}).get("digest"),
                   "correspondence_digest": (r.get("program") or {}).get("correspondence_digest")}
+        if r.get("committed_units"):
+            out[w]["committed_units"] = r["committed_units"]
     json.dump(out, open(f"{d}/build_summary.json", "w"), indent=1, default=str)
     return "PASS" if all(v["ok"] for v in out.values()) else "FAIL"
 
@@ -406,6 +410,11 @@ def manifest_not_of_record(doc: Any, program_digest: str, ck: Any) -> tuple[str,
     the one the Commit is keyed by; unknown is not a match), under the row's tap policies, and recording the word check it passed (the
     Commit refuses one without: `commit.partition.word_check_refusal`)."""
     q = doc.get("query") if isinstance(doc, dict) and isinstance(doc.get("query"), dict) else {}
+    from verity_vllm.pipeline.committed_units import OF_RECORD_APPROVED, from_record
+    committed = from_record(doc)
+    if committed and not OF_RECORD_APPROVED:
+        return "unverified-committed-values", (
+            f"names committed-only unverified inputs {committed.get('inputs')}; claims approval has not been recorded")
     qid = str(q.get("query_id") or "")
     if qid != QUERY_OF_RECORD:
         return "other-query", f"is not built under the query of record {QUERY_OF_RECORD} (query.query_id={qid or 'none'})"

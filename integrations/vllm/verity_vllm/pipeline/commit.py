@@ -1119,6 +1119,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         from verity_vllm.query.manifest.format import coverage_check as manifest_coverage_check
         from verity_vllm.commit.partition import require_partition
         required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
+        from verity_vllm.pipeline.committed_units import require_of_record
+        try:
+            require_of_record(required_manifest, where="Commit of record")
+        except RuntimeError as e:
+            raise SystemExit(f"REFUSE: {e}") from None
         print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
         if args.compiled_taps == "kernels":
             compiled_kernels.set_role_maps(required_manifest)          # BEFORE the engine compiles: capture-time copies + eager acquisitions bind the manifest's roles
