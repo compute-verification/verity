@@ -1,6 +1,8 @@
 """The write gate (21:50Z steering) for the step's weight GEMM: under Nsight Compute, one launch of each linear's fused
 kernel at the configs the step picked (`step.json`), sketched and untagged, and the reader's commit kernels, and per
-kernel the L2 write sectors against what it must write. A sketched launch writes its receipts (`tag_bytes` a vector)
+kernel the L2 write sectors from the SMs against what it must write (all sources' are recorded beside them: the
+profiler's own writes come from other units, 15 sectors a launch and up to 2 MB at a KV launch). A sketched launch
+writes its receipts (`tag_bytes` a vector)
 and adds its partial sums into y (L2 reductions, nchunks · M · N · 4 bytes); an untagged one only the adds; anything
 past that (a spill, a stack, a stray store) shows as write sectors over the receipts' bytes and as local stores. A
 launch passes with no local stores and its L2 writes and reductions within 1% (and a 4 KiB floor) of its outputs plus
@@ -9,7 +11,9 @@ partials; a commit with none and its writes within 1% of its digests.
 With --kv-lib (step.cu) the same for the KV side: attention at each k in the form and split count the step picked
 (`kv_attn` over two layers of the step's batch × context), whose outputs are o and its split partials (at most the
 step's partial buffer for that form and split, `step.part_floats`), and the append of a token at every layer, whose
-outputs are its words.
+outputs are its words. A partial record's m and l are each a group's GROUP floats from its own warp, half a sector at
+GROUP = 4 (8B), so attention is held to the sectors its records span (`part_sector_bytes`) and its ratio to the bytes
+is recorded beside it.
 
     python write_gate.py --wt-lib wt.so [--kv-lib step.so] [--reader-lib reader.so] --step-json OUT/step.json --out OUT
 """
@@ -38,6 +42,7 @@ import kv_bench as BW_KV  # noqa: E402
 
 METRICS = ("lts__t_sectors_op_write.sum", "lts__t_sectors_srcunit_tex_op_write.sum", "lts__t_sectors_op_red.sum",
            "lts__t_sectors_op_atom.sum", "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum", "dram__bytes_write.sum")
+WRITE, ALL = METRICS[1], METRICS[0]   # the SMs' L2 writes, and every source's
 KERNELS = "regex:fused_kernel|leaves_kernel|level_kernel|pads_kernel|attn_|append_kernel"
 
 
@@ -120,8 +125,11 @@ def kv_launches(a, step: dict, torch, st) -> list[dict]:
         kv.call("kv_attn", BW_KV.ptr(cache), form, BW_KV.ptr(q), BW_KV.ptr(o), BW_KV.ptr(part), b, ctx, layers, 1, sp,
                 k, st)
         torch.cuda.synchronize()
+        group_ml = 32 * -(-4 * (sh["heads"] // sh["kv_heads"]) // 32)
         out.append({"kernel": "attention", "k": k, "form": form, "splits": sp, "batch": b, "ctx": ctx,
-                    "out_bytes": o.numel() * 4, "part_bytes": part.numel() * 4})
+                    "out_bytes": o.numel() * 4, "part_bytes": part.numel() * 4,
+                    "part_sector_bytes": part.numel() // sh["part"] * (
+                        4 * sh["heads"] * STEP.K.HEAD_DIM + 2 * sh["kv_heads"] * group_ml)})
     del cache
     model_layers = BW.MODELS[step["model_name"]][0]
     new = BW_KV.random_words(torch, b * model_layers * tlw, f, 23)
@@ -158,9 +166,9 @@ def summarize(stdout: str, rc: int) -> dict:
         return res
     rows_out = []
     for w, kv in zip([w for w in want if w["kernel"] == "fused"], fused):
-        wb, lb = bytes_of(kv, "lts__t_sectors_op_write.sum"), bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum")
+        wb, lb = bytes_of(kv, WRITE), bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum")
         rb, must = bytes_of(kv, "lts__t_sectors_op_red.sum"), w["receipt_bytes"] + w["red_bytes"]
-        rows_out.append({**w, "l2_write_bytes": wb, "l2_write_sm_bytes": bytes_of(kv, METRICS[1]), "l2_red_bytes": rb,
+        rows_out.append({**w, "l2_write_bytes": wb, "l2_write_all_bytes": bytes_of(kv, ALL), "l2_red_bytes": rb,
                          "local_store_bytes": lb, "dram_write_bytes": kv.get("dram__bytes_write.sum"),
                          "write_over_receipts": wb / w["receipt_bytes"] if w["receipt_bytes"] else None,
                          "red_over_partials": rb / w["red_bytes"], "over_outputs_and_partials": (wb + rb) / must,
@@ -169,9 +177,10 @@ def summarize(stdout: str, rc: int) -> dict:
     if commit:
         ck = [kv for kv in kernels if any(s in kv["name"] for s in ("leaves_kernel", "level_kernel", "pads_kernel"))]
         must = commit[0]["leaf_bytes"] + commit[0]["node_bytes"]
-        wb = sum(bytes_of(kv, "lts__t_sectors_op_write.sum") for kv in ck)
+        wb = sum(bytes_of(kv, WRITE) for kv in ck)
         lb = sum(bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum") for kv in ck)
-        rows_out.append({**commit[0], "kernels": len(ck), "l2_write_bytes": wb, "local_store_bytes": lb,
+        rows_out.append({**commit[0], "kernels": len(ck), "l2_write_bytes": wb,
+                         "l2_write_all_bytes": sum(bytes_of(kv, ALL) for kv in ck), "local_store_bytes": lb,
                          "write_over_digests": wb / must, "ok": lb == 0 and wb <= 1.01 * must + 4096 * len(ck)})
     attn = [w for w in want if w["kernel"] == "attention"]
     groups: list[list[dict]] = []
@@ -186,11 +195,13 @@ def summarize(stdout: str, rc: int) -> dict:
         res["rows"] = rows_out
         return res
     for w, g in zip(attn, groups):
-        wb = sum(bytes_of(kv, "lts__t_sectors_op_write.sum") + bytes_of(kv, "lts__t_sectors_op_red.sum") for kv in g)
+        wb = sum(bytes_of(kv, WRITE) + bytes_of(kv, "lts__t_sectors_op_red.sum") for kv in g)
         lb = sum(bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum") for kv in g)
-        must = w["out_bytes"] + w["part_bytes"]
-        rows_out.append({**w, "kernels": [kv["name"][:40] for kv in g], "l2_write_bytes": wb, "local_store_bytes": lb,
-                         "write_over_outputs_and_partials": wb / must, "ok": lb == 0 and wb <= 1.01 * must + 4096 * len(g)})
+        must = w["out_bytes"] + w["part_sector_bytes"]
+        rows_out.append({**w, "kernels": [kv["name"][:40] for kv in g], "l2_write_bytes": wb,
+                         "l2_write_all_bytes": sum(bytes_of(kv, ALL) for kv in g), "local_store_bytes": lb,
+                         "write_over_outputs_and_partials": wb / (w["out_bytes"] + w["part_bytes"]),
+                         "write_over_sectors": wb / must, "ok": lb == 0 and wb <= 1.01 * must + 4096 * len(g)})
     app = [w for w in want if w["kernel"] == "append"]
     ak = [kv for kv in kernels if "append_kernel" in kv["name"]]
     if len(ak) != len(app):
@@ -198,9 +209,9 @@ def summarize(stdout: str, rc: int) -> dict:
         res["rows"] = rows_out
         return res
     for w, kv in zip(app, ak):
-        wb = bytes_of(kv, "lts__t_sectors_op_write.sum")
-        lb = bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum")
-        rows_out.append({**w, "l2_write_bytes": wb, "local_store_bytes": lb, "write_over_words": wb / w["word_bytes"],
+        wb, lb = bytes_of(kv, WRITE), bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum")
+        rows_out.append({**w, "l2_write_bytes": wb, "l2_write_all_bytes": bytes_of(kv, ALL), "local_store_bytes": lb,
+                         "write_over_words": wb / w["word_bytes"],
                          "ok": lb == 0 and wb <= 1.01 * w["word_bytes"] + 4096})
     res["rows"] = rows_out
     res["ok"] = all(r["ok"] for r in rows_out)
