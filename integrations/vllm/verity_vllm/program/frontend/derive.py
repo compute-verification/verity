@@ -1007,8 +1007,9 @@ def _written_operand_items(node) -> list[tuple[str, Any]]:
                 except (TypeError, ValueError):
                     pass
             items = list(zip(names, nodes))
+            output_ptrs = [(name, value) for name, value in items if name in {"c_ptr", "out_ptr", "output_ptr"}]
             allocations = [(name, value) for name, value in items if _from_allocation(value)]
-            out.extend(allocations or items)
+            out.extend(output_ptrs or allocations or items)
     return out
 
 
