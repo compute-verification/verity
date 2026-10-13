@@ -11500,7 +11500,7 @@
    ]
   },
   "Flock.RecOpening": {
-   "digest": "3679a33ffd4bf4912d61b8b34b0621bad5da22f4de949ddb46507554f687367f",
+   "digest": "21806d1a99c143a15402fa1618afee5be8e04bc02a203287c2ee3e1603f3edfe",
    "definitions": {
     "Flock.RecOpening.accTerms": "cf83e68f83f74ca25a9c5680b5fbbc9db61cf78eeb92268f6d5be87bc957af99",
     "Flock.RecOpening.atomTerm": "29c955bc5bef0dfce6a8fdda4ca7971fc7f4487ad03641e33d11a58c1f9d0061",
@@ -11508,7 +11508,7 @@
     "Flock.RecOpening.build": "1db2a971fc7e7002d4f3d28fdd76643aefdc6c2889f266dea0fc79174ef9b208",
     "Flock.RecOpening.buildAll": "63f8ff5f52e3c274e63c2c91795cb3f15fc10af84aa6b94775f43844a1cb74f0",
     "Flock.RecOpening.buildRes": "e501b31934d9ecef5e435154f8d9d82a788b5cb600abb07b9865f969fd34af45",
-    "Flock.RecOpening.check": "4956f7d943969170a0913d9e42f3d558fb4848111096a214a6aea6e01d507c26",
+    "Flock.RecOpening.check": "68b2010e892436f10d5ff3846d559c5f84e31f43226a65c4f4024225c7004e18",
     "Flock.RecOpening.claimW": "0c4e3ccd74875b6f4f3d9c1ddcbf5d25b24725cfa3f188e22e548db6d4459928",
     "Flock.RecOpening.claimsLike": "3bb944a7f0e248c0a8614bbd2d150b16bc6f7710f78def235a4a6ec317de4225",
     "Flock.RecOpening.coefOps": "29682e62e6cd86d9827aa43e74077cc5c616183f3e344a3bd0541ec401690df4",
