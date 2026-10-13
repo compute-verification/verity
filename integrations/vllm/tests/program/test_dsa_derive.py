@@ -184,7 +184,7 @@ def _inputs(model: _Model, seed: int = 1) -> tuple:
 def _observation(**over) -> dict:
     return {"kind": "mla", "impl": IMPL, "backend": "FLASH_ATTN_MLA_SPARSE", "kv_cache_dtype": "auto", "layer_kv_cache_dtype": "auto",
             "num_heads": NH, "scale": SCALE, "kv_lora_rank": L, "qk_rope_head_dim": R, "dcp_world_size": 1, "use_pcp": False,
-            "use_sparse": True, "prefill_backend": None, "num_splits": 1, **over}
+            "use_sparse": True, "prefill_backend": None, "num_splits": 1, "q_heads_per_rank": NH, "sparse_mla_force_mqa": False, **over}
 
 
 @pytest.fixture
@@ -340,11 +340,15 @@ def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):
     monkeypatch.setitem(sys.modules, backend.__name__, backend)
     layer = attention.MLAAttention()
     layer.impl, layer.layer_name = backend.Impl(), NAMES[0]
+    layer._vllm_config = types.SimpleNamespace(model_config=types.SimpleNamespace(get_num_attention_heads=lambda parallel: 64 // parallel.tp),
+                                               parallel_config=types.SimpleNamespace(tp=8),
+                                               attention_config=types.SimpleNamespace(sparse_mla_force_mqa=False))
     model = nn.Sequential(layer)
     backend.flash_attn_varlen_func = lambda *a, **k: None
     assert vm.attention_impls(model)[NAMES[0]]["num_splits"] is None
     backend.flash_attn_varlen_func.verity_sparse_mla_splits = 1
-    assert vm.attention_impls(model)[NAMES[0]]["num_splits"] == 1
+    obs = vm.attention_impls(model)[NAMES[0]]
+    assert obs["num_splits"] == 1 and obs["q_heads_per_rank"] == 8 and obs["sparse_mla_force_mqa"] is False
 
 
 def test_the_shims_leave_a_model_without_their_layers_unchanged(monkeypatch):
@@ -432,17 +436,37 @@ def test_the_served_vocabulary_names_the_roles_it_lacks(served):
     ("splits", "the split-combine has no Definition; SparseMla_v1 is num_splits=1"),
     ("topk", "'layers.0.self_attn.attn': position 2 has 3 keys > TOPK 2"),
     ("shared-first", "IndexShare layer 'layers.0.self_attn.attn' reads a top-k no indexer layer selected for positions 0..1"),
-    ("prefill-backend", "has the dense-MHA prefill backend 'FlashAttnMLAPrefill'"),
+    ("prefill-backend", "a call of 2 query rows is a prefill (decode threshold 1 at 2 query heads per rank), which its dense-MHA "
+                        "prefill backend 'FlashAttnMLAPrefill' serves"),
+    ("heads", "no observed query heads per rank for 'layers.0.self_attn.attn', the decode threshold its prefill backend"),
     ("impl", "runs 'FlashMLASparseImpl'; SparseMla_v1 states FLASH_ATTN_MLA_SPARSE"),
     ("target", "SparseMla_v1 is FA3 at compute capability 9.0; the target is"),
 ])
-def test_each_attention_precondition_refuses_by_name(case, needle, served):
+def test_each_attention_precondition_refuses_by_name(case, needle, served, monkeypatch):
     model = _model(order=(False, True) if case == "shared-first" else (True, False), topk=2 if case == "topk" else TOPK)
+    monkeypatch.setitem(vllm_dsa.DECODE_THRESHOLD, NH, 1)
     over = {"splits": {"num_splits": None}, "prefill-backend": {"prefill_backend": "FlashAttnMLAPrefill"},
-            "impl": {"impl": "FlashMLASparseImpl"}}.get(case)
+            "heads": {"prefill_backend": "FlashAttnMLAPrefill", "q_heads_per_rank": None}, "impl": {"impl": "FlashMLASparseImpl"}}.get(case)
     if over:
         VB.observe_attention_impls({n: _observation(**over) for n in NAMES})
     if case == "target":
         VB.observe_target_profile(TargetProfile(compute_capability=(8, 0), num_sms=108, batch_invariant=False))
     hint = _hint(_derive(model, _inputs(model)))
     assert needle in hint and (case in ("topk", "shared-first") or "DsaIndexerAttn[vllm-dsa]_v1" in hint), hint
+
+
+@pytest.mark.parametrize("threshold,force_mqa", [(None, False), (1, True)])
+def test_a_layer_with_a_prefill_backend_derives_where_every_call_takes_the_mqa_path(threshold, force_mqa, served, monkeypatch):
+    """The H200 serve: GLM-5.3's layers have FA3's dense-MHA prefill backend, and its 256-token prompt is at most the decode threshold
+    (256 at 8 query heads per rank), so the builder counts it a decode and the layer serves it by sparse MQA, as a step; and under
+    `sparse_mla_force_mqa` a longer call does too.  The Program is the one a layer without a prefill backend derives."""
+    model = _model()
+    xs = _inputs(model)
+    plain = _ids(_derive(model, xs))
+    if threshold is not None:
+        monkeypatch.setitem(vllm_dsa.DECODE_THRESHOLD, NH, threshold)
+    VB.observe_attention_impls({n: _observation(prefill_backend="FlashAttnMLAPrefill", sparse_mla_force_mqa=force_mqa) for n in NAMES})
+    rep = _derive(model, xs)
+    assert rep.program is not None, rep.unsupported
+    assert _ids(rep) == plain and _run(rep, model, xs) == _reference(model, xs)
+    assert vllm_dsa.DECODE_THRESHOLD_DEFAULT == 256 and vllm_dsa.DECODE_THRESHOLD.get(8, vllm_dsa.DECODE_THRESHOLD_DEFAULT) == 256

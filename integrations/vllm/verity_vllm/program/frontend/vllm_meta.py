@@ -597,8 +597,9 @@ def attention_impls(model: nn.Module) -> dict:
     in batch-invariant mode (single-split combine). Keyed by `layer_name` — what the exported `unified_attention_with_output`
     node carries — so the attention rule can select the Definition from the layer that will run, not from an env string.  Each
     `MLAAttention` layer has an entry with `"kind": "mla"`: its impl, backend name, kv dtype, heads, scale, context-parallel sizes,
-    dense-MHA prefill backend and the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
-    `engine.sparse_mla`'s pin marks, None for vLLM's heuristic), what `rules/vllm_dsa.py` reads."""
+    dense-MHA prefill backend, the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
+    `engine.sparse_mla`'s pin marks, None for vLLM's heuristic), and from the layer's vLLM config the query heads per rank its
+    metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads."""
     from vllm.model_executor.layers.attention import Attention, MLAAttention
     out = {}
     for name, mod in model.named_modules():
@@ -623,6 +624,7 @@ def attention_impls(model: nn.Module) -> dict:
         backend = getattr(mod, "attn_backend", None)
         pb = getattr(mod, "prefill_backend", None)
         fa = getattr(sys.modules.get(type(impl).__module__), "flash_attn_varlen_func", None)
+        vc = mod._vllm_config
         out[getattr(mod, "layer_name", name)] = {
             "prefill_backend": None if pb is None else f"{type(pb).__module__}.{type(pb).__qualname__}",
             "kind": "mla", "impl": f"{type(impl).__module__}.{type(impl).__qualname__}",
@@ -631,7 +633,9 @@ def attention_impls(model: nn.Module) -> dict:
             "num_heads": getattr(impl, "num_heads", None), "scale": getattr(impl, "scale", None),
             "kv_lora_rank": getattr(mod, "kv_lora_rank", None), "qk_rope_head_dim": getattr(mod, "qk_rope_head_dim", None),
             "dcp_world_size": getattr(impl, "dcp_world_size", None), "use_pcp": getattr(mod, "use_pcp", None),
-            "use_sparse": getattr(mod, "use_sparse", None), "num_splits": getattr(fa, "verity_sparse_mla_splits", None)}
+            "use_sparse": getattr(mod, "use_sparse", None), "num_splits": getattr(fa, "verity_sparse_mla_splits", None),
+            "q_heads_per_rank": vc.model_config.get_num_attention_heads(vc.parallel_config),
+            "sparse_mla_force_mqa": bool(vc.attention_config.sparse_mla_force_mqa)}
     return out
 
 

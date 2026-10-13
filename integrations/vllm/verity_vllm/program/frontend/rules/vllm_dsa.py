@@ -41,6 +41,10 @@ BF16, F32, E4M3 = torch.bfloat16, torch.float32, torch.float8_e4m3fn
 #: FA3's sparse MLA launch geometry by (rope, latent) width: kBlockN and the epilogue at hdim 64 / hdimv 512 (`registry.sparse_mla`)
 FA3_SPARSE_GEOMETRY = {(SPARSE_MLA_GLM53["DR"], SPARSE_MLA_GLM53["DV"]): {k: SPARSE_MLA_GLM53[k] for k in ("BN", "DOT", "INV")}}
 
+#: `FlashAttnMLASparseMetadataBuilder`'s decode threshold by query heads per rank, and its default (vLLM d9105ea80
+#: flashattn_mla_sparse.py:149; a speculative config only raises it): a call of more query rows is a prefill
+DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT = {16: 128, 32: 128, 64: 256, 128: 256}, 256
+
 #: the roles the vocabulary may lack, and which kernel each states
 ROLE_KERNELS = {"dsa_rmsnorm": "q_a_layernorm / kv_a_layernorm in _fused_norm_rope_kernel (DsaRMSNorm_v1{N,EPS})",
                 "dsa_kv_rope": "k_pe's interleaved RoPE in _fused_norm_rope_kernel",
@@ -352,13 +356,27 @@ def _observed_sparse_mla(layer_name: str) -> str | None:
         return f"numerics_unregistered: {layer_name!r} has KV cache dtype {obs.get('layer_kv_cache_dtype')!r}; SparseMla_v1 reads a bf16 cache"
     if obs.get("dcp_world_size") not in (None, 1) or obs.get("use_pcp"):
         return f"numerics_unregistered: {layer_name!r} runs under context parallelism"
-    if obs.get("prefill_backend") is not None:
-        return (f"numerics_unregistered: {layer_name!r} has the dense-MHA prefill backend {obs['prefill_backend']!r}: a prefill of at most "
-                f"TOPK keys would take it, and no Definition states it")
     if obs.get("num_splits") != 1:
         return (f"numerics_unregistered: {layer_name!r} serves FA3's sparse MLA at vLLM's num_splits heuristic (engine.sparse_mla's pin "
                 f"is not installed): the split-combine has no Definition; SparseMla_v1 is num_splits=1")
     return None
+
+
+def _prefill_by_dense_mha(layer_name: str, T: int) -> str | None:
+    """None when a call of T query rows takes the top-k MQA path (`MLAAttention.forward_impl`): the layer has no dense-MHA prefill
+    backend, or `sparse_mla_force_mqa`, or the call is at most the decode threshold, so the builder counts it a decode.  A longer
+    call is a prefill, which the prefill backend serves by dense MHA while its rows have at most TOPK keys."""
+    obs = _OBSERVED["attention_impls"][layer_name]
+    pb, heads = obs.get("prefill_backend"), obs.get("q_heads_per_rank")
+    if pb is None or obs.get("sparse_mla_force_mqa") is True:
+        return None
+    if not isinstance(heads, int):
+        return f"no observed query heads per rank for {layer_name!r}, the decode threshold its prefill backend {pb!r} is behind"
+    limit = DECODE_THRESHOLD.get(heads, DECODE_THRESHOLD_DEFAULT)
+    if T <= limit:
+        return None
+    return (f"numerics_unregistered: {layer_name!r}: a call of {T} query rows is a prefill (decode threshold {limit} at {heads} query "
+            f"heads per rank), which its dense-MHA prefill backend {pb!r} serves, and no Definition states it")
 
 
 class DsaIndexerAttnRule(StateRule):
@@ -369,9 +387,10 @@ class DsaIndexerAttnRule(StateRule):
     the same positions, and both `SparseMla_v1` over the selected rows: with n <= TOPK the selection is rows 0..n-1 in order."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaIndexerAttn[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_indexer_attn(...) (" + ", ".join(_ATTN) + ")",
-                    preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism "
-                                   "or a dense-MHA prefill backend (so every step takes the top-k MQA path), serving FA3 at one split "
-                                   "(engine.sparse_mla's pin, VERITY_SPARSE_MLA_NUM_SPLITS=1)",
+                    preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism, "
+                                   "serving FA3 at one split (engine.sparse_mla's pin, VERITY_SPARSE_MLA_NUM_SPLITS=1)",
+                                   "the call takes the top-k MQA path: no dense-MHA prefill backend, sparse_mla_force_mqa, or T at most the "
+                                   "metadata builder's decode threshold at the observed query heads per rank (DECODE_THRESHOLD)",
                                    "the target's compute capability is 9.0 (FA3)",
                                    "positions are T consecutive rows continuing the layer's history; ql_nope [T, NH, L], q_pe [T, NH, R], kv_c [T, L], k_pe [T, R] bf16",
                                    "the index operands all given (index_q [T, H, D] e4m3, index_weights [T, H] f32, index_k [T, D] e4m3, "
@@ -402,6 +421,8 @@ class DsaIndexerAttnRule(StateRule):
         if isinstance(pos, str):
             return pos
         T = len(pos)
+        if (r := _prefill_by_dense_mha(layer, T)):
+            return r
         L = (shape(ctx, a["kv_c"]) or (0, 0))[-1]
         R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
         NH = (shape(ctx, a["ql_nope"]) or (0, 0, 0))[1]
