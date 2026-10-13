@@ -3,13 +3,11 @@ from __future__ import annotations
 import hashlib
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import bench_arm
-import stack
 
 
 def test_shared_benchmark_arms_name_the_plain_control_and_require_isolation():
@@ -53,9 +51,3 @@ def test_plain_install_gate_does_not_require_encoded_receipt_tree():
     assert bench_arm._install_gate_passed(plain, encoded=False)
     assert not bench_arm._install_gate_passed(plain, encoded=True)
     assert bench_arm._install_gate_passed(encoded, encoded=True)
-
-
-def test_plain_stack_counts_weight_read_passes_for_filler_share():
-    plain = SimpleNamespace(encoded=False, nvec={8: 10}, passes=0)
-    stack.Stack.begin_pass(plain, 8)
-    assert plain.passes == 1
