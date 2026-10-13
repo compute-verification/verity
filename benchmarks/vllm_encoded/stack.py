@@ -93,6 +93,7 @@ class Stack:
 
     def __init__(self, args, encoded: bool) -> None:
         self.args, self.encoded, self.k = args, encoded, args.k if encoded else 0
+        self.kv_receipts = bool(encoded and getattr(args, "kv_receipts", True))
         wt = self.wt = BW.Lib(args.wt_lib)
         if not (wt.receipt and wt.pb == wt.s and wt.tw * wt.pb == BW.W.TASK_BYTES and 4 * wt.nl == wt.pb):
             raise RuntimeError(f"{wt.name}: the stack takes a WT_RECEIPT build at a full-slot field (task = its words)")
@@ -142,7 +143,7 @@ class Stack:
         s = stream()
         self.wt.call("wt_pass", self.j & 0xFFFFFFFF, self.root.data_ptr(), self.signs.data_ptr(), T, s)
         self.wt.call("wt_sign_frags", self.signs.data_ptr(), self.frags.data_ptr(), T, s)
-        if self.attention is not None:
+        if self.attention is not None and self.kv_receipts:
             if self.attention.epoch is not None:
                 self.attention.epoch.fill_(self.j + 1)
             self.plib.call("kv_rc_pass", self.signs.data_ptr(), self.pass_ptrs[1], s)
@@ -548,7 +549,7 @@ class Attention:
         self.graph_tab = None
         self.pool_slots = slots
         self.rc_sk = self.used = self.epoch = self.sparse_tags = None
-        if self.st.encoded:
+        if self.st.kv_receipts:
             self.rc_sk = torch.empty((slots, self.lib.shape["kv_heads"], 16), dtype=torch.int32, device="cuda")
             self.used = torch.full((slots,), -1, dtype=torch.int32, device="cuda")
             self.epoch = torch.full((1,), self.st.j, dtype=torch.int32, device="cuda")
@@ -577,10 +578,10 @@ class Attention:
         return L
 
     def receipts(self):
-        return (self.rc_sk, self.used, self.epoch) if self.st.encoded else None
+        return (self.rc_sk, self.used, self.epoch) if self.st.kv_receipts else None
 
     def receipt_layer(self, layer: int) -> None:
-        if self.st.encoded:
+        if self.st.kv_receipts:
             P.receipts_sparse(self.lib, torch, self.rc_sk, self.sparse_tags, self.used, self.epoch, self.pool_slots,
                               self.nl, layer, self.st.words * self.st.wt.s // SR.BLOCK)
 
@@ -589,20 +590,35 @@ class Attention:
         st = self.st
         if not st.encoded or not st.open:
             return
-        slots_dev = torch.nonzero(self.used == self.epoch, as_tuple=False).flatten()
-        slots = slots_dev.cpu().tolist()
+        if not st.kv_receipts:
+            st.commit(st.pass_m)
+            return
+        torch.cuda.nvtx.range_push("kv-receipts/select-slots")
+        try:
+            slots_dev = torch.nonzero(self.used == self.epoch, as_tuple=False).flatten()
+            slots = slots_dev.cpu().tolist()
+        finally:
+            torch.cuda.nvtx.range_pop()
         n = len(slots)
-        if n:
-            need = n * self.nl
-            if need > self.kv_tag_capacity:
-                self.kv_tag_capacity = 1 << (need - 1).bit_length()
-                self.kv_tags = torch.empty((self.kv_tag_capacity, 8), dtype=torch.int64, device="cuda")
-            target = self.kv_tags[:need].view(n, self.nl, 8)
-            torch.index_select(self.sparse_tags, 0, slots_dev, out=target)
-            tags = self.kv_tags[:need]
-        else:
-            tags = None
-        st.commit(st.pass_m, tags, slots)
+        torch.cuda.nvtx.range_push("kv-receipts/compact")
+        try:
+            if n:
+                need = n * self.nl
+                if need > self.kv_tag_capacity:
+                    self.kv_tag_capacity = 1 << (need - 1).bit_length()
+                    self.kv_tags = torch.empty((self.kv_tag_capacity, 8), dtype=torch.int64, device="cuda")
+                target = self.kv_tags[:need].view(n, self.nl, 8)
+                torch.index_select(self.sparse_tags, 0, slots_dev, out=target)
+                tags = self.kv_tags[:need]
+            else:
+                tags = None
+        finally:
+            torch.cuda.nvtx.range_pop()
+        torch.cuda.nvtx.range_push("kv-receipts/plan-and-commit")
+        try:
+            st.commit(st.pass_m, tags, slots)
+        finally:
+            torch.cuda.nvtx.range_pop()
 
     def plan(self, md, bs: int, slots: torch.Tensor) -> tuple:
         """A step's gather: its sequences' blocks in order, the block table renumbered over them and its tokens' slots
@@ -1056,7 +1072,8 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
         "codec": {"field": wt.field.name, "mask": wt.mask, "fold6": wt.fold6, "receipt": "sketch-sha512" if st.encoded
                   else None, "sketch_t": T, "kv_field": st.plib.field.name, "kv_fold6": st.plib.fold6,
                   "receipt_layout": SR.rb.STORE_ORDER if st.encoded else None, "weight_receipts_per_step": st.nvec,
-                  "kv_receipt": "one store-order/v0 token-layer block per physical slot and layer" if st.encoded else None,
+                  "kv_receipt": "one store-order/v0 token-layer block per physical slot and layer"
+                  if st.kv_receipts else None,
                   "lm_head": {"rows": lm.v, "fused": True, "receipted": bool(st.encoded),
                                                            "payload": "bf16", "bytes": lm.nbytes}},
         "layers": len(layers), "plain_bytes": plain_bytes, "store_bytes": store_bytes,
@@ -1125,7 +1142,7 @@ def hook_passes(st: Stack, att: Attention, hooks, model) -> str:
 
 def summary(st: Stack) -> dict:
     att = st.attention
-    return {"passes": st.passes, "j": st.j, "attention_calls": att.calls,
+    return {"passes": st.passes, "j": st.j, "kv_receipts": st.kv_receipts, "attention_calls": att.calls,
             "lm_head_graphs": sorted({key[0] for key in st.lm.graphs}),
             "kv_store_blocks": att.pool_slots * att.nl,
             "kv_store_bytes": att.pool_slots * att.nl * SR.BLOCK,

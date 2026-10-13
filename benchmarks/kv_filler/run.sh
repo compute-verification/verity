@@ -67,9 +67,17 @@ if [ "$SCRIPT" = serve.py ]; then
     rc=0
     for pool in $POOLS; do for part in ${PARTS:-0}; do
       if [ "$part" = 0 ]; then pol=${POLICIES0:-}; else pol=${POLICIES_PART:-none,part}; fi
-      "$@" --pool "$pool" --partition "$part" ${pol:+--policies "$pol"} || rc=$?
+      cmd=("$@" --pool "$pool" --partition "$part")
+      [ -n "$pol" ] && cmd+=(--policies "$pol")
+      read -ra extra <<< "${ARGS:-}"; cmd+=("${extra[@]}")
+      if [ "${NSYS:-0}" = 1 ]; then
+        nsys profile --trace=cuda,nvtx,osrt --capture-range=cudaProfilerApi --capture-range-end=stop \
+          --force-overwrite true -o "$O/nsys-$pool-p$part" "${cmd[@]}" || rc=$?
+      else
+        "${cmd[@]}" || rc=$?
+      fi
     done; done
-    exit $rc' _ "$PY" $KF/serve.py --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" "${STACK_ARGS[@]}" ${ARGS:-}
+    exit $rc' _ "$PY" $KF/serve.py --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" "${STACK_ARGS[@]}"
   exit $?
 fi
 if [ "$SCRIPT" = step_profile.py ] && [ -n "${NCU_SHAPES:-}" ]; then

@@ -308,6 +308,10 @@ def main() -> int:
     ap.add_argument("--stack", choices=("pstack", "stack"), default=None,
                     help="serve on the encoded stack (stack) or its plain form (pstack): stack_hook.py")
     ap.add_argument("--stack-k", type=int, default=3, help="--stack stack: the codec's rounds")
+    ap.add_argument("--kv-receipts", choices=("on", "off"), default="on",
+                    help="--stack stack: form, compact and commit paged-KV receipts (off keeps weight receipts)")
+    ap.add_argument("--cuda-profile", action="store_true",
+                    help="bracket the one policy/mode trace with cudaProfilerStart/Stop for nsys capture-range")
     ap.add_argument("--max-seqs", type=int, default=max(CAPTURE),
                     help="vLLM's max_num_seqs (the stack captures at most 32: a larger decode batch runs eager)")
     ap.add_argument("--partition", type=int, default=0, help="the filler's SMs, the step on the rest (0: no partition)")
@@ -319,6 +323,8 @@ def main() -> int:
     a = ap.parse_args()
     if a.stack and not (a.wt_lib and a.reader_lib and a.paged_lib):
         ap.error("--stack takes --wt-lib, --reader-lib and --paged-lib")
+    if a.cuda_profile and (len(a.policies) != 1 or len(a.modes) != 1):
+        ap.error("--cuda-profile takes exactly one policy and one mode")
     encode_ks = set()
     for p in a.policies:
         top, _, enc = p.partition("+")
@@ -350,7 +356,8 @@ def main() -> int:
     capture = CAPTURE
     if a.stack:
         import stack_hook
-        stack = stack_hook.install(a.stack, a.stack_k, a.wt_lib, a.reader_lib, a.paged_lib, new_stream=new_stream)
+        stack = stack_hook.install(a.stack, a.stack_k, a.wt_lib, a.reader_lib, a.paged_lib, new_stream=new_stream,
+                                   kv_receipts=a.kv_receipts == "on")
         capture = stack[2]
     kw = {"model": a.model, "quantization": "fp8", "max_num_seqs": a.max_seqs,
           "enable_prefix_caching": a.shared_prefix > 0, "seed": 0,
@@ -685,6 +692,8 @@ def main() -> int:
             base = mark()
             base.synchronize()
             mem0 = torch.cuda.memory_stats()
+            if a.cuda_profile:
+                torch.cuda.cudart().cudaProfilerStart()
             t_start = time.perf_counter()
             first: dict[str, float] = {}
             done: dict[str, float] = {}
@@ -725,6 +734,8 @@ def main() -> int:
                     idle.append((i0, time.perf_counter()))
             t_end = time.perf_counter()
             torch.cuda.synchronize()
+            if a.cuda_profile:
+                torch.cuda.cudart().cudaProfilerStop()
             mem1 = torch.cuda.memory_stats()
             allocator = {k: mem1.get(k, 0) - mem0.get(k, 0) for k in ALLOCATOR_COUNTS}
             allocator["reserved_peak_bytes"] = mem1.get("reserved_bytes.all.peak", 0)

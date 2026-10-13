@@ -817,6 +817,8 @@ def main() -> None:
     ap.add_argument("--wt-lib", help="pstack and stack arms: a WT_RECEIPT build of codec_tensor's wt.cu at a full-slot field")
     ap.add_argument("--reader-lib", help="pstack and stack arms: a build of codec_tensor's reader.cu (the step's tree)")
     ap.add_argument("--paged-lib", help="pstack and stack arms: a build of paged.cu at wt.cu's field")
+    ap.add_argument("--kv-receipts", choices=("on", "off"), default="on",
+                    help="stack arm: form, compact and commit paged-KV receipts (off keeps weight receipts)")
     ap.add_argument("--tag", action="store_true",
                     help="wide and tensor arms: tag every block of the store the GEMMs read (ro-blake3/v1)")
     ap.add_argument("--sketch", type=int, default=0, choices=(0, 16, 64),
@@ -856,6 +858,7 @@ def main() -> None:
                          "into the log and OUT's directory (torch-profile.txt)")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
+    args.kv_receipts = args.kv_receipts == "on"
     batches = [int(x) for x in args.batches.split(",")]
     contexts = [int(x) for x in args.contexts.split(",")]
     if max(batches) > max(CAPTURE):

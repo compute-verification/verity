@@ -153,6 +153,8 @@ def main() -> int:
                          "the bytes step_profile-ncu.json registers; writes step_profile-ncu-split.json")
     ap.add_argument("--stack", choices=("pstack", "stack"), default=None, help="the encoded stack's step (stack_hook.py)")
     ap.add_argument("--stack-k", type=int, default=3)
+    ap.add_argument("--kv-receipts", choices=("on", "off"), default="on",
+                    help="--stack stack: form, compact and commit paged-KV receipts (off keeps weight receipts)")
     ap.add_argument("--wt-lib")
     ap.add_argument("--reader-lib")
     ap.add_argument("--paged-lib")
@@ -191,7 +193,8 @@ def main() -> int:
     stack, capture = None, CAPTURE
     if a.stack:
         import stack_hook
-        stack = stack_hook.install(a.stack, a.stack_k, a.wt_lib, a.reader_lib, a.paged_lib)
+        stack = stack_hook.install(a.stack, a.stack_k, a.wt_lib, a.reader_lib, a.paged_lib,
+                                   kv_receipts=a.kv_receipts == "on")
         capture = stack[2]
     llm = LLM(model=a.model, quantization="fp8", max_num_seqs=max(CAPTURE), enable_prefix_caching=False, seed=0,
               max_model_len=max([c for _, c in a.shapes] + [a.prefill]) + a.steps + 128,
