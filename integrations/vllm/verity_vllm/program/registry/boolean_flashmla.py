@@ -43,11 +43,28 @@ BIT_T = F.Types(BF16, F32, BIT, E8, E8, I32)
 _AB = (("a", F32), ("b", F32))
 
 
+def all_any(C, x):
+    """(AND, OR) of the bits x, the OR's first level reading the AND's first-level pairs (OR(a, b) = a ^ b ^ ab): a lowering
+    that does not share repeated ANDs (a C-Flock piece) computes each pair once."""
+    ab = [C.AND(x[i], x[i + 1]) for i in range(0, len(x) - 1, 2)]
+    odd = [x[-1]] if len(x) % 2 else []
+    return and_reduce(C, ab + odd), or_reduce(C, [x[2 * i] ^ x[2 * i + 1] ^ p for i, p in enumerate(ab)] + odd)
+
+
+def f32_key(C, x):
+    """`scalar.f32_key` over `all_any` of the exponent."""
+    m, e, s = x[:23], x[23:31], x[31]
+    (e_all, e_any), m_any = all_any(C, e), or_reduce(C, m)
+    nan = C.AND(e_all, m_any)
+    neg = C.AND(s, OR(C, e_any, m_any))
+    return nan, [b ^ neg for b in x[:31]] + [NOT(neg)]
+
+
 def f32_geu(C, a, b):
-    """`setp.geu.f32`: NOT of the ordered `b > a` (`scalar.f32_key`: +0 and -0 one key, subnormals as they are), so a NaN on
-    either side gives 1."""
-    na, ka = SC.f32_key(C, a)
-    nb, kb = SC.f32_key(C, b)
+    """`setp.geu.f32`: NOT of the ordered `b > a` (`f32_key`: +0 and -0 one key, subnormals as they are), so a NaN on either side
+    gives 1."""
+    na, ka = f32_key(C, a)
+    nb, kb = f32_key(C, b)
     return [NOT(C.AND(NOT(OR(C, na, nb)), SC.gt_u(C, kb, ka)))]
 
 
@@ -59,8 +76,8 @@ U32GeV2 = definition("U32Ge", 2, lambda C, a, b: [NOT(sub(C, a, b, 32)[1])], _AB
 def e8m0_to_bf16(C, x):
     """`flashmla.e8m0_to_bf16`: bits 7..14 are x and bit 15 clear in every case; 0xFF (all ones) sets bits 0..6 (0x7FFF), 0
     (all clear) bit 6 (0x0040)."""
-    nan, zero = and_reduce(C, x), NOT(or_reduce(C, x))
-    return [nan] * 6 + [nan ^ zero] + list(x) + [ZERO]
+    nan, nonzero = all_any(C, x)
+    return [nan] * 6 + [nan ^ NOT(nonzero)] + list(x) + [ZERO]
 
 
 E8m0ToBf16V2 = definition("E8m0ToBf16", 2, e8m0_to_bf16, (("x", E8),), BF16, word=F.E8m0ToBf16,
