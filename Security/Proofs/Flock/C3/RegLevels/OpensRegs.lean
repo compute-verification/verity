@@ -528,7 +528,8 @@ theorem checkAcc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables :
         obtain ⟨ss, hss, hj, -⟩ := FlockSoundness.Discharge.Recursion.check_ok hck
         obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
         obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
-        exact ⟨ss, s, hss, hj, h⟩
+        obtain ⟨⟨⟩, hacc, -⟩ := FlockSoundness.Refine.ebind_ok h
+        exact ⟨ss, s, hss, hj, hacc⟩
       · cases h
 
 /-- **An R level's checked session has `acc` in its reads file**: where V*'s statement `j` is R's level `l`
