@@ -22,6 +22,20 @@ def test_filler_by_phase_splits_each_record_pro_rata_over_decode_prefill_and_bet
     assert got == {"decode": pytest.approx(100), "prefill": pytest.approx(50), "between": pytest.approx(57)}
 
 
+def test_on_gpu_clock_moves_each_record_to_the_interval_its_update_follows():
+    # the batch queue: record i's update lands just after GPU interval i − 1 ends, and the GPU runs on through the
+    # host's time between records, so on the GPU's clock the filler there falls in a step
+    records = [{"t0": 0.0, "t1": 0.05, "tokens": 0, "reqs": 0, "prefill_tokens": 0},
+               {"t0": 0.05, "t1": 1.0004, "tokens": 4, "reqs": 4, "prefill_tokens": 0},
+               {"t0": 1.5, "t1": 2.0004, "tokens": 900, "reqs": 2, "prefill_tokens": 0}]
+    gpu = [[0.0, 1.0], [1.0, 2.0], [2.0, 2.2]]
+    on = serve.on_gpu_clock(records, gpu)
+    assert [(s["t0"], s["t1"], s["tokens"]) for s in on] == [(0.0, 1.0, 4), (1.0, 2.0, 900)]
+    recs = [(1200.0, 1400.0, 100, 0), (2500.0, 2600.0, 10, 1)]  # GPU 1.2 .. 1.4 and 2.5 .. 2.6, offset 0
+    assert serve.filler_by_phase(on, recs, 0.0) == {"decode": 0.0, "prefill": pytest.approx(100),
+                                                    "between": pytest.approx(10)}
+
+
 def test_within_keeps_only_the_bytes_read_inside_the_trace():
     offset_ms = -1000.0
     recs = [(-500.0, 500.0, 100, 0),  # host 0.5 .. 1.5: the token gate's half before the trace

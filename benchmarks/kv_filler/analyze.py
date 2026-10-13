@@ -60,17 +60,23 @@ def shortfall(steps: list[dict], seconds: float, weight_bytes: int, filler_bytes
     between two steps that both schedule requests; idle, the rest of the time between steps). The filler the run's
     top-up read comes off the total, wherever it fell. With `gpu_steps` (each model step's [start, end] on the GPU),
     `gpu` is the same split by the GPU's clock: its busy seconds, the steps' fraction of R over them, and its idle
-    time's share of η."""
+    time's share of η. A step or interval only partly inside [0, seconds) (the token gate's steps come before it)
+    counts its time and its reads pro rata."""
     cap = R * 1e9 * seconds
+
+    def inside(a: float, b: float) -> float:
+        return float(0 <= a < seconds) if b <= a else max(0.0, min(b, seconds) - max(a, 0.0)) / (b - a)
+
     out, busy = {}, 0.0
     for name, keep in (("decode", lambda s: s["tokens"] > 0 and s["prefill_tokens"] == 0),
                        ("prefill", lambda s: s["prefill_tokens"] > 0), ("empty", lambda s: s["tokens"] == 0)):
-        sel = [s for s in steps if keep(s)]
-        t = sum(s["t1"] - s["t0"] for s in sel)
-        reads = sum(weight_bytes + s["kv_tokens"] * token_bytes for s in sel if s["tokens"] > 0)
+        sel = [(s, inside(s["t0"], s["t1"])) for s in steps if keep(s)]
+        t = sum((s["t1"] - s["t0"]) * f for s, f in sel)
+        reads = sum((weight_bytes + s["kv_tokens"] * token_bytes) * f for s, f in sel if s["tokens"] > 0)
         busy += t
         out[name] = {"s": t, "of_R": reads / (R * 1e9 * t) if t else 0.0, "eta": (R * 1e9 * t - reads) / cap}
-    gaps = sum(max(0.0, b["t0"] - a["t1"]) for a, b in zip(steps, steps[1:]) if a["reqs"] > 0 and b["reqs"] > 0)
+    gaps = sum(max(0.0, min(b["t0"], seconds) - max(a["t1"], 0.0)) for a, b in zip(steps, steps[1:])
+               if a["reqs"] > 0 and b["reqs"] > 0)
     idle = max(0.0, seconds - busy - gaps)
     out["gaps"] = {"s": gaps, "of_R": 0.0, "eta": gaps / seconds}
     out["idle"] = {"s": idle, "of_R": 0.0, "eta": idle / seconds}
@@ -80,20 +86,23 @@ def shortfall(steps: list[dict], seconds: float, weight_bytes: int, filler_bytes
     if gpu_steps:
         gbusy, edge = 0.0, float("-inf")
         for g0, g1 in sorted(gpu_steps):
+            g0, g1 = max(g0, 0.0), min(g1, seconds)
             gbusy += max(0.0, g1 - max(g0, edge))
             edge = max(edge, g1)
-        reads = sum(weight_bytes + s["kv_tokens"] * token_bytes for s in steps if s["tokens"] > 0)
         gidle = max(0.0, seconds - gbusy)
-        g = {"busy_s": gbusy, "of_R": reads / (R * 1e9 * gbusy) if gbusy else 0.0, "idle_s": gidle,
-             "eta_idle": gidle / seconds, "shift": align(steps, gpu_steps)}
+        g = {"busy_s": gbusy, "idle_s": gidle, "eta_idle": gidle / seconds, "shift": align(steps, gpu_steps)}
         for name in ("decode", "prefill", "empty"):
             g[name] = {"s": 0.0, "reads": 0.0}
         for i, s in enumerate(steps):
             j = i + g["shift"]
             if 0 <= j < len(gpu_steps):
                 name = "prefill" if s["prefill_tokens"] > 0 else "decode" if s["tokens"] > 0 else "empty"
-                g[name]["s"] += gpu_steps[j][1] - gpu_steps[j][0]
-                g[name]["reads"] += weight_bytes + s["kv_tokens"] * token_bytes if s["tokens"] > 0 else 0
+                g0, g1 = gpu_steps[j]
+                f = inside(g0, g1)
+                g[name]["s"] += (g1 - g0) * f
+                g[name]["reads"] += (weight_bytes + s["kv_tokens"] * token_bytes) * f if s["tokens"] > 0 else 0
+        reads = sum(g[name]["reads"] for name in ("decode", "prefill", "empty"))
+        g["of_R"] = reads / (R * 1e9 * gbusy) if gbusy else 0.0
         for name in ("decode", "prefill", "empty"):
             t, b = g[name]["s"], g[name].pop("reads")
             g[name].update(of_R=b / (R * 1e9 * t) if t else 0.0, eta=(R * 1e9 * t - b) / cap)

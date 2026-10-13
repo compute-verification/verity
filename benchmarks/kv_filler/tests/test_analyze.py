@@ -42,6 +42,19 @@ def test_shortfall_on_the_gpus_clock_takes_the_union_of_its_model_steps():
     assert (g["busy_s"], g["of_R"], g["idle_s"], g["eta_idle"]) == (2.5, pytest.approx(2 * w / 2.5e9), 1.5, 0.375)
 
 
+def test_shortfall_counts_only_the_part_of_each_step_inside_the_trace():
+    # the token gate's steps run before the trace (negative times) and one straddles its start: R = 1 GB/s over 4 s
+    w = 10**8
+    steps = [step(-1.0, -0.5, 1, 1, 0, 0), step(-0.5, 0.5, 1, 1, 0, 0), step(0.5, 1.5, 1, 1, 0, 0)]
+    e = analyze.shortfall(steps, 4.0, w, 0, 1.0, token_bytes=TB, gpu_steps=[[-1.0, -0.5], [-0.5, 0.5], [0.5, 1.5]])
+    assert e["decode"]["s"] == pytest.approx(1.5) and e["decode"]["of_R"] == pytest.approx(0.1)
+    assert e["idle"]["s"] == pytest.approx(2.5)
+    assert e["eta_before_filler"] == pytest.approx(1 - 1.5 * w / 4e9)
+    g = e["gpu"]
+    assert g["shift"] == 0 and g["busy_s"] == pytest.approx(1.5) and g["decode"]["s"] == pytest.approx(1.5)
+    assert g["eta_idle"] + g["decode"]["eta"] == pytest.approx(e["eta_before_filler"])
+
+
 def test_the_gpus_split_pairs_each_record_with_the_interval_whose_end_it_follows():
     # the batch queue: record 0 is an empty first call, record i's update lands just after interval i − 1 ends
     w = 10**8

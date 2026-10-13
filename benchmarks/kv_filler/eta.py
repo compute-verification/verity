@@ -22,7 +22,8 @@ def rows(serve: dict, R: float) -> list[dict]:
     out = []
     for r in serve["runs"]:
         steps = analyze.phases(r["step_records"])
-        sh = analyze.shortfall(steps, r["seconds"], serve["weight_bytes_per_step"], r["filler_bytes"], R)
+        sh = analyze.shortfall(steps, r["seconds"], serve["weight_bytes_per_step"], r["filler_bytes"], R,
+                               gpu_steps=r.get("gpu_steps"))
         out.append({
             "policy": r["policy"], "mode": r["mode"], "token_gate": r.get("token_gate"), "eta": sh["eta"],
             "windows_mean": next((w["mean"] for w in r["windows"] if w["width_s"] == 1.0), None),
@@ -37,6 +38,12 @@ def rows(serve: dict, R: float) -> list[dict]:
             out[-1]["after_filler"] = {"decode": bf["decode"] - fp["decode"] / cap,
                                        "prefill": bf["prefill"] - fp["prefill"] / cap,
                                        "between": bf["gaps"] + bf["idle"] + bf["empty"] - fp["between"] / cap}
+        fg, g = r.get("filler_by_gpu_phase"), sh.get("gpu")
+        if fg and g:
+            cap = R * 1e9 * r["seconds"]
+            out[-1]["after_filler_gpu"] = {"decode": g["decode"]["eta"] + g["empty"]["eta"] - fg["decode"] / cap,
+                                           "prefill": g["prefill"]["eta"] - fg["prefill"] / cap,
+                                           "idle": g["eta_idle"] - fg["between"] / cap}
     return out
 
 
@@ -57,7 +64,9 @@ def main() -> int:
                   f"  before: decode {b['decode']:.3f} prefill {b['prefill']:.3f} gaps {b['gaps']:.3f}"
                   f" idle {b['idle']:.3f} empty {b['empty']:.3f}" + (
                       "  after: " + " ".join(f"{k} {v:.3f}" for k, v in r["after_filler"].items())
-                      if "after_filler" in r else ""))
+                      if "after_filler" in r else "") + (
+                      "  after, GPU clock: " + " ".join(f"{k} {v:.3f}" for k, v in r["after_filler_gpu"].items())
+                      if "after_filler_gpu" in r else ""))
     a.out.write_text(json.dumps(res, indent=1))
     return 0
 

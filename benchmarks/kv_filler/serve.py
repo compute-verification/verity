@@ -63,6 +63,7 @@ os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import analyze  # noqa: E402
 from bench import FILL_WARPS, RUN_SEED, Codec, K, Seq, Topup, codec_gate, mode_of  # noqa: E402
 
 KV_TOKEN_BYTES = 32 * 2 * 8 * 128 * 2  # Llama-3.1-8B, bf16 KV
@@ -177,6 +178,15 @@ def filler_by_phase(steps: list[dict], recs, offset_ms: float) -> dict:
                 inside += rate * ov
         out["between"] += nbytes - inside
     return out
+
+
+def on_gpu_clock(records: list[dict], gpu_steps: list) -> list[dict]:
+    """Each step record (times from the trace's start) on its model step's GPU interval (`analyze.align`'s pairing),
+    for `filler_by_phase` on the GPU's clock: with vLLM's batch queue the GPU runs the next step through most of the
+    host's time between two, so "between" is then the GPU's own idle time."""
+    sh = analyze.align(records, gpu_steps)
+    return sorted(({**s, "t0": gpu_steps[i + sh][0], "t1": gpu_steps[i + sh][1]}
+                   for i, s in enumerate(records) if 0 <= i + sh < len(gpu_steps)), key=lambda s: s["t0"])
 
 
 def main() -> int:
@@ -603,6 +613,8 @@ def main() -> int:
             tpot = [(done[i] - first[i]) / max(1, by_id[i]["output"] - 1) for i in done if i in first]
             dec = [s["t1"] - s["t0"] for s in steps if s["prefill_tokens"] == 0 and s["reqs"] > 0]
             recs_all, recs = recs, within(recs, offset_ms, t_start, t_end)
+            step_records = [{k2: (round(v - t_start, 5) if k2 in ("t0", "t1") else v) for k2, v in s.items()}
+                            for s in steps]
             run = {"policy": policy, "mode": mode, "token_gate": cur.get("token_gate"), "seconds": t_end - t_start,
                    "steps": len(steps),
                    "requests_done": len(done), "ttft_s_median": statistics.median(ttft) if ttft else None,
@@ -615,10 +627,11 @@ def main() -> int:
                    "free_blocks_min": min((s["free_blocks"] for s in steps), default=None),
                    "windows": [windows(steps, idle, recs, offset_ms, t_start, t_end, w, a.R, weight_bytes)
                                for w in (0.25, 1.0, 5.0)],
-                   "step_records": [{k2: (round(v - t_start, 5) if k2 in ("t0", "t1") else v) for k2, v in s.items()}
-                                    for s in steps],
+                   "step_records": step_records,
                    "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps, "seq": seq_counts,
-                   "filler_by_phase": filler_by_phase(steps, recs, offset_ms)}
+                   "filler_by_phase": filler_by_phase(steps, recs, offset_ms),
+                   "filler_by_gpu_phase": filler_by_phase(on_gpu_clock(step_records, gpu_steps), recs,
+                                                          offset_ms + t_start * 1e3)}
             if ek:
                 run.update({"encode_k": ek, "encode_prefill_tokens": cur["enc_prefill_tokens"],
                             "encode_decode_tokens": cur["enc_decode_tokens"], "encode_decode_inline": not a.encode_grid,
