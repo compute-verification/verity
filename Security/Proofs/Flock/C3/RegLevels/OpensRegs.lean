@@ -147,7 +147,8 @@ end Copy
 
 theorem dirsRow_zero (pos H : ℕ) : (Flock.RecCoins.dirsRow pos H)[0]! = pos % 2 ^ H := by
   rw [Flock.RecCoins.dirsRow,
-    getElem!_pos (#[pos % 2 ^ H] ++ Array.replicate (Flock.RecCoins.DIRS_WORDS - 1) 0) 0 (by simp <;> omega),
+    getElem!_pos (#[pos % 2 ^ H] ++ Array.replicate (Flock.RecCoins.DIRS_WORDS - 1) 0) 0
+      (by simp [Flock.RecCoins.DIRS_WORDS]),
     Array.getElem_append_left (by simp)] <;> rfl
 
 /-- Bit `b < H` of `dirsRow pos H`'s first word is the position's. -/
