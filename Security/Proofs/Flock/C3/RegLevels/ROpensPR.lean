@@ -618,7 +618,6 @@ end
 
 end FlockC3.RegLevels
 
-#print axioms FlockC3.RegLevels.stackedParams_of_checked
 #print axioms FlockC3.RegLevels.stackedReadCol
 #print axioms FlockC3.RegLevels.climb_of_opensTop
 #print axioms FlockC3.RegLevels.opensAtMaps_readMaps
