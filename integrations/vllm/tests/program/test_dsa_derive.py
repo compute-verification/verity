@@ -403,6 +403,44 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     assert roles["layers.0.W_UK_T"]["role"] == "mla.absorb" and roles["layers.0.indexer.k_norm.bias"]["role"] == "dsa.indexer.k_norm.bias"
 
 
+class _LargeMlaAbsorb(nn.Module):
+    """The real q-nope spelling at enough leaves that its first transpose has no compact generic view."""
+
+    def __init__(self, escape_bmm: bool = False) -> None:
+        super().__init__()
+        rng = np.random.default_rng(32)
+        self.weight = nn.Parameter(_bf16(rng, 16, 32, 8), requires_grad=False)
+        self.escape_bmm = escape_bmm
+
+    def forward(self, q):
+        x, _q_pe = q.split([32, 1], dim=-1)
+        y = torch.bmm(x.transpose(0, 1), self.weight)
+        z = y.transpose(0, 1)
+        return (z, y) if self.escape_bmm else z
+
+
+def _large_absorb(escape_bmm: bool = False):
+    model = _LargeMlaAbsorb(escape_bmm)
+    q = torch.empty(256, 16, 33, dtype=torch.bfloat16)
+    return derive_report(model, (q,), mode="profile", profile=STANDIN.name, name="large-mla-absorb", rules=vllm_ruleset())
+
+
+def test_large_mla_absorb_is_bound_before_its_composite_transpose(served):
+    rep = _large_absorb()
+    assert rep.program is not None, rep.unsupported
+    (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "MlaAbsorbTranspose[vllm-dsa]_v1"]
+    assert app["preconditions_checked"]["chain"] == ["transpose", "bmm", "transpose_1"]
+    assert app["preconditions_checked"]["M"] == 256
+    assert app["emitted"].startswith("BatchedGemm_v2") and app["emitted"].endswith("x256")
+    assert rep.provenance["weight_roles"]["weight"]["role"] == "mla.absorb"
+
+
+def test_large_mla_absorb_refuses_when_the_bmm_intermediate_escapes(served):
+    rep = _large_absorb(escape_bmm=True)
+    assert rep.program is None and rep.unsupported.reason == "unsupported_view"
+    assert "transpose of 131072 leaves over a composite reference sequence has no O(1) form" in rep.unsupported.hint
+
+
 def test_default_sparse_mla_uses_each_tokens_launched_split_count(served):
     VB.observe_attention_impls({n: _observation(num_splits=None) for n in NAMES})
     model = _model()

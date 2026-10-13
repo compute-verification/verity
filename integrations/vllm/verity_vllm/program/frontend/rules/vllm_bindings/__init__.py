@@ -71,9 +71,10 @@ def vllm_ruleset():
     from verity_vllm.program.frontend.rules.vllm_moe import VLLM_MOE_RULES  # [R13 MOE-01] the fused-MoE block's leaf kernels
     from verity_vllm.program.frontend.rules.vllm_moe_fp8 import VLLM_MOE_FP8_RULES  # the block-FP8 fused_moe_kernel launches
     from verity_vllm.program.frontend.rules.vllm_moe_router import VLLM_MOE_ROUTER_RULES  # the one-group sigmoid router (grouped_topk)
-    from verity_vllm.program.frontend.rules.vllm_dsa import VLLM_DSA_RULES  # DeepSeek sparse attention's leaves (export_compat.dsa_leaves)
+    from verity_vllm.program.frontend.rules.vllm_dsa import (VLLM_DSA_PATTERN_RULES,  # the large q-nope/value absorb chain, before generic views
+                                                             VLLM_DSA_RULES)  # DeepSeek sparse attention's leaves (export_compat.dsa_leaves)
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES  # [R15 stoch] the seeded temperature + top-p token select (GumbelTopPTokenSelect_v1{V,S})
-    return RuleSet("default+vllm-bindings", base + VLLM_BINDING_RULES + VLLM_MOE_RULES + VLLM_MOE_FP8_RULES + VLLM_MOE_ROUTER_RULES
+    return RuleSet("default+vllm-bindings", VLLM_DSA_PATTERN_RULES + base + VLLM_BINDING_RULES + VLLM_MOE_RULES + VLLM_MOE_FP8_RULES + VLLM_MOE_ROUTER_RULES
                    + VLLM_DSA_RULES + list(VLLM_SAMPLING_RULES), list(DEFAULT_RULES.families))
 
 
