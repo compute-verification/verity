@@ -86,22 +86,18 @@ def test_the_verifiers_opening_unit_is_the_one_stage_opening_writes(m, rows, sta
 def test_the_staged_opening_unit_reads_each_element_whole(staged):
     """`RecResiduals.partlyRead` and `RecOpening.rsUnread` in Python, on m = 22's file: its computed rows read each row-port
     element in all 128 bits or in none, and each element of a claim's ring switch (ports ``m0``, ``m1``) and of the
-    running sums (``acc0``, ``acc1``) in all 128. The check refuses the verifier's own net, so this is where a builder
-    change that reads an element in part shows by the element."""
+    running sums (``acc0``, ``acc1``) in all 128. The unit's inputs are its part's ports and ``v``, the bits the check
+    holds its unit to. The check refuses the verifier's own net, so this is where a builder change that reads an element
+    in part shows by the element."""
     [f] = staged(22)
     lines = f.read_bytes().split(b"\n")
-    head = lines[3].split()
-    const, groups, at = int(head[3]), int(head[4]), 5
-    words = 0
-    for _ in range(groups):
-        words += int(head[at + 1])
-        at += 3 + int(head[at + 2])
-    n_in = min(16 * words, const)
+    const = int(lines[3].split()[3])
+    [p] = RR.parts(RR.spec(_shape(22, 2)))
+    n_in = min(16 * (sum(RR.port_words(n) for _, n in p.S["ports"]) + RR.v_words(p.S)), const)
     read = set()
     for r in range(n_in, const):
         row = list(map(int, lines[4 + r].split()))
         read.update(c for c in row[1:1 + row[0]] + row[2 + row[0]:] if c < n_in)
-    [p] = RR.parts(RR.spec(_shape(22, 2)))
     col, counts = 0, {}
     for name, n in p.S["ports"]:
         for e in range(n):

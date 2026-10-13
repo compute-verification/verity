@@ -123,7 +123,7 @@ theorem regBit_wReadO {Reg' : Type} {zs : (s : Fin S) → (Vs s).Outer Reg'} {Lb
       Flock.RecOpening.params (Vs (sess p)).c.unit.name = some (m, cl, p))
     (hkeys : ∀ p < gs.size, ∀ q < 128 * (nsOfO sh p).sum, ReadCol (Rows.ofNet (Vs (sess p)).hU) (rowColOfO sh p q) →
       ∃ b, RegBit (zs (sess p)) (un p) 0 (rowColOfO sh p q) b)
-    (hagree : ∀ p p' a a' e b b', p < gs.size → p' < gs.size → ∀ (ha : a < (wIOfO sh p).size)
+    (hagree : ∀ (p p' a a' e : ℕ) (b b' : Bool), p < gs.size → p' < gs.size → ∀ (ha : a < (wIOfO sh p).size)
       (ha' : a' < (wIOfO sh p').size), (wIOfO sh p)[a] = (wIOfO sh p')[a'] → e < 128 →
       RegBit (zs (sess p)) (un p) 0 (rowColOfO sh p (128 * a + e)) b →
         RegBit (zs (sess p')) (un p') 0 (rowColOfO sh p' (128 * a' + e)) b' → b = b')
@@ -181,16 +181,16 @@ theorem openingZeroAtL_of_regs {Reg' : Type} {zs : (s : Fin S) → (Vs s).Outer 
       Lb (sess p) (Const.Prog.oneAt (Placed.keyProg (Vs (sess p)).c (Vs (sess p)).hU (Vs (sess p)).nv) (un p)) = true)
     (hkeys : ∀ p < gs.size, ∀ q < 128 * (nsOfO sh p).sum, ReadCol (Rows.ofNet (Vs (sess p)).hU) (rowColOfO sh p q) →
       ∃ b, RegBit (zs (sess p)) (un p) 0 (rowColOfO sh p q) b)
-    (hagree : ∀ p p' a a' e b b', p < gs.size → p' < gs.size → ∀ (ha : a < (wIOfO sh p).size)
+    (hagree : ∀ (p p' a a' e : ℕ) (b b' : Bool), p < gs.size → p' < gs.size → ∀ (ha : a < (wIOfO sh p).size)
       (ha' : a' < (wIOfO sh p').size), (wIOfO sh p)[a] = (wIOfO sh p')[a'] → e < 128 →
       RegBit (zs (sess p)) (un p) 0 (rowColOfO sh p (128 * a + e)) b →
         RegBit (zs (sess p')) (un p') 0 (rowColOfO sh p' (128 * a' + e)) b' → b = b')
     {v : ℕ → F128}
-    (hv : ∀ p (hp : p < gs.size), ∀ q < 128 * nvOfO sh p,
+    (hv : ∀ (p : ℕ) (hp : p < gs.size), ∀ q < 128 * nvOfO sh p,
       RegBit (zs (sess p)) (un p) 0 (vBase (partRep (nsOfO sh p) (nvOfO sh p)) + q)
         (FlockVBridge.wbit (FlockVBridge.Decode.sub gs[p].2.2 v) q))
-    (hz : ∀ p < gs.size, ∀ P ns nv, Flock.RecOpening.part sh p = .ok (P, ns, nv) →
-      ∀ t < 16 * Flock.RecResiduals.RES_OUT_WORDS,
+    (hz : ∀ p < gs.size, ∀ (P : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
+      Flock.RecOpening.part sh p = .ok (P, ns, nv) → ∀ t < 16 * Flock.RecResiduals.RES_OUT_WORDS,
         FlockVBridge.AccChain.RegOut (zs (sess p)) (un p) (upv_of_outer (zs (sess p))) (partBase P ns nv + t) false)
     {p : ℕ} (hp : p < gs.size) :
     OpeningZeroAtL (zs (sess p)) (Lb (sess p)) (un p) 0 sh gs p (Flock.RecAlgebra.el (wReadO Vs sh sess un Lb)) v := by
