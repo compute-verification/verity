@@ -3,20 +3,19 @@
 ``torch.mm(x, W.T, out_dtype=float32)``, `cublas_bf16.GemmF32Out_v1`), GLM-5.3's MLA absorbs (``torch.bmm`` against the served
 `W_UK_T` and `W_UV`, `cublas_bf16.BatchedGemm_v1`), DeepSeek-V4-Pro's compressor GEMMs (the same ``torch.mm`` on bf16,
 `GemmF32Out_v1`), and each model's lm_head shard and indexer projection (``F.linear``, core's `Gemm_v2`), at their TP8 shapes
-(`MODELS`) under the split-K-off cuBLAS switch.
+(`MODELS`) at vLLM's default cuBLAS configuration, with the former split-K-off route kept as a named comparison variant.
 
 One GPU process writes `<out>/glm53_bf16_gemm_capture.json`, the property record `glm53_bf16_gemm_capture` (`properties.record`),
 and prints one line per case and then `GLM53-BF16-GEMM GO` or `NO-GO` with each model's verdict.  `ok` (GO) = every check below,
 for every model run.  The device gate runs first and nothing else runs when it fails (exit 3).  A case that raises records its
 error and fails the verdict without stopping the others.
 
-The switch (`SWITCH_ENV` and `switch()`) is vLLM's batch-invariant cuBLAS configuration on cc 9.0 without the rest of that mode
+The split-K-off variant (`SWITCH_ENV` and `switch()`) is vLLM's batch-invariant cuBLAS configuration on cc 9.0 without the rest of that mode
 (determinism/batch_invariant.py:1076-1080 and 1127-1138): CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before torch
 creates a cuBLAS handle, fp16 and bf16 reduced-precision reductions off with split-K off (``(False, False)``, torch >= 2.10), and
-cuBLASLt preferred.  vLLM's Triton bmm override is not part of it: `torch.bmm` stays on cuBLAS.  The served engine does not set it
-yet (the capture maps' `cublas-bf16-gemm` `when`); `--served-default` runs without it, and by default the run ends with that
-configuration in a second process (`served_default`: which cases it changes, and each case's kernel time either way, the switch's
-cost), which does not enter the verdict.
+cuBLASLt preferred.  vLLM's Triton bmm override is not part of it: `torch.bmm` stays on cuBLAS.  `--served-default` runs without
+the variant. By default the run checks the variant first and vLLM's served default in a second process; the outer verdict needs
+both, so `served_default` is first-class rather than timing-only.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
   selection  each model's `GateLinear(K, N)` with a bf16 weight and f32 out allows tier 1 (ll_bf16_gemm) and tier 4 (cuBLAS) and
@@ -43,9 +42,12 @@ cost), which does not enter the verdict.
              (`verity.ml.circuits.evaluation.evaluate`) of the word Definition the launch binds, which the model must equal.
   bind       every Definition binds at each model's statics.
   timing     each case's kernel time, the median of `REPS` CUDA-event-timed launches.
+  profile    every CUDA kernel name and launch grid, the separate cuBLASLt reduction kernel, grid.z as `SPLIT_K`, and the runtime
+             cuBLAS version. Each default split-K case includes a crafted cancellation row fit against the stated
+             contiguous/f32/forward hypothesis and strided, reverse, tree and bf16-partial alternatives.
 
-GO needs, for every model, every case run, 0 mismatches on every word, `fma` decided, every launch deterministic and on its expected
-kernel, and the references equal.
+GO needs, for every model and both variants, every case run, 0 mismatches on every word, `fma` decided, every launch deterministic
+and on its expected kernel, every profiled split-K launch and unique hypothesis fit pinned, and the references equal.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--no-default]
@@ -736,8 +738,7 @@ def _verdict(doc: dict[str, Any]) -> bool:
 
 # --------------------------------------------------------------------------------------------------------------------- default
 def default_run(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
-    """This capture under torch's default cuBLAS configuration, in a process of its own (the switch is process-wide and set before
-    the first cuBLAS handle): which cases' words it changes, and each case's kernel time either way."""
+    """The first-class served-default capture in its own process (the variant is process-wide and set before the first handle)."""
     sub = outdir / "served_default"
     argv = [sys.executable, str(Path(__file__).resolve()), "--served-default", "--no-default", "--out", str(sub),
             "--workers", str(a.workers), "--only", a.only, "--models", a.models, "--min-driver", str(a.min_driver),
