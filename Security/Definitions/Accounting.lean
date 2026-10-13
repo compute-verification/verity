@@ -11,6 +11,7 @@ import Definitions.Accounting.Physical
 import Definitions.Accounting.Localization
 import Definitions.Accounting.Bridge
 import Definitions.Accounting.Confidence
+import Definitions.Accounting.Responder
 import Definitions.Accounting.CostModel
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, how

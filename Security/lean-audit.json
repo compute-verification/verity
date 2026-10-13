@@ -427,10 +427,11 @@
     "Definitions.Pous.Game.Prob",
     "Definitions.Pous.Model.Audit",
     "Definitions.Pous.Model.SampledAudit",
+    "Definitions.Pous",
     "Definitions.Accounting"
    ],
    "except": [],
-   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth audit's game read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); they import no assumption, guarantee or proof"
+   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth audit's game read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof"
   },
   "Models.Accounting.Guarantees": {
    "imports": [
@@ -442,12 +443,14 @@
     "Definitions.Pous.P2.Cost",
     "Models.Pouw.Assumptions",
     "Models.Pous.Assumptions.P2",
+    "Definitions.Pous",
+    "Models.Pous.Assumptions",
     "Definitions.Accounting",
     "Models.Accounting.Assumptions",
     "Models.Accounting.Guarantees"
    ],
    "except": [],
-   "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Models.Pous.Assumptions.P2)"
+   "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; B2 and lemma M compose with PoUS's audit game (Definitions.Pous) and take P2's named assumption P2RingAuditSecure (Models.Pous.Assumptions.P2) as a hypothesis; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Models.Pous.Assumptions.P2)"
   },
   "Definitions.Accounting.Bandwidth": {
    "imports": ["Mathlib", "Definitions.Pous.Game.Prob", "Definitions.Accounting.Bandwidth"],
@@ -497,6 +500,42 @@
    "signature": ["Accounting.SecurityProofs.Actual.Windows.{u_2, u_3} : Accounting.Guarantees.Actual.Windows"],
    "assumptions": [],
    "type_hash": "9f32b1518e7568f66dd5b15626aafc11e36c5056621c7d221b4210b049859b8d"
+  },
+  "Accounting.SecurityProofs.B2": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.B2.{u_1, u_2} : Accounting.Guarantees.B2"],
+   "assumptions": [],
+   "type_hash": "849d30be76280a0ab4a8ae51adf34e9a5a18b570632f2ce11674f327f675531a"
+  },
+  "Accounting.SecurityProofs.B2Adds": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.B2Adds.{u_1, u_2} : Accounting.Guarantees.B2Adds"],
+   "assumptions": [],
+   "type_hash": "fe3aacfe7a8dd81fb55e915f8f44cdf3ef38d59842916837e282b68b881a9bb6"
+  },
+  "Accounting.SecurityProofs.B2AddsP2Ring": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.B2AddsP2Ring.{u_1, u_2} : Accounting.Guarantees.B2AddsP2Ring"],
+   "assumptions": [],
+   "type_hash": "2b1611b4bfa5b88c1ad1b8b73a9cf643342afd88cebfb73d3405224805eaa85f"
+  },
+  "Accounting.SecurityProofs.B2Audit": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.B2Audit.{u_1, u_2} : Accounting.Guarantees.B2Audit"],
+   "assumptions": [],
+   "type_hash": "54d4d9675e46b4abf3470780529ea1e81fd3461ac798ae53737517be79cedbf5"
+  },
+  "Accounting.SecurityProofs.B2Determines": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.B2Determines.{u_1, u_2} : Accounting.Guarantees.B2Determines"],
+   "assumptions": [],
+   "type_hash": "6c172c2c9b748304da9b6ad343da9695a1f5196c9b6e401fa96c72f8d00667f9"
+  },
+  "Accounting.SecurityProofs.B2P2Ring": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.B2P2Ring.{u_1, u_2} : Accounting.Guarantees.B2P2Ring"],
+   "assumptions": [],
+   "type_hash": "10b2641e83a25a214b68e179ffb1d908a535726dddbfaedb9ba2e490adaddd5b"
   },
   "Accounting.SecurityProofs.B4": {
    "owner": "@lean",
@@ -581,6 +620,12 @@
    "signature": ["Accounting.SecurityProofs.JointPerRunPriced : Accounting.Guarantees.JointPerRunPriced"],
    "assumptions": [],
    "type_hash": "dc12aa2ed2a07c0007c3d7e72ba8302577bc0a4da2bb06db02379eba87f8b9bd"
+  },
+  "Accounting.SecurityProofs.LengthCode": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.LengthCode : Accounting.Guarantees.LengthCode"],
+   "assumptions": [],
+   "type_hash": "fd29b937301f7e15c35e5f75741a436e4d352970128213b20320c38ea8c02146"
   },
   "Accounting.SecurityProofs.Localization": {
    "owner": "@lean",
@@ -4006,6 +4051,10 @@
    "Accounting.SecurityProofs.Memory.CountingAdvice": {
     "function": "Accounting.Memory.fibreAdvice",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.LengthCode": {
+    "function": "Accounting.lengthCode",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -4378,7 +4427,13 @@
    "Accounting.Guarantees.Remote.Conservation": "unstated: the remote audit's conservation statement, at no location; proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.Conservation, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.Guarantees.Remote.NodeLevel": "unstated: the remote audit's node-level statement under Identity (statement C); proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevel, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.Guarantees.Remote.NodeLevelJoint": "unstated: the node-level statement's counting form under Identity (Mbw at the node); proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelJoint, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
-   "Accounting.Guarantees.Remote.NodeLevelLinks": "unstated: the node-level statement without Identity, with the links charged; proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelLinks, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)"
+   "Accounting.Guarantees.Remote.NodeLevelLinks": "unstated: the node-level statement without Identity, with the links charged; proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelLinks, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
+   "Accounting.SecurityProofs.B2": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick (CausalFrom), and takes the challenge ticks increasing, the location's state at the first challenge fixed by the setup, and what reaches it during each window fixed by the help and that window's challenge, as hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.B2Audit": "frozen (no-function,world-unlisted): It takes PoUS's sequential audit security (AuditSecureOn) at an arbitrary scheme as a hypothesis, and B2's hypotheses on the strategy (CausalFrom, increasing challenge ticks, the setup and ingress conditions), which are not on the premises list; the event it bounds is a strategy's pass with the location's memory bounded, not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.B2Determines": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick and takes B2's hypotheses on them, which are not on the premises list, and concludes the existence of PoUS adversaries (lemma M's Determines), not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.B2P2Ring": "frozen (no-function,world-unlisted): It is B2Audit at P2's deployed point under Pous.P2.Assumptions.P2RingAuditSecure 0 0 0, and takes B2's hypotheses on the strategy (CausalFrom, increasing challenge ticks, the setup and ingress conditions), which are not on the premises list; the event it bounds is a strategy's pass with the location's memory bounded, not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.B2Adds": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick, takes B2's hypotheses on them, which are not on the premises list, and composes them with PoUS's AuditSecureOn over the ring model, taken as a hypothesis, through lemma M: about no function of the code.",
+   "Accounting.SecurityProofs.B2AddsP2Ring": "frozen (no-function,world-unlisted): It is B2Adds at P2's deployed point: stated over arbitrary families of strategies causal from every tick, with B2's hypotheses on them, which are not on the premises list, and P2's named assumption P2RingAuditSecure taken as a hypothesis: about no function of the code."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -4430,6 +4485,12 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
@@ -4509,6 +4570,12 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
@@ -4707,6 +4774,24 @@
    },
    "guarantees": ["Accounting.SecurityProofs.ComputeOfPouw", "Accounting.SecurityProofs.ComputeOfPouwPerRun"]
   },
+  "Definitions.Accounting.Responder": {
+   "digest": "f40586b5f980016cc19c0f13705463e1b63f2403d6e058a6f0006c988783da35",
+   "definitions": {
+    "Accounting.Actual.Acts": "a1857bef6a29de44a133783a121e6eb5e4f644a8d60f67b49eb20ad8768b4802",
+    "Accounting.Passes": "e04c74c5006de64ea9239456627f546ea482cbf3afc4eccc5b09179ee01d0910",
+    "Accounting.lengthCode": "25648770c1d2b454ee83406362171b3a00cfbc14292155df126d08081b4acbd5",
+    "Accounting.window": "b0b4820c2087e24bf26a592781f9d3b72005d8ae9f3d544e5c6336103cd5b7f8"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
+    "Accounting.SecurityProofs.LengthCode"
+   ]
+  },
   "Definitions.Accounting.Tag.PolyHash": {
    "digest": "745bfb72ad4da7469d679c4cb9bc2be42ca7640140c26059793b094d186a1f6f",
    "definitions": {
@@ -4800,6 +4885,12 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
@@ -5180,6 +5271,8 @@
     "Pous.Scheme.stateBound": "f219b3199888b8a45eac393ac75becffadc935c7cd567be9198c400bd69c17d1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
@@ -5225,6 +5318,12 @@
     "Pous.Prog.work": "d2d99c0b30b712934b04158c0ded72b0ba662f4a1cc358734c2223d113b94ae3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.Adds",
     "Accounting.SecurityProofs.Memory.AddsAdvice",
     "Accounting.SecurityProofs.Memory.AddsAdviceOn",
@@ -5260,6 +5359,13 @@
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
+    "Accounting.SecurityProofs.LengthCode",
     "Accounting.SecurityProofs.Memory.Adds",
     "Accounting.SecurityProofs.Memory.AddsAdvice",
     "Accounting.SecurityProofs.Memory.AddsAdviceOn",
@@ -5310,6 +5416,12 @@
     "Pous.simAccepts": "62c4ef9b9565b20f69da1313f95ed2e92d2b3f1f1d2ff63bc1f71c38a804523d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.Adds",
     "Accounting.SecurityProofs.Memory.AddsAdvice",
     "Accounting.SecurityProofs.Memory.AddsAdviceOn",
@@ -5408,6 +5520,8 @@
     "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
@@ -5441,6 +5555,12 @@
     "Pous.permsp": "d4fa4566b0ea5f7ad48a716aa9c4a6397da89f45fcd110dc2fa0502ecabfe819"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.AddsAdviceOn",
     "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsOn",
@@ -5487,6 +5607,7 @@
     "Pous.Sampled.seqState": "88adbf0e6305a1e08df7cbb57d91ffac4191d6f56651083fcc554f67b9dd9231"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.Memory.Adds",
     "Accounting.SecurityProofs.Memory.AddsAdvice",
     "Accounting.SecurityProofs.Memory.AddsAdviceOn",
@@ -5516,6 +5637,12 @@
     "Pous.Scheme.ℓ": "cc713501fb08eb0fb1403b0163bb043f5e39683832d9c644e0cf50c5d6000f9c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.Adds",
     "Accounting.SecurityProofs.Memory.AddsAdvice",
     "Accounting.SecurityProofs.Memory.AddsAdviceOn",
@@ -5592,6 +5719,12 @@
     "Pous.sqFix": "af2e924abf530e9aac7cc294dbe5208b2f7d8f4cc5d382a2e3644a35e525905b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.AddsAdviceOn",
     "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsOn",
@@ -13489,6 +13622,27 @@
    },
    "guarantees": ["Accounting.SecurityProofs.ComputeOfPouw"]
   },
+  "Models.Accounting.Guarantees.Responder": {
+   "digest": "01b0e41e897b18509f1523025d75356864c4c55c82c270a7319976b4025ebe86",
+   "definitions": {
+    "Accounting.Guarantees.B2": "82cc5c36fa921f53a00acea5e5eb08d4a4c3f5cfbdef70a6f9c118d09f0e6fa3",
+    "Accounting.Guarantees.B2Adds": "b16b3cb0f8205a6687bcdfdca8127256c4bf551166efb2cf61fd97678e074181",
+    "Accounting.Guarantees.B2AddsP2Ring": "dc946d7d83b2c0a4cfc9474257b6d4a4f35c371d7ba018e9ac78b3b6c0ab1b4c",
+    "Accounting.Guarantees.B2Audit": "3b90bc235fb7dc6e5d24268f2ade81d2b696ab933cfe2bd3f598b50dfdcdcda5",
+    "Accounting.Guarantees.B2Determines": "be1b5b39ad850595f72a9c558f3440cad5612032d89ecd9403d826fdd9211f50",
+    "Accounting.Guarantees.B2P2Ring": "d81353dafcd7800bfe364325d7a1c1de3ffedfa0f8ba44fe0964875906fd5db6",
+    "Accounting.Guarantees.LengthCode": "9bae93dd0406cdb1c7e3e378ec5a310d824a2955918159d0a69d5c10ad8cea5b"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.B2",
+    "Accounting.SecurityProofs.B2Adds",
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2Audit",
+    "Accounting.SecurityProofs.B2Determines",
+    "Accounting.SecurityProofs.B2P2Ring",
+    "Accounting.SecurityProofs.LengthCode"
+   ]
+  },
   "Models.Accounting.Guarantees.Sketch": {
    "digest": "b0f902b6c4a59615f713c7b8e4761a2b41f6505fa1f9612ea7aa985b9b450a0c",
    "definitions": {
@@ -13666,6 +13820,8 @@
     "Pous.P2.Assumptions.P2RingRoundSecure": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.B2AddsP2Ring",
+    "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
