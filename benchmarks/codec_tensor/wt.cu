@@ -1576,6 +1576,15 @@ __device__ __forceinline__ void bulk_load(void *dst, const void *src, u32 bytes,
                "l"(src), "r"(bytes), "r"(smem_u32(bar))
                : "memory");
 }
+__device__ __forceinline__ void bulk_prefetch_l2(const void *src, u32 bytes) {
+  asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;\n" ::"l"(src), "r"(bytes) : "memory");
+}
+
+// WT_L2PF=1: the fused kernel's producer, as it copies task i into its stage, prefetches into the L2 the task that
+// next takes that stage (i + stages), so the copy a released stage waits on reads the L2 rather than HBM.
+#ifndef WT_L2PF
+#define WT_L2PF 1
+#endif
 
 template <int NB8>
 __device__ __forceinline__ void load_xs(uint8_t (*xs)[XS_STRIDE], const uint8_t *__restrict__ x, int M, int Kd, int kc) {
@@ -2682,6 +2691,7 @@ __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
             while (r < i && mbar_test(full + r % stages, (r / stages) & 1)) mbar_arrive(ready + r++ % stages);
         mbar_expect_tx(full + s, SB);
         bulk_load(smem + s * SB, wstore + (q0 + i * gq) * SB, SB, full + s);
+        if (WT_L2PF && i + stages < ntasks) bulk_prefetch_l2(wstore + (q0 + (u64)(i + stages) * gq) * SB, SB);
       }
       for (; r < ntasks; ++r) {
         mbar_wait(full + r % stages, (r / stages) & 1);
