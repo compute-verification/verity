@@ -12233,7 +12233,7 @@
    ]
   },
   "Flock.RecCoins": {
-   "digest": "4198b4a1f5bbb25ac759b39256d945dd329b6851fec9a97979e656232c241d19",
+   "digest": "43f3d45a5a0efe6c4cad3ce1e5338cd3663a589f27cf2aef3e67eea9a875c24e",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "23e99f975164190da096639263b8dc6e9033e8cfb626b5c7a9de3c7ee65e3e23",
@@ -12305,7 +12305,7 @@
     "Flock.RecCoins.checkValue._sparseCasesOn_7": "4ea8e47fdf2794834c496a0116795ca57036361fb6cb760af7bfd51c851bc18f",
     "Flock.RecCoins.coefAt": "b4b21e6b3ae81577057fc7c51f1f61902efa6c88913906612a9df4bf8b41cd8a",
     "Flock.RecCoins.commitRow": "48e36581cf7e3d3796b210f5907cfda8daa430d6b04eb9a04761c5f996990264",
-    "Flock.RecCoins.dirsRow": "36dfb7839125fa0b26194dd9ffd24a93746e327bc8c9e2beb7199e3f0dddc21f",
+    "Flock.RecCoins.dirsRow": "f40fdeb3beb7826e7eb47eff0b5fd0c7d96735743f3c2996ac36122031909a99",
     "Flock.RecCoins.dotF": "b414dfc1ea6a15f3e744f21fd8fef1ee2fbb4e01b30143a916936660ea9fe2e9",
     "Flock.RecCoins.exceptOf": "3a26d9a356870ca580930b6ec66829aae0abe7635763b57c58e020c28272b55c",
     "Flock.RecCoins.f128Of": "ba2c3f95884de49f1af80f924f1d937a745a377726dd85c9613b4e5b83d3b083",
