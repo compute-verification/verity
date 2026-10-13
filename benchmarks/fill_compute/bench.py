@@ -788,7 +788,9 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
     L2_REPEATS dry launches (`dry`, not judged): the same tiles with the log off, which declare no write sectors and last
     as long as the judged launch. Every kernel's launches are then repeated with the stop flag off (`variant: nostop`, each
     with its own controls), which no launch then reads: the chunked kernels' constant 2 sectors over their control follow
-    the read of the pinned stop flag or they don't."""
+    the read of the pinned stop flag or they don't. `all`@128 runs 2 x SMs tiles (62 MB of outputs at 188 SMs) where the
+    others run 4 x SMs: at 123 MB a launch, half again the 128 MB L2, every kernel writes 9-13 sectors over its floor
+    whatever its tile (r20261013-030846-7784, ruling 03:30Z); `--l2-sweep` measures that effect."""
     f64 = random_filler(4096, 4096, 1024, qcap=4 * sms)
     lo = torch.cuda.Stream()
     rows = []
@@ -798,7 +800,7 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
         suffix = "" if T == TILE else "128"
         for store, code in STORES.items():
             for persist in (0, 1):
-                n = 4 * sms
+                n = 2 * sms if store == "all" and T == 128 else 4 * sms
                 seq = ((0, False, True),) + ((n, False, True), (0, False, True)) * L2_REPEATS
                 if store == "fold":
                     seq = ((0, False, True),) + ((n, False, True), (n, True, True), (0, False, True)) * L2_REPEATS
