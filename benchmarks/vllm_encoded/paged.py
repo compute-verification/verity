@@ -90,6 +90,9 @@ def attn(lib: PagedLib, torch, cache, lay: Layout, lbase: int, encoded: int, k: 
     nrows = q.shape[0] if nrows is None else nrows
     if (ck is None) != (cv is None):
         raise ValueError("ck and cv go together")
+    if part.numel() < part_floats(lib, batch, splits):
+        raise ValueError(f"part holds {part.numel()} floats, batch {batch} at {splits} splits needs "
+                         f"{part_floats(lib, batch, splits)}")
     lib.call("pg_attn", cache.data_ptr(), encoded, q.data_ptr(), q.stride(0), QSCALE, out.data_ptr(), out.stride(0),
              nrows, part.data_ptr(), lens.data_ptr(), bt.data_ptr(), 0 if qrow is None else qrow.data_ptr(),
              bt.stride(0), lay.bs, lay.sb, lay.sh, lay.ss, lbase, batch, splits, k,

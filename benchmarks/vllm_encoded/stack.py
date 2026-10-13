@@ -348,7 +348,8 @@ class Attention:
         self.layers: dict[tuple, _Layer] = {}   # by (layer, the cache's storage and shape): vLLM may reallocate it
         self.splits: dict[int, int] = {}
         top = max(P.part_floats(self.lib, b, self.split(b)) for b in range(1, K.MAX_ROWS + 1))
-        self.part = torch.empty(top, dtype=torch.float32, device="cuda")
+        self.part = torch.empty(top, dtype=torch.float32, device="cuda")   # the captured steps' (b <= MAX_ROWS)
+        self.part_eager = self.part                                        # an eager decode's at any b, grown
         self._plan: tuple | None = None
         self.calls = {"decode": 0, "gathered": 0, "append": 0, "flush_graph": 0, "flush_eager": 0}
         self.nl = layers
@@ -366,6 +367,18 @@ class Attention:
         self.app_done = torch.cuda.Event()
         self.outstanding = False
         self.stage_bytes = 2 * self.stage_k.numel() * 2
+
+    def partials(self, b: int) -> torch.Tensor:
+        """Attention's split partials at batch b: the captured steps' buffer, or (b > MAX_ROWS, eager) one grown to fit
+        and kept apart, since the graphs hold the first's address."""
+        if b <= K.MAX_ROWS:
+            return self.part
+        need = P.part_floats(self.lib, b, self.split(b))
+        if need > self.part_eager.numel():
+            if torch.cuda.is_current_stream_capturing():
+                raise RuntimeError(f"a captured decode at batch {b}: the stack captures at most {K.MAX_ROWS}")
+            self.part_eager = torch.empty(need, dtype=torch.float32, device="cuda")
+        return self.part_eager
 
     def split(self, b: int) -> int:
         if b not in self.splits:
@@ -469,7 +482,7 @@ class Attention:
             if md.max_query_len == 1:
                 b = md.seq_lens.shape[0]
                 q2, o2 = query.view(query.shape[0], -1), output.view(output.shape[0], -1)
-                P.attn(att.lib, torch, kv_cache, L.lay, L.lbase, att.enc, att.st.k, q2, o2, att.part, md.seq_lens,
+                P.attn(att.lib, torch, kv_cache, L.lay, L.lbase, att.enc, att.st.k, q2, o2, att.partials(b), md.seq_lens,
                        md.block_table, b, att.split(b), nrows=o2.shape[0], ck=k2, cv=v2)
                 att.calls["decode"] += 1
                 return output

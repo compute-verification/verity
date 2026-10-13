@@ -235,6 +235,8 @@ def main() -> int:
     ap.add_argument("--stack", choices=("pstack", "stack"), default=None,
                     help="serve on the encoded stack (stack) or its plain form (pstack): stack_hook.py")
     ap.add_argument("--stack-k", type=int, default=3, help="--stack stack: the codec's rounds")
+    ap.add_argument("--max-seqs", type=int, default=max(CAPTURE),
+                    help="vLLM's max_num_seqs (the stack captures at most 32: a larger decode batch runs eager)")
     ap.add_argument("--wt-lib", help="--stack: a WT_RECEIPT build of codec_tensor's wt.cu at a full-slot field")
     ap.add_argument("--reader-lib", help="--stack: a build of codec_tensor's reader.cu")
     ap.add_argument("--paged-lib", help="--stack: a build of vllm_encoded's paged.cu at wt.cu's field")
@@ -267,7 +269,7 @@ def main() -> int:
         import stack_hook
         stack = stack_hook.install(a.stack, a.stack_k, a.wt_lib, a.reader_lib, a.paged_lib)
         capture = stack[2]
-    kw = {"model": a.model, "quantization": "fp8", "max_num_seqs": max(CAPTURE),
+    kw = {"model": a.model, "quantization": "fp8", "max_num_seqs": a.max_seqs,
           "enable_prefix_caching": a.shared_prefix > 0, "seed": 0,
           "max_model_len": a.shared_prefix + max(a.prompts) + max(a.outputs) + 64,
           "max_num_batched_tokens": a.max_batched_tokens, "enforce_eager": False,
