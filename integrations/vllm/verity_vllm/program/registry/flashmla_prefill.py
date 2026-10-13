@@ -67,8 +67,9 @@ from verity_vllm.program.kernels import flashmla_prefill_twin
 from verity_vllm.program.registry import flashmla as F
 from verity_vllm.program.registry.prims import BF16, BIT, I32
 
-_CONF = ("model-untested: read from vLLM d9105ea80's DeepSeek-V4 prefill gather and FlashMLA 6bc49418's Hopper sparse prefill (the "
-         "module docstring's files) and the prefill kernel's SASS; tests/properties/dsv4_flashmla_capture_gpu.py is its hardware check")
+_CONF = ("model-untested: read from vLLM d9105ea80's sparse MLA prefill and its K-cache gather and FlashMLA 6bc49418's Hopper sparse "
+         "prefill (the module docstring's files) and the prefill kernel's SASS; tests/properties/dsv4_flashmla_capture_gpu.py is its "
+         "hardware check")
 
 #: DeepSeek-V4-Pro at TP8 on the H200: 16 of the 64 padded heads per rank, the 512-element workspace row (NoPE 448 + RoPE 64, one
 #: scale per 64 NoPE elements), 64-row blocks, softmax_scale 512^-0.5
@@ -188,9 +189,10 @@ def pair(o: F.Ops, S, dot, q, k, nm_prev=None, l_prev=None, o_prev=None):
         l1 = [o.fma(l_prev[4 + t], so1, u1[t]) for t in range(4)]
         lo = list(B.batch(mul, o_prev[:H], so0, axes=(0, None)))
         hi = list(B.batch(mul, o_prev[H:], so1, axes=(0, None)))
+    pb1 = [o.cvt(x) for x in p1]
     lo = pv(o, S, lo, [o.cvt(x) for x in p0], k, 0, range(H))
-    lo = pv(o, S, list(B.batch(mul, array_of(lo), sf, axes=(0, None))), [o.cvt(x) for x in p1], k, 1, range(H))
-    hi = pv(o, S, hi, [o.cvt(x) for x in p1], k, 1, range(H, D_))
+    lo = pv(o, S, list(B.batch(mul, array_of(lo), sf, axes=(0, None))), pb1, k, 1, range(H))
+    hi = pv(o, S, hi, pb1, k, 1, range(H, D_))
     hi = pv(o, S, hi, [o.cvt(o.mul(x, sf)) for x in p0], k, 0, range(H, D_))
     return tuple_of(nm1, array_of(l0 + l1), array_of(lo + hi))
 
