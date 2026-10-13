@@ -107,7 +107,6 @@ class Lib:
         self.l.flag_set.argtypes = [vp, i, vp]
         self.l.fill_occupancy.argtypes = [i, i, i, C.POINTER(i)]
         self.l.gc_split.argtypes = [i, i, i, C.POINTER(vp), C.POINTER(vp), C.POINTER(i)]
-        self.l.gc_nest.argtypes = [i, i, i, i, C.POINTER(vp), C.POINTER(i)]
         self.l.smid_at.argtypes = [vp, i, i, vp]
         self.l.fill_smem.argtypes = [i]
         for f in ("fill_launch", "pearlc_d", "stamp_at", "flag_set", "fill_occupancy", "fill_smem", "gc_split", "smid_at"):
@@ -146,28 +145,6 @@ class Lib:
             self.ck(self.l.smid_at(C.c_void_p(out.data_ptr()), grid, 20000, C.c_void_p(stream.cuda_stream)), "smid")
         torch.cuda.synchronize()
         return int(torch.unique(out).numel())
-
-    def sm_set(self, capture: torch.cuda.Stream, replay: torch.cuda.Stream, grid: int) -> set[int]:
-        """The SMs `grid` CTAs ran on as a graph captured on `capture` and replayed on `replay`."""
-        out = torch.full((grid,), -1, dtype=torch.int32, device="cuda")
-        g = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(g, stream=capture):
-            self.ck(self.l.smid_at(C.c_void_p(out.data_ptr()), grid, 20000, C.c_void_p(capture.cuda_stream)), "smid")
-        with torch.cuda.stream(replay):
-            g.replay()
-        torch.cuda.synchronize()
-        return set(out.tolist())
-
-    def gc_nest(self, n_base: int, n_mid: int, prio_step: int, prio_fill: int) -> dict:
-        """fill.cu's gc_nest: the step's streams on base + mid and on base, the filler's on the remainder and on mid +
-        remainder."""
-        s, got = (C.c_void_p * 4)(), (C.c_int * 4)()
-        rc = self.l.gc_nest(n_base, n_mid, prio_step, prio_fill, s, got)
-        if rc:
-            return {"error": rc}
-        names = ("step_narrow", "step_wide", "fill_narrow", "fill_wide")
-        return {**{k: torch.cuda.ExternalStream(v) for k, v in zip(names, s)},
-                "base_sms": got[0], "mid_sms": got[1], "rem_sms": got[2]}
 
     def gc_split(self, n_step: int, prio_step: int, prio_fill: int) -> dict:
         """Green contexts: the step's stream on (at least) `n_step` SMs and the filler's on the rest (fill.cu's gc_split)."""
