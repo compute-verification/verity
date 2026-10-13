@@ -16,7 +16,7 @@ pass and no chain, so that passes are ordered by the clock alone.
 
 `stated` is the claim of `PROTOCOL.md` §1 and §10 read through `audit.ledger`: the honest prover's session on one
 RTX PRO 6000 at its measured R and S_chip, under the default codec at the stated squaring ceiling, every window's whole
-γ_t and the horizon's.
+γ_t and the horizon's.  `store_floor` is the store below which no T brings every window under 1%.
 
 `sketch_reading` is where sketch-sha512's bound is read (`PROTOCOL.md` §4): the rank r* that minimizes `sketch_rate`,
 the failure each SHA-512 compression of the prover's buys, a guess's 2^-8r beside a fresh key's chance of signs of rank
@@ -252,6 +252,16 @@ def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, sampl
                         wrong=lambda pr: wrong_bound(pr.sizes[0], pr.drawn["receipt"], pr.delta))
 
 
+def store_floor(gap_ns: int = 0, target: float = 0.01) -> float:
+    """The store on one RTX PRO 6000, in bytes, below which no T brings `stated`'s worst γ_t under `target`.  As T
+    grows, a window's μ_sample and its ends vanish, and γ_t tends to `(g + S_chip/R + λ·p + μ_rebuild·(p + g))/(p + g)`
+    with p the store's read at R: the chain's steady state, μ_chip, λ (`audit.QUERIES_LOG2` bits a block) and
+    μ_rebuild.  At `gap_ns` = 0 it is μ_chip, λ and μ_rebuild alone."""
+    rebuild = audit.Rebuild(codec.DEFAULT, SQUARINGS_PER_S["p1024"]).fraction(READ_BYTES_PER_S)
+    lam, g = audit.QUERIES_LOG2 / (8 * BLOCK_BYTES), gap_ns / S
+    return READ_BYTES_PER_S * (g * (1 - target + rebuild) + CHIP_BYTES / READ_BYTES_PER_S) / (target - lam - rebuild)
+
+
 def _ns(ms: float) -> int:
     return round(ms * MS)
 
@@ -281,35 +291,36 @@ def _grid() -> None:
                       + " | ".join(f"{1 - r.utilization:.2%}" for r in runs) + f" | {chained(_ns(p), gap):.2%} "
                       f"| {max(runs[2].window_timing):.2%} |")
     print()
-    t_s = audit.WINDOW_NS // S
-    s = samples_for(0.0025, 2.0 ** -40)
-    openings = {1: samples_for(0.01, 2.0 ** -40), t_s: s, 60: 3 * s, 90: s}
-    print(f"# openings at the stated T = {t_s} s, ε_s = 0.25%, δ = 2^-40: s = {s} from the window's coin "
-          f"({s / t_s:.0f} a second); the 1 s option's ε_s = 1% is {openings[1]}.  A Fiat–Shamir draw from the window's "
-          "last root, ground over Q transcripts, needs s(δ/Q)")
+    t_s, s = audit.WINDOW_NS // S, audit.SAMPLES
+    quarter = samples_for(0.0025, audit.DELTA)
+    openings = {1: samples_for(0.01, audit.DELTA), 20: quarter, t_s: s, 90: quarter}
+    print(f"# openings at the stated T = {t_s} s, δ = 2^-40: s = {s} from the window's coin ({s / t_s:.0f} a second, "
+          f"ε_s = ln(2^40)/s = {math.log(2.0 ** 40) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
+          f"1 s option's 1% is {openings[1]}.  A Fiat–Shamir draw from the window's last root, ground over Q "
+          "transcripts, needs s(δ/Q) = ⌈s·(40 + log2 Q)/40⌉")
     print("| Q | s | × the coin's |")
     print("| --- | --- | --- |")
     for q in (0, 20, 40, 64):
-        sq = samples_for(0.0025, 2.0 ** -(40 + q))
+        sq = -(-s * (40 + q) // 40)
         print(f"| 2^{q} | {sq} | {sq / s:.2f} |")
     print()
     print("# openings: bytes a window and Gb/s per node, at each window's openings: "
-          + ", ".join(f"T = {w} s: {openings[w]}" for w in (1, t_s, 60)))
+          + ", ".join(f"T = {w} s: {openings[w]}" for w in (1, 20, t_s)))
     for name, blocks in (("one GPU, 94 GB", 94 * 10 ** 9 // BLOCK_BYTES), ("8 GPUs, 752 GB", 8 * 94 * 10 ** 9 // BLOCK_BYTES),
                          ("8 GPUs + 1.5 TB host", (8 * 94 + 1500) * 10 ** 9 // BLOCK_BYTES)):
         b = opening_bytes(blocks)
         print(f"{name}: N = {blocks}, {b} B an opening; "
               + ", ".join(f"T = {w} s: {openings[w] * b / 1e6:.0f} MB a window, {openings[w] * b * 8 / w / 1e9:.3f} Gb/s"
-                          for w in (1, t_s, 60)))
+                          for w in (1, 20, t_s)))
     print()
-    print(f"# the stated claim (§1, §10), T = {t_s} s by default and 1 s the option whose per-window claim is μ_sample "
-          "alone: the worst window's whole γ_t over its own span, and over a 10 min horizon of W windows the pooled "
-          "μ_sample and the whole γ, on one RTX PRO 6000 (R = 1.488e12 B/s, S_chip = 263,163,904 B), the default codec "
-          "at the stated ceiling, δ = 2^-40, g = 50 µs, J = 0.05 ms; a pass is the store's read at R")
+    print(f"# the stated claim (§1, §10), T = {t_s} s by default, 20 s and 1 s the options: the worst window's whole γ_t "
+          "over its own span, and over a 10 min horizon of W windows the pooled μ_sample and the whole γ, on one RTX PRO "
+          "6000 (R = 1.488e12 B/s, S_chip = 263,163,904 B), the default codec at the stated ceiling, δ = 2^-40, "
+          "g = 50 µs, J = 0.05 ms; a pass is the store's read at R")
     print("| T s | openings | store GB | pass ms | RTT ms | μ_timing | μ_sample | μ_chip | λ | μ_rebuild | worst γ_t | W "
           "| pooled μ_sample | horizon γ |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
-    for w_s in (t_s, 1, 60, 90):
+    for w_s in (t_s, 20, 1, 90):
         for gb in (30, 62, 94):
             for rtt in (1, 20):
                 g = stated(gb * 10 ** 9, w_s * S, 600 // w_s, rtt_ns=_ns(rtt), samples=openings[w_s])
@@ -317,6 +328,10 @@ def _grid() -> None:
                 print(f"| {w_s} | {openings[w_s]} | {gb} | {gb * 10 ** 9 / READ_BYTES_PER_S * 1e3:.1f} | {rtt} "
                       f"| {x.timing:.3%} | {x.sample:.3%} | {x.chip:.3%} | {x.counting:.3%} | {x.rebuild:.3%} "
                       f"| {x.gamma:.3%} | {600 // w_s} | {g.horizon:.4%} | {g.gamma_horizon:.3%} |")
+    print()
+    print(f"# the store floor (store_floor): below {store_floor() / 1e9:.2f} GB a GPU μ_chip, λ and μ_rebuild alone "
+          f"exceed 1% at any T; with the chain's steady state at g = {gap // US} µs, no T meets 1% below "
+          f"{store_floor(gap) / 1e9:.2f} GB")
     print()
     print(f"# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
           f"deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")

@@ -15,7 +15,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    and commits to them (`coins.Challenger`).  The prover gets the commitment first (`Session.commitment`).
 3. A session of `windows` windows.  The verifier releases `σ_0` (`Session.start`), and at each window's end the next
    window's challenge, or the close after the last (`Session.boundary`), one-way.  A window lasts at least the stated
-   `T` (`Params.window_ns`, 20 s by default).
+   `T` (`Params.window_ns`, 60 s by default).
 4. Chained passes.  Pass i of window t reads the blocks of its plan (`receipts.Plan`: distinct blocks, the whole store by
    default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`), each of its
    block alone, or under a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it
@@ -81,7 +81,9 @@ NONCE_BYTES = 32
 NODE_BYTES = 64
 QUERIES_LOG2 = 64
 SLACK_LOG2 = 41
-WINDOW_NS = 20 * 10**9
+WINDOW_NS = 60 * 10**9
+SAMPLES = 33_273
+DELTA = 2.0 ** -40
 
 FAILURES = ("late", "order", "plan", "few", "malformed", "receipt-path", "codec", "payload-path", "tile", "receipt")
 
@@ -89,16 +91,17 @@ FAILURES = ("late", "order", "plan", "few", "malformed", "receipt-path", "codec"
 @dataclass(frozen=True, slots=True)
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
-    deadline, the windows `W`, the openings `s` per window at `delta`, the fewest passes a window may certify, the
-    stated window `T` (`window_ns`, 20 s by default: no boundary message leaves sooner after its window's challenge),
-    and the store's codec, receipt kind, whether its receipts bind z, its block layout and its sketch rows (None for
-    the kind's default, `receipts.sketch_rows`), the registration's."""
+    deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at 2^-40 by default, 555 a second of the
+    stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
+    boundary message leaves sooner after its window's challenge), and the store's codec, receipt kind, whether its
+    receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
+    registration's."""
 
     blocks: int
     deadline_ns: int
     windows: int
-    samples: int
-    delta: float
+    samples: int = SAMPLES
+    delta: float = DELTA
     min_passes: int = 1
     window_ns: int = WINDOW_NS
     codec: Codec = codec.DEFAULT

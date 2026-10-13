@@ -824,9 +824,10 @@ def test_draws_wait_for_the_windows_roots(store) -> None:
 
 
 def test_a_boundary_waits_out_the_stated_window(store) -> None:
-    """The window T is stated, 20 s unless the params say otherwise: no boundary message leaves sooner than `window_ns`
-    after its window's challenge, and a refused one leaves the window open."""
-    assert Params(blocks=N, deadline_ns=A, windows=3, samples=7, delta=1e-6).window_ns == audit.WINDOW_NS == 20 * 10**9
+    """The window T is stated, 60 s with 33,273 openings at 2^-40 unless the params say otherwise: no boundary message
+    leaves sooner than `window_ns` after its window's challenge, and a refused one leaves the window open."""
+    p = Params(blocks=N, deadline_ns=A, windows=3)
+    assert (p.window_ns, p.samples, p.delta) == (audit.WINDOW_NS, audit.SAMPLES, audit.DELTA) == (60 * 10**9, 33_273, 2.0**-40)
     clock = Clock()
     s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
@@ -935,21 +936,34 @@ def test_opening_size_matches_the_timing_model(store) -> None:
     assert timing.wrong_bound(10 ** 6, timing.samples_for(1e-3, 2.0 ** -40), 2.0 ** -40) <= 10 ** 3
 
 
-def test_the_stated_claim_holds_for_the_sampling_term_and_not_for_the_whole_gamma() -> None:
+def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_term() -> None:
     """`PROTOCOL.md` §1 and §10's reading through the ledger, on one RTX PRO 6000 with its whole HBM as the store.  At
-    the stated T = 20 s and 11,091 openings a window, a 10 min session's worst window has μ_sample under 0.25% and a
-    whole γ_t over 1%; over the horizon the pooled μ_sample is under 0.01% and the whole γ over 0.15%, which λ and
-    μ_chip each exceed alone.  T = 60 s at the same 555 openings a second meets 1%; the 1 s option's μ_sample alone
-    does, at 2,773."""
-    s, store = timing.samples_for(0.0025, 2.0 ** -40), 94 * 10 ** 9
-    assert (s, timing.samples_for(0.01, 2.0 ** -40)) == (11_091, 2_773) and audit.WINDOW_NS == 20 * timing.S
+    the stated T = 60 s and 33,273 openings a window (555 a second), a 10 min session's worst window has its whole γ_t
+    under 0.85%; over the horizon the pooled μ_sample is under 0.01% and the whole γ over 0.15%, which λ and μ_chip
+    each exceed alone.  The 20 s option at 11,091 openings has μ_sample under 0.25% and a whole γ_t over 1%, and the
+    1 s option's μ_sample alone is under 1%, at 2,773."""
+    s, store = audit.SAMPLES, 94 * 10 ** 9
+    assert (timing.samples_for(0.0025, audit.DELTA), timing.samples_for(0.01, audit.DELTA)) == (11_091, 2_773)
+    assert s == 3 * 11_091 and audit.WINDOW_NS == 60 * timing.S
     for rtt in (1, 20):
-        g = timing.stated(store, audit.WINDOW_NS, 30, rtt_ns=rtt * timing.MS, samples=s)
-        assert g.worst.sample < 0.0025 and 0.0125 < g.worst.gamma < 0.014
+        g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
+        assert g.worst.sample < 0.001 and 0.008 < g.worst.gamma < 0.0085
         assert g.horizon < 1e-4 and g.counting > 0.0015 and g.chip > 0.0015 and 0.006 < g.gamma_horizon < 0.0065
-        assert timing.stated(store, 60 * timing.S, 10, rtt_ns=rtt * timing.MS, samples=3 * s).worst.gamma < 0.0085
+        twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=11_091).worst
+        assert twenty.sample < 0.0025 and 0.0125 < twenty.gamma < 0.014
         one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=2_773).worst
         assert one.sample < 0.01 < 0.1 < one.gamma
+
+
+def test_below_the_store_floor_no_window_meets_one_percent() -> None:
+    """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
+    and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
+    is μ_chip, λ and μ_rebuild alone, about 36 GB."""
+    assert 35.6e9 < timing.store_floor() < 35.8e9 and 45.6e9 < timing.store_floor(50 * timing.US) < 45.8e9
+    for scale, over in ((0.98, True), (1.02, False)):
+        g = timing.stated(round(scale * timing.store_floor(50 * timing.US)), 1200 * timing.S, 1, rtt_ns=timing.MS,
+                          samples=555 * 1200)
+        assert (g.worst.gamma > 0.01) is over
 
 
 @pytest.mark.parametrize("pass_ms, rtt_ms, window_ms", [(20, 1, 300), (20, 50, 1000), (50, 5, 1000), (37, 20, 300)])
