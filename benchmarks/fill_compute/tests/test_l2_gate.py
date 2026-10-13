@@ -108,3 +108,9 @@ def test_the_floor_is_the_largest_unhit_control():
     det = res["detail"]["fill_chunk_1_3"]
     assert det["controls"] == [13, 913] and det["floor"] == 15 and det["least_floor"] == 13
     assert det["verdict"] == "passed" and det["verdict_least_floor"] == "REFUSED"
+
+
+def test_mann_whitney_matches_known_cases():
+    assert G.mann_whitney_greater([5, 6, 7, 8], [1, 2, 3, 4]) < 0.05
+    assert G.mann_whitney_greater([1, 2, 3, 4], [5, 6, 7, 8]) > 0.95
+    assert 0.4 < G.mann_whitney_greater([1, 2, 3, 4] * 5, [1, 2, 3, 4]) < 0.6

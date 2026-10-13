@@ -77,6 +77,30 @@ def external(judged: list[dict], controls: list[dict]) -> dict:
             "external": bool(ch) and p >= ALPHA and mc >= mj}
 
 
+def mann_whitney_greater(x: list[float], y: list[float]) -> float:
+    """One-sided Mann-Whitney U p (normal approximation, tie-corrected) that x is stochastically larger than y."""
+    n1, n2 = len(x), len(y)
+    if not n1 or not n2:
+        return 1.0
+    pooled = sorted((v, i < n1) for i, v in enumerate(list(x) + list(y)))
+    ranks, ties, i = [0.0] * len(pooled), 0.0, 0
+    while i < len(pooled):
+        j = i
+        while j + 1 < len(pooled) and pooled[j + 1][0] == pooled[i][0]:
+            j += 1
+        for k in range(i, j + 1):
+            ranks[k] = (i + j) / 2 + 1
+        ties += (j - i + 1) ** 3 - (j - i + 1)
+        i = j + 1
+    u = sum(r for r, (_, first) in zip(ranks, pooled) if first) - n1 * (n1 + 1) / 2
+    n = n1 + n2
+    var = n1 * n2 / 12 * ((n + 1) - ties / (n * (n - 1)))
+    if var <= 0:
+        return 1.0
+    z = (u - n1 * n2 / 2 - 0.5) / math.sqrt(var)
+    return 0.5 * math.erfc(z / math.sqrt(2))
+
+
 def unit(d: dict) -> str:
     """What a verdict and a floor belong to: the kernel, or the kernel under a launch variant (`kernel/variant`)."""
     return f"{d['kernel']}/{d['variant']}" if d.get("variant") else d["kernel"]
@@ -112,6 +136,15 @@ def judge(declared: dict, rows: list[dict]) -> dict:
     dry = [r for r in out if r.get("dry")]
     test_dry = external(judged, dry) if dry else None
     rule = "min" if test_dry is not None and test_dry["external"] else "strict"
+    proposed = None
+    if dry:
+        p_mw = mann_whitney_greater([r["excess"] for r in judged], [r["excess"] for r in dry])
+        proposed = {"why": "evidence only, not applied: condition (c) by a one-sided Mann-Whitney test of the excesses "
+                           "(max against max favours the larger sample), and the floor as the least dry launch",
+                    "mann_whitney_p_judged_larger": p_mw,
+                    "external": bool(test_dry["controls"][1]) and test_dry["fisher_p_judged_hit_more"] >= ALPHA
+                    and p_mw >= ALPHA,
+                    "dry_floor": min(r["write_sectors"] for r in dry)}
     kernels = list(dict.fromkeys(r["unit"] for r in judged))
     def verdicts(key: str) -> tuple[dict, dict]:
         strict = {k: all(r[key] for r in judged if r["unit"] == k) for k in kernels}
@@ -132,6 +165,7 @@ def judge(declared: dict, rows: list[dict]) -> dict:
         by_store[r["store"]] = by_store.get(r["store"], True) and verdict[r["unit"]]
     word = {True: "passed", False: "REFUSED"}
     return {"status": "REFUSED" if bad else "passed", "rule": rule, "external": test, "external_dry": test_dry,
+            "proposed": proposed,
             "by_store": {s: word[p] for s, p in by_store.items()},
             "by_kernel": {k: word[verdict[k]] for k in kernels},
             "by_kernel_strict": {k: word[strict[k]] for k in kernels}, "by_kernel_min": {k: word[least[k]] for k in kernels},
