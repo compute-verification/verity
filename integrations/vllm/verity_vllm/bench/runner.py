@@ -7,7 +7,6 @@ import json
 import math
 import multiprocessing as mp
 import os
-import random
 import statistics
 import subprocess
 import time
@@ -386,11 +385,13 @@ class _VllmEngine:
     def _requests(self, point: SweepPoint) -> list[Any]:
         vocab = int(self.llm._engine.llm.llm_engine.vllm_config.model_config.hf_config.vocab_size)
         seed = int.from_bytes(hashlib.sha256(point.id.encode()).digest()[:8], "big")
-        rng = random.Random(seed)
         return [
             SimpleNamespace(
                 request_id=f"{point.id}-{i}",
-                prompt_token_ids=[rng.randrange(3, vocab - 1) for _ in range(shape.prompt_tokens)],
+                prompt_token_ids=[
+                    3 + (seed + i * 1_000_003 + j * 97_409) % (vocab - 4)
+                    for j in range(shape.prompt_tokens)
+                ],
                 max_tokens=shape.output_tokens,
                 arrive_step=shape.arrive_step,
             )

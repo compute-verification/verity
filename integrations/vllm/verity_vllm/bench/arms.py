@@ -42,7 +42,7 @@ class Target:
 
 BUILTINS = {
     "stock": Arm("stock", precision="bfloat16"),
-    "stock-fp8": Arm("stock-fp8", precision="fp8"),
+    "stock-fp8": Arm("stock-fp8", precision="fp8", control="stock"),
 }
 
 
@@ -73,13 +73,14 @@ def experimental_arm(spec: str) -> Arm:
     name = get("id") or get("name") or spec.partition(":")[2].lower().replace("_", "-")
     if not callable(get("install")):
         raise ValueError(f"experimental arm {spec!r}: NAME must expose install(target)")
+    kernel_digest = get("kernel_digest")
     return Arm(
         id=str(name),
         protocols=_protocols(get("protocols")),
         precision=get("precision"),
         control=get("control"),
         module_spec=spec,
-        kernel_digest=get("kernel_digest"),
+        kernel_digest=kernel_digest if isinstance(kernel_digest, str) else None,
         experimental=True,
     )
 

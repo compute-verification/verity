@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from verity_vllm.bench.arms import Arm
+from verity_vllm.bench.arms import Arm, resolve_arms
 from verity_vllm.bench.presets import SweepPoint, expand_sweep, get_preset
 from verity_vllm.bench.result import IdentityMismatch, judge, validate
 from verity_vllm.bench.runner import ResidentCapacityError, run_benchmark
@@ -78,6 +78,14 @@ def test_sweep_expansion_and_staggered_mixed_requests():
     assert {p.prompt_tokens for p in full} == {512, 8192}
     assert {p.traffic for p in full} == {"decode-heavy", "prefill-heavy", "mixed"}
     assert [r.arrive_step for r in quick[0].requests()] == [0, 0, 1, 1, 2, 2, 3, 3]
+
+
+def test_stock_fp8_is_gated_against_stock_bfloat16():
+    arms = resolve_arms("stock,stock-fp8")
+    assert [(arm.id, arm.precision, arm.control) for arm in arms] == [
+        ("stock", "bfloat16", None),
+        ("stock-fp8", "fp8", "stock"),
+    ]
 
 
 def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():

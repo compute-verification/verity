@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from verity_vllm.bench.arms import resolve_arms
@@ -35,6 +35,14 @@ def main(a: Options) -> int:
         raise UsageError("--reps must be positive")
     try:
         preset = get_preset(a.preset)
+        preset = replace(
+            preset,
+            engine_settings={
+                **preset.engine_settings,
+                "cuda_graphs": not a.eager,
+                "enforce_eager": a.eager,
+            },
+        )
         arms = resolve_arms(a.arms, tuple(a.arm_module))
         points = expand_sweep(a.sweep)
     except ValueError as e:
