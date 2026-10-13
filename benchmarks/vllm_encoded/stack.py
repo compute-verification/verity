@@ -648,7 +648,7 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
     from vllm.v1.attention.backends.flash_attn import FlashAttentionImpl
     hooks.wrap(FlashAttentionImpl, "forward", att.forward)
     hooks.wrap(FlashAttentionImpl, "do_kv_cache_update", att.update)
-    hooks.wrap(type(runner), "_model_forward", _pass(st))
+    passes = hook_passes(st, hooks, runner, model)
     import gc
     gc.collect()
     torch.cuda.synchronize()
@@ -673,7 +673,7 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
                           "lm_head": lm.scratch.numel() * 2 if lm.scratch is not None else 0,
                           "attention_partials": att.part.numel() * 4,
                           "receipts": st.tags.numel() * 8 + 64 * (st.dig.shape[0] + st.up.shape[0])},
-        "plaintext_scan": scan, "gates": gates, "selection": selection,
+        "plaintext_scan": scan, "gates": gates, "selection": selection, "passes_hooked": passes,
         "fp8_kernel": type(layers[0][1].quant_method.fp8_linear).__name__,
         "activation_quant": str(layers[0][1].quant_method.activation_quant_key),
         "install_s": time.perf_counter() - t0}}
@@ -691,16 +691,42 @@ def _apply(idx: int, quant):
     return fn
 
 
-def _pass(st: Stack):
-    def make(orig):
-        def fn(self, input_ids=None, positions=None, *a, **kw):
-            ref = input_ids if input_ids is not None else positions
-            m = ref.shape[-1] if ref is not None else 0
-            if 0 < m <= K.MAX_ROWS and not torch.cuda.is_current_stream_capturing():
-                st.begin_pass(m)
-            return orig(self, input_ids, positions, *a, **kw)
+def hook_passes(st: Stack, hooks, runner, model) -> str:
+    """A pass before each forward of at most MAX_ROWS (padded) tokens outside a capture: the V1 runner's
+    `_model_forward`, or the V2 runner's full-graph replay (`run_fullgraph`, its padded size desc.num_tokens) and its
+    eager forward (the model's own)."""
+    def begin(m: int) -> None:
+        if 0 < m <= K.MAX_ROWS and not torch.cuda.is_current_stream_capturing():
+            st.begin_pass(m)
+
+    def tokens(input_ids, positions) -> int:
+        ref = input_ids if input_ids is not None else positions
+        return ref.shape[0] if ref is not None else 0
+
+    if hasattr(type(runner), "_model_forward"):
+        def v1(orig):
+            def fn(self, input_ids=None, positions=None, *a, **kw):
+                begin(tokens(input_ids, positions))
+                return orig(self, input_ids, positions, *a, **kw)
+            return fn
+        hooks.wrap(type(runner), "_model_forward", v1)
+        return "v1 _model_forward"
+    from vllm.v1.worker.gpu.cudagraph_utils import ModelCudaGraphManager
+
+    def replay(orig):
+        def fn(self, desc):
+            begin(desc.num_tokens)
+            return orig(self, desc)
         return fn
-    return make
+
+    def forward(orig):
+        def fn(input_ids=None, positions=None, *a, **kw):
+            begin(tokens(input_ids, positions))
+            return orig(input_ids, positions, *a, **kw)
+        return fn
+    hooks.wrap(ModelCudaGraphManager, "run_fullgraph", replay)
+    hooks.wrap(model, "forward", forward)
+    return "v2 run_fullgraph + forward"
 
 
 def summary(st: Stack) -> dict:
