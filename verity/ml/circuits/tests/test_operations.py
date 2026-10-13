@@ -15,11 +15,12 @@ from verity.ml.circuits import operations as O
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import cast, gemm, mufu as boolean_mufu, scalar  # noqa: F401  (register the listed Definitions)
 
-#: `digest()` of VERSION 1. A change to the list needs a new VERSION, then this pin.
-DIGEST_V1 = ("5ae1023cdd6929e320d1a4b986c44812aee59d6a66bfc68547d89774cce92693"
-             "b5ed77ef984a93a2b52b476e82d000ff0b0992b7360eb88f406f72c1f32b2ce9")
-#: the entries core does not define (PoUW's), which circuit-check's catalog loads and its suite checks
-ELSEWHERE = {"PouwKeccakF1600_v1", "PouwSha512Compress_v1"}
+#: `digest()` of VERSION 2. A change to the list needs a new VERSION, then this pin.
+DIGEST_V2 = ("ed918096fe165d6b29744c4d90da491e7be633eae488bb638be5744b6a876f49"
+             "915a47cc55c49a7786fec709a6ee716b3e7b6bc4c430679607941a83106f59e5")
+#: the entries core does not define (PoUW's, and the vLLM integration's MUFU.LG2), which circuit-check's catalog loads and its
+#: suite checks
+ELSEWHERE = {"PouwKeccakF1600_v1", "PouwSha512Compress_v1", "MufuLg2Mantissa_v2"}
 
 A16 = Array(16, P.BF16)
 
@@ -37,8 +38,8 @@ def _dot(dot):
 
 
 def test_the_digest_is_pinned():
-    assert O.digest() == DIGEST_V1
-    assert O.spec() == {"format": O.TAG, "version": O.VERSION, "operations": sorted(O.OPERATIONS)} and O.VERSION == 1
+    assert O.digest() == DIGEST_V2
+    assert O.spec() == {"format": O.TAG, "version": O.VERSION, "operations": sorted(O.OPERATIONS)} and O.VERSION == 2
 
 
 def test_core_entries_are_registered_composites():
@@ -98,7 +99,7 @@ def test_a_public_port_is_data_unless_its_derivation_is_listed(monkeypatch):
     assert O.DERIVATIONS == frozenset() and O.public_data(ports) == {
         "public input cs": [(0, "verity/rope/neox-bf16/cos-sin/v1")]}
     monkeypatch.setattr(O, "DERIVATIONS", frozenset({"verity/rope/neox-bf16/cos-sin/v1"}))
-    assert O.public_data(ports) == {} and O.digest() != DIGEST_V1
+    assert O.public_data(ports) == {} and O.digest() != DIGEST_V2
     rope = "verity/rope/neox-bf16/cos-sin/v1"
     for bad in ({"derivation": rope}, {"seed": "", "derivation": rope}, {"seed": "rope/positions", "derivation": "request/x"},
                 {"seed": "rope/positions"}, "request/x"):

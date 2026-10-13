@@ -8,7 +8,7 @@ from verity.ml.circuits import constants as K
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits import operations as O
-from verity_vllm.program.registry import b1, dense, dsv4_moe as D, hopper
+from verity_vllm.program.registry import b1, boolean_dsv4_moe as BD, dense, dsv4_moe as D, hopper
 from verity_vllm.program.registry import prims as P
 
 
@@ -27,9 +27,13 @@ def test_the_guard_lists_a_program_table_the_primitive_still_holds():
 
 
 def test_a_program_reading_mufu_lg2_holds_no_data():
-    """`MufuLg2Mantissa_v1`'s table is the library's `lg2`, so the guard lists nothing for it."""
+    """`MufuLg2Mantissa_v1`'s table is the library's `lg2`, so the guard lists nothing for it; on bits, `MufuLg2Mantissa_v2` is an
+    operation, so the hash router's Boolean Programs hold no data either."""
     lg2 = bind(CompositeDefinition("KLg2", 1, (), lambda S: ((("x", P.F32),), P.F32),
                                    lambda B, S, x: B.call(D.MufuLg2Mantissa, x), register=False))
     root = Program(lg2).root
     assert K.program_data(root) == {D.MufuLg2Mantissa.id: [(0, "lg2")]}
     assert O.program_data(root) == {}
+    assert O.is_operation(bind(BD.MufuLg2Mantissa))
+    for fn in (bind(BD.Dsv4HashWeight), bind(BD.MoeRouterHash, E=8, SCALE=2.5)):
+        assert O.program_data(Program(fn).root) == {}, fn.id
