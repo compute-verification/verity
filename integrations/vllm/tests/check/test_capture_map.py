@@ -281,12 +281,14 @@ def test_a_tp_capture_writes_the_live_document_the_check_reads_from_its_own_engi
 
     from verity_vllm.pipeline.tp import lease as TPL
 
+    rpc_timeout = object()      # handed to collective_rpc unchanged
+
     class _LLM:
         def collective_rpc(self, fn, timeout=None):
-            assert fn is MI.rank_inventory and timeout == 60.0
+            assert fn is MI.rank_inventory and timeout is rpc_timeout
             return [{"rank": r, **copy.deepcopy(RANK0)} for r in reversed(range(TP))]
 
-    live = MI.write_live(_LLM(), tmp_path / "inv" / "live.json", timeout=60.0, repo=DOC["repo"], revision=DOC["revision"], tp=TP)
+    live = MI.write_live(_LLM(), tmp_path / "inv" / "live.json", timeout=rpc_timeout, repo=DOC["repo"], revision=DOC["revision"], tp=TP)
     assert json.loads((tmp_path / "inv" / "live.json").read_text()) == live and live["source"] == "live" and live["tp"] == TP
     code, out = _cli_check(tmp_path / "inv" / "live.json", capsys)
     assert code == 0 and out.count(": 0 problems") == TP
