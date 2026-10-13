@@ -148,7 +148,4 @@ theorem holoSelOne_repName {ish : RecVStar.Inner} {tbl : String} {rs : Array Sch
       ((HoloStream.rep i).name tbl) q :=
   holoSelOne_rep hS (find?_repName tbl rs L i) hq
 
-#print axioms find?_repName
-#print axioms holoSelOne_repName
-
 end FlockC3.Compose
