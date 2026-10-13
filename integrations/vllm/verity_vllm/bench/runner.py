@@ -494,7 +494,7 @@ def _worker(conn: Any, arm: Arm, preset: Preset, resident: bool, eager: bool) ->
             try:
                 engine.close()
             except Exception:  # noqa: BLE001
-                pass
+                traceback.print_exc()
         conn.close()
 
 
