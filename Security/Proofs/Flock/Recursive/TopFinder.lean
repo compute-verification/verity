@@ -179,7 +179,7 @@ variable {n : ℕ} {L : Law n} {Reg Cm Reg₂ : Type} {I : Inner}
 /-- The held binding top at a history differs from the explicit registered top strings. -/
 def TopColl (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
     (bcs' : Array ByteArray) (t : List (Cm × I.Coin)) : Prop :=
-  ∃ cs s bcs, Flock.Guarantees.innerCommitsAt (wr t).1 (wr t).2 st reg = .ok cs ∧
+  ∃ cs s bcs, innerCommitsAt (wr t).1 (wr t).2 st reg = .ok cs ∧
     cs.stream? "stacked/rep0" = some s ∧ s.tops[0]? = some bcs ∧ bcs ≠ bcs'
 
 /-- A bad held top yields the collision between its concrete strings and the explicit registered strings. -/
@@ -189,7 +189,7 @@ theorem TopColl.collision {wr : List (Cm × I.Coin) → Lean.Json × String} {st
     (h : TopColl wr st reg bcs' t) : Merkle.Collision Refine.H512 := by
   obtain ⟨cs, s, bcs, hi, hs, ht, hne⟩ := h
   obtain ⟨program, e, hreg', hfields', -⟩ := hstk
-  unfold Flock.Guarantees.innerCommitsAt at hi
+  unfold innerCommitsAt at hi
   obtain ⟨_, -, hi⟩ := FlockC3.RegLevels.TopHold.eok_bind hi
   obtain ⟨program', e', hreg, hfields, -⟩ :=
     FlockC3.RegLevels.TopHold.innerCommits_top hi hs ht
