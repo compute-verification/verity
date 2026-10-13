@@ -28,6 +28,7 @@ def test_the_registry_names_each_harness_schema_once():
         dsv4_compressor_capture_gpu,
         dsv4_flashmla_capture_gpu,
         dsv4_indexer_capture_gpu,
+        dsv4_indices_capture_gpu,
         fa2_softcap_capture_gpu,
         fa2_target_capture_gpu,
         fp8_sm120_capture_gpu,
@@ -47,6 +48,7 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["sigmoid_router_capture"].schema == sigmoid_router_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_flashmla_capture"].schema == dsv4_flashmla_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_compressor_capture"].schema == dsv4_compressor_capture_gpu.SCHEMA
+    assert REGISTRY["dsv4_indices_capture"].schema == dsv4_indices_capture_gpu.SCHEMA
 
 
 def test_harnesses_return_sealed_records(tmp_path):

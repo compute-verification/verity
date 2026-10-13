@@ -83,6 +83,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "and at the row's TP8 statics on a ratio-4 and a ratio-128 layer every state score word save_partial_states writes "
              "equals Dsv4CompressorScore_v1, every column of the ratio-128 compress Dsv4MlaC128Column_v1, and every byte of every "
              "compressed cache row Dsv4MlaCompressC4_v1 or Dsv4MlaCompressC128_v1, bit for bit."),
+    Property("dsv4_indices_capture", "verity-vllm/dsv4-indices-capture/v1",
+             "On the capture's Hopper GPU, the DSV4 row's FlashMLA prefill calls vLLM's Triton combine_topk_swa_indices (Triton "
+             "3.7.1), whose PTX and the ratio-128 prefill row builder's hold the arithmetic the Definitions were read from, and at "
+             "the row's TP8 statics (ratio 4's top-k of 1024, ratio 128's at widths 256, 896 and 8192, the 128-token window) every "
+             "ratio-128 prefill top-k row equals Dsv4ShortContextTopK_v1 and every row of workspace indices and its length "
+             "Dsv4CombineTopkSwa_v1, at served chunks and at the int32 edges of its domain, bit for bit."),
     Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
              "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
              "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),
