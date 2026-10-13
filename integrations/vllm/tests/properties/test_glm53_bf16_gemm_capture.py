@@ -112,15 +112,25 @@ def test_the_stress_rows_decide_the_dotprod_contraction(tmp_path, fma: int) -> N
     assert X.fma_of({**t, "fma_differ": 3, "fma0_mismatch": 1, "fma1_mismatch": 2}) is None
 
 
-def test_the_splitk_probe_distinguishes_every_hypothesis() -> None:
-    for output in ("f32", "bf16"):
-        x, w, differ = X.splitk_probe_words(256, 8, output)
-        models = BC.cublas_splitk_hypotheses(x[None], w, 8, out=output)
-        candidate = models[BC.CUBLAS_SPLITK_HYPOTHESIS]
-        assert all(not np.array_equal(candidate, words) for name, words in models.items()
-                   if name != BC.CUBLAS_SPLITK_HYPOTHESIS), output
-        assert differ[BC.CUBLAS_SPLITK_HYPOTHESIS] == 0 and all(v > 0 for k, v in differ.items()
-                                                                 if k != BC.CUBLAS_SPLITK_HYPOTHESIS)
+@pytest.mark.parametrize(("K", "splits"), [(6144, 3), (6144, 4), (7168, 2), (7168, 3), (7168, 4), (7168, 5)])
+@pytest.mark.parametrize("output", ["f32", "bf16"])
+def test_the_splitk_probe_distinguishes_every_served_hypothesis(K: int, splits: int, output: str) -> None:
+    x, w, differ = X.splitk_probe_words(K, splits, output)
+    models = BC.cublas_splitk_hypotheses(x[None], w, splits, out=output)
+    candidate = models[BC.CUBLAS_SPLITK_HYPOTHESIS]
+    assert set(differ) == set(models)
+    assert all(not np.array_equal(candidate, words) for name, words in models.items()
+               if name != BC.CUBLAS_SPLITK_HYPOTHESIS)
+    assert differ[BC.CUBLAS_SPLITK_HYPOTHESIS] == 0
+    assert all(v > 0 for k, v in differ.items() if k != BC.CUBLAS_SPLITK_HYPOTHESIS)
+    assert ("contiguous-f32-reverse" in models) == (splits > 2)
+    assert ("contiguous-f32-tree" in models) == (splits > 3)
+
+
+def test_the_splitk_probe_unwraps_the_router_output() -> None:
+    tensor = object()
+    assert X._primary_output(tensor) is tensor
+    assert X._primary_output((tensor, {"metadata": True})) is tensor
 
 
 def test_the_profiler_record_pins_grid_split_count_and_reduction() -> None:
