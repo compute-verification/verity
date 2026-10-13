@@ -39,6 +39,7 @@ import Proofs.Flock.Recursive.HoloCoins
 import Proofs.Flock.Recursive.HoloSched
 import Proofs.Flock.Recursive.HoloSchedRead
 import Proofs.Flock.Recursive.HoloSchedCheck
+import Proofs.Flock.Recursive.HoloRepCoins
 import Proofs.Flock.Recursive.HoloMap
 import Proofs.Flock.Recursive.ForkLast
 import Proofs.Flock.Recursive.ForkInnerC
