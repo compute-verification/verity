@@ -251,15 +251,15 @@ theorem accRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     (∃ pt ∈ zo.own, pt.name = c.ports[q].name) ∧
       (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
         FlockVBridge.Family.site (zo.rd.port (.inl (u, q))) = FlockVBridge.Family.site w) ∧
-      ∃ x, (want.map (·.map (· + d)))[x]? = some (some (zo.rd.readAt (.inl (u, q)))) := by
+      ∃ x : ℕ, (want.map (·.map (· + d)))[x]? = some (some (zo.rd.readAt (.inl (u, q)))) := by
   obtain ⟨u₁, q₁, -, D, -, idx, h₁, hmem, hf, -, -, -, -, -, hpos⟩ :=
     zo.hown ω R' o hacc (.inl (u, q)) ⟨hr, hu⟩
   simp only [Sum.inl.injEq, Prod.mk.injEq] at h₁
   obtain ⟨rfl, rfl⟩ := h₁
   have hn : (zo.rd.port (.inl (u, q))).name = nm := by
-    have h1 : (c.ports[q.val]!.name == (zo.rd.port (.inl (u, q))).name) = true := List.find?_some hf
-    rw [getElem!_pos c.ports q.val q.isLt] at h1
-    exact (beq_iff_eq.1 h1).symm.trans hq
+    have h1 := List.find?_some hf
+    rw [beq_iff_eq, getElem!_pos c.ports q.val q.isLt] at h1
+    exact h1.symm.trans hq
   obtain ⟨hsite, hreads⟩ := accPort_of_checks hck hrd hl hw hnd hnm hmem hn
   refine ⟨⟨_, hmem, hn.trans hq.symm⟩, hsite, idx.getD (D.proved.idxOf u.val) 0, ?_⟩
   rw [← hreads]
@@ -325,10 +325,4 @@ end Family
 
 end FlockC3.RegLevels
 
-#print axioms FlockC3.RegLevels.checkAcc_of_checkStmt
-#print axioms FlockC3.RegLevels.site_of_checkAcc
-#print axioms FlockC3.RegLevels.reads_of_checkAccReads
-#print axioms FlockC3.RegLevels.accPort_of_checks
-#print axioms FlockC3.RegLevels.accPort_of_checkStmt
 #print axioms FlockC3.RegLevels.accRead_drawn
-#print axioms FlockC3.RegLevels.accRead_of_checked

@@ -82,6 +82,7 @@ import Proofs.Flock.C3.RegLevels.ROpens
 import Proofs.Flock.C3.RegLevels.ROpensPR
 import Proofs.Flock.C3.RegLevels.LevelsChecked
 import Proofs.Flock.C3.RegLevels.SrcMaps
+import Proofs.Flock.C3.RegLevels.LgCoins
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
