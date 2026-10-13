@@ -12,6 +12,9 @@
   "Fp8RowScale_v2": {
    "and": 1211
   },
+  "ScaledMmFp8BlockCoordinateGivenScale_v2{K=128,G=128}": {
+   "and": 30509
+  },
   "ScaledMmFp8BlockCoordinateGivenScale_v2{K=64,G=32}": {
    "and": 21175
   },
