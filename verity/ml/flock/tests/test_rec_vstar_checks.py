@@ -527,7 +527,8 @@ def test_rec_sparses_circuit_file_is_v_stars(tmp_path):
     flags = ["--circuit", str(tmp_path / "sparse" / "circuit.txt"), "--instances", "2", "--rec-part", str(j),
              "--rec-bindings", str(own)]
     rc, line = _statements(_inner(tmp_path / "s.json", *C3, sparse=(1, 6, 1, 0)), *flags)
-    assert rc == 0 and line["checked"] == ["rec-sparse/n1-e6-s1-t0", 2] and line["own"] == [["h", "rec-c38", [0, 1]]], line
+    assert rc == 0 and line["checked"] == ["rec-sparse/n1-e6-s1-t0", 2], line
+    assert line["own"] == [["h", "rec-c38", [0, 1]], ["claim", "rec-claim", [0, 1]]], line
     assert line["statements"][j:] == [["rec-sparse/n1-e6-s1-t0", 2]], line
     rc, line = _statements(_inner(tmp_path / "s2.json", *C3, sparse=(1, 6, 2, 0)), *flags)
     assert rc == 1 and line["error"] == (
@@ -548,4 +549,29 @@ def test_r_openings_circuit_file_is_v_stars(tmp_path):
                            "--rec-bindings", str(own))
     nr = len([nm for nm, _ in p.S["ports"] if nm.startswith("m")])
     assert rc == 0 and line["checked"] == ["rec-opening/m23-c2-p0", 1], line
-    assert line["own"] == [[f"m{i}", f"rec-opening-c{i}", [0]] for i in range(nr)], line
+    assert line["own"] == ([[f"m{i}", f"rec-opening-c{i}", [0]] for i in range(nr)]
+                           + [[f"claim{k}", "rec-claim", [k]] for k in range(R_SHAPE[1])]), line
+
+
+def test_a_claim_port_reads_its_own_reps_row_of_rec_claim(tmp_path):
+    """`checkOwn` holds which row each claim port reads: RecSparse's `claim` reads `rec-claim` at rep r's row in instance r
+    (`rec_sparse.reads`), and R's opening's `claim<k>` at row k (`rec_residuals.stage_opening`). `checkPubRows` holds the
+    rows a claim port opens to `rec-claim`'s, not which of them it opens, so a reads file swapping or repeating the reps'
+    claims is refused here, by the port compared."""
+    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    other = [["v", "rec-sparse-v", [0, 1]]]
+    for unit, n, honest, bad in (
+            ("rec-sparse/n18-e13-s6-t0", 2, [["claim", "rec-claim", [0, 1]]], [["claim", "rec-claim", [1, 0]]]),
+            ("rec-opening/m23-c2-p0", 1, [["claim0", "rec-claim", [0]], ["claim1", "rec-claim", [1]]],
+             [["claim0", "rec-claim", [1]], ["claim1", "rec-claim", [1]]])):
+        check = ["--unit", unit, "--instances", str(n)]
+        rc, line = _statements(inner, *check)
+        claims = [p for p in line["own"] if p[1] == "rec-claim"]
+        rest = [p for p in line["own"] if p[1] != "rec-claim"]
+        assert rc == 0 and claims == honest, line
+        rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "honest.json", other + line["own"])))
+        assert rc == 0 and line["checked"] == [unit, n], line
+        rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "bad.json", other + rest + bad)))
+        (nm, _, rd), (_, _, want) = bad[0], claims[0]
+        assert rc == 1 and line["error"] == (f"{unit}: the registered reads' port {nm} under rec-claim reading {rd} is not "
+                                             f"the statement's: the statement's is {nm} under rec-claim reading {want}"), line
