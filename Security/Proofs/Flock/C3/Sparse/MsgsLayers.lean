@@ -292,23 +292,3 @@ end src
 end
 
 end FlockC3.Sparse
-
-#print axioms FlockC3.Sparse.wStart
-#print axioms FlockC3.Sparse.degSum_le
-#print axioms FlockC3.Sparse.lt_nw
-#print axioms FlockC3.Sparse.wStart_sc
-#print axioms FlockC3.Sparse.wStart_u
-#print axioms FlockC3.Sparse.wStart_vt
-#print axioms FlockC3.Sparse.getElem?_app
-#print axioms FlockC3.Sparse.length_msgTape
-#print axioms FlockC3.Sparse.getElem?_msgTape
-#print axioms FlockC3.Sparse.phaseMsgs_congr
-#print axioms FlockC3.Sparse.msgWord
-#print axioms FlockC3.Sparse.rdOf
-#print axioms FlockC3.Sparse.SparseCols
-#print axioms FlockC3.Sparse.SparseSel
-#print axioms FlockC3.Sparse.getElem!_rd
-#print axioms FlockC3.Sparse.bitOf_msgWord
-#print axioms FlockC3.Sparse.bitAt_mask
-#print axioms FlockC3.Sparse.SparseSessionsAt
-#print axioms FlockC3.Sparse.sparseMsgsOfLayers_of_sessions
