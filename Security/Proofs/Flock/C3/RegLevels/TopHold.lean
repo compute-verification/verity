@@ -509,11 +509,12 @@ theorem candidate3_top {tr : Json} {rounds : Array Json} {t : String} {names : L
             · cases hD
             rename_i hmade
             have hm' : (structural && (s1 == s2)) = made := Except.ok.inj hm
+            have hmade' : made = true := by simpa using hmade
             have hboth : structural && (s1 == s2) = true := by
-              rw [hm']
-              simpa using hmade
-            have hstruct : structural = true := (Bool.and_eq_true.mp hboth).1
-            have hs : s1 = s2 := beq_iff_eq.mp (Bool.and_eq_true.mp hboth).2
+              exact hm'.trans hmade'
+            simp only [Bool.and_eq_true] at hboth
+            have hstruct : structural = true := hboth.1
+            have hs : s1 = s2 := beq_iff_eq.mp hboth.2
             rw [hstruct] at hfields
             refine ⟨bcs, (Except.ok.inj hD).symm,
               fun _ => ⟨program, e, rfl, hfields, e', s1, h1, h2, ?_⟩⟩
