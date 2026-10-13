@@ -349,10 +349,10 @@ def test_target_only_taps_are_named_on_the_target_only():
     assert {on[n][0]["id"] for n in set(on) - set(elsewhere)} == {"attn.out.decode", "attn.o_einsum"}
 
 
-def test_the_route_site_decides_three_routes_and_the_committer_waits_for_its_binders():
+def test_the_route_site_decides_three_routes_and_every_binder_is_built():
     """`route_site` names the calls that decide a step's rows, mHC and indexer routes, each decision's routes are the map's, and
-    a source builds every binder, so `route_source.attach` uses the map (`tests/acquire/test_dsv4_route_source.py`,
-    `test_dsv4_mhc_source.py` and `test_dsv4_attention_source.py` run the sources)."""
+    a source builds every binder, so `route_source.attach` uses the map rather than refusing the run
+    (`tests/acquire/test_dsv4_route_source.py`, `test_dsv4_mhc_source.py` and `test_dsv4_attention_source.py` run the sources)."""
     sites = CM.route_sites(CMAP)
     decided: dict[str, set[str]] = {}
     for s in sites:

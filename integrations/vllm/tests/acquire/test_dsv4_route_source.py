@@ -6,6 +6,7 @@ prefill, a short prefill and a mixed step.  Each step's routes are the union of 
 fails without it; a layer that recorded no attention rows, or indexers that disagree, fail the step."""
 from __future__ import annotations
 
+import re
 import types
 from typing import Any
 
@@ -131,17 +132,16 @@ def test_a_layer_without_attention_rows_or_split_indexers_fail(run, capsys):
     run.src.routes.pop(9)
 
 
-def test_a_tp_rank_attaches_the_route_source_once_no_binder_is_unbuilt(monkeypatch):
-    """Every binder of the map is built, so each rank attaches the route source and the sources of its binders; while the map
-    named a binder no source builds, a rank would leave the map alone: nothing would commit those taps, and the route source would
-    release the modules the map knows from the module rule."""
-    class Com:
-        def __init__(self) -> None:
-            self.sources: list[Any] = []
+class Com:
+    def __init__(self) -> None:
+        self.sources: list[Any] = []
 
-        def attach_source(self, s: Any) -> None:
-            self.sources.append(s)
+    def attach_source(self, s: Any) -> None:
+        self.sources.append(s)
 
+
+def test_a_tp_rank_attaches_the_route_source_once_no_binder_is_unbuilt():
+    """Every binder of the map is built, so each rank attaches the route source and the sources of its binders."""
     attach = TAPS.for_ranks(TAPS.TapSources())
     assert RS.unbuilt(CMAP) == set()
     coms = {r: Com() for r in (0, 1)}
@@ -149,5 +149,21 @@ def test_a_tp_rank_attaches_the_route_source_once_no_binder_is_unbuilt(monkeypat
     assert all(m["tap_sources"]["route_source"]["stats"]["layers"] == L for m in made), made
     assert all([s.short_name for s in c.sources] == ["routes", "mhc", "dsv4_attention"] for c in coms.values())
     assert TAPS.require_on_every_rank(made, ("a",), {}, TAPS.TapSources(), explicit_classes=False) == ("a",)
-    monkeypatch.setattr(RS, "BINDERS", tuple(b for b in RS.BINDERS if b != "dsv4_attention"))
-    assert RS.unbuilt(CMAP) == {"dsv4_attention"} and RS.attach(Com(), dsv4_model(), rank=0) is None
+
+
+@pytest.mark.parametrize("unbuilt", [("dsv4_attention",), ("mhc", "dsv4_attention")])
+def test_a_map_naming_a_binder_no_source_builds_refuses_the_run(monkeypatch, unbuilt):
+    """A map that describes the model and names a binder no source builds refuses the run by those binders' names, on every rank,
+    and the TP driver fails closed: nothing would commit the binder's taps while the route source released the modules the map
+    knows from the module rule, so leaving the map alone would commit a step the map does not describe."""
+    monkeypatch.setattr(RS, "BINDERS", tuple(b for b in RS.BINDERS if b not in unbuilt))
+    assert RS.unbuilt(CMAP) == set(unbuilt)
+    com = Com()
+    with pytest.raises(RS.UnbuiltBinders, match=re.escape(str(sorted(unbuilt)))):
+        RS.attach(com, dsv4_model(), rank=0)
+    assert com.sources == []
+    attach = TAPS.for_ranks(TAPS.TapSources())
+    made = [{"rank": r, "tap_sources": attach(Com(), dsv4_model(), None, r)} for r in (0, 1)]
+    assert all("UnbuiltBinders" in m["tap_sources"]["route_source"]["error"] for m in made), made
+    with pytest.raises(SystemExit, match="route source did not attach on ranks"):
+        TAPS.require_on_every_rank(made, ("a",), {}, TAPS.TapSources(), explicit_classes=False)

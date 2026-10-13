@@ -3783,7 +3783,7 @@
   {
    "item": 5,
    "work": "route source: record each step's hc route (token count), FlashMLA rows (num_decode_tokens) and indexer route (the indexer metadata's max_seq_len // CSA_R <= TOPK), then add route_site so the committer reads this map",
-   "done": "route source: route_site.sites names the four calls that decide a step's routes (FlashMLA's _forward_decode and _forward_prefill for its rows, each decoder layer's forward at M <= 16 for its hc route, each CSA indexer's forward returning None for its indexer route); acquire.sources.route_source records them per decision and layer and holds the step's names to the union, and route_source.attach leaves the map alone while it names a binder no source builds (route_source.unbuilt)"
+   "done": "route source: route_site.sites names the four calls that decide a step's routes (FlashMLA's _forward_decode and _forward_prefill for its rows, each decoder layer's forward at M <= 16 for its hc route, each CSA indexer's forward returning None for its indexer route); acquire.sources.route_source records them per decision and layer and holds the step's names to the union, and route_source.attach refuses the run while the map names a binder no source builds (route_source.unbuilt, UnbuiltBinders, which names them)"
   },
   {
    "item": 6,

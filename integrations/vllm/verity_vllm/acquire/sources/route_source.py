@@ -70,6 +70,10 @@ def find_map(model: Any, world: int | None = None) -> dict[str, Any] | None:
     return next((m for m in maps if m["target"]["tensor_parallel_size"] == world), None)
 
 
+class UnbuiltBinders(ValueError):
+    """A capture map that describes the model being committed names a binder no source builds (`unbuilt`)."""
+
+
 def unbuilt(cmap: dict[str, Any]) -> set[str]:
     """The binders `cmap` names that no source builds (neither `BINDERS` nor `OWN_RULES`)."""
     return set(cmap.get("binders", {})) - {*BINDERS, *OWN_RULES}
@@ -269,10 +273,17 @@ class RouteSource:
 def attach(com: Any, model: Any, rank: int = 0) -> RouteSource | None:
     """Attach the source to `com` when a capture map with a `route_site` describes `model`, and the attention sources
     (`attention_source`, `dsv4_attention_source`) and the mHC source (`mhc_source`) beside it when the map binds taps through them;
-    None when no map describes the model, and while the map names a binder no source builds (`unbuilt`), whose taps nothing would
-    commit while the source releases the modules the map knows from the module rule."""
+    None when no map describes the model.  A map that describes it and names a binder no source builds (`unbuilt`) refuses the run
+    (`UnbuiltBinders`, which names them): nothing would commit that binder's taps while the source releases the modules the map
+    knows from the module rule."""
     cmap = find_map(model)
-    if cmap is None or not cmap.get("route_site") or unbuilt(cmap):
+    if cmap is None:
+        return None
+    missing = unbuilt(cmap)
+    if missing:
+        raise UnbuiltBinders(f"capture map {cmap.get('id')} describes {type(model).__qualname__} and names binders no source builds: "
+                             f"{sorted(missing)}")
+    if not cmap.get("route_site"):
         return None
     src = RouteSource(com, model, cmap, rank=rank)
     attn = attention_source.AttentionSource(com, src) if attention_source.binds(cmap) else None
