@@ -29,6 +29,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "admission-planner": ("verity_vllm.pipeline.admission_planner", "resource plan of a Commit launch"),
     "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
     "bench": ("verity_vllm.bench.cli", "shared vLLM overhead benchmark across stock and protocol arms"),
+    "bench-judge": ("verity_vllm.bench.result", "compare benchmark results whose identities agree"),
     "boolean-purity": ("verity_vllm.program.boolean", "the Definitions a Program reaches that are not Boolean (or, --dry-run, would)"),
     "boolean-replay": ("verity_vllm.pipeline.boolean_replay", "a deferred Commit's replay with every pick evaluated on bits"),
     "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),

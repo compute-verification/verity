@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import argparse
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
+
+from verity_vllm.config import option
 
 SCHEMA = "verity-vllm/overhead-benchmark/v1"
 
@@ -74,15 +76,18 @@ def judge(a: Mapping[str, Any], b: Mapping[str, Any], allow: tuple[str, ...] = (
     return {"accepted": True, "allowed": list(allow)}
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="compare two vLLM benchmark results only when their identities agree")
-    ap.add_argument("left")
-    ap.add_argument("right")
-    ap.add_argument("--allow", action="append", default=[], help="identity field or path allowed to differ")
-    a = ap.parse_args(argv)
-    print(json.dumps(judge(json.loads(Path(a.left).read_text()), json.loads(Path(a.right).read_text()), tuple(a.allow))))
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    """Compare two benchmark results only when their identities agree."""
+
+    left: Path = option("left", type=Path)
+    right: Path = option("right", type=Path)
+    allow: list[str] = option("--allow", action="append", default=[],
+                              help="identity field or path allowed to differ; repeatable")
+
+
+def main(a: Options) -> int:
+    left = json.loads(a.left.read_text())
+    right = json.loads(a.right.read_text())
+    print(json.dumps(judge(left, right, tuple(a.allow))))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
