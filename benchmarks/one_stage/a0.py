@@ -146,14 +146,17 @@ def stand_in(set_dir: str) -> dict:
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 
 
-def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None) -> tuple[dict | None, dict | None]:
+def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
+            zk: bool = False) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the draw, coins, the verdict) and `prove`.
-    `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one."""
+    `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
+    sides run the masked protocol (`--zk`), the only one under which the Lean verifier accepts a subset draw."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
+    zf = ["--zk"] if zk else []
     serve_log = open(out / "serve.log", "w")
-    serve = subprocess.Popen([bin_, "serve", "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
+    serve = subprocess.Popen([bin_, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
                               *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1"],
@@ -163,7 +166,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
             if "SERVING" in (out / "serve.log").read_text() or serve.poll() is not None:
                 break
             time.sleep(0.5)
-        p = run([bin_, "prove", "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
+        p = run([bin_, "prove", *zf, "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
                  "--circuit", str(d / "circuit.txt"), "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log")
         live = next((json.loads(line[5:]) for line in p.stdout.splitlines() if line.startswith("LIVE\t")), None)
         if live is None:
@@ -184,10 +187,10 @@ def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[d
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK")]
 
 
-def lean_verify(lean: str, st: dict, n: int, out: Path) -> dict:
+def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-    `registered.reads_file`) when the statement reads registered values."""
+    `registered.reads_file`) when the statement reads registered values; `zk`, a `--zk` session's."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -204,7 +207,8 @@ def lean_verify(lean: str, st: dict, n: int, out: Path) -> dict:
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
-             "--public", keys.get(f"pub-{n}.bin", ""), *bound, "--session", str(sessions[-1].parent)], out / "lean-verify.log")
+             "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), "--session", str(sessions[-1].parent)],
+            out / "lean-verify.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
