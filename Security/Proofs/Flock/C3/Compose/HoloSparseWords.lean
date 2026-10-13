@@ -26,7 +26,7 @@ def CoinWordsEncoded (selC : ℕ → String → ℕ → Prop)
   ∀ i (hi : i < r) s q (cs : List ((k : Fin r) → CT k)) (hc : i < cs.length), selC i s q →
     ∃ (g : ℕ) (hg : g ≤ i + 1), (coin (cs.take (i + 1)) s q).size = g ∧ ∀ w (hw : w < g),
       coinArr FlockSoundness.Refine.fOf #[(coin (cs.take (i + 1)) s q)[w]!] =
-        ⟨CT ⟨i + 1 - g + w, by omega⟩, cs[i + 1 - g + w]'(by omega) ⟨i + 1 - g + w, by omega⟩⟩
+        ⟨CT ⟨i + 1 - g + w, by omega⟩, (cs[i + 1 - g + w]'(by omega)) ⟨i + 1 - g + w, by omega⟩⟩
 
 end FlockC3.Reps
 
