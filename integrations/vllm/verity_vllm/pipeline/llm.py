@@ -31,13 +31,17 @@ SUPPORTED: dict[str, Supported] = {
     "gpu_memory_utilization": Supported((float, int), None, "fraction of device memory the engine may take (default: the "
                                                             "engine profile's)"),
     "enforce_eager": Supported(bool, True, "True runs eagerly; False compiles with torch.compile and CUDA graphs"),
+    "dtype": Supported((str, type(None)), None, "served dtype override (default: the checkpoint profile's)"),
+    "quantization": Supported((str, type(None)), None, "vLLM quantization override, such as fp8 (default: the checkpoint's)"),
+    "compilation_config": Supported((dict, type(None)), None, "vLLM compilation and CUDA-graph settings"),
     "seed": Supported(int, 0, "the engine seed"),
     "protocols": Supported((str, dict, list, tuple), None, "protocol options installed on the engine: 'pouw:<scheme>,pous:<scheme>' "
                                                              "or {name: scheme} (verity_vllm.protocol_options); default none"),
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
 #: Options passed to vLLM only when the caller sets them; unset, the engine profile's value stands.
-ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "seed")
+ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "dtype", "quantization",
+               "compilation_config", "seed")
 #: The keyword arguments ``generate`` accepts beside the prompts and sampling parameters.
 GENERATE_SUPPORTED = ("use_tqdm",)
 
@@ -117,6 +121,9 @@ class LLM:
     * ``gpu_memory_utilization`` (float): fraction of device memory the engine may take; default the engine profile's.
     * ``enforce_eager`` (bool, default True): True runs eagerly; False compiles with torch.compile and CUDA graphs, in a
       fresh Inductor cache for this process.
+    * ``dtype`` (str): served dtype override; default the checkpoint profile's.
+    * ``quantization`` (str): vLLM quantization override, such as ``"fp8"``; default the checkpoint's.
+    * ``compilation_config`` (dict): vLLM compilation and CUDA-graph settings.
     * ``seed`` (int, default 0): the engine seed.
     * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
       (:mod:`verity_vllm.protocol_options`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
