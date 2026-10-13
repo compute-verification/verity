@@ -130,5 +130,7 @@ def part_floats(lib: PagedLib, batch: int, splits: int) -> int:
 
 
 def splits_for(batch: int, sms: int, kv_heads: int, cap: int = 32) -> int:
-    """A decode step's split count: about two CTAs an SM over batch × splits × KV heads."""
-    return max(1, min(cap, -(-2 * sms // max(1, batch * kv_heads))))
+    """A decode step's split count: the largest power of two that keeps batch × splits × KV heads to about eleven CTAs
+    an SM (paged_splits.py at p1024, k = 3, 188 SMs, contexts 1280 and 1536: the fastest count, or within 1.5% of it,
+    at batches 32, 64 and 128, where two CTAs an SM left 15–17% on the table)."""
+    return min(cap, 1 << max(0, (11 * sms // max(1, batch * kv_heads)).bit_length() - 1))

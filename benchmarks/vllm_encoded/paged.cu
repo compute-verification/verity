@@ -194,12 +194,13 @@ __global__ void __launch_bounds__(32 * CW) pg_combine(const float *__restrict__ 
 
 // A warp's words, one a lane (dst nullptr: none), stored through shared memory a whole word to Q = NL/4 lanes, so a store
 // instruction writes whole 32-byte sectors (a lane's own 16-byte stores at a word's stride would each write half of one).
-// Every lane of the warp calls it; blocks are 128 threads.
+// Every lane of the warp calls it; blocks are NW warps.
 constexpr int SQ = NL / 4;
 static_assert(NL % 4 == 0 && 32 % SQ == 0, "a word is whole 16-byte chunks, a whole number of them to a warp");
 
+template <int NW = 4>
 __device__ __forceinline__ void store_warp(u32 *dst, const u32 (&x)[NL]) {
-  __shared__ uint4 sw[4][32][SQ + 1];
+  __shared__ uint4 sw[NW][32][SQ + 1];
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
 #pragma unroll
   for (int q = 0; q < SQ; ++q) sw[w][lane][q] = make_uint4(x[4 * q], x[4 * q + 1], x[4 * q + 2], x[4 * q + 3]);
@@ -240,11 +241,13 @@ __global__ void __launch_bounds__(128) pg_append_kernel(const uint16_t *__restri
 }
 
 // pg_append_kernel over layers: layer l's row i of rows at u = (l rows + i) KV_HEADS HW + g HW + j; its table entry
-// (8 words): key, value, their row strides, slots, rows used, cache, first index.
+// (8 words): key, value, their row strides, slots, rows used, cache, first index. A block is one warp: the encode is a
+// long chain a lane at ~8 warps an SM (its registers), so a decode step's few words spread evenly over the SMs.
+constexpr int AW = 32;
 template <bool ENC>
-__global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restrict__ tab, int layers, int rows, int bs,
-                                                              int sb, int sh, int ss, int k) {
-  const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
+__global__ void __launch_bounds__(AW) pg_append_multi_kernel(const u64 *__restrict__ tab, int layers, int rows, int bs,
+                                                             int sb, int sh, int ss, int k) {
+  const u64 u = (u64)blockIdx.x * AW + threadIdx.x;
   const u64 per = (u64)rows * KV_HEADS * HW;
   u32 x[NL] = {};
   u32 *dst = nullptr;
@@ -263,7 +266,7 @@ __global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restr
       dst = reinterpret_cast<u32 *>(e[6]) + wl * NL;
     }
   }
-  store_warp(dst, x);
+  store_warp<1>(dst, x);
 }
 
 // nb whole blocks (blocks[b], bw words each, contiguous) of a layer's cache into out, block b at word b bw: decoded
@@ -361,8 +364,9 @@ int pg_append_multi(const unsigned long long *tab, int layers, int rows, int bs,
   if (layers < 0 || rows < 0 || bs < 1 || (encoded && (k < 1 || k > kv::KMAX)) || !kv::MMA_OK) return -1;
   if (!layers || !rows) return 0;
   const unsigned long long words = (unsigned long long)layers * rows * kv::KV_HEADS * kv::HW;
-  (encoded ? kv::pg_append_multi_kernel<true> : kv::pg_append_multi_kernel<false>)<<<(unsigned)((words + 127) / 128),
-                                                                                       128, 0, s>>>(
+  (encoded ? kv::pg_append_multi_kernel<true> : kv::pg_append_multi_kernel<false>)<<<(unsigned)((words + kv::AW - 1) /
+                                                                                                  kv::AW),
+                                                                                       kv::AW, 0, s>>>(
       reinterpret_cast<const kv::u64 *>(tab), layers, rows, bs, sb, sh, ss, k);
   return launched();
 }

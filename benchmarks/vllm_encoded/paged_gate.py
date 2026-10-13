@@ -40,7 +40,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--ks", default="2,3")
     ap.add_argument("--batches", default="1,5,10,32")
-    ap.add_argument("--splits", default="1,3,8,32")
+    ap.add_argument("--splits", default="1,2,3,4,8,16,32")
     a = ap.parse_args()
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
