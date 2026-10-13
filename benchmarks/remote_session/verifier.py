@@ -8,12 +8,14 @@ One connection serves one registration and then `--sessions` sessions over it, e
    secret (`audit.register`) and sends the registration; the prover encodes its store and answers `ready` with its
    calibration (pass times, the gap, its measured read rate);
 2. the round trip, measured by pings;
-3. each session: `Params` with the allowance A = `timing.deadline` at the calibration's slowest pass, the measured
-   round trip's worst and `--jitter-ms`; the coin commitment sent first, then σ_0, a boundary message every window,
-   each root fed to `Session.receive` stamped with the time its last byte was read, each window closed (`Session.close`)
-   as soon as its roots are final and its draws sent; the prover's openings checked by `Session.verify` on a thread
-   of their own, so a window's checks run while the next window's passes arrive; once every window is accepted the
-   record (`Session.record`) and its γ terms (`audit.ledger`).
+3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
+   and gaps (`--quantile`), the measured round trip's worst and `--jitter-ms`; the coin commitment sent first, then
+   σ_0, a boundary message every window, each root fed to `Session.receive` stamped with the time its last byte was
+   read, each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
+   checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
+   verdict as `Session.verify`'s) or by `Session.verify` on a thread of the verifier's, so a window's checks run while
+   the next window's passes arrive; once every window is accepted the record (`Session.record`) and its γ terms
+   (`audit.ledger`).
 
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
@@ -38,10 +40,15 @@ sys.path.insert(0, str(HERE.parents[1]))
 from verity.core.protocols.remote_bandwidth import audit, coins, timing  # noqa: E402
 
 import wire  # noqa: E402
+from checks import Checks  # noqa: E402
 
 SPEC_BYTES_PER_S = 1597e9
 """The RTX PRO 6000 Server Edition's datasheet memory bandwidth (`benchmarks/census/hardware.json`)."""
 S_CHIP_BYTES = timing.CHIP_BYTES
+
+
+CHECK_BATCH = 1024
+"""Openings a worker checks at once (`checks.Checks`)."""
 
 
 class RealClock:
@@ -69,8 +76,9 @@ class RealClock:
 
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
-                 jitter_ns: int, clock=None, log=print) -> None:
+                 jitter_ns: int, clock=None, log=print, checks=None) -> None:
         self.conn, self.source, self.W, self.T = conn, source, windows, window_ns
+        self.checks = checks
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
         self.clock = clock or RealClock()
         self.log = log
@@ -134,9 +142,13 @@ class Verifier:
         rtts.sort()
         return {"n": n, "min_ns": rtts[0], "median_ns": rtts[n // 2], "max_ns": rtts[-1]}
 
-    def allowance(self, rtt: dict) -> int:
+    def allowance(self, rtt: dict, quantile: str = "p999") -> int:
+        """`timing.deadline` at the calibration's pass and gap at `quantile` (p50, p99, p999 or max) and the round
+        trip's worst, plus the jitter allowed each way."""
         cal = self.calibration
-        return timing.deadline(int(cal["pass_ns_max"]), gap_ns=int(cal["gap_ns_max"]), down_ns=rtt["max_ns"] // 2 + 1,
+        pass_ns = cal["pass_ns"][quantile] if "pass_ns" in cal else cal["pass_ns_max"]
+        gap_ns = cal["gap_ns"][quantile] if "gap_ns" in cal else cal["gap_ns_max"]
+        return timing.deadline(int(pass_ns), gap_ns=int(gap_ns), down_ns=rtt["max_ns"] // 2 + 1,
                                up_ns=rtt["max_ns"] - rtt["max_ns"] // 2 + 1, jitter_ns=self.jitter_ns)
 
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None) -> dict:
@@ -154,12 +166,12 @@ class Verifier:
                 self.log(f"verifier: skipped a {item[0]['type']} before the session's first coin")
         self.conn.send({"type": "coin", "coin": wire.coin_json(session.start())})
         self.clock.busy()
-        start = session.windows[0].released_ns
         sent = drawn = 0
         arrivals: list[list[int]] = [[] for _ in range(W)]
         verdicts: dict[int, dict] = {}
         draws_at: dict[int, int] = {}
         parts: dict[int, list] = {}
+        checking: dict[int, dict] = {}
         failure = None
         cpu0 = time.process_time_ns()
 
@@ -184,7 +196,7 @@ class Verifier:
 
         while failure is None and len(verdicts) < W:
             if sent < W:
-                until = start + (sent + 1) * self.T
+                until = session.windows[sent].released_ns + self.T
             elif drawn < W:
                 until = session.deadline(W - 1) + 1
             else:
@@ -218,6 +230,39 @@ class Verifier:
                 while drawn < t and failure is None:
                     close(drawn)
                     drawn += 1
+            elif kind == "openings" and self.checks is not None:
+                c = checking.get(t := head["t"])
+                if c is None:
+                    if not 0 <= t < len(session.windows) or session.windows[t].draws is None:
+                        failure = {"t": t, "failure": "malformed", "at": None}
+                        break
+                    c = checking[t] = {"snap": self.checks.snapshot(session, t), "at": 0, "bodies": [], "n": 0,
+                                       "parts": 0, "futures": []}
+                c["bodies"].append(body)
+                c["n"] += max(0, int(head.get("n", 0)))
+                c["parts"] += 1
+                if c["n"] >= CHECK_BATCH or c["parts"] == head["parts"]:
+                    draws = list(session.windows[t].draws[c["at"]:c["at"] + c["n"]])
+                    f = self.checks.submit(c["snap"], t, draws, c["bodies"])
+                    f.add_done_callback(lambda _, t=t: self.inbox.put(({"type": "checked", "t": t}, b"",
+                                                                       self.clock.now())))
+                    c["futures"].append(f)
+                    c["at"], c["bodies"], c["n"] = c["at"] + c["n"], [], 0
+                c["whole"] = c["parts"] == head["parts"]
+            elif kind == "checked":
+                c = checking[head["t"]]
+                if c.get("whole") and all(f.done() for f in c["futures"]) and head["t"] not in verdicts:
+                    t, results = head["t"], [f.result() for f in c["futures"]]
+                    cpu = sum(r["cpu_ns"] for r in results)
+                    count = sum(r["n"] for r in results)
+                    try:
+                        v = self.checks.settle(session, t, results, count)
+                    except audit.SessionError as e:
+                        v = audit.Verdict(t, False, f"refused: {e}")
+                    verdicts[t] = {"t": t, "accepted": v.accepted, "failure": v.failure, "at": v.at, "cpu_ns": cpu,
+                                   "openings": count, "checked_ns": stamp - draws_at[t]}
+                    if not v.accepted:
+                        failure = {"t": t, "failure": v.failure, "at": v.at}
             elif kind == "openings":
                 t, got = head["t"], wire.decode_openings(body)
                 have = parts.setdefault(t, [])
@@ -248,6 +293,8 @@ class Verifier:
                "samples": self.samples, "delta": self.delta, "window_ns": self.T, "windows": W,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
+               "verify_latency_ns": {t: v.get("checked_ns") for t, v in sorted(verdicts.items())},
+               "check_workers": self.checks.workers if self.checks else 0,
                "session_process_cpu_ns": time.process_time_ns() - cpu0,
                "draws": {t: [list(d) for d in w.draws] for t, w in enumerate(session.windows) if w.draws},
                "windows_seen": [{"t": t, "released_ns": w.released_ns, "boundary_ns": w.boundary_ns,
@@ -297,22 +344,27 @@ def main() -> int:
     ap.add_argument("--jitter-ms", type=float, default=2.0)
     ap.add_argument("--sessions", type=int, default=1)
     ap.add_argument("--pings", type=int, default=200)
+    ap.add_argument("--check-workers", type=int, default=len(os.sched_getaffinity(0)) - 1,
+                    help="processes checking openings (0: one thread of the verifier's own)")
+    ap.add_argument("--quantile", default="p999", choices=("p50", "p99", "p999", "max"),
+                    help="the calibration's pass and gap the allowance takes")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     sys.setswitchinterval(2e-4)
+    checks = Checks(a.check_workers) if a.check_workers > 0 else None
     server = wire.listen(a.host, a.port)
     print(f"verifier: listening on {a.host}:{a.port}", flush=True)
     sock, peer = server.accept()
     conn = wire.Conn(sock)
     v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
-                 log=lambda m: print(m, flush=True))
+                 log=lambda m: print(m, flush=True), checks=checks)
     c0 = time.process_time_ns()
     reg, cal = v.register()
     print(f"verifier: registered {reg.blocks} blocks, digest {reg.digest.hex()[:16]}, calibration {json.dumps(cal)}",
           flush=True)
     rtt = v.ping(a.pings)
-    allowance = v.allowance(rtt)
+    allowance = v.allowance(rtt, a.quantile)
     print(f"verifier: rtt {json.dumps(rtt)}, allowance A = {allowance / 1e6:.3f} ms", flush=True)
     results, not_before = [], None
     for k in range(a.sessions):

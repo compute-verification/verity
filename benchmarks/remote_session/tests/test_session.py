@@ -79,7 +79,7 @@ class TickingBackend(prover.CpuBackend):
         return out
 
 
-def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1):
+def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None):
     clock = PassClock()
     a, b = socket.socketpair()
     vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
@@ -96,7 +96,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th = threading.Thread(target=prove, daemon=True)
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
-                          delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None)
+                          delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
+                          checks=checks)
     v.register()
     allowance = v.allowance(v.ping(4))
     out, not_before = [], None
@@ -132,6 +133,25 @@ def test_a_second_session_waits_out_the_first_and_is_accepted():
     assert [r["accepted"] for r in rs] == [True, True]
     assert rs[1]["windows_seen"][0]["released_ns"] >= rs[0]["end_ns"]
     assert rs[0]["coins"] != rs[1]["coins"]
+
+
+@pytest.fixture(scope="module")
+def pool():
+    from checks import Checks
+
+    c = Checks(2)
+    yield c
+    c.close()
+
+
+def test_worker_checks_give_the_verdicts_of_session_verify(monkeypatch, pool):
+    monkeypatch.setattr(prover, "OPENINGS_PART", 2)
+    monkeypatch.setattr(verifier, "CHECK_BATCH", 3)
+    (r,), (pr,) = run("honest", checks=pool)
+    assert r["accepted"] and pr["accepted"] and r["check_workers"] == 2
+    assert all(c > 0 for c in r["verify_cpu_ns"].values())
+    (r,), (pr,) = run("skip:0.5", samples=8, checks=pool)
+    assert not r["accepted"] and r["failure"]["failure"] == "receipt" and r["failure"]["at"][1] in pr["dropped"]
 
 
 def test_openings_round_trip_on_the_wire_and_a_short_body_is_none():
