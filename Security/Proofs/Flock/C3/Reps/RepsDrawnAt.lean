@@ -103,11 +103,3 @@ theorem drawnOf_holoMap {S : ℕ} {Vs : Fin S → VStmt} {st : Flock.Stmt} {hp :
   split <;> omega
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.sum_min_one
-#print axioms FlockC3.Reps.filter_range_getElem?
-#print axioms FlockC3.Reps.heldBefore_rep
-#print axioms FlockC3.Reps.heldBefore_rep_size
-#print axioms FlockC3.Reps.heldBefore_of_coinRound
-#print axioms FlockC3.Reps.holoSelOne_coinRound
-#print axioms FlockC3.Reps.drawnOf_holoMap

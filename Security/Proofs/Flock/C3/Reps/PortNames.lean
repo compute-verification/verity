@@ -265,6 +265,3 @@ theorem wSel_of_rounds {S : ℕ} {Vs : Fin S → VStmt} {sh : Flock.Shape} {sess
   exact selPort_of_part hck hr hloc.1 hloc.2.1 hwi (hkr m x hxm) ρ hb q hkey
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Compose.rsKeys
-#print axioms FlockC3.Reps.wSel_of_rounds

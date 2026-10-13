@@ -147,12 +147,3 @@ theorem coinWordsEncoded_holoMap {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
     (coinAt_congr cs (by omega) (by omega) (by omega) (by omega) (by omega))
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.size_one_of_scalar
-#print axioms FlockC3.Compose.coinArr_word
-#print axioms FlockC3.Compose.toList_of_size_one
-#print axioms FlockC3.Compose.flatMap_range_single
-#print axioms FlockC3.Compose.getElem!_toArray_map_range
-#print axioms FlockC3.Compose.coinAt_congr
-#print axioms FlockC3.Compose.selC_of_holoSelWords
-#print axioms FlockC3.Compose.coinWordsEncoded_holoMap
