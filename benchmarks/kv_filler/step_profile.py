@@ -57,10 +57,10 @@ def split(kernels: list[dict], steps: int, weight_bytes: int, kv_bytes: float, R
             gaps.append(a - end)
         end = max(end, b)
     inside = [g for g in gaps if g < 1000]  # µs; a gap of a millisecond or more is the host between two steps
-    by = {}
+    by, n_by = {}, {}
     for e in kernels:
-        by.setdefault(e["name"], 0.0)
-        by[e["name"]] += e["dur"] / 1e3 / steps
+        by[e["name"]] = by.get(e["name"], 0.0) + e["dur"] / 1e3 / steps
+        n_by[e["name"]] = n_by.get(e["name"], 0) + 1
     return {"ms": ms, "kernel_ms": kern, "span_ms": span, "kernels_a_step": len(kernels) / steps,
             "of_R": (weight_bytes + kv_bytes) / (rate * kern), "of_R_span": (weight_bytes + kv_bytes) / (rate * span),
             "gemm_of_R": weight_bytes / (rate * ms["gemm"]) if ms["gemm"] else None,
@@ -70,7 +70,7 @@ def split(kernels: list[dict], steps: int, weight_bytes: int, kv_bytes: float, R
             "idle_between_steps_ms": sum(g for g in gaps if g >= 1000) / 1e3 / steps,
             "native_of_R": (weight_bytes + kv_bytes) / (rate * native_ms), "native_all_ms": native_all_ms,
             "native_all_of_R": (weight_bytes + kv_bytes) / (rate * native_all_ms),
-            "kernels": [{"name": n[:160], "class": classify(n), "ms": round(t, 4)}
+            "kernels": [{"name": n[:160], "class": classify(n), "ms": round(t, 4), "a_step": n_by[n] / steps}
                         for n, t in sorted(by.items(), key=lambda kv: -kv[1])]}
 
 
