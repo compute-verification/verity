@@ -167,7 +167,7 @@ fast by reusing a part's verdict whenever its inputs haven't changed. Each verdi
 declared inputs (the read guard enforces them), the base image and the code that decides that verdict (a suite's runner and
 harness, not every line of the check tool; Daniel, 9 Oct), so that a docs-only change reruns nothing, a deleted test reruns
 its suite, and a layout move or a change to the runner reruns everything. The merge
-queue is to run the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
+queue runs the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
 something it doesn't declare, and it is fixed in the check, not by reverting anyone's change.
 
 Check time is to come down by a lot, and anyone may do whatever it takes (Daniel, 11 Oct): a change to how `check` runs
@@ -184,8 +184,11 @@ landing.
 
 PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
 
-- Drive admits a PR once its owner marks it ready at its head: `research data label pr:N@SHA ready true --by LANE`. It
-  needs no quick-tier pass, and `research queue status` says what each PR waits for.
+- Drive admits a PR once its owner marks it ready at its head: `research queue ready N --mark --by LANE`, or
+  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass, and a new head needs a new mark. The
+  owner is the lane a `Lane NAME` line in the PR's body names, else the Cursor agent id the body carries. Marks written
+  before `marked_after` in `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out.
+  `research queue status` says what each PR waits for.
 - No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
 - Drive stacks admitted PRs on `next`, checks them in trains and lands the newest train whose check passed. What it
   refuses (a conflict, a failed check) goes to the lander, who ejects the PR that caused it; its owner is told, and
@@ -193,8 +196,9 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
 - A PR whose head is in a train being checked keeps that head until the train lands or fails: a new head takes it off
   `next` and cancels the checks of its train and every train above it.
 - A landing that breaks `main` is reverted at once (`git revert -m 1`), and its owner relands with the fix.
-- A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies goes first, alone in
-  its train.
+- A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
+  of the queue, since drive doesn't order it: the lander lands it with `research merge` on its own passing check, and
+  drive's next sync rebuilds `next` on it.
 
 ## Lean
 
