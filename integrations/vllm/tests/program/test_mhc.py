@@ -306,6 +306,15 @@ def test_boolean_sigmoid_and_step() -> None:
     _agree(bind(BM.HopperTf32WgmmaDot8V2), acc, a, b)
 
 
+@pytest.mark.slow
+def test_boolean_tf32_prenorm_split() -> None:
+    """The minimum DeepGEMM split reaches the private GPU FADD/FMUL/FFMA helpers after `boolean_dsa.flat` inlines them."""
+    rng = np.random.default_rng(111)
+    a, b = bf16(rng, (1, 64)), f32(rng, (1, 1, 64), 0.25)
+    a[0, 3] = 0x7FC0
+    _agree(bind(BM.MhcPrenormTf32SplitV2, K=64, OUT=1), a, b)
+
+
 def test_boolean_post_and_sinkhorn() -> None:
     rng = np.random.default_rng(12)
     x, residual, post, comb = _post_operands(rng, 16, 2, 2)

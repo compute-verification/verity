@@ -15,6 +15,9 @@ and the TF32 step above; a constant word is constant bits and `-x` one NOT gate 
 word Definition on every word, NaN payloads included.  A traced circuit computes no value twice: two pieces that decode one operand
 (a Sinkhorn row's sum, the post's `comb`, a TF32 operand of every output) share its gates.
 
+The squared sum's GPU-NaN FADD, FMUL and FFMA are private traced helpers: `boolean_dsa.flat` inlines their gates into the
+registered prenorm Definitions, so they add no standalone circuit target or Call.
+
 `MhcFusedPostPre_v1`, `MhcPostPreTf32_v1` and `MhcPreBroadcast_v1` have no version here: each is two or three kernel launches,
 the Calls above, and its smallest binding on bits (H 16 or 32 at HC 2) is over circuit-check's partition budget.
 """
@@ -38,27 +41,20 @@ BF16 = Array(16, BIT)
 F32 = Array(32, BIT)
 
 
-def _f32_coll(bits) -> Coll:
-    return Coll(F32, concat([bit.refs for bit in bits]))
-
-
-class MhcBitOps(M.Ops):
-    """The mHC-only GPU arithmetic is inlined into each flat Boolean circuit; its word view calls core's `_v2` primitives."""
-
-    def gpu_add(self, a, b):
-        return _f32_coll(FP.f32_add(self.B, a, b, nan_word=FP.F32_NAN_PTX))
-
-    def gpu_mul(self, a, b):
-        return _f32_coll(FP.f32_mul(self.B, a, b, nan_word=FP.F32_NAN_PTX))
-
-    def gpu_fma(self, a, b, c):
-        return _f32_coll(FP.f32_fma(self.B, a, b, c, nan_word=FP.F32_NAN_PTX))
+_AB = (("a", F32), ("b", F32))
+_MhcGpuF32Add = definition("MhcGpuF32Add", 1, lambda C, a, b: FP.f32_add(C, a, b, nan_word=FP.F32_NAN_PTX), _AB, F32,
+                           word=M.P.F32AddV2, doc="the squared sum's GPU FADD", register=False)
+_MhcGpuF32Mul = definition("MhcGpuF32Mul", 1, lambda C, a, b: FP.f32_mul(C, a, b, nan_word=FP.F32_NAN_PTX), _AB, F32,
+                           word=M.P.F32MulV2, doc="the squared sum's GPU FMUL", register=False)
+_MhcGpuF32Fma = definition("MhcGpuF32Fma", 1, lambda C, a, b, c: FP.f32_fma(C, a, b, c, nan_word=FP.F32_NAN_PTX),
+                           (("a", F32), ("b", F32), ("c", F32)), F32, word=M.P.F32FmaV2,
+                           doc="the squared sum's GPU FFMA", register=False)
 
 
 def bit_ops(B) -> M.Ops:
     c = _Bits(B)
-    return MhcBitOps(B, BITS, lambda v: c.word(v, 32),
-                     lambda x: Coll(F32, concat([x.refs.slice(0, 31), B.call(BL.NOT, x[31]).refs])))
+    return M.Ops(B, BITS, lambda v: c.word(v, 32),
+                 lambda x: Coll(F32, concat([x.refs.slice(0, 31), B.call(BL.NOT, x[31]).refs])))
 
 
 def _tf32_rne(C, w):
@@ -177,7 +173,8 @@ def _head(B, S, residual, fn, scale, base):
 
 HcHeadV2 = BD.flat("HcHead", 2, ["HC", "H", "TH", "EPS", "HC_EPS"], lambda S: M._sig_head(S, BF16, F32), _head, M.HcHead)
 
-BITS = dict(BD.BITS, expf=BMOE.NvExpf, bf16=BG.F2fpBf16, sigmoid=MhcSigmoidV2, tf32=HopperTf32WgmmaDot8V2, MhcSinkhorn=MhcSinkhornV2,
+BITS = dict(BD.BITS, expf=BMOE.NvExpf, bf16=BG.F2fpBf16, gpu_add=_MhcGpuF32Add, gpu_mul=_MhcGpuF32Mul, gpu_fma=_MhcGpuF32Fma,
+            sigmoid=MhcSigmoidV2, tf32=HopperTf32WgmmaDot8V2, MhcSinkhorn=MhcSinkhornV2,
             MhcMixes=MhcMixesV2, MhcPreNorm=MhcPreNormV2, MhcPreNormBroadcast=MhcPreNormBroadcastV2, MhcPreBigFuse=MhcPreBigFuseV2,
             MhcPreBigFuseBroadcast=MhcPreBigFuseBroadcastV2, MhcPost=MhcPostV2, MhcFusedSplit=MhcFusedSplitV2,
             MhcPrenormTf32Split=MhcPrenormTf32SplitV2, MhcPrenormTf32=MhcPrenormTf32V2)
