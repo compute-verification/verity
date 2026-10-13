@@ -1539,6 +1539,9 @@ __device__ __forceinline__ u32 smem_u32(const void *p) { return (u32)__cvta_gene
 __device__ __forceinline__ void mbar_init(u64 *bar, u32 count) {
   asm volatile("mbarrier.init.shared::cta.b64 [%0], %1;\n" ::"r"(smem_u32(bar)), "r"(count) : "memory");
 }
+__device__ __forceinline__ void mbar_inval(u64 *bar) {
+  asm volatile("mbarrier.inval.shared::cta.b64 [%0];\n" ::"r"(smem_u32(bar)) : "memory");
+}
 __device__ __forceinline__ void mbar_arrive(u64 *bar) {
   asm volatile("mbarrier.arrive.shared::cta.b64 _, [%0];\n" ::"r"(smem_u32(bar)) : "memory");
 }
@@ -1578,8 +1581,9 @@ __device__ __forceinline__ void bulk_load(void *dst, const void *src, u32 bytes,
 }
 
 template <int NB8>
-__device__ __forceinline__ void load_xs(uint8_t (*xs)[XS_STRIDE], const uint8_t *__restrict__ x, int M, int Kd, int kc) {
-  for (int e = threadIdx.x; e < NB8 * 8 * TASK_COLS / 16; e += blockDim.x) {
+__device__ __forceinline__ void load_xs(uint8_t (*xs)[XS_STRIDE], const uint8_t *__restrict__ x, int M, int Kd, int kc,
+                                        int threads) {
+  for (int e = threadIdx.x; e < NB8 * 8 * TASK_COLS / 16; e += threads) {
     int b = e / (TASK_COLS / 16), c = e % (TASK_COLS / 16);
     uint4 v = make_uint4(0, 0, 0, 0);
     if (b < M) v = __ldg(reinterpret_cast<const uint4 *>(x + (size_t)b * Kd + (size_t)kc * TASK_COLS) + c);
@@ -1633,7 +1637,7 @@ __global__ void __maxnreg__(168) gemm_ws_kernel(const void *__restrict__ wstore,
   const int nchunks = Kd / TASK_COLS;
   const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks, nbs = N / 16;
   const int warp = threadIdx.x / 32, lane = threadIdx.x & 31, g = lane >> 2, tq = lane & 3;
-  load_xs<NB8>(xs, x, M, Kd, kc);
+  load_xs<NB8>(xs, x, M, Kd, kc, blockDim.x);
   if (threadIdx.x == 0) {
     for (int s = 0; s < stages; ++s) { mbar_init(full + s, 1); mbar_init(empty + s, 1); }
     asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
@@ -2626,36 +2630,77 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
   }
 }
 
-// tsteps: tau (32 D mod TW + A G TW) and tau (32 D mod TW - TW + (A + 1) G TW) mod p, A = floor(32 D / TW), G the
-// store's tasks between the CTA's consecutive ones: the tweak's step to a lane's next unit, its task advancing A or
-// A + 1.
-// With SKK > 0 the decoders sketch (sk_begin) and the MMA warp hashes each tile (SkJob) into sk_out and tags
-// (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps; with SKW > 0 as well, SKW sketch warps after
-// the producer do all of it (sketch_warp).
-// WARPS, the warps the launch bounds allow, is fused_warps' or fewer (wt_fused_sketch).
-template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS = fused_warps<NB8, SKK, SKW>()>
-__global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
-    const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
-    u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps, u32 *__restrict__ tags,
-    u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt, int sgs) {
-  extern __shared__ __align__(128) uint8_t smem[];
-  uint8_t (*xs)[XS_STRIDE] = reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB);
-  u64 *full = reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE);
-  u64 *loaded = full + stages, *decoded = loaded + stages, *empty = decoded + stages, *ready = empty + stages;
-  u64 *sketched = ready + stages;
-  u32 *tagq = reinterpret_cast<u32 *>(full + 2 * ((6 * stages + 1) / 2));
-  int *skbuf = reinterpret_cast<int *>(tagq + 4);   // 16-byte aligned
-  const int nchunks = Kd / TASK_COLS;
-  const int kc = blockIdx.x % nchunks, g0 = blockIdx.x / nchunks, nbs = N / 16;
-  const int warp = threadIdx.x / 32, lane = threadIdx.x & 31;
-  constexpr int MW = fused_mma_warps<K, NB8, SKK, SKW>();
-  load_xs<NB8>(xs, x, M, Kd, kc);
-  for (int e = threadIdx.x; e < sk_bufs<SKW>() * 16 * SKK; e += blockDim.x) skbuf[e] = 0;
-  u32 *sksg = reinterpret_cast<u32 *>(skbuf + sk_bufs<SKW>() * 16 * SKK);
-  if (sgs && signs)
-    for (int e = threadIdx.x; e < sgs; e += blockDim.x) sksg[e] = __ldg(signs + e);
-  const u32 *sgn = sgs ? sksg : signs;
-  if (threadIdx.x == 0) {
+// The format's cut (sketching.vectors): its CTA b = g0 nchunks + kc, one of groups nchunks, does K-chunk kc's tasks
+// nb = g0, g0 + groups, ..., n(g0) = ceil((nbs - g0) / groups) of them, in tpc tiles of skt (the last ones short or
+// empty). Counting the tasks of the format's CTAs before b, tile (b, j) starts at task s, and launch CTA p of P takes
+// the tiles with floor(s P / T) = p, T = nbs nchunks (the last CTA those at s = T too). Each run of one b's tiles is a
+// segment, which the launch CTA runs as b would, so any grid gives the format's outputs, and as many CTAs as the SMs
+// hold share the tasks to within a tile.
+struct Cut {
+  int nchunks, groups, skt, tpc, a, r;   // nbs = a groups + r
+  long long lo, hi;                      // the launch CTA's tiles start in [lo, hi)
+  __device__ Cut(int nbs, int nchunks_, int groups_, int skt_)
+      : nchunks(nchunks_), groups(groups_), skt(skt_), tpc(((nbs + groups_ - 1) / groups_ + skt_ - 1) / skt_),
+        a(nbs / groups_), r(nbs % groups_) {
+    const long long T = (long long)nbs * nchunks, P = gridDim.x;
+    lo = ((long long)blockIdx.x * T + P - 1) / P;
+    hi = blockIdx.x + 1 == P ? T + 1 : ((long long)(blockIdx.x + 1) * T + P - 1) / P;
+  }
+  __device__ int tasks(int g0) const { return g0 < r ? a + 1 : a; }
+  __device__ long long first(int b) const {   // b's first task in the count; first(groups nchunks) = T
+    const int g0 = b / nchunks;
+    return (long long)nchunks * (g0 * a + min(g0, r)) + (long long)(b % nchunks) * tasks(g0);
+  }
+  __device__ int tile_at(int b, long long s) const {   // b's first tile to start at or past task s
+    const long long d = s - first(b);
+    return d <= 0 ? 0 : d <= tasks(b / nchunks) ? (int)((d + skt - 1) / skt) : tpc;
+  }
+  // The segment after b's (b < 0: the first) as (b, j0, j1), its tiles j0 .. j1 - 1, at out; b = groups nchunks past
+  // the last.
+  __device__ void next(int b, u32 *out) const {
+    const int B = groups * nchunks;
+    if (b < 0) {   // the first b whose tiles can start at or past lo
+      b = min(B - 1, (int)(lo * B / first(B)));
+      while (b > 0 && first(b) >= lo) --b;
+      while (first(b + 1) < lo) ++b;
+    } else {
+      ++b;
+    }
+    for (; b < B && first(b) < hi; ++b) {
+      const int j0 = tile_at(b, lo), j1 = tile_at(b, hi);
+      if (j0 < j1) {
+        out[0] = b, out[1] = j0, out[2] = j1;
+        return;
+      }
+    }
+    out[0] = B;
+  }
+};
+
+// A value the compiler can't carry across a loop's iterations: the cut built from it is rebuilt where it is used,
+// rather than held in registers through the decode.
+__device__ __forceinline__ int opaque(int v) {
+  asm volatile("" : "+r"(v));
+  return v;
+}
+
+// The fused kernel's shared memory: the stages, xs, the stages' barriers (full, loaded, decoded, empty, ready,
+// sketched), tagq (the tag warps' queue head, then the segment Cut::next found), the sketch buffers and the signs.
+template <int NB8, int SKK, int SKW>
+struct FusedSmem {
+  uint8_t (*xs)[XS_STRIDE];
+  u64 *full, *loaded, *decoded, *empty, *ready, *sketched;
+  u32 *tagq;
+  int *skbuf;   // 16-byte aligned
+  u32 *sksg;
+  __device__ FusedSmem(uint8_t *smem, int stages)
+      : xs(reinterpret_cast<uint8_t (*)[XS_STRIDE]>(smem + stages * SB)),
+        full(reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE)), loaded(full + stages),
+        decoded(loaded + stages), empty(decoded + stages), ready(empty + stages), sketched(ready + stages),
+        tagq(reinterpret_cast<u32 *>(full + 2 * ((6 * stages + 1) / 2))), skbuf(reinterpret_cast<int *>(tagq + 4)),
+        sksg(reinterpret_cast<u32 *>(skbuf + sk_bufs<SKW>() * 16 * SKK)) {}
+  // Thread 0 makes the stages' barriers anew for each segment, and finds it (Cut::next, after b's) in tagq[1 .. 3].
+  __device__ void setup(int stages, int nbs, int nchunks, int groups, int tskt, int b) const {
     for (int s = 0; s < stages; ++s) {
       mbar_init(full + s, 1);
       mbar_init(loaded + s, TW);
@@ -2664,13 +2709,43 @@ __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
       mbar_init(ready + s, 1);
       mbar_init(sketched + s, 1);
     }
-    tagq[0] = tagq[1] = tagq[2] = tagq[3] = 0;
     asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
+    Cut(nbs, nchunks, groups, tskt).next(b, tagq + 1);
   }
-  __syncthreads();
-  const int ntasks = nbs > g0 ? (nbs - g0 + groups - 1) / groups : 0;
-  const u64 q0 = (u64)g0 * nchunks + kc, gq = (u64)groups * nchunks;   // task i is the store's task q0 + i gq
-  [[maybe_unused]] const int tpc = ((nbs + groups - 1) / groups + skt - 1) / skt;   // the sketch's tiles a CTA
+};
+
+// The launch CTA's segment in tagq, run as the format's CTA b would; false when there is none, and for the tag warps,
+// which run none. Each segment derives what it uses from the kernel's parameters, which the kernel passes through
+// opaque(), and fused_next likewise, so nothing derived is held in registers through one segment's decode into the next.
+template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS>
+__device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x,
+                                              float *__restrict__ y, int M, int N, int Kd, u64 base, int groups,
+                                              int decoders, int stages, const u32 *__restrict__ tsteps,
+                                              u32 *__restrict__ tags, u64 tag_base, const u32 *__restrict__ signs,
+                                              int *__restrict__ sk_out, int skt, int sgs) {
+  extern __shared__ __align__(128) uint8_t smem[];
+  const FusedSmem<NB8, SKK, SKW> S(smem, stages);
+  constexpr int MW = fused_mma_warps<K, NB8, SKK, SKW>();
+  const int pipe = 32 * (decoders + MW + 1 + SKW);   // the threads that run the segments: all but the tag warps
+  if (threadIdx.x >= pipe) return false;
+  const int nchunks = Kd / TASK_COLS, nbs = N / 16;
+  const int b = *(volatile u32 *)(S.tagq + 1), j0 = *(volatile u32 *)(S.tagq + 2), j1 = *(volatile u32 *)(S.tagq + 3);
+  if (b >= groups * nchunks) return false;
+  const int warp = threadIdx.x / 32, lane = threadIdx.x & 31;
+  const int tskt = SKK > 0 ? skt : 1;   // the cut's tile: the untagged kernel's is a task
+  const int kc = b % nchunks, g0 = b / nchunks + j0 * tskt * groups;   // the segment's first 16-row block
+  const int n = nbs > b / nchunks ? (nbs - b / nchunks + groups - 1) / groups : 0;   // b's tasks
+  const int ntasks = max(0, min(n, j1 * tskt) - j0 * tskt), tiles = j1 - j0;
+  const u64 tile0 = (u64)b * (((nbs + groups - 1) / groups + tskt - 1) / tskt) + j0;
+  const u64 gq = (u64)groups * nchunks, q0 = (u64)g0 * nchunks + kc;   // task i is the store's task q0 + i gq
+  uint8_t (*xs)[XS_STRIDE] = S.xs;
+  u64 *full = S.full, *loaded = S.loaded, *decoded = S.decoded, *empty = S.empty, *ready = S.ready;
+  u64 *sketched = S.sketched;
+  int *skbuf = S.skbuf;
+  const u32 *sgn = sgs ? S.sksg : signs;
+  load_xs<NB8>(xs, x, M, Kd, kc, pipe);
+  for (int e = threadIdx.x; e < sk_bufs<SKW>() * 16 * SKK; e += pipe) skbuf[e] = 0;
+  asm volatile("bar.sync 2, %0;\n" ::"r"(pipe) : "memory");
 
   if (warp == decoders + MW) {
     if (lane == 0) {
@@ -2691,7 +2766,7 @@ __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
     __syncwarp();
   } else if (warp >= decoders && warp < decoders + MW) {
     const int g = lane >> 2, tq = lane & 3;
-    [[maybe_unused]] const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
+    [[maybe_unused]] const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, tile0, skt, tiles, ntasks};
     [[maybe_unused]] SkJob J;
     J.blk = -1;
     int hashed = 0;   // the tiles whose hash has started
@@ -2727,9 +2802,9 @@ __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
       }
       if constexpr (SKK > 0 && SKW == 0)
         if (J.blk >= 0 && skt * (J.tile + SK_BUFS) <= i + stages) sk_finish<SKK>(J, lane, sk);
-      // `empty` hands the stage to the next bulk copy (the async proxy): only a proxy fence orders this warp's shared
-      // loads before it, as ptxas issues the arrive straight after the last fragment's load. The decoders' and the
-      // sketch warps' reads precede the decoders' stores, which the decoders fence.
+      // `empty` hands the stage to the next bulk copy (the async proxy): only a proxy fence orders this warp's
+      // shared loads before it, as ptxas issues the arrive straight after the last fragment's load. The decoders'
+      // and the sketch warps' reads precede the decoders' stores, which the decoders fence.
       asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
       mbar_arrive(empty + s);
       store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
@@ -2741,23 +2816,72 @@ __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
     }
     if constexpr (SKK > 0 && SKW == 0) {
       sk_finish<SKK>(J, lane, sk);
-      for (; hashed < tpc; ++hashed) {   // the CTA's tiles past its tasks: zero sketches
+      for (; hashed < tiles; ++hashed) {   // the segment's tiles past its tasks: zero sketches
         sk_start<SKK>(J, hashed, lane, sk);
         sk_finish<SKK>(J, lane, sk);
       }
     }
   } else if (warp < decoders) {
-    const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
+    const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, tile0, skt, tiles, ntasks};
     decode_tasks<K, SKK, SKW, fresh_decode<K, WARPS>()>(smem, ready, loaded, decoded, sketched, stages, ntasks, q0,
                                                         gq, base, decoders, warp, lane, tsteps, sk);
   } else if constexpr (SKW > 0) {
     if (warp < decoders + 1 + MW + SKW) {
-      const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, (u64)blockIdx.x * tpc, skt, tpc, ntasks};
+      const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, tile0, skt, tiles, ntasks};
       sketch_warp<SKK, SKW, SignB>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
     }
   }
+  return true;
+}
+
+// After a segment: its accesses to the stages are all behind its barriers and before its threads meet here, so the
+// barriers can be made anew, and the fence puts this thread's accesses before the next segment's bulk copies.
+template <int K, int NB8, int SKK, int SKW>
+__device__ __forceinline__ void fused_next(int N, int Kd, int groups, int decoders, int stages, int skt) {
+  extern __shared__ __align__(128) uint8_t smem[];
+  const FusedSmem<NB8, SKK, SKW> S(smem, stages);
+  const int pipe = 32 * (decoders + fused_mma_warps<K, NB8, SKK, SKW>() + 1 + SKW);
+  asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
+  asm volatile("bar.sync 2, %0;\n" ::"r"(pipe) : "memory");
+  if (threadIdx.x == 0) {
+    for (int s = 0; s < 6 * stages; ++s) mbar_inval(S.full + s);
+    S.setup(stages, N / 16, Kd / TASK_COLS, groups, SKK > 0 ? skt : 1, *(volatile u32 *)(S.tagq + 1));
+  }
+  asm volatile("bar.sync 2, %0;\n" ::"r"(pipe) : "memory");
+}
+
+// tsteps: tau (32 D mod TW + A G TW) and tau (32 D mod TW - TW + (A + 1) G TW) mod p, A = floor(32 D / TW), G the
+// store's tasks between a segment's consecutive ones: the tweak's step to a lane's next unit, its task advancing A or
+// A + 1.
+// With SKK > 0 the decoders sketch (sk_begin) and the MMA warp hashes each tile (SkJob) into sk_out and tags
+// (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps; with SKW > 0 as well, SKW sketch warps after
+// the producer do all of it (sketch_warp).
+// WARPS, the warps the launch bounds allow, is fused_warps' or fewer (wt_fused_sketch).
+// The grid is any number of CTAs (Cut): launch_gemm's is as many as the SMs hold.
+template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS = fused_warps<NB8, SKK, SKW>()>
+__global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
+    const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
+    u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps, u32 *__restrict__ tags,
+    u64 tag_base, const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt, int sgs) {
+  extern __shared__ __align__(128) uint8_t smem[];
+  {
+    const FusedSmem<NB8, SKK, SKW> S(smem, stages);
+    if (sgs && signs)
+      for (int e = threadIdx.x; e < sgs; e += blockDim.x) S.sksg[e] = __ldg(signs + e);
+    if (threadIdx.x == 0) {
+      S.tagq[0] = 0;
+      S.setup(stages, N / 16, Kd / TASK_COLS, groups, SKK > 0 ? skt : 1, -1);
+    }
+  }
+  __syncthreads();
+  while (fused_segment<K, NB8, PARTIALS, SKK, SKW, WARPS>(
+      wstore, x, y, opaque(M), opaque(N), opaque(Kd), base, opaque(groups), opaque(decoders), opaque(stages), tsteps,
+      tags, tag_base, signs, sk_out, opaque(skt), opaque(sgs)))
+    fused_next<K, NB8, SKK, SKW>(opaque(N), opaque(Kd), opaque(groups), opaque(decoders), opaque(stages), opaque(skt));
   if constexpr (SKK == 0)
-    if (tags) tag_warp(wstore, (u64)nbs * nchunks * SB, tag_base, tagq, tags);
+    if (tags)
+      tag_warp(wstore, (u64)(N / 16) * (Kd / TASK_COLS) * SB, tag_base, FusedSmem<NB8, SKK, SKW>(smem, opaque(stages)).tagq,
+               tags);
 }
 
 __global__ void spin_kernel(long long cycles) {
@@ -2773,26 +2897,27 @@ __global__ void empty_kernel() {}
 using namespace wt;
 
 // The groups (16-row blocks a CTA's chunk advances by) and the launch: groups <= 0 takes as many as fill the device at
-// the occupancy the shared memory and registers allow. *launched gets the grid; with w == nullptr nothing is launched
-// (the fused kernel's caller needs the groups for its tweak steps first).
+// the occupancy the shared memory and registers allow. *launched gets groups nchunks, the CTAs of the format's cut
+// (the plain kernel's grid); with w == nullptr nothing is launched (the fused kernel's caller needs the groups for its
+// tweak steps first). launch(groups, fill) gets as well the CTAs the device holds at once, the fused kernel's grid.
 template <typename Kern, typename Launch>
 static int launch_gemm(Kern kern, int smem, int threads, int groups, int nchunks, int nbs, bool dry, int *launched,
                        Launch launch) {
   if (cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, smem)) return 2;
+  int per_sm = 0, dev = 0, sms = 0;
+  if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, kern, threads, smem)) return 2;
+  if (per_sm < 1) return 6;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
   int gr = groups;
   if (gr <= 0) {
-    int per_sm = 0, dev = 0, sms = 0;
-    if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, kern, threads, smem)) return 2;
-    if (per_sm < 1) return 6;
-    cudaGetDevice(&dev);
-    cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
     gr = (per_sm * sms) / nchunks;
     if (gr < 1) gr = 1;
     if (gr > nbs) gr = nbs;
   }
   if (launched) *launched = gr * nchunks;
   if (dry) return 0;
-  launch(gr);
+  launch(gr, per_sm * sms);
   return cudaGetLastError() ? 4 : 0;
 }
 
@@ -2942,7 +3067,7 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : 4);
   const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (consumers + 1) * 32;
   auto go = [&](auto kern, int smem) -> int {
-    return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr) {
+    return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr, int) {
       kern<<<gr * nchunks, threads, smem, s>>>(w, x, y, M, N, Kd, gr, consumers, stages, knob, xr);
     });
   };
@@ -2989,8 +3114,8 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
   cudaDeviceGetAttribute(&optin, cudaDevAttrMaxSharedMemoryPerBlockOptin, dev);
   const int signs16 = sketch_k == 16 ? skt * ((SB + 511) / 512) * 32 : 0;
   auto go = [&](auto kern, int smem, int sgs) -> int {
-    return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr) {
-      kern<<<gr * nchunks, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr, decoders,
+    return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr, int fill) {
+      kern<<<fill, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr, decoders,
                                                stages, tsteps, tags, tag_base, signs, sk_out, skt, sgs);
     });
   };
