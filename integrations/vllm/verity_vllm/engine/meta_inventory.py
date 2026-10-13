@@ -326,6 +326,9 @@ def _selections() -> dict[str, Any]:
             out[k] = getattr(envs, k)
         except AttributeError:
             out[k] = None
+    from verity_vllm.engine import sparse_mla
+
+    out["sparse_mla_num_splits"] = sparse_mla.num_splits()
     return out
 
 
@@ -357,6 +360,9 @@ def main(a: Options) -> int:
     platform = prepare(target, a.tp)
     import torch
     import vllm
+
+    from verity_vllm.engine import sparse_mla
+    sparse_mla.install()             # as a serving process does before its model's first forward (`_selections` reads it)
 
     from verity_vllm.program.frontend.export_compat import apply_target_profile, read_back_applied
 

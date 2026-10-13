@@ -42,10 +42,10 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "fused_moe_kernel (TritonExperts) for its experts, every expert launch runs its dot as k32 e4m3 wgmma, and at GLM-5.3's "
              "shapes every output word of every launch equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v1 at the launch's "
              "statics, and every activation quant equals Fp8GroupQuant_v1, bit for bit."),
-    Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v1",
+    Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v2",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
-             "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v1, every top-k row of at most 2048 keys "
+             "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v3, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
     Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v1",

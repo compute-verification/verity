@@ -165,8 +165,11 @@ def cancel_runs(repo: Path, ids: list[str], reason: str) -> None:
 
 
 def merge_thread_post(text: str, to: tuple[str, ...] = (CI,), sender: str = "ci") -> bool:
-    r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", sender, "--thread", _merge_thread(), "--to", *to,
-                        "--quiet", "--text", text], capture_output=True, text=True)
+    """Post ``text`` to the merge thread as ``sender``, addressed to ``to`` but not the sender: `research msg send` refuses a
+    `--to` naming the sender (13 Oct: from 05:07Z every notice drive sent named @ci and none was posted)."""
+    others = [t for t in to if t != f"@{sender}"]
+    r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", sender, "--thread", _merge_thread(),
+                        *(["--to", *others] if others else []), "--quiet", "--text", text], capture_output=True, text=True)
     return r.returncode == 0
 
 
@@ -459,7 +462,9 @@ class Driver:
             return
         if self.post(f"{' '.join(to)} queue: {text}", to):
             drive["told"].append(key)
-        self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
+            self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
+        else:
+            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
 
     def _handle(self, pr: int) -> str | None:
         if self._prs is None:
