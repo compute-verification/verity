@@ -108,15 +108,15 @@ def combine_sig(T):
 
 
 def combine(o, S, topk, pos, mb, n, gs) -> list:
-    """`Dsv4CombineTopkSwa_v1`'s body: q from u = t + (t < 0 ? RATIO - 1 : 0), its bit i + k as bit i and its sign as the top k
-    bits, then the row of the module docstring."""
+    """`Dsv4CombineTopkSwa_v1`'s body: q from u = t + (t < 0 ? RATIO - 1 : 0), its bit i + k as bit i below 31 - k and its sign
+    as the top k + 1 bits, then the row of the module docstring."""
     k = check_combine_statics(S.TOPK, S.RATIO, S.WINDOW, S.WIDTH)
     (p,), (mb,), (n,), (gs,) = pos, mb, n, gs
     zero, minus1 = o.word(0), o.word(M32)
     t = o.iadd(p, o.word(1))
     u = o.iadd(t, o.isel(o.bit(t, 31), o.word(S.RATIO - 1), zero))
-    q = o.isel(o.bit(u, 31), o.word((M32 << (32 - k)) & M32), zero)
-    for i in range(32 - k):
+    q = o.isel(o.bit(u, 31), o.word((M32 << (31 - k)) & M32), zero)
+    for i in range(31 - k):
         q = o.iadd(q, o.isel(o.bit(u, i + k), o.word(1 << i), zero))
     tl = o.isel(o.ile(o.word(S.TOPK), q), o.word(S.TOPK), q)
     s0 = o.isub(p, o.word(S.WINDOW - 1))
