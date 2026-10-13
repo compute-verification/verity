@@ -1,0 +1,141 @@
+"""τ of the prover's pass on one GPU: the read alone (`rb_read`), the plain pass kernel by kernel (sketch, receipts,
+leaves, tree), and the pipelined pass (`rs_pass`) at each chunk size and sketch CTA count asked for, each checked to
+give the plain pass's root, over a store of random words (no codec: a pass's cost does not depend on the bytes).
+Writes OUT/pass_bench.json.
+
+    python pass_bench.py --lib session.so --gib 16 --out OUT [--chunks 14,15,16,17,18 --ctas 0 --passes 30]
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import device  # noqa: E402
+from device import BLOCK, PER_LEAF, DeviceStore, Lib, percentiles, rb, skr  # noqa: E402
+
+
+def timed(torch, fn) -> float:
+    a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    a.record()
+    fn()
+    b.record()
+    b.synchronize()
+    return a.elapsed_time(b)
+
+
+def main() -> int:
+    import torch
+
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--lib", required=True)
+    ap.add_argument("--gib", type=float, default=16.0)
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--chunks", default="14,15,16,17,18", help="log2 of the chunk's blocks")
+    ap.add_argument("--ctas", default="0", help="the sketch's CTAs, comma-separated (0: as many as are resident)")
+    ap.add_argument("--kept-from", type=int, default=6)
+    ap.add_argument("--passes", type=int, default=30)
+    ap.add_argument("--open-passes", type=int, default=300)
+    ap.add_argument("--openings", type=int, default=33273)
+    a = ap.parse_args()
+    a.out.mkdir(parents=True, exist_ok=True)
+    lib = Lib(a.lib, torch)
+    copy = tempfile.NamedTemporaryFile(suffix=".so")
+    shutil.copyfile(a.lib, copy.name)
+    lib_open = Lib(copy.name, torch)
+    n = int(a.gib * 2 ** 30) // BLOCK
+    blocks = PER_LEAF << ((n // PER_LEAF).bit_length() - 1)
+    g = torch.Generator(device="cuda")
+    g.manual_seed(1)
+    store = DeviceStore(torch, lib, lib_open, None, blocks, b"k" * 32, g, kept_from=a.kept_from)
+    N, nl = blocks, blocks // PER_LEAF
+    xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+    sms = torch.cuda.get_device_properties(0).multi_processor_count
+    reads = [timed(torch, lambda: lib.call("rb_read", store.data.data_ptr(), N * BLOCK, xr.data_ptr(), 16 * sms))
+             for _ in range(8)]
+    read_ms = min(reads[2:])
+    out = {"device": torch.cuda.get_device_name(0), "blocks": N, "bytes": N * BLOCK, "read_ms": read_ms,
+           "read_bytes_per_s": N * BLOCK / read_ms * 1e3}
+    print(json.dumps(out), flush=True)
+
+    seed = rb.seed(b"\1" * 32, 0, bytes(64))
+    signs = torch.from_numpy(skr.signs(seed)).cuda()
+    store.set_pass(lib, seed)
+    sk = torch.empty((N, skr.ROWS), dtype=torch.int32, device="cuda")
+    ys = torch.empty((N, 8), dtype=torch.int64, device="cuda")
+    dig = torch.empty((nl, 8), dtype=torch.int64, device="cuda")
+    up = torch.empty((nl - 1, 8), dtype=torch.int64, device="cuda")
+    plain = {k: [] for k in ("sketch", "hash", "leaves", "tree")}
+    for _ in range(6):
+        plain["sketch"].append(timed(torch, lambda: lib.call("rb_sketch", store.data.data_ptr(), None, N,
+                                                            signs.data_ptr(), sk.data_ptr(), 0)))
+        plain["hash"].append(timed(torch, lambda: lib.call("rb_sketch_hash", sk.data_ptr(), 0, N, ys.data_ptr())))
+        plain["leaves"].append(timed(torch, lambda: lib.call("rb_leaves", ys.data_ptr(), 0, nl, dig.data_ptr(), None)))
+        plain["tree"].append(timed(torch, lambda: lib.call("rb_tree", dig.data_ptr(), nl, 0, up.data_ptr())))
+    out["plain_ms"] = {k: min(v[1:]) for k, v in plain.items()}
+    out["plain_ms"]["sum"] = sum(out["plain_ms"].values())
+    out["plain_tau"] = out["plain_ms"]["sum"] / read_ms
+    plain_root = device.digests(up[nl - 2:nl - 1].cpu())[0]
+    del sk, ys, dig, up
+    torch.cuda.empty_cache()
+    print(json.dumps({"plain_ms": out["plain_ms"], "plain_tau": out["plain_tau"]}), flush=True)
+
+    out["pipelined"] = []
+    for c in [int(x) for x in a.chunks.split(",")]:
+        for ctas in [int(x) for x in a.ctas.split(",")]:
+            s = store
+            s.shape(1 << c, a.kept_from, ctas)
+            gpu, host = [], []
+            prev = s.run_pass(seed)[0]
+            ok = prev == plain_root
+            for i in range(a.passes):
+                t0 = time.perf_counter_ns()
+                prev, _ = s.run_pass(rb.seed(b"\1" * 32, i + 1, prev))
+                host.append(time.perf_counter_ns() - t0)
+            gpu = s.pass_gpu_ms[-a.passes:]
+            row = {"chunk_log2": c, "ctas": ctas, "h0": s.h0, "root_ok": ok,
+                   "gpu_ms": percentiles(sorted(gpu)), "host_ns": percentiles(sorted(host)),
+                   "tau": sorted(gpu)[len(gpu) // 2] / read_ms, "tau_host": sorted(host)[len(host) // 2] / 1e6 / read_ms}
+            out["pipelined"].append(row)
+            print(json.dumps(row), flush=True)
+            s.pass_gpu_ms.clear()
+    t = []
+    for i in range(20):
+        t0 = time.perf_counter_ns()
+        skr.signs(rb.seed(b"\2" * 32, i, bytes(64)))
+        t.append(time.perf_counter_ns() - t0)
+    out["signs_host_ns"] = percentiles(sorted(t))
+    store.shape(1 << int(a.chunks.split(",")[-1]), a.kept_from, 0)
+    store.payload_tree(b"bench")
+    kept, prev = [], bytes(64)
+    for i in range(a.open_passes):
+        prev, h = store.run_pass(rb.seed(b"\3" * 32, i, prev))
+        kept.append(h)
+    import numpy as np
+
+    rng = np.random.default_rng(5)
+    draws = sorted(zip(rng.integers(len(kept), size=a.openings).tolist(), rng.integers(N, size=a.openings).tolist()))
+    by = {}
+    for i, p in draws:
+        by.setdefault(i, []).append(p)
+    with torch.cuda.stream(torch.cuda.Stream()):
+        for _ in range(2):
+            t0 = time.perf_counter_ns()
+            store.open_window([(kept[i], ps) for i, ps in sorted(by.items())])
+            torch.cuda.synchronize()
+            open_ns = time.perf_counter_ns() - t0
+    out["open"] = {"openings": a.openings, "passes": len(kept), "ns": open_ns}
+    print(json.dumps({"signs_host_ns": out["signs_host_ns"], "open": out["open"]}), flush=True)
+    (a.out / "pass_bench.json").write_text(json.dumps(out, indent=1))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

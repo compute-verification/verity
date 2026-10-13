@@ -154,18 +154,8 @@ class DeviceStore:
         if blocks % PER_LEAF or nl & (nl - 1):
             raise ValueError(f"{blocks} blocks: the harness takes N = 16 · 2^h, so every tree is whole")
         self.torch, self.lib, self.lib_open, self.kv, self.blocks, self.key = torch, lib, lib_open, kv, blocks, key
-        self.chunk = min(chunk, blocks)
-        self.h0 = max(1, min(kept_from, (self.chunk // PER_LEAF).bit_length() - 1))
-        self.H, self.sketch_ctas = nl.bit_length() - 1, sketch_ctas
-        self.kept_at = [0] * (self.H + 2)
-        for h in range(self.h0, self.H + 1):
-            self.kept_at[h + 1] = self.kept_at[h] + (nl >> h)
-        lc = self.chunk // PER_LEAF
-        self.ring = (torch.empty((2 * self.chunk, skr.ROWS), dtype=torch.int32, device="cuda"),
-                     torch.empty((2 * self.chunk, 8), dtype=torch.int64, device="cuda"),
-                     torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
-                     torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"))
-        self.side = torch.cuda.Stream()
+        self.H, self.side = nl.bit_length() - 1, torch.cuda.Stream()
+        self.shape(chunk, kept_from, sketch_ctas)
         self.data = torch.empty(blocks * BLOCK, dtype=torch.uint8, device="cuda")
         chunk = 1 << 18
         for j in range(0, blocks, chunk):
@@ -177,6 +167,22 @@ class DeviceStore:
         self.plan = rb.Plan.whole(blocks)
         self.dropped: dict[int, bytes] = {}
         self.pass_gpu_ms: list[float] = []
+
+    def shape(self, chunk: int, kept_from: int, sketch_ctas: int) -> None:
+        """A pass's chunk (blocks), h0 (at most the chunk's subtree height) and the sketch's CTAs, and its ring."""
+        torch, nl = self.torch, self.blocks // PER_LEAF
+        self.chunk = min(chunk, self.blocks)
+        self.h0 = max(1, min(kept_from, (self.chunk // PER_LEAF).bit_length() - 1))
+        self.sketch_ctas = sketch_ctas
+        self.kept_at = [0] * (self.H + 2)
+        for h in range(self.h0, self.H + 1):
+            self.kept_at[h + 1] = self.kept_at[h] + (nl >> h)
+        lc = self.chunk // PER_LEAF
+        self.ring = None
+        self.ring = (torch.empty((2 * self.chunk, skr.ROWS), dtype=torch.int32, device="cuda"),
+                     torch.empty((2 * self.chunk, 8), dtype=torch.int64, device="cuda"),
+                     torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
+                     torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"))
 
     def block(self, j: int) -> bytes:
         return self.dropped[j] if j in self.dropped else self.data[j * BLOCK:(j + 1) * BLOCK].cpu().numpy().tobytes()
