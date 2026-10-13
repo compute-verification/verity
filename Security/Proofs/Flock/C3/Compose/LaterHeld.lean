@@ -29,23 +29,25 @@ variable {r : ℕ} {CT : Fin r → Type}
 
 /-- **A stage's coins are the history's from round `j` on**, at any stage: its coin steps are the coins `g q` the
 verifier holds of stream `s` at round `ix q`, `q` over `ks` (`hts`, `hd`), and the history's round `j + p` draws the
-`p`-th of them (`hdr`), which custody holds. -/
+`p`-th of them (`hdr`), which custody holds. The draws are read at any selector `sel` within the map's (`hsel`), where
+the map's coins are the history's (`henc`): candidate 3's map's are, where a stream round takes one history round. -/
 theorem coinsAt_held {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts : List Step} {ks : List ℕ}
     {g : ℕ → Array Flock.F128} {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
-    {m : InnerRecordMap Cm ((k : Fin r) → CT k)} {s : String} {ix : ℕ → ℕ} {j : ℕ}
+    {m : InnerRecordMap Cm ((k : Fin r) → CT k)} {sel : ℕ → String → ℕ → Prop} {s : String} {ix : ℕ → ℕ} {j : ℕ}
     (hts : ts.filterMap Sum.getRight? = ks.map (coinArr FlockSoundness.Refine.fOf ∘ g))
-    (hcus : InnerRecordCustody wr held sparse m) (henc : CoinsEncoded m.selC m.coin)
+    (hcus : InnerRecordCustody wr held sparse m) (henc : CoinsEncoded sel m.coin)
+    (hsel : ∀ i s q, sel i s q → m.selC i s q)
     (hd : ∀ q c, heldCoins (held (wr t)) s (ix q) = some c → g q = c)
-    (hdr : j + ks.length ≤ r ∧ ∀ p q, ks[p]? = some q → m.selC (j + p) s (ix q))
+    (hdr : j + ks.length ≤ r ∧ ∀ p q, ks[p]? = some q → sel (j + p) s (ix q))
     (hlen : r + 1 ≤ t.length) :
     nCoins ts = ks.length ∧ CoinsAt (t.map Prod.snd) j (nCoins ts) ts := by
-  obtain ⟨hr, hsel⟩ := hdr
+  obtain ⟨hr, hdr'⟩ := hdr
   refine coinsAt_of_idx hts hr (by rw [List.length_map]; omega) ?_
   intro p q i hi hc hp hip
-  have hs : m.selC i s (ix q) := by rw [hip]; exact hsel p q hp
+  have hs : sel i s (ix q) := by rw [hip]; exact hdr' p q hp
   have hc' : i < t.length := by rw [List.length_map] at hc; exact hc
-  have hround := hd q _ (((hcus t).1 i t[i] (List.getElem?_eq_getElem hc')).2 s (ix q) hs)
+  have hround := hd q _ (((hcus t).1 i t[i] (List.getElem?_eq_getElem hc')).2 s (ix q) (hsel i s (ix q) hs))
   show coinArr FlockSoundness.Refine.fOf (g q) = _
   rw [hround, List.map_take, henc i hi s (ix q) (t.map Prod.snd) hc hs]
 
@@ -64,11 +66,12 @@ def StageHeld {Cm : Type} (t : List (Cm × ((k : Fin r) → CT k)))
 theorem coinsAt_stageHeld {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts : List Step}
     {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
-    {m : InnerRecordMap Cm ((k : Fin r) → CT k)} {j : ℕ}
-    (hcus : InnerRecordCustody wr held sparse m) (henc : CoinsEncoded m.selC m.coin) (hlen : r + 1 ≤ t.length)
-    (h : StageHeld t wr held m.selC j ts) : CoinsAt (t.map Prod.snd) j (nCoins ts) ts := by
-  obtain ⟨_, _, _, _, hts, hd, hr, hsel⟩ := h
-  exact (coinsAt_held hts hcus henc hd ⟨hr, hsel⟩ hlen).2
+    {m : InnerRecordMap Cm ((k : Fin r) → CT k)} {sel : ℕ → String → ℕ → Prop} {j : ℕ}
+    (hcus : InnerRecordCustody wr held sparse m) (henc : CoinsEncoded sel m.coin)
+    (hsel : ∀ i s q, sel i s q → m.selC i s q) (hlen : r + 1 ≤ t.length)
+    (h : StageHeld t wr held sel j ts) : CoinsAt (t.map Prod.snd) j (nCoins ts) ts := by
+  obtain ⟨_, _, _, _, hts, hd, hr, hdr⟩ := h
+  exact (coinsAt_held hts hcus henc hsel hd ⟨hr, hdr⟩ hlen).2
 
 /-- **Hypothesis: the map's link points are the first coin's coordinate** (`InnerRecordMap.points`, the coin types'
 shape): as a run's coin step, `pts` of the points the map gives at a coin is that coin's coordinate 0. -/
@@ -113,22 +116,23 @@ theorem laterCoins_of_held {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} {Cm : 
     {t : List (Cm × ((k : Fin r) → CT k))} {u : C3Run e}
     {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
-    {m : FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin r) → CT k)}
+    {m : FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin r) → CT k)} {sel : ℕ → String → ℕ → Prop}
     {pts : Array (Array Flock.F128) → Fin 2 → Fin e.cls.mPts → GF128} {spec : Flock.SessionSpec}
     {sess : Flock.Session}
-    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m) (henc : CoinsEncoded m.selC m.coin)
+    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m) (henc : CoinsEncoded sel m.coin)
+    (hsel : ∀ i s q, sel i s q → m.selC i s q)
     (hpe : PointsEncoded pts m.points) (hdec : Flock.Record.decode spec (wr t).2 = .ok sess)
     (hu : pts sess.points = u.pts) (hr : 0 < r) (hlen : r + 1 ≤ t.length)
-    (h2 : StageHeld t wr held m.selC (1 + nCoins (u.ts 0) + nCoins (u.ts 1)) (u.sp 0))
-    (h3 : StageHeld t wr held m.selC (1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0)) (u.sp 1))
-    (h4 : StageHeld t wr held m.selC (1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1))
+    (h2 : StageHeld t wr held sel (1 + nCoins (u.ts 0) + nCoins (u.ts 1)) (u.sp 0))
+    (h3 : StageHeld t wr held sel (1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0)) (u.sp 1))
+    (h4 : StageHeld t wr held sel (1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1))
       u.op)
-    (h5 : StageHeld t wr held m.selC
+    (h5 : StageHeld t wr held sel
       (1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op) u.lg) :
     LaterCoins (t.map Prod.snd) u :=
   ⟨FlockC3.Reps.linkPoints_of_custody hcus hpe hdec hu hr (by omega),
-    FlockC3.Reps.coinsAt_stageHeld hcus henc hlen h2, FlockC3.Reps.coinsAt_stageHeld hcus henc hlen h3,
-    FlockC3.Reps.coinsAt_stageHeld hcus henc hlen h4, FlockC3.Reps.coinsAt_stageHeld hcus henc hlen h5⟩
+    FlockC3.Reps.coinsAt_stageHeld hcus henc hsel hlen h2, FlockC3.Reps.coinsAt_stageHeld hcus henc hsel hlen h3,
+    FlockC3.Reps.coinsAt_stageHeld hcus henc hsel hlen h4, FlockC3.Reps.coinsAt_stageHeld hcus henc hsel hlen h5⟩
 
 end
 
