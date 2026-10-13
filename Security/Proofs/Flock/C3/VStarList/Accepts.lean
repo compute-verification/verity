@@ -154,6 +154,3 @@ theorem acceptsC3_of_verify {I : Exec.Inputs} {r : String} {spec' : SessionSpec}
   exact h3
 
 end FlockC3.VStarList
-
-#print axioms FlockC3.VStarList.c3_of_checks
-#print axioms FlockC3.VStarList.acceptsC3_of_verify
