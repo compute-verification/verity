@@ -68,8 +68,8 @@ theorem log2ceil_two_pow (k : Nat) : log2ceil (2 ^ k) = k := by
     have hlog : Nat.log2 (2 ^ (k + 1) - 1) = k := by
       apply (Nat.log2_eq_iff (by have := Nat.two_pow_pos k; rw [Nat.pow_succ]; omega)).2
       constructor
-      · rw [Nat.pow_succ]
-        have := Nat.two_pow_pos k
+      · have hlt : 2 ^ k < 2 ^ (k + 1) :=
+          Nat.pow_lt_pow_right (by norm_num) (by omega)
         omega
       · omega
     rw [hlog]
@@ -107,7 +107,7 @@ theorem root_eq (dom : ByteArray) (leaves : Array ByteArray) :
       (fun level depth => next dom depth level) (base dom leaves)).getD 0 ByteArray.empty =
       (lev dom leaves (log2ceil leaves.size))[0]!
   rw [show base dom leaves = lev dom leaves 0 by rfl, fold_eq]
-  rw [Nat.zero_add, getElem!_eq_getD]
+  rw [Nat.zero_add, Array.getD_eq_getD_getElem?, getElem!_def]
 
 theorem get!_mem {a : Array ByteArray} {i : Nat} (h : i < a.size) : a[i]! ∈ a := by
   rw [getElem!_pos a i h]
