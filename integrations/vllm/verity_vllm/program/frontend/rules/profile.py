@@ -7,6 +7,8 @@ mutated operands explicitly; the state rule binds `unified_attention` and makes 
 
 from __future__ import annotations
 
+import dataclasses
+
 import torch
 
 from verity.ml.circuits.refs import Coll, array_of
@@ -227,6 +229,16 @@ class BroadcastBiasAddRule(OpRule):
                                 "bias_is_parameter": (ctx.weight_of(bn) or None) and ctx.weight_of(bn).name}, emitted=f"{fn.id} x{len(rows)}")
 
 
+def _without_batch_invariance(op: str, states: str) -> str | None:
+    """A refusal when the active target is not batch-invariant, where ``op`` is the kernel vLLM dispatches without batch invariance
+    (cuBLAS's GEMM, `layernorm_kernels.cu`'s `rms_norm_kernel` at a token-count-dependent block), not the batch-invariant one the
+    rule's kind states."""
+    from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports this module)
+    if active_target_profile().batch_invariant:
+        return None
+    return f"numerics_unregistered: {op} on a target without batch invariance is the kernel vLLM dispatches there, not {states}"
+
+
 # -- in-place kernel interface --------------------------------------------------------------------------------
 
 
@@ -235,13 +247,15 @@ class RmsNormRule(InPlaceRule):
     modes = frozenset({"profile"})
     info = RuleInfo("RmsNorm[vllm]", 1, "in-place-binding", applies_to="_C.rms_norm(Tensor! out, x, weight, eps)",
                     preconditions=("out is an unwritten allocation (or a value) of x's shape", "x is bf16 [.., N], weight is bf16 [N]",
-                                   "eps is a Python float (becomes the EPS static)", "weight is not written"),
+                                   "eps is a Python float (becomes the EPS static)", "weight is not written", "the target is batch-invariant"),
                     evidence_domain="structural; numerics: RMSNormTriton_v1 (vLLM batch-invariant Triton _rms_norm_kernel)")
 
     def targets(self):
         return targets_for("rms_norm")
 
     def applies(self, node, ctx):
+        if (r := _without_batch_invariance("_C.rms_norm", "the batch-invariant Triton _rms_norm_kernel RMSNormTriton_v1 states")):
+            return r
         out, x, w, eps = node.args[:4]
         r = _row_tensor(ctx, x, "x") or _row_tensor(ctx, w, "weight")
         if r:
@@ -507,7 +521,19 @@ class UnifiedAttentionRule(StateRule):
                                 "kv_rows_from_this_request": True, "assumed_causal": True}, emitted=f"Attention_v1 x{T} (T={P0 + 1}..{P0 + T})")
 
 
-PROFILE_RULES = [LinearRule("profile", BF16, "gemm", "bias_add"), EmbeddingRule(), ArgmaxTokenSelectRule(), ResidualAddRule(), BroadcastBiasAddRule(),
+class ProfileLinearRule(LinearRule):
+    """`LinearRule` in profile mode, which states the `gemm` kind, the batch-invariant matmul: on a target without batch invariance
+    an exported `aten.linear` is the GEMM vLLM's unquantized linear dispatches to, which that kind does not state."""
+
+    def __init__(self) -> None:
+        super().__init__("profile", BF16, "gemm", "bias_add")
+        self.info = dataclasses.replace(self.info, preconditions=self.info.preconditions + ("the target is batch-invariant",))
+
+    def applies(self, node, ctx):
+        return _without_batch_invariance("aten.linear", "the batch-invariant matmul the 'gemm' kind states") or super().applies(node, ctx)
+
+
+PROFILE_RULES = [ProfileLinearRule(), EmbeddingRule(), ArgmaxTokenSelectRule(), ResidualAddRule(), BroadcastBiasAddRule(),
                  RmsNormRule(), FusedAddRmsNormRule(), RotaryEmbeddingRule(), SiluAndMulRule(), UnifiedAttentionRule()]
 
 __all__ = ["PROFILE_RULES"]

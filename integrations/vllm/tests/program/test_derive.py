@@ -492,6 +492,21 @@ def test_neg_profile_mode_refuses_f32_linear():
     assert isinstance(r, Unsupported) and r.reason in ("numerics_unregistered", "decomposition"), r
 
 
+@pytest.mark.parametrize("op", ["aten.linear", "_C.rms_norm"])
+def test_neg_profile_mode_refuses_a_batch_invariant_kind_on_a_target_without_batch_invariance(op, monkeypatch):
+    """On a target without batch invariance `aten.linear` is the GEMM vLLM's unquantized linear dispatches to and `_C.rms_norm` the
+    CUDA `rms_norm_kernel`, which the profile's `gemm` and `rmsnorm` kinds (the batch-invariant Triton kernels) do not state; the
+    default target derives both."""
+    from verity_vllm.program.frontend.rules.vllm_bindings import observations as VB
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    m = torch.nn.Linear(16, 8, bias=False).to(torch.bfloat16) if op == "aten.linear" else ex.RMSNorm(16, 1e-5)
+    x = (torch.empty(4, 16, dtype=torch.bfloat16),)
+    assert derive_report(m, x, **PROF).ok
+    monkeypatch.setitem(VB._OBSERVED, "target_profile", TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False))
+    r = derive(m, x, **PROF)
+    assert isinstance(r, Unsupported) and f"{op} on a target without batch invariance" in r.hint, r
+
+
 def test_returned_parameter_is_recorded_explicitly():
     rep = derive_report(ex.NegReturnsWeight(), (torch.empty(2, 8),), **REF)
     assert rep.ok, rep.unsupported
