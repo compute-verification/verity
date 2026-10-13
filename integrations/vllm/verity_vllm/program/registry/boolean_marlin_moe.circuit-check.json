@@ -16,13 +16,13 @@
    "and": 829
   },
   "MarlinMxfp4StepActivation_v1{DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 1568
+   "and": 49
   },
   "MarlinMxfp4StepColumn_v1{DOT=HopperBF16WgmmaDot16_v2}": {
    "and": 11133
   },
   "MarlinMxfp4StepFromZeroActivation_v1{DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 1568
+   "and": 49
   },
   "MarlinMxfp4StepFromZeroColumn_v1{DOT=HopperBF16WgmmaDot16_v2}": {
    "and": 10834

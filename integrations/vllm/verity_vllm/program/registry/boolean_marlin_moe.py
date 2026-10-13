@@ -9,8 +9,8 @@ so each one's word view is its `_v1` at the same statics (`elementwise.on_bits`)
     GatherE2m1x{E}_v2, GatherE8m0x{E}_v2, MoeExpertE2m1Row_v2{E,K}, MoeExpertE8m0Row_v2{E,K}
     MarlinMoeExpertCoordinate(W)_v2{E,K,TK,DOT}, MarlinMoeExpertGemm(W)_v2{E,K,N,TK,TN,GRID,DOT}
 
-    MarlinMxfp4Step(FromZero)Activation_v1{DOT}      (x: 32 bf16) -> xd: 1-bit words         the step's gates that read only x
-    MarlinMxfp4Step(FromZero)Column_v1{DOT}          ([acc], x, q, s, xd) -> f32             the rest, from them
+    MarlinMxfp4Step(FromZero)Activation_v1{DOT}      (x: bf16) -> 20 1-bit words             the step's gates that read only x[j]
+    MarlinMxfp4Step(FromZero)Column_v1{DOT}          ([acc], x, q, s, xd: 32 of them) -> f32 the rest, from them
     MarlinMoeExpertColumn(W)_v1{E,K,TK,DOT}          a pair GEMM's output word over its activation gates (no word view)
 
 The group is one circuit: the scale byte's features (s - 1, and s in {0, 1, 253, 254, 255}) once, then per weight its sign, the
@@ -28,9 +28,10 @@ constants too.  The coordinates' other callees are `F32Add_v3`, `SelectI32_v2` (
 lookup gate.
 
 A pair GEMM computes no value twice: each of its N columns runs a step over every scale group of the same x, so each step is cut
-at x (`elementwise.shared_specialized`), its gates that read only x one `...Activation_v1` Call per pair and scale group, and each
-column a `MarlinMoeExpertColumn(W)_v1`: `MarlinMoeExpertCoordinate(W)_v2`'s body with each step its `...Column_v1` over those
-gates, and w2's product with the routed weight `boolean_dense`'s `Bf16MulScalarTensorElement_v1` over g's own gates, made once.
+at x (`elementwise.shared_specialized`), and each column is a `MarlinMoeExpertColumn(W)_v1`: `MarlinMoeExpertCoordinate(W)_v2`'s
+body with each step its `...Column_v1` over x's own gates, and w2's product with the routed weight `boolean_dense`'s
+`Bf16MulScalarTensorElement_v1` over g's own gates, made once.  Each of x's own gates reads one word of x, and every word's are
+the same circuit, so they are one `...Activation_v1` Call per pair and x word: at most 32 bits leave it, one unit of `Q_call`.
 
 Each cut bit is an element of its own (`Array<1, Value<1>>`): an `Array<n, Value<1>>` is one n-bit word in the word view, and the
 word Definitions' cuts are n 1-bit words.
@@ -127,13 +128,13 @@ MarlinMxfp4StepFromZeroV2 = EW.specialized(
     doc="MarlinMxfp4StepFromZero_v1 on bits: MarlinMxfp4Step_v2 with the +0 accumulator folded in")
 MarlinMxfp4StepActivation, MarlinMxfp4StepColumn = EW.shared_specialized(
     ("MarlinMxfp4StepActivation", "MarlinMxfp4StepColumn"), 1, ["DOT"], _step(False), MM.step_sig(False, E2M1, E8M0, BF16, F32), 1,
-    ("the gates of MarlinMxfp4Step_v2 that read only x: once per pair and scale group",
-     "MarlinMxfp4Step_v2 from x's own gates xd: once per column"), element=CUT)
+    ("the gates of MarlinMxfp4Step_v2 that read only one word of x: once per pair and x word",
+     "MarlinMxfp4Step_v2 from x's own gates xd: once per column"), element=CUT, by_element=True)
 MarlinMxfp4StepFromZeroActivation, MarlinMxfp4StepFromZeroColumn = EW.shared_specialized(
     ("MarlinMxfp4StepFromZeroActivation", "MarlinMxfp4StepFromZeroColumn"), 1, ["DOT"], _step(True),
     MM.step_sig(True, E2M1, E8M0, BF16, F32), 0,
-    ("the gates of MarlinMxfp4StepFromZero_v2 that read only x: once per pair and scale group of k-tile 0",
-     "MarlinMxfp4StepFromZero_v2 from x's own gates xd: once per column"), element=CUT)
+    ("the gates of MarlinMxfp4StepFromZero_v2 that read only one word of x: once per pair and x word of k-tile 0",
+     "MarlinMxfp4StepFromZero_v2 from x's own gates xd: once per column"), element=CUT, by_element=True)
 
 
 def _neg_if(C, c, w):
@@ -298,18 +299,17 @@ class _ColumnOps(MM.Ops):
 
 
 def _activation_types(S) -> tuple[Array, Array]:
-    """The types of a pair's activation gates: k-tile 0's TK/32 scale groups' (the step from +0's), and the other groups'."""
+    """The types of a pair's activation gates by scale group: k-tile 0's TK/32 groups' (the step from +0's), and the others'."""
     W = S.TK // MM.GROUP
-    return (Array(W, MarlinMxfp4StepFromZeroActivation.signature(S)[1]),
-            Array(S.K // MM.GROUP - W, MarlinMxfp4StepActivation.signature(S)[1]))
+    return (Array(W, MarlinMxfp4StepFromZeroColumn.signature(S)[0][-1][1]),
+            Array(S.K // MM.GROUP - W, MarlinMxfp4StepColumn.signature(S)[0][-1][1]))
 
 
 def _activation(B, S, x) -> tuple[Coll, Coll]:
-    """Every step's activation gates of one pair, made once, as `_activation_types`."""
-    W = S.TK // MM.GROUP
+    """Every step's activation gates of one pair, one Call per x word, made once, as `_activation_types`."""
     first, step = bind(MarlinMxfp4StepFromZeroActivation, DOT=S.DOT), bind(MarlinMxfp4StepActivation, DOT=S.DOT)
-    parts = [B.call(first if g < W else step, x[MM.GROUP * g:MM.GROUP * (g + 1)]) for g in range(S.K // MM.GROUP)]
-    return tuple(Coll(t, concat([p.refs for p in ps])) for t, ps in zip(_activation_types(S), (parts[:W], parts[W:])))
+    parts = [B.call(first if k < S.TK else step, x[k]) for k in range(S.K)]
+    return tuple(Coll(t, concat([p.refs for p in ps])) for t, ps in zip(_activation_types(S), (parts[:S.TK], parts[S.TK:])))
 
 
 def _column_sig(routed: bool):
