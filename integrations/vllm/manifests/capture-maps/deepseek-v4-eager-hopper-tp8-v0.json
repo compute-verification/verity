@@ -468,7 +468,7 @@
   "sampler": "the committer's runner.sample wrap: runner.sampler/sampled_token_ids",
   "tp_partial": "TPPartialSource (acquire/sources/partial_source.py): a collective's rank-local input, <site>/part_rank<r> or <site>/shard_rank<r>, and the MoE runner's received output, <runner>/out",
   "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block; the Marlin launches and the DeepSeek-V4 routers are capture work",
-  "mhc": "not built (capture work): a wrap of the mHC call-time globals of vllm.models.deepseek_v4.nvidia.model, naming each call's returns <layer>/hc_attn_<value> or <layer>/hc_ffn_<value> (_split on the hc-split route), and the final post and head model/hc_post, model/hc_head",
+  "mhc": "MhcSource (acquire/sources/mhc_source.py): a wrap of the mHC call-time globals of vllm.models.deepseek_v4.nvidia.model, naming each call's returns <layer>/hc_attn_<value> or <layer>/hc_ffn_<value> (_split on the hc-split route, by the call's token count), and the final post and head model/hc_post, model/hc_head",
   "dsv4_attention": "not built (capture work): DeepseekV4Attention's values by function return, output argument and cache rows at the step's slot mappings, as <attn>/<value>, <compressor>/kv_score, <cache>/rows and <indexer>/<value>"
  },
  "taps": [
@@ -3764,7 +3764,8 @@
  "capture_work": [
   {
    "item": 1,
-   "work": "mhc source: wrap the four mHC call-time globals of vllm.models.deepseek_v4.nvidia.model (mhc_pre_broadcast_tilelang, mhc_fused_post_pre_tilelang, mhc_post_tilelang, hc_head_fused_kernel_tilelang) and bind each call's returns under the binder's names; record per call whether the FMA (num_tokens <= 16) or the TF32 path ran, held to the step's hc route"
+   "work": "mhc source: wrap the four mHC call-time globals of vllm.models.deepseek_v4.nvidia.model (mhc_pre_broadcast_tilelang, mhc_fused_post_pre_tilelang, mhc_post_tilelang, hc_head_fused_kernel_tilelang) and bind each call's returns under the binder's names; record per call whether the FMA (num_tokens <= 16) or the TF32 path ran, held to the step's hc route",
+   "done": "mhc source: acquire.sources.mhc_source wraps the four mHC functions in the module of the decoder layer's and the model's forward, attributes each call to the side whose <side>_fn it was passed (the post to the model), binds its returns under the map's names, those of mhc_fused_post_pre_tilelang on the hc route the map's hc decision gives for the call's own token count, and flushes them; route_source holds them to the step's routes (BINDERS)"
   },
   {
    "item": 2,
@@ -3782,7 +3783,7 @@
   {
    "item": 5,
    "work": "route source: record each step's hc route (token count), FlashMLA rows (num_decode_tokens) and indexer route (the indexer metadata's max_seq_len // CSA_R <= TOPK), then add route_site so the committer reads this map",
-   "done": "route source: route_site.sites names the four calls that decide a step's routes (FlashMLA's _forward_decode and _forward_prefill for its rows, each decoder layer's forward at M <= 16 for its hc route, each CSA indexer's forward returning None for its indexer route); acquire.sources.route_source records them per decision and layer and holds the step's names to the union, and route_source.attach leaves the map alone while it names a binder no source builds (route_source.unbuilt: mhc, dsv4_attention)"
+   "done": "route source: route_site.sites names the four calls that decide a step's routes (FlashMLA's _forward_decode and _forward_prefill for its rows, each decoder layer's forward at M <= 16 for its hc route, each CSA indexer's forward returning None for its indexer route); acquire.sources.route_source records them per decision and layer and holds the step's names to the union, and route_source.attach leaves the map alone while it names a binder no source builds (route_source.unbuilt)"
   },
   {
    "item": 6,

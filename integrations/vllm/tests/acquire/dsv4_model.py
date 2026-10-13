@@ -6,7 +6,8 @@ indexers run the pinned vLLM's call structure on small tensors.
 `mhc_pre_broadcast_tilelang` with the embedding, every other one `mhc_fused_post_pre_tilelang` with `hc_attn_fn`, and every ffn
 side `mhc_fused_post_pre_tilelang` with `hc_ffn_fn`, each by the call-time global as vLLM's module does; `Model.forward` runs the
 layers, then `mhc_post_tilelang` and `hc_head_fused_kernel_tilelang`.  The mHC functions take vLLM's parameters and return its
-shapes, and say whether they took the FMA path (`num_tokens <= 16`, kernels/mhc/tilelang.py:518) in `FMA_CALLS`.
+shapes, and say whether they took the FMA path (`num_tokens <= 16`, kernels/mhc/tilelang.py:518) in `FMA_CALLS`; a decoder layer
+keeps each side's four returns in `seen`.
 `Attention.forward` runs the indexer on a CSA layer (its forward returns (None, None, None) when the step's longest sequence has at
 most TOPK * CSA_R tokens) and `forward_mqa`, which calls `_forward_prefill` on the prefill rows and `_forward_decode` on the decode
 rows, as FlashMLA's does.  Each module keeps what it computed (`seen`) for the tests to compare with what a source bound."""
@@ -135,10 +136,12 @@ class DecoderLayer(torch.nn.Module):
             residual, post_mix, res_mix, x = mhc_fused_post_pre_tilelang(
                 x, residual, post_mix, res_mix, self.hc_attn_fn, self.hc_attn_scale, self.hc_attn_base, 1e-6, 1e-6, 1e-6, 2.0, 20,
                 n_splits=1, tile_n=1, norm_weight=torch.ones(H), norm_eps=1e-6)
+        self.seen = {"hc_attn": (residual, post_mix, res_mix, x)}
         x = self.attn(positions, x, None)
         residual, post_mix, res_mix, x = mhc_fused_post_pre_tilelang(
             x, residual, post_mix, res_mix, self.hc_ffn_fn, self.hc_ffn_scale, self.hc_ffn_base, 1e-6, 1e-6, 1e-6, 2.0, 20,
             n_splits=1, tile_n=1, norm_weight=torch.ones(H), norm_eps=1e-6)
+        self.seen["hc_ffn"] = (residual, post_mix, res_mix, x)
         return x * 0.5, residual, post_mix, res_mix
 
 

@@ -19,8 +19,8 @@ the step.  DeepSeek-V4-Pro's map decides its mHC route at the decoder layer's to
 (None on the short path) and its attention rows at FlashMLA's `_forward_decode` and `_forward_prefill` calls.
 
 `identity_check` reads two rules from it.  `split_step_names`: the step's names that the module hooks, the sampler wrap, the
-all-reduce-norm source and the attention source bind (`BINDERS`; the rank-tagged partials and the MoE planes have rules of their
-own) are exactly the map's `committer_names` for the step's routes and phase, once each, and no module-hook name (`<module>`,
+all-reduce-norm source, the attention source and the mHC source bind (`BINDERS`; the rank-tagged partials and the MoE planes have
+rules of their own) are exactly the map's `committer_names` for the step's routes and phase, once each, and no module-hook name (`<module>`,
 `<module>/<k>`, `<module>/in`) of a module the map lists is outside them.  Those names leave the step-0 multiplicity rule, which a
 step on another route than step 0 would fail, and the module rule: `step_modules`, the hooked modules a step must cover by a name of
 their own, are the ones the map has no entry for.  A fused norm, or `kv_b_proj` on a sparse step, is held to the map's names, not to
@@ -39,13 +39,13 @@ from typing import Any, Mapping
 
 import torch
 
-from verity_vllm.acquire.sources import attention_source
+from verity_vllm.acquire.sources import attention_source, mhc_source
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import MANIFESTS
 from verity_vllm.engine.hooks import Hooks
 
 MAPS = MANIFESTS / "capture-maps"
-BINDERS = ("module_hook", "sampler", "allreduce_norm", attention_source.BINDER)
+BINDERS = ("module_hook", "sampler", "allreduce_norm", attention_source.BINDER, mhc_source.BINDER)
 #: binders whose sources hold their names to rules of their own (`partial_source`, `moe_source`)
 OWN_RULES = ("tp_partial", "moe")
 NO_ROUTE = "<no route recorded>"
@@ -180,7 +180,7 @@ class RouteSource:
         self.calls += 1
 
     def _observe(self, k: int, layer: int) -> Any:
-        me, site = self, self.sites[k]
+        me = self
 
         def make(orig: Any) -> Any:
             def observe(*args: Any, **kwargs: Any) -> Any:
@@ -268,16 +268,19 @@ class RouteSource:
 
 def attach(com: Any, model: Any, rank: int = 0) -> RouteSource | None:
     """Attach the source to `com` when a capture map with a `route_site` describes `model`, and the attention source
-    (`attention_source`) beside it when the map binds taps through it; None when no map describes the model, and while the map
-    names a binder no source builds (`unbuilt`), whose taps nothing would commit while the source releases the modules the map
-    knows from the module rule."""
+    (`attention_source`) and the mHC source (`mhc_source`) beside it when the map binds taps through them; None when no map
+    describes the model, and while the map names a binder no source builds (`unbuilt`), whose taps nothing would commit while the
+    source releases the modules the map knows from the module rule."""
     cmap = find_map(model)
     if cmap is None or not cmap.get("route_site") or unbuilt(cmap):
         return None
     src = RouteSource(com, model, cmap, rank=rank)
     attn = attention_source.AttentionSource(com, src) if attention_source.binds(cmap) else None
+    mhc = mhc_source.MhcSource(com, src, model) if mhc_source.binds(cmap) else None
     com.attach_source(src)
     if attn is not None:
         com.attach_source(attn)
         src.attention = attn
+    if mhc is not None:
+        com.attach_source(mhc)
     return src
