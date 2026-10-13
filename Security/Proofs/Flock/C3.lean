@@ -60,6 +60,7 @@ import Proofs.Flock.C3.Reps.ResRead
 import Proofs.Flock.C3.Reps.SentKeys
 import Proofs.Flock.C3.Reps.RepsCounted
 import Proofs.Flock.C3.Reps.WRead
+import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.C3.Reps.WithReads
 import Proofs.Flock.C3.Opening.Session
 import Proofs.Flock.C3.Opening.SrcOpening

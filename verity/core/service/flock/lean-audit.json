@@ -7,6 +7,7 @@
   "Flock.Test.InnerStreams",
   "Flock.Test.RecOpen",
   "Flock.Test.RecOpening",
+  "Flock.Test.ReadWhole",
   "VStar"
  ],
  "exempt": {
