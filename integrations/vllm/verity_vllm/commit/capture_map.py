@@ -3,8 +3,11 @@
 A map's shapes and layer sets are expressions over its symbols (`symbols`: `config.json` keys and the tensor-parallel size).
 `identities` gives the canonical value id (`verity_vllm.commit.identity`) of every tap a step captures on its routes, and
 `committer_names` the tensor name each bound tap is committed under (`commit.name`), which is what the committer's sources
-check a step against (`acquire.sources.route_source`).  `counts` totals the taps by Program status and by binder.  Holding a map
-against a module inventory is `verity_vllm.check.capture_map`.
+check a step against (`acquire.sources.route_source`).  A tap whose leading dimension is a row count (`row_counts`: the tokens
+whose position + 1 is a multiple of a ratio) writes no row on a step where the count is 0, and the step commits nothing under its
+name; `empty_names` recomputes those names from the step's committed positions, for the committer's identity check and for
+`bind_names`, which holds one step's committed names to the map.  `counts` totals the taps by Program status and by binder.
+Holding a map against a module inventory is `verity_vllm.check.capture_map`.
 """
 from __future__ import annotations
 
@@ -193,15 +196,47 @@ def committer_names(cmap: dict[str, Any], env: dict[str, int], *, phase: str = "
     return out
 
 
+def row_count_of(cmap: dict[str, Any], tap: dict[str, Any]) -> str | None:
+    """The row count (`row_counts.ratios`) a tap's leading dimension is, or None."""
+    lead = tap["shape"][0] if tap.get("shape") else None
+    return lead if isinstance(lead, str) and lead in ((cmap.get("row_counts") or {}).get("ratios") or {}) else None
+
+
+def row_counts(cmap: dict[str, Any], env: dict[str, int], positions) -> dict[str, int]:
+    """Each row count of the map (`row_counts.ratios`: the count's symbol -> its ratio's) on a step whose tokens are at `positions`
+    (the values the step commits under the `row_counts.positions` tap): the tokens whose position + 1 is a multiple of the ratio,
+    the rows the compress kernels' mask selects, recomputed from the step's own positions.  Empty for a map without row counts."""
+    ratios = (cmap.get("row_counts") or {}).get("ratios") or {}
+    out: dict[str, int] = {}
+    for sym, ratio in ratios.items():
+        r = int(evaluate(ratio, env))
+        out[sym] = sum(1 for p in positions if (int(p) + 1) % r == 0)
+    return out
+
+
+def empty_names(cmap: dict[str, Any], env: dict[str, int], positions, names: dict[str, tuple[dict[str, Any], int | None]]) -> set[str]:
+    """Of a step's `names` (`committer_names`), the ones it writes no row for: those whose tap's leading dimension is a row count
+    (`row_count_of`) that is 0 at its `positions` (`row_counts`).  The committer commits no empty tensor, so the step commits none
+    of them and every other name: the committer's identity check (`acquire.sources.route_source`) and a reader of a commit
+    (`bind_names`) hold a step to that."""
+    zero = {s for s, n in row_counts(cmap, env, positions).items() if n == 0}
+    return {n for n, (tap, _layer) in names.items() if row_count_of(cmap, tap) in zero} if zero else set()
+
+
 def bind_names(cmap: dict[str, Any], env: dict[str, int], names, *, profile: str, request: str, t: int, phase: str,
                routes: tuple[str, ...] | None = None, rank: int | None = None, binders: tuple[str, ...] | None = None,
-               on_target: bool = True) -> dict[str, list[str]]:
+               on_target: bool = True, positions=None) -> dict[str, list[str]]:
     """One step's committed tensor names on one rank against the map: `ids`, the value id of every name the map lists; `unknown`,
-    the names it does not list; `missing`, the names of bound taps (of `binders`, when given) the step did not commit."""
+    the names it does not list; `missing`, the names of bound taps (of `binders`, when given) the step did not commit and writes
+    rows for; `empty`, the names it committed and writes no row for.  Which names a step writes no row for is `empty_names` at its
+    `positions` (the values it committed under the `row_counts.positions` tap), which a step with a row-counted name must give."""
     want = committer_names(cmap, env, phase=phase, routes=routes, rank=rank or 0, binders=binders, on_target=on_target)
+    if positions is None and any(row_count_of(cmap, tap) for tap, _layer in want.values()):
+        raise MapError(f"capture map {cmap.get('id')}: a step whose names have row counts needs its positions")
+    empty = empty_names(cmap, env, positions, want) if positions is not None else set()
     got = set(names)
     return {"ids": sorted(tap_value_id(*want[n], profile=profile, request=request, t=t, phase=phase, rank=rank) for n in got & want.keys()),
-            "unknown": sorted(got - want.keys()), "missing": sorted(want.keys() - got)}
+            "unknown": sorted(got - want.keys()), "missing": sorted(want.keys() - got - empty), "empty": sorted(got & empty)}
 
 
 def counts(cmap: dict[str, Any], env: dict[str, int], routes: tuple[str, ...] | None = None) -> dict[str, Any]:

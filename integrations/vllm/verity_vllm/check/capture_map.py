@@ -10,8 +10,9 @@ symbols, which name `config.json` keys and the tensor-parallel size, so nothing 
 `check` holds a map against a module inventory (`verity_vllm.engine.meta_inventory`: a meta-device build of the same config, or
 `inventory(model)` of a live serving rank): every (path pattern, class) the inventory lists has exactly one module entry and
 every entry is listed, each entry's layers are the inventory's, each tap names an inventory module and reads tensors of the
-shape the inventory gives that rank, every kernel expectation (`expect`) holds, and every Definition a Program cites is
-registered.  `check_target` holds the device and the process-wide switches the inventory was built under against the map's
+shape the inventory gives that rank, every kernel expectation (`expect`) holds, every Definition a Program cites is
+registered, and the map's row counts (`row_counts`) read a positions tap and, at every layer of a tap they count, the ratio the
+config gives that layer (`layer_ratio`).  `check_target` holds the device and the process-wide switches the inventory was built under against the map's
 target.  Reading a map and expanding one step's taps (`identities`, `committer_names`, `counts`) is `verity_vllm.commit.capture_map`,
 which the committer's sources read too.  A tap marked `target_only` runs only on the map's target device (its kernels have no
 build for the devices the inventory and the tests run on).
@@ -29,8 +30,8 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.commit.capture_map import (DISPOSITIONS, LAYER_VAR, STATUSES, TP_KINDS, MapError, at_layer, committer_names,
-                                            counts, dim, evaluate, identities, layer_set, load, route_sites, symbols, tap_layers,
-                                            tap_value_id)
+                                            config_value, counts, dim, evaluate, identities, layer_set, load, route_sites, symbols,
+                                            tap_layers, tap_value_id)
 from verity_vllm.commit.identity import NAMED_LAYERS
 from verity_vllm.config import option
 
@@ -49,6 +50,34 @@ def _group_tensors(group: dict[str, Any], layer: int | None) -> dict[str, Any]:
         if layer is None or layer in s["layers"] or s["layers"] == [-1]:
             return s["tensors"]
     return {}
+
+
+def _row_count_problems(cmap: dict[str, Any], taps: dict[str, dict[str, Any]], config: dict[str, Any], env: dict[str, int]) -> list[str]:
+    """The map's row counts (`row_counts`) against itself and `config`: they read a tap of one integer per token, each count is a
+    free symbol, and every layer of a tap whose leading dimension is a count has the count's ratio in the config (`layer_ratio`)."""
+    rc = cmap.get("row_counts")
+    if not rc:
+        return []
+    problems: list[str] = []
+    pt = taps.get(rc.get("positions"))
+    if pt is None or pt["shape"] != ["M"] or not str(pt["dtype"]).startswith("int"):
+        problems.append(f"row_counts: positions {rc.get('positions')!r} is no tap of one integer per token")
+    for sym, ratio in rc.get("ratios", {}).items():
+        if sym not in cmap.get("free_symbols", {}):
+            problems.append(f"row_counts: {sym!r} is not a free symbol")
+        try:
+            r = int(evaluate(ratio, env))
+            for tid, t in taps.items():
+                if t["shape"][:1] != [sym]:
+                    continue
+                for i in tap_layers(cmap, t, env) or [None]:
+                    path = at_layer(rc["layer_ratio"], i)
+                    got = config_value(config, path) if i is not None else None
+                    if got != r:
+                        problems.append(f"tap {tid}: layer {i}'s {path} is {got!r}, not its row count {sym}'s ratio {ratio} = {r}")
+        except (MapError, KeyError) as e:
+            problems.append(f"row_counts {sym}: {e!r}")
+    return problems
 
 
 def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any], tp: int,
@@ -156,6 +185,8 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
                     problems.append(f"{where}: weight {at_layer(w['param'], layer)} has shape {ten['shape']}, the map's rows "
                                     f"{w['rows']} = {dim(w['rows'], env, free)}")
                     break
+
+    problems += _row_count_problems(cmap, taps, config, env)
 
     for site in route_sites(cmap):
         problems += [f"route_site {k}: unknown route {r!r}" for k in ("true", "false", "decode_tokens") for r in site.get(k, ())

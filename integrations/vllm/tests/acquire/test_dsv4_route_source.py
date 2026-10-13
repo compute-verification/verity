@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.dsv4_model import CMAP, CONFIG_PATH, CSA, HOOKED, L, MAP, STEPS, TP, dsv4_model, metadata, run_step
+from tests.acquire.dsv4_model import CMAP, CONFIG_PATH, CSA, HCA_R, HOOKED, L, MAP, STEPS, TP, dsv4_model, metadata, run_step
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TP_PARTIAL_RE, NativeHostCommitter, TensorMeta
@@ -31,20 +31,28 @@ def map_names(capsys, routes: tuple[str, ...], phase: str, rank: int = 3, binder
 
 
 class Run:
+    """The route source on the stand-in, beside a record of each step's positions in the place of the attention source that binds
+    them (`RouteSource.rows`): each step ends at a token whose position + 1 is a multiple of HCA_R, so every row count is positive
+    and the map's names on its routes are every name."""
+
     def __init__(self, target: bool = True) -> None:
         self.model = dsv4_model()
         self.com = NativeHostCommitter(None, run_id="dsv4-routes", gpu_tree=True)
         self.src = RS.RouteSource(self.com, self.model, CMAP, rank=3, target=target)
+        self.src.rows = types.SimpleNamespace(positions={}, empty={})
         self.com._modules = [(n, m) for n, m in self.model.named_modules() if type(m).__name__ in HOOKED]
         self.com._modules.append(("runner.sampler", torch.nn.Module()))
         self.src.install()
 
     def step(self, k: int, md: Any, skip: tuple[int, ...] = ()) -> None:
+        n = md.num_actual_tokens
+        first = HCA_R * (k + 1) - n
         self.com._cur = types.SimpleNamespace(step=k)
         try:
-            run_step(self.model, md, 100 * k, skip)
+            run_step(self.model, md, first, skip)
         finally:
             self.com._cur = None
+        self.src.rows.positions[k] = tuple(range(first, first + n))
 
     def check(self, steps: dict[int, list[str]], *, sources: list[Any] | None = None) -> dict[str, Any]:
         self.com.sources = [self.src] if sources is None else sources
@@ -148,6 +156,7 @@ def test_a_tp_rank_attaches_the_route_source_once_no_binder_is_unbuilt():
     made = [{"rank": r, "tap_sources": attach(coms[r], dsv4_model(), None, r)} for r in (0, 1)]
     assert all(m["tap_sources"]["route_source"]["stats"]["layers"] == L for m in made), made
     assert all([s.short_name for s in c.sources] == ["routes", "mhc", "dsv4_attention"] for c in coms.values())
+    assert all(c.sources[0].rows is c.sources[2] for c in coms.values()), "the route source reads the attention source's positions"
     assert TAPS.require_on_every_rank(made, ("a",), {}, TAPS.TapSources(), explicit_classes=False) == ("a",)
 
 

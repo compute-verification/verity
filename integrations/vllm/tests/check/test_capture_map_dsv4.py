@@ -170,6 +170,48 @@ def test_a_wrong_compressor_width_fails():
                             "[2048, 7168]") for p in _check(cmap))
 
 
+def test_the_row_counts_read_the_positions_tap_and_every_counted_layer_s_config_ratio():
+    """NC4 and NC128 are the compress mask over a step's committed positions, at ratios the config gives every layer of a tap they
+    count: a config whose layer 3 compresses by 4 under the map's NC128 fails, and so do positions that are no integer per token."""
+    rc = CMAP["row_counts"]
+    assert rc["ratios"] == {"NC4": "CSA_R", "NC128": "HCA_R"} and rc["positions"] == "attn.positions"
+    counted = {t["id"]: CM.row_count_of(CMAP, t) for t in CMAP["taps"] if CM.row_count_of(CMAP, t)}
+    assert counted == {"attn.compressed_rows.csa": "NC4", "attn.compressed_rows.hca": "NC128", "indexer.k_cache": "NC4"}
+    assert CM.row_counts(CMAP, ENV, range(124, 128)) == {"NC4": 1, "NC128": 1}
+    assert CM.row_counts(CMAP, ENV, range(0, 3)) == {"NC4": 0, "NC128": 0} and CM.row_counts(CMAP, ENV, range(0, 512)) == {"NC4": 128, "NC128": 4}
+    config = copy.deepcopy(CONFIG)
+    config["compress_ratios"][3] = 4
+    assert [p for p in check(CMAP, RANK0, config, TP) if "row count" in p] == [
+        "tap attn.compressed_rows.hca: layer 3's compress_ratios.3 is 4, not its row count NC128's ratio HCA_R = 128"]
+    cmap = copy.deepcopy(CMAP)
+    next(t for t in cmap["taps"] if t["id"] == "attn.positions")["dtype"] = "bfloat16"
+    assert "row_counts: positions 'attn.positions' is no tap of one integer per token" in _check(cmap)
+
+
+def test_a_commit_read_against_the_map_is_held_to_its_positions_row_counts():
+    """The check side of a commit (`CM.bind_names`) recomputes from a step's committed positions the names it writes no row for,
+    with the function the committer's identity check uses (`CM.empty_names`): a missing name the positions give rows for is
+    missing, a present name they give none for is `empty`, and a step with row-counted names read without its positions is refused."""
+    names = CM.committer_names(CMAP, ENV, phase="decode", routes=DECODE, rank=0)
+    hca = {f"model.layers.{i}.attn/compressed_rows" for i in CM.layer_set(CMAP, "hca", ENV)}
+    csa = "model.layers.2.attn/compressed_rows"
+    assert CM.empty_names(CMAP, ENV, (0, 1, 2, 3), names) == hca and CM.empty_names(CMAP, ENV, range(124, 128), names) == set()
+
+    def bind(committed, positions):
+        return CM.bind_names(CMAP, ENV, committed, profile="0123456789ab", request="r0", t=0, phase="decode", routes=DECODE, rank=0,
+                             positions=positions)
+
+    without = [n for n in names if n not in hca]
+    assert (bind(without, (0, 1, 2, 3))["missing"], bind(without, (0, 1, 2, 3))["empty"]) == ([], [])
+    assert bind([n for n in without if n != csa], (0, 1, 2, 3))["missing"] == [csa], "the positions give NC4 = 1"
+    assert bind(list(names), (0, 1, 2, 3))["empty"] == sorted(hca), "the positions give NC128 = 0"
+    assert bind(without, range(124, 128))["missing"] == sorted(hca) and bind(list(names), range(124, 128))["empty"] == []
+    with pytest.raises(CM.MapError, match="needs its positions"):
+        bind(list(names), None)
+    moe = CM.bind_names(CMAP, ENV, [], profile="0123456789ab", request="r0", t=0, phase="decode", routes=DECODE, rank=0, binders=("moe",))
+    assert moe["empty"] == [] and moe["missing"], "a step of no row-counted name needs no positions"
+
+
 FP8_TAPS = {"attn.fused_wqa_wkv", "attn.wq_b", "indexer.wq_b", "attn.wo_b.partial", "shared.gate_up_proj", "shared.down_proj"}
 
 
@@ -250,7 +292,7 @@ def test_the_exists_programs_cite_what_the_build_binds():
 
 def test_the_program_statuses():
     """What has no Definition on main is `tonight` on the branch of the row that writes it; prefill's FlashMLA and the TF32 mHC
-    pre are committed-only on this target, and so are the kernels no row owns yet."""
+    pre are committed-only on this target, and so are the kernels no row owns yet and the step's positions, a root input."""
     statuses = {pid: p["status"] for pid, p in CMAP["programs"].items()}
     assert {statuses[t["program"]] for t in CMAP["taps"]} == set(CM.STATUSES)
     tonight: dict[str, set[str]] = {}
@@ -260,7 +302,7 @@ def test_the_program_statuses():
     assert tonight == OWNERS
     assert {pid for pid, s in statuses.items() if s == "committed-only"} == {
         "tp-allreduce", "flashmla-sparse-prefill", "mhc-tf32", "dsv4-qnorm-rope-kv-insert", "dsv4-compress-512", "dsv4-indexer-q",
-        "dsv4-decode-indices"}
+        "dsv4-decode-indices", "step-positions"}
     for p in CMAP["programs"].values():
         assert p["status"] != "exists" or p["definitions"]
         assert p["status"] != "tonight" or not p["definitions"]
@@ -275,7 +317,7 @@ def test_a_decode_step_leaves_one_mhc_pre_and_the_attention_bookkeeping_committe
     assert tf32 == [(f"hc_attn.first.{v}", 0) for v in ("residual", "post_mix", "comb_mix", "x")]
     assert not any(t["program"] == "flashmla-sparse-prefill" for t, _ in taps)
     assert {t["program"] for t, _ in taps if status[t["program"]] == "committed-only"} == {
-        "mhc-tf32", "tp-allreduce", "dsv4-qnorm-rope-kv-insert", "dsv4-compress-512", "dsv4-decode-indices"}
+        "mhc-tf32", "tp-allreduce", "dsv4-qnorm-rope-kv-insert", "dsv4-compress-512", "dsv4-decode-indices", "step-positions"}
 
 
 @pytest.mark.parametrize("step", sorted(STEPS))
@@ -305,7 +347,7 @@ def test_every_committer_name_is_unique_over_all_routes():
     list every name the map binds without knowing the step's routes."""
     every = CM.counts(CMAP, ENV)["bound_taps_per_step"]
     for rank in range(TP):
-        assert len(CM.committer_names(CMAP, ENV, rank=rank)) == every == 3203
+        assert len(CM.committer_names(CMAP, ENV, rank=rank)) == every == 3204
 
 
 def test_the_runbook_counts():
@@ -314,15 +356,15 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 36, "port": 8, "copy": 1, "committed-only": 27})
+        42, 28, {"exists": 5, "tonight": 36, "port": 8, "copy": 1, "committed-only": 28})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        63, 2538, {"exists": 125, "tonight": 1582, "port": 276, "copy": 1, "committed-only": 554}, 122)
+        64, 2539, {"exists": 125, "tonight": 1582, "port": 276, "copy": 1, "committed-only": 555}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        67, 2658, {"exists": 125, "tonight": 1612, "port": 306, "copy": 1, "committed-only": 614}, 242)
+        68, 2659, {"exists": 125, "tonight": 1612, "port": 306, "copy": 1, "committed-only": 615}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
-        62, 2414, {"exists": 125, "tonight": 1067, "port": 306, "copy": 1, "committed-only": 915}, 726)
+        63, 2415, {"exists": 125, "tonight": 1067, "port": 306, "copy": 1, "committed-only": 916}, 726)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        68, 2719, {"exists": 125, "tonight": 1128, "port": 306, "copy": 1, "committed-only": 1159}, 787)
+        69, 2720, {"exists": 125, "tonight": 1128, "port": 306, "copy": 1, "committed-only": 1160}, 787)
 
 
 def test_the_bound_tap_counts():
@@ -333,9 +375,9 @@ def test_the_bound_tap_counts():
         return c["bound_taps_per_step"], c["bound_taps_per_step_by_binder"]
 
     common = {"mhc": 490, "moe": 366, "sampler": 1, "tp_partial": 185}
-    assert bound(STEPS["decode"]) == (2538, {**common, "dsv4_attention": 1035, "module_hook": 461})
-    assert bound(STEPS["decode-scored"]) == (2628, {**common, "dsv4_attention": 1095, "module_hook": 491})
-    assert bound(STEPS["prefill"]) == (2384, {**common, "dsv4_attention": 851, "module_hook": 491})
+    assert bound(STEPS["decode"]) == (2539, {**common, "dsv4_attention": 1036, "module_hook": 461})
+    assert bound(STEPS["decode-scored"]) == (2629, {**common, "dsv4_attention": 1096, "module_hook": 491})
+    assert bound(STEPS["prefill"]) == (2385, {**common, "dsv4_attention": 852, "module_hook": 491})
 
 
 def test_target_only_taps_are_named_on_the_target_only():

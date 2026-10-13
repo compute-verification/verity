@@ -303,6 +303,7 @@ class Attention(torch.nn.Module):
         return padded
 
     def _sparse_indexer_and_attn(self, hidden_states, index_q, index_q_scale, index_weights, q, kv, positions, out):
+        self.seen["positions"] = positions
         if self.layer in CSA and index_q is not None:
             self.indexer.indexer_op(hidden_states, index_q, None, index_weights)
         self.forward_mqa(q, kv, positions, out)

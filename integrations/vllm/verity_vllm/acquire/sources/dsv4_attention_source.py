@@ -10,7 +10,8 @@ module of the committer's acquired classes.  On every attention layer this sourc
 - `_run_parallel_input_projections`: its returns 1 and 2, the compressor's and the indexer compressor's kv_score;
 - `_fused_qnorm_rope_kv_insert`: its return (the query padded to NHP heads), and the SWA cache rows at the step's SWA slot mapping,
   which it has just written;
-- `_sparse_indexer_and_attn`: on entry, what `_prepare_and_attn` computed beside the insert and joined: each compressor's state rows
+- `_sparse_indexer_and_attn`: on entry, the step's positions at the first layer, and what `_prepare_and_attn` computed beside
+  the insert and joined: each compressor's state rows
   at its state slot mapping (`save_partial_states`), the compressed rows its compress kernel wrote this step and, on the scored
   indexer route, the indexer's query and weights (the arguments `index_q`, `index_weights`); after it returns,
   `topk_indices_buffer[:M, :TOPK]` (the short route's fill or the top-k kernels; one buffer for every layer, so flushed at once),
@@ -27,11 +28,17 @@ scale bytes, regrouped here per row (`split_rows`; the block stride may be padde
 ([num_blocks, block_size, width] f32) holds a row per slot (`state_rows`).  A cache in another layout is not bound, and the step
 then fails by the name.  A value the native collector cannot stage as it lies (`attention_source.pitched_2d`), such as
 `fused_inv_rope_fp8_quant`'s o_fp8 (a transposed view [T, G, D] of a [G, T, D] buffer) and o_scale (token stride 1, its columns
-TMA-aligned), is bound as a contiguous copy, counted in `stats["copied_by_tap"]`.  A token's compressed row is written when its state slot and its compressed slot are set and its position
-+ 1 is a multiple of the compressor's ratio (the compress kernels' mask, which `c128_boundary` short-cuts); a step on which a
-layer's compressor writes no row commits nothing under its compressed-rows name, since the committer commits no empty tensor, and
-`empty` records the name per step: the route source refuses the step by that name.  Taps the map marks `target_only` are bound
-on the target only (`route_source.on_target`).  `capture-map ids --binder dsv4_attention --names` prints what a step binds.
+TMA-aligned), is bound as a contiguous copy, counted in `stats["copied_by_tap"]`.
+
+A token's compressed row is written when its state slot and its compressed slot are set and its position + 1 is a multiple of
+the compressor's ratio (the compress kernels' mask, which `c128_boundary` short-cuts); a step on which a layer's compressor writes
+no row commits nothing under its compressed-rows name, since the committer commits no empty tensor, and `empty` records the name
+per step.  Every layer attends at one positions tensor (another fails the step); the first layer's is bound under the map's
+positions tap and read to the host (`positions`), and the route source recomputes from it the names the step writes no row for
+(the map's `row_counts`, `CM.empty_names`), holds the step to the map's names less those, and fails it when `empty` is another set.
+Each compressor's ratio is the ratio of its compressed tap's row count, or the source refuses to attach.  Taps the map marks
+`target_only` are bound on the target only (`route_source.on_target`).  `capture-map ids --binder dsv4_attention --names` prints
+what a step binds.
 """
 from __future__ import annotations
 
@@ -65,7 +72,8 @@ WRITER = {"attn.compressed_rows": "compressor.state", "indexer.k_cache": "indexe
 SCALE_BYTES = {"attn.swa_rows": 8, "attn.compressed_rows": 8, "indexer.k_cache": 4}
 CACHES = ("attn.swa_rows", *STATE, *COMPRESSED)
 TOPK_ROLES = ("indexer.topk_short", "indexer.topk")
-ROLES = frozenset({*(r for rs in GLOBALS.values() for r in rs), *CACHES, *TOPK_ROLES, "attn.q", "compressor.kv_score",
+POSITIONS = "attn.positions"
+ROLES = frozenset({*(r for rs in GLOBALS.values() for r in rs), *CACHES, *TOPK_ROLES, POSITIONS, "attn.q", "compressor.kv_score",
                    "indexer.compressor.kv_score", "indexer.q_fp8", "indexer.weights", "attn.out.decode", "attn.out.prefill"})
 #: FlashMLA's C128A decode index width is a multiple of this (`_C128A_TOPK_ALIGNMENT`)
 C128A_ALIGN = 128
@@ -152,6 +160,9 @@ class Dsv4AttentionSource:
                     self.width[(role, i)] = int(CM.dim(t["shape"][-1], self.env, free))
                 if role == "attn.q":
                     self.layers[i] = module(CM.at_layer(t["module"], i))
+        rc = self.cmap.get("row_counts")
+        if rc and [t["id"] for t in taps if role_of(t) == POSITIONS] != [rc.get("positions")]:
+            raise ValueError(f"capture map {cid}: its row counts read {rc.get('positions')!r}, not the {POSITIONS} tap this source binds")
         #: (compressed role, layer) -> the writing compressor's ratio
         self.ratio: dict[tuple[str, int], int] = {}
         for (role, i), owner in self.owners.items():
@@ -162,6 +173,10 @@ class Dsv4AttentionSource:
             if comp is None or getattr(comp, "k_cache_prefix", None) != owner.prefix:
                 raise ValueError(f"capture map {cid}: layer {i}'s {role} has no compressor writing it beside {WRITER[role]}")
             self.ratio[(role, i)] = int(comp.compress_ratio)
+            count = CM.row_count_of(self.cmap, self.taps[(role, i)])
+            if rc and (count is None or self.ratio[(role, i)] != int(CM.evaluate(rc["ratios"][count], self.env))):
+                raise ValueError(f"capture map {cid}: layer {i}'s {role} compressor has ratio {self.ratio[(role, i)]}, not the ratio "
+                                 f"of its row count {count}")
         self.heads = int(self.env["NHL"])
         self.topk = int(self.env["TOPK"])
         self.homes: dict[str, list[Any]] = {}
@@ -185,8 +200,11 @@ class Dsv4AttentionSource:
         self._pending: dict[int, Mapping[str, Any]] = {}
         self._decode_rows: dict[int, int] = {}
         self._actives: dict[tuple[int, int, int, int], tuple[tuple[Any, ...], Any]] = {}
+        self._positions_at: tuple[int, tuple[int, ...]] | None = None
         #: engine step -> the names a compressor wrote no row for on it
         self.empty: dict[int, list[str]] = {}
+        #: engine step -> the positions bound on it (`POSITIONS`), as read when bound
+        self.positions: dict[int, tuple[int, ...]] = {}
         self.stats: dict[str, Any] = {}
         self.begin_run()
 
@@ -206,10 +224,10 @@ class Dsv4AttentionSource:
 
     def on_step_begin(self) -> None:
         self._layer = None
-        self._pending, self._decode_rows, self._actives = {}, {}, {}
+        self._pending, self._decode_rows, self._actives, self._positions_at = {}, {}, {}, None
 
     def begin_run(self) -> None:
-        self.empty = {}
+        self.empty, self.positions = {}, {}
         self.stats = {"layers": len(self.layers), "on_target": self.on_target, "attends": 0, "calls": {f: 0 for f in self.homes},
                       "bound": 0, "by_tap": {}, "copied_by_tap": {}, "unpaired": 0, "layout_refused": 0, "unattributed": 0, "empty": 0}
 
@@ -264,6 +282,19 @@ class Dsv4AttentionSource:
         f = getattr(self.c, "flush_after_plane", None)
         if f is not None:
             f(what)
+
+    def _bind_positions(self, layer: int, positions: Any, rows: int, job: Any) -> None:
+        """The step's positions, which every layer attends at (one tensor, or the step fails): bound at the positions tap's layer,
+        and read to the host there (`positions`), from which the route source recomputes the names the step writes no row for."""
+        at = (int(positions.data_ptr()), tuple(int(s) for s in positions.stride()))
+        if self._positions_at is None:
+            self._positions_at = at
+        elif at != self._positions_at:
+            self._fail(f"dsv4_attention: layer {layer} attended at other positions than the step's first layer")
+        if layer in self.names.get(POSITIONS, {}):
+            p = positions[:rows]
+            self.positions[int(job.step)] = tuple(int(x) for x in p.tolist())
+            self._bind(POSITIONS, layer, p, job)
 
     def _active(self, state_slots: Any, kv_slots: Any, positions: Any, ratio: int) -> Any:
         """The token indices whose compressed row a compressor of `ratio` writes this step; one host sync per distinct slot mappings
@@ -368,6 +399,7 @@ class Dsv4AttentionSource:
                 a = sig.bind(*args, **kwargs).arguments
                 me.stats["attends"] += 1
                 rows = int(a["hidden_states"].shape[0])
+                me._bind_positions(layer, a["positions"], rows, job)
                 md = me._pending.pop(layer, None)
                 if md is None:
                     me.stats["unpaired"] += 1
@@ -442,4 +474,4 @@ class Dsv4AttentionSource:
             self._bind("attn.o_einsum", layer, z, job)
 
 
-__all__ = ["Dsv4AttentionSource", "BINDER", "ROLES", "binds", "role_of", "split_rows", "state_rows"]
+__all__ = ["Dsv4AttentionSource", "BINDER", "POSITIONS", "ROLES", "binds", "role_of", "split_rows", "state_rows"]

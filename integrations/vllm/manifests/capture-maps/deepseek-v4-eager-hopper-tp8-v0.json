@@ -219,9 +219,18 @@
   "MD": "the step's decode tokens (swa_metadata.num_decode_tokens), rows [0, MD)",
   "MP": "the step's prefill tokens, rows [MD, M)",
   "CTX": "the indexer logits' key width: compressed keys of the prefill chunk, or of max_model_len on a decode step",
-  "NC4": "compressed rows a CSA layer's compressor writes this step: tokens whose position + 1 is a multiple of CSA_R",
-  "NC128": "compressed rows an HCA layer's compressor writes this step: tokens whose position + 1 is a multiple of HCA_R",
+  "NC4": "compressed rows a CSA layer's compressor writes this step: tokens whose position + 1 is a multiple of CSA_R (row_counts)",
+  "NC128": "compressed rows an HCA layer's compressor writes this step: tokens whose position + 1 is a multiple of HCA_R (row_counts)",
   "NX": "the HCA decode index width: cdiv(cdiv(max_model_len, HCA_R), 128) * 128 (c128a_max_compressed)"
+ },
+ "row_counts": {
+  "positions": "attn.positions",
+  "ratios": {
+   "NC4": "CSA_R",
+   "NC128": "HCA_R"
+  },
+  "layer_ratio": "compress_ratios.{i}",
+  "note": "a row count on a step is the number of its tokens whose position + 1 is a multiple of the count's ratio, over the positions the step commits under the positions tap: the compress kernels' mask recomputed from the step's own metadata, not the source's report of the rows it found.  A tap whose leading dimension is a row count that is 0 on a step writes no row there and the committer commits nothing under its name, so the identity check (route_source) and a reader of the commit (capture_map.bind_names) hold that name absent on the step and every other name present, and the step fails when the names the source found empty are not the same set.  Every layer of such a tap has the count's ratio in the config (layer_ratio, held by capture-map check) and on its compressor (held by the source when it attaches)"
  },
  "layer_sets": {
   "all": "0 <= i < L",
@@ -374,6 +383,11 @@
    "note": "hc_head_fused_kernel_tilelang: the HC stream mixes of the final residual against hc_head_fn (f32), RMS-scaled, times hc_head_scale plus hc_head_base, sigmoid + hc_eps, then the weighted sum of the streams to [M, H] bf16. Row DSV4-MHC",
    "branch": "cursor/dsv4-mhc-8c79"
   },
+  "step-positions": {
+   "status": "committed-only",
+   "definitions": [],
+   "note": "the runner's positions, one int64 per token (its index in its request): a root input no Program computes.  The insert's RoPE, the compressors' state rows (ape[pos % ratio]) and compress kernels, the short-context top-k fill and the decode indices read them, and the identity check recomputes from them which compressed-rows names a step commits (row_counts)"
+  },
   "dsv4-qnorm-rope-kv-insert": {
    "status": "committed-only",
    "definitions": [],
@@ -469,7 +483,7 @@
   "tp_partial": "TPPartialSource (acquire/sources/partial_source.py): a collective's rank-local input, <site>/part_rank<r> or <site>/shard_rank<r>, and the MoE runner's received output, <runner>/out",
   "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block: the two ops.moe_wna16_marlin_gemm launches, moe_sum, and the router at fused_topk_bias's return",
   "mhc": "MhcSource (acquire/sources/mhc_source.py): a wrap of the mHC call-time globals of vllm.models.deepseek_v4.nvidia.model, naming each call's returns <layer>/hc_attn_<value> or <layer>/hc_ffn_<value> (_split on the hc-split route, by the call's token count), and the final post and head model/hc_post, model/hc_head",
-  "dsv4_attention": "Dsv4AttentionSource (acquire/sources/dsv4_attention_source.py): wraps each attention layer's forward (attributing the globals), _run_parallel_input_projections, _fused_qnorm_rope_kv_insert and _sparse_indexer_and_attn, and the call-time globals fused_q_kv_rmsnorm, flash_mla_with_kvcache, fused_inv_rope_fp8_quant and fp8_einsum, naming <attn>/<value>, <compressor>/kv_score, <cache>/rows and <indexer>/<value>; cache rows are read at the step's slot mappings after its writes, a byte cache's per-block data and scale bytes regrouped per row"
+  "dsv4_attention": "Dsv4AttentionSource (acquire/sources/dsv4_attention_source.py): wraps each attention layer's forward (attributing the globals), _run_parallel_input_projections, _fused_qnorm_rope_kv_insert and _sparse_indexer_and_attn, and the call-time globals fused_q_kv_rmsnorm, flash_mla_with_kvcache, fused_inv_rope_fp8_quant and fp8_einsum, and binds the step's positions at the first layer's _sparse_indexer_and_attn (row_counts), naming <attn>/<value>, <compressor>/kv_score, <cache>/rows and <indexer>/<value>; cache rows are read at the step's slot mappings after its writes, a byte cache's per-block data and scale bytes regrouped per row"
  },
  "taps": [
   {
@@ -1455,6 +1469,33 @@
    "commit": {
     "name": "model.layers.{i}.attn.fused_wqa_wkv/0",
     "binder": "module_hook"
+   }
+  },
+  {
+   "id": "attn.positions",
+   "op": "layers.{i}.attn.positions",
+   "port": 0,
+   "layers": "first",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "function_argument",
+    "target": "vllm/models/deepseek_v4/attention.py:DeepseekV4Attention._sparse_indexer_and_attn",
+    "argument": "positions",
+    "detail": "positions[:M], the tensor every layer's insert, compressors, indexer and o-projection read (the model's forward passes one to every layer)"
+   },
+   "dtype": "int64",
+   "shape": [
+    "M"
+   ],
+   "program": "step-positions",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "note": "a root input, bound at the first layer: every later layer attends at the same tensor, or the step fails",
+   "commit": {
+    "name": "model.layers.{i}.attn/positions",
+    "binder": "dsv4_attention"
    }
   },
   {
@@ -3099,6 +3140,7 @@
    "type": "DeepseekV4FlashMLAAttention",
    "disposition": "taps",
    "taps": [
+    "attn.positions",
     "attn.q",
     "attn.compressed_rows.csa",
     "attn.compressed_rows.hca",
@@ -3768,7 +3810,7 @@
   {
    "item": 2,
    "work": "dsv4 attention source: fused_q_kv_rmsnorm's returns (a global of vllm.models.deepseek_v4.attention), _fused_qnorm_rope_kv_insert's return, _run_parallel_input_projections' kv_score and indexer_kv_score, the SWA, state, compressed and indexer cache rows at their slot mappings after the step's writes, fused_indexer_q_rope_quant's returns, topk_indices_buffer[:M, :TOPK] after the indexer, flash_mla_with_kvcache's index arguments, forward_mqa's output argument split at num_decode_tokens, fused_inv_rope_fp8_quant's returns and fp8_einsum's output",
-   "done": "dsv4 attention source: acquire.sources.dsv4_attention_source binds every tap of the binder under the map's names: fused_q_kv_rmsnorm's returns, the insert's return and the SWA rows at the SWA slot mapping after it, the projections' kv_score and indexer_kv_score, at _sparse_indexer_and_attn's entry each compressor's state rows and the compressed and indexer cache rows its kernel wrote this step (state slot and compressed slot set, (position + 1) % ratio == 0) and the scored indexer's index_q and index_weights, after it topk_indices_buffer[:M, :TOPK] (flushed) and o_padded[:MD, :NHL] and [MD:, :NHL] split at flash_mla_with_kvcache's rows, that call's index arguments over its rows, fused_inv_rope_fp8_quant's returns and fp8_einsum's z; route_source holds them to the step's routes (BINDERS). A step on which a layer's compressor writes no compressed row (an HCA layer on a step crossing no 128 boundary, a CSA layer on one crossing no 4 boundary) commits nothing under that compressed-rows name, since the committer commits no empty tensor, and the identity check refuses the step by the name; the source records it (empty)"
+   "done": "dsv4 attention source: acquire.sources.dsv4_attention_source binds every tap of the binder under the map's names: fused_q_kv_rmsnorm's returns, the insert's return and the SWA rows at the SWA slot mapping after it, the projections' kv_score and indexer_kv_score, at _sparse_indexer_and_attn's entry each compressor's state rows and the compressed and indexer cache rows its kernel wrote this step (state slot and compressed slot set, (position + 1) % ratio == 0) and the scored indexer's index_q and index_weights, after it topk_indices_buffer[:M, :TOPK] (flushed) and o_padded[:MD, :NHL] and [MD:, :NHL] split at flash_mla_with_kvcache's rows, that call's index arguments over its rows, fused_inv_rope_fp8_quant's returns and fp8_einsum's z; route_source holds them to the step's routes (BINDERS). A step on which a layer's compressor writes no compressed row (an HCA layer on a step crossing no 128 boundary, a CSA layer on one crossing no 4 boundary) commits nothing under that compressed-rows name, since the committer commits no empty tensor; the source records the name (empty) and binds the step's positions (attn.positions), from which route_source recomputes the names the step writes no row for (row_counts, capture_map.empty_names), holds the step to the map's names less those, and refuses it when the source's record is another set"
   },
   {
    "item": 3,

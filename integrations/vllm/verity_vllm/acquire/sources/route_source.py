@@ -26,7 +26,11 @@ step on another route than step 0 would fail, and the module rule: `step_modules
 their own, are the ones the map has no entry for.  A fused norm, or `kv_b_proj` on a sparse step, is held to the map's names, not to
 "every hooked module ran".  A step whose layers recorded no route, or different ones, fails; a padding-only step (nobody ran it) is
 held to the routes of the run's first step.  `capture-map ids --route R --binder B --names` prints the names a step on route R
-commits.
+commits.  On a map with row counts (`CM.row_counts`: DeepSeek-V4-Pro's compressed rows, one per token whose position + 1 is a
+multiple of a layer's compress ratio) a step commits nothing under a name whose count is 0 on it, and is held to the map's names
+less those, recomputed from the positions it committed (`CM.empty_names`, which a reader of the commit imports too): the
+DeepSeek-V4 attention source binds the positions and records the names it found empty, and a step whose record is another set
+fails.
 
 A tap the map marks `target_only` is bound only on the map's target device (`on_target`: the CUDA device's compute capability and
 SM count are the target's): there a step without it fails, and elsewhere no step may commit it.
@@ -50,6 +54,8 @@ BINDERS = ("module_hook", "sampler", "allreduce_norm", attention_source.BINDER, 
 OWN_RULES = ("tp_partial", "moe")
 NO_ROUTE = "<no route recorded>"
 SPLIT = "<layers took different routes>"
+NO_POSITIONS = "<no positions recorded>"
+EMPTY_DIFFERS = "<the names the source found empty are not the positions' row counts'>"
 PHASES = ("prefill", "decode")
 _HOOK_NAME = re.compile(r"^[^/]+(/(\d+|in))?$")
 
@@ -127,6 +133,7 @@ class RouteSource:
         self.layers: dict[int, Any] = self.site_layers[0]
         self.known = known_modules(cmap, self.env)
         self._want: dict[tuple[tuple[str, ...] | None, str], dict[str, int]] = {}
+        self._taps_at: dict[tuple[tuple[str, ...] | None, str], dict[str, tuple[dict[str, Any], int | None]]] = {}
         self.mine = {n for p in PHASES for n in CM.committer_names(cmap, self.env, phase=p, rank=self.rank, binders=BINDERS)}
         self._hooks = Hooks()
         #: step -> decision -> layer -> the routes it took
@@ -134,6 +141,9 @@ class RouteSource:
         self.prefill: dict[int, bool] = {}
         self.calls = 0
         self.attention: Any = None
+        #: on a map with row counts, the source that binds its positions tap: per engine step, `positions` (the values bound) and
+        #: `empty` (the names it found no row for)
+        self.rows: Any = None
 
     def names_at(self, routes: tuple[str, ...] | None, phase: str) -> dict[str, int]:
         """The names `BINDERS` commit at a step on `routes` (every route when None) in `phase`, once each, the `target_only` ones
@@ -142,8 +152,14 @@ class RouteSource:
         if key not in self._want:
             got = CM.committer_names(self.cmap, self.env, phase=phase, routes=routes, rank=self.rank, binders=BINDERS,
                                      on_target=self.on_target)
-            self._want[key] = {n: 1 for n, (tap, _layer) in got.items() if "{r}" not in tap["commit"]["name"]}
+            self._taps_at[key] = {n: tl for n, tl in got.items() if "{r}" not in tl[0]["commit"]["name"]}
+            self._want[key] = dict.fromkeys(self._taps_at[key], 1)
         return self._want[key]
+
+    def empty_at(self, routes: tuple[str, ...] | None, phase: str, positions) -> set[str]:
+        """The names `names_at` gives that a step at `positions` writes no row for (`CM.empty_names`)."""
+        self.names_at(routes, phase)
+        return CM.empty_names(self.cmap, self.env, positions, self._taps_at[(routes, phase)])
 
     def install(self) -> None:
         for k, (site, found) in enumerate(zip(self.sites, self.site_layers)):
@@ -243,15 +259,31 @@ class RouteSource:
     def split_step_names(self, names: Mapping[str, int], engine_step: int, padding_only: bool) -> tuple[dict[str, int], dict[str, tuple[int, int]]]:
         """X-03 for the names the map binds through `BINDERS` at one step: (the step's other names, for the module rule and the
         step-0 multiplicity rule; name -> (committed, the map's count on the step's routes) where they differ -- by multiplicity, or
-        as a set at a padding-only step).  A step without one route for every layer reports why under that reason's name."""
+        as a set at a padding-only step).  A step without one route for every layer reports why under that reason's name.
+
+        On a map with row counts the map's names on a step leave out the ones it writes no row for (`empty_at`), recomputed from
+        the positions the step committed (a padding-only step: the first step's), never from what the binding source found: a step
+        whose positions were not recorded fails under `NO_POSITIONS`, and one on which the source found another set of names
+        empty under `EMPTY_DIFFERS`, (its names the positions give rows for, the positions' empty names it bound)."""
         got = {n: c for n, c in names.items() if n in self.mine or (_HOOK_NAME.match(n) and n.split("/", 1)[0] in self.known)}
         rest = {n: c for n, c in names.items() if n not in got}
         routes, phase = self.step_routes(engine_step, padding_only)
         if routes is None:
             return rest, {phase: (sum(got.values()), 0)}
         want = self.names_at(routes, phase)
+        bad: dict[str, tuple[int, int]] = {}
+        if self.cmap.get("row_counts"):
+            step = min(self.routes) if padding_only else int(engine_step)
+            positions = None if self.rows is None else self.rows.positions.get(step)
+            if positions is None:
+                return rest, {NO_POSITIONS: (sum(got.values()), 0)}
+            empty = self.empty_at(routes, phase, positions)
+            found = set(self.rows.empty.get(step, ()))
+            if found != empty:
+                bad[EMPTY_DIFFERS] = (len(found - empty), len(empty - found))
+            want = {n: c for n, c in want.items() if n not in empty}
         keys = set(got) ^ set(want) if padding_only else {n for n in set(got) | set(want) if got.get(n, 0) != want.get(n, 0)}
-        return rest, {n: (got.get(n, 0), want.get(n, 0)) for n in keys}
+        return rest, {**bad, **{n: (got.get(n, 0), want.get(n, 0)) for n in keys}}
 
     def step_modules(self, expected: set[str]) -> set[str]:
         """The hooked modules (`expected`) a step must cover by names of their own: those the map has no entry for and binds no name
@@ -296,4 +328,6 @@ def attach(com: Any, model: Any, rank: int = 0) -> RouteSource | None:
     for s in (mhc, dsv4):
         if s is not None:
             com.attach_source(s)
+    if cmap.get("row_counts"):
+        src.rows = dsv4
     return src
