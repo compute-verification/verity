@@ -241,11 +241,12 @@
    "note": "deepseek_v32 common/kernels.py _rms_norm inside _fused_norm_rope_kernel (program 2 q_a_layernorm N=2048, program 1 kv_a_layernorm N=512, eps 1e-5; one CTA of 128 threads a row): DsaRMSNorm_v1{N,EPS=1e-05} (DsaRMSNorm_v2 on bits), read from Triton 3.7.1's sm_90 PTX of the H200 run r20261013-001802-7e95: each thread an FMA chain over its 16- or 8-byte vector loads, warp xor-butterflies, (w0 + w2) + (w1 + w3), r = rsqrt.approx.ftz(eps + div.full(sum, N)), bf16((r * x) * w). Not RMSNormTriton_v1 (1024-column chunks from +0, 1 / sqrt.approx(fma(1/N, sum, eps))): the scales differ on about half of served rows and the words almost never, so the capture probes weights where they do. port until the H200 capture (tests/properties/glm53_fused_rmsnorm_capture_gpu.py) pins the kernel and a Build rule binds the taps"
   },
   "rmsnorm-cuda": {
-   "status": "port",
+   "status": "exists",
    "definitions": [
-    "RMSNormFusedCuda_v1"
+    "RMSNormCudaVector8_v1",
+    "RMSNormFusedCudaVector8_v1"
    ],
-   "note": "vLLM's CUDA rms_norm / fused_add_rms_norm launched without batch invariance; RMSNormFusedCuda@1 models the width-8 fused kernel at the batch-invariant block size, so the non-batch-invariant block size must be pinned"
+   "note": "vLLM's default non-batch-invariant BF16 rms_norm / fused_add_rms_norm width-8 paths. The Program records BLOCK because M < 256 launches rms_norm at min(N/8,1024) and fused_add_rms_norm at min(N,1024), while M >= 256 launches both at 256; the H200 capture checks M 1,42,43,64,256,2048 at GLM-5.3 N=6144 and DeepSeek-V4-Pro N=7168"
   },
   "fused-rope-triton": {
    "status": "port",

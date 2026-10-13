@@ -94,6 +94,9 @@ RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
+#: a transfer from the remote under 1 KB/s for 2 min aborts: git has no timeout, and a stalled HTTPS fetch held a drive tick
+#: for 10 min (13 Oct 02:33Z), the next tick retrying it
+STALL = ("-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=120")
 LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
@@ -349,7 +352,7 @@ class Queue:
 
     def _remote(self, cwd: Path, *args: str, ok: tuple[int, ...] | None = (0,)) -> subprocess.CompletedProcess:
         """A git command that talks to the remote, with `auth` (`credential_args`); one that exits outside `ok` raises."""
-        r = _git(cwd, *self.auth, *args, check=False)
+        r = _git(cwd, *STALL, *self.auth, *args, check=False)
         if ok is not None and r.returncode not in ok:
             err = (r.stderr or r.stdout).strip()[-400:]
             hint = ("; no credential helper applies to the remote outside the caller's checkout: set one in git's global config, "
