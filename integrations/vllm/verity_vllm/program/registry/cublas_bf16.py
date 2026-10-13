@@ -21,7 +21,8 @@ checks that they agree.  `bf16_gemm_check` holds the numpy models.
 The split-K-off configuration is vLLM's batch-invariant one on cc 9.0 (`enable_batch_invariant_mode`): CUBLAS_WORKSPACE_CONFIG=:16:8,
 CUBLASLT_WORKSPACE_SIZE=1, `allow_bf16_reduced_precision_reduction = (False, False)`, `preferred_blas_library("cublaslt")`.  Under it the
 H100's bf16 linear is `Gemm_v2{K, N, HopperBF16WgmmaDot16_v1}` word for word (`kernels.derived_rows`, the R17 probe); torch's defaults
-split K at small M.  GLM-5.3's shapes on the H200 are pinned by `tests/properties/glm53_bf16_gemm_capture_gpu.py`.
+split K at small M.  GLM-5.3's and DeepSeek-V4-Pro's shapes on the H200 are pinned by
+`tests/properties/glm53_bf16_gemm_capture_gpu.py`.
 """
 from __future__ import annotations
 
@@ -41,7 +42,8 @@ __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "GemmF32Out", "GemmF32
            "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX", "chain_step", "dot_step"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
-CONFORMANCE = "not-yet-established: GLM-5.3's shapes on the H200 (tests/properties/glm53_bf16_gemm_capture_gpu.py)"
+CONFORMANCE = ("not-yet-established: GLM-5.3's and DeepSeek-V4-Pro's shapes on the H200 "
+               "(tests/properties/glm53_bf16_gemm_capture_gpu.py)")
 
 
 class ChainStep(NamedTuple):

@@ -1,46 +1,55 @@
-"""GLM-5.3's bf16 GEMMs on Hopper against their Programs: the H200's first-hour go/no-go for binding the MoE router gate
+"""GLM-5.3's and DeepSeek-V4-Pro's bf16 GEMMs on Hopper against their Programs: the H200's go/no-go for binding the MoE router gate
 (`GateLinear`: cuteDSL `ll_bf16_gemm` at M <= 16, `ll_bf16.LlBf16DotprodGemm_v1` or `LlBf16SplitKGemm_v1`; past it cuBLAS
-``torch.mm(x, W.T, out_dtype=float32)``, `cublas_bf16.GemmF32Out_v1`), MLA's absorbs (``torch.bmm`` against the served `W_UK_T` and
-`W_UV`, `cublas_bf16.BatchedGemm_v1`), and the lm_head shard and the indexer's `wk_weights_proj` (``F.linear``, core's `Gemm_v2`), at
-GLM-5.3's TP8 shapes under the split-K-off cuBLAS switch.
+``torch.mm(x, W.T, out_dtype=float32)``, `cublas_bf16.GemmF32Out_v1`), GLM-5.3's MLA absorbs (``torch.bmm`` against the served
+`W_UK_T` and `W_UV`, `cublas_bf16.BatchedGemm_v1`), DeepSeek-V4-Pro's compressor GEMMs (the same ``torch.mm`` on bf16,
+`GemmF32Out_v1`), and each model's lm_head shard and indexer projection (``F.linear``, core's `Gemm_v2`), at their TP8 shapes
+(`MODELS`) under the split-K-off cuBLAS switch.
 
 One GPU process writes `<out>/glm53_bf16_gemm_capture.json`, the property record `glm53_bf16_gemm_capture` (`properties.record`),
-and prints one line per case and then `GLM53-BF16-GEMM GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first
-and nothing else runs when it fails (exit 3).  A phase that raises records its error and fails the verdict without stopping the
-others.
+and prints one line per case and then `GLM53-BF16-GEMM GO` or `NO-GO` with each model's verdict.  `ok` (GO) = every check below,
+for every model run.  The device gate runs first and nothing else runs when it fails (exit 3).  A case that raises records its
+error and fails the verdict without stopping the others.
 
 The switch (`SWITCH_ENV` and `switch()`) is vLLM's batch-invariant cuBLAS configuration on cc 9.0 without the rest of that mode
 (determinism/batch_invariant.py:1076-1080 and 1127-1138): CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before torch
 creates a cuBLAS handle, fp16 and bf16 reduced-precision reductions off with split-K off (``(False, False)``, torch >= 2.10), and
 cuBLASLt preferred.  vLLM's Triton bmm override is not part of it: `torch.bmm` stays on cuBLAS.  The served engine does not set it
-yet (the capture map's `cublas-bf16-gemm` `when`); `--served-default` runs without it, and by default the run ends with that
+yet (the capture maps' `cublas-bf16-gemm` `when`); `--served-default` runs without it, and by default the run ends with that
 configuration in a second process (`served_default`: which cases it changes, and each case's kernel time either way, the switch's
 cost), which does not enter the verdict.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
-  selection  `GateLinear(6144, 256)` with a bf16 weight and f32 out allows tier 1 (ll_bf16_gemm) and tier 4 (cuBLAS) and neither fp32
-             tier; `dispatch_unquantized_gemm()` is `default_unquantized_gemm` (F.linear); the switch's flags read back as set.
-  router     `GateLinear.forward` at M in `ROUTER_M`, twice: every `LLBf16Gemm.dispatch` it makes is tapped and must be
-             `bf16_gemm_check.dispatch_sm90`'s kernel (M <= 4 dotprod at BS 128, 5..16 split-K at 6, or 8 at M 9 and 11; past 16 no
-             ll_bf16 call), and every f32 word against `gate_rows`.  The dotprod's contraction is decided here: from M = 4 on, row 3
-             is 2^-122 times a normal row (and `fma-probe` at M 1 is only such a row), so its products fall below f32's normal range,
-             where FFMA and FMUL-then-FADD differ (on about a third of its words); `fma` is the one of the two whose model every
-             dotprod word equals, and the probe must tell them apart.
-  linear     `dispatch_unquantized_gemm()` (F.linear) of `lm_head.shard` (K 6144, N 19360) and `indexer.wk_weights_proj` (K 6144,
-             N 160) at M in `LINEAR_M`: every bf16 word against `linear_rows`.
-  bmm        `q_nope_absorb` (``torch.bmm(q_nope.transpose(0, 1), W_UK_T).transpose(0, 1)``, 8 heads, K 192, N 512) and `v_absorb`
-             (``torch.bmm(x, W_UV, out=...)``, K 512, N 256) at M in `BMM_M`, on `W_UK_T` / `W_UV` laid out as
+  selection  each model's `GateLinear(K, N)` with a bf16 weight and f32 out allows tier 1 (ll_bf16_gemm) and tier 4 (cuBLAS) and
+             neither fp32 tier; `dispatch_unquantized_gemm()` is `default_unquantized_gemm` (F.linear); the switch's flags read back.
+  router     `GateLinear.forward` at M in the model's `router_m`, twice: every `LLBf16Gemm.dispatch` it makes is tapped and must be
+             `bf16_gemm_check.dispatch_sm90`'s kernel at the gate's (K, N) (GLM-5.3, (6144, 256): M <= 4 dotprod at BS 128, 5..16
+             split-K at 6, or 8 at M 9 and 11; DeepSeek-V4-Pro, (7168, 384): M 1, 2 dotprod at BS 256, whose K loop ends in a tail
+             tile, M 3, 4 at BS 128, M 5 split-K at 6, M 6, 8, 12 at 8, the rest to 16 at 7; past 16 no ll_bf16 call), and every f32
+             word against `gate_rows`.  The dotprod's contraction is decided here: from M = 4 on, row 3 is 2^-122 times a normal
+             row (and `fma-probe` at M 1 is only such a row), so its products fall below f32's normal range, where FFMA and
+             FMUL-then-FADD differ (on about a third of its words); `fma` is the one of the two whose model every dotprod word of
+             the run equals, and the probe must tell them apart.
+  linear     `dispatch_unquantized_gemm()` (F.linear) of each model's `linear` (GLM-5.3: `lm_head.shard` K 6144, N 19360 and
+             `indexer.wk_weights_proj` N 160; DeepSeek-V4-Pro: `lm_head.shard` K 7168, N 16160 and `indexer.weights_proj` N 64) at M
+             in `LINEAR_M`: every bf16 word against `linear_rows`.
+  f32out     DeepSeek-V4-Pro's compressor GEMMs, ``torch.mm(x, fused_wkv_wgate.weight.T, out_dtype=torch.float32)`` at K 7168 and N
+             2048 (ratio-4 layers' compressor), 1024 (ratio-128's) and 512 (the indexer's compressor), at M in `LINEAR_M`: every
+             f32 word against `f32out_rows`.
+  bmm        GLM-5.3's `q_nope_absorb` (``torch.bmm(q_nope.transpose(0, 1), W_UK_T).transpose(0, 1)``, 8 heads, K 192, N 512) and
+             `v_absorb` (``torch.bmm(x, W_UV, out=...)``, K 512, N 256) at M in `LINEAR_M`, on `W_UK_T` / `W_UV` laid out as
              `MLAAttention.process_weights_after_loading` leaves them (views of the dequantized kv_b_proj weight's transpose,
              mla_attention.py:1154-1252): every word against `bmm_rows`.
   reference  on rows 0, 3 and M - 1 of every launch, three coordinates each, the plain-integer reference
              (`verity.ml.circuits.evaluation.evaluate`) of the word Definition the launch binds, which the model must equal.
-  bind       every Definition binds at GLM-5.3's statics.
+  bind       every Definition binds at each model's statics.
   timing     each case's kernel time, the median of `REPS` CUDA-event-timed launches.
 
-GO needs 0 mismatches on every word, `fma` decided, every launch deterministic and on its expected kernel, and the references equal.
+GO needs, for every model, every case run, 0 mismatches on every word, `fma` decided, every launch deterministic and on its expected
+kernel, and the references equal.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
-    $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--no-default] [--only router,linear,bmm]
+    $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--no-default]
+        [--models glm53,dsv4-pro] [--only router,linear,f32out,bmm]
 """
 from __future__ import annotations
 
@@ -54,7 +63,7 @@ import tempfile
 import traceback
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -62,21 +71,40 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v1"
+SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v2"
 RECORD = "glm53_bf16_gemm_capture.json"
-HIDDEN, EXPERTS = 6144, 256
+#: GLM-5.3's MLA at one TP8 rank: heads, the nope and rope query widths, the latent rank and the value width
 NHL, QK_NOPE, QK_ROPE, KV_LORA, V_HEAD = 8, 192, 64, 512, 256
-#: (name, K, N): the capture map's `cublas-bf16-gemm` linears at one TP8 rank (vocab 154880 / 8; the indexer's wk 128 + weights 32)
-LINEAR = (("lm_head.shard", HIDDEN, 154880 // 8), ("indexer.wk_weights_proj", HIDDEN, 128 + 32))
 #: (name, K, N), NHL heads each
 BMM = (("q_nope_absorb", QK_NOPE, KV_LORA), ("v_absorb", KV_LORA, V_HEAD))
 #: the strides of `W_UK_T` ([NHL, 192, 512], row-major per head) and `W_UV` ([NHL, 512, 256], column-major per head) as views of the
 #: dequantized kv_b_proj weight's transpose
 SERVED_STRIDE = {"q_nope_absorb": [(QK_NOPE + V_HEAD) * KV_LORA, KV_LORA, 1], "v_absorb": [(QK_NOPE + V_HEAD) * KV_LORA, 1, KV_LORA]}
-#: every kernel the gate dispatches on sm_90: dotprod (1..4), split-K at the default 6 (5, 8, 12, 16) and the table's 8 (9, 11), cuBLAS
-ROUTER_M = (1, 2, 3, 4, 5, 8, 9, 11, 12, 16, 17, 32, 128, 256)
-LINEAR_M = BMM_M = (1, 4, 16, 128, 256)
-QUICK_ROUTER_M, QUICK_M = (1, 4, 5, 9, 17), (1, 16)
+
+
+class Model(NamedTuple):
+    """One model's GEMMs at one TP8 rank: the gate's K (hidden) and N (routed experts), the router's M (every kernel its
+    `dispatch_sm90` names, and past 16), and the (name, K, N) of its bf16-out linears, its f32-out GEMMs and its absorbs."""
+    hidden: int
+    experts: int
+    router_m: tuple[int, ...]
+    quick_router_m: tuple[int, ...]
+    linear: tuple[tuple[str, int, int], ...]
+    f32out: tuple[tuple[str, int, int], ...]
+    bmm: tuple[tuple[str, int, int], ...]
+
+
+#: GLM-5.3 (vocab 154880 / 8; the indexer's wk 128 + weights 32) and DeepSeek-V4-Pro (vocab 129280 / 8; the indexer's 64 heads; the
+#: compressors' fused kv and score rows, 2 * coff * head dim: 2 * 2 * 512 at ratio 4, 2 * 512 at ratio 128, 2 * 2 * 128 the indexer's)
+MODELS = {
+    "glm53": Model(6144, 256, (1, 2, 3, 4, 5, 8, 9, 11, 12, 16, 17, 32, 128, 256), (1, 4, 5, 9, 17),
+                   (("lm_head.shard", 6144, 154880 // 8), ("indexer.wk_weights_proj", 6144, 128 + 32)), (), BMM),
+    "dsv4-pro": Model(7168, 384, (1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 16, 17, 32, 128, 256), (1, 3, 5, 6, 7, 17),
+                      (("lm_head.shard", 7168, 129280 // 8), ("indexer.weights_proj", 7168, 64)),
+                      (("compressor.kv_score.c4", 7168, 4 * 512), ("compressor.kv_score.c128", 7168, 2 * 512),
+                       ("indexer.compressor.kv_score", 7168, 4 * 128)), ()),
+}
+LINEAR_M, QUICK_M = (1, 4, 16, 128, 256), (1, 16)
 #: the M = 1 dotprod row whose products are all below f32's normal range
 PROBE = "fma-probe"
 STRESS_SCALE = 2.0 ** -122
@@ -84,7 +112,7 @@ SWITCH_ENV = {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"
 REPS = 20
 #: lane-steps (output words x K/16) per comparison job
 JOB_LANE_STEPS = 4_000_000
-PHASES = ("router", "linear", "bmm")
+PHASES = ("router", "linear", "f32out", "bmm")
 
 
 def _error(e: BaseException) -> str:
@@ -204,13 +232,15 @@ def _kernels(fn) -> list[str]:
 
 
 # ------------------------------------------------------------------------------------------------------------------- selection
-def make_gate(vllm_config):
+def make_gate(vllm_config, model: str):
     import torch
     from vllm.model_executor.layers.fused_moe.router.gate_linear import GateLinear
     from verity_vllm.program.frontend.vllm_meta import ensure_distributed
 
     ensure_distributed(vllm_config)                                                # ReplicatedLinear reads the TP group's rank
-    return GateLinear(HIDDEN, EXPERTS, bias=False, out_dtype=torch.float32, params_dtype=torch.bfloat16, prefix="model.layers.3.mlp.gate").cuda()
+    m = MODELS[model]
+    return GateLinear(m.hidden, m.experts, bias=False, out_dtype=torch.float32, params_dtype=torch.bfloat16,
+                      prefix="model.layers.3.mlp.gate").cuda()
 
 
 def selection(gate) -> dict[str, Any]:
@@ -226,23 +256,29 @@ def selection(gate) -> dict[str, Any]:
 
 
 # ----------------------------------------------------------------------------------------------------------------------- cases
-def cases(quick: bool, only: set[str]) -> list[tuple[str, str, int]]:
-    """(phase, case, M) for every launch."""
+def cases(quick: bool, only: set[str], models: list[str]) -> list[tuple[str, str, str, int]]:
+    """(model, phase, case, M) for every launch."""
     out = []
-    if "router" in only:
-        out += [("router", "mlp.gate", M) for M in (QUICK_ROUTER_M if quick else ROUTER_M)] + [("router", PROBE, 1)]
-    if "linear" in only:
-        out += [("linear", name, M) for name, _, _ in LINEAR for M in (QUICK_M if quick else LINEAR_M)]
-    if "bmm" in only:
-        out += [("bmm", name, M) for name, _, _ in BMM for M in (QUICK_M if quick else BMM_M)]
+    for model in models:
+        m = MODELS[model]
+        if "router" in only:
+            out += [(model, "router", "mlp.gate", M) for M in (m.quick_router_m if quick else m.router_m)] + [(model, "router", PROBE, 1)]
+        for phase in ("linear", "f32out", "bmm"):
+            if phase in only:
+                out += [(model, phase, name, M) for name, _, _ in getattr(m, phase) for M in (QUICK_M if quick else LINEAR_M)]
     return out
 
 
-def expected_kernel(M: int) -> dict[str, Any]:
-    """The gate's kernel at M as `dispatch_sm90` names it, in the record's form."""
+def case_key(model: str, phase: str, case: str, M: int) -> str:
+    return f"{model}/{phase}/{case}/M{M}"
+
+
+def expected_kernel(M: int, model: str = "glm53") -> dict[str, Any]:
+    """The model's gate's kernel at M as `dispatch_sm90` names it, in the record's form."""
     from verity_vllm.program.registry import bf16_gemm_check as BC
 
-    kind, st = BC.dispatch_sm90(M, HIDDEN, EXPERTS)
+    m = MODELS[model]
+    kind, st = BC.dispatch_sm90(M, m.hidden, m.experts)
     return {"kind": kind, **st}
 
 
@@ -254,29 +290,31 @@ def absorb_weights(kv_b):
 
 
 class Weights:
-    """The run's weights, each made and saved once: the gate's W, each linear's W, and the dequantized kv_b_proj weight with
-    `W_UK_T` and `W_UV` as views of its transpose."""
+    """The run's weights, each made and saved once: each model's gate W, each linear's and f32-out GEMM's W, and GLM-5.3's
+    dequantized kv_b_proj weight with `W_UK_T` and `W_UV` as views of its transpose."""
 
     def __init__(self, work: Path, seed: int):
         self.work, self.seed, self.made = work, seed, {}
 
-    def get(self, name: str):
-        if name not in self.made:
+    def get(self, model: str, name: str):
+        key = (model, name)
+        if key not in self.made:
             import torch
 
+            m = MODELS[model]
             gen = torch.Generator(device="cuda").manual_seed(self.seed + len(self.made))
             if name == "mlp.gate":
-                w = _bf16(gen, (EXPERTS, HIDDEN), 2.0 ** -6)
-                self.made[name] = (w, _save(self.work / "w_gate", w=_u16(w)))
-            elif name in {n for n, _, _ in LINEAR}:
-                K, N = next((k, n) for nm, k, n in LINEAR if nm == name)
+                w = _bf16(gen, (m.experts, m.hidden), 2.0 ** -6)
+                self.made[key] = (w, _save(self.work / model / "w_gate", w=_u16(w)))
+            elif name in {n for n, _, _ in m.linear + m.f32out}:
+                K, N = next((k, n) for nm, k, n in m.linear + m.f32out if nm == name)
                 w = _bf16(gen, (N, K), 2.0 ** -6)
-                self.made[name] = (w, _save(self.work / f"w_{name}", w=_u16(w)))
+                self.made[key] = (w, _save(self.work / model / f"w_{name}", w=_u16(w)))
             else:
                 uk_t, uv = absorb_weights(_bf16(gen, (NHL * (QK_NOPE + V_HEAD), KV_LORA), 2.0 ** -5))
-                self.made["q_nope_absorb"] = (uk_t, _save(self.work / "w_q_nope_absorb", b=_u16(uk_t)))
-                self.made["v_absorb"] = (uv, _save(self.work / "w_v_absorb", b=_u16(uv)))
-        return self.made[name]
+                self.made[model, "q_nope_absorb"] = (uk_t, _save(self.work / model / "w_q_nope_absorb", b=_u16(uk_t)))
+                self.made[model, "v_absorb"] = (uv, _save(self.work / model / "w_v_absorb", b=_u16(uv)))
+        return self.made[key]
 
 
 class DispatchTap:
@@ -314,40 +352,44 @@ def _kernel_of(keys: list[dict[str, Any]]) -> dict[str, Any]:
     return {"kind": "splitk", "SPLIT_K": k["split_k"], "TILE_K": 256, "WARPS": 4}
 
 
-def launch(work: Path, weights: Weights, gate, phase: str, name: str, M: int, seed: int) -> tuple[dict[str, Any], dict[str, Any]]:
+def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phase: str, name: str, M: int,
+           seed: int) -> tuple[dict[str, Any], dict[str, Any]]:
     """One case on the GPU, twice, timed and profiled; returns (launch record, comparison job)."""
     import torch
-    import torch.nn.functional as F
 
     gen = torch.Generator(device="cuda").manual_seed(seed)
-    rec: dict[str, Any] = {"phase": phase, "case": name, "M": M}
-    d = work / f"{phase}_{name}_M{M}"
+    rec: dict[str, Any] = {"model": model, "phase": phase, "case": name, "M": M}
+    d = work / model / f"{phase}_{name}_M{M}"
     if phase == "router":
-        w, wpath = weights.get("mlp.gate")
+        m, gate = MODELS[model], gates[model]
+        w, wpath = weights.get(model, "mlp.gate")
         gate.weight.data.copy_(w)
-        x = _activation(gen, M, HIDDEN, probe=name == PROBE)
+        x = _activation(gen, M, m.hidden, probe=name == PROBE)
         with DispatchTap() as tap:
             outs = [gate(x)[0].clone() for _ in range(2)]
-        rec.update(K=HIDDEN, N=EXPERTS, kernel=_kernel_of(tap.keys), expected=expected_kernel(M), dispatches=tap.keys)
+        rec.update(K=m.hidden, N=m.experts, kernel=_kernel_of(tap.keys), expected=expected_kernel(M, model), dispatches=tap.keys)
         rec["dispatch_ok"] = (rec["kernel"] == rec["expected"] and len(tap.keys) == (0 if M > 16 else 2)
-                              and all(k["pdl"] == (M == 1) for k in tap.keys))
-        rec["operands_ok"] = outs[0].dtype == torch.float32 and list(outs[0].shape) == [M, EXPERTS]
+                              and all(k["pdl"] == (M == 1) and (k["K"], k["N"]) == (m.hidden, m.experts) for k in tap.keys))
+        rec["operands_ok"] = outs[0].dtype == torch.float32 and list(outs[0].shape) == [M, m.experts]
         fn = lambda: gate(x)                                                       # noqa: E731
         paths = {**wpath, **_save(d, x=_u16(x), out=_u32(outs[0]))}
-    elif phase == "linear":
+    elif phase in ("linear", "f32out"):
         from vllm.model_executor.layers.utils import dispatch_unquantized_gemm
 
-        gemm = dispatch_unquantized_gemm()
-        w, wpath = weights.get(name)
+        w, wpath = weights.get(model, name)
         K, N = w.shape[1], w.shape[0]
         x = _activation(gen, M, K)
-        layer = torch.nn.Module()
-        outs = [gemm(layer, x, w, None).clone() for _ in range(2)]
-        rec.update(K=K, N=N, operands_ok=outs[0].dtype == torch.bfloat16 and list(outs[0].shape) == [M, N])
-        fn = lambda: gemm(layer, x, w, None)                                       # noqa: E731
-        paths = {**wpath, **_save(d, x=_u16(x), out=_u16(outs[0]))}
+        if phase == "linear":
+            gemm, layer = dispatch_unquantized_gemm(), torch.nn.Module()
+            fn = lambda: gemm(layer, x, w, None)                                   # noqa: E731
+        else:
+            fn = lambda: torch.mm(x, w.T, out_dtype=torch.float32)                 # noqa: E731
+        outs = [fn().clone() for _ in range(2)]
+        dtype = torch.bfloat16 if phase == "linear" else torch.float32
+        rec.update(K=K, N=N, operands_ok=outs[0].dtype == dtype and list(outs[0].shape) == [M, N])
+        paths = {**wpath, **_save(d, x=_u16(x), out=(_u16 if phase == "linear" else _u32)(outs[0]))}
     else:
-        b, wpath = weights.get(name)
+        b, wpath = weights.get(model, name)
         K, N = b.shape[1], b.shape[2]
         if name == "q_nope_absorb":
             q = _activation(gen, M, NHL * (QK_NOPE + QK_ROPE)).view(M, NHL, QK_NOPE + QK_ROPE)
@@ -376,7 +418,8 @@ def launch(work: Path, weights: Weights, gate, phase: str, name: str, M: int, se
         rec["kernels"] = _kernels(fn)
     except Exception as e:  # noqa: BLE001
         rec["kernels"] = {"error": _error(e)}
-    job = {"phase": phase, "case": name, "M": M, "K": rec["K"], "N": rec["N"], "kernel": rec.get("kernel"), "paths": paths}
+    job = {"model": model, "phase": phase, "case": name, "M": M, "K": rec["K"], "N": rec["N"], "kernel": rec.get("kernel"),
+           "paths": paths}
     return rec, job
 
 
@@ -411,10 +454,10 @@ def _reference(job: dict[str, Any], a: dict[str, np.ndarray], r: int, n: int, fm
     w = a["w"][n].tolist()
     if job["phase"] == "linear":
         return evaluate(bind(CG.Gemm, K=K, N=1, DOT=hop), x, w)
-    k = job["kernel"]
-    if k["kind"] == "dotprod":
+    k = job.get("kernel") or {}
+    if k.get("kind") == "dotprod":
         return evaluate(bind(LL.LlBf16DotprodDotWord, K=K, BS=k["BS"], VEC=k["VEC"], FMA=fma), x, w)
-    if k["kind"] == "splitk":
+    if k.get("kind") == "splitk":
         return evaluate(bind(LL.LlBf16SplitKDotWord, K=K, SPLIT_K=k["SPLIT_K"], TILE_K=k["TILE_K"], WARPS=k["WARPS"], DOT=hop), x, w)
     return evaluate(bind(CB.GemmF32OutWord, K=K, N=1, DOT=hop), x, w)
 
@@ -425,7 +468,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     try:
         return _compare(job)
     except Exception as e:  # noqa: BLE001
-        return {"phase": job["phase"], "case": job["case"], "M": job["M"], "error": _error(e)}
+        return {"model": job["model"], "phase": job["phase"], "case": job["case"], "M": job["M"], "error": _error(e)}
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
@@ -434,7 +477,6 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
 
     a = _load(job["paths"])
     r0, r1 = job["rows"]
-    N = job["N"]
     rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     k = job.get("kernel") or {}
     if job["phase"] == "bmm":
@@ -450,7 +492,7 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
             want = {None: BC.splitk_rows(x, w, SPLIT_K=k["SPLIT_K"], TILE_K=k["TILE_K"], WARPS=k["WARPS"])}
         else:
             want = {None: BC.f32out_rows(x, w)}
-    f32 = job["phase"] == "router"
+    f32 = job["phase"] in ("router", "f32out")
     for f, wv in want.items():
         bad = ~MK._words_equal(got, wv, f32_words=f32)
         if f is None:
@@ -471,12 +513,12 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
                 y = _reference(job, a, r, n, f)
                 rec["reference_coords"] += 1
                 rec["twin_mismatch"] += not bool(MK._words_equal(np.asarray(y[0], wv.dtype), wv[r - r0, n], f32_words=f32))
-    return {"phase": job["phase"], "case": job["case"], "M": job["M"], "rows": job["rows"], **rec}
+    return {"model": job["model"], "phase": job["phase"], "case": job["case"], "M": job["M"], "rows": job["rows"], **rec}
 
 
 # ------------------------------------------------------------------------------------------------------------------------ bind
-def bind_check() -> dict[str, Any]:
-    """Every Definition binds at GLM-5.3's statics, its operands at the served shapes."""
+def bind_check(models: list[str] = list(MODELS)) -> dict[str, Any]:
+    """Every Definition binds at each model's statics, its operands at the served shapes."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.batch import type_shape
@@ -487,14 +529,21 @@ def bind_check() -> dict[str, Any]:
     from verity_vllm.program.registry import ll_bf16 as LL
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
-    gate = [[HIDDEN], [EXPERTS, HIDDEN], [EXPERTS]]
-    targets = [(bind(CB.GemmF32OutWord, K=HIDDEN, N=EXPERTS, DOT=hop), gate)]
-    targets += [(bind(LL.LlBf16DotprodGemmWord, N=EXPERTS, K=HIDDEN, BS=BC.DOTPROD_BS, VEC=BC.DOTPROD_VEC, FMA=f), gate) for f in (0, 1)]
-    for s in sorted({BC.SPLITK_DEFAULT, *BC.SM90_SPLITK[(HIDDEN, EXPERTS)].values()}):
-        targets.append((bind(LL.LlBf16SplitKGemmWord, N=EXPERTS, K=HIDDEN, SPLIT_K=s, TILE_K=BC.SPLITK_TILE_K, WARPS=BC.SPLITK_WARPS,
-                             DOT=hop), gate))
-    targets += [(bind(CG.Gemm, K=K, N=N, DOT=hop), [[K], [N, K], [N]]) for _, K, N in LINEAR]
-    targets += [(bind(CB.BatchedGemmWord, B=NHL, K=K, N=N, DOT=hop), [[NHL, K], [NHL, N, K], [NHL, N]]) for _, K, N in BMM]
+    targets = []
+    for model in models:
+        m = MODELS[model]
+        H, E = m.hidden, m.experts
+        gate = [[H], [E, H], [E]]
+        kernels = [expected_kernel(M, model) for M in range(1, BC.LL_MAX_M + 1)]
+        targets.append((bind(CB.GemmF32OutWord, K=H, N=E, DOT=hop), gate))
+        for bs in sorted({k["BS"] for k in kernels if k["kind"] == "dotprod"}):
+            targets += [(bind(LL.LlBf16DotprodGemmWord, N=E, K=H, BS=bs, VEC=BC.DOTPROD_VEC, FMA=f), gate) for f in (0, 1)]
+        for s in sorted({k["SPLIT_K"] for k in kernels if k["kind"] == "splitk"}):
+            targets.append((bind(LL.LlBf16SplitKGemmWord, N=E, K=H, SPLIT_K=s, TILE_K=BC.SPLITK_TILE_K, WARPS=BC.SPLITK_WARPS,
+                                 DOT=hop), gate))
+        targets += [(bind(CG.Gemm, K=K, N=N, DOT=hop), [[K], [N, K], [N]]) for _, K, N in m.linear]
+        targets += [(bind(CB.GemmF32OutWord, K=K, N=N, DOT=hop), [[K], [N, K], [N]]) for _, K, N in m.f32out]
+        targets += [(bind(CB.BatchedGemmWord, B=NHL, K=K, N=N, DOT=hop), [[NHL, K], [NHL, N, K], [NHL, N]]) for _, K, N in m.bmm]
     out = {}
     for t, want in targets:
         params, ret = t.signature()
@@ -520,7 +569,7 @@ def _words_ok(t: dict[str, Any]) -> bool:
 
 
 def _case(x: dict[str, Any]) -> str:
-    return f"{x['phase']}/{x['case']}/M{x['M']}"
+    return case_key(x["model"], x["phase"], x["case"], x["M"])
 
 
 def case_verdicts(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -535,7 +584,7 @@ def case_verdicts(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
             for k in TOTALS:
                 c["totals"][k] += r[k]
     fma = doc.get("fma")
-    failed = {"/".join(e.split("/")[:3]) for e in doc["errors"] if e.split("/")[0] in PHASES}
+    failed = {"/".join(p[:4]) for p in (e.split("/") for e in doc["errors"]) if len(p) >= 4 and p[1] in PHASES}
     for key, c in out.items():
         t = c["totals"]
         fma_ok = t["dotprod_words"] == 0 or (fma is not None and t[f"fma{fma}_mismatch"] == 0)
@@ -545,11 +594,18 @@ def case_verdicts(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return out
 
 
+def model_verdicts(doc: dict[str, Any]) -> dict[str, bool]:
+    """Each model's verdict: every one of its expected cases launched and GO."""
+    return {m: all(k in doc["cases"] and doc["cases"][k]["ok"] for k in doc["expected"] if k.startswith(m + "/"))
+            for m in doc["models"]}
+
+
 def _verdict(doc: dict[str, Any]) -> bool:
-    return (doc["gate"]["ok"] and not doc["errors"] and doc["switch"].get("ok") is True and doc["selection"].get("ok") is True
-            and doc["bind"].get("ok") is True and {x["phase"] for x in doc["launches"]} == set(PHASES)
+    return (doc["gate"]["ok"] and not doc["errors"] and doc["switch"].get("ok") is True
+            and all(s.get("ok") is True for s in doc["selection"].values()) and bool(doc["selection"])
+            and doc["bind"].get("ok") is True and {_case(x) for x in doc["launches"]} == set(doc["expected"])
             and all(_launch_ok(x) for x in doc["launches"]) and _words_ok(doc["totals"]) and doc.get("fma") is not None
-            and all(c["ok"] for c in doc["cases"].values()))
+            and all(c["ok"] for c in doc["cases"].values()) and all(model_verdicts(doc).values()))
 
 
 # --------------------------------------------------------------------------------------------------------------------- default
@@ -557,8 +613,9 @@ def default_run(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
     """This capture under torch's default cuBLAS configuration, in a process of its own (the switch is process-wide and set before
     the first cuBLAS handle): which cases' words it changes, and each case's kernel time either way."""
     sub = outdir / "served_default"
-    argv = [sys.executable, str(Path(__file__).resolve()), "--served-default", "--no-default", "--out", str(sub), "--workers", str(a.workers),
-            "--only", a.only, "--min-driver", str(a.min_driver), "--want-cc", a.want_cc, "--want-sms", str(a.want_sms)]
+    argv = [sys.executable, str(Path(__file__).resolve()), "--served-default", "--no-default", "--out", str(sub),
+            "--workers", str(a.workers), "--only", a.only, "--models", a.models, "--min-driver", str(a.min_driver),
+            "--want-cc", a.want_cc, "--want-sms", str(a.want_sms)]
     argv += (["--scratch", a.scratch] if a.scratch else []) + (["--quick"] if a.quick else [])
     proc = subprocess.run(argv, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2])
     (outdir / "served_default.log").write_text(proc.stdout + proc.stderr)
@@ -575,18 +632,23 @@ def _cost(doc: dict[str, Any]) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------- run
 def run(a: argparse.Namespace) -> dict[str, Any]:
+    only, models = set(a.only.split(",")), a.models.split(",")
+    unknown = sorted(set(models) - set(MODELS)) + sorted(only - set(PHASES))
+    if unknown:
+        raise SystemExit(f"unknown models or phases: {unknown} (models {sorted(MODELS)}, phases {list(PHASES)})")
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=a.scratch)
     work = Path(tmp.name)
-    only = set(a.only.split(","))
     env = environment(a.served_default, work / "triton_cache")
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
     tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")
+    todo = cases(a.quick, only, models)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": a.quick, "served_default": a.served_default,
-                           "environment": G._environment(), "gate": C.gate(a.min_driver, a.want_cc, a.want_sms), "errors": {}}
+                           "models": models, "expected": [case_key(*c) for c in todo], "environment": G._environment(),
+                           "gate": C.gate(a.min_driver, a.want_cc, a.want_sms), "errors": {}}
     print(f"[glm53-bf16-gemm] gate {json.dumps(doc['gate'])}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
@@ -598,24 +660,26 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         doc["errors"]["switch"] = _error(e)
         doc["switch"] = {"ok": False}
     print(f"[glm53-bf16-gemm] switch {json.dumps(doc['switch'])}", flush=True)
-    doc["selection"], doc["launches"], jobs = {"ok": False}, [], []
+    doc["selection"], doc["launches"], jobs = {}, [], []
     vllm_config = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     with set_current_vllm_config(vllm_config):
-        gate = None
-        try:
-            gate = make_gate(vllm_config)
-            doc["selection"] = selection(gate)
-        except Exception as e:  # noqa: BLE001
-            doc["errors"]["selection"] = _error(e)
-        print(f"[glm53-bf16-gemm] selection {json.dumps(doc['selection'])}", flush=True)
-        weights = Weights(work, 4000)
-        for i, (phase, name, M) in enumerate(cases(a.quick, only)):
-            key = f"{phase}/{name}/M{M}"
+        gates: dict[str, Any] = {}
+        for model in models:
             try:
-                launch_rec, job = launch(work, weights, gate, phase, name, M, 7000 + i)
+                gates[model] = make_gate(vllm_config, model)
+                doc["selection"][model] = selection(gates[model])
+            except Exception as e:  # noqa: BLE001
+                doc["errors"][f"selection/{model}"] = _error(e)
+                doc["selection"][model] = {"ok": False}
+            print(f"[glm53-bf16-gemm] selection {model} {json.dumps(doc['selection'][model])}", flush=True)
+        weights = Weights(work, 4000)
+        for i, (model, phase, name, M) in enumerate(todo):
+            key = case_key(model, phase, name, M)
+            try:
+                launch_rec, job = launch(work, weights, gates, model, phase, name, M, 7000 + i)
                 doc["launches"].append(launch_rec)
                 jobs += jobs_of(job)
-                print(f"[glm53-bf16-gemm] {key:36s} K={launch_rec['K']:5d} N={launch_rec['N']:5d} kernel={launch_rec.get('kernel')} "
+                print(f"[glm53-bf16-gemm] {key:48s} K={launch_rec['K']:5d} N={launch_rec['N']:5d} kernel={launch_rec.get('kernel')} "
                       f"det={launch_rec['deterministic']} dispatch={launch_rec.get('dispatch_ok')} operands={launch_rec['operands_ok']} "
                       f"us={launch_rec['us']:.1f}", flush=True)
             except Exception as e:  # noqa: BLE001
@@ -624,7 +688,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         del weights
         torch.cuda.empty_cache()
     try:
-        doc["bind"] = bind_check()
+        doc["bind"] = bind_check(models)
     except Exception as e:  # noqa: BLE001
         doc["errors"]["bind"] = _error(e)
         doc["bind"] = {"ok": False}
@@ -632,11 +696,12 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     results: dict[tuple, dict[str, Any]] = {}
     with ProcessPoolExecutor(max_workers=a.workers, mp_context=multiprocessing.get_context("spawn")) as ex:
         for res in ex.map(compare, jobs):
+            key = (res["model"], res["phase"], res["case"], res["M"])
             if "error" in res:
-                doc["errors"][f"{res['phase']}/{res['case']}/M{res['M']}/compare"] = res["error"]
+                doc["errors"][case_key(*key) + "/compare"] = res["error"]
                 continue
-            agg = results.setdefault((res["phase"], res["case"], res["M"]), {"phase": res["phase"], "case": res["case"], "M": res["M"],
-                                                                             **{k: 0 for k in TOTALS}, "first_mismatch": None})
+            agg = results.setdefault(key, {"model": key[0], "phase": key[1], "case": key[2], "M": key[3], **{k: 0 for k in TOTALS},
+                                           "first_mismatch": None})
             for k in TOTALS:
                 agg[k] += res[k]
             agg["first_mismatch"] = agg["first_mismatch"] or res["first_mismatch"]
@@ -646,7 +711,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     doc["cases"] = case_verdicts(doc)
     for key, c in doc["cases"].items():
         t = c["totals"]
-        print(f"[glm53-bf16-gemm] case {key:36s} {'GO' if c['ok'] else 'NO-GO':5s} {c.get('kernel')} words={t['words']}!={t['mismatch']} "
+        print(f"[glm53-bf16-gemm] case {key:48s} {'GO' if c['ok'] else 'NO-GO':5s} {c.get('kernel')} words={t['words']}!={t['mismatch']} "
               f"dotprod={t['dotprod_words']} fma1!={t['fma1_mismatch']} fma0!={t['fma0_mismatch']} differ={t['fma_differ']} "
               f"ref={t['reference_coords']} twin!={t['twin_mismatch']} us={c.get('us')}", flush=True)
     if not a.served_default and not a.no_default:
@@ -657,26 +722,30 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
             doc["served_default"] = {"error": _error(e)}
         print(f"[glm53-bf16-gemm] served default {json.dumps(doc['served_default'])[:1500]}", flush=True)
         print(f"[glm53-bf16-gemm] switch cost (us switched / default) {json.dumps(doc.get('switch_cost'))}", flush=True)
+    doc["model_verdicts"] = model_verdicts(doc)
     doc = seal_record(doc, _verdict(doc))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
-    print(f"{tag} {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} fma={doc['fma']} totals={json.dumps(doc['totals'])} "
+    verdicts = " ".join(f"{m}={'GO' if ok else 'NO-GO'}" for m, ok in doc["model_verdicts"].items())
+    print(f"{tag} {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} {verdicts} fma={doc['fma']} totals={json.dumps(doc['totals'])} "
           f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}", flush=True)
     return doc
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="GLM-5.3's bf16 GEMMs on this Hopper GPU against their Programs")
+    ap = argparse.ArgumentParser(description="GLM-5.3's and DeepSeek-V4-Pro's bf16 GEMMs on this Hopper GPU against their Programs")
     ap.add_argument("--out", required=True, help=f"directory for {RECORD}")
     ap.add_argument("--scratch", default=None, help="parent of the scratch directory (operands, Triton cache); default the system temp")
     ap.add_argument("--min-driver", type=int, default=575)
     ap.add_argument("--want-cc", default="9.0")
     ap.add_argument("--want-sms", type=int, default=132)
     ap.add_argument("--workers", type=int, default=C.cpu_workers())
-    ap.add_argument("--quick", action="store_true", help=f"gate M in {QUICK_ROUTER_M}, the others at M in {QUICK_M}: a first signal in minutes")
+    ap.add_argument("--quick", action="store_true",
+                    help=f"each model's quick router M, the others at M in {QUICK_M}: a first signal in minutes")
     ap.add_argument("--served-default", action="store_true", help="torch's default cuBLAS configuration instead of the split-K-off switch")
     ap.add_argument("--no-default", action="store_true", help="skip the second process under torch's default configuration")
-    ap.add_argument("--only", default=",".join(PHASES), help="comma list of phases: router, linear, bmm")
+    ap.add_argument("--models", default=",".join(MODELS), help=f"comma list of models: {', '.join(MODELS)}")
+    ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)}")
     a = ap.parse_args(argv)
     return 0 if run(a)["ok"] else 1
 

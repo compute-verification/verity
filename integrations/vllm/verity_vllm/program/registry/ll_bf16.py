@@ -53,7 +53,8 @@ __all__ = ["LL_FMA_STEP", "LL_MUL_ADD_STEP", "LlBf16DotprodDot", "LlBf16DotprodD
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 WARP = 32
-CONFORMANCE = "not-yet-established: GLM-5.3's gate on the H200 (tests/properties/glm53_bf16_gemm_capture_gpu.py)"
+CONFORMANCE = ("not-yet-established: GLM-5.3's and DeepSeek-V4-Pro's gates on the H200 "
+               "(tests/properties/glm53_bf16_gemm_capture_gpu.py)")
 
 
 def _check(name: str, **ok: bool) -> None:
