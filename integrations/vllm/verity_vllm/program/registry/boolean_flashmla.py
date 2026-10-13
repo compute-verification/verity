@@ -15,15 +15,16 @@ with the Boolean ``DOT`` read as its word view.
 The callees are core's Boolean pieces: `DotBf16_v3{K = D, DOT}` and `DOT`, `F2fpBf16_v2`, the GPU-NaN f32 operations
 `F32Add_v4` / `F32Mul_v4` / `F32Fma_v4`, `F32Fmaxf_v2`, `F32Eq_v2`, the selects, `GuardNegInfZero_v2`, `MufuEx2Ftz_v2`,
 `MufuRcpFtz_v2`, `E4m3ToF32_v2`, `Bf16MulBf16_v2`, `I32Add_v2` and `boolean_dsa`'s integer steps; a constant word is constant bits
-and `-x` one NOT gate on x's sign bit.  No table or lookup gate.  Each composite is one traced circuit (`boolean_dsa.flat`), so a
-row's scales, a block's rescale and the query every score reads are decoded once.
+and `-x` one NOT gate on x's sign bit.  No table or lookup gate.  Each composite is one traced circuit (`boolean_dsa.flat`;
+`NvLog2f_v2` traced twice, `flat_twice`), so a row's scales, a block's rescale and the query every score reads are decoded once.
 """
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, and_reduce, or_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
+from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, and_reduce, or_reduce, sub
+from verity.ml.circuits.boolean.trace import definition, trace
 from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops.boolean import attention as BA
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -33,7 +34,7 @@ from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
 from verity_vllm.program.registry import flashmla as F
 from verity_vllm.program.registry.boolean_attention import _Bits
-from verity_vllm.program.registry.boolean_dsa import I32SubV2, I32ToF32V2, U32AndV2, flat
+from verity_vllm.program.registry.boolean_dsa import I32SubV2, I32ToF32V2, U32AndV2, flat, replay
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
@@ -117,8 +118,30 @@ def _rcp1(B, S, x):
     return F.fdividef_rcp(bit_ops(B), x)
 
 
+def flat_twice(name: str, version: int, signature, body, word):
+    """`boolean_dsa.flat` (no statics) traced a second time, over the gates of its first trace.  The first writes a form it cannot
+    track (one made through ANDs no output reads: here an `F32Fma_v4` on constant operands) as a fresh XOR tree, which can
+    repeat an XOR it already wrote; the second makes every form from the first's gates, so a repeat is one wire."""
+    inner = EW.on_bits(name, version, [], signature, body, word, register=False)
+    params, ret = signature(None)
+    types = [t for _, t in params]
+
+    def build(S):
+        c = BS.compile(bind(inner))
+        first = trace(lambda C, *x: [replay(c, C, [f for e in x for f in e])], types, ret)
+
+        def run(C, *x):
+            w = [ZERO, ONE, *(f for e in x for f in e)]
+            for kind, (a, *b) in first.gates:
+                w.append(C.AND(w[a], w[b[0]]) if kind == "and" else w[a] ^ w[b[0]] if kind == "xor" else NOT(w[a]))
+            return [w[i] for i in first.outputs]
+        return run
+
+    return EW.specialized(name, version, [], build, signature, doc=body.__doc__ or "", word=inner.word)
+
+
 NvExp2fV2 = flat("NvExp2f", 2, [], _X, _exp2, F.NvExp2f)
-NvLog2fV2 = flat("NvLog2f", 2, [], _X, _log2, F.NvLog2f)
+NvLog2fV2 = flat_twice("NvLog2f", 2, _X, _log2, F.NvLog2f)
 NvFdividefRcpV2 = flat("NvFdividefRcp", 2, [], _X, _rcp1, F.NvFdividefRcp)
 BITS.update(exp2=NvExp2fV2, log2=NvLog2fV2, rcp1=NvFdividefRcpV2)
 
