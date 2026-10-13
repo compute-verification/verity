@@ -42,7 +42,10 @@ class Target:
 
 BUILTINS = {
     "stock": Arm("stock", precision="bfloat16"),
-    "stock-fp8": Arm("stock-fp8", precision="fp8", control="stock"),
+    # Different precisions need not generate identical greedy tokens.  The
+    # stock arms are independent references; protocol arms use stock FP8 as
+    # their bit-exact control.
+    "stock-fp8": Arm("stock-fp8", precision="fp8"),
 }
 
 

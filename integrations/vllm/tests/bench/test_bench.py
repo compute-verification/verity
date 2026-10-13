@@ -80,11 +80,11 @@ def test_sweep_expansion_and_staggered_mixed_requests():
     assert [r.arrive_step for r in quick[0].requests()] == [0, 0, 1, 1, 2, 2, 3, 3]
 
 
-def test_stock_fp8_is_gated_against_stock_bfloat16():
+def test_stock_precisions_are_independent_reference_arms():
     arms = resolve_arms("stock,stock-fp8")
     assert [(arm.id, arm.precision, arm.control) for arm in arms] == [
         ("stock", "bfloat16", None),
-        ("stock-fp8", "fp8", "stock"),
+        ("stock-fp8", "fp8", None),
     ]
 
 
