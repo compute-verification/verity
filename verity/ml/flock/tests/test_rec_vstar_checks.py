@@ -565,20 +565,31 @@ def test_a_claim_port_reads_its_own_reps_row_of_rec_claim(tmp_path):
     """`checkOwn` holds which row each claim port reads: RecSparse's `claim` reads `rec-claim` at rep r's row in instance r
     (`rec_sparse.reads`), and R's opening's `claim<k>` at row k (`rec_residuals.stage_opening`). `checkPubRows` holds the
     rows a claim port opens to `rec-claim`'s, not which of them it opens, so a reads file swapping or repeating the reps'
-    claims is refused here, by the port compared."""
+    claims is refused here, by the port compared. RecSparse's file also holds its other message ports, each `<p>` under
+    `rec-sparse-<p>` at both reps' rows (`rec_vstage.sparse_messages`), and one missing them is refused by the first."""
+    from verity_flock import rec_sparse as SP
+
     inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
-    other = [["v", "rec-sparse-v", [0, 1]]]
-    for unit, n, honest, bad in (
-            ("rec-sparse/n18-e13-s6-t0", 2, [["claim", "rec-claim", [0, 1]]], [["claim", "rec-claim", [1, 0]]]),
-            ("rec-opening/m23-c2-p0", 1, [["claim0", "rec-claim", [0]], ["claim1", "rec-claim", [1]]],
+    msgs = [[nm, f"rec-sparse-{nm}", [0, 1]] for nm, _ in SP.message_ports(SP.Shape(*SPARSE))[1:-1]]
+    for unit, n, other, honest, bad in (
+            ("rec-sparse/n18-e13-s6-t0", 2, [["v", "rec-sparse-v", [0, 1]]] + msgs, [["claim", "rec-claim", [0, 1]]],
+             [["claim", "rec-claim", [1, 0]]]),
+            ("rec-opening/m23-c2-p0", 1, [], [["claim0", "rec-claim", [0]], ["claim1", "rec-claim", [1]]],
              [["claim0", "rec-claim", [1]], ["claim1", "rec-claim", [1]]])):
         check = ["--unit", unit, "--instances", str(n)]
         rc, line = _statements(inner, *check)
-        claims = [p for p in line["own"] if p[1] == "rec-claim"]
-        rest = [p for p in line["own"] if p[1] != "rec-claim"]
+        own = line["own"]
+        claims = [p for p in own if p[1] == "rec-claim"]
+        rest = [p for p in own if p[1] != "rec-claim"]
         assert rc == 0 and claims == honest, line
-        rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "honest.json", other + line["own"])))
+        rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "honest.json", other + own)))
         assert rc == 0 and line["checked"] == [unit, n], line
+        if msgs[0] in other:
+            short = [p for p in other if p != msgs[0]] + own
+            rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "short.json", short)))
+            (nm, v, rd) = msgs[0]
+            assert rc == 1 and line["error"] == (f"{unit}: the statement's message port {nm} under {v} reading {rd} is not in "
+                                                 "the registered reads"), line
         rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "bad.json", other + rest + bad)))
         (nm, _, rd), (_, _, want) = bad[0], claims[0]
         assert rc == 1 and line["error"] == (f"{unit}: the registered reads' port {nm} under rec-claim reading {rd} is not "

@@ -553,10 +553,15 @@ def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse,
     n18-e13-s6-t0, is the only RecSparse statement whose message rows a coin server recorded, so nothing smaller shows
     the verifier reads `sparse/rep<x>`'s rounds at the ports' order. `statement` with the inner transcript sets it up
     (its `rec-sparse-v` compared with no round), and refuses it at a transcript whose `sparse/rep1`
-    `c_k` of `u` (the round before the claim's) is one bit off; without the transcript it sets up as before."""
+    `c_k` of `u` (the round before the claim's) is one bit off; without the transcript it sets up as before. Its reads file
+    holds the statement's message ports as `RecVStar.checkOwn` asks (`rec-statements --registered`: `ownPorts` and
+    RecSparse's other messages, `sparseMsgs`)."""
     unit = f"rec-sparse/n{SPARSE[0]}-e{SPARSE[1]}-s{SPARSE[2]}-t{SPARSE[3]}"
     ports = {k: x["value"] for k, x in json.loads((sparse / "registered.json").read_text())["ports"].items()}
     assert {"rec-sparse-u", "rec-sparse-v"} <= set(ports.values()), ports
+    p = subprocess.run([str(BIN), "rec-statements", *_shape(tmp_path), "--unit", unit, "--instances", "2", "--registered",
+                        str(sparse / "registered.json")], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
     (port,) = [k for k, v in ports.items() if v == "rec-sparse-u"]
     for t in (None, _fixture(C3) / "public.json"):
         p = _statement(sparse, t)
