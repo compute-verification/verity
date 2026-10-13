@@ -23,7 +23,8 @@ the failure each SHA-512 compression of the prover's buys, a guess's 2^-8r besid
 below r on one of a block's 128 sectors (`sign_rank_at_most`, exact through F2: `gf2_rank_at_most`).  `sketch_failure`
 is a session's, and `grind_compressions` what one grinding try costs.
 
-`python -m verity.core.protocols.remote_bandwidth.timing` prints the grid of the report.
+`python -m verity.core.protocols.remote_bandwidth.timing` prints the grid of the report, ending with what would bring
+λ and μ_chip under 0.05% (wider receipts, a larger store, a flush a pass).
 """
 
 from __future__ import annotations
@@ -255,11 +256,92 @@ def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, sampl
 def store_floor(gap_ns: int = 0, target: float = 0.01) -> float:
     """The store on one RTX PRO 6000, in bytes, below which no T brings `stated`'s worst γ_t under `target`.  As T
     grows, a window's μ_sample and its ends vanish, and γ_t tends to `(g + S_chip/R + λ·p + μ_rebuild·(p + g))/(p + g)`
-    with p the store's read at R: the chain's steady state, μ_chip, λ (`audit.QUERIES_LOG2` bits a block) and
-    μ_rebuild.  At `gap_ns` = 0 it is μ_chip, λ and μ_rebuild alone."""
+    with p the store's read at R: the chain's steady state, μ_chip, λ (`audit.named_bits` of the store's blocks, a
+    block's share of them depending on the store's size, solved for by iteration) and μ_rebuild.  At `gap_ns` = 0 it
+    is μ_chip, λ and μ_rebuild alone."""
     rebuild = audit.Rebuild(codec.DEFAULT, SQUARINGS_PER_S["p1024"]).fraction(READ_BYTES_PER_S)
-    lam, g = audit.QUERIES_LOG2 / (8 * BLOCK_BYTES), gap_ns / S
-    return READ_BYTES_PER_S * (g * (1 - target + rebuild) + CHIP_BYTES / READ_BYTES_PER_S) / (target - lam - rebuild)
+    lam, g, blocks = audit.QUERIES_LOG2 / (8 * BLOCK_BYTES), gap_ns / S, 0
+    while True:
+        store = READ_BYTES_PER_S * (g * (1 - target + rebuild) + CHIP_BYTES / READ_BYTES_PER_S) / (target - lam - rebuild)
+        if store // BLOCK_BYTES == blocks:
+            return store
+        blocks = int(store // BLOCK_BYTES)
+        lam = (audit.named_bits(blocks) + audit.SLACK_LOG2) / (8 * BLOCK_BYTES * blocks)
+
+
+def _named_bits(k: int, queries_log2: int, binomial: bool) -> int:
+    """The bits a pass of k receipts charges for AuditRO's C(q, k) at q = 2^queries_log2: `audit.named_bits`, the
+    bound by q^k/k! that `ledger` charges, or k·log2 q, the looser bound by q^k."""
+    return audit.named_bits(k, queries_log2) if binomial else k * queries_log2
+
+
+def _sizing(gap: int) -> None:
+    store, node, hbm = 94 * 10 ** 9, 8 * 94 * 10 ** 9 // BLOCK_BYTES, 96 * 10 ** 9
+    p, g_s = store / READ_BYTES_PER_S, gap / S
+    cap = READ_BYTES_PER_S * (p + g_s)
+    print(f"# λ under 0.05%: one RTX PRO 6000 with its whole HBM (94 GB, {p * 1e3:.1f} ms passes) as the store, in the "
+          f"steady state at g = {gap // US} µs.  A receipt of m blocks: its bits for C(q, k) at q = 2^"
+          f"{audit.QUERIES_LOG2} bounded by q^k, or by q^k/k! as ledger charges them, and the bits 0.05% allows; an "
+          "opening on 8 GPUs' 752 GB with a payload leaf a receipt or a block; τ a pass scaled from #1916's 8 GiB pass "
+          "(sketch 5.82 ms, hash 0.33 ms, tree 0.90 ms, over a 5.60 ms read); sketch-sha512's rate a compression at "
+          "m·128 sectors, log2")
+    print("| m | KiB | q^k bits | λ | q^k/k! bits | λ | bits at 0.05% | opening B, payload a receipt | a block | τ | rate |")
+    print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    for m in (1, 2, 3, 4, 8):
+        k, units = store // (m * BLOCK_BYTES), node // m
+        bits = [_named_bits(k, audit.QUERIES_LOG2, b) for b in (False, True)]
+        base = (4 + 8 + m * BLOCK_BYTES + PER_LEAF * DIGEST_BYTES + SALT_BYTES + 12
+                + DIGEST_BYTES * math.ceil(math.log2(math.ceil(units / PER_LEAF))))
+        rate = min(Fraction(1, 2 ** (8 * r)) + m * SECTORS * sign_rank_at_most(SKETCH_ROWS, r - 1)
+                   for r in range(1, SKETCH_ROWS + 1))
+        print(f"| {m} | {m * 4} | {bits[0] / k:.2f} | {(bits[0] + audit.SLACK_LOG2) / 8 / cap:.4%} | {bits[1] / k:.2f} "
+              f"| {(bits[1] + audit.SLACK_LOG2) / 8 / cap:.4%} | {0.0005 * 8 * cap / k:.2f} "
+              f"| {base + SALT_BYTES + DIGEST_BYTES * math.ceil(math.log2(units))} "
+              f"| {base + m * (SALT_BYTES + DIGEST_BYTES * math.ceil(math.log2(node)))} "
+              f"| {(5.82 + (0.33 + 0.90) / m) / 5.60:.3f} | {log2(rate):.2f} |")
+    k = store // BLOCK_BYTES
+    q_log2 = 0.0005 * 8 * cap / k + math.lgamma(k + 1) / math.log(2) / k
+    print(f"at 4 KiB, under 0.05% by q^k/k! needs q ≤ 2^{q_log2:.2f} queries to a pass's oracle: "
+          f"{2 ** q_log2 / SHA512_PER_S:.0f} s of one GPU's SHA-512, {2 ** q_log2 / (8 * SHA512_PER_S):.0f} s of 8")
+    print()
+    rh = 64e9
+    print(f"# μ_chip under 0.05%: S_chip/(R·(p + g)) by the store a GPU reads a pass at R, {CHIP_BYTES / 0.0005 / 1e9:.0f} "
+          f"GB at 0.05%, {CHIP_BYTES / 0.0005 / hbm:.1f} times its 96 GB of HBM.  Host DRAM at r_h = {rh / 1e9:.0f} GB/s "
+          "(PCIe 5 ×16's ceiling) lengthens a pass past the HBM's read only by leaving the HBM idle.  A flush of t_F a "
+          "pass that leaves nothing of the store on chip adds t_F to the gap")
+    print("| store GB | pass ms | μ_chip |")
+    print("| --- | --- | --- |")
+    for gb in (30, 62, 94, 263, 526):
+        print(f"| {gb} | {gb * 1e9 / READ_BYTES_PER_S * 1e3:.1f} | "
+              f"{CHIP_BYTES / (READ_BYTES_PER_S * (gb * 1e9 / READ_BYTES_PER_S + g_s)):.4%} |")
+    print("| pass ms, HBM and host | store GB | μ_chip | idle |")
+    print("| --- | --- | --- | --- |")
+    for pass_s in (p, 0.1, 0.2, 1.0):
+        reads = min(store, READ_BYTES_PER_S * pass_s) + rh * pass_s
+        print(f"| {pass_s * 1e3:.1f} | {reads / 1e9:.1f} | {CHIP_BYTES / ((READ_BYTES_PER_S + rh) * pass_s):.3%} "
+              f"| {1 - reads / ((READ_BYTES_PER_S + rh) * pass_s):.2%} |")
+    print("| t_F µs | steady state | added |")
+    print("| --- | --- | --- |")
+    steady = g_s / (p + g_s)
+    for tf in (0, 26, 52, 105):
+        x = (g_s + tf * 1e-6) / (p + g_s + tf * 1e-6)
+        print(f"| {tf} | {x:.4%} | {x - steady:.4%} |")
+    print()
+    print(f"# the horizon's whole γ and the worst window's γ_t at the stated T = {audit.WINDOW_NS // S} s, 94 GB, as stated "
+          "and with what lowers λ and μ_chip (a flush: its added steady state on the timing, μ_chip at 0), and by q^k, "
+          "the looser count")
+    print("| RTT ms | γ | stated | by q^k | 16 KiB receipts | and a 26 µs flush | λ = μ_chip = 0 |")
+    print("| --- | --- | --- | --- | --- | --- | --- |")
+    flush = (g_s + 26e-6) / (p + g_s + 26e-6) - steady
+    for rtt in (1, 20):
+        h = stated(store, audit.WINDOW_NS, 600 * S // audit.WINDOW_NS, rtt_ns=_ns(rtt), samples=audit.SAMPLES)
+        for name, gamma, terms in (("horizon", h.gamma_horizon, h), ("worst γ_t", h.worst.gamma, h.worst)):
+            rest = gamma - terms.counting
+            lam = {(m, b): terms.counting * (_named_bits(store // (m * BLOCK_BYTES), audit.QUERIES_LOG2, b)
+                                             + audit.SLACK_LOG2) / (audit.named_bits(k) + audit.SLACK_LOG2)
+                   for m in (1, 4) for b in (False, True)}
+            print(f"| {rtt} | {name} | {gamma:.3%} | {rest + lam[1, False]:.3%} | {rest + lam[4, True]:.3%} "
+                  f"| {rest - terms.chip + lam[4, True] + flush:.3%} | {rest - terms.chip:.3%} |")
 
 
 def _ns(ms: float) -> int:
@@ -332,6 +414,8 @@ def _grid() -> None:
     print(f"# the store floor (store_floor): below {store_floor() / 1e9:.2f} GB a GPU μ_chip, λ and μ_rebuild alone "
           f"exceed 1% at any T; with the chain's steady state at g = {gap // US} µs, no T meets 1% below "
           f"{store_floor(gap) / 1e9:.2f} GB")
+    print()
+    _sizing(gap)
     print()
     print(f"# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
           f"deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")

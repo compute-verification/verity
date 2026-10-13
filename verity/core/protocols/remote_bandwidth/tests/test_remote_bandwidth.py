@@ -314,7 +314,9 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     assert g.timing == pytest.approx(1 - 10 * 300 / r.span_ns)
     assert g.sample == 0                                  # every receipt opened
     assert g.chip == pytest.approx(r.passes * 4096 / whole)
-    assert g.counting == pytest.approx((64 * r.receipts + 41 * r.passes) / 8 / whole) and r.receipts == r.passes * N
+    named = [audit.named_bits(k) + 41 for w in r.windows for k in w.lengths]
+    assert g.counting == pytest.approx(sum(named) / 8 / whole) and r.receipts == r.passes * N
+    assert sum(named) == r.passes * (audit.named_bits(N) + 41) < 64 * r.receipts + 41 * r.passes
     assert g.rebuild == pytest.approx(timing.SQUARINGS_PER_S["p1024"] * 4096 / (65_344 * capacity))
     assert g.gamma == pytest.approx(g.timing + g.chip + g.counting + g.rebuild + 0.002)
     assert g.horizon == g.floor == 0 and g.gamma_horizon == pytest.approx(g.gamma)
@@ -325,7 +327,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     for w, x in zip(g.windows, r.windows):
         whole_t = capacity * x.span_ns / 1e9
         assert w.chip == pytest.approx(x.passes * 4096 / whole_t) and w.sample == w.horizon == w.floor == 0
-        assert w.counting == pytest.approx((64 * x.receipts + 41 * x.passes) / 8 / whole_t)
+        assert w.counting == pytest.approx(sum(audit.named_bits(k) + 41 for k in x.lengths) / 8 / whole_t)
         assert w.rebuild == g.rebuild
         assert w.gamma == pytest.approx(w.timing + w.chip + w.counting + w.rebuild + 0.002)
     assert g.worst.gamma == max(w.gamma for w in g.windows) > g.gamma
@@ -392,12 +394,14 @@ def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None
     assert g.sample == pytest.approx(0.00981) and g.gamma - g.gamma_horizon == pytest.approx(g.sample - g.horizon)
     assert g.to_json()["horizon"] == {"floor": g.floor, "gamma": g.gamma_horizon, "sample": g.horizon}
     # Every window's own, from the record: the pooled event leaves each window's μ_sample under 1%, every one at once;
-    # its γ adds λ's 64 bits a receipt, 0.195% of a 4 KiB block, so the window's γ is 1.19%.
+    # its γ adds λ, log2 of q^k/k! for its pass of 10^5 receipts, 48.8 bits a receipt or 0.149% of a 4 KiB block, so
+    # the window's γ is 1.15%.
     assert audit.floors(synthetic((u,) * n, d, delta)) == pytest.approx((g.floor,) * n)
     assert all(w.horizon == pytest.approx(g.floor) and w.sample == pytest.approx(g.sample) for w in g.windows)
     w = g.worst_horizon
-    assert w.horizon < 0.01 and w.counting == pytest.approx(64 / 8 / 4096, rel=1e-3)
-    assert w.gamma_horizon == pytest.approx(w.horizon + w.counting) and 0.0119 < w.gamma_horizon < 0.012
+    assert w.horizon < 0.01 and w.counting == pytest.approx((audit.named_bits(u) + 41) / 8 / (u * 4096))
+    assert 48.8 < audit.named_bits(u) / u < 48.9
+    assert w.gamma_horizon == pytest.approx(w.horizon + w.counting) and 0.0114 < w.gamma_horizon < 0.0115
     assert g.to_json()["worst"]["horizon"] == {"gamma": w.gamma_horizon, "window": w.window}
 
 
@@ -939,27 +943,52 @@ def test_opening_size_matches_the_timing_model(store) -> None:
 def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_term() -> None:
     """`PROTOCOL.md` §1 and §10's reading through the ledger, on one RTX PRO 6000 with its whole HBM as the store.  At
     the stated T = 60 s and 33,273 openings a window (555 a second), a 10 min session's worst window has its whole γ_t
-    under 0.85%; over the horizon the pooled μ_sample is under 0.01% and the whole γ over 0.15%, which λ and μ_chip
-    each exceed alone.  The 20 s option at 11,091 openings has μ_sample under 0.25% and a whole γ_t over 1%, and the
-    1 s option's μ_sample alone is under 1%, at 2,773."""
+    at 0.745–0.776%; over the horizon the pooled μ_sample is under 0.01% and the whole γ about 0.56%, over 0.15%,
+    which μ_chip exceeds alone and λ (0.125%) with μ_rebuild.  The 20 s option at 11,091 openings has μ_sample under
+    0.25% and a whole γ_t over 1%, and the 1 s option's μ_sample alone is under 1%, at 2,773."""
     s, store = audit.SAMPLES, 94 * 10 ** 9
     assert (timing.samples_for(0.0025, audit.DELTA), timing.samples_for(0.01, audit.DELTA)) == (11_091, 2_773)
     assert s == 3 * 11_091 and audit.WINDOW_NS == 60 * timing.S
     for rtt in (1, 20):
         g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
-        assert g.worst.sample < 0.001 and 0.008 < g.worst.gamma < 0.0085
-        assert g.horizon < 1e-4 and g.counting > 0.0015 and g.chip > 0.0015 and 0.006 < g.gamma_horizon < 0.0065
+        assert g.worst.sample < 0.001 and 0.00744 < g.worst.gamma < 0.00777
+        assert 0.00124 < g.counting < 0.00126 and g.counting + g.rebuild > 0.0015 and g.chip > 0.0015
+        assert g.horizon < 1e-4 and 0.0056 < g.gamma_horizon < 0.0057
         twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=11_091).worst
-        assert twenty.sample < 0.0025 and 0.0125 < twenty.gamma < 0.014
+        assert twenty.sample < 0.0025 and 0.012 < twenty.gamma < 0.0135
         one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=2_773).worst
         assert one.sample < 0.01 < 0.1 < one.gamma
+
+
+def test_the_ledgers_count_bounds_auditros_binomial() -> None:
+    """`named_bits`, λ's count a pass (`PROTOCOL.md` §10), against `Bandwidth.Guarantees.AuditRO`'s last term
+    C(q, k)/2^λ, λ a natural number: charged `named_bits(k) + 41`, a pass's term is at most 2^-41, checked in exact
+    integers against `math.comb`.  It is within 2 bits of log2(q^k/k!) (exact factorials up to 10^5), never above
+    k·log2 q, and at q = 2^40 at most the 40·k + 41 AuditRO's statement reads.  At 94 GB of 4 KiB receipts and
+    q = 2^64 it is 40.99 bits a receipt, and the grid's sizing reads the same count."""
+    cases = [(q_log2, k) for q_log2 in (1, 10, 40) for k in (0, 1, 2, 3, 7, 2 ** q_log2 // 2, 2 ** q_log2)
+             if k <= 2 ** q_log2 and k <= 4096] + [(20, 1000), (64, 3), (64, 3000), (64, 10 ** 4), (64, 10 ** 5)]
+    for q_log2, k in cases:
+        named = audit.named_bits(k, q_log2)
+        assert math.comb(2 ** q_log2, k) * 2 ** 41 <= 2 ** (named + 41) and named <= k * q_log2
+        assert named - (k * q_log2 - math.log2(math.factorial(k))) < 2
+        if q_log2 == 40:
+            assert named + 41 <= 40 * k + 41
+        assert timing._named_bits(k, q_log2, True) == named and timing._named_bits(k, q_log2, False) == k * q_log2
+    k = 94 * 10 ** 9 // codec.BLOCK_BYTES
+    assert 40.98 < audit.named_bits(k) / k < 41.0 and audit.named_bits(k) < 64 * k
+    for bad in (-1, 1.0, True):
+        with pytest.raises(ValueError, match="nonnegative integers"):
+            audit.named_bits(bad)
+    with pytest.raises(ValueError, match="nonnegative integers"):
+        audit.named_bits(1, -1)
 
 
 def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
     and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
-    is μ_chip, λ and μ_rebuild alone, about 36 GB."""
-    assert 35.6e9 < timing.store_floor() < 35.8e9 and 45.6e9 < timing.store_floor(50 * timing.US) < 45.8e9
+    is μ_chip, λ and μ_rebuild alone, about 33 GB."""
+    assert 32.7e9 < timing.store_floor() < 32.85e9 and 41.8e9 < timing.store_floor(50 * timing.US) < 41.95e9
     for scale, over in ((0.98, True), (1.02, False)):
         g = timing.stated(round(scale * timing.store_floor(50 * timing.US)), 1200 * timing.S, 1, rtt_ns=timing.MS,
                           samples=555 * 1200)
