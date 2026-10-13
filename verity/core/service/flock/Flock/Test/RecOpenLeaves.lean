@@ -3,8 +3,15 @@
 words): the statement's first five rows must be `row`, `aux`, `acc`, `coef` and `dirs` at 64, 64, 64, 128 and 64 words
 (`out` and `acc_out` follow), and every copy must read their words in order. Each is refused before the net is built;
 the honest rows and leaves pass both checks, at one copy or two.
+
+`RecVStar.checkAccReads` at the inner shape of `test_lean_rec_coins`' class (m 25: four levels of 218, 106, 71 and 53
+openings a rep) and, for R's levels, R at m 22 (218, 106 and 53): level 3's `acc` reads rows 395 to 447 for rep 0 and 843
+to 895 for rep 1, as the recorded level's reads file does, and `acc_out` the next rows; R's level 1 reads rows from
+`2 · 448 + 218`. A reads file whose `acc` reads its openings level-major, or whose `acc_out` reads `acc`'s rows, or one
+short, is refused at the first unit it differs at.
 -/
 import Flock.RecOpen
+import Flock.RecVStar
 
 namespace Flock.Test.RecOpenLeaves
 
@@ -52,5 +59,42 @@ def words (a b : Nat) : Array Int := (Array.range (b - a)).map fun i => Int.ofNa
 #guard refusal honest #[inOrder.set! 383 (-1)] == leavesRefused
 #guard refusal honest #[inOrder, inOrder.set! 200 199] == leavesRefused
 #guard refusal honest #[inOrder.pop] == leavesRefused
+
+def inner : RecVStar.Inner := { m := 25, kLog := 16, claims := 8, regions := 3 }
+
+def innerR : RecVStar.Inner := { inner with stacked := some { m := 22, claims := 2 } }
+
+def accPort (name : String) (reads : Array (Option Nat)) : Registered.Port :=
+  { name, value := "rec-acc", root := ByteArray.empty, leaves := 897, words := some 64, wordBits := 16,
+    domain := ByteArray.empty, reads }
+
+def level3 : VStar.Stmt := .recOpen 3 16 4 106
+
+def rowsAt (s : VStar.Stmt) (i : RecVStar.Inner := inner) : Array (Option Nat) :=
+  ((RecVStar.accReads i s).toOption.join).getD #[]
+
+def accRefusal (i : RecVStar.Inner) (s : VStar.Stmt) (acc accOut : Array (Option Nat)) : Option String :=
+  match RecVStar.checkAccReads i s #[accPort "acc" acc, accPort "acc_out" accOut] with
+  | .error e => some e
+  | .ok () => none
+
+def after (r : Array (Option Nat)) : Array (Option Nat) := r.map (·.map (· + 1))
+
+#guard RecVStar.opensBelow ((Flock.fast100 25).get!) 4 == 448 && RecVStar.opensBelow ((Flock.fast100 25).get!) 3 == 395
+#guard rowsAt level3 == ((Array.range 53).map fun j => some (395 + j)) ++ (Array.range 53).map fun j => some (843 + j)
+#guard (rowsAt (.recOpen 0 64 8 436)).toList.take 2 == [some 0, some 1] && (rowsAt (.recOpen 0 64 8 436))[218]! == some 448
+#guard rowsAt (.recOpenStacked 1 16 7 106) innerR == (Array.range 106).map fun j => some (1114 + j)
+#guard (RecVStar.accReads inner (.recOpenStacked 1 16 7 106)).toOption.isNone
+
+#guard accRefusal inner level3 (rowsAt level3) (after (rowsAt level3)) == none
+#guard accRefusal innerR (.recOpenStacked 1 16 7 106) (rowsAt (.recOpenStacked 1 16 7 106) innerR)
+  (after (rowsAt (.recOpenStacked 1 16 7 106) innerR)) == none
+#guard accRefusal inner level3 ((Array.range 106).map fun u => some (790 + u)) (after (rowsAt level3)) ==
+  some "rec-open/l16-h4: its port acc reads rec-acc at 790 in unit 0, not at 395 (the chain runs rep-major, then by level and query)"
+#guard accRefusal inner level3 (rowsAt level3) (rowsAt level3) ==
+  some "rec-open/l16-h4: its port acc_out reads rec-acc at 395 in unit 0, not at 396 (the chain runs rep-major, then by level and query)"
+#guard accRefusal inner level3 (rowsAt level3).pop (after (rowsAt level3)) ==
+  some "rec-open/l16-h4: its port acc reads rec-acc at nothing in unit 105, not at 895 (the chain runs rep-major, then by level and query)"
+#guard (RecVStar.checkAccReads inner level3 #[accPort "acc" (rowsAt level3)]) matches .error _
 
 end Flock.Test.RecOpenLeaves
