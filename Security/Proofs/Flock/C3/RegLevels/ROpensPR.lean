@@ -617,9 +617,3 @@ theorem os_two_tied_repsOfVals_ligOfVals
 end
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.stackedReadCol
-#print axioms FlockC3.RegLevels.climb_of_opensTop
-#print axioms FlockC3.RegLevels.opensAtMaps_readMaps
-#print axioms FlockC3.RegLevels.rowCols_readMaps
-#print axioms FlockC3.RegLevels.ioCols_of_open
