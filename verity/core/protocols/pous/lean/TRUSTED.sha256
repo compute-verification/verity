@@ -9,7 +9,7 @@ e76a73face016098c6dd6a03974c4241b0616741a755c5a50fc2eac9d524de62  lake-manifest.
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../../Security/lake-manifest.json
 a62f3985a0b7dec9ef99c19edc7ad59eb5b4e1680f0765801aca5ed8dad846cd  ../../../../../Security/Proofs/lakefile.toml
 83d20180009e0590a3385aa9c19912cc65e2771cbd3c889ef3321a256f79e9e7  ../../../../../Security/Proofs/lake-manifest.json
-6cca0fc423545d0444407611efa44d32a74b8d816bb6a2a4cfa4ad87fc471af4  ../../../../../Security/Definitions/Pous.lean
+3aa8719ffd3bb3f7bd5a11cf24f785781adddd34cc58fe84c30b7dbe69277855  ../../../../../Security/Definitions/Pous.lean
 369114f047c584e3ca3c62379f70900eeac07c4739ce328b115a1c431648620b  ../../../../../Security/Models/Pous/Assumptions.lean
 ce63e2bd4a312a960465450445c5ebedc6407dce23a96e4464a4db5c1fa729cd  ../../../../../Security/Models/Pous/Guarantees.lean
 f7796723029504f99b1937177c9b5de7a08da21f0bc9d64cbe847cca2c4973ab  ../../../../../Security/Proofs/Pous/Statements.lean
@@ -46,6 +46,7 @@ f17be8cbc547930461d46c4f41040ea165bfff15169972934aade312603dc129  ../../../../..
 54f82aac68b27f47b2383f486ef7dbfae2dfc14fc02de7e12458a97b7bfd6463  ../../../../../Security/Definitions/Pous/Model/SecureErasure.lean
 57e605cac56a8976de264946d3e0e7573efd583318d01ead07b1731fca0a248d  ../../../../../Security/Definitions/Pous/Model/SegLift.lean
 58c66950dee05bce6131152a168b1910b8059fd8d7967bc78259331ff96a15a5  ../../../../../Security/Definitions/Pous/P2/Cost.lean
-3a90b129266619b722b06c61ce09598f5f5898f68d0d48e3682627e0b3dc13d7  ../../../../../Security/Models/Pous/Assumptions/P2.lean
-41b94339121a638e0a364de7b75f5069d7b2adafee43f348261d3b9121b14711  ../../../../../Security/Models/Pous/Guarantees/P2.lean
+d8f6004051961b914e007d744f4acbef542bff8fc2a99b7ce36de33b6a9d469b  ../../../../../Security/Definitions/Pous/P2/Rounds.lean
+c1f3114390c593fcab239b629bed7ac2aa8ba42a4c405b0c54b1875a9a611b8d  ../../../../../Security/Models/Pous/Assumptions/P2.lean
+03ab928b3c4a407123dc105fd6c02166c90b3efc7e8dc53213bf720158873d1a  ../../../../../Security/Models/Pous/Guarantees/P2.lean
 c8d78f5c2bdf9f4fc7b84b118d89e82ab6703c5aaa55ae1a9cfee3bde463d423  ../../../../../Security/Models/Pous/Guarantees/SecureErasure.lean
