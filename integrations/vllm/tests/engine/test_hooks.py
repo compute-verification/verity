@@ -228,10 +228,10 @@ def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() 
             self.w13_weight_scale_inv = torch.nn.Parameter(torch.ones(4), requires_grad=False)
             self.w2_weight_scale_inv = torch.nn.Parameter(torch.full((4,), 2.0), requires_grad=False)
             experts = Experts(self.w13_weight_scale_inv, self.w2_weight_scale_inv)
-            self.quant_method = SimpleNamespace(moe_kernel=SimpleNamespace(experts=experts))
+            self.quant_method = SimpleNamespace(moe_kernel=SimpleNamespace(fused_experts=experts))
 
         def forward(self, x):
-            return self.quant_method.moe_kernel.experts.apply(x)
+            return self.quant_method.moe_kernel.fused_experts.apply(x)
 
     layer = Layer()
     inputs = (torch.ones(4),)
@@ -245,8 +245,8 @@ def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() 
         shimmed = torch.export.export(layer, inputs, strict=False)
         assert not shimmed.graph_signature.inputs_to_lifted_tensor_constants
         assert set(shimmed.graph_signature.inputs_to_parameters.values()) == {"w13_weight_scale_inv", "w2_weight_scale_inv"}
-    assert layer.quant_method.moe_kernel.experts.w1_scale is layer.w13_weight_scale_inv
-    assert layer.quant_method.moe_kernel.experts.w2_scale is layer.w2_weight_scale_inv
+    assert layer.quant_method.moe_kernel.fused_experts.w1_scale is layer.w13_weight_scale_inv
+    assert layer.quant_method.moe_kernel.fused_experts.w2_scale is layer.w2_weight_scale_inv
 
 
 def test_tp_group_override_restores_the_group() -> None:
