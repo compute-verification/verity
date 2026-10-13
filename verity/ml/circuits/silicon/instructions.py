@@ -339,9 +339,10 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="tf32", b_dtype="tf32", acc_dtype="f32", scale=None,
             model=None,
             status="unprobed",
-            evidence=("integrations/vllm/tests/properties/dsv4_mhc_capture_gpu.py probes it (not yet run on an H200); its candidate "
-                      "HopperTf32WgmmaDot8_v1 (integrations/vllm/verity_vllm/program/registry/mhc.py) is one group of 8 exact TF32 "
-                      "products, a 26-bit adder, floor -133, each FP32 operand read as its top 19 bits",),
+            evidence=("r20261013-115825-580e on an H200 fitted HopperTf32WgmmaDot8_v1 alone: one group of 8 exact TF32 products, "
+                      "a 26-bit adder and floor -133; B is rounded RNE from FP32 to TF32 (A was widened BF16 and exact in TF32). "
+                      "The end-to-end mHC capture was NO-GO because the old Definition truncated B and used the wrong NaN word in "
+                      "the separate squared sum; integrations/vllm/tests/properties/dsv4_mhc_capture_gpu.py reruns the gate",),
         ),
         _i(
             # Measured 2026-09-22 (D14 resolved): on sm_90a this PTX op is NOT a tensor-core FP8 instruction.  ptxas lowers

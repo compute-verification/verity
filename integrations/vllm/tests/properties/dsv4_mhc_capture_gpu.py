@@ -1,8 +1,8 @@
 """DeepSeek-V4-Pro's hyper-connections (mHC) on Hopper against their Programs: the H200's go/no-go for binding `registry.mhc`
 (`MhcFusedPostPre_v1` at <= 16 tokens, `MhcPostPreTf32_v1` above, `MhcPreBroadcast_v1` on layer 0 and `HcHead_v1`) at
 DeepSeek-V4-Pro's statics on one TP8 rank (mHC is replicated: each rank runs it on the full hidden 7168), and the probe that pins
-the TF32 wgmma step DeepGEMM's `tf32_hc_prenorm_gemm` issues (`HopperTf32WgmmaDot8_v1`, unprobed on sm_90: core's
-`instructions.py`).
+the TF32 wgmma step DeepGEMM's `tf32_hc_prenorm_gemm` issues (`HopperTf32WgmmaDot8_v1`; core's instruction catalog has no
+core-owned model for it).
 
 One GPU process writes `<out>/dsv4_mhc_capture.json`, the property record `dsv4_mhc_capture` (`properties.record`), and
 TileLang's generated CUDA of the mHC kernels under `<out>/cuda/`; it prints one line per phase, a `DSV4-MHC TF32` line, then

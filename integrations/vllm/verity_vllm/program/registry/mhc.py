@@ -38,9 +38,9 @@ from shared memory), both operands rounded RNE to TF32, from a zero accumulator,
 `HopperTf32WgmmaDot8_v1`.  A's conversion is unobservable here because widened bf16 has thirteen zero low bits.  The squared sum
 of each block: thread lane e < 4 of a quad adds `fma(x[k], x[k], x[k+4] * x[k+4])`, k = 64 st + 8 i + e, into its own chain
 from +0, and the quad's shuffles add `(v0 + v2) + (v1 + v3)`; these are GPU FMUL/FFMA/FADD operations, whose NaN result is
-0x7FFFFFFF.  The k8 step itself is unprobed on Hopper (core's
-`instructions.py` lists `sm90.wgmma.m64n8k8.tf32` so): `HopperTf32WgmmaDot8_v1` is a candidate, the Hopper BF16 step's adder
-on TF32 products; tests/properties/dsv4_mhc_capture_gpu.py pins it or names the mismatch.
+0x7FFFFFFF.  Run r20261013-115825-580e's H200 probe fitted `HopperTf32WgmmaDot8_v1` alone: the Hopper BF16 step's adder on
+TF32 products.  Core's instruction catalog remains `unprobed` because it has no core-owned model to pin;
+tests/properties/dsv4_mhc_capture_gpu.py reruns the gate.
 
 Registered functions (all `Name_v1`; OUT = HC * (2 + HC), the 24 mixes; `yp`, `rp` the split partials):
   MhcSigmoid                                  (z: f32) -> f32: `1 / (1 + expf(0 - z))`
@@ -88,9 +88,8 @@ F_ONE, F_NEG_INF = 0x3F800000, 0xFF800000
 
 _CONF = ("model-untested: read from the TileLang kernels' generated CUDA and PTX at the commits the module docstring pins; "
          "tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
-_TF32_CONF = ("model-untested: the k8 TF32 step is unprobed on sm_90 (core's instructions.py); the Hopper BF16 step's adder (one "
-              "group, 26 bits, floor -133) on exact products after each f32 operand is rounded RNE to TF32; "
-              "tests/properties/dsv4_mhc_capture_gpu.py probes it")
+_TF32_CONF = ("exact-model-tested: r20261013-115825-580e's H200 probe fitted this k8 step alone (one group, 26 bits, floor -133) "
+              "on exact products after each f32 operand is rounded RNE to TF32")
 _DG_CONF = ("model-untested: read from DeepGEMM 8b1392b9 sm90_tf32_hc_prenorm_gemm.cuh:150-240 on the candidate "
             "HopperTf32WgmmaDot8_v1; tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
 
@@ -98,7 +97,7 @@ _DG_CONF = ("model-untested: read from DeepGEMM 8b1392b9 sm90_tf32_hc_prenorm_ge
 TF32_GROUPS, TF32_WIDTH, TF32_FLOOR = (8,), 26, -133
 HOPPER_TF32_WGMMA_K8_CANDIDATE = GroupSum(
     name="hopper_tf32_wgmma_k8_candidate", arch="sm_90", dtype="tf32", operand_bits=19, groups=TF32_GROUPS, width=TF32_WIDTH,
-    zero_exponent=TF32_FLOOR, validated="unprobed: tests/properties/dsv4_mhc_capture_gpu.py")
+    zero_exponent=TF32_FLOOR, validated="r20261013-115825-580e: the H200 probe fitted this step alone")
 
 
 class Ops(D.Ops):
