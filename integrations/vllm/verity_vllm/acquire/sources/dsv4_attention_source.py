@@ -25,7 +25,9 @@ ran on, and the committer copies on that stream.  A cache is read in its layout:
 ([num_blocks, block_size, 584] bytes) and the indexer cache ([.., 132]) hold, per block, every slot's data bytes and then every slot's
 scale bytes, regrouped here per row (`split_rows`; the block stride may be padded); a compressor's state cache
 ([num_blocks, block_size, width] f32) holds a row per slot (`state_rows`).  A cache in another layout is not bound, and the step
-then fails by the name.  A token's compressed row is written when its state slot and its compressed slot are set and its position
+then fails by the name.  A value the native collector cannot stage as it lies (`attention_source.pitched_2d`), such as
+`fused_inv_rope_fp8_quant`'s o_fp8 (a transposed view [T, G, D] of a [G, T, D] buffer) and o_scale (token stride 1, its columns
+TMA-aligned), is bound as a contiguous copy, counted in `stats["copied_by_tap"]`.  A token's compressed row is written when its state slot and its compressed slot are set and its position
 + 1 is a multiple of the compressor's ratio (the compress kernels' mask, which `c128_boundary` short-cuts); a step on which a
 layer's compressor writes no row commits nothing under its compressed-rows name, since the committer commits no empty tensor, and
 `empty` records the name per step: the route source refuses the step by that name.  Taps the map marks `target_only` are bound
@@ -39,6 +41,7 @@ from typing import Any, Mapping
 
 import torch
 
+from verity_vllm.acquire.sources.attention_source import pitched_2d
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.engine.hooks import Hooks
 
@@ -208,7 +211,7 @@ class Dsv4AttentionSource:
     def begin_run(self) -> None:
         self.empty = {}
         self.stats = {"layers": len(self.layers), "on_target": self.on_target, "attends": 0, "calls": {f: 0 for f in self.homes},
-                      "bound": 0, "by_tap": {}, "unpaired": 0, "layout_refused": 0, "unattributed": 0, "empty": 0}
+                      "bound": 0, "by_tap": {}, "copied_by_tap": {}, "unpaired": 0, "layout_refused": 0, "unattributed": 0, "empty": 0}
 
     def declaration_classes(self) -> list[dict]:
         return []
@@ -239,6 +242,9 @@ class Dsv4AttentionSource:
             self.empty.setdefault(int(job.step), []).append(name)
             self.stats["empty"] += 1
             return False
+        if not pitched_2d(t):
+            t = t.contiguous()
+            self.stats["copied_by_tap"][role] = self.stats["copied_by_tap"].get(role, 0) + 1
         self.c._acquire(name, t, job)
         self.stats["bound"] += 1
         self.stats["by_tap"][role] = self.stats["by_tap"].get(role, 0) + 1

@@ -177,7 +177,11 @@ def test_each_bound_value_is_the_value_it_names(runs):
     assert not torch.equal(naive, r.bound(NO_C128, "model.layers.5.attn.swa_cache_layer/rows")[3]), "a row is not a [slot] read"
     assert r.bound(3, "model.layers.7.attn/out_decode").shape == (2, NHL, 8) and r.bound(3, "model.layers.7.attn/out_prefill").shape[0] == 18
     assert r.bound(0, "model.layers.4.attn/q").shape[1] == NHP and r.bound(0, "model.layers.3.attn/extra_indices").shape == (4, 128)
-    assert not r.bound(3, "model.layers.4.attn/o_fp8").is_contiguous(), "FlashMLA's transposed views are bound as they are"
+    o_fp8 = r.model.model.layers[4].attn.wo_a.seen["o_fp8"]
+    assert not DS.pitched_2d(o_fp8) and not DS.pitched_2d(r.model.model.layers[4].attn.wo_a.seen["o_scale"])
+    assert r.bound(NO_C128, "model.layers.4.attn/o_fp8").is_contiguous(), "a value the native collector cannot stage is bound copied"
+    assert all(r.attn.stats["copied_by_tap"][role] == len(STEPS) * L for role in ("attn.o_fp8", "attn.o_scale"))
+    assert set(r.attn.stats["copied_by_tap"]) == {"attn.o_fp8", "attn.o_scale"}, r.attn.stats["copied_by_tap"]
 
 
 def test_split_rows_and_state_rows_read_their_layout_only():
