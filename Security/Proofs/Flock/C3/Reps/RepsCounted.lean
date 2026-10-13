@@ -10,6 +10,10 @@ import Proofs.Flock.Recursive.HoloRepCoins
 `checkCommitRounds` (`cursor/flock-c3-refusals-95d4`); until that check is on this branch its result is the hypothesis
 `RepRoundsCounted`, from which `heldRounds_size_of_counted` reads a rep stream's held rounds' count. The check's
 round-for-round form gives it (`repRoundsCounted_of_rounds`).
+
+`t₄k_of_counted` closes the count on the proof's side: where the record was consumed whole (the verifier's S15/R2,
+`t₄.k` is the stream's round count) and the rep's rounds are its held stream's, `t₄.k` is the schedule's count, and
+`repIdxB_of_counted` is RepsDrawn (ii)'s `repIdxB S₀ b = coinRounds rs` from it.
 -/
 
 namespace FlockC3.Reps
@@ -61,5 +65,34 @@ theorem repIdxB_of_size {S₀ : Model.Statement} {b : ValsSrc} {m kLog claims : 
   unfold repIdxB
   rw [hz, hk]
   exact (HoloRepCoins.coinRounds_holoRep_split hc hrs).symm
+
+/-- **A rep's closing round is the schedule's count** where its record was consumed whole (`hk`, the verifier's S15/R2:
+`t₄.k` is the stream's round count), its rounds are the ones the verifier holds of its stream (`hd`), and the count
+check holds that stream to the schedule's count. -/
+theorem t₄k_of_counted {cs : InnerCommits} {rep : Array SchedRound} {s : String} {st : InnerStream} {b : ValsSrc}
+    {sh : Flock.Shape} {d : FlockVBridge.Compiled.RepData}
+    (hc : RepRoundsCounted cs rep) (hs : cs.stream? s = some st)
+    (hn : (s.startsWith s!"{SPARSE}/" || s.startsWith s!"{STACKED}/") = false)
+    (hd : d.rounds = heldRounds (.ok cs) s) (hk : b.t₄.k = (b.vals sh d).t.rounds.size) : b.t₄.k = rep.size := by
+  have e : (b.vals sh d).t.rounds.size = d.rounds.size := by
+    show (FlockVBridge.Family.streamRounds d.rounds b.fr).size = d.rounds.size
+    first
+    | (unfold FlockVBridge.Family.streamRounds; rw [Array.size_mapIdx])
+    | simp [FlockVBridge.Family.streamRounds]
+  rw [hk, e, hd, heldRounds_size_of_counted hc hs hn]
+
+/-- **RepsDrawn (ii)'s count**: a rep's consumed rounds are the hidden-unit schedule's coin rounds where its record
+was consumed whole, its rounds are its held stream's, and the count check holds that stream to the schedule. -/
+theorem repIdxB_of_counted {S₀ : Model.Statement} {b : ValsSrc} {sh : Flock.Shape}
+    {d : FlockVBridge.Compiled.RepData} {m kLog claims : ℕ} {rs : Array SchedRound} {cs : InnerCommits} {s : String}
+    {st : InnerStream} (hcl : 0 < claims) (hrs : holoRepRounds m kLog claims = some rs) (hm : b.st.m = m)
+    (hkl : S₀.kLog = kLog) (hc : RepRoundsCounted cs rs) (hs : cs.stream? s = some st)
+    (hn : (s.startsWith s!"{SPARSE}/" || s.startsWith s!"{STACKED}/") = false)
+    (hd : d.rounds = heldRounds (.ok cs) s) (hk : b.t₄.k = (b.vals sh d).t.rounds.size) :
+    repIdxB S₀ b = coinRounds rs :=
+  repIdxB_of_size hcl hrs hm hkl (t₄k_of_counted hc hs hn hd hk)
+
+#print axioms t₄k_of_counted
+#print axioms repIdxB_of_counted
 
 end FlockC3.Reps
