@@ -15,6 +15,7 @@ VV tp-commit --workload "$WL" --case "$ROLE" --tp 8 --committer native_collect_v
 rc=$?
 kill $s 2>/dev/null
 echo "[commit-probe] tp-commit rc=$rc wall=$(($(date +%s) - t0))s" | tee -a "$O/commit-probe.log"
+du -sb "$d" "$d"/* 2>/dev/null | tee "$O/commit-dir-bytes.txt"
 for f in summary.json runs.jsonl versions.json committer_make.json weights_pin.json timeline.jsonl; do
   [ -f "$d/$f" ] && cp "$d/$f" "$O/"
 done
