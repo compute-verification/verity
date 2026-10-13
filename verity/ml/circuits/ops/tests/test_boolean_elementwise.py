@@ -28,10 +28,11 @@ from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit, const_bits
 
-DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div, EW.F32AddV4, EW.F32MulV4, EW.F32FmaV4, EW.Bf16AddF2fp, EW.Bf16Add, EW.Bf16MulBf16, EW.Bf16MulF32, EW.I32Add]
-F32_DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div, EW.F32AddV4, EW.F32MulV4, EW.F32FmaV4]
+DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div, EW.F32AddV4, EW.F32MulV4, EW.F32FmaV4, EW.F32DivV4, EW.Bf16AddF2fp, EW.Bf16Add,
+        EW.Bf16MulBf16, EW.Bf16MulF32, EW.I32Add]
+F32_DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div, EW.F32AddV4, EW.F32MulV4, EW.F32FmaV4, EW.F32DivV4]
 #: the Boolean versions of the `_v2` words (every NaN the GPU's)
-GPU_NAN_DEFS = (EW.F32AddV4, EW.F32MulV4, EW.F32FmaV4)
+GPU_NAN_DEFS = (EW.F32AddV4, EW.F32MulV4, EW.F32FmaV4, EW.F32DivV4)
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -42,6 +43,7 @@ PINS = {
     "F32Add_v4": (781, 1331, 145, "07df5c280827efc30d031c71d770dd4493430b9558db3994d8bfc928cec024a75e1edf664c74c01e484480f8e115861a4f4f256d61ba4755046ba33db7f6d872"),
     "F32Mul_v4": (2398, 4562, 140, "b23d22f4e857ccc18fa6a80af073de34aeea0543296f588bfa00ad6defc76954b716d9407d919fa3b28f2ae05855cc8fb0101bd756e59ae6aeb668c53d349fce"),
     "F32Fma_v4": (4485, 7863, 289, "6e4b6f08cff8f870a0e06b454f7d873a3904b204d1ba095b80db51038ba1a313a16538d67111cd4acb9fb7a7bc8941c480498f8ca02cc4484cd144fa48ce091e"),
+    "F32Div_v4": (2485, 5497, 282, "dae9b11e607f5b7c5b19d2653be51f6b81ec34793888f2d9ac896e45444c229206843ded4f10f6d8746c84b97bc5850d0212f478f83e65836677a2605c232902"),
     "Bf16AddF2fp_v2": (717, 1061, 122, "af94f0b01e383e1bf6f82c75cd5a2868df0cb37e37239be6fc3a4b62da62bfdde5b5ec385b173fc8cd0290f4400d8a25fc3919850cbc4c69edfe4434fb068c3e"),
     "Bf16Add_v2": (717, 1061, 116, "b193b3c82b68e72f8455d10d00641426c678a0bd9dba986e9d63ca23ff17e52747ee71d9557ebb4d43c9807d454704f16dbf7238cd5aac344af4c85fdcc66e81"),
     "Bf16MulBf16_v2": (799, 1155, 99, "70537fa2f156108040b07271de5bd1a530b06e4edba1bb5c644ce0ab001b07169afc5b720c7ec4e428bdc22cba14a35be842fccc6994b4d671293e686f369ecb"),
