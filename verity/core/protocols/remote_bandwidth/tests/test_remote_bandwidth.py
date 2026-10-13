@@ -121,7 +121,8 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     root.  `tiles` is the stub of PoUW's tiles under a registration that binds z, and None under one that does not."""
     tiles = tiles or (audit.NoiseTiles(96) if store.registration.bind else None)
     clock = Clock()
-    s = Session(p, store.registration, verifier_tiles or tiles, challenger(store, p, label), clock=clock)
+    s = Session(p, store.registration, verifier_tiles or tiles, challenger(store, p, label), not_before_ns=0,
+                clock=clock)
     prover = audit.Prover(store, tiles, s.commitment, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in schedule.arrivals])
@@ -234,7 +235,7 @@ def test_a_receipt_depends_on_its_block_not_its_position(stores, bind) -> None:
     np.array([[0.0, 5.0]]),
 ])
 def test_a_plan_that_repeats_a_block_or_is_not_canonical_rejects(store, runs) -> None:
-    s = Session(params(), store.registration, None, challenger(store, params()), clock=Clock())
+    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s.start()
     assert s.receive(0, 0, bytes(64), runs) == audit.Verdict(0, False, "plan")
 
@@ -408,7 +409,8 @@ def test_a_session_refuses_parameters_that_are_not_the_registrations(store, stor
                   (store, params(receipt=receipts.BLOCK_SHA512)), (block_store, params()),
                   (store, params(bind=True)), (bound, params())):
         with pytest.raises(ValueError, match="not the registration's"):
-            Session(p, st.registration, audit.NoiseTiles(96) if p.bind else None, challenger(st, p), clock=Clock())
+            Session(p, st.registration, audit.NoiseTiles(96) if p.bind else None, challenger(st, p), not_before_ns=0,
+                    clock=Clock())
     with pytest.raises(ValueError, match="a receipt kind is one of"):
         params(receipt="sha512")
     with pytest.raises(ValueError, match="bind is True or False"):
@@ -421,7 +423,7 @@ def test_tiles_are_taken_only_by_a_registration_that_binds_z(store, stores) -> N
     bound = stores[receipts.DEFAULT, True]
     for st, tiles in ((store, audit.NoiseTiles(96)), (bound, None)):
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
-            Session(params_of(st), st.registration, tiles, challenger(st, params()), clock=Clock())
+            Session(params_of(st), st.registration, tiles, challenger(st, params()), not_before_ns=0, clock=Clock())
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
             audit.Prover(st, tiles, challenger(st, params()).commitment)
 
@@ -605,7 +607,7 @@ def test_the_honest_prover_is_never_late_and_the_allowance_is_tight() -> None:
 
 def test_roots_out_of_order_reject(store) -> None:
     def session() -> Session:
-        return Session(params(), store.registration, None, challenger(store, params()), clock=Clock())
+        return Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s = session()
     with pytest.raises(SessionError, match="not started"):
         s.receive(0, 0, bytes(64))
@@ -637,7 +639,7 @@ def test_a_window_of_too_few_passes_is_rejected(store) -> None:
 
 def test_draws_wait_for_the_windows_roots(store) -> None:
     clock = Clock()
-    s = Session(params(), store.registration, None, challenger(store, params()), clock=clock)
+    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
     assert s.receive(0, 0, bytes(64)) is None
     with pytest.raises(SessionError, match="not final"):
@@ -731,6 +733,12 @@ def test_a_session_over_the_store_starts_after_the_one_before_it_ends(store) -> 
         nxt.start()
     clock.now = end
     assert nxt.start().index == 0
+    later = coins.Challenger(store.registration.digest, 2, params().coins, entropy=Entropy(b"later"))
+    with pytest.raises(TypeError, match="not_before_ns"):           # every session names when it may start
+        Session(params(), store.registration, None, later, clock=clock)
+    for bad in (None, -1, 1.5, True):
+        with pytest.raises(ValueError, match="not_before_ns"):
+            Session(params(), store.registration, None, later, not_before_ns=bad, clock=clock)
 
 
 def test_opening_size_matches_the_timing_model(store) -> None:

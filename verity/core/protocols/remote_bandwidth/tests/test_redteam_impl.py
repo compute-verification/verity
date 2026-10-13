@@ -73,18 +73,18 @@ def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, byte
     return out[0], out[1]
 
 
-@pytest.mark.xfail(strict=True, reason="RB-3: `not_before_ns` defaults to None, so a second session over the store "
-                                       "starts while the first is reading, and one read serves both records")
 def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> None:  # noqa: F811
     """`Session(not_before_ns=…)` is the only thing that keeps two sessions over one store from sharing reads
-    (`PROTOCOL.md` §5), and it is optional: left out, it fails open.  Two sessions run at once over one clock; each
-    block is read once a pass and serves a receipt of each chain.  Both are accepted with every receipt opened, and the
-    two records together certify twice the reads made."""
+    (`PROTOCOL.md` §5), and it was optional: left out, it failed open.  Two sessions run at once over one clock, both
+    told they may start at 0, as only a verifier that runs them at once would; each block is read once a pass and
+    serves a receipt of each chain.  Both are accepted with every receipt opened, and the two records together certify
+    twice the reads made.  Fixed: every session names its `not_before_ns`, and one that names the last record's end
+    waits it out."""
     p = params(windows=2, samples=N * 3)
     clock = Clock()
     sessions = [Session(p, store.registration, None,
                         coins.Challenger(store.registration.digest, k, p.coins, entropy=Entropy(b"coins %d" % k)),
-                        clock=clock) for k in (0, 1)]
+                        not_before_ns=0, clock=clock) for k in (0, 1)]
     provers = [audit.Prover(store, None, s.commitment, entropy=Entropy(b"unused")) for s in sessions]
     reads, entropy = [0], Entropy(b"joint salts")
     challenges = [s.start() for s in sessions]
@@ -108,3 +108,10 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     with pytest.raises((TypeError, ValueError)):
         Session(p, store.registration, None,
                 coins.Challenger(store.registration.digest, 2, p.coins, entropy=Entropy(b"coins 2")), clock=clock)
+    end = max(s.record().end_ns for s in sessions)
+    nxt = Session(p, store.registration, None,
+                  coins.Challenger(store.registration.digest, 3, p.coins, entropy=Entropy(b"coins 3")),
+                  not_before_ns=end, clock=clock)
+    clock.now = end - 1
+    with pytest.raises(audit.SessionError, match="may still be reading"):
+        nxt.start()

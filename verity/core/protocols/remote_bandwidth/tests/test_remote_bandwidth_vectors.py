@@ -191,7 +191,8 @@ def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kin
     challenger = coins.Challenger(reg.digest, 0, rv.PARAMS.coins, entropy=rv.Entropy(rv.COIN_LABEL))
     clock = Clock()
     tiles = audit.NoiseTiles(96) if bind else None
-    s = audit.Session(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind), reg, tiles, challenger, clock=clock)
+    s = audit.Session(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind), reg, tiles, challenger, not_before_ns=0,
+                      clock=clock)
     prover = audit.Prover(store, tiles, s.commitment, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
     pinned = json.loads(rv.PATH.read_text())
     pinned = pinned if (kind, bind) == (receipts.DEFAULT, False) else pinned["variants"][rv.name(kind, bind)]

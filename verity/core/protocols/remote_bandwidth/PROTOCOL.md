@@ -416,8 +416,12 @@ pass in flight and its root's trip up, together at most \(A + J\). So
 
 **Between sessions.** Sessions over one store are not chained to each other: each session's chain starts from the
 registration's digest. So a session's first coin leaves no earlier than the previous session's last deadline,
-`Record.end_ns`, less the trusted round-trip floor if there is one. `Session(not_before_ns=…)` refuses an earlier
-`start`. Otherwise two sessions could share reads that neither ledger sees. (Starting a session's chain from the
+`Record.end_ns`, less the trusted round-trip floor if there is one, and the store's first session's no earlier than
+the verifier's clock at registration. Every `Session` names that time (`not_before_ns`, required: a session built
+without it is refused) and refuses an earlier `start`. Otherwise two sessions could share reads that neither ledger
+sees: one read a pass serving a receipt of each chain, both accepted, twice the reads credited. Two records over one
+registration can be checked for it: the later's first release (its first window's `released_ns`) is at or after the
+earlier's last deadline, less the floor. (Starting a session's chain from the
 previous session's last root would remove the wait, at the cost of tying each session's verification to the one
 before it.)
 

@@ -439,16 +439,20 @@ class _Window:
 
 class Session:
     """The verifier's side of one session, driven by the coins it releases and the roots it receives, on its own clock.
-    `challenger` holds the session's coins (`coins.Challenger`), committed before the session.  `not_before_ns` is the
-    earliest its first coin may leave: the previous session's `Record.end_ns` over the same store, less the trusted
-    round-trip floor if there is one, so that no read serves receipts of both sessions.  `tiles` is PoUW's check if
-    the registration binds z, and None if it does not."""
+    `challenger` holds the session's coins (`coins.Challenger`), committed before the session.  `not_before_ns`, which
+    every session names, is the earliest its first coin may leave on the verifier's clock: the previous session's
+    `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
+    registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
+    check if the registration binds z, and None if it does not."""
 
     def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, challenger: coins.Challenger, *,
-                 clock: Callable[[], int] = time.monotonic_ns, not_before_ns: int | None = None) -> None:
+                 not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
         if (registration.blocks != params.blocks or registration.codec != params.codec
                 or registration.receipt != params.receipt or registration.bind != params.bind):
             raise ValueError("the parameters are not the registration's")
+        if type(not_before_ns) is not int or not_before_ns < 0:
+            raise ValueError("not_before_ns is the previous session's last deadline over the store, or the clock at "
+                             "registration for its first: a nonnegative integer")
         c = challenger.commitment
         if c.registration != registration.digest or c.count != params.coins:
             raise ValueError(f"the challenger's coins are not this session's: {params.coins} coins for this registration")
@@ -490,7 +494,7 @@ class Session:
         if self.windows:
             raise SessionError("a session starts once")
         now = self.clock()
-        if self.not_before_ns is not None and now < self.not_before_ns:
+        if now < self.not_before_ns:
             raise SessionError(f"the session's first coin may leave at {self.not_before_ns} ns, not {now}: the session "
                                "before it over this store may still be reading")
         return self._release(0, now)
