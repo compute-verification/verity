@@ -1,6 +1,8 @@
 import Models.Accounting.Guarantees.Actual
 import Models.Accounting.Guarantees.Bandwidth
 import Models.Accounting.Guarantees.BandwidthAudit
+import Models.Accounting.Guarantees.BoundReceipt
+import Models.Accounting.Guarantees.BoundSketch
 import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Capacity
 import Models.Accounting.Guarantees.Confidence
@@ -27,4 +29,5 @@ charged as compute, with partial completion and with a sketch-then-hash tag, the
 tiers and chained passes, the causal horizon bound on its samples and its conservation with named words, the actual
 circuit's capacity theorem, runtime corollary, localization, composition and fit, the obligations B1, B2 and B4, the
 remote bandwidth audit's conservation and node-level guarantees, the tag and sketch guarantees, the bandwidth audit's
-guarantee, and their per-run forms. -/
+guarantee, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
+receipt's sketch must exchange, and their per-run forms. -/

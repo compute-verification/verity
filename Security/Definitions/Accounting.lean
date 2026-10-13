@@ -1,6 +1,8 @@
 import Definitions.Accounting.Actual
 import Definitions.Accounting.Bandwidth
 import Definitions.Accounting.BandwidthAudit
+import Definitions.Accounting.BoundReceipt
+import Definitions.Accounting.BoundSketch
 import Definitions.Accounting.Bridge
 import Definitions.Accounting.Capacity
 import Definitions.Accounting.Confidence
@@ -33,4 +35,5 @@ close, and its sketch-then-hash variant for a device that reads sectors verbatim
 remote bandwidth audit's node and run, the actual circuit, its physical assumptions, a challenge's reach and the
 device's schedule it induces, the actual circuit's runs, strategies, soundness and the confidence set, a location's
 window with the ring's oracle locations, its provers' cost model, the tags and sketches the audits read, and what a
-run's guarantee per run is. -/
+run's guarantee per run is, including the generic-mix game of receipts bound to the matmul on two locations and the
+deployed bound receipt's sketch as a two-party protocol. -/
