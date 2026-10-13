@@ -239,7 +239,8 @@ with candidate 3's compiled table as its inner protocol (`holoInnerAt`, its mess
 and its coins of types `CT st hp`),
 at the law of the registration's draws
 (`drawLaw`): V*'s statements `Vs`, one for each of the verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j`
-as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, the table's prefix `tbl` and the `b ‖ c`
+as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, their registrants' records covering the
+rows their reads files name `_hRC`, the table's prefix `tbl` and the `b ‖ c`
 `bc` at which the map `im` says where each round's commitment and coins go in the inner session's records, and those
 records' custody `_hIC` at `im`, the verifier of record's own inputs (V*'s bindings
 `bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at which V*'s statements' files, where they
