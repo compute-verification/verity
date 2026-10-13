@@ -50,8 +50,10 @@ the tree that was checked, with no new merge commit.  A push refused because `ma
 (`research.drive`) is the loop's tick that needs no agent: it launches the checks of `next`'s trains, lands what passed (onto a
 moved `main` too, when the two share no file), ejects the PR a failure points at alone and tells `@ci` what it refuses.
 
-Notices.  A refusal (a conflict, an ejection) is sent once per PR head: a handoff in the owner's lane directory of the notes, or in
-`lanes/coordinator/` for an owner known only by agent id.
+Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `@ci` and the owner's handle, once per PR head:
+drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
+there reached its owner only when the VM that ran the sync pushed its notes, inside that lane's commit (13 Oct: @lean's
+held notes carried conflict handoffs for ci's and circuits' PRs).
 
 `--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside the trains
 with no effect on them.
@@ -334,7 +336,7 @@ def _message(pr: PR) -> str:
 
 class Queue:
     def __init__(self, workdir: Path, *, remote: str, github, ready: Callable[[int, str], bool],
-                 store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
+                 store=None, shadow: bool = False, rules: Rules | None = None, log: Callable[[str], None] = print,
                  auth: tuple[str, ...] = (), first: tuple[int, ...] = (),
                  before_cutoff: Callable[[int, str], str | None] | None = None,
                  marked_by: Callable[[int, str], str | None] | None = None,
@@ -347,7 +349,6 @@ class Queue:
         #: takes a running check's commit off `next`
         self.hold = 0
         self.branch = SHADOW_BRANCH if shadow else BRANCH
-        self.notes = Path(notes or os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes")
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
 
     # -- the clone and its state
@@ -410,7 +411,7 @@ class Queue:
         try:
             return json.loads(self.state_path.read_text())
         except (OSError, ValueError):
-            return {"ejected": {}, "notified": [], "conflicts": {}}
+            return {"ejected": {}, "conflicts": {}}
 
     def save_state(self, state: dict) -> None:
         tmp = self.state_path.with_suffix(".tmp")
@@ -576,7 +577,6 @@ class Queue:
                 e.state, e.why = "refused", why
                 dropped.add(n)
                 conflicts[str(n)] = {"head": e.pr.head, "why": why, "handle": self.handle(e.pr)}
-                self.notify(e, "conflict", why, state, dry_run)
                 continue
             tip = commit
             members.append(Member(n, e.pr.head, e.pr.owner or "", commit))
@@ -609,13 +609,12 @@ class Queue:
             self.log(f"research queue: #{pr}'s ready mark at {prs[pr].head[:12]} is withdrawn ({target}); {said}")
             if lost:
                 raise QueueError(f"#{pr}'s withdrawn mark didn't reach the store's remote, so other queues may still admit it: {said}")
-        self.notify(Entry(prs[pr]), "eject", f"ejected from `{self.branch}`: {reason}", state, False)
         self.save_state(state)
         return prs[pr]
 
     def tell_ejected(self, p: PR, reason: str, by: str, post: Callable[..., bool] | None = None) -> int:
-        """A hand ejection's notice, posted as ``by`` in the merge thread to `@ci` and the lane that owns ``p``: the handoff note
-        `notify` writes reaches no one from a VM that doesn't sync its notes, and only a handle's holder may post as it.  Drive's
+        """A hand ejection's notice, posted as ``by`` in the merge thread to `@ci` and the lane that owns ``p`` (only a handle's
+        holder may post as it).  Drive's
         own ejections are told by `Driver.refuse`.  1, with the text to send, when the post failed."""
         from .drive import CI, _merge_thread, merge_thread_post
 
@@ -681,31 +680,6 @@ class Queue:
             return m
         self.log(f"research queue: no commit on `{self.branch}` has a passing check yet (newest: {newest})")
         return None
-
-    # -- notices
-
-    def notify(self, e: Entry, kind: str, text: str, state: dict, dry_run: bool) -> None:
-        """One handoff per PR head and kind, to the owner's lane (or `coordinator/` for an owner known only by agent id)."""
-        key = f"{e.pr.number}@{e.pr.head}:{kind}"
-        if key in state["notified"]:
-            return
-        owner = e.pr.owner or "unknown"
-        lane = "coordinator" if AGENT_RE.fullmatch(owner) or owner == "unknown" else owner
-        if self.shadow or dry_run:
-            self.log(f"research queue: would tell {owner} (lanes/{lane}/): #{e.pr.number} {text}")
-            return
-        stamp = time.strftime("%Y%m%dT%H%MZ", time.gmtime())
-        d = self.notes / "lanes" / lane
-        d.mkdir(parents=True, exist_ok=True)
-        p = d / f"{stamp}-handoff-from-merge-queue-{e.pr.number}-{kind}.md"
-        p.write_text(f"lane: {lane} · kind: handoff · from: merge-queue · to: {owner} · created: {stamp}\n\n"
-                     f"# #{e.pr.number} {kind}: {text.split(':')[0]}\n\n- **PR:** #{e.pr.number} {e.pr.title}\n"
-                     f"- **Head:** `{e.pr.head}`\n- **What happened:** {text}\n"
-                     f"- **Next:** push a fix; a new head is admitted again at the tip of `{self.branch}`.\n")
-        state["notified"].append(key)
-        if os.environ.get("RESEARCH_NOTES_SYNC") == "1":
-            subprocess.run([sys.executable, "-m", "research", "notes", "sync", "--path", f"lanes/{lane}"], capture_output=True)
-        self.log(f"research queue: wrote {owner}'s handoff note: {p}")
 
     # -- status
 
