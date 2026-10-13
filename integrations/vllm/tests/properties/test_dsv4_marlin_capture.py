@@ -371,6 +371,47 @@ def test_a_case_s_records_read_its_two_runs(tmp_path) -> None:
         X.case_launches(tmp_path, "decode2", M, "uniform", _tensor(ids), launches[:3], W, 132, TYPES)
 
 
+def test_a_case_over_the_edge_experts_is_deterministic_by_its_words(tmp_path) -> None:
+    """Run r20261013-205619-ce5e's edge8 (8 tokens routed over the edge experts 0..7 only, both launches at 64/128/4 on 132 SMs) was
+    NO-GO on determinism alone, every word equal to the twin's: an edge expert's +inf scale byte on a +-0 code writes NaN words, and
+    `torch.equal` on the bf16 outputs is false wherever one stands, so it called the two runs different whatever they wrote.
+    `case_launches` compares the runs' words as bits (`same_words`): equal words are deterministic, and a word one bit off, a NaN's
+    payload among them, is not."""
+    C = X._load(_launch(tmp_path, "w13")["paths"])["C"]
+    nan = ((C & 0x7F80) == 0x7F80) & ((C & 0x7F) != 0)
+    assert nan.any(), "the twin writes NaN words on the edge expert"
+    M = 8
+    rng = np.random.default_rng(8)
+    ids = np.stack([rng.permutation(X.EDGE_EXPERTS)[:X.TOP_K] for _ in range(M)]).reshape(-1)
+    st, ex, ntpp = _align(ids)
+
+    def output(kind: str, payload: bool) -> torch.Tensor:
+        words = np.resize(C, (M * X.TOP_K, X.shape(kind)[1])).astype(np.uint16)
+        if payload:
+            words[np.unravel_index(np.flatnonzero(((words & 0x7F80) == 0x7F80) & ((words & 0x7F) != 0))[0], words.shape)] ^= 0x0001
+        return torch.from_numpy(words.view(np.int16).copy()).view(torch.bfloat16)
+
+    def records(bumped: str | None) -> list[dict]:
+        launches = []
+        for run in ("run1", "run2"):
+            for kind in ("w13", "w2"):
+                K_, _N = X.shape(kind)
+                launches.append({**_served_launch(kind, M), "label": f"edge8/{run}", "output": output(kind, run == "run2" and kind == bumped),
+                                 "input": torch.zeros(M if kind == "w13" else M * X.TOP_K, K_, dtype=torch.bfloat16),
+                                 "sorted_token_ids": _tensor(st), "expert_ids": _tensor(ex), "num_tokens_past_padded": _tensor([ntpp]),
+                                 "topk_weights": torch.full((M, X.TOP_K), 0.5), "workspace": 528, "kernel": _kernel((64, 128, 4))})
+        W = {"paths": {"w13": {"wq": "-", "ws": "-"}, "w2": {"wq": "-", "ws": "-"}}}
+        return X.case_launches(tmp_path, "edge8", M, "edge", _tensor(ids.reshape(M, X.TOP_K)), launches, W, 132, TYPES)[0]
+
+    a, b = output("w2", False), output("w2", False)
+    assert not torch.equal(a, b) and X.same_words(a, b) and not X.same_words(a, output("w2", True))
+    for r in records(None):
+        assert r["deterministic"] and X._launch_ok({**r, "identified": True}), r["launch"]
+        assert r["config"] == [64, 128, 4] and r["par"] == r["experts_used"] == X.EDGE_EXPERTS and r["pairs"] == M * X.TOP_K
+    w13, w2 = records("w2")
+    assert w13["deterministic"] and not w2["deterministic"] and not X._launch_ok({**w2, "identified": True})
+
+
 def w2_blocks(st: list[int], n: int) -> list[int]:
     blk = [0] * n
     for i, p in enumerate(st):

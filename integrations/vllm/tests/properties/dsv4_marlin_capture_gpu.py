@@ -92,7 +92,7 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from tests.properties.glm53_block_fp8_capture_gpu import _activation, _error, _load, _save, _u16, _u32, cdiv
+from tests.properties.glm53_block_fp8_capture_gpu import _activation, _error, _load, _save, _u16, _u32
 from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.properties.record import seal as seal_record
 
@@ -611,12 +611,20 @@ def _kernel(k: dict[str, Any] | None) -> dict[str, Any] | None:
     return None if k is None else {n: k[n] for n in ("template", "grid", "block", "registers", "shared", "name")}
 
 
+def same_words(a, b) -> bool:
+    """Two runs' outputs of one launch hold the same words, compared as bits: a NaN word (an edge expert's +inf scale byte on a
+    +-0 code writes one) is unequal to itself as a float, so `torch.equal` on the bf16 outputs calls two runs that wrote the same
+    words different on every case over the edge experts."""
+    import torch
+
+    return bool(a.dtype == b.dtype and a.shape == b.shape
+                and torch.equal(a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8)))
+
+
 def case_launches(work: Path, name: str, M: int, pool_kind: str, ids, launches: list[dict], W: dict[str, Any], sms: int,
                   types: list[int] | None) -> tuple[list[dict], list[dict], list[dict]]:
     """One case's records from its two runs' launches (labels `<name>/run1`, `<name>/run2`), each with its kernel; returns (launch
     records, launch specs for the jobs, the captured launches for the forced phase)."""
-    import torch
-
     by = {(L["label"].split("/")[1], kind_of(L)): L for L in launches if L["label"].startswith(f"{name}/")}
     ids_flat = ids.cpu().numpy().astype(np.int64).reshape(-1)
     records, specs, captured = [], [], []
@@ -631,7 +639,7 @@ def case_launches(work: Path, name: str, M: int, pool_kind: str, ids, launches: 
         rec = {"phase": "auto", "case": name, "launch": kind, "M": M, "pool": pool_kind, "pairs": int(ids_flat.size), "K": K, "N": N,
                "prob_m": prob_m(kind, M), "par": par, "experts_used": int(np.unique(ids_flat).size), "args": L["args"],
                "absent": L["absent"], "dtypes": L["dtypes"], "workspace": L["workspace"],
-               "deterministic": bool(torch.equal(L["output"], twin["output"])), "assignment_ok": ok, "statics_ok": statics_ok(L, kind, M),
+               "deterministic": same_words(L["output"], twin["output"]), "assignment_ok": ok, "statics_ok": statics_ok(L, kind, M),
                "kernel": _kernel(L.get("kernel")), "config": config, "kernel_ok": kernel_ok,
                "config_deterministic": config == kernel_config(twin.get("kernel"), sms, types)[0]}
         records.append(rec)
