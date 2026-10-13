@@ -252,7 +252,8 @@ theorem checkStmt_check {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List 
     · rename_i ht
       split at h
       · split at h
-        · first | (obtain ⟨_, h1, -⟩ := ebind_ok h; cases h1) | cases h
+        · obtain ⟨_, h1, -⟩ := ebind_ok h
+          cases h1
         obtain ⟨_, -, h⟩ := ebind_ok h
         obtain ⟨s, hs, -⟩ := ebind_ok h
         obtain ⟨hck, hf⟩ := checkCircuit_ok hs
