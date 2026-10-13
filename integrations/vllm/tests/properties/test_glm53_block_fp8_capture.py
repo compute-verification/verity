@@ -15,6 +15,7 @@ from verity_vllm.program.kernels import fp8_moe_rows as MR
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 K, N, GQ = 256, 200, X.GROUP
+WG, MV = "HopperE4m3QgmmaDot32_v1", "HopperE4m3MmaV2Dot32_v1"
 
 
 def _bf16_rows(rng: np.random.Generator, M: int) -> np.ndarray:
@@ -84,9 +85,11 @@ def test_a_flipped_word_or_quant_byte_is_found(tmp_path) -> None:
     assert _total(res)["quant_mismatch"] == 1
 
 
-def _moe_job(tmp_path, kind: str, *, KB: int = 32, swap: bool = False, flip: bool = False, flip_act: bool = False) -> list[dict]:
+def _moe_job(tmp_path, kind: str, *, KB: int = 32, swap: bool = False, dot: str = WG, words_dot: str | None = None, flip: bool = False,
+             flip_act: bool = False) -> list[dict]:
     """A w13-like launch (3 tokens x 8 slots over 5 used experts), a w2-like one (24 rows, one slot each, the routed weight), or the
-    served w2 (the w2-like launch whose A and A_scale are `silu_and_mul_per_block_quant` of 24 [gate || up] rows)."""
+    served w2 (the w2-like launch whose A and A_scale are `silu_and_mul_per_block_quant` of 24 [gate || up] rows), at DOT `dot`, its
+    words made with `words_dot`'s step (default `dot`)."""
     rng = np.random.default_rng(2)
     M, used = 3, np.array([3, 17, 40, 41, 255])
     ids = np.stack([rng.permutation(used)[:5].tolist() + rng.permutation(used)[:3].tolist() for _ in range(M)]).reshape(-1)
@@ -100,26 +103,36 @@ def _moe_job(tmp_path, kind: str, *, KB: int = 32, swap: bool = False, flip: boo
     A, As = MR.silu_mul_fp8_block_quant_rows(gu, G=GQ) if kind == "served_w2" else _quant(x)
     B, Bs = _e4m3(rng, used.size, N, K), _scales(rng, used.size, X.cdiv(N, GQ), K // GQ)
     C = np.stack([MR.moe_expert_fp8_block_row(A[p // top_k], As[p // top_k], B[umap[ids[p]]], Bs[umap[ids[p]]], G=GQ, KB=KB, swap=swap,
-                                              g=int(tw[p]) if mul else None)[0] for p in range(M * X.TOP_K)])
+                                              g=int(tw[p]) if mul else None, dot=MR.TWIN_DOT_OF[words_dot or dot])[0]
+                  for p in range(M * X.TOP_K)])
     if flip:
         C[13, 7] ^= 0x8000
     if flip_act:
         gu[19, 300] ^= 0x0100
     arrays = {"A": A, "As": As, "B": B, "Bs": Bs, "ids": ids, "umap": umap, "tw": tw, "C": C, **({"x": x} if kind == "w13" else {}),
               **({"gu": gu} if kind == "served_w2" else {})}
-    job = {"phase": "moe", "case": "small", "launch": kind, "K": K, "N": N, "KB": KB, "SWAP": swap, "mul": mul, "top_k": top_k,
+    job = {"phase": "moe", "case": "small", "launch": kind, "K": K, "N": N, "KB": KB, "SWAP": swap, "dot": dot, "mul": mul, "top_k": top_k,
            "pairs": M * X.TOP_K, "statics_known": True, "paths": X._save(tmp_path / kind, **arrays)}
     return [{**job, "pair_range": [0, M * X.TOP_K], "reference": True, "quant_rows": list(range(M)) if kind == "w13" else []}]
 
 
-@pytest.mark.parametrize("kind,KB,swap", [("w13", 32, False), ("w2", 32, False), ("w2", 64, True), ("served_w2", 32, False)])
-def test_moe_jobs_take_the_kernel_words(tmp_path, kind: str, KB: int, swap: bool) -> None:
-    t = _total([X.compare(j) for j in _moe_job(tmp_path, kind, KB=KB, swap=swap)])
+@pytest.mark.parametrize("kind,KB,swap,dot", [("w13", 32, False, WG), ("w2", 32, False, WG), ("w2", 64, True, WG), ("served_w2", 32, False, WG),
+                                             ("w13", 128, False, MV), ("w2", 128, True, MV), ("served_w2", 128, False, MV)])
+def test_moe_jobs_take_the_kernel_words(tmp_path, kind: str, KB: int, swap: bool, dot: str) -> None:
+    t = _total([X.compare(j) for j in _moe_job(tmp_path, kind, KB=KB, swap=swap, dot=dot)])
     assert t["words"] == 24 * N and t["mismatch"] == t["unresolved"] == t["twin_mismatch"] == t["quant_mismatch"] == t["act_mismatch"] == 0
     assert t["reference_coords"] == _sampled_columns((0, 23)) and t["quant_rows"] == t["reference_quant_rows"] * 3 == (3 if kind == "w13" else 0)
     assert (t["act_rows"], t["reference_act_rows"]) == ((24, 1) if kind == "served_w2" else (0, 0))
-    flipped = [X.compare(j) for j in _moe_job(tmp_path, kind, KB=KB, swap=swap, flip=True)]
+    flipped = [X.compare(j) for j in _moe_job(tmp_path, kind, KB=KB, swap=swap, dot=dot, flip=True)]
     assert _total(flipped)["mismatch"] == 1 and flipped[0]["first_mismatch"]["pair"] == 13
+
+
+@pytest.mark.parametrize("dot,words_dot", [(MV, WG), (WG, MV)])
+def test_a_launch_checked_at_the_other_dot_mismatches(tmp_path, dot: str, words_dot: str) -> None:
+    """The stock 8x32x128 tile's words (MMAv2) against the wgmma Program, and a wgmma tile's against the MMAv2 one: the words the
+    two steps round differently are found, so the run binds each launch's own DOT and not either for both."""
+    t = _total([X.compare(j) for j in _moe_job(tmp_path, "w13", KB=128, dot=dot, words_dot=words_dot)])
+    assert t["words"] == 24 * N and t["mismatch"] > 0 and t["twin_mismatch"] == 0
 
 
 def test_a_served_w2_input_that_is_not_the_activation_is_found(tmp_path) -> None:
@@ -147,17 +160,51 @@ def test_the_assignment_check_reads_the_launch_blocks() -> None:
     assert X._assignment_ok({**L, "sorted_token_ids": None}, ids) is None
 
 
-def test_the_ptx_scan_takes_only_the_k32_e4m3_wgmma(tmp_path) -> None:
-    good = "wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 {%f1}, %rd1, %rd2, p, 1, 1;\n"
-    mma = "mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%f1}, {%r1}, {%r2}, {%f2};\n"
-    for d in ("a", "b"):
-        (tmp_path / d).mkdir()
-        (tmp_path / d / "fused_moe_kernel.ptx").write_text(good * 2)
-    got = X.ptx(tmp_path)
-    assert got["ok"] and got["files"] == 2 and got["kernels"]["a/fused_moe_kernel.ptx"] == {"wgmma": {good.split(" ")[0]: 2}, "mma_sync": {}}
-    for text in (good + good.replace("m64n64k32.f32.e4m3", "m64n64k16.f32.bf16"), good + mma, "fma.rn.f32 %f1, %f2, %f3, %f4;\n"):
-        (tmp_path / "b" / "fused_moe_kernel.ptx").write_text(text)
-        assert X.ptx(tmp_path)["ok"] is False, text
+WGMMA_PTX = "wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 {%f1}, %rd1, %rd2, p, 1, 1;\n"
+MMAV2_PTX = ("cvt.rn.f16x2.e4m3x2 %r1, %rs1;\n" * 4 + "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f1}, {%r1}, {%r2}, {%f2};\n" * 8)
+
+
+def _kernel(d, M: int, Kd: int, Nd: int, warps: int | None, text: str) -> None:
+    """One Triton cache entry as Triton 3.7.1 writes it: the TTIR's e4m3 `tt.dot`, the metadata's warps, the PTX."""
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "fused_moe_kernel.ttir").write_text(f"    %acc = tt.dot %a, %b, %c, inputPrecision = tf32 : tensor<{M}x{Kd}xf8E4M3FN> * "
+                                             f"tensor<{Kd}x{Nd}xf8E4M3FN> -> tensor<{M}x{Nd}xf32> loc(#loc1)\n")
+    if warps is not None:
+        (d / "fused_moe_kernel.json").write_text(f'{{"name": "fused_moe_kernel", "num_warps": {warps}, "num_stages": 4}}')
+    (d / "fused_moe_kernel.ptx").write_text(text)
+
+
+def test_the_ptx_scan_takes_each_kernels_family_from_its_tile(tmp_path) -> None:
+    """A swapped 16x64 tile (its dot 64 x 16) runs wgmma; the stock 8x32 tile and the swapped 8x64 one (dot N = 8) run MMAv2 on
+    widened e4m3 (the PTX Triton 3.7.1 wrote for them, run r20261012-215811-1ef7); each against the family its tile is given."""
+    _kernel(tmp_path / "a", 64, 128, 16, 4, WGMMA_PTX * 2)
+    _kernel(tmp_path / "b", 8, 128, 32, 4, MMAV2_PTX)
+    _kernel(tmp_path / "c", 64, 128, 8, 4, MMAV2_PTX)
+    tiles = {(64, 16, 128, 4), (8, 32, 128, 4), (64, 8, 128, 4)}
+    got = X.ptx(tmp_path, tiles)
+    assert got["ok"] and got["files"] == 3 and got["families"] == {"wgmma": 1, "mmav2": 2} and got["missing_tiles"] == []
+    a = got["kernels"]["a/fused_moe_kernel.ptx"]
+    assert (a["tile"], a["expected"], a["observed"], a["wgmma"], a["mma_sync"]) == ([64, 16, 128, 4], "wgmma", "wgmma",
+                                                                                     {WGMMA_PTX.split(" ")[0]: 2}, {})
+    assert got["kernels"]["b/fused_moe_kernel.ptx"]["cvt_e4m3"] == 4
+    missing = X.ptx(tmp_path, tiles | {(64, 16, 64, 4)})
+    assert missing["ok"] is False and missing["missing_tiles"] == [[64, 16, 64, 4]]
+    bad = {"a": (64, 128, 16, 4, MMAV2_PTX),                                          # a wgmma tile on mma.sync
+           "b": (8, 128, 32, 4, WGMMA_PTX),                                           # an MMAv2 tile on wgmma
+           "c": (64, 128, 8, 4, MMAV2_PTX.replace("cvt.rn.f16x2.e4m3x2", "cvt.rn.f16x2.e5m2x2")),  # no e4m3 widening
+           "d": (8, 128, 32, 4, MMAV2_PTX.replace("f32.f16.f16.f32", "f32.bf16.bf16.f32")),
+           "e": (64, 128, 16, 4, WGMMA_PTX + WGMMA_PTX.replace("m64n16k32.f32.e4m3", "m64n16k16.f32.bf16")),
+           "f": (64, 128, 16, 4, WGMMA_PTX + MMAV2_PTX),
+           "g": (64, 128, 16, 4, "fma.rn.f32 %f1, %f2, %f3, %f4;\n"),
+           "h": (64, 128, 16, 2, WGMMA_PTX),                                          # 2 warps: no wgmma tile
+           "i": (64, 128, 16, None, WGMMA_PTX)}                                       # no metadata
+    for name, (M, Kd, Nd, warps, text) in bad.items():
+        _kernel(tmp_path / name / "k", M, Kd, Nd, warps, text)
+        r = X.ptx(tmp_path / name)
+        assert r["ok"] is False and r["kernels"]["k/fused_moe_kernel.ptx"]["ok"] is False, name
+    _kernel(tmp_path / "j", 64, 128, 16, 4, WGMMA_PTX)
+    (tmp_path / "j" / "fused_moe_kernel.ttir").unlink()
+    assert X.ptx(tmp_path / "j")["ok"] is False
     assert X.ptx(tmp_path / "nothing")["ok"] is False
 
 
@@ -173,6 +220,9 @@ H200_TP8 = {"1": {"BLOCK_SIZE_M": 8, "BLOCK_SIZE_N": 32, "BLOCK_SIZE_K": 128, "G
 def test_the_h200_small_batch_tiles_are_no_wgmma_and_the_widened_configs_are() -> None:
     swap = {m: c["BLOCK_SIZE_M"] < 64 and c["BLOCK_SIZE_N"] >= 64 for m, c in H200_TP8.items() if isinstance(c, dict)}
     assert {m: X.wgmma_tile(H200_TP8[m], s) for m, s in swap.items()} == {"1": False, "2": False, "4": False, "256": True, "1024": True}
+    assert {m: X.launch_dot(H200_TP8[m], s).id for m, s in swap.items()} == {"1": MV, "2": MV, "4": MV, "256": WG, "1024": WG}
+    assert [X.launch_tile({"config": H200_TP8[m], "SWAP": swap[m], "KB": 128}) for m in ("1", "4", "256")] == \
+        [(8, 32, 128, 4), (64, 8, 128, 4), (128, 16, 128, 4)]
     assert X.wgmma_tile(X.BATCH_INVARIANT_CONFIG, False) and not X.wgmma_tile({**H200_TP8["1024"], "num_warps": 2}, False)
     assert X.wgmma_tile({**H200_TP8["4"], "BLOCK_SIZE_M": 16}, True) and not X.wgmma_tile(H200_TP8["4"], True)
     wide, changed = X.widen_for_wgmma(H200_TP8)
@@ -183,9 +233,10 @@ def test_the_h200_small_batch_tiles_are_no_wgmma_and_the_widened_configs_are() -
 
 
 def test_the_programs_bind_at_every_glm53_shape() -> None:
-    got = X.bind_check({(32, False)})
+    got = X.bind_check({(32, False, WG), (128, True, MV)})
     assert got["ok"] and got["bindings"]["ScaledMmFp8Block_v1{K=6144,N=2624,G=128}"] and got["bindings"]["SiluMulFp8BlockQuant_v1{I=256,G=128}"]
-    assert len(got["bindings"]) == len(X.DENSE) + len({K for _, K, _ in X.DENSE}) + 3 * len({c[1] for c in X.MOE})
+    assert got["bindings"][f"MoeExpertFp8BlockGemmW_v3{{K=256,N=6144,G=128,KB=128,SWAP=True,DOT={MV}}}"]
+    assert len(got["bindings"]) == len(X.DENSE) + len({K for _, K, _ in X.DENSE}) + 5 * len({c[1] for c in X.MOE})
 
 
 TOTALS = {"words": 10, "mismatch": 0, "unresolved": 0, "quant_rows": 2, "quant_mismatch": 0, "reference_coords": 3,
@@ -196,7 +247,7 @@ ACT = {"act_rows": 4, "reference_act_rows": 1}
 def _doc() -> dict:
     launch = {"deterministic": True, "statics_ok": True, "assignment_ok": True}
     moe = {**launch, "phase": "moe", "case": "tp8_decode", "config": {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64}, "KB": 128, "SWAP": True,
-           "wgmma_tile": True}
+           "dot": WG}
     return {"schema": X.SCHEMA, "gate": {"ok": True}, "errors": {}, "selection": {"dense_ok": True, "moe_ok": True}, "ptx": {"ok": True},
             "bind": {"ok": True},
             "launches": [{**launch, "phase": "dense", "case": "o_proj", "M": 1, "operands_ok": True}, {**moe, "launch": "w13"},
@@ -212,7 +263,7 @@ def _doc() -> dict:
                                         (("totals", "reference_coords"), 0), (("totals", "twin_mismatch"), 1),
                                         (("totals", "act_rows"), 0), (("totals", "act_mismatch"), 1), (("totals", "reference_act_rows"), 0),
                                         (("launches", 1, "statics_ok"), False), (("launches", 1, "assignment_ok"), False),
-                                        (("launches", 2, "wgmma_tile"), False), (("errors", "moe_configs"), "boom"),
+                                        (("ptx", "ok"), False), (("errors", "moe_configs"), "boom"),
                                         (("launches", 0, "deterministic"), False), (("launches", 0, "operands_ok"), False)])
 def test_the_verdict_needs_every_check(path: tuple, value) -> None:
     assert X._verdict(_doc())
@@ -229,13 +280,14 @@ def test_each_case_has_its_own_verdict() -> None:
     doc = _doc()
     got = X.cases(doc)
     assert {k: c["ok"] for k, c in got.items()} == {"dense/o_proj/M1": True, "moe/tp8_decode": True}
-    assert got["moe/tp8_decode"]["tiles"] == ["w13:16x64x128/swap", "w2:16x64x128/swap"]
-    doc["launches"][2]["wgmma_tile"] = False
+    assert got["moe/tp8_decode"]["tiles"] == ["w13:16x64x128/swap/wgmma", "w2:16x64x128/swap/wgmma"]
+    doc["launches"][2] = {**doc["launches"][2], "config": {"BLOCK_SIZE_M": 8, "BLOCK_SIZE_N": 32}, "SWAP": False, "dot": MV}
+    assert X.cases(doc)["moe/tp8_decode"] == {**got["moe/tp8_decode"], "tiles": ["w13:16x64x128/swap/wgmma", "w2:8x32x128/mmav2"]}
+    doc["launches"][2]["deterministic"] = False
     doc["comparisons"][0]["mismatch"] = 1
     doc["errors"]["dense/q_b_proj/M4"] = "boom"
     got = X.cases(doc)
     assert {k: c["ok"] for k, c in got.items()} == {"dense/o_proj/M1": False, "moe/tp8_decode": False, "dense/q_b_proj/M4": False}
-    assert got["moe/tp8_decode"]["tiles"][1] == "w2:16x64x128/swap/no-wgmma"
     doc = _doc()
     doc["comparisons"].pop()                                                    # a MoE case whose act rows nobody compared
     assert {k: c["ok"] for k, c in X.cases(doc).items()} == {"dense/o_proj/M1": True, "moe/tp8_decode": False}
@@ -246,10 +298,12 @@ def test_the_dense_cases_are_glm53s_nine_fp8_linears() -> None:
     assert all(K % X.GROUP == 0 for _, K, _ in X.DENSE) and [n for n, _, N in X.DENSE if N % X.GROUP] == ["fused_qkv_a_proj"]
 
 
-def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
+@pytest.mark.parametrize("wgmma_configs", [False, True])
+def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, wgmma_configs: bool) -> None:
     """`main` with the GPU's pieces stood in for (gate, selection, the launches as kernel words made here, the PTX scan, the tuned
-    configs) and vLLM's config module stubbed: the comparison jobs through the spawned worker pool, the per-case verdicts, the sealed
-    record and the exit status, so a slip in the orchestration shows here and not in the H200's first hour."""
+    configs) and vLLM's config module stubbed: the comparison jobs through the spawned worker pool, each launch at its tile's DOT (a
+    swapped 16x64 wgmma tile and the stock 8x32x128 MMAv2 one), the per-case verdicts, the sealed record and the exit status, so a
+    slip in the orchestration shows here and not in the H200's first hour."""
     import contextlib
     import json
     import sys
@@ -265,36 +319,49 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "selection", lambda: {"dense_ok": True, "moe_ok": True})
-    monkeypatch.setattr(X, "ptx", lambda cache: {"files": 1, "kernels": {}, "ok": True})
+    scanned = []
+
+    def ptx(cache, tiles):
+        scanned.append(tiles)
+        return {"files": 2, "kernels": {}, "ok": True}
+
+    monkeypatch.setattr(X, "ptx", ptx)
     monkeypatch.setattr(X, "write_wgmma_configs", lambda folder: {"folder": str(folder), "files": {}})
     monkeypatch.setattr(X, "dense_cases", lambda quick: [("ragged", K, N, 5)])
-    monkeypatch.setattr(X, "moe_cases", lambda quick: [("small", 256, 3, 0)])
+    monkeypatch.setattr(X, "moe_cases", lambda quick: [("small", 256, 3, 0), ("stock", 256, 1, 0)])
     dense = _dense_job(tmp_path / "d")
     monkeypatch.setattr(X, "dense_launch", lambda work, name, K_, N_, M, seed: (
         {"phase": "dense", "case": name, "K": K_, "N": N_, "M": M, "kernel": "CutlassFp8BlockScaledMMKernel", "deterministic": True,
          "operands_ok": True}, {**dense, "case": name}))
-    cfg = {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 128}
+    tiles = {"small": ({"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 128}, 64, True),
+             "stock": ({"BLOCK_SIZE_M": 8, "BLOCK_SIZE_N": 32, "BLOCK_SIZE_K": 128, "num_warps": 4}, 128, False)}
 
     def moe(work, name, inter, M, hot, seed, batch_invariant):
+        cfg, KB, swap = tiles[name]
+        dot = X.launch_dot(cfg, swap).id
         launches, jobs = [], []
         for kind in ("w13", "w2", "served_w2"):
-            launches.append({"phase": "moe", "case": name, "launch": kind, "K": K, "N": N, "pairs": 24, "KB": 64, "SWAP": True,
-                             "config": cfg, "deterministic": True, "statics_ok": True, "assignment_ok": True,
-                             "wgmma_tile": X.wgmma_tile(cfg, True)})
-            jobs += [{**j, "case": name} for j in _moe_job(tmp_path / "m", kind, KB=64, swap=True, flip=kind == "w2")]
+            launches.append({"phase": "moe", "case": name, "launch": kind, "K": K, "N": N, "pairs": 24, "KB": KB, "SWAP": swap,
+                             "config": cfg, "deterministic": True, "statics_ok": True, "assignment_ok": True, "dot": dot})
+            jobs += [{**j, "case": name} for j in _moe_job(tmp_path / name, kind, KB=KB, swap=swap, dot=dot,
+                                                           flip=name == "small" and kind == "w2")]
         return launches, jobs
 
     monkeypatch.setattr(X, "moe_launches", moe)
     out = tmp_path / "out"
-    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--wgmma-configs"]) == 1
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1"] + (["--wgmma-configs"] if wgmma_configs else [])) == 1
     doc = json.loads((out / X.RECORD).read_text())
-    assert doc["digest"] == digest_of(doc) and doc["ok"] is False and not doc["errors"]
-    assert {k: c["ok"] for k, c in doc["cases"].items()} == {"dense/ragged/M5": True, "moe/small": False}
-    assert doc["totals"]["mismatch"] == 1 and doc["env"]["VLLM_TUNED_CONFIG_FOLDER"] == str(out / "moe_configs")
-    assert (doc["totals"]["act_rows"], doc["totals"]["act_mismatch"], doc["totals"]["reference_act_rows"]) == (24, 0, 1)
+    assert doc["digest"] == digest_of(doc) and doc["ok"] is False and not doc["errors"] and doc["bind"]["ok"]
+    assert {k: c["ok"] for k, c in doc["cases"].items()} == {"dense/ragged/M5": True, "moe/small": False, "moe/stock": True}
+    assert doc["cases"]["moe/stock"]["tiles"] == ["w13:8x32x128/mmav2", "w2:8x32x128/mmav2", "served_w2:8x32x128/mmav2"]
+    assert doc["dots"] == {WG: 3, MV: 3} and scanned == [{(64, 16, 64, 4), (8, 32, 128, 4)}]
+    assert doc["totals"]["mismatch"] == 1
+    assert doc["env"].get("VLLM_TUNED_CONFIG_FOLDER") == (str(out / "moe_configs") if wgmma_configs else None)
+    assert (doc["totals"]["act_rows"], doc["totals"]["act_mismatch"], doc["totals"]["reference_act_rows"]) == (48, 0, 2)
     assert doc["env"]["VLLM_BATCH_INVARIANT"] == "0" and doc["env"]["VLLM_USE_DEEP_GEMM"] == "0"
     printed = capsys.readouterr().out
     assert "case moe/small" in printed and "GLM53-BLOCK-FP8 NO-GO" in printed and "no-go cases=['moe/small']" in printed
+    assert f"dots={json.dumps({WG: 3, MV: 3})}" in printed and "w13:8x32x128/mmav2" in printed
 
 
 def test_the_record_is_a_registered_property() -> None:
