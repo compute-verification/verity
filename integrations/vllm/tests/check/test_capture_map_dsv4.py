@@ -363,7 +363,21 @@ def test_the_route_site_decides_three_routes_and_the_committer_waits_for_its_bin
     assert undecided == {"fp8-swapab", "fp8-deepgemm"} and not undecided & {t["route"] for t in CMAP["taps"] if "route" in t}
     assert route_source.unbuilt(CMAP) == {"dsv4_attention"}
     done = {c["item"] for c in CMAP["capture_work"] if "done" in c}
-    assert len(CMAP["capture_work"]) == 6 and {1, 3, 4, 5} <= done
+    assert len(CMAP["capture_work"]) == 6 and {1, 3, 4, 5, 6} <= done
+
+
+def test_the_tp_partials_are_the_four_collectives_the_pinned_vllm_issues_at_tp8():
+    """With expert parallelism off (so neither sequence parallelism, whose `sp_all_gather` / `sp_reduce_scatter` the model module
+    imports, nor mega-MoE), a step issues the embedding's all-reduce, each layer's `wo_b` all-reduce (`RowParallelLinear`; the shared
+    expert's `down_proj` has `reduce_results` False) and MoE runner all-reduce (`_maybe_reduce_final_output`: the no-EP prepare/finalize
+    leaves the fused output unreduced and the factory's `reduce_results` is True), and the logits all-gather (`use_all_gather` on CUDA)."""
+    assert CMAP["target"]["engine_args"]["enable_expert_parallel"] is False
+    sites = sorted((t["module"], t["site"]["kind"], t.get("layers", t.get("layer"))) for t in CMAP["taps"]
+                   if (t.get("commit") or {}).get("binder") == "tp_partial")
+    assert sites == [("lm_head", "function_return", "lm_head"), ("model.embed_tokens", "collective_input", "embed"),
+                     ("model.layers.{i}.attn.wo_b", "collective_input", "all"),
+                     ("model.layers.{i}.ffn.experts", "collective_input", "all"), ("model.layers.{i}.ffn.experts", "collective_output", "all")]
+    assert CM.counts(CMAP, ENV, DECODE)["bound_taps_per_step_by_binder"]["tp_partial"] == 2 + 3 * ENV["L"]
 
 
 def test_every_module_hook_tap_is_on_a_module_the_committer_acquires():

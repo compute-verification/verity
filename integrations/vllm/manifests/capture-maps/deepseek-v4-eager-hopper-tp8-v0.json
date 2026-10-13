@@ -3786,7 +3786,8 @@
   },
   {
    "item": 6,
-   "work": "TP partial source at TP8: confirm the sites this map names (wo_b's all-reduce in vllm.model_executor.layers.linear, the MoE runner's in fused_moe.runner.moe_runner, the embedding's and the logits all-gather) are the only collectives, one call each per layer and step"
+   "work": "TP partial source at TP8: confirm the sites this map names (wo_b's all-reduce in vllm.model_executor.layers.linear, the MoE runner's in fused_moe.runner.moe_runner, the embedding's and the logits all-gather) are the only collectives, one call each per layer and step",
+   "done": "TP partial source at TP8: confirmed in the pinned vLLM. With enable_expert_parallel false, neither sequence parallelism (sp_all_gather, sp_reduce_scatter) nor mega-MoE runs, and a step issues exactly the embedding's all-reduce (VocabParallelEmbedding.forward), each layer's wo_b all-reduce (RowParallelLinear.forward; the shared expert's down_proj has reduce_results False), each layer's MoE runner all-reduce (MoERunner._maybe_reduce_final_output: the no-EP prepare/finalize leaves the fused output unreduced, FusedMoEFactory's reduce_results is True, no routed_output_transform) and the logits all-gather (LogitsProcessor._gather_logits, use_all_gather on CUDA); no DeepSeek-V4 module imports a TP collective name, so partial_source's mid-module census finds no other site (test_the_tp_partials_are_the_four_collectives_the_pinned_vllm_issues_at_tp8)"
   }
  ]
 }
