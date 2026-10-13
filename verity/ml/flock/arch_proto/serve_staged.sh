@@ -28,7 +28,7 @@ hold_slices "" ${CPUS:-16}
 export RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l) OMP_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
 { nvidia-smi -L; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-} slices=$SLICES cpus=$SLICE_CPUS wait_s=$SLICE_WAIT_S rayon=$RAYON_NUM_THREADS"
   env | grep -E '^(FC_|FLOCK_GEMM_TILE=)' | sort; } | tee $R/out/host.txt
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/protocols/one_stage
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 S=$FLOCK_WORK/scratch/${RESEARCH_RUN_ID:-serve-staged-$$}; rm -rf $S; mkdir -p $S
 trap 'rm -rf $S' EXIT
 taskset -c $SLICE_CPUS $FLOCK_WORK/flock-circuit/py/bin/python3 $REPO/verity/ml/flock/arch_proto/serve_staged.py $B $S $R/out ${PORT:-7710} \

@@ -154,7 +154,7 @@ def xorSel (mask : F128) (es : Array F128) : ℕ → F128
 def pinCertOK : Bool :=
   (List.range 128).all fun k => decide (xorSel pinCols[k]! (eqTable Flock.pinned) 128 = F128.monomial k)
 
-theorem pinCert : pinCertOK = true := by decide +kernel
+theorem pinCert : pinCertOK = true := by unfold pinCertOK; rw [pinned_eq_lit]; decide +kernel
 
 theorem xorSel_eq (mask : F128) (es : Array F128) (n : ℕ) :
     GF128.of (xorSel mask es n) = ∑ b ∈ Finset.range n, if F128.bit mask b then GF128.of es[b]! else 0 := by
