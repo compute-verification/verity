@@ -27,7 +27,9 @@ open Flock Flock.RecVStar
 def zpRound (m kLog : Nat) : Nat := m + kLog - 7
 
 /-- `rec_live.holo_rounds`: `repRounds` with hidden unit circuits. z_partial's round squeezes nothing, and a round of its
-own absorbs h and squeezes r′. None where round `zpRound` is not z_partial's. -/
+own absorbs h and squeezes r′. None where round `zpRound` is not z_partial's.
+A round here records only whether it absorbs (`SchedRound`'s flag), not how many elements: h's round absorbs 64 in
+`rec_live`, and no guarantee or assumption record reads `holoRounds`. -/
 def holoRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
   let out ← repRounds m kLog claims
   let k := zpRound m kLog
