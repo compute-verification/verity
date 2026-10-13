@@ -13,6 +13,8 @@ coordinate is a vector there, where `coinTy 1` is a scalar.
   coordinates; `kindCoinTys_holoKinds`: `holoKinds`' coin types are those forms' types (`formTy`), for every class;
   `holoCTs_succ`: coin `1 + j` is of form `j`.
 * `formTy_coinTy`: a form other than a vector of one coordinate types its coin as `coinTy` of its size (`formSize`).
+  `holoForms_ne_one`: no form at `holoAt st hp` is one, for every inner statement and sparse parameters
+  (`ligForms_schedAt`: none of `fast100`'s schedules draws one).
 * `coinArr_roundWords`: at such a form every history round's coin is the coin step its words read as, which is what
   the map's `coin` reads off the history's prefix; `roundWords_one`: at a vector of one coordinate its words read as the
   coin, as `coinArr` reads them or as the vector of their words (`coinWords_vec`).
@@ -93,6 +95,89 @@ noncomputable def holoForms (e : ExecHolo) : List (Option ℕ) :=
     ((zcForms (e.cls.pubStatement e.regs).m ++ (lcForms (e.cls.pubStatement e.regs).kLog ++
       (opForms (2 * (e.cls.pubStatement e.regs).regions.length + 2) ++ ligForms e.sch))) ++
     (sparseForms e.cls.shape ++ (sparseForms e.cls.shape ++ (opForms 2 ++ ligForms e.rsch.sch))))
+
+/-! ## No coin is a vector of one coordinate -/
+
+theorem zcForms_ne_one {m : ℕ} (h : m ≠ 14) : some 1 ∉ zcForms m := by
+  have h' : 1 ≠ m - 13 := by omega
+  simp [zcForms, h']
+
+theorem lcForms_ne_one (kLog : ℕ) : some 1 ∉ lcForms kLog := by simp [lcForms]
+
+theorem opForms_ne_one {n : ℕ} (h : n ≠ 1) : some 1 ∉ opForms n := by simp [opForms, Ne.symm h]
+
+theorem sparseForms_ne_one (sh : FlockSoundness.Model.SparseShape) : some 1 ∉ sparseForms sh := by
+  simp [sparseForms]
+
+theorem ligForms_default : some 1 ∉ ligForms (default : FlockSoundness.Accounting.Schedule) := by decide
+
+/-- **`fast100`'s schedules draw no vector of one coordinate**, by evaluating `fast100` at each `m` below 36; past 35
+it has none (`Schedule.lean:48`), and `schedAt` is the default. -/
+theorem ligForms_schedAt (m : ℕ) : some 1 ∉ ligForms (schedAt m) := by
+  by_cases hm : m < 36
+  · have key : ∀ m' < 36, some 1 ∉ ligForms (schedAt m') := by decide +kernel
+    exact key m hm
+  · have hb : (m < 22 || m > 35) = true := by
+      simp only [Bool.or_eq_true, decide_eq_true_eq]; omega
+    have h : Flock.fast100 m = none := by
+      unfold Flock.fast100
+      simp [hb]
+    unfold schedAt
+    rw [h]
+    exact ligForms_default
+
+theorem holoForms_ne_one_of (e : ExecHolo) (hm : (e.cls.pubStatement e.regs).m ≠ 14)
+    (hs : some 1 ∉ ligForms e.sch) (hr : some 1 ∉ ligForms e.rsch.sch) : some 1 ∉ holoForms e := by
+  simp only [holoForms, List.mem_append, zcForms_ne_one hm, lcForms_ne_one,
+    opForms_ne_one (by omega : 2 * (e.cls.pubStatement e.regs).regions.length + 2 ≠ 1),
+    opForms_ne_one (by decide : (2 : ℕ) ≠ 1), sparseForms_ne_one, hs, hr, or_self, not_false_eq_true]
+
+/-- **No coin of candidate 3 is a vector of one coordinate**, at every inner statement and sparse parameters: the
+class's `m` is from 25 to 35 where its checks pass (`ZkHidden.schedule_range`) and 13 at the fixed class, so the
+zerocheck's second coin has `m − 13 ≠ 1` coordinates; the reps' and R's schedules are `fast100`'s or the default
+(`ligForms_schedAt`); and the openings are of `2·regions + 2` and 2 claims. -/
+theorem holoForms_ne_one (st : Flock.Stmt) (hp : HoloParams) : some 1 ∉ holoForms (holoAt st hp) := by
+  refine holoForms_ne_one_of _ ?_ ?_ ?_
+  · show (execClassAt st).cls.m ≠ 14
+    rw [execClassAt_cls]
+    by_cases h : ClassOk (shapeOf st)
+    · obtain ⟨_, hs⟩ := h.2.2
+      have h25 := (FlockSoundness.Discharge.ZkHidden.schedule_range hs).1
+      rw [clsOf, dif_pos h]
+      show (shapeOf st).m ≠ 14
+      omega
+    · rw [clsOf, dif_neg h]
+      show (13 : ℕ) ≠ 14
+      decide
+  · show some 1 ∉ ligForms (execClassAt st).sch
+    rw [execClassAt_sch]
+    by_cases h : ClassOk (shapeOf st)
+    · rw [if_pos h]
+      exact ligForms_schedAt _
+    · rw [if_neg h]
+      exact ligForms_default
+  · have e : (holoAt st hp).rsch.sch =
+        if hp.EllOk (execClassAt st).cls.kLog then schedAt (holoAt st hp).cls.shape.mReg else default := rfl
+    by_cases hl : hp.EllOk (execClassAt st).cls.kLog
+    · rw [e, if_pos hl]
+      exact ligForms_schedAt _
+    · rw [e, if_neg hl]
+      exact ligForms_default
+
+theorem getD_ne_one {l : List (Option ℕ)} (hl : some 1 ∉ l) (j : ℕ) : (l[j]?).getD none ≠ some 1 := by
+  intro h
+  cases e : l[j]? with
+  | none =>
+    rw [e, Option.getD_none] at h
+    cases h
+  | some x =>
+    rw [e, Option.getD_some] at h
+    exact hl (h ▸ List.mem_of_getElem? e)
+
+/-- Every form of `holoForms`, read as `holoCTs_succ` reads it, is other than a vector of one coordinate. -/
+theorem holoForms_getD_ne_one (st : Flock.Stmt) (hp : HoloParams) (j : ℕ) :
+    ((holoForms (holoAt st hp))[j]?).getD none ≠ some 1 :=
+  getD_ne_one (holoForms_ne_one st hp) j
 
 /-! ## `holoKinds`' coin types are the forms' -/
 
@@ -282,5 +367,15 @@ theorem roundWords_one {st : Flock.Stmt} {hp : HoloParams}
 #print axioms coinWords_vec
 #print axioms coinArr_roundWords
 #print axioms roundWords_one
+#print axioms zcForms_ne_one
+#print axioms lcForms_ne_one
+#print axioms opForms_ne_one
+#print axioms sparseForms_ne_one
+#print axioms ligForms_default
+#print axioms ligForms_schedAt
+#print axioms holoForms_ne_one_of
+#print axioms holoForms_ne_one
+#print axioms getD_ne_one
+#print axioms holoForms_getD_ne_one
 
 end FlockC3.Compose
