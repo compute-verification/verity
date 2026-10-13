@@ -166,7 +166,7 @@ C_LOG2E, C_NEG_LOG2E, C_LN2, C_NAN_SCORE = (b1.const(32, c) for c in (LOG2E, NEG
 ONE32 = b1.f32c(1.0)
 PTX_NAN = b1.const(32, F32_NAN_PTX)
 
-_UNCAPTURED = "not-yet-established: vLLM d9105ea80's sm_90 lowering read offline; no H200 capture yet (tests/properties/dsv4_moe_capture_gpu.py)"
+_UNCAPTURED = "not-yet-established: vLLM d9105ea80's Hopper lowering read offline; no GPU capture yet (tests/properties/dsv4_moe_capture_gpu.py)"
 
 
 @composite("Ex2Approx", 1, [], lambda S: ((("t", F32),), F32), conformance=_UNCAPTURED)
