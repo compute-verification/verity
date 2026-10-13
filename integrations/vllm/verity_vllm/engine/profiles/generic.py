@@ -159,9 +159,9 @@ def structural_refusal(cfg: dict[str, Any]) -> str | None:
             return f"mlp_only_layers={cfg['mlp_only_layers']!r}: the MoE profile states every layer as a fused-MoE layer"
         if int(cfg.get("decoder_sparse_step", 1) or 1) != 1:
             return f"decoder_sparse_step={cfg['decoder_sparse_step']!r}: the MoE profile states every layer as a fused-MoE layer"
-        E = cfg.get("num_experts") or cfg.get("num_local_experts")
+        E = cfg.get("num_experts") or cfg.get("num_local_experts") or cfg.get("n_routed_experts")
         if not E:
-            return "MoE family without num_experts in config.json"
+            return "MoE family without num_experts, num_local_experts, or n_routed_experts in config.json"
     why = analytic.quant_refusal(cfg.get("quantization_config"), cfg)
     if why:
         return why
