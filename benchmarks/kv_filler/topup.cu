@@ -792,8 +792,8 @@ struct State {
   unsigned long long g0_h = 0;
   uint64_t lim = 0;  // the host's copy of seq->limit, the source of its async copy
   cudaStream_t s_base = nullptr, s_idle = nullptr, s_step = nullptr, s_pre = nullptr, s_h = nullptr;
-  cudaEvent_t start = nullptr, base_done[2] = {nullptr, nullptr}, idle_done = nullptr, step_ev = nullptr, step_started = nullptr,
-              pre_started = nullptr;
+  cudaEvent_t start = nullptr, base_done[2] = {nullptr, nullptr}, idle_done = nullptr, step_ev = nullptr, step_done = nullptr,
+              pre_done = nullptr;
   std::mutex step_mu;
   std::thread th;
   std::atomic<int> run{0}, err{0};
@@ -984,8 +984,8 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   CK(cudaEventCreateWithFlags(&st->base_done[1], cudaEventDisableTiming));
   CK(cudaEventCreate(&st->idle_done));
   CK(cudaEventCreateWithFlags(&st->step_ev, cudaEventDisableTiming));
-  CK(cudaEventCreateWithFlags(&st->step_started, cudaEventDisableTiming));
-  CK(cudaEventCreateWithFlags(&st->pre_started, cudaEventDisableTiming));
+  CK(cudaEventCreateWithFlags(&st->step_done, cudaEventDisableTiming));
+  CK(cudaEventCreateWithFlags(&st->pre_done, cudaEventDisableTiming));
   CK(cudaMalloc(&st->sg.words, 4ull * fl::SIGN_SLOTS * fl::SIGN_WORDS));
   CK(cudaMalloc(&st->sg.pass, 8 * fl::SIGN_SLOTS));
   CK(cudaMalloc(&st->sg.done, 8 * fl::SIGN_SLOTS));
@@ -1068,25 +1068,23 @@ void sq_idle(int on, uint64_t budget) {
 
 namespace sq {
 
-// One kernel of `role` beside the step whose start event is `st.step_ev`, queued behind the last one unless that one
-// hasn't started (`started`): at most one runs and one waits. Declining while the last one runs would leave this step
-// bare whenever that one exits (its steps over) before this step reaches the GPU, as vLLM's batch queue lets it.
-static int beside(State& st, int role, int ctas, cudaStream_t s, cudaEvent_t started, unsigned long long* taken,
+// One kernel of `role` beside the step whose start event is `st.step_ev`, unless the last one (`done`) still runs.
+static int beside(State& st, int role, int ctas, cudaStream_t s, cudaEvent_t done, unsigned long long* taken,
                   std::atomic<uint64_t>& launches) {
-  if (cudaEventQuery(started) == cudaErrorNotReady) return 0;
+  if (cudaEventQuery(done) == cudaErrorNotReady) return 0;
   CK(cudaStreamWaitEvent(s, st.step_ev, 0));
-  CK(cudaEventRecord(started, s));
   if (int rc = launch(st, role, ctas, taken, st.step_budget, s)) return rc;
   launches += 1;
-  return 0;
+  return (int)cudaEventRecord(done, s);
 }
 
 }  // namespace sq
 
 // A step's start on `stream`: the gate's busy count up (and its prefill count, if the step prefills), and, ordered
 // after the counts, a STEP kernel of `ctas` CTAs (if > 0) on the filler's step stream and, for a prefilling step, a
-// PREFILL kernel of `prefill_ctas` (if > 0) on its prefill stream, each queued behind the last of its role unless
-// one already waits (`beside`): more would fill the launch queue and block the caller.
+// PREFILL kernel of `prefill_ctas` (if > 0) on its prefill stream. Neither is launched while the last of its role
+// still runs: it reads while any such step is on the GPU, so it covers this one, and a launch queued behind it would
+// wait, and once the queue is full, block the caller.
 int sq_step_begin_phase(int ctas, int prefill, int prefill_ctas, void* stream) {
   sq::State* st = sq::S;
   if (!st) return 0;
@@ -1099,9 +1097,9 @@ int sq_step_begin_phase(int ctas, int prefill, int prefill_ctas, void* stream) {
   std::lock_guard<std::mutex> g(st->step_mu);
   CK(cudaEventRecord(st->step_ev, s));
   if (ctas > 0)
-    if (int rc = sq::beside(*st, fl::STEP, ctas, st->s_step, st->step_started, st->taken + 3, st->step_launches)) return rc;
+    if (int rc = sq::beside(*st, fl::STEP, ctas, st->s_step, st->step_done, st->taken + 3, st->step_launches)) return rc;
   if (pre)
-    if (int rc = sq::beside(*st, fl::PREFILL, prefill_ctas, st->s_pre, st->pre_started, st->taken + 4, st->prefill_launches))
+    if (int rc = sq::beside(*st, fl::PREFILL, prefill_ctas, st->s_pre, st->pre_done, st->taken + 4, st->prefill_launches))
       return rc;
   return 0;
 }
@@ -1124,7 +1122,7 @@ int sq_stop() {
   int rc = st->err.load();
   tu::gate_set(-1, -1, true);
   for (cudaStream_t s : {st->s_base, st->s_idle, st->s_step, st->s_pre, st->s_h}) cudaStreamDestroy(s);
-  for (cudaEvent_t e : {st->start, st->base_done[0], st->base_done[1], st->idle_done, st->step_ev, st->step_started, st->pre_started})
+  for (cudaEvent_t e : {st->start, st->base_done[0], st->base_done[1], st->idle_done, st->step_ev, st->step_done, st->pre_done})
     cudaEventDestroy(e);
   for (void* p : {(void*)st->sg.words, (void*)st->sg.pass, (void*)st->sg.done, (void*)st->seq, (void*)st->ring.xr, (void*)st->ring.cnt, (void*)st->ring.t0, (void*)st->ring.t1,
                   (void*)st->taken, (void*)st->g0})
