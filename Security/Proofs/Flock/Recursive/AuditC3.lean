@@ -1,6 +1,7 @@
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.HoloExec
 import Proofs.Flock.Recursive.HoloCoins
+import Proofs.Flock.Recursive.HoloMap
 
 /-!
 # The recursive audit at candidate 3 (trusted)
@@ -40,7 +41,9 @@ What it takes, against `PublicAudit`:
   record it writes at each history, `--rec-inner-transcript` and `--rec-inner-session`), in place of fixed records: the
   event reads the records written at the outcome's history, and their custody (`_hIC`,
   `Flock.Premises.InnerRecordCustody`, `live-verifier` at the inner session) says they hold that history's commitments
-  and coins where the map `im` says each round's go;
+  and coins where the verifier's map says each round's go (`holoMap`, from the session's schedule at the verifier's
+  inner shape `ish`: a stream round's coins at the last history round it takes, read off the history's prefix), at the
+  table's prefix in the inner transcript `tbl` and the `b ‖ c` a round's commitment gives a value's row `bc`;
 * V*'s statements indexed by the verifier's own list (`vstarCount ish`, `RecVStar.statements`; gap 4(c)), in place of
   the formula `outerStatementsAt st`; the event adds the verifier's checks at candidate 3 of its own inputs
   (`AcceptsC3`): its list builds, it holds the inner transcript against `reg`, and check 5's sparse refusals pass, so
@@ -225,8 +228,8 @@ noncomputable def holoTys (st : Flock.Stmt) (hp : HoloParams) : Fin 16 → Type 
     Fin (2 ^ (holoAt st hp).cls.shape.pLog) → FlockLevel3.GF128,
     Fin (2 ^ (holoAt st hp).cls.shape.tLog) → FlockLevel3.GF128]
 
-/-- **The recursive audit at candidate 3's soundness half, at coin types `CT`** (`RecursiveAuditC3` reads it at the
-inner session's coin kinds, `holoCTs`).
+/-- **The recursive audit at candidate 3's soundness half, at coin types `CT` and the record map `im`**
+(`RecursiveAuditC3` reads it at the inner session's coin kinds, `holoCTs`, and the verifier's map, `holoMap`).
 
 For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st` and sparse
 parameters `hp`, R's registration (the verifier of record's record `reg`, which `st`'s META binds by its digest, and R's
@@ -236,8 +239,9 @@ with candidate 3's compiled table as its inner protocol (`holoInnerAt`, its mess
 and its coins of types `CT st hp`),
 at the law of the registration's draws
 (`drawLaw`): V*'s statements `Vs`, one for each of the verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j`
-as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, where each round's commitment and coins go in
-the inner session's records (`im`) and those records' custody `_hIC`, the verifier of record's own inputs (V*'s bindings
+as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, the table's prefix `tbl` and the `b ‖ c`
+`bc` at which the map `im` says where each round's commitment and coins go in the inner session's records, and those
+records' custody `_hIC` at `im`, the verifier of record's own inputs (V*'s bindings
 `bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at which V*'s statements' files, where they
 parse into scope as the verifier's acceptance parses them, parse to `Vs` (`VStarParsesScoped`), every session's inputs
 carrying the tags their name names (`TagsFound`), the messages V*'s layers hold and the rounds' commitments (`wmsg`,
@@ -261,7 +265,11 @@ At a private inner shape (`ish.holo`), `RecVStar.statements` refuses (`statement
 has a private inner session, and the guarantee says nothing about one until V*'s holo parts land (#1896). -/
 def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (CT : (st : Flock.Stmt) → (hp : HoloParams) → Fin (r st hp) → Type) [∀ st hp k, Fintype (CT st hp k)]
-    [∀ st hp k, Inhabited (CT st hp k)] : Prop :=
+    [∀ st hp k, Inhabited (CT st hp k)]
+    (im : (st : Flock.Stmt) → (hp : HoloParams) → (Cm : Type) → RecVStar.Inner → String →
+      (Cm → String → Nat → List UInt8) →
+        FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin (r st hp)) → CT st hp k)) :
+    Prop :=
   ∀
     -- the registration's draws, a finite space with an element, and the units each draws
     {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
@@ -283,9 +291,11 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
       (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
-    -- where each round's commitment and coins go in the inner session's records, and those records' custody
-    (im : FlockSoundness.Assumptions.InnerRecordMap Cm (holoInnerAt (holoTys st hp) (CT st hp) st hp).Coin)
-    (_hIC : Flock.Premises.InnerRecordCustody wr (fun w => innerCommitsAt w.1 w.2 st reg) ish.sparse im)
+    -- the table's prefix in the inner transcript and the `b ‖ c` a round's commitment gives a value's row, and the
+    -- custody of the inner session's records where the map says each round's commitment and coins go
+    (tbl : String) (bc : Cm → String → Nat → List UInt8)
+    (_hIC : Flock.Premises.InnerRecordCustody wr (fun w => innerCommitsAt w.1 w.2 st reg) ish.sparse
+      (im st hp Cm ish tbl bc))
     -- the verifier of record's own inputs: V*'s bindings for each statement and the shared rows
     (bind : Fin (vstarCount ish) → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
     -- obligation (gap 4(c)): where V*'s statement `j`'s file under `bind j` parses into scope, as the verifier's
@@ -364,8 +374,10 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
 
 /-- **The recursive audit at candidate 3**: (i) soundness in fork form, `RecursiveAuditC3At` at the inner session's
 coins of their coin kinds in the run's order (`holoCTs`: the link points, then the coins of the stages' shapes,
-`holoKinds`), and (ii) zero knowledge, `RecursiveFirewallPrivate`, as in `PublicAudit`. -/
+`holoKinds`) and the verifier's map of its records (`holoMap`: the session's schedule at the verifier's inner shape,
+each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
+`RecursiveFirewallPrivate`, as in `PublicAudit`. -/
 def RecursiveAuditC3 : Prop :=
-  RecursiveAuditC3At holoCTs ∧ RecursiveFirewallPrivate
+  RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate
 
 end Flock.Guarantees
