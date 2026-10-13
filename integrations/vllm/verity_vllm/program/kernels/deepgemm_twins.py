@@ -12,10 +12,20 @@ from verity_vllm.program.registry.deepgemm import (F_1EM10, F_448, F_ONE, FI_LAN
                                                    fi_lane_elements)
 from verity_vllm.program.registry.fp8 import FP8_BLOCK
 
-#: the f32 ulps above or below a power of two where `per_block_cast_to_fp8`'s `amax / 448` (Triton's `div.full.f32`, at most 2 ulps
-#: off) and `ceil(log2(.))` (libdevice's `log2f`, which returns the integer for a quotient a few ulps above a power of two) may
-#: round the ue8m0 scale to the other power of two than the exact one this twin takes
-REQUANT_BAND_ULPS = 8
+#: the f32 ulps of `amax / 448` around a power of two where Triton's `div.full.f32` (within 2 ulps of the quotient) may cross it
+REQUANT_DIV_ULPS = 2
+
+
+def requant_band(sf0: np.ndarray) -> np.ndarray:
+    """Where `per_block_cast_to_fp8`'s ue8m0 power may differ from the exact one this twin takes: `sf0 = amax / 448` within
+    `REQUANT_DIV_ULPS` of a power of two 2^k, or above it by up to 2^(floor(log2 |k|) + 1) more ulps, where `log2f` (within an ulp
+    of a result near k, whose ulp is 2^(floor(log2 |k|) - 23)) may return k itself and its ceiling stay k."""
+    sf0 = np.asarray(sf0, dtype=np.uint32)
+    mant = (sf0 & 0x7FFFFF).astype(np.int64)
+    k = np.maximum(np.abs(((sf0 >> 23) & 0xFF).astype(np.int64) - 127), 1)
+    above = REQUANT_DIV_ULPS + (np.int64(2) << np.floor(np.log2(k)).astype(np.int64))
+    finite = (sf0 & 0x7F800000) != 0x7F800000
+    return finite & ((mant <= above) | (mant >= (1 << 23) - REQUANT_DIV_ULPS))
 
 
 def ue8m0_ceil(y: np.ndarray) -> np.ndarray:
@@ -120,8 +130,8 @@ def per_block_cast_to_fp8_ue8m0(x: np.ndarray, block: tuple[int, int] = (FP8_BLO
     """`per_block_cast_to_fp8(x, block, use_ue8m0=True)` (vllm/utils/deep_gemm.py:720-740, torch.compile'd) on an f32 [N, K] matrix:
     zero-padded to whole blocks, `amax = max|x|` per block (a NaN propagates) `.clamp(1e-4)`, `sf = amax / 448`, then
     `2^ceil(log2|sf|)` taken exactly, `q = e4m3(x * (1 / sf))` (`1 / sf` exact, a power of two), cropped.  Returns (q [N, K] bytes,
-    sf [cdiv(N, bm), cdiv(K, bk)] f32 words, unresolved [same] bool): a block whose `amax / 448` lies within `REQUANT_BAND_ULPS` of a
-    power of two is where the GPU's division and log2 decide the power, so its words are not claimed."""
+    sf [cdiv(N, bm), cdiv(K, bk)] f32 words, unresolved [same] bool): a block whose `amax / 448` is in `requant_band` is where the
+    GPU's division and log2 decide the power, so its words are not claimed."""
     x = np.asarray(x, dtype=np.uint32)
     N, K = x.shape
     bm, bk = block
@@ -134,8 +144,7 @@ def per_block_cast_to_fp8_ue8m0(x: np.ndarray, block: tuple[int, int] = (FP8_BLO
     sf0 = R.div_rn(R.as_u32(amax), np.full(amax.shape, F_448, dtype=np.uint32))
     nan = ((sf0 & 0x7F800000) == 0x7F800000) & ((sf0 & 0x7FFFFF) != 0)
     sf = np.where(nan, sf0, (sf0 + np.uint32(UE8M0_ROUND)) & np.uint32(UE8M0_KEEP)).astype(np.uint32)
-    mant = (sf0 & 0x7FFFFF).astype(np.int64)
-    unresolved = ~nan & ((mant <= REQUANT_BAND_ULPS) | (mant >= (1 << 23) - REQUANT_BAND_ULPS)) & ((sf0 & 0x7F800000) != 0x7F800000)
+    unresolved = ~nan & requant_band(sf0)
     with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
         inv = R.div_rn(np.full(sf.shape, F_ONE, dtype=np.uint32), sf)
         q = np_f32_to_e4m3_sat(R.as_f32(R.mul_rn(R.as_u32(xv), np.broadcast_to(inv[:, None, :, None], xv.shape))))
