@@ -80,6 +80,7 @@ from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.scalar import F32Neg
+from verity_vllm.program.kernels import dsv4_compressor_twin
 from verity_vllm.program.registry import dsa as D
 from verity_vllm.program.registry import dsv4_indexer as I
 from verity_vllm.program.registry.flashmla import E8M0
@@ -379,3 +380,5 @@ WORD_DEFS = SimpleNamespace(c4=Dsv4MlaC4Column, c128=Dsv4MlaC128Column, norm=Dsv
 
 DSV4_COMPRESSOR_COMPOSITES = [Dsv4MlaC4Column, Dsv4MlaC128Column, Dsv4MlaRmsNorm, Dsv4MlaQuantGroup, Dsv4MlaRope,
                               Dsv4MlaNormRopeQuant, Dsv4MlaCompressC4, Dsv4MlaCompressC128]
+
+dsv4_compressor_twin.register_twin({d.id: d for d in DSV4_COMPRESSOR_COMPOSITES})
