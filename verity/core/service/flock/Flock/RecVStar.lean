@@ -388,12 +388,19 @@ def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
     | none, some k => some (nm, CLAIM_VALUE, #[some k])
     | none, none => none
 
+/-- A statement's message ports that `ownPorts` leaves out: RecSparse's messages but `h` and `claim`, each `<p>` under
+`rec-sparse-<p>` at both reps' rows (`rec_vstage.sparse_messages`, `rec_sparse.reads`); no other statement has any. -/
+def sparseMsgs : VStar.Stmt → List (String × String × Array (Option Nat))
+  | .sparse sh _ => ((RecSparse.messagePorts sh).drop 1).dropLast.map fun (nm, _) =>
+    (nm, s!"rec-sparse-{nm}", #[some 0, some 1])
+  | _ => []
+
 def showPort (q : String × String × Array (Option Nat)) : String :=
   s!"{q.1} under {q.2.1} reading {q.2.2.toList.map fun r => (r.map toString).getD "null"}"
 
 /-- **The verifier's reads file has the statement's message-round ports**: `msgPorts` of the `--registered` file and
 `ownPorts` of the statement hold the same ports, compared by membership (`Registered.ofJson` lists a file's ports in its
-object's key order). -/
+object's key order), and the file has each of the statement's `sparseMsgs`. -/
 def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := do
   let file := msgPorts registered
   let own := ownPorts s
@@ -404,6 +411,9 @@ def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := d
     throw s!"{s.name}: the registered reads' port {showPort q} is not the statement's: {theirs}"
   if let some q := own.find? (!file.contains ·) then
     throw s!"{s.name}: the statement's message-round port {showPort q} is not in the registered reads ({file.length} message-round ports)"
+  let all := registered.toList.map fun p => (p.name, p.value, p.reads)
+  if let some q := (sparseMsgs s).find? (!all.contains ·) then
+    throw s!"{s.name}: the statement's message port {showPort q} is not in the registered reads"
 
 /-- A statement's row ports: a part's ports (`VStar/Algebra.lean:385-387`: its `m<k>`, `acc0`, `acc1`), not its `v` and
 `out`, which are its own (`rec_residuals.write`, rec_residuals.py:451-461); a level has none, and neither has candidate 3's

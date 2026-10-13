@@ -236,26 +236,6 @@ theorem sparseOwnNames_of_checkOwn {sh : RecSparse.Shape} {hr : ℕ} {own : Arra
   · obtain ⟨p, hp, he⟩ := hown ("claim", RecVStar.CLAIM_VALUE, #[some 0, some 1]) (by simp [RecVStar.ownPorts])
     exact ⟨p, hp, (Prod.mk.inj he).1⟩
 
-/-- **A statement the verifier checked as V*'s statement `j` has its message ports in the reads file**: each port of
-`ownAt ss j` is one of `own`'s by name, value and reads (`checkStmt_ok`'s `checkOwn`, its second and third loops). -/
-theorem ownIn_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
-    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
-    {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
-    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program (some own) (some j) (some f) rows =
-      .ok ()) {ss : Array VStar.Stmt} (hss : RecVStar.statements i = .ok ss) :
-    ∀ p ∈ ownAt ss j, ∃ p' ∈ own, p'.name = p.name ∧ p'.value = p.value ∧ p'.reads = p.reads := by
-  obtain ⟨-, -, ss', s, hss', hj, -, -, -, ho, -⟩ := FlockSoundness.Discharge.Recursion.checkStmt_ok h
-  obtain rfl := Except.ok.inj (hss'.symm.trans hss)
-  intro p hp
-  simp only [ownAt, hj, Option.map_some, Option.getD_some, List.map_toArray, List.mem_toArray, List.mem_map] at hp
-  obtain ⟨q, hq, rfl⟩ := hp
-  obtain ⟨h2, h3⟩ := checkOwn_ok ho
-  rcases List.mem_append.1 hq with hq | hq
-  · obtain ⟨p', hp', rfl⟩ := List.mem_map.1 (h2 q hq)
-    exact ⟨p', Array.mem_toList_iff.1 (List.mem_filter.1 hp').1, rfl, rfl, rfl⟩
-  · obtain ⟨p', hp', rfl⟩ := List.mem_map.1 (h3 q hq)
-    exact ⟨p', Array.mem_toList_iff.1 hp', rfl, rfl, rfl⟩
-
 end List
 
 section Session
