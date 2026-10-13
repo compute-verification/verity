@@ -299,7 +299,8 @@ __device__ __forceinline__ void imma16832(int (&d)[4], u32 a0, u32 a1, u32 a2, u
 
 __device__ __forceinline__ u32 sign_reg(u32 word, int r) { return 0x01010101u + 0xFEu * ((word >> r) & 0x01010101u); }
 
-// Lane (g, t)'s 16 bytes at p of blocks b0 + 16 mt + g (+ 8 for hi), zero past n, each XORed with its z when Z.
+// Lane (g, t)'s 16 bytes at p of blocks b0 + 16 mt + g (+ 8 for hi), zero past n, each XORed with its z when Z. A warp
+// reads 64 bytes of each of 16 blocks at p, so the loads ask L2 for 256: p + 1 … p + 3 then hit it.
 template <bool Z, int MT>
 __device__ __forceinline__ void sk64_load(uint4 (&d)[MT][2], const uint4 *__restrict__ data,
                                           const uint4 *__restrict__ zs, u64 b0, u64 n, int p, int g, int t) {
@@ -311,9 +312,9 @@ __device__ __forceinline__ void sk64_load(uint4 (&d)[MT][2], const uint4 *__rest
       uint4 v = make_uint4(0, 0, 0, 0);
       if (blk < n) {
         const u64 at = blk * (BLOCK / 16) + 4 * p + t;
-        v = __ldcs(data + at);
+        v = ld_l2_256(data + at);
         if (Z) {
-          const uint4 x = __ldcs(zs + at);
+          const uint4 x = ld_l2_256(zs + at);
           v.x ^= x.x, v.y ^= x.y, v.z ^= x.z, v.w ^= x.w;
         }
       }
