@@ -351,17 +351,18 @@ theorem unitMsgs_zc (nX : ℕ) (sh : Flock.Shape) (d : RepData) (v : UnitVals) {
 
 /-- **The zerocheck slice at `ValsSrc`'s values**: a rep's message `m < m_z − 4` reads only `zcKeys m`, none a
 consistency sum, at `rep₀`'s consistency sums or any others. -/
-theorem unitMsgs_zc_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : RepData} (hst : b.st = b'.st) {m : ℕ}
+theorem unitMsgs_zc_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : RepData}
+    (hstM : b.st.m = b'.st.m) {m : ℕ}
     (hm : m < b.st.m - 6 + 2)
     (h : ∀ x ∈ zcKeys b.st.m m, (∀ ℓ l, x ≠ .cons ℓ l) →
       Flock.RecAlgebra.valOf sh d.w d.comb (fun _ _ => 0) x =
         Flock.RecAlgebra.valOf sh d'.w d'.comb (fun _ _ => 0) x) :
     (unitMsgs nX sh d (b.vals sh d))[m]? = (unitMsgs nX sh d' (b'.vals sh d'))[m]? := by
-  have hm' : m < b'.st.m - 6 + 2 := hst ▸ hm
+  have hm' : m < b'.st.m - 6 + 2 := by rwa [← hstM]
   rw [unitMsgs_zc nX sh d (b.vals sh d) hm, unitMsgs_zc nX sh d' (b'.vals sh d') hm']
   show (zcMsgs b.st.m (FlockVBridge.Family.proofOf sh b.params b.cap b.lig d).zerocheck)[m]? =
     (zcMsgs b'.st.m (FlockVBridge.Family.proofOf sh b'.params b'.cap b'.lig d').zerocheck)[m]?
-  rw [← hst]
+  rw [← hstM]
   exact zcMsgs_read b.st.m sh m fun x hx =>
     (valOf_cons_irrel sh d.w d.comb d.cons (fun _ _ => 0) (zcKeys_noCons hx)).trans
       ((h x hx (zcKeys_noCons hx)).trans (valOf_cons_irrel sh d'.w d'.comb (fun _ _ => 0) d'.cons (zcKeys_noCons hx)))
@@ -439,21 +440,21 @@ theorem unitMsgs_lc (nX : ℕ) (sh : Flock.Shape) (d : RepData) (v : UnitVals) {
 /-- **The lincheck slice at `ValsSrc`'s values**: at a holo shape a rep's message `m_z − 4 + j`, `j < k_log − 4`,
 reads only `lcKeys j`, none a consistency sum. -/
 theorem unitMsgs_lc_read (nX : ℕ) {sh : Flock.Shape} (hh : sh.holo = true) {b b' : ValsSrc} {d d' : RepData}
-    (hst : b.st = b'.st) {j : ℕ} (hj : j < b.st.kLog - 6 + 2)
+    (hm : b.st.m = b'.st.m) (hk : b.st.kLog = b'.st.kLog) {j : ℕ} (hj : j < b.st.kLog - 6 + 2)
     (h : ∀ x ∈ lcKeys b.st.kLog j, (∀ ℓ l, x ≠ .cons ℓ l) →
       Flock.RecAlgebra.valOf sh d.w d.comb (fun _ _ => 0) x =
         Flock.RecAlgebra.valOf sh d'.w d'.comb (fun _ _ => 0) x) :
     (unitMsgs nX sh d (b.vals sh d))[b.st.m - 6 + 2 + j]? =
       (unitMsgs nX sh d' (b'.vals sh d'))[b.st.m - 6 + 2 + j]? := by
-  have hj' : j < b'.st.kLog - 6 + 2 := hst ▸ hj
+  have hj' : j < b'.st.kLog - 6 + 2 := by rwa [← hk]
   rw [unitMsgs_lc nX sh d (b.vals sh d) (i := b.st.m - 6 + 2 + j) rfl hj,
     unitMsgs_lc nX sh d' (b'.vals sh d') (i := b.st.m - 6 + 2 + j)
-      (congrArg (fun s : Flock.Setup => s.m - 6 + 2 + j) hst) hj']
+      (congrArg (fun m => m - 6 + 2 + j) hm) hj']
   show (holoLcMsgs b.st.kLog (FlockVBridge.Family.proofOf sh b.params b.cap b.lig d).lincheck
       (RecAlgebra.hOfW sh d.w))[j]? =
     (holoLcMsgs b'.st.kLog (FlockVBridge.Family.proofOf sh b'.params b'.cap b'.lig d').lincheck
       (RecAlgebra.hOfW sh d'.w))[j]?
-  rw [← hst]
+  rw [← hk]
   exact holoLcMsgs_read b.st.kLog hh j fun x hx =>
     (valOf_cons_irrel sh d.w d.comb d.cons (fun _ _ => 0) (lcKeys_noCons hx)).trans
       ((h x hx (lcKeys_noCons hx)).trans (valOf_cons_irrel sh d'.w d'.comb (fun _ _ => 0) d'.cons (lcKeys_noCons hx)))
@@ -504,7 +505,8 @@ theorem unitMsgs_rs (nX : ℕ) (sh : Flock.Shape) (d : RepData) (v : UnitVals) {
 
 /-- **The ring-switch slice at `ValsSrc`'s values**: a rep's message `m_z − 4 + k_log − 4 + k`, `k < 2 + n_X`, reads
 only `rsKeys k`, none a consistency sum. -/
-theorem unitMsgs_rs_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : RepData} (hst : b.st = b'.st) {k : ℕ}
+theorem unitMsgs_rs_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : RepData}
+    (hm : b.st.m = b'.st.m) (hkLog : b.st.kLog = b'.st.kLog) {k : ℕ}
     (hk : k < 2 + nX)
     (h : ∀ x ∈ rsKeys k, (∀ ℓ l, x ≠ .cons ℓ l) →
       Flock.RecAlgebra.valOf sh d.w d.comb (fun _ _ => 0) x =
@@ -513,7 +515,7 @@ theorem unitMsgs_rs_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : 
       (unitMsgs nX sh d' (b'.vals sh d'))[b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + k]? := by
   rw [unitMsgs_rs nX sh d (b.vals sh d) (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + k) rfl hk,
     unitMsgs_rs nX sh d' (b'.vals sh d') (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + k)
-      (congrArg (fun s : Flock.Setup => s.m - 6 + 2 + (s.kLog - 6 + 2) + k) hst) hk]
+      (congrArg₂ (fun m kLog => m - 6 + 2 + (kLog - 6 + 2) + k) hm hkLog) hk]
   show (opMsgs (2 + nX) (FlockVBridge.Family.proofOf sh b.params b.cap b.lig d).ringSwitches)[k]? =
     (opMsgs (2 + nX) (FlockVBridge.Family.proofOf sh b'.params b'.cap b'.lig d').ringSwitches)[k]?
   exact opMsgs_read (2 + nX) sh k fun x hx =>
@@ -751,18 +753,38 @@ theorem unitMsgs_lig (nX : ℕ) (sh : Flock.Shape) (d : RepData) (v : UnitVals) 
 
 /-- **The Ligerito slice at `ValsSrc`'s values**: a rep's message `m_z − 4 + k_log − 4 + 2 + n_X + k` reads only
 `ligKeys`' entry `k`, where the two sources' schedules agree and their recursive caps read alike. -/
-theorem unitMsgs_lig_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : RepData} (hst : b.st = b'.st)
+theorem unitMsgs_lig_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : RepData}
+    (hm : b.st.m = b'.st.m) (hkLog : b.st.kLog = b'.st.kLog)
     (hsch : b.sch = b'.sch) (hc : RecCapsRead b.lig b'.lig) {k : ℕ} {ks : List Flock.RecAlgebra.Key}
     (hk : (ligKeys b.sch)[k]? = some ks) (h : KeysRead sh d d' ks) :
     (unitMsgs nX sh d (b.vals sh d))[b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k]? =
       (unitMsgs nX sh d' (b'.vals sh d'))[b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k]? := by
   rw [unitMsgs_lig nX sh d (b.vals sh d) (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k) rfl,
     unitMsgs_lig nX sh d' (b'.vals sh d') (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k)
-      (congrArg (fun s : Flock.Setup => s.m - 6 + 2 + (s.kLog - 6 + 2) + (2 + nX) + k) hst)]
+      (congrArg₂ (fun m kLog => m - 6 + 2 + (kLog - 6 + 2) + (2 + nX) + k) hm hkLog)]
   show (ligMsgs (FlockVBridge.Family.proofOf sh b.params b.cap b.lig d).ligerito capDig b.sch)[k]? =
     (ligMsgs (FlockVBridge.Family.proofOf sh b'.params b'.cap b'.lig d').ligerito capDig b'.sch)[k]?
   rw [← hsch]
   exact (ligMsgs_proofOf_read sh capDig b.sch hc).2.2 k ks hk h
+
+/-- **The Ligerito slice reads its key list at every index**, with the empty default past `ligKeys`. -/
+theorem unitMsgs_lig_getD_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : RepData}
+    (hm : b.st.m = b'.st.m) (hkLog : b.st.kLog = b'.st.kLog)
+    (hsch : b.sch = b'.sch) (hc : RecCapsRead b.lig b'.lig) (k : ℕ)
+    (h : KeysRead sh d d' ((ligKeys b.sch).getD k [])) :
+    (unitMsgs nX sh d (b.vals sh d))[b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k]? =
+      (unitMsgs nX sh d' (b'.vals sh d'))[b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k]? := by
+  cases hk : (ligKeys b.sch)[k]? with
+  | some ks =>
+      exact unitMsgs_lig_read nX sh hm hkLog hsch hc hk
+        (by simpa [List.getD_eq_getElem?_getD, hk] using h)
+  | none =>
+      rw [unitMsgs_lig nX sh d (b.vals sh d) rfl,
+        unitMsgs_lig nX sh d' (b'.vals sh d')
+          (congrArg₂ (fun m kLog => m - 6 + 2 + (kLog - 6 + 2) + (2 + nX) + k) hm hkLog)]
+      have hp := ligMsgs_proofOf_read sh capDig b.sch hc
+      have hge := List.getElem?_eq_none_iff.1 hk
+      rw [List.getElem?_eq_none (hp.1 ▸ hge), List.getElem?_eq_none (hp.2.1 ▸ hge)]
 
 end slices
 
@@ -994,6 +1016,61 @@ def MsgsOfKeys (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j 
           Flock.RecAlgebra.valOf sh (M.rep₀ Lb' ρ).w (M.rep₀ Lb' ρ).comb (fun _ _ => 0) x) →
       (ms R ω t Lb ρ)[m]? = (ms R' ω' t' Lb' ρ)[m]?
 
+/-- **The keys of one rep unit's messages**, in the messages' order. -/
+def unitKeys (nX : ℕ) (sh : Flock.Shape) (m : ℕ) : List Flock.RecAlgebra.Key :=
+  let z := sh.m - 6 + 2
+  let l := sh.kLog - 6 + 2
+  if m < z then zcKeys sh.m m
+  else if m < z + l then lcKeys sh.kLog (m - z)
+  else if m < z + l + (2 + nX) then rsKeys (m - z - l)
+  else (ligKeys sh.sched).getD (m - z - l - (2 + nX)) []
+
+/-- **The recursive caps are read at each stage** at the two layers that stage's commitments hold. -/
+def RecCapsReadAt
+    (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc) : Prop :=
+  ∀ s ρ, ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun _ _ _ Lb _ _ _ Lb' =>
+    RecCapsRead (b Lb ρ).lig (b Lb' ρ).lig
+
+/-- **A rep unit's messages read only `unitKeys`**, composing the zerocheck, lincheck, ring-switch and Ligerito slices. -/
+theorem msgsOfKeys_unit (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
+    (nX : ℕ) (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc) (hh : sh.holo = true)
+    (hsh : ∀ Lb i, FlockVBridge.Family.ShapeIs sh (b Lb i).st (b Lb i).sch)
+    (hcaps : RecCapsReadAt (st := st) (hp := hp) zs dg N k Rw own sel b) {σ : List Exec.Kind} {c₀ : ℕ} :
+    MsgsOfKeys (st := st) (hp := hp) zs dg N k Rw own sel σ c₀ (unitKeys nX sh) M
+      (fun R ω t Lb ρ => unitMsgs nX sh (M.rep R ω t Lb ρ) ((b Lb ρ).vals sh (M.rep R ω t Lb ρ))) := by
+  intro s ρ R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX m _ hread
+  let Lb := layers zs dg N k Rw R ω t R₂ τ
+  let Lb' := layers zs dg N k Rw R' ω' t' R₂' τ'
+  obtain ⟨hm, hkLog, hsch⟩ := hsh Lb ρ
+  obtain ⟨hm', hkLog', hsch'⟩ := hsh Lb' ρ
+  have hM : (b Lb ρ).st.m = (b Lb' ρ).st.m := hm.symm.trans hm'
+  have hK : (b Lb ρ).st.kLog = (b Lb' ρ).st.kLog := hkLog.symm.trans hkLog'
+  have hS : (b Lb ρ).sch = (b Lb' ρ).sch := hsch.symm.trans hsch'
+  let z := sh.m - 6 + 2
+  let l := sh.kLog - 6 + 2
+  by_cases hz : m < z
+  · exact unitMsgs_zc_read _ sh hM (by simpa [z, hm] using hz)
+      (by simpa [unitKeys, z, l, hz, hm] using hread)
+  by_cases hl : m < z + l
+  · have hj : m - z < (b Lb ρ).st.kLog - 6 + 2 := by simp only [← hkLog]; omega
+    have hi : (b Lb ρ).st.m - 6 + 2 + (m - z) = m := by simp only [← hm]; omega
+    simpa only [hi] using unitMsgs_lc_read _ hh hM hK hj
+      (by simpa [unitKeys, z, l, hz, hl, hkLog] using hread)
+  by_cases hr : m < z + l + (2 + nX)
+  · have hj : m - z - l < 2 + nX := by omega
+    have hi : (b Lb ρ).st.m - 6 + 2 + ((b Lb ρ).st.kLog - 6 + 2) + (m - z - l) = m := by
+      simp only [← hm, ← hkLog]
+      omega
+    simpa only [hi] using unitMsgs_rs_read _ sh hM hK hj
+      (by simpa [unitKeys, z, l, hz, hl, hr] using hread)
+  · have hi : (b Lb ρ).st.m - 6 + 2 + ((b Lb ρ).st.kLog - 6 + 2) + (2 + nX) +
+        (m - z - l - (2 + nX)) = m := by
+      simp only [← hm, ← hkLog]
+      omega
+    simpa only [hi] using unitMsgs_lig_getD_read _ sh hM hK hS
+      (hcaps s ρ R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX) _
+      (by simpa [unitKeys, z, l, hz, hl, hr, hsch] using hread)
+
 /-- **Each message is read on its stage**, from its keys' read at the stage (`WCombRead` at `sentK`). -/
 theorem weaveMsgsRead_of_keys {σ : List Exec.Kind} {c₀ : ℕ} {keys : ℕ → List Flock.RecAlgebra.Key}
     {M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)}
@@ -1149,3 +1226,5 @@ end FlockC3.Reps
 #print axioms FlockC3.Reps.ligMsgs_proofOf_read
 #print axioms FlockC3.Reps.unitMsgs_lig
 #print axioms FlockC3.Reps.unitMsgs_lig_read
+#print axioms FlockC3.Reps.unitMsgs_lig_getD_read
+#print axioms FlockC3.Reps.msgsOfKeys_unit

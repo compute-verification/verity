@@ -71,4 +71,25 @@ theorem ligKeys_all (sh : Flock.Shape) : ∀ ks ∈ ligKeys sh.sched, ks.all (wK
     · obtain ⟨m', o', y⟩ := l n hR
       exact recKeys_all y n _ _ (fun j _ h2 => m' j (by omega)) (fun j _ h2 => o' j (by omega)) ks hks
 
+/-- **Every unit message's keys pass `wKey`**, by the four slices' construction. -/
+theorem unitKeys_all {nX : ℕ} {sh : Flock.Shape} (hh : sh.holo = true) (hclaims : 2 + nX ≤ sh.claims) :
+    ∀ m, (unitKeys nX sh m).all (wKey sh) = true := by
+  intro m
+  let z := sh.m - 6 + 2
+  let l := sh.kLog - 6 + 2
+  by_cases hz : m < z
+  · simpa [unitKeys, z, l, hz] using zcKeys_all sh m
+  by_cases hl : m < z + l
+  · simpa [unitKeys, z, l, hz, hl] using lcKeys_all hh (m - z)
+  by_cases hr : m < z + l + (2 + nX)
+  · have hk : m - z - l < sh.claims := by omega
+    simpa [unitKeys, z, l, hz, hl, hr] using rsKeys_all hk
+  · cases hks : (ligKeys sh.sched)[m - z - l - (2 + nX)]? with
+    | none => simp [unitKeys, z, l, hz, hl, hr, List.getD_eq_getElem?_getD, hks]
+    | some ks =>
+        simpa [unitKeys, z, l, hz, hl, hr, List.getD_eq_getElem?_getD, hks] using
+          ligKeys_all sh ks (List.mem_of_getElem? hks)
+
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.unitKeys_all
