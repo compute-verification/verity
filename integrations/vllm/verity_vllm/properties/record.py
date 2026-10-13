@@ -48,6 +48,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v3, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
+    Property("dsv4_indexer_capture", "verity-vllm/dsv4-indexer-capture/v1",
+             "On the capture's Hopper GPU, vLLM selects the FP8 indexer cache, the one-stage head-128 compressor and f32 o-projection "
+             "scales for DeepSeek-V4-Pro, and at its TP8 statics every compared state score row equals Dsv4CompressorScore_v1, every "
+             "written indexer-cache entry Dsv4IndexerCompress_v1 of the state rows the kernel reads, every short-context fill row "
+             "Dsv4ShortContextTopK_v1, every inverse-RoPE FP8 head Dsv4InvRopeQuantHead_v1, every compared prefill and paged logit "
+             "DsaMqaLogit_v3 at 64 heads and every top-k row of at most 1024 keys DsaTopKShortRow_v1, bit for bit."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
              "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "
