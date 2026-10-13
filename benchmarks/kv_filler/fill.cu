@@ -127,10 +127,11 @@ __device__ __forceinline__ void mma(int (&d)[4], uint32_t a0, uint32_t a1, uint3
 // NO_HASH skips the SHA-512, NO_MMA the sketch's MMAs (the bytes are XOR-folded instead).
 constexpr int NO_HASH = 1, NO_MMA = 2;
 
-// One offset o (64 bytes of each block) of a group's 8 blocks: lane (g, c)'s 16 bytes `cur` of block g at 64 o + 16 c.
+// One offset o (64 bytes of each block) of a group's 8 blocks: lane (g, c)'s 16 bytes `cur` of block g at 64 o + 16 c,
+// its first 8 bytes' MMA into `acc` and its last 8 bytes' into `acc2` (the same, or a second chain summed later).
 template <int PROBE = 0>
-__device__ __forceinline__ void sketch_step(int (&acc)[4], const uint32_t* sg, const uint32_t* sg8, int sh, int o,
-                                            uint4 cur) {
+__device__ __forceinline__ void sketch_step(int (&acc)[4], int (&acc2)[4], const uint32_t* sg, const uint32_t* sg8,
+                                            int sh, int o, uint4 cur) {
   if (PROBE & NO_MMA) {
     acc[0] ^= (int)(cur.x ^ cur.y ^ cur.z ^ cur.w);
     return;
@@ -140,7 +141,7 @@ __device__ __forceinline__ void sketch_step(int (&acc)[4], const uint32_t* sg, c
   const uint32_t a0 = expand(r0 & 15), a2 = expand((r0 >> 4) & 15), a1 = expand(r8 & 15), a3 = expand((r8 >> 4) & 15);
   const uint32_t e0 = expand((r0 >> 8) & 15), e2 = expand(r0 >> 12), e1 = expand((r8 >> 8) & 15), e3 = expand(r8 >> 12);
   mma(acc, a0, a1, a2, a3, cur.x, cur.y);
-  mma(acc, e0, e1, e2, e3, cur.z, cur.w);
+  mma(acc2, e0, e1, e2, e3, cur.z, cur.w);
 }
 
 // Lane n's block n = 8q + col: D[r][col] of group q is in lane 4 (r % 8) + col / 2, register 2 (r / 8) + col % 2.
@@ -192,7 +193,7 @@ __device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint
       for (int q = 0; q < 4; ++q) v[slot][q] = ld_stream(src + (uint64_t)q * 8 * BLK + 64 * (o + DEPTH), pol);
     }
 #pragma unroll
-    for (int q = 0; q < 4; ++q) sketch_step<PROBE>(acc[q], sg, sg8, sh, o, cur[q]);
+    for (int q = 0; q < 4; ++q) sketch_step<PROBE>(acc[q], acc[q], sg, sg8, sh, o, cur[q]);
   }
   gather(acc, m);
 }
@@ -514,9 +515,16 @@ __global__ void __launch_bounds__(32) fill_seq_bulk_kernel(const Regions R, Sign
       const uint32_t st = used % S;
       rd::mbar_wait(bar + st, (used / S) & 1);
       const uint8_t* b = sm + st * TB_STAGE + g * TB_STRIDE + 16 * c;
+      // a piece is one group's: four chains of MMAs instead of one, summed after it (int32 sums are exact)
+      int part[4][4] = {};
 #pragma unroll 4
-      for (int o = 0; o < 32; ++o)
-        sketch_step<PROBE>(acc[k >> 1], sgp, sgp8, sh, 32 * (k & 1) + o, *reinterpret_cast<const uint4*>(b + 64 * o));
+      for (int o = 0; o < 32; o += 2) {
+        sketch_step<PROBE>(part[0], part[1], sgp, sgp8, sh, 32 * (k & 1) + o, *reinterpret_cast<const uint4*>(b + 64 * o));
+        sketch_step<PROBE>(part[2], part[3], sgp, sgp8, sh, 32 * (k & 1) + o + 1,
+                           *reinterpret_cast<const uint4*>(b + 64 * (o + 1)));
+      }
+#pragma unroll
+      for (int i = 0; i < 4; ++i) acc[k >> 1][i] += part[0][i] + part[1][i] + part[2][i] + part[3][i];
       ++used;
       __syncwarp();
       if (k + S < 8) {
