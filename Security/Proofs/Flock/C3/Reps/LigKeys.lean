@@ -91,5 +91,3 @@ theorem unitKeys_all {nX : ℕ} {sh : Flock.Shape} (hh : sh.holo = true) (hclaim
           ligKeys_all sh ks (List.mem_of_getElem? hks)
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.unitKeys_all
