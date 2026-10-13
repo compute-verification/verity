@@ -515,3 +515,32 @@ def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypat
                      (dataclasses.replace(world.gh.prs[2], body="Lane `infra`.", branch=""), "infra"),
                      (dataclasses.replace(world.gh.prs[2], branch="cursor/x-0000"), None)):
         assert q.handle(pr) == want
+
+
+def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):
+    """13 Oct: `research msg send` refuses a `--to` naming the sender, and drive posted as ci to @ci, so from 05:07Z no notice
+    was posted. The sender is also selectable (`queue eject --by lean`), so its handle, not always @ci, must be dropped."""
+    from research import drive
+
+    argv = []
+    monkeypatch.setattr(drive.subprocess, "run", lambda cmd, **kw: argv.append(cmd) or
+                        drive.subprocess.CompletedProcess(cmd, 0))
+    assert drive.merge_thread_post("x", ("@ci", "@memory-accounting"))
+    assert argv[-1][argv[-1].index("--as") + 1] == "ci"
+    assert argv[-1][argv[-1].index("--to"):argv[-1].index("--quiet")] == ["--to", "@memory-accounting"]
+    assert drive.merge_thread_post("x", ("@ci",)) and "--to" not in argv[-1]
+    assert drive.merge_thread_post("x", ("@ci", "@lean"), sender="lean")
+    assert argv[-1][argv[-1].index("--as") + 1] == "lean"
+    assert argv[-1][argv[-1].index("--to"):argv[-1].index("--quiet")] == ["--to", "@ci"]
+
+    h = Harness(world, monkeypatch)
+    logged = []
+    h.q.log = logged.append
+    ok = [False]
+    h.d.post = lambda text, to: ok[0]
+    state = {"told": []}
+    h.d.refuse(state, "k", "#1 conflicts", "circuits")
+    assert state["told"] == [] and "could not post" in logged[-1]
+    ok[0] = True
+    h.d.refuse(state, "k", "#1 conflicts", "circuits")
+    assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @ci @circuits")
