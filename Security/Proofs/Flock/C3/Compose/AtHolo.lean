@@ -56,5 +56,3 @@ theorem srcOK_holo {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ →
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.srcOK_holo
