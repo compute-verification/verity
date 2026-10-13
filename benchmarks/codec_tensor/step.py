@@ -1,7 +1,7 @@
 """One decode step at HBM exhaustion on one GPU, from the existing kernels: a Llama-3.1 model's FP8 linears (`--model`)
-held as p512 words (`wt.cu`: the fused decode, ro-sketch-blake3/v0 at k_s = 16 and the FP8 MMA, then the step's leaves
-and tree), and a bf16 KV cache that fills the rest of the GPU's memory at `--batch` sequences, held as p512 words and
-decoded inside attention (`benchmarks/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
+held as words of one field (`wt.cu`: the fused decode, ro-sketch-blake3/v0 or sketch-sha512 at k_s = 16 and the FP8 MMA,
+then the step's leaves and tree), and a bf16 KV cache that fills the rest of the GPU's memory at `--batch` sequences,
+held as words of the same field and decoded inside attention (`benchmarks/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
 `kv_append`, all layers in one launch on a second stream, beside the step). The same step on plain data (each linear's
 fastest native FP8 GEMM, the faster plain attention form, a plain append) is its denominator, and a native pass (a read of every byte
 the step reads) its unit. Writes `step.json` and `step.log` under `--out`, and in a `research run` its `result.json`.
@@ -52,7 +52,6 @@ sys.path.insert(0, str(HERE))
 
 import bench as BW  # noqa: E402  (before kv_bench, which puts word_codec, whose bench.py is another, first on the path)
 import sketching as SKT  # noqa: E402
-import wide as W  # noqa: E402
 
 sys.path.insert(0, str(HERE.parent / "word_codec"))
 import kv as K  # noqa: E402
@@ -94,6 +93,10 @@ def split_cands(sh: dict, b: int, ctx: int, sms: int) -> dict[int, list[int]]:
     return {fm: (mma if fm >= 3 else fma) for fm in sum(forms_of(sh), [])}
 
 
+# wt.cu's WT_FOLD6 (kv.cu's KV_FOLD6: the first two)
+SQUARINGS = ("columns", "FOLD 6", "FOLD 6, folded as made (columns in the 14-warp k >= 2 decoders)")
+
+
 def part_floats(sh: dict, b: int, cands: dict[int, list[int]]) -> int:
     return b * max(sp * (sh["mw"] if fm >= 3 else 1) for fm, c in cands.items() for sp in c) * sh["part"]
 
@@ -102,12 +105,23 @@ def part_floats(sh: dict, b: int, cands: dict[int, list[int]]) -> int:
 
 def gate_prims(wt, torch, log) -> dict:
     """wt.cu's decode primitives (`wt_prim`) at inputs that take their rare branches, which random words reach about
-    once in 2^23 (`kv_twin.rare_cases` for p512: a carry or borrow past limb 0, canon's subtraction of p, the square's
-    rare fold), against `kv_twin.prim_want`."""
-    f = K.field("p512")
+    once in 2^23 (`kv_twin.rare_cases` at the library's field: a carry or borrow past limb 0, canon's subtraction of p,
+    the square's rare fold, σ_K's test against p), against `kv_twin.prim_want`. The square's cases also go through
+    sqr_fold (op 6), the fused decoders' column square. It and the lean FOLD 6 square have lazy values of their own
+    (the latter's differs from the twin's when a² mod p < c), so they are held to x ≡ a² (mod p), x < 2^n, which
+    canon_cc after them needs."""
+    f = K.field(wt.field.name)
     cases = KT.rare_cases(f, random.Random(f.n + 7))
     nb, st, out = 4 * wt.nl, BW.stream(torch), {}
-    for op, rows in cases.items():
+    sq = KT.PRIMS.index("sqr")
+    runs = [(KT.PRIMS[op], op, rows) for op, rows in cases.items()] + [("sqr_fold", 6, cases[sq])]
+
+    def right(name: str, op: int, x: int, y: int, z: int) -> bool:
+        if name == "sqr_fold" or (op == sq and wt.fold6 == 2):
+            return z < 1 << f.n and z % f.p == x * x % f.p
+        return z == KT.prim_want(f, op, x, y)
+
+    for name, op, rows in runs:
         a = BW.to_dev(torch, b"".join(BW.limbs_bytes(x, wt.nl) for x, _ in rows))
         b = BW.to_dev(torch, b"".join(BW.limbs_bytes(y, wt.nl) for _, y in rows))
         o = torch.zeros(len(rows) * nb, dtype=torch.uint8, device="cuda")
@@ -115,8 +129,8 @@ def gate_prims(wt, torch, log) -> dict:
         torch.cuda.synchronize()
         got = bytes(o.cpu().tolist())
         bad = [i for i, (x, y) in enumerate(rows)
-               if int.from_bytes(got[i * nb:(i + 1) * nb], "little") != KT.prim_want(f, op, x, y)]
-        out[KT.PRIMS[op]] = {"cases": len(rows), "bad": bad}
+               if not right(name, op, x, y, int.from_bytes(got[i * nb:(i + 1) * nb], "little"))]
+        out[name] = {"cases": len(rows), "bad": bad}
     ok = all(not v["bad"] for v in out.values())
     counts = ", ".join(f"{k} {v['cases']}" for k, v in out.items())
     log(f"gate wt primitives at their rare branches: {'ok' if ok else 'FAIL'} ({counts}) {out if not ok else ''}")
@@ -131,7 +145,7 @@ def gate_append(kv, torch, ks, log) -> dict:
     out = {}
     for k in [0] + list(ks):
         if k:
-            KB.set_key(kv, K.key(f.name, KB.SEED, k))
+            KB.set_key(kv, KB.lib_key(kv, k))
         bad = []
         for l0, nl in ((0, layers), (1, 1), (layers - 1, 1)):
             new = KB.random_words(torch, b * nl * tlw, f, 11 + k + l0)
@@ -163,7 +177,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log) -> dict:
     sh = KB.attn_shape(kv)
     tl, tle = K.TOKEN_LAYER_BYTES, sh["tle"]
     if tle != tl:
-        raise RuntimeError(f"{kv.name}: a token-layer's words take {tle} bytes, not {tl}: the step wants p512")
+        raise RuntimeError(f"{kv.name}: a token-layer's words take {tle} bytes, not {tl}")
     plains, encs = forms_of(sh)
     cands = split_cands(sh, b, ctx, sms)
     layers, layer, nref = 2, 1, min(b, 4)
@@ -198,7 +212,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log) -> dict:
     n_words = enc.numel() // kv.field.word_bytes
     equal = {}
     for k in ks:
-        KB.set_key(kv, K.key(kv.field.name, KB.SEED, k))
+        KB.set_key(kv, KB.lib_key(kv, k))
         kv.call("kv_encode", KB.ptr(plain), KB.ptr(enc), n_words, 0, k, sms * 8, st)
         for form in encs:
             for sp in cands[form]:
@@ -316,7 +330,7 @@ class Step:
         self.pass_j = 0
         self.root0 = BW.to_dev(torch, BW.root_words(hashlib.sha512(b"verity/codec-tensor/step/registration").digest()))
         self.root_ptr = self.root0.data_ptr()       # root_(j−1): the registration's, then each commit's
-        self.keys = {k: W.key(wt.field.name, BW.SEED, k) for k in self.ks}
+        self.keys = {k: BW.lib_key(wt, k) for k in self.ks}
         self.prm = {}
         self.tag_off = {}
         self.nvec = {}
@@ -356,7 +370,7 @@ class Step:
     # launches -----------------------------------------------------------------------------------------------------
     def set_keys(self, k: int) -> None:
         BW.set_key(self.wt, self.torch, self.keys[k])
-        KB.set_key(self.kv, K.key(self.kv.field.name, KB.SEED, k))
+        KB.set_key(self.kv, KB.lib_key(self.kv, k))
         if self.wt.receipt:   # the tree's binding and salts at a fixed seed (host constants), the receipts at s_j
             BW.READER.begin(BW.RECEIPT_SEED, BW.SR.rb.Plan.whole(self.nvec[k]), BW.STORE_KEY)
 
@@ -666,7 +680,8 @@ def step_points(res: dict, run_id: str | None) -> dict:
     pts = []
     for k, r in res["model"]["k"].items():
         pts.append({"model": res["model_name"], "batch": res["batch"], "gemm_m": res["gemm_m"], "ctx": res["ctx"],
-                    "k": int(k), "word_bits": res.get("word_bits", 512), "k_s": 16,
+                    "k": int(k), "word_bits": res.get("word_bits", 512), "mask": res.get("mask", False),
+                    "squaring": res.get("squaring", "columns"), "k_s": 16,
                     "receipt": res.get("receipt", "ro-sketch-blake3/v0") + ", re-keyed every pass",
                     "f_kv": res["f_kv"], "f_w": res["f_w"], "stored_bytes": res["stored_bytes"],
                     "step_over_plain": r["step_over_plain"], "d": r["d"], "plain_over_pass": res["model"]["plain_over_pass"],
@@ -708,8 +723,8 @@ def write_result(res: dict, out_dir: Path, libs) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--wt-lib", required=True, help="wt.cu built at -DWT_FIELD=512")
-    ap.add_argument("--kv-lib", required=True, help="step.cu built at -DKV_FIELD=512")
+    ap.add_argument("--wt-lib", required=True, help="wt.cu built at a full-slot field (-DWT_FIELD=512 or 1024)")
+    ap.add_argument("--kv-lib", required=True, help="step.cu built at the same field and mask (-DKV_FIELD, -DKV_MASK)")
     ap.add_argument("--reader-lib", default="", help="reader.cu, the commit of a wt.cu built at -DWT_RECEIPT=1")
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", default="8b", choices=["8b", "70b", "tiny"])
@@ -746,12 +761,13 @@ def main() -> int:
     if a.model == "tiny":   # the sanitizer's smoke run: gemm_case's L2-defeating ring would be thousands of copies
         BW.L2_DEFEAT_BYTES = 0
     wt = BW.Lib(a.wt_lib)
-    kv = KB.Lib("p512", a.kv_lib)
+    kv = KB.Lib(wt.field.name, a.kv_lib)
     v, i = ctypes.c_void_p, ctypes.c_int
     kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
     wt.so.wt_prim.argtypes = [i, v, v, v, i, v]
-    if wt.n != 512 or kv.field.n != 512 or max(ks) > min(wt.kmax, kv.kmax):
-        raise SystemExit(f"want p512 builds with k up to {max(ks)}: wt {wt.n} bits kmax {wt.kmax}, kv {kv.field.n}")
+    if not wt.field.full_slot or kv.field.n != wt.n or kv.mask != wt.mask or max(ks) > min(wt.kmax, kv.kmax):
+        raise SystemExit(f"want full-slot builds of one field and mask with k up to {max(ks)}: wt {wt.name} kmax "
+                         f"{wt.kmax}, kv {kv.field.n} bits mask {kv.mask} kmax {kv.kmax}")
     ash = KB.attn_shape(kv)
     if HEADS.get(a.model, ash["heads"]) != ash["heads"]:
         raise SystemExit(f"{a.kv_lib} has {ash['heads']} query heads, {a.model} {HEADS[a.model]}: build KV_QHEADS")
@@ -767,6 +783,7 @@ def main() -> int:
     all_shapes = {**shapes, "lm_head": lm}
     res = {"device": props.name, "sms": sms, "total_memory": props.total_memory, "model_name": a.model,
            "batch": a.batch, "gemm_m": m, "ks": ks, "args": vars(a), "ok": True, "gate": {}, "word_bits": wt.n,
+           "mask": wt.mask, "squaring": SQUARINGS[wt.fold6], "kv_squaring": SQUARINGS[kv.so.kv_fold6()],
            "receipt": "sketch-sha512" if wt.receipt else "ro-sketch-blake3/v0"}
 
     def save() -> None:

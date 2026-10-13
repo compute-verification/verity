@@ -1,5 +1,6 @@
 // The HBM-exhaustion decode step's KV library (`step.py`): `benchmarks/word_codec/kv.cu` (its codec, read and
-// attention) and the append, so one build holds the KV key. Build with -DKV_FIELD=512.
+// attention) and the append, so one build holds the KV key. Build with -DKV_FIELD (and KV_MASK, KV_FOLD6) at wt.cu's
+// field and codec (step.sh).
 //
 // kv_append writes `batch` sequences' new token at slot t, layers l0 .. l0 + nl - 1, into the cache in kv_attn's layout:
 // encoded at k rounds (word w of token-layer (b ctx + t) layers + l at index (((b ctx + t) layers + l) TLW + w)), or
@@ -24,6 +25,8 @@ __global__ void __launch_bounds__(APPEND_THREADS) append_kernel(const u32 *__res
 }
 
 }  // namespace kv
+
+extern "C" int kv_fold6() { return kv::FOLD6; }
 
 extern "C" int kv_append(const void *in, void *cache, int batch, int ctx, int layers, int l0, int nl, int t, int k,
                          cudaStream_t s) {
