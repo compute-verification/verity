@@ -113,6 +113,6 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
   honest family from the verifier's check (n1), and the commitments there (`hCommits_honest`).
 * (h) `C3/VStarList/`, `FlockC3.VStarList`: V*'s statements over the verifier's list (`vstarParsesScoped_of_list`), R's
   shape from the verifier's checks (`stacked_of_openingShape`, `claims_of_stackedShape`), R's `ℓ` and the slots'
-  units from check 5 (`ellOk_of_sparseRange`, `units_of_sparseRange`), and the event's `AcceptsC3` but check 5's
-  verdict from the verifier's acceptance (`acceptsC3_of_verify`).
+  units from check 5 (`ellOk_of_sparseRange`, `units_of_sparseRange`), and the event's `AcceptsC3` from the
+  verifier's acceptance (`acceptsC3_of_verify`).
 -/

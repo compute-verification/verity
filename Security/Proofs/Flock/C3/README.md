@@ -34,11 +34,10 @@ oracle count and `CompiledL`'s lockstep, about 3,500 lines) has no holographic a
 So these start at once: a1s and a1r (a W each, against their stubs alone), a1's assembly (L), h1 (W), b1 → b2 (W),
 c1 (W); h2 builds on #1847's list.
 
-v1, open (W): verify ⇒ `SparseRangeOk`. `acceptsC3_of_verify` (`C3/VStarList/Accepts.lean`) concludes the rest of
-`AcceptsC3` from the verifier's acceptance at both setups (`RecSetup.checks`), not check 5's verdict, which stays the
-event's own conjunct. Either (a) a refusal of `SparseRangeOk`'s checks in every candidate-3 session's setup (about 30
-lines of core and 60 of proof), or (b) a lemma from check 5's `rec-sparse` session, whose `RecCoins.checkSparse` reads
-only the points' sizes (about 100).
+v1, closed (round 20): verify ⇒ `SparseRangeOk`. `acceptsC3_of_verify` (`C3/VStarList/Accepts.lean`) concludes all of
+`AcceptsC3` from the verifier's acceptance at both setups: each runs check 5's range check on the inner files first
+(`RecSetup.checkInner`, `RecCoins.checkAtC3`), and `sparseRangeOk_of_check` reads its verdict at the event's `st`, set
+up from the same circuit and public file (`setupHidden_same`).
 
 ## Next: the honest decoder and the stage discharges (stated, round 3)
 

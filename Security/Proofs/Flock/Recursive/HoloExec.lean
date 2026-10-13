@@ -169,9 +169,8 @@ def SparseRangeOk (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : Prop :=
 inner transcript against R's registration (`innerCommitsAt`), the covers check passes at the commits it holds
 (`RecVStar.checkCovers`, all of it: the sparse-presence, stacked-presence and stacked-shape refusals, and each stream's
 rounds against its schedule, `checkCommitRounds`), and check 5's sparse refusals pass (`SparseRangeOk`). It is not the
-whole compiled acceptance: `AcceptsPublic` and `ChecksVR` carry the verifier's other checks. `SparseRangeOk` stays the
-event's own conjunct, check 5's verdict, which the bridge from the verifier's acceptance
-(`FlockC3.VStarList.acceptsC3_of_verify`) does not conclude. -/
+whole compiled acceptance: `AcceptsPublic` and `ChecksVR` carry the verifier's other checks. The verifier's acceptance
+at both setups gives all of it (`FlockC3.VStarList.acceptsC3_of_verify`). -/
 def AcceptsC3 (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) (tr : Lean.Json) (record : String) (reg : Lean.Json) :
     Prop :=
   (Flock.RecVStar.statements ish).isOk = true ∧ (innerCommitsAt tr record st reg).isOk = true ∧

@@ -50,8 +50,7 @@ What it takes, against `PublicAudit`:
   `RecVStar.checkCovers`: the sparse-presence, stacked-presence and stacked-shape refusals and each stream's rounds),
   and check 5's sparse refusals pass, so `ℓ` is in `[6, k_log]` and the unit range's slots are inside the block
   (`SparseRangeOk`). These are not the whole compiled acceptance (`AcceptsPublic` and `ChecksVR` carry the rest). The
-  verifier's acceptance gives all of `AcceptsC3` but `SparseRangeOk`, check 5's verdict, which stays the event's own
-  (`FlockC3.VStarList.acceptsC3_of_verify`);
+  verifier's acceptance gives all of `AcceptsC3` (`FlockC3.VStarList.acceptsC3_of_verify`);
 * R's `m`: Lean's verifier never compares META's `stacked.m` with the bucket's `table_m`; it holds R's stream and each
   `rec-opening` unit to META's shape, and the unit names come from the outer program it compiles (the list). The model
   takes R's `m` from the class (`mReg`), and VBridge (`_hbr`, V*'s circuits compute this inner verifier at the list's
