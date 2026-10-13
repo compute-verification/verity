@@ -188,7 +188,7 @@ theorem TopColl.collision {wr : List (Cm × I.Coin) → Lean.Json × String} {st
     (hstk : Flock.Guarantees.StackedTopAt lv st reg cap bcs') {t : List (Cm × I.Coin)}
     (h : TopColl wr st reg bcs' t) : Merkle.Collision Refine.H512 := by
   obtain ⟨cs, s, bcs, hi, hs, ht, hne⟩ := h
-  obtain ⟨program, e, hreg', hfields', hcap⟩ := hstk
+  obtain ⟨program, e, hreg', hfields', -⟩ := hstk
   unfold Flock.Guarantees.innerCommitsAt at hi
   obtain ⟨_, -, hi⟩ := FlockC3.RegLevels.TopHold.eok_bind hi
   obtain ⟨program', e', hreg, hfields, -⟩ :=
@@ -197,9 +197,7 @@ theorem TopColl.collision {wr : List (Cm × I.Coin) → Lean.Json × String} {st
     simpa using Except.ok.inj (hreg.symm.trans hreg')
   obtain ⟨rfl, rfl⟩ := he
   obtain ⟨dom, hsz, hroot⟩ := topEntryFields_bind hfields hfields'
-  have hpos' : 0 < bcs'.size := by rw [hcap.1]; positivity
-  have hpos : 0 < bcs.size := by omega
-  exact topRoot_collision hsz hpos hne hroot
+  exact topRoot_collision hsz hne hroot
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {dg : ByteArray → ByteArray} {N : ℕ}
 
