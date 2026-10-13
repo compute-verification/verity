@@ -839,6 +839,9 @@ def main() -> None:
                     help="with --store, run the passes in windows of this many (chained seeds and plan digests, the "
                          "driver's receipt over PoUW's stub tiles, each pass's root a placeholder for the device's "
                          "tree: the store's host work without a device reader); 0: no windows")
+    ap.add_argument("--torch-profile", action="store_true",
+                    help="profile the first point under torch.profiler: its kernels and host ops by device and host time "
+                         "into the log and OUT's directory (torch-profile.txt)")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     batches = [int(x) for x in args.batches.split(",")]
@@ -970,9 +973,21 @@ def main() -> None:
             window.begin(b, ctx)
             before = {k: (binder.store.counters.calls[k], binder.store.counters.seconds[k])
                       for k in binder.store.counters.calls} if binder else {}
+            prof = None
+            if args.torch_profile and not result["points"]:
+                prof = torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU,
+                                                          torch.profiler.ProfilerActivity.CUDA])
+                prof.__enter__()
             t = time.perf_counter()
             llm.generate(prompts, SamplingParams(temperature=0.0, max_tokens=mt, ignore_eos=True, detokenize=False),
                          use_tqdm=False)
+            if prof is not None:
+                torch.cuda.synchronize()
+                prof.__exit__(None, None, None)
+                ka = prof.key_averages()
+                text = "\n".join(ka.table(sort_by=key, row_limit=30) for key in ("cuda_time_total", "cpu_time_total"))
+                (out.parent / "torch-profile.txt").write_text(text)
+                log("torch profile\n" + ka.table(sort_by="cuda_time_total", row_limit=15))
             window.end()
             point.update(steady(rec, b), wall_s=time.perf_counter() - t, max_tokens=mt, updates=len(rec))
             if binder:
