@@ -32,6 +32,7 @@ class PagedLib(KB.Lib):
         so.pg_attn.argtypes = [v, i, v, z, ctypes.c_float, v, z, i, v, v, v, v, i, i, i, i, i, u, i, i, i, v]
         so.pg_append.argtypes = [v, v, z, z, v, i, v, i, i, i, i, u, i, i, v]
         so.pg_gather.argtypes = [v, v, i, i, v, u, i, i, v]
+        so.pg_reduce.argtypes = [v, i, i, i, v, i, v, v, v]
         a = (ctypes.c_int * 10)()
         so.pg_shape(ctypes.cast(a, ctypes.c_void_p))
         self.shape = dict(zip(("heads", "kv_heads", "head_dim", "hw", "wb", "mt", "part", "mw", "mma", "smem"), a))

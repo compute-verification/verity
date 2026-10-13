@@ -4,7 +4,7 @@ codec words, and the plain stack, the same engine over the same kernels' plain f
 
 ~~~text
 linears   stack: wt.cu (WT_RECEIPT, full slot, masked) fused decode + FP8 MMA + sketch-sha512 receipts on two sketch
-          warps, at M <= 32 rows; the chunks' sums reduced in order (ve.cu's ve_reduce). pstack: wt_gemm over the plain
+          warps, at M <= 32 rows; the chunks' sums reduced in order (paged.cu's pg_reduce). pstack: wt_gemm over the plain
           fragments, the same sums bit for bit (gated). M > 32 (prefill): the layer decoded (stack) or unpermuted
           (pstack) into an ephemeral scratch for vLLM's CUTLASS GEMM.
 receipts  a decode step is a pass: before the model's forward (eager, the runner's _model_forward) wt_pass derives pass
@@ -75,7 +75,6 @@ class Stack:
         wt = self.wt = BW.Lib(args.wt_lib)
         if not (wt.receipt and wt.pb == wt.s and wt.tw * wt.pb == BW.W.TASK_BYTES and 4 * wt.nl == wt.pb):
             raise RuntimeError(f"{wt.name}: the stack takes a WT_RECEIPT build at a full-slot field (task = its words)")
-        self.ve = K.Lib(args.lib)
         self.sms = torch.cuda.get_device_properties(0).multi_processor_count
         st = stream()
         if encoded:
@@ -227,8 +226,8 @@ class StackLinear:
     def reduce(self, part: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
         m = part.shape[1]
         out = torch.empty((m, self.n), dtype=torch.bfloat16, device="cuda")
-        self.st.ve.call("ve_reduce", part.data_ptr(), part.shape[0], m, self.n, xs.data_ptr(), int(xs.numel() > 1),
-                        self.ws.data_ptr(), out.data_ptr(), stream())
+        self.st.plib.call("pg_reduce", part.data_ptr(), part.shape[0], m, self.n, xs.data_ptr(), int(xs.numel() > 1),
+                          self.ws.data_ptr(), out.data_ptr(), stream())
         return out
 
     def fragments(self, scratch: torch.Tensor | None = None) -> torch.Tensor:

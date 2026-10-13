@@ -16,7 +16,12 @@
 // leaves no tokens (max -1e30, sum 0), a sequence of length 0 a zero row. q is read from vLLM's query (bf16, any row
 // stride) and scaled by qscale (log2(e) / sqrt(128)) and rounded to bf16 in place of kv.cu's pre-scaled q; the output
 // is bf16, vLLM's.
+//
+// pg_reduce is the stack's linear epilogue: wt.cu's chunk partial sums [nch][M][N] summed in chunk order and scaled
+// (bf16(sum * xs[row or 0] * ws)), so a plain and an encoded linear over the same weight give the same bits.
 #include "../word_codec/kv.cu"
+
+#include <cuda_bf16.h>
 
 namespace kv {
 
@@ -200,6 +205,21 @@ __global__ void __launch_bounds__(128) pg_gather_kernel(const u32 *__restrict__ 
   store(out + u * NL, x);
 }
 
+__global__ void __launch_bounds__(256) pg_reduce_kernel(const float *__restrict__ part, int nch, int n, int mn,
+                                                        const float *__restrict__ xs, int xs_rows,
+                                                        const float *__restrict__ ws, __nv_bfloat16 *__restrict__ out) {
+  const int i = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+  if (i >= mn) return;
+  float4 a = *reinterpret_cast<const float4 *>(part + i);
+  for (int c = 1; c < nch; ++c) {
+    const float4 v = *reinterpret_cast<const float4 *>(part + (size_t)c * mn + i);
+    a.x += v.x; a.y += v.y; a.z += v.z; a.w += v.w;
+  }
+  const float sc = xs[xs_rows ? i / n : 0] * ws[0];
+  *reinterpret_cast<__nv_bfloat162 *>(out + i) = __floats2bfloat162_rn(a.x * sc, a.y * sc);
+  *reinterpret_cast<__nv_bfloat162 *>(out + i + 2) = __floats2bfloat162_rn(a.z * sc, a.w * sc);
+}
+
 }  // namespace kv
 
 extern "C" {
@@ -260,6 +280,15 @@ int pg_gather(const void *cache, const int *blocks, int nb, int bw, void *out, u
   const unsigned long long words = (unsigned long long)nb * bw;
   (encoded ? kv::pg_gather_kernel<true> : kv::pg_gather_kernel<false>)<<<(unsigned)((words + 127) / 128), 128, 0, s>>>(
       static_cast<const uint32_t *>(cache), blocks, nb, bw, static_cast<uint32_t *>(out), lbase, k);
+  return launched();
+}
+
+int pg_reduce(const float *part, int nch, int M, int N, const float *xs, int xs_rows, const float *ws, void *out,
+              cudaStream_t s) {
+  if (M < 1 || N % 4 || nch < 1) return -1;
+  const int mn = M * N;
+  kv::pg_reduce_kernel<<<(mn / 4 + 255) / 256, 256, 0, s>>>(part, nch, N, mn, xs, xs_rows, ws,
+                                                             static_cast<__nv_bfloat16 *>(out));
   return launched();
 }
 }

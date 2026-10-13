@@ -863,8 +863,8 @@ def main() -> None:
     hooks = Hooks(tag="ra-vllm-encoded")
     install = Install(args)
     if args.arm in STACK:
-        if not (args.lib and args.wt_lib and args.reader_lib and args.paged_lib):
-            ap.error("the pstack and stack arms take --lib, --wt-lib, --reader-lib and --paged-lib")
+        if not (args.wt_lib and args.reader_lib and args.paged_lib):
+            ap.error("the pstack and stack arms take --wt-lib, --reader-lib and --paged-lib")
         if args.kv_cache_dtype != "auto" or args.compiled or args.tag or args.sketch or args.commit or args.store:
             ap.error("the pstack and stack arms run mode 0 over a bf16 cache, receipting as they go (no --compiled, "
                      "--kv-cache-dtype, --tag, --sketch, --commit or --store)")
