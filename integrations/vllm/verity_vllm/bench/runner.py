@@ -344,6 +344,9 @@ class _VllmEngine:
             raise ValueError(f"preset {preset.id} is unavailable: {preset.unavailable_reason}")
         if preset.revision is None and preset.model_digest is None:
             raise ValueError(f"preset {preset.id} has no pinned checkpoint revision")
+        from verity_vllm.engine import env as engine_env
+
+        engine_env.apply_engine(None)
         import torch
         import vllm
 
