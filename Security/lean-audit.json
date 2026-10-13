@@ -687,13 +687,22 @@
    "type_hash": "bc163df440fa43c23b650f2c7f04f79f26399e90d792a3bf515f6c9e5635448f"
   },
   "Accounting.SecurityProofs.RateSessionDraw": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateSessionDraw : Accounting.Guarantees.RateSessionDraw"],
+   "assumptions": [],
+   "type_hash": "fda9dca0e9bc2be06f0eb0de24aa3288dcf57bd8627b0ac9090633bdb32bba91"
   },
   "Accounting.SecurityProofs.RateSessionSampledNamedRO": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateSessionSampledNamedRO : Accounting.Guarantees.RateSessionSampledNamedRO"],
+   "assumptions": [],
+   "type_hash": "06613afa1ab109072e1ea27e67fd8d9d8cdde8301790ce1b6d9ba1545b0ba76e"
   },
   "Accounting.SecurityProofs.RateWindowDraw": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateWindowDraw : Accounting.Guarantees.RateWindowDraw"],
+   "assumptions": [],
+   "type_hash": "32536a10cb2a211bb8640b5c9a6a719db991a873f974d47440c297021ad8fe38"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -4690,15 +4699,30 @@
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
     "Accounting.SecurityProofs.RatePaid",
     "Accounting.SecurityProofs.RatePaidNamedRO",
-    "Accounting.SecurityProofs.RatePaidRO"
+    "Accounting.SecurityProofs.RatePaidRO",
+    "Accounting.SecurityProofs.RateSessionDraw",
+    "Accounting.SecurityProofs.RateSessionSampledNamedRO",
+    "Accounting.SecurityProofs.RateWindowDraw"
    ]
   },
   "Definitions.Accounting.RateAuditHorizon": {
-   "digest": "54d81fc56f8da8a118f1c94873a4de4d9f5e0804858c1b85c98e1cc041bb32c8",
+   "digest": "a0f3f025107aefdf062f3614448aa17ac4b9e3dd09bf127a0296b4d63939b8dd",
    "definitions": {
-    "Accounting.Rate.Causal": "de5351b25c92052df6b13913e616a3068d36662ae9cebca4d246c621e2f1230a"
+    "Accounting.Rate.Causal": "de5351b25c92052df6b13913e616a3068d36662ae9cebca4d246c621e2f1230a",
+    "Accounting.Rate.Chain.correctAll": "e18807ebb06807fec53705943e63d6af7620249abc56430793ce7d95f5bc6457",
+    "Accounting.Rate.Chain.spent": "d64ca668218ad27f3f310c1b732a397849d339fca2c25c43443e39d5c45f822d",
+    "Accounting.Rate.Session": "a30cfff3c592d5f890b4c0ba5a95fb3ca244ff269fd6e10c90d4a2e6fe6b8cec",
+    "Accounting.Rate.Session.chain": "2574f727b447ed49a3354478eabd0f6be722da8f31eb7c90e93dc79f76971b59",
+    "Accounting.Rate.Session.window": "9a1c5ed1b6813785d2085c506619c91adb4a4b7bbf8bd07a85b55f13d4984ba9",
+    "Accounting.Rate.WindowCoins": "a40746b5f76d9017a05e2a0dd74f6013235bde6ec9237640b15f7751b0da7861",
+    "Accounting.Rate.instFintypeWindowCoins": "83a3de5f215b4806ab4abeb991fcfd9169bc9d18118a6ba8c06150acea81feec"
    },
-   "guarantees": ["Accounting.SecurityProofs.HorizonSampling"]
+   "guarantees": [
+    "Accounting.SecurityProofs.HorizonSampling",
+    "Accounting.SecurityProofs.RateSessionDraw",
+    "Accounting.SecurityProofs.RateSessionSampledNamedRO",
+    "Accounting.SecurityProofs.RateWindowDraw"
+   ]
   },
   "Definitions.Accounting.RateAuditInteractive": {
    "digest": "9bedb77588a34da693577d9400171636bccb6ab0cfc22df4c75585db116d729a",
@@ -4767,7 +4791,10 @@
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
     "Accounting.SecurityProofs.RatePaid",
     "Accounting.SecurityProofs.RatePaidNamedRO",
-    "Accounting.SecurityProofs.RatePaidRO"
+    "Accounting.SecurityProofs.RatePaidRO",
+    "Accounting.SecurityProofs.RateSessionDraw",
+    "Accounting.SecurityProofs.RateSessionSampledNamedRO",
+    "Accounting.SecurityProofs.RateWindowDraw"
    ]
   },
   "Definitions.Accounting.RateAuditJoint": {
@@ -4826,7 +4853,10 @@
     "Accounting.SecurityProofs.RateHorizon",
     "Accounting.SecurityProofs.RatePaid",
     "Accounting.SecurityProofs.RatePaidNamedRO",
-    "Accounting.SecurityProofs.RatePaidRO"
+    "Accounting.SecurityProofs.RatePaidRO",
+    "Accounting.SecurityProofs.RateSessionDraw",
+    "Accounting.SecurityProofs.RateSessionSampledNamedRO",
+    "Accounting.SecurityProofs.RateWindowDraw"
    ]
   },
   "Definitions.Accounting.RateAuditSketch": {
@@ -5421,6 +5451,9 @@
     "Accounting.SecurityProofs.RatePaid",
     "Accounting.SecurityProofs.RatePaidNamedRO",
     "Accounting.SecurityProofs.RatePaidRO",
+    "Accounting.SecurityProofs.RateSessionDraw",
+    "Accounting.SecurityProofs.RateSessionSampledNamedRO",
+    "Accounting.SecurityProofs.RateWindowDraw",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditRO",
@@ -13390,31 +13423,37 @@
    ]
   },
   "Models.Accounting.Guarantees.RateAuditHorizon": {
-   "digest": "fc2f734ddee46c54355d4085a458ff71a55aca1b55dae52ea3cf4db3b2fa8477",
+   "digest": "043290ed5ab38a5a7c1ca0ff7fc685bec221750396f7d6272a4ab3f804e7d9d5",
    "definitions": {
     "Accounting.Guarantees.HorizonSampling": "54b9944eab007bdc50c9616f18e4ebdd1faf6e301168ba5cc14b1b8f88f6bae3",
     "Accounting.Guarantees.RateChainSampled": "c3472070da2934a1637a6992b74537014b8ffbee9f130e92c9fd020be2e38918",
     "Accounting.Guarantees.RateChainSampledRO": "2dab86de74ef7bd633a027884de80c4facfe84ce3faa23662d7be935d6477657",
-    "Accounting.Guarantees.RateHorizon": "e016e57531bcb4d9073cd482590688d363b0711358f592d417e8813fdec96043"
+    "Accounting.Guarantees.RateHorizon": "e016e57531bcb4d9073cd482590688d363b0711358f592d417e8813fdec96043",
+    "Accounting.Guarantees.RateSessionDraw": "75b3c65d18f3f653932dbbdf75ef44af07655e79943f4fafe09a9be063f23759",
+    "Accounting.Guarantees.RateWindowDraw": "fc366d4deac5adbe6146d2255b8eb4d8dc7fab3985c232ed179a63d66c0233a6"
    },
    "guarantees": [
     "Accounting.SecurityProofs.HorizonSampling",
     "Accounting.SecurityProofs.RateChainSampled",
     "Accounting.SecurityProofs.RateChainSampledRO",
-    "Accounting.SecurityProofs.RateHorizon"
+    "Accounting.SecurityProofs.RateHorizon",
+    "Accounting.SecurityProofs.RateSessionDraw",
+    "Accounting.SecurityProofs.RateWindowDraw"
    ]
   },
   "Models.Accounting.Guarantees.RateAuditNamed": {
-   "digest": "06ec5d2521fc480e2ffe40bb8500c9ecd3170550de2b86c8746f534276b59c24",
+   "digest": "89d3265e306b71d7eb837cc56f2d5b8565f55191d119fadc3b4e4c655b48edf8",
    "definitions": {
     "Accounting.Guarantees.RateChainSampledNamedRO": "3a5acccd938e8bbe3eaeffb05daf1bf7a93b97210cc8d834309203c81771d255",
     "Accounting.Guarantees.RateConservationNamedRO": "4cdd0f4e70fc821a916d17ca35a7c677109a767d8700a3b650a86360fc0ec943",
-    "Accounting.Guarantees.RatePaidNamedRO": "2e35ef763cd22a966079142fcf8e08683b1a4d8eb87625acf2a94a5915a2e18d"
+    "Accounting.Guarantees.RatePaidNamedRO": "2e35ef763cd22a966079142fcf8e08683b1a4d8eb87625acf2a94a5915a2e18d",
+    "Accounting.Guarantees.RateSessionSampledNamedRO": "509abf3f32a6881f9d8b39e8e39b84d8a036a7cf3a5840537829739cb6505685"
    },
    "guarantees": [
     "Accounting.SecurityProofs.RateChainSampledNamedRO",
     "Accounting.SecurityProofs.RateConservationNamedRO",
-    "Accounting.SecurityProofs.RatePaidNamedRO"
+    "Accounting.SecurityProofs.RatePaidNamedRO",
+    "Accounting.SecurityProofs.RateSessionSampledNamedRO"
    ]
   },
   "Models.Accounting.Guarantees.RateAuditRemote": {
@@ -21684,11 +21723,11 @@
   "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
   "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
-  "batteries": "83d6487a6f41072714347b765ec3e233bad10d8b25d822e8543ab47531f610be",
+  "batteries": "93d037527498f18cb49b52aa08a14febe351a161b47e44ca105e85e935264406",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "4b2e37339cdaa30627ba7f4ee6e6e866f14180ea06b549d7e9a386ea89e52601",
+  "mathlib": "a6d8a20d22b4bb1b26e538dd2ecdeb61c6bd65122c64cf013539ac3673a858a8",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
-  "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
-  "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+  "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
+  "toolchain": "aa972bbb9beca661b6dff9dc137830b371ecc15504c0130bbeaa1554de1d1c03"
  }
 }
