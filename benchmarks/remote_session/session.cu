@@ -102,6 +102,39 @@ __global__ void __launch_bounds__(128) payload_leaves_kernel(const uint4 *__rest
   store_digest(dig, tid, n, d);
 }
 
+// The payload leaves of `count` whole 2^h0-block subtrees, first block c[q], laid out subtree by subtree in nodes
+// (level 0 first, then the levels `subtree_level_kernel` writes).  Unlike `payload_leaves_kernel`, the subtrees need
+// not be adjacent.
+__global__ void __launch_bounds__(128) payload_subtree_leaves_kernel(const uint4 *__restrict__ data,
+                                                                     const u64 *__restrict__ c, int h0, u64 count,
+                                                                     u64 *__restrict__ nodes) {
+  const u64 S = 1ULL << h0, n = count * S;
+  const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x;
+  if (tid >= n) return;
+  const u64 q = tid >> h0, local = tid & (S - 1), j = c[q] + local, per = 2 * S - 2;
+  const uint4 *E = data + j * (BLOCK / 16);
+  u64 x[8], w[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) x[i] = kC.row_mid[i];
+#pragma unroll 1
+  for (int k = 0; k < BLOCK / 128; ++k) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      const uint4 v = __ldg(E + 8 * k + i);
+      w[2 * i] = be_word(v.x, v.y), w[2 * i + 1] = be_word(v.z, v.w);
+    }
+    sha512_compress(x, w);
+  }
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = 0;
+  w[0] = 0x80ULL << 56, w[15] = (u64)(128 + BLOCK) * 8;
+  sha512_compress(x, w);
+  u64 d[8];
+  hm96_leaf(j, x, d);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) nodes[(q * per + local) * 8 + i] = d[i];
+}
+
 // The 16-row sketch on tensor cores, fused with its receipt: σ (blocks × 16) = E · Sᵀ by mma.m16n8k32 as reader.cu's
 // sketch64 with its first two n-tiles, so the CUDA cores stay free for the leaves and the tree of the chunk before.
 // Lane (g, t)'s B registers of n-tile n at p are S's row 8 n + g at bytes 64 p + 16 t … + 15 (x, y for k-step 2 p, z, w
@@ -429,6 +462,16 @@ int rs_payload_leaves(const void *data, uint64_t c0, uint64_t n, uint64_t *dig, 
   return cudaGetLastError() ? 4 : 0;
 }
 
+int rs_payload_subtrees(const void *data, const uint64_t *c, uint64_t count, int h0, uint64_t *nodes,
+                        cudaStream_t s) {
+  if (!data || !c || !nodes || !count || h0 < 1 || h0 > 20 || h0 + 1 > NODE_LEVELS) return 1;
+  payload_subtree_leaves_kernel<<<grid(count << h0, 128), 128, 0, s>>>((const uint4 *)data, c, h0, count, nodes);
+  for (int h = 0; h + 1 < h0; ++h)
+    subtree_level_kernel<<<grid(count << (h0 - h - 1), 128), 128, 0, s>>>(nodes, c, h0, h,
+                                                                         count << (h0 - h - 1));
+  return cudaGetLastError() ? 4 : 0;
+}
+
 int rs_gather64(const uint64_t *addrs, uint64_t n, uint64_t *out, cudaStream_t s) {
   if (!addrs || !out || n < 1) return 1;
   gather64_kernel<<<grid(4 * n, 128), 128, 0, s>>>(addrs, n, (uint4 *)out);
@@ -595,8 +638,11 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
   if (!data || !pk || !ctr || !ys || !dig || !up || !kept || n % PER_LEAF || chunk % 32 || chunk % PER_LEAF || !chunk ||
       n % chunk || ctas < 0)
     return 1;
-  const uint64_t nl = n / PER_LEAF, lc = chunk / PER_LEAF, chunks = n / chunk;
-  const int H = log2_exact(nl), hc = log2_exact(lc);
+  const uint64_t nl = n / PER_LEAF, lc = chunk / PER_LEAF;
+  if (nl < 2) return 1;
+  const uint64_t width = 1ULL << (64 - __builtin_clzll(nl - 1));
+  const uint64_t chunks = n / chunk;
+  const int H = log2_exact(width), hc = log2_exact(lc);
   if (H < 0 || hc < 0 || h0 < 1 || h0 > hc || n / 32 >= (1ULL << 32)) return 1;
   if (!ctas) {
     int dev;
@@ -616,16 +662,31 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
     uint64_t *scratch = up_k;
     for (int h = 0; h < hc; ++h) {
       const uint64_t m = lc >> (h + 1), i0 = (k * lc) >> (h + 1);
-      uint64_t *out = h + 1 >= h0 ? kept + 8 * (kept_at(nl, h0, h + 1) + i0) : scratch;
+      uint64_t *out = h + 1 >= h0 ? kept + 8 * (kept_at(width, h0, h + 1) + i0) : scratch;
       level_kernel<<<grid(m, 128), 128, 0, sb>>>(in, out, h, i0, m);
       if (out == scratch) scratch += 8 * m;
       in = out;
     }
   }
-  const uint64_t *in = kept + 8 * kept_at(nl, h0, hc);
+  // Canonical frame-v3 pads from the real leaf count to `width`.  `nl` is chunk-aligned, so below `hc` every
+  // padding node belongs wholly to a missing chunk; batch all missing chunks level by level in `ys`, whose real
+  // receipts have been consumed by this point.
+  const uint64_t pads = width - nl;
+  if (pads) {
+    uint64_t *pin = ys, *scratch = ys + 8 * pads;
+    if ((rc = rb_pads(nl, pads, pin, sb))) return rc;
+    for (int h = 0; h < hc; ++h) {
+      const uint64_t m = pads >> (h + 1), i0 = nl >> (h + 1);
+      uint64_t *out = h + 1 >= h0 ? kept + 8 * (kept_at(width, h0, h + 1) + i0) : scratch;
+      level_kernel<<<grid(m, 128), 128, 0, sb>>>(pin, out, h, i0, m);
+      if (out == scratch) scratch += 8 * m;
+      pin = out;
+    }
+  }
+  const uint64_t *in = kept + 8 * kept_at(width, h0, hc);
   for (int h = hc; h < H; ++h) {
-    const uint64_t m = nl >> (h + 1);
-    uint64_t *out = kept + 8 * kept_at(nl, h0, h + 1);
+    const uint64_t m = width >> (h + 1);
+    uint64_t *out = kept + 8 * kept_at(width, h0, h + 1);
     level_kernel<<<grid(m, 128), 128, 0, sb>>>(in, out, h, 0, m);
     in = out;
   }

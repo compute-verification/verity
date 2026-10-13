@@ -3,7 +3,8 @@ the device reader (`../codec_tensor/reader.cu` in `session.cu`) and the openings
 
 ~~~text
 payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), its
-           tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j)
+           tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j);
+           only levels h0 and above stay resident, and lower paths are recomputed for openings
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) at the registration's key
 pass       sketch-sha512 receipts of every block by one persistent grid on tensor cores, the leaves under
            salt_c = SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be c) (`rb_leaves`) and the tree chunk by chunk on a
@@ -91,6 +92,7 @@ class Lib:
         self.so.rb_sketch.argtypes = [v, v, u64, v, v, i, v]
         self.so.rb_sketch_hash.argtypes = [v, u64, u64, v, v]
         self.so.rs_payload_leaves.argtypes = [v, u64, u64, v, v]
+        self.so.rs_payload_subtrees.argtypes = [v, v, u64, i, v, v]
         self.so.rs_gather64.argtypes = [v, u64, v, v]
         self.so.rs_pass.argtypes = [v, u64, v, v, v, v, v, v, i, u64, i, v, v]
         self.so.rs_subtrees.argtypes = [v, v, v, u64, i, v, v, v]
@@ -101,6 +103,8 @@ class Lib:
         self.so.rs_sketch16_receipts.argtypes = [v, u64, u64, v, v, i, v]
         self.so.rb_chain_set.argtypes = [b, i, b, b, b, b, b, b, i, i, b, i, i, b, i, b, i, i, u64, v]
         self.so.rb_chain.argtypes = [v, v]
+        self.so.rb_pads.argtypes = [u64, u64, v, v]
+        self.so.rb_level.argtypes = [v, v, i, u64, u64, v]
 
     def call(self, fn: str, *args) -> None:
         rc = getattr(self.so, fn)(*args, self.torch.cuda.current_stream().cuda_stream)
@@ -123,11 +127,6 @@ class Lib:
                   rb.HM96.leaf_prefix(rb.KEY), rb.KEY, m["binding"][0], len(m["binding"][0]), m["binding"][1],
                   m["domain"][0], len(m["domain"][0]), m["domain"][1], rb.SCHEMA.encode(), len(rb.SCHEMA),
                   m["salt"][0], len(m["salt"][0]), m["salt"][1], n)
-
-    def chain(self, seed) -> None:
-        """Restore the receipt-tree constants from a pass seed held on this device."""
-        self.call("rb_chain", seed.data_ptr())
-
 
 class Kv:
     """kv.cu's encode at the library's width, masked or not."""
@@ -179,15 +178,19 @@ def path_rows(dig, up, leaves: int, idx: np.ndarray) -> np.ndarray:
 
 
 class DeviceStore:
-    """N blocks on the GPU: the payload, its tree, then the encoded store, and the passes over it."""
+    """N blocks on the GPU: the payload, its kept tree levels, then the encoded store, and the passes over it."""
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *,
-                 chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0) -> None:
+                 chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0, payload_kept_from: int = 6,
+                 offload_handles: bool = False) -> None:
         nl = blocks // PER_LEAF
-        if blocks % PER_LEAF or nl & (nl - 1):
-            raise ValueError(f"{blocks} blocks: the harness takes N = 16 · 2^h, so every tree is whole")
+        if blocks % PER_LEAF or blocks % chunk:
+            raise ValueError(f"{blocks} blocks: the harness takes a multiple of the pass chunk and {PER_LEAF}")
         self.torch, self.lib, self.lib_open, self.kv, self.blocks, self.key = torch, lib, lib_open, kv, blocks, key
-        self.H = nl.bit_length() - 1
+        self.H = (nl - 1).bit_length()
+        self.tree_leaves = 1 << self.H
+        self.payload_h0 = max(1, min(payload_kept_from, chunk.bit_length() - 1))
+        self.offload_handles = offload_handles
         self.side = torch.cuda.Stream(priority=-1)
         self.shape(chunk, kept_from, sketch_ctas)
         self.data = torch.empty(blocks * BLOCK, dtype=torch.uint8, device="cuda")
@@ -211,7 +214,7 @@ class DeviceStore:
 
     def shape(self, chunk: int, kept_from: int, sketch_ctas: int) -> None:
         """A pass's chunk (blocks), h0 (at most the chunk's subtree height) and the sketch's CTAs, and its ring."""
-        torch, nl = self.torch, self.blocks // PER_LEAF
+        torch, nl = self.torch, self.tree_leaves
         self.chunk = min(chunk, self.blocks)
         self.h0 = max(1, min(kept_from, (self.chunk // PER_LEAF).bit_length() - 1))
         self.sketch_ctas = sketch_ctas
@@ -233,16 +236,49 @@ class DeviceStore:
         return [raw[q * BLOCK:(q + 1) * BLOCK] for q in range(n)]
 
     def payload_tree(self, node: bytes) -> bytes:
-        torch, N = self.torch, self.blocks
+        torch, N, width, h0 = self.torch, self.blocks, 1 << (self.blocks - 1).bit_length(), self.payload_h0
         dom = audit.payload_domain(node, N)
         self.lib.set_tree(bytes(128), BLOCK, BLOCK, dom.domain_id, SALT_DOMAIN + self.key + PAYLOAD_LABEL, N)
-        dig = torch.empty((N, 8), dtype=torch.int64, device="cuda")
-        self.lib.call("rs_payload_leaves", self.data.data_ptr(), 0, N, dig.data_ptr())
-        up = torch.empty((N - 1, 8), dtype=torch.int64, device="cuda")
-        self.lib.call("rb_tree", dig.data_ptr(), N, 0, up.data_ptr())
-        self.payload_tree_parts = (dig, up)
-        self.payload_root = digests(up[N - 2:N - 1])[0]
+        H, chunk = width.bit_length() - 1, self.chunk
+        hc = chunk.bit_length() - 1
+        kept_at = [0] * (H + 2)
+        for h in range(h0, H + 1):
+            kept_at[h + 1] = kept_at[h] + (width >> h)
+        kept = torch.empty((kept_at[H + 1], 8), dtype=torch.int64, device="cuda")
+        dig = torch.empty((chunk, 8), dtype=torch.int64, device="cuda")
+        up = torch.empty((chunk, 8), dtype=torch.int64, device="cuda")
+
+        def climb(first: int, leaves: int, payload: bool) -> None:
+            if payload:
+                self.lib.call("rs_payload_leaves", self.data.data_ptr() + first * BLOCK, first, leaves, dig.data_ptr())
+            else:
+                self.lib.call("rb_pads", first, leaves, dig.data_ptr())
+            source, scratch = dig, up
+            for h in range(hc):
+                m, i0 = leaves >> (h + 1), first >> (h + 1)
+                out = kept[kept_at[h + 1] + i0:] if h + 1 >= h0 else scratch
+                self.lib.call("rb_level", source.data_ptr(), out.data_ptr(), h, i0, m)
+                if out.data_ptr() == scratch.data_ptr():
+                    scratch = scratch[m:]
+                source = out
+
+        for first in range(0, N, chunk):
+            climb(first, chunk, True)
+        for first in range(N, width, chunk):
+            climb(first, chunk, False)
+        source = kept[kept_at[hc]:]
+        for h in range(hc, H):
+            m = width >> (h + 1)
+            out = kept[kept_at[h + 1]:]
+            self.lib.call("rb_level", source.data_ptr(), out.data_ptr(), h, 0, m)
+            source = out
+        self.payload_domain_id = dom.domain_id
+        self.payload_H, self.payload_kept_at, self.payload_kept = H, kept_at, kept
+        self.payload_root = digests(kept[-1:])[0]
         return self.payload_root
+
+    def set_payload(self, lib: Lib) -> None:
+        lib.set_tree(bytes(128), BLOCK, BLOCK, self.payload_domain_id, SALT_DOMAIN + self.key + PAYLOAD_LABEL, self.blocks)
 
     def encode(self, key: rcodec.Key, chunk: int = 1 << 16) -> float:
         """The store from its payload, in place; the encode's rate in bytes a second of GPU time."""
@@ -334,9 +370,11 @@ class DeviceStore:
         self.root_host.copy_(kept[-1:], non_blocking=True)
         torch.cuda.current_stream().synchronize()
         root = self.root_host.numpy().astype(np.uint64).astype(">u8").tobytes()
-        self.chain_previous = kept[-1:]
+        self.chain_previous = kept[-1:].clone()
         self.pass_gpu_ms.append(a.elapsed_time(b))
         self.chain_host_phases.append((t1 - t0, t2 - t1, t3 - t2, time.perf_counter_ns() - t3))
+        if self.offload_handles:
+            seed, pk, kept = bytes(seed.cpu().numpy()), pk.cpu(), kept.cpu()
         return root, (seed, pk, kept)
 
     def warm(self, passes: int) -> None:
@@ -359,7 +397,7 @@ class DeviceStore:
 
     def plain_root(self, seed: bytes) -> bytes:
         """The same pass the plain way, every receipt then every leaf then the tree, for the pipelined pass's check."""
-        torch, N, nl = self.torch, self.blocks, self.blocks // PER_LEAF
+        torch, N, nl, width = self.torch, self.blocks, self.blocks // PER_LEAF, self.tree_leaves
         signs = torch.from_numpy(skr.signs(seed)).cuda()
         self.set_pass(self.lib, seed)
         sk = torch.empty((N, skr.ROWS), dtype=torch.int32, device="cuda")
@@ -367,13 +405,14 @@ class DeviceStore:
         ys = torch.empty((N, 8), dtype=torch.int64, device="cuda")
         self.lib.call("rb_sketch_hash", sk.data_ptr(), 0, N, ys.data_ptr())
         del sk
-        dig = torch.empty((nl, 8), dtype=torch.int64, device="cuda")
+        dig = torch.empty((width, 8), dtype=torch.int64, device="cuda")
         self.lib.call("rb_leaves", ys.data_ptr(), 0, nl, dig.data_ptr(), None)
         del ys
-        up = torch.empty((max(nl - 1, 1), 8), dtype=torch.int64, device="cuda")
-        if nl > 1:
-            self.lib.call("rb_tree", dig.data_ptr(), nl, 0, up.data_ptr())
-        return digests((up[nl - 2] if nl > 1 else dig[0]).cpu())[0]
+        if width > nl:
+            self.lib.call("rb_pads", nl, width - nl, dig[nl:].data_ptr())
+        up = torch.empty((width - 1, 8), dtype=torch.int64, device="cuda")
+        self.lib.call("rb_tree", dig.data_ptr(), width, 0, up.data_ptr())
+        return digests(up[-1:].cpu())[0]
 
     def arm(self, dropped: set[int]) -> None:
         """Restore the blocks dropped before, then drop `dropped`: zeroed, their true blocks kept on the host."""
@@ -391,6 +430,22 @@ class DeviceStore:
         pass's constants, by the second library (`rs_subtrees`, a few launches a pass); then one gather on the device and
         two copies from it for the whole window."""
         torch, N, lib, h0 = self.torch, self.blocks, self.lib_open, self.h0
+        if items and not items[0][0][1].is_cuda:
+            # Large stores keep pass handles in host memory.  Bring back only a bounded batch at a time; recursively
+            # opening it releases its device copy before the next batch.
+            out = []
+            for at in range(0, len(items), 128):
+                batch = items[at:at + 128]
+                k = batch[0][0][2].shape[0]
+                pks = torch.empty((len(batch), PACK16_WORDS), dtype=torch.int32, device="cuda")
+                kept = torch.empty((len(batch), k, 8), dtype=torch.int64, device="cuda")
+                for q, ((_, pk, kp), _) in enumerate(batch):
+                    pks[q].copy_(pk)
+                    kept[q].copy_(kp)
+                dev = [((seed, pks[q], kept[q]), positions)
+                       for q, ((seed, _pk, _kp), positions) in enumerate(batch)]
+                out.extend(self.open_window(dev))
+            return out
         nl, S = N // PER_LEAF, PER_LEAF << h0
         per = 2 * (1 << h0) - 2
         sub_at = [0] * (h0 + 1)
@@ -400,6 +455,20 @@ class DeviceStore:
         copied_seeds = iter(torch.stack(device_seeds).cpu().numpy()) if device_seeds else iter(())
         seeds = [seed if isinstance(seed, bytes) else bytes(next(copied_seeds)) for (seed, *_), _ in items]
         firsts = [np.unique((np.asarray(ps, dtype=np.int64) // PER_LEAF) >> h0 << h0) for _, ps in items]
+        flat_positions = np.concatenate([np.asarray(ps, dtype=np.int64) for _, ps in items])
+        ph0, pH = self.payload_h0, self.payload_H
+        payload_first = np.unique(flat_positions >> ph0 << ph0)
+        payload_per = 2 * (1 << ph0) - 2
+        payload_sub_at = [0] * (ph0 + 1)
+        for g in range(ph0):
+            payload_sub_at[g + 1] = payload_sub_at[g] + ((1 << ph0) >> g)
+        payload_nodes = torch.empty((max(len(payload_first), 1) * payload_per, 8), dtype=torch.int64, device="cuda")
+        payload_cs = torch.from_numpy(payload_first).cuda()
+        self.set_payload(lib)
+        rc = lib.so.rs_payload_subtrees(self.data.data_ptr(), payload_cs.data_ptr(), len(payload_first), ph0,
+                                        payload_nodes.data_ptr(), torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"rs_payload_subtrees: {rc}")
         total = sum(len(f) for f in firsts)
         ys = torch.empty((max(total, 1) * S, 8), dtype=torch.int64, device="cuda")
         nodes = torch.empty((max(total, 1) * per, 8), dtype=torch.int64, device="cuda")
@@ -407,11 +476,10 @@ class DeviceStore:
         q0, rows, flat = 0, [], []
         t0 = time.perf_counter_ns()
         cs = torch.from_numpy(np.concatenate(firsts) if firsts else np.zeros(0, dtype=np.int64)).cuda()
-        for ((seed, pk, kept), positions), first in zip(items, firsts):
-            if isinstance(seed, bytes):
-                self.set_pass(lib, seed)
-            else:
-                lib.chain(seed)
+        for ((_seed, pk, kept), positions), first, host_seed in zip(items, firsts, seeds):
+            # The batched copy above is outside the timed pass span.  Installing from those host bytes sets both the
+            # receipt midstate and receipt-tree constants; rb_chain(device_seed) alone would set only the latter.
+            self.set_pass(lib, host_seed)
             rc = lib.so.rs_subtrees(self.data.data_ptr(), pk.data_ptr(), cs.data_ptr() + 8 * q0, len(first), h0,
                                     ys.data_ptr() + 64 * S * q0, nodes.data_ptr() + 64 * per * q0, stream)
             if rc:
@@ -431,7 +499,17 @@ class DeviceStore:
                     addr[:, PER_LEAF + g] = nd0 + np.uint64(64) * at.astype(np.uint64)
                 else:
                     addr[:, PER_LEAF + g] = kp + np.uint64(64) * (self.kept_at[g] + sib).astype(np.uint64)
-            rows.append(np.concatenate([addr, path_rows(*self.payload_tree_parts, N, p)], axis=1))
+            pq = np.searchsorted(payload_first, p >> ph0 << ph0)
+            paddr = np.empty((len(p), pH), dtype=np.uint64)
+            pnd, pkp = np.uint64(payload_nodes.data_ptr()), np.uint64(self.payload_kept.data_ptr())
+            for g in range(pH):
+                sib = (p >> g) ^ 1
+                if g < ph0:
+                    at = payload_per * pq + payload_sub_at[g] + (sib - ((p >> ph0 << ph0) >> g))
+                    paddr[:, g] = pnd + np.uint64(64) * at.astype(np.uint64)
+                else:
+                    paddr[:, g] = pkp + np.uint64(64) * (self.payload_kept_at[g] + sib).astype(np.uint64)
+            rows.append(np.concatenate([addr, paddr], axis=1))
             flat.extend(positions)
             q0 += len(first)
         addrs = np.concatenate(rows)
@@ -441,7 +519,7 @@ class DeviceStore:
         got = torch.empty((n, 8), dtype=torch.int64, device="cuda")
         lib.call("rs_gather64", dev.data_ptr(), n, got.data_ptr())
         blocks = self.data.view(-1, BLOCK)[torch.tensor(flat, dtype=torch.int64, device="cuda")]
-        hr, hp = self.H, N.bit_length() - 1
+        hr, hp = self.H, self.payload_H
         cols = PER_LEAF + hr + hp
         # Byte order on the device and pinned copies (GIL released), so the pass thread is never held behind a
         # host-side byteswap or tobytes of a window's 100+ MB.
@@ -477,10 +555,12 @@ class Device:
 
     def __init__(self, torch, lib_path: str, kv_path: str, blocks: int, *, seed: int, log=print,
                  gate_blocks: int = 4096, gate_chunk: int = 1024, calibration_passes: int = 4000,
-                 warm_openings: int = 2773, chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0) -> None:
+                 warm_openings: int = 2773, chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0,
+                 payload_kept_from: int = 6, offload_handles: bool = False) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks, warm_openings
         self.gate_blocks, self.gate_chunk, self.calibration_passes = gate_blocks, gate_chunk, calibration_passes
-        self.shape = {"chunk": chunk, "kept_from": kept_from, "sketch_ctas": sketch_ctas}
+        self.shape = {"chunk": chunk, "kept_from": kept_from, "sketch_ctas": sketch_ctas,
+                      "payload_kept_from": payload_kept_from, "offload_handles": offload_handles}
         self.lib = Lib(lib_path, torch)
         self._open_copy = tempfile.NamedTemporaryFile(suffix=".so")
         shutil.copyfile(lib_path, self._open_copy.name)
@@ -490,10 +570,8 @@ class Device:
         self.gen.manual_seed(seed)
         self.rng = np.random.default_rng(seed)
         self.salt_key = self.rng.bytes(32)
-        # A window's reconstructed subtrees must not take SMs from the pass whose root is on the deadline path.
-        # CUDA exposes two priorities on this device: the pass and its side tree are high, openings are low.
-        self.main_stream = torch.cuda.Stream(priority=-1)
-        self.open_stream = torch.cuda.Stream(priority=0)
+        self.main_stream = torch.cuda.Stream()
+        self.open_stream = torch.cuda.Stream()
         self.gates: dict = {}
         with torch.cuda.stream(self.main_stream):
             self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, self.gen,
@@ -543,7 +621,7 @@ class Device:
             t_end = None
             # Timed as a session runs: what the passes keep allocated once beforehand (the allocator growing under a
             # timed pass stalls it for tens of ms) and no collector.
-            s.warm(self.calibration_passes)
+            s.warm(1 if s.offload_handles else self.calibration_passes)
             gc.collect()
             gc.freeze()
             gc.disable()
@@ -564,7 +642,8 @@ class Device:
             gc.enable()
             gc.unfreeze()
             seed, chained_root, seed_dev = first
-            self.gates["device_seed"] = bytes(seed_dev.cpu().numpy()) == seed
+            self.gates["device_seed"] = (seed_dev if isinstance(seed_dev, bytes)
+                                         else bytes(seed_dev.cpu().numpy())) == seed
             self.gates["plain_root"] = s.plain_root(seed) == chained_root
             self.gates["device_signs"] = all(s.signs_match(rb.seed(challenge, i, bytes(64))) for i in range(4))
         torch.cuda.synchronize()
@@ -629,7 +708,7 @@ class Device:
         with torch.cuda.stream(self.main_stream):
             small = DeviceStore(torch, self.lib, self.lib_open, self.kv, self.gate_blocks, self.salt_key, g,
                                 chunk=self.gate_chunk, kept_from=self.shape["kept_from"],
-                                sketch_ctas=self.shape["sketch_ctas"])
+                                sketch_ctas=self.shape["sketch_ctas"], payload_kept_from=self.shape["payload_kept_from"])
             payloads = small.host_blocks(0, small.blocks)
             root = small.payload_tree(self.node)
             salts = [store_salt(self.salt_key, PAYLOAD_LABEL, j) for j in range(small.blocks)]
@@ -698,21 +777,27 @@ class Device:
 def add_arguments(ap) -> None:
     ap.add_argument("--lib", required=True, help="session.so")
     ap.add_argument("--kv", required=True, help="kv.so at the registration's codec (p1024 masked)")
-    ap.add_argument("--gib", type=float, default=16.0, help="the store's size; N = 16 · 2^h blocks")
+    ap.add_argument("--gib", type=float, default=16.0,
+                    help="the store's size, rounded down to a whole --chunk-blocks (need not be a power of two)")
     ap.add_argument("--gate-blocks", type=int, default=4096)
     ap.add_argument("--calibration-passes", type=int, default=4000,
                     help="so the allowance's p99.9 is a few passes in, not the worst")
     ap.add_argument("--warm-openings", type=int, default=2773, help="a window's openings, opened once in calibration")
     ap.add_argument("--chunk-blocks", type=int, default=1 << 18, help="a pass's chunk (`rs_pass`)")
     ap.add_argument("--kept-from", type=int, default=6, help="h0: the pass tree's levels kept for the openings")
+    ap.add_argument("--payload-kept-from", type=int, default=6,
+                    help="h0: the payload tree's levels kept; lower paths are recomputed for openings")
     ap.add_argument("--sketch-ctas", type=int, default=0, help="the receipts grid's CTAs (0: one an SM)")
+    ap.add_argument("--offload-handles", action="store_true",
+                    help="keep pass handles on the CPU between their root and openings (automatic above 64 GiB)")
 
 
 def from_arguments(a, log=print) -> Device:
     import torch
 
     n = int(a.gib * 2 ** 30) // BLOCK
-    blocks = PER_LEAF << ((n // PER_LEAF).bit_length() - 1)
+    blocks = n // a.chunk_blocks * a.chunk_blocks
     return Device(torch, a.lib, a.kv, blocks, seed=a.seed, log=log, gate_blocks=a.gate_blocks,
                   calibration_passes=a.calibration_passes, warm_openings=a.warm_openings, chunk=a.chunk_blocks,
-                  kept_from=a.kept_from, sketch_ctas=a.sketch_ctas)
+                  kept_from=a.kept_from, sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
+                  offload_handles=a.offload_handles or a.gib > 64)
