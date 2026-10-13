@@ -13,7 +13,8 @@ M0's statement proves a template's identical units with every instance's input r
   FP8 elements share a leaf and the row's little-endian bytes are the elements' packed memory layout; each row padded with
   unread zero words to a whole number of 64-word SHA-512 blocks, as frame-v3 rows are; under ``FLOCK_CORE_ROWS=1`` an FP GEMM
   coordinate's x and its scales are one packed row and its W column and scales another, each core's bit row (``sha512/row/v2``)
-  of exactly its elements' bits, `element_rows`), its outputs into one u16 output port ``out`` (each output padded with zero bits to whole u16 words);
+  of exactly its elements' bits, `element_rows`), its outputs into one u16 output port ``out`` (each output padded with zero bits to whole u16 words),
+  and under ``FLOCK_COMMIT_WORDS=1`` every word gate's output word committed as rows of its own;
 * each source's row is committed once and opened by every instance that reads it (M0's shared rows), rows being keyed by the
   identity of the values they hold, not by value (`class_lanes`);
 * the instances are every unit of the class in its flat Definition (`class_lanes`: synthetic inputs lifted through the flat
@@ -85,6 +86,10 @@ PACK_WORDS = os.environ.get("FLOCK_PACK_WORDS") == "1"
 #: FLOCK_CORE_ROWS=1: an FP GEMM coordinate's rows are core's bit rows (`element_rows`); packed, and a different circuit and
 #: statement from both other layouts'
 CORE_ROWS = os.environ.get("FLOCK_CORE_ROWS") == "1"
+#: FLOCK_COMMIT_WORDS=1: every word gate's output word is committed (`ir_lower.lower_gates`'s ``commit``), so a long chain of
+#: word gates (TokenSelect_v1's select scan, an f32 reduction) has matrix entries linear in its length; a different circuit and
+#: statement from the default's, of every layout
+COMMIT_WORDS = os.environ.get("FLOCK_COMMIT_WORDS") == "1"
 #: FLOCK_PLAIN_LEAVES=1: the proof's own Merkle leaves are plain SHA-512 (`circuit.LEAF_SCHEME_PLAIN`, a recursive session's
 #: inner statement, ZK off); another statement from the default's
 PLAIN_LEAVES = os.environ.get("FLOCK_PLAIN_LEAVES") == "1"
@@ -310,10 +315,11 @@ def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> 
 
 
 def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
-                   packed: bool | Sequence[bool] = False, blocks: bool = True) -> IL.Lowering:
+                   packed: bool | Sequence[bool] = False, blocks: bool = True, commit: bool = False) -> IL.Lowering:
     """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
     words laid out by `_slots` (``packed``: narrow words share leaves; per group when a sequence), each padded to whole 64-word
-    SHA-512 blocks (not ``blocks``: the words it uses, a bit row's ``ceil(bits / 16)``), and ``out0 .. out{W_out-1}``."""
+    SHA-512 blocks (not ``blocks``: the words it uses, a bit row's ``ceil(bits / 16)``), and ``out0 .. out{W_out-1}``;
+    ``commit``: every word gate's output word committed (`ir_lower.lower_gates`)."""
     groups = groups or [list(range(len(uc.inputs)))]
     slots = [_slots([uc.in_widths[t] for t in g], pk) for g, pk in zip(groups, _packs(packed, groups), strict=True)]
     port_words = tuple(_pad(used, BLOCK_WORDS) if blocks else used for _at, used in slots)
@@ -327,7 +333,7 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
             w = uc.in_widths[t]
             wires[act.absolute(uc.inputs[t])] = [b for word in leaves[base + leaf:base + leaf + _words(bit + w)] for b in word][bit:bit + w]
         base += w_port
-    IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires)
+    IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires, commit=commit)
     out_bits = []
     for j, w in zip(uc.outputs, uc.out_widths):
         out_bits += list(wires[act.absolute(j)]) + [gf2.ZERO] * (16 * _words(w) - w)
@@ -595,11 +601,12 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
 
 def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes,
           packed: bool | None = None, core_rows: bool | None = None, wiring: Wiring | None = None, seg_ports: frozenset = frozenset(),
-          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None) -> dict:
+          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None, commit_words: bool | None = None) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
     source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS; ``core_rows``: an FP
-    GEMM coordinate's rows are core's bit rows, packed, one port per row (`element_rows`), default FLOCK_CORE_ROWS).
+    GEMM coordinate's rows are core's bit rows, packed, one port per row (`element_rows`), default FLOCK_CORE_ROWS;
+    ``commit_words``: every word gate's output word committed (`class_lowering`'s ``commit``), default FLOCK_COMMIT_WORDS).
     ``seg_ports``, ``seg_out_rows`` and ``v2_out_rows`` are `circuit.compose`'s, over the shims' port names (``p0``, …, ``out``).
     Unwired, a class whose unit is one whole activation of its flat Definition names that Definition as the circuit's template
     (META ``program_digests``, `_shims`); a class of part of an activation, or of a primitive (which has no Program), names
@@ -616,9 +623,10 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     and the output the class lowering's own on them, checked as every lane's is (`stage_tiled`'s ``real``)."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
+    commit_words = COMMIT_WORDS if commit_words is None else commit_words
     act = units.activation(cl.definition)
     uc = cl.representative
-    suffix = "-core-rows" if core_rows else "-packed" if packed else ""
+    suffix = ("-core-rows" if core_rows else "-packed" if packed else "") + ("-committed" if commit_words else "")
     name = shape[:16] + suffix
     ins, want, idents = lanes_ if len(lanes_) == 3 else (*lanes_, None)
     real = None
@@ -663,7 +671,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         idents = [idents[o] if s is None else [("link", w, k) if w is not None else ("in", k) for k, w in enumerate(writers[i])]
                   for i, (o, s) in enumerate(zip(origin, spans))]
     links = [{"port": f"p{i}", "leaves": list(s)} for i, s in enumerate(spans) if s is not None]
-    low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows)
+    low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows, commit=commit_words)
     whole = wiring is None and uc.computing == act.graph.n and not isinstance(act.fn, PrimitiveDefinition)
     sub, iset = _shims(name, uc.form.encode() + (b"/" + suffix[1:].encode() if suffix else b"") +
                        (b"/links:" + json.dumps(links).encode() if links else b""), len(groups), act.fn if whole else None)
@@ -732,7 +740,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)} | \
-        ({"packed": True} if packed else {}) | ({"row_schemas": meta["row_schemas"]} if bits is not None else {}) | \
+        ({"packed": True} if packed else {}) | ({"committed": True} if commit_words else {}) | \
+        ({"row_schemas": meta["row_schemas"]} if bits is not None else {}) | \
         ({"links": links, "definition": definition} if wiring is not None else {})
 
 
@@ -778,8 +787,8 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
     ``real``: the statement padded to ``n`` instances (a public cap, `rec_shape`), its first ``real`` tiles the class's and the
     rest fillers: every row zero and the output the class lowering's own on them, checked as every tile's is. A filler's rows
     are equal, so the fillers open one committed row per port; the real tiles' rows and outputs are the unpadded statement's."""
-    if PACK_WORDS or CORE_ROWS:
-        raise ValueError("FLOCK_PACK_WORDS, FLOCK_CORE_ROWS: a tile is staged in the default layout only")
+    if PACK_WORDS or CORE_ROWS or COMMIT_WORDS:
+        raise ValueError("FLOCK_PACK_WORDS, FLOCK_CORE_ROWS, FLOCK_COMMIT_WORDS: a tile is staged in the default layout only")
     if real is not None and not 1 <= real <= n:
         raise ValueError(f"--real {real}: between 1 and the statement's {n} instances")
     lanes_n = n if real is None else real
@@ -1235,7 +1244,7 @@ def _stage_cache(s: str) -> Path | None:
     a = c["a"]
     ident = [c["source_digest"], c["program_digest"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
              a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else []) + (["core-rows"] if CORE_ROWS else []) \
-        + (["plain-leaves"] if PLAIN_LEAVES else []) + ([f"real-{a.real}"] if a.real is not None else [])
+        + (["commit-words"] if COMMIT_WORDS else []) + (["plain-leaves"] if PLAIN_LEAVES else []) + ([f"real-{a.real}"] if a.real is not None else [])
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
 
 

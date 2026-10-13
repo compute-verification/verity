@@ -259,6 +259,50 @@ def test_a_class_of_whole_activations_names_its_definition_as_the_circuits_templ
     assert own["class_sha512"] == named["class_sha512"] and own["circuit_sha512"] != named["circuit_sha512"]
 
 
+def _one_class(fn):
+    TG.load_registries()
+    CS.cache_slot_circuits()
+    units = PU.partition_units(PU.one_call(fn), "q-word")
+    s, cl = max(units.classes().items(), key=lambda kv: len(kv[1].representative.gates))
+    return units, s, cl
+
+
+@pytest.mark.slow
+def test_committed_words_make_a_scans_matrix_entries_linear_in_its_length(tmp_path: Path):
+    """``commit_words`` (FLOCK_COMMIT_WORDS) on TokenSelect_v1{V}, one Q_word unit, the whole select scan: both lowerings stage
+    (`stage` checks each against the reference on every lane), the committed one under its own name and circuit, with more
+    rows (a row per committed bit) and fewer matrix entries; doubling V about doubles the committed one's entries, while the
+    generic one's grow more than threefold (each select's linear form grows with the chain)."""
+    from verity_vllm.program.registry import b1
+
+    key, got = hashlib.sha256(b"test").digest(), {}
+    for V in (34, 66):
+        units, s, cl = _one_class(bind(b1.TokenSelect, V=V))
+        lanes = _lanes(units, cl, 8)
+        for commit in (False, True):
+            d = tmp_path / f"{V}-{commit}"
+            got[V, commit] = st = CS.stage(units, "q-word", s, cl, lanes, d, key, commit_words=commit)
+            meta = json.loads((d / "circuit.txt").read_text().split("\n", 2)[1][5:])
+            assert st.get("committed", False) is commit and meta["unit"].endswith("-committed") is commit
+        plain, committed = got[V, False], got[V, True]
+        assert committed["circuit_sha512"] != plain["circuit_sha512"]
+        assert committed["unit_rows"] > plain["unit_rows"] and committed["unit_nnz"] < plain["unit_nnz"]
+    grow = {c: got[66, c]["unit_nnz"] / got[34, c]["unit_nnz"] for c in (False, True)}
+    assert grow[True] < 2.1 and grow[False] > 3, grow
+
+
+def test_committed_words_leave_a_boolean_definitions_gates_as_they_are():
+    """The Boolean core's gates are not word gates: TokenSelect_v2's class lowers to the same rows with and without ``commit``,
+    its XORs still free."""
+    from verity_vllm.program.registry import sampling_boolean as SB
+
+    units, _s, cl = _one_class(bind(SB.TokenSelect, V=50))
+    act, uc = units.activation(cl.definition), cl.representative
+    groups = CS.sources(act, uc, CS.owners_of(units, cl.definition.id))
+    plain, committed = (CS.class_lowering(act, uc, "unit-class/x", groups, commit=c) for c in (False, True))
+    assert committed.text == plain.text
+
+
 def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):
     """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
     (the output row's, §16.13, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit

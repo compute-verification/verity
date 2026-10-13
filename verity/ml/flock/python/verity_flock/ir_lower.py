@@ -165,10 +165,17 @@ def _value(word) -> int:
     return sum(w.c << i for i, w in enumerate(word))
 
 
-def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Callable] | None = None) -> dict[int, list]:
+def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Callable] | None = None,
+                commit: bool = False) -> dict[int, list]:
     """Lower ``gates`` (``verity.ml.circuits.layout.Gate``s in canonical order) into C, reading operand words from ``wires`` (gate index
-    -> word) and writing each gate's output word there; ``pieces`` (default :data:`PIECES`) maps primitive ids to pieces."""
+    -> word) and writing each gate's output word there; ``pieces`` (default :data:`PIECES`) maps primitive ids to pieces.
+    ``commit``: every word gate's output word is committed (`Circuit.commit`), so a gate's readers see one column per bit, not the
+    linear form its piece left: a chain of word gates (a scan's select) then grows its matrix entries linearly, not quadratically.
+    The Boolean core's gates (`Not_v1`, :data:`GATE_FAMILIES`) are not word gates: their XORs stay free."""
+    import re
+
     pieces = PIECES if pieces is None else pieces
+    bit_gate = re.compile("|".join(["Not_v1", *GATE_FAMILIES]))
     for g in gates:
         prim = g.prim
         fam = getattr(prim, "family", None)
@@ -186,7 +193,7 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
         out = piece(C, *ops)
         if len(out) != _width(prim):
             raise AssertionError(f"piece for {prim.id} returned {len(out)} bits, the primitive returns {_width(prim)}")
-        wires[g.index] = out
+        wires[g.index] = C.commit(out) if commit and not bit_gate.fullmatch(prim.id) else out
     return wires
 
 
