@@ -40,6 +40,8 @@ class MhcRun(Run):
         self.rec: dict[int, list[tuple[str, torch.Tensor]]] = {}
         self.log: list[tuple[str, str]] = []
         self.seen: dict[int, dict[str, Any]] = {}
+        #: the stand-in's mHC calls on this run's steps (`FMA_CALLS` holds every run's in the process)
+        self.fma: list[tuple[str, int, bool]] = []
         self.com._acquire = self._record
         self.com.flush_after_plane = self._flush
 
@@ -52,7 +54,9 @@ class MhcRun(Run):
         return False
 
     def step(self, k: int, md: Any, skip: tuple[int, ...] = ()) -> None:
+        start = len(FMA_CALLS)
         super().step(k, md, skip)
+        self.fma += FMA_CALLS[start:]
         layers, model = self.model.model.layers, self.model.model
         self.seen[k] = {f"model.layers.{i}/{side}": layers[i].seen[side] for i in range(L) for side in ("hc_attn", "hc_ffn")}
         self.seen[k].update({"model/hc_post": model.seen["hc_post"], "model/hc_head": model.seen["hc_head"]})
@@ -98,7 +102,7 @@ def test_every_step_binds_the_map_names_of_its_hc_route_once(runs, capsys):
             if target:
                 assert sorted(r.names(k)) == sorted(map_names(capsys, routes, phase, binders=(MS.BINDER,)))
     split = [k for k, (_md, routes, _p) in enumerate(STEPS) if "hc-split" in routes]
-    assert split == [2, 4] and {m for f, m, fma in FMA_CALLS if f == MS.POST_PRE and not fma} == {20}
+    assert split == [2, 4] and {m for r in runs.values() for f, m, fma in r.fma if f == MS.POST_PRE and not fma} == {20}
     on, off = runs[True], runs[False]
     assert len(on.names(0)) == len(on.names(2)) == 4 * 2 * L + 2 and sum(n.endswith("_split") for n in on.names(2)) == 4 * (2 * L - 1)
     first = {f"model.layers.0/hc_attn_{v}" for v in ("residual", "post_mix", "comb_mix", "x")}

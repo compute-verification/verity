@@ -13,11 +13,16 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.dsv4_model import CMAP, CONFIG_PATH, CSA, HCA_R, HOOKED, L, MAP, STEPS, TP, dsv4_model, metadata, run_step
+from tests.acquire.dsv4_model import CMAP, CONFIG_PATH, CSA, ENV, HCA_R, HOOKED, L, MAP, STEPS, TP, dsv4_model, metadata, run_step
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TP_PARTIAL_RE, NativeHostCommitter, TensorMeta
 from verity_vllm.pipeline import cli
+
+#: every row-counted committed name -> its row count
+COUNTED = {n: CM.row_count_of(CMAP, tap) for p in RS.PHASES for n, (tap, _layer) in CM.committer_names(CMAP, ENV, phase=p, rank=3).items()
+           if CM.row_count_of(CMAP, tap)}
 
 
 def map_names(capsys, routes: tuple[str, ...], phase: str, rank: int = 3, binders: tuple[str, ...] = RS.BINDERS) -> list[str]:
@@ -54,11 +59,24 @@ class Run:
             self.com._cur = None
         self.src.rows.positions[k] = tuple(range(first, first + n))
 
-    def check(self, steps: dict[int, list[str]], *, sources: list[Any] | None = None) -> dict[str, Any]:
+    def leads(self, k: int) -> dict[str, int]:
+        """Each row-counted name's count at step `k`'s recorded positions (`CM.row_counts`), the rows the compress kernels write."""
+        positions = self.src.rows.positions.get(k)
+        if positions is None:
+            return {}
+        counts = CM.row_counts(CMAP, ENV, positions)
+        return {n: counts[s] for n, s in COUNTED.items()}
+
+    def check(self, steps: dict[int, list[str]], *, sources: list[Any] | None = None,
+              shapes: dict[int, dict[str, tuple[int, ...]]] | None = None) -> dict[str, Any]:
+        """The committer's identity check on `steps` (step -> its committed names), each a (4, 8) tensor but a row-counted name,
+        whose leading dimension is its count at the step's positions (`leads`), and the names `shapes` gives (step -> name -> shape)."""
         self.com.sources = [self.src] if sources is None else sources
         self.com._layouts = {}
         for k, names in steps.items():
-            self.com._layouts[k] = [TensorMeta(i, n, "bfloat16", (4, 8), 64, GPU_CHUNK_BYTES, i, 1) for i, n in enumerate(names)]
+            lead, given = self.leads(k), (shapes or {}).get(k, {})
+            self.com._layouts[k] = [TensorMeta(i, n, "bfloat16", given.get(n, (lead.get(n, 4), 8)), 64, GPU_CHUNK_BYTES, i, 1)
+                                    for i, n in enumerate(names)]
             for i, m in enumerate(self.com._layouts[k]):
                 m.dev_off = m.stream_off = 64 * i
         return self.com.identity_check()

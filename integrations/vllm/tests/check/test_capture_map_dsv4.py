@@ -189,25 +189,41 @@ def test_the_row_counts_read_the_positions_tap_and_every_counted_layer_s_config_
 
 
 def test_a_commit_read_against_the_map_is_held_to_its_positions_row_counts():
-    """The check side of a commit (`CM.bind_names`) recomputes from a step's committed positions the names it writes no row for,
-    with the function the committer's identity check uses (`CM.empty_names`): a missing name the positions give rows for is
-    missing, a present name they give none for is `empty`, and a step with row-counted names read without its positions is refused."""
+    """The check side of a commit (`CM.bind_names`) recomputes from a step's committed positions the names it writes no row for and
+    the rows the others hold, with the functions the committer's identity check uses (`CM.empty_names`, `CM.rows_differ`): a
+    missing name the positions give rows for is missing, a present name they give none for is `empty`, a name one row short or one
+    row extra of its count is in `rows_differ` with its layer, and a step with row-counted names read without its positions, or
+    one that commits them read without their leading dimensions, is refused."""
     names = CM.committer_names(CMAP, ENV, phase="decode", routes=DECODE, rank=0)
     hca = {f"model.layers.{i}.attn/compressed_rows" for i in CM.layer_set(CMAP, "hca", ENV)}
     csa = "model.layers.2.attn/compressed_rows"
     assert CM.empty_names(CMAP, ENV, (0, 1, 2, 3), names) == hca and CM.empty_names(CMAP, ENV, range(124, 128), names) == set()
+    counted = {n: CM.row_count_of(CMAP, tap) for n, (tap, _layer) in names.items() if CM.row_count_of(CMAP, tap)}
 
-    def bind(committed, positions):
+    def rows_at(positions):
+        counts = CM.row_counts(CMAP, ENV, positions)
+        return {n: counts[s] for n, s in counted.items()}
+
+    def bind(committed, positions, rows=None):
         return CM.bind_names(CMAP, ENV, committed, profile="0123456789ab", request="r0", t=0, phase="decode", routes=DECODE, rank=0,
-                             positions=positions)
+                             positions=positions, rows=rows_at(positions) if rows is None and positions is not None else rows)
 
     without = [n for n in names if n not in hca]
     assert (bind(without, (0, 1, 2, 3))["missing"], bind(without, (0, 1, 2, 3))["empty"]) == ([], [])
     assert bind([n for n in without if n != csa], (0, 1, 2, 3))["missing"] == [csa], "the positions give NC4 = 1"
     assert bind(list(names), (0, 1, 2, 3))["empty"] == sorted(hca), "the positions give NC128 = 0"
     assert bind(without, range(124, 128))["missing"] == sorted(hca) and bind(list(names), range(124, 128))["empty"] == []
+    prefill = range(108, 128)
+    assert rows_at(prefill)[csa] == 5 and bind(list(names), prefill)["rows_differ"] == {}
+    short, extra = {**rows_at(prefill), csa: 4}, {**rows_at(prefill), "model.layers.3.attn/compressed_rows": 2}
+    assert bind(list(names), prefill, short)["rows_differ"] == {csa: (2, 4, 5)}, "one row short of NC4 = 5"
+    assert bind(list(names), prefill, extra)["rows_differ"] == {"model.layers.3.attn/compressed_rows": (3, 2, 1)}, "one extra"
+    assert bind(list(names), prefill, {})["rows_differ"] == {n: (int(n.split(".")[2]), -1, 5 if s == "NC4" else 1) for n, s in counted.items()}
     with pytest.raises(CM.MapError, match="needs its positions"):
         bind(list(names), None)
+    with pytest.raises(CM.MapError, match="needs their leading dimensions"):
+        CM.bind_names(CMAP, ENV, list(names), profile="0123456789ab", request="r0", t=0, phase="decode", routes=DECODE, rank=0,
+                      positions=prefill)
     moe = CM.bind_names(CMAP, ENV, [], profile="0123456789ab", request="r0", t=0, phase="decode", routes=DECODE, rank=0, binders=("moe",))
     assert moe["empty"] == [] and moe["missing"], "a step of no row-counted name needs no positions"
 

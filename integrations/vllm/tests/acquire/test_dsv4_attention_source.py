@@ -1,16 +1,17 @@
 """The DeepSeek-V4 attention source on CPU (`verity_vllm/acquire/sources/dsv4_attention_source.py`) against the DeepSeek-V4-Pro
 capture map: the stand-in of `tests/acquire/dsv4_model.py` runs the pinned vLLM's attention call structure (its methods, the
 call-time globals, the paged caches in their layouts, the compressors' masks and slots) on a short decode, a scored decode, a
-prefill, a mixed step and a decode that crosses no 128 boundary, on and off the target, and a real `NativeHostCommitter`, whose
-`_acquire` records a copy on CPU, commits what the source binds.
+prefill, a mixed step, a decode that crosses no 128 boundary and a prefill in two chunks, the first ending mid-window, on and off
+the target, and a real `NativeHostCommitter`, whose `_acquire` records a copy on CPU, commits what the source binds.
 
 It catches a name the map lists that a step does not bind, binds twice, or binds off its route or off the target; a value from the
 wrong call, layer, rows or cache layout (a padded paged cache's data and scale bytes regrouped per row); a compressed row of a token
 the kernels' mask skips; a global called outside a layer's forward; a layer attending at other positions than the first; a
 compressor whose ratio is not its row count's; a step the route source admits without its names; and the row-count rule: a step on
-which a compressor writes no row commits without that name, and one fails whose names, or whose source's record of the names it
-found empty, are not what its committed positions give.  A boundary token with no compressed slot (`dsv4_model.step_metadata`'s
-`unslotted`) is a fault the test injects, which the pinned vLLM does not give."""
+which a compressor writes no row commits without that name, every other compressed-rows name holds the rows its committed
+positions give, and a step fails whose names, whose rows under one of them (one short, one extra), or whose source's record of the
+names it found empty, are not what its positions give.  A step one row short is a fault the test injects (a boundary token with
+no compressed slot, `dsv4_model.step_metadata`'s `unslotted`), which the pinned vLLM does not give."""
 from __future__ import annotations
 
 import sys
@@ -23,10 +24,12 @@ import torch
 
 from tests.acquire.dsv4_model import (CMAP, CSA, CSA_R, ENV, HCA_R, IKB, L, LONG, NHL, NHP, SWAB, TOPK, _paged, dsv4_model, metadata,
                                       run_step)
-from tests.acquire.test_dsv4_route_source import Run, map_names
+from tests.acquire.test_dsv4_route_source import COUNTED, Run, map_names
 from verity_vllm.acquire.sources import dsv4_attention_source as DS
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
+from verity_vllm.commit.committer.plan_cache import PlanMetas
 
 OTHERS = tuple(b for b in RS.BINDERS if b != DS.BINDER)
 TAPS_ = [t for t in CMAP["taps"] if (t.get("commit") or {}).get("binder") == DS.BINDER]
@@ -108,6 +111,12 @@ class AttnRun(Run):
 
     def names(self, k: int) -> list[str]:
         return [n for n, _t in self.rec.get(k, [])]
+
+    def check(self, steps: dict[int, list[str]], *, sources: list[Any] | None = None,
+              shapes: dict[int, dict[str, tuple[int, ...]]] | None = None) -> dict[str, Any]:
+        """`Run.check` with every name the source bound at the shape it bound, and the names `shapes` gives."""
+        bound = {k: {n: tuple(t.shape) for n, t in self.rec.get(k, [])} for k in steps}
+        return super().check(steps, sources=sources, shapes={k: {**bound[k], **(shapes or {}).get(k, {})} for k in steps})
 
     def bound(self, k: int, name: str) -> torch.Tensor:
         return next(t for n, t in self.rec[k] if n == name)
@@ -311,6 +320,88 @@ def test_a_step_with_rows_the_positions_give_none_for_fails(runs, capsys):
         assert got["violations"][0]["routes_bad"] == {RS.NO_POSITIONS: (len(steps[0]), 0)}
     finally:
         r.attn.positions[0] = saved
+
+
+def test_every_compressed_rows_name_holds_its_positions_row_count_and_the_prefill_commits(runs, capsys):
+    """Each step binds under every compressed-rows name the rows its committed positions give (`CM.row_counts`), the rows the
+    pinned kernels write: the prefill at 108..127 five CSA rows and one HCA row.  The identity check reads each name's committed
+    leading dimension and admits every step."""
+    for target, r in runs.items():
+        for k in range(len(STEPS)):
+            counts = CM.row_counts(CMAP, ENV, r.attn.positions[k])
+            got = {n: int(t.shape[0]) for n, t in r.rec[k] if n in COUNTED}
+            assert got == {n: counts[s] for n, s in COUNTED.items() if counts[s]}, (target, k)
+    r = runs[True]
+    assert CM.row_counts(CMAP, ENV, r.attn.positions[PREFILL]) == {"NC4": 5, "NC128": 1}
+    got = r.check(committed(r, capsys))
+    assert got["ok"] is True, got["violations"][:2]
+
+
+def test_a_prefill_one_row_short_under_its_compressed_rows_names_fails_by_layer_and_name(capsys):
+    """The prefill at 108..127 with its first CSA boundary token (111) given no compressed slot, a fault: every CSA compressor
+    writes four rows where the positions give five, the source binds the four it wrote and finds nothing empty, and the identity
+    check fails the step under `ROW_COUNT_DIFFERS` at both of every CSA layer's names, (4, 5); the HCA rows, at 127, commit."""
+    r = AttnRun()
+    try:
+        md, first, routes, phase = STEPS[PREFILL]
+        r.step(PREFILL, md, first, unslotted=(3,))
+        short = {n for n, s in COUNTED.items() if s == "NC4"}
+        assert {n: int(t.shape[0]) for n, t in r.rec[PREFILL] if n in short} == dict.fromkeys(short, 4) and not r.attn.empty
+        got = r.check({PREFILL: map_names(capsys, routes, phase, binders=OTHERS) + r.names(PREFILL)})
+        want = {RS.row_count_differs(ROLE_OF[n][1], n): (4, 5) for n in short}
+        v = got["violations"][0]
+        assert got["ok"] is False and [x["step"] for x in got["violations"]] == [PREFILL] and v["routes_bad_n"] == len(want) == 2 * len(CSA)
+        assert v["routes_bad"] == dict(sorted(want.items())[:8])
+        assert RS.row_count_differs(10, "model.layers.10.attn/compressed_rows") in v["routes_bad"]
+    finally:
+        r.close()
+
+
+def test_a_compressed_rows_name_one_row_extra_or_with_no_leading_dimension_fails(runs, capsys):
+    """A commit that holds one row more than the prefill's positions give under a CSA and an HCA name fails under
+    `ROW_COUNT_DIFFERS`, by layer and name, (committed, count); and the commit side fails closed: `split_step_names` given no
+    metas fails every row-counted name the step commits, (-1, count).  It reads the leading dimensions from `TensorMeta`s and from
+    a cached plan's columns (`PlanMetas`) alike."""
+    r = runs[True]
+    steps = committed(r, capsys)
+    csa, hca = "model.layers.2.attn/compressed_rows", "model.layers.3.attn/compressed_rows"
+    got = r.check(steps, shapes={PREFILL: {csa: (6, SWAB), hca: (2, SWAB)}})
+    assert [v["step"] for v in got["violations"]] == [PREFILL]
+    assert got["violations"][0]["routes_bad"] == {RS.row_count_differs(2, csa): (6, 5), RS.row_count_differs(3, hca): (2, 1)}
+    names = Counter(steps[PREFILL])
+    _rest, bad = r.src.split_step_names(names, PREFILL, False)
+    assert bad == {RS.row_count_differs(ROLE_OF[n][1], n): (-1, 5 if s == "NC4" else 1) for n, s in COUNTED.items()}
+    lead = r.leads(PREFILL)
+    shapes = [(lead[n], SWAB) if n in lead else (4, 8) for n in steps[PREFILL]]
+    plan = PlanMetas(steps[PREFILL], ["uint8"] * len(shapes), [64] * len(shapes), [64 * i for i in range(len(shapes))], shapes, GPU_CHUNK_BYTES)
+    assert RS.leading_dims(plan) == RS.leading_dims(plan.scan()) and RS.leading_dims(plan)[csa] == 5
+    assert r.src.split_step_names(names, PREFILL, False, plan)[1] == r.src.split_step_names(names, PREFILL, False, plan.scan())[1] == {}
+    assert r.src.split_step_names(Counter(steps[0]), 9, True)[1] == {}, "a padding-only step is held to step 0's set of names only"
+
+
+def test_a_chunked_prefill_whose_first_chunk_ends_mid_window_holds_the_rows_the_kernels_write(capsys):
+    """A 158-token prefill in chunks within the stand-in's 32-token batch, positions 0..29, then 30..61, 62..93, 94..125 and
+    126..157: the first ends mid-window of both ratios, so every later chunk starts on compressor state the one before left, which
+    the pinned kernels read for the window and never for the mask (`CM.row_counts`).  The first writes 7 CSA rows (3, ..., 27),
+    each later one 8 (31, ..., 59; ...; 127, ..., 155), and only the last an HCA row (127): the source binds what the stand-in
+    wrote, those counts, and every chunk commits."""
+    r = AttnRun()
+    chunks = ((0, 30), (30, 32), (62, 32), (94, 32), (126, 32))
+    try:
+        for k, (first, n) in enumerate(chunks):
+            r.step(k, metadata(prefill_tokens=n, max_seq_len=first + n), first)
+        assert [CM.row_counts(CMAP, ENV, r.attn.positions[k]) for k in range(len(chunks))] == [
+            {"NC4": 7, "NC128": 0}, *[{"NC4": 8, "NC128": 0}] * 3, {"NC4": 8, "NC128": 1}]
+        assert r.attn.positions[4] == tuple(range(126, 158)) and set(r.attn.empty) == {0, 1, 2, 3}
+        for k in range(len(chunks)):
+            counts = CM.row_counts(CMAP, ENV, r.attn.positions[k])
+            assert all(same(t, r.want[k][n]) for n, t in r.rec[k])
+            assert {n: int(t.shape[0]) for n, t in r.rec[k] if n in COUNTED} == {n: counts[s] for n, s in COUNTED.items() if counts[s]}
+            assert r.src.step_routes(k) == (("hc-split", "indexer-short", "prefill-tokens"), "prefill")
+        got = r.check({k: map_names(capsys, *r.src.step_routes(k), binders=OTHERS) + r.names(k) for k in range(len(chunks))})
+        assert got["ok"] is True, got["violations"][:2]
+    finally:
+        r.close()
 
 
 def test_every_layer_attends_at_the_first_layers_positions():

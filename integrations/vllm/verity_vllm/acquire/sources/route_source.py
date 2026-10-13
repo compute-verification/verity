@@ -30,7 +30,9 @@ commits.  On a map with row counts (`CM.row_counts`: DeepSeek-V4-Pro's compresse
 multiple of a layer's compress ratio) a step commits nothing under a name whose count is 0 on it, and is held to the map's names
 less those, recomputed from the positions it committed (`CM.empty_names`, which a reader of the commit imports too): the
 DeepSeek-V4 attention source binds the positions and records the names it found empty, and a step whose record is another set
-fails.
+fails.  Every other such name holds exactly its count's rows (`CM.rows_differ`, on the leading dimensions of the step's committed
+metas, which the identity check hands over), and a step that commits one row more or fewer fails under `ROW_COUNT_DIFFERS`, by
+layer and name.
 
 A tap the map marks `target_only` is bound only on the map's target device (`on_target`: the CUDA device's compute capability and
 SM count are the target's): there a step without it fails, and elsewhere no step may commit it.
@@ -56,8 +58,23 @@ NO_ROUTE = "<no route recorded>"
 SPLIT = "<layers took different routes>"
 NO_POSITIONS = "<no positions recorded>"
 EMPTY_DIFFERS = "<the names the source found empty are not the positions' row counts'>"
+ROW_COUNT_DIFFERS = "<rows differ from the positions' row count>"
 PHASES = ("prefill", "decode")
 _HOOK_NAME = re.compile(r"^[^/]+(/(\d+|in))?$")
+
+
+def leading_dims(metas: Any) -> dict[str, int]:
+    """Each committed name's leading dimension (-1 for a 0-d tensor) in a step's metas as the identity check holds them: a cached
+    plan's columns (`plan_cache.PlanMetas`, its `names` and `shapes()`) or `TensorMeta`s."""
+    if hasattr(metas, "shapes"):
+        return {n: int(s[0]) if s else -1 for n, s in zip(metas.names, metas.shapes())}
+    return {m.name: int(m.shape[0]) if m.shape else -1 for m in metas}
+
+
+def row_count_differs(layer: int | None, name: str) -> str:
+    """The reason a step fails under when it committed `name`, a row-counted name of `layer`, with another number of rows than its
+    positions give (`RouteSource.split_step_names`)."""
+    return f"{ROW_COUNT_DIFFERS[:-1]} at layer {layer}: {name}>"
 
 
 def world_of(model: Any) -> int:
@@ -144,6 +161,8 @@ class RouteSource:
         #: on a map with row counts, the source that binds its positions tap: per engine step, `positions` (the values bound) and
         #: `empty` (the names it found no row for)
         self.rows: Any = None
+        #: the map has row counts: `split_step_names` holds each row-counted name's leading dimension in the step's metas to its count
+        self.counts_rows = bool(cmap.get("row_counts"))
 
     def names_at(self, routes: tuple[str, ...] | None, phase: str) -> dict[str, int]:
         """The names `BINDERS` commit at a step on `routes` (every route when None) in `phase`, once each, the `target_only` ones
@@ -256,7 +275,8 @@ class RouteSource:
             taken |= next(iter(one))
         return tuple(sorted(taken)), "prefill" if self.prefill.get(step) else "decode"
 
-    def split_step_names(self, names: Mapping[str, int], engine_step: int, padding_only: bool) -> tuple[dict[str, int], dict[str, tuple[int, int]]]:
+    def split_step_names(self, names: Mapping[str, int], engine_step: int, padding_only: bool,
+                         metas: Any = None) -> tuple[dict[str, int], dict[str, tuple[int, int]]]:
         """X-03 for the names the map binds through `BINDERS` at one step: (the step's other names, for the module rule and the
         step-0 multiplicity rule; name -> (committed, the map's count on the step's routes) where they differ -- by multiplicity, or
         as a set at a padding-only step).  A step without one route for every layer reports why under that reason's name.
@@ -264,7 +284,11 @@ class RouteSource:
         On a map with row counts the map's names on a step leave out the ones it writes no row for (`empty_at`), recomputed from
         the positions the step committed (a padding-only step: the first step's), never from what the binding source found: a step
         whose positions were not recorded fails under `NO_POSITIONS`, and one on which the source found another set of names
-        empty under `EMPTY_DIFFERS`, (its names the positions give rows for, the positions' empty names it bound)."""
+        empty under `EMPTY_DIFFERS`, (its names the positions give rows for, the positions' empty names it bound).  Every other
+        row-counted name it commits holds the count's rows: a name whose leading dimension in the step's `metas` (`leading_dims`)
+        is not its count at the step's positions (`CM.rows_differ`; -1 for a name the metas lack, so a caller that gives none
+        fails every such name) fails under `row_count_differs(layer, name)`, (the committed dimension, the count).  A
+        padding-only step committed no rows of a computation, so it is held to the set of names only."""
         got = {n: c for n, c in names.items() if n in self.mine or (_HOOK_NAME.match(n) and n.split("/", 1)[0] in self.known)}
         rest = {n: c for n, c in names.items() if n not in got}
         routes, phase = self.step_routes(engine_step, padding_only)
@@ -272,7 +296,7 @@ class RouteSource:
             return rest, {phase: (sum(got.values()), 0)}
         want = self.names_at(routes, phase)
         bad: dict[str, tuple[int, int]] = {}
-        if self.cmap.get("row_counts"):
+        if self.counts_rows:
             step = min(self.routes) if padding_only else int(engine_step)
             positions = None if self.rows is None else self.rows.positions.get(step)
             if positions is None:
@@ -282,6 +306,10 @@ class RouteSource:
             if found != empty:
                 bad[EMPTY_DIFFERS] = (len(found - empty), len(empty - found))
             want = {n: c for n, c in want.items() if n not in empty}
+            if not padding_only:
+                taps = self._taps_at[(routes, phase)]
+                held = CM.rows_differ(self.cmap, self.env, positions, {n: taps[n] for n in got if n in want}, leading_dims(metas or ()))
+                bad.update({row_count_differs(layer, n): (lead, count) for n, (layer, lead, count) in held.items()})
         keys = set(got) ^ set(want) if padding_only else {n for n in set(got) | set(want) if got.get(n, 0) != want.get(n, 0)}
         return rest, {**bad, **{n: (got.get(n, 0), want.get(n, 0)) for n in keys}}
 

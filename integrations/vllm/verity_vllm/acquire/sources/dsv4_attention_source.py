@@ -36,7 +36,10 @@ no row commits nothing under its compressed-rows name, since the committer commi
 per step.  Every layer attends at one positions tensor (another fails the step); the first layer's is bound under the map's
 positions tap and read to the host (`positions`), and the route source recomputes from it the names the step writes no row for
 (the map's `row_counts`, `CM.empty_names`), holds the step to the map's names less those, and fails it when `empty` is another set.
-Each compressor's ratio is the ratio of its compressed tap's row count, or the source refuses to attach.  Taps the map marks
+The pinned vLLM gives every real token a state slot and exactly its boundary tokens a compressed slot (v1/worker/block_table.py's
+`compute_slot_mapping`, v1/attention/backends/mla/compressor_utils.py's `get_compressed_slot_mapping`), so a compressor writes the
+positions' count of rows on a prefill or a decode, whatever compressor state an earlier chunk left, and the route source holds
+every other compressed-rows name's leading dimension to that count (`CM.rows_differ`).  Each compressor's ratio is the ratio of its compressed tap's row count, or the source refuses to attach.  Taps the map marks
 `target_only` are bound on the target only (`route_source.on_target`).  `capture-map ids --binder dsv4_attention --names` prints
 what a step binds.
 """
