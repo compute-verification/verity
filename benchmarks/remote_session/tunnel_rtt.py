@@ -24,6 +24,9 @@ for _ in range(100):
     except OSError:
         time.sleep(0.1)
 c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+c.sendall(b"hello")
+if c.recv(5) != b"hello":
+    sys.exit("PORT is not this probe's echo")
 def run(gap):
     out = []
     for _ in range(n):
@@ -72,12 +75,17 @@ def main() -> int:
     remote = (f"python3 -c \"import base64; exec(base64.b64decode('{code}'))\" "
               f"{a.port} {a.pings} {a.pace_ms}")
     for name, opts in VARIANTS.items():
-        r = subprocess.run(["ssh", *opts, "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
-                            "-R", f"127.0.0.1:{a.port}:127.0.0.1:{a.port}", *to, remote],
-                           stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=600)
-        line = next((x.strip() for x in r.stdout.splitlines() if x.strip().startswith("{")), None)
-        print(json.dumps({"variant": name, "ssh": shlex.join(opts), "rc": r.returncode,
-                          **(json.loads(line) if line else {"stderr": r.stderr[-400:]})}), flush=True)
+        try:
+            r = subprocess.run(["ssh", *opts, "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
+                                "-R", f"127.0.0.1:{a.port}:127.0.0.1:{a.port}", *to, remote],
+                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+            rc, out, err = r.returncode, r.stdout, r.stderr
+        except subprocess.TimeoutExpired as e:
+            rc, out, err = "timeout", e.stdout or "", e.stderr or ""
+            out, err = (x.decode(errors="replace") if isinstance(x, bytes) else x for x in (out, err))
+        line = next((x.strip() for x in out.splitlines() if x.strip().startswith("{")), None)
+        print(json.dumps({"variant": name, "ssh": shlex.join(opts), "rc": rc,
+                          **(json.loads(line) if line else {"stdout": out[-400:], "stderr": err[-400:]})}), flush=True)
     return 0
 
 
