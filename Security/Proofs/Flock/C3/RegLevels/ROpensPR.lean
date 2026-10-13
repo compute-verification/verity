@@ -34,6 +34,10 @@ family's list (`listStmt`) from R's levels in it, the verifier's check of each l
 * `readMaps`: R's map at its read (`stackedRead`'s rows, `readSibs` its siblings), where `StackedReads` holds by
   construction (`stackedReads_readMaps`) and the rows are `levelLanes` wide (`row_size_readMaps`, `levelTie_of_maps`'
   `hwd`). `opensReadAt_two_read` is `hos₂` there from the units' parameters, nets and `StackedReadCol` alone.
+* `ligOfVals`: the step source with R's Ligerito steps woven from its messages and rounds along `ligShape` and its
+  openings at stratum 2 R's rows (`repsOfVals`' form, at R). `ligSteps_of_plays`: where compiled Ligerito plays on them,
+  the woven steps have its kinds, messages and coin steps (`levelTie_of_maps`' `hk`, `hl` and its coins), and no tie
+  changes them (`lg_tied_repsOfVals_ligOfVals`); `os_two_tied_repsOfVals_ligOfVals` is its `ho`.
 -/
 
 namespace FlockC3.RegLevels
@@ -523,6 +527,78 @@ theorem opensAtMaps_readMaps (M : FlockC3.Reps.StackedMaps stmt Vs) {zs : (s : F
   rw [e]
   exact hT
 
+/-! ## R's Ligerito steps and openings at the source -/
+
+/-- **The step source with R's Ligerito steps and openings read off R's proof** (`repsOfVals`' form, at R): `stp` with
+its Ligerito steps the messages `ms` and the coin steps of the rounds `cs` woven along compiled Ligerito's shape at R's
+schedule (`ligShape`), and its openings at stratum 2 `opR`; the rest is `stp`'s. -/
+def ligOfVals (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
+    (ms : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → List FlockSoundness.Game.Msg)
+    (cs : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → List (Array Flock.F128))
+    (opR : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → List 𝔽 × List Dig) :
+    Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp) := fun R ω t Lb =>
+  { stp R ω t Lb with
+    lg := FlockSoundness.Discharge.Exec.weave
+      (FlockSoundness.Discharge.Exec.ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch) (ms R ω t Lb)
+      ((cs R ω t Lb).map (FlockSoundness.Discharge.PlaysCoin.coinArr fOf))
+    os := (fun q ℓ j => if q = 2 then opR R ω t Lb ℓ j else (stp R ω t Lb).os.1 q ℓ j, (stp R ω t Lb).os.2) }
+
+/-- **Woven Ligerito steps are a play's tape** (`levelTie_of_maps`' `hk` and `hl`, and its Ligerito coins): where
+compiled Ligerito at R's schedule plays on `ms` and the rounds `cs`, steps woven from them along its shape are a tape
+along it (`tapeAlong_of_plays` at `ligeritoC_spine`), so they have its kinds, the messages `ms` and the coin steps of
+`cs` (`Woven.steps`). -/
+theorem ligSteps_of_plays {u : C3Run (holoAt st hp)} {ms : List FlockSoundness.Game.Msg}
+    {cs : List (Array Flock.F128)} {T₀ : 𝔽} {b : ℕ → 𝔽} {pend : FlockSoundness.Model.PendL 𝔽 Dig}
+    (h : FlockSoundness.Game.Plays fOf
+      (FlockSoundness.Model.ligeritoC (D := Dig) FlockSoundness.execArith 2 (holoAt st hp).rsch.sch T₀ b) ms cs pend)
+    (hu : u.lg = FlockSoundness.Discharge.Exec.weave
+      (FlockSoundness.Discharge.Exec.ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch) ms
+      (cs.map (FlockSoundness.Discharge.PlaysCoin.coinArr fOf))) :
+    u.lg.map FlockSoundness.Discharge.Exec.kindOf <+:
+        FlockSoundness.Discharge.Exec.ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch ∧
+      u.lg.filterMap Sum.getLeft? = ms ∧
+        u.lg.filterMap Sum.getRight? = cs.map (FlockSoundness.Discharge.PlaysCoin.coinArr fOf) :=
+  FlockC3.Reps.Woven.steps ⟨hu, FlockC3.Reps.tapeAlong_of_plays
+    (FlockSoundness.Discharge.Exec.ligeritoC_spine (D := Dig) FlockSoundness.execArith 2 _ T₀ b) h⟩
+
+/-- **R's Ligerito steps at the reps' tied source over `ligOfVals`** are its weave (`ligSteps_of_plays`' `hu`): no tie
+changes the steps. -/
+theorem lg_tied_repsOfVals_ligOfVals
+    (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
+    (ms : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → List FlockSoundness.Game.Msg)
+    (cs : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → List (Array Flock.F128))
+    (opR : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → List 𝔽 × List Dig)
+    (sh : Flock.Shape) (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
+    (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals)
+    (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (Lb : (j : Fin S) → (Vs j).Bits) :
+    (tiedSrc (repsOfVals (ligOfVals stp ms cs opR) sh rep vals) R ω t Lb).lg = FlockSoundness.Discharge.Exec.weave
+      (FlockSoundness.Discharge.Exec.ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch) (ms R ω t Lb)
+      ((cs R ω t Lb).map (FlockSoundness.Discharge.PlaysCoin.coinArr fOf)) := rfl
+
+/-- **Stratum 2's openings at `ligOfVals` are `opR`'s** (`opensReadAt_two_read`'s `hsrc` where `opR` is `prR`'s rows,
+`openRow (prR Lb) shR.sched`). -/
+theorem os_two_ligOfVals
+    (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
+    (ms : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → List FlockSoundness.Game.Msg)
+    (cs : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → List (Array Flock.F128))
+    (opR : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → List 𝔽 × List Dig)
+    (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (Lb : (j : Fin S) → (Vs j).Bits) (ℓ j : ℕ) :
+    (ligOfVals stp ms cs opR R ω t Lb).os.1 2 ℓ j = opR R ω t Lb ℓ j := rfl
+
+/-- **`levelTie_of_maps`' `ho` at the reps' tied source over `ligOfVals`**: past the reps the tied source's openings
+are `ligOfVals`' (`os_tied_repsOfVals_of_ge`), at stratum 2 `opR`'s (`os_two_ligOfVals`). -/
+theorem os_two_tied_repsOfVals_ligOfVals
+    (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
+    (ms : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → List FlockSoundness.Game.Msg)
+    (cs : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → List (Array Flock.F128))
+    (opR : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → List 𝔽 × List Dig)
+    (sh : Flock.Shape) (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
+    (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals)
+    (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (Lb : (j : Fin S) → (Vs j).Bits) (ℓ j : ℕ) :
+    (tiedSrc (repsOfVals (ligOfVals stp ms cs opR) sh rep vals) R ω t Lb).os.1 2 ℓ j = opR R ω t Lb ℓ j :=
+  (os_tied_repsOfVals_of_ge (ligOfVals stp ms cs opR) sh rep vals R ω t Lb (Nat.lt_irrefl 2) ℓ j).trans
+    (os_two_ligOfVals stp ms cs opR R ω t Lb ℓ j)
+
 end
 
 end FlockC3.RegLevels
@@ -533,3 +609,7 @@ end FlockC3.RegLevels
 #print axioms FlockC3.RegLevels.stackedParams_of_check
 #print axioms FlockC3.RegLevels.shape?_opening
 #print axioms FlockC3.RegLevels.stackedParams_of_checked
+#print axioms FlockC3.RegLevels.ligSteps_of_plays
+#print axioms FlockC3.RegLevels.lg_tied_repsOfVals_ligOfVals
+#print axioms FlockC3.RegLevels.os_two_ligOfVals
+#print axioms FlockC3.RegLevels.os_two_tied_repsOfVals_ligOfVals
