@@ -49,3 +49,14 @@ def test_every_tp_workload_disables_p2p_exactly_on_a_sys_target():
         p2p = (row_p2p_env(p.stem) if req is None else req).get("NCCL_P2P_DISABLE")
         assert (p2p == "1") == (row_target(p.stem) in P2P_SYS_TARGETS) and p2p in ("1", None), p.name
     assert "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager" in {p.stem for p in rows}
+
+
+def test_every_tp_workload_states_its_custom_all_reduce_and_disables_it_exactly_on_a_sys_target():
+    """What each TP row's engines run with (`row_tp.TpRow.custom_all_reduce_off`): the custom all-reduce off on every L40S and RTX PRO
+    6000 row, on for GLM-5.3's H200 row.  Every workload states the field, so none relies on the fallback."""
+    rows = sorted(p for p in WORKLOADS.glob("*.json") if row_world(p.stem) > 1)
+    for p in rows:
+        req = json.loads(p.read_text())["engine_args_required"]
+        assert req["disable_custom_all_reduce"] is (row_target(p.stem) in P2P_SYS_TARGETS), p.name
+    assert json.loads((WORKLOADS / "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager.json").read_text())[
+        "engine_args_required"]["disable_custom_all_reduce"] is False
