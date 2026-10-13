@@ -230,12 +230,14 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log) -> dict:
     return {"ok": ok, "rel_err": rel, "equal": equal, "splits": cands, "layers": layers}
 
 
-def gate_gemm(wt, torch, shapes: dict, b: int, ks, reps: int, sketch_t: int, log) -> tuple[dict, list, list]:
+def gate_gemm(wt, torch, shapes: dict, b: int, ks, reps: int, sketch_t: int, log,
+              gate_reps: int = 1) -> tuple[dict, list, list]:
     fused = [c for c in BW.fused_cfgs(wt, "auto", "16", sketch_t) if c[2] in (-1, -2)]
     plain = BW.parse(PLAIN_CFGS)
     out = {}
     for name, (n, kd) in shapes.items():
-        out[name] = BW.gemm_case(wt, torch, name, n, kd, [b], ks, reps, log, plain, fused, [], [], sketch_t=sketch_t)
+        out[name] = BW.gemm_case(wt, torch, name, n, kd, [b], ks, reps, log, plain, fused, [], [], sketch_t=sketch_t,
+                                 gate_reps=gate_reps)
         if not out[name].get("ok"):
             break
     return out, fused, plain
@@ -744,6 +746,7 @@ def main() -> int:
     ap.add_argument("--gemm-reps", type=int, default=5)
     ap.add_argument("--sketch-t", type=int, default=8)
     ap.add_argument("--gate-words", type=int, default=1 << 16)
+    ap.add_argument("--gate-reps", type=int, default=1, help="runs of each fused config in the GEMM gate")
     ap.add_argument("--gate-ctx", type=int, default=0, help="the attention gate's context (0: the step's)")
     a = ap.parse_args()
     out_dir = Path(a.out)
@@ -813,7 +816,7 @@ def main() -> int:
         write_result(res, out_dir, [a.wt_lib, a.kv_lib])
         return 5
 
-    gemm, fused, plain = gate_gemm(wt, torch, all_shapes, m, ks, a.gemm_reps, a.sketch_t, log)
+    gemm, fused, plain = gate_gemm(wt, torch, all_shapes, m, ks, a.gemm_reps, a.sketch_t, log, a.gate_reps)
     res["gemm"] = gemm
     res["ok"] = all(g.get("ok") for g in gemm.values()) and len(gemm) == len(all_shapes)
     save()
