@@ -42,8 +42,9 @@ both, so `served_default` is first-class rather than timing-only.
              (`verity.ml.circuits.evaluation.evaluate`) of the word Definition the launch binds, which the model must equal.
   bind       every Definition binds at each model's statics.
   timing     each case's kernel time, the median of `REPS` CUDA-event-timed launches.
-  profile    every CUDA kernel name and launch grid, the separate cuBLASLt reduction kernel, grid.z as `SPLIT_K`, and the runtime
-             cuBLAS version. Each default split-K case includes a crafted cancellation row fit against the stated
+  profile    every CUDA kernel name and launch grid, the separate cuBLASLt reduction kernel, the shape-pinned `SPLIT_K` (Kineto
+             reports grid.z = 1 for these launches), and the runtime cuBLAS version. Each default split-K case includes a crafted
+             cancellation row fit against the stated
              contiguous/f32/forward hypothesis and strided, reverse, tree and bf16-partial alternatives.
 
 GO needs, for every model and both variants, every case run, 0 mismatches on every word, `fma` decided, every launch deterministic
@@ -698,7 +699,7 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------ bind
 def bind_check(models: list[str] = list(MODELS), launches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """Every Definition binds at each model's statics, including each default split count read from the profiler."""
+    """Every Definition binds at each model's statics, including each default split count pinned from the profiled route."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.batch import type_shape
