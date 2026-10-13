@@ -130,19 +130,11 @@ def test_masked_round_trip(name, rounds):
         assert (y == W.encode_word(m, 1000 + i, plain)) == (rounds == 1)
 
 
-def masked_rare_payloads(k: W.Key, i: int) -> list[int]:
-    """At full slot, payloads whose first round's output x has x ⊕ K at or above p (σ_K leaves x), and next to them:
-    σ_K's rare branch, which a random word takes with probability c / 2^n."""
-    f, t = k.field, k.tweak(i)
-    xs = [(f.p + r) ^ k.mask for r in (0, 1, f.c - 1)] + [(f.p - 1) ^ k.mask]
-    return [(W.rho_inv(x, f) - k.c[0] - t) % f.p for x in xs if x < f.p]
-
-
 @pytest.mark.parametrize("name", [n for n, f in W.FIELDS.items() if f.full_slot])
 def test_sigma_rare_branch(name):
     k = W.key(name, SEED, 2, mask=True)
     f = k.field
-    ms = masked_rare_payloads(k, 77)
+    ms = W.sigma_rare_payloads(k, 77)
     assert len(ms) == 4
     for j, m in enumerate(ms):
         x = W.rho((m + k.c[0] + k.tweak(77)) % f.p, f)

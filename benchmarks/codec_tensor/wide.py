@@ -196,6 +196,14 @@ def decode_word(y: int, i: int, k: Key) -> int:
     return x
 
 
+def sigma_rare_payloads(k: Key, i: int) -> list[int]:
+    """At full slot, payloads at index `i` whose first round's output x has x ⊕ K at or above p (σ_K leaves x), and next
+    to them: σ_K's rare branch, which a random word takes with probability c / 2^n."""
+    f, t = k.field, k.tweak(i)
+    xs = [(f.p + r) ^ k.mask for r in (0, 1, f.c - 1)] + [(f.p - 1) ^ k.mask]
+    return [(rho_inv(x, f) - k.c[0] - t) % f.p for x in xs if x < f.p]
+
+
 def word_bytes(y: int, f: Field) -> bytes:
     return y.to_bytes(f.word_bytes, "little")
 
