@@ -258,7 +258,7 @@ def test_statics_are_checked() -> None:
 # --- on bits ---------------------------------------------------------------------------------------------------------------------
 
 AGREEMENT = [bind(BDG.F32LtFtzV2), bind(BDG.Fp8Ue8m0CeilV2), bind(BDG.Fp8GroupScaleUe8m0V2, G=32),
-             bind(BDG.Fp8GroupQuantUe8m0V2, K=64, G=32), bind(BDG.FlashInferFp8Quant1x128GroupV2),
+             bind(BDG.Fp8GroupQuantUe8m0GroupV2, G=32), bind(BDG.Fp8GroupQuantUe8m0V2, K=64, G=32), bind(BDG.FlashInferFp8Quant1x128GroupV2),
              bind(BDG.FlashInferFp8Quant1x128V2, K=256), bind(BDG.DeepGemmFp8LinearV2, K=128, N=2),
              bind(BDG.FlashInferFp8LinearV2, K=128, N=2), bind(BDG.ScaledMmFp8BlockGroupedV2, H=2, K=64, N=34, G=32)]
 

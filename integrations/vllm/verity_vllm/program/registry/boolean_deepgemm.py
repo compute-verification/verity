@@ -4,8 +4,10 @@ one's word view is its `_v1` at the same statics.
 
     F32LtFtz_v2                                    traced: setp.lt.ftz.f32 (`f32_gt` of the flushed operands, swapped)
     Fp8Ue8m0Ceil_v2                                one traced circuit (`boolean_dsa.flat`): its three constant words folded
-    Fp8GroupScaleUe8m0_v2{G}, Fp8GroupQuantUe8m0_v2{K,G}
-    FlashInferFp8Quant1x128Group_v2, FlashInferFp8Quant1x128_v2{K}
+    Fp8GroupScaleUe8m0_v2{G}, Fp8GroupQuantUe8m0Group_v2{G}, FlashInferFp8Quant1x128Group_v2
+                                                   one traced circuit each: a group's words share their scale's and their own
+                                                   decoding (the tracer's common ANDs once, its dead gates none)
+    Fp8GroupQuantUe8m0_v2{K,G}, FlashInferFp8Quant1x128_v2{K}
     DeepGemmFp8Linear_v2{K,N}, FlashInferFp8Linear_v2{K,N}, ScaledMmFp8BlockGrouped_v2{H,K,N,G}
 
 The callees are core's Boolean FP32 pieces (`verity.ml.circuits.ops.boolean`'s `scalar`, `attention`, `mufu`, `gemm`, `cast`,
@@ -57,13 +59,22 @@ def _group_scale(B, S, x):
     return B.call(Fp8Ue8m0CeilV2, B.call(bind(BF8.Fp8GroupScaleV2, G=S.G), x))
 
 
-Fp8GroupScaleUe8m0V2 = EW.on_bits("Fp8GroupScaleUe8m0", 2, ["G"], lambda S: ((("x", Array(S.G, BF16)),), F32), _group_scale,
-                                  DG.Fp8GroupScaleUe8m0)
+Fp8GroupScaleUe8m0V2 = BD.flat("Fp8GroupScaleUe8m0", 2, ["G"], lambda S: ((("x", Array(S.G, BF16)),), F32), _group_scale,
+                               DG.Fp8GroupScaleUe8m0)
+
+
+def _group_quant_group(B, S, x):
+    """`Fp8GroupQuantUe8m0Group_v1`'s body on bits."""
+    return DG.group_quant(bit_ops(B), S.G, x, bind(Fp8GroupScaleUe8m0V2, G=S.G), T)
+
+
+Fp8GroupQuantUe8m0GroupV2 = BD.flat("Fp8GroupQuantUe8m0Group", 2, ["G"], lambda S: DG.group_sig(S.G, T), _group_quant_group,
+                                    DG.Fp8GroupQuantUe8m0Group)
 
 
 def _group_quant(B, S, x):
     """`Fp8GroupQuantUe8m0_v1`'s body on bits."""
-    return DG.group_quant(bit_ops(B), S.K, S.G, x, bind(Fp8GroupScaleUe8m0V2, G=S.G), T)
+    return DG.group_row(B, "Fp8GroupQuantUe8m0", S.K, S.G, x, bind(Fp8GroupQuantUe8m0GroupV2, G=S.G), T)
 
 
 Fp8GroupQuantUe8m0V2 = EW.on_bits("Fp8GroupQuantUe8m0", 2, ["K", "G"], lambda S: DG.quant_sig(S, S.G, T), _group_quant,
@@ -75,13 +86,13 @@ def _fi_group(B, S, x):
     return DG.fi_group(bit_ops(B), x, T)
 
 
-FlashInferFp8Quant1x128GroupV2 = EW.on_bits("FlashInferFp8Quant1x128Group", 2, [], lambda S: DG.fi_group_sig(S, T), _fi_group,
-                                            DG.FlashInferFp8Quant1x128Group)
+FlashInferFp8Quant1x128GroupV2 = BD.flat("FlashInferFp8Quant1x128Group", 2, [], lambda S: DG.fi_group_sig(S, T), _fi_group,
+                                         DG.FlashInferFp8Quant1x128Group)
 
 
 def _fi(B, S, x):
     """`FlashInferFp8Quant1x128_v1`'s body on bits."""
-    return DG.fi_row(B, S.K, x, FlashInferFp8Quant1x128GroupV2, T)
+    return DG.group_row(B, "FlashInferFp8Quant1x128", S.K, FP8_BLOCK, x, FlashInferFp8Quant1x128GroupV2, T)
 
 
 FlashInferFp8Quant1x128V2 = EW.on_bits("FlashInferFp8Quant1x128", 2, ["K"], lambda S: DG.quant_sig(S, FP8_BLOCK, T), _fi,
@@ -118,5 +129,6 @@ def _grouped(B, S, xq, sx, w, ws):
 ScaledMmFp8BlockGroupedV2 = EW.on_bits("ScaledMmFp8BlockGrouped", 2, ["H", "K", "N", "G"], lambda S: DG.grouped_sig(S, T), _grouped,
                                        DG.ScaledMmFp8BlockGrouped)
 
-BOOLEAN_DEEPGEMM = [F32LtFtzV2, Fp8Ue8m0CeilV2, Fp8GroupScaleUe8m0V2, Fp8GroupQuantUe8m0V2, FlashInferFp8Quant1x128GroupV2,
-                    FlashInferFp8Quant1x128V2, DeepGemmFp8LinearV2, FlashInferFp8LinearV2, ScaledMmFp8BlockGroupedV2]
+BOOLEAN_DEEPGEMM = [F32LtFtzV2, Fp8Ue8m0CeilV2, Fp8GroupScaleUe8m0V2, Fp8GroupQuantUe8m0GroupV2, Fp8GroupQuantUe8m0V2,
+                    FlashInferFp8Quant1x128GroupV2, FlashInferFp8Quant1x128V2, DeepGemmFp8LinearV2, FlashInferFp8LinearV2,
+                    ScaledMmFp8BlockGroupedV2]

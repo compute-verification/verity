@@ -39,6 +39,7 @@ Registered functions (all `Name_v1`):
   F32LtFtz                          primitive: setp.lt.ftz.f32 -> bit
   Fp8Ue8m0Ceil                      (y: f32) -> f32: the power of two at or above max(|y|, 1e-10)
   Fp8GroupScaleUe8m0{G}             (x: G bf16) -> f32
+  Fp8GroupQuantUe8m0Group{G}        (x: G bf16) -> (q: G e4m3, s: f32)
   Fp8GroupQuantUe8m0{K,G}           (x: K bf16) -> (q: K e4m3, s: K/G f32)                    the M >= 32 branch's quantisation
   FlashInferFp8Quant1x128Group      (x: 128 bf16) -> (q: 128 e4m3, s: f32)
   FlashInferFp8Quant1x128{K}        (x: K bf16) -> (q: K e4m3, s: K/128 f32)                  the M < 32 branch's quantisation
@@ -120,9 +121,14 @@ def quant_sig(S, G: int, T=WORD_TYPES):
     return (("x", Array(S.K, bf16)),), Tuple(Array(S.K, e4m3), Array(S.K // G, f32))
 
 
-def fi_group_sig(S, T=WORD_TYPES):
+def group_sig(G: int, T=WORD_TYPES):
+    """(x: G bf16) -> (q: G e4m3, s: f32), over the types T."""
     bf16, e4m3, f32 = T
-    return (("x", Array(FP8_BLOCK, bf16)),), Tuple(Array(FP8_BLOCK, e4m3), f32)
+    return (("x", Array(G, bf16)),), Tuple(Array(G, e4m3), f32)
+
+
+def fi_group_sig(S, T=WORD_TYPES):
+    return group_sig(FP8_BLOCK, T)
 
 
 def linear_sig(S, materialise: bool, T=WORD_TYPES):
@@ -165,24 +171,35 @@ def Fp8GroupScaleUe8m0(B, S, x):
     return B.call(Fp8Ue8m0Ceil, B.call(bind(F8.Fp8GroupScale, G=S.G), x))
 
 
-def group_quant(o: Ops, K: int, G: int, x, scale, T=WORD_TYPES):
-    """`Fp8GroupQuantUe8m0`'s body, group g's scale a Call of ``scale`` on its G words: (q, s)."""
+def group_quant(o: Ops, G: int, x, scale, T=WORD_TYPES):
+    """`Fp8GroupQuantUe8m0Group`'s body, its scale a Call of ``scale`` on the G words: (q, s)."""
+    s = o.B.call(scale, x)
+    q = [o.e4m3(o.fminf(o.fmaxf(o.div(o.cvt(x[e]), s), o.word(F_NEG448)), o.word(F_448))) for e in range(G)]
+    return tuple_of(_row(G, q, T[1]), s)
+
+
+@composite("Fp8GroupQuantUe8m0Group", 1, ["G"], lambda S: group_sig(S.G), conformance=_UE8M0_CONF)
+def Fp8GroupQuantUe8m0Group(B, S, x):
+    """One group of `per_token_group_quant_8bit_kernel`: `s = Fp8GroupScaleUe8m0_v1{G}` and `q[e] = cvt.rn.satfinite.e4m3x2(
+    fminf(fmaxf(f32(x[e]) / s, -448), 448))` (per_token_group_quant.cu:85-86: `div.rn` by a power of two; a NaN quotient is dropped
+    by fmaxf)."""
+    return group_quant(word_ops(B), S.G, x, bind(Fp8GroupScaleUe8m0, G=S.G))
+
+
+def group_row(B, name: str, K: int, G: int, x, group, T=WORD_TYPES):
+    """A row quantiser's body: the K/G groups' Calls of ``group``, their words and scales concatenated."""
     if K % G:
-        raise ValueError(f"Fp8GroupQuantUe8m0: K={K} is not a multiple of G={G}")
-    qs, ss = [], []
-    for g in range(K // G):
-        s = o.B.call(scale, x[g * G:(g + 1) * G])
-        ss.append(s)
-        qs += [o.e4m3(o.fminf(o.fmaxf(o.div(o.cvt(x[e]), s), o.word(F_NEG448)), o.word(F_448))) for e in range(g * G, (g + 1) * G)]
-    return tuple_of(_row(K, qs, T[1]), _row(K // G, ss, T[2]))
+        raise ValueError(f"{name}: K={K} is not a multiple of G={G}")
+    parts = [B.call(group, x[g * G:(g + 1) * G]) for g in range(K // G)]
+    return tuple_of(Coll(Array(K, T[1]), concat([p[0].refs for p in parts])),
+                    Coll(Array(K // G, T[2]), concat([p[1].refs for p in parts])))
 
 
 @composite("Fp8GroupQuantUe8m0", 1, ["K", "G"], lambda S: quant_sig(S, S.G), conformance=_UE8M0_CONF)
 def Fp8GroupQuantUe8m0(B, S, x):
-    """`_C.per_token_group_fp8_quant(.., use_ue8m0=True)` on one bf16 row: per group g, `s[g] = Fp8GroupScaleUe8m0_v1{G}` and
-    `q[e] = cvt.rn.satfinite.e4m3x2(fminf(fmaxf(f32(x[e]) / s[g], -448), 448))` (per_token_group_quant.cu:85-86: `div.rn` by a power
-    of two; a NaN quotient is dropped by fmaxf).  Both outputs are materialised (the M >= 32 branch's `q_input`, `input_scale`)."""
-    return group_quant(word_ops(B), S.K, S.G, x, bind(Fp8GroupScaleUe8m0, G=S.G))
+    """`_C.per_token_group_fp8_quant(.., use_ue8m0=True)` on one bf16 row: group g is `Fp8GroupQuantUe8m0Group_v1{G}` over
+    x[Gg:Gg+G].  Both outputs are materialised (the M >= 32 branch's `q_input`, `input_scale`)."""
+    return group_row(B, "Fp8GroupQuantUe8m0", S.K, S.G, x, bind(Fp8GroupQuantUe8m0Group, G=S.G))
 
 
 def fi_lane_elements(l: int) -> tuple[int, ...]:
@@ -216,20 +233,11 @@ def FlashInferFp8Quant1x128Group(B, S, x):
     return fi_group(word_ops(B), x)
 
 
-def fi_row(B, K: int, x, group, T=WORD_TYPES):
-    """`FlashInferFp8Quant1x128`'s body: the K/128 groups' Calls of ``group``, their words and scales concatenated."""
-    if K % FP8_BLOCK:
-        raise ValueError(f"FlashInferFp8Quant1x128: K={K} is not a multiple of {FP8_BLOCK}")
-    parts = [B.call(group, x[g * FP8_BLOCK:(g + 1) * FP8_BLOCK]) for g in range(K // FP8_BLOCK)]
-    return tuple_of(Coll(Array(K, T[1]), concat([p[0].refs for p in parts])),
-                    Coll(Array(K // FP8_BLOCK, T[2]), concat([p[1].refs for p in parts])))
-
-
 @composite("FlashInferFp8Quant1x128", 1, ["K"], lambda S: quant_sig(S, FP8_BLOCK), conformance=_FI_CONF)
 def FlashInferFp8Quant1x128(B, S, x):
     """`scale_1x128_kernel` on one bf16 row: group g is `FlashInferFp8Quant1x128Group_v1` over x[128g:128g+128]; the e4m3 words and
     the stored scales are what the TRT-LLM GEMM reads (its workspace)."""
-    return fi_row(B, S.K, x, FlashInferFp8Quant1x128Group)
+    return group_row(B, "FlashInferFp8Quant1x128", S.K, FP8_BLOCK, x, FlashInferFp8Quant1x128Group)
 
 
 def linear(B, quant, gemm, x, w, ws, materialise: bool):
@@ -262,5 +270,5 @@ def ScaledMmFp8BlockGrouped(B, S, xq, sx, w, ws):
     return B.batch(bind(F8.ScaledMmFp8BlockSharedScale, K=S.K, N=S.N, G=S.G), xq, sx, w, ws, axes=(0, 0, 0, 0))
 
 
-DEEPGEMM_COMPOSITES = [Fp8Ue8m0Ceil, Fp8GroupScaleUe8m0, Fp8GroupQuantUe8m0, FlashInferFp8Quant1x128Group, FlashInferFp8Quant1x128,
-                       DeepGemmFp8Linear, FlashInferFp8Linear, ScaledMmFp8BlockGrouped]
+DEEPGEMM_COMPOSITES = [Fp8Ue8m0Ceil, Fp8GroupScaleUe8m0, Fp8GroupQuantUe8m0Group, Fp8GroupQuantUe8m0, FlashInferFp8Quant1x128Group,
+                       FlashInferFp8Quant1x128, DeepGemmFp8Linear, FlashInferFp8Linear, ScaledMmFp8BlockGrouped]
