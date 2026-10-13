@@ -9,6 +9,11 @@ import Proofs.Accounting.RateAudit.PartialJoint
 import Proofs.Accounting.RateAudit.Sketch
 import Proofs.Accounting.RateAudit.SketchHonest
 import Proofs.Accounting.RateAudit.SketchInteractive
+import Proofs.Accounting.RateAudit.Conservation
+import Proofs.Accounting.RateAudit.Chain
+import Proofs.Accounting.RateAudit.Horizon
+import Proofs.Accounting.RateAudit.Named
+import Proofs.Accounting.RateAudit.Session
 
 /-! The rate audit's proofs: the guarantee in the random-oracle model (`Accounting.SecurityProofs.RateAudit`), its
 completeness (`Accounting.SecurityProofs.RateHonest`), its time average over windows
@@ -21,4 +26,16 @@ joint run `RateOfAuditPartial` and its passes form `RateOfAuditPartialPasses`), 
 a device that reads sectors verbatim (`Accounting.SecurityProofs.RateAuditSketch`, its completeness
 `Accounting.SecurityProofs.RateSketchHonest`, with interactive side sources that ignore the oracle
 `Accounting.SecurityProofs.RateAuditSketchInteractiveRO`,
-`Accounting.SecurityProofs.SketchBinds`, `Accounting.SecurityProofs.RateAuditTensorSketch`). -/
+`Accounting.SecurityProofs.SketchBinds`, `Accounting.SecurityProofs.RateAuditTensorSketch`), and the remote protocol's
+conservation over tiers (`Accounting.SecurityProofs.RateConservationRO`, `RateConservation`, their capacity forms
+`RateConservationCapRO` and `RateConservationCap`, and `RateDisplacement`), chained passes
+(`Accounting.SecurityProofs.RateChainPassRO`, `RateChainPass`, `RateChainRO`, `RateChain`), and conservation at every
+count, for a pass and for a window (`Accounting.SecurityProofs.RatePaidRO`, `RatePaid`, `RateChainPaidRO`,
+`RateChainPaid`), and for a window whose roots are ground against the Fiat–Shamir seed
+(`Accounting.SecurityProofs.RateGrindPaidRO`, `RateGrindPaid`), and the causal horizon bound on the samples
+(`Accounting.SecurityProofs.HorizonSampling`, `RateHorizon`) with the route `Sampled` it gives a window
+(`Accounting.SecurityProofs.RateChainSampledRO`, `RateChainSampled`), and conservation with the compression naming
+words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`), with its route `Sampled`
+(`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled draw of a window and of a session of windows,
+over the horizon and in every window (`Accounting.SecurityProofs.RateWindowDraw`, `RateSessionDraw`), with its route
+`Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`). -/
