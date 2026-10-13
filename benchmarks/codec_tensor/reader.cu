@@ -272,6 +272,200 @@ __global__ void __launch_bounds__(128) sketch_hash_kernel(const uint4 *__restric
   for (int i = 0; i < 8; ++i) ys[8 * q + i] = s[i];
 }
 
+// --- sketch-sha512 at k_s = 64 rows (a block's 2^−64) -------------------------------------------------------------
+//
+// The sketch as an int8 tensor-core product, σ (blocks × 64) = E (blocks × 4096) · Sᵀ, by mma.m16n8k32: a warp takes
+// 16 MT blocks (MT m-tiles) through all 4096 bytes, its 8 n-tiles the 64 rows. K runs over a block's bytes in an order
+// of the kernel's own: at p = 0 … 63 lane (g, t) holds 16 bytes of block g and of block g + 8 at 64 p + 16 t, and their
+// words (x, y) are A's (a0, a2) and (a1, a3) of k-step 2 p, (z, w) the same of k-step 2 p + 1. B is S's row 8 n + g at
+// the same bytes. The signs sit in shared memory as 32 KiB of bits (reader.py's `pack64`): lane (g, t)'s uint4 at p
+// holds, in bit 8 i + r of word R / 8, element i of its B register R = 4 n + 2 s + b (n-tile n, k-step 2 p + s, b0 or
+// b1) at r = R mod 8, and a register is one IMAD, 0x01010101 + 0xFE · ((word >> r) & 0x01010101): a bit of 1 is −1.
+//
+// sketch64_kernel writes σ (64 int32 a block); sketch64_hash_kernel is a thread a block, y = three compressions of
+// u64be j ‖ σ_j (264 bytes) from the seed block's midstate. sketch64_receipts_kernel is both in one: each warp stages
+// its 32 blocks' σ in shared memory and each lane hashes one, so σ never leaves the SM.
+
+constexpr int SK64_ROWS = 64, SK64_P = BLOCK / 64, SK64_WARPS = 4, SK64R_WARPS = 8;
+constexpr int SK64_SIGNS = SK64_P * 32;                            // uint4s of packed signs: 32 KiB
+constexpr int SK64R_SMEM = SK64_SIGNS * 16 + SK64R_WARPS * 32 * SK64_ROWS * 4;
+
+__device__ __forceinline__ void imma16832(int (&d)[4], u32 a0, u32 a1, u32 a2, u32 a3, u32 b0, u32 b1) {
+  asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, "
+      "{%0, %1, %2, %3};"
+      : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
+      : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+}
+
+__device__ __forceinline__ u32 sign_reg(u32 word, int r) { return 0x01010101u + 0xFEu * ((word >> r) & 0x01010101u); }
+
+// Lane (g, t)'s 16 bytes at p of blocks b0 + 16 mt + g (+ 8 for hi), zero past n, each XORed with its z when Z.
+template <bool Z, int MT>
+__device__ __forceinline__ void sk64_load(uint4 (&d)[MT][2], const uint4 *__restrict__ data,
+                                          const uint4 *__restrict__ zs, u64 b0, u64 n, int p, int g, int t) {
+#pragma unroll
+  for (int mt = 0; mt < MT; ++mt) {
+#pragma unroll
+    for (int hi = 0; hi < 2; ++hi) {
+      const u64 blk = b0 + 16 * mt + g + 8 * hi;
+      uint4 v = make_uint4(0, 0, 0, 0);
+      if (blk < n) {
+        const u64 at = blk * (BLOCK / 16) + 4 * p + t;
+        v = __ldcs(data + at);
+        if (Z) {
+          const uint4 x = __ldcs(zs + at);
+          v.x ^= x.x, v.y ^= x.y, v.z ^= x.z, v.w ^= x.w;
+        }
+      }
+      d[mt][hi] = v;
+    }
+  }
+}
+
+// σ of the warp's blocks b0 … b0 + 16 MT − 1 into acc: lane (g, t) ends with rows 8 n + 2 t, +1 of block 16 mt + g in
+// acc[mt][n][0, 1] and of block 16 mt + g + 8 in acc[mt][n][2, 3].
+template <bool Z, int MT>
+__device__ __forceinline__ void sk64_tile(int (&acc)[MT][8][4], const uint4 *__restrict__ sg,
+                                          const uint4 *__restrict__ data, const uint4 *__restrict__ zs, u64 b0, u64 n,
+                                          int lane) {
+  const int g = lane >> 2, t = lane & 3;
+#pragma unroll
+  for (int mt = 0; mt < MT; ++mt)
+#pragma unroll
+    for (int nt = 0; nt < 8; ++nt) acc[mt][nt][0] = acc[mt][nt][1] = acc[mt][nt][2] = acc[mt][nt][3] = 0;
+  uint4 cur[MT][2], nxt[MT][2];
+  sk64_load<Z, MT>(cur, data, zs, b0, n, 0, g, t);
+#pragma unroll 1
+  for (int p = 0; p < SK64_P; ++p) {
+    if (p + 1 < SK64_P) sk64_load<Z, MT>(nxt, data, zs, b0, n, p + 1, g, t);
+    const uint4 w = sg[p * 32 + lane];
+    const u32 ws[4] = {w.x, w.y, w.z, w.w};
+#pragma unroll
+    for (int nt = 0; nt < 8; ++nt) {
+      const u32 word = ws[nt >> 1];
+      const int r = 4 * (nt & 1);
+      const u32 b00 = sign_reg(word, r), b01 = sign_reg(word, r + 1);
+      const u32 b10 = sign_reg(word, r + 2), b11 = sign_reg(word, r + 3);
+#pragma unroll
+      for (int mt = 0; mt < MT; ++mt) {
+        const uint4 &lo = cur[mt][0], &hi = cur[mt][1];
+        imma16832(acc[mt][nt], lo.x, hi.x, lo.y, hi.y, b00, b01);
+        imma16832(acc[mt][nt], lo.z, hi.z, lo.w, hi.w, b10, b11);
+      }
+    }
+#pragma unroll
+    for (int mt = 0; mt < MT; ++mt) cur[mt][0] = nxt[mt][0], cur[mt][1] = nxt[mt][1];
+  }
+}
+
+template <int MT>
+__device__ __forceinline__ void sk64_store(const int (&acc)[MT][8][4], int *__restrict__ sk, u64 b0, u64 n, int lane) {
+  const int g = lane >> 2, t = lane & 3;
+#pragma unroll
+  for (int mt = 0; mt < MT; ++mt) {
+    const u64 blk = b0 + 16 * mt + g;
+#pragma unroll
+    for (int nt = 0; nt < 8; ++nt) {
+      if (blk < n) *(int2 *)(sk + blk * SK64_ROWS + 8 * nt + 2 * t) = make_int2(acc[mt][nt][0], acc[mt][nt][1]);
+      if (blk + 8 < n)
+        *(int2 *)(sk + (blk + 8) * SK64_ROWS + 8 * nt + 2 * t) = make_int2(acc[mt][nt][2], acc[mt][nt][3]);
+    }
+  }
+}
+
+// y_j from σ_j's 16 uint4s (`at(q)`, q = 0 … 15) into out.
+template <class At>
+__device__ __forceinline__ void sk64_receipt(At at, u64 j, u64 *__restrict__ out) {
+  u64 w[16], s[8], carry;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = kSketchMid[i];
+  w[0] = j;
+#pragma unroll
+  for (int b = 0; b < 2; ++b) {
+#pragma unroll
+    for (int q = 0; q < 8; ++q) {
+      const uint4 v = at(8 * b + q);
+      const u64 x = be_word(v.x, v.y), y = be_word(v.z, v.w);
+      if (q < 7) w[1 + 2 * q] = x, w[2 + 2 * q] = y;
+      else w[15] = x, carry = y;
+    }
+    sha512_compress(s, w);
+    w[0] = carry;
+  }
+#pragma unroll
+  for (int i = 1; i < 15; ++i) w[i] = 0;
+  w[1] = 0x80ULL << 56, w[15] = (u64)(128 + 8 + 4 * SK64_ROWS) * 8;
+  sha512_compress(s, w);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) out[i] = s[i];
+}
+
+template <bool Z, int MT>
+__global__ void __launch_bounds__(32 * SK64_WARPS, MT > 2 ? 2 : 3) sketch64_kernel(const uint4 *__restrict__ data,
+                                                                                const uint4 *__restrict__ zs, u64 n,
+                                                                                const uint4 *__restrict__ signs,
+                                                                                int *__restrict__ sk) {
+  __shared__ uint4 sg[SK64_SIGNS];
+  for (int i = threadIdx.x; i < SK64_SIGNS; i += blockDim.x) sg[i] = __ldg(signs + i);
+  __syncthreads();
+  const int lane = threadIdx.x & 31;
+  const u64 tiles = (n + 16 * MT - 1) / (16 * MT);
+  for (u64 tile = blockIdx.x * (u64)SK64_WARPS + (threadIdx.x >> 5); tile < tiles;
+       tile += (u64)gridDim.x * SK64_WARPS) {
+    int acc[MT][8][4];
+    sk64_tile<Z, MT>(acc, sg, data, zs, tile * 16 * MT, n, lane);
+    sk64_store<MT>(acc, sk, tile * 16 * MT, n, lane);
+  }
+}
+
+__global__ void __launch_bounds__(128) sketch64_hash_kernel(const uint4 *__restrict__ sk, u64 j0, u64 n,
+                                                            u64 *__restrict__ ys) {
+  const u64 q = blockIdx.x * (u64)blockDim.x + threadIdx.x;
+  if (q >= n) return;
+  const uint4 *S = sk + q * (SK64_ROWS / 4);
+  sk64_receipt([&](int i) { return __ldg(S + i); }, j0 + q, ys + 8 * q);
+}
+
+// A warp's 32 blocks' σ staged at row r ^ 8 (block & 3) (the C fragments' int2 stores then hit 32 banks a phase).
+template <bool Z>
+__global__ void __launch_bounds__(32 * SK64R_WARPS, 1) sketch64_receipts_kernel(const uint4 *__restrict__ data,
+                                                                              const uint4 *__restrict__ zs, u64 j0,
+                                                                              u64 n, const uint4 *__restrict__ signs,
+                                                                              int *__restrict__ sk,
+                                                                              u64 *__restrict__ ys) {
+  extern __shared__ uint4 smem[];
+  uint4 *sg = smem;
+  for (int i = threadIdx.x; i < SK64_SIGNS; i += blockDim.x) sg[i] = __ldg(signs + i);
+  __syncthreads();
+  const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
+  int *st = (int *)(smem + SK64_SIGNS) + (threadIdx.x >> 5) * 32 * SK64_ROWS;
+  const u64 tiles = (n + 31) / 32;
+  for (u64 tile = blockIdx.x * (u64)SK64R_WARPS + (threadIdx.x >> 5); tile < tiles;
+       tile += (u64)gridDim.x * SK64R_WARPS) {
+    const u64 b0 = tile * 32;
+    int acc[2][8][4];
+    sk64_tile<Z, 2>(acc, sg, data, zs, b0, n, lane);
+    if (sk) sk64_store<2>(acc, sk, b0, n, lane);
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt) {
+      const int blk = 16 * mt + g;
+#pragma unroll
+      for (int nt = 0; nt < 8; ++nt) {
+        const int r = (8 * nt + 2 * t) ^ (8 * (g & 3));
+        *(int2 *)(st + blk * SK64_ROWS + r) = make_int2(acc[mt][nt][0], acc[mt][nt][1]);
+        *(int2 *)(st + (blk + 8) * SK64_ROWS + r) = make_int2(acc[mt][nt][2], acc[mt][nt][3]);
+      }
+    }
+    __syncwarp();
+    if (b0 + lane < n) {
+      const uint4 *S = (const uint4 *)(st + lane * SK64_ROWS);
+      const int x = 2 * (lane & 3);
+      sk64_receipt([&](int i) { return S[i ^ x]; }, j0 + b0 + lane, ys + 8 * (b0 + lane));
+    }
+    __syncwarp();
+  }
+}
+
 // --- framed messages ---------------------------------------------------------------------------------------------
 
 // A message of at most 16 W − 17 bytes as W big-endian words, zero past its n bytes. Its bytes land by compile-time
@@ -717,6 +911,61 @@ int rb_sketch(const void *data, const void *zs, uint64_t n, const void *signs, i
 int rb_sketch_hash(const int *sk, uint64_t j0, uint64_t n, uint64_t *ys, cudaStream_t s) {
   if (!sk || !ys || n < 1) return 1;
   sketch_hash_kernel<<<grid(n, 128), 128, 0, s>>>((const uint4 *)sk, j0, n, ys);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// σ at 64 rows of n blocks at data (each XORed with its spread z in zs, or not when zs is null) into sk (64 int32 a
+// block) under signs (reader.py's `pack64`, 32 KiB on the device), mt m-tiles a warp (1, 2 or 4), on ctas CTAs (0:
+// as many as are resident at once).
+int rb_sketch64(const void *data, const void *zs, uint64_t n, const void *signs, int *sk, int mt, int ctas,
+                cudaStream_t s) {
+  if (!data || !signs || !sk || n < 1 || ctas < 0 || (mt != 1 && mt != 2 && mt != 4)) return 1;
+  using K = void (*)(const uint4 *, const uint4 *, u64, const uint4 *, int *);
+  const K k = zs ? (mt == 1 ? sketch64_kernel<true, 1> : mt == 2 ? sketch64_kernel<true, 2> : sketch64_kernel<true, 4>)
+                 : (mt == 1 ? sketch64_kernel<false, 1> : mt == 2 ? sketch64_kernel<false, 2>
+                                                                  : sketch64_kernel<false, 4>);
+  if (!ctas) {
+    int dev, sms, per;
+    if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, k, 32 * SK64_WARPS, 0))
+      return 4;
+    ctas = sms * per;
+  }
+  const u64 most = (n + 16 * mt * SK64_WARPS - 1) / (16 * mt * SK64_WARPS);
+  const unsigned g = (unsigned)(most < (u64)ctas ? most : (u64)ctas);
+  k<<<g, 32 * SK64_WARPS, 0, s>>>((const uint4 *)data, (const uint4 *)zs, n, (const uint4 *)signs, sk);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The 64-row receipts of n sketches (store indices j0 …) into ys (8 words a receipt).
+int rb_sketch64_hash(const int *sk, uint64_t j0, uint64_t n, uint64_t *ys, cudaStream_t s) {
+  if (!sk || !ys || n < 1) return 1;
+  sketch64_hash_kernel<<<grid(n, 128), 128, 0, s>>>((const uint4 *)sk, j0, n, ys);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// rb_sketch64 and rb_sketch64_hash in one kernel (2 m-tiles a warp): the receipts of n blocks into ys, and their σ
+// into sk unless it is null.
+int rb_sketch64_receipts(const void *data, const void *zs, uint64_t j0, uint64_t n, const void *signs, int *sk,
+                         uint64_t *ys, int ctas, cudaStream_t s) {
+  if (!data || !signs || !ys || n < 1 || ctas < 0) return 1;
+  const auto k = zs ? sketch64_receipts_kernel<true> : sketch64_receipts_kernel<false>;
+  static bool opted[2];
+  if (!opted[zs != nullptr]) {
+    if (cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, SK64R_SMEM)) return 4;
+    opted[zs != nullptr] = true;
+  }
+  if (!ctas) {
+    int dev, sms, per;
+    if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, k, 32 * SK64R_WARPS, SK64R_SMEM))
+      return 4;
+    ctas = sms * per;
+  }
+  const u64 most = (n + 32 * SK64R_WARPS - 1) / (32 * SK64R_WARPS);
+  const unsigned g = (unsigned)(most < (u64)ctas ? most : (u64)ctas);
+  k<<<g, 32 * SK64R_WARPS, SK64R_SMEM, s>>>((const uint4 *)data, (const uint4 *)zs, j0, n, (const uint4 *)signs, sk,
+                                            ys);
   return cudaGetLastError() ? 4 : 0;
 }
 
