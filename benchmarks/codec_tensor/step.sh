@@ -15,7 +15,8 @@
 # run. RECEIPT=1 builds wt.cu's sketch warps with sketch-sha512 (WT_RECEIPT) and reader.cu for its commit, gated first
 # against the driver (reader.py). Each library's `cuobjdump -res-usage` goes in OUT/*.res, and after the step
 # write_gate.py (Nsight Compute) checks the L2 writes of its linears', attention's and the append's launches
-# (WRITE_GATE=0 skips it; WG_STEP, a step.json's text, runs only the gate at that step's picks).
+# (WRITE_GATE=0 skips it; WG_STEP, a step.json's text, runs only the gate at that step's picks). DECODE_NCU,
+# decode_ncu.py's arguments, runs it (the weights' decoders under Nsight Compute) in place of the step.
 set -uxo pipefail
 MODEL=${MODEL:-8b}
 case $MODEL in 70b) QHEADS=64 ;; *) QHEADS=32 ;; esac
@@ -28,7 +29,7 @@ CT=benchmarks/codec_tensor
 B=$(mktemp -d /tmp/hbm-step.XXXXXX); trap 'rm -rf "$B"' EXIT
 export B PY CT MODEL QHEADS FIELD=${FIELD:-512} MASK=${MASK:-0} FOLD6=${FOLD6:-0} KV_FOLD6=${KV_FOLD6:-${FOLD6:-0}} BATCH=${BATCH:-32} GEMM_M=${GEMM_M:-0} STEP_ARGS=${STEP_ARGS:-} SANITIZE=${SANITIZE:-1} \
   NVFLAGS=${NVFLAGS:-} COMPILE_ONLY=${COMPILE_ONLY:-} RECEIPT=${RECEIPT:-0} WRITE_GATE=${WRITE_GATE:-1} \
-  WG_STEP=${WG_STEP:-}
+  WG_STEP=${WG_STEP:-} DECODE_NCU=${DECODE_NCU:-}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-28}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
@@ -61,6 +62,10 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-28}" --)
   q() { nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
           --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1; }
   q
+  if [ -n "$DECODE_NCU" ]; then
+    # shellcheck disable=SC2086
+    "$PY" $CT/decode_ncu.py --wt-lib "$B/$WT.so" --kv-lib "$B/$KV.so" --out "$O" $DECODE_NCU; exit $?
+  fi
   rc=0 WG_JSON=$O/step.json
   if [ -n "$WG_STEP" ]; then
     printf %s "$WG_STEP" > "$O/wg-step.json"; WG_JSON=$O/wg-step.json
