@@ -57,12 +57,11 @@ theorem outBitRow_laid {c : Flock.Circuit} {j : ℕ} (h : OutsLaid c j) {n : ℕ
   obtain ⟨hop, hlo, hq1, -, hw0, -, hw1⟩ := h
   have hq : HmOut.nIn c + jo < c.ports.size := by omega
   have hW : HiddenExec.outWordOf c (j, 64 * jo + b / 16, b % 16) = 64 * jo + b / 16 := by
-    unfold HiddenExec.outWordOf
-    dsimp only
+    show (c.leavesOut.getD j #[])[64 * jo + b / 16]! = 64 * jo + b / 16
     rw [hlo, getElem!_pos (Array.range 128) (64 * jo + b / 16) (by rw [Array.size_range]; omega)]
     simp
   have hs : c.outPorts.size = 2 := by rw [hop] <;> rfl
-  have hA0 : Hidden.outAt c 0 = 0 := rfl
+  have hA0 : Hidden.outAt c 0 = 0 := by simp [Hidden.outAt]
   have hA1 : Hidden.outAt c 1 = 64 := by unfold Hidden.outAt; rw [hop] <;> rfl
   have hN : c.outWords = 128 := by
     rw [← HiddenExec.outAt_size c, hs]
@@ -88,7 +87,7 @@ theorem outBitRow_laid {c : Flock.Circuit} {j : ℕ} (h : OutsLaid c j) {n : ℕ
     omega
   refine ⟨hq, hk, outBitRow_eq u hq (by rw [hW, hP]) ?_ hk⟩
   rw [hW, hP]
-  dsimp only
+  show 16 * (64 * jo + b / 16 - Hidden.outAt c jo) + b % 16 = b
   rcases (by omega : jo = 0 ∨ jo = 1) with rfl | rfl
   · rw [hA0]; omega
   · rw [hA1]; omega
@@ -128,8 +127,8 @@ theorem regOut_of_outBitRow {u : Fin nv} {j : ℕ} (hj : j < c.upv) {j' t' : ℕ
         (Const.Prog.instC (Placed.keyProg c hU nv) (Layout.outsOf c hU nv) u).wire x' :=
     ⟨Fin.cast (congrArg FlockSoundness.Rows.w eR).symm x, rfl,
       Const.Prog.castW_wire eR (Const.Prog.rowsWireC (Placed.keyProg c hU nv) u) x⟩
-  have eN : ((Placed.keyProg c hU nv).rows u).nIn = c.upv * (Rows.ofNet hU).nIn := by
-    rw [congrArg FlockSoundness.Rows.nIn eR]; rfl
+  have eN : ((Placed.keyProg c hU nv).rows u).nIn = c.upv * (Rows.ofNet hU).nIn :=
+    (congrArg FlockSoundness.Rows.nIn eR).trans rfl
   have hge : ((Placed.keyProg c hU nv).rows u).nIn ≤ x'.val := by
     rw [eN, hxv', hxv]
     omega
@@ -226,10 +225,11 @@ theorem haout_of_laid {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p
       (Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits + 1024 + t) b := by
   intro t ht
   have hl' := hlaid
-  obtain ⟨-, -, -, -, -, hn1, -⟩ := hl'
+  obtain ⟨-, -, hq1, -, -, hn1, -⟩ := hl'
   obtain ⟨pt, hpt, hpn⟩ := hacc
-  obtain ⟨-, -, h⟩ := regOuts_of_laid zo hj hl hob hlaid (jo := 1) (by decide)
+  obtain ⟨hq, hk, h⟩ := regOuts_of_laid zo hj hl hob hlaid (jo := 1) (by decide)
     (fun hq => hread ⟨_, hq⟩ ⟨pt, hpt, hpn.trans hn1.symm⟩) (b := t) (by omega)
+  rw [Nat.mul_one] at h
   exact ⟨_, h⟩
 
 end Copy
@@ -247,13 +247,11 @@ theorem own_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
   split at hr
   · rename_i p hf
     split at hr
-    · obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok hr
-      cases h2
+    · cases hr
     · refine ⟨⟨p, Array.mem_of_find?_eq_some hf, by simpa using Array.find?_some hf⟩, ?_⟩
       cases hr
       rfl
-  · obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok hr
-    cases h2
+  · cases hr
 
 /-- **An R level's checked session has `acc_out` in its reads file** (`acc_of_checkStmt`'s twin): `checkStmt` ran
 `checkAcc` on V*'s statement `j`, R's level `l`, whose `rec-acc` ports are `acc` and `acc_out`. -/
