@@ -275,8 +275,9 @@ variable {S : ℕ} {Vs : Fin S → VStmt}
 /-- **`ProofOfVals` from G's facts at each rep** (`ProofFrom`). -/
 theorem proofOfVals_of_from {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
-    {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData} {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
-    (h : AtRep zs dg N k Rw sh rep fun _ _ _ Lb i => ProofFrom sh (rep Lb i) (vals Lb i)) :
+    {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    (h : AtRep zs dg N k Rw sh rep fun R ω t Lb i => ProofFrom sh (rep R ω t Lb i) (vals R ω t Lb i)) :
     ProofOfVals zs dg N k Rw sh rep vals := fun R ω t R₂ τ o hA i halg hacc =>
   unitProof_of_from halg hacc (h R ω t R₂ τ o hA i halg hacc)
 
@@ -285,20 +286,20 @@ points. -/
 theorem setupOfVals_of_from {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-    {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    {sh : Flock.Shape} {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
     (h : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
       SetupFrom ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (holoAt st hp).cls.ptLocal
-        (holoAt st hp).cls.mPts (src R ω t Lb).pts sh (vals Lb i)) :
+        (holoAt st hp).cls.mPts (src R ω t Lb).pts sh (vals R ω t Lb i)) :
     SetupOfVals zs dg N k Rw src sh rep vals := fun R ω t R₂ τ o hA i halg hacc =>
   unitSetup_of_from (h R ω t R₂ τ o hA i halg hacc)
 
-/-- **`ProofOfVals` at G's values** `(b Lb i).vals sh (rep Lb i)`: from the setup's facts, the rep's extras at
+/-- **`ProofOfVals` at G's values** `(b Lb i).vals sh (rep R ω t Lb i)`: from the setup's facts, the rep's extras at
 well-formed link points at the run's and the comb port, at each rep. -/
 theorem proofOfVals_of_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {sh : Flock.Shape} {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
     {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
     (hset : AtRep zs dg N k Rw sh rep fun _ _ _ Lb i =>
       FlockVBridge.Family.SetupRealizes (b Lb i).st ((holoAt st hp).cls.pubStatement (holoAt st hp).regs)
@@ -306,19 +307,20 @@ theorem proofOfVals_of_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Re
     (hsh : AtRep zs dg N k Rw sh rep fun _ _ _ Lb i => FlockVBridge.Family.ShapeIs sh (b Lb i).st (b Lb i).sch)
     (hx : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
       RepExtrasAt (b Lb i).st ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
-        (holoAt st hp).cls.mPts (src R ω t Lb).pts (rep Lb i))
-    (hfold : AtRep zs dg N k Rw sh rep fun _ _ _ Lb i => FlockVBridge.Family.CombFolds (b Lb i).st sh (rep Lb i)) :
-    ProofOfVals zs dg N k Rw sh rep fun Lb i => (b Lb i).vals sh (rep Lb i) :=
+        (holoAt st hp).cls.mPts (src R ω t Lb).pts (rep R ω t Lb i))
+    (hfold : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
+      FlockVBridge.Family.CombFolds (b Lb i).st sh (rep R ω t Lb i)) :
+    ProofOfVals zs dg N k Rw sh rep fun R ω t Lb i => (b Lb i).vals sh (rep R ω t Lb i) :=
   fun R ω t R₂ τ o hA i halg hacc => unitProof_of_from halg hacc
     (ValsSrc.proofFrom _ (hset R ω t R₂ τ o hA i halg hacc) (hsh R ω t R₂ τ o hA i halg hacc)
       (hx R ω t R₂ τ o hA i halg hacc) (hfold R ω t R₂ τ o hA i halg hacc))
 
-/-- **`SetupOfVals` at G's values** `(b Lb i).vals sh (rep Lb i)`, at a statement whose class checks pass: from the
-setup's facts and the rep's extras at well-formed link points at the run's, at each rep. -/
+/-- **`SetupOfVals` at G's values** `(b Lb i).vals sh (rep R ω t Lb i)`, at a statement whose class checks pass: from
+the setup's facts and the rep's extras at well-formed link points at the run's, at each rep. -/
 theorem setupOfVals_of_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {sh : Flock.Shape} {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
     {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
     (hcls : FlockSoundness.Discharge.Recursion.ClassOk (FlockSoundness.Discharge.Recursion.shapeOf st))
     (hset : AtRep zs dg N k Rw sh rep fun _ _ _ Lb i =>
@@ -327,8 +329,8 @@ theorem setupOfVals_of_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Re
     (hsh : AtRep zs dg N k Rw sh rep fun _ _ _ Lb i => FlockVBridge.Family.ShapeIs sh (b Lb i).st (b Lb i).sch)
     (hx : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
       RepExtrasAt (b Lb i).st ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
-        (holoAt st hp).cls.mPts (src R ω t Lb).pts (rep Lb i)) :
-    SetupOfVals zs dg N k Rw src sh rep fun Lb i => (b Lb i).vals sh (rep Lb i) :=
+        (holoAt st hp).cls.mPts (src R ω t Lb).pts (rep R ω t Lb i)) :
+    SetupOfVals zs dg N k Rw src sh rep fun R ω t Lb i => (b Lb i).vals sh (rep R ω t Lb i) :=
   fun R ω t R₂ τ o hA i halg hacc => unitSetup_of_from
     (ValsSrc.setupFrom_holo _ hcls (hset R ω t R₂ τ o hA i halg hacc) (hsh R ω t R₂ τ o hA i halg hacc)
       (hx R ω t R₂ τ o hA i halg hacc))
