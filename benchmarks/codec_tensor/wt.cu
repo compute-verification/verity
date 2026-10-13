@@ -2957,6 +2957,14 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
     J.blk = -1;
     int hashed = 0;   // the tiles whose hash has started
     int r = 0;        // without a producer: the next copy lane 0 relays
+    // Lane 0 relays the landed copies of tasks below c, the ones issued: before task i's MMAs those up to task
+    // i + stages - 1, the ones a producer would have issued by now, so task i's decode waits on no copy the producer's
+    // wouldn't. It relays while the warp waits on `decoded` and again between the MMAs and the stores, since the
+    // receipt warps' wait on a group's last copy holds the decoders' first task of it.
+    [[maybe_unused]] const auto relay = [&](int c) {
+      c = min(c, ntasks);
+      while (r < c && mbar_test(full + r % stages, (r / stages) & 1)) mbar_arrive(ready + r++ % stages);
+    };
     if (!PW && lane == 0)
       for (int i = 0; i < min(stages, ntasks); ++i) {
         mbar_expect_tx(full + i, SB);
@@ -2966,14 +2974,8 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
       const int s = i % stages;
       if constexpr (SKK > 0 && SKW == 0)
         while (J.blk >= 0 && !mbar_test(decoded + s, (i / stages) & 1)) sk_hash_block<SKK>(J, lane, sk);
-      // Without a producer lane 0 relays while the warp waits: the copies up to task i + stages - 1, the ones a
-      // producer would have issued by now, so task i's decode waits on no copy the producer's wouldn't.
       if constexpr (!PW) {
-        if (lane == 0)
-          for (const int c = min(ntasks, i + stages);;) {
-            while (r < c && mbar_test(full + r % stages, (r / stages) & 1)) mbar_arrive(ready + r++ % stages);
-            if (mbar_try(decoded + s, (i / stages) & 1, 128)) break;
-          }
+        if (lane == 0) do relay(i + stages); while (!mbar_try(decoded + s, (i / stages) & 1, 128));
         __syncwarp();
       }
       // Every MMA warp waits out every task's phase in turn, so none waits on a stage's parity a phase early.
@@ -3009,10 +3011,13 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
       // and the sketch warps' reads precede the decoders' stores, which the decoders fence.
       asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
       mbar_arrive(empty + s);
-      if (!PW && lane == 0 && i + stages < ntasks) {
-        mbar_wait(empty + s, (i / stages) & 1);
-        mbar_expect_tx(full + s, SB);
-        bulk_load(smem + s * SB, wstore + (q0 + (i + stages) * gq) * SB, SB, full + s);
+      if (!PW && lane == 0) {
+        if (i + stages < ntasks) {
+          mbar_wait(empty + s, (i / stages) & 1);
+          mbar_expect_tx(full + s, SB);
+          bulk_load(smem + s * SB, wstore + (q0 + (i + stages) * gq) * SB, SB, full + s);
+        }
+        relay(i + stages + 1);
       }
       store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
       if constexpr (SKK > 0 && SKW == 0)
