@@ -7,7 +7,9 @@ Arms (``--arm``):
   gc:N        the step on a green context of N SMs (fill.cu's `gc_split`), no filler
   gc:N:fill   the same, and the 128 x 128 fold filler (bench.py's best arm) on the rest through every timed point, launched
               in bounded chunks by fill.cu's native pump (`Fill`)
-  gc:N:fill:D the same at duty D: each CTA idles TILE_NS x (1 / D - 1) after each tile
+  gc:N:fill:D the same at duty D: each CTA idles its tile time x (1 / D - 1) after each tile, the tile time measured
+              before vLLM starts (the filler alone on every SM, `Fill.tile_ns`)
+  gc:N:rcpt[:D] the same with the receipts store: each tile writes its sketch-sha512 receipts (receipt.py), not the fold
 
 How the step is confined: before vLLM starts, the step's green-context stream becomes torch's current stream, so vLLM
 captures its CUDA graphs and launches its eager kernels there (`gc_split`'s `sm_spread` check: a green context's
@@ -15,8 +17,9 @@ launches, direct and from a graph, stay on its SMs). Each arm records the stream
 the green one.
 
 Gates: each arm generates fixed prompts greedily (`gate`: token ids and log-probs), which compare_fill.py requires to be
-bit-identical to the stock arm's; a filled arm's fold is checked against `gemm_pearlc_d` on the same operands after its
-last point (every tile it ran, by the queue counter's passes over the problem).
+bit-identical to the stock arm's; a filled arm's fold (or receipts) is checked against `gemm_pearlc_d`'s words (receipt.py's
+receipts of them) on the same operands after its last point (every tile it ran, by the queue counter's passes over the
+problem).
 
 A decode step's time is serve.py's: the interval between consecutive scheduler updates that both scheduled exactly B
 decode tokens for B requests, the median over the point's steady decode.
@@ -52,8 +55,6 @@ GATE_PROMPTS = [
     "A haiku about the sea:",
 ]
 CAPTURE = [1, 4, 8, 16, 32]
-# one 128 x 128 fold tile's time on one SM, the filler alone on all 188 (1,853,568 tiles/s, r20261013-002059-3970)
-TILE_NS = 101_400
 
 
 def log(*a) -> None:
@@ -71,19 +72,36 @@ def steady(rec: list, b: int) -> dict:
 
 
 class Fill:
-    """The 128 x 128 fold filler on the filler's green stream through fill.cu's native pump: `depth` chunks of `per` tiles a
-    CTA queued at a time, so a device-wide synchronize inside the engine waits for at most `depth` chunks (a persistent
-    filler would hold it forever), and every position launched is a tile computed."""
+    """The 128 x 128 filler (store `fold` or `rcpt`) on the filler's green stream through fill.cu's native pump: `depth`
+    chunks of `per` tiles a CTA queued at a time, so a device-wide synchronize inside the engine waits for at most `depth`
+    chunks (a persistent filler would hold it forever), and every position launched is a tile computed."""
 
     def __init__(self, lib: B.Lib, stream, fsms: int, sms: int, M: int = 4096, N: int = 4096, K: int = 8192,
-                 per: int = 2, depth: int = 2, duty: float = 1.0):
+                 per: int = 2, depth: int = 2, duty: float = 1.0, store: str = "fold"):
         if not 0 < duty <= 1:
             raise ValueError(f"duty {duty}")
         self.lib, self.stream, self.fsms, self.sms, self.per, self.depth = lib, stream, fsms, sms, per, depth
-        self.duty, self.gap_ns = duty, int(TILE_NS * (1 / duty - 1))
+        self.store = store
         base = B.random_filler(M, N, K, qcap=1)
         self.f = base.with_tile(128, qcap=1)
         self.credit = B.credit_tile(M, N, K, 128)
+        self.tile_ns = self.alone()
+        self.duty, self.gap_ns = duty, int(self.tile_ns * (1 / duty - 1))
+
+    def alone(self) -> float:
+        """One tile's time on one SM: two passes over the problem on every SM, one CTA each, on a stream of the device's."""
+        f, s = self.f, torch.cuda.Stream()
+        e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        for timed in (False, True):
+            if timed:
+                e0.record(s)
+            for pos in range(0, 2 * f.tiles, 4 * self.sms):
+                self.lib.fill(0, B.STORES[self.store], self.sms, f.args(pos, min(4 * self.sms, 2 * f.tiles - pos), log=False,
+                                                                         stop=False), s, f.minb)
+            if timed:
+                e1.record(s)
+        torch.cuda.synchronize()
+        return e0.elapsed_time(e1) * 1e6 * self.sms / (2 * f.tiles)
         lib.l.fill_pump_start.argtypes = [C.c_int] * 5 + [C.POINTER(B.Args), C.c_void_p]
         lib.l.fill_pump_start.restype = C.c_int
         lib.l.fill_pump_tiles.restype = C.c_longlong
@@ -96,7 +114,7 @@ class Fill:
         f.poison()
         torch.cuda.synchronize()
         self.args = f.args(0, 0, log=False, stop=False, gap_ns=self.gap_ns)
-        rc = self.lib.l.fill_pump_start(f.minb, B.STORES["fold"], self.fsms, self.per, self.depth, C.byref(self.args),
+        rc = self.lib.l.fill_pump_start(f.minb, B.STORES[self.store], self.fsms, self.per, self.depth, C.byref(self.args),
                                         C.c_void_p(self.stream.cuda_stream))
         if rc:
             raise RuntimeError(f"fill_pump_start: {rc}")
@@ -113,12 +131,13 @@ class Fill:
         return n
 
     def check(self, n: int) -> dict:
-        """The fold of n queue positions (each tile XORed in once per pass) against `gemm_pearlc_d`'s words."""
+        """The fold of n queue positions (each tile XORed in once per pass) against `gemm_pearlc_d`'s words, or each tile's
+        receipts against receipt.py's of them."""
         f = self.f
         refs = B.references(self.lib, f, self.sms, torch.cuda.current_stream())
         counts = np.full(f.tiles, n // f.tiles, np.int64)
         counts[: n % f.tiles] += 1
-        return B.compare(f, B.STORES["fold"], *refs, counts)
+        return B.compare(f, B.STORES[self.store], *refs, counts)
 
 
 def main() -> None:
@@ -136,8 +155,9 @@ def main() -> None:
     batches = [int(x) for x in args.batches.split(",")]
     contexts = [int(x) for x in args.contexts.split(",")]
     parts = args.arm.split(":")
-    if parts[0] not in ("stock", "gc") or (parts[0] == "gc" and len(parts) not in (2, 3, 4)):
-        ap.error("--arm stock | gc:N | gc:N:fill | gc:N:fill:D")
+    if parts[0] not in ("stock", "gc") or (parts[0] == "gc" and len(parts) not in (2, 3, 4)) or \
+            (len(parts) >= 3 and parts[2] not in ("fill", "rcpt")):
+        ap.error("--arm stock | gc:N | gc:N:fill[:D] | gc:N:rcpt[:D]")
 
     lib = B.Lib(args.lib)
     sms = torch.cuda.get_device_properties(0).multi_processor_count
@@ -152,9 +172,11 @@ def main() -> None:
         torch.cuda.set_stream(g["step"])
         result["step_stream"] = g["step"].cuda_stream
         if len(parts) >= 3:
-            fill = Fill(lib, g["fill"], g["fill_sms"], sms, duty=float(parts[3]) if len(parts) == 4 else 1.0)
-            result["filler"] = {"tile": 128, "store": "fold", "grid": g["fill_sms"], "shape": [4096, 4096, 8192],
-                                "credit_w1_per_tile": fill.credit, "duty": fill.duty, "gap_ns": fill.gap_ns}
+            fill = Fill(lib, g["fill"], g["fill_sms"], sms, duty=float(parts[3]) if len(parts) == 4 else 1.0,
+                        store="rcpt" if parts[2] == "rcpt" else "fold")
+            result["filler"] = {"tile": 128, "store": fill.store, "grid": g["fill_sms"], "shape": [4096, 4096, 8192],
+                                "credit_w1_per_tile": fill.credit, "duty": fill.duty, "tile_ns": fill.tile_ns,
+                                "gap_ns": fill.gap_ns}
 
     import vllm
     from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler

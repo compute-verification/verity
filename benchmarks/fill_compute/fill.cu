@@ -29,7 +29,82 @@ template <int T> constexpr int f_smem() { return gemm_smem<M_PEARLC, T, T>(); }
 // What a tile writes: F_ALL C~, U and y (gemm_pearlc_d's buffers, the transcript the verifier's tile leaves read); F_Y y alone;
 // F_FOLD only the XOR of its C~ words and of its U words into p14[2 t], p14[2 t + 1] (a stand-in for an in-kernel tile leaf,
 // so the filler's HBM writes are a leaf's, not the words': not the verifier's bytes).
-enum { F_ALL, F_Y, F_FOLD };
+// F_RCPT: the tile's sketch-sha512 receipts (`receipt.py`), 2 x RB 64-byte receipts into p9 at tile t's slot, nothing else.
+enum { F_ALL, F_Y, F_FOLD, F_RCPT };
+
+// The receipt's blocks: the tile's C~, then its U, each row-major FP32 cut into 4096-byte blocks (T x T x 4 / 4096 = RB a
+// matrix). p15 is the pass's key (`receipt.key`): the SHA-512 state after prefix(seed) (8 u64), then S_i's sign bits, 16
+// rows of 512 bytes.  A block is staged in shared memory with its words' bits 2-4 XORed by X(n, w), so the tensor-core
+// reads (one block a lane group) and the fragment stores (one block, eight rows a warp) both hit distinct banks.
+constexpr int RROWS = 16, RBLOCK = 4096, RWORDS = RBLOCK / 4, RKC = RBLOCK / 32;
+template <int T> constexpr int RB_OF = T * T * 4 / RBLOCK;
+template <int T> DEV int rswz(int n, int w) { return w ^ (4 * (n & 7) ^ 8 * ((w / T) & 3)); }
+template <int T> DEV void rstage2(uint8_t* st, int r, int c, float a, float b) {
+  const int L = r * T + c, n = L / RWORDS;
+  *reinterpret_cast<float2*>(st + n * RBLOCK + 4 * rswz<T>(n, L % RWORDS)) = make_float2(a, b);
+}
+// four sign bits (bit i of x for byte i) as four int8 of +1 (bit 0) or -1 (bit 1)
+DEV uint32_t sgn4(uint32_t x) {
+  const uint32_t m = (x * 0x00204081u) & 0x01010101u;
+  return (m * 0xFFu) | 0x01010101u;
+}
+DEV void imma(int* d, uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t b0, uint32_t b1) {
+  asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+               : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
+               : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+}
+// σ of the RB blocks staged at st (S_i · block as int8), added into sig[block][row]: warp w takes 32-byte steps
+// [w RKC / 8, (w + 1) RKC / 8) of every block, its lane groups one block each.
+template <int T> DEV void rsketch(const uint8_t* st, const uint8_t* bits, int* sig, int warp, int g, int q) {
+  constexpr int RB = RB_OF<T>, NG = (RB + 7) / 8;
+  int acc[NG][4] = {};
+  const uint32_t* r0 = reinterpret_cast<const uint32_t*>(bits + g * (RBLOCK / 8));
+  const uint32_t* r8 = reinterpret_cast<const uint32_t*>(bits + (g + 8) * (RBLOCK / 8));
+#pragma unroll
+  for (int i = 0; i < RKC / 8; i++) {
+    const int kc = warp * (RKC / 8) + i;
+    const uint32_t s0 = __ldg(r0 + kc), s8 = __ldg(r8 + kc);
+    const uint32_t a0 = sgn4((s0 >> 4 * q) & 15), a1 = sgn4((s8 >> 4 * q) & 15);
+    const uint32_t a2 = sgn4((s0 >> (16 + 4 * q)) & 15), a3 = sgn4((s8 >> (16 + 4 * q)) & 15);
+#pragma unroll
+    for (int ng = 0; ng < NG; ng++) {
+      const int n = ng * 8 + g;
+      uint32_t b0 = 0, b1 = 0;
+      if (n < RB) {
+        const uint32_t* blk = reinterpret_cast<const uint32_t*>(st + n * RBLOCK);
+        b0 = blk[rswz<T>(n, kc * 8 + q)];
+        b1 = blk[rswz<T>(n, kc * 8 + q + 4)];
+      }
+      imma(acc[ng], a0, a1, a2, a3, b0, b1);
+    }
+  }
+#pragma unroll
+  for (int ng = 0; ng < NG; ng++)
+#pragma unroll
+    for (int e = 0; e < 4; e++) {
+      const int n = ng * 8 + 2 * q + (e & 1), row = g + 8 * (e >> 1);
+      if (n < RB) atomicAdd(sig + n * RROWS + row, acc[ng][e]);
+    }
+}
+// y = SHA512(prefix(seed) ‖ u64be j ‖ σ_j): one compression from the key's state; σ_j is 16 int32 little-endian.
+DEV void rreceipt(const uint64_t* head, uint64_t j, const int* sig, uint32_t* out) {
+  uint64_t st[8], w[16];
+#pragma unroll
+  for (int k = 0; k < 8; k++) st[k] = head[k];
+  w[0] = j;
+#pragma unroll
+  for (int k = 0; k < 8; k++) w[1 + k] = rs_be64((uint32_t)sig[2 * k], (uint32_t)sig[2 * k + 1]);
+  w[9] = 0x8000000000000000ull;
+#pragma unroll
+  for (int k = 10; k < 15; k++) w[k] = 0;
+  w[15] = (128 + 8 + 64) * 8;
+  rs_compress(st, w);
+#pragma unroll
+  for (int k = 0; k < 8; k++) {
+    out[2 * k] = rs_be32((uint32_t)(st[k] >> 32));
+    out[2 * k + 1] = rs_be32((uint32_t)st[k]);
+  }
+}
 
 DEV uint32_t warp_xor(uint32_t v) {
 #pragma unroll
@@ -155,6 +230,11 @@ template <int STORE, int T> DEV void tile(const Args& a, uint8_t* smem, int tm, 
       if constexpr (STORE == F_FOLD)
 #pragma unroll
         for (int e = 0; e < 4; e++) fc ^= __float_as_uint(total[mi][ni][e]);
+      if constexpr (STORE == F_RCPT) {
+        const int lr = wm * WM + 16 * mi + g, lc = wn * WN + 8 * ni + 2 * q;
+        rstage2<T>(smem, lr, lc, total[mi][ni][0], total[mi][ni][1]);
+        rstage2<T>(smem, lr + 8, lc, total[mi][ni][2], total[mi][ni][3]);
+      }
     }
   const uint32_t pa0 = sa(sPA), pb0 = sa(sPB);
 #pragma unroll
@@ -186,7 +266,7 @@ template <int STORE, int T> DEV void tile(const Args& a, uint8_t* smem, int tm, 
         store2(U + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
         store2(U + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
       }
-      if constexpr (STORE != F_FOLD) {
+      if constexpr (STORE == F_ALL || STORE == F_Y) {
         w[ni][0] = y_word(total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
         w[ni][1] = y_word(total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
         if (ni % 2 == 1) {
@@ -194,12 +274,43 @@ template <int STORE, int T> DEV void tile(const Args& a, uint8_t* smem, int tm, 
           store_y_sector(Y + (size_t)row * N + span, w[ni - 1][0], w[ni][0], q);
           store_y_sector(Y + (size_t)(row + 8) * N + span, w[ni - 1][1], w[ni][1], q);
         }
-      } else {
+      } else if constexpr (STORE == F_FOLD) {
         (void)r0; (void)r1; (void)c0; (void)c1;
 #pragma unroll
         for (int e = 0; e < 4; e++) fu ^= __float_as_uint(total[mi][ni][e]);
+      } else {
+        (void)r0; (void)r1; (void)c0; (void)c1; (void)w;
       }
     }
+  }
+  if constexpr (STORE == F_RCPT) {
+    constexpr int RB = RB_OF<T>, PER = 2 * RB / 8;
+    const uint8_t* key = reinterpret_cast<const uint8_t*>(a.p[15]);
+    int* sig = reinterpret_cast<int*>(sPA);
+    uint32_t* rc = reinterpret_cast<uint32_t*>(sPA + 2 * RB * RROWS * 4);
+    __syncthreads();
+    for (int k = tid; k < 2 * RB * RROWS; k += NT) sig[k] = 0;
+    __syncthreads();
+    rsketch<T>(smem, key + 64, sig, warp, g, q);
+    __syncthreads();
+#pragma unroll
+    for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+      for (int ni = 0; ni < NI; ni++) {
+        const int lr = wm * WM + 16 * mi + g, lc = wn * WN + 8 * ni + 2 * q;
+        rstage2<T>(smem, lr, lc, total[mi][ni][0], total[mi][ni][1]);
+        rstage2<T>(smem, lr + 8, lc, total[mi][ni][2], total[mi][ni][3]);
+      }
+    __syncthreads();
+    rsketch<T>(smem, key + 64, sig + RB * RROWS, warp, g, q);
+    __syncthreads();
+    if (lane < PER) {
+      const int blk = warp * PER + lane;
+      rreceipt(reinterpret_cast<const uint64_t*>(key), (uint64_t)t * 2 * RB + blk, sig + blk * RROWS, rc + blk * 16);
+    }
+    __syncthreads();
+    uint4* out = reinterpret_cast<uint4*>(reinterpret_cast<uint8_t*>(a.p[9]) + (size_t)t * 2 * RB * 64);
+    for (int k = tid; k < 2 * RB * 4; k += NT) out[k] = reinterpret_cast<const uint4*>(rc)[k];
   }
   if constexpr (STORE == F_FOLD) {
     fc = warp_xor(fc);
@@ -283,10 +394,13 @@ FILL(1, 1)
 FILL(1, 2)
 FILL(2, 0)
 FILL(2, 1)
+FILL(1, 3)
 FILL(2, 2)
+FILL(2, 3)
 FILL128(0)
 FILL128(1)
 FILL128(2)
+FILL128(3)
 
 // p0 a u64 slot: %globaltimer when the kernel runs
 extern "C" __global__ void stamp(const Args a) { *reinterpret_cast<uint64_t*>(a.p[0]) = gtimer(); }
@@ -313,17 +427,21 @@ static int launch(const void* fn, int grid, int block, int smem, const Args* a, 
   return (int)cudaLaunchKernel(fn, dim3(grid), dim3(block), argv, (size_t)smem, s);
 }
 
-static const void* FILLS[2][2][3] = {
-    {{(const void*)fill_chunk_1_0, (const void*)fill_chunk_1_1, (const void*)fill_chunk_1_2},
-     {(const void*)fill_chunk_2_0, (const void*)fill_chunk_2_1, (const void*)fill_chunk_2_2}},
-    {{(const void*)fill_persist_1_0, (const void*)fill_persist_1_1, (const void*)fill_persist_1_2},
-     {(const void*)fill_persist_2_0, (const void*)fill_persist_2_1, (const void*)fill_persist_2_2}}};
-static const void* FILLS128[2][3] = {
-    {(const void*)fill_chunk128_1_0, (const void*)fill_chunk128_1_1, (const void*)fill_chunk128_1_2},
-    {(const void*)fill_persist128_1_0, (const void*)fill_persist128_1_1, (const void*)fill_persist128_1_2}};
+static const void* FILLS[2][2][4] = {
+    {{(const void*)fill_chunk_1_0, (const void*)fill_chunk_1_1, (const void*)fill_chunk_1_2, (const void*)fill_chunk_1_3},
+     {(const void*)fill_chunk_2_0, (const void*)fill_chunk_2_1, (const void*)fill_chunk_2_2, (const void*)fill_chunk_2_3}},
+    {{(const void*)fill_persist_1_0, (const void*)fill_persist_1_1, (const void*)fill_persist_1_2,
+      (const void*)fill_persist_1_3},
+     {(const void*)fill_persist_2_0, (const void*)fill_persist_2_1, (const void*)fill_persist_2_2,
+      (const void*)fill_persist_2_3}}};
+static const void* FILLS128[2][4] = {
+    {(const void*)fill_chunk128_1_0, (const void*)fill_chunk128_1_1, (const void*)fill_chunk128_1_2,
+     (const void*)fill_chunk128_1_3},
+    {(const void*)fill_persist128_1_0, (const void*)fill_persist128_1_1, (const void*)fill_persist128_1_2,
+     (const void*)fill_persist128_1_3}};
 // minb 1 or 2: the 64 x 64 tile at that launch bound; 128: the 128 x 128 tile
 static const void* fill_fn(int persist, int minb, int store) {
-  if (store < 0 || store > 2) return nullptr;
+  if (store < 0 || store > 3) return nullptr;
   if (minb == 128) return FILLS128[persist ? 1 : 0][store];
   if (minb < 1 || minb > 2) return nullptr;
   return FILLS[persist ? 1 : 0][minb - 1][store];

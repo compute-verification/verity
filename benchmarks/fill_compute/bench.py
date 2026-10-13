@@ -13,8 +13,9 @@ tile at a time in the step's idle SM time. Each arm is one lever setting:
            lowest priority (or the step's, `prio=same`); every CTA leaves at the stop flag, checked per tile
   persist  `grid` persistent CTAs on the low-priority stream, each taking the queue's next tile until the stop flag
 
-and `store` says what a tile writes: `all` (C~, U and y, the buffers PoUW's tile leaves read), `y`, or `fold` (two XOR words a
-tile, a stand-in for an in-kernel leaf). The host sets the stop flag (pinned memory) when the step's window ends, or after
+and `store` says what a tile writes: `all` (C~, U and y, the buffers PoUW's tile leaves read), `y`, `fold` (two XOR words a
+tile, a stand-in for an in-kernel leaf), or `rcpt` (the tile's sketch-sha512 receipts of its C~ and U blocks, receipt.py:
+the one receipt form, computed in the kernel from the tile as it leaves the accumulators). The host sets the stop flag (pinned memory) when the step's window ends, or after
 `--starve-s` if the step never finishes (an arm whose filler starves the step is recorded as `starved`). These are family
 `stream`; family `short` runs chunks of one tile a CTA from shallower filler calls (`--short-k`), so a filler CTA holds its
 SM for less time; family `gc` captures the step on a green context of n SMs (`alone`: the step's rate against its SMs) and
@@ -30,10 +31,11 @@ rule that a filler keep the step's bytes/s within 1% of the unfilled rate.
 Gates, before any timing, in this process (exit 4 if one fails):
   1. fill.cu's kernels against PoUW's Python reference: fixture.py's `pearl-c-sm120-v1` check (C~, U and y of every tile,
      bit for bit, from `pearl_c` on `SM120`), at every store mode, chunked and persistent, at 1, 3 and all CTAs, alone and
-     beside a step; and the fold against the fixture's words. PoUW's own `gemm_pearlc_d` must match it too.
+     beside a step; the fold against the fixture's words, and the receipts against receipt.py's of the fixture's C~ and U. PoUW's own `gemm_pearlc_d` must match it too.
   2. At the timing shape, the filler alone against `gemm_pearlc_d` on the same operands.
   3. Every arm: the step's output (the last layer's hidden state) bit-identical to the unfilled step's, and every tile the
-     filler wrote in the window equal to `gemm_pearlc_d`'s (all, y) or folded to its words (fold).
+     filler wrote in the window equal to `gemm_pearlc_d`'s (all, y), folded to its words (fold), or with receipt.py's
+     receipts of its words (rcpt).
 
 Per arm (one JSON line in OUT/arms.jsonl): the step's time per replay (median, p90) against the unfilled step's, the filler
 tiles that ended inside the step's window, the tensor-core utilization over the window ((filler + step) FP8 FLOPs / the E4M3
@@ -44,7 +46,7 @@ each step-slowdown budget.
 
 What it is not: a timed panel row (no whole-node lease, no locked clocks, no autotuned baseline beside it); the filler's
 forming (about 1% of its credit at n = 4096) and its SHA-512 tile leaves are not run, so `store=all` writes the words a leaf
-kernel would read, and `fold` is not the verifier's bytes.
+kernel would read, `fold` is not the verifier's bytes, and `rcpt`'s seed is a fixed one (RSEED), not a verifier's draw.
 
   python bench.py --lib libfill.so --fixture CHECK_DIR --out OUT [--configs 8b:32:4096,...] [--quick]
 """
@@ -66,12 +68,15 @@ from pathlib import Path
 import numpy as np
 import torch
 
+import receipt
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 PEAK_E4M3, PEAK_BF16, PEAK_MHZ = 807.2e12, 403.7e12, 2100.0
 RASTER, TILE, PEEL_ROW = 8, 64, 128
 L2_REPEATS = 3
-STORES = {"all": 0, "y": 1, "fold": 2}
+STORES = {"all": 0, "y": 1, "fold": 2, "rcpt": 3}
+RSEED = bytes(range(64))         # the receipts' pass seed (a fixture's, not a verifier's draw)
 CAP = 1.0 / 1000
 
 MODELS = {
@@ -176,6 +181,8 @@ class Filler:
         self.u = torch.empty((M, N), dtype=torch.int32, device=dev)
         self.y = torch.empty((M, N), dtype=torch.int16, device=dev)
         self.fold = torch.zeros(2 * self.tiles, dtype=torch.int32, device=dev)
+        self.rc = torch.zeros((self.tiles, 2 * self.rb * 64), dtype=torch.uint8, device=dev)
+        self.rkey = receipt_key()
         self.qcap = qcap
         self.log = torch.zeros(qcap, dtype=torch.int64, device=dev)
         self.counter = torch.zeros(1, dtype=torch.int32, device=dev)
@@ -184,6 +191,11 @@ class Filler:
         self.tn_of = np.empty(self.tiles, np.int64)
         for t in range(self.tiles):
             self.tm_of[t], self.tn_of[t] = raster(t, self.tiles_m, self.tiles_n)
+
+    @property
+    def rb(self) -> int:
+        """A tile's blocks of C~ (and of U), 4,096 bytes each."""
+        return self.T * self.T * 4 // receipt.BLOCK
 
     @property
     def fp8_flops_tile(self) -> float:
@@ -198,13 +210,14 @@ class Filler:
         return Filler(self.M, self.N, self.K, self.at, self.bt, self.pa, self.pb, self.ia, self.ib, qcap, T)
 
     def args(self, first: int, count: int, *, log: bool = True, stop: bool = True, c=None, u=None, y=None,
-             gap_ns: int = 0) -> Args:
+             gap_ns: int = 0, rc=None) -> Args:
         a = Args()
         p = [self.at.data_ptr(), self.bt.data_ptr(), (c if c is not None else self.c).data_ptr(),
              (u if u is not None else self.u).data_ptr(), (y if y is not None else self.y).data_ptr(),
-             self.pa.data_ptr(), self.pb.data_ptr(), self.ia.data_ptr(), self.ib.data_ptr(), 0, 0,
+             self.pa.data_ptr(), self.pb.data_ptr(), self.ia.data_ptr(), self.ib.data_ptr(),
+             (rc if rc is not None else self.rc).data_ptr(), 0,
              self.log.data_ptr() if log else 0, self.counter.data_ptr(), self.stop.data_ptr() if stop else 0,
-             self.fold.data_ptr()]
+             self.fold.data_ptr(), self.rkey.data_ptr()]
         for j, x in enumerate(p):
             a.p[j] = x
         for j, x in enumerate((self.M, self.N, self.K, RASTER, first, count, gap_ns)):
@@ -212,7 +225,7 @@ class Filler:
         return a
 
     def poison(self) -> None:
-        for x in (self.c, self.u, self.y):
+        for x in (self.c, self.u, self.y, self.rc):
             x.view(torch.uint8).fill_(0xA5)
         self.fold.zero_()
         self.log.zero_()
@@ -228,6 +241,23 @@ class Filler:
         return np.bincount(pos % self.tiles, minlength=self.tiles)
 
 
+_KEY: list[torch.Tensor] = []
+
+
+def receipt_key() -> torch.Tensor:
+    """fill.cu's p15 for RSEED (receipt.key), on the device, made once."""
+    if not _KEY:
+        _KEY.append(torch.from_numpy(receipt.key(RSEED)).to("cuda"))
+    return _KEY[0]
+
+
+def tile_words(x: np.ndarray, f: "Filler") -> np.ndarray:
+    """An M x N matrix of 4-byte words as tiles x T*T, tile t (queue position) row-major."""
+    T = f.T
+    v = x.reshape(f.tiles_m, T, f.tiles_n, T).transpose(0, 2, 1, 3).reshape(f.tiles_m, f.tiles_n, T * T)
+    return v[f.tm_of, f.tn_of]
+
+
 def fold_of(c: np.ndarray, u: np.ndarray, f: Filler) -> np.ndarray:
     out = np.zeros(2 * f.tiles, np.uint32)
     for t in range(f.tiles):
@@ -237,9 +267,9 @@ def fold_of(c: np.ndarray, u: np.ndarray, f: Filler) -> np.ndarray:
     return out
 
 
-def compare(f: Filler, store: int, ref_c, ref_u, ref_y, ref_fold, counts: np.ndarray) -> dict:
-    """Every tile written at least once equals the reference (all, y), or the fold equals the reference fold of each tile
-    written an odd number of times and 0 otherwise (fold)."""
+def compare(f: Filler, store: int, ref_c, ref_u, ref_y, ref_fold, ref_rc, counts: np.ndarray) -> dict:
+    """Every tile written at least once equals the reference (all, y) or has the reference's receipts (rcpt), or the fold
+    equals the reference fold of each tile written an odd number of times and 0 otherwise (fold)."""
     mask = torch.zeros(f.tiles_m, f.tiles_n, dtype=torch.bool)
     hit = np.nonzero(counts)[0]
     mask[torch.from_numpy(f.tm_of[hit]), torch.from_numpy(f.tn_of[hit])] = True
@@ -252,6 +282,9 @@ def compare(f: Filler, store: int, ref_c, ref_u, ref_y, ref_fold, counts: np.nda
     elif store == 1:
         eq = (f.tile_view(f.y) == f.tile_view(ref_y)).all(dim=3).all(dim=1)
         bad += int((mask & ~eq).sum())
+    elif store == 3:
+        hit_t = torch.from_numpy(hit).to("cuda")
+        bad += int((f.rc[hit_t] != ref_rc[hit_t]).any(dim=1).sum())
     else:
         odd = torch.from_numpy(np.repeat(counts % 2 == 1, 2)).to("cuda")
         want = torch.where(odd, ref_fold, torch.zeros_like(ref_fold))
@@ -532,6 +565,7 @@ def gate_fixture(lib: Lib, d: Path, lo: torch.cuda.Stream, step: Step | None, lo
     f, exp = load_fixture(d, qcap=4096, T=T)
     want = {"c": exp["c"], "u": exp["u"], "y": exp["y"]}
     want_fold = fold_of(exp["c32"], exp["u32"], f)
+    want_rc = receipt.all_receipts(RSEED, tile_words(exp["c32"], f), tile_words(exp["u32"], f))
     ok = True
 
     def check(name: str, store: int) -> None:
@@ -541,6 +575,9 @@ def gate_fixture(lib: Lib, d: Path, lo: torch.cuda.Stream, step: Step | None, lo
         if store == 2:
             res = bool(np.array_equal(f.fold.cpu().numpy().view(np.uint32), want_fold))
             detail = {"fold": res}
+        elif store == 3:
+            res = bool(np.array_equal(f.rc.cpu().numpy(), want_rc))
+            detail = {"receipts": res}
         else:
             keys = ("c", "u", "y") if store == 0 else ("y",)
             detail = {kk: bool(np.array_equal(got[kk].cpu().numpy().view(np.uint8).ravel(), want[kk])) for kk in keys}
@@ -552,7 +589,7 @@ def gate_fixture(lib: Lib, d: Path, lo: torch.cuda.Stream, step: Step | None, lo
     f.poison()
     lib.pearlc_d(sms, f.args(0, f.tiles, log=False, stop=False), lo)
     check("gemm_pearlc_d", 0)
-    for store in (0, 1, 2):
+    for store in STORES.values():
         for grid, per in ((1, f.tiles), (3, 5), (sms, 1)):
             f.poison()
             for pos in range(0, f.tiles, grid * per):
@@ -657,17 +694,19 @@ def gc_targets(sms: int, quick: bool, cuts: str = "") -> list[int]:
     return [sms - d for d in cut]
 
 
-def gc_arms(gsms: int, fsms: int, span_s: float, sms: int, rate64: float, rate128: float) -> list[dict]:
+def gc_arms(gsms: int, fsms: int, span_s: float, sms: int, rate64: dict, rate128: dict) -> list[dict]:
     """The persistent filler on the `fsms` SMs beside the step's green context: (store, tile, CTAs an SM, duty). A duty < 1 is
     the throttle: each CTA idles `gap_ns` = its tile time x (1 / duty - 1) after each tile, its tile time taken from the
-    filler alone on every SM (`rate*` tiles/s at one CTA an SM), so the nominal rate is duty x the unthrottled one. The 64 x 64
-    tile runs only on the smallest partitions, where it was the η line's best (r20261012-231033-73f3)."""
+    filler alone on every SM (`rate*[store]` tiles/s at one CTA an SM), so the nominal rate is duty x the unthrottled one. The 64 x 64
+    tile runs only on the smallest partitions, where it was the η line's best (r20261012-231033-73f3). `rcpt`, the tile's
+    sketch-sha512 receipts, is the store the leaderboard's receipts-on rows take; `fold` and `all` run beside it as before."""
     out = []
-    plan = [("fold", 128, 1, 1.0), ("all", 128, 1, 1.0), ("fold", 128, 1, 0.5), ("fold", 128, 1, 0.25), ("fold", 128, 1, 0.1)]
+    plan = [("rcpt", 128, 1, 1.0), ("rcpt", 128, 1, 0.5), ("rcpt", 128, 1, 0.25), ("rcpt", 128, 1, 0.1),
+            ("fold", 128, 1, 1.0), ("fold", 128, 1, 0.25), ("all", 128, 1, 1.0)]
     if fsms <= 12:
-        plan += [("fold", 64, 2, 1.0), ("fold", 64, 2, 0.5)]
+        plan += [("rcpt", 64, 2, 1.0), ("rcpt", 64, 2, 0.5), ("fold", 64, 2, 1.0)]
     for store, T, per_sm, duty in plan:
-        rate = rate128 if T == 128 else rate64
+        rate = (rate128 if T == 128 else rate64)[store]
         tile_ns = per_sm * sms / rate * 1e9
         out.append({"family": "gc", "mode": "persist", "tile": T, "grid": per_sm * fsms, "store": store, "prio": "low",
                     "step_sms": gsms, "fill_sms": fsms, "duty": duty, "gap_ns": int(tile_ns * (1 / duty - 1)),
@@ -676,7 +715,7 @@ def gc_arms(gsms: int, fsms: int, span_s: float, sms: int, rate64: float, rate12
 
 
 def references(lib: Lib, f: Filler, sms: int, lo: torch.cuda.Stream) -> tuple:
-    """`gemm_pearlc_d`'s C~, U and y of the filler's call, and their per-tile fold."""
+    """`gemm_pearlc_d`'s C~, U and y of the filler's call, their per-tile fold, and every tile's receipts (receipt.py)."""
     ref_c, ref_u, ref_y = torch.empty_like(f.c), torch.empty_like(f.u), torch.empty_like(f.y)
     lib.pearlc_d(sms, f.args(0, f.tiles, log=False, stop=False, c=ref_c, u=ref_u, y=ref_y), lo)
     torch.cuda.synchronize()
@@ -689,7 +728,8 @@ def references(lib: Lib, f: Filler, sms: int, lo: torch.cuda.Stream) -> tuple:
     fold_np[0::2] = np.bitwise_xor.reduce(fc[f.tm_of, f.tn_of], axis=1)
     fold_np[1::2] = np.bitwise_xor.reduce(fu[f.tm_of, f.tn_of], axis=1)
     ref_fold = torch.from_numpy(fold_np.view(np.int32)).to("cuda")
-    return ref_c, ref_u, ref_y, ref_fold
+    ref_rc = torch.from_numpy(receipt.all_receipts(RSEED, fc[f.tm_of, f.tn_of], fu[f.tm_of, f.tn_of])).to("cuda")
+    return ref_c, ref_u, ref_y, ref_fold, ref_rc
 
 
 def filler_alone(lib: Lib, f: Filler, refs: tuple, sms: int, lo: torch.cuda.Stream, clock: Clock, log, tag: str) -> dict | None:
@@ -720,22 +760,23 @@ def filler_alone(lib: Lib, f: Filler, refs: tuple, sms: int, lo: torch.cuda.Stre
 
 def l2_probe(lib: Lib, path: Path, sms: int) -> None:
     """The launches the L2 write gate measures under ncu (`--kernel-name regex:^fill_`), in order, each with the L2 write and
-    atomic sectors its outputs declare: C~, U (FP32) and y (BF16) of each tile (`all`), y (`y`) or nothing (`fold`), plus the
-    log's u64 a tile (a sector each); atomics: a warp's two fold words for each of a tile's 8 warps (`fold`), the queue
-    counter's add a tile plus the one each CTA takes past the end (persistent). The 128 x 128 tile's rows are `STORE@128`.
-    Controls (`control`, not judged): each kernel at no tiles, whose sectors are the launch's own, not its outputs'. Each
-    judged launch runs L2_REPEATS times: the persistent kernels' writes have exceeded their outputs by 271-2,144 sectors in
-    some measurements and not others (r20261012-224930-ae0c, r20261012-232748-546d), and the repeats show how often."""
+    atomic sectors its outputs declare: C~, U (FP32) and y (BF16) of each tile (`all`), y (`y`), nothing (`fold`) or its 2 RB
+    receipts (`rcpt`), plus the log's u64 a tile (a sector each); atomics: a warp's two fold words for each of a tile's 8
+    warps (`fold`), the queue counter's add a tile plus the one each CTA takes past the end (persistent). The 128 x 128
+    tile's rows are `STORE@128`. Controls (`control`, not judged): each kernel at no tiles, whose sectors are the launch's
+    own, not its outputs'. Each kernel's L2_REPEATS judged launches are interleaved with L2_REPEATS + 1 controls (control,
+    judged, control, ...), so l2_gate.py can ask whether the intermittent excess (271-7,352 sectors in some measurements and
+    not others, r20261012-224930-ae0c, r20261013-002059-3970) comes to controls as it comes to judged launches."""
     f64 = random_filler(4096, 4096, 1024, qcap=4 * sms)
     lo = torch.cuda.Stream()
     rows = []
     for f in (f64, f64.with_tile(128, 4 * sms)):
         T = f.T
-        out_sectors = {"all": T * T * (4 + 4 + 2) // 32, "y": T * T * 2 // 32, "fold": 0}
+        out_sectors = {"all": T * T * (4 + 4 + 2) // 32, "y": T * T * 2 // 32, "fold": 0, "rcpt": 2 * f.rb * 64 // 32}
         suffix = "" if T == TILE else "128"
         for store, code in STORES.items():
             for persist in (0, 1):
-                for n in (4 * sms,) * L2_REPEATS + (0,):
+                for n in (0,) + (4 * sms, 0) * L2_REPEATS:
                     f.poison()
                     torch.cuda.synchronize()
                     lib.fill(persist, code, sms, f.args(0, n), lo, f.minb)
@@ -908,7 +949,7 @@ def run(args: argparse.Namespace, log) -> int:
                 continue
             span_s = 3 * reps * row["step_ms"] * 1e-3
             for arm in (dict(a, rep=r) for r in range(args.repeats)
-                        for a in gc_arms(gsms, fsms, span_s, sms, alone[K]["fold"], alone_w["fold"])):
+                        for a in gc_arms(gsms, fsms, span_s, sms, alone[K], alone_w)):
                 ff, rr, cc = (wide, refs_w, credit_w) if arm["tile"] == 128 else (f, refs[K], credits[K])
                 row = run_arm(lib, ff, rr, cc, step, reps, base, arm, g["fill"], peer, clock, args.starve_s, head, log, l2)
                 failed |= bool(row["mismatched"]) or not row["identical"]
@@ -921,6 +962,11 @@ def run(args: argparse.Namespace, log) -> int:
                 bu = max(ok, key=lambda x: x["util"])
                 bc = max(ok, key=lambda x: x.get("credit_w1_per_s", 0.0))
                 best[str(b)] = {"by_util": {k: bu[k] for k in keys if k in bu}, "by_credit": {k: bc[k] for k in keys if k in bc}}
+            rc = [r for r in ok if r["arm"].get("store") == "rcpt"]
+            if rc:
+                bu, bc = max(rc, key=lambda x: x["util"]), max(rc, key=lambda x: x.get("credit_w1_per_s", 0.0))
+                best[str(b)].update({"by_util_receipts": {k: bu[k] for k in keys if k in bu},
+                                     "by_credit_receipts": {k: bc[k] for k in keys if k in bc}})
             loose = [r for r in rows if not r["starved"] and r["identical"] and not r["mismatched"] and r["slowdown"] <= b]
             if loose:
                 bl = max(loose, key=lambda x: x.get("credit_w1_per_s", 0.0))

@@ -2,12 +2,19 @@
 more L2 sectors than its outputs declare (`lts__t_sectors_op_write.sum`) and makes no more atomic sectors than its fold and
 queue declare (`lts__t_sectors_op_atom.sum` + `lts__t_sectors_op_red.sum`); there are no partials to declare.
 
-The verdict is per kernel (`by_kernel`, what an arm is judged by: every repeat of its launch passes; `spread` the least
-and most write sectors over the repeats) and per store mode (`by_store`): PoUW's y store writes 16 bytes of a 32-byte sector a request, so `all` and `y`
+The verdict is per kernel (`by_kernel`, what an arm is judged by; `spread` the least and most write sectors over the repeats) and per store mode (`by_store`): PoUW's y store writes 16 bytes of a 32-byte sector a request, so `all` and `y`
 can be refused for the store pattern alone, which the fold (the filler that writes no tile words) is not. A `control` launch
 (no tiles) is measured and reported, not judged: its sectors are what a launch writes whatever its outputs (13-15 a launch on
 sm_120, r20261012-231033-73f3), and each judged launch is allowed its own kernel's control floor beside its declared sectors
-(`floor`; a persistent filler is one launch a window, so the floor doesn't grow with its tiles).
+(`floor`, the least of its controls; a persistent filler is one launch a window, so the floor doesn't grow with its tiles).
+
+Which repeats must pass is rule 4 (memory accounting, 13 Oct): every one (`strict`) unless this run shows the excess some
+launches carry is external, and then the least of a kernel's repeats (`min`). The test (`external`): a launch is hit when its
+write sectors exceed its allowance (declared + floor; a control's is its floor) by more than HIT sectors, above the
+launch's own noise (a few sectors) and below the smallest excess seen (271). Controls are interleaved with the judged
+launches, so an excess from outside the kernel comes to both alike. The excess is external when (a) some control is hit,
+(b) a one-sided Fisher exact test of "judged launches are hit more often than controls" gives p >= ALPHA, and (c) the largest
+control excess is at least the largest judged one. Otherwise the strict rule stands: the guard does not fail open.
 
   python3 l2_gate.py DECLARED_JSON NCU_CSV OUT_JSON      exit 0 passed, 7 refused, 3 unmeasured (no ncu rows)
 """
@@ -16,11 +23,13 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import sys
 from pathlib import Path
 
 WRITE, ATOM, RED, DRAM = ("lts__t_sectors_op_write.sum", "lts__t_sectors_op_atom.sum", "lts__t_sectors_op_red.sum",
                           "dram__bytes_write.sum")
+HIT, ALPHA = 64, 0.05
 
 
 def measured(text: str) -> list[dict]:
@@ -43,11 +52,33 @@ def ratio(x: float, declared: int) -> float:
     return x / declared if declared else (0.0 if x == 0 else float("inf"))
 
 
+def fisher_greater(a: int, b: int, c: int, d: int) -> float:
+    """One-sided Fisher exact p for the 2 x 2 table [[a, b], [c, d]] (rows judged, controls; columns hit, not): the chance,
+    margins fixed, of a judged hit count >= a."""
+    n1, k, n = a + b, a + c, a + b + c + d
+    total = math.comb(n, k)
+    return sum(math.comb(n1, x) * math.comb(n - n1, k - x) for x in range(a, min(n1, k) + 1)) / total
+
+
+def external(judged: list[dict], controls: list[dict]) -> dict:
+    """Rule 4's test on the run's launches (each with `excess`, write sectors over its allowance)."""
+    jh = [r["excess"] for r in judged if r["excess"] > HIT]
+    ch = [r["excess"] for r in controls if r["excess"] > HIT]
+    p = fisher_greater(len(jh), len(judged) - len(jh), len(ch), len(controls) - len(ch))
+    mj, mc = max((r["excess"] for r in judged), default=0.0), max((r["excess"] for r in controls), default=0.0)
+    return {"hit_sectors": HIT, "alpha": ALPHA, "judged": [len(judged), len(jh)], "controls": [len(controls), len(ch)],
+            "fisher_p_judged_hit_more": p, "max_judged_excess": mj, "max_control_excess": mc,
+            "external": bool(ch) and p >= ALPHA and mc >= mj}
+
+
 def judge(declared: dict, rows: list[dict]) -> dict:
     launches = declared["launches"]
     if len(rows) != len(launches):
         return {"status": "unmeasured", "why": f"{len(rows)} profiled launches, {len(launches)} declared"}
-    floors = {d["kernel"]: m.get(WRITE) or 0.0 for d, m in zip(launches, rows) if d.get("control")}
+    floors: dict[str, float] = {}
+    for d, m in zip(launches, rows):
+        if d.get("control"):
+            floors[d["kernel"]] = min(floors.get(d["kernel"], math.inf), m.get(WRITE) or 0.0)
     out, bad = [], []
     for d, m in zip(launches, rows):
         w, a = m.get(WRITE), (m.get(ATOM) or 0.0) + (m.get(RED) or 0.0)
@@ -56,20 +87,32 @@ def judge(declared: dict, rows: list[dict]) -> dict:
         row = {**d, "write_sectors": w, "atom_sectors": a, "dram_write_bytes": m.get(DRAM),
                "read_sectors": m.get("lts__t_sectors_op_read.sum"), "dram_read_bytes": m.get("dram__bytes_read.sum"),
                "write_ratio": ratio(w, d["declared_write_sectors"]), "atom_ratio": ratio(a, d["declared_atom_sectors"])}
-        row["floor"] = 0.0 if d.get("control") else floors.get(d["kernel"], 0.0)
+        floor = floors.get(d["kernel"], 0.0)
+        row["floor"] = 0.0 if d.get("control") else floor
+        row["excess"] = w - floor if d.get("control") else w - d["declared_write_sectors"] - floor
         row["pass"] = w <= d["declared_write_sectors"] + row["floor"] and a <= d["declared_atom_sectors"]
         out.append(row)
-        if not row["pass"] and not d.get("control"):
-            bad.append(f"{d['kernel']}: {w:.0f} write / {d['declared_write_sectors']} declared + {row['floor']:.0f} floor, "
-                       f"{a:.0f} atomic / {d['declared_atom_sectors']} declared")
-    by_store = {}
     judged = [r for r in out if not r.get("control")]
+    test = external(judged, [r for r in out if r.get("control")])
+    rule = "min" if test["external"] else "strict"
+    kernels = list(dict.fromkeys(r["kernel"] for r in judged))
+    strict = {k: all(r["pass"] for r in judged if r["kernel"] == k) for k in kernels}
+    least = {k: min((r for r in judged if r["kernel"] == k), key=lambda r: r["write_sectors"])["pass"]
+             and all(r["atom_sectors"] <= r["declared_atom_sectors"] for r in judged if r["kernel"] == k) for k in kernels}
+    verdict = least if rule == "min" else strict
     for r in judged:
-        by_store[r["store"]] = by_store.get(r["store"], True) and r["pass"]
-    return {"status": "REFUSED" if bad else "passed", "by_store": {s: "passed" if p else "REFUSED" for s, p in by_store.items()},
-            "by_kernel": {k: "passed" if all(r["pass"] for r in judged if r["kernel"] == k) else "REFUSED"
-                          for k in dict.fromkeys(r["kernel"] for r in judged)},
-            "spread": {k: [min(ws), max(ws)] for k in dict.fromkeys(r["kernel"] for r in judged)
+        if not r["pass"] and not verdict[r["kernel"]]:
+            bad.append(f"{r['kernel']}: {r['write_sectors']:.0f} write / {r['declared_write_sectors']} declared + "
+                       f"{r['floor']:.0f} floor, {r['atom_sectors']:.0f} atomic / {r['declared_atom_sectors']} declared")
+    by_store = {}
+    for r in judged:
+        by_store[r["store"]] = by_store.get(r["store"], True) and verdict[r["kernel"]]
+    word = {True: "passed", False: "REFUSED"}
+    return {"status": "REFUSED" if bad else "passed", "rule": rule, "external": test,
+            "by_store": {s: word[p] for s, p in by_store.items()},
+            "by_kernel": {k: word[verdict[k]] for k in kernels},
+            "by_kernel_strict": {k: word[strict[k]] for k in kernels}, "by_kernel_min": {k: word[least[k]] for k in kernels},
+            "spread": {k: [min(ws), max(ws)] for k in kernels
                        for ws in [[r["write_sectors"] for r in judged if r["kernel"] == k]]},
             "refusals": bad, "launches": out,
             "controls": [{k: r[k] for k in ("kernel", "write_sectors", "atom_sectors", "declared_atom_sectors")} for r in out
@@ -86,5 +129,6 @@ if __name__ == "__main__":
     else:
         res = judge(json.loads(dec.read_text()), measured(csv_path.read_text()))
     Path(sys.argv[3]).write_text(json.dumps(res, indent=1) + "\n")
-    print(f"L2 write gate: {res['status']}", *res.get("refusals", []), res.get("why", ""))
+    print(f"L2 write gate: {res['status']} (rule {res.get('rule')}, external test {res.get('external')})",
+          *res.get("refusals", []), res.get("why", ""))
     sys.exit({"passed": 0, "REFUSED": 7}.get(res["status"], 3))
