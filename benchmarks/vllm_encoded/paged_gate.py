@@ -1,0 +1,184 @@
+"""`paged.cu`'s gate on one GPU, before anything uses it in vLLM: synthetic layer caches in vLLM's layout
+([blocks][8 KV heads][16 slots][K ‖ V] bf16), two layers of a pool, random block tables and lengths (0, 1, a tile's
+edge, a block's edge and random), and for each k of `--ks`:
+
+- `append`: a step's tokens (padding slots −1 among them) appended to the plain cache equal torch's indexing, and to
+  the encoded cache, which then equals `kv_encode` of the plain cache at the layer's word indices (and `kv.py` on a few
+  words);
+- `attention`: at each split count, the encoded output equals the plain output bit for bit, the plain output is within
+  RTOL of float64 attention over the same bf16 values (q scaled by log2(e)/sqrt(128), rounded to bf16, as the kernel
+  does), a sequence of length 0 and every row past the batch are zero, and the qrow form (rows permuted) equals it;
+- `gather`: whole blocks decoded (encoded) or copied (plain) equal the plain cache's blocks.
+
+Writes `paged-gate.json` and `paged-gate.log` under `--out`; exits nonzero if any gate fails."""
+from __future__ import annotations
+
+import argparse
+import json
+import random
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import paged as P  # noqa: E402
+from paged import K, KB  # noqa: E402
+
+RTOL = 1e-3
+BLOCKS, BS, LAYERS = 96, 16, 2
+LENS = (0, 1, 15, 16, 17, 63, 64, 65, 300, 511)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--lib", required=True, help="NAME=PATH, paged.cu built at field NAME")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--ks", default="2,3")
+    ap.add_argument("--batches", default="1,5,10,32")
+    ap.add_argument("--splits", default="1,3,8,32")
+    a = ap.parse_args()
+    out_dir = Path(a.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    logf = (out_dir / "paged-gate.log").open("a")
+
+    def log(msg: str) -> None:
+        line = f"{time.strftime('%H:%M:%S', time.gmtime())}Z {msg}"
+        print(line, flush=True)
+        logf.write(line + "\n")
+        logf.flush()
+
+    import torch
+
+    lib = P.PagedLib(*a.lib.split("=", 1))
+    sh = lib.shape
+    H, G, D, WB = sh["heads"], sh["kv_heads"], sh["head_dim"], sh["wb"]
+    f = lib.field
+    log(f"{lib.name}: shape {sh}, mask {lib.mask}, fold6 {lib.fold6}")
+    torch.manual_seed(0)
+    rng = random.Random(1)
+    plain = [(torch.randn(BLOCKS, G, BS, 2 * D, device="cuda") * 2).to(torch.bfloat16) for _ in range(LAYERS)]
+    lay = P.layout(plain[0], G, WB)
+    lbase = [l * lay.words for l in range(LAYERS)]
+    res = {"lib": lib.name, "shape": sh, "mask": lib.mask, "fold6": lib.fold6, "layout": lay.__dict__, "ks": {},
+           "ok": True}
+    st = P.stream(torch)
+    for k in (int(v) for v in a.ks.split(",")):
+        KB.set_key(lib, KB.lib_key(lib, k))
+        key = KB.lib_key(lib, k)
+        pl = [c.clone() for c in plain]
+        enc = []
+        for l in range(LAYERS):
+            e = torch.empty_like(pl[l])
+            lib.call("kv_encode", pl[l].data_ptr(), e.data_ptr(), lay.words, lbase[l], k, 0, st)
+            enc.append(e)
+        g = {}
+        # append: a step of tokens into random slots, padding among them
+        n = 40
+        slots = torch.tensor(rng.sample(range(BLOCKS * BS), n), dtype=torch.int64)
+        slots[::7] = -1
+        qkv = (torch.randn(n, (H + 2 * G) * D, device="cuda") * 2).to(torch.bfloat16)
+        kk, vv = qkv[:, H * D:(H + G) * D], qkv[:, (H + G) * D:]
+        sl = slots.cuda()
+        ok_append = True
+        for l in range(LAYERS):
+            P.append(lib, torch, pl[l], lay, lbase[l], 0, k, kk, vv, sl)
+            P.append(lib, torch, enc[l], lay, lbase[l], 1, k, kk, vv, sl)
+            ref = pl[l].clone()
+            for i, s in enumerate(slots.tolist()):
+                if s < 0:
+                    continue
+                ref[s // BS, :, s % BS, :D] = kk[i].view(G, D)
+                ref[s // BS, :, s % BS, D:] = vv[i].view(G, D)
+            re = torch.empty_like(pl[l])
+            lib.call("kv_encode", pl[l].data_ptr(), re.data_ptr(), lay.words, lbase[l], k, 0, st)
+            torch.cuda.synchronize()
+            ok_append &= bool(torch.equal(ref, pl[l])) and bool(torch.equal(re, enc[l]))
+        # kv.py on a few words of layer 1
+        w8 = pl[1].view(torch.uint8).view(-1, WB)
+        e8 = enc[1].view(torch.uint8).view(-1, WB)
+        picks = [0, 1, lay.words - 1] + rng.sample(range(lay.words), 5)
+        py_ok = all(K.encode_word(int.from_bytes(bytes(w8[i].cpu().tolist()), "little"), lbase[1] + i, key)
+                    == int.from_bytes(bytes(e8[i].cpu().tolist()), "little") for i in picks)
+        g["append"] = {"tokens": n, "padding": int((slots < 0).sum()), "equal": ok_append, "kv_py_words": len(picks),
+                       "kv_py": py_ok, "ok": ok_append and py_ok}
+        # attention
+        att = {"cells": [], "ok": True}
+        for b in (int(v) for v in a.batches.split(",")):
+            lens_l = [LENS[i % len(LENS)] if i < len(LENS) else rng.randrange(1, 513) for i in range(b)]
+            rng.shuffle(lens_l)
+            maxb = 32
+            perm = rng.sample(range(BLOCKS), BLOCKS)
+            bt = torch.zeros(b, maxb + 3, dtype=torch.int32)
+            for i in range(b):
+                nb = -(-lens_l[i] // BS)
+                bt[i, :nb] = torch.tensor([perm[(i * 3 + j) % BLOCKS] for j in range(nb)], dtype=torch.int32)
+            btd, lens = bt.cuda(), torch.tensor(lens_l, dtype=torch.int32, device="cuda")
+            nrows = b + 3
+            qbuf = (torch.randn(nrows, (H + 2 * G) * D, device="cuda")).to(torch.bfloat16)
+            q = qbuf[:, :H * D]
+            layer = rng.randrange(LAYERS)
+            kd = pl[layer][:, :, :, :D].double()  # block, head, slot, dim
+            vd = pl[layer][:, :, :, D:].double()
+            qs = (q.float() * P.QSCALE).to(torch.bfloat16).double().view(nrows, G, H // G, D)
+            ref = torch.zeros(nrows, H, D, dtype=torch.float64, device="cuda")
+            for i in range(b):
+                L = lens_l[i]
+                if not L:
+                    continue
+                blk = bt[i, :-(-L // BS)].long().cuda()
+                kt = kd[blk].permute(0, 2, 1, 3).reshape(-1, G, D)[:L]  # token, head, dim
+                vt = vd[blk].permute(0, 2, 1, 3).reshape(-1, G, D)[:L]
+                s = torch.einsum("gqd,tgd->gqt", qs[i], kt)
+                p = torch.exp2(s - s.amax(-1, keepdim=True))
+                ref[i] = torch.einsum("gqt,tgd->gqd", p / p.sum(-1, keepdim=True), vt).reshape(H, D)
+            for sp in (int(v) for v in a.splits.split(",")):
+                part = torch.empty(P.part_floats(lib, b, sp), dtype=torch.float32, device="cuda")
+                o_p = torch.full((nrows, H * D), 7.0, dtype=torch.bfloat16, device="cuda")
+                o_e = torch.full_like(o_p, -3.0)
+                P.attn(lib, torch, pl[layer], lay, lbase[layer], 0, k, q, o_p, part, lens, btd, b, sp)
+                P.attn(lib, torch, enc[layer], lay, lbase[layer], 1, k, q, o_e, part, lens, btd, b, sp)
+                qrow = torch.tensor(rng.sample(range(b), b), dtype=torch.int32, device="cuda")
+                qp = torch.empty(b, H * D, dtype=torch.bfloat16, device="cuda")
+                qp[qrow.long()] = q[:b]
+                o_r = torch.full((b, H * D), 5.0, dtype=torch.bfloat16, device="cuda")
+                P.attn(lib, torch, enc[layer], lay, lbase[layer], 1, k, qp, o_r, part, lens, btd, b, sp, qrow=qrow)
+                torch.cuda.synchronize()
+                equal = bool(torch.equal(o_p, o_e))
+                zero_pad = bool((o_e[b:] == 0).all())
+                zero_len = all(bool((o_e[i] == 0).all()) for i in range(b) if not lens_l[i])
+                qrow_eq = bool(torch.equal(o_r[qrow.long()], o_e[:b]))
+                m = ref.abs().max().item() or 1.0
+                err = float((o_p[:b].double().view(b, H, D) - ref[:b]).abs().max() / m)
+                ok = equal and zero_pad and zero_len and qrow_eq and err <= RTOL
+                att["cells"].append({"batch": b, "splits": sp, "layer": layer, "lens": lens_l, "equal": equal,
+                                     "zero_padding": zero_pad, "zero_length": zero_len, "qrow": qrow_eq,
+                                     "rel_err": err, "ok": ok})
+                att["ok"] &= ok
+                if not ok:
+                    log(f"attention k={k} B={b} splits={sp}: FAIL {att['cells'][-1]}")
+        g["attention"] = att
+        # gather
+        blocks = torch.tensor(rng.sample(range(BLOCKS), 20), dtype=torch.int32, device="cuda")
+        ok_g = True
+        for l in range(LAYERS):
+            for encd, src in ((0, pl[l]), (1, enc[l])):
+                o = torch.empty(20, *pl[l].shape[1:], dtype=torch.bfloat16, device="cuda")
+                P.gather(lib, torch, src, lay, lbase[l], encd, k, blocks, o)
+                torch.cuda.synchronize()
+                ok_g &= bool(torch.equal(o, pl[l][blocks.long()]))
+        g["gather"] = {"blocks": 20, "ok": ok_g}
+        g["ok"] = g["append"]["ok"] and att["ok"] and ok_g
+        res["ks"][k] = g
+        res["ok"] &= g["ok"]
+        errs = [c["rel_err"] for c in att["cells"]]
+        log(f"k={k}: append {'ok' if g['append']['ok'] else 'FAIL'}, attention {'ok' if att['ok'] else 'FAIL'} "
+            f"({len(att['cells'])} cells, max rel err {max(errs):.1e}), gather {'ok' if ok_g else 'FAIL'}")
+    (out_dir / "paged-gate.json").write_text(json.dumps(res, indent=1))
+    log("paged gate " + ("passed" if res["ok"] else "FAILED"))
+    return 0 if res["ok"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
