@@ -70,6 +70,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "row's TP8 statics (16 heads padded to 64, the 128-token window, compress-ratio 4 and 128 rows, the sink) every "
              "output word of every decode launch equals FlashMlaDecode_v1 at the token's SPLITS, every gathered workspace row "
              "FlashMlaGatherRow_v1, and every output word of every prefill launch FlashMlaPrefill_v1 at the token's NP, bit for bit."),
+    Property("dsv4_qnorm_insert_capture", "verity-vllm/dsv4-qnorm-insert-capture/v1",
+             "On the capture's Hopper GPU, vLLM d9105ea80 selects the fp8_ds_mla SWA cache for the DSV4 row's attention, and at "
+             "its TP8 statics (16 query heads padded to 64, the 64-token page, 64 indexer heads of 128) every word of the q that "
+             "fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert returns and every byte it writes to the cache (and none other) "
+             "equal Dsv4QNormRopeKvInsert_v1, each written row is the input FlashMlaKvRow_v1 dequantises, and every byte of "
+             "q_fp8 and word of weights_out the CuTe IndexerQFp8Kernel returns equal Dsv4IndexerQ_v1, bit for bit."),
     Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
              "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
              "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),
