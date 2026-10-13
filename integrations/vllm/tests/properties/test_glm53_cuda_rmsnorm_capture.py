@@ -17,7 +17,7 @@ def _case(kind: str = "rms_norm", m: int = 1, n: int = 6144) -> dict:
 
 
 def _doc() -> dict:
-    return {"gate": {"ok": True},
+    return {"gate": {"ok": True}, "sass": {"ok": True},
             "cases": [_case(kind, m, n) for n in X.WIDTHS for m in X.MS for kind in X.KINDS], "errors": {}}
 
 
@@ -47,6 +47,7 @@ def test_planted_rows_and_numpy_models_include_both_in_place_outputs() -> None:
 
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
+    monkeypatch.setattr(X, "sass", lambda out: {"ok": True})
     monkeypatch.setattr(X, "one_case", lambda work, kind, m, n: _case(kind, m, n))
     out = tmp_path / "out"
     assert X.main(["--out", str(out), "--scratch", str(tmp_path)]) == 0

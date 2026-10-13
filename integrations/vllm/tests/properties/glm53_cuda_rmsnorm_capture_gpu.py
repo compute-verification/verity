@@ -17,6 +17,9 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -38,6 +41,7 @@ EPS = 1e-5
 MS = (1, 42, 43, 64, 256, 2048)
 WIDTHS = (6144, 7168)
 KINDS = ("rms_norm", "fused_add_rms_norm")
+SASS_SOURCE = Path(__file__).with_name("cuda_rmsnorm_sass.cu")
 
 
 def _u16(t) -> np.ndarray:
@@ -108,6 +112,30 @@ def _profiler_launch(trace: Path, needle: str) -> dict[str, Any]:
 
     return {"found": True, "kernel": event.get("name"), "grid": dim("grid"), "block": dim("block"),
             "args": {k: v for k, v in args.items() if any(q in k.lower() for q in ("grid", "block", "stream", "device"))}}
+
+
+def sass(out: Path) -> dict[str, Any]:
+    """Compile the pinned width-8 arithmetic for sm_90 and retain its SASS and operation census."""
+    nvcc = shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc"
+    cuobjdump = shutil.which("cuobjdump") or str(Path(nvcc).with_name("cuobjdump"))
+    cubin, text = out / "cuda_rmsnorm_sm90.cubin", out / "cuda_rmsnorm_sm90.sass"
+    flags = ["-O3", "-std=c++17", "-lineinfo", "--expt-relaxed-constexpr",
+             "-gencode", "arch=compute_90,code=sm_90"]
+    version = subprocess.run([nvcc, "--version"], capture_output=True, text=True)
+    build = subprocess.run([nvcc, *flags, "-cubin", str(SASS_SOURCE), "-o", str(cubin)], capture_output=True, text=True)
+    if build.returncode:
+        return {"ok": False, "nvcc": version.stdout.strip().splitlines()[-1:], "flags": flags,
+                "error": (build.stdout + build.stderr)[-2000:]}
+    dump = subprocess.run([cuobjdump, "--dump-sass", str(cubin)], capture_output=True, text=True)
+    text.write_text(dump.stdout)
+    ops = {op: len(re.findall(rf"\b{re.escape(op)}", dump.stdout)) for op in
+           ("FFMA", "FADD", "SHFL", "MUFU.RSQ", "F2FP", "HADD2")}
+    kernels = sorted(set(re.findall(r"Function\s*:\s*(\S+)", dump.stdout)))
+    return {"ok": dump.returncode == 0 and len(kernels) == 2 and ops["SHFL"] > 0 and ops["MUFU.RSQ"] == 2 and
+                  ops["FFMA"] > 0 and ops["FADD"] > 0 and ops["F2FP"] > 0,
+            "nvcc": version.stdout.strip().splitlines()[-1:], "flags": flags, "kernels": kernels, "ops": ops,
+            "cubin_sha256": hashlib.sha256(cubin.read_bytes()).hexdigest(), "sass": text.name,
+            "error": dump.stderr[-1000:]}
 
 
 def _profiled(kind: str, xw: np.ndarray, rw: np.ndarray, ww: np.ndarray, trace: Path):
@@ -202,7 +230,8 @@ def _verdict(doc: dict[str, Any]) -> bool:
     cases = doc.get("cases") or []
     refuted = {name: sum(c["alternatives"][name] for c in cases) for name in (
         "batch_invariant_block", "linear_f64_reduction", "sqrt_div_epilogue")}
-    return bool(doc.get("gate", {}).get("ok") and len(cases) == len(KINDS) * len(MS) * len(WIDTHS) and
+    return bool(doc.get("gate", {}).get("ok") and doc.get("sass", {}).get("ok") and
+                len(cases) == len(KINDS) * len(MS) * len(WIDTHS) and
                 all(c["launch_ok"] and c["mismatch"] == c["residual_mismatch"] == 0 and c["deterministic"] and
                     all(v >= 0 for v in c["alternatives"].values()) for c in cases) and
                 all(v > 0 for v in refuted.values()) and not doc.get("errors"))
@@ -225,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
     os.environ["VLLM_BATCH_INVARIANT"] = "0"
     doc: dict[str, Any] = {"schema": SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                            "argv": sys.argv, "gate": gate, "environment": {"VLLM_BATCH_INVARIANT": "0"},
-                           "cases": [], "errors": {}}
+                           "sass": sass(out), "cases": [], "errors": {}}
     with tempfile.TemporaryDirectory(dir=a.scratch) as td:
         work = Path(td)
         for n in WIDTHS:

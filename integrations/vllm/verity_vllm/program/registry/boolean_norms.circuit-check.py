@@ -25,6 +25,6 @@ def _boolean_roots() -> list[Any]:
         bind(BN.RMSNormFusedCudaVector8, N=16, EPS=1e-5, BLOCK=16, **BN.CUDA_WORD),
         bind(BN.RMSNormCudaVector8, N=16, EPS=1e-5, BLOCK=2, RSQRT=bind(BM.RsqrtApprox)),
         bind(BN.RMSNormFusedCudaVector8, N=16, EPS=1e-5, BLOCK=16, RSQRT=bind(BM.RsqrtApprox)),
-        bind(BN.RMSNormVectorLanesCuda, N=72, BLOCK=4, FUSED=False),
-        bind(BN.RMSNormVectorLanesCuda, N=72, BLOCK=8, FUSED=True),
+        bind(BN.RMSNormVectorLanesCuda, N=24, BLOCK=2, FUSED=False),
+        bind(BN.RMSNormVectorLanesCuda, N=24, BLOCK=2, FUSED=True),
     ]
