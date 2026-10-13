@@ -15,6 +15,8 @@ import numpy as np
 import pytest
 
 from tests.properties import dsv4_qnorm_insert_capture_gpu as X
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as W
 from verity_vllm.program.registry import dsv4_qnorm_insert as R
 from verity_vllm.properties.record import REGISTRY, digest_of
@@ -80,6 +82,24 @@ def test_the_statics_are_dsv4s() -> None:
     assert TI["last1"] == X.COARSEN_CUTOFF - 1 and TI["coarse"] == X.COARSEN_CUTOFF and TI["odd"] > X.COARSEN_CUTOFF
     assert set(X.QUICK_INSERT) <= set(X.INSERT_CASES) and set(X.QUICK_INDEXER) <= set(X.INDEXER_CASES)
     assert len(X.EDGE_K) == X.DN // X.QB and X.EDGE_POS + len(X.EDGE_CS) <= X.MAX_POS
+
+
+def test_the_sumsq_probe_separates_fused_from_unfused() -> None:
+    """The probe is a separate non-served-eps claim.  Its repeated lane leaves three different bf16 words per lane after the
+    butterfly and rsqrt; the fused model is the bound Definition, while FMUL-then-FADD differs on 96 output words."""
+    o = X.sumsq_probe_operands()
+    assert X.SUMSQ_PROBE_EPS == 2.0 ** -140 and o["q"].shape == (1, 1, X.D)
+    assert o["q"][0, 0].tolist() == list(X.SUMSQ_PROBE_LANE) * W.LANES
+    assert np.all(o["cs"][0, :X.DR // 2] == X.F32_ONE) and not o["cs"][0, X.DR // 2:].any()
+    fused = X.sumsq_probe_reference(o["q"][0, 0], o["cs"][0], fused=True)
+    unfused = X.sumsq_probe_reference(o["q"][0, 0], o["cs"][0], fused=False)
+    fn = bind(R.Dsv4QNormRope, D=X.D, DR=X.DR, EPS=X.SUMSQ_PROBE_EPS)
+    definition = np.asarray(X._flat(evaluate(fn, o["q"][0, 0].tolist(), o["cs"][0].tolist())), dtype=np.uint16)
+    bad = np.flatnonzero(fused != unfused)
+    assert np.array_equal(fused, definition)
+    assert bad.tolist() == [16 * lane + i for lane in range(W.LANES) for i in (3, 9, 15)]
+    assert {(int(fused[i]), int(unfused[i])) for i in bad} == {(0x3CF4, 0x3CF5), (0x3F4E, 0x3F4F), (0x3E28, 0x3E29)}
+    assert "sumsq-probe" not in X.INSERT_CASES and ("insert", "sumsq-probe") not in X.cases_of(False)
 
 
 def test_the_table_is_ropes_and_its_special_rows() -> None:
@@ -311,11 +331,14 @@ def _doc(quick: bool = False) -> dict:
     comps = [{"phase": p, "case": c, "words": 10, "mismatch": 0, "reference": 1, "twin_mismatch": 0, "first_mismatch": None}
              for p, c in X.cases_of(quick)]
     return {"schema": X.SCHEMA, "quick": quick, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True},
-            "bind": {"ok": True}, "launches": launches, "comparisons": comps,
+            "bind": {"ok": True}, "sumsq_probe": {"case": "insert/sumsq-probe", "served_statics": False,
+                                                  "scope": "diagnostic non-served eps; excluded from served case totals", "ok": True},
+            "launches": launches, "comparisons": comps,
             "totals": {k: sum(r[k] for r in comps) for k in X.TOTALS}}
 
 
 @pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("selection", "ok"), False), (("bind", "ok"), False),
+                                        (("sumsq_probe", "ok"), False),
                                         (("errors", "stack"), "boom"), (("launches", 0, "checks", "untouched"), False),
                                         (("launches", 3, "checks", "rerun"), False), (("launches", 8, "checks", "coarsen"), False),
                                         (("launches", 12, "checks", "route"), False), (("comparisons", 1, "mismatch"), 1),
@@ -369,6 +392,7 @@ def test_main_end_to_end_on_stubbed_launches(padded, short, tmp_path, monkeypatc
 
     def gpu(work, outdir, quick, doc):
         doc["selection"] = {"ok": True}
+        doc["sumsq_probe"] = copy.deepcopy(_doc(quick=True)["sumsq_probe"])
         doc["launches"] += [{"phase": "insert", "case": c, **copy.deepcopy(LAUNCH["insert"])} for c in ("decode", "reduced")]
         doc["launches"].append({"phase": "indexer", "case": "decode", **copy.deepcopy(LAUNCH["indexer"])})
         ins = [{**j, "case": "decode"} for j in X.insert_jobs("padded", paths["good"], T_, quick)]
@@ -396,3 +420,4 @@ def test_the_record_is_a_registered_property() -> None:
 
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_qnorm_insert_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
+    assert doc["sumsq_probe"]["served_statics"] is False and "sumsq-probe" not in doc["cases"]

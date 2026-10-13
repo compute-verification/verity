@@ -83,16 +83,17 @@ def _rope(x: list[int], cs: list[int], DR: int, fused: bool = True) -> list[int]
     return out
 
 
-def q_head(q: list[int], cs: list[int], eps: float, DR: int, fused: bool = True) -> list[int]:
+def q_head(q: list[int], cs: list[int], eps: float, DR: int, fused: bool = True, fused_sumsq: bool = True) -> list[int]:
     """`processDeepseekV4Slot`'s query head (:205-297): lane l's sum of squares over elements 16l .. (FMUL, then FFMAs), `warpSum`
-    (xor 16 .. 1), `rsqrtf(sum / D + eps)` as FFMA(sum, 1/D, eps) and MUFU, x * r, the RoPE, bf16."""
+    (xor 16 .. 1), `rsqrtf(sum / D + eps)` as FFMA(sum, 1/D, eps) and MUFU, x * r, the RoPE, bf16.  ``fused_sumsq=False``
+    is the deliberately wrong FMUL-then-FADD chain used by the sum-of-squares mutation test."""
     x = [v << 16 for v in q]
     L = len(x) // 32
     lanes = []
     for t in range(32):
         acc = _fmul(x[t * L], x[t * L])
         for i in range(t * L + 1, (t + 1) * L):
-            acc = _ffma(x[i], x[i], acc)
+            acc = _ffma(x[i], x[i], acc) if fused_sumsq else _fadd(acc, _fmul(x[i], x[i]))
         lanes.append(acc)
     total = _butterfly(lanes, _fadd, (16, 8, 4, 2, 1))
     r = evaluate(RsqrtApprox, _ffma(total, D.f32_bits(1.0 / len(x)), D.f32_bits(eps)))[0]
@@ -213,6 +214,21 @@ def test_a_query_head_at_other_statics_matches_the_model(Dd, DR, eps):
     fn = bind(Q.Dsv4QNormRope, D=Dd, DR=DR, EPS=eps)
     for q, cs in _q_cases(rng, Dd, DR)[:4]:
         assert _flat(evaluate(fn, q, cs)) == q_head(q, cs, eps, DR)
+
+
+def test_the_query_sum_of_squares_is_fused():
+    """At eps=2^-140, each lane's two widened bf16 inputs have subnormal, inexact squares.  FFMA and FMUL-then-FADD leave adjacent
+    lane-sum words; after the butterfly and rsqrt this changes 32 bf16 outputs, so the Definition kills the unfused mutant."""
+    eps = 2.0 ** -140
+    q = [0x1D0D, 0x1D83] * 32
+    cs = [D.f32_bits(1.0), 0]  # identity RoPE on the last pair
+    fn = bind(Q.Dsv4QNormRope, D=64, DR=2, EPS=eps)
+    got = _flat(evaluate(fn, q, cs))
+    fused = q_head(q, cs, eps, 2)
+    unfused = q_head(q, cs, eps, 2, fused_sumsq=False)
+    assert got == fused
+    assert [i for i, (a, b) in enumerate(zip(fused, unfused)) if a != b] == list(range(1, 64, 2))
+    assert {(fused[i], unfused[i]) for i in range(1, 64, 2)} == {(0x3F98, 0x3F99)}
 
 
 def _kv_cases(rng, Dd: int, DR: int) -> list[tuple[list[int], list[int]]]:

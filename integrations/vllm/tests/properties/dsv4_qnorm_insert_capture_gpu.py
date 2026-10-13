@@ -42,8 +42,12 @@ pair (x, x) at a table row of s = c or s = -c, where a fused and an unfused rota
 table (`EDGE_CS`).  The indexer's: `decode`, `short` 200 tokens, `last1` 511 (the last of coarsen 1), `coarse` 512, `odd` 777,
 `wide` and `edge` (`indexer_edge`).
 
-GO needs every case's words compared with 0 mismatches, the references sampled with 0 disagreements with the twin, every launch
-check, the selection and the bindings.
+`sumsq_probe` is separate from those served-static cases and their totals: at the non-served eps=2^-140, one crafted query head
+has inexact subnormal squares.  It is GO only when the kernel equals `Dsv4QNormRope_v1{D=512,DR=64,EPS=2^-140}` and differs from
+the deliberately unfused FMUL-then-FADD sum-of-squares model on several output words.
+
+GO needs every served case's words compared with 0 mismatches, the references sampled with 0 disagreements with the twin, the
+separate sum-of-squares probe, every launch check, the selection and the bindings.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/dsv4_qnorm_insert_capture_gpu.py --out DIR [--scratch DIR] [--quick]
@@ -66,7 +70,9 @@ import numpy as np
 from tests.properties import dsv4_flashmla_capture_gpu as M
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.program.kernels import derived_rows as DW
 from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as W
+from verity_vllm.program.kernels import flashmla_twin as FT
 from verity_vllm.program.registry import dsv4_qnorm_insert as R
 from verity_vllm.properties.record import seal as seal_record
 
@@ -103,6 +109,12 @@ EDGE_CS: tuple[tuple[Any, Any], ...] = (
 #: the KV blocks' amax exponents in `insert_edge` (amax 448 2^k); the first, 1.07e-4, sits just above the amax floor 1e-4 and
 #: shares its scale byte 105
 EDGE_K = (-22, -14, -1, 0, 1, 20, 110)
+#: A non-served diagnostic eps and one lane repeated across the warp.  Its widened bf16 squares are subnormal and inexact; the
+#: fused and unfused 16-element lane sums differ, and that difference survives the butterfly, rsqrt and bf16 output rounding.
+SUMSQ_PROBE_EPS = 2.0 ** -140
+SUMSQ_PROBE_LANE = (0x1C0A, 0x1BB3, 0x1DDC, 0x1A94, 0x1D97, 0x1B6F, 0x1C3C, 0x1B1F,
+                    0x1C64, 0x1CFA, 0x1CA3, 0x1AB7, 0x1BBD, 0x1BBA, 0x1C40, 0x1BCC)
+SUMSQ_PROBE_PADDED_HEADS = 8
 #: case -> (tokens, inserted tokens, seed, operands)
 INSERT_CASES = {"decode": (8, 8, 1, "act"), "padded": (48, 40, 2, "act"), "chunk": (1023, 1023, 3, "act"),
                 "reduced": (1024, 1024, 4, "act"), "long": (1536, 1500, 5, "act"), "wide": (128, 128, 6, "wide"),
@@ -184,6 +196,29 @@ def _slots(rng: np.random.Generator, n: int) -> tuple[np.ndarray, int]:
     if n > 1:
         s[1] = -1
     return s, nb
+
+
+def sumsq_probe_operands() -> dict[str, np.ndarray]:
+    """One head whose every lane is `SUMSQ_PROBE_LANE`, an identity RoPE row, and a skipped zero KV row."""
+    q = np.tile(np.asarray(SUMSQ_PROBE_LANE, dtype=np.uint16), W.LANES).reshape(1, 1, D)
+    cs = np.zeros((1, DR), dtype=np.uint32)
+    cs[:, :DR // 2] = F32_ONE
+    return {"q": q, "kv": np.zeros((1, D), dtype=np.uint16), "cs": cs, "positions": np.zeros(1, dtype=np.int64),
+            "slots": np.full(1, -1, dtype=np.int64)}
+
+
+def sumsq_probe_reference(q: np.ndarray, cs: np.ndarray, *, fused: bool) -> np.ndarray:
+    """The probe head through the SASS chain, or through the FMUL-then-FADD sum-of-squares mutant when ``fused`` is false."""
+    x = FT._bf16(np.asarray(q, dtype=np.uint16))
+    lanes = x.reshape(W.LANES, D // W.LANES)
+    acc = W.fmul(lanes[:, 0], lanes[:, 0])
+    for i in range(1, lanes.shape[1]):
+        product = W.fmul(lanes[:, i], lanes[:, i])
+        acc = W.ffma(lanes[:, i], lanes[:, i], acc) if fused else W.fadd(acc, product)
+    for h in (16, 8, 4, 2, 1):
+        acc = W.fadd(acc[:h], acc[h:2 * h])
+    r = DW.rsqrt_approx(W.ffma(acc[0], W.f32(1.0 / D), W.f32(SUMSQ_PROBE_EPS)))
+    return DW.f2fp_bf16(W._rope(W.fmul(x, r), np.asarray(cs, dtype=np.uint32), DR))
 
 
 def insert_operands(case: str) -> dict[str, Any]:
@@ -518,6 +553,43 @@ def _dev(a: np.ndarray, dtype=None):
     return t if dtype is None else t.view(dtype)
 
 
+def launch_sumsq_probe() -> dict[str, Any]:
+    """Run the non-served-eps query head and compare every word with the fused Definition and the unfused mutant."""
+    import torch
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+
+    import vllm._C_stable_libtorch  # noqa: F401
+
+    o = sumsq_probe_operands()
+    q, kv = _dev(o["q"].view(np.int16), torch.bfloat16), _dev(o["kv"].view(np.int16), torch.bfloat16)
+    cs, pos, slots = _dev(o["cs"].view(np.float32)), _dev(o["positions"]), _dev(o["slots"])
+    cache = _dev(np.zeros((1, M.page_bytes(PBS)), dtype=np.uint8))
+    op = torch.ops._C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert
+    out = op(q, kv, cache, slots, pos, cs, SUMSQ_PROBE_PADDED_HEADS, SUMSQ_PROBE_EPS, PBS)
+    torch.cuda.synchronize()
+    got = _u16(out)[0, 0]
+    fn = bind(R.Dsv4QNormRope, D=D, DR=DR, EPS=SUMSQ_PROBE_EPS)
+    fused = np.asarray(_flat(evaluate(fn, o["q"][0, 0].tolist(), o["cs"][0].tolist())), dtype=np.uint16)
+    fused_model = sumsq_probe_reference(o["q"][0, 0], o["cs"][0], fused=True)
+    unfused = sumsq_probe_reference(o["q"][0, 0], o["cs"][0], fused=False)
+    fused_bad = np.flatnonzero(got != fused)
+    unfused_bad = np.flatnonzero(got != unfused)
+    forms_bad = np.flatnonzero(fused != unfused)
+    first = int(forms_bad[0]) if forms_bad.size else None
+    checks = {"shape": tuple(out.shape) == (1, SUMSQ_PROBE_PADDED_HEADS, D) and out.dtype == torch.bfloat16,
+              "pads": not bool(_u16(out)[0, 1:].any()), "inputs": bool(np.array_equal(_u16(q), o["q"])),
+              "fused_model": bool(np.array_equal(fused_model, fused)), "kernel_is_fused": fused_bad.size == 0,
+              "forms_separate": forms_bad.size >= 3, "kernel_is_not_unfused": unfused_bad.size > 0}
+    return {"case": "insert/sumsq-probe", "eps": SUMSQ_PROBE_EPS, "served_statics": False,
+            "scope": "diagnostic non-served eps; excluded from served case totals",
+            "input_lane": list(SUMSQ_PROBE_LANE), "kernel_fused_mismatch": int(fused_bad.size),
+            "kernel_unfused_mismatch": int(unfused_bad.size), "fused_unfused_difference": int(forms_bad.size),
+            "first_difference": None if first is None else
+                {"word": first, "kernel": int(got[first]), "fused": int(fused[first]), "unfused": int(unfused[first])},
+            "checks": checks, "ok": all(checks.values())}
+
+
 def launch_insert(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """One insert case, twice on caches of two fills: its launch record and comparison jobs."""
     import torch
@@ -641,6 +713,11 @@ def gpu(work: Path, outdir: Path, quick: bool, doc: dict[str, Any]) -> list[dict
             doc["launches"].append(r[0])
             jobs += r[1]
             print(f"[dsv4-qnorm-insert] {phase:7s} {case:7s} b={r[0]['b']} {json.dumps(r[0]['checks'])}", flush=True)
+    doc["sumsq_probe"] = step("insert/sumsq-probe", launch_sumsq_probe) or {"case": "insert/sumsq-probe", "ok": False}
+    p = doc["sumsq_probe"]
+    print(f"[dsv4-qnorm-insert] probe insert/sumsq-probe {'GO' if p['ok'] else 'NO-GO'} eps={p.get('eps')} "
+          f"kernel!=fused={p.get('kernel_fused_mismatch')} kernel!=unfused={p.get('kernel_unfused_mismatch')} "
+          f"fused!=unfused={p.get('fused_unfused_difference')}", flush=True)
     torch.cuda.empty_cache()
     return jobs
 
@@ -669,7 +746,8 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def _verdict(doc: dict[str, Any]) -> bool:
     return bool(doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("ok") is True and doc["bind"].get("ok") is True
-                and all(c["ok"] for c in cases(doc).values()) and _words_ok(doc["totals"]))
+                and doc.get("sumsq_probe", {}).get("ok") is True and all(c["ok"] for c in cases(doc).values())
+                and _words_ok(doc["totals"]))
 
 
 def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: int, workers: int, quick: bool) -> dict[str, Any]:
