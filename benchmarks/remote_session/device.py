@@ -29,10 +29,12 @@ from __future__ import annotations
 import ctypes
 import gc
 import hashlib
+import queue
 import shutil
 import struct
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -174,6 +176,15 @@ def path_rows(dig, up, leaves: int, idx: np.ndarray) -> np.ndarray:
         out[:, h] = np.uint64(up.data_ptr()) + np.uint64(64) * (at + ((idx >> h) ^ 1)).astype(np.uint64)
         at, width = at + width, width // 2
     return out
+
+
+class OffloadedHandle:
+    """A pass handle whose device-to-host copy finishes on the backend's offloader."""
+
+    __slots__ = ("value",)
+
+    def __init__(self) -> None:
+        self.value = None
 
 
 class DeviceStore:
@@ -380,8 +391,6 @@ class DeviceStore:
         self.chain_previous = kept[-1:].clone()
         self.pass_gpu_ms.append(a.elapsed_time(b))
         self.chain_host_phases.append((t1 - t0, t2 - t1, t3 - t2, time.perf_counter_ns() - t3))
-        if self.offload_handles:
-            seed, pk, kept = bytes(seed.cpu().numpy()), pk.cpu(), kept.cpu()
         return root, (seed, pk, kept)
 
     def warm(self, passes: int) -> None:
@@ -582,6 +591,8 @@ class Device:
         self.salt_key = self.rng.bytes(32)
         self.main_stream = torch.cuda.Stream()
         self.open_stream = torch.cuda.Stream()
+        self.offload_jobs: queue.Queue = queue.Queue()
+        threading.Thread(target=self._offload, daemon=True).start()
         self.gates: dict = {}
         with torch.cuda.stream(self.main_stream):
             self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, self.gen,
@@ -640,18 +651,20 @@ class Device:
             for i in range(self.calibration_passes):
                 t0 = time.perf_counter_ns()
                 want_seed = rb.seed(challenge, i, prev)
-                prev, handle = s.run_chain(i)
+                prev, handle = self._run_chain(i)
                 kept.append(handle)
                 t1 = time.perf_counter_ns()
                 if first is None:
-                    first = (want_seed, prev, handle[0], handle[2])
+                    first = (want_seed, prev, handle)
                 if t_end is not None:
                     gap_ns.append(t0 - t_end)
                 pass_ns.append(t1 - t0)
                 t_end = t1
             gc.enable()
             gc.unfreeze()
-            seed, chained_root, seed_dev, chained_kept = first
+            self.offload_jobs.join()
+            seed, chained_root, chained_handle = first
+            seed_dev, _chained_pk, chained_kept = self._ready(chained_handle)
             self.gates["device_seed"] = (seed_dev if isinstance(seed_dev, bytes)
                                          else bytes(seed_dev.cpu().numpy())) == seed
             plain_root = s.plain_root(seed, chained_kept)
@@ -701,11 +714,41 @@ class Device:
 
     def run_chained(self, i: int):
         with self.torch.cuda.stream(self.main_stream):
-            return self.store.run_chain(i)
+            return self._run_chain(i)
 
     def open_window(self, items: list[tuple[object, list[int]]]) -> list[list[tuple]]:
+        self.offload_jobs.join()
+        items = [(self._ready(handle), positions) for handle, positions in items]
         with self.torch.cuda.stream(self.open_stream):
             return self.store.open_window(items)
+
+    def _run_chain(self, i: int):
+        root, handle = self.store.run_chain(i)
+        if not self.store.offload_handles:
+            return root, handle
+        out = OffloadedHandle()
+        self.offload_jobs.put((handle, out))
+        return root, out
+
+    def _offload(self) -> None:
+        while True:
+            (seed, pk, kept), out = self.offload_jobs.get()
+            try:
+                out.value = (bytes(seed.cpu().numpy()), pk.cpu(), kept.cpu())
+            except BaseException as error:
+                out.value = error
+            finally:
+                self.offload_jobs.task_done()
+
+    @staticmethod
+    def _ready(handle):
+        if not isinstance(handle, OffloadedHandle):
+            return handle
+        if isinstance(handle.value, BaseException):
+            raise RuntimeError("pass-handle offload failed") from handle.value
+        if handle.value is None:
+            raise RuntimeError("pass-handle offload is not ready")
+        return handle.value
 
     def session_stats(self) -> dict:
         gpu = self.store.pass_gpu_ms
