@@ -458,25 +458,26 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
     start, and every other warp tags once its own work is done), DECODERSxSTAGESx-1xK_S (the decoders sketch at
     k_s over tiles of `sketch_t` tasks, stages < 2 sketch_t) or DECODERSxSTAGESx-2xK_S (two sketch warps of their own
     sketch and hash, beside D decoders: full slot, k_s = 16, or 16 and 64 in a WT_RECEIPT build), each checked against
-    wt_fused_sketch's bounds; at
-    M > 16 and k <= 2 the kernel has two MMA warps (wt.cu's fused_mma_warps), so D + 3 warps untagged and D + 5 beside
-    the sketch warps must fit. `auto`: untagged, the most decoder warps the field's registers allow at 16 warps at 4
-    and 6 stages fewer than fit at M = 32 (fewer stages leave more L1) and at all of them, 1 fewer at 4 and 6 fewer
-    stages, and 2 fewer warps at 2 fewer stages (p1536's 10 decoders starve at 8 stages: 8 x 8 and 10 x 10 are its
-    best); tagged, 0 and 2 of those warps tagging from the start, at 4 fewer stages; sketched, for each k_s in
-    `sketch`, all of them sketching at 0, 2, 3 and 4 fewer stages (the sketch's buffers already take some), and at
-    k_s = 16 (any k_s in a WT_RECEIPT build) and full slot the two sketch warps beside all of them and beside 2 and 3
-    fewer, at 0 and 2 fewer stages.
+    wt_fused_sketch's bounds. At M > 16 and k <= 2 the kernel has two MMA warps (wt.cu's fused_mma_warps) and a
+    producer, so D + 3 warps untagged and D + 5 beside the sketch warps must fit; where the decoders sketch, one MMA
+    warp and a producer (D + 2); elsewhere one MMA warp that copies the tasks itself (fused_producers), D + 1 and
+    D + 3. `auto`: untagged, the most decoder warps the field's registers allow at 16 warps at 4 and 6 stages fewer
+    than fit at M = 32 (fewer stages leave more L1) and at all of them, 1 fewer at 4 and 6 fewer stages, and 2 fewer
+    warps at 2 fewer stages (p1536's 10 decoders starve at 8 stages: 8 x 8 and 10 x 10 are its best); tagged, 0 and 2
+    of those warps tagging from the start, at 4 fewer stages; sketched, for each k_s in `sketch`, all of them but the
+    producer's sketching at 0, 2, 3 and 4 fewer stages (the sketch's buffers already take some), and at k_s = 16 (any
+    k_s in a WT_RECEIPT build) and full slot the two sketch warps beside all of them and beside 2 and 3 fewer, at 0 and
+    2 fewer stages.
     Where the field's kernel takes 20 warps (wt.cu's fused_warps: full slot, untagged or beside the sketch warps), also
     16 decoders, four a sub-partition, untagged at 2 and 4 fewer stages and beside the sketch warps (and 15, M = 32's)
-    at 0 and 2 fewer, and 18 untagged at 4 fewer. gemm_case skips each config at an M and k whose kernel doesn't take
+    at 0 and 2 fewer, and 19 untagged at 4 fewer. gemm_case skips each config at an M and k whose kernel doesn't take
     its warps (fused_fits). Four or more tag warps (with the decoders that leave) fail some gates in some runs, on early
     tasks of random CTAs, unexplained, so auto leaves them out."""
     sk_bytes = lambda ks, w: (  # noqa: E731   wt.cu's sk_buf_ints: receipt_warp's batches, or the sketch buffers
         4 * 2 * 4 * 2 * SR.SK_G * (ks + 4) if lib.receipt and w and ks else 64 * (8 if w else 3) * ks)
     smax = lambda ks, w=False: (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - sk_bytes(ks, w)) // (lib.sb + 48)  # noqa: E731
     warps_ks = lambda ks: ks == 16 or (lib.receipt and ks == 64)  # noqa: E731
-    dmax, dwide = lib.fused_warps - 2, lib.fused_most - 2
+    dmax, dwide = lib.fused_warps - 1, lib.fused_most - 1
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     full_slot = lib.pb == lib.s
     if spec == "auto":
@@ -485,14 +486,16 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
         if dmax - 2 >= lib.fused_span:
             cfgs.append((dmax - 2, max(need(dmax - 2), smax(0) - 2), -1))
         cfgs += [(dmax - t, max(need(dmax - t), smax(0) - 4), t) for t in (0, 2) if dmax - t >= lib.fused_span]
+        wide = {dwide - 3, dwide - 4} if dwide > dmax else set()
         if dwide > dmax:
-            cfgs += [(dwide - 2, max(need(dwide - 2), smax(0) - f), -1) for f in (2, 4)]
+            cfgs += [(dwide - 3, max(need(dwide - 3), smax(0) - f), -1) for f in (2, 4)]
             cfgs.append((dwide, max(need(dwide), smax(0) - 4), -1))
         for ks in (int(v) for v in sketch.split(",") if v):
-            cfgs += [(dmax, min(2 * sketch_t - 1, max(need(dmax), smax(ks) - f)), -1, ks) for f in (0, 2, 3, 4)]
+            cfgs += [(dmax - 1, min(2 * sketch_t - 1, max(need(dmax - 1), smax(ks) - f)), -1, ks)
+                     for f in (0, 2, 3, 4)]
             if warps_ks(ks) and full_slot:
                 cfgs += [(d, min(2 * sketch_t - 1, max(need(d), smax(ks, True) - f)), -2, ks)
-                         for d in sorted({dmax, dmax - 2, dmax - 3, dwide - 2, dwide - 3}, reverse=True)
+                         for d in sorted({dmax, dmax - 2, dmax - 3} | wide, reverse=True)
                          if d >= lib.fused_span
                          for f in (0, 2)]
     else:
@@ -552,7 +555,8 @@ def store_blocks_torch(torch, store):
 
 
 def fused_fits(lib: Lib, k: int, mb: int, n: int, kd: int, cfg, sketch_t: int) -> bool:
-    """wt_fused_sketch takes cfg at M = mb (two sketch warps beside D decoders need D + 4 warps past M = 16)."""
+    """wt_fused_sketch takes cfg at M = mb (two sketch warps beside D decoders need D + 3 warps, and D + 5 past
+    M = 16 at k <= 2)."""
     launched = ctypes.c_int(0)
     return lib.so.wt_fused_sketch(k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, max(cfg[2], 0), None, None,
                                   0, cfg[3], None, None, sketch_t, sketch_warps(cfg), ctypes.byref(launched),
