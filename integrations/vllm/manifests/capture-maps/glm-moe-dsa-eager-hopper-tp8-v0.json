@@ -283,9 +283,19 @@
     "AttnBlock_v4",
     "Attention_v9",
     "AttentionHead_v9",
-    "AttnBlock_v9"
+    "AttnBlock_v9",
+    "AttentionSplit_v1",
+    "AttentionHeadSplit_v1",
+    "AttnBlockFirst_v1",
+    "SparseMlaSplitEnd_v1",
+    "SparseMlaCombine_v1",
+    "AttentionSplit_v2",
+    "AttentionHeadSplit_v2",
+    "AttnBlockFirst_v2",
+    "SparseMlaSplitEnd_v2",
+    "SparseMlaCombine_v2"
    ],
-   "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256: vllm-flash-attn 506341a1 runs TileShape 128x80x256 (tile_size_fwd_sm90, hdim > 192, not local), 16 QK and 5 P.V wgmma k16 steps a block. RescaleOBeforeGemm (true above head 128) moves O's rescale before the next P.V gemm, the same per-element recurrence, so a row is Attention_v4{T,NH=8,KVH=8,D=256,BN=80,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,MASKED_FROM} (targets.attention_spec; Attention_v9 on bits). vLLM passes num_splits=0: per rank (8 heads, 132 SMs) a launch whose longest sequence has 321..1664 tokens splits KV (fa3_model.num_splits) and runs FlashAttnFwdCombine, which no Program models. port until the H200 capture (tests/properties/glm53_fa3_prefill_capture_gpu.py) pins the tile and a Build rule binds the tap"
+   "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256: vllm-flash-attn 506341a1 runs TileShape 128x80x256 (tile_size_fwd_sm90, hdim > 192, not local), 16 QK and 5 P.V wgmma k16 steps a block. RescaleOBeforeGemm (true above head 128) moves O's rescale before the next P.V gemm, the same per-element recurrence, so a row is Attention_v4{T,NH=8,KVH=8,D=256,BN=80,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,MASKED_FROM} (targets.attention_spec; Attention_v9 on bits). vLLM passes num_splits=0: per rank (8 heads, 132 SMs) a launch whose longest sequence has 321..1664 tokens splits KV (fa3_model.num_splits) and runs FlashAttnFwdCombine<8x128, kLogMaxSplits 5>: a row of a sequence the plan splits in NS is AttentionSplit_v1{T,NBM,NS,...} (fa3_split.split_of of its Attention_v4 binding, NBM its 128-row tile's n_block_max; AttentionSplit_v2 on bits), each split's blocks AttnBlockFirst_v1 then AttnBlock_v4, its split end and combine sparse_mla_split's SparseMlaSplitEnd_v1 and SparseMlaCombine_v1 at DV 256. port until the H200 capture (tests/properties/glm53_fa3_prefill_capture_gpu.py) pins the tile and a Build rule binds the tap"
   },
   "mla-sparse-attention": {
    "status": "port",

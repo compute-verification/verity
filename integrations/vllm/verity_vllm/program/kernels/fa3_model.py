@@ -32,7 +32,8 @@ there: block n's rescale of O moves from the end of its own step to just before 
 ``O = O * scores_scale + P V`` (and the FFMA-contracted row sum) as here.  kBlockM 128 > kBlockN 80 makes the first rows of an M tile visit
 up to two fully-masked key blocks first; ``kernel_geometry(kblock_m=)`` gives that count and the twin shows it neutral.  vLLM launches it
 with ``num_splits = 0``: :func:`num_splits` says which sequences the heuristic splits (GLM-5.3 per rank, 132 SMs: 321..1664 tokens), and
-those run the Split kernel and ``FlashAttnFwdCombine``, outside this model.  Not yet measured on an H200 (``MEASURED``; the capture is
+those run the Split kernel and ``FlashAttnFwdCombine``, whose rows are ``AttentionSplit_v1`` (``registry.fa3_split``; its twin
+``fa3_split_twins.split_call`` runs :func:`attention_rows` split by split).  Not yet measured on an H200 (``MEASURED``; the capture is
 ``tests/properties/glm53_fa3_prefill_capture_gpu.py``).
 
 Measured (typed program `AttentionFA3@1` = this arithmetic gate for gate, correspondence against the H100 production
@@ -188,7 +189,8 @@ def split_plan(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num
     num_sm)`` over every sequence's ``num_m_blocks * num_n_blocks``; ``max(min(ceil(num_n_blocks / blocks_per_sm), static), 1)``); one
     split past ``PREPARE_VARLEN_MAX_BATCHES_1CTA`` sequences.  The host heuristic is IEEE f32; the device's ``/`` is ``div.full.ftz.f32``
     (``--use_fast_math``: the numerator times the measured MUFU.RCP of ``num_sm``, ``DivFullRcp_v1``), assumed to lower as Triton's does.
-    A sequence counted above 1 is combined from its splits, which this module does not model; one counted 1 is written directly."""
+    A sequence counted above 1 is combined from its splits (``fa3_split_twins.split_call``, ``AttentionSplit_v1``); one counted 1
+    is written directly."""
     from verity_vllm.program.kernels import derived_rows as DR
     L = [int(x) for x in seqlens]
     Dv = int(D if Dv is None else Dv)
