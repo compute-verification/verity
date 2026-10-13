@@ -11,9 +11,9 @@ row-port bit keys (`WLocO`, one chosen by `wLocO`), and 0 where no part has it s
 
 * `partsOfO`, `wIOfO`, `nsOfO`, `nvOfO`, `rowColOfO`: the opening's parts, as `partsOf` … `rowColOf` are V*'s algebra's;
   `structureOf_nwO`, `part_nwO`: the row ports' elements are w's `nw`.
-* `OpenReadCol` (named): each element a part of the verifier's opening holds is read whole or not at all.
+* `OpenWhole` (named): each element a part of the verifier's opening holds is read whole or not at all.
 * `openingZeroAtL_wReadO`: each part's `OpeningZeroAtL` at one `w` holds at `wReadO`'s: a bit a part reads is of an
-  element the part reads whole (`OpenReadCol`), so some part has it so (`WLocO`), and there a good layer holds the
+  element the part reads whole (`OpenWhole`), so some part has it so (`WLocO`), and there a good layer holds the
   registrant's value (`bitAt_of_regBit`), which is `w`'s in every part.
 
 At the opening's shape not every element a part holds is read (at `m = 22`, `m24`'s first four elements are held and
@@ -116,7 +116,7 @@ def wReadO {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → F
 /-- **Hypothesis on the verifier's opening units: an element a part holds is read whole or not at all** (S's
 `RecOpening.check` refusal): at a circuit whose unit `RecOpening.check` accepts as part `p` at `sh`, a row-port element
 `a` of the part one of whose bits' columns a computed row of the unit reads has all 128 of its columns so read. -/
-def OpenReadCol (sh : Flock.Shape) : Prop :=
+def OpenWhole (sh : Flock.Shape) : Prop :=
   ∀ (c : Flock.Circuit) (hU : Built c.unit) (m cl p : ℕ), Flock.RecOpening.check c = .ok () →
     Flock.RecOpening.params c.unit.name = some (m, cl, p) → Flock.RecOpening.shape? m cl = some sh →
     ∀ (S₁ : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ), Flock.RecOpening.part sh p = .ok (S₁, ns, nv) →
@@ -157,9 +157,9 @@ theorem el_wReadO (Lb : (j : Fin S) → (Vs j).Bits) {i : ℕ} (hi : i < Flock.R
 /-- **Each opening part's `OpeningZeroAtL` at `wReadO`**: where every part `p` is copy 0 of unit `un p` in session
 `sess p` registering one `w` where its rows read it (`OpeningZeroAtL`) in a layer agreeing with the registrant, each
 does at `wReadO`'s: element `(wIOfO sh p)[a]`'s bit `b`, read by `p`'s unit, is of an element `p` reads whole
-(`OpenReadCol`), so some part reads it whole at keyed columns (`wLocO_spec`), and `wReadO` holds the layer's bit there
+(`OpenWhole`), so some part reads it whole at keyed columns (`wLocO_spec`), and `wReadO` holds the layer's bit there
 (`el_wReadO`), which is `w`'s (`bitAt_of_regBit`, `RegBit`). -/
-theorem openingZeroAtL_wReadO {Reg' : Type} (hrc : OpenReadCol sh) {zs : (s : Fin S) → (Vs s).Outer Reg'}
+theorem openingZeroAtL_wReadO {Reg' : Type} (hrc : OpenWhole sh) {zs : (s : Fin S) → (Vs s).Outer Reg'}
     {Lb : (s : Fin S) → (Vs s).Bits} (hA : ∀ s, (zs s).RegAgree (Lb s)) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : Flock.RecOpening.structureOf sh = .ok GS)
     (hg : Flock.RecResiduals.groups GS (Flock.RecOpening.portSizes sh) = .ok gs) {w v : ℕ → F128}
