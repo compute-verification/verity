@@ -858,6 +858,24 @@ def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
     assert p.returncode == 0 and "tests/test_sibling.py::test_sibling" not in _reused(tmp_path), p.stdout
 
 
+def test_each_failed_suite_is_written_beside_the_json_as_it_fails(tmp_path):
+    """12 Oct: check cc39's repository suite had failed by 20:25Z, but under `--keep-going` the check ran to 20:55Z, and drive
+    knew only then; `suites.failed.json`, rewritten as each suite fails, is what drive reads of a check still running."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    out = tmp_path / "suites.json"
+    p = _run_suite(root, tmp_path, "--json", str(out))
+    assert p.returncode == 1, p.stdout
+    (doc,) = json.loads((tmp_path / "suites.failed.json").read_text())
+    assert (doc["name"], doc["log"]) == ("pkg", "pkg.log") and any("test_sibling" in t for t in doc["failed_tests"]), doc
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    pass\n")
+    _git(root, "commit", "-qam", "fixed")
+    p = _run_suite(root, tmp_path, "--json", str(out))
+    assert p.returncode == 0 and not (tmp_path / "suites.failed.json").exists(), p.stdout
+
+
 def test_a_suite_that_is_not_parallel_records_outcomes_but_reuses_none(tmp_path):
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)

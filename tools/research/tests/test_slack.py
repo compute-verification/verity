@@ -697,6 +697,21 @@ def test_read_thread_since_reads_only_the_replies_after_ts(fake, registry, capsy
     assert rc == 0 and [m["text"] for m in json.loads(out)] == ["second answer", "third answer"]
 
 
+def test_read_since_takes_an_iso_time_as_its_ts_and_refuses_anything_else(fake, registry, capsys):
+    """Slack answers a date passed as `oldest` with no messages, so a sweep reading `--since 2026-…Z` saw a quiet channel."""
+    root = fake.add(COORD, text="before", user="U1", ts="1793525400.000100")                  # 2026-11-01T09:30:00Z
+    fake.add(COORD, text="after", user="U2", ts="1793525460.000100")
+    fake.add(COORD, text="reply after", user="U3", ts="1793525470.000100", thread_ts=root["ts"])
+    rc, out, _ = run(capsys, "read", "--since", "2026-11-01T09:30:30Z")
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["after"]
+    rc, out, _ = run(capsys, "read", "--thread", root["ts"], "--since", "2026-11-01T01:30:30-08:00")
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["reply after"]
+    for bad in ("2026-11-01T09:30:30", "yesterday"):
+        with pytest.raises(SystemExit) as e:
+            run(capsys, "read", "--since", bad)
+        assert e.value.code == 2 and "an ISO time with its zone" in capsys.readouterr().err
+
+
 def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, registry, capsys):
     text = "freeze 2026-11-01T09:30Z, see note:20260930T2020Z-handoff-infra and `--since 2026-11-01T09:30Z`"
     assert run(capsys, "ask", "--as", "infra", "--to", "@memory-accounting", "--text", text)[0] == 0

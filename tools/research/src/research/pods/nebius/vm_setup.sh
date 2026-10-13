@@ -107,9 +107,13 @@ f=/etc/research/deadline
 d=""; read -r d _rest < "$f" 2>/dev/null
 case $d in ''|*[!0-9]*) d=0;; esac
 [ "$(date +%s)" -ge $((d - 300)) ] || exit 0
-id=$(curl -sf -H 'Metadata: true' http://metadata.nebius.internal/v1/instance-data/id) || exit 1
+id=$(curl -sf -H 'Metadata: true' http://metadata.nebius.internal/v1/instance-data/id) || id=unknown
 logger -t vy-deadline "deadline $d reached: stopping $id"
-exec /usr/local/sbin/vy-nebius-stop "$id"
+/usr/local/sbin/vy-nebius-stop "$id" && exit 0
+# A VM whose recovery_policy is FAIL (every preemptible one) stays stopped and unbilled after a guest poweroff, so that is the
+# fallback when the attached service account can't stop it through the API; under RECOVER Nebius restarts it.
+logger -t vy-deadline "API stop of $id refused: powering off"
+exec systemctl poweroff
 EOF
 chmod 755 /usr/local/sbin/vy-deadline-check
 cat > /etc/systemd/system/vy-deadline.service <<'EOF'

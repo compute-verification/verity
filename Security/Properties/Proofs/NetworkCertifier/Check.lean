@@ -62,7 +62,7 @@ theorem verifies_iff {p : Params} {c : Commitment} {d : Direction} {l : String} 
       · have := hcw.trans hw
         exact_mod_cast this
       · have hcw' : r.certificate.window = w := by have := hcw.trans hw; exact_mod_cast this
-        cases hm : certificateMessage r.certificate.keyId r.certificate.link r.certificate.direction
+        cases hm : certificateMessage r.certificate.keyId p.session r.certificate.link r.certificate.direction
             r.certificate.window r.certificate.digest with
         | error _ => rw [hm] at hsig; cases hsig
         | ok m =>

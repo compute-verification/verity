@@ -34,7 +34,8 @@ The publisher signs its uploads directly with the bucket-scoped key, as root, ou
 broader credential sits on the machine to mint a shorter-lived one. Every write is conditional (`If-None-Match: *`). A
 412 or 409 means the object exists: a blob then must be stored with its MD5 as ETag (blobs go up in one part, so it is),
 and a record must be byte-identical, or the package isn't published. The record goes last, so every blob it names exists.
-Integration's own builds never read the cache: `audit.py` runs Lake with `LAKE_ARTIFACT_CACHE=false` and `LEAN_CACHE=off`.
+Integration's own builds never read the cache: `audit.py` runs Lake with `LEAN_CACHE=off`, and with `LAKE_ARTIFACT_CACHE=false`
+or, in check's audit, a local Lake cache that only a passing audit on that node writes (`lean_audit.LakeArtifacts`).
 """
 from __future__ import annotations
 
