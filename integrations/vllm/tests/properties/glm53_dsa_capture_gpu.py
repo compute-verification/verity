@@ -1,5 +1,5 @@
 """GLM-5.3's sparse attention on Hopper against its Programs: the H200's go/no-go for binding the DSA indexer's `dsa.DsaIndexerKRow_v1`
-(Triton `_fused_norm_rope_kernel` program 0) and `dsa.DsaIndexerQ_v1` (`_fused_q_kernel` program 1), `dsa.DsaMqaLogit_v1` (DeepGEMM
+(Triton `_fused_norm_rope_kernel` program 0) and `dsa.DsaIndexerQ_v1` (`_fused_q_kernel` program 1), `dsa.DsaMqaLogit_v3` (DeepGEMM
 `fp8_fp4_mqa_logits` and `fp8_fp4_paged_mqa_logits`), `dsa.DsaTopKShortRow_v1` and `dsa.DsaTopKSelection_v1` (vLLM's
 `top_k_per_row_prefill`, `cooperative_topk` and `persistent_topk`) and `sparse_mla.SparseMlaHead_v1` (FA3, `FLASH_ATTN_MLA_SPARSE`)
 at GLM-5.3's statics on one TP8 rank (8 MLA heads; the indexer's 32 heads replicated), and the run that settles the RoPE contraction
@@ -29,7 +29,7 @@ A phase that raises records its error and fails the verdict without stopping the
   logits     the prefill gather (`cp_gather_indexer_k_quant_cache`) against the cache slots; `fp8_fp4_mqa_logits` (ks = 0, ke = i + 1,
              clean_logits=False, sparse_attn_indexer.py:496-507) on rows FULL_ROWS, random rows and random (row, key) pairs, and
              `fp8_fp4_paged_mqa_logits` (one context per DECODE_LENS entry, its query the last token's, sparse_attn_indexer.py:600-613)
-             on every key: each logit against `DsaMqaLogit_v1{32,128}` (twin `logit_rows`; the reference on a sample).
+             on every key: each logit against `DsaMqaLogit_v3{32,128}` (twin `logit_rows`; the reference on a sample).
   topk       `top_k_per_row_prefill` on the served logits (twice) and on synthetic rows from a row start of 5; `persistent_topk`,
              `cooperative_topk` where vLLM calls it (not on sm_120; 10 and 8 rows, its clusters of 4 and 8 on sm_90), both
              sparse_attn_indexer.py:617-656, and the `top_k_per_row_decode` fallback (recorded) on synthetic rows
@@ -47,12 +47,13 @@ A phase that raises records its error and fails the verdict without stopping the
              the served kernels): their PTX instruction counts, copied to `<out>/ptx/`.
   bind       the Programs bind at the served statics.
 
-The RoPE contraction.  GLM-5.3's capture map names `RoPEHeadGptJ_v1` for the k_pe and q_pe RoPE (`fused-rope-triton`), whose
-contraction no run has measured; this run must settle it.  The kernels compute `r1 = x1*cos - x2*sin`, `r2 = x2*cos + x1*sin` in f32
+The RoPE contraction.  GLM-5.3's capture map named `RoPEHeadGptJ_v1` for the k_pe and q_pe RoPE (`fused-rope-triton`) before a run
+measured it; run r20261012-222325-ce92 settled both on `RoPEHeadGptJ_v2`, which the map now names, and every run settles it again.
+The kernels compute `r1 = x1*cos - x2*sin`, `r2 = x2*cos + x1*sin` in f32
 from bf16 words (kernels.py:233-236, 718-731), so nvcc/ptxas may contract either product into an FMA: L_a = bf16(fma(x1, c, -RN(x2 s)))
 (`RoPEHeadGptJ_v1`'s `RopeOut_v1`), L_b = bf16(fma(-x2, s, RN(x1 c))), L_n = bf16(RN(x1 c) - RN(x2 s)); H_a = bf16(fma(x2, c, RN(x1
-s))) (`RoPEHeadGptJ_v1`'s `RopeOutAdd_v1`), H_b = bf16(fma(x1, s, RN(x2 c))) (`RoPEHeadGptJ_v2`, which only branch
-`cursor/mla-programs-8c79` registers, measured there on vLLM's CUDA rotary kernel), H_n; each also flushing subnormals (`_ftz`).  A
+s))) (`RoPEHeadGptJ_v1`'s `RopeOutAdd_v1`), H_b = bf16(fma(x1, s, RN(x2 c))) (`RoPEHeadGptJ_v2`, also measured on vLLM's
+CUDA rotary kernel), H_n; each also flushing subnormals (`_ftz`).  A
 product of two bf16 words is exact in f32 unless it leaves f32's normal range, so served operands cannot tell them apart: the
 subnormal probe (`rope_probe_quads`) puts operand quadruples whose products are f32 subnormals beside a bf16 rounding tie, each
 quadruple separating two forms, in k_pe (16 launches) and q_pe.  `ROPE k_pe=... q_pe=...` names the Definition the words are
@@ -93,7 +94,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-dsa-capture/v2"
+SCHEMA = "verity-vllm/glm53-dsa-capture/v3"
 RECORD = "glm53_dsa_capture.json"
 #: GLM-5.3 (tests/check/fixtures/glm_moe_dsa/config.json) at TP8: the indexer's 32 heads of 128 with a 64-wide interleaved RoPE,
 #: top 2048, its cache row 128 e4m3 bytes and a 4-byte scale (kernels.py:63-87); MLA's 8 local heads, rope 64, latent 512, nope 192
@@ -239,10 +240,11 @@ def slot_mask(n_blocks: int, slots) -> np.ndarray:
 
 # ------------------------------------------------------------------------------------------------------------------- the twins
 def logit_rows(q: np.ndarray, w: np.ndarray, k: np.ndarray, ks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """`DsaMqaLogit_v1{H,D}` over n entries, each its own (q, w, k, ks): q (n, H, D) e4m3 bytes, w (n, H) f32 words, k (n, D) e4m3
+    """`DsaMqaLogit_v3{H,D}` over n entries, each its own (q, w, k, ks): q (n, H, D) e4m3 bytes, w (n, H) f32 words, k (n, D) e4m3
     bytes, ks (n,) f32 words -> (n logit words, nonfinite mask).  Per head the D/32 `tc_dot32_e4m3` steps from +0 (key as A),
-    `fmaxf(acc, +0)`, then the quad lanes' FMUL/FFMA sums in ascending j, `(s0 + s1) * ks` and `(v0 + v1) + (v2 + v3)`.  An entry
-    whose dot steps flag a non-finite accumulator or an e4m3 NaN, or whose logit is NaN, is unresolved."""
+    `fmaxf(acc, +0)`, then the quad lanes' sums in ascending j (j = 0's product contracted into j = 1's add, `fma(r0, w0, r1 *
+    w1)`, then FFMAs), `(s0 + s1) * ks` and `(v0 + v1) + (v2 + v3)`.  An entry whose dot steps flag a non-finite accumulator or an
+    e4m3 NaN, or whose logit is NaN, is unresolved."""
     from verity_vllm.program.kernels import derived_rows as DR
 
     n, Hh, Dd = q.shape
@@ -259,8 +261,11 @@ def logit_rows(q: np.ndarray, w: np.ndarray, k: np.ndarray, ks: np.ndarray) -> t
         sums = []
         for pair in (0, 1):
             hs = [2 * c + pair + 8 * j for j in range(Hh // 8)]
-            acc = DR.mul_rn(relu[:, hs[0]], w[:, hs[0]])
-            for h in hs[1:]:
+            if len(hs) > 1:
+                acc, rest = DR.fma_rn(relu[:, hs[0]], w[:, hs[0]], DR.mul_rn(relu[:, hs[1]], w[:, hs[1]])), hs[2:]
+            else:
+                acc, rest = DR.mul_rn(relu[:, hs[0]], w[:, hs[0]]), hs[1:]
+            for h in rest:
                 acc = DR.fma_rn(relu[:, h], w[:, h], acc)
             sums.append(acc)
         v.append(DR.mul_rn(DR.add_rn(sums[0], sums[1]), ks))
@@ -484,12 +489,12 @@ def rope_settled(m: dict[str, Any]) -> bool:
 
 
 def rope_name(m: dict[str, Any]) -> str:
-    """The Definition the words are: RoPEHeadGptJ_v1 = (L_a, H_a), RoPEHeadGptJ_v2 = (L_a, H_b) (branch cursor/mla-programs-8c79)."""
+    """The Definition the words are: RoPEHeadGptJ_v1 = (L_a, H_a), RoPEHeadGptJ_v2 = (L_a, H_b)."""
     forms = (tuple(m["L"]), tuple(m["H"]))
     if forms == (("L_a",), ("H_a",)):
         return "RoPEHeadGptJ_v1"
     if forms == (("L_a",), ("H_b",)):
-        return "RoPEHeadGptJ_v2 (registered on cursor/mla-programs-8c79 only)"
+        return "RoPEHeadGptJ_v2"
     return f"no Definition (L in {list(forms[0])}, H in {list(forms[1])})"
 
 
@@ -1203,10 +1208,17 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
 
 
 def phase_attn(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any], topk: dict[str, Any], quick: bool):
-    """FA3's sparse decode on ATTN_TOKENS' prefill top-k rows, as `forward_mqa` calls it."""
+    """FA3's sparse decode on ATTN_TOKENS' prefill top-k rows, as `forward_mqa` calls it: through its module's
+    ``flash_attn_varlen_func`` under the serving switch (`engine.sparse_mla`, off by default: vLLM's heuristic splits; with
+    ``VERITY_SPARSE_MLA_NUM_SPLITS=1``, one split, `SparseMlaHead_v1`).  The record says which (``switch``); with the pin on,
+    the heuristic on the same call is recorded beside it (``heuristic_differs``), not checked."""
     import torch
+    from vllm.v1.attention.backends.mla import flashattn_mla_sparse as FMS
     from vllm.v1.attention.backends.mla.sparse_utils import flat_kv_row_view, triton_convert_req_index_to_global_index
-    from vllm.vllm_flash_attn.flash_attn_interface import flash_attn_varlen_func
+
+    from verity_vllm.engine import sparse_mla
+
+    pin = sparse_mla.install(FMS)
 
     toks = np.array(QUICK_ATTN_TOKENS if quick else ATTN_TOKENS)
     S = toks.size
@@ -1224,21 +1236,23 @@ def phase_attn(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str
     v_cache = kv_rows[:, :KV_LORA].unsqueeze(1).unsqueeze(1)
     cu = torch.arange(0, S + 1, dtype=torch.int32, device="cuda")
 
-    def fa3():
-        return flash_attn_varlen_func(q=q_rope, k=k_cache, v=v_cache, q_v=q_nope, max_seqlen_q=1, cu_seqlens_q=cu,
-                                      max_seqlen_k=TOPK, seqused_k=valid_t, block_table=glob_t, softmax_scale=SCALE, causal=True,
-                                      fa_version=3)
+    def fa3(fn):
+        return fn(q=q_rope, k=k_cache, v=v_cache, q_v=q_nope, max_seqlen_q=1, cu_seqlens_q=cu, max_seqlen_k=TOPK, seqused_k=valid_t,
+                  block_table=glob_t, softmax_scale=SCALE, causal=True, fa_version=3)
 
-    out1, out2 = fa3(), fa3()
+    out1, out2 = fa3(FMS.flash_attn_varlen_func), fa3(FMS.flash_attn_varlen_func)
+    heuristic = fa3(pin.original) if pin is not None else None
     torch.cuda.synchronize()
     want_g, want_n = convert_rows(rows, o["bt"].cpu().numpy()[0], bsr)
     g, n = glob_t.cpu().numpy(), valid_t.cpu().numpy()
+    kvr = _u16(kv_rows)
+    qn, qr, out = _u16(q_nope), _u16(q_rope), _u16(out1)
     rec = {"phase": "attn", "case": "fa3_sparse", "tokens": toks.tolist(), "valid": n.tolist(), "block_stride_rows": int(bsr),
+           "switch": {sparse_mla.ENV: os.environ.get(sparse_mla.ENV), "num_splits": sparse_mla.num_splits()},
+           "heuristic_differs": None if heuristic is None else int((_u16(heuristic) != out).sum()),
            "checks": {"conversion": bool(np.array_equal(g, want_g) and np.array_equal(n, want_n)),
                       "deterministic": bool(torch.equal(out1.view(torch.int16), out2.view(torch.int16))),
                       "shape": list(out1.shape) == [S, NH, DV] and out1.dtype == torch.bfloat16}}
-    kvr = _u16(kv_rows)
-    qn, qr, out = _u16(q_nope), _u16(q_rope), _u16(out1)
     jobs = []
     for i, t in enumerate(toks):
         paths = _save(work / f"attn_{t}", qn=qn[i], qr=qr[i], kv=kvr[g[i, :n[i]]], out=out[i])
@@ -1305,7 +1319,7 @@ def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
     if bad.size and rec["first_mismatch"] is None:
         i = int(bad[0])
         rec["first_mismatch"] = {"row": int(r[i]), "key": int(c[i]), "want": int(want[i]), "kernel": int(got[i])}
-    fn = bind(dsa.DsaMqaLogit, H=H, D=D)
+    fn = bind(dsa.DsaMqaLogitV3, H=H, D=D)
     for i in range(min(2, got.size)):
         y = evaluate(fn, q[i].reshape(-1).tolist(), w[i].tolist(), k[i].tolist(), int(ks[i]))
         rec["reference"] += 1
@@ -1385,20 +1399,20 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 def bind_check() -> dict[str, Any]:
     """The Programs bind at GLM-5.3's statics."""
     from verity.ml.circuits.defs import bind
+    from verity_vllm.program.registry import boolean_rope as BR
     from verity_vllm.program.registry import dsa
-    from verity_vllm.program.registry import ref_prims as RP
     from verity_vllm.program.registry import sparse_mla as M
 
     mla = {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
     targets = {f"DsaIndexerKRow_v1{{D={D},ROPE={ROPE},EPS={K_EPS}}}": lambda: bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS),
                f"DsaIndexerQ_v1{{H={H},D={D},ROPE={ROPE}}}": lambda: bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
-               f"DsaMqaLogit_v1{{H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogit, H=H, D=D),
-               f"DsaMqaLogits_v1{{N=64,H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogits, N=64, H=H, D=D),
+               f"DsaMqaLogit_v3{{H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogitV3, H=H, D=D),
+               f"DsaMqaLogits_v3{{N=64,H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogitsV3, N=64, H=H, D=D),
                f"DsaTopKShortRow_v1{{TOPK={TOPK}}}": lambda: bind(dsa.DsaTopKShortRow, TOPK=TOPK),
                **{f"DsaTopKSelection_v1{{TOPK={t},N={MAXPOS}}}": lambda t=t: bind(dsa.DsaTopKSelection, TOPK=t, N=MAXPOS)
                   for t in LONG_TOPKS},
-               f"RoPEHeadGptJ_v1{{D={DR}}}": lambda: bind(RP.RoPEHeadGptJ, D=DR),
-               f"RoPEGptJ_v1{{NHEADS={NH},D={DR}}}": lambda: bind(RP.RoPEGptJ, NHEADS=NH, D=DR)}
+               f"RoPEHeadGptJ_v2{{D={DR}}}": lambda: bind(BR.RoPEHeadGptJV2, D=DR),
+               f"RoPEGptJ_v2{{NHEADS={NH},D={DR}}}": lambda: bind(BR.RoPEGptJV2, NHEADS=NH, D=DR)}
     for T in (1, 64, 65, TOPK):
         targets[f"SparseMlaHead_v1{{T={T},...}}"] = lambda T=T: bind(M.SparseMlaHead, T=T, **mla)
     targets[f"SparseMla_v1{{T={TOPK},NH={NH},...}}"] = lambda: bind(M.SparseMla, T=TOPK, **M.SPARSE_MLA_GLM53)

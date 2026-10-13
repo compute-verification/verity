@@ -17,6 +17,15 @@ def test_only_a_command_that_runs_cmd_in_a_check_slot_counts():
         assert not S.through_slot(c), c
 
 
+def test_a_run_may_name_a_pool_of_its_own_under_the_locks_directory_and_nothing_else():
+    pool = ["env", "CHECK_SLOTS=/workspace/research/locks/proofs/slots"]
+    assert S.through_slot([*pool, "python3", "tools/verity/check/slot.py", "--by", "proofs", "--", "nice", "-n", "19", "bash", "j.sh"])
+    for env in (["env", "CHECK_SLOTS=/tmp/slots"], ["env", "CHECK_SLOTS=/workspace/research/locks/../x/slots"],
+                ["env", "CHECK_SLOTS=/workspace/research/locks/proofs/slots", "X=1"], ["env", "LEASE_DIR=/x"]):
+        assert not S.through_slot([*env, "python3", "tools/verity/check/slot.py", "--", "true"]), env
+    assert not S.through_slot([*pool, "python3", "tools/verity/check/slot.py", "--status"])
+
+
 def _run(runs, rid, state, command, *, pgid=None, runner=None):
     d = runs / rid
     d.mkdir(parents=True)

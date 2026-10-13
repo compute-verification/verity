@@ -343,9 +343,10 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
              "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
              "SCALE": "shared-per-block", "S": 4, "KB": 32, "SWAP": False, "FP8_DOT": BlackwellE4m3QmmaDot32,
-             "CONSTRUCTION": "shared-greedy", "TARGET": TargetProfile.default()}
+             "CONSTRUCTION": "shared-greedy", "TARGET": TargetProfile.default(), "RSF": 2.5, "KERNEL": "block"}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     e4m3 = {**small, "G": 32, "DOT": BlackwellE4m3QmmaDot32}  # the block-FP8 MoE pair forms: an e4m3 step, one K tile per scale block
+    act = {**small, "G": 8}                                  # the experts' fused activation quant: a scale group dividing I
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
     kinds = [(f"{v.name}/{k}", make) for v in vocabularies for k, make in v.kinds.items()]
     kinds += [(f"dense/{k}", make) for k, make in V._dense_kinds()[0].items()]
@@ -359,13 +360,13 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
             variants = [(required, "")] + ([(required + optional, "+" + "+".join(optional))] if optional else [])
             for names, suffix in variants:
                 fn, err = None, None
-                for table in (small, wide, e4m3):
+                for table in (small, wide, e4m3, act):
                     try:
                         fn = make(**{a: (dt if a == "DT" else table[a]) for a in names})
                         _ = getattr(fn, "gates", None)
                         break
                     except Exception as e:  # noqa: BLE001  (retried with the next table, then named)
-                        err = f"{type(e).__name__}: {str(e)[:160]}"
+                        fn, err = None, f"{type(e).__name__}: {str(e)[:160]}"
                 out.append((label + suffix, fn if fn is not None else err))
     return out
 
