@@ -206,9 +206,10 @@ def rsUnread (sh : Shape) (W : Array Nat) (rd : Array Bool) (ns : List Nat) : Op
 
 /-- A unit named `rec-opening/…` is the verifier's part at the `m`, claims and part its name gives, equal in every
 field, at one unit per VU (each part is one copy of its unit), and its computed rows read each element of a claim's ring
-switch it holds in all 128 bits (`rsUnread`); any other unit passes. The claims are bounded by the file's unit before the
-structure is computed, and the part's input and output bits are compared before its net is built. Irreducible, so that
-no unification against it builds the net. -/
+switch it holds in all 128 bits (`rsUnread`) and each other element it holds in all 128 bits or none
+(`RecResiduals.partlyRead`); any other unit passes. The claims are bounded by the file's unit before the structure is
+computed, and the part's input and output bits are compared before its net is built. Irreducible, so that no
+unification against it builds the net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some (m, cl, j) =>
@@ -233,7 +234,10 @@ no unification against it builds the net. -/
                 match partW sh j with
                 | .error e => throw s!"circuit {c.name}: unit {c.unit.name}: {e}"
                 | .ok W => match rsUnread sh W (RecResiduals.readIns g) ns with
-                  | none => pure ()
+                  | none => match RecResiduals.partlyRead (RecResiduals.readIns g) ns with
+                    | none => pure ()
+                    | some (q, n) =>
+                      throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of row-port element {q}'s 128 bits"
                   | some (q, n) =>
                     throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of ring-switch element {q}'s 128 bits"
               else throw s!"circuit {c.name}: not the verifier's {c.unit.name} ({firstDiff c.unit g})"
