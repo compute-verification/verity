@@ -13,8 +13,8 @@ import Proofs.Flock.Recursive.HoloSchedRead
 * `claimReadsAt_of_checkOwn`: `checkOwn` holds the reads file's `rec-claim` ports to the statement's (`ownPorts`):
   `ClaimReadsAt`. No part's or opening's message-round value is `rec-claim` (`recC_ne_claim`, `recOpeningC_ne_claim`),
   and an opening's `claim<k>` is named as `claimIndex` reads it back (`claimIndex_some`).
-
-`StackedAt` stays a hypothesis.
+* `stackedAt_of_check`: it holds `stacked/rep0`'s `c_k` at the message rounds of `stackedRounds` of the verifier's R
+  shape and its tops' node counts at the ones those rounds commit (`topCounts`, `topCounts_eq`): `StackedAt`.
 -/
 
 namespace Flock.Guarantees.HoloSchedCheck
@@ -47,15 +47,26 @@ theorem sparseRounds_eq (sh : RecSparse.Shape) : sparseRounds sh = sparsePhaseRo
 
 theorem holoRounds_eq (m kLog claims : Nat) : holoRounds m kLog claims = holoRepRounds m kLog claims := rfl
 
-/-- **`checkCommitRounds` accepting**: two reps, each's `c_k` rounds the reps' schedule's message rounds, and
-`sparse/rep0`'s and `sparse/rep1`'s the sparse phase's. -/
+theorem topCounts_eq (rs : Array SchedRound) : topCounts rs = (topRounds rs).map (·.2) := by
+  unfold topCounts topRounds
+  rw [List.map_flatMap]
+  apply congrArg (fun g => (List.range rs.size).flatMap g)
+  funext k
+  rw [List.map_map]
+  exact (List.map_id _).symm
+
+/-- **`checkCommitRounds` accepting**: two reps, each's `c_k` rounds the reps' schedule's message rounds,
+`sparse/rep0`'s and `sparse/rep1`'s the sparse phase's, and `stacked/rep0`'s those of `stackedRounds` of the
+verifier's R shape, its tops of the node counts those rounds commit. -/
 theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
     (h : checkCommitRounds i cs = .ok ()) :
     cs.reps.size = 2 ∧
       (∀ (y : Nat) (cm : Array (Nat × ByteArray)), cs.reps[y]? = some cm → cm.toList.map (·.1) = commitRounds rep) ∧
-      ∀ sh, i.sparse = some sh → ∀ (y : Nat) (st : InnerStream), y < 2 → cs.stream? s!"{SPARSE}/rep{y}" = some st →
-        st.commits.toList.map (·.1) = commitRounds (sparsePhaseRounds sh) := by
+      (∀ sh, i.sparse = some sh → ∀ (y : Nat) (st : InnerStream), y < 2 → cs.stream? s!"{SPARSE}/rep{y}" = some st →
+        st.commits.toList.map (·.1) = commitRounds (sparsePhaseRounds sh)) ∧
+      ∀ st : InnerStream, cs.stream? s!"{STACKED}/rep0" = some st → ∃ rs, i.stacked.bind stackedRounds = some rs ∧
+        st.commits.toList.map (·.1) = commitRounds rs ∧ st.tops.toList.map (·.size) = topCounts rs := by
   unfold checkCommitRounds at h
   rw [hsch] at h
   try simp only at h
@@ -65,6 +76,7 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
     | exact absurd (checkBind_ok h) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
     | cases h
   · rename_i hsz
+    obtain ⟨rr, hr, h⟩ := checkBind_ok h
     obtain ⟨_, hloop, -⟩ := checkBind_ok h
     have hall := forIn_each (fun a : String × Array (Nat × ByteArray) × Array SchedRound =>
         a.2.1.toList.map (·.1) = commitRounds a.2.2) (fun a r hb => by
@@ -77,13 +89,13 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
             | cases hb
           · rename_i hne
             exact ⟨by simpa using hne, (Except.ok.inj hb).symm⟩) _ hloop
-    refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_⟩
+    refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_, fun st hst => ?_⟩
     · have hz : (cm, y) ∈ cs.reps.toList.zipIdx := by
         apply List.mem_zipIdx_iff_getElem?.2
         first
         | (rw [Array.getElem?_toList]; exact hcm)
         | simpa using hcm
-      exact hall _ (List.mem_append_left _ (List.mem_map.2 ⟨(cm, y), hz, rfl⟩))
+      exact hall _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_map.2 ⟨(cm, y), hz, rfl⟩)))
     · have hy01 : y ∈ [0, 1] := by
         first
         | (simp; omega)
@@ -97,7 +109,31 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
       first
       | rw [hsh] at hall
       | simp only [hsh] at hall
-      exact hall _ (List.mem_append_right _ hm)
+      exact hall _ (List.mem_append_left _ (List.mem_append_right _ hm))
+    · first
+      | rw [hst] at hr
+      | simp only [hst] at hr
+      cases hb : i.stacked.bind stackedRounds with
+      | none =>
+        rw [hb] at hr
+        first
+        | exact absurd hr (checkThrow_ne _ _)
+        | cases hr
+      | some rs =>
+        rw [hb] at hr
+        try simp only at hr
+        split at hr
+        · first
+          | exact absurd hr (checkThrow_ne _ _)
+          | exact absurd (checkBind_ok hr) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
+          | cases hr
+        · rename_i hne
+          have hrr : [(st.name, st.commits, rs)] = rr := Except.ok.inj hr
+          refine ⟨rs, by first | rfl | exact hb, ?_, by simpa using hne⟩
+          have hmr : (st.name, st.commits, rs) ∈ rr := by
+            rw [← hrr]
+            exact List.mem_singleton_self _
+          exact hall _ (List.mem_append_right _ hmr)
 
 /-- **The verifier's check of the reps' `c_k` gives `RepsCommitsAt`** at the hidden-unit schedule `holoRounds`. -/
 theorem repsCommitsAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
@@ -126,13 +162,34 @@ theorem sparseCommitsAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sc
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
     (h : checkCommitRounds i cs = .ok ())
     (hrows : ∀ y st, cs.stream? s!"{SPARSE}/rep{y}" = some st → y < 2) : SparseCommitsAt cs i.sparse := by
-  obtain ⟨-, -, hsp⟩ := commitRounds_of_check hsch h
+  obtain ⟨-, -, hsp, -⟩ := commitRounds_of_check hsch h
   intro y st sh hst hsh
   have hy := hrows y st hst
   refine ⟨hy, ?_⟩
   unfold CommitsAt
   rw [msgRounds_eq, sparseRounds_eq]
   exact hsp sh hsh y st hy hst
+
+/-- **The verifier's check of R's stream gives `StackedAt`** at `stackedRounds` of the verifier's R shape. -/
+theorem stackedAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
+    (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
+    (h : checkCommitRounds i cs = .ok ()) : StackedAt cs (i.stacked.bind stackedRounds) := by
+  obtain ⟨-, -, -, hR⟩ := commitRounds_of_check hsch h
+  intro st hst
+  obtain ⟨rs, hrs, hc, ht⟩ := hR st hst
+  refine ⟨rs, hrs, ?_, ?_⟩
+  · unfold CommitsAt
+    rw [msgRounds_eq]
+    exact hc
+  · unfold TopsAt
+    rw [← topCounts_eq]
+    exact ht
+
+#print axioms topCounts_eq
+#print axioms commitRounds_of_check
+#print axioms repsCommitsAt_of_check
+#print axioms sparseCommitsAt_of_check
+#print axioms stackedAt_of_check
 
 theorem recC_ne_claim (k : Nat) : s!"rec-c{k}" ≠ CLAIM_VALUE := by
   intro h
