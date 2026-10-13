@@ -77,6 +77,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "row's TP8 statics (16 heads padded to 64, the 128-token window, compress-ratio 4 and 128 rows, the sink) every "
              "output word of every decode launch equals FlashMlaDecode_v1 at the token's SPLITS, every gathered workspace row "
              "FlashMlaGatherRow_v1, and every output word of every prefill launch FlashMlaPrefill_v1 at the token's NP, bit for bit."),
+    Property("dsv4_compressor_capture", "verity-vllm/dsv4-compressor-capture/v1",
+             "On the capture's Hopper GPU, vLLM takes the CuTe DSL head-512 compressor (nvidia-cutlass-dsl 4.6.2) into the "
+             "fp8_ds_mla cache for the DSV4 row's MLA, its three kernels' PTX holds the arithmetic the Definitions were read from, "
+             "and at the row's TP8 statics on a ratio-4 and a ratio-128 layer every state score word save_partial_states writes "
+             "equals Dsv4CompressorScore_v1, every column of the ratio-128 compress Dsv4MlaC128Column_v1, and every byte of every "
+             "compressed cache row Dsv4MlaCompressC4_v1 or Dsv4MlaCompressC128_v1, bit for bit."),
     Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
              "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
              "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),
