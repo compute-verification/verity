@@ -134,6 +134,14 @@ def at_layer(pattern: str, layer: int | None) -> str:
     return pattern.replace("{" + LAYER_VAR + "}", str(layer)) if layer is not None else pattern
 
 
+def route_sites(cmap: dict[str, Any]) -> list[dict[str, Any]]:
+    """The calls that decide a step's routes (`acquire.sources.route_source`): `route_site` itself, or each of its `sites`."""
+    site = cmap.get("route_site")
+    if not site:
+        return []
+    return list(site["sites"]) if "sites" in site else [site]
+
+
 
 def _step_taps(cmap: dict[str, Any], env: dict[str, int], phase: str, routes: tuple[str, ...] | None,
                binders: tuple[str, ...] | None = None, on_target: bool = True):

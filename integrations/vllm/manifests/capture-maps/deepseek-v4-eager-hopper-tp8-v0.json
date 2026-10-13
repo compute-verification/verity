@@ -1,7 +1,7 @@
 {
  "schema": "verity-vllm/capture-map/v0",
  "id": "deepseek-v4-eager-hopper-tp8-v0",
- "purpose": "The capture half of a semantic profile for a DeepseekV4ForCausalLM checkpoint (DeepSeek-V4-Pro) served eager at TP8 on Hopper (sm_90, 8xH200) with DeepGEMM and FlashInfer on: every module the pinned vLLM builds for the checkpoint's config.json, what each one computes on the forward path, and the taps the committer attaches to -- each tap's capture-v2 identity (op, port, layer), the tensor's dtype and shape on one rank, where it is captured, the weights it reads and the Program that checks it, by status. The residual is mHC's four streams ([M, HC, H]) between layers, so every mHC call's four returns are taps; the compressors' state rows and the compressed cache rows they write are taps, because a later step's attention reads them. Checked against a meta-device build of the same config at TP8 (verity-vllm meta-inventory, ranks 0-7). No route_site: the committer does not read this map until capture_work lands.",
+ "purpose": "The capture half of a semantic profile for a DeepseekV4ForCausalLM checkpoint (DeepSeek-V4-Pro) served eager at TP8 on Hopper (sm_90, 8xH200) with DeepGEMM and FlashInfer on: every module the pinned vLLM builds for the checkpoint's config.json, what each one computes on the forward path, and the taps the committer attaches to -- each tap's capture-v2 identity (op, port, layer), the tensor's dtype and shape on one rank, where it is captured, the weights it reads and the Program that checks it, by status. The residual is mHC's four streams ([M, HC, H]) between layers, so every mHC call's four returns are taps; the compressors' state rows and the compressed cache rows they write are taps, because a later step's attention reads them. Checked against a meta-device build of the same config at TP8 (verity-vllm meta-inventory, ranks 0-7). route_site names the calls that decide a step's routes; the committer reads this map once no binder it names is capture work (route_source.unbuilt).",
  "architectures": [
   "DeepseekV4ForCausalLM"
  ],
@@ -117,7 +117,62 @@
   "prefill": "prefill-tokens; hc-fused at M <= 16, else hc-split; fp8-swapab at M < 32, else fp8-deepgemm; indexer-short when the longest sequence has at most TOPK * CSA_R tokens, else indexer-scored",
   "decode": "decode-tokens, hc-fused and fp8-swapab (decode batch <= 16); indexer-short or indexer-scored as for prefill",
   "mixed": "decode-tokens and prefill-tokens, each on its own rows; one hc route and one fp8 route by the step's token count and one indexer route by its longest sequence",
-  "recorded": "not yet: the map has no route_site and the committer does not read it (capture_work). Each route is a function of the step's token count, its decode / prefill split or its longest sequence, all in its attention metadata"
+  "recorded": "per layer and step from route_site (acquire.sources.route_source): the attention rows at FlashMLA's _forward_decode and _forward_prefill calls, the hc route at each decoder layer's token count, the indexer route at each CSA indexer's return; a tap with a route is captured only on a step that takes it. The fp8 route names no tap: it picks the FP8 linears' Program by the step's token count"
+ },
+ "route_site": {
+  "sites": [
+   {
+    "decision": "rows",
+    "module": "model.layers.{i}.attn",
+    "method": "_forward_decode",
+    "answer": "called",
+    "true": [
+     "decode-tokens"
+    ],
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:DeepseekV4FlashMLAAttention._forward_decode",
+    "detail": "forward_mqa calls it when swa_metadata.num_decodes > 0, on rows [0, num_decode_tokens)"
+   },
+   {
+    "decision": "rows",
+    "module": "model.layers.{i}.attn",
+    "method": "_forward_prefill",
+    "answer": "called",
+    "true": [
+     "prefill-tokens"
+    ],
+    "prefill": true,
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:DeepseekV4FlashMLAAttention._forward_prefill",
+    "detail": "forward_mqa calls it when swa_metadata.num_prefills > 0, on rows [num_decode_tokens, M); a mixed step calls both"
+   },
+   {
+    "decision": "hc",
+    "module": "model.layers.{i}",
+    "method": "forward",
+    "answer": "M <= 16",
+    "true": [
+     "hc-fused"
+    ],
+    "false": [
+     "hc-split"
+    ],
+    "target": "vllm/models/deepseek_v4/nvidia/model.py:DeepseekV4DecoderLayer.forward",
+    "detail": "x is [M, H] on every layer, and both of the layer's mhc_fused_post_pre_tilelang calls take the FMA path at use_small_fma = num_tokens <= 16 (kernels/mhc/tilelang.py:518) on the same M"
+   },
+   {
+    "decision": "indexer",
+    "module": "model.layers.{i}.attn.indexer",
+    "method": "forward",
+    "answer": "none_returned",
+    "true": [
+     "indexer-short"
+    ],
+    "false": [
+     "indexer-scored"
+    ],
+    "target": "vllm/models/deepseek_v4/attention.py:DeepseekV4Indexer.forward",
+    "detail": "returns (None, None, None) after its compressor and _fill_short_context_topk_indices when max_seq_len // compress_ratio <= topk_tokens, else the quantised query and weights for indexer_op; on CSA layers only, every one on the same indexer metadata"
+   }
+  ]
  },
  "symbols": {
   "H": "hidden_size",
@@ -3726,7 +3781,8 @@
   },
   {
    "item": 5,
-   "work": "route source: record each step's hc route (token count), FlashMLA rows (num_decode_tokens) and indexer route (the indexer metadata's max_seq_len // CSA_R <= TOPK), then add route_site so the committer reads this map"
+   "work": "route source: record each step's hc route (token count), FlashMLA rows (num_decode_tokens) and indexer route (the indexer metadata's max_seq_len // CSA_R <= TOPK), then add route_site so the committer reads this map",
+   "done": "route source: route_site.sites names the four calls that decide a step's routes (FlashMLA's _forward_decode and _forward_prefill for its rows, each decoder layer's forward at M <= 16 for its hc route, each CSA indexer's forward returning None for its indexer route); acquire.sources.route_source records them per decision and layer and holds the step's names to the union, and route_source.attach leaves the map alone while it names a binder no source builds (route_source.unbuilt: mhc, dsv4_attention)"
   },
   {
    "item": 6,

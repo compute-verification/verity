@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.commit.capture_map import (DISPOSITIONS, LAYER_VAR, STATUSES, TP_KINDS, MapError, at_layer, committer_names,
-                                            counts, dim, evaluate, identities, layer_set, load, symbols, tap_layers,
+                                            counts, dim, evaluate, identities, layer_set, load, route_sites, symbols, tap_layers,
                                             tap_value_id)
 from verity_vllm.commit.identity import NAMED_LAYERS
 from verity_vllm.config import option
@@ -157,8 +157,7 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
                                     f"{w['rows']} = {dim(w['rows'], env, free)}")
                     break
 
-    site = cmap.get("route_site")
-    if site is not None:
+    for site in route_sites(cmap):
         problems += [f"route_site {k}: unknown route {r!r}" for k in ("true", "false", "decode_tokens") for r in site.get(k, ())
                      if r not in cmap.get("routes", {})]
         if not by_pattern.get(site["module"]):

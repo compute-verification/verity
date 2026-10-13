@@ -349,14 +349,21 @@ def test_target_only_taps_are_named_on_the_target_only():
     assert {on[n][0]["id"] for n in set(on) - set(elsewhere)} == {"attn.out.decode", "attn.o_einsum"}
 
 
-def test_the_committer_does_not_read_the_map_yet():
-    """No `route_site`, so `route_source.attach` leaves the map alone, and two of its binders are capture work."""
-    assert "route_site" not in CMAP
-    with pytest.raises(ValueError, match="no route_site"):
-        route_source.RouteSource(None, None, CMAP)
-    built = set(route_source.BINDERS) | {"tp_partial", "moe"}
-    assert set(CMAP["binders"]) - built == {"mhc", "dsv4_attention"}
-    assert len(CMAP["capture_work"]) == 6
+def test_the_route_site_decides_three_routes_and_the_committer_waits_for_its_binders():
+    """`route_site` names the calls that decide a step's rows, mHC and indexer routes, each decision's routes are the map's, and
+    `route_source.attach` leaves the map alone while two of its binders are capture work (`tests/acquire/test_dsv4_route_source.py`
+    runs the source)."""
+    sites = CM.route_sites(CMAP)
+    decided: dict[str, set[str]] = {}
+    for s in sites:
+        decided.setdefault(s["decision"], set()).update(s["true"], s.get("false", ()))
+    assert decided == {"rows": {"decode-tokens", "prefill-tokens"}, "hc": {"hc-fused", "hc-split"},
+                       "indexer": {"indexer-short", "indexer-scored"}}
+    undecided = set(CMAP["routes"]) - set().union(*decided.values())
+    assert undecided == {"fp8-swapab", "fp8-deepgemm"} and not undecided & {t["route"] for t in CMAP["taps"] if "route" in t}
+    assert route_source.unbuilt(CMAP) == {"mhc", "dsv4_attention"}
+    done = {c["item"] for c in CMAP["capture_work"] if "done" in c}
+    assert len(CMAP["capture_work"]) == 6 and {4, 5} <= done
 
 
 def test_every_module_hook_tap_is_on_a_module_the_committer_acquires():
