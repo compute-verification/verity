@@ -20,9 +20,18 @@ Which kernel reduces a call (vLLM d9105ea80):
   `mnnvl_shot`: one-shot (`oneshotAllreduceFusionKernel`) when M * H * WORLD * 2 B <= 1 MiB (M <= 10 at H 6144, TP 8), else
   two-shot (`twoshotAllreduceKernel` then `rmsNormLamport`). `AllReduceRmsNormMnnvl_v1` is either, one token.
 * Otherwise the call is `tensor_model_parallel_all_reduce` then `RMSNorm.forward_cuda` (`fused_add_rms_norm`,
-  `b1.RMSNormFusedCuda_v2`). On sm_90 at TP 8 that all-reduce is torch's symmetric-memory `multimem_all_reduce_` (NVSwitch
-  in-network reduction, whose order no Definition states) unless ``VLLM_ALLREDUCE_USE_SYMM_MEM=0``; then vLLM's custom all-reduce
-  up to 8 MiB (`AllReduceCustom_v1`; `custom_stage` picks its kernel, ``VLLM_CUSTOM_ALLREDUCE_ALGO`` pins it) and NCCL past it.
+  `b1.RMSNormFusedCuda_v2`). `_can_use_flashinfer` reads none of the settings below, so this split is the same under each.
+* `tensor_model_parallel_all_reduce` (`CudaCommunicator.all_reduce`, `cuda_communicator.py:305-377`) tries, in order, FlashInfer's
+  MNNVL all-reduce (``fi_ar_comm``) within the same 0.5 MiB; vLLM's custom all-reduce (``ca_comm``, `AllReduceCustom_v1`) when it
+  is on, below its ``max_size``; torch's symmetric memory (``symm_mem_comm``, `AllReduceMultimem_v1`) to 64 MiB when it is on;
+  then NCCL. The custom all-reduce's ``max_size`` is 8 MiB (`CUSTOM_MAX_BYTES`), cut to `CUSTOM_SYMM_MAX_BYTES` (256 KiB at 8 ranks
+  on cc 9.0, `custom_all_reduce.py:206-220`) when symmetric memory is on, which FlashInfer's 0.5 MiB holds: at vLLM's defaults
+  (`SETTINGS`) it takes none of these all-reduces, and runs only with ``VLLM_ALLREDUCE_USE_SYMM_MEM=0`` (the "switch"), up to 8 MiB
+  (`custom_stage` picks its kernel, ``VLLM_CUSTOM_ALLREDUCE_ALGO`` pins it).
+
+What the 8-GPU capture (`tests/properties/glm53_tp8_allreduce_capture_gpu.py`) has shown, per setting, hidden size and route, is
+`CAPTURED`; `covered` answers for one call, and a route it does not name is not covered, whatever the dispatch says. Nothing at
+vLLM's defaults is covered until a capture at the defaults is GO: the two GO runs served with the custom all-reduce off.
 
 The MNNVL all-reduce (`reduceOneshotDeterministic`, `reduceLamportRanksChunked`): every rank's bf16 payload has -0 (0x8000, the
 Lamport sentinel) written as +0 (`sanitizeLamportPayload`); the f32 sum starts at +0 and adds rank 0, 1, ..., WORLD-1 (FADD.FTZ)
@@ -50,9 +59,9 @@ and casts with ``__float2bfloat16``. The 1-stage kernel reads ranks 0, 1, ..., W
 owner + 1, ... mod WORLD (`custom_owners`).
 
 Past FlashInfer's 0.5 MiB at TP 8 on sm_90, `CudaCommunicator.all_reduce` hands a bf16 tensor to torch's symmetric memory (to
-64 MiB) when vLLM's custom all-reduce is off, as the served engine has it (``disable_custom_all_reduce``). At 4, 6 or 8 ranks on
-cc 9.0 that is `torch.ops.symm_mem.multimem_all_reduce_` (torch 2.13 `CUDASymmetricMemoryOps.cu`): rank r issues
-``multimem.ld_reduce.relaxed.sys.global.add.acc::f32.v4.bf16x2`` over its slice of ``round_up(SIZE, 16 * WORLD) / WORLD``
+64 MiB) with vLLM's custom all-reduce on (vLLM's default) or off, its cap with symmetric memory on being below FlashInfer's. At
+4, 6 or 8 ranks on cc 9.0 that is `torch.ops.symm_mem.multimem_all_reduce_` (torch 2.13 `CUDASymmetricMemoryOps.cu`): rank r
+issues ``multimem.ld_reduce.relaxed.sys.global.add.acc::f32.v4.bf16x2`` over its slice of ``round_up(SIZE, 16 * WORLD) / WORLD``
 elements (`multimem_owners`) and ``multimem.st``s the result to every rank. The NVSwitch reduces the WORLD payloads in f32 in an
 order no source states; `AllReduceMultimem_v1` takes it per owner as TREES, binary trees over the ranks whose nodes are f32 adds
 (IEEE, or FTZ when FTZ), the 8-GPU capture's probes reading each tree off the switch (`tree_from_clusters`), then RN to bf16.
@@ -61,6 +70,8 @@ f32 NaN words are the GPU's (`F32AddFtz_v2`, `F32MulFtz_v2`, `F32FmaFtz_v2`, `F3
 is 0x7FFF.
 """
 from __future__ import annotations
+
+from typing import NamedTuple
 
 import numpy as np
 
@@ -72,24 +83,68 @@ from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
-           "AllReduceMultimemCoordinate", "AllReduceRmsNormMnnvl", "CUSTOM_MAX_BYTES", "FI_MAX_BYTES", "H200_SMS",
-           "MNNVL_ONE_SHOT_BYTES", "SYMM_MEM_MAX_BYTES", "WARP", "chain", "custom_order", "custom_owners", "custom_stage",
-           "eps_bits", "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree",
-           "multimem_trees", "ranks", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
+           "AllReduceMultimemCoordinate", "AllReduceRmsNormMnnvl", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",
+           "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "GLM53_H200_TREE", "H200_SMS", "MNNVL_ONE_SHOT_BYTES", "SETTINGS",
+           "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "eps_bits",
+           "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees",
+           "ranks", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
 
 WARP = 32
 #: FlashInfer `MNNVL_ONE_SHOT_THRESHOLD`: the one-shot kernel up to this many bytes of M * H * WORLD
 MNNVL_ONE_SHOT_BYTES = 64 * 1024 * 8 * 2
 #: vLLM `_max_token_num`'s budget: `fused_allreduce_rms_norm` admits M * H * 2 B up to it
 FI_MAX_BYTES = 512 * 1024
-#: vLLM's custom all-reduce buffer (`CustomAllreduce.max_size`)
+#: vLLM's custom all-reduce buffer (`CustomAllreduce.max_size`): it takes fewer bytes than this
 CUSTOM_MAX_BYTES = 8 * 1024 * 1024
+#: vLLM `CUSTOM_ALL_REDUCE_MAX_SIZES["9.0"][8]`: the custom all-reduce's ``max_size`` when torch's symmetric memory is on
+CUSTOM_SYMM_MAX_BYTES = 256 * 1024
 #: vLLM `SYMM_MEM_ALL_REDUCE_MAX_SIZES["9.0"][8]`: torch's symmetric memory takes a bf16 all-reduce up to this many bytes
 SYMM_MEM_MAX_BYTES = 64 * 1024 * 1024
 #: torch's `multimem_all_reduce_` slices are whole 16-byte vectors per rank
 MULTIMEM_ALIGN_BYTES = 16
 H200_SMS = 132
 _NEG_ZERO32 = const(32, 0x80000000)
+
+#: vLLM's all-reduce settings: name -> (custom all-reduce on, torch symmetric memory on), FlashInfer's all-reduce on in each.
+#: "defaults" are vLLM's (``disable_custom_all_reduce`` false, ``VLLM_ALLREDUCE_USE_SYMM_MEM`` and ``VLLM_ALLREDUCE_USE_FLASHINFER``
+#: 1); "custom-off" is ``disable_custom_all_reduce`` true, what the two GO runs served; "switch" is ``VLLM_ALLREDUCE_USE_SYMM_MEM=0``.
+SETTINGS = {"defaults": (True, True), "custom-off": (False, True), "switch": (True, False)}
+#: the 8-GPU capture's GO runs on vy-glm53-h8 (the first with NCCL_P2P_DISABLE=1, which only NCCL's routes read)
+CAPTURE_RUNS = ("r20261013-085842-2147", "r20261013-091723-e383")
+#: the tree every owner's multimem reduction took in both runs
+GLM53_H200_TREE = ((((((0, (1, 2)), 3), 5), 6), 4), 7)
+
+
+class Captured(NamedTuple):
+    """A route the capture showed: at `setting`, hidden size N, the calls of lo..hi tokens on `route` (``fused``:
+    `fused_allreduce_rms_norm`'s FlashInfer call; else the communicator `CudaCommunicator.all_reduce` hands it to) equal
+    `definition` at `statics` on every word, in `runs`."""
+    setting: str
+    N: int
+    route: str
+    lo: int
+    hi: int
+    definition: str
+    statics: dict
+    runs: tuple[str, ...]
+
+
+#: Every covered route, lo and hi the fewest and most tokens the capture launched on it (its `FUSED_M`, `AR_M` and `SWITCH_M`, with
+#: counts between). NCCL's routes and anything at "defaults" are not here.
+CAPTURED = (
+    Captured("custom-off", 6144, "fused", 1, 42, "AllReduceRmsNormMnnvl_v1", {"FMA": True}, CAPTURE_RUNS),
+    Captured("custom-off", 6144, "fi_ar_comm", 1, 42, "AllReduceMnnvl_v1", {}, CAPTURE_RUNS),
+    Captured("custom-off", 6144, "symm_mem_comm", 43, 2048, "AllReduceMultimem_v1",
+             {"TREES": (GLM53_H200_TREE,) * 8, "FTZ": False}, CAPTURE_RUNS),
+    Captured("switch", 6144, "ca_comm", 43, 682, "AllReduceCustom_v1", {"STAGE": 2}, CAPTURE_RUNS),
+)
+
+
+def covered(setting: str, N: int, route: str, M: int) -> Captured | None:
+    """The `CAPTURED` entry covering a call of M tokens of N bf16 on `route` at `setting`, or None: the call is not covered."""
+    if setting not in SETTINGS:
+        raise ValueError(f"setting {setting!r}: one of {sorted(SETTINGS)}")
+    return next((c for c in CAPTURED if (c.setting, c.N, c.route) == (setting, N, route) and c.lo <= M <= c.hi), None)
 
 
 def ranks(W) -> int:
@@ -315,7 +370,8 @@ def _mnnvl_sum(B, S, col, zero, neg0):
 
 
 @composite("AllReduceMnnvlCoordinate", 1, ["WORLD", "SHOT"], lambda S: ((("col", Array(int(S.WORLD), BF16)),), BF16),
-           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 (tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 with the custom all-reduce off, not yet at vLLM's "
+                       "defaults (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceMnnvlCoordinate(B, S, col):
     """One element of FlashInfer's MNNVL all-reduce: ``bf16(+0 + s(col[0]) + ... + s(col[WORLD-1]))`` in FTZ f32, s writing -0 as
     +0; SHOT 2 adds the sum to +0 once more."""
@@ -324,7 +380,8 @@ def AllReduceMnnvlCoordinate(B, S, col):
 
 @composite("AllReduceMnnvl", 1, ["WORLD", "N", "SHOT"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))),), Array(S.N, BF16)),
-           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 (tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 with the custom all-reduce off, not yet at vLLM's "
+                       "defaults (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceMnnvl(B, S, parts):
     """FlashInfer's MNNVL all-reduce of WORLD ranks' N-vectors (`trtllm_allreduce_fusion` without the norm): one
     `AllReduceMnnvlCoordinate_v1` per element."""
@@ -344,7 +401,8 @@ def _butterfly0(B, add, vals: list):
 @composite("AllReduceRmsNormMnnvl", 1, ["WORLD", "N", "SHOT", "CLUSTER", "EPS", "FMA"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
                       Tuple(Array(S.N, BF16), Array(S.N, BF16))),
-           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 (tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 with the custom all-reduce off, not yet at vLLM's "
+                       "defaults (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceRmsNormMnnvl(B, S, parts, res, w):
     """FlashInfer's MNNVL all-reduce + residual add + RMSNorm (`kARResidualRMSNorm`, fp32 accumulation, weight bias 0) of one
     token: `AllReduceMnnvl_v1`, r = a + res, the sum of squares in `blockReduceSum`'s geometry over CLUSTER CTAs,
@@ -399,8 +457,8 @@ def AllReduceRmsNormMnnvl(B, S, parts, res, w):
 
 
 @composite("AllReduceCustomCoordinate", 1, ["WORLD", "START"], lambda S: ((("col", Array(int(S.WORLD), BF16)),), BF16),
-           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 under VLLM_ALLREDUCE_USE_SYMM_MEM=0 "
-                       "(tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 under VLLM_ALLREDUCE_USE_SYMM_MEM=0, where alone "
+                       "it takes GLM-5.3's all-reduces (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceCustomCoordinate(B, S, col):
     """One element of vLLM's custom all-reduce (`packed_reduce`): ``bf16(f32(col[o0]) + f32(col[o1]) + ...)``, IEEE f32 in
     `custom_order(WORLD, START)`."""
@@ -413,8 +471,8 @@ def AllReduceCustomCoordinate(B, S, col):
 
 @composite("AllReduceCustom", 1, ["WORLD", "SIZE", "STAGE"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)),
-           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 under VLLM_ALLREDUCE_USE_SYMM_MEM=0 "
-                       "(tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 under VLLM_ALLREDUCE_USE_SYMM_MEM=0, where alone "
+                       "it takes GLM-5.3's all-reduces (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceCustom(B, S, parts):
     """vLLM's custom all-reduce of WORLD ranks' SIZE bf16 (the whole flattened tensor, which the 2-stage kernel's ownership
     reads): each run of `custom_owners` one `AllReduceCustomCoordinate_v1{START=owner}` per element."""
@@ -432,8 +490,8 @@ def AllReduceCustom(B, S, parts):
 
 
 @composite("AllReduceMultimemCoordinate", 1, ["WORLD", "TREE", "FTZ"], lambda S: ((("col", Array(int(S.WORLD), BF16)),), BF16),
-           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200, the tree read off the switch "
-                       "(tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 with the custom all-reduce off, the tree read off "
+                       "the switch, not yet at vLLM's defaults (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceMultimemCoordinate(B, S, col):
     """One element of torch's multimem all-reduce: the f32 adds of TREE over ``f32(col[r])`` (FTZ: FADD.FTZ, else IEEE), then
     RN to bf16."""
@@ -449,8 +507,8 @@ def AllReduceMultimemCoordinate(B, S, col):
 
 @composite("AllReduceMultimem", 1, ["WORLD", "SIZE", "TREES", "FTZ"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)),
-           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200, the trees read off the switch "
-                       "(tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200 with the custom all-reduce off, the trees read off "
+                       "the switch, not yet at vLLM's defaults (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceMultimem(B, S, parts):
     """torch's `multimem_all_reduce_` of WORLD ranks' SIZE bf16 (the whole flattened tensor, whose slices name each element's
     owner): each run of `multimem_runs` one `AllReduceMultimemCoordinate_v1{TREE=TREES[owner]}` per element."""
