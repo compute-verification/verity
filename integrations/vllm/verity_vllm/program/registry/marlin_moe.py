@@ -85,7 +85,7 @@ ZERO = 0
 
 _CONF = ("model-untested: read from vLLM d9105ea80's Marlin MoE (marlin_template.h, dequant.h, ops.cu) and the module docstring's "
          "lines; tests/properties/dsv4_marlin_capture_gpu.py is its hardware check")
-DOT_CONF = _CONF + "; DOT = HopperBF16WgmmaDot16_v1, sm_90's mma.sync.m16n8k16 bf16"
+DOT_CONF = _CONF + "; DOT = HopperBF16WgmmaDot16_v1, Hopper's mma.sync.m16n8k16 bf16"
 
 E2M1_VALUES = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
 
