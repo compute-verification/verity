@@ -290,7 +290,7 @@ def test_a_tuned_launch_off_hopper_refuses_by_name(on_target):
     on_target(TargetProfile(compute_capability=(12, 0), num_sms=188, batch_invariant=False, moe_backend="triton"))
     xq, sx = _activations()
     hint = _hint(_derive(_Up(), (xq, sx, torch.zeros(M, TOPK, dtype=torch.int32))))
-    assert "modelled on cc 9.0 only (wgmma), not on cc 12.0" in hint, hint
+    assert "modelled on cc 9.0 only, not on cc 12.0" in hint, hint
 
 
 def test_the_wgmma_tile_rule_matches_the_tuned_h200_entries():
@@ -328,7 +328,8 @@ def test_the_fp8_expert_rule_binds_1944s_dot_across_the_served_envelope(on_targe
         config = H200_EXPERT_CONFIG[key]
         tiles = {k: config[k] for k in ("BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K", "GROUP_SIZE_M")}
         calls.clear()
-        rep = _derive(_Up(tiles, warps=config["num_warps"], stages=config["num_stages"]), _activations())
+        inputs = (*_activations(), torch.zeros(M, TOPK, dtype=torch.int32))
+        rep = _derive(_Up(tiles, warps=config["num_warps"], stages=config["num_stages"]), inputs)
         assert rep.program is not None, rep.unsupported
         want = MMAV2_DOT if m <= 6 else DOT
         assert all(fn.endswith(f",DOT={want}}}") for fn in _ids(rep)), (m, _ids(rep))
