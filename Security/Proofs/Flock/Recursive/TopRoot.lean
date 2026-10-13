@@ -70,7 +70,7 @@ theorem log2ceil_two_pow (k : Nat) : log2ceil (2 ^ k) = k := by
       constructor
       · have hlt : 2 ^ k < 2 ^ (k + 1) :=
           Nat.pow_lt_pow_right (by norm_num) (by omega)
-        omega
+        exact Nat.le_pred_of_lt hlt
       · omega
     rw [hlog]
 
@@ -108,6 +108,9 @@ theorem root_eq (dom : ByteArray) (leaves : Array ByteArray) :
       (lev dom leaves (log2ceil leaves.size))[0]!
   rw [show base dom leaves = lev dom leaves 0 by rfl, fold_eq]
   rw [Nat.zero_add, Array.getD_eq_getD_getElem?, getElem!_def]
+  change ((lev dom leaves (log2ceil leaves.size))[0]?).getD ByteArray.empty =
+    ((lev dom leaves (log2ceil leaves.size))[0]?).getD ByteArray.empty
+  rfl
 
 theorem get!_mem {a : Array ByteArray} {i : Nat} (h : i < a.size) : a[i]! ∈ a := by
   rw [getElem!_pos a i h]
