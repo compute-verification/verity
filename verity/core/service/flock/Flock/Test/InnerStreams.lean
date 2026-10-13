@@ -159,7 +159,19 @@ def openSt : VStar.Stmt := .opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("c
   some "candidate 3's V* list: R's m 24 is not rec-sparse/n18-e13-s6-t0's table_m 23"
 #guard err ((candidate3Statements { c3 with stacked := some ⟨23, 3⟩ }).map fun _ => ()) ==
   some "candidate 3's V* list: R's claims 3, not the two reps' sparse claims (2)"
-#guard ((candidate3Statements { c3 with stacked := none }).map (·.toList.map (·.name))).toOption == some ["rec-sparse/n18-e13-s6-t0"]
+#guard err ((candidate3Statements { c3 with stacked := none }).map fun _ => ()) == some
+  "candidate 3's V* list: the inner shape names RecSparse (rec-sparse/n18-e13-s6-t0) and no R's shape (stacked): R opens the sparse phases' claims, so R is missing"
+
+-- candidate 3's inner shape is its inner statement's: a sparse phase, and the statement's m, k_log and regions
+#guard err (checkInnerShape c3 25 22 3) == none
+#guard err (checkInnerShape { c3 with sparse := none } 25 22 3) == some
+  "rec-inner: candidate 3's inner shape names no RecSparse shape (rec-inner --sparse): its V* list would have no RecSparse statement, level of R's or part of R's opening"
+#guard err (checkInnerShape c3 24 22 3) == some
+  "rec-inner: the verifier's inner shape (m 25, k_log 22, regions 3) is not the inner statement's (m 24, k_log 22, regions 3)"
+#guard err (checkInnerShape c3 25 21 3) == some
+  "rec-inner: the verifier's inner shape (m 25, k_log 22, regions 3) is not the inner statement's (m 25, k_log 21, regions 3)"
+#guard err (checkInnerShape c3 25 22 4) == some
+  "rec-inner: the verifier's inner shape (m 25, k_log 22, regions 3) is not the inner statement's (m 25, k_log 22, regions 4)"
 
 -- a unit under a name none of the list's is refused with why: an R level under the circuit table's name, an opening or a
 -- RecSparse at another shape
@@ -237,5 +249,12 @@ def badTops (ns : List Nat) : Option String :=
   why (checkCommitRounds i (c3cs (some r23))) == some ("rec-inner: the inner transcript holds R's stream " ++
     "(stacked/rep0), and the verifier's inner shape names no schedule of R's")
 #guard why (checkCommitRounds { c3 with stacked := none } (withS #[sparseAt 0, sparseAt 1])) == none
+-- the check reads sparse/rep0 and sparse/rep1 only: any other held stream named sparse/… is refused
+def otherSparse (n : String) : Option String :=
+  why (checkCovers c3 (withS #[sparseAt 0, sparseAt 1, stackedAt, { sparseAt 1 with name := n }]))
+
+#guard ["sparse/rep2", "sparse/rep10", "sparse/rep01", "sparse/x", "sparse/"].all fun n => otherSparse n ==
+  some s!"rec inner transcript: it holds {n}, and a sparse phase is one of the two reps' (sparse/rep0, sparse/rep1)"
+#guard otherSparse "sparse-rep2" == none && otherSparse "sparse/rep1" == none
 
 end Flock.Test.InnerStreams

@@ -70,12 +70,14 @@ u16 words, zero-padded to whole blocks, under hm96-sha512's default key). -/
 def commitRow (row : Array Nat) (salt : ByteArray) : ByteArray :=
   Hm96.Default512.commitString (Firewall.rowDigest (padTo row (Registered.rowWords row.size 16))) salt
 
-/-- The inner statement and the inner session's record, as the verifier holds them. -/
+/-- The inner statement and the inner session's record, as the verifier holds them, and at candidate 3's session the
+verifier's inner shape (`inner`), which the inner statement must be (`RecVStar.checkInnerStmt`, at `Inner.load`). -/
 structure Files where
   circuit : ByteArray
   pub : ByteArray
   partition : Json
   record : String
+  inner : Option RecVStar.Inner := none
 
 /-- What check 5 reads of the inner session of V*'s unit `unit`: its statement's `m` and `k_log`, its extra claims at the
 record's link points, each rep's coins (an error without the unit), and the comb at a rep's fold points (`Inner.comb`). Set
@@ -101,6 +103,8 @@ def Inner.load (unit : String) (f : Files) : V Inner := do
     | .ok x => pure x
     | .error e => throw s!"rec-coins: {unit}: the inner statement: {e}"
   let some st := sts[0]? | throw s!"rec-coins: {unit}: the inner statement has no table"
+  if let some i := f.inner then
+    if let .error e := RecVStar.checkInnerStmt i st then throw s!"rec-coins: {unit}: {e}"
   if let .error e := Zk.schedule st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
   let sess ← match Record.decode spec f.record with
     | .ok s => pure s
@@ -492,6 +496,12 @@ def Source.load (unit : String) : Source → V Inner
   | .files f => Inner.load unit f
   | .coins j r => Inner.ofJson unit j r
 
+/-- Check 5's source at a session whose inner transcript holds candidate 3's streams (`cs`): its inner statement, with
+the verifier's inner shape `i`, which `Inner.load` checks it against. -/
+def Source.atC3 : Option Source → Option RecVStar.Inner → Option RecVStar.InnerCommits → Option Source
+  | some (.files f), some i, some cs => some (.files (if cs.streams.isEmpty then f else { f with inner := some i }))
+  | s, _, _ => s
+
 /-- V*'s statement `st` against the verifier's coins: a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…`,
 `rec-open-stacked/…` or `rec-opening/…` unit is refused unless the verifier holds its registered reads and the inner session
 (`files`), candidate 3's besides the last three (`c3`), and its verifier-registered values are the ones the coins give
@@ -539,7 +549,7 @@ def filesOnly (args : List String) : IO (Except String (Option Files)) := do
       let partition ← match Json.parse (← IO.FS.readFile q) with
         | .ok j => pure j
         | .error e => return .error s!"--rec-inner-partition {q}: not JSON: {e}"
-      return .ok (some ⟨← IO.FS.readBinFile c, ← IO.FS.readBinFile p, partition, ← IO.FS.readFile (s ++ "/session.json")⟩)
+      return .ok (some ⟨← IO.FS.readBinFile c, ← IO.FS.readBinFile p, partition, ← IO.FS.readFile (s ++ "/session.json"), none⟩)
     catch e => return .error s!"rec inner session: {e}"
   | _, _, _, _ =>
     return .error "--rec-inner-circuit, --rec-inner-public, --rec-inner-partition and --rec-inner-session go together"
