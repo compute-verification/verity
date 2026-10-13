@@ -304,16 +304,3 @@ theorem srcLevelTie_of_maps
   exact levelTie_of_sessionAt (v := stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) hacc M hell hsh hs hclaim htie hleft
 
 end FlockC3.RegLevels
-
-
-#print axioms FlockC3.Opening.opening_rounds
-#print axioms FlockC3.Opening.rep0
-#print axioms FlockC3.Opening.rep0_eq
-#print axioms FlockC3.Opening.claimsO
-#print axioms FlockC3.Opening.claimsO_eq
-#print axioms FlockC3.Opening.decodedO_rs_size
-#print axioms FlockC3.Opening.run_of_sessionAt
-#print axioms FlockC3.RegLevels.opsAt
-#print axioms FlockC3.RegLevels.MapsLeft
-#print axioms FlockC3.RegLevels.levelTie_of_sessionAt
-#print axioms FlockC3.RegLevels.srcLevelTie_of_maps
