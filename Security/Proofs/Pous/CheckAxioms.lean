@@ -137,6 +137,7 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure
 #print axioms Pous.SecurityProofs.P2RingGradedOfRoundSecure
 #print axioms PousP2Rounds.floor_043
+#print axioms PousP2Rounds.floor_043_eps
 #print axioms PousP2Rounds.round_tight
 #print axioms PousP2Rounds.round_trunc
 #print axioms PousP2Rounds.round_trunc_b19

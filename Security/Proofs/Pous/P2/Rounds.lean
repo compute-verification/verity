@@ -4,13 +4,13 @@ import Proofs.Pous.Sanity
 /-!
 # From the per-round conjecture to the graded bound and to today's whole-audit form
 
-`P2RingRoundSecure p η D Q L` bounds each round at a boundary held at most `S₀` bits by `1 − p`, outside an event
-`bad` of mass at most `η N k`. Chaining it over the `k` rounds (`pr_chain`; a round at a boundary above `S₀` still
-never raises acceptance, `varPassesOn_of_succ`) gives `(1 − p)^m + η N k` with `m` the low boundaries (`graded`). A
+`P2RingRoundSecure p ε₀ D Q L` bounds each round at a boundary held at most `S₀` bits by `1 − p`, outside an event
+`bad` of mass at most `k·ε₀`. Chaining it over the `k` rounds (`pr_chain`; a round at a boundary above `S₀` still
+never raises acceptance, `varPassesOn_of_succ`) gives `(1 − p)^m + k·ε₀` with `m` the low boundaries (`graded`). A
 `SeqResponderOn` of today's game is a `VarResponderOn` with the constant state size (`ofSeq`), accepted exactly when
 all its answers are correct (`varPassesOn_ofSeq_iff`), so at `2^19` blocks and `k = 105` the graded bound is
-`P2RingAuditSecure`'s once `(1 − p)^105 + η (2^19) 105 ≤ 1% + 2^-129 + 2^-130` (`auditSecure_of_roundSecure`), which
-`p = 0.043` and `η ≤ 2^-130` meet (`floor_043`).
+`P2RingAuditSecure`'s once `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`auditSecure_of_roundSecure`), which
+`p = 0.043` and `ε₀ = 2^-137` meet (`floor_043_eps`).
 -/
 
 namespace PousP2Rounds
@@ -110,7 +110,7 @@ end Game
 
 /-- **The graded bound** (`Pous.Guarantees.P2RingGradedOfRoundSecure`). -/
 theorem graded : Pous.Guarantees.P2RingGradedOfRoundSecure := by
-  intro p η D Q L h N _ h1 h2 Sz k W A₁ A₂
+  intro p ε₀ D Q L h N _ h1 h2 Sz k W A₁ A₂
   obtain ⟨bad, hbad, hstep⟩ := h N h1 h2 Sz k W A₁ A₂
   classical
   have hc := pr_chain (fun j x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x)
@@ -122,16 +122,16 @@ theorem graded : Pous.Guarantees.P2RingGradedOfRoundSecure := by
 
 /-- **Today's whole-audit form from the per-round one** (`Pous.Guarantees.P2RingAuditSecureOfRoundSecure`). -/
 theorem auditSecure_of_roundSecure : Pous.Guarantees.P2RingAuditSecureOfRoundSecure := by
-  intro p η D Q L hnum h W A₁ A₂
-  have hg := graded p η D Q L h (2 ^ 19) le_rfl (by norm_num) _ 105 W A₁ (ofSeq A₂)
-  rw [lowBoundaries_const] at hg
+  intro p ε₀ D Q L hnum h W A₁ A₂
+  have hg := graded p ε₀ D Q L h (2 ^ 19) le_rfl (by norm_num) _ 105 W A₁ (ofSeq A₂)
+  rw [lowBoundaries_const, Nat.cast_ofNat] at hg
   calc pr (seqAcceptsOn _ 105 W A₁ A₂)
       = pr (varPassesOn _ 105 105 W A₁ (ofSeq A₂)) :=
         congrArg pr (funext fun x => propext (varPassesOn_ofSeq_iff _ W A₁ A₂ x).symm)
     _ ≤ _ := hg
     _ ≤ _ := hnum
 
-/-- **`p = 0.043` meets the derivation's condition** when `η (2^19) 105 ≤ 2^-130`: `0.957^105 ≈ 0.0099 ≤ 1%`. -/
+/-- **`p = 0.043` meets the derivation's condition** with up to `2^-130` of bad-event mass: `0.957^105 ≈ 0.0099 ≤ 1%`. -/
 theorem one_sub_043 : (1 - 43 / 1000 : ℝ≥0∞) = ENNReal.ofReal (957 / 1000) := by
   rw [ENNReal.ofReal_div_of_pos (by norm_num), ENNReal.ofReal_ofNat, ENNReal.ofReal_ofNat]
   refine ENNReal.sub_eq_of_eq_add (by simp [ENNReal.div_eq_top]) ?_
@@ -144,5 +144,15 @@ theorem floor_043 (e : ℝ≥0∞) (he : e ≤ (2⁻¹ : ℝ≥0∞) ^ 130) :
     rw [one_sub_043, ← ENNReal.ofReal_pow (by norm_num)]
     exact ENNReal.ofReal_le_ofReal (by norm_num [Params.δ])
   exact add_le_add h2 (he.trans le_add_self)
+
+/-- **`p = 0.043` and `ε₀ = 2^-137` meet the derivation's condition**: `105·2^-137 < 128·2^-137 = 2^-130`. -/
+theorem floor_043_eps :
+    (1 - 43 / 1000 : ℝ≥0∞) ^ 105 + 105 * (2⁻¹ : ℝ≥0∞) ^ 137 ≤
+      ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) := by
+  refine floor_043 _ ?_
+  calc 105 * (2⁻¹ : ℝ≥0∞) ^ 137 ≤ 2 ^ 7 * (2⁻¹ : ℝ≥0∞) ^ 137 := by gcongr; norm_num
+    _ = (2⁻¹ : ℝ≥0∞) ^ 130 := by
+      rw [show (137 : ℕ) = 7 + 130 by norm_num, pow_add, ← mul_assoc, ← mul_pow,
+        ENNReal.mul_inv_cancel (by norm_num) (by norm_num), one_pow, one_mul]
 
 end PousP2Rounds

@@ -34,8 +34,8 @@ independent ideal permutations, once a responder may not finish a root within th
 `k`. Its form at `k ≤ 88` is false at `L ≥ 2^30` (`PousP2Ring.not_meetsOn_b19_k88`: a responder that stores truncated
 roots and recomputes the dropped bits); at `k = 105` the same attack needs about 167 dropped bits per block, which no
 theorem here refutes or rules out. So it is a hypothesis only at the `(D, Q, L)` a deadline gives. Those two theorems
-are its falsification tests. It follows from the per-round form `P2RingRoundSecure p η D Q L` whenever
-`(1 − p)^105 + η (2^19) 105 ≤ 1% + 2^-129 + 2^-130` (`Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure`). -/
+are its falsification tests. It follows from the per-round form `P2RingRoundSecure p ε₀ D Q L` whenever
+`(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure`). -/
 def P2RingAuditSecure (D Q L : ℕ) : Prop :=
   AuditSecureOn (p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) .sequential
     ((p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) D Q L 105
@@ -65,41 +65,48 @@ def P2RingReducesToM1p (D Q L : ℕ) : Prop :=
 /-- **`sms-m1-instantiation`, `seq-root` (conjectured): P2 in the ring model, per round, at every block count from
 `2^19` to `2^25`.** For `p2ring N 16448 (2^16448 − 21065) 16432` with `2^19 ≤ N ≤ 2^25`: take any `k`, any payload
 `W`, and any responder whose state at boundary `j` is `Sz j` bits (`VarResponderOn`, each round within
-`(D, Q, L)`). Then there is an event `bad` of probability at most `η N k` outside which, at every boundary `j < k`
+`(D, Q, L)`). Then there is an event `bad` of probability at most `k·ε₀` outside which, at every boundary `j < k`
 where the state is at most `S₀ = ⌊ρ·|C|⌋` bits (`ρ = 18/19`, `stateBound`), the uniform challenge `i_j` is answered
 correctly with probability at most `1 − p` given that the first `j` answers were:
 `Pr[first j + 1 correct, not bad] ≤ (1 − p) · Pr[first j correct, not bad]`.
 
-`p` is the per-round floor, a parameter: the conjecture is that this holds at the `p` and `η` a certificate cites.
-With `(1 − p)^105 + η (2^19) 105 ≤ 1% + 2^-129 + 2^-130` it gives `P2RingAuditSecure D Q L`
-(`Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure`); with `η (2^19) 105 ≤ 2^-130` that needs
-`p ≥ 1 − 0.01^(1/105) ≈ 0.04291`, and `p = 0.043` suffices (`PousP2Rounds.floor_043`). A responder at most `S₀` bits
-at `m` of the `k` boundaries passes with probability at most `(1 − p)^m + η N k`
-(`Pous.SecurityProofs.P2RingGradedOfRoundSecure`). As an illustration only, the abstract model's per-challenge figure
+`p` is the per-round floor and `ε₀` the bad-event mass a round may add, both parameters: the conjecture is that this
+holds at the `p` and `ε₀` a certificate cites. The bad event's mass is pinned to `k·ε₀`, one `ε₀` per round and the
+same at every `N`, so the one `ε₀` the deployed derivation fixes bounds it at every block count and audit length: a
+free `η N k` could be `1` everywhere but at `(2^19, 105)` and leave the conjecture empty there. `k·ε₀` is the simplest
+such shape that keeps today's error exactly. With `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` it gives
+`P2RingAuditSecure D Q L` (`Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure`), and `p = 0.043` with
+`ε₀ = 2^-137` meets that (`PousP2Rounds.floor_043_eps`: `105·2^-137 < 2^-130`, and `0.957^105 ≈ 0.0099`); with
+`105·ε₀ ≤ 2^-130` it needs `p ≥ 1 − 0.01^(1/105) ≈ 0.04291`. At `ε₀ = 2^-137`, `k·ε₀ < 1` for every `k < 2^137`. The
+abstract model's bad event, Lemma A's `|Hist_k|·Γ`, is not linear in `k`, but in `m1p`'s `λ = 128` row (`2^19`
+blocks, `k = 104`) it is below
+`2^-1,959,876` (`PousMargin.log_b19_128`), far below `k·2^-137`. A responder at most `S₀` bits at `m` of the `k`
+boundaries passes with probability at most `(1 − p)^m + k·ε₀` (`Pous.SecurityProofs.P2RingGradedOfRoundSecure`).
+As an illustration only, the abstract model's per-challenge figure
 (`m1p`'s `g = ⌊0.9576·B⌋ + 1` answerable blocks, `P2SlackFamilyFreeBlocks`) suggests `p ≈ 0.043`; nothing here
 derives a value of `p` for P2.
 
 The modulus, the block width `w = 16448` and the payload width `b = 16432` are the same at every `N`: they set one
 block's cost, `N` sets only the number of blocks, the challenge space and `S₀`. The range is the deployed sizes, from
 the MVP's `2^19` blocks (1.1 GB of payload) to item 10's `2^25` (69 GB). The falsification tests below don't depend on
-`N` beyond the state bound, but nobody has checked the `η` a proof would give against `N`, so the range is not
+`N` beyond the state bound, but nobody has checked the `ε₀` a proof would give against `N`, so the range is not
 widened to the abstract model's.
 
-Allowing `bad` and `η` to depend on the responder and on `k` makes this weaker than a bound paid per round. Each round
+Allowing `bad` to depend on the responder and on `k` makes this weaker than a bound paid per round. Each round
 is a fresh uniform index, independent of the history, which is the step P2's error analysis already takes
 (`PousP2Bridge.pr_seqAccepts_succ_le`: one more challenge never raises acceptance).
 
 Falsification tests, at every `N` in the range and if `p` is prime: recomputation (`RingTight`'s responder, which keeps
-no state) forces `p = 0` unless `η N 1 ≥ 1`, at `D ≥ 32,894`, `Q ≥ 2`, `L ≥ 65,789` (`PousP2Rounds.round_tight`), and
-keeping `m` blocks without their low `t` bits, `m·(16448 − t) ≤ S₀`, forces `m/N ≤ 1 − p + η N 1` at `D ≥ 2`, `Q ≥ 2`,
+no state) forces `p = 0` unless `ε₀ ≥ 1`, at `D ≥ 32,894`, `Q ≥ 2`, `L ≥ 65,789` (`PousP2Rounds.round_tight`), and
+keeping `m` blocks without their low `t` bits, `m·(16448 − t) ≤ S₀`, forces `m/N ≤ 1 − p + ε₀` at `D ≥ 2`, `Q ≥ 2`,
 `L ≥ 2^(t+1)` (`PousP2Rounds.round_trunc`; at `2^19` and `p = 0.043` it refutes from `t = 166`, `m = 501,757`, so
 `L ≥ 2^167`, and `m/N` hardly moves with `N`). -/
-def P2RingRoundSecure (p : ℝ≥0∞) (η : ℕ → ℕ → ℝ≥0∞) (D Q L : ℕ) : Prop :=
+def P2RingRoundSecure (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
   ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 25 →
     ∀ (Sz : ℕ → ℕ) (k : ℕ) (W : Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
       (A₁ : Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
       (A₂ : VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
-      ∃ bad : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k → Prop, pr bad ≤ η N k ∧
+      ∃ bad : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k → Prop, pr bad ≤ k * ε₀ ∧
         ∀ j < k, Sz j ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ →
           pr (fun x => varPassesOn _ k (j + 1) W A₁ A₂ x ∧ ¬ bad x) ≤
             (1 - p) * pr (fun x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x)
