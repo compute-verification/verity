@@ -2107,8 +2107,7 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
 // The copy lane bulk-copies task i's TW stored words (SB bytes) into stage i mod stages; the D decoder warps decode
 // them in place; warp D, the MMA warp, takes the tasks in order and runs the plain kernel's 16 tiles on each. The copy
 // lane is the MMA warp's lane 0, which copies task i + stages once the warp's loads of task i are behind `empty`, or
-// with two MMA warps, or one that hashes, a producer warp's after them (fused_producers), which copies once `empty`
-// lets it. The warps after these, if any, tag the layer's store (`tag_warp`), read through L2 behind the bulk copies.
+// with two MMA warps, or a sketch, a producer warp's after them (fused_producers), which copies once `empty` lets it. The warps after these, if any, tag the layer's store (`tag_warp`), read through L2 behind the bulk copies.
 // The CTA's tasks are one sequence of words (task i's word w is word TW i + w), cut into units of 32: decoder warp d
 // takes units d, d + D, ..., lane l a unit's word l. A lane loads its word, decodes it, and writes its payload (stage
 // bytes PB w ..) only once every word of the task is loaded, since a payload overwrites the stored bytes of the words
@@ -2193,12 +2192,13 @@ __host__ __device__ constexpr int fused_mma_warps() {
   return NB8 == 4 && K <= 2 && !(SKK > 0 && SKW == 0) ? 2 : 1;
 }
 
-// The producer warp after the MMA warps, where there are two or the MMA warp hashes (SKK > 0, SKW = 0). Else the MMA
-// warp copies and relays the tasks itself, and the producer's warp is a decoder's: at 12 warps, which the decoders
-// bind, 11 decoders untagged and 9 beside two sketch warps.
+// The producer warp after the MMA warps, where there are two or the kernel sketches (SKK > 0). Else the MMA warp copies
+// and relays the tasks itself, and the producer's warp is a decoder's: 11 decoders untagged at 12 warps, which the
+// decoders bind. Beside the sketch warps the copies in the MMA warp lengthen a stage's round trip, which at 7 stages
+// cost the 8-decoder kernel 6% at k = 2, and a ninth decoder won none of it back.
 template <int K, int NB8, int SKK, int SKW>
 __host__ __device__ constexpr int fused_producers() {
-  return fused_mma_warps<K, NB8, SKK, SKW>() == 2 || (SKK > 0 && SKW == 0) ? 1 : 0;
+  return fused_mma_warps<K, NB8, SKK, SKW>() == 2 || SKK > 0 ? 1 : 0;
 }
 
 template <int SKK, int SKW>
@@ -2958,11 +2958,9 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
     int hashed = 0;   // the tiles whose hash has started
     int r = 0, rs = 0;   // without a producer: the next copy lane 0 relays, its stage and its parity
     u32 rp = 0;
-    // Lane 0 relays the landed copies of tasks below c, the ones issued: before task i's MMAs those up to task
-    // i + stages - 1, the ones a producer would have issued by now, so task i's decode waits on no copy the producer's
-    // wouldn't. It relays while the warp waits on `decoded` and again between the MMAs and the stores, since the
-    // receipt warps' wait on a group's last copy holds the decoders' first task of it. It polls while copies are in
-    // flight, so a poll keeps the copy's stage and parity rather than dividing by `stages`.
+    // Lane 0 relays, while the warp waits on task i's `decoded`, the landed copies of tasks below i + stages: the ones
+    // a producer would have issued by now, so task i's decode waits on no copy the producer's wouldn't. It polls while
+    // copies are in flight, so a poll keeps the copy's stage and parity rather than dividing by `stages`.
     [[maybe_unused]] const auto relay = [&](int c) {
       for (c = min(c, ntasks); r < c && mbar_test(full + rs, rp); ++r) {
         mbar_arrive(ready + rs);
@@ -3019,13 +3017,10 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
       // and the sketch warps' reads precede the decoders' stores, which the decoders fence.
       asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
       mbar_arrive(empty + s);
-      if (!PW && lane == 0) {
-        if (i + stages < ntasks) {
-          mbar_wait(empty + s, (i / stages) & 1);
-          mbar_expect_tx(full + s, SB);
-          bulk_load(smem + s * SB, wstore + (q0 + (i + stages) * gq) * SB, SB, full + s);
-        }
-        relay(i + stages + 1);
+      if (!PW && lane == 0 && i + stages < ntasks) {
+        mbar_wait(empty + s, (i / stages) & 1);
+        mbar_expect_tx(full + s, SB);
+        bulk_load(smem + s * SB, wstore + (q0 + (i + stages) * gq) * SB, SB, full + s);
       }
       store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
       if constexpr (SKK > 0 && SKW == 0)
@@ -3083,7 +3078,7 @@ __device__ __forceinline__ bool fused_next(int N, int Kd, int groups, int decode
 // A + 1.
 // With SKK > 0 the decoders sketch (sk_begin) and the MMA warp hashes each tile (SkJob) into sk_out and tags
 // (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps; with SKW > 0 as well, SKW sketch warps after
-// the MMA warps (and the producer, if any) do all of it (sketch_warp).
+// the MMA warps and the producer do all of it (sketch_warp).
 // WARPS, the warps the launch bounds allow, is fused_warps' or fewer (wt_fused_sketch).
 // The grid is any number of CTAs (Cut): wt_fused_sketch's is the format's, or as many as the SMs hold where that pays.
 template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS = fused_warps<NB8, SKK, SKW>()>
