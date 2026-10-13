@@ -50,6 +50,16 @@ OWNERS = {
     "cursor/dsv4-indexer-8c79": {"dsv4-compressor-state", "dsv4-indexer-compress", "dsa-mqa-logits", "dsa-topk-fill",
                                  "inv-rope-fp8-quant"},
 }
+#: each Program another row's branch registered and took to GO on the H200 -> its Definitions, word then Boolean
+PORTED = {
+    "tp-allreduce": ["AllReduceMnnvl_v1", "AllReduceMultimem_v1", "AllReduceMnnvl_v2", "AllReduceMultimem_v2"],
+    "dsv4-qnorm-rope-kv-insert": ["Dsv4QNormRopeKvInsert_v1", "Dsv4QNormRopeKvInsert_v2"],
+    "dsv4-indexer-q": ["Dsv4IndexerQ_v1", "Dsv4IndexerQ_v2"],
+    "dsv4-compress-512": ["Dsv4MlaCompressC4_v1", "Dsv4MlaCompressC128_v1", "Dsv4MlaCompressC4_v2", "Dsv4MlaCompressC128_v2"],
+    "mhc-tf32": ["MhcPreBroadcast_v1", "MhcPostPreTf32_v1"],
+    "flashmla-sparse-prefill": ["FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4CombineTopkSwa_v1", "FlashMlaPrefill_v2",
+                                "FlashMlaGatherRow_v2", "Dsv4CombineTopkSwa_v2"],
+}
 
 DECODE = ("hc-fused", "indexer-short", "decode-tokens")
 STEPS = {
@@ -307,8 +317,10 @@ def test_the_exists_programs_cite_what_the_build_binds():
 
 
 def test_the_program_statuses():
-    """What has no Definition on main is `tonight` on the branch of the row that writes it; prefill's FlashMLA and the TF32 mHC
-    pre are committed-only on this target, and so are the kernels no row owns yet and the step's positions, a root input."""
+    """What has no Definition on main is `tonight` on the branch of the row that writes it.  The Programs that went GO on the H200
+    on other rows' branches (the TP8 all-reduce at H 7168, the query norm and cache insert, the indexer's query, the head-512
+    compressor, the TF32 mHC pre and prefill's FlashMLA) are `port`: registered here, bound by no Build rule.  Committed-only are the
+    decode attention's indices, which no row states yet, and the step's positions, a root input."""
     statuses = {pid: p["status"] for pid, p in CMAP["programs"].items()}
     assert {statuses[t["program"]] for t in CMAP["taps"]} == set(CM.STATUSES)
     tonight: dict[str, set[str]] = {}
@@ -316,24 +328,24 @@ def test_the_program_statuses():
         if p["status"] == "tonight":
             tonight.setdefault(p["branch"], set()).add(pid)
     assert tonight == OWNERS
-    assert {pid for pid, s in statuses.items() if s == "committed-only"} == {
-        "tp-allreduce", "flashmla-sparse-prefill", "mhc-tf32", "dsv4-qnorm-rope-kv-insert", "dsv4-compress-512", "dsv4-indexer-q",
-        "dsv4-decode-indices", "step-positions"}
+    assert {pid for pid, s in statuses.items() if s == "committed-only"} == {"dsv4-decode-indices", "step-positions"}
+    assert {pid: (statuses[pid], CMAP["programs"][pid]["definitions"]) for pid in PORTED} == {
+        pid: ("port", defs) for pid, defs in PORTED.items()}
     for p in CMAP["programs"].values():
         assert p["status"] != "exists" or p["definitions"]
         assert p["status"] != "tonight" or not p["definitions"]
 
 
-def test_a_decode_step_leaves_one_mhc_pre_and_the_attention_bookkeeping_committed_only():
+def test_a_decode_step_s_one_tf32_mhc_pre_is_layer_0s_and_its_committed_only_taps_the_attention_bookkeeping():
     """On a decode step (<= 16 tokens) every mHC pre after layer 0's is the FMA kernel; layer 0's broadcast pre runs DeepGEMM's
-    TF32 GEMM at every token count, so its four returns are the step's only TF32 mHC taps. Nothing of prefill's FlashMLA runs."""
+    TF32 GEMM at every token count, so its four returns are the step's only TF32 mHC taps. Nothing of prefill's FlashMLA runs, and
+    what stays committed-only is the decode attention's indices and the step's positions."""
     status = {pid: p["status"] for pid, p in CMAP["programs"].items()}
     taps = list(CM._step_taps(CMAP, ENV, "decode", DECODE))
     tf32 = [(t["id"], layer) for t, layer in taps if t["program"] == "mhc-tf32"]
     assert tf32 == [(f"hc_attn.first.{v}", 0) for v in ("residual", "post_mix", "comb_mix", "x")]
     assert not any(t["program"] == "flashmla-sparse-prefill" for t, _ in taps)
-    assert {t["program"] for t, _ in taps if status[t["program"]] == "committed-only"} == {
-        "mhc-tf32", "tp-allreduce", "dsv4-qnorm-rope-kv-insert", "dsv4-compress-512", "dsv4-decode-indices", "step-positions"}
+    assert {t["program"] for t, _ in taps if status[t["program"]] == "committed-only"} == {"dsv4-decode-indices", "step-positions"}
 
 
 @pytest.mark.parametrize("step", sorted(STEPS))
@@ -372,15 +384,15 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 36, "port": 8, "copy": 1, "committed-only": 28})
+        42, 28, {"exists": 5, "tonight": 36, "port": 30, "copy": 1, "committed-only": 6})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        64, 2539, {"exists": 125, "tonight": 1582, "port": 276, "copy": 1, "committed-only": 555}, 122)
+        64, 2539, {"exists": 125, "tonight": 1582, "port": 586, "copy": 1, "committed-only": 245}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        68, 2659, {"exists": 125, "tonight": 1612, "port": 306, "copy": 1, "committed-only": 615}, 242)
+        68, 2659, {"exists": 125, "tonight": 1612, "port": 676, "copy": 1, "committed-only": 245}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
-        63, 2415, {"exists": 125, "tonight": 1067, "port": 306, "copy": 1, "committed-only": 916}, 726)
+        63, 2415, {"exists": 125, "tonight": 1067, "port": 1221, "copy": 1, "committed-only": 1}, 726)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        69, 2720, {"exists": 125, "tonight": 1128, "port": 306, "copy": 1, "committed-only": 1160}, 787)
+        69, 2720, {"exists": 125, "tonight": 1128, "port": 1221, "copy": 1, "committed-only": 245}, 787)
 
 
 def test_the_bound_tap_counts():

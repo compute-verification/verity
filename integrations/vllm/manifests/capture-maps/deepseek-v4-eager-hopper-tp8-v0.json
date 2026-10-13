@@ -321,12 +321,15 @@
    "branch": "cursor/glm53-committed-ops-8c79"
   },
   "tp-allreduce": {
-   "status": "committed-only",
+   "status": "port",
    "definitions": [
-    "AllReduce2_v1",
-    "AllReduce_v2"
+    "AllReduceMnnvl_v1",
+    "AllReduceMultimem_v1",
+    "AllReduceMnnvl_v2",
+    "AllReduceMultimem_v2"
    ],
-   "note": "the TP8 all-reduce on 8xH200 (custom / symm-mem / FlashInfer / NCCL, chosen per call by size; the serve leaves VLLM_ALLREDUCE_USE_SYMM_MEM and VLLM_ALLREDUCE_USE_FLASHINFER at their defaults, the target's switches): AllReduce2_v1 is WORLD 2 and AllReduce_v2 WORLD 4, neither this one. Workstream A owns the WORLD 8 Program; every rank's partial is a tap, so it checks against the same root"
+   "note": "the TP8 all-reduce on 8xH200 at WORLD 8 and N = H = 7168 (registry/tp_allreduce.py, #1945): the taps' all-reduces (embed, attn.wo_b, moe.out), which CudaCommunicator.all_reduce gives, at vLLM's defaults (the target's switches), FlashInfer's MNNVL all-reduce to 36 tokens (0.5 MiB / (7168 x 2 B); AllReduceMnnvl_v1) and torch's multimem_all_reduce_ past it to 64 MiB (AllReduceMultimem_v1, one f32 add tree per owner rank, GLM53_H200_TREE on all eight, IEEE adds), then NCCL; beside symmetric memory the custom all-reduce's cap is 256 KiB, inside FlashInfer's 0.5 MiB, so it takes none of them. Covered (tp_allreduce.covered('defaults', 7168, route, M), CAPTURED; run r20261013-115512-5ff3, the GO that also captured the 7168-wide all-reduces): FlashInfer 1-36 and multimem 37-2048 tokens. Boolean _v2 each. Port until a Build rule binds them. Every rank's partial is a tap, so the Program checks against the same root",
+   "when": "vLLM's all-reduce defaults (target.switches) and calls of at most 2048 tokens: every decode step; a prefill step past 2048 tokens (the target leaves max_num_batched_tokens at vLLM's default) is not covered, nor is NCCL"
   },
   "fp8-block-linear-flashinfer": {
    "status": "tonight",
@@ -356,9 +359,16 @@
    "branch": "cursor/dsv4-flashmla-8c79"
   },
   "flashmla-sparse-prefill": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "FlashMLA flash_mla_sparse_fwd per prefill chunk over dequantize_and_gather_k_cache's bf16 rows at combine_topk_swa_indices' indices, with attn_sink: committed-only on this target (prefill is verified after decode). Row DSV4-MLA states it (FlashMlaPrefill_v1, FlashMlaGatherRow_v1 on its branch); it moves to tonight when the target verifies prefill"
+   "status": "port",
+   "definitions": [
+    "FlashMlaPrefill_v1",
+    "FlashMlaGatherRow_v1",
+    "Dsv4CombineTopkSwa_v1",
+    "FlashMlaPrefill_v2",
+    "FlashMlaGatherRow_v2",
+    "Dsv4CombineTopkSwa_v2"
+   ],
+   "note": "FlashMLA flash_mla_sparse_fwd per prefill chunk (registry/flashmla_prefill.py, #1955): FlashMlaPrefill_v1{NH 16, NP, D 512, BN 64, HopperBF16WgmmaDot16, 512^-0.5} per token over the bf16 workspace dequantize_and_gather_k_cache writes (the CuTe gather, FlashMlaGatherRow_v1{DN 448, DR 64, QT 64}: the E4M3 byte times its group's scale s << 7), at the workspace indices and lengths combine_topk_swa_indices writes (registry/dsv4_indices.py, #1968: Dsv4CombineTopkSwa_v1{TOPK, RATIO, WINDOW 128, WIDTH}), with attn_sink. The H200's GO: run r20261013-115825-52cf (tests/properties/dsv4_flashmla_capture_gpu.py, the prefill cases), and for the indices run r20261013-205633-5489 (tests/properties/dsv4_indices_capture_gpu.py). Boolean _v2 each. Port until a Build rule binds it"
   },
   "mhc-post-pre-fma": {
    "status": "tonight",
@@ -367,9 +377,12 @@
    "branch": "cursor/dsv4-mhc-8c79"
   },
   "mhc-tf32": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "the TF32 pre: DeepGEMM tf32_hc_prenorm_gemm (TF32 tensor cores, n_splits from compute_num_split) then mhc_pre_big_fuse(_broadcast)_with_norm_tilelang. Layer 0's mhc_pre_broadcast_tilelang takes it at every token count, so one mHC pre per step stays committed-only on decode; every later pre at M > 16 (route hc-split). The decode batch limit of 16 lifts when TF32 is pinned"
+   "status": "port",
+   "definitions": [
+    "MhcPreBroadcast_v1",
+    "MhcPostPreTf32_v1"
+   ],
+   "note": "the TF32 pre (registry/mhc.py, #1961): DeepGEMM tf32_hc_prenorm_gemm (HopperTf32WgmmaDot8_v1 steps, split-K over compute_num_split's splits: MhcPrenormTf32_v1) then mhc_pre_big_fuse(_broadcast)_with_norm_tilelang. Layer 0's mhc_pre_broadcast_tilelang takes it at every token count (MhcPreBroadcast_v1, NS 28; its residual, the embedding copied to each of the HC streams, is a copy the Definition does not state: word-equal to embed per stream), so it checks one mHC pre on every decode step; every later post-and-pre past 16 tokens (route hc-split) is mhc_post_tilelang, the GEMM and the big fuse: MhcPostPreTf32_v1. The H200's GO: run r20261013-205619-36e8 (tests/properties/dsv4_mhc_capture_gpu.py: the broadcast at 1, 16, 64 and 65 tokens, the TF32 path at 17, 64, 65, 128 and 129). Neither composite has a Boolean version (boolean_mhc: over circuit-check's partition budget); its pieces have (MhcPrenormTf32_v2, MhcPreBigFuse_v2, MhcPreBigFuseBroadcast_v2, MhcPost_v2). Port until a Build rule binds it"
   },
   "mhc-post": {
    "status": "tonight",
@@ -389,9 +402,12 @@
    "note": "the runner's positions, one int64 per token (its index in its request): a root input no Program computes.  The insert's RoPE, the compressors' state rows (ape[pos % ratio]) and compress kernels, the short-context top-k fill and the decode indices read them, and the identity check recomputes from them which compressed-rows names a step commits (row_counts)"
   },
   "dsv4-qnorm-rope-kv-insert": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "torch.ops._C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert: per head the weightless RMSNorm of q and GPT-J RoPE on its last DR dims, zero-filled to NHP heads; the kv row's RoPE, ue8m0 FP8 quantisation of its NoPE part and the 584-byte insert into the SWA cache at the step's slot mapping. No row owns it yet"
+   "status": "port",
+   "definitions": [
+    "Dsv4QNormRopeKvInsert_v1",
+    "Dsv4QNormRopeKvInsert_v2"
+   ],
+   "note": "torch.ops._C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert (registry/dsv4_qnorm_insert.py, #1969): per token Dsv4QNormRopeKvInsert_v1{NH 16, NHP 64, DN 448, DR 64, QB 64, EPS 1e-6}, the weightless RMSNorm of each live query head and GPT-J RoPE on its last DR dims (Dsv4QNormRope_v1), zero-filled to NHP heads, and the kv row's RoPE, ue8m0 FP8 quantisation of its NoPE part and its 584-byte cache row (Dsv4KvRopeQuant_v1), which the Program scatters at the step's slot mapping (no row where the slot is -1). The H200's GO: run r20261013-205619-f8bf (tests/properties/dsv4_qnorm_insert_capture_gpu.py). Boolean _v2. Port until a Build rule binds it"
   },
   "dsv4-compressor-state": {
    "status": "tonight",
@@ -406,14 +422,22 @@
    "branch": "cursor/dsv4-indexer-8c79"
   },
   "dsv4-compress-512": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "compress_norm_rope_store_cutedsl (head HD, the main attention's compressed rows on CSA and HCA layers): the pooling, norm and RoPE as the indexer's, then the 584-byte fp8_ds_mla row. No row owns it yet (open between DSV4-IDX and DSV4-MLA)"
+   "status": "port",
+   "definitions": [
+    "Dsv4MlaCompressC4_v1",
+    "Dsv4MlaCompressC128_v1",
+    "Dsv4MlaCompressC4_v2",
+    "Dsv4MlaCompressC128_v2"
+   ],
+   "note": "compress_norm_rope_store_cutedsl (head HD, the main attention's compressed rows; registry/dsv4_compressor.py, #1968): on a CSA layer SparseAttnCompressNormRopeStoreC4Kernel, Dsv4MlaCompressC4_v1{ROWS 8, D 512, QB 64, EPS 1e-6} over the 8 state rows of the token's overlapping window; on an HCA layer SparseAttnCompressC128Block8Kernel then SparseAttnNormRopeStoreKernel, Dsv4MlaCompressC128_v1{W 8, R 16, D 512, QB 64, EPS 1e-6} over its 128; each the RMSNorm, the last 64-group's RoPE in bf16 and the other 7 quantised ue8m0 FP8, the 584-byte fp8_ds_mla row FlashMlaKvRow_v1 reads. One row per token that ends a window (row_counts NC4, NC128). The H200's GO: run r20261013-211655-2a70 (tests/properties/dsv4_compressor_capture_gpu.py). Boolean _v2 each. Port until a Build rule binds it"
   },
   "dsv4-indexer-q": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "fused_indexer_q_rope_quant (CuTe DSL fused_indexer_q_rope_quant_fp8_cutedsl when has_cutedsl(), as in the pinned venv; else Triton): GPT-J RoPE on the last DR dims of each of the IH heads, ue8m0 FP8 per head; the head weight (weights_proj's bf16 output) times q scale, ID^-0.5 and IH^-0.5. Not DsaIndexerQ_v1 (GLM-5.3's Triton _fused_q_kernel); not in row DSV4-IDX"
+   "status": "port",
+   "definitions": [
+    "Dsv4IndexerQ_v1",
+    "Dsv4IndexerQ_v2"
+   ],
+   "note": "fused_indexer_q_rope_quant (the CuTe DSL IndexerQFp8Kernel, as has_cutedsl() holds in the pinned venv; registry/dsv4_qnorm_insert.py, #1969): per token Dsv4IndexerQ_v1{H 64, D 128, DR 64, SCALE 128^-0.5 * 64^-0.5}, GPT-J RoPE on the last DR dims of each of the IH heads and ue8m0 FP8 per head (Dsv4IndexerQHead_v1), and the head weight (weights_proj's bf16 output) times q's scale and SCALE. Not DsaIndexerQ_v1 (GLM-5.3's Triton _fused_q_kernel). The H200's GO: run r20261013-205619-f8bf, with the insert's. Boolean _v2. Port until a Build rule binds it"
   },
   "dsa-mqa-logits": {
    "status": "tonight",
