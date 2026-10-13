@@ -235,6 +235,7 @@ def main() -> None:
         log("filler check", result["filler"]["check"])
     result["streams_seen"] = sorted(seen)
     hooks.uninstall()
+    result["complete"] = True
     save()
 
 
