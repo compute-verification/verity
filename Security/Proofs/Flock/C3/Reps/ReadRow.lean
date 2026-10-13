@@ -361,15 +361,17 @@ theorem mem_cols {nIn inRows cp : Nat} {f : Lin} {v : Var} (hv : v ∈ f.s) (hlt
   simp only [cols, Array.toList_append]
   exact List.mem_append_left _ (List.mem_map.2 ⟨v, hv, col_input hlt⟩)
 
-/-- **The laid-out unit has a computed row reading each row bit**: the `k`-th AND, at row `inRows + k`. -/
-theorem laid_reads (LANES H : Nat) {c : Nat} (hc : c < 128 * LANES) :
+/-- **The laid-out unit has a computed row for each input bit a builder row reads**: the `k`-th AND, at row
+`inRows + k`, its forms' columns those of their variables. -/
+theorem laid_reads_of (LANES H : Nat) {c : Nat} (hr : RowReads ((recOpenNet LANES H (ports LANES H)).run St.empty).2 c)
+    (hlt : c < 128 * LANES + (ports LANES H).aux) :
     ∃ k, groupWords ((wordPorts ((ports LANES H).bits.foldl (· + ·) 0)).foldl (· + ·) 0) * Flock.WORD + k <
         (unitLaid LANES H).constPos ∧
       c ∈ ((unitLaid LANES H).ra.getD
           (groupWords ((wordPorts ((ports LANES H).bits.foldl (· + ·) 0)).foldl (· + ·) 0) * Flock.WORD + k) #[]).toList ++
         ((unitLaid LANES H).rb.getD
           (groupWords ((wordPorts ((ports LANES H).bits.foldl (· + ·) 0)).foldl (· + ·) 0) * Flock.WORD + k) #[]).toList := by
-  obtain ⟨r, hr, hv⟩ := rowReads_unit LANES H hc
+  obtain ⟨r, hr, hv⟩ := hr
   obtain ⟨k, hk, hrk⟩ := List.mem_iff_getElem.1 (List.mem_reverse.2 hr)
   obtain ⟨h1, -, h3, -⟩ := layout_rows ((recOpenNet LANES H (ports LANES H)).run St.empty).2
     (wordPorts ((ports LANES H).bits.foldl (· + ·) 0)) (wordPorts 2048) (recOpenOuts LANES H (ports LANES H)).toArray
@@ -378,7 +380,8 @@ theorem laid_reads (LANES H : Nat) {c : Nat} (hc : c < 128 * LANES) :
     ((recOpenNet LANES H (ports LANES H)).run St.empty).2.rows.length) _ hspan
   have hlt : c < (wordPorts ((ports LANES H).bits.foldl (· + ·) 0)).foldl (· + ·) 0 := by
     rw [foldl_wordPorts, foldl_ports]
-    generalize max 1 ((H + 1) / 2) = m
+    simp only [ports] at hlt
+    generalize max 1 ((H + 1) / 2) = m at hlt ⊢
     omega
   refine ⟨k, ?_, ?_⟩
   · show _ < (layout _ _ _ _).constPos
@@ -391,6 +394,16 @@ theorem laid_reads (LANES H : Nat) {c : Nat} (hc : c < 128 * LANES) :
     rcases List.mem_append.1 hv with hv | hv
     · exact List.mem_append_left _ (mem_cols hv hlt)
     · exact List.mem_append_right _ (mem_cols hv hlt)
+
+/-- **The laid-out unit has a computed row reading each row bit**. -/
+theorem laid_reads (LANES H : Nat) {c : Nat} (hc : c < 128 * LANES) :
+    ∃ k, groupWords ((wordPorts ((ports LANES H).bits.foldl (· + ·) 0)).foldl (· + ·) 0) * Flock.WORD + k <
+        (unitLaid LANES H).constPos ∧
+      c ∈ ((unitLaid LANES H).ra.getD
+          (groupWords ((wordPorts ((ports LANES H).bits.foldl (· + ·) 0)).foldl (· + ·) 0) * Flock.WORD + k) #[]).toList ++
+        ((unitLaid LANES H).rb.getD
+          (groupWords ((wordPorts ((ports LANES H).bits.foldl (· + ·) 0)).foldl (· + ·) 0) * Flock.WORD + k) #[]).toList :=
+  laid_reads_of LANES H (rowReads_unit LANES H hc) (by omega)
 
 theorem inWords_unitLaid {LANES H : Nat} {name : String} {net : Flock.Net}
     (hn : netOf name (unitLaid LANES H) = .ok net) :
