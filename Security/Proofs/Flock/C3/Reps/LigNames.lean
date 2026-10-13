@@ -186,21 +186,21 @@ theorem ligLast_has (ext : ℕ) (s : ℕ × ℕ × Array (Array Key)) :
     exact InRound.last (Array.mem_append_right _ (Array.mem_map.2 ⟨j, Array.mem_range.2 hj, rfl⟩))
 
 /-- **The level loop's rounds**, from level `s` of `R = s + n + 1`: `init`'s, its next `7n + 4` messages and `2n`
-out-of-domain values, and the last level's `Y`. -/
-theorem ligLevels_has {R : ℕ} {Y : Key → Prop}
+out-of-domain values, and the last level's `P`. -/
+theorem ligLevels_has {R : ℕ} {P : Key → Prop}
     {G1 G2 : ℕ × ℕ × Array (Array Key) → ℕ × ℕ × Array (Array Key)}
     (h1 : ∀ s, (G1 s).1 = s.1 + 7 ∧ (G1 s).2.1 = s.2.1 + 2 ∧ (∀ x, InRound s.2.2 x → InRound (G1 s).2.2 x) ∧
       (∀ t < 7, ∀ a < 2, ∀ b < 2, InRound (G1 s).2.2 (.msg (s.1 + t) a b)) ∧
       ∀ t < 2, InRound (G1 s).2.2 (.ood (s.2.1 + t)))
     (h2 : ∀ s, (∀ x, InRound s.2.2 x → InRound (G2 s).2.2 x) ∧
       (∀ t < 4, ∀ a < 2, ∀ b < 2, InRound (G2 s).2.2 (.msg (s.1 + t) a b)) ∧
-      ∀ x, Y x → InRound (G2 s).2.2 x)
+      ∀ x, P x → InRound (G2 s).2.2 x)
     (n : ℕ) : ∀ (s : ℕ) (init : ℕ × ℕ × Array (Array Key)), s + n + 1 = R →
       (∀ x, InRound init.2.2 x → InRound (ligLevels R G1 G2 (List.range' s (n + 1)) init).2.2 x) ∧
       (∀ t < 7 * n + 4, ∀ a < 2, ∀ b < 2,
         InRound (ligLevels R G1 G2 (List.range' s (n + 1)) init).2.2 (.msg (init.1 + t) a b)) ∧
       (∀ t < 2 * n, InRound (ligLevels R G1 G2 (List.range' s (n + 1)) init).2.2 (.ood (init.2.1 + t))) ∧
-      ∀ x, Y x → InRound (ligLevels R G1 G2 (List.range' s (n + 1)) init).2.2 x := by
+      ∀ x, P x → InRound (ligLevels R G1 G2 (List.range' s (n + 1)) init).2.2 x := by
   induction n with
   | zero =>
     intro s init hs
@@ -241,7 +241,7 @@ theorem ligRounds_has (sch : Flock.Schedule) :
   rcases R with _ | n
   · simp only [ligLevels, List.range'_zero, List.forIn_nil]
     exact ⟨i3, i4, fun _ h => absurd h (by omega)⟩
-  · obtain ⟨m, g, o, y⟩ := ligLevels_has (R := n + 1) (Y := fun x => ∃ j < 2 <<< sch.ext, x = .yr j) ligMid_has
+  · obtain ⟨m, g, o, y⟩ := ligLevels_has (R := n + 1) (P := fun x => ∃ j < 2 <<< sch.ext, x = .yr j) ligMid_has
       (ligLast_has sch.ext) n 0 (lig0 sch) (by omega)
     refine ⟨fun j hj a ha b hb => m _ (i3 j hj a ha b hb), fun j hj => m _ (i4 j hj), fun n' hn => ?_⟩
     obtain rfl : n = n' := by omega
