@@ -14,10 +14,12 @@ from typing import Any
 
 from verity.ml.circuits.defs import bind
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import bound_args, is_row_major, op_name, target_of, triton_name, unsupported
-from verity_vllm.observe.fold.patterns.geometry import GeometryError
+from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_row_major
 from verity_vllm.observe.fold.patterns.kv_cache import kv_slots
+from verity_vllm.observe.fold.patterns.ops import bound_args, op_name, triton_name
+from verity_vllm.observe.fold.patterns.resolutions import unsupported
 from verity_vllm.observe.fold.patterns.rotary import _positions_ok
+from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.resolver import (
     Compute,
     Const,
