@@ -12,6 +12,7 @@ import Proofs.Accounting.RateAudit.Chain
 import Proofs.Accounting.RateAudit.Horizon
 import Proofs.Accounting.RateAudit.Named
 import Proofs.Accounting.RateAudit.Session
+import Proofs.Accounting.RateAudit.Deployed
 import Proofs.Accounting.RateAudit.SketchHonest
 import Proofs.Accounting.RateAudit.SketchInteractive
 
@@ -38,4 +39,7 @@ count, for a pass and for a window (`Accounting.SecurityProofs.RatePaidRO`, `Rat
 words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`), with its route `Sampled`
 (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled draw of a window and of a session of windows,
 over the horizon and in every window (`Accounting.SecurityProofs.RateWindowDraw`, `RateSessionDraw`), with its route
-`Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`). -/
+`Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`), and the remote bandwidth audit as deployed, one
+guarantee over a session of ground, chained windows of devices with partial completion
+(`Accounting.SecurityProofs.RemoteSessionConservation`, at the deployed parameters
+`RemoteSessionConservationDeployed`). -/

@@ -6,6 +6,9 @@
    "owner": "@memory-accounting",
    "digest": "9d865547ca23af09cf67e3ad5149642660839a871ec3c4cb85abd72829fdb257"
   },
+  "Accounting.Assumptions.SquaringCeiling": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
@@ -762,6 +765,12 @@
    "signature": ["Accounting.SecurityProofs.RateWindowDraw : Accounting.Guarantees.RateWindowDraw"],
    "assumptions": [],
    "type_hash": "32536a10cb2a211bb8640b5c9a6a719db991a873f974d47440c297021ad8fe38"
+  },
+  "Accounting.SecurityProofs.RemoteSessionConservation": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RemoteSessionConservationDeployed": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -4420,6 +4429,8 @@
    "Accounting.SecurityProofs.RateWindowDraw": "frozen (no-function,hash): As Accounting.SecurityProofs.HorizonSampling's one round at M = P * N, for a chained window of abstract chip programs in the random-oracle model whose single draw opens d of all its passes' receipts after the last root (Security/Definitions/Accounting/RateAuditHorizon.lean, WindowCoins, Chain.correctAll), not the rate audit's code.",
    "Accounting.SecurityProofs.RateSessionDraw": "frozen (no-function,hash): As Accounting.SecurityProofs.HorizonSampling for a session of such windows, each a function of the earlier windows' coins and draws (Security/Definitions/Accounting/RateAuditHorizon.lean, Session), each window's correct receipts its good set, and again with every window's receipts good but the first holding at most K_w: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RateSessionSampledNamedRO": "frozen (no-function,hash): It joins Accounting.SecurityProofs.RateSessionDraw and Accounting.SecurityProofs.RatePaidNamedRO at each pass of each window by a union bound: a session of chained windows of abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionConservation": "frozen (no-function,hash): It composes Accounting.SecurityProofs.RatePaidNamedRO at each pass device of a session of ground, chained windows with partial completion (simulated by an interactive device whose link carries the completed bits, under WorkHardness and SquaringCeiling) with the session's pooled draws: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionConservationDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservation at the deployed parameters, with the draw's two terms bounded by 2^-40: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RateAuditSketch": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose tags hash the certified stream and a digest of each tile, for a device that obtains sectors only whole and as they are (Security/Definitions/Accounting/RateAuditSketch.lean), with the device's bounds (held sectors within S_chip, the side link's cap * T, queries) as fields of the Device it ranges over and the digest, the compute budget, c_tag and c_enc as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work, rate-sketch-verbatim, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Accounting.SecurityProofs.RateAuditTensorSketch": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAuditSketch, it bounds acceptance of an abstract chip program in the random-oracle model, at the tensor-core sketch's digest (Accounting.RateSketch.sketch), not the rate audit's code.",
    "Accounting.SecurityProofs.SketchBinds": "frozen (premise): It is a property of Accounting.RateSketch.sketch under the hypothesis SectorsBind σ on the window's signs, which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketch prices the hypothesis as Pr_σ[¬ SectorsBind σ].",

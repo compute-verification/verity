@@ -234,7 +234,7 @@ theorem sim_eq (dflt : α) {τ : ℕ} (tier : ℕ → Fin τ) (w : IWorld N b h 
     have hm : m ≠ 0 := by omega
     obtain ⟨h₁, h₂, h₃, h₄⟩ := ih (w.oracle y) ℓ (m - 1) v hl (by omega)
     simp only [sim, hm, ↓reduceIte, IChip.run, run, IChip.tierBits, tierBits, IChip.queries, queries,
-      IChip.rebuilds, simWorld_oracle, simWorld_mem, simWorld_stream, simWorld_store]
+      IChip.rebuilds, simWorld_oracle]
     exact ⟨h₁, h₂, by rw [h₃], h₄⟩
   | ingress a k ih =>
     intro ℓ m v hl hq
@@ -257,7 +257,7 @@ theorem sim_eq (dflt : α) {τ : ℕ} (tier : ℕ → Fin τ) (w : IWorld N b h 
     have hℓ : ℓ ≠ 0 := by omega
     obtain ⟨h₁, h₂, h₃, h₄⟩ := ih (w.stream i) (ℓ - 1) m v (by omega) hq
     simp only [sim, hℓ, ↓reduceIte, IChip.run, run, IChip.tierBits, tierBits, IChip.queries, queries,
-      IChip.rebuilds, simWorld_oracle, simWorld_mem, simWorld_stream, simWorld_store]
+      IChip.rebuilds, simWorld_stream]
     exact ⟨h₁, h₂, h₃, h₄⟩
   | complete j x hx g k ih =>
     intro ℓ m v hl hq
@@ -266,14 +266,14 @@ theorem sim_eq (dflt : α) {τ : ℕ} (tier : ℕ → Fin τ) (w : IWorld N b h 
     have hxl : x ≤ ℓ := by omega
     obtain ⟨h₁, h₂, h₃, h₄⟩ := ih (g (w.store j)) (ℓ - x) m v (by omega) hq
     simp only [sim, hxl, ↓reduceIte, run, tierBits, queries, IChip.readSide_run, IChip.readSide_tierBits,
-      IChip.readSide_queries, IChip.readSide_rebuilds, simWorld_side_code, simWorld_store]
+      IChip.readSide_queries, IChip.readSide_rebuilds, simWorld_side_code]
     exact ⟨h₁, h₂, h₃, h₄⟩
   | send β p ih =>
     intro ℓ m v hl hq
     simp only [linkBits, completed] at hl
     simp only [queries] at hq
     obtain ⟨h₁, h₂, h₃, h₄⟩ := ih ℓ m (β :: v) hl hq
-    simp only [sim, IChip.run, run, IChip.tierBits, tierBits, IChip.queries, queries, IChip.rebuilds, simWorld_oracle, simWorld_mem, simWorld_stream, simWorld_store]
+    simp only [sim, IChip.run, run, IChip.tierBits, tierBits, IChip.queries, queries, IChip.rebuilds]
     exact ⟨h₁, h₂, h₃, h₄⟩
 
 /-- `WorkHardness`, one completion at a time: the bits completed, at `rounds·c_root` per `b` of them, cost at most the
@@ -344,7 +344,8 @@ theorem completed_le (A : PIDevice N b h ρ S L q) {rounds cRoot F : ℕ} {cost 
 
 /-- **A pass device's correct receipts are paid for**: `RatePaidNamedRO` at the simulating device, the completed bits
 in its link; `toInteractive_eq` carries it to the pass device once `X` covers them. -/
-theorem pr_unpaid_le {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (X lam : ℕ) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
+theorem pr_unpaid_le {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (X lam : ℕ)
+    (hA : ∀ E R O O', A.side E R O = A.side E R O') :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (A.toInteractive X).tierReads tier t x.1 x.2.1 x.2.2 + (A.toInteractive X).rebuilt x.1 x.2.1 x.2.2 * b +
             (S + (L - ρ) + X + lam) < ((A.toInteractive X).correct x.1 x.2.1 x.2.2).card * b)
@@ -595,6 +596,47 @@ theorem count_lt {R t g c Nn b sl : ℝ} (hb : 0 < b) (hg : g * (Nn * b) = sl)
   have := mul_lt_mul_of_pos_right (Nat.lt_floor_add_one ((1 - t) * (c * Nn))) hb
   linarith
 
+/-- `e^(−x) ≤ 2^-40` once `x ≥ 40·0.6931471808 > 40·log 2`. -/
+theorem exp_neg_le (x : ℝ) (hx : 40 * 0.6931471808 ≤ x) : Real.exp (-x) ≤ 1 / 2 ^ 40 := by
+  have h2 := Real.log_two_lt_d9
+  have e : Real.exp (40 * Real.log 2) = 2 ^ 40 := by
+    rw [show (40 : ℝ) = ((40 : ℕ) : ℝ) by norm_num, Real.exp_nat_mul, Real.exp_log two_pos]
+  rw [one_div, ← e, ← Real.exp_neg]
+  exact Real.exp_le_exp.2 (by linarith)
+
+/-- `(1 − u)^m ≤ e^(−u·m)`. -/
+theorem one_sub_pow_le (u : ℝ) (m : ℕ) (hu : u ≤ 1) : (1 - u) ^ m ≤ Real.exp (-(u * m)) := by
+  have h := Real.add_one_le_exp (-u)
+  calc (1 - u) ^ m ≤ Real.exp (-u) ^ m := pow_le_pow_left₀ (by linarith) (by linarith) m
+    _ = Real.exp (-(u * m)) := by rw [← Real.exp_nat_mul]; ring_nf
+
+/-- A real bound as an `ℝ≥0∞` one, at `2^-40`. -/
+theorem ofReal_pow_le {x : ℝ} {m : ℕ} (hx : 0 ≤ x) (h : x ^ m ≤ 1 / 2 ^ 40) :
+    ENNReal.ofReal x ^ m ≤ 1 / 2 ^ 40 := by
+  rw [← ENNReal.ofReal_pow hx]
+  have e : (1 : ℝ≥0∞) / 2 ^ 40 = ENNReal.ofReal (1 / 2 ^ 40) := by
+    rw [ENNReal.ofReal_div_of_pos (by positivity), ENNReal.ofReal_one, ENNReal.ofReal_pow (by norm_num),
+      ENNReal.ofReal_ofNat]
+  rw [e]
+  exact ENNReal.ofReal_le_ofReal h
+
+/-- The horizon's term at the deployed draw: `(1 − 0.0015)^(2773·n) ≤ 2^-40` from `n = 7`. -/
+theorem horizon_deployed (n : ℕ) (hn : 7 ≤ n) : ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) ≤ 1 / 2 ^ 40 := by
+  refine ofReal_pow_le (by norm_num) ((one_sub_pow_le 0.0015 _ (by norm_num)).trans (exp_neg_le _ ?_))
+  have : (7 : ℝ) ≤ n := by exact_mod_cast hn
+  push_cast
+  nlinarith
+
+/-- The window's term at the deployed draw: `(1 − 0.01/n)^(2773·n) ≤ e^(−27.73) ≤ 2^-40` at every `n ≥ 1`. -/
+theorem window_deployed (n : ℕ) (hn : 0 < n) : ENNReal.ofReal (1 - 0.01 / n) ^ (2773 * n) ≤ 1 / 2 ^ 40 := by
+  have hn' : (1 : ℝ) ≤ n := by exact_mod_cast hn
+  have hu : 0.01 / (n : ℝ) ≤ 0.01 := div_le_self (by norm_num) hn'
+  have hu0 : 0 ≤ 0.01 / (n : ℝ) := by positivity
+  refine ofReal_pow_le (by linarith) ((one_sub_pow_le _ _ (by linarith)).trans (exp_neg_le _ ?_))
+  have : 0.01 / (n : ℝ) * ((2773 * n : ℕ) : ℝ) = 27.73 := by push_cast; field_simp; norm_num
+  rw [this]
+  norm_num
+
 end Accounting.Rate.Deployed
 
 namespace Accounting.SecurityProofs
@@ -633,5 +675,19 @@ theorem RemoteSessionConservation : Accounting.Guarantees.RemoteSessionConservat
       exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+
+/-- **The remote bandwidth audit at its deployed parameters**
+(`Accounting.Guarantees.RemoteSessionConservationDeployed`). -/
+theorem RemoteSessionConservationDeployed : Accounting.Guarantees.RemoteSessionConservationDeployed := by
+  intro n P N ρ S L q r s G lam τ cRoot F cost tier A hn hP hN hc hq hG hW hF hA
+  have h := RemoteSessionConservation n P N 32768 512 ρ S L q r s 2773 G lam τ 3 cRoot F cost tier A 0.0015 0.01
+    (by omega) hP hN (by norm_num) (by positivity) (by norm_num) hW hF hA
+  refine h.trans (add_le_add ?_ ?_)
+  · rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by rw [ENNReal.div_add_div_same]; norm_num]
+    exact add_le_add (Deployed.horizon_deployed n hn) (Deployed.window_deployed n (by omega))
+  · have hq' : (q.choose 2 : ℝ≥0∞) ≤ (((2 ^ 55 : ℕ).choose 2 : ℕ) : ℝ≥0∞) := by
+      exact_mod_cast Nat.choose_le_choose 2 hq
+    have hG' : (G : ℝ≥0∞) ≤ 2 ^ 55 := by exact_mod_cast hG
+    gcongr
 
 end Accounting.SecurityProofs

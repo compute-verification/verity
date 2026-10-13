@@ -20,4 +20,5 @@ how PoUW's game, the bandwidth audit's game and a state-bounded capacity game re
 capacity audits, the rate audit's game with its embedding as a bandwidth audit whose rebuilds are charged as compute,
 with side sources that answer what the chip sent, over memory tiers and chained passes, the causal rounds its
 samples close, with partial completion, and its sketch-then-hash variant for a device that reads sectors verbatim, with
-such side sources too, the remote bandwidth audit's node and run, and the tags and sketches the audits read. -/
+such side sources too, the deployed game that composes them (partial completion, interactive side sources, tiers,
+ground chained passes and a session of pooled draws), the remote bandwidth audit's node and run, and the tags and sketches the audits read. -/
