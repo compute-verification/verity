@@ -12,6 +12,7 @@ from verity_vllm.properties.record import REGISTRY, digest_of
 
 def _case(kind: str = "rms_norm", m: int = 1, n: int = 6144) -> dict:
     return {"kind": kind, "M": m, "N": n, "block": X.M.launch_block(m, n, fused=kind != "rms_norm"),
+            "eps": X.EPS_BY_WIDTH[n],
             "launch_ok": True, "mismatch": 0, "residual_mismatch": 0, "deterministic": True,
             "alternatives": {"batch_invariant_block": 1, "linear_f64_reduction": 1, "sqrt_div_epilogue": 1}}
 
@@ -40,10 +41,11 @@ def test_planted_rows_and_numpy_models_include_both_in_place_outputs() -> None:
     x, res, w = X.operands(42, 64, 7)
     assert x.shape == res.shape == (42, 64) and w.shape == (64,)
     assert {0x0001, 0x0080, 0x7F7F, 0x7F80, 0x7FC1} <= set(x.reshape(-1))
-    got = R.fused_add_rms_norm_rows(x, res, w, X.EPS, 64)
+    eps = X.EPS_BY_WIDTH[6144]
+    got = R.fused_add_rms_norm_rows(x, res, w, eps, 64)
     assert got["out"].shape == got["residual"].shape == x.shape
     assert got["out"].dtype == got["residual"].dtype == np.uint16
-    alt = X.alternatives("fused_add_rms_norm", x, res, w, 64, got)
+    alt = X.alternatives("fused_add_rms_norm", x, res, w, eps, 64, got)
     assert set(alt) == {"batch_invariant_block", "linear_f64_reduction", "sqrt_div_epilogue"}
     assert all(isinstance(v, int) and v >= 0 for v in alt.values())
 
@@ -56,6 +58,8 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert X.main(["--out", str(out), "--scratch", str(tmp_path)]) == 0
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["ok"] and doc["digest"] == digest_of(doc) and len(doc["cases"]) == 24
+    assert {c["eps"] for c in doc["cases"] if c["N"] == 6144} == {1e-5}
+    assert {c["eps"] for c in doc["cases"] if c["N"] == 7168} == {1e-6}
     assert "GLM53-CUDA-RMSNORM GO cases=24 errors=0" in capsys.readouterr().out
 
 

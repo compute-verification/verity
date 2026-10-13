@@ -97,4 +97,3 @@ def fused_add_rms_norm_rows(x, res, w, eps: float, block: int) -> dict[str, np.n
     r = D.f2fp_bf16(D.add_rn(D.bf16_to_f32_words(x), D.bf16_to_f32_words(res)))
     out, scale = _finish(r, w, _fused_partials(D.bf16_to_f32_words(r), block), eps)
     return {"out": out, "residual": r, "scale": scale}
-

@@ -35,10 +35,11 @@ def test_launch_policy_refuses_shapes_outside_the_width_8_path() -> None:
 
 
 @pytest.mark.parametrize("cls", [TW.RMSNormCudaVector8Twin, TW.RMSNormFusedCudaVector8Twin])
-def test_numpy_twins_match_word_definitions_on_random_and_special_words(cls) -> None:
+@pytest.mark.parametrize("eps", [1e-5, 1e-6])
+def test_numpy_twins_match_word_definitions_on_random_and_special_words(cls, eps: float) -> None:
     rng = np.random.default_rng(0xCADA + (cls is TW.RMSNormFusedCudaVector8Twin))
     for kind in ("gauss", "wide", "special", "extreme", "subnormal", "boundary"):
-        rep = TW.check_instances(cls, lambda _rng: {"N": 72, "EPS": 1e-5, "BLOCK": 4}, rng, 1, (kind,))
+        rep = TW.check_instances(cls, lambda _rng: {"N": 72, "EPS": eps, "BLOCK": 4}, rng, 1, (kind,))
         assert rep["status"] == "pass" and not rep["mismatches"], rep
 
 
@@ -61,4 +62,3 @@ def test_boolean_v2_has_the_word_v1_view_and_matches_it(fused: bool, block: int)
         expect = TW.RMSNormCudaVector8Twin(word)([x[0], w[0]])
     assert TR.word_of(target).id == word.id
     assert np.array_equal(got[0], expect)
-

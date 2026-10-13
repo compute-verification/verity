@@ -37,9 +37,9 @@ from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-cuda-rmsnorm-capture/v1"
 RECORD = "glm53_cuda_rmsnorm_capture.json"
-EPS = 1e-5
 MS = (1, 42, 43, 64, 256, 2048)
 WIDTHS = (6144, 7168)
+EPS_BY_WIDTH = {6144: 1e-5, 7168: 1e-6}
 KINDS = ("rms_norm", "fused_add_rms_norm")
 SASS_SOURCE = Path(__file__).with_name("cuda_rmsnorm_sass.cu")
 
@@ -138,7 +138,7 @@ def sass(out: Path) -> dict[str, Any]:
             "error": dump.stderr[-1000:]}
 
 
-def _profiled(kind: str, xw: np.ndarray, rw: np.ndarray, ww: np.ndarray, trace: Path):
+def _profiled(kind: str, xw: np.ndarray, rw: np.ndarray, ww: np.ndarray, eps: float, trace: Path):
     import torch
     import vllm._custom_ops  # noqa: F401 -- registers torch.ops._C
 
@@ -146,25 +146,25 @@ def _profiled(kind: str, xw: np.ndarray, rw: np.ndarray, ww: np.ndarray, trace: 
     with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA]) as prof:
         if kind == "rms_norm":
             out = torch.empty_like(x)
-            torch.ops._C.rms_norm(out, x, w, EPS)
+            torch.ops._C.rms_norm(out, x, w, eps)
         else:
             out = x
-            torch.ops._C.fused_add_rms_norm(out, res, w, EPS)
+            torch.ops._C.fused_add_rms_norm(out, res, w, eps)
         torch.cuda.synchronize()
     prof.export_chrome_trace(str(trace))
     return _u16(out), _u16(res)
 
 
-def _plain(kind: str, xw: np.ndarray, rw: np.ndarray, ww: np.ndarray):
+def _plain(kind: str, xw: np.ndarray, rw: np.ndarray, ww: np.ndarray, eps: float):
     import torch
 
     x, res, w = _tensor(xw), _tensor(rw), _tensor(ww)
     if kind == "rms_norm":
         out = torch.empty_like(x)
-        torch.ops._C.rms_norm(out, x, w, EPS)
+        torch.ops._C.rms_norm(out, x, w, eps)
     else:
         out = x
-        torch.ops._C.fused_add_rms_norm(out, res, w, EPS)
+        torch.ops._C.fused_add_rms_norm(out, res, w, eps)
     torch.cuda.synchronize()
     return _u16(out), _u16(res)
 
@@ -173,7 +173,7 @@ def _alt_words(x: np.ndarray, w: np.ndarray, scale: np.ndarray) -> np.ndarray:
     return D.f2fp_bf16(D.mul_rn(D.mul_rn(D.bf16_to_f32_words(x), scale[:, None]), D.bf16_to_f32_words(w)))
 
 
-def alternatives(kind: str, x: np.ndarray, res: np.ndarray, w: np.ndarray, block: int,
+def alternatives(kind: str, x: np.ndarray, res: np.ndarray, w: np.ndarray, eps: float, block: int,
                  model: dict[str, np.ndarray]) -> dict[str, int]:
     """Word mismatches to the three nearby models the planted rows are required to refute."""
     n = x.shape[1]
@@ -181,18 +181,18 @@ def alternatives(kind: str, x: np.ndarray, res: np.ndarray, w: np.ndarray, block
     # The batch-invariant block choice.  For fused this is still the width-8 tree, a conservative nearby alternative;
     # the actual BI generic kernel differs even earlier, at each thread's scalar ownership.
     bi_block = min(n // M.VECTOR if kind == "rms_norm" else n, M.LARGE_BLOCK)
-    bi = (R.rms_norm_rows(x, w, EPS, bi_block)["out"] if kind == "rms_norm" else
-          R.fused_add_rms_norm_rows(x, res, w, EPS, bi_block)["out"])
+    bi = (R.rms_norm_rows(x, w, eps, bi_block)["out"] if kind == "rms_norm" else
+          R.fused_add_rms_norm_rows(x, res, w, eps, bi_block)["out"])
 
     xf = D.as_f32(D.bf16_to_f32_words(row)).astype(np.float64)
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        linear_scale = D.as_u32((1.0 / np.sqrt((np.sum(xf * xf, axis=1) / n + EPS).astype(np.float32))).astype(np.float32))
+        linear_scale = D.as_u32((1.0 / np.sqrt((np.sum(xf * xf, axis=1) / n + eps).astype(np.float32))).astype(np.float32))
     linear = _alt_words(row, w, linear_scale)
 
     arg = D.add_rn(D.div_rn(R.cub_sum(
         R._pure_partials(D.bf16_to_f32_words(x), block) if kind == "rms_norm" else
         R._fused_partials(D.bf16_to_f32_words(model["residual"]), block)),
-        np.full(len(x), P.bits_of(float(n)), np.uint32)), np.full(len(x), P.bits_of(EPS), np.uint32))
+        np.full(len(x), P.bits_of(float(n)), np.uint32)), np.full(len(x), P.bits_of(eps), np.uint32))
     with np.errstate(invalid="ignore", divide="ignore"):
         sqrt_scale = D.as_u32((np.float32(1.0) / np.sqrt(D.as_f32(arg))).astype(np.float32))
     sqrt_div = _alt_words(row, w, sqrt_scale)
@@ -202,19 +202,20 @@ def alternatives(kind: str, x: np.ndarray, res: np.ndarray, w: np.ndarray, block
 
 
 def one_case(work: Path, kind: str, m: int, n: int) -> dict[str, Any]:
+    eps = EPS_BY_WIDTH[n]
     x, res, w = operands(m, n, 100000 * n + 10 * m + (kind != "rms_norm"))
     block = M.launch_block(m, n, fused=kind != "rms_norm")
     trace = work / f"{kind}-m{m}-n{n}.json"
-    got, got_res = _profiled(kind, x, res, w, trace)
-    again, again_res = _plain(kind, x, res, w)
-    model = (R.rms_norm_rows(x, w, EPS, block) if kind == "rms_norm" else
-             R.fused_add_rms_norm_rows(x, res, w, EPS, block))
+    got, got_res = _profiled(kind, x, res, w, eps, trace)
+    again, again_res = _plain(kind, x, res, w, eps)
+    model = (R.rms_norm_rows(x, w, eps, block) if kind == "rms_norm" else
+             R.fused_add_rms_norm_rows(x, res, w, eps, block))
     launch = _profiler_launch(trace, "rms_norm_kernel" if kind == "rms_norm" else "fused_add_rms_norm_kernel")
     block_x = launch["block"][0] if isinstance(launch.get("block"), list) and launch["block"] else launch.get("block")
     grid_x = launch["grid"][0] if isinstance(launch.get("grid"), list) and launch["grid"] else launch.get("grid")
-    alt = alternatives(kind, x, res, w, block, model)
+    alt = alternatives(kind, x, res, w, eps, block, model)
     residual_ok = True if kind == "rms_norm" else np.array_equal(got_res, model["residual"])
-    return {"kind": kind, "M": m, "N": n, "eps": EPS, "block": block, "vector": M.VECTOR, "launch": launch,
+    return {"kind": kind, "M": m, "N": n, "eps": eps, "block": block, "vector": M.VECTOR, "launch": launch,
             "launch_ok": launch["found"] and block_x == block and grid_x == m,
             "words": int(got.size + (got_res.size if kind != "rms_norm" else 0)),
             "mismatch": int(np.count_nonzero(got != model["out"])),
