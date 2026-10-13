@@ -1,6 +1,7 @@
 # The TP8 row's CPU Build alone, in a sweep dir of its own: whether this tree derives GLM-5.3's rank Programs (the Commit needs their
-# GP-01 workload digests). Its exit code is the Build's.
-export SWEEP_DIR=/workspace/cp/sweep-build-probe
+# GP-01 workload digests). Its exit code is the Build's. No GPU is visible to it, as in a row (`gpu_lease`), so it can run beside
+# a GPU step without opening contexts on its devices.
+export SWEEP_DIR=/workspace/cp/sweep-build-probe CUDA_VISIBLE_DEVICES=
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 rm -rf "${SWEEP_DIR:?}/$ROW"
 stamp build-probe | tee "$O/build-probe.log"

@@ -14,6 +14,9 @@ CK=/workspace/fs/glm53/$REV
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
 WL=workloads/$ROW.json
 CMAP=manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json
+# The Build's derives give vLLM the repo id, which resolves through the hub layout under HF_HOME (r20261012-235952-d8c3).
+HS=$HF_HOME/hub/models--${REPO//\//--}/snapshots
+[ -e "$HS/$REV" ] || { mkdir -p "$HS" && ln -sfn "$CK" "$HS/$REV"; }
 mkdir -p /workspace/tmp "$SWEEP_DIR"
 export TMPDIR=/workspace/tmp
 # The bootstrap's torchcodec 0.17.0 is a CUDA 13 build (libnvrtc.so.13) beside torch cu129: `import vllm.multimodal` and cuteDSL's
