@@ -92,11 +92,13 @@ def main() -> int:
     out["tensor_receipts_ms"] = min(tensor[1:])
     out["tensor_receipts_tau"] = out["tensor_receipts_ms"] / read_ms
     out["tensor_receipts_equal"] = bool(torch.equal(ys, ys16))
+    out["device_signs_equal"] = all(store.signs_match(rb.seed(b"\4" * 32, i, bytes(64))) for i in range(8))
     del ys, ys16, pk
     torch.cuda.empty_cache()
     print(json.dumps({"plain_ms": out["plain_ms"], "plain_tau": out["plain_tau"],
                       "tensor_receipts_ms": out["tensor_receipts_ms"], "tensor_receipts_tau": out["tensor_receipts_tau"],
-                      "tensor_receipts_equal": out["tensor_receipts_equal"]}), flush=True)
+                      "tensor_receipts_equal": out["tensor_receipts_equal"],
+                      "device_signs_equal": out["device_signs_equal"]}), flush=True)
 
     out["pipelined"] = []
     for c in [int(x) for x in a.chunks.split(",")]:

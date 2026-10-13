@@ -192,6 +192,41 @@ __device__ __forceinline__ void sk16_prologue(u32 *sg, const u32 *__restrict__ p
   __syncthreads();
 }
 
+// A pass's signs from its key on the device, packed as pack16_kernel packs them: row c of S is the first 512 bytes of
+// the key's counter-mode stream at index ("row", c) (`verity.ml.randomness`'s Key.stream: block k is
+// SHA512(head ‖ u64be k), head = stream tag ‖ key ‖ frames(("row", c)), whose last byte is c for c < 256), bit u of
+// the row (byte u / 8, LSB first) 1 where S[c][u] = −1. head is row 0's (at most 103 bytes, so a block is one
+// compression). A thread a (row, block) of the stream, then the 2048 words from shared memory.
+struct StreamHead {
+  uint8_t b[104];
+  int n;
+};
+
+__global__ void __launch_bounds__(128) signs16_kernel(const StreamHead h, u32 *__restrict__ pk) {
+  __shared__ uint8_t bits[SK_ROWS][BLOCK / 8];
+  {
+    const int c = threadIdx.x >> 3, k = threadIdx.x & 7;
+    uint8_t m[256];
+    for (int i = 0; i < 256; ++i) m[i] = i < h.n ? h.b[i] : 0;
+    m[h.n - 1] = (uint8_t)c;
+    m[h.n + 7] = (uint8_t)k;
+    u64 st[8];
+    sha512_bytes(m, h.n + 8, st, &bits[c][64 * k]);
+  }
+  __syncthreads();
+  for (int q = threadIdx.x; q < SK16_PACK; q += blockDim.x) {
+    const int p = q >> 5, g = (q & 31) >> 2, t = q & 3;
+    u32 w = 0;
+#pragma unroll
+    for (int r = 0; r < 8; ++r) {
+      const int nt = r >> 2, s = (r >> 1) & 1, b = r & 1, u = 64 * p + 16 * t + 8 * s + 4 * b;
+#pragma unroll
+      for (int i = 0; i < 4; ++i) w |= (u32)((bits[8 * nt + g][(u + i) >> 3] >> ((u + i) & 7)) & 1) << (8 * i + r);
+    }
+    pk[q] = w;
+  }
+}
+
 __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_receipts_kernel(const uint4 *__restrict__ data, u64 j0,
                                                                                u64 n, const u32 *__restrict__ pk,
                                                                                u64 *__restrict__ ys) {
@@ -346,6 +381,16 @@ int rs_pack16(const void *signs, uint32_t *pk, cudaStream_t s) {
   return cudaGetLastError() ? 4 : 0;
 }
 
+// The packed signs of a pass from its stream head (`signs16_kernel`): SK16_PACK words into pk.
+int rs_signs16(const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) {
+  StreamHead h{};
+  if (!head || !pk || head_len < 1 || head_len > (int)sizeof h.b || head_len + 8 + 17 > 128) return 1;
+  memcpy(h.b, head, head_len);
+  h.n = head_len;
+  signs16_kernel<<<1, 128, 0, s>>>(h, pk);
+  return cudaGetLastError() ? 4 : 0;
+}
+
 int rs_sketch16_receipts(const void *data, uint64_t j0, uint64_t n, const uint32_t *pk, uint64_t *ys, int ctas,
                          cudaStream_t s) {
   return sketch16_receipts(data, j0, n, pk, ys, ctas, s);
@@ -369,12 +414,12 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
 // One pass over n blocks at data: its receipts by one persistent grid of ctas CTAs on sa (`sketch16_pass_kernel`, tensor
 // cores; 0: one an SM, so a leaves CTA fits beside each), and on sb, chunk by chunk (`chunk` blocks) as the grid counts
 // each chunk's tiles done, the chunk's leaves and subtree (CUDA cores): the hashing runs under the later chunks' reads,
-// with no kernel boundary between them. sk is scratch of SK16_PACK + 1 + n / chunk words (the packed signs, the next
-// tile, each chunk's tiles done); ys holds all n receipts (8 words each); two slots of dig (8 words a leaf) and up (8
+// with no kernel boundary between them. pk is the pass's packed signs (`rs_signs16`); ctr is scratch of 1 + n / chunk
+// words (the next tile, each chunk's tiles done); ys holds all n receipts (8 words each); two slots of dig (8 words a leaf) and up (8
 // words for each of chunk/16 nodes) alternate between chunks. Levels h0 … H of the tree go to kept (level h0 first,
 // `kept_at`), the root last; levels below h0 are not kept. sa waits for the whole pass before anything queued on it
 // after.
-int rs_pass(const void *data, uint64_t n, const void *signs, int *sk, uint64_t *ys, uint64_t *dig, uint64_t *up,
+int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uint64_t *ys, uint64_t *dig, uint64_t *up,
             uint64_t *kept, int h0, uint64_t chunk, int ctas, cudaStream_t sa, cudaStream_t sb) {
   static cudaEvent_t go, end;
   static bool made = false;
@@ -383,7 +428,7 @@ int rs_pass(const void *data, uint64_t n, const void *signs, int *sk, uint64_t *
       return 4;
     made = true;
   }
-  if (!data || !signs || !sk || !ys || !dig || !up || !kept || n % PER_LEAF || chunk % 32 || chunk % PER_LEAF || !chunk ||
+  if (!data || !pk || !ctr || !ys || !dig || !up || !kept || n % PER_LEAF || chunk % 32 || chunk % PER_LEAF || !chunk ||
       n % chunk || ctas < 0)
     return 1;
   const uint64_t nl = n / PER_LEAF, lc = chunk / PER_LEAF, chunks = n / chunk;
@@ -393,10 +438,7 @@ int rs_pass(const void *data, uint64_t n, const void *signs, int *sk, uint64_t *
     int dev;
     if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
   }
-  uint32_t *pk = (uint32_t *)sk;
-  unsigned *ctr = (unsigned *)sk + SK16_PACK;
-  int rc = rs_pack16(signs, pk, sa);
-  if (rc) return rc;
+  int rc;
   if (cudaMemsetAsync(ctr, 0, 4 * (1 + chunks), sa) || cudaEventRecord(go, sa) || cudaStreamWaitEvent(sb, go, 0))
     return 4;
   sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, pk, ys, ctr, (unsigned)(chunk / 32));
@@ -430,17 +472,15 @@ int rs_pass(const void *data, uint64_t n, const void *signs, int *sk, uint64_t *
 // What the openings of a pass need below its kept levels, recomputed from the store under the pass constants set: for
 // each first leaf c[q] (a multiple of 2^h0, c on the device), the subtree's 16 · 2^h0 receipts into
 // ys + q · 16 · 2^h0 · 8 and its levels 0 … h0 − 1 into nodes + q · (2^(h0+1) − 2) · 8, level 0 first, in one launch for
-// the receipts, one for the leaves and one a level. sk is scratch for the packed signs (SK16_PACK words). Every leaf
-// of the pass must be whole (positions a multiple of 16).
-int rs_subtrees(const void *data, const void *signs, const uint64_t *c, uint64_t count, int h0, int *sk, uint64_t *ys,
+// the receipts, one for the leaves and one a level; pk is the pass's packed signs. Every leaf of the pass must be whole
+// (positions a multiple of 16).
+int rs_subtrees(const void *data, const uint32_t *pk, const uint64_t *c, uint64_t count, int h0, uint64_t *ys,
                 uint64_t *nodes, cudaStream_t s) {
-  if (!data || !signs || !c || !sk || !ys || !nodes || h0 < 1 || h0 > 20 || h0 + 1 > NODE_LEVELS) return 1;
+  if (!data || !pk || !c || !ys || !nodes || h0 < 1 || h0 > 20 || h0 + 1 > NODE_LEVELS) return 1;
   if (!count) return 0;
-  int rc = rs_pack16(signs, (uint32_t *)sk, s);
-  if (rc) return rc;
   const uint64_t tiles = count << (h0 + PER_LEAF_LOG2 - 5);
   subtree_receipts_kernel<<<grid(tiles, SK16_WARPS) , 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, c, h0,
-                                                                               (const u32 *)sk, ys, tiles);
+                                                                               pk, ys, tiles);
   subtree_leaves_kernel<<<grid(count << h0, 128), 128, 0, s>>>(ys, c, h0, count << h0, nodes);
   for (int h = 0; h + 1 < h0; ++h)
     subtree_level_kernel<<<grid(count << (h0 - h - 1), 128), 128, 0, s>>>(nodes, c, h0, h, count << (h0 - h - 1));

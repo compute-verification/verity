@@ -88,8 +88,10 @@ def connect(host: str, port: int, attempts: int = 600) -> Conn:
     """Connect, retrying while the verifier is not yet listening (each retry waits on the refused connect itself)."""
     for k in range(attempts):
         try:
-            return Conn(socket.create_connection((host, port)))
-        except ConnectionRefusedError:
+            sock = socket.create_connection((host, port), timeout=10)
+            sock.settimeout(None)
+            return Conn(sock)
+        except (ConnectionRefusedError, TimeoutError):
             if k + 1 == attempts:
                 raise
             threading.Event().wait(0.1)

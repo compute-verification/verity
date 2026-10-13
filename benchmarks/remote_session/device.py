@@ -7,7 +7,8 @@ payload    N blocks of seeded random bytes, each 128-byte word's top byte below 
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) at the registration's key
 pass       sketch-sha512 receipts of every block by one persistent grid on tensor cores, the leaves under
            salt_c = SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be c) (`rb_leaves`) and the tree chunk by chunk on a
-           second stream, so the hashing runs under the later chunks' reads (`rs_pass`); a pass keeps its signs and its
+           second stream, so the hashing runs under the later chunks' reads (`rs_pass`), its signs derived on the device
+           (`rs_signs16`); a pass keeps its packed signs (8 KiB) and its
            tree's levels from h0 up (2 · N / 16 / 2^h0 nodes), nothing per block
 opening    a window's draws at once, on a stream of their own: each drawn leaf's subtree of 2^h0 leaves recomputed
            from the store under its pass's constants by a second copy of the library (`rs_subtrees`), then its
@@ -43,6 +44,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 from verity.core.protocols.remote_bandwidth import audit, coins, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix  # noqa: E402
+from verity.ml import randomness  # noqa: E402
 
 import sketch_receipt as skr  # noqa: E402
 from prover import PAYLOAD_LABEL  # noqa: E402
@@ -55,6 +57,12 @@ PACK16_WORDS = BLOCK // 64 * 32  # session.cu's SK16_PACK
 
 def store_salt(key: bytes, label: bytes, c: int) -> bytes:
     return hashlib.shake_256(SALT_DOMAIN + key + label + struct.pack(">Q", c)).digest(rb.SALT_BYTES)
+
+
+def stream_head(seed: bytes) -> bytes:
+    """The head of row 0's stream of a pass's signs (`skr.sign_bits`), its last byte the row: `rs_signs16`'s input."""
+    key = randomness.derive(rb._digest(seed, "a pass seed"), skr.SIGN_DOMAIN, {"tag": skr.KIND, "k": skr.ROWS, "n": BLOCK})
+    return randomness._STREAM + key.value + randomness.frame(randomness.frame("row") + randomness.frame(0))
 
 
 def digests(words) -> list[bytes]:
@@ -83,7 +91,8 @@ class Lib:
         self.so.rs_payload_leaves.argtypes = [v, u64, u64, v, v]
         self.so.rs_gather64.argtypes = [v, u64, v, v]
         self.so.rs_pass.argtypes = [v, u64, v, v, v, v, v, v, i, u64, i, v, v]
-        self.so.rs_subtrees.argtypes = [v, v, v, u64, i, v, v, v, v]
+        self.so.rs_subtrees.argtypes = [v, v, v, u64, i, v, v, v]
+        self.so.rs_signs16.argtypes = [b, i, v, v]
         self.so.rs_pack16.argtypes = [v, v, v]
         self.so.rs_sketch16_receipts.argtypes = [v, u64, u64, v, v, i, v]
 
@@ -184,7 +193,7 @@ class DeviceStore:
             self.kept_at[h + 1] = self.kept_at[h] + (nl >> h)
         lc = self.chunk // PER_LEAF
         self.ring = None
-        self.ring = (torch.empty(PACK16_WORDS + 1 + self.blocks // self.chunk, dtype=torch.int32, device="cuda"),
+        self.ring = (torch.empty(1 + self.blocks // self.chunk, dtype=torch.int32, device="cuda"),
                      torch.empty((self.blocks, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"))
@@ -228,24 +237,36 @@ class DeviceStore:
         lib.call("rb_sketch_set", skr.prefix(seed))
 
     def run_pass(self, seed: bytes):
-        """One pass (`rs_pass`): its root, and what its openings need kept, (seed, signs, levels h0 … H)."""
+        """One pass (`rs_signs16`, `rs_pass`): its root, and what its openings need kept, (seed, its packed signs,
+        levels h0 … H)."""
         torch = self.torch
-        signs = torch.from_numpy(skr.signs(seed)).cuda()
+        head = stream_head(seed)
         self.set_pass(self.lib, seed)
+        pk = torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda")
         kept = torch.empty((self.kept_at[self.H + 1], 8), dtype=torch.int64, device="cuda")
-        sk, ys, dig, up = self.ring
+        ctr, ys, dig, up = self.ring
         a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         a.record()
         main = torch.cuda.current_stream().cuda_stream
-        rc = self.lib.so.rs_pass(self.data.data_ptr(), self.blocks, signs.data_ptr(), sk.data_ptr(), ys.data_ptr(),
-                                 dig.data_ptr(), up.data_ptr(), kept.data_ptr(), self.h0, self.chunk, self.sketch_ctas,
-                                 main, self.side.cuda_stream)
+        rc = self.lib.so.rs_signs16(head, len(head), pk.data_ptr(), main) or self.lib.so.rs_pass(
+            self.data.data_ptr(), self.blocks, pk.data_ptr(), ctr.data_ptr(), ys.data_ptr(), dig.data_ptr(),
+            up.data_ptr(), kept.data_ptr(), self.h0, self.chunk, self.sketch_ctas, main, self.side.cuda_stream)
         if rc:
             raise RuntimeError(f"rs_pass: {rc}")
         b.record()
         root = digests(kept[-1:].cpu())[0]
         self.pass_gpu_ms.append(a.elapsed_time(b))
-        return root, (seed, signs, kept)
+        return root, (seed, pk, kept)
+
+    def signs_match(self, seed: bytes) -> bool:
+        """The device's packed signs of a pass (`rs_signs16`) against the reference's (`skr.signs`, packed)."""
+        torch = self.torch
+        head = stream_head(seed)
+        got, want = (torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda") for _ in range(2))
+        self.lib.call("rs_signs16", head, len(head), got.data_ptr())
+        signs = torch.from_numpy(skr.signs(seed)).cuda()
+        self.lib.call("rs_pack16", signs.data_ptr(), want.data_ptr())
+        return bool(torch.equal(got, want))
 
     def plain_root(self, seed: bytes) -> bytes:
         """The same pass the plain way, every receipt then every leaf then the tree, for the pipelined pass's check."""
@@ -290,16 +311,14 @@ class DeviceStore:
         total = sum(len(f) for f in firsts)
         ys = torch.empty((max(total, 1) * S, 8), dtype=torch.int64, device="cuda")
         nodes = torch.empty((max(total, 1) * per, 8), dtype=torch.int64, device="cuda")
-        sk = torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda")
         stream = torch.cuda.current_stream().cuda_stream
         q0, rows, flat = 0, [], []
         t0 = time.perf_counter_ns()
         cs = torch.from_numpy(np.concatenate(firsts) if firsts else np.zeros(0, dtype=np.int64)).cuda()
-        for ((seed, signs, kept), positions), first in zip(items, firsts):
+        for ((seed, pk, kept), positions), first in zip(items, firsts):
             self.set_pass(lib, seed)
-            rc = lib.so.rs_subtrees(self.data.data_ptr(), signs.data_ptr(), cs.data_ptr() + 8 * q0, len(first), h0,
-                                    sk.data_ptr(), ys.data_ptr() + 64 * S * q0, nodes.data_ptr() + 64 * per * q0,
-                                    stream)
+            rc = lib.so.rs_subtrees(self.data.data_ptr(), pk.data_ptr(), cs.data_ptr() + 8 * q0, len(first), h0,
+                                    ys.data_ptr() + 64 * S * q0, nodes.data_ptr() + 64 * per * q0, stream)
             if rc:
                 raise RuntimeError(f"rs_subtrees: {rc}")
             p = np.asarray(positions, dtype=np.int64)
@@ -433,9 +452,12 @@ class Device:
             seed = rb.seed(challenge, 0, bytes(64))
             self.gates["plain_root"] = s.plain_root(seed) == s.run_pass(seed)[0]
             s.pass_gpu_ms.pop()
+            self.gates["device_signs"] = all(s.signs_match(rb.seed(challenge, i, bytes(64))) for i in range(4))
         torch.cuda.synchronize()
         if not self.gates["plain_root"]:
             raise RuntimeError("the pipelined pass's root is not the plain pass's")
+        if not self.gates["device_signs"]:
+            raise RuntimeError("the device's signs are not the reference's")
         # A window's openings once, over the calibration's passes, before any session: the opener's stream reaches
         # its allocations here and not in a session, where growing them stalls the passes.
         draws = [(int(self.rng.integers(len(kept))), int(self.rng.integers(s.blocks))) for _ in range(self.warm_openings)]
