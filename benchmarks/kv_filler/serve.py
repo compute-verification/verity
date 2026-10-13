@@ -308,8 +308,8 @@ def main() -> int:
     ap.add_argument("--stack", choices=("pstack", "stack"), default=None,
                     help="serve on the encoded stack (stack) or its plain form (pstack): stack_hook.py")
     ap.add_argument("--stack-k", type=int, default=3, help="--stack stack: the codec's rounds")
-    ap.add_argument("--kv-receipts", choices=("on", "off"), default="on",
-                    help="--stack stack: form, compact and commit paged-KV receipts (off keeps weight receipts)")
+    ap.add_argument("--kv-receipts", choices=("on", "off"), default="off",
+                    help="--stack stack: form, compact and commit paged-KV receipts (default off; weight receipts remain)")
     ap.add_argument("--cuda-profile", action="store_true",
                     help="bracket the one policy/mode trace with cudaProfilerStart/Stop for nsys capture-range")
     ap.add_argument("--max-seqs", type=int, default=max(CAPTURE),
