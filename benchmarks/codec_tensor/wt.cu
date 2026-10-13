@@ -2179,6 +2179,13 @@ __host__ __device__ constexpr int sk_bufs() {
 // A WT_RECEIPT build's sketch warps (receipt_warp) keep batches of SK_GB groups of SK_G tasks, a row of sk_rs(k_s)
 // ints a block, in place of the sketch buffers.
 constexpr int SK_G = 4, SK_GB = 32 / (2 * SK_G);
+
+// receipt_warp's tasks a group, and so a WT_RECEIPT launch's fewest stages: at 128 rows (NB8 = 16) 2, since 4 stages
+// beside 128 rows of x are past sm120's shared memory.
+template <int NB8>
+__host__ __device__ constexpr int receipt_tasks() {
+  return NB8 > 8 ? 2 : SK_G;
+}
 __host__ __device__ constexpr int sk_rs(int ks) { return ks + 4; }
 template <int SKK, int SKW>
 __host__ __device__ constexpr int sk_buf_ints() {
@@ -2586,25 +2593,28 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
 // (sketch_receipt.sign_planes, word 2 s + r / 2 for k-step 2 p + s), and m-tile mt's register r is the plane ANDed
 // with 0x01010101 << ρ, ρ = 2 mt + r % 2: the accumulator holds 2^ρ Σ bit e (−2^7 at ρ = 7), a fifth MMA of ones
 // holds T = Σ e, and σ = T − 2 (acc >> ρ) (T + 2 (acc >> 7) at ρ = 7); a group is 640 MMAs. The warp waits on `ready`
-// for the group's tasks and arrives on `sketched` for each once it has read them, so a launch has stages >= SK_G. It
+// for the group's tasks and arrives on `sketched` for each once it has read them, so a launch has stages >= GT, the
+// tasks a group: SK_G, or 2 (receipt_tasks: 128 rows of x leave room for 3 stages), whose groups leave blocks 4 .. 7
+// of the MMAs' columns zero and their lanes out of the hash. It
 // keeps each group's 8 sketches in its batch buffer (rows of sk_rs(KS) words, so the C fragments' stores and the
 // hash's uint4 loads hit distinct banks) and after SK_GB groups, or its last, hashes them a lane a block: 8 + 4 KS
 // bytes after the prefix's midstate, one compression at KS = 16, three at 64. Only the segment's tasks have blocks, so
 // no receipt is of padding, and neither the launch's groups nor its grid moves any block.
-template <int SKW, int KS>
+template <int SKW, int KS, int GT = SK_G>
 __device__ __forceinline__ void receipt_warp(const uint8_t *smem, u64 *ready, u64 *sketched, int stages, int q,
                                              int lane, const Sketch &k) {
   constexpr int NB = 2 * SK_G, HB = SB / 2, RS = sk_rs(KS), LEN = 8 + 4 * KS, NMB = (LEN + 17 + 127) / 128;
   constexpr u32 ONES = 0x01010101u;
-  static_assert(HB == 4096 && (KS == 16 || KS == 64) && SKW * SK_GB * NB * RS <= sk_buf_ints<KS, SKW>(),
-                "a task is two blocks; the warps' batches fit the sketch buffers");
+  static_assert(HB == 4096 && (KS == 16 || KS == 64) && SKW * SK_GB * NB * RS <= sk_buf_ints<KS, SKW>() && 1 <= GT &&
+                    GT <= SK_G,
+                "a task is two blocks; the warps' batches fit the sketch buffers; a group fills at most the columns");
   const int g = lane >> 2, t = lane & 3;
   int *buf = k.buf + q * SK_GB * NB * RS;
   const uint4 *fg = reinterpret_cast<const uint4 *>(k.signs) + lane;
-  const int ng = (k.ntasks + SK_G - 1) / SK_G;
+  const int ng = (k.ntasks + GT - 1) / GT;
   int nb = 0, a0 = q;   // the batch's groups so far, and its first
   for (int a = q; a < ng; a += SKW) {
-    const int i0 = SK_G * a, ni = min(SK_G, k.ntasks - i0);
+    const int i0 = GT * a, ni = min(GT, k.ntasks - i0);
     for (int x = 0; x < ni; ++x) mbar_wait(ready + (i0 + x) % stages, ((i0 + x) / stages) & 1);
     const bool have = (g >> 1) < ni;
     const uint8_t *bp = smem + (size_t)((i0 + (g >> 1)) % stages) * SB + HB * (g & 1) + 16 * t;
@@ -2659,8 +2669,8 @@ __device__ __forceinline__ void receipt_warp(const uint8_t *smem, u64 *ready, u6
     }
     if (++nb < SK_GB && a + SKW < ng) continue;
     __syncwarp();
-    const int n = lane % NB, i = SK_G * (a0 + SKW * (lane / NB)) + n / 2;
-    const bool on = lane / NB < nb && i < k.ntasks;
+    const int n = lane % NB, i = GT * (a0 + SKW * (lane / NB)) + n / 2;
+    const bool on = lane / NB < nb && n / 2 < GT && i < k.ntasks;
     const u32 act = __ballot_sync(FULL, on);
     if (on) {
       const u64 v = 2 * (k.q0 + (u64)i * k.gq) + (n & 1), j = k.jbase + v;
@@ -3051,7 +3061,7 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
     if (warp < decoders + 1 + MW + SKW) {
       const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, tile0, skt, tiles, ntasks, q0, gq};
 #if WT_RECEIPT
-      receipt_warp<SKW, SKK>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
+      receipt_warp<SKW, SKK, receipt_tasks<NB8>()>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
 #else
       sketch_warp<SKK, SKW, SignB>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
 #endif
@@ -3175,7 +3185,8 @@ static int fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M,
                    stages >= (SK_BUFS - 1) * skt || (w && (!signs || !(tags || sk_out)))))
     return 1;
   if (sketch_warps && (sketch_warps != 2 || (sketch_k != 16 && !rc64) || PAY_E != 0)) return 1;
-  if (WT_RECEIPT && sketch_k && (!sketch_warps || stages < SK_G)) return 1;   // only the sketch warps hash sketch-sha512
+  if (WT_RECEIPT && sketch_k && (!sketch_warps || stages < (nb8 > 8 ? receipt_tasks<16>() : SK_G)))
+    return 1;   // only the sketch warps hash sketch-sha512
   const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = warps * 32;
   int dev = 0, optin = 0;
   cudaGetDevice(&dev);
@@ -3423,7 +3434,8 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
 // two sketch warps do both (sketch_warp), beside `decoders` decoders, and signs holds the words' B fragments
 // (wt_sign_frags), 4 u32 a word. The warps a launch may take are fused_warps'. A WT_RECEIPT build's sketch warps
 // receipt the store's blocks instead (receipt_warp: block v at tag_base + v, 2 a task, whatever the groups, grid and
-// skt) at k_s = sketch_k, 16 or 64 at any k, signs is wt_sign_frags' layout of the pass's bits, and stages >= SK_G.
+// skt) at k_s = sketch_k, 16 or 64 at any k, signs is wt_sign_frags' layout of the pass's bits, and stages >= SK_G
+// (2 at M > 64: receipt_tasks).
 int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
                     int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
                     int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,

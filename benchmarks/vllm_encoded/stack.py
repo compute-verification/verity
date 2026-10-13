@@ -53,11 +53,11 @@ import paged as P  # noqa: E402
 SR = BW.SR
 T = 8                                   # tasks a sketch vector
 PLAIN_CFGS = ((4, 4), (8, 8))           # wt_gemm's (consumers, stages): step.py's PLAIN_CFGS
-MAX_ROWS = 128                          # a decode's rows on the fused kernel, in launches of at most PLAIN_ROWS
-# wt_gemm's most a launch (pstack, the gates' reference), and the fused kernel's: store-order/v0's receipt warps hold
-# SK_G = 4 stages, and 4 stages beside 128 rows of x are ~103.6 KB of shared memory, past sm120's 99 KB
-PLAIN_ROWS = 64
+MAX_ROWS = 128                          # a decode's rows on the fused kernel (wt_fused_sketch's most a launch)
+PLAIN_ROWS = 64                         # wt_gemm's most a launch (pstack, the gates' reference)
 CAPTURE = [1, 4, 8, 16, 32, 48, 64, 96, 128]
+# past 64 rows: 128 rows of x leave 3 stages, and the receipt warps take groups of 2 tasks there (wt.cu receipt_tasks)
+WIDE_CFGS = [(d, s, -2, 16) for d in (5, 4, 3) for s in (3, 2)]
 ROOT0 = hashlib.sha512(b"verity/vllm-encoded/stack/registration").digest()   # root_(−1)
 GATE_RECEIPTS = 64                      # receipts of a linear checked against sketch_receipt
 GATE_TREE = (1, 32, 128)                # batches whose whole step tree is checked against the driver's
@@ -110,7 +110,7 @@ class Stack:
         self.root = BW.to_dev(torch, BW.root_words(ROOT0)).view(torch.int64)
         self.reader = BW.READER = RD.Reader(args.reader_lib, torch)
         self.j, self.plan_n, self.at, self.pass_m, self.open = 0, None, 0, None, False
-        self.rows = PLAIN_ROWS   # a launch's most rows
+        self.rows = MAX_ROWS if encoded else PLAIN_ROWS   # a launch's most rows
         self.fused = [m for m in CAPTURE if m <= self.rows]   # the launch sizes whose configs are selected and gated
         self.xr = torch.zeros(1, dtype=torch.int64, device="cuda")
         self.plib = P.PagedLib(f"p{wt.n}", args.paged_lib)
@@ -132,9 +132,6 @@ class Stack:
         self.tags = torch.zeros(top * self.wt.tag_bytes // 8, dtype=torch.int64, device="cuda")   # not uint8, which the plaintext scan counts
         self.dig = torch.zeros((width, 8), dtype=torch.int64, device="cuda")
         self.up = torch.zeros((max(width - 1, 1), 8), dtype=torch.int64, device="cuda")
-        spare = max(p[3] for lin in self.linears for ps in lin.plan.values() for _, p in ps[1:]) if any(
-            len(ps) > 1 for lin in self.linears for ps in lin.plan.values()) else 1
-        self.spare = torch.zeros(spare * self.wt.tag_bytes // 8, dtype=torch.int64, device="cuda")
 
     def begin_pass(self, m: int) -> None:
         """Pass j at batch m: the tree's constants for its m's receipts (when m changed), then wt_pass from root_(j−1)."""
@@ -232,6 +229,7 @@ class StackLinear:
         if not self.st.encoded:
             return list(PLAIN_CFGS)
         cfgs = [c for c in BW.fused_cfgs(self.st.wt, "auto", "16", T) if c[2] == -2]
+        cfgs += [c for c in WIDE_CFGS if m > PLAIN_ROWS and c not in cfgs]
         return [c for c in cfgs if self.dry(m, c)[0] == 0]
 
     def probe(self, m: int, cfg) -> int:
@@ -268,12 +266,11 @@ class StackLinear:
         if rc:
             raise RuntimeError(f"{self.name} m={m}: {'the fused kernel' if st.encoded else 'wt_gemm'} error {rc}")
 
-    def sums(self, x8: torch.Tensor, plan: tuple, at: int | None = None, tags: torch.Tensor | None = None) -> torch.Tensor:
+    def sums(self, x8: torch.Tensor, plan: tuple, at: int | None = None) -> torch.Tensor:
         """The sums; at None (the gates, before the step's buffers), the receipts into a buffer of their own."""
         part = torch.empty((self.nch, x8.shape[0], self.n), dtype=torch.float32, device="cuda")
-        if at is None:
-            at, tags = 0, self.own_tags(plan)
-        self.launch(x8, part, plan, at, tags)
+        own = self.own_tags(plan) if at is None else None
+        self.launch(x8, part, plan, at or 0, own)
         return part
 
     def own_tags(self, plan: tuple) -> torch.Tensor | None:
@@ -282,9 +279,7 @@ class StackLinear:
         return torch.empty(max(plan[3], 1) * self.st.wt.tag_bytes // 8, dtype=torch.int64, device="cuda")
 
     def receipts(self, m: int) -> int:
-        """The step's receipts of the linear at m: its first launch's. A later launch (m > PLAIN_ROWS) reads the same
-        blocks, which a pass's plan credits once, so its receipts go to the stack's spare buffer."""
-        return self.plan[m][0][1][3]
+        return sum(p[3] for _, p in self.plan[m])
 
     def reduce(self, part: torch.Tensor, xs: torch.Tensor, out: torch.Tensor | None = None) -> torch.Tensor:
         m = part.shape[1]
@@ -327,10 +322,9 @@ class StackLinear:
         x8 = x8.contiguous()
         y = torch.empty((m, self.n), dtype=torch.bfloat16, device="cuda")
         r0 = 0
-        for i, (r, plan) in enumerate(self.plan[m]):
-            part = self.sums(x8[r0:r0 + r], plan, st.at) if i == 0 else self.sums(x8[r0:r0 + r], plan, 0, st.spare)
-            self.reduce(part, xs if xs.numel() == 1 else xs[r0:r0 + r], y[r0:r0 + r])
-            st.at += plan[3] if i == 0 else 0
+        for r, plan in self.plan[m]:
+            self.reduce(self.sums(x8[r0:r0 + r], plan, st.at), xs if xs.numel() == 1 else xs[r0:r0 + r], y[r0:r0 + r])
+            st.at += plan[3]
             r0 += r
         return y
 
@@ -368,14 +362,11 @@ class LmHead:
         y = self.out[:m]
         at = lin.at[st.pass_m] if commit else 0
         r0 = 0
-        for i, (r, plan) in enumerate(lin.plan[m]):
+        for r, plan in lin.plan[m]:
             part = self.part[: lin.nch * r * self.v].view(lin.nch, r, self.v)
-            if commit and i == 0:
-                lin.launch(x[r0:r0 + r], part, plan, at, None)
-                at += plan[3]
-            else:
-                lin.launch(x[r0:r0 + r], part, plan, 0, st.spare if commit else lin.own_tags(plan))
+            lin.launch(x[r0:r0 + r], part, plan, at, None if commit else lin.own_tags(plan))
             lin.reduce(part, self.ones, y[r0:r0 + r])
+            at += plan[3] if commit else 0
             r0 += r
         if commit:
             st.at = at
@@ -951,7 +942,7 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
                           "lm_head": lm.scratch_bytes,
                           "attention_partials": att.part.numel() * 4,
                           "kv_stage": att.stage_bytes,
-                          "receipts": (st.tags.numel() + st.spare.numel()) * 8 + 64 * (st.dig.shape[0] + st.up.shape[0])},
+                          "receipts": st.tags.numel() * 8 + 64 * (st.dig.shape[0] + st.up.shape[0])},
         "plaintext_scan": scan, "gates": gates, "selection": selection, "passes_hooked": passes, "components_ms": parts,
         "fp8_kernel": type(layers[0][1].quant_method.fp8_linear).__name__,
         "activation_quant": str(layers[0][1].quant_method.activation_quant_key),
