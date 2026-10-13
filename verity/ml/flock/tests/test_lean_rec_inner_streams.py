@@ -630,13 +630,23 @@ def _moved(stream: str, j: int, k: int):
 ], ids=["not-holo", "rep-round", "sparse-round"])
 def test_each_streams_c_k_sit_at_its_schedules_message_rounds(tmp_path, change, why):
     """`RecVStar.checkCommitRounds`, the last of `checkCovers`: the verifier holds each rep's `c_k` at the message rounds of
-    `rec_live.rep_rounds` at its own inner shape (`holo_rounds` when its circuits are private, as 2d61's are), and each sparse
-    stream's at `sparse_rounds` of its RecSparse shape. 2d61's session under a shape whose circuits are public, and its
-    transcript with one rep's or one sparse stream's `c_k` moved to a round that commits none (which the reps' coins and
-    the streams' counts do not see), are refused by the round."""
+    `rec_live.rep_rounds` at its own inner shape (`holo_rounds` when its circuits are private, as 2d61's are), each
+    sparse stream's at `sparse_rounds` of its RecSparse shape, and R's at `stacked_rounds`. 2d61's session under a shape
+    whose circuits are public, and its transcript with one rep's or one sparse stream's `c_k` moved to a round that
+    commits none (which the reps' coins and the streams' counts do not see), are refused by the round."""
     shape = _shape(tmp_path, holo=change is not None)
     transcript = None if change is None else _changed(tmp_path, change)
     assert _covers(tmp_path, shape, transcript) == (1, f"rec inner transcript: {why}")
+
+
+def test_rs_c_k_off_its_schedule_is_refused(tmp_path):
+    """R's stream with its second `c_k` moved to round 2, which commits none, is refused under the honest inner shape:
+    `checkStackedShape` holds R's transcript rounds to `stackedRounds` of META's shape before `checkCommitRounds`
+    holds the `c_k` and tops the verifier keeps of them to the same rounds (its refusals, unreachable past the first,
+    are the Lean guards in `Test/InnerStreams.lean`)."""
+    assert _covers(tmp_path, _shape(tmp_path), _changed(tmp_path, _moved("stacked/rep0", 1, 2))) == (
+        1, SHAPE.format(**R_SHAPE) + "round 1 is (coins 7, tops [], level0 0, commits false), not (coins 7, tops [], "
+        "level0 0, commits true)")
 
 
 def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_path):

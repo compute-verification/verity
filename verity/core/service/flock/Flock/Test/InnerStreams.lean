@@ -175,14 +175,17 @@ def openSt : VStar.Stmt := .opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("c
   "rec-sparse/n18-e13-s6-t0: a RecSparse unit, and the verifier's inner shape names no sparse phase (rec-inner --sparse)"
 #guard isVStar "rec-open-stacked/l16-h1" && isVStar "rec-sparse/n18-e13-s6-t0" && isVStar "rec-opening/m23-c2-p0"
 
--- the inner shape covers the transcript: candidate 3's streams need the shapes, and R's is META's; each rep's and sparse
--- stream's c_k sit at its schedule's message rounds
+-- the inner shape covers the transcript: candidate 3's streams need the shapes, and R's is META's; each stream's c_k
+-- sit at its schedule's message rounds, and R's tops at its schedule's
 def atRounds (ks : List Nat) (base : Nat) : Array (Nat × ByteArray) := ks.toArray.zipIdx.map fun (k, i) => (k, b (base + i))
 def sparseAt (x : Nat) (ks : List Nat := commitRounds (sparsePhaseRounds sp18)) : InnerStream :=
   { name := s!"sparse/rep{x}", commits := atRounds ks (50 * x), tops := #[] }
+def rRounds : Array SchedRound := (stackedRounds r23).getD #[]
+def stackedAt (ks : List Nat := commitRounds rRounds) (ns : List Nat := topCounts rRounds) : InnerStream :=
+  { name := "stacked/rep0", commits := atRounds ks 200, tops := ns.toArray.map fun n => Array.replicate n (b 9) }
 def c3cs (sh : Option StackedShape) (rs : Option (Array SchedRound) := repRounds 25 22 8) : InnerCommits :=
   { reps := #[0, 1].map fun x => atRounds ((rs.map commitRounds).getD []) (100 + 50 * x),
-    streams := #[sparseAt 0, sparseAt 1] ++ ic.streams, stacked := sh }
+    streams := #[sparseAt 0, sparseAt 1, stackedAt], stacked := sh }
 
 #guard why (checkCovers c3 (c3cs (some r23))) == none
 #guard why (checkCovers { c3 with sparse := none } (c3cs (some r23))) == some
@@ -208,9 +211,31 @@ def spRounds : List Nat := commitRounds (sparsePhaseRounds sp18)
   "rec inner transcript: rep 1's message round 5 is at round 8, and its schedule's at round 7 (76 message rounds, the schedule's 76)"
 #guard why (checkCovers c3 { c3cs (some r23) with reps := (c3cs (some r23)).reps.pop }) == some
   "rec inner transcript: 1 reps, not the circuit table's two"
-#guard why (checkCovers c3 { c3cs (some r23) with streams := #[sparseAt 0, sparseAt 1 (spRounds.map (· + 1))] ++ ic.streams }) ==
-  some "rec inner transcript: sparse/rep1's message round 0 is at round 2, and its schedule's at round 1 (33 message rounds, the schedule's 33)"
-#guard why (checkCovers c3 { c3cs (some r23) with streams := #[sparseAt 0 spRounds.dropLast, sparseAt 1] ++ ic.streams }) ==
-  some "rec inner transcript: sparse/rep0's message round 32 is at no round, and its schedule's at round 33 (32 message rounds, the schedule's 33)"
+def withS (xs : Array InnerStream) : InnerCommits := { c3cs (some r23) with streams := xs }
+def msgAt (s : String) (j : Nat) (got want : String) (n m : Nat) : Option String :=
+  some (s!"rec inner transcript: {s}'s message round {j} is at {got}, and its schedule's at {want} " ++
+    s!"({n} message rounds, the schedule's {m})")
+
+#guard why (checkCovers c3 (withS #[sparseAt 0, sparseAt 1 (spRounds.map (· + 1)), stackedAt])) ==
+  msgAt "sparse/rep1" 0 "round 2" "round 1" 33 33
+#guard why (checkCovers c3 (withS #[sparseAt 0 spRounds.dropLast, sparseAt 1, stackedAt])) ==
+  msgAt "sparse/rep0" 32 "no round" "round 33" 32 33
+-- R's stream at (m 23, claims 2): 25 message rounds and tops of 128, 64 and 64 nodes. Its c_k one round off or one
+-- short, its tops other than its rounds commit, and R's stream under an inner shape naming no schedule of R's are
+-- refused
+def withR (st : InnerStream) : InnerCommits := withS #[sparseAt 0, sparseAt 1, st]
+def rMsgs : List Nat := commitRounds rRounds
+def badTops (ns : List Nat) : Option String :=
+  some s!"rec inner transcript: stacked/rep0 holds tops of {ns} nodes, and its schedule commits tops of [128, 64, 64]"
+
+#guard rMsgs.length == 25 && topCounts rRounds == [128, 64, 64]
+#guard why (checkCovers c3 (withR (stackedAt (rMsgs.set 1 2)))) == msgAt "stacked/rep0" 1 "round 2" "round 1" 25 25
+#guard why (checkCovers c3 (withR (stackedAt rMsgs.dropLast))) == msgAt "stacked/rep0" 24 "no round" "round 33" 24 25
+#guard why (checkCovers c3 (withR (stackedAt (ns := [128, 64])))) == badTops [128, 64]
+#guard why (checkCovers c3 (withR (stackedAt (ns := [128, 64, 32])))) == badTops [128, 64, 32]
+#guard [{ c3 with stacked := none }, { c3 with stacked := some ⟨40, 2⟩ }].all fun i =>
+  why (checkCommitRounds i (c3cs (some r23))) == some ("rec-inner: the inner transcript holds R's stream " ++
+    "(stacked/rep0), and the verifier's inner shape names no schedule of R's")
+#guard why (checkCommitRounds { c3 with stacked := none } (withS #[sparseAt 0, sparseAt 1])) == none
 
 end Flock.Test.InnerStreams
