@@ -429,7 +429,6 @@ class LmHead:
         if commit:
             # A graph replay executes the receipt writes but not `run`'s Python update of the receipt cursor.
             st.at = self.lin.at[st.pass_m] + self.lin.receipts(m)
-            st.attention.finish_pass()
         if bias is not None:
             y = y + bias
         return y.reshape(*x.shape[:-1], self.v)
@@ -596,7 +595,13 @@ class Attention:
                               self.nl, layer, self.st.words * self.st.wt.s // SR.BLOCK)
 
     def finish_pass(self) -> None:
-        """Compact the step's selected physical slots in store order, configure its public plan, and commit all receipts."""
+        """Compact the pending step's selected slots, configure its public plan, and commit all receipts.
+
+        Runtime calls this at the next scheduler entry, after sampling has already drained the preceding model step.
+        Calling it from lm_head would make its necessary host view of the dynamic plan synchronize the model stream
+        before sampling and destroy vLLM's pipeline beside a filler.  The commit is enqueued before the next pass starts,
+        so its root still seeds that pass.
+        """
         st = self.st
         if not st.encoded or not st.open:
             return
@@ -1069,6 +1074,7 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
     st.buffers()
     gates["step"] = gate_step(st, log)
     parts = components(st, lm)
+    st.open = False
     log(f"components (ms): {parts}")
     att = Attention(st, len(model.model.layers))
     from vllm.v1.attention.backends.flash_attn import FlashAttentionImpl
@@ -1130,6 +1136,8 @@ def hook_passes(st: Stack, att: Attention, hooks, model) -> str:
     def begin(m: int) -> bool:
         if torch.cuda.is_current_stream_capturing():
             return False
+        # Finish the preceding pass at vLLM's existing host/device boundary, before its root seeds this pass.
+        att.finish_pass()
         att.join()
         if 0 < m <= MAX_ROWS:
             st.begin_pass(m)
@@ -1161,6 +1169,10 @@ def hook_passes(st: Stack, att: Attention, hooks, model) -> str:
 
 def summary(st: Stack) -> dict:
     att = st.attention
+    # There is no next scheduler entry after the final step.
+    att.finish_pass()
+    if st.encoded:
+        torch.cuda.synchronize()
     return {"passes": st.passes, "j": st.j, "kv_receipts": st.kv_receipts, "attention_calls": att.calls,
             "lm_head_graphs": sorted({key[0] for key in st.lm.graphs}),
             "kv_store_blocks": att.pool_slots * att.nl,
