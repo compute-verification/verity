@@ -263,6 +263,16 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     assert g.gamma == pytest.approx(g.timing + g.chip + g.counting + 0.002)
     assert g.horizon == g.floor == 0 and g.gamma_horizon == pytest.approx(g.gamma)
     assert set(g.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "overlap" not in audit.LEDGER_SOURCES
+    assert [w.span_ns for w in g.windows] == [w.span_ns for w in r.windows] == [1000 + A] * 3
+    assert [w.timing for w in g.windows] == pytest.approx(SCHEDULE.window_timing)
+    assert g.windows[0].timing == pytest.approx(1 - 4 * 300 / (1000 + A))
+    for w, x in zip(g.windows, r.windows):
+        whole_t = capacity * x.span_ns / 1e9
+        assert w.chip == pytest.approx(x.passes * 4096 / whole_t) and w.sample == w.horizon == w.floor == 0
+        assert w.counting == pytest.approx((64 * x.receipts + 41 * x.passes) / 8 / whole_t)
+        assert w.gamma == pytest.approx(w.timing + w.chip + w.counting + 0.002)
+    assert g.worst.gamma == max(w.gamma for w in g.windows) > g.gamma
+    assert g.to_json()["worst"]["window"] == g.worst.window == 1 and g.to_json()["windows"][1] == g.windows[1].to_json()
     with pytest.raises(ValueError, match="understated"):
         audit.ledger(r, capacity_bytes_per_s=capacity / 2, chip_bytes=0)
     with pytest.raises(ValueError, match="link term"):                 # an unbound receipt is of the block alone
@@ -291,6 +301,23 @@ def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None
     assert 0.0099 < g.floor < 0.01
     assert g.sample == pytest.approx(0.00981) and g.gamma - g.gamma_horizon == pytest.approx(g.sample - g.horizon)
     assert g.to_json()["horizon"] == {"floor": g.floor, "gamma": g.gamma_horizon, "sample": g.horizon}
+    # Every window's own, from the record: the pooled event leaves each window's μ_sample under 1%, every one at once;
+    # its γ adds λ's 64 bits a receipt, 0.195% of a 4 KiB block, so the window's γ is 1.19%.
+    assert audit.floors(synthetic((u,) * n, d, delta)) == pytest.approx((g.floor,) * n)
+    assert all(w.horizon == pytest.approx(g.floor) and w.sample == pytest.approx(g.sample) for w in g.windows)
+    w = g.worst_horizon
+    assert w.horizon < 0.01 and w.counting == pytest.approx(64 / 8 / 4096, rel=1e-3)
+    assert w.gamma_horizon == pytest.approx(w.horizon + w.counting) and 0.0119 < w.gamma_horizon < 0.012
+    assert g.to_json()["worst"]["horizon"] == {"gamma": w.gamma_horizon, "window": w.window}
+
+
+def test_the_ledger_refuses_a_window_its_capacity_cannot_have_read() -> None:
+    """Window 0 certifies 100 blocks in its second, where the capacity reads 60: understated, though the session's two
+    seconds hold its 110."""
+    r = synthetic((100, 10), 5, 1e-6)
+    with pytest.raises(ValueError, match="window 0 .* understated"):
+        audit.ledger(r, capacity_bytes_per_s=60 * 4096, chip_bytes=0)
+    assert audit.ledger(r, capacity_bytes_per_s=100 * 4096, chip_bytes=0).windows[0].timing == 0
 
 
 def test_the_horizon_puts_the_shortfall_where_it_hides_most() -> None:
@@ -715,7 +742,8 @@ def test_opening_size_matches_the_timing_model(store) -> None:
 @pytest.mark.parametrize("pass_ms, rtt_ms, window_ms", [(20, 1, 300), (20, 50, 1000), (50, 5, 1000), (37, 20, 300)])
 def test_honest_schedules_fill_their_windows_to_the_chained_steady_state(pass_ms, rtt_ms, window_ms) -> None:
     """Every window certifies at least `⌊(T − p − g)/(p + g)⌋` passes, and the span the passes leave uncovered is `g`
-    after each pass and the session's two ends, which come to at most `A + J`."""
+    after each pass and the session's two ends, which come to at most `A + J`.  A window over its own span `T + A` is
+    charged its ends too, and the rest of the pass in flight at its challenge: at most `A + J + p` more."""
     ms, gap, jitter = timing.MS, 50_000, 50_000
     kw = dict(gap_ns=gap, down_ns=rtt_ms * ms // 2, up_ns=rtt_ms * ms - rtt_ms * ms // 2, jitter_ns=jitter)
     st = timing.honest(window_ms * ms, 40, pass_ms * ms, **kw)
@@ -724,6 +752,8 @@ def test_honest_schedules_fill_their_windows_to_the_chained_steady_state(pass_ms
     mu = 1 - st.utilization
     steady = timing.chained(pass_ms * ms, gap)
     assert steady <= mu <= steady + (a + jitter) / st.span_ns
+    assert steady <= min(st.window_timing) and max(st.window_timing) <= steady + (a + jitter + pass_ms * ms) / (
+        window_ms * ms + a)
 
 
 @pytest.mark.parametrize("pass_ms, rtt_ms, jitter_ms, floor", [(20, 1, 0.05, 0.5), (20, 0.2, 0, 0), (50, 5, 0.5, 0.9),

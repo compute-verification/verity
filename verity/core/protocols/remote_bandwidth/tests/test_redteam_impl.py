@@ -19,14 +19,12 @@ def window_shortfall(w: audit.WindowRecord) -> float:
     return 1 - w.receipts * BLOCK / (CAPACITY * (w.deadline_ns - w.released_ns) / 1e9)
 
 
-@pytest.mark.xfail(strict=True, reason="RB-1: the ledger's every-window half bounds only wrong receipts; a window the "
-                                       "prover leaves idle is accepted and seen only through the session's average")
 def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:  # noqa: F811
     """The claim is the hybrid: short by under 0.15% over the horizon and by under 1% in every window.  `Ledger.floor` is
     the every-window half, but it is only the openings' bound on a window's wrong receipts.  A prover that reads one
     block a pass through window 5 (every receipt correct, every one opened) is accepted with floor 0; the window's
     certified reads are 3.3% of its capacity, and the session's γ moves by about 1/W of that, 8% at W = 12 (0.17% at
-    600 windows of 1 s).  Nothing in the ledger names window 5."""
+    600 windows of 1 s).  Fixed: the ledger reads each window over its own span, and names window 5 the worst."""
     windows, idle = 12, 5
     schedule = timing.honest(1000, windows, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
     p = params(windows=windows, samples=N * 4)
@@ -40,6 +38,7 @@ def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:  # noqa:
     assert led.floor == 0
     per_window = led.to_json().get("windows")
     assert per_window is not None and per_window[idle]["gamma"] >= short[idle]
+    assert led.worst.window == led.worst_horizon.window == led.to_json()["worst"]["window"] == idle
 
 
 @pytest.mark.xfail(strict=True, reason="RB-2: the record names the receipt kind and bind but not the codec, which "

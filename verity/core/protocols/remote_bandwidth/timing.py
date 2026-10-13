@@ -76,6 +76,15 @@ class Schedule:
         """The share of the session's span its certified passes fill at the node's capacity: `1 − μ_timing`."""
         return sum(self.passes) * self.pass_ns / self.span_ns
 
+    @property
+    def window_timing(self) -> tuple[float, ...]:
+        """Each window's μ_timing over its own span `[b_(t−1), D_t]` (`audit.WindowLedger`): the spans of consecutive
+        windows overlap by A, and a window's passes start when the pass in flight at its challenge ends, so each
+        window is charged A and up to a pass, where the session is charged them once: at most
+        `g/(p + g) + (A + J + p)/(T + A)`."""
+        starts = (0, *self.boundaries[:-1])
+        return tuple(1 - n * self.pass_ns / (d - b) for n, b, d in zip(self.passes, starts, self.deadlines))
+
 
 def honest(window_ns: int, windows: int, pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0,
            deadline_ns: int | None = None) -> Schedule:
@@ -220,16 +229,19 @@ def _grid() -> None:
           "the registration binds z")
     print()
     print(f"# μ_timing of chained sessions: g = {gap // US} µs, J = {jitter / MS} ms each way, A = RTT + 2J + pass + g; "
-          "one-way delays RTT/2; isolated is a session of one window")
-    print("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 | steady state g/(pass + g) |")
-    print("| --- | --- | --- | --- | --- | --- | --- | --- |")
+          "one-way delays RTT/2; isolated is a session of one window; worst window is the largest of a W = 100 "
+          "session's windows' own, each over [b_(t−1), D_t]")
+    print("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 | steady state g/(pass + g) "
+          "| worst window |")
+    print("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for p in (20, 50):
         for w in (0.3, 1, 10):
             for rtt in (1, 5, 20, 50):
                 kw = dict(gap_ns=gap, down_ns=_ns(rtt) // 2, up_ns=_ns(rtt) - _ns(rtt) // 2, jitter_ns=jitter)
                 runs = [honest(round(w * S), n, _ns(p), **kw) for n in (1, 10, 100)]
                 print(f"| {p} | {w} | {rtt} | {runs[0].passes[0]} | "
-                      + " | ".join(f"{1 - r.utilization:.2%}" for r in runs) + f" | {chained(_ns(p), gap):.2%} |")
+                      + " | ".join(f"{1 - r.utilization:.2%}" for r in runs) + f" | {chained(_ns(p), gap):.2%} "
+                      f"| {max(runs[2].window_timing):.2%} |")
     print()
     s = samples_for(1e-3, 2.0 ** -40)
     print(f"# openings at ε_s = 0.1%, δ = 2^-40: s = {s} from the window's coin; a Fiat–Shamir draw from the window's last "

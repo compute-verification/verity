@@ -49,6 +49,18 @@ receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on 
 \(C \cdot 2^{-95.12}\) a session for a prover of \(C\) SHA-512 compressions (`timing.sketch_failure`, §4): no more
 than \(2^{-40}\) up to \(C = 2^{55.12}\). block-sha512, kept for comparison, adds nothing. Neither adds to γ.
 
+**Each window alone.** The same terms over window \(t\)'s own span \(\Sigma_t = D_t - b_{t-1}\) (`WindowRecord.span_ns`),
+with its \(U_t\), \(P_t\) and \(m^*_t\) (or the pooled bound's \(f_t U_t\)) in place of the session's sums, give
+\(\gamma_t\): window \(t\)'s reads are at least \((1 - \gamma_t) R \Sigma_t\) (`Ledger.windows`, a `WindowLedger`
+each). Every read behind window \(t\)'s receipts falls in \(\Sigma_t\): its chain starts from \(\sigma_t\), which left
+at \(b_{t-1}\), and its roots arrived by \(D_t\). Consecutive spans overlap by \(A\), but no read serves two windows'
+receipts (§5). The every-window claim is \(\max_t \gamma_t\) (`Ledger.worst`, and `Ledger.worst_horizon` read over
+the horizon), which the ledger reports beside the session's γ. A window the prover leaves idle is its own
+\(\gamma_t\) there, where the session's γ sees about \(1/W\) of it. Read per window, the failure probability is the
+same \(W\delta\); read over the horizon, every window's \(f_t\) holds on the session's one event (§10). A window is
+charged \(A\) and the rest of the pass in flight at its challenge, where the session is charged them once, so its
+\(\mu_{\text{timing}}\) is up to about \((A + t_{\text{pass}})/(T + A)\) (§10).
+
 What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The prover
 is one undifferentiated resource of capacity \(R\) (Daniel, 12 Oct, #1884): the guarantee is over whatever reads the
 node made, with no identity assumption about which hardware made them.
@@ -479,8 +491,10 @@ opening.
 commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z\), each window's passes and receipts
 \(U_t\), and the session's span. The digest binds both already, but the record names them as well, since what its
 receipts rest on depends on them (§4), and `ledger` takes a link term only from a record that binds \(z\). Each
-`WindowRecord` carries its passes' lengths \(L_{t,i}\), its challenge's release \(b_{t-1}\), its deadline \(D_t\), its openings coin's
-release, and an `IntegrityProfile`. `Record.end_ns` is the last deadline, which the next session over the store waits
+`WindowRecord` carries its passes' lengths \(L_{t,i}\), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so
+its span \(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`. That is every input of
+\(\gamma_t\) but the node's measured \(R\) and \(S_{\text{chip}}\) and the models, so the every-window claim is
+checkable from the record (§1). `Record.end_ns` is the last deadline, which the next session over the store waits
 out.
 
 **How `IntegrityProfile` fits.** It fits the openings exactly. The one level is `receipt`, \(U_t\) members, with
@@ -490,8 +504,8 @@ profile's hierarchy has one fan-out per level, which passes of different lengths
 
 It doesn't fit the rest of γ: the timing, chip, rebuild, host and link terms aren't a sampling design over units. So,
 as the core protocol interface provides for a protocol whose acceptance isn't only a sampling design, the protocol's
-profile is its own: each window's `IntegrityProfile` with its schedule. `ledger` computes every γ term from it plus the
-node's capacities.
+profile is its own: each window's `IntegrityProfile` with its schedule. `ledger` computes every γ term, the session's
+and each window's, from it plus the node's capacities.
 
 ## 8. What deployment changes, and what is open
 
@@ -580,23 +594,30 @@ second per node the stream would send.
 
 `python -m verity.core.protocols.remote_bandwidth.timing` prints the grid: passes of 20 and 50 ms, windows of
 \(T\) = 0.3, 1 and 10 s, RTT 1–50 ms (half each way), \(J\) = 0.05 ms each way and \(g\) = 50 µs, with the least
-allowance, and after them §4's rank bound, grinding tries and sessions' failure. \(\mu_{\text{timing}}\) by session, at \(T\) = 1 s:
+allowance, and after them §4's rank bound, grinding tries and sessions' failure. \(\mu_{\text{timing}}\) by session, at
+\(T\) = 1 s, and the largest of a \(W\) = 100 session's windows' own (§1):
 
-| pass | RTT | passes a window | one window | \(W\) = 10 | \(W\) = 100 | steady state |
-| --- | --- | --- | --- | --- | --- | --- |
-| 20 ms | 1 ms | 50 | 2.07% | 0.41% | 0.26% | 0.25% |
-| 20 ms | 5 ms | 50 | 2.45% | 0.45% | 0.27% | 0.25% |
-| 20 ms | 20 ms | 50 | 3.86% | 0.60% | 0.28% | 0.25% |
-| 20 ms | 50 ms | 50 | 6.56% | 0.90% | 0.31% | 0.25% |
-| 50 ms | 1 ms | 20 | 4.87% | 0.51% | 0.10% | 0.10% |
-| 50 ms | 5 ms | 20 | 5.23% | 0.55% | 0.11% | 0.10% |
-| 50 ms | 20 ms | 20 | 6.56% | 0.70% | 0.12% | 0.10% |
-| 50 ms | 50 ms | 20 | 9.10% | 0.99% | 0.15% | 0.10% |
+| pass | RTT | passes a window | one window | \(W\) = 10 | \(W\) = 100 | steady state | worst window |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 20 ms | 1 ms | 50 | 2.07% | 0.41% | 0.26% | 0.25% | 4.03% |
+| 20 ms | 5 ms | 50 | 2.45% | 0.45% | 0.27% | 0.25% | 4.40% |
+| 20 ms | 20 ms | 50 | 3.86% | 0.60% | 0.28% | 0.25% | 5.78% |
+| 20 ms | 50 ms | 50 | 6.56% | 0.90% | 0.31% | 0.25% | 8.42% |
+| 50 ms | 1 ms | 20 | 4.87% | 0.51% | 0.10% | 0.10% | 9.62% |
+| 50 ms | 5 ms | 20 | 5.23% | 0.55% | 0.11% | 0.10% | 9.97% |
+| 50 ms | 20 ms | 20 | 6.56% | 0.70% | 0.12% | 0.10% | 11.23% |
+| 50 ms | 50 ms | 20 | 9.10% | 0.99% | 0.15% | 0.10% | 13.65% |
 
 A session's ends are its only round-trip cost, so a long session reaches the steady state: at \(T\) = 10 s and
 \(W\) = 100 it is 0.25% at 20 ms passes and 0.10–0.11% at 50 ms over the whole RTT range. A short window costs nothing
 by itself: at \(T\) = 0.3 s and \(W\) = 100 it is 0.27–0.43% at 20 ms passes. A pass reads distinct blocks, so it is at
 most a read of the store: about 52 ms for a GPU's 94 GB at 1.8 TB/s.
+
+A window by itself does pay its ends. Its span is \(T + A\), the pass in flight at its challenge is the window
+before's, and its own chain starts only when that pass ends, so a window is charged \(A\) and up to a pass whatever
+\(W\) is: about \((A + t_{\text{pass}})/(T + A)\) at worst, the last column. That is under 1% only at \(T\) ≥ 5 s for
+20 ms passes and RTT up to 5 ms (0.82–0.90%), \(T\) ≥ 10 s up to 20 ms RTT (0.61–0.80%), and at \(T\) = 15 s for
+50 ms passes (0.67–0.99% over the RTT range; 1.01–1.49% at 10 s).
 
 **Openings** at \(\varepsilon_s = 0.1\%\), δ = \(2^{-40}\): \(s = 27{,}726\) per window, about 8.5–9.1 KB each (block,
 leaf, both salts, both paths). That is 235–253 MB a window per node: 1.9–2.0 Gb/s at \(T\) = 1 s, 0.19–0.20 Gb/s at
@@ -621,7 +642,15 @@ per-window reading at 0.1%. The horizon is then short by under \(\ln(2^{40})/(d\
 
 `ledger` reports μ_sample both ways: `sample`, the per-window reading, and `horizon`, the pooled one (`pooled`: the
 most \(\sum_t f_t U_t\) the bounds above allow), with `floor`, the largest \(f_t\) they allow, and γ for each
-(`gamma`, `gamma_horizon`). Both start from each window's profile, which the record keeps.
+(`gamma`, `gamma_horizon`). It reports each window's the same way over its own span (`Ledger.windows`: each
+\(f_t\), from `floors`, is its `floor`, and \(f_t U_t\) its `horizon`), and the worst window's γ either way beside the
+session's (`worst`, `worst_horizon`). All of it starts from each window's profile and span, which the record keeps.
+
+The 1% in every window bounds μ_sample; a window's γ adds its own μ_timing above, λ's 0.195%, and μ_chip. At 2,773
+openings and \(T\) = 1 s the worst window's γ is about 1% + 0.195% + 4–14%. For the window's whole γ under 1%, its
+openings and \(T\) both rise: at \(T\) = 20 s and RTT up to 20 ms, 20 ms passes leave 0.41–0.50% to μ_timing, and a
+floor of 0.25% takes \(\ln(2^{40})/0.0025 \approx 11{,}090\) openings a window (94–101 MB, 38–40 Mb/s); with λ that is
+0.86–0.95% before μ_chip.
 
 ## Appendix A. Live coins, and why the protocol doesn't use them
 

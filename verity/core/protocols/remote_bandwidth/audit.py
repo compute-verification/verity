@@ -35,8 +35,9 @@ many reads of a node's registered blocks the node made in each window, from rece
    and a rejected window ends its session.
 8. The record (`Session.record`): per window each pass's length, its challenge's release and its deadline on the
    verifier's clock, its openings coin's release, and an `IntegrityProfile` over its receipts with `Subset(s)` drawn;
-   `ledger` turns it, with the node's measured capacities, into each γ term, μ_sample read per window and pooled over
-   the session's horizon (`pooled`).  What an accepted window certifies, and on what, is `PROTOCOL.md`.
+   `ledger` turns it, with the node's measured capacities, into each γ term over the session's span and over each
+   window's own (`WindowLedger`), μ_sample read per window and pooled over the session's horizon (`pooled`, `floors`).
+   What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
 The verifier's clock is injected (`clock`, nanoseconds, `time.monotonic_ns` by default).  Openings are checked in the
 clear here, as the specification of what each zero-knowledge proof unit proves on the deployed path (`PROTOCOL.md` §8).
@@ -359,9 +360,16 @@ class WindowRecord:
         """U_t, the window's receipts."""
         return sum(self.lengths)
 
+    @property
+    def span_ns(self) -> int:
+        """`D_t − b_(t−1)`: the verifier-fixed span its reads fall in, from its challenge's release to its deadline.
+        Consecutive windows' spans overlap by A, and no read is in two windows' passes."""
+        return self.deadline_ns - self.released_ns
+
     def to_json(self) -> dict:
         return {"deadline_ns": self.deadline_ns, "lengths": list(self.lengths), "opened_ns": self.opened_ns,
-                "profile": self.profile.to_json(), "released_ns": self.released_ns, "window": self.window}
+                "profile": self.profile.to_json(), "released_ns": self.released_ns, "span_ns": self.span_ns,
+                "window": self.window}
 
 
 @dataclass(frozen=True, slots=True)
@@ -625,7 +633,8 @@ class Session:
 
 LEDGER_SOURCES = {
     "timing": "the record: the span its passes don't cover at the node's capacity (the round trip and the pass in "
-              "flight at the session's ends, the chaining gaps, blocks a plan leaves out)",
+              "flight at the span's ends, the chaining gaps, blocks a plan leaves out), the session's or a window's own "
+              "[b_(t−1), D_t]",
     "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
               "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, `pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
@@ -637,22 +646,8 @@ LEDGER_SOURCES = {
 }
 
 
-@dataclass(frozen=True, slots=True)
-class Ledger:
-    """Each γ term as a fraction of the node's read capacity over the session's span; γ is their sum.  μ_sample comes
-    both ways: `sample`, each window's openings bounding its own wrong receipts at δ, and `horizon`, the session's
-    openings pooled over its windows at one δ (`pooled`).  `floor` is the hybrid claim's other half, from the same
-    pooled event: no window has more than that share of its receipts wrong."""
-
-    timing: float
-    sample: float
-    chip: float
-    counting: float
-    rebuild: float
-    host: float
-    link: float
-    horizon: float
-    floor: float
+class _Terms:
+    __slots__ = ()
 
     @property
     def gamma(self) -> float:
@@ -664,10 +659,79 @@ class Ledger:
         """γ with the pooled μ_sample, except with probability `delta`, `floor` holding with it."""
         return self.horizon + sum(getattr(self, name) for name in LEDGER_SOURCES if name != "sample")
 
-    def to_json(self) -> dict:
-        terms = {name: getattr(self, name) for name in LEDGER_SOURCES}
+    def _json(self) -> dict:
         return {"gamma": self.gamma, "horizon": {"floor": self.floor, "gamma": self.gamma_horizon, "sample": self.horizon},
-                "terms": terms}
+                "terms": {name: getattr(self, name) for name in LEDGER_SOURCES}}
+
+
+@dataclass(frozen=True, slots=True)
+class WindowLedger(_Terms):
+    """Window t's γ terms as fractions of the node's read capacity over its own span `[b_(t−1), D_t]`
+    (`WindowRecord.span_ns`): its reads are at least `(1 − gamma)·capacity·span` except with `delta`, and at least
+    `(1 − gamma_horizon)·capacity·span` on the session's pooled event, every window's at once.  `floor` is the most
+    of its receipts that event leaves wrong, and `horizon` those receipts' bytes."""
+
+    window: int
+    span_ns: int
+    timing: float
+    sample: float
+    chip: float
+    counting: float
+    rebuild: float
+    host: float
+    link: float
+    horizon: float
+    floor: float
+
+    def to_json(self) -> dict:
+        return {"span_ns": self.span_ns, "window": self.window, **self._json()}
+
+
+@dataclass(frozen=True, slots=True)
+class Ledger(_Terms):
+    """Each γ term as a fraction of the node's read capacity over the session's span; γ is their sum.  μ_sample comes
+    both ways: `sample`, each window's openings bounding its own wrong receipts at δ, and `horizon`, the session's
+    openings pooled over its windows at one δ (`pooled`).  `floor` is the most of any window's receipts the pooled
+    event leaves wrong.  `windows` are the same terms over each window's own span, and `worst` and `worst_horizon`
+    the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's."""
+
+    timing: float
+    sample: float
+    chip: float
+    counting: float
+    rebuild: float
+    host: float
+    link: float
+    horizon: float
+    floor: float
+    windows: tuple[WindowLedger, ...]
+
+    @property
+    def worst(self) -> WindowLedger:
+        return max(self.windows, key=lambda w: w.gamma)
+
+    @property
+    def worst_horizon(self) -> WindowLedger:
+        return max(self.windows, key=lambda w: w.gamma_horizon)
+
+    def to_json(self) -> dict:
+        w, h = self.worst, self.worst_horizon
+        return {**self._json(), "windows": [x.to_json() for x in self.windows],
+                "worst": {"gamma": w.gamma, "horizon": {"gamma": h.gamma_horizon, "window": h.window},
+                          "window": w.window}}
+
+
+def _budget(record: Record) -> tuple[list[int], float]:
+    delta = record.windows[0].profile.delta
+    drawn = [w.profile.drawn["receipt"] for w in record.windows]
+    return drawn, -math.expm1(math.log(delta) / sum(drawn)) * sum(drawn)
+
+
+def floors(record: Record) -> tuple[float, ...]:
+    """Each window's share of wrong receipts at most on `pooled`'s event, min(1 − s_t/U_t, d̄·S/s_t): every window's
+    at once, except with δ."""
+    drawn, budget = _budget(record)
+    return tuple(min(1 - s / w.receipts, budget / s) for w, s in zip(record.windows, drawn))
 
 
 def pooled(record: Record) -> tuple[float, float]:
@@ -682,10 +746,8 @@ def pooled(record: Record) -> tuple[float, float]:
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states it for windows of one size; at unequal U_t it is the
     same argument with each window's own."""
-    delta = record.windows[0].profile.delta
-    drawn = [w.profile.drawn["receipt"] for w in record.windows]
-    budget = -math.expm1(math.log(delta) / sum(drawn)) * sum(drawn)
-    floor = max(min(1 - s / w.receipts, budget / s) for w, s in zip(record.windows, drawn))
+    drawn, budget = _budget(record)
+    floor = max(floors(record))
     wrong = 0.0
     for w, s in sorted(zip(record.windows, drawn), key=lambda x: x[0].receipts / x[1], reverse=True):
         f = min(1 - s / w.receipts, budget / s)
@@ -699,7 +761,9 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     """γ's terms for an accepted session on a node of `capacity_bytes_per_s` (HBM plus host DRAM) and `chip_bytes` of
     on-chip storage: the read bytes the record certifies are at least `(1 − γ)·capacity·span`, except with probability
     `windows · delta`, and at least `(1 − γ_horizon)·capacity·span` except with `delta` (each plus 2^-slack_log2 a
-    pass).  `rebuild`, `host` and `link` are the models' fractions, passed through: the record does not bound them.
+    pass), and each window's over its own span likewise with its own terms (`Ledger.windows`), the horizon's every
+    window's at once with the session's.  `rebuild`, `host` and `link` are the models' fractions, passed through, the
+    same in every window: the record does not bound them.
     `link` is a binding record's only: an unbound receipt is of its block alone, and the record says nothing of where
     its read was made.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an
     approximation for a large store).  A sketch-sha512 record's receipts also rest on `RateAuditSketch`, whose terms
@@ -715,9 +779,19 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     if reads > whole:
         raise ValueError(f"the record certifies {reads} bytes read, more than the capacity allows in its span: the "
                          "capacity is understated")
-    wrong_receipts = sum(math.ceil(wrong(w.profile)) for w in record.windows)
+    wrong_receipts = [math.ceil(wrong(w.profile)) for w in record.windows]
+    windows = []
+    for w, f, e in zip(record.windows, floors(record), wrong_receipts):
+        whole_t, reads_t = capacity_bytes_per_s * w.span_ns / 1e9, w.receipts * b
+        if reads_t > whole_t:
+            raise ValueError(f"window {w.window} certifies {reads_t} bytes read, more than the capacity allows in its "
+                             "span: the capacity is understated")
+        windows.append(WindowLedger(
+            w.window, w.span_ns, timing=1 - reads_t / whole_t, sample=e * b / whole_t, chip=w.passes * chip_bytes / whole_t,
+            counting=(queries_log2 * w.receipts + slack_log2 * w.passes) / 8 / whole_t, rebuild=rebuild, host=host,
+            link=link, horizon=f * reads_t / whole_t, floor=f))
     horizon, floor = pooled(record)
     lam_bits = queries_log2 * record.receipts + slack_log2 * record.passes
-    return Ledger(timing=1 - reads / whole, sample=wrong_receipts * b / whole,
+    return Ledger(timing=1 - reads / whole, sample=sum(wrong_receipts) * b / whole,
                   chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=rebuild, host=host,
-                  link=link, horizon=horizon * b / whole, floor=floor)
+                  link=link, horizon=horizon * b / whole, floor=floor, windows=tuple(windows))
