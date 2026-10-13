@@ -1,7 +1,9 @@
-"""DeepSeek-V4-Pro's sparse MLA decode on Hopper against its Programs: the H200's go/no-go for binding `flashmla.FlashMlaDecode_v1`
+"""DeepSeek-V4-Pro's sparse MLA on Hopper against its Programs: the H200's go/no-go for binding `flashmla.FlashMlaDecode_v1`
 (FlashMLA 6bc49418's `sparse_decode_fwd`, `flash_fwd_splitkv_mla_fp8_sparse_kernel<MODEL1, 64>` and its combine, as vLLM d9105ea80's
-`DeepseekV4FlashMLAAttention._forward_decode` calls it) at DeepSeek-V4-Pro's statics on one TP8 rank: 16 real heads padded to 64,
-the 128-token sliding window over an `fp8_ds_mla` cache, the compressed rows of a compress-ratio 4 and 128 layer, and the sink.
+`DeepseekV4FlashMLAAttention._forward_decode` calls it) and `flashmla_prefill.FlashMlaGatherRow_v1` / `FlashMlaPrefill_v1` (the CuTe
+K-cache gather and `flash_mla_sparse_fwd`'s sm_90 `phase1<512, true>`, as `_forward_prefill` calls them) at DeepSeek-V4-Pro's
+statics on one TP8 rank: 16 real heads padded to 64, the 128-token sliding window over an `fp8_ds_mla` cache, the compressed rows
+of a compress-ratio 4 and 128 layer, and the sink.
 
 One GPU process writes `<out>/dsv4_flashmla_capture.json`, the property record `dsv4_flashmla_capture` (`properties.record`); it
 prints one line per launch and per case, then `DSV4-FLASHMLA GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs
@@ -10,8 +12,10 @@ the others.  The operands are random at the served shapes (`case_operands`), so 
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
   selection  `_select_dsv4_attn_cls` picks `DeepseekV4FlashMLAAttention` on this device, its `get_padded_num_q_heads(16)` is 64,
-             `is_flashmla_sparse_supported()` holds, and the installed `vllm.third_party.flashmla.flash_mla_interface` is the
-             interface vLLM's build vendors from FlashMLA 6bc49418 (`INTERFACE_SHA256`).
+             `is_flashmla_sparse_supported()` holds, the installed `vllm.third_party.flashmla.flash_mla_interface` is the
+             interface vLLM's build vendors from FlashMLA 6bc49418 (`INTERFACE_SHA256`), the attention module's
+             `flash_mla_sparse_fwd` and `dequantize_and_gather_k_cache` are that interface's and cache_utils', and `has_cutedsl()`
+             holds (the gather takes its CuTe kernel, cache_utils.py:412).
   decode     per case (`CASES`), `flash_mla_with_kvcache` called as flashmla.py:248-266 calls it: q (b, 1, 64, 512) bf16 with the
              pad heads zero, the SWA cache (nb, 64, 1, 584) uint8 (a page of `page_bytes(64)`), indices (b, 1, 128) and
              topk_length, the sink (64,) f32 with the pad heads -inf, softmax_scale 512^-0.5, and on a compressed layer the extra
@@ -21,6 +25,15 @@ the others.  The operands are random at the served shapes (`case_operands`), so 
              every token and all 64 heads against `flashmla_twin.decode` at the token's SPLITS (`request_splits` of the GPU's
              metadata); on a few tokens of each case (the most and the fewest splits, every token of `edge`) the reference
              `FlashMlaDecode_v1{NH=16,...}` over the real heads against the twin.
+  prefill    per case (`PREFILL_CASE_LAYERS`), a chunk of four requests as `_forward_prefill` (flashmla.py:316-398) runs it: a
+             bf16 workspace (4, M, 512) filled with a sentinel, `dequantize_and_gather_k_cache` of each request's compressed rows
+             from row 0 (on a compressed layer) and of its last gather_len window positions from row N_c, each through its block
+             table, twice into two sentinels; then `flash_mla_sparse_fwd(q (T, 64, 512), kv.view(-1, 1, 512),
+             indices.unsqueeze(1), 512^-0.5, attn_sink, topk_length, out)` over that workspace, twice into two sentinels.  Every
+             word of the workspace against `flashmla_prefill_twin.gather_rows` of the rows the gathers write and the sentinel
+             elsewhere; every output word of every token and all 64 heads against `flashmla_prefill_twin.prefill` at the token's
+             NP (`prefill_pairs`); `FlashMlaGatherRow_v1` on a few rows and `FlashMlaPrefill_v1{NH=16,NP,...}` on a few tokens
+             (the longest and the shortest, every token of `edge`) against the twin.
   bind       the Programs bind at the served statics.
 
 The cases: `swa` a window-only layer (compress_ratio 0) over swa_len 0..128; `c4` a compress-ratio 4 layer (extra page block 64,
@@ -28,9 +41,13 @@ The cases: `swa` a window-only layer (compress_ratio 0) over swa_len 0..128; `c4
 buffer, as vLLM's `c128a` indices are); `lone` one token of 1152 rows, cut by the planner into its most splits; `batch` 160 tokens
 of random lengths (requests that share a partition); `edge` special words: UE8M0 scales 0x00 / 0xFE / 0xFF, E4M3 NaN bytes, -1
 indices within a length and valid ones past it, repeated indices, overflowing, zero and subnormal queries, an empty request, and
-sinks +-inf, NaN and +-1e30.
+sinks +-inf, NaN and +-1e30.  The prefill's: `swa` a window-only layer (index rows 128 wide, one pair); `c4` a compress-ratio 4
+layer (rows 1152 wide: topk_length 1..1152, even and odd block counts, every NP from 1 to 9); `c128` a compress-ratio 128 layer (rows 256
+wide); `edge` (C4) UE8M0 scales 0x00 / 0xFE / 0xFF, E4M3 NaN and subnormal bytes, rows that overflow bf16, indices -1, -2,
+INT_MIN, s_kv and INT_MAX within a length and valid ones onto NaN rows past it, overflowing, zero and subnormal queries,
+topk_length 0, one row repeated, a length of 1152 with one valid index, and the decode's sinks.
 
-GO needs every case's words compared with 0 mismatches, the reference sampled with 0 disagreements with the twin, every launch
+GO needs every case's words compared with 0 mismatches, the references sampled with 0 disagreements with the twins, every launch
 check, the selection and the bindings.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
@@ -53,9 +70,11 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.program.kernels import flashmla_prefill_twin as PT
 from verity_vllm.program.kernels import flashmla_twin as T
 from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
 from verity_vllm.program.registry import flashmla as F
+from verity_vllm.program.registry import flashmla_prefill as P
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-flashmla-capture/v1"
@@ -92,7 +111,24 @@ EDGE_SINKS = (0x7F800000, F_NINF, 0x7FC00000, 0, 0x7149F2CA, 0xF149F2CA, 1, 0x42
               0x3E800000, 0x41200000, 0xC1200000, 0x00800000, 0xBF800000)
 #: case -> (layer, seed)
 CASE_LAYERS = {"swa": ("swa", 1), "c4": ("c4", 2), "c128": ("c128", 3), "lone": ("c4", 4), "batch": ("c4", 5), "edge": ("c4", 6)}
-CASES = tuple(("decode", c) for c in CASE_LAYERS)
+#: `_forward_prefill` (flashmla.py:266-398) per layer: (compress ratio, the compressed cache's page block, top_k: the indexer's 1024
+#: on C4, c128a's width on C128, here 128); a token's index row is round_up(top_k + WINDOW, 128) wide (max_image_tokens 0:
+#: DeepSeek-V4-Pro has no vision layers)
+PREFILL_LAYERS: dict[str, tuple[int, int, int]] = {"swa": (1, SWA_PBS, 0), "c4": (4, 64, C4_TOPK), "c128": (128, 2, 128)}
+#: the chunk's requests, (seq_len, gather_len): the compressed gather writes request r's seq_len // ratio rows from row 0 of its
+#: workspace, the SWA gather its last gather_len positions from row N_c = the most compressed rows of any request
+PREFILL_REQS = ((5000, 144), (4100, 130), (16384, 129), (1300, 128))
+#: per token, (request, compressed rows, window rows): its topk_length is their sum
+PREFILL_LENS = {
+    "swa": ((0, 0, 1), (1, 0, 2), (2, 0, 63), (3, 0, 64), (0, 0, 65), (1, 0, 127), (2, 0, 128), (3, 0, 100)),
+    "c4": ((0, 1024, 128), (1, 1000, 128), (0, 960, 128), (2, 512, 1), (3, 0, 1), (3, 63, 1), (1, 64, 1), (0, 127, 1),
+           (2, 128, 1), (0, 700, 77), (1, 1024, 1), (2, 255, 128), (1, 400, 100), (2, 640, 100), (0, 900, 60)),
+    "c128": ((2, 128, 128), (2, 1, 128), (3, 0, 1), (0, 39, 64), (2, 127, 128), (1, 5, 3)),
+    "edge": ((0, 1024, 128), (1, 200, 100), (2, 300, 128), (3, 64, 64), (0, 0, 128), (1, 0, 0), (2, 0, 128), (2, 1024, 128)),
+}
+PREFILL_CASE_LAYERS = {"swa": ("swa", 11), "c4": ("c4", 12), "c128": ("c128", 13), "edge": ("c4", 14)}
+CASES = tuple(("decode", c) for c in CASE_LAYERS) + tuple(("prefill", c) for c in PREFILL_CASE_LAYERS)
+I32_MIN, I32_MAX = -(1 << 31), (1 << 31) - 1
 #: tokens per twin job
 JOB_TOKENS = 4
 TOTALS = ("words", "mismatch", "reference", "twin_mismatch")
@@ -347,10 +383,182 @@ def case_jobs(case: str, paths: dict[str, str], num_splits: np.ndarray, quick: b
     return jobs + [{"phase": "decode", "case": case, "kind": "ref", "paths": paths, "token": t} for t in sorted(refs)]
 
 
+# ------------------------------------------------------------------------------------------------------------------ the prefill
+def prefill_width(layer: str) -> int:
+    return -(-(PREFILL_LAYERS[layer][2] + WINDOW) // 128) * 128
+
+
+def prefill_pairs(n: int) -> int:
+    """NP of a token of topk_length n: its ceil(n / 64) blocks taken in pairs (phase1.cuh:80-81, :521), at least one (n = 0 runs
+    none, and a first pair of invalid rows leaves the state it starts from)."""
+    blocks = -(-n // BN)
+    return max(1, -(-blocks // 2))
+
+
+def _table(rng: np.random.Generator, layer: str, lens: np.ndarray, pbs: int) -> np.ndarray:
+    """A block table: each request's logical blocks on random physical blocks of the cache, never its reserved last block."""
+    return rng.integers(0, CACHE_BLOCKS[layer] - 1, (lens.size, max(1, -(-int(lens.max()) // pbs))), dtype=np.int32)
+
+
+def prefill_operands(case: str) -> dict[str, Any]:
+    """A prefill case's operands as numpy words: the SWA cache and its block table; on a compressed layer the compressed cache and
+    its table; the chunk's seq_lens, gather_lens and comp_lens (seq_len // ratio, else 0); geom = (N_c, M); q (T, 64, D) bf16 (pad
+    heads +0), sink (64,) f32 (pad heads -inf); idx (T, width) into the flattened workspace (request r's rows from r * M) with -1
+    past each topk_length, lens."""
+    layer, seed = PREFILL_CASE_LAYERS[case]
+    ratio, pbs, _ = PREFILL_LAYERS[layer]
+    rng = np.random.default_rng(seed)
+    seq = np.array([s for s, _ in PREFILL_REQS], dtype=np.int32)
+    gl = np.array([g for _, g in PREFILL_REQS], dtype=np.int32)
+    comp = seq // ratio if ratio > 1 else np.zeros_like(seq)
+    nc = int(comp.max())
+    m = nc + int(gl.max())
+    o: dict[str, Any] = {"case": case, "layer": layer, "seq_lens": seq, "gather_lens": gl, "comp_lens": comp,
+                         "geom": np.array([nc, m], dtype=np.int32), "swa_cache": random_cache(rng, "swa"),
+                         "swa_table": _table(rng, "swa", seq, SWA_PBS)}
+    if ratio > 1:
+        o.update(extra_cache=random_cache(rng, layer), extra_table=_table(rng, layer, comp, pbs), extra_pbs=np.array([pbs]))
+    lens = PREFILL_LENS[case]
+    t_ = len(lens)
+    head_gain = np.array([0.25, 1.0, 4.0, 16.0] * (NH // 4), dtype=np.float32)[None, :, None]
+    o["q"] = np.zeros((t_, H_Q, D), dtype=np.uint16)
+    o["q"][:, :NH] = _bf16(rng.standard_normal((t_, NH, D)).astype(np.float32) * head_gain)
+    o["sink"] = np.full(H_Q, F_NINF, dtype=np.uint32)
+    o["sink"][:NH] = (rng.standard_normal(NH) * 2).astype(np.float32).view(np.uint32)
+    o["idx"] = np.full((t_, prefill_width(layer)), -1, dtype=np.int32)
+    for t, (r, kc, w) in enumerate(lens):
+        c = rng.choice(int(comp[r]), size=kc, replace=False) if kc else np.zeros(0, dtype=np.int64)
+        lo = nc + int(gl[r]) - w - int(rng.integers(0, int(gl[r]) - w + 1))
+        o["idx"][t, :kc + w] = r * m + np.concatenate([c, np.arange(lo, lo + w)])
+    o["lens"] = np.array([kc + w for _, kc, w in lens], dtype=np.int32)
+    if case == "edge":
+        prefill_edge(rng, o)
+    return o
+
+
+def prefill_edge(rng: np.random.Generator, o: dict[str, Any]) -> None:
+    """`edge`'s special words.  Request 0's compressed rows 0..63 are the compressed cache's reserved block: row 0 has UE8M0 scales
+    0x00 / 0x01 / 0x7F / 0x80, row 1 scales 0xFE and 0xFF (+inf: its NoPE overflows or is NaN), row 2 E4M3 NaN bytes 0x7F and
+    0xFF, row 3 E4M3 subnormals and bf16 subnormal RoPE, row 4 bytes +0 and -0; request 1's last window positions 4096..4099 are
+    the SWA cache's reserved block, row 0 with an E4M3 NaN, row 1 E4M3 +-448 at scale 0xFE (bf16 +-inf).  Token 0 reads rows 0, 3
+    and 4 within its length (finite); token 1 rows 1 and 2 and the two SWA rows; token 2 -1, -2, INT_MIN, s_kv, s_kv + 7 and
+    INT_MAX within its length and, past it, valid indices onto rows of NaN words (rows 1 and 2, the NaN SWA row, a workspace row
+    no gather writes: FlashMLA's interface warns of NaN there, phase1.cuh:485-488 zero-fills them); token 3 heads 0 and 1 at
+    +-bf16 max; token 4 real heads all +0; token 5 topk_length 0 over valid NaN rows; token 6 one row repeated through its window
+    and bf16 subnormal queries; token 7 1152 indices, one valid."""
+    o["sink"][:NH] = np.array(EDGE_SINKS, dtype=np.uint32)
+    nc, m = (int(v) for v in o["geom"])
+    skv = len(PREFILL_REQS) * m
+    eb, sb = CACHE_BLOCKS["c4"] - 1, CACHE_BLOCKS["swa"] - 1
+    o["extra_table"][0, 0] = eb
+    base = eb * int(o["extra_pbs"][0])
+    _write_row(o, "extra_cache", base, scale=np.array([0x00, 0x01, 0x7F, 0x80, 0x00, 0x01, 0x7F], dtype=np.uint8))
+    _write_row(o, "extra_cache", base + 1, scale=np.array([0xFE, 0xFF, 0xFE, 0xFF, 0xFE, 0xFF, 0xFE], dtype=np.uint8))
+    nan_row = rng.integers(0, 0x7E, DN, dtype=np.uint8)
+    nan_row[17], nan_row[300] = 0x7F, 0xFF
+    _write_row(o, "extra_cache", base + 2, nope=nan_row)
+    sub = (rng.integers(1, 8, DN, dtype=np.uint8) | (rng.integers(0, 2, DN, dtype=np.uint8) << 7)).astype(np.uint8)
+    _write_row(o, "extra_cache", base + 3, nope=sub, rope=rng.integers(1, 0x80, DR, dtype=np.uint16) | 0x8000)
+    _write_row(o, "extra_cache", base + 4, nope=(rng.integers(0, 2, DN, dtype=np.uint8) << 7).astype(np.uint8),
+               rope=(rng.integers(0, 2, DR, dtype=np.uint16) << 15).astype(np.uint16))
+    s1, g1 = PREFILL_REQS[1]
+    o["swa_table"][1, 4096 // SWA_PBS] = sb
+    nan_row = rng.integers(0, 0x7E, DN, dtype=np.uint8)
+    nan_row[5] = 0x7F
+    _write_row(o, "swa_cache", sb * SWA_PBS, nope=nan_row)
+    _write_row(o, "swa_cache", sb * SWA_PBS + 1, nope=np.where(rng.random(DN) < 0.5, 0x7E, 0xFE).astype(np.uint8),
+               scale=np.full(DN // QT, 0xFE, dtype=np.uint8))
+    swa_row = lambda r, pos: r * m + nc + pos - (PREFILL_REQS[r][0] - PREFILL_REQS[r][1])  # noqa: E731
+    kc0 = PREFILL_LENS["edge"][0][1]
+    o["idx"][0, :kc0] = np.concatenate([[0, 3, 4], 5 + rng.choice(int(o["comp_lens"][0]) - 5, kc0 - 3, replace=False)])
+    o["idx"][1, [0, 1, 210, 220]] = [1, 2, swa_row(1, 4096), swa_row(1, 4097)]
+    n2 = int(o["lens"][2])
+    o["idx"][2, 7:13] = [-1, -2, I32_MIN, skv, skv + 7, I32_MAX]
+    unwritten = 3 * m + int(o["comp_lens"][3]) + 5
+    o["idx"][2, n2:prefill_width("c4")] = np.resize(np.array([1, 2, swa_row(1, 4096), unwritten]), prefill_width("c4") - n2)
+    o["q"][3, 0], o["q"][3, 1] = 0x7F7F, 0xFF7F
+    o["q"][4, :NH] = 0
+    o["idx"][5, :2 * BN] = np.resize(np.array([1, 2, unwritten]), 2 * BN)
+    o["idx"][6, :WINDOW] = o["idx"][6, 3]
+    o["q"][6, :NH] = rng.integers(1, 0x80, (NH, D), dtype=np.uint16) | (rng.integers(0, 2, (NH, D), dtype=np.uint16) << 15)
+    keep = o["idx"][7, 700]
+    o["idx"][7, :] = -1
+    o["idx"][7, 700] = keep
+
+
+def _cache_rows(cache: np.ndarray, table: np.ndarray, r: int, positions: np.ndarray, pbs: int):
+    """Request r's cache rows at ``positions`` through its block table: (n, DN) e4m3, (n, 7) UE8M0, (n, DR) bf16."""
+    p = np.asarray(positions, dtype=np.int64)
+    return gather_rows(cache, np.asarray(table)[r, p // pbs].astype(np.int64) * pbs + p % pbs, pbs)
+
+
+def written(a: dict[str, np.ndarray]) -> np.ndarray:
+    """(R, M): the workspace rows the two gathers write."""
+    nc, m = (int(v) for v in a["geom"])
+    out = np.zeros((len(a["seq_lens"]), m), dtype=bool)
+    for r in range(out.shape[0]):
+        out[r, :int(a["comp_lens"][r])] = True
+        out[r, nc:nc + int(a["gather_lens"][r])] = True
+    return out
+
+
+def workspace(a: dict[str, np.ndarray], sentinel: int) -> np.ndarray:
+    """The bf16 workspace (R, M, D) the two gathers write (flashmla.py:327-347): `PT.gather_rows` of request r's compressed rows
+    0..comp_len - 1 at rows 0.., of its positions seq_len - gather_len..seq_len - 1 at rows N_c..; every other word ``sentinel``."""
+    nc, m = (int(v) for v in a["geom"])
+    ws = np.full((len(a["seq_lens"]), m, D), sentinel, dtype=np.uint16)
+    for r in range(ws.shape[0]):
+        n = int(a["comp_lens"][r])
+        if n:
+            ws[r, :n] = PT.gather_rows(*_cache_rows(a["extra_cache"], a["extra_table"], r, np.arange(n), int(a["extra_pbs"][0])), QT)
+        s, g = int(a["seq_lens"][r]), int(a["gather_lens"][r])
+        ws[r, nc:nc + g] = PT.gather_rows(*_cache_rows(a["swa_cache"], a["swa_table"], r, np.arange(s - g, s), SWA_PBS), QT)
+    return ws
+
+
+def prefill_token(a: dict[str, np.ndarray], t: int) -> dict[str, Any]:
+    """`FlashMlaPrefill_v1`'s inputs for token t: its N = 2 NP 64 workspace rows in kernel order (an index outside the workspace
+    reads row 0, which the Definition zeroes), their indices, topk_length, s_kv and NP."""
+    n = int(a["lens"][t])
+    np_ = prefill_pairs(n)
+    kv = np.asarray(a["kv"]).reshape(-1, D)
+    idx = np.asarray(a["idx"][t][:2 * np_ * BN], dtype=np.int32)
+    ok = (idx >= 0) & (idx < kv.shape[0])
+    return {"q": np.asarray(a["q"][t]), "rows": kv[np.where(ok, idx, 0)], "idx": idx.view(np.uint32), "len": n,
+            "skv": kv.shape[0], "sink": np.asarray(a["sink"]), "NP": np_}
+
+
+def prefill_twin_out(a: dict[str, np.ndarray], t: int) -> tuple[dict[str, Any], np.ndarray]:
+    x = prefill_token(a, t)
+    return x, PT.prefill(x["q"], x["rows"], x["idx"], x["len"], x["skv"], x["sink"], BN=BN, SCALE=SCALE)
+
+
+def prefill_arrays(o: dict[str, Any], kv: np.ndarray, out: np.ndarray) -> dict[str, np.ndarray]:
+    """What a prefill case's jobs read: the operands, the GPU's workspace and output words."""
+    keys = ("q", "sink", "idx", "lens", "seq_lens", "gather_lens", "comp_lens", "geom", "swa_cache", "swa_table", "extra_cache",
+            "extra_table", "extra_pbs")
+    return {**{k: o[k] for k in keys if k in o}, "kv": kv, "out": out}
+
+
+def prefill_jobs(case: str, paths: dict[str, str], lens, quick: bool) -> list[dict[str, Any]]:
+    """The workspace job; twin jobs of JOB_TOKENS tokens; reference jobs on the longest and the shortest token (every token of
+    `edge`; under --quick only the shortest)."""
+    n = np.asarray(lens)
+    b = n.size
+    job = {"phase": "prefill", "case": case, "paths": paths}
+    jobs = [{**job, "kind": "gather"}]
+    jobs += [{**job, "kind": "prefill-twin", "tokens": [lo, min(b, lo + JOB_TOKENS)]} for lo in range(0, b, JOB_TOKENS)]
+    refs = {int(np.argmin(n))} if quick else ({int(np.argmax(n)), int(np.argmin(n))} if case != "edge" else set(range(b)))
+    return jobs + [{**job, "kind": "prefill-ref", "token": t} for t in sorted(refs)]
+
+
 # ----------------------------------------------------------------------------------------------------------------- the GPU side
 def selection() -> dict[str, Any]:
-    """vLLM's DSV4 attention class on this device, its padded heads, FlashMLA sparse support and the vendored interface."""
+    """vLLM's DSV4 attention class on this device, its padded heads, FlashMLA sparse support, the vendored interface, the prefill's
+    two functions and the gather's CuTe path."""
     from vllm.config import get_current_vllm_config
+    from vllm.models.deepseek_v4.common.ops import cache_utils as CU
+    from vllm.models.deepseek_v4.nvidia import flashmla as DF
     from vllm.models.deepseek_v4.nvidia.flashmla import DeepseekV4FlashMLAAttention
     from vllm.models.deepseek_v4.nvidia.model import _select_dsv4_attn_cls
     from vllm.v1.attention.ops import flashmla as VF
@@ -360,12 +568,17 @@ def selection() -> dict[str, Any]:
     cls = _select_dsv4_attn_cls(get_current_vllm_config())
     sup = VF.is_flashmla_sparse_supported()
     sha = hashlib.sha256(Path(FI.__file__).read_bytes()).hexdigest()
+    name = lambda f: f"{f.__module__}.{f.__name__}"  # noqa: E731
     rec = {"attn_cls": cls.__name__, "padded_heads": int(DeepseekV4FlashMLAAttention.get_padded_num_q_heads(NH)),
            "sparse_supported": list(sup), "interface": FI.__file__, "interface_sha256": sha,
-           "decode_fn": f"{VF.flash_mla_with_kvcache.__module__}.{VF.flash_mla_with_kvcache.__name__}"}
+           "decode_fn": name(VF.flash_mla_with_kvcache), "prefill_fn": name(DF.flash_mla_sparse_fwd),
+           "gather_fn": name(DF.dequantize_and_gather_k_cache), "has_cutedsl": bool(CU.has_cutedsl())}
     rec["checks"] = {"attn_cls": cls is DeepseekV4FlashMLAAttention, "padded_heads": rec["padded_heads"] == H_Q,
                      "sparse_supported": bool(sup[0]), "interface": sha == INTERFACE_SHA256,
-                     "decode_fn": rec["decode_fn"] == "vllm.third_party.flashmla.flash_mla_interface.flash_mla_with_kvcache"}
+                     "decode_fn": rec["decode_fn"] == "vllm.third_party.flashmla.flash_mla_interface.flash_mla_with_kvcache",
+                     "prefill_fn": rec["prefill_fn"] == "vllm.third_party.flashmla.flash_mla_interface.flash_mla_sparse_fwd",
+                     "gather_fn": rec["gather_fn"] == "vllm.models.deepseek_v4.common.ops.cache_utils.dequantize_and_gather_k_cache",
+                     "has_cutedsl": rec["has_cutedsl"]}
     rec["ok"] = all(rec["checks"].values())
     return rec
 
@@ -445,6 +658,65 @@ def launch_case(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], lis
     return rec, case_jobs(case, paths, ns, quick)
 
 
+def _i16(word: int) -> int:
+    return word - (1 << 16) if word >= 1 << 15 else word
+
+
+def launch_prefill(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """One prefill case as `_forward_prefill` runs a chunk: the two gathers into the workspace, then the sparse prefill over it;
+    each twice into two sentinels.  Its launch record and comparison jobs."""
+    import torch
+    from vllm.models.deepseek_v4.nvidia import flashmla as DF
+
+    o = prefill_operands(case)
+    ratio, pbs, _ = PREFILL_LAYERS[o["layer"]]
+    nc, m = (int(v) for v in o["geom"])
+    r_, t_ = len(PREFILL_REQS), o["q"].shape[0]
+    dev = "cuda"
+
+    def on(a: np.ndarray):
+        return torch.from_numpy(np.ascontiguousarray(a)).to(dev)
+
+    def cache(a: np.ndarray, block: int):
+        return on(a)[:, :block * TOKEN_BYTES].view(a.shape[0], block, TOKEN_BYTES)
+
+    def gather(sentinel: int):
+        kv = torch.full((r_, m, D), _i16(sentinel), dtype=torch.int16, device=dev).view(torch.bfloat16)
+        if ratio > 1:
+            DF.dequantize_and_gather_k_cache(kv, cache(o["extra_cache"], pbs), seq_lens=on(o["comp_lens"]), gather_lens=None,
+                                             block_table=on(o["extra_table"]), block_size=pbs, offset=0)
+        DF.dequantize_and_gather_k_cache(kv, cache(o["swa_cache"], SWA_PBS), seq_lens=on(o["seq_lens"]),
+                                         gather_lens=on(o["gather_lens"]), block_table=on(o["swa_table"]), block_size=SWA_PBS,
+                                         offset=nc)
+        return kv
+
+    q = on(o["q"].view(np.int16)).view(torch.bfloat16)
+    sink = on(o["sink"].view(np.float32))
+    idx, lens = on(o["idx"]).unsqueeze(1), on(o["lens"])
+
+    def attend(kv, sentinel: int):
+        out = torch.full((t_, H_Q, D), _i16(sentinel), dtype=torch.int16, device=dev).view(torch.bfloat16)
+        ret = DF.flash_mla_sparse_fwd(q=q, kv=kv.view(-1, 1, D), indices=idx, sm_scale=SCALE, attn_sink=sink, topk_length=lens,
+                                      out=out)
+        return out, ret
+
+    kv1, kv2 = gather(SENTINELS[0]), gather(SENTINELS[1])
+    out1, ret1 = attend(kv1, SENTINELS[0])
+    out2, _ = attend(kv1, SENTINELS[1])
+    torch.cuda.synchronize()
+    w1, w2 = _u16(kv1), _u16(kv2)
+    mask = written(o)
+    rec = {"phase": "prefill", "case": case, "layer": o["layer"], "b": t_, "width": int(o["idx"].shape[1]),
+           "lens": o["lens"].tolist(), "pairs": [prefill_pairs(int(n)) for n in o["lens"]], "geom": [nc, m],
+           "returned_shapes": [list(x.shape) for x in ret1],
+           "checks": {"shape": list(out1.shape) == [t_, H_Q, D] and list(kv1.shape) == [r_, m, D],
+                      "gather_rerun": bool(np.array_equal(w1[mask], w2[mask]) and np.all(w2[~mask] == SENTINELS[1])),
+                      "rerun": bool(torch.equal(out1.view(torch.int16), out2.view(torch.int16))),
+                      "returned": bool(torch.equal(ret1[0].view(torch.int16), out1.view(torch.int16)))}}
+    paths = _save(work / f"prefill-{case}", **prefill_arrays(o, w1, _u16(out1)))
+    return rec, prefill_jobs(case, paths, o["lens"], quick)
+
+
 # ------------------------------------------------------------------------------------------------------------------ comparisons
 def compare_twin(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [t0, t1): every output word of all 64 heads against `flashmla_twin.decode` at the token's SPLITS."""
@@ -483,7 +755,74 @@ def compare_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
         rec["first_mismatch"] = {"token": t, "head": h, "word": i, "reference": int(r[bad[0]]), "twin": int(y[h, i])}
 
 
-COMPARE = {"twin": compare_twin, "ref": compare_ref}
+def compare_gather(job: dict[str, Any], rec: dict[str, Any]) -> None:
+    """Every word of the GPU's workspace against `workspace` (the twin's rows where the gathers write, the sentinel elsewhere);
+    `FlashMlaGatherRow_v1` (the reference) against the twin on each request's last window row, request 1's window positions 4096
+    and 4097 and request 0's first five compressed rows (`edge`'s special rows)."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+
+    a = _load(job["paths"])
+    want, got = workspace(a, SENTINELS[0]), np.asarray(a["kv"], dtype=np.uint16)
+    bad = np.argwhere(want != got)
+    rec["words"] += int(got.size)
+    rec["mismatch"] += int(bad.shape[0])
+    if bad.shape[0] and rec["first_mismatch"] is None:
+        r, row, i = (int(v) for v in bad[0])
+        rec["first_mismatch"] = {"request": r, "row": row, "word": i, "want": int(want[r, row, i]), "kernel": int(got[r, row, i])}
+    rows = [_cache_rows(a["swa_cache"], a["swa_table"], r, [int(s) - 1], SWA_PBS) for r, s in enumerate(a["seq_lens"])]
+    rows.append(_cache_rows(a["swa_cache"], a["swa_table"], 1, [4096, 4097], SWA_PBS))
+    if "extra_cache" in a:
+        rows.append(_cache_rows(a["extra_cache"], a["extra_table"], 0, np.arange(5), int(a["extra_pbs"][0])))
+    fn = bind(P.FlashMlaGatherRow, **P.FLASHMLA_GATHER_DSV4)
+    for nope, scale, rope in rows:
+        y = PT.gather_rows(nope, scale, rope, QT)
+        for j in range(nope.shape[0]):
+            r = np.array(evaluate(fn, nope[j].tolist(), scale[j].tolist(), rope[j].tolist()), dtype=np.int64)
+            bad = np.flatnonzero(r != y[j])
+            rec["reference"] += 1
+            rec["twin_mismatch"] += int(bad.size)
+            if bad.size and rec["first_mismatch"] is None:
+                rec["first_mismatch"] = {"gather_row": j, "word": int(bad[0]), "reference": int(r[bad[0]]), "twin": int(y[j, bad[0]])}
+
+
+def compare_prefill_twin(job: dict[str, Any], rec: dict[str, Any]) -> None:
+    """Tokens [t0, t1): every output word of all 64 heads against `flashmla_prefill_twin.prefill` at the token's NP."""
+    a = _load(job["paths"])
+    for t in range(*job["tokens"]):
+        x, y = prefill_twin_out(a, t)
+        got = np.asarray(a["out"][t], dtype=np.uint16)
+        bad = np.argwhere(y != got)
+        rec["words"] += int(got.size)
+        rec["mismatch"] += int(bad.shape[0])
+        if bad.shape[0] and rec["first_mismatch"] is None:
+            h, i = (int(v) for v in bad[0])
+            rec["first_mismatch"] = {"token": t, "head": h, "word": i, "want": int(y[h, i]), "kernel": int(got[h, i]),
+                                     "len": x["len"], "NP": x["NP"]}
+
+
+def compare_prefill_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
+    """One token's real heads: `FlashMlaPrefill_v1{NH=16,NP,...}` (the reference) against the twin."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+
+    a = _load(job["paths"])
+    t = job["token"]
+    x, y = prefill_twin_out(a, t)
+    fn = bind(P.FlashMlaPrefill, NP=x["NP"], **P.FLASHMLA_PREFILL_DSV4)
+    r = evaluate(fn, x["q"][:NH].reshape(-1).tolist(), x["rows"].reshape(-1).tolist(), x["idx"].tolist(), x["len"], x["skv"],
+                 x["sink"][:NH].tolist())
+    r = np.array(r, dtype=np.int64)
+    bad = np.flatnonzero(r != y[:NH].reshape(-1))
+    rec["reference"] += 1
+    rec["twin_mismatch"] += int(bad.size)
+    if bad.size and rec["first_mismatch"] is None:
+        h, i = divmod(int(bad[0]), D)
+        rec["first_mismatch"] = {"token": t, "head": h, "word": i, "reference": int(r[bad[0]]), "twin": int(y[h, i])}
+
+
+COMPARE = {"twin": compare_twin, "ref": compare_ref, "gather": compare_gather, "prefill-twin": compare_prefill_twin,
+           "prefill-ref": compare_prefill_ref}
 
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
@@ -497,12 +836,17 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics: a window-only token (two blocks, one split), a full compressed token cut in
-    two, the lone token's split, combine and head shapes, the KV row."""
+    two, the lone token's split, combine and head shapes, the KV row; the prefill's gather row and a token of one pair and of a
+    full C4 row's nine."""
     from verity.ml.circuits.defs import bind
 
     st = {k: v for k, v in F.FLASHMLA_DSV4.items() if k != "NH"}
     blk = {"D": D, "BN": BN, "DOT": F.FLASHMLA_DSV4["DOT"], "SCALE": SCALE}
     targets = {
+        "FlashMlaGatherRow_v1{DN=448,DR=64,QT=64}": lambda: bind(P.FlashMlaGatherRow, **P.FLASHMLA_GATHER_DSV4),
+        "FlashMlaPrefill_v1{NH=16,NP=1,...}": lambda: bind(P.FlashMlaPrefill, NP=1, **P.FLASHMLA_PREFILL_DSV4),
+        "FlashMlaPrefill_v1{NH=16,NP=9,...}": lambda: bind(P.FlashMlaPrefill, NP=prefill_pairs(prefill_width("c4")),
+                                                           **P.FLASHMLA_PREFILL_DSV4),
         "FlashMlaKvRow_v1{DN=448,DR=64,QT=64}": lambda: bind(F.FlashMlaKvRow, DN=DN, DR=DR, QT=QT),
         "FlashMlaSplit_v1{NB=2,PARTIAL=False,...}": lambda: bind(F.FlashMlaSplit, NB=2, PARTIAL=False, **blk),
         "FlashMlaSplit_v1{NB=1,PARTIAL=True,...}": lambda: bind(F.FlashMlaSplit, NB=1, PARTIAL=True, **blk),
@@ -539,13 +883,14 @@ def gpu(work: Path, outdir: Path, quick: bool, doc: dict[str, Any]) -> list[dict
     doc["selection"] = step("selection", selection) or {"ok": False}
     print(f"[dsv4-flashmla] selection {json.dumps(doc['selection'])[:1500]}", flush=True)
     doc["stack"] = step("stack", stack) or {}
-    for _, case in CASES:
-        r = step(f"decode/{case}", lambda case=case: launch_case(work, case, quick))
+    for phase, case in CASES:
+        launch = launch_case if phase == "decode" else launch_prefill
+        r = step(f"{phase}/{case}", lambda launch=launch, case=case: launch(work, case, quick))
         if r is not None:
             doc["launches"].append(r[0])
             jobs += r[1]
-            print(f"[dsv4-flashmla] decode {case:6s} b={r[0]['b']} {json.dumps(r[0]['checks'])} "
-                  f"splits={np.diff(r[0]['num_splits']).tolist()[:24]}", flush=True)
+            shape = f"splits={np.diff(r[0]['num_splits']).tolist()[:24]}" if phase == "decode" else f"pairs={r[0]['pairs']}"
+            print(f"[dsv4-flashmla] {phase:7s} {case:6s} b={r[0]['b']} {json.dumps(r[0]['checks'])} {shape}", flush=True)
     torch.cuda.empty_cache()
     return jobs
 
@@ -631,7 +976,8 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="DeepSeek-V4-Pro's FlashMLA sparse decode on this Hopper GPU against its Programs")
+    ap = argparse.ArgumentParser(description="DeepSeek-V4-Pro's FlashMLA sparse decode and prefill on this Hopper GPU against "
+                                             "its Programs")
     ap.add_argument("--out", required=True, help=f"directory for {RECORD}")
     ap.add_argument("--scratch", default=None, help="parent of the scratch directory (the cases' operands and outputs)")
     ap.add_argument("--min-driver", type=int, default=575)
@@ -639,7 +985,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--want-sms", type=int, default=132)
     ap.add_argument("--workers", type=int, default=C.cpu_workers())
     ap.add_argument("--quick", action="store_true",
-                    help=f"a batch of {QUICK_BATCH} and the reference on one token per case: a first signal in minutes")
+                    help=f"a decode batch of {QUICK_BATCH} and the reference on one token per case: a first signal in minutes")
     a = ap.parse_args(argv)
     doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick)
     return 0 if doc["ok"] else 1
