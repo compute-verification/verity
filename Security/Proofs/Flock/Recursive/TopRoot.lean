@@ -68,10 +68,11 @@ theorem log2ceil_two_pow (k : Nat) : log2ceil (2 ^ k) = k := by
     have hlog : Nat.log2 (2 ^ (k + 1) - 1) = k := by
       apply (Nat.log2_eq_iff (by have := Nat.two_pow_pos k; rw [Nat.pow_succ]; omega)).2
       constructor
-      · rw [Nat.pow_succ]
-        have := Nat.two_pow_pos k
+      · have hlt : 2 ^ k < 2 ^ (k + 1) :=
+          Nat.pow_lt_pow_right (by norm_num) (by omega)
+        exact Nat.le_pred_of_lt hlt
+      · have := Nat.two_pow_pos (k + 1)
         omega
-      · omega
     rw [hlog]
 
 theorem log2ceil_nextPow2 (n : Nat) : log2ceil (nextPow2 n) = log2ceil n := by
@@ -107,7 +108,10 @@ theorem root_eq (dom : ByteArray) (leaves : Array ByteArray) :
       (fun level depth => next dom depth level) (base dom leaves)).getD 0 ByteArray.empty =
       (lev dom leaves (log2ceil leaves.size))[0]!
   rw [show base dom leaves = lev dom leaves 0 by rfl, fold_eq]
-  rw [Nat.zero_add, getElem!_eq_getD]
+  rw [Nat.zero_add, Array.getD_eq_getD_getElem?, getElem!_def]
+  change ((lev dom leaves (log2ceil leaves.size))[0]?).getD ByteArray.empty =
+    ((lev dom leaves (log2ceil leaves.size))[0]?).getD ByteArray.empty
+  rfl
 
 theorem get!_mem {a : Array ByteArray} {i : Nat} (h : i < a.size) : a[i]! ∈ a := by
   rw [getElem!_pos a i h]
@@ -146,7 +150,7 @@ theorem next_get (dom : ByteArray) (l : Nat) (a : Array ByteArray) {i : Nat} (hi
 /-- Equal-size, nonempty frame-v3 roots bind their supplied leaves unless two
 node-frame inputs from the two computations collide. -/
 theorem fv3Root_bind {dom : ByteArray} {leaves leaves' : Array ByteArray} {S : List ByteArray}
-    (hsz : leaves.size = leaves'.size) (hpos : 0 < leaves.size)
+    (hsz : leaves.size = leaves'.size)
     (hw : ∀ x ∈ leaves, x.size = 64) (hw' : ∀ x ∈ leaves', x.size = 64)
     (hS : ∀ x ∈ rootStrings dom leaves, x ∈ S) (hS' : ∀ x ∈ rootStrings dom leaves', x ∈ S)
     (cf : CF S)
@@ -252,7 +256,7 @@ theorem topLeaves_width (dom : ByteArray) (bcs : Array ByteArray) :
 /-- Under no collision among either recomputation's inputs, equal top roots
 bind the arrays of commit strings. -/
 theorem top_bind {dom : ByteArray} {bcs bcs' : Array ByteArray}
-    (hsz : bcs.size = bcs'.size) (hpos : 0 < bcs.size)
+    (hsz : bcs.size = bcs'.size)
     (cf : CF (topStrings dom bcs ++ topStrings dom bcs'))
     (hroot : FV3.root dom (topLeaves dom bcs) Sha512.hash =
       FV3.root dom (topLeaves dom bcs') Sha512.hash) :
@@ -260,7 +264,7 @@ theorem top_bind {dom : ByteArray} {bcs bcs' : Array ByteArray}
   have hleaves := fv3Root_bind
     (dom := dom) (leaves := topLeaves dom bcs) (leaves' := topLeaves dom bcs')
     (S := topStrings dom bcs ++ topStrings dom bcs')
-    (by simp [topLeaves_size, hsz]) (by simpa [topLeaves_size] using hpos)
+    (by simp [topLeaves_size, hsz])
     (topLeaves_width dom bcs) (topLeaves_width dom bcs')
     (fun x hx => List.mem_append_left _ (root_mem hx))
     (fun x hx => List.mem_append_right _ (root_mem hx)) cf hroot
@@ -285,7 +289,7 @@ open TopRoot
 /-- Two unequal level-zero top arrays with one `topEntry` root expose a
 collision among SHA-512 inputs used by those two root computations. -/
 theorem topRoot_collision {dom : ByteArray} {bcs bcs' : Array ByteArray}
-    (hsz : bcs.size = bcs'.size) (hpos : 0 < bcs.size) (hne : bcs ≠ bcs')
+    (hsz : bcs.size = bcs'.size) (hne : bcs ≠ bcs')
     (hroot : Flock.FV3.root dom (topLeaves dom bcs) Flock.Sha512.hash =
       Flock.FV3.root dom (topLeaves dom bcs') Flock.Sha512.hash) :
     Merkle.Collision Refine.H512 := by
@@ -301,6 +305,6 @@ theorem topRoot_collision {dom : ByteArray} {bcs bcs' : Array ByteArray}
       exact hxy (ByteArray.ext (Array.ext' h))
     · apply Subtype.ext
       simpa only [Refine.H512, Refine.bytes_of_list] using he
-  exact hne (top_bind hsz hpos cf hroot)
+  exact hne (top_bind hsz cf hroot)
 
 end Flock.SecurityProofs
