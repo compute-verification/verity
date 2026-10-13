@@ -51,8 +51,9 @@ bits), and its measured read rate of 1.488 TB/s, \(\mu_{\text{rebuild}}\) is 0.0
 k = 2 and 0.34% under p512/k2 (`timing.SQUARINGS_PER_S`, `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
 receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on `RateAuditSketch`, which adds at most
-\(C \cdot 2^{-95.12}\) a session for a prover of \(C\) SHA-512 compressions (`timing.sketch_failure`, §4): no more
-than \(2^{-40}\) up to \(C = 2^{55.12}\). block-sha512, kept for comparison, adds nothing. Neither adds to γ.
+\(C \cdot 2^{-95.12}\) a session at 16 rows for a prover of \(C\) SHA-512 compressions (`timing.sketch_failure`, §4):
+no more than \(2^{-40}\) up to \(C = 2^{55.12}\). At 64 rows, a registration's other row count, it is
+\(C \cdot 2^{-215.85}\). block-sha512, kept for comparison, adds nothing. Neither adds to γ.
 
 **Each window alone.** The same terms over window \(t\)'s own span \(\Sigma_t = D_t - b_{t-1}\) (`WindowRecord.span_ns`),
 with its \(U_t\), \(P_t\) and \(m^*_t\) (or the pooled bound's \(f_t U_t\)) in place of the session's sums, give
@@ -97,6 +98,7 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 | `receipt` | the receipt kind, the one its registration names (§4): `sketch-sha512` unless `block-sha512` is named |
 | `bind` | whether receipts bind PoUW's tile output \(z\), as its registration says (§4): no unless it binds them |
 | `layout` | how a kernel's sketch vectors map to registered blocks, the one its registration names (§4): `store-order/v0` |
+| `rows` | sketch-sha512's \(k_s\), the one its registration names (§4): 16 or 64, 16 unless 64 is named (None is the kind's default); 0 under block-sha512 |
 
 The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by window. It is not a parameter.
 
@@ -112,15 +114,16 @@ The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by
 2. Only after the payload root has arrived does the verifier draw the codec seed from its own secret and a fresh
    32-byte nonce: `derive(source, "verity/remote-bandwidth/codec/v0", {node, blocks, payload, codec, nonce}).stream("codec",
    32)`, `codec` the name of the codec the registration names. The registration also names its receipt kind, whether
-   its receipts bind \(z\) and its block layout (§4), none of them in this context: the store depends on none of them.
+   its receipts bind \(z\), its block layout and sketch-sha512's rows (§4), none of them in this context: the store
+   depends on none of them.
 3. The prover encodes every block under that seed with that codec (`codec.py`, below):
    \(E_j = \text{encode}(\text{payload}_j)\).
 4. `Registration.digest = SHA512("verity/remote-bandwidth/registration/v0\0" ‖ frame(node) ‖ u64be N ‖ payload root ‖
-   codec seed ‖ frame(codec name) ‖ frame(receipt kind) ‖ u8 bind ‖ frame(block layout))`, `frame` being
-   `verity.ml.randomness.frame` ("s" ‖ u64be length ‖ the name in UTF-8) and bind 1 if the receipts bind \(z\), else 0.
-   A record cites this digest, each session's coin commitment binds it, and each session's chain starts from it, so a
-   session's coins and seeds are bound to its kind, to whether it binds \(z\) and to the block cut its kernels' sketch
-   vectors follow.
+   codec seed ‖ frame(codec name) ‖ frame(receipt kind) ‖ u8 bind ‖ frame(block layout) ‖ u32be rows)`, `frame` being
+   `verity.ml.randomness.frame` ("s" ‖ u64be length ‖ the name in UTF-8), bind 1 if the receipts bind \(z\), else 0,
+   and rows sketch-sha512's \(k_s\) (0 under block-sha512). A record cites this digest, each session's coin commitment
+   binds it, and each session's chain starts from it, so a session's coins and seeds are bound to its kind, to whether
+   it binds \(z\), to the block cut its kernels' sketch vectors follow and to the sketch's rows.
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT` (Daniel, 12 Oct, #1884). The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -194,11 +197,11 @@ y_(i,p)     sketch-sha512, the default: SHA512(Z("verity/remote-bandwidth/sketch
             u64be j ‖ σ_(i,j)),  j = plan_(t,i)[p]
             block-sha512, for comparison: SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖
             e_(i,j))
-S_(t,i)     sketch-sha512's 16 × 4096 signs: K = derive(seed_(t,i), "verity/remote-bandwidth/sketch-signs/v0",
-            {"tag": "sketch-sha512", "k": 16, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u
-            (byte u // 8, LSB first) 1 → −1 and 0 → +1
-σ_(i,j)     S_(t,i) · e, e the 4096 bytes of e_(i,j) as int8, over the integers (|σ[c]| ≤ 2^19): 16 int32
-            little-endian, 64 bytes
+S_(t,i)     sketch-sha512's k_s × 4096 signs, k_s the registration's rows (16 or 64): K = derive(seed_(t,i),
+            "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 4096}), row c the first
+            512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB first) 1 → −1 and 0 → +1
+σ_(i,j)     S_(t,i) · e, e the 4096 bytes of e_(i,j) as int8, over the integers (|σ[c]| ≤ 2^19): k_s int32
+            little-endian, 64 bytes at 16 rows and 256 at 64
 spread(z)   z over 4096 bytes: byte u of z XORed into byte u mod 4096 (folded), or a shorter z repeated
 leaf c      v_c = y_(i,16c) ‖ … ‖ y_(i,16c+15), positions in plan order, the last leaf short; committed as
             hm96-sha512/row/v2: x_c = sha512/row/v2(v_c), value tree_leaf(key, commit_string(key, x_c, salt_c)),
@@ -225,11 +228,19 @@ and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 **The two receipt kinds.** The registration names one (`receipts.KINDS`), and `Params.receipt` must name the same.
 Every receipt of its sessions is of that kind, the weights' and the KV pages' alike (§8). sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for
 (Daniel, 12 Oct, #1884). block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
-sketch-sha512 is ra-codec-tensor's `sketch_receipt.py` (#1916, at 5b8decfc5), byte for byte: the suite pins its numpy
-outputs, and `receipts.SketchReceipter` computes the same in pure Python. Each kind's receipt is 64 bytes, so leaves,
-salts and the tree don't change. The difference is what is hashed after the seed's block: sketch-sha512 hashes \(j\)
-and the 64-byte sketch, one compression; block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions. The
-sketch's signs come from the pass's seed, so like the seed they exist only once the root before it does.
+sketch-sha512 is ra-codec-tensor's `sketch_receipt.py` (#1916, at 5b8decfc5; at 64 rows, f666d887b), byte for byte:
+the suite pins its numpy outputs at both row counts, and `receipts.SketchReceipter` computes the same in pure Python.
+Each kind's receipt is 64 bytes, so leaves, salts and the tree don't change. The difference is what is hashed after
+the seed's block: sketch-sha512 hashes \(j\) and the sketch, one compression at 16 rows (64 bytes) and three at 64
+(256 bytes); block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions. The sketch's signs come from the
+pass's seed, so like the seed they exist only once the root before it does.
+
+**The rows.** sketch-sha512's \(k_s\) is a registration parameter (`receipts.ROWS`: 16 or 64), bound in the digest
+(§3) and in the signs' key (`"k"`), so 64-row signs are not 16-row signs and 48 more, and a session's `Params.rows`
+must be the registration's. 16 is the default. 64 rows read the bound at \(r^* = 27\), \(2^{-215.85}\) a compression
+(below), so no session is long enough to need a cap. On the device reader they cost τ = 1.226 a pass in one kernel
+with an L2 hint, below 16 rows' 1.258 (ra-codec-tensor at 47b703a14, run r20261013-071237-9303, art:dd7bbe89). 64
+becomes the default once the fused GEMM's cost at 64 rows is measured; until then a registration names 64 to use it.
 
 What each kind rests on:
 
@@ -314,8 +325,8 @@ The GPUs are RTX PRO 6000s at \(7.0 \cdot 10^9\) SHA-512 compressions a second e
 (#1916, below). \(C\) counts every compression the prover makes, on any hardware: the grinding needs no access to the
 store. So at 16 rows a session stays below \(2^{-40}\) up to \(2^{55.12}\) compressions: \(2^{-50.19}\) for one node's
 10-minute session, \(2^{-43.02}\) for a node-day, and \(2^{-40}\) for about 9,400 such GPUs grinding through a
-10-minute session. \(2^{-64}\) is out of reach at 16 rows (42 ms of one node's hashing) and needs 64 rows, whose cost
-on the GPU isn't measured.
+10-minute session. \(2^{-64}\) is out of reach at 16 rows (42 ms of one node's hashing) and needs 64 rows, a
+registration's other row count, at τ 1.226 a pass on the reader; the fused GEMM's cost at 64 rows isn't measured yet.
 
 A grinding try is not a pass's commitment. It reads no block: re-salting one receipt leaf changes the root without
 changing any receipt. As the reference computes it, a try is 15 + 3⌈log₂ n⌉ compressions over \(n\) leaves
@@ -520,11 +531,12 @@ opening.
 
 `Session.record()` returns a `Record` once every window is accepted. `public()` holds the registration digest, the coin
 commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z\), the codec's name and parameters
-(`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), the block layout, each window's passes and
-receipts \(U_t\), and the session's span. The digest binds the kind, `bind`, the codec and the layout already, but the
-record names them as well: what its receipts rest on depends on the first two (§4), and `ledger` takes a link term
-only from a record that binds \(z\); \(\mu_{\text{rebuild}}\) is priced from the record's codec (§1, §3), and `ledger`
-refuses a rebuild model of any other; and the layout says which bytes a credited block is (§4). Each
+(`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), the block layout, the sketch's rows
+(`rows`), each window's passes and receipts \(U_t\), and the session's span. The digest binds the kind, `bind`, the
+codec, the layout and the rows already, but the record names them as well: what its receipts rest on depends on the
+kind, `bind` and the rows (§4), and `ledger` takes a link term only from a record that binds \(z\);
+\(\mu_{\text{rebuild}}\) is priced from the record's codec (§1, §3), and `ledger` refuses a rebuild model of any
+other; and the layout says which bytes a credited block is (§4). Each
 `WindowRecord` carries its passes' lengths \(L_{t,i}\), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so
 its span \(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`. That is every input of
 \(\gamma_t\) but the node's measured \(R\) and \(S_{\text{chip}}\) and the models, so the every-window claim is

@@ -63,11 +63,11 @@ def store() -> audit.Store:
     return audit.Store(audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32)), payloads, salts)
 
 
-def registered(store: audit.Store, receipt: str, bind: bool) -> audit.Store:
-    """`store` registered under `receipt` and `bind` with the same nonce: neither is in the codec seed's context, so its
-    blocks are `store`'s, and only the registration and its digest differ."""
+def registered(store: audit.Store, receipt: str, bind: bool, rows: int | None = None) -> audit.Store:
+    """`store` registered under `receipt`, `bind` and `rows` with the same nonce: none is in the codec seed's context,
+    so its blocks are `store`'s, and only the registration and its digest differ."""
     reg = audit.register(SOURCE, NODE, N, store.registration.payload_root, codec.FALLBACK, receipt, bind=bind,
-                         nonce=bytes(32))
+                         rows=rows, nonce=bytes(32))
     assert reg.key == store.registration.key
     out = copy.copy(store)
     out.registration = reg
@@ -95,6 +95,12 @@ def block_store(stores) -> audit.Store:
     return stores[receipts.BLOCK_SHA512, False]
 
 
+@pytest.fixture(scope="module")
+def rows64_store(store) -> audit.Store:
+    """sketch-sha512 at 64 rows, of the block alone."""
+    return registered(store, receipts.SKETCH_SHA512, False, 64)
+
+
 def params(**kw) -> Params:
     base = dict(blocks=N, deadline_ns=A, windows=3, samples=7, delta=1e-6, codec=codec.FALLBACK)
     return Params(**{**base, **kw})
@@ -106,8 +112,8 @@ def no_rebuild(r: audit.Record) -> audit.Rebuild:
 
 
 def params_of(st: audit.Store, **kw) -> Params:
-    """`params` under `st`'s receipt kind and `bind`."""
-    return params(receipt=st.registration.receipt, bind=st.registration.bind, **kw)
+    """`params` under `st`'s receipt kind, `bind` and rows."""
+    return params(receipt=st.registration.receipt, bind=st.registration.bind, rows=st.registration.rows, **kw)
 
 
 def challenger(store, p: Params, label: bytes = b"coins") -> coins.Challenger:
@@ -170,7 +176,7 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
                           "coins": s.commitment.root.hex(), "layout": "store-order/v0", "passes": [4, 3, 3],
                           "protocol": audit.PROTOCOL_ID,
                           "receipt": "sketch-sha512", "receipts": [4 * N, 3 * N, 3 * N],
-                          "registration": store.registration.digest.hex(), "span_ns": 3000 + A}
+                          "registration": store.registration.digest.hex(), "rows": 16, "span_ns": 3000 + A}
     assert r.codec == store.registration.codec == codec.FALLBACK
     w1 = r.profile()["windows"][1]
     assert w1["lengths"] == [N] * 3 and w1["released_ns"] == 1000 and w1["deadline_ns"] == 2000 + A
@@ -466,17 +472,34 @@ def test_the_codec_seed_is_drawn_after_and_bound_to_the_payload_root() -> None:
     assert dataclasses.replace(a, codec=codec.FALLBACK).digest != a.digest     # the digest binds the codec's name
     assert a.receipt == receipts.DEFAULT == receipts.SKETCH_SHA512 == receipts.KINDS[0] and a.bind is False
     blocked = audit.register(SOURCE, NODE, N, root, codec.DEFAULT, receipts.BLOCK_SHA512, nonce=bytes(32))
-    assert blocked == dataclasses.replace(a, receipt=receipts.BLOCK_SHA512)    # the same codec seed: the same store
+    assert blocked == dataclasses.replace(a, receipt=receipts.BLOCK_SHA512, rows=0)   # the same codec seed and store
     assert blocked.digest not in {a.digest, *(o.digest for o in others)}       # the digest binds the receipt kind
     bound = audit.register(SOURCE, NODE, N, root, bind=True, nonce=bytes(32))
     assert bound == dataclasses.replace(a, bind=True)                          # nor is bind in the codec seed's context
     assert bound.digest not in {a.digest, blocked.digest, *(o.digest for o in others)}   # the digest binds it
     assert a.digest == hashlib.sha512(audit.REGISTRATION_DOMAIN + frame(NODE) + N.to_bytes(8, "big") + root
                                       + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\0"
-                                      + frame("store-order/v0")).digest()
+                                      + frame("store-order/v0") + (16).to_bytes(4, "big")).digest()
     assert bound.digest == hashlib.sha512(audit.REGISTRATION_DOMAIN + frame(NODE) + N.to_bytes(8, "big") + root
                                           + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\1"
-                                          + frame("store-order/v0")).digest()
+                                          + frame("store-order/v0") + (16).to_bytes(4, "big")).digest()
+    assert a.rows == receipts.SKETCH_ROWS == receipts.ROWS[0] == 16 and blocked.rows == 0
+    wide = audit.register(SOURCE, NODE, N, root, rows=64, nonce=bytes(32))
+    assert wide == dataclasses.replace(a, rows=64)                             # nor are the rows in its context
+    assert wide.digest == hashlib.sha512(audit.REGISTRATION_DOMAIN + frame(NODE) + N.to_bytes(8, "big") + root
+                                         + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\0"
+                                         + frame("store-order/v0") + (64).to_bytes(4, "big")).digest()
+    assert wide.digest not in {a.digest, blocked.digest, bound.digest, *(o.digest for o in others)}
+    assert audit.register(SOURCE, NODE, N, root, rows=16, nonce=bytes(32)) == a
+    assert blocked == audit.register(SOURCE, NODE, N, root, codec.DEFAULT, receipts.BLOCK_SHA512, rows=0,
+                                     nonce=bytes(32))
+    sketch, block = receipts.SKETCH_SHA512, receipts.BLOCK_SHA512
+    for kind, rows, match in ((sketch, 32, "rows are one of"), (sketch, 0, "one of"), (sketch, True, "one of"),
+                              (sketch, 64.0, "one of"), (block, 16, "sketches nothing"), (block, False, "nothing")):
+        with pytest.raises(ValueError, match=match):
+            audit.register(SOURCE, NODE, N, root, codec.DEFAULT, kind, rows=rows, nonce=bytes(32))
+        with pytest.raises(ValueError, match=match):
+            params(receipt=kind, rows=rows)
     assert a.layout == receipts.LAYOUT == receipts.STORE_ORDER == receipts.LAYOUTS[0]
     assert dataclasses.replace(a, layout="gemm-a-fragment/v0").digest != a.digest   # the digest binds the layout
     with pytest.raises(ValueError, match="a block layout is one of"):                # one the verifier can't map
@@ -495,11 +518,12 @@ def test_the_codec_seed_is_drawn_after_and_bound_to_the_payload_root() -> None:
         audit.register(SOURCE, NODE, N, root, "p1024/k3/masked", nonce=bytes(32))
 
 
-def test_a_session_refuses_parameters_that_are_not_the_registrations(store, stores, block_store) -> None:
+def test_a_session_refuses_parameters_that_are_not_the_registrations(store, stores, block_store, rows64_store) -> None:
     bound = stores[receipts.DEFAULT, True]
     for st, p in ((store, params(codec=codec.DEFAULT)), (store, params(blocks=N + 1)),
                   (store, params(receipt=receipts.BLOCK_SHA512)), (block_store, params()),
-                  (store, params(bind=True)), (bound, params())):
+                  (store, params(bind=True)), (bound, params()), (store, params(rows=64)), (rows64_store, params()),
+                  (rows64_store, params(rows=16))):
         with pytest.raises(ValueError, match="not the registration's"):
             Session(p, st.registration, audit.NoiseTiles(96) if p.bind else None, challenger(st, p), not_before_ns=0,
                     clock=Clock())
@@ -582,6 +606,50 @@ def test_a_sketch_receipt_hashes_the_passs_signed_sums_of_the_block_seed_first(s
             r(*bad)
     with pytest.raises(ValueError, match="a receipt kind is one of"):
         receipts.receipter("sha512", seed)
+
+
+def test_a_64_row_sketch_is_its_own_signs_and_hashes_256_bytes(store) -> None:
+    """At k_s = 64 the signs' key binds k, so its first 16 rows are not the 16-row signs, and σ_j is 64 int32, 256
+    bytes, three SHA-512 compressions after the seed's block where 16 rows take one."""
+    seed, z, j, block = hashlib.sha512(b"a pass seed").digest(), bytes(range(96)), 5, store.blocks[5]
+    r = receipts.SketchReceipter(seed, 64)
+    assert r.rows == 64 and receipts.SketchReceipter(seed).rows == 16
+    assert receipts.receipter("sketch-sha512", seed).rows == 16
+    bits = np.frombuffer(b"".join(receipts.sign_bits(seed, 64)), np.uint8).reshape(64, 512)
+    signs = 1 - 2 * np.unpackbits(bits, axis=1, bitorder="little").astype(np.int64)
+    assert receipts.sign_bits(seed, 64)[:16] != receipts.sign_bits(seed)
+    pre = receipts.sketch_prefix(seed)
+    for zz, e in ((None, block), (z, bytes(a ^ b for a, b in zip(block, (z * 43)[:4096])))):
+        sigma = r.sketch(block, zz)
+        assert len(sigma) == 256
+        assert sigma == (signs @ np.frombuffer(e, np.int8).astype(np.int64)).astype("<i4").tobytes()
+        y = r(j, block, zz)
+        assert y == hashlib.sha512(pre + j.to_bytes(8, "big") + sigma).digest() == receipts.receipter(
+            "sketch-sha512", seed, 64)(j, block, zz) != receipts.SketchReceipter(seed)(j, block, zz)
+        assert -(-(len(pre) + 8 + len(sigma) + 17) // 128) == 4                  # the seed's block and three
+    for rows in (0, 16.0, 32, True):
+        with pytest.raises(ValueError, match="one of"):
+            receipts.SketchReceipter(seed, rows)
+        with pytest.raises(ValueError, match="one of"):
+            receipts.sign_bits(seed, rows)
+    assert type(receipts.receipter("block-sha512", seed)) is receipts.Receipter
+    assert type(receipts.receipter("block-sha512", seed, 0)) is receipts.Receipter
+    with pytest.raises(ValueError, match="sketches nothing"):
+        receipts.receipter("block-sha512", seed, 64)
+
+
+def test_an_honest_64_row_session_is_accepted_and_names_its_rows(rows64_store) -> None:
+    """The verifier recomputes each opened receipt at the registration's 64 rows, and the record names them; receipts
+    made at 16 rows under the 64-row registration fail the first draw."""
+    st = rows64_store
+    s, prover, passes, clock = drive(st, params_of(st), SCHEDULE, plan=partial)
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    assert s.record().public()["rows"] == s.record().rows == 64
+    ps = passes[1, 2]
+    assert ps.receipts[0] == receipts.SketchReceipter(ps.seed, 64)(ps.plan.block(0), st.blocks[ps.plan.block(0)])
+    s, prover, passes, clock = drive(st, params_of(st), SCHEDULE,
+                                     run=committed_with(lambda seed, prover: receipts.SketchReceipter(seed)))
+    assert finish(s, prover, passes, clock) == [audit.Verdict(0, False, "receipt", s.windows[0].draws[0])]
 
 
 @pytest.mark.parametrize("kind", receipts.KINDS)
