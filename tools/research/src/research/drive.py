@@ -159,8 +159,8 @@ def cancel_runs(repo: Path, ids: list[str], reason: str) -> None:
                        capture_output=True, text=True)
 
 
-def merge_thread_post(text: str, to: tuple[str, ...] = (CI,)) -> bool:
-    r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", "ci", "--thread", _merge_thread(), "--to", *to,
+def merge_thread_post(text: str, to: tuple[str, ...] = (CI,), sender: str = "ci") -> bool:
+    r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", sender, "--thread", _merge_thread(), "--to", *to,
                         "--quiet", "--text", text], capture_output=True, text=True)
     return r.returncode == 0
 
