@@ -101,6 +101,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vocab.py", "verity_vllm/program/frontend/rules/triton_iface.py",
                          "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
                          "verity_vllm/program/frontend/targets.py",
+                         "verity_vllm/pipeline/committed_units.py",
                          # [R13 tp] the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
@@ -363,12 +364,15 @@ def _cuda_available() -> bool:
 
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
-        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None) -> dict:
+        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None,
+        committed_units: list[str | dict] | None = None) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.pipeline.committed_units import parse as parse_committed_units
     os.makedirs(out, exist_ok=True)
     t_start = time.time()
     sampling = dict(sampling) if sampling is not None else {"kind": "greedy", "source": "default"}
+    committed_entries = parse_committed_units(committed_units)
     if tp < 1 or not (0 <= rank < tp):
         raise ValueError(f"--tp {tp} --rank {rank}")
     if target is None:   # [X-01] no declared target: the target is THIS host's GPU, queried once (multi_processor_count, capability); GPU-free host -> default
@@ -420,7 +424,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-                   tp=tp, rank=rank, launch=launch, emit=emit)
+                   tp=tp, rank=rank, launch=launch, emit=emit, committed_units=committed_entries)
     except _Refused:
         pass
     res = _finish(out, res, t_start)
@@ -438,7 +442,8 @@ class _Refused(Exception):
 
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-               tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None) -> None:
+               tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None,
+               committed_units: tuple[dict, ...] = ()) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import vllm_meta as vm
@@ -546,7 +551,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
                                     check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values),
-                                    session=session)
+                                    session=session, committed_units=committed_units)
             rep = derived(rep) if target.ir == "boolean" else rep
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
@@ -600,6 +605,9 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["rules_applied"] = rep.provenance["rules_applied"]
     res["n_applications"] = len(rep.provenance["applications"])
     res["weights"] = {"n_fields": len(rep.provenance["weights"]), "roles": rep.provenance.get("weight_roles")}
+    if rep.provenance.get("committed_units"):
+        from verity_vllm.pipeline.committed_units import record as committed_record
+        res["committed_units"] = committed_record(rep.provenance["committed_units"])
     if tp > 1:
         res["tp"]["links"] = write_tp_links(out, res, program, rep, tp, rank, model_root=model_root)
     res["mutation_effects"] = rep.provenance["mutation_effects"]
@@ -703,6 +711,7 @@ def _write_manifest(out: str, res: dict) -> None:
                           "site_packages_by_package": tr.get("site_packages_by_package"),
                           "non_site_packages_paths": [p for p in tr.get("non_site_packages_paths", []) if not p.startswith("/usr/lib/python")]},
          "program": res.get("program"), "spec_histogram": res.get("spec_histogram"), "ok": res.get("ok"), "unsupported": res.get("unsupported"),
+         **({"committed_units": res["committed_units"]} if res.get("committed_units") else {}),
          "files": ["descriptor.json.gz (verity.ml.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand runs)", "derive-report.json", "inputs.json", "result.json",
                    "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
     if res.get("relabeled_from"):
@@ -742,6 +751,9 @@ class Options:
                                              "has N rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: "
                                              "refused under FA3, whose tile reads it; recorded and inert under FA2).  Omitted = own rows (a batch of one).  "
                                              "row_pod.sh derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
+    committed_unit: list[str] | None = option("--committed-unit", action="append", default=None, metavar="JSON",
+                                               help="test-only explicit committed unit; repeat JSON {\"op\",\"module\",\"reason\"}. "
+                                                    "Every matching op output becomes committed_<k>; any non-empty list is not of record")
 
 
 def main(a: Options) -> int:
@@ -754,7 +766,7 @@ def main(a: Options) -> int:
         emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
-                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_max_seqlen_q), emit=emit)
+                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_max_seqlen_q), emit=emit, committed_units=a.committed_unit)
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)
@@ -765,6 +777,8 @@ def main(a: Options) -> int:
     summary = {k: res.get(k) for k in ("ok", "unsupported", "program", "rules_applied", "n_applications", "derive_secs")}
     summary["target"] = {k: (res.get("target") or {}).get(k) for k in ("declared", "applied")}
     summary["artifact_identity"] = (res.get("artifact") or {}).get("identity")
+    if res.get("committed_units"):
+        summary["committed_units"] = res["committed_units"]
     print(json.dumps(summary, indent=1, default=str))
     if res.get("ok"):
         print(json.dumps(res["spec_histogram"], indent=1))

@@ -523,6 +523,44 @@ def test_unsupported_is_never_a_partial_program():
     assert set(REGISTRY.defs) == before
 
 
+def test_committed_unit_is_an_explicit_input_and_no_list_is_digest_neutral():
+    class Relu(torch.nn.Module):
+        def forward(self, x):
+            return torch.relu(x)
+
+    source = Relu()
+    x = torch.tensor([[-2.0, 0.5, 3.0]], dtype=torch.float32)
+    full = derive_report(source, (torch.empty_like(x),), **REF, name="Relu")
+    empty = derive_report(source, (torch.empty_like(x),), **REF, name="Relu", committed_units=[])
+    listed = derive_report(source, (torch.empty_like(x),), **REF, name="Relu", committed_units=[
+        {"op": "aten.relu.default", "module": "*", "reason": "toy unit has no served Definition"}])
+    assert full.ok and empty.ok and listed.ok
+    assert program_digest(full.program) == program_digest(empty.program)
+    assert program_digest(listed.program) != program_digest(full.program)
+    assert [name for name, _type in listed.program.fn.body.params] == ["x", "committed_0"]
+    unit = listed.provenance["committed_units"][0]
+    assert unit["op"] == "aten.relu.default" and unit["reason"] == "toy unit has no served Definition"
+    assert unit["list_entry"]["module"] == "*" and unit["operand_refs"][0]["node"] == "x"
+
+    x_bits = [int(v) for v in _bits(x)]
+    true_bits = [int(v) for v in _bits(torch.relu(x))]
+    full_table = materialize(full.program, [x_bits])
+    listed_table = materialize(listed.program, [x_bits, true_bits])
+    assert [full_table[g] for g in full.program.circuit.root_outputs()] == [
+        listed_table[g] for g in listed.program.circuit.root_outputs()]
+
+
+def test_unlisted_unknown_op_still_refuses_the_whole_program():
+    class Sin(torch.nn.Module):
+        def forward(self, x):
+            return torch.sin(x)
+
+    assert isinstance(derive(Sin(), (torch.empty(2),), **REF), Unsupported)
+    wrong = derive(Sin(), (torch.empty(2),), **REF, committed_units=[
+        {"op": "aten.cos.default", "module": "*", "reason": "does not match"}])
+    assert isinstance(wrong, Unsupported)
+
+
 def test_rule_set_is_versioned_and_recorded():
     infos = DEFAULT_RULES.to_json()
     assert infos["rules"] and all(i["version"] >= 1 and i["rule"].endswith(f"_v{i['version']}") for i in infos["rules"])

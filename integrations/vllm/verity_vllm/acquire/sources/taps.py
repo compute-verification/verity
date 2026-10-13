@@ -17,8 +17,8 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import (call_boundary_source, norm_scale_source, route_source, router_softmax_source, scale_products_source,
-                                         vocab_range_source)
+from verity_vllm.acquire.sources import (call_boundary_source, committed_unit_source, norm_scale_source, route_source,
+                                         router_softmax_source, scale_products_source, vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
 from verity_vllm.program.registry.topp_geometry import splits_for_v1
@@ -63,6 +63,8 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
                                                          plan=call_boundary_plan)
     required_classes, _src = scale_products_source.attach(com, bool(SP.manifest_sites(manifest)), manifest, required_classes,
                                                           explicit_classes=explicit_classes, model=model)
+    required_classes, _src = committed_unit_source.attach(com, manifest, required_classes,
+                                                          explicit_classes=explicit_classes, model=model)
     prescribe_idle_splits(com, manifest)
     return required_classes
 
@@ -96,7 +98,8 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     one = int((manifest or {}).get("ranks") or 1) == 1
     return [*(cls.short_name for _f, _key, _mod, fam, cls in SOURCES if fam in fams),
             *([call_boundary_source.CallBoundarySource.short_name] if one and call_boundary_source.manifest_sites(manifest) else []),
-            *([scale_products_source.ScaleProductsSource.short_name] if one and SP.manifest_sites(manifest) else [])]
+            *([scale_products_source.ScaleProductsSource.short_name] if one and SP.manifest_sites(manifest) else []),
+            *([committed_unit_source.CommittedUnitSource.short_name] if committed_unit_source.manifest_sites(manifest) else [])]
 
 
 def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **given: Any) -> dict[str, Any]:
@@ -120,6 +123,12 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **gi
             out["route_source"] = {"stats": dict(rsrc.stats)}
     except (ValueError, RuntimeError, AttributeError) as e:
         out["route_source"] = {"error": repr(e)[:200]}
+    try:
+        _classes, src = committed_unit_source.attach(com, mine, (), explicit_classes=True, model=model)
+        if src is not None:
+            out["committed_unit_source"] = {"stats": dict(src.stats)}
+    except (SystemExit, ValueError, RuntimeError) as e:
+        out["committed_unit_source"] = {"error": repr(e)[:200]}
     return out
 
 

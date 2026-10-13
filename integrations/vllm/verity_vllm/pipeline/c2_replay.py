@@ -211,6 +211,9 @@ def programs_of_record(s: Site, _rl: dict[str, str]) -> tuple[dict[str, dict], d
     else:
         _l1 = MF.load_program(args.program_dir)
         _loaded = {_rl[str(r.get("request_id"))]: _l1 for r in reqs}
+    from verity_vllm.pipeline.committed_units import require_of_record
+    for _request, _program in _loaded.items():
+        require_of_record(_program.get("result"), where=f"replay Program of record {_request}")
     _digs = {k: str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "") for k, v in _loaded.items()}
     if not _of_record:
         raise RuntimeError("no Program digest of record to check the replay Programs against (pass --program-digest / --required-manifest)")

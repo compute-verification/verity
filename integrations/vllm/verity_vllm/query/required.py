@@ -594,6 +594,25 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
         identities.append(row)
         fam_counts[family] += 1
 
+    # --- committed-only inputs: explicit test-only gaps, committed at their runtime op but not verified by this Program ----------
+    committed_record = res.get("committed_units") if isinstance(res.get("committed_units"), Mapping) else None
+    committed_refs: set[ValueRef] = set()
+    if committed_record:
+        from verity_vllm.pipeline.committed_units import FAMILY
+        params_by_name = {p.name: p for p in P.params}
+        for unit in committed_record.get("units") or []:
+            p = params_by_name.get(str(unit.get("input")))
+            if p is None:
+                raise ValueError(f"committed unit {unit.get('input')!r} is not a parameter of Program {pdig[:16]}")
+            committed_refs.update(ValueRef(p.id, port.name) for port in p.port_table)
+            readers = [c for c in P.calls if any(v.call == p.id for v in param_reads(c))]
+            step = step_of(readers[0].id) if readers else 0
+            for port in p.port_table:
+                member = str(unit["input"]) if len(p.port_table) == 1 else f"{unit['input']}/{port.name}"
+                add(FAMILY, step, 0, impl(str(unit.get("module") or "")), member, 0, port.elems,
+                    dtype=_dtype(port.width), op=unit.get("op"), reason=unit.get("reason"),
+                    list_entry=unit.get("list_entry"), fx_node=unit.get("node"), unverified=True)
+
     # --- weights: every prescribed record field --------------------------------------------------------------------------------------
     for p in record_params:
         for port in sorted(p.port_table, key=lambda q: q.name):
@@ -653,7 +672,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     # --- the token ids a module body consumes: prompt input or a sampling event's output -------------------------------------------
     ids_rows: Counter = Counter()
     event_set = frozenset(events)
-    non_ids = pop.peer_inputs                                   # a rank Program's received peer partials are not token ids
+    non_ids = set(pop.peer_inputs) | committed_refs             # peer partials and explicit committed-only values are not token ids
     for c in P.calls:
         m = corr.module_of(c.id)
         if not m or c.family in SAMPLING_EVENTS:            # a selector's runtime inputs are the sampler's (above), wherever it sits (TP: `inner`)
@@ -720,6 +739,10 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
         q["moe_layers"] = sorted(moe_layers)
     if any(f[:8] == "sampler_" for f in fam_counts):
         q["required_families"] += sorted(f for f in fam_counts if f[:8] == "sampler_")
+    if committed_record:
+        from verity_vllm.pipeline.committed_units import FAMILY
+        q["required_families"].append(FAMILY)
+        q["policy"]["unverified"] = list(committed_record.get("inputs") or ())
     q["residuals_applied"] = dict(sorted(residual_counts.items()))
     alias_out = {impl(m): [impl(canon), k] for m, (canon, k) in aliases.items() if m != canon}
     man = {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": pdig,
@@ -736,5 +759,6 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
                            "attention_layers": len(attn_bodies), "units": len(B.units), "boundary_values": len(B.values),
                            "required_values": len(req.values), "literal_calls": len(literals)},
            "complete": not unmodelled, "unmodelled": dict(unmodelled),
-           "manifest_digest": fmt.manifest_digest(identities), "identities": identities}
+           "manifest_digest": fmt.manifest_digest(identities), "identities": identities,
+           **({"committed_units": dict(committed_record)} if committed_record else {})}
     return BridgeResult(man, req, residual_counts)

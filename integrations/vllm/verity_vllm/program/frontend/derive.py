@@ -50,7 +50,7 @@ from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import Registration
 from verity_vllm.program.frontend.report import DeriveReport, DeriveSession
 from verity_vllm.program.replay import replayer
-from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
+from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
 
 DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: G-RH-16 (rotary table without terminal cast), G-RH-17 (0-d buffer operand in Elementwise) (lane DERIVE-4); d2: HF 5.x plumbing closures G-RH-1/-2/-4/-6/-8/-9/-10 (lane DERIVE-2); d3: G-RH-14 (embedding padding_idx), G-RH-7 (bf16 inv_freq rotary table) (lane DERIVE-3)
@@ -183,12 +183,15 @@ class Ctx:
     def __init__(self, *, mode: str, profile: str | None, config: dict | None, allowed_dims: dict, name: str, ruleset: RuleSet,
                  vocab, module, ep, B: Builder, user_inputs: dict[str, Coll], weights_coll: Coll | None, weights: list[WeightLeaf],
                  placeholder_to_weight: dict[str, int], lifted_constants: dict[str, str], registration: Registration | None = None,
-                 weights_param: int | None = None) -> None:
+                 weights_param: int | None = None, committed_inputs: dict[Any, Coll] | None = None,
+                 committed_units: list[dict[str, Any]] | None = None) -> None:
         self.mode, self.profile, self.config, self.allowed_dims, self.name = mode, profile, dict(config or {}), dict(allowed_dims or {}), name
         self.ruleset, self.vocab, self.module, self.ep, self.B = ruleset, vocab, module, ep, B
         self.user_inputs, self.weights_coll, self.weights = user_inputs, weights_coll, weights
         self.placeholder_to_weight, self.lifted_constants = placeholder_to_weight, lifted_constants
         self.registration, self.weights_param = registration, weights_param   # the registered inputs (`registered_values`)
+        self.committed_inputs = dict(committed_inputs or {})
+        self.committed_units = list(committed_units or [])
         self.env: dict[Any, Any] = {}
         self.storage: _Storage = _Storage()  # node -> storage base node (alias groups); absent: own storage
         self.stale: dict[Any, str] = {}  # node -> why its value may no longer be read (alias of a mutated tensor)
@@ -463,16 +466,19 @@ class Ctx:
 
 def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
            rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
-           check_registry: bool = True, rank: tuple[int, int] | None = None, registered_values: bool = False) -> Program | Unsupported:
+           check_registry: bool = True, rank: tuple[int, int] | None = None, registered_values: bool = False,
+           committed_units: Sequence[dict[str, Any]] | None = None) -> Program | Unsupported:
     """Derive a `Program` from an unannotated module/callable, or return `Unsupported`. See module docstring."""
     return derive_report(source, example_inputs, mode=mode, profile=profile, config=config, rules=rules, allowed_dims=allowed_dims,
-                         name=name, check_registry=check_registry, rank=rank, registered_values=registered_values).result
+                         name=name, check_registry=check_registry, rank=rank, registered_values=registered_values,
+                         committed_units=committed_units).result
 
 
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None,
-                  registered_values: bool = False, session: list | None = None) -> DeriveReport:
+                  registered_values: bool = False, session: list | None = None,
+                  committed_units: Sequence[dict[str, Any]] | None = None) -> DeriveReport:
     """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
@@ -490,6 +496,8 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     config = dict(config or {})
     name = name or (type(source).__name__ if isinstance(source, torch.nn.Module) else getattr(source, "__name__", "Derived"))
     source_desc = _describe_source(source, example_inputs, mode, profile, config, allowed_dims)
+    from verity_vllm.pipeline.committed_units import parse as parse_committed_units
+    committed_entries = parse_committed_units(committed_units)
     prov: dict[str, Any] = {"schema": "verity_ir/derive-provenance/v1", "frontend": FRONTEND_VERSION, "derive": DERIVE_VERSION,
                             "torch": torch.__version__, "mode": mode, "profile": profile, "vocabulary": vocab.to_json(),
                             "ruleset": ruleset.to_json(), "registry": registry_version(), "source": source_desc,
@@ -498,7 +506,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     try:
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
-                                    registered_values=registered_values)
+                                    registered_values=registered_values, committed_entries=committed_entries)
         head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
         rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry)
         if session is not None:
@@ -525,6 +533,8 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     prov["applications"] = ctx.applications
     prov["mutation_effects"] = ctx.mutation_effects
     prov["returned_inputs"] = ctx.returned_inputs
+    if ctx.committed_units:
+        prov["committed_units"] = ctx.committed_units
     prov["rules_applied"] = sorted({a["rule"] for a in ctx.applications})
     if ctx.registered_values:
         prov["supplied"] = ctx.registration.layout()
@@ -539,7 +549,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     check_identity(flat_program, check_registry=check_registry)
     flat_digest = program_digest(flat_desc := encode_program(flat_program))
     program, family_report = flat_program, None
-    for fam in ruleset.families:
+    for fam in (() if ctx.committed_units else ruleset.families):
         if fam.modes is not None and mode not in fam.modes:
             continue
         a = "a family claim keeps no registered parameter" if ctx.registered_values else fam.applies_program(flat_sd, ctx)
@@ -575,6 +585,8 @@ def _record_partial(prov: dict, holder: list) -> None:
     ctx = holder[0]
     prov["weights"] = [w.to_json() for w in ctx.weights]
     prov["applications_before_refusal"] = ctx.applications
+    if ctx.committed_units:
+        prov["committed_units_before_refusal"] = ctx.committed_units
     prov["rules_applied_before_refusal"] = sorted({a["rule"] for a in ctx.applications})
     prov["note"] = "refused: no program exists; the applications listed fired before the refusing node and are evidence for the report only"
 
@@ -650,7 +662,8 @@ def _weights_of(module: torch.nn.Module | None) -> tuple[list[WeightLeaf], dict[
 
 
 def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims, name, ruleset, vocab,
-                 _ctx_holder: list | None = None, exported=None, registered_values: bool = False) -> tuple[SpecializedDefinition, Ctx]:
+                 _ctx_holder: list | None = None, exported=None, registered_values: bool = False,
+                 committed_entries: Sequence[dict[str, Any]] = ()) -> tuple[SpecializedDefinition, Ctx]:
     module = source if isinstance(source, torch.nn.Module) else None
     ep = exported if exported is not None else _export(source, example_inputs)
     sig = ep.graph_signature
@@ -687,6 +700,31 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
         if not isinstance(v, torch.Tensor):
             refuse("dynamic_control_flow", ph_nodes[un], None, f"input {un} is not a tensor (symbolic scalar inputs are not static structure)")
         params.append((un, type_of_tensor(v)))
+    committed_nodes: list[tuple[Any, dict[str, Any], str]] = []
+    matched_entries: set[int] = set()
+    if committed_entries:
+        from verity_vllm.pipeline.committed_units import matches as committed_matches
+        for node in ep.graph.nodes:
+            if node.op != "call_function":
+                continue
+            op = str(node.target)
+            stack = node.meta.get("nn_module_stack") or {}
+            module_path = str(list(stack.values())[-1][0] or "") if stack else ""
+            hit = next(((k, entry) for k, entry in enumerate(committed_entries) if committed_matches(entry, op, module_path)), None)
+            if hit is None:
+                continue
+            k, entry = hit
+            try:
+                output_type = type_of(node.meta.get("val"), node.name)
+            except FrontendError as e:
+                refuse("shape", node, module_path, f"committed-only output cannot be typed: {e.message}")
+            input_name = f"committed_{len(committed_nodes)}"
+            params.append((input_name, output_type))
+            committed_nodes.append((node, dict(entry), module_path))
+            matched_entries.add(k)
+        missing = [dict(entry) for k, entry in enumerate(committed_entries) if k not in matched_entries]
+        if missing:
+            refuse("decomposition", None, None, f"committed-unit list entries matched no exported op/module occurrence: {missing}")
     registration = Registration.declare(params, ruleset, ep, mode) if registered_values else None
     wrec_t = Record(*[(w.name, w.type) for w in leaves]) if leaves else None
     if wrec_t is not None:
@@ -695,10 +733,16 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     B = Builder(tuple(params), Value(1))  # ret type is set once the outputs are known
     pcolls = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
     user_inputs = {un: pcolls[i] for i, un in enumerate(user_names)}
+    committed_offset = len(user_names)
+    committed_inputs = {node: pcolls[committed_offset + k] for k, (node, _entry, _module) in enumerate(committed_nodes)}
+    committed_provenance = [{"input": f"committed_{k}", "op": str(node.target), "module": module, "reason": entry["reason"],
+                             "list_entry": entry, "node": node.name, "type": str(params[committed_offset + k][1])}
+                            for k, (node, entry, module) in enumerate(committed_nodes)]
     weights_coll = pcolls[-1] if wrec_t is not None else None
     ctx = Ctx(mode=mode, profile=profile, config=config, allowed_dims=allowed_dims, name=name, ruleset=ruleset, vocab=vocab, module=module,
               ep=ep, B=B, user_inputs=user_inputs, weights_coll=weights_coll, weights=leaves, placeholder_to_weight=placeholder_to_weight,
-              lifted_constants=lifted, registration=registration, weights_param=len(params) - 1 if wrec_t is not None else None)
+              lifted_constants=lifted, registration=registration, weights_param=len(params) - 1 if wrec_t is not None else None,
+              committed_inputs=committed_inputs, committed_units=committed_provenance)
     if _ctx_holder is not None:
         _ctx_holder.append(ctx)
     out = _translate(ctx)
@@ -759,6 +803,17 @@ def _translate(ctx: Ctx) -> Coll:
         elif node.op == "call_function":
             if node in ctx.env:
                 continue  # absorbed by a pattern rule that fired at an earlier node of its chain
+            if node in ctx.committed_inputs:
+                operands = []
+                for j, arg in fx_arg_nodes(node):
+                    value = ctx.env.get(arg)
+                    operands.append({"index": j, "node": arg.name,
+                                     "refs": [list(r) for r in _runs(value.refs)] if isinstance(value, Coll) else None})
+                unit = ctx.committed_units[list(ctx.committed_inputs).index(node)]
+                unit["module"] = ctx.stack_path(node)
+                unit["operand_refs"] = operands
+                ctx.define(node, ctx.committed_inputs[node])
+                continue
             _translate_node(ctx, node)
         else:
             refuse("decomposition", node, ctx.module_path(node), f"graph node of kind {node.op} has no derivation rule")
