@@ -429,8 +429,10 @@ class DeviceStore:
             for h in range(1, self.H + 1):
                 n = width >> h
                 if h >= self.h0:
-                    matches[h] = bool(torch.equal(up[at:at + n],
-                                                  expected[self.kept_at[h]:self.kept_at[h] + n]))
+                    got = up[at:at + n]
+                    want = expected[self.kept_at[h]:self.kept_at[h] + n]
+                    bad = torch.nonzero(torch.any(got != want, dim=1)).reshape(-1).cpu().tolist()
+                    matches[h] = bad[:8]
                 at += n
             self.plain_level_matches = matches
         return digests(up[-1:].cpu())[0]
@@ -660,8 +662,8 @@ class Device:
         if not self.gates["device_seed"]:
             raise RuntimeError("the device's chained seed is not the driver's")
         if not self.gates["plain_root"]:
-            raise RuntimeError(f"the pipelined pass differs from the plain pass at levels "
-                               f"{[h for h, ok in s.plain_level_matches.items() if not ok]}")
+            raise RuntimeError(f"the pipelined pass differs from the plain pass at level/index "
+                               f"{[(h, bad) for h, bad in s.plain_level_matches.items() if bad]}")
         if not self.gates["device_signs"]:
             raise RuntimeError("the device's signs are not the reference's")
         # A window's openings once, over the calibration's passes, before any session: the opener's stream reaches
