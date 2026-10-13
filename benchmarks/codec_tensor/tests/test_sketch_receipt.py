@@ -1,6 +1,7 @@
-"""`sketch_receipt`'s blocks of a weight GEMM's store: a block is the GEMM's sketch vector, so the sketch warps' MMA
-arithmetic over the stored bytes (`sketching.fragment_sketch`, under sketch-sha512's signs) is σ of each block, and a
-launch's receipts from those sums are the driver-shaped `SketchReceipter`'s of its blocks."""
+"""`sketch_receipt`'s blocks of a weight GEMM's store: a block is 4,096 stored bytes in store order (store-order/v0),
+so the sketch warps' MMA arithmetic over the stored bytes (`fragment_sketch`, receipt_warp's lanes under sketch-sha512's
+signs) is σ of each block, the launch's map is the plan the driver credits, and its receipts are the driver's
+`SketchReceipter`'s of its blocks."""
 from __future__ import annotations
 
 import sys
@@ -12,25 +13,51 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import sketch_receipt as SR  # noqa: E402
-import sketching as SK  # noqa: E402
 
 SEED = SR.rb.seed(bytes(range(32)), 3, bytes(64))
-SB, T = 8192, 8
+SB = 8192
 
 
-def test_gemm_blocks_are_the_sketch_warps_vectors():
-    nbs, nchunks, groups = 3, 1, 2
-    store = np.random.default_rng(4).integers(0, 256, nbs * nchunks * SB, dtype=np.uint8)
-    blocks = SR.gemm_blocks(store, nbs, nchunks, SB, groups, T)
-    assert blocks.shape == (groups * nchunks * SK.tiles_per_cta(nbs, groups, T) * 16, SR.BLOCK)
-    bits = np.unpackbits(SR.sign_bits(SEED), axis=1, bitorder="little")
-    mma = SK.fragment_sketch(store, nbs, nchunks, SB, groups, T, SK.sign_fragments(bits, SK.steps(SB), T), 16)
-    signs = SR.signs(SEED)
-    assert np.array_equal(SR.sketches(signs, blocks), mma)
+@pytest.mark.parametrize("nbs, nchunks, groups", [(3, 1, 2), (5, 2, 1), (9, 1, 9), (17, 1, 2)])
+def test_the_sketch_warps_sum_each_store_block(nbs, nchunks, groups):
+    """Groups of SK_G = 4 tasks, a CTA's last group short (3 of 2 groups, 17 of 2), one task a CTA (9 of 9) and two
+    chunks: each receipt is one store block's σ, every block once."""
+    store = np.random.default_rng(nbs + groups).integers(0, 256, nbs * nchunks * SB, dtype=np.uint8)
+    store[:2 * SR.BLOCK:2] = 0x80
+    blocks = SR.gemm_blocks(store, SB)
+    assert blocks.shape == (2 * nbs * nchunks, SR.BLOCK)
+    mma = SR.fragment_sketch(store, nbs, nchunks, SB, groups, SR.sign_frags(SR.sign_bits(SEED)))
+    assert np.array_equal(SR.sketches(SR.signs(SEED), blocks), mma)
     j0 = 11
-    receipter = SR.SketchReceipter(SEED)
-    want = [receipter(j0 + v, blocks[v].tobytes(), b"\0") for v in range(len(blocks))]
-    assert SR.receipts_of(SEED, mma, j0) == want
+    receipter = SR.rb.SketchReceipter(SEED)
+    assert SR.receipts_of(SEED, mma, j0) == [receipter(j0 + v, blocks[v].tobytes()) for v in range(len(blocks))]
+
+
+@pytest.mark.parametrize("groups", [1, 2, 5])
+def test_a_launch_receipts_the_registered_blocks(groups):
+    nbs, nchunks = 5, 2
+    blocks = nbs * nchunks * SB // SR.BLOCK
+    assert SR.rb.plan_of(SR.gemm_vectors(nbs, nchunks, SB, groups), blocks) == SR.rb.Plan.whole(blocks)
+    assert sorted(SR.gemm_receipts(nbs, nchunks, SB, groups)) == list(range(blocks))
+
+
+def test_sign_layouts():
+    """sign_words is S's bits as bytes; sign_frags' selectors expand through prmt to each position's sign."""
+    import sketching as SK
+
+    bits = SR.sign_bits(SEED)
+    assert SR.sign_words(bits).size == SR.SIGN_WORDS and SR.sign_words(bits).tobytes() == bits.tobytes()
+    fr = SR.sign_frags(bits).reshape(SR.BLOCK // 128, SR.LANES, 4)
+    assert fr.size == SR.FRAG_WORDS
+    signs = SR.signs(SEED)
+    for pp, lane, x, big_r in ((0, 0, 0, 0), (31, 31, 1, 7), (7, 13, 1, 3), (20, 6, 0, 5)):
+        g, t = divmod(lane, 4)
+        s, r = divmod(big_r, 4)
+        sel = int(fr[pp, lane, 2 * x + big_r // 6]) >> (16 * ((big_r % 6) // 3))
+        reg = SK.prmt(*SK.PRMT[big_r % 3], sel & 0xFFFF)
+        pos = 64 * (2 * pp + x) + 16 * t + 8 * s + 4 * (r >> 1)
+        got = [1 if (reg >> 8 * q) & 0xFF == 1 else -1 for q in range(4)]
+        assert got == signs[g + 8 * (r & 1), pos:pos + 4].tolist()
 
 
 def test_reader_sketch64_fragments_are_the_64_row_sketch():
@@ -67,6 +94,7 @@ def test_reader_sketch64_fragments_are_the_64_row_sketch():
 
 
 def test_gemm_blocks_refuse_other_widths():
-    store = np.zeros(2 * SB, dtype=np.uint8)
-    with pytest.raises(ValueError, match="4096-byte block"):
-        SR.gemm_blocks(store, 2, 1, SB, 1, 2)
+    with pytest.raises(ValueError, match="4096-byte blocks"):
+        SR.gemm_blocks(np.zeros(6144, dtype=np.uint8), 6144)
+    with pytest.raises(ValueError, match="two 4096-byte blocks"):
+        SR.gemm_receipts(2, 1, 4096, 1)

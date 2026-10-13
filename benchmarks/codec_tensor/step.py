@@ -390,7 +390,7 @@ class Step:
         torch, wt = self.torch, self.wt
         st = BW.stream(torch)
         bits = BW.sketch_bits(wt, BW.window_seed(wt), 16, SKT.vector_bytes(wt.sb, self.T))
-        self.signs = torch.from_numpy(SKT.sign_fragments(bits, SKT.steps(wt.sb), self.T).view(np.int32)).cuda()
+        self.signs = torch.from_numpy(BW.pass_signs(wt, bits, self.T).view(np.int32)).cuda()
         self.frags = BW.sign_frags(wt, torch, self.signs, self.T, st)   # the sketch warps' B fragments of the signs
         BW.set_pass(wt, self.T)
         self.pass_j = 0
@@ -415,6 +415,12 @@ class Step:
             for l, name in self.lins:
                 self.tag_off[(k, l, name)] = tot
                 tot += self.prm[(name, k, "sketch")][3]
+                # store-order/v0: a linear's receipts are its own store blocks, so the pass's plan is the store's
+                if wt.receipt and self.tag_off[(k, l, name)] * BW.SR.BLOCK != self.off[(l, name)]:
+                    raise RuntimeError(f"{name} layer {l}: receipts from {self.tag_off[(k, l, name)]}, not its store's "
+                                       f"block {self.off[(l, name)] // BW.SR.BLOCK}")
+            if wt.receipt and tot * BW.SR.BLOCK != self.w_bytes:
+                raise RuntimeError(f"k={k}: {tot} weight receipts for {self.w_bytes // BW.SR.BLOCK} store blocks")
             self.nvec[k] = tot
         top = max(self.nvec.values()) + self.nkv
         self.tags = torch.empty(top * wt.tag_bytes, dtype=torch.uint8, device="cuda")
@@ -521,12 +527,12 @@ class Step:
         seed = BW.pass_seed(wt, j, root)
         n = SKT.vector_bytes(wt.sb, self.T)
         bits = BW.sketch_bits(wt, seed, 16, n)
-        want = SKT.sign_fragments(bits, SKT.steps(wt.sb), self.T)
+        want = BW.pass_signs(wt, bits, self.T)
         name = ORDER[0]
         nn, kd = self.shapes[name]
         _, gr, _, nvec = self.prm[(name, k, "sketch")]
         o, first = self.off[(0, name)], min(64, nvec)
-        vs = SKT.vectors_torch(torch, self.W[o:o + nn * kd], nn // 16, kd // 512, wt.sb, gr, self.T)[:first]
+        vs = BW.store_blocks_torch(torch, self.W[o:o + nn * kd])[:first]
         sk = SKT.sketch_torch(torch, vs, bits).cpu().numpy()
         ys = b"".join(BW.root_words(y) for y in BW.SR.receipts_of(seed, sk, wt.jbase + self.tag_off[(k, 0, name)]))
         out = {"j": j, "seed": got["seed"] == seed, "k_s": got["k_s"] == BW.sketch_derive(wt, seed, n),

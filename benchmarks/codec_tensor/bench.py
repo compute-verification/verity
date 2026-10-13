@@ -512,10 +512,32 @@ def sketch_warps(cfg) -> int:
 
 
 def sign_frags(lib: Lib, torch, signs, sketch_t: int, st: int):
-    """The B fragments (wt_sign_frags) of the sign words on the device, for launches with two sketch warps."""
-    frags = torch.empty(4 * signs.numel(), dtype=torch.int32, device="cuda")
+    """The B fragments (wt_sign_frags) of the sign words on the device, for launches with two sketch warps; a
+    WT_RECEIPT build's A selectors (sketch_receipt.sign_frags)."""
+    frags = torch.empty(SR.FRAG_WORDS if lib.receipt else 4 * signs.numel(), dtype=torch.int32, device="cuda")
     lib.call("wt_sign_frags", ptr(signs), ptr(frags), sketch_t, st)
     return frags
+
+
+def pass_signs(lib: Lib, bits: np.ndarray, sketch_t: int) -> np.ndarray:
+    """The pass's sign words of S's bits (k × n, 1 is −1) as wt_pass writes them: sketching.sign_fragments at T tasks a
+    tile, or a WT_RECEIPT build's S as it is (sketch_receipt.sign_words)."""
+    if lib.receipt:
+        return SR.sign_words(np.packbits(bits, axis=1, bitorder="little"))
+    return SKT.sign_fragments(bits, SKT.steps(lib.sb), sketch_t)
+
+
+def pass_frags(lib: Lib, bits: np.ndarray, sketch_t: int) -> np.ndarray:
+    """What wt_sign_frags makes of pass_signs: the sketch warps' B fragments, or a WT_RECEIPT build's A selectors."""
+    if lib.receipt:
+        return SR.sign_frags(np.packbits(bits, axis=1, bitorder="little"))
+    return SKT.b_fragments(bits, SKT.steps(lib.sb), sketch_t)
+
+
+def store_blocks_torch(torch, store):
+    """A WT_RECEIPT build's receipts' vectors on the device: the store's 4 KiB blocks in store order (store-order/v0,
+    sketch_receipt.gemm_blocks), as int8."""
+    return store.view(-1, SR.BLOCK).view(torch.int8)
 
 
 def fused_fits(lib: Lib, k: int, mb: int, n: int, kd: int, cfg, sketch_t: int) -> bool:
@@ -662,9 +684,10 @@ def gate_pass(lib: Lib, torch, sketch_t: int, log, trials: int = 4) -> dict:
     """wt_pass (red team F29: pass j's receipt keyed by s_j = pass_seed(σ, j, root_(j−1))) against Python at random
     j and roots: s_j, K_S, the tag key, the signs (sign_fragments of sign_bits(s_j)) and, through wt_tag_leaves over
     random tags, the leaves' prefix (commit_gate at s_j); in a WT_RECEIPT build sketch-sha512's s_j, K_S, signs and
-    receipt prefix (its midstate against the host's of sketch_receipt.prefix(s_j))."""
+    receipt prefix (its midstate against the host's of sketch_receipt.prefix(s_j)), the signs as sign_words and their
+    selectors as sign_frags."""
     n, m, st = set_pass(lib, sketch_t), SKT.steps(lib.sb), stream(torch)
-    signs = torch.empty(sketch_t * m * 32, dtype=torch.int32, device="cuda")
+    signs = torch.empty(SR.SIGN_WORDS if lib.receipt else sketch_t * m * 32, dtype=torch.int32, device="cuda")
     rng = random.Random(29)
     rows = []
     for t in range(trials):
@@ -676,10 +699,9 @@ def gate_pass(lib: Lib, torch, sketch_t: int, log, trials: int = 4) -> dict:
         got = pass_state(lib)
         seed = pass_seed(lib, j, root)
         bits = sketch_bits(lib, seed, 16, n)
-        want = SKT.sign_fragments(bits, m, sketch_t)
         row = {"j": j, "seed": got["seed"] == seed, "k_s": got["k_s"] == sketch_derive(lib, seed, n),
-               "signs": bool(np.array_equal(signs.cpu().numpy().view(np.uint32), want)),
-               "frags": bool(np.array_equal(frags.cpu().numpy().view(np.uint32), SKT.b_fragments(bits, m, sketch_t)))}
+               "signs": bool(np.array_equal(signs.cpu().numpy().view(np.uint32), pass_signs(lib, bits, sketch_t))),
+               "frags": bool(np.array_equal(frags.cpu().numpy().view(np.uint32), pass_frags(lib, bits, sketch_t)))}
         if lib.receipt:
             row["mid"] = got["mid"] == receipt_mid(lib, seed)
         else:
@@ -824,7 +846,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     sk = {}
     for s in sorted({c[3] for c in sketched}):
         bits = sketch_bits(lib, window_seed(lib), s, SKT.vector_bytes(lib.sb, sketch_t))
-        words = SKT.sign_fragments(bits, SKT.steps(lib.sb), sketch_t)
+        words = pass_signs(lib, bits, sketch_t)
         sk[s] = {"bits": bits, "signs": torch.from_numpy(words.view(np.int32)).cuda()}
         if s == 16:
             sk[s]["frags"] = sign_frags(lib, torch, sk[s]["signs"], sketch_t, st)
@@ -834,6 +856,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     def sk_tags_for(gr):
         """The tag buffer of a sketched launch at gr groups, and its vector count."""
         nvec = lib.so.wt_sketch_vectors(n, kd, gr, sketch_t)
+        if lib.receipt and nvec != len(SR.gemm_receipts(n // 16, nch, lib.sb, gr)):
+            raise SystemExit(f"{lib.name} {name}: wt_sketch_vectors is {nvec}, not the store's blocks")
         if gr not in sk_bufs:
             sk_bufs[gr] = torch.empty(nvec * lib.tag_bytes, dtype=torch.uint8, device="cuda")
         return sk_bufs[gr], nvec
@@ -843,7 +867,8 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         the PyPI blake3 (tags.py on a sample, which must agree); sketch-sha512's receipts with hashlib."""
         seed = window_seed(lib) if seed is None else seed
         if (k, s, gr, seed) not in sk_refs:
-            vs = SKT.vectors_torch(torch, stores[k], n // 16, nch, lib.sb, gr, sketch_t)
+            vs = (store_blocks_torch(torch, stores[k]) if lib.receipt
+                  else SKT.vectors_torch(torch, stores[k], n // 16, nch, lib.sb, gr, sketch_t))
             bits = sk[s]["bits"] if seed == window_seed(lib) else sketch_bits(lib, seed, s,
                                                                               SKT.vector_bytes(lib.sb, sketch_t))
             ref = SKT.sketch_torch(torch, vs, bits)

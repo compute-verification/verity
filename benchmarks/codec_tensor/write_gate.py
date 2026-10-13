@@ -74,7 +74,7 @@ def launches(a) -> list[dict]:
     st = BW.stream(torch)
     BW.set_sketch_tag(lib)
     bits = BW.sketch_bits(lib, BW.window_seed(lib), 16, SKT.vector_bytes(lib.sb, t))
-    signs = torch.from_numpy(SKT.sign_fragments(bits, SKT.steps(lib.sb), t).view(np.int32)).cuda()
+    signs = torch.from_numpy(BW.pass_signs(lib, bits, t).view(np.int32)).cuda()
     frags = BW.sign_frags(lib, torch, signs, t, st)
     out = []
     for name in a.linears.split(","):
