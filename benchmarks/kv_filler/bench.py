@@ -452,7 +452,8 @@ def seq_gate(tu: Topup, torch) -> dict:
     ok, units = seq_epochs_ok(tu.log(), blobs, SEQ_SHIFT_GATE, also=pre_epochs)
     out["seq_roles_receipts"] = ok and units > 0
     out["seq_roles_moves"] = (rc == 0 and still == 0 and idle_bytes > 0 and quiet == 0 and step_bytes > 0
-                              and step_tail == 0 and all(b > 0 for b in pre_bytes) and pre_tail == [0, 0, 0] and launches == (4, 1, 3, 3))
+                              and step_tail == 0 and all(b > 0 for b in pre_bytes) and pre_tail == [0, 0, 0] and launches == (4, 1, 3, 3)
+                              and bare == (3, 0))  # the prefill brackets have no STEP kernel, and each has its PREFILL
     out["seq_roles_bytes"] = {"before_idle": still, "idle": idle_bytes, "between": quiet, "step": step_bytes,
                               "after_step": step_tail, "prefill": pre_bytes, "after_prefill": pre_tail,
                               "launches": list(launches), "bare_steps": list(bare)}
