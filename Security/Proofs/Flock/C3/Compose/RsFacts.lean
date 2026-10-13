@@ -19,7 +19,11 @@ import Proofs.Flock.Recursive.Loads
 * `RsIo` from the unit reading its row ports' columns (`RsReadCol`, S's `ReadCol`), `rsIo_of_readCol`: copy `j` reads
   a column its computed rows read (`mem_io_of_readCol`, `ioColAt_of_readCol` at copy `j`).
 
-`rsRead_of_facts` composes them.
+`rsRead_of_facts` composes them. `RsSel` is at the round commitments (`rsSel_of_rounds`): ring switch `i`'s columns
+are keyed by port `m<i>` (`RsKeys`, a circuit fact), whose reads-file entry is `rec-opening-c<i>` (`RoundReads`), which
+stage `c₀ + i` reads (`RoundStage`). `SessStmt` is at any family whose checks pass (`sessStmt_of_accepted`, from
+`ChecksAccepted`), and at the checked family from the guarantee's `_hF` (`sessStmt_checked`: the checked sessions carry
+the prover's inputs, `tagsFound_checked`); `rsRead_of_accepted` composes them.
 -/
 
 namespace FlockC3.Compose
@@ -470,6 +474,118 @@ theorem rsRead_of_facts {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     (hu : OpenUpv) (hall : OpenAll zs dg N k Rw sh w) (hsel : RsSel zs dg N k Rw sh w own sel c₀)
     (hr : RsReadCol zs dg N k Rw sh w) : RsRead zs dg N k Rw sh w own sel c₀ :=
   rsRead_of_layer (oneCopy_of hob hst hu) hall (rsSk_of_sel hsel) (rsIo_of_readCol hr)
+
+/-! ## `RsSel` at the round commitments -/
+
+/-- Obligation: discharged by the `rec-opening` circuits (row port `m<i>` holds round `i` of `RecOpening.rounds`, the
+claims' ring switch `i`, `rec_vstage.opening_messages`). **Ring switch `i`'s columns are keyed by port `m<i>`**: at a
+copy of the `rec-opening` unit registering w as part `p`, a row port `q'` whose bit keys copy `j`'s column of a bit of
+the part's row-port element holding ring switch `i`'s slot `t` is named `m<i>`. -/
+def RsKeys (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
+    (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128) : Prop :=
+  ∀ i < 2, ∀ gs (s : Fin S) (un : Fin (Vs s).nv) (j p : ℕ), OpenCopy zs dg N k Rw sh w gs s un j p →
+    ∀ (hpg : p < gs.size) (S₁ : RecOpen.GfS) (ns : List ℕ) (nv : ℕ), RecOpening.part sh p = .ok (S₁, ns, nv) →
+      ∀ (q e : ℕ) (t : Fin 128), (wIdx (RecOpening.portSizes sh) gs[p].2.1)[q]? = some e →
+        RecOpening.wi sh (.rs i t.val) = some e → ∀ b < 128, ∀ (q' : Fin (Vs s).c.ports.size) (kk : ℕ),
+          kk < Layout.portRowW (Vs s).c q' →
+          Aliased.srcKey (Vs s).c (j * (Rows.ofNet (Vs s).hU).nIn + rowCol (partRep ns nv).ports 0 (128 * q + b)) =
+            .msg q'.val (kk / 8) (kk % 8) → (Vs s).c.ports[q'].name = s!"m{i}"
+
+/-- **Hypothesis on the reads file: a copy's unit reads round `i`'s commitment at port `m<i>`**: at the session and unit
+of a copy registering w, the reads file has an entry named `m<i>` of value `rec-opening-c<i>` (round `i`'s commitment,
+`rec_vstage.opening_messages`) whose read of the unit is at a position. -/
+def RoundReads (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
+    (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128)
+    (own : Fin S → Array Flock.Registered.Port) : Prop :=
+  ∀ i < 2, ∀ gs (s : Fin S) (un : Fin (Vs s).nv) (j p : ℕ), OpenCopy zs dg N k Rw sh w gs s un j p →
+    ∃ pt ∈ own s, pt.name = s!"m{i}" ∧ pt.value = s!"rec-opening-c{i}" ∧ ∃ x, pt.reads[un.val]? = some (some x)
+
+/-- **Hypothesis on the stage selector: stage `c₀ + i` reads round `i`'s commitment**, at every position. -/
+def RoundStage (sel : ℕ → String → ℕ → Prop) (c₀ : ℕ) : Prop :=
+  ∀ i < 2, ∀ x, sel (c₀ + i) s!"rec-opening-c{i}" x
+
+/-- **`RsSel` at the round commitments**: the port keying a ring switch's column is its round's (`RsKeys`), whose entry
+in the reads file is that round's commitment (`RoundReads`), which the round's stage reads (`RoundStage`). -/
+theorem rsSel_of_rounds {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
+    {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
+    (hk : RsKeys zs dg N k Rw sh w) (hr : RoundReads zs dg N k Rw sh w own) (hs : RoundStage sel c₀) :
+    RsSel zs dg N k Rw sh w own sel c₀ := by
+  intro i hi gs s un j p hO hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey
+  obtain ⟨pt, hpt, hn, hv, x, hx⟩ := hr i hi gs s un j p hO
+  have hq := hk i hi gs s un j p hO hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey
+  refine ⟨pt, hpt, hn.trans hq.symm, x, hx, ?_⟩
+  rw [hv]
+  exact hs i hi x
+
+/-! ## `SessStmt` from the verifier's checks -/
+
+/-- **The checked sessions' inputs carry the tags their name names** where the prover's do (the guarantee's `_hF`): a
+checked session's inputs are those of a session of its index as the prover supplies it (`zsOf` builds it, or another,
+refused; `keepOwn` and `refuse` keep the inputs). -/
+theorem tagsFound_checked {ish : RecVStar.Inner} {cs : List (Cm × (ℐ).Coin) → Option Flock.RecVStar.InnerCommits}
+    {coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg'}
+    {hC : Flock.Premises.RecordCustody zr} {h : Typed zr} (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
+    (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (j : Fin S) :
+    TagsFound (Flock.Guarantees.checkedC3 ish cs coins bind rows zr hC h R ω t R₂ j).I := by
+  show TagsFound (Flock.Guarantees.custodied zr hC h R ω t R₂ j).I
+  dsimp only [Flock.Guarantees.custodied]
+  by_cases hx : (zr R ω t R₂ j).Typable
+  · rw [zsOf_pos zr _ h R ω t R₂ j hx]
+    exact hF R ω t R₂ j
+  · rw [zsOf_neg zr _ h R ω t R₂ j hx]
+    exact hF (h j).choose.1 (h j).choose.2.1 (h j).choose.2.2.1 (h j).choose.2.2.2 j
+
+/-- **`SessStmt` where the verifier's checks pass** (`ChecksAccepted`'s statement check, `sessStmt_of_checks`) and the
+sessions' inputs carry the tags their name names. -/
+theorem sessStmt_of_accepted {xR : HoloReg GF128 Dig} {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
+    {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
+    (hca : FlockC3.PubRows.ChecksAccepted F rows wr reg) (hF : ∀ R ω t R₂ j, TagsFound (F.zs R ω t R₂ j).I)
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} : SessStmt F.ish F.bind F.zs dg N k Rw :=
+  sessStmt_of_checks (rows := rows) (fun R ω t R₂ s h => by
+    obtain ⟨tr, -, -, hs⟩ := hca R ω t R₂ s h
+    exact ⟨tr, hs⟩) hF
+
+/-- **`SessStmt` at the checked family** (`C3Family.checked`) from the prover's sessions' tags (the guarantee's `_hF`):
+where a checked session accepts, the verifier's checks pass (`checksAccepted_checked`), and the checked sessions carry
+the prover's inputs (`tagsFound_checked`). -/
+theorem sessStmt_checked {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Array VStar.Stmt}
+    {hss : RecVStar.statements ish = .ok ss} {bind : Fin (vstarCount ish) → VStar.Bindings}
+    {Vs : Fin (vstarCount ish) → VStmt} {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
+    {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg'}
+    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} {coins : String → Option Flock.RecCoins.Source}
+    {rows : Option (Array Flock.Registered.Port)} {own : Fin (vstarCount ish) → Array Flock.Registered.Port}
+    {sel : ℕ → String → ℕ → Prop}
+    {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
+    {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (ℐ).Msg}
+    {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
+    (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I) {dg : ByteArray → ByteArray} {N k Rw : ℕ} :
+    SessStmt ish bind (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs
+      dg N k Rw :=
+  sessStmt_of_accepted
+    (F := C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+    FlockC3.PubRows.checksAccepted_checked
+    (tagsFound_checked (ish := ish) (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2)
+      (bind := bind) (rows := rows) (hC := hCust) (h := h) hF)
+
+/-- **R's ring switches are read at their rounds at a family whose checks pass** (`rsRead_of_facts`): `SessStmt` from
+the verifier's checks and the inputs' tags (`sessStmt_of_accepted`), `RsSel` at the round commitments
+(`rsSel_of_rounds`). -/
+theorem rsRead_of_accepted {xR : HoloReg GF128 Dig} {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
+    {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
+    (hca : FlockC3.PubRows.ChecksAccepted F rows wr reg) (hF : ∀ R ω t R₂ j, TagsFound (F.zs R ω t R₂ j).I)
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
+    {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → Array F128}
+    {own : Fin (vstarCount F.ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
+    (hu : OpenUpv) (hall : OpenAll F.zs dg N k Rw sh w) (hk : RsKeys F.zs dg N k Rw sh w)
+    (hr : RoundReads F.zs dg N k Rw sh w own) (hs : RoundStage sel c₀) (hrc : RsReadCol F.zs dg N k Rw sh w) :
+    RsRead F.zs dg N k Rw sh w own sel c₀ :=
+  rsRead_of_facts F.hob (sessStmt_of_accepted hca hF) hu hall (rsSel_of_rounds hk hr hs) hrc
 
 end
 
