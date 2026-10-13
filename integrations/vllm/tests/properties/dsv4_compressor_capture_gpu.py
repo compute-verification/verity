@@ -36,8 +36,9 @@ are random at the served shapes (`operands`), so no model weights are read.
              against `dsv4_compressor_twin.c128_columns` (the reference `Dsv4MlaC128Column_v1{8,16}` on every column of every
              token, of every 16th served one under --quick), every other row the sentinel, and the cache it writes the served
              call's, byte for byte.
-  ptx        each of the three kernels compiled once (their `compile` caches hold one entry), its PTX for sm_90a and its
-             arithmetic instruction counts PTX_COUNTS, the ones the Definitions were read from.
+  ptx        each of the three kernels compiled once (their `compile` caches hold one entry), its PTX and cubin kept
+             (`environment`'s CUTE_DSL_KEEP), the PTX for sm_90a and its arithmetic instruction counts PTX_COUNTS, the ones
+             the Definitions were read from.
   bind       the Programs bind at the served statics.
 
 GO needs every case's words compared with 0 mismatches, the references with 0 disagreements with the twins, every launch check,
@@ -361,8 +362,14 @@ def entry_fn(layer: str, rows: int):
 
 # ----------------------------------------------------------------------------------------------------------------- the GPU side
 def environment(work: Path) -> dict[str, str]:
-    """The Triton cache (`save_partial_states`) in scratch; set before vLLM is imported."""
-    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache")}
+    """The Triton cache (`save_partial_states`) and the CuTe DSL's dump and cache directories in scratch, and CUTE_DSL_KEEP=
+    ptx,cubin; set before vLLM, and so cutlass, is imported (the DSL reads its environment once).  Without KEEP a compiled
+    kernel's `__ptx__` and `__cubin__` are None (cutlass 4.6.2's `JitFunctionArtifacts` holds only the kept files), and with it
+    the DSL bypasses its own cache, so each kernel the launches compile is compiled afresh and keeps its PTX and cubin."""
+    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache"), "CUTE_DSL_KEEP": "ptx,cubin",
+           "CUTE_DSL_DUMP_DIR": str(work / "cute_dsl_dump"), "CUTE_DSL_CACHE_DIR": str(work / "cute_dsl_cache")}
+    for k in ("CUTE_DSL_DUMP_DIR", "CUTE_DSL_CACHE_DIR"):
+        Path(env[k]).mkdir(parents=True, exist_ok=True)
     os.environ.update(env)
     return env
 
@@ -657,7 +664,8 @@ def ptx(outdir: Path) -> dict[str, Any]:
     dest = outdir / "ptx"
     dest.mkdir(parents=True, exist_ok=True)
     tool = shutil.which("cuobjdump")
-    rec: dict[str, Any] = {"cache_sizes": {"before": before, "after": sizes()}, "kernels": {}}
+    rec: dict[str, Any] = {"cache_sizes": {"before": before, "after": sizes()}, "keep": os.environ.get("CUTE_DSL_KEEP"),
+                           "kernels": {}}
     for name, c in got.items():
         text, cubin = getattr(c, "__ptx__", None), getattr(c, "__cubin__", None)
         e: dict[str, Any] = {"ptx": text is not None, "cubin": cubin is not None}
@@ -678,6 +686,7 @@ def ptx(outdir: Path) -> dict[str, Any]:
                     e["sass_error"] = str(err)[-300:]
         rec["kernels"][name] = e
     rec["checks"] = {"one_specialization": before == rec["cache_sizes"]["after"] == {k: 1 for k in kernels},
+                     "kept": all(e["ptx"] and e["cubin"] for e in rec["kernels"].values()),
                      "target": all(e.get("target") == ["sm_90a"] for e in rec["kernels"].values()),
                      "counts": all(rec["kernels"][k].get("counts") == PTX_COUNTS[k] for k in kernels)}
     rec["ok"] = all(rec["checks"].values())

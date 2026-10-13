@@ -372,6 +372,73 @@ def test_ptx_counts_reads_each_pinned_instruction() -> None:
                                   "max.f32": 1, "shfl.sync.bfly.b32": 1}
 
 
+ENV_KEYS = ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "CUTE_DSL_KEEP", "CUTE_DSL_DUMP_DIR", "CUTE_DSL_CACHE_DIR")
+
+
+def test_the_environment_keeps_the_cute_dsl_ptx_and_cubin_in_scratch(tmp_path, monkeypatch) -> None:
+    """The H200 run r20261013-205619-e245 matched every word and still went NO-GO in `ptx`: no CUTE_DSL_KEEP, so cutlass 4.6.2
+    kept no PTX or cubin and every compiled kernel's `__ptx__` and `__cubin__` were None.  `environment` keeps both (KEEP's
+    comma-separated tokens), with the dump and cache directories made in scratch."""
+    for k in ENV_KEYS:
+        monkeypatch.delenv(k, raising=False)
+    env = X.environment(tmp_path)
+    assert {k: X.os.environ[k] for k in ENV_KEYS} == env
+    assert {"ptx", "cubin"} <= {t.strip() for t in env["CUTE_DSL_KEEP"].split(",")}
+    for k in ("CUTE_DSL_DUMP_DIR", "CUTE_DSL_CACHE_DIR"):
+        p = X.Path(env[k])
+        assert p.is_dir() and p.parent == tmp_path, k
+
+
+def _kernels(texts: dict) -> types.ModuleType:
+    """vLLM's CuTe DSL kernels module stood in for, after the launches: each `compile` a cache holding the one served kernel, a
+    compiled stub with ``texts[name]`` as its `__ptx__` and cubin bytes when it has PTX, as cutlass 4.6.2 does with
+    KEEP=ptx,cubin (None for both without)."""
+    import torch
+
+    class Compile:
+        def __init__(self, name):
+            t = texts[name]
+            self.made = SimpleNamespace(__ptx__=t, __cubin__=None if t is None else b"\x7fELF")
+
+        def __call__(self, *a, **kw):
+            return self.made
+
+        def cache_info(self):
+            return SimpleNamespace(currsize=1)
+
+    K = types.ModuleType("sparse_attn_compress_cutedsl")
+    K.SparseAttnCompressNormRopeStoreC4Kernel, K.SparseAttnCompressC128Block8Kernel, K.SparseAttnNormRopeStoreKernel = (
+        type(n, (), {"compile": Compile(n)}) for n in ("c4", "c128", "store"))
+    K._TORCH_TO_CUTE = {torch.bfloat16: "bf16"}
+    K.compile_split_sparse_attn_cutedsl = lambda *a, **kw: (K.SparseAttnCompressC128Block8Kernel.compile(),
+                                                            K.SparseAttnNormRopeStoreKernel.compile())
+    return K
+
+
+def _ptx_text(counts: dict) -> str:
+    return ".version 8.8\n.target sm_90a\n" + "".join(f"\t{k} %f1;\n" * n for k, n in counts.items())
+
+
+@pytest.mark.parametrize("kept", [True, False])
+def test_the_ptx_phase_reads_each_kernels_kept_ptx_and_cubin(kept, tmp_path, monkeypatch) -> None:
+    """`ptx` on the served kernels as their caches hold them: with the PTX and cubin kept, each kernel's PTX is written under
+    out/ptx with the pinned counts and the phase is ok; without (the e245 run), `kept` fails by name and so does the phase."""
+    texts = {k: _ptx_text(X.PTX_COUNTS[k]) if kept else None for k in ("c4", "c128", "store")}
+    K = _kernels(texts)
+    for name in ("vllm", "vllm.models", "vllm.models.deepseek_v4", "vllm.models.deepseek_v4.nvidia"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    ops = types.ModuleType("vllm.models.deepseek_v4.nvidia.ops")
+    ops.sparse_attn_compress_cutedsl = K
+    monkeypatch.setitem(sys.modules, ops.__name__, ops)
+    monkeypatch.setitem(sys.modules, f"{ops.__name__}.sparse_attn_compress_cutedsl", K)
+    monkeypatch.setattr(X.shutil, "which", lambda tool: None)
+    monkeypatch.setenv("CUTE_DSL_KEEP", "ptx,cubin" if kept else "")
+    rec = X.ptx(tmp_path)
+    assert rec["checks"] == {"one_specialization": True, "kept": kept, "target": kept, "counts": kept} and rec["ok"] is kept
+    assert sorted(p.name for p in (tmp_path / "ptx").iterdir()) == (
+        ["c128.cubin", "c128.ptx", "c4.cubin", "c4.ptx", "store.cubin", "store.ptx"] if kept else [])
+
+
 def test_the_sources_are_checked_by_digest(tmp_path, monkeypatch) -> None:
     (tmp_path / "a").mkdir()
     (tmp_path / "a" / "x.py").write_text("x = 1\n")
@@ -427,6 +494,8 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
     an edge row with one word flipped) and vLLM's config module stubbed: the jobs through the spawned worker pool, the per-case
     verdicts, the sealed record and the exit status, so a slip in the orchestration shows here and not on the H200."""
     ob = observed["c4"]
+    for k in ENV_KEYS:
+        monkeypatch.delenv(k, raising=False)
     vc = types.ModuleType("vllm.config")
     vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
     vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
