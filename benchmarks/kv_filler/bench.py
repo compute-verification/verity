@@ -704,10 +704,10 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
             for ctas in args.pc_ctas:
                 torch.cuda.synchronize()
                 if reader.startswith("v2"):
-                    spec = re.fullmatch(r"v2(?:b(\d))?(?:p(\d))?", reader)
-                    sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=0, priority=least,
-                             step_priority=greatest)
-                    if sq.prefill_reader(int(spec[1] or 0)) or tu.so.sq_probe(int(spec[2] or 0)):
+                    spec = re.fullmatch(r"v2(?:w(\d+))?(?:b(\d))?(?:p(\d))?", reader)
+                    sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=0, warps=int(spec[1] or 4),
+                             priority=least, step_priority=greatest)
+                    if sq.prefill_reader(int(spec[2] or 0)) or tu.so.sq_probe(int(spec[3] or 0)):
                         raise RuntimeError(f"{reader} refused")
                     time.sleep(0.02)
 
