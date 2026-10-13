@@ -73,7 +73,9 @@ theorem wRoundReads_ownAt {ish : RecVStar.Inner} {bind : Fin S → VStar.Binding
     {un : (p : ℕ) → Fin 2 → Fin (Vs (sess p)).nv}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs) (hst : SessStmt ish bind zs dg N k Rw)
     (hmn : MsgNamesAt ish zs dg N k Rw) (hss : RecVStar.statements ish = .ok ss) {R : Reg} {ω : L.Ω}
-    {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o} (hA : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o)
+    {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N)}
+    {o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript}
+    (hA : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o)
     (hpar : ∀ p < (partsOf sh).size, ∃ m kk cl j,
       RecResiduals.params (Vs (sess p)).c.unit.name = some (m, kk, cl, j))
     (hun : ∀ p (ρ : Fin 2), ρ.val < (Vs (sess p)).nv → (un p ρ).val = ρ.val)
@@ -121,7 +123,10 @@ theorem roundReads_checked (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j)
 `wRoundReads_ownAt` with `SessStmt` and `MsgNamesAt` as `roundReads_checked` has them. -/
 theorem wRoundReads_checked (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I) {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {sh : Flock.Shape} {stage : Fin 2 → ℕ → ℕ} {sess : ℕ → Fin (vstarCount ish)}
-    {un : (p : ℕ) → Fin 2 → Fin (Vs (sess p)).nv} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    {un : (p : ℕ) → Fin 2 → Fin (Vs (sess p)).nv} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
+    {τ : (j : Fin (vstarCount ish)) → Strategy (((C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own
+      sel bc dec wr reg).zs R ω t R₂ j).game dg N)}
+    {o : (j : Fin (vstarCount ish)) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript}
     (hA : FlockVBridge.Compiled.Accepted (I := ℐ)
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs dg N k Rw
         R ω t R₂ τ o)
