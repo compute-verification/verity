@@ -1980,16 +1980,16 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 //
 // A WT_RECEIPT = 1 build's receipt is sketch-sha512 instead (`sketch_receipt.py`, the remote bandwidth driver's kind):
 // s_j is the whole 64-byte SHA-512 (`receipts.seed`), K_S = derive(s_j, "verity/remote-bandwidth/sketch-signs/v0",
-// {"k": 16, "n": 4096, "tag": "sketch-sha512"}), a vector is the store's block, its 4,096 bytes in store order
-// (store-order/v0: task q's halves are blocks 2 q and 2 q + 1, receipt_warp), and
+// {"k": k_s, "n": 4096, "tag": "sketch-sha512"}) at the registration's k_s (16 or 64), a vector is the store's block,
+// its 4,096 bytes in store order (store-order/v0: task q's halves are blocks 2 q and 2 q + 1, receipt_warp), and
 // y_j = SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(s_j)) ‖ u64be j ‖ σ_j): one compression from the prefix's midstate
-// (kRcptMid, the leaf slot's), 64 bytes a block. Its leaves and tree are the driver's (reader.cu's rb_leaves, rb_tree).
-// There pass_kernel writes S's bits as they are (sketch_receipt.sign_words) and wt_sign_frags lays them out for the
-// sketch warps (sketch_receipt.sign_frags).
+// (kRcptMid, the leaf slot's) at 16 rows, three at 64, 64 bytes a block. Its leaves and tree are the driver's
+// (reader.cu's rb_leaves, rb_tree). There pass_kernel writes S's bits as they are (sketch_receipt.sign_words) and
+// wt_sign_frags lays them out for the sketch warps (sketch_receipt.sign_frags at 16 rows, sign_planes at 64).
 #ifndef WT_RECEIPT
 #define WT_RECEIPT 0
 #endif
-constexpr int KPASS_ROWS = 16, PASS_BITS_BYTES = 16 * 1024, PASS_THREADS = 256, SEED_BYTES = WT_RECEIPT ? 64 : 32;
+constexpr int PASS_BITS_BYTES = (WT_RECEIPT ? 32 : 16) * 1024, PASS_THREADS = 256, SEED_BYTES = WT_RECEIPT ? 64 : 32;
 struct PassMsgs {
   uint8_t seed[160], derive[256], tag[128], leaf[128], row[128];
   int seed_len, derive_len, row_len, derive_s, tag_s, leaf_s, row_key, row_c, row_ctr, ks, n;
@@ -2142,6 +2142,14 @@ template <int SKW>
 __host__ __device__ constexpr int sk_bufs() {
   return SKW ? 2 * sk_batch<SKW>() : SK_BUFS;
 }
+// A WT_RECEIPT build's sketch warps (receipt_warp) keep batches of SK_GB groups of SK_G tasks, a row of sk_rs(k_s)
+// ints a block, in place of the sketch buffers.
+constexpr int SK_G = 4, SK_GB = 32 / (2 * SK_G);
+__host__ __device__ constexpr int sk_rs(int ks) { return ks + 4; }
+template <int SKK, int SKW>
+__host__ __device__ constexpr int sk_buf_ints() {
+  return WT_RECEIPT && SKW ? SKW * SK_GB * 2 * SK_G * sk_rs(SKK) : sk_bufs<SKW>() * 16 * SKK;
+}
 // A diagnostic build (WT_SK_DIAG, bits) drops parts of the sketch to time them, so its sketches and tags are wrong
 // (bench.py gates only its partial sums): 1 the MMA warp's hash, 2 the decoders' MMAs and adds, 4 their sign loads.
 #ifndef WT_SK_DIAG
@@ -2152,7 +2160,7 @@ __host__ __device__ constexpr int sk_bufs() {
 // sketch warps' fragments are 4x the words, so they read them through L1 and L2 (sgs = 0 at SKW > 0).
 template <int NB8, int SKK, int SKW>
 __host__ __device__ constexpr int fused_smem_bytes(int stages, int sgs) {
-  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((6 * stages + 1) / 2) + 16 + sk_bufs<SKW>() * 64 * SKK + 4 * sgs;
+  return stages * SB + NB8 * 8 * XS_STRIDE + 16 * ((6 * stages + 1) / 2) + 16 + 4 * sk_buf_ints<SKK, SKW>() + 4 * sgs;
 }
 
 // The CTA's warps: FUSED_WARPS, and with SKW sketch warps (sketch_warp) SKW more where the registers allow (the MMA
@@ -2521,26 +2529,29 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
 // sketch-sha512 under store-order/v0 (sketch_receipt.py, a WT_RECEIPT build's sketch warps): a vector is one of the
 // store's 4 KiB blocks, task q_s's half h block 2 q_s + h, receipted at jbase + 2 q_s + h into tags[16 (2 q_s + h) ..].
 // Sketch warp q takes the segment's tasks in groups of SK_G (groups q, q + SKW, ...), their 2 SK_G = 8 blocks the
-// columns of mma.m16n8k32.s8's B against the pass's 16 sign rows as A: block n is task SK_G a + n / 2's half n % 2, and
+// columns of mma.m16n8k32.s8's B against the pass's KS sign rows as A: block n is task SK_G a + n / 2's half n % 2, and
 // lane (g, t) holds block g's 16 bytes at 64 p + 16 t, (x, y) b0 and b1 of k-step 2 p, (z, w) of 2 p + 1. A register r
 // of k-step 2 p + s is row g + 8 (r % 2) at positions 64 p + 16 t + 8 s + 4 (r / 2) + b, so each byte meets the sign of
-// its own position: σ is the block's in store order. Each A register is one prmt (sk_sign) of the selector words
-// sketch_receipt.sign_frags lays out (wt_sign_frags), a uint4 a lane every two p: R = 4 s + r is word R / 6's half
-// (R % 6) / 3 at e = R % 3. A group is 128 MMAs, the old cut's 32 a task. The warp waits on `ready` for the group's
-// tasks and arrives on `sketched` for each once it has read them, so a launch has stages >= SK_G. It keeps each group's
-// 8 sketches in its batch buffer (rows of SK_RS words, so the C fragments' stores and the hash's uint4 loads hit
-// distinct banks) and after SK_GB groups, or its last, hashes them a lane a block. Only the segment's tasks have
-// blocks, so no receipt is of padding, and neither the launch's groups nor its grid moves any block.
-constexpr int SK_G = 4, SK_GB = 32 / (2 * SK_G), SK_RS = 20;
-
-template <int SKW>
+// its own position: σ is the block's in store order. At KS = 16 each A register is one prmt (sk_sign) of the selector
+// words sketch_receipt.sign_frags lays out (wt_sign_frags), a uint4 a lane every two p: R = 4 s + r is word R / 6's
+// half (R % 6) / 3 at e = R % 3; a group is 128 MMAs. At KS = 64 the lane's uint4 of p is its bit planes
+// (sketch_receipt.sign_planes, word 2 s + r / 2 for k-step 2 p + s), and m-tile mt's register r is the plane ANDed
+// with 0x01010101 << ρ, ρ = 2 mt + r % 2: the accumulator holds 2^ρ Σ bit e (−2^7 at ρ = 7), a fifth MMA of ones
+// holds T = Σ e, and σ = T − 2 (acc >> ρ) (T + 2 (acc >> 7) at ρ = 7); a group is 640 MMAs. The warp waits on `ready`
+// for the group's tasks and arrives on `sketched` for each once it has read them, so a launch has stages >= SK_G. It
+// keeps each group's 8 sketches in its batch buffer (rows of sk_rs(KS) words, so the C fragments' stores and the
+// hash's uint4 loads hit distinct banks) and after SK_GB groups, or its last, hashes them a lane a block: 8 + 4 KS
+// bytes after the prefix's midstate, one compression at KS = 16, three at 64. Only the segment's tasks have blocks, so
+// no receipt is of padding, and neither the launch's groups nor its grid moves any block.
+template <int SKW, int KS>
 __device__ __forceinline__ void receipt_warp(const uint8_t *smem, u64 *ready, u64 *sketched, int stages, int q,
                                              int lane, const Sketch &k) {
-  constexpr int NB = 2 * SK_G, HB = SB / 2, LEN = 8 + 64;
-  static_assert(HB == 4096 && SKW * SK_GB * NB * SK_RS <= sk_bufs<SKW>() * 16 * 16,
+  constexpr int NB = 2 * SK_G, HB = SB / 2, RS = sk_rs(KS), LEN = 8 + 4 * KS, NMB = (LEN + 17 + 127) / 128;
+  constexpr u32 ONES = 0x01010101u;
+  static_assert(HB == 4096 && (KS == 16 || KS == 64) && SKW * SK_GB * NB * RS <= sk_buf_ints<KS, SKW>(),
                 "a task is two blocks; the warps' batches fit the sketch buffers");
   const int g = lane >> 2, t = lane & 3;
-  int *buf = k.buf + q * SK_GB * NB * SK_RS;
+  int *buf = k.buf + q * SK_GB * NB * RS;
   const uint4 *fg = reinterpret_cast<const uint4 *>(k.signs) + lane;
   const int ng = (k.ntasks + SK_G - 1) / SK_G;
   int nb = 0, a0 = q;   // the batch's groups so far, and its first
@@ -2549,26 +2560,55 @@ __device__ __forceinline__ void receipt_warp(const uint8_t *smem, u64 *ready, u6
     for (int x = 0; x < ni; ++x) mbar_wait(ready + (i0 + x) % stages, ((i0 + x) / stages) & 1);
     const bool have = (g >> 1) < ni;
     const uint8_t *bp = smem + (size_t)((i0 + (g >> 1)) % stages) * SB + HB * (g & 1) + 16 * t;
-    int acc[2][4] = {};
+    int *r = buf + (NB * nb + 2 * t) * RS + g;   // C: rows g, g + 8 of blocks 2 t, 2 t + 1
+    if constexpr (KS == 16) {
+      int acc[2][4] = {};
 #pragma unroll 4
-    for (int pp = 0; pp < HB / 128; ++pp) {
-      const uint4 m = __ldg(fg + pp * LANES);
+      for (int pp = 0; pp < HB / 128; ++pp) {
+        const uint4 m = __ldg(fg + pp * LANES);
 #pragma unroll
-      for (int e = 0; e < 2; ++e) {
-        const uint4 d = have ? *reinterpret_cast<const uint4 *>(bp + 128 * pp + 64 * e) : make_uint4(0u, 0u, 0u, 0u);
-        const u32 w0 = e ? m.z : m.x, w1 = e ? m.w : m.y, h0 = w0 >> 16;
-        mma_s8(acc[0], make_uint4(sk_sign(w0, 0), sk_sign(w0, 1), sk_sign(w0, 2), sk_sign(h0, 0)), d.x, d.y);
-        mma_s8(acc[1], make_uint4(sk_sign(h0, 1), sk_sign(h0, 2), sk_sign(w1, 0), sk_sign(w1, 1)), d.z, d.w);
+        for (int e = 0; e < 2; ++e) {
+          const uint4 d = have ? *reinterpret_cast<const uint4 *>(bp + 128 * pp + 64 * e) : make_uint4(0u, 0u, 0u, 0u);
+          const u32 w0 = e ? m.z : m.x, w1 = e ? m.w : m.y, h0 = w0 >> 16;
+          mma_s8(acc[0], make_uint4(sk_sign(w0, 0), sk_sign(w0, 1), sk_sign(w0, 2), sk_sign(h0, 0)), d.x, d.y);
+          mma_s8(acc[1], make_uint4(sk_sign(h0, 1), sk_sign(h0, 2), sk_sign(w1, 0), sk_sign(w1, 1)), d.z, d.w);
+        }
+      }
+      __syncwarp();
+      if (lane == 0)
+        for (int x = 0; x < ni; ++x) mbar_arrive(sketched + (i0 + x) % stages);
+      r[0] = acc[0][0] + acc[1][0];
+      r[RS] = acc[0][1] + acc[1][1];
+      r[8] = acc[0][2] + acc[1][2];
+      r[RS + 8] = acc[0][3] + acc[1][3];
+    } else {
+      int acc[4][4] = {}, tot[4] = {};
+#pragma unroll 2
+      for (int p = 0; p < HB / 64; ++p) {
+        const uint4 m = __ldg(fg + p * LANES);
+        const uint4 d = have ? *reinterpret_cast<const uint4 *>(bp + 64 * p) : make_uint4(0u, 0u, 0u, 0u);
+#pragma unroll
+        for (int s = 0; s < 2; ++s) {
+          const u32 w0 = s ? m.z : m.x, w1 = s ? m.w : m.y, b0 = s ? d.z : d.x, b1 = s ? d.w : d.y;
+          mma_s8(tot, make_uint4(ONES, ONES, ONES, ONES), b0, b1);
+#pragma unroll
+          for (int mt = 0; mt < 4; ++mt) {
+            const u32 lo = ONES << (2 * mt), hi = ONES << (2 * mt + 1);
+            mma_s8(acc[mt], make_uint4(w0 & lo, w0 & hi, w1 & lo, w1 & hi), b0, b1);
+          }
+        }
+      }
+      __syncwarp();
+      if (lane == 0)
+        for (int x = 0; x < ni; ++x) mbar_arrive(sketched + (i0 + x) % stages);
+#pragma unroll
+      for (int mt = 0; mt < 4; ++mt) {
+        r[16 * mt] = tot[0] - 2 * (acc[mt][0] >> (2 * mt));
+        r[RS + 16 * mt] = tot[1] - 2 * (acc[mt][1] >> (2 * mt));
+        r[16 * mt + 8] = mt < 3 ? tot[0] - 2 * (acc[mt][2] >> (2 * mt + 1)) : tot[0] + 2 * (acc[mt][2] >> 7);
+        r[RS + 16 * mt + 8] = mt < 3 ? tot[1] - 2 * (acc[mt][3] >> (2 * mt + 1)) : tot[1] + 2 * (acc[mt][3] >> 7);
       }
     }
-    __syncwarp();
-    if (lane == 0)
-      for (int x = 0; x < ni; ++x) mbar_arrive(sketched + (i0 + x) % stages);
-    int *r = buf + (NB * nb + 2 * t) * SK_RS + g;   // C: rows g, g + 8 of blocks 2 t, 2 t + 1
-    r[0] = acc[0][0] + acc[1][0];
-    r[SK_RS] = acc[0][1] + acc[1][1];
-    r[8] = acc[0][2] + acc[1][2];
-    r[SK_RS + 8] = acc[0][3] + acc[1][3];
     if (++nb < SK_GB && a + SKW < ng) continue;
     __syncwarp();
     const int n = lane % NB, i = SK_G * (a0 + SKW * (lane / NB)) + n / 2;
@@ -2576,29 +2616,45 @@ __device__ __forceinline__ void receipt_warp(const uint8_t *smem, u64 *ready, u6
     const u32 act = __ballot_sync(FULL, on);
     if (on) {
       const u64 v = 2 * (k.q0 + (u64)i * k.gq) + (n & 1), j = k.jbase + v;
-      int w[16];
-#pragma unroll
-      for (int c = 0; c < 4; ++c) {
-        const int4 x = *reinterpret_cast<const int4 *>(buf + lane * SK_RS + 4 * c);
-        w[4 * c] = x.x, w[4 * c + 1] = x.y, w[4 * c + 2] = x.z, w[4 * c + 3] = x.w;
-      }
+      const int *row = buf + lane * RS;
       if (k.out) {
 #pragma unroll
-        for (int c = 0; c < 4; ++c)
-          reinterpret_cast<int4 *>(k.out + 16 * v)[c] = make_int4(w[4 * c], w[4 * c + 1], w[4 * c + 2], w[4 * c + 3]);
+        for (int c = 0; c < KS / 4; ++c)
+          reinterpret_cast<int4 *>(k.out + KS * v)[c] = *reinterpret_cast<const int4 *>(row + 4 * c);
       }
       if (k.tags) {
-        u64 h[8], m[16];
+        // Message word G = 16 blk + x is j at 0, σ's pair G − 1 (ints 2 G − 2 and 2 G − 1) up to KS / 2, then the
+        // padding: block blk loads ints 32 blk … 32 blk + 31 and takes ints 2 x − 2 and 2 x − 1 of them, the
+        // previous block's last two at x = 0.
+        u64 h[8];
+        int carry[2] = {0, 0};
 #pragma unroll
         for (int x = 0; x < 8; ++x) h[x] = kRcptMid[x];
-        m[0] = j;
 #pragma unroll
-        for (int x = 0; x < 8; ++x) m[1 + x] = (u64)bswap32((u32)w[2 * x]) << 32 | bswap32((u32)w[2 * x + 1]);
-        m[9] = 0x80ULL << 56;
+        for (int blk = 0; blk < NMB; ++blk) {
+          int w[32];
 #pragma unroll
-        for (int x = 10; x < 15; ++x) m[x] = 0;
-        m[15] = (128 + LEN) * 8;
-        sha512_compress(h, m);
+          for (int c = 0; c < 8; ++c) {
+            if (32 * blk + 4 * c < KS) {
+              const int4 x = *reinterpret_cast<const int4 *>(row + 32 * blk + 4 * c);
+              w[4 * c] = x.x, w[4 * c + 1] = x.y, w[4 * c + 2] = x.z, w[4 * c + 3] = x.w;
+            } else {
+              w[4 * c] = w[4 * c + 1] = w[4 * c + 2] = w[4 * c + 3] = 0;
+            }
+          }
+          u64 m[16];
+#pragma unroll
+          for (int x = 0; x < 16; ++x) {
+            const int G = 16 * blk + x;
+            const u32 a = x ? (u32)w[2 * x - 2] : (u32)carry[0], b = x ? (u32)w[2 * x - 1] : (u32)carry[1];
+            m[x] = G == 0 ? j
+                 : G <= KS / 2 ? (u64)bswap32(a) << 32 | bswap32(b)
+                 : G == KS / 2 + 1 ? 0x80ULL << 56
+                 : blk == NMB - 1 && x == 15 ? (u64)(128 + LEN) * 8 : 0;
+          }
+          carry[0] = w[30], carry[1] = w[31];
+          sha512_compress(h, m);
+        }
         // Lanes 2 a and 2 a + 1 hold one task's blocks v and v + 1 and write their 128 bytes as four whole 32-byte
         // sectors, each half from one lane: a lane's own four 16-byte stores would each fill half a sector. Sector s
         // of the pair is words 4 (s % 2) … of block v + s / 2; the even lane writes its first 16 bytes and the odd lane
@@ -2644,6 +2700,22 @@ __global__ void receipt_frags_kernel(const uint8_t *__restrict__ bits, uint4 *__
       }
     }
   frags[e] = make_uint4(w[0], w[1], w[2], w[3]);
+}
+
+// sketch_receipt.sign_planes from S's 64 rows of bits: thread e = 32 p + lane writes its lane's planes of p, word
+// 2 s + hh's bit 8 b + ρ row 16 (ρ / 2) + g + 8 (ρ % 2)'s bit at 64 p + 16 t + 8 s + 4 hh + b.
+__global__ void receipt_planes_kernel(const uint8_t *__restrict__ bits, uint4 *__restrict__ planes) {
+  const int e = blockIdx.x * blockDim.x + threadIdx.x;
+  if (e >= 64 * LANES) return;
+  const int p = e / LANES, lane = e % LANES, g = lane >> 2, t = lane & 3;
+  u32 w[4] = {0u, 0u, 0u, 0u};
+  for (int x = 0; x < 4; ++x)
+    for (int b = 0; b < 4; ++b) {
+      const int u = 64 * p + 16 * t + 4 * x + b;
+      for (int rho = 0; rho < 8; ++rho)
+        w[x] |= ((bits[512 * (16 * (rho >> 1) + g + 8 * (rho & 1)) + (u >> 3)] >> (u & 7)) & 1u) << (8 * b + rho);
+    }
+  planes[e] = make_uint4(w[0], w[1], w[2], w[3]);
 }
 
 // The decoder warps' loop (fused_kernel's comment). A lane keeps w = -(c_0 + t) in place of its tweak t and steps it
@@ -2796,7 +2868,7 @@ struct FusedSmem {
         full(reinterpret_cast<u64 *>(smem + stages * SB + NB8 * 8 * XS_STRIDE)), loaded(full + stages),
         decoded(loaded + stages), empty(decoded + stages), ready(empty + stages), sketched(ready + stages),
         tagq(reinterpret_cast<u32 *>(full + 2 * ((6 * stages + 1) / 2))), skbuf(reinterpret_cast<int *>(tagq + 4)),
-        sksg(reinterpret_cast<u32 *>(skbuf + sk_bufs<SKW>() * 16 * SKK)) {}
+        sksg(reinterpret_cast<u32 *>(skbuf + sk_buf_ints<SKK, SKW>())) {}
   // Thread 0 makes the stages' barriers anew for each segment, and finds it (Cut::next, after b's) in tagq[1 .. 3].
   __device__ void setup(int stages, int nbs, int nchunks, int groups, int tskt, int b) const {
     for (int s = 0; s < stages; ++s) {
@@ -2843,7 +2915,7 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
   int *skbuf = S.skbuf;
   const u32 *sgn = sgs ? S.sksg : signs;
   load_xs<NB8>(xs, x, M, Kd, kc, pipe);
-  for (int e = threadIdx.x; e < sk_bufs<SKW>() * 16 * SKK; e += pipe) skbuf[e] = 0;
+  for (int e = threadIdx.x; e < sk_buf_ints<SKK, SKW>(); e += pipe) skbuf[e] = 0;
   asm volatile("bar.sync 2, %0;\n" ::"r"(pipe) : "memory");
 
   if (warp == decoders + MW) {
@@ -2928,7 +3000,7 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
     if (warp < decoders + 1 + MW + SKW) {
       const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, tile0, skt, tiles, ntasks, q0, gq};
 #if WT_RECEIPT
-      receipt_warp<SKW>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
+      receipt_warp<SKW, SKK>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
 #else
       sketch_warp<SKK, SKW, SignB>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
 #endif
@@ -3201,7 +3273,7 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
 // two sketch warps do both (sketch_warp), beside `decoders` decoders, and signs holds the words' B fragments
 // (wt_sign_frags), 4 u32 a word. The warps a launch may take are fused_warps'. A WT_RECEIPT build's sketch warps
 // receipt the store's blocks instead (receipt_warp: block v at tag_base + v, 2 a task, whatever the groups, grid and
-// skt), signs is wt_sign_frags' layout of the pass's bits, and stages >= SK_G.
+// skt) at k_s = sketch_k, 16 or 64 at any k, signs is wt_sign_frags' layout of the pass's bits, and stages >= SK_G.
 int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
                     int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
                     int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,
@@ -3214,10 +3286,11 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
   if (Kd % TASK_COLS || N % 16 || M < 1 || M > 32 || k < 1 || k > MAXK || decoders < FUSED_SPAN || taggers < 0 ||
       warps > cap || stages < (32 * decoders + TW - 1) / TW || (w && taggers && !tags))
     return 1;
-  if (sketch_k && ((sketch_k != 16 && sketch_k != 64) || (sketch_k == 64 && k != 1) || taggers ||
+  const bool rc64 = WT_RECEIPT && sketch_warps && sketch_k == 64;
+  if (sketch_k && ((sketch_k != 16 && sketch_k != 64) || (sketch_k == 64 && k != 1 && !rc64) || taggers ||
                    stages >= (SK_BUFS - 1) * skt || (w && (!signs || !(tags || sk_out)))))
     return 1;
-  if (sketch_warps && (sketch_warps != 2 || sketch_k != 16 || PAY_E != 0)) return 1;
+  if (sketch_warps && (sketch_warps != 2 || (sketch_k != 16 && !rc64) || PAY_E != 0)) return 1;
   if (WT_RECEIPT && sketch_k && (!sketch_warps || stages < SK_G)) return 1;   // only the sketch warps hash sketch-sha512
   const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = warps * 32;
   int dev = 0, optin = 0;
@@ -3248,6 +3321,11 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
   } while (0)
 #define GN(KK, SK, SW) \
   do { if (nb8 == 1) G(KK, 1, SK, SW); else if (nb8 == 2) G(KK, 2, SK, SW); else G(KK, 4, SK, SW); } while (0)
+#if WT_RECEIPT
+  if (rc64 && k == 1) GN(1, 64, 2);
+  if (rc64 && k == 2) GN(2, 64, 2);
+  if (rc64) GN(3, 64, 2);
+#endif
   if (sketch_warps && k == 1) GN(1, 16, 2);
   if (sketch_warps && k == 2) GN(2, 16, 2);
   if (sketch_warps) GN(3, 16, 2);
@@ -3305,10 +3383,13 @@ int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
   return cudaDeviceSynchronize() ? 3 : 0;
 }
 
-// The fixed bytes of a pass's messages (pass_kernel) at σ (32 bytes), k_s and n.
-static int g_pass_n = 0;
+// The fixed bytes of a pass's messages (pass_kernel) at σ (32 bytes), k_s and n: k_s = 16, or in a WT_RECEIPT build
+// 64 as well.
+static int g_pass_n = 0, g_pass_ks = 16;
 int wt_set_pass(const uint8_t *sigma, int ks, int n) {
-  if (ks != 16 || n < 8 || n % 8 || KPASS_ROWS * (n / 8) > PASS_BITS_BYTES || (WT_RECEIPT && n != 4096)) return 1;
+  if ((ks != 16 && !(WT_RECEIPT && ks == 64)) || n < 8 || n % 8 || ks * (n / 8) > PASS_BITS_BYTES ||
+      (WT_RECEIPT && n != 4096))
+    return 1;
   PassMsgs P{};
   auto put = [](uint8_t *m, int &o, const void *src, int len) {
     memcpy(m + o, src, len);
@@ -3381,6 +3462,7 @@ int wt_set_pass(const uint8_t *sigma, int ks, int n) {
   P.n = n;
   if (cudaMemcpyToSymbol(kPass, &P, sizeof P)) return 2;
   g_pass_n = n;
+  g_pass_ks = ks;
   return cudaDeviceSynchronize() ? 3 : 0;
 }
 
@@ -3424,11 +3506,16 @@ int wt_pass_ptrs(const void **out) {
 }
 
 // The sketch warps' B fragments (frags, 4 u32 a word) from the k_s = 16 sign words of t tasks a tile (signs); in a
-// WT_RECEIPT build their A selectors (sketch_receipt.sign_frags, 4,096 u32) from the pass's bits (sign_words, 2,048).
+// WT_RECEIPT build their A from the pass's bits (sign_words, 128 k_s u32) at wt_set_pass's k_s: at 16 the selectors
+// (sketch_receipt.sign_frags, 4,096 u32), at 64 the bit planes (sketch_receipt.sign_planes, 8,192 u32).
 int wt_sign_frags(const u32 *signs, u32 *frags, int t, cudaStream_t s) {
   if (!signs || !frags || t < 1) return 1;
   if (WT_RECEIPT) {
-    receipt_frags_kernel<<<4, 256, 0, s>>>(reinterpret_cast<const uint8_t *>(signs), reinterpret_cast<uint4 *>(frags));
+    const uint8_t *bits = reinterpret_cast<const uint8_t *>(signs);
+    if (g_pass_ks == 64)
+      receipt_planes_kernel<<<8, 256, 0, s>>>(bits, reinterpret_cast<uint4 *>(frags));
+    else
+      receipt_frags_kernel<<<4, 256, 0, s>>>(bits, reinterpret_cast<uint4 *>(frags));
     return cudaGetLastError() ? 4 : 0;
   }
   const int n = t * SK_M * LANES;

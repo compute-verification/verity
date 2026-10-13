@@ -1,6 +1,7 @@
 """One decode step at HBM exhaustion on one GPU, from the existing kernels: a Llama-3.1 model's FP8 linears (`--model`)
-held as words of one field (`wt.cu`: the fused decode, ro-sketch-blake3/v0 or sketch-sha512 at k_s = 16 and the FP8 MMA,
-then the step's leaves and tree), and a bf16 KV cache that fills the rest of the GPU's memory at `--batch` sequences,
+held as words of one field (`wt.cu`: the fused decode, ro-sketch-blake3/v0 or sketch-sha512 at k_s = 16 (or a
+WT_RECEIPT build's `--rows` 64) and the FP8 MMA, then the step's leaves and tree), and a bf16 KV cache that fills the
+rest of the GPU's memory at `--batch` sequences,
 held as words of the same field and decoded inside attention (`benchmarks/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
 `kv_append`, all layers in one launch on a second stream, beside the step). With sketch-sha512 (a WT_RECEIPT build)
 the KV carries the same receipts: each token-layer is one of the store's registered 4 KiB blocks (store-order/v0),
@@ -332,8 +333,8 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, wt=None) -> d
 
 
 def gate_gemm(wt, torch, shapes: dict, b: int, ks, reps: int, sketch_t: int, log,
-              gate_reps: int = 1) -> tuple[dict, list, list]:
-    fused = [c for c in BW.fused_cfgs(wt, "auto", "16", sketch_t) if c[2] in (-1, -2)]
+              gate_reps: int = 1, rows: int = SR.ROWS) -> tuple[dict, list, list]:
+    fused = [c for c in BW.fused_cfgs(wt, "auto", str(rows), sketch_t) if c[2] in (-1, -2)]
     plain = BW.parse(PLAIN_CFGS)
     out = {}
     for name, (n, kd) in shapes.items():
@@ -344,19 +345,20 @@ def gate_gemm(wt, torch, shapes: dict, b: int, ks, reps: int, sketch_t: int, log
     return out, fused, plain
 
 
-def pick(g: dict, b: int, ks, fused, plain) -> dict:
+def pick(g: dict, b: int, ks, fused, plain, rows: int = SR.ROWS) -> dict:
     """A linear's arms for the step from its gemm_case timings at M = b: native (cuBLASLt or the plain kernel, the
-    faster), and per k the fastest sketched (by the decoders or by two sketch warps) and untagged fused configs."""
+    faster), and per k the fastest sketched at k_s = rows (by the decoders or by two sketch warps) and untagged fused
+    configs."""
     med = g["times"][b]["median_s"]
     nat = min(["cublas"] + [f"plain_c{c}s{s}" for c, s in plain], key=lambda a: med[a])
     out = {"native": nat, "native_s": med[nat], "k": {}}
     for k in ks:
         ran = [c for c in fused if BW.fused_name(k, c) in med]
-        sk = min((c for c in ran if c[3] == 16), key=lambda c: med[BW.fused_name(k, c)])
+        sk = min((c for c in ran if c[3] == rows), key=lambda c: med[BW.fused_name(k, c)])
         un = min((c for c in ran if c[3] == 0), key=lambda c: med[BW.fused_name(k, c)])
         out["k"][k] = {"sketch": list(sk), "sketch_s": med[BW.fused_name(k, sk)], "untagged": list(un),
                        "untagged_s": med[BW.fused_name(k, un)]}
-        dec = [c for c in ran if c[3] == 16 and not BW.sketch_warps(c)]
+        dec = [c for c in ran if c[3] == rows and not BW.sketch_warps(c)]
         if dec:
             best = min(dec, key=lambda c: med[BW.fused_name(k, c)])
             out["k"][k]["sketch_decoders"], out["k"][k]["sketch_decoders_s"] = list(best), med[BW.fused_name(k, best)]
@@ -369,9 +371,9 @@ class Step:
     """The step's buffers and its launches, each enqueued on the current stream (and the append's stream)."""
 
     def __init__(self, wt, kv, torch, model: str, b: int, m: int, ctx: int, ks, picks: dict, sketch_t: int,
-                 log, rc: bool = False) -> None:
+                 log, rc: bool = False, rows: int = SR.ROWS) -> None:
         self.wt, self.kv, self.torch, self.b, self.ctx, self.ks, self.T = wt, kv, torch, b, ctx, list(ks), sketch_t
-        self.m, self.rc = m, rc
+        self.m, self.rc, self.rows = m, rc, rows
         self.layers, self.lins, self.shapes, self.off, self.w_bytes = store_layout(model)
         self.picks = picks
         f = kv.field
@@ -424,10 +426,10 @@ class Step:
     def _launch_params(self) -> None:
         torch, wt = self.torch, self.wt
         st = BW.stream(torch)
-        bits = BW.sketch_bits(wt, BW.window_seed(wt), 16, SKT.vector_bytes(wt.sb, self.T))
+        BW.set_pass(wt, self.T, rows=self.rows)
+        bits = BW.sketch_bits(wt, BW.window_seed(wt), self.rows, SKT.vector_bytes(wt.sb, self.T))
         self.signs = torch.from_numpy(BW.pass_signs(wt, bits, self.T).view(np.int32)).cuda()
-        self.frags = BW.sign_frags(wt, torch, self.signs, self.T, st)   # the sketch warps' B fragments of the signs
-        BW.set_pass(wt, self.T)
+        self.frags = BW.sign_frags(wt, torch, self.signs, self.T, st)   # the sketch warps' fragments of the signs
         self.pass_ptrs = (ctypes.c_void_p * 2)()     # g_pass's seed and receipt midstate on the device
         if wt.receipt:
             wt.call("wt_pass_ptrs", ctypes.addressof(self.pass_ptrs))
@@ -512,7 +514,7 @@ class Step:
         rc = self.wt.so.wt_fused_sketch(
             k, self.W.data_ptr() + o, self.x[kd].data_ptr(), y.data_ptr(), self.m, n, kd, o // self.wt.s, 0, cfg[0],
             cfg[1], gr, 0, steps.data_ptr(), self.tags.data_ptr() + self.wt.tag_bytes * to if sketch else None,
-            self.wt.jbase + to, 16 if sketch else 0, sg, None, self.T,
+            self.wt.jbase + to, self.rows if sketch else 0, sg, None, self.T,
             BW.sketch_warps(cfg), None, BW.stream(self.torch))
         if rc:
             raise RuntimeError(f"wt_fused_sketch {name} k={k}: error {rc}")
@@ -587,7 +589,7 @@ class Step:
         hosted_root = self.root_at(self.commit_tree(self.nvec[k] + self.nkv, BW.stream(torch)))
         BW.READER.chain_begin(self.plan(k), BW.STORE_KEY)
         n = SKT.vector_bytes(wt.sb, self.T)
-        bits = BW.sketch_bits(wt, seed, 16, n)
+        bits = BW.sketch_bits(wt, seed, self.rows, n)
         want = BW.pass_signs(wt, bits, self.T)
         name = ORDER[0]
         nn, kd = self.shapes[name]
@@ -596,7 +598,7 @@ class Step:
         vs = BW.store_blocks_torch(torch, self.W[o:o + nn * kd])[:first]
         sk = SKT.sketch_torch(torch, vs, bits).cpu().numpy()
         ys = b"".join(BW.root_words(y) for y in BW.SR.receipts_of(seed, sk, wt.jbase + self.tag_off[(k, 0, name)]))
-        out = {"j": j, "seed": got["seed"] == seed, "k_s": got["k_s"] == BW.sketch_derive(wt, seed, n),
+        out = {"j": j, "seed": got["seed"] == seed, "k_s": got["k_s"] == BW.sketch_derive(wt, seed, n, self.rows),
                "signs": bool(np.array_equal(self.signs.cpu().numpy().view(np.uint32), want)),
                "mid": got["mid"] == BW.receipt_mid(wt, seed),
                "tree": chained == hosted, "root": chained_root == hosted_root,
@@ -606,7 +608,7 @@ class Step:
             torch.cuda.synchronize()
             nv, few = self.nvec[k], min(64, self.slots)
             kvb = self.KV.view(torch.int8).view(self.slots, self.layers, SR.BLOCK)[:few, 0]
-            sk = SKT.sketch_torch(torch, kvb, bits).cpu().numpy().astype("<i4")
+            sk = SKT.sketch_torch(torch, kvb, bits[:SR.ROWS]).cpu().numpy().astype("<i4")
             head = hashlib.sha512(SR.prefix(seed))
             ys = b"".join(BW.root_words(SR.receipt_of(head, wt.jbase + nv + u * self.layers, sk[u].tobytes()))
                           for u in range(few))
@@ -843,7 +845,8 @@ def step_points(res: dict, run_id: str | None) -> dict:
     for k, r in res["model"]["k"].items():
         pts.append({"model": res["model_name"], "batch": res["batch"], "gemm_m": res["gemm_m"], "ctx": res["ctx"],
                     "k": int(k), "word_bits": res.get("word_bits", 512), "mask": res.get("mask", False),
-                    "squaring": res.get("squaring", "columns"), "k_s": 16,
+                    "squaring": res.get("squaring", "columns"), "k_s": res.get("k_s", 16),
+                    "kv_k_s": res.get("kv_k_s"),
                     "receipt": res.get("receipt", "ro-sketch-blake3/v0") + ", re-keyed every pass",
                     "kv_receipt": res.get("kv_receipt"),
                     "attention_receipt": r["attention_receipt"],
@@ -910,6 +913,10 @@ def main() -> int:
     ap.add_argument("--gate-words", type=int, default=1 << 16)
     ap.add_argument("--gate-reps", type=int, default=1, help="runs of each fused config in the GEMM gate")
     ap.add_argument("--gate-ctx", type=int, default=0, help="the attention gate's context (0: the step's)")
+    ap.add_argument("--rows", type=int, default=SR.ROWS, choices=SR.rb.ROWS,
+                    help="sketch-sha512's k_s, the registration's (a WT_RECEIPT build's; 64 sketches the weights at 64 "
+                         "rows, and the KV's form 13, which sketches 16, at S's first 16 rows: its cost, not a 64-row "
+                         "receipt)")
     a = ap.parse_args()
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -942,6 +949,8 @@ def main() -> int:
     ash = KB.attn_shape(kv)
     if HEADS.get(a.model, ash["heads"]) != ash["heads"]:
         raise SystemExit(f"{a.kv_lib} has {ash['heads']} query heads, {a.model} {HEADS[a.model]}: build KV_QHEADS")
+    if a.rows != SR.ROWS and not wt.receipt:
+        raise SystemExit(f"ro-sketch-blake3/v0 sketches {SR.ROWS} rows; --rows {a.rows} wants a WT_RECEIPT build")
     if wt.receipt:
         if not a.reader_lib or a.sketch_t != 8:
             raise SystemExit("a WT_RECEIPT build commits with reader.cu (--reader-lib) and sketches 4 KiB vectors (T 8)")
@@ -956,9 +965,12 @@ def main() -> int:
     res = {"device": props.name, "sms": sms, "total_memory": props.total_memory, "model_name": a.model,
            "batch": a.batch, "gemm_m": m, "ks": ks, "args": vars(a), "ok": True, "gate": {}, "word_bits": wt.n,
            "mask": wt.mask, "squaring": SQUARINGS[wt.fold6], "kv_squaring": SQUARINGS[kv.so.kv_fold6()],
-           "receipt": "sketch-sha512" if wt.receipt else "ro-sketch-blake3/v0",
+           "receipt": "sketch-sha512" if wt.receipt else "ro-sketch-blake3/v0", "k_s": a.rows,
            "kv_receipt": f"sketch-sha512 of each token-layer (a store block, store-order/v0) in "
-                         f"{FORMS[RECEIPT_FORM]}, under each pass's signs, in the pass's commit" if rc else None,
+                         f"{FORMS[RECEIPT_FORM]}, under each pass's signs, in the pass's commit"
+                         + (f" (at 16 rows, S's first: the cost of the KV's receipts, the registration's {a.rows})"
+                            if a.rows != SR.ROWS else "") if rc else None,
+           "kv_k_s": SR.ROWS if rc else 0,
            "kv_rc_shape": KE.rc_shape(kv)}
 
     def save() -> None:
@@ -972,7 +984,7 @@ def main() -> int:
     res["gate"]["wt_codec"] = {k: BW.gate_codec(wt, torch, k, 256, log) for k in ks}
     res["gate"]["kv_codec"] = KB.gate(kv, torch, ks, 48, a.gate_words, log)
     res["gate"]["append"] = gate_append(kv, torch, ks, log)
-    res["gate"]["pass"] = BW.gate_pass(wt, torch, a.sketch_t, log)
+    res["gate"]["pass"] = BW.gate_pass(wt, torch, a.sketch_t, log, rows=a.rows)
     BW.set_tag(wt)
     res["ok"] = (res["gate"]["layout"]["ok"] and res["gate"]["wt_prims"]["ok"]
                  and all(g["ok"] for g in res["gate"]["wt_codec"].values())
@@ -984,7 +996,7 @@ def main() -> int:
         write_result(res, out_dir, [a.wt_lib, a.kv_lib])
         return 5
 
-    gemm, fused, plain = gate_gemm(wt, torch, all_shapes, m, ks, a.gemm_reps, a.sketch_t, log, a.gate_reps)
+    gemm, fused, plain = gate_gemm(wt, torch, all_shapes, m, ks, a.gemm_reps, a.sketch_t, log, a.gate_reps, a.rows)
     res["gemm"] = gemm
     res["ok"] = all(g.get("ok") for g in gemm.values()) and len(gemm) == len(all_shapes)
     save()
@@ -992,7 +1004,7 @@ def main() -> int:
         log("a GEMM gate failed: nothing timed")
         write_result(res, out_dir, [a.wt_lib, a.kv_lib])
         return 5
-    picks = {name: pick(g, m, ks, fused, plain) for name, g in gemm.items()}
+    picks = {name: pick(g, m, ks, fused, plain, a.rows) for name, g in gemm.items()}
     res["picks"] = picks
     for name, p in picks.items():
         log(f"pick {name}: native {p['native']}; " + ", ".join(
@@ -1019,7 +1031,7 @@ def main() -> int:
         write_result(res, out_dir, [a.wt_lib, a.kv_lib])
         return 5
 
-    S = Step(wt, kv, torch, a.model, a.batch, m, ctx, ks, picks, a.sketch_t, log, rc)
+    S = Step(wt, kv, torch, a.model, a.batch, m, ctx, ks, picks, a.sketch_t, log, rc, a.rows)
     if rc:
         log(f"the KV's receipts: {S.slots} a layer (one a token-layer), {S.nkv} a pass after the weights' "
             f"{max(S.nvec.values())} ({S.rc_sk.numel() * 4 / 1e6:.2f} MB of head shares a layer)")
