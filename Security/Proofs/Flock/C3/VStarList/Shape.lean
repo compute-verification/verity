@@ -131,9 +131,6 @@ theorem checkInnerStmt_ok {i : Flock.RecVStar.Inner} {st : Flock.Stmt}
   | none => rw [hs] at h1; exact absurd rfl h1
   | some _ => rfl
 
-#print axioms stacked_of_candidate3
-#print axioms checkInnerStmt_ok
-
 /-- **A loop that runs through passes each element**: where each step that succeeds continues and holds `P` of its
 element, a loop that succeeds holds `P` of every element. -/
 theorem forIn_ok_all {α ε : Type} (P : α → Prop) {f : α → Unit → Except ε (ForInStep Unit)}

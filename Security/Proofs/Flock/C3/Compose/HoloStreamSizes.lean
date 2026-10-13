@@ -58,8 +58,6 @@ theorem shape_holoAt {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.I
     ⟨hp.nu, hp.ell, hp.sLog, hp.tLog⟩
   exact congrArg (fun e => (⟨hp.nu, e, hp.sLog, hp.tLog⟩ : FlockSoundness.Model.SparseShape)) h
 
-#print axioms shape_holoAt
-
 theorem flatMap_replicate_fst : ∀ l : List SchedRound,
     l.flatMap (fun q => List.replicate q.1 1) = List.replicate (l.map (·.1)).sum 1
   | [] => rfl
