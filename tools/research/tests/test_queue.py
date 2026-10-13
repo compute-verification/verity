@@ -1332,9 +1332,9 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, land and drive only"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, land and drive only"),
-                      (["queue", "drive"], "drive needs --on MACHINE")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, land, drive and report only"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, land, drive and report only"),
+                      (["queue", "drive"], "drive needs --on MACHINE"), (["queue", "report"], "report needs --on MACHINE")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
