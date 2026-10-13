@@ -243,7 +243,7 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
     assert FF.facts_for(cfg)["arch"] == "dsa-moe"
     assert G.structural_refusal(cfg) is None
     profile = G.build_profile("GLM53", 8, hf_config=cfg, repo="zai-org/GLM-5.3-FP8", revision="aca966e4")
-    assert profile.config["MOE_I_FULL"] == 1536 and profile.config["I"] == 192 and profile.config["ROUTER_VPT"] == 8
+    assert profile.config["MOE_I_FULL"] == 2048 and profile.config["I"] == 256 and profile.config["ROUTER_VPT"] == 8
     assert [type(p) for p in profile.patterns[:6]] == [
         DsaNormRope, DsaQ, DsaMqaGather, DsaMqaAllocation, DsaTopK, DsaSparseMla]
     shared = next(p for p in profile.patterns if isinstance(p, MoEFusedSharedExpertsFp8))
