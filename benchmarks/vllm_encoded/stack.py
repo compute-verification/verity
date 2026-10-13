@@ -4,10 +4,10 @@ codec words, and the plain stack, the same engine over the same kernels' plain f
 
 ~~~text
 linears   stack: wt.cu (WT_RECEIPT, full slot, masked) fused decode + FP8 MMA + sketch-sha512 receipts on two sketch
-          warps, at M <= 32 rows; the chunks' sums reduced in order (paged.cu's pg_reduce). pstack: wt_gemm over the plain
-          fragments, the same sums bit for bit (gated). M > 32 (prefill): the layer decoded straight into an ephemeral
-          scratch as its N × K matrix (stack, wt_decode_rows; gated against the weight) or unpermuted (pstack) for
-          vLLM's CUTLASS GEMM.
+          warps, at M <= 128 rows in launches of at most 64; the chunks' sums reduced in order (paged.cu's pg_reduce).
+          pstack: wt_gemm over the plain fragments, the same sums bit for bit (gated). M > 128 (prefill): the layer
+          decoded straight into an ephemeral scratch as its N × K matrix (stack, wt_decode_rows; gated against the
+          weight) or unpermuted (pstack) for vLLM's CUTLASS GEMM.
 receipts  a decode step is a pass: before the model's forward (eager, the runner's _model_forward) wt_pass derives pass
           j's seed, signs and receipt prefix from root_(j−1) on the device; each linear writes its vectors' receipts
           at the step's running offset; after the last linear (inside the step's CUDA graph) reader.cu's leaves, pads
@@ -49,11 +49,14 @@ import paged as P  # noqa: E402
 SR = BW.SR
 T = 8                                   # tasks a sketch vector
 PLAIN_CFGS = ((4, 4), (8, 8))           # wt_gemm's (consumers, stages): step.py's PLAIN_CFGS
-CAPTURE = [1, 4, 8, 16, 32]
+FUSED_ROWS = 64                         # wt_fused_sketch's rows a launch
+MAX_ROWS = 128                          # a decode's rows on the fused kernel (in launches of at most FUSED_ROWS)
+CAPTURE = [1, 4, 8, 16, 32, 48, 64, 96, 128]
+FUSED = [m for m in CAPTURE if m <= FUSED_ROWS]   # the launch sizes whose configs are selected and gated
 ROOT0 = hashlib.sha512(b"verity/vllm-encoded/stack/registration").digest()   # root_(−1)
 LM_ROWS = 4096                          # lm_head rows a chunk: 32 MB of BF16, in L2
 GATE_RECEIPTS = 64                      # receipts of a linear checked against sketch_receipt
-GATE_TREE = (1, 32)                     # batches whose whole step tree is checked against the driver's
+GATE_TREE = (1, 32, 128)                # batches whose whole step tree is checked against the driver's
 
 
 def stream() -> int:
@@ -65,6 +68,12 @@ def new_stream() -> torch.cuda.Stream:
     made in, and so is a graph captured on it: an SM partition (kv_filler's `serve.py --partition`) replaces this with
     one that makes them on the step's green context."""
     return torch.cuda.Stream()
+
+
+def pieces(m: int) -> list[int]:
+    """A decode of m rows as launches of at most FUSED_ROWS, their sizes as even as they go."""
+    p = -(-m // FUSED_ROWS)
+    return [m // p + (i < m % p) for i in range(p)]
 
 
 def unplain(f: torch.Tensor, n: int, kd: int) -> torch.Tensor:
@@ -167,7 +176,7 @@ class StackLinear:
         else:
             self.base, self.store = 0, plain
         self.cfgs: dict[int, tuple] = {}     # capture size -> config
-        self.plan: dict[int, tuple] = {}     # m -> (cfg, groups, tweak steps, receipts)
+        self.plan: dict[int, list] = {}      # m -> its launches' (rows, (cfg, groups, tweak steps, receipts))
         self.at: dict[int, int] = {}         # m -> the step's offset of its receipts
         st.linears.append(self)
 
@@ -232,9 +241,13 @@ class StackLinear:
             return None
         return torch.empty(max(plan[3], 1) * self.st.wt.tag_bytes // 8, dtype=torch.int64, device="cuda")
 
-    def reduce(self, part: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
+    def receipts(self, m: int) -> int:
+        return sum(p[3] for _, p in self.plan[m])
+
+    def reduce(self, part: torch.Tensor, xs: torch.Tensor, out: torch.Tensor | None = None) -> torch.Tensor:
         m = part.shape[1]
-        out = torch.empty((m, self.n), dtype=torch.bfloat16, device="cuda")
+        if out is None:
+            out = torch.empty((m, self.n), dtype=torch.bfloat16, device="cuda")
         self.st.plib.call("pg_reduce", part.data_ptr(), part.shape[0], m, self.n, xs.data_ptr(), int(xs.numel() > 1),
                           self.ws.data_ptr(), out.data_ptr(), stream())
         return out
@@ -263,15 +276,19 @@ class StackLinear:
     def forward(self, x8: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
         m, st = x8.shape[0], self.st
         xs = xs.reshape(-1).float().contiguous()
-        if m > K.MAX_ROWS:
+        if m > MAX_ROWS:
             from vllm import _custom_ops as ops
             w = self.rows(st.scratch).view(torch.float8_e4m3fn)
             return ops.cutlass_scaled_mm(x8, w.t(), out_dtype=torch.bfloat16, scale_a=xs, scale_b=self.ws, bias=None)
         if self.idx == 0:
             st.at = 0
-        plan = self.plan[m]
-        y = self.reduce(self.sums(x8.contiguous(), plan, st.at), xs)
-        st.at += plan[3]
+        x8 = x8.contiguous()
+        y = torch.empty((m, self.n), dtype=torch.bfloat16, device="cuda")
+        r0 = 0
+        for r, plan in self.plan[m]:
+            self.reduce(self.sums(x8[r0:r0 + r], plan, st.at), xs if xs.numel() == 1 else xs[r0:r0 + r], y[r0:r0 + r])
+            st.at += plan[3]
+            r0 += r
         if st.encoded and self.idx == len(st.linears) - 1:
             st.commit(m)
         return y
@@ -326,7 +343,7 @@ class LmHead:
     def apply(self, layer, x: torch.Tensor, bias=None) -> torch.Tensor:
         x2 = x.reshape(-1, self.h)
         m = x2.shape[0]
-        if m > K.MAX_ROWS or torch.cuda.is_current_stream_capturing():
+        if m > MAX_ROWS or torch.cuda.is_current_stream_capturing():
             y = self.run(x2.contiguous())
         else:
             g = self.graphs.get(m)
@@ -369,16 +386,16 @@ class Attention:
         self.enc = int(st.encoded)
         self.layers: dict[tuple, _Layer] = {}   # by (layer, the cache's storage and shape): vLLM may reallocate it
         self.splits: dict[int, int] = {}
-        top = max(P.part_floats(self.lib, b, self.split(b)) for b in range(1, K.MAX_ROWS + 1))
+        top = max(P.part_floats(self.lib, b, self.split(b)) for b in range(1, MAX_ROWS + 1))
         self.part = torch.empty(top, dtype=torch.float32, device="cuda")   # the captured steps' (b <= MAX_ROWS)
         self.part_eager = self.part                                        # an eager decode's at any b, grown
         self._plan: tuple | None = None
         self.calls = {"decode": 0, "gathered": 0, "append": 0, "flush_graph": 0, "flush_eager": 0}
         self.nl = layers
         row = self.lib.shape["kv_heads"] * self.lib.shape["head_dim"]
-        self.stage_k = torch.zeros((layers, K.MAX_ROWS, row), dtype=torch.bfloat16, device="cuda")
+        self.stage_k = torch.zeros((layers, MAX_ROWS, row), dtype=torch.bfloat16, device="cuda")
         self.stage_v = torch.zeros_like(self.stage_k)
-        self.stage_s = torch.full((layers, K.MAX_ROWS), -1, dtype=torch.int64, device="cuda")
+        self.stage_s = torch.full((layers, MAX_ROWS), -1, dtype=torch.int64, device="cuda")
         self.staged: dict[int, tuple] = {}      # layer -> (cache, lbase): its staged rows' target
         self.graph_tab = None
         self.pending: list[tuple] = []          # an eager step's (key, value, slots, rows, cache, lbase), by layer
@@ -393,12 +410,12 @@ class Attention:
     def partials(self, b: int) -> torch.Tensor:
         """Attention's split partials at batch b: the captured steps' buffer, or (b > MAX_ROWS, eager) one grown to fit
         and kept apart, since the graphs hold the first's address."""
-        if b <= K.MAX_ROWS:
+        if b <= MAX_ROWS:
             return self.part
         need = P.part_floats(self.lib, b, self.split(b))
         if need > self.part_eager.numel():
             if torch.cuda.is_current_stream_capturing():
-                raise RuntimeError(f"a captured decode at batch {b}: the stack captures at most {K.MAX_ROWS}")
+                raise RuntimeError(f"a captured decode at batch {b}: the stack captures at most {MAX_ROWS}")
             self.part_eager = torch.empty(need, dtype=torch.float32, device="cuda")
         return self.part_eager
 
@@ -460,16 +477,16 @@ class Attention:
         self.app_done.record(self.s2)
         self.outstanding = True
 
-    def flush_graph(self) -> None:
-        """After a captured step's replay: its staged rows, every layer's, into the pages."""
+    def flush_graph(self, rows: int) -> None:
+        """After a captured step's replay at `rows` (padded) tokens: its staged rows, every layer's, into the pages."""
         if not self.staged:
             return
         if self.graph_tab is None:
-            ents = [(self.stage_k[l], self.stage_v[l], self.stage_s[l], K.MAX_ROWS, c, lb)
+            ents = [(self.stage_k[l], self.stage_v[l], self.stage_s[l], MAX_ROWS, c, lb)
                     for l, (c, lb) in sorted(self.staged.items())]
             self.graph_tab = P.table(torch, ents).cuda()
             self.graph_layers = len(ents)
-        self._launch(self.graph_tab, self.graph_layers, K.MAX_ROWS)
+        self._launch(self.graph_tab, self.graph_layers, rows)
         self.calls["flush_graph"] += 1
 
     def flush_eager(self) -> None:
@@ -529,8 +546,8 @@ class Attention:
             att.slots[idx] = slot_mapping
             k2, v2 = key.view(key.shape[0], -1), value.view(value.shape[0], -1)
             if torch.cuda.is_current_stream_capturing():
-                if n > K.MAX_ROWS:
-                    raise RuntimeError(f"a captured step of {n} tokens: the stage holds {K.MAX_ROWS}")
+                if n > MAX_ROWS:
+                    raise RuntimeError(f"a captured step of {n} tokens: the stage holds {MAX_ROWS}")
                 att.stage_k[idx, :n].copy_(k2[:n])
                 att.stage_v[idx, :n].copy_(v2[:n])
                 att.stage_s[idx, :n].copy_(slot_mapping)
@@ -559,7 +576,7 @@ def select(st: Stack, trials: int, log) -> list[dict]:
     cache: dict = {}
     out = []
     for (n, kd), lins in groups.items():
-        for m in CAPTURE:
+        for m in FUSED:
             x8 = rand_fp8(m, kd, gen)
             part = torch.empty((lins[0].nch, m, n), dtype=torch.float32, device="cuda")
             times = {}
@@ -594,14 +611,13 @@ def select(st: Stack, trials: int, log) -> list[dict]:
                         "us": {"x".join(map(str, c)): round(t, 2) for c, t in times.items()}})
             log(f"select n={n} k={kd} m={m}: {best} {times[best]:.1f} us/layer")
     for lin in st.linears:
-        for m in range(1, K.MAX_ROWS + 1):
-            cfg = lin.cfgs[min(c for c in CAPTURE if c >= m)]
-            lin.plan[m] = lin.planned(m, cfg, cache)
-    for m in range(1, K.MAX_ROWS + 1):
+        for m in range(1, MAX_ROWS + 1):
+            lin.plan[m] = [(r, lin.planned(r, lin.cfgs[min(c for c in FUSED if c >= r)], cache)) for r in pieces(m)]
+    for m in range(1, MAX_ROWS + 1):
         at = 0
         for lin in st.linears:
             lin.at[m] = at
-            at += lin.plan[m][3]
+            at += lin.receipts(m)
         st.nvec[m] = at
     torch.cuda.empty_cache()
     return out
@@ -625,7 +641,7 @@ def gate_linear(st: Stack, lin: StackLinear, w: torch.Tensor, plain: torch.Tenso
             gates["python_words"] += 1
     ref_lib = PlainRef(st, lin, plain)
     cache: dict = {}
-    for m in CAPTURE:
+    for m in FUSED:
         x8 = rand_fp8(m, lin.kd, gen)
         ref = ref_lib.sums(x8)
         for cfg in lin.candidates(m):
@@ -688,7 +704,7 @@ def gate_step(st: Stack, log) -> dict:
         row = {"j": j, "seed": got["seed"] == seed, "receipts": st.nvec[m], "linears_checked": 0, "receipts_ok": True}
         nbits = BW.sketch_bits(wt, seed, 16, SKT.vector_bytes(wt.sb, T))
         for lin in st.linears[:nper] + st.linears[-nper:]:
-            _, gr, _, nvec = lin.plan[m]
+            _, (_, gr, _, nvec) = lin.plan[m][0]
             first = min(GATE_RECEIPTS, nvec)
             vs = SKT.vectors_torch(torch, lin.store.view(torch.uint8), lin.n // 16, lin.nch, wt.sb, gr, T)[:first]
             sk = SKT.sketch_torch(torch, vs, nbits).cpu().numpy()
@@ -886,7 +902,7 @@ def hook_passes(st: Stack, att: Attention, hooks, model) -> str:
         if torch.cuda.is_current_stream_capturing():
             return False
         att.join()
-        if 0 < m <= K.MAX_ROWS:
+        if 0 < m <= MAX_ROWS:
             st.begin_pass(m)
         return True
 
@@ -894,7 +910,7 @@ def hook_passes(st: Stack, att: Attention, hooks, model) -> str:
         def fn(self, desc):
             begin(desc.num_tokens)
             out = orig(self, desc)
-            att.flush_graph()
+            att.flush_graph(desc.num_tokens)
             return out
         return fn
 
