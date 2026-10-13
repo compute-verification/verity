@@ -29,7 +29,7 @@ The insert, per token (`processDeepseekV4Slot`, :178-379; 32 lanes, lane l eleme
   norm), each element's bf16 round trip (:315-318: exact on the NoPE elements but for a NaN's payload, which no output reads); per
   block of QB NoPE elements (4 lanes: `warp4MaxAbs`, :144-151) amax = fmaxf over fabsf from +0 (max.f32 drops a NaN, so the order
   is free), fmaxf(amax, 1e-4), s = `div.rn.f32`(amax, 448) (`F32Div_v2`), e = ceilf(`NvLog2f_v1`(s)) (`F32CeilFtz_v1`: its operand
-  is never subnormal, s >= 2^-22), inv = `NvExp2f_v1`(-e) (`ex2.approx.f32`); byte i `F32ToE4m3Sat`(fminf(fmaxf(x_i * inv, -448),
+  is never subnormal, s >= 1e-4/448 > 2^-23), inv = `NvExp2f_v1`(-e) (`ex2.approx.f32`); byte i `F32ToE4m3Sat`(fminf(fmaxf(x_i * inv, -448),
   448)) (:332-343; a NaN element is -448, 0xFE); the block's scale byte `F32ToU32RzByte_v1`(fmaxf(fminf(e + 127, 255), +0))
   (:346-350; +inf amax gives 255) and a 0 byte after the DN/QB of them (:351-353); the RoPE elements' bf16 (:354-371).  The cache row
   is the DN e4m3 bytes and DR bf16 at `pos_in_block * (DN + 2 DR)` and the scale bytes at `block_size * (DN + 2 DR) + pos_in_block *
