@@ -85,7 +85,7 @@ from verity_vllm.program.registry.prims import BF16
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
            "AllReduceMultimemCoordinate", "AllReduceRmsNormMnnvl", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",
-           "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "GLM53_H200_TREE", "H200_SMS", "MNNVL_ONE_SHOT_BYTES", "SETTINGS",
+           "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "SETTINGS",
            "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "eps_bits",
            "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees",
            "ranks", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
@@ -391,8 +391,8 @@ def AllReduceMnnvlCoordinate(B, S, col):
 
 @composite("AllReduceMnnvl", 1, ["WORLD", "N", "SHOT"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))),), Array(S.N, BF16)),
-           conformance="exact-model-tested: GLM-5.3 TP8 on 8x H200 at vLLM's defaults and with the custom all-reduce off, "
-                       "1-42 tokens at N=6144, and DeepSeek-V4-Pro at the defaults, 1-36 tokens at N=7168 "
+           conformance="exact-model-tested: GLM-5.3 TP8 on 8 cc 9.0 GPUs (132 SMs) at vLLM's defaults and with the custom all-reduce off, "
+                       "1-42 tokens at N=6144, and at the defaults 1-36 tokens at N=7168 "
                        "(`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceMnnvl(B, S, parts):
     """FlashInfer's MNNVL all-reduce of WORLD ranks' N-vectors (`trtllm_allreduce_fusion` without the norm): one
@@ -413,7 +413,7 @@ def _butterfly0(B, add, vals: list):
 @composite("AllReduceRmsNormMnnvl", 1, ["WORLD", "N", "SHOT", "CLUSTER", "EPS", "FMA"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
                       Tuple(Array(S.N, BF16), Array(S.N, BF16))),
-           conformance="exact-model-tested: GLM-5.3 TP8 on 8x H200 at vLLM's defaults and with the custom all-reduce off, "
+           conformance="exact-model-tested: GLM-5.3 TP8 on 8 cc 9.0 GPUs (132 SMs) at vLLM's defaults and with the custom all-reduce off, "
                        "1-42 tokens at N=6144 with both shots and every launch geometry "
                        "(`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceRmsNormMnnvl(B, S, parts, res, w):
@@ -485,7 +485,7 @@ def AllReduceCustomCoordinate(B, S, col):
 
 @composite("AllReduceCustom", 1, ["WORLD", "SIZE", "STAGE"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)),
-           conformance="exact-model-tested: GLM-5.3 TP8 on 8x H200 under VLLM_ALLREDUCE_USE_SYMM_MEM=0, where alone "
+           conformance="exact-model-tested: GLM-5.3 TP8 on 8 cc 9.0 GPUs (132 SMs) under VLLM_ALLREDUCE_USE_SYMM_MEM=0, where alone "
                        "it takes GLM-5.3's all-reduces, 43-682 tokens at N=6144 "
                        "(`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceCustom(B, S, parts):
@@ -523,8 +523,8 @@ def AllReduceMultimemCoordinate(B, S, col):
 
 @composite("AllReduceMultimem", 1, ["WORLD", "SIZE", "TREES", "FTZ"],
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)),
-           conformance="exact-model-tested: TP8 on 8x H200 at vLLM's defaults and with the custom all-reduce off, the tree "
-                       "read off the switch with IEEE adds: GLM-5.3 at N=6144, 43-2048 tokens, and DeepSeek-V4-Pro at N=7168, "
+           conformance="exact-model-tested: TP8 on 8 cc 9.0 GPUs (132 SMs) at vLLM's defaults and with the custom all-reduce off, the tree "
+                       "read off the switch with IEEE adds: GLM-5.3 at N=6144, 43-2048 tokens, and N=7168, "
                        "37-2048 tokens (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
 def AllReduceMultimem(B, S, parts):
     """torch's `multimem_all_reduce_` of WORLD ranks' SIZE bf16 (the whole flattened tensor, whose slices name each element's
