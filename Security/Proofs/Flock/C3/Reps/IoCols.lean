@@ -2,6 +2,7 @@ import Proofs.Flock.C3.Reps.TsRead
 import Proofs.Flock.C3.Reps.SrcOpens
 import Proofs.Flock.VBridge.Decode
 import Proofs.Flock.VBridge.Verifier
+import Proofs.Flock.C3.Reps.ReadCol
 
 /-!
 # The openings' columns: in range, and read under a stage's mask
@@ -9,7 +10,7 @@ import Proofs.Flock.VBridge.Verifier
 * `lt_nIn_of_params`: a unit the verifier accepted (`RecOpen.check_ok`) as `rec-open/l<LANES>-h<H>` has its first
   `128 · LANES + 512 · H` columns (the row and the `aux` blocks) among its inputs (`inWords_unit`, `unitIn_eq`), so
   `openCols_of` gives `OpenCols`' in-range half from the units' parameters (`OpenParams`, `hOpenParams_of`'s statement),
-  leaving its `ReadCol` half.
+  leaving its `ReadCol` half, which `openCols_of_readCol` takes as `OpenReadCol` at every unit.
 * `copyVal_maskOf`: an input column a row reads (`IoColAt`) whose position is in stage `i`'s commit strings is the same
   in the masked layer: `colOf_mask`'s lemma at any `Sk`, the one both `IoColAt` and `RowColsRead` go through.
   `posK_of_key`: a column keyed by bit `k` of row port `q` is at `q`'s commit string.
@@ -32,6 +33,12 @@ open FlockVBridge.AccChain (levelLanes)
 /-- Every circuit the verifier parsed passes `RecOpen.check` (`ParseFacts.recNet`). -/
 theorem recCheck {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg') : Flock.RecOpen.check Q.c = .ok () :=
   (parse_facts zo.hc).recNet
+
+/-- A circuit in `rs`' scope has `unitLog ≤ 32`. -/
+theorem unitLog_of_scope {c : Flock.Circuit} (h : Layout.scopeOk c = true) : c.unit.unitLog ≤ 32 := by
+  unfold Layout.scopeOk at h
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+  exact h.1.1.2
 
 /-- **An opening's row and `aux` columns are inputs**: the unit is `unitLaid LANES H`, whose input bits
 (`unitIn`: `128 · LANES` row bits, then at least `512 · H` of `aux`) are below its inputs' end. -/
@@ -101,6 +108,14 @@ theorem openCols_of (hrec : ∀ j, Flock.RecOpen.check (Vs j).c = .ok ()) (hP : 
   intro ℓ hℓ c hc
   rw [FlockVBridge.Family.Conss.getD_default] at hc
   exact ⟨lt_nIn_of_params (hrec _) (hP ℓ hℓ) hc, hR ℓ hℓ c hc⟩
+
+/-- **`OpenCols` from the units' parameters and `OpenReadCol`**: each level's unit is the net of `unitLaid`
+(`RecOpen.check_ok`), with `unitLog ≤ 32` (`unitLog_of_scope`). -/
+theorem openCols_of_readCol (hrec : ∀ j, Flock.RecOpen.check (Vs j).c = .ok ()) (hP : M.OpenParams)
+    (hR : ∀ LANES H, OpenReadCol LANES H) : M.OpenCols sh.sched :=
+  M.openCols_of hrec hP fun ℓ hℓ c hc =>
+    have hok := Flock.RecOpen.check_ok (hrec (M.sessO ℓ)) (hP ℓ hℓ)
+    hR _ _ (Vs (M.sessO ℓ)).hU hok.2 hok.1 (unitLog_of_scope (Vs (M.sessO ℓ)).hscope) c hc
 
 /-- Obligation: discharged by the openings' circuits (`RecOpen.check_ok`: the unit is `unitLaid`, whose first port is
 `row`), as `PartRowCols` for the parts. **The openings' row columns are keyed by row bits**: at each level, the Δ key of
