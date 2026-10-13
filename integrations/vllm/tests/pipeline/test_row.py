@@ -690,6 +690,54 @@ def test_a_tp_rows_stages_have_nccl_p2p_disable_only_when_its_workload_requires_
     assert open(f"{t.d}/stage.log").read().splitlines()[-1] == f"NCCL_P2P_DISABLE={p2p or 'unset'}"
 
 
+GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
+
+
+def _engines_custom_all_reduce_off(t, monkeypatch) -> tuple[object, object]:
+    """``disable_custom_all_reduce`` as tp-capture's and tp-commit's engines parse it from the row's command lines."""
+    from verity_vllm.pipeline.tp.capture import parse_engine_args
+    t.MML, t.MNBT = 1024, 256
+    t.engine = t.engine_args()
+    seen: list[list[str]] = []
+
+    def capture_leg(stage, to, log, cmd, **kw):
+        seen.append(cmd)
+        raise Stop(98)
+    monkeypatch.setattr(R, "derived_ok", lambda p: True)
+    monkeypatch.setattr(t, "run_gpu", capture_leg)
+    with pytest.raises(Stop):
+        t.match()
+
+    def parsed(cmd: list[str]) -> object:
+        return parse_engine_args([cmd[i + 1] for i, a in enumerate(cmd) if a == "--engine-arg"])["disable_custom_all_reduce"]
+    return parsed(seen[0]), parsed(t.commit_cmd([]))
+
+
+@pytest.mark.parametrize("row, off", [
+    (GLM53, False),                                  # an H box: vLLM's default, the custom all-reduce on
+    (TP_DENSE, True),                                # L40S, a workload with env_required
+    (TP_MOE, True),                                  # L40S, one written before env_required
+    ("llama32-1b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager", True),
+    ("qwen3-235b-a22b-fp8__fp8__rtxpro6000__tp8__b1__i256__o32__mixed__greedy__bi-eager", True),
+])
+def test_a_tp_rows_engines_take_disable_custom_all_reduce_from_its_workload(tmp_path, monkeypatch, row, off):
+    t = _tp_row(tmp_path, row)
+    assert t.custom_all_reduce_off() is off
+    assert _engines_custom_all_reduce_off(t, monkeypatch) == (off, off)
+
+
+def test_a_tp_workload_without_disable_custom_all_reduce_keeps_it_off(tmp_path, monkeypatch):
+    """Not the generator's value for the target (an H200 row's would be False): what every TP row's engines ran before the field."""
+    t = _tp_row(tmp_path, GLM53)
+    doc = json.loads(Path(t.path(t.wl)).read_text())
+    del doc["engine_args_required"]["disable_custom_all_reduce"]
+    t.tree = str(tmp_path / "tree")
+    Path(t.path(t.wl)).parent.mkdir(parents=True)
+    Path(t.path(t.wl)).write_text(json.dumps(doc))
+    assert t.custom_all_reduce_off() is True
+    assert _engines_custom_all_reduce_off(t, monkeypatch) == (True, True)
+
+
 # ---------------------------------------------------------------------------------------------------------------- Match summary
 
 STAGE_START = 1_600_000_000
