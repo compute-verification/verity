@@ -152,6 +152,26 @@ def test_a_new_push_moves_its_pr_to_the_tip_and_keeps_the_commits_before_it(worl
     assert again[2].head == world.gh.prs[2].head
 
 
+def test_an_api_head_ahead_of_its_pull_ref_waits_without_blocking_the_queue(world):
+    """GitHub's REST PR head can update before refs/pull/N/head; the queue must not walk the absent REST commit or stop the tick."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, old := world.change({"b.txt": "old\n"}))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+
+    new = world.change({"b.txt": "new\n"})
+    world.gh.prs[2] = PR(2, new, "change 2", "Lane `lane-2`.")
+    world.gh.ready.add((2, new))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1]
+    assert entries[2].state == "waiting"
+    assert entries[2].why == f"GitHub's API head {new[:12]} and pull ref {old[:12]} disagree; retrying next sync"
+    assert q.logs[-2] == f"research queue: #2's API head {new[:12]} and fetched pull ref {old[:12]} disagree; retrying next sync"
+
+    world.gh.put(2, new)
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+
+
 def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
     """12 Oct: a flaky test on `main` failed 8577 and its fix (#1858) sat behind the next train; `--first` restacks `next` so the
     next train starts with the fix.  A PR in `--first` that isn't ready is passed over, and another queue's sync without the
