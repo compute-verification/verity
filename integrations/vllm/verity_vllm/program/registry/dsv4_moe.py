@@ -21,6 +21,7 @@ not read.  The unit's quadratic interpolator, with integer coefficients, reprodu
 (cc 12.0; `LG2_MEASURED`): a segment g = m >> 17 and the offset u below it give ``G = (C0[g] + C1[g] u + C2[g] Q(u)) >> 2``,
 Q(u) the truncated square MUFU.EX2's interpolator uses (columns >= 19 of u^2's folded partial products, core's
 `verity.ml.circuits.ops.boolean.mufu`), and the word is G 2^-36 rounded toward zero; m = 0 is +0, where the interpolant is 7377.
+Those 2^23 words, by m, are the library's measured table ``lg2`` (`verity.ml.circuits.library`), which the primitive declares.
 
 `Ex2Approx_v1` is ``ex2.approx.f32`` (not .ftz): ptxas computes ``t < -126 ? MUFU.EX2(t * 0.5)^2 : MUFU.EX2(t)`` (FMUL,
 subnormals kept), the form `registry.mla`'s `ex2_approx` builds on bits.
@@ -153,11 +154,10 @@ def mufu_lg2_mantissa_bits(x: int) -> int:
            conformance="exact-model-tested: lg2.approx.ftz.f32 on every 1.m of [1, 2), 8,388,608 words measured on the RTX PRO 6000 "
                        "(cc 12.0; run r20261004-060203-ba52) equal to the interpolant; cc 9.0 not yet captured "
                        "(tests/properties/dsv4_moe_capture_gpu.py)",
-           # a measured MUFU table in substance, but not on `verity.ml.circuits.library`'s versioned list, so the guard lists it
-           tables=(("lg2_coeffs", "registered"),))
+           tables=(("lg2", "library"),))
 def MufuLg2Mantissa(x: int) -> int:
     """MUFU.LG2 (``lg2.approx.f32``) of 1.m, m = x's 23 mantissa bits: the unit's quadratic interpolator rounded toward zero on
-    the 2^-36 grid, +0 at m = 0."""
+    the 2^-36 grid, +0 at m = 0.  At every m it is the library's measured table ``lg2``, word m."""
     return mufu_lg2_mantissa_bits(x)
 
 
