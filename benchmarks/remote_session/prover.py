@@ -100,6 +100,7 @@ class ProverSide:
         self.inbox: queue.Queue = queue.Queue()
         self.jobs: queue.Queue = queue.Queue()
         self.kept: dict[tuple[int, int], object] = {}
+        self.dropped: set[int] = set()
         self.lock = threading.Lock()
         threading.Thread(target=self._read, daemon=True).start()
         threading.Thread(target=self._open, daemon=True).start()
@@ -136,7 +137,8 @@ class ProverSide:
             with self.lock:
                 for key in [key for key in self.kept if key[0] == t]:
                     del self.kept[key]
-            self.opened.append({"t": t, "n": len(out), "bytes": len(body), "ns": time.perf_counter_ns() - c0})
+            self.opened.append({"t": t, "n": len(out), "bytes": len(body), "ns": time.perf_counter_ns() - c0,
+                                "on_dropped": sum(p in self.dropped for _, p in draws)})
             self.jobs.task_done()
 
     def expect(self, kind: str):
@@ -168,7 +170,7 @@ class ProverSide:
         N = self.backend.blocks
         dropped = set(self.rng.sample(range(N), round(fraction * N))) if mode == "skip" else set()
         self.backend.arm(dropped)
-        self.opened: list[dict] = []
+        self.dropped, self.opened = dropped, []
         self.conn.send({"type": "armed", "k": k})
         head, _, _ = self.expect("coin")
         coin = wire.coin_of(head["coin"])

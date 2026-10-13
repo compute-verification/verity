@@ -257,8 +257,8 @@ class Device:
     """The prover's backend (`prover.ProverSide`): the store, its gates and calibration, its passes and openings."""
 
     def __init__(self, torch, lib_path: str, kv_path: str, blocks: int, *, seed: int, log=print,
-                 gate_blocks: int = 256, calibration_passes: int = 40) -> None:
-        self.torch, self.log, self.blocks = torch, log, blocks
+                 gate_blocks: int = 256, calibration_passes: int = 40, warm_openings: int = 2773) -> None:
+        self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks, warm_openings
         self.gate_blocks, self.calibration_passes = gate_blocks, calibration_passes
         self.lib = Lib(lib_path, torch)
         self.tmp = tempfile.mkdtemp(prefix="rs-opener.")
@@ -311,19 +311,28 @@ class Device:
                 b.record()
                 b.synchronize()
                 reads.append(a.elapsed_time(b))
-            prev, pass_ns, gap_ns = bytes(64), [], []
+            prev, pass_ns, gap_ns, kept = bytes(64), [], [], []
             challenge = self.rng.bytes(32)
             t_end = None
             for i in range(self.calibration_passes):
                 t0 = time.perf_counter_ns()
                 seed = rb.seed(challenge, i, prev)
                 t1 = time.perf_counter_ns()
-                prev, _ = s.run_pass(seed)
+                prev, handle = s.run_pass(seed)
+                kept.append(handle)
                 t2 = time.perf_counter_ns()
                 if t_end is not None:
                     gap_ns.append(t1 - t_end)
                 pass_ns.append(t2 - t1)
                 t_end = t2
+        # A window's openings once, over the calibration's passes, before any session: the opener's stream reaches
+        # its allocations here and not in a session, where growing them stalls the passes.
+        draws = [(int(self.rng.integers(len(kept))), int(self.rng.integers(s.blocks))) for _ in range(self.warm_openings)]
+        o0 = time.perf_counter_ns()
+        for i in sorted({i for i, _ in draws}):
+            self.open(kept[i], [p for k, p in draws if k == i])
+        open_ns = time.perf_counter_ns() - o0
+        del kept
         gpu = s.pass_gpu_ms[-self.calibration_passes:]
         s.pass_gpu_ms.clear()
         read_ms = min(reads[1:])
@@ -331,7 +340,8 @@ class Device:
                 "gap_ns_max": max(gap_ns[1:]), "gap_ns_median": sorted(gap_ns)[len(gap_ns) // 2],
                 "pass_gpu_ms_median": sorted(gpu)[len(gpu) // 2], "read_ms": read_ms,
                 "read_bytes_per_s": s.blocks * BLOCK / (read_ms / 1e3),
-                "tau": sorted(gpu)[len(gpu) // 2] / read_ms, "device": torch.cuda.get_device_name(0)}
+                "tau": sorted(gpu)[len(gpu) // 2] / read_ms, "warm_openings": len(draws), "warm_open_ns": open_ns,
+                "device": torch.cuda.get_device_name(0)}
 
     def arm(self, dropped: set[int]) -> None:
         with self.torch.cuda.stream(self.main_stream):
