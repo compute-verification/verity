@@ -499,36 +499,48 @@ theorem elems_of_cols {f : ℕ → Bool} {base : ℕ} {r : Array Flock.F128}
     exact (hc _ hb').symm.trans (h _ hb)
   rwa [getElem!_pos (elems f base r.size) k hk, getElem!_pos r k hk'] at e
 
-/-- **`OpensAtMaps` at R's map at its read**: in good layers, an opening of its unit's registered row opens the row its
-columns hold (`elems_of_cols`), each a read input column holding its registered bit (`bitAt_of_regBit`, by
-`StackedOpenCols`), so any map whose openings are its units' (`OpensAtMaps`) gives `readMaps`', and `levelTie_of_maps`
-takes `readMaps` with `row_size_readMaps` as `hwd`. -/
+/-- **`OpensAtMaps` at R's map at its read**: an opening's row is the row its copy's own columns hold (`OpensTopAt`,
+`elems_of_cols`), which is `readMaps`' row, so any map whose openings are its units' (`OpensAtMaps`) gives
+`readMaps`', and `levelTie_of_maps` takes `readMaps` with `row_size_readMaps` as `hwd`. -/
 theorem opensAtMaps_readMaps (M : FlockC3.Reps.StackedMaps stmt Vs) {zs : (s : Fin S) → (Vs s).Outer Reg'}
-    {Lb : (s : Fin S) → (Vs s).Bits} (hG : ∀ s, (zs s).Good (Lb s)) {sh : Flock.Shape}
-    (hk : StackedOpenCols M sh.sched) {sibs : ℕ → Array ByteArray} {cap : Array ByteArray} {p : Flock.LigeritoProof}
-    {lg : Flock.RecAlgebra.LgPts} (h : OpensAtMaps M zs Lb sh sibs cap p lg) :
+    {Lb : (s : Fin S) → (Vs s).Bits} {sh : Flock.Shape} {sibs : ℕ → Array ByteArray} {cap : Array ByteArray}
+    {p : Flock.LigeritoProof} {lg : Flock.RecAlgebra.LgPts} (h : OpensAtMaps M zs Lb sh sibs cap p lg) :
     OpensAtMaps (readMaps M sh.sched) zs Lb sh sibs cap p lg := by
   intro ℓ hℓ j hj
   obtain ⟨a, cf, A, hT⟩ := h ℓ hℓ j hj
   have e : (readMaps M sh.sched).row Lb ℓ j = M.row Lb ℓ j := by
-    obtain ⟨h0, _, _, _, _, _, _, _, _, _, _, _, hr, _, _, _, _, _, _, _, hrow, _⟩ := hT
+    obtain ⟨h0, _, _, _, _, _, _, _, _, _, _, _, hr, _, _, _, _, _, _, _, _, hrow, _⟩ := hT
     have hL : 2 ^ (sh.sched.levels.getD ℓ default).lanes = (M.row Lb ℓ j).size := by
       rw [FlockVBridge.Family.Conss.getD_default]
       exact hr.symm
+    have hf : stackedCol M Lb ℓ j = _ := FlockVBridge.Family.colOf_eq (Vs (M.sess ℓ)) (Lb (M.sess ℓ)) (M.un ℓ j) h0
     show elems (stackedCol M Lb ℓ j) 0 (2 ^ (sh.sched.levels.getD ℓ default).lanes) = M.row Lb ℓ j
-    rw [hL]
-    refine elems_of_cols (f := stackedCol M Lb ℓ j) (base := 0) (r := M.row Lb ℓ j) fun t ht => ?_
-    have hb : 0 + t < 128 * 2 ^ (sh.sched.levels.getD ℓ default).lanes +
-        512 * ((sh.sched.levels.getD ℓ default).d - (sh.sched.levels.getD ℓ default).cap) := by
-      rw [hL]
-      rw [FlockVBridge.size_rowBytes] at ht
-      omega
-    have hc := hk ℓ hℓ (0 + t) hb
-    exact FlockVBridge.Family.bitAt_of_regBit (zs (M.sess ℓ)) (hG (M.sess ℓ)).2 (hrow t ht)
-      (ioColAt_of_readCol (M.un ℓ j) hc.1 hc.2) h0
+    rw [hL, hf]
+    exact elems_of_cols hrow
   refine ⟨a, cf, A, ?_⟩
   rw [e]
   exact hT
+
+/-- **R's map's rows at its read are in its units' columns** (`OpensTopAt`'s row conjunct at `readMaps`, by
+construction): copy 0 of opening `j`'s unit holds `readMaps`' row from column 0 (`colsHold_elems`). -/
+theorem rowCols_readMaps (M : FlockC3.Reps.StackedMaps stmt Vs) (sch : Flock.Schedule) (Lb : (j : Fin S) → (Vs j).Bits)
+    (ℓ j : ℕ) (h0 : 0 < (Vs (M.sess ℓ)).c.upv) :
+    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst (Vs (M.sess ℓ)).hU (Vs (M.sess ℓ)).nv
+      (Layout.outsOf (Vs (M.sess ℓ)).c (Vs (M.sess ℓ)).hU (Vs (M.sess ℓ)).nv) (M.un ℓ j)) (Lb (M.sess ℓ)) h0) 0
+      (Flock.MerkleScheme.rowBytes ((readMaps M sch).row Lb ℓ j)) := by
+  have h := FlockVBridge.Family.colsHold_elems (stackedCol M Lb ℓ j) 0 (2 ^ (sch.levels.getD ℓ default).lanes)
+  intro t ht
+  rw [← FlockVBridge.Family.colOf_eq (Vs (M.sess ℓ)) (Lb (M.sess ℓ)) (M.un ℓ j) h0]
+  exact h t ht
+
+/-- **R's map's columns are input wires of their units** (`OpensTopAt`'s wire conjunct at copy 0, from
+`StackedOpenCols` by `ioColAt_of_readCol`). -/
+theorem ioCols_of_open (M : FlockC3.Reps.StackedMaps stmt Vs) {sch : Flock.Schedule} (hk : StackedOpenCols M sch)
+    {ℓ : ℕ} (hℓ : ℓ < sch.levels.size) (j : ℕ) {col : ℕ}
+    (hc : col < 128 * 2 ^ (sch.levels.getD ℓ default).lanes +
+      512 * ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap)) :
+    col < (Rows.ofNet (Vs (M.sess ℓ)).hU).nIn ∧ FlockVBridge.Family.IoColAt (Vs (M.sess ℓ)) (M.un ℓ j) col :=
+  ⟨(hk ℓ hℓ col hc).1, ioColAt_of_readCol (M.un ℓ j) (hk ℓ hℓ col hc).1 (hk ℓ hℓ col hc).2⟩
 
 /-! ## R's Ligerito steps and openings at the source -/
 
@@ -607,3 +619,8 @@ end
 end FlockC3.RegLevels
 
 #print axioms FlockC3.RegLevels.stackedParams_of_checked
+#print axioms FlockC3.RegLevels.stackedReadCol
+#print axioms FlockC3.RegLevels.climb_of_opensTop
+#print axioms FlockC3.RegLevels.opensAtMaps_readMaps
+#print axioms FlockC3.RegLevels.rowCols_readMaps
+#print axioms FlockC3.RegLevels.ioCols_of_open
