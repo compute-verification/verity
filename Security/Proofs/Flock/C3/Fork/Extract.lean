@@ -18,7 +18,6 @@ position (`RunOpensReg`): both are runs of `σ` at `ω`, so the two are an inner
 * `regClash_fork`, the per-draw fact: a leaf's run that `RegClash`es at `regStmt` is an inner fork at round 0.
 * `innerAtLeavesL_reg`: `innerAtLeavesL_of_forkOn`'s argument at each draw on `holo_runs_sound` at that draw's
   `regStmt`, its `RegClash` cases by `regClash_fork`.
-* `zk_sessions_recursive_fork_innerL`: `zk_sessions_recursive_fork_innerC` with the inner term a hypothesis.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -326,54 +325,6 @@ theorem innerAtLeavesL_reg {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Ty
     (fun u s' _ => ?_) _) ?_
   · exact ite_one_zero_iff Iff.rfl
   exact (prob_rounds _ _ _ _).symm
-
-/-- **Gap 2 at the committed rounds, the inner term given**: `zk_sessions_recursive_fork_innerC`'s argument with the
-inner term `InnerAtLeavesL` a hypothesis wherever the recursive prover has no inner fork, in place of the inner
-protocol's soundness. -/
-theorem zk_sessions_recursive_fork_innerL
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
-    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N : ℕ)
-    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ R ω t R₂ j S' R' i,
-      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
-    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
-    (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
-    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
-    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
-    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
-    (hbr : Flock.Assumptions.VBridgeC zs dg N k Rw x wmsg Sk cmt msg)
-    {D : Type} (H : List UInt8 → D) (pick : I.Stmt → List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair)
-    {εin : ℝ≥0∞} (hr0 : 0 < I.r)
-    (hleaf : ¬ InnerForkRec zs dg N k Rw σ x wmsg H pick →
-      ∀ ref, InnerAtLeavesL σ (fun R ω t o => AcceptsV (zs R ω t) o) x (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt)
-        (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω)) (fun w => wmsg w.1) ref εin) :
-    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
-      InnerForkRec zs dg N k Rw σ x wmsg H pick ∨
-      prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
-          (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
-        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
-          (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
-  by_cases hf : InnerForkRec zs dg N k Rw σ x wmsg H pick
-  · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
-  have hrd : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
-      (∀ k < I.r, Option.Rel (fun a b => k + 1 < I.r → a = b) l[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) →
-      ∃ m, l.zip (t.map Prod.snd) = relabelL (ref ω) m t := by
-    intro ref ω t l ht h
-    obtain ⟨m, hm⟩ := exists_of_rel (h (t.length - 1) (by omega)) (by
-      simp only [ne_eq, Option.map_eq_none_iff, List.getElem?_eq_none_iff, Nat.not_le]; omega)
-    exact ⟨m, zip_eq_relabelL (ref ω) m t l hm fun k hk =>
-      option_eq_of_rel (R := fun a b => k + 1 < I.r → a = b) (fun _ _ hab => hab (by omega)) (h k (by omega))⟩
-  rcases zk_sessions_recursive_fork_on hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun i _ a b => i + 1 < I.r → a = b)
-      (fun ref ω t u => ∃ m, u = relabelL (ref ω) m t) hrd (fun i j => if i + 1 < I.r then Sk i j else ∅) cmt msg
-      hbr.2.1 hbr.2.2.1 hbr.2.2.2 (fun ref => InnerAtLeavesL.toZ (hleaf hf ref))
-      with h | h | h | h
-  · exact Or.inl h
-  · exact Or.inr (Or.inl h)
-  · exact Or.inr (Or.inr (Or.inl h))
-  · exact Or.inr (Or.inr (Or.inr (Or.inr h)))
 
 end Chain
 
