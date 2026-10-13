@@ -56,6 +56,7 @@ __all__ = [
     "e4m3_product_total",
     "e5m2_class",
     "e5m2_product_total",
+    "in_mmav2_e4m3_k_order",
     "tc_dot_total_e4m3",
     "tc_dot_total_e5m2",
 ]
@@ -165,12 +166,18 @@ HOPPER_E4M3_WGMMA_K32 = Pipeline(
 
 HOPPER_E4M3_FAMILY_VERSION = "1"
 
+
+def in_mmav2_e4m3_k_order(xs) -> list:
+    """`xs`, one 32-wide k block, in :data:`MMAV2_E4M3_K_ORDER`: computed, so an evaluator that calls it reads no table."""
+    return [xs[k] for k in range(32) if k % 4 < 2] + [xs[k] for k in range(32) if k % 4 >= 2]
+
+
 #: The k order in which Triton 3.7.1's MMAv2 lowering of an e4m3 ``tl.dot`` on sm_90 feeds one 32-wide k block to its two
 #: ``mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32``: the operands are promoted to f16 (``cvt.rn.f16x2.e4m3x2``, exact; Triton
 #: promotes FP8 for MMAv2 on every cc but 8.9 and 12.0, AccelerateMatmul.cpp ``mmav2SupportsFp8Operands``), and the kWidth = 4 dot
 #: operand layout hands the first mma the k with k mod 4 in {0, 1} and the second those with k mod 4 in {2, 3} (MMAv2.cpp
 #: ``getValuesFromDotOperandLayoutStruct``), the accumulator chained from the first into the second.
-MMAV2_E4M3_K_ORDER: tuple[int, ...] = tuple(k for k in range(32) if k % 4 < 2) + tuple(k for k in range(32) if k % 4 >= 2)
+MMAV2_E4M3_K_ORDER: tuple[int, ...] = tuple(in_mmav2_e4m3_k_order(range(32)))
 
 #: One accumulator coordinate of that k block, in :data:`MMAV2_E4M3_K_ORDER`: two groups of 16 exact products, the accumulator
 #: joining the first and the first's result the second, each through ``HMMA.16816.F32``'s 26-bit truncating adder, floor ``-133``
