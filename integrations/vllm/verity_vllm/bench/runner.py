@@ -206,13 +206,16 @@ def _identity(
     vllm_versions = {v.get("vllm_version") for v in versions.values()}
     if len(vllm_versions) != 1:
         raise RuntimeError(f"benchmark arms loaded different vLLM versions: {sorted(map(str, vllm_versions))}")
+    vllm_version = str(next(iter(vllm_versions)))
+    if preset.vllm_pin[:9] not in vllm_version:
+        raise RuntimeError(f"benchmark preset pins vLLM {preset.vllm_pin}, but the runtime reports {vllm_version}")
     arm_docs = []
     for arm in arms:
         runtime = versions[arm.id]
         arm_docs.append({**arm.to_json(), "kernel_digest": runtime.get("kernel_digest") or arm.kernel_digest})
     return {
         "preset": preset.to_json(),
-        "vllm_version": next(iter(vllm_versions)),
+        "vllm_version": vllm_version,
         "vllm_pin": preset.vllm_pin,
         "arms": arm_docs,
         "git_commit": git_commit,

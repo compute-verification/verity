@@ -14,7 +14,7 @@ from verity_vllm.bench.table import render
 class FakeEngine:
     def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
-        self.identity = {"vllm_version": "fake-vllm", "kernel_digest": f"digest-{arm.id}"}
+        self.identity = {"vllm_version": "0.fake+gd9105ea80", "kernel_digest": f"digest-{arm.id}"}
 
     def gate(self, point):
         self.events.append(("gate", self.arm.id, point.id))
