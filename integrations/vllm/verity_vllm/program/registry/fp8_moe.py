@@ -169,14 +169,14 @@ def MoeExpertFp8BlockGemmW(B, S, xq, sx, g, w, ws):
 # `_v1` bodies with `DOT` for `HopperE4m3QgmmaDot32_v1`; `_v2` is each `_v1`'s Boolean version
 # ---------------------------------------------------------------------------------------------------------
 
-DOT_CONF = ("exact-model-tested at the one DOT a registered target binds (GemmTarget.fp8_moe_dot), BlackwellE4m3QmmaDot32_v1 at G = 64, "
+DOT_CONF = ("exact-model-tested at cc 12.0's DOT (GemmTarget.fp8_moe_dot), BlackwellE4m3QmmaDot32_v1 at G = 64, "
              "KB = 32, SWAP = False (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, run r20261003-220018-3f6a, record "
              "0d346c79c642a0a1 (#1000 @ 2fd4e257f), cases moe/decode, moe/small, moe/block and "
              "moe/prefill: fused_experts (E 128, top 8, hidden 4096, I 192) under TritonExperts, every block-[64, 64] fused_moe_kernel "
              "launch at 64x64x32, 11,791,360 w13 and w2 words, 0 mismatches; Hopper's step, the swapped and CUTLASS scale orders and an "
              "unfused mul + add each refuted (3,942, 577, 568 and 575 words); read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1 "
-             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); at DOT = HopperE4m3QgmmaDot32_v1 the function of the `_v1` "
-             "forms (tests/program/test_fp8_moe_dot.py), which are model-untested")
+             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); at DOT = HopperE4m3QgmmaDot32_v1 (cc 9.0's) the function of "
+             "the `_v1` forms (tests/program/test_fp8_moe_dot.py), which are model-untested")
 
 
 def coordinate_sig(routed: bool, e4m3=E4M3, f32=F32, bf16=BF16):

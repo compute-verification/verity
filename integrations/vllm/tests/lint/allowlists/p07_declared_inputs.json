@@ -316,6 +316,7 @@
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "broad-except", "symbol": "TP2CaptureWorkerExtension._claimed", "detail": "except Exception"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "broad-except", "symbol": "_moe_collective_modules", "detail": "except Exception"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "CUDA_VISIBLE_DEVICES"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "os.environ.items"}
+    {"file": "verity_vllm/engine/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "os.environ.items"},
+    {"file": "verity_vllm/engine/sparse_mla.py", "kind": "environ", "symbol": "wanted", "detail": "os.environ.get"}
   ]
 }

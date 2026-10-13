@@ -252,6 +252,53 @@ def test_a_failure_two_changes_reach_rings_ci_and_ejects_nothing(world, monkeypa
     assert [m.pr for m in h.q.chain()] == [1, 2]
 
 
+LINT_LOG = """..........F........                                                      [100%]
+=================================== FAILURES ===================================
+___________________________ test_markdown_size_caps ____________________________
+
+>       assert not offenders, "maintained documents are small:\\n" + "\\n".join(offenders)
+E       AssertionError: maintained documents are small:
+E         tools/research/src/research/store/README.md: 48 KB > 48 KB, 17 bytes over; move detail to the notes store
+
+tests/test_repository.py:180: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_repository.py::test_markdown_size_caps - AssertionError: ma...
+1 failed, 18 passed in 17.49s
+"""
+
+
+def _lint_run(tmp_path, log: str = LINT_LOG):
+    d = tmp_path / "run"
+    d.mkdir(parents=True)
+    (d / "steps.jsonl").write_text('{"step": "preflight-lock", "status": "passed"}\n'
+                                   '{"step": "preflight-lints", "status": "failed", "rc": 1, "log": "preflight-lints.log"}\n')
+    (d / "preflight-lints.log").write_text(log)
+    return d
+
+
+def test_a_lint_failure_only_one_trains_change_reaches_ejects_that_pr(world, monkeypatch, tmp_path):
+    """13 Oct 07:35Z: 898eae8a1f74 failed `preflight-lints` because the store README one PR edited was 17 bytes over its cap,
+    and drive rang ci: the offender is named in the lint's assertion, and drive read only the suites' tracebacks."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"tools/research/src/research/store/README.md": "big\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    h.evidence = [_lint_run(tmp_path)]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "store/README.md" in h.posts[0], h.posts
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1]
+
+
+def test_a_failed_pytest_step_points_at_its_tests_and_the_paths_its_failures_name(tmp_path):
+    from research.drive import implicated
+
+    assert implicated(_lint_run(tmp_path)) == {"tests/test_repository.py", "tools/research/src/research/store/README.md"}
+    assert implicated(_lint_run(tmp_path / "b", "error: lock is stale\n")) is None
+
+
 def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_file(tmp_path):
     from research.drive import implicated, touches
 
@@ -468,3 +515,32 @@ def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypat
                      (dataclasses.replace(world.gh.prs[2], body="Lane `infra`.", branch=""), "infra"),
                      (dataclasses.replace(world.gh.prs[2], branch="cursor/x-0000"), None)):
         assert q.handle(pr) == want
+
+
+def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):
+    """13 Oct: `research msg send` refuses a `--to` naming the sender, and drive posted as ci to @ci, so from 05:07Z no notice
+    was posted. The sender is also selectable (`queue eject --by lean`), so its handle, not always @ci, must be dropped."""
+    from research import drive
+
+    argv = []
+    monkeypatch.setattr(drive.subprocess, "run", lambda cmd, **kw: argv.append(cmd) or
+                        drive.subprocess.CompletedProcess(cmd, 0))
+    assert drive.merge_thread_post("x", ("@ci", "@memory-accounting"))
+    assert argv[-1][argv[-1].index("--as") + 1] == "ci"
+    assert argv[-1][argv[-1].index("--to"):argv[-1].index("--quiet")] == ["--to", "@memory-accounting"]
+    assert drive.merge_thread_post("x", ("@ci",)) and "--to" not in argv[-1]
+    assert drive.merge_thread_post("x", ("@ci", "@lean"), sender="lean")
+    assert argv[-1][argv[-1].index("--as") + 1] == "lean"
+    assert argv[-1][argv[-1].index("--to"):argv[-1].index("--quiet")] == ["--to", "@ci"]
+
+    h = Harness(world, monkeypatch)
+    logged = []
+    h.q.log = logged.append
+    ok = [False]
+    h.d.post = lambda text, to: ok[0]
+    state = {"told": []}
+    h.d.refuse(state, "k", "#1 conflicts", "circuits")
+    assert state["told"] == [] and "could not post" in logged[-1]
+    ok[0] = True
+    h.d.refuse(state, "k", "#1 conflicts", "circuits")
+    assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @ci @circuits")
