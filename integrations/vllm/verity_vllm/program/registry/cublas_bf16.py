@@ -37,6 +37,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import const_bits
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.ops import fp32 as F
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import elementwise as EW
@@ -181,10 +182,10 @@ BatchedGemm = CompositeDefinition("BatchedGemm", 2, ("B", "K", "N", "DOT"), _bat
                                   conformance=CONFORMANCE)
 CublasSplitKGemmF32OutWord = CompositeDefinition(
     "CublasSplitKGemmF32Out", 1, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(P.BF16, P.F32),
-    _splitk(GemmF32OutWord, P.F32Add), doc=f"{SPLITK_DOC}; f32 output", conformance=CONFORMANCE)
+    _splitk(GemmF32OutWord, F.F32Add), doc=f"{SPLITK_DOC}; f32 output", conformance=CONFORMANCE)
 CublasSplitKGemmWord = CompositeDefinition(
     "CublasSplitKGemm", 1, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(P.BF16, P.BF16),
-    _splitk(GemmF32OutWord, P.F32Add, P.F2fpBf16), doc=f"{SPLITK_DOC}; one final bf16 rounding", conformance=CONFORMANCE)
+    _splitk(GemmF32OutWord, F.F32Add, P.F2fpBf16), doc=f"{SPLITK_DOC}; one final bf16 rounding", conformance=CONFORMANCE)
 CublasSplitKGemmF32Out = CompositeDefinition(
     "CublasSplitKGemmF32Out", 2, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(BF16, F32),
     _splitk(GemmF32Out, EW.F32Add), doc=f"{SPLITK_DOC}; f32 output, on bits", conformance=CONFORMANCE)
