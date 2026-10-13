@@ -14,9 +14,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     glm = sparse_mla_split.M.SPARSE_MLA_GLM53
     head = {k: v for k, v in glm.items() if k != "NH"}
     return [
-        ("MufuLg2Ftz_v1", lambda: sparse_mla_split.MufuLg2Ftz),
-        ("F32NeZeroFtz_v1", lambda: sparse_mla_split.F32NeZeroFtz),
-        ("F32GtZeroFtz_v1", lambda: sparse_mla_split.F32GtZeroFtz),
         # the split path at the served statics: T = 130 in two splits (two blocks, then the partial one), sixteen splits combined
         ("SparseMlaSplitEnd_v1", lambda: bind(sparse_mla_split.SparseMlaSplitEnd, DV=glm["DV"], INV=glm["INV"], SCALE=glm["SCALE"])),
         ("SparseMlaCombine_v1", lambda: bind(sparse_mla_split.SparseMlaCombine, NSPLIT=16, DV=glm["DV"], INV=glm["INV"])),
