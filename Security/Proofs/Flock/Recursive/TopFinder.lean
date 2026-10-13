@@ -238,3 +238,9 @@ theorem prob_topColl_le
     (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)) (by positivity)).2 hev
 
 end FlockSoundness.Discharge.Recursion
+
+#print axioms Flock.SecurityProofs.TopFinder.hexOf_inj
+#print axioms Flock.SecurityProofs.TopFinder.topEntryFields_ok
+#print axioms Flock.SecurityProofs.TopFinder.topEntryFields_bind
+#print axioms FlockSoundness.Discharge.Recursion.TopColl.collision
+#print axioms FlockSoundness.Discharge.Recursion.prob_topColl_le
