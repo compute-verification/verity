@@ -81,6 +81,7 @@ import Definitions.Pouw.PearlC.TileCheck8
 import Definitions.Pouw.PearlC.TileCheck4
 import Definitions.Pouw.PearlC.TileCircuit
 import Definitions.Pouw.PearlC.W1
+import Definitions.Pouw.PearlC.W1Stop
 import Definitions.Pouw.PearlC.WholeCircuit
 import Definitions.Pouw.PearlC.WholeCircuit4
 import Definitions.Pouw.TileBound.AlignedExactDefs
