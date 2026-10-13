@@ -550,13 +550,3 @@ theorem dirs_tie {c3 : RecCoins.C3} {LANES H : ℕ} (h : RecCoins.checkStackedLe
 end Session
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.climb_sibsV
-#print axioms FlockC3.RegLevels.openPairV_collides
-#print axioms FlockC3.RegLevels.checkValue_root
-#print axioms FlockC3.RegLevels.treeLeaf_commitRow
-#print axioms FlockC3.RegLevels.bits_of_rowInV
-#print axioms FlockC3.RegLevels.valueColl_spec
-#print axioms FlockC3.RegLevels.tie_read
-#print axioms FlockC3.RegLevels.value_tie
-#print axioms FlockC3.RegLevels.dirs_tie
