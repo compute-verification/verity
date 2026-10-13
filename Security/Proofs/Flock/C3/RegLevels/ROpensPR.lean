@@ -354,7 +354,3 @@ theorem opensReadAt_two_read (M : FlockC3.Reps.StackedMaps stmt Vs) {shR : Flock
 end
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.srcOK_repsOfVals_pR
-#print axioms FlockC3.RegLevels.opensReadAt_two_read
-#print axioms FlockC3.RegLevels.row_size_readMaps
