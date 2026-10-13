@@ -215,8 +215,8 @@ noncomputable def topFinder
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) : Finder Pair :=
   oneRun _ σ (onePick Refine.H512
     (fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) =>
-      TopColl wr st reg bcs' o.2.2.1)
-    fun _ h => TopColl.collision hstk h)
+      AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1)
+    fun _ h => TopColl.collision hstk h.2)
 
 /-- A differing held top occurs with probability at most `qT²/2^513` under the honest budget of `topFinder`. -/
 theorem prob_topColl_le
@@ -226,17 +226,18 @@ theorem prob_topColl_le
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     {qT : ℝ} (hT : (topFinder wr st reg bcs' lv cap hstk zs σ).CR Refine.H512 qT) :
-    prob (fun o => TopColl wr st reg bcs' o.2.2.1)
+    prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1)
       (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) := by
-  have hev : (prob (fun o => TopColl wr st reg bcs' o.2.2.1)
+  have hev : (prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+        TopColl wr st reg bcs' o.2.2.1)
       (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ).toReal ≤
       qT ^ 2 / 2 ^ (513 : ℝ) := by
     rw [prob_toReal]
     exact (expect_one_le Refine.H512 _ σ
       (fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) =>
-        TopColl wr st reg bcs' o.2.2.1)
-      fun _ h => TopColl.collision hstk h).trans hT.le
+        AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1)
+      fun _ h => TopColl.collision hstk h.2).trans hT.le
   exact (ENNReal.le_ofReal_iff_toReal_le
     (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)) (by positivity)).2 hev
 
@@ -249,7 +250,8 @@ theorem prob_regOrTop_le
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     {qX qT : ℝ} (hX : (regFinder zs dg N σ).CR Refine.H512 qX)
     (hT : (topFinder wr st reg bcs' lv cap hstk zs σ).CR Refine.H512 qT) :
-    prob (fun o => RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨ TopColl wr st reg bcs' o.2.2.1)
+    prob (fun o => RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨
+        (AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1))
       (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       ENNReal.ofReal (qX ^ 2 / 2 ^ (513 : ℝ)) + ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) :=
   (prob_or_le _ _ _ _).trans (add_le_add
