@@ -4,7 +4,9 @@
     Dsv4CompressorScore_v2{W}, Dsv4CompressColumn_v2{ROWS}, Dsv4IndexerNormRope_v2{D,ROPE,EPS}, Dsv4IndexerKQuant_v2{N},
     Dsv4InvRope_v2{ROPE}, Dsv4InvRopeQuant_v2{N}       traced at their statics (`EW.specialized`)
     Dsv4IndexerCompress_v2{D,ROPE,EPS}                 Calls of the column, norm and quantisation (`EW.on_bits`)
-    Dsv4InvRopeQuantHead_v2{CHUNKS,QG,ROPE}            Calls of `Bf16ToF32_v2`, the inverse RoPE and the group quantisation
+    Dsv4InvRopeQuantHead_v2{CHUNKS,QG,ROPE}            its Calls of `Bf16ToF32_v2`, the inverse RoPE and the group quantisation
+                                                       traced as one circuit (`boolean_dsa.flat`): a widened word's 16 zero
+                                                       bits fold instead of reaching a separately traced callee
     Dsv4ShortContextTopK_v2{TOPK,RATIO}                traced: one validity bit per slot from pos's bits
 
 A step is core's gate builder for the word primitive `dsv4_indexer.WORD` names: `fp.f32_add` / `f32_sub` / `f32_mul` / `f32_fma`
@@ -162,12 +164,13 @@ Dsv4IndexerCompressV2 = EW.on_bits("Dsv4IndexerCompress", 2, ["D", "ROPE", "EPS"
 
 
 def _head(B, S, x, cs):
-    """`Dsv4InvRopeQuantHead_v1`'s body on bits: Calls of `Bf16ToF32_v2`, `Dsv4InvRope_v2{ROPE}` and `Dsv4InvRopeQuant_v2{QG}`."""
+    """`Dsv4InvRopeQuantHead_v1`'s body on bits: `Bf16ToF32_v2`, `Dsv4InvRope_v2{ROPE}` and `Dsv4InvRopeQuant_v2{QG}`, traced as
+    one circuit."""
     return I.inv_rope_head(B, S, x, cs, BIT_DEFS, BITS)
 
 
-Dsv4InvRopeQuantHeadV2 = EW.on_bits("Dsv4InvRopeQuantHead", 2, ["CHUNKS", "QG", "ROPE"], I.head_sig(BITS), _head,
-                                    I.Dsv4InvRopeQuantHead)
+Dsv4InvRopeQuantHeadV2 = BD.flat("Dsv4InvRopeQuantHead", 2, ["CHUNKS", "QG", "ROPE"], I.head_sig(BITS), _head,
+                                 I.Dsv4InvRopeQuantHead)
 
 
 def _topk(S):
