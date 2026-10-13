@@ -154,13 +154,15 @@ theorem dirsRow_zero (pos H : ℕ) : (Flock.RecCoins.dirsRow pos H)[0]! = pos % 
   rw [Flock.RecCoins.dirsRow,
     getElem!_pos (#[pos % 2 ^ H % 2 ^ 16, pos % 2 ^ H / 2 ^ 16] ++
       Array.replicate (Flock.RecCoins.DIRS_WORDS - 2) 0) 0 (by simp [Flock.RecCoins.DIRS_WORDS]),
-    Array.getElem_append_left (by simp)] <;> rfl
+    Array.getElem_append_left (by simp)]
+  rfl
 
 theorem dirsRow_one (pos H : ℕ) : (Flock.RecCoins.dirsRow pos H)[1]! = pos % 2 ^ H / 2 ^ 16 := by
   rw [Flock.RecCoins.dirsRow,
     getElem!_pos (#[pos % 2 ^ H % 2 ^ 16, pos % 2 ^ H / 2 ^ 16] ++
       Array.replicate (Flock.RecCoins.DIRS_WORDS - 2) 0) 1 (by simp [Flock.RecCoins.DIRS_WORDS]),
-    Array.getElem_append_left (by simp)] <;> rfl
+    Array.getElem_append_left (by simp)]
+  rfl
 
 /-- Bit `b < H` of the position, `b < 32`, is bit `b % 16` of `dirsRow pos H`'s word `b / 16`. -/
 theorem dirsRow_testBit (pos H : ℕ) {b : ℕ} (hb : b < H) (h32 : b < 32) :
@@ -448,20 +450,22 @@ theorem srcKey_opening {c : Flock.Circuit} {name : String} {L H : ℕ}
   exact ⟨hq', hname, by omega, by omega, key⟩
 
 theorem preBits_aux (L H : ℕ) : preBits L H 1 = (Flock.RecOpen.ports L H).row := by
-  simp [preBits, Flock.RecOpen.Ports.bits] <;> omega
+  simp [preBits, Flock.RecOpen.Ports.bits]
 
 theorem preBits_acc (L H : ℕ) :
     preBits L H 2 = (Flock.RecOpen.ports L H).row + (Flock.RecOpen.ports L H).aux := by
-  simp [preBits, Flock.RecOpen.Ports.bits] <;> omega
+  simp [preBits, Flock.RecOpen.Ports.bits]
 
 theorem preBits_coef (L H : ℕ) :
     preBits L H 3 = (Flock.RecOpen.ports L H).row + (Flock.RecOpen.ports L H).aux + (Flock.RecOpen.ports L H).acc := by
-  simp [preBits, Flock.RecOpen.Ports.bits] <;> omega
+  simp [preBits, Flock.RecOpen.Ports.bits]
+  omega
 
 theorem preBits_dirs (L H : ℕ) :
     preBits L H 4 = (Flock.RecOpen.ports L H).row + (Flock.RecOpen.ports L H).aux + (Flock.RecOpen.ports L H).acc +
       (Flock.RecOpen.ports L H).coef := by
-  simp [preBits, Flock.RecOpen.Ports.bits] <;> omega
+  simp [preBits, Flock.RecOpen.Ports.bits]
+  omega
 
 theorem bits_acc (L H : ℕ) : (Flock.RecOpen.ports L H).bits[2]! = (Flock.RecOpen.ports L H).acc := rfl
 
