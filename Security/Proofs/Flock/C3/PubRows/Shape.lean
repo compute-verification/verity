@@ -20,7 +20,7 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
   (`checksAccepted_checked`, by `checks_of_keepOwn`), and `hPubRows_of_checked` is `hPubRows_of_check'` with it and
   `SparseAtShapeChecked`.
 * `ownIn_of_checks`: where `ChecksAccepted` holds, the accepted sessions' reads hold the verifier's message-round ports
-  of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second loop (`mem_msgPorts_of_checkOwn`,
+  of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second and third loops (`checkOwn_ok`,
   `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
 -/
 
@@ -180,10 +180,11 @@ theorem sparse_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : L
   exact sparse_of_name hss (Array.mem_of_getElem? hj)
     ((FlockVBridge.Sparse.unitName_params hp).trans hname.symm)
 
-/-- **`checkOwn` accepting, its second loop**: each of the statement's message-round ports is one of the reads
-file's. -/
-theorem mem_msgPorts_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.Port}
-    (h : RecVStar.checkOwn s own = .ok ()) : ∀ q ∈ RecVStar.ownPorts s, q ∈ RecVStar.msgPorts own := by
+/-- **`checkOwn` accepting, its second and third loops**: each of the statement's message-round ports is one of the
+reads file's, and each of its `sparseMsgs` is one of the file's ports. -/
+theorem checkOwn_ok {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : RecVStar.checkOwn s own = .ok ()) :
+    (∀ q ∈ RecVStar.ownPorts s, q ∈ RecVStar.msgPorts own) ∧
+      ∀ q ∈ RecVStar.sparseMsgs s, q ∈ own.toList.map fun p => (p.name, p.value, p.reads) := by
   unfold RecVStar.checkOwn at h
   simp only at h
   split at h
@@ -191,15 +192,25 @@ theorem mem_msgPorts_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.
   · split at h
     · cases h
     · rename_i hnone
-      intro q hq
-      have hfind : (RecVStar.ownPorts s).find? (fun x => !(RecVStar.msgPorts own).contains x) = none := by
-        cases hf : (RecVStar.ownPorts s).find? (fun x => !(RecVStar.msgPorts own).contains x) with
-        | none => rfl
-        | some q' => exact absurd hf (hnone q')
-      simpa using List.find?_eq_none.1 hfind q hq
+      split at h
+      · cases h
+      · rename_i hnone'
+        refine ⟨fun q hq => ?_, fun q hq => ?_⟩
+        · have hfind : (RecVStar.ownPorts s).find? (fun x => !(RecVStar.msgPorts own).contains x) = none := by
+            cases hf : (RecVStar.ownPorts s).find? (fun x => !(RecVStar.msgPorts own).contains x) with
+            | none => rfl
+            | some q' => exact absurd hf (hnone q')
+          simpa using List.find?_eq_none.1 hfind q hq
+        · have hfind : (RecVStar.sparseMsgs s).find?
+              (fun x => !(own.toList.map fun p => (p.name, p.value, p.reads)).contains x) = none := by
+            cases hf : (RecVStar.sparseMsgs s).find?
+                (fun x => !(own.toList.map fun p => (p.name, p.value, p.reads)).contains x) with
+            | none => rfl
+            | some q' => exact absurd hf (hnone' q')
+          simpa using List.find?_eq_none.1 hfind q hq
 
-/-- **A statement the verifier checked as V*'s statement `j` has its message-round ports in the reads file**: each
-port of `ownAt ss j` is one of `own`'s by name, value and reads (`checkStmt_ok`'s `checkOwn`, its second loop). -/
+/-- **A statement the verifier checked as V*'s statement `j` has its message ports in the reads file**: each port of
+`ownAt ss j` is one of `own`'s by name, value and reads (`checkStmt_ok`'s `checkOwn`, its second and third loops). -/
 theorem ownIn_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
@@ -211,8 +222,12 @@ theorem ownIn_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : Li
   intro p hp
   simp only [ownAt, hj, Option.map_some, Option.getD_some, List.map_toArray, List.mem_toArray, List.mem_map] at hp
   obtain ⟨q, hq, rfl⟩ := hp
-  obtain ⟨p', hp', rfl⟩ := List.mem_map.1 (mem_msgPorts_of_checkOwn ho q hq)
-  exact ⟨p', Array.mem_toList_iff.1 (List.mem_filter.1 hp').1, rfl, rfl, rfl⟩
+  obtain ⟨h2, h3⟩ := checkOwn_ok ho
+  rcases List.mem_append.1 hq with hq | hq
+  · obtain ⟨p', hp', rfl⟩ := List.mem_map.1 (h2 q hq)
+    exact ⟨p', Array.mem_toList_iff.1 (List.mem_filter.1 hp').1, rfl, rfl, rfl⟩
+  · obtain ⟨p', hp', rfl⟩ := List.mem_map.1 (h3 q hq)
+    exact ⟨p', Array.mem_toList_iff.1 hp', rfl, rfl, rfl⟩
 
 end List
 

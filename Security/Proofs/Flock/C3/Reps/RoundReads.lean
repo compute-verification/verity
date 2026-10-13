@@ -49,7 +49,7 @@ theorem mem_ownAt {ss : Array VStar.Stmt} {j : ℕ} {s : VStar.Stmt} (hj : ss[j]
     {q : String × String × Array (Option ℕ)} (hq : q ∈ RecVStar.ownPorts s) :
     { (default : Flock.Registered.Port) with name := q.1, value := q.2.1, reads := q.2.2 } ∈ ownAt ss j := by
   simp only [ownAt, hj, Option.map_some, Option.getD_some, List.map_toArray, List.mem_toArray]
-  exact List.mem_map_of_mem hq
+  exact List.mem_map_of_mem (List.mem_append_left _ hq)
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}

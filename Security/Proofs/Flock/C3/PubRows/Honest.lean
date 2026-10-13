@@ -50,10 +50,10 @@ def ChecksPubRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     PubRowsChecked (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption F.ish.sparse (F.zs R ω t R₂ j).I
       (F.zs R ω t R₂ j).own tr'
 
-/-- **The verifier's message-round ports of statement `j`**: `ownPorts` of the list's statement `j`, each as a port of
-its name, value and reads (the other fields `default`'s, which no reader of `own` reads). -/
+/-- **The verifier's message ports of statement `j`**: `ownPorts` and `sparseMsgs` of the list's statement `j`, each as
+a port of its name, value and reads (the other fields `default`'s, which no reader of `own` reads). -/
 def ownAt (ss : Array VStar.Stmt) (j : ℕ) : Array Flock.Registered.Port :=
-  (((ss[j]?).map RecVStar.ownPorts).getD []).toArray.map fun q =>
+  (((ss[j]?).map fun s => RecVStar.ownPorts s ++ RecVStar.sparseMsgs s).getD []).toArray.map fun q =>
     { (default : Flock.Registered.Port) with name := q.1, value := q.2.1, reads := q.2.2 }
 
 /-- **Each accepted session's reads hold `own`'s**: each port of `own j` is one of the session's by name, value and
