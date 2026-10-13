@@ -11,7 +11,8 @@ One constructor per ARCHITECTURE class, selected by the family facts table (`fam
   * `moe`       -- the fused-MoE decoder (`OlmoeForCausalLM`, `Qwen3MoeForCausalLM`): the constructive MoE block (`gen_ov_moe_patterns.
                    MoEFusedExperts`, router renormalisation from `C["RENORMALIZE"]`, the router kernel's VPT from E), the experts' width from
                    `moe_intermediate_size` when the family has one, the MoE / q-k-norm weight fields.
-The table also describes `dsa-moe` (sparse-attention MLA with a sigmoid shared-expert MoE), which `structural_refusal` refuses.
+  * `dsa-moe`   -- GLM-5.3's sparse-attention MLA and sigmoid shared-expert MoE: the H200 DSA folds in
+                   `gen_dsa_patterns`, and `gen_shared_moe_patterns.MoEFusedSharedExpertsFp8`.
 `world > 1` is a generic branch of every class (the rank-local shard configuration: heads, kv heads, the MLP / expert width and the vocabulary
 divided by the world; `tp.embedding_shard.EmbeddingShardCuda` and `tp.collective_pattern.TpCollective(world)` registered first; the sampler over the
 all-gathered vocabulary; the header check re-shards the recorded FULL config) -- it replaced the two hand-written `*_tp2rank` modules and the
@@ -47,10 +48,12 @@ from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as base
 from verity_vllm.engine.profiles.gen_dense2_patterns import with_dense2_patterns
 from verity_vllm.engine.profiles.gen_dense_gemma2_patterns import with_gemma2_patterns
 from verity_vllm.engine.profiles.gen_dense_softcap_patterns import with_softcap_patterns
+from verity_vllm.engine.profiles.gen_dsa_patterns import dsa_patterns
 from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, with_tuned_gemm
 from verity_vllm.engine.profiles.gen_ln_patterns import with_ln_patterns
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
                                   MOE_FP8_CONSTRUCTION_PATTERNS, ROUTER_VPT_BY_E, MoEFusedExperts, MoEFusedExpertsFp8)
+from verity_vllm.engine.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 MODULE_PREFIX = "derived_"
@@ -59,6 +62,7 @@ _MODULE_RE = re.compile(r"^derived_([A-Z0-9_]+?)(?:_tp(\d+))?(_ovs)?$")
 _LAYER_RE_FMT = r"^{prefix}\.(\d+)\.(.+)$"
 _ATTN_SCALES = r"(k_scale|v_scale|q_scale|prob_scale|_k_scale|_v_scale|_q_scale|_prob_scale)"
 _SCALE_INV = "_scale_inv"
+_MOE_ARCHES = frozenset({"moe", "dsa-moe"})
 
 
 # ------------------------------------------------------------------------------------------------------------------------------- names
@@ -144,16 +148,13 @@ def structural_refusal(cfg: dict[str, Any]) -> str | None:
     if fam not in FF.FAMILY_FACTS:
         return f"model_type {fam!r} is not in the family facts table {FF.FAMILIES} (needs its own mechanism record)"
     arch = FF.FAMILY_FACTS[fam]["arch"]
-    if arch == "dsa-moe":
-        return (f"{fam}: sparse attention (the lightning indexer's top-k over the latent cache, then sparse MLA) has no κ fold patterns; "
-                f"only its MoE block has (gen_shared_moe_patterns)")
     if effective_sliding_window(cfg) and "dense2" not in (FF.FAMILY_FACTS[fam].get("patterns") or ()):
         # only families whose vLLM code hands the window to FA2 as an inert `window_size_left >= max_seqlen_k` (Phi-3, Gemma-2: the
         # inert-window scope decides from the LAUNCH) are served; any other windowed configuration is outside the pinned splitkv patterns
         return f"sliding_window={cfg['sliding_window']!r}: windowed attention is outside the pinned FA2 splitkv patterns"
     if FF.FAMILY_FACTS[fam]["rules"].get("qk_norm") == "head" and not cfg.get("head_dim"):
         return f"{fam} without head_dim in config.json: the per-head q/k norm width is not derivable"
-    if arch == "moe":
+    if arch in _MOE_ARCHES:
         if cfg.get("mlp_only_layers"):
             return f"mlp_only_layers={cfg['mlp_only_layers']!r}: the MoE profile states every layer as a fused-MoE layer"
         if int(cfg.get("decoder_sparse_step", 1) or 1) != 1:
@@ -195,7 +196,7 @@ def derive_config(cfg: dict[str, Any], *, repo: str | None, revision: str | None
     prov.update({k: v for k, v in hprov.items() if k in C})
     C["ROPE_THETA"] = float(C["ROPE_THETA"])                            # config.json writes 100000 or 100000.0; the profiles always said float
     C = base.with_geometry(C)
-    if fam["arch"] == "moe":
+    if fam["arch"] in _MOE_ARCHES:
         mk = moe_width_key(cfg)
         if mk:
             C["MOE_I_FULL"], prov["MOE_I_FULL"] = int(cfg[mk]), "hf-config"
@@ -244,7 +245,7 @@ def make_weight_field(cfg: dict[str, Any], C: dict[str, Any]) -> Callable[[str],
 
     base_wf = base.make_weight_field(C)
     layer_re = base._LAYER_RE
-    dense_only = ("mlp.gate_up_proj.weight", "mlp.down_proj.weight", "self_attn.qkv_proj.bias") if fam["arch"] == "moe" else ()
+    dense_only = ("mlp.gate_up_proj.weight", "mlp.down_proj.weight", "self_attn.qkv_proj.bias") if fam["arch"] in _MOE_ARCHES else ()
 
     def weight_field(name: str) -> tuple[str | int, ...] | None:
         if name in extra_top:
@@ -281,7 +282,7 @@ def make_root_class(cfg: dict[str, Any], weight_field: Callable[[str], Any]) -> 
         ignored = (re.compile(rf"^{re.escape(prefix)}\.\d+\.{re.escape(params['attn_scales'])}\.{_ATTN_SCALES}$"),)
     else:
         alias, ignored = base.ALIAS_OF_COS_SIN, base.IGNORED_ROOTS
-    moe_names = frozenset((params.get("layer") or {}).keys()) if fam["arch"] == "moe" else frozenset()
+    moe_names = frozenset((params.get("layer") or {}).keys()) if fam["arch"] in _MOE_ARCHES else frozenset()
 
     def root_class(name: str) -> str:
         if weight_field(name) is not None:
@@ -325,7 +326,7 @@ def make_check_header(cfg: dict[str, Any], C: dict[str, Any], world: int) -> Cal
                 rk.pop("intermediate_size", None)          # the dense width of no layer here; MOE_I_FULL is checked below
             out += base_check(dataclasses.replace(header, model={**(header.model or {}), "config": rk}))
             out += FF.header_checks(cfg, C, hcfg)
-            if fam["arch"] == "moe":
+            if fam["arch"] in _MOE_ARCHES:
                 for hf, key in _MOE_HF_KEYS.items():
                     if hf in hcfg and hcfg[hf] != C.get(key):
                         out.append(f"{hf}={hcfg[hf]!r} != C[{key}]={C.get(key)!r}")
@@ -381,6 +382,16 @@ def _moe_patterns(C: dict[str, Any], patterns: list, *, world: int, moe_construc
     return out
 
 
+def _dsa_patterns(C: dict[str, Any], patterns: list) -> list:
+    """GLM-5.3's pinned DSA kernels and block-FP8 shared-expert scope."""
+    if int(C.get("FP8_BLOCK") or 0) != 128:
+        raise ValueError(f"dsa-moe requires the recorded block-128 FP8 experts, got FP8_BLOCK={C.get('FP8_BLOCK')!r}")
+    out = with_tuned_gemm(patterns)
+    moe = MoEFusedSharedExpertsFp8(C, group=128, gate_spec=None)
+    out.insert(next(i for i, p in enumerate(out) if type(p).__name__ == "GemmLaunchTuned") + 1, moe)
+    return dsa_patterns() + out
+
+
 def build_profile(role: str, world: int = 1, *, moe_construction: str | None = None, fused_moe_pins: dict[str, Any] | None = None,
                   fused_moe_num_warps: int | None = None, fused_moe_num_stages: int | None = None, ov_sampling: bool = False,
                   hf_config: dict[str, Any] | None = None, repo: str | None = None, revision: str | None = None) -> Profile:
@@ -407,13 +418,16 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
             + (f" ONE RANK of TP{world} (rank-local shard configuration)" if world > 1 else "")
             + f": H={C['H']} NL={C['NL']} NH={C['NH']} KVH={C['KVH']} D={C['D']} I={C['I']} V={C['V']} QKV={C['QKV']}, "
             + ("QKV bias" if C["BIAS"] else "no QKV bias") + ", " + ("tied" if C["tie_word_embeddings"] else "untied") + f" embeddings, FA2 kBlockN {C['BN']}"
-            + (f"; E={C['NUM_EXPERTS']} top-{C['TOPK']} " + ("renormalised" if C.get("RENORMALIZE") else "unnormalised") + " router" if arch == "moe" else "")
+            + (f"; E={C['NUM_EXPERTS']} top-{C['TOPK']} " + ("renormalised" if C.get("RENORMALIZE") else "unnormalised") + " router"
+               if arch in _MOE_ARCHES else "")
             + (f"; hand facts: {hand_note}" if hand_note else ""))
     prof = base.build_profile(C, profile_id=profile_id(role, C, world), case=role, model_note=note)
     wf = make_weight_field(cfg, C)
     if arch == "moe":
         patterns = _moe_patterns(C, list(prof.patterns), world=world, moe_construction=moe_construction, fused_pins=fused_moe_pins,
                                  fused_num_warps=fused_moe_num_warps, fused_num_stages=fused_moe_num_stages)
+    elif arch == "dsa-moe":
+        patterns = _dsa_patterns(C, list(prof.patterns))
     else:
         patterns = _dense_patterns(cfg, C, list(prof.patterns))       # [R15 fp8] the fp8 patterns are the base list's own (make_patterns)
     if world > 1:
@@ -456,8 +470,8 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                         "env": ["VLLM_USE_DEEP_GEMM=0 (the DeepGEMM JIT path is not modelled)", "VLLM_USE_FLASHINFER_SAMPLER=0"],
                         "families": ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G} (fp8_scale_construction per-coordinate: "
                                      "ScaledMmFp8Block_v1{K,N,G})"], "quantization_config": C.get("quantization_config")}
-    if arch == "moe":
-        moe = next(p for p in patterns if isinstance(p, MoEFusedExperts))
+    if arch in _MOE_ARCHES:
+        moe = next(p for p in patterns if isinstance(p, (MoEFusedExperts, MoEFusedSharedExpertsFp8)))
         E, T, I, H = C["NUM_EXPERTS"], C["TOPK"], C["I"], C["H"]
         if isinstance(moe, MoEFusedExpertsFp8):
             fp8 = f"G={moe.group},KB={moe.fused_pins['BLOCK_SIZE_K']},SWAP=False,DOT=the record target's e4m3 step"
@@ -465,7 +479,8 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                        f"Fp8GroupQuant_v1{{K={I},G={moe.group}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},{fp8}}}"]
         else:
             experts = [f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}", f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}"]
-        notes["moe"] = {"status": "constructive: Computes over registry.moe definitions per step per rank",
+        notes["moe"] = {"status": ("constructive except the gate: no registered bf16 x bf16 -> f32 gate Definition"
+                                     if arch == "dsa-moe" else "constructive: Computes over registry.moe definitions per step per rank"),
                         "scope_pattern": f"gen_ov_moe_patterns.{type(moe).__name__} (vllm.moe_forward*), renormalize={bool(C.get('RENORMALIZE', False))}",
                         "definitions": [f"MoeRouterTopK{'Ordered' if moe.router == 'ordered' else ''}{'Norm' if C.get('RENORMALIZE') else ''}_v1"
                                         f"{{E={E},TOPK={T},VPT={C['ROUTER_VPT']}}}", *experts,
@@ -475,7 +490,8 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                                                                 else "injected (build_profile(fused_moe_pins=...))"},
                                  "router_vpt_by_E": {E: C["ROUTER_VPT"]},
                                  "alignment": "moe_align_block_size is Transparent(noop): a pair->expert-block schedule with no numerical effect"},
-                        "construction": moe_construction or TargetProfile.DEFAULT_MOE_CONSTRUCTION,
+                        "construction": ("shared-experts-pairwise" if arch == "dsa-moe"
+                                         else moe_construction or TargetProfile.DEFAULT_MOE_CONSTRUCTION),
                         "sharding": {"router": "replicated (full E logits on every rank)", "experts": f"intermediate axis / {world}: w13 [E, 2*{I}, H], w2 [E, H, {I}]",
                                      "reduce": "moe_sum rank-local, then AllReduce2_v1{N=H} of the routed sum"} if world > 1 else "none (TP1)",
                         "record_fields_present": sorted(f for f in ("q_norm", "k_norm", "gate_w", "w13", "w2")

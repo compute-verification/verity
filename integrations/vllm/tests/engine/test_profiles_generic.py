@@ -225,16 +225,30 @@ def test_structural_refusals_are_stated():
     assert "awq" in G.structural_refusal(json.loads((dg.HF_CONFIG_DIR / "QWEN15_AWQ.config.json").read_text()))
 
 
-def test_the_sparse_attention_family_is_described_and_refused():
-    """GLM-5.3's `glm_moe_dsa`: the facts resolve over a TP8 rank's configuration to what the MoE scope and the capture map read, and the
-    profile refuses the class (no fold patterns for the indexer or sparse MLA)."""
+def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile():
+    """GLM-5.3's facts resolve over a TP8 rank and register every DSA fold before the shared-expert MoE scope."""
     from pathlib import Path
+
+    from verity_vllm.engine.profiles.gen_dsa_patterns import (
+        DsaMqaAllocation,
+        DsaMqaGather,
+        DsaNormRope,
+        DsaQ,
+        DsaSparseMla,
+        DsaTopK,
+    )
+    from verity_vllm.engine.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 
     cfg = json.loads((Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
     assert FF.facts_for(cfg)["arch"] == "dsa-moe"
-    assert "sparse attention" in G.structural_refusal(cfg)
-    with pytest.raises(ValueError, match="sparse attention"):
-        G.derive_config(cfg, repo=None, revision=None, world=8)
+    assert G.structural_refusal(cfg) is None
+    profile = G.build_profile("GLM53", 8, hf_config=cfg, repo="zai-org/GLM-5.3-FP8", revision="aca966e4")
+    assert profile.config["MOE_I_FULL"] == 1536 and profile.config["I"] == 192 and profile.config["ROUTER_VPT"] == 8
+    assert [type(p) for p in profile.patterns[:6]] == [
+        DsaNormRope, DsaQ, DsaMqaGather, DsaMqaAllocation, DsaTopK, DsaSparseMla]
+    shared = next(p for p in profile.patterns if isinstance(p, MoEFusedSharedExpertsFp8))
+    assert shared.group == 128 and shared.gate_spec is None
+    assert profile.notes["moe"]["status"].startswith("constructive except the gate")
     vals, prov = FF.resolve_facts(G.rank_hf_config(cfg, 8), {})
     assert {k: vals[k] for k in ("NUM_EXPERTS", "N_GROUP", "TOPK_GROUP", "RENORMALIZE", "SCORING", "ROUTED_SCALING_FACTOR", "SHARED_I",
                                  "INDEX_HEADS", "INDEX_HEAD_DIM", "INDEX_TOPK", "INDEX_TOPK_FREQ", "INDEX_SKIP_TOPK_OFFSET", "FIRST_DENSE")} == {
