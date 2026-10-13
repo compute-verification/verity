@@ -412,6 +412,23 @@ def rowPorts : VStar.Stmt → List String
   | .inner _ _ p => p.S.ports.map (·.1)
   | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. => []
 
+/-- The first port of a circuit named as a message round's (`m<k>`) that is none of a statement's message-round ports
+(`ownPorts`). -/
+def msgUnnamed (s : VStar.Stmt) (c : Circuit) : Option String :=
+  (c.ports.toList.map (·.name)).find? fun nm => (mIndex nm).isSome && !((ownPorts s).any (·.1 == nm))
+
+/-- **A part's circuit, and a part of R's opening's, names only its statement's message-round ports**: each port `m<k>`
+of the circuit is one of the statement's (`ownPorts`: a part's `m<k>` under `rec-c<k>`, R's opening's under
+`rec-opening-c<k>`), so the verifier's reads file reads it under the statement's value (`checkOwn`). The circuit file is
+V*'s for the statement (`checkFile`), whose ports are the statement's, so an honest session passes. -/
+def checkMsgNames (s : VStar.Stmt) (c : Circuit) : V Unit :=
+  match s with
+  | .inner .. | .opening .. =>
+    match msgUnnamed s c with
+    | some nm => throw s!"{s.name}: the circuit's port {nm} is named as a message round's, and the statement has no such port"
+    | none => pure ()
+  | _ => pure ()
+
 def showReads (r : Array (Option Nat)) : String := toString (r.toList.map fun x => (x.map toString).getD "null")
 
 /-- The first field in which two registered ports differ, with both values: the registration (value, root, leaf count,
@@ -1069,6 +1086,7 @@ def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × Byt
       throw s!"{name}: one of V*'s statements, whose circuits are in ProvedScope.scopeOk (every row sha512/row/v1, VStmt.hscope), not scopeOkH's bit rows: {ProvedScope.scopeWhy false st.c}"
     checkOwnBindings name f obj prog
     let s ← checkCircuit i j st.c (population st) circuitB f
+    checkMsgNames s st.c
     if let some r := registered then
       checkOwn s r
       checkRows s r rows
