@@ -100,3 +100,11 @@ def test_a_variant_is_judged_against_its_own_controls():
         x["variant"] = "nostop"
     res = G.judge({"launches": d["launches"] + d2["launches"]}, rows + rows2)
     assert res["by_kernel"] == {"fill_chunk_1_3": "REFUSED", "fill_chunk_1_3/nostop": "passed"}
+
+
+def test_the_floor_is_the_largest_unhit_control():
+    d, rows = probe([DECLARED + 15] * 3, [13, 15, 14, 13 + 900], "fill_chunk_1_3")
+    res = G.judge(d, rows)
+    det = res["detail"]["fill_chunk_1_3"]
+    assert det["controls"] == [13, 913] and det["floor"] == 15 and det["least_floor"] == 13
+    assert det["verdict"] == "passed" and det["verdict_least_floor"] == "REFUSED"

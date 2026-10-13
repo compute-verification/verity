@@ -6,7 +6,10 @@ The verdict is per kernel (`by_kernel`, what an arm is judged by; `spread` the l
 can be refused for the store pattern alone, which the fold (the filler that writes no tile words) is not. A `control` launch
 (no tiles) is measured and reported, not judged: its sectors are what a launch writes whatever its outputs (13-15 a launch on
 sm_120, r20261012-231033-73f3), and each judged launch is allowed its own kernel's control floor beside its declared sectors
-(`floor`, the least of its controls; a persistent filler is one launch a window, so the floor doesn't grow with its tiles).
+(a persistent filler is one launch a window, so the floor doesn't grow with its tiles). The floor is the largest unhit
+control of the kernel in the same run (ruling 02:55Z): the most any of its interleaved zero-tile controls wrote, among those
+within HIT sectors of the least (13-15 on sm_120, r20261013-024344-d7db). Each kernel's `detail` reports the controls'
+range, both floors and its verdicts under each, so the allowance over the least control is visible.
 
 Which repeats must pass is rule 4 (memory accounting, 13 Oct): every one (`strict`) unless this run shows the excess some
 launches carry is external, and then the least of a kernel's repeats (`min`). The test: a launch is hit when its write
@@ -83,10 +86,12 @@ def judge(declared: dict, rows: list[dict]) -> dict:
     launches = declared["launches"]
     if len(rows) != len(launches):
         return {"status": "unmeasured", "why": f"{len(rows)} profiled launches, {len(launches)} declared"}
-    floors: dict[str, float] = {}
+    ctl: dict[str, list[float]] = {}
     for d, m in zip(launches, rows):
         if d.get("control"):
-            floors[unit(d)] = min(floors.get(unit(d), math.inf), m.get(WRITE) or 0.0)
+            ctl.setdefault(unit(d), []).append(m.get(WRITE) or 0.0)
+    least_floor = {k: min(ws) for k, ws in ctl.items()}
+    floors = {k: max(w for w in ws if w <= least_floor[k] + HIT) for k, ws in ctl.items()}
     out, bad = [], []
     for d, m in zip(launches, rows):
         w, a = m.get(WRITE), (m.get(ATOM) or 0.0) + (m.get(RED) or 0.0)
@@ -99,6 +104,8 @@ def judge(declared: dict, rows: list[dict]) -> dict:
         row["floor"] = 0.0 if d.get("control") else floor
         row["excess"] = w - floor if d.get("control") else w - d["declared_write_sectors"] - floor
         row["pass"] = w <= d["declared_write_sectors"] + row["floor"] and a <= d["declared_atom_sectors"]
+        row["pass_least_floor"] = w <= d["declared_write_sectors"] + least_floor.get(unit(d), 0.0) and \
+            a <= d["declared_atom_sectors"]
         out.append(row)
     judged = [r for r in out if not r.get("control") and not r.get("dry")]
     test = external(judged, [r for r in out if r.get("control")])
@@ -106,10 +113,16 @@ def judge(declared: dict, rows: list[dict]) -> dict:
     test_dry = external(judged, dry) if dry else None
     rule = "min" if test_dry is not None and test_dry["external"] else "strict"
     kernels = list(dict.fromkeys(r["unit"] for r in judged))
-    strict = {k: all(r["pass"] for r in judged if r["unit"] == k) for k in kernels}
-    least = {k: min((r for r in judged if r["unit"] == k), key=lambda r: r["write_sectors"])["pass"]
-             and all(r["atom_sectors"] <= r["declared_atom_sectors"] for r in judged if r["unit"] == k) for k in kernels}
+    def verdicts(key: str) -> tuple[dict, dict]:
+        strict = {k: all(r[key] for r in judged if r["unit"] == k) for k in kernels}
+        least = {k: min((r for r in judged if r["unit"] == k), key=lambda r: r["write_sectors"])[key]
+                 and all(r["atom_sectors"] <= r["declared_atom_sectors"] for r in judged if r["unit"] == k) for k in kernels}
+        return strict, least
+
+    strict, least = verdicts("pass")
+    strict_lf, least_lf = verdicts("pass_least_floor")
     verdict = least if rule == "min" else strict
+    verdict_lf = least_lf if rule == "min" else strict_lf
     for r in judged:
         if not r["pass"] and not verdict[r["unit"]]:
             bad.append(f"{r['unit']}: {r['write_sectors']:.0f} write / {r['declared_write_sectors']} declared + "
@@ -122,6 +135,10 @@ def judge(declared: dict, rows: list[dict]) -> dict:
             "by_store": {s: word[p] for s, p in by_store.items()},
             "by_kernel": {k: word[verdict[k]] for k in kernels},
             "by_kernel_strict": {k: word[strict[k]] for k in kernels}, "by_kernel_min": {k: word[least[k]] for k in kernels},
+            "detail": {k: {"controls": [min(ctl.get(k, [0.0])), max(ctl.get(k, [0.0]))], "floor": floors.get(k, 0.0),
+                           "least_floor": least_floor.get(k, 0.0), "verdict": word[verdict[k]],
+                           "verdict_least_floor": word[verdict_lf[k]], "strict": word[strict[k]], "min": word[least[k]]}
+                       for k in kernels},
             "spread": {k: [min(ws), max(ws)] for k in kernels
                        for ws in [[r["write_sectors"] for r in judged if r["unit"] == k]]},
             "refusals": bad, "launches": out,
