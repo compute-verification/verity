@@ -58,6 +58,38 @@ theorem extraClaims_length (S : Model.Statement) (a b : ℕ) (pts pts' : Fin 2 �
     (Model.extraClaims S a b pts).length = (Model.extraClaims S a b pts').length := by
   simp only [Model.extraClaims, List.length_flatMap, List.length_cons, List.length_nil]
 
+/-- **A recursive level's messages' count**, whatever the proof, the caps and the indices. -/
+theorem recMsgs_length {D D' : Type} (p p' : LigeritoProof) (capD : Array ByteArray → Model.Cap D)
+    (capD' : Array ByteArray → Model.Cap D') (ext : ℕ) : ∀ left i i' msg msg' ood ood' : ℕ,
+    (recMsgs p capD ext left i msg ood).length = (recMsgs p' capD' ext left i' msg' ood').length
+  | 0, _, _, _, _, _, _ => rfl
+  | 1, _, _, _, _, _, _ => by
+      simp only [recMsgs, kMsgs, List.length_append, List.length_map, List.length_range', List.length_cons,
+        List.length_nil]
+  | left + 2, i, i', msg, msg', ood, ood' => by
+      simp only [recMsgs, kMsgs, List.length_append, List.length_map, List.length_range', List.length_cons,
+        List.length_nil, recMsgs_length p p' capD capD' ext (left + 1) (i + 1) (i' + 1) (msg + 7) (msg' + 7) (ood + 2)
+          (ood' + 2)]
+
+/-- **A Ligerito run's messages' count** is its schedule's. -/
+theorem ligMsgs_length {D D' : Type} (p p' : LigeritoProof) (capD : Array ByteArray → Model.Cap D)
+    (capD' : Array ByteArray → Model.Cap D') (sch : Flock.Schedule) :
+    (ligMsgs p capD sch).length = (ligMsgs p' capD' sch).length := by
+  simp only [ligMsgs, kMsgs, List.length_append, List.length_map, List.length_range', List.length_cons,
+    List.length_nil, recMsgs_length p p' capD capD' sch.ext (sch.levels.size - 1) 0 0 (sch.k0 + 4) (sch.k0 + 4) 3 3]
+
+/-- **A rep's messages' count** is its setup's and schedule's, whatever its proof and values. -/
+theorem unitMsgs_length (nX : ℕ) {sh sh' : Flock.Shape} {d d' : FlockVBridge.Compiled.RepData} {v v' : UnitVals}
+    (hst : v.st = v'.st) (hs : v.sch = v'.sch) : (unitMsgs nX sh d v).length = (unitMsgs nX sh' d' v').length := by
+  simp only [unitMsgs, holoRepMsgs, holoLcMsgs, zcMsgs, lcMsgs, opMsgs, List.length_append, List.length_cons,
+    List.length_map, List.length_range, List.length_nil, hst, hs,
+    ligMsgs_length v.p.ligerito v'.p.ligerito capDig capDig v'.sch]
+
+/-- **A rep's coins' count** is its setup's and its transcripts' rounds'. -/
+theorem unitCoins_length (S : Model.Statement) {v v' : UnitVals} (hk : v.t.k = v'.t.k) (hst : v.st = v'.st)
+    (h₄ : v.t₄.k = v'.t₄.k) : (unitCoins S v).length = (unitCoins S v').length := by
+  simp only [unitCoins, consumed, List.length_map, List.length_append, List.length_range', hk, hst, h₄]
+
 end unit
 
 open Flock
@@ -313,6 +345,39 @@ theorem tsRead_repsOfVals (M : RepMaps stmt Vs sh) {nm nc : Fin 2 → ℕ} {keys
     TsRead zs dg N k Rw (repsOfVals stp sh M.rep vals) own sel :=
   tsRead_of_woven (wovenAt_repsOfVals hlen) (weaveMsgsRead_of_keys hk (wCombRead_of hc))
 
+/-- **The reps' lengths at `ValsSrc.vals`** are `b₀`'s where `b`'s setup, schedule and closing round are `b₀`'s (the
+transcript starts at round 0 at either). -/
+theorem lengths_vals (nX : ℕ) (S₀ : Model.Statement) (b b₀ : ValsSrc) (d d₀ : RepData) (hst : b.st = b₀.st)
+    (hs : b.sch = b₀.sch) (h₄ : b.t₄.k = b₀.t₄.k) :
+    (unitMsgs nX sh d (b.vals sh d)).length = (unitMsgs nX sh d₀ (b₀.vals sh d₀)).length ∧
+      (unitCoins S₀ (b.vals sh d)).length = (unitCoins S₀ (b₀.vals sh d₀)).length :=
+  ⟨unitMsgs_length nX (v := b.vals sh d) (v' := b₀.vals sh d₀) hst hs,
+    unitCoins_length S₀ (v := b.vals sh d) (v' := b₀.vals sh d₀) rfl hst h₄⟩
+
+/-- **`TsRead` at `repsOfVals` of `ValsSrc`'s values**, `tsRead_repsOfVals` with the lengths `b₀`'s (`lengths_vals`),
+where every `b` has `b₀`'s setup, schedule and closing round. -/
+theorem tsRead_valsSrc (M : RepMaps stmt Vs sh) {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} (b₀ : ValsSrc)
+    (d₀ : RepData) {keys : ℕ → List Flock.RecAlgebra.Key}
+    (hb : ∀ Lb i, (b Lb i).st = b₀.st ∧ (b Lb i).sch = b₀.sch ∧ (b Lb i).t₄.k = b₀.t₄.k)
+    (hk : MsgsOfKeys (st := st) (hp := hp) zs dg N k Rw own sel
+      (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
+      (coins₀ (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
+        (unitMsgs (nXOf st hp) sh d₀ (b₀.vals sh d₀)).length
+        (unitCoins ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (b₀.vals sh d₀)).length) keys M
+      (fun Lb ρ => unitMsgs (nXOf st hp) sh (M.rep Lb ρ) ((b Lb ρ).vals sh (M.rep Lb ρ))))
+    (hc : WColsAt own sel M (sentK
+      (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
+      (coins₀ (unitShape ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch (nXOf st hp))
+        (unitMsgs (nXOf st hp) sh d₀ (b₀.vals sh d₀)).length
+        (unitCoins ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (b₀.vals sh d₀)).length) keys)) :
+    TsRead zs dg N k Rw (repsOfVals stp sh M.rep fun Lb i => (b Lb i).vals sh (M.rep Lb i)) own sel :=
+  tsRead_repsOfVals M (nm := fun _ => (unitMsgs (nXOf st hp) sh d₀ (b₀.vals sh d₀)).length)
+    (nc := fun _ => (unitCoins ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (b₀.vals sh d₀)).length)
+    (fun R ω t R₂ τ o _ ρ => by
+      obtain ⟨h₁, h₂, h₃⟩ := hb (layers zs dg N k Rw R ω t R₂ τ) ρ
+      exact lengths_vals _ _ _ _ _ _ h₁ h₂ h₃)
+    hk hc
+
 end
 
 end FlockC3.Reps
@@ -330,3 +395,9 @@ end FlockC3.Reps
 #print axioms FlockC3.Reps.weaveMsgsRead_of_keys
 #print axioms FlockC3.Reps.wovenAt_repsOfVals
 #print axioms FlockC3.Reps.tsRead_repsOfVals
+#print axioms FlockC3.Reps.recMsgs_length
+#print axioms FlockC3.Reps.ligMsgs_length
+#print axioms FlockC3.Reps.unitMsgs_length
+#print axioms FlockC3.Reps.unitCoins_length
+#print axioms FlockC3.Reps.lengths_vals
+#print axioms FlockC3.Reps.tsRead_valsSrc
