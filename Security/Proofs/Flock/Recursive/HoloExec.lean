@@ -24,9 +24,9 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   `RecVStar.registration`): the entry `topEntry` makes from one hm96 commit string per node, each over the node's row
   (`Firewall.topRows`, `rowDigest`) under a salt. The verifier holds it of the binding round's top (`innerCommitsAt`).
 * `AcceptsC3`: the verifier's checks at candidate 3 of its own inputs, which the event carries: V*'s list builds, the
-  inner transcript holds against R's registration (`innerCommitsAt`), and check 5's sparse refusals pass
-  (`SparseRangeOk`: `ℓ` in `[6, k_log]`, the unit range's slots inside the block). `UnitsOf`: the slots' units are the
-  unit range's.
+  inner transcript holds against R's registration (`innerCommitsAt`), the covers check passes there (all of
+  `RecVStar.checkCovers`), and check 5's sparse refusals pass (`SparseRangeOk`: `ℓ` in `[6, k_log]`, the unit range's
+  slots inside the block). `UnitsOf`: the slots' units are the unit range's.
 * `holoInnerCL`, `holoInnerAt`: `schedInner` at `Model.holoTableCL` with `capReg := x.cap`, at a statement `x` a word
   and a cap; it is true when some table `R` within the unique-decoding radius of `x.w` (`RegSchedule.Close`) has a
   satisfiable hidden statement at the slots' types.
@@ -136,8 +136,8 @@ def StackedTop (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refin
     Flock.RecVStar.registration (some reg) (metaRegistration st) = .ok (some (prog, some e)) ∧
       Flock.RecVStar.topEntry prog bcs = .ok e' ∧ Flock.canon e' = .ok s ∧ Flock.canon e = .ok s ∧ TopOf lv cap bcs
 
-/-- **The verifier's hold of the inner transcript**: `RecVStar.innerCommits` as `FlockVerify.recTranscriptInput` calls
-it, at the coin server's record of V*'s inner session `tr` (`--rec-inner-transcript`), the inner session's record
+/-- **The verifier's hold of the inner transcript**: `RecVStar.innerCommits` as `RecSetup.commits` calls it, at the
+coin server's record of V*'s inner session `tr` (`--rec-inner-transcript`), the inner session's record
 `record` (`--rec-inner-session`), R's registration `reg` (`--rec-inner-registration`), and the digest and R's shape the
 inner statement's META names (`metaRegistration`, `RecVStar.stackedShapeOf`). It refuses a registration META does not
 bind, and a binding round of R's stream whose top does not make the registered `stacked` entry. -/
@@ -166,10 +166,17 @@ def SparseRangeOk (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : Prop :=
       ∃ rng, unitRangeOf st = .ok rng ∧ (Flock.RecCoins.layoutFactors sp xs xs rng).isOk = true
 
 /-- **Lean's verifier accepts its own inputs at candidate 3**: V*'s list builds (`RecVStar.statements`), it holds the
-inner transcript against R's registration (`innerCommitsAt`), and check 5's sparse refusals pass (`SparseRangeOk`). -/
+inner transcript against R's registration (`innerCommitsAt`), the covers check passes at the commits it holds
+(`RecVStar.checkCovers`, all of it: the sparse-presence, stacked-presence and stacked-shape refusals, and each stream's
+rounds against its schedule, `checkCommitRounds`), and check 5's sparse refusals pass (`SparseRangeOk`). It is not the
+whole compiled acceptance: `AcceptsPublic` and `ChecksVR` carry the verifier's other checks. `SparseRangeOk` stays the
+event's own conjunct, check 5's verdict, which the bridge from the verifier's acceptance
+(`FlockC3.VStarList.acceptsC3_of_verify`) does not conclude. -/
 def AcceptsC3 (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) (tr : Lean.Json) (record : String) (reg : Lean.Json) :
     Prop :=
-  (Flock.RecVStar.statements ish).isOk = true ∧ (innerCommitsAt tr record st reg).isOk = true ∧ SparseRangeOk ish st
+  (Flock.RecVStar.statements ish).isOk = true ∧ (innerCommitsAt tr record st reg).isOk = true ∧
+    (∀ cs, innerCommitsAt tr record st reg = .ok cs → (Flock.RecVStar.checkCovers ish cs).isOk = true) ∧
+    SparseRangeOk ish st
 
 /-- **The slots' unit slots are the verifier's**: slot `σ` fills unit `pos0 + σ` of the inner circuit's unit range
 below its count, and none past it (`RecCoins.layoutFactors`). -/

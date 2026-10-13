@@ -29,6 +29,7 @@ import Proofs.Flock.C3.Sparse.MsgsLayers
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
+import Proofs.Flock.C3.VStarList.Accepts
 import Proofs.Flock.C3.RegLevels.Top
 import Proofs.Flock.C3.Opening.Read
 import Proofs.Flock.C3.RegLevels.Read
@@ -109,6 +110,7 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
 * (g) `C3/PubRows/`, `FlockC3.PubRows`: the public rows per value prefix (`HPubRows`) and the tape (`HTape`), at the
   honest family from the verifier's check (n1), and the commitments there (`hCommits_honest`).
 * (h) `C3/VStarList/`, `FlockC3.VStarList`: V*'s statements over the verifier's list (`vstarParsesScoped_of_list`), R's
-  shape from the verifier's checks (`stacked_of_openingShape`, `claims_of_stackedShape`), and R's `ℓ` and the slots'
-  units from check 5 (`ellOk_of_sparseRange`, `units_of_sparseRange`).
+  shape from the verifier's checks (`stacked_of_openingShape`, `claims_of_stackedShape`), R's `ℓ` and the slots'
+  units from check 5 (`ellOk_of_sparseRange`, `units_of_sparseRange`), and the event's `AcceptsC3` but check 5's
+  verdict from the verifier's acceptance (`acceptsC3_of_verify`).
 -/
