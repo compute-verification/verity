@@ -2956,14 +2956,18 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
     [[maybe_unused]] SkJob J;
     J.blk = -1;
     int hashed = 0;   // the tiles whose hash has started
-    int r = 0;        // without a producer: the next copy lane 0 relays
+    int r = 0, rs = 0;   // without a producer: the next copy lane 0 relays, its stage and its parity
+    u32 rp = 0;
     // Lane 0 relays the landed copies of tasks below c, the ones issued: before task i's MMAs those up to task
     // i + stages - 1, the ones a producer would have issued by now, so task i's decode waits on no copy the producer's
     // wouldn't. It relays while the warp waits on `decoded` and again between the MMAs and the stores, since the
-    // receipt warps' wait on a group's last copy holds the decoders' first task of it.
+    // receipt warps' wait on a group's last copy holds the decoders' first task of it. It polls while copies are in
+    // flight, so a poll keeps the copy's stage and parity rather than dividing by `stages`.
     [[maybe_unused]] const auto relay = [&](int c) {
-      c = min(c, ntasks);
-      while (r < c && mbar_test(full + r % stages, (r / stages) & 1)) mbar_arrive(ready + r++ % stages);
+      for (c = min(c, ntasks); r < c && mbar_test(full + rs, rp); ++r) {
+        mbar_arrive(ready + rs);
+        if (++rs == stages) rs = 0, rp ^= 1;
+      }
     };
     if (!PW && lane == 0)
       for (int i = 0; i < min(stages, ntasks); ++i) {
@@ -2975,7 +2979,11 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
       if constexpr (SKK > 0 && SKW == 0)
         while (J.blk >= 0 && !mbar_test(decoded + s, (i / stages) & 1)) sk_hash_block<SKK>(J, lane, sk);
       if constexpr (!PW) {
-        if (lane == 0) do relay(i + stages); while (!mbar_try(decoded + s, (i / stages) & 1, 128));
+        if (lane == 0)
+          for (const int c = i + stages, ph = (i / stages) & 1;;) {
+            relay(c);
+            if (mbar_try(decoded + s, ph, 128)) break;
+          }
         __syncwarp();
       }
       // Every MMA warp waits out every task's phase in turn, so none waits on a stage's parity a phase early.
