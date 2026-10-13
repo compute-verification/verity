@@ -71,6 +71,8 @@ F_1EM10 = P.bits_of(1e-10)
 UE8M0_ROUND, UE8M0_KEEP = 0x007FFFFF, 0xFF800000
 #: the lanes and their elements of FlashInfer's warp-per-group quantiser
 FI_LANES = 32
+#: (bf16, e4m3, f32): the word types; `boolean_deepgemm` passes their bits
+WORD_TYPES = (BF16, E4M3, F32)
 
 _UE8M0_CONF = ("model-untested: read from vLLM d9105ea80 per_token_group_quant.cu:42-160 (nvcc without fast-math); the ue8m0 rounding "
                "written as the bit form of per_token_group_quant.cu:381-387, equal on every reachable scale (Fp8Ue8m0Ceil_v1's doc); "
@@ -112,6 +114,33 @@ def _row(n: int, words: list, t):
     return Coll(Array(n, t), concat([w.refs for w in words]))
 
 
+def quant_sig(S, G: int, T=WORD_TYPES):
+    """(x: K bf16) -> (q: K e4m3, s: K/G f32), over the types T."""
+    bf16, e4m3, f32 = T
+    return (("x", Array(S.K, bf16)),), Tuple(Array(S.K, e4m3), Array(S.K // G, f32))
+
+
+def fi_group_sig(S, T=WORD_TYPES):
+    bf16, e4m3, f32 = T
+    return (("x", Array(FP8_BLOCK, bf16)),), Tuple(Array(FP8_BLOCK, e4m3), f32)
+
+
+def linear_sig(S, materialise: bool, T=WORD_TYPES):
+    """(x: K bf16, w: N x K e4m3, ws: cdiv(N, 128) x K/128 f32) -> (q, s, y: N bf16) when ``materialise``, else y."""
+    bf16, e4m3, f32 = T
+    y = Array(S.N, bf16)
+    return ((("x", Array(S.K, bf16)), ("w", Array(S.N, Array(S.K, e4m3))),
+             ("ws", Array(weight_blocks(S.N, FP8_BLOCK), Array(S.K // FP8_BLOCK, f32)))),
+            Tuple(Array(S.K, e4m3), Array(S.K // FP8_BLOCK, f32), y) if materialise else y)
+
+
+def grouped_sig(S, T=WORD_TYPES):
+    bf16, e4m3, f32 = T
+    return ((("xq", Array(S.H, Array(S.K, e4m3))), ("sx", Array(S.H, Array(S.K // S.G, f32))),
+             ("w", Array(S.H, Array(S.N, Array(S.K, e4m3)))), ("ws", Array(S.H, Array(weight_blocks(S.N, S.G), Array(S.K // S.G, f32))))),
+            Array(S.H, Array(S.N, bf16)))
+
+
 def ue8m0_ceil(o: Ops, y):
     """`Fp8Ue8m0Ceil_v1`'s body."""
     m = o.fmaxf(o.fabs(y), o.word(F_1EM10))
@@ -136,7 +165,7 @@ def Fp8GroupScaleUe8m0(B, S, x):
     return B.call(Fp8Ue8m0Ceil, B.call(bind(F8.Fp8GroupScale, G=S.G), x))
 
 
-def group_quant(o: Ops, K: int, G: int, x, scale):
+def group_quant(o: Ops, K: int, G: int, x, scale, T=WORD_TYPES):
     """`Fp8GroupQuantUe8m0`'s body, group g's scale a Call of ``scale`` on its G words: (q, s)."""
     if K % G:
         raise ValueError(f"Fp8GroupQuantUe8m0: K={K} is not a multiple of G={G}")
@@ -145,11 +174,10 @@ def group_quant(o: Ops, K: int, G: int, x, scale):
         s = o.B.call(scale, x[g * G:(g + 1) * G])
         ss.append(s)
         qs += [o.e4m3(o.fminf(o.fmaxf(o.div(o.cvt(x[e]), s), o.word(F_NEG448)), o.word(F_448))) for e in range(g * G, (g + 1) * G)]
-    return tuple_of(_row(K, qs, E4M3), _row(K // G, ss, F32))
+    return tuple_of(_row(K, qs, T[1]), _row(K // G, ss, T[2]))
 
 
-@composite("Fp8GroupQuantUe8m0", 1, ["K", "G"],
-           lambda S: ((("x", Array(S.K, BF16)),), Tuple(Array(S.K, E4M3), Array(S.K // S.G, F32))), conformance=_UE8M0_CONF)
+@composite("Fp8GroupQuantUe8m0", 1, ["K", "G"], lambda S: quant_sig(S, S.G), conformance=_UE8M0_CONF)
 def Fp8GroupQuantUe8m0(B, S, x):
     """`_C.per_token_group_fp8_quant(.., use_ue8m0=True)` on one bf16 row: per group g, `s[g] = Fp8GroupScaleUe8m0_v1{G}` and
     `q[e] = cvt.rn.satfinite.e4m3x2(fminf(fmaxf(f32(x[e]) / s[g], -448), 448))` (per_token_group_quant.cu:85-86: `div.rn` by a power
@@ -161,7 +189,7 @@ def fi_lane_elements(l: int) -> tuple[int, ...]:
     return (2 * l, 2 * l + 1, 64 + 2 * l, 65 + 2 * l)
 
 
-def fi_group(o: Ops, x):
+def fi_group(o: Ops, x, T=WORD_TYPES):
     """`FlashInferFp8Quant1x128Group_v1`'s body: (q words, stored scale)."""
     zero = o.word(0)
     lanes = []
@@ -174,11 +202,10 @@ def fi_group(o: Ops, x):
     nz = o.bf16_gt(o.f2bf16(amax), o.half(0))
     scale = o.isel(nz, o.mul_ftz(o.rcp_ftz(amax), o.word(F_448)), o.word(F_ONE))
     q = [o.e4m3(o.mul_ftz(scale, o.cvt(x[i]))) for i in range(FP8_BLOCK)]
-    return tuple_of(_row(FP8_BLOCK, q, E4M3), o.rcp_ftz(scale))
+    return tuple_of(_row(FP8_BLOCK, q, T[1]), o.rcp_ftz(scale))
 
 
-@composite("FlashInferFp8Quant1x128Group", 1, [], lambda S: ((("x", Array(FP8_BLOCK, BF16)),), Tuple(Array(FP8_BLOCK, E4M3), F32)),
-           conformance=_FI_CONF)
+@composite("FlashInferFp8Quant1x128Group", 1, [], fi_group_sig, conformance=_FI_CONF)
 def FlashInferFp8Quant1x128Group(B, S, x):
     """One 128-element group of FlashInfer's `scale_1x128_kernel` (the module docstring's sequence): lane l's value an `fmaxf` fold from
     +0 of |f32(x)| over its four elements (= max.bf16 of abs.bf16: exact, NaN dropped); amax the lane-0 halving tree of
@@ -188,53 +215,46 @@ def FlashInferFp8Quant1x128Group(B, S, x):
     return fi_group(word_ops(B), x)
 
 
-def fi_row(B, K: int, x, group):
+def fi_row(B, K: int, x, group, T=WORD_TYPES):
     """`FlashInferFp8Quant1x128`'s body: the K/128 groups' Calls of ``group``, their words and scales concatenated."""
     if K % FP8_BLOCK:
         raise ValueError(f"FlashInferFp8Quant1x128: K={K} is not a multiple of {FP8_BLOCK}")
     parts = [B.call(group, x[g * FP8_BLOCK:(g + 1) * FP8_BLOCK]) for g in range(K // FP8_BLOCK)]
-    return tuple_of(Coll(Array(K, E4M3), concat([p[0].refs for p in parts])),
-                    Coll(Array(K // FP8_BLOCK, F32), concat([p[1].refs for p in parts])))
+    return tuple_of(Coll(Array(K, T[1]), concat([p[0].refs for p in parts])),
+                    Coll(Array(K // FP8_BLOCK, T[2]), concat([p[1].refs for p in parts])))
 
 
-@composite("FlashInferFp8Quant1x128", 1, ["K"],
-           lambda S: ((("x", Array(S.K, BF16)),), Tuple(Array(S.K, E4M3), Array(S.K // FP8_BLOCK, F32))), conformance=_FI_CONF)
+@composite("FlashInferFp8Quant1x128", 1, ["K"], lambda S: quant_sig(S, FP8_BLOCK), conformance=_FI_CONF)
 def FlashInferFp8Quant1x128(B, S, x):
     """`scale_1x128_kernel` on one bf16 row: group g is `FlashInferFp8Quant1x128Group_v1` over x[128g:128g+128]; the e4m3 words and
     the stored scales are what the TRT-LLM GEMM reads (its workspace)."""
     return fi_row(B, S.K, x, FlashInferFp8Quant1x128Group)
 
 
-def _linear_sig(S, ret):
-    return ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, E4M3))),
-             ("ws", Array(weight_blocks(S.N, FP8_BLOCK), Array(S.K // FP8_BLOCK, F32)))), ret)
+def linear(B, quant, gemm, x, w, ws, materialise: bool):
+    """A linear's body on one token row: ``gemm`` over ``quant``'s (q, s); (q, s, y) when ``materialise``, else y."""
+    q = B.call(quant, x)
+    y = B.call(gemm, q[0], q[1], w, ws)
+    return tuple_of(q[0], q[1], y) if materialise else y
 
 
-@composite("DeepGemmFp8Linear", 1, ["K", "N"],
-           lambda S: _linear_sig(S, Tuple(Array(S.K, E4M3), Array(S.K // FP8_BLOCK, F32), Array(S.N, BF16))), conformance=_GEMM_CONF)
+@composite("DeepGemmFp8Linear", 1, ["K", "N"], lambda S: linear_sig(S, True), conformance=_GEMM_CONF)
 def DeepGemmFp8Linear(B, S, x, w, ws):
     """The linear's M >= 32 branch on one token row: `Fp8GroupQuantUe8m0_v1{K,128}`, then `ScaledMmFp8BlockSharedScale_v1{K,N,128}`
     (DeepGEMM `fp8_gemm_nt`); returns (q, s, y), the three values vLLM materialises."""
-    q = B.call(bind(Fp8GroupQuantUe8m0, K=S.K, G=FP8_BLOCK), x)
-    y = B.call(bind(F8.ScaledMmFp8BlockSharedScale, K=S.K, N=S.N, G=FP8_BLOCK), q[0], q[1], w, ws)
-    return tuple_of(q[0], q[1], y)
+    return linear(B, bind(Fp8GroupQuantUe8m0, K=S.K, G=FP8_BLOCK), bind(F8.ScaledMmFp8BlockSharedScale, K=S.K, N=S.N, G=FP8_BLOCK),
+                  x, w, ws, True)
 
 
-@composite("FlashInferFp8Linear", 1, ["K", "N"], lambda S: _linear_sig(S, Array(S.N, BF16)), conformance=_GEMM_CONF)
+@composite("FlashInferFp8Linear", 1, ["K", "N"], lambda S: linear_sig(S, False), conformance=_GEMM_CONF)
 def FlashInferFp8Linear(B, S, x, w, ws):
     """The linear's M < 32 branch on one token row: `FlashInferFp8Quant1x128_v1{K}`, then `ScaledMmFp8BlockSharedScale_v1{K,N,128}`
     (TRT-LLM's swapAB kernel, the stored scales as the activation's); returns y, the op's one output."""
-    q = B.call(bind(FlashInferFp8Quant1x128, K=S.K), x)
-    return B.call(bind(F8.ScaledMmFp8BlockSharedScale, K=S.K, N=S.N, G=FP8_BLOCK), q[0], q[1], w, ws)
+    return linear(B, bind(FlashInferFp8Quant1x128, K=S.K), bind(F8.ScaledMmFp8BlockSharedScale, K=S.K, N=S.N, G=FP8_BLOCK), x, w, ws,
+                  False)
 
 
-def _grouped_sig(S):
-    return ((("xq", Array(S.H, Array(S.K, E4M3))), ("sx", Array(S.H, Array(S.K // S.G, F32))),
-             ("w", Array(S.H, Array(S.N, Array(S.K, E4M3)))), ("ws", Array(S.H, Array(weight_blocks(S.N, S.G), Array(S.K // S.G, F32))))),
-            Array(S.H, Array(S.N, BF16)))
-
-
-@composite("ScaledMmFp8BlockGrouped", 1, ["H", "K", "N", "G"], _grouped_sig, conformance=_GEMM_CONF)
+@composite("ScaledMmFp8BlockGrouped", 1, ["H", "K", "N", "G"], grouped_sig, conformance=_GEMM_CONF)
 def ScaledMmFp8BlockGrouped(B, S, xq, sx, w, ws):
     """`fp8_einsum("bhr,hdr->bhd", recipe=(1, G, G))` on one token: group h's N words are `ScaledMmFp8BlockSharedScale_v1{K,N,G}` over
     its e4m3 row xq[h], scales sx[h], weight w[h] and block scales ws[h] (`sm90_fp8_bmm`: the 1d2d chain per group)."""
