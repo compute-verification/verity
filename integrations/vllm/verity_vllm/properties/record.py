@@ -45,7 +45,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
     Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v3",
              "On the capture's 8 Hopper GPUs at the record's served setting (served.setting: vLLM's defaults, or its custom "
              "all-reduce off), each set of rank processes holding that setting's communicators, GLM-5.3's fused_allreduce_rms_norm "
-             "runs FlashInfer's MNNVL all-reduce + residual add + RMSNorm up to 42 tokens at the strategy mnnvl_shot names, every "
+             "runs FlashInfer's MNNVL all-reduce + residual add + RMS norm up to 42 tokens at the strategy mnnvl_shot names, every "
              "normed and residual word equals AllReduceRmsNormMnnvl_v1 at the shot's decided FMA, and every "
              "tensor_model_parallel_all_reduce to 42 tokens runs FlashInfer's MNNVL all-reduce and equals AllReduceMnnvl_v1; past "
              "it, prefill's route is either served (torch's multimem_all_reduce_, whose pair probes name one add tree per owner rank, "
@@ -53,7 +53,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "AllReduceMultimem_v1 at those trees and FTZ) or switch (under VLLM_ALLREDUCE_USE_SYMM_MEM=0 with the custom all-reduce "
              "on, every all-reduce to 682 tokens runs vLLM's custom all-reduce at custom_stage and equals AllReduceCustom_v1), bit "
              "for bit, on every rank.  Apart from that verdict, h7168.ok says the same at vLLM's defaults of 7168-wide "
-             "tensor_model_parallel_all_reduce (DeepSeek-V4-Pro's): FlashInfer's to 36 tokens, multimem past it at its own probe's "
+             "tensor_model_parallel_all_reduce (the hidden-7168 pass): FlashInfer's to 36 tokens, multimem past it at its own probe's "
              "trees and FTZ."),
     Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v1",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
