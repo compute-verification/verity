@@ -96,6 +96,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "sweep": ("verity_vllm.pipeline.sweep", "a night's config runs on one host, packed onto its GPUs by RAM and CPU (plan, run)"),
     "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
     "sampling-rng": ("verity_vllm.program.kernels.sampling_rng", "sampler noise recomputation"),
+    "serving-rows": ("verity_vllm.pipeline.deferred_rows", "a deferred Commit's serving rows and one-stage registration, from its sealed replay bundle"),
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
     "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),
     "target-family": ("verity_vllm.target_family", "target-family preflight"),
