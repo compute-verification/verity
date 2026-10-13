@@ -174,27 +174,34 @@ def num_splits_heuristic(total_mblocks: int, num_sms: int, num_n_blocks: int, nu
 
 
 def num_splits(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num_sms: int, Dv: int | None = None) -> list[int]:
-    """The split count FA3 runs each sequence of one causal varlen self-attention launch at (``cu_seqlens_q = cu_seqlens_k``, the
-    sequences' lengths ``seqlens``) when the caller passes ``num_splits = 0`` (vLLM's MLA prefill outside batch invariance):
+    """The split count FA3 runs each sequence of one causal varlen self-attention launch at: :func:`split_plan`'s second part."""
+    return split_plan(seqlens, H, KVH, D, num_sms=num_sms, Dv=Dv)[1]
+
+
+def split_plan(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num_sms: int,
+               Dv: int | None = None) -> tuple[int, list[int]]:
+    """(the launch's ``params.num_splits``, each sequence's split count) of one causal varlen self-attention launch (``cu_seqlens_q =
+    cu_seqlens_k``, the sequences' lengths ``seqlens``) when the caller passes ``num_splits = 0`` (vLLM's MLA prefill outside batch
+    invariance).  The launch runs the ``Split`` mainloop and ``FlashAttnFwdCombine`` exactly when the first exceeds 1:
     ``flash_api.cpp::get_num_splits``' static bound (the tile of max_seqlen_q, ``total_mblocks = h_k * num_m_blocks`` as if batch = 1,
     PackGQA rows), then ``flash_prepare_scheduler.cu``'s dynamic split per sequence (``blocks_per_sm = ceilf(total_blocks * 1.1f * h_k /
     num_sm)`` over every sequence's ``num_m_blocks * num_n_blocks``; ``max(min(ceil(num_n_blocks / blocks_per_sm), static), 1)``); one
     split past ``PREPARE_VARLEN_MAX_BATCHES_1CTA`` sequences.  The host heuristic is IEEE f32; the device's ``/`` is ``div.full.ftz.f32``
     (``--use_fast_math``: the numerator times the measured MUFU.RCP of ``num_sm``, ``DivFullRcp_v1``), assumed to lower as Triton's does.
-    A count above 1 runs the Split kernel and ``FlashAttnFwdCombine``, which this module does not model."""
+    A sequence counted above 1 is combined from its splits, which this module does not model; one counted 1 is written directly."""
     from verity_vllm.program.kernels import derived_rows as DR
     L = [int(x) for x in seqlens]
     Dv = int(D if Dv is None else Dv)
     g = int(H) // int(KVH)
     if not L or len(L) > PREPARE_VARLEN_MAX_BATCHES_1CTA:
-        return [1] * len(L)
+        return 1, [1] * len(L)
     max_q = max(L)
     BM, BN = kblock_m_for(D, max_q, g), kblock_n_for(D, max_q, g)
     nmb_static = -(-(max_q * g) // BM)
     nnb_static = -(-max_q // BN)
     static = num_splits_heuristic(int(KVH) * nmb_static, int(num_sms), nnb_static, nmb_static, max_q * (int(D) + Dv) * 2, True, 128)
     if static == 1:
-        return [1] * len(L)
+        return 1, [1] * len(L)
     nmb = [-(-(x * g) // BM) for x in L]
     nnb = [-(-x // BN) for x in L]
     total = sum(m * n for m, n in zip(nmb, nnb))
@@ -202,7 +209,7 @@ def num_splits(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num
     a = np.array([f32(f32(f32(total) * f32(1.1)) * f32(KVH))], np.float32).view(np.uint32)
     b = np.array([f32(num_sms)], np.float32).view(np.uint32)
     bps = int(np.ceil(DR.as_f32(DR.mul_ftz(DR.div_full_scale_a(a, b), DR.div_full_rcp(b)))[0]))
-    return [max(min(-(-n // bps), static), 1) for n in nnb]
+    return static, [max(min(-(-n // bps), static), 1) for n in nnb]
 
 
 def attention_rows(

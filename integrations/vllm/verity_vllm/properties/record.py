@@ -48,6 +48,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v1, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
+    Property("glm53_fa3_prefill_capture", "verity-vllm/glm53-fa3-prefill-capture/v1",
+             "On the capture's Hopper GPU, vLLM selects FA3 for GLM-5.3's dense MHA prefill at head dim 256, MUFU ex2 / rcp are core's "
+             "tables, every launch runs FlashAttnFwdSm90 at TileShape 128x80x256 with the Split mainloop and FlashAttnFwdCombine "
+             "exactly where fa3_model.split_plan splits it, and every output row of a launch at num_splits 1, and of every served "
+             "sequence the plan runs as one split, equals Attention_v4{T,NH=8,KVH=8,D=256,BN=80,...}, which the target binds, bit for "
+             "bit."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
              "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "
