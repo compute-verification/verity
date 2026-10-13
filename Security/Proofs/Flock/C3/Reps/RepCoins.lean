@@ -9,8 +9,8 @@ import Proofs.Flock.Soundness.Assumptions.Inner
 `i`'s coin steps are its consumed rounds' coins (`repIdx`, `UnitWoven`'s), so its `p`-th is round `repIdx p`'s
 (`unitCoins_eq`); the history's round `repStart c₀ i + p` draws it from the rep's stream (`RepsDrawn`), where custody's
 coins half (`Assumptions.InnerRecordCustody` at a map `m`, round `i` drawing round `q` of `s` where `m.selC i s q`) holds
-that round's coin, the rep's rounds are the record's (`RepRoundsHeld`), and the map's coins are the round's coordinate
-(`CoinsEncoded`).
+what the map reads off the coins up to that round, the rep's rounds are the record's (`RepRoundsHeld`), and the map's
+coins are the round's coordinate (`CoinsEncoded`).
 `repRoundsHeld_of_rounds`: `RepRoundsHeld` by definition at reps whose rounds are the record's (`heldRounds`).
 `capRead_vals`: `CapRead` at values whose cap is one constant.
 -/
@@ -70,12 +70,12 @@ theorem coinsAt_of_idx {cs : List ((k : Fin r) → CT k)} {ts : List Step} {ks :
 def repStart (c₀ : ℕ) (i : Fin 2) : ℕ := if (i : ℕ) = 0 then 1 else 1 + c₀
 
 /-- **Hypothesis: the map's coins are the rounds' coordinates** (the coin types' shape): where round `i` draws round
-`q` of stream `s` (`selC`), the coins the map gives there (`coin`), as a run's coin step, are coordinate `i` of the
-round's coin. -/
-def CoinsEncoded (selC : ℕ → String → ℕ → Prop) (coin : ((k : Fin r) → CT k) → String → ℕ → Array Flock.F128) :
-    Prop :=
-  ∀ i (hi : i < r) s q (c : (k : Fin r) → CT k), selC i s q →
-    coinArr FlockSoundness.Refine.fOf (coin c s q) = ⟨CT ⟨i, hi⟩, c ⟨i, hi⟩⟩
+`q` of stream `s` (`selC`), the coins the map reads there off the coins up to round `i` (`coin`), as a run's coin
+step, are coordinate `i` of round `i`'s coin. -/
+def CoinsEncoded (selC : ℕ → String → ℕ → Prop)
+    (coin : List ((k : Fin r) → CT k) → String → ℕ → Array Flock.F128) : Prop :=
+  ∀ i (hi : i < r) s q (cs : List ((k : Fin r) → CT k)) (hc : i < cs.length), selC i s q →
+    coinArr FlockSoundness.Refine.fOf (coin (cs.take (i + 1)) s q) = ⟨CT ⟨i, hi⟩, cs[i] ⟨i, hi⟩⟩
 
 end list
 
@@ -124,7 +124,7 @@ theorem coinsAt_rep {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts : 
   have hround := hd q _ (((hcus t).1 i t[i] (List.getElem?_eq_getElem hc')).2 s (ix q) hs)
   rw [hv] at hround
   show coinArr fOf (v.t.rounds[q]!).coins = _
-  rw [getElem!_of_map hround, henc i hi s (ix q) t[i].2 hs, List.getElem_map]
+  rw [getElem!_of_map hround, List.map_take, henc i hi s (ix q) (t.map Prod.snd) hc hs]
 
 end unit
 

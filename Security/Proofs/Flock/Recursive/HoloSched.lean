@@ -4,7 +4,7 @@ import Flock.RecVStar
 # Candidate 3's inner schedule, and where its transcript holds each fixed value
 
 Mirrors of `rec_live`'s schedule of candidate 3's inner session (`schedule_for` with `holo`, `sparse` and `stacked`),
-which the guarantee's fixed record map (`InnerRecordMap`'s `sel` and `selC`) is to read:
+which the guarantee's record map (`holoMap`, `Recursive/HoloMap.lean`) reads:
 * a rep's rounds with hidden unit circuits (`holoRounds`, `rec_live.holo_rounds`), a rep's sparse phase's
   (`sparseRounds`, `rec_live.sparse_rounds`) and R's (`RecVStar.stackedRounds`), and the session's streams in
   `schedule_for`'s order (`holoStreams`);
@@ -27,7 +27,9 @@ open Flock Flock.RecVStar
 def zpRound (m kLog : Nat) : Nat := m + kLog - 7
 
 /-- `rec_live.holo_rounds`: `repRounds` with hidden unit circuits. z_partial's round squeezes nothing, and a round of its
-own absorbs h and squeezes r′. None where round `zpRound` is not z_partial's. -/
+own absorbs h and squeezes r′. None where round `zpRound` is not z_partial's.
+A round here records only whether it absorbs (`SchedRound`'s flag), not how many elements: h's round absorbs 64 in
+`rec_live`, and no guarantee or assumption record reads `holoRounds`. -/
 def holoRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
   let out ← repRounds m kLog claims
   let k := zpRound m kLog

@@ -39,13 +39,15 @@ def heldCoins (cs : Except String RecVStar.InnerCommits) (s : String) (k : Nat) 
   | .error _ => none
 
 /-- **What a history's rounds fix in the inner session's records**: row `x` of registered value `v` holds round `i`'s
-commitment (`sel i v x`) as its `b ‖ c` (`bc`), round `k` of stream `s` holds round `i`'s coin (`selC i s k`) as its
-coins (`coin`), and the first round's coin is the session's link points (`points`). -/
+commitment (`sel i v x`) as its `b ‖ c` (`bc`), round `k` of stream `s` holds the coins of the rounds up to `i`
+(`selC i s k`) as `coin` reads them off those rounds' coins, and the first round's coin is the session's link points
+(`points`). A stream round can hold several rounds' coins, the last of them round `i`'s: a sparse phase's ζ_c is one
+round of six coins and six rounds of one. -/
 structure InnerRecordMap (Cm Coin : Type) where
   sel : Nat → String → Nat → Prop
   bc : Cm → String → Nat → List UInt8
   selC : Nat → String → Nat → Prop
-  coin : Coin → String → Nat → Array F128
+  coin : List Coin → String → Nat → Array F128
   points : Coin → Array (Array F128)
 
 /-- **The coin server's records of the inner session are the live history's** (`live-verifier` at the inner session):
@@ -53,8 +55,9 @@ at every history `t`, the inner transcript and session record the coin server wr
 holds them (`held`), hold
 
 * at every row `x` of a value `v` that round `i` fixes (`m.sel i v x`), the `b ‖ c` of `t`'s round-`i` commitment;
-* at every round `k` of a stream `s` that round `i` draws (`m.selC i s k`), `t`'s round-`i` coin's (the link points,
-  `{table}/rep<r>`, `sparse/rep<r>` and `stacked/rep0`'s rounds, which check 5 and V*'s registered values read);
+* at every round `k` of a stream `s` that round `i` draws (`m.selC i s k`), the coins `m.coin` reads off `t`'s coins up
+  to round `i` (the link points, `{table}/rep<r>`, `sparse/rep<r>` and `stacked/rep0`'s rounds, which check 5 and V*'s
+  registered values read);
 * in the session record, at whatever session parameters it decodes under, `t`'s first coin as its link points. -/
 def InnerRecordCustody {Cm Coin : Type} (wr : List (Cm × Coin) → Lean.Json × String)
     (held : Lean.Json × String → Except String RecVStar.InnerCommits) (sparse : Option RecSparse.Shape)
@@ -62,7 +65,7 @@ def InnerRecordCustody {Cm Coin : Type} (wr : List (Cm × Coin) → Lean.Json ×
   ∀ t : List (Cm × Coin),
     (∀ i e, t[i]? = some e →
       (∀ v x, m.sel i v x → heldRow (held (wr t)) sparse v x = some (m.bc e.1 v x)) ∧
-      ∀ s k, m.selC i s k → heldCoins (held (wr t)) s k = some (m.coin e.2 s k)) ∧
+      ∀ s k, m.selC i s k → heldCoins (held (wr t)) s k = some (m.coin ((t.take (i + 1)).map Prod.snd) s k)) ∧
     ∀ e, t[0]? = some e → ∀ spec sess, Record.decode spec (wr t).2 = .ok sess → sess.points = m.points e.2
 
 end FlockSoundness.Assumptions
