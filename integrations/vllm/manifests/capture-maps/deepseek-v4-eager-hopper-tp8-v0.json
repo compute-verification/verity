@@ -282,7 +282,7 @@
   "copy-equality": {
    "status": "copy",
    "definitions": [],
-   "note": "a value the runtime only moves: checked by word equality against the taps it copies, no Program"
+   "note": "a value no kernel computes, which the runtime only moves or takes from the step's schedule: checked by word equality against the taps it copies or the schedule (the prompt's ids, the previous step's sampled ids, each token's position), no Program"
   },
   "rmsnorm-cuda": {
    "status": "port",
@@ -395,11 +395,6 @@
    "definitions": [],
    "note": "hc_head_fused_kernel_tilelang: the HC stream mixes of the final residual against hc_head_fn (f32), RMS-scaled, times hc_head_scale plus hc_head_base, sigmoid + hc_eps, then the weighted sum of the streams to [M, H] bf16. Row DSV4-MHC",
    "branch": "cursor/dsv4-mhc-8c79"
-  },
-  "step-positions": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "the runner's positions, one int64 per token (its index in its request): a root input no Program computes.  The insert's RoPE, the compressors' state rows (ape[pos % ratio]) and compress kernels, the short-context top-k fill and the decode indices read them, and the identity check recomputes from them which compressed-rows names a step commits (row_counts)"
   },
   "dsv4-qnorm-rope-kv-insert": {
    "status": "port",
@@ -1511,12 +1506,12 @@
    "shape": [
     "M"
    ],
-   "program": "step-positions",
+   "program": "copy-equality",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
    "manifest_family": "instance_outputs",
-   "note": "a root input, bound at the first layer: every later layer attends at the same tensor, or the step fails",
+   "note": "a root input, the step's schedule as input_ids is: each token's index in its request (0 .. n - 1 on a prompt's n rows, the prompt's length + k - 1 on its k-th decode step), which no kernel computes; public step facts the fold binds nothing for (observe.fold), and to the frontend values known statically (derive.StaticIndex). Held by word equality to the schedule (compiled_kernel_check's position gate) and where they are read: the insert's RoPE (the cos_sin_cache row Dsv4QNormRopeKvInsert_v1 and Dsv4IndexerQ_v1 take), the compressors' state rows (ape[pos % ratio], Dsv4CompressorScore_v1) and which tokens end a window (row_counts), the short-context top-k fill (Dsv4ShortContextTopK_v1) and the decode indices. Bound at the first layer: every later layer attends at the same tensor, or the step fails",
    "commit": {
     "name": "model.layers.{i}.attn/positions",
     "binder": "dsv4_attention"
