@@ -150,6 +150,5 @@ theorem holoSelOne_repName {ish : RecVStar.Inner} {tbl : String} {rs : Array Sch
 #print axioms repName_ne
 #print axioms find?_repName
 #print axioms holoSelOne_repName
-#print axioms coinsEncoded_holoMap
 
 end FlockC3.Compose
