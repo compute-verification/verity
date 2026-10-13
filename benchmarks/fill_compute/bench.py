@@ -74,7 +74,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 PEAK_E4M3, PEAK_BF16, PEAK_MHZ = 807.2e12, 403.7e12, 2100.0
 RASTER, TILE, PEEL_ROW = 8, 64, 128
-L2_REPEATS = 3
+L2_REPEATS = 5
 STORES = {"all": 0, "y": 1, "fold": 2, "rcpt": 3}
 RSEED = bytes(range(64))         # the receipts' pass seed (a fixture's, not a verifier's draw)
 CAP = 1.0 / 1000
@@ -766,7 +766,10 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
     tile's rows are `STORE@128`. Controls (`control`, not judged): each kernel at no tiles, whose sectors are the launch's
     own, not its outputs'. Each kernel's L2_REPEATS judged launches are interleaved with L2_REPEATS + 1 controls (control,
     judged, control, ...), so l2_gate.py can ask whether the intermittent excess (271-7,352 sectors in some measurements and
-    not others, r20261012-224930-ae0c, r20261013-002059-3970) comes to controls as it comes to judged launches."""
+    not others, r20261012-224930-ae0c, r20261013-002059-3970) comes to controls as it comes to judged launches. A zero-tile
+    control lasts microseconds where a judged launch lasts milliseconds, so each fold kernel's launches also interleave
+    L2_REPEATS dry launches (`dry`, not judged): the same tiles with the log off, which declare no write sectors and last
+    as long as the judged launch."""
     f64 = random_filler(4096, 4096, 1024, qcap=4 * sms)
     lo = torch.cuda.Stream()
     rows = []
@@ -776,15 +779,18 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
         suffix = "" if T == TILE else "128"
         for store, code in STORES.items():
             for persist in (0, 1):
-                for n in (0,) + (4 * sms, 0) * L2_REPEATS:
+                seq = ((0, False),) + ((4 * sms, False), (0, False)) * L2_REPEATS
+                if store == "fold":
+                    seq = ((0, False),) + ((4 * sms, False), (4 * sms, True), (0, False)) * L2_REPEATS
+                for n, dry in seq:
                     f.poison()
                     torch.cuda.synchronize()
-                    lib.fill(persist, code, sms, f.args(0, n), lo, f.minb)
+                    lib.fill(persist, code, sms, f.args(0, n, log=not dry), lo, f.minb)
                     torch.cuda.synchronize()
                     rows.append({"kernel": f"fill_{'persist' if persist else 'chunk'}{suffix}_1_{code}",
                                  "store": store if T == TILE else f"{store}@{T}", "tile": T, "tiles": n, "control": n == 0,
-                                 "logged": int((f.log > 0).sum()),
-                                 "declared_write_sectors": n * (out_sectors[store] + 1),
+                                 "dry": dry, "logged": int((f.log > 0).sum()),
+                                 "declared_write_sectors": 0 if dry else n * (out_sectors[store] + 1),
                                  "declared_atom_sectors": n * (16 if store == "fold" else 0) + (n + sms if persist else 0)})
     path.write_text(json.dumps({"filler": [4096, 4096, 1024], "launches": rows}, indent=1) + "\n")
 

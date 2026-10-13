@@ -67,3 +67,14 @@ def test_min_rule_still_refuses_a_kernel_whose_every_repeat_exceeds():
 def test_smaller_control_excess_keeps_the_strict_rule():
     res = judge(*[([DECLARED + 14, DECLARED + 14 + 2000, DECLARED + 14], [14, 14, 14 + 300, 14])] * 6)
     assert res["external"]["controls"][1] == 6 and not res["external"]["external"] and res["rule"] == "strict"
+
+
+def test_dry_launches_are_reported_beside_and_do_not_set_the_rule():
+    d, rows = probe([DECLARED + 14, DECLARED + 14 + 2000, DECLARED + 14] * 2, [14] * 7)
+    for k in range(6):
+        d["launches"].append({"kernel": "fill_persist128_1_3", "store": "rcpt@128", "control": False, "dry": True,
+                              "declared_write_sectors": 0, "declared_atom_sectors": 0})
+        rows.append({"kernel": "fill_persist128_1_3", G.WRITE: 14 + (2500 if k % 3 == 1 else 0), G.ATOM: 0.0, G.RED: 0.0})
+    res = G.judge(d, rows)
+    assert res["external_dry"]["external"] and res["external_dry"]["controls"] == [6, 2]
+    assert res["external"]["judged"] == [6, 2] and res["rule"] == "strict" and res["status"] == "REFUSED"

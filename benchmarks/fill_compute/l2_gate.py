@@ -15,6 +15,8 @@ launch's own noise (a few sectors) and below the smallest excess seen (271). Con
 launches, so an excess from outside the kernel comes to both alike. The excess is external when (a) some control is hit,
 (b) a one-sided Fisher exact test of "judged launches are hit more often than controls" gives p >= ALPHA, and (c) the largest
 control excess is at least the largest judged one. Otherwise the strict rule stands: the guard does not fail open.
+The same test against the dry launches (`dry`: a fold kernel's tiles with the log off, as long as a judged launch and
+declaring nothing) is reported beside it (`external_dry`), as evidence; the rule follows the zero-tile controls.
 
   python3 l2_gate.py DECLARED_JSON NCU_CSV OUT_JSON      exit 0 passed, 7 refused, 3 unmeasured (no ncu rows)
 """
@@ -92,8 +94,10 @@ def judge(declared: dict, rows: list[dict]) -> dict:
         row["excess"] = w - floor if d.get("control") else w - d["declared_write_sectors"] - floor
         row["pass"] = w <= d["declared_write_sectors"] + row["floor"] and a <= d["declared_atom_sectors"]
         out.append(row)
-    judged = [r for r in out if not r.get("control")]
+    judged = [r for r in out if not r.get("control") and not r.get("dry")]
     test = external(judged, [r for r in out if r.get("control")])
+    dry = [r for r in out if r.get("dry")]
+    test_dry = external(judged, dry) if dry else None
     rule = "min" if test["external"] else "strict"
     kernels = list(dict.fromkeys(r["kernel"] for r in judged))
     strict = {k: all(r["pass"] for r in judged if r["kernel"] == k) for k in kernels}
@@ -108,7 +112,7 @@ def judge(declared: dict, rows: list[dict]) -> dict:
     for r in judged:
         by_store[r["store"]] = by_store.get(r["store"], True) and verdict[r["kernel"]]
     word = {True: "passed", False: "REFUSED"}
-    return {"status": "REFUSED" if bad else "passed", "rule": rule, "external": test,
+    return {"status": "REFUSED" if bad else "passed", "rule": rule, "external": test, "external_dry": test_dry,
             "by_store": {s: word[p] for s, p in by_store.items()},
             "by_kernel": {k: word[verdict[k]] for k in kernels},
             "by_kernel_strict": {k: word[strict[k]] for k in kernels}, "by_kernel_min": {k: word[least[k]] for k in kernels},
