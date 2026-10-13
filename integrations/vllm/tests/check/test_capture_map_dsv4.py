@@ -363,7 +363,7 @@ def test_the_route_site_decides_three_routes_and_the_committer_waits_for_its_bin
     assert undecided == {"fp8-swapab", "fp8-deepgemm"} and not undecided & {t["route"] for t in CMAP["taps"] if "route" in t}
     assert route_source.unbuilt(CMAP) == {"dsv4_attention"}
     done = {c["item"] for c in CMAP["capture_work"] if "done" in c}
-    assert len(CMAP["capture_work"]) == 6 and {1, 4, 5} <= done
+    assert len(CMAP["capture_work"]) == 6 and {1, 3, 4, 5} <= done
 
 
 def test_every_module_hook_tap_is_on_a_module_the_committer_acquires():

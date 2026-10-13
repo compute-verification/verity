@@ -467,7 +467,7 @@
   "module_hook": "the committer's forward hooks on the modules of its acquired classes whose forward runs (commit/committer/native_host.py _make_hook, _make_pre_hook): <module> for a tensor output, <module>/<k> for tuple element k, <module>/in for an acquired input",
   "sampler": "the committer's runner.sample wrap: runner.sampler/sampled_token_ids",
   "tp_partial": "TPPartialSource (acquire/sources/partial_source.py): a collective's rank-local input, <site>/part_rank<r> or <site>/shard_rank<r>, and the MoE runner's received output, <runner>/out",
-  "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block; the Marlin launches and the DeepSeek-V4 routers are capture work",
+  "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block: the two ops.moe_wna16_marlin_gemm launches, moe_sum, and the router at fused_topk_bias's return",
   "mhc": "MhcSource (acquire/sources/mhc_source.py): a wrap of the mHC call-time globals of vllm.models.deepseek_v4.nvidia.model, naming each call's returns <layer>/hc_attn_<value> or <layer>/hc_ffn_<value> (_split on the hc-split route, by the call's token count), and the final post and head model/hc_post, model/hc_head",
   "dsv4_attention": "not built (capture work): DeepseekV4Attention's values by function return, output argument and cache rows at the step's slot mappings, as <attn>/<value>, <compressor>/kv_score, <cache>/rows and <indexer>/<value>"
  },
@@ -2702,12 +2702,11 @@
    "site": {
     "kind": "launch_wrap",
     "target": "vllm/model_executor/layers/fused_moe/experts/marlin_moe.py:ops.moe_wna16_marlin_gemm",
-    "detail": "the w13 launch (mul_topk_weights False): intermediate_cache1, token-major rows of [gate | up]"
+    "detail": "the w13 launch (mul_topk_weights False): its return, intermediate_cache1 [M * K, 2 * MIL], pair-major rows of [gate | up]"
    },
    "dtype": "bfloat16",
    "shape": [
-    "M",
-    "K",
+    "=M * K",
     "=2 * MIL"
    ],
    "program": "marlin-mxfp4-moe",
@@ -2747,8 +2746,7 @@
    },
    "dtype": "bfloat16",
    "shape": [
-    "M",
-    "K",
+    "=M * K",
     "MIL"
    ],
    "program": "silu-mul-clamp",
@@ -2760,7 +2758,8 @@
    "commit": {
     "name": "moe/L{i}/act",
     "binder": "moe"
-   }
+   },
+   "note": "moe_sum's output is carved from the workspace that holds intermediate_cache2: act and down are flushed right after the w2 launch"
   },
   {
    "id": "moe.down",
@@ -2771,12 +2770,11 @@
    "site": {
     "kind": "launch_wrap",
     "target": "vllm/model_executor/layers/fused_moe/experts/marlin_moe.py:ops.moe_wna16_marlin_gemm",
-    "detail": "the w2 launch (mul_topk_weights True): token-major rows"
+    "detail": "the w2 launch (mul_topk_weights True, top_k 1): its return, intermediate_cache3 [M * K, H], pair-major rows"
    },
    "dtype": "bfloat16",
    "shape": [
-    "M",
-    "K",
+    "=M * K",
     "H"
    ],
    "program": "marlin-mxfp4-moe",
@@ -3773,7 +3771,8 @@
   },
   {
    "item": 3,
-   "work": "moe source: the Marlin launches (ops.moe_wna16_marlin_gemm as experts/marlin_moe.py reads it: up after the w13 launch, before w2 overwrites the shared buffer; act as the w2 launch's input; down after it), the router at fused_topk_bias's return (dsv4_topk and topk_hash_softplus_sqrt), moe_sum unchanged"
+   "work": "moe source: the Marlin launches (ops.moe_wna16_marlin_gemm as experts/marlin_moe.py reads it: up after the w13 launch, before w2 overwrites the shared buffer; act as the w2 launch's input; down after it), the router at fused_topk_bias's return (dsv4_topk and topk_hash_softplus_sqrt), moe_sum unchanged",
+   "done": "moe source: acquire.sources.moe_source wraps ops.moe_wna16_marlin_gemm (up at the w13 launch's return, mul_topk_weights False, flushed before w2 overwrites its buffer; act as the w2 launch's input and down as its return, mul_topk_weights True and top_k 1, flushed right after it because moe_sum writes into act's workspace) and fused_topk_bias in fused_topk_bias_router (router_w, router_ids at its return when scoring_func is sqrtsoftplus, the kernel recorded per step: topk_hash_softplus_sqrt with a hash table, dsv4_topk otherwise, and a call can_use_dsv4_topk refuses is not bound); up, act and down are the 2-D [M * K, .] buffers Marlin writes"
   },
   {
    "item": 4,
