@@ -1222,24 +1222,31 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
                else walker.store.find("GemmCoordinate_v1", K=str(tp["K"])))
         return _walked(base, walker, ids.get(None), f"GemmCoordinate{json.dumps(tp, sort_keys=True)}")
     if tname in SPINE_UNITS:
-        from verity_numerical.bench import lowerings, templates as TM
+        from verity_numerical.bench import templates as TM
 
-        spine = SPINE_UNITS[tname]
-        sub = TM.subcircuit(spine, **_params(tname, tp))
-        mod = lowerings.registry("C-Flock").module(spine)
-        if hasattr(mod, "width") and mod.width(int(sub.params["N"])) is None:
-            rec = _walked(base, walker, spec, f"{tname}{json.dumps(tp, sort_keys=True)}")
-            rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single C-Flock unit "
-                           f"(verity_flock.templates.{Path(mod.__file__).stem}.width); its Definition is walked instead, every "
-                           f"primitive with its piece, none in a proof unit")
-            return rec
-        low = mod.lowering(sub)
-        uid = _unit(reg, low.units, f"{mod.UNIT} unit", cache)
-        children = [{"ref": uid, "count": low.units.n, "c_flock_unit": True}] + _tail(reg, low.units, low.definition, cache)
-        ib, ob = _io_bits(low.definition)
-        return dict(base, name=f"{tname}{json.dumps(_params(tname, tp), sort_keys=True)}", kind="template", subcircuit=sub.id,
-                    children=children, unit=uid, in_bits=ib, out_bits=ob)
+        sub = TM.subcircuit(SPINE_UNITS[tname], **_params(tname, tp))
+        return _spine(reg, sub, base, walker, spec, f"{tname}{json.dumps(tp, sort_keys=True)}",
+                      f"{tname}{json.dumps(_params(tname, tp), sort_keys=True)}", cache)
     return _walked(base, walker, spec, spec or tname)
+
+
+def _spine(reg: Registry, sub, base: dict, walker: "Walker", spec: str | None, walked_name: str, name: str, cache: dict) -> dict:
+    """A spine template's record: its C-Flock unit with the instance count and its tail, or, where the kernel's warps differ (no
+    single unit), its Definition walked."""
+    from verity_numerical.bench import lowerings
+
+    mod = lowerings.registry("C-Flock").module(sub.template.id)
+    if hasattr(mod, "width") and mod.width(int(sub.params["N"])) is None:
+        rec = _walked(base, walker, spec, walked_name)
+        rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single C-Flock unit "
+                       f"(verity_flock.templates.{Path(mod.__file__).stem}.width); its Definition is walked instead, every "
+                       f"primitive with its piece, none in a proof unit")
+        return rec
+    low = mod.lowering(sub)
+    uid = _unit(reg, low.units, f"{mod.UNIT} unit", cache)
+    children = [{"ref": uid, "count": low.units.n, "c_flock_unit": True}] + _tail(reg, low.units, low.definition, cache)
+    ib, ob = _io_bits(low.definition)
+    return dict(base, name=name, kind="template", subcircuit=sub.id, children=children, unit=uid, in_bits=ib, out_bits=ob)
 
 
 def _coordinate(store: DefStore, did: str | None) -> tuple[str, int] | None:
@@ -1347,6 +1354,69 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
     return {"schema": SCHEMA + "/row", "row": row["row"], "row_key": row["serving"]["row_key"], "model": row["serving"].get("model"),
             "program_graph": Path(pg_path).name, "totals": totals, "nodes": nodes, "edges": p.get("edges", []),
             "templates": sorted(set(used))}
+
+
+class _Encoded:
+    """A store of Definitions encoded here, in the codec's v0 form a program graph's store holds them in, for a subcircuit no
+    row carries."""
+
+    def __init__(self):
+        self.ix: dict[str, dict] = {}
+
+    def add(self, fn) -> str:
+        from verity_vllm.pipeline.program_graph import _encoded
+
+        top, defs = _encoded(fn)
+        self.ix.update(defs)
+        return top
+
+    def get(self, did: str):
+        return self.ix.get(did)
+
+
+def statics_key(statics: dict) -> str:
+    """Instance statics as one key: canonical JSON (sorted keys, no spaces), ``{}`` for a subcircuit whose statics never vary."""
+    return json.dumps(statics, sort_keys=True, separators=(",", ":"))
+
+
+def subcircuit(sub, statics=({},)) -> dict:
+    """One bound subcircuit's Boolean export (``verity_numerical.bench.templates.Subcircuit``), self-contained: a template record
+    per instance statics (``variants``, keyed by :func:`statics_key`; attention one per key count T), as a row's templates are
+    recorded (a spine template its C-Flock unit and tail, any other its Definition walked), with every definition, subcircuit
+    node and circuit type (``circuit_types`` content, keyed by digest) they reach. Raises where the subcircuit has no core
+    Definition (a silicon reference)."""
+    reg, cache, store = Registry(), {}, _Encoded()
+    walker = Walker(reg, store, cache)
+    variants = {}
+    for st in statics:
+        top = store.add(sub.definition(**st))
+        base = {"id": "tpl-" + hashlib.sha256(json.dumps([sub.id, st], sort_keys=True).encode()).hexdigest()[:16],
+                "template": sub.template.id, "params": sub.params, "statics": st}
+        if sub.template.id in SPINE_UNITS.values():
+            rec = _spine(reg, sub, base, walker, top, top, f"{sub.id} ({top})", cache)
+        else:
+            rec = _walked(base, walker, top, top)
+        if rec["kind"] == "template":
+            rec.update(_totals(reg, rec["children"], walker.defs))
+        variants[statics_key(st)] = rec
+    defs, refs, todo = {}, set(), [c for r in variants.values() for c in r["children"]]
+    while todo:
+        c = todo.pop()
+        if "def" in c and c["def"] not in defs:
+            defs[c["def"]] = walker.defs[c["def"]]
+            todo += defs[c["def"]]["children"]
+        elif "ref" in c:
+            refs.add(c["ref"])
+    types, todo = {}, list(refs)
+    while todo:
+        d = todo.pop()
+        if d not in types:
+            types[d] = reg.types[d]
+            todo += list(types[d].calls)
+    return {"schema": SCHEMA + "/subcircuit", "subcircuit": sub.id, "template": sub.template.id, "params": sub.params,
+            "gathers": GATHERS, "library_digest": _library_digest(), "variants": variants, "definitions": defs,
+            "nodes": {d: reg.nodes[d] for d in types}, "types": {"format": CT.FORMAT,
+                                                                 "content": {d: t.content() for d, t in types.items()}}}
 
 
 #: a template's node ANDs and its Calls' unit ANDs agree within this; beyond CROSSCHECK_FAIL (a granularity-sized error) the export fails

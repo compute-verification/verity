@@ -429,7 +429,7 @@ class TpRow(Row):
                        *arms, "--replay-workers", str(ck.replay_workers), "--label", self.row, "--out", f"{d}/commit")
         if not self.config_run and self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):
             cmd.append("--require-fold-match")
-        if ck.replay_deferred in ("1", "slim"):    # slim reaches a TP row only above TP2 (`run_row`), where tp-commit replays in process
+        if ck.replay_deferred in ("1", "slim"):    # slim reaches a TP row only at a world where tp-commit replays in process (`run_row`)
             cmd.append("--replay-deferred")
         return cmd + R.tap_source_args(taps, self.env) + (ck.extra_commit_args or "").split()
 

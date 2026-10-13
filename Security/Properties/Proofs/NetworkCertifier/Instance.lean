@@ -63,7 +63,12 @@ theorem toyKey_params : toyKey.params = toyParams := (key_spec toyKey_eq).1
 theorem toyKey_valid : ValidKey toyKey :=
   ⟨8, 8, 1, true, ident, seed, by rw [toyKey_params]; exact toyParams_ok, by rw [toyKey_params]; exact toyKey_eq⟩
 
-def issuer : Issuer := ⟨toyKey, #[]⟩
+/-- A certifier session id of 32 zero bytes. -/
+def session : ByteArray := ⟨Array.replicate 32 0⟩
+
+theorem session_size : session.size = 32 := by decide +kernel
+
+def issuer : Issuer := { key := toyKey, session }
 
 theorem issuer_I : issuer.key.I.size = 16 := by
   show toyKey.I.size = 16
@@ -79,7 +84,7 @@ def syncSet : NetworkCertifier.SyncSet := ⟨[0], [1], by simp, by simp, by simp
 
 def sync : ClockSync := ⟨0, 1, by decide⟩
 
-/-- One egress link and one ingress link, one window, the toy key. -/
+/-- One egress link and one ingress link, one window, the toy key, the session. -/
 def params : NetworkCheck.Check.Params where
   egress := #["out"]
   ingress := #["in"]
@@ -89,6 +94,7 @@ def params : NetworkCheck.Check.Params where
   syncSet := syncSet
   lms := toyKey.params
   key := toyKey.publicKey
+  session := session
 
 /-- The egress link opens no frames and declares `sync`. -/
 def link : NetworkCheck.Check.Link := ⟨[], #[sync]⟩
@@ -132,10 +138,10 @@ head, the head's digest and a signature that verifies under the key over the cer
 theorem signed (d : Direction) (l : String) {pd : ByteArray} (hpd : pd.size = 64) (hl : l.toUTF8.size < 2 ^ 16)
     {q : Nat} (hq : q < 2) :
     ∃ (h : RecordHead) (dg σ : ByteArray), recordHead l d 0 #[#[none]] none grid pd true = .ok h ∧
-      h.digest = .ok dg ∧ ∃ m, certificateMessage (params.key.extract 0 16) l d 0 dg = .ok m ∧
+      h.digest = .ok dg ∧ ∃ m, certificateMessage (params.key.extract 0 16) params.session l d 0 dg = .ok m ∧
         LmsVerifies params m σ := by
   obtain ⟨h, dg, m, hh, hprep⟩ := prepare_of (i := issuer) (r := record l) (d := d) (g := grid) (pd := pd) issuer_I
-    rfl (by
+    session_size rfl (by
       intro row hrow
       have : row = #[none] := by simpa [record] using hrow
       subst this

@@ -18,6 +18,7 @@ import Proofs.Pous.SecureErasure
 import Proofs.Pous.Graded.Band
 import Proofs.Pous.P2.Margin
 import Proofs.Pous.P2.Bridge
+import Proofs.Pous.P2.Wide
 import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Audit.SampledAudit
 import Proofs.Pous.B5.ExPostFacto
@@ -196,6 +197,9 @@ theorem P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond := by
     (PousMargin.b19_256_129 b hsp hb D).2.2.2.2⟩
 
 theorem P2SlackFamilyFreeBlocks : Pous.Guarantees.P2SlackFamilyFreeBlocks := Pous.FreeBlocks.p2_slack_family_free_blocks
+theorem P2SlackFamilyWide : Pous.Guarantees.P2SlackFamilyWide := PousP2Wide.p2_slack_family_wide
+theorem P2SlackFamilyFreeBlocksWide : Pous.Guarantees.P2SlackFamilyFreeBlocksWide :=
+  PousP2Wide.p2_slack_family_free_blocks_wide
 
 theorem P2RingAuditSecureOfReduces : Pous.Guarantees.P2RingAuditSecureOfReduces := by
   intro D Q L h W A₁ A₂

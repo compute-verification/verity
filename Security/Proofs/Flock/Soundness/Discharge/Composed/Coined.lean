@@ -7,7 +7,8 @@ import Proofs.Flock.Soundness.Discharge.Composed.Inner
 
 * `CoinedSetup`, `coinedOf`, `CoinedOK`, `CoinedOfSetup`: the `--zk` table of a draw as `ZkView`'s `Coined` tables at the
   executable's leaves, at each coin vector, and the structural facts Lemma B reads of them.
-* `ZkViewAt`: the view statement the composed headline proves at each draw.
+* `ZkViewAt`: the view statement the composed headline proves at each draw; `ZkViewAtReg`, at the witnesses whose
+  registered values are the public ones.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -267,14 +268,29 @@ def CoinedOfSetup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finse
 
 /-- **Zero knowledge at a `CoinedSetup`, at `δ₁` per hidden leaf** (Lemma B, `ZkWireFixed`'s form at one table): at every
 coin vector the honest prover doesn't refuse (`Admits`), for any encoding `enc` of the view (the proof files) and any
-event `E`, the real view at any valid witness `w` whose registered values are the public ones and `S_shvzk`'s at any
-`w0` are within `2·|Hid|·δ₁`, both ways.
+event `E`, the real view at any valid witness `w` and `S_shvzk`'s at any `w0` are within `2·|Hid|·δ₁`, both ways.
 
 This is honest-verifier zero knowledge at fixed coins. It covers a verifier that chooses its coins because the coin
 server commits every coin at `Hello`, before the prover's first message (`coin_tree.rs`), and the prover checks each
 opening against that commitment before it uses the coin; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)`
 (`keyed-cr`). No statement here models that commitment yet. -/
 def ZkViewAt (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
+  ∀ (c : CoinsZK C.Rest), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
+    (w w0 : Fin 1 → Witness C.S.m), (∀ j, C.Valid (w j)) → ∀ (E : Out → Prop),
+    Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) =>
+        E (enc fun j => (C.T c).viewExe (w j) (p j).1 (p j).2))
+        ≤ Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) =>
+            E (enc fun j => (C.T c).simExe (w0 j) (p j).1 (p j).2))
+          + ∑ _j : Fin 1, 2 * Fintype.card (C.T c).tab.Hid * δ₁
+      ∧ Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) =>
+          E (enc fun j => (C.T c).simExe (w0 j) (p j).1 (p j).2))
+        ≤ Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) =>
+            E (enc fun j => (C.T c).viewExe (w j) (p j).1 (p j).2))
+          + ∑ _j : Fin 1, 2 * Fintype.card (C.T c).tab.Hid * δ₁
+
+/-- `ZkViewAt` at the valid witnesses whose registered values are the public ones at the coin vector (`H_reg`), which
+Lemma B reads; `zkViewAt_of_ok` discharges `H_reg` where it holds at every valid witness (`coinedOf_reg`). -/
+def ZkViewAtReg (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
   ∀ (c : CoinsZK C.Rest), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
     (w w0 : Fin 1 → Witness C.S.m), (∀ j, C.Valid (w j)) → ∀ (_hreg : ∀ j, (C.T c).tab.sReg (w j) = (C.T c).tab.pubReg)
     (E : Out → Prop),
