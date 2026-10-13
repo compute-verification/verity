@@ -12,6 +12,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.program.registry import boolean_deepgemm as BDG
 
     return [
+        # the leaves the flat group circuits trace inline rather than call
+        ("F32LtFtz_v2", lambda: bind(BDG.F32LtFtzV2)),
+        ("Fp8Ue8m0Ceil_v2", lambda: bind(BDG.Fp8Ue8m0CeilV2)),
+        ("Fp8GroupScaleUe8m0_v2", lambda: bind(BDG.Fp8GroupScaleUe8m0V2, G=32)),
         ("Fp8GroupQuantUe8m0_v2", lambda: bind(BDG.Fp8GroupQuantUe8m0V2, K=64, G=32)),
         ("DeepGemmFp8Linear_v2", lambda: bind(BDG.DeepGemmFp8LinearV2, K=128, N=2)),
         ("FlashInferFp8Linear_v2", lambda: bind(BDG.FlashInferFp8LinearV2, K=128, N=2)),
