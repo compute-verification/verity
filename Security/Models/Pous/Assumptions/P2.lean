@@ -82,9 +82,7 @@ abstract model's bad event, Lemma A's `|Hist_k|·Γ`, is not linear in `k`, but 
 blocks, `k = 104`) it is below
 `2^-1,959,876` (`PousMargin.log_b19_128`), far below `k·2^-137`. A responder at most `S₀` bits at `m` of the `k`
 boundaries passes with probability at most `(1 − p)^m + k·ε₀` (`Pous.SecurityProofs.P2RingGradedOfRoundSecure`).
-As an illustration only, the abstract model's per-challenge figure
-(`m1p`'s `g = ⌊0.9576·B⌋ + 1` answerable blocks, `P2SlackFamilyFreeBlocks`) suggests `p ≈ 0.043`; nothing here
-derives a value of `p` for P2.
+Nothing here derives a value of `p` for P2.
 
 The modulus, the block width `w = 16448` and the payload width `b = 16432` are the same at every `N`: they set one
 block's cost, `N` sets only the number of blocks, the challenge space and `S₀`. The range is the deployed sizes, from
@@ -93,8 +91,13 @@ the MVP's `2^19` blocks (1.1 GB of payload) to item 10's `2^25` (69 GB). The fal
 widened to the abstract model's.
 
 Allowing `bad` to depend on the responder and on `k` makes this weaker than a bound paid per round. Each round
-is a fresh uniform index, independent of the history, which is the step P2's error analysis already takes
-(`PousP2Bridge.pr_seqAccepts_succ_le`: one more challenge never raises acceptance).
+is a fresh uniform index, independent of the history, so a round's pass rate is the share of indices the state held
+at that boundary answers. The abstract model already argues per state: Lemma A for `m1p` (`PousP2p.lemmaA_m1p`)
+bounds every state, outside an event of mass `Γ`, to fewer than `g` answerable indices, unioned over the `|Hist_k|`
+histories. That is a per-round factor `(g − 1)/B` with bad-event mass `|Hist_k|·Γ`. At the reduction's `λ = 128`
+slack (`PousMargin.log_b19_128`: `g = 501,579` at `2^19` blocks, `k = 104`) the factor is `501,578/2^19`, so
+`p = 22,710/2^19 ≈ 0.0433`, above both `0.043` and the derivation's `0.04291` floor. It is evidence about `m1p` with
+128 more bits per block, not a proof for P2.
 
 Falsification tests, at every `N` in the range and if `p` is prime: recomputation (`RingTight`'s responder, which keeps
 no state) forces `p = 0` unless `ε₀ ≥ 1`, at `D ≥ 32,894`, `Q ≥ 2`, `L ≥ 65,789` (`PousP2Rounds.round_tight`), and
