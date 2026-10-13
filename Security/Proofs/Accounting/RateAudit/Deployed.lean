@@ -1,0 +1,544 @@
+import Mathlib
+import Models.Accounting.Guarantees.RateAuditDeployed
+import Proofs.Accounting.RateAudit.Session
+
+/-!
+# The remote bandwidth audit as deployed: the proof
+
+**Completions as side reads.** A pass device with completions is simulated by an interactive device of
+`RatePaidNamedRO`'s class (`PIDevice.toInteractive`): its chip reads a completion's `x` bits from the side sources, at
+odd addresses that name the word, the width, the function and the bit, and the side sources answer them from the
+store; an original side read at `a` goes to `2a`. The simulating chip keeps count of its link bits and queries and
+stops at its bounds, so it is bounded in every world; in the device's own worlds the counts are the device's link bits
+plus its completed bits and its queries, within `L + X` and `q` once `X` bounds the completed bits, and there it
+returns the same receipts with the same tier reads, sends what the device sends, and rebuilds nothing.
+`WorkHardness` and `SquaringCeiling` give `X = b·F/(rounds·c_root)` (`PIDevice.completed_le`).
+
+**A window and a session.** A deployed window maps to a `GrindChain` of the simulated devices, whose union over the
+`G` candidates (`GrindChain.pr_unpaid_le`) and `RatePaidNamedRO` bound each window's unpaid words; the session's pooled
+draws are the causal horizon (`Horizon.pr_causal_le'`, `Horizon.pr_floor_le`), as in `Session.lean`.
+
+**The readings.** `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋` turn the counts into the fractions of `γ`.
+-/
+
+namespace Accounting.Rate
+
+open Pous (Bits pr)
+open scoped ENNReal
+open Bandwidth (pr_mono pr_or_le pr_exists_le)
+
+namespace IChip
+
+variable {N b h ρ : ℕ} {α : Type}
+
+/-- Read `n` side bits at the addresses `addr`, then continue with them. -/
+def readSide : (n : ℕ) → (Fin n → ℕ) → (Bits n → IChip N b h ρ α) → IChip N b h ρ α
+  | 0, _, k => k Fin.elim0
+  | n + 1, addr, k => side (addr 0) (fun β => readSide n (fun i => addr i.succ) (fun z => k (Fin.cons β z)))
+
+theorem readSide_run (w : IWorld N b h ρ) (v : List Bool) :
+    ∀ (n : ℕ) (addr : Fin n → ℕ) (k : Bits n → IChip N b h ρ α),
+      (readSide n addr k).run w v = (k (fun i => w.side v (addr i))).run w v
+  | 0, addr, k => by
+    simp only [readSide]
+    congr 2
+    funext i
+    exact i.elim0
+  | n + 1, addr, k => by
+    simp only [readSide, run]
+    rw [readSide_run w v n]
+    congr 2
+    funext i
+    refine Fin.cases rfl (fun i => rfl) i
+
+theorem readSide_tierBits {τ : ℕ} (tier : ℕ → Fin τ) (t : Fin τ) (w : IWorld N b h ρ) (v : List Bool) :
+    ∀ (n : ℕ) (addr : Fin n → ℕ) (k : Bits n → IChip N b h ρ α),
+      (readSide n addr k).tierBits tier t w v = (k (fun i => w.side v (addr i))).tierBits tier t w v
+  | 0, addr, k => by
+    simp only [readSide]
+    congr 2
+    funext i
+    exact i.elim0
+  | n + 1, addr, k => by
+    simp only [readSide, tierBits]
+    rw [readSide_tierBits tier t w v n]
+    congr 2
+    funext i
+    refine Fin.cases rfl (fun i => rfl) i
+
+theorem readSide_queries (w : IWorld N b h ρ) (v : List Bool) :
+    ∀ (n : ℕ) (addr : Fin n → ℕ) (k : Bits n → IChip N b h ρ α),
+      (readSide n addr k).queries w v = (k (fun i => w.side v (addr i))).queries w v
+  | 0, addr, k => by
+    simp only [readSide]
+    congr 2
+    funext i
+    exact i.elim0
+  | n + 1, addr, k => by
+    simp only [readSide, queries]
+    rw [readSide_queries w v n]
+    congr 2
+    funext i
+    refine Fin.cases rfl (fun i => rfl) i
+
+theorem readSide_rebuilds (w : IWorld N b h ρ) (v : List Bool) :
+    ∀ (n : ℕ) (addr : Fin n → ℕ) (k : Bits n → IChip N b h ρ α),
+      (readSide n addr k).rebuilds w v = (k (fun i => w.side v (addr i))).rebuilds w v
+  | 0, addr, k => by
+    simp only [readSide]
+    congr 2
+    funext i
+    exact i.elim0
+  | n + 1, addr, k => by
+    simp only [readSide, rebuilds]
+    rw [readSide_rebuilds w v n]
+    congr 2
+    funext i
+    refine Fin.cases rfl (fun i => rfl) i
+
+/-- Reading `n` side bits takes `n` bits over the link, and whatever the continuation takes, in every world. -/
+theorem readSide_linkBits (w : IWorld N b h ρ) (v : List Bool) :
+    ∀ (n : ℕ) (addr : Fin n → ℕ) (k : Bits n → IChip N b h ρ α),
+      ∃ z, (readSide n addr k).linkBits w v = (k z).linkBits w v + n ∧
+        (readSide n addr k).queries w v = (k z).queries w v
+  | 0, addr, k => ⟨Fin.elim0, by simp [readSide]⟩
+  | n + 1, addr, k => by
+    obtain ⟨z, hz, hq⟩ := readSide_linkBits w v n (fun i => addr i.succ) (fun z => k (Fin.cons (w.side v (addr 0)) z))
+    exact ⟨Fin.cons (w.side v (addr 0)) z, by simp only [readSide, linkBits]; omega,
+      by simp only [readSide, queries]; exact hq⟩
+
+end IChip
+
+namespace PIChip
+
+variable {N b h ρ : ℕ} {α : Type}
+
+/-- The address of bit `i` of the completion of `x` bits `g` of word `j`. -/
+noncomputable def code (j : Fin N) (x : ℕ) (g : Bits b → Bits x) (i : Fin x) : ℕ :=
+  Nat.pair j.1 (Nat.pair x (Nat.pair (Fintype.equivFin (Bits b → Bits x) g).1 i.1))
+
+/-- Bit `i` of the `x`-bit function numbered `gi` of word `j` of the store, or `false` if they name none. -/
+noncomputable def decodeAt (E : Store N b) (j x gi i : ℕ) : Bool :=
+  if hj : j < N then
+    if hg : gi < Fintype.card (Bits b → Bits x) then
+      if hi : i < x then ((Fintype.equivFin (Bits b → Bits x)).symm ⟨gi, hg⟩ (E ⟨j, hj⟩)) ⟨i, hi⟩ else false
+    else false
+  else false
+
+/-- The bit an address names, read from the store: bit `i` of `g (E_j)` at `code j x g i`. -/
+noncomputable def decode (E : Store N b) (c : ℕ) : Bool :=
+  decodeAt E c.unpair.1 c.unpair.2.unpair.1 c.unpair.2.unpair.2.unpair.1 c.unpair.2.unpair.2.unpair.2
+
+theorem decode_code (E : Store N b) (j : Fin N) (x : ℕ) (g : Bits b → Bits x) (i : Fin x) :
+    decode E (code j x g i) = g (E j) i := by
+  simp only [decode, code, Nat.unpair_pair]
+  unfold decodeAt
+  rw [dite_eq_left_of_eq_true (eq_true j.2), dite_eq_left_of_eq_true (eq_true (Fintype.equivFin (Bits b → Bits x) g).2),
+    dite_eq_left_of_eq_true (eq_true i.2)]
+  rw [Fin.eta, Equiv.symm_apply_apply]
+
+/-- Side sources that also answer completions: an original read at `a` is at `2a`, and `code j x g i` at
+`2·code j x g i + 1`. -/
+noncomputable def sideOf (E : Store N b) (f : List Bool → ℕ → Bool) (v : List Bool) (a : ℕ) : Bool :=
+  if a % 2 = 0 then f v (a / 2) else decode E (a / 2)
+
+/-- The simulating chip: link bits within `ℓ` and queries within `m`, a completion read from the side sources. -/
+noncomputable def sim (dflt : α) : ℕ → ℕ → PIChip N b h ρ α → IChip N b h ρ α
+  | _, _, done a => .done a
+  | ℓ, m, tag y k => if m = 0 then .done dflt else .tag y (fun t => sim dflt ℓ (m - 1) (k t))
+  | ℓ, m, ingress a k => .ingress a (fun β => sim dflt ℓ m (k β))
+  | ℓ, m, side a k => if ℓ = 0 then .done dflt else .side (2 * a) (fun β => sim dflt (ℓ - 1) m (k β))
+  | ℓ, m, stream i k => if ℓ = 0 then .done dflt else .stream i (fun β => sim dflt (ℓ - 1) m (k β))
+  | ℓ, m, complete j x _ g k =>
+    if x ≤ ℓ then IChip.readSide x (fun i => 2 * code j x g i + 1) (fun z => sim dflt (ℓ - x) m (k z))
+    else .done dflt
+  | ℓ, m, send β p => .send β (sim dflt ℓ m p)
+
+/-- The simulating chip is within its counts in every world. -/
+theorem sim_bounded (dflt : α) (w : IWorld N b h ρ) :
+    ∀ (c : PIChip N b h ρ α) (ℓ m : ℕ) (v : List Bool),
+      (sim dflt ℓ m c).linkBits w v ≤ ℓ ∧ ((sim dflt ℓ m c).queries w v).length ≤ m := by
+  intro c
+  induction c with
+  | done a => intro ℓ m v; simp [sim, IChip.linkBits, IChip.queries]
+  | tag y k ih =>
+    intro ℓ m v
+    by_cases hm : m = 0
+    · simp [sim, hm, IChip.linkBits, IChip.queries]
+    · simp only [sim, hm, ↓reduceIte, IChip.linkBits, IChip.queries, List.length_cons]
+      have := ih (w.oracle y) ℓ (m - 1) v
+      omega
+  | ingress a k ih => intro ℓ m v; simpa [sim, IChip.linkBits, IChip.queries] using ih (w.mem a) ℓ m v
+  | side a k ih =>
+    intro ℓ m v
+    by_cases hl : ℓ = 0
+    · simp [sim, hl, IChip.linkBits, IChip.queries]
+    · simp only [sim, hl, ↓reduceIte, IChip.linkBits, IChip.queries]
+      have := ih (w.side v (2 * a)) (ℓ - 1) m v
+      omega
+  | stream i k ih =>
+    intro ℓ m v
+    by_cases hl : ℓ = 0
+    · simp [sim, hl, IChip.linkBits, IChip.queries]
+    · simp only [sim, hl, ↓reduceIte, IChip.linkBits, IChip.queries]
+      have := ih (w.stream i) (ℓ - 1) m v
+      omega
+  | complete j x hx g k ih =>
+    intro ℓ m v
+    by_cases hl : x ≤ ℓ
+    · simp only [sim, hl, ↓reduceIte]
+      obtain ⟨z, hz, hq⟩ := IChip.readSide_linkBits w v x (fun i => 2 * code j x g i + 1)
+        (fun z => sim dflt (ℓ - x) m (k z))
+      have := ih z (ℓ - x) m v
+      rw [hz, hq]
+      omega
+    · simp [sim, hl, IChip.linkBits, IChip.queries]
+  | send β p ih => intro ℓ m v; simpa [sim, IChip.linkBits, IChip.queries] using ih ℓ m (β :: v)
+
+/-- The world the simulating chip runs in, for the device's world `w`. -/
+noncomputable def simWorld (w : IWorld N b h ρ) : IWorld N b h ρ :=
+  { w with side := sideOf w.store w.side }
+
+@[simp] theorem simWorld_oracle (w : IWorld N b h ρ) : (simWorld w).oracle = w.oracle := rfl
+@[simp] theorem simWorld_mem (w : IWorld N b h ρ) : (simWorld w).mem = w.mem := rfl
+@[simp] theorem simWorld_stream (w : IWorld N b h ρ) : (simWorld w).stream = w.stream := rfl
+@[simp] theorem simWorld_store (w : IWorld N b h ρ) : (simWorld w).store = w.store := rfl
+
+theorem simWorld_side_even (w : IWorld N b h ρ) (v : List Bool) (a : ℕ) :
+    (simWorld w).side v (2 * a) = w.side v a := by
+  simp [simWorld, sideOf]
+
+theorem simWorld_side_code (w : IWorld N b h ρ) (v : List Bool) (j : Fin N) (x : ℕ) (g : Bits b → Bits x) :
+    (fun i => (simWorld w).side v (2 * code j x g i + 1)) = g (w.store j) := by
+  funext i
+  simp only [simWorld, sideOf]
+  have h2 : ((2 * code j x g i + 1) % 2 = 0) = False := by simp only [eq_iff_iff, iff_false]; omega
+  simp only [h2, ↓reduceIte, show (2 * code j x g i + 1) / 2 = code j x g i by omega, decode_code]
+
+/-- Within its counts, the simulating chip returns what the chip does, reads what it reads and queries what it
+queries, in the chip's world. -/
+theorem sim_eq (dflt : α) {τ : ℕ} (tier : ℕ → Fin τ) (w : IWorld N b h ρ) :
+    ∀ (c : PIChip N b h ρ α) (ℓ m : ℕ) (v : List Bool),
+      c.linkBits w v + c.completed w v ≤ ℓ → (c.queries w v).length ≤ m →
+      (sim dflt ℓ m c).run (simWorld w) v = c.run w v ∧
+        (∀ t, (sim dflt ℓ m c).tierBits tier t (simWorld w) v = c.tierBits tier t w v) ∧
+        (sim dflt ℓ m c).queries (simWorld w) v = c.queries w v ∧
+        (sim dflt ℓ m c).rebuilds (simWorld w) v = 0 := by
+  intro c
+  induction c with
+  | done a => intro ℓ m v _ _; simp [sim, run, IChip.run, IChip.tierBits, tierBits, IChip.queries, queries,
+      IChip.rebuilds]
+  | tag y k ih =>
+    intro ℓ m v hl hq
+    simp only [queries, List.length_cons, linkBits, completed] at hq hl
+    have hm : m ≠ 0 := by omega
+    obtain ⟨h₁, h₂, h₃, h₄⟩ := ih (w.oracle y) ℓ (m - 1) v hl (by omega)
+    simp only [sim, hm, ↓reduceIte, IChip.run, run, IChip.tierBits, tierBits, IChip.queries, queries,
+      IChip.rebuilds, simWorld_oracle, simWorld_mem, simWorld_stream, simWorld_store]
+    exact ⟨h₁, h₂, by rw [h₃], h₄⟩
+  | ingress a k ih =>
+    intro ℓ m v hl hq
+    obtain ⟨h₁, h₂, h₃, h₄⟩ := ih (w.mem a) ℓ m v hl hq
+    simp only [sim, IChip.run, run, IChip.tierBits, tierBits, IChip.queries, queries, IChip.rebuilds, simWorld_mem]
+    exact ⟨h₁, fun t => by rw [h₂ t], h₃, h₄⟩
+  | side a k ih =>
+    intro ℓ m v hl hq
+    simp only [linkBits, completed] at hl
+    simp only [queries] at hq
+    have hℓ : ℓ ≠ 0 := by omega
+    obtain ⟨h₁, h₂, h₃, h₄⟩ := ih (w.side v a) (ℓ - 1) m v (by omega) hq
+    simp only [sim, hℓ, ↓reduceIte, IChip.run, run, IChip.tierBits, tierBits, IChip.queries, queries,
+      IChip.rebuilds, simWorld_side_even]
+    exact ⟨h₁, h₂, h₃, h₄⟩
+  | stream i k ih =>
+    intro ℓ m v hl hq
+    simp only [linkBits, completed] at hl
+    simp only [queries] at hq
+    have hℓ : ℓ ≠ 0 := by omega
+    obtain ⟨h₁, h₂, h₃, h₄⟩ := ih (w.stream i) (ℓ - 1) m v (by omega) hq
+    simp only [sim, hℓ, ↓reduceIte, IChip.run, run, IChip.tierBits, tierBits, IChip.queries, queries,
+      IChip.rebuilds, simWorld_oracle, simWorld_mem, simWorld_stream, simWorld_store]
+    exact ⟨h₁, h₂, h₃, h₄⟩
+  | complete j x hx g k ih =>
+    intro ℓ m v hl hq
+    simp only [linkBits, completed] at hl
+    simp only [queries] at hq
+    have hxl : x ≤ ℓ := by omega
+    obtain ⟨h₁, h₂, h₃, h₄⟩ := ih (g (w.store j)) (ℓ - x) m v (by omega) hq
+    simp only [sim, hxl, ↓reduceIte, run, tierBits, queries, IChip.readSide_run, IChip.readSide_tierBits,
+      IChip.readSide_queries, IChip.readSide_rebuilds, simWorld_side_code, simWorld_store]
+    exact ⟨h₁, h₂, h₃, h₄⟩
+  | send β p ih =>
+    intro ℓ m v hl hq
+    simp only [linkBits, completed] at hl
+    simp only [queries] at hq
+    obtain ⟨h₁, h₂, h₃, h₄⟩ := ih ℓ m (β :: v) hl hq
+    simp only [sim, IChip.run, run, IChip.tierBits, tierBits, IChip.queries, queries, IChip.rebuilds, simWorld_oracle, simWorld_mem, simWorld_stream, simWorld_store]
+    exact ⟨h₁, h₂, h₃, h₄⟩
+
+/-- `WorkHardness`, one completion at a time: the bits completed, at `rounds·c_root` per `b` of them, cost at most the
+completions' compute. -/
+theorem completed_mul_le {rounds cRoot : ℕ} {cost : ℕ → ℕ} (hW : Assumptions.WorkHardness b rounds cRoot cost)
+    (w : IWorld N b h ρ) : ∀ (c : PIChip N b h ρ α) (v : List Bool),
+      c.completed w v * (rounds * cRoot) ≤ b * c.work cost w v := by
+  intro c
+  induction c with
+  | done a => intro v; simp [completed, work]
+  | tag y k ih => intro v; exact ih _ v
+  | ingress a k ih => intro v; exact ih _ v
+  | side a k ih => intro v; exact ih _ v
+  | stream i k ih => intro v; exact ih _ v
+  | complete j x hx g k ih =>
+    intro v
+    simp only [completed, work]
+    have := hW x hx
+    have := ih (g (w.store j)) v
+    nlinarith
+  | send β p ih => intro v; exact ih (β :: v)
+
+end PIChip
+
+namespace PIDevice
+
+variable {N b h ρ S L q : ℕ}
+
+/-- The interactive device that simulates a pass device, its link carrying `L + X` bits: its side sources also answer
+the completed bits from the store. -/
+noncomputable def toInteractive (A : PIDevice N b h ρ S L q) (X : ℕ) : InteractiveDevice N b h ρ S (L + X) q where
+  state := A.state
+  mem := A.mem
+  side E R O := PIChip.sideOf E (A.side E R O)
+  chip st := PIChip.sim (fun _ _ => false) (L + X) q (A.chip st)
+  bounded st w := PIChip.sim_bounded _ w (A.chip st) (L + X) q []
+
+theorem toInteractive_world (A : PIDevice N b h ρ S L q) (X : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+    (A.toInteractive X).world E R O = PIChip.simWorld (A.world E R O) := rfl
+
+theorem toInteractive_side (A : PIDevice N b h ρ S L q) (X : ℕ) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
+    ∀ E R O O', (A.toInteractive X).side E R O = (A.toInteractive X).side E R O' := fun E R O O' => by
+  simp only [toInteractive, hA E R O O']
+
+/-- When `X` covers the bits completed, the simulating device commits the device's receipts with its tier reads, and
+rebuilds nothing. -/
+theorem toInteractive_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (X : ℕ) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
+    (O : Oracle N b h ρ) (hX : A.completed E R O ≤ X) :
+    (A.toInteractive X).correct E R O = A.correct E R O ∧
+      (∀ t, (A.toInteractive X).tierReads tier t E R O = A.tierReads tier t E R O) ∧
+      (A.toInteractive X).rebuilt E R O = 0 := by
+  have hb := A.bounded (A.state E) (A.world E R O)
+  obtain ⟨h₁, h₂, -, h₄⟩ := PIChip.sim_eq (fun _ _ => false) tier (A.world E R O) (A.chip (A.state E)) (L + X) q []
+    (by unfold completed at hX; omega) hb.2
+  refine ⟨?_, fun t => h₂ t, h₄⟩
+  have ht : (A.toInteractive X).tags E R O = A.tags E R O := h₁
+  simp only [InteractiveDevice.correct, PIDevice.correct, ht]
+
+/-- `WorkHardness` and the squaring ceiling: a pass completes at most `b·F/(rounds·c_root)` bits. -/
+theorem completed_le (A : PIDevice N b h ρ S L q) {rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
+    (hW : Assumptions.WorkHardness b rounds cRoot cost) (hF : Assumptions.SquaringCeiling cost F A) (E : Store N b)
+    (R : Bits ρ) (O : Oracle N b h ρ) : A.completed E R O ≤ Deployed.rebuildBits b rounds cRoot F := by
+  unfold Deployed.rebuildBits
+  rw [Nat.le_div_iff_mul_le hrc]
+  calc A.completed E R O * (rounds * cRoot) ≤ b * A.work cost E R O :=
+        PIChip.completed_mul_le hW (A.world E R O) (A.chip (A.state E)) []
+    _ ≤ b * F := Nat.mul_le_mul_left b (hF (A.state E) (A.world E R O))
+
+/-- **A pass device's correct receipts are paid for**: `RatePaidNamedRO` at the simulating device, the completed bits
+in its link; `toInteractive_eq` carries it to the pass device once `X` covers them. -/
+theorem pr_unpaid_le {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (X lam : ℕ) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
+    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∑ t, (A.toInteractive X).tierReads tier t x.1 x.2.1 x.2.2 + (A.toInteractive X).rebuilt x.1 x.2.1 x.2.2 * b +
+            (S + (L - ρ) + X + lam) < ((A.toInteractive X).correct x.1 x.2.1 x.2.2).card * b)
+      ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam :=
+  (pr_mono (fun _ hx => by omega)).trans
+    (SecurityProofs.RatePaidNamedRO N b h ρ S (L + X) q lam τ tier (A.toInteractive X) (toInteractive_side A X hA))
+
+end PIDevice
+
+namespace DeployedWindow
+
+variable {P N b h ρ S L q r s G : ℕ}
+
+/-- The grinding chain of the simulating devices. -/
+noncomputable def toGrind (A : DeployedWindow P N b h ρ S L q r s G) (X : ℕ) : GrindChain P N b h ρ S (L + X) q r s G where
+  device j η c := (A.device j η c).toInteractive X
+  cand := A.cand
+  pick := A.pick
+
+/-- A window's correct receipts are its passes' correct receipts, counted together. -/
+theorem card_correctAll (A : DeployedWindow P N b h ρ S L q r s G) (E : Store N b)
+    (ω : Fin P → PassCoins N b h ρ r s) :
+    (A.correctAll E ω).card = ∑ j, ((A.dev j E ω).correct E (ω j).1 (A.oracle j E ω)).card := by
+  classical
+  unfold correctAll
+  rw [Finset.card_filter, Fintype.sum_prod_type]
+  refine Finset.sum_congr rfl (fun j _ => ?_)
+  rw [Finset.sum_boole]
+  simp
+
+/-- **A window's unpaid words**, its draw beside: with `X` covering every pass's completed bits, the probability that
+its reads and `P` slacks fall short of its correct receipts' words is at most `P·G·ε`. -/
+theorem pr_unpaid_draw_le {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (X slack d : ℕ)
+    (ε : ℝ≥0∞) (hX : ∀ j η c E R O, (A.device j η c).completed E R O ≤ X)
+    (hε : ∀ j η c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∑ t, ((A.device j η c).toInteractive X).tierReads tier t x.1 x.2.1 x.2.2 +
+            ((A.device j η c).toInteractive X).rebuilt x.1 x.2.1 x.2.2 * b + slack <
+          (((A.device j η c).toInteractive X).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
+    pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
+        A.reads tier y.1 y.2.1 + P * slack < (A.correctAll y.1 y.2.1).card * b) ≤ (P : ℝ≥0∞) * (G * ε) := by
+  classical
+  let e : Store N b × WindowCoins P N b h ρ r s d ≃
+      (Store N b × (Fin P → PassCoins N b h ρ r s)) × (Fin d → Fin P × Fin N) :=
+    (Equiv.prodAssoc _ _ _).symm
+  rw [pr_equiv e]
+  refine pr_le_of_fiber _ _ (fun D => ?_)
+  refine (pr_mono (fun x hx => ?_)).trans ((A.toGrind X).pr_unpaid_le tier slack ε hε)
+  have hx' : A.reads tier x.1 x.2 + P * slack < (A.correctAll x.1 x.2).card * b := hx
+  have heq := fun j => (A.dev j x.1 x.2).toInteractive_eq X tier x.1 (x.2 j).1 (A.oracle j x.1 x.2)
+    (hX j _ _ x.1 (x.2 j).1 (A.oracle j x.1 x.2))
+  show ∑ j, (∑ t, ((A.dev j x.1 x.2).toInteractive X).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
+      ((A.dev j x.1 x.2).toInteractive X).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * slack <
+    ∑ j, (((A.dev j x.1 x.2).toInteractive X).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b
+  simp only [fun j => (heq j).1, fun j t => (heq j).2.1 t, fun j => (heq j).2.2, zero_mul, add_zero]
+  rw [card_correctAll, Finset.sum_mul] at hx'
+  exact hx'
+
+end DeployedWindow
+
+namespace DeployedSession
+
+variable {n P N b h ρ S L q r s d G : ℕ}
+
+/-- **Sequencing over windows**: an event of window `w`'s prover and its coins has at most its bound for the provers the
+earlier windows' coins pick. -/
+theorem pr_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n)
+    (Q : DeployedWindow P N b h ρ S L q r s G → Store N b × WindowCoins P N b h ρ r s d → Prop) (ε : ℝ≥0∞)
+    (hQ : ∀ η, pr (Q (A.window w η)) ≤ ε) :
+    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) => Q (A.win w x.2) (x.1, x.2 w)) ≤ ε := by
+  classical
+  let e : Store N b × (Fin n → WindowCoins P N b h ρ r s d) ≃
+      (Store N b × WindowCoins P N b h ρ r s d) × ({v : Fin n // v ≠ w} → WindowCoins P N b h ρ r s d) :=
+    ((Equiv.refl _).prodCongr (Equiv.funSplitAt w _)).trans (Equiv.prodAssoc _ _ _).symm
+  rw [pr_equiv e]
+  refine pr_le_of_fiber _ _ (fun ω' => ?_)
+  let η : {v : Fin n // v < w} → WindowCoins P N b h ρ r s d := fun v => ω' ⟨v.1, v.2.ne⟩
+  refine (pr_mono (fun y hy => ?_)).trans (hQ η)
+  have hω : ((Equiv.funSplitAt w (WindowCoins P N b h ρ r s d)).symm (y.2, ω')) w = y.2 := by simp
+  have hη : (fun v : {v : Fin n // v < w} =>
+      ((Equiv.funSplitAt w (WindowCoins P N b h ρ r s d)).symm (y.2, ω')) v.1) = η := by
+    funext v
+    simp [η, v.2.ne]
+  have hc : A.win w ((Equiv.funSplitAt w (WindowCoins P N b h ρ r s d)).symm (y.2, ω')) = A.window w η := by
+    simp only [DeployedSession.win]
+    rw [hη]
+  simpa [e, hω, hc] using hy
+
+/-- **A session's pooled draws**: every window's openings land on correct receipts while the session holds at most
+`K` in all or some window at most `K_w`. -/
+theorem pr_draws_le (A : DeployedSession n P N b h ρ S L q r s d G) (K Kw : ℕ) :
+    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
+          (∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
+            ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw))
+      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
+        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) := by
+  classical
+  rw [pr_equiv (Equiv.prodComm _ _)]
+  refine pr_le_of_fiber _ _ (fun E => ?_)
+  let X : Fin n → Type := fun _ => Fin P → PassCoins N b h ρ r s
+  let e : (Fin n → WindowCoins P N b h ρ r s d) ≃ ((w : Fin n) → X w × (Fin d → Fin (P * N))) :=
+    Equiv.piCongrRight (fun _ => (Equiv.refl _).prodCongr (Equiv.arrowCongr (Equiv.refl _) finProdFinEquiv))
+  rw [pr_equiv e]
+  let Gs : (w : Fin n) → ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Finset (Fin (P * N)) :=
+    fun w ω => ((A.win w (e.symm ω)).correctAll E (e.symm ω w).1).map finProdFinEquiv.toEmbedding
+  have hG : Causal (s := fun _ => d) Gs := by
+    intro w ω ω' hlt hw
+    have hη : (fun v : {v : Fin n // v < w} => e.symm ω v.1) = (fun v => e.symm ω' v.1) :=
+      funext fun v => by simp [e, hlt v.1 v.2]
+    have h₁ : (e.symm ω w).1 = (e.symm ω' w).1 := by simp [e, hw]
+    simp only [Gs, DeployedSession.win]
+    rw [hη, h₁]
+  have hmem : ∀ ω w t, (e.symm ω w).2 t ∈ (A.win w (e.symm ω)).correctAll E (e.symm ω w).1 →
+      (ω w).2 t ∈ Gs w ω := by
+    intro ω w t h
+    simp only [Gs, Finset.mem_map_equiv]
+    exact h
+  have hcard : ∀ ω w, (Gs w ω).card = ((A.win w (e.symm ω)).correctAll E (e.symm ω w).1).card :=
+    fun ω w => Finset.card_map _
+  refine (pr_mono (fun ω hω => ?_)).trans ((pr_or_le _ _).trans (add_le_add
+    ((Horizon.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
+    ((Horizon.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))))
+  · obtain ⟨hall, hK | ⟨w, hw⟩⟩ := hω
+    · refine Or.inl ⟨fun w t => hmem ω w t (hall w t), ?_⟩
+      show ∑ i, d * (Gs i ω).card ≤ d * K
+      simp only [hcard]
+      rw [← Finset.mul_sum]
+      exact Nat.mul_le_mul_left d hK
+    · exact Or.inr ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
+  · simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
+    rcases Nat.eq_zero_or_pos d with rfl | hd
+    · simp
+    rw [mul_comm n d]
+    congr 1
+    have hd' : (d : ℝ≥0∞) ≠ 0 := by exact_mod_cast hd.ne'
+    push_cast
+    rw [show (P : ℝ≥0∞) * N * (d * n) = d * (n * P * N) by ring]
+    exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
+  · simp only [Nat.cast_mul, mul_assoc]
+
+/-- A session's unpaid words from a per-window bound: the probability that some window's reads and `P` slacks fall
+short of its correct receipts' words is at most `n·ε`. -/
+theorem pr_unpaid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (slack : ℕ)
+    (ε : ℝ≥0∞) (hε : ∀ w η, pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
+        (A.window w η).reads tier y.1 y.2.1 + P * slack < ((A.window w η).correctAll y.1 y.2.1).card * b) ≤ ε) :
+    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+        ∃ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack <
+          ((A.win w x.2).correctAll x.1 (x.2 w).1).card * b)
+      ≤ (n : ℝ≥0∞) * ε := by
+  classical
+  calc _ ≤ ∑ w, pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+          (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack <
+            ((A.win w x.2).correctAll x.1 (x.2 w).1).card * b) := pr_exists_le _
+    _ ≤ ∑ _w : Fin n, ε := Finset.sum_le_sum (fun w _ => pr_window_le A w
+          (fun C y => C.reads tier y.1 y.2.1 + P * slack < (C.correctAll y.1 y.2.1).card * b) _ (hε w))
+    _ = (n : ℝ≥0∞) * ε := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+
+/-- **The session's words, in counts**: every opening passes while the session's reads and `n·P` slacks fall short of
+`K + 1` words, or some window's reads and `P` slacks of `K_w + 1`, at most the draws' bound and `n·P·G·ε`. -/
+theorem pr_paid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X slack K Kw : ℕ)
+    (ε : ℝ≥0∞) (hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ X)
+    (hε : ∀ w η j ι c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+        ∑ t, (((A.window w η).device j ι c).toInteractive X).tierReads tier t x.1 x.2.1 x.2.2 +
+            (((A.window w η).device j ι c).toInteractive X).rebuilt x.1 x.2.1 x.2.2 * b + slack <
+          ((((A.window w η).device j ι c).toInteractive X).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
+    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
+          (∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + n * (P * slack) < (K + 1) * b ∨
+            ∃ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack < (Kw + 1) * b))
+      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
+        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + (n : ℝ≥0∞) * (P * (G * ε)) := by
+  have h₁ := pr_draws_le A K Kw
+  have h₂ := pr_unpaid_le A tier slack _ (fun w η =>
+    (A.window w η).pr_unpaid_draw_le tier X slack d ε (hX w η) (hε w η))
+  refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ h₂))
+  obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
+  · by_cases hD : ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
+        ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw
+    · exact Or.inl ⟨hall, hD⟩
+    refine Or.inr ?_
+    by_contra hno
+    push Not at hno hD
+    have hle := Finset.sum_le_sum (fun w (_ : w ∈ Finset.univ) => hno w)
+    rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul,
+      ← Finset.sum_mul] at hle
+    have hK : (K + 1) * b ≤ (∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card) * b :=
+      Nat.mul_le_mul_right _ hD.1
+    omega
+  · by_cases hD : ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
+        ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw
+    · exact Or.inl ⟨hall, hD⟩
+    push Not at hD
+    exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
+
+end DeployedSession
+
+end Accounting.Rate
