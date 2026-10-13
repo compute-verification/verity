@@ -31,6 +31,8 @@ def test_the_registry_names_each_harness_schema_once():
         glm53_block_fp8_capture_gpu,
         glm53_dsa_capture_gpu,
         glm53_tp8_allreduce_capture_gpu,
+        glm53_fa3_prefill_capture_gpu,
+        glm53_fused_rmsnorm_capture_gpu,
         sigmoid_router_capture_gpu,
     )
 
@@ -41,6 +43,8 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["glm53_block_fp8_capture"].schema == glm53_block_fp8_capture_gpu.SCHEMA
     assert REGISTRY["glm53_dsa_capture"].schema == glm53_dsa_capture_gpu.SCHEMA
     assert REGISTRY["glm53_tp8_allreduce_capture"].schema == glm53_tp8_allreduce_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_fa3_prefill_capture"].schema == glm53_fa3_prefill_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_fused_rmsnorm_capture"].schema == glm53_fused_rmsnorm_capture_gpu.SCHEMA
     assert REGISTRY["blackwell_fp8_capture"].schema == fp8_sm120_capture_gpu.SCHEMA
     assert REGISTRY["sigmoid_router_capture"].schema == sigmoid_router_capture_gpu.SCHEMA
 

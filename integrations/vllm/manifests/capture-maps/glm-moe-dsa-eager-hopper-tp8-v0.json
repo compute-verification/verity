@@ -235,9 +235,10 @@
   "fused-rmsnorm-triton": {
    "status": "port",
    "definitions": [
-    "RMSNormTriton_v1"
+    "DsaRMSNorm_v1",
+    "DsaRMSNorm_v2"
    ],
-   "note": "deepseek_v32 common/kernels.py _rms_norm inside _fused_norm_rope_kernel: f32 tl.sum(x*x)/N, tl.rsqrt(+eps), * f32(w), to bf16. Its reduction tree and rsqrt must be pinned against the existing Triton RMSNorm family"
+   "note": "deepseek_v32 common/kernels.py _rms_norm inside _fused_norm_rope_kernel (program 2 q_a_layernorm N=2048, program 1 kv_a_layernorm N=512, eps 1e-5; one CTA of 128 threads a row): DsaRMSNorm_v1{N,EPS=1e-05} (DsaRMSNorm_v2 on bits), read from Triton 3.7.1's sm_90 PTX of the H200 run r20261013-001802-7e95: each thread an FMA chain over its 16- or 8-byte vector loads, warp xor-butterflies, (w0 + w2) + (w1 + w3), r = rsqrt.approx.ftz(eps + div.full(sum, N)), bf16((r * x) * w). Not RMSNormTriton_v1 (1024-column chunks from +0, 1 / sqrt.approx(fma(1/N, sum, eps))): the scales differ on about half of served rows and the words almost never, so the capture probes weights where they do. port until the H200 capture (tests/properties/glm53_fused_rmsnorm_capture_gpu.py) pins the kernel and a Build rule binds the taps"
   },
   "rmsnorm-cuda": {
    "status": "port",
@@ -283,9 +284,14 @@
   "fa3-prefill-attention": {
    "status": "port",
    "definitions": [
-    "AttentionFA3_v1"
+    "Attention_v4",
+    "AttentionHead_v4",
+    "AttnBlock_v4",
+    "Attention_v9",
+    "AttentionHead_v9",
+    "AttnBlock_v9"
    ],
-   "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256. AttentionFA3_v1 is FA3 at head dim 128 (kBlockN 128, RescaleOBeforeGemm false); the head-256 tile geometry and rescale order must be pinned before it binds"
+   "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256: vllm-flash-attn 506341a1 runs TileShape 128x80x256 (tile_size_fwd_sm90, hdim > 192, not local), 16 QK and 5 P.V wgmma k16 steps a block. RescaleOBeforeGemm (true above head 128) moves O's rescale before the next P.V gemm, the same per-element recurrence, so a row is Attention_v4{T,NH=8,KVH=8,D=256,BN=80,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,MASKED_FROM} (targets.attention_spec; Attention_v9 on bits). vLLM passes num_splits=0: per rank (8 heads, 132 SMs) a launch whose longest sequence has 321..1664 tokens splits KV (fa3_model.num_splits) and runs FlashAttnFwdCombine, which no Program models. port until the H200 capture (tests/properties/glm53_fa3_prefill_capture_gpu.py) pins the tile and a Build rule binds the tap"
   },
   "mla-sparse-attention": {
    "status": "port",
