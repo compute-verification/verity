@@ -809,15 +809,17 @@ static int launch(State& st, int role, int grid, unsigned long long* taken, uint
   if (e != cudaSuccess) return (int)e;
 #define SQ_B(S) \
   fl::fill_seq_bulk_kernel<S><<<grid, 32, S * fl::TB_STAGE, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
-  if (const int pr = st.probe.load()) {  // the probes run at 4 warps and 3 stages only
+  if (const int pr = st.probe.load()) {  // the probes run at 4 or 16 warps, or 3 stages
     const int stages = role == fl::PREFILL ? st.prefill_stages.load() : 0;
 #define SQ_P(PR)                                                                                                       \
   if (stages)                                                                                                         \
     fl::fill_seq_bulk_kernel<3, PR><<<grid, 32, 3 * fl::TB_STAGE, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, \
                                                                        taken, budget);                                \
+  else if (st.warps == 16)                                                                                            \
+    fl::fill_seq_kernel<16, PR><<<grid, 512, 0, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget); \
   else                                                                                                                \
     fl::fill_seq_kernel<4, PR><<<grid, 128, 0, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
-    if ((stages && stages != 3) || (!stages && st.warps != 4)) return -1;
+    if ((stages && stages != 3) || (!stages && st.warps != 4 && st.warps != 16)) return -1;
     switch (pr) {
       case 1: SQ_P(1); break;
       case 2: SQ_P(2); break;
