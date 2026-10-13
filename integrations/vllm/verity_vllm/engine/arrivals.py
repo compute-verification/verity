@@ -96,12 +96,21 @@ def forwards_from_schedule(computed: list[dict[str, int]]) -> tuple[list[bool], 
 
 
 def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[Any], Any], *,
-                          on_step: Callable[[list[Any]], None] | None = None, scheduler: Any | None = None) -> tuple[dict[str, Any], dict]:
+                          on_step: Callable[[list[Any]], None] | None = None, scheduler: Any | None = None,
+                          clock: Callable[[], float] = time.perf_counter,
+                          request_timing: bool = False) -> tuple[dict[str, Any], dict]:
+    """Drive a step-indexed schedule and report throughput and per-request latency.
+
+    ``clock`` is injectable so callers and tests can measure the same admission,
+    first-token and completion boundaries without depending on wall-clock time.
+    ``request_timing`` adds those durations to each request record; it is off by
+    default so existing deterministic schedule records remain unchanged.
+    """
     eng = llm.llm_engine
     sched = scheduler if scheduler is not None else scheduler_of(llm)
     reqs = list(requests)
     pending = sorted(range(len(reqs)), key=lambda i: (int(getattr(reqs[i], "arrive_step", 0) or 0), i))
-    t0 = time.perf_counter()
+    t0 = clock()
     rec: dict[str, dict] = {r.request_id: {"arrive_step": int(getattr(r, "arrive_step", 0) or 0), "arrive_step_realized": None,
                                            "first_step": None, "finish_step": None, "finish_reason": None} for r in reqs}
     finished: dict[str, Any] = {}
@@ -112,13 +121,16 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
     computed: list[dict[str, int]] = []  # per iteration (scheduler reachable): {rid: num_computed_tokens after this iteration's schedule}
     admit_iter: dict[str, int] = {}
     finish_iter: dict[str, int] = {}
+    admit_at: dict[str, float] = {}
+    first_at: dict[str, float] = {}
 
     def _admit(i: int) -> None:
         nonlocal t_add
         r = reqs[i]
-        ta = time.perf_counter()
+        ta = clock()
         eng.add_request(request_id=r.request_id, prompt={"prompt_token_ids": list(r.prompt_token_ids)}, params=params_for(r))
-        t_add += time.perf_counter() - ta
+        admit_at[r.request_id] = ta
+        t_add += clock() - ta
         admit_iter[r.request_id] = steps
 
     while pending or eng.has_unfinished_requests():
@@ -139,13 +151,15 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
         if on_step is not None:
             on_step(outs)
         for o in outs:
+            if o.request_id in rec and o.request_id not in first_at and getattr(o, "outputs", None):
+                first_at[o.request_id] = clock()
             if getattr(o, "finished", False) and o.request_id in rec:
                 finished[o.request_id] = o
                 finish_iter[o.request_id] = steps
                 fr = [getattr(c, "finish_reason", None) for c in o.outputs]
                 rec[o.request_id]["finish_reason"] = (str(fr[0]) if fr[0] is not None else None) if len(fr) == 1 else [str(x) for x in fr]
         steps += 1
-    dt = time.perf_counter() - t0
+    dt = clock() - t0
     missing = [r for r in rec if r not in finished]
     if missing:
         raise RuntimeError(f"{len(missing)} requests did not finish: {missing[:3]}")
@@ -178,6 +192,10 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
         rec[rid]["finish_step"] = max(0, fwd_index[min(max(fi - lag, 0), len(nonempty))])   # forward that sampled the last token
         rec[rid]["admit_iter"] = ai
         rec[rid]["finish_iter"] = fi
+        if request_timing:
+            rec[rid]["arrival_s"] = admit_at[rid] - t0
+            rec[rid]["first_output_s"] = first_at[rid] - t0
+            rec[rid]["time_to_first_token_s"] = first_at[rid] - admit_at[rid]
     gen = sum(len(o.outputs[0].token_ids) for o in finished.values())
     prompt = sum(len(r.prompt_token_ids) for r in reqs)
     for rid, o in finished.items():

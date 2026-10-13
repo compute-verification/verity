@@ -14,7 +14,7 @@ Every fact cites the vLLM source that hard-codes it (`provenance`: file:line @ d
   * `derive` -- a value computed from the configuration the way vLLM computes it (Gemma-2's `normalizer = sqrt(H)`; Pythia's rotary width).
 `rules` are the `analytic.config_of` family rules (QKV bias, default rope theta, per-head q/k norm); for the families `analytic.FAMILY_RULES`
 already lists they MUST agree (`tests/test_profiles_generic.py` pins that), the others (`gpt_neox`, `qwen3_moe`) are passed as `family_rules`.
-`arch` selects the constructor class in `profiles.generic` (`dense`, `dense-ln`, `moe`); `params` are the architecture's vLLM parameter
+`arch` selects the constructor class in `profiles.generic` (`dense`, `dense-ln`, `moe`; `dsa-moe` is described and refused); `params` are the architecture's vLLM parameter
 names that the base Llama map (`vllm_d9105ea80_sm89_eager._LAYER_FIELDS`) does not know, per weights-Record field.
 """
 from __future__ import annotations
@@ -31,6 +31,10 @@ _NEOX = "vllm/model_executor/models/gpt_neox.py"
 _PHI3 = "vllm/model_executor/models/phi3.py"
 _OLMOE = "vllm/model_executor/models/olmoe.py"
 _Q3MOE = "vllm/model_executor/models/qwen3_moe.py"
+_DSV2 = "vllm/model_executor/models/deepseek_v2.py"
+_DSA = "vllm/models/deepseek_v32/nvidia/model.py"
+_DSA_ATTN = "vllm/models/deepseek_v32/attention.py"
+_FMOE = "vllm/model_executor/layers/fused_moe/layer.py"
 _LN = "vllm/model_executor/layers/layernorm.py"
 
 
@@ -190,6 +194,60 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
         "moe_width_key": "moe_intermediate_size",
         "moe_width_provenance": f"{_Q3MOE}:186-190,:213-219 the experts' width is moe_intermediate_size; intermediate_size is the dense-MLP width of mlp_only_layers "
                                 f"(none here: mlp_only_layers empty, decoder_sparse_step 1)",
+    },
+    # --------------------------------------------------------------------------------------------------------------------------- dsa-moe
+    # Sparse attention (multi-head latent attention whose decode attends the top-k positions a lightning indexer picks) and a sigmoid
+    # grouped-top-k MoE with a shared expert.  `structural_refusal` refuses the class: the κ fold has patterns for the MoE block
+    # (`gen_shared_moe_patterns`) but none for the indexer or sparse MLA, so a profile would be silently mis-fitted.  The facts below are
+    # what the Build's lowering, the MoE scope and the capture map read.
+    "glm_moe_dsa": {
+        "arch": "dsa-moe", "vllm_class": "GlmMoeDsaForCausalLM (= DeepseekV32ForCausalLM)",
+        "rules": {"qkv_bias_key": "attention_bias"},
+        "rules_provenance": f"vllm/models/deepseek_v32/__init__.py:18-21 GlmMoeDsaForCausalLM is the CUDA DeepseekV32ForCausalLM; {_DSA_ATTN}:255-261 "
+                            f"o_proj and the MLA projections without bias; MoE blocks are {_DSV2}:287-421 DeepseekV2MoE",
+        "facts": {
+            "Q_LORA": {"key": "q_lora_rank", "provenance": f"{_DSA_ATTN}:137 q_lora_rank = config.q_lora_rank (fused_qkv_a_proj, q_a_layernorm, q_b_proj)"},
+            "KV_LORA": {"key": "kv_lora_rank", "provenance": f"{_DSA_ATTN}:138,177-180 kv_b_proj = ColumnParallelLinear(kv_lora_rank, heads * (qk_nope + v_head))"},
+            "QK_NOPE": {"key": "qk_nope_head_dim", "provenance": f"{_DSA_ATTN}:134,144 qk_head_dim = qk_nope_head_dim + qk_rope_head_dim"},
+            "QK_ROPE": {"key": "qk_rope_head_dim", "provenance": f"{_DSA_ATTN}:135,263-268 rotary_emb = get_rope(qk_rope_head_dim, ...)"},
+            "V_HEAD": {"key": "v_head_dim", "provenance": f"{_DSA_ATTN}:136,255-256 o_proj = RowParallelLinear(heads * v_head_dim, hidden)"},
+            "ROPE_NEOX": {"const": False, "provenance": f"{_DSA_ATTN}:263-268 get_rope(..., is_neox_style=False): interleaved (even, odd) rotary pairs"},
+            "ATTN_SCALE": {"derive": lambda cfg, C: float(int(cfg["qk_nope_head_dim"]) + int(cfg["qk_rope_head_dim"])) ** -0.5,
+                           "provenance": f"{_DSA_ATTN}:144-145 scaling = qk_head_dim**-0.5 (:148-159 times the yarn mscale only when rope_type != default)"},
+            "INDEX_HEADS": {"key": "index_n_heads", "provenance": f"{_DSA_ATTN}:63 DeepseekV32Indexer.n_head = config.index_n_heads"},
+            "INDEX_HEAD_DIM": {"key": "index_head_dim", "provenance": f"{_DSA_ATTN}:64 DeepseekV32Indexer.head_dim = config.index_head_dim"},
+            "INDEX_TOPK": {"key": "index_topk", "provenance": f"{_DSA_ATTN}:62 DeepseekV32Indexer.topk_tokens = config.index_topk; {_DSA}:182-188 the shared "
+                                                              f"top-k indices buffer"},
+            "INDEX_TOPK_FREQ": {"key": "index_topk_freq", "default": 1,
+                                "provenance": f"{_DSA_ATTN}:161-168 skip_topk = max(layer_id - index_skip_topk_offset + 1, 0) % index_topk_freq != 0 "
+                                              f"(a layer that skips builds no indexer and reuses the shared top-k)"},
+            "INDEX_SKIP_TOPK_OFFSET": {"key": "index_skip_topk_offset", "default": 2, "provenance": f"{_DSA_ATTN}:164-168"},
+            "INDEX_ROPE_INTERLEAVE": {"key": "indexer_rope_interleave", "default": False,
+                                      "provenance": f"{_DSA_ATTN}:236,270-276 indexer_rope_emb = get_rope(..., is_neox_style=not indexer_rope_interleave)"},
+            "FIRST_DENSE": {"key": "first_k_dense_replace",
+                            "provenance": f"{_DSA}:85-108 layers from first_k_dense_replace on are DeepseekV2MoE, the ones below DeepseekV2MLP(intermediate_size)"},
+            "NUM_EXPERTS": {"key": "n_routed_experts", "provenance": f"{_DSV2}:317-321,373 GateLinear(hidden, n_routed_experts), FusedMoE num_experts"},
+            "N_GROUP": {"key": "n_group", "provenance": f"{_DSV2}:379-380 use_grouped_topk=True, num_expert_group=getattr(config, 'n_group', 1)"},
+            "TOPK_GROUP": {"key": "topk_group", "provenance": f"{_DSV2}:381 topk_group=getattr(config, 'topk_group', 1)"},
+            "RENORMALIZE": {"key": "norm_topk_prob", "provenance": f"{_DSV2}:377 renormalize=config.norm_topk_prob"},
+            "SCORING": {"key": "scoring_func", "provenance": f"{_DSV2}:383 scoring_func=getattr(config, 'scoring_func', 'softmax') (sigmoid in the checkpoint)"},
+            "SCORE_BIAS": {"key": "topk_method", "provenance": f"{_DSV2}:323-328 e_score_correction_bias = an f32 [n_routed_experts] parameter when "
+                                                               f"topk_method == 'noaux_tc', else None; :386 passed to the router"},
+            "ROUTED_SCALING_FACTOR": {"key": "routed_scaling_factor",
+                                      "provenance": f"{_DSA}:98 DeepseekV2MoE(..., apply_routed_scale_to_output=False) -> {_FMOE}:295-302 the router "
+                                                    f"multiplies the top-k weights by routed_scaling_factor (grouped_topk's routed_scaling_factor)"},
+            "ROUTER_DTYPE": {"const": "float32", "provenance": f"{_DSV2}:131-141 _get_moe_router_dtype returns float32 for model_type glm_moe_dsa; "
+                                                               f":317-321 GateLinear(out_dtype=router_dtype)"},
+            "GATE_IN_EXPERTS": {"const": True, "provenance": f"{_DSV2}:370-372,419-421 FusedMoEFactory(shared_experts=..., gate=self.gate) called with "
+                                                              f"router_logits=hidden_states: the gate and the shared expert run inside moe_forward_shared"},
+            "SHARED_EXPERTS": {"key": "n_shared_experts", "provenance": f"{_DSV2}:355-368 shared_experts = DeepseekV2MLP(moe_intermediate_size * "
+                                                                        f"n_shared_experts, reduce_results=False) unless the fused shared expert is enabled"},
+            "SHARED_I": {"derive": lambda cfg, C: int(cfg["moe_intermediate_size"]) * int(cfg["n_shared_experts"]),
+                         "provenance": f"{_DSV2}:358 intermediate_size = moe_intermediate_size * n_shared_experts (a rank's: the rank's moe_intermediate_size)"},
+        },
+        "moe_width_key": "moe_intermediate_size",
+        "moe_width_provenance": f"{_DSV2}:376 FusedMoE(intermediate_size=config.moe_intermediate_size); intermediate_size is the dense layers' width "
+                                f"({_DSA}:101-108)",
     },
 }
 

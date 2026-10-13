@@ -11,6 +11,7 @@ One constructor per ARCHITECTURE class, selected by the family facts table (`fam
   * `moe`       -- the fused-MoE decoder (`OlmoeForCausalLM`, `Qwen3MoeForCausalLM`): the constructive MoE block (`gen_ov_moe_patterns.
                    MoEFusedExperts`, router renormalisation from `C["RENORMALIZE"]`, the router kernel's VPT from E), the experts' width from
                    `moe_intermediate_size` when the family has one, the MoE / q-k-norm weight fields.
+The table also describes `dsa-moe` (sparse-attention MLA with a sigmoid shared-expert MoE), which `structural_refusal` refuses.
 `world > 1` is a generic branch of every class (the rank-local shard configuration: heads, kv heads, the MLP / expert width and the vocabulary
 divided by the world; `tp.embedding_shard.EmbeddingShardCuda` and `tp.collective_pattern.TpCollective(world)` registered first; the sampler over the
 all-gathered vocabulary; the header check re-shards the recorded FULL config) -- it replaced the two hand-written `*_tp2rank` modules and the
@@ -143,6 +144,9 @@ def structural_refusal(cfg: dict[str, Any]) -> str | None:
     if fam not in FF.FAMILY_FACTS:
         return f"model_type {fam!r} is not in the family facts table {FF.FAMILIES} (needs its own mechanism record)"
     arch = FF.FAMILY_FACTS[fam]["arch"]
+    if arch == "dsa-moe":
+        return (f"{fam}: sparse attention (the lightning indexer's top-k over the latent cache, then sparse MLA) has no κ fold patterns; "
+                f"only its MoE block has (gen_shared_moe_patterns)")
     if effective_sliding_window(cfg) and "dense2" not in (FF.FAMILY_FACTS[fam].get("patterns") or ()):
         # only families whose vLLM code hands the window to FA2 as an inert `window_size_left >= max_seqlen_k` (Phi-3, Gemma-2: the
         # inert-window scope decides from the LAUNCH) are served; any other windowed configuration is outside the pinned splitkv patterns

@@ -473,7 +473,8 @@ weight are committed a leaf per row, so a proved unit opens exactly the rows it 
 
   The verifier builds these inputs itself (`Traced.call_args`, `Traced.weight_args`) or refuses a prover's that differ
   (`Anchors.check_call`), and a window's `Ledger` refuses a repeated call index (forward, position), A11's
-  `UniqueCallIndices`.
+  `UniqueCallIndices`. `SaltWindows` refuses one across every window of a salt, whose forwards continue from its
+  `next_forward`.
 - **Every primitive returns at most 32 bits.** SHA-512 words are carried as (hi, lo) halves and Keccak lanes as
   (lo, hi).
 

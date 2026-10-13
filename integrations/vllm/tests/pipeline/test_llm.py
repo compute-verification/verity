@@ -30,7 +30,7 @@ def test_the_package_exports_llm():
     assert "LLM" in verity_vllm.__all__
 
 
-@pytest.mark.parametrize("opt", ["dtype", "tokenizer", "enable_prefix_caching", "quantization"])
+@pytest.mark.parametrize("opt", ["tokenizer", "enable_prefix_caching"])
 def test_an_unsupported_option_raises_with_its_name_and_the_supported_list(opt):
     with pytest.raises(TypeError) as e:
         L.LLM(LLAMA[0], revision=LLAMA[1], **{opt: None})
@@ -113,8 +113,9 @@ def test_the_engine_is_built_from_the_pin_with_only_the_options_set(built):
     assert llm.engine_record["pin"]["case"] == "LLAMA32_1B"
     assert llm.engine_record["env_flags"] == {"F": "1"}
     L.LLM(LLAMA[0], revision=LLAMA[1], tensor_parallel_size=2, max_num_seqs=4, gpu_memory_utilization=0.6, seed=3,
-          enforce_eager=False)
-    assert built["engine_args"] == {"gpu_memory_utilization": 0.6, "seed": 3, "tensor_parallel_size": 2}
+          enforce_eager=False, quantization="fp8", compilation_config={"mode": 0})
+    assert built["engine_args"] == {"gpu_memory_utilization": 0.6, "quantization": "fp8", "compilation_config": {"mode": 0},
+                                    "seed": 3, "tensor_parallel_size": 2}
     assert (built["max_num_seqs"], built["execution"]) == (4, "bi-compiled")
 
 

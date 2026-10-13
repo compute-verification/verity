@@ -200,7 +200,8 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 
 `model` and `revision` (the full commit sha) must be pinned in `manifests/checkpoints.json` with the snapshot on the host.
 The engine is built by `engine.vllm_adapter.build_engine` from that pin's engine profile, as every `verity-vllm` stage
-builds it: dtype, tokenizer and attention come from the profile, and prefix caching is off.  Supported keyword options:
+builds it: dtype, tokenizer and attention come from the profile unless explicitly overridden, and prefix caching is off.
+Supported keyword options:
 
 | option | default | sets |
 | --- | --- | --- |
@@ -210,6 +211,9 @@ builds it: dtype, tokenizer and attention come from the profile, and prefix cach
 | `max_model_len` | the pin's | context length |
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
+| `dtype` | the profile's | served dtype override |
+| `quantization` | the checkpoint's | vLLM quantization override, such as `"fp8"` |
+| `compilation_config` | vLLM's | compilation and CUDA-graph settings |
 | `seed` | 0 | the engine seed |
 | `protocols` | none | protocol options installed on the engine: `"pouw:<scheme>,pous:<scheme>"` or `{name: scheme}` |
 | `protocols_config` | none | each enabled protocol's settings, `{name: {...}}`; never hashed |
@@ -219,6 +223,29 @@ sampling_params=None, use_tqdm=True)` returns vLLM's `RequestOutput` list unchan
 parameters, prompt and generated token ids per request) to `llm.records`; `llm.pin` is the resolved `EnginePin` and
 `llm.engine_record` the engine as built (the `vllm.LLM` keyword arguments, the profile's environment flags, the execution vLLM
 reports, the protocol composition record).
+
+## Overhead benchmark
+
+`verity-vllm bench` is the shared overhead driver for stock vLLM, protocol options, and experimental integrations:
+
+~~~sh
+verity-vllm bench --preset llama31-8b-fp8-1gpu --arms stock,stock-fp8 \
+  --sweep quick --reps 3 --out "$OUT"
+~~~
+
+The quick sweep measures batches 8 and 32 under mixed, staggered traffic. The full sweep measures batches 1, 8, 32 and
+128 at prompt envelopes 512 and 8,192 under decode-heavy, prefill-heavy and mixed traffic. CUDA graphs are the default;
+`--eager` opts out. `--model-path DIR` binds a machine-local checkpoint by hashing every file into the preset identity;
+it supports stock and experimental arms, while protocol-option arms use the preset's registered checkpoint. Engines stay
+resident and arms interleave repetition by repetition when memory permits. Otherwise the driver records the failure and
+alternates engine-lifetime blocks. Every arm passes greedy-token equality against its declared control and its own optional
+gate before any timing.
+
+An experimental `--arm-module pkg.mod:NAME` exposes `install(target)` and may expose `gate(target)`, `spans(target)` and
+`extras(target)`. It patches only through `target.hooks`, a tagged `engine.hooks.Hooks`; the driver checks and uninstalls
+that set. Results are `result.json` plus a ratio `table.md`; their identity includes the preset, vLLM version and pin,
+arm and kernel identities, Git commit and sweep. `verity-vllm bench-judge LEFT RIGHT [--allow FIELD]` refuses a comparison
+when any identity field differs unless each difference is explicitly allowed.
 
 ## Protocol options
 
