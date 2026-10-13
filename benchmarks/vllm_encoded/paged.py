@@ -70,8 +70,8 @@ def layout(cache, kv_heads: int, wb: int, dims=(0, 1, 2)) -> Layout:
     if any(x % wb for x in st):
         raise ValueError(f"strides {st} bytes are not whole {wb}-byte words")
     sb, sh, ss = (x // wb for x in st)
-    bs = cache.shape[s]
-    if sb != kv_heads * bs * (4 * K.HEAD_DIM // wb) or not cache.is_contiguous():
+    bs, hw = cache.shape[s], 4 * K.HEAD_DIM // wb
+    if sb != kv_heads * bs * hw or sorted((sh, ss)) != sorted((hw, kv_heads * hw) if sh < ss else (bs * hw, hw)):
         raise ValueError(f"a block is not contiguous: {tuple(cache.shape)} {cache.stride()}")
     return Layout(cache.shape[b], bs, sb, sh, ss)
 

@@ -339,7 +339,7 @@ class Attention:
     def __init__(self, st: Stack) -> None:
         self.st, self.lib = st, st.plib
         self.enc = int(st.encoded)
-        self.layers: dict[int, _Layer] = {}
+        self.layers: dict[tuple, _Layer] = {}   # by (layer, the cache's storage and shape): vLLM may reallocate it
         self.splits: dict[int, int] = {}
         top = max(P.part_floats(self.lib, b, self.split(b)) for b in range(1, K.MAX_ROWS + 1))
         self.part = torch.empty(top, dtype=torch.float32, device="cuda")
@@ -353,10 +353,11 @@ class Attention:
 
     def layer(self, layer, kv_cache: torch.Tensor) -> _Layer:
         idx = int(layer.layer_name.split(".layers.")[1].split(".")[0])
-        L = self.layers.get(idx)
+        key = (idx, kv_cache.data_ptr(), tuple(kv_cache.shape))
+        L = self.layers.get(key)
         if L is None:
             lay = P.layout(kv_cache, self.lib.shape["kv_heads"], self.lib.shape["wb"])
-            L = self.layers[idx] = _Layer(lay, idx * lay.words)
+            L = self.layers[key] = _Layer(lay, idx * lay.words)
         return L
 
     def plan(self, md, bs: int) -> tuple:
@@ -395,7 +396,8 @@ class Attention:
                 att.calls["decode"] += 1
                 return output
             blocks, md2 = att.plan(md, L.lay.bs)
-            scratch = torch.empty((blocks.shape[0], *kv_cache.shape[1:]), dtype=kv_cache.dtype, device="cuda")
+            scratch = torch.empty_strided((blocks.shape[0], *kv_cache.shape[1:]), kv_cache.stride(), dtype=kv_cache.dtype,
+                                          device="cuda")   # the cache's order within a block, which the gather copies
             P.gather(att.lib, torch, kv_cache, L.lay, L.lbase, att.enc, att.st.k, blocks, scratch)
             att.calls["gathered"] += 1
             return orig(impl, layer, query, key, value, scratch, md2, output, output_scale, output_block_scale)
