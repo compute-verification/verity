@@ -83,6 +83,7 @@ import Proofs.Flock.C3.RegLevels.SrcOpenRel
 import Proofs.Flock.C3.RegLevels.RsT
 import Proofs.Flock.C3.RegLevels.Kappa
 import Proofs.Flock.C3.RegLevels.StackedReg
+import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.RegLevels.ROpens
