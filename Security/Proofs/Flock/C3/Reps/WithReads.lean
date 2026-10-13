@@ -46,7 +46,7 @@ theorem infoAlpha_of_rows {sh : Flock.Shape} {rounds : Array (Array F128)} {extr
   | ok q =>
     obtain ⟨lins, _⟩ := q
     rw [hl] at h
-    simp only [bind, Except.bind] at h
+    simp only [Bind.bind, Except.bind] at h
     cases hb : Flock.RecAlgebra.build sh lins with
     | error _ => rw [hb] at h; cases h
     | ok b =>
@@ -72,7 +72,7 @@ theorem wKey_spec {sh : Flock.Shape} {x : Flock.RecAlgebra.Key} (h : wKey sh x =
   | cons ℓ l => exact (hnc ℓ l rfl).elim
   | rsT => cases h
   | comb => cases h
-  | _ => exact ⟨Option.isSome_iff_exists.1 h, fun _ _ e => by cases e, fun _ e => by cases e⟩
+  | _ => exact ⟨Option.isSome_iff_exists.1 h, fun _ _ e => (by cases e), fun _ e => by cases e⟩
 
 /-- **`WKeys` at the sent keys**, from `wKey` at each message's keys. -/
 theorem wKeys_sentK {sh : Flock.Shape} {σ : List FlockSoundness.Discharge.Exec.Kind} {c₀ : ℕ}
