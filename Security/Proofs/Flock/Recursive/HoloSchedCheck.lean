@@ -52,8 +52,9 @@ theorem holoRounds_eq (m kLog claims : Nat) : holoRounds m kLog claims = holoRep
 theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
     (h : checkCommitRounds i cs = .ok ()) :
-    cs.reps.size = 2 ∧ (∀ y cm, cs.reps[y]? = some cm → cm.toList.map (·.1) = commitRounds rep) ∧
-      ∀ sh, i.sparse = some sh → ∀ y st, y < 2 → cs.stream? s!"{SPARSE}/rep{y}" = some st →
+    cs.reps.size = 2 ∧
+      (∀ (y : Nat) (cm : Array (Nat × ByteArray)), cs.reps[y]? = some cm → cm.toList.map (·.1) = commitRounds rep) ∧
+      ∀ sh, i.sparse = some sh → ∀ (y : Nat) (st : InnerStream), y < 2 → cs.stream? s!"{SPARSE}/rep{y}" = some st →
         st.commits.toList.map (·.1) = commitRounds (sparsePhaseRounds sh) := by
   unfold checkCommitRounds at h
   rw [hsch] at h
