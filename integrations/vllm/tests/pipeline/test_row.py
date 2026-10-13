@@ -644,7 +644,7 @@ def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
 def _tp_row(tmp_path: Path, row: str, *argv: str, **kw):
     from verity_vllm.pipeline.row_tp import TpRow
     o = _opts(tmp_path, *argv, row=row, **kw)
-    t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None, nccl_p2p_disable="1",
+    t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None,
               build=o.build, match=o.match, commit=o.commit)
     t.hidden_so, t.B, t.engine, t.ck, t.fold_profile = t.hidden_build(), 2, [], "/ck", ""
     t.bdir, t.M = f"{t.d}/build", f"{t.d}/match"
@@ -667,6 +667,27 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     dense = _tp_row(tmp_path, TP_DENSE)
     cmd = dense.commit_cmd(R.applicable_taps(_tap_manifest(tmp_path / "dense.json", "norm_scales", "vocab_range"), dense.ck_))
     assert "--norm-tap-so" in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
+
+
+@pytest.mark.parametrize("row, p2p", [
+    ("glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", None),   # an H box: its env_required names none
+    (TP_DENSE, "1"),                                                          # an L40S row's env_required names it
+    (TP_MOE, "1"),                  # an L40S workload written before env_required: the generator's rule for its target
+])
+def test_a_tp_rows_stages_have_nccl_p2p_disable_only_when_its_workload_requires_it(tmp_path, monkeypatch, row, p2p):
+    """The caller's NCCL_P2P_DISABLE=1 (an L40S operator's shell) reaches the stages only when the row's workload requires it."""
+    t = _tp_row(tmp_path, row, environ={"NCCL_P2P_DISABLE": "1"})
+
+    def precheck_reached() -> str:
+        raise Stop(99)
+    monkeypatch.setattr(t, "hidden_build", precheck_reached)
+    with pytest.raises(Stop) as e:
+        t.prepare()
+    assert e.value.rc == 99 and t.nccl == p2p
+    os.makedirs(t.d, exist_ok=True)
+    stage = [sys.executable, "-c", "import os; print('NCCL_P2P_DISABLE=' + os.environ.get('NCCL_P2P_DISABLE', 'unset'))"]
+    assert t.run_to(0, f"{t.d}/stage.log", stage) == 0
+    assert open(f"{t.d}/stage.log").read().splitlines()[-1] == f"NCCL_P2P_DISABLE={p2p or 'unset'}"
 
 
 # ---------------------------------------------------------------------------------------------------------------- Match summary

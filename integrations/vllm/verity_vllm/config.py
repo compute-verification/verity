@@ -96,6 +96,11 @@ TARGETS: dict[str, tuple[int, int]] = {
 #: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
 TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188}
 
+#: Row-id target tokens whose GPUs reach each other across PCIe and the CPU interconnect (`nvidia-smi topo -m`: SYS), where NCCL's
+#: P2P transport hangs vLLM's all-reduce (#70 / #75): a TP workload for one requires NCCL_P2P_DISABLE=1.  Every other target runs
+#: vLLM's own transport (Daniel, 13 Oct: standard vLLM on H boxes).
+P2P_SYS_TARGETS: frozenset[str] = frozenset({"l40s", "rtxpro6000"})
+
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
 _TOKEN = re.compile(r"__(tp|b|i|o)(\d+)(?=__)")
@@ -167,6 +172,11 @@ def row_target(row: str) -> str | None:
     """The device token of a row id (its third field when the fourth is ``tp<N>``), None when the id lacks the grammar."""
     parts = str(row).split("__")
     return parts[2] if len(parts) >= 4 and parts[3].startswith("tp") else None
+
+
+def row_p2p_env(row: str) -> dict[str, str]:
+    """A TP row's ``env_required`` NCCL_P2P_DISABLE by its device token: ``{"NCCL_P2P_DISABLE": "1"}`` on a SYS target, else none."""
+    return {"NCCL_P2P_DISABLE": "1"} if row_target(row) in P2P_SYS_TARGETS else {}
 
 
 #: The protocols a run can enable (`verity_vllm.protocol_options`), in install order, innermost first: PoUW replaces the
