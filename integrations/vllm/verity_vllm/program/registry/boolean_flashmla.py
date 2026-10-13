@@ -124,9 +124,9 @@ def _row(B, S, nope, scale, rope, valid):
 FlashMlaKvRowV2 = flat("FlashMlaKvRow", 2, ["DN", "DR", "QT"], lambda S: F._row_type(S, BIT_T), _row, F.FlashMlaKvRow)
 
 
-def _block(B, S, q, k, m_prev=None, l_prev=None, o_prev=None):
+def _block(B, S, q, k, nm_prev=None, l_prev=None, o_prev=None):
     """`FlashMlaBlock_v1`'s body on bits: the score chain `DotBf16_v3{K = D, DOT}`, the P V step `DOT`."""
-    return F.block(bit_ops(B), S, bind(BG.DotBf16, K=S.D, DOT=S.DOT), q, k, m_prev, l_prev, o_prev)
+    return F.block(bit_ops(B), S, bind(BG.DotBf16, K=S.D, DOT=S.DOT), q, k, nm_prev, l_prev, o_prev)
 
 
 FlashMlaBlockV2 = flat("FlashMlaBlock", 2, ["D", "BN", "FIRST", "DOT", "SCALE"], lambda S: F._block_type(S, BIT_T), _block,

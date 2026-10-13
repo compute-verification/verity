@@ -53,7 +53,7 @@ Registered functions (all `Name_v1`):
   NvExp2f, NvLog2f, NvFdividefRcp                    (x: f32) -> f32
   FlashMlaRowValid                                   (idx: i32, len: i32, pos: i32) -> bit
   FlashMlaKvRow{DN,DR,QT}                            (nope: DN e4m3, scale: DN/QT e8m0, rope: DR bf16, valid: bit) -> DN+DR bf16
-  FlashMlaBlock{D,BN,FIRST,DOT,SCALE}                (q: D bf16, k: BN rows[, m, l[4], o[D]]) -> (m, l[4], o[D])
+  FlashMlaBlock{D,BN,FIRST,DOT,SCALE}                (q: D bf16, k: BN rows[, -m, l[4], o[D]]) -> (-m, l[4], o[D])
   FlashMlaSplit{NB,D,BN,PARTIAL,DOT,SCALE}           (q, k: NB*BN rows[, sink]) -> D bf16 | PARTIAL: (oacc: D f32, lse: f32)
   FlashMlaCombine{NS,D}                              (lse: NS f32, oacc: NS x D f32, sink: f32) -> D bf16
   FlashMlaDecodeHead{SPLITS,D,BN,DOT,SCALE}          (q: D bf16, k: N rows, sink: f32) -> D bf16
@@ -281,7 +281,7 @@ def check_block_statics(D_: int, BN: int) -> None:
         raise ValueError(f"FlashMlaBlock: D={D_} and BN={BN} must be multiples of 16")
 
 
-def block(o: Ops, S, dot, q, k, m_prev=None, l_prev=None, o_prev=None):
+def block(o: Ops, S, dot, q, k, nm_prev=None, l_prev=None, o_prev=None):
     """`FlashMlaBlock_v1`'s body over ``o``'s steps, ``dot`` the score chain (`DotBf16{K = D, DOT}`)."""
     B, D_, BN, FIRST, T, L = o.B, S.D, S.BN, S.FIRST, o.T, o.leaf
     check_block_statics(D_, BN)
@@ -292,7 +292,7 @@ def block(o: Ops, S, dot, q, k, m_prev=None, l_prev=None, o_prev=None):
     bmax = ninf
     for c in range(BN):
         bmax = o.fmax(bmax, s[c])
-    m_old = o.word(F_MAX_INIT) if FIRST else m_prev
+    m_old = o.word(F_MAX_INIT) if FIRST else o.neg(nm_prev)
     m_new = o.fmax(o.mul(bmax, scale), m_old)
     nm = o.neg(m_new)
     # From the first block's constant state, r = exp2f(-1e30 - m') is finite in [0, 1] (m' >= -1e30), and a lane's sum of
@@ -313,21 +313,22 @@ def block(o: Ops, S, dot, q, k, m_prev=None, l_prev=None, o_prev=None):
         prow = Coll(Array(16, T.bf16), concat([pb[k0 + j].refs for j in range(16)]))
         vt = Coll(Array(D_, Array(16, T.bf16)), concat([strided_view(k, k0 * RS + d * L, L, RS, 1, 16 * L) for d in range(D_)]))
         out = list(B.batch(S.DOT, array_of(out), prow, vt, axes=(0, None, 0)))
-    return tuple_of(m_new, array_of(lanes), array_of(out))
+    return tuple_of(nm, array_of(lanes), array_of(out))
 
 
 def _block_type(S, T: Types = WORD_T):
-    state = () if S.FIRST else (("m_prev", T.f32), ("l_prev", Array(4, T.f32)), ("o_prev", Array(S.D, T.f32)))
+    state = () if S.FIRST else (("nm_prev", T.f32), ("l_prev", Array(4, T.f32)), ("o_prev", Array(S.D, T.f32)))
     return ((("q", Array(S.D, T.bf16)), ("k", Array(S.BN, _staged(S.D, T)))) + state,
             Tuple(T.f32, Array(4, T.f32), Array(S.D, T.f32)))
 
 
 @composite("FlashMlaBlock", 1, ["D", "BN", "FIRST", "DOT", "SCALE"], _block_type, conformance=_CONF)
-def FlashMlaBlock(B, S, q, k, m_prev=None, l_prev=None, o_prev=None):
+def FlashMlaBlock(B, S, q, k, nm_prev=None, l_prev=None, o_prev=None):
     """One BN-row block of the decode's online softmax for one head (`scale_softmax`, splitkv_mla.cuh:32-84, and the two P V
     wgmmas, :253-258 and :398-404): the module docstring's step 2.  The first block of a split (FIRST) starts from the constant
-    state m = -1e30, l = 0, o = 0 and takes no state."""
-    return block(word_ops(B), S, bind(DotBf16V2, K=S.D, DOT=S.DOT), q, k, m_prev, l_prev, o_prev)
+    state m = -1e30, l = 0, o = 0 and takes no state.  The state carries the running max negated, -m (the -m' every exponent
+    of the block reads), so the split's sink term reads its last block's -m' rather than negating m again."""
+    return block(word_ops(B), S, bind(DotBf16V2, K=S.D, DOT=S.DOT), q, k, nm_prev, l_prev, o_prev)
 
 
 def check_split_statics(NB: int) -> None:
@@ -339,20 +340,20 @@ def split(o: Ops, S, block_of, q, k, sink=None):
     """`FlashMlaSplit_v1`'s body, ``block_of(first)`` the bound block."""
     B, NB, BN = o.B, S.NB, S.BN
     check_split_statics(NB)
-    m = l = acc = None
+    nm = l = acc = None
     for b in range(NB):
         kb = k[b * BN:(b + 1) * BN]
-        res = B.call(block_of(True), q, kb) if b == 0 else B.call(block_of(False), q, kb, m, l, acc)
-        m, l, acc = res[0], res[1], res[2]
+        res = B.call(block_of(True), q, kb) if b == 0 else B.call(block_of(False), q, kb, nm, l, acc)
+        nm, l, acc = res[0], res[1], res[2]
     total = o.add(o.add(l[0], l[1]), o.add(l[2], l[3]))
     empty = o.eq(total, o.word(0))
     mul = o._defs["mul"]
     if not S.PARTIAL:
-        den = o.add(total, o.exp2(o.add(o.mul(sink, o.word(L2E)), o.neg(m))))
+        den = o.add(total, o.exp2(o.add(o.mul(sink, o.word(L2E)), nm)))
         scale = o.sel(empty, o.word(0), o.rcp1(den))
         return B.batch(o._defs["cvt"], B.batch(mul, acc, scale, axes=(0, None)), axes=(0,))
     scale = o.sel(empty, o.word(0), o.rcp1(total))
-    lse = o.sel(empty, o.word(F_NINF), o.add(o.log2(total), m))
+    lse = o.sel(empty, o.word(F_NINF), o.add(o.log2(total), o.neg(nm)))
     return tuple_of(B.batch(mul, acc, scale, axes=(0, None)), lse)
 
 
