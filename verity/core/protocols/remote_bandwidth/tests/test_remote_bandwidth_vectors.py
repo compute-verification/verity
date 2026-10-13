@@ -52,6 +52,42 @@ SKETCH_CASES = [
      "6dd31d65ca1d94c620420c240e3834c3d09159020309c455514f6384f5bc0d566c31936d25ef206d6481b907ed3cff83ac3e4e245c2d7c9e9ca7004e99b3de6d"),
 ]
 
+# The same reference at 64 rows (cursor/ra-device-reader-0f7a at f666d887b, `SketchReceipter(seed, 64)`, `signs(seed,
+# 64)`), on the same inputs: the sign bits' SHA-512 per seed, and each case with SHA-512 of σ_j's 256 bytes in place of
+# σ_j.
+SKETCH64_SIGN_BITS_SHA512 = [
+    "2ffa7ce504e16a4a8d9e0d19abb2318ce0d7e4f6245c0dd64d15e8bff5640a035da1da231aa63a56ae45d67291d831543c4fde5b020fbde8494451b5eaf023b1",
+    "e53861f81d5515c5e6fd423e66ef64c6d84e3c770acdcb98fecf7345e30c2da6cde8efeff25c2235e61fc701e7d8a537906499326f3cd8dfb630a4271c6db80a",
+]
+SKETCH64_CASES = [
+    (0, "0x80", "one", 0,
+     "12543d8b982b5dd2a3e001e128f77d320a96908cd1d5c35bdc00549106147f720d65153356833a8ee0c8aa3d789449d32ae9651d18acaa83c2498bf3a43a8b2d",
+     "2aff6a29daa438d20b11ead8d629a639d31de55435ad18dcbad8571100cc4f671625fb3d262b9e4c9520e6682b7067f0ab854293810d4010c86d97a65beea9da"),
+    (0, "0x7f", "short", 1,
+     "29c7ca9063e3c31ae69ee4af19cb105f7f35c15843eb9aa2850c3963a6e596b7429a27eb056326344688bd69b39a032097ee20805a9356bf6cb2963ffa7c1c74",
+     "44c6291a83cb95aa8975dbdfa2490eae7e92ae948c6801b735512ec50590aabdb11931a2bf2745ee169cac6fe1b7778ce4eef7f6cc89565e99864d9974c5efa4"),
+    (0, "counter", "folded", 20,
+     "1130863d7c53c5a7290ec883daadfe074e43208e1040741391ecbc1aea9a99ecba254160d9e1f5adc4553086ba3575fdbd79cd28d67eb54015e8597a72c4758b",
+     "d8cbd5b0bc3f2f0672e5bfeac4580af1bf0d9b280e37228ff594c429a831019764824d6c4feaf06ca26d359f4c2ca5b8e8ba62d471a3554c3b7a678a0016c668"),
+    (1, "counter", "short", (1 << 64) - 1,
+     "fb7ffb9430b69637cdab800965f3ab07e27f0e73be1243c3c57ea4cc6f9966ba939d84ca923d90c2720fa904433a4033edcb4b446eddb26ea08034b280de6d0a",
+     "af5c0c67da2fd9c06b0ebf26827408faf0d9a904e6271a4a1997f0d725b6b6187ca4f6bcf75b6c79d37e949df6257c535868ea7320be7d0265733b27c0d7c903"),
+]
+SKETCH64_UNBOUND_CASES = [
+    (0, "0x80", 0,
+     "f6ef757affdfff0e2fc03f3871458ed7b8a46dc80c3b1368b9d0e6be0e4aadf16697e9109e2e0670b5785fb37b48bedb550116619005adf251d1638695176fc1",
+     "0eb1e5ba0305b80b1f8029bf0027144bafb71bdfab2a0146a09c5cbdfb8ae8df0ddf93b78f78802e8ef1f6205a09936e9fda1bed694cecd9b488e960eb8abda8"),
+    (0, "0x7f", 1,
+     "da8204d492a263c2d87f973f06a01cb49adb25341ce91eb3abcbcce932bb029081fc30b3c8266a77b11694393ab572a11fa096c398dbbf61abf1e07aa50d0064",
+     "6b6b08fbf5dea1439d82e03aa25f900ea2124a00da078adcf45dcaea62430cc02058cb689b2cc69e5f8f3e021e5bacf0cac91ca77fd57f258e07e1174f86ba98"),
+    (0, "counter", 20,
+     "3fa5828e6ea5cee3ce548d2e3100a99615ed19cc5fc0d411c818eaac08530647a9660d802606ddbbed24a134d2a3766935e663487d90b00764a8c357550146f4",
+     "da3866b87520a10c6e183a69de5c04d3051b749d6c7a6e4173c411253e58d159f4b8ca1d08dee4bb6b5efcb586a325e39f0b66a7d2127b750e40b74261f462cf"),
+    (1, "counter", (1 << 64) - 1,
+     "fb24d011c28947cf9d50722c439582cdccdec8fb713d562742637266e7dd2ae740619d35c56aa02dfb4de0b94e637a364221fed9d6d1e754571abd1f382ee585",
+     "a391d7324adcc28de3d7d5b780c433a2cdceb8755b795dd7d818401aa814074279c1e00b21e08307d961a433026089aadcb2f0e49f0ff966903906ad4cef9b95"),
+]
+
 # `benchmarks/word_codec/tests/kv_vectors.json` ("p512/k2", cursor/ra-word-codec-10bf at 56818bb77): the kv/v0 codec
 # the KV kernel (`kv.cu`) implements, under its vector seed SHA256("verity/word-codec/kv/vectors").
 KV_SEED = "9a2a3bccf24b46d0788b084ea6ab8a259f06781facbe053a212734936d48be4a"
@@ -131,11 +167,15 @@ def test_the_registration_and_the_codecs_words_reproduce_the_pinned_ones() -> No
     assert pinned["registration"]["codec"] == pinned["codec"]["name"] == reg.codec.name == "p1024/k3/masked"
     assert pinned["registration"]["receipt"] == reg.receipt == receipts.DEFAULT == "sketch-sha512"
     assert pinned["registration"]["bind"] is reg.bind is False
-    assert set(pinned["variants"]) == {rv.name(kind, bind) for kind, bind in rv.VARIANTS} and len(rv.VARIANTS) == 3
-    for kind, bind in rv.VARIANTS:
-        v = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, reg.codec, kind, bind=bind, nonce=rv.NONCE)
-        assert pinned["variants"][rv.name(kind, bind)]["registration"] == {
-            "receipt": kind, "bind": bind, "codec_seed": reg.codec_seed.hex(), "digest": v.digest.hex()}
+    assert pinned["registration"]["layout"] == reg.layout == receipts.LAYOUT == "store-order/v0"
+    assert pinned["registration"]["rows"] == reg.rows == receipts.SKETCH_ROWS == 16
+    assert set(pinned["variants"]) == {rv.name(*v) for v in rv.VARIANTS} and len(rv.VARIANTS) == 4
+    assert "sketch-sha512/rows64" in pinned["variants"] and pinned["sketch"]["rows_allowed"] == [16, 64]
+    for kind, bind, rows in rv.VARIANTS:
+        v = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, reg.codec, kind, bind=bind, rows=rows, nonce=rv.NONCE)
+        assert pinned["variants"][rv.name(kind, bind, rows)]["registration"] == {
+            "receipt": kind, "bind": bind, "layout": receipts.LAYOUT, "rows": rows, "codec_seed": reg.codec_seed.hex(),
+            "digest": v.digest.hex()}
     k, f = reg.key, reg.codec.field
     assert pinned["codec"]["c"] == [format(c, "x") for c in k.c] and pinned["codec"]["tau"] == format(k.tau, "x")
     assert pinned["codec"]["mask"] == format(k.mask, "x") and pinned["codec"]["seed"] == reg.codec_seed.hex()
@@ -157,11 +197,11 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
     assert len({p["seed"] for p in passes}) == 3
     assert passes[0]["plan_digest"] == passes[2]["plan_digest"] != passes[1]["plan_digest"]
     assert pinned["openings"]["index"] == rv.PARAMS.windows and pinned["payload"]["schema"] == "hm96-sha512/row/v2"
-    chains = {(receipts.DEFAULT, False): pinned["passes"]} | {
-        (kind, bind): pinned["variants"][rv.name(kind, bind)]["passes"] for kind, bind in rv.VARIANTS}
+    chains = {rv.DEFAULT: pinned["passes"]} | {v: pinned["variants"][rv.name(*v)]["passes"] for v in rv.VARIANTS}
     digests = {pinned["registration"]["digest"]} | {v["registration"]["digest"] for v in pinned["variants"].values()}
-    assert len(digests) == 4 and len({v["coins_root"] for v in pinned["variants"].values()} | {pinned["coins"]["root"]}) == 4
-    for (kind, bind), c in chains.items():
+    coins_roots = {v["coins_root"] for v in pinned["variants"].values()} | {pinned["coins"]["root"]}
+    assert len(digests) == len(coins_roots) == 5
+    for (kind, bind, rows), c in chains.items():
         assert c["passes"][0]["previous"] in digests and all(b["previous"] == a["root"]
                                                              for a, b in itertools.pairwise(c["passes"]))
         assert [p["plan_digest"] for p in c["passes"]] == [p["plan_digest"] for p in passes]
@@ -169,7 +209,8 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
         assert ("z_bytes" in c) == bind and all(("z_1" in p) == bind for p in c["passes"])   # z only where it is bound
         if kind == receipts.SKETCH_SHA512:
             assert len({p["sign_bits_sha512"] for p in c["passes"]}) == 3   # the signs are re-keyed every pass
-    assert len({c["passes"][0]["root"] for c in chains.values()}) == 4
+            assert all(len(bytes.fromhex(s)) == 4 * rows for p in c["passes"] for s in p["sigma"].values())
+    assert len({c["passes"][0]["root"] for c in chains.values()}) == 5
 
 
 class Clock:
@@ -181,20 +222,21 @@ class Clock:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("kind, bind", [(receipts.DEFAULT, False), *rv.VARIANTS])
-def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kind, bind) -> None:
+@pytest.mark.parametrize("kind, bind, rows", [rv.DEFAULT, *rv.VARIANTS])
+def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kind, bind, rows) -> None:
     """The generator computes receipts and draws on its own; the audit's `Prover` and `Session` must agree with it, at the
-    default codec, under each receipt kind, of the block alone and binding z.  Slow for the same store as
-    `test_vectors_are_reproduced`, which encodes it once for all of them."""
-    store = rv.store() if (kind, bind) == (receipts.DEFAULT, False) else rv.registered(kind, bind)
+    default codec, under each receipt kind, of the block alone and binding z, and at 64 rows.  Slow for the same store
+    as `test_vectors_are_reproduced`, which encodes it once for all of them."""
+    store = rv.store() if (kind, bind, rows) == rv.DEFAULT else rv.registered(kind, bind, rows)
     reg = store.registration
     challenger = coins.Challenger(reg.digest, 0, rv.PARAMS.coins, entropy=rv.Entropy(rv.COIN_LABEL))
     clock = Clock()
     tiles = audit.NoiseTiles(96) if bind else None
-    s = audit.Session(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind), reg, tiles, challenger, clock=clock)
+    s = audit.Session(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind, rows=rows), reg, tiles, challenger,
+                      not_before_ns=0, clock=clock)
     prover = audit.Prover(store, tiles, s.commitment, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
     pinned = json.loads(rv.PATH.read_text())
-    pinned = pinned if (kind, bind) == (receipts.DEFAULT, False) else pinned["variants"][rv.name(kind, bind)]
+    pinned = pinned if (kind, bind, rows) == rv.DEFAULT else pinned["variants"][rv.name(kind, bind, rows)]
     challenge, previous, passes = s.start(), reg.digest, []
     for i, (plan, want) in enumerate(zip(rv.PLANS, pinned["passes"]["passes"], strict=True)):
         passes.append(prover.run(challenge, i, previous, plan))
@@ -202,12 +244,14 @@ def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kin
         assert ps.root.hex() == want["root"] and ps.plan.runs == tuple(map(tuple, want["plan"]))
         assert s.receive(0, i, ps.root, ps.plan.runs) is None
         previous = ps.root
+    clock.now = rv.PARAMS.window_ns
     assert s.boundary() is None
     clock.now = s.deadline(0) + 1
     draws = s.close(0)
     assert list(draws) == [unit(u) for u in pinned["openings"]["draws"]]
     assert s.verify(0, [prover.open(passes[i], p) for i, p in draws]) == audit.Verdict(0, True)
     assert s.record().public()["receipt"] == kind and s.record().public()["bind"] is bind
+    assert s.record().public()["rows"] == rows
 
 
 def unit(u: int) -> tuple[int, int]:
@@ -247,6 +291,24 @@ def test_sketch_sha512_is_ra_codec_tensors_reference() -> None:
     for k, b, j, sigma, y in SKETCH_UNBOUND_CASES:
         assert receipters[k].sketch(blocks[b]).hex() == sigma
         assert receipters[k](j, blocks[b]).hex() == y == receipters[k](j, blocks[b], bytes(codec.BLOCK_BYTES)).hex()
+
+
+def test_sketch_sha512_at_64_rows_is_ra_codec_tensors_reference() -> None:
+    """The same inputs at k_s = 64, a registration's other row count: the signs under the key that binds k = 64, σ_j's
+    256 bytes and y, three compressions after the seed's block."""
+    seeds = [hashlib.sha512(SKETCH_PINS + bytes([k])).digest() for k in range(2)]
+    assert [hashlib.sha512(b"".join(receipts.sign_bits(s, 64))).hexdigest() for s in seeds] == SKETCH64_SIGN_BITS_SHA512
+    blocks = {"0x80": b"\x80" * codec.BLOCK_BYTES, "0x7f": b"\x7f" * codec.BLOCK_BYTES,
+              "counter": _counter(b"block", codec.BLOCK_BYTES)}
+    zs = {"one": b"\x01", "short": bytes(range(100)), "folded": _counter(b"z", 5000)}
+    receipters = [receipts.SketchReceipter(s, 64) for s in seeds]
+    for k, b, z, j, sigma, y in SKETCH64_CASES:
+        assert hashlib.sha512(receipters[k].sketch(blocks[b], zs[z])).hexdigest() == sigma
+        assert receipters[k](j, blocks[b], zs[z]).hex() == y
+        assert receipts.receipter(receipts.SKETCH_SHA512, seeds[k], 64)(j, blocks[b], zs[z]).hex() == y
+    for k, b, j, sigma, y in SKETCH64_UNBOUND_CASES:
+        assert hashlib.sha512(receipters[k].sketch(blocks[b])).hexdigest() == sigma
+        assert receipters[k](j, blocks[b]).hex() == y
 
 
 @pytest.mark.parametrize("c", [codec.FALLBACK, codec.DEFAULT], ids=lambda c: c.name)

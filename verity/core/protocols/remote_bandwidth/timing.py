@@ -14,6 +14,10 @@ in flight, its root's reduction and its trip up, each trip at its longest.
 `live_mu` and `live_best_interval` are the steady state of the alternative `PROTOCOL.md`'s appendix weighs: a live coin a
 pass and no chain, so that passes are ordered by the clock alone.
 
+`stated` is the claim of `PROTOCOL.md` §1 and §10 read through `audit.ledger`: the honest prover's session on one
+RTX PRO 6000 at its measured R and S_chip, under the default codec at the stated squaring ceiling, every window's whole
+γ_t and the horizon's.  `store_floor` is the store below which no T brings every window under 1%.
+
 `sketch_reading` is where sketch-sha512's bound is read (`PROTOCOL.md` §4): the rank r* that minimizes `sketch_rate`,
 the failure each SHA-512 compression of the prover's buys, a guess's 2^-8r beside a fresh key's chance of signs of rank
 below r on one of a block's 128 sectors (`sign_rank_at_most`, exact through F2: `gf2_rank_at_most`).  `sketch_failure`
@@ -29,6 +33,9 @@ import math
 from dataclasses import dataclass
 from fractions import Fraction
 
+from verity.core.protocols.profile import IntegrityProfile, Subset
+
+from . import audit, codec
 from .codec import BLOCK_BYTES
 from .receipts import DEFAULT, DIGEST_BYTES, KINDS, PER_LEAF, SALT_BYTES, SKETCH_ROWS
 
@@ -41,6 +48,16 @@ SECTORS = BLOCK_BYTES // SECTOR_BYTES
 SHA512_PER_S = 7.0e9
 """One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms
 (#1916, art:dea3a309)."""
+READ_BYTES_PER_S = 1.488e12
+"""One RTX PRO 6000's measured HBM read rate (ra-word-codec #1840, r20261012-051505-ed9d, art:51a27942)."""
+CHIP_BYTES = 263_163_904
+"""S_chip, one RTX PRO 6000's on-chip storage at most: 188 SMs' registers, L1 and shared memory, L1.5, instruction
+caches, uniform registers and warp state, its L2, TLB and 1 MiB of buffers (ra-pcie-exhaust #1852, `chip.cu`, runs
+art:2b6cac05 to art:90de6479)."""
+SQUARINGS_PER_S = {"p1024": 1.597 * 1.499e10, "p512": 1.567 * 5.13e10}
+"""Assumption 5 stated per width: the squarings a second of one RTX PRO 6000 with its share of the host, s·(1 + h) over
+the reference (the best form less its MOV and SEL, the host at its IFMA bound; ra-squaring-ceiling #1887).  The
+reference is codec-mix's 5.13e10 at 512 bits and `kv.cu`'s 1.499e10 at 1,024."""
 
 
 def deadline(pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0) -> int:
@@ -75,6 +92,15 @@ class Schedule:
     def utilization(self) -> float:
         """The share of the session's span its certified passes fill at the node's capacity: `1 − μ_timing`."""
         return sum(self.passes) * self.pass_ns / self.span_ns
+
+    @property
+    def window_timing(self) -> tuple[float, ...]:
+        """Each window's μ_timing over its own span `[b_(t−1), D_t]` (`audit.WindowLedger`): the spans of consecutive
+        windows overlap by A, and a window's passes start when the pass in flight at its challenge ends, so each
+        window is charged A and up to a pass, where the session is charged them once: at most
+        `g/(p + g) + (A + J + p)/(T + A)`."""
+        starts = (0, *self.boundaries[:-1])
+        return tuple(1 - n * self.pass_ns / (d - b) for n, b, d in zip(self.passes, starts, self.deadlines))
 
 
 def honest(window_ns: int, windows: int, pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0,
@@ -205,6 +231,37 @@ def wrong_bound(units: int, samples: int, delta: float) -> int:
     return math.ceil(-units * math.expm1(math.log(delta) / samples))
 
 
+def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = 2.0 ** -40,
+           gap_ns: int = 50 * US, jitter_ns: int = 50 * US) -> audit.Ledger:
+    """The ledger of the honest prover's session over a store of `store_bytes` on one RTX PRO 6000: a pass is the
+    store's read at `READ_BYTES_PER_S`, `samples` openings a window at `delta` bound its wrong receipts (`wrong_bound`),
+    the chip holds `CHIP_BYTES`, and μ_rebuild is the default codec at `SQUARINGS_PER_S`.  μ_chip is about
+    `CHIP_BYTES/store_bytes`, and a window's μ_timing about `(RTT + 2p)/T`, the pass in flight at its challenge and the
+    one its boundary cuts short: a larger store trades the one for the other."""
+    blocks = store_bytes // BLOCK_BYTES
+    pass_ns = math.ceil(blocks * BLOCK_BYTES / READ_BYTES_PER_S * S)
+    st = honest(window_ns, windows, pass_ns, gap_ns=gap_ns, down_ns=rtt_ns // 2, up_ns=rtt_ns - rtt_ns // 2,
+                jitter_ns=jitter_ns)
+    starts = (0, *st.boundaries[:-1])
+    record = audit.Record(bytes(64), bytes(64), blocks, BLOCK_BYTES, tuple(
+        audit.WindowRecord(t, (blocks,) * n, b, d, d, IntegrityProfile(
+            ("receipt",), (blocks * n,), {"receipt": Subset(samples)}, delta, drawn={"receipt": samples}))
+        for t, (n, b, d) in enumerate(zip(st.passes, starts, st.deadlines))))
+    return audit.ledger(record, capacity_bytes_per_s=READ_BYTES_PER_S, chip_bytes=CHIP_BYTES,
+                        rebuild=audit.Rebuild(codec.DEFAULT, SQUARINGS_PER_S["p1024"]),
+                        wrong=lambda pr: wrong_bound(pr.sizes[0], pr.drawn["receipt"], pr.delta))
+
+
+def store_floor(gap_ns: int = 0, target: float = 0.01) -> float:
+    """The store on one RTX PRO 6000, in bytes, below which no T brings `stated`'s worst γ_t under `target`.  As T
+    grows, a window's μ_sample and its ends vanish, and γ_t tends to `(g + S_chip/R + λ·p + μ_rebuild·(p + g))/(p + g)`
+    with p the store's read at R: the chain's steady state, μ_chip, λ (`audit.QUERIES_LOG2` bits a block) and
+    μ_rebuild.  At `gap_ns` = 0 it is μ_chip, λ and μ_rebuild alone."""
+    rebuild = audit.Rebuild(codec.DEFAULT, SQUARINGS_PER_S["p1024"]).fraction(READ_BYTES_PER_S)
+    lam, g = audit.QUERIES_LOG2 / (8 * BLOCK_BYTES), gap_ns / S
+    return READ_BYTES_PER_S * (g * (1 - target + rebuild) + CHIP_BYTES / READ_BYTES_PER_S) / (target - lam - rebuild)
+
+
 def _ns(ms: float) -> int:
     return round(ms * MS)
 
@@ -220,32 +277,61 @@ def _grid() -> None:
           "the registration binds z")
     print()
     print(f"# μ_timing of chained sessions: g = {gap // US} µs, J = {jitter / MS} ms each way, A = RTT + 2J + pass + g; "
-          "one-way delays RTT/2; isolated is a session of one window")
-    print("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 | steady state g/(pass + g) |")
-    print("| --- | --- | --- | --- | --- | --- | --- | --- |")
+          "one-way delays RTT/2; isolated is a session of one window; worst window is the largest of a W = 100 "
+          "session's windows' own, each over [b_(t−1), D_t]")
+    print("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 | steady state g/(pass + g) "
+          "| worst window |")
+    print("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for p in (20, 50):
-        for w in (0.3, 1, 10):
+        for w in (1, 20, 60):
             for rtt in (1, 5, 20, 50):
                 kw = dict(gap_ns=gap, down_ns=_ns(rtt) // 2, up_ns=_ns(rtt) - _ns(rtt) // 2, jitter_ns=jitter)
                 runs = [honest(round(w * S), n, _ns(p), **kw) for n in (1, 10, 100)]
                 print(f"| {p} | {w} | {rtt} | {runs[0].passes[0]} | "
-                      + " | ".join(f"{1 - r.utilization:.2%}" for r in runs) + f" | {chained(_ns(p), gap):.2%} |")
+                      + " | ".join(f"{1 - r.utilization:.2%}" for r in runs) + f" | {chained(_ns(p), gap):.2%} "
+                      f"| {max(runs[2].window_timing):.2%} |")
     print()
-    s = samples_for(1e-3, 2.0 ** -40)
-    print(f"# openings at ε_s = 0.1%, δ = 2^-40: s = {s} from the window's coin; a Fiat–Shamir draw from the window's last "
-          "root, ground over Q transcripts, needs s(δ/Q)")
+    t_s, s = audit.WINDOW_NS // S, audit.SAMPLES
+    quarter = samples_for(0.0025, audit.DELTA)
+    openings = {1: samples_for(0.01, audit.DELTA), 20: quarter, t_s: s, 90: quarter}
+    print(f"# openings at the stated T = {t_s} s, δ = 2^-40: s = {s} from the window's coin ({s / t_s:.0f} a second, "
+          f"ε_s = ln(2^40)/s = {math.log(2.0 ** 40) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
+          f"1 s option's 1% is {openings[1]}.  A Fiat–Shamir draw from the window's last root, ground over Q "
+          "transcripts, needs s(δ/Q) = ⌈s·(40 + log2 Q)/40⌉")
     print("| Q | s | × the coin's |")
     print("| --- | --- | --- |")
     for q in (0, 20, 40, 64):
-        sq = samples_for(1e-3, 2.0 ** -(40 + q))
+        sq = -(-s * (40 + q) // 40)
         print(f"| 2^{q} | {sq} | {sq / s:.2f} |")
     print()
-    print("# openings: bytes a window and Gb/s per node, with the coin's s")
+    print("# openings: bytes a window and Gb/s per node, at each window's openings: "
+          + ", ".join(f"T = {w} s: {openings[w]}" for w in (1, 20, t_s)))
     for name, blocks in (("one GPU, 94 GB", 94 * 10 ** 9 // BLOCK_BYTES), ("8 GPUs, 752 GB", 8 * 94 * 10 ** 9 // BLOCK_BYTES),
                          ("8 GPUs + 1.5 TB host", (8 * 94 + 1500) * 10 ** 9 // BLOCK_BYTES)):
         b = opening_bytes(blocks)
-        print(f"{name}: N = {blocks}, {b} B an opening, {s * b / 1e6:.0f} MB a window; "
-              + ", ".join(f"T = {w} s: {s * b * 8 / w / 1e9:.2f} Gb/s" for w in (0.3, 1, 10)))
+        print(f"{name}: N = {blocks}, {b} B an opening; "
+              + ", ".join(f"T = {w} s: {openings[w] * b / 1e6:.0f} MB a window, {openings[w] * b * 8 / w / 1e9:.3f} Gb/s"
+                          for w in (1, 20, t_s)))
+    print()
+    print(f"# the stated claim (§1, §10), T = {t_s} s by default, 20 s and 1 s the options: the worst window's whole γ_t "
+          "over its own span, and over a 10 min horizon of W windows the pooled μ_sample and the whole γ, on one RTX PRO "
+          "6000 (R = 1.488e12 B/s, S_chip = 263,163,904 B), the default codec at the stated ceiling, δ = 2^-40, "
+          "g = 50 µs, J = 0.05 ms; a pass is the store's read at R")
+    print("| T s | openings | store GB | pass ms | RTT ms | μ_timing | μ_sample | μ_chip | λ | μ_rebuild | worst γ_t | W "
+          "| pooled μ_sample | horizon γ |")
+    print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    for w_s in (t_s, 20, 1, 90):
+        for gb in (30, 62, 94):
+            for rtt in (1, 20):
+                g = stated(gb * 10 ** 9, w_s * S, 600 // w_s, rtt_ns=_ns(rtt), samples=openings[w_s])
+                x = g.worst
+                print(f"| {w_s} | {openings[w_s]} | {gb} | {gb * 10 ** 9 / READ_BYTES_PER_S * 1e3:.1f} | {rtt} "
+                      f"| {x.timing:.3%} | {x.sample:.3%} | {x.chip:.3%} | {x.counting:.3%} | {x.rebuild:.3%} "
+                      f"| {x.gamma:.3%} | {600 // w_s} | {g.horizon:.4%} | {g.gamma_horizon:.3%} |")
+    print()
+    print(f"# the store floor (store_floor): below {store_floor() / 1e9:.2f} GB a GPU μ_chip, λ and μ_rebuild alone "
+          f"exceed 1% at any T; with the chain's steady state at g = {gap // US} µs, no T meets 1% below "
+          f"{store_floor(gap) / 1e9:.2f} GB")
     print()
     print(f"# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
           f"deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
