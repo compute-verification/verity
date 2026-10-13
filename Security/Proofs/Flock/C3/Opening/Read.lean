@@ -231,9 +231,9 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
   {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg}
-  {tr : Lean.Json} {record : String} {reg : Lean.Json}
+  {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
 
-local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec tr record reg
+local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 
 /-- **(n4 from its read fact) R's opening plays at the honest family.** -/
 theorem hOpening_of_read {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hread : OpeningRead 𝓗 dg N k Rw) :

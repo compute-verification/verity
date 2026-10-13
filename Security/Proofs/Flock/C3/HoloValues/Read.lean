@@ -299,9 +299,9 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
   {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg}
-  {tr : Lean.Json} {record : String} {reg : Lean.Json}
+  {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
 
-local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec tr record reg
+local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 
 /-- The honest family's run is `decodeRun` of the inner transcript's steps, at any decoder `dec`. -/
 theorem hRepStages_honest {dg : ByteArray → ByteArray} {N k Rw : ℕ} : HRepStages 𝓗 dg N k Rw := by

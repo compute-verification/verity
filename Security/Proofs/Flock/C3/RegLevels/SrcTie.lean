@@ -81,14 +81,15 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
     (Vs j).Outer Reg'}
   {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
-  {tr : Lean.Json} {record : String} {reg : Lean.Json} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+  {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
+  {dg : ByteArray → ByteArray} {N k Rw : ℕ}
   {src : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) →
     C3Run (holoAt st hp)}
 
 /-- **(n7's levels) `RegLevelsRead` at the fixed decoder**, from the source's obligations and its levels' tie. -/
 theorem regLevelsRead_of_tie (hs : SrcOK zs dg N k Rw src own sel) (h : SrcLevelTie zs dg N k Rw src xR.cap) :
-    RegLevelsRead (C3Family.honest (xR := xR) ish hss bind hob zs own sel bc (c3DecOf zs dg N k Rw src own sel) tr
-      record reg) dg N k Rw :=
+    RegLevelsRead (C3Family.honest (xR := xR) ish hss bind hob zs own sel bc (c3DecOf zs dg N k Rw src own sel) wr
+      reg) dg N k Rw :=
   regLevelsRead_c3DecOf hs (regTapeAt_src h)
 
 end

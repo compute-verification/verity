@@ -266,10 +266,10 @@ theorem sparseAtShapeChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) :
 its hold of the inner transcript (`PubRowsChecked`) and of its statements as V*'s statement of its index
 (`StmtsChecked`), as the checked sessions keep it (`checksAccepted_checked`). -/
 def ChecksAccepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Option (Array Flock.Registered.Port))
-    (tr : Lean.Json) (record : String) (reg : Lean.Json) : Prop :=
+    (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json) : Prop :=
   ∀ R ω t R₂ j, (∃ tr', AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr') →
     ∃ tr', AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr' ∧
-      PubRowsChecked (innerCommitsAt tr record st reg).toOption F.ish.sparse (F.zs R ω t R₂ j).I
+      PubRowsChecked (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption F.ish.sparse (F.zs R ω t R₂ j).I
         (F.zs R ω t R₂ j).own tr' ∧
       StmtsChecked F.ish j (F.bind j) rows (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr'
 
@@ -281,37 +281,39 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
   {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg}
-  {tr : Lean.Json} {record : String} {reg : Lean.Json}
+  {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
 
 /-- **(n1b) The checked family passes the verifier's checks where a session accepts**: a checked session that accepts
 kept its own list, so a transcript it accepts passes `ChecksC3`, whose public-row and statement checks these are. -/
-theorem checksAccepted_checked {coins : Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
+theorem checksAccepted_checked {coins : String → Option Flock.RecCoins.Source}
+    {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
       (Vs j).OuterR Reg'}
     {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
-    ChecksAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec tr record reg)
-      rows tr record reg := by
+    ChecksAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+      rows wr reg := by
   intro R ω t R₂ j hex
   refine checks_of_keepOwn (z := Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
     (P := fun J o tr' => (holoInnerAt T CT st hp).r ≤ t.length ∧
-      Flock.Guarantees.ChecksC3 ish (innerCommitsAt tr record st reg).toOption coins j (bind j) rows J o tr')
-    (Pc := fun J o tr' => PubRowsChecked (innerCommitsAt tr record st reg).toOption ish.sparse J o tr' ∧
+      Flock.Guarantees.ChecksC3 ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (bind j)
+        rows J o tr')
+    (Pc := fun J o tr' => PubRowsChecked (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption ish.sparse J o tr' ∧
       StmtsChecked ish j (bind j) rows J o tr') ?_ hex
   intro J o tr' hp
   obtain ⟨-, spec, sts, hs, hst, -, hpr⟩ := hp
   exact ⟨⟨spec, sts, hs, hpr⟩, spec, sts, hs, hst⟩
 
-local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec tr record reg
+local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 
 /-- **(n1) The public rows at the honest family, from the verifier's checks**: `hPubRows_of_check'` with the
 rec-sparse shape read at an accepted transcript whose public rows and statements the verifier checks
 (`ChecksAccepted`, n1b's), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`). -/
-theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksAccepted 𝓗 rows tr record reg)
+theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksAccepted 𝓗 rows wr reg)
     (hdrawn : RowsHeld 𝓗) (hnames : PortsNamed 𝓗) (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
   intro R ω t R₂ j hex rg hrg u q x hname hread b hrow
   obtain ⟨tr', hacc, hchk', hst⟩ := hchk R ω t R₂ j hex
   obtain ⟨cs, w, c, hcs, hc, hb⟩ :=
-    heldRow_some (show heldRow (innerCommitsAt tr record st reg) ish.sparse rg.value x = some b from hrow)
+    heldRow_some (show heldRow (innerCommitsAt (wr t).1 (wr t).2 st reg) ish.sparse rg.value x = some b from hrow)
   have hfix : (RecVStar.fixedRow { reps := #[] } rg.value 0).isSome = true := by
     rw [fixedRow_isSome { reps := #[] } cs rg.value 0 x none ish.sparse]
     simp [hc]
