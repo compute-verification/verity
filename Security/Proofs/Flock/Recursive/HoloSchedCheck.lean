@@ -80,7 +80,7 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
   · rename_i hsz
     rcases hf : cs.streams.find? (fun st => st.name.startsWith s!"{SPARSE}/" &&
         st.name != s!"{SPARSE}/rep0" && st.name != s!"{SPARSE}/rep1") with _ | stx
-    swap
+    rotate_left
     · first
       | rw [hf] at h
       | simp only [hf] at h
@@ -112,7 +112,7 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
               | cases hb
             · rename_i hne
               exact ⟨by simpa using hne, (Except.ok.inj hb).symm⟩) _ hloop
-      refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_, fun st hst => ?_, hf⟩
+      refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_, fun st hst => ?_, by first | exact hf | rfl⟩
       · have hz : (cm, y) ∈ cs.reps.toList.zipIdx := by
           apply List.mem_zipIdx_iff_getElem?.2
           first
@@ -175,7 +175,7 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
                   | cases hb
                 · rename_i hne
                   exact ⟨by simpa using hne, (Except.ok.inj hb).symm⟩) _ hloop
-          refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_, fun st hst => ?_, hf⟩
+          refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_, fun st hst => ?_, by first | exact hf | rfl⟩
           · have hz : (cm, y) ∈ cs.reps.toList.zipIdx := by
               apply List.mem_zipIdx_iff_getElem?.2
               first
