@@ -14,9 +14,10 @@ receipts  a decode step is a pass: before the model's forward (eager, the runner
 lm_head   BF16 payloads (Daniel's ruling: its logits are BF16's), the head's rows as words; ROWS rows at a time decoded
           (stack) into an L2-sized scratch, or read as they are (pstack), times x (torch.mm); one CUDA graph a batch.
           Not receipted.
-KV        vLLM's own paged cache tensors, a layer's words at their place in the pool (paged.cu): the append encodes, a
-          decode-only step's attention decodes inside paged.cu's tensor-core attention (CUDA-graph safe), and a step
-          with prefill gathers its sequences' pages decoded into a scratch for vLLM's FlashAttention.
+KV        vLLM's own paged cache tensors, a layer's words at their place in the pool (paged.cu): the append encodes (all
+          layers' in one launch on a second stream after the step's forward; the step reads its own tokens from vLLM's
+          rows), a decode-only step's attention decodes inside paged.cu's tensor-core attention (CUDA-graph safe), and
+          a step with prefill gathers its sequences' pages decoded into a scratch for vLLM's FlashAttention.
 ~~~
 """
 from __future__ import annotations
@@ -332,11 +333,16 @@ class _Layer:
 
 
 class Attention:
-    """FlashAttentionImpl's forward and KV append over paged.cu: decode-only steps (max_query_len 1) in paged.cu's
-    attention, the rest through vLLM's FlashAttention over the step's sequences' pages gathered (decoded) into a
-    scratch with the block table renumbered."""
+    """FlashAttentionImpl's forward and KV append over paged.cu. The append is deferred: a step's tokens reach the pages
+    after its forward, every layer's in one launch (pg_append_multi) on a second stream, which the next forward waits
+    for (the codec's encode is a long chain a word, ~5 ms at p1024, k = 3: one wave a step instead of one a layer on
+    the critical path). Until then a step reads its own tokens' K and V from vLLM's rows: a decode-only step
+    (max_query_len 1) in paged.cu's attention with each sequence's last token from them, any other step through vLLM's
+    FlashAttention over its sequences' pages gathered (decoded) into a scratch, its own tokens written over their slots
+    there, with the block table renumbered. In a captured step the rows are staged (at most MAX_ROWS a layer, in the
+    graph); outside one the append reads vLLM's own tensors, held for the second stream."""
 
-    def __init__(self, st: Stack) -> None:
+    def __init__(self, st: Stack, layers: int) -> None:
         self.st, self.lib = st, st.plib
         self.enc = int(st.encoded)
         self.layers: dict[tuple, _Layer] = {}   # by (layer, the cache's storage and shape): vLLM may reallocate it
@@ -344,24 +350,48 @@ class Attention:
         top = max(P.part_floats(self.lib, b, self.split(b)) for b in range(1, K.MAX_ROWS + 1))
         self.part = torch.empty(top, dtype=torch.float32, device="cuda")
         self._plan: tuple | None = None
-        self.calls = {"decode": 0, "gathered": 0, "append": 0}
+        self.calls = {"decode": 0, "gathered": 0, "append": 0, "flush_graph": 0, "flush_eager": 0}
+        self.nl = layers
+        row = self.lib.shape["kv_heads"] * self.lib.shape["head_dim"]
+        self.stage_k = torch.zeros((layers, K.MAX_ROWS, row), dtype=torch.bfloat16, device="cuda")
+        self.stage_v = torch.zeros_like(self.stage_k)
+        self.stage_s = torch.full((layers, K.MAX_ROWS), -1, dtype=torch.int64, device="cuda")
+        self.staged: dict[int, tuple] = {}      # layer -> (cache, lbase): its staged rows' target
+        self.graph_tab = None
+        self.pending: list[tuple] = []          # an eager step's (key, value, slots, rows, cache, lbase), by layer
+        self.slots: dict[int, torch.Tensor] = {}
+        self.lay: P.Layout | None = None
+        self.s2 = torch.cuda.Stream()
+        self.fwd_done = torch.cuda.Event()
+        self.app_done = torch.cuda.Event()
+        self.outstanding = False
+        self.stage_bytes = 2 * self.stage_k.numel() * 2
 
     def split(self, b: int) -> int:
         if b not in self.splits:
             self.splits[b] = P.splits_for(b, self.st.sms, self.lib.shape["kv_heads"])
         return self.splits[b]
 
+    @staticmethod
+    def index(layer) -> int:
+        return int(layer.layer_name.split(".layers.")[1].split(".")[0])
+
     def layer(self, layer, kv_cache: torch.Tensor) -> _Layer:
-        idx = int(layer.layer_name.split(".layers.")[1].split(".")[0])
+        idx = self.index(layer)
         key = (idx, kv_cache.data_ptr(), tuple(kv_cache.shape))
         L = self.layers.get(key)
         if L is None:
             lay = P.layout(kv_cache, self.lib.shape["kv_heads"], self.lib.shape["wb"])
+            if self.lay is not None and (lay.bs, lay.sb, lay.sh, lay.ss) != (self.lay.bs, self.lay.sb, self.lay.sh,
+                                                                               self.lay.ss):
+                raise RuntimeError(f"layer {idx}'s cache layout {lay} is not the others' {self.lay}")
+            self.lay = lay
             L = self.layers[key] = _Layer(lay, idx * lay.words)
         return L
 
-    def plan(self, md, bs: int) -> tuple:
-        """A step's gather: its sequences' blocks in order and the block table renumbered over them (one sync a step)."""
+    def plan(self, md, bs: int, slots: torch.Tensor) -> tuple:
+        """A step's gather: its sequences' blocks in order, the block table renumbered over them and its tokens' slots
+        in the scratch (one sync a step)."""
         if self._plan is not None and self._plan[0] is md:
             return self._plan[1:]
         lens = md.seq_lens.cpu().tolist()
@@ -373,9 +403,56 @@ class Attention:
             blocks += bt[i, :nb].tolist()
         dev = torch.tensor(blocks, dtype=torch.int32, device="cuda")
         md2 = dataclasses.replace(md, block_table=bt2.to("cuda", non_blocking=True))
-        self._plan = (md, dev, md2)
-        return dev, md2
+        where = torch.full((int(bt.max()) + 1 if bt.numel() else 1,), -1, dtype=torch.int64, device="cuda")
+        where[dev.long()] = torch.arange(len(blocks), dtype=torch.int64, device="cuda")
+        ok = slots >= 0
+        s2 = torch.where(ok, where[torch.where(ok, slots // bs, 0)] * bs + slots % bs, -1)
+        self._plan = (md, dev, md2, s2)
+        return dev, md2, s2
 
+    # the deferred append ---------------------------------------------------------------------------------------------
+    def join(self) -> None:
+        """Before a forward: the last step's appends are in the pages."""
+        if self.outstanding:
+            torch.cuda.current_stream().wait_event(self.app_done)
+            self.outstanding = False
+
+    def _launch(self, tab: torch.Tensor, layers: int, rows: int) -> None:
+        main = torch.cuda.current_stream()
+        self.fwd_done.record(main)
+        self.s2.wait_event(self.fwd_done)
+        P.append_multi(self.lib, torch, tab, layers, rows, self.lay, self.enc, self.st.k, self.s2.cuda_stream)
+        self.app_done.record(self.s2)
+        self.outstanding = True
+
+    def flush_graph(self) -> None:
+        """After a captured step's replay: its staged rows, every layer's, into the pages."""
+        if not self.staged:
+            return
+        if self.graph_tab is None:
+            ents = [(self.stage_k[l], self.stage_v[l], self.stage_s[l], K.MAX_ROWS, c, lb)
+                    for l, (c, lb) in sorted(self.staged.items())]
+            self.graph_tab = P.table(torch, ents).cuda()
+            self.graph_layers = len(ents)
+        self._launch(self.graph_tab, self.graph_layers, K.MAX_ROWS)
+        self.calls["flush_graph"] += 1
+
+    def flush_eager(self) -> None:
+        """After an eager forward: its rows, held until the second stream has read them."""
+        if not self.pending:
+            return
+        rows = max(e[3] for e in self.pending)
+        with torch.cuda.stream(self.s2):
+            tab = P.table(torch, self.pending).to("cuda", non_blocking=False)
+        self._launch(tab, len(self.pending), rows)
+        for key, val, slots, _, _, _ in self.pending:
+            for t in (key, val, slots):
+                t.record_stream(self.s2)
+        tab.record_stream(self.s2)
+        self.pending = []
+        self.calls["flush_eager"] += 1
+
+    # vLLM's hooks ------------------------------------------------------------------------------------------------
     def forward(self, orig):
         att = self
 
@@ -388,17 +465,21 @@ class Attention:
                 return orig(impl, layer, query, key, value, kv_cache, attn_metadata, output, output_scale,
                             output_block_scale)
             L = att.layer(layer, kv_cache)
+            k2, v2 = key.view(key.shape[0], -1), value.view(value.shape[0], -1)
             if md.max_query_len == 1:
                 b = md.seq_lens.shape[0]
                 q2, o2 = query.view(query.shape[0], -1), output.view(output.shape[0], -1)
                 P.attn(att.lib, torch, kv_cache, L.lay, L.lbase, att.enc, att.st.k, q2, o2, att.part, md.seq_lens,
-                       md.block_table, b, att.split(b), nrows=o2.shape[0])
+                       md.block_table, b, att.split(b), nrows=o2.shape[0], ck=k2, cv=v2)
                 att.calls["decode"] += 1
                 return output
-            blocks, md2 = att.plan(md, L.lay.bs)
+            slots = att.slots[att.index(layer)]
+            blocks, md2, s2 = att.plan(md, L.lay.bs, slots)
             scratch = torch.empty_strided((blocks.shape[0], *kv_cache.shape[1:]), kv_cache.stride(), dtype=kv_cache.dtype,
                                           device="cuda")   # the cache's order within a block, which the gather copies
             P.gather(att.lib, torch, kv_cache, L.lay, L.lbase, att.enc, att.st.k, blocks, scratch)
+            lay2 = P.Layout(blocks.shape[0], L.lay.bs, L.lay.sb, L.lay.sh, L.lay.ss)
+            P.append(att.lib, torch, scratch, lay2, 0, 0, 0, k2[:s2.shape[0]], v2[:s2.shape[0]], s2)
             att.calls["gathered"] += 1
             return orig(impl, layer, query, key, value, scratch, md2, output, output_scale, output_block_scale)
         return fn
@@ -409,9 +490,21 @@ class Attention:
         def fn(impl, layer, key, value, kv_cache, slot_mapping):
             if slot_mapping.dtype != torch.int64:
                 raise RuntimeError(f"slot mapping {slot_mapping.dtype}")
-            L = att.layer(layer, kv_cache)
-            P.append(att.lib, torch, kv_cache, L.lay, L.lbase, att.enc, att.st.k, key.view(key.shape[0], -1),
-                     value.view(value.shape[0], -1), slot_mapping)
+            L, idx, n = att.layer(layer, kv_cache), att.index(layer), slot_mapping.shape[0]
+            att.slots[idx] = slot_mapping
+            k2, v2 = key.view(key.shape[0], -1), value.view(value.shape[0], -1)
+            if torch.cuda.is_current_stream_capturing():
+                if n > K.MAX_ROWS:
+                    raise RuntimeError(f"a captured step of {n} tokens: the stage holds {K.MAX_ROWS}")
+                att.stage_k[idx, :n].copy_(k2[:n])
+                att.stage_v[idx, :n].copy_(v2[:n])
+                att.stage_s[idx, :n].copy_(slot_mapping)
+                att.stage_s[idx, n:].fill_(-1)
+                if idx not in att.staged or att.staged[idx][0].data_ptr() != kv_cache.data_ptr():
+                    att.graph_tab = None
+                att.staged[idx] = (kv_cache, L.lbase)
+            else:
+                att.pending.append((k2, v2, slot_mapping, n, kv_cache, L.lbase))
             att.calls["append"] += 1
         return fn
 
@@ -694,11 +787,11 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
     gates["step"] = gate_step(st, log)
     parts = components(st, lm)
     log(f"components (ms): {parts}")
-    att = Attention(st)
+    att = Attention(st, len(model.model.layers))
     from vllm.v1.attention.backends.flash_attn import FlashAttentionImpl
     hooks.wrap(FlashAttentionImpl, "forward", att.forward)
     hooks.wrap(FlashAttentionImpl, "do_kv_cache_update", att.update)
-    passes = hook_passes(st, hooks, runner, model)
+    passes = hook_passes(st, att, hooks, model)
     import gc
     gc.collect()
     torch.cuda.synchronize()
@@ -722,6 +815,7 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
         "scratch_bytes": {"prefill_linear": st.scratch.numel() * 4 if st.scratch is not None else 0,
                           "lm_head": lm.scratch.numel() * 2 if lm.scratch is not None else 0,
                           "attention_partials": att.part.numel() * 4,
+                          "kv_stage": att.stage_bytes,
                           "receipts": st.tags.numel() * 8 + 64 * (st.dig.shape[0] + st.up.shape[0])},
         "plaintext_scan": scan, "gates": gates, "selection": selection, "passes_hooked": passes, "components_ms": parts,
         "fp8_kernel": type(layers[0][1].quant_method.fp8_linear).__name__,
@@ -741,42 +835,40 @@ def _apply(idx: int, quant):
     return fn
 
 
-def hook_passes(st: Stack, hooks, runner, model) -> str:
-    """A pass before each forward of at most MAX_ROWS (padded) tokens outside a capture: the V1 runner's
-    `_model_forward`, or the V2 runner's full-graph replay (`run_fullgraph`, its padded size desc.num_tokens) and its
-    eager forward (the model's own)."""
-    def begin(m: int) -> None:
-        if 0 < m <= K.MAX_ROWS and not torch.cuda.is_current_stream_capturing():
-            st.begin_pass(m)
-
-    def tokens(input_ids, positions) -> int:
-        ref = input_ids if input_ids is not None else positions
-        return ref.shape[0] if ref is not None else 0
-
-    if hasattr(type(runner), "_model_forward"):
-        def v1(orig):
-            def fn(self, input_ids=None, positions=None, *a, **kw):
-                begin(tokens(input_ids, positions))
-                return orig(self, input_ids, positions, *a, **kw)
-            return fn
-        hooks.wrap(type(runner), "_model_forward", v1)
-        return "v1 _model_forward"
+def hook_passes(st: Stack, att: Attention, hooks, model) -> str:
+    """vLLM's V2 runner: before each forward outside a capture the last step's appends (Attention.join) and, at most
+    MAX_ROWS (padded) tokens, a pass; after it the step's appends: its full-graph replay's (`run_fullgraph`, its padded
+    size desc.num_tokens; staged in the graph) or its eager forward's (the model's own)."""
     from vllm.v1.worker.gpu.cudagraph_utils import ModelCudaGraphManager
+
+    def begin(m: int) -> bool:
+        if torch.cuda.is_current_stream_capturing():
+            return False
+        att.join()
+        if 0 < m <= K.MAX_ROWS:
+            st.begin_pass(m)
+        return True
 
     def replay(orig):
         def fn(self, desc):
             begin(desc.num_tokens)
-            return orig(self, desc)
+            out = orig(self, desc)
+            att.flush_graph()
+            return out
         return fn
 
     def forward(orig):
         def fn(input_ids=None, positions=None, *a, **kw):
-            begin(tokens(input_ids, positions))
-            return orig(input_ids, positions, *a, **kw)
+            ref = input_ids if input_ids is not None else positions
+            live = begin(ref.shape[0] if ref is not None else 0)
+            out = orig(input_ids, positions, *a, **kw)
+            if live:
+                att.flush_eager()
+            return out
         return fn
     hooks.wrap(ModelCudaGraphManager, "run_fullgraph", replay)
     hooks.wrap(model, "forward", forward)
-    return "v2 run_fullgraph + forward"
+    return "v2 run_fullgraph + forward, appends deferred"
 
 
 def summary(st: Stack) -> dict:

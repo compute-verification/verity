@@ -15,7 +15,12 @@
 // tiles by its own length (lens), so the grid is fixed and a CUDA graph replays it at any lengths; an empty split
 // leaves no tokens (max -1e30, sum 0), a sequence of length 0 a zero row. q is read from vLLM's query (bf16, any row
 // stride) and scaled by qscale (log2(e) / sqrt(128)) and rounded to bf16 in place of kv.cu's pre-scaled q; the output
-// is bf16, vLLM's.
+// is bf16, vLLM's. With ck (and cv) a sequence's last token, position len − 1, is read from the step's own K and V rows
+// (bf16, vLLM's key and value, the sequence's row as q's) and not from the pages: the stack appends a step's tokens after
+// its forward (pg_append_multi, on a second stream), so its pages hold them only from the next step.
+//
+// pg_append_multi is pg_append over many layers in one launch (the codec's encode is a long chain a word: one wave for all
+// of a step's layers instead of one a layer), each layer's rows, slots, cache and first index in a table on the device.
 //
 // pg_reduce is the stack's linear epilogue: wt.cu's chunk partial sums [nch][M][N] summed in chunk order and scaled
 // (bf16(sum * xs[row or 0] * ws)), so a plain and an encoded linear over the same weight give the same bits.
@@ -32,6 +37,8 @@ struct Pg {
   int bstride, bs;   // the block table's row stride, slots a block
   int sb, sh, ss;    // words between blocks, heads, slots
   u64 lbase;         // the layer's first word index
+  const uint16_t *ck, *cv;  // the step's K and V rows (nullptr: every token from the pages)
+  size_t cks, cvs;          // their row strides (elements)
 };
 
 __device__ __forceinline__ u64 pg_word(const Pg &pg, const int *btr, int p, int g, int j) {
@@ -81,27 +88,43 @@ __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restri
       const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
       const int *btr = pg.bt + (size_t)seq * pg.bstride;
       const u32 *base = reinterpret_cast<const u32 *>(kv);
+      const size_t crow = pg.qrow ? (size_t)pg.qrow[seq] : (size_t)seq;
+      const u32 *fresh = pg.ck ? reinterpret_cast<const u32 *>(
+                                     (j < HW / 2 ? pg.ck + crow * pg.cks : pg.cv + crow * pg.cvs) + (size_t)g * HEAD_DIM +
+                                     (size_t)(j % (HW / 2)) * (WB / 2))
+                               : nullptr;
       const auto has = [&](int tile) { return tile < ntiles && t0 + tile * MT + t < t1; };
+      const auto own = [&](int tile) { return fresh && t0 + tile * MT + t == len - 1; };
       u32 x[NL];
       u64 wl = has(0) ? pg_word(pg, btr, t0 + t, g, j) : 0;
-      if (has(0)) ldg_word(base + wl * NL, x);
+      bool mine = has(0) && own(0);
+      if (has(0)) {
+        if (mine) load(fresh, x);
+        else ldg_word(base + wl * NL, x);
+      }
       for (int tile = 0; tile < ntiles; ++tile) {
-        const bool cur = has(tile), next = has(tile + 1);
+        const bool cur = has(tile), next = has(tile + 1), next_mine = next && own(tile + 1);
         const u64 wn = next ? pg_word(pg, btr, t0 + (tile + 1) * MT + t, g, j) : 0;
-        if (next) prefetch_word_l2(base + wn * NL);
+        if (next && !next_mine) prefetch_word_l2(base + wn * NL);
         if (!cur) {
 #pragma unroll
           for (int l = 0; l < NL; ++l) x[l] = 0u;
         } else if constexpr (ENC) {
-          u32 tw[NL];
-          tweak(pg.lbase + wl, tw);
-          decode_word_t<true>(x, tw, k);
+          if (!mine) {
+            u32 tw[NL];
+            tweak(pg.lbase + wl, tw);
+            decode_word_t<true>(x, tw, k);
+          }
         }
         if (tile >= MNB) mbar_wait(empty + tile % MNB, (tile / MNB - 1) & 1);
         store(reinterpret_cast<u32 *>(sm + (tile % MNB) * MT * MTS + t * MTS + j * WB), x);
         mbar_arrive(full + tile % MNB);
-        if (next) ldg_word(base + wn * NL, x);
+        if (next) {
+          if (next_mine) load(fresh, x);
+          else ldg_word(base + wn * NL, x);
+        }
         wl = wn;
+        mine = next_mine;
       }
       return;
     }
@@ -190,6 +213,30 @@ __global__ void __launch_bounds__(128) pg_append_kernel(const uint16_t *__restri
   store(cache + wl * NL, x);
 }
 
+// pg_append_kernel over layers: layer l's row i of rows at u = (l rows + i) KV_HEADS HW + g HW + j; its table entry
+// (8 words): key, value, their row strides, slots, rows used, cache, first index.
+template <bool ENC>
+__global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restrict__ tab, int layers, int rows, int bs,
+                                                              int sb, int sh, int ss, int k) {
+  const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
+  const u64 per = (u64)rows * KV_HEADS * HW;
+  if (u >= (u64)layers * per) return;
+  const u64 *e = tab + 8 * (u / per);
+  const u64 r = u % per;
+  const int j = (int)(r % HW), g = (int)(r / HW % KV_HEADS), i = (int)(r / ((u64)HW * KV_HEADS));
+  if (i >= (int)e[5]) return;
+  const long long slot = reinterpret_cast<const long long *>(e[4])[i];
+  if (slot < 0) return;
+  const uint16_t *src = (j < HW / 2 ? reinterpret_cast<const uint16_t *>(e[0]) + (size_t)i * e[2]
+                                    : reinterpret_cast<const uint16_t *>(e[1]) + (size_t)i * e[3]) +
+                        (size_t)g * HEAD_DIM + (size_t)(j % (HW / 2)) * (WB / 2);
+  u32 x[NL];
+  load(reinterpret_cast<const u32 *>(src), x);
+  const u64 wl = (u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j;
+  if constexpr (ENC) encode_word(x, e[7] + wl, k);
+  store(reinterpret_cast<u32 *>(e[6]) + wl * NL, x);
+}
+
 // nb whole blocks (blocks[b], bw words each, contiguous) of a layer's cache into out, block b at word b bw: decoded
 // (ENC) or copied. A thread a word.
 template <bool ENC>
@@ -236,13 +283,15 @@ void pg_shape(int *out) {
 // One layer's decode attention for batch sequences (lens, block table bt) into nrows rows of out (bf16, row stride
 // ostride; a sequence's row qrow[i], or i with qrow null, rows past batch zeroed), q's row likewise (row stride
 // qstride); part holds batch splits MW partials (pg_shape's out[6] floats each). encoded = 0 plain, 1 its words at k
-// rounds (the same output).
+// rounds (the same output). ck, cv (row strides cks, cvs): each sequence's last token's K and V, at its row of q (null:
+// from the pages).
 int pg_attn(const void *kv_, int encoded, const uint16_t *q, size_t qstride, float qscale, uint16_t *out,
             size_t ostride, int nrows, float *part, const int *lens, const int *bt, const int *qrow, int bstride,
-            int bs, int sb, int sh, int ss, unsigned long long lbase, int batch, int splits, int k, cudaStream_t s) {
+            int bs, int sb, int sh, int ss, unsigned long long lbase, int batch, int splits, int k,
+            const uint16_t *ck, const uint16_t *cv, size_t cks, size_t cvs, cudaStream_t s) {
   if (!kv::MMA_OK) return -2;
   if (batch < 0 || nrows < batch || splits < 1 || bs < 1 || (encoded && (k < 1 || k > kv::KMAX)) || encoded < 0 ||
-      encoded > 1 || (qrow && nrows != batch))
+      encoded > 1 || (qrow && nrows != batch) || (!ck != !cv))
     return -1;
   static bool set = false;
   if (!set) {
@@ -250,7 +299,7 @@ int pg_attn(const void *kv_, int encoded, const uint16_t *q, size_t qstride, flo
       cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::pg_smem());
     set = true;
   }
-  const kv::Pg pg{lens, bt, qrow, bstride, bs, sb, sh, ss, lbase};
+  const kv::Pg pg{lens, bt, qrow, bstride, bs, sb, sh, ss, lbase, ck, cv, cks, cvs};
   if (batch) {
     const int grid = batch * splits * kv::KV_HEADS;
     (encoded ? kv::pg_attn_kernel<true> : kv::pg_attn_kernel<false>)<<<grid, kv::MWT, kv::pg_smem(), s>>>(
@@ -270,6 +319,19 @@ int pg_append(const uint16_t *key, const uint16_t *val, size_t kstride, size_t v
   const unsigned grid = (unsigned)((words + 127) / 128);
   (encoded ? kv::pg_append_kernel<true> : kv::pg_append_kernel<false>)<<<grid, 128, 0, s>>>(
       key, val, kstride, vstride, slots, n, static_cast<uint32_t *>(cache), bs, sb, sh, ss, lbase, k);
+  return launched();
+}
+
+// layers layers' appends in one launch: tab (device) holds each layer's 8 words (pg_append_multi_kernel), rows its
+// most rows; every layer's cache in one layout (bs, sb, sh, ss).
+int pg_append_multi(const unsigned long long *tab, int layers, int rows, int bs, int sb, int sh, int ss, int encoded,
+                    int k, cudaStream_t s) {
+  if (layers < 0 || rows < 0 || bs < 1 || (encoded && (k < 1 || k > kv::KMAX)) || !kv::MMA_OK) return -1;
+  if (!layers || !rows) return 0;
+  const unsigned long long words = (unsigned long long)layers * rows * kv::KV_HEADS * kv::HW;
+  (encoded ? kv::pg_append_multi_kernel<true> : kv::pg_append_multi_kernel<false>)<<<(unsigned)((words + 127) / 128),
+                                                                                       128, 0, s>>>(
+      reinterpret_cast<const kv::u64 *>(tab), layers, rows, bs, sb, sh, ss, k);
   return launched();
 }
 

@@ -29,7 +29,8 @@ class PagedLib(KB.Lib):
         v, i, z, u = ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t, ctypes.c_ulonglong
         so = self.so
         so.pg_shape.argtypes = [v]
-        so.pg_attn.argtypes = [v, i, v, z, ctypes.c_float, v, z, i, v, v, v, v, i, i, i, i, i, u, i, i, i, v]
+        so.pg_attn.argtypes = [v, i, v, z, ctypes.c_float, v, z, i, v, v, v, v, i, i, i, i, i, u, i, i, i, v, v, z, z, v]
+        so.pg_append_multi.argtypes = [v, i, i, i, i, i, i, i, i, v]
         so.pg_append.argtypes = [v, v, z, z, v, i, v, i, i, i, i, u, i, i, v]
         so.pg_gather.argtypes = [v, v, i, i, v, u, i, i, v]
         so.pg_reduce.argtypes = [v, i, i, i, v, i, v, v, v]
@@ -81,20 +82,38 @@ def stream(torch) -> int:
 
 
 def attn(lib: PagedLib, torch, cache, lay: Layout, lbase: int, encoded: int, k: int, q, out, part, lens, bt,
-         batch: int, splits: int, nrows: int | None = None, qrow=None) -> None:
+         batch: int, splits: int, nrows: int | None = None, qrow=None, ck=None, cv=None) -> None:
     """Decode attention of batch sequences (lens [≥ batch] int32, bt [≥ batch][bstride] int32) over one layer: q and out
     are [rows][heads · head_dim] bf16 (any row stride), sequence i's at row qrow[i] (or i); rows batch … nrows − 1
-    zeroed (nrows default q's rows); part holds batch · splits · MW partials."""
+    zeroed (nrows default q's rows); part holds batch · splits · MW partials. ck, cv ([rows][KV heads · head_dim] bf16,
+    any row stride): each sequence's last token's K and V at its row, in place of its pages'."""
     nrows = q.shape[0] if nrows is None else nrows
+    if (ck is None) != (cv is None):
+        raise ValueError("ck and cv go together")
     lib.call("pg_attn", cache.data_ptr(), encoded, q.data_ptr(), q.stride(0), QSCALE, out.data_ptr(), out.stride(0),
              nrows, part.data_ptr(), lens.data_ptr(), bt.data_ptr(), 0 if qrow is None else qrow.data_ptr(),
-             bt.stride(0), lay.bs, lay.sb, lay.sh, lay.ss, lbase, batch, splits, k, stream(torch))
+             bt.stride(0), lay.bs, lay.sb, lay.sh, lay.ss, lbase, batch, splits, k,
+             0 if ck is None else ck.data_ptr(), 0 if cv is None else cv.data_ptr(),
+             0 if ck is None else ck.stride(0), 0 if cv is None else cv.stride(0), stream(torch))
 
 
 def append(lib: PagedLib, torch, cache, lay: Layout, lbase: int, encoded: int, k: int, key, val, slots) -> None:
     """Tokens key[i], val[i] ([tokens][KV heads · head_dim] bf16, any row stride) at slot slots[i] (int64; < 0 skipped)."""
     lib.call("pg_append", key.data_ptr(), val.data_ptr(), key.stride(0), val.stride(0), slots.data_ptr(),
              slots.shape[0], cache.data_ptr(), lay.bs, lay.sb, lay.sh, lay.ss, lbase, encoded, k, stream(torch))
+
+
+def table(torch, entries):
+    """pg_append_multi's table on the host: a layer's (key, value, slots, rows, cache, lbase) each, tensors as pointers."""
+    rows = [[key.data_ptr(), val.data_ptr(), key.stride(0), val.stride(0), slots.data_ptr(), n, cache.data_ptr(), lbase]
+            for key, val, slots, n, cache, lbase in entries]
+    return torch.tensor(rows, dtype=torch.int64).reshape(-1)
+
+
+def append_multi(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, encoded: int, k: int, s=None) -> None:
+    """Every layer's appends of tab (a device int64 tensor of `table`'s) in one launch on stream s (default current)."""
+    lib.call("pg_append_multi", tab.data_ptr(), layers, rows, lay.bs, lay.sb, lay.sh, lay.ss, encoded, k,
+             stream(torch) if s is None else s)
 
 
 def gather(lib: PagedLib, torch, cache, lay: Layout, lbase: int, encoded: int, k: int, blocks, out) -> None:

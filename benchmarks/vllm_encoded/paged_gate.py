@@ -8,6 +8,9 @@ edge, a block's edge and random), and for each k of `--ks`:
 - `attention`: at each split count, the encoded output equals the plain output bit for bit, the plain output is within
   RTOL of float64 attention over the same bf16 values (q scaled by log2(e)/sqrt(128), rounded to bf16, as the kernel
   does), a sequence of length 0 and every row past the batch are zero, and the qrow form (rows permuted) equals it;
+  with each sequence's last token's K and V given as rows (ck, cv) and its slot in the pages overwritten, the output is
+  the same bits (plain, encoded, and in the qrow form);
+- `append_multi`: both layers' appends in one launch (more rows than tokens) equal the layer-by-layer appends;
 - `gather`: whole blocks decoded (encoded) or copied (plain) equal the plain cache's blocks.
 
 Writes `paged-gate.json` and `paged-gate.log` under `--out`; exits nonzero if any gate fails."""
@@ -81,6 +84,7 @@ def main() -> int:
         kk, vv = qkv[:, H * D:(H + G) * D], qkv[:, (H + G) * D:]
         sl = slots.cuda()
         ok_append, where = True, []
+        pre = [c.clone() for c in pl] + [c.clone() for c in enc]
         for l in range(LAYERS):
             P.append(lib, torch, pl[l], lay, lbase[l], 0, k, kk, vv, sl)
             P.append(lib, torch, enc[l], lay, lbase[l], 1, k, kk, vv, sl)
@@ -112,6 +116,17 @@ def main() -> int:
         picks = [0, 1, lay.words - 1] + rng.sample(range(lay.words), 5)
         py_ok = all(K.encode_word(int.from_bytes(bytes(w8[i].cpu().tolist()), "little"), lbase[1] + i, key)
                     == int.from_bytes(bytes(e8[i].cpu().tolist()), "little") for i in picks)
+        tabs = {}
+        for encd in (0, 1):
+            ents = [(kk, vv, sl, n, pre[encd * LAYERS + l], lbase[l]) for l in range(LAYERS)]
+            tabs[encd] = P.table(torch, ents).cuda()
+            P.append_multi(lib, torch, tabs[encd], LAYERS, n + 8, lay, encd, k)
+        torch.cuda.synchronize()
+        multi_ok = all(torch.equal(pre[encd * LAYERS + l].view(torch.int16), (enc if encd else pl)[l].view(torch.int16))
+                       for encd in (0, 1) for l in range(LAYERS))
+        g["append_multi"] = {"layers": LAYERS, "rows": n + 8, "tokens": n, "ok": multi_ok}
+        if not multi_ok:
+            log(f"append_multi k={k}: FAIL")
         g["append"] = {"tokens": n, "padding": int((slots < 0).sum()), "equal": ok_append, "kv_py_words": len(picks),
                        "kv_py": py_ok, "differ": where, "ok": ok_append and py_ok}
         if where:
@@ -157,16 +172,43 @@ def main() -> int:
                 qp[qrow.long()] = q[:b]
                 o_r = torch.full((b, H * D), 5.0, dtype=torch.bfloat16, device="cuda")
                 P.attn(lib, torch, enc[layer], lay, lbase[layer], 1, k, qp, o_r, part, lens, btd, b, sp, qrow=qrow)
+                # the last tokens as rows, their slots in the pages overwritten
+                ck = torch.zeros(nrows, G * D, dtype=torch.bfloat16, device="cuda")
+                cv = torch.zeros_like(ck)
+                pl_x, enc_x = pl[layer].clone(), enc[layer].clone()
+                for i in range(b):
+                    L = lens_l[i]
+                    if not L:
+                        continue
+                    blk, off = int(bt[i, (L - 1) // BS]), (L - 1) % BS
+                    ck[i] = pl[layer][blk, :, off, :D].reshape(-1)
+                    cv[i] = pl[layer][blk, :, off, D:].reshape(-1)
+                    junk = (torch.randn(G, 2 * D, device="cuda") * 9).to(torch.bfloat16)
+                    pl_x[blk, :, off] = junk
+                    enc_x[blk, :, off] = junk
+                o_cp = torch.full_like(o_p, 1.0)
+                o_ce = torch.full_like(o_p, 2.0)
+                P.attn(lib, torch, pl_x, lay, lbase[layer], 0, k, q, o_cp, part, lens, btd, b, sp, ck=ck, cv=cv)
+                P.attn(lib, torch, enc_x, lay, lbase[layer], 1, k, q, o_ce, part, lens, btd, b, sp, ck=ck, cv=cv)
+                ckp, cvp = torch.empty(b, G * D, dtype=torch.bfloat16, device="cuda"), torch.empty(
+                    b, G * D, dtype=torch.bfloat16, device="cuda")
+                ckp[qrow.long()], cvp[qrow.long()] = ck[:b], cv[:b]
+                o_cr = torch.full((b, H * D), 4.0, dtype=torch.bfloat16, device="cuda")
+                P.attn(lib, torch, enc_x, lay, lbase[layer], 1, k, qp, o_cr, part, lens, btd, b, sp, qrow=qrow, ck=ckp,
+                       cv=cvp)
                 torch.cuda.synchronize()
+                rows_eq = (bool(torch.equal(o_cp.view(torch.int16), o_p.view(torch.int16)))
+                           and bool(torch.equal(o_ce.view(torch.int16), o_e.view(torch.int16)))
+                           and bool(torch.equal(o_cr[qrow.long()].view(torch.int16), o_e[:b].view(torch.int16))))
                 equal = bool(torch.equal(o_p.view(torch.int16), o_e.view(torch.int16)))
                 zero_pad = bool((o_e[b:] == 0).all())
                 zero_len = all(bool((o_e[i] == 0).all()) for i in range(b) if not lens_l[i])
                 qrow_eq = bool(torch.equal(o_r[qrow.long()].view(torch.int16), o_e[:b].view(torch.int16)))
                 m = ref.abs().max().item() or 1.0
                 err = float((o_p[:b].double().view(b, H, D) - ref[:b]).abs().max() / m)
-                ok = equal and zero_pad and zero_len and qrow_eq and err <= RTOL
+                ok = equal and zero_pad and zero_len and qrow_eq and rows_eq and err <= RTOL
                 att["cells"].append({"batch": b, "splits": sp, "layer": layer, "lens": lens_l, "equal": equal,
-                                     "zero_padding": zero_pad, "zero_length": zero_len, "qrow": qrow_eq,
+                                     "zero_padding": zero_pad, "zero_length": zero_len, "qrow": qrow_eq, "last_rows": rows_eq,
                                      "rel_err": err, "ok": ok})
                 att["ok"] &= ok
                 if not ok:
@@ -182,11 +224,11 @@ def main() -> int:
                 torch.cuda.synchronize()
                 ok_g &= bool(torch.equal(o.view(torch.int16), pl[l][blocks.long()].view(torch.int16)))
         g["gather"] = {"blocks": 20, "ok": ok_g}
-        g["ok"] = g["append"]["ok"] and att["ok"] and ok_g
+        g["ok"] = g["append"]["ok"] and multi_ok and att["ok"] and ok_g
         res["ks"][k] = g
         res["ok"] &= g["ok"]
         errs = [c["rel_err"] for c in att["cells"]]
-        log(f"k={k}: append {'ok' if g['append']['ok'] else 'FAIL'}, attention {'ok' if att['ok'] else 'FAIL'} "
+        log(f"k={k}: append {'ok' if g['append']['ok'] else 'FAIL'}, append_multi {'ok' if multi_ok else 'FAIL'}, attention {'ok' if att['ok'] else 'FAIL'} "
             f"({len(att['cells'])} cells, max rel err {max(errs):.1e}), gather {'ok' if ok_g else 'FAIL'}")
     (out_dir / "paged-gate.json").write_text(json.dumps(res, indent=1))
     log("paged gate " + ("passed" if res["ok"] else "FAILED"))
