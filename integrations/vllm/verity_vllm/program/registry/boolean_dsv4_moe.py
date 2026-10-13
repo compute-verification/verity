@@ -17,28 +17,29 @@
 AND), the digits' signs and the bits of C0 (the digits' constants folded in) functions of the six segment bits, each the XOR of
 the monomials in its algebraic normal form; G is bits 3 .. 38 of the sum.  The word is then G's: its leading-zero count z
 over 64 bits (G at the top, below it 28 zeros), the 23 bits under the leading one (G shifted left by z), the exponent field 126
-- z, and +0 where m = 0.
+- z, and +0 where m = 0.  G is at least 1 on every m > 0, so the word's exponent field is 0 exactly at m = 0.
 
-The others are cut only where they read a MUFU, at Calls to core's `MufuEx2Ftz_v2`, `MufuSqrtFtz_v2` and `DivFullRcp_v2` and to
+The others are cut only where they read a MUFU, at Calls to core's `MufuEx2Ftz_v2` and `MufuSqrtFtz_v2` and to
 `MufuLg2Mantissa_v2`, and at libdevice's logarithm (`gumbel_boolean.NvLogf_v3`), so that each is one shared Call; every other
-value is decoded in one traced piece:
+value is decoded in one traced piece, and the Triton router's one div.full reciprocal is traced into the piece whose sum and
+products read the words it reads (as `boolean_moe.MoeRouterBiasTopK_v1` traces its divide):
 
     Ex2Approx_v2               `Ex2ApproxIn_v1` (whether t < -126, and the operand t * 0.5 or t), `MufuEx2Ftz_v2`,
                                `Ex2ApproxOut_v1` (the square where t < -126)
     Dsv4HashWeight_v2          `Dsv4HashWeightIn_v1` (|x| * -log2 e read as `Ex2ApproxIn_v1` reads t, and fmaxf(x, 0)),
-                               `MufuEx2Ftz_v2`, `Dsv4HashWeightMid_v1` (the square, + 1, whether the sum is NaN or 2),
-                               `MufuLg2Mantissa_v2`, `Dsv4HashWeightOut_v1` (MUFU.LG2's word at 2 and NaN, the FFMA with ln 2,
-                               sqrt.rn as PoUW's `f32_sqrt_rn`, a NaN +0)
+                               `MufuEx2Ftz_v2`, `Dsv4HashWeightMid_v1` (the square, + 1), `MufuLg2Mantissa_v2`,
+                               `Dsv4HashWeightOut_v1` (whether the sum is NaN or 2, from its sign and exponent and whether
+                               MUFU.LG2's word is +0; that word at 2 and NaN, the FFMA with ln 2, sqrt.rn as PoUW's
+                               `f32_sqrt_rn`, a NaN +0)
     MoeRouterHash_v2           `MoeRouterHashPick_v1{E}` (each id's logit: a multiplexer tree on its low bits, logits[0] when a
                                high bit is set, as `MoeRouterPick_v1`), six `Dsv4HashWeight_v2`, `MoeRouterHashNorm_v1{SCALE}`
                                (the warp's sum, the divisor, ``w * SCALE / divisor`` with F32Mul_v2's and F32Div_v2's NaN words)
     Dsv4SqrtSoftplus_v2        `Dsv4SqrtSoftplusIn_v1` (x * log2 e read as `Ex2ApproxIn_v1` reads t, and x > 20),
                                `MufuEx2Ftz_v2`, `Dsv4SqrtSoftplusMid_v1` (the square, 1 + it), `NvLogf_v3`,
                                `Dsv4SqrtSoftplusSelect_v1` (x where x > 20, else the logarithm), `MufuSqrtFtz_v2`
-    MoeRouterSqrtSoftplus_v2   E `Dsv4SqrtSoftplus_v2`, `MoeRouterSqrtSoftplusTopK_v1{E}` (the currents, the six slots by their
-                               order keys, each slot's score, the warp's sum and the divisor), `DivFullRcp_v2`,
-                               `MoeRouterSqrtSoftplusNorm_v1{SCALE}` (div.full's scaled SCALE times the reciprocal, then each
-                               slot's product with F32Mul_v2's NaN word)
+    MoeRouterSqrtSoftplus_v2   E `Dsv4SqrtSoftplus_v2`, `MoeRouterSqrtSoftplusTopK_v1{E,SCALE}` (the currents, the six slots by
+                               their order keys, each slot's score, the warp's sum, the divisor, `DivFullRcp_v2`'s builder on it,
+                               div.full's scaled SCALE times the reciprocal, then each slot's product with F32Mul_v2's NaN word)
     SiluMulClampBf16_v2        `SiluMulClampIn_v1{LIMIT}` (the clamps on the bf16 words: a NaN or a value above LIMIT is LIMIT,
                                an up below -LIMIT is -LIMIT), then `boolean_silu.SiluMulBf16_v4`
     SiluMulClamp_v2            I `SiluMulClampBf16_v2`
@@ -72,8 +73,7 @@ from verity_vllm.program.registry.gumbel_boolean import NvLogf
 
 __all__ = ["Dsv4HashWeight", "Dsv4HashWeightIn", "Dsv4HashWeightMid", "Dsv4HashWeightOut", "Dsv4SqrtSoftplus",
            "Dsv4SqrtSoftplusIn", "Dsv4SqrtSoftplusMid", "Dsv4SqrtSoftplusSelect", "Ex2Approx", "Ex2ApproxIn", "Ex2ApproxOut",
-           "MoeRouterHash", "MoeRouterHashNorm", "MoeRouterHashPick", "MoeRouterSqrtSoftplus", "MoeRouterSqrtSoftplusNorm",
-           "MoeRouterSqrtSoftplusTopK", "MufuLg2Mantissa", "SiluMulClamp", "SiluMulClampBf16", "SiluMulClampIn",
+           "MoeRouterHash", "MoeRouterHashNorm", "MoeRouterHashPick", "MoeRouterSqrtSoftplus", "MoeRouterSqrtSoftplusTopK", "MufuLg2Mantissa", "SiluMulClamp", "SiluMulClampBf16", "SiluMulClampIn",
            "mufu_lg2_mantissa"]
 
 BF16 = Array(16, BL.BIT)
@@ -138,7 +138,9 @@ def mufu_lg2_mantissa(C, x):
     _, z = lzc(C, top)
     mant = shl_window(C, top, z, 40, 63)
     exp, _ = sub(C, const_bits(len(G) - 1 + 127 + D.LG2_SCALE, 8), z, 8)
-    nz = or_reduce(C, m)
+    # m = 0 from the NOTs of u the sum reads and the segment bits' zero test, the XOR of all their monomials (no AND), so that
+    # no AND repeats a monomial or a product of the square
+    nz = NOT(and_reduce(C, [NOT(b) for b in u] + [BM._xor_all(terms)]))
     return [C.AND(nz, b) for b in mant + exp] + [ZERO]
 
 
@@ -193,14 +195,17 @@ def hash_weight_in(C, x):
 
 
 def hash_weight_mid(C, y, small):
-    """Between the MUFUs: ``y = ex2 + 1`` (F32Add_v1), and whether y is NaN or 2."""
-    s = fp.f32_add(C, _ex2_out(C, y, small[0]), _w(ONE_BITS), ir_nan=True)
-    return [s, [_nan(C, s), _eq_word(C, s, D.TWO)]]
+    """Between the MUFUs: ``y = ex2 + 1`` (F32Add_v1)."""
+    return fp.f32_add(C, _ex2_out(C, y, small[0]), _w(ONE_BITS), ir_nan=True)
 
 
-def hash_weight_out(C, lg2, flags, f):
-    """After MUFU.LG2: its word (1.0 at y = 2, 0x7FFFFFFF at a NaN), ``fma(lg2, ln 2, f)`` (F32Fma_v1), sqrt.rn, a NaN +0."""
-    nan, two = flags
+def hash_weight_out(C, lg2, y, f):
+    """After MUFU.LG2: its word (1.0 at y = 2, 0x7FFFFFFF at a NaN), ``fma(lg2, ln 2, f)`` (F32Fma_v1), sqrt.rn, a NaN +0.
+    Whether y is NaN or 2 reads y's sign and exponent and, for its mantissa m, `MufuLg2Mantissa_v2`'s word: +0 at m = 0, and
+    of exponent field 91 or more at every other m (G >= 1 there), so the mantissa is decoded once, in the table."""
+    m_zero = NOT(or_reduce(C, lg2[23:31]))
+    nan = C.AND(and_reduce(C, y[23:31]), NOT(m_zero))
+    two = _eq_word(C, list(y[23:]) + [m_zero], (D.TWO >> 23) | 1 << 9)
     l = mux(C, two, _w(ONE_BITS), mux(C, nan, _w(fp.F32_NAN_PTX), list(lg2)))
     r = f32_sqrt_rn(C, fp.f32_fma(C, l, _w(D.LN2), f))
     keep = NOT(_nan(C, r))
@@ -210,12 +215,11 @@ def hash_weight_out(C, lg2, flags, f):
 Dsv4HashWeightIn = definition("Dsv4HashWeightIn", 1, hash_weight_in, (("x", F32),), Tuple(F32, FLAG, F32),
                               doc="the hash weight before its MUFU.EX2: the operand of ex2.approx(|x| * -log2 e), its flag, "
                                   "and fmaxf(x, 0)")
-Dsv4HashWeightMid = definition("Dsv4HashWeightMid", 1, hash_weight_mid, (("y", F32), ("small", FLAG)),
-                               Tuple(F32, Array(2, BL.BIT)),
-                               doc="the hash weight between its MUFUs: ex2 + 1, and whether it is NaN or 2")
-Dsv4HashWeightOut = definition("Dsv4HashWeightOut", 1, hash_weight_out,
-                               (("lg2", F32), ("flags", Array(2, BL.BIT)), ("f", F32)), F32,
-                               doc="the hash weight after its MUFU.LG2: the FFMA with ln 2 and fmaxf(x, 0), sqrt.rn, a NaN +0")
+Dsv4HashWeightMid = definition("Dsv4HashWeightMid", 1, hash_weight_mid, (("y", F32), ("small", FLAG)), F32,
+                               doc="the hash weight between its MUFUs: ex2 + 1")
+Dsv4HashWeightOut = definition("Dsv4HashWeightOut", 1, hash_weight_out, (("lg2", F32), ("y", F32), ("f", F32)), F32,
+                               doc="the hash weight after its MUFU.LG2: its word at y = 2 and at a NaN, the FFMA with ln 2 and "
+                                   "fmaxf(x, 0), sqrt.rn, a NaN +0")
 
 
 def _hash_weight(B, S, x):
@@ -223,7 +227,7 @@ def _hash_weight(B, S, x):
     `Dsv4HashWeightOut_v1`."""
     a = B.call(Dsv4HashWeightIn, x)
     y = B.call(Dsv4HashWeightMid, B.call(BM.MufuEx2Ftz, a[0]), a[1])
-    return B.call(Dsv4HashWeightOut, B.call(MufuLg2Mantissa, y[0]), y[1], a[2])
+    return B.call(Dsv4HashWeightOut, B.call(MufuLg2Mantissa, y), y, a[2])
 
 
 Dsv4HashWeight = EW.on_bits("Dsv4HashWeight", 2, (), lambda S: ((("x", F32),), F32), _hash_weight, D.Dsv4HashWeight)
@@ -352,13 +356,16 @@ def _decode(C, bits: list) -> list:
 
 
 def router_topk(S):
-    """`MoeRouterSqrtSoftplus_v1`'s selection on its scores w: ``current = w + bias`` (F32Add_v1), a NaN -1e30; six slots, each
-    the strict argmax of the currents' order keys (the lower expert on ties), its one-hot decode reading the slot's score and
-    setting its current to -inf's key; then the warp's sum of the six and the divisor ``sum > 0 ? sum : 1``."""
+    """`MoeRouterSqrtSoftplus_v1` on its scores w: ``current = w + bias`` (F32Add_v1), a NaN -1e30; six slots, each the strict
+    argmax of the currents' order keys (the lower expert on ties), its one-hot decode reading the slot's score and setting its
+    current to -inf's key; the warp's sum of the six, the divisor ``d = sum > 0 ? sum : 1``, its reciprocal r (`DivFullRcp_v2`'s
+    builder) and ``w[k] * (DivFullScaleA(SCALE, d) * r)`` (F32Mul_v1, then F32Mul_v2: the GPU's NaN word).  One circuit, so that
+    the sum and the products read each slot's score, and r and the scaling read d, through shared gates."""
     E, nb = S.E, _nb(S.E)
     if E < TOPK:
         raise ValueError(f"E must be at least {TOPK}")
     masked = const_bits(_key_of(NEG_INF_BITS), 32)
+    scale = _w(P.bits_of(S.SCALE))
 
     def build(C, *wb):
         w, bias = wb[:E], wb[E:]
@@ -380,41 +387,25 @@ def router_topk(S):
             ids.append(idx + [ZERO] * (32 - nb))
             if k < TOPK - 1:
                 key = [mux(C, hit[i], masked, key[i]) for i in range(E)]
-        return [*sel, *ids, _divisor(C, _lane0(C, sel))]
-
-    return build
-
-
-def router_sqrt_softplus_norm(S):
-    """``w[k] * (DivFullScaleA(SCALE, d) * r)``, r = `DivFullRcp_v1`(d): F32Mul_v1, then F32Mul_v2 (the GPU's NaN word)."""
-    scale = _w(P.bits_of(S.SCALE))
-
-    def build(C, *swr):
-        w, d, r = swr[:TOPK], swr[TOPK], swr[TOPK + 1]
-        q = fp.f32_mul(C, BM.div_full_scale_a(C, scale, d), r, ir_nan=True)
-        return [fp.f32_mul(C, v, q, nan_word=fp.F32_NAN_PTX) for v in w]
+        d = _divisor(C, _lane0(C, sel))
+        q = fp.f32_mul(C, BM.div_full_scale_a(C, scale, d), BM.div_full_rcp(C, d), ir_nan=True)
+        return [*[fp.f32_mul(C, v, q, nan_word=fp.F32_NAN_PTX) for v in sel], *ids]
 
     return build
 
 
 MoeRouterSqrtSoftplusTopK = EW.specialized(
-    "MoeRouterSqrtSoftplusTopK", 1, ["E"], router_topk,
-    lambda S: ((("w", Array(S.E, F32)), ("bias", Array(S.E, F32))), Tuple(Array(TOPK, F32), Array(TOPK, I32), F32)),
-    doc="dsv4_topk's six slots on bits: the currents, the argmax rounds by order keys, each slot's score, the warp's sum and "
-        "the divisor")
-MoeRouterSqrtSoftplusNorm = EW.specialized(
-    "MoeRouterSqrtSoftplusNorm", 1, ["SCALE"], router_sqrt_softplus_norm,
-    lambda S: ((("w", Array(TOPK, F32)), ("d", F32), ("r", F32)), Array(TOPK, F32)),
-    doc="dsv4_topk's renormalisation on bits: w * div.full(SCALE, d), the reciprocal r read from DivFullRcp_v2")
+    "MoeRouterSqrtSoftplusTopK", 1, ["E", "SCALE"], router_topk,
+    lambda S: ((("w", Array(S.E, F32)), ("bias", Array(S.E, F32))), Tuple(Array(TOPK, F32), Array(TOPK, I32))),
+    doc="dsv4_topk's six slots on bits: the currents, the argmax rounds by order keys, each slot's score, the warp's sum, the "
+        "divisor and w * div.full(SCALE, d)")
 
 
 def _router_sqrt_softplus(B, S, logits, bias):
-    """`MoeRouterSqrtSoftplus_v1` on bits: E `Dsv4SqrtSoftplus_v2`, `MoeRouterSqrtSoftplusTopK_v1`, `DivFullRcp_v2`,
-    `MoeRouterSqrtSoftplusNorm_v1`."""
+    """`MoeRouterSqrtSoftplus_v1` on bits: E `Dsv4SqrtSoftplus_v2`, then `MoeRouterSqrtSoftplusTopK_v1`."""
     w = B.batch(Dsv4SqrtSoftplus, logits, axes=(0,))
-    s = B.call(bind(MoeRouterSqrtSoftplusTopK, E=S.E), w, bias)
-    out = B.call(bind(MoeRouterSqrtSoftplusNorm, SCALE=S.SCALE), s[0], s[2], B.call(BM.DivFullRcp, s[2]))
-    return tuple_of(out, s[1])
+    s = B.call(bind(MoeRouterSqrtSoftplusTopK, E=S.E, SCALE=S.SCALE), w, bias)
+    return tuple_of(s[0], s[1])
 
 
 MoeRouterSqrtSoftplus = EW.on_bits(

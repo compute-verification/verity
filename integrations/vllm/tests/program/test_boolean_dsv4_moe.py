@@ -27,14 +27,14 @@ from verity_vllm.program.registry import dsv4_moe as D
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "MufuLg2Mantissa_v2": (986, 4785, 91, "62d1ffb1a5fd70c5dc478e45d492be0b8882ade01689e5b03b6c2a9aa9997b6cfc99735d01b3036fc8fcc02374a0c792da8a80609787eaba3a1794819803ca17"),
+    "MufuLg2Mantissa_v2": (986, 4749, 92, "420c0779217331399abead35f33ffff9201fce329ef972d4e50b3bc0aaa19e6dee5d40a7c01fa46e72ac0df73c8b1f56be7c4f98c692c721814861ff2f2f221d"),
     "SiluMulClampBf16_v2{LIMIT=10.0}": (1489, 7153, 207, "d8cb5e0c6612969c40d2c8dae79e629625ce1fb675970bf3a5c1220662421f708fea9f4efabee3972e7096bec46d2f0b5e9709ebde952f27de3f25a60fb7766b"),
     "SiluMulClamp_v2{I=4,LIMIT=10.0}": (5956, 28612, 828, "49ee7a9fa8385d3022c224922f231f569d9a908778809416e0797b52269d989041a7c43011fca22c475d42a2211326c5ff69bd2ec68d8aca400d20539d13caf6"),
     "Ex2Approx_v2": (3857, 9772, 300, "e0464671c57dca8de9abe8b6692b8471b782d76869557426f67824c77e1ba74c9e19c7fc1d1977af5f8b67a649ac8d5ada92a427e45aee510937364fa0a35fd2"),
-    "Dsv4HashWeight_v2": (11613, 26349, 1080, "ee232bb92928489f4c78c37f76fb5eee2007ac8b0633d306bc331962ec543e16c22625d95dcf79d1868e76374d93c77b961cf467ec26b90fccb9143424be53c2"),
-    "MoeRouterHash_v2{E=8,SCALE=2.5}": (93817, 205859, 9145, "c87de201d4dc4c66d434a152b75ee680b655a08c11688681ad936497030552f90530da0ab6baa776633195ec3ba58c62346f25b3d269285120fa7b0420487373"),
+    "Dsv4HashWeight_v2": (11576, 26283, 1059, "b90892d782f915cf1bc388ce51e0cda6d5453e003eec58997da9bb1615b56c391b1078d0d82f73c0965200724dad0e63da31ecba7e9408b88cdd4b4c95eb20f6"),
+    "MoeRouterHash_v2{E=8,SCALE=2.5}": (93595, 205463, 9019, "478cd3da7feb6d8c222e241662d072c6d3ca48b4c4a154cc05431e4b9e808bfce7446ce4a131bfe879089d6030f4ecad63a5614f18134f83b5aea27209717416"),
     "Dsv4SqrtSoftplus_v2": (50376, 93380, 3493, "a93fb47b11aac786622772916da070b6f1e23ea667d9a5b269114b9c68d5e36ba4caaefb915870996a5d3238b223d2831c95d7cf4c282b681ae52be9326ecf59"),
-    "MoeRouterSqrtSoftplus_v2{E=8,SCALE=2.5}": (436068, 809021, 32317, "7a8e169840e6953497360014f7da413b1b065e73fc8c44a38bf29728e207ae2bbae83651fa1161d54b4b28fed88aecf0660499dab382c61bce2b777f2566796a"),
+    "MoeRouterSqrtSoftplus_v2{E=8,SCALE=2.5}": (435870, 808659, 32308, "0b3e11c44e7883154b4b03c058455257c801435ad6c08407357061e3fe7a13238e9400038f38c6324ba345892217526f7e93141fa3257c2f3e0efc07f342b9e1"),
 }
 TARGETS = [bind(BD.MufuLg2Mantissa), bind(BD.SiluMulClampBf16, LIMIT=10.0), bind(BD.SiluMulClamp, I=4, LIMIT=10.0),
            *[pytest.param(t, marks=pytest.mark.slow) for t in (bind(BD.Ex2Approx), bind(BD.Dsv4HashWeight),
@@ -121,11 +121,13 @@ def test_lg2_where_measured_and_on_every_exponent_and_sign() -> None:
 @pytest.mark.slow
 def test_lg2_on_every_mantissa_is_the_measured_unit() -> None:
     """All 2^23 words of [1, 2) against `LG2_MEASURED`'s SHA-256 (about 10 s): the Boolean interpolator is the measured unit, not
-    only its word view."""
+    only its word view.  Its exponent field is 0 exactly at m = 0, which `Dsv4HashWeightOut_v1` reads as m = 0."""
     h = hashlib.sha256()
     for lo in range(0, 1 << 23, 1 << 19):
-        x = np.arange(lo, lo + (1 << 19), dtype=np.uint32) | np.uint32(0x3F800000)
-        h.update(np.asarray(BS.evaluate_words(bind(BD.MufuLg2Mantissa), x)).astype("<u4").reshape(-1).tobytes())
+        m = np.arange(lo, lo + (1 << 19), dtype=np.uint32)
+        y = np.asarray(BS.evaluate_words(bind(BD.MufuLg2Mantissa), m | np.uint32(0x3F800000))).astype("<u4").reshape(-1)
+        assert np.array_equal((y >> 23 & 0xFF) == 0, m == 0)
+        h.update(y.tobytes())
     assert h.hexdigest() == D.LG2_MEASURED["sha256"]
 
 
@@ -223,7 +225,7 @@ def test_the_triton_router(E_) -> None:
 @pytest.mark.parametrize("target", [bind(BD.MoeRouterHash, E=8, SCALE=2.5), bind(BD.MoeRouterSqrtSoftplus, E=8, SCALE=2.5)],
                          ids=lambda t: t.id)
 def test_the_routers_pass_the_word_querys_cut_check(target) -> None:
-    """Each value a router reads is decoded in one of its Calls (each expert's MUFUs and pieces, the pick or the slots, the
-    renormalisation): the cut check finds no value computed twice."""
+    """Each value a router reads is decoded in one of its Calls (each expert's MUFUs and pieces, the pick or the slots, the hash
+    router's renormalisation): the cut check finds no value computed twice."""
     prog, _ = standalone_call(target)
     assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok
