@@ -26,6 +26,7 @@ store (in calibration), and two sessions over a small store under the registrati
 from __future__ import annotations
 
 import ctypes
+import gc
 import hashlib
 import shutil
 import struct
@@ -270,6 +271,14 @@ class DeviceStore:
         self.pass_host_phases.append((t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, time.perf_counter_ns() - t5))
         return root, (seed, pk, kept)
 
+    def warm(self, passes: int) -> None:
+        """What `passes` passes keep (`run_pass`'s packed signs and kept levels), allocated once and freed, so the
+        allocator holds them before anything is timed."""
+        torch = self.torch
+        held = [(torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda"),
+                 torch.empty((self.kept_at[self.H + 1], 8), dtype=torch.int64, device="cuda")) for _ in range(passes)]
+        del held
+
     def signs_match(self, seed: bytes) -> bool:
         """The device's packed signs of a pass (`rs_signs16`) against the reference's (`skr.signs`, packed)."""
         torch = self.torch
@@ -456,6 +465,12 @@ class Device:
             prev, pass_ns, gap_ns, kept = bytes(64), [], [], []
             challenge = self.rng.bytes(32)
             t_end = None
+            # Timed as a session runs: what the passes keep allocated once beforehand (the allocator growing under a
+            # timed pass stalls it for tens of ms) and no collector.
+            s.warm(self.calibration_passes)
+            gc.collect()
+            gc.freeze()
+            gc.disable()
             for i in range(self.calibration_passes):
                 t0 = time.perf_counter_ns()
                 seed = rb.seed(challenge, i, prev)
@@ -467,6 +482,8 @@ class Device:
                     gap_ns.append(t1 - t_end)
                 pass_ns.append(t2 - t1)
                 t_end = t2
+            gc.enable()
+            gc.unfreeze()
             seed = rb.seed(challenge, 0, bytes(64))
             self.gates["plain_root"] = s.plain_root(seed) == s.run_pass(seed)[0]
             s.pass_gpu_ms.pop()
