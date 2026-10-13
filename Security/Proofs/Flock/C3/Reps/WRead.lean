@@ -218,15 +218,6 @@ theorem wDecodes_of_read (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (holoInnerAt T 
       getElem!_neg _ i (by rw [wRead_size]; exact hi)
     rw [hn, hn]
 
-#print axioms wLoc_spec
-#print axioms wRead_size
-#print axioms getElem!_wRead
-#print axioms el_wRead
-#print axioms upv_of_outer
-#print axioms bitAt_eq
-#print axioms resZeroAtLH_wRead
-#print axioms wDecodes_of_read
-
 end
 
 end FlockC3.Reps
