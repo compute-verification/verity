@@ -35,7 +35,7 @@
  "model_class": "vllm.models.deepseek_v32.nvidia.model.DeepseekV32ForCausalLM",
  "quantization": "fp8",
  "cache_dtype": "auto",
- "run": "r20261013-002721-e2f9",
+ "run": "r20261003-072626-b966",
  "ranks": {
   "0": {
    "applied": {
@@ -59,8 +59,7 @@
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
     "VLLM_ALLREDUCE_USE_FLASHINFER": true,
-    "VLLM_ALLREDUCE_USE_SYMM_MEM": true,
-    "sparse_mla_num_splits": 1
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
    },
    "modules": 1758,
    "module_types": {
@@ -5730,8 +5729,7 @@
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
     "VLLM_ALLREDUCE_USE_FLASHINFER": true,
-    "VLLM_ALLREDUCE_USE_SYMM_MEM": true,
-    "sparse_mla_num_splits": 1
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
    },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
@@ -5758,8 +5756,7 @@
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
     "VLLM_ALLREDUCE_USE_FLASHINFER": true,
-    "VLLM_ALLREDUCE_USE_SYMM_MEM": true,
-    "sparse_mla_num_splits": 1
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
    },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
@@ -5786,8 +5783,7 @@
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
     "VLLM_ALLREDUCE_USE_FLASHINFER": true,
-    "VLLM_ALLREDUCE_USE_SYMM_MEM": true,
-    "sparse_mla_num_splits": 1
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
    },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
@@ -5814,8 +5810,7 @@
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
     "VLLM_ALLREDUCE_USE_FLASHINFER": true,
-    "VLLM_ALLREDUCE_USE_SYMM_MEM": true,
-    "sparse_mla_num_splits": 1
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
    },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
@@ -5842,8 +5837,7 @@
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
     "VLLM_ALLREDUCE_USE_FLASHINFER": true,
-    "VLLM_ALLREDUCE_USE_SYMM_MEM": true,
-    "sparse_mla_num_splits": 1
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
    },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
@@ -5870,8 +5864,7 @@
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
     "VLLM_ALLREDUCE_USE_FLASHINFER": true,
-    "VLLM_ALLREDUCE_USE_SYMM_MEM": true,
-    "sparse_mla_num_splits": 1
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
    },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"
@@ -5898,8 +5891,7 @@
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
     "VLLM_ALLREDUCE_USE_FLASHINFER": true,
-    "VLLM_ALLREDUCE_USE_SYMM_MEM": true,
-    "sparse_mla_num_splits": 1
+    "VLLM_ALLREDUCE_USE_SYMM_MEM": true
    },
    "modules": 1758,
    "signature": "92b97a3a48036d4716e911f405e22ad2d338d108a6f026cbc348f0afa09fdfe0"

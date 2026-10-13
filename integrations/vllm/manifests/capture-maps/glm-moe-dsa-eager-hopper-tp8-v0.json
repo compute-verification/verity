@@ -17,7 +17,7 @@
    "config_sha256": "3ac72612095574542f7fff847ada8e59d9199dd8af44bdf625d7e02615572e69"
   },
   "inventory_runs": {
-   "VLLM_USE_DEEP_GEMM=0": "r20261013-002721-e2f9 (inv-tp8-cutlass.json, ranks 0-7, the target profile, with the switch sparse_mla_num_splits; tests/check/fixtures/glm_moe_dsa). r20261003-072626-b966 is the same inventory before the switch",
+   "VLLM_USE_DEEP_GEMM=0": "r20261003-072626-b966 (inv-tp8-cutlass.json, ranks 0-7, the target profile; tests/check/fixtures/glm_moe_dsa)",
    "default": "r20261003-072626-b966 (inv-tp8-default.json, rank 0: DeepGemmFp8BlockScaledMMKernel; check-default.txt: 11 problems, 2 switches and 9 kernel expectations); r20261003-062327-45fd (ranks 0-7)",
    "VLLM_BATCH_INVARIANT=1": "r20261003-062327-45fd (log-bi.txt: refused, no sparse MLA backend supports batch invariance)"
   }
@@ -54,12 +54,12 @@
    "VLLM_USE_DEEP_GEMM": false,
    "deep_gemm_e8m0": false,
    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
-   "sparse_mla_num_splits": 1
+   "sparse_mla_num_splits": null
   },
   "env_reasons": {
    "VLLM_USE_DEEP_GEMM": "0 puts every dense FP8 linear on CutlassFp8BlockScaledMMKernel, the kernel fp8.ScaledMmFp8Block@1 models (exact-model-tested on H100 with VLLM_USE_DEEP_GEMM=0). The default (1) selects DeepGemmFp8BlockScaledMMKernel with ue8m0 activation scales and weights requantized to ue8m0 at load: a different function with no Program yet. The indexer's DeepGEMM logits kernels are gated on the package, not on this variable, and still run.",
    "VLLM_BATCH_INVARIANT": "1 is refused at engine build on sm_90: FLASH_ATTN_MLA_SPARSE, FLASHMLA_SPARSE and FLASHINFER_MLA_SPARSE_SM90 all report 'batch invariance not supported'. The Commit runs without it and replay uses the same batch layout.",
-   "VERITY_SPARSE_MLA_NUM_SPLITS": "unset or 1 (verity_vllm.engine.sparse_mla, the switch sparse_mla_num_splits) pins FA3's sparse MLA (FlashAttnMLASparseImpl.forward_mqa, every decode step and a prefill over more than TOPK keys) to num_splits=1: forward_mqa passes none, so FA3's heuristic splits each row's keys and combines the partials, a reduction no Definition states. SparseMlaHead_v1 is FA3 at one split (H200, run r20261012-224647-aacf: 20,480 of 20,480 words; run r20261013-001802-7e95 calls it through the switch: GLM53-DSA GO, the heuristic differs on 3,240 of its 57,344 words). The price, run r20261013-001656-57d6 (one TP8 rank: 8 heads, top-2048, CUDA-graph replay): 13.6 -> 57.7 us per layer at B1 and 15.9 -> 58.4 us at B8 (about +3.3 ms per decode step over 78 layers), 50.7 -> 64.4 us at B64, the same at 4k and 32k context. 0 restores the heuristic, which no Program models."
+   "VERITY_SPARSE_MLA_NUM_SPLITS": "off by default (unset or 0): the target serves vLLM's standard setup, FA3's heuristic split-KV and its combine in FlashAttnMLASparseImpl.forward_mqa (every decode step and a prefill over more than TOPK keys), which binds only to a Program of the split and its combine (cursor/fa3-sparse-split-8c79). 1 pins num_splits=1 (verity_vllm.engine.sparse_mla, read back as the switch sparse_mla_num_splits = 1), whose function is SparseMlaHead_v1: H200 run r20261012-224647-aacf (20,480 of 20,480 words), and run r20261013-001802-7e95 through the switch (GLM53-DSA GO; the heuristic differs on 3,240 of its 57,344 words). Its price, run r20261013-001656-57d6 (one TP8 rank: 8 heads, top-2048, CUDA-graph replay): 13.6 -> 57.7 us per layer at B1, 15.9 -> 58.4 us at B8 (about +3.3 ms per decode step over 78 layers), 50.7 -> 64.4 us at B64, the same at 4k and 32k context. Serving with it is pending a decision; the meta inventory with it on is run r20261013-002721-e2f9, otherwise equal to the pinned one."
   }
  },
  "selections": {
@@ -294,7 +294,7 @@
     "SparseMlaHead_v2",
     "SparseMlaBlock_v2"
    ],
-   "note": "FlashAttnMLASparseImpl.forward_mqa -> FA3 flash_attn_varlen_func (FLASH_ATTN_MLA_SPARSE: bf16 MLA cache, no DCP): per query token the NHL heads over the row's valid_counts selected rows [kv_c 512 | k_pe 64] in the top-k's order, scale 1/16: SparseMla_v1{T=valid count,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}. FlashInfer's sparse path (FLASHINFER_MLA_SPARSE_SM90) runs only with an fp8 KV cache or a named --attention-backend and has no Definition. SparseMlaHead_v1 is FA3 at num_splits=1 (H200, run r20261012-224647-aacf: 20,480 of 20,480 words); forward_mqa passes no num_splits, so FA3's heuristic splits the keys and combines the partials, which the Definition does not state (3,835 of the same 20,480 words differ, run r20261012-222325-ce92). The serving switch sparse_mla_num_splits (target.switches; VERITY_SPARSE_MLA_NUM_SPLITS, target.env_reasons) pins it to 1 in the driver and every rank: run r20261013-001802-7e95 calls forward_mqa's FA3 through it, GLM53-DSA GO. Port until a Build rule binds it"
+   "note": "FlashAttnMLASparseImpl.forward_mqa -> FA3 flash_attn_varlen_func (FLASH_ATTN_MLA_SPARSE: bf16 MLA cache, no DCP): per query token the NHL heads over the row's valid_counts selected rows [kv_c 512 | k_pe 64] in the top-k's order, scale 1/16: SparseMla_v1{T=valid count,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}. FlashInfer's sparse path (FLASHINFER_MLA_SPARSE_SM90) runs only with an fp8 KV cache or a named --attention-backend and has no Definition. SparseMlaHead_v1 is FA3 at num_splits=1 (H200, run r20261012-224647-aacf: 20,480 of 20,480 words); forward_mqa passes no num_splits, so FA3's heuristic splits the keys and combines the partials, which the Definition does not state (3,835 of the same 20,480 words differ, run r20261012-222325-ce92). The target serves the heuristic (target.switches: sparse_mla_num_splits null), so this binds to a Program of the split and its combine, or to SparseMlaHead_v1 under VERITY_SPARSE_MLA_NUM_SPLITS=1 (target.env_reasons; run r20261013-001802-7e95: GLM53-DSA GO). Port until then"
   },
   "dsa-indexer-q": {
    "status": "port",

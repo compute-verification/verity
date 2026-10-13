@@ -4,9 +4,10 @@ vLLM's `FlashAttnMLASparseImpl.forward_mqa` (`FLASH_ATTN_MLA_SPARSE`: every deco
 calls FA3 with no ``num_splits``, so FA3's heuristic splits each row's keys by the batch shape and combines the partial rows: a
 reduction no Definition states, whose words change with the split count.  `SparseMlaHead_v1` is FA3 at ``num_splits=1``.
 
-`install` wraps the ``flash_attn_varlen_func`` that backend module calls, its own module global, so FA3's dense prefill and every
-other caller keep vLLM's arguments.  It pins one split unless `ENV` is ``"0"`` (vLLM's heuristic) and refuses any other value.
-Every process that builds a served engine pins it before the model's first forward (a CUDA graph captures the call's arguments).
+The switch is off by default: unset or ``"0"`` serves vLLM's standard setup (the heuristic), ``"1"`` pins one split, and any
+other value is refused.  When it is on, `install` wraps the ``flash_attn_varlen_func`` that backend module calls, its own module
+global, so FA3's dense prefill and every other caller keep vLLM's arguments.  Every process that builds a served engine pins it
+before the model's first forward (a CUDA graph captures the call's arguments).
 Importing this module `arm`\\ s the pin: it is installed when the backend module is imported, and nothing is imported for it, so a
 process that loads this module without serving (a committer, a CPU test) imports no vLLM.  Each tensor-parallel rank imports it
 through `engine.rank_worker` when vLLM mixes the extension into its Worker; the driver (`engine.build.build_engine`) arms it
@@ -34,8 +35,8 @@ _PIN: hooks.Patch | None = None
 
 
 def wanted() -> int | None:
-    """The split count `ENV` asks for: `SPLITS` when unset or ``"1"``, None (vLLM's heuristic) for ``"0"``."""
-    v = os.environ.get(ENV, str(SPLITS)).strip()
+    """The split count `ENV` asks for: `SPLITS` for ``"1"``, None (vLLM's heuristic) when unset or ``"0"``."""
+    v = os.environ.get(ENV, "0").strip()
     if v not in ("0", str(SPLITS)):
         raise ValueError(f"{ENV}={v!r}: {SPLITS} pins FA3's sparse MLA to one split, 0 leaves vLLM's heuristic; nothing else is modelled")
     return None if v == "0" else SPLITS
@@ -52,7 +53,7 @@ def _one_split(original: Any) -> Any:
 
 def install(module: Any = None) -> hooks.Patch | None:
     """Pin `SITE`'s ``flash_attn_varlen_func`` to `SPLITS` (``module``: that module, imported when None), once per process;
-    None when `ENV` is ``"0"``."""
+    None when the switch is off (`ENV` unset or ``"0"``)."""
     global _PIN
     if wanted() is None:
         return None
@@ -87,8 +88,8 @@ class _OnImport(importlib.abc.MetaPathFinder):
 
 
 def arm(site: str = SITE) -> None:
-    """`install` now if ``site`` is imported, else when it is: nothing is imported here.  Once per process; nothing when `ENV`
-    is ``"0"``."""
+    """`install` now if ``site`` is imported, else when it is: nothing is imported here.  Once per process; nothing when the
+    switch is off."""
     if wanted() is None:
         return
     if site in sys.modules:

@@ -948,8 +948,9 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
 
 def phase_attn(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any], topk: dict[str, Any], quick: bool):
     """FA3's sparse decode on ATTN_TOKENS' prefill top-k rows, as `forward_mqa` calls it: through its module's
-    ``flash_attn_varlen_func`` under the serving switch (`engine.sparse_mla`), which pins one split.  vLLM's own heuristic on the
-    same call is recorded beside it (``heuristic_differs``), not checked."""
+    ``flash_attn_varlen_func`` under the serving switch (`engine.sparse_mla`, off by default: vLLM's heuristic splits; with
+    ``VERITY_SPARSE_MLA_NUM_SPLITS=1``, one split, `SparseMlaHead_v1`).  The record says which (``switch``); with the pin on,
+    the heuristic on the same call is recorded beside it (``heuristic_differs``), not checked."""
     import torch
     from vllm.v1.attention.backends.mla import flashattn_mla_sparse as FMS
     from vllm.v1.attention.backends.mla.sparse_utils import flat_kv_row_view, triton_convert_req_index_to_global_index
@@ -990,8 +991,7 @@ def phase_attn(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str
            "heuristic_differs": None if heuristic is None else int((_u16(heuristic) != out).sum()),
            "checks": {"conversion": bool(np.array_equal(g, want_g) and np.array_equal(n, want_n)),
                       "deterministic": bool(torch.equal(out1.view(torch.int16), out2.view(torch.int16))),
-                      "shape": list(out1.shape) == [S, NH, DV] and out1.dtype == torch.bfloat16,
-                      "one_split": sparse_mla.num_splits() == 1}}
+                      "shape": list(out1.shape) == [S, NH, DV] and out1.dtype == torch.bfloat16}}
     jobs = []
     for i, t in enumerate(toks):
         paths = _save(work / f"attn_{t}", qn=qn[i], qr=qr[i], kv=kvr[g[i, :n[i]]], out=out[i])

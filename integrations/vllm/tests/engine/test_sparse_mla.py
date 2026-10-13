@@ -1,5 +1,5 @@
-"""`engine.sparse_mla`: the serving switch pins FA3's sparse MLA backend to one split, through that module's own global, armed
-before the module is imported or installed on it; ``"0"`` leaves vLLM's heuristic and any other value is refused."""
+"""`engine.sparse_mla`: the serving switch is off by default (vLLM's heuristic); ``"1"`` pins FA3's sparse MLA backend to one
+split, through that module's own global, armed before the module is imported or installed on it; any other value is refused."""
 from __future__ import annotations
 
 import sys
@@ -22,13 +22,36 @@ def clean(monkeypatch):
     sparse_mla.uninstall()
 
 
+@pytest.fixture
+def on(clean):
+    clean.setenv(sparse_mla.ENV, "1")
+    return clean
+
+
 def _backend() -> types.ModuleType:
     m = types.ModuleType("fake_flashattn_mla_sparse")
     m.flash_attn_varlen_func = _fa3
     return m
 
 
-def test_the_pin_passes_one_split_and_uninstall_restores_the_module(clean) -> None:
+@pytest.mark.parametrize("value", [None, "0"], ids=["unset", "zero"])
+def test_off_leaves_the_heuristic_and_arms_nothing(clean, value) -> None:
+    if value is not None:
+        clean.setenv(sparse_mla.ENV, value)
+    m = _backend()
+    assert sparse_mla.wanted() is None
+    assert sparse_mla.install(m) is None and m.flash_attn_varlen_func is _fa3 and sparse_mla.num_splits() is None
+    sparse_mla.arm("fake_never_imported_site")
+    assert not any(isinstance(f, sparse_mla._OnImport) for f in sys.meta_path)
+
+
+def test_any_other_value_is_refused(clean) -> None:
+    clean.setenv(sparse_mla.ENV, "2")
+    with pytest.raises(ValueError, match=sparse_mla.ENV):
+        sparse_mla.install(_backend())
+
+
+def test_the_pin_passes_one_split_and_uninstall_restores_the_module(on) -> None:
     m = _backend()
     p = sparse_mla.install(m)
     assert m.flash_attn_varlen_func(q=None) == 1 and m.flash_attn_varlen_func(q=None, num_splits=0) == 1
@@ -38,23 +61,12 @@ def test_the_pin_passes_one_split_and_uninstall_restores_the_module(clean) -> No
     assert m.flash_attn_varlen_func is _fa3 and sparse_mla.num_splits() is None
 
 
-def test_zero_leaves_the_heuristic_and_other_values_are_refused(clean) -> None:
-    m = _backend()
-    clean.setenv(sparse_mla.ENV, "0")
-    assert sparse_mla.install(m) is None and m.flash_attn_varlen_func is _fa3 and sparse_mla.num_splits() is None
-    sparse_mla.arm("fake_never_imported_site")
-    assert not any(isinstance(f, sparse_mla._OnImport) for f in sys.meta_path)
-    clean.setenv(sparse_mla.ENV, "2")
-    with pytest.raises(ValueError, match=sparse_mla.ENV):
-        sparse_mla.install(m)
-
-
-def test_arm_installs_when_the_backend_is_imported_and_imports_nothing_itself(clean, tmp_path) -> None:
+def test_arm_installs_when_the_backend_is_imported_and_imports_nothing_itself(on, tmp_path) -> None:
     pkg = tmp_path / "fake_vllm_pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
     (pkg / "sparse.py").write_text("def flash_attn_varlen_func(**kw):\n    return kw.get('num_splits', 0)\n")
-    clean.syspath_prepend(str(tmp_path))
+    on.syspath_prepend(str(tmp_path))
     site = "fake_vllm_pkg.sparse"
     try:
         sparse_mla.arm(site)
