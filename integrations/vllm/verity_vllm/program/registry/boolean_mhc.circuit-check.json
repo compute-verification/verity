@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "HopperTf32WgmmaDot8_v2": {
+   "and": 5388
+  },
+  "MhcSigmoid_v2": {
+   "and": 15167
+  }
+ }
+}
