@@ -134,10 +134,10 @@ theorem rowColsRead_of {own : Fin S → Array Flock.Registered.Port} {sel : ℕ 
     omega
   obtain ⟨hn, hr⟩ := hk ℓ hℓ t hb
   obtain ⟨q, k, hkq, hkey'⟩ := hkey ℓ hℓ t ht
-  have hm : ∀ X : (x : Fin S) → (Vs x).Bits,
-      colsAt (Vs (M.sessO ℓ)) (maskOf Vs (skOf Vs own sel) s X (M.sessO ℓ)) (M.unO ℓ ρ j) hj t =
-        colsAt (Vs (M.sessO ℓ)) (X (M.sessO ℓ)) (M.unO ℓ ρ j) hj t := fun X =>
-    copyVal_maskOf s X (M.sessO ℓ) (M.unO ℓ ρ j) hj hn (ioColAt_of_readCol _ hn hr) fun hcw => by
+  have hm : ∀ Lx : (x : Fin S) → (Vs x).Bits,
+      colsAt (Vs (M.sessO ℓ)) (maskOf Vs (skOf Vs own sel) s Lx (M.sessO ℓ)) (M.unO ℓ ρ j) hj t =
+        colsAt (Vs (M.sessO ℓ)) (Lx (M.sessO ℓ)) (M.unO ℓ ρ j) hj t := fun Lx =>
+    copyVal_maskOf s Lx (M.sessO ℓ) (M.unO ℓ ρ j) hj hn (ioColAt_of_readCol _ hn hr) fun hcw => by
       rw [posK_of_key (M.unO ℓ ρ j) hj hn hkq hkey' hcw]
       exact mem_skOf_inl.2 (hsel s ρ ℓ l hc j hjq t ht q k hkq hkey')
   rw [← hm Lb, ← hm Lb', he]
