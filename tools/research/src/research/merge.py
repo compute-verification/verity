@@ -1159,10 +1159,28 @@ def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run
     return True
 
 
+#: `sh -c` around the after-landing command: run it (``$2``...) in its worktree ``$0``, then remove that from ``$1``'s repository
+AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree remove --force "$0"; exit $s'
+
+
+def _own_tree(repo: Path, commit: str) -> Path | None:
+    """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
+    (12 Oct: drive's queue clone is reset and cleaned every tick, and d779760ce's `post_train.py` lost its `.venv` mid-run).
+    None when ``repo`` can't make one."""
+    import shutil
+
+    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-"))
+    if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
+        shutil.rmtree(tree, ignore_errors=True)
+        return None
+    return tree
+
+
 def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen) -> list[str] | None:
     """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
-    does changes the merge's result.  Returns the argv started, None when the declaration names none."""
+    does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  Returns
+    the argv started, None when the declaration names none."""
     from .store import tools_registry
 
     try:
@@ -1173,13 +1191,17 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
         return None
     argv.append(commit)
     out = Path(tempfile.gettempdir()) / f"research-after-land-{commit[:12]}.log"
+    tree = _own_tree(repo, commit)
+    run = argv if tree is None else ["sh", "-c", AFTER_LAND_THEN_REMOVE, str(tree), str(repo), *argv]
     try:
         with open(out, "ab") as f:
-            spawn(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+            spawn(run, cwd=tree or repo, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
     except OSError as e:
+        if tree is not None:
+            _git(repo, "worktree", "remove", "--force", str(tree), check=False)
         log(f"research merge: after the landing, `{shlex.join(argv)}` did not start ({e}); run it by hand")
         return argv
-    log(f"research merge: after the landing, started `{shlex.join(argv)}` (log {out})")
+    log(f"research merge: after the landing, started `{shlex.join(argv)}` in {tree or repo} (log {out})")
     return argv
 
 
