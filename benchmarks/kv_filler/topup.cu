@@ -980,6 +980,7 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   CK(cudaEventCreateWithFlags(&st->step_done, cudaEventDisableTiming));
   CK(cudaEventCreateWithFlags(&st->pre_done, cudaEventDisableTiming));
   CK(cudaMalloc(&st->sg.words, 4ull * fl::SIGN_SLOTS * fl::SIGN_WORDS));
+  CK(cudaMalloc(&st->sg.frag, 16ull * fl::SIGN_SLOTS * fl::FRAG_U4));
   CK(cudaMalloc(&st->sg.pass, 8 * fl::SIGN_SLOTS));
   CK(cudaMalloc(&st->sg.done, 8 * fl::SIGN_SLOTS));
   CK(cudaMemset(st->sg.pass, 0xFF, 8 * fl::SIGN_SLOTS));
@@ -1105,7 +1106,7 @@ int sq_stop() {
   for (cudaStream_t s : {st->s_base, st->s_idle, st->s_step, st->s_pre, st->s_h}) cudaStreamDestroy(s);
   for (cudaEvent_t e : {st->start, st->base_done[0], st->base_done[1], st->idle_done, st->step_ev, st->step_done, st->pre_done})
     cudaEventDestroy(e);
-  for (void* p : {(void*)st->sg.words, (void*)st->sg.pass, (void*)st->sg.done, (void*)st->seq, (void*)st->ring.xr, (void*)st->ring.cnt, (void*)st->ring.t0, (void*)st->ring.t1,
+  for (void* p : {(void*)st->sg.words, (void*)st->sg.frag, (void*)st->sg.pass, (void*)st->sg.done, (void*)st->seq, (void*)st->ring.xr, (void*)st->ring.cnt, (void*)st->ring.t0, (void*)st->ring.t1,
                   (void*)st->taken, (void*)st->g0})
     cudaFree(p);
   cudaFreeHost(st->taken_h);
