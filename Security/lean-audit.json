@@ -4472,13 +4472,13 @@
    ]
   },
   "Definitions.Accounting.Bandwidth.Causal": {
-   "digest": "44ca9320bacb2e2990c7878d8724c0e1b04f6ceded8ee6d9e23e5c44e37a63b0",
+   "digest": "77c0e7236051b937516370d1b66cdabfd998ca6d239df4ace8f07b4195a4d0bc",
    "definitions": {
-    "Bandwidth.Causal.Acts": "bf84a8bebc9a52be06c19a2937ae5e1416b1c39f8b8b7eadf1db58c02007f3e1",
-    "Bandwidth.Causal.Cross": "42319d887d9ef6f5e1c271749102eedef501ccc72733792a140a79b39ba48655",
-    "Bandwidth.Causal.HearsChip": "d7da9b45fb66d32748061aa0aeac9157d24fb6723e6dd297bfae145999623f4d",
-    "Bandwidth.Causal.OracleLocation": "45d775975250439a0f1874cf29490a8dd032753e9d33613125caac33446f501b",
-    "Bandwidth.Causal.PassiveMemory": "23e5648136afb6b8503d55f741d67bcfdd8c8b401fcd8b70be5f50f891051c70"
+    "Bandwidth.Causal.Acts": "1ca623e41a5214c918751e8e5f2b0d5811c82b75d84df0dc84a397e43f28fdc7",
+    "Bandwidth.Causal.Cross": "ebaffc3a897d7c709cdafee0baaf0a9848e8e93738a322e468768da45d3d8608",
+    "Bandwidth.Causal.HearsChip": "a5eb2858fdf2d8e7693fe5fdb1e0d527b58b1364ea14175ef6e17596c12072eb",
+    "Bandwidth.Causal.OracleLocation": "effcffb04999062d96d55a41336ed5521a126776a0840000c2cdf54416a2b2fe",
+    "Bandwidth.Causal.PassiveMemory": "01110f201c3b2ba387aa41511daebee03a2cb4d6d34a533f626e3f48f3a88eba"
    },
    "guarantees": [
     "Bandwidth.SecurityProofs.B3",
@@ -4609,7 +4609,7 @@
    "guarantees": ["Bandwidth.SecurityProofs.AuditRelay"]
   },
   "Definitions.Accounting.Confidence": {
-   "digest": "6dadeaf8538b9a740ed4fce10203e5cda4d0873825ed16a032bff929856d704b",
+   "digest": "2832d0ccbf65277d155f0683e0940cbb0433e9730d5baa867d9b6fd68e2f6c07",
    "definitions": {
     "Accounting.Actual.Computes": "9319720c640d412d7ba1e51b57f32c7ca303ac42c727e20f0055ae79c371c1cf",
     "Accounting.Actual.Run": "59b9a32712cd5c6f246f1b7e6a3ee435e2d35f3e1882d7a7cf003a7a1be22974",
@@ -4624,7 +4624,7 @@
     "Accounting.Actual.Run.mem": "dd69202e6cc6e2aaf253558dc167cdd6da57895c4fe8ff381268c22bb57f42fa",
     "Accounting.Actual.Run.seen": "bea69d75ef4fed14b09f991a23a2504f42786a77422d706d02cdaad94581a1a4",
     "Accounting.Actual.Run.sent": "19ae99de6633019bddc3b650c5011b8d5fd3691dbb1ef093441bde5edeeff69d",
-    "Accounting.Actual.Run.signal": "8f3e12c2807eb5ac47fe36b43cff1d627351a78c04066634d158d020f4e1f588",
+    "Accounting.Actual.Run.signal": "96fead465002ae09522e8b9fadef7f609035071aed0672210d0655d60ded6698",
     "Accounting.Actual.Run.state": "a89f70b57086a6087671decec76a36d9e00a0116ebe45ad2abd29b9bed1832aa",
     "Accounting.Actual.Run.val": "5cc9838473d175b8749ea80c18d2c0f15af104127f05ec1f80551375a542991e",
     "Accounting.Actual.Run.view": "11996c3958851a1f8ed93df3e5385dc4200ad9871ca493111324718032d579af",
@@ -4633,11 +4633,11 @@
     "Accounting.Actual.position": "b6c4737f68b198bc4d1054481b8ae41dd1f0c2ee777902e8da61127805102cff",
     "Accounting.Actual.runtime": "5bca70547f5a3fc42f68c8dbdeee801f02ab1ce2bc3d64829bf7eadcfcc36598",
     "Accounting.Additive": "c8c0489d83df1eb0207905c97bfb01051056206f391a6e0ec8ce423dcc7de39e",
-    "Accounting.Alphabet": "5f14f775d728c5e2b90b471ce45276926f98a8000ad8ebf05a5a0c5067f96a62",
+    "Accounting.Alphabet": "4ad9e1785273c14ca24a26523e3b5852b82021d461b657bf211df1ace08e5191",
     "Accounting.CausalFrom": "fee9dbdb5e257e6c997b15ae60f60d662ffd24cddf4861aa15c9f5e5b4280bee",
     "Accounting.Placed.Holding": "3518954773e68e4f3e14e2c6ddd6635884d611c8e5da4db11ad8bfa846774bab",
     "Accounting.Sound": "ab7db8fd6792ca63814601cfcd42c9d07942f59b4e2b9f7af85cf7ca024908c0",
-    "Accounting.portSignals": "0a82918f35da0c0533cc5269285f6b05154d897823f6d6e984c33b20c90ee333",
+    "Accounting.portSignals": "ce4ca5ef163dbbaaf7e95aca25dfcec092bd6b766b6ff9a4920894cf0299b817",
     "Accounting.req": "961f514b6304465dc1e7e4fa55e51c523c147c776780150b65c6454bdaed6fea"
    },
    "guarantees": [
@@ -13499,14 +13499,14 @@
    ]
   },
   "Models.Accounting.Guarantees.Bandwidth.Causal": {
-   "digest": "906b60b49664317e9ccb494a48c0fcfe4a31e6e430b6ca235a184b8242f1b401",
+   "digest": "a991ac69e4d2a525b166b5e859cbcd03231393a3d66c809b7a82916c3b61babd",
    "definitions": {
-    "Bandwidth.Guarantees.B3": "2fa33538e78f3a712bf67f9c6f22d4cfe63bd47049d697beac712091e1f58396",
-    "Bandwidth.Guarantees.B3Capacity": "f3dfafaa86dcc42b12dac913543ca96e413c0b2c0ae690e0b3eb7bcf35e2fa84",
-    "Bandwidth.Guarantees.B3CapacityRO": "d9dc59bd66551a59b524b08c9dd8cb065065f9c3dcc74e07ffbbcedfaa83d089",
-    "Bandwidth.Guarantees.B3RO": "a5b3be43df38802256fcd8a65f52d9daa13d534ca43f73616c6b45b9f7af1da5",
-    "Bandwidth.Guarantees.Mbw": "5c87ceecc02181154fae40fb7595b491368cbce92a03b01be270ae2f87ccad3d",
-    "Bandwidth.Guarantees.MbwCapacity": "9d1a81fcdca474f8686c0a3f5f31d43e3efb76011b3a8eece3f6316bc3daa42b"
+    "Bandwidth.Guarantees.B3": "d1b226cedad503642628eaa456f21e48d3d6a9fd47aa5eed036c44d2e3d85e1b",
+    "Bandwidth.Guarantees.B3Capacity": "7f8271d7d306bf13aa1b43f92de062758aa5379a5fdf29cfbd2e1d0214b39f25",
+    "Bandwidth.Guarantees.B3CapacityRO": "bd88bf5e4db44368a20e5f9ca288b33d811878030e76aed3698fa5b0a48352e9",
+    "Bandwidth.Guarantees.B3RO": "3264d93a335c9469d76443a3462ac5c002f1e2a7ae713507556f0c02f60e5100",
+    "Bandwidth.Guarantees.Mbw": "58aae401fa7fba97e68ec282b7407e5296d75fa7d43838a8630e12992d143507",
+    "Bandwidth.Guarantees.MbwCapacity": "e3b467144dbf5983862e967cbcb82d2ea3b504c72033b4cad7b840bdf06dd099"
    },
    "guarantees": [
     "Bandwidth.SecurityProofs.B3",
