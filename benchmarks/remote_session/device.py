@@ -660,7 +660,8 @@ class Device:
         if not self.gates["device_seed"]:
             raise RuntimeError("the device's chained seed is not the driver's")
         if not self.gates["plain_root"]:
-            raise RuntimeError("the pipelined pass's root is not the plain pass's")
+            raise RuntimeError(f"the pipelined pass differs from the plain pass at levels "
+                               f"{[h for h, ok in s.plain_level_matches.items() if not ok]}")
         if not self.gates["device_signs"]:
             raise RuntimeError("the device's signs are not the reference's")
         # A window's openings once, over the calibration's passes, before any session: the opener's stream reaches
