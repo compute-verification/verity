@@ -80,6 +80,7 @@ def test_the_registrant_premise_is_a_model_of_the_provers_covered() -> None:
     e = get("registrant-holds-openings")
     assert (e.kind, e.standing, e.label) == ("model", None, "Registrant holds openings")
     assert "a row and salt under every leaf it registered" in e.name and "outside the guarantee" in e.name
+    assert "its own workers behind the firewall hold the salts they committed R's level-0 top rows under" in e.name
 
 
 def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:

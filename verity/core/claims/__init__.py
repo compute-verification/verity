@@ -108,7 +108,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # recursive audit (Flock.Guarantees.RecursiveAuditC3At's _hRC) on the provers it covers
     Entry("registrant-holds-openings", "model",
           "Registrant holds its openings: the prover holds a row and salt under every leaf it registered at a row the "
-          "verifier's reads file names; a prover that registers a hash it can't open is outside the guarantee",
+          "verifier's reads file names, and its own workers behind the firewall hold the salts they committed R's level-0 "
+          "top rows under; a prover that registers a hash it can't open is outside the guarantee",
           "Registrant holds openings"),
     Entry("fiat-shamir", "model", "Fiat–Shamir (non-interactive) in the random-oracle model", "Fiat–Shamir"),
     Entry("common-reference-string", "model",
