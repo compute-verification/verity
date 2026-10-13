@@ -336,12 +336,12 @@ variable {bind : Fin S → VStar.Bindings} {zs : Reg → L.Ω → List (Cm × (�
 port `m<i>`. -/
 theorem roundPort_inner (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs) (hst : SessStmt ish bind zs dg N k Rw)
     (hmn : MsgNamesAt ish zs dg N k Rw) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
-    {τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N)}
-    {o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript} (hA : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) (s : Fin S) {m kk cl j : ℕ}
+    (hA : ∃ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) (s : Fin S) {m kk cl j : ℕ}
     (hpar : RecResiduals.params (Vs s).c.unit.name = some (m, kk, cl, j)) (q : Fin (Vs s).c.ports.size) {i : ℕ}
     (hq : (Vs s).c.ports[q].name = s!"m{i}") :
     ∃ ss sv, RecVStar.statements ish = .ok ss ∧ ss[(s : ℕ)]? = some sv ∧
       (s!"m{i}", s!"rec-c{i}", #[some 0, some 1]) ∈ ownPorts sv ∧ (Vs s).nv = 2 := by
+  obtain ⟨τ, o, hA⟩ := hA
   obtain ⟨ss, sv, cf, hss, hj, hf, hcf, hc⟩ := hst R ω t R₂ τ o hA s
   obtain ⟨ss', sv', hss', hj', hm⟩ := hmn R ω t R₂ τ o hA s
   obtain rfl : ss' = ss := Except.ok.inj (hss'.symm.trans hss)
@@ -355,9 +355,8 @@ theorem roundPort_inner (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
 units). -/
 theorem wRoundRead_inner (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
     (hst : SessStmt ish bind zs dg N k Rw) (hmn : MsgNamesAt ish zs dg N k Rw) {R : Reg} {ω : L.Ω}
-    {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N)}
-    {o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript}
-    (hA : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o)
+    {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
+    (hA : ∃ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o)
     {own : Fin S → Array Flock.Registered.Port}
     (hown : ∀ (s : Fin S) ss sv, RecVStar.statements ish = .ok ss → ss[(s : ℕ)]? = some sv → OwnHas (own s) sv)
     {sel : ℕ → String → ℕ → Prop} {stage : Fin 2 → ℕ → ℕ} {sess : ℕ → Fin S}
