@@ -142,6 +142,21 @@ def effective_sliding_window(cfg: dict[str, Any]) -> int | None:
     return cfg.get("sliding_window") or None
 
 
+def _quant_config_for_profile(cfg: dict[str, Any], arch: str) -> dict[str, Any] | None:
+    """The checkpoint quantization contract that generic ``config_of`` validates.
+
+    GLM-5.3 deliberately keeps its DSA projections, norms, biases, embeddings,
+    lm_head, and MoE gates in their served non-FP8 dtypes.  Their profile and
+    Build rules model those roles separately; ``quant_refusal`` still checks
+    the block-FP8 scheme and that every MoE router is kept in bf16.
+    """
+    qc = cfg.get("quantization_config")
+    if not isinstance(qc, dict) or arch != "dsa-moe":
+        return qc
+    routers = {f"model.layers.{n}.mlp.gate" for n in range(int(cfg.get("num_hidden_layers") or 0))}
+    return {**qc, "modules_to_not_convert": [name for name in qc.get("modules_to_not_convert", ()) if name in routers]}
+
+
 def structural_refusal(cfg: dict[str, Any]) -> str | None:
     """None when the family facts table describes the configuration's vLLM implementation; else why it is not served."""
     fam = FF.family_of(cfg)
@@ -162,7 +177,7 @@ def structural_refusal(cfg: dict[str, Any]) -> str | None:
         E = cfg.get("num_experts") or cfg.get("num_local_experts") or cfg.get("n_routed_experts")
         if not E:
             return "MoE family without num_experts, num_local_experts, or n_routed_experts in config.json"
-    why = analytic.quant_refusal(cfg.get("quantization_config"), cfg)
+    why = analytic.quant_refusal(_quant_config_for_profile(cfg, arch), cfg)
     if why:
         return why
     return None
@@ -189,10 +204,14 @@ def derive_config(cfg: dict[str, Any], *, repo: str | None, revision: str | None
         raise ValueError(why)
     fam = FF.facts_for(cfg)
     rcfg = rank_hf_config(cfg, world)
+    analytic_cfg = dict(rcfg)
+    analytic_cfg["quantization_config"] = _quant_config_for_profile(rcfg, fam["arch"])
     # the hand facts that config_of needs BEFORE deriving (none today) vs the ones that read C (derive: sqrt(H), rotary width): two passes
-    C0, _ = analytic.config_of(rcfg, model=repo, revision=revision, family_rules={FF.family_of(cfg): fam["rules"]})
+    C0, _ = analytic.config_of(analytic_cfg, model=repo, revision=revision, family_rules={FF.family_of(cfg): fam["rules"]})
     hand, hprov = FF.resolve_facts(rcfg, C0)
-    C, prov = analytic.config_of(rcfg, model=repo, revision=revision, family_rules={FF.family_of(cfg): fam["rules"]}, hand=hand)
+    C, prov = analytic.config_of(analytic_cfg, model=repo, revision=revision, family_rules={FF.family_of(cfg): fam["rules"]}, hand=hand)
+    if rcfg.get("quantization_config"):
+        C["quantization_config"] = dict(rcfg["quantization_config"])
     prov.update({k: v for k, v in hprov.items() if k in C})
     C["ROPE_THETA"] = float(C["ROPE_THETA"])                            # config.json writes 100000 or 100000.0; the profiles always said float
     C = base.with_geometry(C)
