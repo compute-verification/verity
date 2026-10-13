@@ -12,7 +12,8 @@ split along them:
     FA2 -> `BN = fa2_kblock_n(D)` (128 at D <= 64, else 64; constant per head dim), `INV = Fa2InvSum_v1` (`sum == 0 ? 1 : 1/sum`);
     FA3 -> `BN = fa3_kblock_n(D, seqlen_q, NH // KVH)` (vllm-flash-attn 506341a1 `hopper/tile_size.h::tile_size_fwd_sm90` with
            `heuristics.h::use_one_mma_wg`: at D <= 64 the decode launch (`seqlen_q * (NH/KVH) <= 64`) runs the 64 x 192 tile, prefill
-           192 x 128; at D = 128 both run kBlockN 128), `INV = Fa3InvSum_v1` (`sum == 0 || sum != sum ? 0 : 1/sum`).
+           192 x 128; at D = 128 both run kBlockN 128; at D = 256 every launch runs 128 x 80), `INV = Fa3InvSum_v1`
+           (`sum == 0 || sum != sum ? 0 : 1/sum`).
   `TARGETS[family]["flash_attn_versions"]` says which versions have a registered chain on a step family; `check_flash_attn_registered` refuses
   the rest with the reason.
 
@@ -197,7 +198,8 @@ def fa3_kblock_n(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
     """kBlockN of the FA3 forward vLLM launches (vllm-flash-attn 506341a1 `hopper/tile_size.h::tile_size_fwd_sm90`, element_size 2,
     causal, not local, `paged_kv_non_TMA` = paged KV without TMA, `use_one_mma_wg = (D in {64, 128}) and seqlen_q * qh_per_kvh <= 64`
     (`hopper/heuristics.h`; `seqlen_q` = the launch's max_seqlen_q under varlen)):  D <= 64: one-MMA-warpgroup 64 x 192 else 192 x 128;
-    D <= 96: 128 (paged non-TMA); D <= 128: 128 (causal).  Larger head dims are not registered."""
+    D <= 96: 128 (paged non-TMA); D <= 128: 128 (causal); D = 256 (qk and v head 256, GLM-5.3's dense MHA prefill): 80, the 128 x 80
+    tile whatever seqlen_q or paging.  The head dims between are not registered."""
     D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
     one_wg = D in (64, 128) and seqlen_q * qh <= 64
     if D <= 64:
@@ -206,12 +208,14 @@ def fa3_kblock_n(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
         return 128
     if D <= 128:
         return 128
+    if D == 256:
+        return 80
     raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockN rule")
 
 
 def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
     """kBlockM of the FA3 forward tile (the same `tile_size_fwd_sm90` / `use_one_mma_wg` rule as `fa3_kblock_n`): D <= 64: 64 (one MMA
-    warpgroup) else 192; D <= 96: 192; D <= 128: 64 (one MMA warpgroup) else 128."""
+    warpgroup) else 192; D <= 96: 192; D <= 128: 64 (one MMA warpgroup) else 128; D = 256: 128."""
     D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
     one_wg = D in (64, 128) and seqlen_q * qh <= 64
     if D <= 64:
@@ -220,6 +224,8 @@ def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
         return 192
     if D <= 128:
         return 64 if one_wg else 128
+    if D == 256:
+        return 128
     raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockM rule")
 
 
