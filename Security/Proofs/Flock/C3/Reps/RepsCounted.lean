@@ -116,9 +116,4 @@ theorem repIdxB_of_rounds {S₀ : Model.Statement} {b : ValsSrc} {sh : Flock.Sha
     repIdxB S₀ b = coinRounds rs :=
   repIdxB_of_counted hcl hrs hm hkl (repRoundsCounted_of_rounds hr) hs hn hd hk
 
-#print axioms t₄k_of_counted
-#print axioms repIdxB_of_counted
-#print axioms t₄k_of_coins
-#print axioms repIdxB_of_rounds
-
 end FlockC3.Reps

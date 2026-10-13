@@ -127,12 +127,4 @@ theorem coinRounds_held {H : Array (Array F128)} {rs : Array SchedRound}
     (coinRounds rs).map (H.getD · #[]) = (H.filter (·.size != 0)).toList :=
   map_getD_eq_filter (filter_range_sublist (fun k => 0 < (rs.getD k default).1) H.size rs.size hlt) hne hlen
 
-#print axioms heldBefore_size
-#print axioms heldBefore_sparse_size
-#print axioms roundAt_sparse
-#print axioms roundAt_sparseRounds
-#print axioms filter_range_sublist
-#print axioms map_getD_eq_filter
-#print axioms coinRounds_held
-
 end FlockC3.Compose
