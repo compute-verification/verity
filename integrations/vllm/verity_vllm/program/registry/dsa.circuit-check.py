@@ -23,4 +23,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         # the long-row check at a top-16 of 64 keys and at a ragged row (no power of two in either static)
         ("DsaTopKSelection_v1", lambda: bind(dsa.DsaTopKSelection, TOPK=16, N=64)),
         ("DsaTopKSelection_v1 ragged", lambda: bind(dsa.DsaTopKSelection, TOPK=5, N=37)),
+        ("DsaTopKSelection_v3", lambda: bind(dsa.DsaTopKSelectionV3, TOPK=16, N=64)),
+        ("DsaTopKSelection_v3 ragged", lambda: bind(dsa.DsaTopKSelectionV3, TOPK=5, N=37)),
     ]

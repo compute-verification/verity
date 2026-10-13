@@ -62,7 +62,7 @@ reaches (s >= 1e-4 / 448), and `bits(s) >= 0x7F800000` unsigned (`fma.rn.ftz(s, 
 the polynomial gives y = 128 (e = 128, m = 1) and so the same scale, ex2(128) = +inf.  So the scale is a power of two in
 [2^-22, 2^127], or +inf when amax is.
 
-Registered functions (all `Name_v1`):
+Registered functions (`Name_v1` but the last):
   U32And, I32Sub, F32CeilFtz                 primitives: and.b32, sub.s32, cvt.rpi.ftz.f32.f32
   DsaUe8m0Scale                             (amax: f32) -> f32
   DsaUe8m0Quant{N}                          (x: N f32) -> (q: N e4m3, scale: f32)
@@ -73,6 +73,7 @@ Registered functions (all `Name_v1`):
   DsaMqaLogits{N,H,D}                       (q, w, k: N x D e4m3, ks: N f32) -> N f32: one query token over N keys
   DsaTopKShortRow{TOPK}                     (len: i32) -> TOPK i32
   DsaTopKSelection{TOPK,N}                  (logits: N f32, len: i32, idx: TOPK i32) -> bit: idx a selection of the row
+  DsaTopKSelection_v3{TOPK,N}               (logits, len, idx, thr: f32) -> bit: the same against a threshold witness
 
 `cs` is the rotary cache row at the token's position, [cos 0..ROPE/2-1 | sin 0..ROPE/2-1] bf16 (`get_rope` builds it in the default
 dtype, rotary_embedding/base.py:59-63).  `ks` is the key's f32 scale from its cache slot.
@@ -434,8 +435,9 @@ def order_key(o: Ops, x):
     return o.isel(o.ile(o.word(0), x), x, o.isub(o.word(INT_MAX), x))
 
 
-def topk_selection(o: Ops, TOPK: int, N: int, logits, n, idx):
-    """`DsaTopKSelection_v1`'s bit."""
+def selection_parts(o: Ops, TOPK: int, N: int, n, idx) -> tuple:
+    """The steps `DsaTopKSelection_v1` and `_v3` share, in v1's order: ``le[j]`` = len <= j (j <= N), ``short`` (idx the
+    shortcut's words), ``inside`` (every index in [0, len)), ``member[j]`` (some idx[i] == j) and ``count`` (the members)."""
     check_selection_statics(TOPK, N)
     zero, one = o.word(0), o.word(1)
     le = [o.ile(n, o.word(j)) for j in range(N + 1)]
@@ -443,12 +445,35 @@ def topk_selection(o: Ops, TOPK: int, N: int, logits, n, idx):
     inside = pairwise([o.band(o.ile(zero, idx[i]), o.bnot(o.ile(n, idx[i]))) for i in range(TOPK)], o.band)
     member = [pairwise([o.ieq(idx[i], o.word(j)) for i in range(TOPK)], o.bor) for j in range(N)]
     count = pairwise([o.isel(m, one, zero) for m in member], o.iadd)
+    return le, short, inside, member, count
+
+
+def _selected(o: Ops, TOPK: int, N: int, le, short, inside, count, fits):
+    """The bit from the shared steps and ``fits()``, the long row's key condition (emitted after the count's comparison)."""
+    tight = o.band(inside, o.ieq(count, o.word(TOPK)))
+    long_ok = o.band(tight, o.band(fits(), le[N]))
+    return o.bor(o.band(le[TOPK], short), o.band(o.bnot(le[TOPK]), long_ok))
+
+
+def topk_selection(o: Ops, TOPK: int, N: int, logits, n, idx):
+    """`DsaTopKSelection_v1`'s bit."""
+    le, short, inside, member, count = selection_parts(o, TOPK, N, n, idx)
     key = [order_key(o, logits[j]) for j in range(N)]
     least = pairwise([o.isel(member[j], key[j], o.word(INT_MAX)) for j in range(N)], lambda a, b: o.isel(o.ile(a, b), a, b))
     most = pairwise([o.isel(o.bor(member[j], le[j]), o.word(INT_MIN), key[j]) for j in range(N)],
                     lambda a, b: o.isel(o.ile(a, b), b, a))
-    long_ok = o.band(o.band(inside, o.ieq(count, o.word(TOPK))), o.band(o.ile(most, least), le[N]))
-    return o.bor(o.band(le[TOPK], short), o.band(o.bnot(le[TOPK]), long_ok))
+    return _selected(o, TOPK, N, le, short, inside, count, lambda: o.ile(most, least))
+
+
+def topk_threshold_selection(o: Ops, TOPK: int, N: int, logits, n, idx, thr):
+    """`DsaTopKSelection_v3`'s bit: v1's, its key comparison made against the threshold key ``order_key(thr)``."""
+    le, short, inside, member, count = selection_parts(o, TOPK, N, n, idx)
+    tk = order_key(o, thr)
+    fits = []
+    for j in range(N):
+        key = order_key(o, logits[j])
+        fits.append(o.band(o.bor(o.bnot(member[j]), o.ile(tk, key)), o.bor(o.bor(member[j], le[j]), o.ile(key, tk))))
+    return _selected(o, TOPK, N, le, short, inside, count, lambda: pairwise(fits, o.band))
 
 
 @composite("DsaTopKSelection", 1, ["TOPK", "N"],
@@ -463,6 +488,18 @@ def DsaTopKSelection(B, S, logits, n, idx):
     kernels take, and in what order they write the selection, follows their atomics, so the indices are the kernel's own and this
     function checks them."""
     return topk_selection(word_ops(B), S.TOPK, S.N, logits, n, idx)
+
+
+@composite("DsaTopKSelection", 3, ["TOPK", "N"],
+           lambda S: ((("logits", Array(S.N, F32)), ("len", I32), ("idx", Array(S.TOPK, I32)), ("thr", F32)), BIT),
+           conformance=_SELECTION_CONF)
+def DsaTopKSelectionV3(B, S, logits, n, idx, thr):
+    """`DsaTopKSelection_v1` with a threshold: the same bit, except that for TOPK < len <= N the members' least key need not be
+    computed.  Instead every member's key is at least the threshold key `order_key(thr)` and every non-member's below len at
+    most it.  So v1 is 1 exactly when v3 is 1 for some ``thr``, and `selection_threshold` names one (a member's word of least
+    key); a row of len <= TOPK or len > N reads no ``thr``.  ``thr`` is the prover's witness, not the kernel's: this form needs
+    no least or greatest key over the row, so `boolean_dsa.DsaTopKSelection_v4` checks it chunk by chunk."""
+    return topk_threshold_selection(word_ops(B), S.TOPK, S.N, logits, n, idx, thr)
 
 
 def order_keys(words) -> np.ndarray:
@@ -494,5 +531,32 @@ def selection_ok(words, n: int, idx) -> bool:
     return bool(key[mask].min() >= key[~mask].max())
 
 
+def selection_ok_thr(words, n: int, idx, thr) -> bool:
+    """`DsaTopKSelection_v3{TOPK = len(idx), N = len(words)}` in numpy (``thr`` an f32 word, float32 or its bits)."""
+    idx, n = _signed(idx).reshape(-1), int(_signed(n))
+    TOPK, N = idx.size, len(words)
+    check_selection_statics(TOPK, N)
+    if n <= TOPK or n > N:
+        return selection_ok(words, n, idx)
+    if not ((idx >= 0) & (idx < n)).all() or np.unique(idx).size != TOPK:
+        return False
+    key, t = order_keys(np.asarray(words)[:n]), int(order_keys(np.asarray([thr]))[0])
+    mask = np.zeros(n, dtype=bool)
+    mask[idx] = True
+    return bool((key[mask] >= t).all() and (key[~mask] <= t).all())
+
+
+def selection_threshold(words, n: int, idx) -> int:
+    """A ``thr`` for `DsaTopKSelection_v3`: the word of least key among the row's words that ``idx`` names in [0, min(len, N)),
+    0 when it names none.  Whenever v1 accepts (words, len, idx), v3 accepts it with this word, so v3 at this word is v1."""
+    w = np.asarray(words)
+    w = (w.view(np.uint32) if w.dtype == np.float32 else w.astype(np.int64) & M32).astype(np.int64)
+    idx, n = _signed(idx).reshape(-1), int(_signed(n))
+    named = idx[(idx >= 0) & (idx < min(n, len(w)))]
+    if not named.size:
+        return 0
+    return int(w[named[np.argmin(order_keys(w[named]))]])
+
+
 DSA_COMPOSITES = [DsaUe8m0Scale, DsaUe8m0Quant, DsaIndexerKRow, DsaIndexerQHead, DsaIndexerQ, DsaMqaLogit, DsaMqaLogits,
-                  DsaTopKShortRow, DsaTopKSelection]
+                  DsaTopKShortRow, DsaTopKSelection, DsaTopKSelectionV3]
