@@ -10,18 +10,30 @@
 namespace kv {
 
 constexpr int APPEND_THREADS = 64;
+static_assert(TLW % 32 == 0, "a warp's words are one run of its token-layer");
 
+// A warp's 32 words are consecutive in the cache, so it stages them in shared memory and stores them as whole rows: a
+// word a lane would leave each of its 16-byte stores half a 32-byte sector.
 __global__ void __launch_bounds__(APPEND_THREADS) append_kernel(const u32 *__restrict__ in, u32 *__restrict__ cache,
                                                                 int batch, int ctx, int layers, int l0, int nl, int t,
                                                                 int k) {
+  constexpr int Q = NL / 4;   // a word's 16-byte pieces
+  __shared__ uint4 sm[APPEND_THREADS / 32][32 * Q];
   const u64 u = (u64)blockIdx.x * APPEND_THREADS + threadIdx.x;
-  if (u >= (u64)batch * nl * TLW) return;
+  if (u >= (u64)batch * nl * TLW) return;   // whole warps: the words are whole token-layers
+  const int lane = threadIdx.x & 31;
   const int w = (int)(u % TLW), l = l0 + (int)(u / TLW % nl), b = (int)(u / ((u64)TLW * nl));
   const u64 i = (((u64)b * ctx + t) * layers + l) * TLW + w;
   u32 x[NL];
   load(in + u * NL, x);
   if (k) encode_word(x, i, k);
-  store(cache + i * NL, x);
+  uint4 *s = sm[threadIdx.x / 32];
+#pragma unroll
+  for (int e = 0; e < Q; ++e) s[lane * Q + e] = make_uint4(x[4 * e], x[4 * e + 1], x[4 * e + 2], x[4 * e + 3]);
+  __syncwarp();
+  uint4 *g = reinterpret_cast<uint4 *>(cache + (i - lane) * NL);
+#pragma unroll
+  for (int e = 0; e < Q; ++e) g[lane + 32 * e] = s[lane + 32 * e];
 }
 
 }  // namespace kv
