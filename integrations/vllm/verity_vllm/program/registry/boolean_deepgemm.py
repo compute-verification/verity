@@ -2,7 +2,7 @@
 Boolean Definitions (the bodies are `deepgemm`'s, written once over `deepgemm.Ops` and its signatures over the word types), so each
 one's word view is its `_v1` at the same statics.
 
-    F32LtFtz_v2                                    traced: setp.lt.ftz.f32 (`f32_gt` of the flushed operands, swapped)
+    F32LtFtz_v2                                    traced (`lt_ftz`): setp.lt.ftz.f32, the flush read off the exponents
     Fp8Ue8m0Ceil_v2                                one traced circuit (`boolean_dsa.flat`): its three constant words folded
     Fp8GroupScaleUe8m0_v2{G}, Fp8GroupQuantUe8m0Group_v2{G}, FlashInferFp8Quant1x128Group_v2
                                                    one traced circuit each: a group's words share their scale's and their own
@@ -18,13 +18,13 @@ from __future__ import annotations
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.types import Array
+from verity.ml.circuits.boolean.forms import NOT, and_reduce, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.ops.boolean import attention as BA
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import mufu as BM
 from verity.ml.circuits.ops.boolean import scalar as SC
-from verity.ml.circuits.ops.boolean.softmax import f32_gt, ftz
 from verity_vllm.program.registry import boolean_dsa as BD
 from verity_vllm.program.registry import boolean_fp8 as BF8
 from verity_vllm.program.registry import deepgemm as DG
@@ -34,8 +34,31 @@ from verity_vllm.program.registry.fp8 import FP8_BLOCK
 BIT, BF16, F32, E4M3 = BD.BIT, BD.BF16, BD.F32, BD.E4M3
 T = (BF16, E4M3, F32)
 
-F32LtFtzV2 = definition("F32LtFtz", 2, lambda C, a, b: f32_gt(C, ftz(C, b), ftz(C, a)), (("a", F32), ("b", F32)), BIT,
-                        word=DG.F32LtFtz, doc="setp.lt.ftz.f32 on bits: F32LtFtz_v1, ftz(b) > ftz(a)")
+def _exponent(C, w):
+    """(any, all) of w's exponent bits, each pair's AND read by both reductions."""
+    e = w[23:31]
+    p = [C.AND(e[i], e[i + 1]) for i in range(0, 8, 2)]
+    return or_reduce(C, [e[i] ^ e[i + 1] ^ q for i, q in zip(range(0, 8, 2), p)]), and_reduce(C, p)
+
+
+def lt_ftz(C, a, b):
+    """setp.lt.ftz.f32 on bits.  A flushed operand's magnitude is its raw 31 bits when its exponent is nonzero and 0 otherwise, so
+    |ftz(a)| < |ftz(b)| is raw a < raw b with b's exponent nonzero (and > with a's); opposite signs give a's sign unless both flush to
+    zero; a NaN operand gives 0."""
+    (anz, aall), (bnz, ball) = _exponent(C, a), _exponent(C, b)
+    _, lt = sub(C, a[:31], b[:31], 31)
+    _, gt = sub(C, b[:31], a[:31], 31)
+    mag_lt, mag_gt = C.AND(lt, bnz), C.AND(gt, anz)
+    sa, sb = a[31], b[31]
+    same = mag_lt ^ C.AND(sa, mag_gt ^ mag_lt)
+    apart = C.AND(sa, NOT(C.AND(NOT(anz), NOT(bnz))))
+    r = same ^ C.AND(sa ^ sb, apart ^ same)
+    nan_a, nan_b = C.AND(aall, or_reduce(C, a[:23])), C.AND(ball, or_reduce(C, b[:23]))
+    return [C.AND(r, C.AND(NOT(nan_a), NOT(nan_b)))]
+
+
+F32LtFtzV2 = definition("F32LtFtz", 2, lt_ftz, (("a", F32), ("b", F32)), BIT, word=DG.F32LtFtz,
+                        doc="setp.lt.ftz.f32 on bits: F32LtFtz_v1")
 
 BITS = dict(BD.BITS, fminf=SC.F32Fminf, lt_ftz=F32LtFtzV2, mul_ftz=BA.F32MulFtz, rcp_ftz=BM.MufuRcpFtz, bf16_gt=SC.Bf16GtStrict,
             f2bf16=BG.F2fpBf16)
