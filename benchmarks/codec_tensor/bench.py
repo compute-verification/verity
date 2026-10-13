@@ -457,8 +457,10 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
     k_s over tiles of `sketch_t` tasks, stages < 2 sketch_t) or DECODERSxSTAGESx-2x16 (two sketch warps of their own
     sketch and hash, beside D decoders: full slot, k_s = 16), each checked against wt_fused_sketch's bounds; at
     M > 16 and k <= 2 the kernel has two MMA warps (wt.cu's fused_mma_warps), so D + 3 warps untagged and D + 5 beside
-    the sketch warps must fit. `auto`: untagged, the most decoder warps the field's registers allow at 16 warps at 4
-    and 6 stages fewer than fit at M = 32 (fewer stages leave more L1) and at all of them, 1 fewer at 4 and 6 fewer
+    the sketch warps must fit. `auto`: untagged, the most decoder warps the field's registers allow at 16 warps at 3,
+    4 and 6 stages fewer than fit at M = 32 (fewer stages leave more L1; at p1024 3 fewer is 7, the most that fit the
+    64 KiB shared-memory carveout at M <= 8, where a decoder's next task takes the stage of the task two before its
+    current one rather than one, so the decoders' chain of waits spans two rounds) and at all of them, 1 fewer at 4 and 6 fewer
     stages, and 2 fewer warps at 2 fewer stages (p1536's 10 decoders starve at 8 stages: 8 x 8 and 10 x 10 are its
     best); tagged, 0 and 2 of those warps tagging from the start, at 4 fewer stages; sketched, for each k_s in
     `sketch`, all of them sketching at 0, 2, 3 and 4 fewer stages (the sketch's buffers already take some), and at
@@ -474,7 +476,7 @@ def fused_cfgs(lib: Lib, spec: str, sketch: str = "", sketch_t: int = 8) -> list
     need = lambda d: -(-32 * d // lib.tw)  # noqa: E731
     full_slot = lib.pb == lib.s
     if spec == "auto":
-        cfgs = [(dmax, max(need(dmax), smax(0) - f), -1) for f in (4, 6, 0)]
+        cfgs = [(dmax, max(need(dmax), smax(0) - f), -1) for f in (4, 3, 6, 0)]
         cfgs += [(dmax - 1, max(need(dmax - 1), smax(0) - f), -1) for f in (4, 6) if dmax - 1 >= lib.fused_span]
         if dmax - 2 >= lib.fused_span:
             cfgs.append((dmax - 2, max(need(dmax - 2), smax(0) - 2), -1))
