@@ -657,6 +657,10 @@ inner transcript records. -/
 def commitRounds (rs : Array SchedRound) : List Nat :=
   (List.range rs.size).filter fun k => (rs.getD k default).2.2.2
 
+/-- The node counts of the tops `rs` commits, in round order: the `l`-th is a stream's `l`-th top's. -/
+def topCounts (rs : Array SchedRound) : List Nat :=
+  (List.range rs.size).flatMap fun k => (rs.getD k default).2.1.toList
+
 /-- A transcript round's schedule round: its coins' count, its tops' node counts, its copies of level 0's top, and whether
 it commits a message. -/
 def schedOf (r : Json) : SchedRound :=
@@ -839,12 +843,14 @@ def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (boun
   if c3 then return { reps, streams := ← candidate3 tr rounds t names msgs regR shape, stacked := shape }
   return { reps }
 
-/-- **Each rep's and each sparse stream's `c_k` sit at its schedule's message rounds** (`commitRounds`): the circuit
-table's two reps' (`InnerCommits.reps`) at `repRounds` of the inner shape `i`, `holoRepRounds` when its circuits are
-private (`i.holo`, `rec_live.schedule_for`'s `holo`), and with the verifier's RecSparse shape `sparse/rep<x>`'s at
-`sparsePhaseRounds` of it. `innerCommits` holds the reps' rounds only to the record's coins and `sparseRow` only counts a
-sparse stream's `c_k`, so this check is what puts the `j`-th `c_k` the verifier holds at the schedule's `j`-th message
-round. R's stream is held to its rounds by `checkStackedShape`. -/
+/-- **Each stream's `c_k` sit at its schedule's message rounds** (`commitRounds`): the circuit table's two reps'
+(`InnerCommits.reps`) at `repRounds` of the inner shape `i`, `holoRepRounds` when its circuits are private (`i.holo`,
+`rec_live.schedule_for`'s `holo`), with the verifier's RecSparse shape `sparse/rep<x>`'s at `sparsePhaseRounds` of it,
+and R's (`stacked/rep0`) at `stackedRounds` of the verifier's R shape, R's held tops being those rounds' (`topCounts`).
+`innerCommits` holds the reps' rounds only to the record's coins and `sparseRow` only counts a sparse stream's `c_k`, so
+this check is what puts the `j`-th `c_k` the verifier holds at the schedule's `j`-th message round. `checkStackedShape`
+holds R's transcript rounds to its schedule; this holds the `c_k` and tops the verifier keeps of them, and refuses R's
+stream under an inner shape naming no schedule of R's. -/
 def checkCommitRounds (i : Inner) (cs : InnerCommits) : V Unit := do
   let some rep := (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
     | throw s!"rec-inner: the inner shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) has no fast100 schedule"
@@ -853,7 +859,17 @@ def checkCommitRounds (i : Inner) (cs : InnerCommits) : V Unit := do
     | some sh => [0, 1].filterMap fun x =>
       (cs.stream? s!"{SPARSE}/rep{x}").map fun st => (st.name, st.commits, sparsePhaseRounds sh)
     | none => []
-  for (s, cm, rs) in (cs.reps.toList.zipIdx.map fun (cm, x) => (s!"rep {x}", cm, rep)) ++ sp do
+  let r ← match cs.stream? s!"{STACKED}/rep0", i.stacked.bind stackedRounds with
+    | none, _ => pure []
+    | some st, none =>
+      throw (s!"rec-inner: the inner transcript holds R's stream ({st.name}), and the verifier's inner shape names " ++
+        "no schedule of R's")
+    | some st, some rs =>
+      let (got, want) := (st.tops.toList.map (·.size), topCounts rs)
+      if got != want then
+        throw s!"rec inner transcript: {st.name} holds tops of {got} nodes, and its schedule commits tops of {want}"
+      pure [(st.name, st.commits, rs)]
+  for (s, cm, rs) in (cs.reps.toList.zipIdx.map fun (cm, x) => (s!"rep {x}", cm, rep)) ++ sp ++ r do
     let (got, want) := (cm.toList.map (·.1), commitRounds rs)
     if got != want then
       let j := ((got.zip want).findIdx? fun (a, b) => a != b).getD (min got.length want.length)
@@ -865,8 +881,8 @@ def checkCommitRounds (i : Inner) (cs : InnerCommits) : V Unit := do
 exactly when the transcript (`innerCommits`) has candidate 3's streams. A transcript with the sparse phases needs the
 bucket's RecSparse shape (`rec-inner --sparse`), one with R's stream needs R's shape, and R's shape is the one the inner
 circuit's META names (`InnerCommits.stacked`); an inner shape naming either over a session without it is refused too.
-So no V* list leaves out RecSparse, R's levels or R's opening of a session that has them. Then each rep's and each sparse
-stream's `c_k` sit at its schedule's message rounds (`checkCommitRounds`). -/
+So no V* list leaves out RecSparse, R's levels or R's opening of a session that has them. Then each stream's `c_k` sit
+at its schedule's message rounds, and R's tops at its schedule's (`checkCommitRounds`). -/
 def checkCovers (i : Inner) (cs : InnerCommits) : V Unit := do
   let sparse := cs.streams.any (·.name.startsWith s!"{SPARSE}/")
   let stacked := (cs.stream? s!"{STACKED}/rep0").isSome
