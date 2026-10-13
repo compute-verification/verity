@@ -1,7 +1,7 @@
 {
  "schema": "verity-vllm/capture-map/v0",
  "id": "deepseek-v4-eager-hopper-tp8-v0",
- "purpose": "The capture half of a semantic profile for a DeepseekV4ForCausalLM checkpoint (DeepSeek-V4-Pro) served eager at TP8 on Hopper (sm_90, 8xH200) with DeepGEMM on: every module the pinned vLLM builds for the checkpoint's config.json, what each one computes on the forward path, and the taps the committer attaches to -- each tap's capture-v2 identity (op, port, layer), the tensor's dtype and shape on one rank, where it is captured, the weights it reads and the Program that checks it, by status. The residual is mHC's four streams ([M, HC, H]) between layers, so every mHC call's four returns are taps; the compressors' state rows and the compressed cache rows they write are taps, because a later step's attention reads them. Checked against a meta-device build of the same config at TP8 (verity-vllm meta-inventory, ranks 0-7). No route_site: the committer does not read this map until capture_work lands.",
+ "purpose": "The capture half of a semantic profile for a DeepseekV4ForCausalLM checkpoint (DeepSeek-V4-Pro) served eager at TP8 on Hopper (sm_90, 8xH200) with DeepGEMM and FlashInfer on: every module the pinned vLLM builds for the checkpoint's config.json, what each one computes on the forward path, and the taps the committer attaches to -- each tap's capture-v2 identity (op, port, layer), the tensor's dtype and shape on one rank, where it is captured, the weights it reads and the Program that checks it, by status. The residual is mHC's four streams ([M, HC, H]) between layers, so every mHC call's four returns are taps; the compressors' state rows and the compressed cache rows they write are taps, because a later step's attention reads them. Checked against a meta-device build of the same config at TP8 (verity-vllm meta-inventory, ranks 0-7). No route_site: the committer does not read this map until capture_work lands.",
  "architectures": [
   "DeepseekV4ForCausalLM"
  ],
@@ -21,10 +21,11 @@
    "deep_gemm": "8b1392b9 (fp8_gemm_nt, fp8_einsum, tf32_hc_prenorm_gemm, fp8_mqa_logits / fp8_paged_mqa_logits)",
    "flash_mla": "6bc49418 (flash_mla_with_kvcache, flash_mla_sparse_fwd)",
    "marlin": "csrc/moe/marlin_moe_wna16 at the vLLM pin (moe_wna16_marlin_gemm, float4_e2m1f weights with e8m0 group-32 scales)",
-   "tilelang_mhc": "vllm/model_executor/kernels/mhc/tilelang_kernels.py at the vLLM pin"
+   "tilelang_mhc": "vllm/model_executor/kernels/mhc/tilelang_kernels.py at the vLLM pin",
+   "flashinfer": "0.6.18 (fp8_blockscale_gemm_sm90: TRT-LLM's swapAB block-FP8 GEMM, the FP8 linears below 32 tokens)"
   },
   "inventory_runs": {
-   "default": "art:2e450ae48507dc3561421318c7fd995890d97a7435192b4d5fc6e1fe1ac5ab95 (inv-tp8.json, ranks 0-7, the target profile: DeepGEMM on, e8m0 scales; tests/check/fixtures/deepseek_v4). Produced by verity-vllm meta-inventory on a cloud-agent VM, not a research run: command.txt and meta_inventory.patch in the tree name the command, the venv and the stub driver"
+   "default": "art:f3a53228045077f58b47d4417609529c9526e71f94e9427d5ad39c9c40f42bd7 (inv-tp8.json, ranks 0-7, the target profile: DeepGEMM on, e8m0 scales, FlashInfer present with nvcc on PATH; tests/check/fixtures/deepseek_v4). Produced by verity-vllm meta-inventory on a cloud-agent VM, not a research run: command.txt in the tree names the command, the venv and the stub driver. It replaces art:2e450ae48507dc3561421318c7fd995890d97a7435192b4d5fc6e1fe1ac5ab95, built without nvcc, where has_flashinfer() was False and every FP8 linear fell through to DeepGemmFp8BlockScaledMMKernel"
   }
  },
  "target": {
@@ -68,21 +69,25 @@
    "VLLM_USE_DEEP_GEMM_E8M0": true,
    "deep_gemm_supported": true,
    "deep_gemm_e8m0": true,
+   "VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER": true,
+   "flashinfer": true,
+   "flashinfer_fp8_blockscale_gemm": true,
    "VLLM_ALLREDUCE_USE_SYMM_MEM": true,
    "VLLM_ALLREDUCE_USE_FLASHINFER": true
   },
   "env_reasons": {
-   "VLLM_USE_DEEP_GEMM": "left at its default (1): the checkpoint's FP8 scales are ue8m0 (quantization_config.scale_fmt) and every dense FP8 linear runs DeepGemmFp8BlockScaledMMKernel with e8m0 activation scales. VLLM_USE_DEEP_GEMM=0 would move them to CUTLASS with f32 scales, a different function from the one the checkpoint was trained to; the mHC TF32 GEMM, the o-projection einsum and the indexer logits call DeepGEMM whatever the variable says",
+   "VLLM_USE_DEEP_GEMM": "left at its default (1): the checkpoint's FP8 scales are ue8m0 (quantization_config.scale_fmt), and the FP8 linears' kernel is FlashInferFp8DeepGEMMDynamicBlockScaledKernel, whose fallback is DeepGEMM with e8m0 activation scales. VLLM_USE_DEEP_GEMM=0 makes that fallback unsupported and moves every FP8 linear to CUTLASS with f32 scales, a different function; the mHC TF32 GEMM, the o-projection einsum and the indexer logits call DeepGEMM whatever the variable says",
+   "VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER": "left at its default (1), with FlashInfer present (vLLM's has_flashinfer: flashinfer-python 0.6.18 importable and nvcc on PATH, the pods' CUDA toolkit; or flashinfer-cubin): FlashInferFp8DeepGEMMDynamicBlockScaledKernel, the first of _POSSIBLE_FP8_BLOCK_KERNELS[CUDA], is supported on sm_90 and implements every FP8 linear here (bf16 in and out, e4m3 weights, N % 64 and K % 128). With 0, or a serve without nvcc and cubins, every FP8 linear is DeepGemmFp8BlockScaledMMKernel at every token count: below 32 tokens a different function, which this map does not cover; the switches and the linears' kernel expectations fail such an engine",
    "VLLM_BATCH_INVARIANT": "not set: the Commit runs without it and replay uses the same batch layout",
    "kv_cache_dtype": "auto: DeepseekV4Attention rewrites it to fp8_ds_mla (_resolve_dsv4_kv_cache_dtype), the UE8M0 paged layout, 584 bytes per token (448 e4m3 NoPE + 64 bf16 RoPE + 8 scale bytes)",
    "max_decode_batch": "the serve's decode batch limit (max_num_seqs 16) until the TF32 mHC is pinned: a step of at most 16 tokens takes the fused FMA mHC kernel (route hc-fused); a larger one the TF32 path (hc-split), whose taps are committed-only",
-   "engine_args": "vLLM's default Hopper kernels, chosen by the engine and held by the expectations: DeepGEMM for the FP8 linears, the o-projection einsum, the TF32 mHC GEMM and the indexer logits; Marlin for the MXFP4 experts; FlashMLA for attention; the FP8 indexer cache. No MTP (speculative_config None: num_nextn_predict_layers 1 is not built), no expert parallelism (MegaMoE is sm_100 only)"
+   "engine_args": "vLLM's default Hopper kernels, chosen by the engine and held by the expectations: FlashInfer's swapAB GEMM below 32 tokens and DeepGEMM from 32 for the FP8 linears; DeepGEMM for the o-projection einsum, the TF32 mHC GEMM and the indexer logits; Marlin for the MXFP4 experts; FlashMLA for attention; the FP8 indexer cache. No MTP (speculative_config None: num_nextn_predict_layers 1 is not built), no expert parallelism (MegaMoE is sm_100 only)"
   }
  },
  "selections": {
   "attention_backend": "DeepseekV4FlashMLAAttention (_select_dsv4_attn_cls: FlashMLA on sm_90): decode tokens through flash_mla_with_kvcache over the SWA cache plus the compressed cache at the layer's indices; prefill tokens through flash_mla_sparse_fwd over gathered, dequantized rows, per chunk",
   "padded_heads": "NHL = 16 query heads per rank, padded to NHP = 64 for FlashMLA; attn_sink has NHP entries",
-  "fp8_linear_kernel": "DeepGemmFp8BlockScaledMMKernel (use_deep_gemm_e8m0, is_scale_e8m0) on every FP8 linear",
+  "fp8_linear_kernel": "FlashInferFp8DeepGEMMDynamicBlockScaledKernel on every FP8 linear (kernels/linear/scaled_mm/flashinfer.py:149-330; wo_a's is built but its forward is the o-projection einsum). apply_block_scaled_mm passes the bf16 input to dynamic_flashinfer_deepgemm_blockscale_gemm, which branches on M, the linear's rows (the step's token count), with torch.cond (flashinfer.py:301-316): M < 32 FlashInfer's fp8_blockscale_gemm, its own 1x128 quantiser and TRT-LLM's swapAB GEMM (route fp8-swapab); M >= 32 per_token_group_quant_fp8 with ue8m0 scales, then DeepGEMM fp8_gemm_nt (route fp8-deepgemm). VLLM_BATCH_INVARIANT=1 would take the DeepGEMM branch at every M. The weights are processed once, by the DeepGEMM fallback (deepgemm_post_process_fp8_weight_block: the checkpoint's e8m0 scales upcast to f32, not requantised)",
   "o_projection": "deep_gemm_fp8_o_proj: fused_inv_rope_fp8_quant (inverse RoPE on the last DR dims, 1x128 FP8 groups), DeepGEMM fp8_einsum('bhr,hdr->bhd', recipe (1, 128, 128) on sm_90) against wo_a's weight, then wo_b",
   "moe_backend": "Mxfp4MoEMethod with Mxfp4MoeBackend.MARLIN (W4A16: float4_e2m1 weights, e8m0 group-32 scales, bf16 activations): fused_marlin_moe, two moe_wna16_marlin_gemm launches with use_fp32_reduce, then ops.moe_sum",
   "router": "FusedTopKBiasRouter -> fused_topk_bias: sqrtsoftplus scores, top 6 of 384 with e_score_correction_bias for selection only, renormalised, x 2.5 (dsv4_topk); the first HASH layers route by tid2eid[input_ids] (topk_hash_softplus_sqrt)",
@@ -97,15 +102,17 @@
  "routes": {
   "hc-fused": "a step of at most 16 tokens (mhc_fused_post_pre_tilelang: use_small_fma = num_tokens <= 16): each post-and-pre after layer 0's is mhc_fused_tilelang (the post, then the pre's GEMM and square sum by FMA in 4 K-splits at H = 7168; tile_n 2 below 8 tokens, else 3) and mhc_pre_big_fuse_with_norm_tilelang. Every decode step of the target's serve (decode batch <= 16)",
   "hc-split": "a step of more than 16 tokens: mhc_post_tilelang, DeepGEMM tf32_hc_prenorm_gemm (TF32 tensor cores) and mhc_pre_big_fuse_with_norm_tilelang",
+  "fp8-swapab": "a step of fewer than 32 tokens (torch.cond(M < 32) in dynamic_flashinfer_deepgemm_blockscale_gemm): every FP8 linear is FlashInfer's fp8_blockscale_gemm, which quantises its bf16 input itself (scale_1x128_kernel) and runs TRT-LLM's swapAB GEMM. Every decode step of the target's serve (decode batch <= 16)",
+  "fp8-deepgemm": "a step of 32 tokens or more: every FP8 linear quantises its input with per_token_group_quant_fp8 (ue8m0 scales per 1x128) and runs DeepGEMM fp8_gemm_nt",
   "indexer-short": "a step whose longest sequence has at most TOPK * CSA_R tokens (Indexer.forward: max_seq_len // compress_ratio <= topk_tokens; eager never captures): the indexer's compressor runs and _fill_short_context_topk_indices writes every compressed key; wq_b, the q quantisation and indexer_op do not run",
   "indexer-scored": "a longer step: wq_b, fused_indexer_q_rope_quant, DeepGEMM's logits and the top-TOPK selection (SparseAttnIndexer)",
   "decode-tokens": "the step has decode tokens (rows [0, MD), swa_metadata.num_decodes > 0): flash_mla_with_kvcache at the decode indices",
   "prefill-tokens": "the step has prefill tokens (rows [MD, M)): flash_mla_sparse_fwd per prefill chunk over the gathered, dequantized cache rows"
  },
  "step_routes": {
-  "prefill": "prefill-tokens; hc-fused at M <= 16, else hc-split; indexer-short when the longest sequence has at most TOPK * CSA_R tokens, else indexer-scored",
-  "decode": "decode-tokens and hc-fused (decode batch <= 16); indexer-short or indexer-scored as for prefill",
-  "mixed": "decode-tokens and prefill-tokens, each on its own rows; one hc route by the step's token count and one indexer route by its longest sequence",
+  "prefill": "prefill-tokens; hc-fused at M <= 16, else hc-split; fp8-swapab at M < 32, else fp8-deepgemm; indexer-short when the longest sequence has at most TOPK * CSA_R tokens, else indexer-scored",
+  "decode": "decode-tokens, hc-fused and fp8-swapab (decode batch <= 16); indexer-short or indexer-scored as for prefill",
+  "mixed": "decode-tokens and prefill-tokens, each on its own rows; one hc route and one fp8 route by the step's token count and one indexer route by its longest sequence",
   "recorded": "not yet: the map has no route_site and the committer does not read it (capture_work). Each route is a function of the step's token count, its decode / prefill split or its longest sequence, all in its attention metadata"
  },
  "symbols": {
@@ -253,16 +260,25 @@
    ],
    "note": "the TP8 all-reduce on 8xH200 (custom / symm-mem / FlashInfer / NCCL, chosen per call by size; the serve leaves VLLM_ALLREDUCE_USE_SYMM_MEM and VLLM_ALLREDUCE_USE_FLASHINFER at their defaults, the target's switches): AllReduce2_v1 is WORLD 2 and AllReduce_v2 WORLD 4, neither this one. Workstream A owns the WORLD 8 Program; every rank's partial is a tap, so it checks against the same root"
   },
+  "fp8-block-linear-flashinfer": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "FlashInferFp8DeepGEMMDynamicBlockScaledKernel's M < 32 branch: FlashInfer fp8_blockscale_gemm quantises the bf16 input itself (scale_1x128_kernel: f32 scales per 1x128, not ue8m0; neither its words nor its scales leave the op) and runs TRT-LLM's swapAB GEMM against the checkpoint's e4m3 weight and its e8m0 128x128 block scales upcast to f32: per output the wgmma e4m3 k32 chain of each 128-wide K block, promoted into an f32 accumulator with the product of the two scales, rounded to bf16. FlashInferFp8Linear_v1{K, N} (FlashInferFp8Quant1x128_v1{K}, then fp8.ScaledMmFp8BlockCoordinate_v1 per output word). Row SHARED-DG",
+   "when": "route fp8-swapab: M < 32, every decode step of the serve and a prefill step of fewer than 32 tokens",
+   "branch": "cursor/deepgemm-sm90-8c79"
+  },
   "fp8-block-linear-deepgemm": {
    "status": "tonight",
    "definitions": [],
-   "note": "DeepGemmFp8BlockScaledMMKernel: per_token_group_quant_fp8 of the input with ue8m0 (power-of-two) scales per 1x128, then DeepGEMM sm90 fp8_gemm_nt against the checkpoint's e4m3 weight and ue8m0 128x128 block scales: per output the wgmma e4m3 k32 chain of each 128-wide K block, promoted into an f32 accumulator with the product of the two scales, rounded to bf16. Row SHARED-DG",
+   "note": "FlashInferFp8DeepGEMMDynamicBlockScaledKernel's M >= 32 branch: per_token_group_quant_fp8 of the input with ue8m0 (power-of-two) scales per 1x128 (Fp8GroupQuantUe8m0_v1{K, 128}), then DeepGEMM sm90 fp8_gemm_nt against the same weight and scales, the same GEMM chain. DeepGemmFp8Linear_v1{K, N}. Row SHARED-DG",
+   "alternative_to": "fp8-block-linear-flashinfer",
+   "when": "route fp8-deepgemm: M >= 32, a prefill or mixed step of 32 tokens or more",
    "branch": "cursor/deepgemm-sm90-8c79"
   },
   "fp8-einsum-deepgemm": {
    "status": "tonight",
    "definitions": [],
-   "note": "DeepGEMM fp8_einsum('bhr,hdr->bhd', recipe (1, 128, 128)): per token and o-group g, z[g] = the block-FP8 product of o_fp8[g] (scales o_scale[g]) and wo_a's weight rows of group g (e4m3, 128x128 ue8m0 block scales), bf16 out. Row SHARED-DG",
+   "note": "DeepGEMM fp8_einsum('bhr,hdr->bhd', recipe (1, 128, 128)) on one token: per o-group g, z[g] = the block-FP8 product of o_fp8[g] (scales o_scale[g], fused_inv_rope_fp8_quant's) and wo_a's weight rows of group g (e4m3, its e8m0 128x128 block scales upcast to f32 and reshaped to [OGL, OL / 128, HPG * HD / 128] at load, deepgemm_post_process_fp8_weight_block(is_bmm=True)), bf16 out. ScaledMmFp8BlockGrouped_v1{H, K, N, G} at H = OGL, K = HPG * HD, N = OL, G = 128. Row SHARED-DG",
    "branch": "cursor/deepgemm-sm90-8c79"
   },
   "flashmla-sparse-decode": {
@@ -1359,7 +1375,7 @@
     "M",
     "KVQ"
    ],
-   "program": "fp8-block-linear-deepgemm",
+   "program": "fp8-block-linear-flashinfer",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1372,7 +1388,7 @@
     },
     {
      "param": "model.layers.{i}.attn.fused_wqa_wkv.weight_scale_inv",
-     "provenance": "checkpoint",
+     "provenance": "checkpoint (e8m0, upcast to f32 at load: deepgemm_post_process_fp8_weight_block)",
      "rows": "=KVQ // B"
     }
    ],
@@ -1464,7 +1480,7 @@
     "M",
     "=NHL * HD"
    ],
-   "program": "fp8-block-linear-deepgemm",
+   "program": "fp8-block-linear-flashinfer",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1477,7 +1493,7 @@
     },
     {
      "param": "model.layers.{i}.attn.wq_b.weight_scale_inv",
-     "provenance": "checkpoint",
+     "provenance": "checkpoint (e8m0, upcast to f32 at load: deepgemm_post_process_fp8_weight_block)",
      "rows": "=NHL * HD // B"
     }
    ],
@@ -1949,7 +1965,7 @@
     "M",
     "=IH * ID"
    ],
-   "program": "fp8-block-linear-deepgemm",
+   "program": "fp8-block-linear-flashinfer",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1963,7 +1979,7 @@
     },
     {
      "param": "model.layers.{i}.attn.indexer.wq_b.weight_scale_inv",
-     "provenance": "checkpoint",
+     "provenance": "checkpoint (e8m0, upcast to f32 at load: deepgemm_post_process_fp8_weight_block)",
      "rows": "=IH * ID // B"
     }
    ],
@@ -2385,7 +2401,7 @@
     },
     {
      "param": "model.layers.{i}.attn.wo_a.weight_scale_inv",
-     "provenance": "checkpoint",
+     "provenance": "checkpoint (e8m0, upcast to f32 at load: deepgemm_post_process_fp8_weight_block)",
      "rows": "=OGL * OL // B"
     }
    ],
@@ -2410,7 +2426,7 @@
     "M",
     "H"
    ],
-   "program": "fp8-block-linear-deepgemm",
+   "program": "fp8-block-linear-flashinfer",
    "tp": "partial",
    "rank_identical": false,
    "target_only": false,
@@ -2423,7 +2439,7 @@
     },
     {
      "param": "model.layers.{i}.attn.wo_b.weight_scale_inv",
-     "provenance": "checkpoint",
+     "provenance": "checkpoint (e8m0, upcast to f32 at load: deepgemm_post_process_fp8_weight_block)",
      "rows": "=H // B"
     }
    ],
@@ -2771,7 +2787,7 @@
     "M",
     "=2 * SIL"
    ],
-   "program": "fp8-block-linear-deepgemm",
+   "program": "fp8-block-linear-flashinfer",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -2784,7 +2800,7 @@
     },
     {
      "param": "model.layers.{i}.ffn.shared_experts.gate_up_proj.weight_scale_inv",
-     "provenance": "checkpoint",
+     "provenance": "checkpoint (e8m0, upcast to f32 at load: deepgemm_post_process_fp8_weight_block)",
      "rows": "=2 * SIL // B"
     }
    ],
@@ -2836,7 +2852,7 @@
     "M",
     "H"
    ],
-   "program": "fp8-block-linear-deepgemm",
+   "program": "fp8-block-linear-flashinfer",
    "tp": "partial",
    "rank_identical": false,
    "target_only": false,
@@ -2849,7 +2865,7 @@
     },
     {
      "param": "model.layers.{i}.ffn.shared_experts.down_proj.weight_scale_inv",
-     "provenance": "checkpoint",
+     "provenance": "checkpoint (e8m0, upcast to f32 at load: deepgemm_post_process_fp8_weight_block)",
      "rows": "=H // B"
     }
    ],
@@ -3359,13 +3375,7 @@
    "pattern": "model.layers.{i}.attn.fused_wqa_wkv",
    "type": "MergedColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
-  },
-  {
-   "pattern": "model.layers.{i}.attn.fused_wqa_wkv",
-   "type": "MergedColumnParallelLinear",
-   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
-   "value": true
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.attn.fused_wqa_wkv",
@@ -3377,13 +3387,7 @@
    "pattern": "model.layers.{i}.attn.wq_b",
    "type": "ColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
-  },
-  {
-   "pattern": "model.layers.{i}.attn.wq_b",
-   "type": "ColumnParallelLinear",
-   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
-   "value": true
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.attn.wq_b",
@@ -3395,13 +3399,7 @@
    "pattern": "model.layers.{i}.attn.wo_a",
    "type": "ColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
-  },
-  {
-   "pattern": "model.layers.{i}.attn.wo_a",
-   "type": "ColumnParallelLinear",
-   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
-   "value": true
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.attn.wo_a",
@@ -3413,13 +3411,7 @@
    "pattern": "model.layers.{i}.attn.wo_b",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
-  },
-  {
-   "pattern": "model.layers.{i}.attn.wo_b",
-   "type": "RowParallelLinear",
-   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
-   "value": true
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.attn.wo_b",
@@ -3431,13 +3423,7 @@
    "pattern": "model.layers.{i}.attn.indexer.wq_b",
    "type": "ReplicatedLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
-  },
-  {
-   "pattern": "model.layers.{i}.attn.indexer.wq_b",
-   "type": "ReplicatedLinear",
-   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
-   "value": true
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.attn.indexer.wq_b",
@@ -3449,13 +3435,7 @@
    "pattern": "model.layers.{i}.ffn.shared_experts.gate_up_proj",
    "type": "MergedColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
-  },
-  {
-   "pattern": "model.layers.{i}.ffn.shared_experts.gate_up_proj",
-   "type": "MergedColumnParallelLinear",
-   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
-   "value": true
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.ffn.shared_experts.gate_up_proj",
@@ -3467,13 +3447,7 @@
    "pattern": "model.layers.{i}.ffn.shared_experts.down_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
-  },
-  {
-   "pattern": "model.layers.{i}.ffn.shared_experts.down_proj",
-   "type": "RowParallelLinear",
-   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
-   "value": true
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.ffn.shared_experts.down_proj",
@@ -3593,7 +3567,7 @@
    "pattern": "model.layers.{i}.attn.rotary_emb",
    "type": "DeepseekV4ScalingRotaryEmbedding",
    "path": "flags.use_flashinfer",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model",

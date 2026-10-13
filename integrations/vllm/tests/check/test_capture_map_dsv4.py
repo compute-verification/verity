@@ -1,7 +1,8 @@
 """The DeepSeek-V4-Pro capture map (`manifests/capture-maps/deepseek-v4-eager-hopper-tp8-v0.json`) against the meta-device
 inventory of the same `config.json` at TP8 for the map's target (`verity-vllm meta-inventory`, ranks 0-7, the inventory the map's
 `pins.inventory_runs` names): every module the pinned vLLM builds has exactly one entry, every tap reads tensors of the shape the
-inventory gives a rank, each rank built DeepGEMM on with e8m0 scales and the Marlin MXFP4 experts, and the counts are pinned.
+inventory gives a rank, each rank built DeepGEMM on with e8m0 scales, FlashInfer's FP8 linear and the Marlin MXFP4 experts, and
+the counts are pinned.
 
 The routes are independent per step: an mHC route (`hc-fused` at <= 16 tokens, else `hc-split`), an indexer route (`indexer-short`
 or `indexer-scored`) and the attention's rows (`decode-tokens`, `prefill-tokens`, or both on a mixed step), so a step's identities
@@ -40,7 +41,7 @@ ENV = CM.symbols(CMAP, CONFIG, TP)
 #: each `tonight` Program -> the branch of the row that writes its Definitions
 OWNERS = {
     "cursor/glm53-committed-ops-8c79": {"cublas-f32-out", "router-gemm"},
-    "cursor/deepgemm-sm90-8c79": {"fp8-block-linear-deepgemm", "fp8-einsum-deepgemm"},
+    "cursor/deepgemm-sm90-8c79": {"fp8-block-linear-flashinfer", "fp8-block-linear-deepgemm", "fp8-einsum-deepgemm"},
     "cursor/dsv4-flashmla-8c79": {"flashmla-sparse-decode"},
     "cursor/dsv4-mhc-8c79": {"mhc-post-pre-fma", "mhc-post", "hc-head"},
     "cursor/dsv4-routers-8c79": {"sqrtsoftplus-router", "hash-router", "silu-mul-clamp"},
@@ -156,6 +157,53 @@ def test_a_wrong_compressor_width_fails():
     tap["weights"][0]["rows"] = "=2 * HD"
     assert any(p.startswith("tap compressor.kv_score.csa: weight model.layers.2.attn.compressor.fused_wkv_wgate.weight has shape "
                             "[2048, 7168]") for p in _check(cmap))
+
+
+FP8_TAPS = {"attn.fused_wqa_wkv", "attn.wq_b", "indexer.wq_b", "attn.wo_b.partial", "shared.gate_up_proj", "shared.down_proj"}
+
+
+def test_every_fp8_linear_is_flashinfer_below_32_tokens_and_deepgemm_from_32():
+    """With FlashInfer present (vLLM's `has_flashinfer`: nvcc on PATH) the sm_90 FP8 linear is the first of
+    `_POSSIBLE_FP8_BLOCK_KERNELS[CUDA]`, `FlashInferFp8DeepGEMMDynamicBlockScaledKernel`, on all seven block-FP8 linears, and it
+    implements each one (bf16 in and out, e4m3 weights, N % 64 and K % 128).  Its `torch.cond(M < 32)` is the map's fp8 route:
+    the six linears' taps cite the M < 32 Program, the M >= 32 one is its alternative, and a decode step (<= 16 tokens) takes
+    the first; `wo_a`'s forward is the einsum."""
+    fp8 = {g["pattern"]: g for g in RANK0["groups"] if "fp8_linear" in (g.get("kernels") or {}).get("quant_method", {})}
+    assert {p: g["kernels"]["quant_method"]["fp8_linear"]["type"].rsplit(".", 1)[1] for p, g in fp8.items()} == dict.fromkeys(
+        [f"model.layers.{{i}}.{m}" for m in ("attn.fused_wqa_wkv", "attn.indexer.wq_b", "attn.wo_a", "attn.wo_b", "attn.wq_b",
+                                            "ffn.shared_experts.down_proj", "ffn.shared_experts.gate_up_proj")],
+        "FlashInferFp8DeepGEMMDynamicBlockScaledKernel")
+    for rec in DOC["ranks"].values():
+        sel = rec["selections"]
+        assert sel["flashinfer"] and sel["flashinfer_fp8_blockscale_gemm"] and sel["VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER"]
+        assert sel["deep_gemm_e8m0"] and not sel["VLLM_BATCH_INVARIANT"]
+    for g in fp8.values():
+        (s,) = g["shapes"]
+        (n, k), dtype = s["tensors"]["weight"]["shape"], s["tensors"]["weight"]["dtype"]
+        assert dtype == "float8_e4m3fn" and n % 64 == 0 and k % 128 == 0 and g["kernels"]["quant_method"]["is_scale_e8m0"]
+    progs = CMAP["programs"]
+    assert {t["id"] for t in CMAP["taps"] if t["program"] == "fp8-block-linear-flashinfer"} == FP8_TAPS
+    assert progs["fp8-block-linear-deepgemm"]["alternative_to"] == "fp8-block-linear-flashinfer"
+    assert progs["fp8-block-linear-flashinfer"]["when"].startswith("route fp8-swapab: M < 32")
+    assert progs["fp8-block-linear-deepgemm"]["when"].startswith("route fp8-deepgemm: M >= 32")
+    assert {"fp8-swapab", "fp8-deepgemm"} <= set(CMAP["routes"]) and "fp8-swapab" in CMAP["step_routes"]["decode"]
+    assert next(t for t in CMAP["taps"] if t["id"] == "attn.o_einsum")["program"] == "fp8-einsum-deepgemm"
+
+
+def test_an_engine_without_flashinfer_fails():
+    """Without nvcc or FlashInfer's cubins (or with `VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=0`) every FP8 linear is DeepGEMM's at
+    every token count, a different function below 32 tokens: the switches and each linear's kernel fail."""
+    rec = copy.deepcopy(RANK0)
+    rec["selections"].update(flashinfer=False, flashinfer_fp8_blockscale_gemm=False)
+    assert check_target(CMAP, rec) == ["switch flashinfer = True, the inventory has False",
+                                       "switch flashinfer_fp8_blockscale_gemm = True, the inventory has False"]
+    deepgemm = "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
+    inv = copy.deepcopy(RANK0)
+    for g in inv["groups"]:
+        if "fp8_linear" in (g.get("kernels") or {}).get("quant_method", {}):
+            g["kernels"]["quant_method"]["fp8_linear"]["type"] = deepgemm
+    problems = _check(inv=inv)
+    assert len(problems) == 7 and all(p.endswith(f"the inventory has {deepgemm!r}") for p in problems)
 
 
 def test_deepgemm_off_or_another_moe_backend_fails():
