@@ -251,21 +251,33 @@ def recordHead (link : String) (direction : Direction) (window : Int) (grid : Ar
 /-- `[x] = u64be len(x) ‖ x` (`lms._field`). -/
 def field (b : ByteArray) : ByteArray := be64 b.size.toUInt64 ++ b
 
-/-- What `certificate_message` hashes: `[tag] ‖ I ‖ [[link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, refused
-unless the digest is 64 bytes, I is 16 and the window a u64. -/
-def messageInput (keyId : ByteArray) (link : String) (direction : Direction) (window : Int) (digest : ByteArray) :
-    E ByteArray := do
+/-- The message's domain-separation tag, LMS's network-certificate role tag (`lms.ROLES`): the message's own, distinct
+from the ids of the checks that read it (`verity/network-certificate/v3`, `verity/network-records/v2`). -/
+def messageTag : String := "verity/network-certificate-message/v2"
+
+/-- The length of a certifier session id (`lms.SESSION_BYTES`). -/
+def sessionBytes : Nat := 32
+
+/-- What `certificate_message` hashes:
+`[tag] ‖ I ‖ [[session] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, the tag `messageTag`
+(`verity/network-certificate-message/v2`, LMS's network-certificate role tag, the message's own and distinct from the ids
+of the checks that read it, `verity/network-certificate/v3` and `verity/network-records/v2`); refused unless the digest
+is 64 bytes, the window a u64, the session 32 bytes and I 16. -/
+def messageInput (keyId session : ByteArray) (link : String) (direction : Direction) (window : Int)
+    (digest : ByteArray) : E ByteArray := do
   if digest.size ≠ digestBytes then throw "a record digest is 64 bytes"
   let w ← uBE 8 window "window"
+  if session.size ≠ sessionBytes then throw s!"a certifier session id is 32 bytes, not {session.size}"
   if keyId.size ≠ 16 then throw s!"an LMS identifier is 16 bytes, not {keyId.size}"
-  let context := field link.toUTF8 ++ field direction.value.toUTF8 ++ w
-  pure (field "verity/network-certificate/v1".toUTF8 ++ keyId ++ field context ++ field digest)
+  let context := field session ++ field link.toUTF8 ++ field direction.value.toUTF8 ++ w
+  pure (field messageTag.toUTF8 ++ keyId ++ field context ++ field digest)
 
-/-- `certificate_message` (`certificate.py` and `verity.ml.crypto.lms`): SHA-512 of
-`[tag] ‖ I ‖ [[link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, the tag `verity/network-certificate/v1`; refused
-unless the digest is 64 bytes, I is 16 and the window a u64. -/
-def certificateMessage (keyId : ByteArray) (link : String) (direction : Direction) (window : Int) (digest : ByteArray) :
-    E ByteArray :=
-  Sha512.hash <$> messageInput keyId link direction window digest
+/-- `certificate_message` (`certificate.py` and `verity.ml.crypto.lms`): SHA-512 of `messageInput`,
+`[tag] ‖ I ‖ [[session] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [record digest]` with the tag
+`verity/network-certificate-message/v2`; refused unless the digest is 64 bytes, the window a u64, the session 32 bytes
+and I 16. -/
+def certificateMessage (keyId session : ByteArray) (link : String) (direction : Direction) (window : Int)
+    (digest : ByteArray) : E ByteArray :=
+  Sha512.hash <$> messageInput keyId session link direction window digest
 
 end NetworkCheck

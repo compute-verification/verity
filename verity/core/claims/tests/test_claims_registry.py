@@ -58,8 +58,10 @@ def test_bandwidth_device_claims_are_measured_and_cited_separately() -> None:
 
 def test_rate_audit_claims_are_cited_separately() -> None:
     device, work = get("rate-device"), get("rate-codec-work")
-    assert (device.kind, device.standing) == ("model", None) and "L - rho" in device.name
-    assert (work.kind, work.standing) == ("assumption", "measured") and "k * c_enc" in work.name
+    assert (device.kind, device.standing) == ("model", None) and "L - rho" in device.name and "non-adaptive" in device.name
+    assert (work.kind, work.standing) == ("assumption", "measured") and "x * c_enc / b" in work.name
+    assert "k >= 2 rounds" in work.name and "false when the payload is known" in work.name
+    assert "Incompressible(W)" in work.name
     verbatim = get("rate-sketch-verbatim")
     assert (verbatim.kind, verbatim.standing) == ("model", None) and "whole sectors" in verbatim.name
 
@@ -72,8 +74,21 @@ def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
     assert get("prf/sha-512").kind == "assumption"
 
 
+def test_pouw_gamma_per_coin_is_a_conjecture_at_w1_priced() -> None:
+    e = get("pouw-gamma-per-coin")
+    assert (e.kind, e.standing) == ("assumption", "conjectured") and "budget per coin" in e.name and "W1 priced" in e.name
+
+
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
     site = ("cr/sha-256", "cr/sha-512", "cr/blake3", "cr/blake2b", "cr/poseidon2-babybear", "cr/poseidon2-koalabear", "xof/shake-256",
             "random-oracle", "honest-verifier")
     assert all(get(i).id == i and get(i).kind == "assumption" for i in site)
     assert not [k for k in ENTRIES if any(r in k for r in ("beacon", "auditor", "challenger"))]
+
+
+def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
+    e = get("trusted-nebius-host")
+    assert (e.kind, e.standing) == ("assumption", "standard")
+    assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger, the bandwidth audit's "
+                      "challenger) runs its stated code on its Nebius host, and its host never restores an earlier copy "
+                      "of the state the device keeps there")

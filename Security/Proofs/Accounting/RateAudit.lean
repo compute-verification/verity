@@ -5,6 +5,8 @@ import Proofs.Accounting.RateAudit.Joint
 import Proofs.Accounting.RateAudit.Relay
 import Proofs.Accounting.RateAudit.Interactive
 import Proofs.Accounting.RateAudit.Sketch
+import Proofs.Accounting.RateAudit.SketchHonest
+import Proofs.Accounting.RateAudit.SketchInteractive
 import Proofs.Accounting.RateAudit.Conservation
 import Proofs.Accounting.RateAudit.Chain
 import Proofs.Accounting.RateAudit.Horizon
@@ -17,7 +19,9 @@ completeness (`Accounting.SecurityProofs.RateHonest`), its time average over win
 (`Accounting.SecurityProofs.RateOfAudit`), the guarantee with side sources that answer what the chip sent
 (`Accounting.SecurityProofs.RateAuditInteractiveRO` when they ignore the oracle, `RateAuditInteractive` with relayed
 tags, and `RateOfAuditInteractive` and `RateOfAuditInteractiveRO` in a joint run), and the sketch-then-hash variant for
-a device that reads sectors verbatim (`Accounting.SecurityProofs.RateAuditSketch`,
+a device that reads sectors verbatim (`Accounting.SecurityProofs.RateAuditSketch`, its completeness
+`Accounting.SecurityProofs.RateSketchHonest`, with interactive side sources that ignore the oracle
+`Accounting.SecurityProofs.RateAuditSketchInteractiveRO`,
 `Accounting.SecurityProofs.SketchBinds`, `Accounting.SecurityProofs.RateAuditTensorSketch`), and the remote protocol's
 conservation over tiers (`Accounting.SecurityProofs.RateConservationRO`, `RateConservation`, their capacity forms
 `RateConservationCapRO` and `RateConservationCap`, and `RateDisplacement`), chained passes
