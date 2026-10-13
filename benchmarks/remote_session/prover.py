@@ -212,6 +212,7 @@ class ProverSide:
         if ended is None:
             ended, _, _ = self.expect("end")
         self.jobs.join()
+        device = getattr(self.backend, "session_stats", lambda: {})()
         self.backend.arm(set())
         with self.lock:
             self.kept.clear()
@@ -224,7 +225,7 @@ class ProverSide:
         return {"k": k, "mode": mode, "fraction": fraction, "dropped": sorted(dropped), "accepted": ended["accepted"],
                 "failure": ended["failure"], "passes": [per_window[tt] for tt in range(W)],
                 "pass_host_ns": host_ns, "gap_host_ns": gaps, "opened": self.opened,
-                "device": getattr(self.backend, "session_stats", lambda: {})()}
+                "device": device}
 
 
 def main() -> int:
@@ -239,6 +240,7 @@ def main() -> int:
     device.add_arguments(ap)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
+    sys.setswitchinterval(2e-4)
     backend = device.from_arguments(a, log=lambda m: print(m, flush=True))
     host, port = a.connect.rsplit(":", 1)
     conn = wire.connect(host, int(port))

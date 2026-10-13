@@ -213,7 +213,7 @@ class DeviceStore:
         b.record()
         root = digests((up[nl - 2] if nl > 1 else dig[0]).cpu())[0]
         self.pass_gpu_ms.append(a.elapsed_time(b))
-        return root, (seed, dig, up if nl > 1 else up[:0])
+        return root, (seed, signs, dig, up if nl > 1 else up[:0])
 
     def arm(self, dropped: set[int]) -> None:
         """Restore the blocks dropped before, then drop `dropped`: zeroed, their true blocks kept on the host."""
@@ -229,11 +229,10 @@ class DeviceStore:
         """Each position's (block, leaf, leaf salt, receipt path, payload salt, payload path), on the opener's stream
         and library."""
         torch = self.torch
-        seed, dig, up = handle
+        seed, signs, dig, up = handle
         cs = sorted({p // PER_LEAF for p in positions})
         js = torch.tensor([PER_LEAF * c + r for c in cs for r in range(PER_LEAF)], dtype=torch.int64, device="cuda")
         blocks = self.data.view(-1, BLOCK)[js].contiguous()
-        signs = torch.from_numpy(skr.signs(seed)).cuda()
         self.opener.call("rb_sketch_set", skr.prefix(seed))
         sk = torch.empty((len(js), skr.ROWS), dtype=torch.int32, device="cuda")
         ys = torch.empty((len(js), 8), dtype=torch.int64, device="cuda")
