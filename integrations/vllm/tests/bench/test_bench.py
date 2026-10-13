@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import replace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -86,6 +88,14 @@ def test_stock_precisions_are_independent_reference_arms():
         ("stock", "bfloat16", None),
         ("stock-fp8", "fp8", None),
     ]
+
+
+def test_experimental_arm_can_require_an_isolated_engine(monkeypatch):
+    module = ModuleType("bench_isolated_arm")
+    module.ARM = SimpleNamespace(id="isolated", install=lambda target: None, resident=False)
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    arm, = resolve_arms("isolated", (f"{module.__name__}:ARM",))
+    assert arm.experimental and not arm.resident
 
 
 def test_local_checkpoint_is_content_bound(tmp_path):

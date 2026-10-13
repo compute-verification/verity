@@ -242,10 +242,13 @@ alternates engine-lifetime blocks. Every arm passes greedy-token equality agains
 gate before any timing.
 
 An experimental `--arm-module pkg.mod:NAME` exposes `install(target)` and may expose `gate(target)`, `spans(target)` and
-`extras(target)`. It patches only through `target.hooks`, a tagged `engine.hooks.Hooks`; the driver checks and uninstalls
-that set. Results are `result.json` plus a ratio `table.md`; their identity includes the preset, vLLM version and pin,
-arm and kernel identities, Git commit and sweep. `verity-vllm bench-judge LEFT RIGHT [--allow FIELD]` refuses a comparison
-when any identity field differs unless each difference is explicitly allowed.
+`extras(target)`. `install` runs before engine construction so it can patch model loading and graph capture; its returned
+object may expose `ready(target)`, called after `target.engine` and `target.model` become available. It patches only through
+`target.hooks`, a tagged `engine.hooks.Hooks`; the driver checks and uninstalls that set. An arm that cannot share a resident
+engine sets `resident = False` and uses the recorded alternating-block fallback. Results are `result.json` plus a ratio
+`table.md`; their identity includes the preset, vLLM version and pin, arm and kernel identities, Git commit and sweep.
+`verity-vllm bench-judge LEFT RIGHT [--allow FIELD]` refuses a comparison when any identity field differs unless each
+difference is explicitly allowed.
 
 ## Protocol options
 

@@ -21,6 +21,7 @@ class Arm:
     module_spec: str | None = None
     kernel_digest: str | None = None
     experimental: bool = False
+    resident: bool = True
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -85,6 +86,7 @@ def experimental_arm(spec: str) -> Arm:
         module_spec=spec,
         kernel_digest=kernel_digest if isinstance(kernel_digest, str) else None,
         experimental=True,
+        resident=bool(get("resident", True)),
     )
 
 
