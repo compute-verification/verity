@@ -18,7 +18,7 @@ word is constant bits and `-x` one NOT gate on x's sign bit.  No table or lookup
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, const_bits, mux, or_reduce, sub
+from verity.ml.circuits.boolean.forms import NOT, ONE, ZERO, const_bits, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.ops.boolean import cast as BC
 from verity.ml.circuits.ops.boolean import elementwise as EW
@@ -47,10 +47,23 @@ def f32_to_u32_rz_byte(C, x):
     nan = C.AND(_all(C, e), or_reduce(C, m))
     w = [ZERO] * 8 + list(m) + [ONE]
     for (sh, keep), r in zip(_STAGES, (NOT(k[4]), NOT(k[3]), NOT(k[2]), NOT(k[1]), NOT(k[0]))):
-        w = mux(C, r, [w[i + sh] if i + sh < len(w) else ZERO for i in range(keep)], w[:keep])
-    fits = C.AND(NOT(below), NOT(big))
+        w = _stage(C, r, w, sh, keep)
     ok = C.AND(NOT(s), NOT(nan))
-    return [C.AND(ok, OR(C, big, C.AND(fits, b))) for b in w[:8]]
+    sat, fits = C.AND(ok, big), C.AND(ok, C.AND(NOT(below), NOT(big)))
+    return [sat ^ C.AND(fits, b) for b in w[:8]]
+
+
+def _stage(C, r, w, sh, keep):
+    """`mux(r, w >> sh, w)` to ``keep`` bits, each r AND v made once: in the first stage a bit read shifted at i and unshifted at
+    i + sh (its other operand zero) would be ANDed with r twice in a lowering that does not share terms."""
+    ands = {}
+    out = []
+    for i in range(keep):
+        v = (w[i + sh] if i + sh < len(w) else ZERO) ^ w[i]
+        if v.key() not in ands:
+            ands[v.key()] = C.AND(r, v)
+        out.append(w[i] ^ ands[v.key()])
+    return out
 
 
 def _all(C, bits):
