@@ -181,13 +181,14 @@ theorem holoForms_getD_ne_one (st : Flock.Stmt) (hp : HoloParams) (j : ℕ) :
 
 /-! ## `holoKinds`' coin types are the forms' -/
 
-theorem kindCoinTys_append : ∀ σ τ : List Kind, kindCoinTys (σ ++ τ) = kindCoinTys σ ++ kindCoinTys τ
+theorem kindCoinTys_append :
+    ∀ σ τ : List FlockSoundness.Discharge.Exec.Kind, kindCoinTys (σ ++ τ) = kindCoinTys σ ++ kindCoinTys τ
   | [], _ => rfl
   | .msg _ :: σ, τ => kindCoinTys_append σ τ
   | .coin C :: σ, τ => congrArg (C :: ·) (kindCoinTys_append σ τ)
 
 /-- `n` rounds of `f`, each drawing one coin of form `s`. -/
-theorem kindCoinTys_rounds (C : Type) (f : ℕ → List Kind) (hf0 : f 0 = [])
+theorem kindCoinTys_rounds (C : Type) (f : ℕ → List FlockSoundness.Discharge.Exec.Kind) (hf0 : f 0 = [])
     (hf : ∀ n, kindCoinTys (f (n + 1)) = C :: kindCoinTys (f n)) (s : Option ℕ) (hs : formTy s = C) :
     ∀ n, kindCoinTys (f n) = (List.replicate n s).map formTy
   | 0 => by rw [hf0]; rfl
