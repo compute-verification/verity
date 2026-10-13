@@ -67,6 +67,12 @@ same \(W\delta\); read over the horizon, every window's \(f_t\) holds on the ses
 charged \(A\) and the rest of the pass in flight at its challenge, where the session is charged them once, so its
 \(\mu_{\text{timing}}\) is up to about \((A + t_{\text{pass}})/(T + A)\) (§10).
 
+The window is stated: \(T\) = 20 s (`Params.window_ns`, §2), with 11,091 openings a window. There, on one RTX PRO
+6000 with its whole HBM as the store, the claim of every window under 1% holds for \(\mu_{\text{sample}}\) (0.25%) but
+not for the whole \(\gamma_t\), which is 1.30–1.39% in the worst window at RTT 1–20 ms. Likewise the horizon's 0.15%
+over 10 minutes holds for its pooled \(\mu_{\text{sample}}\) (0.0083%) but not for its whole γ (0.63%): λ and
+\(\mu_{\text{chip}}\) each exceed 0.15% by themselves (§10, `timing.stated`).
+
 What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The prover
 is one undifferentiated resource of capacity \(R\) (Daniel, 12 Oct, #1884): the guarantee is over whatever reads the
 node made, with no identity assumption about which hardware made them.
@@ -94,13 +100,16 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 | `samples` | \(s\), the openings per window |
 | `delta` | δ of each window's profile |
 | `min_passes` | the fewest passes a window may certify |
+| `window_ns` | \(T\), the stated window: no boundary message leaves sooner than this after its window's challenge (`Session.boundary` refuses one). 20 s (`WINDOW_NS`) unless another is named; 1 s is the option whose per-window claim is \(\mu_{\text{sample}}\) alone (§10) |
 | `codec` | the store's codec, the one its registration names (§3): `p1024/k3/masked` unless another is named |
 | `receipt` | the receipt kind, the one its registration names (§4): `sketch-sha512` unless `block-sha512` is named |
 | `bind` | whether receipts bind PoUW's tile output \(z\), as its registration says (§4): no unless it binds them |
 | `layout` | how a kernel's sketch vectors map to registered blocks, the one its registration names (§4): `store-order/v0` |
 | `rows` | sketch-sha512's \(k_s\), the one its registration names (§4): 16 or 64, 16 unless 64 is named (None is the kind's default); 0 under block-sha512 |
 
-The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by window. It is not a parameter.
+A window's length \(b_t - b_{t-1}\) is at least `window_ns`. The verifier may end a window later but never sooner.
+The record keeps each window's span, so its \(\gamma_t\) is read over the span it actually had, and the record doesn't
+carry `window_ns`.
 
 ## 3. Registration
 
@@ -332,14 +341,15 @@ A grinding try is not a pass's commitment. It reads no block: re-salting one rec
 changing any receipt. As the reference computes it, a try is 15 + 3⌈log₂ n⌉ compressions over \(n\) leaves
 (`timing.grind_compressions`): the leaf's salt digest, the hm96 key's digest and its tree leaf (9), the leaf's hash
 (2), its path (3 a level), the next seed (2) and its signs' key (2). That is 66 compressions, 9.4 ns on one GPU, for
-an 8 GiB pass of 131,072 leaves, so a window of \(T\) = 1 s affords a node of 8 GPUs about \(2^{29.7}\) tries. A
+an 8 GiB pass of 131,072 leaves, so a node of 8 GPUs affords about \(2^{29.7}\) tries a second, \(2^{34.0}\) in a
+stated 20 s window. A
 prover that keeps the constant prefixes' midstates needs at least 5 compressions a try (the root's last, and the
 seed's and the key's 2 each, whose first blocks hold the root and the seed): at most \(2^{33.4}\) tries a second on
 that node. Seeing one sector's \(16 \times 32\) signs takes 16 more, one stream block a row. The bound doesn't rest on
 any of these counts: it charges a key to every compression.
 
-None of this moves γ: \(F\) adds to the failure probability, not to the reads certified. Daniel's 1% target (§10:
-short by under 1% in every window, at \(2^{-40}\)) holds. For one node's 10-minute horizon, \(F = 2^{-50.19}\), so
+None of this moves γ: \(F\) adds to the failure probability, not to the reads certified, so Daniel's claim at
+\(2^{-40}\) (§10) reads as before. For one node's 10-minute horizon, \(F = 2^{-50.19}\), so
 keeping the total at \(2^{-40}\) takes the openings' δ to \(2^{-40} - 2^{-50.19}\), and their count up by about
 0.003%. It breaks only past \(2^{55.12}\) compressions in a session, where \(F\) alone reaches \(2^{-40}\). The
 ledger doesn't compute \(F\): it is a failure term, not a term of γ (`ledger`).
@@ -478,15 +488,15 @@ order. The coin is released only after every root it draws from is fixed, so the
 last leaf re-rolls the draws for the price of a leaf and its path, so a prover with wrong receipts tries \(Q\) roots
 and keeps one whose draws miss them. By the union bound the window's δ becomes \(Q\delta\), so \(s\) must rise to the
 count at \(\delta/Q\) (`timing.samples_for`). A try reads no block and costs a few to a few tens of compressions (§4
-counts a seed's), so a window of \(T\) = 1 s affords one node of 8 GPUs about \(2^{30}\) to \(2^{34}\) of them. At
-\(\varepsilon_s = 0.1\%\) and δ = \(2^{-40}\):
+counts a seed's), so the stated 20 s window affords one node of 8 GPUs about \(2^{34}\) to \(2^{38}\) of them. At
+the stated window's \(\varepsilon_s\) = 0.25% and δ = \(2^{-40}\):
 
 | grinding \(Q\) | \(s\) | × the coin's |
 | --- | --- | --- |
-| none (the coin) | 27,726 | 1.00 |
-| \(2^{20}\) | 41,589 | 1.50 |
-| \(2^{40}\) | 55,452 | 2.00 |
-| \(2^{64}\) (λ's budget) | 72,088 | 2.60 |
+| none (the coin) | 11,091 | 1.00 |
+| \(2^{20}\) | 16,636 | 1.50 |
+| \(2^{40}\) | 22,181 | 2.00 |
+| \(2^{64}\) (λ's budget) | 28,835 | 2.60 |
 
 It would also void the horizon reading (§10), whose proof takes each window's draw to be independent of what the
 prover did in that window, unless that is re-proved for a grinding prover. The coin costs one message a window, sent
@@ -650,38 +660,39 @@ second per node the stream would send.
 
 ## 10. The timing
 
-`python -m verity.core.protocols.remote_bandwidth.timing` prints the grid: passes of 20 and 50 ms, windows of
-\(T\) = 0.3, 1 and 10 s, RTT 1–50 ms (half each way), \(J\) = 0.05 ms each way and \(g\) = 50 µs, with the least
-allowance, and after them §4's rank bound, grinding tries and sessions' failure. \(\mu_{\text{timing}}\) by session, at
-\(T\) = 1 s, and the largest of a \(W\) = 100 session's windows' own (§1):
+`python -m verity.core.protocols.remote_bandwidth.timing` prints the grid. It covers passes of 20 and 50 ms, windows
+of \(T\) = 1, 20 (the stated window) and 60 s, RTT 1–50 ms (half each way), \(J\) = 0.05 ms each way and \(g\) =
+50 µs, at the least allowance. After that come the openings, the stated claim through `ledger` (below), and §4's rank
+bound, grinding tries and sessions' failure. \(\mu_{\text{timing}}\) by session at the stated \(T\) = 20 s, and the
+largest of a \(W\) = 100 session's windows' own (§1):
 
 | pass | RTT | passes a window | one window | \(W\) = 10 | \(W\) = 100 | steady state | worst window |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 20 ms | 1 ms | 50 | 2.07% | 0.41% | 0.26% | 0.25% | 4.03% |
-| 20 ms | 5 ms | 50 | 2.45% | 0.45% | 0.27% | 0.25% | 4.40% |
-| 20 ms | 20 ms | 50 | 3.86% | 0.60% | 0.28% | 0.25% | 5.78% |
-| 20 ms | 50 ms | 50 | 6.56% | 0.90% | 0.31% | 0.25% | 8.42% |
-| 50 ms | 1 ms | 20 | 4.87% | 0.51% | 0.10% | 0.10% | 9.62% |
-| 50 ms | 5 ms | 20 | 5.23% | 0.55% | 0.11% | 0.10% | 9.97% |
-| 50 ms | 20 ms | 20 | 6.56% | 0.70% | 0.12% | 0.10% | 11.23% |
-| 50 ms | 50 ms | 20 | 9.10% | 0.99% | 0.15% | 0.10% | 13.65% |
+| 20 ms | 1 ms | 998 | 0.31% | 0.25% | 0.25% | 0.25% | 0.41% |
+| 20 ms | 5 ms | 998 | 0.33% | 0.25% | 0.25% | 0.25% | 0.43% |
+| 20 ms | 20 ms | 998 | 0.40% | 0.26% | 0.25% | 0.25% | 0.50% |
+| 20 ms | 50 ms | 998 | 0.55% | 0.27% | 0.25% | 0.25% | 0.65% |
+| 50 ms | 1 ms | 400 | 0.26% | 0.10% | 0.10% | 0.10% | 0.50% |
+| 50 ms | 5 ms | 400 | 0.27% | 0.10% | 0.10% | 0.10% | 0.52% |
+| 50 ms | 20 ms | 400 | 0.35% | 0.11% | 0.10% | 0.10% | 0.60% |
+| 50 ms | 50 ms | 400 | 0.50% | 0.13% | 0.10% | 0.10% | 0.75% |
 
-A session's ends are its only round-trip cost, so a long session reaches the steady state: at \(T\) = 10 s and
-\(W\) = 100 it is 0.25% at 20 ms passes and 0.10–0.11% at 50 ms over the whole RTT range. A short window costs nothing
-by itself: at \(T\) = 0.3 s and \(W\) = 100 it is 0.27–0.43% at 20 ms passes. A pass reads distinct blocks, so it is at
-most a read of the store: about 52 ms for a GPU's 94 GB at 1.8 TB/s.
+A session's ends are its only round-trip cost, so a long session reaches the steady state \(g/(t_{\text{pass}} + g)\)
+whatever \(T\) is. At \(T\) = 1 s and \(W\) = 100 it is still 0.26–0.31% at 20 ms passes and 0.10–0.15% at 50 ms. A
+pass reads distinct blocks, so it is at most a read of the store: about 63 ms for a GPU's 94 GB at its measured
+1.488 TB/s.
 
-A window by itself does pay its ends. Its span is \(T + A\), the pass in flight at its challenge is the window
-before's, and its own chain starts only when that pass ends, so a window is charged \(A\) and up to a pass whatever
-\(W\) is: about \((A + t_{\text{pass}})/(T + A)\) at worst, the last column. That is under 1% only at \(T\) ≥ 5 s for
-20 ms passes and RTT up to 5 ms (0.82–0.90%), \(T\) ≥ 10 s up to 20 ms RTT (0.61–0.80%), and at \(T\) = 15 s for
-50 ms passes (0.67–0.99% over the RTT range; 1.01–1.49% at 10 s).
+A window by itself does pay its ends. Its span is \(T + A\), the pass in flight at its challenge belongs to the window
+before, and its own chain starts only when that pass ends. So a window is charged \(A\) and up to a pass whatever
+\(W\) is: about \((A + t_{\text{pass}})/(T + A)\) at worst, the last column. At \(T\) = 20 s that is 0.41–0.65%, and
+at 60 s 0.30–0.38% (20 ms passes) and 0.25–0.33% (50 ms). At the 1 s option it is 4.03–8.42% (20 ms) and 9.62–13.65%
+(50 ms).
 
-**Openings** at \(\varepsilon_s = 0.1\%\), δ = \(2^{-40}\): \(s = 27{,}726\) per window, about 8.5–9.1 KB each (block,
-leaf, both salts, both paths). That is 235–253 MB a window per node: 1.9–2.0 Gb/s at \(T\) = 1 s, 0.19–0.20 Gb/s at
-\(T\) = 10 s. Under a registration that binds \(z\), PoUW's tile evidence comes on top unless PoUW's own sampled check
-covers the same tiles. A Fiat–Shamir
-draw would multiply all of this by 1.5–2.6 (§6).
+**Openings** at the stated \(T\) = 20 s, \(\varepsilon_s\) = 0.25% and δ = \(2^{-40}\): \(s = 11{,}091\) per window
+(555 a second), each about 8.5–9.1 KB (block, leaf, both salts, both paths). That is 94–101 MB a window per node, or
+38–40 Mb/s. The 1 s option's \(\varepsilon_s\) = 1% takes 2,773 a window: 23–25 MB, or 0.19–0.20 Gb/s. Under a
+registration that binds \(z\), PoUW's tile evidence comes on top unless PoUW's own sampled check covers the same
+tiles. A Fiat–Shamir draw would multiply all of this by 1.5–2.6 (§6).
 
 That is the per-window reading, each window's profile at its own δ, \(W\delta\) in all. Read over the horizon, the
 windows' draws pool (`RateSessionDraw`, §8). Each window draws its \(s_t\) after its own roots from its own openings
@@ -693,10 +704,10 @@ correct receipts. The same event bounds every window's share by itself: \(f_t < 
 \(\ln(1/\delta)/s_t\), with no union over the windows.
 
 Daniel's claim is that hybrid (#1884): short by under 0.15% over a 10-minute horizon and by under 1% in every window,
-at \(2^{-40}\). That needs \(d \cdot n \ge 18{,}470\) openings over the horizon's \(n\) windows and \(d \ge 2{,}773\) a
-window. With 7 or more windows in 10 minutes (\(T\) up to 85 s) the window floor is what binds: 2,773 openings a
-window, about 24–25 MB, which is 0.19–0.20 Gb/s at \(T\) = 1 s and 19–20 Mb/s at \(T\) = 10 s, a tenth of the
-per-window reading at 0.1%. The horizon is then short by under \(\ln(2^{40})/(d\,n)\): 0.0017% at \(T\) = 1 s.
+at \(2^{-40}\), with the window stated at \(T\) = 20 s (13 Oct). For \(\mu_{\text{sample}}\) it needs
+\(d \ge 2{,}773\) openings a window and \(d \cdot n \ge 18{,}470\) over the horizon's \(n\) windows. The stated
+window's 11,091 give each window a floor of 0.25%, and the horizon's 30 windows \(\ln(2^{40})/(d\,n)\) = 0.0083%.
+The 1 s option's 2,773 give each window 1%, and over its 600 windows 0.0017%.
 
 `ledger` reports μ_sample both ways: `sample`, the per-window reading, and `horizon`, the pooled one (`pooled`: the
 most \(\sum_t f_t U_t\) the bounds above allow), with `floor`, the largest \(f_t\) they allow, and γ for each
@@ -704,11 +715,33 @@ most \(\sum_t f_t U_t\) the bounds above allow), with `floor`, the largest \(f_t
 \(f_t\), from `floors`, is its `floor`, and \(f_t U_t\) its `horizon`), and the worst window's γ either way beside the
 session's (`worst`, `worst_horizon`). All of it starts from each window's profile and span, which the record keeps.
 
-The 1% in every window bounds μ_sample; a window's γ adds its own μ_timing above, λ's 0.195%, and μ_chip. At 2,773
-openings and \(T\) = 1 s the worst window's γ is about 1% + 0.195% + 4–14%. For the window's whole γ under 1%, its
-openings and \(T\) both rise: at \(T\) = 20 s and RTT up to 20 ms, 20 ms passes leave 0.41–0.50% to μ_timing, and a
-floor of 0.25% takes \(\ln(2^{40})/0.0025 \approx 11{,}090\) openings a window (94–101 MB, 38–40 Mb/s); with λ that is
-0.86–0.95% before μ_chip.
+**The whole γ.** `timing.stated` reads the claim through `ledger`: an honest 10-minute session on one RTX PRO 6000
+at its measured \(R\) = 1.488 TB/s and \(S_{\text{chip}}\) = 263,163,904 B, under the default codec at the stated
+squaring ceiling, where a pass is the store's read at \(R\). \(\mu_{\text{chip}}\) is about \(S_{\text{chip}}\) over
+the store, and a window's \(\mu_{\text{timing}}\) about \((\text{RTT} + 2 t_{\text{pass}})/T\), so the store's size
+trades one against the other. Among the grid's stores the whole HBM, 94 GB with 63 ms passes, is best except at
+\(T\) = 1 s. The worst window's terms and its \(\gamma_t\), and over the horizon's \(W\) windows the pooled
+\(\mu_{\text{sample}}\) and the whole γ, at RTT 1 and 20 ms:
+
+| \(T\) | openings a window | store | \(\mu_{\text{timing}}\) | \(\mu_{\text{sample}}\) | \(\mu_{\text{chip}}\) | λ | \(\mu_{\text{rebuild}}\) | worst \(\gamma_t\) | \(W\) | pooled \(\mu_{\text{sample}}\) | horizon γ |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 20 s | 11,091 | 94 GB | 0.51–0.60% | 0.25% | 0.28% | 0.19% | 0.067% | 1.30–1.39% | 30 | 0.0083% | 0.63–0.64% |
+| 20 s | 11,091 | 62 GB | 0.42–0.52% | 0.25% | 0.42% | 0.19% | 0.067% | 1.35–1.45% | 30 | 0.0083% | 0.82% |
+| 20 s | 11,091 | 30 GB | 0.41–0.50% | 0.25% | 0.87% | 0.19% | 0.067% | 1.79–1.89% | 30 | 0.0083% | 1.39–1.40% |
+| 1 s | 2,773 | 30 GB | 3.27–5.04% | 0.94–0.96% | 0.83–0.85% | 0.19% | 0.067% | 5.34–7.07% | 600 | 0.0017% | 1.39% |
+| 1 s | 2,773 | 94 GB | 10.97–12.53% | 0.87–0.89% | 0.24–0.25% | 0.17% | 0.067% | 12.34–13.88% | 600 | 0.0017% | 0.63% |
+| 60 s | 33,273 | 94 GB | 0.19–0.22% | 0.083% | 0.28% | 0.19% | 0.067% | 0.81–0.85% | 10 | 0.0083% | 0.63–0.64% |
+| 90 s | 11,091 | 94 GB | 0.19–0.21% | 0.25% | 0.28% | 0.19% | 0.067% | 0.980–1.001% | 6 | 0.042% | 0.67% |
+
+At the stated \(T\) = 20 s, then, every window under 1% holds for \(\mu_{\text{sample}}\) and not for the whole
+\(\gamma_t\): it is 1.30% at best. The horizon's 0.15% holds for its pooled \(\mu_{\text{sample}}\) and not for its
+whole γ, 0.63% at best. There λ (64 bits a 4 KiB block, 0.195%) and \(\mu_{\text{chip}}\) (\(S_{\text{chip}}\) over a
+GPU's store, 0.28% at the whole HBM) each exceed 0.15% by themselves, and neither shrinks with more openings or longer
+windows. The whole \(\gamma_t\) is under 1% in every window at \(T\) = 60 s with the same 555 openings a second (33,273
+a window, the same 38–40 Mb/s): 0.81–0.85%. At \(T\) = 90 s with 11,091 a window it is 0.98% at 1 ms RTT and
+just over, 1.001%, at 20 ms. The 1 s option's
+per-window claim is \(\mu_{\text{sample}}\) alone. Its whole \(\gamma_t\) is 5–14%, nearly all \(\mu_{\text{timing}}\):
+the window's idle ends, which the record states exactly.
 
 ## Appendix A. Live coins, and why the protocol doesn't use them
 

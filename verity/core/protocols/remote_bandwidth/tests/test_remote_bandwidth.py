@@ -102,7 +102,7 @@ def rows64_store(store) -> audit.Store:
 
 
 def params(**kw) -> Params:
-    base = dict(blocks=N, deadline_ns=A, windows=3, samples=7, delta=1e-6, codec=codec.FALLBACK)
+    base = dict(blocks=N, deadline_ns=A, windows=3, samples=7, delta=1e-6, window_ns=1000, codec=codec.FALLBACK)
     return Params(**{**base, **kw})
 
 
@@ -783,8 +783,10 @@ def test_roots_out_of_order_reject(store) -> None:
     s = session()
     s.start()
     assert s.receive(1, 0, bytes(64)) == audit.Verdict(0, False, "order")         # window 1's challenge isn't out
-    s = session()
+    clock = Clock()
+    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
+    clock.now = 1000
     s.boundary()
     assert s.receive(1, 0, bytes(64)) is None and s.receive(0, 0, bytes(64)) == audit.Verdict(1, False, "order")
     s = session()
@@ -819,6 +821,28 @@ def test_draws_wait_for_the_windows_roots(store) -> None:
     assert isinstance(s.close(0), tuple)
     with pytest.raises(SessionError, match="not open to draw"):
         s.close(0)
+
+
+def test_a_boundary_waits_out_the_stated_window(store) -> None:
+    """The window T is stated, 20 s unless the params say otherwise: no boundary message leaves sooner than `window_ns`
+    after its window's challenge, and a refused one leaves the window open."""
+    assert Params(blocks=N, deadline_ns=A, windows=3, samples=7, delta=1e-6).window_ns == audit.WINDOW_NS == 20 * 10**9
+    clock = Clock()
+    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
+    s.start()
+    clock.now = 999
+    with pytest.raises(SessionError, match="may leave at 1000 ns, not 999"):
+        s.boundary()
+    clock.now = 1000
+    assert s.boundary().index == 1 and s.windows[0].boundary_ns == 1000
+    clock.now = 1999
+    with pytest.raises(SessionError, match="window 1 is 1000 ns"):
+        s.boundary()
+    clock.now = 2500
+    assert s.boundary().index == 2 and s.windows[1].boundary_ns == 2500
+    for bad in (0, -1, 1.5, True):
+        with pytest.raises(ValueError, match="window_ns"):
+            params(window_ns=bad)
 
 
 def _tampered(field_: str, value):
@@ -909,6 +933,23 @@ def test_opening_size_matches_the_timing_model(store) -> None:
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert prover.open(passes[0, 0], 0).size == timing.opening_bytes(N)
     assert timing.wrong_bound(10 ** 6, timing.samples_for(1e-3, 2.0 ** -40), 2.0 ** -40) <= 10 ** 3
+
+
+def test_the_stated_claim_holds_for_the_sampling_term_and_not_for_the_whole_gamma() -> None:
+    """`PROTOCOL.md` §1 and §10's reading through the ledger, on one RTX PRO 6000 with its whole HBM as the store.  At
+    the stated T = 20 s and 11,091 openings a window, a 10 min session's worst window has μ_sample under 0.25% and a
+    whole γ_t over 1%; over the horizon the pooled μ_sample is under 0.01% and the whole γ over 0.15%, which λ and
+    μ_chip each exceed alone.  T = 60 s at the same 555 openings a second meets 1%; the 1 s option's μ_sample alone
+    does, at 2,773."""
+    s, store = timing.samples_for(0.0025, 2.0 ** -40), 94 * 10 ** 9
+    assert (s, timing.samples_for(0.01, 2.0 ** -40)) == (11_091, 2_773) and audit.WINDOW_NS == 20 * timing.S
+    for rtt in (1, 20):
+        g = timing.stated(store, audit.WINDOW_NS, 30, rtt_ns=rtt * timing.MS, samples=s)
+        assert g.worst.sample < 0.0025 and 0.0125 < g.worst.gamma < 0.014
+        assert g.horizon < 1e-4 and g.counting > 0.0015 and g.chip > 0.0015 and 0.006 < g.gamma_horizon < 0.0065
+        assert timing.stated(store, 60 * timing.S, 10, rtt_ns=rtt * timing.MS, samples=3 * s).worst.gamma < 0.0085
+        one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=2_773).worst
+        assert one.sample < 0.01 < 0.1 < one.gamma
 
 
 @pytest.mark.parametrize("pass_ms, rtt_ms, window_ms", [(20, 1, 300), (20, 50, 1000), (50, 5, 1000), (37, 20, 300)])

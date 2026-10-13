@@ -91,7 +91,7 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     serves a receipt of each chain.  Both are accepted with every receipt opened, and the two records together certify
     twice the reads made.  Fixed: every session names its `not_before_ns`, and one that names the last record's end
     waits it out."""
-    p = params(windows=2, samples=N * 3)
+    p = params(windows=2, samples=N * 3, window_ns=910)
     clock = Clock()
     sessions = [Session(p, store.registration, None,
                         coins.Challenger(store.registration.digest, k, p.coins, entropy=Entropy(b"coins %d" % k)),

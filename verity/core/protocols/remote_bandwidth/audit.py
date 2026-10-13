@@ -14,7 +14,8 @@ many reads of a node's registered blocks the node made in each window, from rece
 2. Coins.  Before the session the challenger draws two live coins a window, its challenge `σ_t` and its openings coin,
    and commits to them (`coins.Challenger`).  The prover gets the commitment first (`Session.commitment`).
 3. A session of `windows` windows.  The verifier releases `σ_0` (`Session.start`), and at each window's end the next
-   window's challenge, or the close after the last (`Session.boundary`), one-way.
+   window's challenge, or the close after the last (`Session.boundary`), one-way.  A window lasts at least the stated
+   `T` (`Params.window_ns`, 20 s by default).
 4. Chained passes.  Pass i of window t reads the blocks of its plan (`receipts.Plan`: distinct blocks, the whole store by
    default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`), each of its
    block alone, or under a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it
@@ -80,6 +81,7 @@ NONCE_BYTES = 32
 NODE_BYTES = 64
 QUERIES_LOG2 = 64
 SLACK_LOG2 = 41
+WINDOW_NS = 20 * 10**9
 
 FAILURES = ("late", "order", "plan", "few", "malformed", "receipt-path", "codec", "payload-path", "tile", "receipt")
 
@@ -87,9 +89,10 @@ FAILURES = ("late", "order", "plan", "few", "malformed", "receipt-path", "codec"
 @dataclass(frozen=True, slots=True)
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
-    deadline, the windows `W`, the openings `s` per window at `delta`, the fewest passes a window may certify, and the
-    store's codec, receipt kind, whether its receipts bind z, its block layout and its sketch rows (None for the
-    kind's default, `receipts.sketch_rows`), the registration's."""
+    deadline, the windows `W`, the openings `s` per window at `delta`, the fewest passes a window may certify, the
+    stated window `T` (`window_ns`, 20 s by default: no boundary message leaves sooner after its window's challenge),
+    and the store's codec, receipt kind, whether its receipts bind z, its block layout and its sketch rows (None for
+    the kind's default, `receipts.sketch_rows`), the registration's."""
 
     blocks: int
     deadline_ns: int
@@ -97,6 +100,7 @@ class Params:
     samples: int
     delta: float
     min_passes: int = 1
+    window_ns: int = WINDOW_NS
     codec: Codec = codec.DEFAULT
     receipt: str = receipts.DEFAULT
     bind: bool = False
@@ -104,7 +108,7 @@ class Params:
     rows: int | None = None
 
     def __post_init__(self) -> None:
-        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes"):
+        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"{name} is a positive integer")
         if not 0 < self.delta < 1:
@@ -524,12 +528,16 @@ class Session:
         return self._release(0, now)
 
     def boundary(self) -> coins.CoinOpening | None:
-        """The end of the next unended window: the following window's challenge, or None, the close, after the last."""
+        """The end of the next unended window: the following window's challenge, or None, the close, after the last.
+        Refused sooner than `window_ns` after the window's challenge left."""
         self._live()
         now = self.clock()
         t = next((t for t, w in enumerate(self.windows) if w.boundary_ns is None), None)
         if t is None:
             raise SessionError("every window has ended" if self.windows else "the session has not started")
+        if now < self.windows[t].released_ns + self.params.window_ns:
+            raise SessionError(f"window {t} is {self.params.window_ns} ns, stated: its boundary may leave at "
+                               f"{self.windows[t].released_ns + self.params.window_ns} ns, not {now}")
         self.windows[t].boundary_ns = now
         return self._release(t + 1, now) if t + 1 < self.params.windows else None
 

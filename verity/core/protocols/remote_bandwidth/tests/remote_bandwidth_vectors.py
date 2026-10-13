@@ -40,7 +40,7 @@ PAYLOAD_SALT_LABEL = b"verity remote bandwidth vector payload salts"
 LEAF_SALT_LABEL = b"verity remote bandwidth vector receipt salts"
 BLOCKS = 21
 PLANS = (receipts.Plan.whole(BLOCKS), receipts.Plan(((16, 5), (3, 4), (0, 1)), BLOCKS), receipts.Plan.whole(BLOCKS))
-PARAMS = audit.Params(blocks=BLOCKS, deadline_ns=10, windows=1, samples=7, delta=1e-6)
+PARAMS = audit.Params(blocks=BLOCKS, deadline_ns=10, windows=1, samples=7, delta=1e-6, window_ns=10)
 TILES = audit.NoiseTiles(96)
 DEFAULT = (receipts.DEFAULT, False, receipts.SKETCH_ROWS)
 VARIANTS = (*((k, b, receipts.sketch_rows(k)) for k in receipts.KINDS for b in (False, True)
