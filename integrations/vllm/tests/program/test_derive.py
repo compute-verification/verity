@@ -513,12 +513,13 @@ def test_neg_profile_mode_refuses_a_batch_invariant_linear_on_a_target_without_b
 )
 def test_profile_mode_binds_the_non_batch_invariant_cuda_rmsnorm(fused, expected, monkeypatch):
     """The rule asks #1970's selector for the served M=4 block and binds one CUDA vector-8 call per token."""
+    from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.rules.vllm_bindings import observations as VB
     from verity_vllm.program.frontend.target_profile import TargetProfile
     monkeypatch.setitem(VB._OBSERVED, "target_profile", TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False))
     m = ex.RMSNorm(6144, 1e-5)
     x = torch.empty(4, 6144, dtype=torch.bfloat16)
-    rep = derive_report(m, (x, x.clone()) if fused else (x,), **PROF)
+    rep = derive_report(m, (x, x.clone()) if fused else (x,), rules=vllm_ruleset(), **PROF)
     assert rep.ok, rep.unsupported
     calls = [node.fn.id for node in rep.program.fn.body.nodes]
     assert calls == [expected] * 4
