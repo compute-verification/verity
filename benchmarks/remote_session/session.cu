@@ -102,39 +102,6 @@ __global__ void __launch_bounds__(128) payload_leaves_kernel(const uint4 *__rest
   store_digest(dig, tid, n, d);
 }
 
-// The payload leaves of `count` whole 2^h0-block subtrees, first block c[q], laid out subtree by subtree in nodes
-// (level 0 first, then the levels `subtree_level_kernel` writes).  Unlike `payload_leaves_kernel`, the subtrees need
-// not be adjacent.
-__global__ void __launch_bounds__(128) payload_subtree_leaves_kernel(const uint4 *__restrict__ data,
-                                                                     const u64 *__restrict__ c, int h0, u64 count,
-                                                                     u64 *__restrict__ nodes) {
-  const u64 S = 1ULL << h0, n = count * S;
-  const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x;
-  if (tid >= n) return;
-  const u64 q = tid >> h0, local = tid & (S - 1), j = c[q] + local, per = 2 * S - 2;
-  const uint4 *E = data + j * (BLOCK / 16);
-  u64 x[8], w[16];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) x[i] = kC.row_mid[i];
-#pragma unroll 1
-  for (int k = 0; k < BLOCK / 128; ++k) {
-#pragma unroll
-    for (int i = 0; i < 8; ++i) {
-      const uint4 v = __ldg(E + 8 * k + i);
-      w[2 * i] = be_word(v.x, v.y), w[2 * i + 1] = be_word(v.z, v.w);
-    }
-    sha512_compress(x, w);
-  }
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = 0;
-  w[0] = 0x80ULL << 56, w[15] = (u64)(128 + BLOCK) * 8;
-  sha512_compress(x, w);
-  u64 d[8];
-  hm96_leaf(j, x, d);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) nodes[(q * per + local) * 8 + i] = d[i];
-}
-
 // The 16-row sketch on tensor cores, fused with its receipt: σ (blocks × 16) = E · Sᵀ by mma.m16n8k32 as reader.cu's
 // sketch64 with its first two n-tiles, so the CUDA cores stay free for the leaves and the tree of the chunk before.
 // Lane (g, t)'s B registers of n-tile n at p are S's row 8 n + g at bytes 64 p + 16 t … + 15 (x, y for k-step 2 p, z, w
@@ -459,16 +426,6 @@ extern "C" {
 int rs_payload_leaves(const void *data, uint64_t c0, uint64_t n, uint64_t *dig, cudaStream_t s) {
   if (!data || !dig || n < 1) return 1;
   payload_leaves_kernel<<<grid(n, 128), 128, 0, s>>>((const uint4 *)data, c0, n, dig);
-  return cudaGetLastError() ? 4 : 0;
-}
-
-int rs_payload_subtrees(const void *data, const uint64_t *c, uint64_t count, int h0, uint64_t *nodes,
-                        cudaStream_t s) {
-  if (!data || !c || !nodes || !count || h0 < 1 || h0 > 20 || h0 + 1 > NODE_LEVELS) return 1;
-  payload_subtree_leaves_kernel<<<grid(count << h0, 128), 128, 0, s>>>((const uint4 *)data, c, h0, count, nodes);
-  for (int h = 0; h + 1 < h0; ++h)
-    subtree_level_kernel<<<grid(count << (h0 - h - 1), 128), 128, 0, s>>>(nodes, c, h0, h,
-                                                                         count << (h0 - h - 1));
   return cudaGetLastError() ? 4 : 0;
 }
 
