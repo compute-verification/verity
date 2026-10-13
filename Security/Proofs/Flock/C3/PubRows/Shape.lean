@@ -123,7 +123,6 @@ theorem candidate3_rest {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVSta
   | none =>
     rw [hr] at h
     cases h
-    exact ⟨#[], Array.append_empty.symm, by simp⟩
   | some r =>
     rw [hr] at h
     dsimp only at h

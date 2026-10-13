@@ -652,7 +652,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         r.2.forM (RecVStar.checkStmt recInner stmtTags tables · circuitB partition program registered recPart recBindings recRows)
         if let (some i, some cs) := (recInner, recCommits) then RecVStar.checkCovers i cs
         if zk then r.2.forM Zk.shapeOk
-        r.2.forM (RecCoins.check · registered recCoins (recC3 recInner recCommits))
+        r.2.forM (RecCoins.check · registered (RecCoins.Source.atC3 recCoins recInner recCommits) (recC3 recInner recCommits))
         r.2.forM (RecVStar.checkPubRows · registered recCommits (recInner.bind (·.sparse)))
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
@@ -776,7 +776,7 @@ def statementCmd (args : List String) : IO UInt32 := do
       if recCommits.isSome then RecVStar.checkPubRows st registered recCommits (recInner.bind (·.sparse))
       let u := st.c.unit.name
       if recCoins.isSome || (c3.isSome && ((RecCoins.stackedParams u).isSome || (RecOpening.params u).isSome)) then
-        RecCoins.check st registered recCoins c3
+        RecCoins.check st registered (RecCoins.Source.atC3 recCoins recInner recCommits) c3
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"

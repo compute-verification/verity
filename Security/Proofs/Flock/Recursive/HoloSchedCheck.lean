@@ -8,8 +8,8 @@ import Proofs.Flock.Recursive.HoloSchedRead
 * `repsCommitsAt_of_check`: `checkCommitRounds` (the end of `checkCovers`) holds two reps, each's `c_k` at the reps'
   schedule's message rounds (`holoRepRounds` under `Inner.holo`, which is `holoRounds`): `RepsCommitsAt`.
 * `sparseCommitsAt_of_check`: it holds `sparse/rep0`'s and `sparse/rep1`'s `c_k` at `sparsePhaseRounds` of the verifier's
-  RecSparse shape (`sparseRounds`): `SparseCommitsAt`, where the verifier holds no other stream named `sparse/rep<y>`.
-  The check reads those two names only, so a stream `sparse/rep<y>` at `y ≥ 2` is that hypothesis's, not the check's.
+  RecSparse shape (`sparseRounds`) and refuses any other held stream named `sparse/…`, so a held `sparse/rep<y>` has
+  `y < 2` (`sparse_lt_two`): `SparseCommitsAt`.
 * `claimReadsAt_of_checkOwn`: `checkOwn` holds the reads file's `rec-claim` ports to the statement's (`ownPorts`):
   `ClaimReadsAt`. No part's or opening's message-round value is `rec-claim` (`recC_ne_claim`, `recOpeningC_ne_claim`),
   and an opening's `claim<k>` is named as `claimIndex` reads it back (`claimIndex_some`).
@@ -56,8 +56,8 @@ theorem topCounts_eq (rs : Array SchedRound) : topCounts rs = (topRounds rs).map
   exact (List.map_id _).symm
 
 /-- **`checkCommitRounds` accepting**: two reps, each's `c_k` rounds the reps' schedule's message rounds,
-`sparse/rep0`'s and `sparse/rep1`'s the sparse phase's, and `stacked/rep0`'s those of `stackedRounds` of the
-verifier's R shape, its tops of the node counts those rounds commit. -/
+`sparse/rep0`'s and `sparse/rep1`'s the sparse phase's, `stacked/rep0`'s those of `stackedRounds` of the
+verifier's R shape, its tops of the node counts those rounds commit, and no other held stream named `sparse/…`. -/
 theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
     (h : checkCommitRounds i cs = .ok ()) :
@@ -65,8 +65,10 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
       (∀ (y : Nat) (cm : Array (Nat × ByteArray)), cs.reps[y]? = some cm → cm.toList.map (·.1) = commitRounds rep) ∧
       (∀ sh, i.sparse = some sh → ∀ (y : Nat) (st : InnerStream), y < 2 → cs.stream? s!"{SPARSE}/rep{y}" = some st →
         st.commits.toList.map (·.1) = commitRounds (sparsePhaseRounds sh)) ∧
-      ∀ st : InnerStream, cs.stream? s!"{STACKED}/rep0" = some st → ∃ rs, i.stacked.bind stackedRounds = some rs ∧
-        st.commits.toList.map (·.1) = commitRounds rs ∧ st.tops.toList.map (·.size) = topCounts rs := by
+      (∀ st : InnerStream, cs.stream? s!"{STACKED}/rep0" = some st → ∃ rs, i.stacked.bind stackedRounds = some rs ∧
+        st.commits.toList.map (·.1) = commitRounds rs ∧ st.tops.toList.map (·.size) = topCounts rs) ∧
+      cs.streams.find? (fun st => st.name.startsWith s!"{SPARSE}/" &&
+        st.name != s!"{SPARSE}/rep0" && st.name != s!"{SPARSE}/rep1") = none := by
   unfold checkCommitRounds at h
   rw [hsch] at h
   try simp only at h
@@ -76,6 +78,21 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
     | exact absurd (checkBind_ok h) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
     | cases h
   · rename_i hsz
+    rcases hf : cs.streams.find? (fun st => st.name.startsWith s!"{SPARSE}/" &&
+        st.name != s!"{SPARSE}/rep0" && st.name != s!"{SPARSE}/rep1") with _ | stx
+    rotate_left
+    · first
+      | rw [hf] at h
+      | simp only [hf] at h
+      try simp only at h
+      first
+      | exact absurd h (checkThrow_ne _ _)
+      | exact absurd (checkBind_ok h) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
+      | cases h
+    first
+    | rw [hf] at h
+    | simp only [hf] at h
+    try simp only at h
     rcases hs : cs.stream? s!"{STACKED}/rep0" with _ | st₀
     · first
       | rw [hs] at h
@@ -95,7 +112,7 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
               | cases hb
             · rename_i hne
               exact ⟨by simpa using hne, (Except.ok.inj hb).symm⟩) _ hloop
-      refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_, fun st hst => ?_⟩
+      refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_, fun st hst => ?_, by first | exact hf | rfl⟩
       · have hz : (cm, y) ∈ cs.reps.toList.zipIdx := by
           apply List.mem_zipIdx_iff_getElem?.2
           first
@@ -158,7 +175,7 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
                   | cases hb
                 · rename_i hne
                   exact ⟨by simpa using hne, (Except.ok.inj hb).symm⟩) _ hloop
-          refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_, fun st hst => ?_⟩
+          refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_, fun st hst => ?_, by first | exact hf | rfl⟩
           · have hz : (cm, y) ∈ cs.reps.toList.zipIdx := by
               apply List.mem_zipIdx_iff_getElem?.2
               first
@@ -206,15 +223,43 @@ theorem repsCommitsAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sche
     rw [msgRounds_eq]
     exact hreps y cm hcm
 
-/-- **The verifier's check of the sparse phases' `c_k` gives `SparseCommitsAt`**, where each stream the verifier holds
-named `sparse/rep<y>` is a rep's (`y < 2`): `checkCommitRounds` reads `sparse/rep0` and `sparse/rep1` only. -/
+theorem digits_eq {y : Nat} {d : Char} (h : Nat.toDigits 10 y = [d]) : y = Nat.ofDigitChars 10 [d] 0 := by
+  rw [← h, Nat.ofDigitChars_ten_toDigits]
+
+/-- **A held `sparse/rep<y>` is a rep's** (`y < 2`) where no held stream named `sparse/…` is other than `sparse/rep0`
+and `sparse/rep1`, as `checkCommitRounds` refuses. -/
+theorem sparse_lt_two {cs : InnerCommits}
+    (hn : cs.streams.find? (fun st => st.name.startsWith s!"{SPARSE}/" &&
+      st.name != s!"{SPARSE}/rep0" && st.name != s!"{SPARSE}/rep1") = none) :
+    ∀ (y : Nat) (st : InnerStream), cs.stream? s!"{SPARSE}/rep{y}" = some st → y < 2 := by
+  intro y st h
+  have hm := Array.mem_of_find?_eq_some h
+  have hname : st.name = s!"{SPARSE}/rep{y}" := by simpa using Array.find?_some h
+  have hf := Array.find?_eq_none.1 hn st hm
+  rw [hname] at hf
+  refine Classical.byContradiction fun hy => hf ?_
+  have ne : ∀ (k : String) (d : Char), k.toList = "/rep".toList ++ [d] → Nat.ofDigitChars 10 [d] 0 < 2 →
+      s!"{SPARSE}/rep{y}" ≠ toString SPARSE ++ toString k := by
+    intro k d hk hd he
+    have he := congrArg String.toList he
+    simp only [String.toList_append, toString, Nat.toList_repr] at he
+    rw [hk] at he
+    have := digits_eq (by simpa [List.append_assoc] using he)
+    omega
+  simp only [Bool.and_eq_true, bne_iff_ne, ne_eq]
+  refine ⟨⟨String.startsWith_string_iff.2 ?_, ne "/rep0" '0' (by decide) (by decide)⟩,
+    ne "/rep1" '1' (by decide) (by decide)⟩
+  simp only [String.toList_append, toString]
+  exact ⟨"rep".toList ++ Nat.toDigits 10 y, by simp [List.append_assoc]⟩
+
+/-- **The verifier's check of the sparse phases' `c_k` gives `SparseCommitsAt`**: `checkCommitRounds` holds
+`sparse/rep0`'s and `sparse/rep1`'s at the sparse phase's rounds and refuses any other held `sparse/…` stream. -/
 theorem sparseCommitsAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
-    (h : checkCommitRounds i cs = .ok ())
-    (hrows : ∀ y st, cs.stream? s!"{SPARSE}/rep{y}" = some st → y < 2) : SparseCommitsAt cs i.sparse := by
-  obtain ⟨-, -, hsp, -⟩ := commitRounds_of_check hsch h
+    (h : checkCommitRounds i cs = .ok ()) : SparseCommitsAt cs i.sparse := by
+  obtain ⟨-, -, hsp, -, hn⟩ := commitRounds_of_check hsch h
   intro y st sh hst hsh
-  have hy := hrows y st hst
+  have hy := sparse_lt_two hn y st hst
   refine ⟨hy, ?_⟩
   unfold CommitsAt
   rw [msgRounds_eq, sparseRounds_eq]
@@ -224,7 +269,7 @@ theorem sparseCommitsAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sc
 theorem stackedAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
     (h : checkCommitRounds i cs = .ok ()) : StackedAt cs (i.stacked.bind stackedRounds) := by
-  obtain ⟨-, -, -, hR⟩ := commitRounds_of_check hsch h
+  obtain ⟨-, -, -, hR, -⟩ := commitRounds_of_check hsch h
   intro st hst
   obtain ⟨rs, hrs, hc, ht⟩ := hR st hst
   refine ⟨rs, hrs, ?_, ?_⟩
