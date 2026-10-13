@@ -30,7 +30,7 @@ from verity_vllm.program.registry import sparse_mla_split as W
 from verity_vllm.program.registry.b1 import ZERO16
 from verity_vllm.program.registry.prims import BF16, F32
 
-_CONF = ("model-untested: read from vllm-flash-attn 506341a1's FA3 split path (hopper/block.h, mainloop_fwd_sm90_tma_gmma_ws.hpp, "
+_CONF = ("model-untested: read from vllm-flash-attn 506341a1's FA3 split path (hopper/block.h, the TMA / GMMA mainloop, "
          "softmax.h) at hdim 256, its split end and combine sparse_mla_split's; tests/properties/glm53_fa3_prefill_capture_gpu.py "
          "is its hardware check")
 
