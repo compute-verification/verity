@@ -390,3 +390,9 @@ theorem openReadCol_whole (sh : Flock.Shape) :
 end Net
 
 end FlockC3.Reps.ReadWhole
+
+#print axioms FlockC3.Reps.ReadWhole.readBits_of_accUnread
+#print axioms FlockC3.Reps.ReadWhole.readCol_acc
+#print axioms FlockC3.Reps.ReadWhole.readCol_rs
+#print axioms FlockC3.Reps.ReadWhole.readBits_of_rsUnread
+#print axioms FlockC3.Reps.ReadWhole.check_rsWhole

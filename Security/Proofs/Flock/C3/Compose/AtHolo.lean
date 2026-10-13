@@ -88,8 +88,7 @@ theorem srcOK_holo_rs {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arra
       FlockC3.Opening.OpenTieL (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) sh
         (w R ω t (layers zs dg N k Rw R ω t R₂ τ)) (tiedSrc stp R ω t (layers zs dg N k Rw R ω t R₂ τ)))
     (hall : OpenAll zs dg N k Rw sh w) (hk : RsKeys zs dg N k Rw sh w)
-    (hr : RoundReads zs dg N k Rw sh w own sel c₀) (hrc : RsReadCol zs dg N k Rw sh w)
-    (hlg : LigMsgsRead zs dg N k Rw (tiedSrc stp) own sel)
+    (hr : RoundReads zs dg N k Rw sh w own sel c₀) (hlg : LigMsgsRead zs dg N k Rw (tiedSrc stp) own sel)
     (hos : ∀ s < 3, OpensReadAt zs dg N k Rw (tiedSrc stp) s)
     (hrt : SrcRepTie zs dg N k Rw (tiedSrc stp)) (hst : FlockC3.Sparse.SrcSparseTie zs dg N k Rw (tiedSrc stp))
     (hot : AtSrc zs dg N k Rw (tiedSrc stp) fun _ u => ∃ sh w ops,
@@ -98,7 +97,7 @@ theorem srcOK_holo_rs {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arra
     SrcOK zs dg N k Rw (tiedSrc (normSrc stp)) own sel := by
   have hop : OpenMsgsRead zs dg N k Rw (tiedSrc stp) own sel := by
     subst hzs
-    exact openMsgsRead_checked hF he htie hall hk hr hrc
+    exact openMsgsRead_checked hF he htie hall hk hr
   exact srcOK_holo (ish := ish) (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2)
     (bind := bind) (rows := rows) (zr := zr) (hC := hCust) (h := h) hzs hS hcoins hrp hsp hop hlg hos hrt hst hot
     hlt
