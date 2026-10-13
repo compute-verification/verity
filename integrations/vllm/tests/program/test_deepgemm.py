@@ -9,6 +9,7 @@ grouped `wo_a` einsum, against models of their kernels and against their twins (
   or not), infinities and NaNs;
 * each word Definition word for word against its twin on random rows and on rows that reach the guards, the linears and the
   grouped einsum over a partial weight block;
+* the replay's evaluator of the three linears, their row kernels (`kernels.deepgemm_rows`), and the rows they decline;
 * the Boolean versions (`boolean_deepgemm`) against their word views, the switch mapping each word Definition to them;
 * the load-time weight processing: the e8m0 upcast, and the ue8m0 requantisation against vLLM's own `per_block_cast_to_fp8`
   run eagerly on CPU, off the blocks whose power of two the GPU's division and log2 decide (`requant_band`).
@@ -246,6 +247,37 @@ def test_grouped_einsum_matches_its_twin() -> None:
     sx, ws = T.upcast_e8m0(rng.integers(118, 126, (H, K // G))), T.upcast_e8m0(rng.integers(112, 124, (H, 2, K // G)))
     y, _ = T.scaled_mm_fp8_block_grouped_row(xq, sx, w, ws)
     assert list(evaluate(bind(DG.ScaledMmFp8BlockGrouped, H=H, K=K, N=N, G=G), *map(_words, (xq, sx, w, ws)))) == _words(y)
+
+
+def test_replay_evaluates_the_linears_with_their_row_kernels() -> None:
+    """`evaluate_batch`'s default for the three Definitions is their row kernel (`kernels.deepgemm_rows`, registered from `rows`), not
+    the plain-integer reference.  The middle row of each batch is one the GEMM twin does not reproduce (DeepGEMM: accumulators past
+    the largest finite; FlashInfer: its all-subnormal group's NaN words; the einsum: a NaN e4m3 byte in one token): the row kernel
+    declines it by name, and the reference evaluates it."""
+    from verity.ml.circuits.evaluation.reference import statics_of
+    from verity_vllm.program.kernels import kernel_registry as KR
+    from verity_vllm.program.kernels import rows
+
+    rng = np.random.default_rng(8)
+    K, N, H, G = 256, 130, 2, 128
+    around = lambda mid: np.stack([_bf16_rows(rng, 1, K)[0], mid, _bf16_rows(rng, 1, K)[0]])       # noqa: E731
+    shared = lambda *ops: [np.broadcast_to(o, (3, *o.shape)) for o in ops]                         # noqa: E731
+    w, ws = _weights(rng, N, K), T.upcast_e8m0(rng.integers(112, 124, (2, K // G)))
+    xq, sx = _weights(rng, 3, H, K), T.upcast_e8m0(rng.integers(118, 126, (3, H, K // G)))
+    xq[1, 0, 5] = 0x7F
+    cases = [(bind(DG.DeepGemmFp8Linear, K=K, N=N), [around(_bf16_rows(rng, 1, K, 1e37)[0]), *shared(w, ws)]),
+             (bind(DG.FlashInferFp8Linear, K=K, N=N), [around(_guard_rows(rng, K)[0]), *shared(w, ws)]),
+             (bind(DG.ScaledMmFp8BlockGrouped, H=H, K=K, N=N, G=G),
+              [xq, sx, *shared(_weights(rng, H, N, K), T.upcast_e8m0(rng.integers(112, 124, (H, 2, K // G))))])]
+    for target, ops in cases:
+        assert set(E.kernels(target)) == {rows.KERNEL}
+        fn, statics = KR.instance(target, rows.KERNEL), statics_of(target)
+        with pytest.raises(KR.Declined, match="NaN e4m3 operand or a non-finite accumulator"):
+            fn(*(o[1] for o in ops), **statics)
+        for i in (0, 2):
+            fn(*(o[i] for o in ops), **statics)
+        got, ref = E.evaluate_batch(target, *ops), E.evaluate_batch(target, *ops, kernel="reference")
+        assert got.dtype == ref.dtype and np.array_equal(got, ref), target.id
 
 
 def test_statics_are_checked() -> None:
