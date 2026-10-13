@@ -221,6 +221,43 @@ def test_a_shared_specialized_split_is_the_specialized_operation(element) -> Non
     assert own.traced(SimpleNamespace(K=0x3F80)).gates != own.traced(SimpleNamespace(K=0xC1F0)).gates
 
 
+@pytest.mark.parametrize("element", [BL.BIT, Array(1, BL.BIT)], ids=["word", "bits"])
+def test_a_shared_specialized_split_by_element_is_the_specialized_operation(element) -> None:
+    """`shared_specialized` with ``by_element`` cuts ``bf16(x_j + K) * s`` over x of 3 bf16 words at each x_j: the first part is
+    one word's circuit, its 3 Calls and the rest have exactly the `specialized` circuit's gates, and the rest over (x, s, the 3
+    frontiers) is the `specialized` Definition on random words; a builder whose x gates read two words refuses."""
+    X3 = Array(3, EW.BF16)
+
+    def build(S):
+        return lambda C, *e: [EW.Bf16MulBf16.build(C, EW.bf16_add(C, xj, const_bits(S.K, 16)), e[3]) for xj in e[:3]]
+
+    def sig(S):
+        return (("x", X3), ("s", EW.BF16)), X3
+
+    whole = EW.specialized("ByElementWholeCheck", 1, ["K"], build, sig, register=False)
+    own, rest = EW.shared_specialized(("ByElementOwnCheck", "ByElementRestCheck"), 1, ["K"], build, sig, 0, ("", ""),
+                                      register=False, element=element, by_element=True)
+    rng = np.random.default_rng(27)
+    n = 30_000
+    x = rng.integers(0, 1 << 16, (n, 3)).astype(np.uint16)
+    x[:len(BF16_SPECIALS), 1] = BF16_SPECIALS
+    s = rng.integers(0, 1 << 16, n).astype(np.uint16)
+    for k in (0x3F80, 0xC1F0):
+        S = SimpleNamespace(K=k)
+        counts = whole.traced(S).counts
+        assert {g: 3 * own.traced(S).counts[g] + rest.traced(S).counts[g] for g in counts} == counts
+        dt = Array(len(own.traced(S).outputs), element)
+        assert own.signature(S) == ((("x", EW.BF16),), dt) and rest.signature(S)[0][-1] == ("xd", Array(3, dt))
+        xd = np.asarray(BS.evaluate_words(bind(own, K=k), x.reshape(-1))).reshape(n, -1)
+        got = np.asarray(BS.evaluate_words(bind(rest, K=k), x, s, xd)).reshape(n, 3)
+        assert np.array_equal(got, np.asarray(BS.evaluate_words(bind(whole, K=k), x, s)).reshape(n, 3))
+    mixed = EW.shared_specialized(("MixedOwnCheck", "MixedRestCheck"), 1, ["K"],
+                                  lambda S: lambda C, *e: [EW.Bf16MulBf16.build(C, EW.bf16_add(C, e[0], e[1]), e[3])] * 3, sig, 0,
+                                  ("", ""), register=False, by_element=True)[0]
+    with pytest.raises(ValueError, match="reads elements"):
+        mixed.traced(SimpleNamespace(K=0))
+
+
 def test_a_specialized_constant_is_folded() -> None:
     """`specialized` folds the f32 word K into `bf16_mul_f32`: no gate reads a constant wire, it has fewer ANDs than
     `Bf16MulF32_v2`, and on every bf16 word it is `Bf16MulF32_v1(x, K)` at K = 30.0 and K = RN32(1 / 30)."""
