@@ -13,8 +13,9 @@ At the proof G's lig lane builds (`pR` over `StackedMaps.ops`), R's openings are
 Where those are the read of R's map's units (`StackedReads`, by construction) and that read's columns are input columns
 a row reads (`StackedOpenCols`, `RepMaps.OpenCols`' form at R's map), `opensReadAt_two_of_layers`' hypotheses both hold.
 `StackedOpenCols` is `RepMaps.openCols_of_readCol`'s at R's map (`stackedOpenCols_of`), from its units' parameters
-(`StackedParams`, at `RecCoins.stackedParams`), their nets (`StackedNet`, which no check gives yet) and S's
-`OpenReadCol` at their names (`StackedReadCol`).
+(`StackedParams`, at `RecCoins.stackedParams`), their nets (`StackedNet`, from `RecOpen.check`: `stackedNet_of`) and S's
+`OpenReadCol` at their names (`StackedReadCol`). `stackedParams_of_check`: a unit `RecOpen.check` accepted under V*'s
+name `rec-open-stacked/l<L>-h<H>` has `stackedParams` `(L, H)`.
 
 * `openRow_ligOfRead_out`, `openRow_ligOfRead_past`: past a level's `q` a `ligOfRead` opening is empty, and past a
   schedule of at least two levels (`DimSeam`) it is the last level's row with no siblings (the default level's `d - cap`
@@ -156,13 +157,61 @@ def StackedParams (M : FlockC3.Reps.StackedMaps stmt Vs) (sh : Flock.Shape) : Pr
   ∀ ℓ < sh.sched.levels.size, Flock.RecCoins.stackedParams (Vs (M.sess ℓ)).c.unit.name =
     some (FlockVBridge.AccChain.levelLanes sh ℓ, (sh.sched.levels[ℓ]!).d - (sh.sched.levels[ℓ]!).cap)
 
-/-- **Hypothesis: R's map's units' nets** (`RecOpen.check_ok`'s conclusion at R's stacked names, which no check gives
-yet: `RecOpen.check` passes a `rec-open-stacked/` unit, and the circuit file pins it byte for byte): a unit at
-`stackedParams` `L`, `H` has a valid `L` and `H` and is the net of `unitLaid L H` under its stacked name. -/
+/-- **R's map's units' nets** (`RecOpen.check_ok_stacked`'s conclusion, `stackedNet_of`): a unit at `stackedParams` `L`,
+`H` has a valid `L` and `H` and is the net of `unitLaid L H` under its stacked name. -/
 def StackedNet (M : FlockC3.Reps.StackedMaps stmt Vs) : Prop :=
   ∀ ℓ {L H : ℕ}, Flock.RecCoins.stackedParams (Vs (M.sess ℓ)).c.unit.name = some (L, H) →
     Flock.RecOpen.valid L H = true ∧
       Flock.HmNets.netOf (VStar.recOpenStackedName L H) (Flock.RecOpen.unitLaid L H) = .ok (Vs (M.sess ℓ)).c.unit
+
+/-- **`StackedNet` from the verifier's check**: `RecOpen.check` rebuilds a `rec-open-stacked/` unit's net under its own
+name and compares it (`RecOpen.check_ok_stacked`; `RecCoins.stackedParams` is `RecOpen.stackedParams` word for word). -/
+theorem stackedNet_of (M : FlockC3.Reps.StackedMaps stmt Vs) (hrec : ∀ j, Flock.RecOpen.check (Vs j).c = .ok ()) :
+    StackedNet M := fun ℓ _ _ hp => Flock.RecOpen.check_ok_stacked (hrec (M.sess ℓ)) hp
+
+/-- **The name `rec-open-stacked/l<L>-h<H>` determines `L` and `H`** (`FlockVBridge.unitName_inj`'s argument). -/
+theorem stackedName_inj {L H L' H' : ℕ} (h : Flock.RecOpen.stackedName L H = Flock.RecOpen.stackedName L' H') :
+    L = L' ∧ H = H' := by
+  have h := congrArg String.toList h
+  simp only [Flock.RecOpen.stackedName, String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h
+  have h := List.append_cancel_left h
+  have dig : ∀ n, ∀ x ∈ Nat.toDigits 10 n, x.isDigit := fun n x hx =>
+    Nat.isDigit_of_mem_toDigits (by decide) (by decide) hx
+  obtain ⟨h1, h2⟩ := FlockVBridge.digits_dash (dig L) (dig L') (by simpa using h)
+  simp only [List.cons.injEq, true_and] at h2
+  exact ⟨FlockVBridge.eq_of_toDigits h1, FlockVBridge.eq_of_toDigits h2⟩
+
+theorem stackedName_startsWith (L H : ℕ) :
+    (Flock.RecOpen.stackedName L H).startsWith "rec-open-stacked/" = true := by
+  have : Flock.RecOpen.stackedName L H = "rec-open-stacked/" ++ s!"l{L}-h{H}" := by
+    simp [Flock.RecOpen.stackedName, ← String.toList_inj, List.append_assoc, FlockVBridge.toString_str]
+  rw [this]
+  simp [String.startsWith_string_iff]
+
+/-- **A unit the verifier accepted under V*'s name of one of R's levels gives back its `L` and `H`** at
+`RecCoins.stackedParams` (`FlockVBridge.params_of_check`'s, at R's names): where `stackedParams` is `none`, so is
+`params` (`RecOpen.unitName_ne_stackedName`), and `RecOpen.check` refuses the name. Stated at an accepted unit, as
+`params_of_check` is, so it needs no lemma about `String.splitOn`. -/
+theorem stackedParams_of_check {c : Flock.Circuit} (h : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
+    (hn : c.unit.name = VStar.recOpenStackedName L H) : Flock.RecCoins.stackedParams c.unit.name = some (L, H) := by
+  have hn' : c.unit.name = Flock.RecOpen.stackedName L H := hn
+  show Flock.RecOpen.stackedParams c.unit.name = some (L, H)
+  cases hp : Flock.RecOpen.stackedParams c.unit.name with
+  | some p =>
+    obtain ⟨L', H'⟩ := p
+    obtain ⟨rfl, rfl⟩ := stackedName_inj ((Flock.RecOpen.stackedName_of_params hp).trans hn')
+    rfl
+  | none =>
+    have hu : Flock.RecOpen.params c.unit.name = none := by
+      cases hq : Flock.RecOpen.params c.unit.name with
+      | none => rfl
+      | some q =>
+        exact absurd ((Flock.RecOpen.unitName_of_params hq).trans hn') (Flock.RecOpen.unitName_ne_stackedName _ _ _ _)
+    unfold Flock.RecOpen.check at h
+    rw [hu, hp] at h
+    dsimp only at h
+    rw [hn', Flock.RecOpen.startsWith_stackedName, stackedName_startsWith] at h
+    cases h
 
 /-- **Hypothesis: `OpenReadCol` at R's stacked names** (`OpenReadCol` is at `RecOpen.unitName`; over any name it gives
 this). -/
@@ -426,7 +475,7 @@ end
 
 end FlockC3.RegLevels
 
-#print axioms FlockC3.RegLevels.lt_nIn_of_net
-#print axioms FlockC3.RegLevels.stackedOpenCols_of
-#print axioms FlockC3.RegLevels.srcOK_repsOfVals_pR
-#print axioms FlockC3.RegLevels.opensReadAt_two_read
+#print axioms FlockC3.RegLevels.stackedNet_of
+#print axioms FlockC3.RegLevels.stackedName_inj
+#print axioms FlockC3.RegLevels.stackedName_startsWith
+#print axioms FlockC3.RegLevels.stackedParams_of_check

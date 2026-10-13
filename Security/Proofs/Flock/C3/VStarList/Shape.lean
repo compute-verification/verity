@@ -10,7 +10,8 @@ shape (`stacked`), R's levels and the parts of R's opening. `checkCandidate3` re
 shape, and `candidate3Statements` an R off the two claims or off the bucket's `table_m`. So:
 
 * `SparseIs ish hp`: `hp` is the verifier's own, the inner shape's `sparse` entry (`[NU, ELL, S_LOG, T_LOG]`).
-* `sparse_of_list`: the list holds RecSparse at that entry.
+* `sparse_of_list`: the list holds RecSparse at that entry; `stacked_of_list`: with R, it holds each of R's levels at
+  `fast100(m)` (`recOpenStacked`).
 * `mReg_of_list`: each of the list's `rec-opening` statements is at `m = mReg` and `STACKED_CLAIMS` claims, where
   `mReg` is the model's (`(holoAt st hp).cls.shape.mReg`, padded to `PAD_TO` as the verifier's `tableM` is) and `ℓ` is
   in the class's range.
@@ -178,6 +179,39 @@ theorem sparse_of_list {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : F
   rw [hCe]
   simp
 
+/-- **The list holds R's levels**: with R (`i.stacked`), each level `l` of `fast100`'s schedule at R's `m`, as
+`recOpenStacked l (2^lanes) (d − cap) q`. -/
+theorem stacked_of_list {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Flock.RecVStar.statements i = .ok ss)
+    {r : Flock.RecVStar.StackedShape} (hr : i.stacked = some r) :
+    ∃ sch, Flock.fast100 r.m = some sch ∧ ∀ l < sch.levels.size,
+      VStar.Stmt.recOpenStacked l (2 ^ (sch.levels[l]!).lanes) ((sch.levels[l]!).d - (sch.levels[l]!).cap)
+        (sch.levels[l]!).q ∈ ss := by
+  obtain ⟨vsh, A, C, -, hC, rfl, -⟩ := statements_ok h
+  unfold Flock.RecVStar.candidate3Statements at hC
+  cases hsp : i.sparse with
+  | none =>
+    rw [hsp, hr] at hC
+    cases hC
+  | some sp =>
+    rw [hsp] at hC
+    dsimp only at hC
+    split at hC
+    · cases hC
+    rw [hr] at hC
+    dsimp only at hC
+    split at hC
+    · cases hC
+    split at hC
+    · cases hC
+    split at hC
+    rotate_left
+    · cases hC
+    rename_i sch hsch
+    obtain ⟨x, -, hC⟩ := eok_bind hC
+    cases hC
+    exact ⟨sch, hsch, fun l hl => Array.mem_append.2 (.inr (Array.mem_append.2 (.inl (Array.mem_append.2
+      (.inr (Array.mem_map.2 ⟨l, List.mem_toArray.2 (List.mem_range.2 hl), rfl⟩))))))⟩
+
 /-- **`table_m`**: the cells' `NU + P_LOG + T_LOG`, with `P_LOG = ⌊log₂ (2 ELL + 1)⌋ + 1`, at least `PAD_TO`. -/
 theorem tableM_eq (nu ell sLog tLog : ℕ) :
     Flock.RecVStar.tableM { nu := nu, ell := ell, sLog := sLog, tLog := tLog } =
@@ -217,3 +251,5 @@ theorem mReg_of_list {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.I
   rw [hm, tableM_eq, mReg_holoAt hell]
 
 end FlockC3.VStarList
+
+#print axioms FlockC3.VStarList.stacked_of_list
