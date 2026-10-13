@@ -60,7 +60,7 @@
   },
   "Pous.P2.Assumptions.P2RingRoundSecure": {
    "owner": "@memory-accounting",
-   "digest": "0e3e26d689c54f3d8cbd890344e17f92efe5fe8abf02c5b9e9ff25adfb2448a1"
+   "digest": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
   },
   "Pouw.Assumptions.TT": {
    "owner": "@compute-accounting",
@@ -12792,11 +12792,11 @@
    ]
   },
   "Models.Pous.Assumptions.P2": {
-   "digest": "f358b8c9d9b0150c57bd80d3500fc72eea0d50723ff4b394aecf224d11e05438",
+   "digest": "542e07ff4ed489d0453cf4f99a4a99500079d0d88443c89db22847bbbf50c0cc",
    "definitions": {
     "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3",
     "Pous.P2.Assumptions.P2RingReducesToM1p": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53",
-    "Pous.P2.Assumptions.P2RingRoundSecure": "0e3e26d689c54f3d8cbd890344e17f92efe5fe8abf02c5b9e9ff25adfb2448a1"
+    "Pous.P2.Assumptions.P2RingRoundSecure": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
    },
    "guarantees": [
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
@@ -12822,15 +12822,15 @@
    ]
   },
   "Models.Pous.Guarantees.P2": {
-   "digest": "6ed8b48c366cab6a8a7904f0f111a4ac24f530bacb919af43908ea1af6cb8f0d",
+   "digest": "4c25a2d2dbfe693577e03e616f72cad852a0f19f6a75e44856c5c8b4b1d8c593",
    "definitions": {
     "Pous.Guarantees.P2ErrorSplitB19Uncond": "33dbfe54712b1673b846f461fba5102a07cc39e17bebd04c496626e5e20f0ce8",
     "Pous.Guarantees.P2MeetsM1pB19Uncond": "5e6b9f544f812c9cf559bc3393bb707c226713af948f5fcec94709ca6d0c7df1",
     "Pous.Guarantees.P2MeetsM1pFamilyUncond": "5f4e1f3cf63263edb6acb56a5da36ca73d16667357cbb6ba17fabda31cb67754",
     "Pous.Guarantees.P2MeetsM1pW8192Uncond": "87ff711708725424195e0b6b38057a66fa3e21dd18c34471574dfd3ad74e05c7",
     "Pous.Guarantees.P2RingAuditSecureOfReduces": "30d2bf23a3e55e003e53b14f82cdf917bb6422b70be6a005ff1b8a777a669ba7",
-    "Pous.Guarantees.P2RingAuditSecureOfRoundSecure": "7ff8855d666812e8371f63b91d917e504a7f2b61a9e6b32b3319d7a2766da06b",
-    "Pous.Guarantees.P2RingGradedOfRoundSecure": "a9d26780d2a231103e764f4a1640b72cbdd37e95462c7b0dfa9a3cac62bea646",
+    "Pous.Guarantees.P2RingAuditSecureOfRoundSecure": "f445d92a7856757244b0c605d2a21c7287cc5c1104269602c81105e099dfb51a",
+    "Pous.Guarantees.P2RingGradedOfRoundSecure": "11177d6666e45e4497da08d3b3baa844373e4f731138d1777da1ca55b350219a",
     "Pous.Guarantees.P2SlackB19Uncond": "29abf694f38211f455a2a46a228f6e968f6320e447ed414279fde6a9be57d863",
     "Pous.Guarantees.P2SlackFamilyFreeBlocks": "902a58831f71201cb27e6cdd2eb12899621d32c867c0fe282ce1ef3aee9f3198",
     "Pous.Guarantees.P2SlackFamilyUncond": "56aa4860fbb0c6a834054089ba0cb9b580789ca4ac9e4188a48b59a75bf76fd5"
