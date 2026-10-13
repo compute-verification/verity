@@ -281,3 +281,9 @@ theorem ligKeys_wKey (sh : Flock.Shape) :
   rwa [Nat.shiftLeft_eq, ← Nat.pow_succ']
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.ligRounds_eq
+#print axioms FlockC3.Reps.ligLevels_has
+#print axioms FlockC3.Reps.ligRounds_has
+#print axioms FlockC3.Reps.mem_wNames_of_lig
+#print axioms FlockC3.Reps.ligKeys_wKey
