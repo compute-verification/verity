@@ -54,7 +54,6 @@ def main() -> int:
     lib = P.PagedLib(*a.lib.split("=", 1))
     sh = lib.shape
     H, G, D, WB = sh["heads"], sh["kv_heads"], sh["head_dim"], sh["wb"]
-    f = lib.field
     log(f"{lib.name}: shape {sh}, mask {lib.mask}, fold6 {lib.fold6}")
     torch.manual_seed(0)
     rng = random.Random(1)
