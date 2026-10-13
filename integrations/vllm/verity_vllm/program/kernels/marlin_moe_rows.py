@@ -64,7 +64,7 @@ def _warp_tree(acc: list[np.ndarray]) -> np.ndarray:
 
 def coordinates(x: np.ndarray, cut: np.ndarray, wq: np.ndarray, ws: np.ndarray, *, TK: int, g: np.ndarray | None = None) -> np.ndarray:
     """`MarlinMxfp4Coordinate_v1` (``g`` None) or `MarlinMxfp4CoordinateW_v1` on n coordinates at once: x (n, K) bf16 words, cut
-    (n, K / TK - 1) bools, wq (n, K) codes, ws (n, K / 32) scale bytes, g (n,) f32 words -> (n,) bf16 words."""
+    (n, K / TK - 1) bools, wq (n, K) codes, ws (n, K / 32) scale bytes, g (n,) the routed weights as bf16 words -> (n,) bf16 words."""
     x = np.asarray(x, dtype=np.uint16)
     n, K = x.shape
     MM.check_statics(K, TK)
@@ -88,8 +88,7 @@ def coordinates(x: np.ndarray, cut: np.ndarray, wq: np.ndarray, ws: np.ndarray, 
     y = f2fp_bf16(R)
     if g is None:
         return y
-    gb = f2fp_bf16(np.asarray(g, dtype=np.uint32)).astype(np.uint32) << 16
-    return f2fp_bf16(mul_rn(y.astype(np.uint32) << 16, gb))
+    return f2fp_bf16(mul_rn(y.astype(np.uint32) << 16, np.asarray(g, dtype=np.uint32) << 16))
 
 
 def launch(x: np.ndarray, blk: np.ndarray, par: int, e: np.ndarray, wq: np.ndarray, ws: np.ndarray, cols: np.ndarray, *, TK: int,
@@ -106,6 +105,7 @@ def launch(x: np.ndarray, blk: np.ndarray, par: int, e: np.ndarray, wq: np.ndarr
         raise ValueError(f"N = {N} is not a whole number of TN = {TN} tile columns")
     cols = np.asarray(cols, dtype=np.int64)
     cuts = {b: schedule(KT, NT, GRID, int(b), int(par)) for b in np.unique(blk)}
+    gb = None if g is None else f2fp_bf16(np.asarray(g, dtype=np.uint32))
     pi, ci = np.meshgrid(np.arange(P), np.arange(len(cols)), indexing="ij")
     pi, ci = pi.ravel(), ci.ravel()
     out = np.empty(P * len(cols), dtype=np.uint16)
@@ -113,7 +113,7 @@ def launch(x: np.ndarray, blk: np.ndarray, par: int, e: np.ndarray, wq: np.ndarr
         p, c = pi[lo:lo + chunk], ci[lo:lo + chunk]
         n = cols[c]
         cut = np.stack([cuts[int(blk[i])][j] for i, j in zip(p, n // TN)]) if KT > 1 else np.zeros((len(p), 0), dtype=bool)
-        out[lo:lo + chunk] = coordinates(x[p], cut, wq[e[p], n], ws[e[p], n], TK=TK, g=None if g is None else g[p])
+        out[lo:lo + chunk] = coordinates(x[p], cut, wq[e[p], n], ws[e[p], n], TK=TK, g=None if gb is None else gb[p])
     return out.reshape(P, len(cols))
 
 

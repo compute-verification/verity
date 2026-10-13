@@ -42,10 +42,12 @@ Registered functions (`_v1`):
   I32Mul, I32Div, I32Rem                      primitives: mul.lo.s32, div.s32, rem.s32 (C `int` * / %); a zero divisor gives
                                               quotient -1 and remainder a (a total extension: every divisor here is a positive count)
   MarlinMxfp4Group                            (q: 32 e2m1, s: e8m0) -> 32 bf16: one scale group's weights, the scale decoded once
+  MarlinMxfp4Step{DOT}                        (acc: f32, x: 32 bf16, q, s) -> f32: one warp row's two k16 steps over one group
+  MarlinMxfp4StepFromZero{DOT}                (x, q, s) -> f32: the same from +0 (k-tile 0)
   MarlinMoeSchedule{KT,NT,GRID}               (blk, par: i32) -> NT x (KT-1) bits: cut[J][t-1] = k-tile t of tile column J
                                               starts a segment
   MarlinMxfp4Coordinate{K,TK,DOT}             (x: K bf16, cut: KT-1 bits, wq: K e2m1, ws: K/32 e8m0) -> bf16: the w13 word
-  MarlinMxfp4CoordinateW{K,TK,DOT}            (x, cut, g: f32, wq, ws) -> bf16: the w2 word, times the routed weight
+  MarlinMxfp4CoordinateW{K,TK,DOT}            (x, cut, g: bf16, wq, ws) -> bf16: the w2 word, times the routed weight
   GatherE2m1x{E}, GatherE8m0x{E}              (e: i32, column: E words) -> column[e]; e outside [0, E) -> 0 (e2m1), 0xFF (e8m0)
   MoeExpertE2m1Row{E,K}, MoeExpertE8m0Row{E,K}  (e, slab: [E][K]) -> [K] = slab[e]
   MarlinMoeExpertCoordinate(W){E,K,TK,DOT}    (x, cut, e, [g], wq: [E][K], ws: [E][K/32]) -> bf16: over the rows of expert e
@@ -56,8 +58,8 @@ Registered functions (`_v1`):
 `wq` / `ws` are the layer's logical weights, [E][N][K] codes and [E][N][K/32] scale bytes (the checkpoint's, before Marlin's repack
 and scale permutation at load: `marlin_utils_fp4.prepare_moe_mxfp4_layer_for_marlin`, `mxfp4_marlin_process_scales`, which for bf16
 activations reorders scales and keeps their values); `x` the pair's bf16 activation row (w13: the token's hidden state; w2: the
-pair's activation), `g` its f32 routed weight.  Each MarlinMoeExpertGemm(W) reads the schedule once and every column of a tile its
-cut bits.
+pair's activation), `g` its f32 routed weight, which MarlinMoeExpertGemmW rounds to bf16 once for every coordinate.  Each
+MarlinMoeExpertGemm(W) reads the schedule once and every column of a tile its cut bits.
 """
 from __future__ import annotations
 
@@ -170,6 +172,31 @@ def MarlinMxfp4Group(B, S, q, s):
     return B.batch(Bf16MulBf16, B.batch(E2m1ToBf16, q, axes=(0,)), sb, axes=(0, None))
 
 
+def step_sig(from_zero: bool, e2m1=E2M1, e8m0=E8M0, bf16=BF16, f32=F32):
+    acc = () if from_zero else (("acc", f32),)
+    return lambda S: (acc + (("x", Array(GROUP, bf16)), ("q", Array(GROUP, e2m1)), ("s", e8m0)), f32)
+
+
+def _two_steps(B, dot, acc, x, w):
+    for j in range(2):
+        acc = B.call(dot, acc, x[16 * j:16 * j + 16], w[16 * j:16 * j + 16])
+    return acc
+
+
+@composite("MarlinMxfp4Step", 1, ["DOT"], step_sig(False), conformance=DOT_CONF)
+def MarlinMxfp4Step(B, S, acc, x, q, s):
+    """One warp row's run over one k-tile: its two k16 `DOT` steps (j = 0, 1) over the 32 k of one scale group, the weights
+    `MarlinMxfp4Group`'s."""
+    return _two_steps(B, S.DOT, acc, x, B.call(MarlinMxfp4Group, q, s))
+
+
+@composite("MarlinMxfp4StepFromZero", 1, ["DOT"], step_sig(True), conformance=DOT_CONF)
+def MarlinMxfp4StepFromZero(B, S, x, q, s):
+    """`MarlinMxfp4Step_v1` from the +0 accumulator (a warp row's run over k-tile 0): the Boolean version's own constant, so that
+    its circuit folds the accumulator rather than reading 32 copies of one zero bit."""
+    return _two_steps(B, S.DOT, B.call(const(32, ZERO)), x, B.call(MarlinMxfp4Group, q, s))
+
+
 def check_statics(K: int, TK: int) -> None:
     if TK not in TKS or K % TK or K < 2 * TK:
         raise ValueError(f"a Marlin coordinate reads K = TK * KT with TK in {TKS} and KT >= 2, not K = {K}, TK = {TK}")
@@ -196,19 +223,20 @@ def warp_tree(add, acc: list):
 
 
 class Ops:
-    """The steps a coordinate takes: ``group(q32, s)``, ``dot(acc, x16, w16)``, ``add``, ``select(c, a, b)`` (32-bit words, c a cut
+    """The steps a coordinate takes: ``step(acc, x32, q32, s)`` (`MarlinMxfp4Step`), ``first(zero, x32, q32, s)`` (the step from
+    +0: ``first`` the Definition that starts there, else ``step`` on ``zero``), ``add``, ``select(c, a, b)`` (32-bit words, c a cut
     bit) and ``zero()`` (+0.0, made once per coordinate); `word_ops` binds the word Definitions, `boolean_marlin_moe` their Boolean
     ones, so the body is written once."""
 
-    def __init__(self, B, group, dot, add, select, zero, bf16=BF16, bit=lambda c: c):
-        self.B, self._group, self._dot, self._add, self._select, self._zero = B, group, dot, add, select, zero
-        self.bf16, self._bit = bf16, bit
+    def __init__(self, B, step, first, add, select, zero, bit=lambda c: c):
+        self.B, self._step, self._first, self._add, self._select, self._zero = B, step, first, add, select, zero
+        self._bit = bit
 
-    def group(self, q, s):
-        return self.B.call(self._group, q, s)
+    def step(self, acc, x, q, s):
+        return self.B.call(self._step, acc, x, q, s)
 
-    def dot(self, acc, x, w):
-        return self.B.call(self._dot, acc, x, w)
+    def first(self, zero, x, q, s):
+        return self.step(zero, x, q, s) if self._first is None else self.B.call(self._first, x, q, s)
 
     def add(self, a, b):
         return self.B.call(self._add, a, b)
@@ -221,26 +249,23 @@ class Ops:
 
 
 def word_ops(B, S) -> Ops:
-    return Ops(B, MarlinMxfp4Group, S.DOT, F32Add, SelectF32, lambda: B.call(const(32, ZERO)))
+    return Ops(B, bind(MarlinMxfp4Step, DOT=S.DOT), None, F32Add, SelectF32, lambda: B.call(const(32, ZERO)))
 
 
 def marlin_acc(o: Ops, K: int, TK: int, x, cut, wq, ws):
-    """The f32 R of one coordinate: the dequantised row (one `MarlinMxfp4Group` per scale group), each warp row's k16 chain,
+    """The f32 R of one coordinate: each warp row's k16 chain, one `MarlinMxfp4Step` per k-tile (its 32 k are one scale group),
     zeroed where a segment starts (`cut[t-1]` for k-tile t), the warp tree at every k-tile that ends a segment, and those trees
     folded from the highest k down."""
     check_statics(K, TK)
     W, KT = TK // 32, K // TK
-    w = Coll(Array(K, o.bf16), concat([o.group(wq[GROUP * g:GROUP * g + GROUP], ws[g]).refs for g in range(K // GROUP)]))
     zero = o.zero()
-    acc = [zero] * W
+    acc: list = [None] * W
     trees = []
     for t in range(KT):
-        if t:
-            acc = [o.select(cut[t - 1], zero, a) for a in acc]
         for r in range(W):
-            for j in range(2):
-                k = t * TK + 32 * r + 16 * j
-                acc[r] = o.dot(acc[r], x[k:k + 16], w[k:k + 16])
+            k = t * TK + GROUP * r
+            xs, q, s = x[k:k + GROUP], wq[k:k + GROUP], ws[k // GROUP]
+            acc[r] = o.first(zero, xs, q, s) if t == 0 else o.step(o.select(cut[t - 1], zero, acc[r]), xs, q, s)
         trees.append(warp_tree(o.add, acc))
     R = trees[-1]
     for t in reversed(range(KT - 1)):
@@ -248,8 +273,8 @@ def marlin_acc(o: Ops, K: int, TK: int, x, cut, wq, ws):
     return R
 
 
-def coordinate_sig(routed: bool, e2m1=E2M1, e8m0=E8M0, bf16=BF16, f32=F32, bit=BIT):
-    g = (("g", f32),) if routed else ()
+def coordinate_sig(routed: bool, e2m1=E2M1, e8m0=E8M0, bf16=BF16, bit=BIT):
+    g = (("g", bf16),) if routed else ()
     return lambda S: ((("x", Array(S.K, bf16)), ("cut", Array(S.K // S.TK - 1, bit))) + g
                       + (("wq", Array(S.K, e2m1)), ("ws", Array(S.K // GROUP, e8m0))), bf16)
 
@@ -262,9 +287,10 @@ def MarlinMxfp4Coordinate(B, S, x, cut, wq, ws):
 
 @composite("MarlinMxfp4CoordinateW", 1, ["K", "TK", "DOT"], coordinate_sig(True), conformance=DOT_CONF)
 def MarlinMxfp4CoordinateW(B, S, x, cut, g, wq, ws):
-    """One output word of a w2 launch: the bf16 word times the routed weight as bf16 (`__hmul2`, write_result 1880-1887)."""
+    """One output word of a w2 launch: the bf16 word times the routed weight g, already bf16 (`__hmul2`, write_result 1880-1887;
+    `MarlinMoeExpertGemmW_v1` rounds the router's f32 weight once per pair)."""
     y = B.call(F2fpBf16, marlin_acc(word_ops(B, S), S.K, S.TK, x, cut, wq, ws))
-    return B.call(Bf16MulBf16, y, B.call(F2fpBf16, g))
+    return B.call(Bf16MulBf16, y, g)
 
 
 class IntOps:
@@ -309,11 +335,12 @@ def schedule(o: IntOps, KT: int, NT: int, GRID: int, blk, par) -> list[list]:
         part2 = o.le(first, g)
         r = o.rem(o.mul(o.sub(g, first), o.i(KT)), iters)
         row = []
-        for _ in range(1, KT):
+        for t in range(1, KT):
             r = o.add(r, o.i(1))
             wrap = o.eq(r, iters)
-            r = o.sel(wrap, o.i(0), r)
             row.append(o.band(part2, wrap))
+            if t < KT - 1:
+                r = o.sel(wrap, o.i(0), r)
         out.append(row)
     return out
 
@@ -356,8 +383,8 @@ def MoeExpertE8m0Row(B, S, e, slab):
     return B.batch(gather_e8m0(S.E), e, X.columns(slab, S.E, S.K, E8M0), axes=(None, 0))
 
 
-def pair_coordinate_sig(routed: bool, e2m1=E2M1, e8m0=E8M0, bf16=BF16, f32=F32, i32=I32, bit=BIT):
-    g = (("g", f32),) if routed else ()
+def pair_coordinate_sig(routed: bool, e2m1=E2M1, e8m0=E8M0, bf16=BF16, i32=I32, bit=BIT):
+    g = (("g", bf16),) if routed else ()
     return lambda S: ((("x", Array(S.K, bf16)), ("cut", Array(S.K // S.TK - 1, bit)), ("e", i32)) + g
                       + (("wq", Array(S.E, Array(S.K, e2m1))), ("ws", Array(S.E, Array(S.K // GROUP, e8m0)))), bf16)
 
@@ -428,10 +455,11 @@ def MarlinMoeExpertGemm(B, S, x, e, blk, par, wq, ws):
 
 @composite("MarlinMoeExpertGemmW", 1, GEMM_STATICS, gemm_sig(True), conformance=DOT_CONF)
 def MarlinMoeExpertGemmW(B, S, x, e, g, blk, par, wq, ws):
-    """The w2 launch (top_k 1, `mul_topk_weights` True) on one pair: y[n] = `MarlinMoeExpertCoordinateW_v1`(x, cut[n / TN], e, g,
-    wq[:, n], ws[:, n])."""
+    """The w2 launch (top_k 1, `mul_topk_weights` True) on one pair: y[n] = `MarlinMoeExpertCoordinateW_v1`(x, cut[n / TN], e,
+    F2fpBf16(g), wq[:, n], ws[:, n]), the router's f32 weight g rounded once."""
     coord = bind(MarlinMoeExpertCoordinateW, E=S.E, **coordinate(S))
-    return pair_rows(B, S, bind(MarlinMoeSchedule, **schedule_of(S)), coord, (x, e, g), blk, par, wq, ws)
+    gb = B.call(F2fpBf16, g)
+    return pair_rows(B, S, bind(MarlinMoeSchedule, **schedule_of(S)), coord, (x, e, gb), blk, par, wq, ws)
 
 
 #: the step DSV4's Programs bind (`DOT`)

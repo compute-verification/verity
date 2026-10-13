@@ -149,7 +149,7 @@ def test_split_k_coordinate_is_its_fold_and_the_twin(TK: int) -> None:
     wq = rng.integers(0, 16, (n, K))
     ws = rng.integers(118, 128, (n, K // 32))
     cut = np.array(list(itertools.product([False, True], repeat=KT - 1)), dtype=bool)
-    g = np.array(rng.random(n), dtype=np.float32).view(np.uint32)
+    g = (np.array(rng.random(n), dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
     twin, twin_w = MR.coordinates(x, cut, wq, ws, TK=TK), MR.coordinates(x, cut, wq, ws, TK=TK, g=g)
     sums = set()
     for i in range(n):
@@ -157,7 +157,7 @@ def test_split_k_coordinate_is_its_fold_and_the_twin(TK: int) -> None:
         R = _fold_model(x[i].tolist(), cut[i], wq[i].tolist(), ws[i].tolist(), TK)
         sums.add(R)
         assert evaluate(coord, *args, wq[i].tolist(), ws[i].tolist()) == (F2fpBf16.evaluate(R),) == (twin[i],), i
-        want_w = Bf16MulBf16.evaluate(F2fpBf16.evaluate(R), F2fpBf16.evaluate(int(g[i])))
+        want_w = Bf16MulBf16.evaluate(F2fpBf16.evaluate(R), int(g[i]))
         assert evaluate(coord_w, *args, int(g[i]), wq[i].tolist(), ws[i].tolist()) == (want_w,) == (twin_w[i],), i
     assert len(sums) > 1, "every split of these operands gives one sum: the test reads no fold order"
 
