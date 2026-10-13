@@ -9,7 +9,7 @@ window's challenge and the prover's previous root, so the passes are chained. Da
 live-coin design and what it would cost.
 
 The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (seeds, plans, receipts and trees),
-`codec.py` (the store's encoding) and `timing.py` (the honest schedule). Every byte format below is pinned by
+`codec.py` (the store's encoding) and `timing.py` (the honest schedule, and where the sketch's bound is read). Every byte format below is pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
 checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8).
 
@@ -40,13 +40,14 @@ data are at least \((1 - \gamma) R \Sigma\), with
 | \(\lambda\) | AuditRO's slack: `queries_log2` bits per receipt (every certified one, in either reading) and `slack_log2` per pass; 0.195% at 64 bits a 4 KiB block, more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
 | \(\mu_{\text{rebuild}}\) | re-encoding blocks from their payloads with leftover compute | a model, on `WorkHardness(p, k)` |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
-| \(\mu_{\text{link}}\) | relays that meet \(z\) and a copy of the block over a link (§4) | a model |
+| \(\mu_{\text{link}}\) | under a registration that binds \(z\) only (0 otherwise): relays that meet \(z\) and a copy of the block over a link (§4) | a model |
 
 The protocol bounds the first four and passes the last three through: the record can't bound them (a protocol carries
 no policy parameter). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
-receipt. That is for the default receipt kind, block-sha512. Under sketch-sha512 a receipt also rests on
-`RateAuditSketch`, and its terms are added to the failure probability, per pass (§4).
+receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on `RateAuditSketch`, which adds at most
+\(C \cdot 2^{-95.12}\) a session for a prover of \(C\) SHA-512 compressions (`timing.sketch_failure`, §4): no more
+than \(2^{-40}\) up to \(C = 2^{55.12}\). block-sha512, kept for comparison, adds nothing. Neither adds to γ.
 
 What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The prover
 is one undifferentiated resource of capacity \(R\) (Daniel, 12 Oct, #1884): the guarantee is over whatever reads the
@@ -76,7 +77,8 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 | `delta` | δ of each window's profile |
 | `min_passes` | the fewest passes a window may certify |
 | `codec` | the store's codec, the one its registration names (§3): `p1024/k3/masked` unless another is named |
-| `receipt` | the receipt kind, the one its registration names (§4): `block-sha512` unless `sketch-sha512` is named |
+| `receipt` | the receipt kind, the one its registration names (§4): `sketch-sha512` unless `block-sha512` is named |
+| `bind` | whether receipts bind PoUW's tile output \(z\), as its registration says (§4): no unless it binds them |
 
 The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by window. It is not a parameter.
 
@@ -91,14 +93,15 @@ The window's length \(T = b_t - b_{t-1}\) is the verifier's to choose, window by
    `node` is the node's id, 1 to 64 bytes. This is the leaf PoUS's answer circuit proves over a block.
 2. Only after the payload root has arrived does the verifier draw the codec seed from its own secret and a fresh
    32-byte nonce: `derive(source, "verity/remote-bandwidth/codec/v0", {node, blocks, payload, codec, nonce}).stream("codec",
-   32)`, `codec` the name of the codec the registration names. The registration also names its receipt kind (§4),
-   which is not in this context: the store doesn't depend on it.
+   32)`, `codec` the name of the codec the registration names. The registration also names its receipt kind and
+   whether its receipts bind \(z\) (§4), neither in this context: the store depends on neither.
 3. The prover encodes every block under that seed with that codec (`codec.py`, below):
    \(E_j = \text{encode}(\text{payload}_j)\).
 4. `Registration.digest = SHA512("verity/remote-bandwidth/registration/v0\0" ‖ frame(node) ‖ u64be N ‖ payload root ‖
-   codec seed ‖ frame(codec name) ‖ frame(receipt kind))`, `frame` being `verity.ml.randomness.frame` ("s" ‖ u64be
-   length ‖ the name in UTF-8). A record cites this digest, each session's coin commitment binds it, and each session's
-   chain starts from it, so a session's coins and seeds are bound to its kind.
+   codec seed ‖ frame(codec name) ‖ frame(receipt kind) ‖ u8 bind)`, `frame` being `verity.ml.randomness.frame` ("s" ‖
+   u64be length ‖ the name in UTF-8) and bind 1 if the receipts bind \(z\), else 0. A record cites this digest, each
+   session's coin commitment binds it, and each session's chain starts from it, so a session's coins and seeds are
+   bound to its kind and to whether it binds \(z\).
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT` (Daniel, 12 Oct, #1884). The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -167,14 +170,16 @@ seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ 
 plan_(t,i)  R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, no run starting where
             the one before it ends.  Position p is the p-th block of the runs concatenated; L positions in all.
             digest SHA512("verity/remote-bandwidth/plan/v0\0" ‖ u32be R ‖ (u64be first ‖ u64be count) × R)
-y_(i,p)     block-sha512: SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖
-            (E_j ⊕ spread(z_(i,j)))),  j = plan_(t,i)[p]
-            sketch-sha512: SHA512(Z("verity/remote-bandwidth/sketch-receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖ σ_(i,j))
+e_(i,j)     E_j, the block alone; under a registration that binds z, E_j ⊕ spread(z_(i,j))
+y_(i,p)     sketch-sha512, the default: SHA512(Z("verity/remote-bandwidth/sketch-receipt/v0\0" ‖ frame(seed_(t,i))) ‖
+            u64be j ‖ σ_(i,j)),  j = plan_(t,i)[p]
+            block-sha512, for comparison: SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖
+            e_(i,j))
 S_(t,i)     sketch-sha512's 16 × 4096 signs: K = derive(seed_(t,i), "verity/remote-bandwidth/sketch-signs/v0",
             {"tag": "sketch-sha512", "k": 16, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u
             (byte u // 8, LSB first) 1 → −1 and 0 → +1
-σ_(i,j)     S_(t,i) · e, e the 4096 bytes of E_j ⊕ spread(z_(i,j)) as int8, over the integers (|σ[c]| ≤ 2^19):
-            16 int32 little-endian, 64 bytes
+σ_(i,j)     S_(t,i) · e, e the 4096 bytes of e_(i,j) as int8, over the integers (|σ[c]| ≤ 2^19): 16 int32
+            little-endian, 64 bytes
 spread(z)   z over 4096 bytes: byte u of z XORed into byte u mod 4096 (folded), or a shorter z repeated
 leaf c      v_c = y_(i,16c) ‖ … ‖ y_(i,16c+15), positions in plan order, the last leaf short; committed as
             hm96-sha512/row/v2: x_c = sha512/row/v2(v_c), value tree_leaf(key, commit_string(key, x_c, salt_c)),
@@ -192,19 +197,20 @@ The prover sends each root with its pass's plan as the pass ends (`Session.recei
 that breaks its format rejects with `plan`.
 
 **Fiat–Shamir, and what grinding buys.** A seed after the first depends on the prover's own root, so the prover can
-grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path. A chosen seed buys
-nothing against the block-sha512 receipt, because no seed makes a receipt cheaper to compute without the block's
-bytes after the seed. The queries a grinding prover makes are counted by AuditRO's `queries_log2` bits a certified
-receipt (λ). Two other users of the seed must hold for a seed chosen among \(Q\): PoUW's noise for the pass (§8), and
-sketch-sha512's signs (below).
+grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path and no read. A
+chosen seed buys nothing against the block-sha512 receipt, because no seed makes a receipt cheaper to compute without
+the block's bytes after the seed. The queries a grinding prover makes are counted by AuditRO's `queries_log2` bits a
+certified receipt (λ). Other users of the seed must hold for a seed the prover chose: sketch-sha512's signs (below),
+and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 
 **The two receipt kinds.** The registration names one (`receipts.KINDS`), and `Params.receipt` must name the same.
-block-sha512 is the default until Daniel rules between them. sketch-sha512 is ra-codec-tensor's `sketch_receipt.py`
-(#1916, at 5b8decfc5), byte for byte: the suite pins its numpy outputs, and `receipts.SketchReceipter` computes the
-same in pure Python. Each kind's receipt is 64 bytes, so leaves, salts and the tree don't change. The difference is
-what is hashed after the seed's block: block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions;
-sketch-sha512 hashes \(j\) and the 64-byte sketch, one compression. The sketch's signs come from the pass's seed, so
-like the seed they exist only once the root before it does.
+sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for
+(Daniel, 12 Oct, #1884). block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
+sketch-sha512 is ra-codec-tensor's `sketch_receipt.py` (#1916, at 5b8decfc5), byte for byte: the suite pins its numpy
+outputs, and `receipts.SketchReceipter` computes the same in pure Python. Each kind's receipt is 64 bytes, so leaves,
+salts and the tree don't change. The difference is what is hashed after the seed's block: sketch-sha512 hashes \(j\)
+and the 64-byte sketch, one compression; block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions. The
+sketch's signs come from the pass's seed, so like the seed they exist only once the root before it does.
 
 What each kind rests on:
 
@@ -222,28 +228,100 @@ What each kind rests on:
   - **Signs fresh per pass.** \(S_{(t,i)}\) comes from each pass's chained seed, never once per window (F29, §8).
     The statement's window is this protocol's pass.
   - **Grinding.** The statement takes the signs uniform. Here they are derived from a seed the prover can choose
-    among \(Q\) (above), so \(\Pr_S[g < \text{fib}_S]\) is counted \(Q\) times, by the union bound.
+    (above), so the bound counts every key the prover sees, ground or not (below).
   - **The 16 rows.** At \(k_s = 16\) no \(16 \times 32\) block of signs is injective (Siegel's lemma). So
-    `SketchBinds` doesn't apply, and the bound is read at the sketch's largest fiber \(g\), whose law over the signs
-    isn't evaluated yet. A sector's block of rank \(r\) has fibers of at most \(256^{32-r}\): \(r\) of the sector's
-    bytes are fixed by the others and the sketch, whose sums never wrap. So at \(g = 2^{8(32-r)}\) the guess is
-    \(q/2^{8r}\), and \(\Pr_S[g < \text{fib}_S]\) is at most the chance that some sector's block has rank below \(r\).
-    At \(k_s = 64\) the signs bind except for a column dependency (`RateAuditTensorSketch`), at 256 bytes a block.
+    `SketchBinds` doesn't apply, and the bound is read at a rank \(r\) of every sector's block of signs: \(r^* = 12\),
+    where it costs \(2^{-95.12}\) a SHA-512 compression of the prover's (below). At \(k_s = 64\) the signs bind except
+    for a column dependency (`RateAuditTensorSketch`), at 256 bytes a block, and \(r^* = 27\).
 
-  #1849's tag is \(H(R, t, \text{dig}_S(e_t))\): the stream \(R\) is hashed verbatim, beside the tile's sketch. Here
-  \(z\) enters before the sketch, \(e = E_j \oplus \text{spread}(z)\), as §8's third rule requires. XOR with a fixed
-  \(z\) permutes each sector, so each sector's fiber is the same. But the statement's digest is of the tile alone,
-  so applying it here needs the digest restated over the block and \(z\) together. The ledger computes neither
-  `RateAuditSketch`'s terms nor that restatement (`ledger`).
+  Under the default the sketch is of \(E_j\) alone, which is #1849's digest of the tile, \(\text{dig}_S(e_t)\), so
+  the statement applies as it is. Binding \(z\) is the registration's opt-in (`bind`), PoUW's join (Daniel, 12 Oct:
+  the guarantee is conservation over one undifferentiated resource, with no identity to bind). Under it \(z\) enters
+  before the sketch, \(e = E_j \oplus \text{spread}(z)\), as §8's third rule requires, and XOR with a fixed \(z\)
+  permutes each sector, so each sector's fiber is the same. But #1849's digest is of the tile alone, so that form
+  needs #1849 restated over the block and \(z\) together, and it is not part of the stated guarantee.
+
+**Where sketch-sha512's bound is read** (`timing.sketch_reading`, `timing.sketch_failure`, pinned by
+`tests/test_sketch_reading.py`). The field is \(\mathbb{Q}\). The sketch's sums never wrap (\(|\sigma[c]| \le
+2^{19}\)), so \(\sigma\) is \(S e\) over the integers. If sector \(u\)'s \(k_s \times 32\) block of signs \(S_u\) has
+rank \(r\) over \(\mathbb{Q}\), then \(r\) of the sector's bytes are fixed by the others and by \(S_u e_u\), so each
+of its fibers has at most \(256^{32-r}\) members, and a guess of \(S_u e_u\) is right with chance at most
+\(2^{-8r}\).
+
+The rank's law is bounded through \(\mathbb{F}_2\). Multiply each column of a uniform \(\pm 1\) matrix by its first
+row's sign, and replace every other row \(v\) by \((\text{first} - v)/2\). Both keep the rank over \(\mathbb{Q}\), and
+they leave the all-ones row over a uniform 0/1 matrix \(B\). That matrix's rank over \(\mathbb{Q}\) is at least its
+rank over \(\mathbb{F}_2\), which is \(1 + \text{rank}\,U\), where \(U\) is \(B\) with its first column added to the
+others and then dropped: a uniform \((k_s - 1) \times 31\) matrix over \(\mathbb{F}_2\). Its law is exact: an
+\(m \times n\) matrix over \(\mathbb{F}_2\) has rank \(s\) in \(\prod_{i<s} (2^m - 2^i)(2^n - 2^i)/(2^s - 2^i)\) of
+the \(2^{mn}\) cases. So
+
+\[
+\Pr[\text{rank}_{\mathbb{Q}} S_u \le r] \;\le\; \Pr[\text{rank}_{\mathbb{F}_2} U \le r - 1] .
+\]
+
+| \(r\), 16 rows | 15 | 14 | 13 | 12 | 11 | 10 |
+| --- | --- | --- | --- | --- | --- | --- |
+| \(\log_2\) of the bound on \(\Pr[\text{rank} \le r]\) | −16.00 | −34.59 | −55.39 | −78.30 | −103.25 | −130.23 |
+
+| \(r\), 64 rows | 31 | 30 | 29 | 28 | 27 | 26 |
+| --- | --- | --- | --- | --- | --- | --- |
+| \(\log_2\) of the bound on \(\Pr[\text{rank} \le r]\) | −32.00 | −66.58 | −103.39 | −142.30 | −183.25 | −226.23 |
+
+The bound is exact at 2 rows, \(2^{1-n}\), and the suite checks it against every \(\pm 1\) matrix up to \(4 \times 4\)
+and \(3 \times 5\). At 16 rows it is loose at full rank: \(2^{-16}\), where two rows equal up to sign already give
+about \(\binom{16}{2} 2^{-31} = 2^{-24.1}\). Where it is read, it costs under one bit (next).
+
+**Grinding, and \(r^*\).** Every key is a fresh oracle output, the derive of a fresh seed, so its signs are uniform
+whatever the prover did to reach it. A prover of \(C\) SHA-512 compressions over a session sees at most \(C + P\)
+keys, \(P\) the session's passes, and makes at most \(C\) guesses. Read at rank \(r\), by the union bound over keys,
+guesses and the block's 128 sectors,
+
+\[
+F(r) \;\le\; C \cdot 2^{-8r} + (C + P) \cdot 128 \cdot \Pr[\text{rank} \le r - 1] ,
+\]
+
+so its cost a compression is \(\rho(r) = 2^{-8r} + 128 \Pr[\text{rank} \le r - 1]\), and \(r^*\) minimizes it. At 16
+rows \(r^* = 12\): the guess's \(2^{-96}\) beside \(128 \cdot 2^{-103.25} = 2^{-96.25}\), so \(\rho(r^*) =
+2^{-95.12}\). At \(r = 11\), \(\rho = 2^{-88}\); at 13, \(2^{-71.30}\). At 64 rows \(r^* = 27\) and \(\rho(r^*) =
+2^{-215.85}\).
+
+| rows | \(r^*\) | \(\rho(r^*)\) | \(C\) at \(F = 2^{-40}\) | \(C\) at \(F = 2^{-64}\) |
+| --- | --- | --- | --- | --- |
+| 16 | 12 | \(2^{-95.12}\) | \(2^{55.12}\): 8.1 days of 8 GPUs | \(2^{31.12}\): 42 ms of 8 GPUs |
+| 64 | 27 | \(2^{-215.85}\) | \(2^{175.85}\) | \(2^{151.85}\) |
+
+The GPUs are RTX PRO 6000s at \(7.0 \cdot 10^9\) SHA-512 compressions a second each, block-sha512's measured rate
+(#1916, below). \(C\) counts every compression the prover makes, on any hardware: the grinding needs no access to the
+store. So at 16 rows a session stays below \(2^{-40}\) up to \(2^{55.12}\) compressions: \(2^{-50.19}\) for one node's
+10-minute session, \(2^{-43.02}\) for a node-day, and \(2^{-40}\) for about 9,400 such GPUs grinding through a
+10-minute session. \(2^{-64}\) is out of reach at 16 rows (42 ms of one node's hashing) and needs 64 rows, whose cost
+on the GPU isn't measured.
+
+A grinding try is not a pass's commitment. It reads no block: re-salting one receipt leaf changes the root without
+changing any receipt. As the reference computes it, a try is 15 + 3⌈log₂ n⌉ compressions over \(n\) leaves
+(`timing.grind_compressions`): the leaf's salt digest, the hm96 key's digest and its tree leaf (9), the leaf's hash
+(2), its path (3 a level), the next seed (2) and its signs' key (2). That is 66 compressions, 9.4 ns on one GPU, for
+an 8 GiB pass of 131,072 leaves, so a window of \(T\) = 1 s affords a node of 8 GPUs about \(2^{29.7}\) tries. A
+prover that keeps the constant prefixes' midstates needs at least 5 compressions a try (the root's last, and the
+seed's and the key's 2 each, whose first blocks hold the root and the seed): at most \(2^{33.4}\) tries a second on
+that node. Seeing one sector's \(16 \times 32\) signs takes 16 more, one stream block a row. The bound doesn't rest on
+any of these counts: it charges a key to every compression.
+
+None of this moves γ: \(F\) adds to the failure probability, not to the reads certified. Daniel's 1% target (§10:
+short by under 1% in every window, at \(2^{-40}\)) holds. For one node's 10-minute horizon, \(F = 2^{-50.19}\), so
+keeping the total at \(2^{-40}\) takes the openings' δ to \(2^{-40} - 2^{-50.19}\), and their count up by about
+0.003%. It breaks only past \(2^{55.12}\) compressions in a session, where \(F\) alone reaches \(2^{-40}\). The
+ledger doesn't compute \(F\): it is a failure term, not a term of γ (`ledger`).
 
 What each costs on the GPU (#1916): one RTX PRO 6000 (sm_120, 2,092 MHz), an 8 GiB pass of 2,097,152 blocks, best of
 3, run r20261012-224926-17ce at 5b8decfc5 (art:dea3a309). τ is a pass's time over one plain read of the same
 bytes, 5.60 ms.
 
-| kind | receipts | leaves and tree | τ a pass | τ, a 4 KiB \(z\) on every block |
+| kind | receipts | leaves and tree | τ a pass | τ, binding a 4 KiB \(z\) on every block |
 | --- | --- | --- | --- | --- |
-| block-sha512 | 9.87 ms, ALU-bound (33 compressions a block, \(7.0 \cdot 10^9\)/s) | 0.90 ms | 1.93 | 2.26 |
 | sketch-sha512 | 5.82 ms for the sketch (1,475 GB/s, memory-bound) and 0.33 ms for the hash | 0.90 ms | 1.26 | 2.27 |
+| block-sha512 | 9.87 ms, ALU-bound (33 compressions a block, \(7.0 \cdot 10^9\)/s) | 0.90 ms | 1.93 | 2.26 |
 
 Fused into the weight GEMM, sketch-sha512 is estimated at about 0.27 reads a pass, or 0.11 if the commit hides under
 the GEMM's memory time; that is estimated, not measured. The GEMM's sketch warps add 0.053 at a 70B model, batch 8, and
@@ -269,8 +347,9 @@ so the prover may list a pass's blocks in store order whatever order it reads th
 per contiguous range read (§8). It may choose the plan after reading, since it is credited only with what it receipts
 and every receipt is sampled; what it can't do is credit one read twice.
 
-**\(z_{(i,j)}\)** is PoUW's noised output of the tile the prover computes before reading block \(j\) in pass \(i\)
-(`Tiles`). Three choices in it are load-bearing:
+**\(z_{(i,j)}\)**, under a registration that binds \(z\) only, is PoUW's noised output of the tile the prover computes
+before reading block \(j\) in pass \(i\) (`Tiles`). A registration that doesn't bind it takes no tiles: its receipts
+are of the block alone, and its openings carry no tile evidence. Three choices in the binding form are load-bearing:
 
 - **PoUW's noise for a pass is derived from the pass's seed,** so \(z\) differs every pass even when the weights and
   activations don't. Otherwise a pass's \(z\) would be known before its seed.
@@ -344,7 +423,9 @@ order. The coin is released only after every root it draws from is fixed, so the
 \(\text{root}_{(t,\text{last})}\)) is also sound in the random-oracle model, but the prover can grind it. Re-salting the
 last leaf re-rolls the draws for the price of a leaf and its path, so a prover with wrong receipts tries \(Q\) roots
 and keeps one whose draws miss them. By the union bound the window's δ becomes \(Q\delta\), so \(s\) must rise to the
-count at \(\delta/Q\) (`timing.samples_for`). At \(\varepsilon_s = 0.1\%\) and δ = \(2^{-40}\):
+count at \(\delta/Q\) (`timing.samples_for`). A try reads no block and costs a few to a few tens of compressions (§4
+counts a seed's), so a window of \(T\) = 1 s affords one node of 8 GPUs about \(2^{30}\) to \(2^{34}\) of them. At
+\(\varepsilon_s = 0.1\%\) and δ = \(2^{-40}\):
 
 | grinding \(Q\) | \(s\) | × the coin's |
 | --- | --- | --- |
@@ -359,22 +440,24 @@ after the roots, which the verifier is waiting for anyway. So the protocol keeps
 
 The prover opens each draw (`Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
 leaf's receipts \(v_c\) with the leaf's salt and path to \(\text{root}_{(t,i)}\), the payload's salt and path to the
-payload root, and PoUW's evidence for \(z_{(i,j)}\). Openings aren't timed, because the roots already bind every
-receipt, and the next window's passes run while they are checked.
+payload root, and under a registration that binds \(z\), PoUW's evidence for \(z_{(i,j)}\). Openings aren't timed,
+because the roots already bind every receipt, and the next window's passes run while they are checked.
 
 The verifier checks each opening in order (`Session.verify`):
 
-1. the indices are the draw's and every field has its size (`malformed`);
+1. the indices are the draw's and every field has its size, the tile evidence empty unless the registration binds
+   \(z\) (`malformed`);
 2. the leaf, under \(\text{seed}_{(t,i)}\) (from \(\sigma_t\), \(i\) and the root received before
    \(\text{root}_{(t,i)}\)), the plan received with the root and the leaf's salt, has its path to
    \(\text{root}_{(t,i)}\) (`receipt-path`);
 3. the block, read as the registered codec's words, has every word below \(p\) (`codec`), and its decoding's leaf under
    the payload salt has its path to the payload root at \(j\) (`payload-path`);
-4. PoUW's check recomputes \(z_{(i,j)}\) from the evidence (`tile`);
-5. \(y_{(i,p)}\), recomputed from \(j\), the block and \(z\) under the registration's kind, is the leaf's receipt at
-   \(p\) (`receipt`). Under sketch-sha512 the verifier derives the pass's signs \(S_{(t,i)}\) from
-   \(\text{seed}_{(t,i)}\), once for each pass it draws from, and recomputes \(\sigma_j\) from the opened block and
-   \(z\) before hashing it. It takes no sketch from the prover: the opening is the same under either kind.
+4. under a registration that binds \(z\), PoUW's check recomputes \(z_{(i,j)}\) from the evidence (`tile`);
+5. \(y_{(i,p)}\), recomputed from \(j\) and \(e_{(i,j)}\) (the block, with \(z\) if the registration binds it) under
+   the registration's kind, is the leaf's receipt at \(p\) (`receipt`). Under sketch-sha512 the verifier derives the
+   pass's signs \(S_{(t,i)}\) from \(\text{seed}_{(t,i)}\), once for each pass it draws from, and recomputes
+   \(\sigma_j\) from \(e_{(i,j)}\) before hashing it. It takes no sketch from the prover: the opening is the same under
+   either kind.
 
 **What the codec changes in check 3.** Under `p512/k2` a block was 64 words of 64 bytes, each below \(2^{512} - 569\),
 and each word's decode two squarings. Under the default it is 32 words of 128 bytes, each below \(2^{1024} - 105\): a
@@ -393,9 +476,10 @@ opening.
 ## 7. The record
 
 `Session.record()` returns a `Record` once every window is accepted. `public()` holds the registration digest, the coin
-commitment's root, \(N\), \(b\), the receipt kind, each window's passes and receipts \(U_t\), and the session's span. The
-digest binds the kind already, but the record names it as well, since what its receipts rest on depends on it (§4). Each `WindowRecord`
-carries its passes' lengths \(L_{t,i}\), its challenge's release \(b_{t-1}\), its deadline \(D_t\), its openings coin's
+commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z\), each window's passes and receipts
+\(U_t\), and the session's span. The digest binds both already, but the record names them as well, since what its
+receipts rest on depends on them (§4), and `ledger` takes a link term only from a record that binds \(z\). Each
+`WindowRecord` carries its passes' lengths \(L_{t,i}\), its challenge's release \(b_{t-1}\), its deadline \(D_t\), its openings coin's
 release, and an `IntegrityProfile`. `Record.end_ns` is the last deadline, which the next session over the store waits
 out.
 
@@ -413,18 +497,20 @@ node's capacities.
 
 - **Zero knowledge.** Every protocol is zero-knowledge, with no clear mode, and an opened block decodes to a KV page,
   which is user data. Deployed, each opening is a proof unit the proof service proves in zero knowledge, and the
-  verifier sees only its result. The unit's statement is §6's checks 2–5, with the opening's fields as witness and
+  verifier sees only its result. The unit's statement is §6's checks 2, 3 and 5 (and 4 under a registration that binds
+  \(z\)), with the opening's fields as witness and
   public inputs the pass's root, its seed, its plan's digest, \(p\), \(j\), the payload root and the registration. The
   clear checks here are the specification of what each unit proves. The formats already hide: payload blocks and
   receipt leaves are `hm96-sha512/row/v2` leaves under fresh salts, and the coins are hm96 leaves until released, so the
   formats don't change when the openings move into proofs.
-- **Where \(z\) comes from.** \(z\) comes from Pearl-C's k-slice accumulators, inside Pearl-C's domain, with Pearl-C's
-  noise for the pass derived from the pass's seed. That gives \(|z|/|E| = 4m/k_s\), at least 1 for batch
+- **Where \(z\) comes from,** under a registration that binds it. \(z\) comes from Pearl-C's k-slice accumulators,
+  inside Pearl-C's domain, with Pearl-C's noise for the pass derived from the pass's seed. That gives \(|z|/|E| = 4m/k_s\), at least 1 for batch
   \(\ge k_s/4\), where the tile's final output would give \(4m/k\) (1/16 at batch 64). All-zero weights needn't be
   supported; where Pearl-C's accumulators don't apply, NCP's middle checkpoints are the fallback. `Tiles` stays generic:
   the reference takes \(z\) as bytes of any length. The seed is Fiat–Shamir, so Pearl-C's check must hold for noise
   from a seed the prover chose among \(Q\).
-- **The schedule.** Which tile precedes position \(p\) of a pass is the prover-side registry's (ra-vllm-hooks).
+- **The schedule.** Under a registration that binds \(z\), which tile precedes position \(p\) of a pass is the
+  prover-side registry's (ra-vllm-hooks).
   `Tiles` takes it as given. A window ends on the verifier's boundary message, not after a count of passes: a prover
   that stops at a count idles until the message, which \(\mu_{\text{timing}}\) charges, and one whose count runs past
   the message is late.
@@ -450,17 +536,19 @@ node's capacities.
   of every plan, as the prover-side registry already does with blocks a write has touched.
 - **Multi-GPU trees.** Each GPU's blocks should be an aligned power-of-two range of leaves, so that a pass's root is
   its GPUs' subtree roots combined. That keeps \(g\) to an all-gather, a few hashes and the next seed's broadcast.
-- **Sketch receipts** (a ±1 projection hashed, `RateAuditSketch`) are a cheaper receipt. Three rules apply to them:
+- **Sketch receipts** (a ±1 projection hashed, `RateAuditSketch`) are the stated receipt, sketch-sha512 (§4). Three
+  rules apply to them:
   - The sketch's matrix must be derived from each pass's seed, never once per window. A per-window matrix makes each
     block's contribution a fixed digest: read once and kept, it serves every later pass's receipt (red team F29,
     art:61fc2e4c).
-  - The matrix must resist a seed the prover chose among \(Q\), since it can grind the seed through its previous root.
-  - \(z\) must enter before the sketch, because a linear sketch of \(E \oplus Z\) splits.
+  - The matrix must resist a seed the prover chose, since it can grind the seed through its previous root.
+  - Under a registration that binds \(z\), \(z\) must enter before the sketch, because a linear sketch of
+    \(E \oplus Z\) splits.
 
-  The reference's sketch-sha512 (§4) meets the first and third: its signs come from each pass's seed, and \(z\) is
-  XORed into the block before the sketch. For the second it counts the signs' failure to bind \(Q\) times.
-  block-sha512 stays the default until Daniel rules between them. In the proof unit, check 5 under sketch-sha512 is
-  16 signed sums over the block's 4,096 bytes and one compression, in place of 33 compressions.
+  The reference's sketch-sha512 meets all three. Its signs come from each pass's seed. For the second it counts every
+  key the prover sees, and reads the bound at \(r^* = 12\) (§4). Under a registration that binds \(z\), \(z\) is
+  XORed into the block before the sketch. In the proof unit, check 5 under sketch-sha512 is 16 signed sums over the
+  block's 4,096 bytes and one compression, in place of block-sha512's 33 compressions.
 - **The challenger's state.** The challenger keeps every coin of a session until it releases it and never releases one
   twice. Persisting that across challenger restarts, and committing coins that outlive one session, is out of scope.
 - **Keeping receipts for the draws.** Any receipt of a window may be drawn once its roots are final, so the prover
@@ -474,8 +562,9 @@ node's capacities.
   one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ in \(U_t\), and its draws are
   distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
   size, which the Lean doesn't state yet. What this code supplies is the schedule (each window's challenge released
-  at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile a receipt, and the profile at
-  δ. The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.
+  at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile a receipt under a
+  registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and the profile at δ.
+  The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.
 
 ## 9. Why the passes are chained
 
@@ -491,7 +580,7 @@ second per node the stream would send.
 
 `python -m verity.core.protocols.remote_bandwidth.timing` prints the grid: passes of 20 and 50 ms, windows of
 \(T\) = 0.3, 1 and 10 s, RTT 1–50 ms (half each way), \(J\) = 0.05 ms each way and \(g\) = 50 µs, with the least
-allowance. \(\mu_{\text{timing}}\) by session, at \(T\) = 1 s:
+allowance, and after them §4's rank bound, grinding tries and sessions' failure. \(\mu_{\text{timing}}\) by session, at \(T\) = 1 s:
 
 | pass | RTT | passes a window | one window | \(W\) = 10 | \(W\) = 100 | steady state |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -511,7 +600,8 @@ most a read of the store: about 52 ms for a GPU's 94 GB at 1.8 TB/s.
 
 **Openings** at \(\varepsilon_s = 0.1\%\), δ = \(2^{-40}\): \(s = 27{,}726\) per window, about 8.5–9.1 KB each (block,
 leaf, both salts, both paths). That is 235–253 MB a window per node: 1.9–2.0 Gb/s at \(T\) = 1 s, 0.19–0.20 Gb/s at
-\(T\) = 10 s. PoUW's tile evidence comes on top unless PoUW's own sampled check covers the same tiles. A Fiat–Shamir
+\(T\) = 10 s. Under a registration that binds \(z\), PoUW's tile evidence comes on top unless PoUW's own sampled check
+covers the same tiles. A Fiat–Shamir
 draw would multiply all of this by 1.5–2.6 (§6).
 
 That is the per-window reading, each window's profile at its own δ, \(W\delta\) in all. Read over the horizon, the
