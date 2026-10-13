@@ -430,13 +430,13 @@ immutable, append-only; a target's assertion set is the listing of its prefix):
  "by": "red-team-zk-2", "ts": "2026-09-22T11:20:29Z", "ref": "art:<findings>|r<run id>|<url>"}
 ~~~
 
-Assertions are durable with what they describe (`labels_sync.py`): `push RUN` / `attempt publish` / `push ART` push the assertions
+Assertions travel with what they describe (`labels_sync.py`): `push RUN` / `attempt publish` / `push ART` push the assertions
 about the attempt, its derivation and its named artifacts (`attempt_targets`); `push --pending` and `labels-sync` push every local
-one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote / machine assertions into the local layout and index.
-`preserved` is a three-leg gate — attempt manifest, artifacts, labels — and names the leg that fails; a preserved Attempt is not
+one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote/machine assertions into the local layout and index.
+`preserved` is a three-leg gate (attempt manifest, artifacts, labels) naming the leg that fails; a preserved Attempt is not
 preserved until its assertions are on the remote. `labels TARGET --remote` marks each both / LOCAL ONLY / REMOTE ONLY.
-Conflicting assertions coexist on both sides. A landing is a `landed` label by `research-merge` on each run its `Check:`
-trailer names, valued main's commit (`research merge`; `--label-landed REV`: past ones).
+Conflicting ones coexist on both sides. A landing is a `landed` label by `research-merge` on each run its `Check:`
+trailer names, valued main's commit (`research merge`; `--label-landed REV` backfills).
 
 Append-only, one file per assertion (`O_EXCL`, mode 0444), never read-modify-write. The file name uses the compact ts
 (`20260922T112029Z`), `by` restricted to `[A-Za-z0-9._-]`, and a `~N` suffix when the same asserter labels twice in one
