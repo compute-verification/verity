@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+import hashlib
+from dataclasses import asdict, dataclass, field, replace
+from pathlib import Path
 from typing import Any, Mapping
 
 from verity_vllm.engine.profiles.benchmark import PRESET_FACTS
@@ -23,6 +25,7 @@ class Preset:
     gpu_count: int
     engine_settings: Mapping[str, Any] = field(default_factory=dict)
     vllm_pin: str = VLLM_PIN
+    model_digest: str | None = None
     unavailable_reason: str | None = None
 
     def to_json(self) -> dict[str, Any]:
@@ -58,6 +61,34 @@ def get_preset(name: str) -> Preset:
         return PRESETS[name]
     except KeyError:
         raise ValueError(f"unknown benchmark preset {name!r} (known: {', '.join(PRESETS)})") from None
+
+
+def local_checkpoint(preset: Preset, path: str | Path) -> Preset:
+    """Bind a machine-local checkpoint to a preset by hashing all of its files."""
+
+    root = Path(path)
+    files = sorted(p for p in root.iterdir() if p.is_file())
+    if not files:
+        raise ValueError(f"benchmark checkpoint {root} has no files")
+    digest = hashlib.sha256()
+    for file in files:
+        name = file.name.encode()
+        digest.update(len(name).to_bytes(4, "big"))
+        digest.update(name)
+        digest.update(file.stat().st_size.to_bytes(8, "big"))
+        content = hashlib.sha256()
+        with file.open("rb") as stream:
+            while chunk := stream.read(8 << 20):
+                content.update(chunk)
+        digest.update(content.digest())
+    return replace(
+        preset,
+        model=str(root),
+        revision=None,
+        case=None,
+        model_digest=digest.hexdigest(),
+        unavailable_reason=None,
+    )
 
 
 @dataclass(frozen=True)

@@ -317,13 +317,29 @@ def _callback(obj: Any, name: str, target: Target, default: Any) -> Any:
     return default if not callable(fn) else fn(target)
 
 
+class _DirectLLM:
+    """The subset of ``verity_vllm.LLM`` needed for a content-bound local checkpoint."""
+
+    def __init__(self, llm: Any) -> None:
+        from verity_vllm.engine.engine_profile import get_model_runner
+
+        runner = get_model_runner(llm)
+        self._engine = SimpleNamespace(llm=llm, model=runner.get_model())
+        self.protocols = None
+
+    def close(self) -> None:
+        # The worker process exits immediately after close and releases vLLM's
+        # process-owned CUDA state.
+        pass
+
+
 class _VllmEngine:
     """One worker process's live vLLM engine."""
 
     def __init__(self, arm: Arm, preset: Preset, resident: bool, eager: bool) -> None:
         if preset.unavailable_reason:
             raise ValueError(f"preset {preset.id} is unavailable: {preset.unavailable_reason}")
-        if preset.revision is None:
+        if preset.revision is None and preset.model_digest is None:
             raise ValueError(f"preset {preset.id} has no pinned checkpoint revision")
         import torch
         import vllm
@@ -342,7 +358,6 @@ class _VllmEngine:
                 "resident_gpu_memory_utilization" if resident else "block_gpu_memory_utilization"
             ]),
             "enforce_eager": eager,
-            "protocols": ",".join(arm.protocols) or None,
         }
         if precision == "fp8":
             engine["quantization"] = "fp8"
@@ -354,7 +369,18 @@ class _VllmEngine:
                 "cudagraph_mode": "FULL_DECODE_ONLY",
                 "cudagraph_capture_sizes": list(settings["capture_sizes"]),
             }
-        self.llm = LLM(preset.model, revision=preset.revision, **engine)
+        if preset.model_digest is not None:
+            if arm.protocols:
+                raise ValueError("a local checkpoint override supports stock and experimental arms, not protocol-option arms")
+            self.llm = _DirectLLM(vllm.LLM(
+                model=preset.model,
+                enable_prefix_caching=False,
+                seed=0,
+                **engine,
+            ))
+        else:
+            engine["protocols"] = ",".join(arm.protocols) or None
+            self.llm = LLM(preset.model, revision=preset.revision, **engine)
         self.arm, self.obj, self.installed = arm, plugin(arm), None
         self.target = Target(arm, self.llm, self.llm._engine.model, Hooks(tag=f"bench:{arm.id}"))
         if self.obj is not None:

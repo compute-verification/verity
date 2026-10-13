@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 
 from verity_vllm.bench.arms import Arm, resolve_arms
-from verity_vllm.bench.presets import SweepPoint, expand_sweep, get_preset
+from verity_vllm.bench.presets import SweepPoint, expand_sweep, get_preset, local_checkpoint
 from verity_vllm.bench.result import IdentityMismatch, judge, validate
 from verity_vllm.bench.runner import ResidentCapacityError, run_benchmark
 from verity_vllm.bench.table import render
@@ -86,6 +86,17 @@ def test_stock_fp8_is_gated_against_stock_bfloat16():
         ("stock", "bfloat16", None),
         ("stock-fp8", "fp8", "stock"),
     ]
+
+
+def test_local_checkpoint_is_content_bound(tmp_path):
+    (tmp_path / "config.json").write_bytes(b"config")
+    (tmp_path / "weights.safetensors").write_bytes(b"weights")
+    preset = local_checkpoint(get_preset("llama31-8b-fp8-1gpu"), tmp_path)
+    assert preset.model == str(tmp_path)
+    assert preset.revision is preset.case is None
+    assert len(preset.model_digest) == 64
+    (tmp_path / "weights.safetensors").write_bytes(b"changed")
+    assert local_checkpoint(get_preset("llama31-8b-fp8-1gpu"), tmp_path).model_digest != preset.model_digest
 
 
 def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():

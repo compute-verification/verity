@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from verity_vllm.bench.arms import resolve_arms
-from verity_vllm.bench.presets import PRESETS, expand_sweep, get_preset
+from verity_vllm.bench.presets import PRESETS, expand_sweep, get_preset, local_checkpoint
 from verity_vllm.bench.result import write
 from verity_vllm.bench.runner import ProcessEngineFactory, run_benchmark
 from verity_vllm.bench.table import render
@@ -20,6 +20,8 @@ from verity_vllm.config import UsageError, option
 @dataclass(frozen=True, kw_only=True)
 class Options:
     preset: str = option("--preset", choices=tuple(PRESETS))
+    model_path: Path | None = option("--model-path", type=Path, default=None,
+                                     help="machine-local checkpoint override; every file is hashed into the result identity")
     arms: str = option("--arms", help="comma-separated arm ids; include every arm's control")
     arm_module: list[str] = option("--arm-module", action="append", default=[],
                                    help="experimental pkg.mod:NAME exposing install(target); repeatable")
@@ -35,6 +37,8 @@ def main(a: Options) -> int:
         raise UsageError("--reps must be positive")
     try:
         preset = get_preset(a.preset)
+        if a.model_path is not None:
+            preset = local_checkpoint(preset, a.model_path)
         preset = replace(
             preset,
             engine_settings={

@@ -235,14 +235,17 @@ verity-vllm bench --preset llama31-8b-fp8-1gpu --arms stock,stock-fp8 \
 
 The quick sweep measures batches 8 and 32 under mixed, staggered traffic. The full sweep measures batches 1, 8, 32 and
 128 at prompt envelopes 512 and 8,192 under decode-heavy, prefill-heavy and mixed traffic. CUDA graphs are the default;
-`--eager` opts out. Engines stay resident and arms interleave repetition by repetition when memory permits. Otherwise the
-driver records the failure and alternates engine-lifetime blocks. Every arm passes greedy-token equality against its
-declared control and its own optional gate before any timing.
+`--eager` opts out. `--model-path DIR` binds a machine-local checkpoint by hashing every file into the preset identity;
+it supports stock and experimental arms, while protocol-option arms use the preset's registered checkpoint. Engines stay
+resident and arms interleave repetition by repetition when memory permits. Otherwise the driver records the failure and
+alternates engine-lifetime blocks. Every arm passes greedy-token equality against its declared control and its own optional
+gate before any timing.
 
 An experimental `--arm-module pkg.mod:NAME` exposes `install(target)` and may expose `gate(target)`, `spans(target)` and
 `extras(target)`. It patches only through `target.hooks`, a tagged `engine.hooks.Hooks`; the driver checks and uninstalls
 that set. Results are `result.json` plus a ratio `table.md`; their identity includes the preset, vLLM version and pin,
-arm and kernel identities, Git commit and sweep.
+arm and kernel identities, Git commit and sweep. `verity-vllm bench-judge LEFT RIGHT [--allow FIELD]` refuses a comparison
+when any identity field differs unless each difference is explicitly allowed.
 
 ## Protocol options
 
