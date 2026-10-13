@@ -49,7 +49,7 @@ theorem regBit_regCol {u : Fin nv} {j col : ℕ} {b : Bool} (h : RegBit zo u j c
     RegBit zo u j col (regCol zo u j col) := by
   have hex : ∃ b, RegBit zo u j col b := ⟨b, h⟩
   unfold regCol
-  rw [dif_pos hex]
+  rw [dite_eq_left hex]
   exact Classical.choose_spec hex
 
 /-- **A run of registered input columns holds the registrant's bytes**, as registered bits. -/
@@ -70,7 +70,7 @@ theorem regOut_outReg {u : Fin nv} {j : ℕ} {hj : j < c.upv} {col : ℕ} {b : B
     RegOut zo u hj col (outReg zo u hj col) := by
   have hex : ∃ b, RegOut zo u hj col b := ⟨b, h⟩
   unfold outReg
-  rw [dif_pos hex]
+  rw [dite_eq_left hex]
   exact Classical.choose_spec hex
 
 /-- **A run of registered output columns holds the registrant's bytes**, as registered outputs. -/
@@ -644,10 +644,3 @@ theorem regCols_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
 end Keyed
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.own_of_checkValue
-#print axioms FlockC3.RegLevels.acc_of_checkAcc
-#print axioms FlockC3.RegLevels.checkAcc_of_checkStmt
-#print axioms FlockC3.RegLevels.acc_of_checkStmt
-#print axioms FlockC3.RegLevels.regReads_of_check
-#print axioms FlockC3.RegLevels.regCols_of_check
