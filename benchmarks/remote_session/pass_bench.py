@@ -8,6 +8,7 @@ Writes OUT/pass_bench.json.
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import shutil
 import sys
@@ -45,8 +46,8 @@ def main() -> int:
     ap.add_argument("--passes", type=int, default=30)
     ap.add_argument("--open-passes", type=int, default=300)
     ap.add_argument("--openings", type=int, default=33273)
-    ap.add_argument("--contend", default="0:0:5,-10:0:5,-10:0:0.5,-10:0:0.1",
-                    help="passes run while a window opens: pass stream priority:open stream priority:GIL switch ms")
+    ap.add_argument("--contend", default="0:0:5,-10:0:5,-10:0:0.5,-10:0:5:nogc,-10:0:0.5:nogc",
+                    help="passes run while a window opens: pass stream priority:open stream priority:GIL switch ms[:nogc]")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     lib = Lib(a.lib, torch)
@@ -158,8 +159,20 @@ def main() -> int:
     out["contended"] = []
     items = [(kept[i], ps) for i, ps in sorted(by.items())]
     for spec in filter(None, a.contend.split(",")):
-        pass_prio, open_prio, switch_ms = spec.split(":")
+        pass_prio, open_prio, switch_ms, *rest = spec.split(":")
         sys.setswitchinterval(float(switch_ms) / 1e3)
+        nogc = rest == ["nogc"]
+        collections, began = [], {}
+
+        def on_gc(phase: str, info: dict) -> None:
+            if phase == "start":
+                began[0] = time.perf_counter_ns()
+            elif time.perf_counter_ns() - began.get(0, 0) > 10_000_000:
+                collections.append({"generation": info["generation"], "ms": (time.perf_counter_ns() - began[0]) / 1e6})
+        gc.callbacks.append(on_gc)
+        if nogc:
+            gc.freeze()
+            gc.disable()
         ps, os_ = torch.cuda.Stream(priority=int(pass_prio)), torch.cuda.Stream(priority=int(open_prio))
         done, opened = threading.Event(), {}
 
@@ -191,15 +204,19 @@ def main() -> int:
                 host.append(time.perf_counter_ns() - t0)
             th.join()
             pr.join()
+        gc.callbacks.remove(on_gc)
+        if nogc:
+            gc.enable()
+            gc.unfreeze()
         gpu = store.pass_gpu_ms[g0:]
         st = store.open_stats[-1]
         marks = [st["at_ns"], st["at_ns"] + st["subtrees_ns"], st["at_ns"] + st["subtrees_ns"] + st["gather_ns"]]
         stalls = [{"after_open_ms": (t - marks[0]) / 1e6, "ms": d / 1e6,
                    "phase": ("before", "subtrees", "gather", "assemble")[sum(t >= m for m in marks)]} for t, d in stalls]
-        row = {"pass_priority": int(pass_prio), "open_priority": int(open_prio), "switch_ms": float(switch_ms),
+        row = {"pass_priority": int(pass_prio), "open_priority": int(open_prio), "switch_ms": float(switch_ms), "gc": not nogc,
                "passes": len(host), "open_ns": opened["ns"], "host_ns": percentiles(sorted(host)),
                "gpu_ms": percentiles(sorted(gpu)), "excess_ms": sum(host) / 1e6 - len(host) * read_ms,
-               "open_stats": st, "gil_stalls": stalls}
+               "open_stats": st, "gil_stalls": stalls, "collections_over_10ms": collections}
         out["contended"].append(row)
         print(json.dumps(row), flush=True)
     sys.setswitchinterval(0.005)
