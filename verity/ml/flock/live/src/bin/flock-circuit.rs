@@ -5,7 +5,7 @@
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
-//!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --verifier ADDR [--dump F])   (`stacked`)
+//!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --statement-digest HEX --verifier ADDR [--dump F])   (`stacked`)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
 //! `b || c`, the output rows' too; no row, no salt, no output word) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
@@ -4716,10 +4716,12 @@ fn stacked_points(m: usize) -> Vec<Vec<F128>> {
 
 /// `stacked`: candidate 3's registered opening, `rec_algebra.Shape(m, 6, claims, salt_len=0, opening_only=True)`. R is committed
 /// under plain SHA-512 leaves at fast100(m) and opened at the relay's claim points by upstream's batch opening, on the live stream
-/// `stacked/rep0`, bound as a rep is (`bind_statement`'s label, R's digest, R's cap); no zerocheck or lincheck precedes it.
+/// `stacked/rep0`, bound as a rep is (`bind_statement`'s label, the inner statement's digest, R's cap): the circuit reps' own
+/// statement digest (`--statement-digest`, which the firewall holds to theirs), so the stream's first coin follows the
+/// statement's META and the circuit registration it binds; no zerocheck or lincheck precedes it.
 ///
-///   flock-circuit stacked --table R.bin --root-out ROOT.json                         R's Commit root, before the session's Commit
-///   flock-circuit stacked --table R.bin --points P.json --verifier ADDR [--dump F]   the opening
+///   flock-circuit stacked --table R.bin --root-out ROOT.json                         R's registered root, at staging
+///   flock-circuit stacked --table R.bin --points P.json --statement-digest HEX --verifier ADDR [--dump F]   the opening
 ///
 /// `ROOT.json` is `{m, cap, digest}` in hex, the cap table `stacked`'s Commit root. The opening commits R again (plain leaves
 /// take no salt, so to the same cap), sends only `Open`, its rounds, `Proof` and `Finish`, and its proof is bincode((Commitment,
@@ -4740,11 +4742,15 @@ fn stacked() {
         return;
     }
     let xs = stacked_points(m);
+    let sd = arg("--statement-digest", "");
+    let statement_digest: Vec<u8> = (sd.len() == 64 && sd.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then(|| (0..32).map(|i| u8::from_str_radix(&sd[2 * i..2 * i + 2], 16).unwrap()).collect())
+        .unwrap_or_else(|| refuse(format!("--statement-digest {sd:?}: the inner statement's 32-byte digest, 64 hex digits")));
     let addr = arg("--verifier", "127.0.0.1:7500");
     let t = shared(TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the challenger at {addr}: {e}"))));
     let mut ch = LiveChallenger::new(t.clone(), STACKED_TABLE, 0, STACKED_DOMAIN.as_bytes()).unwrap_or_else(|e| refuse(format!("Open: {e}")));
     ch.observe_label(b"flock-r1cs-v0");
-    ch.observe_bytes(&digest);
+    ch.observe_bytes(&statement_digest);
     ch.observe_bytes(&root);
     let lc = pcs.ligerito_prover_config().unwrap_or_else(|e| refuse(e));
     let refs: Vec<&[F128]> = xs.iter().map(Vec::as_slice).collect();

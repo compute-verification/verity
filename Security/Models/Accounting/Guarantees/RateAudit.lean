@@ -71,6 +71,12 @@ it at least `k·b + ρ − S − L − λ` bits of footprint and rebuilt words, 
 `F − k·c_tag` that tagging leaves. The stream is what makes `L − ρ`, not `L`, the link's share: its bits are fresh,
 so the link's bits that carried them carried nothing about the store. Its completeness is `RateHonest`.
 
+The game's `rebuild j` is all-or-nothing: it returns the whole word at `c_enc`. Completing part of a word from the rest
+(the red team's F27: at one codec round with the payload known, a lattice completes a word's bottom third far below
+its per-bit price) is outside this game; `RateAuditPartial` (`RateAuditPartial.lean`) puts it inside, at this floor
+and error, under the named assumption `Accounting.Assumptions.WorkHardness` (`rate-codec-work` in partial-completion
+form, for codecs with `k ≥ 2` rounds).
+
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the rate audit's code computes. -/
 def RateAudit : Prop :=
@@ -142,8 +148,9 @@ is `(1 − τ)/x` with `τ = (W + tagging)/(F·T)` and `x = N·c_enc/(F·T)`. Th
 hold: a per-run compute guarantee bounding the probability that the compute audit accepts with the compute account's
 work below `W` by `ε_W` (lane `ra-per-run`'s `ComputeSoundPerRun`) gives, by a union bound, the probability that both
 audits accept and the bandwidth account read short of the floor at most `ε + ε_W`. Unlike `BandwidthOfAudit`, this is
-a per-run reading: the event is about the reads at the coins drawn. Proof: `Accounting.SecurityProofs.RateOfAudit`,
-from `RateAudit`.
+a per-run reading: the event is about the reads at the coins drawn. A `RealizesRate` for a deployed run must put the
+deadline and a round trip, `T + RTT`, inside `T_bw`, and every rebuild in the bandwidth window must fall in the compute
+window's work of the other accounts (`compute_le`). Proof: `Accounting.SecurityProofs.RateOfAudit`, from `RateAudit`.
 
 Frozen (no-function, hash): it carries `RateAudit`, a bound in the random-oracle model over an abstract chip program, to
 the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run, not to a Lean
