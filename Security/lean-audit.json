@@ -417,6 +417,7 @@
   "Definitions.Accounting": {
    "imports": [
     "Mathlib",
+    "Definitions.Core",
     "Definitions.Pouw",
     "Definitions.Pous.Game.Prob",
     "Definitions.Pous.Model.Audit",
@@ -424,11 +425,14 @@
     "Definitions.Accounting"
    ],
    "except": [],
-   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth audit's game read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); they import no assumption, guarantee or proof"
+   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth audit's game read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); they import no assumption, guarantee or proof"
   },
   "Models.Accounting.Guarantees": {
    "imports": [
     "Mathlib",
+    "Definitions.Core",
+    "Definitions.Nci",
+    "Models.Nci.Assumptions",
     "Definitions.Pouw",
     "Definitions.Pous.P2.Cost",
     "Models.Pouw.Assumptions",
@@ -437,7 +441,7 @@
     "Models.Accounting.Guarantees"
    ],
    "except": [],
-   "why": "a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and PoUW's named assumption TT as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Models.Pous.Assumptions.P2)"
+   "why": "a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and PoUW's named assumption TT as hypotheses, never over a proof; the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Models.Pous.Assumptions.P2)"
   },
   "Definitions.Accounting.Bandwidth": {
    "imports": ["Mathlib", "Definitions.Pous.Game.Prob", "Definitions.Accounting.Bandwidth"],
@@ -471,6 +475,30 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
+  "Accounting.SecurityProofs.Actual.Runtime": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Actual.Runtime.{u_1, u_2} : Accounting.Guarantees.Actual.Runtime"],
+   "assumptions": [],
+   "type_hash": "3f1a556d64beb730fe1ba2839e7746f3295ff22630ae7a2c1ec263b26b7b9c99"
+  },
+  "Accounting.SecurityProofs.Actual.Windows": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Actual.Windows.{u_2, u_3} : Accounting.Guarantees.Actual.Windows"],
+   "assumptions": [],
+   "type_hash": "9f32b1518e7568f66dd5b15626aafc11e36c5056621c7d221b4210b049859b8d"
+  },
+  "Accounting.SecurityProofs.B4": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.B4.{u_1, u_2, u_3} : Accounting.Guarantees.B4"],
+   "assumptions": [],
+   "type_hash": "f5ec95b7103c1028179ab4aa3c8ce73b7d1c31a8fac0d0fc4724d831b7f2db36"
+  },
+  "Accounting.SecurityProofs.Composition": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Composition.{u_1} : Accounting.Guarantees.Composition"],
+   "assumptions": [],
+   "type_hash": "68a2985cb5f4e2e89e1024fc536a3da954ad2e21ebff335f3b9102c85564ff3c"
+  },
   "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": {
    "owner": "@memory-accounting",
    "signature": [
@@ -519,6 +547,12 @@
    "assumptions": [],
    "type_hash": "0620c0fb742047ca1143d4ed9d45e9c1a5197c2b1372bd430dcb20b53bb89167"
   },
+  "Accounting.SecurityProofs.Fit": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Fit.{u_1} : Accounting.Guarantees.Fit"],
+   "assumptions": [],
+   "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
+  },
   "Accounting.SecurityProofs.Joint": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Joint : Accounting.Guarantees.Joint"],
@@ -536,6 +570,12 @@
    "signature": ["Accounting.SecurityProofs.JointPerRunPriced : Accounting.Guarantees.JointPerRunPriced"],
    "assumptions": [],
    "type_hash": "dc12aa2ed2a07c0007c3d7e72ba8302577bc0a4da2bb06db02379eba87f8b9bd"
+  },
+  "Accounting.SecurityProofs.Localization": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Localization.{u_1, u_2} : Accounting.Guarantees.Localization"],
+   "assumptions": [],
+   "type_hash": "1c4add285dad9b08b8fc8f6051762475568ce296efd6f4ea116fc0842db782c1"
   },
   "Accounting.SecurityProofs.Memory.Adds": {
    "owner": "@memory-accounting",
@@ -621,6 +661,12 @@
    "assumptions": [],
    "type_hash": "31c0943a819102e21c0f851f870d2ab5a9e93937491c328813e69182e5fccce1"
   },
+  "Accounting.SecurityProofs.Recall": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Recall.{u_1, u_2} : Accounting.Guarantees.Recall"],
+   "assumptions": [],
+   "type_hash": "6f9da408630883d8770f358eaddf47063f1b76099677faea7bdb35c5e45d777a"
+  },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
@@ -700,6 +746,12 @@
    "signature": ["Accounting.SecurityProofs.Tag.PolyUnpredictable : Accounting.Guarantees.Tag.PolyUnpredictable"],
    "assumptions": [],
    "type_hash": "67b1fadb363e69e86a6d5bd4f1470fc59a8c75d8d3422ec50bd514d9437b7035"
+  },
+  "Accounting.SecurityProofs.pouwRow": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.pouwRow : Accounting.Guarantees.pouwRow"],
+   "assumptions": [],
+   "type_hash": "906825a3b08429ff5792f39a31164d1d252f77a3bc93b02bd84df4c92d3386a9"
   },
   "Bandwidth.SecurityProofs.AuditRO": {
    "owner": "@memory-accounting",
@@ -2578,6 +2630,12 @@
    "assumptions": [],
    "type_hash": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b"
   },
+  "Nci.SecurityProofs.UpdatedMatMulReads": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.UpdatedMatMulReads : Nci.Guarantees.UpdatedMatMulReads"],
+   "assumptions": [],
+   "type_hash": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83"
+  },
   "NetTiming.SecurityProofs.CardCountsEqLe": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.CardCountsEqLe : NetTiming.Guarantees.CardCountsEqLe"],
@@ -4268,7 +4326,16 @@
    "Accounting.SecurityProofs.Memory.AddsAdvice": "frozen (no-function): It is Adds with advice: the location reads its value from the state and at most a advice bits, so the advice counts against the bound; about PoUS's abstract audit game and no function of the code.",
    "Accounting.SecurityProofs.Memory.AddsAdviceOn": "frozen (no-function): It is AddsOn with advice (a bits beside the state), about PoUS's ring model and no function of the code.",
    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring": "frozen (no-function): It is AddsP2Ring with advice (a bits beside the state), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure.",
-   "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": "frozen (conjecture,no-function): It is a consequence of the named open conjecture DistinctLiveH1T, a lower bound on the cost of every MH100w program (draft semantics) that computes H-1T's credited words, not a property of a Lean function."
+   "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": "frozen (conjecture,no-function): It is a consequence of the named open conjecture DistinctLiveH1T, a lower bound on the cost of every MH100w program (draft semantics) that computes H-1T's credited words, not a property of a Lean function.",
+   "Accounting.SecurityProofs.Actual.Runtime": "falsified (conjecture,no-function): It is the runtime corollary of Accounting.SecurityProofs.Actual.Windows and UpdatedMatMulReads, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates them.",
+   "Accounting.SecurityProofs.Actual.Windows": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and takes the physical constraints Causal, ComputeRate, Memory and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Recall": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick (CausalFrom) and takes what reaches the location during the window, fixed across the coins, as a hypothesis that is not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Localization": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from a challenge's values to Accounting.Actual.Run) causal from every tick (CausalFrom) and takes what the rest of the prover can tell at the window's start and what it reads from the verifier during the window, fixed across the challenge, as hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.B4": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick (CausalFrom), with links as alphabets (Alphabet) and the trusted devices across the strategy (TrustedUnits, the certifiers' record their gates in declared record cells), and takes what the certifiers and the outside can tell at the window's start, fixed across the coins, and per-run causality and links as hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.pouwRow": "frozen (conjecture,no-function): It takes B1 (Accounting.Guarantees.B1), the named open conjecture TT (Pouw.Assumptions.TT) at the cost model of an arbitrary actual circuit's provers (Accounting.Actual.costModel), as a hypothesis, and is about PoUW's audit of an abstract protocol (Pouw.Protocol) against those provers, not a Lean function.",
+   "Accounting.SecurityProofs.Composition": "frozen (no-function): It is stated over arbitrary strategies (maps from coins to Accounting.Actual.Run) causal from every tick and each protocol's soundness alone, hypotheses about them rather than a Lean function's acceptance, and bounds a count of coins, not an event of shape.events.",
+   "Accounting.SecurityProofs.Fit": "frozen (no-function): It is stated over arbitrary sets of runs (Accounting.Actual.Run) and a quantity on them, with additivity as a hypothesis, not a Lean function's acceptance.",
+   "Nci.SecurityProofs.UpdatedMatMulReads": "falsified (conjecture,no-function): It is UpdatedMatMul before its division by alpha, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -4298,6 +4365,31 @@
   "events": ["FlockSoundness.Game.prob"]
  },
  "reads": {
+  "Definitions.Accounting.Actual": {
+   "digest": "a4f312d230c62dc0346c91ba7ebcd9b2a4d9d5b06fbaea971019ce9563092065",
+   "definitions": {
+    "Accounting.Placed": "8e88821bb1082b7132148634f8e1329a4e2b57af20bc00f6c57ad1a0dee06ce0",
+    "Accounting.Placed.cell": "023af47cec2f181ace8b7830d2f1752d8b88a235bf777a56d7a8e279c403fe51",
+    "Accounting.Placed.cut": "891d150c292c8c2153e75fea539db7bd81f47f21fdb3a06d4d95a1225a9c8591",
+    "Accounting.Placed.declaration": "208dafa0b84502054fe4dcfae508dac8a9a1f2b06a8f8f83b2c881d6b3c81e31",
+    "Accounting.Placed.region": "9a00e0b16d67d8bb6a52b3d1ecb4337ea0891720392913f218ce04de54c9efb9",
+    "Accounting.Placed.state": "947a5efbb5f3e50de4ecc5bf17d54a8105af813f589323646b617947283c8b0e",
+    "Accounting.Placed.t": "18a96559a967f791a812307b287978fd44ff6d3c23193444916713641f88c886",
+    "Accounting.Placed.toCircuit": "6dc6235d50e828728aad7f1c9148e590896d9e45e87efd949cfa7943dd049cb6",
+    "Accounting.Placed.work": "eb78b65c4ca6a9d95046e9d9f606a3bee05154e7f5448c8559c1ca90561de1db",
+    "Accounting.Placed.x": "994440becd8445d653a65b364659a7498c1ea20fa4c58dc13c6780b6bf12fef7"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.B4",
+    "Accounting.SecurityProofs.Composition",
+    "Accounting.SecurityProofs.Fit",
+    "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.Recall",
+    "Accounting.SecurityProofs.pouwRow"
+   ]
+  },
   "Definitions.Accounting.Bandwidth.Game": {
    "digest": "419713f54ecb1553848ac084adeaab4e0a2db5738e1f27422be1050001d17ef0",
    "definitions": {
@@ -4335,6 +4427,58 @@
     "Bandwidth.World.side": "f566a8353998a8afde7363fd5ca5b98c5cb9ade02af1f79d543430fb1b1e8b99"
    },
    "guarantees": ["Bandwidth.SecurityProofs.AuditRO", "Bandwidth.SecurityProofs.HonestPasses"]
+  },
+  "Definitions.Accounting.Confidence": {
+   "digest": "977dafd69575333d30e4aa5abd7796e2a94d3f778e41c24d710d9863071934df",
+   "definitions": {
+    "Accounting.Actual.Computes": "9319720c640d412d7ba1e51b57f32c7ca303ac42c727e20f0055ae79c371c1cf",
+    "Accounting.Actual.Run": "59b9a32712cd5c6f246f1b7e6a3ee435e2d35f3e1882d7a7cf003a7a1be22974",
+    "Accounting.Actual.Run.A": "1ccbd66f55cb59225749e02b0e16da0880011e930bebe5a1d2ecb38e007f4ceb",
+    "Accounting.Actual.Run.acts": "e50ce6296f25ae4559694bc99c37f198b750c60f595aa96931814260475e3b35",
+    "Accounting.Actual.Run.before": "c02e1af29641135df4d90c919be29bddfb3fbcc31edf7b2aba1b6c8942891701",
+    "Accounting.Actual.Run.content": "5293a008c10a4f54c69b81313c0b02ab8a5f2d580d2c51100b0206e0ce734900",
+    "Accounting.Actual.Run.crossing": "aaf01b044154dc9bf055c7923371307fd09b1d81244396623cfd2f4a375f05fc",
+    "Accounting.Actual.Run.held": "d3eb9a7393d22ff965132b42b2601432a7ddf4cd5acc22905474028ad1ee5d96",
+    "Accounting.Actual.Run.history": "cab8a7ef3eb400f8f81e4cd23c77c21d94d8ea72fe286e8c04b5fa84bd49913f",
+    "Accounting.Actual.Run.inputs": "ab16b193c84527cc81191e94d7195c1cd80317cff2bb03da2a82db32d4b46513",
+    "Accounting.Actual.Run.mem": "dd69202e6cc6e2aaf253558dc167cdd6da57895c4fe8ff381268c22bb57f42fa",
+    "Accounting.Actual.Run.seen": "bea69d75ef4fed14b09f991a23a2504f42786a77422d706d02cdaad94581a1a4",
+    "Accounting.Actual.Run.sent": "19ae99de6633019bddc3b650c5011b8d5fd3691dbb1ef093441bde5edeeff69d",
+    "Accounting.Actual.Run.signal": "96fead465002ae09522e8b9fadef7f609035071aed0672210d0655d60ded6698",
+    "Accounting.Actual.Run.state": "a89f70b57086a6087671decec76a36d9e00a0116ebe45ad2abd29b9bed1832aa",
+    "Accounting.Actual.Run.val": "5cc9838473d175b8749ea80c18d2c0f15af104127f05ec1f80551375a542991e",
+    "Accounting.Actual.Run.view": "11996c3958851a1f8ed93df3e5385dc4200ad9871ca493111324718032d579af",
+    "Accounting.Actual.bits": "a0d4a7eed029eb2c7be17a2c4f1056c36e99c6bfc3c5718fa9bbcf2943fbc5e0",
+    "Accounting.Actual.chunk": "39f0f2efde6615fa43ccdaf2994754d30eabcac8b2f1d858ea7a3c312a9ed211",
+    "Accounting.Actual.position": "b6c4737f68b198bc4d1054481b8ae41dd1f0c2ee777902e8da61127805102cff",
+    "Accounting.Actual.runtime": "5bca70547f5a3fc42f68c8dbdeee801f02ab1ce2bc3d64829bf7eadcfcc36598",
+    "Accounting.Additive": "c8c0489d83df1eb0207905c97bfb01051056206f391a6e0ec8ce423dcc7de39e",
+    "Accounting.Alphabet": "4ad9e1785273c14ca24a26523e3b5852b82021d461b657bf211df1ace08e5191",
+    "Accounting.CausalFrom": "fee9dbdb5e257e6c997b15ae60f60d662ffd24cddf4861aa15c9f5e5b4280bee",
+    "Accounting.Placed.Holding": "3518954773e68e4f3e14e2c6ddd6635884d611c8e5da4db11ad8bfa846774bab",
+    "Accounting.Sound": "ab7db8fd6792ca63814601cfcd42c9d07942f59b4e2b9f7af85cf7ca024908c0",
+    "Accounting.req": "961f514b6304465dc1e7e4fa55e51c523c147c776780150b65c6454bdaed6fea"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.B4",
+    "Accounting.SecurityProofs.Composition",
+    "Accounting.SecurityProofs.Fit",
+    "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.Recall",
+    "Accounting.SecurityProofs.pouwRow"
+   ]
+  },
+  "Definitions.Accounting.CostModel": {
+   "digest": "9811a5ffac309b47bdb1c7666fe5345daeae2f0303f7b21395edd173e3a88a78",
+   "definitions": {
+    "Accounting.Actual.Inputs": "b93e4c4e75abb54644df0497a6fe0c9f1cbebff022e964b4b7e147ad9a83ac07",
+    "Accounting.Actual.Prover": "5115cf0c737294866506d69c598b0344ad0000cc8344febf5b8fa8b67e1f239f",
+    "Accounting.Actual.Prover.strategy": "37d0cfb813d8f263fc606b5def473159d498a5b6c72f07f8dc4e288b50088d10",
+    "Accounting.Actual.Run.workIn": "ed19c56355aecb58c859d7d7cbf6952836d5e83f08dc1f2200208114cd1b4770",
+    "Accounting.Actual.costModel": "5854a68df19043ad0fff548ae75d42d463f156c0b8b8fa8d6723f2d973c5475a"
+   },
+   "guarantees": ["Accounting.SecurityProofs.pouwRow"]
   },
   "Definitions.Accounting.Device": {
    "digest": "315ed87db39c2b81bb280e3813cdda0f798fffb3daafa43f7c3300fa9d11b0cf",
@@ -4484,6 +4628,29 @@
     "Accounting.SecurityProofs.PouwEndToEndPerRun"
    ]
   },
+  "Definitions.Accounting.Physical": {
+   "digest": "04e38614f5b111891b7f64e345ea8ff3b85db3eab10d56739a2e272151f1e1ac",
+   "definitions": {
+    "Accounting.Actual.Run.record": "cef12634f1151508a108f7cc4f75fa0152800cf5a567b253af90bfd921aefccd",
+    "Accounting.Placed.Causal": "2f04d6a4fe23b7a63aebd7193ea1d651866d0c4924150d9e15f1c357f33321f6",
+    "Accounting.Placed.ComputeRate": "96822ce429b2fa6114048640d01228d12b1cfb6ff66fbb3af883ef7fc773eb15",
+    "Accounting.Placed.Links": "21289f1d8100bbc4b24f3fb015950d0d11f515aeb18b02f70d65a6b68f2f813b",
+    "Accounting.Placed.Memory": "f12294cc702724cca24f7a1192e560840420a9a1ab87d3eff59ab7a9f53edd15",
+    "Accounting.Placed.Spec": "b1bacd8a93bd348e554d654f301218d19023c6018637e1667d2984b36593eda6",
+    "Accounting.Placed.Spec.op": "c84d3febe360a3a38ec798620ea3667ac688d142d66d2d8967813cee3ca31188",
+    "Accounting.Placed.Spec.reads": "84f3b8534ac1c418e755de3b9fee4cc1f65a8cd20d472d4180005da1bfc7cbf3",
+    "Accounting.Placed.readOn": "060e103ff34a579b5dab2ed4dabc64b5849a89ad95e7987745d343bfdb4bc9c3",
+    "Accounting.TrustedUnits": "d7c47c66b606793b60119a93001827de25bf7ebb191e3b152f84a92efb9727e2",
+    "Accounting.boundary": "07676e3178e9dc4629bc1bca42bd192e63e44646aa29bff077eb221d15948522",
+    "Accounting.linkCapacity": "d6970a625a14a173064adabe913bdf66c7ff1260f2b49553265e1cde9959e69c",
+    "Accounting.uncertifiedCapacity": "50c8f9c62d90bc1ad68df65c869ad6c4257dd4b1dd3e44b9255753d6c33e503c"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.B4"
+   ]
+  },
   "Definitions.Accounting.Pouw": {
    "digest": "e5e0c1fdb8d3ae83f5ebefcd1115b6e1b7c33676cc5c4dbbf2d4afd2dc1cf094",
    "definitions": {
@@ -4583,6 +4750,14 @@
     "Verity.Implementation.inp": "997e0ba3c6cf816c20ad7aecf22ecb9aef93d68ebcf8cec1ed8c071b89d64202"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.B4",
+    "Accounting.SecurityProofs.Composition",
+    "Accounting.SecurityProofs.Fit",
+    "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.Recall",
+    "Accounting.SecurityProofs.pouwRow",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -4590,6 +4765,7 @@
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
+    "Nci.SecurityProofs.UpdatedMatMulReads",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
@@ -4604,11 +4780,14 @@
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
-    "Nci.SecurityProofs.UpdatedMatMul"
+    "Nci.SecurityProofs.UpdatedMatMul",
+    "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
   },
   "Definitions.Core.Fp32": {
@@ -4685,11 +4864,14 @@
     "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
+    "Nci.SecurityProofs.UpdatedMatMulReads",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
@@ -4777,14 +4959,24 @@
     "Nci.slowdown": "47f31dfc1e426587b79935cd908a1d4daa0c1a2bf91a9883a452c55b3de3d2b2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
-    "Nci.SecurityProofs.UpdatedMatMul"
+    "Nci.SecurityProofs.UpdatedMatMul",
+    "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
+  },
+  "Definitions.Nci.Reads": {
+   "digest": "c3c240e59ed9edb472fbe4005f08c7f4b68d4fb7cea86dfa5d35e989587fb439",
+   "definitions": {
+    "Nci.readFactor": "427aa147343137e4df8ca0791a21530052e928f25b6372e268c4d65181ca7385"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Actual.Runtime", "Nci.SecurityProofs.UpdatedMatMulReads"]
   },
   "Definitions.NetworkCertifier.Grid": {
    "digest": "c7ed6edeeae9117352e16647ec33b99c24c886b9fb8833bad5989949fd0516fc",
@@ -5354,6 +5546,7 @@
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
+    "Accounting.SecurityProofs.pouwRow",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.SecurityProofs.Barrier.Generic",
     "Pouw.SecurityProofs.Dimension.A2WordsIff",
@@ -5401,6 +5594,7 @@
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
     "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
+    "Accounting.SecurityProofs.pouwRow",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
@@ -5522,6 +5716,7 @@
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
     "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
+    "Accounting.SecurityProofs.pouwRow",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
@@ -6132,6 +6327,7 @@
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
     "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
+    "Accounting.SecurityProofs.pouwRow",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
@@ -6189,6 +6385,7 @@
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
+    "Accounting.SecurityProofs.pouwRow",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
@@ -13071,6 +13268,14 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
+  "Models.Accounting.Guarantees.Actual": {
+   "digest": "b37ea97d0378f3085e9c3151a63dca01ffe0aa5dba3d2319dd394170d5547672",
+   "definitions": {
+    "Accounting.Guarantees.Actual.Runtime": "fc51137e65590878b9589eb9f35c83ab5f62cc45f9bff771b2b08b7937cde60b",
+    "Accounting.Guarantees.Actual.Windows": "650149982dfcc10c00acf77ec132181d05eb13496e435fcd1407502178e39753"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Actual.Runtime", "Accounting.SecurityProofs.Actual.Windows"]
+  },
   "Models.Accounting.Guarantees.Bandwidth": {
    "digest": "c983853bf2be4c384df9d364a5b2c827a9e0187155e2c12dc3e2d5450cff7e00",
    "definitions": {
@@ -13079,6 +13284,23 @@
    },
    "guarantees": ["Bandwidth.SecurityProofs.AuditRO", "Bandwidth.SecurityProofs.HonestPasses"]
   },
+  "Models.Accounting.Guarantees.Bridges": {
+   "digest": "26f85801505572a224a4b8833397fce889422d396b88c238265015169138faa2",
+   "definitions": {
+    "Accounting.Guarantees.B1": "c74386e3ceabe9d2f16360aa3120a74016750e7b3bc295394d49436ae386e242",
+    "Accounting.Guarantees.B4": "80b5e1ac77b04ded390b07d4c4ebc6d7b64c9ef3bb9563252466d0ab38678e4d",
+    "Accounting.Guarantees.pouwRow": "6a594dc2e7ef18c12bee36e69e071cbafb8720d5281f33dbd810b02fa54f9786"
+   },
+   "guarantees": ["Accounting.SecurityProofs.B4", "Accounting.SecurityProofs.pouwRow"]
+  },
+  "Models.Accounting.Guarantees.Confidence": {
+   "digest": "efce790a6464ea41d877ef6d1bf1c6db1c02c97c43a096e52b0936b6c9b035dc",
+   "definitions": {
+    "Accounting.Guarantees.Composition": "03813b3323e2fd35f0a58490f86479967bbf2af8f36345310a517c95dd3cccc8",
+    "Accounting.Guarantees.Fit": "3dad2744dedc3335f643260612186bf5c3ce25104fde75630f3a0b405302b605"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
+  },
   "Models.Accounting.Guarantees.Joint": {
    "digest": "6c3005740d08578ac0e0fda861dbe77c578ceb28314b3b026ad572fb9ffd9837",
    "definitions": {
@@ -13086,6 +13308,14 @@
     "Accounting.Guarantees.Joint": "994a9f616574f737ac1bb98ceeb5051f135976d5bf3d90328dece5cffa401887"
    },
    "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
+  },
+  "Models.Accounting.Guarantees.Localization": {
+   "digest": "2375ead4630b5640c3072e6aa1ed43cc3a9fd821a28e01d786c4cc2577d78fe4",
+   "definitions": {
+    "Accounting.Guarantees.Localization": "d13f783d222adf13f699b8fff2d098a845ec0f9341b0199b27d3081c92dc2e7d",
+    "Accounting.Guarantees.Recall": "ace9ff622ac226380584e42b55381440effc418d3b0f74bbf00c4f0d899cbdd1"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Localization", "Accounting.SecurityProofs.Recall"]
   },
   "Models.Accounting.Guarantees.Memory": {
    "digest": "5cb49813c4c96062a1ec8420803d7ca524eb76fb792feb22c2a8960e63c10f68",
@@ -13207,7 +13437,13 @@
     "Nci.Assumptions.ActivationsIncompressible": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a",
     "Nci.Assumptions.PartialSumsIncompressible": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
    },
-   "guarantees": ["Nci.SecurityProofs.IuReads", "Nci.SecurityProofs.Training", "Nci.SecurityProofs.UpdatedMatMul"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.Runtime",
+    "Nci.SecurityProofs.IuReads",
+    "Nci.SecurityProofs.Training",
+    "Nci.SecurityProofs.UpdatedMatMul",
+    "Nci.SecurityProofs.UpdatedMatMulReads"
+   ]
   },
   "Models.Nci.Guarantees": {
    "digest": "cd6f1af1ce140226037a84cb52697151bc5f5c8bd2c6405c131e5140bda3fc1b",
@@ -13231,6 +13467,13 @@
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul"
    ]
+  },
+  "Models.Nci.Guarantees.Reads": {
+   "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
+   "definitions": {
+    "Nci.Guarantees.UpdatedMatMulReads": "de140ae92faffcee18baa17b53bc3f1cc58b34e66dc03775895fb5f2d3672dcb"
+   },
+   "guarantees": ["Nci.SecurityProofs.UpdatedMatMulReads"]
   },
   "Models.NetworkCertifier.Assumptions": {
    "digest": "caf277c28b90843d92e77c576054596bad0cc0589030f3cfb2dc6c7e00393552",
@@ -13497,6 +13740,7 @@
     "Accounting.SecurityProofs.ComputeOfPouw",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
+    "Accounting.SecurityProofs.pouwRow",
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT"
    ]
