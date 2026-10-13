@@ -167,16 +167,10 @@ def _derive_world8_collective(monkeypatch, *, fused: bool, custom: bool):
     (False, "AllReduceMnnvl_v1{WORLD=8,N=6144,SHOT=1}"),
     (True, "AllReduceRmsNormMnnvl_v1{WORLD=8,N=6144,SHOT=1,CLUSTER=8,EPS=1e-05,FMA=True}"),
 ])
-def test_world_8_collective_rules_bind_only_captured_routes(monkeypatch, fused, kind):
-    """The rule follows the row's switches and `tp_allreduce.covered`: captured custom-off routes bind; defaults refuse by name."""
-    refused = _derive_world8_collective(monkeypatch, fused=fused, custom=True)
-    route = "fused" if fused else "fi_ar_comm"
-    assert not refused.ok and (
-        "tp_allreduce.covered() has no entry for setting='defaults', N=6144, "
-        f"route={route!r}, M=1"
-    ) in refused.unsupported.hint, refused.unsupported
-
-    derived = _derive_world8_collective(monkeypatch, fused=fused, custom=False)
+@pytest.mark.parametrize("custom", [True, False], ids=["defaults", "custom-off"])
+def test_world_8_collective_rules_bind_captured_default_and_custom_off_routes(monkeypatch, fused, kind, custom):
+    """Both captured switch settings bind through `tp_allreduce.covered`; no route is admitted merely because its shape matches."""
+    derived = _derive_world8_collective(monkeypatch, fused=fused, custom=custom)
     assert derived.ok, derived.unsupported
     assert [n.fn.id for n in derived.program.fn.body.nodes] == [kind]
 
