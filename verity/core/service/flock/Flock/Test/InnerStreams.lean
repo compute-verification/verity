@@ -237,5 +237,12 @@ def badTops (ns : List Nat) : Option String :=
   why (checkCommitRounds i (c3cs (some r23))) == some ("rec-inner: the inner transcript holds R's stream " ++
     "(stacked/rep0), and the verifier's inner shape names no schedule of R's")
 #guard why (checkCommitRounds { c3 with stacked := none } (withS #[sparseAt 0, sparseAt 1])) == none
+-- the check reads sparse/rep0 and sparse/rep1 only: any other held stream named sparse/… is refused
+def otherSparse (n : String) : Option String :=
+  why (checkCovers c3 (withS #[sparseAt 0, sparseAt 1, stackedAt, { sparseAt 1 with name := n }]))
+
+#guard ["sparse/rep2", "sparse/rep10", "sparse/rep01", "sparse/x", "sparse/"].all fun n => otherSparse n ==
+  some s!"rec inner transcript: it holds {n}, and a sparse phase is one of the two reps' (sparse/rep0, sparse/rep1)"
+#guard otherSparse "sparse-rep2" == none && otherSparse "sparse/rep1" == none
 
 end Flock.Test.InnerStreams
