@@ -149,6 +149,7 @@ class Seq:
         so.sq_progress.argtypes = [v]
         so.sq_prefill_reader.argtypes = [i]
         so.sq_probe.argtypes = [i]
+        so.sq_shape.argtypes = [i, i]
         so.sq_now_ms.argtypes = [v]
         so.sq_now_ms.restype = d
 
@@ -179,6 +180,10 @@ class Seq:
     def prefill_reader(self, stages: int) -> int:
         """The PREFILL role's reader: 0 the 16-byte loads, 2–4 the TMA reader with that many stages."""
         return self.so.sq_prefill_reader(stages)
+
+    def shape(self, step_warps: int, depth: int) -> int:
+        """STEP's and PREFILL's warps a CTA (0: `start`'s), and every role's offsets of loads in flight a warp."""
+        return self.so.sq_shape(step_warps, depth)
 
 
 class Codec:
@@ -378,7 +383,8 @@ def seq_gate(tu: Topup, torch) -> dict:
     then IDLE alone (no BASE): nothing taken while it is off, units while on; then STEP alone: nothing taken until a
     step's begin on a stream, units while the step runs (a sleep kernel), none once it has ended; then PREFILL alone
     the same, beside a step that prefills. Every epoch logged
-    is placed and its receipt checked (`seq_epochs_ok`)."""
+    is placed and its receipt checked (`seq_epochs_ok`). Then every other kernel shape (`SEQ_SHAPES`) through IDLE, and
+    STEP at 16 warps beside IDLE's 4 (`seq_shapes_receipts`)."""
     sq, out = Seq(tu), {}
     store, regions, blobs = gate_regions(torch)
 
@@ -450,6 +456,27 @@ def seq_gate(tu: Topup, torch) -> dict:
     out["seq_roles_bytes"] = {"before_idle": still, "idle": idle_bytes, "between": quiet, "step": step_bytes,
                               "after_step": step_tail, "prefill": pre_bytes, "after_prefill": pre_tail,
                               "launches": list(launches)}
+    # every other kernel shape (`sq_shape`), through IDLE, and STEP at 16 warps beside IDLE at 4
+    shapes = {}
+    for warps, depth, step_warps in sorted((w, d, 0) for w, d in SEQ_SHAPES if (w, d) != (4, 2)) + [(4, 2, 16)]:
+        sq.start(regions, RUN_SEED, base_ctas=0, warps=warps, shift=SEQ_SHIFT_GATE)
+        rc = sq.shape(step_warps, depth)
+        if step_warps:
+            rc |= tu.so.sq_step_begin(2, s.cuda_stream)
+            with torch.cuda.stream(s):
+                torch.cuda._sleep(50_000_000)
+            rc |= tu.so.sq_step_end(s.cuda_stream)
+            s.synchronize()
+        else:
+            tu.so.sq_idle(1, 64)
+            time.sleep(0.03)
+            tu.so.sq_idle(0, 0)
+        settle(sq.progress()[1] + 2)
+        moved = sq.progress()[0]
+        sq.stop()
+        ok, units = seq_epochs_ok(tu.log(), blobs, SEQ_SHIFT_GATE)
+        shapes[f"w{warps}d{depth}" + (f"s{step_warps}" if step_warps else "")] = rc == 0 and ok and units > 0 and moved > 0
+    out["seq_shapes_receipts"] = shapes
     del store
     return out
 
@@ -499,7 +526,7 @@ def read_rate(tu: Topup, torch, filler, reps: int) -> dict:
 
 
 def alone(tu: Topup, torch, filler, seconds: float, chunk: int, depth: int, least: int, fill_chunk: int = 1 << 30,
-          fill_ctas=(), fill_modes=("fill",)) -> dict:
+          fill_ctas=(), fill_modes=("fill",), seq_depths=(2,)) -> dict:
     out = {}
     runs = [(name, mode, 0, 4) for name, mode in MODES.items()]
     runs += [(f"{f}@{c}", MODES["fill"], c, FILL_WARPS[f]) for f in fill_modes for c in fill_ctas]
@@ -513,14 +540,17 @@ def alone(tu: Topup, torch, filler, seconds: float, chunk: int, depth: int, leas
         out[name] = {"GBps": sum(r[2] for r in recs) / span / 1e9, "chunks": len(recs),
                      "chunk_ms_median": statistics.median(r[1] - r[0] for r in recs)}
     sq = Seq(tu)
-    for warps in sorted({FILL_WARPS[f] for f in fill_modes}):
+    for warps, d in [(w, d) for w in sorted({FILL_WARPS[f] for f in fill_modes}) for d in seq_depths
+                     if (w, d) in SEQ_SHAPES]:
         sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=0, warps=warps, priority=least)
+        if sq.shape(0, d):
+            raise RuntimeError(f"sq_shape(0, {d}) refused")
         tu.so.sq_idle(1, 0)
         time.sleep(seconds)
         sq.stop()
         recs = tu.log()[1:]
         span = (recs[-1][1] - recs[0][1]) / 1e3
-        out[f"seq-idle-w{warps}"] = {"GBps": sum(r[2] for r in recs[1:]) / span / 1e9, "epochs": len(recs)}
+        out[f"seq-idle-w{warps}" + (f"d{d}" if d != 2 else "")] = {"GBps": sum(r[2] for r in recs[1:]) / span / 1e9, "epochs": len(recs)}
     return out
 
 
@@ -669,6 +699,7 @@ def phases(tu: Topup, torch, model: Model, filler, R: float, args, least: int, g
     return rows
 
 
+SEQ_SHAPES = {(4, 2), (4, 8), (8, 2), (8, 4), (8, 8), (16, 2)}  # topup.cu's fill_seq_kernel (warps, depth)
 PC_READERS = {"ldef4": (1, 4), "ld4": (0, 4), "bulk2": (2, 2), "bulk4": (2, 4)}  # readers.cu's rd_read (kind, u)
 
 
@@ -679,7 +710,8 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
     copies into S stages of 16 KiB of shared memory), each a train of launches timed by events. Each cell gives the
     prefill's slowdown, the reader's bytes inside the prefills' span, and their cost: the span's added time at R per
     reader byte. A length of 0 is a sleep in the prefill's place (each reader's rate alone), `v2w<W>` runs W warps a
-    CTA (4 by default), and `v2...p<k>` runs v2
+    CTA (4 by default), `v2...d<D>` D offsets of loads in flight a warp (2 by default; `SEQ_SHAPES`), and `v2...p<k>`
+    runs v2
     under `sq_probe(k)` (no hash, no MMAs, or neither: where a warp's time goes; receipts wrong)."""
     rows = []
     high = torch.cuda.Stream(priority=greatest)
@@ -705,10 +737,11 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
             for ctas in args.pc_ctas:
                 torch.cuda.synchronize()
                 if reader.startswith("v2"):
-                    spec = re.fullmatch(r"v2(?:w(\d+))?(?:b(\d))?(?:p(\d))?", reader)
+                    spec = re.fullmatch(r"v2(?:w(\d+))?(?:d(\d))?(?:b(\d))?(?:p(\d))?", reader)
                     sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=0, warps=int(spec[1] or 4),
                              priority=least, step_priority=greatest)
-                    if sq.prefill_reader(int(spec[2] or 0)) or tu.so.sq_probe(int(spec[3] or 0)):
+                    if (sq.shape(0, int(spec[2] or 2)) or sq.prefill_reader(int(spec[3] or 0))
+                            or tu.so.sq_probe(int(spec[4] or 0))):
                         raise RuntimeError(f"{reader} refused")
                     time.sleep(0.02)
 
@@ -949,6 +982,8 @@ def main() -> int:
     ap.add_argument("--encode-grids", type=lambda s: [int(v) for v in s.split(",") if v], default=[16, 32, 64, 128])
     ap.add_argument("--throttle-decode", type=pairs, default=pairs("64x2048"))
     ap.add_argument("--throttle-prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[4096])
+    ap.add_argument("--seq-depths", type=lambda s: [int(x) for x in s.split(",")], default=[2],
+                    help="the seq IDLE rate at each of these depths (offsets of loads in flight a warp)")
     ap.add_argument("--throttle-modes", type=lambda s: s.split(","), default=["read", "b3", "sk16"])
     ap.add_argument("--throttle-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[2, 4, 8, 16, 32, 64])
     ap.add_argument("--fill-chunk-mib", type=int, default=1024)
@@ -988,7 +1023,7 @@ def main() -> int:
     R = res["read"]["R_GBps"]
     log(f"R = {R:.0f} GB/s ({res['read']})")
     res["alone"] = alone(tu, torch, filler, a.alone_s, a.chunk_mib << 20, a.depth, least, a.fill_chunk_mib << 20,
-                         a.throttle_ctas, [m for m in a.throttle_modes if m in FILL_WARPS])
+                         a.throttle_ctas, [m for m in a.throttle_modes if m in FILL_WARPS], a.seq_depths)
     log(f"top-up alone: {res['alone']}")
 
     def save() -> None:

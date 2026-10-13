@@ -776,6 +776,7 @@ constexpr auto IDLE_BACKOFF = std::chrono::microseconds(200);
 struct State {
   int device = 0, warps = 4, base_ctas = 0, sms = 0;
   std::atomic<int> prefill_stages{0};
+  std::atomic<int> step_warps{0}, depth{fl::DEPTH};  // STEP's and PREFILL's warps a CTA (0: `warps`), loads in flight
   std::atomic<int> probe{0};  // fill.cu's PROBE for every launch from now (sq_probe; the receipts are then wrong)  // the PREFILL role's TMA stages (fill.cu's fill_seq_bulk_kernel), 0: 16-byte loads
   uint32_t shift = 8;
   uint64_t base_budget = 4096, idle_budget = 1ull << 22, step_budget = 1ull << 22;
@@ -809,17 +810,19 @@ static int launch(State& st, int role, int grid, unsigned long long* taken, uint
   if (e != cudaSuccess) return (int)e;
 #define SQ_B(S) \
   fl::fill_seq_bulk_kernel<S><<<grid, 32, S * fl::TB_STAGE, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
-  if (const int pr = st.probe.load()) {  // the probes run at 4 or 16 warps, or 3 stages
+  const int sw = st.step_warps.load();
+  const int warps = (role == fl::STEP || role == fl::PREFILL) && sw ? sw : st.warps, depth = st.depth.load();
+  if (const int pr = st.probe.load()) {  // the probes run at 4 or 16 warps and the default depth, or 3 stages
     const int stages = role == fl::PREFILL ? st.prefill_stages.load() : 0;
 #define SQ_P(PR)                                                                                                       \
   if (stages)                                                                                                         \
     fl::fill_seq_bulk_kernel<3, PR><<<grid, 32, 3 * fl::TB_STAGE, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, \
                                                                        taken, budget);                                \
-  else if (st.warps == 16)                                                                                            \
+  else if (warps == 16)                                                                                               \
     fl::fill_seq_kernel<16, PR><<<grid, 512, 0, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget); \
   else                                                                                                                \
     fl::fill_seq_kernel<4, PR><<<grid, 128, 0, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
-    if ((stages && stages != 3) || (!stages && st.warps != 4 && st.warps != 16)) return -1;
+    if ((stages && stages != 3) || (!stages && ((warps != 4 && warps != 16) || depth != fl::DEPTH))) return -1;
     switch (pr) {
       case 1: SQ_P(1); break;
       case 2: SQ_P(2); break;
@@ -839,11 +842,15 @@ static int launch(State& st, int role, int grid, unsigned long long* taken, uint
     return (int)cudaGetLastError();
   }
 #undef SQ_B
-#define SQ_L(W) fl::fill_seq_kernel<W><<<grid, W * 32, 0, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
-  switch (st.warps) {
-    case 4: SQ_L(4); break;
-    case 8: SQ_L(8); break;
-    case 16: SQ_L(16); break;
+#define SQ_L(W, D) \
+  fl::fill_seq_kernel<W, 0, D><<<grid, W * 32, 0, s>>>(st.plan, st.sg, tu::gate, st.seq, st.ring, role, taken, budget)
+  switch (100 * warps + depth) {
+    case 402: SQ_L(4, 2); break;
+    case 408: SQ_L(4, 8); break;
+    case 802: SQ_L(8, 2); break;
+    case 804: SQ_L(8, 4); break;
+    case 808: SQ_L(8, 8); break;
+    case 1602: SQ_L(16, 2); break;
     default: return -1;
   }
 #undef SQ_L
@@ -1029,6 +1036,18 @@ int sq_prefill_reader(int stages) {
     if (cudaError_t e = cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, 4 * (int)fl::TB_STAGE))
       return (int)e;
   sq::S->prefill_stages = stages;
+  return 0;
+}
+
+// STEP's and PREFILL's warps a CTA from now (4, 8 or 16; 0: sq_start's `warps`), and every role's offsets of loads
+// in flight a warp (`depth`: 2, or 8 at 4 warps, or 4 or 8 at 8; fill.cu's fill_seq_kernel D). A launch at a pair it
+// has no kernel for fails.
+int sq_shape(int step_warps, int depth) {
+  if (!sq::S || (step_warps != 0 && step_warps != 4 && step_warps != 8 && step_warps != 16) ||
+      (depth != 2 && depth != 4 && depth != 8))
+    return -1;
+  sq::S->step_warps = step_warps;
+  sq::S->depth = depth;
   return 0;
 }
 

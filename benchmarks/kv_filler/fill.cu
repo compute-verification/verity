@@ -162,21 +162,22 @@ __device__ __forceinline__ void gather(const int (&acc)[4][4], uint32_t (&m)[16]
       }
 }
 
-// The first DEPTH steps' loads of the 32 blocks at `p` (lane (g, c)'s 16 bytes of block 8q + g at 64 d + 16 c).
-__device__ __forceinline__ void preload(uint4 (&v)[DEPTH][4], const uint8_t* __restrict__ p, uint64_t pol) {
+// The first D steps' loads of the 32 blocks at `p` (lane (g, c)'s 16 bytes of block 8q + g at 64 d + 16 c).
+template <int D = DEPTH>
+__device__ __forceinline__ void preload(uint4 (&v)[D][4], const uint8_t* __restrict__ p, uint64_t pol) {
   const int lane = threadIdx.x & 31;
   const uint8_t* src = p + (uint64_t)(lane >> 2) * BLK + 16 * (lane & 3);
 #pragma unroll
-  for (int d = 0; d < DEPTH; ++d)
+  for (int d = 0; d < D; ++d)
 #pragma unroll
     for (int q = 0; q < 4; ++q) v[d][q] = ld_stream(src + (uint64_t)q * 8 * BLK + 64 * d, pol);
 }
 
-// The sketches of 32 blocks at `p` (block 8q + g of group q), its first DEPTH steps already in v (`preload`): lane n's
-// block n, its 16 sums into acc's gather. Offset o's sign fragments depend on the lane and o only, so the four groups
-// share them.
-template <int PROBE = 0>
-__device__ __forceinline__ void sketch_loaded(uint4 (&v)[DEPTH][4], const uint8_t* __restrict__ p,
+// The sketches of 32 blocks at `p` (block 8q + g of group q), its first D steps already in v (`preload`, D divides
+// the 64 steps): lane n's block n, its 16 sums into acc's gather. Offset o's sign fragments depend on the lane and o
+// only, so the four groups share them.
+template <int PROBE = 0, int D = DEPTH>
+__device__ __forceinline__ void sketch_loaded(uint4 (&v)[D][4], const uint8_t* __restrict__ p,
                                               const uint32_t* signs, uint64_t pol, int (&acc)[4][4]) {
   const int lane = threadIdx.x & 31, g = lane >> 2, c = lane & 3;
 #pragma unroll
@@ -188,15 +189,16 @@ __device__ __forceinline__ void sketch_loaded(uint4 (&v)[DEPTH][4], const uint8_
   const uint32_t* sg8 = sg + 8 * (BLK / 32);
   const int sh = (c & 1) * 16;
   constexpr int STEPS = BLK / 64;
-#pragma unroll 2
+  static_assert(STEPS % D == 0, "a slot's index must be static");
+#pragma unroll D
   for (int o = 0; o < STEPS; ++o) {
-    const int slot = o % DEPTH;
+    const int slot = o % D;
     uint4 cur[4];
 #pragma unroll
     for (int q = 0; q < 4; ++q) cur[q] = v[slot][q];
-    if (o + DEPTH < STEPS) {
+    if (o + D < STEPS) {
 #pragma unroll
-      for (int q = 0; q < 4; ++q) v[slot][q] = ld_stream(src + (uint64_t)q * 8 * BLK + 64 * (o + DEPTH), pol);
+      for (int q = 0; q < 4; ++q) v[slot][q] = ld_stream(src + (uint64_t)q * 8 * BLK + 64 * (o + D), pol);
     }
     if (PROBE & NO_MMA) {
 #pragma unroll
@@ -399,11 +401,15 @@ __device__ __forceinline__ uint32_t words_v2(const uint32_t (&m)[16], uint64_t j
   return x;
 }
 
-template <int PROBE = 0>
+template <int PROBE = 0, int D = DEPTH>
 __device__ __forceinline__ uint32_t unit_v2(const uint8_t* __restrict__ p, uint64_t j0, uint64_t pass,
                                         const uint32_t* signs, uint64_t pol) {
+  uint4 v[D][4];
+  int acc[4][4];
   uint32_t m[16];
-  sketch<PROBE>(p, signs, pol, m);
+  preload<D>(v, p, pol);
+  sketch_loaded<PROBE, D>(v, p, signs, pol, acc);
+  gather(acc, m);
   return words_v2<PROBE>(m, j0, pass);
 }
 
@@ -470,7 +476,8 @@ __device__ __forceinline__ void finish(const Signs& sg, const Ring& ring, unsign
   if (U == 0) derive_signs(sg, pass + 1, P);
 }
 
-template <int W, int PROBE = 0>
+// D: the offsets of loads in flight a warp (`sketch_loaded`)
+template <int W, int PROBE = 0, int D = DEPTH>
 __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, Signs sg, const Gate* gate, Seq* seq,
                                                           Ring ring, int role, unsigned long long* taken,
                                                           unsigned long long budget) {
@@ -484,7 +491,7 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, Signs
     const uint64_t U = s % P, pass = s / P;
     acquire_signs(sg, pass, &have);
     const uint32_t* signs = sg.words + (pass % SIGN_SLOTS) * SIGN_WORDS;
-    finish(sg, ring, s, P, unit_v2<PROBE>(unit_at(R, U), U * UNIT_BLOCKS, pass, signs, pol));
+    finish(sg, ring, s, P, unit_v2<PROBE, D>(unit_at(R, U), U * UNIT_BLOCKS, pass, signs, pol));
   }
 }
 

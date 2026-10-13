@@ -209,6 +209,9 @@ def main() -> int:
                          "least)")
     ap.add_argument("--seq-prefill-stages", type=int, default=0,
                     help="seq: the PREFILL kernel's reader, 0 16-byte loads, 2-4 the TMA reader with that many stages")
+    ap.add_argument("--seq-step-warps", type=int, default=0,
+                    help="seq: the STEP and PREFILL kernels' warps a CTA (0: the mode's, as IDLE's)")
+    ap.add_argument("--seq-depth", type=int, default=2, help="seq: every kernel's offsets of loads in flight a warp")
     ap.add_argument("--max-batched-tokens", type=int, default=8192)
     ap.add_argument("--async-scheduling", choices=("default", "on", "off"), default="default")
     ap.add_argument("--shared-prefix", type=int, default=0,
@@ -494,9 +497,12 @@ def main() -> int:
                          step_priority={"greatest": greatest, "default": 0, "least": least}[a.seq_step_priority])
                 if sq.prefill_reader(a.seq_prefill_stages):
                     raise RuntimeError(f"sq_prefill_reader({a.seq_prefill_stages}) refused")
+                if sq.shape(a.seq_step_warps, a.seq_depth):
+                    raise RuntimeError(f"sq_shape({a.seq_step_warps}, {a.seq_depth}) refused")
                 tu.so.sq_idle(1, 0)
                 cur["seq_step"], cur["seq_prefill"] = ctas, int(pat or 0)
                 cur["seq_prefill_stages"] = a.seq_prefill_stages
+                cur["seq_step_warps"], cur["seq_depth"] = a.seq_step_warps, a.seq_depth
                 if a.token_gate:
                     gate_ids = gate_tokens()
                     if not gate_ref:
