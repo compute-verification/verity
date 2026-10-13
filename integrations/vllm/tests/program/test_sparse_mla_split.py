@@ -6,7 +6,6 @@ with their word views."""
 from __future__ import annotations
 
 import hashlib
-import math
 import re
 
 import numpy as np
@@ -155,6 +154,7 @@ def test_the_undetermined_words_are_the_powers_of_two_below_one() -> None:
     x = x[(x & 0x7FFFFF) != 0]
     assert not TW.undetermined_words(x).any()
     assert [W.mufu_lg2_undetermined(int(v)) for v in powers] == TW.undetermined_words(powers).tolist()
+    assert np.array_equal(TW.undetermined_words(powers, TW.mufu_lg2_words(powers)), TW.undetermined_words(powers))
 
 
 # --- the split counts and boundaries --------------------------------------------------------------------------------------------
@@ -198,6 +198,22 @@ def test_no_split_at_bound_one_or_past_the_batch_limit() -> None:
 def test_a_batch_without_keys_is_refused() -> None:
     with pytest.raises(ValueError, match="blocks_per_sm = 0"):
         W.dynamic_num_splits([0, 0], 132, 28)
+
+
+DSA14 = [1, 2, 5, 64, 65, 66, 128, 129, 130, 1001, 2047, 2048, 2048, 2048]
+
+
+@pytest.mark.parametrize("valid,num_splits,want", [
+    (DSA14, 0, [1, 1, 1, 1, 1, 1, 1, 2, 2, 8, 16, 16, 16, 16]),     # vLLM's call: the static bound 28
+    (DSA14, 28, [1, 1, 1, 1, 1, 1, 1, 2, 2, 8, 16, 16, 16, 16]),    # the bound the heuristic takes, given
+    (DSA14, 1, [1] * 14),                                           # the serving pin
+    ([129, 130, 1001, 2048, 2048], 5, [3, 3, 5, 5, 5]),             # a given count bounds each token's
+    ([1] * 991 + [2048], 0, [1] * 991 + [4]),                       # 1023 blocks, 9 per SM
+    ([1] * 992 + [2048], 0, [1] * 993),                             # past MAX_SPLIT_BATCH
+    ([1] * 992 + [2048], 28, [1] * 993),                            # past it a given count is dropped too
+])
+def test_launch_num_splits(valid: list[int], num_splits: int, want: list[int]) -> None:
+    assert W.launch_num_splits(valid, 132, 2048, num_splits) == want
 
 
 @pytest.mark.parametrize("T,NS,want", [

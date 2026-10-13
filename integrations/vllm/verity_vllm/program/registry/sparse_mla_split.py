@@ -44,7 +44,7 @@ Registered functions (all `Name_v1`):
   SparseMlaHeadSplit{T,NS,DR,DV,BN,DOT,INV,SCALE}  (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> DV bf16
   SparseMlaSplit{T,NS,NH,DR,DV,BN,DOT,INV,SCALE}   (q_nope: NH x DV, q_rope: NH x DR, kv: T x (DV+DR)) -> NH x DV bf16
 
-NS is the token's split count (`dynamic_num_splits`), the boundaries `split_blocks(T, NS, BN)`.
+NS is the token's split count (`launch_num_splits`), the boundaries `split_blocks(T, NS, BN)`.
 """
 from __future__ import annotations
 
@@ -218,6 +218,16 @@ def dynamic_num_splits(valid, num_sm: int, bound: int, block_n: int = BLOCK_N) -
     if bps <= 0:
         raise ValueError(f"dynamic_num_splits: {sum(nblk)} blocks give blocks_per_sm = {bps} (the kernel divides by it)")
     return [max(min((n + bps - 1) // bps, bound), 1) for n in nblk]
+
+
+def launch_num_splits(valid, num_sm: int, max_seqlen_k: int, num_splits: int = 0) -> list[int]:
+    """Each token's split count in one varlen decode launch over ``valid`` key counts (`mha_fwd`, flash_api.cpp:1053-1070):
+    ``num_splits`` the call's argument, 0 (vLLM passes none) for `static_num_splits` and any other count the bound in its place,
+    then `dynamic_num_splits` (nothing splits past `MAX_SPLIT_BATCH` tokens).  ``num_sm`` is the device's SM count (vLLM's
+    varlen call passes sm_margin 0)."""
+    valid = [int(t) for t in valid]
+    bound = num_splits if num_splits > 0 else static_num_splits(num_sm, max_seqlen_k, len(valid))
+    return dynamic_num_splits(valid, num_sm, bound)
 
 
 def split_blocks(T: int, NS: int, BN: int = BLOCK_N) -> list[tuple[int, int]]:
