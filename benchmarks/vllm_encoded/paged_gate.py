@@ -94,7 +94,9 @@ def main() -> int:
             re = torch.empty_like(pl[l])
             lib.call("kv_encode", pl[l].data_ptr(), re.data_ptr(), lay.words, lbase[l], k, 0, st)
             torch.cuda.synchronize()
-            pe, ee = bool(torch.equal(ref, pl[l])), bool(torch.equal(re, enc[l]))
+            # bits, not bf16 values: an encoded word's halves include NaNs
+            pe = bool(torch.equal(ref.view(torch.int16), pl[l].view(torch.int16)))
+            ee = bool(torch.equal(re.view(torch.int16), enc[l].view(torch.int16)))
             ok_append &= pe and ee
             if not (pe and ee):
                 dp = (ref.view(torch.int16) != pl[l].view(torch.int16)).view(-1, WB // 2).any(1).nonzero().flatten()
@@ -157,10 +159,10 @@ def main() -> int:
                 o_r = torch.full((b, H * D), 5.0, dtype=torch.bfloat16, device="cuda")
                 P.attn(lib, torch, enc[layer], lay, lbase[layer], 1, k, qp, o_r, part, lens, btd, b, sp, qrow=qrow)
                 torch.cuda.synchronize()
-                equal = bool(torch.equal(o_p, o_e))
+                equal = bool(torch.equal(o_p.view(torch.int16), o_e.view(torch.int16)))
                 zero_pad = bool((o_e[b:] == 0).all())
                 zero_len = all(bool((o_e[i] == 0).all()) for i in range(b) if not lens_l[i])
-                qrow_eq = bool(torch.equal(o_r[qrow.long()], o_e[:b]))
+                qrow_eq = bool(torch.equal(o_r[qrow.long()].view(torch.int16), o_e[:b].view(torch.int16)))
                 m = ref.abs().max().item() or 1.0
                 err = float((o_p[:b].double().view(b, H, D) - ref[:b]).abs().max() / m)
                 ok = equal and zero_pad and zero_len and qrow_eq and err <= RTOL
@@ -179,7 +181,7 @@ def main() -> int:
                 o = torch.empty(20, *pl[l].shape[1:], dtype=torch.bfloat16, device="cuda")
                 P.gather(lib, torch, src, lay, lbase[l], encd, k, blocks, o)
                 torch.cuda.synchronize()
-                ok_g &= bool(torch.equal(o, pl[l][blocks.long()]))
+                ok_g &= bool(torch.equal(o.view(torch.int16), pl[l][blocks.long()].view(torch.int16)))
         g["gather"] = {"blocks": 20, "ok": ok_g}
         g["ok"] = g["append"]["ok"] and att["ok"] and ok_g
         res["ks"][k] = g
