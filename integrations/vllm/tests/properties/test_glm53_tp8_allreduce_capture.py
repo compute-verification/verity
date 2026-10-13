@@ -497,6 +497,10 @@ def test_prefill_takes_the_served_route_else_the_switch() -> None:
         assert not doc["routes"]["served"] and X.prefill_of(doc["routes"]) == "switch"
     doc = _doc()
     doc["probes"]["trees"] = None
+    doc["comparisons"][8]["rank_mismatch"] = 1
+    assert X.prefill_of(_derive(doc)["routes"]) == "switch" and not doc["cases"]["switch/M683"]["ok"]
+    doc = _doc()
+    doc["probes"]["trees"] = None
     doc["comparisons"][7]["mismatch"] = 1
     assert X.prefill_of(_derive(doc)["routes"]) is None
     doc = _doc()

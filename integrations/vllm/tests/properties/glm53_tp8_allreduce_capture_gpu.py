@@ -32,7 +32,8 @@ when it fails (exit 3).
              (`tree_from_clusters`), at B = 2^40 and 2^100 (an accumulator wider than f32 absorbs only the second).  Its specials
              decide FTZ (a subnormal kept or flushed), and -0, NaN and inf sums are compared with the model like every word.
   again      (served_again) the probes in a second set of rank processes, whose trees must be the first set's.
-  switch     (switch) `tensor_model_parallel_all_reduce` at M in `SWITCH_M` against `custom_rows` at `custom_stage`, NCCL past 682.
+  switch     (switch) `tensor_model_parallel_all_reduce` at M in `SWITCH_M` against `custom_rows` at `custom_stage`; past 682 the
+             launch's NCCL route is recorded, outside the switch's verdict (no Program models it and the workload stays below it).
   reference  per launch, the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`) of the word Definition the launch
              binds, on sampled tokens or elements, which the model must equal.
   bind       every Definition binds at GLM-5.3's statics (the multimem one at the probes' trees).
@@ -860,8 +861,7 @@ def routes(doc: dict[str, Any]) -> dict[str, Any]:
               and all_ok(lambda c: c["phase"] == "probe") and all_ok(lambda c: c["phase"] == "again"))
     return {"fused": all_ok(lambda c: c["phase"] == "fused") and all(doc["fma"].get(str(s)) is not None for s in (1, 2)),
             "decode": all_ok(lambda c: c.get("comm") == "fi_ar_comm" and c["phase"] == "allreduce"),
-            "served": served, "switch": all_ok(lambda c: c["phase"] == "switch")
-            and any(c.get("comm") == "ca_comm" for c in cs if c["phase"] == "switch")}
+            "served": served, "switch": all_ok(lambda c: c["phase"] == "switch" and c.get("comm") == "ca_comm")}
 
 
 def prefill_of(r: dict[str, Any]) -> str | None:
