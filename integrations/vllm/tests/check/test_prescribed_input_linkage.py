@@ -379,7 +379,13 @@ def test_arrivals_of_record_follow_the_observed_schedule_only_when_the_populatio
     assert LK.arrivals_of_record(decl, dict(obs_sched, use="declared")) == (decl, False)              # the declaration stands (coverage names why)
     assert LK.arrivals_of_record(decl, None) == (decl, False) and LK.arrivals_of_record(decl, {}) == (decl, False)
     assert LK.arrivals_of_record(decl, dict(obs_sched, observed_arrive_steps={"r0": 0, "r1": 3, "r9": 5})) == ({"r0": 0, "r1": 3}, True)   # unknown ids ignored
-    # the commit_delta wiring: the replay/linkage _arr goes through this one rule, fed the binding record's schedule
+    # the commit_delta wiring: the replay/linkage (and serving rows') _arr goes through this one rule, fed the binding record's schedule
     from pathlib import Path
-    src = "".join((Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / f"{m}.py").read_text() for m in ("commit", "c2_replay"))
-    assert '_arr, _moved = SR.arrivals_of_record(_arr, _sched_r)' in src and '.get("coverage") or {}).get("schedule")' in src
+    from types import SimpleNamespace
+    from verity_vllm.pipeline import c2_replay as C2
+    reqs = [{"request_id": "a", "index": 0, "arrive_step": 0}, {"request_id": "b", "index": 1, "arrive_step": 7}]
+    site = SimpleNamespace(reqs=reqs, row={"commit": {"binding": {"coverage": {"schedule": obs_sched}}}})
+    assert C2.arrivals(site, C2.request_labels(reqs)) == ({"r0": 0, "r1": 3}, True)
+    assert C2.arrivals(SimpleNamespace(reqs=reqs, row={"commit": {}}), C2.request_labels(reqs)) == (decl, False)
+    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "c2_replay.py").read_text()
+    assert '_arr, _moved = arrivals(s, _rl)' in src

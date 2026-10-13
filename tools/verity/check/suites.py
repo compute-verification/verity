@@ -1544,6 +1544,20 @@ def _count(r: Result) -> str:
     return ", ".join(f"{c[k]} {k}" for k in ("passed", "reused", "failed", "error", "skipped") if c.get(k)) or "no tests"
 
 
+def failing_path(out: Path) -> Path:
+    """Beside `--json`'s ``out``: the suites failed so far, rewritten as each one fails, so a check that keeps going is known to
+    have failed while it runs (`research queue drive` reads it through `research status --also`)."""
+    return out.with_name(f"{out.stem}.failed.json")
+
+
+def failing(out: Path, results: list[Result]) -> None:
+    doc = [{"name": r.suite.name, "suite": r.suite.path, "failed_tests": (r.failed_tests or [])[:10],
+            "log": r.log.name if r.log else None} for r in results if r.status == "failed"]
+    tmp = failing_path(out).with_suffix(".tmp")
+    tmp.write_text(json.dumps(doc, indent=1) + "\n")
+    tmp.replace(failing_path(out))
+
+
 def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
     # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check left a 42 GB one on vy-cpu-2, 11 Oct)
@@ -1696,6 +1710,8 @@ def main(argv: list[str] | None = None) -> int:
         r = fut.result()
         r.key = k
         results.append(r)
+        if a.json and r.status == "failed":
+            failing(a.json, results)
         known[s.name] = r.seconds
         u = used(r, paths, deps, tree, lock)
         if a.fresh and r.status == "failed":
@@ -1753,6 +1769,10 @@ def main(argv: list[str] | None = None) -> int:
                 print("        the guard wrote no report, so nothing vouches for what the tests read")
             print("        " + "\n        ".join(r.log.read_text().splitlines()[-25:]) + f"\n        log: {r.log}")
 
+    if a.json and any(r.status == "failed" for r in results):
+        failing(a.json, results)
+    elif a.json:
+        failing_path(a.json).unlink(missing_ok=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(todo))) as pool:
         futures = {pool.submit(start, s, paths): (s, keys[0], paths, deps) for s, paths, keys, deps in todo}
         handled = set()
