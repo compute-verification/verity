@@ -8,11 +8,15 @@
   tests/kernels/attention/test_deepgemm_attention.py:67-91 at d9105ea80) within the tolerance those tests allow: 1 fp8 step;
 * the ue8m0 scale near every power of two and at its edge words (amax 0, subnormal, 1e-4, the largest finite, inf, NaN), where
   `__nv_log2f`'s ceiling is not torch's `ceil(log2)`;
-* the short-row top-k against `i < len ? i : -1`.
+* the short-row top-k against `i < len ? i : -1`;
+* the long-row top-k: `DsaTopKSelection_v1` against its twin, its Boolean v2 against it, and the threshold form v3 and its chunked
+  Boolean v4 against v1 at every threshold class, on every row of special words at the smallest statics, on the capture's kinds
+  of row and the kernels' overflow, and at the served statics on the capture's own rows (``VERITY_VLLM_DSA_SERVED``).
 """
 from __future__ import annotations
 
 import math
+import os
 from fractions import Fraction
 
 import numpy as np
@@ -538,6 +542,293 @@ def test_boolean_topk_selection_is_its_word_view(T: int, N: int) -> None:
     for args in (_arrays(cases), noise):
         got = np.asarray(BS.evaluate_words(v2, *args)).reshape(-1)
         assert np.array_equal(got, np.asarray(E.evaluate_batch(word, *args)).reshape(-1))
+
+
+# --- DsaTopKSelection_v3 and _v4: the threshold witness --------------------------------------------------------------------------
+
+#: the f32 words of the exhaustive rows: both zeros, +-1, both infinities, PTX's NaN and a negative quiet NaN
+_SPECIAL = (0, SIGN, D.f32_bits(1.0), D.f32_bits(-1.0), INF, NEG_INF, NAN_PTX, 0xFFC00000)
+_BATCH = 1 << 16
+
+
+def _key_word(k: int) -> int:
+    """The f32 word whose `order_key` is k."""
+    return k if k >= 0 else D.INT_MAX - k
+
+
+def _threshold_classes(words) -> list[int]:
+    """A threshold word of each class the row's keys tell apart: at each key, just below and just above it, and at both ends."""
+    ks = {int(k) + d for k in D.order_keys(words) for d in (-1, 0, 1)} | {-(1 << 31), (1 << 31) - 1}
+    return sorted(_key_word(k) for k in ks if -(1 << 31) <= k < 1 << 31)
+
+
+def _bit(out) -> np.ndarray:
+    return np.asarray(out).reshape(-1).astype(np.int64)
+
+
+def _i32(v: np.ndarray) -> np.ndarray:
+    v = v.astype(np.int64)
+    return v - ((v >> 31) << 32)
+
+
+def _selections(w: np.ndarray, n: np.ndarray, idx: np.ndarray, thr: np.ndarray | None = None) -> np.ndarray:
+    """v1 (``thr`` None) or v3 on rows of arrays, from their definitions: the shortcut's words up to TOPK, past it TOPK distinct
+    indices in [0, len) with len <= N, and then v1's least member key at least the greatest other key below len, or v3's members'
+    keys at least the threshold's and the others' below len at most it."""
+    N, T = w.shape[1], idx.shape[1]
+    s, ix, j = _i32(n)[:, None], _i32(idx), np.arange(N)
+    short = (ix == np.where(np.arange(T) < s, np.arange(T), -1)).all(1)
+    member = (ix[:, :, None] == j).any(1)
+    tight = ((ix >= 0) & (ix < s)).all(1) & (member.sum(1) == T) & (s[:, 0] <= N)
+    key, live = D.order_keys(w), j < s
+    if thr is None:
+        fits = np.where(member, key, 1 << 32).min(1) >= np.where(~member & live, key, -(1 << 32)).max(1)
+    else:
+        t = D.order_keys(thr)[:, None]
+        fits = ((~member | (key >= t)) & (member | ~live | (key <= t))).all(1)
+    return np.where(s[:, 0] <= T, short, tight & fits).astype(np.int64)
+
+
+def _threshold_agrees(T: int, N: int, Cs, cases, ir: int = 48, twins: int = 2000) -> np.ndarray:
+    """v1 on ``cases`` is 1 exactly when v3 is 1 at some threshold class, and is v3 at `selection_threshold`; v4 at each chunk
+    width of ``Cs`` is v3 at every class (a row of len <= TOPK or past N at two thresholds, 0 and all ones).  v1 and v3 are
+    `_selections` here, checked against the IR oracle on ``ir`` instances spread over them and against the twins
+    (`selection_ok`, `selection_ok_thr`, and `boolean_dsa`'s `chunk_ok` and `final_ok` composed) on ``twins``.  Returns v1."""
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.circuits.evaluation import bits as BS
+    from verity_vllm.program.registry import boolean_dsa as BD
+
+    w, n, idx = _arrays(cases)
+    signed = _i32(n)
+    seen: dict[bytes, list[int]] = {}
+    cls = []
+    for i in range(len(n)):
+        if T < signed[i] <= N:
+            if (k := w[i].tobytes()) not in seen:
+                seen[k] = _threshold_classes(w[i])
+            cls.append(seen[k])
+        else:
+            cls.append([0, M32])
+    rep = np.repeat(np.arange(len(n)), [len(c) for c in cls])
+    thr = np.array([t for c in cls for t in c], np.uint32)
+    got1, got3 = _selections(w, n, idx), np.empty(len(rep), np.int64)
+    for lo in range(0, len(rep), _BATCH):
+        r = rep[lo:lo + _BATCH]
+        args = (w[r], n[r], idx[r], thr[lo:lo + _BATCH])
+        got3[lo:lo + _BATCH] = _selections(*args)
+        for C in Cs:
+            fn = bind(BD.DsaTopKSelectionV4, TOPK=T, N=N, C=C)
+            assert np.array_equal(_bit(BS.evaluate_words(fn, *args)), got3[lo:lo + _BATCH]), (fn.id, lo)
+    assert np.array_equal(np.bincount(rep, got3, len(n)) > 0, got1 == 1)
+    best = np.array([D.selection_threshold(*c) for c in cases], np.uint32)
+    assert np.array_equal(_selections(w, n, idx, best), got1)
+    at = np.unique(np.linspace(0, len(rep) - 1, ir).astype(np.int64))
+    v1, v3 = bind(D.DsaTopKSelection, TOPK=T, N=N), bind(D.DsaTopKSelectionV3, TOPK=T, N=N)
+    assert np.array_equal(_bit(E.evaluate_batch(v3, w[rep[at]], n[rep[at]], idx[rep[at]], thr[at])), got3[at])
+    assert np.array_equal(_bit(E.evaluate_batch(v1, w[rep[at]], n[rep[at]], idx[rep[at]])), got1[rep[at]])
+    for k in np.unique(np.linspace(0, len(rep) - 1, twins).astype(np.int64)):
+        c, t = cases[rep[k]], int(thr[k])
+        assert D.selection_ok(*c) == got1[rep[k]] and D.selection_ok_thr(c[0], c[1], c[2], t) == got3[k], (rep[k], t)
+        for C in Cs:
+            ok = [BD.chunk_ok(c[0][h * C:(h + 1) * C], c[1], c[2], t, T, N, C, h) for h in range(-(-N // C))]
+            assert BD.final_ok(ok, c[1], c[2], T, N) == got3[k], (rep[k], t, C)
+    return got1
+
+
+def test_merge_sort_layers_sort_every_bit_pattern() -> None:
+    """`merge_sort_layers(n)` sorts every 0-1 input up to n = 13 (so every input, by the 0-1 principle), its layers' comparators
+    are disjoint, and at a power of two it is Batcher's network of (k^2 - k + 4) 2^(k-2) - 1 comparators."""
+    from verity_vllm.program.registry import boolean_dsa as BD
+
+    for n in range(1, 14):
+        x = (np.arange(1 << n)[:, None] >> np.arange(n)) & 1
+        for layer in BD.merge_sort_layers(n):
+            ends = [e for ab in layer for e in ab]
+            assert len(set(ends)) == len(ends) and all(a < b < n for a, b in layer)
+            a, b = np.array(layer).T
+            x[:, a], x[:, b] = np.minimum(x[:, a], x[:, b]), np.maximum(x[:, a], x[:, b])
+        assert (np.diff(x, axis=1) >= 0).all(), n
+    for k in range(1, 12):
+        assert sum(map(len, BD.merge_sort_layers(1 << k))) == (k * k - k + 4) * (1 << k) // 4 - 1
+    assert [sum(map(len, BD.merge_sort_layers(t))) for t in (2048, 1024)] == [58367, 24063]
+
+
+@pytest.mark.parametrize("T, N, Cs", [(1, 2, (1, 2)), pytest.param(2, 3, (1, 2, 4), marks=pytest.mark.slow)])
+def test_threshold_selection_on_every_special_row(T: int, N: int, Cs) -> None:
+    """Every row of N words from `_SPECIAL` (signed zeros, infinities and NaNs of both signs, ties), every len in {INT_MIN, -1,
+    0..N+1, INT_MAX} and every TOPK-tuple of indices from {-1, 0..N, 2^31}: v1 is v3 at some threshold and at
+    `selection_threshold`, and v4 is v3 at every threshold class, in chunks of one position, of two with one left over, and of
+    four over three positions (W < 2^w)."""
+    import itertools
+
+    lens = sorted({-(1 << 31), -1, *range(N + 2), (1 << 31) - 1})
+    vals = (-1, *range(N + 1), 1 << 31)
+    rows = [np.array(r, np.uint32) for r in itertools.product(_SPECIAL, repeat=N)]
+    cases = [(r, n & M32, [i & M32 for i in ix]) for r in rows for n in lens for ix in itertools.product(vals, repeat=T)]
+    got = _threshold_agrees(T, N, Cs, cases, ir=256)
+    assert 0 < got.sum() < len(got)
+
+
+def _capture_rows(T: int, N: int, seed: int) -> list[tuple[str, np.ndarray, int]]:
+    """`glm53_dsa_capture_gpu._long_rows`' kinds at N keys, each (name, words, len) with +inf past len: random; ``m`` equal words
+    at the threshold (`ties<m>`) or m consecutive words from 1.0 there (`crowd<m>`), m // 2 of them in the top set beside T - m // 2
+    keys above and the rest below; three +0 and four -0 at the threshold; +inf among the keys; -inf at the threshold; NaNs of both
+    signs."""
+    rng = np.random.default_rng(seed)
+    n = N - 3
+
+    def around(middle: np.ndarray) -> np.ndarray:
+        a = max(T - middle.size // 2, 0)
+        v = np.concatenate([rng.uniform(100, 200, a), middle, rng.uniform(-200, -100, n - a - middle.size)]).astype(np.float32)
+        return v[rng.permutation(n)]
+
+    one = np.float32(1.0).view(np.uint32)
+    rows = [("random", rng.standard_normal(n).astype(np.float32))]
+    for m in sorted({2, T, 2 * T}):
+        rows += [(f"ties{m}", around(np.full(m, 2.0, np.float32))),
+                 (f"crowd{m}", around((one + np.arange(m, dtype=np.uint32)).view(np.float32)))]
+    rows.append(("zeros", around(np.array([0.0] * 3 + [-0.0] * 4, np.float32))))
+    pinf = rng.standard_normal(n).astype(np.float32)
+    pinf[rng.choice(n, 3, replace=False)] = np.inf
+    ninf = np.full(n, -np.inf, np.float32)
+    ninf[rng.choice(n, T - max(1, T // 4), replace=False)] = rng.standard_normal(T - max(1, T // 4))
+    nan = rng.standard_normal(n).astype(np.float32)
+    nan[rng.choice(n, 4, replace=False)] = np.array([0x7FC00000] * 2 + [0xFFC00000] * 2, np.uint32).view(np.float32)
+    rows += [("pinf", pinf), ("ninf", ninf), ("nan", nan)]
+    out = []
+    for name, v in rows:
+        full = np.full(N, np.inf, np.float32)
+        full[:n] = v
+        out.append((name, full.view(np.uint32), n))
+    return out
+
+
+def _overflowed(words: np.ndarray, n: int, T: int) -> list[int]:
+    """What a kernel past its tie capacity writes: every key above the threshold key's coarse class (its sign and exponent), then
+    the class's first keys by index."""
+    key = D.order_keys(words[:n])
+    t = np.sort(key)[::-1][T - 1]
+    coarse = (words[:n].astype(np.int64) >> 23)
+    cls = coarse == coarse[np.flatnonzero(key == t)[0]]
+    above = np.flatnonzero(~cls & (key > t))
+    return [int(i) for i in np.concatenate([above, np.flatnonzero(cls)[:T - above.size]])]
+
+
+@pytest.mark.parametrize("T, N, Cs", [pytest.param(16, 64, (16, 8), marks=pytest.mark.slow), (5, 37, (8, 4))])
+def test_threshold_selection_on_the_captures_kinds_of_row(T: int, N: int, Cs) -> None:
+    """The capture's kinds of long row (`_capture_rows`) at small statics, each with its exact top set in a random order, and the
+    kernels' overflow (`_overflowed`), a selected +0 swapped for a -0, and the least selected key swapped for the greatest left
+    out: v1 is v3 at some threshold and at `selection_threshold`, v4 (chunks of 16 or 8 over 64 keys; of 8 or 4 over 37, the last
+    ragged) v3 at every threshold class, and the twins agree; the exact sets and the ties' overflow pass, the crowds' overflow and
+    the swaps fail.  Then `_selection_cases`, the same way."""
+    rng = np.random.default_rng(T * 1000 + N + 2)
+    cases, want = [], {}
+    for name, w, n in _capture_rows(T, N, T + N):
+        key = D.order_keys(w[:n])
+        top = _top(w, n, T, rng)
+        rest = [j for j in range(n) if j not in top]
+        lo, hi = min(top, key=lambda j: key[j]), max(rest, key=lambda j: key[j])
+        over = _overflowed(w, n, T)
+        for kind, idx, ok in (("exact", top, True), ("overflow", over, None),
+                              ("swap", [hi if j == lo else j for j in top], False if key[lo] != key[hi] else None)):
+            want[name, kind] = (len(cases), ok)
+            cases.append((w, n, idx))
+        if name == "zeros":
+            plus, minus = [j for j in top if w[j] == 0], [j for j in rest if w[j] == SIGN]
+            want[name, "-0 for +0"] = (len(cases), False)
+            cases.append((w, n, [minus[0] if j == plus[0] else j for j in top]))
+    got = _threshold_agrees(T, N, Cs, cases)
+    assert {k: got[i] for k, (i, ok) in want.items() if ok is not None} == {k: ok for k, (_i, ok) in want.items() if ok is not None}
+    assert got[want["ties" + str(2 * T), "overflow"][0]] == 1 and got[want["crowd" + str(2 * T), "overflow"][0]] == 0
+    assert got[want["zeros", "overflow"][0]] == 1
+    more, _ = _selection_cases(T, N, T * 1000 + N + 3)
+    _threshold_agrees(T, N, Cs, more)
+
+
+def test_threshold_twin_on_the_capture_rows() -> None:
+    """The capture's own long rows (`_long_rows`, both top-ks, up to 262,144 keys): at each row's exact top set and at the kernels'
+    overflow of the threshold's coarse class, v3's twin at `selection_threshold` is v1's; every exact set and every ties row's
+    overflow passes, every crowd's overflow fails."""
+    from tests.properties import glm53_dsa_capture_gpu as X
+
+    for topk in X.LONG_TOPKS:
+        vals, lens, names = X._long_rows(topk, 13 + topk)
+        rng = np.random.default_rng(topk)
+        for v, n, name in zip(vals.view(np.uint32), lens, names):
+            for idx, kind in ((_top(v, n, topk, rng), "exact"), (_overflowed(v, n, topk), "overflow")):
+                ok = D.selection_ok(v, n, idx)
+                assert D.selection_ok_thr(v, n, idx, D.selection_threshold(v, n, idx)) == ok, (topk, name, kind)
+                if kind == "exact" or name.startswith(("ties", "crowd")):
+                    assert ok == (kind == "exact" or name.startswith("ties")), (topk, name, kind)
+
+
+def test_v4_is_v3_on_bits_and_its_chunks_are_units_at_the_root() -> None:
+    """The switch maps v3 to v4 at the served chunk (v1 still to v2); under `Q_word` and `Q_call` one Call of v4 is one unit, and
+    v4's body at a Program's root (`topk_selection_calls`) is one unit per chunk and the final."""
+    from verity.ml.circuits import partition_object as PO
+    from verity.ml.circuits.boolean import trace as TR
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.program import Program
+    from verity_vllm.program import boolean as SW
+    from verity_vllm.program.registry import boolean_dsa as BD
+
+    v3 = bind(D.DsaTopKSelectionV3, TOPK=16, N=64)
+    assert SW.boolean_version(v3).id == bind(BD.DsaTopKSelectionV4, TOPK=16, N=64, C=BD.CHUNK).id
+    assert SW.boolean_version(bind(D.DsaTopKSelection, TOPK=16, N=64)).id == bind(BD.DsaTopKSelectionV2, TOPK=16, N=64).id
+    v4 = bind(BD.DsaTopKSelectionV4, TOPK=16, N=64, C=16)
+    assert TR.word_of(v4).id == v3.id
+    params, ret = v4.signature()
+    one = Program(CompositeDefinition("OneCallOfV4", 1, (), lambda S: (tuple(params), ret), lambda B, S, *x: B.call(v4, *x),
+                                      register=False))
+    for q in (PO.query(), PO.call_query()):
+        assert PO.evaluate(one, q).population == 1
+        assert PO.evaluate(Program(v4), q).population == 5
+    assert [fn.id for _k, fn in PO.calls(Program(v4))] == [f"DsaTopKChunk_v1{{TOPK=16,N=64,C=16,H={h}}}" for h in range(4)] + [
+        "DsaTopKFinal_v1{TOPK=16,N=64,C=16}"]
+
+
+#: v4's chunks at the served statics on the capture's rows (``VERITY_VLLM_DSA_SERVED``): GLM-5.3's top-2048 of 131,072 keys in 8
+#: chunks and DeepSeek-V4-Pro's top-1024 of 262,144 in 16
+SERVED = os.environ.get("VERITY_VLLM_DSA_SERVED")
+_SERVED_CHUNKS = [(2048, 131072, h) for h in range(8)] + [(1024, 262144, h) for h in range(16)]
+
+
+@pytest.mark.skipif(not SERVED, reason="VERITY_VLLM_DSA_SERVED: v4's 24 chunks at the served statics, each about 4.5M ANDs "
+                                       "traced (a few minutes and several GB each)")
+@pytest.mark.parametrize("T, N, H", _SERVED_CHUNKS)
+def test_served_chunk_on_the_capture_rows(T: int, N: int, H: int) -> None:
+    """Chunk H of v4 at a served statics (chunks of `CHUNK`), on bits, against `chunk_ok` on the capture's long rows at that top-k,
+    each with its exact top set and the kernels' overflow, at `selection_threshold` and one key above it; on the last chunk the
+    final against `final_ok` on the twins' chunk bits, and `final_ok` of those against v1's twin."""
+    from tests.properties import glm53_dsa_capture_gpu as X
+    from verity.ml.circuits.evaluation import bits as BS
+    from verity_vllm.program.registry import boolean_dsa as BD
+
+    C = BD.CHUNK
+    vals, lens, _names = X._long_rows(T, 13 + T)
+    words = vals.view(np.uint32)[:, :N]
+    rng = np.random.default_rng(T)
+    cases = []
+    for v, n in zip(words, lens):
+        m = min(int(n), N)
+        for idx in (_top(v, m, T, rng), _overflowed(v, m, T)):
+            t = D.selection_threshold(v, n, idx)
+            cases += [(v, int(n), idx, t), (v, int(n), idx, _key_word(int(D.order_keys(np.array([t]))[0]) + 1))]
+    lo, hi = H * C, min(N, (H + 1) * C)
+    fn = bind(BD.DsaTopKChunk, TOPK=T, N=N, C=C, H=H)
+    got = _bit(BS.evaluate_words(fn, np.stack([c[0][lo:hi] for c in cases]), np.array([c[1] for c in cases], np.uint32),
+                                 np.array([c[2] for c in cases], np.uint32), np.array([c[3] for c in cases], np.uint32)))
+    want = [BD.chunk_ok(c[0][lo:hi], c[1], c[2], c[3], T, N, C, H) for c in cases]
+    BD.DsaTopKChunk._cache.pop(fn.key, None)
+    assert got.tolist() == [int(x) for x in want]
+    if hi < N:
+        return
+    ok = np.array([[BD.chunk_ok(c[0][h * C:(h + 1) * C], c[1], c[2], c[3], T, N, C, h) for h in range(N // C)] for c in cases])
+    fin = _bit(BS.evaluate_words(bind(BD.DsaTopKFinal, TOPK=T, N=N, C=C), (ok @ (1 << np.arange(N // C))).astype(np.uint32),
+                                 np.array([c[1] for c in cases], np.uint32), np.array([c[2] for c in cases], np.uint32)))
+    assert fin.tolist() == [int(BD.final_ok(o, c[1], c[2], T, N)) for o, c in zip(ok, cases)]
+    assert fin.tolist() == [int(D.selection_ok_thr(c[0], c[1], c[2], c[3])) for c in cases]
+    assert [D.selection_ok(*c[:3]) for c in cases[::2]] == [bool(f) for f in fin[::2]]
 
 
 # --- vLLM's torch references ---------------------------------------------------------------------------------------------------
