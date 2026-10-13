@@ -480,6 +480,7 @@ extern "C" int flag_set(void* flag, int v, void* stream) {
 // filler's, the minimum partition and the co-scheduled alignment.  *s_fill is null when nothing remains.  Returns 0, or
 // 1000 * the failing stage + its CUresult (stage 1 a missing driver symbol).
 #include <dlfcn.h>
+#include <vector>
 template <class F> static F drv(const char* name) {
   static void* h = dlopen("libcuda.so.1", RTLD_NOW | RTLD_GLOBAL);
   return h ? reinterpret_cast<F>(dlsym(h, name)) : nullptr;
@@ -521,33 +522,35 @@ extern "C" int gc_split(int n_step, int prio_step, int prio_fill, void** s_step,
   *s_fill = b;
   return 0;
 }
-// Nested green contexts for a partition chosen per step: the SMs split into a base of at least n_base and the rest, the
-// rest into a group of at least n_mid and a remainder.  s[0] the step's stream on base + mid (the narrow filler beside it),
-// s[1] its stream on base alone (the wide filler beside it), s[2] the narrow filler's on the remainder, s[3] the wide
-// filler's on mid + remainder.  got: base, mid, remainder SMs.
+// Nested green contexts for a partition chosen per step: the SMs split into groups of n_mid, n_base / n_mid + 1 of them,
+// and the remainder; base is all groups but the last, mid the last.  s[0] the step's stream on base + mid (the narrow
+// filler beside it), s[1] its stream on base alone (the wide filler beside it), s[2] the narrow filler's on the
+// remainder, s[3] the wide filler's on mid + remainder.  got: base, mid, remainder SMs.
 extern "C" int gc_nest(int n_base, int n_mid, int prio_step, int prio_fill, void** s, int* got) {
   auto dget = drv<decltype(&cuDeviceGet)>("cuDeviceGet");
   auto res = drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");
   auto split = drv<decltype(&cuDevSmResourceSplitByCount)>("cuDevSmResourceSplitByCount");
   if (!dget || !res || !split) return 1000;
+  if (n_mid < 1 || n_base % n_mid) return 7998;
   cudaFree(nullptr);
   CUdevice dev;
-  CUdevResource all{}, base{}, rest{}, mid{}, rem{};
-  unsigned nb = 1;
+  CUdevResource all{}, rem{};
+  const unsigned want = (unsigned)(n_base / n_mid + 1);
+  std::vector<CUdevResource> grp(want);
+  unsigned nb = want;
   int e;
   if ((e = dget(&dev, 0))) return 2000 + e;
   if ((e = res(dev, &all, CU_DEV_RESOURCE_TYPE_SM))) return 2000 + e;
-  if ((e = split(&base, &nb, &all, &rest, 0, (unsigned)n_base))) return 3000 + e;
-  nb = 1;
-  if ((e = split(&mid, &nb, &rest, &rem, 0, (unsigned)n_mid))) return 7000 + e;
-  if (!rem.sm.smCount) return 7999;
-  got[0] = (int)base.sm.smCount;
-  got[1] = (int)mid.sm.smCount;
+  if ((e = split(grp.data(), &nb, &all, &rem, 0, (unsigned)n_mid))) return 3000 + e;
+  if (nb != want || !rem.sm.smCount) return 7999;
+  got[0] = 0;
+  for (unsigned i = 0; i + 1 < nb; i++) got[0] += (int)grp[i].sm.smCount;
+  got[1] = (int)grp[nb - 1].sm.smCount;
   got[2] = (int)rem.sm.smCount;
-  CUdevResource narrow_step[2] = {base, mid}, wide_fill[2] = {mid, rem};
+  CUdevResource wide_fill[2] = {grp[nb - 1], rem};
   CUstream st[4] = {};
-  if ((e = green(narrow_step, dev, prio_step, &st[0], 2))) return e;
-  if ((e = green(&base, dev, prio_step, &st[1]))) return e;
+  if ((e = green(grp.data(), dev, prio_step, &st[0], nb))) return e;
+  if ((e = green(grp.data(), dev, prio_step, &st[1], nb - 1))) return e;
   if ((e = green(&rem, dev, prio_fill, &st[2]))) return e;
   if ((e = green(wide_fill, dev, prio_fill, &st[3], 2))) return e;
   for (int i = 0; i < 4; i++) s[i] = st[i];

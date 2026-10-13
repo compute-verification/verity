@@ -246,10 +246,10 @@ def main() -> None:
         except (ImportError, AttributeError):
             continue
 
-    steps_cap = args.steps + max(batches) * max(contexts) // 2048 + 16
+    steps_cap = args.steps + max(batches) * max(map(max, contexts)) // 2048 + 16
     cc = {"cudagraph_capture_sizes": CAPTURE, "mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY"}
     kw = {"model": args.model, "quantization": "fp8", "max_num_seqs": max(CAPTURE), "enable_prefix_caching": False, "seed": 0,
-          "max_model_len": max(contexts) + steps_cap + 64, "max_num_batched_tokens": 2048,
+          "max_model_len": max(map(max, contexts)) + steps_cap + 64, "max_num_batched_tokens": 2048,
           "gpu_memory_utilization": args.mem, "enforce_eager": False, "compilation_config": cc}
     t0 = time.perf_counter()
     llm = LLM(**kw)
