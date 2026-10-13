@@ -10,11 +10,16 @@ Arms (``--arm``):
   gc:N:fill:D the same at duty D: each CTA idles its tile time x (1 / D - 1) after each tile, the tile time measured
               before vLLM starts (the filler alone on every SM, `Fill.tile_ns`)
   gc:N:rcpt[:D] the same with the receipts store: each tile writes its sketch-sha512 receipts (receipt.py), not the fold
+  pc:A:B:rcpt[:D] the partition chosen per step by the running requests' mean context: at most --narrow-ctx, the step on
+              A SMs and the receipt filler on the rest; above it, the step on B < A SMs and the filler on the rest (fill.cu's
+              `gc_nest`: the step's two streams nested, the filler's too). The step switches stream between steps, the
+              new one waiting on the old, and the pump launches each chunk on the partition the current step leaves
 
 How the step is confined: before vLLM starts, the step's green-context stream becomes torch's current stream, so vLLM
 captures its CUDA graphs and launches its eager kernels there (`gc_split`'s `sm_spread` check: a green context's
 launches, direct and from a graph, stay on its SMs). Each arm records the stream `execute_model` ran on, which must be
-the green one.
+the green one (for `pc`, one of its two; a graph captured on either and replayed on the other stays on the replay
+stream's SMs, `nest_check`).
 
 Gates: each arm generates fixed prompts greedily (`gate`: token ids and log-probs), which compare_fill.py requires to be
 bit-identical to the stock arm's; a filled arm's fold (or receipts) is checked against `gemm_pearlc_d`'s words (receipt.py's
@@ -23,6 +28,8 @@ problem).
 
 A decode step's time is serve.py's: the interval between consecutive scheduler updates that both scheduled exactly B
 decode tokens for B requests, the median over the point's steady decode.
+
+A context `A+B` is a mixed batch: half its requests at A tokens, half at B (the point's `context` their mean, `mix` both).
 
   python serve_fill.py --lib libfill.so --model DIR --arm gc:128:fill --out OUT.json [--batches 16,32] [--contexts 512,4096]
 """
@@ -107,10 +114,14 @@ class Fill:
         lib.l.fill_pump_tiles.restype = C.c_longlong
         lib.l.fill_pump_stop.argtypes = [C.POINTER(C.c_int)]
         lib.l.fill_pump_stop.restype = C.c_longlong
+        lib.l.fill_pump_alt.argtypes = [C.c_void_p, C.c_int]
+        lib.l.fill_pump_set_wide.argtypes = [C.c_int]
         self.args = None
 
-    def start(self) -> None:
+    def start(self, wide=None) -> None:
         f = self.f
+        if wide is not None:
+            self.lib.l.fill_pump_alt(C.c_void_p(wide[0].cuda_stream), wide[1])
         f.poison()
         torch.cuda.synchronize()
         self.args = f.args(0, 0, log=False, stop=False, gap_ns=self.gap_ns)
@@ -151,18 +162,43 @@ def main() -> None:
     ap.add_argument("--steps", type=int, default=64)
     ap.add_argument("--gate-tokens", type=int, default=32)
     ap.add_argument("--mem", type=float, default=0.80)
+    ap.add_argument("--narrow-ctx", type=int, default=512, help="arm pc: the mean context at or below which the step is wide")
     args = ap.parse_args()
     batches = [int(x) for x in args.batches.split(",")]
-    contexts = [int(x) for x in args.contexts.split(",")]
+    contexts = [[int(y) for y in x.split("+")] for x in args.contexts.split(",")]
     parts = args.arm.split(":")
-    if parts[0] not in ("stock", "gc") or (parts[0] == "gc" and len(parts) not in (2, 3, 4)) or \
+    if parts[0] == "pc" and len(parts) in (4, 5) and parts[3] == "rcpt" and int(parts[2]) < int(parts[1]):
+        pass
+    elif parts[0] not in ("stock", "gc") or (parts[0] == "gc" and len(parts) not in (2, 3, 4)) or \
             (len(parts) >= 3 and parts[2] not in ("fill", "rcpt")):
-        ap.error("--arm stock | gc:N | gc:N:fill[:D] | gc:N:rcpt[:D]")
+        ap.error("--arm stock | gc:N | gc:N:fill[:D] | gc:N:rcpt[:D] | pc:A:B:rcpt[:D]")
 
     lib = B.Lib(args.lib)
     sms = torch.cuda.get_device_properties(0).multi_processor_count
     result: dict = {"arm": args.arm, "sms": sms, "gate": [], "points": []}
     fill = None
+    nest = None
+    if parts[0] == "pc":
+        g = lib.gc_nest(int(parts[2]), int(parts[1]) - int(parts[2]), -5, 0)
+        if "error" in g:
+            raise SystemExit(f"gc_nest: {g['error']}")
+        nest = g
+        rem, wide_fill = g["rem_sms"], g["mid_sms"] + g["rem_sms"]
+        on = {k: lib.sm_set(g[a], g[b], 4 * sms) for k, a, b in
+              (("narrow_on_wide", "step_narrow", "step_wide"), ("wide_on_narrow", "step_wide", "step_narrow"),
+               ("wide_on_wide", "step_wide", "step_wide"), ("fill_wide", "fill_wide", "fill_wide"),
+               ("fill_narrow", "fill_narrow", "fill_narrow"))}
+        result["green"] = {"base_sms": g["base_sms"], "mid_sms": g["mid_sms"], "rem_sms": rem,
+                           "nest_check": {k: len(v) for k, v in on.items()},
+                           "nest_ok": on["narrow_on_wide"] <= on["wide_on_wide"] and not (on["wide_on_wide"] & on["fill_wide"])
+                           and len(on["wide_on_narrow"]) == g["base_sms"] + g["mid_sms"]
+                           and not (on["wide_on_narrow"] & on["fill_narrow"])}
+        torch.cuda.set_stream(g["step_narrow"])
+        result["step_stream"] = [g["step_narrow"].cuda_stream, g["step_wide"].cuda_stream]
+        fill = Fill(lib, g["fill_narrow"], rem, sms, duty=float(parts[4]) if len(parts) == 5 else 1.0, store="rcpt")
+        result["filler"] = {"tile": 128, "store": fill.store, "grid": [rem, wide_fill], "shape": [4096, 4096, 8192],
+                            "credit_w1_per_tile": fill.credit, "duty": fill.duty, "tile_ns": fill.tile_ns,
+                            "gap_ns": fill.gap_ns, "narrow_ctx": args.narrow_ctx}
     if parts[0] == "gc":
         g = lib.gc_split(int(parts[1]), -5, 0)
         if "error" in g:
@@ -186,9 +222,19 @@ def main() -> None:
 
     hooks = Hooks(tag="ra-fill-compute")
     seen = set()
+    want = {"wide": False}
+    switches = {"to_wide": 0, "to_narrow": 0}
 
     def runner_hook(orig):
         def execute_model(self, *a, **kw):
+            if nest is not None:
+                cur = torch.cuda.current_stream()
+                new = nest["step_wide"] if want["wide"] else nest["step_narrow"]
+                if new.cuda_stream != cur.cuda_stream:
+                    new.wait_stream(cur)
+                    torch.cuda.set_stream(new)
+                    lib.l.fill_pump_set_wide(int(want["wide"]))
+                    switches["to_wide" if want["wide"] else "to_narrow"] += 1
             seen.add(torch.cuda.current_stream().cuda_stream)
             return orig(self, *a, **kw)
         return execute_model
@@ -213,13 +259,19 @@ def main() -> None:
                              "heads": hf.num_attention_heads, "kv_heads": hf.num_key_value_heads, "vocab": hf.vocab_size}
     rec: list = []
 
+    sched = get_scheduler(llm)
+
     def make(orig):
         def update_from_output(so, mro):
             rec.append((time.perf_counter(), so.total_num_scheduled_tokens, len(so.num_scheduled_tokens)))
-            return orig(so, mro)
+            out_ = orig(so, mro)
+            if nest is not None:
+                run = sched.running
+                want["wide"] = bool(run) and sum(r.num_computed_tokens for r in run) / len(run) > args.narrow_ctx
+            return out_
         return update_from_output
 
-    hooks.wrap(get_scheduler(llm), "update_from_output", make)
+    hooks.wrap(sched, "update_from_output", make)
     out = Path(args.out)
 
     def save() -> None:
@@ -227,7 +279,7 @@ def main() -> None:
 
     sp = SamplingParams(temperature=0.0, max_tokens=args.gate_tokens, logprobs=1, seed=0)
     if fill:
-        fill.start()
+        fill.start(None if nest is None else (nest["fill_wide"], nest["mid_sms"] + nest["rem_sms"]))
     for o in llm.generate(GATE_PROMPTS, sp, use_tqdm=False):
         c = o.outputs[0]
         result["gate"].append({"prompt": o.prompt, "token_ids": list(c.token_ids),
@@ -237,9 +289,11 @@ def main() -> None:
     rng = random.Random(0)
     llm.generate([TokensPrompt(prompt_token_ids=[rng.randrange(1000, 120000) for _ in range(512)])],
                  SamplingParams(temperature=0.0, max_tokens=16, ignore_eos=True, detokenize=False), use_tqdm=False)
-    for ctx in contexts:
+    for mix in contexts:
+        ctx = sum(mix) // len(mix)
         for b in batches:
-            prompts = [TokensPrompt(prompt_token_ids=[rng.randrange(1000, 120000) for _ in range(ctx)]) for _ in range(b)]
+            prompts = [TokensPrompt(prompt_token_ids=[rng.randrange(1000, 120000) for _ in range(mix[i * len(mix) // b])])
+                       for i in range(b)]
             mt = args.steps + b * ctx // 2048 + 8
             rec.clear()
             n0 = fill.tiles() if fill else 0
@@ -247,7 +301,10 @@ def main() -> None:
             llm.generate(prompts, SamplingParams(temperature=0.0, max_tokens=mt, ignore_eos=True, detokenize=False),
                          use_tqdm=False)
             wall = time.perf_counter() - t
-            point = {"batch": b, "context": ctx, **steady(rec, b), "wall_s": wall, "max_tokens": mt}
+            point = {"batch": b, "context": ctx, **({"mix": mix} if len(mix) > 1 else {}), **steady(rec, b), "wall_s": wall,
+                     "max_tokens": mt}
+            if nest is not None:
+                point["switches"] = dict(switches)
             if fill:
                 n = fill.tiles() - n0
                 fl = n * (fill.f.fp8_flops_tile + fill.f.bf16_flops_tile)
@@ -262,6 +319,8 @@ def main() -> None:
         result["filler"]["check"] = fill.check(n)
         log("filler check", result["filler"]["check"])
     result["streams_seen"] = sorted(seen)
+    if nest is not None:
+        result["switches"] = switches
     hooks.uninstall()
     result["complete"] = True
     save()

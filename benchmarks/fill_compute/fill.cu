@@ -484,7 +484,7 @@ template <class F> static F drv(const char* name) {
   static void* h = dlopen("libcuda.so.1", RTLD_NOW | RTLD_GLOBAL);
   return h ? reinterpret_cast<F>(dlsym(h, name)) : nullptr;
 }
-static int green(CUdevResource* r, CUdevice dev, int prio, CUstream* s) {
+static int green(CUdevResource* r, CUdevice dev, int prio, CUstream* s, unsigned nr = 1) {
   auto gen = drv<decltype(&cuDevResourceGenerateDesc)>("cuDevResourceGenerateDesc");
   auto mk = drv<decltype(&cuGreenCtxCreate)>("cuGreenCtxCreate");
   auto st = drv<decltype(&cuGreenCtxStreamCreate)>("cuGreenCtxStreamCreate");
@@ -492,7 +492,7 @@ static int green(CUdevResource* r, CUdevice dev, int prio, CUstream* s) {
   CUdevResourceDesc d;
   CUgreenCtx g;
   int e;
-  if ((e = gen(&d, r, 1))) return 4000 + e;
+  if ((e = gen(&d, r, nr))) return 4000 + e;
   if ((e = mk(&g, d, dev, CU_GREEN_CTX_DEFAULT_STREAM))) return 5000 + e;
   if ((e = st(s, g, CU_STREAM_NON_BLOCKING, prio))) return 6000 + e;
   return 0;
@@ -521,6 +521,38 @@ extern "C" int gc_split(int n_step, int prio_step, int prio_fill, void** s_step,
   *s_fill = b;
   return 0;
 }
+// Nested green contexts for a partition chosen per step: the SMs split into a base of at least n_base and the rest, the
+// rest into a group of at least n_mid and a remainder.  s[0] the step's stream on base + mid (the narrow filler beside it),
+// s[1] its stream on base alone (the wide filler beside it), s[2] the narrow filler's on the remainder, s[3] the wide
+// filler's on mid + remainder.  got: base, mid, remainder SMs.
+extern "C" int gc_nest(int n_base, int n_mid, int prio_step, int prio_fill, void** s, int* got) {
+  auto dget = drv<decltype(&cuDeviceGet)>("cuDeviceGet");
+  auto res = drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");
+  auto split = drv<decltype(&cuDevSmResourceSplitByCount)>("cuDevSmResourceSplitByCount");
+  if (!dget || !res || !split) return 1000;
+  cudaFree(nullptr);
+  CUdevice dev;
+  CUdevResource all{}, base{}, rest{}, mid{}, rem{};
+  unsigned nb = 1;
+  int e;
+  if ((e = dget(&dev, 0))) return 2000 + e;
+  if ((e = res(dev, &all, CU_DEV_RESOURCE_TYPE_SM))) return 2000 + e;
+  if ((e = split(&base, &nb, &all, &rest, 0, (unsigned)n_base))) return 3000 + e;
+  nb = 1;
+  if ((e = split(&mid, &nb, &rest, &rem, 0, (unsigned)n_mid))) return 7000 + e;
+  if (!rem.sm.smCount) return 7999;
+  got[0] = (int)base.sm.smCount;
+  got[1] = (int)mid.sm.smCount;
+  got[2] = (int)rem.sm.smCount;
+  CUdevResource narrow_step[2] = {base, mid}, wide_fill[2] = {mid, rem};
+  CUstream st[4] = {};
+  if ((e = green(narrow_step, dev, prio_step, &st[0], 2))) return e;
+  if ((e = green(&base, dev, prio_step, &st[1]))) return e;
+  if ((e = green(&rem, dev, prio_fill, &st[2]))) return e;
+  if ((e = green(wide_fill, dev, prio_fill, &st[3], 2))) return e;
+  for (int i = 0; i < 4; i++) s[i] = st[i];
+  return 0;
+}
 
 // The pump: a native thread (no GIL, beside an engine that runs Python) that keeps `depth` chunks of `per` tiles a CTA over
 // `grid` CTAs queued on `stream`, each the next queue positions, so the filler never holds the device for longer than
@@ -534,6 +566,15 @@ static std::thread pump_thread;
 static std::atomic<bool> pump_on{false};
 static std::atomic<long long> pump_done_tiles{0};
 static int pump_rc = 0;
+static std::atomic<bool> pump_wide{false};
+static cudaStream_t pump_alt_stream = nullptr;
+static int pump_alt_grid = 0;
+// A second stream and grid for the pump (the wide partition), used for each launch while fill_pump_set_wide(1) holds.
+extern "C" void fill_pump_alt(void* stream, int grid) {
+  pump_alt_stream = (cudaStream_t)stream;
+  pump_alt_grid = grid;
+}
+extern "C" void fill_pump_set_wide(int on) { pump_wide = on != 0; }
 extern "C" int fill_pump_start(int minb, int store, int grid, int per, int depth, const Args* a, void* stream) {
   const void* fn = fill_fn(0, minb, store);
   if (!fn || pump_on.load() || depth < 1) return -1;
@@ -546,7 +587,6 @@ extern "C" int fill_pump_start(int minb, int store, int grid, int per, int depth
     std::vector<cudaEvent_t> ev(depth);
     std::vector<long long> n(depth, 0);
     for (auto& e : ev) cudaEventCreateWithFlags(&e, cudaEventDisableTiming | cudaEventBlockingSync);
-    const long long chunk = (long long)grid * per;
     long long pos = args.i[4];
     for (long long k = 0; pump_on.load(); k++) {
       const int slot = (int)(k % depth);
@@ -555,10 +595,14 @@ extern "C" int fill_pump_start(int minb, int store, int grid, int per, int depth
         pump_done_tiles += n[slot];
         n[slot] = 0;
       }
+      const bool wide = pump_alt_stream && pump_wide.load();
+      const int g = wide ? pump_alt_grid : grid;
+      const cudaStream_t ls = wide ? pump_alt_stream : s;
+      const long long chunk = (long long)g * per;
       args.i[4] = (int)pos;
       args.i[5] = (int)chunk;
-      if ((pump_rc = launch(fn, grid, NT, smem_of(minb), &args, s))) break;
-      cudaEventRecord(ev[slot], s);
+      if ((pump_rc = launch(fn, g, NT, smem_of(minb), &args, ls))) break;
+      cudaEventRecord(ev[slot], ls);
       n[slot] = chunk;
       pos += chunk;
     }
@@ -574,6 +618,8 @@ extern "C" long long fill_pump_tiles() { return pump_done_tiles.load(); }
 extern "C" long long fill_pump_stop(int* rc) {
   pump_on = false;
   if (pump_thread.joinable()) pump_thread.join();
+  pump_alt_stream = nullptr;
+  pump_wide = false;
   if (rc) *rc = pump_rc;
   return pump_done_tiles.load();
 }

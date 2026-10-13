@@ -1,5 +1,5 @@
 """serve_fill.py's arms side by side: the gates (every arm ran to its end; its greedy tokens and log-probs bit-identical to
-the first stock arm's; a green arm's `execute_model` on its green stream only; a filled arm's fold or receipts equal to `gemm_pearlc_d`'s) and, per
+the first stock arm's; a green arm's `execute_model` on its green stream only (a `pc` arm's on its two, each confining a graph captured on the other); a filled arm's fold or receipts equal to `gemm_pearlc_d`'s) and, per
 point, the step time against the stock arms' (their mean, so the two stock runs bracket drift), the step's HBM ratio
 (1 / slowdown), the filler's TFLOPS and credited W1/s, and the tensor-core utilization ((the step's FLOPs + the filler's)
 over the E4M3 and BF16 peaks at 2,100 MHz).
@@ -35,7 +35,12 @@ def main() -> int:
     for a in arms:
         g = {"identical": a["gate"] == ref and len(a["gate"]) == len(ref), "complete": a.get("complete") is True}
         if a["arm"] != "stock":
-            g["green_stream_only"] = a.get("streams_seen") == [a.get("step_stream")]
+            step = a.get("step_stream")
+            if isinstance(step, list):
+                g["green_stream_only"] = bool(a.get("streams_seen")) and set(a["streams_seen"]) <= set(step)
+                g["nest_confined"] = a.get("green", {}).get("nest_ok") is True
+            else:
+                g["green_stream_only"] = a.get("streams_seen") == [step]
         if "filler" in a:
             chk = a["filler"].get("check", {})
             g["filler_bit_exact"] = chk.get("mismatched") == 0 and chk.get("tiles_checked", 0) > 0
