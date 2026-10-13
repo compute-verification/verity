@@ -86,11 +86,11 @@ theorem coinsEncoded_holoMap {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {is
 
 theorem roundIn_cons_self {s : HoloStream} {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)} {k : ℕ} :
     roundIn ((s, rs) :: L) s k = heldBefore s rs k :=
-  if_pos rfl
+  ite_eq_left rfl
 
 theorem roundIn_cons_ne {s' s : HoloStream} {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)} {k : ℕ}
     (h : ¬s'.idx = s.idx) : roundIn ((s', rs) :: L) s k = heldBefore s' rs rs.size + roundIn L s k :=
-  if_neg h
+  ite_eq_right h
 
 /-- **The reps' history order at the map read** (lean (i)): in `holoStreams`' order, rep 0's rounds `rs` and then rep
 1's, rep `i`'s round `q` is history round `repStart c₀ i` (1, or past rep 0's `c₀` coin rounds) plus rep `i`'s coin
@@ -121,10 +121,8 @@ theorem holoSelOne_rep {ish : RecVStar.Inner} {tbl s : String} {rs : Array Sched
 theorem repName_ne (t : String) : (HoloStream.rep 0).name t ≠ (HoloStream.rep 1).name t := by
   intro h
   have h := congrArg String.toList h
-  simp only [HoloStream.name, String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h <;>
-    first
-    | exact absurd (List.append_cancel_left (List.append_cancel_left h)) (by decide)
-    | exact absurd h (by decide)
+  simp only [HoloStream.name, String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h
+  exact absurd (List.append_cancel_left (List.append_cancel_left h)) (by decide)
 
 /-- **`holoStreams`' order finds rep `i` by its name**: rep 0's and rep 1's streams first, the name rep `i`'s
 (`repName_ne`). -/
