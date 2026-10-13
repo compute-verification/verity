@@ -131,33 +131,28 @@ theorem hm_check_slots {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.c
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_lt] at *
     omega
 
-set_option maxHeartbeats 8000000 in
+/-- Every `HmRow.parse`, untyped or a template's, ends with `HmRow.check`. `rw [HmRow.parse.eq_def]` keeps the body's
+join points as `let`s, and `ret_walk` walks each once. -/
+theorem hm_parse_check_any {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {t : Option Typed.Template} {pre : Array (String × Net)} {c : Circuit}
+    (h : HmRow.parse tags bytes tables t pre = .ok c) : ∃ ls, HmRow.check c tags ls = .ok () := by
+  revert c
+  show Ret (HmRow.parse tags bytes tables t pre) fun c => ∃ ls, HmRow.check c tags ls = .ok ()
+  rw [HmRow.parse.eq_def]
+  ret_walk [HmRow.check]
+  all_goals exact ⟨_, by with_reducible assumption⟩
+
 /-- An untyped `HmRow.parse` ends with `HmRow.check`. -/
 theorem hm_parse_check_none {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables none pre = .ok c) :
-    ∃ ls, HmRow.check c tags ls = .ok () := by
-  unfold HmRow.parse at h
-  dsimp only [Option.isSome_none] at h
-  simp only [throw_bind', pure_bind, Bool.false_eq_true, ite_false, Option.mapM_none] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    exact ⟨_, by with_reducible assumption⟩
+    ∃ ls, HmRow.check c tags ls = .ok () :=
+  hm_parse_check_any h
 
-set_option maxHeartbeats 8000000 in
 /-- A template's `HmRow.parse` ends with `HmRow.check`. -/
 theorem hm_parse_check_some {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {t : Typed.Template} {c : Circuit} (h : HmRow.parse tags bytes tables (some t) #[] = .ok c) :
-    ∃ ls, HmRow.check c tags ls = .ok () := by
-  unfold HmRow.parse at h
-  dsimp only [Option.isSome_some] at h
-  simp only [throw_bind', pure_bind, ite_true] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    exact ⟨_, by with_reducible assumption⟩
+    ∃ ls, HmRow.check c tags ls = .ok () :=
+  hm_parse_check_any h
 
 /-- `HmRow.parse` with its defaults, as `setupH` calls it, ends with `HmRow.check`. -/
 theorem hm_parse_check {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
@@ -238,9 +233,11 @@ theorem setupH_wf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Co
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     obtain ⟨_, hc⟩ : ∃ ls, HmRow.check _ tags ls = .ok () := by
-      first | exact hm_parse_check (by assumption) | exact hm_parseTyped_check (by assumption)
-    exact ⟨wf_of_facts (hm_check_slots hc) (hm_pin_ok (by assumption)) rfl, rfl, rfl,
-      hm_regions_wf (by assumption)⟩
+      first
+      | exact hm_parse_check (by with_reducible assumption)
+      | exact hm_parseTyped_check (by with_reducible assumption)
+    exact ⟨wf_of_facts (hm_check_slots hc) (hm_pin_ok (by with_reducible assumption)) rfl, rfl, rfl,
+      hm_regions_wf (by with_reducible assumption)⟩
 
 theorem filterMap_fin_nodup (kl : ℕ) (L : List ℕ) (h : L.Nodup) :
     (L.filterMap fun b => if h : b < kl then some (⟨b, h⟩ : Fin kl) else none).Nodup :=
@@ -299,7 +296,9 @@ theorem setupH_mask {tags : Tags} {circuitFile publicFile : ByteArray} {coins : 
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     obtain ⟨_, hc⟩ : ∃ ls, HmRow.check _ tags ls = .ok () := by
-      first | exact hm_parse_check (by assumption) | exact hm_parseTyped_check (by assumption)
+      first
+      | exact hm_parse_check (by with_reducible assumption)
+      | exact hm_parseTyped_check (by with_reducible assumption)
     exact ⟨hm_check_mask hc, rfl⟩
 
 end FlockSoundness.Refine
