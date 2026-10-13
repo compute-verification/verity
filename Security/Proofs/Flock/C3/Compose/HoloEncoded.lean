@@ -80,7 +80,7 @@ theorem coinsEncoded_holoMap {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {is
         (roundWords (cs.take (roundAt L' e.1 q + 1)) (roundAt L' e.1 q + j)).toList).toArray := by
     simp only [holoMap, hS, hf]
   rw [hcoin, hg, List.range_one, List.flatMap_cons, List.flatMap_nil, List.append_nil, Array.toArray_toList,
-    Nat.add_zero, roundWords_take cs (show roundAt L' e.1 q < roundAt L' e.1 q + 1 from Nat.lt_succ_self _)]
+    Nat.add_zero (roundAt L' e.1 q), roundWords_take cs (show roundAt L' e.1 q < roundAt L' e.1 q + 1 from Nat.lt_succ_self _)]
   exact coinArr_roundWords hL cs _ hi hc
 
 theorem roundIn_cons_self {s : HoloStream} {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)} {k : ℕ} :
