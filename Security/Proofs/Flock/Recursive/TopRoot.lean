@@ -71,7 +71,8 @@ theorem log2ceil_two_pow (k : Nat) : log2ceil (2 ^ k) = k := by
       · have hlt : 2 ^ k < 2 ^ (k + 1) :=
           Nat.pow_lt_pow_right (by norm_num) (by omega)
         exact Nat.le_pred_of_lt hlt
-      · omega
+      · have := Nat.two_pow_pos (k + 1)
+        omega
     rw [hlog]
 
 theorem log2ceil_nextPow2 (n : Nat) : log2ceil (nextPow2 n) = log2ceil n := by
