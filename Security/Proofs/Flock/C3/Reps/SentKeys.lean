@@ -153,7 +153,7 @@ theorem sentK_noCons {σ : List FlockSoundness.Discharge.Exec.Kind} {c₀ : ℕ}
 
 section slices
 
-universe u
+universe u v
 
 open FlockSoundness.Refine (zcMsgs lcMsgs holoLcMsgs holoRepMsgs opMsgs vecOf pairOf fOf)
 open FlockVBridge.Compiled (RepData)
@@ -587,13 +587,14 @@ theorem yrOf_read (sh : Flock.Shape) {params params' : Flock.PcsParams} {cap cap
 open FlockSoundness.Refine (ligMsgs recMsgs kMsg fMsg yrOf capDig)
 
 /-- **`L` and `L'` agree at each index whose keys read alike** (`R`), the three lists of one length. -/
-def PwRead {κ α : Type} (R : κ → Prop) (ks : List κ) (L L' : List α) : Prop :=
+def PwRead {κ : Type u} {α : Type v} (R : κ → Prop) (ks : List κ) (L L' : List α) : Prop :=
   L.length = ks.length ∧ L'.length = ks.length ∧ ∀ (k : ℕ) c, ks[k]? = some c → R c → L[k]? = L'[k]?
 
-theorem pwRead_nil {κ α : Type} (R : κ → Prop) : PwRead R ([] : List κ) ([] : List α) [] :=
+theorem pwRead_nil {κ : Type u} {α : Type v} (R : κ → Prop) : PwRead R ([] : List κ) ([] : List α) [] :=
   ⟨rfl, rfl, fun _ _ h _ => by simp at h⟩
 
-theorem pwRead_cons {κ α : Type} {R : κ → Prop} {c : κ} {ks : List κ} {m m' : α} {L L' : List α}
+theorem pwRead_cons {κ : Type u} {α : Type v} {R : κ → Prop} {c : κ} {ks : List κ} {m m' : α}
+    {L L' : List α}
     (h : R c → m = m') (t : PwRead R ks L L') : PwRead R (c :: ks) (m :: L) (m' :: L') := by
   refine ⟨by simp [t.1], by simp [t.2.1], fun k c' hk hc => ?_⟩
   cases k with
@@ -605,7 +606,8 @@ theorem pwRead_cons {κ α : Type} {R : κ → Prop} {c : κ} {ks : List κ} {m 
     simp only [List.getElem?_cons_succ] at hk ⊢
     exact t.2.2 k c' hk hc
 
-theorem pwRead_append {κ α : Type} {R : κ → Prop} {k₁ k₂ : List κ} {L₁ L₁' L₂ L₂' : List α}
+theorem pwRead_append {κ : Type u} {α : Type v} {R : κ → Prop} {k₁ k₂ : List κ}
+    {L₁ L₁' L₂ L₂' : List α}
     (h₁ : PwRead R k₁ L₁ L₁') (h₂ : PwRead R k₂ L₂ L₂') :
     PwRead R (k₁ ++ k₂) (L₁ ++ L₂) (L₁' ++ L₂') := by
   refine ⟨by simp [h₁.1, h₂.1], by simp [h₁.2.1, h₂.2.1], fun k c hk hc => ?_⟩
@@ -619,7 +621,7 @@ theorem pwRead_append {κ α : Type} {R : κ → Prop} {k₁ k₂ : List κ} {L�
       List.getElem?_append_right (by rw [h₁.2.1]; exact hl'), h₁.1, h₁.2.1]
     exact h₂.2.2 _ c hk hc
 
-theorem pwRead_map {κ α : Type} {R : κ → Prop} (key : ℕ → κ) (f f' : ℕ → α) (l : List ℕ)
+theorem pwRead_map {κ : Type u} {α : Type v} {R : κ → Prop} (key : ℕ → κ) (f f' : ℕ → α) (l : List ℕ)
     (h : ∀ j ∈ l, R (key j) → f j = f' j) : PwRead R (l.map key) (l.map f) (l.map f') := by
   refine ⟨by simp, by simp, fun k c hk hc => ?_⟩
   rw [List.getElem?_map] at hk
@@ -779,8 +781,10 @@ theorem unitMsgs_lig_getD_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d
       exact unitMsgs_lig_read nX sh hm hkLog hsch hc hk
         (by simpa [List.getD_eq_getElem?_getD, hk] using h)
   | none =>
-      rw [unitMsgs_lig nX sh d (b.vals sh d) rfl,
+      rw [unitMsgs_lig nX sh d (b.vals sh d)
+          (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k) (k := k) rfl,
         unitMsgs_lig nX sh d' (b'.vals sh d')
+          (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k) (k := k)
           (congrArg₂ (fun m kLog => m - 6 + 2 + (kLog - 6 + 2) + (2 + nX) + k) hm hkLog)]
       have hp := ligMsgs_proofOf_read sh capDig b.sch hc
       have hge := List.getElem?_eq_none_iff.1 hk
@@ -1035,7 +1039,8 @@ def RecCapsReadAt
 theorem msgsOfKeys_unit (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
     (nX : ℕ) (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc) (hh : sh.holo = true)
     (hsh : ∀ Lb i, FlockVBridge.Family.ShapeIs sh (b Lb i).st (b Lb i).sch)
-    (hcaps : RecCapsReadAt (st := st) (hp := hp) zs dg N k Rw own sel b) {σ : List Exec.Kind} {c₀ : ℕ} :
+    (hcaps : RecCapsReadAt (st := st) (hp := hp) (zs := zs) (dg := dg) (N := N) (k := k) (Rw := Rw)
+      (own := own) (sel := sel) b) {σ : List Exec.Kind} {c₀ : ℕ} :
     MsgsOfKeys (st := st) (hp := hp) zs dg N k Rw own sel σ c₀ (unitKeys nX sh) M
       (fun R ω t Lb ρ => unitMsgs nX sh (M.rep R ω t Lb ρ) ((b Lb ρ).vals sh (M.rep R ω t Lb ρ))) := by
   intro s ρ R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX m _ hread
