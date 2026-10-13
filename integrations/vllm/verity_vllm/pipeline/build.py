@@ -474,6 +474,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # vLLM for loading and RE-TIED after it iff the two tensors are equal (Qwen3-4B-Instruct-2507-FP8); the same decision from the
             # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `vm.retie_lm_head_as_the_loader_does`)
             res["lm_head_tying"] = vm.retie_lm_head_as_the_loader_does(model, cfg)
+            res["mla_absorbed_weights"] = vm.mla_absorbed_weights_as_the_loader_does(model, cfg)
             if tp > 1:
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
@@ -494,7 +495,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["attention_impls_observed"] = vm.attention_impls(model)
             # [R13 hopper] READ BACK the FA version the selector gave the layers (one value over all layers, else None = mismatch): the
             # declared `flash_attn_version` (or the selector's default for the declared capability) must be what was instantiated
-            favs = {v.get("vllm_flash_attn_version") for v in res["attention_impls_observed"].values()}
+            favs = {v.get("vllm_flash_attn_version") for v in res["attention_impls_observed"].values() if v.get("kind") != "mla"}
             fav_ints = {int(x) for x in favs if isinstance(x, int) and not isinstance(x, bool)}
             if fav_ints or len(favs) > 1:        # FlashAttention layers (or a mixed tree): judged here.  A backend that carries no FA
                 applied["flash_attn_version"] = fav_ints.pop() if (len(fav_ints) == 1 and len(favs) == 1) else None

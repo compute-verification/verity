@@ -6,6 +6,8 @@ counts them as structural scaffolding.
    non-strict export `.data` yields an untracked FakeTensor that export then tries to lift as a constant
    ("We found a fake tensor in the exported program constant's list"). For fake tensors the shim returns `detach()`
    — the same value, recorded as `aten.detach` of the parameter placeholder.
+2. The declared target applied (`apply_target_profile`).  3. vLLM's MoE dispatcher ops traced through (`moe_ops_traced`).
+4. DeepSeek sparse attention's three kernels as leaf ops (`dsa_ops_leaf`).
 """
 
 from __future__ import annotations
@@ -342,15 +344,97 @@ class _ExportWorkspaceManager:
         return self._locked
 
 
+_DSA_SITE = "vllm.models.deepseek_v32.attention"
+
+
 @contextmanager
-def export_compat(profile=None, model=None):
-    """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
-    dispatcher ops traced through their bodies (`moe_ops_traced`; `model` = the instantiated module, for the per-layer entry)."""
-    if profile is None:
-        from verity_vllm.program.frontend.target_profile import TargetProfile
-        profile = TargetProfile.default()
-    with tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model):
+def dsa_ops_leaf(model=None):
+    """4. DeepSeek sparse attention (`DeepseekV32Attention.forward`, GLM-5.3, DeepSeek-V3.2) as three leaf ops.  Its two Triton kernels
+    run outside the MLA attention op and write the MLA and indexer caches through the forward context's slot mapping, which the meta
+    export has no cache for (`fused_norm_rope` asserts `slot_mapping is not None`); its attention reads those caches back through the
+    same context.  See `dsa_leaves`.  Without vLLM it is a no-op."""
+    try:
+        import importlib
+        site = importlib.import_module(_DSA_SITE)
+    except Exception:  # noqa: BLE001
+        yield
+        return
+    with dsa_leaves(site, model):
         yield
 
 
-__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "read_back_applied", "host_facts"]
+@contextmanager
+def dsa_leaves(site, model=None):
+    """For the duration, ``site`` (the module `DeepseekV32Attention.forward` reads its kernels from) calls `vllm_iface.dsa_norm_rope`
+    for `fused_norm_rope` and `vllm_iface.dsa_q` for `fused_q`, and every module of ``model`` with a `_sparse_indexer_and_attn` gets
+    one that calls `vllm_iface.dsa_indexer_attn` and then the absorbed value projection its body ends with, `bmm(attn, W_UV)` into
+    `output`.  The cache rows the kernels write are the first op's outputs (`kv_c_out`, `k_pe_out`, the index K and its scale) and
+    the third op's operands, so each layer's cache is the derive's state (`rules/vllm_dsa.py`).  What the shim does not model is
+    refused at export: prefill context parallelism, decode context parallelism, an fp8 query or KV cache, a caller-supplied `q_c_out`
+    or `index_k_out`.  `W_UK_T` and `W_UV` are Parameters the engine registers after loading; a meta model gets them from
+    `vllm_meta.mla_absorbed_weights_as_the_loader_does`."""
+    from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the ops)
+    iface = torch.ops.vllm_iface
+    pending: dict[int, tuple] = {}
+    h = hooks.Hooks()
+
+    def fused_norm_rope(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, k_cs, index_k, index_k_w, index_k_b, index_k_eps, index_cs,
+                        topk_indices_buffer, slot_mapping=None, indexer_k_cache=None, mla_kv_cache=None, mla_kv_cache_dtype="auto",
+                        mla_k_scale=None, has_indexer=True, index_rope_interleave=False, q_c_out=None, kv_c_out=None, k_pe_out=None,
+                        index_k_out=None):
+        if q_c_out is not None or index_k_out is not None or kv_c_out is None or k_pe_out is None:
+            raise NotImplementedError("dsa_leaves: fused_norm_rope with q_c_out / index_k_out, or without kv_c_out / k_pe_out")
+        if mla_kv_cache_dtype not in ("auto", "bfloat16"):
+            raise NotImplementedError(f"dsa_leaves: MLA KV cache dtype {mla_kv_cache_dtype!r} (only a bf16 cache is modelled)")
+        ix = (index_k, index_k_w, index_k_b, index_cs) if has_indexer else (None, None, None, None)
+        q, ik, iks = iface.dsa_norm_rope(positions, q_c, q_w, float(q_eps), kv_c, kv_w, float(kv_eps), k_pe, k_cs, ix[0], ix[1], ix[2],
+                                         float(index_k_eps), ix[3], bool(index_rope_interleave), kv_c_out, k_pe_out)
+        pending[id(kv_c_out)] = (ik, iks) if has_indexer else (None, None)
+        return q
+
+    def fused_q(positions, q_pe, q_pe_cs, index_q, index_q_cs, ql_nope, q_scale, index_weights, softmax_scale, head_scale,
+                has_indexer=True, index_rope_interleave=False, quantize_mqa=True):
+        if quantize_mqa:
+            raise NotImplementedError("dsa_leaves: fused_q with quantize_mqa (an fp8 MQA query)")
+        ix = (index_q, index_q_cs, index_weights) if has_indexer else (None, None, None)
+        q_pe_out, iq, iw = iface.dsa_q(positions, q_pe, q_pe_cs, ix[0], ix[1], ix[2], float(softmax_scale), float(head_scale),
+                                       bool(index_rope_interleave))
+        return iq, iw, q_pe_out
+
+    def indexer_and_attn(layer):
+        def run(positions, q_c, q_nope, q_pe, index_q_fp8, index_k, index_weights_out, kv_c, k_pe, ql_nope, mqa_q, output):
+            if layer.use_pcp or layer.impl.dcp_world_size > 1 or layer._fp8_query or layer._fp8_kv_needs_view:
+                raise NotImplementedError(f"dsa_leaves: {layer.layer_name} under context parallelism or an fp8 KV cache")
+            ik, iks = pending.pop(id(kv_c))
+            has = ik is not None
+            a = iface.dsa_indexer_attn(positions, ql_nope, mqa_q, kv_c, k_pe, index_q_fp8 if has else None, index_weights_out if has else None,
+                                       ik, iks, layer.layer_name, int(layer.topk_indices_buffer.shape[-1]), float(layer.scale))
+            n, nh, lat, v = output.shape[0], layer.num_heads, layer.kv_lora_rank, layer.v_head_dim
+            y = torch.bmm(a.view(n, nh, lat).transpose(0, 1), layer.W_UV)
+            output.copy_(y.transpose(0, 1).reshape(n, nh * v))
+        return run
+
+    h.patch(site, "fused_norm_rope", fused_norm_rope)
+    h.patch(site, "fused_q", fused_q)
+    for m in (model.modules() if model is not None else ()):
+        if not (hasattr(m, "_sparse_indexer_and_attn") and hasattr(m, "fused_qkv_a_proj")):
+            continue
+        h.patch(m, "_sparse_indexer_and_attn", indexer_and_attn(m))
+    with h:
+        yield
+
+
+@contextmanager
+def export_compat(profile=None, model=None):
+    """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
+    dispatcher ops traced through their bodies (`moe_ops_traced`) + DeepSeek sparse attention's kernels as leaf ops (`dsa_ops_leaf`);
+    `model` = the instantiated module, for the per-layer entries."""
+    if profile is None:
+        from verity_vllm.program.frontend.target_profile import TargetProfile
+        profile = TargetProfile.default()
+    with tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model):
+        yield
+
+
+__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "dsa_ops_leaf", "dsa_leaves",
+           "read_back_applied", "host_facts"]

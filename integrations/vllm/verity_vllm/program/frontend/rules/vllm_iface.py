@@ -82,6 +82,38 @@ _define_once("gumbel_topp_token_select(Tensor logits, Tensor seed, float tempera
              "gumbel_topp_token_select",
              lambda logits, seed, temperature, top_p, pos, splits, S=None: logits.new_empty(tuple(logits.shape[:-1]), dtype=torch.int32))
 
+# [GLM-5.3] DeepSeek sparse attention (vllm/models/deepseek_v32/attention.py) as three ops, the leaves `export_compat.dsa_ops_leaf`
+# puts in place of `fused_norm_rope`, `fused_q` and `_sparse_indexer_and_attn` while exporting.  The served kernels write the MLA and
+# indexer caches through a slot mapping and read them back through the forward context; here the cache rows are the first op's outputs
+# and the third op's operands, and each layer's history is the derive's state keyed by `layer_name` (as `unified_attention_with_output`'s).
+#   dsa_norm_rope -> (q_c normed, index K e4m3 [T, Dk], index K scale f32 [T]); kv_c_out / k_pe_out written (the MLA cache row)
+#   dsa_q         -> (q_pe roped bf16, index q e4m3 [T, H, Dk], index weights f32 [T, H])
+#   dsa_indexer_attn -> the attention rows [T, NH, kv_lora] bf16 (before the W_UV bmm)
+# On a layer without an indexer the index outputs are empty ([T, 0], [T, 0, 0]) and the third op's index operands are None.
+def _dsa_norm_rope_fake(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, cos_sin, index_k, index_k_w, index_k_b, index_k_eps,
+                        index_cos_sin, index_rope_interleave, kv_c_out, k_pe_out):
+    T, Dk = q_c.shape[0], (index_k.shape[-1] if index_k is not None else 0)
+    return (q_c.new_empty(q_c.shape), q_c.new_empty((T, Dk), dtype=torch.float8_e4m3fn),
+            q_c.new_empty((T,) if index_k is not None else (T, 0), dtype=torch.float32))
+
+
+def _dsa_q_fake(positions, q_pe, cos_sin, index_q, index_cos_sin, index_weights, softmax_scale, head_scale, index_rope_interleave):
+    T = q_pe.shape[0]
+    iq = index_q.shape if index_q is not None else (T, 0, 0)
+    return (q_pe.new_empty(q_pe.shape), q_pe.new_empty(iq, dtype=torch.float8_e4m3fn), q_pe.new_empty(iq[:2], dtype=torch.float32))
+
+
+_define_once("dsa_norm_rope(Tensor positions, Tensor q_c, Tensor q_w, float q_eps, Tensor kv_c, Tensor kv_w, float kv_eps, Tensor k_pe, "
+             "Tensor cos_sin, Tensor? index_k, Tensor? index_k_w, Tensor? index_k_b, float index_k_eps, Tensor? index_cos_sin, "
+             "bool index_rope_interleave, Tensor(a!) kv_c_out, Tensor(b!) k_pe_out) -> (Tensor, Tensor, Tensor)",
+             "dsa_norm_rope", _dsa_norm_rope_fake)
+_define_once("dsa_q(Tensor positions, Tensor q_pe, Tensor cos_sin, Tensor? index_q, Tensor? index_cos_sin, Tensor? index_weights, "
+             "float softmax_scale, float head_scale, bool index_rope_interleave) -> (Tensor, Tensor, Tensor)", "dsa_q", _dsa_q_fake)
+_define_once("dsa_indexer_attn(Tensor positions, Tensor ql_nope, Tensor q_pe, Tensor kv_c, Tensor k_pe, Tensor? index_q, "
+             "Tensor? index_weights, Tensor? index_k, Tensor? index_k_scale, str layer_name, int topk, float scale) -> Tensor",
+             "dsa_indexer_attn", lambda positions, ql_nope, q_pe, kv_c, k_pe, index_q, index_weights, index_k, index_k_scale, layer_name,
+             topk, scale: ql_nope.new_empty(ql_nope.shape))
+
 iface = torch.ops.vllm_iface
 
 
