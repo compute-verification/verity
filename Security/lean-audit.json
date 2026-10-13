@@ -411,20 +411,29 @@
    "why": "a guarantee is a Prop over Mathlib, never over a proof"
   },
   "Definitions.Accounting": {
-   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Pous.Game.Prob", "Definitions.Accounting"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Pouw",
+    "Definitions.Pous.Game.Prob",
+    "Definitions.Pous.Model.Audit",
+    "Definitions.Pous.Model.SampledAudit",
+    "Definitions.Accounting"
+   ],
    "except": [],
-   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth audit's game read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); they import no assumption, guarantee or proof"
+   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth audit's game read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); they import no assumption, guarantee or proof"
   },
   "Models.Accounting.Guarantees": {
    "imports": [
     "Mathlib",
     "Definitions.Pouw",
+    "Definitions.Pous.P2.Cost",
     "Models.Pouw.Assumptions",
+    "Models.Pous.Assumptions.P2",
     "Definitions.Accounting",
     "Models.Accounting.Guarantees"
    ],
    "except": [],
-   "why": "a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and PoUW's named assumption TT as hypotheses, never over a proof"
+   "why": "a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and PoUW's named assumption TT as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Models.Pous.Assumptions.P2)"
   },
   "Definitions.Accounting.Bandwidth": {
    "imports": ["Mathlib", "Definitions.Pous.Game.Prob", "Definitions.Accounting.Bandwidth"],
@@ -523,6 +532,72 @@
    "signature": ["Accounting.SecurityProofs.JointPerRunPriced : Accounting.Guarantees.JointPerRunPriced"],
    "assumptions": [],
    "type_hash": "dc12aa2ed2a07c0007c3d7e72ba8302577bc0a4da2bb06db02379eba87f8b9bd"
+  },
+  "Accounting.SecurityProofs.Memory.Adds": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.Adds : Accounting.Guarantees.Memory.Adds"],
+   "assumptions": [],
+   "type_hash": "544acaaebe8c1a3245a82532f76264ca9a2788539b712c3c394bdc9f1d67c5ea"
+  },
+  "Accounting.SecurityProofs.Memory.AddsAdvice": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsAdvice : Accounting.Guarantees.Memory.AddsAdvice"],
+   "assumptions": [],
+   "type_hash": "134add09b968feac6240a65346d5c814dd7a9afe1bfcc6ff8d8eebd89c8ff93c"
+  },
+  "Accounting.SecurityProofs.Memory.AddsAdviceOn": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsAdviceOn : Accounting.Guarantees.Memory.AddsAdviceOn"],
+   "assumptions": [],
+   "type_hash": "9f8641e2f3a11d725cb3d10500bd3cf177f5bfc9699fa1d474e777c2e2a43f47"
+  },
+  "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsAdviceP2Ring : Accounting.Guarantees.Memory.AddsAdviceP2Ring"],
+   "assumptions": [],
+   "type_hash": "d3266a0560d33ecc3acaa0ca37239838dd9920acbca2e81a226589007a3c7247"
+  },
+  "Accounting.SecurityProofs.Memory.AddsIsolated": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsIsolated : Accounting.Guarantees.Memory.AddsIsolated"],
+   "assumptions": [],
+   "type_hash": "b132d1ace80ef3962d5442044c15a62fafd27872c5987a58eb3c03e45f5c94c1"
+  },
+  "Accounting.SecurityProofs.Memory.AddsOn": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsOn : Accounting.Guarantees.Memory.AddsOn"],
+   "assumptions": [],
+   "type_hash": "0b0f3ae1c073d5c807e328eba3d670e6be620d23d72542c640676ad1fdc69feb"
+  },
+  "Accounting.SecurityProofs.Memory.AddsOnIsolated": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsOnIsolated : Accounting.Guarantees.Memory.AddsOnIsolated"],
+   "assumptions": [],
+   "type_hash": "91c5d43da4737d787c1e964db77fad39b665efce7d1d3a7593c607d82efab775"
+  },
+  "Accounting.SecurityProofs.Memory.AddsP2Ring": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsP2Ring : Accounting.Guarantees.Memory.AddsP2Ring"],
+   "assumptions": [],
+   "type_hash": "f0aa00f8cae218c366383ce47bd75ef2d99fde281ee1c9bd11960721b325f2e5"
+  },
+  "Accounting.SecurityProofs.Memory.AddsP2RingIsolated": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.AddsP2RingIsolated : Accounting.Guarantees.Memory.AddsP2RingIsolated"],
+   "assumptions": [],
+   "type_hash": "7f0b1134bb86e214efaadf6417224dc2ffe2eff10aad147d265255d5c07a7305"
+  },
+  "Accounting.SecurityProofs.Memory.Counting": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.Counting : Accounting.Guarantees.Memory.Counting"],
+   "assumptions": [],
+   "type_hash": "38be2c96b0dfcca031464085d1aabc4b6ccf2a4cb146f88d79611faec1ba885f"
+  },
+  "Accounting.SecurityProofs.Memory.CountingAdvice": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Memory.CountingAdvice : Accounting.Guarantees.Memory.CountingAdvice"],
+   "assumptions": [],
+   "type_hash": "ce044d7f61c49917c656e0fef2aa65fc8cf9359727b975c2ee1adb3aec56f5e1"
   },
   "Accounting.SecurityProofs.PearlCEndToEndPerRun": {
    "owner": "@memory-accounting",
@@ -3820,6 +3895,14 @@
    "Accounting.SecurityProofs.Sketch.LittlewoodOfford": {
     "function": "Accounting.Tag.unreadSum",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Memory.Counting": {
+    "function": "Accounting.Memory.fibre",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Memory.CountingAdvice": {
+    "function": "Accounting.Memory.fibreAdvice",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -4165,7 +4248,16 @@
    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun": "frozen (no-function,hash): It is PearlCEndToEndPerRun on the machine that stops a run at its budget (Pouw.PearlC.CostModel.withStop, Security/Definitions/Pouw/PearlC/W1Stop.lean), from the γ-gap property per coin GγPerCoin, a hypothesis (at W1 priced, the conjecture the per-run bound rests on), stated over Pearl-C's game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/PearlC/Game.lean), not over a Lean function.",
    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": "frozen (no-function,hash): It carries PearlCStopEndToEndPerRun, from the γ-gap property per coin GγPerCoin over Pearl-C's game with a uniform oracle, to the compute audit of an abstract run of the device model whose cost on the stopping machine the priced sum covers (Accounting.RealizesPearlCPriced, Security/Definitions/Accounting/PerRun.lean), not to a Lean function.",
    "Accounting.SecurityProofs.JointPerRunPriced": "frozen (no-function): Like JointPerRun, it composes the three audits' per-run guarantees, the compute audit's on the priced sum, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.CovertResidualPerRunPriced": "frozen (no-function): Like JointPerRunPriced, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list."
+   "Accounting.SecurityProofs.CovertResidualPerRunPriced": "frozen (no-function): Like JointPerRunPriced, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Memory.Adds": "frozen (no-function): It composes PoUS's own guarantee, AuditSecure over the abstract audit game (Security/Definitions/Pous/Model/Audit.lean) taken as a hypothesis, with the counting core: lemma M of the actual-circuit model, counting the help (an (M + H)-bit responder), about no function of the code.",
+   "Accounting.SecurityProofs.Memory.AddsOn": "frozen (no-function): It composes PoUS's AuditSecureOn over the ring model (Security/Definitions/Pous/P2/Cost.lean), taken as a hypothesis, with the counting core: lemma M counting the help, about no function of the code.",
+   "Accounting.SecurityProofs.Memory.AddsP2Ring": "frozen (no-function): It is AddsOn at P2's deployed point (105 challenges), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure.",
+   "Accounting.SecurityProofs.Memory.AddsIsolated": "frozen (no-function): It is Adds at H = 0 (perfect isolation), about PoUS's abstract audit game and no function of the code.",
+   "Accounting.SecurityProofs.Memory.AddsOnIsolated": "frozen (no-function): It is AddsOn at H = 0 (perfect isolation), about PoUS's ring model and no function of the code.",
+   "Accounting.SecurityProofs.Memory.AddsP2RingIsolated": "frozen (no-function): It is AddsP2Ring at H = 0 (perfect isolation), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure.",
+   "Accounting.SecurityProofs.Memory.AddsAdvice": "frozen (no-function): It is Adds with advice: the location reads its value from the state and at most a advice bits, so the advice counts against the bound; about PoUS's abstract audit game and no function of the code.",
+   "Accounting.SecurityProofs.Memory.AddsAdviceOn": "frozen (no-function): It is AddsOn with advice (a bits beside the state), about PoUS's ring model and no function of the code.",
+   "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring": "frozen (no-function): It is AddsP2Ring with advice (a bits beside the state), about P2 in the ring model rather than the setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingAuditSecure."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -4319,6 +4411,28 @@
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced"
+   ]
+  },
+  "Definitions.Accounting.Memory": {
+   "digest": "6611399160c026f613e5e66208c6725847cddb1f299db2addf06baedfcf3efef",
+   "definitions": {
+    "Accounting.Memory.Determines": "e2afa785f178f523c375b0a748f71d37365b481c4b17e1a26767a90d63886626",
+    "Accounting.Memory.DeterminesAdvice": "044d87c4d62cdc247e32c17d11254755d63f8de976c1b199ecd87fcc35637f35",
+    "Accounting.Memory.fibre": "30b5e82f80befddfca5880b5ab4508c3c5501261e7bca1f8e3e7f88b4d1ff103",
+    "Accounting.Memory.fibreAdvice": "b0670f5885042b0f321ae5a95ceff76840f309e43f55b14798657de50a3f0fa1"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsIsolated",
+    "Accounting.SecurityProofs.Memory.AddsOn",
+    "Accounting.SecurityProofs.Memory.AddsOnIsolated",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
+    "Accounting.SecurityProofs.Memory.Counting",
+    "Accounting.SecurityProofs.Memory.CountingAdvice"
    ]
   },
   "Definitions.Accounting.PerRun": {
@@ -4810,6 +4924,9 @@
     "Pous.Scheme.stateBound": "f219b3199888b8a45eac393ac75becffadc935c7cd567be9198c400bd69c17d1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -4848,6 +4965,15 @@
     "Pous.Prog.work": "d2d99c0b30b712934b04158c0ded72b0ba662f4a1cc358734c2223d113b94ae3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsIsolated",
+    "Accounting.SecurityProofs.Memory.AddsOn",
+    "Accounting.SecurityProofs.Memory.AddsOnIsolated",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -4870,6 +4996,15 @@
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsIsolated",
+    "Accounting.SecurityProofs.Memory.AddsOn",
+    "Accounting.SecurityProofs.Memory.AddsOnIsolated",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.HonestPasses",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
@@ -4907,6 +5042,15 @@
     "Pous.simAccepts": "62c4ef9b9565b20f69da1313f95ed2e92d2b3f1f1d2ff63bc1f71c38a804523d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsIsolated",
+    "Accounting.SecurityProofs.Memory.AddsOn",
+    "Accounting.SecurityProofs.Memory.AddsOnIsolated",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -4992,6 +5136,9 @@
     "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -5018,6 +5165,12 @@
     "Pous.permsp": "d4fa4566b0ea5f7ad48a716aa9c4a6397da89f45fcd110dc2fa0502ecabfe819"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsOn",
+    "Accounting.SecurityProofs.Memory.AddsOnIsolated",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -5048,6 +5201,23 @@
     "Pous.SecurityProofs.ChainDenseMeets64"
    ]
   },
+  "Definitions.Pous.Model.SampledAudit": {
+   "digest": "b2197a6faf0004dcef1f5f71a8dff752780b8b5295852b27f430de9757ae928a",
+   "definitions": {
+    "Pous.Sampled.seqState": "88adbf0e6305a1e08df7cbb57d91ffac4191d6f56651083fcc554f67b9dd9231"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsIsolated",
+    "Accounting.SecurityProofs.Memory.AddsOn",
+    "Accounting.SecurityProofs.Memory.AddsOnIsolated",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated"
+   ]
+  },
   "Definitions.Pous.Model.Scheme": {
    "digest": "4c2daf388f74e6bbba183a9fe2508c77043e8149d219698b42b37210453cc3d5",
    "definitions": {
@@ -5066,6 +5236,15 @@
     "Pous.Scheme.ℓ": "cc713501fb08eb0fb1403b0163bb043f5e39683832d9c644e0cf50c5d6000f9c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsIsolated",
+    "Accounting.SecurityProofs.Memory.AddsOn",
+    "Accounting.SecurityProofs.Memory.AddsOnIsolated",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -5128,7 +5307,15 @@
     "Pous.sqE": "3727f1863cf42a82d1b2940a9ca18c4ff59c2909e3b961c3a0d83c5def7eaaed",
     "Pous.sqFix": "af2e924abf530e9aac7cc294dbe5208b2f7d8f4cc5d382a2e3644a35e525905b"
    },
-   "guarantees": ["Pous.SecurityProofs.P2RingAuditSecureOfReduces"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsOn",
+    "Accounting.SecurityProofs.Memory.AddsOnIsolated",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces"
+   ]
   },
   "Definitions.Pouw.Barrier.Defs": {
    "digest": "9db794608d3a485fcf68f85932a09e917d482590427dd793fb32d9d1972fefa4",
@@ -12831,6 +13018,35 @@
    },
    "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
   },
+  "Models.Accounting.Guarantees.Memory": {
+   "digest": "5cb49813c4c96062a1ec8420803d7ca524eb76fb792feb22c2a8960e63c10f68",
+   "definitions": {
+    "Accounting.Guarantees.Memory.Adds": "f071694fc39e660a8cdd1fa117526838628d1efdba08f031549b9d0c58109453",
+    "Accounting.Guarantees.Memory.AddsAdvice": "89901f5814347debaad3f4b3cfe52941a24e49734525449c050db0a48234ec1d",
+    "Accounting.Guarantees.Memory.AddsAdviceOn": "5628e97965c332c4a83cd3acba36998398a32a01610228c0d3ac9e7e841a5692",
+    "Accounting.Guarantees.Memory.AddsAdviceP2Ring": "6b357a2c56451fc026e15b16ac226aad975f0e897929e87532a5e0bb40a5e9d3",
+    "Accounting.Guarantees.Memory.AddsIsolated": "66659b648efc6cdf99234eba9337637543439b46672bf18c355d2b764b03b6cf",
+    "Accounting.Guarantees.Memory.AddsOn": "dfa4a0452231370ff1360ec341db32254f073e05c4684ca18daced487dfb519b",
+    "Accounting.Guarantees.Memory.AddsOnIsolated": "16722addf042722e8ac9ac2c6ae6bddd7bc762a2b192b9fdb4fe77efa3abb783",
+    "Accounting.Guarantees.Memory.AddsP2Ring": "20556d9fce4cfc39d55dca01a08c87b9eee06b9af1aef993c795f6b517a2c6eb",
+    "Accounting.Guarantees.Memory.AddsP2RingIsolated": "d346a90f41442631f4806ce931fd5384167531471876be9a299b8bbf5ac6c210",
+    "Accounting.Guarantees.Memory.Counting": "545adad226ac07276a309a699aa2b49a6b21b924e0fb994a4275723a3b649b2e",
+    "Accounting.Guarantees.Memory.CountingAdvice": "52978a71b5a470e251d2140cf84f5fe9893c434a36e1c84389bf00b28c632117"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Memory.Adds",
+    "Accounting.SecurityProofs.Memory.AddsAdvice",
+    "Accounting.SecurityProofs.Memory.AddsAdviceOn",
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsIsolated",
+    "Accounting.SecurityProofs.Memory.AddsOn",
+    "Accounting.SecurityProofs.Memory.AddsOnIsolated",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
+    "Accounting.SecurityProofs.Memory.Counting",
+    "Accounting.SecurityProofs.Memory.CountingAdvice"
+   ]
+  },
   "Models.Accounting.Guarantees.PerRun": {
    "digest": "f9031d56e0bccf3376726e64c491827fa7eef030da6eb09a50e9829cefb2aff4",
    "definitions": {
@@ -13027,7 +13243,12 @@
     "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3",
     "Pous.P2.Assumptions.P2RingReducesToM1p": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53"
    },
-   "guarantees": ["Pous.SecurityProofs.P2RingAuditSecureOfReduces"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2Ring",
+    "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
+    "Pous.SecurityProofs.P2RingAuditSecureOfReduces"
+   ]
   },
   "Models.Pous.Guarantees": {
    "digest": "f1a77f429299b9f5cbcf96b9d6752b0fbec28b9e95250bdc3e5479427df7e940",

@@ -1,6 +1,6 @@
+import Definitions.Accounting.Memory
 import Definitions.Accounting.Bandwidth
 import Definitions.Accounting.Device
-import Definitions.Accounting.Bandwidth
 import Definitions.Accounting.Joint
 import Definitions.Accounting.PerRun
 import Definitions.Accounting.Pouw
