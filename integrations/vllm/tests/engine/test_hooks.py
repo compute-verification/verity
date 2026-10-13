@@ -237,7 +237,7 @@ def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() 
     inputs = (torch.ones(4),)
     unshimmed = torch.export.export(layer, inputs, strict=False)
     assert set(unshimmed.graph_signature.inputs_to_lifted_tensor_constants.values()) == {"lifted_tensor_0", "lifted_tensor_1"}
-    assert not unshimmed.graph_signature.inputs_to_parameters
+    assert set(unshimmed.graph_signature.inputs_to_parameters.values()) == {"w13_weight_scale_inv", "w2_weight_scale_inv"}
 
     h = hooks.Hooks()
     _expert_weight_scales_through_owner(layer, layer.quant_method, h)
