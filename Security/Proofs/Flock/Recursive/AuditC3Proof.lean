@@ -14,7 +14,7 @@ In (i), as in `PublicAudit`'s:
 * at a statement Lean's verifier doesn't build, or inputs at candidate 3 it refuses (`AcceptsC3`: V*'s list, the inner
   transcript against R's registration, check 5's sparse refusals), the event is empty (its first conjunct);
 * at one it builds, the class checks pass (`classOk_of_accepts`), and gap 2 holds at the word the prover's runs open
-  (`zk_sessions_recursive_fork_reg`, `Recursive/RegExtract.lean`, a stub: the extraction from piece (a)'s runs), here at
+  (`zk_sessions_recursive_fork_reg`, `Recursive/RegExtract.lean`: the extraction from piece (a)'s runs), here at
   the checked sessions (`checkedC3`), whose games are the typed sessions', so the transported prover plays them;
 * the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each draw
   (`regStmt`), and the raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`,
@@ -23,7 +23,8 @@ In (i), as in `PublicAudit`'s:
 * `_hob` is read where the event parses a session's file into scope (`loads_of_verifiesV`, `scope_of_accepts`).
 
 Candidate 3's table ignores the last round's coin, as its pick does (`schedInner_lastFree`, `clashPickHL_lastFree`), so
-gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerC`, which the stub's proof reads).
+gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerL`, `innerC`'s form that
+`RegExtract`'s proof reads).
 
 `_hstk` is not read here: VBridgeC is a premise, and `_hstk` is what its discharge at the honest family takes as `htop`
 (`FlockC3.Compose.hbr_honest_reg`, at `⟨_, _hstk⟩`, which gives VBridgeC at the checked sessions and the word the runs
