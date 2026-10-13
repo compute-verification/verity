@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 
 from test_remote_bandwidth import N, SCHEDULE, Clock, Entropy, drive, finish, params, store  # noqa: F401
-from verity.core.protocols.remote_bandwidth import audit, coins, receipts, timing
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Session
 
 BLOCK = 4096
@@ -33,7 +33,7 @@ def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:  # noqa:
                                      plan=lambda t, i: receipts.Plan(((0, 1),), N) if t == idle else None)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
-    led = audit.ledger(r, capacity_bytes_per_s=CAPACITY, chip_bytes=0)
+    led = audit.ledger(r, capacity_bytes_per_s=CAPACITY, chip_bytes=0, rebuild=audit.Rebuild(r.codec, 0.0))
     short = [window_shortfall(w) for w in r.windows]
     assert short[idle] > 0.96 and max(x for t, x in enumerate(short) if t != idle) < 0.35
     assert led.floor == 0
@@ -47,12 +47,22 @@ def test_rb2_the_record_names_its_codec(store) -> None:  # noqa: F811
     `ledger` checks `link` against `bind`.  μ_rebuild rests on the codec (field, k, mask), and the record omitted it: a
     session under `p512/k2`, unmasked and resting on the unmeasured assumption 7, had a public record of the same shape
     as one under the stated `p1024/k3/masked`, and `ledger` takes any `rebuild` for either.  Fixed: the record names
-    the codec and its parameters."""
+    the codec and its parameters, and `ledger` prices μ_rebuild from a model of the record's codec, refusing
+    another's."""
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     assert store.registration.codec.name == "p1024/k2/masked"
     assert store.registration.codec.name in s.record().public().values()
     assert s.record().public()["codec_params"] == {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2}
+    stated = timing.SQUARINGS_PER_S["p1024"]
+    with pytest.raises(ValueError, match="record's codec p1024/k2/masked"):
+        audit.ledger(s.record(), capacity_bytes_per_s=CAPACITY, chip_bytes=0,
+                     rebuild=audit.Rebuild(codec.DEFAULT, stated))
+    with pytest.raises(ValueError, match="not a fraction"):
+        audit.ledger(s.record(), capacity_bytes_per_s=CAPACITY, chip_bytes=0, rebuild=0.0)
+    led = audit.ledger(s.record(), capacity_bytes_per_s=CAPACITY, chip_bytes=0,
+                       rebuild=audit.Rebuild(codec.FALLBACK, stated))
+    assert led.rebuild == pytest.approx(stated * BLOCK / (65_344 * CAPACITY))
 
 
 def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, bytes], reads: list[int],

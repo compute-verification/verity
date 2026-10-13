@@ -37,8 +37,9 @@ many reads of a node's registered blocks the node made in each window, from rece
    and a rejected window ends its session.
 8. The record (`Session.record`): per window each pass's length, its challenge's release and its deadline on the
    verifier's clock, its openings coin's release, and an `IntegrityProfile` over its receipts with `Subset(s)` drawn;
-   `ledger` turns it, with the node's measured capacities, into each γ term over the session's span and over each
-   window's own (`WindowLedger`), μ_sample read per window and pooled over the session's horizon (`pooled`, `floors`).
+   `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
+   each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
+   pooled over the session's horizon (`pooled`, `floors`).
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
 The verifier's clock is injected (`clock`, nanoseconds, `time.monotonic_ns` by default).  Openings are checked in the
@@ -658,7 +659,8 @@ LEDGER_SOURCES = {
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
     "counting": "AuditRO's slack, queries_log2 bits a receipt (each certified one, whichever reading) and slack_log2 a "
                 "pass",
-    "rebuild": "a model: re-encoding blocks from their payload with leftover compute (WorkHardness(p, k))",
+    "rebuild": "the record's codec and a stated squaring ceiling (`Rebuild`): blocks re-encoded from their payload, "
+               "each at least the codec's squarings (WorkHardness(p, k)), in place of reads",
     "host": "a model: the host tier's own shortfall and host DRAM bandwidth PCIe cannot carry",
     "link": "a model, under a registration that binds z: relays meeting z and a block copy over a link (0 otherwise)",
 }
@@ -773,15 +775,37 @@ def pooled(record: Record) -> tuple[float, float]:
     return wrong, floor
 
 
-def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: float = 0.0, host: float = 0.0,
+@dataclass(frozen=True, slots=True)
+class Rebuild:
+    """μ_rebuild's model: the node runs at most `squarings_per_s` squarings at `codec`'s width (the stated ceiling,
+    assumption 5, every GPU and the host together), and a block it re-encodes from its payload rather than reads costs
+    at least `codec.encode_squarings` of them (WorkHardness(p, k)).  So rebuilds stand in for at most
+    `squarings_per_s · BLOCK_BYTES / encode_squarings` bytes a second of reads, `fraction` of a capacity, in every
+    window alike.  `ledger` refuses a model of another codec than the record's."""
+
+    codec: Codec
+    squarings_per_s: float
+
+    def __post_init__(self) -> None:
+        if type(self.codec) is not Codec:
+            raise ValueError("a rebuild model is of a Codec")
+        if type(self.squarings_per_s) not in (int, float) or not 0 <= self.squarings_per_s < math.inf:
+            raise ValueError("a squaring ceiling is a finite nonnegative rate")
+
+    def fraction(self, capacity_bytes_per_s: float) -> float:
+        return self.squarings_per_s * BLOCK_BYTES / (self.codec.encode_squarings * capacity_bytes_per_s)
+
+
+def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: Rebuild, host: float = 0.0,
            link: float = 0.0, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2,
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Ledger:
     """γ's terms for an accepted session on a node of `capacity_bytes_per_s` (HBM plus host DRAM) and `chip_bytes` of
     on-chip storage: the read bytes the record certifies are at least `(1 − γ)·capacity·span`, except with probability
     `windows · delta`, and at least `(1 − γ_horizon)·capacity·span` except with `delta` (each plus 2^-slack_log2 a
     pass), and each window's over its own span likewise with its own terms (`Ledger.windows`), the horizon's every
-    window's at once with the session's.  `rebuild`, `host` and `link` are the models' fractions, passed through, the
-    same in every window: the record does not bound them.
+    window's at once with the session's.  μ_rebuild is `rebuild`'s fraction of the capacity, a model of the record's
+    own codec (name and parameters) at a stated squaring ceiling.  `host` and `link` are the models' fractions, passed
+    through.  All three are the same in every window: the record does not bound them.
     `link` is a binding record's only: an unbound receipt is of its block alone, and the record says nothing of where
     its read was made.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an
     approximation for a large store).  A sketch-sha512 record's receipts also rest on `RateAuditSketch`, whose terms
@@ -789,8 +813,14 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     session (`PROTOCOL.md` §4)."""
     if capacity_bytes_per_s <= 0 or chip_bytes < 0:
         raise ValueError("the capacity is positive and the chip's storage nonnegative")
+    if type(rebuild) is not Rebuild:
+        raise ValueError("μ_rebuild is a Rebuild model of the record's codec, not a fraction")
+    if rebuild.codec != record.codec:
+        raise ValueError(f"the rebuild model is of {rebuild.codec.name} {rebuild.codec.to_json()}, the record's codec "
+                         f"{record.codec.name} {record.codec.to_json()}")
     if link and not record.bind:
         raise ValueError("the link term is a registration's that binds z: this record's receipts are of blocks alone")
+    mu_rebuild = rebuild.fraction(capacity_bytes_per_s)
     whole = capacity_bytes_per_s * record.span_ns / 1e9
     b = record.block_bytes
     reads = record.receipts * b
@@ -806,10 +836,10 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
                              "span: the capacity is understated")
         windows.append(WindowLedger(
             w.window, w.span_ns, timing=1 - reads_t / whole_t, sample=e * b / whole_t, chip=w.passes * chip_bytes / whole_t,
-            counting=(queries_log2 * w.receipts + slack_log2 * w.passes) / 8 / whole_t, rebuild=rebuild, host=host,
+            counting=(queries_log2 * w.receipts + slack_log2 * w.passes) / 8 / whole_t, rebuild=mu_rebuild, host=host,
             link=link, horizon=f * reads_t / whole_t, floor=f))
     horizon, floor = pooled(record)
     lam_bits = queries_log2 * record.receipts + slack_log2 * record.passes
     return Ledger(timing=1 - reads / whole, sample=sum(wrong_receipts) * b / whole,
-                  chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=rebuild, host=host,
+                  chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=mu_rebuild, host=host,
                   link=link, horizon=horizon * b / whole, floor=floor, windows=tuple(windows))

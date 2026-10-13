@@ -38,12 +38,17 @@ data are at least \((1 - \gamma) R \Sigma\), with
 | \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`Ledger.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`Ledger.horizon`, §10) | the record's profiles, at δ |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
 | \(\lambda\) | AuditRO's slack: `queries_log2` bits per receipt (every certified one, in either reading) and `slack_log2` per pass; 0.195% at 64 bits a 4 KiB block, more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
-| \(\mu_{\text{rebuild}}\) | re-encoding blocks from their payloads with leftover compute | a model, on `WorkHardness(p, k)` |
+| \(\mu_{\text{rebuild}}\) | \(C_{\text{sq}} b / (E_{\text{sq}} R)\): blocks re-encoded from their payloads in place of reads, each at least the record's codec's \(E_{\text{sq}}\) squarings (`Codec.encode_squarings`: 98,016 at p1024/k3/masked, 65,344 at k = 2, 65,152 at p512/k2) at the node's stated ceiling of \(C_{\text{sq}}\) squarings a second at that width (`Rebuild`) | the record's codec, and assumption 5 stated per width (`WorkHardness(p, k)`) |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | under a registration that binds \(z\) only (0 otherwise): relays that meet \(z\) and a copy of the block over a link (§4) | a model |
 
-The protocol bounds the first four and passes the last three through: the record can't bound them (a protocol carries
-no policy parameter). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
+The protocol bounds the first four, prices \(\mu_{\text{rebuild}}\) from the record's codec (its name and parameters)
+at a stated squaring ceiling, and passes the last two through: the record can't bound them (a protocol carries no
+policy parameter). `ledger` takes the rebuild model as a `Rebuild(codec, squarings_per_s)` and refuses one of another
+codec than the record's, or a bare fraction. At the stated ceiling, 1.597 × `kv.cu`'s 1.499·10^10 squarings a second
+at 1,024 bits for each RTX PRO 6000 with its share of the host (ra-squaring-ceiling, #1887; 1.567 × 5.13·10^10 at 512
+bits), and its measured read rate of 1.488 TB/s, \(\mu_{\text{rebuild}}\) is 0.067% under the default codec, 0.10% at
+k = 2 and 0.34% under p512/k2 (`timing.SQUARINGS_PER_S`, `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
 receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on `RateAuditSketch`, which adds at most
 \(C \cdot 2^{-95.12}\) a session for a prover of \(C\) SHA-512 compressions (`timing.sketch_failure`, §4): no more
@@ -518,8 +523,8 @@ commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z
 (`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), the block layout, each window's passes and
 receipts \(U_t\), and the session's span. The digest binds the kind, `bind`, the codec and the layout already, but the
 record names them as well: what its receipts rest on depends on the first two (§4), and `ledger` takes a link term
-only from a record that binds \(z\); \(\mu_{\text{rebuild}}\)'s model is priced under the codec (§3), so a record is
-re-checked against the model's codec by name; and the layout says which bytes a credited block is (§4). Each
+only from a record that binds \(z\); \(\mu_{\text{rebuild}}\) is priced from the record's codec (§1, §3), and `ledger`
+refuses a rebuild model of any other; and the layout says which bytes a credited block is (§4). Each
 `WindowRecord` carries its passes' lengths \(L_{t,i}\), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so
 its span \(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`. That is every input of
 \(\gamma_t\) but the node's measured \(R\) and \(S_{\text{chip}}\) and the models, so the every-window claim is

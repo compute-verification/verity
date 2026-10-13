@@ -41,6 +41,16 @@ SECTORS = BLOCK_BYTES // SECTOR_BYTES
 SHA512_PER_S = 7.0e9
 """One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms
 (#1916, art:dea3a309)."""
+READ_BYTES_PER_S = 1.488e12
+"""One RTX PRO 6000's measured HBM read rate (ra-word-codec #1840, r20261012-051505-ed9d, art:51a27942)."""
+CHIP_BYTES = 263_163_904
+"""S_chip, one RTX PRO 6000's on-chip storage at most: 188 SMs' registers, L1 and shared memory, L1.5, instruction
+caches, uniform registers and warp state, its L2, TLB and 1 MiB of buffers (ra-pcie-exhaust #1852, `chip.cu`, runs
+art:2b6cac05 to art:90de6479)."""
+SQUARINGS_PER_S = {"p1024": 1.597 * 1.499e10, "p512": 1.567 * 5.13e10}
+"""Assumption 5 stated per width: the squarings a second of one RTX PRO 6000 with its share of the host, s·(1 + h) over
+the reference (the best form less its MOV and SEL, the host at its IFMA bound; ra-squaring-ceiling #1887).  The
+reference is codec-mix's 5.13e10 at 512 bits and `kv.cu`'s 1.499e10 at 1,024."""
 
 
 def deadline(pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0) -> int:

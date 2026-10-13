@@ -100,6 +100,11 @@ def params(**kw) -> Params:
     return Params(**{**base, **kw})
 
 
+def no_rebuild(r: audit.Record) -> audit.Rebuild:
+    """A rebuild model of the record's codec at a ceiling of 0, for the tests of the other terms."""
+    return audit.Rebuild(r.codec, 0.0)
+
+
 def params_of(st: audit.Store, **kw) -> Params:
     """`params` under `st`'s receipt kind and `bind`."""
     return params(receipt=st.registration.receipt, bind=st.registration.bind, **kw)
@@ -187,7 +192,7 @@ def test_a_session_of_partial_plans_is_accepted_and_certifies_its_receipts(store
     r = s.record()
     assert [w.lengths for w in r.windows] == [(15, 16, 17, 18), (15, 16, 17), (15, 16, 17)]
     assert r.public()["receipts"] == [66, 48, 48]
-    g = audit.ledger(r, capacity_bytes_per_s=N * 4096 / 300e-9, chip_bytes=0)
+    g = audit.ledger(r, capacity_bytes_per_s=N * 4096 / 300e-9, chip_bytes=0, rebuild=no_rebuild(r))
     assert g.timing == pytest.approx(1 - 162 * 4096 / (N * 4096 / 300e-9 * r.span_ns / 1e9))
 
 
@@ -296,14 +301,16 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     finish(s, prover, passes, clock)
     r = s.record()
     capacity = N * 4096 / 300e-9
-    g = audit.ledger(r, capacity_bytes_per_s=capacity, chip_bytes=4096, host=0.002)
+    rebuild = audit.Rebuild(r.codec, timing.SQUARINGS_PER_S["p1024"])
+    g = audit.ledger(r, capacity_bytes_per_s=capacity, chip_bytes=4096, rebuild=rebuild, host=0.002)
     whole = capacity * r.span_ns / 1e9
     assert r.span_ns == 3000 + A and r.passes == 10
     assert g.timing == pytest.approx(1 - 10 * 300 / r.span_ns)
     assert g.sample == 0                                  # every receipt opened
     assert g.chip == pytest.approx(r.passes * 4096 / whole)
     assert g.counting == pytest.approx((64 * r.receipts + 41 * r.passes) / 8 / whole) and r.receipts == r.passes * N
-    assert g.gamma == pytest.approx(g.timing + g.chip + g.counting + 0.002)
+    assert g.rebuild == pytest.approx(timing.SQUARINGS_PER_S["p1024"] * 4096 / (65_344 * capacity))
+    assert g.gamma == pytest.approx(g.timing + g.chip + g.counting + g.rebuild + 0.002)
     assert g.horizon == g.floor == 0 and g.gamma_horizon == pytest.approx(g.gamma)
     assert set(g.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "overlap" not in audit.LEDGER_SOURCES
     assert [w.span_ns for w in g.windows] == [w.span_ns for w in r.windows] == [1000 + A] * 3
@@ -313,15 +320,48 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
         whole_t = capacity * x.span_ns / 1e9
         assert w.chip == pytest.approx(x.passes * 4096 / whole_t) and w.sample == w.horizon == w.floor == 0
         assert w.counting == pytest.approx((64 * x.receipts + 41 * x.passes) / 8 / whole_t)
-        assert w.gamma == pytest.approx(w.timing + w.chip + w.counting + 0.002)
+        assert w.rebuild == g.rebuild
+        assert w.gamma == pytest.approx(w.timing + w.chip + w.counting + w.rebuild + 0.002)
     assert g.worst.gamma == max(w.gamma for w in g.windows) > g.gamma
     assert g.to_json()["worst"]["window"] == g.worst.window == 1 and g.to_json()["windows"][1] == g.windows[1].to_json()
     with pytest.raises(ValueError, match="understated"):
-        audit.ledger(r, capacity_bytes_per_s=capacity / 2, chip_bytes=0)
+        audit.ledger(r, capacity_bytes_per_s=capacity / 2, chip_bytes=0, rebuild=no_rebuild(r))
     with pytest.raises(ValueError, match="link term"):                 # an unbound receipt is of the block alone
-        audit.ledger(r, capacity_bytes_per_s=capacity, chip_bytes=0, link=0.001)
+        audit.ledger(r, capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=no_rebuild(r), link=0.001)
     assert audit.ledger(dataclasses.replace(r, bind=True), capacity_bytes_per_s=capacity, chip_bytes=0,
-                        link=0.001).link == 0.001
+                        rebuild=no_rebuild(r), link=0.001).link == 0.001
+
+
+def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
+    """μ_rebuild is the stated squaring ceiling over the record's codec's encode, `C_sq · 4096 / (E_sq · R)`: at one
+    RTX PRO 6000's measured read rate 0.067% under p1024/k3/masked, 0.10% at k = 2 and 0.34% under p512/k2.  A model
+    of another codec than the record's, a bare fraction, or a ceiling that isn't a finite nonnegative rate is
+    refused."""
+    p512 = codec.Codec(codec.P512, 2, False)
+    assert [c.encode_squarings for c in (codec.DEFAULT, codec.FALLBACK, p512)] == [32 * 3 * 1021, 32 * 2 * 1021,
+                                                                                 64 * 2 * 509]
+    assert [c.encode_squarings for c in (codec.DEFAULT, codec.FALLBACK, p512)] == [98_016, 65_344, 65_152]
+    for c in (codec.DEFAULT, p512):
+        assert ((c.field.p + 1) // 4).bit_length() - 1 == c.field.n - 3
+    fractions = [audit.Rebuild(c, timing.SQUARINGS_PER_S[c.field.name]).fraction(timing.READ_BYTES_PER_S)
+                 for c in (codec.DEFAULT, codec.FALLBACK, p512)]
+    assert fractions == pytest.approx([6.723e-4, 1.0085e-3, 3.3964e-3], rel=1e-4)
+    r = synthetic((100, 100, 60), 5, 1e-6)
+    assert r.codec == codec.DEFAULT
+    rebuild = audit.Rebuild(codec.DEFAULT, timing.SQUARINGS_PER_S["p1024"])
+    g = audit.ledger(r, capacity_bytes_per_s=100 * 4096, chip_bytes=0, rebuild=rebuild)
+    assert g.rebuild == rebuild.fraction(100 * 4096) and {w.rebuild for w in g.windows} == {g.rebuild}
+    with pytest.raises(ValueError, match="p1024/k2/masked .* the record's codec p1024/k3/masked"):
+        audit.ledger(r, capacity_bytes_per_s=100 * 4096, chip_bytes=0, rebuild=audit.Rebuild(codec.FALLBACK, 1e9))
+    with pytest.raises(ValueError, match="not a fraction"):
+        audit.ledger(r, capacity_bytes_per_s=100 * 4096, chip_bytes=0, rebuild=0.001)
+    with pytest.raises(TypeError):
+        audit.ledger(r, capacity_bytes_per_s=100 * 4096, chip_bytes=0)
+    for bad in (-1.0, math.inf, math.nan, True, "1e9"):
+        with pytest.raises(ValueError, match="finite nonnegative"):
+            audit.Rebuild(codec.DEFAULT, bad)
+    with pytest.raises(ValueError, match="of a Codec"):
+        audit.Rebuild("p1024/k3/masked", 1e9)
 
 
 def synthetic(lengths: tuple[int, ...], drawn: int, delta: float) -> audit.Record:
@@ -336,7 +376,8 @@ def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None
     openings each (d·n ≥ 18,470) are short by under 0.15% over the horizon, and by under 1% in every window, together.
     Read per window, each window's own bound at δ is about 1% of its receipts, with 7·δ in all."""
     n, d, u, delta = 7, 2773, 100_000, 2.0 ** -40
-    g = audit.ledger(synthetic((u,) * n, d, delta), capacity_bytes_per_s=u * 4096, chip_bytes=0)
+    r = synthetic((u,) * n, d, delta)
+    g = audit.ledger(r, capacity_bytes_per_s=u * 4096, chip_bytes=0, rebuild=no_rebuild(r))
     dbar = 1 - delta ** (1 / (n * d))
     assert g.timing == pytest.approx(0, abs=1e-12)
     assert g.horizon == pytest.approx(dbar) and 0.0014 < g.horizon < 0.0015
@@ -359,8 +400,9 @@ def test_the_ledger_refuses_a_window_its_capacity_cannot_have_read() -> None:
     seconds hold its 110."""
     r = synthetic((100, 10), 5, 1e-6)
     with pytest.raises(ValueError, match="window 0 .* understated"):
-        audit.ledger(r, capacity_bytes_per_s=60 * 4096, chip_bytes=0)
-    assert audit.ledger(r, capacity_bytes_per_s=100 * 4096, chip_bytes=0).windows[0].timing == 0
+        audit.ledger(r, capacity_bytes_per_s=60 * 4096, chip_bytes=0, rebuild=no_rebuild(r))
+    assert audit.ledger(r, capacity_bytes_per_s=100 * 4096, chip_bytes=0,
+                        rebuild=no_rebuild(r)).windows[0].timing == 0
 
 
 def test_the_horizon_puts_the_shortfall_where_it_hides_most() -> None:
