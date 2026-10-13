@@ -1,4 +1,4 @@
-"""The served CUDA RMSNorm kernels on an H200, word-for-word against their registered models.
+"""The served CUDA RMSNorm kernels on cc 9.0, word-for-word against their registered models.
 
 Runs vLLM d9105ea80's default (non-batch-invariant) BF16 ``rms_norm_kernel`` and width-8
 ``fused_add_rms_norm_kernel`` at M in {1,42,43,64,256,2048}, hidden widths 6144 and 7168.

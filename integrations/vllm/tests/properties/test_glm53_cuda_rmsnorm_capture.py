@@ -1,4 +1,4 @@
-"""CPU checks for the H200 CUDA RMSNorm capture's models, verdict and orchestration."""
+"""CPU checks for the cc 9.0 CUDA RMSNorm capture's models, verdict and orchestration."""
 from __future__ import annotations
 
 import json
