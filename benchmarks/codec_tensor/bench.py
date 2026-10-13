@@ -736,7 +736,8 @@ def dump_words(lib: Lib, dbg, plain, store, key, gq: int, stages: int) -> dict:
     """What the fused MMA warp consumed (a WT_DEBUG_DUMP build's dbg, plain fragment bytes a task) where it differs from
     the plain store: per bad word (task q, word w), its differing 16-byte chunks and whether its bytes are the stored
     word, zero, the payload of another word (the CTA's tasks q + j gq that share or neighbour its stage) or the decode
-    of its stored word under another tweak index."""
+    of its stored word under another tweak index; and per differing 16-byte chunk (a lane's fragment) whether it is
+    zero or those tasks' plain or stored bytes at its offset."""
     f, tb = lib.field, W.TASK_BYTES
     pb, s, tw = f.payload_bytes, lib.s, lib.tw
     dt, pt = dbg.view(-1, tb), plain.view(-1, tb)
@@ -771,6 +772,19 @@ def dump_words(lib: Lib, dbg, plain, store, key, gq: int, stages: int) -> dict:
                     if m.to_bytes(pb, "little")[:hi - lo] == got:
                         rec["is"].append(f"decoded at index{dj:+d}")
             out["words"].append(rec)
+        sb = tw * s
+        for c in sorted({o // 16 for o in range(tb) if d[o] != p[o]})[:8]:
+            got, kinds = d[16 * c:16 * c + 16], []
+            if got == bytes(16):
+                kinds.append("zero")
+            for j in range(-stages - 1, stages + 2):
+                q2 = q + j * gq
+                if 0 <= q2 < pt.shape[0]:
+                    if j and got == host_bytes(pt[q2][16 * c:16 * c + 16]):
+                        kinds.append(f"plain q{j:+d}gq")
+                    if got == host_bytes(store[q2 * sb + 16 * c:q2 * sb + 16 * c + 16]):
+                        kinds.append(f"stored q{j:+d}gq")
+            out.setdefault("chunks", []).append({"q": q, "chunk": c, "is": kinds})
     return out
 
 
@@ -976,12 +990,17 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 if bad and dump:
                     dbg = torch.zeros_like(plain)
                     lib.call("wt_set_dbg", ptr(dbg))
-                    pf = torch.zeros_like(pp)
-                    call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp)
-                    torch.cuda.synchronize()
+                    for tries in range(1, 4 * gate_reps + 1):   # a race shows in some runs only: dump a failing one
+                        pf = torch.zeros_like(pp)
+                        call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp, skout=skb)
+                        torch.cuda.synchronize()
+                        if not torch_equal(pf, pp):
+                            break
                     lib.call("wt_set_dbg", None)
                     dw = dump_words(lib, dbg, plain, stores[k], keys[k], gr * nch, cfg[1])
-                    dw["partials_equal"] = torch_equal(pf, pp)
+                    dw["partials_equal"], dw["tries"] = torch_equal(pf, pp), tries
+                    if not dw["partials_equal"]:
+                        dw["mismatch"] = mismatch(pf, pp, nch, mb, n, gr)
                     entry.setdefault("dump", {})[fused_name(k, cfg)] = dw
                     log(f"dump {lib.name} {name} M={mb} {fused_name(k, cfg)}: {dw}")
                     del dbg
@@ -1205,7 +1224,8 @@ def main() -> int:
     ap.add_argument("--fused", default="auto",
                     help="fused kernel DECODERSxSTAGES[xTAGGERS], or auto (fused_cfgs)")
     ap.add_argument("--dump", action="store_true",
-                    help="after a failed fused gate, rerun it once dumping the MMA warp's operands (WT_DEBUG_DUMP build)")
+                    help="after a failed fused gate, rerun it (until it fails, at most 4 x --gate-reps) dumping the MMA "
+                         "warp's operands (WT_DEBUG_DUMP build)")
     ap.add_argument("--sketch", default="", help="k_s values (16 at every k, 64 at k = 1) for the sketched fused kernel")
     ap.add_argument("--sketch-t", type=int, default=8, help="tasks a sketch tile (n = 32 ceil(SB / 512) T bytes)")
     ap.add_argument("--mma-knobs", default="8,16,32,48,64,96")
