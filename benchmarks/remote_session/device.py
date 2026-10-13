@@ -161,7 +161,7 @@ class DeviceStore:
     """N blocks on the GPU: the payload, its tree, then the encoded store, and the passes over it."""
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *,
-                 chunk: int = 1 << 16, kept_from: int = 6, sketch_ctas: int = 0) -> None:
+                 chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0) -> None:
         nl = blocks // PER_LEAF
         if blocks % PER_LEAF or nl & (nl - 1):
             raise ValueError(f"{blocks} blocks: the harness takes N = 16 · 2^h, so every tree is whole")
@@ -182,6 +182,7 @@ class DeviceStore:
         self.pass_gpu_ms: list[float] = []
         self.open_stats: list[dict] = []
         self.pass_host_phases: list[tuple] = []
+        self.root_host = torch.empty((1, 8), dtype=torch.int64, pin_memory=True)
 
     def shape(self, chunk: int, kept_from: int, sketch_ctas: int) -> None:
         """A pass's chunk (blocks), h0 (at most the chunk's subtree height) and the sketch's CTAs, and its ring."""
@@ -262,7 +263,9 @@ class DeviceStore:
         t4 = time.perf_counter_ns()
         b.synchronize()
         t5 = time.perf_counter_ns()
-        root = digests(kept[-1:].cpu())[0]
+        self.root_host.copy_(kept[-1:], non_blocking=True)
+        torch.cuda.current_stream().synchronize()
+        root = self.root_host.numpy().astype(np.uint64).astype(">u8").tobytes()
         self.pass_gpu_ms.append(a.elapsed_time(b))
         self.pass_host_phases.append((t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, time.perf_counter_ns() - t5))
         return root, (seed, pk, kept)
@@ -385,7 +388,7 @@ class Device:
 
     def __init__(self, torch, lib_path: str, kv_path: str, blocks: int, *, seed: int, log=print,
                  gate_blocks: int = 4096, gate_chunk: int = 1024, calibration_passes: int = 1000,
-                 warm_openings: int = 2773, chunk: int = 1 << 16, kept_from: int = 6, sketch_ctas: int = 0) -> None:
+                 warm_openings: int = 2773, chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks, warm_openings
         self.gate_blocks, self.gate_chunk, self.calibration_passes = gate_blocks, gate_chunk, calibration_passes
         self.shape = {"chunk": chunk, "kept_from": kept_from, "sketch_ctas": sketch_ctas}
@@ -585,9 +588,9 @@ def add_arguments(ap) -> None:
     ap.add_argument("--gate-blocks", type=int, default=4096)
     ap.add_argument("--calibration-passes", type=int, default=1000)
     ap.add_argument("--warm-openings", type=int, default=2773, help="a window's openings, opened once in calibration")
-    ap.add_argument("--chunk-blocks", type=int, default=1 << 16, help="a pass's chunk (`rs_pass`)")
+    ap.add_argument("--chunk-blocks", type=int, default=1 << 18, help="a pass's chunk (`rs_pass`)")
     ap.add_argument("--kept-from", type=int, default=6, help="h0: the pass tree's levels kept for the openings")
-    ap.add_argument("--sketch-ctas", type=int, default=0, help="the sketch's CTAs (0: as many as are resident)")
+    ap.add_argument("--sketch-ctas", type=int, default=0, help="the receipts grid's CTAs (0: one an SM)")
 
 
 def from_arguments(a, log=print) -> Device:
