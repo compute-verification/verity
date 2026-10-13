@@ -12,7 +12,7 @@
   },
   "FlockSoundness.Assumptions.InnerRecordCustody": {
    "owner": "@proofs",
-   "digest": "0fa1bc487add939198bdbd17d3376409a02c8885420a00205cd835f829084e08"
+   "digest": "bf19edae03fc6d856197b0b4b48fad91c9dc021892ca626e6dd3ed9f90b7fc3b"
   },
   "FlockSoundness.Assumptions.SHA512CRExpected": {
    "owner": "@proofs",
@@ -14971,12 +14971,12 @@
    ]
   },
   "Proofs.Flock.Soundness.Assumptions.Inner": {
-   "digest": "2c197fa5e0c1672a868310b12b12c1f4fe1c0848a01af55703915a83ac30b5fb",
+   "digest": "b94ddfde9baad66fa4c9d32e1e1f4785d38ae8cffb67d7ee355690bcaa0be546",
    "definitions": {
-    "FlockSoundness.Assumptions.InnerRecordCustody": "0fa1bc487add939198bdbd17d3376409a02c8885420a00205cd835f829084e08",
-    "FlockSoundness.Assumptions.InnerRecordMap": "b10f8ce11392434de7e5f24b142eb4ee0b1c6d9abbd517d465b7e16b68c6b807",
+    "FlockSoundness.Assumptions.InnerRecordCustody": "bf19edae03fc6d856197b0b4b48fad91c9dc021892ca626e6dd3ed9f90b7fc3b",
+    "FlockSoundness.Assumptions.InnerRecordMap": "c2a8b665eb8ce78a9cad24d1f17ed4f2721ce0e13d954e2bd4d1a2a78dc7c0be",
     "FlockSoundness.Assumptions.InnerRecordMap.bc": "313d685aa17b98c29ec6d7e5cdc9a06b3f6143233ad6ac3f3597f1907776ca2e",
-    "FlockSoundness.Assumptions.InnerRecordMap.coin": "0440000b8b853fcbe23119d113e71546ee0827c694db337e8c5668681220901a",
+    "FlockSoundness.Assumptions.InnerRecordMap.coin": "6a9e67d7395acfaa55a8f76d17f3bc3d0dd58a97ff2997fb0d27314f20a0c220",
     "FlockSoundness.Assumptions.InnerRecordMap.points": "d500444251e3a53d9bf5afabda916a3dc200fe38a0ecf24dba368f2161b33d55",
     "FlockSoundness.Assumptions.InnerRecordMap.sel": "6ac71905c2e122085200102a31ba65efb71ba806d5f4bc295cf2fd9ee508af97",
     "FlockSoundness.Assumptions.InnerRecordMap.selC": "2bf3c14ae46645f6299ce9fc7e4511f0775ce8df7ead6595c67781ae299862c5",
