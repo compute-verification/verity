@@ -61,9 +61,9 @@ def heldCommits (cs : InnerCommits) : HoloStream → Option (Array (Nat × ByteA
 round `k`, or node `x` of R's `l`-th top, which R's round `k` commits. -/
 def HeldAt (cs : InnerCommits) (stacked : Option (Array SchedRound)) (s : HoloStream) (k x : Nat) (c : ByteArray) :
     Prop :=
-  (∃ cm i, heldCommits cs s = some cm ∧ cm[i]? = some (k, c)) ∨
-    ∃ rs st l n, s = .stacked ∧ stacked = some rs ∧ cs.stream? s!"{STACKED}/rep0" = some st ∧
-      (topRounds rs)[l]? = some (k, n) ∧ (st.tops[l]?).bind (·[x]?) = some c
+  (∃ (cm : Array (Nat × ByteArray)) (i : Nat), heldCommits cs s = some cm ∧ cm[i]? = some (k, c)) ∨
+    ∃ (rs : Array SchedRound) (st : InnerStream) (l n : Nat), s = .stacked ∧ stacked = some rs ∧
+      cs.stream? s!"{STACKED}/rep0" = some st ∧ (topRounds rs)[l]? = some (k, n) ∧ (st.tops[l]?).bind (·[x]?) = some c
 
 theorem msgRounds_getElem? {cm : Array (Nat × ByteArray)} {rs : Array SchedRound} (h : CommitsAt cm rs) (i : Nat) :
     (msgRounds rs)[i]? = (cm[i]?).map (·.1) := by
@@ -103,7 +103,7 @@ theorem sparseRow_ok {cs : InnerCommits} {sh : RecSparse.Shape} {p : String} {x 
   | none => simp [sparseRow, hi] at h
   | some i =>
     cases hs : cs.stream? s!"{SPARSE}/rep{x}" with
-    | none => simp [sparseRow, hi, hs] at h
+    | none => simp [sparseRow, hi, hs, -Nat.toString_eq_repr] at h
     | some st =>
       obtain ⟨hil, -⟩ := List.idxOf?_eq_some_iff.1 hi
       by_cases hn : st.commits.size = (sparseMessages sh).length
@@ -112,12 +112,12 @@ theorem sparseRow_ok {cs : InnerCommits} {sh : RecSparse.Shape} {p : String} {x 
         | mk k c' =>
           have hc : c' = c := by
             simp [sparseRow, hi, hs, hn, getElem!_pos st.commits i hix, hk, bind, Except.bind, pure,
-              Except.pure] at h
+              Except.pure, -Nat.toString_eq_repr] at h
             exact h.2
           subst hc
           refine ⟨i, st, k, by first | rfl | exact hi, by first | rfl | exact hs, ?_⟩
           rw [Array.getElem?_eq_getElem hix, hk]
-      · simp [sparseRow, hi, hs, hn, bind, Except.bind] at h
+      · simp [sparseRow, hi, hs, hn, bind, Except.bind, -Nat.toString_eq_repr] at h
 
 theorem fixedRow_sparse_eq {cs : InnerCommits} {sh : RecSparse.Shape} {v p : String} {x : Nat}
     (hci : cIndex v = none) (hoi : openingIndex v = none) (hti : stackedTopLevel v = none)
