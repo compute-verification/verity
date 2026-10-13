@@ -6,12 +6,14 @@ import Proofs.Flock.C3.Compose.RsFacts
 # The checks' whole reads: `RsReadCol` and `ResReadCol`
 
 `RecOpening.check` refuses a `rec-opening` part whose computed rows read an element of a claim's ring switch in fewer
-than 128 bits (`rsUnread`), and `RecResiduals.check` a `rec-residuals` part whose computed rows read a row-port element
-in some but not all of them (`partlyRead`), both over `readIns`, the input columns the net's computed rows read.
+than 128 bits (`rsUnread`), and both it and `RecResiduals.check` a part whose computed rows read a row-port element in
+some but not all of them (`partlyRead`), all over `readIns`, the input columns the net's computed rows read.
 
 * `getD_readIns`: `readIns` marks exactly those columns; `readCol_of_row`, `row_of_readCol`: they are the audit's
   `ReadCol` at `unitLog ≤ 32` (`Rows.ofNet_a`, `Rows.ofNet_b`).
-* `check_rsWhole`, `check_whole`: what each check accepted, with its refusal passed.
+* `check_rsWhole`, `check_whole`: what each check accepted, with its refusals passed.
+* `readCol_whole`: a part's net that passed `partlyRead` reads a row-port element whole where it reads one of its bits;
+  `readCol_openWhole` at the opening's check, and `openReadCol_whole`, `WReadO`'s `OpenReadCol sh` at `unitLog ≤ 32`.
 * `rsReadCol`: `RsReadCol` holds outright, `OpenCopy` carrying the opening's check.
 * `resReadCol`: `ResReadCol` holds where each part's session passed `RecResiduals.check` at the shape (`p₀ = p`).
 -/
@@ -164,13 +166,15 @@ theorem partW_eq {sh : Shape} {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Ar
     exact h.symm
   · cases h
 
-/-- **What `RecOpening.check` accepted reads its ring-switch elements whole**: the verifier's net for part `j`, whose
-computed rows read each element of a claim's ring switch at `partW`'s slots in all 128 bits. -/
+/-- **What `RecOpening.check` accepted reads its ring-switch elements whole, and every other element whole or not at
+all**: the verifier's net for part `j`, whose computed rows read each element of a claim's ring switch at `partW`'s
+slots in all 128 bits, and each row-port element in all 128 or in none. -/
 theorem check_rsWhole {c : Circuit} (h : RecOpening.check c = .ok ()) {m cl j : ℕ}
     (hp : RecOpening.params c.unit.name = some (m, cl, j)) {sh : Shape} (hsh : RecOpening.shape? m cl = some sh) :
     ∃ S ns nv W, RecOpening.part sh j = .ok (S, ns, nv) ∧
       HmNets.netOf (RecOpening.unitName m cl j) (RecResiduals.unitLaid S ns nv) = .ok c.unit ∧
-      RecOpening.partW sh j = .ok W ∧ RecOpening.rsUnread sh W (RecResiduals.readIns c.unit) ns = none := by
+      RecOpening.partW sh j = .ok W ∧ RecOpening.rsUnread sh W (RecResiduals.readIns c.unit) ns = none ∧
+      RecResiduals.partlyRead (RecResiduals.readIns c.unit) ns = none := by
   unfold RecOpening.check at h
   rw [hp] at h
   dsimp only at h
@@ -196,7 +200,10 @@ theorem check_rsWhole {c : Circuit} (h : RecOpening.check c = .ok ()) {m cl j : 
             · rename_i W hW
               split at h
               · rename_i hn
-                exact ⟨S, ns, nv, W, hpart, hg, hW, hn⟩
+                split at h
+                · rename_i hw
+                  exact ⟨S, ns, nv, W, hpart, hg, hW, hn, hw⟩
+                · cases h
               · cases h
           · cases h
 
@@ -289,7 +296,7 @@ theorem readCol_rs {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpening.check
     {q e : ℕ} (he : (FlockVBridge.PartS.wIdx (RecOpening.portSizes sh) gs[p].2.1)[q]? = some e) {i t : ℕ}
     (hwi : RecOpening.wi sh (.rs i t) = some e) {b : ℕ} (hb : b < 128) :
     ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * q + b)) := by
-  obtain ⟨S₂, ns₂, nv₂, W, hpart₂, -, hW, hn⟩ := check_rsWhole h hp hsh
+  obtain ⟨S₂, ns₂, nv₂, W, hpart₂, -, hW, hn, -⟩ := check_rsWhole h hp hsh
   obtain ⟨rfl, rfl, rfl⟩ : S₁ = S₂ ∧ ns = ns₂ ∧ nv = nv₂ := by
     simpa only [Prod.mk.injEq] using Except.ok.inj (hpart.symm.trans hpart₂)
   obtain rfl := partW_eq hS hg hpg hW
@@ -319,6 +326,30 @@ theorem readCol_whole {c : Flock.Circuit} (hU : Built c.unit) (hu : c.unit.unitL
   · obtain ⟨-, r', hr1', hr2', hmem'⟩ := (getD_readIns c.unit _).1 (getD_of_readBits h128 hb₀)
     rw [rowCol_eq] at hmem'
     exact readCol_of_row hU hu hr1' hr2' hmem'
+
+/-- **The unit `RecOpening.check` accepted for part `p` reads a row-port element whole where it reads one of its bits**
+(`readCol_whole` at the part's net, whose `partlyRead` the check passed). -/
+theorem readCol_openWhole {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpening.check c = .ok ())
+    (hu : c.unit.unitLog ≤ 32) {m cl p : ℕ} (hp : RecOpening.params c.unit.name = some (m, cl, p)) {sh : Flock.Shape}
+    (hsh : RecOpening.shape? m cl = some sh) {S₁ : RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (hpart : RecOpening.part sh p = .ok (S₁, ns, nv)) {q b : ℕ} (hq : q < ns.sum) (hb : b < 128)
+    (hr : ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * q + b))) {b₀ : ℕ} (hb₀ : b₀ < 128) :
+    ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * q + b₀)) := by
+  obtain ⟨S₂, ns₂, nv₂, -, hpart₂, hn, -, -, hw⟩ := check_rsWhole h hp hsh
+  obtain ⟨rfl, rfl, rfl⟩ : S₁ = S₂ ∧ ns = ns₂ ∧ nv = nv₂ := by
+    simpa only [Prod.mk.injEq] using Except.ok.inj (hpart.symm.trans hpart₂)
+  exact readCol_whole hU hu hn hw hq hb hr hb₀
+
+/-- **An element a `rec-opening` part holds is read whole or not at all** (`WReadO`'s `OpenReadCol sh`, with the unit's
+`unitLog ≤ 32` that `OpeningZeroAtL` carries): `readCol_openWhole` at each circuit. -/
+theorem openReadCol_whole (sh : Flock.Shape) :
+    ∀ (c : Flock.Circuit) (hU : Built c.unit) (m cl p : ℕ), Flock.RecOpening.check c = .ok () →
+      c.unit.unitLog ≤ 32 → Flock.RecOpening.params c.unit.name = some (m, cl, p) →
+      Flock.RecOpening.shape? m cl = some sh →
+      ∀ (S₁ : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ), Flock.RecOpening.part sh p = .ok (S₁, ns, nv) →
+      ∀ a < ns.sum, ∀ b < 128, ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * a + b)) →
+        ∀ b₀ < 128, ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * a + b₀)) :=
+  fun _ hU _ _ _ hc hu hp hsh _ _ _ hpart _ hq _ hb hr _ hb₀ => readCol_openWhole hU hc hu hp hsh hpart hq hb hr hb₀
 
 end Net
 
