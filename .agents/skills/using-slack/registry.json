@@ -134,7 +134,8 @@
         "benchmarks/bandwidth/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
-        "benchmarks/codec_tensor/"
+        "benchmarks/codec_tensor/",
+        "benchmarks/kv_filler/"
       ]
     },
     {

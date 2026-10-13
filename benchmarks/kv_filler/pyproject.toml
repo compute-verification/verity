@@ -1,0 +1,7 @@
+# The KV filler's benchmark and its tests. Not a package: `topup.cu`, `bench.py` and `serve.py` run on a GPU node
+# (`run.sh`); the conversion-lag replay (`lag.py`) and the filler plan (`plan.py`) run here as a suite.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+inputs = ["verity/ml/crypto/blake3.py"]
