@@ -777,16 +777,20 @@ def recorder(hooks, sched, rec: list, window: Window) -> None:
     hooks.wrap(sched, "update_from_output", make)
 
 
-def steady(rec: list, b: int) -> dict:
-    """The point's decode steps: intervals between consecutive updates that each scheduled b tokens for b requests."""
+def steady(rec: list, b: int, start: float) -> dict:
+    """The point's decode steps: intervals between consecutive updates that each scheduled b tokens for b requests; and
+    its TTFT, from the generate call to the update of the step that finished the last prompt's prefill (the one before
+    the first all-decode step: every request has its first token)."""
+    first = next((i for i, (_, n, r) in enumerate(rec) if n == r == b), None)
+    ttft = {"ttft_ms": (rec[first - 1][0] - start) * 1e3} if first else {}
     iv = [t1 - t0 for (t0, n0, r0), (t1, n1, r1) in itertools.pairwise(rec) if n0 == r0 == b and n1 == r1 == b]
     if len(iv) < 4:
-        return {"steps": len(iv)}
+        return {"steps": len(iv), **ttft}
     iv = iv[1:]
     med = statistics.median(iv)
     q = statistics.quantiles(iv, n=10)
     return {"steps": len(iv), "step_ms": med * 1e3, "mean_ms": statistics.fmean(iv) * 1e3, "p10_ms": q[0] * 1e3,
-            "p90_ms": q[-1] * 1e3, "tokens_per_s": b / med}
+            "p90_ms": q[-1] * 1e3, "tokens_per_s": b / med, **ttft}
 
 
 def main() -> None:
@@ -989,7 +993,7 @@ def main() -> None:
                 (out.parent / "torch-profile.txt").write_text(text)
                 log("torch profile\n" + ka.table(sort_by="cuda_time_total", row_limit=15))
             window.end()
-            point.update(steady(rec, b), wall_s=time.perf_counter() - t, max_tokens=mt, updates=len(rec))
+            point.update(steady(rec, b, t), wall_s=time.perf_counter() - t, max_tokens=mt, updates=len(rec))
             if binder:
                 point["store"] = store_delta(binder, before, len(rec))
             result["points"].append(point)

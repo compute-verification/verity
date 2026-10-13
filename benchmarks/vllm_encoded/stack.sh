@@ -11,7 +11,7 @@
 # MODE=paged runs paged_gate.py (ARGS passes through). MODE=serve also builds wt.cu (WT_RECEIPT at
 # KV_FIELD, masked, WT_FOLD6 default 1) and reader.cu, then runs serve.py's ARMS (default "stock pstack stack") in order,
 # each with SERVE_ARGS (default one gate-sized point), into $O/arm-<arm>[-<i>].json, and stack_compare.py over them.
-# MODE=wgate builds as serve, runs ARMS (set it to "stack") for the configs it selects, then stack_write_gate.py at them.
+# DISCARD=N leaves each arm's first N repeats out of the points (a warm-up round). MODE=wgate builds as serve, runs ARMS (set it to "stack") for the configs it selects, then stack_write_gate.py at them.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
@@ -61,7 +61,7 @@ case ${MODE:-paged} in
         --ptxas "$O/wt.ptxas" "$O/paged.ptxas" "$O/reader.ptxas" --out "$O" > "$O/stack-write-gate.log" 2>&1 || rc=$?
       tail -40 "$O/stack-write-gate.log"; exit $rc
     fi
-    "$PY" $VE/stack_compare.py "$O" || rc=$?
+    "$PY" $VE/stack_compare.py "$O" --discard "${DISCARD:-0}" || rc=$?
     exit $rc ;;
   *) echo "unknown MODE ${MODE}"; exit 2 ;;
 esac

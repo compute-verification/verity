@@ -7,7 +7,10 @@ chunked): the tokens that agree before the first that differs, and the largest l
 Writes OUT/stack-points.json: for each batch and context, each arm's decode step (serve.py's median, ms) by repeat, and the
 ratios stack / stock, stack / pstack and pstack / stock: the mean of the repeats' ratios (repeat i of one arm over repeat i
 of the other, run interleaved), with a 95% t-interval over the repeats when there are at least two, and TTFT likewise
-where serve.py measured it.
+where serve.py measured it.  `--discard N` leaves each arm's first N repeats (a warm-up round) out of the points, not the
+gates.
+
+    python stack_compare.py OUT [--discard N]
 """
 from __future__ import annotations
 
@@ -63,9 +66,10 @@ def ratio(num: list[float], den: list[float]) -> dict | None:
 
 def main() -> int:
     out = Path(sys.argv[1])
+    discard = int(sys.argv[sys.argv.index("--discard") + 1]) if "--discard" in sys.argv else 0
     by = arms(out)
     fails: list[str] = []
-    report: dict = {"arms": {a: len(v) for a, v in by.items()}, "gate": {}, "points": []}
+    report: dict = {"arms": {a: len(v) for a, v in by.items()}, "discarded": discard, "gate": {}, "points": []}
     for a in ("pstack", "stack"):
         for i, r in enumerate(by.get(a, [])):
             g = r.get("install", {}).get("gates")
@@ -91,7 +95,8 @@ def main() -> int:
     for b, ctx in keys:
         row: dict = {"batch": b, "context": ctx, "step_ms": {}, "ttft_ms": {}}
         for a, v in by.items():
-            pts = [next((p for p in r.get("points", []) if (p["batch"], p["context"]) == (b, ctx)), {}) for r in v]
+            pts = [next((p for p in r.get("points", []) if (p["batch"], p["context"]) == (b, ctx)), {})
+                   for r in v[discard:]]
             row["step_ms"][a] = [p.get("step_ms") for p in pts]
             row["ttft_ms"][a] = [p.get("ttft_ms") for p in pts]
         for x, y in PAIRS:
