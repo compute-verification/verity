@@ -1,0 +1,3733 @@
+{
+ "schema": "verity-vllm/capture-map/v0",
+ "id": "deepseek-v4-eager-hopper-tp8-v0",
+ "purpose": "The capture half of a semantic profile for a DeepseekV4ForCausalLM checkpoint (DeepSeek-V4-Pro) served eager at TP8 on Hopper (sm_90, 8xH200) with DeepGEMM on: every module the pinned vLLM builds for the checkpoint's config.json, what each one computes on the forward path, and the taps the committer attaches to -- each tap's capture-v2 identity (op, port, layer), the tensor's dtype and shape on one rank, where it is captured, the weights it reads and the Program that checks it, by status. The residual is mHC's four streams ([M, HC, H]) between layers, so every mHC call's four returns are taps; the compressors' state rows and the compressed cache rows they write are taps, because a later step's attention reads them. Checked against a meta-device build of the same config at TP8 (verity-vllm meta-inventory, ranks 0-7). No route_site: the committer does not read this map until capture_work lands.",
+ "architectures": [
+  "DeepseekV4ForCausalLM"
+ ],
+ "model_type": "deepseek_v4",
+ "model_class": "vllm.models.deepseek_v4.nvidia.model.DeepseekV4ForCausalLM",
+ "pins": {
+  "vllm": "0.28.1rc1.dev472+gd9105ea80",
+  "vllm_commit": "d9105ea8001e0a6d77a96327d17515bb5791fb36",
+  "torch": "2.13.0+cu129",
+  "checkpoint": {
+   "repo": "deepseek-ai/DeepSeek-V4-Pro",
+   "revision": "b5968e9190ef611bbf34a7229255be88a0e937c1",
+   "config_sha256": "5fe4568daee51c208cb8a79538eaeda090ae011ade1dee2c386aa95f569c810e"
+  },
+  "kernels": {
+   "deep_gemm": "8b1392b9 (fp8_gemm_nt, fp8_einsum, tf32_hc_prenorm_gemm, fp8_mqa_logits / fp8_paged_mqa_logits)",
+   "flash_mla": "6bc49418 (flash_mla_with_kvcache, flash_mla_sparse_fwd)",
+   "marlin": "csrc/moe/marlin_moe_wna16 at the vLLM pin (moe_wna16_marlin_gemm, float4_e2m1f weights with e8m0 group-32 scales)",
+   "tilelang_mhc": "vllm/model_executor/kernels/mhc/tilelang_kernels.py at the vLLM pin"
+  },
+  "inventory_runs": {
+   "default": "art:2e450ae48507dc3561421318c7fd995890d97a7435192b4d5fc6e1fe1ac5ab95 (inv-tp8.json, ranks 0-7, the target profile: DeepGEMM on, e8m0 scales; tests/check/fixtures/deepseek_v4). Produced by verity-vllm meta-inventory on a cloud-agent VM, not a research run: command.txt and meta_inventory.patch in the tree name the command, the venv and the stub driver"
+  }
+ },
+ "target": {
+  "compute_capability": [
+   9,
+   0
+  ],
+  "num_sms": 132,
+  "device": "NVIDIA H200",
+  "device_memory_gb": 141,
+  "tensor_parallel_size": 8,
+  "pipeline_parallel_size": 1,
+  "enforce_eager": true,
+  "kv_cache_dtype": "auto",
+  "dtype": "bfloat16",
+  "quantization": "deepseek_v4_fp8",
+  "max_decode_batch": 16,
+  "profile": {
+   "compute_capability": [
+    9,
+    0
+   ],
+   "num_sms": 132,
+   "batch_invariant": false
+  },
+  "env": {
+   "VLLM_BATCH_INVARIANT": "0"
+  },
+  "switches": {
+   "VLLM_BATCH_INVARIANT": false,
+   "VLLM_USE_DEEP_GEMM": true,
+   "VLLM_USE_DEEP_GEMM_E8M0": true,
+   "deep_gemm_supported": true,
+   "deep_gemm_e8m0": true,
+   "VLLM_ALLREDUCE_USE_SYMM_MEM": true,
+   "VLLM_ALLREDUCE_USE_FLASHINFER": true
+  },
+  "env_reasons": {
+   "VLLM_USE_DEEP_GEMM": "left at its default (1): the checkpoint's FP8 scales are ue8m0 (quantization_config.scale_fmt) and every dense FP8 linear runs DeepGemmFp8BlockScaledMMKernel with e8m0 activation scales. VLLM_USE_DEEP_GEMM=0 would move them to CUTLASS with f32 scales, a different function from the one the checkpoint was trained to; the mHC TF32 GEMM, the o-projection einsum and the indexer logits call DeepGEMM whatever the variable says",
+   "VLLM_BATCH_INVARIANT": "not set: the Commit runs without it and replay uses the same batch layout",
+   "kv_cache_dtype": "auto: DeepseekV4Attention rewrites it to fp8_ds_mla (_resolve_dsv4_kv_cache_dtype), the UE8M0 paged layout, 584 bytes per token (448 e4m3 NoPE + 64 bf16 RoPE + 8 scale bytes)",
+   "max_decode_batch": "the serve's decode batch limit: a step of at most 16 tokens takes the fused FMA mHC kernel (route hc-fused); a larger one the TF32 path"
+  }
+ },
+ "selections": {
+  "attention_backend": "DeepseekV4FlashMLAAttention (_select_dsv4_attn_cls: FlashMLA on sm_90): decode tokens through flash_mla_with_kvcache over the SWA cache plus the compressed cache at the layer's indices; prefill tokens through flash_mla_sparse_fwd over gathered, dequantized rows, per chunk",
+  "padded_heads": "NHL = 16 query heads per rank, padded to NHP = 64 for FlashMLA; attn_sink has NHP entries",
+  "fp8_linear_kernel": "DeepGemmFp8BlockScaledMMKernel (use_deep_gemm_e8m0, is_scale_e8m0) on every FP8 linear",
+  "o_projection": "deep_gemm_fp8_o_proj: fused_inv_rope_fp8_quant (inverse RoPE on the last DR dims, 1x128 FP8 groups), DeepGEMM fp8_einsum('bhr,hdr->bhd', recipe (1, 128, 128) on sm_90) against wo_a's weight, then wo_b",
+  "moe_backend": "Mxfp4MoEMethod with Mxfp4MoeBackend.MARLIN (W4A16: float4_e2m1 weights, e8m0 group-32 scales, bf16 activations): fused_marlin_moe, two moe_wna16_marlin_gemm launches with use_fp32_reduce, then ops.moe_sum",
+  "router": "FusedTopKBiasRouter -> fused_topk_bias: sqrtsoftplus scores, top 6 of 384 with e_score_correction_bias for selection only, renormalised, x 2.5 (dsv4_topk); the first HASH layers route by tid2eid[input_ids] (topk_hash_softplus_sqrt)",
+  "router_gemm": "GateLinear: cuteDSL ll_bf16_gemm for M <= 16 (allow_ll_bf16_gemm), else torch.mm(x, W.T, out_dtype=float32)",
+  "mhc": "hc_mult 4, 20 Sinkhorn iterations. Layer 0's pre is mhc_pre_broadcast_tilelang (DeepGEMM tf32_hc_prenorm_gemm at every token count); every later pre is fused with the previous post (mhc_fused_post_pre_tilelang): FMA for M <= 16, DeepGEMM TF32 above. After the last layer, mhc_post_tilelang and hc_head_fused_kernel_tilelang, then model.norm",
+  "compressors": "every layer has one: compress_ratios[i] 4 (CSA, with an indexer) or 128 (HCA). The kv / score GEMM is torch.mm(out_dtype=float32) on fused_wkv_wgate's weight; save_partial_states keeps f32 state rows; at a ratio boundary compress_norm_rope_store_cutedsl (head 512) or _triton (the indexer's, head 128) writes one compressed cache row",
+  "rotary": "one DeepseekV4ScalingRotaryEmbedding (deepseek_yarn, compress_rope_theta 160000, factor 16, GPT-J interleaved, cos_sin_cache [1048576, 64] f32) shared by every layer, its compressor and its indexer",
+  "embedding": "VocabParallelEmbedding sharded (16160 rows per rank, use_fused_embedding): masked gather then all-reduce",
+  "mtp": "num_nextn_predict_layers 1 is not built: no speculative decoding in the serve command"
+ },
+ "routes": {
+  "hc-fused": "a step of at most 16 tokens (mhc_fused_post_pre_tilelang: use_small_fma = num_tokens <= 16): each post-and-pre after layer 0's is mhc_fused_tilelang (the post, then the pre's GEMM and square sum by FMA in 4 K-splits at H = 7168; tile_n 2 below 8 tokens, else 3) and mhc_pre_big_fuse_with_norm_tilelang. Every decode step of the target's serve (decode batch <= 16)",
+  "hc-split": "a step of more than 16 tokens: mhc_post_tilelang, DeepGEMM tf32_hc_prenorm_gemm (TF32 tensor cores) and mhc_pre_big_fuse_with_norm_tilelang",
+  "indexer-short": "a step whose longest sequence has at most TOPK * CSA_R tokens (Indexer.forward: max_seq_len // compress_ratio <= topk_tokens; eager never captures): the indexer's compressor runs and _fill_short_context_topk_indices writes every compressed key; wq_b, the q quantisation and indexer_op do not run",
+  "indexer-scored": "a longer step: wq_b, fused_indexer_q_rope_quant, DeepGEMM's logits and the top-TOPK selection (SparseAttnIndexer)",
+  "decode-tokens": "the step has decode tokens (rows [0, MD), swa_metadata.num_decodes > 0): flash_mla_with_kvcache at the decode indices",
+  "prefill-tokens": "the step has prefill tokens (rows [MD, M)): flash_mla_sparse_fwd per prefill chunk over the gathered, dequantized cache rows"
+ },
+ "step_routes": {
+  "prefill": "prefill-tokens; hc-fused at M <= 16, else hc-split; indexer-short when the longest sequence has at most TOPK * CSA_R tokens, else indexer-scored",
+  "decode": "decode-tokens and hc-fused (decode batch <= 16); indexer-short or indexer-scored as for prefill",
+  "mixed": "decode-tokens and prefill-tokens, each on its own rows; one hc route by the step's token count and one indexer route by its longest sequence",
+  "recorded": "not yet: the map has no route_site and the committer does not read it (capture_work). Each route is a function of the step's token count, its decode / prefill split or its longest sequence, all in its attention metadata"
+ },
+ "symbols": {
+  "H": "hidden_size",
+  "V": "vocab_size",
+  "NH": "num_attention_heads",
+  "HD": "head_dim",
+  "DR": "qk_rope_head_dim",
+  "QL": "q_lora_rank",
+  "OG": "o_groups",
+  "OL": "o_lora_rank",
+  "IH": "index_n_heads",
+  "ID": "index_head_dim",
+  "TOPK": "index_topk",
+  "E": "n_routed_experts",
+  "K": "num_experts_per_tok",
+  "MI": "moe_intermediate_size",
+  "NS": "n_shared_experts",
+  "L": "num_hidden_layers",
+  "HASH": "num_hash_layers",
+  "HC": "hc_mult",
+  "HCI": "hc_sinkhorn_iters",
+  "SW": "sliding_window",
+  "B": "quantization_config.weight_block_size.0",
+  "CSA_R": "compress_ratios.2",
+  "HCA_R": "compress_ratios.0",
+  "W": "=tp",
+  "NHL": "=NH // W",
+  "NHP": "=64 + 64 * (NHL > 64)",
+  "OGL": "=OG // W",
+  "HPG": "=NHL // OGL",
+  "VS": "=V // W",
+  "MIL": "=MI // W",
+  "SIL": "=NS * MI // W",
+  "HCD": "=HC * H",
+  "MIX": "=(2 + HC) * HC",
+  "KVQ": "=QL + HD",
+  "DN": "=HD - DR",
+  "SWAB": "=DN + 2 * DR + DN // 64 + 1",
+  "IKB": "=ID + 4"
+ },
+ "free_symbols": {
+  "M": "tokens this step on every rank (TP replicates the batch)",
+  "MS": "rows sampled this step (logits_indices: one per running request)",
+  "MD": "the step's decode tokens (swa_metadata.num_decode_tokens), rows [0, MD)",
+  "MP": "the step's prefill tokens, rows [MD, M)",
+  "CTX": "the indexer logits' key width: compressed keys of the prefill chunk, or of max_model_len on a decode step",
+  "NC4": "compressed rows a CSA layer's compressor writes this step: tokens whose position + 1 is a multiple of CSA_R",
+  "NC128": "compressed rows an HCA layer's compressor writes this step: tokens whose position + 1 is a multiple of HCA_R",
+  "NX": "the HCA decode index width: cdiv(cdiv(max_model_len, HCA_R), 128) * 128 (c128a_max_compressed)"
+ },
+ "layer_sets": {
+  "all": "0 <= i < L",
+  "first": "i == 0",
+  "after_first": "1 <= i < L",
+  "hash": "i < HASH",
+  "scored": "i >= HASH",
+  "csa": "i >= 2 and i % 2 == 0",
+  "hca": "i < 2 or i % 2 == 1"
+ },
+ "programs": {
+  "embedding-shard": {
+   "status": "exists",
+   "definitions": [
+    "EmbeddingShard_v1"
+   ],
+   "note": "one rank of VocabParallelEmbedding: the row table[tok - START] when the rank owns the token, else zeros (START = rank * VS)"
+  },
+  "all-gather": {
+   "status": "exists",
+   "definitions": [
+    "AllGather_v1"
+   ],
+   "note": "the logits all-gather: the concatenation of the 8 vocab shards (AllGather_v1 at WORLD 8 is a reference rearrangement, no gates)"
+  },
+  "token-select": {
+   "status": "exists",
+   "definitions": [
+    "TokenSelect_v1",
+    "TokenSelect_v2"
+   ],
+   "note": "greedy argmax over the gathered logits (temperature 0)"
+  },
+  "bf16-add": {
+   "status": "exists",
+   "definitions": [
+    "ResidualAdd_v1"
+   ],
+   "note": "ATen add on bf16: bf16_rn(f32(a) + f32(b)) per element, NaN 0x7FC0 (MoERunner: shared_output + fused_output)"
+  },
+  "moe-sum": {
+   "status": "exists",
+   "definitions": [
+    "MoeSum_v1",
+    "MoeSum_v2"
+   ],
+   "note": "ops.moe_sum (moe_sum_vec_kernel): per element the f32 sum of the TOPK down rows from 0 in ascending k, rounded to bf16 (the rows already carry the router weights from the w2 launch)"
+  },
+  "copy-equality": {
+   "status": "copy",
+   "definitions": [],
+   "note": "a value the runtime only moves: checked by word equality against the taps it copies, no Program"
+  },
+  "rmsnorm-cuda": {
+   "status": "port",
+   "definitions": [
+    "RMSNormFusedCuda_v1"
+   ],
+   "note": "model.norm: RMSNorm.forward_cuda without a residual (rms_norm). RMSNormFusedCuda_v1 models the width-8 kernel at the batch-invariant block size; the block size at H = 7168 without batch invariance must be pinned"
+  },
+  "fused-rmsnorm-triton": {
+   "status": "port",
+   "definitions": [
+    "RMSNormTriton_v1"
+   ],
+   "note": "fused_q_kv_rmsnorm (vllm/models/common/ops/fused_qk_rmsnorm.py, _fused_q_kv_rmsnorm_kernel, grid (M, 2), BLOCK = next_power_of_2(max(QL, HD)) = 2048): program 0 the q_norm of qr, program 1 the kv_norm of kv, eps 1e-6; its reduction tree must be pinned against the Triton RMSNorm family at that block"
+  },
+  "cublas-bf16-gemm": {
+   "status": "port",
+   "definitions": [
+    "Gemm_v2",
+    "Gemm_v3"
+   ],
+   "note": "cuBLAS bf16 F.linear with split-K off (lm_head.shard; the indexer's weights_proj): core's Gemm_v2{K, N, HopperBF16WgmmaDot16_v1} (Boolean Gemm_v3), as workstream A pins GLM-5.3's shapes (tests/properties/glm53_bf16_gemm_capture_gpu.py on cursor/glm53-committed-ops-8c79). DeepSeek-V4's shapes (K = 7168; N = 16160 and 64) need the same capture",
+   "when": "CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before the first cuBLAS handle, allow_fp16/bf16_reduced_precision_reduction = (False, False) and preferred_blas_library('cublaslt') on every rank (vLLM's batch-invariant cuBLAS settings on cc 9.0 without its Triton overrides); not yet set by the served engine"
+  },
+  "cublas-f32-out": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "torch.mm(x, W.T, out_dtype=float32) on bf16 (the compressors' kv / score GEMMs, K = 7168, N = 4 * HD, 2 * HD or 4 * ID): cublas_bf16.GemmF32Out_v1{K, N, HopperBF16WgmmaDot16_v1} (Boolean _v2) on workstream A's branch, at GLM-5.3's shapes; these shapes need its capture too",
+   "branch": "cursor/glm53-committed-ops-8c79",
+   "when": "CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before the first cuBLAS handle, allow_fp16/bf16_reduced_precision_reduction = (False, False) and preferred_blas_library('cublaslt') on every rank (vLLM's batch-invariant cuBLAS settings on cc 9.0 without its Triton overrides); not yet set by the served engine"
+  },
+  "router-gemm": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "GateLinear bf16 x bf16 -> f32 (N = E = 384, K = H = 7168): M <= 16 the cuteDSL ll_bf16_gemm (ll_bf16.LlBf16DotprodGemm / LlBf16SplitKGemm on workstream A's branch; its dispatch and split at these statics must be captured), above that cublas-f32-out",
+   "branch": "cursor/glm53-committed-ops-8c79"
+  },
+  "tp-allreduce": {
+   "status": "committed-only",
+   "definitions": [
+    "AllReduce2_v1",
+    "AllReduce_v2"
+   ],
+   "note": "the TP8 all-reduce on 8xH200 (custom / symm-mem / FlashInfer / NCCL, chosen per call by size; the serve leaves VLLM_ALLREDUCE_USE_SYMM_MEM and VLLM_ALLREDUCE_USE_FLASHINFER at their defaults, the target's switches): AllReduce2_v1 is WORLD 2 and AllReduce_v2 WORLD 4, neither this one. Workstream A owns the WORLD 8 Program; every rank's partial is a tap, so it checks against the same root"
+  },
+  "fp8-block-linear-deepgemm": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "DeepGemmFp8BlockScaledMMKernel: per_token_group_quant_fp8 of the input with ue8m0 (power-of-two) scales per 1x128, then DeepGEMM sm90 fp8_gemm_nt against the checkpoint's e4m3 weight and ue8m0 128x128 block scales: per output the wgmma e4m3 k32 chain of each 128-wide K block, promoted into an f32 accumulator with the product of the two scales, rounded to bf16",
+   "branch": "cursor/dsv4-prep-8c79"
+  },
+  "fp8-einsum-deepgemm": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "DeepGEMM fp8_einsum('bhr,hdr->bhd', recipe (1, 128, 128)): per token and o-group g, z[g] = the block-FP8 product of o_fp8[g] (scales o_scale[g]) and wo_a's weight rows of group g (e4m3, 128x128 ue8m0 block scales), bf16 out",
+   "branch": "cursor/dsv4-prep-8c79"
+  },
+  "flashmla-sparse-decode": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "FlashMLA flash_mla_with_kvcache, sm90 sparse FP8 decode (is_fp8_kvcache, head_dim_v 512): per decode token and padded head the online softmax at softmax_scale = HD^-0.5 over the SWA rows at swa_indices (swa_lens of them) then the compressed rows at the layer's extra indices (extra_topk_length), each row dequantized from the 584-byte fp8_ds_mla layout, the head's attn_sink in the denominator; NHP heads written, NHL kept",
+   "branch": "cursor/dsv4-prep-8c79"
+  },
+  "flashmla-sparse-prefill": {
+   "status": "committed-only",
+   "definitions": [],
+   "note": "FlashMLA flash_mla_sparse_fwd per prefill chunk over dequantize_and_gather_k_cache's bf16 rows at combine_topk_swa_indices' indices, with attn_sink: committed-only on this target (prefill is verified after decode)"
+  },
+  "mhc-post-pre-fma": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "mhc_fused_post_pre_tilelang at M <= 16: mhc_fused_tilelang (the post: new residual[s] = post_mix[s] * x + sum_t comb_mix[t, s] * residual[t] in bf16 streams; the pre's 24 mix logits of the new residual against hc_fn and its square sum, by FMA in 4 K-splits) and mhc_pre_big_fuse_with_norm_tilelang (split sums, rsqrt RMS, scale and base, sigmoid pre / post mixes, 20 Sinkhorn iterations for comb_mix, the layer input as the pre-mix of the streams, then the attn_norm / ffn_norm RMSNorm)",
+   "branch": "cursor/dsv4-prep-8c79"
+  },
+  "mhc-tf32": {
+   "status": "committed-only",
+   "definitions": [],
+   "note": "the TF32 pre: DeepGEMM tf32_hc_prenorm_gemm (TF32 tensor cores, n_splits from compute_num_split) then mhc_pre_big_fuse(_broadcast)_with_norm_tilelang. Layer 0's mhc_pre_broadcast_tilelang takes it at every token count, so one mHC pre per step stays committed-only on decode; every later pre at M > 16 (route hc-split)"
+  },
+  "mhc-post": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "mhc_post_tilelang after the last layer: out[s] = post_mix[s] * x + sum_t comb_mix[t, s] * residual[t], [M, HC, H] bf16 (the same post the hc-split path runs inside each layer)",
+   "branch": "cursor/dsv4-prep-8c79"
+  },
+  "hc-head": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "hc_head_fused_kernel_tilelang: the HC stream mixes of the final residual against hc_head_fn (f32), RMS-scaled, times hc_head_scale plus hc_head_base, sigmoid + hc_eps, then the weighted sum of the streams to [M, H] bf16",
+   "branch": "cursor/dsv4-prep-8c79"
+  },
+  "dsv4-qnorm-rope-kv-insert": {
+   "status": "committed-only",
+   "definitions": [],
+   "note": "torch.ops._C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert: per head the weightless RMSNorm of q and GPT-J RoPE on its last DR dims, zero-filled to NHP heads; the kv row's RoPE, ue8m0 FP8 quantisation of its NoPE part and the 584-byte insert into the SWA cache at the step's slot mapping"
+  },
+  "dsv4-compressor": {
+   "status": "committed-only",
+   "definitions": [],
+   "note": "DeepseekCompressor.forward: save_partial_states (the kv half and the score half + ape[pos % ratio] as f32 state rows), then at each ratio boundary the softmax-over-score pooling of the window's states (CSA: overlapping windows of 2 * ratio), RMSNorm (the compressor's norm), GPT-J RoPE at the block's position, and the quantised cache row: compress_norm_rope_store_cutedsl (head 512: fp8_ds_mla, 584 bytes) or compress_norm_rope_store_triton (the indexer's, head 128: 128 e4m3 + one f32 ue8m0 scale)"
+  },
+  "dsv4-indexer-q": {
+   "status": "committed-only",
+   "definitions": [],
+   "note": "fused_indexer_q_rope_quant (CuTe DSL fused_indexer_q_rope_quant_fp8_cutedsl when has_cutedsl(), as in the pinned venv; else Triton): GPT-J RoPE on the last DR dims of each of the IH heads, ue8m0 FP8 per head; the head weight (weights_proj's bf16 output) times q scale, ID^-0.5 and IH^-0.5. Not DsaIndexerQ_v1 (GLM-5.3's Triton _fused_q_kernel)"
+  },
+  "dsa-mqa-logits": {
+   "status": "port",
+   "definitions": [
+    "DsaMqaLogits_v1",
+    "DsaMqaLogit_v1",
+    "DsaMqaLogits_v2",
+    "DsaMqaLogit_v2"
+   ],
+   "note": "DeepGEMM fp8_mqa_logits (prefill) / fp8_paged_mqa_logits (decode): per (query row, compressed key) the sum over the IH heads of relu(q_h . k) * w_h, times the key's scale: DsaMqaLogits_v1{N=keys, H=64, D=128}. GLM-5.3's H = 32 kernel is the one pinned; the H = 64 epilogue must be captured"
+  },
+  "dsa-topk": {
+   "status": "port",
+   "definitions": [
+    "DsaTopKShortRow_v1",
+    "DsaTopKShortRow_v2"
+   ],
+   "note": "SparseAttnIndexer's top-TOPK (top_k_per_row_prefill / cooperative_topk / persistent_topk): a row of at most TOPK keys takes each kernel's shortcut, DsaTopKShortRow_v1{TOPK}; a longer row is a radix selection no Definition states",
+   "when": "every row has at most TOPK compressed keys"
+  },
+  "dsa-topk-fill": {
+   "status": "port",
+   "definitions": [
+    "DsaTopKShortRow_v1",
+    "DsaTopKShortRow_v2"
+   ],
+   "note": "_fill_short_context_topk_indices (attention.py:72, Triton, num_warps 8): slot j = j when j < (pos + 1) // CSA_R, else -1, DsaTopKShortRow_v1{TOPK} at len = (pos + 1) // CSA_R; the int64 position arithmetic is not yet in the Definition"
+  },
+  "dsv4-decode-indices": {
+   "status": "committed-only",
+   "definitions": [],
+   "note": "the decode attention's indices: decode_swa_indices / decode_swa_lens (the metadata builder: the last SW tokens' SWA slots), compute_global_topk_indices_and_lens (CSA: the indexer's local top-k through the block table, padding tokens length 0) and c128a_global_decode_topk_indices / _lens (HCA: every compressed block so far)"
+  },
+  "inv-rope-fp8-quant": {
+   "status": "committed-only",
+   "definitions": [],
+   "note": "fused_inv_rope_fp8_quant: the inverse GPT-J RoPE of each head's last DR dims, then e4m3 with one f32 scale per 1x128 group, regrouped to [M, OGL, HPG * HD] (tma_aligned_scales false on sm_90)"
+  },
+  "sqrtsoftplus-router": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "fused_topk_bias -> dsv4_topk (router/dsv4_topk.py): s = sqrt(softplus(logit)) in f32, the top K of E by s + e_score_correction_bias (selection only), weights s / sum(s) * routed_scaling_factor (2.5), ids int32",
+   "branch": "cursor/dsv4-prep-8c79"
+  },
+  "hash-router": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "fused_topk_bias -> ops.topk_hash_softplus_sqrt on the first HASH layers: ids = tid2eid[input_id] (K per token), weights sqrt(softplus(logit)) at those ids, renormalised, x 2.5",
+   "branch": "cursor/dsv4-prep-8c79"
+  },
+  "marlin-mxfp4-moe": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "fused_marlin_moe (experts/marlin_moe.py) with Mxfp4 weights: moe_align_block_size, ops.moe_wna16_marlin_gemm for w13 (float4_e2m1f weights dequantized against e8m0 group-32 scales, bf16 activations, mma.sync bf16, use_fp32_reduce, no router weight) and for w2 (top_k 1, mul_topk_weights). The weights are the checkpoint's, repacked to Marlin's tile layout at load",
+   "branch": "cursor/dsv4-prep-8c79"
+  },
+  "silu-mul-clamp": {
+   "status": "tonight",
+   "definitions": [],
+   "note": "torch.ops._C.silu_and_mul_with_clamp(out, x, limit = swiglu_limit (10.0), alpha 1.0, beta 0.0): silu(min(gate, limit)) * clamp(up, -limit, limit) per element in f32, to bf16. The routed experts reach it through apply_moe_activation (no expert map); the shared expert through SiluAndMulWithClamp.forward_cuda",
+   "branch": "cursor/dsv4-prep-8c79"
+  }
+ },
+ "binders": {
+  "module_hook": "the committer's forward hooks on the modules of its acquired classes whose forward runs (commit/committer/native_host.py _make_hook, _make_pre_hook): <module> for a tensor output, <module>/<k> for tuple element k, <module>/in for an acquired input",
+  "sampler": "the committer's runner.sample wrap: runner.sampler/sampled_token_ids",
+  "tp_partial": "TPPartialSource (acquire/sources/partial_source.py): a collective's rank-local input, <site>/part_rank<r> or <site>/shard_rank<r>, and the MoE runner's received output, <runner>/out",
+  "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block; the Marlin launches and the DeepSeek-V4 routers are capture work",
+  "mhc": "not built (capture work): a wrap of the mHC call-time globals of vllm.models.deepseek_v4.nvidia.model, naming each call's returns <layer>/hc_attn_<value> or <layer>/hc_ffn_<value> (_split on the hc-split route), and the final post and head model/hc_post, model/hc_head",
+  "dsv4_attention": "not built (capture work): DeepseekV4Attention's values by function return, output argument and cache rows at the step's slot mappings, as <attn>/<value>, <compressor>/kv_score, <cache>/rows and <indexer>/<value>"
+ },
+ "taps": [
+  {
+   "id": "input_ids",
+   "op": "embed_tokens.input_ids",
+   "port": 0,
+   "layer": "embed",
+   "module": "model.embed_tokens",
+   "site": {
+    "kind": "module_input",
+    "target": "model.embed_tokens",
+    "detail": "the step's token ids (VocabParallelEmbedding.forward's input_)"
+   },
+   "dtype": "int32",
+   "shape": [
+    "M"
+   ],
+   "program": "copy-equality",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "input_token_ids",
+   "note": "a root input: the prompt's ids on a prefill step, the previous step's sampled ids on a decode step; the hash layers' routers read it too",
+   "commit": {
+    "name": "model.embed_tokens/in",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "embed",
+   "op": "embed_tokens.embedding",
+   "port": 0,
+   "layer": "embed",
+   "module": "model.embed_tokens",
+   "site": {
+    "kind": "module_output",
+    "target": "model.embed_tokens",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "tp-allreduce",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "note": "VocabParallelEmbedding.forward (ops.vocab_parallel_embedding, then tensor_model_parallel_all_reduce): equal to the owning rank's partial word for word except that a -0.0 word reduces to +0.0. Layer 0's mHC pre broadcasts it to the HC streams",
+   "commit": {
+    "name": "model.embed_tokens",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "embed.partial",
+   "op": "embed_tokens.partial",
+   "port": 0,
+   "layer": "embed",
+   "module": "model.embed_tokens",
+   "site": {
+    "kind": "collective_input",
+    "target": "model.embed_tokens",
+    "detail": "the masked shard gather before tensor_model_parallel_all_reduce (member part_rank<r>)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "embedding-shard",
+   "tp": "partial",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "tp_rank_partials",
+   "weights": [
+    {
+     "param": "model.embed_tokens.weight",
+     "provenance": "checkpoint",
+     "rows": "VS"
+    }
+   ],
+   "commit": {
+    "name": "model.embed_tokens/part_rank{r}",
+    "binder": "tp_partial"
+   }
+  },
+  {
+   "id": "hc_attn.first.residual",
+   "op": "layers.{i}.hc_attn",
+   "port": 0,
+   "layers": "first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_pre_broadcast_tilelang",
+    "output": 0,
+    "detail": "the new four-stream residual; layer 0, called with the embedding"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "HC",
+    "H"
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.hc_attn_fn",
+     "provenance": "checkpoint",
+     "rows": "MIX"
+    },
+    {
+     "param": "model.layers.{i}.hc_attn_fn_broadcast",
+     "provenance": "load-derived: hc_attn_fn.view(-1, HC, H).sum(dim=1) (finalize_mhc_broadcast_weights), [MIX, H] f32",
+     "after_load": true
+    },
+    {
+     "param": "model.layers.{i}.hc_attn_scale",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.hc_attn_base",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.attn_norm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "note": "residual is the embedding broadcast to the HC streams, a copy; the mixes and x come from DeepGEMM's TF32 GEMM at every token count, decode included",
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_residual",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.first.post_mix",
+   "op": "layers.{i}.hc_attn",
+   "port": 1,
+   "layers": "first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_pre_broadcast_tilelang",
+    "output": 1,
+    "detail": "the post mix the next post applies to this sublayer's output; layer 0, called with the embedding"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "HC",
+    1
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_post_mix",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.first.comb_mix",
+   "op": "layers.{i}.hc_attn",
+   "port": 2,
+   "layers": "first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_pre_broadcast_tilelang",
+    "output": 2,
+    "detail": "the Sinkhorn-normalised stream mix; layer 0, called with the embedding"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "HC",
+    "HC"
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_comb_mix",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.first.x",
+   "op": "layers.{i}.hc_attn",
+   "port": 3,
+   "layers": "first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_pre_broadcast_tilelang",
+    "output": 3,
+    "detail": "the sublayer's input: the pre-mix of the streams, RMS-normed by the sublayer norm; layer 0, called with the embedding"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_x",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.residual",
+   "op": "layers.{i}.hc_attn",
+   "port": 0,
+   "layers": "after_first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 0,
+    "detail": "the new four-stream residual; the post of the previous layer's ffn output fused with this pre"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "HC",
+    "H"
+   ],
+   "program": "mhc-post-pre-fma",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "hc-fused",
+   "weights": [
+    {
+     "param": "model.layers.{i}.hc_attn_fn",
+     "provenance": "checkpoint",
+     "rows": "MIX"
+    },
+    {
+     "param": "model.layers.{i}.hc_attn_scale",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.hc_attn_base",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.attn_norm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_residual",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.post_mix",
+   "op": "layers.{i}.hc_attn",
+   "port": 1,
+   "layers": "after_first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 1,
+    "detail": "the post mix the next post applies to this sublayer's output; the post of the previous layer's ffn output fused with this pre"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "HC",
+    1
+   ],
+   "program": "mhc-post-pre-fma",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "hc-fused",
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_post_mix",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.comb_mix",
+   "op": "layers.{i}.hc_attn",
+   "port": 2,
+   "layers": "after_first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 2,
+    "detail": "the Sinkhorn-normalised stream mix; the post of the previous layer's ffn output fused with this pre"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "HC",
+    "HC"
+   ],
+   "program": "mhc-post-pre-fma",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "hc-fused",
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_comb_mix",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.x",
+   "op": "layers.{i}.hc_attn",
+   "port": 3,
+   "layers": "after_first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 3,
+    "detail": "the sublayer's input: the pre-mix of the streams, RMS-normed by the sublayer norm; the post of the previous layer's ffn output fused with this pre"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "mhc-post-pre-fma",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "hc-fused",
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_x",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.split.residual",
+   "op": "layers.{i}.hc_attn",
+   "port": 0,
+   "layers": "after_first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 0,
+    "detail": "the new four-stream residual; the post of the previous layer's ffn output fused with this pre"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "HC",
+    "H"
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "hc-split",
+   "weights": [
+    {
+     "param": "model.layers.{i}.hc_attn_fn",
+     "provenance": "checkpoint",
+     "rows": "MIX"
+    },
+    {
+     "param": "model.layers.{i}.hc_attn_scale",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.hc_attn_base",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.attn_norm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_residual_split",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.split.post_mix",
+   "op": "layers.{i}.hc_attn",
+   "port": 1,
+   "layers": "after_first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 1,
+    "detail": "the post mix the next post applies to this sublayer's output; the post of the previous layer's ffn output fused with this pre"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "HC",
+    1
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "hc-split",
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_post_mix_split",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.split.comb_mix",
+   "op": "layers.{i}.hc_attn",
+   "port": 2,
+   "layers": "after_first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 2,
+    "detail": "the Sinkhorn-normalised stream mix; the post of the previous layer's ffn output fused with this pre"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "HC",
+    "HC"
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "hc-split",
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_comb_mix_split",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_attn.split.x",
+   "op": "layers.{i}.hc_attn",
+   "port": 3,
+   "layers": "after_first",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 3,
+    "detail": "the sublayer's input: the pre-mix of the streams, RMS-normed by the sublayer norm; the post of the previous layer's ffn output fused with this pre"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "hc-split",
+   "commit": {
+    "name": "model.layers.{i}/hc_attn_x_split",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_ffn.residual",
+   "op": "layers.{i}.hc_ffn",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 0,
+    "detail": "the new four-stream residual; the post of this layer's attention output fused with this pre"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "HC",
+    "H"
+   ],
+   "program": "mhc-post-pre-fma",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "hc-fused",
+   "weights": [
+    {
+     "param": "model.layers.{i}.hc_ffn_fn",
+     "provenance": "checkpoint",
+     "rows": "MIX"
+    },
+    {
+     "param": "model.layers.{i}.hc_ffn_scale",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.hc_ffn_base",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.ffn_norm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}/hc_ffn_residual",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_ffn.post_mix",
+   "op": "layers.{i}.hc_ffn",
+   "port": 1,
+   "layers": "all",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 1,
+    "detail": "the post mix the next post applies to this sublayer's output; the post of this layer's attention output fused with this pre"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "HC",
+    1
+   ],
+   "program": "mhc-post-pre-fma",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "hc-fused",
+   "commit": {
+    "name": "model.layers.{i}/hc_ffn_post_mix",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_ffn.comb_mix",
+   "op": "layers.{i}.hc_ffn",
+   "port": 2,
+   "layers": "all",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 2,
+    "detail": "the Sinkhorn-normalised stream mix; the post of this layer's attention output fused with this pre"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "HC",
+    "HC"
+   ],
+   "program": "mhc-post-pre-fma",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "hc-fused",
+   "commit": {
+    "name": "model.layers.{i}/hc_ffn_comb_mix",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_ffn.x",
+   "op": "layers.{i}.hc_ffn",
+   "port": 3,
+   "layers": "all",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 3,
+    "detail": "the sublayer's input: the pre-mix of the streams, RMS-normed by the sublayer norm; the post of this layer's attention output fused with this pre"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "mhc-post-pre-fma",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "hc-fused",
+   "commit": {
+    "name": "model.layers.{i}/hc_ffn_x",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_ffn.split.residual",
+   "op": "layers.{i}.hc_ffn",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 0,
+    "detail": "the new four-stream residual; the post of this layer's attention output fused with this pre"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "HC",
+    "H"
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "hc-split",
+   "weights": [
+    {
+     "param": "model.layers.{i}.hc_ffn_fn",
+     "provenance": "checkpoint",
+     "rows": "MIX"
+    },
+    {
+     "param": "model.layers.{i}.hc_ffn_scale",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.hc_ffn_base",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.ffn_norm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}/hc_ffn_residual_split",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_ffn.split.post_mix",
+   "op": "layers.{i}.hc_ffn",
+   "port": 1,
+   "layers": "all",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 1,
+    "detail": "the post mix the next post applies to this sublayer's output; the post of this layer's attention output fused with this pre"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "HC",
+    1
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "hc-split",
+   "commit": {
+    "name": "model.layers.{i}/hc_ffn_post_mix_split",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_ffn.split.comb_mix",
+   "op": "layers.{i}.hc_ffn",
+   "port": 2,
+   "layers": "all",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 2,
+    "detail": "the Sinkhorn-normalised stream mix; the post of this layer's attention output fused with this pre"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "HC",
+    "HC"
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "hc-split",
+   "commit": {
+    "name": "model.layers.{i}/hc_ffn_comb_mix_split",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "hc_ffn.split.x",
+   "op": "layers.{i}.hc_ffn",
+   "port": 3,
+   "layers": "all",
+   "module": "model.layers.{i}",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_fused_post_pre_tilelang",
+    "output": 3,
+    "detail": "the sublayer's input: the pre-mix of the streams, RMS-normed by the sublayer norm; the post of this layer's attention output fused with this pre"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "mhc-tf32",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "hc-split",
+   "commit": {
+    "name": "model.layers.{i}/hc_ffn_x_split",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "norm.hc_post",
+   "op": "norm.hc_post",
+   "port": 0,
+   "layer": "norm",
+   "module": "model",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:mhc_post_tilelang",
+    "output": 0,
+    "detail": "the last layer's ffn output posted into the streams (DeepseekV4Model.forward)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "HC",
+    "H"
+   ],
+   "program": "mhc-post",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model/hc_post",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "norm.hc_head",
+   "op": "norm.hc_head",
+   "port": 0,
+   "layer": "norm",
+   "module": "model",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/kernels/mhc/tilelang.py:hc_head_fused_kernel_tilelang",
+    "output": 0,
+    "detail": "the streams collapsed to one hidden state"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "hc-head",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.hc_head_fn",
+     "provenance": "checkpoint",
+     "rows": "HC"
+    },
+    {
+     "param": "model.hc_head_scale",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.hc_head_base",
+     "provenance": "checkpoint"
+    }
+   ],
+   "commit": {
+    "name": "model/hc_head",
+    "binder": "mhc"
+   }
+  },
+  {
+   "id": "norm",
+   "op": "norm.rmsnorm",
+   "port": 0,
+   "layer": "norm",
+   "module": "model.norm",
+   "site": {
+    "kind": "module_output",
+    "target": "model.norm",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "rmsnorm-cuda",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.norm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "note": "RMSNorm.forward_cuda on hc_head's output, no residual",
+   "commit": {
+    "name": "model.norm",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "lm_head.shard",
+   "op": "lm_head.gemm",
+   "port": 0,
+   "layer": "lm_head",
+   "module": "lm_head",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/logits_processor.py:LogitsProcessor._get_logits",
+    "detail": "lm_head.quant_method.apply (UnquantizedEmbeddingMethod: F.linear) before the all-gather (member shard_rank<r>)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "MS",
+    "VS"
+   ],
+   "program": "cublas-bf16-gemm",
+   "tp": "vocab-shard",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "tp_rank_partials",
+   "weights": [
+    {
+     "param": "lm_head.weight",
+     "provenance": "checkpoint",
+     "rows": "VS"
+    }
+   ],
+   "commit": {
+    "name": "logits_processor/shard_rank{r}",
+    "binder": "tp_partial"
+   }
+  },
+  {
+   "id": "logits",
+   "op": "lm_head.gather",
+   "port": 0,
+   "layer": "lm_head",
+   "module": "logits_processor",
+   "site": {
+    "kind": "module_output",
+    "target": "logits_processor",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "MS",
+    "V"
+   ],
+   "program": "all-gather",
+   "tp": "gathered",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "note": "the all-gather of the 8 lm_head shards: word-equal to their concatenation",
+   "commit": {
+    "name": "logits_processor",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "sampler",
+   "op": "sampler.select",
+   "port": 0,
+   "layer": "sampler",
+   "module": null,
+   "site": {
+    "kind": "runner",
+    "target": "vllm/v1/sample/sampler.py:Sampler",
+    "detail": "the sampled token ids on the driver rank"
+   },
+   "dtype": "int32",
+   "shape": [
+    "MS"
+   ],
+   "program": "token-select",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "sampled_token_ids",
+   "commit": {
+    "name": "runner.sampler/sampled_token_ids",
+    "binder": "sampler"
+   }
+  },
+  {
+   "id": "attn.fused_wqa_wkv",
+   "op": "layers.{i}.attn.fused_wqa_wkv.gemm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn.fused_wqa_wkv",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.attn.fused_wqa_wkv",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "KVQ"
+   ],
+   "program": "fp8-block-linear-deepgemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.fused_wqa_wkv.weight",
+     "provenance": "checkpoint",
+     "rows": "KVQ"
+    },
+    {
+     "param": "model.layers.{i}.attn.fused_wqa_wkv.weight_scale_inv",
+     "provenance": "checkpoint",
+     "rows": "=KVQ // B"
+    }
+   ],
+   "note": "[qr | kv] before the norms (disable_tp: every rank computes it)",
+   "commit": {
+    "name": "model.layers.{i}.attn.fused_wqa_wkv/0",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "attn.qr",
+   "op": "layers.{i}.attn.q_kv_norm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn.q_norm",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/common/ops/fused_qk_rmsnorm.py:fused_q_kv_rmsnorm",
+    "output": 0,
+    "detail": "qr after q_norm"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "QL"
+   ],
+   "program": "fused-rmsnorm-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.q_norm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn/qr",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.kv",
+   "op": "layers.{i}.attn.q_kv_norm",
+   "port": 1,
+   "layers": "all",
+   "module": "model.layers.{i}.attn.kv_norm",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/common/ops/fused_qk_rmsnorm.py:fused_q_kv_rmsnorm",
+    "output": 1,
+    "detail": "kv after kv_norm"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "HD"
+   ],
+   "program": "fused-rmsnorm-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.kv_norm.weight",
+     "provenance": "checkpoint"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn/kv",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.wq_b",
+   "op": "layers.{i}.attn.wq_b.gemm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn.wq_b",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.attn.wq_b",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "=NHL * HD"
+   ],
+   "program": "fp8-block-linear-deepgemm",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.wq_b.weight",
+     "provenance": "checkpoint",
+     "rows": "=NHL * HD"
+    },
+    {
+     "param": "model.layers.{i}.attn.wq_b.weight_scale_inv",
+     "provenance": "checkpoint",
+     "rows": "=NHL * HD // B"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn.wq_b",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "attn.q",
+   "op": "layers.{i}.attn.qnorm_rope_kv_insert",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/deepseek_v4/attention.py:DeepseekV4Attention._fused_qnorm_rope_kv_insert",
+    "output": 0,
+    "detail": "the normed, roped query zero-padded to NHP heads"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "NHP",
+    "HD"
+   ],
+   "program": "dsv4-qnorm-rope-kv-insert",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn/q",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.swa_rows",
+   "op": "layers.{i}.attn.swa_cache_layer",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn.swa_cache_layer",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.swa_cache_layer.kv_cache",
+    "detail": "the 584-byte rows at the step's SWA slot mapping after the insert: 448 e4m3 NoPE bytes, 64 bf16 RoPE dims, 7 ue8m0 scales and a pad byte (the block's data and scale bytes regrouped per row)"
+   },
+   "dtype": "uint8",
+   "shape": [
+    "M",
+    "SWAB"
+   ],
+   "program": "dsv4-qnorm-rope-kv-insert",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "note": "what the next SW tokens' attention reads; kv itself is not read again",
+   "commit": {
+    "name": "model.layers.{i}.attn.swa_cache_layer/rows",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "compressor.kv_score.csa",
+   "op": "layers.{i}.attn.compressor.kv_score",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.compressor",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/deepseek_v4/attention.py:DeepseekV4Attention._run_parallel_input_projections",
+    "output": 1,
+    "detail": "kv_score: torch.mm(hidden_states, compressor.fused_wkv_wgate.weight.T, out_dtype=float32)"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "=4 * HD"
+   ],
+   "program": "cublas-f32-out",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.compressor.fused_wkv_wgate.weight",
+     "provenance": "checkpoint",
+     "rows": "=4 * HD"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn.compressor/kv_score",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "compressor.state.csa",
+   "op": "layers.{i}.attn.compressor.state_cache",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.compressor.state_cache",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.compressor.state_cache.kv_cache",
+    "detail": "the f32 rows at the step's state slot mapping after save_partial_states: [kv | score + ape[pos % ratio]]"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "=4 * HD"
+   ],
+   "program": "dsv4-compressor",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.compressor.ape",
+     "provenance": "checkpoint",
+     "rows": "CSA_R"
+    }
+   ],
+   "note": "the state the next boundary's compression pools: a later step reads rows this one wrote",
+   "commit": {
+    "name": "model.layers.{i}.attn.compressor.state_cache/rows",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.compressed_rows.csa",
+   "op": "layers.{i}.attn.compressed_cache",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.kv_cache",
+    "detail": "the 584-byte fp8_ds_mla rows compress_norm_rope_store_cutedsl wrote this step, at the compressed slot mapping"
+   },
+   "dtype": "uint8",
+   "shape": [
+    "NC4",
+    "SWAB"
+   ],
+   "program": "dsv4-compressor",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.compressor.norm.weight",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "note": "one row per CSA_R tokens; the decode attention reads them at the indexer's top-k",
+   "commit": {
+    "name": "model.layers.{i}.attn/compressed_rows",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "compressor.kv_score.hca",
+   "op": "layers.{i}.attn.compressor.kv_score",
+   "port": 0,
+   "layers": "hca",
+   "module": "model.layers.{i}.attn.compressor",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/deepseek_v4/attention.py:DeepseekV4Attention._run_parallel_input_projections",
+    "output": 1,
+    "detail": "kv_score: torch.mm(hidden_states, compressor.fused_wkv_wgate.weight.T, out_dtype=float32)"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "=2 * HD"
+   ],
+   "program": "cublas-f32-out",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.compressor.fused_wkv_wgate.weight",
+     "provenance": "checkpoint",
+     "rows": "=2 * HD"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn.compressor/kv_score",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "compressor.state.hca",
+   "op": "layers.{i}.attn.compressor.state_cache",
+   "port": 0,
+   "layers": "hca",
+   "module": "model.layers.{i}.attn.compressor.state_cache",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.compressor.state_cache.kv_cache",
+    "detail": "the f32 rows at the step's state slot mapping after save_partial_states: [kv | score + ape[pos % ratio]]"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "=2 * HD"
+   ],
+   "program": "dsv4-compressor",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.compressor.ape",
+     "provenance": "checkpoint",
+     "rows": "HCA_R"
+    }
+   ],
+   "note": "the state the next boundary's compression pools: a later step reads rows this one wrote",
+   "commit": {
+    "name": "model.layers.{i}.attn.compressor.state_cache/rows",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.compressed_rows.hca",
+   "op": "layers.{i}.attn.compressed_cache",
+   "port": 0,
+   "layers": "hca",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.kv_cache",
+    "detail": "the 584-byte fp8_ds_mla rows compress_norm_rope_store_cutedsl wrote this step, at the compressed slot mapping"
+   },
+   "dtype": "uint8",
+   "shape": [
+    "NC128",
+    "SWAB"
+   ],
+   "program": "dsv4-compressor",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.compressor.norm.weight",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "note": "one row per HCA_R tokens, written only on a step that crosses a boundary (c128_boundary); the decode attention reads every one",
+   "commit": {
+    "name": "model.layers.{i}.attn/compressed_rows",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "indexer.weights_proj",
+   "op": "layers.{i}.attn.indexer.weights_proj.gemm",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.indexer.weights_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.attn.indexer.weights_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "IH"
+   ],
+   "program": "cublas-bf16-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.indexer.weights_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "IH"
+    }
+   ],
+   "note": "computed on both indexer routes; only the scored route reads it",
+   "commit": {
+    "name": "model.layers.{i}.attn.indexer.weights_proj/0",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "indexer.compressor.kv_score",
+   "op": "layers.{i}.attn.indexer.compressor.kv_score",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.indexer.compressor",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/deepseek_v4/attention.py:DeepseekV4Attention._run_parallel_input_projections",
+    "output": 2,
+    "detail": "indexer_kv_score: torch.mm(hidden_states, indexer.compressor.fused_wkv_wgate.weight.T, out_dtype=float32)"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "=4 * ID"
+   ],
+   "program": "cublas-f32-out",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.indexer.compressor.fused_wkv_wgate.weight",
+     "provenance": "checkpoint",
+     "rows": "=4 * ID"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn.indexer.compressor/kv_score",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "indexer.compressor.state",
+   "op": "layers.{i}.attn.indexer.compressor.state_cache",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.indexer.compressor.state_cache",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.indexer.compressor.state_cache.kv_cache",
+    "detail": "the f32 rows at the step's state slot mapping after save_partial_states"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "=4 * ID"
+   ],
+   "program": "dsv4-compressor",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.indexer.compressor.ape",
+     "provenance": "checkpoint",
+     "rows": "CSA_R"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn.indexer.compressor.state_cache/rows",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "indexer.k_cache",
+   "op": "layers.{i}.attn.indexer.k_cache",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.indexer.k_cache",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.indexer.k_cache.kv_cache",
+    "detail": "the rows compress_norm_rope_store_triton wrote this step: 128 e4m3 bytes and one f32 ue8m0 scale (the block's key bytes then scale bytes regrouped per row)"
+   },
+   "dtype": "uint8",
+   "shape": [
+    "NC4",
+    "IKB"
+   ],
+   "program": "dsv4-compressor",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.indexer.compressor.norm.weight",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn.indexer.k_cache/rows",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "indexer.topk_short",
+   "op": "layers.{i}.attn.indexer.topk_fill",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.indexer",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/deepseek_v4/attention.py:DeepseekV4Indexer.forward",
+    "detail": "topk_indices_buffer[:M, :TOPK] after _fill_short_context_topk_indices (-1 past (pos + 1) // CSA_R)"
+   },
+   "dtype": "int32",
+   "shape": [
+    "M",
+    "TOPK"
+   ],
+   "program": "dsa-topk-fill",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "indexer-short",
+   "note": "topk_indices_buffer is the model's, shared by every CSA layer: each layer's rows are read before the next writes them",
+   "commit": {
+    "name": "model.layers.{i}.attn.indexer/topk_short",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "indexer.wq_b",
+   "op": "layers.{i}.attn.indexer.wq_b.gemm",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.indexer.wq_b",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.attn.indexer.wq_b",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "=IH * ID"
+   ],
+   "program": "fp8-block-linear-deepgemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "indexer-scored",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.indexer.wq_b.weight",
+     "provenance": "checkpoint",
+     "rows": "=IH * ID"
+    },
+    {
+     "param": "model.layers.{i}.attn.indexer.wq_b.weight_scale_inv",
+     "provenance": "checkpoint",
+     "rows": "=IH * ID // B"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn.indexer.wq_b/0",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "indexer.q_fp8",
+   "op": "layers.{i}.attn.indexer.q_quant",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.indexer",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/deepseek_v4/common/ops/fused_indexer_q_rope_quant.py:fused_indexer_q_rope_quant",
+    "output": 0,
+    "detail": "the roped, ue8m0-quantised query (a tensor: the q scale is folded into the weights)"
+   },
+   "dtype": "float8_e4m3fn",
+   "shape": [
+    "M",
+    "IH",
+    "ID"
+   ],
+   "program": "dsv4-indexer-q",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "indexer-scored",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn.indexer/q_fp8",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "indexer.weights",
+   "op": "layers.{i}.attn.indexer.q_quant",
+   "port": 1,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.indexer",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/deepseek_v4/common/ops/fused_indexer_q_rope_quant.py:fused_indexer_q_rope_quant",
+    "output": 1,
+    "detail": "weights * q scale * ID^-0.5 * IH^-0.5"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "IH"
+   ],
+   "program": "dsv4-indexer-q",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "indexer-scored",
+   "commit": {
+    "name": "model.layers.{i}.attn.indexer/weights",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "indexer.logits",
+   "op": "layers.{i}.attn.indexer.indexer_op.logits",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.indexer.indexer_op",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/utils/deep_gemm.py:fp8_fp4_mqa_logits | fp8_fp4_paged_mqa_logits",
+    "detail": "the f32 logits per query row over the compressed keys"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "CTX"
+   ],
+   "program": "dsa-mqa-logits",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "indexer-scored",
+   "note": "not bound, as on GLM-5.3: one call per prefill chunk plus one for the decode rows, each M x CTX f32. The top-k and its inputs (q_fp8, weights, k_cache) are what the attention reads"
+  },
+  {
+   "id": "indexer.topk",
+   "op": "layers.{i}.attn.indexer.indexer_op",
+   "port": 0,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn.indexer.indexer_op",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/sparse_attn_indexer.py:sparse_attn_indexer",
+    "detail": "topk_indices_buffer[:M, :TOPK] after the top-k kernels (-1 pads rows with fewer keys)"
+   },
+   "dtype": "int32",
+   "shape": [
+    "M",
+    "TOPK"
+   ],
+   "program": "dsa-topk",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "indexer-scored",
+   "commit": {
+    "name": "model.layers.{i}.attn.indexer.indexer_op/topk",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.swa_indices",
+   "op": "layers.{i}.attn.decode_indices",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:flash_mla_with_kvcache",
+    "detail": "indices: decode_swa_indices[:MD], [MD, 1, SW]"
+   },
+   "dtype": "int32",
+   "shape": [
+    "MD",
+    "SW"
+   ],
+   "program": "dsv4-decode-indices",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "decode-tokens",
+   "commit": {
+    "name": "model.layers.{i}.attn/swa_indices",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.swa_lens",
+   "op": "layers.{i}.attn.decode_indices",
+   "port": 1,
+   "layers": "all",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:flash_mla_with_kvcache",
+    "detail": "topk_length: decode_swa_lens[:MD]"
+   },
+   "dtype": "int32",
+   "shape": [
+    "MD"
+   ],
+   "program": "dsv4-decode-indices",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "decode-tokens",
+   "commit": {
+    "name": "model.layers.{i}.attn/swa_lens",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.extra_indices.csa",
+   "op": "layers.{i}.attn.decode_indices",
+   "port": 2,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:flash_mla_with_kvcache",
+    "detail": "extra_indices_in_kvcache: compute_global_topk_indices_and_lens' global slots of the indexer's top-k"
+   },
+   "dtype": "int32",
+   "shape": [
+    "MD",
+    "TOPK"
+   ],
+   "program": "dsv4-decode-indices",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "decode-tokens",
+   "commit": {
+    "name": "model.layers.{i}.attn/extra_indices",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.extra_indices.hca",
+   "op": "layers.{i}.attn.decode_indices",
+   "port": 2,
+   "layers": "hca",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:flash_mla_with_kvcache",
+    "detail": "extra_indices_in_kvcache: c128a_global_decode_topk_indices"
+   },
+   "dtype": "int32",
+   "shape": [
+    "MD",
+    "NX"
+   ],
+   "program": "dsv4-decode-indices",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "decode-tokens",
+   "commit": {
+    "name": "model.layers.{i}.attn/extra_indices",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.extra_lens",
+   "op": "layers.{i}.attn.decode_indices",
+   "port": 3,
+   "layers": "all",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:flash_mla_with_kvcache",
+    "detail": "extra_topk_length (CSA: from compute_global_topk_indices_and_lens; HCA: c128a_decode_topk_lens)"
+   },
+   "dtype": "int32",
+   "shape": [
+    "MD"
+   ],
+   "program": "dsv4-decode-indices",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "route": "decode-tokens",
+   "commit": {
+    "name": "model.layers.{i}.attn/extra_lens",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.out.decode",
+   "op": "layers.{i}.attn.flashmla",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "out_argument",
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:DeepseekV4FlashMLAAttention.forward_mqa",
+    "argument": "output",
+    "detail": "o_padded[:MD, :NHL] after flash_mla_with_kvcache wrote it"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "MD",
+    "NHL",
+    "HD"
+   ],
+   "program": "flashmla-sparse-decode",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "decode-tokens",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.attn_sink",
+     "provenance": "checkpoint"
+    }
+   ],
+   "note": "reads the SWA rows and compressed rows earlier steps committed (attn.swa_rows, attn.compressed_rows) at the decode indices",
+   "commit": {
+    "name": "model.layers.{i}.attn/out_decode",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.out.prefill",
+   "op": "layers.{i}.attn.flashmla",
+   "port": 1,
+   "layers": "all",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "out_argument",
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:DeepseekV4FlashMLAAttention.forward_mqa",
+    "argument": "output",
+    "detail": "o_padded[MD:, :NHL] after flash_mla_sparse_fwd wrote every chunk"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "MP",
+    "NHL",
+    "HD"
+   ],
+   "program": "flashmla-sparse-prefill",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "prefill-tokens",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.attn_sink",
+     "provenance": "checkpoint"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn/out_prefill",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.o_fp8",
+   "op": "layers.{i}.attn.inv_rope_quant",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/deepseek_v4/common/ops/fused_inv_rope_fp8_quant.py:fused_inv_rope_fp8_quant",
+    "output": 0,
+    "detail": "the un-roped attention output, e4m3, per token and o-group"
+   },
+   "dtype": "float8_e4m3fn",
+   "shape": [
+    "M",
+    "OGL",
+    "=HPG * HD"
+   ],
+   "program": "inv-rope-fp8-quant",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn/o_fp8",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.o_scale",
+   "op": "layers.{i}.attn.inv_rope_quant",
+   "port": 1,
+   "layers": "all",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/models/deepseek_v4/common/ops/fused_inv_rope_fp8_quant.py:fused_inv_rope_fp8_quant",
+    "output": 1,
+    "detail": "one f32 scale per 128 elements"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "OGL",
+    "=HPG * HD // 128"
+   ],
+   "program": "inv-rope-fp8-quant",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}.attn/o_scale",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.o_einsum",
+   "op": "layers.{i}.attn.wo_a.einsum",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn.wo_a",
+   "site": {
+    "kind": "out_argument",
+    "target": "vllm/models/deepseek_v4/nvidia/ops/o_proj.py:deep_gemm_fp8_o_proj",
+    "argument": "z",
+    "detail": "fp8_einsum's bf16 output, before wo_b"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "OGL",
+    "OL"
+   ],
+   "program": "fp8-einsum-deepgemm",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.wo_a.weight",
+     "provenance": "checkpoint",
+     "rows": "=OGL * OL"
+    },
+    {
+     "param": "model.layers.{i}.attn.wo_a.weight_scale_inv",
+     "provenance": "checkpoint",
+     "rows": "=OGL * OL // B"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn/o_einsum",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.wo_b.partial",
+   "op": "layers.{i}.attn.wo_b.gemm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn.wo_b",
+   "site": {
+    "kind": "collective_input",
+    "target": "model.layers.{i}.attn.wo_b",
+    "detail": "quant_method.apply's output before tensor_model_parallel_all_reduce (member part_rank<r>)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "fp8-block-linear-deepgemm",
+   "tp": "partial",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "tp_rank_partials",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.wo_b.weight",
+     "provenance": "checkpoint",
+     "rows": "H"
+    },
+    {
+     "param": "model.layers.{i}.attn.wo_b.weight_scale_inv",
+     "provenance": "checkpoint",
+     "rows": "=H // B"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.attn.wo_b/part_rank{r}",
+    "binder": "tp_partial"
+   }
+  },
+  {
+   "id": "attn.wo_b",
+   "op": "layers.{i}.attn.wo_b.allreduce",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.attn.wo_b",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.attn.wo_b",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "tp-allreduce",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "note": "the attention's output, which the ffn side's mHC post folds into the streams",
+   "commit": {
+    "name": "model.layers.{i}.attn.wo_b",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "ffn.gate",
+   "op": "layers.{i}.ffn.gate.gemm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.ffn.gate",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.ffn.gate",
+    "output": 0
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "E"
+   ],
+   "program": "router-gemm",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.ffn.gate.weight",
+     "provenance": "checkpoint",
+     "rows": "E"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.ffn.gate/0",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "moe.router_w",
+   "op": "layers.{i}.ffn.experts.router",
+   "port": 0,
+   "layers": "scored",
+   "module": "model.layers.{i}.ffn.experts",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/fused_moe/router/fused_topk_bias_router.py:fused_topk_bias",
+    "output": 0,
+    "detail": "topk_weights (x routed_scaling_factor)"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "K"
+   ],
+   "program": "sqrtsoftplus-router",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "weights": [
+    {
+     "param": "model.layers.{i}.ffn.gate.e_score_correction_bias",
+     "provenance": "checkpoint"
+    }
+   ],
+   "source": "moe/L{i}/router_w",
+   "commit": {
+    "name": "moe/L{i}/router_w",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.router_ids",
+   "op": "layers.{i}.ffn.experts.router",
+   "port": 1,
+   "layers": "scored",
+   "module": "model.layers.{i}.ffn.experts",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/fused_moe/router/fused_topk_bias_router.py:fused_topk_bias",
+    "output": 1,
+    "detail": "topk_ids"
+   },
+   "dtype": "int32",
+   "shape": [
+    "M",
+    "K"
+   ],
+   "program": "sqrtsoftplus-router",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/router_ids",
+   "commit": {
+    "name": "moe/L{i}/router_ids",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.router_w.hash",
+   "op": "layers.{i}.ffn.experts.router",
+   "port": 0,
+   "layers": "hash",
+   "module": "model.layers.{i}.ffn.experts",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/fused_moe/router/fused_topk_bias_router.py:fused_topk_bias",
+    "output": 0,
+    "detail": "topk_weights (x routed_scaling_factor)"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "K"
+   ],
+   "program": "hash-router",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "weights": [
+    {
+     "param": "model.layers.{i}.ffn.gate.tid2eid",
+     "provenance": "checkpoint",
+     "rows": "V"
+    }
+   ],
+   "source": "moe/L{i}/router_w",
+   "commit": {
+    "name": "moe/L{i}/router_w",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.router_ids.hash",
+   "op": "layers.{i}.ffn.experts.router",
+   "port": 1,
+   "layers": "hash",
+   "module": "model.layers.{i}.ffn.experts",
+   "site": {
+    "kind": "function_return",
+    "target": "vllm/model_executor/layers/fused_moe/router/fused_topk_bias_router.py:fused_topk_bias",
+    "output": 1,
+    "detail": "topk_ids"
+   },
+   "dtype": "int32",
+   "shape": [
+    "M",
+    "K"
+   ],
+   "program": "hash-router",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/router_ids",
+   "note": "ids from tid2eid[input_ids]; reads the input_ids tap",
+   "commit": {
+    "name": "moe/L{i}/router_ids",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.up",
+   "op": "layers.{i}.ffn.experts.moe_up",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.ffn.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/experts/marlin_moe.py:ops.moe_wna16_marlin_gemm",
+    "detail": "the w13 launch (mul_topk_weights False): intermediate_cache1, token-major rows of [gate | up]"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "K",
+    "=2 * MIL"
+   ],
+   "program": "marlin-mxfp4-moe",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "weights": [
+    {
+     "param": "model.layers.{i}.ffn.experts.routed_experts.w13_weight",
+     "provenance": "checkpoint (repacked to Marlin's layout at load)",
+     "rows": "=2 * MIL"
+    },
+    {
+     "param": "model.layers.{i}.ffn.experts.routed_experts.w13_weight_scale",
+     "provenance": "checkpoint (e8m0, permuted at load)",
+     "rows": "=2 * MIL"
+    }
+   ],
+   "source": "moe/L{i}/up",
+   "note": "intermediate_cache1 shares its buffer with the w2 output: snapshotted after the w13 launch, before w2 overwrites it",
+   "commit": {
+    "name": "moe/L{i}/up",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.act",
+   "op": "layers.{i}.ffn.experts.moe_act",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.ffn.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/experts/marlin_moe.py:ops.moe_wna16_marlin_gemm",
+    "detail": "the w2 launch's input: intermediate_cache2, silu_and_mul_with_clamp's bf16 output"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "K",
+    "MIL"
+   ],
+   "program": "silu-mul-clamp",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/act",
+   "commit": {
+    "name": "moe/L{i}/act",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.down",
+   "op": "layers.{i}.ffn.experts.moe_down",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.ffn.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/experts/marlin_moe.py:ops.moe_wna16_marlin_gemm",
+    "detail": "the w2 launch (mul_topk_weights True): token-major rows"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "K",
+    "H"
+   ],
+   "program": "marlin-mxfp4-moe",
+   "tp": "partial",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "weights": [
+    {
+     "param": "model.layers.{i}.ffn.experts.routed_experts.w2_weight",
+     "provenance": "checkpoint (repacked to Marlin's layout at load)",
+     "rows": "H"
+    },
+    {
+     "param": "model.layers.{i}.ffn.experts.routed_experts.w2_weight_scale",
+     "provenance": "checkpoint (e8m0, permuted at load)",
+     "rows": "H"
+    }
+   ],
+   "source": "moe/L{i}/down",
+   "commit": {
+    "name": "moe/L{i}/down",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.sum",
+   "op": "layers.{i}.ffn.experts.moe_sum",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.ffn.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/_custom_ops.py:moe_sum",
+    "detail": "out"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "moe-sum",
+   "tp": "partial",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/sum",
+   "note": "each rank holds all 384 experts with a MIL-wide slice of each one's intermediate: the sum is a partial",
+   "commit": {
+    "name": "moe/L{i}/sum",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "shared.gate_up_proj",
+   "op": "layers.{i}.ffn.shared_experts.gate_up_proj.gemm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.ffn.shared_experts.gate_up_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.ffn.shared_experts.gate_up_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "=2 * SIL"
+   ],
+   "program": "fp8-block-linear-deepgemm",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.ffn.shared_experts.gate_up_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "=2 * SIL"
+    },
+    {
+     "param": "model.layers.{i}.ffn.shared_experts.gate_up_proj.weight_scale_inv",
+     "provenance": "checkpoint",
+     "rows": "=2 * SIL // B"
+    }
+   ],
+   "commit": {
+    "name": "model.layers.{i}.ffn.shared_experts.gate_up_proj/0",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "shared.act_fn",
+   "op": "layers.{i}.ffn.shared_experts.act_fn.act_mul",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.ffn.shared_experts.act_fn",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.ffn.shared_experts.act_fn",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "SIL"
+   ],
+   "program": "silu-mul-clamp",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "note": "SiluAndMulWithClamp is not an acquired class yet (capture_work)",
+   "commit": {
+    "name": "model.layers.{i}.ffn.shared_experts.act_fn",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "shared.down_proj",
+   "op": "layers.{i}.ffn.shared_experts.down_proj.gemm",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.ffn.shared_experts.down_proj",
+   "site": {
+    "kind": "module_output",
+    "target": "model.layers.{i}.ffn.shared_experts.down_proj",
+    "output": 0
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "fp8-block-linear-deepgemm",
+   "tp": "partial",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "tp_rank_partials",
+   "weights": [
+    {
+     "param": "model.layers.{i}.ffn.shared_experts.down_proj.weight",
+     "provenance": "checkpoint",
+     "rows": "H"
+    },
+    {
+     "param": "model.layers.{i}.ffn.shared_experts.down_proj.weight_scale_inv",
+     "provenance": "checkpoint",
+     "rows": "=H // B"
+    }
+   ],
+   "note": "reduce_results False: the runner adds it to the routed output before the one all-reduce",
+   "commit": {
+    "name": "model.layers.{i}.ffn.shared_experts.down_proj/0",
+    "binder": "module_hook"
+   }
+  },
+  {
+   "id": "moe.out.partial",
+   "op": "layers.{i}.ffn.experts.add",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.ffn.experts",
+   "site": {
+    "kind": "collective_input",
+    "target": "model.layers.{i}.ffn.experts",
+    "detail": "MoERunner: shared_output + fused_output before _maybe_reduce_final_output's all-reduce (member part_rank<r>)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "bf16-add",
+   "tp": "partial",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "tp_rank_partials",
+   "note": "routed_scaling_factor is already in the router weights (the runner's own is 1.0)",
+   "commit": {
+    "name": "model.layers.{i}.ffn.experts/part_rank{r}",
+    "binder": "tp_partial"
+   }
+  },
+  {
+   "id": "moe.out",
+   "op": "layers.{i}.ffn.experts.allreduce",
+   "port": 0,
+   "layers": "all",
+   "module": "model.layers.{i}.ffn.experts",
+   "site": {
+    "kind": "collective_output",
+    "target": "model.layers.{i}.ffn.experts",
+    "detail": "the all-reduce's received output (member out)"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "tp-allreduce",
+   "tp": "reduced",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "note": "the layer's ffn output: the next layer's mHC post (or the final mhc_post) folds it into the streams",
+   "commit": {
+    "name": "model.layers.{i}.ffn.experts/out",
+    "binder": "tp_partial"
+   }
+  }
+ ],
+ "modules": [
+  {
+   "pattern": "",
+   "type": "DeepseekV4ForCausalLM",
+   "disposition": "container",
+   "reason": "runs model.forward and compute_logits"
+  },
+  {
+   "pattern": "model",
+   "type": "DeepseekV4Model",
+   "disposition": "taps",
+   "taps": [
+    "norm.hc_post",
+    "norm.hc_head"
+   ],
+   "reason": "the embedding, the layer loop over the four-stream residual, the last mhc_post and hc_head (its hc_head_fn, hc_head_scale, hc_head_base), then model.norm; holds topk_indices_buffer, which every CSA layer's indexer writes"
+  },
+  {
+   "pattern": "model.embed_tokens",
+   "type": "VocabParallelEmbedding",
+   "disposition": "taps",
+   "taps": [
+    "input_ids",
+    "embed",
+    "embed.partial"
+   ]
+  },
+  {
+   "pattern": "lm_head",
+   "type": "ParallelLMHead",
+   "disposition": "taps",
+   "taps": [
+    "lm_head.shard"
+   ],
+   "reason": "its forward is never called: LogitsProcessor applies lm_head.quant_method"
+  },
+  {
+   "pattern": "logits_processor",
+   "type": "LogitsProcessor",
+   "disposition": "taps",
+   "taps": [
+    "logits"
+   ]
+  },
+  {
+   "pattern": "model.norm",
+   "type": "RMSNorm",
+   "disposition": "taps",
+   "taps": [
+    "norm"
+   ]
+  },
+  {
+   "pattern": "model.layers",
+   "type": "ModuleList",
+   "disposition": "container",
+   "reason": "holds the decoder layers"
+  },
+  {
+   "pattern": "model.layers.{i}",
+   "type": "DeepseekV4DecoderLayer",
+   "disposition": "taps",
+   "taps": [
+    "hc_attn.first.residual",
+    "hc_attn.first.post_mix",
+    "hc_attn.first.comb_mix",
+    "hc_attn.first.x",
+    "hc_attn.residual",
+    "hc_attn.post_mix",
+    "hc_attn.comb_mix",
+    "hc_attn.x",
+    "hc_attn.split.residual",
+    "hc_attn.split.post_mix",
+    "hc_attn.split.comb_mix",
+    "hc_attn.split.x",
+    "hc_ffn.residual",
+    "hc_ffn.post_mix",
+    "hc_ffn.comb_mix",
+    "hc_ffn.x",
+    "hc_ffn.split.residual",
+    "hc_ffn.split.post_mix",
+    "hc_ffn.split.comb_mix",
+    "hc_ffn.split.x"
+   ],
+   "reason": "calls the mHC kernels around attn and ffn with its hc_attn_* / hc_ffn_* parameters and the norms' weights"
+  },
+  {
+   "pattern": "model.layers.{i}.attn_norm",
+   "type": "RMSNorm",
+   "disposition": "fused",
+   "taps": [
+    "hc_attn.first.x",
+    "hc_attn.x",
+    "hc_attn.split.x"
+   ],
+   "reason": "its weight is the mHC pre's norm_weight; its forward is not called"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn_norm",
+   "type": "RMSNorm",
+   "disposition": "fused",
+   "taps": [
+    "hc_ffn.x",
+    "hc_ffn.split.x"
+   ],
+   "reason": "its weight is the mHC pre's norm_weight; its forward is not called"
+  },
+  {
+   "pattern": "model.layers.{i}.attn",
+   "type": "DeepseekV4FlashMLAAttention",
+   "disposition": "taps",
+   "taps": [
+    "attn.q",
+    "attn.compressed_rows.csa",
+    "attn.compressed_rows.hca",
+    "attn.swa_indices",
+    "attn.swa_lens",
+    "attn.extra_indices.csa",
+    "attn.extra_indices.hca",
+    "attn.extra_lens",
+    "attn.out.decode",
+    "attn.out.prefill",
+    "attn.o_fp8",
+    "attn.o_scale"
+   ],
+   "reason": "DeepseekV4Attention.forward: the input projections, the q / kv norms, the q projection with the SWA insert, the compressor and indexer, FlashMLA into o_padded, then the inverse-RoPE FP8 o-projection; its kv_cache holds the compressed rows"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.fused_wqa_wkv",
+   "type": "MergedColumnParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "attn.fused_wqa_wkv"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.attn.q_norm",
+   "type": "RMSNorm",
+   "disposition": "fused",
+   "taps": [
+    "attn.qr"
+   ],
+   "reason": "its weight is read by fused_q_kv_rmsnorm; its forward is not called"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.kv_norm",
+   "type": "RMSNorm",
+   "disposition": "fused",
+   "taps": [
+    "attn.kv"
+   ],
+   "reason": "its weight is read by fused_q_kv_rmsnorm; its forward is not called"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wq_b",
+   "type": "ColumnParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "attn.wq_b"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.attn.swa_cache_layer",
+   "type": "DeepseekV4SWACache",
+   "disposition": "taps",
+   "taps": [
+    "attn.swa_rows"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.attn.rotary_emb",
+   "type": "DeepseekV4ScalingRotaryEmbedding",
+   "disposition": "fused",
+   "taps": [
+    "attn.q",
+    "attn.swa_rows",
+    "attn.compressed_rows.csa",
+    "attn.compressed_rows.hca",
+    "indexer.k_cache",
+    "indexer.q_fp8",
+    "attn.o_fp8"
+   ],
+   "reason": "one instance shared by every layer, its compressors and its indexer (named_modules lists it once, at layer 0); the fused kernels read its cos_sin_cache",
+   "shared": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.rotary_emb.apply_rotary_emb",
+   "type": "ApplyRotaryEmb",
+   "disposition": "inactive",
+   "reason": "RotaryEmbedding.forward is never called: every RoPE here is inside a fused kernel",
+   "shared": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.compressor",
+   "type": "DeepseekCompressor",
+   "disposition": "taps",
+   "taps": [
+    "compressor.kv_score.csa",
+    "compressor.kv_score.hca",
+    "attn.compressed_rows.csa",
+    "attn.compressed_rows.hca"
+   ],
+   "reason": "forward(kv_score, positions, rotary_emb) runs on every step and returns nothing: it writes the state rows and, at a boundary, the compressed rows; its ape is the score's position bias"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.compressor.fused_wkv_wgate",
+   "type": "MergedColumnParallelLinear",
+   "disposition": "weights-only",
+   "taps": [
+    "compressor.kv_score.csa",
+    "compressor.kv_score.hca"
+   ],
+   "reason": "its forward is never called: the attention's torch.mm reads its weight"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.compressor.norm",
+   "type": "RMSNorm",
+   "disposition": "fused",
+   "taps": [
+    "attn.compressed_rows.csa",
+    "attn.compressed_rows.hca"
+   ],
+   "reason": "its weight is read by compress_norm_rope_store_cutedsl; its forward is not called"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.compressor.state_cache",
+   "type": "CompressorStateCache",
+   "disposition": "taps",
+   "taps": [
+    "compressor.state.csa",
+    "compressor.state.hca"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer",
+   "type": "DeepseekV4Indexer",
+   "disposition": "taps",
+   "taps": [
+    "indexer.topk_short",
+    "indexer.q_fp8",
+    "indexer.weights"
+   ],
+   "reason": "forward runs its compressor, then either fills the short-context top-k or projects and quantises its query",
+   "when": "csa"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.wq_b",
+   "type": "ReplicatedLinear",
+   "disposition": "taps",
+   "taps": [
+    "indexer.wq_b"
+   ],
+   "when": "csa"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.weights_proj",
+   "type": "ReplicatedLinear",
+   "disposition": "taps",
+   "taps": [
+    "indexer.weights_proj"
+   ],
+   "when": "csa"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.compressor",
+   "type": "DeepseekCompressor",
+   "disposition": "taps",
+   "taps": [
+    "indexer.compressor.kv_score",
+    "indexer.k_cache"
+   ],
+   "reason": "the indexer's compressor (head ID, overlapping windows): writes the indexer's state rows and k_cache rows",
+   "when": "csa"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.compressor.fused_wkv_wgate",
+   "type": "MergedColumnParallelLinear",
+   "disposition": "weights-only",
+   "taps": [
+    "indexer.compressor.kv_score"
+   ],
+   "reason": "its forward is never called: the attention's torch.mm reads its weight",
+   "when": "csa"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.compressor.norm",
+   "type": "RMSNorm",
+   "disposition": "fused",
+   "taps": [
+    "indexer.k_cache"
+   ],
+   "reason": "its weight is read by compress_norm_rope_store_triton; its forward is not called",
+   "when": "csa"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.compressor.state_cache",
+   "type": "CompressorStateCache",
+   "disposition": "taps",
+   "taps": [
+    "indexer.compressor.state"
+   ],
+   "when": "csa"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.k_cache",
+   "type": "DeepseekV4IndexerCache",
+   "disposition": "taps",
+   "taps": [
+    "indexer.k_cache"
+   ],
+   "when": "csa"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.indexer_op",
+   "type": "SparseAttnIndexer",
+   "disposition": "taps",
+   "taps": [
+    "indexer.logits",
+    "indexer.topk"
+   ],
+   "reason": "called by _sparse_indexer_and_attn on the scored route only (skip_k_cache_insert: the compressor writes the cache)",
+   "when": "csa"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wo_a",
+   "type": "ColumnParallelLinear",
+   "disposition": "weights-only",
+   "taps": [
+    "attn.o_einsum"
+   ],
+   "reason": "its forward is never called: deep_gemm_fp8_o_proj's fp8_einsum reads its weight and weight_scale_inv"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wo_b",
+   "type": "RowParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "attn.wo_b.partial",
+    "attn.wo_b"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.ffn",
+   "type": "DeepseekV4MoE",
+   "disposition": "container",
+   "reason": "use_mega_moe false: _forward_fused_moe calls the MoERunner with the gate inside it"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.gate",
+   "type": "GateLinear",
+   "disposition": "taps",
+   "taps": [
+    "ffn.gate"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts",
+   "type": "MoERunner",
+   "disposition": "taps",
+   "taps": [
+    "moe.router_w",
+    "moe.router_ids",
+    "moe.router_w.hash",
+    "moe.router_ids.hash",
+    "moe.out.partial",
+    "moe.out"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts.routed_experts",
+   "type": "RoutedExperts",
+   "disposition": "taps",
+   "taps": [
+    "moe.up",
+    "moe.act",
+    "moe.down",
+    "moe.sum"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts._shared_experts",
+   "type": "SharedExperts",
+   "disposition": "container",
+   "reason": "runs ffn.shared_experts for the runner"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts",
+   "type": "DeepseekV4MLP",
+   "disposition": "container",
+   "reason": "the one shared expert: gate_up -> SiluAndMulWithClamp -> down (reduce_results False)"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts.gate_up_proj",
+   "type": "MergedColumnParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "shared.gate_up_proj"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts.act_fn",
+   "type": "SiluAndMulWithClamp",
+   "disposition": "taps",
+   "taps": [
+    "shared.act_fn"
+   ]
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts.down_proj",
+   "type": "RowParallelLinear",
+   "disposition": "taps",
+   "taps": [
+    "shared.down_proj"
+   ]
+  }
+ ],
+ "expect": [
+  {
+   "pattern": "model.layers.{i}.attn",
+   "type": "DeepseekV4FlashMLAAttention",
+   "path": "attrs.kv_cache_dtype",
+   "value": "fp8_ds_mla"
+  },
+  {
+   "pattern": "model.layers.{i}.attn",
+   "type": "DeepseekV4FlashMLAAttention",
+   "path": "attrs.head_dim",
+   "value": "=HD"
+  },
+  {
+   "pattern": "model.layers.{i}.attn",
+   "type": "DeepseekV4FlashMLAAttention",
+   "path": "attrs.q_lora_rank",
+   "value": "=QL"
+  },
+  {
+   "pattern": "model.layers.{i}.attn",
+   "type": "DeepseekV4FlashMLAAttention",
+   "path": "flags._tma_aligned_scales",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.attn.fused_wqa_wkv",
+   "type": "MergedColumnParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.type",
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.fused_wqa_wkv",
+   "type": "MergedColumnParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.fused_wqa_wkv",
+   "type": "MergedColumnParallelLinear",
+   "path": "kernels.quant_method.is_scale_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wq_b",
+   "type": "ColumnParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.type",
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wq_b",
+   "type": "ColumnParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wq_b",
+   "type": "ColumnParallelLinear",
+   "path": "kernels.quant_method.is_scale_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wo_a",
+   "type": "ColumnParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.type",
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wo_a",
+   "type": "ColumnParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wo_a",
+   "type": "ColumnParallelLinear",
+   "path": "kernels.quant_method.is_scale_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wo_b",
+   "type": "RowParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.type",
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wo_b",
+   "type": "RowParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wo_b",
+   "type": "RowParallelLinear",
+   "path": "kernels.quant_method.is_scale_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.wq_b",
+   "type": "ReplicatedLinear",
+   "path": "kernels.quant_method.fp8_linear.type",
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.wq_b",
+   "type": "ReplicatedLinear",
+   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.wq_b",
+   "type": "ReplicatedLinear",
+   "path": "kernels.quant_method.is_scale_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts.gate_up_proj",
+   "type": "MergedColumnParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.type",
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts.gate_up_proj",
+   "type": "MergedColumnParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts.gate_up_proj",
+   "type": "MergedColumnParallelLinear",
+   "path": "kernels.quant_method.is_scale_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts.down_proj",
+   "type": "RowParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.type",
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.deep_gemm.DeepGemmFp8BlockScaledMMKernel"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts.down_proj",
+   "type": "RowParallelLinear",
+   "path": "kernels.quant_method.fp8_linear.use_deep_gemm_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts.down_proj",
+   "type": "RowParallelLinear",
+   "path": "kernels.quant_method.is_scale_e8m0",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.wo_b",
+   "type": "RowParallelLinear",
+   "path": "attrs.reduce_results",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.shared_experts.down_proj",
+   "type": "RowParallelLinear",
+   "path": "attrs.reduce_results",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.attn.compressor",
+   "type": "DeepseekCompressor",
+   "path": "flags._use_two_stage_fused_compressor",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.attn.compressor",
+   "type": "DeepseekCompressor",
+   "path": "flags.use_fp4_cache",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.compressor",
+   "type": "DeepseekCompressor",
+   "path": "flags.overlap",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.compressor",
+   "type": "DeepseekCompressor",
+   "path": "attrs.head_dim",
+   "value": "=ID"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.compressor.state_cache",
+   "type": "CompressorStateCache",
+   "path": "attrs.dtype",
+   "value": "float32"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.swa_cache_layer",
+   "type": "DeepseekV4SWACache",
+   "path": "attrs.dtype",
+   "value": "uint8"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer",
+   "type": "DeepseekV4Indexer",
+   "path": "attrs.topk_tokens",
+   "value": "=TOPK"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer",
+   "type": "DeepseekV4Indexer",
+   "path": "attrs.n_head",
+   "value": "=IH"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer",
+   "type": "DeepseekV4Indexer",
+   "path": "attrs.scale_fmt",
+   "value": "ue8m0"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer",
+   "type": "DeepseekV4Indexer",
+   "path": "flags.use_fp4_kv",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.indexer_op",
+   "type": "SparseAttnIndexer",
+   "path": "flags.skip_k_cache_insert",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.indexer_op",
+   "type": "SparseAttnIndexer",
+   "path": "flags.use_fp4_cache",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.attn.indexer.k_cache",
+   "type": "DeepseekV4IndexerCache",
+   "path": "attrs.head_dim",
+   "value": "=IKB"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.rotary_emb",
+   "type": "DeepseekV4ScalingRotaryEmbedding",
+   "path": "attrs.is_neox_style",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.attn.rotary_emb",
+   "type": "DeepseekV4ScalingRotaryEmbedding",
+   "path": "attrs.rotary_dim",
+   "value": "=DR"
+  },
+  {
+   "pattern": "model.layers.{i}.attn.rotary_emb",
+   "type": "DeepseekV4ScalingRotaryEmbedding",
+   "path": "attrs.base",
+   "value": 160000
+  },
+  {
+   "pattern": "model.layers.{i}.attn.rotary_emb",
+   "type": "DeepseekV4ScalingRotaryEmbedding",
+   "path": "flags.use_flashinfer",
+   "value": false
+  },
+  {
+   "pattern": "model",
+   "type": "DeepseekV4Model",
+   "path": "flags.use_mega_moe",
+   "value": false
+  },
+  {
+   "pattern": "model",
+   "type": "DeepseekV4Model",
+   "path": "flags.use_sequence_parallel",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}",
+   "type": "DeepseekV4DecoderLayer",
+   "path": "flags.use_sequence_parallel",
+   "value": false
+  },
+  {
+   "pattern": "model.embed_tokens",
+   "type": "VocabParallelEmbedding",
+   "path": "flags.use_fused_embedding",
+   "value": true
+  },
+  {
+   "pattern": "logits_processor",
+   "type": "LogitsProcessor",
+   "path": "flags.use_all_gather",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.ffn",
+   "type": "DeepseekV4MoE",
+   "path": "flags.use_mega_moe",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.ffn",
+   "type": "DeepseekV4MoE",
+   "path": "attrs.scoring_func",
+   "value": "sqrtsoftplus"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts",
+   "type": "MoERunner",
+   "path": "attrs.routed_scaling_factor",
+   "value": 1.0
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.type",
+   "value": "vllm.model_executor.layers.fused_moe.router.fused_topk_bias_router.FusedTopKBiasRouter"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.top_k",
+   "value": "=K"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.global_num_experts",
+   "value": "=E"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.routed_scaling_factor",
+   "value": 2.5
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts",
+   "type": "MoERunner",
+   "path": "kernels.router.renormalize",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts.routed_experts",
+   "type": "RoutedExperts",
+   "path": "kernels.quant_method.type",
+   "value": "vllm.model_executor.layers.quantization.mxfp4.Mxfp4MoEMethod"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts.routed_experts",
+   "type": "RoutedExperts",
+   "path": "kernels.quant_method.mxfp4_backend._value_",
+   "value": "MARLIN"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts.routed_experts",
+   "type": "RoutedExperts",
+   "path": "kernels.quant_method.weight_dtype",
+   "value": "mxfp4"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts.routed_experts",
+   "type": "RoutedExperts",
+   "path": "flags.apply_router_weight_on_input",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.experts.routed_experts",
+   "type": "RoutedExperts",
+   "path": "attrs.intermediate_size_per_partition",
+   "value": "=MIL"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.gate",
+   "type": "GateLinear",
+   "path": "attrs.out_dtype",
+   "value": "float32"
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.gate",
+   "type": "GateLinear",
+   "path": "flags.allow_ll_bf16_gemm",
+   "value": true
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.gate",
+   "type": "GateLinear",
+   "path": "flags.allow_fp32_router_gemm",
+   "value": false
+  },
+  {
+   "pattern": "model.layers.{i}.ffn.gate",
+   "type": "GateLinear",
+   "path": "flags.allow_bf16x3_router_gemm",
+   "value": false
+  }
+ ],
+ "capture_work": [
+  {
+   "item": 1,
+   "work": "mhc source: wrap the four mHC call-time globals of vllm.models.deepseek_v4.nvidia.model (mhc_pre_broadcast_tilelang, mhc_fused_post_pre_tilelang, mhc_post_tilelang, hc_head_fused_kernel_tilelang) and bind each call's returns under the binder's names; record per call whether the FMA (num_tokens <= 16) or the TF32 path ran, held to the step's hc route"
+  },
+  {
+   "item": 2,
+   "work": "dsv4 attention source: fused_q_kv_rmsnorm's returns (a global of vllm.models.deepseek_v4.attention), _fused_qnorm_rope_kv_insert's return, _run_parallel_input_projections' kv_score and indexer_kv_score, the SWA, state, compressed and indexer cache rows at their slot mappings after the step's writes, fused_indexer_q_rope_quant's returns, topk_indices_buffer[:M, :TOPK] after the indexer, flash_mla_with_kvcache's index arguments, forward_mqa's output argument split at num_decode_tokens, fused_inv_rope_fp8_quant's returns and fp8_einsum's output"
+  },
+  {
+   "item": 3,
+   "work": "moe source: the Marlin launches (ops.moe_wna16_marlin_gemm as experts/marlin_moe.py reads it: up after the w13 launch, before w2 overwrites the shared buffer; act as the w2 launch's input; down after it), the router at fused_topk_bias's return (dsv4_topk and topk_hash_softplus_sqrt), moe_sum unchanged"
+  },
+  {
+   "item": 4,
+   "work": "committer: add SiluAndMulWithClamp to ACQUIRE_CLASSES so the shared expert's act_fn module hook binds"
+  },
+  {
+   "item": 5,
+   "work": "route source: record each step's hc route (token count), FlashMLA rows (num_decode_tokens) and indexer route (the indexer metadata's max_seq_len // CSA_R <= TOPK), then add route_site so the committer reads this map"
+  },
+  {
+   "item": 6,
+   "work": "TP partial source at TP8: confirm the sites this map names (wo_b's all-reduce in vllm.model_executor.layers.linear, the MoE runner's in fused_moe.runner.moe_runner, the embedding's and the logits all-gather) are the only collectives, one call each per layer and step"
+  }
+ ]
+}
