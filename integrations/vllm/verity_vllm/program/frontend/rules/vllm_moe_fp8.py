@@ -106,7 +106,7 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
                                    "K/G, 1); K % G == 0 and G % BLOCK_SIZE_K == 0",
                                    "batch invariant: BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages, SWAP_AB False (vLLM's default); otherwise "
                                    "cc 9.0 with SWAP_AB = enable_swap_ab(BLOCK_SIZE_M, BLOCK_SIZE_N), and the tile's MMAv2/QGMMA step registered "
-                                   "(vLLM's tuned config; fp8_moe.sm90_dot)",
+                                   "(vLLM's tuned config; the shared tile-lowering rule)",
                                    "schedule and routed weights as FusedMoeKernel[vllm-moe]"),
                     evidence_domain="structural; numerics: MoeExpertFp8Gemm_v1 / MoeExpertFp8GemmW_v1 over MoeExpertFp8BlockGemm(W)_v3{DOT} "
                                     "(registry.fp8_moe DOT_CONF: exact-model-tested at cc 12.0's step; at cc 9.0's, the _v1 forms, model-untested)")

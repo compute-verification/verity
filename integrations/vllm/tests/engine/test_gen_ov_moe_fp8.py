@@ -254,7 +254,7 @@ H200_TUNED = TargetProfile(compute_capability=(9, 0), num_sms=132, moe_backend="
     (64, 64, 64, False, "HopperE4m3QgmmaDot32_v1", None),
     (16, 64, 32, True, "HopperE4m3QgmmaDot32_v1", None),
     (8, 32, 64, False, "HopperE4m3MmaV2Dot32_v1", None),
-    (8, 64, 128, True, "HopperE4m3MmaV2Dot32_v1", None),
+    (8, 64, 64, True, "HopperE4m3MmaV2Dot32_v1", None),
     (16, 128, 64, False, None, "enable_swap_ab"),
     (64, 64, 16, False, None, "k32 step"),
 ])
