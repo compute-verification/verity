@@ -29,8 +29,9 @@ HOPPER_K64 = bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER)
 DOTS = [bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=48, **BG.GEMM_HOPPER)]
 STEPS = [bind(BG.AmpereBF16TcDot16), bind(BG.HopperBF16WgmmaDot16)]
 GEMMS = [bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER)]
-FP8_STEPS = [bind(BG.HopperE4m3QgmmaDot32), bind(BG.BlackwellE4m3QmmaDot32)]
-FP8_COORDS = [bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3)]
+FP8_STEPS = [bind(BG.HopperE4m3QgmmaDot32), bind(BG.BlackwellE4m3QmmaDot32), bind(BG.HopperE4m3MmaV2Dot32)]
+FP8_COORDS = [bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3),
+              bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3_MMAV2)]
 FP4 = [(bind(BG.BlackwellNvf4OmmaDot64), K.BLACKWELL_SM120_NVF4), (bind(BG.BlackwellMxf4OmmaDot64), K.BLACKWELL_SM120_MXF4),
        (bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), K.BLACKWELL_SM120_NVF4),
        (bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4), K.BLACKWELL_SM120_MXF4)]
@@ -50,6 +51,8 @@ PINS = {
     "BlackwellE4m3QmmaDot32_v2": (9128, 17402, 1025, "558f1f03cff362c3d6f1ba368f67e2a9f24ff62333f2dfc3f269564ffeb27a6f1dfe0d46e46ef465f3739a0d0b482c3a56d8983cd167ffa77f8db5707c3d634d"),
     FP8_COORDS[0].id: (13664, 24500, 2051, "6d1e77347ce33e2669a884c4ac07f73eb6e1e8117bb64d3bf5b734c7618d987cc460ed14200ce69dd23c1c9e703ce883cdb1f3ee81b60c9565b4ca7e38415d08"),
     FP8_COORDS[1].id: (18322, 34902, 2065, "1c55a01aceccd44d8f05082ccf98b593de36ad2a586caf4c05b21c763779dba8d8c9a67ea6ae85fccf55674eb78eac4bcf012f3fd1eadead7f3e05a362f772ef"),
+    "HopperE4m3MmaV2Dot32_v2": (9710, 18390, 1105, "39c016593e48e4d8cc13401592ed9a7fc4f538d8011365c10e7f918ab5754562a49e3411a5c98381db4115c4d7c521f937cd29a9419dfaf635e3d79f36af6d87"),
+    FP8_COORDS[2].id: (19486, 36878, 2225, "41613b7da3add51bbf8c3daf916732e888aee0a5ec08764a1ca22f0be069e1af1fe3ab78da3e3132f17529e40de6bd603e1f1b4fcf5325f0b6fc2cb36107a60d"),
     "BlackwellE5m2QmmaDot32_v2": (8931, 17231, 1251, "7d92a507ada52b4e9ec533bcd8572a18e18d8cff42a9b3f6f781b3143c53976cac2e80d72734f3d8d78c61b0d9e635cacd827caac6cfd96b8663fc676911bb9a"),
     "BlackwellNvf4OmmaDot64_v2": (6864, 13949, 616, "73168c623c4a783d34f98fee8600b11f5aab5db24730d2da5ce039bd2bcbbaedeef1ddb7f2ea7caef692029eef678f2f24d45a74948c74db541416db324e22a9"),
     "BlackwellMxf4OmmaDot64_v2": (5917, 12058, 605, "f067a7bc2f6718102469b2306b2110a7b3298d4625d47a71ed96af36cf1351b36b619c70df54e916640e6291d118d3d74495eb1e3ba701e311ce10875ea1b653"),
@@ -73,7 +76,7 @@ def test_pinned_counts_and_digests(target) -> None:
 
 
 @pytest.mark.parametrize("d", [BG.F2fpBf16, BG.AmpereBF16TcDot16, BG.HopperBF16WgmmaDot16, BG.HopperE4m3QgmmaDot32,
-                               BG.BlackwellE4m3QmmaDot32, BG.BlackwellE5m2QmmaDot32, BG.BlackwellNvf4OmmaDot64,
+                               BG.HopperE4m3MmaV2Dot32, BG.BlackwellE4m3QmmaDot32, BG.BlackwellE5m2QmmaDot32, BG.BlackwellNvf4OmmaDot64,
                                BG.BlackwellMxf4OmmaDot64], ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
     """The traced circuit has one And gate per AND the builder keeps live, with common ANDs shared (`Circuit(cse=True)`)."""

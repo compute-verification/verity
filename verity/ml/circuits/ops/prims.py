@@ -17,7 +17,8 @@ equal to `_v1` on every finite input.  A registered id denotes one function, so 
 `tc_dot_total_e4m3` on `models.BLACKWELL_SM120_E4M3_M16N8K32`, and `BlackwellE5m2QmmaDot32_v1` the same with E5M2 operands
 (`tc_dot_total_e5m2`); `BlackwellNvf4OmmaDot64_v1` its NVFP4 step
 (`models.BLACKWELL_SM120_NVF4`), with the two casts NVFP4 quantization uses, `F32ToE2m1Sat_v1` and `E4m3ToF32_v1`, and
-`BlackwellMxf4OmmaDot64_v1` its MXFP4 step (`models.BLACKWELL_SM120_MXF4`).
+`BlackwellMxf4OmmaDot64_v1` its MXFP4 step (`models.BLACKWELL_SM120_MXF4`).  `HopperE4m3MmaV2Dot32_v1` is the k32 step of an e4m3
+`tl.dot` that Triton 3.7.1 lowers to MMAv2 on sm_90 (`total_fp8.HOPPER_E4M3_MMAV2_K32` in `total_fp8.MMAV2_E4M3_K_ORDER`).
 """
 from __future__ import annotations
 
@@ -30,7 +31,8 @@ from verity.ml.circuits.silicon.errors import InvalidArtifact
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_E5M2_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4
 from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
-from verity.ml.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3, tc_dot_total_e5m2
+from verity.ml.circuits.silicon.total_fp8 import (HOPPER_E4M3_MMAV2_K32, HOPPER_E4M3_WGMMA_K32, MMAV2_E4M3_K_ORDER, tc_dot_total_e4m3,
+                                                  tc_dot_total_e5m2)
 
 BF16, F32, E4M3, E5M2, E2M1 = Value(16), Value(32), Value(8), Value(8), Value(4)
 A16 = Array(16, BF16)
@@ -45,7 +47,7 @@ E2M1_NAN_CODE = 0x7
 
 __all__ = ["A16", "A2_8", "A32_8", "A32_E5M2", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "E5M2", "F32", "AmpereBF16TcDot16", "Bf16ToF32",
            "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64", "E4m3ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE2m1Sat", "F32ToE4m3Sat", "HopperBF16WgmmaDot16",
-           "HopperE4m3QgmmaDot32", "const"]
+           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "const"]
 
 
 @primitive("Bf16ToF32", 1, [("a", BF16)], F32, conformance="exact-model-tested")
@@ -107,6 +109,26 @@ def HopperE4m3QgmmaDot32(acc: int, *ab: int) -> int:
     on E4M3 operands); total on every encoding (NaN -> 0x7FFFFFFF, sticky/saturating infinities, zero always +0).  The
     accumulator itself passes through the 14-bit adder, so `acc + 0 != acc` for most f32 words."""
     return tc_dot_total_e4m3(HOPPER_E4M3_WGMMA_K32, acc, list(ab[:32]), list(ab[32:64]))
+
+
+@primitive("HopperE4m3MmaV2Dot32", 1, [("acc", F32), ("a", A32_8), ("b", A32_8)], F32,
+           conformance="model-untested: read from Triton 3.7.1 (AccelerateMatmul.cpp supportMMA v3 and mmav2SupportsFp8Operands, "
+                       "MMAv2.cpp's kWidth-4 register order) and its offline sm_90 compile of vLLM d9105ea80's fused_moe_kernel at the "
+                       "tuned H200 tiles 8x32x128 and 8x64x128/SWAP_AB (8 chained mma.sync.m16n8k16.f32.f16.f16.f32 per 128-wide K "
+                       "tile, cvt.rn.f16x2.e4m3x2; SASS F2FP.F16.E4M3.UNPACK_B, HMMA.16816.F32); HMMA.16816.F32 from +0 is "
+                       "HOPPER_BF16_M16N8K16's group on the H100 (r20260922-184111-671e, 0 mismatches), with a nonzero accumulator "
+                       "unmeasured: integrations/vllm/tests/properties/glm53_block_fp8_capture_gpu.py is its hardware check")
+def HopperE4m3MmaV2Dot32(acc: int, *ab: int) -> int:
+    """One 32-wide k block of an e4m3 `tl.dot` that Triton 3.7.1 lowers to MMAv2 on sm_90 (a dot whose M is not a multiple of 64 or
+    whose N is not a multiple of 16, or under fewer than 4 warps): the operands promoted to f16 exactly, then two chained
+    `mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32` (SASS `HMMA.16816.F32`), the first over the k with k mod 4 in {0, 1}
+    from `acc`, the second over k mod 4 in {2, 3} from the first's result; each one group of 16 exact products plus its
+    accumulator through the 26-bit truncating adder (`total_fp8.HOPPER_E4M3_MMAV2_K32` in `MMAV2_E4M3_K_ORDER`), total on every
+    encoding (NaN -> 0x7FFFFFFF, sticky/saturating infinities, zero always +0).  Not ptxas's own lowering of PTX
+    `mma.sync.m16n8k32` e4m3 on sm_90 (two HMMA from +0 and IEEE FADDs), and not the wgmma step `HopperE4m3QgmmaDot32_v1`, whose
+    14-bit adder truncates the accumulator."""
+    return tc_dot_total_e4m3(HOPPER_E4M3_MMAV2_K32, acc, [ab[k] for k in MMAV2_E4M3_K_ORDER],
+                             [ab[32 + k] for k in MMAV2_E4M3_K_ORDER])
 
 
 @primitive("BlackwellE4m3QmmaDot32", 1, [("acc", F32), ("a", A32_8), ("b", A32_8)], F32,
@@ -272,6 +294,10 @@ def _register_kernels() -> None:
     register_kernel(HopperBF16WgmmaDot16, lambda acc, a, b: K.group_sum_total_batch(HOPPER_BF16_WGMMA_K16, acc, a, b),
                     domain=every, sample=K.sample_tc)
     register_kernel(HopperE4m3QgmmaDot32, lambda acc, a, b: K.group_sum_total_batch(HOPPER_E4M3_WGMMA_K32, acc, a, b),
+                    domain=every, sample=K.sample_tc)
+    order = list(MMAV2_E4M3_K_ORDER)
+    register_kernel(HopperE4m3MmaV2Dot32,
+                    lambda acc, a, b: K.group_sum_total_batch(HOPPER_E4M3_MMAV2_K32, acc, a[..., order], b[..., order]),
                     domain=every, sample=K.sample_tc)
     register_kernel(BlackwellE4m3QmmaDot32, lambda acc, a, b: K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b),
                     domain=every, sample=K.sample_tc)
