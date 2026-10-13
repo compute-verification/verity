@@ -115,8 +115,30 @@ def err (x : Except String Unit) : Option String := match x with | .error e => s
 #guard (VStar.Stmt.sparse sp18 38).name == "rec-sparse/n18-e13-s6-t0" && (op 23).name == "rec-opening/m23-c2-p0"
 #guard openingPortName 25 0 == "m0" && openingPortName 25 24 == "m24" && openingPortName 25 25 == "acc0" &&
   openingPortName 25 26 == "acc1" && openingPortName 25 28 == "claim1"
-#guard ownPorts (.sparse sp18 38) == [("h", "rec-c38", #[some 0, some 1])]
-#guard ownPorts (.opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("claim0", 1)] 1) == [("m3", "rec-opening-c3", #[some 0])]
+#guard ownPorts (.sparse sp18 38) == [("h", "rec-c38", #[some 0, some 1]), ("claim", "rec-claim", #[some 0, some 1])]
+#guard ownPorts (.opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("claim1", 1)] 1) ==
+  [("m3", "rec-opening-c3", #[some 0]), ("claim1", "rec-claim", #[some 1])]
+
+-- each claim port reads its own rep's row of rec-claim: RecSparse's `claim` rep r's at instance r, R's opening's `claim<k>`
+-- row k; a reads file with a claim port at another row is refused
+def port (name value : String) (reads : List Nat) : Registered.Port :=
+  { name, value, root := ByteArray.empty, leaves := 2, words := none, wordBits := 16, domain := ByteArray.empty,
+    reads := (reads.map some).toArray }
+def sparseOwn (claim : List Nat) : Array Registered.Port :=
+  #[port "h" "rec-c38" [0, 1], port "claim" "rec-claim" claim, port "v" "rec-sparse-v" [0, 1]]
+def openOwn (claim1 : List Nat) : Array Registered.Port :=
+  #[port "m3" "rec-opening-c3" [0], port "acc0" "rec-acc" [4], port "claim1" "rec-claim" claim1]
+def openSt : VStar.Stmt := .opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("claim1", 1)] 1
+
+#guard err (checkOwn (.sparse sp18 38) (sparseOwn [0, 1])) == none
+#guard err (checkOwn (.sparse sp18 38) (sparseOwn [1, 0])) == some
+  "rec-sparse/n18-e13-s6-t0: the registered reads' port claim under rec-claim reading [1, 0] is not the statement's: the statement's is claim under rec-claim reading [0, 1]"
+#guard err (checkOwn (.sparse sp18 38) (sparseOwn [0, 1]).pop.pop) == some
+  "rec-sparse/n18-e13-s6-t0: the statement's message-round port claim under rec-claim reading [0, 1] is not in the registered reads (1 message-round ports)"
+#guard claimIndex "claim12" == some 12 && claimIndex "claim01" == none && claimIndex "claim" == none
+#guard err (checkOwn openSt (openOwn [1])) == none
+#guard err (checkOwn openSt (openOwn [0])) == some
+  "rec-opening/m23-c2-p0: the registered reads' port claim1 under rec-claim reading [0] is not the statement's: the statement's is claim1 under rec-claim reading [1]"
 
 #guard err (checkCandidate3 c3 full.toArray) == none
 #guard err (checkCandidate3 c3 (full.drop 1).toArray) ==
@@ -153,9 +175,14 @@ def err (x : Except String Unit) : Option String := match x with | .error e => s
   "rec-sparse/n18-e13-s6-t0: a RecSparse unit, and the verifier's inner shape names no sparse phase (rec-inner --sparse)"
 #guard isVStar "rec-open-stacked/l16-h1" && isVStar "rec-sparse/n18-e13-s6-t0" && isVStar "rec-opening/m23-c2-p0"
 
--- the inner shape covers the transcript: candidate 3's streams need the shapes, and R's is META's
-def c3cs (sh : Option StackedShape) : InnerCommits :=
-  { reps := ic.reps, streams := #[sparseStream 0 20 10, sparseStream 1 40 10] ++ ic.streams, stacked := sh }
+-- the inner shape covers the transcript: candidate 3's streams need the shapes, and R's is META's; each rep's and sparse
+-- stream's c_k sit at its schedule's message rounds
+def atRounds (ks : List Nat) (base : Nat) : Array (Nat × ByteArray) := ks.toArray.zipIdx.map fun (k, i) => (k, b (base + i))
+def sparseAt (x : Nat) (ks : List Nat := commitRounds (sparsePhaseRounds sp18)) : InnerStream :=
+  { name := s!"sparse/rep{x}", commits := atRounds ks (50 * x), tops := #[] }
+def c3cs (sh : Option StackedShape) (rs : Option (Array SchedRound) := repRounds 25 22 8) : InnerCommits :=
+  { reps := #[0, 1].map fun x => atRounds ((rs.map commitRounds).getD []) (100 + 50 * x),
+    streams := #[sparseAt 0, sparseAt 1] ++ ic.streams, stacked := sh }
 
 #guard why (checkCovers c3 (c3cs (some r23))) == none
 #guard why (checkCovers { c3 with sparse := none } (c3cs (some r23))) == some
@@ -166,5 +193,24 @@ def c3cs (sh : Option StackedShape) : InnerCommits :=
   "rec-inner: the inner transcript holds R's stream (stacked/rep0), and the verifier's inner shape names no shape of R (stacked): its V* list would have no level of R's or R's opening"
 #guard why (checkCovers { c3 with stacked := some ⟨24, 2⟩ } (c3cs (some r23))) == some
   "rec-inner: the verifier's inner shape names R's shape (m 24, claims 2), and the inner circuit's META (m 23, claims 2) (stacked)"
+-- private circuits' reps split z_partial's round (`holoRepRounds`): their transcript passes under the verifier's `holo`
+-- alone; a rep's c_k one round off, a rep missing, and a sparse stream's c_k off its rounds or short of one are refused
+def holoCs : InnerCommits := c3cs (some r23) (holoRepRounds 25 22 8)
+def spRounds : List Nat := commitRounds (sparsePhaseRounds sp18)
+
+#guard why (checkCovers { c3 with holo := true } holoCs) == none
+#guard why (checkCovers c3 holoCs) == some
+  "rec inner transcript: rep 0's message round 46 is at round 49, and its schedule's at round 50 (77 message rounds, the schedule's 76)"
+#guard why (checkCovers { c3 with holo := true } (c3cs (some r23))) == some
+  "rec inner transcript: rep 0's message round 46 is at round 50, and its schedule's at round 49 (76 message rounds, the schedule's 77)"
+#guard why (checkCovers c3 { c3cs (some r23) with
+    reps := (c3cs (some r23)).reps.modify 1 fun cm => cm.modify 5 fun (k, c) => (k + 1, c) }) == some
+  "rec inner transcript: rep 1's message round 5 is at round 8, and its schedule's at round 7 (76 message rounds, the schedule's 76)"
+#guard why (checkCovers c3 { c3cs (some r23) with reps := (c3cs (some r23)).reps.pop }) == some
+  "rec inner transcript: 1 reps, not the circuit table's two"
+#guard why (checkCovers c3 { c3cs (some r23) with streams := #[sparseAt 0, sparseAt 1 (spRounds.map (· + 1))] ++ ic.streams }) ==
+  some "rec inner transcript: sparse/rep1's message round 0 is at round 2, and its schedule's at round 1 (33 message rounds, the schedule's 33)"
+#guard why (checkCovers c3 { c3cs (some r23) with streams := #[sparseAt 0 spRounds.dropLast, sparseAt 1] ++ ic.streams }) ==
+  some "rec inner transcript: sparse/rep0's message round 32 is at no round, and its schedule's at round 33 (32 message rounds, the schedule's 33)"
 
 end Flock.Test.InnerStreams
