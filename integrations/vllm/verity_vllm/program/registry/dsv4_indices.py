@@ -46,9 +46,9 @@ block table, the position and the window, all schedule metadata, the class of `_
 public-metadata kernels `kernel_allowlist` names): FlashMLA's decode takes the rows they select and their lengths, and which
 rows is wiring the verifier derives from the schedule, as the capture resolves each slot to its position through the step's
 block tables.  Ratio 128's decode row is the same class (`_build_c128a_topk_metadata_kernel`'s decode branch, sparse_mla.py:
-388-416: the block-table slots of positions below min((position + 1) // 128, K), the length 0 for an invalid token).  Still
-open: ratio 4's decode row, `compute_global_topk_indices_and_lens` (cache_utils.py:435-517), the block-table lookup of the
-indexer's selection, a function of a committed value.
+388-416: the block-table slots of positions below min((position + 1) // 128, K), the length 0 for an invalid token).  Ratio
+4's decode row, `compute_global_topk_indices_and_lens` (cache_utils.py:435-517), the block-table lookup of the indexer's
+selection, is a function of a committed value: `dsv4_decode_indices.Dsv4GlobalTopk_v1`.
 
 Registered functions:
   Dsv4CombineTopkSwa{TOPK,RATIO,WINDOW,WIDTH}  (topk: TOPK i32, pos, mb, n, gs: i32) -> (WIDTH i32, len: i32)
