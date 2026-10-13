@@ -150,13 +150,13 @@ class _Layer(nn.Module):
 class _Model(nn.Module):
     """The layers over the steps, each step's positions an `arange` (as `vllm_meta`'s wrappers make them)."""
 
-    def __init__(self, layers) -> None:
+    def __init__(self, layers, steps=STEPS) -> None:
         super().__init__()
-        self.layers = nn.ModuleList(layers)
+        self.layers, self.steps = nn.ModuleList(layers), steps
 
     def forward(self, *xs):
         outs, k = [], 0
-        for p0, T in STEPS:
+        for p0, T in self.steps:
             positions = torch.arange(p0, p0 + T, dtype=torch.int64)
             for layer in self.layers:
                 outs += list(layer(positions, *xs[k:k + layer.n_inputs]))
@@ -164,14 +164,14 @@ class _Model(nn.Module):
         return tuple(outs)
 
 
-def _model(order=(True, False), topk: int = TOPK) -> _Model:
-    return _Model([_Layer(NAMES[i], indexer, seed=10 + i, topk=topk) for i, indexer in enumerate(order)])
+def _model(order=(True, False), topk: int = TOPK, steps=STEPS) -> _Model:
+    return _Model([_Layer(NAMES[i], indexer, seed=10 + i, topk=topk) for i, indexer in enumerate(order)], steps)
 
 
 def _inputs(model: _Model, seed: int = 1) -> tuple:
     rng = np.random.default_rng(seed)
     xs = []
-    for _, T in STEPS:
+    for _, T in model.steps:
         for layer in model.layers:
             xs += [_bf16(rng, T, NQ), _bf16(rng, T, L), _bf16(rng, T, R), _bf16(rng, T, NH * (P + R))]
             if layer.indexer is not None:
@@ -234,7 +234,7 @@ def _reference(model: _Model, inputs) -> list[int]:
     up, down = bind(BatchedGemmStandIn, B=NH, K=P, N=L, DOT=DOT), bind(BatchedGemmStandIn, B=NH, K=L, N=V, DOT=DOT)
     hist = {n: [] for n in NAMES}
     out, k = [], 0
-    for p0, T in STEPS:
+    for p0, T in model.steps:
         for layer in model.layers:
             q_c, kv_c, k_pe, q = inputs[k:k + 4]
             k += layer.n_inputs
@@ -246,10 +246,11 @@ def _reference(model: _Model, inputs) -> list[int]:
                 qcs += list(evaluate(qn, _words(q_c[i]), _words(layer.q_a_layernorm.weight)))
                 kv = list(evaluate(kn, _words(kv_c[i]), _words(layer.kv_a_layernorm.weight)))
                 hist[layer.layer_name].append(kv + list(evaluate(rope1, _words(k_pe[i]), _words(cs[p]))))
+                n = len(hist[layer.layer_name])
                 ql = list(evaluate(up, _words(qv[i, :, :P]), wuk))
                 qr = list(evaluate(ropeh, _words(qv[i, :, P:]), _words(cs[p])))
-                fn = bind(sparse_mla.SparseMla, T=p + 1, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE)
-                a = list(evaluate(fn, ql, qr, [w for r in hist[layer.layer_name][:p + 1] for w in r]))
+                fn = bind(sparse_mla.SparseMla, T=n, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE)
+                a = list(evaluate(fn, ql, qr, [w for r in hist[layer.layer_name] for w in r]))
                 rows += list(evaluate(down, a, wuv))
             out += rows + qcs
     return [int(w) for w in out]
@@ -326,6 +327,25 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
         (NAMES[0], NAMES[0]), (NAMES[1], NAMES[0])] * len(STEPS)
     roles = rep.provenance["weight_roles"]
     assert roles["layers.0.W_UK_T"]["role"] == "mla.absorb" and roles["layers.0.indexer.k_norm.bias"]["role"] == "dsa.indexer.k_norm.bias"
+
+
+def test_a_history_opens_at_the_first_position_a_layer_sees(served):
+    """The step wrapper's Program starts at `pos0` (`EngineStep`), and a layer's history opens there, as the dense attention rule's
+    does: row i of a call reads P0 + i + 1 keys, while RoPE reads the position."""
+    model = _model(steps=((5, 2), (7, 1)))
+    xs = _inputs(model)
+    rep = _derive(model, xs)
+    assert rep.program is not None, rep.unsupported
+    ids = _ids(rep)
+    logits = [i for i in ids if i.startswith("DsaMqaLogits")]
+    assert logits == [bind(dsa.DsaMqaLogitsV3, N=n, H=H, D=D).id for n in (1, 2, 3)]
+    assert _run(rep, model, xs) == _reference(model, xs)
+
+
+def test_a_call_that_does_not_continue_the_history_refuses(served):
+    model = _model(steps=((0, 2), (3, 1)))
+    hint = _hint(_derive(model, _inputs(model)))
+    assert f"positions 3..3 do not continue {NAMES[0]!r}'s history of 2 rows (next position 2)" in hint, hint
 
 
 def test_the_served_vocabulary_names_the_roles_it_lacks(served):

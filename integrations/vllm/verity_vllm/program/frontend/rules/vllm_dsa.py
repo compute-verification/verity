@@ -360,15 +360,16 @@ def _observed_sparse_mla(layer_name: str) -> str | None:
 
 class DsaIndexerAttnRule(StateRule):
     """`vllm_iface.dsa_indexer_attn` (the sparse indexer and FA3's sparse MLA of one layer): the layer's MLA and index-K caches are
-    implicit state keyed by `layer_name`, made explicit as histories; each query row at position P reads the first n = P + 1 rows.
-    An indexer layer emits the row's logits and its top-k, an IndexShare layer takes the top-k the last indexer layer selected for
+    implicit state keyed by `layer_name`, made explicit as histories.  A layer's history opens at its first call, at whatever position
+    (the step wrapper's `pos0`, as the dense attention rule's `kv_history` opens), and every later call continues it; row i of a call
+    that finds P0 rows reads the first n = P0 + i + 1 rows.  An indexer layer emits the row's logits and its top-k, an IndexShare layer takes the top-k the last indexer layer selected for
     the same positions, and both `SparseMla_v1` over the selected rows: with n <= TOPK the selection is rows 0..n-1 in order."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaIndexerAttn[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_indexer_attn(...) (" + ", ".join(_ATTN) + ")",
                     preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism "
                                    "or a dense-MHA prefill backend (so every step takes the top-k MQA path)",
                                    "the target is sm_90 and FA3's sparse MLA is pinned to one split (engine.sparse_mla, VERITY_SPARSE_MLA_NUM_SPLITS=1)",
-                                   "positions are the layer's next T rows; ql_nope [T, NH, L], q_pe [T, NH, R], kv_c [T, L], k_pe [T, R] bf16",
+                                   "positions are T consecutive rows continuing the layer's history; ql_nope [T, NH, L], q_pe [T, NH, R], kv_c [T, L], k_pe [T, R] bf16",
                                    "the index operands all given (index_q [T, H, D] e4m3, index_weights [T, H] f32, index_k [T, D] e4m3, "
                                    "index_k_scale [T] f32) or all None, then the last indexer layer selected for these positions",
                                    "every row has at most TOPK keys (the top-k kernels' short-row shortcut)",
@@ -441,20 +442,23 @@ class DsaIndexerAttnRule(StateRule):
         owner = ctx.state.setdefault("dsa_owner", {})
         if owner.setdefault(layer, mp) != mp:
             refuse("side_input", node, mp, f"the caches of {layer!r} are written from two modules ({owner[layer]} and {mp})")
-        hist = ctx.state.setdefault("dsa_history", {}).setdefault(layer, {"latent": [], "ik": [], "iks": []})
+        hist = ctx.state.setdefault("dsa_history", {}).setdefault(layer, {"latent": [], "ik": [], "iks": [], "next": None})
         P0 = len(hist["latent"])
-        if pos != list(range(P0, P0 + T)):
-            refuse("shape", node, mp, f"positions {pos[0]}..{pos[-1]} are not {layer!r}'s next rows {P0}..{P0 + T - 1}")
+        if pos != list(range(pos[0], pos[0] + T)) or (P0 and pos[0] != hist["next"]):
+            refuse("shape", node, mp, f"positions {pos[0]}..{pos[-1]} do not continue {layer!r}'s history"
+                                      + (f" of {P0} rows (next position {hist['next']})" if P0 else " (not consecutive)"))
         if has != bool(hist["ik"]) and P0:
             refuse("side_input", node, mp, f"{layer!r} has an index-K cache at some steps only")
+        hist["next"] = pos[-1] + 1
+        keys = [P0 + i + 1 for i in range(T)]
         kvc, kpe = _rows(ctx, a["kv_c"], 16), _rows(ctx, a["k_pe"], 16)
         for i in range(T):
             hist["latent"].append(Coll(Array(L + R, Value(16)), concat([kvc[i].refs, kpe[i].refs])))
         latent = _log(ctx, (layer, "latent"), hist["latent"])
         G = FA3_SPARSE_GEOMETRY[(R, L)]
-        too_long = [p for p in pos if p + 1 > TOPK]
+        too_long = [(P, n) for P, n in zip(pos, keys) if n > TOPK]
         if too_long:
-            refuse("numerics_unregistered", node, mp, f"{layer!r}: position {too_long[0]} has {too_long[0] + 1} keys > TOPK {TOPK}: the top-k "
+            refuse("numerics_unregistered", node, mp, f"{layer!r}: position {too_long[0][0]} has {too_long[0][1]} keys > TOPK {TOPK}: the top-k "
                                                      f"kernels' radix selection has no Definition (DsaTopKShortRow_v1 states rows of at most TOPK)")
         if has:
             H, D = shape(ctx, a["index_q"])[1:3]
@@ -466,8 +470,7 @@ class DsaIndexerAttnRule(StateRule):
             klog, slog = _log(ctx, (layer, "ik"), hist["ik"]), _log(ctx, (layer, "iks"), hist["iks"])
             sel_fn = ctx.kind("dsa_topk_short_row", node, TOPK=TOPK)
             selected = {}
-            for i, P in enumerate(pos):
-                n = P + 1
+            for i, (P, n) in enumerate(zip(pos, keys)):
                 lg = ctx.kind("dsa_mqa_logits", node, N=n, H=H, D=D)
                 ctx.call(lg, iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)), Coll(Array(n, Value(32)), slog.cut(n)),
                          node=node, rule=self, name=f"{h}/logits[t={P}]")
@@ -483,8 +486,7 @@ class DsaIndexerAttnRule(StateRule):
             source = last["layer"]
         ql, qr = _rows(ctx, a["ql_nope"], 16), _rows(ctx, a["q_pe"], 16)
         outs = []
-        for i, P in enumerate(pos):
-            n = P + 1
+        for i, (P, n) in enumerate(zip(pos, keys)):
             attn = ctx.kind("sparse_mla", node, T=n, NH=NH, DR=R, DV=L, BN=G["BN"], DOT=G["DOT"], INV=G["INV"], SM_SCALE=scale)
             outs.append(ctx.call(attn, ql[i], qr[i], Coll(Array(n, Array(L + R, Value(16))), latent.cut(n)), node=node, rule=self,
                                  name=f"{h}[t={P}]"))
