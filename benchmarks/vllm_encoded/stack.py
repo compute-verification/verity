@@ -592,6 +592,52 @@ def gate_step(st: Stack, log) -> dict:
     return out
 
 
+def components(st: Stack, lm: "LmHead", trials: int = 5) -> dict:
+    """Each part of a decode step alone, in ms (the best of `trials` CUDA-event timings, after one warm launch): every
+    linear at m (one CUDA graph, its receipts and, encoded, the commit), the commit alone, the lm_head, the pass's
+    start."""
+    def best(fn) -> float:
+        fn()
+        torch.cuda.synchronize()
+        out = float("inf")
+        for _ in range(trials):
+            e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            e0.record()
+            fn()
+            e1.record()
+            torch.cuda.synchronize()
+            out = min(out, e0.elapsed_time(e1))
+        return out
+
+    gen = torch.Generator(device="cuda").manual_seed(5)
+    xs = torch.ones(1, dtype=torch.float32, device="cuda")
+    out = {}
+    for m in (1, 32):
+        x8 = {kd: rand_fp8(m, kd, gen) for kd in {lin.kd for lin in st.linears}}
+        st.begin_pass(m)
+
+        def linears():
+            for lin in st.linears:
+                lin.forward(x8[lin.kd], xs)
+        linears()
+        torch.cuda.synchronize()
+        g = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(g):
+            linears()
+        row = {"linears": best(g.replay)}
+        del g
+        if st.encoded:
+            def commit():
+                st.at = st.nvec[m]
+                st.commit(m)
+            row["commit"] = best(commit)
+            row["begin_pass"] = best(lambda: st.begin_pass(m))
+        h = torch.randn((m, lm.h), generator=gen, device="cuda").to(torch.bfloat16)
+        row["lm_head"] = best(lambda: lm.run(h))
+        out[m] = row
+    return out
+
+
 def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> dict:
     """The arm's stack, in the runner's load_model: every FP8 linear, the lm_head, the attention and the KV append."""
     t0 = time.perf_counter()
@@ -646,6 +692,8 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
     selection = select(st, args.select_trials, log)
     st.buffers()
     gates["step"] = gate_step(st, log)
+    parts = components(st, lm)
+    log(f"components (ms): {parts}")
     att = Attention(st)
     from vllm.v1.attention.backends.flash_attn import FlashAttentionImpl
     hooks.wrap(FlashAttentionImpl, "forward", att.forward)
@@ -675,7 +723,7 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
                           "lm_head": lm.scratch.numel() * 2 if lm.scratch is not None else 0,
                           "attention_partials": att.part.numel() * 4,
                           "receipts": st.tags.numel() * 8 + 64 * (st.dig.shape[0] + st.up.shape[0])},
-        "plaintext_scan": scan, "gates": gates, "selection": selection, "passes_hooked": passes,
+        "plaintext_scan": scan, "gates": gates, "selection": selection, "passes_hooked": passes, "components_ms": parts,
         "fp8_kernel": type(layers[0][1].quant_method.fp8_linear).__name__,
         "activation_quant": str(layers[0][1].quant_method.activation_quant_key),
         "install_s": time.perf_counter() - t0}}
