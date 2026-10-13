@@ -193,20 +193,27 @@ def sparseCoins (e : ExecHolo) : ℕ :=
     (e.cls.pubStatement e.regs).kLog (2 * (e.cls.pubStatement e.regs).regions.length) e.sch) +
     2 * kindCoins (sparseKinds GF128 e.cls.shape)
 
+/-- **A tied rep takes its whole shape**: its unit's play accepts, and `holoRepC` stops early only on a reject. -/
+theorem repKinds_of_tie {e : ExecHolo} {u : C3Run e} {i : Fin 2} (h : RepTie e u i) :
+    (u.ts i).map Exec.kindOf = FlockC3.HoloValues.holoRepShape GF128 GF256 Dig (e.cls.pubStatement e.regs).m
+      (e.cls.pubStatement e.regs).kLog (2 * (e.cls.pubStatement e.regs).regions.length) e.sch := by
+  obtain ⟨U⟩ := h
+  obtain ⟨_, _, _, hT, hv, -⟩ := FlockC3.HoloValues.rep_of_unit e.cls.hm U
+  rw [SpineOn.kinds hT (holoRepC_on _ _ _ _ _ _ u.os.1) hv, extraClaims_length]
+
+/-- **A tied sparse phase takes its exact shape.** -/
+theorem sparseKinds_of_tie {e : ExecHolo} {u : C3Run e} {i : Fin 2} (h : SparseTie e u i) :
+    (u.sp i).map Exec.kindOf = sparseKinds GF128 e.cls.shape := by
+  obtain ⟨_, hx⟩ := FlockC3.Sparse.plays_of_tie h
+  exact Exec.Exact.kinds hx (FlockC3.Sparse.sparsePhase_exact _ _ _ _ _)
+
 /-- **The sparse phases' part has `sparseCoins` coins and ends in one**, where both reps and both sparse phases are
 tied. -/
 theorem sparsePart_ends {e : ExecHolo} {u : C3Run e} (hr : ∀ i, RepTie e u i) (hs : ∀ i, SparseTie e u i) :
     ((sparsePart u).filterMap Sum.getRight?).length = sparseCoins e ∧
       ∃ (l : List Step) (c : Game.Msg), sparsePart u = l ++ [.inr c] := by
-  have hkr : ∀ i, (u.ts i).map Exec.kindOf = FlockC3.HoloValues.holoRepShape GF128 GF256 Dig
-      (e.cls.pubStatement e.regs).m (e.cls.pubStatement e.regs).kLog
-      (2 * (e.cls.pubStatement e.regs).regions.length) e.sch := fun i => by
-    obtain ⟨U⟩ := hr i
-    obtain ⟨_, _, _, hT, hv, -⟩ := FlockC3.HoloValues.rep_of_unit e.cls.hm U
-    rw [SpineOn.kinds hT (holoRepC_on _ _ _ _ _ _ u.os.1) hv, extraClaims_length]
-  have hks : ∀ i, (u.sp i).map Exec.kindOf = sparseKinds GF128 e.cls.shape := fun i => by
-    obtain ⟨_, hx⟩ := FlockC3.Sparse.plays_of_tie (hs i)
-    exact Exec.Exact.kinds hx (FlockC3.Sparse.sparsePhase_exact _ _ _ _ _)
+  have hkr := fun i => repKinds_of_tie (hr i)
+  have hks := fun i => sparseKinds_of_tie (hs i)
   have h2 : (((runSteps u).take 2).filterMap Sum.getRight?).length = 1 := by
     rw [runSteps, FlockC3.PubRows.holoSteps_eq]; rfl
   obtain ⟨σ, hσ⟩ := sparseKinds_ends GF128 e.cls.shape
