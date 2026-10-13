@@ -222,6 +222,12 @@ boundaries `j < k` at which the state is at most `S₀ = ⌊ρ·|C|⌋` bits (`l
 times the share of such boundaries estimates the share of time the server held at most `S₀`, which is the time
 average the capacity account reads.
 
+It covers schedules `Sz` fixed in advance, before the coins and the challenges are drawn, and not schedules chosen from
+the history. A server whose state size adapts to the challenges so far, or to the coins, is covered only through its
+padded schedule, `Sz j` the largest size it may hold at boundary `j` over every history, which counts fewer low
+boundaries. Adapting doesn't help a cheater pass, since later challenges are independent of the history, but a
+consumer that needs `E[(1 − p)^M]` for a random number `M` of low boundaries can't read it off this bound.
+
 Frozen (no-function, hash): it relates two ring-model statements about the abstract P2, not the setup check's code. -/
 def P2RingGradedOfRoundSecure : Prop :=
   ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), Pous.P2.Assumptions.P2RingRoundSecure p ε₀ D Q L →
