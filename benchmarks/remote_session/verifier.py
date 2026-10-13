@@ -28,6 +28,7 @@ import json
 import math
 import os
 import queue
+import resource
 import sys
 import threading
 import time
@@ -351,6 +352,7 @@ def main() -> int:
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     sys.setswitchinterval(2e-4)
+    w0 = time.monotonic_ns()
     checks = Checks(a.check_workers) if a.check_workers > 0 else None
     server = wire.listen(a.host, a.port)
     print(f"verifier: listening on {a.host}:{a.port}", flush=True)
@@ -379,6 +381,14 @@ def main() -> int:
              "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
              "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals()}, indent=1))
     conn.send({"type": "bye"})
+    if checks:
+        checks.close(wait=True)
+    me, kids = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
+    out = json.loads((a.out / "verifier.json").read_text()) if (a.out / "verifier.json").exists() else {}
+    out["cpu"] = {"self_s": me.ru_utime + me.ru_stime, "workers_s": kids.ru_utime + kids.ru_stime,
+                  "wall_s": (time.monotonic_ns() - w0) / 1e9, "cores": len(os.sched_getaffinity(0))}
+    (a.out / "verifier.json").write_text(json.dumps(out, indent=1))
+    print(f"verifier: cpu {json.dumps(out['cpu'])}", flush=True)
     return 0
 
 

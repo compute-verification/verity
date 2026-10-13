@@ -101,8 +101,8 @@ class Checks:
         w.verdict = audit.Verdict(t, True)
         return w.verdict
 
-    def close(self) -> None:
-        self.pool.shutdown(wait=False, cancel_futures=True)
+    def close(self, wait: bool = False) -> None:
+        self.pool.shutdown(wait=wait, cancel_futures=True)
 
 
 def _warm() -> int:
