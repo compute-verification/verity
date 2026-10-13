@@ -43,3 +43,11 @@ def test_library_inputs_fail_closed_and_kernel_digest_binds_contents(tmp_path, m
     assert got == want.hexdigest()
     second.write_bytes(b"changed")
     assert bench_arm._digest([first, second]) != got
+
+
+def test_plain_install_gate_does_not_require_encoded_receipt_tree():
+    plain = {"gates": {"layers": 128, "configs_checked": 5160}}
+    encoded = {"gates": {**plain["gates"], "step": {32: {"ok": True}}}}
+    assert bench_arm._install_gate_passed(plain, encoded=False)
+    assert not bench_arm._install_gate_passed(plain, encoded=True)
+    assert bench_arm._install_gate_passed(encoded, encoded=True)

@@ -51,6 +51,12 @@ def _digest(paths: list[Path]) -> str:
     return out.hexdigest()
 
 
+def _install_gate_passed(record: dict[str, Any], *, encoded: bool) -> bool:
+    gates = record.get("gates", {})
+    common = bool(gates.get("layers") and gates.get("configs_checked"))
+    return common and (not encoded or bool(gates.get("step")))
+
+
 class _Installed:
     def __init__(self, target: Any, *, encoded: bool) -> None:
         from benchmarks.vllm_encoded import serve
@@ -161,7 +167,7 @@ class _Installed:
     def gate(self) -> dict[str, Any]:
         gates = self.install.record.get("gates", {})
         return {
-            "passed": bool(gates.get("layers") and gates.get("step")),
+            "passed": _install_gate_passed(self.install.record, encoded=self.encoded),
             "layers": int(gates.get("layers", 0)),
             "kv_receipts": bool(self.stack.kv_receipts),
             "filler_ctas": self.ctas,
