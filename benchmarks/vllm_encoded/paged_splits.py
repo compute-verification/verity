@@ -47,7 +47,10 @@ def main() -> int:
     plain = (torch.randn(blocks, G, BS, 2 * D, device="cuda") * 2).to(torch.bfloat16)
     lay = P.layout(plain, G, WB)
     cache = torch.empty_like(plain)
-    lib.call("kv_encode", plain.data_ptr(), cache.data_ptr(), lay.words, 0, a.k, 0, P.stream(torch))
+    slots_all = torch.arange(blocks * BS, dtype=torch.int64, device="cuda")
+    kk = plain[:, :, :, :D].permute(0, 2, 1, 3).reshape(blocks * BS, G * D).contiguous()
+    vv = plain[:, :, :, D:].permute(0, 2, 1, 3).reshape(blocks * BS, G * D).contiguous()
+    P.append(lib, torch, cache, lay, 0, a.layers, 0, 1, a.k, kk, vv, slots_all)
     del plain
     rng = random.Random(0)
     perm = torch.tensor(rng.sample(range(blocks), blocks), dtype=torch.int32)
@@ -76,7 +79,8 @@ def main() -> int:
             row = {"batch": b, "ctx": ctx, "picked": P.splits_for(b, res["sms"], G), "ms": {}}
             for sp in (int(v) for v in a.splits.split(",")):
                 part = torch.empty(P.part_floats(lib, b, sp), dtype=torch.float32, device="cuda")
-                row["ms"][sp] = timed(P.attn, lib, torch, cache, lay, 0, 1, a.k, q, o, part, lens, bt, b, sp)
+                row["ms"][sp] = timed(P.attn, lib, torch, cache, lay, 0, a.layers, 0, 1, a.k,
+                                      q, o, part, lens, bt, b, sp)
             row["best"] = min(row["ms"], key=row["ms"].get)
             res["attention"].append(row)
             print(f"attention B={b} ctx={ctx}: picked {row['picked']}, best {row['best']} "
@@ -86,13 +90,13 @@ def main() -> int:
         kk = (torch.randn(rows, G * D, device="cuda")).to(torch.bfloat16)
         vv = torch.randn_like(kk)
         slots = torch.randperm(blocks * BS, device="cuda")[:rows].to(torch.int64)
-        tab = P.table(torch, [(kk, vv, slots, rows, cache, 0) for _ in range(a.layers)]).cuda()
+        tab = P.table(torch, [(kk, vv, slots, rows, cache, 0, a.layers, l) for l in range(a.layers)]).cuda()
         t = timed(P.append_multi, lib, torch, tab, a.layers, rows, lay, 1, a.k)
         res["append"].append({"rows": rows, "layers": a.layers, "ms": t})
         print(f"append_multi {rows} rows x {a.layers} layers: {t:.3f} ms", flush=True)
     gb = torch.arange(a.gather // BS, dtype=torch.int32, device="cuda")
     go = torch.empty(gb.shape[0], *cache.shape[1:], dtype=torch.bfloat16, device="cuda")
-    t = timed(P.gather, lib, torch, cache, lay, 0, 1, a.k, gb, go)
+    t = timed(P.gather, lib, torch, cache, lay, 0, a.layers, 0, 1, a.k, gb, go)
     res["gather"] = {"tokens": a.gather, "ms_a_layer": t, "ms_layers": t * a.layers}
     print(f"gather {a.gather} tokens: {t:.3f} ms a layer, {t * a.layers:.2f} ms over {a.layers} layers", flush=True)
     (out / "paged-splits.json").write_text(json.dumps(res, indent=1) + "\n")

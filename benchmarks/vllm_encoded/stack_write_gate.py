@@ -79,12 +79,15 @@ def launches(a) -> list[dict]:
     st.buffers()
     st.reader.begin(S.BW.RECEIPT_SEED, S.SR.rb.Plan.whole(n), S.BW.STORE_KEY)
     st.tags.random_()
-    st.at = n
-    torch.cuda.synchronize()
-    st.commit(1)
-    torch.cuda.synchronize()
+    so, stream = st.reader.so, S.stream()
     nl = -(-n // S.SR.rb.PER_LEAF)
     width = 1 << max(0, (nl - 1).bit_length())
+    so.rb_leaves(st.tags.data_ptr(), 0, nl, st.dig.data_ptr(), None, stream)
+    if width > nl:
+        so.rb_pads(nl, width - nl, st.dig.data_ptr() + 64 * nl, stream)
+    if width > 1:
+        so.rb_tree(st.dig.data_ptr(), width, 0, st.up.data_ptr(), stream)
+    torch.cuda.synchronize()
     out.append({"kernel": "commit", "receipts": n, "leaves": nl, "digest_bytes": 64 * width + 64 * (width - 1)})
     lib = st.plib
     sh = lib.shape
@@ -102,13 +105,13 @@ def launches(a) -> list[dict]:
     sp = P.splits_for(b, st.sms, G)
     part = torch.empty(P.part_floats(lib, b, sp), dtype=torch.float32, device="cuda")
     torch.cuda.synchronize()
-    P.attn(lib, torch, kvc, lay, 0, 1, st.k, q, o, part, lens, bt, b, sp, ck=rows, cv=rows)
+    P.attn(lib, torch, kvc, lay, 0, layers, 0, 1, st.k, q, o, part, lens, bt, b, sp, ck=rows, cv=rows)
     torch.cuda.synchronize()
     records = part.numel() // sh["part"]
     out.append({"kernel": "attention", "batch": b, "ctx": ctx, "splits": sp, "out_bytes": o.numel() * 2,
                 "part_bytes": part.numel() * 4, "part_sector_bytes": records * (4 * H * D + 2 * G * 32)})
     slots = torch.arange(b, dtype=torch.int64, device="cuda") * ctx + ctx - 1
-    tab = P.table(torch, [(rows, rows, slots, b, kvc, l * lay.words) for l in range(layers)]).cuda()
+    tab = P.table(torch, [(rows, rows, slots, b, kvc, 0, layers, l) for l in range(layers)]).cuda()
     torch.cuda.synchronize()
     P.append_multi(lib, torch, tab, layers, b, lay, 1, st.k)
     torch.cuda.synchronize()
@@ -116,7 +119,7 @@ def launches(a) -> list[dict]:
     blocks = torch.arange(64, dtype=torch.int32, device="cuda") * 7
     scratch = torch.empty((64, G, bs, 2 * D), dtype=torch.bfloat16, device="cuda")
     torch.cuda.synchronize()
-    P.gather(lib, torch, kvc, lay, 0, 1, st.k, blocks, scratch)
+    P.gather(lib, torch, kvc, lay, 0, layers, 0, 1, st.k, blocks, scratch)
     torch.cuda.synchronize()
     out.append({"kernel": "gather", "blocks": 64, "word_bytes": scratch.numel() * 2})
     rows_lm, h = 4096, 4096

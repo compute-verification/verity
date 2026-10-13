@@ -3,10 +3,10 @@
 // -DKV_FIELD, -DKV_MASK, -DKV_FOLD6 and -DKV_QHEADS at the encoded stack's codec (run.sh).
 //
 // A layer's cache is vLLM's own tensor, [blocks][KV heads][slots][K ‖ V] or any order of the inner three whose block
-// is contiguous: head g of slot s of block b, its 256 bytes of K then 256 of V, is HW words at word offset
-// b sb + g sh + s ss (sb, sh, ss its strides in words), and its word j has index lbase + b sb + g sh + s ss + j
-// (lbase the layer's first index, so no two words of the pool share one). A word's index is its place in the pool,
-// so the append, the attention and the gather agree on it whatever the block table.
+// is contiguous: head g of slot s of block b, its 256 bytes of K then 256 of V, is HW words at physical word offset
+// b sb + g sh + s ss. The codec index is independent of that physical layout: after the weights at store_base, physical
+// slot u and layer l are the store-order/v0 block u layers + l, whose words are K of every head then V of every head.
+// Thus a token-layer is exactly one registered 4 KiB block and all three paths agree on its codec indices.
 //
 // pg_attn is kv.cu's warp-specialized tensor-core form (attn_mma_ws_kernel) over pages: MDW decoder warps, a lane a
 // word of every tile, load the tile's words of one KV head from the pages (the block table), decode them (encoded) or
@@ -36,13 +36,29 @@ struct Pg {
   const int *qrow;   // [batch] its row of q and of out (nullptr: the sequence's index)
   int bstride, bs;   // the block table's row stride, slots a block
   int sb, sh, ss;    // words between blocks, heads, slots
-  u64 lbase;         // the layer's first word index
+  u64 store_base;    // the KV region's first word index, after the weights
+  int layers, layer;
   const uint16_t *ck, *cv;  // the step's K and V rows (nullptr: every token from the pages)
   size_t cks, cvs;          // their row strides (elements)
+  int *rc_sk;               // sparse [physical slot][KV head][16] shares, nullptr: no receipts
+  int *used;                // sparse physical-slot epochs
+  const int *epoch;
 };
 
 __device__ __forceinline__ u64 pg_word(const Pg &pg, const int *btr, int p, int g, int j) {
   return (u64)btr[p / pg.bs] * pg.sb + (u64)g * pg.sh + (u64)(p % pg.bs) * pg.ss + j;
+}
+
+__device__ __forceinline__ u64 pg_slot(const Pg &pg, const int *btr, int p) {
+  return (u64)btr[p / pg.bs] * pg.bs + p % pg.bs;
+}
+
+__device__ __forceinline__ int pg_wi(int g, int j) {
+  return (j < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + g * (HB / WB) + j;
+}
+
+__device__ __forceinline__ u64 pg_store_word(const Pg &pg, u64 slot, int g, int j) {
+  return pg.store_base + (slot * pg.layers + pg.layer) * TLW + pg_wi(g, j);
 }
 
 __device__ __forceinline__ u32 pg_scale2(u32 v, float s) {
@@ -63,14 +79,16 @@ __device__ __forceinline__ void pg_load_q(const uint16_t *q, size_t qstride, siz
 }
 
 constexpr int pg_smem() { return MNB * MT * MTS + 2 * MNB * 8; }
+constexpr int pg_rc_smem() { return pg_smem() + RK * 32 * 16; }
 
-template <bool ENC>
+template <bool ENC, bool RC>
 __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restrict__ kv, const uint16_t *__restrict__ q,
                                                          size_t qstride, float qscale, float *__restrict__ part, Pg pg,
                                                          int splits, int k) {
   if constexpr (MMA_OK) {
     extern __shared__ __align__(16) uint8_t sm[];
     uint64_t *full = reinterpret_cast<uint64_t *>(sm + MNB * MT * MTS), *empty = full + MNB;
+    u32 *rct = reinterpret_cast<u32 *>(empty + MNB);
     const int g = blockIdx.x % KV_HEADS, sq = blockIdx.x / KV_HEADS, seq = sq / splits, split = sq % splits;
     const int len = pg.lens[seq];
     const int per = ((len + splits - 1) / splits + MT - 1) / MT * MT;
@@ -83,6 +101,9 @@ __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restri
         mbar_init(empty + b, 32 * MW);
       }
     }
+    if constexpr (RC)
+      for (int v = threadIdx.x; v < RK * 32; v += MWT)
+        reinterpret_cast<uint4 *>(rct)[v] = kRcA[g][v / 32][v % 32];
     __syncthreads();
     if (w >= MW) {
       const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
@@ -97,6 +118,7 @@ __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restri
       const auto own = [&](int tile) { return fresh && t0 + tile * MT + t == len - 1; };
       u32 x[NL];
       u64 wl = has(0) ? pg_word(pg, btr, t0 + t, g, j) : 0;
+      u64 sl = has(0) ? pg_slot(pg, btr, t0 + t) : 0;
       bool mine = has(0) && own(0);
       if (has(0)) {
         if (mine) load(fresh, x);
@@ -105,14 +127,33 @@ __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restri
       for (int tile = 0; tile < ntiles; ++tile) {
         const bool cur = has(tile), next = has(tile + 1), next_mine = next && own(tile + 1);
         const u64 wn = next ? pg_word(pg, btr, t0 + (tile + 1) * MT + t, g, j) : 0;
+        const u64 sn = next ? pg_slot(pg, btr, t0 + (tile + 1) * MT + t) : 0;
         if (next && !next_mine) prefetch_word_l2(base + wn * NL);
         if (!cur) {
 #pragma unroll
           for (int l = 0; l < NL; ++l) x[l] = 0u;
-        } else if constexpr (ENC) {
-          if (!mine) {
+        }
+        if constexpr (RC) {
+          int c[4] = {};
+          const uint4 *a = reinterpret_cast<const uint4 *>(rct) + lane;
+#pragma unroll
+          for (int kk = 0; kk < RK; ++kk) {
+            const uint4 v = a[32 * kk];
+            imma16832(c, v.x, v.y, v.z, v.w, x[2 * kk], x[2 * kk + 1]);
+          }
+          const int i = w - MW, gid = lane >> 2, t4 = lane & 3;
+#pragma unroll
+          for (int e = 0; e < 4; ++e) {
+            const int n = 2 * t4 + (e & 1), pt = t0 + tile * MT + 8 * i + n;
+            if (pt < t1 && !(pg.ck && pt == len - 1))
+              pg.rc_sk[((pg_slot(pg, btr, pt) * KV_HEADS + g) * 16) + gid + 8 * (e >> 1)] = c[e];
+          }
+          if (cur && !mine && g == 0 && j == 0) atomicExch(pg.used + sl, *pg.epoch);
+        }
+        if constexpr (ENC) {
+          if (cur && !mine) {
             u32 tw[NL];
-            tweak(pg.lbase + wl, tw);
+            tweak(pg_store_word(pg, sl, g, j), tw);
             decode_word_t<true>(x, tw, k);
           }
         }
@@ -124,6 +165,7 @@ __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restri
           else ldg_word(base + wn * NL, x);
         }
         wl = wn;
+        sl = sn;
         mine = next_mine;
       }
       return;
@@ -142,6 +184,38 @@ __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restri
     }
     mma_out(part + ((size_t)sq * MW + w) * PART, g, lane, o, m_own, l_own);
   }
+}
+
+// One selected physical slot's standard receipt for this layer, into the sparse token-layer tag array. The attention
+// and gather kernels have already written each KV head's share of σ while holding the encoded words.
+__global__ void __launch_bounds__(128) pg_receipt_sparse_kernel(const int *__restrict__ sk, u32 *__restrict__ tags,
+                                                                const int *__restrict__ used, const int *__restrict__ epoch,
+                                                                u64 slots, int layers, int layer, u64 jbase) {
+  const u64 u = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (u >= slots || used[u] != *epoch) return;
+  int sg[16] = {};
+  const int4 *p = reinterpret_cast<const int4 *>(sk + u * KV_HEADS * 16);
+#pragma unroll
+  for (int g = 0; g < KV_HEADS; ++g)
+#pragma unroll
+    for (int v = 0; v < 4; ++v) {
+      const int4 q = __ldcs(p + 4 * g + v);
+      sg[4 * v] += q.x, sg[4 * v + 1] += q.y, sg[4 * v + 2] += q.z, sg[4 * v + 3] += q.w;
+    }
+  u64 h[8], w[16];
+  w[0] = jbase + u * layers + layer;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) w[1 + i] = be64((u32)sg[2 * i], (u32)sg[2 * i + 1]);
+  w[9] = 0x8000000000000000ull;
+#pragma unroll
+  for (int i = 10; i < 15; ++i) w[i] = 0;
+  w[15] = (128 + 72) * 8;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) h[i] = kKvMid[i];
+  sha512_compress(h, w);
+  uint4 *o = reinterpret_cast<uint4 *>(tags + 16 * (u * layers + layer));
+#pragma unroll
+  for (int i = 0; i < 4; ++i) o[i] = u64_pair(h[2 * i], h[2 * i + 1]);
 }
 
 // attn_combine's merge of a sequence's nparts partials, written as bf16 at its row of out; a row with no tokens (sum 0)
@@ -199,7 +273,7 @@ constexpr int SQ = NL / 4;
 static_assert(NL % 4 == 0 && 32 % SQ == 0, "a word is whole 16-byte chunks, a whole number of them to a warp");
 
 __device__ __forceinline__ void store_warp(u32 *dst, const u32 (&x)[NL]) {
-  __shared__ uint4 sw[4][32][SQ + 1];
+  __shared__ uint4 sw[8][32][SQ + 1];
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
 #pragma unroll
   for (int q = 0; q < SQ; ++q) sw[w][lane][q] = make_uint4(x[4 * q], x[4 * q + 1], x[4 * q + 2], x[4 * q + 3]);
@@ -220,7 +294,7 @@ template <bool ENC>
 __global__ void __launch_bounds__(128) pg_append_kernel(const uint16_t *__restrict__ key, const uint16_t *__restrict__ val,
                                                         size_t kstride, size_t vstride, const long long *__restrict__ slots,
                                                         int n, u32 *__restrict__ cache, int bs, int sb, int sh, int ss,
-                                                        u64 lbase, int k) {
+                                                        u64 store_base, int layers, int layer, int k) {
   const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
   u32 x[NL] = {};
   u32 *dst = nullptr;
@@ -232,7 +306,8 @@ __global__ void __launch_bounds__(128) pg_append_kernel(const uint16_t *__restri
                             (size_t)(j % (HW / 2)) * (WB / 2);
       load(reinterpret_cast<const u32 *>(src), x);
       const u64 wl = (u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j;
-      if constexpr (ENC) encode_word(x, lbase + wl, k);
+      if constexpr (ENC)
+        encode_word(x, store_base + ((u64)slot * layers + layer) * TLW + pg_wi(g, j), k);
       dst = cache + wl * NL;
     }
   }
@@ -240,7 +315,7 @@ __global__ void __launch_bounds__(128) pg_append_kernel(const uint16_t *__restri
 }
 
 // pg_append_kernel over layers: layer l's row i of rows at u = (l rows + i) KV_HEADS HW + g HW + j; its table entry
-// (8 words): key, value, their row strides, slots, rows used, cache, first index.
+// (10 words): key, value, their row strides, slots, rows used, cache, store base, layer count and layer index.
 template <bool ENC>
 __global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restrict__ tab, int layers, int rows, int bs,
                                                               int sb, int sh, int ss, int k) {
@@ -249,7 +324,7 @@ __global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restr
   u32 x[NL] = {};
   u32 *dst = nullptr;
   if (u < (u64)layers * per) {
-    const u64 *e = tab + 8 * (u / per);
+    const u64 *e = tab + 10 * (u / per);
     const u64 r = u % per;
     const int j = (int)(r % HW), g = (int)(r / HW % KV_HEADS), i = (int)(r / ((u64)HW * KV_HEADS));
     const long long slot = i < (int)e[5] ? reinterpret_cast<const long long *>(e[4])[i] : -1;
@@ -259,7 +334,7 @@ __global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restr
                             (size_t)g * HEAD_DIM + (size_t)(j % (HW / 2)) * (WB / 2);
       load(reinterpret_cast<const u32 *>(src), x);
       const u64 wl = (u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j;
-      if constexpr (ENC) encode_word(x, e[7] + wl, k);
+      if constexpr (ENC) encode_word(x, e[7] + ((u64)slot * e[8] + e[9]) * TLW + pg_wi(g, j), k);
       dst = reinterpret_cast<u32 *>(e[6]) + wl * NL;
     }
   }
@@ -270,7 +345,8 @@ __global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restr
 // (ENC) or copied. A thread a word.
 template <bool ENC>
 __global__ void __launch_bounds__(128) pg_gather_kernel(const u32 *__restrict__ cache, const int *__restrict__ blocks,
-                                                        int nb, int bw, u32 *__restrict__ out, u64 lbase, int k) {
+                                                        int nb, int bw, int bs, int sh, int ss, u32 *__restrict__ out,
+                                                        u64 store_base, int layers, int layer, int k) {
   const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
   u32 x[NL] = {};
   u32 *dst = nullptr;
@@ -278,8 +354,51 @@ __global__ void __launch_bounds__(128) pg_gather_kernel(const u32 *__restrict__ 
     const unsigned b = (unsigned)u / (unsigned)bw, w = (unsigned)u % (unsigned)bw;   // pg_gather: nb bw < 2^32
     const u64 wl = (u64)blocks[b] * bw + w;
     load(cache + wl * NL, x);
-    if constexpr (ENC) decode_word(x, lbase + wl, k);
+    const int g = sh < ss ? (w % ss) / sh : w / sh;
+    const int so = sh < ss ? w / ss : (w % sh) / ss;
+    const int j = w - g * sh - so * ss;
+    const u64 slot = (u64)blocks[b] * bs + so;
+    if constexpr (ENC) decode_word(x, store_base + (slot * layers + layer) * TLW + pg_wi(g, j), k);
     dst = out + ((u64)blockIdx.x * 128 + threadIdx.x) * NL;   // u again, not held across the decode (ptxas spills it)
+  }
+  store_warp(dst, x);
+}
+
+// Receipt-capable gather: one warp per KV head and one CTA per eight token slots. It decodes and copies each word as
+// pg_gather does, and feeds that same encoded word to form 13's IMMA sketch before it leaves registers.
+template <bool ENC>
+__global__ void __launch_bounds__(32 * KV_HEADS) pg_gather_rc_kernel(
+    const u32 *__restrict__ cache, const int *__restrict__ blocks, int nb, int bs, int sb, int sh, int ss,
+    u32 *__restrict__ out, u64 store_base, int layers, int layer, int k, int *__restrict__ rc_sk,
+    int *__restrict__ used, const int *__restrict__ epoch) {
+  const int g = threadIdx.x >> 5, lane = threadIdx.x & 31, t = lane >> 2, j = lane & 3;
+  const u64 q = (u64)blockIdx.x * 8 + t;
+  u32 x[NL] = {};
+  u32 *dst = nullptr;
+  if (q < (u64)nb * bs) {
+    const int bo = q / bs, so = q % bs, b = blocks[bo];
+    const u64 slot = (u64)b * bs + so;
+    const u64 wl = (u64)b * sb + (u64)g * sh + (u64)so * ss + j;
+    load(cache + wl * NL, x);
+    int c[4] = {};
+#pragma unroll
+    for (int kk = 0; kk < RK; ++kk) {
+      const uint4 v = kRcA[g][kk][lane];
+      imma16832(c, v.x, v.y, v.z, v.w, x[2 * kk], x[2 * kk + 1]);
+    }
+    const int gid = lane >> 2, t4 = lane & 3;
+#pragma unroll
+    for (int e = 0; e < 4; ++e) {
+      const int n = 2 * t4 + (e & 1);
+      if (n < 8) {
+        const u64 su = (u64)b * bs + ((u64)blockIdx.x * 8 + n) % bs;
+        rc_sk[((su * KV_HEADS + g) * 16) + gid + 8 * (e >> 1)] = c[e];
+      }
+    }
+    if (g == 0 && j == 0) atomicExch(used + slot, *epoch);
+    if constexpr (ENC) decode_word(x, store_base + (slot * layers + layer) * TLW + pg_wi(g, j), k);
+    const u64 ow = (u64)bo * sb + (u64)g * sh + (u64)so * ss + j;
+    dst = out + ow * NL;
   }
   store_warp(dst, x);
 }
@@ -305,6 +424,23 @@ extern "C" {
 
 int kv_fold6() { return kv::FOLD6; }
 
+// Gate-only form-13 pass setup from the driver's 128-byte receipt prefix on the host. Serving uses kv_rc_pass with
+// wt_pass's device midstate, so no seed or prefix crosses the host on the measured path.
+int pg_rc_gate_pass(const uint32_t *bits, const uint8_t *prefix, cudaStream_t s) {
+  if (!bits || !prefix || !kv::RC3_OK) return -1;
+  uint64_t h[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull,
+                   0x510e527fade682d1ull, 0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
+  uint64_t w[16];
+  for (int i = 0; i < 16; ++i) {
+    w[i] = 0;
+    for (int b = 0; b < 8; ++b) w[i] = w[i] << 8 | prefix[8 * i + b];
+  }
+  kv::sha512_compress(h, w);
+  kv::rc_a_kernel<<<kv::KV_HEADS * kv::RK * 32 / 128, 128, 0, s>>>(reinterpret_cast<const uint8_t *>(bits));
+  if (cudaMemcpyToSymbolAsync(kv::kKvMid, h, sizeof h, 0, cudaMemcpyHostToDevice, s) != cudaSuccess) return launched();
+  return launched();
+}
+
 // heads, KV heads, head dim, words a (slot, head), bytes a word, tokens a tile, floats a partial, MMA warps a CTA,
 // whether the field's words tile a head, the attention's shared memory.
 void pg_shape(int *out) {
@@ -319,23 +455,35 @@ void pg_shape(int *out) {
 // from the pages).
 int pg_attn(const void *kv_, int encoded, const uint16_t *q, size_t qstride, float qscale, uint16_t *out,
             size_t ostride, int nrows, float *part, const int *lens, const int *bt, const int *qrow, int bstride,
-            int bs, int sb, int sh, int ss, unsigned long long lbase, int batch, int splits, int k,
-            const uint16_t *ck, const uint16_t *cv, size_t cks, size_t cvs, cudaStream_t s) {
+            int bs, int sb, int sh, int ss, unsigned long long store_base, int layers, int layer,
+            int batch, int splits, int k, const uint16_t *ck, const uint16_t *cv, size_t cks, size_t cvs,
+            int *rc_sk, int *used, const int *epoch, cudaStream_t s) {
   if (!kv::MMA_OK) return -2;
+  const bool rc = rc_sk || used || epoch;
   if (batch < 0 || nrows < batch || splits < 1 || bs < 1 || (encoded && (k < 1 || k > kv::KMAX)) || encoded < 0 ||
-      encoded > 1 || (qrow && nrows != batch) || (!ck != !cv))
+      encoded > 1 || (qrow && nrows != batch) || (!ck != !cv) || layers < 1 || layer < 0 || layer >= layers ||
+      (rc && (!encoded || !rc_sk || !used || !epoch)))
     return -1;
   static bool set = false;
   if (!set) {
-    for (auto *f : {kv::pg_attn_kernel<true>, kv::pg_attn_kernel<false>})
-      cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::pg_smem());
+    cudaFuncSetAttribute(kv::pg_attn_kernel<true, false>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::pg_smem());
+    cudaFuncSetAttribute(kv::pg_attn_kernel<false, false>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::pg_smem());
+    cudaFuncSetAttribute(kv::pg_attn_kernel<true, true>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::pg_rc_smem());
     set = true;
   }
-  const kv::Pg pg{lens, bt, qrow, bstride, bs, sb, sh, ss, lbase, ck, cv, cks, cvs};
+  const kv::Pg pg{lens, bt, qrow, bstride, bs, sb, sh, ss, store_base, layers, layer, ck, cv, cks, cvs,
+                  rc_sk, used, epoch};
   if (batch) {
     const int grid = batch * splits * kv::KV_HEADS;
-    (encoded ? kv::pg_attn_kernel<true> : kv::pg_attn_kernel<false>)<<<grid, kv::MWT, kv::pg_smem(), s>>>(
-        static_cast<const uint8_t *>(kv_), q, qstride, qscale, part, pg, splits, k);
+    if (rc)
+      kv::pg_attn_kernel<true, true><<<grid, kv::MWT, kv::pg_rc_smem(), s>>>(
+          static_cast<const uint8_t *>(kv_), q, qstride, qscale, part, pg, splits, k);
+    else if (encoded)
+      kv::pg_attn_kernel<true, false><<<grid, kv::MWT, kv::pg_smem(), s>>>(
+          static_cast<const uint8_t *>(kv_), q, qstride, qscale, part, pg, splits, k);
+    else
+      kv::pg_attn_kernel<false, false><<<grid, kv::MWT, kv::pg_smem(), s>>>(
+          static_cast<const uint8_t *>(kv_), q, qstride, qscale, part, pg, splits, k);
   }
   if (nrows)
     kv::pg_combine<<<nrows * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, ostride, qrow, batch, splits * kv::MW);
@@ -343,18 +491,19 @@ int pg_attn(const void *kv_, int encoded, const uint16_t *q, size_t qstride, flo
 }
 
 int pg_append(const uint16_t *key, const uint16_t *val, size_t kstride, size_t vstride, const long long *slots, int n,
-              void *cache, int bs, int sb, int sh, int ss, unsigned long long lbase, int encoded, int k,
-              cudaStream_t s) {
-  if (n < 0 || bs < 1 || (encoded && (k < 1 || k > kv::KMAX)) || !kv::MMA_OK) return -1;
+              void *cache, int bs, int sb, int sh, int ss, unsigned long long store_base, int layers, int layer,
+              int encoded, int k, cudaStream_t s) {
+  if (n < 0 || bs < 1 || layers < 1 || layer < 0 || layer >= layers ||
+      (encoded && (k < 1 || k > kv::KMAX)) || !kv::MMA_OK) return -1;
   if (!n) return 0;
   const unsigned long long words = (unsigned long long)n * kv::KV_HEADS * kv::HW;
   const unsigned grid = (unsigned)((words + 127) / 128);
   (encoded ? kv::pg_append_kernel<true> : kv::pg_append_kernel<false>)<<<grid, 128, 0, s>>>(
-      key, val, kstride, vstride, slots, n, static_cast<uint32_t *>(cache), bs, sb, sh, ss, lbase, k);
+      key, val, kstride, vstride, slots, n, static_cast<uint32_t *>(cache), bs, sb, sh, ss, store_base, layers, layer, k);
   return launched();
 }
 
-// layers layers' appends in one launch: tab (device) holds each layer's 8 words (pg_append_multi_kernel), rows its
+// layers layers' appends in one launch: tab (device) holds each layer's 10 words (pg_append_multi_kernel), rows its
 // most rows; every layer's cache in one layout (bs, sb, sh, ss).
 int pg_append_multi(const unsigned long long *tab, int layers, int rows, int bs, int sb, int sh, int ss, int encoded,
                     int k, cudaStream_t s) {
@@ -367,13 +516,37 @@ int pg_append_multi(const unsigned long long *tab, int layers, int rows, int bs,
   return launched();
 }
 
-int pg_gather(const void *cache, const int *blocks, int nb, int bw, void *out, unsigned long long lbase, int encoded,
-              int k, cudaStream_t s) {
-  if (nb < 0 || bw < 1 || (unsigned long long)nb * bw >= 1ull << 32 || (encoded && (k < 1 || k > kv::KMAX))) return -1;
+int pg_gather(const void *cache, const int *blocks, int nb, int bw, int bs, int sb, int sh, int ss, void *out,
+              unsigned long long store_base, int layers, int layer, int encoded, int k, int *rc_sk, int *used,
+              const int *epoch, cudaStream_t s) {
+  const bool rc = rc_sk || used || epoch;
+  if (nb < 0 || bw < 1 || bs < 1 || layers < 1 || layer < 0 || layer >= layers ||
+      (unsigned long long)nb * bw >= 1ull << 32 || (encoded && (k < 1 || k > kv::KMAX)) ||
+      (rc && (!encoded || !rc_sk || !used || !epoch))) return -1;
   if (!nb) return 0;
-  const unsigned long long words = (unsigned long long)nb * bw;
-  (encoded ? kv::pg_gather_kernel<true> : kv::pg_gather_kernel<false>)<<<(unsigned)((words + 127) / 128), 128, 0, s>>>(
-      static_cast<const uint32_t *>(cache), blocks, nb, bw, static_cast<uint32_t *>(out), lbase, k);
+  if (rc) {
+    kv::pg_gather_rc_kernel<true><<<(unsigned)(((unsigned long long)nb * bs + 7) / 8), 32 * kv::KV_HEADS, 0, s>>>(
+        static_cast<const uint32_t *>(cache), blocks, nb, bs, sb, sh, ss, static_cast<uint32_t *>(out), store_base,
+        layers, layer, k, rc_sk, used, epoch);
+  } else {
+    const unsigned long long words = (unsigned long long)nb * bw;
+    if (encoded)
+      kv::pg_gather_kernel<true><<<(unsigned)((words + 127) / 128), 128, 0, s>>>(
+          static_cast<const uint32_t *>(cache), blocks, nb, bw, bs, sh, ss, static_cast<uint32_t *>(out), store_base,
+          layers, layer, k);
+    else
+      kv::pg_gather_kernel<false><<<(unsigned)((words + 127) / 128), 128, 0, s>>>(
+          static_cast<const uint32_t *>(cache), blocks, nb, bw, bs, sh, ss, static_cast<uint32_t *>(out), store_base,
+          layers, layer, k);
+  }
+  return launched();
+}
+
+int pg_receipts_sparse(const int *sk, uint32_t *tags, const int *used, const int *epoch,
+                       unsigned long long slots, int layers, int layer, unsigned long long jbase, cudaStream_t s) {
+  if (!sk || !tags || !used || !epoch || !slots || layers < 1 || layer < 0 || layer >= layers) return -1;
+  kv::pg_receipt_sparse_kernel<<<(unsigned)((slots + 127) / 128), 128, 0, s>>>(
+      sk, tags, used, epoch, slots, layers, layer, jbase);
   return launched();
 }
 

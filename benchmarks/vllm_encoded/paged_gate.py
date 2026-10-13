@@ -17,17 +17,24 @@ Writes `paged-gate.json` and `paged-gate.log` under `--out`; exits nonzero if an
 from __future__ import annotations
 
 import argparse
+import ctypes
+import hashlib
 import json
 import random
 import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "codec_tensor"))
 
 import paged as P  # noqa: E402
 from paged import K, KB  # noqa: E402
+import sketch_receipt as SR  # noqa: E402
+import sketching as SKT  # noqa: E402
 
 RTOL = 8e-3  # step.py's for the tensor-core form, which rounds P (and here the output) to bf16
 BLOCKS, BS, LAYERS = 96, 16, 2
@@ -62,19 +69,66 @@ def main() -> int:
     rng = random.Random(1)
     plain = [(torch.randn(BLOCKS, G, BS, 2 * D, device="cuda") * 2).to(torch.bfloat16) for _ in range(LAYERS)]
     lay = P.layout(plain[0], G, WB)
-    lbase = [l * lay.words for l in range(LAYERS)]
+    all_slots = torch.arange(BLOCKS * BS, dtype=torch.int64, device="cuda")
+
+    def encoded_of(src, layer, k):
+        e = torch.empty_like(src)
+        keys = src[:, :, :, :D].permute(0, 2, 1, 3).reshape(BLOCKS * BS, G * D).contiguous()
+        vals = src[:, :, :, D:].permute(0, 2, 1, 3).reshape(BLOCKS * BS, G * D).contiguous()
+        P.append(lib, torch, e, lay, 0, LAYERS, layer, 1, k, keys, vals, all_slots)
+        return e
+
     res = {"lib": lib.name, "shape": sh, "mask": lib.mask, "fold6": lib.fold6, "layout": lay.__dict__, "ks": {},
            "ok": True}
     st = P.stream(torch)
+    seed = hashlib.sha512(b"verity/vllm-encoded/paged-gate/receipts").digest()
+    packed = SR.sign_bits(seed)
+    signs = torch.from_numpy(SR.sign_words(packed).view(np.int32)).cuda()
+    prefix = ctypes.create_string_buffer(SR.prefix(seed))
+    lib.call("pg_rc_gate_pass", signs.data_ptr(), ctypes.addressof(prefix), st)
+    rc_sk = torch.empty((BLOCKS * BS, G, SR.ROWS), dtype=torch.int32, device="cuda")
+    used = torch.full((BLOCKS * BS,), -1, dtype=torch.int32, device="cuda")
+    epoch = torch.zeros(1, dtype=torch.int32, device="cuda")
+    tags = torch.full((BLOCKS * BS, LAYERS, 8), -1, dtype=torch.int64, device="cuda")
+    sign_bits = np.unpackbits(packed, axis=1, bitorder="little")
+    head = hashlib.sha512(SR.prefix(seed))
+    receipt_sets = 0
+    plan_checked = False
+
+    def receipt_gate(src, layer, slots, label):
+        nonlocal receipt_sets, plan_checked
+        active = sorted(set(map(int, slots)))
+        P.receipts_sparse(lib, torch, rc_sk, tags, used, epoch, BLOCKS * BS, LAYERS, layer, 0)
+        torch.cuda.synchronize()
+        marked = (used == epoch).nonzero().flatten().cpu().tolist()
+        blocks = []
+        for slot in active:
+            b, s = divmod(slot, BS)
+            blocks.append(torch.cat((src[b, :, s, :D].reshape(-1), src[b, :, s, D:].reshape(-1))).contiguous()
+                          .view(torch.int8))
+        sk = SKT.sketch_torch(torch, torch.stack(blocks), sign_bits).cpu().numpy().astype("<i4") if blocks else np.empty(
+            (0, SR.ROWS), dtype="<i4")
+        want = [SR.receipt_of(head, slot * LAYERS + layer, sk[i].tobytes()) for i, slot in enumerate(active)]
+        got = [np.asarray(tags[slot, layer].cpu().numpy()).astype(np.uint64).astype(">u8").tobytes()
+               for slot in active]
+        plan_ok = True
+        if not plan_checked and active:
+            vectors = SR.kv_vectors(BLOCKS * BS, LAYERS)[[slot * LAYERS + layer for slot in active]]
+            plan = SR.rb.plan_of(vectors, BLOCKS * BS * LAYERS)
+            expected = SR.rb.Plan.of([slot * LAYERS + layer for slot in active], BLOCKS * BS * LAYERS)
+            plan_ok, plan_checked = plan == expected, True
+        ok = marked == active and got == want and plan_ok
+        receipt_sets += 1
+        if not ok:
+            log(f"{label}: receipt FAIL marked={marked[:8]}/{len(marked)} active={active[:8]}/{len(active)} "
+                f"tags={sum(a == b for a, b in zip(got, want))}/{len(want)} plan={plan_ok}")
+        return ok
+
     for k in (int(v) for v in a.ks.split(",")):
         KB.set_key(lib, KB.lib_key(lib, k))
         key = KB.lib_key(lib, k)
         pl = [c.clone() for c in plain]
-        enc = []
-        for l in range(LAYERS):
-            e = torch.empty_like(pl[l])
-            lib.call("kv_encode", pl[l].data_ptr(), e.data_ptr(), lay.words, lbase[l], k, 0, st)
-            enc.append(e)
+        enc = [encoded_of(pl[l], l, k) for l in range(LAYERS)]
         g = {}
         # append: a step of tokens into random slots, padding among them
         n = 40
@@ -86,16 +140,15 @@ def main() -> int:
         ok_append, where = True, []
         pre = [c.clone() for c in pl] + [c.clone() for c in enc]
         for l in range(LAYERS):
-            P.append(lib, torch, pl[l], lay, lbase[l], 0, k, kk, vv, sl)
-            P.append(lib, torch, enc[l], lay, lbase[l], 1, k, kk, vv, sl)
+            P.append(lib, torch, pl[l], lay, 0, LAYERS, l, 0, k, kk, vv, sl)
+            P.append(lib, torch, enc[l], lay, 0, LAYERS, l, 1, k, kk, vv, sl)
             ref = pl[l].clone()
             for i, s in enumerate(slots.tolist()):
                 if s < 0:
                     continue
                 ref[s // BS, :, s % BS, :D] = kk[i].view(G, D)
                 ref[s // BS, :, s % BS, D:] = vv[i].view(G, D)
-            re = torch.empty_like(pl[l])
-            lib.call("kv_encode", pl[l].data_ptr(), re.data_ptr(), lay.words, lbase[l], k, 0, st)
+            re = encoded_of(pl[l], l, k)
             torch.cuda.synchronize()
             # bits, not bf16 values: an encoded word's halves include NaNs
             pe = bool(torch.equal(ref.view(torch.int16), pl[l].view(torch.int16)))
@@ -114,11 +167,18 @@ def main() -> int:
         w8 = pl[1].view(torch.uint8).view(-1, WB)
         e8 = enc[1].view(torch.uint8).view(-1, WB)
         picks = [0, 1, lay.words - 1] + rng.sample(range(lay.words), 5)
-        py_ok = all(K.encode_word(int.from_bytes(bytes(w8[i].cpu().tolist()), "little"), lbase[1] + i, key)
+        def logical_word(i):
+            b, r = divmod(i, lay.sb)
+            g, r = divmod(r, lay.sh)
+            s, j = divmod(r, lay.ss)
+            wi = (j if j < sh["hw"] // 2 else 16 + j - sh["hw"] // 2) + g * (sh["hw"] // 2)
+            return ((b * BS + s) * LAYERS + 1) * (4096 // WB) + wi
+
+        py_ok = all(K.encode_word(int.from_bytes(bytes(w8[i].cpu().tolist()), "little"), logical_word(i), key)
                     == int.from_bytes(bytes(e8[i].cpu().tolist()), "little") for i in picks)
         tabs = {}
         for encd in (0, 1):
-            ents = [(kk, vv, sl, n, pre[encd * LAYERS + l], lbase[l]) for l in range(LAYERS)]
+            ents = [(kk, vv, sl, n, pre[encd * LAYERS + l], 0, LAYERS, l) for l in range(LAYERS)]
             tabs[encd] = P.table(torch, ents).cuda()
             P.append_multi(lib, torch, tabs[encd], LAYERS, n + 8, lay, encd, k)
         torch.cuda.synchronize()
@@ -165,13 +225,18 @@ def main() -> int:
                 part = torch.empty(P.part_floats(lib, b, sp), dtype=torch.float32, device="cuda")
                 o_p = torch.full((nrows, H * D), 7.0, dtype=torch.bfloat16, device="cuda")
                 o_e = torch.full_like(o_p, -3.0)
-                P.attn(lib, torch, pl[layer], lay, lbase[layer], 0, k, q, o_p, part, lens, btd, b, sp)
-                P.attn(lib, torch, enc[layer], lay, lbase[layer], 1, k, q, o_e, part, lens, btd, b, sp)
+                P.attn(lib, torch, pl[layer], lay, 0, LAYERS, layer, 0, k, q, o_p, part, lens, btd, b, sp)
+                epoch.add_(1)
+                rc_sk.fill_(-1)
+                active = [int(bt[i, p // BS]) * BS + p % BS for i, length in enumerate(lens_l) for p in range(length)]
+                P.attn(lib, torch, enc[layer], lay, 0, LAYERS, layer, 1, k, q, o_e, part, lens, btd, b, sp,
+                       receipts=(rc_sk, used, epoch))
+                receipts_all = receipt_gate(enc[layer], layer, active, f"attention k={k} B={b} sp={sp}")
                 qrow = torch.tensor(rng.sample(range(b), b), dtype=torch.int32, device="cuda")
                 qp = torch.empty(b, H * D, dtype=torch.bfloat16, device="cuda")
                 qp[qrow.long()] = q[:b]
                 o_r = torch.full((b, H * D), 5.0, dtype=torch.bfloat16, device="cuda")
-                P.attn(lib, torch, enc[layer], lay, lbase[layer], 1, k, qp, o_r, part, lens, btd, b, sp, qrow=qrow)
+                P.attn(lib, torch, enc[layer], lay, 0, LAYERS, layer, 1, k, qp, o_r, part, lens, btd, b, sp, qrow=qrow)
                 # the last tokens as rows, their slots in the pages overwritten
                 ck = torch.zeros(nrows, G * D, dtype=torch.bfloat16, device="cuda")
                 cv = torch.zeros_like(ck)
@@ -196,13 +261,19 @@ def main() -> int:
                         overwritten += 1
                 o_cp = torch.full_like(o_p, 1.0)
                 o_ce = torch.full_like(o_p, 2.0)
-                P.attn(lib, torch, pl_x, lay, lbase[layer], 0, k, q, o_cp, part, lens, btd, b, sp, ck=ck, cv=cv)
-                P.attn(lib, torch, enc_x, lay, lbase[layer], 1, k, q, o_ce, part, lens, btd, b, sp, ck=ck, cv=cv)
+                P.attn(lib, torch, pl_x, lay, 0, LAYERS, layer, 0, k, q, o_cp, part, lens, btd, b, sp, ck=ck, cv=cv)
+                epoch.add_(1)
+                rc_sk.fill_(-1)
+                active_fresh = [int(bt[i, p // BS]) * BS + p % BS for i, length in enumerate(lens_l)
+                                for p in range(max(0, length - 1))]
+                P.attn(lib, torch, enc_x, lay, 0, LAYERS, layer, 1, k, q, o_ce, part, lens, btd, b, sp, ck=ck, cv=cv,
+                       receipts=(rc_sk, used, epoch))
+                receipts_fresh = receipt_gate(enc_x, layer, active_fresh, f"attention-fresh k={k} B={b} sp={sp}")
                 ckp, cvp = torch.empty(b, G * D, dtype=torch.bfloat16, device="cuda"), torch.empty(
                     b, G * D, dtype=torch.bfloat16, device="cuda")
                 ckp[qrow.long()], cvp[qrow.long()] = ck[:b], cv[:b]
                 o_cr = torch.full((b, H * D), 4.0, dtype=torch.bfloat16, device="cuda")
-                P.attn(lib, torch, enc_x, lay, lbase[layer], 1, k, qp, o_cr, part, lens, btd, b, sp, qrow=qrow, ck=ckp,
+                P.attn(lib, torch, enc_x, lay, 0, LAYERS, layer, 1, k, qp, o_cr, part, lens, btd, b, sp, qrow=qrow, ck=ckp,
                        cv=cvp)
                 torch.cuda.synchronize()
                 rows_eq = (bool(torch.equal(o_cp.view(torch.int16), o_p.view(torch.int16)))
@@ -214,9 +285,11 @@ def main() -> int:
                 qrow_eq = bool(torch.equal(o_r[qrow.long()].view(torch.int16), o_e[:b].view(torch.int16)))
                 m = ref.abs().max().item() or 1.0
                 err = float((o_p[:b].double().view(b, H, D) - ref[:b]).abs().max() / m)
-                ok = equal and zero_pad and zero_len and qrow_eq and rows_eq and err <= RTOL
+                ok = equal and zero_pad and zero_len and qrow_eq and rows_eq and receipts_all and receipts_fresh and err <= RTOL
                 att["cells"].append({"batch": b, "splits": sp, "layer": layer, "lens": lens_l, "equal": equal,
-                                     "zero_padding": zero_pad, "zero_length": zero_len, "qrow": qrow_eq, "last_rows": rows_eq, "last_overwritten": overwritten,
+                                     "zero_padding": zero_pad, "zero_length": zero_len, "qrow": qrow_eq,
+                                     "last_rows": rows_eq, "last_overwritten": overwritten,
+                                     "receipts": receipts_all, "fresh_receipts": receipts_fresh,
                                      "rel_err": err, "ok": ok})
                 att["ok"] &= ok
                 if not ok:
@@ -228,16 +301,26 @@ def main() -> int:
         for l in range(LAYERS):
             for encd, src in ((0, pl[l]), (1, enc[l])):
                 o = torch.empty(20, *pl[l].shape[1:], dtype=torch.bfloat16, device="cuda")
-                P.gather(lib, torch, src, lay, lbase[l], encd, k, blocks, o)
+                if encd:
+                    epoch.add_(1)
+                    rc_sk.fill_(-1)
+                    P.gather(lib, torch, src, lay, 0, LAYERS, l, encd, k, blocks, o,
+                             receipts=(rc_sk, used, epoch))
+                    gather_slots = [int(b) * BS + s for b in blocks.cpu().tolist() for s in range(BS)]
+                    ok_g &= receipt_gate(src, l, gather_slots, f"gather k={k} layer={l}")
+                else:
+                    P.gather(lib, torch, src, lay, 0, LAYERS, l, encd, k, blocks, o)
                 torch.cuda.synchronize()
                 ok_g &= bool(torch.equal(o.view(torch.int16), pl[l][blocks.long()].view(torch.int16)))
-        g["gather"] = {"blocks": 20, "ok": ok_g}
+        g["gather"] = {"blocks": 20, "receipt_sets": LAYERS, "ok": ok_g}
         g["ok"] = g["append"]["ok"] and multi_ok and att["ok"] and ok_g
         res["ks"][k] = g
         res["ok"] &= g["ok"]
         errs = [c["rel_err"] for c in att["cells"]]
         log(f"k={k}: append {'ok' if g['append']['ok'] else 'FAIL'}, append_multi {'ok' if multi_ok else 'FAIL'}, attention {'ok' if att['ok'] else 'FAIL'} "
             f"({len(att['cells'])} cells, max rel err {max(errs):.1e}), gather {'ok' if ok_g else 'FAIL'}")
+    res["receipt_sets"] = receipt_sets
+    res["plan_of"] = plan_checked
     (out_dir / "paged-gate.json").write_text(json.dumps(res, indent=1))
     log("paged gate " + ("passed" if res["ok"] else "FAILED"))
     return 0 if res["ok"] else 1
