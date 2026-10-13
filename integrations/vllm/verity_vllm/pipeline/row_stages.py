@@ -583,7 +583,8 @@ class SingleRow(Row):
 
     def serving_rows_request(self, partition: str) -> str:
         """The Commit's serving-rows request (`pipeline.serving_rows`): its directory inside the research run dir when there is one,
-        so the run's custody preserves it, the verifier's partition file, and the run id and source the roots' domains bind."""
+        so the run's custody preserves it, the verifier's partition file, and the run id and source the registration names (its
+        domains bind the run root)."""
         rd = self.env.research_run_dir
         d = os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows"
         os.makedirs(d, exist_ok=True)
