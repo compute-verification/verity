@@ -19,6 +19,9 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
   `checkStmt` (`StmtsChecked`, `AcceptsZKV`'s second conjunct), n1b's checks; the checked family meets it
   (`checksAccepted_checked`, by `checks_of_keepOwn`), and `hPubRows_of_checked` is `hPubRows_of_check'` with it and
   `SparseAtShapeChecked`.
+* `ownIn_of_checks`: where `ChecksAccepted` holds, the accepted sessions' reads hold the verifier's message-round ports
+  of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second loop (`mem_msgPorts_of_checkOwn`,
+  `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
 -/
 
 namespace FlockC3.PubRows
@@ -177,6 +180,40 @@ theorem sparse_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : L
   exact sparse_of_name hss (Array.mem_of_getElem? hj)
     ((FlockVBridge.Sparse.unitName_params hp).trans hname.symm)
 
+/-- **`checkOwn` accepting, its second loop**: each of the statement's message-round ports is one of the reads
+file's. -/
+theorem mem_msgPorts_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.Port}
+    (h : RecVStar.checkOwn s own = .ok ()) : ∀ q ∈ RecVStar.ownPorts s, q ∈ RecVStar.msgPorts own := by
+  unfold RecVStar.checkOwn at h
+  simp only at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · rename_i hnone
+      intro q hq
+      have hfind : (RecVStar.ownPorts s).find? (fun x => !(RecVStar.msgPorts own).contains x) = none := by
+        cases hf : (RecVStar.ownPorts s).find? (fun x => !(RecVStar.msgPorts own).contains x) with
+        | none => rfl
+        | some q' => exact absurd hf (hnone q')
+      simpa using List.find?_eq_none.1 hfind q hq
+
+/-- **A statement the verifier checked as V*'s statement `j` has its message-round ports in the reads file**: each
+port of `ownAt ss j` is one of `own`'s by name, value and reads (`checkStmt_ok`'s `checkOwn`, its second loop). -/
+theorem ownIn_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program (some own) (some j) (some f) rows =
+      .ok ()) {ss : Array VStar.Stmt} (hss : RecVStar.statements i = .ok ss) :
+    ∀ p ∈ ownAt ss j, ∃ p' ∈ own, p'.name = p.name ∧ p'.value = p.value ∧ p'.reads = p.reads := by
+  obtain ⟨-, -, ss', s, hss', hj, -, -, -, ho, -⟩ := FlockSoundness.Discharge.Recursion.checkStmt_ok h
+  obtain rfl := Except.ok.inj (hss'.symm.trans hss)
+  intro p hp
+  simp only [ownAt, hj, Option.map_some, Option.getD_some, List.map_toArray, List.mem_toArray, List.mem_map] at hp
+  obtain ⟨q, hq, rfl⟩ := hp
+  obtain ⟨p', hp', rfl⟩ := List.mem_map.1 (mem_msgPorts_of_checkOwn ho q hq)
+  exact ⟨p', Array.mem_toList_iff.1 (List.mem_filter.1 hp').1, rfl, rfl, rfl⟩
+
 end List
 
 section Session
@@ -320,6 +357,28 @@ theorem checksAccepted_checked {coins : String → Option Flock.RecCoins.Source}
   intro J o tr' hp
   obtain ⟨-, spec, sts, hs, hst, -, hpr⟩ := hp
   exact ⟨⟨spec, sts, hs, hpr⟩, spec, sts, hs, hst⟩
+
+/-- **(n1b) The accepted sessions' reads hold the verifier's message-round ports** (`OwnIn` at `ownAt`) where a
+transcript they accept passes the statement check (`ChecksAccepted`): the check of the session's first statement
+(`setup_zero_c`) is `checkOwn` at the family's list's statement `j` (`ownIn_of_checkStmt`). -/
+theorem ownIn_of_checks {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
+    {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
+    (hca : ChecksAccepted F rows wr reg) : OwnIn F fun j => ownAt F.stmts j := by
+  intro R ω t R₂ j hex
+  obtain ⟨tr, -, -, spec, sts, hs, hfm⟩ := hca R ω t R₂ j hex
+  obtain ⟨h0, -⟩ := setup_zero_c (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hTags.1 (F.zs R ω t R₂ j).hcH hs
+  exact ownIn_of_checkStmt (array_forM_ok hfm 0 h0) F.hstmts
+
+/-- **(n1b) The checked family's accepted sessions' reads hold the verifier's message-round ports**, at whatever `own`
+the family is (`checksAccepted_checked`, `ownIn_of_checks`); at `own := fun j => ownAt ss j` it is `hbr_honest`'s
+`hown`. -/
+theorem ownIn_checked {coins : String → Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+      (Vs j).OuterR Reg'}
+    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
+    OwnIn (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+      fun j => ownAt ss j :=
+  ownIn_of_checks (checksAccepted_checked (coins := coins) (rows := rows) (zr := zr) (hCust := hCust) (h := h))
 
 local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 

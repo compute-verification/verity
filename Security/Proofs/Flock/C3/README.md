@@ -73,7 +73,10 @@ takes, each with who discharges it:
   is empty), and the checked sessions refuse one (`hLeafC3_checked`, wherever V* has a statement).
 * `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W).
 * `hnames` (`PortsNamed`): G's `PortNamesUnique` at V*'s circuits (W, with h2's parse).
-* `hown` (`OwnIs`): each accepted session's reads are the verifier's own `own`; G's `HOwn` at the honest family.
+* `hown` (`OwnIn`): each accepted session's reads hold `own`'s ports by name, value and reads. At
+  `own := fun j => ownAt ss j`, the verifier's message-round ports of statement `j`, it is proved (`ownIn_checked`,
+  `C3/PubRows/Shape.lean`, from `checkOwn`'s second loop). The session may read more; no reader of `own` needs the
+  converse.
 * `hheld` (`HeldIs`): n1c, below.
 * `hss` and `_htop`: the event's (`AcceptsC3`'s list and the guarantee's `_hstk`); `_htop` is unused by `hbr_honest`
   and is what n6's `RegLevelsRead` reads.
