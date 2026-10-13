@@ -61,11 +61,11 @@ theorem mapM' {f : β → M α} {g : α → Prop} : ∀ {l : List β}, (∀ b �
 
 end Av
 
-theorem mem_symm {v : Var} : ∀ {xs ys : List Var}, v ∈ symm xs ys → v ∈ xs ∨ v ∈ ys
-  | [], _, h => by unfold symm at h; exact Or.inr h
-  | _ :: _, [], h => by unfold symm at h; exact Or.inl h
+theorem mem_symm {v : Var} : ∀ {xs ys : List Var}, v ∈ Flock.HmNets.symm xs ys → v ∈ xs ∨ v ∈ ys
+  | [], _, h => by unfold Flock.HmNets.symm at h; exact Or.inr h
+  | _ :: _, [], h => by unfold Flock.HmNets.symm at h; exact Or.inl h
   | x :: xs, y :: ys, h => by
-      unfold symm at h
+      unfold Flock.HmNets.symm at h
       split at h
       · rcases List.mem_cons.1 h with rfl | h
         · exact Or.inl (List.mem_cons_self ..)
@@ -76,10 +76,10 @@ theorem mem_symm {v : Var} : ∀ {xs ys : List Var}, v ∈ symm xs ys → v ∈ 
           · exact (mem_symm h).imp id (List.mem_cons_of_mem _)
         · exact (mem_symm h).imp (List.mem_cons_of_mem _) (List.mem_cons_of_mem _)
 
-theorem mem_symm_var : ∀ {xs : List Var}, u ∉ xs → u ∈ symm xs [u]
-  | [], _ => by unfold symm; exact List.mem_singleton_self _
+theorem mem_symm_var : ∀ {xs : List Var}, u ∉ xs → u ∈ Flock.HmNets.symm xs [u]
+  | [], _ => by unfold Flock.HmNets.symm; exact List.mem_singleton_self _
   | x :: xs, h => by
-      unfold symm
+      unfold Flock.HmNets.symm
       split
       · exact List.mem_cons_of_mem _ (mem_symm_var fun h' => h (List.mem_cons_of_mem _ h'))
       · split
