@@ -32,7 +32,7 @@ def test_split_times_each_class_and_re_times_the_gemms_at_the_native_rate():
     assert (r["kernel_ms"], r["span_ms"], r["kernels_a_step"]) == (7.0, 7.0, 3.0)
     assert (r["of_R"], r["gemm_of_R"], r["attention_of_R"]) == (pytest.approx(3 / 7), 0.5, 0.5)
     assert r["native_ms"] == pytest.approx(4.0 + 2.0 + 1.0) and r["native_all_ms"] == pytest.approx(6.0 + 1.0)
-    assert r["kernels"][0] == {"name": "gemm_a", "class": "gemm", "ms": 4.0} and len(r["kernels"]) == 3
+    assert r["kernels"][0] == {"name": "gemm_a", "class": "gemm", "ms": 4.0, "a_step": 1.0} and len(r["kernels"]) == 3
 
 
 def test_split_counts_idle_between_kernels_inside_a_step_apart_from_the_host_gap_between_steps():
