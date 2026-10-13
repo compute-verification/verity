@@ -6,8 +6,8 @@
 //                    digest at position j: the driver's `receipts.hidden(payload_j, salt_j)` in `audit.payload_tree`
 //   gather           64-byte rows from a list of device addresses (a window's openings, across its passes' kept
 //                    levels, their recomputed subtrees and the payload tree)
-//   pass             a pass in chunks on two streams, each chunk's receipts, leaves and subtree hashed while the next
-//                    chunk is read (`rs_pass`), keeping the tree's levels from h0 up
+//   pass             a pass's receipts by one persistent grid on tensor cores, each chunk's leaves and subtree hashed on
+//                    a second stream while the later chunks are read (`rs_pass`), keeping the tree's levels from h0 up
 //   subtrees         the levels below h0 and the receipts of the subtrees a window's openings fall in, recomputed from
 //                    the store under the pass's constants (`rs_subtrees`)
 //
@@ -125,74 +125,113 @@ __global__ void __launch_bounds__(128) pack16_kernel(const int8_t *__restrict__ 
   pk[q] = w;
 }
 
+// The receipts of the warp's 32 blocks b0 … b0 + 31 (of n, block 0 at data, position j0 + b) into ys, S the warp's
+// staging (32 · SK_ROWS int32) and sg the packed signs in shared memory.
+__device__ __forceinline__ void sk16_tile(const uint4 *__restrict__ data, u64 j0, u64 n, u64 b0, const u32 *sg, int *S,
+                                          u64 *__restrict__ ys, int lane) {
+  const int g = lane >> 2, t = lane & 3;
+  int acc[2][2][4];
+#pragma unroll
+  for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+    for (int nt = 0; nt < 2; ++nt) acc[mt][nt][0] = acc[mt][nt][1] = acc[mt][nt][2] = acc[mt][nt][3] = 0;
+  uint4 cur[2][2], nxt[2][2];
+  sk64_load<false, 2>(cur, data, nullptr, b0, n, 0, g, t);
+#pragma unroll 1
+  for (int p = 0; p < SK16_P; ++p) {
+    if (p + 1 < SK16_P) sk64_load<false, 2>(nxt, data, nullptr, b0, n, p + 1, g, t);
+    const u32 w = sg[p * 32 + lane];
+#pragma unroll
+    for (int nt = 0; nt < 2; ++nt) {
+      const int r = 4 * nt;
+      const u32 b00 = sign_reg(w, r), b01 = sign_reg(w, r + 1), b10 = sign_reg(w, r + 2), b11 = sign_reg(w, r + 3);
+#pragma unroll
+      for (int mt = 0; mt < 2; ++mt) {
+        const uint4 &lo = cur[mt][0], &hi = cur[mt][1];
+        imma16832(acc[mt][nt], lo.x, hi.x, lo.y, hi.y, b00, b01);
+        imma16832(acc[mt][nt], lo.z, hi.z, lo.w, hi.w, b10, b11);
+      }
+    }
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt) cur[mt][0] = nxt[mt][0], cur[mt][1] = nxt[mt][1];
+  }
+#pragma unroll
+  for (int mt = 0; mt < 2; ++mt) {
+    const int blk = 16 * mt + g;
+#pragma unroll
+    for (int nt = 0; nt < 2; ++nt) {
+      *(int2 *)(S + blk * SK_ROWS + 8 * nt + 2 * t) = make_int2(acc[mt][nt][0], acc[mt][nt][1]);
+      *(int2 *)(S + (blk + 8) * SK_ROWS + 8 * nt + 2 * t) = make_int2(acc[mt][nt][2], acc[mt][nt][3]);
+    }
+  }
+  __syncwarp();
+  const u64 q = b0 + lane;
+  if (q < n) {
+    const uint4 *V = (const uint4 *)(S + lane * SK_ROWS);
+    u64 w[16], s[8];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) w[i] = 0;
+    w[0] = j0 + q;
+#pragma unroll
+    for (int i = 0; i < 4; ++i) {
+      const uint4 v = V[i];
+      w[1 + 2 * i] = be_word(v.x, v.y), w[2 + 2 * i] = be_word(v.z, v.w);
+    }
+    w[9] = 0x80ULL << 56, w[15] = (u64)(128 + 8 + 4 * SK_ROWS) * 8;
+#pragma unroll
+    for (int i = 0; i < 8; ++i) s[i] = kSketchMid[i];
+    sha512_compress(s, w);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) ys[8 * q + i] = s[i];
+  }
+  __syncwarp();
+}
+
+__device__ __forceinline__ void sk16_prologue(u32 *sg, const u32 *__restrict__ pk) {
+  for (int i = threadIdx.x; i < SK16_PACK; i += blockDim.x) sg[i] = __ldg(pk + i);
+  __syncthreads();
+}
+
 __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_receipts_kernel(const uint4 *__restrict__ data, u64 j0,
                                                                                u64 n, const u32 *__restrict__ pk,
                                                                                u64 *__restrict__ ys) {
   __shared__ u32 sg[SK16_PACK];
   __shared__ __align__(16) int st[SK16_WARPS][32 * SK_ROWS];
-  for (int i = threadIdx.x; i < SK16_PACK; i += blockDim.x) sg[i] = __ldg(pk + i);
-  __syncthreads();
-  const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3, warp = threadIdx.x >> 5;
-  int *S = st[warp];
+  sk16_prologue(sg, pk);
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
   const u64 tiles = (n + 31) / 32;
-  for (u64 tile = blockIdx.x * (u64)SK16_WARPS + warp; tile < tiles; tile += (u64)gridDim.x * SK16_WARPS) {
-    const u64 b0 = tile * 32;
-    int acc[2][2][4];
-#pragma unroll
-    for (int mt = 0; mt < 2; ++mt)
-#pragma unroll
-      for (int nt = 0; nt < 2; ++nt) acc[mt][nt][0] = acc[mt][nt][1] = acc[mt][nt][2] = acc[mt][nt][3] = 0;
-    uint4 cur[2][2], nxt[2][2];
-    sk64_load<false, 2>(cur, data, nullptr, b0, n, 0, g, t);
-#pragma unroll 1
-    for (int p = 0; p < SK16_P; ++p) {
-      if (p + 1 < SK16_P) sk64_load<false, 2>(nxt, data, nullptr, b0, n, p + 1, g, t);
-      const u32 w = sg[p * 32 + lane];
-#pragma unroll
-      for (int nt = 0; nt < 2; ++nt) {
-        const int r = 4 * nt;
-        const u32 b00 = sign_reg(w, r), b01 = sign_reg(w, r + 1), b10 = sign_reg(w, r + 2), b11 = sign_reg(w, r + 3);
-#pragma unroll
-        for (int mt = 0; mt < 2; ++mt) {
-          const uint4 &lo = cur[mt][0], &hi = cur[mt][1];
-          imma16832(acc[mt][nt], lo.x, hi.x, lo.y, hi.y, b00, b01);
-          imma16832(acc[mt][nt], lo.z, hi.z, lo.w, hi.w, b10, b11);
-        }
-      }
-#pragma unroll
-      for (int mt = 0; mt < 2; ++mt) cur[mt][0] = nxt[mt][0], cur[mt][1] = nxt[mt][1];
-    }
-#pragma unroll
-    for (int mt = 0; mt < 2; ++mt) {
-      const int blk = 16 * mt + g;
-#pragma unroll
-      for (int nt = 0; nt < 2; ++nt) {
-        *(int2 *)(S + blk * SK_ROWS + 8 * nt + 2 * t) = make_int2(acc[mt][nt][0], acc[mt][nt][1]);
-        *(int2 *)(S + (blk + 8) * SK_ROWS + 8 * nt + 2 * t) = make_int2(acc[mt][nt][2], acc[mt][nt][3]);
-      }
-    }
+  for (u64 tile = blockIdx.x * (u64)SK16_WARPS + warp; tile < tiles; tile += (u64)gridDim.x * SK16_WARPS)
+    sk16_tile(data, j0, n, tile * 32, sg, st[warp], ys, lane);
+}
+
+// The whole pass's receipts by a persistent grid, a warp taking the next tile of 32 blocks from ctr[0] and, once its
+// receipts are stored, counting it in ctr[1 + its chunk] (tiles_per of them a chunk), so the leaves of a chunk can start
+// while later chunks are read (`wait_kernel`), with no kernel boundary on the reads between chunks.
+__global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_pass_kernel(const uint4 *__restrict__ data, u64 n,
+                                                                           const u32 *__restrict__ pk,
+                                                                           u64 *__restrict__ ys, unsigned *ctr,
+                                                                           unsigned tiles_per) {
+  __shared__ u32 sg[SK16_PACK];
+  __shared__ __align__(16) int st[SK16_WARPS][32 * SK_ROWS];
+  sk16_prologue(sg, pk);
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  const u64 tiles = (n + 31) / 32;
+  for (;;) {
+    unsigned tile = 0;
+    if (!lane) tile = atomicAdd(ctr, 1u);
+    tile = __shfl_sync(~0u, tile, 0);
+    if (tile >= tiles) break;
+    sk16_tile(data, 0, n, (u64)tile * 32, sg, st[warp], ys, lane);
+    __threadfence();
     __syncwarp();
-    const u64 q = b0 + lane;
-    if (q < n) {
-      const uint4 *V = (const uint4 *)(S + lane * SK_ROWS);
-      u64 w[16], s[8];
-#pragma unroll
-      for (int i = 0; i < 16; ++i) w[i] = 0;
-      w[0] = j0 + q;
-#pragma unroll
-      for (int i = 0; i < 4; ++i) {
-        const uint4 v = V[i];
-        w[1 + 2 * i] = be_word(v.x, v.y), w[2 + 2 * i] = be_word(v.z, v.w);
-      }
-      w[9] = 0x80ULL << 56, w[15] = (u64)(128 + 8 + 4 * SK_ROWS) * 8;
-#pragma unroll
-      for (int i = 0; i < 8; ++i) s[i] = kSketchMid[i];
-      sha512_compress(s, w);
-#pragma unroll
-      for (int i = 0; i < 8; ++i) ys[8 * q + i] = s[i];
-    }
-    __syncwarp();
+    if (!lane) atomicAdd(ctr + 1 + tile / tiles_per, 1u);
   }
+}
+
+// One thread waiting until *flag reaches want, so what follows on its stream reads what the counted tiles wrote.
+__global__ void wait_kernel(const unsigned *flag, unsigned want) {
+  while (*(volatile const unsigned *)flag < want) __nanosleep(256);
+  __threadfence();
 }
 
 // Row q of out is the 64 bytes at device address addrs[q]: a window's openings (receipts, tree nodes of every pass and
@@ -265,39 +304,46 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
   return at;
 }
 
-// One pass over n blocks at data, in chunks of `chunk` blocks: chunk k's receipts on sa (`sketch16_receipts`, tensor
-// cores) while chunk k − 1's leaves and subtree run on sb (CUDA cores), so the hashing runs under the next chunk's
-// reads. sk is scratch for the packed signs (SK16_PACK words). Two slots of ys (8 words a receipt) and dig (8 words a
-// leaf), and up (8 words for each of chunk/16 nodes), alternate between chunks. Levels h0 … H of the tree go to kept (level h0 first, `kept_at`), the root last; levels below h0 are not kept.
-// sa waits for the whole pass before anything queued on it after.
+// One pass over n blocks at data: its receipts by one persistent grid of ctas CTAs on sa (`sketch16_pass_kernel`, tensor
+// cores; 0: one an SM, so a leaves CTA fits beside each), and on sb, chunk by chunk (`chunk` blocks) as the grid counts
+// each chunk's tiles done, the chunk's leaves and subtree (CUDA cores): the hashing runs under the later chunks' reads,
+// with no kernel boundary between them. sk is scratch of SK16_PACK + 1 + n / chunk words (the packed signs, the next
+// tile, each chunk's tiles done); ys holds all n receipts (8 words each); two slots of dig (8 words a leaf) and up (8
+// words for each of chunk/16 nodes) alternate between chunks. Levels h0 … H of the tree go to kept (level h0 first,
+// `kept_at`), the root last; levels below h0 are not kept. sa waits for the whole pass before anything queued on it
+// after.
 int rs_pass(const void *data, uint64_t n, const void *signs, int *sk, uint64_t *ys, uint64_t *dig, uint64_t *up,
             uint64_t *kept, int h0, uint64_t chunk, int ctas, cudaStream_t sa, cudaStream_t sb) {
-  static cudaEvent_t a[2], b[2], end;
+  static cudaEvent_t go, end;
   static bool made = false;
   if (!made) {
-    for (int k = 0; k < 2; ++k)
-      if (cudaEventCreateWithFlags(&a[k], cudaEventDisableTiming) || cudaEventCreateWithFlags(&b[k], cudaEventDisableTiming))
-        return 4;
-    if (cudaEventCreateWithFlags(&end, cudaEventDisableTiming)) return 4;
+    if (cudaEventCreateWithFlags(&go, cudaEventDisableTiming) || cudaEventCreateWithFlags(&end, cudaEventDisableTiming))
+      return 4;
     made = true;
   }
-  if (!data || !signs || !sk || !ys || !dig || !up || !kept || n % PER_LEAF || chunk % PER_LEAF || !chunk || n % chunk)
+  if (!data || !signs || !sk || !ys || !dig || !up || !kept || n % PER_LEAF || chunk % 32 || chunk % PER_LEAF || !chunk ||
+      n % chunk || ctas < 0)
     return 1;
-  const uint64_t nl = n / PER_LEAF, lc = chunk / PER_LEAF;
+  const uint64_t nl = n / PER_LEAF, lc = chunk / PER_LEAF, chunks = n / chunk;
   const int H = log2_exact(nl), hc = log2_exact(lc);
-  if (H < 0 || hc < 0 || h0 < 1 || h0 > hc) return 1;
-  const uint64_t chunks = n / chunk;
-  const uint32_t *pk = (const uint32_t *)sk;
-  int rc = rs_pack16(signs, (uint32_t *)sk, sa);
+  if (H < 0 || hc < 0 || h0 < 1 || h0 > hc || n / 32 >= (1ULL << 32)) return 1;
+  if (!ctas) {
+    int dev;
+    if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
+  }
+  uint32_t *pk = (uint32_t *)sk;
+  unsigned *ctr = (unsigned *)sk + SK16_PACK;
+  int rc = rs_pack16(signs, pk, sa);
   if (rc) return rc;
+  if (cudaMemsetAsync(ctr, 0, 4 * (1 + chunks), sa) || cudaEventRecord(go, sa) || cudaStreamWaitEvent(sb, go, 0))
+    return 4;
+  sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, pk, ys, ctr, (unsigned)(chunk / 32));
+  if (cudaGetLastError()) return 4;
   for (uint64_t k = 0; k < chunks; ++k) {
     const int slot = k & 1;
-    uint64_t *ys_k = ys + slot * chunk * 8, *dig_k = dig + slot * lc * 8, *up_k = up + slot * lc * 8;
-    if (k >= 2 && cudaStreamWaitEvent(sa, b[slot], 0)) return 4;
-    if ((rc = sketch16_receipts((const uint8_t *)data + k * chunk * BLOCK, k * chunk, chunk, pk, ys_k, ctas, sa)))
-      return rc;
-    if (cudaEventRecord(a[slot], sa) || cudaStreamWaitEvent(sb, a[slot], 0)) return 4;
-    if ((rc = rb_leaves(ys_k, k * lc, lc, dig_k, nullptr, sb))) return rc;
+    uint64_t *dig_k = dig + slot * lc * 8, *up_k = up + slot * lc * 8;
+    wait_kernel<<<1, 1, 0, sb>>>(ctr + 1 + k, (unsigned)(chunk / 32));
+    if ((rc = rb_leaves(ys + k * chunk * 8, k * lc, lc, dig_k, nullptr, sb))) return rc;
     const uint64_t *in = dig_k;
     uint64_t *scratch = up_k;
     for (int h = 0; h < hc; ++h) {
@@ -307,7 +353,6 @@ int rs_pass(const void *data, uint64_t n, const void *signs, int *sk, uint64_t *
       if (out == scratch) scratch += 8 * m;
       in = out;
     }
-    if (cudaEventRecord(b[slot], sb)) return 4;
   }
   const uint64_t *in = kept + 8 * kept_at(nl, h0, hc);
   for (int h = hc; h < H; ++h) {

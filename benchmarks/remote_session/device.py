@@ -5,9 +5,9 @@ the device reader (`../codec_tensor/reader.cu` in `session.cu`) and the openings
 payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), its
            tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j)
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) at the registration's key
-pass       sketch-sha512 receipts of every block in store order (`rb_sketch`, `rb_sketch_hash`), the leaves under
-           salt_c = SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be c) (`rb_leaves`) and the tree, in chunks on two
-           streams so a chunk's hashing runs under the next chunk's reads (`rs_pass`); a pass keeps its signs and its
+pass       sketch-sha512 receipts of every block by one persistent grid on tensor cores, the leaves under
+           salt_c = SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be c) (`rb_leaves`) and the tree chunk by chunk on a
+           second stream, so the hashing runs under the later chunks' reads (`rs_pass`); a pass keeps its signs and its
            tree's levels from h0 up (2 · N / 16 / 2^h0 nodes), nothing per block
 opening    a window's draws at once, on a stream of their own: each drawn leaf's subtree of 2^h0 leaves recomputed
            from the store under its pass's constants by a second copy of the library (`rs_subtrees`), then its
@@ -184,8 +184,8 @@ class DeviceStore:
             self.kept_at[h + 1] = self.kept_at[h] + (nl >> h)
         lc = self.chunk // PER_LEAF
         self.ring = None
-        self.ring = (torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda"),
-                     torch.empty((2 * self.chunk, 8), dtype=torch.int64, device="cuda"),
+        self.ring = (torch.empty(PACK16_WORDS + 1 + self.blocks // self.chunk, dtype=torch.int32, device="cuda"),
+                     torch.empty((self.blocks, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"))
 

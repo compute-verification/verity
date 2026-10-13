@@ -1,6 +1,6 @@
 """τ of the prover's pass on one GPU: the read alone (`rb_read`), the plain pass kernel by kernel (sketch, receipts,
-leaves, tree), and the pipelined pass (`rs_pass`) at each chunk size and sketch CTA count asked for, each checked to
-give the plain pass's root, over a store of random words (no codec: a pass's cost does not depend on the bytes).
+leaves, tree), the tensor-core receipts alone (checked equal to the plain ones), and the pipelined pass (`rs_pass`)
+at each chunk size and CTA count asked for, every pass checked to give the plain pass's root, over a store of random words (no codec: a pass's cost does not depend on the bytes).
 Writes OUT/pass_bench.json.
 
     python pass_bench.py --lib session.so --gib 16 --out OUT [--chunks 14,15,16,17,18 --ctas 0 --passes 30]
@@ -39,7 +39,7 @@ def main() -> int:
     ap.add_argument("--gib", type=float, default=16.0)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--chunks", default="14,15,16,17,18", help="log2 of the chunk's blocks")
-    ap.add_argument("--ctas", default="0", help="the sketch's CTAs, comma-separated (0: as many as are resident)")
+    ap.add_argument("--ctas", default="0", help="the receipts grid's CTAs, comma-separated (0: one an SM)")
     ap.add_argument("--kept-from", type=int, default=6)
     ap.add_argument("--passes", type=int, default=30)
     ap.add_argument("--open-passes", type=int, default=300)
@@ -107,9 +107,11 @@ def main() -> int:
             prev = s.run_pass(seed)[0]
             ok = prev == plain_root
             for i in range(a.passes):
+                sd = rb.seed(b"\1" * 32, i + 1, prev)
                 t0 = time.perf_counter_ns()
-                prev, _ = s.run_pass(rb.seed(b"\1" * 32, i + 1, prev))
+                prev, _ = s.run_pass(sd)
                 host.append(time.perf_counter_ns() - t0)
+                ok = ok and prev == s.plain_root(sd)
             gpu = s.pass_gpu_ms[-a.passes:]
             row = {"chunk_log2": c, "ctas": ctas, "h0": s.h0, "root_ok": ok,
                    "gpu_ms": percentiles(sorted(gpu)), "host_ns": percentiles(sorted(host)),
