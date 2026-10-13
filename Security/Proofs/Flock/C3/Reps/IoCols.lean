@@ -2,6 +2,7 @@ import Proofs.Flock.C3.Reps.TsRead
 import Proofs.Flock.C3.Reps.SrcOpens
 import Proofs.Flock.VBridge.Decode
 import Proofs.Flock.VBridge.Verifier
+import Proofs.Flock.C3.Reps.ReadCol
 
 /-!
 # The openings' columns: in range, and read under a stage's mask
@@ -9,7 +10,7 @@ import Proofs.Flock.VBridge.Verifier
 * `lt_nIn_of_params`: a unit the verifier accepted (`RecOpen.check_ok`) as `rec-open/l<LANES>-h<H>` has its first
   `128 · LANES + 512 · H` columns (the row and the `aux` blocks) among its inputs (`inWords_unit`, `unitIn_eq`), so
   `openCols_of` gives `OpenCols`' in-range half from the units' parameters (`OpenParams`, `hOpenParams_of`'s statement),
-  leaving its `ReadCol` half.
+  leaving its `ReadCol` half, which `openCols_of_readCol` takes as `OpenReadCol` at every unit.
 * `copyVal_maskOf`: an input column a row reads (`IoColAt`) whose position is in stage `i`'s commit strings is the same
   in the masked layer: `colOf_mask`'s lemma at any `Sk`, the one both `IoColAt` and `RowColsRead` go through.
   `posK_of_key`: a column keyed by bit `k` of row port `q` is at `q`'s commit string.
@@ -101,6 +102,15 @@ theorem openCols_of (hrec : ∀ j, Flock.RecOpen.check (Vs j).c = .ok ()) (hP : 
   intro ℓ hℓ c hc
   rw [FlockVBridge.Family.Conss.getD_default] at hc
   exact ⟨lt_nIn_of_params (hrec _) (hP ℓ hℓ) hc, hR ℓ hℓ c hc⟩
+
+/-- **`OpenCols` from the units' parameters and `OpenReadCol`**: each level's unit is the net of `unitLaid`
+(`RecOpen.check_ok`). -/
+theorem openCols_of_readCol (hrec : ∀ j, Flock.RecOpen.check (Vs j).c = .ok ()) (hP : M.OpenParams)
+    (hu : ∀ ℓ < sh.sched.levels.size, (Vs (M.sessO ℓ)).c.unit.unitLog ≤ 32)
+    (hR : ∀ LANES H, OpenReadCol LANES H) : M.OpenCols sh.sched :=
+  M.openCols_of hrec hP fun ℓ hℓ c hc =>
+    have hok := Flock.RecOpen.check_ok (hrec (M.sessO ℓ)) (hP ℓ hℓ)
+    hR _ _ (Vs (M.sessO ℓ)).hU hok.2 hok.1 (hu ℓ hℓ) c hc
 
 /-- Obligation: discharged by the openings' circuits (`RecOpen.check_ok`: the unit is `unitLaid`, whose first port is
 `row`), as `PartRowCols` for the parts. **The openings' row columns are keyed by row bits**: at each level, the Δ key of
