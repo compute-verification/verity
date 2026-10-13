@@ -38,6 +38,7 @@ import Proofs.Flock.C3.Reps.Maps
 import Proofs.Flock.C3.Reps.OpensRead
 import Proofs.Flock.C3.Reps.SrcOK
 import Proofs.Flock.C3.Reps.TsRead
+import Proofs.Flock.C3.Reps.RepRounds
 import Proofs.Flock.C3.Opening.Session
 import Proofs.Flock.C3.Opening.SrcOpening
 import Proofs.Flock.C3.Opening.ClaimTie
