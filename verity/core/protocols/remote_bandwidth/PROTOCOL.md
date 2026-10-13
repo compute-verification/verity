@@ -218,7 +218,7 @@ certified receipt (λ). Other users of the seed must hold for a seed the prover 
 and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 
 **The two receipt kinds.** The registration names one (`receipts.KINDS`), and `Params.receipt` must name the same.
-sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for
+Every receipt of its sessions is of that kind, the weights' and the KV pages' alike (§8). sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for
 (Daniel, 12 Oct, #1884). block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
 sketch-sha512 is ra-codec-tensor's `sketch_receipt.py` (#1916, at 5b8decfc5), byte for byte: the suite pins its numpy
 outputs, and `receipts.SketchReceipter` computes the same in pure Python. Each kind's receipt is 64 bytes, so leaves,
@@ -592,6 +592,18 @@ and each window's, from it plus the node's capacities.
   key the prover sees, and reads the bound at \(r^* = 12\) (§4). Under a registration that binds \(z\), \(z\) is
   XORed into the block before the sketch. In the proof unit, check 5 under sketch-sha512 is 16 signed sums over the
   block's 4,096 bytes and one compression, in place of block-sha512's 33 compressions.
+- **KV receipts are the driver's receipts.** A KV page's receipt is the registration's one receipt kind (sketch-sha512:
+  `SketchReceipter` under the pass's seed, its signs under `SIGN_DOMAIN`, hashed under `SKETCH_RECEIPT_DOMAIN`) of a
+  registered KV block under the registration's block layout, committed in the pass's one tree and listed in its one
+  plan with the weights'. A KV block is a registered block like any other: 4,096 bytes of the encoded store, 32 whole
+  codec words, \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\) (§3), and its kernel's vectors pass `plan_of`
+  (§4). The device's KV receipt as it stands (word_codec's `kv_receipt.py` and `kv.cu`'s `rc_sha8_kernel`, #1916)
+  is a third kind:
+  its own SHA-512 domain (`verity/word-codec/kv-receipt/sha512/v0`), ro-sketch-blake3 signs, and half-block vectors
+  that take their 4,096 bytes from 16 tokens' head shares, zero-padded to whole blocks (RB-D2). The verifier can open
+  none of it, so none of it is credited: no pass's plan holds a KV block until its receipts are the registration's kind
+  over the registered KV layout, and a step that commits KV receipts of another kind keeps them out of its plan and
+  its credited bytes.
 - **The challenger's state.** The challenger keeps every coin of a session until it releases it and never releases one
   twice. Persisting that across challenger restarts, and committing coins that outlive one session, is out of scope.
 - **Keeping receipts for the draws.** Any receipt of a window may be drawn once its roots are final, so the prover
