@@ -218,9 +218,9 @@ P2 in the ring model holds per round with floor `p` and bad-event mass `ε₀` p
 every block count `N` from `2^19` to `2^25`, every `k`, every payload `W` and every responder against
 `p2ring N 16448 (2^16448 − 21065) 16432` holding `Sz j` bits at boundary `j` (`VarResponderOn`, each round within
 `(D, Q, L)`), all `k` answers are correct with probability at most `(1 − p)^m + k·ε₀`, where `m` is the number of
-boundaries `j < k` at which the state is at most `S₀ = ⌊ρ·|C|⌋` bits (`lowBoundaries`). Over challenges at random
-times the share of such boundaries estimates the share of time the server held at most `S₀`, which is the time
-average the capacity account reads.
+boundaries `j < k` at which the state is at most `S₀ = ⌊ρ·|C|⌋` bits (`lowBoundaries`). The game has no times, so
+the share of low boundaries is not a time average: reading it as one needs a statement about when challenges arrive,
+which this one doesn't make (PoUS sends each challenge when the last answer arrives).
 
 It covers schedules `Sz` fixed in advance, before the coins and the challenges are drawn, and not schedules chosen from
 the history. A server whose state size adapts to the challenges so far, or to the coins, is covered only through its
