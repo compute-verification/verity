@@ -47,6 +47,7 @@ import Proofs.Flock.Recursive.AuditC3
 import Proofs.Flock.Recursive.RegExtract
 import Proofs.Flock.Recursive.AuditC3Proof
 import Proofs.Flock.Recursive.Witness
+import Proofs.Flock.Recursive.TopRoot
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
