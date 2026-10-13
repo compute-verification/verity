@@ -12479,7 +12479,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "2bbeaa1b354b26ace95f25781f08e4c562dea2b9cdfb0d6e4aee609a0a2956dd",
+   "digest": "5771f25bbc889341f599ced8347706f86c48950973fb7032787023e9180aeb72",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -12518,6 +12518,8 @@
     "Flock.RecVStar.TOP_ROW_WORDS": "c92f71d3120b32d6615530b1ca13222a9ebc351734a92531f6cc67d9ba1e44d8",
     "Flock.RecVStar.TRANSCRIPT_FORMAT": "9d1fb6654bc04339ffda240a8426829cb0d455e786740115091f1a2916602105",
     "Flock.RecVStar.accPorts": "54ee85e7271675dd69af344e29f6141939b3d9670388bae777e03a5670be7e24",
+    "Flock.RecVStar.accReads": "b5c658b69ede8b3c69f0064bcb2bbabeaed2f1652d5a66853fe889548d19b5e3",
+    "Flock.RecVStar.accReads._sparseCasesOn_1": "6d334b557e269d46579b73187c9131abb06d4401f07fb2f4c771bb1839726b52",
     "Flock.RecVStar.bindingsOf": "88fa73ce28541a6fe3d49c73a746f0d0f94bad254b27b3436a9752d267583ea3",
     "Flock.RecVStar.bitLength": "a121200599cab7b89dc74e59f95ab37be2a4030354b5cdd2e39b55c3882592ee",
     "Flock.RecVStar.cIndex": "7ad06946523455bd1c42f936d6b3a4cf696f7257cbfa36d7462c0c4dcfc6d67e",
@@ -12525,6 +12527,7 @@
     "Flock.RecVStar.candidate3Statements": "4486f6f82954aecb1c85b19e2a332a452d282bc3b7cc7c8ee49245ba650ef56b",
     "Flock.RecVStar.check": "c90f0d96089029480adddbd043ce249b3218ae90536a04dffca04c8dbdb343f6",
     "Flock.RecVStar.checkAcc": "ae336bed0bb822e9686989e5014904d91574dbcd38cbb1e30d2324a16ffd24fb",
+    "Flock.RecVStar.checkAccReads": "f02bda542777c1a48e87f413bba7a6b40db1d58ba3069e5f5f8ab55ba5414861",
     "Flock.RecVStar.checkCandidate3": "cb40b62f272675bc144f21cc539f1b997d7f7478570680e7672d729e49225c6e",
     "Flock.RecVStar.checkCandidate3._sparseCasesOn_1": "f1793be39997bc1359f7e71aadbf6aeff1be8b406d9a3532c3e7dd6848d9e022",
     "Flock.RecVStar.checkCandidate3._sparseCasesOn_6": "b265f62b903f6fed706e890cde48328d8f17ac2f0f30cabcafc5e1bb7c727a28",
@@ -12539,7 +12542,7 @@
     "Flock.RecVStar.checkPubRows": "7773199351841982f8f64f395559a2fd44d2b6c622e42742a299b7cbee968db6",
     "Flock.RecVStar.checkRows": "d7bbf004f2ea230d7ff114671294fb50278b0eac9cddd19a99ba322800865906",
     "Flock.RecVStar.checkStackedShape": "cdc27d3648f54150ff75001e409dbe488f224903f45ac61d7c258064c6e5fb1a",
-    "Flock.RecVStar.checkStmt": "b3d27ec18d56dcc4642a730f00cdb56d8201d8d08dcb739ec26cfdae800fee0d",
+    "Flock.RecVStar.checkStmt": "66b660fcf8893f18290c1b999c1a3692c29ef7c32750ff5bc181404e066269c7",
     "Flock.RecVStar.circuitFile": "0a9d97a7b7f34727383f5347e04c5c701620e3914f34af0f55b1141b614c3d6a",
     "Flock.RecVStar.claimIndex": "5c4c995acbc138e139cd727a39fb9b07b3142a6fd0073063e4bcd93426f0333f",
     "Flock.RecVStar.claimRow": "c512261808fb696ddb271cce8ee5cf32ba88efcb703afbfff1a4768d4c5ef13c",
@@ -12560,6 +12563,7 @@
     "Flock.RecVStar.openingIndex": "5ad21749b8a3cb215050c3c6c0d788ffa14f010d1848bae92d74e6da9cbd4ebe",
     "Flock.RecVStar.openingParts": "69271a76b70a23590f495834ae977234ca8fe99b7c0de3574ddfaafadbca1b60",
     "Flock.RecVStar.openingPortName": "2316902adfd1c0ed7761e02db5e6e82f0407e5b4eaaa569121a46df988c9529f",
+    "Flock.RecVStar.opensBelow": "9baa6453d2437cc2b389173e6622b4db73716f38f7a11cadb9a5c400d358d2ab",
     "Flock.RecVStar.ownPorts": "e4bb8386ab61eb43b2133bbb3b40fcef4aee24b5c1963e80297d116f2886fabb",
     "Flock.RecVStar.population": "2a41ae08f10ede678cf208852812d2048e712c9c726ed84cd5caaf3a38cd6c94",
     "Flock.RecVStar.portDiff?": "fa3e403d42061786f84d4ba22a5a1346021dfb62680eee9a33f024229a1feae0",
@@ -12584,7 +12588,8 @@
     "Flock.RecVStar.tableM": "e20157f21a1d001a2802c42e7c1dd13ced086908f538433c621c0254478f69da",
     "Flock.RecVStar.topEntry": "1d481f2bf7ee5616b53a939f84ba3a0df4da1dbf30746b9f422cdf080bd10b5f",
     "Flock.RecVStar.unlisted": "8cfb01c1366434eec3e33600328b6bf066a1293a9d20acf9c81aca86fefe57e5",
-    "_private.Flock.RecVStar.0.Flock.RecVStar.hexList": "61a2be07c723ed626543b18b6220cd01cdd5153e7047c1b1b25901d43b2488c9"
+    "_private.Flock.RecVStar.0.Flock.RecVStar.hexList": "61a2be07c723ed626543b18b6220cd01cdd5153e7047c1b1b25901d43b2488c9",
+    "_private.Flock.RecVStar.0.Flock.RecVStar.showRead": "ac135a2d30ddc6a79270b3de31087e40b5209cea299b97ac5ae92039a26cef36"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
