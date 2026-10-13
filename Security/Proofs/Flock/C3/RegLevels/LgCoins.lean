@@ -76,6 +76,3 @@ theorem lgCoins_of_held {ish : Flock.RecVStar.Inner} {cs : Flock.RecVStar.InnerC
     getElem!_pos (FlockC3.Opening.rep0 c3 unit) q hq']
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.heldCoins_rep0
-#print axioms FlockC3.RegLevels.lgCoins_of_held
