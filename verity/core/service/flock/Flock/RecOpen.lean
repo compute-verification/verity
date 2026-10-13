@@ -172,15 +172,6 @@ def leafSumsGo : List (List Lin × List Lin) → List HmNets.Acc → M (List HmN
 def leafSumsFast (ps : List (List Lin × List Lin)) (sums : List Lin) : M (List Lin) :=
   (·.map HmNets.Acc.get) <$> leafSumsGo ps (sums.map HmNets.Acc.of)
 
-theorem zipWith_add_get : ∀ (sums : List HmNets.Acc) (zs : List Lin),
-    (List.zipWith HmNets.Acc.add sums zs).map HmNets.Acc.get = xorL (sums.map HmNets.Acc.get) zs
-  | [], _ => rfl
-  | _ :: _, [] => rfl
-  | a :: sums, z :: zs => by
-    simp only [List.zipWith_cons_cons, List.map_cons, xorL] at *
-    rw [HmNets.Acc.add_get]
-    exact congrArg _ (zipWith_add_get sums zs)
-
 theorem leafSumsGo_eq : ∀ (ps : List (List Lin × List Lin)) (sums : List HmNets.Acc),
     (·.map HmNets.Acc.get) <$> leafSumsGo ps sums = leafSums ps (sums.map HmNets.Acc.get)
   | [], _ => by simp [leafSumsGo, leafSums]
@@ -188,7 +179,8 @@ theorem leafSumsGo_eq : ∀ (ps : List (List Lin × List Lin)) (sums : List HmNe
     simp only [leafSumsGo, leafSums, map_bind]
     congr 1
     funext zs
-    rw [leafSumsGo_eq ps, zipWith_add_get]
+    rw [leafSumsGo_eq ps, HmNets.Acc.zipWith_add_get]
+    rfl
 
 @[csimp] theorem leafSums_eq_fast : @leafSums = @leafSumsFast := by
   funext ps sums
