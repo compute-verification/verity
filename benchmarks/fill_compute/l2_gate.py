@@ -9,14 +9,15 @@ sm_120, r20261012-231033-73f3), and each judged launch is allowed its own kernel
 (`floor`, the least of its controls; a persistent filler is one launch a window, so the floor doesn't grow with its tiles).
 
 Which repeats must pass is rule 4 (memory accounting, 13 Oct): every one (`strict`) unless this run shows the excess some
-launches carry is external, and then the least of a kernel's repeats (`min`). The test (`external`): a launch is hit when its
-write sectors exceed its allowance (declared + floor; a control's is its floor) by more than HIT sectors, above the
-launch's own noise (a few sectors) and below the smallest excess seen (271). Controls are interleaved with the judged
-launches, so an excess from outside the kernel comes to both alike. The excess is external when (a) some control is hit,
-(b) a one-sided Fisher exact test of "judged launches are hit more often than controls" gives p >= ALPHA, and (c) the largest
-control excess is at least the largest judged one. Otherwise the strict rule stands: the guard does not fail open.
-The same test against the dry launches (`dry`: a fold kernel's tiles with the log off, as long as a judged launch and
-declaring nothing) is reported beside it (`external_dry`), as evidence; the rule follows the zero-tile controls.
+launches carry is external, and then the least of a kernel's repeats (`min`). The test: a launch is hit when its write
+sectors exceed its allowance (declared + floor; a control's is its floor) by more than HIT sectors, above the launch's own
+noise (a few sectors; the chunked kernels' constant 2) where the intermittent excess comes in multiples of 64. The excess is external when, against controls interleaved
+with the judged launches in the same run, (a) some control is hit, (b) a one-sided Fisher exact test of "judged launches
+are hit more often than controls" gives p >= ALPHA, and (c) the largest control excess is at least the largest judged one.
+The controls that decide are the dry launches (`external_dry`: a fold kernel's tiles with the log off, as long as a judged
+launch and declaring nothing), the duration-matched control (ruling 02:30Z); the zero-tile controls' test (`external`) is
+reported beside it. A run without dry launches, or whose dry launches fail the test, keeps the strict rule: the guard does
+not fail open.
 
   python3 l2_gate.py DECLARED_JSON NCU_CSV OUT_JSON      exit 0 passed, 7 refused, 3 unmeasured (no ncu rows)
 """
@@ -98,7 +99,7 @@ def judge(declared: dict, rows: list[dict]) -> dict:
     test = external(judged, [r for r in out if r.get("control")])
     dry = [r for r in out if r.get("dry")]
     test_dry = external(judged, dry) if dry else None
-    rule = "min" if test["external"] else "strict"
+    rule = "min" if test_dry is not None and test_dry["external"] else "strict"
     kernels = list(dict.fromkeys(r["kernel"] for r in judged))
     strict = {k: all(r["pass"] for r in judged if r["kernel"] == k) for k in kernels}
     least = {k: min((r for r in judged if r["kernel"] == k), key=lambda r: r["write_sectors"])["pass"]
