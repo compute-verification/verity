@@ -144,3 +144,12 @@ def test_openings_round_trip_on_the_wire_and_a_short_body_is_none():
 @pytest.mark.parametrize("name", ["p1024/k3/masked", "p1024/k2/masked", "p512/k2"])
 def test_codec_names_round_trip(name):
     assert wire.codec_named(name).name == name
+
+
+def test_the_predicted_rate_is_the_draws_chance_to_miss_every_dropped_receipt():
+    import summary
+
+    assert summary.miss(100, 0, 10) == 1.0 and summary.miss(10, 1, 10) == 0.0
+    assert summary.miss(20, 2, 2) == pytest.approx(18 / 20 * 17 / 19)
+    U, f, s = 68 << 22, 2.0 ** -14, 2773
+    assert summary.miss(U, round(f * U), s) == pytest.approx((1 - f) ** s, rel=1e-4)
