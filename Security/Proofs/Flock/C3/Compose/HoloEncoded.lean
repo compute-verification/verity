@@ -116,6 +116,39 @@ theorem holoSelOne_rep {ish : RecVStar.Inner} {tbl s : String} {rs : Array Sched
     holoSelOne ish tbl (repStart (heldBefore (.rep 0) rs rs.size) i + heldBefore (.rep i) rs q) s q :=
   ⟨_, _, hS, hf, Nat.min_eq_right hq, (roundAt_reps rs L i q).symm⟩
 
+/-- **The reps' stream names differ**: at any table `t`, rep 0's (`t ++ "rep0"`) is not rep 1's. -/
+theorem repName_ne (t : String) : (HoloStream.rep 0).name t ≠ (HoloStream.rep 1).name t := by
+  intro h
+  have h := congrArg String.toList h
+  simp only [HoloStream.name, String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h <;>
+    first
+    | exact absurd (List.append_cancel_left (List.append_cancel_left h)) (by decide)
+    | exact absurd h (by decide)
+
+/-- **`holoStreams`' order finds rep `i` by its name**: rep 0's and rep 1's streams first, the name rep `i`'s
+(`repName_ne`). -/
+theorem find?_repName (tbl : String) (rs : Array SchedRound) (L : List (HoloStream × Array SchedRound)) (i : Fin 2) :
+    ((HoloStream.rep 0, rs) :: (HoloStream.rep 1, rs) :: L).find? (fun e => e.1.name tbl == (HoloStream.rep i).name tbl) =
+      some (.rep i, rs) := by
+  rcases i with ⟨_ | _ | n, hn⟩
+  · exact List.find?_cons_of_pos (beq_iff_eq.2 rfl)
+  · exact (List.find?_cons_of_neg fun h => repName_ne tbl (beq_iff_eq.1 h)).trans
+      (List.find?_cons_of_pos (beq_iff_eq.2 rfl))
+  · exact absurd hn (by omega)
+
+/-- **Rep `i`'s rounds of coins at the map read, by its stream's name**: `holoSelOne_rep` at `(HoloStream.rep i).name`,
+which `holoStreams`' order finds as rep `i`'s (`find?_repName`). -/
+theorem holoSelOne_repName {ish : RecVStar.Inner} {tbl : String} {rs : Array SchedRound}
+    {L : List (HoloStream × Array SchedRound)} {i : Fin 2} {q : ℕ}
+    (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some ((.rep 0, rs) :: (.rep 1, rs) :: L))
+    (hq : 0 < (rs.getD q default).1) :
+    holoSelOne ish tbl (repStart (heldBefore (.rep 0) rs rs.size) i + heldBefore (.rep i) rs q)
+      ((HoloStream.rep i).name tbl) q :=
+  holoSelOne_rep hS (find?_repName tbl rs L i) hq
+
+#print axioms repName_ne
+#print axioms find?_repName
+#print axioms holoSelOne_repName
 #print axioms holoPts
 #print axioms holoPts_ofFn
 #print axioms pointsEncoded_holoMap
