@@ -281,8 +281,8 @@ theorem row_of_readCol {net : Net} (hU : Built net) (hu : net.unitLog ≤ 32) {c
 
 /-- **The unit `RecOpening.check` accepted for part `p` reads each column of its ring-switch elements**: bit `b` of the
 part's row-port element `q`, slot `e` of the opening's w holding ring switch `i`'s element `t`. -/
-theorem readCol_rs {c : Circuit} (hU : Built c.unit) (h : RecOpening.check c = .ok ()) (hu : c.unit.unitLog ≤ 32)
-    {m cl p : ℕ} (hp : RecOpening.params c.unit.name = some (m, cl, p)) {sh : Shape}
+theorem readCol_rs {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpening.check c = .ok ()) (hu : c.unit.unitLog ≤ 32)
+    {m cl p : ℕ} (hp : RecOpening.params c.unit.name = some (m, cl, p)) {sh : Flock.Shape}
     (hsh : RecOpening.shape? m cl = some sh) {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hS : RecOpening.structureOf sh = .ok S0) (hg : RecResiduals.groups S0 (RecOpening.portSizes sh) = .ok gs)
     (hpg : p < gs.size) {S₁ : RecOpen.GfS} {ns : List ℕ} {nv : ℕ} (hpart : RecOpening.part sh p = .ok (S₁, ns, nv))
@@ -303,8 +303,8 @@ theorem readCol_rs {c : Circuit} (hU : Built c.unit) (h : RecOpening.check c = .
   exact readCol_of_row hU hu hr hr' hc
 
 /-- **The unit `RecResiduals.check` accepted reads a row-port element whole where it reads one of its bits.** -/
-theorem readCol_whole {c : Circuit} (hU : Built c.unit) (hu : c.unit.unitLog ≤ 32) {S : RecOpen.GfS} {ns : List ℕ}
-    {nv : ℕ} {name : String} (hn : HmNets.netOf name (RecResiduals.unitLaid S ns nv) = .ok c.unit)
+theorem readCol_whole {c : Flock.Circuit} (hU : Built c.unit) (hu : c.unit.unitLog ≤ 32) {S : RecOpen.GfS}
+    {ns : List ℕ} {nv : ℕ} {name : String} (hn : HmNets.netOf name (RecResiduals.unitLaid S ns nv) = .ok c.unit)
     (hw : RecResiduals.partlyRead (RecResiduals.readIns c.unit) ns = none) {q b : ℕ} (hq : q < ns.sum)
     (hb : b < 128) (hr : ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * q + b))) {b₀ : ℕ}
     (hb₀ : b₀ < 128) : ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * q + b₀)) := by
