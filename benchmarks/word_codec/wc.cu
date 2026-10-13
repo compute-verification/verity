@@ -893,6 +893,9 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
       uint4 w[TASK_TILES];
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) w[tt] = st[tt * LANES];
+      // `empty` hands the stage to the producer's next bulk copy (the async proxy): only a proxy fence orders the
+      // lanes' shared loads before it, as ptxas may issue the arrive before the loads complete.
+      asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
       __syncwarp();
       if (lane == 0) mbar_arrive(empty + s);
 #pragma unroll
@@ -905,6 +908,7 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
       uint64_t xw[LANE_WORDS];
 #pragma unroll
       for (int w = 0; w < LANE_WORDS; ++w) xw[w] = st[w * LANES];
+      asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");   // before `empty`, as above
       __syncwarp();
       if (lane == 0) mbar_arrive(empty + s);
       if constexpr ((MODE & WS_TAG) != 0) {
