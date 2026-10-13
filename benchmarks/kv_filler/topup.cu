@@ -71,6 +71,29 @@ __global__ void __launch_bounds__(256) tile_read(const uint4* __restrict__ p, ui
   if ((threadIdx.x & 31) == 0 && acc == 0x9e3779b9u) atomicXor(out, acc);  // keeps the loads; almost never stores
 }
 
+// `count` pages of page16 16-byte words out of n_pages, CTA b taking the j-th for j = b, b + gridDim.x, ...: page
+// (first + j) mod n_pages in order (`random` = 0, a weight stream), else a SplitMix64 hash of (seed, j) mod n_pages
+// (paged KV gathers).
+__global__ void __launch_bounds__(256) page_read(const uint4* __restrict__ p, uint64_t n_pages, uint32_t page16,
+                                                 uint64_t count, uint64_t first, int random, uint64_t seed,
+                                                 uint32_t* out) {
+  uint32_t acc = 0;
+  for (uint64_t j = blockIdx.x; j < count; j += gridDim.x) {
+    uint64_t z = seed + (first + j) * 0x9e3779b97f4a7c15ull;
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
+    z ^= z >> 31;
+    const uint4* q = p + (random ? z % n_pages : (first + j) % n_pages) * page16;
+    for (uint32_t i = threadIdx.x; i < page16; i += 256) {
+      uint4 v = __ldcs(q + i);
+      acc ^= v.x ^ v.y ^ v.z ^ v.w;
+    }
+  }
+#pragma unroll
+  for (int d = 16; d; d >>= 1) acc ^= __shfl_xor_sync(0xffffffffu, acc, d);
+  if ((threadIdx.x & 31) == 0 && acc == 0x9e3779b9u) atomicXor(out, acc);
+}
+
 // The ±1 signs: row r's byte 4q + b is bit b of nibble r of the q-th 64-bit SplitMix64 output from the seed's first 8
 // bytes, set meaning -1; stored [q][r] as int8x4 words.
 static void sk_signs(const uint8_t seed[32], uint32_t* out) {
@@ -719,6 +742,13 @@ int tu_read(const void* p, uint64_t bytes, uint64_t tile_bytes, void* stream, ui
   const uint64_t n16 = bytes / 16, tile16 = tile_bytes / 16;
   tu::tile_read<<<(unsigned)((n16 + tile16 - 1) / tile16), 256, 0, (cudaStream_t)stream>>>((const uint4*)p, n16,
                                                                                          (uint32_t)tile16, xr);
+  return (int)cudaGetLastError();
+}
+
+int tu_page_read(const void* p, uint64_t bytes, uint64_t page_bytes, uint64_t count, uint64_t first, int random,
+                 uint64_t seed, int ctas, void* stream, uint32_t* xr) {
+  tu::page_read<<<ctas, 256, 0, (cudaStream_t)stream>>>((const uint4*)p, bytes / page_bytes,
+                                                        (uint32_t)(page_bytes / 16), count, first, random, seed, xr);
   return (int)cudaGetLastError();
 }
 

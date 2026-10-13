@@ -81,6 +81,7 @@ class Topup:
         so.tu_fill_units.argtypes = [v, v, i, q, q, v, v, i, v]
         so.tu_fill_signs.argtypes = [v, v]
         so.rd_read_reps.argtypes = [i, i, v, q, ctypes.c_uint32, i, v, v]
+        so.tu_page_read.argtypes = [v, q, q, q, q, i, q, i, v, v]
 
     def fill_units(self, regions, unit0: int, units: int, seed: bytes, sign_seed: bytes, ctas: int):
         ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
@@ -617,6 +618,98 @@ def writes(tu: Topup, torch, filler, seconds: float, least: int, sleeps, log) ->
     return out
 
 
+READERS = {"weights": (False, 64 << 10), "kv16": (True, 16 * 2048), "kv32": (True, 32 * 2048), "kv64": (True, 64 * 2048)}
+
+
+def reads(tu: Topup, torch, filler, R: float, seconds: float, least: int, ctas_list, reps: int, log) -> dict:
+    """The best total read rate a reader mix reaches beside a read-only filler: IDLE at every SM's CTA (4 warps) beside
+    step-like readers on their own default-priority streams, each kernel after kernel of 1 GiB of 256-thread CTAs
+    (`page_read`): `weights` streams an 8 GiB buffer in order in 64 KiB pages; `kvN` gathers random N-token pages (N · 2
+    KiB contiguous, one layer's K or V of a 16-token block at N = 16) out of another 8 GiB; `weights+kv16` runs both at
+    once. The reader's grid (`ctas`) sets its share of the bus. Each arm `reps` windows of `seconds`; per window the
+    filler's GB/s (its progress over host time) and the readers' (their bytes over their events' time), summed to the
+    total, a fraction of R; the ceiling is the arm with the best mean total, with its windows' min and max."""
+    bufs = {"weights": torch.empty(8 << 30, dtype=torch.uint8, device="cuda"),
+            "kv": torch.empty(8 << 30, dtype=torch.uint8, device="cuda")}
+    for b in bufs.values():
+        b.fill_(1)
+    xr = torch.zeros(1, dtype=torch.int32, device="cuda")
+    launch = 1 << 30
+    sq = Seq(tu)
+
+    def run(names, ctas: int) -> float:
+        """The readers `names` for `seconds`, each on its own stream at `ctas` CTAs: their summed GB/s."""
+        streams = [torch.cuda.Stream() for _ in names]
+        done: list[list] = [[] for _ in names]
+        first = [0] * len(names)
+        ev = [(torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)) for _ in names]
+        n = [0] * len(names)
+        for k, s in enumerate(streams):
+            ev[k][0].record(s)
+        t_end = time.perf_counter() + seconds
+        while time.perf_counter() < t_end:
+            for k, (name, s) in enumerate(zip(names, streams)):
+                random, page = READERS[name]
+                buf = bufs["weights" if name == "weights" else "kv"]
+                count = launch // page
+                rc = tu.so.tu_page_read(buf.data_ptr(), buf.numel(), page, count, first[k], int(random), 7 + k, ctas,
+                                        s.cuda_stream, xr.data_ptr())
+                if rc:
+                    raise RuntimeError(f"tu_page_read error {rc}")
+                first[k] += count
+                n[k] += 1
+                e = torch.cuda.Event()
+                e.record(s)
+                done[k].append(e)
+                if len(done[k]) > 3:  # a short queue, never empty
+                    done[k].pop(0).synchronize()
+        total = 0.0
+        for k, s in enumerate(streams):
+            ev[k][1].record(s)
+            ev[k][1].synchronize()
+            total += n[k] * launch / (ev[k][0].elapsed_time(ev[k][1]) / 1e3) / 1e9
+        return total
+
+    def window(names, ctas: int) -> tuple[float, float]:
+        sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=0, warps=4, priority=least)
+        tu.so.sq_idle(1, 0)
+        time.sleep(0.05)
+        p0, t0 = sq.progress()[0], time.perf_counter()
+        r = run(names, ctas) if names else (time.sleep(seconds) or 0.0)
+        p1, t1 = sq.progress()[0], time.perf_counter()
+        sq.stop()
+        return (p1 - p0) / (t1 - t0) / 1e9, r
+
+    def summary(ws) -> dict:
+        tot = [f + r for f, r in ws]
+        return {"filler_GBps": statistics.mean(f for f, _ in ws), "readers_GBps": statistics.mean(r for _, r in ws),
+                "total_GBps": statistics.mean(tot), "total_min_GBps": min(tot), "total_max_GBps": max(tot),
+                "of_R": statistics.mean(tot) / R, "of_R_min": min(tot) / R, "of_R_max": max(tot) / R,
+                "windows": [list(w) for w in ws]}
+
+    out: dict = {"R_GBps": R, "filler_alone": summary([window((), 0) for _ in range(reps)]), "alone": {}, "arms": {}}
+    log(f"reads: filler alone {out['filler_alone']['total_GBps']:.0f} GB/s ({out['filler_alone']['of_R']:.3f} R)")
+    for name in READERS:
+        rs = [run((name,), 188 * 8) for _ in range(reps)]
+        out["alone"][name] = {"GBps": statistics.mean(rs), "min_GBps": min(rs), "max_GBps": max(rs),
+                              "of_R": statistics.mean(rs) / R}
+        log(f"reads: {name} alone at {188 * 8} CTAs {statistics.mean(rs):.0f} GB/s ({statistics.mean(rs) / R:.3f} R)")
+    for mix in [("weights",), ("kv16",), ("weights", "kv16"), ("kv32",), ("kv64",)]:
+        key = "+".join(mix)
+        out["arms"][key] = {}
+        for ctas in ctas_list:
+            s = summary([window(mix, ctas) for _ in range(reps)])
+            out["arms"][key][str(ctas)] = s
+            log(f"reads: {key} at {ctas} CTAs: filler {s['filler_GBps']:.0f} + readers {s['readers_GBps']:.0f} = "
+                f"{s['total_GBps']:.0f} GB/s, {s['of_R']:.3f} R [{s['of_R_min']:.3f}, {s['of_R_max']:.3f}]")
+        best = max(out["arms"][key], key=lambda c: out["arms"][key][c]["total_GBps"])
+        out["arms"][key]["best"] = best
+        log(f"reads: {key} ceiling {out['arms'][key][best]['of_R']:.3f} R at {best} CTAs")
+    out["filler_alone_after"] = summary([window((), 0) for _ in range(reps)])
+    del bufs
+    return out
+
+
 # --- the synthetic 8B step ---------------------------------------------------------------------------------------------
 
 class Model:
@@ -1057,6 +1150,10 @@ def main() -> int:
     ap.add_argument("--write-sleeps", type=lambda s: [int(v) for v in s.split(",") if v],
                     default=[0, 100_000, 300_000, 1_000_000, 3_000_000, 10_000_000],
                     help="`writes`: the cycles slept after each 8 MiB burst, one arm each")
+    ap.add_argument("--read-ctas", type=lambda s: [int(v) for v in s.split(",") if v],
+                    default=[12, 24, 47, 94, 188, 376, 752],
+                    help="`reads`: the step-like readers' grid, one arm each")
+    ap.add_argument("--read-reps", type=int, default=5)
     ap.add_argument("--skip", type=lambda s: set(s.split(",")), default=set())
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -1098,6 +1195,9 @@ def main() -> int:
     save()
     if "writes" not in a.skip:
         res["writes"] = writes(tu, torch, filler, a.alone_s, least, a.write_sleeps, log)
+        save()
+    if "reads" not in a.skip:
+        res["reads"] = reads(tu, torch, filler, R, a.alone_s, least, a.read_ctas, a.read_reps, log)
         save()
     model = Model(torch)
     if "phases" not in a.skip:
