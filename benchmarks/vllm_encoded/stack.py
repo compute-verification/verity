@@ -138,7 +138,10 @@ class Stack:
 
     def begin_pass(self, m: int) -> None:
         """Pass j at batch m: wt_pass from root_(j−1), then the weight and paged-KV kernels' shared pass state."""
-        if not self.encoded or m not in self.nvec:
+        if m not in self.nvec:
+            return
+        self.passes += 1
+        if not self.encoded:
             return
         s = stream()
         self.wt.call("wt_pass", self.j & 0xFFFFFFFF, self.root.data_ptr(), self.signs.data_ptr(), T, s)
@@ -147,7 +150,7 @@ class Stack:
             if self.attention.epoch is not None:
                 self.attention.epoch.fill_(self.j + 1)
             self.plib.call("kv_rc_pass", self.signs.data_ptr(), self.pass_ptrs[1], s)
-        self.j, self.pass_m, self.passes, self.open, self.ready = self.j + 1, m, self.passes + 1, True, False
+        self.j, self.pass_m, self.open, self.ready = self.j + 1, m, True, False
 
     def step_plan(self, m: int, slots=()):
         """The registered blocks a step's receipts at m credit (`receipts.plan_of` under store-order/v0): a WT_RECEIPT

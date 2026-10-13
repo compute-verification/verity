@@ -2,7 +2,8 @@
 
 ``PLAIN`` installs the stack's plain kernels. ``AUDIT`` installs the encoded
 and receipted stack and is gated against ``PLAIN``. Both run with the same
-fill-sk16 reader over the paged KV pool and report its byte share as an extra.
+fill-sk16 reader over the paged KV pool and report its share of filler plus
+weight-read bytes as an extra.
 
 The GPU libraries are built outside the lease's Python process and named by:
 
