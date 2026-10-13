@@ -5,7 +5,7 @@
 # and bf16 GEMM captures under $SWEEP_DIR, named by $AR_RUN and $BF16_RUN). Reads the Commit's records from $SWEEP_DIR/commit-probe.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 stamp profile | tee "$O/profile.log"
-"$PY" - "$CMAP" "$SWEEP_DIR/commit-probe" "$SWEEP_DIR/ar-capture" "$SWEEP_DIR/bf16-gemm-capture" "$O" "${COMMIT_RUN:-}" "${AR_RUN:-}" \
+ROW=$ROW "$PY" - "$CMAP" "$SWEEP_DIR/commit-probe" "$SWEEP_DIR/ar-capture" "$SWEEP_DIR/bf16-gemm-capture" "$O" "${COMMIT_RUN:-}" "${AR_RUN:-}" \
   "${BF16_RUN:-}" <<'EOF' 2>&1 | tee -a "$O/profile.log"
 import json, os, sys
 from collections import defaultdict
