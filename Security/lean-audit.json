@@ -854,6 +854,12 @@
    "assumptions": [],
    "type_hash": "815d06f69502065e94d00c5777538da1002429c92e4f4a936dc35cf46755df66"
   },
+  "Accounting.SecurityProofs.RateAuditTensorSketchRank": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateAuditTensorSketchRank : Accounting.Guarantees.RateAuditTensorSketchRank"],
+   "assumptions": [],
+   "type_hash": "050fafe71166380170011271e9b1dfe43c3ed59c5709179994caa08d188e4b86"
+  },
   "Accounting.SecurityProofs.RateAuditWindows": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RateAuditWindows : Accounting.Guarantees.RateAuditWindows"],
@@ -1052,6 +1058,18 @@
    "assumptions": [],
    "type_hash": "4ec1755f734a0d74b944bba77f1618fb545e84a650aed6fc930c599cb6a229ff"
   },
+  "Accounting.SecurityProofs.RateSketchTable": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateSketchTable : Accounting.Guarantees.RateSketchTable"],
+   "assumptions": [],
+   "type_hash": "ef5e21f1fb7f8e6ea92d3dee6b3a7bfefa0962a7f8ed1b0fd1470723e25c49fc"
+  },
+  "Accounting.SecurityProofs.RateTensorSketchTable": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RateTensorSketchTable : Accounting.Guarantees.RateTensorSketchTable"],
+   "assumptions": [],
+   "type_hash": "cdc083c895e46c38c26169f93c80eb0246f5bfa14a40f70e66ea77a29999476c"
+  },
   "Accounting.SecurityProofs.RateWindowDraw": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RateWindowDraw : Accounting.Guarantees.RateWindowDraw"],
@@ -1167,6 +1185,12 @@
    "signature": ["Accounting.SecurityProofs.SketchBinds : Accounting.Guarantees.SketchBinds"],
    "assumptions": [],
    "type_hash": "861d27e425b04e0a5fd7568ce8a5ced525c4d3b5f1688ff064c8adb6b8bffa4c"
+  },
+  "Accounting.SecurityProofs.SketchRankFiber": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.SketchRankFiber : Accounting.Guarantees.SketchRankFiber"],
+   "assumptions": [],
+   "type_hash": "285621bb6e07e492d607d97ac1183c00f683ca8459de8b4d593e019714144cd1"
   },
   "Accounting.SecurityProofs.Tag.DigestNonCollision": {
    "owner": "@memory-accounting",
@@ -4996,7 +5020,11 @@
    "Accounting.SecurityProofs.RemoteWindowRunConservation": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at each window's run (Accounting.Remote.Run.ofDeployedWindow), with Sampled at the window's draw (DeployedSession.pr_draws_window_le) and Paid at the window's P G terms, read at the node at gamma_w, RemoteSessionConservation's per-window reading: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationRelay": "frozen (no-function,hash): Accounting.Guarantees.RemoteSessionConservation without the hypothesis that the side sources ignore the oracle: each pass device simulated with its completions read from device memory (PIDevice.toInteractiveMem) on its own link, RatePaid at each pass with m relayed words, a union over the G candidates, and the session's pooled draws: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at the deployed session's run (Accounting.Remote.Run.ofDeployed) with side sources that may relay receipts, Sampled at the horizon's draw and Paid at RatePaid's terms with the run's slack lam + m b, read at the node: abstract chip programs in the random-oracle model, not the rate audit's code.",
-   "Accounting.SecurityProofs.RemoteWindowRunConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at each window's run (Accounting.Remote.Run.ofDeployedWindow) with side sources that may relay receipts, Sampled at the window's draw and Paid at RatePaid's P G terms with the run's slack lam + m b, read at the node at gamma_w: abstract chip programs in the random-oracle model, not the rate audit's code."
+   "Accounting.SecurityProofs.RemoteWindowRunConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at each window's run (Accounting.Remote.Run.ofDeployedWindow) with side sources that may relay receipts, Sampled at the window's draw and Paid at RatePaid's P G terms with the run's slack lam + m b, read at the node at gamma_w: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RateAuditTensorSketchRank": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAuditTensorSketch, it bounds acceptance of an abstract chip program in the random-oracle model at the tensor-core sketch's digest, here with the guess priced by the signs' rank over Q (Accounting.SecurityProofs.SketchRankFiber), not the rate audit's code; Pr_sigma[exists u, rank < r] is a number of the signs' law evaluated outside Lean.",
+   "Accounting.SecurityProofs.RateSketchTable": "completeness: like Accounting.SecurityProofs.RateSketchHonest, a device (a LayoutDevice of Security/Definitions/Accounting/RateAuditSketchLayout.lean, whose memory holds any function of the store) accepted at every signs, oracle and data, here one that reads N * d bits from a table of card Sig * N * d bits for any digest of at most 2^d values, below Accounting.SecurityProofs.RateAuditSketch's floor: a counterexample outside the verbatim class (rate-sketch-verbatim), not a property of a function",
+   "Accounting.SecurityProofs.RateTensorSketchTable": "completeness: Accounting.SecurityProofs.RateSketchTable at the tensor-core sketch (Accounting.RateSketch.sketch, 32-byte sectors, k_s INT32 words), reading N * 32 * k_s bits at any number of rows k_s: a counterexample outside the verbatim class, not a property of a function",
+   "Accounting.SecurityProofs.SketchRankFiber": "frozen (premise): Like Accounting.SecurityProofs.SketchBinds, it is a property of Accounting.RateSketch.sketch under a hypothesis on the window's signs (every sector's block has rank at least r over Q), which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketchRank prices the hypothesis as Pr_sigma[exists u, rank < r]."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -5974,8 +6002,12 @@
     "Accounting.SecurityProofs.RateAuditSketch",
     "Accounting.SecurityProofs.RateAuditSketchInteractiveRO",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
+    "Accounting.SecurityProofs.RateAuditTensorSketchRank",
     "Accounting.SecurityProofs.RateSketchHonest",
-    "Accounting.SecurityProofs.SketchBinds"
+    "Accounting.SecurityProofs.RateSketchTable",
+    "Accounting.SecurityProofs.RateTensorSketchTable",
+    "Accounting.SecurityProofs.SketchBinds",
+    "Accounting.SecurityProofs.SketchRankFiber"
    ]
   },
   "Definitions.Accounting.RateAuditSketchInteractive": {
@@ -6009,6 +6041,34 @@
     "Accounting.RateSketch.InteractiveDevice.tags": "a6c4e02c8cdefb2ece164df5472e52d40af9a68040986d3b5522103908f71fe0"
    },
    "guarantees": ["Accounting.SecurityProofs.RateAuditSketchInteractiveRO"]
+  },
+  "Definitions.Accounting.RateAuditSketchLayout": {
+   "digest": "dab2fb04fbc5f149767e623d7e2935390bce57840b472d26179e81c213957e22",
+   "definitions": {
+    "Accounting.RateSketch.Data.store": "47079120cfb95a709f3fb2e01a2526d17eb6bb9db787c59ac7c758619ef44558",
+    "Accounting.RateSketch.LayoutChip": "3dee8b7d2fcc3623c3dc15140847bbcf04bd776e45b5f4f0747e9d5448e1c70a",
+    "Accounting.RateSketch.LayoutChip.below": "fae1a19e67685622118cdbd41389122f2f877b4d07fc854f7817cc80f496a0a1",
+    "Accounting.RateSketch.LayoutChip.brecOn": "212b150de0a2c8025375b2a08374e73caceb0a75154defe837575c2f9351036d",
+    "Accounting.RateSketch.LayoutChip.brecOn.go": "c86e2d2c5eadaf035025ade7fe471fbae3abb74f36d26f8b45ea9c0d985d42ce",
+    "Accounting.RateSketch.LayoutChip.casesOn": "f25a55c3d8353e6204c562968186a0584136d02957a0ffd805837996a5eb8a17",
+    "Accounting.RateSketch.LayoutChip.done": "259e457282287ccc86efbb4063ac11639d42924d1093a807c11447fa93fba6d0",
+    "Accounting.RateSketch.LayoutChip.link": "d9003bcd31d9da50d8dc016d0299914884b1103ada9f38f976d800c367fb1401",
+    "Accounting.RateSketch.LayoutChip.linkSteps": "4dc486b0f9179c3e143e1ca3198bb8a14a8cf8b1ea5c31a8305aee59dc3f5109",
+    "Accounting.RateSketch.LayoutChip.queries": "b28b137b3fc38f88f394f2aa7a441bf5b4be71ba9c9ccb66410119a13b9ce832",
+    "Accounting.RateSketch.LayoutChip.read": "4ce71fc5d0971283fe0d3e971b826f32c64162f64b835db61807b74ef9ba02ba",
+    "Accounting.RateSketch.LayoutChip.reads": "07fddfef3734c8e5da5b538052a818101930ac0f7a67b92be0819596fcb209df",
+    "Accounting.RateSketch.LayoutChip.rec": "c29c422976f60582355913e7762ab3d8662e9704afc8ac529a12edff8d1793ae",
+    "Accounting.RateSketch.LayoutChip.run": "fb8c7c81cf97062def5fbd485a8bb219b453d89ca3c039138e63d17da0d7ca13",
+    "Accounting.RateSketch.LayoutChip.tag": "90d94e40e259d3e52c0d4f4b40cb0d171568c3dfe9c6a29dcab238bc3b6cb5da",
+    "Accounting.RateSketch.LayoutDevice": "2ca0e414f514071b99229d294ddce9d1ac70c442c1b9867a0b426daaec205701",
+    "Accounting.RateSketch.LayoutDevice.chip": "ecf2a6fc050b2eb7c53b74050249a22f6fa0fc26334610875d398763f9ffa18b",
+    "Accounting.RateSketch.LayoutDevice.linkSteps": "cb0f2e41f874997b494910c3c384a0de92b34c742a8911f38565a987a87608b5",
+    "Accounting.RateSketch.LayoutDevice.mem": "a1becb3d8b14a49a718edf992089b8b8b67b3eda253ab338baf007c57f506a4a",
+    "Accounting.RateSketch.LayoutDevice.queries": "47de99a15f30d0b3f3e2381672e30b16352e00d1017d89246d24076ec916b348",
+    "Accounting.RateSketch.LayoutDevice.reads": "2d7fb48d2175a0628b7ce2525e0d6e74cd6a55734c5efdef12582453da64335b",
+    "Accounting.RateSketch.LayoutDevice.tags": "a450c6cbdf5d15d5e2d3a26e3462653126cdfc18452bf2fb770775b84b2e24a5"
+   },
+   "guarantees": ["Accounting.SecurityProofs.RateSketchTable", "Accounting.SecurityProofs.RateTensorSketchTable"]
   },
   "Definitions.Accounting.Remote.Deployed": {
    "digest": "0198bf0d38ebe58014fae8cf3a8213402ce1b02ae9b0411b86c2dd497a4ee69e",
@@ -6152,13 +6212,16 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.RateAuditTensorSketch",
+    "Accounting.SecurityProofs.RateAuditTensorSketchRank",
+    "Accounting.SecurityProofs.RateTensorSketchTable",
     "Accounting.SecurityProofs.Sketch.CommitThenProject",
     "Accounting.SecurityProofs.Sketch.Exact",
     "Accounting.SecurityProofs.Sketch.LittlewoodOfford",
     "Accounting.SecurityProofs.Sketch.NonCollision",
     "Accounting.SecurityProofs.Sketch.SmallCode",
     "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
-    "Accounting.SecurityProofs.SketchBinds"
+    "Accounting.SecurityProofs.SketchBinds",
+    "Accounting.SecurityProofs.SketchRankFiber"
    ]
   },
   "Definitions.Accounting.Window": {
@@ -6721,6 +6784,7 @@
     "Accounting.SecurityProofs.RateAuditSketch",
     "Accounting.SecurityProofs.RateAuditSketchInteractiveRO",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
+    "Accounting.SecurityProofs.RateAuditTensorSketchRank",
     "Accounting.SecurityProofs.RateAuditWindows",
     "Accounting.SecurityProofs.RateChain",
     "Accounting.SecurityProofs.RateChainPaid",
@@ -6754,6 +6818,8 @@
     "Accounting.SecurityProofs.RateSessionDraw",
     "Accounting.SecurityProofs.RateSessionSampledNamedRO",
     "Accounting.SecurityProofs.RateSketchHonest",
+    "Accounting.SecurityProofs.RateSketchTable",
+    "Accounting.SecurityProofs.RateTensorSketchTable",
     "Accounting.SecurityProofs.RateWindowDraw",
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
@@ -15289,20 +15355,28 @@
    ]
   },
   "Models.Accounting.Guarantees.RateAuditSketch": {
-   "digest": "2489434432ba7f212c9b70ec5897f545523573fc581b8c6fb91a4c067494b530",
+   "digest": "41b064436870f09a9a50112efe172235f80924ca30a5ce8d72c5c07897d1f717",
    "definitions": {
     "Accounting.Guarantees.RateAuditSketch": "0558d5b89d41b024f4fd09e34eaeb64cfff91dc6578467922ef2bed9154a4f42",
     "Accounting.Guarantees.RateAuditSketchInteractiveRO": "171106fb2712080ca11506653d92f55a067bf4b27c44b84663b29959c431346e",
     "Accounting.Guarantees.RateAuditTensorSketch": "0d3d28ef53d84d82f9c0fdbf1ee76108ebc2204f36b832eda293478b453ecf85",
+    "Accounting.Guarantees.RateAuditTensorSketchRank": "fdcc30f920ad25d54da0afa2243563e8b0330a006846e4e34f130d413d9c0d1b",
     "Accounting.Guarantees.RateSketchHonest": "a580aef94c532d16ac6027909c08685f85b0e40894ca3882e18905a1f8f9baa0",
-    "Accounting.Guarantees.SketchBinds": "9a978b67560738d197a102968fd86baf8a3db5e203e0e3a4d88067d3fa3f681a"
+    "Accounting.Guarantees.RateSketchTable": "ad94ab3b4978f81c02a225a618afbb16645613e630f496f9e11295cbde01c096",
+    "Accounting.Guarantees.RateTensorSketchTable": "fa3b784ec840c5aeec068caa1bcab7f39b74f47ef4e4a4ff1844fae566b9dc19",
+    "Accounting.Guarantees.SketchBinds": "9a978b67560738d197a102968fd86baf8a3db5e203e0e3a4d88067d3fa3f681a",
+    "Accounting.Guarantees.SketchRankFiber": "c895af3fb0837a709e22870a84ff8bbb64dbe72b82c96f80ff166e9e7c6265b7"
    },
    "guarantees": [
     "Accounting.SecurityProofs.RateAuditSketch",
     "Accounting.SecurityProofs.RateAuditSketchInteractiveRO",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
+    "Accounting.SecurityProofs.RateAuditTensorSketchRank",
     "Accounting.SecurityProofs.RateSketchHonest",
-    "Accounting.SecurityProofs.SketchBinds"
+    "Accounting.SecurityProofs.RateSketchTable",
+    "Accounting.SecurityProofs.RateTensorSketchTable",
+    "Accounting.SecurityProofs.SketchBinds",
+    "Accounting.SecurityProofs.SketchRankFiber"
    ]
   },
   "Models.Accounting.Guarantees.Responder": {

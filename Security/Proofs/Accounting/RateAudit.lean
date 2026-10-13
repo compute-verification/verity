@@ -16,6 +16,8 @@ import Proofs.Accounting.RateAudit.Session
 import Proofs.Accounting.RateAudit.Sketch
 import Proofs.Accounting.RateAudit.SketchHonest
 import Proofs.Accounting.RateAudit.SketchInteractive
+import Proofs.Accounting.RateAudit.SketchRank
+import Proofs.Accounting.RateAudit.SketchTable
 import Proofs.Accounting.RateAudit.Windows
 
 /-! The rate audit's proofs: the guarantee in the random-oracle model (`Accounting.SecurityProofs.RateAudit`), its
@@ -29,20 +31,22 @@ joint run `RateOfAuditPartial` and its passes form `RateOfAuditPartialPasses`), 
 a device that reads sectors verbatim (`Accounting.SecurityProofs.RateAuditSketch`, its completeness
 `Accounting.SecurityProofs.RateSketchHonest`, with interactive side sources that ignore the oracle
 `Accounting.SecurityProofs.RateAuditSketchInteractiveRO`,
-`Accounting.SecurityProofs.SketchBinds`, `Accounting.SecurityProofs.RateAuditTensorSketch`), and the remote protocol's
-conservation over tiers (`Accounting.SecurityProofs.RateConservationRO`, `RateConservation`, their capacity forms
-`RateConservationCapRO` and `RateConservationCap`, and `RateDisplacement`), chained passes
-(`Accounting.SecurityProofs.RateChainPassRO`, `RateChainPass`, `RateChainRO`, `RateChain`), and conservation at every
-count, for a pass and for a window (`Accounting.SecurityProofs.RatePaidRO`, `RatePaid`, `RateChainPaidRO`,
-`RateChainPaid`), and for a window whose roots are ground against the Fiat–Shamir seed
-(`Accounting.SecurityProofs.RateGrindPaidRO`, `RateGrindPaid`), and the causal horizon bound on the samples
-(`Accounting.SecurityProofs.HorizonSampling`, `RateHorizon`) with the route `Sampled` it gives a window
-(`Accounting.SecurityProofs.RateChainSampledRO`, `RateChainSampled`), and conservation with the compression naming
-words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`), with its route `Sampled`
-(`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled draw of a window and of a session of windows,
-over the horizon and in every window (`Accounting.SecurityProofs.RateWindowDraw`, `RateSessionDraw`), with its route
-`Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`), and the remote bandwidth audit as deployed, one
-guarantee over a session of ground, chained windows of devices with partial completion
+`Accounting.SecurityProofs.SketchBinds`, `Accounting.SecurityProofs.RateAuditTensorSketch`, priced by the signs' rank
+`Accounting.SecurityProofs.SketchRankFiber`, `Accounting.SecurityProofs.RateAuditTensorSketchRank`), and outside that class
+the table that reads only the digest (`Accounting.SecurityProofs.RateSketchTable`,
+`Accounting.SecurityProofs.RateTensorSketchTable`), and the remote protocol's conservation over tiers
+(`Accounting.SecurityProofs.RateConservationRO`, `RateConservation`, their capacity forms `RateConservationCapRO` and
+`RateConservationCap`, and `RateDisplacement`), chained passes (`Accounting.SecurityProofs.RateChainPassRO`,
+`RateChainPass`, `RateChainRO`, `RateChain`), and conservation at every count, for a pass and for a window
+(`Accounting.SecurityProofs.RatePaidRO`, `RatePaid`, `RateChainPaidRO`, `RateChainPaid`), and for a window whose roots
+are ground against the Fiat–Shamir seed (`Accounting.SecurityProofs.RateGrindPaidRO`, `RateGrindPaid`), and the causal
+horizon bound on the samples (`Accounting.SecurityProofs.HorizonSampling`, `RateHorizon`) with the route `Sampled` it
+gives a window (`Accounting.SecurityProofs.RateChainSampledRO`, `RateChainSampled`), and conservation with the
+compression naming words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`), with
+its route `Sampled` (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled draw of a window and of a
+session of windows, over the horizon and in every window (`Accounting.SecurityProofs.RateWindowDraw`,
+`RateSessionDraw`), with its route `Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`), and the remote
+bandwidth audit as deployed, one guarantee over a session of ground, chained windows of devices with partial completion
 (`Accounting.SecurityProofs.RemoteSessionConservation`, at the deployed parameters
 `RemoteSessionConservationDeployed`), and the same session as a run of the remote audit, meeting its routes
 (`Accounting.SecurityProofs.RemoteSessionRoutes`) and conserving over the horizon and in each window at the same `γ`
