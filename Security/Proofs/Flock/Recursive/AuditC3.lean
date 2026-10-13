@@ -282,8 +282,9 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     -- check 5's source at the inner session's record (`--rec-inner-coins` with it, or the inner session's files), the
     -- verifier's own
     (coins : String → Option Flock.RecCoins.Source)
-    -- R's cap, the record's `stacked` entry
-    (cap : Cap Refine.Dig) (_hstk : StackedTop (holoAt st hp).rsch.sch.level₀ st reg cap)
+    -- R's cap and the explicit commit strings of the record's `stacked` entry
+    (cap : Cap Refine.Dig) (bcs' : Array ByteArray)
+    (_hstk : StackedTopAt (holoAt st hp).rsch.sch.level₀ st reg cap bcs')
     -- the verifier of record's inner shape (`--rec-inner`), and V*'s statements over its list, as the prover supplies
     -- their sessions
     (ish : RecVStar.Inner) {Vs : Fin (vstarCount ish) → VStmt}

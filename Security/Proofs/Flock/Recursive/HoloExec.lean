@@ -127,14 +127,15 @@ def TopOf (lv : Level) (cap : Cap Refine.Dig) (bcs : Array ByteArray) : Prop :=
     bcs[i] = Flock.Hm96.Default512.commitString (Flock.Firewall.rowDigest ((Flock.Firewall.topRows (cap i).1).headD #[]))
       (salt i)
 
-/-- **`cap` is R's registered top**: the registration record `reg` (`--rec-inner-registration`, the verifier's own
-input) is the one the inner statement's META binds by its digest (`metaRegistration st`), it names `stacked` under its
-`program`, and that entry is, canonically, what `topEntry` makes from `cap`'s commit strings (`TopOf`), as
-`RecVStar.candidate3` compares them. -/
-def StackedTop (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) : Prop :=
-  ∃ (prog : String) (e e' : Lean.Json) (bcs : Array ByteArray) (s : String),
+/-- **`cap` is R's registered top at explicit commit strings `bcs`**: the registration record `reg`
+(`--rec-inner-registration`, the verifier's own input) is the one the inner statement's META binds by its digest, it
+names `stacked` under its `program`, and the entry's five structural fields are exactly those computed from `bcs`.
+`TopOf` ties the same explicit strings to `cap`; no choice is hidden in this relation. -/
+def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig)
+    (bcs : Array ByteArray) : Prop :=
+  ∃ (prog : String) (e : Lean.Json),
     Flock.RecVStar.registration (some reg) (metaRegistration st) = .ok (some (prog, some e)) ∧
-      Flock.RecVStar.topEntry prog bcs = .ok e' ∧ Flock.canon e' = .ok s ∧ Flock.canon e = .ok s ∧ TopOf lv cap bcs
+      Flock.RecVStar.topEntryFields prog bcs e = .ok true ∧ TopOf lv cap bcs
 
 /-- **The verifier's hold of the inner transcript**: `RecVStar.innerCommits` as `FlockVerify.recTranscriptInput` calls
 it, at the coin server's record of V*'s inner session `tr` (`--rec-inner-transcript`), the inner session's record

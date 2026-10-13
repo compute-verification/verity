@@ -23,10 +23,10 @@ theorem stackedTop_of_innerCommits {tr : Lean.Json} {record : String} {st : Floc
     {cs : Flock.RecVStar.InnerCommits} {s : Flock.RecVStar.InnerStream} {bcs : Array ByteArray} {lv : Level}
     {cap : Cap Refine.Dig} (h : innerCommitsAt tr record st reg = .ok cs)
     (hs : cs.stream? "stacked/rep0" = some s) (htop : s.tops[0]? = some bcs) (hcap : TopOf lv cap bcs) :
-    StackedTop lv st reg cap := by
+    StackedTopAt lv st reg cap bcs := by
   unfold innerCommitsAt at h
   obtain ⟨_, -, h⟩ := TopHold.eok_bind h
-  obtain ⟨prog, e, hreg, e', str, h1, h2, h3⟩ := TopHold.innerCommits_top h hs htop
-  exact ⟨prog, e, e', bcs, str, hreg, h1, h2, h3, hcap⟩
+  obtain ⟨prog, e, hreg, hfields, -⟩ := TopHold.innerCommits_top h hs htop
+  exact ⟨prog, e, hreg, hfields, hcap⟩
 
 end FlockC3.RegLevels
