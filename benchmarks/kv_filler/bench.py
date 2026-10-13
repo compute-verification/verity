@@ -555,6 +555,68 @@ def alone(tu: Topup, torch, filler, seconds: float, chunk: int, depth: int, leas
     return out
 
 
+def writes(tu: Topup, torch, filler, seconds: float, least: int, sleeps, log) -> dict:
+    """What a write stream costs a read-only filler at its ceiling: IDLE at every SM's CTA (4 warps) alone, then beside
+    writes paced on their own stream (a burst of 8 MiB, then `torch.cuda._sleep(cycles)`), bulk (one contiguous slice)
+    or scattered (4,096 rows of 2 KiB at random offsets, a token's K and V of one layer apiece), into 2 GiB, past L2,
+    so every byte written goes to DRAM. Each arm: the writes' GB/s alone and beside the filler, and the filler's;
+    `lost` = the filler's GB/s alone minus beside, `turnaround` = lost minus the writes' GB/s (bus time beyond the
+    bytes)."""
+    buf = torch.empty(2 << 30, dtype=torch.uint8, device="cuda")
+    rows = buf.view(-1, 2048)
+    g = torch.Generator(device="cuda").manual_seed(5)
+    burst = 8 << 20
+    s = torch.cuda.Stream()
+    sq = Seq(tu)
+
+    def write_for(pattern: str, cycles: int) -> float:
+        """Paced writes for `seconds` on `s`: their GB/s over the stream's time."""
+        n, off = 0, 0
+        with torch.cuda.stream(s):
+            e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            e0.record()
+            t_end = time.perf_counter() + seconds
+            while time.perf_counter() < t_end:
+                if pattern == "bulk":
+                    buf[off:off + burst].fill_(n & 0xFF)
+                    off = (off + burst) % buf.numel()
+                else:
+                    rows.index_fill_(0, torch.randint(0, rows.shape[0], (burst // 2048,), device="cuda", generator=g),
+                                     n & 0xFF)
+                if cycles:
+                    torch.cuda._sleep(cycles)
+                n += 1
+                if n % 64 == 0:
+                    s.synchronize()  # keeps the host's queue, and so the window, short
+            e1.record()
+        s.synchronize()
+        return n * burst / (e0.elapsed_time(e1) / 1e3) / 1e9
+
+    def filler_beside(fn) -> tuple[float, float]:
+        sq.start([(filler.data_ptr(), filler.numel())], RUN_SEED, base_ctas=0, warps=4, priority=least)
+        tu.so.sq_idle(1, 0)
+        time.sleep(0.05)
+        p0, t0 = sq.progress()[0], time.perf_counter()
+        w = fn()
+        p1, t1 = sq.progress()[0], time.perf_counter()
+        sq.stop()
+        return (p1 - p0) / (t1 - t0) / 1e9, w
+
+    out = {"filler_alone_GBps": filler_beside(lambda: time.sleep(seconds) or 0.0)[0], "arms": []}
+    for pattern in ("bulk", "scatter2k"):
+        for cycles in sleeps:
+            alone_w = write_for(pattern, cycles)
+            f, w = filler_beside(lambda: write_for(pattern, cycles))
+            lost = out["filler_alone_GBps"] - f
+            out["arms"].append({"pattern": pattern, "sleep_cycles": cycles, "writes_alone_GBps": alone_w,
+                                "writes_beside_GBps": w, "filler_GBps": f, "lost_GBps": lost, "turnaround_GBps": lost - w})
+            log(f"writes {pattern} sleep {cycles}: writes {alone_w:.1f} alone, {w:.1f} beside; filler {f:.0f} GB/s "
+                f"(alone {out['filler_alone_GBps']:.0f}): lost {lost:.1f}, beyond the bytes {lost - w:.1f}")
+    out["filler_alone_after_GBps"] = filler_beside(lambda: time.sleep(seconds) or 0.0)[0]
+    del buf
+    return out
+
+
 # --- the synthetic 8B step ---------------------------------------------------------------------------------------------
 
 class Model:
@@ -992,6 +1054,9 @@ def main() -> int:
     ap.add_argument("--pc-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[8, 16, 32, 64])
     ap.add_argument("--pc-readers", type=lambda s: s.split(","), default=["v2", "v2b2", "v2b3", "v2b4", "bulk2", "bulk4"])
     ap.add_argument("--pc-steps", type=int, default=6)
+    ap.add_argument("--write-sleeps", type=lambda s: [int(v) for v in s.split(",") if v],
+                    default=[0, 100_000, 300_000, 1_000_000, 3_000_000, 10_000_000],
+                    help="`writes`: the cycles slept after each 8 MiB burst, one arm each")
     ap.add_argument("--skip", type=lambda s: set(s.split(",")), default=set())
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -1031,6 +1096,9 @@ def main() -> int:
         (a.out / "bench.json").write_text(json.dumps(res, indent=1) + "\n")
 
     save()
+    if "writes" not in a.skip:
+        res["writes"] = writes(tu, torch, filler, a.alone_s, least, a.write_sleeps, log)
+        save()
     model = Model(torch)
     if "phases" not in a.skip:
         res["phases"] = phases(tu, torch, model, filler, R, a, least, greatest, log)
