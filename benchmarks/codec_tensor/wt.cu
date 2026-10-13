@@ -79,8 +79,8 @@ constexpr int MAXK = 3;
 constexpr int TASK_BYTES = 8192;
 constexpr int SB = TW * S;                              // a task's stored bytes
 // WT_MASK=1: `wide.py`'s masked word, σ_K (kMask) between consecutive rounds. WT_FOLD6=1: sqr is ra-squaring-ceiling's
-// FOLD 6 (`benchmarks/word_codec/kv.cu`'s KV_FOLD6), which holds the double-width square and spills in the p1024 fused
-// kernels; 2: its half squares folded as they are made (sqr_fold6_lean), which fits the 12-warp ones.
+// FOLD 6 (`benchmarks/word_codec/kv.cu`'s KV_FOLD6), its half squares ordered to fit the p1024 12-warp fused kernels;
+// 2: its half squares folded as they are made (sqr_fold6_lean).
 #ifndef WT_MASK
 #define WT_MASK 0
 #endif
@@ -298,48 +298,61 @@ __device__ __forceinline__ void sqr_dbl_n(const u32 (&a)[N], u32 (&y)[2 * N]) {
 }
 
 // FOLD 6's square: one Karatsuba level, a = a1 B + a0, a^2 = C B^2 + (A + C - D) B + A with A = a0^2, C = a1^2,
-// D = |a0 - a1|^2, each a FOLD 5 square.
+// D = |a0 - a1|^2, each a FOLD 5 square. A and D come first and go into E = A_hi + (A - D) (2H limbs and a signed
+// top word es) before C starts: a1 is remade from a0 and d (a0 - d, or a0 + d when a0 < a1) with a dependence on es
+// ((es + 1) >> 2 = 0), so neither a1 nor A and D are held across C. Two half squares' columns are in flight at once
+// and no third's inputs wait beside them, which the 12-warp fused decoders' 168 registers hold beside the tweak
+// (A, C, then D spilled 16-32 bytes there). a^2 = A_lo + B (E + es B^2) + B C + B^2 C.
 __device__ __forceinline__ void sqr_fold6(const u32 (&a)[NL], u32 (&t)[2 * NL]) {
   constexpr int H = NL / 2;
-  u32 x0[H], x1[H], d[H], e[H];
+  u32 x0[H], d[H], e[H];
 #pragma unroll
-  for (int k = 0; k < H; ++k) {
-    x0[k] = a[k];
-    x1[k] = a[H + k];
-  }
-  d[0] = sub_cc(x0[0], x1[0]);
+  for (int k = 0; k < H; ++k) x0[k] = a[k];
+  d[0] = sub_cc(a[0], a[H]);
 #pragma unroll
-  for (int k = 1; k < H; ++k) d[k] = subc_cc(x0[k], x1[k]);
-  const u32 mask = subc(0u, 0u);
-  e[0] = sub_cc(x1[0], x0[0]);
+  for (int k = 1; k < H; ++k) d[k] = subc_cc(a[k], a[H + k]);
+  const u32 mask = subc(0u, 0u);   // a0 < a1
+  e[0] = sub_cc(a[H], a[0]);
 #pragma unroll
-  for (int k = 1; k < H; ++k) e[k] = subc_cc(x1[k], x0[k]);
+  for (int k = 1; k < H; ++k) e[k] = subc_cc(a[H + k], a[k]);
 #pragma unroll
   for (int k = 0; k < H; ++k) d[k] = (d[k] & ~mask) | (e[k] & mask);
-  u32 A[2 * H], C[2 * H], D[2 * H], M[2 * H];
+  u32 A[2 * H], D[2 * H], F[2 * H], E[2 * H];
   sqr_dbl_n<H>(x0, A);
-  sqr_dbl_n<H>(x1, C);
   sqr_dbl_n<H>(d, D);
-  M[0] = add_cc(A[0], C[0]);
+  F[0] = sub_cc(A[0], D[0]);
 #pragma unroll
-  for (int k = 1; k < 2 * H; ++k) M[k] = addc_cc(A[k], C[k]);
-  u32 m = addc(0u, 0u);
-  M[0] = sub_cc(M[0], D[0]);
+  for (int k = 1; k < 2 * H; ++k) F[k] = subc_cc(A[k], D[k]);
+  const u32 f = subc(0u, 0u);   // A - D's sign word
+  E[0] = add_cc(A[H], F[0]);
 #pragma unroll
-  for (int k = 1; k < 2 * H; ++k) M[k] = subc_cc(M[k], D[k]);
-  m = subc(m, 0u);
+  for (int k = 1; k < H; ++k) E[k] = addc_cc(A[H + k], F[k]);
 #pragma unroll
-  for (int k = 0; k < 2 * H; ++k) {
-    t[k] = A[k];
-    t[2 * H + k] = C[k];
-  }
-  t[H] = add_cc(t[H], M[0]);
+  for (int k = H; k < 2 * H; ++k) E[k] = addc_cc(F[k], 0u);
+  const u32 es = addc(f, 0u);   // -1, 0 or 1
+  // a1 = a0 + (d ^ nm) + (nm & 1): nm all ones (a0 - d) or 0 (a0 + d); nm + nm carries nm & 1 in.
+  const u32 nm = ~mask | ((es + 1u) >> 2);
+  u32 x1[H];
+  x1[0] = add_cc(nm, nm);
+  x1[0] = addc_cc(x0[0], d[0] ^ nm);
 #pragma unroll
-  for (int k = 1; k < 2 * H; ++k) t[H + k] = addc_cc(t[H + k], M[k]);
-  t[3 * H] = addc_cc(t[3 * H], m);
+  for (int k = 1; k < H; ++k) x1[k] = addc_cc(x0[k], d[k] ^ nm);
+  u32 C[2 * H];
+  sqr_dbl_n<H>(x1, C);
 #pragma unroll
-  for (int k = 3 * H + 1; k < 4 * H - 1; ++k) t[k] = addc_cc(t[k], 0u);
-  t[4 * H - 1] = addc(t[4 * H - 1], 0u);
+  for (int k = 0; k < H; ++k) t[k] = A[k];
+  t[H] = add_cc(E[0], C[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H; ++k) t[H + k] = addc_cc(E[k], C[k]);
+  const u32 top = addc(es, 0u);   // es plus the carry, signed, sign-extended to 2^(64 H)
+  const u32 ext = (u32)((int)top >> 31);
+  t[3 * H] = top;
+#pragma unroll
+  for (int k = 3 * H + 1; k < 4 * H; ++k) t[k] = ext;
+  t[2 * H] = add_cc(t[2 * H], C[0]);
+#pragma unroll
+  for (int k = 1; k < 2 * H - 1; ++k) t[2 * H + k] = addc_cc(t[2 * H + k], C[k]);
+  t[4 * H - 1] = addc(t[4 * H - 1], C[2 * H - 1]);
 }
 
 // fold at full slot as FOLD 1's carry chains (kv.cu's fold): lo + c hi, the low products' chain then the high ones'
