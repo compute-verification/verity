@@ -45,7 +45,9 @@ SASS_SOURCE = Path(__file__).with_name("cuda_rmsnorm_sass.cu")
 
 
 def _u16(t) -> np.ndarray:
-    return t.detach().view(np.int16).cpu().numpy().view(np.uint16).copy()
+    import torch
+
+    return t.detach().view(torch.int16).cpu().numpy().view(np.uint16).copy()
 
 
 def _tensor(words: np.ndarray):
