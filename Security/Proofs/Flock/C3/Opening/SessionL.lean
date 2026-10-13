@@ -49,3 +49,5 @@ theorem sessionAtL_of {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin n
   ⟨o, ho, hsh, hw, ⟨S, gs, sess, un, cp, hS, hg, fun p hpg => FlockVBridge.OfVStar.openingZeroAtL_of _ (hp p hpg)⟩, hc⟩
 
 end FlockC3.Opening
+
+#print axioms FlockC3.Opening.sessionAtL_of

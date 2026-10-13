@@ -248,3 +248,9 @@ end read
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.partsOfO_eq
+#print axioms FlockC3.Reps.structureOf_nwO
+#print axioms FlockC3.Reps.part_nwO
+#print axioms FlockC3.Reps.el_wReadO
+#print axioms FlockC3.Reps.openingZeroAtL_wReadO

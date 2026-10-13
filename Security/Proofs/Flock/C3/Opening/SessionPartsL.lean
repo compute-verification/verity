@@ -97,3 +97,7 @@ theorem partCols_of_openingZeroAtL {bits : Fin (Layout.keyN c hU nU) → Bool} (
     copyVal_regOut zo hG.2 (keyProg_correct hU nU hG.1 u) hj (by omega) (hz t (by omega))⟩
 
 end FlockVBridge.OfVStar
+
+#print axioms FlockVBridge.OfVStar.decode_openingR
+#print axioms FlockVBridge.OfVStar.openingZeroAtL_of
+#print axioms FlockVBridge.OfVStar.partCols_of_openingZeroAtL
