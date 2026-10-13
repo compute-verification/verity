@@ -7,7 +7,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test_tagging checks the store's tags against the bandwidth audit's ro-blake3/v1 (tags.py and the stdlib modules it
-# imports); test_sketch_receipt the GEMM's blocks under the remote bandwidth driver's receipts (and its commitments).
+# imports); test_sketch_receipt and test_redteam_impl the GEMM's and attention's blocks under the remote bandwidth
+# driver's receipts (and its commitments).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/bandwidth/__init__.py", "verity/core/protocols/bandwidth/tags.py",
           "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py", "verity/ml/crypto",
