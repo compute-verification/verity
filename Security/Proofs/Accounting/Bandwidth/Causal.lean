@@ -49,10 +49,10 @@ open scoped ENNReal
 namespace Causal
 
 /-- What a location does during an interval, as `Actual.Run.acts` gives it. -/
-abbrev Acts (L : Type*) := Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ)
+abbrev Acts (L : Type*) := Set (ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ × ℕ)
 
 /-- What crosses into a location at a tick, as `Actual.Run.crossing` gives it. -/
-abbrev Cross (L : Type*) := Set (ℕ × L × ℕ × L × ℕ × ℕ)
+abbrev Cross (L : Type*) := Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ)
 
 /-- **The chip's links in the window**, at tick `u` after the chip did `a` since the window's start: HBM's reply has
 `width u a` bits, bit `j` being `hbm E u a j`; the rest's signal has bit `j` `side E O u a j`; the oracle answers the
@@ -196,7 +196,7 @@ width the chip's requests fix. -/
 def PassiveMemory {L K ε : Type*} {N b h : ℕ} (S : ε × Oracle N b h → Actual.Run L)
     (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (X : Finset L) (t₀ T : ℕ) (hbmPorts : List (K × L))
     (wd : ℕ → Acts L → ℕ) : Prop :=
-  ∃ G : ε → ℕ → Acts L → List (Set (ℕ × L × ℕ × ℕ)),
+  ∃ G : ε → ℕ → Acts L → List (Set (ℕ × L × ℕ × ℕ × ℕ)),
     (∀ E O, ∀ i < T, portSignals S link hbmPorts (E, O) (t₀ + i) =
       G E (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))) ∧
     ∀ u a, (Set.range fun E => G E u a).encard ≤ ((2 ^ wd u a : ℕ) : ℕ∞)
@@ -206,7 +206,7 @@ function `G` of the strategy's input other than the oracle and of what the chip 
 passive memory: no width). -/
 def HearsChip {L K ε : Type*} {N b h : ℕ} (S : ε × Oracle N b h → Actual.Run L)
     (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (X : Finset L) (t₀ T : ℕ) (hbmPorts : List (K × L)) : Prop :=
-  ∃ G : ε → ℕ → Acts L → List (Set (ℕ × L × ℕ × ℕ)),
+  ∃ G : ε → ℕ → Acts L → List (Set (ℕ × L × ℕ × ℕ × ℕ)),
     ∀ E O, ∀ i < T, portSignals S link hbmPorts (E, O) (t₀ + i) =
       G E (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))
 
@@ -215,7 +215,7 @@ function of what the chip did since `t₀`, `a`, and of the oracle's answers to 
 def OracleLocation {L K ε : Type*} {N b h : ℕ} (S : ε × Oracle N b h → Actual.Run L)
     (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (X : Finset L) (t₀ T : ℕ) (orPorts : List (K × L))
     (Q : ℕ → Acts L → List (Fin N × Bits b)) : Prop :=
-  ∃ R : ℕ → Acts L → List (Bits h) → List (Set (ℕ × L × ℕ × ℕ)),
+  ∃ R : ℕ → Acts L → List (Bits h) → List (Set (ℕ × L × ℕ × ℕ × ℕ)),
     ∀ E O, ∀ i < T, portSignals S link orPorts (E, O) (t₀ + i) =
       R (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))
         ((Q (t₀ + i) ((S (E, O)).acts ↑X (Set.Ico t₀ (t₀ + i)))).map O)

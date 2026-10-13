@@ -23,7 +23,8 @@ namespace Accounting.SecurityProofs.Actual
 
 open Finset
 
-/-- The actual circuit of `held_tick` at coin `b`. Every gate is the constant `b` at its width. -/
+/-- The actual circuit of `held_tick` at coin `b`, each gate in the cell its index. Every gate is the constant `b` at
+its width. -/
 abbrev tickPlaced (b : Bool) : Placed Bool where
   N := 5
   w g := if g.val = 1 ∨ g.val = 3 then 0 else 1
@@ -37,6 +38,8 @@ abbrev tickPlaced (b : Bool) : Placed Bool where
   x g := decide (g.val < 3)
   t g := if g.val = 1 then 1 + b.toNat else if g.val = 2 then 10 else if g.val = 3 then 2 + b.toNat else
     if g.val = 4 then 6 else 0
+  cell g := g.val
+  cell_inj _ _ h := Fin.ext (congrArg (fun p => p.2.1) h)
 
 /-- Its run at coin `b`, with what each leaf holds given by `held`. -/
 abbrev tickRun (b : Bool) (held : Bool → ℕ → Finset (Fin 5)) (h : (tickPlaced b).Holding held) :
@@ -84,7 +87,7 @@ theorem held_tick_closed (held : Bool → Bool → ℕ → Finset (Fin 5)) (h : 
     (hc {false} 5 7 false true
       (by simp only [Actual.Run.content, tick_state]; simp [Actual.chunk, Actual.position, Actual.bits, Actual.Run.seen])
       (by simp only [hx]))
-  have : ((6 : ℕ), false, 1, 1) ∈ ((tickRun true (held true) (h true)).acts ↑({false} : Finset Bool)
+  have : ((6 : ℕ), false, 4, 1, 1) ∈ ((tickRun true (held true) (h true)).acts ↑({false} : Finset Bool)
       (Set.Ico 5 7)).1 := ⟨4, by simp, by simp, rfl⟩
   rw [← key] at this
   obtain ⟨g, hg, ht, he⟩ := this

@@ -77,7 +77,7 @@ theorem ingressFrom_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E →
   unfold Placed.ingressFrom linkCapacityFrom
   rw [Finset.sum_mul]
   refine (width_mono A ?_).trans ((width_biUnion_le A _ _).trans
-    (Finset.sum_le_sum fun e _ => (h.2 e (inner ends X e) a b).1))
+    (Finset.sum_le_sum fun e _ => h.2 e (inner ends X e) a b))
   intro c hc
   obtain ⟨hc, hcX, hcY⟩ := mem_filter.1 hc
   obtain ⟨-, g, hg, hcg⟩ := (mem_into A).1 hc

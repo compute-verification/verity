@@ -12,7 +12,6 @@ import Definitions.Accounting.Localization
 import Definitions.Accounting.Bridge
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
-import Definitions.Accounting.Bandwidth
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, how
 PoUW's game realizes its compute audit, the actual circuit, its physical assumptions, a challenge's reach and the
