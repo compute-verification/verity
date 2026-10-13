@@ -14,8 +14,8 @@ import Proofs.Flock.C3.Sparse.SessionAt
   `(u, q)` of the port `q` its key reads.
 * `SparseSessionsAt`, `SparseCols`, `SparseSel` (named): `SparseSessionAt`'s copy (`SparseCopyAt`) and `SparseSrcAt` at
   the map; every message column an input column a row reads (`OpenCols`' form; the support question rec-lean decides);
-  stage `c₀ + i · nS + roundOf m` selects, in `own (sess i)`, the port each column of message `m`'s words reads (`skOf`'s
-  form). `sparseMsgsOfLayers_of_sessions`: the three give `SparseMsgsOfLayers` at `rdOf`.
+  stage `c₀ + i · nS + roundOf m` selects, in `own (sess i)`, the port each column of message `m`'s words reads
+  (`skOf`'s form). `sparseMsgsOfLayers_of_sessions`: the three give `SparseMsgsOfLayers` at `rdOf`.
 -/
 
 namespace FlockC3.Sparse
@@ -291,10 +291,3 @@ end src
 end
 
 end FlockC3.Sparse
-
-#print axioms FlockC3.Sparse.SparseCopyAt
-#print axioms FlockC3.Sparse.SparseSessionAt
-#print axioms FlockC3.Sparse.sparseTieL_of_session
-#print axioms FlockC3.Sparse.sparseTie_of_session
-#print axioms FlockC3.Sparse.SparseSessionsAt
-#print axioms FlockC3.Sparse.sparseMsgsOfLayers_of_sessions
