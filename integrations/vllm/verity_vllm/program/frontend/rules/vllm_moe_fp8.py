@@ -10,11 +10,12 @@
 
 `invoke_fused_moe_triton_kernel` (vLLM d9105ea80, fused_moe.py:763-910) passes `group_n, group_k = block_shape`, A_scale's strides
 (K/G, 1), B_scale's (cdiv(N, G) * K/G, 1, K/G) as (stride_bse, stride_bsk, stride_bsn), and `BLOCK_SIZE_K = min(BLOCK_SIZE_K, G)`.
-The pins are `vllm_moe.MOE_GEMM_PINS`' kernel body with the FP8 numeric constexprs, and DOT is the target's e4m3 step
-(`frontend.targets.moe_expert_fp8_dot`, the GEMM target's `fp8_moe_dot`; a target that records none refuses by name).  The tile is
+The pins are `vllm_moe.MOE_GEMM_PINS`' kernel body with the FP8 numeric constexprs, and DOT is the launch's e4m3 step
+(`frontend.targets.moe_expert_fp8_launch_dot`; a target or tile without a registered step refuses by name).  The tile is
 the one vLLM picks: on a batch-invariant target `get_default_config`'s fixed BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages, SWAP_AB
-False; on cc 9.0 without batch invariance the tuned config's (fused_moe.py:1422-1451), any tile whose `tl.dot` Triton lowers to wgmma
-with SWAP_AB = `enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633): the rule is
+False; on cc 9.0 without batch invariance the tuned config's (fused_moe.py:1422-1451), with SWAP_AB =
+`enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633) and DOT selected by #1944's
+`fp8_moe.sm90_dot` rule (MMAv2 at the small tiles, QGMMA elsewhere): the acceptance rule is
 `frontend.targets.moe_fp8_tuned_tile_refusal`, which the fold applies too.  The Definitions read only KB = BLOCK_SIZE_K and SWAP.
 The schedule (sorted or naive) and the routed weights are `FusedMoeKernelRule`'s.
 
@@ -84,11 +85,12 @@ def _fp8_launch_pins(node, meta, sc, profile) -> str | None:
     return None
 
 
-def moe_expert_fp8_role(routed: bool) -> tuple[str, dict]:
+def moe_expert_fp8_role(routed: bool, bm: int, bn: int, warps: int, swap: bool) -> tuple[str, dict]:
     """(vocabulary role, its DOT) of a block-FP8 launch's per-pair Definition on the active target: the `_dot` roles' block-FP8 forms
     (`vocab._moe_expert_dot` with `G`); raises `frontend.targets.UnregisteredTarget` for a target without a registered e4m3 step."""
     from verity_vllm.program.frontend import targets as T
-    return ("moe_expert_gemm_w_dot" if routed else "moe_expert_gemm_dot"), {"DOT": T.moe_expert_fp8_dot(active_target_profile())}
+    dot = T.moe_expert_fp8_launch_dot(active_target_profile(), bm, bn, warps, swap)
+    return ("moe_expert_gemm_w_dot" if routed else "moe_expert_gemm_dot"), {"DOT": dot}
 
 
 class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
@@ -103,7 +105,8 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
                                    "a_scale is an f32 value [rows, K/G] (strides K/G, 1); b_scale an f32 weight [E, cdiv(N, G), K/G] (strides cdiv(N, G)*K/G, "
                                    "K/G, 1); K % G == 0 and G % BLOCK_SIZE_K == 0",
                                    "batch invariant: BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages, SWAP_AB False (vLLM's default); otherwise "
-                                   "cc 9.0 and a wgmma tile with SWAP_AB = enable_swap_ab(BLOCK_SIZE_M, BLOCK_SIZE_N) (vLLM's tuned config)",
+                                   "cc 9.0 with SWAP_AB = enable_swap_ab(BLOCK_SIZE_M, BLOCK_SIZE_N), and the tile's MMAv2/QGMMA step registered "
+                                   "(vLLM's tuned config; fp8_moe.sm90_dot)",
                                    "schedule and routed weights as FusedMoeKernel[vllm-moe]"),
                     evidence_domain="structural; numerics: MoeExpertFp8Gemm_v1 / MoeExpertFp8GemmW_v1 over MoeExpertFp8BlockGemm(W)_v3{DOT} "
                                     "(registry.fp8_moe DOT_CONF: exact-model-tested at cc 12.0's step; at cc 9.0's, the _v1 forms, model-untested)")
@@ -115,11 +118,14 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         if (r := _not_owned(INDEXED_READ)):
             return r
         sc = meta.get("scalars", {})
-        if (r := _fp8_launch_pins(node, meta, sc, active_target_profile())):
+        profile = active_target_profile()
+        if (r := _fp8_launch_pins(node, meta, sc, profile)):
             return r
         from verity_vllm.program.frontend import targets as T
+        geom = meta.get("geometry") or {}
         try:
-            T.moe_expert_fp8_dot(active_target_profile())
+            T.moe_expert_fp8_launch_dot(profile, sc.get("BLOCK_SIZE_M"), sc.get("BLOCK_SIZE_N"),
+                                        geom.get("num_warps", sc.get("num_warps")), sc.get("SWAP_AB"))
         except T.UnregisteredTarget as e:
             return f"numerics_unregistered: {e}"
         mrw, top_k = sc.get("MUL_ROUTED_WEIGHT"), sc.get("top_k")
@@ -167,6 +173,8 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         sc = meta["scalars"]
         a, b, c, a_s, b_s = (launch_tensor(node, meta, n) for n in _OPERANDS)
         mrw, top_k, nv, G, KB, SWAP = sc["MUL_ROUTED_WEIGHT"], sc["top_k"], sc["num_valid_tokens"], sc["group_k"], sc["BLOCK_SIZE_K"], sc["SWAP_AB"]
+        BM, BN = sc["BLOCK_SIZE_M"], sc["BLOCK_SIZE_N"]
+        WARPS = (meta.get("geometry") or {}).get("num_warps", sc.get("num_warps"))
         E, N, K = shape(ctx, b)
         a_rows, _ = rows_of(ctx.coll(a))
         s_rows, _ = rows_of(ctx.coll(a_s))
@@ -176,7 +184,7 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         from verity_vllm.program.registry.prims import F32, I32
         ids = _flat_pairs(ctx.coll(ids_node), nv, I32)
         ws = _flat_pairs(ctx.coll(launch_tensor(node, meta, "topk_weights_ptr")), nv, F32) if mrw else None
-        role, dot = moe_expert_fp8_role(mrw)
+        role, dot = moe_expert_fp8_role(mrw, BM, BN, WARPS, SWAP)
         fn = ctx.kind(role, node, E=E, K=K, N=N, G=G, KB=KB, SWAP=SWAP, **dot)
         hint = ctx.hint_name(node)
         outs = []

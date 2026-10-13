@@ -48,8 +48,10 @@ from .term import e5m2_product
 from .total import NAN, Inf, Value, fp32_value, group_step_total, pack_value
 
 __all__ = [
+    "HOPPER_E4M3_MMAV2_K32",
     "HOPPER_E4M3_WGMMA_K32",
     "HOPPER_E4M3_FAMILY_VERSION",
+    "MMAV2_E4M3_K_ORDER",
     "e4m3_class",
     "e4m3_product_total",
     "e5m2_class",
@@ -162,3 +164,32 @@ HOPPER_E4M3_WGMMA_K32 = Pipeline(
 )
 
 HOPPER_E4M3_FAMILY_VERSION = "1"
+
+#: The k order in which Triton 3.7.1's MMAv2 lowering of an e4m3 ``tl.dot`` on sm_90 feeds one 32-wide k block to its two
+#: ``mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32``: the operands are promoted to f16 (``cvt.rn.f16x2.e4m3x2``, exact; Triton
+#: promotes FP8 for MMAv2 on every cc but 8.9 and 12.0, AccelerateMatmul.cpp ``mmav2SupportsFp8Operands``), and the kWidth = 4 dot
+#: operand layout hands the first mma the k with k mod 4 in {0, 1} and the second those with k mod 4 in {2, 3} (MMAv2.cpp
+#: ``getValuesFromDotOperandLayoutStruct``), the accumulator chained from the first into the second.
+MMAV2_E4M3_K_ORDER: tuple[int, ...] = tuple(k for k in range(32) if k % 4 < 2) + tuple(k for k in range(32) if k % 4 >= 2)
+
+#: One accumulator coordinate of that k block, in :data:`MMAV2_E4M3_K_ORDER`: two groups of 16 exact products, the accumulator
+#: joining the first and the first's result the second, each through ``HMMA.16816.F32``'s 26-bit truncating adder, floor ``-133``
+#: (unobservable on E4M3 operands, like every floor at or below ``-126``).  Carrying a group's result to the next unpacked is the
+#: same word as packing it to FP32 between the two mma (a group result is an FP32 value or a sticky infinity).  A HYPOTHESIS: the
+#: f16 HMMA with zero accumulators is this pipeline per group (lane tc-probe-fp8, H100, runs r20260922-184111-671e and
+#: r20260922-184835-4b95: ptxas's own sm_90 lowering of ``mma.sync.m16n8k32`` FP8 to two HMMA.16816.F32 over the same k halves
+#: from +0 plus FADDs, 25,040,128 words each, 0 mismatches), and the bf16 HMMA with nonzero accumulators is (runs
+#: r20260922-185339-e337, r20260926-023321-ecb5); an f16 HMMA with a nonzero accumulator is not measured, and the H200 capture
+#: ``integrations/vllm/tests/properties/glm53_block_fp8_capture_gpu.py`` is its check.
+HOPPER_E4M3_MMAV2_K32 = Pipeline(
+    name="hopper_e4m3_mmav2_k32",
+    arch="sm_90",
+    dtype="e4m3",
+    operand_bits=8,
+    groups=(16, 16),
+    width=26,
+    zero_exponent=-133,
+    validated="hypothesis: Triton 3.7.1's MMAv2 e4m3 dot on sm_90 (two chained f16 HMMA.16816.F32 per k32, the operands in "
+              "MMAV2_E4M3_K_ORDER); HMMA.16816.F32 from +0 measured on the H100 (r20260922-184111-671e, r20260922-184835-4b95), "
+              "with a nonzero f16 accumulator not measured",
+)

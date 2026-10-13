@@ -249,13 +249,17 @@ def test_a_cc9_target_folds_the_pinned_tile_on_the_wgmma_step():
 H200_TUNED = TargetProfile(compute_capability=(9, 0), num_sms=132, moe_backend="triton", batch_invariant=False)
 
 
-@pytest.mark.parametrize("bm,bn,kb,swap,needle", [
-    (16, 128, 64, True, None), (64, 64, 64, False, None), (16, 64, 32, True, None),
-    (8, 32, 64, False, "no wgmma tile"), (16, 128, 64, False, "enable_swap_ab"), (64, 64, 16, False, "k32 step"),
+@pytest.mark.parametrize("bm,bn,kb,swap,dot,needle", [
+    (16, 128, 64, True, "HopperE4m3QgmmaDot32_v1", None),
+    (64, 64, 64, False, "HopperE4m3QgmmaDot32_v1", None),
+    (16, 64, 32, True, "HopperE4m3QgmmaDot32_v1", None),
+    (8, 32, 64, False, "HopperE4m3MmaV2Dot32_v1", None),
+    (8, 64, 128, True, "HopperE4m3MmaV2Dot32_v1", None),
+    (16, 128, 64, False, None, "enable_swap_ab"),
+    (64, 64, 16, False, None, "k32 step"),
 ])
-def test_a_tuned_cc9_target_folds_the_wgmma_tiles_the_build_accepts_and_refuses_the_rest(bm, bn, kb, swap, needle):
-    """Without batch invariance vLLM's tuned config picks the tile; the fold applies the Build's rule (`moe_fp8_tuned_tile_refusal`),
-    and the Definitions read the launch's KB and SWAP."""
+def test_a_tuned_cc9_target_folds_each_registered_tile_step_and_refuses_bad_pins(bm, bn, kb, swap, dot, needle):
+    """The fold applies the Build's tile rule and binds #1944's MMAv2/QGMMA selection; bad SWAP_AB and k32 pins refuse."""
     tile = {"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "BLOCK_SIZE_K": kb, "GROUP_SIZE_M": 1, "SWAP_AB": swap}
     res, _ = _resolve(3, ctx_kw={"target": H200_TUNED}, consts_up=tile, consts_down=tile)
     if needle is not None:
@@ -264,7 +268,7 @@ def test_a_tuned_cc9_target_folds_the_wgmma_tiles_the_build_accepts_and_refuses_
         return
     assert len(res) == 1 and isinstance(res[0], Group), [getattr(r, "reason", r) for r in res]
     gemms = [p.spec.id for p in res[0].parts if isinstance(p, Compute) and p.spec.id.startswith("MoeExpertFp8Gemm")]
-    assert len(gemms) == 2 and all(f",KB={kb},SWAP={swap},DOT=HopperE4m3QgmmaDot32_v1}}" in g for g in gemms), gemms
+    assert len(gemms) == 2 and all(f",KB={kb},SWAP={swap},DOT={dot}}}" in g for g in gemms), gemms
 
 
 def test_a_batch_invariant_target_keeps_the_pinned_tile_and_swap_ab_false():
