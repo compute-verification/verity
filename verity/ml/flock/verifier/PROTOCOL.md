@@ -1740,7 +1740,7 @@ expectation):
   parameters, one whose port bits are not the opening's at them, one whose rows or copies' leaves are not the opening's
   inputs in order, and one whose net differs from the verifier's. No vector exercises it;
   `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean verifier, and
-  `verity/core/service/flock/Flock/Test/RecOpen.lean` the rows' and leaves'.
+  `verity/core/service/flock/Flock/Test/RecOpenLeaves.lean` the rows' and leaves'.
 - **D14:** U4 (§7.3, §16.10): a drawn statement must draw in full each unit that reads a round's commitment. Upstream
   ignores the header's `registered` (D5) and so cannot tell which units read one; the spec refuses the draw at setup. No
   vector exercises it: no set's draw meets a port of a round's commitment (`rec-c<i>`, `rec-top-L<l>`, R's and the sparse

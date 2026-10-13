@@ -6,7 +6,7 @@ the honest rows and leaves pass both checks, at one copy or two.
 -/
 import Flock.RecOpen
 
-namespace Flock.Test.RecOpen
+namespace Flock.Test.RecOpenLeaves
 
 open Flock.RecOpen
 
@@ -53,4 +53,4 @@ def words (a b : Nat) : Array Int := (Array.range (b - a)).map fun i => Int.ofNa
 #guard refusal honest #[inOrder, inOrder.set! 200 199] == leavesRefused
 #guard refusal honest #[inOrder.pop] == leavesRefused
 
-end Flock.Test.RecOpen
+end Flock.Test.RecOpenLeaves
