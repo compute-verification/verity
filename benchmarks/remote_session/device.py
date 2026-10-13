@@ -402,8 +402,12 @@ class DeviceStore:
         self.lib.call("rs_pack16", signs.data_ptr(), want.data_ptr())
         return bool(torch.equal(got, want))
 
-    def plain_root(self, seed: bytes) -> bytes:
-        """The same pass the plain way, every receipt then every leaf then the tree, for the pipelined pass's check."""
+    def plain_root(self, seed: bytes, expected_kept=None) -> bytes:
+        """The same pass the plain way, every receipt then every leaf then the tree, for the pipelined pass's check.
+
+        When `expected_kept` is supplied, record agreement at every kept level as well as at the root; that makes a
+        non-power-of-two tree's real/padding boundary part of the startup gate rather than only its final digest.
+        """
         torch, N, nl, width = self.torch, self.blocks, self.blocks // PER_LEAF, self.tree_leaves
         signs = torch.from_numpy(skr.signs(seed)).cuda()
         self.set_pass(self.lib, seed)
@@ -419,6 +423,16 @@ class DeviceStore:
             self.lib.call("rb_pads", nl, width - nl, dig[nl:].data_ptr())
         up = torch.empty((width - 1, 8), dtype=torch.int64, device="cuda")
         self.lib.call("rb_tree", dig.data_ptr(), width, 0, up.data_ptr())
+        if expected_kept is not None:
+            expected = expected_kept if expected_kept.is_cuda else expected_kept.cuda()
+            at, matches = 0, {}
+            for h in range(1, self.H + 1):
+                n = width >> h
+                if h >= self.h0:
+                    matches[h] = bool(torch.equal(up[at:at + n],
+                                                  expected[self.kept_at[h]:self.kept_at[h] + n]))
+                at += n
+            self.plain_level_matches = matches
         return digests(up[-1:].cpu())[0]
 
     def arm(self, dropped: set[int]) -> None:
@@ -629,17 +643,18 @@ class Device:
                 kept.append(handle)
                 t1 = time.perf_counter_ns()
                 if first is None:
-                    first = (want_seed, prev, handle[0])
+                    first = (want_seed, prev, handle[0], handle[2])
                 if t_end is not None:
                     gap_ns.append(t0 - t_end)
                 pass_ns.append(t1 - t0)
                 t_end = t1
             gc.enable()
             gc.unfreeze()
-            seed, chained_root, seed_dev = first
+            seed, chained_root, seed_dev, chained_kept = first
             self.gates["device_seed"] = (seed_dev if isinstance(seed_dev, bytes)
                                          else bytes(seed_dev.cpu().numpy())) == seed
-            self.gates["plain_root"] = s.plain_root(seed) == chained_root
+            self.gates["plain_root"] = s.plain_root(seed, chained_kept) == chained_root
+            self.gates["plain_levels"] = s.plain_level_matches
             self.gates["device_signs"] = all(s.signs_match(rb.seed(challenge, i, bytes(64))) for i in range(4))
         torch.cuda.synchronize()
         if not self.gates["device_seed"]:
