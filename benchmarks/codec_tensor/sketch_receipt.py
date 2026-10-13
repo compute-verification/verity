@@ -46,8 +46,11 @@ ROWS = 16
 BLOCK = 4096
 LANES = 32
 SK_G = 4                                  # receipt_warp's tasks a group: 2 SK_G blocks, mma.m16n8k32's B columns
+ROWS64 = 64
 SIGN_WORDS = ROWS * BLOCK // 32           # a WT_RECEIPT pass's signs (`sign_words`)
 FRAG_WORDS = 2 * SIGN_WORDS               # receipt_warp's selectors (`sign_frags`)
+PLANE_WORDS = ROWS64 * BLOCK // 32        # receipt_warp's bit planes at 64 rows (`sign_planes`)
+PLANE_MASK = 0x01010101
 KV_HEADS, KV_WORD = 8, 128                # kv.cu form 13: a token-layer's KV heads and its codec words' bytes
 KV_STEPS = KV_WORD // 8                   # its k-steps a tile: 8 bytes of each of a head's 4 words
 
@@ -80,11 +83,11 @@ def sketches(s: np.ndarray, blocks: np.ndarray) -> np.ndarray:
 
 
 def sign_words(bits: np.ndarray) -> np.ndarray:
-    """S's bits (`sign_bits`) as a WT_RECEIPT pass writes them (wt_pass's signs): SIGN_WORDS u32, row c's 512 bytes
-    little-endian from word 128 c."""
+    """S's bits (`sign_bits`) as a WT_RECEIPT pass writes them (wt_pass's signs): k_s 128 u32 (SIGN_WORDS at 16 rows),
+    row c's 512 bytes little-endian from word 128 c."""
     b = np.asarray(bits, np.uint8)
-    if b.shape != (ROWS, BLOCK // 8):
-        raise ValueError(f"S's bits are {ROWS} × {BLOCK // 8} bytes")
+    if b.shape not in ((ROWS, BLOCK // 8), (ROWS64, BLOCK // 8)):
+        raise ValueError(f"S's bits are {ROWS} or {ROWS64} × {BLOCK // 8} bytes")
     return np.ascontiguousarray(b).reshape(-1).view("<u4").astype(np.uint32)
 
 
@@ -108,6 +111,27 @@ def sign_frags(bits: np.ndarray) -> np.ndarray:
                 pos = 64 * (2 * pp + x) + 16 * t + 8 * s + 4 * (r >> 1) + q
                 out[..., 2 * x + big_r // 6] |= u[g + 8 * (r & 1), pos] << np.uint32(16 * ((big_r % 6) // 3) + 4 * q
                                                                                      + big_r % 3)
+    return out.reshape(-1)
+
+
+def sign_planes(bits: np.ndarray) -> np.ndarray:
+    """receipt_warp's A at 64 rows (wt_sign_frags): PLANE_WORDS u32, word 4 (32 p + lane) + 2 s + hh lane (g, t)'s
+    plane of k-step 2 p + s, half hh. Its bit 8 b + ρ (ρ = 2 mt + rh) is S's bit (1 where −1) of row 16 mt + g + 8 rh
+    at position 64 p + 16 t + 8 s + 4 hh + b, so m-tile mt's A registers are one AND each with PLANE_MASK << ρ: bytes
+    2^ρ where the bit is set (−128 at ρ = 7), 0 where it is clear."""
+    b = np.asarray(bits, np.uint8)
+    if b.shape != (ROWS64, BLOCK // 8):
+        raise ValueError(f"S's bits are {ROWS64} × {BLOCK // 8} bytes")
+    u = np.unpackbits(b, axis=1, bitorder="little").astype(np.uint32)
+    p, lane = np.meshgrid(np.arange(BLOCK // 64), np.arange(LANES), indexing="ij")
+    g, t = lane >> 2, lane & 3
+    out = np.zeros((BLOCK // 64, LANES, 4), np.uint32)
+    for w in range(4):
+        s, hh = divmod(w, 2)
+        for q in range(4):
+            pos = 64 * p + 16 * t + 8 * s + 4 * hh + q
+            for rho in range(8):
+                out[..., w] |= u[16 * (rho >> 1) + g + 8 * (rho & 1), pos] << np.uint32(8 * q + rho)
     return out.reshape(-1)
 
 
@@ -176,22 +200,59 @@ def fragment_sketch(store: np.ndarray, nbs: int, nchunks: int, sb: int, groups: 
                     reg = sketching.prmt(*sketching.PRMT[big_r % 3], sels[big_r] & 0xFFFF)
                     regb = _int8([reg >> 8 * q for q in range(4)])
                     a[2 * pp + e, s, g + 8 * (r & 1), 16 * (r >> 1) + 4 * t:16 * (r >> 1) + 4 * t + 4] = regb
-    out = np.full((nbs * nchunks * sb // BLOCK, ROWS), np.iinfo(np.int64).min, np.int64)
+    return _group_sketches(st, nbs, nchunks, sb, groups, ROWS, lambda b: np.einsum("psrk,pskn->rn", a, b))
+
+
+def _group_sketches(st, nbs, nchunks, sb, groups, rows, mma) -> np.ndarray:
+    """Each sketch warp group's 2 SK_G blocks as B (BLOCK // 64 p, 2 s, 32 k, 2 SK_G n): lane (n, t)'s uint4 of block
+    n at 64 p + 16 t, b0 of k-step 2 p + s its bytes 8 s …, b1 8 s + 4 …; `mma(b)` the rows × 2 SK_G sketches."""
+    out = np.full((nbs * nchunks * sb // BLOCK, rows), np.iinfo(np.int64).min, np.int64)
     for qs in _tasks(nbs, nchunks, groups):
         for i0 in range(0, len(qs), SK_G):
             blk = [(q, h) for q in qs[i0:i0 + SK_G] for h in range(2)]
             b = np.zeros((BLOCK // 64, 2, 32, 2 * SK_G), np.int64)
             for n, (q, h) in enumerate(blk):
                 d = st[q * sb + BLOCK * h:q * sb + BLOCK * (h + 1)].view(np.int8).astype(np.int64)
-                # 16 bytes a lane: pp, e, t, then (s, b0 or b1, byte); B's k is 16 (b1) + 4 t + byte
-                b[..., n] = d.reshape(BLOCK // 128, 2, 4, 2, 2, 4).transpose(0, 1, 3, 4, 2, 5).reshape(BLOCK // 64, 2,
-                                                                                                         32)
-            acc = np.einsum("psrk,pskn->rn", a, b)
+                # 16 bytes a lane: p, t, then (s, b0 or b1, byte); B's k is 16 (b1) + 4 t + byte
+                b[..., n] = d.reshape(BLOCK // 64, 4, 2, 2, 4).transpose(0, 2, 3, 1, 4).reshape(BLOCK // 64, 2, 32)
+            acc = mma(b)
             for n, (q, h) in enumerate(blk):
                 if out[2 * q + h, 0] != np.iinfo(np.int64).min:
                     raise AssertionError(f"receipt {2 * q + h} twice")
                 out[2 * q + h] = acc[:, n]
     return out
+
+
+def _i32(x: np.ndarray) -> np.ndarray:
+    return ((np.asarray(x, np.int64) + (1 << 31)) & 0xFFFFFFFF) - (1 << 31)
+
+
+def fragment_sketch64(store: np.ndarray, nbs: int, nchunks: int, sb: int, groups: int, planes: np.ndarray) -> np.ndarray:
+    """σ at 64 rows as receipt_warp computes it, row v receipt v. B as `fragment_sketch`'s; A, m-tile mt of k-step
+    2 p + s, from lane (g, t)'s planes (`sign_planes`) W_hh of (p, s): a0 W_0 & PLANE_MASK << 2 mt, a1 the same at
+    2 mt + 1, a2 and a3 W_1's, so m-tile mt's int32 accumulator holds row 16 mt + r's 2^ρ Σ_u bit_u e_u (−2^7 at
+    ρ = 7, ρ = 2 mt + r // 8), and a fifth MMA of A all ones T = Σ_u e_u. Then σ = T − 2 (acc >> ρ), or
+    T + 2 (acc >> 7) at ρ = 7: S = 1 − 2 bit. |acc| ≤ 2^26, so no int32 wraps."""
+    st = np.asarray(store, np.uint8).reshape(-1)
+    pl = np.asarray(planes, np.uint32).reshape(BLOCK // 64, LANES, 2, 2).astype(np.int64)
+    a = np.zeros((BLOCK // 64, 2, ROWS64 // 16, 16, 32), np.int64)
+    for lane in range(LANES):
+        g, t = divmod(lane, 4)
+        for mt in range(ROWS64 // 16):
+            for rh in range(2):
+                rho = 2 * mt + rh
+                for hh in range(2):
+                    reg = pl[:, lane, :, hh] & (PLANE_MASK << rho)
+                    a[:, :, mt, g + 8 * rh, 16 * hh + 4 * t:16 * hh + 4 * t + 4] = _int8(
+                        reg[..., None] >> (8 * np.arange(4)))
+    rho = (2 * np.arange(ROWS64 // 16)[:, None] + (np.arange(16) >= 8)[None, :]).reshape(-1, 1)
+
+    def mma(b):
+        acc = _i32(np.einsum("psmrk,pskn->mrn", a, b).reshape(ROWS64, -1))
+        tot = _i32(np.einsum("pskn->n", b))[None, :]
+        return _i32(np.where(rho < 7, tot - 2 * (acc >> rho), tot + 2 * (acc >> 7)))
+
+    return _group_sketches(st, nbs, nchunks, sb, groups, ROWS64, mma)
 
 
 def kv_head_words(g: int) -> list[int]:
