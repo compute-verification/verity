@@ -256,10 +256,3 @@ theorem prob_regOrTop_le
     (prob_regColl_le zs dg N σ hX) (prob_topColl_le wr st reg bcs' lv cap hstk zs σ hT))
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms Flock.SecurityProofs.TopFinder.hexOf_inj
-#print axioms Flock.SecurityProofs.TopFinder.topEntryFields_ok
-#print axioms Flock.SecurityProofs.TopFinder.topEntryFields_bind
-#print axioms FlockSoundness.Discharge.Recursion.TopColl.collision
-#print axioms FlockSoundness.Discharge.Recursion.prob_topColl_le
-#print axioms FlockSoundness.Discharge.Recursion.prob_regOrTop_le
