@@ -70,6 +70,7 @@ import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.RegLevels.ROpens
 import Proofs.Flock.C3.RegLevels.ROpensPR
+import Proofs.Flock.C3.RegLevels.SrcMaps
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
