@@ -68,8 +68,9 @@ def split(kernels: list[dict], steps: int, weight_bytes: int, kv_bytes: float, R
                         for n, t in sorted(by.items(), key=lambda kv: -kv[1])]}
 
 
-NCU_METRICS = ("gpu__time_duration.sum", "dram__bytes_read.sum", "dram__bytes_write.sum", "lts__t_sectors_op_read.sum",
-               "lts__t_sectors_op_write.sum")
+NCU_METRICS = ("gpu__time_duration.sum", "dram__bytes_op_read.sum", "dram__bytes_op_write.sum",
+               "lts__t_sectors_op_read.sum", "lts__t_sectors_op_write.sum", "dram__cycles_active.sum",
+               "dram__cycles_elapsed.sum")
 
 
 def ncu_rows(text: str) -> list[dict]:
@@ -92,8 +93,8 @@ def ncu_split(rows: list[dict], steps: int, weight_bytes: float, kv_bytes: float
     out = {}
     for c in ("gemm", "attention", "other", "all"):
         rs = [r for r in rows if c == "all" or classify(r["name"]) == c]
-        rd = sum(r["dram__bytes_read.sum"] for r in rs) / steps
-        wr = sum(r["dram__bytes_write.sum"] for r in rs) / steps
+        rd = sum(r["dram__bytes_op_read.sum"] for r in rs) / steps
+        wr = sum(r["dram__bytes_op_write.sum"] for r in rs) / steps
         ns = sum(r["gpu__time_duration.sum"] for r in rs) / steps
         registered = sum(reg.values()) if c == "all" else reg[c]
         out[c] = {"kernels": len(rs) / steps, "ms": ns / 1e6, "dram_read_GB": rd / 1e9, "dram_write_GB": wr / 1e9,
@@ -101,6 +102,8 @@ def ncu_split(rows: list[dict], steps: int, weight_bytes: float, kv_bytes: float
                   "l2_write_GB": sum(r["lts__t_sectors_op_write.sum"] for r in rs) * 32 / steps / 1e9,
                   "registered_GB": registered / 1e9, "read_over_registered": rd / registered if registered else None,
                   "dram_GBps": (rd + wr) / ns if ns else None,
+                  "dram_active": (sum(r["dram__cycles_active.sum"] for r in rs) / sum(r["dram__cycles_elapsed.sum"]
+                                                                                  for r in rs)) if rs else None,
                   "bus_left_GB": (ns * 1e-9 * R * 1e9 - rd - wr) / 1e9}
     by: dict = {}
     for r in rows:
@@ -108,8 +111,8 @@ def ncu_split(rows: list[dict], steps: int, weight_bytes: float, kv_bytes: float
                                             "write_GB": 0.0})
         k["n"] += 1
         k["ms"] += r["gpu__time_duration.sum"] / 1e6 / steps
-        k["read_GB"] += r["dram__bytes_read.sum"] / 1e9 / steps
-        k["write_GB"] += r["dram__bytes_write.sum"] / 1e9 / steps
+        k["read_GB"] += r["dram__bytes_op_read.sum"] / 1e9 / steps
+        k["write_GB"] += r["dram__bytes_op_write.sum"] / 1e9 / steps
     out["kernels"] = [{"name": n, **v} for n, v in sorted(by.items(), key=lambda kv: -kv[1]["ms"])]
     return out
 
@@ -143,7 +146,7 @@ def main() -> int:
             print(f"{c}: {v['kernels']:.0f} kernels, {v['ms']:.3f} ms; DRAM read {v['dram_read_GB']:.3f} GB against "
                   f"{v['registered_GB']:.3f} registered ({v['read_over_registered'] or 0:.3f}), write "
                   f"{v['dram_write_GB']:.3f} GB; L2 read {v['l2_read_GB']:.3f} GB; {v['dram_GBps'] or 0:.0f} GB/s; "
-                  f"bus left inside {v['bus_left_GB']:.3f} GB", flush=True)
+                  f"DRAM active {v['dram_active'] or 0:.3f}; bus left inside {v['bus_left_GB']:.3f} GB", flush=True)
         return 0
     logf = (a.out / "step_profile.log").open("a")
 

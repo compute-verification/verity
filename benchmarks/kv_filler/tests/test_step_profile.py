@@ -49,10 +49,10 @@ def test_split_counts_idle_between_kernels_inside_a_step_apart_from_the_host_gap
 
 def test_ncu_split_sets_each_class_s_dram_bytes_against_its_registered_bytes():
     head = '"ID","Kernel Name","' + '","'.join(step_profile.NCU_METRICS) + '"\n'
-    units = '"","","ns","byte","byte","sector","sector"\n'
-    body = ('"0","nvjet_gemm","1,000","3000","100","200","10"\n'
-            '"1","flashinfer::BatchDecodeWithPagedKVCacheKernel","500","1500","0","50","0"\n'
-            '"2","vllm::rms_norm_kernel","100","40","40","4","4"\n') * 2
+    units = '"","","ns","byte","byte","sector","sector","cycle","cycle"\n'
+    body = ('"0","nvjet_gemm","1,000","3000","100","200","10","30","100"\n'
+            '"1","flashinfer::BatchDecodeWithPagedKVCacheKernel","500","1500","0","50","0","10","50"\n'
+            '"2","vllm::rms_norm_kernel","100","40","40","4","4","1","10"\n') * 2
     rows = step_profile.ncu_rows(head + units + body)
     assert len(rows) == 6 and rows[0]["gpu__time_duration.sum"] == 1000.0
     r = step_profile.ncu_split(rows, 2, 2000.0, 1000.0, 10.0)  # R = 10 GB/s = 10 bytes a ns
@@ -61,4 +61,5 @@ def test_ncu_split_sets_each_class_s_dram_bytes_against_its_registered_bytes():
     assert r["all"]["read_over_registered"] == pytest.approx(4540 / 3000)
     assert r["gemm"]["l2_read_GB"] == pytest.approx(200 * 32 / 1e9)
     assert r["gemm"]["bus_left_GB"] == pytest.approx((1000 * 10 - 3100) / 1e9)
+    assert r["gemm"]["dram_active"] == pytest.approx(0.3) and r["all"]["dram_active"] == pytest.approx(41 / 160)
     assert r["kernels"][0]["name"] == "nvjet_gemm" and r["kernels"][0]["n"] == 2

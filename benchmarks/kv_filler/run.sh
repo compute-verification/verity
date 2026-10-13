@@ -59,11 +59,11 @@ if [ "$SCRIPT" = step_profile.py ] && [ -n "${NCU_SHAPES:-}" ]; then
   export NCUB=/usr/local/cuda/bin/ncu PY KF
   # shellcheck disable=SC2086,SC2016
   "${LEASE[@]}" bash -c '
-    set -e
+    set -eo pipefail
     for shape in $NCU_SHAPES; do
       d=$O/ncu-$shape; mkdir -p "$d"
       $NCUB --target-processes all --profile-from-start off --cache-control none --clock-control none \
-        --graph-profiling node --metrics gpu__time_duration.sum,dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sectors_op_read.sum,lts__t_sectors_op_write.sum \
+        --graph-profiling node --metrics gpu__time_duration.sum,dram__bytes_op_read.sum,dram__bytes_op_write.sum,lts__t_sectors_op_read.sum,lts__t_sectors_op_write.sum,dram__cycles_active.sum,dram__cycles_elapsed.sum \
         -f -o "$d/step" "$PY" $KF/step_profile.py --out "$d" --ncu --shapes "$shape" --steps "${NCU_STEPS:-3}" > "$d/ncu.log" 2>&1 \
         || { tail -40 "$d/ncu.log"; exit 6; }
       $NCUB --import "$d/step.ncu-rep" --csv --page raw --print-units base > "$d/ncu.csv"
