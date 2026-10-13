@@ -30,7 +30,8 @@ from __future__ import annotations
 from typing import Any
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
+from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
+                                          HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import attention_vocab
@@ -51,7 +52,8 @@ class UnregisteredTarget(ValueError):
 #: the registered k16 step primitives by the name a `GemmTarget.dot` record carries.
 DOTS: dict[str, Any] = {"AmpereBF16TcDot16": P.AmpereBF16TcDot16, "HopperBF16WgmmaDot16": HopperBF16WgmmaDot16}
 #: the registered e4m3 k32 step primitives by the name a `GemmTarget.fp8_dot` record carries.
-FP8_DOTS: dict[str, Any] = {"HopperE4m3QgmmaDot32": HopperE4m3QgmmaDot32, "BlackwellE4m3QmmaDot32": BlackwellE4m3QmmaDot32}
+FP8_DOTS: dict[str, Any] = {"HopperE4m3QgmmaDot32": HopperE4m3QgmmaDot32, "HopperE4m3MmaV2Dot32": HopperE4m3MmaV2Dot32,
+                            "BlackwellE4m3QmmaDot32": BlackwellE4m3QmmaDot32}
 #: the registered NVFP4 k64 block-scaled step primitives by the name a `GemmTarget.fp4_dot` record carries.
 FP4_DOTS: dict[str, Any] = {"BlackwellNvf4OmmaDot64": BlackwellNvf4OmmaDot64}
 
@@ -172,20 +174,38 @@ def moe_expert_fp8_dot(profile):
     return dot
 
 
+def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool):
+    """The registered e4m3 k32 step of one block-FP8 fused-MoE launch.
+
+    A tuned cc 9.0 launch is tile-dependent: use `fp8_moe.sm90_dot`, the Triton 3.7.1 lowering rule pinned by #1944.  Other
+    registered targets and batch-invariant cc 9.0 launches use their target-wide `GemmTarget.fp8_moe_dot`.
+    """
+    target_dot = moe_expert_fp8_dot(profile)
+    if profile.batch_invariant or tuple(profile.compute_capability) != (9, 0):
+        return target_dot
+    from verity_vllm.program.registry import fp8_moe
+    dot = fp8_moe.sm90_dot(int(bm), int(bn), int(warps), bool(swap))
+    if dot not in FP8_DOTS.values():
+        raise UnregisteredTarget(f"block-FP8 fused-MoE tile {bm}x{bn}, {warps} warps, SWAP_AB={swap}: "
+                                 f"Triton's step {getattr(dot, 'id', dot)!r} has no registered primitive")
+    return dot
+
+
 def wgmma_tile(config: dict, swap: bool) -> bool:
-    """Whether Triton lowers a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3), the one FP8 dot the Hopper Definitions model: the
-    dot's M (BLOCK_SIZE_N under SWAP_AB, else BLOCK_SIZE_M) a multiple of 64 over a multiple of 4 warps and its N a multiple of 8.  A
-    smaller tile takes `mma.sync` or FMA, which no Definition models."""
+    """Whether Triton 3.7.1 lowers a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3): the dot's M (BLOCK_SIZE_N under
+    SWAP_AB, else BLOCK_SIZE_M) is a multiple of 64 over a multiple of 4 warps and its N a multiple of 16.  Other registered
+    cc 9.0 tiles take MMAv2 (`fp8_moe.sm90_dot`)."""
     m, n = (config["BLOCK_SIZE_N"], config["BLOCK_SIZE_M"]) if swap else (config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"])
-    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 8 == 0
+    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 16 == 0
 
 
 def moe_fp8_tuned_tile_refusal(profile, bm: Any, bn: Any, kb: Any, warps: Any, swap: Any) -> str | None:
     """None when a tuned (not batch-invariant) block-FP8 `fused_moe_kernel` tile is one the Definitions model on the declared target:
     cc 9.0, SWAP_AB = `enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, vLLM d9105ea80 fused_moe/utils.py:628-633), BLOCK_SIZE_K
-    a multiple of the k32 step and a `wgmma_tile`; else why not.  The Build's rule and the fold's are this one."""
+    a multiple of the k32 step, and a step selected by `fp8_moe.sm90_dot` with a registered primitive; else why not.  The Build's
+    rule and the fold's are this one."""
     if tuple(profile.compute_capability) != (9, 0):
-        return (f"numerics_unregistered: a tuned (not batch-invariant) block-FP8 expert launch is modelled on cc 9.0 only (wgmma), not on "
+        return (f"numerics_unregistered: a tuned (not batch-invariant) block-FP8 expert launch is modelled on cc 9.0 only, not on "
                 f"cc {profile.capability_str}")
     if not all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in (bm, bn, kb, warps)):
         return f"tiling BLOCK_SIZE_M/N/K={bm!r}/{bn!r}/{kb!r}, num_warps={warps!r} are not positive integers"
@@ -194,18 +214,20 @@ def moe_fp8_tuned_tile_refusal(profile, bm: Any, bn: Any, kb: Any, warps: Any, s
         return f"numerics_unregistered: SWAP_AB={swap!r} is not enable_swap_ab(BLOCK_SIZE_M={bm}, BLOCK_SIZE_N={bn}) = {want} on cc 9.0"
     if kb % 32:
         return f"numerics_unregistered: BLOCK_SIZE_K={kb} is not a multiple of the k32 step"
-    if not wgmma_tile({"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "num_warps": warps}, want):
-        return (f"numerics_unregistered: the launch's tl.dot (BLOCK_SIZE_M {bm} x BLOCK_SIZE_N {bn}, SWAP_AB {want}, {warps} warps) is no "
-                f"wgmma tile: it takes mma.sync, whose e4m3 step no Definition models")
+    try:
+        moe_expert_fp8_launch_dot(profile, bm, bn, warps, want)
+    except UnregisteredTarget as e:
+        return f"numerics_unregistered: {e}"
     return None
 
 
-def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, SWAP: bool, *, routed: bool):
+def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, SWAP: bool, *, BM: int, BN: int, WARPS: int,
+                             routed: bool):
     """The registered Definition of one (token, slot) pair of a block-FP8 `fused_moe_kernel` launch on the declared target:
     `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,SWAP,DOT}`, the w13 launch (`routed` False) or the w2 launch with the routed weight."""
     from verity_vllm.program.registry import fp8_moe_experts as X
     return bind(X.MoeExpertFp8GemmW if routed else X.MoeExpertFp8Gemm, E=int(E), K=int(K), N=int(N), G=int(G), KB=int(KB),
-                SWAP=bool(SWAP), DOT=moe_expert_fp8_dot(profile))
+                SWAP=bool(SWAP), DOT=moe_expert_fp8_launch_dot(profile, BM, BN, WARPS, SWAP))
 
 
 def tuned_gemm_table(profile) -> dict[tuple[int, int], dict[str, Any]]:
@@ -526,7 +548,8 @@ def describe(profile) -> dict[str, Any]:
 
 
 __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
-           "moe_expert_dot", "moe_expert_gemm_spec", "moe_expert_fp8_dot", "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
+           "moe_expert_dot", "moe_expert_gemm_spec", "moe_expert_fp8_dot", "moe_expert_fp8_launch_dot",
+           "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
