@@ -163,7 +163,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Rate codec work", "measured"),
     # the sketch-then-hash rate audit's device (Accounting.Guarantees.RateAuditSketch,
     # Security/Models/Accounting/Guarantees/RateAuditSketch.lean): falsified by a device or host that passes while holding,
-    # reading or sending something other than E's sectors as they are
+    # reading or sending something other than E's sectors as they are; Accounting.Guarantees.RateSketchTable is why the
+    # class is needed: a prover whose memory may hold any function of E (RateAudit's model) passes on every coin reading
+    # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows
     Entry("rate-sketch-verbatim", "model",
           "Rate sketch verbatim device model: the rate device model for a sketch-then-hash tag, with on-chip state, device "
           "memory, the side link and rebuilding each returning whole sectors of E or of the certified stream as they are, "
