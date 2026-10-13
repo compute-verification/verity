@@ -9,9 +9,14 @@ bit `b` is copy 0's at column `128 a + b` of the part's unit for `ρ` (`bitAt`),
 
 * `wDecodes_of_read`: `WDecodes` at `wLoc`'s session, unit and columns, for maps whose `rep₀` reads `w` so, given each
   session's `upv > 0` (`upv_of_outer`, from any outer proof).
-* `resZeroAtLH_wRead`: each part's `ResZeroAtLH` at one `w` holds at `wRead`'s, where each part's row-port columns are
-  read (`ResReadCol`): at a registered bit a good layer holds the registrant's value (`bitAt_of_regBit`), which is `w`'s
-  in every part.
+* `resZeroAtLH_wRead`: each part's `ResZeroAtLH` at one `w` holds at `wRead`'s, where an element a part reads a bit of
+  is read whole at some part (`ResReadCol`): at a registered bit a good layer holds the registrant's value
+  (`bitAt_of_regBit`), which is `w`'s in every part.
+
+Not every column of a part's row ports is read: a part's row ports hold the whole of each port of `w` its residuals
+touch, and first-fit packing can leave elements of a touched port that none of the part's residuals reads (at V*'s
+shape `m = 25, k = 22, c = 8`, part 1 reads no bit of `m76`'s first four elements), so `ResReadCol` asks only of the
+bits some part reads.
 -/
 
 namespace FlockC3.Reps
@@ -64,11 +69,14 @@ def wRead {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → Fi
       (wUn Vs sh sess un ρ i.val) (rowColOf sh (wLoc Vs sh sess i.val).1 (128 * (wLoc Vs sh sess i.val).2 + b))
   else 0
 
-/-- **Hypothesis on V*'s circuits: each part's row-port columns are read**: every column of part `p`'s row ports is one
-a computed row of the part's session reads (`ReadCol`). -/
+/-- **Hypothesis on V*'s circuits: an element of `w` a part reads is read whole at some part**: where a computed row of
+part `p`'s session reads bit `b` of position `a` of its row ports (`ReadCol`), some part `p₀` holds the same element at
+a position `a₀` all 128 of whose columns a computed row of `p₀`'s session reads. -/
 def ResReadCol {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → Fin S) : Prop :=
-  ∀ p P ns nv, Flock.RecResiduals.part sh p = .ok (P, ns, nv) → ∀ q < 128 * ns.sum,
-    ReadCol (Rows.ofNet (Vs (sess p)).hU) (rowCol (partRep ns nv).ports 0 q)
+  ∀ p a b, p < (partsOf sh).size → (_ : a < (wIOf sh p).size) → b < 128 →
+    ReadCol (Rows.ofNet (Vs (sess p)).hU) (rowColOf sh p (128 * a + b)) →
+    ∃ p₀ a₀, p₀ < (partsOf sh).size ∧ ∃ (_ : a₀ < (wIOf sh p₀).size), (wIOf sh p₀)[a₀] = (wIOf sh p)[a] ∧
+      ∀ b₀ < 128, ReadCol (Rows.ofNet (Vs (sess p₀)).hU) (rowColOf sh p₀ (128 * a₀ + b₀))
 
 section read
 
@@ -114,8 +122,8 @@ theorem bitAt_eq {Q : VStmt} {bits : Q.Bits} {u : Fin Q.nv} {col : ℕ} (hj : 0 
 
 /-- **Each part's `hres` at `wRead`**: where every part `p` of rep `ρ`'s unit holds part `p` at one `w` in a good layer
 (`ResZeroAtLH`), each at `w`'s registered bits, it does at `wRead`'s: element `(wIOf sh p)[a]`'s bit `b` is the
-layer's at `wLoc`'s part `p₀` (`el_wRead`), which holds `w`'s bit there (`bitAt_of_regBit`), every column being read
-(`ResReadCol`) and keyed (`RegBit`). -/
+layer's at `wLoc`'s part `p₀` (`el_wRead`), which holds `w`'s bit there (`bitAt_of_regBit`), a part reading the element
+whole where `p` reads the bit (`ResReadCol`), each of its columns keyed (`RegBit`). -/
 theorem resZeroAtLH_wRead {Reg' : Type} (hrc : ResReadCol Vs sh sess) {zs : (s : Fin S) → (Vs s).Outer Reg'}
     {Lb : (s : Fin S) → (Vs s).Bits} (hA : ∀ s, (zs s).RegAgree (Lb s)) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : Flock.RecAlgebra.structureOf sh = .ok GS)
@@ -136,15 +144,16 @@ theorem resZeroAtLH_wRead {Reg' : Type} (hrc : ResReadCol Vs sh sess) {zs : (s :
     refine ⟨by rw [nsOf, hgp, hns], by rw [nvOf, hgp, hnv], hwI, ?_⟩
     rw [hwI, FlockVBridge.OfVStar.wIdx_size, hns]
   have hloc : ∀ p₁ (_ : p₁ < gs.size) a (_ : a < (wIOf sh p₁).size) b, b < 128 →
+      ReadCol (Rows.ofNet (Vs (sess p₁)).hU) (rowColOf sh p₁ (128 * a + b)) →
       0 < (Vs (sess p₁)).c.upv ∧ (wIOf sh p₁)[a] < nwOf sh ∧
       KeyedCol (Vs (sess p₁)) (rowColOf sh p₁ (128 * a + b)) ∧
         RegBit (zs (sess p₁)) (un p₁ ρ) 0 (rowColOf sh p₁ (128 * a + b))
           (FlockVBridge.bitOf (w (wIOf sh p₁)[a]) b) := by
-    intro p₁ hp₁ a ha b hb
+    intro p₁ hp₁ a ha b hb hrd
     obtain ⟨_, hj, _, _, _, _, _, _, _, _, _, _, _, P, ns, nv, hpart, hw, _, _⟩ := h p₁ hp₁
     obtain ⟨hns, hnv, hwI, hsz⟩ := hof p₁ hp₁ P ns nv hpart
     have hq : 128 * a + b < 128 * ns.sum := by rw [← hsz]; omega
-    have hrd := hrc p₁ P ns nv hpart _ hq
+    rw [rowColOf, hns, hnv] at hrd ⊢
     have hreg := hw _ hq hrd
     have hval : FlockVBridge.wbit (FlockVBridge.Decode.sub (wIdx (Flock.RecResiduals.portSizes sh) gs[p₁].2.1) w)
         (128 * a + b) = FlockVBridge.bitOf (w (wIOf sh p₁)[a]) b := by
@@ -155,38 +164,45 @@ theorem resZeroAtLH_wRead {Reg' : Type} (hrc : ResReadCol Vs sh sess) {zs : (s :
     have hi : (wIOf sh p₁)[a] < nwOf sh := by
       rw [FlockVBridge.Family.nwOf_eq hS, ← FlockVBridge.Family.part_nw hS hpart]
       exact FlockVBridge.Family.wIdx_lt (Flock.RecResiduals.portSizes sh) ((partsOf sh)[p₁]!.2.1) ha
-    rw [rowColOf, hns, hnv]
     refine ⟨hj, hi, ⟨?_, hrd, ?_⟩, hreg⟩
     · obtain ⟨hlt, -⟩ := hreg
       exact hlt
     · obtain ⟨-, q, kq, hkq, hkey, -⟩ := hreg
       exact ⟨q, kq, hkq, hkey⟩
   have hread : ∀ p₁ (_ : p₁ < gs.size) a (_ : a < (wIOf sh p₁).size) b, b < 128 →
+      ReadCol (Rows.ofNet (Vs (sess p₁)).hU) (rowColOf sh p₁ (128 * a + b)) →
       FlockVBridge.bitOf (Flock.RecAlgebra.el (wRead Vs sh sess un Lb ρ) (wIOf sh p₁)[a]) b =
         FlockVBridge.bitOf (w (wIOf sh p₁)[a]) b := by
-    intro p₁ hp₁ a ha b hb
+    intro p₁ hp₁ a ha b hb hrd₁
+    obtain ⟨p₂, a₂, hp₂, ha₂, he₂, hall⟩ := hrc p₁ a b (by rw [hP]; exact hp₁) ha hb hrd₁
+    rw [hP] at hp₂
     have hex : ∃ pa, WLoc Vs sh sess (wIOf sh p₁)[a] pa :=
-      ⟨(p₁, a), by rw [hP]; exact hp₁, Array.getElem?_eq_getElem ha, fun b₁ hb₁ => (hloc p₁ hp₁ a ha b₁ hb₁).2.2.1⟩
-    obtain ⟨hp₀, ha₀, -⟩ := wLoc_spec hex
+      ⟨(p₂, a₂), by rw [hP]; exact hp₂, (Array.getElem?_eq_getElem ha₂).trans (congrArg some he₂),
+        fun b₁ hb₁ => (hloc p₂ hp₂ a₂ ha₂ b₁ hb₁ (hall b₁ hb₁)).2.2.1⟩
+    obtain ⟨hp₀, ha₀, hkc⟩ := wLoc_spec hex
     rw [hP] at hp₀
     obtain ⟨ha₀, he₀⟩ := Array.getElem?_eq_some_iff.mp ha₀
-    obtain ⟨hj₀, -, ⟨hlt, hrd, -⟩, hreg⟩ := hloc _ hp₀ _ ha₀ b hb
-    rw [el_wRead Lb ρ (hloc p₁ hp₁ a ha b hb).2.1 hex, FlockVBridge.bitOf_ofBits _ hb]
+    obtain ⟨hlt, hrd₀, -⟩ := hkc b hb
+    obtain ⟨hj₀, -, -, hreg⟩ := hloc _ hp₀ _ ha₀ b hb hrd₀
+    rw [el_wRead Lb ρ (hloc p₁ hp₁ a ha b hb hrd₁).2.1 hex, FlockVBridge.bitOf_ofBits _ hb]
     have hdec := FlockVBridge.Family.bitAt_of_regBit (zs _) (hA _) hreg
-      (FlockVBridge.Family.ioColAt_of_readCol _ hlt hrd) hj₀
+      (FlockVBridge.Family.ioColAt_of_readCol _ hlt hrd₀) hj₀
     rw [he₀] at hdec
     exact hdec
   obtain ⟨hpg, hj, hone, hchk, hholo, hlog, m, k, cl, hpar, sh0, hsh0, hsheq, P, ns, nv, hpart, hw, hv, hz⟩ := h p hp
-  obtain ⟨-, -, hwI, hsz⟩ := hof p hp P ns nv hpart
+  obtain ⟨hns, hnv, hwI, hsz⟩ := hof p hp P ns nv hpart
   refine ⟨hpg, hj, hone, hchk, hholo, hlog, m, k, cl, hpar, sh0, hsh0, hsheq, P, ns, nv, hpart, fun q hq hrd => ?_,
     hv, hz⟩
   have ha : q / 128 < (wIOf sh p).size := by rw [hsz]; omega
+  have hrd' : ReadCol (Rows.ofNet (Vs (sess p)).hU) (rowColOf sh p (128 * (q / 128) + q % 128)) := by
+    rw [Nat.div_add_mod, rowColOf, hns, hnv]
+    exact hrd
   have hval : FlockVBridge.wbit (FlockVBridge.Decode.sub (wIdx (Flock.RecResiduals.portSizes sh) gs[p].2.1)
       (Flock.RecAlgebra.el (wRead Vs sh sess un Lb ρ))) q =
       FlockVBridge.wbit (FlockVBridge.Decode.sub (wIdx (Flock.RecResiduals.portSizes sh) gs[p].2.1) w) q := by
     unfold FlockVBridge.wbit
     rw [← hwI, FlockVBridge.Decode.sub_lt _ _ _ ha, FlockVBridge.Decode.sub_lt _ _ _ ha]
-    exact hread p hp _ ha _ (Nat.mod_lt _ (by norm_num))
+    exact hread p hp _ ha _ (Nat.mod_lt _ (by norm_num)) hrd'
   rw [hval]
   exact hw q hq hrd
 
@@ -221,3 +237,6 @@ theorem wDecodes_of_read (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (holoInnerAt T 
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.resZeroAtLH_wRead
+#print axioms FlockC3.Reps.wDecodes_of_read
