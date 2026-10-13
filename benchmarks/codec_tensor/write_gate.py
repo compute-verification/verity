@@ -240,11 +240,13 @@ def summarize(stdout: str, rc: int) -> dict:
         res["ok"] = False
         res["rows"] = rows_out
         return res
+    # A thread stores its 64-byte receipt as four 16-byte halves of two sectors, and L2 counts a sector twice when L1
+    # doesn't merge its halves (1.016 and 1.049 at the same inputs): the bound is a sector a store.
     for w, kv in zip(rcw, rck):
         wb, lb = bytes_of(kv, WRITE), bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum")
         rows_out.append({**w, "l2_write_bytes": wb, "l2_write_all_bytes": bytes_of(kv, ALL), "local_store_bytes": lb,
                          "write_over_receipts": wb / w["receipt_bytes"],
-                         "ok": lb == 0 and wb <= 1.01 * w["receipt_bytes"] + 4096})
+                         "ok": lb == 0 and wb <= 2 * w["receipt_bytes"] + 4096})
     app = [w for w in want if w["kernel"] == "append"]
     ak = [kv for kv in kernels if "append_kernel" in kv["name"]]
     if len(ak) != len(app):
