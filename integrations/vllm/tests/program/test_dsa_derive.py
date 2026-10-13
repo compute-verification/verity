@@ -291,6 +291,40 @@ def test_the_meta_instantiation_puts_an_explicit_cuda_buffer_on_meta():
     assert torch.empty(1, device="cpu").device.type == "cpu"
 
 
+def _cuda_only(hidden_states, router_weight, output_dtype=torch.float32):
+    raise ValueError("hidden_states and router_weight must have device_type=cuda")
+
+
+GATE_SITE = types.ModuleType("ll_bf16_site_standin")
+GATE_SITE.ll_bf16_gemm = _cuda_only
+
+
+class _Gate(nn.Module):
+    """`GateLinear.forward`'s tier 1: `ll_bf16_gemm` read from its module at the call."""
+
+    def __init__(self, rng, out_dtype=torch.float32) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(_bf16(rng, 6, 8), requires_grad=False)
+        self.out_dtype = out_dtype
+
+    def forward(self, x):
+        return GATE_SITE.ll_bf16_gemm(x, self.weight, self.out_dtype)
+
+
+@pytest.mark.parametrize("M", [1, 5, 16])
+def test_the_gate_shim_exports_the_cutedsl_gemm_as_a_leaf_and_unwinds(M):
+    from verity_vllm.program.frontend.export_compat import moe_gate_leaf
+    rng = np.random.default_rng(3)
+    with moe_gate_leaf(GATE_SITE):
+        ep = torch.export.export(_Gate(rng), (_bf16(rng, M, 8),), strict=False)
+    assert GATE_SITE.ll_bf16_gemm is _cuda_only
+    (leaf,) = [n for n in ep.graph.nodes if n.op == "call_function"]
+    assert str(leaf.target) == "vllm_iface.ll_bf16_gemm.default"
+    assert tuple(leaf.meta["val"].shape) == (M, 6) and leaf.meta["val"].dtype == torch.float32
+    with moe_gate_leaf(GATE_SITE), pytest.raises(NotImplementedError, match="ll_bf16_gemm with output dtype torch.bfloat16"):
+        torch.export.export(_Gate(rng, torch.bfloat16), (_bf16(rng, M, 8),), strict=False)
+
+
 # -- the rules ----------------------------------------------------------------------------------------------------------------
 
 

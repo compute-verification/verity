@@ -7,7 +7,8 @@ counts them as structural scaffolding.
    ("We found a fake tensor in the exported program constant's list"). For fake tensors the shim returns `detach()`
    — the same value, recorded as `aten.detach` of the parameter placeholder.
 2. The declared target applied (`apply_target_profile`).  3. vLLM's MoE dispatcher ops traced through (`moe_ops_traced`).
-4. DeepSeek sparse attention's three kernels as leaf ops (`dsa_ops_leaf`).
+4. DeepSeek sparse attention's three kernels as leaf ops (`dsa_ops_leaf`).  5. The MoE gate's cuteDSL GEMM as a leaf op
+   (`moe_gate_leaf`).
 """
 
 from __future__ import annotations
@@ -424,17 +425,45 @@ def dsa_leaves(site, model=None):
         yield
 
 
+_LL_BF16_SITE = "vllm.model_executor.kernels.linear.cute_dsl.ll_bf16"
+
+
+@contextmanager
+def moe_gate_leaf(site=None):
+    """5. `GateLinear.forward`'s tier 1 (router/gate_linear.py:181-187, M <= 16 on sm_90+ wherever CUTLASS DSL imports) calls
+    `ll_bf16_gemm`, a CUTLASS DSL kernel that checks its operands are on a CUDA device and leaves no dispatcher op behind.  For the
+    duration, ``site``'s (default vLLM's `cute_dsl.ll_bf16`, which `forward` imports it from at every call) is
+    `vllm_iface.ll_bf16_gemm(x, w)`, so the tier the declared target takes is the node the rules bind; any output dtype but f32
+    refuses at export.  Without vLLM it is a no-op."""
+    if site is None:
+        try:
+            import importlib
+            site = importlib.import_module(_LL_BF16_SITE)
+        except Exception:  # noqa: BLE001
+            yield
+            return
+    from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the op)
+
+    def ll_bf16_gemm(hidden_states, router_weight, output_dtype=torch.float32):
+        if output_dtype != torch.float32:
+            raise NotImplementedError(f"moe_gate_leaf: ll_bf16_gemm with output dtype {output_dtype} (only f32 is modelled)")
+        return torch.ops.vllm_iface.ll_bf16_gemm(hidden_states, router_weight)
+
+    with hooks.patched(site, "ll_bf16_gemm", ll_bf16_gemm):
+        yield
+
+
 @contextmanager
 def export_compat(profile=None, model=None):
     """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
-    dispatcher ops traced through their bodies (`moe_ops_traced`) + DeepSeek sparse attention's kernels as leaf ops (`dsa_ops_leaf`);
-    `model` = the instantiated module, for the per-layer entries."""
+    dispatcher ops traced through their bodies (`moe_ops_traced`) + DeepSeek sparse attention's kernels and the MoE gate's cuteDSL GEMM
+    as leaf ops (`dsa_ops_leaf`, `moe_gate_leaf`); `model` = the instantiated module, for the per-layer entries."""
     if profile is None:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         profile = TargetProfile.default()
-    with tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model):
+    with tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model), moe_gate_leaf():
         yield
 
 
 __all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "dsa_ops_leaf", "dsa_leaves",
-           "read_back_applied", "host_facts"]
+           "moe_gate_leaf", "read_back_applied", "host_facts"]

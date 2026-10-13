@@ -113,6 +113,10 @@ _define_once("dsa_indexer_attn(Tensor positions, Tensor ql_nope, Tensor q_pe, Te
              "Tensor? index_weights, Tensor? index_k, Tensor? index_k_scale, str layer_name, int topk, float scale) -> Tensor",
              "dsa_indexer_attn", lambda positions, ql_nope, q_pe, kv_c, k_pe, index_q, index_weights, index_k, index_k_scale, layer_name,
              topk, scale: ql_nope.new_empty(ql_nope.shape))
+# [GLM-5.3] vLLM's cuteDSL router GEMM `ll_bf16_gemm(x [M, K] bf16, w [N, K] bf16) -> [M, N] f32` (`GateLinear` tier 1, M <= 16 on
+# sm_90+), the leaf `export_compat.moe_gate_leaf` puts in its place while exporting: a CUTLASS DSL kernel that is no dispatcher op
+_define_once("ll_bf16_gemm(Tensor x, Tensor w) -> Tensor", "ll_bf16_gemm",
+             lambda x, w: x.new_empty((x.shape[0], w.shape[0]), dtype=torch.float32))
 
 iface = torch.ops.vllm_iface
 
