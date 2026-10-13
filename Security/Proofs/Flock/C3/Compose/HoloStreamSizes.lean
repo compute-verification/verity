@@ -128,15 +128,4 @@ theorem holoSizes_holoStreams {m kLog claims : ℕ} {sp : RecSparse.Shape} {L : 
         holoSizes_append, holoSizes_sparse, holoSizes_sparse, holoSizes_stacked hs, mReg_sparseOf]
       simp only [List.map_append, List.append_assoc]
 
-#print axioms sparseOf
-#print axioms degrees_length
-#print axioms stacked_iff
-#print axioms pLog_sparseOf
-#print axioms mReg_sparseOf
-#print axioms flatMap_replicate_fst
-#print axioms holoSizes_append
-#print axioms holoSizes_sparse
-#print axioms holoSizes_stacked
-#print axioms holoSizes_holoStreams
-
 end FlockC3.Compose

@@ -350,33 +350,4 @@ theorem roundWords_one {st : Flock.Stmt} {hp : HoloParams}
   rw [dif_pos h]
   exact coinWords_vec e _
 
-#print axioms holoSizes
-#print axioms formTy_coinTy
-#print axioms holoForms
-#print axioms kindCoinTys_append
-#print axioms kindCoinTys_rounds
-#print axioms kindCoinTys_qbShape
-#print axioms kindCoinTys_recShape
-#print axioms kindCoinTys_ligShape
-#print axioms kindCoinTys_holoRepShape
-#print axioms kindCoinTys_sparseKinds
-#print axioms kindCoinTys_holoKinds
-#print axioms length_kindCoinTys_holoKinds
-#print axioms nthTy_map
-#print axioms holoCTs_succ
-#print axioms coinArr_coinWords
-#print axioms coinWords_vec
-#print axioms coinArr_roundWords
-#print axioms roundWords_one
-#print axioms zcForms_ne_one
-#print axioms lcForms_ne_one
-#print axioms opForms_ne_one
-#print axioms sparseForms_ne_one
-#print axioms ligForms_default
-#print axioms ligForms_schedAt
-#print axioms holoForms_ne_one_of
-#print axioms holoForms_ne_one
-#print axioms getD_ne_one
-#print axioms holoForms_getD_ne_one
-
 end FlockC3.Compose
