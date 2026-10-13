@@ -4,7 +4,8 @@ import Proofs.Flock.Recursive.HoloSched
 # The reps' coin rounds at the hidden-unit schedule
 
 `coinRounds_holo`: at a claim, the rounds of `holoRounds` that draw coins are all of its rounds but z_partial's
-(`zpRound`); `coinRounds_holoRep` states it at the verifier's `RecVStar.holoRepRounds`, which is `holoRounds`.
+(`zpRound`); `coinRounds_holoRep` states it at the verifier's `RecVStar.holoRepRounds`, which is `holoRounds`, and
+`coinRounds_holoRep_split` as the two ranges either side of `zpRound` (`range'_split_filter`).
 `repRounds` draws in every round (`repRounds_coins`): `fast100` (`Schedule.lean:47`) puts `m` in `[22, 35]`, the
 table's variables above 0 and every level's queries at 2 or more (`fast100_facts`, by evaluating it at each `m`), and
 each of `repRounds`' rounds draws a positive constant, `m - 13`, the claims, the table's variables, a split
@@ -40,33 +41,6 @@ theorem oforIn_inv {α σ : Type} {f : α → σ → Option (ForInStep σ)} {L :
     (h : forIn L init f = some v) (P : α → Prop) (Q : σ → Prop) (hL : ∀ a ∈ L, P a)
     (hf : ∀ a, P a → ∀ r y, Q r → f a r = some y → ∃ r', y = .yield r' ∧ Q r') (hq : Q init) : Q v :=
   oforIn_inv' P Q f hf L hL init v hq h
-
-theorem pos_append {a b : Array SchedRound} (ha : ∀ x ∈ a, 0 < x.1) (hb : ∀ x ∈ b, 0 < x.1) :
-    ∀ x ∈ a ++ b, 0 < x.1 := by
-  intro x hx
-  rcases Array.mem_append.1 hx with h | h
-  · exact ha x h
-  · exact hb x h
-
-theorem pos_rep {k : Nat} {a : SchedRound} (h : 0 < a.1) : ∀ x ∈ Array.replicate k a, 0 < x.1 := by
-  intro x hx
-  rw [(Array.mem_replicate.1 hx).2]
-  exact h
-
-theorem pos_nil : ∀ x ∈ ([] : List SchedRound), 0 < x.1 := by
-  intro x hx
-  cases hx
-
-theorem pos_cons {a : SchedRound} {l : List SchedRound} (ha : 0 < a.1) (hl : ∀ x ∈ l, 0 < x.1) :
-    ∀ x ∈ a :: l, 0 < x.1 := by
-  intro x hx
-  rcases List.mem_cons.1 hx with rfl | h
-  · exact ha
-  · exact hl x h
-
-theorem pos_arr {l : List SchedRound} (h : ∀ x ∈ l, 0 < x.1) : ∀ x ∈ l.toArray, 0 < x.1 := by
-  intro x hx
-  exact h x (List.mem_toArray.1 hx)
 
 /-- **`fast100`'s schedules** (`Schedule.lean:47-61`), by evaluating it at each `m`: `m ≥ 22`, the table has variables,
 and every level draws at least two queries. -/
@@ -130,24 +104,39 @@ theorem repRounds_coins {m kLog claims : Nat} {out : Array SchedRound} (hc : 0 <
     try dsimp only at hy
     repeat' (first | (obtain ⟨_, _, hy⟩ := obind_some hy) | (split at hy))
     all_goals first
-      | exact absurd hy (by simp)
-      | (cases hy
+      | contradiction
+      | (simp at hy; done)
+      | (first
+         | cases hy
+         | (injection hy with hy; subst hy)
+         | (simp only [pure, Option.some.injEq] at hy; subst hy)
          refine ⟨_, rfl, ?_⟩
-         try dsimp only
-         repeat' apply pos_append
+         intro x hx
+         try dsimp only at hx
+         simp only [Array.mem_append, Array.mem_replicate, List.mem_toArray, List.mem_cons, List.not_mem_nil,
+           or_false] at hx
+         repeat' (first | (refine Or.elim hx (fun hx => ?_) (fun hx => ?_)) | (replace hx := hx.2))
          all_goals first
-           | exact hr'
-           | (apply pos_rep; first | decide | (dsimp only; omega) | omega)
-           | (apply pos_arr
-              repeat' apply pos_cons
-              all_goals first | exact pos_nil | decide | (dsimp only; omega) | omega | (dsimp only; assumption)))
-  · try dsimp only
-    repeat' apply pos_append
-    all_goals first
-      | (apply pos_rep; first | decide | (dsimp only; omega) | omega)
-      | (apply pos_arr
-         repeat' apply pos_cons
-         all_goals first | exact pos_nil | decide | (dsimp only; omega) | omega | (dsimp only; assumption))
+           | exact hr' x hx
+           | (subst hx
+              first | decide | (dsimp only; omega) | (dsimp only; assumption) | (simp only; omega)))
+  · intro x hx
+    try dsimp only at hx
+    simp only [Array.mem_append, Array.mem_replicate, List.mem_toArray, List.mem_cons, List.not_mem_nil,
+      or_false] at hx
+    repeat' (first | (refine Or.elim hx (fun hx => ?_) (fun hx => ?_)) | (replace hx := hx.2))
+    all_goals
+      subst hx
+      first | decide | (dsimp only; omega) | (dsimp only; assumption) | (simp only; omega)
+
+/-- `fast100` puts `m` at 22 or more (`fast100_facts`), so `holoRepRounds` is none below it. -/
+theorem holoRepRounds_m {m kLog claims : Nat} {rs : Array SchedRound} (h : holoRepRounds m kLog claims = some rs) :
+    22 ≤ m := by
+  unfold holoRepRounds at h
+  obtain ⟨out, hout, -⟩ := obind_some h
+  unfold repRounds at hout
+  obtain ⟨sch, hf, -⟩ := obind_some hout
+  exact (fast100_facts hf).1
 
 /-- Round `q` of `xs` with a round `z` put at `K` and round `K` replaced by `o` after it. -/
 theorem getElem?_insert {xs : Array SchedRound} {K : Nat} {z o : SchedRound} (hK : K < xs.size) (q : Nat) :
@@ -158,7 +147,7 @@ theorem getElem?_insert {xs : Array SchedRound} {K : Nat} {z o : SchedRound} (hK
     omega
   have hAB : (xs.extract 0 K ++ #[z, o]).size = K + 2 := by
     rw [Array.size_append, hA]
-    rfl
+    all_goals rfl
   by_cases h1 : q < K
   · rw [if_pos h1, Array.getElem?_append_left (by omega), Array.getElem?_append_left (by omega),
       Array.getElem?_extract, if_pos (by omega), Nat.zero_add]
@@ -166,13 +155,13 @@ theorem getElem?_insert {xs : Array SchedRound} {K : Nat} {z o : SchedRound} (hK
     by_cases h2 : q = K
     · subst h2
       rw [if_pos rfl, Array.getElem?_append_left (by omega), Array.getElem?_append_right (by omega), hA, Nat.sub_self]
-      rfl
+      all_goals first | rfl | simp
     · rw [if_neg h2]
       by_cases h3 : q = K + 1
       · subst h3
         rw [if_pos rfl, Array.getElem?_append_left (by omega), Array.getElem?_append_right (by omega), hA]
         first
-        | (rw [show K + 1 - K = 1 by omega]; rfl)
+        | (rw [show K + 1 - K = 1 by omega]; all_goals rfl)
         | simp
       · rw [if_neg h3, Array.getElem?_append_right (by omega), hAB, Array.getElem?_extract]
         by_cases h4 : q - (K + 2) < min xs.size xs.size - (K + 1)
@@ -246,17 +235,53 @@ theorem coinRounds_holo {m kLog claims : Nat} {rs : Array SchedRound} (hc : 0 < 
     rw [decide_eq_true h0]
     exact (bne_iff_ne.2 hk).symm
 
-/-- `coinRounds_holo` at the verifier's `holoRepRounds` (`RecVStar.lean:640`), which is `holoRounds`. -/
+/-- The verifier's `holoRepRounds` (`RecVStar.lean:640`) is `holoRounds`. -/
+theorem holoRepRounds_eq (m kLog claims : Nat) : holoRepRounds m kLog claims = holoRounds m kLog claims := by
+  first
+  | rfl
+  | (unfold holoRepRounds holoRounds zpRound; rfl)
+  | simp only [holoRepRounds, holoRounds, zpRound]
+
+/-- `coinRounds_holo` at the verifier's `holoRepRounds`. -/
 theorem coinRounds_holoRep {m kLog claims : Nat} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRepRounds m kLog claims = some rs) :
     coinRounds rs = (List.range rs.size).filter fun q => q != zpRound m kLog :=
-  coinRounds_holo hc h
+  coinRounds_holo hc ((holoRepRounds_eq m kLog claims).symm.trans h)
+
+/-- **`[0, N)` but `Z`, as two ranges**: the rounds below `Z` and those from `Z + 1` to `N`. -/
+theorem range'_split_filter {Z N : Nat} (h : Z < N) :
+    List.range' 0 Z ++ List.range' (Z + 1) (N - (Z + 1)) = (List.range N).filter fun q => q != Z := by
+  obtain ⟨K, rfl⟩ : ∃ K, N = Z + (K + 1) := ⟨N - (Z + 1), by omega⟩
+  have e : List.range (Z + (K + 1)) = List.range' 0 Z ++ (Z :: List.range' (Z + 1) K) := by
+    first
+    | rw [List.range_eq_range', ← List.range'_append_1, Nat.zero_add, List.range'_succ]
+    | (rw [List.range_eq_range', ← List.range'_append_1, Nat.zero_add]; rfl)
+  have hlo : ∀ a ∈ List.range' 0 Z, (a != Z) = true := fun a ha => by
+    obtain ⟨_, h2⟩ := List.mem_range'_1.1 ha
+    exact bne_iff_ne.2 (by omega)
+  have hhi : ∀ a ∈ List.range' (Z + 1) K, (a != Z) = true := fun a ha => by
+    obtain ⟨h1, _⟩ := List.mem_range'_1.1 ha
+    exact bne_iff_ne.2 (by omega)
+  rw [e, List.filter_append, List.filter_cons_of_neg (by simp), show Z + (K + 1) - (Z + 1) = K by omega,
+    List.filter_eq_self.2 hlo, List.filter_eq_self.2 hhi]
+
+/-- **`holoRepRounds`' coin rounds, as two ranges** either side of z_partial's round, at a claim: the form
+`FlockC3.Reps.repIdxB` has. -/
+theorem coinRounds_holoRep_split {m kLog claims : Nat} {rs : Array SchedRound} (hc : 0 < claims)
+    (h : holoRepRounds m kLog claims = some rs) :
+    coinRounds rs = List.range' 0 (zpRound m kLog) ++
+      List.range' (zpRound m kLog + 1) (rs.size - (zpRound m kLog + 1)) := by
+  rw [coinRounds_holoRep hc h]
+  exact (range'_split_filter (holoRounds_coins hc h).1).symm
 
 #print axioms fast100_facts
 #print axioms repRounds_coins
+#print axioms holoRepRounds_m
 #print axioms getElem?_insert
 #print axioms holoRounds_coins
 #print axioms coinRounds_holo
 #print axioms coinRounds_holoRep
+#print axioms range'_split_filter
+#print axioms coinRounds_holoRep_split
 
 end Flock.Guarantees.HoloRepCoins
