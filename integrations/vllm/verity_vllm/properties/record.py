@@ -37,11 +37,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, the installed FA2 softcap kernel launches kBlockM 64 and kBlockN fa2_kblock_n(D), MUFU ex2 / rcp are "
              "core's tables and MUFU.TANH is MufuTanh_v1 on every input, and every checked output row equals the registered "
              "AttentionSoftcap_v2, which the target binds, on every head."),
-    Property("glm53_block_fp8_capture", "verity-vllm/glm53-block-fp8-capture/v1",
+    Property("glm53_block_fp8_capture", "verity-vllm/glm53-block-fp8-capture/v2",
              "On the capture's Hopper GPU, vLLM selects CutlassFp8BlockScaledMMKernel for GLM-5.3's FP8 linears and Triton's "
-             "fused_moe_kernel (TritonExperts) for its experts, every expert launch runs its dot as k32 e4m3 wgmma, and at GLM-5.3's "
-             "shapes every output word of every launch equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v1 at the launch's "
-             "statics, and every activation quant equals Fp8GroupQuant_v1, bit for bit."),
+             "fused_moe_kernel (TritonExperts) for its experts, every compiled expert kernel runs its dot as the step fp8_moe gives its "
+             "tile (k32 e4m3 wgmma, or f16 mma.sync m16n8k16 on widened e4m3), and at GLM-5.3's shapes every output word of every launch "
+             "equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v3 at the launch's statics with that step as DOT, and every "
+             "activation quant equals Fp8GroupQuant_v1, bit for bit."),
     Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v3",
              "On the capture's 8 Hopper GPUs at the record's served setting (served.setting: vLLM's defaults, or its custom "
              "all-reduce off), each set of rank processes holding that setting's communicators, GLM-5.3's fused_allreduce_rms_norm "

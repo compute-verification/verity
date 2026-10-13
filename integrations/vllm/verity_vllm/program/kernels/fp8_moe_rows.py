@@ -1,5 +1,6 @@
 """The fused-MoE expert GEMM's twin (`registry.fp8_moe`: `MoeExpertFp8BlockCoordinate(W)_v1`, and `_v3` with its `DOT`), vectorised
-over one (token, expert) pair's output columns with `derived_rows`'s k32 e4m3 step or core's sm_120 one, and the twin of the activation between the two launches
+over one (token, expert) pair's output columns with `derived_rows`'s k32 e4m3 step, core's sm_120 one or sm_90's MMAv2 one as its two
+k16 instructions, and the twin of the activation between the two launches
 (`SiluMulFp8BlockQuant_v1`) over whole rows.  The scalar Definitions are the reference; tests/program/test_fp8_moe.py checks these
 twins against them word for word, and the H200 capture (tests/properties/glm53_block_fp8_capture_gpu.py) checks the kernels' words
 against them."""
@@ -10,8 +11,9 @@ from functools import lru_cache
 import numpy as np
 
 from verity.ml.kernels.tc import group_sum_total_batch
-from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
-from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
+from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.ml.circuits.silicon.cast import e4m3_to_f32_word
+from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16
 from verity_vllm.program.kernels.derived_rows import f2fp_bf16, fma_rn, mul_rn, tc_dot32_e4m3
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.fp8 import MIN_SCALE_BITS, weight_blocks
@@ -33,9 +35,30 @@ def qmma_dot32_e4m3(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.n
     return np.asarray(group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b)[0], dtype=np.uint32), nonfin
 
 
+#: each e4m3 byte as the bf16 word of its value (exact: e4m3's exponent and fraction fit bf16's, as they fit the f16 that
+#: `cvt.rn.f16x2.e4m3x2` gives; a NaN byte a bf16 NaN), the operand format of core's k16 step
+E4M3_AS_BF16 = np.array([e4m3_to_f32_word(e) >> 16 for e in range(256)], dtype=np.uint16)
+#: the k of each of MMAv2's two chained k16 instructions in a 32-wide block: Triton 3.7.1's f16 operand layout at kWidth 4 gives the
+#: first k mod 4 in {0, 1} and the second {2, 3}
+MMAV2_HALVES = (np.array([k for k in range(32) if k % 4 < 2]), np.array([k for k in range(32) if k % 4 >= 2]))
+
+
+def mmav2_dot32_e4m3(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """`HopperE4m3MmaV2Dot32_v1` vectorised as the instructions run: the bytes widened (`E4M3_AS_BF16`), then core's kernel of the
+    k16 step `HOPPER_BF16_M16N8K16` over `MMAV2_HALVES[0]` and, from its result, over `MMAV2_HALVES[1]`: acc (n,) f32 words, a/b
+    (n, 32) e4m3 bytes -> (f32 words, `qmma_dot32_e4m3`'s mask)."""
+    acc = np.asarray(acc, dtype=np.uint32)
+    a, b = np.asarray(a, dtype=np.uint8), np.asarray(b, dtype=np.uint8)
+    nonfin = ((a & E4M3_NAN) == E4M3_NAN).any(axis=-1) | ((b & E4M3_NAN) == E4M3_NAN).any(axis=-1) | ((acc & 0x7F800000) == 0x7F800000)
+    wa, wb = E4M3_AS_BF16[a], E4M3_AS_BF16[b]
+    for half in MMAV2_HALVES:
+        acc = group_sum_total_batch(HOPPER_BF16_M16N8K16, acc, wa[:, half], wb[:, half])[0]
+    return np.asarray(acc, dtype=np.uint32), nonfin
+
+
 #: the twin's k32 step by the registered step a `MoeExpertFp8Block*_v3` binds as `DOT` (`_v1` is "hopper")
-TWIN_DOTS = {"hopper": tc_dot32_e4m3, "blackwell": qmma_dot32_e4m3}
-TWIN_DOT_OF = {HopperE4m3QgmmaDot32.id: "hopper", BlackwellE4m3QmmaDot32.id: "blackwell"}
+TWIN_DOTS = {"hopper": tc_dot32_e4m3, "blackwell": qmma_dot32_e4m3, "mmav2": mmav2_dot32_e4m3}
+TWIN_DOT_OF = {HopperE4m3QgmmaDot32.id: "hopper", BlackwellE4m3QmmaDot32.id: "blackwell", HopperE4m3MmaV2Dot32.id: "mmav2"}
 
 
 def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, G: int = 128, KB: int = 32,
@@ -46,7 +69,8 @@ def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: 
     bytes, ws (cdiv(N, G), K/G) f32 words -> (N bf16 words, nonfinite mask).  Per output column n (`fp8_moe.triton_block_acc`):
     for each K tile k ascending, `d` = KB/32 `tc_dot32_e4m3` steps from +0, then `acc` = FFMA(FMUL(d, sx[kb]), ws[n // G][kb], acc)
     from +0 (the two scales swapped under `swap`), kb = k*KB // G; then FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`.
-    `dot` = "blackwell" is the `_v3{DOT=BlackwellE4m3QmmaDot32_v1}` forms, `qmma_dot32_e4m3` for the step."""
+    `dot` = "blackwell" is the `_v3{DOT=BlackwellE4m3QmmaDot32_v1}` forms, `qmma_dot32_e4m3` for the step, and "mmav2" the
+    `_v3{DOT=HopperE4m3MmaV2Dot32_v1}` forms (cc 9.0's small-batch tiles), `mmav2_dot32_e4m3`."""
     step = TWIN_DOTS[dot]
     xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
     K = xq.size
