@@ -31,8 +31,8 @@ from verity.ml.circuits.silicon.errors import InvalidArtifact
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_E5M2_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4
 from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
-from verity.ml.circuits.silicon.total_fp8 import (HOPPER_E4M3_MMAV2_K32, HOPPER_E4M3_WGMMA_K32, MMAV2_E4M3_K_ORDER, tc_dot_total_e4m3,
-                                                  tc_dot_total_e5m2)
+from verity.ml.circuits.silicon.total_fp8 import (HOPPER_E4M3_MMAV2_K32, HOPPER_E4M3_WGMMA_K32, MMAV2_E4M3_K_ORDER, in_mmav2_e4m3_k_order,
+                                                  tc_dot_total_e4m3, tc_dot_total_e5m2)
 
 BF16, F32, E4M3, E5M2, E2M1 = Value(16), Value(32), Value(8), Value(8), Value(4)
 A16 = Array(16, BF16)
@@ -127,8 +127,7 @@ def HopperE4m3MmaV2Dot32(acc: int, *ab: int) -> int:
     encoding (NaN -> 0x7FFFFFFF, sticky/saturating infinities, zero always +0).  Not ptxas's own lowering of PTX
     `mma.sync.m16n8k32` e4m3 on sm_90 (two HMMA from +0 and IEEE FADDs), and not the wgmma step `HopperE4m3QgmmaDot32_v1`, whose
     14-bit adder truncates the accumulator."""
-    return tc_dot_total_e4m3(HOPPER_E4M3_MMAV2_K32, acc, [ab[k] for k in MMAV2_E4M3_K_ORDER],
-                             [ab[32 + k] for k in MMAV2_E4M3_K_ORDER])
+    return tc_dot_total_e4m3(HOPPER_E4M3_MMAV2_K32, acc, in_mmav2_e4m3_k_order(ab[:32]), in_mmav2_e4m3_k_order(ab[32:64]))
 
 
 @primitive("BlackwellE4m3QmmaDot32", 1, [("acc", F32), ("a", A32_8), ("b", A32_8)], F32,
