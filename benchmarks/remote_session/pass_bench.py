@@ -115,7 +115,10 @@ def main() -> int:
                 host.append(time.perf_counter_ns() - t0)
                 ok = ok and prev == s.plain_root(sd)
             gpu = s.pass_gpu_ms[-a.passes:]
-            row = {"chunk_log2": c, "ctas": ctas, "h0": s.h0, "root_ok": ok,
+            names = ("head", "set_pass", "alloc", "launch", "wait", "root")
+            ph = s.pass_host_phases[-a.passes:]
+            phases = {k: sorted(x[j] for x in ph)[len(ph) // 2] for j, k in enumerate(names)}
+            row = {"chunk_log2": c, "ctas": ctas, "h0": s.h0, "root_ok": ok, "host_phases_p50_ns": phases,
                    "gpu_ms": percentiles(sorted(gpu)), "host_ns": percentiles(sorted(host)),
                    "tau": sorted(gpu)[len(gpu) // 2] / read_ms, "tau_host": sorted(host)[len(host) // 2] / 1e6 / read_ms}
             out["pipelined"].append(row)

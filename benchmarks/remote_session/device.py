@@ -181,6 +181,7 @@ class DeviceStore:
         self.dropped: dict[int, bytes] = {}
         self.pass_gpu_ms: list[float] = []
         self.open_stats: list[dict] = []
+        self.pass_host_phases: list[tuple] = []
 
     def shape(self, chunk: int, kept_from: int, sketch_ctas: int) -> None:
         """A pass's chunk (blocks), h0 (at most the chunk's subtree height) and the sketch's CTAs, and its ring."""
@@ -240,12 +241,16 @@ class DeviceStore:
         """One pass (`rs_signs16`, `rs_pass`): its root, and what its openings need kept, (seed, its packed signs,
         levels h0 … H)."""
         torch = self.torch
+        t0 = time.perf_counter_ns()
         head = stream_head(seed)
+        t1 = time.perf_counter_ns()
         self.set_pass(self.lib, seed)
+        t2 = time.perf_counter_ns()
         pk = torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda")
         kept = torch.empty((self.kept_at[self.H + 1], 8), dtype=torch.int64, device="cuda")
         ctr, ys, dig, up = self.ring
         a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        t3 = time.perf_counter_ns()
         a.record()
         main = torch.cuda.current_stream().cuda_stream
         rc = self.lib.so.rs_signs16(head, len(head), pk.data_ptr(), main) or self.lib.so.rs_pass(
@@ -254,8 +259,12 @@ class DeviceStore:
         if rc:
             raise RuntimeError(f"rs_pass: {rc}")
         b.record()
+        t4 = time.perf_counter_ns()
+        b.synchronize()
+        t5 = time.perf_counter_ns()
         root = digests(kept[-1:].cpu())[0]
         self.pass_gpu_ms.append(a.elapsed_time(b))
+        self.pass_host_phases.append((t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, time.perf_counter_ns() - t5))
         return root, (seed, pk, kept)
 
     def signs_match(self, seed: bytes) -> bool:
