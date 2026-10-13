@@ -154,26 +154,6 @@ def kernel_geometry(seqlen_q: int, seqlen_k: int, rows: list[int] | np.ndarray, 
 PREPARE_VARLEN_MAX_BATCHES_1CTA = 992
 
 
-def num_splits_heuristic(total_mblocks: int, num_sms: int, num_n_blocks: int, num_m_blocks: int, size_one_kv_head: int,
-                         is_causal_or_local: bool, max_splits: int) -> int:
-    """``hopper/heuristics.h::num_splits_heuristic`` at vllm-flash-attn 506341a1, its float arithmetic in f32 as the host compiles it."""
-    f32 = np.float32
-    if f32(total_mblocks) >= f32(0.8) * f32(num_sms):
-        size_l2 = 50 * 1024 * 1024
-        if size_one_kv_head > size_l2 and num_m_blocks >= num_sms * 2 and not is_causal_or_local:
-            return min((size_one_kv_head + size_l2 - 1) // size_l2, max_splits)
-        return 1
-    if num_n_blocks <= 4:
-        return 1
-    max_splits = min(max_splits, num_sms, num_n_blocks)
-    eff = []
-    for ns in range(1, max_splits + 1):
-        n_waves = f32(total_mblocks * ns) / f32(num_sms)
-        eff.append(n_waves / np.ceil(n_waves))
-    best = max(eff)
-    return next((ns for ns, e in enumerate(eff, 1) if float(e) >= 0.85 * float(best)), 1)
-
-
 def num_splits(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num_sms: int, Dv: int | None = None) -> list[int]:
     """The split count FA3 runs each sequence of one causal varlen self-attention launch at: :func:`split_plan`'s second part."""
     return split_plan(seqlens, H, KVH, D, num_sms=num_sms, Dv=Dv)[1]
@@ -187,11 +167,12 @@ def split_plan(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num
     ``flash_api.cpp::get_num_splits``' static bound (the tile of max_seqlen_q, ``total_mblocks = h_k * num_m_blocks`` as if batch = 1,
     PackGQA rows), then ``flash_prepare_scheduler.cu``'s dynamic split per sequence (``blocks_per_sm = ceilf(total_blocks * 1.1f * h_k /
     num_sm)`` over every sequence's ``num_m_blocks * num_n_blocks``; ``max(min(ceil(num_n_blocks / blocks_per_sm), static), 1)``); one
-    split past ``PREPARE_VARLEN_MAX_BATCHES_1CTA`` sequences.  The host heuristic is IEEE f32; the device's ``/`` is ``div.full.ftz.f32``
-    (``--use_fast_math``: the numerator times the measured MUFU.RCP of ``num_sm``, ``DivFullRcp_v1``), assumed to lower as Triton's does.
-    A sequence counted above 1 is combined from its splits (``fa3_split_twins.split_call``, ``AttentionSplit_v1``); one counted 1
-    is written directly."""
-    from verity_vllm.program.kernels import derived_rows as DR
+    split past ``PREPARE_VARLEN_MAX_BATCHES_1CTA`` sequences.  The host heuristic and the device quotient are
+    ``sparse_mla_split.num_splits_heuristic`` (IEEE f32) and ``blocks_per_sm`` (``div.full.ftz.f32`` under ``--use_fast_math``: the
+    numerator times the measured MUFU.RCP of ``num_sm``, ``DivFullRcp_v1``), which the sparse decode's split reads too.  A sequence
+    counted above 1 is combined from its splits (``fa3_split_twins.split_call``, ``AttentionSplit_v1``); one counted 1 is written
+    directly."""
+    from verity_vllm.program.registry import sparse_mla_split as W
     L = [int(x) for x in seqlens]
     Dv = int(D if Dv is None else Dv)
     g = int(H) // int(KVH)
@@ -201,16 +182,12 @@ def split_plan(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num
     BM, BN = kblock_m_for(D, max_q, g), kblock_n_for(D, max_q, g)
     nmb_static = -(-(max_q * g) // BM)
     nnb_static = -(-max_q // BN)
-    static = num_splits_heuristic(int(KVH) * nmb_static, int(num_sms), nnb_static, nmb_static, max_q * (int(D) + Dv) * 2, True, 128)
+    static = W.num_splits_heuristic(int(KVH) * nmb_static, int(num_sms), nnb_static, nmb_static, max_q * (int(D) + Dv) * 2, True, 128)
     if static == 1:
         return 1, [1] * len(L)
     nmb = [-(-(x * g) // BM) for x in L]
     nnb = [-(-x // BN) for x in L]
-    total = sum(m * n for m, n in zip(nmb, nnb))
-    f32 = np.float32
-    a = np.array([f32(f32(f32(total) * f32(1.1)) * f32(KVH))], np.float32).view(np.uint32)
-    b = np.array([f32(num_sms)], np.float32).view(np.uint32)
-    bps = int(np.ceil(DR.as_f32(DR.mul_ftz(DR.div_full_scale_a(a, b), DR.div_full_rcp(b)))[0]))
+    bps = W.blocks_per_sm(sum(m * n for m, n in zip(nmb, nnb)), int(num_sms), int(KVH))
     return static, [max(min(-(-n // bps), static), 1) for n in nnb]
 
 

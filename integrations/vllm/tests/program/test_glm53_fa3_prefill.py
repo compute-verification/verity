@@ -17,6 +17,7 @@ from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import fa2_relation, fa3_model
 from verity_vllm.program.registry import attention_vocab, b1, hopper
 from verity_vllm.program.registry import fa3_check_inf as F3
+from verity_vllm.program.registry import sparse_mla_split as W
 
 CMAP = Path(__file__).resolve().parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -131,18 +132,20 @@ def test_the_twin_refuses_a_tile_hdim_256_does_not_run():
 def test_the_served_split_heuristic_at_glm53_per_rank(lengths, static, expected):
     """vLLM passes `num_splits = 0` to the MLA prefill outside batch invariance (which GLM-5.3 refuses on sm_90): `get_num_splits`'
     static bound, then the prepare kernel's per-sequence count.  Per rank (8 heads, 132 SMs) launches whose longest sequence has
-    321..1664 tokens run the Split mainloop and `FlashAttnFwdCombine` (outside the model; a sequence counted 1 is written directly);
-    993 sequences or more never do."""
+    321..1664 tokens run the Split mainloop and `FlashAttnFwdCombine` (`AttentionSplit_v1`; a sequence counted 1 is written
+    directly); 993 sequences or more never do."""
     assert fa3_model.split_plan(lengths, NH, KVH, D, num_sms=132) == (static, expected)
     assert fa3_model.num_splits(lengths, NH, KVH, D, num_sms=132) == expected
 
 
 def test_the_devices_split_quotient_is_the_exact_one_at_glm53_per_rank():
     """`blocks_per_sm = ceilf(total * 1.1f * 8 / 132)` with `/` as `div.full.ftz.f32`: MUFU.RCP(132) is one ulp below 1/132, so the device's
-    quotient never rounds up past the IEEE one, and its ceiling is the IEEE ceiling for every total blocks count up to 4000."""
+    quotient never rounds up past the IEEE one, and its ceiling is the IEEE ceiling for every total blocks count up to 4000;
+    `sparse_mla_split.blocks_per_sm`, which `split_plan` reads, is that ceiling."""
     b = np.array([132.0], np.float32).view(np.uint32)
     assert int(DR.div_full_rcp(b)[0]) == int(np.array([np.float32(1) / np.float32(132)]).view(np.uint32)[0]) - 1
     f32 = np.float32
     a = ((np.arange(1, 4001).astype(f32) * f32(1.1)).astype(f32) * f32(8)).astype(f32)
     device = DR.as_f32(DR.mul_ftz(DR.div_full_scale_a(a.view(np.uint32), np.repeat(b, a.size)), np.repeat(DR.div_full_rcp(b), a.size)))
     assert np.array_equal(np.ceil(device), np.ceil(a / f32(132)))
+    assert [W.blocks_per_sm(t, 132, 8) for t in range(1, 4001)] == np.ceil(device).astype(int).tolist()
