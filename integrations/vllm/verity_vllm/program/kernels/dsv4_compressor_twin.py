@@ -233,7 +233,8 @@ def _cs(rng, n, k):
 
 def _row_x(rng, n, D):
     """Rows whose groups span the scale range: each 8-wide stretch at its own magnitude, some groups all zero, a few edges."""
-    x = (rng.standard_normal((n, D)) * 2.0 ** np.repeat(rng.integers(-40, 40, (n, D // 8)), 8, axis=1)).astype(np.float32)
+    mag = np.repeat(rng.integers(-40, 40, (n, -(-D // 8))), 8, axis=1)[:, :D]
+    x = (rng.standard_normal((n, D)) * 2.0 ** mag).astype(np.float32)
     x[rng.random((n, D)) < 0.05] = 0.0
     return FT._edges(rng, x.view(U32), _X_EDGE, frac=0.3, k=1)
 
