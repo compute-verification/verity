@@ -136,6 +136,23 @@ def test_the_profiler_record_pins_grid_split_count_and_reduction() -> None:
     assert not X._profile_record({"traceEvents": trace["traceEvents"][:1]})["ok"]
 
 
+def test_cutedsl_splitk_is_not_a_profiled_cublas_split() -> None:
+    trace = {"traceEvents": [
+        {"cat": "kernel", "name": "kernel_cutlass_kernel_vllmmodel_executorkernelslinearcute_dsl_ll_bf16_splitkLLBf16SplitK",
+         "args": {"grid": [1, 16, 6]}},
+    ]}
+    got = X._profile_record(trace)
+    assert got["ok"] and got["split_k"] is None and got["reduction_kernels"] == []
+
+
+def test_cutedsl_dispatch_wins_over_legacy_profile_split_count(tmp_path) -> None:
+    job = _job(tmp_path, "splitk")
+    job["split_k"] = SPLITK["SPLIT_K"]              # v3 used to mistake this profiler field for a cuBLAS route
+    assert X._cublas_split_k(job) is None
+    t = _total([X.compare(j) for j in X.jobs_of(job)])
+    assert (t["words"], t["mismatch"], t["twin_mismatch"]) == (5 * 16, 0, 0)
+
+
 def test_the_gate_kernel_record_is_dispatch_sm90s() -> None:
     assert X._kernel_of([]) == {"kind": "cublas"}
     dot = {"backend": "dotprod", "bs": 128, "split_k": 0, "num_stages": 0}

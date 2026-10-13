@@ -283,7 +283,10 @@ def _profile_record(trace: dict[str, Any]) -> dict[str, Any]:
                                          ("Block X", "Block Y", "Block Z")) if all(k in args for k in ks)), None)
         launches.append({"name": str(e.get("name", "")), "grid": grid,
                          "block": [int(args[k]) for k in block_keys] if block_keys else None})
-    main = [x for x in launches if "splitk" in x["name"].lower() and "reduce" not in x["name"].lower()]
+    # `LLBf16SplitK` has its split count in the dispatch record and reduces its cluster ranks in-kernel.  This field describes
+    # cuBLAS's otherwise opaque split-K route, whose main kernel is followed by a separate reduction kernel.
+    main = [x for x in launches if "splitk" in x["name"].lower() and "reduce" not in x["name"].lower()
+            and "cute_dsl" not in x["name"].lower()]
     reductions = [x for x in launches if "splitkreduce" in x["name"].lower()]
     split_k = main[-1]["grid"][2] if main and main[-1]["grid"][2] > 1 else None
     return {"launches": launches, "split_k": split_k, "reduction_kernels": reductions,
@@ -450,6 +453,12 @@ def _kernel_of(keys: list[dict[str, Any]]) -> dict[str, Any]:
     return {"kind": "splitk", "SPLIT_K": k["split_k"], "TILE_K": 256, "WARPS": 4}
 
 
+def _cublas_split_k(job: dict[str, Any]) -> int | None:
+    """The profiler's cuBLAS split count, never the split count of the independently described cuteDSL kernel."""
+    split_k = job.get("split_k")
+    return split_k if split_k and (job.get("kernel") or {}).get("kind") != "splitk" else None
+
+
 def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phase: str, name: str, M: int,
            seed: int, served_default: bool) -> tuple[dict[str, Any], dict[str, Any]]:
     """One case on the GPU, twice, timed and profiled; returns (launch record, comparison job)."""
@@ -520,11 +529,12 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
     except Exception as e:  # noqa: BLE001
         rec["profile"] = {"error": _error(e), "ok": False}
     probe_paths, probe = None, None
-    if served_default and probe_w is not None and rec["profile"].get("split_k"):
+    profiled_split_k = rec["profile"].get("split_k")
+    if served_default and probe_w is not None and _cublas_split_k({"split_k": profiled_split_k, "kernel": rec.get("kernel")}):
         n = min(32, probe_w.shape[0])
         old_w = probe_w[:n].clone()
         output = "f32" if phase in ("router", "f32out") else "bf16"
-        probe = _install_splitk_probe(x, probe_w, rec["profile"]["split_k"], output)
+        probe = _install_splitk_probe(x, probe_w, profiled_split_k, output)
         probe_out = fn()
         torch.cuda.synchronize()
         probe_paths = _save(d / "splitk_probe", x=_u16(x[0:1]), w=_u16(probe_w[:n]),
@@ -532,7 +542,7 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
         probe_w[:n].copy_(old_w)
     rec["splitk_probe"] = probe
     job = {"model": model, "phase": phase, "case": name, "M": M, "K": rec["K"], "N": rec["N"], "kernel": rec.get("kernel"),
-           "paths": paths, "split_k": rec["profile"].get("split_k"), "probe_paths": probe_paths}
+           "paths": paths, "split_k": profiled_split_k, "probe_paths": probe_paths}
     return rec, job
 
 
@@ -565,9 +575,10 @@ def _reference(job: dict[str, Any], a: dict[str, np.ndarray], r: int, n: int, fm
         return evaluate(bind(CB.BatchedGemmWord, B=1, K=K, N=1, DOT=hop), a["a"][h, r].tolist(), np.asarray(a["b"][h][:, c]).tolist())
     x = a["x"][r].tolist()
     w = a["w"][n].tolist()
-    if job.get("split_k"):
+    cublas_split_k = _cublas_split_k(job)
+    if cublas_split_k:
         target = CB.CublasSplitKGemmF32OutWord if job["phase"] in ("router", "f32out") else CB.CublasSplitKGemmWord
-        return evaluate(bind(target, K=K, N=1, SPLIT_K=job["split_k"], DOT=hop), x, w)
+        return evaluate(bind(target, K=K, N=1, SPLIT_K=cublas_split_k, DOT=hop), x, w)
     if job["phase"] == "linear":
         return evaluate(bind(CG.Gemm, K=K, N=1, DOT=hop), x, w)
     k = job.get("kernel") or {}
@@ -600,9 +611,10 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
         want = {None: BC.bmm_rows(np.asarray(a["a"][:, r0:r1]), np.asarray(a["b"])).transpose(1, 0, 2).reshape(r1 - r0, -1)}
     else:
         x, w, got = np.asarray(a["x"][r0:r1]), np.asarray(a["w"]), np.asarray(a["out"][r0:r1])
-        if job.get("split_k"):
+        cublas_split_k = _cublas_split_k(job)
+        if cublas_split_k:
             output = "f32" if job["phase"] in ("router", "f32out") else "bf16"
-            want = {None: BC.cublas_splitk_rows(x, w, job["split_k"], out=output)}
+            want = {None: BC.cublas_splitk_rows(x, w, cublas_split_k, out=output)}
         elif job["phase"] == "linear":
             want = {None: BC.linear_rows(x, w)}
         elif k.get("kind") == "dotprod":
@@ -633,10 +645,11 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
                 rec["reference_coords"] += 1
                 rec["twin_mismatch"] += not bool(MK._words_equal(np.asarray(y[0], wv.dtype), wv[r - r0, n], f32_words=f32))
     hypotheses = None
-    if job.get("split_k") and r0 == 0 and job.get("probe_paths"):
+    cublas_split_k = _cublas_split_k(job)
+    if cublas_split_k and r0 == 0 and job.get("probe_paths"):
         probe = _load(job["probe_paths"])
         output = "f32" if job["phase"] in ("router", "f32out") else "bf16"
-        models = BC.cublas_splitk_hypotheses(np.asarray(probe["x"]), np.asarray(probe["w"]), job["split_k"], out=output)
+        models = BC.cublas_splitk_hypotheses(np.asarray(probe["x"]), np.asarray(probe["w"]), cublas_split_k, out=output)
         actual = np.asarray(probe["out"])
         hypotheses = {
             name: int((~MK._words_equal(actual, words, f32_words=output == "f32")).sum())
