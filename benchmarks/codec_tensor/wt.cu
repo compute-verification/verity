@@ -826,15 +826,15 @@ __device__ __forceinline__ void undo_round(u32 (&y)[NL], int j) {
   sigma_k(y);
 }
 
-// K rounds against w as decode_word_w.
+// K rounds against w as decode_word_w, in one loop: peeling the last round puts a second copy of the round's code
+// (1,800 instructions at p1024) in every decoder.
 template <int K>
 __device__ __forceinline__ void decode_word_wk(u32 (&y)[NL], const u32 (&w)[NL]) {
 #pragma unroll 1
-  for (int j = K - 1; j > 0; --j) {
+  for (int j = K - 1; j >= 0; --j) {
     decode_word_w(y, w);
-    undo_round(y, j);
+    if (j > 0) undo_round(y, j);
   }
-  decode_word_w(y, w);
 }
 
 // u = (c_j + tau i) mod p, canonical, at full slot (2^n = c; FRESH_DECODE, its one caller, is full slot only) and
