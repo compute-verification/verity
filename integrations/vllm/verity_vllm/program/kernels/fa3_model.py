@@ -126,9 +126,10 @@ def lib() -> ctypes.CDLL:
 
 def kernel_geometry(seqlen_q: int, seqlen_k: int, rows: list[int] | np.ndarray, kblock_n: int = KBLOCK_N, *,
                     kblock_m: int | None = None, qh_per_kvh: int = 1) -> tuple[np.ndarray, np.ndarray]:
-    """Per query row ``r``: (visible columns, n_block_max).  FA3 keeps ``Is_causal`` for ``seqlen_q == 1`` (the decode
-    kernel instantiation above is causal), so every launch is causal, bottom-right aligned: ``col_limit = min(seqlen_k,
-    r + 1 + seqlen_k - seqlen_q)``.  ``BlockMN::get_n_block_min_max`` gives ``n_block_max = min(ceil(seqlen_k /
+    """Per query row ``r``: (visible columns, n_block_max).  FA3 keeps ``Is_causal`` for ``seqlen_q == 1`` only at hdim 128
+    with a page table (the decode kernel instantiation above is causal; ``hopper/flash_api.cpp:866-873`` drops it otherwise,
+    e.g. hdim 256's one-token prefill launch), and one query row sees every key either way, so every launch reads as causal,
+    bottom-right aligned: ``col_limit = min(seqlen_k, r + 1 + seqlen_k - seqlen_q)``.  ``BlockMN::get_n_block_min_max`` gives ``n_block_max = min(ceil(seqlen_k /
     kBlockN), ceil((m_idx_max + seqlen_k - seqlen_q) / kBlockN))`` with ``m_idx_max = (m_block + 1) * kBlockM``
     (PackGQA: divided by the GQA ratio); with kBlockM = kBlockN = 128 in prefill and one packed M tile in decode
     this equals ``ceil(col_limit / kBlockN)`` — no fully-masked block is ever visited (the typed program's
