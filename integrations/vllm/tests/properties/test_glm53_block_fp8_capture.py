@@ -170,14 +170,16 @@ H200_TP8 = {"1": {"BLOCK_SIZE_M": 8, "BLOCK_SIZE_N": 32, "BLOCK_SIZE_K": 128, "G
             "triton_version": "3.7.1"}
 
 
-def test_the_h200_decode_tile_is_no_wgmma_and_the_widened_configs_are() -> None:
+def test_the_h200_small_batch_tiles_are_no_wgmma_and_the_widened_configs_are() -> None:
     swap = {m: c["BLOCK_SIZE_M"] < 64 and c["BLOCK_SIZE_N"] >= 64 for m, c in H200_TP8.items() if isinstance(c, dict)}
-    assert {m: X.wgmma_tile(H200_TP8[m], s) for m, s in swap.items()} == {"1": False, "2": False, "4": True, "256": True, "1024": True}
+    assert {m: X.wgmma_tile(H200_TP8[m], s) for m, s in swap.items()} == {"1": False, "2": False, "4": False, "256": True, "1024": True}
     assert X.wgmma_tile(X.BATCH_INVARIANT_CONFIG, False) and not X.wgmma_tile({**H200_TP8["1024"], "num_warps": 2}, False)
+    assert X.wgmma_tile({**H200_TP8["4"], "BLOCK_SIZE_M": 16}, True) and not X.wgmma_tile(H200_TP8["4"], True)
     wide, changed = X.widen_for_wgmma(H200_TP8)
-    assert sorted(changed) == ["1", "2"] and wide["1"] == {**H200_TP8["1"], "BLOCK_SIZE_N": 64} and wide["triton_version"] == "3.7.1"
+    assert sorted(changed) == ["1", "2", "4"] and wide["triton_version"] == "3.7.1"
+    assert wide["1"] == {**H200_TP8["1"], "BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64} and wide["4"] == {**H200_TP8["4"], "BLOCK_SIZE_M": 16}
     assert all(X.wgmma_tile(c, c["BLOCK_SIZE_M"] < 64 and c["BLOCK_SIZE_N"] >= 64) for c in wide.values() if isinstance(c, dict))
-    assert {m: wide[m] for m in ("4", "256", "1024")} == {m: H200_TP8[m] for m in ("4", "256", "1024")}
+    assert {m: wide[m] for m in ("256", "1024")} == {m: H200_TP8[m] for m in ("256", "1024")}
 
 
 def test_the_programs_bind_at_every_glm53_shape() -> None:
@@ -193,7 +195,7 @@ ACT = {"act_rows": 4, "reference_act_rows": 1}
 
 def _doc() -> dict:
     launch = {"deterministic": True, "statics_ok": True, "assignment_ok": True}
-    moe = {**launch, "phase": "moe", "case": "tp8_decode", "config": {"BLOCK_SIZE_M": 8, "BLOCK_SIZE_N": 64}, "KB": 128, "SWAP": True,
+    moe = {**launch, "phase": "moe", "case": "tp8_decode", "config": {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64}, "KB": 128, "SWAP": True,
            "wgmma_tile": True}
     return {"schema": X.SCHEMA, "gate": {"ok": True}, "errors": {}, "selection": {"dense_ok": True, "moe_ok": True}, "ptx": {"ok": True},
             "bind": {"ok": True},
@@ -227,13 +229,13 @@ def test_each_case_has_its_own_verdict() -> None:
     doc = _doc()
     got = X.cases(doc)
     assert {k: c["ok"] for k, c in got.items()} == {"dense/o_proj/M1": True, "moe/tp8_decode": True}
-    assert got["moe/tp8_decode"]["tiles"] == ["w13:8x64x128/swap", "w2:8x64x128/swap"]
+    assert got["moe/tp8_decode"]["tiles"] == ["w13:16x64x128/swap", "w2:16x64x128/swap"]
     doc["launches"][2]["wgmma_tile"] = False
     doc["comparisons"][0]["mismatch"] = 1
     doc["errors"]["dense/q_b_proj/M4"] = "boom"
     got = X.cases(doc)
     assert {k: c["ok"] for k, c in got.items()} == {"dense/o_proj/M1": False, "moe/tp8_decode": False, "dense/q_b_proj/M4": False}
-    assert got["moe/tp8_decode"]["tiles"][1] == "w2:8x64x128/swap/no-wgmma"
+    assert got["moe/tp8_decode"]["tiles"][1] == "w2:16x64x128/swap/no-wgmma"
     doc = _doc()
     doc["comparisons"].pop()                                                    # a MoE case whose act rows nobody compared
     assert {k: c["ok"] for k, c in X.cases(doc).items()} == {"dense/o_proj/M1": True, "moe/tp8_decode": False}
@@ -271,7 +273,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     monkeypatch.setattr(X, "dense_launch", lambda work, name, K_, N_, M, seed: (
         {"phase": "dense", "case": name, "K": K_, "N": N_, "M": M, "kernel": "CutlassFp8BlockScaledMMKernel", "deterministic": True,
          "operands_ok": True}, {**dense, "case": name}))
-    cfg = {"BLOCK_SIZE_M": 8, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 128}
+    cfg = {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 128}
 
     def moe(work, name, inter, M, hot, seed, batch_invariant):
         launches, jobs = [], []
