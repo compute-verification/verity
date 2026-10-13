@@ -17,8 +17,9 @@ from pathlib import Path
 VE = Path(__file__).resolve().parent.parent / "vllm_encoded"
 
 
-def install(arm: str, k: int, wt_lib: str, reader_lib: str, paged_lib: str, select_trials: int = 5):
-    """Hooks vLLM's load_model to install the arm's stack; returns (the stack module, the install, its capture sizes)."""
+def install(arm: str, k: int, wt_lib: str, reader_lib: str, paged_lib: str, select_trials: int = 5, new_stream=None):
+    """Hooks vLLM's load_model to install the arm's stack; returns (the stack module, the install, its capture sizes).
+    `new_stream` makes the stack's side streams (`stack.new_stream`), on an SM partition's step context."""
     ours = {m: sys.modules.pop(m) for m in ("bench", "serve") if m in sys.modules}
     sys.path.insert(0, str(VE))
     try:
@@ -30,6 +31,8 @@ def install(arm: str, k: int, wt_lib: str, reader_lib: str, paged_lib: str, sele
     finally:
         sys.modules.pop("bench", None)
         sys.modules.update(ours)
+    if new_stream is not None:
+        S.new_stream = new_stream
     from verity_vllm.engine.hooks import Hooks
 
     args = argparse.Namespace(arm=arm, k=k, wt_lib=wt_lib, reader_lib=reader_lib, paged_lib=paged_lib,

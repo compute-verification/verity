@@ -59,6 +59,13 @@ def stream() -> int:
     return torch.cuda.current_stream().cuda_stream
 
 
+def new_stream() -> torch.cuda.Stream:
+    """The stack's side streams (the deferred append's, the lm_head's graph capture). A stream is in the context it was
+    made in, and so is a graph captured on it: an SM partition (kv_filler's `serve.py --partition`) replaces this with
+    one that makes them on the step's green context."""
+    return torch.cuda.Stream()
+
+
 def unplain(f: torch.Tensor, n: int, kd: int) -> torch.Tensor:
     """bench.plain_layout's inverse: the fragments' bytes back to the N × K matrix."""
     return f.view(n // 16, kd // 512, 16, 8, 4, 2, 2, 4).permute(0, 6, 3, 1, 2, 5, 4, 7).reshape(n, kd)
@@ -282,6 +289,7 @@ class LmHead:
         else:
             self.base, self.words, self.store, self.scratch = 0, w.numel() * 2 // wt.s, w, None
         self.graphs: dict[int, tuple] = {}
+        self.cap = None
 
     @property
     def nbytes(self) -> int:
@@ -315,7 +323,9 @@ class LmHead:
                 self.run(xs)
                 torch.cuda.synchronize()
                 graph = torch.cuda.CUDAGraph()
-                with torch.cuda.graph(graph):
+                if self.cap is None:
+                    self.cap = new_stream()
+                with torch.cuda.graph(graph, stream=self.cap):
                     out = self.run(xs)
                 g = self.graphs[m] = (graph, xs, out)
             g[1].copy_(x2)
@@ -362,7 +372,7 @@ class Attention:
         self.pending: list[tuple] = []          # an eager step's (key, value, slots, rows, cache, lbase), by layer
         self.slots: dict[int, torch.Tensor] = {}
         self.lay: P.Layout | None = None
-        self.s2 = torch.cuda.Stream()
+        self.s2 = new_stream()
         self.fwd_done = torch.cuda.Event()
         self.app_done = torch.cuda.Event()
         self.outstanding = False

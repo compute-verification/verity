@@ -21,6 +21,9 @@ Top-up policies, each over the same trace in the same engine (`--policies`):
             of every SM's CTA, launched by the filler's thread, that read while no model step is on the GPU and return
             once one is; `seq@0` is IDLE alone. `seq@N/P` adds a PREFILL kernel of P CTAs beside each step that
             prefills, reading until no such step is on the GPU
+  part      fill modes, with `--partition F`: fill-sk16/v2's BASE kernels on the filler's F SMs throughout (`part@N`: N
+            CTAs, default F, of `--part-warps` warps, two deep, `--part-budget` units each), and its IDLE kernels on
+            every SM while no model step is on the GPU, as seq@0's
   gemm      no top-up thread: while the engine has no work, FP8 GEMMs at M = 16 over the pool and the buffer in 64 MiB
             slices, 4 a sync, until the next arrival (the reader a receipt bound to a PoUW tile needs, without its
             sketch; once a run, like none)
@@ -46,6 +49,13 @@ sets vLLM's, which the record states either way. The prefix cache is emptied bef
 `--stack stack` serves on the encoded stack (`stack_hook.py`: `vllm_encoded/stack.py`'s linears, lm_head, attention and
 KV append, with `--wt-lib`, `--reader-lib` and `--paged-lib`), `--stack pstack` on its plain form; a step's registered
 weight bytes are then the stack's stores, and the engine captures the stack's decode sizes.
+
+`--partition F` splits the SMs before the engine starts (`topup.cu`'s `sq_green`, green contexts): the filler's F and
+the step's rest. The step's stream is torch's current stream from then on, so vLLM captures its graphs and launches its
+eager kernels there, the stack's side streams are made on the step's context (`stack.new_stream`), and the device's SM
+count reads as the step's (`multi_processor_count`, which sizes the stack's and vLLM's grids). The confinement is
+checked (`green`: the SMs a stream's CTAs ran on, directly and from a graph), and each run records the streams
+`execute_model` ran on, which must be the step's.
 
 `--token-gate N` checks, before each policy's trace, that the top-up changes no token: N fixed prompts, generated
 together (so the schedule doesn't depend on time) with the top-up in the state it has while the engine works, give the
@@ -193,6 +203,67 @@ def on_gpu_clock(records: list[dict], gpu_steps: list) -> list[dict]:
                    for i, s in enumerate(records) if 0 <= i + sh < len(gpu_steps)), key=lambda s: s["t0"])
 
 
+class _StepProps:
+    """The device's properties with the step's SM count: what a kernel launched on the step's green context can use."""
+
+    def __init__(self, props, sms: int) -> None:
+        self._props, self.multi_processor_count = props, sms
+
+    def __getattr__(self, name):
+        return getattr(self._props, name)
+
+
+def partition(tu, torch, fill_sms: int):
+    """`--partition`: the green contexts (`sq_green`), the step's stream made torch's current one, and the device's SM
+    count read as the step's; returns the record, the step's stream and the stack's side-stream factory."""
+    v, i = ctypes.c_void_p, ctypes.c_int
+    tu.so.sq_green.argtypes = [i, ctypes.POINTER(v), i, ctypes.POINTER(i)]
+    tu.so.sq_green_stream.argtypes = [i, i, ctypes.POINTER(v)]
+    tu.so.sq_smid.argtypes = [v, i, ctypes.c_ulonglong, v]
+    s, got = v(), (i * 4)()
+    if rc := tu.so.sq_green(fill_sms, ctypes.byref(s), 0, got):
+        raise SystemExit(f"sq_green: {rc}")
+    rec = {"fill_sms": got[0], "step_sms": got[1], "min_partition": got[2], "alignment": got[3],
+           "device_sms": torch.cuda.get_device_properties(0).multi_processor_count}
+    step = torch.cuda.ExternalStream(s.value)
+    torch.cuda.set_stream(step)
+    gdp = torch.cuda.get_device_properties
+    torch.cuda.get_device_properties = lambda *x, **kw: _StepProps(gdp(*x, **kw), got[1])
+
+    def new_stream(which: int = 0):
+        p = v()
+        if rc := tu.so.sq_green_stream(which, 0, ctypes.byref(p)):
+            raise RuntimeError(f"sq_green_stream: {rc}")
+        return torch.cuda.ExternalStream(p.value)
+
+    return rec, step, new_stream
+
+
+def spread_checks(tu, torch, step, new_stream, rec: dict) -> dict:
+    """The SMs that 4 CTAs an SM ran on: on the step's stream (directly and from a graph captured there), on a side
+    stream of the stack's, and on a stream of the filler's context; the step's must be within its count."""
+    n = 4 * rec["device_sms"]
+
+    def sms(s, graph: bool) -> int:
+        out = torch.full((n,), -1, dtype=torch.int32, device="cuda")
+        if graph:
+            g = torch.cuda.CUDAGraph()
+            with torch.cuda.graph(g, stream=s):
+                tu.so.sq_smid(out.data_ptr(), n, 20000, s.cuda_stream)
+            with torch.cuda.stream(s):
+                g.replay()
+        elif tu.so.sq_smid(out.data_ptr(), n, 20000, s.cuda_stream):
+            raise RuntimeError("sq_smid")
+        torch.cuda.synchronize()
+        return int(torch.unique(out).numel())
+
+    got = {"step": sms(step, False), "step_graph": sms(step, True), "side": sms(new_stream(0), False),
+           "side_graph": sms(new_stream(0), True), "fill": sms(new_stream(1), False)}
+    got["confined"] = (max(got["step"], got["step_graph"], got["side"], got["side_graph"]) <= rec["step_sms"]
+                       and got["fill"] <= rec["fill_sms"])
+    return got
+
+
 def main() -> int:
     global LOGF
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -237,6 +308,9 @@ def main() -> int:
     ap.add_argument("--stack-k", type=int, default=3, help="--stack stack: the codec's rounds")
     ap.add_argument("--max-seqs", type=int, default=max(CAPTURE),
                     help="vLLM's max_num_seqs (the stack captures at most 32: a larger decode batch runs eager)")
+    ap.add_argument("--partition", type=int, default=0, help="the filler's SMs, the step on the rest (0: no partition)")
+    ap.add_argument("--part-warps", type=int, default=16, help="part: the BASE and IDLE kernels' warps a CTA")
+    ap.add_argument("--part-budget", type=int, default=1 << 15, help="part: a BASE kernel's units of 128 KiB")
     ap.add_argument("--wt-lib", help="--stack: a WT_RECEIPT build of codec_tensor's wt.cu at a full-slot field")
     ap.add_argument("--reader-lib", help="--stack: a build of codec_tensor's reader.cu")
     ap.add_argument("--paged-lib", help="--stack: a build of vllm_encoded's paged.cu at wt.cu's field")
@@ -247,9 +321,11 @@ def main() -> int:
     for p in a.policies:
         top, _, enc = p.partition("+")
         top, _, at = top.partition("@")
-        if ((at and not at.replace("/", "", 1 if top == "seq" else 0).isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always", "step", "seq")
+        if ((at and not at.replace("/", "", 1 if top == "seq" else 0).isdigit()) or top not in ("none", "idle", "throttle", "full", "gemm", "always", "step", "seq", "part")
                 or (enc and not enc.removeprefix("fused").isdigit())):
             ap.error(f"unknown policy {p}")
+        if top == "part" and not a.partition:
+            ap.error("a part policy needs --partition")
         if enc:
             encode_ks.add(int(enc.removeprefix("fused")))
     if encode_ks and not a.kv_lib:
@@ -263,11 +339,16 @@ def main() -> int:
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
+    tu = Topup(a.topup_lib)
+    green, step_stream, new_stream = None, None, None
+    if a.partition:
+        green, step_stream, new_stream = partition(tu, torch, a.partition)
+        log(f"partition: {json.dumps(green)}")
     stack = None
     capture = CAPTURE
     if a.stack:
         import stack_hook
-        stack = stack_hook.install(a.stack, a.stack_k, a.wt_lib, a.reader_lib, a.paged_lib)
+        stack = stack_hook.install(a.stack, a.stack_k, a.wt_lib, a.reader_lib, a.paged_lib, new_stream=new_stream)
         capture = stack[2]
     kw = {"model": a.model, "quantization": "fp8", "max_num_seqs": a.max_seqs,
           "enable_prefix_caching": a.shared_prefix > 0, "seed": 0,
@@ -338,12 +419,19 @@ def main() -> int:
         f" card {card / 1e9:.1f} GB, {res['unregistered_bytes'] / 1e9:.1f} GB unregistered; async scheduling "
         f"{res['async_scheduling']}, batch queue {res['batch_queue_size']}")
 
-    out_path = a.out / f"serve-{a.pool}.json"
+    out_path = a.out / f"serve-{a.pool}{f'-gc{a.partition}' if a.partition else ''}.json"
 
     def save() -> None:
         out_path.write_text(json.dumps(res, indent=1) + "\n")
 
-    tu = Topup(a.topup_lib)
+    if green:
+        green["spread"] = spread_checks(tu, torch, step_stream, new_stream, green)
+        res["green"] = green
+        log(f"partition confinement: {json.dumps(green['spread'])}")
+        if not green["spread"]["confined"]:
+            log("REFUSED: a stream of the step's runs outside its SMs")
+            save()
+            return 7
     sq = Seq(tu)
     tu.so.tu_pause.argtypes = [ctypes.c_int]
     tu.so.tu_throttle.argtypes = [ctypes.c_int]
@@ -452,6 +540,7 @@ def main() -> int:
             tu.so.tu_gate_step(delta, torch.cuda.current_stream().cuda_stream)
 
     def execute_model(*args, **kwargs):
+        cur.setdefault("streams", set()).add(torch.cuda.current_stream().cuda_stream)
         e0 = mark()
         so = args[0] if args else kwargs["scheduler_output"]
         pre = int(any(n > 1 for n in so.num_scheduled_tokens.values()))
@@ -546,6 +635,24 @@ def main() -> int:
                     cur["token_gate"] = gate_ids == list(gate_ref)
                     log(f"{policy}/{mode}: token gate {'passed' if cur['token_gate'] else 'FAILED'}")
                 offset_ms = sq.now(0) - time.perf_counter() * 1e3
+            elif top == "part":
+                if mode not in FILL_WARPS:
+                    continue
+                nbase = int(at) if at else green["fill_sms"]
+                sq.start(regions, RUN_SEED, base_ctas=nbase, warps=a.part_warps, base_budget=a.part_budget,
+                         shift=a.seq_shift, priority=least, step_priority=least)
+                if sq.shape(0, a.seq_depth):
+                    raise RuntimeError(f"sq_shape(0, {a.seq_depth}) refused")
+                tu.so.sq_idle(1, 0)
+                cur["seq_step"], cur["seq_prefill"] = 0, 0
+                cur["part"] = {"base_ctas": nbase, "warps": a.part_warps, "budget_units": a.part_budget}
+                if a.token_gate:
+                    gate_ids = gate_tokens()
+                    if not gate_ref:
+                        gate_ref.extend(gate_ids)
+                    cur["token_gate"] = gate_ids == list(gate_ref)
+                    log(f"{policy}/{mode}: token gate {'passed' if cur['token_gate'] else 'FAILED'}")
+                offset_ms = sq.now(0) - time.perf_counter() * 1e3
             elif top not in ("none", "gemm"):
                 chunk = (a.fill_chunk_mib if mode in FILL_WARPS else a.chunk_mib) << 20
                 tu.start(regions, mode_of(mode), chunk, 3, least, RUN_SEED, ctas=ctas if top == "always" else 0,
@@ -622,7 +729,7 @@ def main() -> int:
                 edge = max(edge, g1)
             recs = grecs
             seq_counts = None
-            if top == "seq":
+            if top in ("seq", "part"):
                 cur.pop("seq_step")
                 _, _, n_steps, n_launches, n_pre, n_pre_launches, bare, bare_pre = sq.progress()
                 seq_counts = {"steps_begun": n_steps, "step_launches": n_launches, "prefill_steps_begun": n_pre,
@@ -654,7 +761,8 @@ def main() -> int:
                    "windows": [windows(steps, idle, recs, offset_ms, t_start, t_end, w, a.R, weight_bytes)
                                for w in (0.25, 1.0, 5.0)],
                    "step_records": step_records,
-                   "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps, "seq": seq_counts,
+                   "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps, "seq": seq_counts, "part": cur.get("part"),
+                   "streams": sorted(cur.get("streams", ())),
                    "filler_by_phase": filler_by_phase(steps, recs, offset_ms),
                    "filler_by_gpu_phase": filler_by_phase(on_gpu_clock(step_records, gpu_steps), recs,
                                                           offset_ms + t_start * 1e3)}
@@ -665,6 +773,8 @@ def main() -> int:
                                                 round(base.elapsed_time(d) / 1e3, 6), n] for w, d, n in cur["enc"]],
                             "encode_lag_ms": {"median": statistics.median(lag), "p90": lag[int(0.9 * (len(lag) - 1))],
                                               "max": lag[-1]} if lag else None})
+            if green:
+                run["streams_on_step"] = set(run["streams"]) <= {step_stream.cuda_stream}
             if stack:
                 run["stack"] = stack[0].summary(stack[1].stack)
             res["runs"].append(run)

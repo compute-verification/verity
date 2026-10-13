@@ -981,7 +981,97 @@ static void loop(State* sp) {
 
 }  // namespace sq
 
+// --- the SM partition: green contexts (benchmarks/fill_compute's fill.cu `gc_split`, the filler's side split first) ---
+// sq_green splits the device's SMs into the filler's `fill_sms` (as the driver rounds) and the step's rest, each a green
+// context. Once it has run, sq_start makes the BASE, STEP and PREFILL streams on the filler's context; IDLE stays on the
+// device's, every SM, as no step is on the GPU while it reads. The driver API through dlopen, as fill.cu's.
+#include <cuda.h>
+#include <dlfcn.h>
+
+namespace gc {
+
+template <class F> static F drv(const char* name) {
+  static void* h = dlopen("libcuda.so.1", RTLD_NOW | RTLD_GLOBAL);
+  return h ? reinterpret_cast<F>(dlsym(h, name)) : nullptr;
+}
+
+static CUgreenCtx ctx[2] = {nullptr, nullptr};  // [0] the step's, [1] the filler's
+
+static int make(CUdevResource* r, CUdevice dev, CUgreenCtx* g) {
+  auto gen = drv<decltype(&cuDevResourceGenerateDesc)>("cuDevResourceGenerateDesc");
+  auto mk = drv<decltype(&cuGreenCtxCreate)>("cuGreenCtxCreate");
+  if (!gen || !mk) return 1000;
+  CUdevResourceDesc d;
+  if (int e = gen(&d, r, 1)) return 4000 + e;
+  if (int e = mk(g, d, dev, CU_GREEN_CTX_DEFAULT_STREAM)) return 5000 + e;
+  return 0;
+}
+
+static int stream(int which, int prio, cudaStream_t* s) {
+  auto st = drv<decltype(&cuGreenCtxStreamCreate)>("cuGreenCtxStreamCreate");
+  if (!st || !ctx[which]) return 1000;
+  CUstream c;
+  if (int e = st(&c, ctx[which], CU_STREAM_NON_BLOCKING, prio)) return 6000 + e;
+  *s = (cudaStream_t)c;
+  return 0;
+}
+
+// p0 a u32 per CTA: the SM it ran on, after holding it for i0 ns (so every SM a stream may use takes CTAs)
+__global__ void smid_of(unsigned* out, unsigned long long hold_ns) {
+  const unsigned long long t0 = fl::globaltimer();
+  while (fl::globaltimer() - t0 < hold_ns) {
+  }
+  unsigned s;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(s));
+  if (threadIdx.x == 0) out[blockIdx.x] = s;
+}
+
+}  // namespace gc
+
 extern "C" {
+
+// got: the filler's SMs, the step's, the minimum partition, the co-scheduled alignment. Returns 0, or 1000 · the failing
+// stage + its CUresult (stage 1: a missing driver symbol).
+int sq_green(int fill_sms, void** s_step, int prio_step, int* got) {
+  auto dget = gc::drv<decltype(&cuDeviceGet)>("cuDeviceGet");
+  auto res = gc::drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");
+  auto split = gc::drv<decltype(&cuDevSmResourceSplitByCount)>("cuDevSmResourceSplitByCount");
+  if (!dget || !res || !split) return 1000;
+  if (gc::ctx[0] || fill_sms <= 0) return -1;
+  cudaFree(nullptr);
+  CUdevice dev;
+  CUdevResource all{}, part{}, rest{};
+  unsigned nb = 1;
+  if (int e = dget(&dev, 0)) return 2000 + e;
+  if (int e = res(dev, &all, CU_DEV_RESOURCE_TYPE_SM)) return 2000 + e;
+  if (int e = split(&part, &nb, &all, &rest, 0, (unsigned)fill_sms)) return 3000 + e;
+  got[0] = (int)part.sm.smCount;
+  got[1] = (int)rest.sm.smCount;
+  got[2] = (int)all.sm.minSmPartitionSize;
+  got[3] = (int)all.sm.smCoscheduledAlignment;
+  if (!rest.sm.smCount) return -2;
+  if (int e = gc::make(&rest, dev, &gc::ctx[0])) return e;
+  if (int e = gc::make(&part, dev, &gc::ctx[1])) return e;
+  cudaStream_t s;
+  if (int e = gc::stream(0, prio_step, &s)) return e;
+  *s_step = s;
+  return 0;
+}
+
+// Another stream on the step's (0) or the filler's (1) green context.
+int sq_green_stream(int which, int prio, void** s) {
+  if (which < 0 || which > 1) return -1;
+  cudaStream_t c;
+  if (int e = gc::stream(which, prio, &c)) return e;
+  *s = c;
+  return 0;
+}
+
+// `grid` CTAs on `stream`, each writing the SM it ran on to out[blockIdx] after holding it `hold_ns`.
+int sq_smid(void* out, int grid, unsigned long long hold_ns, void* stream) {
+  gc::smid_of<<<grid, 32, 0, (cudaStream_t)stream>>>((unsigned*)out, hold_ns);
+  return (int)cudaGetLastError();
+}
 
 // Starts fill-sk16/v2 on `device` over `n` regions (16-byte aligned) under `seed`: BASE kernels of `base_ctas` CTAs
 // (0: none) of `warps` warps, `base_budget` units each; epochs of 2^shift units. The IDLE kernels wait for sq_idle(1).
@@ -1004,10 +1094,15 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   CK(cudaSetDevice(device));
   CK(cudaDeviceGetAttribute(&st->sms, cudaDevAttrMultiProcessorCount, device));
   if (int rc = tu::gate_set(-1, -1, true)) return rc;
-  for (cudaStream_t* s : {&st->s_base, &st->s_idle})
-    CK(cudaStreamCreateWithPriority(s, cudaStreamNonBlocking, priority));
-  CK(cudaStreamCreateWithPriority(&st->s_step, cudaStreamNonBlocking, step_priority));
-  CK(cudaStreamCreateWithPriority(&st->s_pre, cudaStreamNonBlocking, step_priority));
+  CK(cudaStreamCreateWithPriority(&st->s_idle, cudaStreamNonBlocking, priority));
+  if (gc::ctx[1]) {
+    for (auto [s, p] : {std::pair{&st->s_base, priority}, {&st->s_step, step_priority}, {&st->s_pre, step_priority}})
+      if (int e = gc::stream(1, p, s)) return e;
+  } else {
+    CK(cudaStreamCreateWithPriority(&st->s_base, cudaStreamNonBlocking, priority));
+    CK(cudaStreamCreateWithPriority(&st->s_step, cudaStreamNonBlocking, step_priority));
+    CK(cudaStreamCreateWithPriority(&st->s_pre, cudaStreamNonBlocking, step_priority));
+  }
   CK(cudaStreamCreateWithFlags(&st->s_h, cudaStreamNonBlocking));
   CK(cudaEventCreate(&st->start));
   CK(cudaEventCreateWithFlags(&st->base_done[0], cudaEventDisableTiming));

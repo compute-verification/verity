@@ -61,9 +61,14 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ "${QUEUED:-0}" = 1 ] && LEASE=()
 if [ "$SCRIPT" = serve.py ]; then
   # shellcheck disable=SC2086,SC2016
+  # PARTS (default 0): one process a pool and SM partition (serve.py --partition), POLICIES0 (default: ARGS's) at 0 and
+  # POLICIES_PART (default none,part) at a partition, after ARGS
   "${LEASE[@]}" bash -c '
     rc=0
-    for pool in $POOLS; do "$@" --pool "$pool" || rc=$?; done
+    for pool in $POOLS; do for part in ${PARTS:-0}; do
+      if [ "$part" = 0 ]; then pol=${POLICIES0:-}; else pol=${POLICIES_PART:-none,part}; fi
+      "$@" --pool "$pool" --partition "$part" ${pol:+--policies "$pol"} || rc=$?
+    done; done
     exit $rc' _ "$PY" $KF/serve.py --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" "${STACK_ARGS[@]}" ${ARGS:-}
   exit $?
 fi
