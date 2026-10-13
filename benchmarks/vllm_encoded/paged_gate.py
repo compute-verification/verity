@@ -26,7 +26,7 @@ sys.path.insert(0, str(HERE))
 import paged as P  # noqa: E402
 from paged import K, KB  # noqa: E402
 
-RTOL = 1e-3
+RTOL = 8e-3  # step.py's for the tensor-core form, which rounds P (and here the output) to bf16
 BLOCKS, BS, LAYERS = 96, 16, 2
 LENS = (0, 1, 15, 16, 17, 63, 64, 65, 300, 511)
 
@@ -81,7 +81,7 @@ def main() -> int:
         qkv = (torch.randn(n, (H + 2 * G) * D, device="cuda") * 2).to(torch.bfloat16)
         kk, vv = qkv[:, H * D:(H + G) * D], qkv[:, (H + G) * D:]
         sl = slots.cuda()
-        ok_append = True
+        ok_append, where = True, []
         for l in range(LAYERS):
             P.append(lib, torch, pl[l], lay, lbase[l], 0, k, kk, vv, sl)
             P.append(lib, torch, enc[l], lay, lbase[l], 1, k, kk, vv, sl)
@@ -94,7 +94,17 @@ def main() -> int:
             re = torch.empty_like(pl[l])
             lib.call("kv_encode", pl[l].data_ptr(), re.data_ptr(), lay.words, lbase[l], k, 0, st)
             torch.cuda.synchronize()
-            ok_append &= bool(torch.equal(ref, pl[l])) and bool(torch.equal(re, enc[l]))
+            pe, ee = bool(torch.equal(ref, pl[l])), bool(torch.equal(re, enc[l]))
+            ok_append &= pe and ee
+            if not (pe and ee):
+                dp = (ref.view(torch.int16) != pl[l].view(torch.int16)).view(-1, WB // 2).any(1).nonzero().flatten()
+                de = (re.view(torch.int16) != enc[l].view(torch.int16)).view(-1, WB // 2).any(1).nonzero().flatten()
+                where.append({"layer": l, "plain": pe, "encoded": ee, "plain_words": dp[:8].tolist(),
+                              "plain_differ": dp.numel(), "encoded_words": de[:8].tolist(),
+                              "encoded_differ": de.numel(),
+                              "appended_words": sorted((s // BS) * lay.sb + g * lay.sh + (s % BS) * lay.ss + j
+                                                       for s in slots.tolist() if s >= 0
+                                                       for g in range(G) for j in range(4))[:8]})
         # kv.py on a few words of layer 1
         w8 = pl[1].view(torch.uint8).view(-1, WB)
         e8 = enc[1].view(torch.uint8).view(-1, WB)
@@ -102,7 +112,9 @@ def main() -> int:
         py_ok = all(K.encode_word(int.from_bytes(bytes(w8[i].cpu().tolist()), "little"), lbase[1] + i, key)
                     == int.from_bytes(bytes(e8[i].cpu().tolist()), "little") for i in picks)
         g["append"] = {"tokens": n, "padding": int((slots < 0).sum()), "equal": ok_append, "kv_py_words": len(picks),
-                       "kv_py": py_ok, "ok": ok_append and py_ok}
+                       "kv_py": py_ok, "differ": where, "ok": ok_append and py_ok}
+        if where:
+            log(f"append k={k}: FAIL {where}")
         # attention
         att = {"cells": [], "ok": True}
         for b in (int(v) for v in a.batches.split(",")):
