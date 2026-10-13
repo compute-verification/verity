@@ -1038,7 +1038,9 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
     submod_cc(t, step, t2);
     copy(t, t2);
   }
-  atomicXor(xr, (unsigned long long)acc);
+#pragma unroll
+  for (int o = 16; o; o >>= 1) acc ^= __shfl_xor_sync(0xffffffffu, acc, o);
+  if ((threadIdx.x & 31) == 0) atomicXor(xr, (unsigned long long)acc);   // a warp's, not a thread's: one sector each
 }
 
 // The decode's field primitives a word a thread, for the gate at their rare carries (`kv_twin.rare_cases`): op 0
