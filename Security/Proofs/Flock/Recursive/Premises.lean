@@ -28,9 +28,10 @@ abbreviates, unchanged.
   sessions reads are the challenger's of the live session of its statement's `J` tables and the verifier's own draw, at every history (one premise
   over V*'s sessions as the prover supplies them, `ZkOuterR`, so the shape check reads its head; the property builds the
   typed sessions from them and it).
-* `RegistrantCovers` (`Assumptions.RegistrantCovers`): at each typing of each of V*'s sessions as the prover supplies
-  them, every row of a port the session's reads file names is a registered read of its record, the registrant's
-  openings no accepted run carries (one premise over `ZkOuterR`, as `RecordCustody`).
+* `RegistrantCovers` (`registrant-holds-openings`, `Assumptions.RegistrantCovers`): the prover holds a row and salt
+  under every leaf it registered at a row a session's reads file names, so at each typing of each of V*'s sessions as
+  the prover supplies them every such row is a registered read of its record (one premise over `ZkOuterR`, as
+  `RecordCustody`); a prover that registers a hash it can't open is outside the guarantee.
 * `InnerRecordCustody` (`live-verifier` at the inner session, `Assumptions.InnerRecordCustody`): the inner transcript
   and session record the coin server writes at each history hold that history's commitments and coins where a map of
   the rounds says they go (one premise over the writer `wr`, as the verifier holds what it writes).

@@ -104,6 +104,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("rs-proximity-johnson", "assumption", "Reed–Solomon proximity gaps up to the Johnson bound", "RS proximity · Johnson", "proven"),
     Entry("logup", "assumption", "LogUp fractional-sum soundness", "LogUp", "proven"),
     Entry("live-verifier", "model", "Live verifier: the verifier's coins arrive online during the proof", "Live verifier"),
+    # `Flock.Assumptions.RegistrantCovers` (Security/Proofs/Flock/Soundness/Assumptions/Registrant.lean), a premise of the
+    # recursive audit (Flock.Guarantees.RecursiveAuditC3At's _hRC) on the provers it covers
+    Entry("registrant-holds-openings", "model",
+          "Registrant holds its openings: the prover holds a row and salt under every leaf it registered at a row the "
+          "verifier's reads file names; a prover that registers a hash it can't open is outside the guarantee",
+          "Registrant holds openings"),
     Entry("fiat-shamir", "model", "Fiat–Shamir (non-interactive) in the random-oracle model", "Fiat–Shamir"),
     Entry("common-reference-string", "model",
           "Common reference string: a public parameter treated as a uniform draw fixed before use, such as the pinned keys of "
