@@ -6,7 +6,8 @@ import Proofs.Flock.C3.Sparse.SrcLayer
 `SessionAt` says what V*'s sessions give for R's opening; `SparseSessionAt` says it for rep `i`'s sparse phase, in its
 style. The verifier's coins accept the phase at its shape (`RecCoins.sparseCoins` at the verifier's RecSparse shape,
 `unitShape`), the phase's coins `c.cs` being the coin server's in the order drawn (`sparseCs`). Some copy of the
-`rec-sparse` unit in some session registers w at the message columns some computed row reads, the verifier row at `c`
+`rec-sparse` unit in some session (`SparseCopyAt`, which `MsgsLayers` reads at a fixed copy per rep) registers w at the
+message columns some computed row reads, the verifier row at `c`
 on `v`'s and with `T > 1` the slots' types on `tau`'s, its residuals' output columns registered zero (`RegOut`). The
 unit is one whole net (`RecSparse.check` against `unitNet`), so unlike R's opening there is no part to choose.
 
@@ -106,29 +107,34 @@ section Sessions
 
 variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
 
+/-- **Copy `j` of unit `un` in session `s` holds a sparse phase** at w and the phase's coins `c`: it is of a circuit
+`RecSparse.check` accepted at the verifier's RecSparse shape, its message columns some computed row reads registered
+bits of w, `v`'s of the verifier row at `c`, with `T > 1` `tau`'s of the slots' types, and its residuals' output columns
+registered 0 (`RegOut`). -/
+def SparseCopyAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (e : ExecHolo)
+    (w : Array Flock.F128) (c : SCoins) (s : Fin nS) (un : Fin (Vs s).nv) (j : ℕ) (hj : j < (Vs s).c.upv) : Prop :=
+  Flock.RecSparse.check (Vs s).c = .ok () ∧ Flock.RecSparse.params (Vs s).c.unit.name = some (unitShape e) ∧
+    Lb s (FlockSoundness.Discharge.Const.Prog.oneAt
+      (FlockSoundness.Discharge.Placed.keyProg (Vs s).c (Vs s).hU (Vs s).nv) un) = true ∧
+    (Vs s).c.unit.unitLog ≤ 32 ∧
+    (∀ q < 128 * ((Flock.RecSparse.messagePorts (unitShape e)).map (·.2)).sum,
+      ReadCol (FlockSoundness.Rows.ofNet (Vs s).hU) (rowCol (Flock.RecSparse.messagePorts (unitShape e)) 0 q) →
+        RegBit (zs s) un j (rowCol (Flock.RecSparse.messagePorts (unitShape e)) 0 q) (wbit (w[·]!) q)) ∧
+    (∀ q < 128 * Flock.RecSparse.nv (unitShape e),
+      RegBit (zs s) un j (vBaseS (unitShape e) + q) (wbit ((verifierRow e.cls.shape c)[·]!) q)) ∧
+    ((unitShape e).stacked = true → ∀ k < (unitShape e).S, ∀ b < 16,
+      RegBit (zs s) un j (tauBase (unitShape e) + (16 * k + b)) (((tauArr e)[k]!).testBit b)) ∧
+    ∀ t < 128 * (Flock.RecSparse.residualNames (unitShape e)).length,
+      RegOut (zs s) un hj (sparseBase (unitShape e) + t) false
+
 /-- **(n7) Rep `i`'s sparse phase in V*'s sessions**, at the sessions `zs` and their layers `Lb`, the verifier's coins
 `c3`, w and the phase's coins `c`: `RecCoins.sparseCoins` accepts rep `i`'s coins at the verifier's RecSparse shape and
-`c.cs` is them, and w has its elements. Copy `j` of unit `un` in session `s` is of a circuit `RecSparse.check` accepted
-at that shape, its message columns some computed row reads registered bits of w, `v`'s of the verifier row at `c`, with
-`T > 1` `tau`'s of the slots' types, and its residuals' output columns registered 0 (`RegOut`). -/
+`c.cs` is them, w has its elements, and some copy holds the phase (`SparseCopyAt`). -/
 def SparseSessionAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (e : ExecHolo)
     (c3 : Flock.RecCoins.C3) (unit : String) (i : Fin 2) (w : Array Flock.F128) (c : SCoins) : Prop :=
   (∃ sc, Flock.RecCoins.sparseCoins c3 unit i.val = .ok sc ∧ c3.sparse = unitShape e ∧ c.cs = sparseCs sc) ∧
     w.size = nw e.cls.shape ∧
-    ∃ (s : Fin nS) (un : Fin (Vs s).nv) (j : ℕ) (hj : j < (Vs s).c.upv),
-      Flock.RecSparse.check (Vs s).c = .ok () ∧ Flock.RecSparse.params (Vs s).c.unit.name = some (unitShape e) ∧
-      Lb s (FlockSoundness.Discharge.Const.Prog.oneAt
-        (FlockSoundness.Discharge.Placed.keyProg (Vs s).c (Vs s).hU (Vs s).nv) un) = true ∧
-      (Vs s).c.unit.unitLog ≤ 32 ∧
-      (∀ q < 128 * ((Flock.RecSparse.messagePorts (unitShape e)).map (·.2)).sum,
-        ReadCol (FlockSoundness.Rows.ofNet (Vs s).hU) (rowCol (Flock.RecSparse.messagePorts (unitShape e)) 0 q) →
-          RegBit (zs s) un j (rowCol (Flock.RecSparse.messagePorts (unitShape e)) 0 q) (wbit (w[·]!) q)) ∧
-      (∀ q < 128 * Flock.RecSparse.nv (unitShape e),
-        RegBit (zs s) un j (vBaseS (unitShape e) + q) (wbit ((verifierRow e.cls.shape c)[·]!) q)) ∧
-      ((unitShape e).stacked = true → ∀ k < (unitShape e).S, ∀ b < 16,
-        RegBit (zs s) un j (tauBase (unitShape e) + (16 * k + b)) (((tauArr e)[k]!).testBit b)) ∧
-      ∀ t < 128 * (Flock.RecSparse.residualNames (unitShape e)).length,
-        RegOut (zs s) un hj (sparseBase (unitShape e) + t) false
+    ∃ (s : Fin nS) (un : Fin (Vs s).nv) (j : ℕ) (hj : j < (Vs s).c.upv), SparseCopyAt zs Lb e w c s un j hj
 
 /-- **(n7's sparse tie from V*'s sessions)** At good layers, the sparse session and what the source reads there give
 `SparseTieL` at the session's layer: the coins' count is `nc`'s (`sparseCoins_size`), and the residuals' output

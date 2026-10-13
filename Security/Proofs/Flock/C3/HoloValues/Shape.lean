@@ -2,13 +2,14 @@ import Proofs.Flock.Soundness.Discharge.Exec.Shape
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.Soundness.Model.HoloCompiled
 import Proofs.Flock.VBridge.InnerAccepts
+import Proofs.Flock.Recursive.StageKinds
 
 /-!
 # A rep with hidden units has a spine
 
 `repC_spine` (`Discharge/Exec/Shape.lean`) at `holoRepC`: the hidden units' lincheck (`holoLincheck`) receives `h` after
-`z_partial`, so its shape (`holoLcShape`) is `lcShape` with one more message, and a rep's (`holoRepShape`) is
-`repShape` with it. `playsT_of_spine` is `InnerAccepts.playsT_of_tape` at any spine: a run on a game's messages and
+`z_partial`, so its shape (`holoLcShape`, `Recursive/StageKinds.lean`) is `lcShape` with one more message, and a rep's
+(`holoRepShape`) is `repShape` with it. `playsT_of_spine` is `InnerAccepts.playsT_of_tape` at any spine: a run on a game's messages and
 coins (`Plays`) is a run on any tape of the spine's kinds with those messages and coin steps (`PlaysT`).
 -/
 
@@ -19,10 +20,6 @@ open FlockSoundness.Discharge.PlaysCoin (coinArr toT_exact)
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D : Type}
 
-/-- The lincheck's shape with hidden units (L1–L5 with L4′): `lcShape` with `h` after `z_partial`. -/
-def holoLcShape (F : Type) (kLog : ℕ) : List Kind :=
-  .coin F :: .coin F :: (pairRounds F (kLog - 6) ++ [.msg (Fin 64 → F), .msg (Fin 64 → F), .coin F])
-
 omit [Fintype K] [DecidableEq K] in
 theorem holoLincheck_exact (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
     Exact (holoLincheck A S zc) (holoLcShape F S.kLog) := by
@@ -30,10 +27,6 @@ theorem holoLincheck_exact (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
   refine Exact.draw_bind fun α => Exact.draw_bind fun β => ?_
   exact Exact.bind (lincheckRounds_exact _ _) fun r =>
     Exact.recv_bind fun zP => Exact.recv_bind fun h => Exact.draw_bind fun r' => .ret _
-
-/-- **A rep's shape with hidden units**: `repShape` with `holoLcShape`. -/
-def holoRepShape (F K D : Type) (m kLog nExtra : ℕ) (sch : Schedule) : List Kind :=
-  zcShape F m ++ (holoLcShape F kLog ++ (opShape F (nExtra + 2) ++ ligShape F K D sch))
 
 theorem spine_bind_pure {α β : Type} {g : Game α} {σ : List Kind} (hs : Spine g σ) (f : α → β) :
     Spine (g >>= fun a => pure (f a)) σ := by

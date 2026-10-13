@@ -92,7 +92,7 @@ variable {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt} {sh : Fl
 
 namespace RepMaps
 
-variable (M : RepMaps stmt Vs sh)
+variable {Reg Ω C : Type} (M : RepMaps stmt Vs sh Reg Ω C)
 
 /-- **The openings' units' parameters** (`hOpenParams_of`'s statement at the maps, from `HOpenName` and the statements):
 level `ℓ`'s unit is `rec-open/l<levelLanes>-h<d - cap>`. -/

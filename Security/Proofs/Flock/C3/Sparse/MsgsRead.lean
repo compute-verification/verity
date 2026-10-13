@@ -1,6 +1,6 @@
 import Proofs.Flock.C3.Sparse.SrcLayer
 import Proofs.Flock.C3.Reps.RepsRead
-import Proofs.Flock.C3.Compose.LastRead
+import Proofs.Flock.C3.Compose.PartRead
 
 /-!
 # The sparse phases' committed rounds, from each message's stage
@@ -10,10 +10,10 @@ A sparse phase's steps weave its messages along `sparseKinds` (`stepsOf`), so it
 phase has `nS` coins whatever they are (`nCoins_stepsOf`). The sparse stage is rep 0's phase then rep 1's, so its round
 `j` is rep 0's round `j` and rep 1's round `j − nS` (`groups_stage`).
 
-`sparseStageRead_of_layers`: the stage's committed rounds past `c₀` coins (H's `StageMsgsRead` at `sp 0 ++ sp 1`,
-`SparseStageRead` here) where each phase's steps are `stepsOf` (`SparseTieL`'s) and its message `m` is read off V*'s
-layers on stage `c₀ + i · nS + roundOf m`'s commit strings (`SparseMsgsOfLayers`, named). `sparseMsgsRead_of_layers`:
-`SparseMsgsRead`, through H's `sparseMsgsRead_of_stage` (`PartRead.lean`), taken in its form.
+`stageMsgsRead_of_layers`: the stage's committed rounds past `c₀` coins (H's `StageMsgsRead` at `sp 0 ++ sp 1`) where
+each phase's steps are `stepsOf` (`SparseTieL`'s) and its message `m` is read off V*'s layers on stage
+`c₀ + i · nS + roundOf m`'s commit strings (`SparseMsgsOfLayers`, named). `sparseMsgsRead_of_layers`: `SparseMsgsRead`,
+through H's `sparseMsgsRead_of_stage` at the reps' part's `c₀` coins ending in one (`PartEnds repPart`).
 -/
 
 namespace FlockC3.Sparse
@@ -24,7 +24,8 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 open FlockSoundness.Discharge.PlaysCoin (groups consHead groups_ne_nil)
-open FlockC3.Reps (nCoins cutOf cutOf_eq_groups consHead_succ groups_append_lt groups_append_succ groups_append_coins)
+open FlockC3.Reps (nCoins cutOf cutOf_eq_groups consHead_succ groups_append_lt groups_append_succ groups_append_coins
+  repPart)
 open FlockVBridge.Family (skOf maskOf)
 open FlockVBridge.Sparse (phaseMsgs coinTape vtTape msgTape nc)
 
@@ -144,31 +145,15 @@ def SparseMsgsOfLayers (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂
         (c₀ + i.val * nS (holoAt st hp).cls.shape + roundOf (sparseKinds 𝔽 (holoAt st hp).cls.shape) m)
         (layers zs dg N k Rw R ω t R₂ τ))
 
-/-- **The sparse stage's committed rounds past `c₀` coins** (H's `StageMsgsRead c₀ (fun u => u.sp 0 ++ u.sp 1)`). -/
-def SparseStageRead (c₀ : ℕ) (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
-    (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
-    (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) : Prop :=
-  ∀ j R ω t R₂ τ o R' ω' t' R₂' τ' o', FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
-    FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R' ω' t' R₂' τ' o' →
-    maskOf Vs (skOf Vs own sel) (c₀ + j) (layers zs dg N k Rw R ω t R₂ τ) =
-      maskOf Vs (skOf Vs own sel) (c₀ + j) (layers zs dg N k Rw R' ω' t' R₂' τ') →
-    j < (((fun u : C3Run (holoAt st hp) => u.sp 0 ++ u.sp 1)
-      (src R ω t (layers zs dg N k Rw R ω t R₂ τ))).filterMap Sum.getRight?).length →
-    j < (((fun u : C3Run (holoAt st hp) => u.sp 0 ++ u.sp 1)
-      (src R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ'))).filterMap Sum.getRight?).length →
-    (cutOf ((fun u : C3Run (holoAt st hp) => u.sp 0 ++ u.sp 1) (src R ω t (layers zs dg N k Rw R ω t R₂ τ))))[j]? =
-      (cutOf ((fun u : C3Run (holoAt st hp) => u.sp 0 ++ u.sp 1)
-        (src R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ'))))[j]?
-
 /-- **The sparse stage's committed rounds from V*'s layers**: each round is rep 0's and rep 1's messages of it, and
 each message is read on its stage's commit strings (`SparseMsgsOfLayers`). -/
-theorem sparseStageRead_of_layers
+theorem stageMsgsRead_of_layers
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
     {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
     {rd : Fin 2 → ℕ → ((j : Fin S) → (Vs j).Bits) → Option Msg}
-    (h : SparseMsgsOfLayers zs dg N k Rw src own sel c₀ rd) : SparseStageRead c₀ zs dg N k Rw src own sel := by
+    (h : SparseMsgsOfLayers zs dg N k Rw src own sel c₀ rd) :
+    StageMsgsRead c₀ (fun u => u.sp 0 ++ u.sp 1) zs dg N k Rw src own sel := by
   intro j R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX _ _
   choose w cs hs hm using h R ω t R₂ τ o hA
   choose w' cs' hs' hm' using h R' ω' t' R₂' τ' o' hA'
@@ -184,16 +169,16 @@ theorem sparseStageRead_of_layers
       c₀ + j := by rw [show (1 : Fin 2).val = 1 from rfl, Nat.one_mul]; omega
     rw [e, hX]
 
-/-- **`SparseMsgsRead` from V*'s layers**, through H's lemma for the parts' committed rounds (`sparseMsgsRead_of_stage`
-at the reps' part's `c₀` coins ending in one, `PartRead.lean`), taken here in its form. -/
+/-- **`SparseMsgsRead` from V*'s layers**, through H's lemma for the parts' committed rounds (`sparseMsgsRead_of_stage`)
+at the reps' part's `c₀` coins ending in one. -/
 theorem sparseMsgsRead_of_layers
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
     {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
     {rd : Fin 2 → ℕ → ((j : Fin S) → (Vs j).Bits) → Option Msg}
-    (hH : SparseStageRead c₀ zs dg N k Rw src own sel → SparseMsgsRead zs dg N k Rw src own sel)
-    (h : SparseMsgsOfLayers zs dg N k Rw src own sel c₀ rd) : SparseMsgsRead zs dg N k Rw src own sel :=
-  hH (sparseStageRead_of_layers h)
+    (he : PartEnds repPart zs dg N k Rw src c₀) (h : SparseMsgsOfLayers zs dg N k Rw src own sel c₀ rd) :
+    SparseMsgsRead zs dg N k Rw src own sel :=
+  sparseMsgsRead_of_stage he (stageMsgsRead_of_layers h)
 
 end src
 
