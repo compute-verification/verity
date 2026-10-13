@@ -1,12 +1,13 @@
 """Known artifact kinds (README §11).  The store validates the envelope only; `put` warns on an unknown kind, never refuses.
 
-Kinds are strings `<name>/v<int>`; kind-specific validation is the producer's.
+Kinds are strings `<name>/v<int>`, the name one or more `/`-separated segments (`verity/subcircuit-catalog/v1`); kind-specific
+validation is the producer's.
 """
 from __future__ import annotations
 
 import re
 
-KIND_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*/v[0-9]+$")
+KIND_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*(/[a-z0-9][a-z0-9_.-]*)*/v[0-9]+$")
 
 KINDS: dict[str, str] = {
     "bench-result/v1": "a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?",
@@ -61,6 +62,12 @@ KINDS: dict[str, str] = {
     "flock-agreement-inputs/v1": "the stored inputs the agreement job's replayable sets name (a ci-bundle's store/, tar.gz); meta "
                                  "{arts}, pinned by verity/ml/flock/verifier/upstream.json",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
+    "circuit-check-report/v1": "a `circuit-check --out` report (tools/verity/circuit_check): payload file circuit-check.json; meta "
+                               "{targets, failures}; a subcircuit catalog's counts cite its targets",
+    "verity/subcircuit-catalog/v1": "one build of the subcircuit catalog (verity_numerical.bench.subcircuit_catalog): payload tree, one "
+                                    "Boolean export per census subcircuit (subcircuits/<id>.boolean.json); meta {schema, census, entries: "
+                                    "[{id, display, template, params, descriptor_id, default_statics, program_digests, export, counts, "
+                                    "missing?}]}; refs.circuit_check = the circuit-check-report/v1 its counts cite",
     "kernel-attempt/v1": "one PoUW kernel attempt at one shape (benchmarks/pouw/harness/ledger.py, written by verify.py): meta = the "
                          "variant id, parent, tier, harness commit and gate version, metrics and step times, gamma at both FP32 prices, "
                          "the verifier's lines, the hypothesis; refs.parent = the attempt it changes; labels kernel_outcome, kernel_reason",

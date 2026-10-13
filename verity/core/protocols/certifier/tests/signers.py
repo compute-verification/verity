@@ -11,6 +11,8 @@ from verity.ml.crypto import lms
 from verity.core.protocols.certifier.certificate import LmsSigner
 
 SMALL = lms.Params(64, 1, 6)
+#: the certifier session the tests' issuers sign in, and another
+SESSION, OTHER_SESSION = bytes(range(32)), bytes(range(1, 33))
 
 
 @lru_cache(maxsize=None)

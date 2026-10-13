@@ -29,6 +29,7 @@ import subprocess
 import threading
 from pathlib import Path
 
+import keyed
 import pytest
 from verity_flock import rec_bindings as RB
 from verity_flock import rec_vstage as S
@@ -44,6 +45,10 @@ CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479
                   "459a42e2dda3e07463")
 #: the recorded outer session's refusal as `verity/flock-circuit`, after setup
 S2_R7 = "S2/R7: the session parameters are not the verifier's"
+#: a staging's key (`once`): the inner session and V*'s fold, points and salts it reads, and the import closure of this
+#: module, which holds the code each staging runs
+_KEY = functools.partial(keyed.key, SET / "inner-honest", SET / "fold-honest.json", SET / "points-honest.json",
+                         SET / "acc-salts.bin", code=[__name__])
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
@@ -75,7 +80,7 @@ def forged(built, once) -> Path:
                           algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
         assert res["levels"][f"L{LEVEL}"]["opened"] == res["levels"][f"L{LEVEL}"]["instances"] == 106
 
-    out = once("rec-coins-forged", make) / f"L{LEVEL}"
+    out = once("rec-coins-forged", make, _KEY) / f"L{LEVEL}"
     assert hashlib.sha512((out / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
     return out
 
@@ -84,8 +89,8 @@ def forged(built, once) -> Path:
 def shape(built, tmp_path_factory) -> Path:
     """The verifier's own inner shape (`rec-inner`) from the inner statement, which `verify` needs for any V* statement."""
     u = SET / "u" / "stage"
-    p = subprocess.run([str(BIN), "rec-inner", "--circuit", str(u / "circuit.txt"), "--public", str(u / "pub-64.bin"),
-                        "--partition", str(u / "partition.json")], capture_output=True, text=True, check=True)
+    p = keyed.run([str(BIN), "rec-inner", "--circuit", str(u / "circuit.txt"), "--public", str(u / "pub-64.bin"),
+                   "--partition", str(u / "partition.json")], check=True)
     f = tmp_path_factory.mktemp("rec-inner") / "inner.json"
     f.write_text(p.stdout)
     return f
@@ -93,7 +98,7 @@ def shape(built, tmp_path_factory) -> Path:
 
 @functools.cache
 def _statements(shape: str) -> list[str]:
-    p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", shape], capture_output=True, text=True, check=True)
+    p = keyed.run([str(BIN), "rec-statements", "--rec-inner", shape], check=True)
     (line,) = [json.loads(ln[9:]) for ln in p.stdout.splitlines() if ln.startswith("RECVSTAR ")]
     return [s[0] for s in line["statements"]]
 
@@ -129,9 +134,8 @@ def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | 
              "--rec-inner-partition", str(u / "partition.json")]
     rec = [] if inner is None else [*(files if coins is None else ["--rec-inner-coins", str(coins)]),
                                     "--rec-inner-session", str(SET / inner / "session")]
-    p = subprocess.run([str(BIN), "verify", "--zk", *_files(level, public, registered, shape, rows, statement), *rec, *extra,
-                        "--session", str(session)], capture_output=True, text=True, check=False)
-    return p
+    return keyed.run([str(BIN), "verify", "--zk", *_files(level, public, registered, shape, rows, statement), *rec, *extra,
+                      "--session", str(session)])
 
 
 @pytest.fixture(scope="module")
@@ -140,9 +144,9 @@ def coins(built, once) -> Path:
     u = SET / "u" / "stage"
 
     def make(d):
-        p = subprocess.run([str(BIN), "rec-coins", "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public",
-                            str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
-                            str(SET / "inner-honest" / "session")], capture_output=True, text=True, check=True)
+        p = keyed.run([str(BIN), "rec-coins", "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public",
+                       str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
+                       str(SET / "inner-honest" / "session")], check=True)
         (d / "coins.json").write_text(p.stdout)
 
     return once("rec-coins-coins", make) / "coins.json"
@@ -237,13 +241,13 @@ def undrawn(tmp_path_factory) -> Path:
 @pytest.fixture(scope="module")
 def algebra(built, once) -> Path:
     """V*'s algebra parts (`p<j>`) staged over the honest inner session."""
-    return once("rec-coins-algebra", lambda d: _stage(d, levels=[], algebra=True, evaluate=False)) / "alg"
+    return once("rec-coins-algebra", lambda d: _stage(d, levels=[], algebra=True, evaluate=False), _KEY) / "alg"
 
 
 @pytest.fixture(scope="module")
 def comb(built, once) -> Path:
     """The algebra staged with rep 0's first comb element of v one bit off (`rec_vstage --forge comb`)."""
-    return once("rec-coins-comb", lambda d: _stage(d, levels=[], algebra=True, evaluate=False, forge="comb")) / (
+    return once("rec-coins-comb", lambda d: _stage(d, levels=[], algebra=True, evaluate=False, forge="comb"), _KEY) / (
         "forged-comb/alg")
 
 
@@ -255,7 +259,7 @@ def salted(built, once) -> Path:
             mp.setattr(S, "acc_salts", _salted)
             _stage(d, levels=[LEVEL], algebra=True, evaluate=False)
 
-    return once("rec-coins-salted", make)
+    return once("rec-coins-salted", make, _KEY)
 
 
 def _rec_rows(dst: Path, parts: list[Path]) -> Path:
@@ -457,9 +461,9 @@ def test_the_honest_level_is_refused_as_another_statement_than_v_stars(forged, s
            f"verity/flock-circuit), not {other}")
     rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
     pub, reg = SET / "L3" / "pub.bin", SET / "L3" / "registered.json"
-    p = subprocess.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows)], capture_output=True, text=True)
+    p = keyed.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows)])
     assert p.returncode == 0 and json.loads(p.stdout)["statement"] == "verity/flock-circuit", (p.stdout, p.stderr)
-    p = subprocess.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows, other)], capture_output=True, text=True)
+    p = keyed.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows, other)])
     assert p.returncode == 1 and p.stdout.strip() == why, p.stdout
     v = _verify(forged, pub, reg, shape, "inner-honest", rows=rows, statement=other)
     assert v["why"] == why, v["why"]
@@ -474,8 +478,7 @@ def test_the_honest_level_is_refused_with_a_lookup_table_held(forged, shape, tmp
     why = f"setup: {UNIT}: one of V*'s statements, which read no lookup table; the verifier holds [rcp] (--tables, --archive)"
     rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
     pub, reg = SET / "L3" / "pub.bin", SET / "L3" / "registered.json"
-    p = subprocess.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows), "--tables", str(tmp_path / "tables")],
-                       capture_output=True, text=True)
+    p = keyed.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows), "--tables", str(tmp_path / "tables")])
     assert p.returncode == 1 and p.stdout.strip() == why, p.stdout
     v = _verify(forged, pub, reg, shape, "inner-honest", "--tables", str(tmp_path / "tables"), rows=rows)
     assert v["why"] == why, v["why"]

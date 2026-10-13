@@ -6,7 +6,7 @@ import Properties.NetworkCertifier
 
 What the device returns over a trace (the records `step` publishes) and what the host's assembly reads of its
 configuration to certify them (each record's direction, grid and Σ_sync, the signer's leaf reservation), the check's
-copy of a certified record, and the check's parameters of the device's configuration and key.
+copy of a certified record, and the check's parameters of the device's configuration, key and certifier session.
 `Properties.CertifierNetwork.Runs` states what an accepted run of the device is over them;
 `Properties.Proofs.CertifierNetwork.Defs` states, as completeness, that the device's own output is accepted.
 
@@ -48,9 +48,9 @@ def certified (cr : CertifiedRecord) : NetworkCheck.Check.Certified :=
   ⟨cr.head, ⟨cr.certificate.keyId, cr.certificate.link, cr.certificate.direction, cr.certificate.window,
     cr.certificate.digest, cr.certificate.signature⟩⟩
 
-/-- The check's parameters of the device's configuration and key: its two links, its `W` windows, its two grids, its
-Σ_sync, and the key's LMS parameters and public key. -/
-def unitParams (c : Config) (key : Lms.PrivateKey) : NetworkCheck.Check.Params where
+/-- The check's parameters of the device's configuration, key and certifier session: its two links, its `W` windows, its
+two grids, its Σ_sync, the key's LMS parameters and public key, and the session's id. -/
+def unitParams (c : Config) (key : Lms.PrivateKey) (session : ByteArray) : NetworkCheck.Check.Params where
   egress := #[c.egressLink]
   ingress := #[c.ingressLink]
   windows := c.windows
@@ -59,5 +59,6 @@ def unitParams (c : Config) (key : Lms.PrivateKey) : NetworkCheck.Check.Params w
   syncSet := c.syncSet
   lms := key.params
   key := key.publicKey
+  session := session
 
 end Properties.CertifierNetwork

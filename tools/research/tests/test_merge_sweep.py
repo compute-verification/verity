@@ -243,6 +243,28 @@ def test_after_a_landing_the_declarations_command_starts_detached_on_the_commit(
     assert M.after_land(tmp_path, "nothere.decl:T", "abc", spawn=spawn) is None and len(started) == 1
 
 
+def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_goes_when_it_ends(tmp_path):
+    """12 Oct: drive started `post_train.py` in its queue clone, which the next tick reset and cleaned, so d779760ce's run lost
+    the `.venv` `uv run` had made there; the command gets a tree of its own, which the caller's checkout moving can't touch."""
+    repo, rec = tmp_path / "repo", tmp_path / "rec"
+    (repo / "mytools").mkdir(parents=True)
+    (repo / "mytools" / "decl.py").write_text(
+        "from research.store.tool import Tool\n"
+        f"T = Tool(name='check', after_land=['sh', '-c', 'pwd > {rec}; git rev-parse HEAD >> {rec}; echo $0 >> {rec}'])\n")
+    for args in (("init", "-q", "-b", "main"), ("add", "-A"), ("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "a")):
+        subprocess.run(["git", *args], cwd=repo, check=True)
+    landed = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    (repo / "later.txt").write_text("the checkout moves on\n")
+    procs: list[subprocess.Popen] = []
+    M.after_land(repo, "mytools.decl:T", landed, log=lambda *_: None, spawn=lambda argv, **kw: procs.append(subprocess.Popen(argv, **kw)))
+    assert procs[0].wait() == 0
+    where, head, arg = rec.read_text().split()
+    assert Path(where) != repo and Path(where).name.startswith(f"research-after-land-{landed[:12]}-")
+    assert (head, arg) == (landed, landed)
+    assert not Path(where).exists()
+    assert subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=repo, capture_output=True, text=True).stdout.count("worktree ") == 1
+
+
 def test_a_refused_push_sweeps_nothing_and_fails(tmp_path, monkeypatch, capsys):
     repo, gh, _tips, _merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
