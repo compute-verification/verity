@@ -817,6 +817,39 @@ def l2_probe(lib: Lib, path: Path, sms: int) -> None:
     path.write_text(json.dumps({"filler": [4096, 4096, 1024], "launches": rows}, indent=1) + "\n")
 
 
+def l2_sweep(lib: Lib, path: Path, sms: int) -> None:
+    """Item 2's probe: does `all`@128's excess over declared + floor (+9 to +23, r20261013-025156-e585) follow the bytes a
+    launch writes, near the 128 MB L2, rather than the tile? The persistent `all` and `y` kernels at both tiles, each at
+    tile counts whose outputs run from about 8 to 123 MB (`variant` nN, a unit of its own), each count interleaved as
+    l2_probe's are, with zero-tile controls and the fold's dry launches at the same count for the floor."""
+    T64, T128 = TILE, 128
+    counts = {T64: [sms, 4 * sms, 8 * sms, 16 * sms], T128: [sms // 4, sms, 2 * sms, 4 * sms]}
+    base = random_filler(4096, 4096, 1024, qcap=16 * sms)
+    lo = torch.cuda.Stream()
+    rows = []
+    for T in (T64, T128):
+        f = base if T == T64 else base.with_tile(T128, 4 * sms)
+        out_sectors = {"all": T * T * (4 + 4 + 2) // 32, "y": T * T * 2 // 32, "fold": 0}
+        suffix = "" if T == TILE else "128"
+        for n in counts[T]:
+            for store in ("all", "y", "fold"):
+                code = STORES[store]
+                seq = ((0, False),) + ((n, False), (0, False)) * L2_REPEATS
+                if store == "fold":
+                    seq = tuple((n, True) for _ in range(L2_REPEATS))
+                for k, dry in seq:
+                    f.poison()
+                    torch.cuda.synchronize()
+                    lib.fill(1, code, sms, f.args(0, k, log=not dry), lo, f.minb)
+                    torch.cuda.synchronize()
+                    rows.append({"kernel": f"fill_persist{suffix}_1_{code}", "variant": f"n{n}",
+                                 "store": store if T == TILE else f"{store}@{T}", "tile": T, "tiles": k, "control": k == 0,
+                                 "dry": dry, "logged": int((f.log > 0).sum()), "out_mb": k * T * T * 10 / 1e6,
+                                 "declared_write_sectors": 0 if dry else k * (out_sectors[store] + 1),
+                                 "declared_atom_sectors": k * (16 if store == "fold" else 0) + k + sms})
+    path.write_text(json.dumps({"filler": [4096, 4096, 1024], "sweep": True, "launches": rows}, indent=1) + "\n")
+
+
 def l2_of(l2: dict, arm: dict) -> str:
     """The L2 write gate's verdict for the arm's kernel (`none` for an arm without a filler)."""
     if "store" not in arm:
@@ -855,9 +888,11 @@ def main() -> int:
     ap.add_argument("--budgets", default="1.01,1.02,1.05,1.10,1.25,1.5,2,4")
     ap.add_argument("--l2", type=Path, help="l2_gate.py's verdict, reported beside every timing")
     ap.add_argument("--l2-probe", type=Path, help="only the L2 write gate's launches (run under ncu), declared sectors to this file")
+    ap.add_argument("--l2-sweep", action="store_true", help="with --l2-probe: item 2's tile-count sweep in place of the gate's launches")
     args = ap.parse_args()
     if args.l2_probe:
-        l2_probe(Lib(args.lib), args.l2_probe, torch.cuda.get_device_properties(0).multi_processor_count)
+        (l2_sweep if args.l2_sweep else l2_probe)(Lib(args.lib), args.l2_probe,
+                                                   torch.cuda.get_device_properties(0).multi_processor_count)
         return 0
     if args.fixture is None or args.out is None:
         ap.error("--fixture and --out are required")
