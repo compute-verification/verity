@@ -1552,6 +1552,15 @@ __device__ __forceinline__ void mma_e4m3(float (&d)[4], const u32 (&a)[4], u32 b
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
 }
 
+// BF16 (an lm_head's payload): m16n8k16's A and B fragments are e4m3 m16n8k32's bytes, so a BF16 matrix's bytes in
+// plain_layout and BF16 rows in xs feed it as they are.
+__device__ __forceinline__ void mma_bf16(float (&d)[4], const u32 (&a)[4], u32 b0, u32 b1) {
+  asm volatile(
+      "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+      : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
+}
+
 __device__ __forceinline__ void mma_s8(int (&d)[4], const uint4 &a, u32 b0, u32 b1) {
   asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
       : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
@@ -1619,15 +1628,16 @@ __device__ __forceinline__ void load_xs(uint8_t (*xs)[XS_STRIDE], const uint8_t 
   }
 }
 
-// Tile tt of a task: the warp's A fragment a (rows nb 16 .., columns 32 tt ..) against x's batch groups.
-template <int NB8>
+// Tile tt of a task: the warp's A fragment a (rows nb 16 .., bytes 32 tt ..) against x's batch groups; BF: BF16.
+template <int NB8, bool BF = false>
 __device__ __forceinline__ void mma_tile(float (&acc)[NB8][4], const u32 (&a)[4], const uint8_t (*xs)[XS_STRIDE],
                                          int tt, int g, int tq) {
 #pragma unroll
   for (int j = 0; j < NB8; ++j) {
     const u32 b0 = *reinterpret_cast<const u32 *>(&xs[8 * j + g][32 * tt + 4 * tq]);
     const u32 b1 = *reinterpret_cast<const u32 *>(&xs[8 * j + g][32 * tt + 16 + 4 * tq]);
-    mma_e4m3(acc[j], a, b0, b1);
+    if constexpr (BF) mma_bf16(acc[j], a, b0, b1);
+    else mma_e4m3(acc[j], a, b0, b1);
   }
 }
 
@@ -1706,7 +1716,7 @@ __global__ void __maxnreg__(168) gemm_ws_kernel(const void *__restrict__ wstore,
 #pragma unroll
     for (int tt = 0; tt < TASK_TILES; ++tt) {
       const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
-      mma_tile<NB8>(acc, a, xs, tt, g, tq);
+      mma_tile<NB8, MODE == 3>(acc, a, xs, tt, g, tq);
       if constexpr (MODE == 1) {
 #pragma unroll 1
         for (int e = 0; e < knob; e += 4) {
@@ -2211,11 +2221,13 @@ template <int SKK, int SKW>
 int fused_cap(int nb8) {
   return nb8 == 1 ? fused_warps<1, SKK, SKW>()
                   : (nb8 == 2 ? fused_warps<2, SKK, SKW>()
-                              : (nb8 == 4 ? fused_warps<4, SKK, SKW>() : fused_warps<8, SKK, SKW>()));
+                              : (nb8 == 4 ? fused_warps<4, SKK, SKW>()
+                                          : (nb8 == 8 ? fused_warps<8, SKK, SKW>() : fused_warps<16, SKK, SKW>())));
 }
 
 template <int SKK, int SKW>
 int fused_mma(int k, int nb8) {
+  if (nb8 > 8) return fused_mma_warps<3, 16, SKK, SKW>();
   if (nb8 > 4) return fused_mma_warps<3, 8, SKK, SKW>();
   return nb8 == 4 && k <= 2 ? fused_mma_warps<1, 4, SKK, SKW>() : fused_mma_warps<3, 1, SKK, SKW>();
 }
@@ -2672,7 +2684,7 @@ __device__ __forceinline__ void decode_tasks(uint8_t *smem, u64 *ready, u64 *loa
 // (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps; with SKW > 0 as well, SKW sketch warps after
 // the producer do all of it (sketch_warp).
 // WARPS, the warps the launch bounds allow, is fused_warps' or fewer (wt_fused_sketch).
-template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS = fused_warps<NB8, SKK, SKW>()>
+template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS = fused_warps<NB8, SKK, SKW>(), bool BF = false>
 __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
     const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
     u64 base, int groups, int decoders, int stages, const u32 *__restrict__ tsteps, u32 *__restrict__ tags,
@@ -2765,7 +2777,7 @@ __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
 #pragma unroll
         for (int tt = 0; tt < WH; ++tt) {
           const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
-          mma_tile<NA>(acc, a, xs + r0, h + tt, g, tq);
+          mma_tile<NA, BF>(acc, a, xs + r0, h + tt, g, tq);
         }
       }
       if constexpr (SKK > 0 && SKW == 0)
@@ -2838,6 +2850,80 @@ static int launch_gemm(Kern kern, int smem, int threads, int groups, int nchunks
   launch(gr);
   return cudaGetLastError() ? 4 : 0;
 }
+
+// wt_fused_sketch and wt_fused_sketch_bf (BF16 operands: Kd and x in bytes, partials only).
+template <bool BF>
+static int fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
+                    int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
+                    int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,
+                    cudaStream_t s) {
+  const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : (M <= 32 ? 4 : (M <= 64 ? 8 : 16)));
+  if (nb8 > 4 && sketch_k && !sketch_warps) return 1;   // fused_kernel's row groups
+  if ((nb8 > 8 || BF) && !sketch_warps) return 1;       // 128 rows and BF16 only beside the sketch warps
+  if (BF && w && !partials) return 1;
+  const int cap = sketch_warps ? fused_cap<16, 2>(nb8) : (sketch_k ? fused_cap<16, 0>(nb8) : fused_cap<0, 0>(nb8));
+  const int mw =
+      sketch_warps ? fused_mma<16, 2>(k, nb8) : (sketch_k ? fused_mma<16, 0>(k, nb8) : fused_mma<0, 0>(k, nb8));
+  const int warps = decoders + mw + 1 + taggers + sketch_warps;
+  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 128 || k < 1 || k > MAXK || decoders < FUSED_SPAN || taggers < 0 ||
+      warps > cap || stages < (32 * decoders + TW - 1) / TW || (w && taggers && !tags))
+    return 1;
+  if (sketch_k && ((sketch_k != 16 && sketch_k != 64) || (sketch_k == 64 && k != 1) || taggers ||
+                   stages >= (SK_BUFS - 1) * skt || (w && (!signs || !(tags || sk_out)))))
+    return 1;
+  if (sketch_warps && (sketch_warps != 2 || sketch_k != 16 || PAY_E != 0)) return 1;
+  if (WT_RECEIPT && sketch_k && !sketch_warps) return 1;   // only the sketch warps hash sketch-sha512
+  const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = warps * 32;
+  int dev = 0, optin = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&optin, cudaDevAttrMaxSharedMemoryPerBlockOptin, dev);
+  const int signs16 = sketch_k == 16 ? skt * ((SB + 511) / 512) * 32 : 0;
+  auto go = [&](auto kern, int smem, int sgs) -> int {
+    return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr) {
+      kern<<<gr * nchunks, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr, decoders,
+                                               stages, tsteps, tags, tag_base, signs, sk_out, skt, sgs);
+    });
+  };
+  // A launch of at most 12 warps at k >= 2 takes the 12-warp kernel (fresh_decode), where fused_warps allows more.
+#define G(KK, NB, SK, SW)                                                                                            \
+  do {                                                                                                               \
+    const int sg = SW == 0 && fused_smem_bytes<NB, SK, SW>(stages, signs16) <= optin ? signs16 : 0;                  \
+    const int sm = fused_smem_bytes<NB, SK, SW>(stages, sg);                                                         \
+    constexpr int W12 = FRESH_DECODE && KK >= 2 ? 12 : fused_warps<NB, SK, SW>();                                    \
+    constexpr int WF = fused_warps<NB, SK, SW>();                                                                    \
+    if constexpr (BF) {                                                                                              \
+      return warps <= W12 ? go(fused_kernel<KK, NB, true, SK, SW, W12, true>, sm, sg)                                \
+                          : go(fused_kernel<KK, NB, true, SK, SW, WF, true>, sm, sg);                                \
+    } else {                                                                                                         \
+      if (warps <= W12)                                                                                              \
+        return partials ? go(fused_kernel<KK, NB, true, SK, SW, W12>, sm, sg)                                        \
+                        : go(fused_kernel<KK, NB, false, SK, SW, W12>, sm, sg);                                      \
+      return partials ? go(fused_kernel<KK, NB, true, SK, SW>, sm, sg) : go(fused_kernel<KK, NB, false, SK, SW>, sm, sg); \
+    }                                                                                                                \
+  } while (0)
+#define GN(KK, SK, SW) \
+  do { if (nb8 == 1) G(KK, 1, SK, SW); else if (nb8 == 2) G(KK, 2, SK, SW); else G(KK, 4, SK, SW); } while (0)
+#define GN8(KK, SK, SW) do { if (nb8 == 8) G(KK, 8, SK, SW); GN(KK, SK, SW); } while (0)
+#define GN16(KK, SK, SW) do { if (nb8 == 16) G(KK, 16, SK, SW); GN8(KK, SK, SW); } while (0)
+  if (sketch_warps && k == 1) GN16(1, 16, 2);
+  if (sketch_warps && k == 2) GN16(2, 16, 2);
+  if (sketch_warps) GN16(3, 16, 2);
+  if constexpr (!BF) {
+    if (sketch_k == 16 && k == 1) GN(1, 16, 0);
+    if (sketch_k == 16 && k == 2) GN(2, 16, 0);
+    if (sketch_k == 16) GN(3, 16, 0);
+    if (sketch_k == 64) GN(1, 64, 0);
+    if (k == 1) GN8(1, 0, 0);
+    if (k == 2) GN8(2, 0, 0);
+    GN8(3, 0, 0);
+  }
+  return 1;
+#undef GN16
+#undef GN8
+#undef GN
+#undef G
+}
+
 
 #define WT_K_SWITCH(k, F) switch (k) { case 1: F(1); break; case 2: F(2); break; case 3: F(3); break; default: return 1; }
 
@@ -2987,11 +3073,11 @@ int wt_mix(u64 sc, u64 stc, int cw, unsigned long long *xr, int grid, cudaStream
   return cudaGetLastError() ? 4 : 0;
 }
 
-// mode 0 plain, 1 plain + knob MMAs a tile, 2 plain + knob IMADs a tile.
+// mode 0 plain, 1 plain + knob MMAs a tile, 2 plain + knob IMADs a tile, 3 plain BF16 (mma_bf16; Kd in bytes).
 int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, int partials, int consumers,
             int stages, int groups, int knob, unsigned long long *xr, int *launched, cudaStream_t s) {
-  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 64 || (M > 32 && mode) || consumers < 1 || stages < 1 ||
-      consumers > WS_MAX_CONSUMERS || mode < 0 || mode > 2)
+  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 64 || (M > 32 && mode != 0 && mode != 3) || consumers < 1 ||
+      stages < 1 || consumers > WS_MAX_CONSUMERS || mode < 0 || mode > 3)
     return 1;
   const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : (M <= 32 ? 4 : 8));
   const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = (consumers + 1) * 32;
@@ -3006,6 +3092,8 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
 #define GN(MO) do { if (nb8 == 1) G(MO, 1); else if (nb8 == 2) G(MO, 2); else G(MO, 4); } while (0)
   if (mode == 0 && nb8 == 8) G(0, 8);
   if (mode == 0) GN(0);
+  if (mode == 3 && nb8 == 8) G(3, 8);
+  if (mode == 3) GN(3);
   if (mode == 1) GN(1);
   GN(2);
 #undef GN
@@ -3025,58 +3113,16 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
                     int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
                     int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,
                     cudaStream_t s) {
-  const int nb8 = M <= 8 ? 1 : (M <= 16 ? 2 : (M <= 32 ? 4 : 8));
-  if (nb8 > 4 && sketch_k && !sketch_warps) return 1;   // fused_kernel's row groups
-  const int cap = sketch_warps ? fused_cap<16, 2>(nb8) : (sketch_k ? fused_cap<16, 0>(nb8) : fused_cap<0, 0>(nb8));
-  const int mw =
-      sketch_warps ? fused_mma<16, 2>(k, nb8) : (sketch_k ? fused_mma<16, 0>(k, nb8) : fused_mma<0, 0>(k, nb8));
-  const int warps = decoders + mw + 1 + taggers + sketch_warps;
-  if (Kd % TASK_COLS || N % 16 || M < 1 || M > 64 || k < 1 || k > MAXK || decoders < FUSED_SPAN || taggers < 0 ||
-      warps > cap || stages < (32 * decoders + TW - 1) / TW || (w && taggers && !tags))
-    return 1;
-  if (sketch_k && ((sketch_k != 16 && sketch_k != 64) || (sketch_k == 64 && k != 1) || taggers ||
-                   stages >= (SK_BUFS - 1) * skt || (w && (!signs || !(tags || sk_out)))))
-    return 1;
-  if (sketch_warps && (sketch_warps != 2 || sketch_k != 16 || PAY_E != 0)) return 1;
-  if (WT_RECEIPT && sketch_k && !sketch_warps) return 1;   // only the sketch warps hash sketch-sha512
-  const int nchunks = Kd / TASK_COLS, nbs = N / 16, threads = warps * 32;
-  int dev = 0, optin = 0;
-  cudaGetDevice(&dev);
-  cudaDeviceGetAttribute(&optin, cudaDevAttrMaxSharedMemoryPerBlockOptin, dev);
-  const int signs16 = sketch_k == 16 ? skt * ((SB + 511) / 512) * 32 : 0;
-  auto go = [&](auto kern, int smem, int sgs) -> int {
-    return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr) {
-      kern<<<gr * nchunks, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr, decoders,
-                                               stages, tsteps, tags, tag_base, signs, sk_out, skt, sgs);
-    });
-  };
-  // A launch of at most 12 warps at k >= 2 takes the 12-warp kernel (fresh_decode), where fused_warps allows more.
-#define G(KK, NB, SK, SW)                                                                                            \
-  do {                                                                                                               \
-    const int sg = SW == 0 && fused_smem_bytes<NB, SK, SW>(stages, signs16) <= optin ? signs16 : 0;                  \
-    const int sm = fused_smem_bytes<NB, SK, SW>(stages, sg);                                                         \
-    constexpr int W12 = FRESH_DECODE && KK >= 2 ? 12 : fused_warps<NB, SK, SW>();                                    \
-    if (warps <= W12)                                                                                                \
-      return partials ? go(fused_kernel<KK, NB, true, SK, SW, W12>, sm, sg)                                          \
-                      : go(fused_kernel<KK, NB, false, SK, SW, W12>, sm, sg);                                        \
-    return partials ? go(fused_kernel<KK, NB, true, SK, SW>, sm, sg) : go(fused_kernel<KK, NB, false, SK, SW>, sm, sg); \
-  } while (0)
-#define GN(KK, SK, SW) \
-  do { if (nb8 == 1) G(KK, 1, SK, SW); else if (nb8 == 2) G(KK, 2, SK, SW); else G(KK, 4, SK, SW); } while (0)
-#define GN8(KK, SK, SW) do { if (nb8 == 8) G(KK, 8, SK, SW); GN(KK, SK, SW); } while (0)
-  if (sketch_warps && k == 1) GN8(1, 16, 2);
-  if (sketch_warps && k == 2) GN8(2, 16, 2);
-  if (sketch_warps) GN8(3, 16, 2);
-  if (sketch_k == 16 && k == 1) GN(1, 16, 0);
-  if (sketch_k == 16 && k == 2) GN(2, 16, 0);
-  if (sketch_k == 16) GN(3, 16, 0);
-  if (sketch_k == 64) GN(1, 64, 0);
-  if (k == 1) GN8(1, 0, 0);
-  if (k == 2) GN8(2, 0, 0);
-  GN8(3, 0, 0);
-#undef GN8
-#undef GN
-#undef G
+  return fused_sketch<false>(k, w, x, y, M, N, Kd, base, partials, decoders, stages, groups, taggers, tsteps, tags, tag_base, sketch_k, signs, sk_out, skt, sketch_warps, launched, s);
+}
+
+// wt_fused_sketch over a BF16 matrix's plain fragments (its bytes as an N x 2K FP8 matrix's, Kd = 2K) and BF16 rows
+// x: beside the two sketch warps, partials only.
+int wt_fused_sketch_bf(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
+                    int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
+                    int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,
+                    cudaStream_t s) {
+  return fused_sketch<true>(k, w, x, y, M, N, Kd, base, partials, decoders, stages, groups, taggers, tsteps, tags, tag_base, sketch_k, signs, sk_out, skt, sketch_warps, launched, s);
 }
 
 int wt_fused(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
