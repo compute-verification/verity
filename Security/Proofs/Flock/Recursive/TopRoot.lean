@@ -59,15 +59,16 @@ theorem le_nextPow2 (n : Nat) : n ≤ nextPow2 n := by
   · have := Nat.lt_log2_self (n := n - 1)
     omega
 
-theorem log2ceil_nextPow2 (n : Nat) : log2ceil (nextPow2 n) = log2ceil n := by
-  unfold nextPow2 log2ceil
-  split
-  · simp
-  · rename_i hn
-    simp only [Nat.pow_succ, Nat.reducePow, Nat.mul_le_one, Nat.reduceLeDiff, false_and, ↓reduceIte]
-    rw [show 2 * 2 ^ Nat.log2 (n - 1) - 1 = 2 ^ (Nat.log2 (n - 1) + 1) - 1 by
-      rw [Nat.pow_succ, Nat.mul_comm]]
+theorem log2ceil_two_pow (k : Nat) : log2ceil (2 ^ k) = k := by
+  cases k with
+  | zero => rfl
+  | succ k =>
+    unfold log2ceil
+    rw [if_neg (by have := Nat.two_pow_pos k; rw [Nat.pow_succ]; omega)]
     rw [Nat.log2_pred_pow]
+
+theorem log2ceil_nextPow2 (n : Nat) : log2ceil (nextPow2 n) = log2ceil n := by
+  exact log2ceil_two_pow (log2ceil n)
 
 theorem base_size (dom : ByteArray) (leaves : Array ByteArray) :
     (base dom leaves).size = nextPow2 leaves.size := by
@@ -91,13 +92,14 @@ theorem root_eq (dom : ByteArray) (leaves : Array ByteArray) :
     FV3.root dom leaves Sha512.hash = (lev dom leaves (log2ceil leaves.size))[0]! := by
   unfold FV3.root
   simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl]
-  rw [log2ceil_nextPow2]
+  have hs : [:log2ceil (nextPow2 leaves.size)].size = log2ceil (nextPow2 leaves.size) := by
+    simp [Std.Legacy.Range.size]
+  rw [hs, log2ceil_nextPow2]
   change
-    ((List.range (log2ceil leaves.size)).foldl
+    ((List.range' 0 (log2ceil leaves.size)).foldl
       (fun level depth => next dom depth level) (base dom leaves)).getD 0 ByteArray.empty =
       (lev dom leaves (log2ceil leaves.size))[0]!
-  rw [show List.range (log2ceil leaves.size) = List.range' 0 (log2ceil leaves.size) by simp,
-    show base dom leaves = lev dom leaves 0 by rfl, fold_eq]
+  rw [show base dom leaves = lev dom leaves 0 by rfl, fold_eq]
   rfl
 
 theorem get!_mem {a : Array ByteArray} {i : Nat} (h : i < a.size) : a[i]! ∈ a := by
@@ -156,7 +158,8 @@ theorem fv3Root_bind {dom : ByteArray} {leaves leaves' : Array ByteArray} {S : L
     induction k with
     | zero =>
       intro _
-      rw [root_eq, root_eq, hsz] at hr
+      rw [root_eq, root_eq] at hr
+      rw [← hsz] at hr
       have s1 := size_l (log2ceil leaves.size) (Nat.le_refl _)
       have s2 := size_l' (log2ceil leaves.size) (Nat.le_refl _)
       simp only [Nat.sub_self, Nat.pow_zero] at s1 s2
@@ -211,20 +214,25 @@ def topStrings (dom : ByteArray) (bcs : Array ByteArray) : List ByteArray :=
 theorem hm_mem {dom : ByteArray} {bcs : Array ByteArray} {i : Nat} (hi : i < bcs.size) :
     Hm96.Default512.leafPrefix ++ bcs[i]! ∈ topStrings dom bcs := by
   simp only [topStrings, List.mem_append, List.mem_map, List.mem_range]
-  exact Or.inl ⟨i, hi, rfl⟩
+  exact Or.inl (Or.inl ⟨i, hi, rfl⟩)
 
 theorem row_mem {dom : ByteArray} {bcs : Array ByteArray} {i : Nat} (hi : i < bcs.size) :
     Registered.leafIn dom i (Hm96.Default512.treeLeaf bcs[i]!) ∈ topStrings dom bcs := by
   simp only [topStrings, List.mem_append, List.mem_map, List.mem_range]
-  exact Or.inr (Or.inl ⟨i, hi, rfl⟩)
+  exact Or.inl (Or.inr ⟨i, hi, rfl⟩)
 
 theorem root_mem {dom : ByteArray} {bcs : Array ByteArray} {x : ByteArray}
     (hx : x ∈ rootStrings dom (topLeaves dom bcs)) : x ∈ topStrings dom bcs := by
   simp only [topStrings, List.mem_append]
-  exact Or.inr (Or.inr hx)
+  exact Or.inr hx
 
 theorem topLeaves_size (dom : ByteArray) (bcs : Array ByteArray) :
     (topLeaves dom bcs).size = bcs.size := by
+  simp [topLeaves]
+
+theorem topLeaves_get {dom : ByteArray} {bcs : Array ByteArray} {i : Nat} (hi : i < bcs.size) :
+    (topLeaves dom bcs)[i]! = Registered.rowLeaf dom i (Hm96.Default512.treeLeaf bcs[i]!) := by
+  rw [getElem!_pos _ i (by rw [topLeaves_size]; exact hi), getElem!_pos _ i hi]
   simp [topLeaves]
 
 theorem topLeaves_width (dom : ByteArray) (bcs : Array ByteArray) :
@@ -252,7 +260,7 @@ theorem top_bind {dom : ByteArray} {bcs bcs' : Array ByteArray}
   apply Array.ext hsz
   intro i hi hi'
   have e := congrArg (·[i]!) hleaves
-  simp only [topLeaves, getElem!_pos _ i hi, getElem!_pos _ i hi', Array.getElem_mapIdx] at e
+  rw [topLeaves_get hi, topLeaves_get hi'] at e
   rw [Registered.rowLeaf_eq, Registered.rowLeaf_eq] at e
   have erow := cf _ (List.mem_append_left _ (row_mem hi)) _
     (List.mem_append_right _ (row_mem hi')) e
