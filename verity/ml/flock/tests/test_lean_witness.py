@@ -40,6 +40,7 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
+import keyed
 import numpy as np
 import pytest
 from verity.ml.circuits.defs import CompositeDefinition, bind
@@ -86,7 +87,7 @@ def _build() -> None:
 
 
 def _witness(*args: str) -> dict[str, dict]:
-    p = subprocess.run([str(BIN), *args], capture_output=True, text=True, check=False)
+    p = keyed.run([str(BIN), *args])
     checks = [json.loads(line[len("WITNESS "):]) for line in p.stdout.splitlines() if line.startswith("WITNESS ")]
     assert checks, p.stderr
     return {c["check"]: c for c in checks}
@@ -113,7 +114,9 @@ def level(inner, once) -> list[str]:
     """`flock-witness session`'s files and session at the recorded level, its statement restaged."""
     d = once("witness-level", lambda d: S.stage(
         SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL], algebra=False,
-        pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin"))
+        pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin"), functools.partial(
+        keyed.key, SET / "inner-honest", SET / "fold-honest.json", SET / "points-honest.json", SET / "acc-salts.bin",
+        code=[__name__]))
     level = d / f"L{LEVEL}"
     assert hashlib.sha512((level / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
     return ["--circuit", str(level / "circuit.txt"), "--public", str(SET / f"L{LEVEL}" / "pub.bin"), "--partition",
