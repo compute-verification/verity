@@ -1,6 +1,7 @@
 // Standalone instantiations of vLLM d9105ea80 layernorm_kernels.cu's served BF16 width-8 arithmetic.
 // Compile exactly as the capture does:
-//   nvcc -O3 -std=c++17 -lineinfo -gencode arch=compute_90,code=sm_90 -cubin cuda_rmsnorm_sass.cu -o rmsnorm.cubin
+//   nvcc -O3 -DNDEBUG -std=c++17 -lineinfo --expt-relaxed-constexpr --expt-extended-lambda \
+//     -gencode arch=compute_90,code=sm_90 -cubin cuda_rmsnorm_sass.cu -o rmsnorm.cubin
 #include <cuda_bf16.h>
 #include <cub/block/block_reduce.cuh>
 

@@ -119,7 +119,7 @@ def sass(out: Path) -> dict[str, Any]:
     nvcc = shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc"
     cuobjdump = shutil.which("cuobjdump") or str(Path(nvcc).with_name("cuobjdump"))
     cubin, text = out / "cuda_rmsnorm_sm90.cubin", out / "cuda_rmsnorm_sm90.sass"
-    flags = ["-O3", "-std=c++17", "-lineinfo", "--expt-relaxed-constexpr",
+    flags = ["-O3", "-DNDEBUG", "-std=c++17", "-lineinfo", "--expt-relaxed-constexpr", "--expt-extended-lambda",
              "-gencode", "arch=compute_90,code=sm_90"]
     version = subprocess.run([nvcc, "--version"], capture_output=True, text=True)
     build = subprocess.run([nvcc, *flags, "-cubin", str(SASS_SOURCE), "-o", str(cubin)], capture_output=True, text=True)
