@@ -234,6 +234,68 @@ __global__ void wait_kernel(const unsigned *flag, unsigned want) {
   __threadfence();
 }
 
+// The subtrees' kernels behind rs_subtrees: subtree q's first leaf c[q], its 16 · 2^h0 receipts at ys + q · 16 · 2^h0
+// · 8, its nodes at nodes + q · (2^(h0+1) − 2) · 8 (level g at the sum of 2^(h0 − f) over f < g).
+constexpr int PER_LEAF_LOG2 = 4;
+static_assert(PER_LEAF == 1 << PER_LEAF_LOG2, "a leaf is 16 receipts");
+
+__global__ void __launch_bounds__(32 * SK16_WARPS, 2) subtree_receipts_kernel(const uint4 *__restrict__ data,
+                                                                              const u64 *__restrict__ c, int h0,
+                                                                              const u32 *__restrict__ pk,
+                                                                              u64 *__restrict__ ys, u64 tiles) {
+  __shared__ u32 sg[SK16_PACK];
+  __shared__ __align__(16) int st[SK16_WARPS][32 * SK_ROWS];
+  sk16_prologue(sg, pk);
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  const u64 tile = blockIdx.x * (u64)SK16_WARPS + warp;
+  if (tile >= tiles) return;
+  const int per_log2 = h0 + PER_LEAF_LOG2 - 5;   // tiles a subtree
+  const u64 q = tile >> per_log2, b0 = (tile & ((1ULL << per_log2) - 1)) * 32, j0 = c[q] * PER_LEAF;
+  sk16_tile(data + j0 * (BLOCK / 16), j0, (u64)PER_LEAF << h0, b0, sg, st[warp], ys + (q << (h0 + PER_LEAF_LOG2)) * 8,
+            lane);
+}
+
+__global__ void __launch_bounds__(128) subtree_leaves_kernel(const u64 *__restrict__ ys, const u64 *__restrict__ c,
+                                                             int h0, u64 n, u64 *__restrict__ nodes) {
+  const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x, t = tid < n ? tid : n - 1;
+  const u64 q = t >> h0, l = t & ((1ULL << h0) - 1), per = (2ULL << h0) - 2;
+  const u64 *Y = ys + t * PER_LEAF * 8;
+  u64 x[8], w[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) x[i] = kC.row_mid[i];
+#pragma unroll 1
+  for (int blk = 0; blk < 9; ++blk) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int k = 16 * blk + i;
+      w[i] = k < 8 * PER_LEAF ? Y[k] : k == 8 * PER_LEAF ? 0x80ULL << 56 : 0;
+    }
+    if (blk == 8) w[15] = (u64)(128 + 64 * PER_LEAF) * 8;
+    sha512_compress(x, w);
+  }
+  u64 d[8];
+  hm96_leaf(c[q] + l, x, d);
+  if (tid < n)
+#pragma unroll
+    for (int i = 0; i < 8; ++i) nodes[(q * per + l) * 8 + i] = d[i];
+}
+
+__global__ void __launch_bounds__(128) subtree_level_kernel(u64 *__restrict__ nodes, const u64 *__restrict__ c, int h0,
+                                                            int h, u64 n) {
+  const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x;
+  if (tid >= n) return;
+  const int wide = h0 - h - 1;   // log2 of the subtree's nodes at level h + 1
+  const u64 q = tid >> wide, i = tid & ((1ULL << wide) - 1), per = (2ULL << h0) - 2;
+  u64 at = 0;
+  for (int f = 0; f < h; ++f) at += 1ULL << (h0 - f);
+  u64 *nd = nodes + q * per * 8;
+  const u64 *in = nd + 8 * (at + 2 * i);
+  u64 d[8];
+  node_digest(kC.node_mid[h], (c[q] >> (h + 1)) + i, in, in + 8, d);
+#pragma unroll
+  for (int k = 0; k < 8; ++k) nd[8 * (at + (1ULL << (h0 - h)) + i) + k] = d[k];
+}
+
 // Row q of out is the 64 bytes at device address addrs[q]: a window's openings (receipts, tree nodes of every pass and
 // of the payload tree) gathered in one launch, so the opener waits on the passes' kernels once a window.
 __global__ void __launch_bounds__(128) gather64_kernel(const u64 *__restrict__ addrs, u64 n, uint4 *__restrict__ out) {
@@ -366,30 +428,22 @@ int rs_pass(const void *data, uint64_t n, const void *signs, int *sk, uint64_t *
 }
 
 // What the openings of a pass need below its kept levels, recomputed from the store under the pass constants set: for
-// each first leaf c[q] (a multiple of 2^h0), the subtree's 16 · 2^h0 receipts into ys + q · 16 · 2^h0 · 8 and its
-// levels 0 … h0 − 1 into nodes + q · (2^(h0+1) − 2) · 8, level 0 first. sk is scratch for the packed signs (SK16_PACK words).
+// each first leaf c[q] (a multiple of 2^h0, c on the device), the subtree's 16 · 2^h0 receipts into
+// ys + q · 16 · 2^h0 · 8 and its levels 0 … h0 − 1 into nodes + q · (2^(h0+1) − 2) · 8, level 0 first, in one launch for
+// the receipts, one for the leaves and one a level. sk is scratch for the packed signs (SK16_PACK words). Every leaf
+// of the pass must be whole (positions a multiple of 16).
 int rs_subtrees(const void *data, const void *signs, const uint64_t *c, uint64_t count, int h0, int *sk, uint64_t *ys,
                 uint64_t *nodes, cudaStream_t s) {
-  if (!data || !signs || !c || !sk || !ys || !nodes || h0 < 1 || h0 > 20) return 1;
-  const uint64_t leaves = 1ULL << h0, blocks = PER_LEAF * leaves, per = 2 * leaves - 2;
+  if (!data || !signs || !c || !sk || !ys || !nodes || h0 < 1 || h0 > 20 || h0 + 1 > NODE_LEVELS) return 1;
+  if (!count) return 0;
   int rc = rs_pack16(signs, (uint32_t *)sk, s);
   if (rc) return rc;
-  for (uint64_t q = 0; q < count; ++q) {
-    if (c[q] % leaves) return 1;
-    const uint64_t j0 = c[q] * PER_LEAF;
-    uint64_t *ys_q = ys + q * blocks * 8, *nd = nodes + q * per * 8;
-    if ((rc = sketch16_receipts((const uint8_t *)data + j0 * BLOCK, j0, blocks, (const uint32_t *)sk, ys_q, 0, s)) ||
-        (rc = rb_leaves(ys_q, c[q], leaves, nd, nullptr, s)))
-      return rc;
-    const uint64_t *in = nd;
-    uint64_t *out = nd + 8 * leaves;
-    for (int h = 0; h + 1 < h0; ++h) {
-      const uint64_t m = leaves >> (h + 1);
-      level_kernel<<<grid(m, 128), 128, 0, s>>>(in, out, h, c[q] >> (h + 1), m);
-      in = out;
-      out += 8 * m;
-    }
-  }
+  const uint64_t tiles = count << (h0 + PER_LEAF_LOG2 - 5);
+  subtree_receipts_kernel<<<grid(tiles, SK16_WARPS) , 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, c, h0,
+                                                                               (const u32 *)sk, ys, tiles);
+  subtree_leaves_kernel<<<grid(count << h0, 128), 128, 0, s>>>(ys, c, h0, count << h0, nodes);
+  for (int h = 0; h + 1 < h0; ++h)
+    subtree_level_kernel<<<grid(count << (h0 - h - 1), 128), 128, 0, s>>>(nodes, c, h0, h, count << (h0 - h - 1));
   return cudaGetLastError() ? 4 : 0;
 }
 

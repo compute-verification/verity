@@ -278,8 +278,8 @@ class DeviceStore:
     def open_window(self, items: list[tuple[object, list[int]]]) -> list[list[tuple]]:
         """For each (pass, positions) of a window, each position's (block, leaf, leaf salt, receipt path, payload salt,
         payload path). The subtrees of 2^h0 leaves the positions fall in are recomputed from the store under each
-        pass's constants, by the second library (`rs_subtrees`); then one gather on the device and two copies from it
-        for the whole window."""
+        pass's constants, by the second library (`rs_subtrees`, a few launches a pass); then one gather on the device and
+        two copies from it for the whole window."""
         torch, N, lib, h0 = self.torch, self.blocks, self.lib_open, self.h0
         nl, S = N // PER_LEAF, PER_LEAF << h0
         per = 2 * (1 << h0) - 2
@@ -294,11 +294,12 @@ class DeviceStore:
         stream = torch.cuda.current_stream().cuda_stream
         q0, rows, flat = 0, [], []
         t0 = time.perf_counter_ns()
+        cs = torch.from_numpy(np.concatenate(firsts) if firsts else np.zeros(0, dtype=np.int64)).cuda()
         for ((seed, signs, kept), positions), first in zip(items, firsts):
             self.set_pass(lib, seed)
-            c = np.ascontiguousarray(first, dtype=np.uint64)
-            rc = lib.so.rs_subtrees(self.data.data_ptr(), signs.data_ptr(), c.ctypes.data, len(c), h0, sk.data_ptr(),
-                                    ys.data_ptr() + 64 * S * q0, nodes.data_ptr() + 64 * per * q0, stream)
+            rc = lib.so.rs_subtrees(self.data.data_ptr(), signs.data_ptr(), cs.data_ptr() + 8 * q0, len(first), h0,
+                                    sk.data_ptr(), ys.data_ptr() + 64 * S * q0, nodes.data_ptr() + 64 * per * q0,
+                                    stream)
             if rc:
                 raise RuntimeError(f"rs_subtrees: {rc}")
             p = np.asarray(positions, dtype=np.int64)
