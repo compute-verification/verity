@@ -16,7 +16,8 @@ without stopping the others.
   selection  the FP8 indexer cache (`dsa_indexer_uses_fp4` False: MXFP4 needs sm_10x), no two-stage compressor
              (`_prefer_two_stage_compressor`, ROCm only), so the head-128 compressor is `compress_norm_rope_store_triton`'s
              `_fused_kv_compress_norm_rope_insert_indexer_attn` (compressor.py:420-423); f32 o-projection scales (`tma_aligned_scales`
-             False, nvidia/ops/o_proj.py:24).
+             False, nvidia/ops/o_proj.py:24); the installed SOURCES the ones read (`sources`), since the phases below call the
+             kernels' wrappers directly rather than through `DeepseekCompressor.forward`'s dispatch.
   score      `save_partial_states` as `DeepseekCompressor.forward` calls it (compressor.py:354-365, block size 4, state width 256), twice
              on fresh state caches, over three requests in one launch: SEQ tokens at positions 0..SEQ-1, EDGE_SEQ tokens from EDGE_START
              (its first state block holds four positions written before; the edge operands, `EDGE`) and EXTRA boundary tokens (half
@@ -135,6 +136,19 @@ PTX_COUNT = re.compile(r"\b(fma\.rn(?:\.ftz)?\.f32|mul(?:\.rn)?(?:\.ftz)?\.f32|s
                        r"neg(?:\.ftz)?\.f32|div\.(?:rn|full)(?:\.ftz)?\.f32|rsqrt\.approx(?:\.ftz)?\.f32|ex2\.approx(?:\.ftz)?\.f32|"
                        r"lg2\.approx(?:\.ftz)?\.f32|cvt\.rpi(?:\.ftz)?\.f32\.f32|cvt\.rn\.bf16\.f32|cvt\.rn\.satfinite\.e4m3x2\.f32|"
                        r"(?:max|min)(?:\.ftz)?(?:\.xorsign\.abs)?\.f32)(?=[\s;])")
+
+#: the installed vLLM's files the Definitions and this script were read from, by sha256 at d9105ea80.  They pin the dispatch this
+#: script calls past: `DeepseekCompressor.forward` sends head 512 to cuteDSL and the indexer's head 128 to
+#: `compress_norm_rope_store_triton` (compressor.py:402-427; its class docstring still says the head-128 path is cuteDSL)
+SOURCES = {"models/deepseek_v4/compressor.py": "338b89ec959f1b40f7210cbee01a8dce12afa1259195137feb1fb806011f61f7",
+           "models/deepseek_v4/common/ops/fused_compress_quant_cache.py":
+               "6b1f4c6b4861f9645c296cf990b879329042a9aa7fa0214eabd9e58f8ebc7987",
+           "models/deepseek_v4/common/ops/save_partial_states.py": "27f5a42c352339627004cc767f33e113710c095a585c4b40ddbfda3a335d9363",
+           "models/deepseek_v4/common/ops/fused_inv_rope_fp8_quant.py":
+               "afc182aab04103430d220d5e146da5389f98ec1a814c1477e27f700cc605de59",
+           "models/deepseek_v4/attention.py": "b6b32d5a98737ba2d7e619b66de0b055f6189f68d513d9dc1e11f05aaa362616",
+           "models/deepseek_v4/nvidia/ops/o_proj.py": "ffb28e7cc44124bb2878e596617b70ec2659c7b26a2048a06facc343fa4d24e1",
+           "model_executor/layers/sparse_attn_indexer.py": "470f78842e70f62fc089b0f1429683dcf1d6d07814e2ce8045d42e2841b9dde6"}
 
 NAN = np.uint32(0x7FFFFFFF)
 NEG_INF = np.uint32(0xFF800000)
@@ -506,7 +520,18 @@ def operands(seed: int, dev: str = "cuda") -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------------------------------------------ the phases
+def sources(root: Path) -> dict[str, Any]:
+    """Each of SOURCES under the vLLM package directory ``root``: True when its sha256 is the one read, False when it differs,
+    None when it is missing."""
+    files: dict[str, bool | None] = {}
+    for rel, want in SOURCES.items():
+        p = root / rel
+        files[rel] = hashlib.sha256(p.read_bytes()).hexdigest() == want if p.is_file() else None
+    return {"files": files, "ok": all(v is True for v in files.values())}
+
+
 def selection() -> dict[str, Any]:
+    import vllm
     from vllm.config import get_current_vllm_config
     from vllm.models.deepseek_v4.compressor import _prefer_two_stage_compressor
     from vllm.models.deepseek_v4.nvidia.ops.o_proj import compute_fp8_einsum_recipe
@@ -517,8 +542,9 @@ def selection() -> dict[str, Any]:
     rec: dict[str, Any] = {"indexer_fp4": bool(dsa_indexer_uses_fp4(get_current_vllm_config())),
                            "two_stage_compressor": bool(_prefer_two_stage_compressor()),
                            "family_100": bool(current_platform.is_device_capability_family(100)),
-                           "einsum_recipe": list(recipe), "tma_aligned_scales": bool(tma)}
-    rec["ok"] = not (rec["indexer_fp4"] or rec["two_stage_compressor"] or rec["tma_aligned_scales"])
+                           "einsum_recipe": list(recipe), "tma_aligned_scales": bool(tma),
+                           "sources": sources(Path(vllm.__file__).parent)}
+    rec["ok"] = not (rec["indexer_fp4"] or rec["two_stage_compressor"] or rec["tma_aligned_scales"]) and rec["sources"]["ok"]
     return rec
 
 

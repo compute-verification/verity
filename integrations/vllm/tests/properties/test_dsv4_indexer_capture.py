@@ -447,6 +447,22 @@ def test_the_ptx_scan_wants_one_specialization_per_kernel(tmp_path) -> None:
     assert D4.ptx(tmp_path / "c", tmp_path / "out")["ok"] is False
 
 
+def test_the_sources_must_be_the_ones_read(tmp_path, monkeypatch) -> None:
+    import hashlib
+
+    assert len(D4.SOURCES) == 7 and all(len(h) == 64 for h in D4.SOURCES.values())
+    (tmp_path / "models").mkdir()
+    for name, text in (("a.py", "read\n"), ("b.py", "read too\n")):
+        (tmp_path / "models" / name).write_text(text)
+    want = {f"models/{n}": hashlib.sha256((tmp_path / "models" / n).read_bytes()).hexdigest() for n in ("a.py", "b.py")}
+    monkeypatch.setattr(D4, "SOURCES", want)
+    assert D4.sources(tmp_path) == {"files": {"models/a.py": True, "models/b.py": True}, "ok": True}
+    (tmp_path / "models" / "b.py").write_text("edited\n")
+    assert D4.sources(tmp_path)["files"]["models/b.py"] is False and not D4.sources(tmp_path)["ok"]
+    monkeypatch.setattr(D4, "SOURCES", {**want, "models/c.py": "0" * 64})
+    assert D4.sources(tmp_path)["files"]["models/c.py"] is None
+
+
 def test_the_programs_bind_at_dsv4s_statics() -> None:
     got = D4.bind_check()
     assert got["ok"] and len(got["bindings"]) == 12
