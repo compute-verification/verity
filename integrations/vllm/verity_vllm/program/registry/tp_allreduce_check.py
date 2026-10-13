@@ -2,11 +2,12 @@
 
 * `mnnvl_rows`: FlashInfer's MNNVL all-reduce (one- or two-shot) of (WORLD, ..., N) bf16 words;
 * `mnnvl_norm_rows`: its fused residual add + RMSNorm, (WORLD, M, N) partials with (M, N) residuals and an N weight;
-* `custom_rows`: vLLM's custom all-reduce (1- or 2-stage) of (WORLD, SIZE) bf16 words.
+* `custom_rows`: vLLM's custom all-reduce (1- or 2-stage) of (WORLD, SIZE) bf16 words;
+* `multimem_rows`: torch's multimem all-reduce of (WORLD, SIZE) bf16 words at an owner's tree each.
 
-Written from the kernels (FlashInfer 0.6.18 `trtllm_mnnvl_allreduce.cuh`, vLLM d9105ea80 `csrc/custom_all_reduce.cuh`), not from
-the Definitions, so that a test comparing the two compares two statements of the kernels. NaN payloads never reach an output:
-every output is F2FP's bf16.
+Written from the kernels (FlashInfer 0.6.18 `trtllm_mnnvl_allreduce.cuh`, vLLM d9105ea80 `csrc/custom_all_reduce.cuh`, torch 2.13
+`CUDASymmetricMemoryOps.cu`), not from the Definitions, so that a test comparing the two compares two statements of the kernels.
+NaN payloads never reach an output: every output is F2FP's bf16.
 """
 from __future__ import annotations
 
@@ -97,4 +98,24 @@ def custom_rows(parts: np.ndarray, stage: int) -> np.ndarray:
         for r in order[1:]:
             acc = DR.add_rn(acc, _widen(parts[r, lo:hi]))
         out[lo:hi] = DR.f2fp_bf16(acc)
+    return out
+
+
+def tree_sum(cols: np.ndarray, tree, ftz: bool) -> np.ndarray:
+    """f32 words of `tree`'s adds over the (WORLD, ...) bf16 words `cols`."""
+    add = DR.add_ftz if ftz else DR.add_rn
+    if isinstance(tree, int):
+        return _widen(cols[tree])
+    return add(tree_sum(cols, tree[0], ftz), tree_sum(cols, tree[1], ftz))
+
+
+def multimem_rows(parts: np.ndarray, trees, ftz: bool) -> np.ndarray:
+    """torch's multimem all-reduce of (WORLD, SIZE) bf16 words: each owner's slice (`multimem_owners`) the f32 adds of its tree,
+    RN to bf16."""
+    parts = np.asarray(parts, np.uint16)
+    W, size = parts.shape
+    trees = T.multimem_trees(trees, W)
+    out = np.empty(size, np.uint16)
+    for lo, hi, owner in T.multimem_owners(W, size):
+        out[lo:hi] = DR.f2fp_bf16(tree_sum(parts[:, lo:hi], trees[owner], ftz))
     return out

@@ -7,6 +7,10 @@ bits (bf16 = Array<16, Value<1>>).
     AllReduceCustomCoordinate_v2{WORLD,START}  (col: Array<WORLD, BF16>) -> BF16          word view: AllReduceCustomCoordinate_v1
     AllReduceCustom_v2{WORLD,SIZE,STAGE}       (parts: Array<WORLD, Array<SIZE, BF16>>) -> Array<SIZE, BF16>
                                                                                           word view: AllReduceCustom_v1
+    AllReduceMultimemCoordinate_v2{WORLD,TREE,FTZ}
+                                               (col: Array<WORLD, BF16>) -> BF16          word view: AllReduceMultimemCoordinate_v1
+    AllReduceMultimem_v2{WORLD,SIZE,TREES,FTZ} (parts: Array<WORLD, Array<SIZE, BF16>>) -> Array<SIZE, BF16>
+                                                                                          word view: AllReduceMultimem_v1
 
 Each coordinate is traced for its statics (`elementwise.specialized`) through `verity.ml.circuits.silicon.fp`, so a payload's 16
 constant-zero low bits fold into its adds. The MNNVL sum is written as what each FADD.FTZ does to the words it can meet:
@@ -19,7 +23,8 @@ constant-zero low bits fold into its adds. The MNNVL sum is written as what each
 * two-shot's ``+0 + sum`` is the sum with its sign kept only when its exponent is nonzero.
 
 The adds make the GPU's NaN (`F32AddFtz_v2`'s 0x7FFFFFFF) and F2FP ends every NaN in 0x7FFF; ``+0 + x`` keeping a NaN's payload
-changes no output. The custom all-reduce's IEEE adds are `F32Add_v2`'s. The rows are the word bodies on bits.
+changes no output. The custom all-reduce's IEEE adds are `F32Add_v2`'s, as are the multimem tree's; its FTZ adds read a payload
+with a subnormal flushed to its signed zero and an add's FTZ result unflushed. The rows are the word bodies on bits.
 """
 from __future__ import annotations
 
@@ -34,7 +39,8 @@ from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array
 from verity_vllm.program.registry import tp_allreduce as TA
 
-__all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "custom_sum", "mnnvl_sum"]
+__all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
+           "AllReduceMultimemCoordinate", "custom_sum", "mnnvl_sum", "multimem_sum"]
 
 BF16 = Array(16, BL.BIT)
 
@@ -84,6 +90,27 @@ def custom_sum(S):
     return build
 
 
+def _flushed(C, x):
+    """A bf16 payload widened as FADD.FTZ reads it: a subnormal flushed to its signed zero."""
+    e = _exp_nz(C, x)
+    return fp.bf16_to_f32([C.AND(e, m) for m in x[:7]] + list(x[7:16]))
+
+
+def multimem_sum(S):
+    """`AllReduceMultimemCoordinate_v1{WORLD,TREE,FTZ}`'s builder."""
+    tree, flush = TA.multimem_tree(S.TREE, TA.ranks(S.WORLD)), bool(S.FTZ)
+
+    def build(C, *col):
+        def value(t):
+            if isinstance(t, int):
+                return _flushed(C, col[t]) if flush else fp.bf16_to_f32(col[t])
+            s = fp.f32_add(C, value(t[0]), value(t[1]), nan_word=W.F32_NAN_PTX)
+            return ftz(C, s) if flush else s
+
+        return fp.f32_to_bf16(C, value(tree), W.BF16_NAN_F2FP)
+    return build
+
+
 def _col(S):
     return ((("col", Array(int(S.WORLD), BF16)),), BF16)
 
@@ -125,3 +152,25 @@ def _custom(B, S, parts):
 AllReduceCustom = EW.on_bits(
     "AllReduceCustom", 2, ("WORLD", "SIZE", "STAGE"),
     lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)), _custom, TA.AllReduceCustom)
+
+AllReduceMultimemCoordinate = EW.specialized(
+    "AllReduceMultimemCoordinate", 2, ["WORLD", "TREE", "FTZ"], multimem_sum, _col,
+    doc="torch's multimem all-reduce of one element on bits: AllReduceMultimemCoordinate_v1, the f32 adds of TREE (FTZ or IEEE), "
+        "F2FP",
+    word=lambda b: bind(TA.AllReduceMultimemCoordinate, WORLD=b["WORLD"], TREE=b["TREE"], FTZ=b["FTZ"]))
+
+
+def _multimem(B, S, parts):
+    """`AllReduceMultimem_v1`'s body on bits: each run of `tp_allreduce.multimem_runs` one `AllReduceMultimemCoordinate_v2` per
+    element."""
+    world = TA.ranks(S.WORLD)
+    outs = []
+    for lo, hi, tree in TA.multimem_runs(world, int(S.SIZE), S.TREES):
+        cols = array_of([parts[r][lo:hi] for r in range(world)])
+        outs.append(B.batch(bind(AllReduceMultimemCoordinate, WORLD=world, TREE=tree, FTZ=bool(S.FTZ)), cols, axes=(1,)))
+    return outs[0] if len(outs) == 1 else coll_concat(Array(int(S.SIZE), BF16), outs)
+
+
+AllReduceMultimem = EW.on_bits(
+    "AllReduceMultimem", 2, ("WORLD", "SIZE", "TREES", "FTZ"),
+    lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)), _multimem, TA.AllReduceMultimem)

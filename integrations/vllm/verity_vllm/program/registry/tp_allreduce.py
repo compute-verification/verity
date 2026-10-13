@@ -45,6 +45,14 @@ and casts with ``__float2bfloat16``. The 1-stage kernel reads ranks 0, 1, ..., W
 8-element packs into WORLD parts, the last rank taking the rest, and the owner of a pack reads ranks from its own: owner,
 owner + 1, ... mod WORLD (`custom_owners`).
 
+Past FlashInfer's 0.5 MiB at TP 8 on sm_90, `CudaCommunicator.all_reduce` hands a bf16 tensor to torch's symmetric memory (to
+64 MiB) when vLLM's custom all-reduce is off, as the served engine has it (``disable_custom_all_reduce``). At 4, 6 or 8 ranks on
+cc 9.0 that is `torch.ops.symm_mem.multimem_all_reduce_` (torch 2.13 `CUDASymmetricMemoryOps.cu`): rank r issues
+``multimem.ld_reduce.relaxed.sys.global.add.acc::f32.v4.bf16x2`` over its slice of ``round_up(SIZE, 16 * WORLD) / WORLD``
+elements (`multimem_owners`) and ``multimem.st``s the result to every rank. The NVSwitch reduces the WORLD payloads in f32 in an
+order no source states; `AllReduceMultimem_v1` takes it per owner as TREES, binary trees over the ranks whose nodes are f32 adds
+(IEEE, or FTZ when FTZ), the 8-GPU capture's probes reading each tree off the switch (`tree_from_clusters`), then RN to bf16.
+
 f32 NaN words are the GPU's (`F32AddFtz_v2`, `F32MulFtz_v2`, `F32FmaFtz_v2`, `F32Add_v2`); every output is F2FP's bf16, whose NaN
 is 0x7FFF.
 """
@@ -59,9 +67,11 @@ from verity.ml.circuits.types import Array, Tuple
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16
 
-__all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceRmsNormMnnvl",
-           "CUSTOM_MAX_BYTES", "FI_MAX_BYTES", "H200_SMS", "MNNVL_ONE_SHOT_BYTES", "WARP", "custom_order", "custom_owners",
-           "custom_stage", "eps_bits", "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "ranks", "strategy"]
+__all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
+           "AllReduceMultimemCoordinate", "AllReduceRmsNormMnnvl", "CUSTOM_MAX_BYTES", "FI_MAX_BYTES", "H200_SMS",
+           "MNNVL_ONE_SHOT_BYTES", "SYMM_MEM_MAX_BYTES", "WARP", "chain", "custom_order", "custom_owners", "custom_stage",
+           "eps_bits", "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree",
+           "multimem_trees", "ranks", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
 
 WARP = 32
 #: FlashInfer `MNNVL_ONE_SHOT_THRESHOLD`: the one-shot kernel up to this many bytes of M * H * WORLD
@@ -70,6 +80,10 @@ MNNVL_ONE_SHOT_BYTES = 64 * 1024 * 8 * 2
 FI_MAX_BYTES = 512 * 1024
 #: vLLM's custom all-reduce buffer (`CustomAllreduce.max_size`)
 CUSTOM_MAX_BYTES = 8 * 1024 * 1024
+#: vLLM `SYMM_MEM_ALL_REDUCE_MAX_SIZES["9.0"][8]`: torch's symmetric memory takes a bf16 all-reduce up to this many bytes
+SYMM_MEM_MAX_BYTES = 64 * 1024 * 1024
+#: torch's `multimem_all_reduce_` slices are whole 16-byte vectors per rank
+MULTIMEM_ALIGN_BYTES = 16
 H200_SMS = 132
 _NEG_ZERO32 = const(32, 0x80000000)
 
@@ -175,6 +189,109 @@ def custom_owners(world: int, size: int, stage: int) -> list[tuple[int, int, int
     part = packs // world
     runs = [(8 * r * part, 8 * (r + 1) * part, r) for r in range(world - 1) if part]
     runs.append((8 * (world - 1) * part, size, world - 1))
+    return runs
+
+
+def tree_leaves(t) -> tuple[int, ...]:
+    return (t,) if isinstance(t, int) else tuple(r for c in t for r in tree_leaves(c))
+
+
+def multimem_tree(t, world: int):
+    """`t` as a reduction tree over ranks 0..WORLD-1 in canonical form: a rank, or a pair of trees (one f32 add), every rank once,
+    each pair's children ordered by their least rank (an IEEE add commutes)."""
+    def canon(x):
+        if isinstance(x, bool) or not isinstance(x, (int, tuple, list)):
+            raise ValueError(f"TREE {t!r}: a node is a rank or a pair of nodes, not {x!r}")
+        if isinstance(x, int):
+            return x
+        if len(x) != 2:
+            raise ValueError(f"TREE {t!r}: the node {x!r} adds {len(x)} subtrees; each add takes two")
+        a, b = canon(x[0]), canon(x[1])
+        return (a, b) if min(tree_leaves(a)) < min(tree_leaves(b)) else (b, a)
+
+    c = canon(t)
+    if sorted(tree_leaves(c)) != list(range(world)):
+        raise ValueError(f"TREE {t!r}: its leaves must be the ranks 0..{world - 1}, each once")
+    return c
+
+
+def multimem_trees(trees, world: int) -> tuple:
+    """One canonical tree per owner rank."""
+    trees = tuple(trees)
+    if len(trees) != world:
+        raise ValueError(f"TREES: one tree per owner rank, {world}, not {len(trees)}")
+    return tuple(multimem_tree(t, world) for t in trees)
+
+
+def chain(world: int, order=None):
+    """The tree adding the ranks of `order` (default 0, 1, ..., WORLD-1) one at a time onto the first."""
+    order = tuple(range(world)) if order is None else tuple(order)
+    t = order[0]
+    for r in order[1:]:
+        t = (t, r)
+    return multimem_tree(t, world)
+
+
+def tree_clusters(t) -> set[frozenset[int]]:
+    """The ranks under each add of `t`."""
+    out: set[frozenset[int]] = set()
+
+    def walk(x) -> frozenset[int]:
+        if isinstance(x, int):
+            return frozenset((x,))
+        s = walk(x[0]) | walk(x[1])
+        out.add(s)
+        return s
+
+    walk(t)
+    return out
+
+
+def tree_from_clusters(clusters, world: int):
+    """The binary tree whose adds hold exactly `clusters` (sets of ranks), or None when none does: WORLD - 1 sets that nest (any
+    two disjoint or one inside the other), the largest every rank, each split by its largest proper subsets and its loose ranks
+    into exactly two parts."""
+    cs = {frozenset(c) for c in clusters}
+    full = frozenset(range(world))
+    if len(cs) != world - 1 or full not in cs or any(len(c) < 2 or not c <= full for c in cs):
+        return None
+    if any(a & b and not (a <= b or b <= a) for a in cs for b in cs):
+        return None
+
+    def build(s: frozenset[int]):
+        if len(s) == 1:
+            return next(iter(s))
+        inner = [c for c in cs if c < s]
+        top = [c for c in inner if not any(c < d for d in inner)]
+        parts = top + [frozenset((r,)) for r in sorted(s - frozenset().union(*top))]
+        if len(parts) != 2:
+            return None
+        a, b = build(parts[0]), build(parts[1])
+        return None if a is None or b is None else (a, b)
+
+    t = build(full)
+    return None if t is None else multimem_tree(t, world)
+
+
+def multimem_owners(world: int, size: int) -> list[tuple[int, int, int]]:
+    """[(lo, hi, owner)]: torch's `multimem_all_reduce_` reduces elements lo..hi of a SIZE-element bf16 all-reduce from rank
+    `owner`'s ``multimem.ld_reduce``, each rank ``round_up(SIZE, 16 * WORLD) / WORLD`` elements (the kernel's 16-byte alignment
+    taken as elements), empty slices dropped."""
+    if size % 8:
+        raise ValueError(f"SIZE={size}: torch's multimem all-reduce at 16-byte alignment takes whole 8-element vectors of bf16")
+    per = -(-size // (MULTIMEM_ALIGN_BYTES * world)) * MULTIMEM_ALIGN_BYTES
+    return [(r * per, min((r + 1) * per, size), r) for r in range(world) if r * per < size]
+
+
+def multimem_runs(world: int, size: int, trees) -> list[tuple[int, int, object]]:
+    """[(lo, hi, tree)]: `multimem_owners`' slices with each owner's tree, adjacent slices of one tree merged."""
+    trees = multimem_trees(trees, world)
+    runs: list[tuple[int, int, object]] = []
+    for lo, hi, owner in multimem_owners(world, size):
+        if runs and runs[-1][2] == trees[owner]:
+            runs[-1] = (runs[-1][0], hi, trees[owner])
+        else:
+            runs.append((lo, hi, trees[owner]))
     return runs
 
 
@@ -302,4 +419,40 @@ def AllReduceCustom(B, S, parts):
     for lo, hi, owner in custom_owners(W, int(S.SIZE), int(S.STAGE)):
         cols = array_of([parts[r][lo:hi] for r in range(W)])
         outs.append(B.batch(bind(AllReduceCustomCoordinate, WORLD=W, START=owner), cols, axes=(1,)))
+    return outs[0] if len(outs) == 1 else coll_concat(Array(int(S.SIZE), BF16), outs)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# torch symmetric memory: NVSwitch multimem
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+@composite("AllReduceMultimemCoordinate", 1, ["WORLD", "TREE", "FTZ"], lambda S: ((("col", Array(int(S.WORLD), BF16)),), BF16),
+           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200, the tree read off the switch "
+                       "(tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+def AllReduceMultimemCoordinate(B, S, col):
+    """One element of torch's multimem all-reduce: the f32 adds of TREE over ``f32(col[r])`` (FTZ: FADD.FTZ, else IEEE), then
+    RN to bf16."""
+    add = P.F32AddFtzV2 if S.FTZ else P.F32AddV2
+
+    def value(t):
+        if isinstance(t, int):
+            return B.call(P.Bf16ToF32, col[t])
+        return B.call(add, value(t[0]), value(t[1]))
+
+    return B.call(P.F2fpBf16, value(multimem_tree(S.TREE, ranks(S.WORLD))))
+
+
+@composite("AllReduceMultimem", 1, ["WORLD", "SIZE", "TREES", "FTZ"],
+           lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)),
+           conformance="not-yet-established: GLM-5.3 TP8 on 8x H200, the trees read off the switch "
+                       "(tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+def AllReduceMultimem(B, S, parts):
+    """torch's `multimem_all_reduce_` of WORLD ranks' SIZE bf16 (the whole flattened tensor, whose slices name each element's
+    owner): each run of `multimem_runs` one `AllReduceMultimemCoordinate_v1{TREE=TREES[owner]}` per element."""
+    W = ranks(S.WORLD)
+    outs = []
+    for lo, hi, tree in multimem_runs(W, int(S.SIZE), S.TREES):
+        cols = array_of([parts[r][lo:hi] for r in range(W)])
+        outs.append(B.batch(bind(AllReduceMultimemCoordinate, WORLD=W, TREE=tree, FTZ=bool(S.FTZ)), cols, axes=(1,)))
     return outs[0] if len(outs) == 1 else coll_concat(Array(int(S.SIZE), BF16), outs)
