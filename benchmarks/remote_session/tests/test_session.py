@@ -108,7 +108,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     return out, results
 
 
-def test_an_honest_session_is_accepted_with_its_ledger():
+def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (r,), (pr,) = run("honest")
     assert r["accepted"] and pr["accepted"] and r["failure"] is None
     assert [w["passes"] for w in r["windows_seen"]] == pr["passes"] and min(pr["passes"]) >= 1

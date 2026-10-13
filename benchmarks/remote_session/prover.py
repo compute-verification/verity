@@ -37,6 +37,8 @@ from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 import wire  # noqa: E402
 
 PAYLOAD_LABEL = hashlib.sha512(b"verity/remote-session/payload-salts/v0").digest()
+OPENINGS_PART = 128
+"""Openings a frame: a window's go out in parts, so a root waits for one part's send, not the window's."""
 
 
 def parse_plan(plan: str) -> list[tuple[str, float]]:
@@ -138,13 +140,16 @@ class ProverSide:
             for (i, items), got in zip(passes, fields):
                 for (k, p), f in zip(items, got):
                     out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"")
-            body = wire.encode_openings(out)
-            c3 = time.perf_counter_ns()
-            self.conn.send({"type": "openings", "t": t, "n": len(out)}, body)
+            parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
+            c3, sent = time.perf_counter_ns(), 0
+            for k, part in enumerate(parts):
+                body = wire.encode_openings(part)
+                self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(part)}, body)
+                sent += len(body)
             with self.lock:
                 for key in [key for key in self.kept if key[0] == t]:
                     del self.kept[key]
-            self.opened.append({"t": t, "n": len(out), "bytes": len(body), "ns": time.perf_counter_ns() - c0,
+            self.opened.append({"t": t, "n": len(out), "bytes": sent, "ns": time.perf_counter_ns() - c0,
                                 "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
                                 "on_dropped": sum(p in self.dropped for _, p in draws)})
             self.jobs.task_done()

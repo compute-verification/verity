@@ -160,6 +160,7 @@ class Verifier:
         arrivals: list[list[int]] = [[] for _ in range(W)]
         verdicts: dict[int, dict] = {}
         draws_at: dict[int, int] = {}
+        parts: dict[int, list] = {}
         failure = None
         cpu0 = time.process_time_ns()
 
@@ -219,7 +220,12 @@ class Verifier:
                     close(drawn)
                     drawn += 1
             elif kind == "openings":
-                self.jobs.put((session, head["t"], wire.decode_openings(body)))
+                t, got = head["t"], wire.decode_openings(body)
+                have = parts.setdefault(t, [])
+                have.append(got)
+                if len(have) == head["parts"]:
+                    whole = None if any(x is None for x in have) else [o for x in have for o in x]
+                    self.jobs.put((session, t, whole))
             elif kind == "verdict":
                 verdicts[head["t"]] = head
                 if not head["accepted"]:
