@@ -26,7 +26,7 @@ theorem resReadCol {S : ℕ} {Vs : Fin S → VStmt} {sh : Flock.Shape} {sess : �
     ResReadCol Vs sh sess := by
   intro p a b hp ha hb hr
   obtain ⟨hc, hu, m, k, cl, sh₀, hpar, hsh, hh, hsheq⟩ := hck p hp
-  obtain ⟨S₁, ns, nv, hpart, hn, hw⟩ := ReadWhole.check_whole hc hpar hsh hh
+  obtain ⟨S₁, ns, nv, hpart, hn, hw, -⟩ := ReadWhole.check_whole hc hpar hsh hh
   rw [← hsheq] at hpart
   obtain ⟨S0, gs, hS, hg⟩ := ReadWhole.part_ok hpart
   have hpo := partsOf_eq hS hg
