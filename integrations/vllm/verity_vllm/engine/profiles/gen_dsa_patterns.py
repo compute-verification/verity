@@ -43,10 +43,12 @@ Q_KERNEL = "_fused_q_kernel"
 MQA_STAGE = "cp_gather_indexer_k_quant_cache"
 TOPK_PREFILL = "top_k_per_row_prefill"
 TOPK_DECODE = "cooperative_topk"
+INDEX_SHARE_KERNEL = "vllm.v1.attention.backends.mla.sparse_utils.ConvertReqIndexToGlobalIndexKernel.kernel"
 FA3_OP = "fwd"
 
 NORM_SRC_SHA = "2dcf56892eb2b61c0f0249965013fc1f63968c00e473b3df35cb186d42c650de"
 Q_SRC_SHA = "7380a1385db787ceded52869fe395160e859d22710ca46f20d1d0fdef2f41043"
+INDEX_SHARE_SRC_SHA = "ad40bdb415664d3b65e3e4163863158096f2ea52f2e2a3e01ff8be63aeb98f63"
 
 
 def _same(a: Any, b: ViewDesc) -> bool:
@@ -204,7 +206,7 @@ class DsaNormRope:
                 ik_rows, is_rows = _slot_rows(ikc, 128), _index_scale_rows(isc)
             except GeometryError as e:
                 return unsupported(node, str(e))
-            if (ik_rows.alloc, ik_rows.offset) != (is_rows.alloc, isc.offset) or ik_rows.shape[0] != is_rows.shape[0]:
+            if ik_rows.alloc != is_rows.alloc or 4 * is_rows.offset != ik_rows.offset + 128 or ik_rows.shape[0] != is_rows.shape[0]:
                 return unsupported(node, "index-K values and scales are not the two views of one 132-byte slot layout")
             ieps = float(a.get("index_k_layer_norm_eps"))
             parts.append(Compute(bind(dsa.DsaIndexerKRow, D=128, ROPE=64, EPS=ieps), M,
@@ -363,6 +365,51 @@ class DsaTopK:
 
 
 @dataclass
+class DsaIndexShare:
+    """The pinned request-index to physical-slot copy between top-k and sparse FA3.
+
+    The conversion is staging: ``SparseMlaSplit`` reads the selected latent-cache rows directly through ``GatherMany``.  This pattern
+    nevertheless verifies that each layer's FA3 page table is produced from the one top-k allocation shared by full and IndexShare
+    layers, then records that output for ``DsaSparseMla``.
+    """
+
+    name = "dsa.index_share_copy"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if not node.is_triton or node.enter.fn != INDEX_SHARE_KERNEL:
+            return None
+        a, c = bound_args(node), node.enter.constexprs
+        pins = {
+            "BLOCK_SIZE": 64, "BLOCK_STRIDE_ROWS": 64, "BLOCK_N": 2048, "HAS_PREFILL": False,
+            "COUNT_VALID": True, "SINGLE_TILE": True, "COMPACT_TO_FRONT": True,
+            "DCP_SIZE": 1, "DCP_RANK": 0, "DCP_INTERLEAVE": 1,
+        }
+        bad = {k: (c.get(k), v) for k, v in pins.items() if c.get(k) != v}
+        if node.enter.src_sha != INDEX_SHARE_SRC_SHA or node.enter.num_warps != 8 or node.enter.num_stages != 3 or bad:
+            return unsupported(node, "IndexShare conversion source or launch geometry differs from the GLM-5.3 H200 pin",
+                               src_sha=node.enter.src_sha, num_warps=node.enter.num_warps, num_stages=node.enter.num_stages,
+                               mismatches=bad)
+        req, blocks, source, out, valid = (a.get(k) for k in
+                                           ("req_id_ptr", "block_table_ptr", "token_indices_ptr", "out_ptr", "valid_count_ptr"))
+        M = len(ctx.start.rows)
+        if not all(isinstance(v, ViewDesc) for v in (req, blocks, source, out, valid)):
+            return unsupported(node, "IndexShare conversion pointers are not bound")
+        if req.shape != (M,) or req.dtype != "int32" or blocks.dtype != "int32" or blocks.rank != 2 \
+                or source.shape != out.shape or source.shape != (M, 2048) or source.dtype != out.dtype or source.dtype != "int32" \
+                or valid.shape != (M,) or valid.dtype != "int32" or not is_row_major(source) or not is_row_major(out):
+            return unsupported(node, "IndexShare conversion views differ from the pinned i32 layouts",
+                               req=repr(req), block_table=repr(blocks), source=repr(source), out=repr(out), valid=repr(valid))
+        established = _state(ctx).get("topk")
+        source_id = (source.alloc, source.offset, source.shape[1], source.strides)
+        if established is None or source_id != established:
+            return unsupported(node, "IndexShare conversion does not read the shared top-k allocation",
+                               source=source_id, established=established)
+        _module_state(ctx, node)["page_table"] = (out.alloc, out.offset, out.shape[1], out.strides)
+        return Transparent("noop", tuple(sorted(node.ids())), hint=f"{_module(node)}/IndexShare top-k staging",
+                           kernels=("ConvertReqIndexToGlobalIndexKernel",), pattern=self.name)
+
+
+@dataclass
 class DsaSparseMla:
     """FA3 sparse MLA at vLLM's per-row default split count."""
 
@@ -401,8 +448,9 @@ class DsaSparseMla:
         if isinstance(ms.get("latent"), ViewDesc) and (ms["latent"].alloc, ms["latent"].offset) != (latent.alloc, latent.offset):
             return unsupported(node, "FA3 does not read the latent cache fused_norm_rope wrote", observed=repr(latent), established=repr(ms["latent"]))
         page = a.get("page_table")
-        established = _state(ctx).get("topk")
-        if not isinstance(page, ViewDesc) or established is None or page.alloc != established[0] or page.offset != established[1]:
+        established = ms.get("page_table")
+        page_id = (page.alloc, page.offset, page.shape[1], page.strides) if isinstance(page, ViewDesc) and page.rank == 2 else None
+        if page_id is None or established is None or page_id != established:
             return unsupported(node, "FA3 page table is not the shared top-k allocation", page_table=repr(page), established=established)
         ns_arg = a.get("num_splits")
         if not isinstance(ns_arg, int) or ns_arg < 0:
@@ -432,7 +480,7 @@ class DsaSparseMla:
 
 def dsa_patterns() -> list:
     """Patterns in dependency order, before generic transparent handlers."""
-    return [DsaNormRope(), DsaQ(), DsaMqaGather(), DsaMqaAllocation(), DsaTopK(), DsaSparseMla()]
+    return [DsaNormRope(), DsaQ(), DsaMqaGather(), DsaMqaAllocation(), DsaTopK(), DsaIndexShare(), DsaSparseMla()]
 
 
 __all__ = [
@@ -440,6 +488,7 @@ __all__ = [
     "DsaMqaGather",
     "DsaNormRope",
     "DsaQ",
+    "DsaIndexShare",
     "DsaSparseMla",
     "DsaTopK",
     "dsa_patterns",
