@@ -422,13 +422,14 @@ theorem readCol_of_laid {net : Flock.Net} (hU : Built net) {name : String} {l : 
     rw [← hcp]; exact Rows.ofNet_one hU
   have hw : (2 : ℕ) ^ net.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by norm_num) hu
   have hj : k < (Rows.ofNet hU).nComp := by omega
+  have hij : (Rows.ofNet hU).nIn + (⟨k, hj⟩ : Fin _).val = net.inWords * Flock.WORD + k := by simp only; omega
   have hra : ((Rows.ofNet hU).a ⟨k, hj⟩).map Fin.val = (l.ra.getD (net.inWords * Flock.WORD + k) #[]).toList := by
     have h := Rows.ofNet_a hU hu ⟨k, hj⟩
-    rw [ofRows_row ha hw, hnIn] at h
+    rw [ofRows_row ha hw, hij] at h
     exact h
   have hrb : ((Rows.ofNet hU).b ⟨k, hj⟩).map Fin.val = (l.rb.getD (net.inWords * Flock.WORD + k) #[]).toList := by
     have h := Rows.ofNet_b hU hu ⟨k, hj⟩
-    rw [ofRows_row hb hw, hnIn] at h
+    rw [ofRows_row hb hw, hij] at h
     exact h
   rw [← hra, ← hrb, ← List.map_append] at hc
   obtain ⟨x, hx, rfl⟩ := List.mem_map.1 hc
