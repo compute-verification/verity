@@ -24,7 +24,9 @@ Stage `s`'s keys for rep `ρ` are the keys of the messages rep `ρ` sends at sta
 * The slices, at `ValsSrc`'s values: a rep's first `m_z − 4` messages, the zerocheck's, read only `zcKeys`
   (`unitMsgs_zc_read`), its next `k_log − 4`, the lincheck's with `h`, only `lcKeys` at a holo shape
   (`unitMsgs_lc_read`), and its next `2 + n_X`, the ring switches', only `rsKeys` (`unitMsgs_rs_read`). No key of
-  any is `.cons`, so `rep₀`'s consistency sums stand in for the rep's (`valOf_cons_irrel`).
+  any is `.cons`, so `rep₀`'s consistency sums stand in for the rep's (`valOf_cons_irrel`). The Ligerito slice's
+  leaves: G's out-of-domain value `i` reads only `.ood i` (`ligOod_read`), its sumcheck message `i` only `.msg i`
+  (`ligMsg_read`), and its final `yr` only the `.yr` keys (`yrOf_read`).
 * `wColsAt_of_w`: `WColsAt` from L's side of the decoder (`WDecodes`: `rep₀` reads each element of `w` off columns),
   S's reads file per key (`WSel`, `SelPort`) and the keys being elements of `w` (`WKeys`, `valOf_w`).
 * At `ValsSrc`'s values: `hb_of_shape` gives `tsRead_valsSrc`' `hb` from V*'s shape; a constant source cap gives
@@ -516,6 +518,68 @@ theorem unitMsgs_rs_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : 
     (valOf_cons_irrel sh d.w d.comb d.cons (fun _ _ => 0) (rsKeys_noCons hx)).trans
       ((h x hx (rsKeys_noCons hx)).trans (valOf_cons_irrel sh d'.w d'.comb (fun _ _ => 0) d'.cons (rsKeys_noCons hx)))
 
+/-- **An evaluated variable at its index reads only its key.** -/
+theorem var_get_read {K L F : Type} [Inhabited F] (var : K → L) (eval : (K → F) → L → F)
+    (heval : ∀ v k, eval v (var k) = v k) (n i : ℕ) (key : ℕ → K) {v v' : K → F}
+    (h : i < n → v (key i) = v' (key i)) :
+    (((Array.range n).map (var ∘ key)).map (eval v))[i]! =
+      (((Array.range n).map (var ∘ key)).map (eval v'))[i]! := by
+  by_cases hi : i < n
+  · simp only [getElem!_def, Array.getElem?_map, Array.getElem?_range, hi, ↓reduceIte, Option.map_some,
+      Function.comp_apply, heval, h hi]
+  · simp only [getElem!_def, Array.getElem?_map, Array.getElem?_range, hi, ↓reduceIte, Option.map_none]
+
+/-- **An evaluated pair of pairs at its index reads only its four keys.** -/
+theorem kvs_get_read {K L F G : Type} [Inhabited G] (var : K → L) (eval : (K → F) → L → F)
+    (heval : ∀ v k, eval v (var k) = v k) (g : RecAlgebra.KV F × RecAlgebra.KV F → G) (n i : ℕ)
+    (key : ℕ → ℕ → ℕ → K) {v v' : K → F}
+    (h : i < n → ∀ a < 2, ∀ b < 2, v (key i a b) = v' (key i a b)) :
+    ((((Array.range n).map fun j => ((var (key j 0 0), var (key j 0 1)), (var (key j 1 0), var (key j 1 1)))).map
+        fun mm => (RecAlgebra.KV.map (eval v) mm.1, RecAlgebra.KV.map (eval v) mm.2)).map g)[i]! =
+      ((((Array.range n).map fun j => ((var (key j 0 0), var (key j 0 1)), (var (key j 1 0), var (key j 1 1)))).map
+        fun mm => (RecAlgebra.KV.map (eval v') mm.1, RecAlgebra.KV.map (eval v') mm.2)).map g)[i]! := by
+  by_cases hi : i < n
+  · simp only [getElem!_def, Array.getElem?_map, Array.getElem?_range, hi, ↓reduceIte, Option.map_some,
+      RecAlgebra.KV.map, heval, h hi 0 (by decide) 0 (by decide), h hi 0 (by decide) 1 (by decide),
+      h hi 1 (by decide) 0 (by decide), h hi 1 (by decide) 1 (by decide)]
+  · simp only [getElem!_def, Array.getElem?_map, Array.getElem?_range, hi, ↓reduceIte, Option.map_none]
+
+/-- **Out-of-domain value `i` of G's Ligerito proof reads only `.ood i`.** -/
+theorem ligOod_read (sh : Flock.Shape) {params params' : Flock.PcsParams} {cap cap' : Array ByteArray}
+    {lig lig' : Flock.LigeritoProof} {d d' : RepData} (i : ℕ)
+    (h : Flock.RecAlgebra.valOf sh d.w d.comb d.cons (.ood i) =
+      Flock.RecAlgebra.valOf sh d'.w d'.comb d'.cons (.ood i)) :
+    (FlockVBridge.Family.proofOf sh params cap lig d).ligerito.oodValues[i]! =
+      (FlockVBridge.Family.proofOf sh params' cap' lig' d').ligerito.oodValues[i]! :=
+  var_get_read RecAlgebra.Lin.var RecAlgebra.Lin.eval RecAlgebra.Lin.eval_var _ i RecAlgebra.Key.ood fun _ => h
+
+/-- **Sumcheck message `i` of G's Ligerito proof reads only its four `.msg i` keys.** -/
+theorem ligMsg_read (sh : Flock.Shape) {params params' : Flock.PcsParams} {cap cap' : Array ByteArray}
+    {lig lig' : Flock.LigeritoProof} {d d' : RepData} (i : ℕ)
+    (h : ∀ a < 2, ∀ b < 2,
+      Flock.RecAlgebra.valOf sh d.w d.comb d.cons (.msg i a b) =
+        Flock.RecAlgebra.valOf sh d'.w d'.comb d'.cons (.msg i a b)) :
+    (FlockVBridge.Family.proofOf sh params cap lig d).ligerito.messages[i]! =
+      (FlockVBridge.Family.proofOf sh params' cap' lig' d').ligerito.messages[i]! :=
+  kvs_get_read RecAlgebra.Lin.var RecAlgebra.Lin.eval RecAlgebra.Lin.eval_var
+    (fun mm => (RecAlgebra.kv mm.1, RecAlgebra.kv mm.2)) _ i RecAlgebra.Key.msg fun _ => h
+
+/-- **G's final `yr` reads only the `.yr j` keys.** -/
+theorem yrOf_read (sh : Flock.Shape) {params params' : Flock.PcsParams} {cap cap' : Array ByteArray}
+    {lig lig' : Flock.LigeritoProof} {d d' : RepData} (ext : ℕ)
+    (h : ∀ j < 2 ^ (ext + 1),
+      Flock.RecAlgebra.valOf sh d.w d.comb d.cons (.yr j) = Flock.RecAlgebra.valOf sh d'.w d'.comb d'.cons (.yr j)) :
+    FlockSoundness.Refine.yrOf (FlockVBridge.Family.proofOf sh params cap lig d).ligerito ext =
+      FlockSoundness.Refine.yrOf (FlockVBridge.Family.proofOf sh params' cap' lig' d').ligerito ext :=
+  funext fun i => by
+    have e : (RecAlgebra.decoded sh d.w d.comb d.cons).yr[i.val]! =
+        (RecAlgebra.decoded sh d'.w d'.comb d'.cons).yr[i.val]! :=
+      var_get_read RecAlgebra.Lin.var RecAlgebra.Lin.eval RecAlgebra.Lin.eval_var _ i.val RecAlgebra.Key.yr
+        fun _ => h i.val i.isLt
+    show fOf (RecAlgebra.decoded sh d.w d.comb d.cons).yr[i.val]! =
+      fOf (RecAlgebra.decoded sh d'.w d'.comb d'.cons).yr[i.val]!
+    rw [e]
+
 end slices
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -889,57 +953,3 @@ theorem repsDrawn_valsSrc {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsS
 end
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.unitWeave_eq
-#print axioms FlockC3.Reps.extraClaims_length
-#print axioms FlockC3.Reps.hOfW_valOf
-#print axioms FlockC3.Reps.sentK_noCons
-#print axioms FlockC3.Reps.alphaRead_of_noCons
-#print axioms FlockC3.Reps.formsRead_sent
-#print axioms FlockC3.Reps.valOf_of_mask
-#print axioms FlockC3.Reps.wCombRead_of
-#print axioms FlockC3.Reps.hOfW_read
-#print axioms FlockC3.Reps.tsRead_of_woven
-#print axioms FlockC3.Reps.weaveMsgsRead_of_keys
-#print axioms FlockC3.Reps.wovenAt_repsOfVals
-#print axioms FlockC3.Reps.tsRead_repsOfVals
-#print axioms FlockC3.Reps.recMsgs_length
-#print axioms FlockC3.Reps.ligMsgs_length
-#print axioms FlockC3.Reps.unitMsgs_length
-#print axioms FlockC3.Reps.unitCoins_length
-#print axioms FlockC3.Reps.lengths_vals
-#print axioms FlockC3.Reps.tsRead_valsSrc
-#print axioms FlockC3.Reps.list3_get
-#print axioms FlockC3.Reps.list3_length
-#print axioms FlockC3.Reps.append_get_right
-#print axioms FlockC3.Reps.list2_get
-#print axioms FlockC3.Reps.list2_length
-#print axioms FlockC3.Reps.vars_read
-#print axioms FlockC3.Reps.pairs_read
-#print axioms FlockC3.Reps.valOf_cons_irrel
-#print axioms FlockC3.Reps.zcKeys_noCons
-#print axioms FlockC3.Reps.zcMsgs_read
-#print axioms FlockC3.Reps.zcMsgs_length
-#print axioms FlockC3.Reps.unitMsgs_zc
-#print axioms FlockC3.Reps.unitMsgs_zc_read
-#print axioms FlockC3.Reps.lcKeys_noCons
-#print axioms FlockC3.Reps.holoLcMsgs_read
-#print axioms FlockC3.Reps.holoLcMsgs_length
-#print axioms FlockC3.Reps.unitMsgs_lc
-#print axioms FlockC3.Reps.unitMsgs_lc_read
-#print axioms FlockC3.Reps.unitMsgs_length_of
-#print axioms FlockC3.Reps.unitCoins_length_of
-#print axioms FlockC3.Reps.rows_read
-#print axioms FlockC3.Reps.map_range_get
-#print axioms FlockC3.Reps.valOf_w
-#print axioms FlockC3.Reps.rsKeys_noCons
-#print axioms FlockC3.Reps.opMsgs_read
-#print axioms FlockC3.Reps.opMsgs_length
-#print axioms FlockC3.Reps.unitMsgs_rs
-#print axioms FlockC3.Reps.unitMsgs_rs_read
-#print axioms FlockC3.Reps.wColsAt_of_w
-#print axioms FlockC3.Reps.hb_of_shape
-#print axioms FlockC3.Reps.capRead_of_const
-#print axioms FlockC3.Reps.capTie_vals
-#print axioms FlockC3.Reps.repIdx_vals
-#print axioms FlockC3.Reps.repsDrawn_valsSrc

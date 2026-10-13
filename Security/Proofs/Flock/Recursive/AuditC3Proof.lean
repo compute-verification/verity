@@ -148,11 +148,15 @@ theorem vbridgeC_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Ty
       htr⟩,
     hdec, hfull⟩
 
-/-- **The recursive audit at candidate 3's soundness half, at every coin types `CT`.** -/
+/-- **The recursive audit at candidate 3's soundness half, at every coin types `CT` and record map `im`.** -/
 theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (CT : (st : Flock.Stmt) → (hp : HoloParams) → Fin (r st hp) → Type) [∀ st hp k, Fintype (CT st hp k)]
-    [∀ st hp k, Inhabited (CT st hp k)] : Flock.Guarantees.RecursiveAuditC3At CT := by
-  intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _hstk ish Vs zr hCust _im _hIC
+    [∀ st hp k, Inhabited (CT st hp k)]
+    (im : (st : Flock.Stmt) → (hp : HoloParams) → (Cm : Type) → Flock.RecVStar.Inner → String →
+      (Cm → String → Nat → List UInt8) →
+        FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin (r st hp)) → CT st hp k)) :
+    Flock.Guarantees.RecursiveAuditC3At CT im := by
+  intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _hstk ish Vs zr hCust _tbl _bc _hIC
     bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
@@ -210,6 +214,6 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
-  exact recursiveAuditC3At Flock.Guarantees.holoCTs
+  exact recursiveAuditC3At Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
 end Flock.SecurityProofs
