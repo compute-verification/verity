@@ -47,7 +47,7 @@ theorem coinsAt_held {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts :
   have hc' : i < t.length := by rw [List.length_map] at hc; exact hc
   have hround := hd q _ (((hcus t).1 i t[i] (List.getElem?_eq_getElem hc')).2 s (ix q) hs)
   show coinArr FlockSoundness.Refine.fOf (g q) = _
-  rw [hround, henc i hi s (ix q) t[i].2 hs, List.getElem_map]
+  rw [hround, List.map_take, henc i hi s (ix q) (t.map Prod.snd) hc hs]
 
 /-- **Hypothesis: a stage's coins are one stream's, drawn in order from the history's round `j` on**: its coin steps
 are the coins `g q` the verifier holds of a stream `s` at round `ix q`, `q` over `ks`, and the history's round `j + p`
