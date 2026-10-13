@@ -1,5 +1,5 @@
 import Proofs.Flock.C3.Opening.SessionCoins
-import Proofs.Flock.C3.Opening.SessionParts
+import Proofs.Flock.C3.Opening.SessionPartsL
 import Proofs.Flock.C3.Opening.SessionAcc
 
 /-!
@@ -10,9 +10,10 @@ coins', with no decoder (`SessionAt`):
 
 * item 2, the coins: `RecCoins.opening` accepted R's opening at its shape (`opening_ok`): its two claims of value zero,
   `RecOpening.run` at its coins, the passes from `kappa` zero;
-* item 1 (a) and (b): every part of the shape's S is a copy of its `rec-opening` unit whose row ports are w and whose
-  `v` port is the opening's `v`, its outputs registered zero (`OpeningZeroAt`), so all of S's residuals are zero
-  (`residuals_zero_of_cols`), S being the passes' S (`opening_ok`'s "structure moved" check);
+* item 1 (a) and (b): every part of the shape's S is a copy of its `rec-opening` unit whose row ports are w where its
+  computed rows read them and whose `v` port is the opening's `v`, its outputs registered zero (`OpeningZeroAtL`), so
+  all of S's residuals are zero (`residuals_zero_of_cols`), S being the passes' S (`opening_ok`'s "structure moved"
+  check);
 * item 1 (c): each opening of R's levels is a copy of its `rec-open-stacked` unit chaining `rec-acc` (`OpensAt`), at the
   `coef` the verifier registers at the opening's `kappa` (`RecCoins.coefAt`), and w's `acc0`, `acc1` are the chain's
   rows at R's ends, so `hacc` holds at the opened rows' consistency sums (`hacc_of_units`).
@@ -34,10 +35,10 @@ variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
 /-- **(n4 items 1 and 2) R's opening in V*'s sessions**, at the sessions `zs` and their layers `Lb`, R's shape `sh`,
 the verifier's coins `c3`, w and R's openings `ops`. `RecCoins.opening` accepts R's opening `o` at `sh`, and w has its
 elements. (a) Each part `p` of the groups `gs` of the shape's S is copy `cp p` of unit `un p` in session `sess p`, its
-row ports w and its `v` port `o`'s `v`, its outputs registered zero (`OpeningZeroAt`). (c) Opening `j` of level `ℓ`
-is copy `cp ℓ j` of unit `un ℓ j` in session `sess ℓ`, opening its row at its `coef` with `acc`'s rows at its chain
-position before and after (`OpensAt`); that `coef` is the verifier's (`RecCoins.coefAt` at `o`'s `kappa`), and w's
-`acc0`, `acc1` are `acc`'s rows at R's ends. -/
+row ports w where a computed row of the unit reads them and its `v` port `o`'s `v`, its outputs registered zero
+(`OpeningZeroAtL`). (c) Opening `j` of level `ℓ` is copy `cp ℓ j` of unit `un ℓ j` in session `sess ℓ`, opening its row
+at its `coef` with `acc`'s rows at its chain position before and after (`OpensAt`); that `coef` is the verifier's
+(`RecCoins.coefAt` at `o`'s `kappa`), and w's `acc0`, `acc1` are `acc`'s rows at R's ends. -/
 def SessionAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (sh : Flock.Shape)
     (unit : String) (c3 : Flock.RecCoins.C3) (w : Array F128) (ops : FlockVBridge.AccChain.Openings) : Prop :=
   ∃ o : Flock.RecCoins.Opening, Flock.RecCoins.opening c3 unit = .ok o ∧ o.sh = sh ∧
@@ -45,7 +46,7 @@ def SessionAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (
     (∃ (S : Flock.RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (sess : ℕ → Fin nS)
         (un : (p : ℕ) → Fin (Vs (sess p)).nv) (cp : ℕ → ℕ),
       Flock.RecOpening.structureOf sh = .ok S ∧ Flock.RecResiduals.groups S (Flock.RecOpening.portSizes sh) = .ok gs ∧
-      ∀ p < gs.size, FlockVBridge.OfVStar.OpeningZeroAt (zs (sess p)) (Lb (sess p)) (un p) (cp p) sh gs p
+      ∀ p < gs.size, FlockVBridge.OfVStar.OpeningZeroAtL (zs (sess p)) (Lb (sess p)) (un p) (cp p) sh gs p
         (Flock.RecAlgebra.el w) (Flock.RecAlgebra.el o.v)) ∧
     (∃ (acc : ℕ → Array F128) (sess : ℕ → Fin nS) (un : (ℓ : ℕ) → ℕ → Fin (Vs (sess ℓ)).nv) (cp : ℕ → ℕ → ℕ),
       (∀ ℓ < sh.sched.levels.size, ∀ j < ops.q ℓ,
@@ -107,7 +108,7 @@ theorem openingRead_of_session (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     (w := w R ω t (FlockVBridge.Compiled.layers F.zs dg N k Rw R ω t R₂ τ)) (v := bs.vVals) hw hvs.symm
     fun p hp => by
       obtain ⟨_, S', hS', w', v', col, base, hw', hv', hcols, h0⟩ :=
-        FlockVBridge.OfVStar.partCols_of_openingZeroAt (F.zs R ω t R₂ (sess p)) (hacc.1 (sess p)).2 hS hg
+        FlockVBridge.OfVStar.partCols_of_openingZeroAtL (F.zs R ω t R₂ (sess p)) (hacc.1 (sess p)).2 hS hg
           (hparts p hp)
       rw [hv] at hv'
       exact ⟨S', hS', w', v', col, base, hw', hv', hcols, h0⟩

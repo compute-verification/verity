@@ -1,43 +1,12 @@
 import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.C3.Reps.WRead
-import Proofs.Flock.C3.Compose.RsFacts
 
 /-!
-# The checks' whole reads at the sessions: `RsReadCol` and `ResReadCol`
+# The residuals' check's whole reads at `wRead`'s parts: `ResReadCol`
 
-`ReadWhole`'s reads, which import no session, at the facts the sessions name.
-
-* `rsReadCol`: `RsReadCol` holds outright, `OpenCopy` carrying the opening's check.
-* `resReadCol`: `ResReadCol` holds where each part's session passed `RecResiduals.check` at the shape (`p₀ = p`).
+`resReadCol`: `ResReadCol` holds where each part's session passed `RecResiduals.check` at the shape (`p₀ = p`), by
+`ReadWhole`'s reads, which import no session.
 -/
-
-namespace FlockC3.Compose
-
-noncomputable section
-
-open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
-open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
-
-variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
-
-local notation "ℐ" => holoInnerAt T CT st hp
-
-/-- **The `rec-opening` unit reads its ring switches' columns** (`RsReadCol`): `OpenCopy` carries the opening's check,
-which refuses a unit reading an element of a claim's ring switch in fewer than 128 bits (`readCol_rs`). -/
-theorem rsReadCol {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
-    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
-    {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128} :
-    RsReadCol zs dg N k Rw sh w := by
-  intro i _ gs s un j p hO S0 hS hg hpg S₁ ns nv hpart q e t he hwi b hb _ _ _ _ _ _
-  obtain ⟨_, _, _, _, _, _, _, -, hz⟩ := hO
-  obtain ⟨_, _, _, hc, hu, m, cl, hpm, hsh, -⟩ := hz
-  exact FlockC3.Reps.ReadWhole.readCol_rs (Vs s).hU hc hu hpm hsh hS hg hpg hpart he hwi hb
-
-end
-
-end FlockC3.Compose
 
 namespace FlockC3.Reps
 

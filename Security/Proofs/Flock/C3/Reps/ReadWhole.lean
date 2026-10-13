@@ -15,8 +15,8 @@ some but not all of them (`partlyRead`), all over `readIns`, the input columns t
   `unitLog ≤ 32`.
 * `readCol_rs`: the opening's part reads each column of its ring-switch elements.
 
-This file imports no session, so the sessions read these directly: `RsReadCol` is `rsReadCol` and `ResReadCol` is
-`resReadCol` (`ReadWholeAt`).
+This file imports no session, so the sessions read these directly: `RsReadCol` is `rsReadCol` (`RsFacts`, from
+`readCol_rsAt`) and `ResReadCol` is `resReadCol` (`ReadWholeAt`).
 -/
 
 namespace FlockC3.Reps.ReadWhole

@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.Reps.WRead
-import Proofs.Flock.C3.Opening.SessionL
+import Proofs.Flock.C3.Reps.ReadWhole
+import Proofs.Flock.C3.Opening.Session
 
 /-!
 # R's opening's `w` read off the layers: `wReadO`, and each part's `OpeningZeroAtL` at it
@@ -11,10 +12,9 @@ row-port bit keys (`WLocO`, one chosen by `wLocO`), and 0 where no part has it s
 
 * `partsOfO`, `wIOfO`, `nsOfO`, `nvOfO`, `rowColOfO`: the opening's parts, as `partsOf` … `rowColOf` are V*'s algebra's;
   `structureOf_nwO`, `part_nwO`: the row ports' elements are w's `nw`.
-* `OpenWhole` (named): each element a part of the verifier's opening holds is read whole or not at all.
 * `openingZeroAtL_wReadO`: each part's `OpeningZeroAtL` at one `w` holds at `wReadO`'s: a bit a part reads is of an
-  element the part reads whole (`OpenWhole`), so some part has it so (`WLocO`), and there a good layer holds the
-  registrant's value (`bitAt_of_regBit`), which is `w`'s in every part.
+  element the part reads whole (S's `openReadCol_whole`, from the part's `RecOpening.check`), so some part has it so
+  (`WLocO`), and there a good layer holds the registrant's value (`bitAt_of_regBit`), which is `w`'s in every part.
 
 At the opening's shape not every element a part holds is read (at `m = 22`, `m24`'s first four elements are held and
 never read), so `wReadO` need not be `w` there, and `OpeningZeroAtL` asks nothing of those columns.
@@ -113,16 +113,6 @@ def wReadO {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → F
       (wUnO Vs sh sess un i.val) (rowColOfO sh (wLocO Vs sh sess i.val).1 (128 * (wLocO Vs sh sess i.val).2 + b))
   else 0
 
-/-- **Hypothesis on the verifier's opening units: an element a part holds is read whole or not at all** (S's
-`RecOpening.check` refusal): at a circuit whose unit `RecOpening.check` accepts as part `p` at `sh`, a row-port element
-`a` of the part one of whose bits' columns a computed row of the unit reads has all 128 of its columns so read. -/
-def OpenWhole (sh : Flock.Shape) : Prop :=
-  ∀ (c : Flock.Circuit) (hU : Built c.unit) (m cl p : ℕ), Flock.RecOpening.check c = .ok () →
-    Flock.RecOpening.params c.unit.name = some (m, cl, p) → Flock.RecOpening.shape? m cl = some sh →
-    ∀ (S₁ : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ), Flock.RecOpening.part sh p = .ok (S₁, ns, nv) →
-    ∀ a < ns.sum, ∀ b < 128, ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * a + b)) →
-      ∀ b₀ < 128, ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * a + b₀))
-
 section read
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {sh : Flock.Shape} {sess : ℕ → Fin S} {un : (p : ℕ) → Fin (Vs (sess p)).nv}
@@ -157,9 +147,9 @@ theorem el_wReadO (Lb : (j : Fin S) → (Vs j).Bits) {i : ℕ} (hi : i < Flock.R
 /-- **Each opening part's `OpeningZeroAtL` at `wReadO`**: where every part `p` is copy 0 of unit `un p` in session
 `sess p` registering one `w` where its rows read it (`OpeningZeroAtL`) in a layer agreeing with the registrant, each
 does at `wReadO`'s: element `(wIOfO sh p)[a]`'s bit `b`, read by `p`'s unit, is of an element `p` reads whole
-(`OpenWhole`), so some part reads it whole at keyed columns (`wLocO_spec`), and `wReadO` holds the layer's bit there
-(`el_wReadO`), which is `w`'s (`bitAt_of_regBit`, `RegBit`). -/
-theorem openingZeroAtL_wReadO {Reg' : Type} (hrc : OpenWhole sh) {zs : (s : Fin S) → (Vs s).Outer Reg'}
+(`openReadCol_whole`, at the part's check), so some part reads it whole at keyed columns (`wLocO_spec`), and `wReadO`
+holds the layer's bit there (`el_wReadO`), which is `w`'s (`bitAt_of_regBit`, `RegBit`). -/
+theorem openingZeroAtL_wReadO {Reg' : Type} {zs : (s : Fin S) → (Vs s).Outer Reg'}
     {Lb : (s : Fin S) → (Vs s).Bits} (hA : ∀ s, (zs s).RegAgree (Lb s)) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : Flock.RecOpening.structureOf sh = .ok GS)
     (hg : Flock.RecResiduals.groups GS (Flock.RecOpening.portSizes sh) = .ok gs) {w v : ℕ → F128}
@@ -209,11 +199,12 @@ theorem openingZeroAtL_wReadO {Reg' : Type} (hrc : OpenWhole sh) {zs : (s : Fin 
     intro p₁ hp₁ a ha b hb hrd₁
     have hall : ∀ b₀ < 128, ReadCol (Rows.ofNet (Vs (sess p₁)).hU) (rowColOfO sh p₁ (128 * a + b₀)) := by
       intro b₀ hb₀
-      obtain ⟨_, _, _, hc, _, m, cl, hpm, hsh, P, ns, nv, hpart, _, _, _⟩ := h p₁ hp₁
+      obtain ⟨_, _, _, hc, hu, m, cl, hpm, hsh, P, ns, nv, hpart, _, _, _⟩ := h p₁ hp₁
       obtain ⟨hns, hnv, -, hsz⟩ := hof p₁ hp₁ P ns nv hpart
       have hrd := hrd₁
       rw [rowColOfO, hns, hnv] at hrd ⊢
-      exact hrc _ _ m cl p₁ hc hpm hsh P ns nv hpart a (by rw [← hsz]; exact ha) b hb hrd b₀ hb₀
+      exact ReadWhole.openReadCol_whole sh _ _ m cl p₁ hc hu hpm hsh P ns nv hpart a (by rw [← hsz]; exact ha) b hb
+        hrd b₀ hb₀
     have hex : ∃ pa, WLocO Vs sh sess (wIOfO sh p₁)[a] pa :=
       ⟨(p₁, a), by rw [hP]; exact hp₁, Array.getElem?_eq_getElem ha,
         fun b₁ hb₁ => (hloc p₁ hp₁ a ha b₁ hb₁ (hall b₁ hb₁)).2.2.1⟩
