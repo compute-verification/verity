@@ -1159,10 +1159,28 @@ def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run
     return True
 
 
+#: `sh -c` around the after-landing command: run it (``$2``...) in its worktree ``$0``, then remove that from ``$1``'s repository
+AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree remove --force "$0"; exit $s'
+
+
+def _own_tree(repo: Path, commit: str) -> Path | None:
+    """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
+    (12 Oct: drive's queue clone is reset and cleaned every tick, and d779760ce's `post_train.py` lost its `.venv` mid-run).
+    None when ``repo`` can't make one."""
+    import shutil
+
+    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-"))
+    if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
+        shutil.rmtree(tree, ignore_errors=True)
+        return None
+    return tree
+
+
 def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen) -> list[str] | None:
     """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
-    does changes the merge's result.  Returns the argv started, None when the declaration names none."""
+    does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  Returns
+    the argv started, None when the declaration names none."""
     from .store import tools_registry
 
     try:
@@ -1173,13 +1191,17 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
         return None
     argv.append(commit)
     out = Path(tempfile.gettempdir()) / f"research-after-land-{commit[:12]}.log"
+    tree = _own_tree(repo, commit)
+    run = argv if tree is None else ["sh", "-c", AFTER_LAND_THEN_REMOVE, str(tree), str(repo), *argv]
     try:
         with open(out, "ab") as f:
-            spawn(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+            spawn(run, cwd=tree or repo, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
     except OSError as e:
+        if tree is not None:
+            _git(repo, "worktree", "remove", "--force", str(tree), check=False)
         log(f"research merge: after the landing, `{shlex.join(argv)}` did not start ({e}); run it by hand")
         return argv
-    log(f"research merge: after the landing, started `{shlex.join(argv)}` (log {out})")
+    log(f"research merge: after the landing, started `{shlex.join(argv)}` in {tree or repo} (log {out})")
     return argv
 
 
@@ -1204,7 +1226,8 @@ def _move(repo: Path, remote: str, ref: str, was: str, tip: str, log=print) -> b
     return not p.returncode
 
 
-def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log=print) -> str | None:
+def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log=print,
+              runs: dict[str, str] | None = None) -> str | None:
     """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
     the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
     on the tip (a later landing's `post_train.py` tests the ones before it too), post each landing to the merge thread
@@ -1256,7 +1279,7 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
             push_mirror(repo, tip, name)
         after_land(repo, tool, tip, log=log)
         if remote == "origin":
-            report_landings(repo, start, tip, log=log)
+            report_landings(repo, start, tip, log=log, runs=runs)
     if _move(repo, remote, AFTER_LAND_REF, mark, tip, log) and not start:
         log(f"research merge: {remote} had no {AFTER_LAND_REF}; set it to main ({tip[:12]}): the steps after a landing are "
             "caught up from here, and nothing before it was looked at")
@@ -1264,7 +1287,7 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
 
 
 #: what a landing merged, in its own subject or its train's (`prepare`): a pull request, a branch of origin, or a commit
-MERGED_REF = re.compile(r"Merge (#\d+|origin/\S+|[0-9a-f]{12,40}) \([0-9a-f]{7,40}\)")
+MERGED_REF = re.compile(r"Merge (#\d+|origin/\S+|[0-9a-f]{12,40}) \([0-9a-f]{7,40}\)|^Queue: (#\d+) ")
 CHECK_TRAILER = re.compile(r"^Check(?:ed)?: (.*)$", re.M)
 #: a run id, or the lander's `r20261010-*-9827` for one whose launch time it didn't copy
 RUN_ID = re.compile(r"r20\d{6}-(?:\d{6}|\*)-[0-9a-f]{4}")
@@ -1279,10 +1302,11 @@ def _merged_name(ref: str, prs: dict[str, int]) -> str:
     return f"#{prs[sha]}" if sha else ref[:12]
 
 
-def landing_lines(repo: Path, start: str, tip: str, prs: dict[str, int] | None = None) -> list[str]:
+def landing_lines(repo: Path, start: str, tip: str, prs: dict[str, int] | None = None,
+                  runs: dict[str, str] | None = None) -> list[str]:
     """One line per commit on ``tip``'s first-parent line after ``start``: what it merged (pull requests, or the branches and
     commits ``prs``, head branch or head sha to number, doesn't map to one) and the runs its `Check:` or `Checked:` trailer
-    names.  Read from main's log, since a pull request's state can't stand in: a stacked member such as #1706 reads closed on
+    names, else the run ``runs`` gives for it (a queue commit `research queue drive` fast-forwarded has no trailer).  Read from main's log, since a pull request's state can't stand in: a stacked member such as #1706 reads closed on
     GitHub without having landed on its own."""
     prs = prs or {}
     lines = []
@@ -1295,17 +1319,18 @@ def landing_lines(repo: Path, start: str, tip: str, prs: dict[str, int] | None =
         merged = []
         for s in subjects:
             for m in MERGED_REF.finditer(s):
-                if len(parents) == 2 and parents[1].startswith(m[1]):
+                if m[2] is None and len(parents) == 2 and parents[1].startswith(m[1]):
                     continue                            # the train's own tip, whose merges name what it holds
-                if (ref := _merged_name(m[1], prs)) not in merged:
+                if (ref := _merged_name(m[1] or m[2], prs)) not in merged:
                     merged.append(ref)
         what = " + ".join(reversed(merged)) if merged else f"“{subject}”"
-        runs = [r for t in CHECK_TRAILER.findall(body) for r in RUN_ID.findall(t)]
-        lines.append(f"landed on main: {c[:12]} {what}; checked by {', '.join(dict.fromkeys(runs)) or 'no run (no Check: trailer)'}")
+        found = [r for t in CHECK_TRAILER.findall(body) for r in RUN_ID.findall(t)] or RUN_ID.findall((runs or {}).get(c, ""))
+        lines.append(f"landed on main: {c[:12]} {what}; checked by {', '.join(dict.fromkeys(found)) or 'no run (no Check: trailer)'}")
     return lines
 
 
-def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | None = None, gh=None, log=print) -> bool:
+def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | None = None, gh=None, log=print,
+                    runs: dict[str, str] | None = None) -> bool:
     """Post `landing_lines` over ``start``..``tip`` to the merge thread, one line per landing, so every landing is reported
     whoever pushed it (two of 10 Oct's were missing from the lander's own reports).  True when posted or there was nothing to
     post; a failure is printed and returns False, and nothing raises, since the landings stand."""
@@ -1320,7 +1345,7 @@ def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | N
                    for k in (p["headRefName"], p["headRefOid"])}
         except Exception:                               # noqa: BLE001: without GitHub a branch is named by its branch
             prs = {}
-        lines = landing_lines(repo, start, tip, prs)
+        lines = landing_lines(repo, start, tip, prs, runs)
         if not lines:
             return True
         reg = reg if reg is not None else load_registry(registry_path())
