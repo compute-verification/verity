@@ -47,7 +47,8 @@ def attn_kind_for(obs: dict) -> tuple[str, dict, int | None]:
 
 FUSED_NORM_DISPATCH_PIN = "batch_invariant"
 
-_OBSERVED: dict = {"attention_impls": None, "export_facts": None, "target_profile": None, "launch_context": None}
+_OBSERVED: dict = {"attention_impls": None, "export_facts": None, "target_profile": None, "launch_context": None,
+                   "allreduce_settings": None}
 
 
 def clear_observations() -> None:
@@ -55,6 +56,16 @@ def clear_observations() -> None:
     _OBSERVED["export_facts"] = None
     _OBSERVED["target_profile"] = None
     _OBSERVED["launch_context"] = None
+    _OBSERVED["allreduce_settings"] = None
+
+
+def observe_allreduce_settings(settings: dict | None) -> None:
+    """The TP row's served all-reduce switches, read from its workload before export."""
+    _OBSERVED["allreduce_settings"] = dict(settings) if settings else None
+
+
+def active_allreduce_settings() -> dict | None:
+    return _OBSERVED.get("allreduce_settings")
 
 
 def observe_launch_context(launch: dict | None) -> None:

@@ -373,11 +373,7 @@
   ],
   "num_sms": 132,
   "batch_invariant": false,
-<<<<<<< HEAD
   "fp8_block_gemm": "cutlass",
   "moe_backend": "triton"
-=======
-  "fp8_block_gemm": "cutlass"
->>>>>>> 877f16bc67363b74aff88c40b0554ee0d8a35752
  }
 }

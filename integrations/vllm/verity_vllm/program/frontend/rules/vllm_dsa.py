@@ -34,6 +34,7 @@ from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type
 from verity_vllm.program.registry import dsa
 from verity_vllm.program.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
 
 aten = torch.ops.aten
 BF16, F32, E4M3 = torch.bfloat16, torch.float32, torch.float8_e4m3fn
@@ -54,6 +55,7 @@ ROLE_KERNELS = {"dsa_rmsnorm": "q_a_layernorm / kv_a_layernorm in _fused_norm_ro
                 "dsa_mqa_logits": "DeepGEMM's fp8 MQA logits (DsaMqaLogits_v3)",
                 "dsa_topk_short_row": "the top-k of a row of at most TOPK keys (DsaTopKShortRow_v1)",
                 "sparse_mla": "FA3's sparse MLA (SparseMla_v1)",
+                "sparse_mla_split": "FA3's sparse MLA at vLLM's default split count (SparseMlaSplit_v1)",
                 "batched_gemm": "the latent absorption bmm, cuBLAS's batched bf16 GEMM (BatchedGemm_v1{B,K,N,DOT})",
                 "const": "a constant word"}
 
@@ -233,12 +235,11 @@ class DsaNormRopeRule(InPlaceRule):
         cs = ctx.coll(a["cos_sin"])
         qn = ctx.kind("dsa_rmsnorm", node, N=Nq, EPS=float(a["q_eps"]))
         kn = ctx.kind("dsa_rmsnorm", node, N=L, EPS=float(a["kv_eps"]))
-        kr = ctx.kind("dsa_kv_rope", node, NHEADS=1, D=R)
+        kr = ctx.kind("dsa_kv_rope", node, D=R)
         qw, kvw = ctx.coll(a["q_w"]), ctx.coll(a["kv_w"])
         q_out = [ctx.call(qn, qc[i], qw, node=node, rule=self, name=f"{h}/q_c[{i}]") for i in range(T)]
         kv_out = [ctx.call(kn, kvc[i], kvw, node=node, rule=self, name=f"{h}/kv_c[{i}]") for i in range(T)]
-        pe_out = [ctx.call(kr, kpe[i].reshape(Array(1, Array(R, Value(16)))), cs[pos[i]], node=node, rule=self,
-                           name=f"{h}/k_pe[{i}]").reshape(Array(R, Value(16))) for i in range(T)]
+        pe_out = [ctx.call(kr, kpe[i], cs[pos[i]], node=node, rule=self, name=f"{h}/k_pe[{i}]") for i in range(T)]
         ctx.rebind(a["kv_c_out"], array_of(kv_out), self, what="kv_c_out")
         ctx.rebind(a["k_pe_out"], array_of(pe_out), self, what="k_pe_out")
         ids = [qn.id, kn.id, kr.id]
@@ -323,8 +324,9 @@ class DsaQRule(OpRule):
         T, h = len(pos), ctx.hint_name(node)
         _, NH, R = shape(ctx, a["q_pe"])
         qpe, cs = _rows(ctx, a["q_pe"], 16), ctx.coll(a["cos_sin"])
-        qr = ctx.kind("dsa_q_rope", node, NHEADS=NH, D=R)
-        q_out = array_of([ctx.call(qr, qpe[i], cs[pos[i]], node=node, rule=self, name=f"{h}/q_pe[{i}]") for i in range(T)])
+        qr = ctx.kind("dsa_q_rope", node, D=R)
+        q_out = array_of([array_of([ctx.call(qr, qpe[i][j], cs[pos[i]], node=node, rule=self, name=f"{h}/q_pe[{i},{j}]")
+                                     for j in range(NH)]) for i in range(T)])
         ids, iq, iw = [qr.id], None, None
         pre = {"T": T, "positions": [pos[0], pos[-1]], "NH": NH, "R": R, "indexer": has}
         if has:
@@ -346,7 +348,7 @@ _ATTN = ("positions", "ql_nope", "q_pe", "kv_c", "k_pe", "index_q", "index_weigh
 
 
 def _observed_sparse_mla(layer_name: str) -> str | None:
-    """None when the layer's OBSERVED implementation is the one `SparseMla_v1` states (`vllm_meta.attention_impls`)."""
+    """None when the observed implementation is the registered FA3 sparse path, at its default split or the explicit one-split pin."""
     obs = (_OBSERVED["attention_impls"] or {}).get(layer_name)
     if obs is None:
         return f"no observed attention implementation for {layer_name!r} (vllm_meta.attention_impls)"
@@ -356,9 +358,8 @@ def _observed_sparse_mla(layer_name: str) -> str | None:
         return f"numerics_unregistered: {layer_name!r} has KV cache dtype {obs.get('layer_kv_cache_dtype')!r}; SparseMla_v1 reads a bf16 cache"
     if obs.get("dcp_world_size") not in (None, 1) or obs.get("use_pcp"):
         return f"numerics_unregistered: {layer_name!r} runs under context parallelism"
-    if obs.get("num_splits") != 1:
-        return (f"numerics_unregistered: {layer_name!r} serves FA3's sparse MLA at vLLM's num_splits heuristic (engine.sparse_mla's pin "
-                f"is not installed): the split-combine has no Definition; SparseMla_v1 is num_splits=1")
+    if obs.get("num_splits") not in (None, 1):
+        return f"numerics_unregistered: {layer_name!r} passes unsupported num_splits={obs.get('num_splits')!r} to FA3 sparse MLA"
     return None
 
 
@@ -408,7 +409,9 @@ class DsaIndexerAttnRule(StateRule):
         layer, topk, scale = a["layer_name"], a["topk"], a["scale"]
         if not isinstance(layer, str) or not isinstance(topk, int) or topk < 1 or not _static_float(scale):
             return "layer_name, topk, scale are not static"
-        if (r := _missing(ctx, ["sparse_mla"] + (["dsa_mqa_logits", "dsa_topk_short_row", "const"] if has else []))):
+        obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
+        sparse_role = "sparse_mla" if obs.get("num_splits") == 1 else "sparse_mla_split"
+        if (r := _missing(ctx, [sparse_role] + (["dsa_mqa_logits", "dsa_topk_short_row", "const"] if has else []))):
             return r
         if ctx.registered_values:
             return "numerics_unregistered: SparseMla_v1 takes its scale as a static; no registered-values twin"
@@ -473,6 +476,10 @@ class DsaIndexerAttnRule(StateRule):
             hist["latent"].append(Coll(Array(L + R, Value(16)), concat([kvc[i].refs, kpe[i].refs])))
         latent = _log(ctx, (layer, "latent"), hist["latent"])
         G = FA3_SPARSE_GEOMETRY[(R, L)]
+        obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
+        pinned_one = obs.get("num_splits") == 1
+        splits = ([1] * T if pinned_one else
+                  launch_num_splits(keys, int(active_target_profile().num_sms), TOPK, int(obs.get("num_splits") or 0)))
         too_long = [(P, n) for P, n in zip(pos, keys) if n > TOPK]
         if too_long:
             refuse("numerics_unregistered", node, mp, f"{layer!r}: position {too_long[0][0]} has {too_long[0][1]} keys > TOPK {TOPK}: the top-k "
@@ -503,8 +510,12 @@ class DsaIndexerAttnRule(StateRule):
             source = last["layer"]
         ql, qr = _rows(ctx, a["ql_nope"], 16), _rows(ctx, a["q_pe"], 16)
         outs = []
-        for i, (P, n) in enumerate(zip(pos, keys)):
-            attn = ctx.kind("sparse_mla", node, T=n, NH=NH, DR=R, DV=L, BN=G["BN"], DOT=G["DOT"], INV=G["INV"], SM_SCALE=scale)
+        for i, (P, n, ns) in enumerate(zip(pos, keys, splits)):
+            role = "sparse_mla" if pinned_one else "sparse_mla_split"
+            statics = {"T": n, "NH": NH, "DR": R, "DV": L, "BN": G["BN"], "DOT": G["DOT"], "INV": G["INV"], "SM_SCALE": scale}
+            if not pinned_one:
+                statics["NS"] = ns
+            attn = ctx.kind(role, node, **statics)
             outs.append(ctx.call(attn, ql[i], qr[i], Coll(Array(n, Array(L + R, Value(16))), latent.cut(n)), node=node, rule=self,
                                  name=f"{h}[t={P}]"))
         ctx.define(node, array_of(outs))
@@ -512,7 +523,8 @@ class DsaIndexerAttnRule(StateRule):
                                 "BN": G["BN"], "DOT": G["DOT"].name, "INV": G["INV"].name, "scale": scale, "TOPK": TOPK, "indexer": has,
                                 "top_k_from": source, "selection": "rows 0..n-1 in order (n <= TOPK: DsaTopKShortRow_v1's slots)",
                                 "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
-                   emitted=f"{attn.id} x{T}" + (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T}" if has else f" (top-k of {source})"))
+                   emitted=f"{attn.id} x{T} (splits {splits})" +
+                           (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T}" if has else f" (top-k of {source})"))
 
 
 class MlaAbsorbBmmRule(OpRule):

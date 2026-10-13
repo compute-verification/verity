@@ -426,6 +426,54 @@ def dsa_leaves(site, model=None):
         yield
 
 
+_FUSED_AR_NORM_MODULE = "vllm.models.common.ops.fused_allreduce_rms_norm"
+_FUSED_AR_NORM_NAME = "fused_allreduce_rms_norm"
+
+
+@contextmanager
+def fused_allreduce_rms_norm_leaf(model=None):
+    """Author the leaf that meta execution otherwise misses when the served call takes FlashInfer's fused TP8 path.
+
+    `_can_use_flashinfer` rejects every meta tensor because it checks ``is_cuda``.  The other dispatch facts are static:
+    world 8, bf16 ``[M,6144]`` with M <= 42, and FlashInfer all-reduce enabled.  The construction's ``TPStub`` carries
+    those workload settings and authors the rank-ordered peer operands through its ``CollectiveBus``.  Calls outside that
+    path keep vLLM's original fallback (ordinary all-reduce followed by the norm).
+    """
+    home = sys.modules.get(_FUSED_AR_NORM_MODULE)
+    original = getattr(home, _FUSED_AR_NORM_NAME, None) if home is not None else None
+    if original is None or model is None:
+        yield
+        return
+    users = [sys.modules[n] for n in sorted({type(m).__module__ for m in model.modules()})
+             if n in sys.modules and n != _FUSED_AR_NORM_MODULE]
+    users = [m for m in users if getattr(m, _FUSED_AR_NORM_NAME, None) is original]
+    if not users:
+        yield
+        return
+
+    def shim(hidden_states, residual, norm, *args, **kwargs):
+        try:
+            from vllm.distributed.parallel_state import get_tp_group
+            group = get_tp_group()
+            bus = getattr(group, "bus", None)
+            shape = tuple(hidden_states.shape)
+            fused = (bus is not None and int(getattr(group, "world_size", 1)) == 8
+                     and bool(bus.settings.get("flashinfer")) and hidden_states.dtype == torch.bfloat16
+                     and len(shape) == 2 and shape[1] == 6144 and shape[0] <= 42
+                     and tuple(residual.shape) == shape and tuple(norm.weight.shape) == (6144,))
+            if fused:
+                return bus.fused_allreduce_rms_norm(hidden_states, residual, norm.weight, float(norm.variance_epsilon))
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            pass
+        return original(hidden_states, residual, norm, *args, **kwargs)
+
+    with hooks.Hooks() as h:
+        h.patch(home, _FUSED_AR_NORM_NAME, shim)
+        for module in users:
+            h.patch(module, _FUSED_AR_NORM_NAME, shim)
+        yield
+
+
 _LL_BF16_SITE = "vllm.model_executor.kernels.linear.cute_dsl.ll_bf16"
 
 
@@ -461,9 +509,10 @@ def export_compat(profile=None, model=None):
     if profile is None:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         profile = TargetProfile.default()
-    with tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model), moe_gate_leaf(model):
+    with (tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model),
+          fused_allreduce_rms_norm_leaf(model), moe_gate_leaf(model)):
         yield
 
 
 __all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "dsa_ops_leaf", "dsa_leaves",
-           "moe_gate_leaf", "read_back_applied", "host_facts"]
+           "fused_allreduce_rms_norm_leaf", "moe_gate_leaf", "read_back_applied", "host_facts"]

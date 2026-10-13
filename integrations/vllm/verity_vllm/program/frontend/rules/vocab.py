@@ -14,7 +14,10 @@ from typing import Callable
 from verity.ml.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
-from verity_vllm.program.registry import dsa as _dsa, sparse_mla as _sparse_mla
+from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm
+from verity_vllm.program.registry import boolean_rope as _rope
+from verity_vllm.program.registry import sparse_mla as _sparse_mla, sparse_mla_split as _sparse_mla_split
+from verity_vllm.program.registry import tp_allreduce as _tp_allreduce
 from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
@@ -392,6 +395,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # [lane vllm-tp-n] the WORLD-parametric families for a world > 2 (identities `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}`; world 2
            # keeps the `*2` identities above -- `b1_tp2.all_reduce(world, N)` is the selector)
            "all_reduce": lambda WORLD, N: ir_bind(TP2.AllReduce, WORLD=WORLD, N=N),
+           "all_reduce_mnnvl": lambda WORLD, N, SHOT: ir_bind(_tp_allreduce.AllReduceMnnvl, WORLD=WORLD, N=N, SHOT=SHOT),
+           "all_reduce_multimem": lambda WORLD, SIZE, TREES, FTZ:
+               ir_bind(_tp_allreduce.AllReduceMultimem, WORLD=WORLD, SIZE=SIZE, TREES=TREES, FTZ=FTZ),
+           "all_reduce_custom": lambda WORLD, SIZE, STAGE:
+               ir_bind(_tp_allreduce.AllReduceCustom, WORLD=WORLD, SIZE=SIZE, STAGE=STAGE),
+           "all_reduce_rmsnorm_mnnvl": lambda WORLD, N, SHOT, CLUSTER, EPS, FMA:
+               ir_bind(_tp_allreduce.AllReduceRmsNormMnnvl, WORLD=WORLD, N=N, SHOT=SHOT, CLUSTER=CLUSTER, EPS=EPS, FMA=FMA),
            "all_gather": lambda WORLD, N: ir_bind(TP2.AllGather, WORLD=WORLD, N=N),
            "embedding_shard": lambda VS, H, START: ir_bind(TP2.EmbeddingShard, VS=VS, H=H, START=START),
            # [R15 stoch] the seeded temperature + top-p token select (registry.sampling: TemperatureScale -> TopPMask{V} -> GumbelSelectF32,
@@ -420,8 +430,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_indexer_q": lambda H, D, ROPE: ir_bind(_dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
            "dsa_mqa_logits": lambda N, H, D: ir_bind(_dsa.DsaMqaLogitsV3, N=N, H=H, D=D),
            "dsa_topk_short_row": lambda TOPK: ir_bind(_dsa.DsaTopKShortRow, TOPK=TOPK),
+           "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
+           "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
+           "dsa_q_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
            "sparse_mla": lambda T, NH, DR, DV, BN, DOT, INV, SM_SCALE:
-               ir_bind(_sparse_mla.SparseMla, T=T, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE)},
+               ir_bind(_sparse_mla.SparseMla, T=T, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
+           "sparse_mla_split": lambda T, NS, NH, DR, DV, BN, DOT, INV, SM_SCALE:
+               ir_bind(_sparse_mla_split.SparseMlaSplit, T=T, NS=NS, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -467,6 +482,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "all_reduce2": "AllReduce2_v1{N}: pynccl ncclSum bf16 of two ranks' partials = bf16(f32(a)+f32(b)) per element (b1_tp2)",
            "all_gather2": "AllGather2_v1{N}: vllm.all_gather of two [N] shards along the trailing axis = the [2N] concatenation (b1_tp2)",
            "all_reduce": "AllReduce_v2{WORLD,N}: pynccl ncclSum bf16 over WORLD>2 ranks' partials as NCCL's intra-node tree chain of one-rounding bf16 adds (b1_tp2.allreduce_order)",
+           "all_reduce_mnnvl": "AllReduceMnnvl_v1{WORLD,N,SHOT}: FlashInfer MNNVL all-reduce on a captured route",
+           "all_reduce_multimem": "AllReduceMultimem_v1{WORLD,SIZE,TREES,FTZ}: torch symmetric-memory multimem all-reduce on captured trees",
+           "all_reduce_custom": "AllReduceCustom_v1{WORLD,SIZE,STAGE}: vLLM custom all-reduce on a captured route",
+           "all_reduce_rmsnorm_mnnvl": "AllReduceRmsNormMnnvl_v1{WORLD,N,SHOT,CLUSTER,EPS,FMA}: FlashInfer fused all-reduce + RMSNorm",
            "all_gather": "AllGather_v1{WORLD,N}: vllm.all_gather of WORLD>2 [N] shards along the trailing axis = the [WORLD*N] concatenation (b1_tp2)",
            "embedding_shard": "EmbeddingShard_v1{VS,H,START}: one rank of VocabParallelEmbedding — shard[id-START] if START<=id<START+VS else 0 (b1_tp2)",
            "fp8_group_quant": "Fp8GroupQuant_v1{K,G}: _C.per_token_group_fp8_quant on one bf16 row -> (x_q e4m3[K], x_s f32[K/G]); per group absmax fmaxf-fold "
@@ -487,9 +506,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                              "HopperE4m3QgmmaDot32 steps, relu x weight summed per quad lane (the first two heads contracted), x the slot's scale",
            "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
                                  "-- slot i = i < len ? i : -1",
+           "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's sm_90 PTX reduction",
+           "dsa_kv_rope": "RoPEHeadGptJ_v2{D}: _fused_norm_rope_kernel's interleaved k_pe head",
+           "dsa_q_rope": "RoPEHeadGptJ_v2{D}: _fused_q_kernel's interleaved q_pe head",
            "sparse_mla": "SparseMla_v1{T,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3's sparse MLA (_vllm_fa3_C.fwd, FLASH_ATTN_MLA_SPARSE) of one "
                          "query token's NH heads over its T selected [kv_c | k_pe] rows -- the k16 wgmma chain over [q_rope | q_nope], "
-                         "AttnBlock_v4's online softmax over BN-key blocks last to first, AttentionHead_v4's epilogue"})
+                         "AttnBlock_v4's online softmax over BN-key blocks last to first, AttentionHead_v4's epilogue",
+           "sparse_mla_split": "SparseMlaSplit_v1{T,NS,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3 sparse MLA at the token's default split count"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

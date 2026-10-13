@@ -10,8 +10,9 @@ from verity_vllm.program.frontend.derive import StaticIndex
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_allreduce_settings
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
+from verity_vllm.program.registry import tp_allreduce
 
 
 # -- [R13 lane tp, P4] tensor-parallel collectives: `verity_tp::*` ops emitted by the construction's CollectiveBus (cb_a/tp_ops.py) ----------
@@ -137,16 +138,67 @@ def _tp_parts(node) -> list:
     return list(a) if isinstance(a, (list, tuple)) else [a]
 
 
+def _served_route(settings: dict, M: int, N: int) -> tuple[str | None, str]:
+    """The setting name and communicator route vLLM d9105ea80 takes for one bf16 [M,N] world-8 all-reduce."""
+    custom = bool(settings.get("custom_all_reduce"))
+    symm = bool(settings.get("symmetric_memory"))
+    flashinfer = bool(settings.get("flashinfer"))
+    setting = ("custom-off" if not custom and symm and flashinfer else
+               "defaults" if custom and symm and flashinfer else
+               "switch" if custom and not symm and flashinfer else None)
+    nbytes = M * N * 2
+    if flashinfer and nbytes <= tp_allreduce.FI_MAX_BYTES:
+        route = "fi_ar_comm"
+    elif custom and nbytes < (tp_allreduce.CUSTOM_SYMM_MAX_BYTES if symm else tp_allreduce.CUSTOM_MAX_BYTES):
+        route = "ca_comm"
+    elif symm and nbytes <= tp_allreduce.SYMM_MEM_MAX_BYTES:
+        route = "symm_mem_comm"
+    else:
+        route = "pynccl_comm"
+    return setting, route
+
+
+def _coverage(parts, node, ctx, *, fused: bool = False):
+    settings = active_allreduce_settings()
+    if settings is None:
+        return None, "all-reduce settings were not observed from the workload"
+    if len(parts) != 8:
+        return None, f"world {len(parts)}: tp_allreduce.CAPTURED covers world 8 only"
+    rows = [rows_of(ctx.coll(a))[0] for a in parts]
+    M, N = len(rows[0]), rows[0][0].type.n
+    setting, route = _served_route(settings, M, N)
+    if fused:
+        route = "fused" if bool(settings.get("flashinfer")) and M <= tp_allreduce.fused_max_tokens(N, len(parts)) else "unfused"
+    if setting is None:
+        return None, f"tp_allreduce.covered(): switches {settings!r} do not name a captured setting"
+    captured = tp_allreduce.covered(setting, N, route, M)
+    if captured is None:
+        return None, (f"tp_allreduce.covered() has no entry for setting={setting!r}, N={N}, route={route!r}, M={M}; "
+                      "the route is refused until a capture records it")
+    return {"captured": captured, "rows": rows, "M": M, "N": N, "setting": setting, "route": route}, None
+
+
+def _allreduce_kind(ctx, node, plan, world: int):
+    c, M, N, route = plan["captured"], plan["M"], plan["N"], plan["route"]
+    size = M * N
+    if c.definition == "AllReduceMnnvl_v1":
+        return ctx.kind("all_reduce_mnnvl", node, WORLD=world, N=size, SHOT=tp_allreduce.mnnvl_shot(M, N, world))
+    if c.definition == "AllReduceMultimem_v1":
+        return ctx.kind("all_reduce_multimem", node, WORLD=world, SIZE=size, **c.statics)
+    if c.definition == "AllReduceCustom_v1":
+        return ctx.kind("all_reduce_custom", node, WORLD=world, SIZE=size, **c.statics)
+    raise ValueError(f"covered route {route!r} names unsupported definition {c.definition!r}")
+
+
 class AllReduceRule(OpRule):
     """[lane vllm-tp-n] `verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_reduce{WORLD=W, N}` (`AllReduce_v2{WORLD,N}`:
-    the chain of one-rounding bf16 additions in `b1_tp2.allreduce_order`) per row, for a world of W > 2 ranks (world 2 is `AllReduce2Rule`,
-    the recorded identity).  Exactly one operand is this rank's own partial; the other W-1 are PEER INPUTS bound by `tp_links.json` to
-    the other ranks' committed partials.  That chain is the one vLLM's batch-invariant mode pins NCCL to; on a target without batch
-    invariance the all-reduce is whichever route vLLM's dispatch takes (symmetric memory, FlashInfer, NCCL's own algorithm choice)."""
+    the captured world-8 route selected by the call's M and the workload's custom-all-reduce, symmetric-memory and FlashInfer settings.
+    A route absent from `tp_allreduce.covered()` refuses by name."""
     modes = frozenset({"profile"})
     info = RuleInfo("AllReduce[tp]", 1, "op-binding", applies_to="verity_tp::all_reduce([a_0 .. a_{W-1}] each [.., N] bf16) (rank order), W > 2",
-                    preconditions=("every operand is a bf16 value collection of identical shape", "world size > 2", "the target is batch-invariant"),
-                    evidence_domain="structural; numerics: AllReduce_v2{WORLD,N} states NCCL's intra-node tree chain (b1_tp2.allreduce_order); the Match value leg checks it")
+                    preconditions=("every operand is a bf16 value collection of identical shape", "world size 8",
+                                   "tp_allreduce.covered(setting,N,route,M) returns a captured entry"),
+                    evidence_domain="structural; numerics: registry.tp_allreduce.CAPTURED")
 
     def targets(self):
         return _tp_op("all_reduce")
@@ -155,9 +207,6 @@ class AllReduceRule(OpRule):
         parts = _tp_parts(node)
         if len(parts) <= 2:
             return f"world {len(parts)}: the two-rank collective is AllReduce2 (recorded identity)"
-        if not active_target_profile().batch_invariant:
-            return ("numerics_unregistered: AllReduce_v2 states the tree chain vLLM's batch-invariant mode pins NCCL to "
-                    "(b1_tp2.allreduce_order); on a target without batch invariance the all-reduce is the route vLLM's dispatch takes")
         for i, a in enumerate(parts):
             r = _row_value(ctx, a, f"part_rank{i}")
             if r:
@@ -165,6 +214,9 @@ class AllReduceRule(OpRule):
         shapes = {shape(ctx, a) for a in parts}
         if len(shapes) != 1:
             return f"partials differ in shape ({sorted(map(str, shapes))})"
+        _plan, why = _coverage(parts, node, ctx)
+        if why:
+            return f"numerics_unregistered: {why}"
         return True
 
     def emit(self, node, ctx):
@@ -173,12 +225,67 @@ class AllReduceRule(OpRule):
         colls = [ctx.coll(a, f"part_rank{i}") for i, a in enumerate(parts)]
         rows, lead = zip(*(rows_of(c) for c in colls))
         rows = list(rows)
-        N = rows[0][0].type.n
-        fn = ctx.kind("all_reduce", node, WORLD=W, N=N)
+        plan, why = _coverage(parts, node, ctx)
+        assert plan is not None and why is None
+        M, N = plan["M"], plan["N"]
+        fn = _allreduce_kind(ctx, node, plan, W)
+        flat_parts = array_of([array_of(list(rs)).reshape(Array(M * N, Value(16))) for rs in rows])
         hint = _collective_hint(node, ctx)
-        outs = [ctx.call(fn, array_of(list(xs)), node=node, rule=self, name=f"{hint}[{i}]/all_reduce") for i, xs in enumerate(zip(*rows))]
-        ctx.define(node, from_rows(outs, lead[0]))
-        ctx.record(self, node, {"N": N, "rows": len(rows[0]), "world": W}, emitted=f"{fn.id} x{len(rows[0])}", collective="all_reduce")
+        out = ctx.call(fn, flat_parts, node=node, rule=self, name=f"{hint}/all_reduce")
+        ctx.define(node, from_rows([out[i * N:(i + 1) * N] for i in range(M)], lead[0]))
+        ctx.record(self, node, {"N": N, "rows": M, "world": W, "setting": plan["setting"], "route": plan["route"],
+                               "coverage": plan["captured"]._asdict()}, emitted=fn.id, collective="all_reduce")
+
+
+class FusedAllReduceRmsNormRule(OpRule):
+    """FlashInfer's fused world-8 all-reduce + residual add + RMSNorm leaf authored by the export shim."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("AllReduceRmsNorm[tp]", 1, "op-binding",
+                    applies_to="verity_tp::fused_allreduce_rms_norm([part_rank0..7], residual, weight, eps)",
+                    preconditions=("bf16 parts/residual [M,N], bf16 weight [N]", "tp_allreduce.covered(..., route='fused')"),
+                    evidence_domain="registry.tp_allreduce.CAPTURED")
+
+    def targets(self):
+        return _tp_op("fused_allreduce_rms_norm")
+
+    def applies(self, node, ctx):
+        parts = _tp_parts(node)
+        for i, a in enumerate(parts):
+            if (r := _row_value(ctx, a, f"part_rank{i}")):
+                return r
+        residual, weight, eps = node.args[1:4]
+        if (r := _row_value(ctx, residual, "residual")) or (r := _row_value(ctx, weight, "weight")):
+            return r
+        shapes = {shape(ctx, a) for a in parts}
+        if len(shapes) != 1 or shape(ctx, residual) not in shapes:
+            return "parts and residual differ in shape"
+        shp = next(iter(shapes))
+        if shp is None or len(shp) != 2 or shape(ctx, weight) != (shp[1],):
+            return f"expected [M,N] parts/residual and [N] weight, got {shp}, {shape(ctx, weight)}"
+        if not isinstance(eps, (int, float)) or isinstance(eps, bool):
+            return "eps is not a static float"
+        _plan, why = _coverage(parts, node, ctx, fused=True)
+        return f"numerics_unregistered: {why}" if why else True
+
+    def emit(self, node, ctx):
+        parts = _tp_parts(node)
+        colls = [ctx.coll(a, f"part_rank{i}") for i, a in enumerate(parts)]
+        rows, leads = zip(*(rows_of(c) for c in colls))
+        residual_rows, lead = rows_of(ctx.coll(node.args[1], "residual"))
+        weight, eps = ctx.coll(node.args[2], "weight"), float(node.args[3])
+        plan, why = _coverage(parts, node, ctx, fused=True)
+        assert plan is not None and why is None
+        M, N, W = plan["M"], plan["N"], len(parts)
+        shot = tp_allreduce.mnnvl_shot(M, N, W)
+        _block, cluster = tp_allreduce.mnnvl_grid(M, N)
+        fn = ctx.kind("all_reduce_rmsnorm_mnnvl", node, WORLD=W, N=N, SHOT=shot, CLUSTER=cluster, EPS=eps,
+                      FMA=bool(plan["captured"].statics["FMA"]))
+        hint = _collective_hint(node, ctx)
+        outs = [ctx.call(fn, array_of([rows[r][i] for r in range(W)]), residual_rows[i], weight,
+                         node=node, rule=self, name=f"{hint}[{i}]/fused_all_reduce_rmsnorm") for i in range(M)]
+        ctx.define(node, [from_rows([o[0] for o in outs], lead), from_rows([o[1] for o in outs], lead)])
+        ctx.record(self, node, {"N": N, "rows": M, "world": W, "setting": plan["setting"], "route": "fused",
+                               "coverage": plan["captured"]._asdict()}, emitted=f"{fn.id} x{M}", collective="all_reduce")
 
 
 class AllGatherRule(OpRule):

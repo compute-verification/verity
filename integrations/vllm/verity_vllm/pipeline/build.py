@@ -459,7 +459,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         from verity_vllm.program.frontend.derive import derive_report
         from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts,
                                                             observe_target_profile, declared_derived_accounting, clear_observations,
-                                                            observe_launch_context)
+                                                            observe_allreduce_settings, observe_launch_context)
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
@@ -476,12 +476,21 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             if tp > 1:
                 # [R13 tp] rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
                 from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
-                bus = CollectiveBus(rank=rank, world=tp)
+                env_now = engine_env.snapshot()
+                enabled = lambda name: str(env_now.get(name, "1")).strip().lower() not in ("0", "false", "no", "off")  # noqa: E731
+                allreduce_settings = {
+                    "custom_all_reduce": not bool(cfg.parallel_config.disable_custom_all_reduce),
+                    "symmetric_memory": enabled("VLLM_ALLREDUCE_USE_SYMM_MEM"),
+                    "flashinfer": enabled("VLLM_ALLREDUCE_USE_FLASHINFER"),
+                }
+                observe_allreduce_settings(allreduce_settings)
+                bus = CollectiveBus(rank=rank, world=tp, settings=allreduce_settings)
                 tp_stack.enter_context(tp_group_override(rank, tp, bus))
                 car_off = bool(cfg.parallel_config.disable_custom_all_reduce)
                 res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": car_off}
                 # the workload's transport as the row set it (`row_tp.TpRow.p2p_env`) -- recorded, not consulted here
-                res["tp"]["env_required"] = {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}
+                res["tp"]["env_required"] = {k: v for k, v in env_now.items() if k == "NCCL_P2P_DISABLE"}
+                res["tp"]["allreduce_settings"] = allreduce_settings
                 res["tp"]["collective_backend"] = ("pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)" if car_off else
                                                    "vLLM's custom all-reduce where it admits the tensor, else pynccl")
             from verity_vllm.engine import sparse_mla
