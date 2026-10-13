@@ -4,6 +4,9 @@ import Proofs.Accounting.Bandwidth
 import Proofs.Accounting.Prob
 import Proofs.Accounting.Joint
 import Proofs.Accounting.Pouw
+import Proofs.Accounting.BandwidthAudit
+import Proofs.Accounting.RateAudit
+import Proofs.Accounting.Capacity
 import Proofs.Accounting.PerRunTruncation
 import Proofs.Accounting.PerRunPouw
 import Proofs.Accounting.PerRunJoint

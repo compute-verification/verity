@@ -142,6 +142,42 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("bandwidth-instantiation", "assumption",
           "The blocks of E, the PoUS encoding's, are no easier to hold information about than uniformly random blocks, "
           "except by rebuilding them from setup", "Bandwidth instantiation", "conjectured"),
+    # the rate audit's device (Accounting.Guarantees.RateAudit, Security/Models/Accounting/Guarantees/RateAudit.lean): the
+    # bandwidth device with a certified stream on its side link and rebuilds paid in compute
+    Entry("rate-device", "model",
+          "Rate device model: the bandwidth device model, with the trusted host streaming rho fresh bits to each device over "
+          "its side link in every window, after the layout and before the deadline, and every tag absorbing all of them, so "
+          "the link carries them and at most L - rho bits of anything else; its side sources are non-adaptive, each "
+          "answering a read at an address the chip picks as a function of E fixed before the window, never of what the chip "
+          "sent, the stream or the oracle; a word the device neither holds nor reads it rebuilds with the codec's inverse, "
+          "whose ops are charged to accounts other than the compute account", "Rate device"),
+    # falsified by a partial completion cheaper than x * c_enc / b: x bits of a word of E, rebuilt from setup, the weights
+    # they encode and the rest of the word, in less than that of the compute account's units, by any schedule. At k = 2
+    # the red team's 4-dimensional lattice completes a tail of up to b/10 bits (r20261012-163319-2804), and fplll, the
+    # best of five reducers, costs 12.3x the claim at 512 bits (r20261012-164518-ccba); the 1.2x at the reduction's
+    # operation-count floor is an estimate from operation counts, unmeasured (r20261012-170958-f49a). At k = 1 with the
+    # payload known, F27 (r20261012-132841-565e) is such a completion, at a floor of half a GMP extended GCD
+    # (r20261012-164518-ccba). In partial-completion form it is `Accounting.Assumptions.WorkHardness`
+    # (Security/Models/Accounting/Assumptions/RateAudit.lean)
+    Entry("rate-codec-work", "assumption",
+          "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
+          "neither holds nor reads, from setup and the weights they encode, costs at least x * c_enc / b units of compute "
+          "(b the word's bits), with no amortization across words; at k = 2 the best completion measured (keeping a "
+          "word's top nine-tenths, a 4-dimensional lattice completes the rest) costs 12.3 times that at 512 bits, and the "
+          "reduction's operation-count floor is estimated, not measured, at 1.2 times it on a GPU; at k = 1 it is false "
+          "when the payload is known (F27: keeping a word's top two-thirds, a 2-dimensional lattice completes the rest at "
+          "a floor of 0.025 of a root at 512 bits, down to 0.003 at 2,048, against a per-bit price of 0.32), and holds "
+          "only for words whose payload is unknown, under Incompressible(W)",
+          "Rate codec work", "measured"),
+    # the sketch-then-hash rate audit's device (Accounting.Guarantees.RateAuditSketch,
+    # Security/Models/Accounting/Guarantees/RateAuditSketch.lean): falsified by a device or host that passes while holding,
+    # reading or sending something other than E's sectors as they are
+    Entry("rate-sketch-verbatim", "model",
+          "Rate sketch verbatim device model: the rate device model for a sketch-then-hash tag, with on-chip state, device "
+          "memory, the side link and rebuilding each returning whole sectors of E or of the certified stream as they are, "
+          "the sectors on chip chosen before the signs, so nothing the device holds, reads or takes in is a function of "
+          "several sectors; a host that computes sketches after the signs are revealed and sends them over the link is "
+          "outside it", "Rate sketch verbatim"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "

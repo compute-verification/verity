@@ -54,4 +54,62 @@ def HonestPasses : Prop :=
   ∀ N b h : ℕ, ∃ A : Device N b h 0 0 0 N,
     ∀ (E : Store N b) (O : Oracle N b h) (s : ℕ) (I : Fin s → Fin N), Accepts A E O I ∧ A.ingress E O = N * b
 
+/-- **The bandwidth audit v0 with relayed tags, in the random-oracle model.** `AuditRO` for a `RelayDevice`, whose side
+sources may depend on the oracle: a peer holding a copy of the store can compute tags after the seed and relay them,
+and every bit the chip reads from it counts against `c`. For every `m`, the probability that the verifier accepts while
+the device's ingress, plus `S + c + m·b + G·b + λ`, falls short of `k·b` is at most
+
+  `((k − 1)/N)^s + C(N, m)·2^c/2^(h·m) + C(q, k − m)/2^λ`.
+
+`m` is the number of blocks charged to the side sources' tags. The middle term bounds the chance that the chip
+committed the right tag for `m` blocks it never queried: for a fixed store, the run depends on the oracle off its
+queries only through the side bits it read, at most `2^c` strings, and those `m` tags are `h·m` uniform bits. Since
+`C(N, m) ≤ (e·N/m)^m`, choosing `m·(h − log₂(e·N/m)) ≥ c + μ` makes it at most `2^-μ`. The side sources then cost
+`c + m·b ≈ c·(1 + b/(h − log₂(e·N/m)))` bits of the deficit, `c` as information about the store and `m·b` as relayed
+tags, so relay is covered inside the side budget rather than excluded. The other two terms are `AuditRO`'s, with the
+compression at `k − m` blocks. Proof: `Bandwidth.SecurityProofs.AuditRelay`.
+
+Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
+the bandwidth audit's code computes. -/
+def AuditRelay : Prop :=
+  ∀ (N b h S c G q s k m lam : ℕ) (A : RelayDevice N b h S c G q),
+    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+        A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + m * b + G * b + lam < k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ c / 2 ^ (h * m)
+        + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
+
+/-- **The bandwidth audit v0 with interactive side sources, in the random-oracle model.** `AuditRelay`'s bound for an
+`InteractiveDevice`, whose chip may send bits and whose side sources answer each read as any function of the store,
+the oracle and every bit sent so far. `c` bounds only the side bits the chip read, and sends are free: however many
+bits the chip sends, and however they depend on the seed, the deficit is `S + c + m·b + G·b + λ`, as for a relay
+device.
+
+In the actual-circuit model (`note:console/20261012T0645Z-draft-actual-circuit-model`, section 6), the rest of the
+prover answers the cores as such a source. So the bandwidth audit's help term is the side bits the cores read in the
+window, `β_side·(T + RTT)`, not `2^e` times it for `e` seed-dependent bits sent. Proof:
+`Bandwidth.SecurityProofs.AuditInteractive`, from `AuditRelay`: such a device is a relay device whose side source is
+addressed by what was sent and where.
+
+Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
+the bandwidth audit's code computes. -/
+def AuditInteractive : Prop :=
+  ∀ (N b h S c G q s k m lam : ℕ) (A : InteractiveDevice N b h S c G q),
+    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+        A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + m * b + G * b + lam < k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ c / 2 ^ (h * m)
+        + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
+
+/-- **The bandwidth audit v0 with interactive side sources that ignore the oracle.** `AuditRO`'s bound for an
+`InteractiveDevice` whose side sources' answers don't depend on the oracle. They may still depend on everything the
+chip sent, including tags it computed. No relayed-tag term: the deficit is `S + c + G·b + λ` at `AuditRO`'s error,
+with `c` the side bits read. Proof: `Bandwidth.SecurityProofs.AuditInteractiveRO`, from `AuditRO`.
+
+Frozen (no-function, hash): as `AuditInteractive`. -/
+def AuditInteractiveRO : Prop :=
+  ∀ (N b h S c G q s k lam : ℕ) (A : InteractiveDevice N b h S c G q),
+    (∀ E O O', A.side E O = A.side E O') →
+    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+        A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
+
 end Bandwidth.Guarantees
