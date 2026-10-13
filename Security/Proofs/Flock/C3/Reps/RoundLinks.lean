@@ -145,7 +145,8 @@ theorem msgNames_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables :
       cases h1
     · split at h
       · split at h
-        · first | (obtain ⟨_, h1, -⟩ := ebind_ok h; cases h1) | cases h
+        · obtain ⟨_, h1, -⟩ := ebind_ok h
+          cases h1
         obtain ⟨_, -, h⟩ := ebind_ok h
         obtain ⟨s, hs, h⟩ := ebind_ok h
         obtain ⟨ss, hss, hj, -⟩ := FlockSoundness.Discharge.Recursion.check_ok
@@ -228,7 +229,7 @@ theorem valueRound_rep {rep : Array SchedRound} {sp : Option RecSparse.Shape} {s
     valueRound rep sp stk s!"rec-c{m}" ρ.val = some (.rep ρ, (msgRounds rep)[m]) := by
   unfold valueRound
   rw [cIndex_c]
-  simp [hm]
+  simp [hm, Nat.le_of_lt_succ ρ.isLt]
 
 theorem valueRound_opening {rep rsR : Array SchedRound} {sp : Option RecSparse.Shape}
     {stk : Option (Array SchedRound)} (hR : stk = some rsR) {i : ℕ} (hi : i < (msgRounds rsR).length) :
@@ -334,8 +335,9 @@ variable {bind : Fin S → VStar.Bindings} {zs : Reg → L.Ω → List (Cm × (�
 /-- **A session whose unit is named as a part's has the part's port `m<i>` and two units**, where its circuit has a
 port `m<i>`. -/
 theorem roundPort_inner (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs) (hst : SessStmt ish bind zs dg N k Rw)
-    (hmn : MsgNamesAt ish zs dg N k Rw) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
-    (hA : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) (s : Fin S) {m kk cl j : ℕ}
+    (hmn : MsgNamesAt ish zs dg N k Rw) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
+    {τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N)}
+    {o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript} (hA : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) (s : Fin S) {m kk cl j : ℕ}
     (hpar : RecResiduals.params (Vs s).c.unit.name = some (m, kk, cl, j)) (q : Fin (Vs s).c.ports.size) {i : ℕ}
     (hq : (Vs s).c.ports[q].name = s!"m{i}") :
     ∃ ss sv, RecVStar.statements ish = .ok ss ∧ ss[(s : ℕ)]? = some sv ∧
@@ -353,7 +355,9 @@ theorem roundPort_inner (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
 units). -/
 theorem wRoundRead_inner (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
     (hst : SessStmt ish bind zs dg N k Rw) (hmn : MsgNamesAt ish zs dg N k Rw) {R : Reg} {ω : L.Ω}
-    {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o} (hA : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o)
+    {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N)}
+    {o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript}
+    (hA : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o)
     {own : Fin S → Array Flock.Registered.Port}
     (hown : ∀ (s : Fin S) ss sv, RecVStar.statements ish = .ok ss → ss[(s : ℕ)]? = some sv → OwnHas (own s) sv)
     {sel : ℕ → String → ℕ → Prop} {stage : Fin 2 → ℕ → ℕ} {sess : ℕ → Fin S}
