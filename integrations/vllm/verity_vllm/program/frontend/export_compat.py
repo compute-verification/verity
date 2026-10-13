@@ -309,12 +309,12 @@ def _expert_weight_scales_through_owner(layer, quant_method, h) -> None:
     """Make a plain MoE-kernel object read its registered expert-scale Parameters through their owning module during export.
 
     vLLM's FP8 ``_init_moe_kernel`` copies the ``RoutedExperts.w13_weight_scale_inv`` / ``w2_weight_scale_inv`` objects into
-    ``moe_kernel.experts.w1_scale`` / ``w2_scale``.  ``experts`` is not an ``nn.Module``.  Torch export swaps Parameters on modules
+    ``moe_kernel.fused_experts.w1_scale`` / ``w2_scale``.  ``fused_experts`` is not an ``nn.Module``.  Torch export swaps Parameters on modules
     for graph values while tracing, so the stale references on that plain object otherwise become lifted tensor constants.  Refresh
     them immediately before ``experts.apply`` from the owning module, exactly as ``_router_bias_through_owner`` does for the router's
     correction bias.  Identity is checked before patching: a backend-owned derived scale is not silently relabelled as a Parameter."""
     kernel = getattr(quant_method, "moe_kernel", None)
-    experts = getattr(kernel, "experts", None)
+    experts = getattr(kernel, "fused_experts", None)
     apply = getattr(experts, "apply", None)
     if experts is None or not callable(apply):
         return
