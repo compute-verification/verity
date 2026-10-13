@@ -259,6 +259,7 @@ __global__ void __launch_bounds__(CHAIN_THREADS) chain_prepare_kernel(unsigned p
   uint8_t m[256];
   u64 h[8];
   if (tid == 0) {
+    for (int b = 0; b < 256; ++b) m[b] = 0;
     for (int b = 0; b < kChainPass.seed_len; ++b) m[b] = kChainPass.seed[b];
     for (int b = 0; b < 4; ++b) m[kChainPass.seed_i + b] = (uint8_t)(pass >> (24 - 8 * b));
     for (int b = 0; b < 64; ++b)
@@ -268,10 +269,12 @@ __global__ void __launch_bounds__(CHAIN_THREADS) chain_prepare_kernel(unsigned p
   }
   __syncthreads();
   if (tid == 0) {
+    for (int b = 0; b < 256; ++b) m[b] = 0;
     for (int b = 0; b < kChainPass.derive_len; ++b) m[b] = kChainPass.derive[b];
     for (int b = 0; b < 64; ++b) m[kChainPass.derive_seed + b] = seed[b];
     sha512_bytes(m, kChainPass.derive_len, h, nullptr);
     for (int b = 0; b < 32; ++b) key[b] = (uint8_t)(h[b >> 3] >> (56 - 8 * (b & 7)));
+    for (int b = 0; b < 256; ++b) m[b] = 0;
     for (int b = 0; b < 128; ++b) m[b] = kChainPass.receipt[b];
     for (int b = 0; b < 64; ++b) m[kChainPass.receipt_seed + b] = seed[b];
     sha512_bytes(m, -1, h, nullptr);
@@ -280,6 +283,7 @@ __global__ void __launch_bounds__(CHAIN_THREADS) chain_prepare_kernel(unsigned p
   __syncthreads();
   {
     const int c = tid >> 3, block = tid & 7;
+    for (int b = 0; b < 256; ++b) m[b] = 0;
     for (int b = 0; b < kChainPass.row_len; ++b) m[b] = kChainPass.row[b];
     for (int b = 0; b < 32; ++b) m[kChainPass.row_key + b] = key[b];
     m[kChainPass.row_c] = (uint8_t)c;
