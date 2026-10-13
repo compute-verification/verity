@@ -37,6 +37,19 @@ DEV uint32_t warp_xor(uint32_t v) {
   return v;
 }
 
+// y over two adjacent n8 fragments of one row, w0 and w1 the y word (two BF16) a lane holds in each, stored so a quad writes
+// one whole 32-byte sector: after two quad shuffles lane q holds the row's BF16 4q..4q+3 of the 16.  gemm_body's store_y
+// writes each lane's 4 bytes where it computed them, half a sector a quad, so every y sector is written twice.
+DEV void store_y_sector(uint16_t* p, uint32_t w0, uint32_t w1, int q) {
+  const int base = (threadIdx.x & 31) & ~3, lo = 2 * (q & 1), hi = q >> 1;
+  const uint32_t x = __shfl_sync(~0u, (q & 1) ? w1 : w0, base + lo + hi);
+  const uint32_t z = __shfl_sync(~0u, (q & 1) ? w0 : w1, base + lo + 1 - hi);
+  *reinterpret_cast<uint2*>(p + 4 * q) = hi ? make_uint2(z, x) : make_uint2(x, z);
+}
+DEV uint32_t y_word(float a, float b, float sr, float sc0, float sc1) {
+  return f2bf(__fmul_rn(__fmul_rn(a, sr), sc0)) | (uint32_t)f2bf(__fmul_rn(__fmul_rn(b, sr), sc1)) << 16;
+}
+
 // One T x T tile (tm, tn): gemm_body<M_PEARLC, T, T, 4>'s loop body, unchanged but for its indices and what it stores.
 template <int STORE, int T> DEV void tile(const Args& a, uint8_t* smem, int tm, int tn, int t) {
   constexpr int TM = T, BN = T, G = FG;
@@ -164,6 +177,7 @@ template <int STORE, int T> DEV void tile(const Args& a, uint8_t* smem, int tm, 
   for (int mi = 0; mi < MI; mi++) {
     const int row = row0 + 16 * mi;
     const float r0 = rs[row], r1 = rs[row + 8];
+    uint32_t w[NI][2];
 #pragma unroll
     for (int ni = 0; ni < NI; ni++) {
       const int col = col0 + 8 * ni;
@@ -173,8 +187,13 @@ template <int STORE, int T> DEV void tile(const Args& a, uint8_t* smem, int tm, 
         store2(U + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
       }
       if constexpr (STORE != F_FOLD) {
-        store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
-        store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+        w[ni][0] = y_word(total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
+        w[ni][1] = y_word(total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+        if (ni % 2 == 1) {
+          const int span = col0 - 2 * q + 8 * (ni - 1);
+          store_y_sector(Y + (size_t)row * N + span, w[ni - 1][0], w[ni][0], q);
+          store_y_sector(Y + (size_t)(row + 8) * N + span, w[ni - 1][1], w[ni][1], q);
+        }
       } else {
         (void)r0; (void)r1; (void)c0; (void)c1;
 #pragma unroll
