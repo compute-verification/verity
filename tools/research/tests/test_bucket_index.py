@@ -166,6 +166,22 @@ def test_the_public_index_is_the_published_artifacts_their_runs_summarised_and_w
     assert BI.dump(public) == rows
 
 
+def test_the_public_pass_reads_the_private_index_in_batches_and_builds_what_one_batch_builds(tmp_path, monkeypatch):
+    b, pub = tmp_path / "bucket", tmp_path / "public"
+    arts = [artifact(b, kind="fixture/v1", meta={"i": i}) for i in range(5)]
+    for i, a in enumerate(arts):
+        run(b, f"r20261011-17000{i}-0001", outputs={"result": a}, inputs={"golden": arts[(i + 1) % 5]})
+        label(b, a, "verified", "accepted")
+        _put(pub, f"manifests/{ids.hex_of(a)}.json", json.loads((b / f"manifests/{ids.hex_of(a)}.json").read_bytes()))
+    priv = tmp_path / "i.sqlite"
+    BI.index(FsRemote(b), priv, now=T0)
+    BI.index(FsRemote(pub), tmp_path / "one.sqlite", policy=BI.PUBLIC, private=priv, now=T0)
+    monkeypatch.setattr(BI, "IN_BATCH", 2)
+    rep = BI.index(FsRemote(pub), tmp_path / "two.sqlite", policy=BI.PUBLIC, private=priv, now=T0)
+    assert rep["read"] == 0 and rep["added"] == {"artifact": 5, "run": 5, "label": 5}
+    assert BI.dump(tmp_path / "two.sqlite") == BI.dump(tmp_path / "one.sqlite")
+
+
 @pytest.fixture
 def s3(tmp_path):
     objects = {"attempts/r1.json": b"1", "attempts/r2.json": b"2", "attempts/r3.json": b"3", "labels/x.json": b"x"}
@@ -283,8 +299,9 @@ def postgres(tmp_path):
         subprocess.run([f"{bindir}/pg_ctl", "-D", str(data), "-w", "-m", "fast", "stop"], check=True, capture_output=True)
 
 
-def test_postgres_builds_the_rows_sqlite_builds_and_a_rebuild_keeps_the_readers_grants(tmp_path, postgres):
+def test_postgres_builds_the_rows_sqlite_builds_and_a_rebuild_keeps_the_readers_grants(tmp_path, postgres, monkeypatch):
     url, reader = postgres
+    monkeypatch.setattr(BI, "IN_BATCH", 1)
     b, pub = tmp_path / "bucket", tmp_path / "public"
     fixture = artifact(b, kind="fixture/v1", meta={"weird": "a\tb\nc\\d", "n": [1, 2.5, None]})
     proof = artifact(b, kind="proof/v1", refs={"inputs": [fixture]})
@@ -294,11 +311,83 @@ def test_postgres_builds_the_rows_sqlite_builds_and_a_rebuild_keeps_the_readers_
     _put(pub, f"manifests/{ids.hex_of(fixture)}.json", json.loads((b / f"manifests/{ids.hex_of(fixture)}.json").read_bytes()))
     lite, lite_pub = tmp_path / "i.sqlite", tmp_path / "p.sqlite"
     pg, pg_pub = BI.PostgresIndex(url, "store_private"), BI.PostgresIndex(url, "store_public")
+    calls = []
+    monkeypatch.setattr(pg, "run", lambda script, run=pg.run: calls.append(script) or run(script))
     for _ in range(2):
         assert BI.index(FsRemote(b), lite, now=T0)["errors"] == [] and BI.index(FsRemote(b), pg, now=T0)["errors"] == []
         BI.index(FsRemote(pub), lite_pub, policy=BI.PUBLIC, private=lite, now=T0)
+        calls.clear()
         BI.index(FsRemote(pub), pg_pub, policy=BI.PUBLIC, private=pg, now=T0)
+        assert len(calls) <= 6
     assert BI.dump(pg) == BI.dump(lite) and BI.dump(pg_pub) == BI.dump(lite_pub)
     assert pg.listed_at(BI.MANIFESTS) == "2026-10-11T18:00:00Z" and pg.newest_run() == "r20261011-170000-0001"
     assert pg.size()["records"]["rows"] == 5
     assert BI.PostgresIndex(reader, "store_private", create=False).run("SELECT count(*) FROM records;") == [["5"]]
+
+
+def _readers_world(tmp_path):
+    """A bucket of one run, its output and a label on it, indexed where `reader` looks, and a store holding one artifact and one
+    label the bucket lacks."""
+    from research.store.local import LocalStore
+
+    b, root = tmp_path / "bucket", tmp_path / "store"
+    a1 = artifact(b, meta={"x": 1})
+    run(b, "r20261011-170000-0001", outputs={"result": a1})
+    label(b, a1, "verified", "accepted")
+    st = LocalStore(root)
+    (tmp_path / "f.txt").write_text("here only\n")
+    mine = st.put_artifact("bench-result/v1", {"x": 1}, {}, file=tmp_path / "f.txt")
+    st.add_label(a1, "verified", "rejected", "infra", ts="2026-10-11T19:00:00Z")
+    return b, st, a1, mine
+
+
+def test_displays_read_the_index_with_what_this_store_holds_beside_it(tmp_path, monkeypatch, capsys):
+    """Step 5 of the store design: `select` and `sql --index` read the index (Neon's store_private with its reader's URL, else a local
+    build), complete as of its listing, and name this store's records the index lacks rather than leave them out."""
+    from research.store import labels_sync as LS
+    from research.store.cli import main
+
+    b, st, a1, mine = _readers_world(tmp_path)
+    assert BI.reader(st.root) is None, "no index here: displays read the catalog"
+    BI.index(FsRemote(b), BI.default_path(st.root), now=T0)
+    idx = BI.reader(st.root)
+    assert isinstance(idx, BI.SqliteIndex) and BI.as_of(idx) == "2026-10-11T18:00:00Z"
+    for facets in ({"kind": "bench-result/v1"}, {"where": {"x": "1"}}, {"where": {"meta.x": "1"}}, {"labels": [("verified", "accepted")]},
+                   {"tool": "bench_vu"}, {"attempt": "r20261011-170000-0001"}, {"derivation": "drv:" + "d" * 64}):
+        assert [i for i, _ in BI.select_artifacts(idx, **facets)] == [a1], facets
+    for facets in ({"kind": "proof/v1"}, {"where": {"x": "2"}}, {"labels": [("verified", "rejected")]}, {"tool": "check"}):
+        assert BI.select_artifacts(idx, **facets) == [], facets
+    (h,) = LS.local_labels(st)
+    assert set(BI.pending(st, idx)) == {mine, f"label:{h}"}
+    idx.close()
+
+    capsys.readouterr()
+    assert main(["select", "--store", str(st.root), "--where", "x=1"]) == 0
+    out, err = capsys.readouterr()
+    assert a1 in out and f"{mine}" in out and "(pending: not in the index)" in out.splitlines()[[mine in ln for ln in out.splitlines()].index(True)]
+    assert "2 artifact(s) from the index" in err and "complete as of 2026-10-11T18:00:00Z), 1 of them only here" in err
+    assert main(["sql", "--index", "--store", str(st.root), "SELECT type, count(*) AS n FROM records GROUP BY type ORDER BY type"]) == 0
+    out, err = capsys.readouterr()
+    assert out.splitlines() == ["type\tn", "artifact\t1", "label\t1", "run\t1"]
+    assert "complete as of 2026-10-11T18:00:00Z; 2 record(s) here are not in it" in err
+    assert main(["sql", "--index", "--store", str(st.root), "SELECT * FROM attempts"]) == 2
+    assert "tables: records(id, type, kind, time, doc)" in capsys.readouterr().err
+    monkeypatch.setenv(BI.READER_ENV, "postgresql://store_private_reader:pw@db.example/store?sslmode=require")
+    pg = BI.reader(st.root)
+    assert isinstance(pg, BI.PostgresIndex) and pg.schema == "store_private" and pg.env["PGPASSWORD"] == "pw"
+
+
+def test_the_postgres_reader_reads_read_only_with_column_names_and_selects_what_sqlite_selects(tmp_path, postgres):
+    url, reader = postgres
+    b, st, a1, _mine = _readers_world(tmp_path)
+    lite = BI.SqliteIndex(tmp_path / "i.sqlite")
+    for db in (lite, BI.PostgresIndex(url, "store_private")):
+        BI.index(FsRemote(b), db, now=T0)
+    pg = BI.PostgresIndex(reader, "store_private", create=False)
+    assert pg.query("SELECT kind, id FROM records WHERE type = 'run'") == (["kind", "id"], [("bench_vu", "r20261011-170000-0001")])
+    assert BI.as_of(pg) == BI.as_of(lite) == "2026-10-11T18:00:00Z"
+    for facets in ({"where": {"x": "1"}}, {"labels": [("verified", "accepted")]}, {"tool": "bench_vu"}, {"kind": "proof/v1"}):
+        assert BI.select_artifacts(pg, **facets) == BI.select_artifacts(lite, **facets), facets
+    assert BI.not_indexed(pg, [a1, "art:" + "0" * 64]) == BI.not_indexed(lite, [a1, "art:" + "0" * 64]) == ["art:" + "0" * 64]
+    with pytest.raises(RuntimeError, match="read-only"):
+        pg.query("DELETE FROM records RETURNING id")
