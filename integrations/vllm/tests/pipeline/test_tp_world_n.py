@@ -139,21 +139,46 @@ def test_collective_bus_world_3_peer_layout_and_rank_order():
     assert ag.shape == (2, 12) and ag[0, :4].tolist() == [1.0] * 4 and ag[0, 4:8].tolist() == [10.0] * 4 and ag[0, 8:].tolist() == [100.0] * 4
 
 
-def test_a_world_4_all_reduce_refuses_on_a_target_without_batch_invariance(monkeypatch):
-    """`AllReduce_v2` states the tree chain vLLM's batch-invariant mode pins NCCL to.  On a target without batch invariance the served
-    all-reduce is whatever route vLLM's dispatch takes, so the toy rank's first all-reduce (its embedding's) refuses; the default target
-    derives the same rank."""
-    pytest.importorskip("torch")
-    from tests.pipeline import tp_toy as T
+def _derive_world8_collective(monkeypatch, *, fused: bool, custom: bool):
+    torch = pytest.importorskip("torch")
     from verity_vllm.program.frontend.derive import derive_report
-    from verity_vllm.program.frontend.rules.vllm_bindings import observations as VB, vllm_ruleset
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-    T.derive_rank(4, 1)
-    mod, inputs, _record, _inner = T.rank_source(4, 1)
-    monkeypatch.setitem(VB._OBSERVED, "target_profile", TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False))
-    rep = derive_report(mod, inputs, mode="profile", profile="b1-eager-v3", rules=vllm_ruleset(), name="vLLMStep[ToyRank]",
-                        check_registry=True, rank=(4, 1))
-    assert not rep.ok and "AllReduce_v2 states the tree chain vLLM's batch-invariant mode pins NCCL to" in rep.unsupported.hint, rep.unsupported
+    from verity_vllm.program.frontend.export_ops import ensure_ops
+    from verity_vllm.program.frontend.rules import vllm_bindings as VB
+    from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+
+    ensure_ops()
+    monkeypatch.setitem(VB._OBSERVED, "allreduce_settings",
+                        {"custom_all_reduce": custom, "symmetric_memory": True, "flashinfer": True})
+
+    class Collective(torch.nn.Module):
+        def forward(self, *args):
+            parts = list(args[:8])
+            if fused:
+                return torch.ops.verity_tp.fused_allreduce_rms_norm(parts, args[8], args[9], 1e-5)
+            return torch.ops.verity_tp.all_reduce(parts)
+
+    rows = tuple(torch.zeros(1, 6144, dtype=torch.bfloat16) for _ in range(8))
+    inputs = rows + ((torch.zeros(1, 6144, dtype=torch.bfloat16), torch.ones(6144, dtype=torch.bfloat16)) if fused else ())
+    return derive_report(Collective(), inputs, mode="profile", profile="b1-eager-v3", rules=vllm_ruleset(),
+                         name="world8-collective", check_registry=True, rank=(8, 0))
+
+
+@pytest.mark.parametrize("fused,kind", [
+    (False, "AllReduceMnnvl_v1{WORLD=8,N=6144,SHOT=1}"),
+    (True, "AllReduceRmsNormMnnvl_v1{WORLD=8,N=6144,SHOT=1,CLUSTER=8,EPS=1e-05,FMA=True}"),
+])
+def test_world_8_collective_rules_bind_only_captured_routes(monkeypatch, fused, kind):
+    """The rule follows the row's switches and `tp_allreduce.covered`: captured custom-off routes bind; defaults refuse by name."""
+    refused = _derive_world8_collective(monkeypatch, fused=fused, custom=True)
+    route = "fused" if fused else "fi_ar_comm"
+    assert not refused.ok and (
+        "tp_allreduce.covered() has no entry for setting='defaults', N=6144, "
+        f"route={route!r}, M=1"
+    ) in refused.unsupported.hint, refused.unsupported
+
+    derived = _derive_world8_collective(monkeypatch, fused=fused, custom=False)
+    assert derived.ok, derived.unsupported
+    assert [n.fn.id for n in derived.program.fn.body.nodes] == [kind]
 
 
 # --- tp_links.json: v2 schema at world N, v1 files read as v2 ----------------------------------------------------------------

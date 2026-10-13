@@ -471,6 +471,36 @@ def test_the_allreduce_norm_partial_is_the_calls_hidden_states_and_the_returns_i
     assert run.c.acquired[f"{site}/0"] is normed and run.c.acquired[f"{site}/1"] is hs
 
 
+@pytest.mark.parametrize("M,fused", [(42, True), (43, False)])
+def test_the_meta_export_shim_emits_the_fused_leaf_only_on_flashinfers_served_range(monkeypatch, M, fused):
+    from verity_vllm.program.frontend.export_compat import fused_allreduce_rms_norm_leaf
+
+    v = fake_far(monkeypatch)
+    model = Root()
+    seen: list[tuple] = []
+
+    class Bus:
+        settings = {"flashinfer": True}
+
+        def fused_allreduce_rms_norm(self, hidden_states, residual, weight, eps):
+            seen.append((tuple(hidden_states.shape), tuple(residual.shape), tuple(weight.shape), eps))
+            return T(*hidden_states.shape), T(*residual.shape)
+
+    parallel = types.ModuleType("vllm.distributed.parallel_state")
+    parallel.get_tp_group = lambda: types.SimpleNamespace(world_size=TP, bus=Bus())
+    distributed = types.ModuleType("vllm.distributed")
+    distributed.parallel_state = parallel
+    monkeypatch.setitem(sys.modules, distributed.__name__, distributed)
+    monkeypatch.setitem(sys.modules, parallel.__name__, parallel)
+
+    hidden, residual = T(M, H), T(M, H)
+    with fused_allreduce_rms_norm_leaf(model):
+        out = v.user.fused_allreduce_rms_norm(hidden, residual, model.model.layers[0].input_layernorm)
+    assert bool(seen) is fused
+    assert v.calls == ([] if fused else ["all_reduce"])
+    assert tuple(out[0].shape) == (M, H) and tuple(out[1].shape) == (M, H)
+
+
 def test_a_model_that_calls_it_and_makes_no_call_declares_a_site_no_step_binds(monkeypatch):
     from verity_vllm.acquire.sources.allreduce_norm import NO_CALL_SITE
     from verity_vllm.acquire.sources.partial_source import TPPartialSource

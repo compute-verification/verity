@@ -230,6 +230,10 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
     from pathlib import Path
 
     from verity_vllm.engine.profiles.gen_dsa_patterns import (
+        INDEX_SHARE_SRC_SHA,
+        NORM_SRC_SHA,
+        Q_SRC_SHA,
+        DsaIndexShare,
         DsaMqaAllocation,
         DsaMqaGather,
         DsaNormRope,
@@ -244,8 +248,13 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
     assert G.structural_refusal(cfg) is None
     profile = G.build_profile("GLM53", 8, hf_config=cfg, repo="zai-org/GLM-5.3-FP8", revision="aca966e4")
     assert profile.config["MOE_I_FULL"] == 2048 and profile.config["I"] == 256 and profile.config["ROUTER_VPT"] == 8
-    assert [type(p) for p in profile.patterns[2:8]] == [
-        DsaNormRope, DsaQ, DsaMqaGather, DsaMqaAllocation, DsaTopK, DsaSparseMla]
+    assert [type(p) for p in profile.patterns[2:9]] == [
+        DsaNormRope, DsaQ, DsaMqaGather, DsaMqaAllocation, DsaTopK, DsaIndexShare, DsaSparseMla]
+    assert (NORM_SRC_SHA, Q_SRC_SHA, INDEX_SHARE_SRC_SHA) == (
+        "2dcf56892eb2b61c0f0249965013fc1f63968c00e473b3df35cb186d42c650de",
+        "7380a1385db787ceded52869fe395160e859d22710ca46f20d1d0fdef2f41043",
+        "ad40bdb415664d3b65e3e4163863158096f2ea52f2e2a3e01ff8be63aeb98f63",
+    )
     shared = next(p for p in profile.patterns if isinstance(p, MoEFusedSharedExpertsFp8))
     assert shared.group == 128 and shared.gate_spec is None
     assert profile.notes["moe"]["status"].startswith("constructive except the gate")
