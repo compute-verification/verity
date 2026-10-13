@@ -128,12 +128,22 @@ def sass(out: Path) -> dict[str, Any]:
                 "error": (build.stdout + build.stderr)[-2000:]}
     dump = subprocess.run([cuobjdump, "--dump-sass", str(cubin)], capture_output=True, text=True)
     text.write_text(dump.stdout)
-    ops = {op: len(re.findall(rf"\b{re.escape(op)}", dump.stdout)) for op in
-           ("FFMA", "FADD", "SHFL", "MUFU.RSQ", "F2FP", "HADD2")}
-    kernels = sorted(set(re.findall(r"Function\s*:\s*(\S+)", dump.stdout)))
-    return {"ok": dump.returncode == 0 and len(kernels) == 2 and ops["SHFL"] > 0 and ops["MUFU.RSQ"] == 2 and
-                  ops["FFMA"] > 0 and ops["FADD"] > 0 and ops["F2FP"] > 0,
+    op_names = ("FFMA", "FADD", "SHFL", "MUFU.RSQ", "F2FP", "HADD2")
+    ops = {op: len(re.findall(rf"\b{re.escape(op)}", dump.stdout)) for op in op_names}
+    matches = list(re.finditer(r"Function\s*:\s*(\S+)", dump.stdout))
+    kernels = sorted({match.group(1) for match in matches})
+    ops_by_kernel = {}
+    for i, match in enumerate(matches):
+        body = dump.stdout[match.start() : matches[i + 1].start() if i + 1 < len(matches) else None]
+        ops_by_kernel[match.group(1)] = {
+            op: len(re.findall(rf"\b{re.escape(op)}", body)) for op in op_names
+        }
+    common = ("FFMA", "FADD", "SHFL", "MUFU.RSQ", "F2FP")
+    return {"ok": dump.returncode == 0 and len(kernels) == 2 and
+                  all(all(ops_by_kernel[k][op] > 0 for op in common) for k in kernels) and
+                  ops_by_kernel.get("fused_add_rms_norm_bf16_v8", {}).get("HADD2", 0) > 0,
             "nvcc": version.stdout.strip().splitlines()[-1:], "flags": flags, "kernels": kernels, "ops": ops,
+            "ops_by_kernel": ops_by_kernel,
             "cubin_sha256": hashlib.sha256(cubin.read_bytes()).hexdigest(), "sass": text.name,
             "error": dump.stderr[-1000:]}
 
