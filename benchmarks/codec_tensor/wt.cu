@@ -2700,8 +2700,8 @@ struct FusedSmem {
         decoded(loaded + stages), empty(decoded + stages), ready(empty + stages), sketched(ready + stages),
         tagq(reinterpret_cast<u32 *>(full + 2 * ((6 * stages + 1) / 2))), skbuf(reinterpret_cast<int *>(tagq + 4)),
         sksg(reinterpret_cast<u32 *>(skbuf + sk_bufs<SKW>() * 16 * SKK)) {}
-  // Thread 0 makes the stages' barriers anew for each segment, and finds it (Cut::next, after b's) in tagq[1 .. 3].
-  __device__ void setup(int stages, int nbs, int nchunks, int groups, int tskt, int b) const {
+  // Thread 0 makes the stages' barriers anew for each segment g, and puts it in tagq[1 .. 3].
+  __device__ void setup(int stages, Cut::Seg g) const {
     for (int s = 0; s < stages; ++s) {
       mbar_init(full + s, 1);
       mbar_init(loaded + s, TW);
@@ -2711,8 +2711,12 @@ struct FusedSmem {
       mbar_init(sketched + s, 1);
     }
     asm volatile("fence.mbarrier_init.release.cluster;\n" ::: "memory");
-    const Cut::Seg g = Cut(nbs, nchunks, groups, tskt).next(b);
     tagq[1] = g.b, tagq[2] = g.j0, tagq[3] = g.j1;
+  }
+  // A segment's K-chunk kc of x into xs, and its sketch buffers zeroed, by `threads` threads.
+  __device__ void prepare(const uint8_t *__restrict__ x, int M, int Kd, int kc, int threads) const {
+    load_xs<NB8>(xs, x, M, Kd, kc, threads);
+    for (int e = threadIdx.x; e < sk_bufs<SKW>() * 16 * SKK; e += threads) skbuf[e] = 0;
   }
 };
 
@@ -2720,11 +2724,11 @@ struct FusedSmem {
 // which run none. Each segment derives what it uses from the kernel's parameters, which the kernel passes through
 // opaque(), and fused_next likewise, so nothing derived is held in registers through one segment's decode into the next.
 template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS>
-__device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x,
-                                              float *__restrict__ y, int M, int N, int Kd, u64 base, int groups,
-                                              int decoders, int stages, const u32 *__restrict__ tsteps,
-                                              u32 *__restrict__ tags, u64 tag_base, const u32 *__restrict__ signs,
-                                              int *__restrict__ sk_out, int skt, int sgs) {
+__device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore, float *__restrict__ y, int M, int N,
+                                              int Kd, u64 base, int groups, int decoders, int stages,
+                                              const u32 *__restrict__ tsteps, u32 *__restrict__ tags, u64 tag_base,
+                                              const u32 *__restrict__ signs, int *__restrict__ sk_out, int skt,
+                                              int sgs) {
   extern __shared__ __align__(128) uint8_t smem[];
   const FusedSmem<NB8, SKK, SKW> S(smem, stages);
   constexpr int MW = fused_mma_warps<K, NB8, SKK, SKW>();
@@ -2745,9 +2749,6 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
   u64 *sketched = S.sketched;
   int *skbuf = S.skbuf;
   const u32 *sgn = sgs ? S.sksg : signs;
-  load_xs<NB8>(xs, x, M, Kd, kc, pipe);
-  for (int e = threadIdx.x; e < sk_bufs<SKW>() * 16 * SKK; e += pipe) skbuf[e] = 0;
-  asm volatile("bar.sync 2, %0;\n" ::"r"(pipe) : "memory");
 
   if (warp == decoders + MW) {
     if (lane == 0) {
@@ -2838,20 +2839,23 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
 
 // After a segment: false if it was the launch CTA's last. Else its accesses to the stages are all behind its barriers
 // and before its threads meet here, so the barriers can be made anew, and the fence puts this thread's accesses before
-// the next segment's bulk copies.
+// the next segment's bulk copies; the threads prepare its xs meanwhile.
 template <int K, int NB8, int SKK, int SKW>
-__device__ __forceinline__ bool fused_next(int N, int Kd, int groups, int decoders, int stages, int skt) {
+__device__ __forceinline__ bool fused_next(const uint8_t *__restrict__ x, int M, int N, int Kd, int groups, int decoders,
+                                           int stages, int skt) {
   extern __shared__ __align__(128) uint8_t smem[];
   const FusedSmem<NB8, SKK, SKW> S(smem, stages);
-  const int b = *(volatile u32 *)(S.tagq + 1), nchunks = Kd / TASK_COLS, tskt = SKK > 0 ? skt : 1;
-  if (Cut(N / 16, nchunks, groups, tskt).next(b).b >= groups * nchunks) return false;
+  const int nchunks = Kd / TASK_COLS;
+  const Cut::Seg g = Cut(N / 16, nchunks, groups, SKK > 0 ? skt : 1).next(*(volatile u32 *)(S.tagq + 1));
+  if (g.b >= groups * nchunks) return false;
   const int pipe = 32 * (decoders + fused_mma_warps<K, NB8, SKK, SKW>() + 1 + SKW);
   asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
   asm volatile("bar.sync 2, %0;\n" ::"r"(pipe) : "memory");
   if (threadIdx.x == 0) {
     for (int s = 0; s < 6 * stages; ++s) mbar_inval(S.full + s);
-    S.setup(stages, N / 16, nchunks, groups, tskt, b);
+    S.setup(stages, g);
   }
+  S.prepare(x, M, Kd, g.b % nchunks, pipe);
   asm volatile("bar.sync 2, %0;\n" ::"r"(pipe) : "memory");
   return true;
 }
@@ -2872,19 +2876,22 @@ __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
   extern __shared__ __align__(128) uint8_t smem[];
   {
     const FusedSmem<NB8, SKK, SKW> S(smem, stages);
+    const int nchunks = Kd / TASK_COLS;
+    const Cut::Seg g = Cut(N / 16, nchunks, groups, SKK > 0 ? skt : 1).next(-1);
     if (sgs && signs)
       for (int e = threadIdx.x; e < sgs; e += blockDim.x) S.sksg[e] = __ldg(signs + e);
     if (threadIdx.x == 0) {
       S.tagq[0] = 0;
-      S.setup(stages, N / 16, Kd / TASK_COLS, groups, SKK > 0 ? skt : 1, -1);
+      S.setup(stages, g);
     }
+    if (g.b < groups * nchunks) S.prepare(x, M, Kd, g.b % nchunks, blockDim.x);
   }
   __syncthreads();
   while (fused_segment<K, NB8, PARTIALS, SKK, SKW, WARPS>(
-      wstore, x, y, opaque(M), opaque(N), opaque(Kd), base, opaque(groups), opaque(decoders), opaque(stages), tsteps,
-      tags, tag_base, signs, sk_out, opaque(skt), opaque(sgs)) &&
-         fused_next<K, NB8, SKK, SKW>(opaque(N), opaque(Kd), opaque(groups), opaque(decoders), opaque(stages),
-                                      opaque(skt))) {
+             wstore, y, opaque(M), opaque(N), opaque(Kd), base, opaque(groups), opaque(decoders), opaque(stages),
+             tsteps, tags, tag_base, signs, sk_out, opaque(skt), opaque(sgs)) &&
+         fused_next<K, NB8, SKK, SKW>(x, opaque(M), opaque(N), opaque(Kd), opaque(groups), opaque(decoders),
+                                      opaque(stages), opaque(skt))) {
   }
   if constexpr (SKK == 0)
     if (tags)
