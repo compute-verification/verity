@@ -532,6 +532,13 @@ def _u32(t) -> np.ndarray:
     return t.contiguous().view(torch.int32).cpu().numpy().view(U32)
 
 
+def _equal_f32_words(a, b) -> bool:
+    """Whether two f32 tensors have the same words, including NaN payloads."""
+    import torch
+
+    return bool(torch.equal(a.view(torch.int32), b.view(torch.int32)))
+
+
 def _device(a: np.ndarray, dtype=None):
     import torch
 
@@ -607,7 +614,7 @@ def capture(rows: dict[str, dict[str, np.ndarray]], reps: int = 2) -> tuple[dict
         xd, bd = _device(R["x"][g * GROUP:(g + 1) * GROUP]), _device(R["b"][g])
         before = (xd.clone(), bd.clone())
         outs.append([launch_router(xd, bd) for _ in range(reps)])
-        intact &= bool(torch.equal(xd, before[0]) and torch.equal(bd.view(torch.int32), before[1].view(torch.int32)))
+        intact &= _equal_f32_words(xd, before[0]) and _equal_f32_words(bd, before[1])
     rec["router"] = {"launches": reps * len(outs), "inputs_intact": intact, "deterministic": all(
         np.array_equal(o[0][0], r[0]) and np.array_equal(o[0][1], r[1]) for o in outs for r in o[1:])}
     got["router"] = {"w": np.concatenate([o[0][0] for o in outs]), "ids": np.concatenate([o[0][1] for o in outs])}

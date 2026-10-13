@@ -37,6 +37,19 @@ def _one(d, *xs: int) -> int:
     return int(r[0]) if isinstance(r, (list, tuple)) else int(r)
 
 
+def test_router_input_intactness_compares_f32_words():
+    """NaNs with unchanged payloads are intact; one changed payload bit is not."""
+    import torch
+
+    words = np.array([0x7FC00000, 0xFFFFFFFF, 0x7F800001, 0x3F800000], U32)
+    before = torch.from_numpy(words.view(np.int32)).view(torch.float32)
+    same = before.clone()
+    assert not torch.equal(same, before) and S._equal_f32_words(same, before)
+    changed = same.view(torch.int32).clone()
+    changed[0] ^= 1
+    assert not S._equal_f32_words(changed.view(torch.float32), before)
+
+
 def test_lg2_words_are_the_measured_unit():
     w = S.lg2_words(S.lg2_inputs())
     assert hashlib.sha256(w.astype("<u4").tobytes()).hexdigest() == D.LG2_MEASURED["sha256"]
