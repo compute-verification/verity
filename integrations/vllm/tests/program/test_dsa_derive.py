@@ -4,12 +4,11 @@
   meta export has no KV cache, so the kernels' slot-mapping asserts never run) and unwinds; what it does not model refuses at export;
   `export_compat.moe_gate_leaf` does the same for the MoE gate's cuteDSL `ll_bf16_gemm`, which checks for CUDA operands;
 * `rules/vllm_dsa.py` derives an indexer layer and an IndexShare layer over a prefill and a decode step: per token the norms and
-  RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and `SparseMla_v1{T=n}` over
-  the layer's first n history rows, equal to those Definitions composed by hand;
+  RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and either the explicitly
+  pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
 * each precondition refuses by name.
 
-The roles with no Definition on this branch (`dsa_rmsnorm`, `dsa_kv_rope`, `dsa_q_rope`, `batched_gemm`) are stand-ins here
-(`RMSNormTriton_v1`, `RoPE_v1`, a batch of `Gemm_v2`), and FA3's sparse geometry is registered at rope 16, latent 16."""
+Only `batched_gemm`, which remains outside this change, is a stand-in here; FA3's sparse geometry is registered at rope 16, latent 16."""
 from __future__ import annotations
 
 import sys
@@ -31,7 +30,9 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels.serve3_reference import materialize
-from verity_vllm.program.registry import b1, dsa, hopper, sparse_mla
+from verity_vllm.program.registry import b1, dsa, dsa_norm, hopper, sparse_mla, sparse_mla_split
+from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
+from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
 from verity_vllm.program.registry.prims import BF16
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton", fp8_block_gemm="cutlass")
@@ -52,8 +53,7 @@ def BatchedGemmStandIn(B, S, x, w):
 
 
 STANDIN = Vocabulary("dsa-standin", "profile", "dsa-standin",
-                     kinds={**PROFILE_B1_EAGER_V3.kinds, "dsa_rmsnorm": PROFILE_B1_EAGER_V3.kinds["rmsnorm"],
-                            "dsa_kv_rope": PROFILE_B1_EAGER_V3.kinds["rope"], "dsa_q_rope": PROFILE_B1_EAGER_V3.kinds["rope"],
+                     kinds={**PROFILE_B1_EAGER_V3.kinds,
                             "batched_gemm": lambda B, K, N, DOT: bind(BatchedGemmStandIn, B=B, K=K, N=N, DOT=DOT)},
                      notes=dict(PROFILE_B1_EAGER_V3.notes))
 
@@ -230,8 +230,8 @@ def _run(rep, model: _Model, inputs) -> list[int]:
 def _reference(model: _Model, inputs) -> list[int]:
     """The module's outputs as the Definitions compose them: per token the norms, the RoPEs and the absorptions, and per row
     `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped])."""
-    qn, kn = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(b1.RMSNormTriton, N=L, EPS=EPS)
-    rope1, ropeh = bind(b1.RoPE, NHEADS=1, D=R), bind(b1.RoPE, NHEADS=NH, D=R)
+    qn, kn = bind(dsa_norm.DsaRMSNorm, N=NQ, EPS=EPS), bind(dsa_norm.DsaRMSNorm, N=L, EPS=EPS)
+    rope1 = ropeh = bind(RoPEHeadGptJV2, D=R)
     up, down = bind(BatchedGemmStandIn, B=NH, K=P, N=L, DOT=DOT), bind(BatchedGemmStandIn, B=NH, K=L, N=V, DOT=DOT)
     hist = {n: [] for n in NAMES}
     out, k = [], 0
@@ -249,7 +249,7 @@ def _reference(model: _Model, inputs) -> list[int]:
                 hist[layer.layer_name].append(kv + list(evaluate(rope1, _words(k_pe[i]), _words(cs[p]))))
                 n = len(hist[layer.layer_name])
                 ql = list(evaluate(up, _words(qv[i, :, :P]), wuk))
-                qr = list(evaluate(ropeh, _words(qv[i, :, P:]), _words(cs[p])))
+                qr = [w for head in qv[i, :, P:] for w in evaluate(ropeh, _words(head), _words(cs[p]))]
                 fn = bind(sparse_mla.SparseMla, T=n, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE)
                 a = list(evaluate(fn, ql, qr, [w for r in hist[layer.layer_name] for w in r]))
                 rows += list(evaluate(down, a, wuv))
@@ -378,8 +378,9 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     rep = _derive(model, xs)
     assert rep.program is not None, rep.unsupported
     ids = _ids(rep)
-    norm_q, norm_kv = f"RMSNormTriton_v1{{N={NQ},EPS={EPS}}}", f"RMSNormTriton_v1{{N={L},EPS={EPS}}}"
-    kr, qr = bind(b1.RoPE, NHEADS=1, D=R).id, bind(b1.RoPE, NHEADS=NH, D=R).id
+    norm_q = bind(dsa_norm.DsaRMSNorm, N=NQ, EPS=EPS).id
+    norm_kv = bind(dsa_norm.DsaRMSNorm, N=L, EPS=EPS).id
+    kr = qr = bind(RoPEHeadGptJV2, D=R).id
     up = bind(BatchedGemmStandIn, B=NH, K=P, N=L, DOT=DOT).id
     down = bind(BatchedGemmStandIn, B=NH, K=L, N=V, DOT=DOT).id
     krow, iq = bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=EPS).id, bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE).id
@@ -392,7 +393,7 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     for p0, T in STEPS:
         pos = range(p0, p0 + T)
         for indexer in (True, False):
-            want += [norm_q] * T + [norm_kv] * T + [kr] * T + ([krow] * T if indexer else []) + [up] * T + [qr] * T
+            want += [norm_q] * T + [norm_kv] * T + [kr] * T + ([krow] * T if indexer else []) + [up] * T + [qr] * (T * NH)
             want += [iq] * T if indexer else []
             for p in pos if indexer else ():
                 want += [bind(dsa.DsaMqaLogitsV3, N=p + 1, H=H, D=D).id, f"Const32[0x{p + 1:08x}]_v1", sel]
@@ -405,6 +406,22 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
         (NAMES[0], NAMES[0]), (NAMES[1], NAMES[0])] * len(STEPS)
     roles = rep.provenance["weight_roles"]
     assert roles["layers.0.W_UK_T"]["role"] == "mla.absorb" and roles["layers.0.indexer.k_norm.bias"]["role"] == "dsa.indexer.k_norm.bias"
+
+
+def test_default_sparse_mla_uses_each_tokens_launched_split_count(served):
+    VB.observe_attention_impls({n: _observation(num_splits=None) for n in NAMES})
+    model = _model()
+    rep = _derive(model, _inputs(model))
+    assert rep.program is not None, rep.unsupported
+    got = [spec for spec in _ids(rep) if spec.startswith("SparseMlaSplit_v1")]
+    keys = [1, 2, 1, 2, 3, 3]
+    splits = launch_num_splits(keys, H200.num_sms, TOPK, 0)
+    want = [
+        bind(sparse_mla_split.SparseMlaSplit, T=n, NS=ns, NH=NH, DR=R, DV=L, BN=BN,
+             DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
+        for n, ns in zip(keys, splits)
+    ]
+    assert got == want
 
 
 def test_a_history_opens_at_the_first_position_a_layer_sees(served):
@@ -426,14 +443,13 @@ def test_a_call_that_does_not_continue_the_history_refuses(served):
     assert f"positions 3..3 do not continue {NAMES[0]!r}'s history of 2 rows (next position 2)" in hint, hint
 
 
-def test_the_served_vocabulary_names_the_roles_it_lacks(served):
-    model = _model()
-    hint = _hint(_derive(model, _inputs(model), profile="b1-eager-v3"))
-    assert "DsaNormRope[vllm-dsa]_v1" in hint and "the vocabulary has no dsa_rmsnorm" in hint and "no dsa_kv_rope" in hint, hint
+def test_the_served_vocabulary_binds_the_norm_and_gptj_rope_roles():
+    assert PROFILE_B1_EAGER_V3.kind("dsa_rmsnorm", N=NQ, EPS=EPS).id == bind(dsa_norm.DsaRMSNorm, N=NQ, EPS=EPS).id
+    assert PROFILE_B1_EAGER_V3.kind("dsa_kv_rope", D=R).id == bind(RoPEHeadGptJV2, D=R).id
+    assert PROFILE_B1_EAGER_V3.kind("dsa_q_rope", D=R).id == bind(RoPEHeadGptJV2, D=R).id
 
 
 @pytest.mark.parametrize("case,needle", [
-    ("splits", "the split-combine has no Definition; SparseMla_v1 is num_splits=1"),
     ("topk", "'layers.0.self_attn.attn': position 2 has 3 keys > TOPK 2"),
     ("shared-first", "IndexShare layer 'layers.0.self_attn.attn' reads a top-k no indexer layer selected for positions 0..1"),
     ("prefill-backend", "a call of 2 query rows is a prefill (decode threshold 1 at 2 query heads per rank), which its dense-MHA "
@@ -445,7 +461,7 @@ def test_the_served_vocabulary_names_the_roles_it_lacks(served):
 def test_each_attention_precondition_refuses_by_name(case, needle, served, monkeypatch):
     model = _model(order=(False, True) if case == "shared-first" else (True, False), topk=2 if case == "topk" else TOPK)
     monkeypatch.setitem(vllm_dsa.DECODE_THRESHOLD, NH, 1)
-    over = {"splits": {"num_splits": None}, "prefill-backend": {"prefill_backend": "FlashAttnMLAPrefill"},
+    over = {"prefill-backend": {"prefill_backend": "FlashAttnMLAPrefill"},
             "heads": {"prefill_backend": "FlashAttnMLAPrefill", "q_heads_per_rank": None}, "impl": {"impl": "FlashMLASparseImpl"}}.get(case)
     if over:
         VB.observe_attention_impls({n: _observation(**over) for n in NAMES})

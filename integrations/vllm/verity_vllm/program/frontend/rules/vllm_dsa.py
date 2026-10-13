@@ -13,7 +13,7 @@ over the three leaves `export_compat.dsa_leaves` exports in place of its kernels
         the layer's caches as history keyed by `layer_name` (rows [kv_c | k_pe], index-K slots and scales); per query row of n = P + 1
         keys, on an indexer layer `DsaMqaLogits_v3{N=n,H,D}` and `DsaTopKShortRow_v1{TOPK}` (n <= TOPK: the kernels' short-row
         shortcut, slot i = i), on an IndexShare layer the top-k the last indexer layer wrote for the same positions; then
-        `SparseMla_v1{T=n,NH,DR,DV,BN,DOT,INV,SCALE}` over the history's first n rows
+        explicitly pinned `SparseMla_v1{T=n,...}` or default `SparseMlaSplit_v1{T=n,NS,...}` over the history's first n rows
 
 and two ops around them: the latent absorptions `bmm(q_nope^T, W_UK_T)` and `bmm(attn^T, W_UV)` (`batched_gemm{B,K,N,DOT}` per token)
 and `output.copy_(rows)` (an allocation written whole).  A role the vocabulary lacks refuses by name.
@@ -385,11 +385,12 @@ class DsaIndexerAttnRule(StateRule):
     implicit state keyed by `layer_name`, made explicit as histories.  A layer's history opens at its first call, at whatever position
     (the step wrapper's `pos0`, as the dense attention rule's `kv_history` opens), and every later call continues it; row i of a call
     that finds P0 rows reads the first n = P0 + i + 1 rows.  An indexer layer emits the row's logits and its top-k, an IndexShare layer takes the top-k the last indexer layer selected for
-    the same positions, and both `SparseMla_v1` over the selected rows: with n <= TOPK the selection is rows 0..n-1 in order."""
+    the same positions, and both the pinned one-split or default split sparse MLA over the selected rows: with n <= TOPK the
+    selection is rows 0..n-1 in order."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaIndexerAttn[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_indexer_attn(...) (" + ", ".join(_ATTN) + ")",
-                    preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism, "
-                                   "serving FA3 at one split (engine.sparse_mla's pin, VERITY_SPARSE_MLA_NUM_SPLITS=1)",
+                    preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
+                                   "the workload either declares the one-split pin or leaves FA3's split heuristic at its default",
                                    "the call takes the top-k MQA path: no dense-MHA prefill backend, sparse_mla_force_mqa, or T at most the "
                                    "metadata builder's decode threshold at the observed query heads per rank (DECODE_THRESHOLD)",
                                    "the target's compute capability is 9.0 (FA3)",
@@ -398,7 +399,7 @@ class DsaIndexerAttnRule(StateRule):
                                    "index_k_scale [T] f32) or all None, then the last indexer layer selected for these positions",
                                    "every row has at most TOPK keys (the top-k kernels' short-row shortcut)",
                                    "layer_name static and written from one module; not under registered_values"),
-                    evidence_domain="structural; numerics: DsaMqaLogits_v3, DsaTopKShortRow_v1, SparseMla_v1 (registry.dsa, registry.sparse_mla)")
+                    evidence_domain="structural; numerics: DsaMqaLogits_v3, DsaTopKShortRow_v1, SparseMla_v1 or SparseMlaSplit_v1")
 
     def targets(self):
         return {iface.dsa_indexer_attn.default}
