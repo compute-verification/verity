@@ -5,12 +5,13 @@
 # capture when $AR_RUN names it). Reads the Commit's records from $SWEEP_DIR/commit-probe.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 stamp profile | tee "$O/profile.log"
-"$PY" - "$CMAP" "$SWEEP_DIR/commit-probe" "$SWEEP_DIR/ar-capture" "$O" "${COMMIT_RUN:-}" "${AR_RUN:-}" <<'EOF' 2>&1 | tee -a "$O/profile.log"
+"$PY" - "$CMAP" "$SWEEP_DIR/commit-probe" "$SWEEP_DIR/ar-capture" "$SWEEP_DIR/bf16-gemm-capture" "$O" "${COMMIT_RUN:-}" "${AR_RUN:-}" \
+  "${BF16_RUN:-}" <<'EOF' 2>&1 | tee -a "$O/profile.log"
 import json, os, sys
 from collections import defaultdict
 from pathlib import Path
 
-cmap_path, commit_dir, ar_dir, out, commit_run, ar_run = sys.argv[1:7]
+cmap_path, commit_dir, ar_dir, bf16_dir, out, commit_run, ar_run, bf16_run = sys.argv[1:9]
 cmap = json.loads(Path(cmap_path).read_text())
 
 H200 = {
@@ -43,12 +44,23 @@ IN_TREE = {"sigmoid-router": ["MoeRouterSigmoidBias_v1"],
            "fp8-moe-triton": ["MoeExpertFp8BlockGemm_v1", "MoeExpertFp8BlockGemmW_v1", "MoeExpertFp8BlockCoordinate_v1",
                               "MoeExpertFp8BlockCoordinateW_v1"]}
 
-ar = None
-rec = Path(ar_dir) / "glm53_tp8_allreduce_capture.json"
-if rec.is_file():
+def capture(rec: Path, run: str, phases: tuple[str, ...] | None = None) -> dict | None:
+    """A capture's record, or its cases of `phases` only ("<phase>/..." keys): GO when every one of them is."""
+    if not rec.is_file():
+        return None
     doc = json.loads(rec.read_text())
-    ar = {"run": ar_run or None, "verdict": "GO" if doc.get("ok") else "NO-GO", "digest": doc.get("digest"), "record": str(rec),
-          "no_go_cases": [k for k, c in (doc.get("cases") or {}).items() if not c.get("ok")]}
+    cases = {k: c for k, c in (doc.get("cases") or {}).items() if phases is None or k.split("/")[0] in phases}
+    ok = bool(doc.get("ok")) if phases is None else bool(cases) and all(c.get("ok") for c in cases.values())
+    return {"run": run or None, "verdict": "GO" if ok else "NO-GO", "digest": doc.get("digest"), "record": str(rec), "cases": len(cases),
+            "no_go_cases": sorted(k for k, c in cases.items() if not c.get("ok")), "errors": sorted(doc.get("errors") or [])}
+
+
+ar = capture(Path(ar_dir) / "glm53_tp8_allreduce_capture.json", ar_run)
+bf16_rec = Path(bf16_dir) / "glm53_bf16_gemm_capture.json"
+BF16 = {"router-gemm": (capture(bf16_rec, bf16_run, ("router",)), "GateLinear at M <= 16 on cuteDSL ll_bf16_gemm as served, past 16 "
+                        "cuBLAS under the split-K-off switch"),
+        "cublas-bf16-gemm": (capture(bf16_rec, bf16_run, ("linear", "bmm")), "lm_head shard, wk_weights_proj and the absorbs under the "
+                             "split-K-off cuBLAS switch, which this Commit's engine does not set")}
 
 taps = defaultdict(list)
 for t in cmap["taps"]:
@@ -74,11 +86,15 @@ for name, prog in cmap["programs"].items():
     has_program = (prog.get("status") in ("exists", "port") and bool(defs)) or name in IN_TREE
     h = H200.get(name)
     if name in AR_FAMILIES:
-        h = ({"verdict": ar["verdict"], "runs": [ar["run"]] if ar["run"] else [], "digest": ar["digest"], "no_go_cases": ar["no_go_cases"],
-              "what": "glm53_tp8_allreduce_capture_gpu.py at cursor/glm53-tp8-allreduce-3d06 against that branch's Programs (not merged "
-                      "into this tree); its all-reduce phase is vLLM's custom all-reduce, which this Commit's engine disables "
-                      "(disable_custom_all_reduce), so only its fused phase describes the served decoder layers"} if ar else
+        h = (ar | {"runs": [ar["run"]] if ar["run"] else [],
+                   "what": "glm53_tp8_allreduce_capture_gpu.py at cursor/glm53-tp8-allreduce-3d06 against that branch's Programs (not "
+                           "merged into this tree); its all-reduce phase is vLLM's custom all-reduce, which this Commit's engine disables "
+                           "(disable_custom_all_reduce), so only its fused phase describes the served decoder layers"} if ar else
              {"verdict": "not captured", "runs": [], "what": "Programs on cursor/glm53-tp8-allreduce-3d06, not merged"})
+    if name in BF16 and BF16[name][0]:
+        c, what = BF16[name]
+        h = c | {"runs": [c["run"]] if c["run"] else [], "what": f"glm53_bf16_gemm_capture_gpu.py at cursor/glm53-tp8-allreduce-3d06 "
+                 f"(cursor/glm53-committed-ops-8c79 merged) against that branch's Programs, not merged into this tree: {what}"}
     fams.append({"family": name, "map_status": prog.get("status"), "definitions": defs, "has_program_in_tree": has_program,
                  "committed": [t["id"] for t in ts if t["binder"]], "unbound_by_design": [t["id"] for t in ts if not t["binder"]],
                  "checked_in_commit": False, "h200": h or {"verdict": "no H200 capture in this campaign", "runs": []}})
@@ -101,6 +117,7 @@ print(f"[profile] integrity profile: none ({doc['why']})")
 if commit:
     print(f"[profile] commit (not of record): tp_run_roots={commit['tp_run_roots']} pass={commit['pass']} commit_pass={commit['commit_pass']} "
           f"bytes_bound(rank 0..)={commit['bytes_bound_total']}")
+    print(f"[profile] cross-rank collectives: {json.dumps((commit['cross_rank_collectives'] or {}).get('by_family'))}")
 groups = defaultdict(list)
 for f in fams:
     key = ("program + H200 GO" if f["has_program_in_tree"] and f["h200"]["verdict"] == "GO" else
