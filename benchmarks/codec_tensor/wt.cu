@@ -2107,8 +2107,8 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
 // least the units a task spans (no warp holds two units of one task, which would deadlock on `loaded`), and at least
 // ceil(32 D / TW) stages (a decoder's tasks advance by at most that from one unit to its next, so the stage's previous
 // task is one it held, or an earlier one, whose relay came first). One MMA warp keeps `decoded` and `empty` in order.
-// The barrier orders generic accesses only, so the MMA warp arrives on `empty` once its MMAs have consumed the stage's
-// loads: an earlier arrive lets the next bulk copy (async proxy) overwrite the stage under loads still in flight.
+// The barrier orders generic accesses only, so the MMA warp arrives on `empty` behind a proxy fence after its last load
+// of the stage: without it the next bulk copy (async proxy) may overwrite the stage under loads still in flight.
 //
 // An SM's registers fit FUSED_WARPS warps at the decode's register count (a sub-partition holds 16K: four warps at
 // 128 registers, three at 168, two at 255; 9 to 11 warps put three on one). The decode holds the word, its square and
@@ -2719,19 +2719,23 @@ __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
           for (int tt = 0; tt < WH; ++tt) o[(h + tt) * LANES] = wv[tt];
         }
 #endif
+        if (h + WH == TASK_TILES) {
+          // The stage's next task may be in the tile whose buffer the job still hashes.
+          if constexpr (SKK > 0 && SKW == 0)
+            if (J.blk >= 0 && skt * (J.tile + SK_BUFS) <= i + stages) sk_finish<SKK>(J, lane, sk);
+          // `empty` hands the stage to the next bulk copy (the async proxy) once its last fragments are loaded, ahead
+          // of their MMAs, as gemm_ws_kernel's: only a proxy fence orders this warp's shared loads before it, as ptxas
+          // issues the arrive straight after the last load. The decoders' and the sketch warps' reads precede the
+          // decoders' stores, which the decoders fence.
+          asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
+          mbar_arrive(empty + s);
+        }
 #pragma unroll
         for (int tt = 0; tt < WH; ++tt) {
           const u32 a[4] = {wv[tt].x, wv[tt].y, wv[tt].z, wv[tt].w};
           mma_tile<NB8>(acc, a, xs, h + tt, g, tq);
         }
       }
-      if constexpr (SKK > 0 && SKW == 0)
-        if (J.blk >= 0 && skt * (J.tile + SK_BUFS) <= i + stages) sk_finish<SKK>(J, lane, sk);
-      // `empty` hands the stage to the next bulk copy (the async proxy): only a proxy fence orders this warp's shared
-      // loads before it, as ptxas issues the arrive straight after the last fragment's load. The decoders' and the
-      // sketch warps' reads precede the decoders' stores, which the decoders fence.
-      asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
-      mbar_arrive(empty + s);
       store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
       if constexpr (SKK > 0 && SKW == 0)
         while (hashed * skt < ntasks && i == min(skt * (hashed + 1), ntasks - 1)) {
