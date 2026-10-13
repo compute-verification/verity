@@ -6,6 +6,7 @@ Definitions (the bodies are `dsa`'s, written once over `dsa.Ops`), so each one's
     DsaIndexerKRow_v2{D,ROPE,EPS}, DsaIndexerQHead_v2{D,ROPE,NH}, DsaIndexerQ_v2{H,D,ROPE}
     DsaMqaLogit_v2{H,D}, DsaMqaLogits_v2{N,H,D}
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
+    DsaTopKSelection_v2{TOPK,N}                         traced at its statics: a decoder per slot, unsigned keys
 
 The callees are core's Boolean FP32 pieces (`verity.ml.circuits.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
@@ -17,7 +18,9 @@ the scale every quantized element divides by, a row's mean) is computed once (`Q
 """
 from __future__ import annotations
 
+import operator
 from collections.abc import Callable, Sequence
+from functools import reduce
 
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits import boolean as BL
@@ -31,7 +34,7 @@ from verity.ml.circuits.silicon import fp as FP
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import mufu as BM
 from verity.ml.circuits.ops.boolean import scalar as SC
-from verity.ml.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.ml.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, compress_columns, const_bits, mux, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition
 from verity_vllm.program.registry import dsa as D
 from verity_vllm.program.registry.boolean_attention import _Bits
@@ -222,5 +225,55 @@ def _topk(S):
 DsaTopKShortRowV2 = EW.specialized("DsaTopKShortRow", 2, ["TOPK"], _topk, lambda S: ((("len", I32),), Array(S.TOPK, I32)),
                                    doc=_topk.__doc__, word=lambda b: bind(D.DsaTopKShortRow, TOPK=b["TOPK"]))
 
+
+def decode(C, bits: list, n: int) -> list:
+    """The first n lines of the decoder of the unsigned index ``bits`` (n <= 2^len(bits)): line j is `bits == j`, one AND of a line
+    of the low half's decoder and one of the high half's."""
+    if len(bits) == 1:
+        return [NOT(bits[0]), bits[0]][:n]
+    h = len(bits) // 2
+    lo, hi = decode(C, bits[:h], min(n, 1 << h)), decode(C, bits[h:], -(-n >> h))
+    return [C.AND(hi[j >> h], lo[j & ((1 << h) - 1)]) for j in range(n)]
+
+
+def _selection(S):
+    """`DsaTopKSelection_v1{TOPK, N}` traced.  `len <= j` is `_topk`'s comparison; keys compare unsigned as `order_key ^ 2^31`
+    (`convert_to_uint32_v2`: bit 31 the sign's NOT, bit b < 31 x_b ^ x_31), the sentinels INT_MAX and INT_MIN all ones and all
+    zeros; `idx < len` unsigned is the range check (len > TOPK > 0 wherever it is read).  Slot i's membership lines decode its low
+    ceil(log2 N) bits (an index in range has no other) and position j's membership is their XOR over the slots: with every index
+    in range, TOPK odd positions means TOPK distinct indices, as TOPK members by the OR does, so the bit is v1's.  The count is
+    `compress_columns`."""
+    D.check_selection_statics(S.TOPK, S.N)
+    T, N = S.TOPK, S.N
+    p = (N - 1).bit_length()
+
+    def le_u(C, a, b):
+        return NOT(sub(C, b, a, 32)[1])
+
+    def build(C, *els):
+        x, n, idx = els[:N], els[N], els[N + 1:]
+        flip = list(n[:31]) + [NOT(n[31])]
+        le = [NOT(sub(C, const_bits(j ^ (1 << 31), 32), flip, 32)[1]) for j in range(N + 1)]
+        short = and_reduce(C, [b if (i >> k) & 1 else NOT(b ^ le[i]) for i in range(T) for k, b in enumerate(idx[i])])
+        inside = and_reduce(C, [sub(C, idx[i], n, 32)[1] for i in range(T)])
+        lines = [decode(C, list(idx[i][:p]), N) for i in range(T)]
+        member = [reduce(operator.xor, (lines[i][j] for i in range(T))) for j in range(N)]
+        count = compress_columns(C, [member])
+        tight = and_reduce(C, [c if (T >> k) & 1 else NOT(c) for k, c in enumerate(count)])
+        key = [[b ^ v[31] for b in v[:31]] + [NOT(v[31])] for v in x]
+        least = D.pairwise([mux(C, member[j], key[j], const_bits(D.M32, 32)) for j in range(N)],
+                           lambda a, b: mux(C, le_u(C, a, b), a, b))
+        most = D.pairwise([mux(C, OR(C, member[j], le[j]), const_bits(0, 32), key[j]) for j in range(N)],
+                          lambda a, b: mux(C, le_u(C, a, b), b, a))
+        long_ok = and_reduce(C, [inside, tight, le_u(C, most, least), le[N]])
+        return [OR(C, C.AND(le[T], short), C.AND(NOT(le[T]), long_ok))]
+    return build
+
+
+DsaTopKSelectionV2 = EW.specialized(
+    "DsaTopKSelection", 2, ["TOPK", "N"], _selection,
+    lambda S: ((("logits", Array(S.N, F32)), ("len", I32), ("idx", Array(S.TOPK, I32))), BIT),
+    doc=_selection.__doc__, word=lambda b: bind(D.DsaTopKSelection, TOPK=b["TOPK"], N=b["N"]))
+
 BOOLEAN_DSA = [U32AndV2, I32SubV2, I32ToF32V2, F32CeilFtzV2, DsaUe8m0ScaleV2, DsaUe8m0QuantV2, DsaIndexerKRowV2, DsaIndexerQHeadV2,
-               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaTopKShortRowV2]
+               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaTopKShortRowV2, DsaTopKSelectionV2]

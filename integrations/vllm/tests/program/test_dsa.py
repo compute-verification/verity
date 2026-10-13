@@ -422,6 +422,124 @@ def test_short_row_topk(TOPK: int) -> None:
         assert _flat(evaluate(fn, n)) == [i if i < signed else M32 for i in range(TOPK)], n
 
 
+def _top(words: np.ndarray, n: int, T: int, rng) -> list[int]:
+    """A top-T set of words[:n] under the kernels' order, in a random order."""
+    return [int(i) for i in rng.permutation(np.argsort(-D.order_keys(words[:n]), kind="stable")[:T])]
+
+
+def _selection_cases(T: int, N: int, seed: int) -> tuple[list, list[bool]]:
+    """(words, len, idx) cases and whether each is a selection: the shortcut's words and near misses at lengths up to TOPK
+    (negative included); past it a random row's top-T set in any order, the same with a duplicate, an index at len, -1, past N
+    or 2^31, a key below an unselected one in, a row of equal words (any T distinct; a duplicate, or an index past the row or
+    equal to a free position's low bits, fails though no key tells), +0 taken over -0 and not, +NaN on top and -NaN at the
+    bottom; len > N."""
+    rng = np.random.default_rng(seed)
+    cases, want = [], []
+
+    def add(words, n, idx, ok):
+        cases.append((np.asarray(words, np.uint32), n & M32, [i & M32 for i in idx]))
+        want.append(ok)
+
+    rnd = lambda: rng.standard_normal(N).astype(np.float32).view(np.uint32)  # noqa: E731
+    for n in (0, 1, T - 1, T, -3, -(1 << 31)):
+        short = [i if i < n else -1 for i in range(T)]
+        add(rnd(), n, short, True)
+        add(rnd(), n, short[:-1] + [short[-1] + 1], False)
+        add(rnd(), n, list(reversed(short)), T == 1 or max(n, 0) <= 0)
+    for n in sorted({n for n in (T + 1, T + 2, N - 1, N) if T < n <= N}):
+        w = rnd()
+        top = _top(w, n, T, rng)
+        add(w, n, top, True)
+        add(w, n, sorted(top), True)
+        add(w, n, top[:-1] + [top[0]], T == 1)
+        for bad in (n, -1, N + 5, 1 << 31):
+            add(w, n, top[:-1] + [bad], False)
+        rest = [j for j in np.argsort(-D.order_keys(w[:n]), kind="stable") if j not in top]
+        add(w, n, top[:-1] + [int(rest[-1])], False)
+        add(w, n, [int(i) for i in rng.choice(n, T, replace=False)], None)
+        eq = np.full(N, D.f32_bits(1.5), np.uint32)
+        pick = [int(i) for i in rng.choice(n, T, replace=False)]
+        add(eq, n, pick, True)
+        add(eq, n, pick[:-1] + [pick[0]], T == 1)
+        free = next(j for j in range(n) if j not in pick)
+        for bad in (free | 1 << 31, free + (1 << 20), n, -1):
+            add(eq, n, pick[:-1] + [bad], False)
+        z = np.full(N, D.f32_bits(-1.0), np.uint32)
+        z[:T - 1] = D.f32_bits(1.0)
+        z[n - 1], z[n - 2] = 0, SIGN
+        add(z, n, list(range(T - 1)) + [n - 1], True)
+        add(z, n, list(range(T - 1)) + [n - 2], False)
+        nan = rnd()
+        nan[n - 1], nan[0] = 0x7FC00000, 0xFFC00000
+        top = _top(nan, n, T, rng)
+        add(nan, n, top, True)
+        assert n - 1 in top and 0 not in top
+    w = rnd()
+    add(w, N + 1, _top(w, N, T, rng), False)
+    add(w, (1 << 31) - 1, _top(w, N, T, rng), False)
+    return cases, want
+
+
+def _arrays(cases) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return (np.stack([c[0] for c in cases]), np.array([c[1] for c in cases], np.uint32),
+            np.array([c[2] for c in cases], np.uint32))
+
+
+@pytest.mark.parametrize("T, N", [(1, 2), (4, 9), (16, 64), (5, 37)])
+def test_topk_selection_against_its_twin(T: int, N: int) -> None:
+    """`DsaTopKSelection_v1` against the numpy twin `selection_ok` and the cases' own verdicts, and the IR oracle on a sample."""
+    from verity.ml.circuits import evaluation as E
+
+    fn = bind(D.DsaTopKSelection, TOPK=T, N=N)
+    cases, want = _selection_cases(T, N, T * 1000 + N)
+    got = np.asarray(E.evaluate_batch(fn, *_arrays(cases))).reshape(-1).tolist()
+    twin = [D.selection_ok(w, n, idx) for w, n, idx in cases]
+    assert got == [int(t) for t in twin]
+    assert all(t == ok for t, ok in zip(twin, want) if ok is not None)
+    for c in cases[::7]:
+        assert evaluate(fn, [int(v) for v in c[0]], c[1], c[2])[0] == D.selection_ok(*c)
+
+
+def test_topk_selection_twin_at_dsv4_width() -> None:
+    """The twin at top-1024 (DSV4's indexer) on a row of 4096 keys with 3000 tied at the threshold: any 1024 of the row's top set
+    pass, one key below the threshold swapped in fails."""
+    rng = np.random.default_rng(12)
+    w = np.full(4096, D.f32_bits(0.25), np.uint32)
+    w[rng.choice(4096, 1000, replace=False)] = D.f32_bits(-2.0)
+    w[3000:3100] = D.f32_bits(3.0)
+    tied = np.flatnonzero(w == D.f32_bits(0.25))
+    pick = list(range(3000, 3100)) + [int(i) for i in rng.choice(tied, 924, replace=False)]
+    assert D.selection_ok(w, 4096, rng.permutation(pick))
+    low = int(np.flatnonzero(w == D.f32_bits(-2.0))[0])
+    assert not D.selection_ok(w, 4096, pick[:-1] + [low])
+    assert not D.selection_ok(w, 4096, pick[:-1] + [pick[0]])
+
+
+@pytest.mark.parametrize("T, N", [(1, 2), (4, 9), (16, 64), (5, 37)])
+def test_boolean_topk_selection_is_its_word_view(T: int, N: int) -> None:
+    """`DsaTopKSelection_v2` bit for bit against v1 on the selection cases and on random words, lengths and indices; the switch
+    maps v1 to it."""
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.circuits.evaluation import bits as BS
+    from verity.ml.circuits.boolean import trace as TR
+    from verity_vllm.program import boolean as SW
+    from verity_vllm.program.registry import boolean_dsa as BD
+
+    v2 = bind(BD.DsaTopKSelectionV2, TOPK=T, N=N)
+    word = TR.word_of(v2)
+    assert word.id == bind(D.DsaTopKSelection, TOPK=T, N=N).id
+    assert SW.boolean_version(word).id == v2.id
+    cases, _ = _selection_cases(T, N, T * 1000 + N + 1)
+    rng = np.random.default_rng(N)
+    m = 256
+    noise = (rng.integers(0, 1 << 32, (m, N), dtype=np.uint64).astype(np.uint32),
+             rng.integers(-2, N + 3, m).astype(np.int64).astype(np.uint32),
+             rng.integers(-1, N + 1, (m, T)).astype(np.int64).astype(np.uint32))
+    for args in (_arrays(cases), noise):
+        got = np.asarray(BS.evaluate_words(v2, *args)).reshape(-1)
+        assert np.array_equal(got, np.asarray(E.evaluate_batch(word, *args)).reshape(-1))
+
+
 # --- vLLM's torch references ---------------------------------------------------------------------------------------------------
 
 torch = pytest.importorskip("torch")

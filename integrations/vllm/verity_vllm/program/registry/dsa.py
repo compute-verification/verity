@@ -16,10 +16,29 @@ The indexer's per-token work (`deepseek_v32/attention.py`, `model_executor/layer
 4. DeepGEMM `fp8_mqa_logits` (prefill, `sm90_fp8_mqa_logits.cuh:225-317`) or `fp8_paged_mqa_logits` (decode,
    `sm90_fp8_paged_mqa_logits.cuh:270-355`), `clean_logits=False` (sparse_attn_indexer.py:496-503, 600-611): one epilogue for both,
    per (query token, key): `DsaMqaLogit_v1`, a token's keys `DsaMqaLogits_v1`.
-5. The top-2048 selection: prefill `ops.top_k_per_row_prefill` (`topKPerRowPrefill<512, false>`, sampler.cu:846-878), decode
-   `cooperative_topk` on H200 (num_rows <= 64, sparse_attn_indexer.py:615-642; else `persistent_topk`).  A row of at most 2048 keys
-   takes each kernel's shortcut (sampler.cu:388-412, cooperative_topk.cuh:494-501): `DsaTopKShortRow_v1`.  A longer row is a radix
-   selection whose output order (ties included) the kernels leave to their atomics; no Definition here states it.
+5. The top-2048 selection: prefill `ops.top_k_per_row_prefill` (`topKPerRowPrefill<512, false>` on the first 12288 rows, `<512,
+   true>` past them, sampler.cu:846-878), decode `cooperative_topk` on H200 (num_rows <= 64, sparse_attn_indexer.py:615-642; else
+   `persistent_topk`, its FilteredTopK past 32 rows, topk.cu:39).  A row of at most 2048 keys takes each kernel's shortcut
+   (sampler.cu:388-412, cooperative_topk.cuh:494-501): `DsaTopKShortRow_v1`.  A longer row is a radix selection whose output order,
+   and choice among the words tied at its threshold, the kernels leave to their atomics (sampler.cu:269, 297;
+   topk_histogram_4096.cuh:470, persistent_topk.cuh:291), so it is no function of the row: `DsaTopKSelection_v1` takes the indices
+   the kernel wrote and states that they are a top-2048 set of the row under the kernels' order (below).
+
+The top-k order.  Every kernel ranks a word by `convert_to_uint32_v2` (topk_histogram_4096.cuh:71-74, persistent_topk.cuh:50-53;
+sampler.cu:48-51's `convert_to_uint32` is its complement): x | 2^31 for a clear sign, ~x for a set one, so -NaN < -inf < ... < -0 <
++0 < ... < +inf < +NaN; as a signed word that is `order_key`, x or 0x7FFFFFFF - x.  The coarse passes bin `__float2half_rn(x)` or the
+key's top bits, monotone in the order for every word but a NaN.  So on a row without a NaN every kernel writes a top-k set, except
+where a buffer overflows (then an index may be missing, stale or past the row, and `DsaTopKSelection_v1` is 0):
+
+    prefill        none: a threshold bin of at most 2048 items is sorted (sampler.cu:341), the last radix step's ties are equal words
+    cooperative    up to 16384 keys (`histogram_4096_topk<TOPK,12>`, cooperative_topk.cuh:504-511): more than TOPK words tied in the
+                   threshold bin when it needs tie handling (topk_histogram_4096.cuh:447, 470, 485); longer (`large_topk`): more
+                   than 1024 ties in one block's share (cooperative_topk.cuh:372, 394-396), or above + tied > TOPK with more than
+                   max(TOPK, 1024) tied (445, 455, 462, 472)
+    persistent     up to 8192 keys (`histogram_2048_topk`): more than 3708 words in the threshold bin (persistent_topk.cuh:171, 294),
+                   or a threshold at half's -inf bin, where the 4-word load's padding counts as -inf (97-104, 266-268); up to
+                   32768 (`histogram_256_topk`): more than 4096 (512, 582); longer: the exact radix (849-854)
+    FilteredTopK   up to 32768 keys: `histogram_4096_topk<TOPK,12,8>` as above; longer: more than 16384 candidates (1190, 1267)
 
 The ue8m0 quantisation (`_fp8_ue8m0_quantize`, kernels.py:50-60), in the PTX of both Triton kernels:
 
@@ -53,6 +72,7 @@ Registered functions (all `Name_v1`):
   DsaMqaLogit{H,D}                          (q: H x D e4m3, w: H f32, k: D e4m3, ks: f32) -> f32: one logit
   DsaMqaLogits{N,H,D}                       (q, w, k: N x D e4m3, ks: N f32) -> N f32: one query token over N keys
   DsaTopKShortRow{TOPK}                     (len: i32) -> TOPK i32
+  DsaTopKSelection{TOPK,N}                  (logits: N f32, len: i32, idx: TOPK i32) -> bit: idx a selection of the row
 
 `cs` is the rotary cache row at the token's position, [cos 0..ROPE/2-1 | sin 0..ROPE/2-1] bf16 (`get_rope` builds it in the default
 dtype, rotary_embedding/base.py:59-63).  `ks` is the key's f32 scale from its cache slot.
@@ -65,10 +85,10 @@ from verity.ml.circuits.defs import bind, composite, primitive
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
-from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
+from verity.ml.circuits.ops.scalar import BitAnd, BitNot, BitOr, F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Eq, I32Le, SelectI32
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.fp8 import E4M3
-from verity_vllm.program.registry.prims import BF16, F32, I32, bits_of
+from verity_vllm.program.registry.prims import BF16, BIT, F32, I32, bits_of
 from verity_vllm.program.registry.topp_word_gates import I32ToF32
 
 M32 = 0xFFFFFFFF
@@ -79,6 +99,9 @@ _LOGIT_CONF = ("model-untested: read from the two DeepGEMM epilogues the module 
                "`sum += relu * w` is an FFMA); tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
 _TOPK_CONF = ("model-untested: read from vLLM d9105ea80 sampler.cu:388-412 and cooperative_topk.cuh:494-501; "
               "tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
+_SELECTION_CONF = ("model-untested: read from vLLM d9105ea80's top-k kernels (sampler.cu, cooperative_topk.cuh, "
+                   "topk_histogram_4096.cuh, persistent_topk.cuh; the module docstring, step 5); "
+                   "tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
 
 #: `__nv_log2f`'s constants as the PTX has them: the exponent offset (-bits(sqrt(1/2)) mod 2^32), the exponent mask, 2^-23, the
 #: polynomial's coefficients in Horner order (the first two are the first FMA's), and log2(e)
@@ -152,7 +175,7 @@ class Ops:
 WORD = dict(cvt=P.Bf16ToF32, add=P.F32Add, mul=P.F32Mul, fma=P.F32Fma, fma_ftz=P.F32FmaFtz, div=P.F32Div, rcp=P.DivFullRcp,
             scale_a=P.DivFullScaleA, rsqrt=P.RsqrtApprox, ex2=P.MufuEx2Ftz, fabs=F32Fabs, fmaxf=F32Fmaxf, e4m3=F32ToE4m3Sat,
             iadd=I32Add, iand=U32And, isub=I32Sub, i2f=I32ToF32, ceil=F32CeilFtz, ile=I32Le, isel=SelectI32,
-            dot=HopperE4m3QgmmaDot32)
+            dot=HopperE4m3QgmmaDot32, ieq=I32Eq, band=BitAnd, bnot=BitNot, bor=BitOr)
 
 
 def word_ops(B) -> Ops:
@@ -386,9 +409,90 @@ def DsaTopKShortRow(B, S, n):
     """The selection of a row of at most TOPK keys: slot i holds i when i < len, else -1 (signed; a length of 0 or less is all -1).
     Prefill (`topKPerRowPrefill`, sampler.cu:388-412) has len = rowEnd - rowStart and writes indices from the row's start; decode
     (`cooperative_topk`, cooperative_topk.cuh:494-501) clamps a negative length at 0.  A row of more than TOPK keys is the radix
-    selection, which this function does not state."""
+    selection, whose indices `DsaTopKSelection_v1` checks."""
     return Coll(Array(S.TOPK, I32), concat([w.refs for w in topk_short(word_ops(B), S.TOPK, n)]))
 
 
+INT_MAX, INT_MIN = 0x7FFFFFFF, 0x80000000
+
+
+def check_selection_statics(TOPK: int, N: int) -> None:
+    if not 0 < TOPK < N:
+        raise ValueError(f"DsaTopKSelection: a row of N > TOPK > 0 keys (TOPK={TOPK}, N={N})")
+
+
+def pairwise(vals: list, op) -> object:
+    """``op`` over ``vals`` as a balanced tree: neighbours meet level by level, an odd one out passing up."""
+    while len(vals) > 1:
+        vals = [op(vals[t], vals[t + 1]) for t in range(0, len(vals) - 1, 2)] + vals[len(vals) - len(vals) % 2:]
+    return vals[0]
+
+
+def order_key(o: Ops, x):
+    """The top-k kernels' order on the f32 word x as a signed word (the module docstring): x when its sign is clear, else
+    0x7FFFFFFF - x."""
+    return o.isel(o.ile(o.word(0), x), x, o.isub(o.word(INT_MAX), x))
+
+
+def topk_selection(o: Ops, TOPK: int, N: int, logits, n, idx):
+    """`DsaTopKSelection_v1`'s bit."""
+    check_selection_statics(TOPK, N)
+    zero, one = o.word(0), o.word(1)
+    le = [o.ile(n, o.word(j)) for j in range(N + 1)]
+    short = pairwise([o.ieq(idx[i], o.isel(le[i], o.word(M32), o.word(i))) for i in range(TOPK)], o.band)
+    inside = pairwise([o.band(o.ile(zero, idx[i]), o.bnot(o.ile(n, idx[i]))) for i in range(TOPK)], o.band)
+    member = [pairwise([o.ieq(idx[i], o.word(j)) for i in range(TOPK)], o.bor) for j in range(N)]
+    count = pairwise([o.isel(m, one, zero) for m in member], o.iadd)
+    key = [order_key(o, logits[j]) for j in range(N)]
+    least = pairwise([o.isel(member[j], key[j], o.word(INT_MAX)) for j in range(N)], lambda a, b: o.isel(o.ile(a, b), a, b))
+    most = pairwise([o.isel(o.bor(member[j], le[j]), o.word(INT_MIN), key[j]) for j in range(N)],
+                    lambda a, b: o.isel(o.ile(a, b), b, a))
+    long_ok = o.band(o.band(inside, o.ieq(count, o.word(TOPK))), o.band(o.ile(most, least), le[N]))
+    return o.bor(o.band(le[TOPK], short), o.band(o.bnot(le[TOPK]), long_ok))
+
+
+@composite("DsaTopKSelection", 1, ["TOPK", "N"],
+           lambda S: ((("logits", Array(S.N, F32)), ("len", I32), ("idx", Array(S.TOPK, I32))), BIT), conformance=_SELECTION_CONF)
+def DsaTopKSelection(B, S, logits, n, idx):
+    """Whether the TOPK indices ``idx`` are a selection the top-k kernels may write for a row of ``len`` keys, logits[:len] (the
+    module docstring, step 5).  For len <= TOPK they are the shortcut's words, `DsaTopKShortRow_v1`'s.  For TOPK < len <= N they
+    are TOPK distinct indices in [0, len), in any order, the least key among them (`order_key`, signed `I32Le`) at least the
+    greatest key of the rest of the row: position j is a member when some idx[i] == j, the members number TOPK (with every index
+    in range, so the indices are distinct), and the members' least key (INT_MAX when there is none) is at least the greatest key of
+    the non-members below len (INT_MIN when there is none).  For len > N, never.  Which of the keys tied at the threshold the
+    kernels take, and in what order they write the selection, follows their atomics, so the indices are the kernel's own and this
+    function checks them."""
+    return topk_selection(word_ops(B), S.TOPK, S.N, logits, n, idx)
+
+
+def order_keys(words) -> np.ndarray:
+    """`order_key` on an array of f32 words (float32, or their bits as integers), as int64."""
+    w = np.asarray(words)
+    w = (w.view(np.uint32) if w.dtype == np.float32 else w.astype(np.int64) & M32).astype(np.int64)
+    return np.where(w <= INT_MAX, w, INT_MAX - w)
+
+
+def _signed(v) -> np.ndarray:
+    v = np.asarray(v).astype(np.int64) & M32
+    return np.where(v > INT_MAX, v - (1 << 32), v)
+
+
+def selection_ok(words, n: int, idx) -> bool:
+    """`DsaTopKSelection_v1{TOPK = len(idx), N = len(words)}` in numpy: ``words`` the row's N f32 words, ``n`` its length, ``idx``
+    the TOPK indices (int32, or their bits)."""
+    idx, n = _signed(idx).reshape(-1), int(_signed(n))
+    TOPK, N = idx.size, len(words)
+    check_selection_statics(TOPK, N)
+    j = np.arange(TOPK)
+    if n <= TOPK:
+        return bool(np.array_equal(idx, np.where(j < n, j, -1)))
+    if n > N or not ((idx >= 0) & (idx < n)).all() or np.unique(idx).size != TOPK:
+        return False
+    key = order_keys(np.asarray(words)[:n])
+    mask = np.zeros(n, dtype=bool)
+    mask[idx] = True
+    return bool(key[mask].min() >= key[~mask].max())
+
+
 DSA_COMPOSITES = [DsaUe8m0Scale, DsaUe8m0Quant, DsaIndexerKRow, DsaIndexerQHead, DsaIndexerQ, DsaMqaLogit, DsaMqaLogits,
-                  DsaTopKShortRow]
+                  DsaTopKShortRow, DsaTopKSelection]
