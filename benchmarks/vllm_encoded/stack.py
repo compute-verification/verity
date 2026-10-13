@@ -24,7 +24,6 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import hashlib
-import json
 import random
 import sys
 import time
@@ -106,7 +105,7 @@ class Stack:
         top = max(self.nvec.values())
         nl = -(-top // SR.rb.PER_LEAF)
         width = 1 << max(0, (nl - 1).bit_length())
-        self.tags = torch.zeros(top * self.wt.tag_bytes, dtype=torch.uint8, device="cuda")
+        self.tags = torch.zeros(top * self.wt.tag_bytes // 8, dtype=torch.int64, device="cuda")   # not uint8, which the plaintext scan counts
         self.dig = torch.zeros((width, 8), dtype=torch.int64, device="cuda")
         self.up = torch.zeros((max(width - 1, 1), 8), dtype=torch.int64, device="cuda")
 
@@ -223,7 +222,7 @@ class StackLinear:
     def own_tags(self, plan: tuple) -> torch.Tensor | None:
         if not self.st.encoded:
             return None
-        return torch.empty(max(plan[3], 1) * self.st.wt.tag_bytes, dtype=torch.uint8, device="cuda")
+        return torch.empty(max(plan[3], 1) * self.st.wt.tag_bytes // 8, dtype=torch.int64, device="cuda")
 
     def reduce(self, part: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
         m = part.shape[1]
@@ -567,12 +566,12 @@ def gate_step(st: Stack, log) -> dict:
             del vs
             at = lin.at[m]
             want = b"".join(BW.root_words(y) for y in SR.receipts_of(seed, sk, wt.jbase + at))
-            row["receipts_ok"] &= BW.host_bytes(st.tags[wt.tag_bytes * at:wt.tag_bytes * (at + first)]) == want
+            row["receipts_ok"] &= BW.host_bytes(st.tags.view(torch.uint8)[wt.tag_bytes * at:wt.tag_bytes * (at + first)]) == want
             row["linears_checked"] += 1
         if m in GATE_TREE:
             n = st.nvec[m]
             plan = SR.rb.Plan.whole(n)
-            ys = st.tags.view(torch.int64)[:8 * n].view(n, 8).cpu().numpy()
+            ys = st.tags[:8 * n].view(n, 8).cpu().numpy()
             receipts = [RD.digest(y) for y in ys]
             leaves = -(-n // SR.rb.PER_LEAF)
             tree = SR.rb.tree(BW.RECEIPT_SEED, plan, receipts,
@@ -674,7 +673,7 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
         "scratch_bytes": {"prefill_linear": st.scratch.numel() * 4 if st.scratch is not None else 0,
                           "lm_head": lm.scratch.numel() * 2 if lm.scratch is not None else 0,
                           "attention_partials": att.part.numel() * 4,
-                          "receipts": st.tags.numel() + 64 * (st.dig.shape[0] + st.up.shape[0])},
+                          "receipts": st.tags.numel() * 8 + 64 * (st.dig.shape[0] + st.up.shape[0])},
         "plaintext_scan": scan, "gates": gates, "selection": selection,
         "fp8_kernel": type(layers[0][1].quant_method.fp8_linear).__name__,
         "activation_quant": str(layers[0][1].quant_method.activation_quant_key),

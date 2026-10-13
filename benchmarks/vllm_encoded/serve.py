@@ -19,6 +19,12 @@ Arms:
             (ro-sketch-blake3/v0), and with
             ``--commit`` also each decode step's commit: the step's tags in one buffer, their leaves and the tree's
             root, after the step's last linear
+  pstack    the remote bandwidth audit's own kernels in their plain forms (`stack.py`): wt.cu's GEMM over plain fragments,
+            the BF16 lm_head as it is, paged.cu's attention and KV append over vLLM's own cache; stack's denominator
+  stack     the same kernels over codec words only (`stack.py`, ``--wt-lib`` a WT_RECEIPT build at a full-slot field,
+            ``--reader-lib``, ``--paged-lib``): every linear's fused decode + GEMM + sketch-sha512 receipts and each decode
+            step's receipt tree on the device, the lm_head's BF16 rows as words, the KV cache as words (encoded on append,
+            decoded in attention); greedy tokens and log-probs equal pstack's bit for bit (`compare.py`)
 
 Each arm runs the engine in compilation mode 0 with full CUDA graphs for decode, or with ``--compiled`` as vLLM serves by
 default (torch.compile, piecewise and full graphs; the fused linear is the opaque op ``ve_enc::linear``, and vLLM's activation
@@ -64,6 +70,7 @@ import torch
 
 CAPTURE = [1, 4, 8, 16, 32]
 ENCODED = ("enc", "wide", "tensor")
+STACK = ("pstack", "stack")
 SEED = hashlib.sha512(b"ra-vllm-encoded/key/v0").digest()[:32]
 TAG_SEED = hashlib.sha256(b"ra-vllm-encoded/tag-seed/v0").digest()
 TAG = "ro-blake3/v1"
@@ -110,10 +117,18 @@ class Install:
         self.record: dict = {}
         self.linears: list[tuple[str, K.Linear]] = []
         self.hooks = None
+        self.stack = None
 
     def __call__(self, runner) -> None:
         from verity_vllm.engine.hooks import Hooks
         args = self.args
+        if args.arm in STACK:
+            import stack as S
+            self.hooks = Hooks(tag="ra-vllm-encoded-stack")
+            r = S.install(runner, args, self.hooks, fp8_linears, unwrap, plaintext_scan, log)
+            self.stack, self.record = r["stack"], r["record"]
+            log("install", json.dumps({k: v for k, v in self.record.items() if k != "selection"}))
+            return
         t0 = time.perf_counter()
         model = unwrap(runner.model)
         layers = fp8_linears(model)
@@ -776,7 +791,7 @@ def steady(rec: list, b: int) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", choices=("stock", "plain", *ENCODED), required=True)
+    ap.add_argument("--arm", choices=("stock", "plain", *ENCODED, *STACK), required=True)
     ap.add_argument("--compiled", action="store_true",
                     help="vLLM's default compilation (torch.compile, piecewise and full CUDA graphs) instead of mode 0")
     ap.add_argument("--no-autotune", action="store_true",
@@ -787,6 +802,9 @@ def main() -> None:
     ap.add_argument("--lib", help="a build of ve.cu (every arm but stock; the wide and tensor arms reduce with it)")
     ap.add_argument("--wide-lib", help="a build of wide.cu (wide arm)")
     ap.add_argument("--tensor-lib", help="a build of codec_tensor's wt.cu (tensor arm)")
+    ap.add_argument("--wt-lib", help="pstack and stack arms: a WT_RECEIPT build of codec_tensor's wt.cu at a full-slot field")
+    ap.add_argument("--reader-lib", help="pstack and stack arms: a build of codec_tensor's reader.cu (the step's tree)")
+    ap.add_argument("--paged-lib", help="pstack and stack arms: a build of paged.cu at wt.cu's field")
     ap.add_argument("--tag", action="store_true",
                     help="wide and tensor arms: tag every block of the store the GEMMs read (ro-blake3/v1)")
     ap.add_argument("--sketch", type=int, default=0, choices=(0, 16, 64),
@@ -844,7 +862,14 @@ def main() -> None:
 
     hooks = Hooks(tag="ra-vllm-encoded")
     install = Install(args)
-    if args.arm != "stock":
+    if args.arm in STACK:
+        if not (args.lib and args.wt_lib and args.reader_lib and args.paged_lib):
+            ap.error("the pstack and stack arms take --lib, --wt-lib, --reader-lib and --paged-lib")
+        if args.kv_cache_dtype != "auto" or args.compiled or args.tag or args.sketch or args.commit or args.store:
+            ap.error("the pstack and stack arms run mode 0 over a bf16 cache, receipting as they go (no --compiled, "
+                     "--kv-cache-dtype, --tag, --sketch, --commit or --store)")
+        hook_runner(hooks, install)
+    elif args.arm != "stock":
         if not args.lib or (args.arm == "wide") != bool(args.wide_lib) or (args.arm == "tensor") != bool(args.tensor_lib):
             ap.error("--lib is required for every arm but stock, --wide-lib for the wide arm only and --tensor-lib for the "
                      "tensor arm only")
@@ -896,7 +921,7 @@ def main() -> None:
     props = torch.cuda.get_device_properties(0)
     result = {
         "arm": args.arm, "compiled": args.compiled, "autotune": args.compiled and not args.no_autotune,
-        "k": args.k if args.arm in ENCODED else 0,
+        "k": args.k if args.arm in (*ENCODED, "stack") else 0,
         "codec_tag": TAG if args.tag else None, "model": args.model,
         "revision": args.revision,
         "vllm": vllm.__version__, "torch": torch.__version__, "cuda": torch.version.cuda, "gpu": props.name,
@@ -957,6 +982,9 @@ def main() -> None:
             log("point", json.dumps(point))
     if args.arm == "stock" and args.native_trials:
         result["native_pass"] = native_pass(fp8_linears(model), batches, args.native_trials)
+    if install.stack is not None:
+        import stack as S
+        result["stack"] = S.summary(install.stack)
     if binder:
         result["store"] = binder.stats()
         binder.uninstall()
