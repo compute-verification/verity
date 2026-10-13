@@ -77,23 +77,24 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
   {dg : ByteArray → ByteArray} {N k Rw : ℕ}
   {stp : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-  {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-  {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+  {sh : Flock.Shape}
+  {rep : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+  {vals : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
 /-- **Hypothesis: the step source's rep steps are the values' weave** (`RepStepsWoven`'s first conjunct): rep `i`'s
-steps in `stp` are `unitWeave` of `vals Lb i` at the run's statement, schedule and extra claims. No tie reads it; it
-is the source's definition at the reps, 0 lines at `repsOfVals`. -/
+steps in `stp` are `unitWeave` of `vals R ω t Lb i` at the run's statement, schedule and extra claims. No tie reads
+it; it is the source's definition at the reps, 0 lines at `repsOfVals`. -/
 def RepWeaveAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
-    (sh : Flock.Shape) (rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
-    (vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals) : Prop :=
+    (sh : Flock.Shape) (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
+    (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals) : Prop :=
   AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
     (stp R ω t Lb).ts i = unitWeave ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch
       (extraClaims ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
-        (holoAt st hp).cls.mPts (stp R ω t Lb).pts).length sh (rep Lb i) (vals Lb i)
+        (holoAt st hp).cls.mPts (stp R ω t Lb).pts).length sh (rep R ω t Lb i) (vals R ω t Lb i)
 
 /-- **`RepStepsWoven` from the reps' parts**: the weave is the source's (`RepWeaveAt`), and the values' messages and
 coins are a tape along the shape by the rep's run on them (`tapeAlong_of_parts`). -/
@@ -107,14 +108,14 @@ theorem repStepsWoven_of_tie (hw : RepWeaveAt zs dg N k Rw stp sh rep vals)
 /-- **The step source with its reps read off the values**: `stp` with rep `i`'s steps the values' weave
 (`unitWeave`) and its openings at reps 0 and 1 the values' proof's rows (`openRow`); the rest is `stp`'s. -/
 def repsOfVals (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
-    (sh : Flock.Shape) (rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
-    (vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals) :
+    (sh : Flock.Shape) (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
+    (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals) :
     Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp) := fun R ω t Lb =>
   { stp R ω t Lb with
     ts := fun i => unitWeave ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch
       (extraClaims ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
-        (holoAt st hp).cls.mPts (stp R ω t Lb).pts).length sh (rep Lb i) (vals Lb i)
-    os := (fun q ℓ j => if h : q < 2 then openRow (vals Lb ⟨q, h⟩).p.ligerito (vals Lb ⟨q, h⟩).sch ℓ j
+        (holoAt st hp).cls.mPts (stp R ω t Lb).pts).length sh (rep R ω t Lb i) (vals R ω t Lb i)
+    os := (fun q ℓ j => if h : q < 2 then openRow (vals R ω t Lb ⟨q, h⟩).p.ligerito (vals R ω t Lb ⟨q, h⟩).sch ℓ j
       else (stp R ω t Lb).os.1 q ℓ j, (stp R ω t Lb).os.2) }
 
 theorem repWeaveAt_repsOfVals : RepWeaveAt zs dg N k Rw (repsOfVals stp sh rep vals) sh rep vals :=
@@ -122,14 +123,15 @@ theorem repWeaveAt_repsOfVals : RepWeaveAt zs dg N k Rw (repsOfVals stp sh rep v
 
 /-- **The openings at `repsOfVals`' reps are the values' proof's rows** (`StepsOfVals`' `hos`). -/
 theorem hos_repsOfVals : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
-    ∀ ℓ j, (repsOfVals stp sh rep vals R ω t Lb).os.1 i ℓ j = openRow (vals Lb i).p.ligerito (vals Lb i).sch ℓ j :=
+    ∀ ℓ j, (repsOfVals stp sh rep vals R ω t Lb).os.1 i ℓ j =
+      openRow (vals R ω t Lb i).p.ligerito (vals R ω t Lb i).sch ℓ j :=
   fun _ _ _ _ _ _ _ i _ _ _ _ => dite_eq_left i.isLt
 
 /-- **`StepsOfVals` at the source that reads its reps off the values**, from the reps' other parts and the cap. -/
 theorem stepsOfVals_repsOfVals (hpr : ProofOfVals zs dg N k Rw sh rep vals)
     (hs : SetupOfVals zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) sh rep vals)
     (hf : FramesOfVals zs dg N k Rw sh rep vals)
-    (hcap : AtRep zs dg N k Rw sh rep fun R ω t Lb i => capDig (vals Lb i).p.cap = (stp R ω t Lb).cap₀) :
+    (hcap : AtRep zs dg N k Rw sh rep fun R ω t Lb i => capDig (vals R ω t Lb i).p.cap = (stp R ω t Lb).cap₀) :
     StepsOfVals zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) sh rep vals :=
   stepsOfVals_of_woven (repStepsWoven_of_tie repWeaveAt_repsOfVals hpr hs hf) hcap hos_repsOfVals
 

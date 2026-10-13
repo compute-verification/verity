@@ -322,7 +322,7 @@ theorem algebraDecodes_of_decode (zs : Reg → L.Ω → List (Cm × I.Coin) → 
       ResZeroAt (zs R ω t R₂ (sess p)) (layers zs dg N k Rw R ω t R₂ τ (sess p)) (un p) (cp p) sh gs p
         (el (rep (layers zs dg N k Rw R ω t R₂ τ) r).w) (rep (layers zs dg N k Rw R ω t R₂ τ) r).rounds
         (rep (layers zs dg N k Rw R ω t R₂ τ) r).extras (rep (layers zs dg N k Rw R ω t R₂ τ) r).comb) :
-    AlgebraDecodes zs dg N k Rw sh rep := by
+    AlgebraDecodes zs dg N k Rw sh fun _ _ _ => rep := by
   intro R ω t R₂ τ o hacc r
   obtain ⟨v, info, kappa, hv, hvs⟩ := hvr R ω t R₂ τ o hacc r
   obtain ⟨hw, hc⟩ := hsz R ω t R₂ τ o hacc r

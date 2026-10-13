@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.Sparse.MsgsRead
 import Proofs.Flock.C3.Sparse.SessionAt
+import Proofs.Flock.C3.Reps.IoCols
 
 /-!
 # The sparse phases' messages from V*'s sessions
@@ -14,8 +15,8 @@ import Proofs.Flock.C3.Sparse.SessionAt
   `(u, q)` of the port `q` its key reads.
 * `SparseSessionsAt`, `SparseCols`, `SparseSel` (named): `SparseSessionAt`'s copy (`SparseCopyAt`) and `SparseSrcAt` at
   the map; every message column an input column a row reads (`OpenCols`' form; the support question rec-lean decides);
-  stage `c₀ + i · nS + roundOf m` selects, in `own (sess i)`, the port each column of message `m`'s words reads
-  (`skOf`'s form). `sparseMsgsOfLayers_of_sessions`: the three give `SparseMsgsOfLayers` at `rdOf`.
+  stage `c₀ + i · nS + roundOf m` reads, at unit `un i` of `sess i`, the port each column of message `m`'s words reads
+  (S's `SelPort`). `sparseMsgsOfLayers_of_sessions`: the three give `SparseMsgsOfLayers` at `rdOf`.
 -/
 
 namespace FlockC3.Sparse
@@ -31,6 +32,7 @@ open FlockVBridge.OfVStar (ReadCol rowCol)
 open FlockVBridge.AccChain (eq_of_bitOf)
 open FlockVBridge.Family (skOf maskOf mem_skOf_inl bitAt IoColAt bitAt_of_regBit ioColAt_of_readCol)
 open FlockVBridge.Sparse (phaseMsgs vtTape msgTape msg2 msg3 uOf nR degSum tw wPre wV2 wSc wU wVt wClaim nw)
+open FlockC3.Reps (SelPort)
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -179,16 +181,15 @@ def SparseCols (mp : List (String × ℕ)) (sess : Fin 2 → Fin S) : Prop :=
   ∀ i : Fin 2, ∀ q < 128 * (mp.map (·.2)).sum,
     rowCol mp 0 q < (Rows.ofNet (Vs (sess i)).hU).nIn ∧ ReadCol (Rows.ofNet (Vs (sess i)).hU) (rowCol mp 0 q)
 
-/-- **Hypothesis: stage `c₀ + i · nS + roundOf m` selects port `m + 1` in `own (sess i)`** (`skOf`'s form): at each
-column of message `m`'s words, the reads file registers a port of the name of the port `q` its key reads, under a value
-whose row unit `un i` reads holds that stage's message. -/
+/-- **Hypothesis: stage `c₀ + i · nS + roundOf m` reads port `m + 1` of unit `un i` of `sess i`** (S's `SelPort`, the
+reads-file fact `skOf` membership is): at each column of message `m`'s words, that stage reads the port `q` its key
+reads. -/
 def SparseSel (sh : SparseShape) (mp : List (String × ℕ)) (own : Fin S → Array Flock.Registered.Port)
     (sel : ℕ → String → ℕ → Prop) (c₀ : ℕ) (sess : Fin 2 → Fin S) (un : (i : Fin 2) → Fin (Vs (sess i)).nv) : Prop :=
   ∀ (i : Fin 2) (m e t : ℕ), wStart sh m ≤ e → e < wStart sh (m + 1) → t < 128 →
     ∀ (q : Fin (Vs (sess i)).c.ports.size) (byte bit : ℕ),
       Aliased.srcKey (Vs (sess i)).c (rowCol mp 0 (128 * e + t)) = .msg q.val byte bit →
-      ∃ p ∈ own (sess i), p.name = (Vs (sess i)).c.ports[q].name ∧ ∃ x, p.reads[(un i).val]? = some (some x) ∧
-        sel (c₀ + i.val * nS sh + roundOf (sparseKinds 𝔽 sh) m) p.value x
+        SelPort Vs own sel (c₀ + i.val * nS sh + roundOf (sparseKinds 𝔽 sh) m) (sess i) (un i) q
 
 variable {Vs}
 

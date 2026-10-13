@@ -78,28 +78,30 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **The step source's rep `i` is the values' proof, woven**: its steps are `holoRepMsgs` of `(vals Lb i).p` and the
-coins the record `(vals Lb i).t` consumes but `z_partial`'s, woven along `holoRepShape` at the run's statement,
-schedule and extra claims, and those are a tape's along it (`UnitWoven`). -/
+/-- **The step source's rep `i` is the values' proof, woven**: its steps are `holoRepMsgs` of `(vals R ω t Lb i).p` and
+the coins the record `(vals R ω t Lb i).t` consumes but `z_partial`'s, woven along `holoRepShape` at the run's
+statement, schedule and extra claims, and those are a tape's along it (`UnitWoven`). -/
 def RepStepsWoven (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
-    (sh : Flock.Shape) (rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
-    (vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals) : Prop :=
+    (sh : Flock.Shape) (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
+    (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals) : Prop :=
   AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
     UnitWoven ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).sch
       (extraClaims ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
-        (holoAt st hp).cls.mPts (stp R ω t Lb).pts).length ((stp R ω t Lb).ts i) sh (rep Lb i) (vals Lb i)
+        (holoAt st hp).cls.mPts (stp R ω t Lb).pts).length ((stp R ω t Lb).ts i) sh (rep R ω t Lb i)
+        (vals R ω t Lb i)
 
 /-- **`StepsOfVals` at the tied source** from `stp`'s woven rep steps, its cap and its openings, which `tie` keeps. -/
 theorem stepsOfVals_of_woven {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {sh : Flock.Shape} {rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-    {vals : ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals} (h : RepStepsWoven zs dg N k Rw stp sh rep vals)
-    (hcap : AtRep zs dg N k Rw sh rep fun R ω t Lb i => capDig (vals Lb i).p.cap = (stp R ω t Lb).cap₀)
+    {sh : Flock.Shape} {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    (h : RepStepsWoven zs dg N k Rw stp sh rep vals)
+    (hcap : AtRep zs dg N k Rw sh rep fun R ω t Lb i => capDig (vals R ω t Lb i).p.cap = (stp R ω t Lb).cap₀)
     (hos : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
-      ∀ ℓ j, (stp R ω t Lb).os.1 i ℓ j = openRow (vals Lb i).p.ligerito (vals Lb i).sch ℓ j) :
+      ∀ ℓ j, (stp R ω t Lb).os.1 i ℓ j = openRow (vals R ω t Lb i).p.ligerito (vals R ω t Lb i).sch ℓ j) :
     StepsOfVals zs dg N k Rw (tiedSrc stp) sh rep vals := fun R ω t R₂ τ o hA i halg hacc =>
   unitSteps_of_woven (h R ω t R₂ τ o hA i halg hacc) (hcap R ω t R₂ τ o hA i halg hacc)
     (hos R ω t R₂ τ o hA i halg hacc)
