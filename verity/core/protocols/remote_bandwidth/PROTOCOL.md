@@ -37,7 +37,7 @@ data are at least \((1 - \gamma) R \Sigma\), with
 | \(\mu_{\text{timing}}\) | \(1 - \sum_t U_t b / (R\Sigma)\): the span the receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out) | the record |
 | \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`Ledger.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`Ledger.horizon`, §10) | the record's profiles, at δ |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
-| \(\lambda\) | AuditRO's slack: `queries_log2` bits per receipt (every certified one, in either reading) and `slack_log2` per pass; 0.195% at 64 bits a 4 KiB block, more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
+| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2`; 0.125% at the whole HBM's 22.9M 4 KiB blocks a pass (41.0 bits a block), more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
 | \(\mu_{\text{rebuild}}\) | \(C_{\text{sq}} b / (E_{\text{sq}} R)\): blocks re-encoded from their payloads in place of reads, each at least the record's codec's \(E_{\text{sq}}\) squarings (`Codec.encode_squarings`: 98,016 at p1024/k3/masked, 65,344 at k = 2, 65,152 at p512/k2) at the node's stated ceiling of \(C_{\text{sq}}\) squarings a second at that width (`Rebuild`) | the record's codec, and assumption 5 stated per width (`WorkHardness(p, k)`) |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | under a registration that binds \(z\) only (0 otherwise): relays that meet \(z\) and a copy of the block over a link (§4) | a model |
@@ -69,11 +69,11 @@ charged \(A\) and the rest of the pass in flight at its challenge, where the ses
 
 The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with 33,273 openings a window (`Params.samples`), 555 a
 second. There, on one RTX PRO 6000 with its whole HBM as the store, every window's whole \(\gamma_t\) is under 1%:
-0.81–0.85% in the worst window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes is stated for its pooled
-\(\mu_{\text{sample}}\) (0.0083%), with its whole γ (0.63%) reported beside it: λ and \(\mu_{\text{chip}}\) each
-exceed 0.15% by themselves (§10, `timing.stated`). Below about
-36 GB a GPU no \(T\) meets 1% (§10, `timing.store_floor`). 20 s and 1 s are options with their own readings: at 20 s
-and 11,091 openings every window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.30–1.39%, and at 1 s
+0.745–0.776% in the worst window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes is stated for its pooled
+\(\mu_{\text{sample}}\) (0.0083%), with its whole γ (0.56%) reported beside it: \(\mu_{\text{chip}}\) exceeds 0.15%
+by itself, and λ with \(\mu_{\text{rebuild}}\) (§10, `timing.stated`). Below about
+33 GB a GPU no \(T\) meets 1% (§10, `timing.store_floor`). 20 s and 1 s are options with their own readings: at 20 s
+and 11,091 openings every window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.23–1.32%, and at 1 s
 and 2,773 its \(\mu_{\text{sample}}\) is under 1% and its whole \(\gamma_t\) 5–14%.
 
 What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The prover
@@ -233,8 +233,8 @@ that breaks its format rejects with `plan`.
 **Fiat–Shamir, and what grinding buys.** A seed after the first depends on the prover's own root, so the prover can
 grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path and no read. A
 chosen seed buys nothing against the block-sha512 receipt, because no seed makes a receipt cheaper to compute without
-the block's bytes after the seed. The queries a grinding prover makes are counted by AuditRO's `queries_log2` bits a
-certified receipt (λ). Other users of the seed must hold for a seed the prover chose: sketch-sha512's signs (below),
+the block's bytes after the seed. The queries a grinding prover makes are counted by AuditRO's \(q\), at most
+\(2^{64}\) a pass (`queries_log2`), whose \(C(q, k)\) λ charges. Other users of the seed must hold for a seed the prover chose: sketch-sha512's signs (below),
 and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 
 **The two receipt kinds.** The registration names one (`receipts.KINDS`), and `Params.receipt` must name the same.
@@ -733,54 +733,56 @@ trades one against the other. Among the grid's stores the whole HBM, 94 GB with 
 
 | \(T\) | openings a window | store | \(\mu_{\text{timing}}\) | \(\mu_{\text{sample}}\) | \(\mu_{\text{chip}}\) | λ | \(\mu_{\text{rebuild}}\) | worst \(\gamma_t\) | \(W\) | pooled \(\mu_{\text{sample}}\) | horizon γ |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 60 s | 33,273 | 94 GB | 0.19–0.22% | 0.083% | 0.28% | 0.19% | 0.067% | 0.81–0.85% | 10 | 0.0083% | 0.63–0.64% |
-| 60 s | 33,273 | 62 GB | 0.21–0.24% | 0.083% | 0.42% | 0.19% | 0.067% | 0.98–1.01% | 10 | 0.0083% | 0.82% |
-| 60 s | 33,273 | 30 GB | 0.30–0.34% | 0.083% | 0.87% | 0.19% | 0.067% | 1.52–1.55% | 10 | 0.0083% | 1.39–1.40% |
-| 20 s | 11,091 | 94 GB | 0.51–0.60% | 0.25% | 0.28% | 0.19% | 0.067% | 1.30–1.39% | 30 | 0.0083% | 0.63–0.64% |
-| 20 s | 11,091 | 62 GB | 0.42–0.52% | 0.25% | 0.42% | 0.19% | 0.067% | 1.35–1.45% | 30 | 0.0083% | 0.82% |
-| 20 s | 11,091 | 30 GB | 0.41–0.50% | 0.25% | 0.87% | 0.19% | 0.067% | 1.79–1.89% | 30 | 0.0083% | 1.39–1.40% |
-| 1 s | 2,773 | 30 GB | 3.27–5.04% | 0.94–0.96% | 0.83–0.85% | 0.19% | 0.067% | 5.34–7.07% | 600 | 0.0017% | 1.39% |
-| 1 s | 2,773 | 94 GB | 10.97–12.53% | 0.87–0.89% | 0.24–0.25% | 0.17% | 0.067% | 12.34–13.88% | 600 | 0.0017% | 0.63% |
-| 90 s | 11,091 | 94 GB | 0.19–0.21% | 0.25% | 0.28% | 0.19% | 0.067% | 0.980–1.001% | 6 | 0.042% | 0.67% |
+| 60 s | 33,273 | 94 GB | 0.19–0.22% | 0.083% | 0.28% | 0.125% | 0.067% | 0.745–0.776% | 10 | 0.0083% | 0.563–0.567% |
+| 60 s | 33,273 | 62 GB | 0.21–0.24% | 0.083% | 0.42% | 0.127% | 0.067% | 0.911–0.942% | 10 | 0.0083% | 0.751–0.755% |
+| 60 s | 33,273 | 30 GB | 0.30–0.34% | 0.083% | 0.87% | 0.130% | 0.067% | 1.459–1.490% | 10 | 0.0083% | 1.329–1.332% |
+| 20 s | 11,091 | 94 GB | 0.51–0.60% | 0.25% | 0.28% | 0.124% | 0.067% | 1.227–1.320% | 30 | 0.0083% | 0.563–0.567% |
+| 20 s | 11,091 | 62 GB | 0.42–0.52% | 0.25% | 0.42% | 0.126% | 0.067% | 1.286–1.380% | 30 | 0.0083% | 0.751–0.755% |
+| 20 s | 11,091 | 30 GB | 0.41–0.50% | 0.25% | 0.87% | 0.129–0.130% | 0.067% | 1.728–1.821% | 30 | 0.0083% | 1.329–1.332% |
+| 1 s | 2,773 | 30 GB | 3.27–5.04% | 0.94–0.96% | 0.83–0.85% | 0.124–0.126% | 0.067% | 5.275–7.006% | 600 | 0.0017% | 1.323–1.326% |
+| 1 s | 2,773 | 94 GB | 10.97–12.53% | 0.87–0.89% | 0.24–0.25% | 0.109–0.111% | 0.067% | 12.282–13.822% | 600 | 0.0017% | 0.557–0.560% |
+| 90 s | 11,091 | 94 GB | 0.19–0.21% | 0.25% | 0.28% | 0.125% | 0.067% | 0.910–0.931% | 6 | 0.042% | 0.597–0.600% |
 
-At the stated \(T\) = 60 s, then, every window is under 1% for the whole \(\gamma_t\): 0.81–0.85% with the whole HBM
-as the store, and 0.98–1.01% at 62 GB. At the 20 s option, every window under 1% holds for \(\mu_{\text{sample}}\)
-(0.25%) and not for the whole \(\gamma_t\), which is 1.30% at best. At \(T\) = 90 s with 11,091 a window it is 0.98%
-at 1 ms RTT and just over, 1.001%, at 20 ms. The 1 s option's per-window claim is \(\mu_{\text{sample}}\) alone. Its
+At the stated \(T\) = 60 s, then, every window is under 1% for the whole \(\gamma_t\): 0.745–0.776% with the whole
+HBM as the store, and 0.91–0.94% at 62 GB. At the 20 s option, every window under 1% holds for \(\mu_{\text{sample}}\)
+(0.25%) and not for the whole \(\gamma_t\), which is 1.23% at best. At \(T\) = 90 s with 11,091 a window it is
+0.91–0.93%. The 1 s option's per-window claim is \(\mu_{\text{sample}}\) alone. Its
 whole \(\gamma_t\) is 5–14%, nearly all \(\mu_{\text{timing}}\): the window's idle ends, which the record states
 exactly.
 
 **The store floor.** No \(T\) brings every window under 1% on too small a store. As \(T\) grows, a window's
 \(\mu_{\text{sample}}\) (at 555 openings a second) and its ends vanish, and its \(\gamma_t\) tends to
-\((g + S_{\text{chip}}/R + \lambda\, t_{\text{pass}} + \mu_{\text{rebuild}}(t_{\text{pass}} + g))/(t_{\text{pass}} + g)\),
-where \(t_{\text{pass}}\) is the store's read at \(R\) (`timing.store_floor`). Below 35.7 GB a GPU,
+\((g + (S_{\text{chip}} + \Lambda)/R + \mu_{\text{rebuild}}(t_{\text{pass}} + g))/(t_{\text{pass}} + g)\),
+where \(t_{\text{pass}}\) is the store's read at \(R\) and \(\Lambda\) a pass's `named_bits` and `slack_log2` in bytes,
+whose share a block depends on the store's size (`timing.store_floor` solves for it). Below 32.8 GB a GPU,
 \(\mu_{\text{chip}}\), λ and \(\mu_{\text{rebuild}}\) alone exceed 1%. With the chain's steady state at \(g\) =
-50 µs, no \(T\) meets 1% below 45.7 GB. The suite checks the closed form against `ledger` on a 20-minute window, 2%
+50 µs, no \(T\) meets 1% below 41.9 GB. The suite checks the closed form against `ledger` on a 20-minute window, 2%
 either side of it.
 
 **The horizon's 0.15%** is stated for its pooled \(\mu_{\text{sample}}\), with the whole γ reported beside it (the
 default put to Daniel on 13 Oct, in force from 9:00 AM PDT that day unless he rules otherwise). The pooled
-\(\mu_{\text{sample}}\) is 0.0083% at every stated and optional \(T\), and the whole γ 0.63% at best. λ (64 bits a
-4 KiB block, 0.195%) and \(\mu_{\text{chip}}\) (\(S_{\text{chip}}\) over a GPU's store, 0.28% at the whole HBM) each
-exceed 0.15% by themselves, and neither shrinks with more openings or longer windows. The whole γ meets 0.15% at no
+\(\mu_{\text{sample}}\) is 0.0083% at every stated and optional \(T\), and the whole γ 0.56% at best.
+\(\mu_{\text{chip}}\) (\(S_{\text{chip}}\) over a GPU's store, 0.28% at the whole HBM) exceeds 0.15% by itself, and
+λ (41.0 bits a 4 KiB block, 0.125%) does with \(\mu_{\text{rebuild}}\). Neither λ nor \(\mu_{\text{chip}}\) shrinks
+with more openings or longer windows. The whole γ meets 0.15% at no
 \(T\) and no count of openings today. Even with λ and \(\mu_{\text{chip}}\) at 0 it would be 0.159–0.162%: the
 chain's steady state (0.079% at \(g\) = 50 µs and 63 ms passes, 0.083–0.086% with the session's ends),
 \(\mu_{\text{rebuild}}\) (0.067%) and the pooled \(\mu_{\text{sample}}\).
 
 **What λ and \(\mu_{\text{chip}}\) would take** (the grid's last sections, at 94 GB and 63 ms passes). λ is
-AuditRO's \(C(q, k)\) for a pass's \(k\) receipts, charged as \(\log_2 q\) = 64 bits a receipt. Under 0.05% it may be
-16.4 bits a 4 KiB receipt. Two ways get there:
+AuditRO's \(C(q, k)\) for a pass's \(k\) receipts, bounded by \(q^k/k!\), which takes no assumption: about
+\(\log_2(e q/k)\) a receipt, 41.0 bits at 4 KiB (0.125%). Under 0.05% it may be 16.4 bits a 4 KiB receipt. Two ways
+get there:
 
-- **Wider receipts.** A receipt of \(m\) blocks gives 0.098%, 0.065% and 0.049% at 8, 12 and 16 KiB. Bounding
-  \(C(q, k)\) by \(q^k/k!\), which takes no assumption, charges \(\log_2(e q/k)\): 41.0 bits at 4 KiB (0.125%),
-  and 0.064%, 0.043% and 0.033% at 8, 12 and 16 KiB. On the GPU a receipt's sketch is the same work a byte, and
+- **Wider receipts.** A receipt of \(m\) blocks gives 0.064%, 0.043% and 0.033% at 8, 12 and 16 KiB (bounded by
+  \(q^k\) instead, 64 bits a receipt, 0.098%, 0.065% and 0.049%). On the GPU a receipt's sketch is the same work a byte, and
   its hash and share of the tree are \(1/m\). #1916's τ of 1.26 a pass scales to about 1.09 at 16 KiB (from its
   measured parts; the whole isn't measured). The openings pay instead. Each carries \(m\) blocks: 20.9 KB at
   16 KiB with a payload leaf a receipt, or 27.0 KB with PoUS's 4 KiB leaf. That is 2.4–3.0 times today's, or
   0.70–0.90 GB a window and 93–120 Mb/s per node. Each opening's proof unit also decodes \(m\) blocks (check 3).
   sketch-sha512's rate a compression goes from \(2^{-95.12}\) to \(2^{-93.88}\) at 16 KiB's 512 sectors.
   `RateAuditSketch` would need restating for a receipt of \(m\) blocks, and the registration would name \(m\).
-- **Fewer queries.** At 4 KiB with \(q^k/k!\), 0.05% needs \(q \le 2^{39.4}\) queries to a pass's oracle:
+- **Fewer queries.** At 4 KiB, 0.05% needs \(q \le 2^{39.4}\) queries to a pass's oracle:
   104 s of one GPU's SHA-512. No prover hardware is trusted, so the protocol can't state such a bound.
 
 \(\mu_{\text{chip}}\) is \(S_{\text{chip}}\) over a pass's reads, and a pass reads each block at most once. So it
@@ -800,9 +802,9 @@ into the next pass. That needs three things:
 - **The GPU's time.** At least one write and one read of \(S_{\text{chip}}\): 26–105 µs at 5–20 TB/s on chip
   (unmeasured). That adds 0.04–0.17% to the steady state.
 
-At the stated \(T\) = 60 s with 94 GB and RTT 1 ms, the horizon's whole γ is 0.63%. \(q^k/k!\) makes it 0.56%,
-16 KiB receipts 0.47–0.49%, and a 26 µs flush with both 0.23%. The worst window's \(\gamma_t\) goes from 0.81% to 0.74%, 0.65–0.67%
-and 0.41%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's steady state and
+At the stated \(T\) = 60 s with 94 GB and RTT 1 ms, the horizon's whole γ is 0.56% (0.63% bounded by \(q^k\)).
+16 KiB receipts make it 0.47%, and a 26 µs flush with them 0.23%. The worst window's \(\gamma_t\) goes from 0.745% to
+0.65% and 0.41%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's steady state and
 \(\mu_{\text{rebuild}}\) alone exceed 0.15%.
 
 ## Appendix A. Live coins, and why the protocol doesn't use them

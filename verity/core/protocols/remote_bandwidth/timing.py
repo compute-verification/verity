@@ -24,7 +24,7 @@ below r on one of a block's 128 sectors (`sign_rank_at_most`, exact through F2: 
 is a session's, and `grind_compressions` what one grinding try costs.
 
 `python -m verity.core.protocols.remote_bandwidth.timing` prints the grid of the report, ending with what would bring
-λ and μ_chip under 0.05% (wider receipts, q^k/k! for AuditRO's C(q, k), a larger store, a flush a pass).
+λ and μ_chip under 0.05% (wider receipts, a larger store, a flush a pass).
 """
 
 from __future__ import annotations
@@ -256,17 +256,23 @@ def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, sampl
 def store_floor(gap_ns: int = 0, target: float = 0.01) -> float:
     """The store on one RTX PRO 6000, in bytes, below which no T brings `stated`'s worst γ_t under `target`.  As T
     grows, a window's μ_sample and its ends vanish, and γ_t tends to `(g + S_chip/R + λ·p + μ_rebuild·(p + g))/(p + g)`
-    with p the store's read at R: the chain's steady state, μ_chip, λ (`audit.QUERIES_LOG2` bits a block) and
-    μ_rebuild.  At `gap_ns` = 0 it is μ_chip, λ and μ_rebuild alone."""
+    with p the store's read at R: the chain's steady state, μ_chip, λ (`audit.named_bits` of the store's blocks, a
+    block's share of them depending on the store's size, solved for by iteration) and μ_rebuild.  At `gap_ns` = 0 it
+    is μ_chip, λ and μ_rebuild alone."""
     rebuild = audit.Rebuild(codec.DEFAULT, SQUARINGS_PER_S["p1024"]).fraction(READ_BYTES_PER_S)
-    lam, g = audit.QUERIES_LOG2 / (8 * BLOCK_BYTES), gap_ns / S
-    return READ_BYTES_PER_S * (g * (1 - target + rebuild) + CHIP_BYTES / READ_BYTES_PER_S) / (target - lam - rebuild)
+    lam, g, blocks = audit.QUERIES_LOG2 / (8 * BLOCK_BYTES), gap_ns / S, 0
+    while True:
+        store = READ_BYTES_PER_S * (g * (1 - target + rebuild) + CHIP_BYTES / READ_BYTES_PER_S) / (target - lam - rebuild)
+        if store // BLOCK_BYTES == blocks:
+            return store
+        blocks = int(store // BLOCK_BYTES)
+        lam = (audit.named_bits(blocks) + audit.SLACK_LOG2) / (8 * BLOCK_BYTES * blocks)
 
 
-def _named_bits(k: int, queries_log2: int, binomial: bool) -> float:
-    """The bits a pass of k receipts charges for AuditRO's C(q, k) at q = 2^queries_log2: k·log2 q, as `ledger`
-    charges them, or log2(q^k/k!), which bounds C(q, k) too."""
-    return k * queries_log2 - (math.lgamma(k + 1) / math.log(2) if binomial else 0.0)
+def _named_bits(k: int, queries_log2: int, binomial: bool) -> int:
+    """The bits a pass of k receipts charges for AuditRO's C(q, k) at q = 2^queries_log2: `audit.named_bits`, the
+    bound by q^k/k! that `ledger` charges, or k·log2 q, the looser bound by q^k."""
+    return audit.named_bits(k, queries_log2) if binomial else k * queries_log2
 
 
 def _sizing(gap: int) -> None:
@@ -275,7 +281,7 @@ def _sizing(gap: int) -> None:
     cap = READ_BYTES_PER_S * (p + g_s)
     print(f"# λ under 0.05%: one RTX PRO 6000 with its whole HBM (94 GB, {p * 1e3:.1f} ms passes) as the store, in the "
           f"steady state at g = {gap // US} µs.  A receipt of m blocks: its bits for C(q, k) at q = 2^"
-          f"{audit.QUERIES_LOG2} as ledger charges them (q^k) or bounded by q^k/k!, and the bits 0.05% allows; an "
+          f"{audit.QUERIES_LOG2} bounded by q^k, or by q^k/k! as ledger charges them, and the bits 0.05% allows; an "
           "opening on 8 GPUs' 752 GB with a payload leaf a receipt or a block; τ a pass scaled from #1916's 8 GiB pass "
           "(sketch 5.82 ms, hash 0.33 ms, tree 0.90 ms, over a 5.60 ms read); sketch-sha512's rate a compression at "
           "m·128 sectors, log2")
@@ -322,20 +328,20 @@ def _sizing(gap: int) -> None:
         print(f"| {tf} | {x:.4%} | {x - steady:.4%} |")
     print()
     print(f"# the horizon's whole γ and the worst window's γ_t at the stated T = {audit.WINDOW_NS // S} s, 94 GB, as stated "
-          "and with what lowers λ and μ_chip (a flush: its added steady state on the timing, μ_chip at 0)")
-    print("| RTT ms | γ | stated | q^k/k! | 16 KiB, q^k | 16 KiB, q^k/k! | and a 26 µs flush | λ = μ_chip = 0 |")
-    print("| --- | --- | --- | --- | --- | --- | --- | --- |")
+          "and with what lowers λ and μ_chip (a flush: its added steady state on the timing, μ_chip at 0), and by q^k, "
+          "the looser count")
+    print("| RTT ms | γ | stated | by q^k | 16 KiB receipts | and a 26 µs flush | λ = μ_chip = 0 |")
+    print("| --- | --- | --- | --- | --- | --- | --- |")
     flush = (g_s + 26e-6) / (p + g_s + 26e-6) - steady
     for rtt in (1, 20):
         h = stated(store, audit.WINDOW_NS, 600 * S // audit.WINDOW_NS, rtt_ns=_ns(rtt), samples=audit.SAMPLES)
         for name, gamma, terms in (("horizon", h.gamma_horizon, h), ("worst γ_t", h.worst.gamma, h.worst)):
             rest = gamma - terms.counting
             lam = {(m, b): terms.counting * (_named_bits(store // (m * BLOCK_BYTES), audit.QUERIES_LOG2, b)
-                                             + audit.SLACK_LOG2) / (audit.QUERIES_LOG2 * k + audit.SLACK_LOG2)
+                                             + audit.SLACK_LOG2) / (audit.named_bits(k) + audit.SLACK_LOG2)
                    for m in (1, 4) for b in (False, True)}
-            print(f"| {rtt} | {name} | {gamma:.3%} | {rest + lam[1, True]:.3%} | {rest + lam[4, False]:.3%} "
-                  f"| {rest + lam[4, True]:.3%} | {rest - terms.chip + lam[4, True] + flush:.3%} "
-                  f"| {rest - terms.chip:.3%} |")
+            print(f"| {rtt} | {name} | {gamma:.3%} | {rest + lam[1, False]:.3%} | {rest + lam[4, True]:.3%} "
+                  f"| {rest - terms.chip + lam[4, True] + flush:.3%} | {rest - terms.chip:.3%} |")
 
 
 def _ns(ms: float) -> int:

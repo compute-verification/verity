@@ -678,8 +678,8 @@ LEDGER_SOURCES = {
     "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
               "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, `pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
-    "counting": "AuditRO's slack, queries_log2 bits a receipt (each certified one, whichever reading) and slack_log2 a "
-                "pass",
+    "counting": "AuditRO's slack, a pass's `named_bits` of its receipts (log2 of q^k/k!, which bounds C(q, k); every "
+                "certified receipt, whichever reading) and slack_log2",
     "rebuild": "the record's codec and a stated squaring ceiling (`Rebuild`): blocks re-encoded from their payload, "
                "each at least the codec's squarings (WorkHardness(p, k)), in place of reads",
     "host": "a model: the host tier's own shortfall and host DRAM bandwidth PCIe cannot carry",
@@ -817,6 +817,17 @@ class Rebuild:
         return self.squarings_per_s * BLOCK_BYTES / (self.codec.encode_squarings * capacity_bytes_per_s)
 
 
+def named_bits(k: int, queries_log2: int = QUERIES_LOG2) -> int:
+    """A whole number of bits at least log2 C(q, k), q = 2^queries_log2: AuditRO's count of which k of a pass's q
+    queries named its receipts.  C(q, k) ≤ q^k/k!, so it is k·log2 q − log2 k!, with log2 k! taken below
+    `math.lgamma`'s by a relative 2^-40 and a bit, far past its few ulps.  A pass of k receipts charged
+    `named_bits(k) + slack_log2` has AuditRO's last term C(q, k)/2^λ at most 2^-slack_log2."""
+    if type(k) is not int or type(queries_log2) is not int or k < 0 or queries_log2 < 0:
+        raise ValueError("a pass's receipts and its queries' log2 are nonnegative integers")
+    factorial = math.lgamma(k + 1) / math.log(2)
+    return k * queries_log2 - max(0, math.floor(factorial * (1 - 2.0 ** -40)) - 1)
+
+
 def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: Rebuild, host: float = 0.0,
            link: float = 0.0, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2,
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Ledger:
@@ -849,6 +860,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
         raise ValueError(f"the record certifies {reads} bytes read, more than the capacity allows in its span: the "
                          "capacity is understated")
     wrong_receipts = [math.ceil(wrong(w.profile)) for w in record.windows]
+    named = {k: named_bits(k, queries_log2) + slack_log2 for k in {k for w in record.windows for k in w.lengths}}
     windows = []
     for w, f, e in zip(record.windows, floors(record), wrong_receipts):
         whole_t, reads_t = capacity_bytes_per_s * w.span_ns / 1e9, w.receipts * b
@@ -857,10 +869,10 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
                              "span: the capacity is understated")
         windows.append(WindowLedger(
             w.window, w.span_ns, timing=1 - reads_t / whole_t, sample=e * b / whole_t, chip=w.passes * chip_bytes / whole_t,
-            counting=(queries_log2 * w.receipts + slack_log2 * w.passes) / 8 / whole_t, rebuild=mu_rebuild, host=host,
-            link=link, horizon=f * reads_t / whole_t, floor=f))
+            counting=sum(named[k] for k in w.lengths) / 8 / whole_t, rebuild=mu_rebuild, host=host, link=link,
+            horizon=f * reads_t / whole_t, floor=f))
     horizon, floor = pooled(record)
-    lam_bits = queries_log2 * record.receipts + slack_log2 * record.passes
+    lam_bits = sum(named[k] for w in record.windows for k in w.lengths)
     return Ledger(timing=1 - reads / whole, sample=sum(wrong_receipts) * b / whole,
                   chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=mu_rebuild, host=host,
                   link=link, horizon=horizon * b / whole, floor=floor, windows=tuple(windows))
