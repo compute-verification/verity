@@ -13,6 +13,7 @@ import Definitions.Accounting.RateAuditDeployed
 import Definitions.Accounting.RateAuditSketch
 import Definitions.Accounting.RateAuditSketchInteractive
 import Definitions.Accounting.Remote
+import Definitions.Accounting.Remote.Deployed
 import Definitions.Accounting.Tag
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, and

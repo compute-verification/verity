@@ -13,6 +13,7 @@ import Proofs.Accounting.RateAudit.Horizon
 import Proofs.Accounting.RateAudit.Named
 import Proofs.Accounting.RateAudit.Session
 import Proofs.Accounting.RateAudit.Deployed
+import Proofs.Accounting.RateAudit.DeployedRun
 import Proofs.Accounting.RateAudit.SketchHonest
 import Proofs.Accounting.RateAudit.SketchInteractive
 
@@ -42,4 +43,6 @@ over the horizon and in every window (`Accounting.SecurityProofs.RateWindowDraw`
 `Sampled` (`Accounting.SecurityProofs.RateSessionSampledNamedRO`), and the remote bandwidth audit as deployed, one
 guarantee over a session of ground, chained windows of devices with partial completion
 (`Accounting.SecurityProofs.RemoteSessionConservation`, at the deployed parameters
-`RemoteSessionConservationDeployed`). -/
+`RemoteSessionConservationDeployed`), and the same session as a run of the remote audit, meeting its routes
+(`Accounting.SecurityProofs.RemoteSessionRoutes`) and conserving over the horizon and in each window at the same `γ`
+(`RemoteSessionRunConservation`, `RemoteWindowRunConservation`). -/

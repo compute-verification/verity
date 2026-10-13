@@ -1,4 +1,5 @@
 import Definitions.Accounting.RateAuditDeployed
+import Definitions.Accounting.Remote.Deployed
 import Models.Accounting.Assumptions.RateAudit
 import Models.Accounting.Assumptions.RateAuditDeployed
 
@@ -14,14 +15,20 @@ pooled draw a window. Proofs are in `Security/Proofs/Accounting/RateAudit/Deploy
 * `RemoteSessionConservationDeployed`: at the deployed parameters (masked `p = 2^1024 − 105` at `k = 3` rounds, 4 KiB
   blocks, SHA-512 receipts, 2,773 openings a window, `d̄ = 0.15%`, `d_w = 1%`, at most `2^55` compressions), where
   the draw's two terms are each at most `2^-40` from seven windows on.
+* `RemoteSessionRoutes`: the session as a run of the remote audit (`Accounting.Remote.Run.ofDeployed`) meets its routes
+  `Sampled d̄` and `Paid`, at the errors above.
+* `RemoteSessionRunConservation`: `Accounting.Guarantees.Remote.Conservation` at those routes, read at the node: the
+  run's tier reads are at least `(1 − (d̄ + μ))·C`, the same `γ̄` as `RemoteSessionConservation`'s horizon.
+* `RemoteWindowRunConservation`: the same for each window (`Accounting.Remote.Run.ofDeployedWindow`) at `γ_w`.
 
 It rests on the random oracle (the game's), and on two named assumptions: `Accounting.Assumptions.WorkHardness`
 (completing `x` of a word's `b` bits costs `x/b` of `rounds · c_root`) and `Accounting.Assumptions.SquaringCeiling`
 (a pass's completions cost at most the node's measured squaring capacity `F`). The other measured capacities (the
 on-chip state `S`, the link `L`, the tiers) are the game's bounds, as in every guarantee it composes.
 
-The receipt here is the oracle's tag of the whole block; the deployed receipt hashes a 16-row sketch of it, and the
-step from one to the other is not proved (the PR's gap list).
+The receipt here is the oracle's tag of the whole block; the deployed receipt hashes a 16-row sketch of it (the driver
+also supports 64 rows), and the step from one to the other is not proved here; the last section states the shape
+through which it plugs in.
 -/
 
 namespace Accounting.Guarantees
@@ -117,5 +124,118 @@ def RemoteSessionConservationDeployed : Prop :=
               (1 - (0.01 + Deployed.gammaPass N 32768 ρ S L lam 3 cRoot F)) * (P * N * 32768)))
       ≤ 2 / 2 ^ 40 + (n * P * 2 ^ 55 : ℝ≥0∞) *
         ((N : ℝ≥0∞) / 2 ^ 512 + (((2 ^ 55 : ℕ).choose 2 : ℕ) : ℝ≥0∞) / 2 ^ 512 + (2 ^ N : ℝ≥0∞) / 2 ^ lam)
+
+/-- **The deployed session meets the remote audit's routes.** Read as a run of the remote audit on a node `Nd` whose
+declared capacity over `a`'s interval is the session's `n·P·N·b` bits, with `a`'s passes the session's `n·P`, its word
+`b` and its slack `λ` (`Accounting.Remote.Run.ofDeployed`, at `b·F/(rounds·c_root)` bits completed a pass), every
+deployed session under `RemoteSessionConservation`'s hypotheses meets
+
+* `Sampled d̄` (μ_sample) except with probability `(1 − d̄)^(d·n)`: the pooled draws pass while the correct receipts
+  cover less than `(1 − d̄)·C`; and
+* `Paid` except with probability `n·P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`: the correct receipts' words exceed what the
+  run paid for them (its tier reads, its on-chip state, the side link beyond the stream, its completed bits) and its
+  `n·P` slacks `λ`.
+
+**The reading.** These are the routes `Accounting.Guarantees.Remote.Conservation` composes, proved for the runs the
+deployed game realizes; the run's fields are the game's (`Run.ofDeployed`), so its `paid` is the session's tier reads
+and the `n·P` passes' `S + (L − ρ) + b·F/(rounds·c_root)` bits.
+
+Frozen (no-function, hash): as `RemoteSessionConservation`. -/
+def RemoteSessionRoutes : Prop :=
+  ∀ (n P N b h ρ S L q r s d G lam τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
+    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
+    0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dbar ≤ 1 →
+    a.P = n * P → a.b = b → a.lam = lam → Nd.declared a.T = n * P * N * b →
+    Assumptions.WorkHardness b rounds cRoot cost →
+    (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
+    (∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') →
+    (Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Sampled dbar ((1 - dbar) ^ (d * n)) ∧
+      (Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Paid
+        ((n * P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam))
+
+/-- **The deployed session conserves its words as a run of the remote audit, at the same `γ`.** Under
+`RemoteSessionRoutes`' hypotheses, the probability that the run of the session (`Accounting.Remote.Run.ofDeployed`)
+accepts while its correct receipts cover less than `(1 − d̄)·C`, or its tier reads are less than `(1 − γ̄)·C`, is at
+most the two routes' errors summed:
+
+  `γ̄ = d̄ + μ_chip + μ_link + μ_rebuild + μ_λ`,   the error `(1 − d̄)^(d·n) + n·P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
+
+**The reading.** `Accounting.Guarantees.Remote.Conservation` gives `(1 − d̄ − λ)·C` of payments at every location; the
+run's payments other than its tier reads are its state, its side link beyond the stream and its completed bits, which
+are `μ_chip`, `μ_link` and `μ_rebuild` of `C`, and the remote model's `λ` share (`Accounting.Remote.muLambda`) is
+`μ_λ`. So this is `RemoteSessionConservation`'s horizon reading, the same `γ̄`, with the window's term dropped.
+
+Frozen (no-function, hash): as `RemoteSessionConservation`. -/
+def RemoteSessionRunConservation : Prop :=
+  ∀ (n P N b h ρ S L q r s d G lam τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
+    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
+    0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dbar ≤ 1 →
+    a.P = n * P → a.b = b → a.lam = lam → Nd.declared a.T = n * P * N * b →
+    Assumptions.WorkHardness b rounds cRoot cost →
+    (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
+    (∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') →
+    (Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Holds
+      ((1 - dbar) ^ (d * n) + (n * P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam))
+      fun x =>
+        (1 - dbar) * Nd.declared a.T ≤
+            ((Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).correct x * a.b : ℝ) ∧
+          (1 - (dbar + Deployed.gammaPass N b ρ S L lam rounds cRoot F)) * Nd.declared a.T ≤
+            ((Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
+
+/-- **Each window of the deployed session conserves its words as a run of the remote audit, at the same `γ_w`.**
+Window `w` read as a run of the remote audit (`Accounting.Remote.Run.ofDeployedWindow`) on a node `Nd` whose declared
+capacity over `a`'s interval is the window's `P·N·b` bits, with `a`'s passes the window's `P`: under
+`RemoteSessionConservation`'s hypotheses and `d_w ≤ 1`, the run meets `Sampled d_w` except with probability
+`(1 − d_w/n)^(d·n)` and `Paid` except with `P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`, and
+`Accounting.Guarantees.Remote.Conservation` at them gives: the probability that every window's draw passes while
+window `w`'s correct receipts cover less than `(1 − d_w)·C`, or its tier reads are less than `(1 − γ_w)·C`,
+`γ_w = d_w + μ_chip + μ_link + μ_rebuild + μ_λ`, is at most
+
+  `(1 − d_w/n)^(d·n) + P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
+
+**The reading.** `RemoteSessionConservation`'s per-window reading, one window at a time: the draw's term is the same
+(it bounds the event that some window holds at most `⌊(1 − d_w)·P·N⌋`), and the unpaid term is one window's.
+
+Frozen (no-function, hash): as `RemoteSessionConservation`. -/
+def RemoteWindowRunConservation : Prop :=
+  ∀ (n P N b h ρ S L q r s d G lam τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
+    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit)
+    (dw : ℝ),
+    0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 →
+    a.P = P → a.b = b → a.lam = lam → Nd.declared a.T = P * N * b →
+    Assumptions.WorkHardness b rounds cRoot cost →
+    (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
+    (∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') →
+    (Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Holds
+      ((1 - dw / n) ^ (d * n) + (P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam))
+      fun x =>
+        (1 - dw) * Nd.declared a.T ≤
+            ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).correct x * a.b : ℝ) ∧
+          (1 - (dw + Deployed.gammaPass N b ρ S L lam rounds cRoot F)) * Nd.declared a.T ≤
+            ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
+
+/-!
+## Where the sketch receipt plugs in (not stated here)
+
+The deployed receipt is `H(σ_t, root, j, sketch_σ(E_j))`, a hash of a `k_s`-row tensor-core sketch of block `j` under
+the window's signs `σ`, where this game's is `H(σ_t, R, j, E_j)`. The step from one to the other is lane
+ra-sketch-anyprover-lean's (`SketchRankFiber`, `RateAuditTensorSketchRank` in `RateAuditSketch.lean`), and it holds
+for the verbatim class only (a device that reads a sector's bytes as they are stored; `RateTensorSketchTable` is a
+prover outside it that no such bound covers). Its result plugs in through two statements of this shape:
+
+* `SketchRank ks m r ε : Prop := pr (fun σ : SketchSigns ks m => ∃ u, rank_ℚ (signMatrix (σ.block u)) < r) ≤ ε`, a
+  number of the signs' law evaluated outside Lean (`r* = 12` at `k_s = 16`; at `k_s = 64`, `r* = 27`, `2^-215.85` a
+  compression).
+* `SketchSessionReduction`: for every deployed session `A` whose pass devices are of the verbatim sketch class, with
+  each window's signs drawn with its coins, there is a `Rate.DeployedSession A'` on the same store, with the same `n`,
+  `P`, `N`, `b`, `S`, `L`, `G` and at most `q` queries a pass, whose pass devices have the same tier reads, completions,
+  link bits and correct sets as `A`'s at every coin where every sector block has rank at least `r` and no query lands
+  on another block of the sketch's fiber; so for every event `Ev` of the session's reads and correct sets,
+
+    `pr_A[Ev] ≤ pr_A'[Ev] + n·ε + n·P·G·q/2^(8·r)`.
+
+`RemoteSessionConservation` at `A'` then bounds the deployed session at `A` with `n·ε + n·P·G·q/2^(8·r)` added, and
+`SketchRank` names `ε`.
+-/
 
 end Accounting.Guarantees

@@ -781,6 +781,15 @@
    "assumptions": [],
    "type_hash": "753e8962c63271ce1e020916d50978296e9ff02db0839977381987f1162ec8bc"
   },
+  "Accounting.SecurityProofs.RemoteSessionRoutes": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RemoteSessionRunConservation": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RemoteWindowRunConservation": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
@@ -4440,6 +4449,9 @@
    "Accounting.SecurityProofs.RateSessionSampledNamedRO": "frozen (no-function,hash): It joins Accounting.SecurityProofs.RateSessionDraw and Accounting.SecurityProofs.RatePaidNamedRO at each pass of each window by a union bound: a session of chained windows of abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservation": "frozen (no-function,hash): It composes Accounting.SecurityProofs.RatePaidNamedRO at each pass device of a session of ground, chained windows with partial completion (simulated by an interactive device whose link carries the completed bits, under WorkHardness and SquaringCeiling) with the session's pooled draws: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservation at the deployed parameters, with the draw's two terms bounded by 2^-40: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionRoutes": "frozen (no-function,hash): It reads Accounting.Guarantees.RemoteSessionConservation's deployed session as a run of the remote audit (Accounting.Remote.Run.ofDeployed) and proves for it the routes Sampled (the horizon's draw, DeployedSession.pr_draws_horizon_le) and Paid (RatePaidNamedRO at each pass, a union over the G candidates): abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionRunConservation": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at Accounting.SecurityProofs.RemoteSessionRoutes' routes, read at the node: the run's payments other than its tier reads are the passes' S + (L - rho) + X bits, so its tier reads are at least (1 - (dbar + gammaPass)) of C, RemoteSessionConservation's horizon reading: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteWindowRunConservation": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at each window's run (Accounting.Remote.Run.ofDeployedWindow), with Sampled at the window's draw (DeployedSession.pr_draws_window_le) and Paid at the window's P G terms, read at the node at gamma_w, RemoteSessionConservation's per-window reading: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RateAuditSketch": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose tags hash the certified stream and a digest of each tile, for a device that obtains sectors only whole and as they are (Security/Definitions/Accounting/RateAuditSketch.lean), with the device's bounds (held sectors within S_chip, the side link's cap * T, queries) as fields of the Device it ranges over and the digest, the compute budget, c_tag and c_enc as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work, rate-sketch-verbatim, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Accounting.SecurityProofs.RateAuditTensorSketch": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAuditSketch, it bounds acceptance of an abstract chip program in the random-oracle model, at the tensor-core sketch's digest (Accounting.RateSketch.sketch), not the rate audit's code.",
    "Accounting.SecurityProofs.SketchBinds": "frozen (premise): It is a property of Accounting.RateSketch.sketch under the hypothesis SectorsBind σ on the window's signs, which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketch prices the hypothesis as Pr_σ[¬ SectorsBind σ].",
