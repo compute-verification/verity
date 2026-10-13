@@ -146,19 +146,19 @@ def innerCommitsAt (tr : Lean.Json) (record : String) (st : Flock.Stmt) (reg : L
   let shape ← Flock.RecVStar.stackedShapeOf st.c.metaJ
   Flock.RecVStar.innerCommits tr record (some reg) (metaRegistration st) shape
 
-/-- **The inner circuit's unit range**, as check 5 reads it off the inner statement (`RecCoins.Inner.load`'s
-`unitRange`): its one range of the unit net. -/
+/-- **The inner circuit's unit range**, as check 5 reads it off the inner statement (`RecCoins.unitRangeOf`, which
+`RecCoins.Inner.load` and `RecCoins.checkInnerRange` read): its one range of the unit net. -/
 def unitRangeOf (st : Flock.Stmt) : Except String Flock.Range :=
-  match st.c.ranges.filter (·.kind == Flock.Kind.net st.c.unitNet) with
-  | #[r] => .ok r
-  | _ => .error "the inner circuit has not one range of its unit net"
+  Flock.RecCoins.unitRangeOf st
 
 /-- **Check 5's refusals at the sparse shape**, which read only the verifier's own inputs: at the inner shape's RecSparse
 shape `sp` (`RecVStar.Inner.sparse`, the verifier's `--sparse`), RecSparse's shape check (`RecSparse.Shape.valid`,
 `6 ≤ ELL`); and at inner points of the inner statement's `k_log − 6` coordinates, RecSparse's `v`'s check that they are
 not short of `ELL − 6` (`RecCoins.sparseV`) and the slots' layout factors at the inner circuit's unit range
 (`RecCoins.layoutFactors`: slots of `2^ELL` rows, at most `2^S_LOG` of them, inside the block). Both read only the
-points' sizes, so this is their verdict at every rep's points (`RecCoins.checkSparse`). -/
+points' sizes, so this is their verdict at every rep's points (`RecCoins.checkSparse`). The verifier evaluates it on the
+inner statement at every candidate-3 session's setup (`RecCoins.checkInnerRange`, through `RecCoins.checkAtC3`), at the
+statement's own `k_log`, which is the class's where its class checks pass (`FlockC3.VStarList.sparseRangeOk_of_check`). -/
 def SparseRangeOk (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : Prop :=
   ∀ sp, ish.sparse = some sp →
     let xs := Array.replicate ((execClassAt st).cls.kLog - 6) (0 : Flock.F128)

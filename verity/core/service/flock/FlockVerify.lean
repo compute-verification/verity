@@ -536,7 +536,9 @@ statement and session its coefficients are checked against (`RecCoins.check`; or
 of what that check reads of them, `--rec-inner-coins`), and a statement reading a `rec-c<k>` the
 coin server's record of the inner session whose `c_k` its rows must be (`--rec-inner-transcript`,
 `RecVStar.checkPubRows`), and one of V*'s parts the verifier's record of V*'s shared rows, which its row ports must be
-(`--rec-rows`, `RecVStar.checkRows`). Each DIR holds `session.json`
+(`--rec-rows`, `RecVStar.checkRows`). At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
+needs the inner statement's files, on which its setup first checks check 5's sparse refusals (`RecCoins.checkAtC3`).
+Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
@@ -629,12 +631,14 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let scope := ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
+        RecCoins.checkAtC3 recInner recCoins
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
         RecSetup.checks recInner recCommits recCircuit recBound stmtTags tables r.2 circuitB partition program
           registered recPart recBindings recRows
         if zk then r.2.forM Zk.shapeOk
-        r.2.forM (RecCoins.check · registered recCoins (RecSetup.c3 recInner recCommits))
+        r.2.forM (RecCoins.check · registered (RecCoins.Source.atC3 recCoins recInner recCommits)
+          (RecSetup.c3 recInner recCommits))
         r.2.forM (RecVStar.checkPubRows · registered recCommits (recInner.bind (·.sparse)))
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
@@ -701,7 +705,9 @@ verifier's own `--rec-bindings F` (`RecVStar.checkStmt`). With `--rec-inner-tran
 rows at what the inner transcript fixes are the `b ‖ c` the verifier holds (`RecVStar.checkPubRows`, as `verify` sets up).
 Its verifier-registered values are checked against the verifier's coins (`RecCoins.check`) when it holds what that check
 reads: the inner statement and session (`--rec-inner-public` and its three, or `--rec-inner-coins`), or for R's levels and
-opening the inner transcript and the verifier's inner shape alone. -/
+opening the inner transcript and the verifier's inner shape alone. At candidate 3's inner shape (`--rec-inner` naming a
+RecSparse shape), every statement needs the inner statement's files, whose sparse range is checked first
+(`RecCoins.checkAtC3`). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
     | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F | --rec-inner-coins F]] [--coins seed|os]"; return 2
@@ -763,6 +769,7 @@ def statementCmd (args : List String) : IO UInt32 := do
       else pure none
     | _, none => pure none
   match (do
+      RecCoins.checkAtC3 recInner recCoins
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
       if recInner.isSome then
@@ -771,7 +778,7 @@ def statementCmd (args : List String) : IO UInt32 := do
       if recCommits.isSome then RecVStar.checkPubRows st registered recCommits (recInner.bind (·.sparse))
       let u := st.c.unit.name
       if recCoins.isSome || (c3.isSome && ((RecCoins.stackedParams u).isSome || (RecOpening.params u).isSome)) then
-        RecCoins.check st registered recCoins c3
+        RecCoins.check st registered (RecCoins.Source.atC3 recCoins recInner recCommits) c3
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"

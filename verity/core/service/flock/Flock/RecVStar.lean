@@ -50,7 +50,8 @@ instance instReprShape : Repr RecSparse.Shape := ⟨fun s _ => repr (s.nu, s.ell
 link point (`Stmt.extraClaims`, `rec_vstage.verifier`'s `2 + len(extras)`), its table's regions (`Stmt.regions`), and
 whether its circuits are private (`holo`, `rec_algebra.Shape.holo`): the verifier's own `--hide`, never the prover's.
 Candidate 3's session (`rec_live.schedule_for` with `sparse`) also has its sparse phase's RecSparse shape (`sparse`, the
-bucket's, the verifier's own `--sparse`) and, when it committed R, R's shape (`stacked`, the inner circuit's META's). -/
+bucket's, the verifier's own `--sparse`) and R's shape (`stacked`, the inner circuit's META's), which its V* list needs
+beside it (`candidate3Statements`). -/
 structure Inner where
   m : Nat
   kLog : Nat
@@ -139,10 +140,11 @@ def openingParts (r : StackedShape) : Except String (Array VStar.Stmt) := do
   pure out
 
 /-- **Candidate 3's statements** at the inner shape `i` (`rec_vstage.stage --sparse`): the sparse phase's RecSparse over
-both reps at the bucket's shape (`i.sparse`, its `h` the table's `hRound`); and when the session committed R
-(`i.stacked`, META's), R's levels at `fast100(m)` over its one stream's `q` openings each (`rec-open-stacked/l<2^lanes>-h<d −
-cap>`), then the parts of R's opening (`openingParts`). R is opened at the two reps' sparse claims, at the bucket's
-`table_m`, so a shape of R otherwise is refused; so is R without the sparse phase, whose claims it opens. -/
+both reps at the bucket's shape (`i.sparse`, its `h` the table's `hRound`); then R's (`i.stacked`, META's): its levels at
+`fast100(m)` over its one stream's `q` openings each (`rec-open-stacked/l<2^lanes>-h<d − cap>`), then the parts of its
+opening (`openingParts`). R is opened at the two reps' sparse claims, at the bucket's
+`table_m`, so a shape of R otherwise is refused; so is R without the sparse phase, whose claims it opens, and the sparse
+phase without R, which opens them. -/
 def candidate3Statements (i : Inner) : Except String (Array VStar.Stmt) := do
   match i.sparse, i.stacked with
   | none, none => pure #[]
@@ -153,7 +155,8 @@ def candidate3Statements (i : Inner) : Except String (Array VStar.Stmt) := do
     if !sp.valid then
       throw s!"candidate 3's V* list: {RecSparse.unitName sp}: rec-sparse's NU is at least 1, ELL at least 6 and T_LOG at most 16"
     let sparse := VStar.Stmt.sparse sp (hRound i.m i.kLog)
-    let some r := r? | pure #[sparse]
+    let some r := r? | throw (s!"candidate 3's V* list: the inner shape names RecSparse ({RecSparse.unitName sp}) and no R's " ++
+      s!"shape ({STACKED_SHAPE_KEY}): R opens the sparse phases' claims, so R is missing")
     if r.claims != STACKED_CLAIMS then
       throw s!"candidate 3's V* list: R's claims {r.claims}, not the two reps' sparse claims ({STACKED_CLAIMS})"
     if r.m != tableM sp then
@@ -908,6 +911,21 @@ def checkCovers (i : Inner) (cs : InnerCommits) : V Unit := do
   if i.stacked != cs.stacked then
     throw s!"rec-inner: the verifier's inner shape names R's shape {showR i.stacked}, and the inner circuit's META {showR cs.stacked} ({STACKED_SHAPE_KEY})"
   checkCommitRounds i cs
+
+/-- **Candidate 3's inner shape is its inner statement's**: it names the bucket's RecSparse shape (`rec-inner --sparse`),
+and its `m`, `k_log` and region count are those of the inner statement check 5 sets up (`m`, `kLog`, `regions`), as
+`innerOf` reads them, so V*'s list, the streams it holds and the class the sparse phase is weighed at are one table's. -/
+def checkInnerShape (i : Inner) (m kLog regions : Nat) : Except String Unit := do
+  if i.sparse.isNone then
+    throw ("rec-inner: candidate 3's inner shape names no RecSparse shape (rec-inner --sparse): its V* list would have no " ++
+      "RecSparse statement, level of R's or part of R's opening")
+  if i.m != m || i.kLog != kLog || i.regions != regions then
+    throw (s!"rec-inner: the verifier's inner shape (m {i.m}, k_log {i.kLog}, regions {i.regions}) is not the inner " ++
+      s!"statement's (m {m}, k_log {kLog}, regions {regions})")
+
+/-- `checkInnerShape` at the inner statement `st`. -/
+def checkInnerStmt (i : Inner) (st : Stmt) : Except String Unit :=
+  checkInnerShape i st.m st.c.kLog st.regions.size
 
 /-- `rec-opening-c<i>`'s `i`. -/
 def openingIndex (value : String) : Option Nat :=

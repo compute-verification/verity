@@ -8,6 +8,10 @@ Check 5 (`RecCoins.checkSparse`) refuses the inner shape's `sparse` entry off Re
 `6 ≤ ELL`), inner points short of `ELL − 6` (`RecCoins.sparseV`) and slots off the inner circuit's unit range
 (`RecCoins.layoutFactors`), and the event carries its verdict (`SparseRangeOk`). So:
 
+* `sparseRangeOk_of_check`: the verifier evaluates that verdict on the inner statement at every candidate-3 session's
+  setup (`RecCoins.checkAtC3`, which sets the statement up from its files, `checkAtC3_spec`, and runs
+  `RecCoins.checkInnerRange`, `checkInnerRange_spec`), so where the statement's class checks pass (`execClassAt_kLog`)
+  its acceptance is `SparseRangeOk`, and the inner shape is candidate 3's at the statement (`checkInnerStmt`).
 * `ellOk_of_sparseRange`: `ℓ` is in the class's range `[6, k_log]` (`HoloParams.EllOk`), where `holoAt` takes it.
 * `units_of_sparseRange`: where the slots' units are the unit range's (`UnitsOf`), the class keeps every one of them
   (`HoloClass.ofExec`'s filter): the range ends inside the `2^(k_log − ℓ)` units of the block.
@@ -40,6 +44,73 @@ theorem layoutFactors_end {sh : Flock.RecSparse.Shape} {xs ys : Array Flock.F128
     exact hc (by simp [Nat.lt_of_not_le hn])
   simp only [FlockLevel3.eqTable_size, Array.size_extract, min_self] at hle
   exact hle.trans (min_le_left _ _)
+
+/-- **`checkInnerRange` accepting**: the inner shape is candidate 3's at the statement, and at its RecSparse shape, which
+is valid, zero points of the statement's `k_log − 6` coordinates are not short of `ELL − 6` and give layout factors at
+its unit range. -/
+theorem checkInnerRange_spec {i : Flock.RecVStar.Inner} {st : Flock.Stmt}
+    (h : Flock.RecCoins.checkInnerRange i st = .ok ()) :
+    Flock.RecVStar.checkInnerStmt i st = .ok () ∧ ∀ sp, i.sparse = some sp →
+      sp.valid = true ∧ ¬ (Array.replicate (st.c.kLog - 6) (0 : Flock.F128)).size < sp.ell - Flock.RecSparse.PRE_ROUNDS ∧
+        ∃ rng, Flock.RecCoins.unitRangeOf st = .ok rng ∧
+          (Flock.RecCoins.layoutFactors sp (Array.replicate (st.c.kLog - 6) (0 : Flock.F128))
+            (Array.replicate (st.c.kLog - 6) (0 : Flock.F128)) rng).isOk = true := by
+  unfold Flock.RecCoins.checkInnerRange at h
+  cases hc : Flock.RecVStar.checkInnerStmt i st with
+  | error e => rw [hc] at h; cases h
+  | ok u =>
+    refine ⟨rfl, fun sp hsp => ?_⟩
+    rw [hc] at h
+    rw [Array.size_replicate]
+    simp only [bind, Except.bind, hsp, Array.size_replicate] at h
+    by_cases hv : sp.valid = true
+    · by_cases hs : st.c.kLog - 6 < sp.ell - Flock.RecSparse.PRE_ROUNDS
+      · simp [hv, hs, throw, throwThe, MonadExceptOf.throw] at h
+      · refine ⟨hv, hs, ?_⟩
+        cases hr : Flock.RecCoins.unitRangeOf st with
+        | error e => simp [hv, hs, hr, Except.mapError] at h
+        | ok rng =>
+          refine ⟨rng, rfl, ?_⟩
+          cases hl : Flock.RecCoins.layoutFactors sp (Array.replicate (st.c.kLog - 6) (0 : Flock.F128))
+            (Array.replicate (st.c.kLog - 6) (0 : Flock.F128)) rng with
+          | error e => simp [hv, hs, hr, hl, Except.mapError, throw, throwThe, MonadExceptOf.throw] at h
+          | ok _ => rfl
+    · simp [hv, throw, throwThe, MonadExceptOf.throw] at h
+
+/-- **`checkAtC3` accepting at candidate 3's inner shape**: the verifier holds the inner statement's files, the inner
+statement `st` sets up from them, and `checkInnerRange` accepts it. -/
+theorem checkAtC3_spec {i : Flock.RecVStar.Inner} {src : Option Flock.RecCoins.Source}
+    (h : Flock.RecCoins.checkAtC3 (some i) src = .ok ()) (hs : i.sparse.isSome = true) :
+    ∃ f spec st, src = some (.files f) ∧ f.stmt "the inner session" = .ok (spec, st) ∧
+      Flock.RecCoins.checkInnerRange i st = .ok () := by
+  have hn : i.sparse.isNone = false := by cases hsp : i.sparse <;> simp_all
+  unfold Flock.RecCoins.checkAtC3 at h
+  simp only [hn, Bool.false_eq_true, ↓reduceIte] at h
+  rcases src with _ | (f | ⟨j, r⟩)
+  · cases h
+  · cases hf : f.stmt "the inner session" with
+    | error e => simp [hf, bind, Except.bind] at h
+    | ok x =>
+      obtain ⟨spec, st⟩ := x
+      simp only [hf, bind, Except.bind] at h
+      exact ⟨f, spec, st, rfl, hf, h⟩
+  · cases h
+
+/-- `execClassAt`'s `k_log` is the statement's where its class checks pass. -/
+theorem execClassAt_kLog {st : Flock.Stmt} (h : ClassOk (shapeOf st)) : (execClassAt st).cls.kLog = st.c.kLog := by
+  rw [execClassAt, dif_pos h]
+  rfl
+
+/-- **The verifier's range check gives `SparseRangeOk`**: where the inner statement's class checks pass (at an accepted
+statement, `classOk_of_accepts`), `checkInnerRange` accepting is check 5's sparse refusals' verdict at zero points of the
+class's `k_log` (`execClassAt_kLog`), and the inner shape is candidate 3's at the statement. -/
+theorem sparseRangeOk_of_check {ish : Flock.RecVStar.Inner} {st : Flock.Stmt} (hc : ClassOk (shapeOf st))
+    (h : Flock.RecCoins.checkInnerRange ish st = .ok ()) :
+    SparseRangeOk ish st ∧ (Flock.RecVStar.checkInnerStmt ish st).isOk = true := by
+  obtain ⟨hs, hr⟩ := checkInnerRange_spec h
+  refine ⟨fun sp hsp => ?_, by rw [hs]; rfl⟩
+  rw [execClassAt_kLog hc]
+  exact hr sp hsp
 
 /-- **`ℓ` is in the class's range**: RecSparse's shape check gives `6 ≤ ℓ`, and points of `k_log − 6` coordinates not
 short of `ℓ − 6` give `ℓ ≤ k_log`. -/
