@@ -561,13 +561,20 @@ def topk_selection(C, S, *els):
     return topk_final(C, S, ok, n, *idx)
 
 
-DsaTopKSelectionV4 = SB.traced_family(
+def _with_word(d: CompositeDefinition, word: Callable, word_statics: dict) -> CompositeDefinition:
+    """``d`` with its word Definition and the statics that word has no counterpart for (`program.boolean`), as
+    `EW.specialized`'s ``word``."""
+    d.word = word  # type: ignore[attr-defined]
+    d.word_statics = word_statics  # type: ignore[attr-defined]
+    return d
+
+
+DsaTopKSelectionV4 = _with_word(SB.traced_family(
     "DsaTopKSelection", 4, ("TOPK", "N", "C"), lambda S: (_row_sig(S), BIT), topk_selection,
     "`DsaTopKSelection_v3{TOPK,N}` on bits in chunks of C positions: `DsaTopKChunk_v1{TOPK,N,C,H}`'s check for each chunk H, "
     "then `DsaTopKFinal_v1{TOPK,N,C}`'s, traced as one circuit (`topk_selection`).  A Program at the served statics calls those "
-    "Definitions at its root instead (`topk_selection_calls`), a unit each.")
-DsaTopKSelectionV4.word = lambda b: bind(D.DsaTopKSelectionV3, TOPK=b["TOPK"], N=b["N"])  # type: ignore[attr-defined]
-DsaTopKSelectionV4.word_statics = {"C": CHUNK}  # type: ignore[attr-defined]
+    "Definitions at its root instead (`topk_selection_calls`), a unit each."),
+    lambda b: bind(D.DsaTopKSelectionV3, TOPK=b["TOPK"], N=b["N"]), {"C": CHUNK})
 
 BOOLEAN_DSA = [U32AndV2, I32SubV2, I32ToF32V2, F32CeilFtzV2, DsaUe8m0ScaleV2, DsaUe8m0QuantV2, DsaIndexerKRowV2, DsaIndexerQHeadV2,
                DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaMqaLogitV4, DsaMqaLogitsV4, DsaTopKShortRowV2, DsaTopKSelectionV2,
