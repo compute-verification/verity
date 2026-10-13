@@ -19,10 +19,10 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
 * `HoloReg`: a word `w` and a level-0 cap `cap`, the inner statement; `Opens` is a registrant's openings of every
   position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditC3` does
   not take: its word is the one the prover's own runs open (`Recursive/RegExtract.lean`).
-* `StackedTop lv st reg cap`: `cap` is R's registered top, the `stacked` entry of the registration record `reg` (the
-  verifier's `--rec-inner-registration`) that the inner statement's META binds by its digest (`metaRegistration st`,
-  `RecVStar.registration`): the entry `topEntry` makes from one hm96 commit string per node, each over the node's row
-  (`Firewall.topRows`, `rowDigest`) under a salt. The verifier holds it of the binding round's top (`innerCommitsAt`).
+* `StackedTopAt lv st reg cap bcs'`: `cap` is R's registered top at the explicit commit strings `bcs'`, the `stacked`
+  entry of the registration record `reg` (the verifier's `--rec-inner-registration`) that the inner statement's META
+  binds by its digest (`metaRegistration st`, `RecVStar.registration`). Its five structural fields are those computed
+  by `topEntry`; the verifier checks them beside its canonical comparison.
 * `AcceptsC3`: the verifier's checks at candidate 3 of its own inputs, which the event carries: V*'s list builds, the
   inner transcript holds against R's registration (`innerCommitsAt`), and check 5's sparse refusals pass
   (`SparseRangeOk`: `ℓ` in `[6, k_log]`, the unit range's slots inside the block). `UnitsOf`: the slots' units are the

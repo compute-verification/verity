@@ -115,12 +115,14 @@ takes, each with who discharges it:
 * Sparse-phase order: the recorded one. `holoTableCL` plays each rep's sparse phase after both reps, reading only that
   rep's zerocheck, lincheck and `h`, fixed before its coins, so the bridge replays the record round for round and no
   reordering lemma is needed.
-* `Creg`: the inner statement's `x.cap`, tied by `StackedTop` to the META-bound record's `stacked` entry; the
+* `Creg`: the inner statement's `x.cap`, tied by `StackedTopAt` at explicit commit strings to the META-bound record's
+  structurally checked `stacked` entry; the
   registrant's openings of every level-0 position are `_hreg` (`HoloReg.Opens`). Closeness is in `holds`, not a hypothesis.
-* The tie is the verifier's (round 3, ruling 1): the event's `AcceptsC3` holds the inner transcript against `reg`
+* The tie is the verifier's (round 4 follow-up): the event's `AcceptsC3` holds the inner transcript against `reg`
   (`innerCommitsAt`, `RecVStar.innerCommits` at the verifier's own `tr`, `record` and `reg`), whose binding round's top
-  must make the `stacked` entry, compared canonically (`TopOf`); `_hstk` is gone, and t0 derives `StackedTop` from that
-  hold. The digest is `metaRegistration st`, META's `registration` of the inner circuit the verifier reads off
+  must match the `stacked` entry's five fields as well as its canonical form. `_hstk : StackedTopAt … bcs'` carries
+  the registered strings explicitly; a different held top is `topFinder`'s one-run collision event. The digest is
+  `metaRegistration st`, META's `registration` of the inner circuit the verifier reads off
   `--rec-inner-circuit`, the file `AcceptsPublic` sets `st` up from.
 * Who registers R: the inner session's prover. Its staging commits R's table and writes the registration record, and
   the verifier checks only that META binds the record's digest and that the binding round's top makes its `stacked`
