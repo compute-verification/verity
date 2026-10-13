@@ -69,9 +69,9 @@ charged \(A\) and the rest of the pass in flight at its challenge, where the ses
 
 The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with 33,273 openings a window (`Params.samples`), 555 a
 second. There, on one RTX PRO 6000 with its whole HBM as the store, every window's whole \(\gamma_t\) is under 1%:
-0.81–0.85% in the worst window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes holds for its pooled
-\(\mu_{\text{sample}}\) (0.0083%) but not for its whole γ (0.63%): λ and \(\mu_{\text{chip}}\) each exceed 0.15% by
-themselves (§10, `timing.stated`). Which of the two the 0.15% bounds is open; both readings are in §10. Below about
+0.81–0.85% in the worst window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes is stated for its pooled
+\(\mu_{\text{sample}}\) (0.0083%), with its whole γ (0.63%) reported beside it: λ and \(\mu_{\text{chip}}\) each
+exceed 0.15% by themselves (§10, `timing.stated`). Below about
 36 GB a GPU no \(T\) meets 1% (§10, `timing.store_floor`). 20 s and 1 s are options with their own readings: at 20 s
 and 11,091 openings every window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.30–1.39%, and at 1 s
 and 2,773 its \(\mu_{\text{sample}}\) is under 1% and its whole \(\gamma_t\) 5–14%.
@@ -709,8 +709,9 @@ window \(t\)'s share of correct receipts. Set that to δ: except with δ, the wr
 correct receipts. The same event bounds every window's share by itself: \(f_t < \bar d \sum_u s_u / s_t\), about
 \(\ln(1/\delta)/s_t\), with no union over the windows.
 
-Daniel's claim is that hybrid (#1884): short by under 0.15% over a 10-minute horizon and by under 1% in every window,
-at \(2^{-40}\), with the window stated at \(T\) = 60 s and 33,273 openings (13 Oct). For \(\mu_{\text{sample}}\) it
+Daniel's claim is that hybrid (#1884): short by under 0.15% over a 10-minute horizon (for \(\mu_{\text{sample}}\),
+below) and by under 1% in every window (for the whole \(\gamma_t\)), at \(2^{-40}\), with the window stated at
+\(T\) = 60 s and 33,273 openings (13 Oct). For \(\mu_{\text{sample}}\) it
 needs \(d \ge 2{,}773\) openings a window and \(d \cdot n \ge 18{,}470\) over the horizon's \(n\) windows. The stated
 window's 33,273 give each window a floor of 0.083%, and the horizon's 10 windows \(\ln(2^{40})/(d\,n)\) = 0.0083%.
 The 20 s option's 11,091 give each window 0.25%, and over its 30 windows the same 0.0083%. The 1 s option's 2,773
@@ -757,18 +758,14 @@ where \(t_{\text{pass}}\) is the store's read at \(R\) (`timing.store_floor`). B
 50 µs, no \(T\) meets 1% below 45.7 GB. The suite checks the closed form against `ledger` on a 20-minute window, 2%
 either side of it.
 
-**The horizon's 0.15%, two readings.** Over the horizon the pooled \(\mu_{\text{sample}}\) is 0.0083% and the whole
-γ 0.63% at best. λ (64 bits a 4 KiB block, 0.195%) and \(\mu_{\text{chip}}\) (\(S_{\text{chip}}\) over a GPU's store,
-0.28% at the whole HBM) each exceed 0.15% by themselves, and neither shrinks with more openings or longer windows.
-Which the 0.15% bounds is open:
-
-- **For \(\mu_{\text{sample}}\), with the whole γ reported beside it.** This holds at every stated and optional
-  \(T\). It is the default Daniel was asked about on 13 Oct, and it applies from 9:00 AM PDT that day unless he
-  rules otherwise.
-- **For the whole γ.** This holds at no \(T\) and no count of openings today. Even with λ and
-  \(\mu_{\text{chip}}\) at 0, the horizon's γ would be 0.159–0.162%: the chain's steady state (0.079% at \(g\) =
-  50 µs and 63 ms passes, 0.083–0.086% with the session's ends), \(\mu_{\text{rebuild}}\) (0.067%) and the pooled
-  \(\mu_{\text{sample}}\).
+**The horizon's 0.15%** is stated for its pooled \(\mu_{\text{sample}}\), with the whole γ reported beside it (the
+default put to Daniel on 13 Oct, in force from 9:00 AM PDT that day unless he rules otherwise). The pooled
+\(\mu_{\text{sample}}\) is 0.0083% at every stated and optional \(T\), and the whole γ 0.63% at best. λ (64 bits a
+4 KiB block, 0.195%) and \(\mu_{\text{chip}}\) (\(S_{\text{chip}}\) over a GPU's store, 0.28% at the whole HBM) each
+exceed 0.15% by themselves, and neither shrinks with more openings or longer windows. The whole γ meets 0.15% at no
+\(T\) and no count of openings today. Even with λ and \(\mu_{\text{chip}}\) at 0 it would be 0.159–0.162%: the
+chain's steady state (0.079% at \(g\) = 50 µs and 63 ms passes, 0.083–0.086% with the session's ends),
+\(\mu_{\text{rebuild}}\) (0.067%) and the pooled \(\mu_{\text{sample}}\).
 
 **What λ and \(\mu_{\text{chip}}\) would take** (the grid's last sections, at 94 GB and 63 ms passes). λ is
 AuditRO's \(C(q, k)\) for a pass's \(k\) receipts, charged as \(\log_2 q\) = 64 bits a receipt. Under 0.05% it may be
