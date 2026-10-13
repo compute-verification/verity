@@ -77,11 +77,6 @@ theorem crossing_of_signals {E : Type*} {R R' : Actual.Run L} (link : Fin R.A.N 
   · rintro ⟨h1, h2, h3, e, he⟩
     exact ⟨h1, h2, h3, e, by rwa [h e _ h2]⟩
 
-/-- The signals a list of ports (a link and the leaf of `X` it delivers to) carries at tick `u`. -/
-def portSignals {E : Type*} (S : Ω → Actual.Run L) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
-    (ports : List (E × L)) (r : Ω) (u : ℕ) : List (Set (ℕ × L × ℕ × ℕ × ℕ)) :=
-  ports.map fun p => (S r).signal (link r) p.1 p.2 u
-
 /-- When every wire into `X` runs on one of the ports, the ports' signals at `u` fix what crosses into `X` at `u`. -/
 theorem crossing_of_ports {E : Type*} (S : Ω → Actual.Run L) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
     (X : Finset L) (ports : List (E × L))

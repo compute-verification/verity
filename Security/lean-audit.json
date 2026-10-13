@@ -457,9 +457,14 @@
    "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Models.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; B2 and lemma M compose with PoUS's audit game (Definitions.Pous) and take P2's named assumption P2RingAuditSecure (Models.Pous.Assumptions.P2) as a hypothesis; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Models.Pous.Assumptions.P2)"
   },
   "Definitions.Accounting.Bandwidth": {
-   "imports": ["Mathlib", "Definitions.Pous.Game.Prob", "Definitions.Accounting.Bandwidth"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous.Game.Prob",
+    "Definitions.Accounting.Confidence",
+    "Definitions.Accounting.Bandwidth"
+   ],
    "except": [],
-   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof"
+   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence)"
   },
   "Models.Accounting.Guarantees.Bandwidth": {
    "imports": [
@@ -1209,11 +1214,47 @@
    "assumptions": [],
    "type_hash": "0fe66fd603e783a1c5e889f218ec0a4acaee1afc91e09411b7939048763df73e"
   },
+  "Bandwidth.SecurityProofs.B3": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.B3.{u_1, u_2} : Bandwidth.Guarantees.B3"],
+   "assumptions": [],
+   "type_hash": "9988a227d2f3af4fb80d344254a7d385a32bc782f3b15912046dc67dc6e51b46"
+  },
+  "Bandwidth.SecurityProofs.B3Capacity": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.B3Capacity.{u_1, u_2} : Bandwidth.Guarantees.B3Capacity"],
+   "assumptions": [],
+   "type_hash": "3216e3384698719316692f6cc6db3bcf06152b0090c10c811f58c9aeb789ed9e"
+  },
+  "Bandwidth.SecurityProofs.B3CapacityRO": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.B3CapacityRO.{u_1, u_2} : Bandwidth.Guarantees.B3CapacityRO"],
+   "assumptions": [],
+   "type_hash": "0ba456e91cf351c91a52beadb346191e0dcbd9f8c5d3183f4209db1cf224204e"
+  },
+  "Bandwidth.SecurityProofs.B3RO": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.B3RO.{u_1, u_2} : Bandwidth.Guarantees.B3RO"],
+   "assumptions": [],
+   "type_hash": "b2dd32b10ed99fff97ec8690ab651b337b9e2cdfd7efa3981e29ad5665e6f3f2"
+  },
   "Bandwidth.SecurityProofs.HonestPasses": {
    "owner": "@memory-accounting",
    "signature": ["Bandwidth.SecurityProofs.HonestPasses : Bandwidth.Guarantees.HonestPasses"],
    "assumptions": [],
    "type_hash": "49bc1714ad2ff09df8968490d1fdbbb60cb38a219cc689e27206f0eac7c207e9"
+  },
+  "Bandwidth.SecurityProofs.Mbw": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.Mbw.{u_1, u_2} : Bandwidth.Guarantees.Mbw"],
+   "assumptions": [],
+   "type_hash": "a043d64046e92484d432d2c5c7dd267be7cd7917c32ba60d166d5dbd87438d54"
+  },
+  "Bandwidth.SecurityProofs.MbwCapacity": {
+   "owner": "@memory-accounting",
+   "signature": ["Bandwidth.SecurityProofs.MbwCapacity.{u_1, u_2} : Bandwidth.Guarantees.MbwCapacity"],
+   "assumptions": [],
+   "type_hash": "14543c855bb73081fb225a17c7df7478387af02155c806d46e19367db0d5f2f6"
   },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
@@ -4877,7 +4918,13 @@
    "Accounting.SecurityProofs.TileUnpredictableOfNCPU": "frozen (conjecture,no-function,hash): As Accounting.SecurityProofs.TileUnpredictableOfTT, for NCP's named conjecture TT_NCP_U on route U.",
    "Accounting.SecurityProofs.TileUnpredictableOfTT": "frozen (conjecture,no-function,hash): It carries the named open conjecture TT over PoUW's game with a uniform oracle to one unit's checked values (Accounting.Guarantees.TileUnpredictable), about no Lean function of the protocol's code.",
    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut": "frozen (conjecture,no-function,hash): It carries an assumption of the named open conjecture TT_OUT's shape, at any Pearl-C protocol, over Pearl-C's game with a uniform oracle to one unit's correctness (Accounting.Guarantees.TileUnpredictablePearlC), about no Lean function of the protocol's code.",
-   "Bandwidth.SecurityProofs.AuditJoint": "frozen (no-function,hash): As AuditRO, for a device whose layout also reads n bits z, uniform and independent of the store, which its chip outputs (Security/Definitions/Accounting/Bandwidth/Joint.lean): the compression over the pair (store, z) moves the floor up by n, so an accept gives n <= ingress - cert_bw at AuditRO's error (Mbw, bandwidth additivity by counting)."
+   "Bandwidth.SecurityProofs.AuditJoint": "frozen (no-function,hash): As AuditRO, for a device whose layout also reads n bits z, uniform and independent of the store, which its chip outputs (Security/Definitions/Accounting/Bandwidth/Joint.lean): the compression over the pair (store, z) moves the floor up by n, so an accept gives n <= ingress - cert_bw at AuditRO's error (Mbw, bandwidth additivity by counting).",
+   "Bandwidth.SecurityProofs.B3": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from the store and the oracle to Accounting.Actual.Run) causal from every tick (CausalFrom), with the chip's ports' constraints (Alphabet, PassiveMemory, OracleLocation, and every wire into the chip on a port of HBM, the rest or the oracle: Security/Definitions/Accounting/Bandwidth/Causal.lean) as hypotheses that are not on the premises list, rather than a function's acceptance; it is AuditInteractive's bound at S = M + 1 and c = beta_side * T for the chip of such a run (the console's B3 at e > 0, m * b less for relayed tags).",
+   "Bandwidth.SecurityProofs.B3RO": "frozen (no-function,world-unlisted): As B3, when the rest's ports' signals don't depend on the oracle, at AuditInteractiveRO's bound with no relayed-tag term (the console's B3 at e = 0: the chip read at least k * b - M_chip - 1 - c_side - lam bits from HBM).",
+   "Bandwidth.SecurityProofs.B3Capacity": "frozen (no-function,world-unlisted): As B3, with HBM hearing only the chip (HearsChip: what HBM's ports deliver is a function of the store and of what the chip did) in place of passive memory, and every tick's HBM signal counted at its ports' capacities summed (B3's capacity form).",
+   "Bandwidth.SecurityProofs.B3CapacityRO": "frozen (no-function,world-unlisted): As B3RO, in B3Capacity's capacity form.",
+   "Bandwidth.SecurityProofs.Mbw": "frozen (no-function,world-unlisted): As B3RO, for a strategy over the store, n bits z (uniform and independent of the store and the oracle) and the oracle, whose chip's view (its content at the window's start and what crosses into it in the window) determines z: the floor moves up by n, so an accept gives n <= reads - cert_bw at AuditRO's error (the console's Mbw, bandwidth additivity by counting, on a strategy's runs).",
+   "Bandwidth.SecurityProofs.MbwCapacity": "frozen (no-function,world-unlisted): As Mbw, in B3Capacity's capacity form: an accept gives n <= beta_HBM * T - cert_bw."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -4935,7 +4982,31 @@
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.Recall",
-    "Accounting.SecurityProofs.pouwRow"
+    "Accounting.SecurityProofs.pouwRow",
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity"
+   ]
+  },
+  "Definitions.Accounting.Bandwidth.Causal": {
+   "digest": "77c0e7236051b937516370d1b66cdabfd998ca6d239df4ace8f07b4195a4d0bc",
+   "definitions": {
+    "Bandwidth.Causal.Acts": "1ca623e41a5214c918751e8e5f2b0d5811c82b75d84df0dc84a397e43f28fdc7",
+    "Bandwidth.Causal.Cross": "ebaffc3a897d7c709cdafee0baaf0a9848e8e93738a322e468768da45d3d8608",
+    "Bandwidth.Causal.HearsChip": "a5eb2858fdf2d8e7693fe5fdb1e0d527b58b1364ea14175ef6e17596c12072eb",
+    "Bandwidth.Causal.OracleLocation": "effcffb04999062d96d55a41336ed5521a126776a0840000c2cdf54416a2b2fe",
+    "Bandwidth.Causal.PassiveMemory": "01110f201c3b2ba387aa41511daebee03a2cb4d6d34a533f626e3f48f3a88eba"
+   },
+   "guarantees": [
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity"
    ]
   },
   "Definitions.Accounting.Bandwidth.Game": {
@@ -4981,7 +5052,13 @@
     "Bandwidth.SecurityProofs.AuditJoint",
     "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
-    "Bandwidth.SecurityProofs.HonestPasses"
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.HonestPasses",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity"
    ]
   },
   "Definitions.Accounting.Bandwidth.Interactive": {
@@ -5136,7 +5213,7 @@
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
   "Definitions.Accounting.Confidence": {
-   "digest": "977dafd69575333d30e4aa5abd7796e2a94d3f778e41c24d710d9863071934df",
+   "digest": "2832d0ccbf65277d155f0683e0940cbb0433e9730d5baa867d9b6fd68e2f6c07",
    "definitions": {
     "Accounting.Actual.Computes": "9319720c640d412d7ba1e51b57f32c7ca303ac42c727e20f0055ae79c371c1cf",
     "Accounting.Actual.Run": "59b9a32712cd5c6f246f1b7e6a3ee435e2d35f3e1882d7a7cf003a7a1be22974",
@@ -5164,6 +5241,7 @@
     "Accounting.CausalFrom": "fee9dbdb5e257e6c997b15ae60f60d662ffd24cddf4861aa15c9f5e5b4280bee",
     "Accounting.Placed.Holding": "3518954773e68e4f3e14e2c6ddd6635884d611c8e5da4db11ad8bfa846774bab",
     "Accounting.Sound": "ab7db8fd6792ca63814601cfcd42c9d07942f59b4e2b9f7af85cf7ca024908c0",
+    "Accounting.portSignals": "ce4ca5ef163dbbaaf7e95aca25dfcec092bd6b766b6ff9a4920894cf0299b817",
     "Accounting.req": "961f514b6304465dc1e7e4fa55e51c523c147c776780150b65c6454bdaed6fea"
    },
    "guarantees": [
@@ -5179,7 +5257,13 @@
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.Recall",
-    "Accounting.SecurityProofs.pouwRow"
+    "Accounting.SecurityProofs.pouwRow",
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity"
    ]
   },
   "Definitions.Accounting.CostModel": {
@@ -5914,6 +5998,12 @@
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.pouwRow",
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -6446,7 +6536,13 @@
     "Bandwidth.SecurityProofs.AuditJoint",
     "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
     "Bandwidth.SecurityProofs.HonestPasses",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity",
     "Pous.SecurityProofs.BandMultiMeetsFamily",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD0",
     "Pous.SecurityProofs.BandMultiMeetsFamilyD1",
@@ -14632,6 +14728,25 @@
     "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.HonestPasses"
+   ]
+  },
+  "Models.Accounting.Guarantees.Bandwidth.Causal": {
+   "digest": "a991ac69e4d2a525b166b5e859cbcd03231393a3d66c809b7a82916c3b61babd",
+   "definitions": {
+    "Bandwidth.Guarantees.B3": "d1b226cedad503642628eaa456f21e48d3d6a9fd47aa5eed036c44d2e3d85e1b",
+    "Bandwidth.Guarantees.B3Capacity": "7f8271d7d306bf13aa1b43f92de062758aa5379a5fdf29cfbd2e1d0214b39f25",
+    "Bandwidth.Guarantees.B3CapacityRO": "bd88bf5e4db44368a20e5f9ca288b33d811878030e76aed3698fa5b0a48352e9",
+    "Bandwidth.Guarantees.B3RO": "3264d93a335c9469d76443a3462ac5c002f1e2a7ae713507556f0c02f60e5100",
+    "Bandwidth.Guarantees.Mbw": "58aae401fa7fba97e68ec282b7407e5296d75fa7d43838a8630e12992d143507",
+    "Bandwidth.Guarantees.MbwCapacity": "e3b467144dbf5983862e967cbcb82d2ea3b504c72033b4cad7b840bdf06dd099"
+   },
+   "guarantees": [
+    "Bandwidth.SecurityProofs.B3",
+    "Bandwidth.SecurityProofs.B3Capacity",
+    "Bandwidth.SecurityProofs.B3CapacityRO",
+    "Bandwidth.SecurityProofs.B3RO",
+    "Bandwidth.SecurityProofs.Mbw",
+    "Bandwidth.SecurityProofs.MbwCapacity"
    ]
   },
   "Models.Accounting.Guarantees.BandwidthAudit": {

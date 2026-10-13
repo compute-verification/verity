@@ -24,7 +24,8 @@ keyed by the source's tick: the sender chooses what crosses, to whom and when) a
 (`CausalFrom`) when what `X` does during `[t, u)` is a function of its state's content at `t` and of what it reads from
 outside during `[t, u)`; the state is the run's own, so fixing coins keeps it. What `X` can tell at `t` (`history`:
 its inputs, its gates before `t` and what it read from outside before `t`) and links as alphabets (`Alphabet`, by
-`signal`) are further hypotheses on a strategy.
+`signal`) are further hypotheses on a strategy. `portSignals` is what a list of ports (a link and the leaf it delivers
+to) carries at a tick.
 
 The *runtime* `t_A(P)` (v2.8, section 7; `Actual.runtime`) reads the strategy too: the least `t` for which some
 positions before `t` (leaf of the developer's, cell, tick), the same for every value of `P`'s inputs put in place of
@@ -172,6 +173,11 @@ noncomputable def Actual.runtime {L : Type*} {P : Verity.Circuit} (S : P.Transcr
 def Alphabet {Ω L E : Type*} (S : Ω → Actual.Run L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) :
     Prop :=
   ∀ e y u, (Set.range fun r => (S r).signal (link r) e y u).encard ≤ ((2 ^ β e : ℕ) : ℕ∞)
+
+/-- The signals a list of ports (a link and the leaf it delivers to) carries at tick `u`, in the run of `S` at `r`. -/
+def portSignals {Ω L E : Type*} (S : Ω → Actual.Run L) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
+    (ports : List (E × L)) (r : Ω) (u : ℕ) : List (Set (ℕ × L × ℕ × ℕ × ℕ)) :=
+  ports.map fun p => (S r).signal (link r) p.1 p.2 u
 
 open Classical in
 /-- **`E` is sound at `δ`** against the feasible runs `𝓕`, for the verifier at `V` accepting on `acc` of its view with

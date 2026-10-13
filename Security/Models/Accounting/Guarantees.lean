@@ -1,5 +1,6 @@
 import Models.Accounting.Guarantees.Actual
 import Models.Accounting.Guarantees.Bandwidth
+import Models.Accounting.Guarantees.Bandwidth.Causal
 import Models.Accounting.Guarantees.BandwidthAudit
 import Models.Accounting.Guarantees.BoundReceipt
 import Models.Accounting.Guarantees.BoundSketch
