@@ -203,7 +203,10 @@ theorem TopColl.collision {wr : List (Cm × I.Coin) → Lean.Json × String} {st
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {dg : ByteArray → ByteArray} {N : ℕ}
 
-/-- One run of the recursive audit, selecting the held-top collision when its concrete top differs from `bcs'`. -/
+/-- One run of the recursive audit, selecting the held-top collision when its concrete top differs from `bcs'`.
+An honest `Finder.CR` budget counts the audit run plus both top recomputations: for each side, one hm96 `treeLeaf`
+hash per commit string and `2 * bcs.size - 1` frame-v3 leaf/node hashes (including padding where the size is not a
+power of two). -/
 noncomputable def topFinder
     (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
     (bcs' : Array ByteArray) (lv : Level) (cap : Cap Refine.Dig)
@@ -237,6 +240,21 @@ theorem prob_topColl_le
   exact (ENNReal.le_ofReal_iff_toReal_le
     (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)) (by positivity)).2 hev
 
+/-- The separate registrant and top finders union-bound their two one-run bad events. -/
+theorem prob_regOrTop_le
+    (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
+    (bcs' : Array ByteArray) (lv : Level) (cap : Cap Refine.Dig)
+    (hstk : Flock.Guarantees.StackedTopAt lv st reg cap bcs')
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
+    {qX qT : ℝ} (hX : (regFinder zs dg N σ).CR Refine.H512 qX)
+    (hT : (topFinder wr st reg bcs' lv cap hstk zs σ).CR Refine.H512 qT) :
+    prob (fun o => RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨ TopColl wr st reg bcs' o.2.2.1)
+      (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+      ENNReal.ofReal (qX ^ 2 / 2 ^ (513 : ℝ)) + ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) :=
+  (prob_or_le _ _ _ _).trans (add_le_add
+    (prob_regColl_le zs dg N σ hX) (prob_topColl_le wr st reg bcs' lv cap hstk zs σ hT))
+
 end FlockSoundness.Discharge.Recursion
 
 #print axioms Flock.SecurityProofs.TopFinder.hexOf_inj
@@ -244,3 +262,4 @@ end FlockSoundness.Discharge.Recursion
 #print axioms Flock.SecurityProofs.TopFinder.topEntryFields_bind
 #print axioms FlockSoundness.Discharge.Recursion.TopColl.collision
 #print axioms FlockSoundness.Discharge.Recursion.prob_topColl_le
+#print axioms FlockSoundness.Discharge.Recursion.prob_regOrTop_le
