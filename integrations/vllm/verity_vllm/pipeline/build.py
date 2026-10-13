@@ -468,7 +468,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 tp_stack.enter_context(tp_group_override(rank, tp, bus))
                 res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": bool(cfg.parallel_config.disable_custom_all_reduce)}
                 # the workload's transport as the row set it (`row_tp.TpRow.p2p_env`) -- recorded, not consulted here
-                res["tp"]["env_required"] = {k: os.environ[k] for k in ("NCCL_P2P_DISABLE",) if k in os.environ}
+                res["tp"]["env_required"] = {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}
                 res["tp"]["collective_backend"] = "pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)"
             model = vm.instantiate_meta(cfg)
             # [R15 fp8] loader parity: a checkpoint that ships a redundant `lm_head.weight` under `tie_word_embeddings` is untied by

@@ -38,7 +38,8 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv, row_p2p_env
+from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.engine.profiles.transport import row_p2p_env
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
@@ -159,7 +160,7 @@ class TpRow(Row):
     def p2p_env(self) -> str | None:
         """The stages' NCCL_P2P_DISABLE: the workload's ``env_required`` value, else unset (one the caller's environment has is
         dropped).  A workload written before it had ``env_required`` requires what the generator writes for its target
-        (`config.row_p2p_env`)."""
+        (`engine.profiles.transport.row_p2p_env`)."""
         req = (R.load_json(self.path(self.wl)) or {}).get("env_required")
         v = (row_p2p_env(self.row) if req is None else req).get("NCCL_P2P_DISABLE")
         if v is None:

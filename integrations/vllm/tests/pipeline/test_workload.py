@@ -5,7 +5,8 @@ import json
 
 import pytest
 
-from verity_vllm.config import P2P_SYS_TARGETS, WORKLOADS, row_p2p_env, row_target, row_world
+from verity_vllm.config import WORKLOADS, row_target, row_world
+from verity_vllm.engine.profiles.transport import P2P_SYS_TARGETS, row_p2p_env
 from verity_vllm.pipeline import workload as W
 
 

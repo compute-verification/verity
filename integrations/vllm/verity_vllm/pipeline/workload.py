@@ -39,8 +39,9 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.config import CHECKPOINTS, WORKLOADS, row_p2p_env
+from verity_vllm.config import CHECKPOINTS, WORKLOADS
 from verity_vllm.config import option
+from verity_vllm.engine.profiles.transport import row_p2p_env
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = "verity-vllm/workload/v1"
