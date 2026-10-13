@@ -6,11 +6,12 @@ reduction no Definition states, whose words change with the split count.  `Spars
 
 `install` wraps the ``flash_attn_varlen_func`` that backend module calls, its own module global, so FA3's dense prefill and every
 other caller keep vLLM's arguments.  It pins one split unless `ENV` is ``"0"`` (vLLM's heuristic) and refuses any other value.
-Every process that builds a served engine pins it before the model's first forward (a CUDA graph captures the call's arguments):
-the driver (`engine.build.build_engine`) installs it, and each tensor-parallel rank, which imports `engine.rank_worker` when vLLM
-mixes the extension into its Worker, `arm`\\ s it: the pin is installed when the backend module is imported, so a process that
-imports `rank_worker` without serving (a committer, a CPU test) imports no vLLM for it.  `num_splits` reads the switch back from
-the process: `meta_inventory`'s selections, which the capture map's ``target.switches`` holds.
+Every process that builds a served engine pins it before the model's first forward (a CUDA graph captures the call's arguments).
+Importing this module `arm`\\ s the pin: it is installed when the backend module is imported, and nothing is imported for it, so a
+process that loads this module without serving (a committer, a CPU test) imports no vLLM.  Each tensor-parallel rank imports it
+through `engine.rank_worker` when vLLM mixes the extension into its Worker; the driver (`engine.build.build_engine`) and the meta
+inventory `install` it outright.  `num_splits` reads the switch back from the process: `meta_inventory`'s selections, which the
+capture map's ``target.switches`` holds.
 """
 from __future__ import annotations
 
@@ -74,13 +75,13 @@ class _OnImport(importlib.abc.MetaPathFinder):
         spec = importlib.machinery.PathFinder.find_spec(name, path)
         if spec is None or spec.loader is None or not hasattr(spec.loader, "exec_module"):
             return spec
-        run = spec.loader.exec_module
+        def exec_module(run: Any) -> Any:
+            def exec_then_pin(module: Any) -> None:
+                run(module)
+                install(module)
+            return exec_then_pin
 
-        def exec_module(module: Any) -> None:
-            run(module)
-            install(module)
-
-        spec.loader.exec_module = exec_module
+        hooks.wrap(spec.loader, "exec_module", exec_module)
         return spec
 
 
@@ -109,5 +110,7 @@ def num_splits() -> int | None:
     otherwise."""
     return SPLITS if _PIN is not None and _PIN.installed else None
 
+
+arm()
 
 __all__ = ["ENV", "NAME", "SITE", "SPLITS", "arm", "install", "num_splits", "uninstall", "wanted"]

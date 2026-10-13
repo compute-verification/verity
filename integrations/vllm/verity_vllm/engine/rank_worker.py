@@ -36,11 +36,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
-from verity_vllm.engine import hooks, sparse_mla
-
-# A rank imports this module when vLLM mixes the extension into its Worker, before it builds the model: the serving switches are
-# armed here, so the rank's first forward (and every CUDA graph it captures) already runs them.
-sparse_mla.arm()
+from verity_vllm.engine import hooks, sparse_mla  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 
 
 def repo_modules_loaded() -> dict[str, Any]:
