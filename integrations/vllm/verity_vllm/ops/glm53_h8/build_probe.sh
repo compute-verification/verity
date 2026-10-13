@@ -1,7 +1,7 @@
 # The TP8 row's CPU Build alone, in a sweep dir of its own: whether this tree derives GLM-5.3's rank Programs (the Commit needs their
-# GP-01 workload digests). Its exit code is the Build's. No GPU is visible to it, as in a row (`gpu_lease`), so it can run beside
-# a GPU step without opening contexts on its devices.
-export SWEEP_DIR=/workspace/cp/sweep-build-probe CUDA_VISIBLE_DEVICES=
+# GP-01 workload digests). Its exit code is the Build's. Its derives need one visible GPU: vLLM's DSA model allocates its
+# topk_indices_buffer on CUDA in __init__, even on the meta device (r20261013-001116-ec17), so it runs while no GPU step does.
+export SWEEP_DIR=/workspace/cp/sweep-build-probe CUDA_VISIBLE_DEVICES=0
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 rm -rf "${SWEEP_DIR:?}/$ROW"
 stamp build-probe | tee "$O/build-probe.log"
