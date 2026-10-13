@@ -26,8 +26,8 @@ the weights and the cache fill the memory once. Arms, interleaved over `--reps`,
 - `pass`: a read of the weights and the cache (the native pass);
 - `plain` and per k `enc{k}`: the whole step (and `_layerwise`: each layer's append on the second stream after its qkv;
   `_noappend`: no append);
-- the parts alone: `_W` the linears (encoded: sketched, with the step's commit; `_Wu` untagged), `_A` attention, `_P`
-  the append on the main stream.
+- the parts alone: `_W` the linears (encoded: sketched, with the step's commit; `_Wn` sketched without it, so `_Wn` −
+  `_Wu` is the receipt and `_W` − `_Wn` the commit; `_Wu` untagged), `_A` attention, `_P` the append on the main stream.
 `model` sets the measured terms (in native passes) beside the mainline model's,
 step = 1 + f_KV max(0, c k - h) + f_W (small) + f_KV k x_1 / ctx + tau.
 """
@@ -530,7 +530,7 @@ class Step:
     def step(self, k: int, append: str = "async", parts: str = "WA") -> None:
         """k = 0: the plain step. append: async (one launch on the second stream, beside the step), layerwise (each
         layer's after its qkv, on the second stream), serial (one launch first, on the main stream) or none. parts: W
-        (the linears), A (attention), u (the linears untagged)."""
+        (the linears), A (attention), u (the linears untagged), n (no commit after sketched linears)."""
         torch = self.torch
         main = torch.cuda.current_stream()
         enc = k > 0
@@ -556,7 +556,7 @@ class Step:
                         self.attn(l, self.form[k], k)
         if "W" in parts or "u" in parts:
             self.lin_enc(self.layers, "lm_head", k, sketch) if enc else self.lin_plain(self.layers, "lm_head")
-            if sketch:
+            if sketch and "n" not in parts:
                 self.commit(k)
         if append in ("async", "layerwise"):
             self.ev[-2].record(self.s2)
@@ -644,6 +644,8 @@ def model_terms(res: dict) -> dict:
             "weights": (t[f"{e}_W"] - t["plain_W"]) / p,
             "weights_decode": (t[f"{e}_Wu"] - t["plain_W"]) / p,
             "weights_tag": (t[f"{e}_W"] - t[f"{e}_Wu"]) / p,
+            "weights_receipt": (t[f"{e}_Wn"] - t[f"{e}_Wu"]) / p,
+            "weights_commit": (t[f"{e}_W"] - t[f"{e}_Wn"]) / p,
             "attention": (t[f"{e}_A"] - t["plain_A"]) / p,
             "append_async": (t[e] - t[f"{e}_noappend"]) / p,
             "append_serial": t[f"{e}_P"] / p,
@@ -686,6 +688,7 @@ def step_points(res: dict, run_id: str | None) -> dict:
                     "f_kv": res["f_kv"], "f_w": res["f_w"], "stored_bytes": res["stored_bytes"],
                     "step_over_plain": r["step_over_plain"], "d": r["d"], "plain_over_pass": res["model"]["plain_over_pass"],
                     "o_w_per_w_pass": r["o_w_per_w_pass"], "tau_w_per_w_pass": r["tau_w_per_w_pass"],
+                    "weights_receipt": r["weights_receipt"], "weights_commit": r["weights_commit"],
                     "attention_per_kv_pass": r["attention_per_kv_pass"], "append_async": r["append_async"],
                     "mu_rebuild_pooled": r["mu_rebuild_pooled"],
                     "sketch_configs": {n: p["k"].get(k, p["k"].get(str(k)))["sketch"]
@@ -704,7 +707,8 @@ def write_result(res: dict, out_dir: Path, libs) -> None:
     for a, v in res.get("times", {}).items():
         ms.append({"name": f"{a}_s", "value": v, "unit": "s"})
     for k, row in res.get("model", {}).get("k", {}).items():
-        for name in ("step_over_plain", "d", "weights", "weights_tag", "attention", "append_async"):
+        for name in ("step_over_plain", "d", "weights", "weights_decode", "weights_receipt", "weights_commit",
+                     "attention", "append_async"):
             ms.append({"name": f"k{k}_{name}", "value": row[name], "unit": "1"})
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/step.json", f"{rel}/step.log"] + ([f"{rel}/step-points.json"] if "model" in res else [])
@@ -888,6 +892,7 @@ def main() -> int:
                      f"enc{k}_noappend": lambda k=k: S.step(k, "none"),
                      f"enc{k}_W": lambda k=k: S.step(k, "none", "W"),
                      f"enc{k}_Wu": lambda k=k: S.step(k, "none", "u"),
+                     f"enc{k}_Wn": lambda k=k: S.step(k, "none", "Wn"),
                      f"enc{k}_A": lambda k=k: S.step(k, "none", "A"),
                      f"enc{k}_P": lambda k=k: S.step(k, "serial", "")})
     host = {}
@@ -921,7 +926,8 @@ def main() -> int:
     log(f"times (ms): " + ", ".join(f"{n} {v * 1e3:.2f}" for n, v in t.items()))
     log(f"plain step {t['plain'] / p:.3f} passes; " + "; ".join(
         f"k={k}: step {r['step_over_plain']:.3f}x plain, d {r['d']:.3f} (layerwise append {r['d_layerwise']:.3f}); "
-        f"weights {r['weights']:+.3f} (decode {r['weights_decode']:+.3f}, tag {r['weights_tag']:+.3f}), attention "
+        f"weights {r['weights']:+.3f} (decode {r['weights_decode']:+.3f}, tag {r['weights_tag']:+.3f}: receipt "
+        f"{r['weights_receipt']:+.3f}, commit {r['weights_commit']:+.3f}), attention "
         f"{r['attention']:+.3f} (model {r['model_attention'][0]:+.3f}..{r['model_attention'][1]:+.3f}), append "
         f"{r['append_async']:+.3f} async / {r['append_serial']:.3f} serial (model {r['model_append']:.3f}); model step "
         f"{r['model_step'][0]:.3f}..{r['model_step'][1]:.3f}; mu_rebuild {r['mu_rebuild_pooled']:.2%} at x1 175"
