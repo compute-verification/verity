@@ -152,7 +152,9 @@ def mufu_lg2_mantissa_bits(x: int) -> int:
 @primitive("MufuLg2Mantissa", 1, [("x", F32)], F32,
            conformance="exact-model-tested: lg2.approx.ftz.f32 on every 1.m of [1, 2), 8,388,608 words measured on the RTX PRO 6000 "
                        "(cc 12.0; run r20261004-060203-ba52) equal to the interpolant; cc 9.0 not yet captured "
-                       "(tests/properties/dsv4_moe_capture_gpu.py)")
+                       "(tests/properties/dsv4_moe_capture_gpu.py)",
+           # a measured MUFU table in substance, but not on `verity.ml.circuits.library`'s versioned list, so the guard lists it
+           tables=(("lg2_coeffs", "registered"),))
 def MufuLg2Mantissa(x: int) -> int:
     """MUFU.LG2 (``lg2.approx.f32``) of 1.m, m = x's 23 mantissa bits: the unit's quadratic interpolator rounded toward zero on
     the 2^-36 grid, +0 at m = 0."""
