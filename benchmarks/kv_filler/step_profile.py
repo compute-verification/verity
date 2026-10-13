@@ -284,16 +284,18 @@ def main() -> int:
                 eng.step()
                 torch.cuda.synchronize()
             wall = time.perf_counter() - t0
-            if not count[0]:
+            kernels = traced(prof)
+            if not count[0] or not kernels or done >= a.prefill:
                 continue
             chunk = min(a.max_batched_tokens, a.prefill - done)
             done += chunk
             s = {"chunk": chunk, "context": done, "steps": count[0], "wall_ms": wall * 1e3,
-                 **split(traced(prof), count[0], weight_bytes, done * KV_TOKEN_BYTES, a.R, a.native_R)}
+                 **split(kernels, count[0], weight_bytes, done * KV_TOKEN_BYTES, a.R, a.native_R)}
             res["prefill"].append(s)
             log(f"prefill chunk of {chunk} at context {done}: wall {s['wall_ms']:.2f} ms, kernels {s['kernel_ms']:.3f} "
                 f"ms (span {s['span_ms']:.3f}): GEMM {s['ms']['gemm']:.3f}, attention {s['ms']['attention']:.3f}, other "
-                f"{s['ms']['other']:.3f}; idle in step {s['idle_in_step_ms']:.3f} ms")
+                f"{s['ms']['other']:.3f}; idle in step {s['idle_in_step_ms']:.3f} ms; "
+                + ", ".join(f"{k['name'][:60]} {k['ms']:.2f}" for k in s["kernels"][:10]))
         (a.out / "step_profile.json").write_text(json.dumps(res, indent=1) + "\n")
     log("done")
     return 0
