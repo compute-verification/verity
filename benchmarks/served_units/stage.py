@@ -54,6 +54,7 @@ from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import act, b1, dsa, fp8_moe, moe, ref_prims, sparse_mla
+from verity_vllm.program.registry import sampling_boolean as SB
 from verity_vllm.program.registry import boolean_fp8 as BF
 
 
@@ -128,6 +129,7 @@ PARTS: dict[str, Part] = {
     "dsa-topk": Part(dsa.DsaTopKShortRow, {"TOPK": 2048}),
     "sparse-mla-head": Part(sparse_mla.SparseMlaHead, {"T": 2048, "DR": 64, "DV": 512, "BN": 64, "SCALE": 0.0625}, _MLA),
     "token-select": Part(b1.TokenSelect, {"V": 154880}),
+    "token-select-stage": Part(SB.TokenSelectStage, {"V": 154880, "L": 0}),
 }
 for _p in PARTS.values():
     _p.defaults.setdefault("C", 0)
