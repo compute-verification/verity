@@ -524,15 +524,4 @@ theorem dirsCols_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
 
 end Keyed
 
-#print axioms dirs_of_check
-#print axioms srcKey_inOrder
-#print axioms check_rows
-#print axioms rowsOk_get
-#print axioms leavesOk_get
-#print axioms preBits_le
-#print axioms srcKey_opening
-#print axioms regBit_opening
-#print axioms accCoef_of_check
-#print axioms dirsCols_of_check
-
 end FlockC3.RegLevels
