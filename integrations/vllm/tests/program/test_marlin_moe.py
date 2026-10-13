@@ -41,7 +41,7 @@ def test_dequant_primitives_on_every_code_and_scale_byte() -> None:
         assert MM.E2m1ToBf16.evaluate(q) == want == MR.E2M1_BF16[q], q
     for s in range(256):
         want = 0 if s == 0 else 0x7F80 if s == 255 else _bf16(2.0 ** (s - 127))
-        assert MM.E8m0ToBf16.evaluate(s) == want, s
+        assert MM.E8m0DequantBf16.evaluate(s) == want, s
 
 
 def test_group_is_its_32_products_and_the_twin() -> None:
@@ -49,7 +49,7 @@ def test_group_is_its_32_products_and_the_twin() -> None:
     for s in range(256):
         q = rng.permutation(np.r_[np.arange(16), np.arange(16)])
         got = evaluate(bind(MM.MarlinMxfp4Group), q.tolist(), [s])
-        sb = MM.E8m0ToBf16.evaluate(s)
+        sb = MM.E8m0DequantBf16.evaluate(s)
         assert list(got) == [Bf16MulBf16.evaluate(MM.E2m1ToBf16.evaluate(int(c)), sb) for c in q], s
         assert list(got) == MR.dequant(q[None], np.array([[s]]))[0].tolist(), s
     # the specials: 0 times inf is the F2FP NaN, a scale of 0 keeps each code's sign, (0.5, 2^-126) is the subnormal 2^-127
@@ -118,7 +118,7 @@ def _fold_model(x, cut, wq, ws, TK: int) -> int:
     +0 and the CTA's tree acc_0 + (acc_1 + ...), and the segments' partials folded P_0 + (P_1 + (... + P_last))."""
     K = len(x)
     W, KT = TK // 32, K // TK
-    w = [MM.Bf16MulBf16.evaluate(MM.E2m1ToBf16.evaluate(wq[k]), MM.E8m0ToBf16.evaluate(ws[k // 32])) for k in range(K)]
+    w = [MM.Bf16MulBf16.evaluate(MM.E2m1ToBf16.evaluate(wq[k]), MM.E8m0DequantBf16.evaluate(ws[k // 32])) for k in range(K)]
     bounds = [0] + [t for t in range(1, KT) if cut[t - 1]] + [KT]
     parts = []
     for lo, hi in zip(bounds, bounds[1:]):
