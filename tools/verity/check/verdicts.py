@@ -12,7 +12,8 @@ and under `$CHECK_CACHE` a circuit-check target's report, a Lean package's audit
 identical to the ones that earned it.  It is trusted as far as its source: `check.py --record` gathers packs only from recorded
 runs (`gather_verdicts`).
 Never packed, since they aren't verdicts: `lean-deps/` (fetched dependencies), `lean-builds/` (the Lean audit's kept builds,
-`lean_audit.WarmBuilds`, whose `ir/*.setup.json` run to 9 MB each and grew a combined pack past 15 GB), the trees steps build in, not even walked since a
+`lean_audit.WarmBuilds`, whose `ir/*.setup.json` run to 9 MB each and grew a combined pack past 15 GB), `lean-artifacts/`
+(Lake's cache of built modules, `lean_audit.LakeArtifacts`, whose `outputs/` entries name files no pack carries), the trees steps build in, not even walked since a
 tree holds a package's dependencies, some 170k files (`lean_changed.py`'s `lean-changed/` for check's early Lean step and
 `lean-records/` for the Lean fast path, and `lean_audit.py`'s `lean-audit-scratch-*/`, which another slot may remove while this one
 reads it), the suites' `logs/` and `durations.json`, and any file that isn't a finished `.json` entry. An entry that goes away while
@@ -34,7 +35,7 @@ import sys
 import tarfile
 from pathlib import Path
 
-SKIP = {"check": {"lean-deps", "lean-builds", "lean-changed", "lean-records"}, "tests": {"logs", "durations.json"}}
+SKIP = {"check": {"lean-deps", "lean-builds", "lean-changed", "lean-records", "lean-artifacts"}, "tests": {"logs", "durations.json"}}
 SCRATCH = {"check": ("lean-audit-scratch-",), "tests": ()}
 
 

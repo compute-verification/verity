@@ -23,8 +23,10 @@ def test_git_env_drops_a_hooks_repository_and_the_callers_slots_and_import_path(
         monkeypatch.setenv(k, v)
     env = gates.git_env(GIT_TERMINAL_PROMPT="0", HOME="/home/y")
     assert not set(leaked) & set(env)
-    driver = {"GIT_CONFIG_KEY_1": "merge.lean-audit.name", "GIT_CONFIG_KEY_2": "merge.lean-audit.driver"}
-    assert env == {**env, **kept, **driver, "GIT_CONFIG_COUNT": "3", "GIT_TERMINAL_PROMPT": "0", "HOME": "/home/y"}
+    driver = {"GIT_CONFIG_KEY_1": "merge.lean-audit.name", "GIT_CONFIG_KEY_2": "merge.lean-audit.driver",
+              "GIT_CONFIG_KEY_3": "merge.lean-imports.name", "GIT_CONFIG_KEY_4": "merge.lean-imports.driver",
+              "GIT_CONFIG_KEY_5": "merge.fixture-map.name", "GIT_CONFIG_KEY_6": "merge.fixture-map.driver"}
+    assert env == {**env, **kept, **driver, "GIT_CONFIG_COUNT": "7", "GIT_TERMINAL_PROMPT": "0", "HOME": "/home/y"}
 
 
 def test_a_gates_merge_runs_the_record_driver_in_a_clone_without_it(tmp_path):

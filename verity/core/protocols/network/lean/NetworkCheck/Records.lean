@@ -2,16 +2,16 @@ import NetworkCheck.Check
 import Difftest
 
 /-!
-# The audit over every published record, a core protocol: `verity/network-records/v1`
+# The audit over every published record, a core protocol: `verity/network-records/v2`
 
 `audit.py`'s `Audit` over its whole domain, `Published = Record | CommittedRecord | CertifiedRecord`, mixed lists
 included: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link. A certified record
-is checked exactly as `verity/network-certificate/v2` checks it (`NetworkCheck.Check`'s `egressVerdict`, with the
+is checked exactly as `verity/network-certificate/v3` checks it (`NetworkCheck.Check`'s `egressVerdict`, with the
 Program's grid from `expectedGrids`, and `ingressVerdict` on that one record); a raw or committed record carries no direction, so it is matched by link and window
 alone (`_by_window`), as one record of the link's egress windows and of its ingress windows alike.
 
-**Params** and **evidence**: `verity/network-certificate/v2`'s, read by its decoders; the evidence keeps each payload as
-its bytes (`ByteEvidence`, which `NetworkCheck.RecordsBytes` proves is v2's reading of the same JSON), since v2's bits
+**Params** and **evidence**: `verity/network-certificate/v3`'s, read by its decoders; the evidence keeps each payload as
+its bytes (`ByteEvidence`, which `NetworkCheck.RecordsBytes` proves is v3's reading of the same JSON), since v3's bits
 take a cons cell per bit.
 
 **Commitment**: the unit's published records, each `u8 kind ‖ u64be len(body) ‖ body`, concatenated, decoded exactly:
@@ -26,13 +26,13 @@ any length), nothing left over in a body or after the last record. Its `digest` 
 `tagged_sha512("verity-network-certifier/records/v1", the commitment's bytes)`.
 
 **The verdict** of each link-window, in `Audit`'s order and with its names: `no-verdict` (no record), `duplicate` (more
-than one); one certified record's verdict is v2's; one raw or committed record has `status:<reason>` when its status in
-the clear is not complete, then on egress `advice` as v2, then `mismatch` when a raw record's grid is not the Program's
+than one); one certified record's verdict is v3's; one raw or committed record has `status:<reason>` when its status in
+the clear is not complete, then on egress `advice` as v3, then `mismatch` when a raw record's grid is not the Program's
 (`expected_grids`, slot for slot) or a committed record's digest is not `record_digest` of the Program's grid with a
 complete status (`commitment.py`: SHA-256, padding elided). On ingress a raw or committed record is checked on its status
 alone.
 
-**Public** and **profile**: v2's. The `network-records` executable serves the protocol (`Core.Protocol.main`) and, as
+**Public** and **profile**: v3's. The `network-records` executable serves the protocol (`Core.Protocol.main`) and, as
 `network-records verdicts`, every link-window's verdict, `Difftest.serve`'s `verdicts` on a `serve` case (`verdictsFn`).
 -/
 
@@ -42,7 +42,7 @@ open Lean (Json toJson)
 open NetworkCheck.Check (Grid Certified Link Evidence LinkWindow Profile)
 open NetworkCertifier (ClockSync)
 
-def protocolId : String := "verity/network-records/v1"
+def protocolId : String := "verity/network-records/v2"
 def commitmentTag : String := "verity-network-certifier/records/v1"
 
 abbrev RawGrid := Array (Array (Option ByteArray))
@@ -224,7 +224,7 @@ def found (c : Commitment) (d : Direction) (l : String) (w : Nat) : Array Publis
     | .raw l' w' .. | .committed l' w' .. => l' == l && w' == w
     | .certified r => r.head.direction == d && r.head.link == l && r.head.window == (w : Int)
 
-/-- One certified record as a v2 commitment, so that v2's verdict reads it. -/
+/-- One certified record as a v3 commitment, so that v3's verdict reads it. -/
 def single (r : Certified) : Check.Commitment := ⟨#[r], .empty⟩
 
 def statusViolation (s : Option String) : Option String := s.map (s!"status:{·}")
@@ -280,7 +280,7 @@ def unitSync (e : ByteEvidence) (w : Nat) : ClockSync :=
   ((e.links[0]?).map (·.syncs.getD w Check.noSync)).getD Check.noSync
 
 /-- An egress link-window's violation (`check_link`), none when it is accepted; `expected` is the Program's grid of the
-link-window. A certified record's is v2's `Check.egressVerdict`. -/
+link-window. A certified record's is v3's `Check.egressVerdict`. -/
 def egressVerdict (p : Check.Params) (c : Commitment) (e : ByteEvidence) (egressDigest : ByteArray) (l : String)
     (link : ByteLink) (expected : RawGrid) (w : Nat) : Option String :=
   let screened : Except String (RawGrid → Bool) := match (found c .egress l w).toList with
@@ -325,7 +325,7 @@ def verdicts (p : Check.Params) (c : Commitment) (e : ByteEvidence) (egressDiges
       ({ direction := .ingress, link := l, window := w, violation := ingressVerdict p c ingressDigest l w } :
         LinkWindow)).toArray
 
-/-- Every link-window's verdict, or why the evidence or the parameters can't give them (v2's refusals). -/
+/-- Every link-window's verdict, or why the evidence or the parameters can't give them (v3's refusals). -/
 def evaluate (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Except String (Array LinkWindow) :=
   if e.links.size ≠ p.egress.size then
     .error s!"evidence: {e.links.size} links' frames and syncs for {p.egress.size} egress links"

@@ -241,7 +241,6 @@ theorem ligerito_frames (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
   have hc01 := hcols 0 (by omega)
   have hn3 : 3 ≤ sch.n := by omega
   unfold Flock.ligerito at h
-  obtain ⟨hR, h⟩ := check_bind h
   obtain ⟨hcap, h⟩ := check_bind h
   obtain ⟨_, t₁, h₁, h⟩ := bind_ok h
   have e₁ := label_emitted h₁
