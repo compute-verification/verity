@@ -420,4 +420,4 @@ def test_the_record_is_a_registered_property() -> None:
 
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_qnorm_insert_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
-    assert doc["sumsq_probe"]["served_statics"] is False and "sumsq-probe" not in doc["cases"]
+    assert doc["sumsq_probe"]["served_statics"] is False and "insert/sumsq-probe" not in X.cases(doc)
