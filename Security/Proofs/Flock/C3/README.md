@@ -74,9 +74,11 @@ takes, each with who discharges it:
 * `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W).
 * `hnames` (`PortsNamed`): G's `PortNamesUnique` at V*'s circuits (W, with h2's parse).
 * `hown` (`OwnIn`): each accepted session's reads hold `own`'s ports by name, value and reads. At
-  `own := fun j => ownAt ss j`, the verifier's message-round ports of statement `j`, it is proved (`ownIn_checked`,
-  `C3/PubRows/Shape.lean`, from `checkOwn`'s second loop). The session may read more; no reader of `own` needs the
-  converse.
+  `own := fun j => ownAt ss j`, the verifier's message ports of statement `j` (`ownPorts` and RecSparse's other
+  messages, `sparseMsgs`), it is proved (`ownIn_checked`, `C3/PubRows/Shape.lean`, from `checkOwn`'s second and third
+  loops). The session may read more; no reader of `own` needs the converse. `RoundReads` and `WRoundReads` at that
+  `own` are `C3/Reps/RoundReads.lean`'s (`roundReads_checked`, `wRoundReads_checked`, from U's links in
+  `C3/Reps/RoundLinks.lean`), with the stage selector at the rounds as hypotheses.
 * `hheld` (`HeldIs`): n1c, below.
 * `hss` and `_htop`: the event's (`AcceptsC3`'s list and the guarantee's `_hstk`); `_htop` is unused by `hbr_honest`
   and is what n6's `RegLevelsRead` reads.
