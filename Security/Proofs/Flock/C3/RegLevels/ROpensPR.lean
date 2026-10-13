@@ -86,9 +86,9 @@ theorem openRow_ligOfRead_past {sl : Option ℕ} {sch : Flock.Schedule} (x x' : 
     apply List.eq_nil_of_length_eq_zero
     simp only [Flock.sibsOf, Array.length_toList, Array.size_extract]
     omega
-  unfold openRow
+  unfold openRow at hR ⊢
   rw [e x, e x', hd, hs, hs]
-  exact Prod.ext (congrArg Prod.fst hR) rfl
+  exact Prod.ext (Prod.mk.inj hR).1 rfl
 
 /-- **`RRowsPinned` at any proof whose openings are `ligOfRead`'s**, at a schedule of at least two levels. -/
 theorem rRowsPinned_of_read {sl : Option ℕ} {sch : Flock.Schedule} (h2 : 2 ≤ sch.levels.size)
@@ -230,3 +230,5 @@ theorem opensReadAt_two_pR (M : FlockC3.Reps.StackedMaps stmt Vs) {sh : Flock.Sh
 end
 
 end FlockC3.RegLevels
+
+#print axioms FlockC3.RegLevels.opensReadAt_two_pR
