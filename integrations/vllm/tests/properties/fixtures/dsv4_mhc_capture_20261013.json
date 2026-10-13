@@ -1,0 +1,38 @@
+{
+ "run": "r20261013-115825-580e",
+ "head": "c07829364",
+ "record_digest": "d7adeed215b449acb42d40c4bc11bd70e2ec21e7e3003ba015f8282ec77c00cc",
+ "raw_arrays_preserved": false,
+ "probe": {
+  "step": ["g8_w26_f133"],
+  "rounding": ["rne"],
+  "sqrsum": [],
+  "rounding_mismatch": {
+   "trunc": 862,
+   "rna": 109,
+   "rne": 0
+  },
+  "sqrsum_mismatch": {
+   "lo": 8,
+   "hi": 35,
+   "mul": 18
+  }
+ },
+ "totals": {
+  "words": 20980103,
+  "mismatch": 943797,
+  "ref_words": 965808,
+  "ref_mismatch": 23903
+ },
+ "case_mismatches": {
+  "tf32/T17": 48548,
+  "tf32/T64": 193846,
+  "tf32/T65": 128567,
+  "tf32/T128": 254673,
+  "tf32/T129": 183896,
+  "broadcast/T1": 1089,
+  "broadcast/T16": 14296,
+  "broadcast/T64": 57196,
+  "broadcast/T65": 61686
+ }
+}

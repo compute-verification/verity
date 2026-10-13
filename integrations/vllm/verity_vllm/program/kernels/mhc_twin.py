@@ -4,16 +4,16 @@ Definitions' tests.  Weights (`fn`, `scale`, `base`, `w`) carry no token axis.  
 the f32 add, multiply and divide numpy's (a NaN lane recomputed by the primitive, whose payload numpy's array loops can take from
 the other operand), the FMA `derived_rows.fma_rn`, `rsqrt.approx` `derived_rows.rsqrt_approx`, expf `moe_twins.nv_expf_bits`.
 
-The TF32 GEMM takes its k8 step as a `GroupSum` (`HOPPER_TF32_WGMMA_K8_CANDIDATE` by default), the B operand's rounding to TF32
-(``"trunc"``, the candidate: the low 13 bits ignored; ``"rna"``, ``"rne"``) and the squared sum's contraction (``sqr``: ``"lo"``,
-the Definitions' `fma(x[k], x[k], x[k+4] x[k+4])`; ``"hi"``, the FMA on x[k + 4]; ``"mul"``, none) as parameters, so the capture
-can name which of them the H200 runs.  On bf16 operands a square is exact unless it is an f32 subnormal, so only such operands
-tell the three contractions apart."""
+The TF32 GEMM takes its k8 step as a `GroupSum` (`HOPPER_TF32_WGMMA_K8_CANDIDATE` by default), each operand's conversion to TF32
+(``"trunc"``, ``"rna"``, ``"rne"``; Hopper is RNE) and the squared sum's contraction (``sqr``: ``"lo"``, the Definitions'
+GPU `fma(x[k], x[k], x[k+4] x[k+4])`; ``"hi"``, the FMA on x[k + 4]; ``"mul"``, none) as parameters, so the capture can name
+which of them the H200 runs.  A is widened bf16 and therefore already exact in TF32.  On bf16 operands a square is exact unless
+it is an f32 subnormal, so only such operands tell the three contractions apart."""
 from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.ops.scalar import F32Fmaxf
+from verity.ml.circuits.ops.scalar import F32Fmaxf, F32_NAN_PTX
 from verity.ml.circuits.silicon.models import GroupSum
 from verity.ml.kernels import tc as TC
 from verity_vllm.program.kernels import derived_rows as DR
@@ -279,8 +279,8 @@ def fused_post_pre(x, residual, post_mix, comb, fn, scale, base, w, NS: int, TH:
 
 # --- the TF32 path ----------------------------------------------------------------------------------------------------------------
 
-def round_tf32(w, rounding: str = "trunc") -> np.ndarray:
-    """f32 words as the k8 step would read them: ``"trunc"`` as they are (the step ignores the low 13 bits); ``"rna"`` /
+def round_tf32(w, rounding: str = "rne") -> np.ndarray:
+    """f32 words as the k8 step would read them: ``"trunc"`` leaves them for a low-bit discard; ``"rna"`` /
     ``"rne"`` rounded to 19 bits first (`cvt.rna.tf32.f32` / to nearest even), a NaN kept."""
     w = _u(w)
     if rounding == "trunc":
@@ -292,19 +292,44 @@ def round_tf32(w, rounding: str = "trunc") -> np.ndarray:
     return np.where(_is_nan(w) | ((w & 0x7F800000) == 0x7F800000), w, r).astype(U32)
 
 
-def tf32_dot8(acc, a, b, model: GroupSum = CANDIDATE) -> np.ndarray:
+def _tf32_codes(w, rounding: str) -> np.ndarray:
+    w = _u(w)
+    code = round_tf32(w, rounding) >> U32(13)
+    return np.where(_is_nan(w), code | U32(1), code).astype(U32)
+
+
+def tf32_dot8(acc, a, b, model: GroupSum = CANDIDATE, a_round: str = "rne", b_round: str = "rne") -> np.ndarray:
     """`HopperTf32WgmmaDot8_v1` (at the candidate ``model``) on acc [R] and a, b [R, 8] f32 words."""
-    out, _ = TC.group_sum_total_batch(model, _u(acc).reshape(-1), _u(a).reshape(-1, 8) >> 13, _u(b).reshape(-1, 8) >> 13)
+    out, _ = TC.group_sum_total_batch(model, _u(acc).reshape(-1), _tf32_codes(a, a_round).reshape(-1, 8),
+                                      _tf32_codes(b, b_round).reshape(-1, 8))
     return np.asarray(out, dtype=U32)
+
+
+def gpu_add(a, b) -> np.ndarray:
+    """GPU FADD: `add`, with every NaN result canonicalised to 0x7FFFFFFF."""
+    out = add(a, b)
+    return np.where(_is_nan(out), U32(F32_NAN_PTX), out).astype(U32)
+
+
+def gpu_mul(a, b) -> np.ndarray:
+    """GPU FMUL: `mul`, with every NaN result canonicalised to 0x7FFFFFFF."""
+    out = mul(a, b)
+    return np.where(_is_nan(out), U32(F32_NAN_PTX), out).astype(U32)
+
+
+def gpu_fma(a, b, c) -> np.ndarray:
+    """GPU FFMA: `fma`, with every NaN result canonicalised to 0x7FFFFFFF."""
+    out = fma(a, b, c)
+    return np.where(_is_nan(out), U32(F32_NAN_PTX), out).astype(U32)
 
 
 def _sqr_term(lo: np.ndarray, hi: np.ndarray, sqr: str) -> np.ndarray:
     if sqr == "lo":
-        return fma(lo, lo, mul(hi, hi))
+        return gpu_fma(lo, lo, gpu_mul(hi, hi))
     if sqr == "hi":
-        return fma(hi, hi, mul(lo, lo))
+        return gpu_fma(hi, hi, gpu_mul(lo, lo))
     if sqr == "mul":
-        return add(mul(lo, lo), mul(hi, hi))
+        return gpu_add(gpu_mul(lo, lo), gpu_mul(hi, hi))
     raise ValueError(f"the squared sum's contraction: one of {SQR_FORMS} (got {sqr!r})")
 
 
@@ -314,28 +339,27 @@ def _sqrsum(x: np.ndarray, sqr: str) -> np.ndarray:
     g = x.reshape(x.shape[:-1] + (x.shape[-1] // 8, 8))
     v = np.zeros(x.shape[:-1] + (4,), dtype=U32)
     for i in range(g.shape[-2]):
-        v = add(v, _sqr_term(g[..., i, :4], g[..., i, 4:], sqr))
-    return tree(v)
+        v = gpu_add(v, _sqr_term(g[..., i, :4], g[..., i, 4:], sqr))
+    return tree(v, gpu_add)
 
 
 def _tf32_splits(x: np.ndarray, b: np.ndarray, ranges, model: GroupSum, b_round: str):
     """yp [T, NS, OUT] of the splits ``ranges`` over x [T, K] f32 words and b [OUT, K]: equal-length splits at once."""
     T, OUT = x.shape[0], b.shape[0]
-    bb = round_tf32(b, b_round)
     yp = np.zeros((T, len(ranges), OUT), dtype=U32)
     for n in sorted({n for _, n in ranges}):
         idx = [s for s, (_, m) in enumerate(ranges) if m == n]
         xs = np.stack([x[:, ranges[s][0]:ranges[s][0] + n] for s in idx], axis=1)
-        bs = np.stack([bb[:, ranges[s][0]:ranges[s][0] + n] for s in idx], axis=0)
+        bs = np.stack([b[:, ranges[s][0]:ranges[s][0] + n] for s in idx], axis=0)
         av, bv = np.broadcast_arrays(xs[:, :, None, :], bs[None, :, :, :])
         acc = np.zeros(av.shape[:-1], dtype=U32).reshape(-1)
         for k in range(0, n, 8):
-            acc = tf32_dot8(acc, av[..., k:k + 8], bv[..., k:k + 8], model)
+            acc = tf32_dot8(acc, av[..., k:k + 8], bv[..., k:k + 8], model, b_round=b_round)
         yp[:, idx, :] = acc.reshape(T, len(idx), OUT)
     return yp
 
 
-def tf32_split(a, b, model: GroupSum = CANDIDATE, b_round: str = "trunc", sqr: str = "lo"):
+def tf32_split(a, b, model: GroupSum = CANDIDATE, b_round: str = "rne", sqr: str = "lo"):
     """`MhcPrenormTf32Split_v1{K, OUT}`: a [T, K] bf16, b [OUT, K] f32 -> (yp [T, OUT], rp [T])."""
     x, b = cvt(a), _u(b)
     M._check_tf32(x.shape[-1])
@@ -348,7 +372,7 @@ def prenorm_sqrsum(a, NS: int, sqr: str = "lo") -> np.ndarray:
     return np.stack([_sqrsum(x[:, o:o + n], sqr) for o, n in M.tf32_ranges(x.shape[-1], NS)], axis=1)
 
 
-def prenorm_tf32(a, b, NS: int, model: GroupSum = CANDIDATE, b_round: str = "trunc", sqr: str = "lo"):
+def prenorm_tf32(a, b, NS: int, model: GroupSum = CANDIDATE, b_round: str = "rne", sqr: str = "lo"):
     """`MhcPrenormTf32_v1{K, NS, OUT}`: a [T, K] bf16, b [OUT, K] f32 -> (yp [T, NS, OUT], rp [T, NS])."""
     x, b = cvt(a), _u(b)
     return _tf32_splits(x, b, M.tf32_ranges(x.shape[-1], NS), model, b_round), prenorm_sqrsum(a, NS, sqr)

@@ -41,8 +41,9 @@ operand's reading shows).  The reference: on the first and the last token of eve
 (`verity.ml.circuits.evaluation`) at the served statics, each on the kernel's own words: `MhcFusedSplit_v1` per split,
 `MhcPost_v1`, `MhcPrenormTf32_v1`, `MhcPreBigFuse_v1` / `MhcPreBigFuseBroadcast_v1`, `HcHead_v1`.
 
-The TF32 step.  The A operand is bf16 widened to f32 (exact in TF32); B is `fn`'s f32 words read from shared memory, which the
-k8 step reads as TF32 (`trunc`: the low 13 bits ignored, the candidate; or rounded, `rna` / `rne`).  `HopperTf32WgmmaDot8_v1`
+The TF32 step.  The A operand is bf16 widened to f32 (already exact in TF32, so its conversion mode is not observable here);
+B is `fn`'s f32 words read from shared memory, which the k8 step rounds RNE to TF32 (the probe also tests `trunc` and `rna`).
+`HopperTf32WgmmaDot8_v1`
 is a candidate: the sm_90 BF16 step's adder (one group of 8, 26 bits, exponent floor -133) on exact products of the TF32 codes.
 The probe's families: `round` (one-hot A rows: each word the B operand as the step reads it, whatever the adder), `align`,
 `cancel` and `tiny` (products over a spread of exponents, cancelling pairs within a step, products near f32's subnormals), `floor`
@@ -50,8 +51,9 @@ The probe's families: `round` (one-hot A rows: each word the B operand as the st
 2^-149 exactly when the adder keeps bit 2^t and truncate to +0 when it doesn't, t in [-160, -155], so the width and floor show
 as `floor - width + 1 <= t`), `sqr` (one `x[k]^2 + x[k+4]^2` per split, one square an inexact f32 subnormal and the other just
 above 2^-126: the three contractions differ only in such a term's rounding) and `special` (inf, NaN, signed zeros, overflow);
-all but `round` have B words exact in TF32, so they pin the adder alone.  `TF32` names the fits: GO when the step is the candidate alone, B is `trunc`
-and the squared sum `lo` (the Definitions'); otherwise the line names what the Definitions must become.
+all but `round` have B words exact in TF32, so they pin the adder alone.  `TF32` names the fits: GO when the step is the candidate
+alone, B is `rne` and the squared sum `lo` (GPU FMUL/FFMA/FADD, including its NaN word); otherwise the line names what the
+Definitions must become.
 
 GO needs every case's words compared with 0 mismatches, the reference on every case with 0 mismatches, deterministic reruns,
 the stack, mufu, probe, sources and bind checks, and no errors.
@@ -195,6 +197,15 @@ def _save(d: Path, **arrays: np.ndarray) -> dict[str, str]:
 
 def _load(paths: dict[str, str]) -> dict[str, np.ndarray]:
     return {k: np.load(p, mmap_mode="r") for k, p in paths.items()}
+
+
+def _savez(outdir: Path, name: str, arrays: dict[str, np.ndarray]) -> dict[str, Any]:
+    """A custody-preserved compressed replay file and its identity."""
+    path = outdir / "replay" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, **{k: np.ascontiguousarray(v) for k, v in arrays.items()})
+    return {"file": str(path.relative_to(outdir)), "bytes": path.stat().st_size,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
 def _chunks(n: int, step: int) -> list[tuple[int, int]]:
@@ -384,7 +395,7 @@ def probe_fit(launches: list[dict[str, Any]], tables: dict[str, dict[str, list]]
            "sqrsum": [k for k, v in sqrsum.items() if v == 0], "nearest": sorted(step.items(), key=lambda kv: kv[1])[:3],
            "rounding_mismatch": rounding, "sqrsum_mismatch": sqrsum, "candidate_by_family": dict(fams),
            "words": int(sum(np.asarray(g["yp"]).size + np.asarray(g["rp"]).size for g in got))}
-    rec["ok"] = rec["step"] == [CANDIDATE_NAME] and rec["rounding"] == ["trunc"] and rec["sqrsum"] == ["lo"]
+    rec["ok"] = rec["step"] == [CANDIDATE_NAME] and rec["rounding"] == ["rne"] and rec["sqrsum"] == ["lo"]
     return rec
 
 
@@ -401,13 +412,19 @@ def gemm(a: np.ndarray, b: np.ndarray, NS: int) -> dict[str, np.ndarray]:
     return {"yp": _u32(d).transpose(1, 0, 2).copy(), "rp": _u32(s).T.copy()}
 
 
-def phase_probe() -> dict[str, Any]:
+def phase_probe(outdir: Path) -> dict[str, Any]:
     launches = probe_launches()
     got, again = [gemm(L["a"], L["b"], L["NS"]) for L in launches], [gemm(L["a"], L["b"], L["NS"]) for L in launches]
     det = all(np.array_equal(x[k], y[k]) for x, y in zip(got, again) for k in ("yp", "rp"))
     rec = probe_fit(launches, probe_tables(launches), got)
     rec["deterministic"] = det
     rec["ok"] = bool(rec["ok"] and det)
+    arrays = {}
+    for i, (launch, words) in enumerate(zip(launches, got)):
+        arrays.update({f"p{i}_a": launch["a"], f"p{i}_b": launch["b"], f"p{i}_yp": words["yp"], f"p{i}_rp": words["rp"]})
+    rec["replay"] = {**_savez(outdir, "probe.npz", arrays),
+                     "launches": [{"index": i, "family": launch["family"], "NS": launch["NS"]}
+                                  for i, launch in enumerate(launches)]}
     return rec
 
 
@@ -553,7 +570,8 @@ def layer_jobs(phase: str, T: int, NS: int | None, paths: dict[str, str], static
                                          for p in reference_pieces(phase, NS)]
 
 
-def phase_layers(work: Path, plan: dict[str, tuple[int, ...]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def phase_layers(work: Path, outdir: Path,
+                 plan: dict[str, tuple[int, ...]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """Every served case of every phase, twice; returns (launch records, comparison jobs)."""
     import torch
 
@@ -562,7 +580,7 @@ def phase_layers(work: Path, plan: dict[str, tuple[int, ...]]) -> tuple[list[dic
     wd["fnb"] = broadcast_weight(wd["fn"])
     wts["fnb"] = _u32(wd["fnb"])
     wpaths = _save(work / "weights", **wts)
-    launches, jobs = [], []
+    launches, jobs, replay = [], [], {}
     for phase in PHASES:
         for T in plan[phase]:
             case = f"T{T}"
@@ -582,10 +600,19 @@ def phase_layers(work: Path, plan: dict[str, tuple[int, ...]]) -> tuple[list[dic
             paths = {**wpaths, **_save(work / phase / case, **tk, **got)}
             launches.append({"phase": phase, "case": case, "checks": checks, "info": {"T": T, "NS": NS}})
             jobs += layer_jobs(phase, T, NS, paths)
+            if phase in ("tf32", "broadcast"):
+                aa = got["res"].reshape(T, -1) if phase == "tf32" else tk["x"]
+                bb = wts["fn"] if phase == "tf32" else wts["fnb"]
+                off, n = W.M.tf32_ranges(aa.shape[1], NS)[0]
+                prefix = f"{phase}_T{T}"
+                replay.update({f"{prefix}_a": aa[0, off:off + n], f"{prefix}_b": bb[0, off:off + n],
+                               f"{prefix}_yp": np.asarray([got["yp"][0, 0, 0]], np.uint32),
+                               f"{prefix}_rp": np.asarray([got["rp"][0, 0]], np.uint32),
+                               f"{prefix}_meta": np.asarray([T, NS, off, n], np.int64)})
             del td, got, again
     del wd
     torch.cuda.empty_cache()
-    return launches, jobs
+    return launches, jobs, _savez(outdir, "layer_samples.npz", replay)
 
 
 # ---------------------------------------------------------------------------------------------------------------- comparisons
@@ -784,12 +811,13 @@ def gpu(work: Path, outdir: Path, plan: dict[str, tuple[int, ...]], doc: dict[st
         doc["mufu"], j = r
         jobs += j
     print(f"[dsv4-mhc] mufu {json.dumps(doc.get('mufu', {}))[:1500]}", flush=True)
-    doc["probe"] = step("probe", phase_probe) or {"ok": False}
+    doc["probe"] = step("probe", lambda: phase_probe(outdir)) or {"ok": False}
     print(f"[dsv4-mhc] probe {json.dumps(doc['probe'])[:2000]}", flush=True)
-    r = step("layers", lambda: phase_layers(work, plan))
+    r = step("layers", lambda: phase_layers(work, outdir, plan))
     if r is not None:
         doc["launches"] += r[0]
         jobs += r[1]
+        doc["replay"]["layers"] = r[2]
         for x in r[0]:
             print(f"[dsv4-mhc] {x['phase']:9s} {x['case']:5s} {json.dumps(x['checks'])} {json.dumps(x['info'])}", flush=True)
     return jobs
@@ -843,7 +871,7 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     plan = token_counts(quick)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": quick, "plan": plan, "statics": STATICS,
                            "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms), "errors": {},
-                           "launches": []}
+                           "launches": [], "replay": {}}
     print(f"[dsv4-mhc] gate {json.dumps(doc['gate'])}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")

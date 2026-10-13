@@ -209,11 +209,13 @@ def test_tf32_step_twin_specials() -> None:
 
 def test_tf32_rounding_modes() -> None:
     w = np.array([0x3F800FFF, 0x3F801000, 0x3F803000, 0x3F801001, 0x7F7FFFFF, 0x7FC00001, 0xFF800000, 0xBF802000], np.uint32)
-    assert (W.round_tf32(w, "trunc") == w).all()
+    assert (W.round_tf32(w, "trunc") == w).all() and np.array_equal(W.round_tf32(w), W.round_tf32(w, "rne"))
     assert [hex(v) for v in W.round_tf32(w, "rna")] == [hex(v) for v in (0x3F800000, 0x3F802000, 0x3F804000, 0x3F802000, 0x7F800000,
                                                                          0x7FC00001, 0xFF800000, 0xBF802000)]
     assert [hex(v) for v in W.round_tf32(w, "rne")] == [hex(v) for v in (0x3F800000, 0x3F800000, 0x3F804000, 0x3F802000, 0x7F800000,
                                                                          0x7FC00001, 0xFF800000, 0xBF802000)]
+    assert [M.tf32_operand(int(v)) for v in w] == [int(v) >> 13 | (1 if (int(v) & 0x7F800000 == 0x7F800000 and int(v) & 0x7FFFFF) else 0)
+                                                   for v in W.round_tf32(w, "rne")]
 
 
 def test_tf32_split_twins() -> None:
@@ -247,6 +249,11 @@ def test_tf32_sqr_forms() -> None:
     assert (W.prenorm_tf32(a, b, 1)[1] == forms["lo"]).all()
     d = bind(M.MhcPrenormTf32Split, K=64, OUT=1)
     same(oracle(d, T, lambda t: (a[t], b))[:, 1:], forms["lo"].astype(np.uint64), d.id)
+    special = np.zeros((1, 64), np.uint16)
+    special[0, 3] = 0x7FC0
+    assert W.prenorm_sqrsum(special, 1)[0, 0] == 0x7FFFFFFF
+    y = np.array(evaluate(d, special[0].tolist(), b.reshape(-1).tolist()), np.uint32)
+    assert y[-1] == 0x7FFFFFFF
     with pytest.raises(ValueError, match="contraction"):
         W.prenorm_sqrsum(a, 1, "fma")
 

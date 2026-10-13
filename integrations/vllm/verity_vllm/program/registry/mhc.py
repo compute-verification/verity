@@ -34,9 +34,11 @@ normalisation `cm / (colsum + eps)`, then REPEAT - 1 times a row and a column no
 TF32 (`tf32_hc_prenorm_gemm`, DeepGEMM `sm90_tf32_hc_prenorm_gemm.cuh:150-240`, `mma/sm90.cuh:150-195`): BLOCK_M 64, BLOCK_N 32,
 BLOCK_K 64; each split s takes `per + (s < rem)` K-blocks of 64 from `(s * per + min(s, rem)) * 64` (per, rem = divmod(K/64,
 NS)); `wgmma.mma_async.sync.aligned.m64n32k8.f32.tf32.tf32` (A from registers, the bf16 streams widened to f32; B the f32 `fn`
-from shared memory) from a zero accumulator, eight k8 steps a block, `scale-d` 1: `HopperTf32WgmmaDot8_v1`.  The squared sum
+from shared memory), both operands rounded RNE to TF32, from a zero accumulator, eight k8 steps a block, `scale-d` 1:
+`HopperTf32WgmmaDot8_v1`.  A's conversion is unobservable here because widened bf16 has thirteen zero low bits.  The squared sum
 of each block: thread lane e < 4 of a quad adds `fma(x[k], x[k], x[k+4] * x[k+4])`, k = 64 st + 8 i + e, into its own chain
-from +0, and the quad's shuffles add `(v0 + v2) + (v1 + v3)`.  The k8 step itself is unprobed on Hopper (core's
+from +0, and the quad's shuffles add `(v0 + v2) + (v1 + v3)`; these are GPU FMUL/FFMA/FADD operations, whose NaN result is
+0x7FFFFFFF.  The k8 step itself is unprobed on Hopper (core's
 `instructions.py` lists `sm90.wgmma.m64n8k8.tf32` so): `HopperTf32WgmmaDot8_v1` is a candidate, the Hopper BF16 step's adder
 on TF32 products; tests/properties/dsv4_mhc_capture_gpu.py pins it or names the mismatch.
 
@@ -87,7 +89,7 @@ F_ONE, F_NEG_INF = 0x3F800000, 0xFF800000
 _CONF = ("model-untested: read from the TileLang kernels' generated CUDA and PTX at the commits the module docstring pins; "
          "tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
 _TF32_CONF = ("model-untested: the k8 TF32 step is unprobed on sm_90 (core's instructions.py); the Hopper BF16 step's adder (one "
-              "group, 26 bits, floor -133) on exact TF32 products of each word's top 19 bits; "
+              "group, 26 bits, floor -133) on exact products after each f32 operand is rounded RNE to TF32; "
               "tests/properties/dsv4_mhc_capture_gpu.py probes it")
 _DG_CONF = ("model-untested: read from DeepGEMM 8b1392b9 sm90_tf32_hc_prenorm_gemm.cuh:150-240 on the candidate "
             "HopperTf32WgmmaDot8_v1; tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
@@ -462,8 +464,16 @@ def MhcFusedPostPre(B, S, x, residual, post, comb, fn, scale, base, w):
 # --- the TF32 path (above 16 tokens, and layer 0's broadcast) -------------------------------------------------------------------
 
 def tf32_operand(word: int) -> int:
-    """The TF32 word the candidate reads from an f32 word: its top 19 bits (the low 13 ignored, not rounded)."""
-    return (word & M32) >> 13
+    """The 19-bit TF32 word an HGMMA TF32 operand reads: f32 rounded to nearest, ties to even.
+
+    A NaN remains a NaN even when its payload lives entirely in the thirteen discarded bits.  The tensor-core step only
+    observes its class, so one low TF32 payload bit is sufficient.
+    """
+    word &= M32
+    high = word >> 13
+    if word & 0x7F800000 == 0x7F800000:
+        return high | int(bool(word & 0x7FFFFF))
+    return ((word + 0xFFF + (high & 1)) & M32) >> 13
 
 
 def tf32_product_total(a: int, b: int):
@@ -492,7 +502,7 @@ def tf32_dot_total(acc: int, a, b, groups=TF32_GROUPS, width: int = TF32_WIDTH, 
 @primitive("HopperTf32WgmmaDot8", 1, [("acc", F32), ("a", Array(8, F32)), ("b", Array(8, F32))], F32, conformance=_TF32_CONF)
 def HopperTf32WgmmaDot8(acc: int, *ab: int) -> int:
     """Candidate: one accumulator coordinate of `wgmma.mma_async.sync.aligned.m64n{N}k8.f32.tf32.tf32` on sm_90 with f32 words
-    as operands: each operand's top 19 bits a TF32 word, the eight exact products and `acc` in one group through the Hopper BF16
+    as operands: each operand rounded RNE to a 19-bit TF32 word, the eight exact products and `acc` in one group through the Hopper BF16
     step's 26-bit truncating adder with exponent floor -133 (`HOPPER_TF32_WGMMA_K8_CANDIDATE`); total on every encoding as that
     step (NaN 0x7FFFFFFF, sticky infinities, a zero +0)."""
     return tf32_dot_total(acc, ab[:8], ab[8:16])
@@ -523,16 +533,16 @@ def tf32_split(o: D.Ops, S, a, b):
         for i in range(8):
             for e in range(4):
                 k = 64 * st + 8 * i + e
-                v[e] = o.add(v[e], o.fma(x[k], x[k], o.mul(x[k + 4], x[k + 4])))
-    return tuple_of(stack(yp), D.halving_tree(v, o.add))
+                v[e] = o.gpu_add(v[e], o.gpu_fma(x[k], x[k], o.gpu_mul(x[k + 4], x[k + 4])))
+    return tuple_of(stack(yp), D.halving_tree(v, o.gpu_add))
 
 
 @composite("MhcPrenormTf32Split", 1, ["K", "OUT"], _sig_tf32_split, conformance=_DG_CONF)
 def MhcPrenormTf32Split(B, S, a, b):
     """One split of `tf32_hc_prenorm_gemm` for one token over its K = 64 * stages elements: yp[n] = the K/8 k8 steps
     `HopperTf32WgmmaDot8_v1` in ascending k from +0 (`scale-d` 1 on a zeroed accumulator), a the bf16 elements widened to f32;
-    rp the quad's four squared-sum chains (`fma(x[k], x[k], x[k+4] * x[k+4])` added from +0, k = 64 st + 8 i + e) and `(v0 +
-    v2) + (v1 + v3)`."""
+    rp the quad's four squared-sum chains (GPU `FFMA(x[k], x[k], FMUL(x[k+4], x[k+4]))` then GPU `FADD` from +0,
+    k = 64 st + 8 i + e) and GPU FADDs `(v0 + v2) + (v1 + v3)`.  These operations canonicalise every NaN to 0x7FFFFFFF."""
     return tf32_split(word_ops(B), S, a, b)
 
 
@@ -655,7 +665,8 @@ def HcHead(B, S, residual, fn, scale, base):
     return hc_head(word_ops(B), S, residual, fn, scale, base)
 
 
-WORD = dict(D.WORD, expf=M.NvExpf, bf16=P.F2fpBf16, sigmoid=MhcSigmoid, tf32=HopperTf32WgmmaDot8, MhcSinkhorn=MhcSinkhorn,
+WORD = dict(D.WORD, expf=M.NvExpf, bf16=P.F2fpBf16, gpu_add=P.F32AddV2, gpu_mul=P.F32MulV2, gpu_fma=P.F32FmaV2,
+            sigmoid=MhcSigmoid, tf32=HopperTf32WgmmaDot8, MhcSinkhorn=MhcSinkhorn,
             MhcMixes=MhcMixes, MhcPreNorm=MhcPreNorm, MhcPreNormBroadcast=MhcPreNormBroadcast, MhcPreBigFuse=MhcPreBigFuse,
             MhcPreBigFuseBroadcast=MhcPreBigFuseBroadcast, MhcPost=MhcPost, MhcFusedSplit=MhcFusedSplit,
             MhcPrenormTf32Split=MhcPrenormTf32Split, MhcPrenormTf32=MhcPrenormTf32)

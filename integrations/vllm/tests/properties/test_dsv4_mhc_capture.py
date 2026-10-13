@@ -8,6 +8,7 @@ import copy
 import hashlib
 import json
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -40,7 +41,7 @@ def _models(*names: str):
     return [m for m in X.step_models() if X.model_name(m) in names]
 
 
-def _got(launches, tables, step: str = X.CANDIDATE_NAME, rounding: str = "trunc", sqr: str = "lo") -> list[dict]:
+def _got(launches, tables, step: str = X.CANDIDATE_NAME, rounding: str = "rne", sqr: str = "lo") -> list[dict]:
     """The words a GPU whose step is ``step``, whose B reading is ``rounding`` and whose squared sum is ``sqr`` would write."""
     return [{"yp": tables["rounding"][rounding][i] if L["family"] == "round" else tables["step"][step][i],
              "rp": tables["sqrsum"][sqr][i]} for i, L in enumerate(launches)]
@@ -97,8 +98,8 @@ def test_the_probe_names_each_hypothesis_alone(launches) -> None:
 def test_the_probe_fit_names_each_axis(launches) -> None:
     tables = X.probe_tables(launches, _models(X.CANDIDATE_NAME, OTHER_STEP))
     fit = X.probe_fit(launches, tables, _got(launches, tables))
-    assert fit["ok"] and (fit["step"], fit["rounding"], fit["sqrsum"]) == ([X.CANDIDATE_NAME], ["trunc"], ["lo"])
-    for kw, axis, name in (({"rounding": "rna"}, "rounding", "rna"), ({"rounding": "rne"}, "rounding", "rne"),
+    assert fit["ok"] and (fit["step"], fit["rounding"], fit["sqrsum"]) == ([X.CANDIDATE_NAME], ["rne"], ["lo"])
+    for kw, axis, name in (({"rounding": "rna"}, "rounding", "rna"), ({"rounding": "trunc"}, "rounding", "trunc"),
                            ({"sqr": "hi"}, "sqrsum", "hi"), ({"sqr": "mul"}, "sqrsum", "mul"), ({"step": OTHER_STEP}, "step", OTHER_STEP)):
         fit = X.probe_fit(launches, tables, _got(launches, tables, **kw))
         assert fit[axis] == [name] and not fit["ok"], kw
@@ -131,6 +132,19 @@ def test_the_probe_words_are_the_definitions(launches, family: str, rows: tuple)
     for m in rows:
         y = np.array(evaluate(d, L["a"][m].tolist(), L["b"].reshape(-1).tolist()), dtype=np.uint32)
         assert np.array_equal(y, np.concatenate([yp[m].reshape(-1), rp[m]])), (family, m)
+
+
+def test_the_failed_h200_capture_is_pinned() -> None:
+    """The small committed cut of r20261013-115825-580e pins the before counts and why no raw-word replay is possible."""
+    path = Path(__file__).with_name("fixtures") / "dsv4_mhc_capture_20261013.json"
+    rec = json.loads(path.read_text())
+    assert rec["run"] == "r20261013-115825-580e" and rec["head"] == "c07829364"
+    assert rec["raw_arrays_preserved"] is False
+    assert rec["probe"] == {"step": ["g8_w26_f133"], "rounding": ["rne"], "sqrsum": [],
+                            "rounding_mismatch": {"trunc": 862, "rna": 109, "rne": 0},
+                            "sqrsum_mismatch": {"lo": 8, "hi": 35, "mul": 18}}
+    assert rec["totals"] == {"words": 20980103, "mismatch": 943797, "ref_words": 965808, "ref_mismatch": 23903}
+    assert all(v > 0 for v in rec["case_mismatches"].values())
 
 
 # ---------------------------------------------------------------------------------------------------------------- the layers
@@ -354,7 +368,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
 
     def gpu(work, outdir, plan, doc):
         doc["stack"], doc["mufu"] = {"ok": True}, {"ok": True}
-        doc["probe"] = {"ok": True, "step": [X.CANDIDATE_NAME], "rounding": ["trunc"], "sqrsum": ["lo"],
+        doc["probe"] = {"ok": True, "step": [X.CANDIDATE_NAME], "rounding": ["rne"], "sqrsum": ["lo"],
                         "nearest": [[X.CANDIDATE_NAME, 0]]}
         doc["launches"] += [{"phase": p, "case": "T1", "checks": {"deterministic": True}} for p in ("fused", "broadcast", "head")]
         return jobs
@@ -370,7 +384,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert doc["totals"]["mismatch"] == 1 and doc["totals"]["ref_mismatch"] >= 1 and doc["totals"]["reference"] > 0
     assert doc["env"]["VLLM_USE_DEEP_GEMM"] == "1" and doc["env"]["TILELANG_CACHE_DIR"].endswith("tilelang")
     printed = capsys.readouterr().out
-    assert f"DSV4-MHC TF32 NO-GO step=['{X.CANDIDATE_NAME}'] rounding=['trunc'] sqrsum=['lo']" in printed
+    assert f"DSV4-MHC TF32 NO-GO step=['{X.CANDIDATE_NAME}'] rounding=['rne'] sqrsum=['lo']" in printed
     assert f"DSV4-MHC-CAPTURE NO-GO {doc['digest']}" in printed
     assert "no-go cases=['fused/T16', 'tf32/T17', 'tf32/T65', 'broadcast/T1', 'head/T16']" in printed
 

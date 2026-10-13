@@ -1,8 +1,9 @@
 """`mhc`'s kernels on bits: version 2 of each Definition one kernel launch computes, its word body line for line over Boolean
 Definitions (the bodies are `mhc`'s, written once over `mhc.Ops`), so each one's word view is its `_v1` at the same statics.
 
-    HopperTf32WgmmaDot8_v2                      traced: `fp.tc_dot_tf32` on each f32 operand's top 19 bits, the candidate's
+    HopperTf32WgmmaDot8_v2                      traced: `fp.tc_dot_tf32` after RNE f32 -> TF32 on both operands, the candidate's
                                                 groups, adder width and floor
+    MhcGpuF32{Add,Mul,Fma}_v1                   the squared-sum CUDA instructions, including GPU NaN canonicalisation
     MhcSigmoid_v2, MhcSinkhorn_v2{HC,REPEAT,EPS}, MhcMixes_v2{HC,NS,K,REPEAT,EPS,HC_EPS}
     MhcPreNorm_v2{HC,H,TN,EPS}, MhcPreNormBroadcast_v2{HC,H,TN,EPS}, MhcPost_v2{HC,N}, MhcFusedSplit_v2{HC,N,OUT,TH}
     MhcPrenormTf32Split_v2{K,OUT}, HcHead_v2{HC,H,TH,EPS,HC_EPS}
@@ -26,6 +27,7 @@ from verity.ml.circuits.types import Array
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.silicon import fp as FP
+from verity.ml.circuits.boolean.forms import OR, add, and_reduce, mux, or_reduce
 from verity.ml.circuits.boolean.trace import definition
 from verity_vllm.program.registry import boolean_dsa as BD
 from verity_vllm.program.registry import boolean_moe as BMOE
@@ -43,12 +45,33 @@ def bit_ops(B) -> M.Ops:
                  lambda x: Coll(F32, concat([x.refs.slice(0, 31), B.call(BL.NOT, x[31]).refs])))
 
 
+def _tf32_rne(C, w):
+    """A 32-bit f32 word rounded RNE to TF32's sign, exponent and ten mantissa bits, LSB first."""
+    high = list(w[13:])
+    special = and_reduce(C, w[23:31])
+    nan = C.AND(special, or_reduce(C, w[:23]))
+    inc = C.AND(w[12], OR(C, or_reduce(C, w[:12]), high[0]))
+    rounded = add(C, high, [inc], width=19)
+    kept = list(high)
+    kept[0] = OR(C, kept[0], nan)
+    return mux(C, special, kept, rounded)
+
+
 HopperTf32WgmmaDot8V2 = definition(
     "HopperTf32WgmmaDot8", 2,
-    lambda C, acc, *ab: FP.tc_dot_tf32(C, acc, [x[13:] for x in ab[:8]], [y[13:] for y in ab[8:16]], M.TF32_GROUPS, M.TF32_WIDTH,
-                                       M.TF32_FLOOR),
+    lambda C, acc, *ab: FP.tc_dot_tf32(C, acc, [_tf32_rne(C, x) for x in ab[:8]], [_tf32_rne(C, y) for y in ab[8:16]],
+                                       M.TF32_GROUPS, M.TF32_WIDTH, M.TF32_FLOOR),
     (("acc", F32), ("a", Array(8, F32)), ("b", Array(8, F32))), F32, word=M.HopperTf32WgmmaDot8,
     doc="the candidate wgmma.m64nNk8 tf32 step on bits: HopperTf32WgmmaDot8_v1")
+
+
+_AB = (("a", F32), ("b", F32))
+MhcGpuF32Add = definition("MhcGpuF32Add", 1, lambda C, a, b: FP.f32_add(C, a, b, nan_word=FP.F32_NAN_PTX), _AB, F32,
+                          word=M.P.F32AddV2, doc="the squared sum's GPU FADD")
+MhcGpuF32Mul = definition("MhcGpuF32Mul", 1, lambda C, a, b: FP.f32_mul(C, a, b, nan_word=FP.F32_NAN_PTX), _AB, F32,
+                          word=M.P.F32MulV2, doc="the squared sum's GPU FMUL")
+MhcGpuF32Fma = definition("MhcGpuF32Fma", 1, lambda C, a, b, c: FP.f32_fma(C, a, b, c, nan_word=FP.F32_NAN_PTX),
+                          (("a", F32), ("b", F32), ("c", F32)), F32, word=M.P.F32FmaV2, doc="the squared sum's GPU FFMA")
 
 
 def _sigmoid(B, S, z):
@@ -147,10 +170,12 @@ def _head(B, S, residual, fn, scale, base):
 
 HcHeadV2 = BD.flat("HcHead", 2, ["HC", "H", "TH", "EPS", "HC_EPS"], lambda S: M._sig_head(S, BF16, F32), _head, M.HcHead)
 
-BITS = dict(BD.BITS, expf=BMOE.NvExpf, bf16=BG.F2fpBf16, sigmoid=MhcSigmoidV2, tf32=HopperTf32WgmmaDot8V2, MhcSinkhorn=MhcSinkhornV2,
+BITS = dict(BD.BITS, expf=BMOE.NvExpf, bf16=BG.F2fpBf16, gpu_add=MhcGpuF32Add, gpu_mul=MhcGpuF32Mul, gpu_fma=MhcGpuF32Fma,
+            sigmoid=MhcSigmoidV2, tf32=HopperTf32WgmmaDot8V2, MhcSinkhorn=MhcSinkhornV2,
             MhcMixes=MhcMixesV2, MhcPreNorm=MhcPreNormV2, MhcPreNormBroadcast=MhcPreNormBroadcastV2, MhcPreBigFuse=MhcPreBigFuseV2,
             MhcPreBigFuseBroadcast=MhcPreBigFuseBroadcastV2, MhcPost=MhcPostV2, MhcFusedSplit=MhcFusedSplitV2,
             MhcPrenormTf32Split=MhcPrenormTf32SplitV2, MhcPrenormTf32=MhcPrenormTf32V2)
 
-BOOLEAN_MHC = [HopperTf32WgmmaDot8V2, MhcSigmoidV2, MhcSinkhornV2, MhcMixesV2, MhcPreNormV2, MhcPreNormBroadcastV2, MhcPreBigFuseV2,
+BOOLEAN_MHC = [HopperTf32WgmmaDot8V2, MhcGpuF32Add, MhcGpuF32Mul, MhcGpuF32Fma, MhcSigmoidV2, MhcSinkhornV2, MhcMixesV2,
+               MhcPreNormV2, MhcPreNormBroadcastV2, MhcPreBigFuseV2,
                MhcPreBigFuseBroadcastV2, MhcPostV2, MhcFusedSplitV2, MhcPrenormTf32SplitV2, MhcPrenormTf32V2, HcHeadV2]
