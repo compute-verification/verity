@@ -20,7 +20,7 @@
   "kernels": {
    "deep_gemm": "8b1392b9 (fp8_gemm_nt, fp8_einsum, tf32_hc_prenorm_gemm, fp8_mqa_logits / fp8_paged_mqa_logits)",
    "flash_mla": "6bc49418 (flash_mla_with_kvcache, flash_mla_sparse_fwd)",
-   "marlin": "csrc/moe/marlin_moe_wna16 at the vLLM pin (moe_wna16_marlin_gemm, float4_e2m1f weights with e8m0 group-32 scales)",
+   "marlin": "csrc/libtorch_stable/moe/marlin_moe_wna16 at the vLLM pin (moe_wna16_marlin_gemm, float4_e2m1f weights with e8m0 group-32 scales), built 8.0+PTX: on sm_90 the SASS is target.driver's JIT of its compute_80 PTX",
    "tilelang_mhc": "vllm/model_executor/kernels/mhc/tilelang_kernels.py at the vLLM pin",
    "flashinfer": "0.6.18 (fp8_blockscale_gemm_sm90: TRT-LLM's swapAB block-FP8 GEMM, the FP8 linears below 32 tokens)"
   },
@@ -36,6 +36,10 @@
   "num_sms": 132,
   "device": "NVIDIA H200",
   "device_memory_gb": 141,
+  "driver": {
+   "version": "580.173.02",
+   "why": "the H200 pods' driver, on which GLM-5.3's H200 captures ran (r20261013-090127-6de9, r20261013-085842-2147, r20261012-220846-5d83). vLLM builds the Marlin MoE kernels 8.0+PTX, with no sm_90 SASS, so the driver JIT-compiles their compute_80 PTX. The JIT chooses no rounding: the PTX's floating-point instructions are mma.sync bf16 into f32, bf16x2 FMAs and bf16 casts with explicit rounding, and f32 adds with no f32 multiply to fuse into. It does choose the kernels' registers, which ops.cu reads to bound the blocks per SM, and so GRID and the fp32 fold order. The Marlin capture's gate holds the driver to this version, and its record names the sha256 of the JIT'd cubin and of each served kernel's SASS (tests/properties/dsv4_marlin_capture_gpu.py, phase jit); a serve on another driver needs its own capture"
+  },
   "tensor_parallel_size": 8,
   "pipeline_parallel_size": 1,
   "enforce_eager": true,
@@ -395,7 +399,7 @@
     "MarlinMoeExpertGemmW_v2"
    ],
    "note": "fused_marlin_moe (experts/marlin_moe.py) with Mxfp4 weights: moe_align_block_size, ops.moe_wna16_marlin_gemm for w13 (float4_e2m1f weights dequantized against e8m0 group-32 scales, bf16 activations, mma.sync bf16, use_fp32_reduce, no router weight) and for w2 (top_k 1, mul_topk_weights). The weights are the checkpoint's, repacked to Marlin's tile layout at load. One Call per (token, slot) pair and launch: MarlinMoeExpertGemm_v1{E, K, N, TK, TN, GRID, DOT} (w13) and MarlinMoeExpertGemmW_v1 (w2, the router's f32 weight rounded to bf16 once), each word the warp rows' k16 chains over its scale groups, cut where the schedule starts a CTA's k slice and the slices folded in fp32 as the reduce does, the moe-align block ids committed (Boolean _v2 each). Row DSV4-PREP's capture (tests/properties/dsv4_marlin_capture_gpu.py) pins the thread config served at each decode batch and every launch's words",
-   "when": "decode batches of 1 to 16 tokens (the capture sweeps each); GRID is 132 SMs times the JIT'd kernel's blocks per SM"
+   "when": "decode batches of 1 to 16 tokens (the capture sweeps each), on target.driver: GRID is 132 SMs times the blocks per SM that ops.cu picks from the JIT'd kernel's registers"
   },
   "silu-mul-clamp": {
    "status": "tonight",

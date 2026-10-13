@@ -13,6 +13,7 @@ import copy
 import hashlib
 import itertools
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -107,6 +108,15 @@ def test_the_serve_profile():
     assert (args["tensor_parallel_size"], args["enforce_eager"], args["kv_cache_dtype"]) == (TP, True, target["kv_cache_dtype"])
     assert CONFIG["num_nextn_predict_layers"] == 1 and not any("mtp" in g["pattern"].lower() for g in RANK0["groups"])
     assert _group("model.layers.{i}.attn.indexer")["flags"]["use_fp4_kv"] is False
+
+
+def test_the_target_names_the_driver_that_jits_marlin():
+    """Marlin's experts are built `8.0+PTX`, so on sm_90 their SASS is the driver's JIT of compute_80 PTX: the target names that
+    driver beside the profile (which a meta build cannot read), and the Marlin Program and kernel pin cite it."""
+    driver = CMAP["target"]["driver"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", driver["version"]) and "driver" not in CMAP["target"]["profile"]
+    assert "target.driver" in CMAP["programs"]["marlin-mxfp4-moe"]["when"]
+    assert "8.0+PTX" in CMAP["pins"]["kernels"]["marlin"] and "target.driver" in CMAP["pins"]["kernels"]["marlin"]
 
 
 @pytest.mark.parametrize("k", range(len(CMAP["modules"])), ids=lambda k: CMAP["modules"][k]["pattern"] or "<root>")

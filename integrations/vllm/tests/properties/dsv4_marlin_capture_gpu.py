@@ -6,12 +6,17 @@ One GPU process writes `<out>/dsv4_marlin_capture.json`, the property record `ds
 one line per case and then `DSV4-MARLIN GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else
 runs when it fails (exit 3).  A phase that raises records its error and fails the verdict without stopping the others.
 
-  gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
+  gate       `fa2_target_capture_gpu.gate`: cc 9.0, 132 SMs (an H200), and the driver exactly `--driver`, by default the one the
+             capture map's target names (`pinned_driver`, `target.driver`), since the SASS that runs is that driver's (`jit`).
   selection  `select_deepseek_v4_mxfp4_moe_backend` on DeepSeek-V4-Pro's FusedMoEConfig (oracle/mxfp4.py:656) selects MARLIN /
              MarlinExperts, `get_marlin_input_dtype()` is None (W4A16: VLLM_MARLIN_INPUT_DTYPE unset) and Marlin's round-up leaves
              (7168, 384) as they are (oracle/mxfp4.py:746-751).
-  binary     the SASS and PTX archs `_moe_C` carries (information: an `8.0+PTX` build has no sm_90 SASS, and the driver JIT-compiles
-             it, so the kernel's registers, and with them blocks_per_sm, are the driver's).
+  binary     the SASS and PTX archs `_moe_C` carries (information: the `8.0+PTX` build has no sm_90 SASS).
+  jit        the SASS that ran.  The driver JIT-compiles the compute_80 PTX into this process's own compute cache (`CUDA_CACHE_PATH`,
+             empty, under the scratch directory: `environment`), and each profiled kernel is read back out of it (`jit`): the
+             sha256 of its cubin and of its function's SASS (`.text.<symbol>`, one per template), its arch (sm_90), its registers
+             (`cuobjdump -res-usage`), which must be the ones the profiler read, and its floating-point opcodes, which must lie in
+             `FP_OPS`; with libcuda's and the PTX JIT compiler's paths and sha256.  The cubins are kept in `<out>/jit/`.
   auto       on one layer of random logical weights (every e2m1 code; scale bytes 118..127, and experts 0..7 with 30% of their scale
              bytes from `EDGE_BYTES`: +0, +inf, overflow) repacked by `prepare_moe_mxfp4_layer_for_marlin`, `fused_marlin_moe` runs
              each case twice (`CASES`: decode batches of 1 to 16 tokens over experts 8..383, 16 tokens over 12 hot experts, and 8
@@ -44,24 +49,41 @@ runs when it fails (exit 3).  A phase that raises records its error and fails th
 
 GO needs every launch at the served statics, deterministic and assigned as routed, every auto launch's kernel read and at its M's
 swept config, a swept config per kind at every M of 1..16, at least one accepted forced launch per kind and more than one word class
-wherever two were accepted (when the phase runs), 0 mismatched words, and every reference evaluation equal to the twin.
+wherever two were accepted (when the phase runs), 0 mismatched words, every reference evaluation equal to the twin, and every
+profiled kernel's SASS read back from the driver's cache.
+
+What the JIT decides.  At a given config (TK, TN, GRID) the served kernels' arithmetic is fixed by their PTX, and the JIT chooses no
+rounding in it.  In each of the three served instantiations (256 threads at 8 x 8 blocks, 128 at 8 x 4 and at 4 x 8) the PTX's
+floating-point instructions are `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32` (inline asm: one HMMA.16816.F32.BF16 each,
+whose products and f32 accumulation are the tensor core's), `fma.rn.bf16x2` and `cvt.rn.bf16.f32` (explicit rounding), and `add.f32`
+(the fp32 reduce).  The PTX ISA lets the code generator optimize an add without a rounding modifier only by fusing it with a multiply
+into an FMA, and these kernels have no f32 multiply; nothing reassociates.  ptxas 12.9 compiles them for sm_90 to exactly that
+(HMMA.16816.F32.BF16; FADD; HMUL2 and HADD2.BF16_V2, the bf16x2 FMAs with a -0 addend or a unit factor; F2FP.BF16.F32.PACK_AB), plus
+MUFU.RCP in the integer-division idiom, and `jit` holds the driver's SASS to the same opcodes.  What the JIT does decide is the
+registers (ptxas 12.9: 120, 119 and 121), and `determine_exec_config` reads them (ops.cu:321-323, `device_max_reg_size` over numRegs
+x threads x 4 bytes) to bound the blocks per SM: 2 at 256 threads and 4 at 128 below 128 registers, 1 and 3 from 128.  The blocks per
+SM give GRID, and GRID fixes the k-slice schedule and the fp32 fold order, which the Programs take as statics.  So the config served
+at each batch is the driver's, and the record pins the driver and the SASS.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
-    $PY tests/properties/dsv4_marlin_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--skip-forced]
+    $PY tests/properties/dsv4_marlin_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--skip-forced] [--driver VERSION]
 """
 from __future__ import annotations
 
 import argparse
 import ctypes
 import glob
+import hashlib
 import inspect
 import itertools
 import json
 import multiprocessing
 import os
 import re
+import struct
 import sys
 import tempfile
+from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -107,6 +129,17 @@ E2M1 = np.array([0, 0.5, 1, 1.5, 2, 3, 4, 6, -0.0, -0.5, -1, -1.5, -2, -3, -4, -
 JOB_COORD_K = 100_000_000
 #: the launch arguments a W4A16 MXFP4 launch leaves None
 ABSENT = ("b_bias", "a_scales", "global_scale", "b_qzeros", "g_idx", "perm")
+#: the capture map whose target names the driver (`target.driver`)
+MAP = Path(__file__).resolve().parents[2] / "manifests/capture-maps/deepseek-v4-eager-hopper-tp8-v0.json"
+#: the environment that would disable the driver's JIT cache or its JIT, or JIT kernels that carry SASS
+JIT_ENV = ("CUDA_CACHE_DISABLE", "CUDA_DISABLE_PTX_JIT", "CUDA_FORCE_PTX_JIT")
+EM_CUDA = 190
+#: a mangled `marlin_moe_wna16::Marlin<...>` (kernel.h): its twelve template arguments are literals `L<type><value>E` (the four
+#: ScalarTypeIds int64_t, `l`; the bools `b`; a negative value prefixed `n`)
+MANGLED = re.compile(r"_ZN16marlin_moe_wna166MarlinI((?:L[a-z]n?\d+E){12})E")
+#: the floating-point SASS opcodes `sass_census` counts, and the ones the served kernels may hold (module docstring)
+FP_OP = re.compile(r"(?:HMMA|HFMA|HMUL|HADD|HMNMX|FADD|FFMA|FMUL|FMNMX|FSET|FCHK|F2F|MUFU|DADD|DFMA|DMUL)")
+FP_OPS = {"HMMA.16816.F32.BF16", "FADD", "HFMA2.BF16_V2", "HMUL2.BF16_V2", "HADD2.BF16_V2", "F2FP.BF16.F32.PACK_AB", "MUFU.RCP"}
 
 
 def shape(kind: str) -> tuple[int, int]:
@@ -123,13 +156,34 @@ def launch_top_k(kind: str) -> int:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- env
-def environment() -> dict[str, Any]:
-    """DeepSeek-V4-Pro's serve env as it bears on the experts (the capture map's `target.env`), set before vLLM is imported; the
-    serve leaves VLLM_MARLIN_INPUT_DTYPE unset (W4A16), so a value this shell holds is dropped and recorded."""
-    env: dict[str, Any] = {"VLLM_BATCH_INVARIANT": "0", "VLLM_ENABLE_V1_MULTIPROCESSING": "0"}
+def environment(cache: Path) -> dict[str, Any]:
+    """DeepSeek-V4-Pro's serve env as it bears on the experts (the capture map's `target.env`), set before vLLM is imported and
+    before CUDA initialises; the serve leaves VLLM_MARLIN_INPUT_DTYPE and `JIT_ENV` unset, so a value this shell holds is dropped and
+    recorded.  The driver's JIT cache is `cache`, new and empty, so every PTX kernel the run launches is compiled here, by this
+    driver, and `jit` reads it back; a CUDA_CACHE_PATH this shell holds is recorded as replaced."""
+    env: dict[str, Any] = {"VLLM_BATCH_INVARIANT": "0", "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "CUDA_CACHE_MAXSIZE": str(4 << 30)}
     os.environ.update(env)
-    env["unset"] = {"VLLM_MARLIN_INPUT_DTYPE": os.environ.pop("VLLM_MARLIN_INPUT_DTYPE", None)}
+    env["unset"] = {k: os.environ.pop(k, None) for k in ("VLLM_MARLIN_INPUT_DTYPE", *JIT_ENV)}
+    env["replaced"] = {"CUDA_CACHE_PATH": os.environ.get("CUDA_CACHE_PATH")}
+    cache.mkdir(parents=True)
+    os.environ["CUDA_CACHE_PATH"] = str(cache)
+    env["CUDA_CACHE_PATH"] = "<scratch>/" + cache.name
     return env
+
+
+def pinned_driver() -> str:
+    """The driver the capture map's target names (`target.driver.version`)."""
+    return json.loads(MAP.read_text())["target"]["driver"]["version"]
+
+
+def gate(min_driver: int, want_cc: str, want_sms: int, driver: str) -> dict[str, Any]:
+    """`fa2_target_capture_gpu.gate`, and the driver exactly `driver`: the served kernels' SASS, and with its registers their config,
+    is this driver's JIT of the PTX (`jit`), so a record on another driver claims nothing for the map's target."""
+    rec = C.gate(min_driver, want_cc, want_sms)
+    rec.setdefault("want", {})["driver"] = driver
+    rec.setdefault("checks", {})["driver_pinned"] = rec.get("driver") == driver
+    rec["ok"] = all(rec["checks"].values())
+    return rec
 
 
 # ------------------------------------------------------------------------------------------------------------------- selection
@@ -169,6 +223,133 @@ def binary() -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         return {"so": so[0], "error": _error(e)}
     rec["sm90_sass"] = "90" in rec["sass_archs"] or "90a" in rec["sass_archs"]
+    return rec
+
+
+# ------------------------------------------------------------------------------------------------------------------------- jit
+def mangled_template(symbol: str) -> dict[str, int | bool] | None:
+    """The template arguments of a mangled Marlin MoE kernel, by `TEMPLATE`'s names; None for another symbol."""
+    m = MANGLED.match(symbol)
+    if m is None:
+        return None
+    lits = re.findall(r"L([a-z])(n?)(\d+)E", m.group(1))
+    return {n: (v != 0 if t == "b" else v) for n, (t, neg, d) in zip(TEMPLATE, lits, strict=True) for v in [-int(d) if neg else int(d)]}
+
+
+def _elf_at(blob: bytes, i: int) -> bytes | None:
+    """The little-endian ELF64 CUDA image starting at `blob[i]`, through the last of its headers and sections; None if there is none."""
+    if len(blob) < i + 64 or blob[i + 4:i + 6] != b"\x02\x01" or struct.unpack_from("<H", blob, i + 18)[0] != EM_CUDA:
+        return None
+    phoff, shoff = struct.unpack_from("<QQ", blob, i + 32)
+    phentsize, phnum, shentsize, shnum = struct.unpack_from("<HHHH", blob, i + 54)
+    if shentsize != 64 or not shnum or i + shoff + 64 * shnum > len(blob):
+        return None
+    end = max(shoff + 64 * shnum, phoff + phentsize * phnum)
+    for k in range(shnum):
+        h = i + shoff + 64 * k
+        if struct.unpack_from("<I", blob, h + 4)[0] != 8:        # SHT_NOBITS takes no bytes
+            off, size = struct.unpack_from("<QQ", blob, h + 24)
+            end = max(end, off + size)
+    return blob[i:i + end] if i + end <= len(blob) else None
+
+
+def cuda_elfs(blob: bytes) -> list[tuple[int, bytes]]:
+    """Every CUDA image in `blob` as (offset, image): a compute-cache entry holds the cubin the driver compiled behind a header of
+    its own."""
+    out, i = [], blob.find(b"\x7fELF")
+    while i >= 0:
+        img = _elf_at(blob, i)
+        if img:
+            out.append((i, img))
+        i = blob.find(b"\x7fELF", i + (len(img) if img else 1))
+    return out
+
+
+def elf_functions(img: bytes) -> dict[str, bytes]:
+    """Each function's SASS in a CUDA image (its `.text.<symbol>` section), by symbol."""
+    shoff, = struct.unpack_from("<Q", img, 40)
+    shnum, shstrndx = struct.unpack_from("<HH", img, 60)
+    hdrs = [struct.unpack_from("<IIQQQQ", img, shoff + 64 * k) for k in range(shnum)]
+    names = img[hdrs[shstrndx][4]:hdrs[shstrndx][4] + hdrs[shstrndx][5]]
+    out = {}
+    for name_at, sh_type, _, _, off, size in hdrs:
+        name = names[name_at:names.index(b"\0", name_at)].decode()
+        if name.startswith(".text.") and sh_type != 8:
+            out[name[len(".text."):]] = img[off:off + size]
+    return out
+
+
+def sass_census(sass: str) -> dict[str, int]:
+    """The floating-point opcodes (`FP_OP`) of a `cuobjdump -sass` listing, counted."""
+    ops = re.findall(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)", sass)
+    return dict(sorted(Counter(op for op in ops if FP_OP.match(op)).items()))
+
+
+def function_registers(res_usage: str) -> dict[str, int]:
+    """REG of each function of a `cuobjdump -res-usage` listing."""
+    return {m.group(1): int(m.group(2)) for m in re.finditer(r"Function (\S+):\s*\n\s*REG:(\d+)", res_usage)}
+
+
+def _cuobjdump(*args: str) -> str:
+    r = C._run([C._cuda_tool("cuobjdump"), *args])
+    if r.returncode:
+        raise RuntimeError(f"cuobjdump {' '.join(args)}: {(r.stdout + r.stderr)[-300:]}")
+    return r.stdout
+
+
+def driver_libraries() -> dict[str, Any]:
+    """The CUDA driver library this process loaded and the PTX JIT compiler it loaded to compile PTX, each path and sha256, and
+    `cuDriverGetVersion`."""
+    with open("/proc/self/maps") as f:
+        paths = sorted({p for p in (ln.split()[-1] for ln in f)
+                        if p.startswith("/") and re.search(r"/lib(cuda|nvidia-ptxjitcompiler)\.so", p)})
+    rec: dict[str, Any] = {os.path.basename(p): {"path": p, "sha256": C._sha256_file(p)} for p in paths}
+    lib = next((p for p in paths if "/libcuda.so" in p), None)
+    if lib:
+        v = ctypes.c_int()
+        ctypes.CDLL(lib).cuDriverGetVersion(ctypes.byref(v))
+        rec["cuDriverGetVersion"] = v.value
+    return rec
+
+
+def jit(cache: Path, keep: Path, served: list[dict[str, Any]], arch: str) -> dict[str, Any]:
+    """The SASS of each profiled kernel (`served`: its template and the registers the profiler read), read back out of the driver's
+    compute cache: the CUDA images in it, and per kernel the cached function of its template, the sha256 of its cubin and of its
+    SASS (one), its arch, registers and floating-point opcodes.  `ok` when every kernel is found, at `arch`, at the profiled
+    registers, with its opcodes in `FP_OPS` and at least one HMMA.  Each cubin holding one is written to `keep`."""
+    rec: dict[str, Any] = {"driver": driver_libraries(), "files": 0, "bytes": 0, "cubins": [], "kernels": []}
+    images = []
+    for p in sorted(x for x in cache.rglob("*") if x.is_file()):
+        blob = p.read_bytes()
+        rec["files"] += 1
+        rec["bytes"] += len(blob)
+        for off, img in cuda_elfs(blob):
+            fns = elf_functions(img)
+            images.append((hashlib.sha256(img).hexdigest(), img, fns))
+            rec["cubins"].append({"file": str(p.relative_to(cache)), "offset": off, "bytes": len(img), "sha256": images[-1][0],
+                                  "e_flags": f"{struct.unpack_from('<I', img, 48)[0]:#x}", "functions": len(fns),
+                                  "marlin": sum(mangled_template(s) is not None for s in fns)})
+    for k in served:
+        hits = [(sha, img, sym, text) for sha, img, fns in images for sym, text in fns.items() if mangled_template(sym) == k["template"]]
+        kr: dict[str, Any] = {"template": k["template"], "profiled_registers": k["registers"], "found": bool(hits), "ok": False}
+        rec["kernels"].append(kr)
+        if not hits:
+            continue
+        sha, img, sym, text = hits[0]
+        keep.mkdir(parents=True, exist_ok=True)
+        path = keep / f"{sha}.cubin"
+        path.write_bytes(img)
+        sass = _cuobjdump("-sass", "-fun", sym, str(path))
+        m = re.search(r"code for (sm_\w+)", sass)
+        kr.update({"symbol": sym, "cubins": sorted({h[0] for h in hits}),
+                   "text_sha256": sorted({hashlib.sha256(h[3]).hexdigest() for h in hits}), "text_bytes": len(text),
+                   "arch": m.group(1) if m else None,
+                   "registers": function_registers(_cuobjdump("-res-usage", str(path))).get(sym),
+                   "fp_ops": sass_census(sass), "kept": f"{keep.name}/{path.name}"})
+        kr["ok"] = (len(kr["text_sha256"]) == 1 and kr["arch"] == arch and f"Function : {sym}" in sass
+                    and kr["profiled_registers"] == [kr["registers"]] and set(kr["fp_ops"]) <= FP_OPS
+                    and kr["fp_ops"].get("HMMA.16816.F32.BF16", 0) > 0)
+    rec["ok"] = bool(rec["kernels"]) and all(k["ok"] for k in rec["kernels"])
     return rec
 
 
@@ -744,7 +925,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def _verdict(doc: dict[str, Any]) -> bool:
     launches = doc["launches"]
     return (doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("ok") is True and doc["bind"].get("ok") is True
-            and doc["sweep"].get("ok") is True
+            and doc["sweep"].get("ok") is True and doc.get("jit", {}).get("ok") is True
             and {x["launch"] for x in launches if x["phase"] == "auto"} == {"w13", "w2"} and all(_launch_ok(x) for x in launches)
             and _forced_ok(doc) and _words_ok(doc["totals"]))
 
@@ -803,7 +984,13 @@ def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: b
         _say(f"runs ERROR {doc['errors']['runs'][:600]}")
         return [], []
     doc["errors"].update({label if label.startswith("sweep/") else f"case/{label}": err for label, err in run_errors.items()})
-    doc["kernels"] = {"launches": len(launches), "kernels": len(kernels), "registers": sorted({str(k["registers"]) for k in kernels})}
+    served: dict[str, dict[str, Any]] = {}
+    for k in kernels:
+        if k["template"]:
+            s = served.setdefault(json.dumps(k["template"], sort_keys=True), {"template": k["template"], "registers": []})
+            s["registers"] = sorted(set(s["registers"]) | {k["registers"]}, key=str)
+    doc["kernels"] = {"launches": len(launches), "kernels": len(kernels), "registers": sorted({str(k["registers"]) for k in kernels}),
+                      "served": list(served.values())}
     if len(kernels) == len(launches):
         for L, k in zip(launches, kernels):
             L["kernel"] = k
@@ -876,17 +1063,17 @@ def compare_all(ex, doc: dict[str, Any], specs: list[dict], forced_specs: list[d
 
 
 def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: int, workers: int, quick: bool,
-        forced: bool) -> dict[str, Any]:
+        forced: bool, driver: str) -> dict[str, Any]:
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=scratch)
     work = Path(tmp.name)
-    env = environment()
+    env = environment(work / "compute-cache")
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": quick, "forced_phase": forced,
-                           "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms), "errors": {}, "launches": [],
-                           "selection": {}, "sweep": {}, "probe": {}, "comparisons": []}
+                           "environment": G._environment(), "gate": gate(min_driver, want_cc, want_sms, driver), "errors": {},
+                           "launches": [], "selection": {}, "sweep": {}, "probe": {}, "comparisons": []}
     _say(f"gate {json.dumps(doc['gate'])}")
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
@@ -895,6 +1082,15 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     sms = int(doc["gate"]["sms"])
     with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
         specs, forced_specs = gpu_phases(doc, work, sms, quick, forced)
+    try:
+        doc["jit"] = jit(work / "compute-cache", outdir / "jit", doc.get("kernels", {}).get("served", []),
+                         "sm_" + want_cc.replace(".", ""))
+    except Exception as e:  # noqa: BLE001
+        doc["errors"]["jit"] = _error(e)
+        doc["jit"] = {"ok": False}
+    seen = [{k: x.get(k) for k in ("symbol", "text_sha256", "registers", "fp_ops", "ok")} for x in doc["jit"].get("kernels", [])]
+    _say(f"jit ok={doc['jit']['ok']} files={doc['jit'].get('files')} cubins={len(doc['jit'].get('cubins', []))} "
+         f"kernels={json.dumps(seen)[:2000]}")
     _say(f"comparing on {workers} workers")
     with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as ex:
         compare_all(ex, doc, specs, forced_specs, sms)
@@ -925,13 +1121,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", required=True, help=f"directory for {RECORD}")
     ap.add_argument("--scratch", default=None, help="parent of the scratch directory (logical weights, launch words); default the system temp")
     ap.add_argument("--min-driver", type=int, default=575)
+    ap.add_argument("--driver", default=None, help="the exact driver version (nvidia-smi); default the capture map's target.driver")
     ap.add_argument("--want-cc", default="9.0")
     ap.add_argument("--want-sms", type=int, default=132)
     ap.add_argument("--workers", type=int, default=C.cpu_workers())
     ap.add_argument("--quick", action="store_true", help=f"cases {QUICK}, forced {QUICK_FORCED}: a first signal in minutes")
     ap.add_argument("--skip-forced", action="store_true", help="no forced launches (their check is then not part of the verdict)")
     a = ap.parse_args(argv)
-    doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick, not a.skip_forced)
+    doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick, not a.skip_forced, a.driver or pinned_driver())
     return 0 if doc["ok"] else 1
 
 

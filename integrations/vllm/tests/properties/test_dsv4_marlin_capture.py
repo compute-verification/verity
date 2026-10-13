@@ -1,11 +1,14 @@
 """The DeepSeek-V4-Pro Marlin capture without a GPU: its jobs over launches made here (the kernel's words stood in for by the twin at
 a known config), the kernel's config read off its profiled name and grid, the probe telling summation orders apart where ordinary
 activations cannot, a flipped word found and located, the reference against the twin, the sweep and its model, the assignment and
-statics checks, the records of a case's launches, the verdict, and `main` end to end (the GPU run is
-`tests/properties/dsv4_marlin_capture_gpu.py --out ...` on an H200)."""
+statics checks, the records of a case's launches, the JIT'd kernels read back from a compute cache made here and the driver held
+to the map's, the verdict, and `main` end to end (the GPU run is `tests/properties/dsv4_marlin_capture_gpu.py --out ...` on an
+H200)."""
 from __future__ import annotations
 
 import copy
+import hashlib
+import struct
 
 import numpy as np
 import pytest
@@ -121,6 +124,100 @@ def test_the_kernel_name_and_grid_read_the_launch_config() -> None:
     assert X.kernel_template(_name(128, 8, 4).replace("1095l", "x")) is None
     assert X.kernel_template(_name(128, 8, 4).replace(", false>", ", false, 7>")) is None
     assert X.kernel_config(None, SMS, TYPES) == (None, False) and X.kernel_config({"template": None}, SMS, TYPES) == (None, False)
+
+
+def _symbol(threads: int, n_blocks: int, k_blocks: int, *, group_blocks: str = "2") -> str:
+    """`_name`'s kernel mangled, as its cubin names it."""
+    return (f"_ZN16marlin_moe_wna166MarlinILl5ELl1095ELl5ELl2ELi{threads}ELi1ELi{n_blocks}ELi{k_blocks}ELb1ELi4ELi{group_blocks}ELb0EEEv"
+            "PK4int4S3_PS1_S4_S3_PKfS3_S6_S3_PKiS8_S8_S8_S6_ibiiiiPibbb")
+
+
+def _cubin(functions: dict[str, bytes]) -> bytes:
+    """A little-endian ELF64 CUDA image: a null section, a `.text.<symbol>` section per function, a NOBITS `.nv.shared` section
+    larger than the file, and the section-name table, with the section headers last."""
+    names = b"\0" + b"".join(b".text." + s.encode() + b"\0" for s in functions) + b".nv.shared\0.shstrtab\0"
+    body, sections, name_at = b"", [], 1
+    for s, text in functions.items():
+        sections.append((name_at, 1, 64 + len(body), len(text)))
+        name_at += len(".text.") + len(s) + 1
+        body += text
+    sections.append((name_at, 8, 64 + len(body), 1 << 20))
+    sections.append((name_at + len(".nv.shared") + 1, 3, 64 + len(body), len(names)))
+    body += names
+    shdrs = bytes(64) + b"".join(struct.pack("<IIQQQQIIQQ", n, t, 0, 0, o, z, 0, 0, 1, 0) for n, t, o, z in sections)
+    ehdr = b"\x7fELF\x02\x01\x01\x33\x07" + bytes(7) + struct.pack("<HHIQQQIHHHHHH", 2, X.EM_CUDA, 1, 0, 0, 64 + len(body), 0x50055A, 64,
+                                                                  0, 0, 64, len(sections) + 1, len(sections))
+    return ehdr + body + shdrs
+
+
+def _listing(sym: str, ops: tuple[str, ...] = ("HMMA.16816.F32.BF16", "FADD", "HMUL2.BF16_V2"), arch: str = "sm_90") -> str:
+    lines = "".join(f"        /*{16 * i:04x}*/              {'@!P0 ' if i % 2 else ''}{op} R1, R2, R3 ;   /* 0x000fe20000000a00 */\n"
+                    for i, op in enumerate(ops))
+    return f"\n\tcode for {arch}\n\t\tFunction : {sym}\n\t.headerflags\t@\"EF_CUDA_SM90\"\n{lines}"
+
+
+def test_a_mangled_marlin_symbol_reads_as_its_profiled_name() -> None:
+    for threads, n, k in ((256, 8, 8), (128, 8, 4), (128, 4, 8)):
+        assert X.mangled_template(_symbol(threads, n, k)) == X.kernel_template(_name(threads, n, k)) is not None
+    assert X.mangled_template(_symbol(128, 8, 4, group_blocks="n1"))["group_blocks"] == -1
+    assert X.mangled_template("_ZN7vllm3moe25moe_align_block_size_kernelIiEEvPKT_") is None
+    assert X.mangled_template(_symbol(128, 8, 4).replace("ELb0EEEv", "EEEv")) is None, "eleven arguments"
+
+
+def test_a_cuda_image_is_found_behind_a_cache_header() -> None:
+    img = _cubin({_symbol(128, 8, 4): b"\x01" * 48, "_Z5otherv": b"\x02" * 16})
+    blob = b"\x7fELF-not-an-image" + b"\0" * 23 + img + b"\x7fELF" + b"trailer"
+    assert X.cuda_elfs(blob) == [(40, img)], "the NOBITS section takes no bytes; a truncated magic is no image"
+    assert X.elf_functions(img) == {_symbol(128, 8, 4): b"\x01" * 48, "_Z5otherv": b"\x02" * 16}
+    assert X.cuda_elfs(img[:-1]) == [] and X.cuda_elfs(img[:18] + b"\x3e\x00" + img[20:]) == [], "truncated; an x86-64 image"
+
+
+def test_the_jit_phase_reads_each_kernel_back_from_the_driver_cache(tmp_path, monkeypatch) -> None:
+    sym, text = _symbol(128, 8, 4), b"\x07" * 64
+    served = [{"template": X.kernel_template(_name(128, 8, 4)), "registers": [120]}]
+    listings = {"-sass": _listing(sym), "-res-usage": f"Resource usage:\n Common:\n  GLOBAL:0\n Function {sym}:\n  REG:120 STACK:0\n"}
+    monkeypatch.setattr(X, "_cuobjdump", lambda *a: listings[a[0]])
+    monkeypatch.setattr(X, "driver_libraries", lambda: {"libcuda.so.580.173.02": {"sha256": "ab"}})
+    cache = tmp_path / "cache"
+    (cache / "1" / "f").mkdir(parents=True)
+    (cache / "index").write_bytes(bytes(32))
+    img = _cubin({sym: text, "_Z5otherv": b"\x02" * 16})
+    (cache / "1" / "f" / "entry").write_bytes(b"H" * 24 + img)
+
+    def run(served=served) -> dict:
+        return X.jit(cache, tmp_path / "out" / "jit", served, "sm_90")
+
+    rec = run()
+    k = rec["kernels"][0]
+    assert rec["ok"] and rec["files"] == 2 and rec["cubins"] == [{"file": "1/f/entry", "offset": 24, "bytes": len(img),
+                                                                  "sha256": hashlib.sha256(img).hexdigest(), "e_flags": "0x50055a",
+                                                                  "functions": 2, "marlin": 1}]
+    assert k["symbol"] == sym and k["text_sha256"] == [hashlib.sha256(text).hexdigest()] and k["registers"] == 120 and k["arch"] == "sm_90"
+    assert k["fp_ops"] == {"FADD": 1, "HMMA.16816.F32.BF16": 1, "HMUL2.BF16_V2": 1}
+    assert (tmp_path / "out" / k["kept"]).read_bytes() == img
+    assert not run([{**served[0], "registers": [121]}])["ok"], "the profiled kernel's registers"
+    assert not run([{**served[0], "registers": [120, 121]}])["ok"]
+    for listing in (_listing(sym, ("HMMA.16816.F32.BF16", "FFMA")), _listing(sym, ("HMMA.16816.F32.TF32",)), _listing(sym, ("FADD",)),
+                    _listing(sym, arch="sm_80"), _listing("_Z5otherv")):
+        listings["-sass"] = listing
+        assert not run()["ok"], listing
+    listings["-sass"] = _listing(sym)
+    other = {**served[0], "template": X.kernel_template(_name(256, 8, 8))}
+    assert run([other])["kernels"][0]["found"] is False and not run([other])["ok"] and not run([])["ok"]
+    (cache / "1" / "f" / "entry2").write_bytes(b"H" * 8 + _cubin({sym: b"\x08" * 64}))
+    rec = run()
+    assert not rec["ok"] and len(rec["kernels"][0]["text_sha256"]) == 2, "one template, two SASS"
+
+
+def test_the_gate_holds_the_driver_to_the_map_s(monkeypatch) -> None:
+    import json
+
+    assert X.pinned_driver() == json.loads(X.MAP.read_text())["target"]["driver"]["version"] == "580.173.02"
+    monkeypatch.setattr(X.C, "gate", lambda *a: {"driver": "580.173.02", "want": {"min_driver": 575}, "checks": {"driver": True},
+                                                 "ok": True})
+    assert X.gate(575, "9.0", 132, "580.173.02")["ok"]
+    g = X.gate(575, "9.0", 132, "580.126.09")
+    assert not g["ok"] and g["checks"]["driver_pinned"] is False and g["want"]["driver"] == "580.126.09"
 
 
 def test_the_probe_tells_summation_orders_apart(tmp_path) -> None:
@@ -329,7 +426,8 @@ def _doc() -> dict:
     forced = {"phase": "forced", "case": "hot16", "config": [64, 128, 1]}
     probe = {"case": "hot16", "accepted": 2, "classes": [[[64, 128, 1]], [[128, 64, 1]]], "ok": True}
     return {"schema": X.SCHEMA, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True}, "bind": {"ok": True}, "forced_phase": True,
-            "sweep": {"ok": True}, "probe": {"hot16/w13": {**probe, "launch": "w13"}, "hot16/w2": {**probe, "launch": "w2"}},
+            "sweep": {"ok": True}, "jit": {"ok": True},
+            "probe": {"hot16/w13": {**probe, "launch": "w13"}, "hot16/w2": {**probe, "launch": "w2"}},
             "launches": [{**auto, "launch": "w13"}, {**auto, "launch": "w2"}, {**forced, "launch": "w13", "accepted": True},
                          {**forced, "launch": "w2", "accepted": True}, {**forced, "launch": "w2", "accepted": False}],
             "comparisons": [{"phase": "auto", "case": "decode1", "launch": "w13", "config": [128, 64, 2], **TOTALS},
@@ -338,7 +436,8 @@ def _doc() -> dict:
 
 
 @pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("errors", "case/decode1"), "boom"), (("selection", "ok"), False),
-                                        (("bind", "ok"), False), (("sweep", "ok"), False), (("totals", "mismatch"), 1),
+                                        (("bind", "ok"), False), (("sweep", "ok"), False), (("jit", "ok"), False),
+                                        (("totals", "mismatch"), 1),
                                         (("totals", "words"), 0), (("totals", "twin_mismatch"), 1), (("totals", "reference_coords"), 0),
                                         (("totals", "reference_schedules"), 0), (("totals", "reference_expert_coords"), 0),
                                         (("launches", 0, "deterministic"), False), (("launches", 1, "statics_ok"), False),
@@ -354,6 +453,7 @@ def test_the_verdict_needs_every_check(path: tuple, value) -> None:
     node[path[-1]] = value
     assert not X._verdict(doc)
     assert not X._verdict({**_doc(), "sweep": {}})
+    assert not X._verdict({k: v for k, v in _doc().items() if k != "jit"}), "no jit phase"
     assert not X._verdict({**_doc(), "launches": _doc()["launches"][:1] + _doc()["launches"][2:]}), "both launch kinds"
     assert not X._verdict({**_doc(), "probe": {"hot16/w13": _doc()["probe"]["hot16/w13"]}}), "a forced launch without its probe"
     assert X._verdict({**_doc(), "forced_phase": False, "launches": _doc()["launches"][:2], "probe": {}})
@@ -379,11 +479,13 @@ def test_each_case_has_its_own_verdict() -> None:
 @pytest.mark.parametrize("flip", [False, True])
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip: bool) -> None:
     """`main` with the GPU phases stood in for (the gate, a sweep serving TRUE, launches whose words the twin made at TRUE, a forced
-    w2 launch at another config with one word flipped or not) and vLLM's config module stubbed: the comparisons through the spawned
-    worker pool, identification against the sweep, the bindings, the per-case verdicts, the sealed record and the exit status, so a
-    slip in the orchestration shows here and not in the H200's first hour."""
+    w2 launch at another config with one word flipped or not, the jit phase) and vLLM's config module stubbed: the environment and
+    the compute cache it points the driver at, the driver pinned to the map's, the comparisons through the spawned worker pool,
+    identification against the sweep, the bindings, the per-case verdicts, the sealed record and the exit status, so a slip in the
+    orchestration shows here and not in the H200's first hour."""
     import contextlib
     import json
+    import os
     import sys
     import types
 
@@ -392,12 +494,23 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
     vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
-    for k in ("VLLM_BATCH_INVARIANT", "VLLM_ENABLE_V1_MULTIPROCESSING"):
+    for k in ("VLLM_BATCH_INVARIANT", "VLLM_ENABLE_V1_MULTIPROCESSING", "CUDA_CACHE_MAXSIZE"):
         monkeypatch.setenv(k, "")
+    for k in X.JIT_ENV[:2]:
+        monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("VLLM_MARLIN_INPUT_DTYPE", "fp8")
-    monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True, "sms": SMS})
+    monkeypatch.setenv("CUDA_FORCE_PTX_JIT", "1")
+    monkeypatch.setenv("CUDA_CACHE_PATH", "/host/cache/cuda/k-0")
+    monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True, "sms": SMS, "driver": "580.173.02", "want": {}, "checks": {}})
     monkeypatch.setattr(X.G, "_environment", dict)
     forced_at = (128, 64, 2)
+
+    def jit(cache, keep, served, arch):
+        assert os.environ["CUDA_CACHE_PATH"] == str(cache) and cache.is_dir() and not any(cache.iterdir())
+        assert keep == out / "jit" and served == [] and arch == "sm_90"
+        return {"ok": True, "kernels": []}
+
+    monkeypatch.setattr(X, "jit", jit)
 
     def gpu(doc, work, sms, quick, forced):
         assert sms == SMS and forced and not quick
@@ -420,7 +533,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1"]) == (1 if flip else 0)
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["digest"] == digest_of(doc) and doc["ok"] is (not flip) and not doc["errors"]
-    assert doc["env"]["VLLM_BATCH_INVARIANT"] == "0" and doc["env"]["unset"] == {"VLLM_MARLIN_INPUT_DTYPE": "fp8"}
+    assert doc["env"]["VLLM_BATCH_INVARIANT"] == "0" and doc["env"]["unset"] == {
+        "VLLM_MARLIN_INPUT_DTYPE": "fp8", "CUDA_CACHE_DISABLE": None, "CUDA_DISABLE_PTX_JIT": None, "CUDA_FORCE_PTX_JIT": "1"}
+    assert doc["env"]["replaced"] == {"CUDA_CACHE_PATH": "/host/cache/cuda/k-0"} and doc["env"]["CUDA_CACHE_MAXSIZE"] == str(4 << 30)
+    assert doc["gate"]["want"]["driver"] == "580.173.02" and doc["gate"]["checks"]["driver_pinned"] and doc["jit"]["ok"]
     assert all(x["identified"] and x["served"] == list(TRUE) for x in doc["launches"][:2])
     assert doc["bind"]["ok"] and len(doc["bind"]["bindings"]) == 2
     assert doc["totals"]["mismatch"] == (1 if flip else 0) and doc["totals"]["reference_expert_coords"] == 1
