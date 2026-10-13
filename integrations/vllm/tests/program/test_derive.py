@@ -561,6 +561,24 @@ def test_unlisted_unknown_op_still_refuses_the_whole_program():
     assert isinstance(wrong, Unsupported)
 
 
+def test_committed_mutable_op_rebinds_its_written_operand():
+    class AddInPlace(torch.nn.Module):
+        def forward(self, x):
+            x = x.clone()
+            x.add_(2)
+            return x
+
+    source = AddInPlace()
+    x = torch.tensor([1.0, -4.0])
+    rep = derive_report(source, (torch.empty_like(x),), **REF, committed_units=[
+        {"op": "aten.add_.Tensor", "module": "*", "reason": "test mutable gap"}])
+    assert rep.ok, rep.unsupported
+    assert rep.provenance["committed_units"][0]["writes"]
+    true_bits = [int(v) for v in _bits(source(x))]
+    table = materialize(rep.program, [[int(v) for v in _bits(x)], true_bits])
+    assert [table[g] for g in rep.program.circuit.root_outputs()] == true_bits
+
+
 def test_rule_set_is_versioned_and_recorded():
     infos = DEFAULT_RULES.to_json()
     assert infos["rules"] and all(i["version"] >= 1 and i["rule"].endswith(f"_v{i['version']}") for i in infos["rules"])

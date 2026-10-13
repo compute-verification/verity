@@ -34,6 +34,13 @@ class _Model(torch.nn.Module):
         return self.block(x)
 
 
+class _InPlace(torch.nn.Module):
+    def forward(self, x):
+        x = x.clone()
+        x.add_(2)
+        return x
+
+
 def _manifest():
     return {
         "identities": [{
@@ -80,3 +87,15 @@ def test_tuple_output_is_committed_as_one_input_group_with_members():
     values = (torch.tensor([1.0]), torch.tensor([2]))
     source._after("block", "custom.tuple", values)
     assert [name for name, _tensor, _step in com.acquired] == ["block/committed_0/0", "block/committed_0/1"]
+
+
+def test_mutable_op_tap_commits_the_post_write_operand():
+    com, model = _Committer(), _InPlace()
+    site = {"family": C.FAMILY, "step": 0, "op_path": "", "op": "aten.add_.Tensor", "output_member": "committed_0"}
+    source = S.CommittedUnitSource(com, model, [site])
+    source.install()
+    source.on_step_begin()
+    got = model(torch.tensor([1.0]))
+    source.uninstall()
+    assert torch.equal(got, torch.tensor([3.0]))
+    assert len(com.acquired) == 1 and torch.equal(com.acquired[0][1], got)

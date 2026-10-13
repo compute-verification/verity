@@ -56,7 +56,7 @@ class CommittedUnitSource:
 
             def __torch_dispatch__(self, func, types, args=(), kwargs=None):
                 out = func(*args, **(kwargs or {}))
-                source._after(self.module, str(func), out)
+                source._after(self.module, str(func), out, func=func, args=args, kwargs=kwargs or {})
                 return out
 
         named = dict(self.model.named_modules())
@@ -96,7 +96,8 @@ class CommittedUnitSource:
         self._seen.clear()
         self._held.clear()
 
-    def _after(self, module: str, op: str, out: Any) -> None:
+    def _after(self, module: str, op: str, out: Any, *, func: Any = None, args: tuple[Any, ...] = (),
+               kwargs: Mapping[str, Any] | None = None) -> None:
         job = getattr(self.c, "_cur", None)
         if job is None:
             return
@@ -112,6 +113,9 @@ class CommittedUnitSource:
             return
         rows = units[occurrence]
         tensors = _tensors(out)
+        written = _written_values(func, args, kwargs or {}) if func is not None else []
+        if written:
+            tensors = [t for value in written for t in _tensors(value)]
         if len(tensors) != len(rows):
             self.c.errors.append(
                 f"committed units: {op} under {module} returned {len(tensors)} tensors; "
@@ -142,6 +146,15 @@ def _tensors(value: Any) -> list[Any]:
     if isinstance(value, dict):
         return [t for v in value.values() for t in _tensors(v)]
     return []
+
+
+def _written_values(func: Any, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> list[Any]:
+    schema = getattr(func, "_schema", None)
+    if schema is None:
+        return []
+    return [args[k] if k < len(args) else kwargs.get(arg.name)
+            for k, arg in enumerate(schema.arguments)
+            if arg.alias_info is not None and arg.alias_info.is_write]
 
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,
