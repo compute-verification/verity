@@ -17,6 +17,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--first N,...] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
                                                    check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest
+    research queue report --on MACHINE [--max-running N] [--dry-run]
+                                                   one tick of the reporter for GitHub's merge queue (`research.mergequeue`): check
+                                                   each merge group's head, post its `verity/check` status
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
@@ -1118,7 +1121,7 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive"])
+    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report"])
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
@@ -1138,7 +1141,8 @@ def main(argv: list[str]) -> int:
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
-    ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once")
+    ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once; "
+                                                                      "report: of merge groups")
     ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
                                                                            "or after this time (default: `marked_after` in the rules file)")
@@ -1150,14 +1154,14 @@ def main(argv: list[str]) -> int:
         ap.error(f"--first {a.first!r}: PR numbers separated by commas")
     if a.marked_after and not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", a.marked_after):
         ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
-    if a.dry_run and a.command not in ("sync", "land", "drive"):
-        ap.error(f"--dry-run is for sync, land and drive only: `{a.command}` would act for real")
+    if a.dry_run and a.command not in ("sync", "land", "drive", "report"):
+        ap.error(f"--dry-run is for sync, land, drive and report only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot), --local (here) and --mark (no tier)")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
-    if a.command == "drive" and not a.on:
-        ap.error("drive needs --on MACHINE (train.sh's: a machine, or `auto`) for the checks it launches")
+    if a.command in ("drive", "report") and not a.on:
+        ap.error(f"{a.command} needs --on MACHINE (train.sh's: a machine, or `auto`) for the checks it launches")
     if a.command in ("ready", "judge") and not a.by:
         ap.error(f"{a.command} writes the owner's ready mark: pass --by <lane> (or set $RESEARCH_LANE)")
     a.by = a.by or "merge-queue"
@@ -1210,6 +1214,11 @@ def main(argv: list[str]) -> int:
             from .drive import Driver
 
             Driver(q, on=a.on, max_running=a.max_running, train_size=a.train_size).tick(dry_run=a.dry_run)
+            return 0
+        if a.command == "report":
+            from .mergequeue import Reporter, Statuses
+
+            Reporter(q, on=a.on, statuses=Statuses(repo), max_running=a.max_running).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
