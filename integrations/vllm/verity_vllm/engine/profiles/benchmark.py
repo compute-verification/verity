@@ -2,35 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 
-PRESET_FACTS: dict[str, dict[str, Any]] = {
-    "llama31-8b-fp8-1gpu": {
-        "model": "unsloth/Llama-3.1-8B",
-        "revision": "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814",
-        "case": "LLAMA31_8B",
-        "precision": "fp8",
-        "gpu_type": "RTX PRO 6000",
-        "gpu_count": 1,
-    },
-    "llama31-70b-fp8-8gpu": {
-        "model": "meta-llama/Llama-3.1-70B",
-        "revision": None,
-        "case": None,
-        "precision": "fp8",
-        "gpu_type": "RTX PRO 6000",
-        "gpu_count": 8,
-        "engine_settings": {"resident_gpu_memory_utilization": 0.44},
-        "unavailable_reason": "the repository has no pinned Llama-3.1-70B checkpoint yet",
-    },
-    "glm53-fp8-8gpu": {
-        "model": "zai-org/GLM-5.3",
-        "revision": "aca966e4e02791568aa6a4ced368624b3d897f42",
-        "case": "GLM53",
-        "precision": "fp8",
-        "gpu_type": "H200",
-        "gpu_count": 8,
-        "engine_settings": {"max_num_batched_tokens": 32_768},
-    },
-}
+PRESET_FACTS: dict[str, dict[str, Any]] = json.loads(
+    Path(__file__).with_suffix(".json").read_text()
+)

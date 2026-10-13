@@ -444,7 +444,12 @@ class _VllmEngine:
             torch.cuda.synchronize()
             torch.cuda.reset_peak_memory_stats()
         start = time.perf_counter()
-        finished, timing = run_requests_arrivals(self.llm._engine.llm, requests, params)
+        finished, timing = run_requests_arrivals(
+            self.llm._engine.llm,
+            requests,
+            params,
+            request_timing=True,
+        )
         torch.cuda.synchronize()
         wall = time.perf_counter() - start
         tokens = {rid: tuple(int(t) for t in out.outputs[0].token_ids) for rid, out in finished.items()}

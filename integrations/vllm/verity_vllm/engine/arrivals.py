@@ -97,11 +97,14 @@ def forwards_from_schedule(computed: list[dict[str, int]]) -> tuple[list[bool], 
 
 def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[Any], Any], *,
                           on_step: Callable[[list[Any]], None] | None = None, scheduler: Any | None = None,
-                          clock: Callable[[], float] = time.perf_counter) -> tuple[dict[str, Any], dict]:
+                          clock: Callable[[], float] = time.perf_counter,
+                          request_timing: bool = False) -> tuple[dict[str, Any], dict]:
     """Drive a step-indexed schedule and report throughput and per-request latency.
 
     ``clock`` is injectable so callers and tests can measure the same admission,
     first-token and completion boundaries without depending on wall-clock time.
+    ``request_timing`` adds those durations to each request record; it is off by
+    default so existing deterministic schedule records remain unchanged.
     """
     eng = llm.llm_engine
     sched = scheduler if scheduler is not None else scheduler_of(llm)
@@ -189,9 +192,10 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
         rec[rid]["finish_step"] = max(0, fwd_index[min(max(fi - lag, 0), len(nonempty))])   # forward that sampled the last token
         rec[rid]["admit_iter"] = ai
         rec[rid]["finish_iter"] = fi
-        rec[rid]["arrival_s"] = admit_at[rid] - t0
-        rec[rid]["first_output_s"] = first_at[rid] - t0
-        rec[rid]["time_to_first_token_s"] = first_at[rid] - admit_at[rid]
+        if request_timing:
+            rec[rid]["arrival_s"] = admit_at[rid] - t0
+            rec[rid]["first_output_s"] = first_at[rid] - t0
+            rec[rid]["time_to_first_token_s"] = first_at[rid] - admit_at[rid]
     gen = sum(len(o.outputs[0].token_ids) for o in finished.values())
     prompt = sum(len(r.prompt_token_ids) for r in reqs)
     for rid, o in finished.items():
