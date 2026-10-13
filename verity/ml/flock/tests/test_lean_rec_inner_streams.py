@@ -621,22 +621,28 @@ def _moved(stream: str, j: int, k: int):
     return change
 
 
+def test_each_reps_stream_holds_its_schedules_rounds(tmp_path):
+    """`RecVStar.checkCommitRounds` first holds every stream but the sparse phases' and R's to the rep's schedule at the
+    verifier's inner shape, round for round (`RepsDrawn`'s second half): 2d61's reps split z_partial's round, as private
+    circuits' do (`holo_rounds`, 95 rounds), so under a shape whose circuits are public (`rep_rounds`, 94) they are
+    refused for their rounds."""
+    assert _covers(tmp_path, _shape(tmp_path, holo=False)) == (
+        1, "rec inner transcript: circuit/rep0 holds 95 rounds, and its schedule (m 25, k_log 22, claims 8) 94")
+
+
 @pytest.mark.parametrize("change,why", [
-    (None, "rep 0's message round 46 is at round 49, and its schedule's at round 50 (77 message rounds, the schedule's 76)"),
     (_moved("circuit/rep1", 20, 23), "rep 1's message round 20 is at round 23, and its schedule's at round 22 (77 message "
      "rounds, the schedule's 77)"),
     (_moved("sparse/rep0", 0, 0), "sparse/rep0's message round 0 is at round 0, and its schedule's at round 1 (33 message "
      "rounds, the schedule's 33)"),
-], ids=["not-holo", "rep-round", "sparse-round"])
+], ids=["rep-round", "sparse-round"])
 def test_each_streams_c_k_sit_at_its_schedules_message_rounds(tmp_path, change, why):
     """`RecVStar.checkCommitRounds`, the last of `checkCovers`: the verifier holds each rep's `c_k` at the message rounds of
     `rec_live.rep_rounds` at its own inner shape (`holo_rounds` when its circuits are private, as 2d61's are), each
-    sparse stream's at `sparse_rounds` of its RecSparse shape, and R's at `stacked_rounds`. 2d61's session under a shape
-    whose circuits are public, and its transcript with one rep's or one sparse stream's `c_k` moved to a round that
-    commits none (which the reps' coins and the streams' counts do not see), are refused by the round."""
-    shape = _shape(tmp_path, holo=change is not None)
-    transcript = None if change is None else _changed(tmp_path, change)
-    assert _covers(tmp_path, shape, transcript) == (1, f"rec inner transcript: {why}")
+    sparse stream's at `sparse_rounds` of its RecSparse shape, and R's at `stacked_rounds`. 2d61's transcript with one
+    rep's or one sparse stream's `c_k` moved to a round that commits none (which the reps' coins and the streams' counts
+    do not see) is refused by the round."""
+    assert _covers(tmp_path, _shape(tmp_path), _changed(tmp_path, change)) == (1, f"rec inner transcript: {why}")
 
 
 def test_rs_c_k_off_its_schedule_is_refused(tmp_path):

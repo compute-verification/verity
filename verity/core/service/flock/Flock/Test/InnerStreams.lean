@@ -243,7 +243,22 @@ def otherSparse (n : String) : Option String :=
 
 #guard ["sparse/rep2", "sparse/rep10", "sparse/rep01", "sparse/x", "sparse/"].all fun n => otherSparse n ==
   some s!"rec inner transcript: it holds {n}, and a sparse phase is one of the two reps' (sparse/rep0, sparse/rep1)"
-#guard otherSparse "sparse-rep2" == none && otherSparse "sparse/rep1" == none
+#guard otherSparse "sparse/rep1" == none
+-- every stream but the sparse phases' and R's holds the rep's rounds at the inner shape, round for round (`RepsDrawn`'s
+-- second half): a stream named neither way with no rounds, one round short, or one coin over in a round is refused
+def repCoins (rs : Array SchedRound) : Array (Array Flock.F128) := rs.map fun r => Array.replicate r.1 0
+def reps25 : Array SchedRound := (repRounds 25 22 8).getD #[]
+def repStream (coins : Array (Array Flock.F128)) : InnerStream :=
+  { name := "circuit/rep0", commits := #[], tops := #[], coins := coins }
+def withRep (coins : Array (Array Flock.F128)) : Option String :=
+  why (checkCovers c3 (withS #[sparseAt 0, sparseAt 1, stackedAt, repStream coins]))
+def roundsOff (s : String) (n : Nat) : Option String :=
+  some s!"rec inner transcript: {s} holds {n} rounds, and its schedule (m 25, k_log 22, claims 8) 94"
+
+#guard reps25.size == 94 && withRep (repCoins reps25) == none
+#guard otherSparse "sparse-rep2" == roundsOff "sparse-rep2" 0
+#guard withRep (repCoins reps25).pop == roundsOff "circuit/rep0" 93
+#guard withRep ((repCoins reps25).modify 0 (·.push 0)) == roundsOff "circuit/rep0" 94
 
 -- candidate 3's inner circuit is the one whose header's META the verifier read (`RecSetup.checkMeta`): a session
 -- without it, or with bytes that do not parse as the inner statement's circuit, is refused before the V* checks, and a

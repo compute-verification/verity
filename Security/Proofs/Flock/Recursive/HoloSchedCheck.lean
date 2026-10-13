@@ -48,7 +48,8 @@ theorem sparseRounds_eq (sh : RecSparse.Shape) : sparseRounds sh = sparsePhaseRo
 theorem holoRounds_eq (m kLog claims : Nat) : holoRounds m kLog claims = holoRepRounds m kLog claims := rfl
 
 /-- **`checkCommitRounds` accepting**: two reps, each's `c_k` rounds the reps' schedule's message rounds, and
-`sparse/rep0`'s and `sparse/rep1`'s the sparse phase's. -/
+`sparse/rep0`'s and `sparse/rep1`'s the sparse phase's. Its refusals of a stream off the reps' rounds and of another
+`sparse/…` stream come first, and are not read here. -/
 theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
     (h : checkCommitRounds i cs = .ok ()) :
@@ -59,45 +60,59 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
   unfold checkCommitRounds at h
   rw [hsch] at h
   try simp only at h
+  obtain ⟨_, -, h⟩ := checkBind_ok h
   split at h
   · first
     | exact absurd h (checkThrow_ne _ _)
     | exact absurd (checkBind_ok h) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
     | cases h
   · rename_i hsz
-    obtain ⟨_, hloop, -⟩ := checkBind_ok h
-    have hall := forIn_each (fun a : String × Array (Nat × ByteArray) × Array SchedRound =>
-        a.2.1.toList.map (·.1) = commitRounds a.2.2) (fun a r hb => by
-          obtain ⟨s, cm, rs⟩ := a
-          try simp only at hb
-          split at hb
-          · first
-            | exact absurd hb (checkThrow_ne _ _)
-            | exact absurd (checkBind_ok hb) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
-            | cases hb
-          · rename_i hne
-            exact ⟨by simpa using hne, (Except.ok.inj hb).symm⟩) _ hloop
-    refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_⟩
-    · have hz : (cm, y) ∈ cs.reps.toList.zipIdx := by
-        apply List.mem_zipIdx_iff_getElem?.2
+    split at h
+    · first
+      | exact absurd h (checkThrow_ne _ _)
+      | exact absurd (checkBind_ok h) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
+      | cases h
+    split at h
+    all_goals first
+      | exact absurd (checkBind_ok h) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
+      | obtain ⟨_, -, h⟩ := checkBind_ok h
+      | (split at h
+         · exact absurd (checkBind_ok h) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
+         obtain ⟨_, -, h⟩ := checkBind_ok h)
+    all_goals
+      obtain ⟨_, hloop, -⟩ := checkBind_ok h
+      have hall := forIn_each (fun a : String × Array (Nat × ByteArray) × Array SchedRound =>
+          a.2.1.toList.map (·.1) = commitRounds a.2.2) (fun a r hb => by
+            obtain ⟨s, cm, rs⟩ := a
+            try simp only at hb
+            split at hb
+            · first
+              | exact absurd hb (checkThrow_ne _ _)
+              | exact absurd (checkBind_ok hb) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
+              | cases hb
+            · rename_i hne
+              exact ⟨by simpa using hne, (Except.ok.inj hb).symm⟩) _ hloop
+      refine ⟨by simpa using hsz, fun y cm hcm => ?_, fun sh hsh y st hy hst => ?_⟩
+      · have hz : (cm, y) ∈ cs.reps.toList.zipIdx := by
+          apply List.mem_zipIdx_iff_getElem?.2
+          first
+          | (rw [Array.getElem?_toList]; exact hcm)
+          | simpa using hcm
+        exact hall _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_map.2 ⟨(cm, y), hz, rfl⟩)))
+      · have hy01 : y ∈ [0, 1] := by
+          first
+          | (simp; omega)
+          | (rcases (by omega : y = 0 ∨ y = 1) with rfl | rfl <;> simp)
+        have hm : (st.name, st.commits, sparsePhaseRounds sh) ∈ [0, 1].filterMap fun x =>
+            (cs.stream? s!"{SPARSE}/rep{x}").map fun st => (st.name, st.commits, sparsePhaseRounds sh) := by
+          refine List.mem_filterMap.2 ⟨y, hy01, ?_⟩
+          show Option.map _ (cs.stream? s!"{SPARSE}/rep{y}") = _
+          rw [hst]
+          try rfl
         first
-        | (rw [Array.getElem?_toList]; exact hcm)
-        | simpa using hcm
-      exact hall _ (List.mem_append_left _ (List.mem_map.2 ⟨(cm, y), hz, rfl⟩))
-    · have hy01 : y ∈ [0, 1] := by
-        first
-        | (simp; omega)
-        | (rcases (by omega : y = 0 ∨ y = 1) with rfl | rfl <;> simp)
-      have hm : (st.name, st.commits, sparsePhaseRounds sh) ∈ [0, 1].filterMap fun x =>
-          (cs.stream? s!"{SPARSE}/rep{x}").map fun st => (st.name, st.commits, sparsePhaseRounds sh) := by
-        refine List.mem_filterMap.2 ⟨y, hy01, ?_⟩
-        show Option.map _ (cs.stream? s!"{SPARSE}/rep{y}") = _
-        rw [hst]
-        try rfl
-      first
-      | rw [hsh] at hall
-      | simp only [hsh] at hall
-      exact hall _ (List.mem_append_right _ hm)
+        | rw [hsh] at hall
+        | simp only [hsh] at hall
+        exact hall _ (List.mem_append_left _ (List.mem_append_right _ hm))
 
 /-- **The verifier's check of the reps' `c_k` gives `RepsCommitsAt`** at the hidden-unit schedule `holoRounds`. -/
 theorem repsCommitsAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
