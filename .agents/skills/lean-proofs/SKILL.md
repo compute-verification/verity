@@ -176,7 +176,8 @@ simp with that.
   other hypothesis is refused; a compound failure goes under one `¬` or definition. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
   with one sentence on why, starting with its category (`restatable: …`, `frozen (hash): …`, `lemma`, `completeness`,
   `falsified`); the check fails once it fits, until the entry goes. A named conjecture is a premise under
-  `shape.conjectures` (open with a falsification test that runs, or falsified, with why); a property resting on one
+  `shape.conjectures` (open with a falsification test that runs, its `test` a pytest node id `PATH::NAME`, or
+  falsified, with why); a property resting on one
   lists it under `rests_on`, and a falsified one takes every property resting on it off the list. Every `def G : Prop` of a `Guarantees` module (or a module
   under `shape.statements`) is the statement of a guarantee the lock lists, or is under `shape.frozen` until it is. Adding an entry is a claims change the
   landing DM shows Daniel: rather restate the guarantee, or move what isn't a property (an iff's converse, an honest
