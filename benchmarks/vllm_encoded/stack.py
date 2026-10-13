@@ -414,7 +414,8 @@ class Attention:
         self.part = torch.empty(top, dtype=torch.float32, device="cuda")   # the captured steps' (b <= MAX_ROWS)
         self.part_eager = self.part                                        # an eager decode's at any b, grown
         self._plan: tuple | None = None
-        self.calls = {"decode": 0, "gathered": 0, "append": 0, "flush_graph": 0, "flush_eager": 0}
+        self.calls = {"decode": 0, "gathered": 0, "append": 0, "flush_graph": 0, "flush_eager": 0, "gather_grow": 0}
+        self.gather_buf: torch.Tensor | None = None
         self.nl = layers
         row = self.lib.shape["kv_heads"] * self.lib.shape["head_dim"]
         self.stage_k = torch.zeros((layers, MAX_ROWS, row), dtype=torch.bfloat16, device="cuda")
@@ -442,6 +443,18 @@ class Attention:
                 raise RuntimeError(f"a captured decode at batch {b}: the stack captures at most {MAX_ROWS}")
             self.part_eager = torch.empty(need, dtype=torch.float32, device="cuda")
         return self.part_eager
+
+    def gathered(self, n: int, kv_cache: torch.Tensor) -> torch.Tensor:
+        """A gathered step's scratch of n blocks in the cache's order within a block (which the gather copies): a view
+        of one buffer, grown to the next power of two, since one sized each step reaches cudaMalloc and cudaFree
+        (device-wide syncs that stall the filler's relaunches) once the cache fills the device."""
+        g = self.gather_buf
+        if g is None or g.shape[0] < n or g.shape[1:] != kv_cache.shape[1:] or g.stride() != kv_cache.stride():
+            self.gather_buf = None
+            g = self.gather_buf = torch.empty_strided((1 << (n - 1).bit_length(), *kv_cache.shape[1:]),
+                                                      kv_cache.stride(), dtype=kv_cache.dtype, device="cuda")
+            self.calls["gather_grow"] += 1
+        return g[:n]
 
     def split(self, b: int) -> int:
         if b not in self.splits:
@@ -551,8 +564,7 @@ class Attention:
                 return output
             slots = att.slots[att.index(layer)]
             blocks, md2, s2 = att.plan(md, L.lay.bs, slots)
-            scratch = torch.empty_strided((blocks.shape[0], *kv_cache.shape[1:]), kv_cache.stride(), dtype=kv_cache.dtype,
-                                          device="cuda")   # the cache's order within a block, which the gather copies
+            scratch = att.gathered(blocks.shape[0], kv_cache)
             P.gather(att.lib, torch, kv_cache, L.lay, L.lbase, att.enc, att.st.k, blocks, scratch)
             lay2 = P.Layout(blocks.shape[0], L.lay.bs, L.lay.sb, L.lay.sh, L.lay.ss)
             P.append(att.lib, torch, scratch, lay2, 0, 0, 0, k2[:s2.shape[0]], v2[:s2.shape[0]], s2)
