@@ -14,7 +14,7 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    --mark, on the owner's word alone (`MarkOnly`)
     research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--first N,...] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
-                                                   check `next` in trains with train.sh, tell the lander what it refuses
+                                                   check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
@@ -46,7 +46,7 @@ Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the 
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
 `next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).  `drive`
 (`research.drive`) is the loop's tick that needs no agent: it launches the checks of `next`'s trains, lands what passed (onto a
-moved `main` too, when the two share no file) and tells the lander what it refuses.
+moved `main` too, when the two share no file), ejects the PR a failure points at alone and tells `@ci` what it refuses.
 
 Notices.  A refusal (a conflict, an ejection) is sent once per PR head: a handoff in the owner's lane directory of the notes, or in
 `lanes/coordinator/` for an owner known only by agent id.
@@ -677,7 +677,7 @@ class Queue:
             if e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
             elif e.state == "ready":
-                e.why = "admitted: ready for a train (the queue does not land trains yet)"
+                e.why = f"admitted: the next sync merges it onto `{self.branch}`, and drive checks and lands it in a train"
         return entries
 
 

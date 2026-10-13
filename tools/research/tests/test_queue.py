@@ -539,7 +539,7 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
     assert research_main(argv) == 0
     got = {e["pr"]: (e["state"], e["why"]) for e in json.loads(capsys.readouterr().out)}
     assert got[1][0] == "waiting" and got[1][1].startswith("ignored: marked before cutoff") and "2026-10-05T09:00:00Z" in got[1][1]
-    assert got[2][0] == "ready"
+    assert got[2][0] == "ready" and "the next sync merges it onto `next`" in got[2][1]
     assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
     assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
 
