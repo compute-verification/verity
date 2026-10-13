@@ -126,7 +126,6 @@ WAIT_EVERY_S = 30
 WAIT_GRACE = timedelta(minutes=5)                                # the site's default cron runs every minute
 ROUTES_DIR = "routes.d"                                          # in the notes: one `<name>.json` per inbox
 ROUTES_RAW = "https://raw.githubusercontent.com/danielreuter/research-notes/main/routes.d/"
-RAW_HOST = "raw.githubusercontent.com"                           # the notes are private: `http_get` sends it the notes token
 ROUTE_SCHEMA = "verity/slack-route/v1"
 LEAD_RE = re.compile(r"^\s*(?:(?::[a-z0-9_+'-]+:|[\u2600-\u27bf\U0001f000-\U0001faff]\ufe0f?)\s*)?"   # one emoji may lead (`:mega: @a`)
                      r"((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\|@?[^>]*)?>)[\s,:]*)+)")
@@ -842,6 +841,9 @@ def notes_root() -> Path:
 
 def _route_ok(r: Any, name: str) -> bool:
     return isinstance(r, dict) and r.get("schema") == ROUTE_SCHEMA and r.get("name") == name and isinstance(r.get("inbox_ts"), str)
+
+
+RAW_HOST = "raw.githubusercontent.com"                           # the notes are private: `http_get` sends it the notes token
 
 
 def http_get(url: str, timeout: float = 10) -> bytes | None:
