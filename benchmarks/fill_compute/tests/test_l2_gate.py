@@ -83,9 +83,17 @@ def test_min_rule_still_refuses_a_kernel_whose_every_repeat_exceeds():
     assert res["rule"] == "min" and res["by_kernel"]["fill_k1"] == "REFUSED" and res["status"] == "REFUSED"
 
 
-def test_smaller_dry_excess_keeps_the_strict_rule():
-    res = G.judge(*with_dry(EXCESS, [14] * 7, [14, 14 + 300, 14, 14, 14 + 300, 14]))
-    assert res["external_dry"]["controls"][1] == 2 and not res["external_dry"]["external"] and res["rule"] == "strict"
+def test_dry_excess_as_often_but_smaller_keeps_the_strict_rule():
+    res = G.judge(*with_dry([DECLARED + 14, DECLARED + 14 + 2000] * 20, [14] * 41, [14, 14 + 100] * 20))
+    ext = res["external_dry"]
+    assert ext["fisher_p_judged_hit_more"] >= G.ALPHA and ext["mann_whitney_p_judged_larger"] < G.ALPHA
+    assert not ext["external"] and res["rule"] == "strict"
+
+
+def test_a_larger_judged_maximum_alone_does_not_refuse_the_min_rule():
+    res = G.judge(*with_dry(EXCESS * 4, [14] * 25, [14, 14 + 300, 14, 14, 14 + 300, 14]))
+    assert res["external_dry"]["max_control_excess"] < res["external_dry"]["max_judged_excess"]
+    assert res["external_dry"]["external"] and res["rule"] == "min"
 
 
 def test_dry_controls_hit_less_often_keep_the_strict_rule():
@@ -102,12 +110,19 @@ def test_a_variant_is_judged_against_its_own_controls():
     assert res["by_kernel"] == {"fill_chunk_1_3": "REFUSED", "fill_chunk_1_3/nostop": "passed"}
 
 
-def test_the_floor_is_the_largest_unhit_control():
-    d, rows = probe([DECLARED + 15] * 3, [13, 15, 14, 13 + 900], "fill_chunk_1_3")
+def test_the_floor_is_the_least_dry_launch_and_the_zero_tile_range_is_reported():
+    d, rows = with_dry([DECLARED + 15] * 3, [13, 13, 13, 13], [15, 15 + 900, 15], "fill_chunk_1_3")
     res = G.judge(d, rows)
     det = res["detail"]["fill_chunk_1_3"]
-    assert det["controls"] == [13, 913] and det["floor"] == 15 and det["least_floor"] == 13
-    assert det["verdict"] == "passed" and det["verdict_least_floor"] == "REFUSED"
+    assert res["floor"] == {"source": "dry", "sectors": 15} and det["controls"] == [13, 13] and det["floor"] == 15
+    assert det["strict"] == "passed"
+
+
+def test_without_dry_launches_the_floor_is_the_least_zero_tile_control():
+    d, rows = probe([DECLARED + 15] * 3, [13, 15, 14, 13], "fill_chunk_1_3")
+    res = G.judge(d, rows)
+    assert res["floor"]["source"] == "zero-tile" and res["detail"]["fill_chunk_1_3"]["floor"] == 13
+    assert res["status"] == "REFUSED"
 
 
 def test_mann_whitney_matches_known_cases():

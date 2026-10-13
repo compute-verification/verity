@@ -5,18 +5,21 @@ queue declare (`lts__t_sectors_op_atom.sum` + `lts__t_sectors_op_red.sum`); ther
 The verdict is per kernel (`by_kernel`, what an arm is judged by; `spread` the least and most write sectors over the repeats) and per store mode (`by_store`): PoUW's y store writes 16 bytes of a 32-byte sector a request, so `all` and `y`
 can be refused for the store pattern alone, which the fold (the filler that writes no tile words) is not. A `control` launch
 (no tiles) is measured and reported, not judged: its sectors are what a launch writes whatever its outputs (13-15 a launch on
-sm_120, r20261012-231033-73f3), and each judged launch is allowed its own kernel's control floor beside its declared sectors
-(a persistent filler is one launch a window, so the floor doesn't grow with its tiles). The floor is the largest unhit
-control of the kernel in the same run (ruling 02:55Z): the most any of its interleaved zero-tile controls wrote, among those
-within HIT sectors of the least (13-15 on sm_120, r20261013-024344-d7db). Each kernel's `detail` reports the controls'
-range, both floors and its verdicts under each, so the allowance over the least control is visible.
+sm_120, r20261012-231033-73f3). Each judged launch is allowed the run's floor beside its declared sectors (a persistent
+filler is one launch a window, so the floor doesn't grow with its tiles). The floor is the least dry launch in the same run
+(ruling 03:10Z): a dry launch runs a judged launch's tiles and declares nothing, so it writes what running tiles writes
+beyond the outputs (15 on sm_120 in every run, r20261013-025156-e585), where a zero-tile control writes 13-15. A run
+without dry launches takes each kernel's least zero-tile control, the smaller allowance. Each kernel's `detail` reports
+its zero-tile controls' range beside the floor.
 
 Which repeats must pass is rule 4 (memory accounting, 13 Oct): every one (`strict`) unless this run shows the excess some
 launches carry is external, and then the least of a kernel's repeats (`min`). The test: a launch is hit when its write
 sectors exceed its allowance (declared + floor; a control's is its floor) by more than HIT sectors, above the launch's own
 noise (a few sectors; the chunked kernels' constant 2) where the intermittent excess comes in multiples of 64. The excess is external when, against controls interleaved
 with the judged launches in the same run, (a) some control is hit, (b) a one-sided Fisher exact test of "judged launches
-are hit more often than controls" gives p >= ALPHA, and (c) the largest control excess is at least the largest judged one.
+are hit more often than controls" gives p >= ALPHA, and (c) a one-sided Mann-Whitney test of "judged excesses are larger
+than controls'" gives p >= ALPHA (ruling 03:10Z; the largest of many judged launches against the largest of a few controls
+favours the larger sample).
 The controls that decide are the dry launches (`external_dry`: a fold kernel's tiles with the log off, as long as a judged
 launch and declaring nothing), the duration-matched control (ruling 02:30Z); the zero-tile controls' test (`external`) is
 reported beside it. A run without dry launches, or whose dry launches fail the test, keeps the strict rule: the guard does
@@ -72,9 +75,10 @@ def external(judged: list[dict], controls: list[dict]) -> dict:
     ch = [r["excess"] for r in controls if r["excess"] > HIT]
     p = fisher_greater(len(jh), len(judged) - len(jh), len(ch), len(controls) - len(ch))
     mj, mc = max((r["excess"] for r in judged), default=0.0), max((r["excess"] for r in controls), default=0.0)
+    mw = mann_whitney_greater([r["excess"] for r in judged], [r["excess"] for r in controls])
     return {"hit_sectors": HIT, "alpha": ALPHA, "judged": [len(judged), len(jh)], "controls": [len(controls), len(ch)],
-            "fisher_p_judged_hit_more": p, "max_judged_excess": mj, "max_control_excess": mc,
-            "external": bool(ch) and p >= ALPHA and mc >= mj}
+            "fisher_p_judged_hit_more": p, "mann_whitney_p_judged_larger": mw, "max_judged_excess": mj,
+            "max_control_excess": mc, "external": bool(ch) and p >= ALPHA and mw >= ALPHA}
 
 
 def mann_whitney_greater(x: list[float], y: list[float]) -> float:
@@ -114,8 +118,9 @@ def judge(declared: dict, rows: list[dict]) -> dict:
     for d, m in zip(launches, rows):
         if d.get("control"):
             ctl.setdefault(unit(d), []).append(m.get(WRITE) or 0.0)
-    least_floor = {k: min(ws) for k, ws in ctl.items()}
-    floors = {k: max(w for w in ws if w <= least_floor[k] + HIT) for k, ws in ctl.items()}
+    dry_writes = [m.get(WRITE) or 0.0 for d, m in zip(launches, rows) if d.get("dry")]
+    dry_floor = min(dry_writes) if dry_writes else None
+    floors = {k: min(ws) if dry_floor is None else dry_floor for k, ws in ctl.items()}
     out, bad = [], []
     for d, m in zip(launches, rows):
         w, a = m.get(WRITE), (m.get(ATOM) or 0.0) + (m.get(RED) or 0.0)
@@ -124,27 +129,16 @@ def judge(declared: dict, rows: list[dict]) -> dict:
         row = {**d, "unit": unit(d), "write_sectors": w, "atom_sectors": a, "dram_write_bytes": m.get(DRAM),
                "read_sectors": m.get("lts__t_sectors_op_read.sum"), "dram_read_bytes": m.get("dram__bytes_read.sum"),
                "write_ratio": ratio(w, d["declared_write_sectors"]), "atom_ratio": ratio(a, d["declared_atom_sectors"])}
-        floor = floors.get(unit(d), 0.0)
+        floor = floors.get(unit(d), 0.0 if dry_floor is None else dry_floor)
         row["floor"] = 0.0 if d.get("control") else floor
         row["excess"] = w - floor if d.get("control") else w - d["declared_write_sectors"] - floor
         row["pass"] = w <= d["declared_write_sectors"] + row["floor"] and a <= d["declared_atom_sectors"]
-        row["pass_least_floor"] = w <= d["declared_write_sectors"] + least_floor.get(unit(d), 0.0) and \
-            a <= d["declared_atom_sectors"]
         out.append(row)
     judged = [r for r in out if not r.get("control") and not r.get("dry")]
     test = external(judged, [r for r in out if r.get("control")])
     dry = [r for r in out if r.get("dry")]
     test_dry = external(judged, dry) if dry else None
     rule = "min" if test_dry is not None and test_dry["external"] else "strict"
-    proposed = None
-    if dry:
-        p_mw = mann_whitney_greater([r["excess"] for r in judged], [r["excess"] for r in dry])
-        proposed = {"why": "evidence only, not applied: condition (c) by a one-sided Mann-Whitney test of the excesses "
-                           "(max against max favours the larger sample), and the floor as the least dry launch",
-                    "mann_whitney_p_judged_larger": p_mw,
-                    "external": bool(test_dry["controls"][1]) and test_dry["fisher_p_judged_hit_more"] >= ALPHA
-                    and p_mw >= ALPHA,
-                    "dry_floor": min(r["write_sectors"] for r in dry)}
     kernels = list(dict.fromkeys(r["unit"] for r in judged))
     def verdicts(key: str) -> tuple[dict, dict]:
         strict = {k: all(r[key] for r in judged if r["unit"] == k) for k in kernels}
@@ -153,9 +147,7 @@ def judge(declared: dict, rows: list[dict]) -> dict:
         return strict, least
 
     strict, least = verdicts("pass")
-    strict_lf, least_lf = verdicts("pass_least_floor")
     verdict = least if rule == "min" else strict
-    verdict_lf = least_lf if rule == "min" else strict_lf
     for r in judged:
         if not r["pass"] and not verdict[r["unit"]]:
             bad.append(f"{r['unit']}: {r['write_sectors']:.0f} write / {r['declared_write_sectors']} declared + "
@@ -165,13 +157,13 @@ def judge(declared: dict, rows: list[dict]) -> dict:
         by_store[r["store"]] = by_store.get(r["store"], True) and verdict[r["unit"]]
     word = {True: "passed", False: "REFUSED"}
     return {"status": "REFUSED" if bad else "passed", "rule": rule, "external": test, "external_dry": test_dry,
-            "proposed": proposed,
+            "floor": {"source": "zero-tile" if dry_floor is None else "dry", "sectors": dry_floor},
             "by_store": {s: word[p] for s, p in by_store.items()},
             "by_kernel": {k: word[verdict[k]] for k in kernels},
             "by_kernel_strict": {k: word[strict[k]] for k in kernels}, "by_kernel_min": {k: word[least[k]] for k in kernels},
-            "detail": {k: {"controls": [min(ctl.get(k, [0.0])), max(ctl.get(k, [0.0]))], "floor": floors.get(k, 0.0),
-                           "least_floor": least_floor.get(k, 0.0), "verdict": word[verdict[k]],
-                           "verdict_least_floor": word[verdict_lf[k]], "strict": word[strict[k]], "min": word[least[k]]}
+            "detail": {k: {"controls": [min(ctl.get(k, [0.0])), max(ctl.get(k, [0.0]))],
+                           "floor": floors.get(k, 0.0 if dry_floor is None else dry_floor), "verdict": word[verdict[k]],
+                           "strict": word[strict[k]], "min": word[least[k]]}
                        for k in kernels},
             "spread": {k: [min(ws), max(ws)] for k in kernels
                        for ws in [[r["write_sectors"] for r in judged if r["unit"] == k]]},
