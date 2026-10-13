@@ -31,6 +31,7 @@
 #include "readers.cu"
 #include "fill.cu"
 
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <thread>
@@ -820,7 +821,12 @@ struct State {
   unsigned long long* taken_h = nullptr;  // pinned: idle's after it ends
   unsigned long long* g0 = nullptr;  // the globaltimer at the start event
   unsigned long long g0_h = 0;
-  uint64_t lim = 0;  // the host's copy of seq->limit, the source of its async copy
+  uint64_t lim = 0;  // the host's copy of seq->limit
+  // pinned: harvest's copies of the ring and the limit's source. A pageable copy is staged by the driver and can wait
+  // behind another thread's pageable copy that waits on a long-running stream (the step's), stalling the limit
+  uint32_t *cnt_h = nullptr, *xr_h = nullptr;
+  unsigned long long *t0_h = nullptr, *t1_h = nullptr;
+  uint64_t* lim_h = nullptr;
   cudaStream_t s_base = nullptr, s_idle = nullptr, s_step = nullptr, s_pre = nullptr, s_h = nullptr;
   cudaEvent_t start = nullptr, base_done[2] = {nullptr, nullptr}, idle_done = nullptr, step_ev = nullptr, step_done = nullptr,
               pre_done = nullptr;
@@ -891,12 +897,16 @@ static int launch(State& st, int role, int grid, unsigned long long* taken, uint
 // (every kernel ended, `total` units taken), the partial epoch after them too.
 static int harvest(State& st, uint64_t& next, std::vector<uint32_t>& cnt, std::vector<uint32_t>& xr,
                    std::vector<unsigned long long>& t0, std::vector<unsigned long long>& t1, bool last, uint64_t total) {
-  cudaError_t e = cudaMemcpyAsync(cnt.data(), st.ring.cnt, 4 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
-  if (e == cudaSuccess) e = cudaMemcpyAsync(xr.data(), st.ring.xr, 4 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
-  if (e == cudaSuccess) e = cudaMemcpyAsync(t0.data(), st.ring.t0, 8 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
-  if (e == cudaSuccess) e = cudaMemcpyAsync(t1.data(), st.ring.t1, 8 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
+  cudaError_t e = cudaMemcpyAsync(st.cnt_h, st.ring.cnt, 4 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
+  if (e == cudaSuccess) e = cudaMemcpyAsync(st.xr_h, st.ring.xr, 4 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
+  if (e == cudaSuccess) e = cudaMemcpyAsync(st.t0_h, st.ring.t0, 8 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
+  if (e == cudaSuccess) e = cudaMemcpyAsync(st.t1_h, st.ring.t1, 8 * EPOCHS, cudaMemcpyDeviceToHost, st.s_h);
   if (e == cudaSuccess) e = cudaStreamSynchronize(st.s_h);
   if (e != cudaSuccess) return (int)e;
+  std::copy(st.cnt_h, st.cnt_h + EPOCHS, cnt.begin());
+  std::copy(st.xr_h, st.xr_h + EPOCHS, xr.begin());
+  std::copy(st.t0_h, st.t0_h + EPOCHS, t0.begin());
+  std::copy(st.t1_h, st.t1_h + EPOCHS, t1.begin());
   const uint32_t full = 1u << st.shift;
   const uint64_t next0 = next;
   for (;;) {
@@ -927,8 +937,8 @@ static int harvest(State& st, uint64_t& next, std::vector<uint32_t>& cnt, std::v
     k += m;
   }
   if (e == cudaSuccess && next != next0) {
-    st.lim = limit(st.shift, next);
-    e = cudaMemcpyAsync(&st.seq->limit, &st.lim, 8, cudaMemcpyHostToDevice, st.s_h);
+    st.lim = *st.lim_h = limit(st.shift, next);   // the last copy from lim_h is done: s_h was synchronized since
+    e = cudaMemcpyAsync(&st.seq->limit, st.lim_h, 8, cudaMemcpyHostToDevice, st.s_h);
   }
   return (int)e;
 }
@@ -1140,6 +1150,11 @@ int sq_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, con
   st->ring.mask = sq::EPOCHS - 1;
   CK(cudaMalloc(&st->taken, 5 * 8));
   CK(cudaMallocHost(&st->taken_h, 8));
+  CK(cudaMallocHost(&st->cnt_h, 4 * sq::EPOCHS));
+  CK(cudaMallocHost(&st->xr_h, 4 * sq::EPOCHS));
+  CK(cudaMallocHost(&st->t0_h, 8 * sq::EPOCHS));
+  CK(cudaMallocHost(&st->t1_h, 8 * sq::EPOCHS));
+  CK(cudaMallocHost(&st->lim_h, 8));
   CK(cudaMalloc(&st->g0, 8));
   CK(cudaEventRecord(st->start, st->s_h));
   fl::stamp<<<1, 1, 0, st->s_h>>>(st->g0);
@@ -1253,6 +1268,7 @@ int sq_stop() {
                   (void*)st->taken, (void*)st->g0})
     cudaFree(p);
   cudaFreeHost(st->taken_h);
+  for (void* p : {(void*)st->cnt_h, (void*)st->xr_h, (void*)st->t0_h, (void*)st->t1_h, (void*)st->lim_h}) cudaFreeHost(p);
   tu::last_log = std::move(st->log);
   delete st;
   sq::S = nullptr;
