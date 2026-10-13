@@ -227,6 +227,30 @@ def test_tf32_split_twins() -> None:
     same(leaves(T, *W.prenorm_tf32(a, b, 2)), oracle(d, T, lambda t: (a[t], b)), d.id)
 
 
+def test_tf32_sqr_forms() -> None:
+    """The squared sum's three contractions agree on normal squares; on a term with one square an inexact subnormal and the
+    other just above 2^-126 each pair differs somewhere, and the Definitions' is `lo`."""
+    rng = np.random.default_rng(10)
+    T = 256
+    normal = bf16(rng, (T, 64), 2.0)
+    forms = {s: W.prenorm_sqrsum(normal, 1, s) for s in W.SQR_FORMS}
+    assert all((v == forms["lo"]).all() for v in forms.values())
+    word = lambda e: (rng.integers(0, 2, T) << 15 | rng.integers(0, 128, T) | (rng.integers(*e, T) + 127) << 7).astype(np.uint16)
+    small, big = word((-75, -66)), word((-62, -60))
+    swap = rng.random(T) < 0.5
+    a = np.zeros((T, 64), np.uint16)
+    a[:, 1], a[:, 5] = np.where(swap, small, big), np.where(swap, big, small)
+    forms = {s: W.prenorm_sqrsum(a, 1, s) for s in W.SQR_FORMS}
+    for x, y in itertools.combinations(W.SQR_FORMS, 2):
+        assert (forms[x] != forms[y]).any(), (x, y)
+    b = f32(rng, (1, 64))
+    assert (W.prenorm_tf32(a, b, 1)[1] == forms["lo"]).all()
+    d = bind(M.MhcPrenormTf32Split, K=64, OUT=1)
+    same(oracle(d, T, lambda t: (a[t], b))[:, 1:], forms["lo"].astype(np.uint64), d.id)
+    with pytest.raises(ValueError, match="contraction"):
+        W.prenorm_sqrsum(a, 1, "fma")
+
+
 def test_tf32_layers_twins() -> None:
     rng = np.random.default_rng(9)
     T, HC, H, TN, REPEAT = 2, 2, 64, 2, 2

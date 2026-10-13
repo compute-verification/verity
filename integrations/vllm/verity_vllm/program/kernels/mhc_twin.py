@@ -5,8 +5,10 @@ the f32 add, multiply and divide numpy's (a NaN lane recomputed by the primitive
 the other operand), the FMA `derived_rows.fma_rn`, `rsqrt.approx` `derived_rows.rsqrt_approx`, expf `moe_twins.nv_expf_bits`.
 
 The TF32 GEMM takes its k8 step as a `GroupSum` (`HOPPER_TF32_WGMMA_K8_CANDIDATE` by default), the B operand's rounding to TF32
-(``"trunc"``, the candidate: the low 13 bits ignored; ``"rna"``, ``"rne"``) and the squared sum's contraction (``sqr_swap``: the
-FMA on x[k + 4] and the product x[k] x[k]) as parameters, so the capture can name which of them the H200 runs."""
+(``"trunc"``, the candidate: the low 13 bits ignored; ``"rna"``, ``"rne"``) and the squared sum's contraction (``sqr``: ``"lo"``,
+the Definitions' `fma(x[k], x[k], x[k+4] x[k+4])`; ``"hi"``, the FMA on x[k + 4]; ``"mul"``, none) as parameters, so the capture
+can name which of them the H200 runs.  On bf16 operands a square is exact unless it is an f32 subnormal, so only such operands
+tell the three contractions apart."""
 from __future__ import annotations
 
 import numpy as np
@@ -24,6 +26,7 @@ SIGN = U32(0x80000000)
 ONE, ZERO, NEG_INF = U32(M.F_ONE), U32(0), U32(M.F_NEG_INF)
 CANDIDATE = M.HOPPER_TF32_WGMMA_K8_CANDIDATE
 B_ROUNDINGS = ("trunc", "rna", "rne")
+SQR_FORMS = ("lo", "hi", "mul")
 
 
 def word(v: float) -> np.uint32:
@@ -254,9 +257,8 @@ def fused_split(x, residual, post_mix, comb, fn, TH: int):
     return bf16(nr), _warp_reduce(acc, TH), _warp_reduce(sqr, TH)
 
 
-def fused_post_pre(x, residual, post_mix, comb, fn, scale, base, w, NS: int, TH: int, TN: int, REPEAT: int, EPS: float,
-                   HC_EPS: float):
-    """`MhcFusedPostPre_v1`: x [T, H], residual [T, HC, H] bf16, fn [OUT, HC * H] -> (residual', layer input, post', comb')."""
+def fused_partials(x, residual, post_mix, comb, fn, NS: int, TH: int):
+    """`mhc_fused_tilelang`'s NS splits of H: (residual' [T, HC, H] bf16, yp [T, NS, OUT], rp [T, NS])."""
     T, HC, H = np.shape(residual)
     if H % NS:
         raise ValueError(f"mhc_fused splits H evenly (H={H}, NS={NS})")
@@ -264,7 +266,13 @@ def fused_post_pre(x, residual, post_mix, comb, fn, scale, base, w, NS: int, TH:
     parts = [fused_split(np.asarray(x)[:, N * s:N * s + N], np.asarray(residual)[:, :, N * s:N * s + N], post_mix, comb,
                          fn3[:, :, N * s:N * s + N], TH) for s in range(NS)]
     res = np.concatenate([p[0] for p in parts], axis=-1)
-    yp, rp = np.stack([p[1] for p in parts], axis=1), np.stack([p[2] for p in parts], axis=1)
+    return res, np.stack([p[1] for p in parts], axis=1), np.stack([p[2] for p in parts], axis=1)
+
+
+def fused_post_pre(x, residual, post_mix, comb, fn, scale, base, w, NS: int, TH: int, TN: int, REPEAT: int, EPS: float,
+                   HC_EPS: float):
+    """`MhcFusedPostPre_v1`: x [T, H], residual [T, HC, H] bf16, fn [OUT, HC * H] -> (residual', layer input, post', comb')."""
+    res, yp, rp = fused_partials(x, residual, post_mix, comb, fn, NS, TH)
     out, post2, comb2 = big_fuse(yp, rp, scale, base, res, w, TN, REPEAT, EPS, HC_EPS)
     return res, out, post2, comb2
 
@@ -290,13 +298,23 @@ def tf32_dot8(acc, a, b, model: GroupSum = CANDIDATE) -> np.ndarray:
     return np.asarray(out, dtype=U32)
 
 
-def _sqrsum(x: np.ndarray, sqr_swap: bool) -> np.ndarray:
-    """The quad's squared sum over x [..., K] f32 words: four chains v[e] from +0 and `(v0 + v2) + (v1 + v3)`."""
+def _sqr_term(lo: np.ndarray, hi: np.ndarray, sqr: str) -> np.ndarray:
+    if sqr == "lo":
+        return fma(lo, lo, mul(hi, hi))
+    if sqr == "hi":
+        return fma(hi, hi, mul(lo, lo))
+    if sqr == "mul":
+        return add(mul(lo, lo), mul(hi, hi))
+    raise ValueError(f"the squared sum's contraction: one of {SQR_FORMS} (got {sqr!r})")
+
+
+def _sqrsum(x: np.ndarray, sqr: str) -> np.ndarray:
+    """The quad's squared sum over x [..., K] f32 words: four chains v[e] from +0 of `x[k]^2 + x[k+4]^2` contracted as ``sqr``
+    (k = 8 i + e), and `(v0 + v2) + (v1 + v3)`."""
     g = x.reshape(x.shape[:-1] + (x.shape[-1] // 8, 8))
     v = np.zeros(x.shape[:-1] + (4,), dtype=U32)
     for i in range(g.shape[-2]):
-        lo, hi = g[..., i, :4], g[..., i, 4:]
-        v = add(v, fma(hi, hi, mul(lo, lo)) if sqr_swap else fma(lo, lo, mul(hi, hi)))
+        v = add(v, _sqr_term(g[..., i, :4], g[..., i, 4:], sqr))
     return tree(v)
 
 
@@ -317,19 +335,23 @@ def _tf32_splits(x: np.ndarray, b: np.ndarray, ranges, model: GroupSum, b_round:
     return yp
 
 
-def tf32_split(a, b, model: GroupSum = CANDIDATE, b_round: str = "trunc", sqr_swap: bool = False):
+def tf32_split(a, b, model: GroupSum = CANDIDATE, b_round: str = "trunc", sqr: str = "lo"):
     """`MhcPrenormTf32Split_v1{K, OUT}`: a [T, K] bf16, b [OUT, K] f32 -> (yp [T, OUT], rp [T])."""
     x, b = cvt(a), _u(b)
     M._check_tf32(x.shape[-1])
-    return _tf32_splits(x, b, [(0, x.shape[-1])], model, b_round)[:, 0], _sqrsum(x, sqr_swap)
+    return _tf32_splits(x, b, [(0, x.shape[-1])], model, b_round)[:, 0], _sqrsum(x, sqr)
 
 
-def prenorm_tf32(a, b, NS: int, model: GroupSum = CANDIDATE, b_round: str = "trunc", sqr_swap: bool = False):
+def prenorm_sqrsum(a, NS: int, sqr: str = "lo") -> np.ndarray:
+    """The squared sums of `MhcPrenormTf32_v1{K, NS, OUT}` alone: a [T, K] bf16 -> rp [T, NS]."""
+    x = cvt(a)
+    return np.stack([_sqrsum(x[:, o:o + n], sqr) for o, n in M.tf32_ranges(x.shape[-1], NS)], axis=1)
+
+
+def prenorm_tf32(a, b, NS: int, model: GroupSum = CANDIDATE, b_round: str = "trunc", sqr: str = "lo"):
     """`MhcPrenormTf32_v1{K, NS, OUT}`: a [T, K] bf16, b [OUT, K] f32 -> (yp [T, NS, OUT], rp [T, NS])."""
     x, b = cvt(a), _u(b)
-    ranges = M.tf32_ranges(x.shape[-1], NS)
-    rp = np.stack([_sqrsum(x[:, o:o + n], sqr_swap) for o, n in ranges], axis=1)
-    return _tf32_splits(x, b, ranges, model, b_round), rp
+    return _tf32_splits(x, b, M.tf32_ranges(x.shape[-1], NS), model, b_round), prenorm_sqrsum(a, NS, sqr)
 
 
 def post_pre_tf32(x, residual, post_mix, comb, fn, scale, base, w, NS: int, TN: int, REPEAT: int, EPS: float, HC_EPS: float,
