@@ -237,6 +237,3 @@ theorem wDecodes_of_read (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (holoInnerAt T 
 end
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.resZeroAtLH_wRead
-#print axioms FlockC3.Reps.wDecodes_of_read
