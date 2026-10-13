@@ -133,7 +133,8 @@
         "benchmarks/pous/",
         "benchmarks/bandwidth/",
         "benchmarks/word_codec/",
-        "benchmarks/codec_tensor/"
+        "benchmarks/codec_tensor/",
+        "benchmarks/remote_session/"
       ]
     },
     {
