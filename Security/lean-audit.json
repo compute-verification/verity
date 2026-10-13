@@ -568,6 +568,12 @@
    "assumptions": [],
    "type_hash": "4ec1755f734a0d74b944bba77f1618fb545e84a650aed6fc930c599cb6a229ff"
   },
+  "Accounting.SecurityProofs.RateSketchTable": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateTensorSketchTable": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
@@ -4196,6 +4202,8 @@
    "Accounting.SecurityProofs.RateAuditSketchInteractiveRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model that may send bits to side sources answering each read with a whole sector of the store or of the certified stream, as it is, at an address picked from what was sent (Security/Definitions/Accounting/RateAuditSketchInteractive.lean), at Accounting.SecurityProofs.RateAuditSketch's floor and error, with the device's bounds as fields of the InteractiveDevice it ranges over, not the rate audit's code; sends are unbounded and free, and the claims rate-sketch-verbatim and random-oracle carry it to a deployed device.",
    "Accounting.SecurityProofs.RateAuditTensorSketch": "frozen (no-function,hash): Like Accounting.SecurityProofs.RateAuditSketch, it bounds acceptance of an abstract chip program in the random-oracle model, at the tensor-core sketch's digest (Accounting.RateSketch.sketch), not the rate audit's code.",
    "Accounting.SecurityProofs.RateSketchHonest": "completeness: an honest device (nothing held on chip, a link carrying exactly the certified stream's rho sectors, N queries, nothing rebuilt) is accepted at every signs, oracle, data and sample with footprint exactly N * m * w and compute N * c_tag, so Accounting.SecurityProofs.RateAuditSketch's event is not vacuous",
+   "Accounting.SecurityProofs.RateSketchTable": "completeness: like Accounting.SecurityProofs.RateSketchHonest, a device (a LayoutDevice of Security/Definitions/Accounting/RateAuditSketchLayout.lean, whose memory holds any function of the store) accepted at every signs, oracle and data, here one that reads N * d bits from a table of card Sig * N * d bits for any digest of at most 2^d values, below Accounting.SecurityProofs.RateAuditSketch's floor: a counterexample outside the verbatim class (rate-sketch-verbatim), not a property of a function",
+   "Accounting.SecurityProofs.RateTensorSketchTable": "completeness: Accounting.SecurityProofs.RateSketchTable at the tensor-core sketch (Accounting.RateSketch.sketch, 32-byte sectors, k_s INT32 words), reading N * 32 * k_s bits at any number of rows k_s: a counterexample outside the verbatim class, not a property of a function",
    "Accounting.SecurityProofs.SketchBinds": "frozen (premise): It is a property of Accounting.RateSketch.sketch under the hypothesis SectorsBind σ on the window's signs, which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketch prices the hypothesis as Pr_σ[¬ SectorsBind σ].",
    "Bandwidth.SecurityProofs.HonestPasses": "completeness: an honest device (no on-chip state, side sources or regeneration, N queries) is accepted on every store, oracle and sample with ingress exactly N * b, so AuditRO's event is not vacuous and the gap between N * b and its floor k * b - S - c - G * b - lam is in the lock",
    "Bandwidth.SecurityProofs.AuditRelay": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose side sources may depend on the oracle (Security/Definitions/Accounting/Bandwidth/Relay.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the RelayDevice it ranges over, not the bandwidth audit's code; relayed tags count against the side budget, at m * b bits for m blocks.",
