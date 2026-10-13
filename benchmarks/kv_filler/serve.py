@@ -598,9 +598,9 @@ def main() -> int:
             seq_counts = None
             if top == "seq":
                 cur.pop("seq_step")
-                _, _, n_steps, n_launches, n_pre, n_pre_launches = sq.progress()
+                _, _, n_steps, n_launches, n_pre, n_pre_launches, bare, bare_pre = sq.progress()
                 seq_counts = {"steps_begun": n_steps, "step_launches": n_launches, "prefill_steps_begun": n_pre,
-                              "prefill_launches": n_pre_launches}
+                              "prefill_launches": n_pre_launches, "steps_bare": bare, "prefill_steps_bare": bare_pre}
                 sq.stop()
                 recs = tu.log()
             elif top not in ("none", "gemm"):

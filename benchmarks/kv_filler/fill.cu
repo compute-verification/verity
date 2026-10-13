@@ -42,6 +42,10 @@ struct Gate {
   int busy;
   uint32_t busy_ctas, idle_ctas;
   int prefill;  // the steps on the GPU that prefill (the PREFILL role reads while it is > 0)
+  // fill_seq's units taken by role; at each step's start (`gate_step`) STEP's and PREFILL's counts, and the steps (and
+  // prefill steps) that ended with their role's count where it started: no unit read beside them
+  unsigned long long units[4], mark[2];
+  unsigned int bare[2];
 };
 constexpr uint32_t ALL = 0xFFFFFFFFu;
 
@@ -435,7 +439,10 @@ __device__ __forceinline__ unsigned long long take(const Gate* gate, Seq* seq, i
       const unsigned long long until = globaltimer() + STEP_LINGER_NS;
       while (!(go = *count > 0) && !q->stop && globaltimer() < until) __nanosleep(1000);
     }
-    if (go && atomicAdd(taken, 1ull) < budget) s = atomicAdd(&seq->next, 1ull);
+    if (go && atomicAdd(taken, 1ull) < budget) {
+      s = atomicAdd(&seq->next, 1ull);
+      atomicAdd(const_cast<unsigned long long*>(&gate->units[role]), 1ull);
+    }
   }
   return __shfl_sync(0xffffffffu, s, 0);
 }
@@ -590,15 +597,29 @@ __global__ void signs_first(Signs sg) { derive_signs(sg, 0, 0); }
 __global__ void stamp(unsigned long long* t) { *t = globaltimer(); }
 
 __global__ void gate_set(Gate* g, uint32_t busy_ctas, uint32_t idle_ctas, int reset) {
-  if (reset) g->busy = g->prefill = 0;
+  if (reset) {
+    g->busy = g->prefill = 0;
+    for (int r = 0; r < 4; ++r) g->units[r] = 0;
+    g->mark[0] = g->mark[1] = 0;
+    g->bare[0] = g->bare[1] = 0;
+  }
   g->busy_ctas = busy_ctas;
   g->idle_ctas = idle_ctas;
   __threadfence();
 }
 
 __global__ void gate_step(Gate* g, int delta, int prefill = 0) {
+  const volatile unsigned long long* u = g->units;
+  if (delta < 0) {
+    if (u[STEP] == g->mark[0]) ++g->bare[0];
+    if (prefill && u[PREFILL] == g->mark[1]) ++g->bare[1];
+  }
   atomicAdd(&g->busy, delta);
   if (prefill) atomicAdd(&g->prefill, delta);
+  if (delta > 0) {
+    g->mark[0] = u[STEP];
+    if (prefill) g->mark[1] = u[PREFILL];
+  }
   __threadfence();
 }
 #endif

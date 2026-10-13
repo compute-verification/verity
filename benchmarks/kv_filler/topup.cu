@@ -1134,8 +1134,16 @@ int sq_stop() {
   return rc;
 }
 
-// Bytes and epochs logged, steps begun, STEP kernels launched, prefill steps begun, and PREFILL kernels launched.
+// Bytes and epochs logged, steps begun, STEP kernels launched, prefill steps begun, PREFILL kernels launched, and the
+// steps and prefill steps that ended on the GPU with no unit of their role read since they started (fill.cu's Gate).
 void sq_progress(uint64_t* out) {
+  unsigned int bare[2] = {0, 0};
+  if (sq::S && tu::gate) {
+    cudaMemcpyAsync(bare, tu::gate->bare, sizeof bare, cudaMemcpyDeviceToHost, sq::S->s_h);
+    cudaStreamSynchronize(sq::S->s_h);
+  }
+  out[6] = bare[0];
+  out[7] = bare[1];
   out[0] = sq::S ? sq::S->units_done.load() * fl::UNIT_BYTES : 0;
   out[1] = sq::S ? sq::S->epochs_done.load() : 0;
   out[2] = sq::S ? sq::S->steps.load() : 0;

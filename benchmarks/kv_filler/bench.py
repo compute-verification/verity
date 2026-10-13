@@ -168,9 +168,9 @@ class Seq:
             raise RuntimeError(f"sq_stop error {rc}")
 
     def progress(self) -> tuple[int, ...]:
-        """Bytes and epochs logged so far, steps begun, STEP kernels launched, prefill steps begun, and PREFILL kernels
-        launched."""
-        p = (ctypes.c_uint64 * 6)()
+        """Bytes and epochs logged so far, steps begun, STEP kernels launched, prefill steps begun, PREFILL kernels
+        launched, and the steps and prefill steps that ended on the GPU with no unit of their role read beside them."""
+        p = (ctypes.c_uint64 * 8)()
         self.so.sq_progress(p)
         return tuple(p)
 
@@ -447,7 +447,7 @@ def seq_gate(tu: Topup, torch) -> dict:
         tail = sq.progress()[0] - after
         pre_tail.append(tail)
         pre_epochs.append(sq.progress()[1] - 1)  # logged once its bracket ended, so read inside it
-    launches = sq.progress()[2:]
+    launches, bare = sq.progress()[2:6], sq.progress()[6:]
     sq.stop()
     ok, units = seq_epochs_ok(tu.log(), blobs, SEQ_SHIFT_GATE, also=pre_epochs)
     out["seq_roles_receipts"] = ok and units > 0
@@ -455,7 +455,7 @@ def seq_gate(tu: Topup, torch) -> dict:
                               and step_tail == 0 and all(b > 0 for b in pre_bytes) and pre_tail == [0, 0, 0] and launches == (4, 1, 3, 3))
     out["seq_roles_bytes"] = {"before_idle": still, "idle": idle_bytes, "between": quiet, "step": step_bytes,
                               "after_step": step_tail, "prefill": pre_bytes, "after_prefill": pre_tail,
-                              "launches": list(launches)}
+                              "launches": list(launches), "bare_steps": list(bare)}
     # every other kernel shape (`sq_shape`), through IDLE, and STEP at 16 warps beside IDLE at 4
     shapes = {}
     for warps, depth, step_warps in sorted((w, d, 0) for w, d in SEQ_SHAPES if (w, d) != (4, 2)) + [(4, 2, 16)]:
