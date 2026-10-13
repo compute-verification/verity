@@ -67,3 +67,16 @@ def test_nonempty_record_is_fail_closed_for_of_record_use():
     assert rec["committed_units"]["integrity"] == {"linked": False, "unverified": ["committed_0"]}
     with pytest.raises(RuntimeError, match="unverified and not approved"):
         C.require_of_record(rec, where="test Program of record")
+
+
+def test_tuple_output_is_committed_as_one_input_group_with_members():
+    com = _Committer()
+    sites = [
+        {"family": C.FAMILY, "step": 0, "op_path": "block", "op": "custom.tuple",
+         "output_member": f"committed_0/{member}"}
+        for member in ("0", "1")
+    ]
+    source = S.CommittedUnitSource(com, _Model(), sites)
+    values = (torch.tensor([1.0]), torch.tensor([2]))
+    source._after("block", "custom.tuple", values)
+    assert [name for name, _tensor, _step in com.acquired] == ["block/committed_0/0", "block/committed_0/1"]
