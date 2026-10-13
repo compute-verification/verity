@@ -12,7 +12,7 @@ model takes on trust (`random-oracle` for the tag, `bandwidth-instantiation` for
 
 namespace Bandwidth.Guarantees
 
-open Pous (pr)
+open Pous (Bits pr)
 open scoped ENNReal
 
 /-- **The bandwidth audit v0 in the random-oracle model.** For every device with on-chip state of `S` bits that reads
@@ -110,6 +110,31 @@ def AuditInteractiveRO : Prop :=
     (∀ E O O', A.side E O = A.side E O') →
     pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
         A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)
+      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
+
+/-- **Bandwidth adds, by counting (Mbw), in the random-oracle model.** For every `JointDevice` whose chip's view
+determines `z` (`Recovers`), over a uniform store of `N` blocks of `b` bits, `z` uniform over `n` bits, a fresh oracle
+and `s` sampled blocks, all independent (`z` independent of the oracle too: the oracle's answers at points that don't
+depend on the store would be a `z` the chip's view determines with no reads): the probability that the verifier accepts
+while the device's ingress, plus `S + c + G·b + λ`, falls short of `k·b + n` is at most `AuditRO`'s bound
+
+  `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`.
+
+Read with `cert_bw = k·b − S − c − G·b − λ`, the bits of ingress `AuditRO` certifies: an accept gives
+`n ≤ ingress − cert_bw` except with `AuditRO`'s error and no extra slack, so whatever else the chip's view must
+determine in the window, it reads on top of what the audit certifies, up to what it held or got another way. The
+proof is `AuditRO`'s, with the compression run over the pair (store, `z`): the chip's state, the bits it read and which
+`k` of its queries named blocks determine those `k` blocks and `z`, `n` bits more than the store's alone. This is Mbw
+of `note:console/20261012T0645Z-draft-actual-circuit-model` (section 5) for a device of this game; for the chip as a
+tick transducer whose view in the window determines `z`, it is `Bandwidth.SecurityProofs.Ticked.audit_joint`, and for
+the chip of a strategy causal from every tick, `Bandwidth.SecurityProofs.Causal.audit_joint`. Proof:
+`Bandwidth.SecurityProofs.AuditJoint`.
+
+Frozen (no-function, hash): as `AuditRO`. -/
+def AuditJoint : Prop :=
+  ∀ (N b h S c G q n s k lam : ℕ) (A : JointDevice N b h S c G q n), A.Recovers →
+    pr (fun x : (Store N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
+        A.Accepts x.1.1 x.1.2 x.2.1 x.2.2 ∧ A.ingress x.1.1 x.1.2 x.2.1 + S + c + G * b + lam < k * b + n)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
 end Bandwidth.Guarantees
