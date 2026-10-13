@@ -222,7 +222,8 @@ theorem checkFile_ok {s : VStar.Stmt} {b : VStar.Bindings} {circuitB : ByteArray
 statements at `i` (the one statement so named, and statement `j`'s name is it), and `n` is its instance count. -/
 theorem check_ok {i : RecVStar.Inner} {name : String} {n j : ℕ} {s : VStar.Stmt}
     (h : RecVStar.check i name n (some j) = .ok s) :
-    ∃ ss, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ s.name = name ∧ n = s.instances := by
+    ∃ ss, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ s.name = name ∧ n = s.instances ∧
+      ss.toList.filter (·.name == name) = [s] := by
   unfold RecVStar.check at h
   dsimp only at h
   split at h
@@ -251,7 +252,7 @@ theorem check_ok {i : RecVStar.Inner} {name : String} {n j : ℕ} {s : VStar.Stm
               exact ⟨Array.mem_toList_iff.mpr (Array.mem_of_getElem? ht), by simpa using htn⟩
             rw [hfl, List.mem_singleton] at htm
             rw [List.mem_filter] at hm
-            exact ⟨ss, hss, htm ▸ ht, by simpa using hm.2, by simpa using hn⟩
+            exact ⟨ss, hss, htm ▸ ht, by simpa using hm.2, by simpa using hn, hfl⟩
     · cases h
 
 /-- **The circuit check, as V*'s statement `j` under the verifier's bindings `f`**: the unit check as statement `j`,
@@ -268,8 +269,8 @@ theorem checkCircuit_ok {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : 
 
 /-- **`checkStmt` at an inner shape, the verifier's own reads, statement `j` and bindings `f`**: the statement is set
 up under tags named V*'s `Tags.circuit` with no lookup table (refusals 5 and 6), and its circuit file is
-`circuitFile s f` for V*'s statement `s` at index `j` at `i`, named as its unit, with the statement's population as its
-instances, and the verifier's reads hold `s`'s message-round ports. -/
+`circuitFile s f` for V*'s statement `s` at index `j` at `i`, named as its unit (the one statement so named), with the
+statement's population as its instances, and the verifier's reads hold `s`'s message-round ports. -/
 theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)} {st : Flock.Stmt}
     {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
@@ -278,7 +279,7 @@ theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (St
     tags.name = Flock.Tags.circuit.name ∧ tables = [] ∧
       ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ s.name = st.c.unit.name ∧
         RecVStar.population st = s.instances ∧ RecVStar.circuitFile s f = .ok circuitB ∧
-        RecVStar.checkOwn s own = .ok () := by
+        RecVStar.checkOwn s own = .ok () ∧ ss.toList.filter (·.name == st.c.unit.name) = [s] := by
   unfold RecVStar.checkStmt at h
   dsimp only at h
   split at h
@@ -295,9 +296,9 @@ theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (St
         obtain ⟨_, -, h⟩ := ebind_ok h
         obtain ⟨s, hs, h⟩ := ebind_ok h
         obtain ⟨hck, hf⟩ := checkCircuit_ok hs
-        obtain ⟨ss, hss, hj, hname, hpop⟩ := check_ok hck
+        obtain ⟨ss, hss, hj, hname, hpop, hfl⟩ := check_ok hck
         obtain ⟨⟨⟩, ho, -⟩ := ebind_ok h
-        exact ⟨by simpa using hn, by simpa using ht, ss, s, hss, hj, hname, hpop, checkFile_ok hf, ho⟩
+        exact ⟨by simpa using hn, by simpa using ht, ss, s, hss, hj, hname, hpop, checkFile_ok hf, ho, hfl⟩
       · cases h
 
 -- walking `HmRow.loadPublic`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
@@ -386,7 +387,7 @@ theorem vstarFile_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : 
   obtain ⟨-, spec, sts, hs, hv⟩ := hacc
   obtain ⟨h0, hcst, hpop⟩ := setup_of_accepts x t hs hck
   have hck1 := array_forM_ok hv 0 h0
-  obtain ⟨htag, htab, ss, s, hss, hj, hname, hn, hf, ho⟩ := checkStmt_ok hck1
+  obtain ⟨htag, htab, ss, s, hss, hj, hname, hn, hf, ho, -⟩ := checkStmt_ok hck1
   rw [hcst] at hname
   exact ⟨htag, htab, ss, s, hss, hj, hname, hpop ▸ hn, hf, ho⟩
 
