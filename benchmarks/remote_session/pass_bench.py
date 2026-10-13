@@ -12,6 +12,7 @@ import json
 import shutil
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -44,6 +45,8 @@ def main() -> int:
     ap.add_argument("--passes", type=int, default=30)
     ap.add_argument("--open-passes", type=int, default=300)
     ap.add_argument("--openings", type=int, default=33273)
+    ap.add_argument("--contend", default="0:0:5,-10:0:5,-10:0:0.5,-10:0:0.1",
+                    help="passes run while a window opens: pass stream priority:open stream priority:GIL switch ms")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     lib = Lib(a.lib, torch)
@@ -151,6 +154,40 @@ def main() -> int:
             open_ns = time.perf_counter_ns() - t0
     out["open"] = {"openings": a.openings, "passes": len(kept), "ns": open_ns, "stats": store.open_stats[-1]}
     print(json.dumps({"signs_host_ns": out["signs_host_ns"], "open": out["open"]}), flush=True)
+
+    out["contended"] = []
+    items = [(kept[i], ps) for i, ps in sorted(by.items())]
+    for spec in filter(None, a.contend.split(",")):
+        pass_prio, open_prio, switch_ms = spec.split(":")
+        sys.setswitchinterval(float(switch_ms) / 1e3)
+        ps, os_ = torch.cuda.Stream(priority=int(pass_prio)), torch.cuda.Stream(priority=int(open_prio))
+        done, opened = threading.Event(), {}
+
+        def opener() -> None:
+            t0 = time.perf_counter_ns()
+            with torch.cuda.stream(os_):
+                store.open_window(items)
+                os_.synchronize()
+            opened["ns"] = time.perf_counter_ns() - t0
+            done.set()
+
+        host, g0, prev = [], len(store.pass_gpu_ms), bytes(64)
+        with torch.cuda.stream(ps):
+            th = threading.Thread(target=opener)
+            th.start()
+            while not done.is_set():
+                t0 = time.perf_counter_ns()
+                prev, _ = store.run_pass(rb.seed(b"\5" * 32, len(host), prev))
+                host.append(time.perf_counter_ns() - t0)
+            th.join()
+        gpu = store.pass_gpu_ms[g0:]
+        row = {"pass_priority": int(pass_prio), "open_priority": int(open_prio), "switch_ms": float(switch_ms),
+               "passes": len(host), "open_ns": opened["ns"], "host_ns": percentiles(sorted(host)),
+               "gpu_ms": percentiles(sorted(gpu)), "excess_ms": sum(host) / 1e6 - len(host) * read_ms,
+               "open_stats": store.open_stats[-1]}
+        out["contended"].append(row)
+        print(json.dumps(row), flush=True)
+    sys.setswitchinterval(0.005)
     (a.out / "pass_bench.json").write_text(json.dumps(out, indent=1))
     return 0
 

@@ -20,5 +20,5 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
     --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
   nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
     -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 || { tail -40 "$O/session.ptxas"; exit 4; }
-  "$PY" $RS/pass_bench.py --lib "$B/session.so" --gib "$GIB" --chunks "$CHUNKS" --ctas "$CTAS" --out "$O" 2>&1 \
+  "$PY" $RS/pass_bench.py --lib "$B/session.so" --gib "$GIB" --chunks "$CHUNKS" --ctas "$CTAS" --out "$O" ${BENCH_ARGS:-} 2>&1 \
     | tee "$O/pass_bench.log"'
