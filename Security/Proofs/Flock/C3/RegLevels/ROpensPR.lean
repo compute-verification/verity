@@ -1,6 +1,9 @@
 import Proofs.Flock.C3.RegLevels.ROpens
 import Proofs.Flock.C3.RegLevels.SrcUnits
 import Proofs.Flock.C3.Reps.SrcOpens
+import Proofs.Flock.C3.Reps.IoCols
+import Proofs.Flock.C3.Reps.SrcOK
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # n11: R's openings at `pR`, read from the layers (`ROpensOfLayers`, `RRowsPinned`)
@@ -8,6 +11,8 @@ import Proofs.Flock.C3.Reps.SrcOpens
 At the proof G's lig lane builds (`pR` over `StackedMaps.ops`), R's openings are `ligOfRead`'s at R's rows and siblings.
 Where those are the read of R's map's units (`StackedReads`, by construction) and that read's columns are input columns
 a row reads (`StackedOpenCols`, `RepMaps.OpenCols`' form at R's map), `opensReadAt_two_of_layers`' hypotheses both hold.
+`StackedOpenCols` is `RepMaps.openCols_of_readCol`'s at R's map (`stackedOpenCols_of`), from its units' parameters
+(`StackedParams`) and S's `OpenReadCol`.
 
 * `openRow_ligOfRead_out`, `openRow_ligOfRead_past`: past a level's `q` a `ligOfRead` opening is empty, and past a
   schedule of at least two levels (`DimSeam`) it is the last level's row with no siblings (the default level's `d - cap`
@@ -15,7 +20,10 @@ a row reads (`StackedOpenCols`, `RepMaps.OpenCols`' form at R's map), `opensRead
 * `openRow_stackedRead_mask`: the read is the same in the masked layer (`colOf_mask`, as `RepMaps.openRow_mask`), so
   `rOpensOfLayers_of_read`: `ROpensOfLayers` at `W` every position, `rdR` the read of the masked layers.
 * `openRow_pR_stacked`: `pR`'s openings at `StackedMaps.ops` are the read's, at any cap, messages, coins and caps.
-  `rOpens_pR` is both hypotheses at `pR`, and `opensReadAt_two_pR` is `OpensReadAt 2` at H's normalized tied source.
+  `rOpens_pR` is both hypotheses at `pR`.
+* `opensReadAt_two_pR`: `OpensReadAt 2` at the reps' tied source (`repsOfVals` sets only strata 0 and 1,
+  `os_tied_repsOfVals_of_ge`), `srcOK_repsOfVals`' `hos₂`; `srcOK_repsOfVals_pR` is `srcOK_repsOfVals` with it, at R's
+  shape of `fast100`'s schedule (two levels, `DimSeam`).
 -/
 
 namespace FlockC3.RegLevels
@@ -28,6 +36,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL Floc
 open FlockC3.Compose
 open FlockVBridge.Family (maskOf colOf ioColAt_of_readCol elems bytesAt LigRead ligOfRead levAt)
 open FlockVBridge.OfVStar (ReadCol)
+open FlockC3.Reps (UnitVals repsOfVals CapRead TsRead OpensOfLayers OpenReadCol)
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -136,6 +145,24 @@ def StackedOpenCols (M : FlockC3.Reps.StackedMaps stmt Vs) (sch : Flock.Schedule
       512 * ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap),
     c < (Rows.ofNet (Vs (M.sess ℓ)).hU).nIn ∧ ReadCol (Rows.ofNet (Vs (M.sess ℓ)).hU) c
 
+/-- **Hypothesis: R's map's units' parameters** (`RepMaps.OpenParams` at `M.sess`, `hOpenParams_of`'s statement): level
+`ℓ`'s unit is `rec-open/l<levelLanes>-h<d - cap>`. -/
+def StackedParams (M : FlockC3.Reps.StackedMaps stmt Vs) (sh : Flock.Shape) : Prop :=
+  ∀ ℓ < sh.sched.levels.size, Flock.RecOpen.params (Vs (M.sess ℓ)).c.unit.name =
+    some (FlockVBridge.AccChain.levelLanes sh ℓ, (sh.sched.levels[ℓ]!).d - (sh.sched.levels[ℓ]!).cap)
+
+/-- **`StackedOpenCols` from the units' parameters and `OpenReadCol`** (`RepMaps.openCols_of_readCol` at R's map): the
+columns are inputs by `lt_nIn_of_params`, and read by `OpenReadCol` at each level's unit, the net of `unitLaid`
+(`RecOpen.check_ok`) with `unitLog ≤ 32` (`unitLog_of_scope`). -/
+theorem stackedOpenCols_of (M : FlockC3.Reps.StackedMaps stmt Vs) {sh : Flock.Shape}
+    (hrec : ∀ j, Flock.RecOpen.check (Vs j).c = .ok ()) (hP : StackedParams M sh)
+    (hR : ∀ LANES H, OpenReadCol LANES H) : StackedOpenCols M sh.sched := by
+  intro ℓ hℓ c hc
+  rw [FlockVBridge.Family.Conss.getD_default] at hc
+  have hok := Flock.RecOpen.check_ok (hrec (M.sess ℓ)) (hP ℓ hℓ)
+  exact ⟨FlockC3.Reps.lt_nIn_of_params (hrec _) (hP ℓ hℓ) hc,
+    hR _ _ (Vs (M.sess ℓ)).hU hok.2 hok.1 (FlockC3.Reps.unitLog_of_scope (Vs (M.sess ℓ)).hscope) c hc⟩
+
 /-- R's opening at level `ℓ`, query `q`, read off the layers `l`. -/
 def rdR (M : FlockC3.Reps.StackedMaps stmt Vs) (sch : Flock.Schedule) (ℓ q : ℕ) (l : (j : Fin S) → (Vs j).Bits) :
     List 𝔽 × List Dig :=
@@ -214,21 +241,74 @@ theorem rOpens_pR (M : FlockC3.Reps.StackedMaps stmt Vs) {sh : Flock.Shape} (h2 
     exact (congrArg (fun p => openRow p sh.sched ℓ q) h).trans (openRow_pR_stacked M hrd Lb e0 w kap cl k₀ c e ℓ q)
   exact ⟨rOpensOfLayers_of_read M hk hrow, rRowsPinned_of_read h2 (stackedRead M sh.sched) hrow⟩
 
-/-- **`OpensReadAt 2` at H's normalized tied source** whose openings at stratum 2 are `prR`'s rows, `prR` at `pR`. -/
-theorem opensReadAt_two_pR (M : FlockC3.Reps.StackedMaps stmt Vs) {sh : Flock.Shape} (h2 : 2 ≤ sh.sched.levels.size)
-    (hk : StackedOpenCols M sh.sched) {sb : ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ℕ → ByteArray}
-    (hrd : StackedReads M sh.sched sb)
+/-! ## At the reps' tied source -/
+
+/-- **Past the reps, the reps' tied source's openings are `stp`'s**: `repsOfVals` sets strata 0 and 1, and the tie
+keeps the openings (`tie_os`). -/
+theorem os_tied_repsOfVals_of_ge
+    (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) (sh : Flock.Shape)
+    (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
+    (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals)
+    (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (Lb : (j : Fin S) → (Vs j).Bits) {s : ℕ} (hs : ¬s < 2)
+    (ℓ q : ℕ) : (tiedSrc (repsOfVals stp sh rep vals) R ω t Lb).os.1 s ℓ q = (stp R ω t Lb).os.1 s ℓ q := by
+  show (tie (repsOfVals stp sh rep vals R ω t Lb)).os.1 s ℓ q = _
+  rw [tie_os]
+  exact dite_eq_right hs
+
+/-- **`OpensReadAt 2` at the reps' tied source** (`srcOK_repsOfVals`' `hos₂`) whose step source's openings at stratum
+2 are `prR`'s rows, `prR` at `pR` over R's map at R's shape `shR`. -/
+theorem opensReadAt_two_pR (M : FlockC3.Reps.StackedMaps stmt Vs) {shR : Flock.Shape} (h2 : 2 ≤ shR.sched.levels.size)
+    (hk : StackedOpenCols M shR.sched) {sb : ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ℕ → ByteArray}
+    (hrd : StackedReads M shR.sched sb)
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {prR : ((j : Fin S) → (Vs j).Bits) → Flock.LigeritoProof}
-    (hpr : ∀ Lb, ∃ e0 w kap cl k₀ c e, prR Lb = pR sh e0 w (M.ops sh Lb kap cl k₀ c) (sb Lb) e)
+    (hpr : ∀ Lb, ∃ e0 w kap cl k₀ c e, prR Lb = pR shR e0 w (M.ops shR Lb kap cl k₀ c) (sb Lb) e)
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    (hsrc : ∀ R ω t Lb ℓ q, (stp R ω t Lb).os.1 2 ℓ q = openRow (prR Lb) sh.sched ℓ q) :
-    OpensReadAt zs dg N k Rw (tiedSrc (normSrc stp)) 2 := by
+    {sh : Flock.Shape} {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    (hsrc : ∀ R ω t Lb ℓ q, (stp R ω t Lb).os.1 2 ℓ q = openRow (prR Lb) shR.sched ℓ q) :
+    OpensReadAt zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) 2 := by
   obtain ⟨hv, hpin⟩ := rOpens_pR (zs := zs) (dg := dg) (N := N) (k := k) (Rw := Rw) M h2 hk hrd hpr
-  exact opensReadAt_two_norm hv hpin hsrc
+  exact opensReadAt_two_of_layers hv hpin fun R ω t Lb ℓ q =>
+    (os_tied_repsOfVals_of_ge stp sh rep vals R ω t Lb (Nat.lt_irrefl 2) ℓ q).trans (hsrc R ω t Lb ℓ q)
+
+/-- **`SrcOK` at the reps' normalized tied source, R's openings at `pR`**: `srcOK_repsOfVals` with `hos₂` from
+`opensReadAt_two_pR`, at R's shape `shR` of `fast100`'s schedule (two levels, `fast100_dims`), its map's columns read
+(`stackedOpenCols_of`), R's openings the read of its map's units (`StackedReads`) and `stp`'s at stratum 2. -/
+theorem srcOK_repsOfVals_pR {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {sh : Flock.Shape} {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    {W : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
+    {rd : Fin 2 → ℕ → ℕ → ((j : Fin S) → (Vs j).Bits) → List 𝔽 × List Dig}
+    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
+    (hleaf : HLeafC3 zs dg N k Rw)
+    (hcoins : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
+      StageCoins (CT := CT) (t.map Prod.snd) u)
+    (hc : CapRead zs dg N k Rw stp own sel) (hts : TsRead zs dg N k Rw (repsOfVals stp sh rep vals) own sel)
+    (hsp : SparseMsgsRead zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) own sel)
+    (hop : OpenMsgsRead zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) own sel)
+    (hlg : LigMsgsRead zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) own sel)
+    (hv : OpensOfLayers zs dg N k Rw W rd vals)
+    (M : FlockC3.Reps.StackedMaps stmt Vs) {shR : Flock.Shape} (hf : Flock.fast100 shR.m = some shR.sched)
+    (hrec : ∀ j, Flock.RecOpen.check (Vs j).c = .ok ()) (hP : StackedParams M shR)
+    (hR : ∀ LANES H, OpenReadCol LANES H) {sb : ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ℕ → ByteArray}
+    (hrd : StackedReads M shR.sched sb) {prR : ((j : Fin S) → (Vs j).Bits) → Flock.LigeritoProof}
+    (hpr : ∀ Lb, ∃ e0 w kap cl k₀ c e, prR Lb = pR shR e0 w (M.ops shR Lb kap cl k₀ c) (sb Lb) e)
+    (hsrc : ∀ R ω t Lb ℓ q, (stp R ω t Lb).os.1 2 ℓ q = openRow (prR Lb) shR.sched ℓ q)
+    (hw : LigWhole zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
+    (hcap : ∃ j, T j = Cap Dig) (hbool : ∃ j, T j = Bool) (hty : ∃ j, T j = (Opens GF128 Dig × Salts (List UInt8)))
+    (hT : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => ShapeTys T (holoAt st hp) u)
+    (hplay : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => StagesPlay (holoAt st hp) u) :
+    SrcOK zs dg N k Rw (tiedSrc (normSrc (repsOfVals stp sh rep vals))) own sel :=
+  FlockC3.Reps.srcOK_repsOfVals hleaf hcoins hc hts hsp hop hlg hv
+    (opensReadAt_two_pR M (FlockSoundness.Refine.fast100_dims _ _ hf).1.2.1 (stackedOpenCols_of M hrec hP hR) hrd hpr
+      hsrc)
+    hw hcap hbool hty hT hplay
 
 end
 
 end FlockC3.RegLevels
 
-#print axioms FlockC3.RegLevels.opensReadAt_two_pR
+#print axioms FlockC3.RegLevels.srcOK_repsOfVals_pR
