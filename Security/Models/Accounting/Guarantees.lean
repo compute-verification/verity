@@ -7,6 +7,7 @@ import Models.Accounting.Guarantees.RateAuditRemote
 import Models.Accounting.Guarantees.RateAuditHorizon
 import Models.Accounting.Guarantees.RateAuditNamed
 import Models.Accounting.Guarantees.RateAuditPartial
+import Models.Accounting.Guarantees.RateAuditDeployed
 import Models.Accounting.Guarantees.RateAuditSketch
 import Models.Accounting.Guarantees.Remote
 import Models.Accounting.Guarantees.Sketch

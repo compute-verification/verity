@@ -9,6 +9,7 @@ import Definitions.Accounting.RateAuditInteractive
 import Definitions.Accounting.RateAuditRemote
 import Definitions.Accounting.RateAuditHorizon
 import Definitions.Accounting.RateAuditPartial
+import Definitions.Accounting.RateAuditDeployed
 import Definitions.Accounting.RateAuditSketch
 import Definitions.Accounting.RateAuditSketchInteractive
 import Definitions.Accounting.Remote
