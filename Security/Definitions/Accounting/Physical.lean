@@ -18,7 +18,7 @@ resource:
 | `SequentialSpeed ring D span` | a path through more than `D` computed gates at the location of the ring's multiplications spans more than `span` (`Δ + RTT`) ticks | answering faster than `D` sequential multiplications modulo `p` |
 | `Memory 𝒳 M` | `mem_X(t) ≤ M_X` | hidden storage |
 | `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` delivers at most `β_e (b − a)` bits read during `[a, b)` (v2.7) | side channels, hidden bandwidth |
-| `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱` are the protocol's; what each certifier sends outside itself during `[a, b)` is a function of its own record before `b` and of its own jitter word, one of `χ` classes a bucket (v2.8) | forged records, timing channels |
+| `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱`, the auditor's devices on machines the prover doesn't control, are the protocol's; what each certifier sends outside itself during `[a, b)` is a function of its own record before `b` and of its own jitter word, one of `χ` classes a bucket (v2.8) | forged records, timing channels |
 
 The hardware is a tree of *locations* `𝒳` (a set of `Finset L`) and *links* `e : E` (a finite type), each joining two
 leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified* when a certifier sits on it, at one of its ends
@@ -106,7 +106,12 @@ words `J`, one per certifier, each one of `χ = 2^jitter` classes a bucket of ti
 certifier `y` sends outside itself from the gates it places during `[a, b)`, values and ticks (`sent`), is a function of
 its own record placed before `b` (its gates in its record cells `record y`, `Actual.Run.record`, as seen, so whatever
 timing it logs is counted there; a send during `[a, b)` can't read a later record) and of its own jitter word on the
-buckets of `[a, b)` (W2 and J). What a certifier reads is unconstrained. -/
+buckets of `[a, b)` (W2 and J). What a certifier reads is unconstrained.
+
+Each trusted device, every certifier among them, is the auditor's hardware and runs on a machine the prover doesn't
+control: the auditor's own VM or box, under the auditor's account, never a process on the prover's node. A device on a
+node the prover controls, such as the bandwidth audit's challenger on the GPU's own node, is the prover's hardware,
+and its leaves aren't in `𝒱`. -/
 def TrustedUnits {Ω L : Type*} (S : Ω → Actual.Run L) (𝒱 cert : Finset L) (spec : ∀ r, (S r).A.Spec)
     (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter : ℕ) : Prop :=
   cert ⊆ 𝒱 ∧

@@ -360,8 +360,9 @@ class CommitConfig:
     vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",
                             help="0 opts out: the Commit exports a sample of the row's VUs as instance sets (verity_vllm.pipeline.vu_export)")
     serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
-                                      help="opt in, never the record: the Commit also commits every RoPE head in M0's serving row format "
-                                           "(verity_vllm.commit.serving_rows) over this partition file, fixed before serving")
+                                      help="opt in, never the record: the Commit also commits every unit of this partition file's templates "
+                                           "in M0's serving row format (verity_vllm.pipeline.serving_rows), fixed before serving; a "
+                                           "deferred Commit's come from its bundle (verity-vllm serving-rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

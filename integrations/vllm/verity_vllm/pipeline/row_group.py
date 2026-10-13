@@ -87,7 +87,8 @@ def refusal(lead: Any) -> str | None:
     return ("a grouped Commit is a config run's (--config-run 1)" if not lead.config_run else
             "a grouped Commit defers every row's replay (--replay-deferred 1 or slim)" if ck.replay_deferred not in ("1", "slim") else
             "a grouped Commit is not the hot worker's (--hot-engine 1)" if ck.hot_engine == "1" else
-            "a grouped Commit's other rows have no research run for the serving rows' domains to bind (--serving-rows)" if ck.serving_rows else
+            "a grouped Commit defers every replay, and --serving-rows commits in the in-process one; `verity-vllm serving-rows BUNDLE` "
+            "writes each row's from its bundle" if ck.serving_rows else
             f"a grouped Commit installs no protocol options ({list(lead.protocols)})" if lead.protocols else None)
 
 
