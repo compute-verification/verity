@@ -34,6 +34,7 @@ SM90_SPLITK = {(4096, 256): {**{m: 8 for m in range(5, 8)}, 10: 8, 11: 8, 13: 8,
                (6144, 256): {9: 8, 11: 8},
                (7168, 384): {m: (8 if m in (6, 8, 12) else 7) for m in range(6, 17)}}
 LL_MAX_M = 16
+DEFAULT_LL_BF16_FMA = 1
 DEFAULT_CUBLAS_SPLIT_K = {
     ("router", 6144, 256): {17: 4, 32: 4, 128: 4, 256: 3},
     ("router", 7168, 384): {17: 5, 32: 5, 128: 4, 256: 4},
@@ -43,11 +44,24 @@ DEFAULT_CUBLAS_SPLIT_K = {
     ("f32out", 7168, 1024): {1: 5, 4: 5, 16: 5, 128: 3, 256: 2},
     ("f32out", 7168, 512): {1: 5, 4: 5, 16: 5, 128: 3, 256: 3},
 }
+DEFAULT_CUBLAS_NON_SPLIT = {
+    ("linear", 6144, 19360): frozenset((1, 4, 16, 128, 256)),
+}
 
 
 def default_cublas_split_k(phase: str, M: int, K: int, N: int) -> int | None:
     """The split count selected by cuBLAS 12.9.1 on the pinned H200, or None for its non-split routes."""
     return DEFAULT_CUBLAS_SPLIT_K.get((phase, K, N), {}).get(M)
+
+
+def default_cublas_route(phase: str, M: int, K: int, N: int) -> tuple[str, dict[str, int]] | None:
+    """The captured default cuBLAS route, distinguishing a known non-split launch from a shape/M with no record."""
+    split = default_cublas_split_k(phase, M, K, N)
+    if split is not None:
+        return "splitk", {"SPLIT_K": split}
+    if M in DEFAULT_CUBLAS_NON_SPLIT.get((phase, K, N), ()):
+        return "non_split", {}
+    return None
 
 
 def dispatch_sm90(M: int, K: int, N: int) -> tuple[str, dict]:

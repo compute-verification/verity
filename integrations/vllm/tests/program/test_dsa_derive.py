@@ -8,8 +8,8 @@
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
 * each precondition refuses by name.
 
-`batched_gemm`, which remains outside this change, is a stand-in here.  The tiny fixture also substitutes the old norm because
-`DsaRMSNorm_v1` is pinned to the real 128-thread widths (512/2048); a direct vocabulary assertion below checks its binding.
+The tiny fixture substitutes the old norm because `DsaRMSNorm_v1` is pinned to the real 128-thread widths (512/2048); a direct
+vocabulary assertion below checks its binding.  Its MLA absorbs use the registered default cuBLAS `BatchedGemm_v1`.
 FA3's sparse geometry is registered at rope 16, latent 16."""
 from __future__ import annotations
 
@@ -21,9 +21,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.types import Array
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
@@ -32,10 +31,9 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels.serve3_reference import materialize
-from verity_vllm.program.registry import b1, dsa, dsa_norm, hopper, sparse_mla, sparse_mla_split
+from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, hopper, sparse_mla, sparse_mla_split
 from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
 from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
-from verity_vllm.program.registry.prims import BF16
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton", fp8_block_gemm="cutlass")
 NH, P, R, L, V, NQ = 2, 16, 16, 16, 16, 16   # heads, nope, rope, latent, value, q_lora
@@ -48,15 +46,9 @@ DOT = hopper.HopperBF16WgmmaDot16
 IMPL = "vllm.v1.attention.backends.mla.flashattn_mla_sparse.FlashAttnMLASparseImpl"
 
 
-@composite("BatchedGemmStandIn", 1, ["B", "K", "N", "DOT"],
-           lambda S: ((("x", Array(S.B, Array(S.K, BF16))), ("w", Array(S.B, Array(S.N, Array(S.K, BF16))))), Array(S.B, Array(S.N, BF16))))
-def BatchedGemmStandIn(B, S, x, w):
-    return B.batch(bind(b1.GemmV2, K=S.K, N=S.N, DOT=S.DOT), x, w, axes=(0, 0))
-
-
 STANDIN = Vocabulary("dsa-standin", "profile", "dsa-standin",
                      kinds={**PROFILE_B1_EAGER_V3.kinds, "dsa_rmsnorm": PROFILE_B1_EAGER_V3.kinds["rmsnorm"],
-                            "batched_gemm": lambda B, K, N, DOT: bind(BatchedGemmStandIn, B=B, K=K, N=N, DOT=DOT)},
+                            "batched_gemm": lambda B, K, N, DOT: bind(cublas_bf16.BatchedGemm, B=B, K=K, N=N, DOT=DOT)},
                      notes=dict(PROFILE_B1_EAGER_V3.notes))
 
 
@@ -234,7 +226,8 @@ def _reference(model: _Model, inputs) -> list[int]:
     `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped])."""
     qn, kn = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(b1.RMSNormTriton, N=L, EPS=EPS)
     rope1 = ropeh = bind(RoPEHeadGptJV2, D=R)
-    up, down = bind(BatchedGemmStandIn, B=NH, K=P, N=L, DOT=DOT), bind(BatchedGemmStandIn, B=NH, K=L, N=V, DOT=DOT)
+    up = bind(cublas_bf16.BatchedGemm, B=NH, K=P, N=L, DOT=DOT)
+    down = bind(cublas_bf16.BatchedGemm, B=NH, K=L, N=V, DOT=DOT)
     hist = {n: [] for n in NAMES}
     out, k = [], 0
     for p0, T in model.steps:
@@ -383,8 +376,8 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     norm_q = bind(b1.RMSNormTriton, N=NQ, EPS=EPS).id
     norm_kv = bind(b1.RMSNormTriton, N=L, EPS=EPS).id
     kr = qr = bind(RoPEHeadGptJV2, D=R).id
-    up = bind(BatchedGemmStandIn, B=NH, K=P, N=L, DOT=DOT).id
-    down = bind(BatchedGemmStandIn, B=NH, K=L, N=V, DOT=DOT).id
+    up = bind(cublas_bf16.BatchedGemm, B=NH, K=P, N=L, DOT=DOT).id
+    down = bind(cublas_bf16.BatchedGemm, B=NH, K=L, N=V, DOT=DOT).id
     krow, iq = bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=EPS).id, bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE).id
     sel = bind(dsa.DsaTopKShortRow, TOPK=TOPK).id
 

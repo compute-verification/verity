@@ -16,6 +16,7 @@ from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm
 from verity_vllm.program.registry import boolean_rope as _rope
+from verity_vllm.program.registry import cublas_bf16 as _cublas_bf16, ll_bf16 as _ll_bf16
 from verity_vllm.program.registry import sparse_mla as _sparse_mla, sparse_mla_split as _sparse_mla_split
 from verity_vllm.program.registry import tp_allreduce as _tp_allreduce
 from verity_vllm.program.registry import fa2_check_inf as _f2
@@ -433,6 +434,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
            "dsa_q_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
+           "cublas_splitk_gemm": lambda K, N, SPLIT_K, DOT:
+               ir_bind(_cublas_bf16.CublasSplitKGemm, K=K, N=N, SPLIT_K=SPLIT_K, DOT=DOT),
+           "batched_gemm": lambda B, K, N, DOT: ir_bind(_cublas_bf16.BatchedGemm, B=B, K=K, N=N, DOT=DOT),
+           "ll_bf16_dotprod": lambda N, K, BS, VEC, FMA:
+               ir_bind(_ll_bf16.LlBf16DotprodGemm, N=N, K=K, BS=BS, VEC=VEC, FMA=FMA),
+           "ll_bf16_splitk": lambda N, K, SPLIT_K, TILE_K, WARPS, DOT:
+               ir_bind(_ll_bf16.LlBf16SplitKGemm, N=N, K=K, SPLIT_K=SPLIT_K, TILE_K=TILE_K, WARPS=WARPS, DOT=DOT),
            "sparse_mla": lambda T, NH, DR, DV, BN, DOT, INV, SM_SCALE:
                ir_bind(_sparse_mla.SparseMla, T=T, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
            "sparse_mla_split": lambda T, NS, NH, DR, DV, BN, DOT, INV, SM_SCALE:
@@ -509,6 +517,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "dsa_kv_rope": "RoPEHeadGptJ_v2{D}: _fused_norm_rope_kernel's interleaved k_pe head",
            "dsa_q_rope": "RoPEHeadGptJ_v2{D}: _fused_q_kernel's interleaved q_pe head",
+           "cublas_splitk_gemm": "CublasSplitKGemm_v1{K,N,SPLIT_K,DOT}: vLLM-default cuBLAS BF16 linear at a captured split count",
+           "batched_gemm": "BatchedGemm_v1{B,K,N,DOT}: vLLM-default cuBLAS batched BF16 MLA absorption",
+           "ll_bf16_dotprod": "LlBf16DotprodGemm_v1{N,K,BS,VEC,FMA}: vLLM-default cuteDSL MoE gate for M <= 4",
+           "ll_bf16_splitk": "LlBf16SplitKGemm_v1{N,K,SPLIT_K,TILE_K,WARPS,DOT}: vLLM-default cuteDSL MoE gate for 5 <= M <= 16",
            "sparse_mla": "SparseMla_v1{T,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3's sparse MLA (_vllm_fa3_C.fwd, FLASH_ATTN_MLA_SPARSE) of one "
                          "query token's NH heads over its T selected [kv_c | k_pe] rows -- the k16 wgmma chain over [q_rope | q_nope], "
                          "AttnBlock_v4's online softmax over BN-key blocks last to first, AttentionHead_v4's epilogue",

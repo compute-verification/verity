@@ -27,6 +27,7 @@ from __future__ import annotations
 from verity_vllm.program.frontend.rules.profile import FusedAddRmsNormRule as _FusedAddRmsNormRule
 from verity_vllm.program.frontend.rules.triton_iface import triton_launch
 from verity_vllm.program.frontend.rules.vllm_bindings.attention import KvCacheUpdateRule, UnifiedAttentionWithOutputRule
+from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import CublasLinearRule, LlBf16GemmRule
 from verity_vllm.program.frontend.rules.vllm_bindings.cache_pad import CachePadRule
 from verity_vllm.program.frontend.rules.vllm_bindings.collectives import (AllGather2Rule, AllGatherRule, AllReduce2Rule, AllReduceRule,
                                                                           EmbeddingShardRule, FusedAllReduceRmsNormRule)
@@ -46,7 +47,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import Tri
 from verity_vllm.program.frontend.rules.vllm_bindings.views import AllocViewRule, IntIdWidenRule
 
 
-VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), KvCacheUpdateRule(), UnifiedAttentionWithOutputRule(), AllocViewRule(), IntIdWidenRule(),
+VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), CublasLinearRule(), LlBf16GemmRule(),
+                      KvCacheUpdateRule(), UnifiedAttentionWithOutputRule(), AllocViewRule(), IntIdWidenRule(),
                       CachePadRule(), CudaRmsNormRule(), CudaFusedAddRmsNormRule(), FusedAddRmsNormBIRule(), ScalarTensorMulRule(),
                       GeluTanhAndMulRule(), Bf16ScalarChainRule(),
                       # [R15 dense] the unfused norm chain (forward_native norms as ATen on an f32 copy)

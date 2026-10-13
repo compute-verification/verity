@@ -161,6 +161,14 @@ def test_the_default_cublas_split_counts_are_pinned_by_shape_and_m() -> None:
     assert BC.default_cublas_split_k("f32out", 256, 7168, 2048) is None       # c4 M256 is the non-split kernel
 
 
+def test_the_default_cublas_route_does_not_confuse_unrecorded_with_non_split() -> None:
+    for M in X.LINEAR_M:
+        assert BC.default_cublas_route("linear", M, 6144, 160) == ("splitk", {"SPLIT_K": 4})
+        assert BC.default_cublas_route("linear", M, 6144, 19360) == ("non_split", {})
+    assert BC.default_cublas_route("linear", 5, 6144, 19360) is None
+    assert BC.default_cublas_route("linear", 1, 6144, 161) is None
+
+
 def test_the_default_operand_dump_keeps_reduction_routes_and_deduplicates_weights(tmp_path) -> None:
     profile = {"launches": [{"name": "main_splitK", "grid": [4, 8, 1]}],
                "reduction_kernels": [{"name": "splitKreduce_kernel", "grid": [8, 2, 1]}]}

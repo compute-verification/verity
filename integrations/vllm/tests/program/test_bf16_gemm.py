@@ -25,6 +25,7 @@ from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity_vllm.program.boolean import boolean_version
+from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.registry import bf16_gemm_check as C
 from verity_vllm.program.registry import cublas_bf16 as CB
 from verity_vllm.program.registry import ll_bf16 as LL
@@ -375,6 +376,18 @@ def test_the_definitions_refuse_what_they_do_not_model() -> None:
         _ = bind(LL.LlBf16SplitKDot, K=64, SPLIT_K=3, TILE_K=32, WARPS=2, DOT=HOP).body
     with pytest.raises(ValueError, match="SPLIT_K_in_2_to_K_over_16"):
         _ = bind(CB.CublasSplitKGemmF32Out, K=64, N=2, SPLIT_K=5, DOT=HOP).body
+
+
+def test_profile_vocabulary_binds_the_served_default_glm53_families() -> None:
+    v = PROFILE_B1_EAGER_V3
+    assert v.kind("cublas_splitk_gemm", K=6144, N=160, SPLIT_K=4, DOT=HOP).id == \
+        bind(CB.CublasSplitKGemm, K=6144, N=160, SPLIT_K=4, DOT=HOP).id
+    assert v.kind("batched_gemm", B=8, K=192, N=512, DOT=HOP).id == bind(CB.BatchedGemm, B=8, K=192, N=512, DOT=HOP).id
+    assert v.kind("batched_gemm", B=8, K=512, N=256, DOT=HOP).id == bind(CB.BatchedGemm, B=8, K=512, N=256, DOT=HOP).id
+    assert v.kind("ll_bf16_dotprod", N=256, K=6144, BS=128, VEC=8, FMA=1).id == \
+        bind(LL.LlBf16DotprodGemm, N=256, K=6144, BS=128, VEC=8, FMA=1).id
+    assert v.kind("ll_bf16_splitk", N=256, K=6144, SPLIT_K=6, TILE_K=256, WARPS=4, DOT=HOP).id == \
+        bind(LL.LlBf16SplitKGemm, N=256, K=6144, SPLIT_K=6, TILE_K=256, WARPS=4, DOT=HOP).id
 
 
 @pytest.mark.parametrize("target", STEPS + PINNED, ids=[t.id for t in STEPS + PINNED])
