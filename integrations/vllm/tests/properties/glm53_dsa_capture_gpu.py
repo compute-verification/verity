@@ -93,7 +93,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-dsa-capture/v1"
+SCHEMA = "verity-vllm/glm53-dsa-capture/v2"
 RECORD = "glm53_dsa_capture.json"
 #: GLM-5.3 (tests/check/fixtures/glm_moe_dsa/config.json) at TP8: the indexer's 32 heads of 128 with a 64-wide interleaved RoPE,
 #: top 2048, its cache row 128 e4m3 bytes and a 4-byte scale (kernels.py:63-87); MLA's 8 local heads, rope 64, latent 512, nope 192
