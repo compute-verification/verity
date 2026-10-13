@@ -2857,7 +2857,7 @@ __device__ __forceinline__ void fused_next(int N, int Kd, int groups, int decode
 // (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps; with SKW > 0 as well, SKW sketch warps after
 // the producer do all of it (sketch_warp).
 // WARPS, the warps the launch bounds allow, is fused_warps' or fewer (wt_fused_sketch).
-// The grid is any number of CTAs (Cut): launch_gemm's is as many as the SMs hold.
+// The grid is any number of CTAs (Cut): wt_fused_sketch's is the format's, or as many as the SMs hold where that pays.
 template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS = fused_warps<NB8, SKK, SKW>()>
 __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
     const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x, float *__restrict__ y, int M, int N, int Kd,
@@ -2899,7 +2899,7 @@ using namespace wt;
 // The groups (16-row blocks a CTA's chunk advances by) and the launch: groups <= 0 takes as many as fill the device at
 // the occupancy the shared memory and registers allow. *launched gets groups nchunks, the CTAs of the format's cut
 // (the plain kernel's grid); with w == nullptr nothing is launched (the fused kernel's caller needs the groups for its
-// tweak steps first). launch(groups, fill) gets as well the CTAs the device holds at once, the fused kernel's grid.
+// tweak steps first). launch(groups, fill) gets as well the CTAs the device holds at once, the fused kernel's Cut grid.
 template <typename Kern, typename Launch>
 static int launch_gemm(Kern kern, int smem, int threads, int groups, int nchunks, int nbs, bool dry, int *launched,
                        Launch launch) {
@@ -3115,8 +3115,13 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
   const int signs16 = sketch_k == 16 ? skt * ((SB + 511) / 512) * 32 : 0;
   auto go = [&](auto kern, int smem, int sgs) -> int {
     return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr, int fill) {
-      kern<<<fill, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr, decoders,
-                                               stages, tsteps, tags, tag_base, signs, sk_out, skt, sgs);
+      // Cut's grid where it pays: its CTAs' tasks are at most ceil(T / P) and a tile, and a CTA's change of segment
+      // drains and refills its stages, about `stages` tasks; the format's first CTA has ceil(nbs / groups) tasks.
+      const long long T = (long long)nbs * nchunks;
+      const bool cut = (T + fill - 1) / fill + (sketch_k ? skt : 1) + stages < (nbs + gr - 1) / gr;
+      kern<<<cut ? fill : gr * nchunks, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr,
+                                                            decoders, stages, tsteps, tags, tag_base, signs, sk_out,
+                                                            skt, sgs);
     });
   };
   // A launch of at most 12 warps at k >= 2 takes the 12-warp kernel (fresh_decode), where fused_warps allows more.
