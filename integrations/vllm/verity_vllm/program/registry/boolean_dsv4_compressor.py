@@ -11,14 +11,15 @@
 
 A step is `boolean_dsv4_indexer.GateOps`' gates for the word primitive `dsv4_compressor.WORD` names, with `fp.f32_div` at the
 GPU's NaN word for `div.rn.f32` (`F32Div_v2`, as `F32Div_v4` lowers it) and the two UE8M0 steps above; a constant word is
-constant bits, so it folds into the gates.  No table or lookup gate.
+constant bits, so it folds into the gates.  An FMA whose product is a constant zero (the ratio-4 column's first row, against
+its zero l and acc) is `fma_zero_product`.  No table or lookup gate.
 """
 from __future__ import annotations
 
 from types import SimpleNamespace
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ZERO, add, const_bits, sub
+from verity.ml.circuits.boolean.forms import OR, ZERO, add, const_bits, mux, sub
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import elementwise as EW
@@ -48,8 +49,33 @@ Ue8m0InvScaleV2 = definition("Ue8m0InvScale", 2, ue8m0_inv, (("e", E8),), F32, w
                              doc="The inverse scale of a UE8M0 byte on bits: Ue8m0InvScale_v1")
 
 
+def zero_word(w) -> bool:
+    """Whether ``w``'s exponent and mantissa bits are the constant 0 (a zero of any sign)."""
+    return all(f.is_const() and not f.c for f in w[:31])
+
+
+def fma_zero_product(C_, a, b, c):
+    """`fp.f32_fma` at the GPU's NaN word when ``a`` or ``b`` is a constant zero: its product's zero flag is the constant 1, so
+    its last select takes the addend (or the zero of the sum's sign) and never the rounded sum. The same forms, written without
+    the rounding: through it, each result form's making would pass bits that cancel out of it, and a trace writes such a form
+    as an XOR tree of its own, unshared."""
+    A, B, Cc = FP.unpack(C_, a), FP.unpack(C_, b), FP.unpack(C_, c)
+    sp = A.s ^ B.s
+    r = mux(C_, Cc.zero, FP.f32_const(0)[:31] + [C_.AND(sp, Cc.s)], list(c))
+    prod_inf = OR(C_, A.inf, B.inf)
+    nan = OR(C_, OR(C_, OR(C_, A.nan, B.nan), Cc.nan),
+             OR(C_, OR(C_, C_.AND(A.inf, B.zero), C_.AND(A.zero, B.inf)), C_.AND(C_.AND(prod_inf, Cc.inf), sp ^ Cc.s)))
+    return FP.specials(C_, r, nan, OR(C_, prod_inf, Cc.inf), mux(C_, prod_inf, [sp], [Cc.s])[0], BI.PTX)
+
+
 class GateOps(BI.GateOps):
-    """`boolean_dsv4_indexer.GateOps` with `dsv4_compressor.WORD`'s ``div``, ``ue8m0`` and ``inv``."""
+    """`boolean_dsv4_indexer.GateOps` with `dsv4_compressor.WORD`'s ``div``, ``ue8m0`` and ``inv``, and an FMA of a constant
+    zero product as `fma_zero_product`."""
+
+    def fma(self, a, b, c):
+        if zero_word(a) or zero_word(b):
+            return fma_zero_product(self.C, a, b, c)
+        return super().fma(a, b, c)
 
     def div(self, a, b):
         return FP.f32_div(self.C, a, b, nan_word=BI.PTX)

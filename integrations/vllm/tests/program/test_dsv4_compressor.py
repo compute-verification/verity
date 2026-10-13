@@ -18,15 +18,18 @@ import math
 import numpy as np
 import pytest
 
+from verity.ml.circuits.boolean.forms import Circuit, const_bits
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.ml.circuits.silicon import fp as FP
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.kernels import dsv4_compressor_twin as T
 from verity_vllm.program.kernels import flashmla_twin as FT
 from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
 from verity_vllm.program.registry import boolean_dsv4_compressor as BC
+from verity_vllm.program.registry import boolean_dsv4_indexer as BI
 from verity_vllm.program.registry import dsv4_compressor as C
 from verity_vllm.program.registry import dsv4_indexer as I
 from verity_vllm.program.registry import flashmla as F
@@ -257,10 +260,24 @@ def test_the_boolean_ue8m0_steps_are_their_words():
     _is_its_word(bind(BC.Ue8m0InvScaleV2), [np.arange(256, dtype=np.uint64)], 256)
 
 
+@pytest.mark.parametrize("zero", [0, SIGN])
+@pytest.mark.parametrize("side", [0, 1])
+def test_an_fma_of_a_constant_zero_product_is_fp_f32_fma(zero, side):
+    """The same forms as `fp.f32_fma`, every AND one it already made."""
+    C_ = Circuit(cse=True)
+    x, c = C_.input("x", 32), C_.input("c", 32)
+    a, b = (const_bits(zero, 32), x) if side == 0 else (x, const_bits(zero, 32))
+    want = [f.key() for f in FP.f32_fma(C_, a, b, c, nan_word=BI.PTX)]
+    n = len(C_.kind)
+    assert BC.zero_word(a) or BC.zero_word(b)
+    assert [f.key() for f in BC.GateOps(C_).fma(a, b, c)] == want and len(C_.kind) == n
+
+
 @pytest.mark.parametrize("target,family", [
     (bind(BC.Dsv4MlaQuantGroupV2, QB=8), "Dsv4MlaQuantGroup_v1"),
     (bind(BC.Dsv4MlaRopeV2, ROPE=4), "Dsv4MlaRope_v1"),
-], ids=["quant", "rope"])
+    (bind(BC.Dsv4MlaC4ColumnV2, ROWS=2), "Dsv4MlaC4Column_v1"),
+], ids=["quant", "rope", "c4-column"])
 def test_the_small_boolean_definitions_are_their_words(target, family):
     st = dict(target.bindings)
     _is_its_word(target, T.SAMPLES[family](np.random.default_rng(8), 64, None, **st), 64)
