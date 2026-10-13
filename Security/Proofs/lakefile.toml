@@ -42,4 +42,4 @@ path = "../Properties"
 [[lean_lib]]
 name = "Proofs"
 roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier", "Proofs.Flock",
-  "Proofs.Accounting", "Proofs.Accounting.Bandwidth"]
+  "Proofs.Accounting"]
