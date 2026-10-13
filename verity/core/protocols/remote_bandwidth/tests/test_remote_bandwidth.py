@@ -955,6 +955,16 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
         assert one.sample < 0.01 < 0.1 < one.gamma
 
 
+def test_the_grids_tighter_count_bounds_the_named_words() -> None:
+    """The grid's sizing of λ (`PROTOCOL.md` §10) bounds AuditRO's C(q, k) by q^k/k!: its bits are at least log2 C(q, k)
+    and at most k·log2 q, the ledger's, and at 94 GB of 4 KiB receipts and q = 2^64 they are 40.99 a receipt."""
+    for q_log2, k in ((10, 1), (10, 7), (20, 1000), (64, 3), (64, 10 ** 4)):
+        named = timing._named_bits(k, q_log2, True)
+        assert math.log2(math.comb(2 ** q_log2, k)) <= named + 1e-6 and named <= timing._named_bits(k, q_log2, False)
+    k = 94 * 10 ** 9 // codec.BLOCK_BYTES
+    assert 40.98 < timing._named_bits(k, audit.QUERIES_LOG2, True) / k < 41.0
+
+
 def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
     and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor

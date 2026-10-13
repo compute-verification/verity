@@ -770,6 +770,44 @@ Which the 0.15% bounds is open:
   50 µs and 63 ms passes, 0.083–0.086% with the session's ends), \(\mu_{\text{rebuild}}\) (0.067%) and the pooled
   \(\mu_{\text{sample}}\).
 
+**What λ and \(\mu_{\text{chip}}\) would take** (the grid's last sections, at 94 GB and 63 ms passes). λ is
+AuditRO's \(C(q, k)\) for a pass's \(k\) receipts, charged as \(\log_2 q\) = 64 bits a receipt. Under 0.05% it may be
+16.4 bits a 4 KiB receipt. Two ways get there:
+
+- **Wider receipts.** A receipt of \(m\) blocks gives 0.098%, 0.065% and 0.049% at 8, 12 and 16 KiB. Bounding
+  \(C(q, k)\) by \(q^k/k!\), which takes no assumption, charges \(\log_2(e q/k)\): 41.0 bits at 4 KiB (0.125%),
+  and 0.064%, 0.043% and 0.033% at 8, 12 and 16 KiB. On the GPU a receipt's sketch is the same work a byte, and
+  its hash and share of the tree are \(1/m\). #1916's τ of 1.26 a pass scales to about 1.09 at 16 KiB (from its
+  measured parts; the whole isn't measured). The openings pay instead. Each carries \(m\) blocks: 20.9 KB at
+  16 KiB with a payload leaf a receipt, or 27.0 KB with PoUS's 4 KiB leaf. That is 2.4–3.0 times today's, or
+  0.70–0.90 GB a window and 93–120 Mb/s per node. Each opening's proof unit also decodes \(m\) blocks (check 3).
+  sketch-sha512's rate a compression goes from \(2^{-95.12}\) to \(2^{-93.88}\) at 16 KiB's 512 sectors.
+  `RateAuditSketch` would need restating for a receipt of \(m\) blocks, and the registration would name \(m\).
+- **Fewer queries.** At 4 KiB with \(q^k/k!\), 0.05% needs \(q \le 2^{39.4}\) queries to a pass's oracle:
+  104 s of one GPU's SHA-512. No prover hardware is trusted, so the protocol can't state such a bound.
+
+\(\mu_{\text{chip}}\) is \(S_{\text{chip}}\) over a pass's reads, and a pass reads each block at most once. So it
+falls only with more store read at \(R\): 526 GB a GPU for 0.05%, 5.5 times the RTX PRO 6000's 96 GB. At its whole
+HBM it is 0.274%. Host DRAM doesn't substitute. Over PCIe at 64 GB/s, a pass longer than the HBM's 63 ms read
+leaves the HBM idle: at 200 ms, \(\mu_{\text{chip}}\) is 0.085% and the HBM is idle 66% of the capacity.
+
+What would lower \(\mu_{\text{chip}}\) instead is a flush. Each pass's root would key a computation that needs the
+chip's whole storage, and its output would go into the next seed, so the chip's state carries nothing of the store
+into the next pass. That needs three things:
+
+- **An assumption.** A bandwidth-hard function on \(S_{\text{chip}}\): evaluating it while holding \(X\) bytes of
+  the store on chip costs at least \(X\) bytes more of device-memory traffic, with \(R\) bounding reads and writes
+  together. Spilling the held bytes instead costs \(2X\).
+- **The verifier's work.** It recomputes the flush for every pass whose seed it uses, which at 33,273 openings is
+  nearly every pass.
+- **The GPU's time.** At least one write and one read of \(S_{\text{chip}}\): 26–105 µs at 5–20 TB/s on chip
+  (unmeasured). That adds 0.04–0.17% to the steady state.
+
+At the stated \(T\) = 60 s with 94 GB and RTT 1 ms, the horizon's whole γ is 0.63%. \(q^k/k!\) makes it 0.56%,
+16 KiB receipts 0.47–0.49%, and a 26 µs flush with both 0.23%. The worst window's \(\gamma_t\) goes from 0.81% to 0.74%, 0.65–0.67%
+and 0.41%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's steady state and
+\(\mu_{\text{rebuild}}\) alone exceed 0.15%.
+
 ## Appendix A. Live coins, and why the protocol doesn't use them
 
 The alternative: a live coin a pass and no chain. The challenger commits \(K\) pass coins and \(W\) openings coins.
