@@ -15,7 +15,8 @@ Staging the level takes about a minute and each verify sets up its 158 MB circui
 module is slow; it catches what no test before it can: the Lean verifier's coefficients, positions and salts at real
 coins, against the ones V*'s Python registers. The algebra's parts are staged too, for their verifier-registered `v`,
 their message rows and their row ports, and every session's `rec-acc` reads, against the verifier's record of V*'s shared
-rows (`--rec-rows`); and check 5 on `rec-coins`' record of the inner session in place of its statement (`--rec-inner-coins`).
+rows (`--rec-rows`), and their rows of the chain; and check 5 on `rec-coins`' record of the inner session in place of its
+statement (`--rec-inner-coins`).
 A level staged with bit rows, which hidden outputs admit and V*'s statement does not, is refused under the inner shape."""
 from __future__ import annotations
 
@@ -33,6 +34,7 @@ from pathlib import Path
 import keyed
 import pytest
 from verity_flock import rec_bindings as RB
+from verity_flock import rec_outer as O
 from verity_flock import rec_vstage as S
 
 HERE = Path(__file__).resolve().parent
@@ -263,6 +265,22 @@ def salted(built, once) -> Path:
     return once("rec-coins-salted", make, _KEY)
 
 
+@pytest.fixture(scope="module")
+def level_major(built, once) -> Path:
+    """Level 3 staged on running sums whose openings run level-major (`rec_outer.chain_order` by level, then rep and
+    query): its `rec-acc` registration, reads file and `pub.bin`'s paths agree with that chain, whose level 3 starts at
+    row `2 · 395`."""
+    def order(queries):
+        return sorted(((q.rep, q.level, q.j) for q in queries), key=lambda k: (k[1], k[0], k[2]))
+
+    def make(d):
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(O, "chain_order", order)
+            _stage(d, levels=[LEVEL], algebra=False, evaluate=False)
+
+    return once("rec-coins-level-major", make, _KEY) / f"L{LEVEL}"
+
+
 def _rec_rows(dst: Path, parts: list[Path]) -> Path:
     """The verifier's record of V*'s shared rows (`--rec-rows`) from staged parts: each row port's entry (every port but `v`
     and `out`), which every part that has the port must agree on."""
@@ -451,6 +469,22 @@ def test_a_session_staged_under_another_salt_reads_rec_acc_as_another_registrati
     v = _verify(forged, c / "pub.bin", c / "registered.json", shape, "inner-honest", rows=rows)
     assert v["why"] == (f"setup: {UNIT}: its rec-acc ports acc and acc_out are two registrations: root {honest}, against "
                         f"{other}"), v["why"]
+
+
+def test_a_level_reading_rec_acc_off_its_openings_rows_of_the_chain_is_refused(level_major, forged, shape, tmp_path):
+    """`OpenKeysS`' positions (`RecVStar.checkAccReads`): the recorded level 3's `acc` reads rows 395 to 447 for rep 0 and
+    843 to 895 for rep 1 (the chain rep-major, then by level and query, at 448 openings a rep) and `acc_out` the next. On a
+    level-major chain, consistently registered, `acc` reads row `790 + u` at unit `u`, which passes `checkAcc` at its own
+    registration and is refused at unit 0."""
+    reads = lambda d: json.loads((d / "registered.json").read_text())["ports"]
+    honest = [395 + j for j in range(53)] + [843 + j for j in range(53)]
+    assert reads(SET / "L3")["acc"]["reads"] == honest
+    assert reads(SET / "L3")["acc_out"]["reads"] == [p + 1 for p in honest]
+    assert reads(level_major)["acc"]["reads"] == [790 + u for u in range(106)]
+    v = _verify(forged, level_major / "pub.bin", level_major / "registered.json", shape, "inner-honest",
+                rows=_acc_rows(tmp_path / "own.json", level_major))
+    assert v["why"] == (f"setup: {UNIT}: its port acc reads rec-acc at 790 in unit 0, not at 395 (the chain runs rep-major, "
+                        "then by level and query)"), v["why"]
 
 
 @pytest.mark.parametrize("other", ["verity/flock-circuit+seed-injection", "verity/flock-circuit@cec3e347"])
