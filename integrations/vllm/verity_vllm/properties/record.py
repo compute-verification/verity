@@ -55,6 +55,14 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "written indexer-cache entry Dsv4IndexerCompress_v1 of the state rows the kernel reads, every short-context fill row "
              "Dsv4ShortContextTopK_v1, every inverse-RoPE FP8 head Dsv4InvRopeQuantHead_v1, every compared prefill and paged logit "
              "DsaMqaLogit_v3 at 64 heads and every top-k row of at most 1024 keys DsaTopKShortRow_v1, bit for bit."),
+    Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v1",
+             "On the capture's Hopper GPU and driver (the capture map's target.driver), vLLM selects MARLIN (MarlinExperts) for "
+             "the 384-expert TP8 row's MXFP4 experts at bf16 activations, each launch's kernel (its thread config and blocks per "
+             "SM, profiled) is the one served at its decode batch, one at every batch 1 to 16, each served kernel's SASS is the "
+             "driver's JIT of its compute_80 PTX that the record names by sha256, at the profiled registers and with no f32 "
+             "multiply, and every output word of every launch, and of every accepted forced config on an input whose summation "
+             "orders show, equals MarlinMoeExpertGemm_v1 (w13) or MarlinMoeExpertGemmW_v1 (w2) at the launch's statics, bit for "
+             "bit."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
              "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "

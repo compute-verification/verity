@@ -26,8 +26,8 @@ and fixed XORs of them).
 A row of an element-wise operation computes no value twice (`Q_word`'s no-recompute rule) when an operand every member shares
 is decoded once: `shared_operand` cuts a builder's circuit into the gates that read only that operand (one Call per row) and the
 rest (one per member). A constant operand is not an operand at all: `specialized` traces the builder for each binding of its
-statics, so the constant is folded into the gates. `on_bits` is a composite of such Calls whose word view is a word composite
-at the same statics.
+statics, so the constant is folded into the gates; `shared_specialized` cuts such a builder per binding, at an operand or at
+each element of one. `on_bits` is a composite of such Calls whose word view is a word composite at the same statics.
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ from verity.ml.circuits.boolean.forms import NOT, ZERO, add, and_reduce
 from verity.ml.circuits.boolean.trace import Traced, definition, emit, trace, word_of
 
 __all__ = ["Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32", "F32Add", "F32AddV4", "F32Div", "F32DivV4", "F32Fma", "F32FmaV4",
-           "F32Mul", "F32MulV4", "I32Add", "bf16_band", "on_bits", "shared_operand", "specialized"]
+           "F32Mul", "F32MulV4", "I32Add", "bf16_band", "on_bits", "shared_operand", "shared_specialized", "specialized"]
 
 F32 = I32 = Array(32, BL.BIT)
 BF16 = Array(16, BL.BIT)
@@ -117,6 +117,40 @@ def _sub(T: Traced, keep: list[int], inputs: list[int], outputs: list[int]) -> T
     return Traced(len(inputs), gates, [new[o] for o in outputs], {k: sum(g == k for g, _ in gates) for k in ("and", "xor", "not")})
 
 
+def _split(T: Traced, types: Sequence[Type], shared: int, by_element: bool = False) -> list[Traced]:
+    """``T`` over parameters of ``types`` cut in two by what its gates read: the gates that read only parameter ``shared``, from
+    its bits to their frontier (those the other gates read, or outputs), and the rest, from every parameter's bits and then the
+    frontier to the outputs.  With ``by_element``, ``shared`` an Array each of whose gates reads one element, every element's
+    gates one circuit (else `ValueError`): the first part is that circuit, from one element's bits to its frontier, and the
+    rest reads the frontier element by element."""
+    starts = [2 + sum(t.leaves for t in types[:p]) for p in range(len(types))]
+    wires = [list(range(s, s + t.leaves)) for s, t in zip(starts, types)]
+    sup = [0, 0] + [1 << p for p, t in enumerate(types) for _ in range(t.leaves)]
+    for _, ops in T.gates:
+        sup.append(functools.reduce(operator.or_, (sup[o] for o in ops)))
+    keep = [i for i in range(len(T.gates)) if sup[T.first_gate + i] == 1 << shared]
+    mine = {T.first_gate + i for i in keep}
+    frontier = sorted({o for i, (_, ops) in enumerate(T.gates) if T.first_gate + i not in mine for o in ops if o in mine}
+                      | (mine & set(T.outputs)))
+    rest = [i for i in range(len(T.gates)) if T.first_gate + i not in mine]
+    own = _sub(T, keep, wires[shared], frontier)
+    if by_element:
+        t = types[shared]
+        m = t.elem.leaves
+        el = {w: (w - starts[shared]) // m for w in wires[shared]}
+        for i in keep:
+            reads = {el[o] for o in T.gates[i][1] if o in el}
+            if len(reads) != 1:
+                raise ValueError(f"gate {i} reads elements {sorted(reads)} of parameter {shared}")
+            el[T.first_gate + i] = reads.pop()
+        by = [[w for w in frontier if el[w] == j] for j in range(t.n)]
+        parts = [_sub(T, [i for i in keep if el[T.first_gate + i] == j], wires[shared][j * m:(j + 1) * m], by[j]) for j in range(t.n)]
+        if any(p.gates != parts[0].gates or p.outputs != parts[0].outputs for p in parts):
+            raise ValueError(f"the elements of parameter {shared} are not one circuit")
+        own, frontier = parts[0], [w for ws in by for w in ws]
+    return [own, _sub(T, rest, [w for ws in wires for w in ws] + frontier, T.outputs)]
+
+
 def shared_operand(names: tuple[str, str], version: int, build: Callable, params: Sequence[tuple[str, Type]], ret: Type,
                    shared: int, docs: tuple[str, str], register: bool = True) -> tuple[CompositeDefinition, CompositeDefinition]:
     """``build``'s circuit (`trace.trace`) for a row whose members share parameter ``shared``, cut in two by what its gates read,
@@ -128,18 +162,7 @@ def shared_operand(names: tuple[str, str], version: int, build: Callable, params
 
     def split() -> list[Traced]:
         if not parts:
-            T = trace(build, types, ret)
-            starts = [2 + sum(t.leaves for t in types[:p]) for p in range(len(types))]
-            wires = [list(range(s, s + t.leaves)) for s, t in zip(starts, types)]
-            sup = [0, 0] + [1 << p for p, t in enumerate(types) for _ in range(t.leaves)]
-            for _, ops in T.gates:
-                sup.append(functools.reduce(operator.or_, (sup[o] for o in ops)))
-            keep = [i for i in range(len(T.gates)) if sup[T.first_gate + i] == 1 << shared]
-            mine = {T.first_gate + i for i in keep}
-            frontier = sorted({o for i, (_, ops) in enumerate(T.gates) if T.first_gate + i not in mine for o in ops if o in mine}
-                              | (mine & set(T.outputs)))
-            rest = [i for i in range(len(T.gates)) if T.first_gate + i not in mine]
-            parts.extend([_sub(T, keep, wires[shared], frontier), _sub(T, rest, [w for ws in wires for w in ws] + frontier, T.outputs)])
+            parts.extend(_split(trace(build, types, ret), types, shared))
         return parts
 
     name, t = params[shared]
@@ -180,6 +203,50 @@ def specialized(name: str, version: int, statics: Sequence[str], build: Callable
     d.traced = traced  # type: ignore[attr-defined]
     d.word = word  # type: ignore[attr-defined]
     return d
+
+
+def shared_specialized(names: tuple[str, str], version: int, statics: Sequence[str], build: Callable,
+                       signature: Callable[[Any], tuple[Sequence[tuple[str, Type]], Type]], shared: int, docs: tuple[str, str],
+                       register: bool = True, element: Type = BL.BIT,
+                       by_element: bool = False) -> tuple[CompositeDefinition, CompositeDefinition]:
+    """`shared_operand` of a `specialized` builder: for bindings S, ``build(S)`` traced over ``signature(S)`` and cut at parameter
+    ``shared``, ``names[0]{statics}`` the gates that read only it and ``names[1]{statics}`` the rest, from every parameter's
+    bits and then the frontier ``<shared>d``, an ``Array<n, element>`` (one n-bit word; n 1-bit words with ``element`` an
+    ``Array<1, Value<1>>``). With ``by_element`` the cut is at one element of ``shared``, an Array whose elements' gates are
+    each the same circuit (`_split`): ``names[0]`` reads one element, one Call per element, and ``<shared>d`` is the Array of
+    their frontiers. Traced once per binding, on first use; each has ``traced(S)``."""
+    made: dict[tuple, list[Traced]] = {}
+
+    def split(S) -> list[Traced]:
+        key = tuple(getattr(S, k) for k in statics)
+        if key not in made:
+            params, ret = signature(S)
+            types = [t for _, t in params]
+            made[key] = _split(trace(build(S), types, ret), types, shared, by_element)
+        return made[key]
+
+    def own_sig(S):
+        name, t = signature(S)[0][shared]
+        return ((name, t.elem if by_element else t),), Array(len(split(S)[0].outputs), element)
+
+    def rest_sig(S):
+        (params, ret), (_, dt) = signature(S), own_sig(S)
+        name, t = params[shared]
+        return tuple(params) + ((name + "d", Array(t.n, dt) if by_element else dt),), ret
+
+    def body(part: int, sig: Callable):
+        def emit_part(B, S, *c):
+            params, ret = sig(S)
+            return emit(split(S)[part], [t for _, t in params], ret, B, *c)
+        return emit_part
+
+    own = CompositeDefinition(names[0], version, tuple(statics), own_sig, body(0, own_sig), doc=docs[0],
+                              conformance="exact-model-tested", register=register)
+    rest = CompositeDefinition(names[1], version, tuple(statics), rest_sig, body(1, rest_sig), doc=docs[1],
+                               conformance="exact-model-tested", register=register)
+    own.traced = lambda S: split(S)[0]  # type: ignore[attr-defined]
+    rest.traced = lambda S: split(S)[1]  # type: ignore[attr-defined]
+    return own, rest
 
 
 def on_bits(name: str, version: int, statics: Sequence[str], signature: Callable, body: Callable, word: Any,

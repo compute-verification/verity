@@ -75,6 +75,19 @@ def indexer_rows(cache: Any, slots: Any, width: int) -> Any:
     return torch.cat((keys, scale), dim=1)
 
 
+def pitched_2d(t: Any) -> bool:
+    """Whether the native collector stages `t` as it lies (`native_collect.cpp` `pitched_2d`): contiguous, or equally spaced
+    contiguous rows.  The W_UK_T product `ql_nope`, a transposed bmm output [T, H, L] with strides (L, T * L, 1), is neither."""
+    dims = [(int(n), int(s)) for n, s in zip(t.shape, t.stride()) if int(n) != 1]
+    k, expect = len(dims) - 1, 1
+    while k >= 0 and dims[k][1] == expect:
+        expect *= dims[k][0]
+        k -= 1
+    if k < 0:
+        return True
+    return all(dims[j][1] == dims[j + 1][1] * dims[j + 1][0] for j in range(k)) and dims[k][1] >= expect
+
+
 class AttentionSource:
     short_name = "attention"
 
@@ -127,7 +140,7 @@ class AttentionSource:
 
     def begin_run(self) -> None:
         self.stats = {"layers": len(self.layers), "on_target": self.on_target, "calls": 0, "bound": 0, "unpaired": 0, "layout_refused": 0,
-                      "mha_unbound": 0, "by_tap": {}}
+                      "mha_unbound": 0, "by_tap": {}, "copied_by_tap": {}}
 
     def declaration_classes(self) -> list[dict]:
         return []
@@ -150,6 +163,9 @@ class AttentionSource:
         name = self.names.get(tid, {}).get(layer)
         if name is None or t is None:
             return
+        if not pitched_2d(t):
+            t = t.contiguous()
+            self.stats["copied_by_tap"][tid] = self.stats["copied_by_tap"].get(tid, 0) + 1
         self.c._acquire(name, t, job)
         self.stats["bound"] += 1
         self.stats["by_tap"][tid] = self.stats["by_tap"].get(tid, 0) + 1

@@ -29,6 +29,7 @@ def test_the_registry_names_each_harness_schema_once():
         dsv4_flashmla_capture_gpu,
         dsv4_indexer_capture_gpu,
         dsv4_indices_capture_gpu,
+        dsv4_marlin_capture_gpu,
         fa2_softcap_capture_gpu,
         fa2_target_capture_gpu,
         fp8_sm120_capture_gpu,
@@ -44,6 +45,7 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["glm53_block_fp8_capture"].schema == glm53_block_fp8_capture_gpu.SCHEMA
     assert REGISTRY["glm53_dsa_capture"].schema == glm53_dsa_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_indexer_capture"].schema == dsv4_indexer_capture_gpu.SCHEMA
+    assert REGISTRY["dsv4_marlin_capture"].schema == dsv4_marlin_capture_gpu.SCHEMA
     assert REGISTRY["blackwell_fp8_capture"].schema == fp8_sm120_capture_gpu.SCHEMA
     assert REGISTRY["sigmoid_router_capture"].schema == sigmoid_router_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_flashmla_capture"].schema == dsv4_flashmla_capture_gpu.SCHEMA
