@@ -251,8 +251,10 @@ pass's seed, so like the seed they exist only once the root before it does.
 (§3) and in the signs' key (`"k"`), so 64-row signs are not 16-row signs and 48 more, and a session's `Params.rows`
 must be the registration's. 16 is the default. 64 rows read the bound at \(r^* = 27\), \(2^{-215.85}\) a compression
 (below), so no session is long enough to need a cap. On the device reader they cost τ = 1.226 a pass in one kernel
-with an L2 hint, below 16 rows' 1.258 (ra-codec-tensor at 47b703a14, run r20261013-071237-9303, art:dd7bbe89). 64
-becomes the default once the fused GEMM's cost at 64 rows is measured; until then a registration names 64 to use it.
+with an L2 hint, below 16 rows' 1.258 (ra-codec-tensor at 47b703a14, run r20261013-071237-9303, art:dd7bbe89). In
+the fused GEMM they cost more: at 70B and B = 8, #1916's step cost d is 3.49 / 4.00 at k = 2 / 3 against 16 rows'
+2.40 / 3.18 (#1916 at cf4f823c4, run r20261013-122226-8001), since the two sketch warps bind there. So 16 stays the
+default, and a registration names 64 to use it.
 
 What each kind rests on:
 
@@ -759,8 +761,8 @@ whose share a block depends on the store's size (`timing.store_floor` solves for
 50 µs, no \(T\) meets 1% below 41.9 GB. The suite checks the closed form against `ledger` on a 20-minute window, 2%
 either side of it.
 
-**The horizon's 0.15%** is stated for its pooled \(\mu_{\text{sample}}\), with the whole γ reported beside it (the
-default put to Daniel on 13 Oct, in force from 9:00 AM PDT that day unless he rules otherwise). The pooled
+**The horizon's 0.15%** is stated for its pooled \(\mu_{\text{sample}}\), with the whole γ reported beside it (Daniel,
+13 Oct: the default put to him, which applied with no objection by its deadline). The pooled
 \(\mu_{\text{sample}}\) is 0.0083% at every stated and optional \(T\), and the whole γ 0.56% at best.
 \(\mu_{\text{chip}}\) (\(S_{\text{chip}}\) over a GPU's store, 0.28% at the whole HBM) exceeds 0.15% by itself, and
 λ (41.0 bits a 4 KiB block, 0.125%) does with \(\mu_{\text{rebuild}}\). Neither λ nor \(\mu_{\text{chip}}\) shrinks
