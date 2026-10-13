@@ -238,11 +238,12 @@
    "note": "deepseek_v32 common/kernels.py _rms_norm inside _fused_norm_rope_kernel: f32 tl.sum(x*x)/N, tl.rsqrt(+eps), * f32(w), to bf16. Its reduction tree and rsqrt must be pinned against the existing Triton RMSNorm family"
   },
   "rmsnorm-cuda": {
-   "status": "port",
+   "status": "exists",
    "definitions": [
-    "RMSNormFusedCuda_v1"
+    "RMSNormCudaVector8_v1",
+    "RMSNormFusedCudaVector8_v1"
    ],
-   "note": "vLLM's CUDA rms_norm / fused_add_rms_norm launched without batch invariance; RMSNormFusedCuda@1 models the width-8 fused kernel at the batch-invariant block size, so the non-batch-invariant block size must be pinned"
+   "note": "vLLM's default non-batch-invariant BF16 rms_norm / fused_add_rms_norm width-8 paths. The Program records BLOCK because M < 256 launches rms_norm at min(N/8,1024) and fused_add_rms_norm at min(N,1024), while M >= 256 launches both at 256; the H200 capture checks M 1,42,43,64,256,2048 at GLM-5.3 N=6144 and DeepSeek-V4-Pro N=7168"
   },
   "fused-rope-triton": {
    "status": "port",

@@ -48,6 +48,10 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v1, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
+    Property("glm53_cuda_rmsnorm_capture", "verity-vllm/glm53-cuda-rmsnorm-capture/v1",
+             "On the capture's H200, vLLM's default non-batch-invariant BF16 rms_norm and fused_add_rms_norm launch their pinned "
+             "width-8 paths and block sizes at GLM-5.3 and DeepSeek-V4-Pro widths, and every output and residual word equals the "
+             "registered CUDA vector-8 Definitions, including planted finite, subnormal, infinity and NaN rows."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
              "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "

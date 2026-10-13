@@ -26,6 +26,9 @@ Twins (twin_id -> registered body it reproduces; see `out/capture/reports/h4_twi
     rmsnorm.triton.v1            RMSNormTriton_v1     rms_triton_model.cpp `rms_triton_rows` (variant 0)
     rmsnorm.fused_cuda.v2.v1     RMSNormFusedCuda_v2  numpy: residual add, per-thread fma chain (float64 intermediate), cub
                                                       BlockReduce tree, IEEE div/add, MUFU.RSQ (C++), two f32 products, RNE
+    rmsnorm.cuda.vector8.v1      RMSNormCudaVector8_v1
+    rmsnorm.fused_cuda.vector8.v1 RMSNormFusedCudaVector8_v1
+                                                      numpy word twins of the served non-batch-invariant width-8 CUDA paths
     attention.fa2.bf16.v3        Attention_v3         fa2_model.cpp `fa2_rows` (online softmax, blocks last -> first); declines
                                                       non-finite operands and rows with a non-finite intermediate (flags)
 
@@ -52,8 +55,8 @@ from verity.ml.circuits.evaluation import self_check
 from verity.ml.circuits.defs import SpecializedDefinition, bind
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.kernels.kernel_registry import Declined, covers, instance, register
-from verity_vllm.program.registry import b1, prims as P
-from verity_vllm.program.kernels import prims_twins
+from verity_vllm.program.registry import b1, cuda_rmsnorm as CR, prims as P
+from verity_vllm.program.kernels import cuda_rmsnorm_rows as CNR, prims_twins
 
 SCHEMA = "verity-gen/twins/v1"
 U16, U32, U64, F32, F64 = np.uint16, np.uint32, np.uint64, np.float32, np.float64
@@ -631,6 +634,78 @@ def _fused_variance(rf: np.ndarray, N: int) -> np.float32:
     return np.float32(var[0])
 
 
+class RMSNormCudaVector8Twin(Twin):
+    twin_id = "rmsnorm.cuda.vector8.v1"
+    base_id = "RMSNormCudaVector8_v1"
+    covers = ("RMSNormCudaVector8_v1{N,EPS,BLOCK}: vLLM's aligned BF16 width-8 rms_norm_kernel path; each thread visits "
+              "vectors t, t+BLOCK, ... and accumulates one f32 FMA square chain, followed by CUB BlockReduce, rsqrtf, "
+              "two f32 products and RNE to BF16.")
+
+    @classmethod
+    def accepts(cls, st: dict) -> str | None:
+        try:
+            CR._check(type("S", (), st), fused=False)
+        except ValueError as e:
+            return str(e)
+        return None
+
+    def __call__(self, args: list[np.ndarray]) -> np.ndarray:
+        N = int(self.s.N)
+        x, w = _words16(args[0]), _words16(args[1])
+        if x.size != N or w.size != N:
+            raise ValueError(f"{self.spec.id}: operands {x.size}, {w.size} words")
+        return CNR.rms_norm_rows(x.reshape(1, N), w, float(self.s.EPS), int(self.s.BLOCK))["out"].reshape(-1).astype(U64)
+
+    @classmethod
+    def small_statics(cls, rng: np.random.Generator) -> dict:
+        N = int(rng.choice([8, 16, 24, 64, 72, 256]))
+        return {"N": N, "EPS": float(rng.choice([1e-5, 1e-6])),
+                "BLOCK": int(rng.integers(1, N // CR.VECTOR + 1))}
+
+    @classmethod
+    def random_args(cls, st: dict, rng: np.random.Generator, kind: str) -> list[np.ndarray]:
+        N = int(st["N"])
+        wk = "gauss" if kind in RANDOM_KINDS else kind
+        return [rand_bf16(rng, N, kind).astype(U64), rand_bf16(rng, N, wk).astype(U64)]
+
+
+class RMSNormFusedCudaVector8Twin(RMSNormCudaVector8Twin):
+    twin_id = "rmsnorm.fused_cuda.vector8.v1"
+    base_id = "RMSNormFusedCudaVector8_v1"
+    covers = ("RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}: vLLM's aligned BF16 width-8 fused_add_rms_norm_kernel path; "
+              "native BF16 residual add, four adjacent square-pair sums per vector, CUB BlockReduce, rsqrtf, output and residual.")
+
+    @classmethod
+    def accepts(cls, st: dict) -> str | None:
+        try:
+            CR._check(type("S", (), st), fused=True)
+        except ValueError as e:
+            return str(e)
+        return None
+
+    def __call__(self, args: list[np.ndarray]) -> np.ndarray:
+        N = int(self.s.N)
+        x, res, w = (_words16(a) for a in args)
+        if x.size != N or res.size != N or w.size != N:
+            raise ValueError(f"{self.spec.id}: operands {x.size}, {res.size}, {w.size} words")
+        got = CNR.fused_add_rms_norm_rows(
+            x.reshape(1, N), res.reshape(1, N), w, float(self.s.EPS), int(self.s.BLOCK))
+        return np.concatenate([got["out"].reshape(-1), got["residual"].reshape(-1)]).astype(U64)
+
+    @classmethod
+    def small_statics(cls, rng: np.random.Generator) -> dict:
+        N = int(rng.choice([8, 16, 24, 64, 72, 256]))
+        return {"N": N, "EPS": float(rng.choice([1e-5, 1e-6])),
+                "BLOCK": int(rng.integers(1, min(N, CR.LARGE_BLOCK) + 1))}
+
+    @classmethod
+    def random_args(cls, st: dict, rng: np.random.Generator, kind: str) -> list[np.ndarray]:
+        N = int(st["N"])
+        wk = "gauss" if kind in RANDOM_KINDS else kind
+        return [rand_bf16(rng, N, kind).astype(U64), rand_bf16(rng, N, kind).astype(U64),
+                rand_bf16(rng, N, wk).astype(U64)]
+
+
 class AttentionTwin(Twin):
     twin_id = "attention.fa2.bf16.v3"
     base_id = "Attention_v3"
@@ -701,11 +776,13 @@ class AttentionTwin(Twin):
                 rand_bf16(rng, T * KVH * D, k).astype(U64)]
 
 
-FAMILIES: dict[str, type[Twin]] = {cls.base_id: cls for cls in (GemmTwin, BiasAddTwin, EmbeddingTwin, TokenSelectTwin, SiluMulTwin,
-                                                                RoPETwin, RMSNormTritonTwin, RMSNormFusedTwin, AttentionTwin)}
+FAMILIES: dict[str, type[Twin]] = {cls.base_id: cls for cls in (
+    GemmTwin, BiasAddTwin, EmbeddingTwin, TokenSelectTwin, SiluMulTwin, RoPETwin, RMSNormTritonTwin, RMSNormFusedTwin,
+    RMSNormCudaVector8Twin, RMSNormFusedCudaVector8Twin, AttentionTwin)}
 DEFINITIONS = {"Gemm_v1": b1.Gemm, "BiasAdd_v1": b1.BiasAdd, "Embedding_v1": b1.Embedding, "TokenSelect_v1": b1.TokenSelect,
                "SiluMul_v1": b1.SiluMul, "RoPE_v1": b1.RoPE, "RMSNormTriton_v1": b1.RMSNormTriton,
-               "RMSNormFusedCuda_v2": b1.RMSNormFusedCuda, "Attention_v3": b1.AttentionV3}
+               "RMSNormFusedCuda_v2": b1.RMSNormFusedCuda, "RMSNormCudaVector8_v1": CR.RMSNormCudaVector8,
+               "RMSNormFusedCudaVector8_v1": CR.RMSNormFusedCudaVector8, "Attention_v3": b1.AttentionV3}
 
 
 # ---------------------------------------------------------------------------------------------------------
