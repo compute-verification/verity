@@ -64,8 +64,9 @@ def padTo (ws : Array Nat) (n : Nat) : Array Nat := ws ++ Array.replicate (n - w
 def coefAt (kap : Array (Array F128)) (LANES : Nat) (e : F128) : Array F128 :=
   (Array.range LANES).map (fun l => (kap[0]!)[l]! * e) ++ (Array.range LANES).map (fun l => (kap[1]!)[l]! * e)
 
-/-- `dirs`: the position's low `H` bits, then zero words (`rec_open.dirs_words`, rec_open.py:155). -/
-def dirsRow (pos H : Nat) : Array Nat := #[pos % 2 ^ H] ++ Array.replicate (DIRS_WORDS - 1) 0
+/-- `dirs`: the position's low `H` bits, 16 a word, then zero words (`rec_open.dirs_words`, rec_open.py:161). -/
+def dirsRow (pos H : Nat) : Array Nat :=
+  #[pos % 2 ^ H % 2 ^ 16, pos % 2 ^ H / 2 ^ 16] ++ Array.replicate (DIRS_WORDS - 2) 0
 
 /-- A registered row's `b ‖ c` under `salt` (`registered.Registered.commit`, registered.py:139: `sha512/row/v1` of its
 u16 words, zero-padded to whole blocks, under hm96-sha512's default key). -/

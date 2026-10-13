@@ -19,6 +19,7 @@ import Proofs.Flock.C3.Compose.HoloCoinTys
 import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.Compose.HoloStreamSizes
 import Proofs.Flock.C3.Compose.HoloSparseRounds
+import Proofs.Flock.C3.Compose.HoloSparseWords
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Sparse.Src
@@ -61,13 +62,16 @@ import Proofs.Flock.C3.Reps.ReadSib
 import Proofs.Flock.C3.Reps.ResRead
 import Proofs.Flock.C3.Reps.SentKeys
 import Proofs.Flock.C3.Reps.RepsCounted
+import Proofs.Flock.C3.Reps.RepsDrawnAt
 import Proofs.Flock.C3.Reps.WRead
 import Proofs.Flock.C3.Reps.ReadWhole
+import Proofs.Flock.C3.Reps.PortNames
+import Proofs.Flock.C3.Reps.ReadWholeAt
 import Proofs.Flock.C3.Reps.WithReads
 import Proofs.Flock.C3.Reps.KeysInW
 import Proofs.Flock.C3.Reps.LigNames
+import Proofs.Flock.C3.Reps.LigKeys
 import Proofs.Flock.C3.Opening.SessionPartsL
-import Proofs.Flock.C3.Opening.SessionL
 import Proofs.Flock.C3.Reps.WReadO
 import Proofs.Flock.C3.Opening.Session
 import Proofs.Flock.C3.Opening.SrcOpening
@@ -83,6 +87,7 @@ import Proofs.Flock.C3.RegLevels.SrcOpenRel
 import Proofs.Flock.C3.RegLevels.RsT
 import Proofs.Flock.C3.RegLevels.Kappa
 import Proofs.Flock.C3.RegLevels.StackedReg
+import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.RegLevels.ROpens

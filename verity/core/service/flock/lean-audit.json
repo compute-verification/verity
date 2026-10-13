@@ -5,8 +5,10 @@
   "Flock.Test.Full",
   "Flock.Test.Sha512",
   "Flock.Test.InnerStreams",
+  "Flock.Test.RecCoins",
   "Flock.Test.RecOpen",
   "Flock.Test.RecOpening",
+  "Flock.Test.RecOpenLeaves",
   "Flock.Test.ReadWhole",
   "VStar"
  ],
