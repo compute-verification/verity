@@ -694,13 +694,30 @@ def gc_targets(sms: int, quick: bool, cuts: str = "") -> list[int]:
     return [sms - d for d in cut]
 
 
-def gc_arms(gsms: int, fsms: int, span_s: float, sms: int, rate64: dict, rate128: dict) -> list[dict]:
+RESIDENT_NS = 500_000_000
+
+
+def gc_arms(gsms: int, fsms: int, span_s: float, sms: int, rate64: dict, rate128: dict, plan: str = "") -> list[dict]:
     """The persistent filler on the `fsms` SMs beside the step's green context: (store, tile, CTAs an SM, duty). A duty < 1 is
     the throttle: each CTA idles `gap_ns` = its tile time x (1 / duty - 1) after each tile, its tile time taken from the
     filler alone on every SM (`rate*[store]` tiles/s at one CTA an SM), so the nominal rate is duty x the unthrottled one. The 64 x 64
     tile runs only on the smallest partitions, where it was the η line's best (r20261012-231033-73f3). `rcpt`, the tile's
-    sketch-sha512 receipts, is the store the leaderboard's receipts-on rows take; `fold` and `all` run beside it as before."""
+    sketch-sha512 receipts, is the store the leaderboard's receipts-on rows take; `fold` and `all` run beside it as before.
+    `plan` (`--gc-plan`, STORE:TILE:CTAS_AN_SM:DUTY,...) replaces the default; duty 0 is `resident`: each CTA takes one tile
+    before the window opens and then sleeps through it (RESIDENT_NS), so the arm measures the filler's presence alone."""
     out = []
+    if plan:
+        for x in plan.split(","):
+            store, T, per_sm, duty = x.split(":")
+            T, per_sm, duty = int(T), int(per_sm), float(duty)
+            rate = (rate128 if T == 128 else rate64)[store]
+            tile_ns = per_sm * sms / rate * 1e9
+            resident = duty == 0
+            out.append({"family": "gc", "mode": "persist", "tile": T, "grid": per_sm * fsms, "store": store, "prio": "low",
+                        "step_sms": gsms, "fill_sms": fsms, "duty": duty, "resident": resident,
+                        "gap_ns": RESIDENT_NS if resident else int(tile_ns * (1 / duty - 1)),
+                        "limit": per_sm * fsms if resident else int(rate * fsms / sms * span_s * duty) + 4 * per_sm * fsms})
+        return out
     plan = [("rcpt", 128, 1, 1.0), ("rcpt", 128, 1, 0.5), ("rcpt", 128, 1, 0.25), ("rcpt", 128, 1, 0.1),
             ("fold", 128, 1, 1.0), ("fold", 128, 1, 0.25), ("all", 128, 1, 1.0)]
     if fsms <= 12:
@@ -827,7 +844,9 @@ def main() -> int:
     ap.add_argument("--starve-s", type=float, default=5.0)
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--gc-cuts", default="", help="family gc: the filler's SMs asked for, e.g. 0,4,12,20,28,44,60,92")
-    ap.add_argument("--repeats", type=int, default=1, help="family gc: each filled arm this many times (rows carry `rep`)")
+    ap.add_argument("--repeats", type=int, default=1,
+                    help="family gc: the step alone and each filled arm this many times, interleaved (rows carry `rep`)")
+    ap.add_argument("--gc-plan", default="", help="family gc: STORE:TILE:CTAS_AN_SM:DUTY,... in place of the default arms")
     ap.add_argument("--budgets", default="1.01,1.02,1.05,1.10,1.25,1.5,2,4")
     ap.add_argument("--l2", type=Path, help="l2_gate.py's verdict, reported beside every timing")
     ap.add_argument("--l2-probe", type=Path, help="only the L2 write gate's launches (run under ncu), declared sectors to this file")
@@ -946,20 +965,23 @@ def run(args: argparse.Namespace, log) -> int:
                 emit(log, {**head, "green_context": n, "error": f"rebind: {e!r}"})
                 break
             gsms, fsms = g["step_sms"], g["fill_sms"]
-            row = run_arm(lib, None, None, None, step, reps, base, {"family": "gc", "mode": "alone", "step_sms": gsms},
-                          lo, peer, clock, args.starve_s, head, log, l2)
-            failed |= not row["identical"]
-            curve.append({"step_sms": gsms, "slowdown": row["slowdown"], "hbm_ratio": row["hbm_ratio"],
-                          "step_hbm_gbs": row["step_hbm_gbs"]})
-            if g["fill"] is None:
-                continue
-            span_s = 3 * reps * row["step_ms"] * 1e-3
-            for arm in (dict(a, rep=r) for r in range(args.repeats)
-                        for a in gc_arms(gsms, fsms, span_s, sms, alone[K], alone_w)):
-                ff, rr, cc = (wide, refs_w, credit_w) if arm["tile"] == 128 else (f, refs[K], credits[K])
-                row = run_arm(lib, ff, rr, cc, step, reps, base, arm, g["fill"], peer, clock, args.starve_s, head, log, l2)
-                failed |= bool(row["mismatched"]) or not row["identical"]
-                rows.append(row)
+            for r in range(args.repeats if g["fill"] is not None else 1):
+                row = run_arm(lib, None, None, None, step, reps, base,
+                              {"family": "gc", "mode": "alone", "step_sms": gsms, "rep": r}, lo, peer, clock, args.starve_s,
+                              head, log, l2)
+                failed |= not row["identical"]
+                if r == 0:
+                    curve.append({"step_sms": gsms, "slowdown": row["slowdown"], "hbm_ratio": row["hbm_ratio"],
+                                  "step_hbm_gbs": row["step_hbm_gbs"]})
+                if g["fill"] is None:
+                    break
+                span_s = 3 * reps * row["step_ms"] * 1e-3
+                plan = gc_arms(gsms, fsms, span_s, sms, alone[K], alone_w, args.gc_plan)
+                for arm in (dict(a, rep=r) for a in (plan if r % 2 == 0 else plan[::-1])):
+                    ff, rr, cc = (wide, refs_w, credit_w) if arm["tile"] == 128 else (f, refs[K], credits[K])
+                    row = run_arm(lib, ff, rr, cc, step, reps, base, arm, g["fill"], peer, clock, args.starve_s, head, log, l2)
+                    failed |= bool(row["mismatched"]) or not row["identical"]
+                    rows.append(row)
         best = {}
         for b in budgets:
             ok = [r for r in rows if not r["starved"] and r["identical"] and not r["mismatched"] and r["slowdown"] <= b
