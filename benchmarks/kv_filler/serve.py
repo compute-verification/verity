@@ -81,6 +81,8 @@ import analyze  # noqa: E402
 from bench import FILL_WARPS, RUN_SEED, Codec, K, Seq, Topup, codec_gate, mode_of  # noqa: E402
 
 KV_TOKEN_BYTES = 32 * 2 * 8 * 128 * 2  # Llama-3.1-8B, bf16 KV
+# torch's caching allocator over a run: a retry frees the cache (cudaFree, a device-wide sync) and allocates again
+ALLOCATOR_COUNTS = ("num_alloc_retries", "num_device_alloc", "num_device_free", "num_sync_all_streams", "num_ooms")
 TOKEN_WORDS = KV_TOKEN_BYTES // 64
 CAPTURE = [1, 2, 4, 8, 16, 24, 32, 48, 64, 96, 128]
 GEMM_K, GEMM_SLICE, GEMM_GROUP = 4096, 64 << 20, 4
@@ -682,6 +684,7 @@ def main() -> int:
             torch.cuda.synchronize()
             base = mark()
             base.synchronize()
+            mem0 = torch.cuda.memory_stats()
             t_start = time.perf_counter()
             first: dict[str, float] = {}
             done: dict[str, float] = {}
@@ -722,6 +725,9 @@ def main() -> int:
                     idle.append((i0, time.perf_counter()))
             t_end = time.perf_counter()
             torch.cuda.synchronize()
+            mem1 = torch.cuda.memory_stats()
+            allocator = {k: mem1.get(k, 0) - mem0.get(k, 0) for k in ALLOCATOR_COUNTS}
+            allocator["reserved_peak_bytes"] = mem1.get("reserved_bytes.all.peak", 0)
             gpu_steps = [[round(base.elapsed_time(e0) / 1e3, 6), round(base.elapsed_time(e1) / 1e3, 6)]
                          for e0, e1 in cur["gpu"]]
             gpu_busy, edge = 0.0, 0.0
@@ -763,7 +769,7 @@ def main() -> int:
                                for w in (0.25, 1.0, 5.0)],
                    "step_records": step_records,
                    "gpu_busy_s": gpu_busy, "gpu_steps": gpu_steps, "seq": seq_counts, "part": cur.get("part"),
-                   "streams": sorted(cur.get("streams", ())),
+                   "streams": sorted(cur.get("streams", ())), "allocator": allocator,
                    "filler_by_phase": filler_by_phase(steps, recs, offset_ms),
                    "filler_by_gpu_phase": filler_by_phase(on_gpu_clock(step_records, gpu_steps), recs,
                                                           offset_ms + t_start * 1e3)}
