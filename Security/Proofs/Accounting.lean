@@ -15,5 +15,6 @@ import Proofs.Accounting.PerRunPriced
 import Proofs.Accounting.PerRunStop
 import Proofs.Accounting.Sanity
 import Proofs.Accounting.Tag
+import Proofs.Accounting.Actual
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/
