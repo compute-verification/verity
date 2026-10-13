@@ -32,6 +32,8 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
 from verity.ml.commitments import merkle_depth
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import domain_message
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 
 import sketch_receipt as skr
@@ -56,6 +58,27 @@ def pack64(bits: np.ndarray) -> np.ndarray:
 
 def store_salt(key: bytes, seed: bytes, leaf: int) -> bytes:
     return hashlib.shake_256(SALT_DOMAIN + key + seed + struct.pack(">Q", leaf)).digest(rb.SALT_BYTES)
+
+
+def chain_messages(plan: rb.Plan, key: bytes) -> dict[str, tuple[bytes, int]]:
+    """A pass's seed-dependent messages with the seed's 64 bytes zero, each with where those bytes go (`rb_chain_set`):
+    the receipt prefix (`rb.prefix`) and the salts' input (`store_salt`) take the seed, the tree's binding
+    (`rb.binding`) the seed, and its domain message (`rb.domain`'s) the binding."""
+    z, f = bytes(64), b"\xff" * 64
+    positions = RangeIndexedDomain(0, rb.leaves(plan.length))
+
+    def dom(binding: bytes) -> bytes:
+        return domain_message(binding, rb.OWNER, positions.identity_sha512(), positions.count, "sha512")
+
+    out = {}
+    for name, fn in (("receipt", rb.prefix), ("binding", lambda s: rb.TREE_DOMAIN + s + plan.digest),
+                     ("domain", dom), ("salt", lambda s: SALT_DOMAIN + key + s)):
+        m0, m1 = fn(z), fn(f)
+        a = next(i for i, (x, y) in enumerate(zip(m0, m1)) if x != y)
+        if m0[a:a + 64] != z or m1[a:a + 64] != f or m0[:a] + m0[a + 64:] != m1[:a] + m1[a + 64:]:
+            raise RuntimeError(f"the {name} message's seed-derived bytes are not one run of 64")
+        out[name] = (m0, a)
+    return out
 
 
 def digest(words) -> bytes:
@@ -83,6 +106,10 @@ class Reader:
         self.so.rb_sketch64.argtypes = [v, v, u64, v, v, i, i, v]
         self.so.rb_sketch64_hash.argtypes = [v, u64, u64, v, v]
         self.so.rb_sketch64_receipts.argtypes = [v, v, u64, u64, v, v, v, i, v]
+        self.so.rb_chain_set.argtypes = [b, i, b, b, b, b, b, b, i, i, b, i, i, b, i, b, i, i, u64, v]
+        self.so.rb_chain.argtypes = [v, v]
+        self.so.rb_consts.argtypes = [v, u64]
+        self.so.rb_consts_bytes.restype = u64
         self.kept: dict[int, tuple[int, object, list]] = {}
 
     def call(self, fn: str, *args) -> None:
@@ -101,6 +128,32 @@ class Reader:
                   sha512_row_v2_prefix(8 * rb.DIGEST_BYTES * last), rb.HM96.salt_prefix, rb.HM96.leaf_prefix(rb.KEY),
                   rb.KEY, self.dom.domain_id, rb.SCHEMA.encode(), len(rb.SCHEMA), salt_in, len(salt_in), n)
         self.kept = {}
+
+    def chain_begin(self, plan: rb.Plan, key: bytes) -> None:
+        """`begin`'s constants for a pass whose seed is on the device (`chain`): the driver's messages with the seed's
+        bytes zero, each with where they go."""
+        n = plan.length
+        self.seed, self.plan, self.key, self.positions, self.leaves = None, plan, key, n, rb.leaves(n)
+        last = n - rb.PER_LEAF * (self.leaves - 1)
+        m = chain_messages(plan, key)
+        self.call("rb_chain_set", *m["receipt"], sha512_row_v2_prefix(8 * rb.DIGEST_BYTES * rb.PER_LEAF),
+                  sha512_row_v2_prefix(8 * rb.DIGEST_BYTES * last), rb.HM96.salt_prefix, rb.HM96.leaf_prefix(rb.KEY),
+                  rb.KEY, m["binding"][0], len(m["binding"][0]), m["binding"][1], m["domain"][0], len(m["domain"][0]),
+                  m["domain"][1], rb.SCHEMA.encode(), len(rb.SCHEMA), m["salt"][0], len(m["salt"][0]), m["salt"][1], n)
+        self.kept = {}
+
+    def chain(self, seed_ptr: int) -> None:
+        """`chain_begin`'s pass's constants from the 64-byte seed at seed_ptr on the device (wt.cu's g_pass.seed), on
+        the stream: those `begin` sets at that seed."""
+        self.call("rb_chain", seed_ptr)
+
+    def consts(self) -> bytes:
+        """The pass's constants as the device holds them (after the stream's work)."""
+        out = ctypes.create_string_buffer(self.so.rb_consts_bytes())
+        rc = self.so.rb_consts(ctypes.addressof(out), len(out.raw))
+        if rc:
+            raise RuntimeError(f"rb_consts: {rc}")
+        return out.raw
 
     def receipts(self, data, j0: int, n: int, ys, zs=None, load: str | None = None) -> None:
         """Receipts of n blocks at `data` (store indices j0 …) into ys (n x 8), each bound to its spread z in zs."""
@@ -265,6 +318,31 @@ def gate(reader: Reader, torch, blocks: int, rng: np.random.Generator) -> dict:
     }
     out["ok"] = all(v for part in ("partial", "segments") for k, v in out[part].items() if isinstance(v, bool)) and all(
         by_load.values())
+    return out
+
+
+def chain_gate(reader: Reader, torch, rng: np.random.Generator) -> dict:
+    """The chained pass (`chain_begin`, then `chain` from a seed on the device) against `begin` at the same seed: the
+    device's constants byte for byte, and its commit of random receipts (salts, root) against `rb.tree` at that seed,
+    on a partial plan out of store order with a short last leaf and on a whole one."""
+    out, key = {}, rng.bytes(32)
+    for name, plan in (("partial", rb.Plan(((901, 37), (5, 300), (2000, 18)), 4096)), ("whole", rb.Plan.whole(4096))):
+        seed = rb.seed(rng.bytes(32), int(rng.integers(1 << 32)), rng.bytes(64))
+        dev = torch.from_numpy(np.frombuffer(seed, np.uint8).copy()).cuda()
+        ys = torch.empty((plan.length, 8), dtype=torch.int64, device="cuda").random_()
+        reader.chain_begin(plan, key)
+        reader.chain(dev.data_ptr())
+        salts = torch.empty(reader.leaves * rb.SALT_BYTES, dtype=torch.uint8, device="cuda")
+        levels = reader.levels(reader.commit(ys, 0, reader.leaves, salts), 0, pad=True)
+        torch.cuda.synchronize()
+        chained, root, sl = reader.consts(), digest(levels[-1][0]), salts.cpu().numpy().tobytes()
+        reader.begin(seed, plan, key)
+        torch.cuda.synchronize()
+        ref_salts = [store_salt(key, seed, c) for c in range(reader.leaves)]
+        tree = rb.tree(seed, plan, [digest(y) for y in ys.cpu().numpy()], ref_salts)
+        out[name] = {"positions": plan.length, "leaves": reader.leaves, "consts": chained == reader.consts(),
+                     "salts": sl == b"".join(ref_salts), "root": root == tree.commitment.root}
+    out["ok"] = all(v for part in out.values() for v in part.values() if isinstance(v, bool))
     return out
 
 
@@ -500,9 +578,11 @@ def main() -> int:
     print("sketch-sha512 gate:", json.dumps(sg), flush=True)
     sg64 = sketch_gate(reader, torch, a.gate_blocks, np.random.default_rng(20261014), rows=ROWS64)
     print("sketch-sha512 64-row gate:", json.dumps(sg64), flush=True)
-    g["ok"] = g["ok"] and sg["ok"] and sg64["ok"]
+    cg = chain_gate(reader, torch, np.random.default_rng(20261015))
+    print("chained pass gate:", json.dumps(cg), flush=True)
+    g["ok"] = g["ok"] and sg["ok"] and sg64["ok"] and cg["ok"]
     result = {"schema": "verity/device-reader/v0", "device": torch.cuda.get_device_name(0), "gate": g,
-              "sketch_gate": sg, "sketch64_gate": sg64}
+              "sketch_gate": sg, "sketch64_gate": sg64, "chain_gate": cg}
     if g["ok"] and a.gib > 0:
         result["measure"] = m = measure(reader, torch, a.gib, a.reps)
         print("reader measure:", json.dumps(m), flush=True)

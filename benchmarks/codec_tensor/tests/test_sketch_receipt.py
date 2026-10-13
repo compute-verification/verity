@@ -110,6 +110,29 @@ def test_attention_sketches_each_token_layer():
         range(nvec, nvec + slots * layers), nvec + slots * layers)
 
 
+def test_the_chained_pass_completes_the_driver_s_messages():
+    """reader.cu's chain_kernel completes `chain_messages`' templates from a pass's seed: the receipt prefix, the salts'
+    input, the tree's binding, and with that the domain message whose SHA-512 is `rb.domain`'s id, at each plan."""
+    import hashlib
+
+    import reader as RD
+
+    rb = SR.rb
+    key = bytes(range(32))
+    for plan in (rb.Plan(((901, 37), (5, 300), (2000, 18)), 4096), rb.Plan.whole(4096), rb.Plan.whole(1)):
+        m = RD.chain_messages(plan, key)
+        for seed in (SEED, rb.seed(b"\x01" * 32, 7, b"\x02" * 64)):
+            def put(name, v):
+                t, a = m[name]
+                return t[:a] + v + t[a + 64:]
+            assert put("receipt", seed) == rb.prefix(seed)
+            assert put("salt", seed) == RD.SALT_DOMAIN + key + seed
+            binding = hashlib.sha512(put("binding", seed)).digest()
+            assert binding == rb.binding(seed, plan)
+            assert hashlib.sha512(put("domain", binding)).digest() == rb.domain(seed, plan).domain_id
+            assert len(m["binding"][0]) <= 239 and len(m["domain"][0]) <= 239 and len(m["receipt"][0]) == 128
+
+
 def test_gemm_blocks_refuse_other_widths():
     with pytest.raises(ValueError, match="4096-byte blocks"):
         SR.gemm_blocks(np.zeros(6144, dtype=np.uint8), 6144)

@@ -37,6 +37,7 @@ struct Consts {
   u64 schema[4];             // the leaf schema, the same
   u64 salt_block[17];        // SHAKE256's block of salt_in ‖ u64be 0, padded, as little-endian lanes (`salt_of`)
   int head_len[3], schema_len, salt_in_len;
+  int zero;                  // no padding: two passes' constants compare as bytes (rb_consts)
   u64 positions;             // the pass's positions L: ⌈L / 16⌉ leaves, the last of L − 16 (leaves − 1) receipts
 };
 __constant__ Consts kC;
@@ -783,6 +784,85 @@ __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ p, 
   if (acc == 0x9e3779b9u) atomicXor(xr, 1ull);
 }
 
+// --- the chained pass ------------------------------------------------------------------------------------------------
+
+// A pass's seed-dependent constants as rb_chain_set's templates, which chain_kernel completes from the pass's seed on
+// the device (wt.cu's g_pass.seed: s_j from root_(j−1)), so the receipt prefix, the tree's binding and domain and the
+// salts are s_j's, receipts.domain(s_j, plan) and Store.salt's: each message's 64 seed-derived bytes are zero in its
+// template, at its *_at.
+struct Chain {
+  uint8_t receipt[128];   // prefix(seed)
+  uint8_t binding[256];   // TREE_DOMAIN ‖ seed ‖ plan digest
+  uint8_t domain[256];    // domain_message(binding, …)
+  uint8_t heads[3][128];  // head(t, domain id), the domain id at head_len[t] − 64
+  u64 salt_block[17];     // salt_in ‖ u64be 0's SHAKE256 block, the seed's bytes at salt_at
+  int receipt_at, binding_at, binding_len, domain_at, domain_len, salt_at;
+};
+__device__ Chain g_chain;
+__device__ Consts g_stage;
+
+__device__ void be_load(const uint8_t *b, u64 *w, int n) {
+  for (int i = 0; i < n; ++i) {
+    u64 v = 0;
+    for (int k = 0; k < 8; ++k) v = v << 8 | b[8 * i + k];
+    w[i] = v;
+  }
+}
+// SHA-512 of m's first n bytes, n ≤ 239 (m 256 bytes, zero past n), or with n < 0 the midstate of its first block.
+__device__ void sha512_bytes(uint8_t *m, int n, u64 (&s)[8], uint8_t *out) {
+  const int nb = n < 0 ? 1 : (n + 17 + 127) / 128;
+  if (n >= 0) {
+    m[n] = 0x80;
+    for (int k = 0; k < 8; ++k) m[128 * nb - 1 - k] = (uint8_t)((u64)n * 8 >> (8 * k));
+  }
+  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  for (int b = 0; b < nb; ++b) {
+    u64 w[16];
+    be_load(m + 128 * b, w, 16);
+    sha512_compress(s, w);
+  }
+  if (out)
+    for (int i = 0; i < 64; ++i) out[i] = (uint8_t)(s[i / 8] >> (56 - 8 * (i % 8)));
+}
+
+__global__ void __launch_bounds__(NODE_LEVELS) chain_kernel(const uint8_t *__restrict__ seed) {
+  __shared__ uint8_t node[128];
+  const Chain &c = g_chain;
+  if (threadIdx.x == 0) {
+    uint8_t m[256], d[64];
+    u64 s[8];
+    for (int i = 0; i < 256; ++i) m[i] = i < 128 ? c.receipt[i] : 0;
+    for (int i = 0; i < 64; ++i) m[c.receipt_at + i] = seed[i];
+    sha512_bytes(m, -1, s, nullptr);
+    for (int i = 0; i < 8; ++i) g_stage.receipt_mid[i] = s[i];
+    for (int i = 0; i < 256; ++i) m[i] = c.binding[i];
+    for (int i = 0; i < 64; ++i) m[c.binding_at + i] = seed[i];
+    sha512_bytes(m, c.binding_len, s, d);
+    for (int i = 0; i < 256; ++i) m[i] = c.domain[i];
+    for (int i = 0; i < 64; ++i) m[c.domain_at + i] = d[i];
+    sha512_bytes(m, c.domain_len, s, d);   // the domain id
+    for (int t = 0; t < 3; ++t) {
+      for (int i = 0; i < 128; ++i) m[i] = c.heads[t][i];
+      for (int i = 0; i < 64; ++i) m[g_stage.head_len[t] - 64 + i] = d[i];
+      be_load(m, g_stage.head[t], 16);
+      if (t == HEAD_NODE)
+        for (int i = 0; i < 128; ++i) node[i] = i < NODE_HEAD ? m[i] : 0;
+    }
+    for (int i = 0; i < 17; ++i) g_stage.salt_block[i] = c.salt_block[i];
+    for (int i = 0; i < 64; ++i) {
+      const int p = c.salt_at + i;
+      g_stage.salt_block[p / 8] |= (u64)seed[i] << 8 * (p % 8);
+    }
+  }
+  __syncthreads();
+  uint8_t first[128];
+  for (int i = 0; i < 128; ++i) first[i] = node[i];
+  first[NODE_HEAD + 7] = 1, first[NODE_HEAD + 8] = (uint8_t)threadIdx.x;
+  u64 s[8];
+  sha512_bytes(first, -1, s, nullptr);
+  for (int i = 0; i < 8; ++i) g_stage.node_mid[threadIdx.x][i] = s[i];
+}
+
 void midstate(const uint8_t *block, u64 *out) {
   u64 w[16];
   for (int i = 0; i < 16; ++i) {
@@ -825,12 +905,12 @@ extern "C" {
 // One pass's constants. The 128-byte blocks are the reference's own: prefix(seed), sha512_row_v2_prefix(8192) and
 // (8 · 64 m) for the pass's last leaf of m receipts, hm96's salt_prefix and leaf_prefix(key); key is hm96-sha512's
 // 256-byte key; salt_in is D(store salt) ‖ the store's key ‖ seed.
-int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8_t *row_prefix_last,
-           const uint8_t *salt_prefix, const uint8_t *leaf_prefix, const uint8_t *key, const uint8_t *domain_id,
-           const uint8_t *schema, int schema_len, const uint8_t *salt_in, int salt_in_len, uint64_t positions,
-           cudaStream_t s) {
+static const char *const TAGS[3] = {"leaf", "node", "pad"};
+
+static int build(Consts &c, const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8_t *row_prefix_last,
+                 const uint8_t *salt_prefix, const uint8_t *leaf_prefix, const uint8_t *key, const uint8_t *domain_id,
+                 const uint8_t *schema, int schema_len, const uint8_t *salt_in, int salt_in_len, uint64_t positions) {
   if (schema_len < 1 || schema_len > 32 || salt_in_len < 1 || salt_in_len + 9 > 136 || positions < 1) return 1;
-  static Consts c;
   midstate(receipt_prefix, c.receipt_mid);
   midstate(row_prefix, c.row_mid);
   midstate(row_prefix_last, c.row_mid_last);
@@ -838,7 +918,6 @@ int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8
   midstate(leaf_prefix, c.leaf_mid);
   for (int i = 0; i < KEY_WORDS; ++i)
     c.key[i] = (u32)key[4 * i] | (u32)key[4 * i + 1] << 8 | (u32)key[4 * i + 2] << 16 | (u32)key[4 * i + 3] << 24;
-  static const char *const TAGS[3] = {"leaf", "node", "pad"};
   uint8_t heads[3][128] = {};
   for (int t = 0; t < 3; ++t) {
     c.head_len[t] = head(heads[t], TAGS[t], domain_id);
@@ -865,9 +944,69 @@ int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8
     c.salt_block[i] = v;
   }
   c.salt_in_len = salt_in_len;
+  c.zero = 0;
   c.positions = positions;
+  return 0;
+}
+
+int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8_t *row_prefix_last,
+           const uint8_t *salt_prefix, const uint8_t *leaf_prefix, const uint8_t *key, const uint8_t *domain_id,
+           const uint8_t *schema, int schema_len, const uint8_t *salt_in, int salt_in_len, uint64_t positions,
+           cudaStream_t s) {
+  static Consts c;
+  if (int e = build(c, receipt_prefix, row_prefix, row_prefix_last, salt_prefix, leaf_prefix, key, domain_id, schema,
+                    schema_len, salt_in, salt_in_len, positions))
+    return e;
   return cudaMemcpyToSymbolAsync(kC, &c, sizeof c, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;
 }
+
+// A chained pass's constants (rb_chain completes them from its seed on the device): rb_set's, with the seed's 64 bytes
+// zero in receipt_prefix (at receipt_at) and salt_in (at salt_at), and in place of the domain id the binding's message
+// (binding_len bytes, TREE_DOMAIN ‖ seed ‖ plan digest, the seed at binding_at) and the domain's (domain_len bytes,
+// receipts.domain's domain_message, the binding at domain_at), each with those bytes zero.
+int rb_chain_set(const uint8_t *receipt_prefix, int receipt_at, const uint8_t *row_prefix,
+                 const uint8_t *row_prefix_last, const uint8_t *salt_prefix, const uint8_t *leaf_prefix,
+                 const uint8_t *key, const uint8_t *binding, int binding_len, int binding_at, const uint8_t *domain,
+                 int domain_len, int domain_at, const uint8_t *schema, int schema_len, const uint8_t *salt_in,
+                 int salt_in_len, int salt_at, uint64_t positions, cudaStream_t s) {
+  if (receipt_at < 0 || receipt_at + 64 > 128 || binding_len > 239 || binding_at < 0 || binding_at + 64 > binding_len ||
+      domain_len > 239 || domain_at < 0 || domain_at + 64 > domain_len || salt_at < 0 || salt_at + 64 > salt_in_len)
+    return 1;
+  static Consts c;
+  static Chain ch;
+  const uint8_t zero[64] = {};
+  if (int e = build(c, receipt_prefix, row_prefix, row_prefix_last, salt_prefix, leaf_prefix, key, zero, schema,
+                    schema_len, salt_in, salt_in_len, positions))
+    return e;
+  memset(&ch, 0, sizeof ch);
+  memcpy(ch.receipt, receipt_prefix, 128);
+  memcpy(ch.binding, binding, binding_len);
+  memcpy(ch.domain, domain, domain_len);
+  for (int t = 0; t < 3; ++t) head(ch.heads[t], TAGS[t], zero);
+  memcpy(ch.salt_block, c.salt_block, sizeof ch.salt_block);
+  ch.receipt_at = receipt_at, ch.binding_at = binding_at, ch.binding_len = binding_len;
+  ch.domain_at = domain_at, ch.domain_len = domain_len, ch.salt_at = salt_at;
+  return cudaMemcpyToSymbolAsync(g_stage, &c, sizeof c, 0, cudaMemcpyHostToDevice, s) ||
+                 cudaMemcpyToSymbolAsync(g_chain, &ch, sizeof ch, 0, cudaMemcpyHostToDevice, s)
+             ? 4
+             : 0;
+}
+
+// A chained pass's constants from its 64-byte seed on the device (wt.cu's g_pass.seed), into kC, on stream s.
+int rb_chain(const uint8_t *seed, cudaStream_t s) {
+  if (!seed) return 1;
+  chain_kernel<<<1, NODE_LEVELS, 0, s>>>(seed);
+  void *stage = nullptr;
+  if (cudaGetLastError() || cudaGetSymbolAddress(&stage, g_stage)) return 4;
+  return cudaMemcpyToSymbolAsync(kC, stage, sizeof(Consts), 0, cudaMemcpyDeviceToDevice, s) ? 4 : 0;
+}
+
+// The pass's constants as kC holds them (bytes = sizeof(Consts)), after the device is idle.
+int rb_consts(uint8_t *out, uint64_t bytes) {
+  if (!out || bytes != sizeof(Consts)) return 1;
+  return cudaMemcpyFromSymbol(out, kC, sizeof(Consts)) ? 4 : 0;
+}
+uint64_t rb_consts_bytes() { return sizeof(Consts); }
 
 // The receipts of n blocks at data (block q at byte 4096 q, store index j0 + q) into ys (8 words a receipt); zs holds
 // each block's spread z (4096 bytes a block) or is null for z's of zero bytes; mode is how a block is read (LOAD_*).

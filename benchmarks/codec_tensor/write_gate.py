@@ -6,7 +6,8 @@ writes its receipts (`tag_bytes` a vector)
 and adds its partial sums into y (L2 reductions, nchunks · M · N · 4 bytes); an untagged one only the adds; anything
 past that (a spill, a stack, a stray store) shows as write sectors over the receipts' bytes and as local stores. A
 launch passes with no local stores and its L2 writes and reductions within 1% (and a 4 KiB floor) of its outputs plus
-partials; a commit with none and its writes within 1% of its digests.
+partials; a commit (the pass's tree constants from its seed on the device, `chain_kernel`, then the leaves, pads and
+tree) with none and its writes within 1% of its constants and digests.
 
 With --kv-lib (step.cu) the same for the KV side: attention at each k in the form and split count the step picked
 (`kv_attn` over two layers of the step's batch × context), whose outputs are o and its split partials (at most the
@@ -45,7 +46,7 @@ import kv_bench as BW_KV  # noqa: E402
 METRICS = ("lts__t_sectors_op_write.sum", "lts__t_sectors_srcunit_tex_op_write.sum", "lts__t_sectors_op_red.sum",
            "lts__t_sectors_op_atom.sum", "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum", "dram__bytes_write.sum")
 WRITE, ALL = METRICS[1], METRICS[0]   # the SMs' L2 writes, and every source's
-KERNELS = "regex:fused_kernel|leaves_kernel|level_kernel|pads_kernel|attn_|append_kernel|rc_receipt_kernel"
+KERNELS = "regex:fused_kernel|chain_kernel|leaves_kernel|level_kernel|pads_kernel|attn_|append_kernel|rc_receipt_kernel"
 
 
 def launches(a) -> list[dict]:
@@ -94,12 +95,14 @@ def launches(a) -> list[dict]:
         rd = RD.Reader(a.reader_lib, torch)
         n = 1 << 16
         plan = BW.SR.rb.Plan.whole(n)
-        rd.begin(BW.RECEIPT_SEED, plan, BW.STORE_KEY)
+        seed = torch.frombuffer(bytearray(BW.RECEIPT_SEED), dtype=torch.uint8).cuda()
+        rd.chain_begin(plan, BW.STORE_KEY)
+        rd.chain(BW.ptr(seed))
         ys = torch.empty((n, 8), dtype=torch.int64, device="cuda").random_()
         rd.levels(rd.commit(ys, 0, rd.leaves), 0, pad=True)
         torch.cuda.synchronize()
         out.append({"kernel": "commit", "blocks": n, "leaves": rd.leaves, "leaf_bytes": 64 * rd.leaves,
-                    "node_bytes": 64 * (rd.leaves - 1)})
+                    "node_bytes": 64 * (rd.leaves - 1), "const_bytes": rd.so.rb_consts_bytes()})
     if a.kv_lib:
         out += kv_launches(a, step, torch, st)
     return out
@@ -195,8 +198,9 @@ def summarize(stdout: str, rc: int) -> dict:
                          "ok": lb == 0 and wb + rb <= 1.01 * must + 4096})
     commit = [w for w in want if w["kernel"] == "commit"]
     if commit:
-        ck = [kv for kv in kernels if any(s in kv["name"] for s in ("leaves_kernel", "level_kernel", "pads_kernel"))]
-        must = commit[0]["leaf_bytes"] + commit[0]["node_bytes"]
+        ck = [kv for kv in kernels
+              if any(s in kv["name"] for s in ("chain_kernel", "leaves_kernel", "level_kernel", "pads_kernel"))]
+        must = commit[0]["leaf_bytes"] + commit[0]["node_bytes"] + commit[0].get("const_bytes", 0)
         wb = sum(bytes_of(kv, WRITE) for kv in ck)
         lb = sum(bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum") for kv in ck)
         rows_out.append({**commit[0], "kernels": len(ck), "l2_write_bytes": wb,

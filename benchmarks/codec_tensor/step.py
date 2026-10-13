@@ -27,8 +27,9 @@ Nothing is timed before its gate passed:
 - the append: encoded, the cache's bytes equal `kv_encode` of the same words at each slot's index; plain, the words;
 - the per-pass key (red team F29, `bench.gate_pass`): each sketched step starts with `wt_pass`, which derives pass j's
   seed pass_seed(σ, j, root_(j−1)), signs, key and leaves' prefix on the device from the previous step's root (the
-  first from a registration root); `gate_chain` checks two consecutive steps' link, and with the KV's receipts the
-  second pass's first KV receipts at its seed.
+  first from a registration root), and with sketch-sha512 `rb_chain` the receipt tree's binding, domain and salts at
+  that seed; `gate_chain` checks two consecutive steps' link: the second pass's tree constants and root are those
+  `reader.begin` sets at its seed, and with the KV's receipts its first KV receipts are at that seed.
 
 The step itself runs on random stored words (the decode, the sketch and the MMAs take the same time on any words), so
 the weights and the cache fill the memory once. Arms, interleaved over `--reps`, each queued behind a spin:
@@ -460,8 +461,12 @@ class Step:
     def set_keys(self, k: int) -> None:
         BW.set_key(self.wt, self.torch, self.keys[k])
         KB.set_key(self.kv, KB.lib_key(self.kv, k))
-        if self.wt.receipt:   # the tree's binding and salts at a fixed seed (host constants), the receipts at s_j
-            BW.READER.begin(BW.RECEIPT_SEED, BW.SR.rb.Plan.whole(self.nvec[k] + self.nkv), BW.STORE_KEY)
+        if self.wt.receipt:   # the tree's plan and salt key; its binding, domain and salts are each pass's (begin_pass)
+            BW.READER.chain_begin(self.plan(k), BW.STORE_KEY)
+
+    def plan(self, k: int):
+        """The pass's plan: every block of the store, the weights' then the KV's token-layers, in store order."""
+        return SR.rb.Plan.whole(self.nvec[k] + self.nkv)
 
     def lin_plain(self, l: int, name: str) -> None:
         n, kd = self.shapes[name]
@@ -494,10 +499,13 @@ class Step:
 
     def begin_pass(self) -> None:
         """Pass j's signs (and their B fragments), key and leaves' prefix from root_(j−1) (wt_pass, on the stream
-        behind the last commit); with the KV's receipts, the same signs and receipt midstate for kv_attn form 13."""
+        behind the last commit); in a WT_RECEIPT build the receipt tree's constants from s_j (reader.cu's rb_chain),
+        and with the KV's receipts the same signs and receipt midstate for kv_attn form 13."""
         st = BW.stream(self.torch)
         self.wt.call("wt_pass", self.pass_j, self.root_ptr, self.signs.data_ptr(), self.T, st)
         self.wt.call("wt_sign_frags", self.signs.data_ptr(), self.frags.data_ptr(), self.T, st)
+        if self.wt.receipt:
+            BW.READER.chain(self.pass_ptrs[0])
         if self.rc:
             self.kv.call("kv_rc_pass", self.signs.data_ptr(), self.pass_ptrs[1], st)
 
@@ -513,8 +521,13 @@ class Step:
         self.root_ptr, self.pass_j = self.nodes.data_ptr() + 64 * ri.value, self.pass_j + 1
 
     def commit_receipts(self, n: int, st: int) -> None:
-        """sketch-sha512's commit (reader.cu, READER's constants): the hm96 leaves of the pass's n receipts, the pads to
-        a power of two and the frame-v3 tree; the root is the next pass's root_(j−1)."""
+        """sketch-sha512's commit of the pass's n receipts (`commit_tree`); its root is the next pass's root_(j−1)."""
+        self.root_ptr = self.commit_tree(n, st)
+        self.pass_j += 1
+
+    def commit_tree(self, n: int, st: int) -> int:
+        """The hm96 leaves of the pass's n receipts, the pads to a power of two and the frame-v3 tree (reader.cu,
+        READER's constants); the root's address."""
         so, nl = BW.READER.so, -(-n // BW.SR.rb.PER_LEAF)
         width = 1 << max(0, (nl - 1).bit_length())
         dig = self.dig.data_ptr()
@@ -523,29 +536,36 @@ class Step:
                    so.rb_tree(dig, width, 0, self.up.data_ptr(), st) if width > 1 else 0):
             if rc:
                 raise RuntimeError(f"the receipts' commit: error {rc}")
-        self.root_ptr = dig if width == 1 else self.up.data_ptr() + 64 * (width - 2)
-        self.pass_j += 1
+        return dig if width == 1 else self.up.data_ptr() + 64 * (width - 2)
+
+    def root_at(self, p: int) -> bytes:
+        """The digest at p, in dig or up."""
+        t = self.up if 0 <= p - self.up.data_ptr() < self.up.numel() * 8 else self.dig
+        return BW.digests(BW.host_bytes(t[(p - t.data_ptr()) // 64]))[0]
 
     def gate_chain_receipts(self, k: int, log) -> dict:
         """sketch-sha512's chain over two sketched passes: pass j + 1's seed, K_S, signs and receipt prefix on the device
-        are receipts.seed(σ, j + 1, root_j) of pass j's root as committed (reader.cu's tree), and its first linear's
-        first receipts are `sketch_receipt`'s of that linear's first blocks (`gemm_blocks`) at that seed; with the KV's
-        receipts, layer 0's attention after it (form 13 under the signs and midstate kv_rc_pass took from the pass)
-        receipts its first token-layers as `sketch_receipt` does at that seed, store blocks nvec + u layers."""
+        are receipts.seed(σ, j + 1, root_j) of pass j's root as committed (reader.cu's tree), its tree's constants
+        (rb_chain's, from that seed on the device) are those `reader.begin` sets at it and its root that tree's of its
+        receipts, and its first linear's first receipts are `sketch_receipt`'s of that linear's first blocks
+        (`gemm_blocks`) at that seed; with the KV's receipts, layer 0's attention after it (form 13 under the signs and
+        midstate kv_rc_pass took from the pass) receipts its first token-layers as `sketch_receipt` does at that seed,
+        store blocks nvec + u layers."""
         torch, wt = self.torch, self.wt
         self.set_keys(k)
         self.step(k, "none", "W")
         torch.cuda.synchronize()
-        if self.root_ptr >= self.up.data_ptr():
-            root_t = self.up[(self.root_ptr - self.up.data_ptr()) // 64]
-        else:
-            root_t = self.dig[(self.root_ptr - self.dig.data_ptr()) // 64]
-        root = BW.digests(BW.host_bytes(root_t))[0]
+        root = self.root_at(self.root_ptr)
         j = self.pass_j
         self.step(k, "none", "W")
         torch.cuda.synchronize()
         got = BW.pass_state(wt)
         seed = BW.pass_seed(wt, j, root)
+        chained, chained_root = BW.READER.consts(), self.root_at(self.root_ptr)
+        BW.READER.begin(seed, self.plan(k), BW.STORE_KEY)
+        hosted = BW.READER.consts()
+        hosted_root = self.root_at(self.commit_tree(self.nvec[k] + self.nkv, BW.stream(torch)))
+        BW.READER.chain_begin(self.plan(k), BW.STORE_KEY)
         n = SKT.vector_bytes(wt.sb, self.T)
         bits = BW.sketch_bits(wt, seed, 16, n)
         want = BW.pass_signs(wt, bits, self.T)
@@ -559,6 +579,7 @@ class Step:
         out = {"j": j, "seed": got["seed"] == seed, "k_s": got["k_s"] == BW.sketch_derive(wt, seed, n),
                "signs": bool(np.array_equal(self.signs.cpu().numpy().view(np.uint32), want)),
                "mid": got["mid"] == BW.receipt_mid(wt, seed),
+               "tree": chained == hosted, "root": chained_root == hosted_root,
                "receipts": BW.host_bytes(self.tags[:first * wt.tag_bytes]) == ys}
         if self.rc:
             self.attn(0, RECEIPT_FORM, k, self.split_cands[RECEIPT_FORM][0])
