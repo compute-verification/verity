@@ -76,17 +76,12 @@ def _lg2_plan() -> tuple[tuple[int, int, int], tuple[tuple[int, int], ...], tupl
     return (Ks[0], Ks[1], Wd), pairs, sums
 
 
-def lg2_fraction(C, m):
-    """(v(m) on bits (`FRACTION_BITS`, LSB first), 0 at m = 0; m != 0).  m != 0 takes no product the table takes (C-Flock's
-    lowering has no CSE): the segment bits' OR is the XOR of their nonempty monomials, and u's bits are ORed in the pairs
-    (k, nb - 1 - k), below the square's columns while nb < p."""
+def lg2_fraction(C, m, m_nz):
+    """v(m) on bits (`FRACTION_BITS`, LSB first), 0 where ``m_nz`` (m != 0) is not."""
     f = W.lg2_fit()
     (K1, K2, Wd), pairs, sums = _lg2_plan()
     u = list(m[:f.nb])
     terms = BM._monomials(C, m[f.nb:])
-    half = f.nb // 2
-    u_nz = or_reduce(C, [b for k in range(half) for b in (u[k], u[f.nb - 1 - k])] + u[half:f.nb - half])
-    m_nz = OR(C, u_nz, BM._xor_all(terms[1:]))
     for a, b in pairs:
         terms.append(terms[a] ^ terms[b])
     fns = [BM._xor_all(terms[i] for i in s) for s in sums]
@@ -103,20 +98,19 @@ def lg2_fraction(C, m):
     for j, b in enumerate(fns[K1 + K2:]):
         cols[j].append(b)
     v = compress_columns(C, cols)[f.shift + 1:Wd]
-    return [C.AND(m_nz, b) for b in v] + [ZERO] * (FRACTION_BITS - len(v)), m_nz
+    return [C.AND(m_nz, b) for b in v] + [ZERO] * (FRACTION_BITS - len(v))
 
 
 def mufu_lg2(C, x):
-    """``MufuLg2Ftz_v1`` on bits.  E's pairwise ANDs serve both its AND and its OR, and E < 127 reuses e_max's AND."""
+    """``MufuLg2Ftz_v1`` on bits."""
     s, E, m = x[31], list(x[23:31]), list(x[:23])
-    p = [C.AND(E[k], E[k + 1]) for k in (0, 2, 4)]
-    lo7 = and_reduce(C, p + [E[6]])
+    lo7 = and_reduce(C, E[:7])
     e_max = C.AND(E[7], lo7)
-    neg = NOT(E[7] ^ lo7 ^ e_max)                                 # E < 127
-    e_zero = NOT(or_reduce(C, [E[k] ^ E[k + 1] ^ q for k, q in zip((0, 2, 4), p)] + [OR(C, E[6], E[7])]))
-    v, m_nz = lg2_fraction(C, m)
+    neg = NOT(OR(C, E[7], lo7))                                   # E < 127
+    e_zero = NOT(or_reduce(C, E))
+    m_nz = or_reduce(C, m)
     t = add(C, E[:7], [], ONE, width=7)                           # (E + 1) mod 128
-    L = [ZERO] * (64 - FRACTION_BITS - 7) + [b ^ neg for b in v + t]
+    L = [ZERO] * (64 - FRACTION_BITS - 7) + [b ^ neg for b in lg2_fraction(C, m, m_nz) + t]
     az, lz = lzc(C, L)
     body = shl_window(C, L, lz, 40, 63) + sub(C, const_bits(133, 8), lz + [ZERO] * (8 - len(lz)), 8)[0] + [neg]
     return BM._word(C, [(e_zero, const_bits(W.NEG_INF, 32)), (s, const_bits(W.QNAN, 32)),
@@ -124,19 +118,38 @@ def mufu_lg2(C, x):
 
 
 def _nonzero(C, x):
-    """x is neither a zero nor a subnormal nor a NaN.  E's pairwise ANDs serve both its OR and its AND (C-Flock's lowering has
-    no CSE)."""
+    """x is neither a zero nor a subnormal nor a NaN."""
     E = list(x[23:31])
-    p = [C.AND(a, b) for a, b in zip(E[::2], E[1::2])]
-    e_nz = or_reduce(C, [a ^ b ^ q for a, b, q in zip(E[::2], E[1::2], p)])
-    return C.AND(e_nz, NOT(C.AND(and_reduce(C, p), or_reduce(C, x[:23]))))
+    return C.AND(or_reduce(C, E), NOT(C.AND(and_reduce(C, E), or_reduce(C, x[:23]))))
 
 
-MufuLg2Ftz = definition("MufuLg2Ftz", 2, mufu_lg2, (("x", F32),), F32, word=W.MufuLg2Ftz, conformance=W.MufuLg2Ftz.conformance,
+class _Cse:
+    """``C`` whose AND of two forms already ANDed (in either order) reuses that bit, as the trace's does: C-Flock lowers a word
+    primitive through its Boolean Definition's builder (`ir_lower._boolean_build`) on a circuit without CSE, and these builders
+    take some products twice (an OR's AND is an AND's, the square's and the monomials' are the mantissa OR's)."""
+
+    def __init__(self, C):
+        self.C, self.ands = C, {}
+
+    def AND(self, a, b):
+        key = frozenset((a.key(), b.key()))
+        if key not in self.ands:
+            self.ands[key] = self.C.AND(a, b)
+        return self.ands[key]
+
+    def __getattr__(self, name):
+        return getattr(self.C, name)
+
+
+def _cse(build):
+    return lambda C, *x: build(_Cse(C), *x)
+
+
+MufuLg2Ftz = definition("MufuLg2Ftz", 2, _cse(mufu_lg2), (("x", F32),), F32, word=W.MufuLg2Ftz, conformance=W.MufuLg2Ftz.conformance,
                         doc="lg2.approx.ftz.f32 on bits: MufuLg2Ftz_v1, the interpolator of mufu_lg2.json as one carry-save sum")
-F32NeZeroFtz = definition("F32NeZeroFtz", 2, lambda C, x: [_nonzero(C, x)], (("x", F32),), BIT, word=W.F32NeZeroFtz,
+F32NeZeroFtz = definition("F32NeZeroFtz", 2, _cse(lambda C, x: [_nonzero(C, x)]), (("x", F32),), BIT, word=W.F32NeZeroFtz,
                           doc="setp.ne.ftz.f32 x, 0 on bits: F32NeZeroFtz_v1")
-F32GtZeroFtz = definition("F32GtZeroFtz", 2, lambda C, x: [C.AND(NOT(x[31]), _nonzero(C, x))], (("x", F32),), BIT,
+F32GtZeroFtz = definition("F32GtZeroFtz", 2, _cse(lambda C, x: [C.AND(NOT(x[31]), _nonzero(C, x))]), (("x", F32),), BIT,
                           word=W.F32GtZeroFtz, doc="setp.gt.ftz.f32 x, 0 on bits: F32GtZeroFtz_v1")
 
 
