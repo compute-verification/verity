@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.engine.profiles.transport import workload_custom_all_reduce_off
 from verity_vllm.program.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
@@ -243,6 +244,14 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     return None
 
 
+def workload_engine_args(workload: str | None, tp: int) -> dict:
+    """The engine arguments a TP row's Build takes from its workload: ``disable_custom_all_reduce`` as the row's engines run it
+    (`engine.profiles.transport.workload_custom_all_reduce_off`).  None at TP1 or without a workload: `vllm_meta`'s default then."""
+    if tp < 2 or workload is None:
+        return {}
+    return {"disable_custom_all_reduce": workload_custom_all_reduce_off(json.load(open(workload)))}
+
+
 def sampling_policy(arg: str | None, workload: str | None) -> dict:
     """[R13 X-05] The row's sampling policy as a STRUCTURAL INPUT of the construction (BRIEF: prompt length, max_tokens, sampling kind).
 
@@ -362,8 +371,10 @@ def _cuda_available() -> bool:
 
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
-        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None) -> dict:
-    """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation."""
+        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None,
+        engine_args: dict | None = None) -> dict:
+    """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
+    the row's engine arguments the meta config takes (`workload_engine_args`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
     t_start = time.time()
@@ -419,7 +430,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-                   tp=tp, rank=rank, launch=launch, emit=emit)
+                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args)
     except _Refused:
         pass
     res = _finish(out, res, t_start)
@@ -437,7 +448,7 @@ class _Refused(Exception):
 
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-               tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None) -> None:
+               tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import vllm_meta as vm
@@ -456,7 +467,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         with apply_target_profile(target):  # ONE application of the declared target for config, instantiation, export and derive
             # [R13 hopper] `TargetProfile.engine_args()` = the attention knobs the target applies (`attention_backend`, `attention_config.flash_attn_version`)
             cfg = vm.make_vllm_config(model=model_id or vm.PIN["model"], revision=revision or vm.PIN["revision"], max_model_len=max_model_len,
-                                      **target.engine_args(), tensor_parallel_size=tp)
+                                      **target.engine_args(), **(engine_args or {}), tensor_parallel_size=tp)
             res["model_pin"] = {"model": model_id or vm.PIN["model"], "revision": revision or vm.PIN["revision"], "dtype": engine_dtype(cfg.model_config), "tp": tp,
                                 "rank": rank, "max_model_len": max_model_len}
             vm.ensure_distributed(cfg, backend)
@@ -466,10 +477,12 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
                 bus = CollectiveBus(rank=rank, world=tp)
                 tp_stack.enter_context(tp_group_override(rank, tp, bus))
-                res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": bool(cfg.parallel_config.disable_custom_all_reduce)}
+                car_off = bool(cfg.parallel_config.disable_custom_all_reduce)
+                res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": car_off}
                 # the workload's transport as the row set it (`row_tp.TpRow.p2p_env`) -- recorded, not consulted here
                 res["tp"]["env_required"] = {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}
-                res["tp"]["collective_backend"] = "pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)"
+                res["tp"]["collective_backend"] = ("pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)" if car_off else
+                                                   "vLLM's custom all-reduce where it admits the tensor, else pynccl")
             model = vm.instantiate_meta(cfg)
             # [R15 fp8] loader parity: a checkpoint that ships a redundant `lm_head.weight` under `tie_word_embeddings` is untied by
             # vLLM for loading and RE-TIED after it iff the two tensors are equal (Qwen3-4B-Instruct-2507-FP8); the same decision from the
@@ -751,7 +764,8 @@ def main(a: Options) -> int:
         emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
-                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_max_seqlen_q), emit=emit)
+                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_max_seqlen_q), emit=emit,
+                  engine_args=workload_engine_args(a.workload, a.tp))
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)
