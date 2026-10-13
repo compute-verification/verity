@@ -61,6 +61,7 @@ import ctypes.util
 import json
 import multiprocessing
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -554,6 +555,35 @@ def jobs_of(job: dict[str, Any]) -> list[dict[str, Any]]:
     return [{**job, "rows": [r0, r1], "reference_rows": [r for r in ref if r0 <= r < r1]} for r0, r1 in _chunks(M, per_row)]
 
 
+def dump_default_operands(outdir: Path, jobs: list[dict[str, Any]], launches: list[dict[str, Any]]) -> dict[str, Any]:
+    """Preserve each cuBLAS split-K launch's exact operands and output for offline fitting; one W per case, shared across its M."""
+    launch_by_case = {_case(x): x for x in launches}
+    first_job: dict[str, dict[str, Any]] = {}
+    for job in jobs:
+        first_job.setdefault(_case(job), job)
+    root, entries = outdir / "default_operands", {}
+    for key, job in first_job.items():
+        launch = launch_by_case[key]
+        profile = launch.get("profile") or {}
+        if not profile.get("reduction_kernels"):
+            continue
+        case_root = root / job["model"] / job["phase"] / job["case"]
+        row_root = case_root / f"M{job['M']}"
+        saved = {}
+        for name, raw in job["paths"].items():
+            dst = (case_root if name in ("w", "b") else row_root) / f"{name}.npy"
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if not dst.exists():
+                shutil.copyfile(raw, dst)
+            saved[name] = str(dst.relative_to(outdir))
+        entries[key] = {"K": job["K"], "N": job["N"], "kernel": job.get("kernel"), "profile": profile, "paths": saved}
+    manifest = {"schema": "verity-vllm/glm53-bf16-gemm-default-operands/v1", "cases": entries}
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / "manifest.json"
+    path.write_text(json.dumps(manifest, indent=1) + "\n")
+    return {"manifest": str(path.relative_to(outdir)), "cases": len(entries)}
+
+
 # ---------------------------------------------------------------------------------------------------------------------- compare
 TOTALS = ("words", "mismatch", "dotprod_words", "fma1_mismatch", "fma0_mismatch", "fma_differ", "reference_coords", "twin_mismatch")
 
@@ -770,6 +800,7 @@ def default_run(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
             "--workers", str(a.workers), "--only", a.only, "--models", a.models, "--min-driver", str(a.min_driver),
             "--want-cc", a.want_cc, "--want-sms", str(a.want_sms)]
     argv += (["--scratch", a.scratch] if a.scratch else []) + (["--quick"] if a.quick else [])
+    argv += ["--dump-operands"] if a.dump_operands else []
     proc = subprocess.run(argv, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2])
     (outdir / "served_default.log").write_text(proc.stdout + proc.stderr)
     doc = json.loads((sub / RECORD).read_text())
@@ -877,6 +908,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                 "fits": fit,
                 "ok": fit == [BC.CUBLAS_SPLITK_HYPOTHESIS],
             }
+    if a.dump_operands:
+        doc["operand_dump"] = dump_default_operands(outdir, jobs, doc["launches"])
     doc["fma"] = fma_of(doc["totals"])
     doc["cases"] = case_verdicts(doc)
     for key, c in doc["cases"].items():
@@ -916,6 +949,8 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"each model's quick router M, the others at M in {QUICK_M}: a first signal in minutes")
     ap.add_argument("--served-default", action="store_true", help="torch's default cuBLAS configuration instead of the split-K-off switch")
     ap.add_argument("--no-default", action="store_true", help="skip the second process under torch's default configuration")
+    ap.add_argument("--dump-operands", action="store_true",
+                    help="preserve operands and outputs for launches with a separate split-K reduction, deduplicating W across M")
     ap.add_argument("--models", default=",".join(MODELS), help=f"comma list of models: {', '.join(MODELS)}")
     ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)}")
     a = ap.parse_args(argv)

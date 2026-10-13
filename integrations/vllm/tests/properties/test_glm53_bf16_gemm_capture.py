@@ -153,6 +153,25 @@ def test_cutedsl_dispatch_wins_over_legacy_profile_split_count(tmp_path) -> None
     assert (t["words"], t["mismatch"], t["twin_mismatch"]) == (5 * 16, 0, 0)
 
 
+def test_the_default_operand_dump_keeps_reduction_routes_and_deduplicates_weights(tmp_path) -> None:
+    profile = {"launches": [{"name": "main_splitK", "grid": [4, 8, 1]}],
+               "reduction_kernels": [{"name": "splitKreduce_kernel", "grid": [8, 2, 1]}]}
+    jobs, launches = [], []
+    for M in (1, 4):
+        paths = X._save(tmp_path / "scratch" / f"M{M}", x=np.full((M, 8), M, np.uint16),
+                        w=np.arange(24, dtype=np.uint16).reshape(3, 8), out=np.full((M, 3), M, np.uint32))
+        jobs.append({"model": "glm53", "phase": "linear", "case": "indexer.wk_weights_proj", "M": M, "K": 8, "N": 3,
+                     "kernel": None, "paths": paths})
+        launches.append({"model": "glm53", "phase": "linear", "case": "indexer.wk_weights_proj", "M": M, "profile": profile})
+    out = tmp_path / "out"
+    got = X.dump_default_operands(out, jobs, launches)
+    manifest = json.loads((out / got["manifest"]).read_text())
+    a, b = (manifest["cases"][f"glm53/linear/indexer.wk_weights_proj/M{M}"] for M in (1, 4))
+    assert got["cases"] == 2 and a["paths"]["w"] == b["paths"]["w"]
+    assert np.array_equal(np.load(out / b["paths"]["x"]), np.full((4, 8), 4, np.uint16))
+    assert len(list((out / "default_operands").rglob("w.npy"))) == 1
+
+
 def test_the_gate_kernel_record_is_dispatch_sm90s() -> None:
     assert X._kernel_of([]) == {"kind": "cublas"}
     dot = {"backend": "dotprod", "bs": 128, "split_k": 0, "num_stages": 0}
@@ -307,10 +326,10 @@ def test_the_default_run_is_a_second_process(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(X.subprocess, "run", fake_run)
     a = X.argparse.Namespace(workers=3, only="linear,bmm", models="glm53", min_driver=575, want_cc="9.0", want_sms=132, scratch=None,
-                             quick=True)
+                             quick=True, dump_operands=True)
     got = X.default_run(a, tmp_path)
     argv = seen["argv"]
-    assert {"--served-default", "--no-default", "--quick"} <= set(argv)
+    assert {"--served-default", "--no-default", "--quick", "--dump-operands"} <= set(argv)
     assert argv[argv.index("--out") + 1] == str(tmp_path / "served_default") and argv[argv.index("--models") + 1] == "glm53"
     assert got["changed"] == [lm] and got["us"][va] == 3.0
     doc = {"served_default": got, "cases": {lm: {"us": 9.0}, va: {"us": 3.0}}}
