@@ -44,6 +44,13 @@ def split(kernels: list[dict], steps: int, weight_bytes: int, kv_bytes: float, R
     gemm_native = weight_bytes / (native * rate)
     native_ms = gemm_native + ms["attention"] + ms["other"]
     native_all_ms = (weight_bytes + kv_bytes) / (native * rate) + ms["other"]
+    busy = sorted((e["ts"], e["ts"] + e["dur"]) for e in kernels)
+    gaps, end = [], busy[0][1]
+    for a, b in busy[1:]:
+        if a > end:
+            gaps.append(a - end)
+        end = max(end, b)
+    inside = [g for g in gaps if g < 1000]  # µs; a gap of a millisecond or more is the host between two steps
     by = {}
     for e in kernels:
         by.setdefault(e["name"], 0.0)
@@ -53,10 +60,58 @@ def split(kernels: list[dict], steps: int, weight_bytes: int, kv_bytes: float, R
             "gemm_of_R": weight_bytes / (rate * ms["gemm"]) if ms["gemm"] else None,
             "attention_of_R": kv_bytes / (rate * ms["attention"]) if ms["attention"] else None,
             "other_share": ms["other"] / kern, "native_ms": native_ms,
+            "idle_in_step_ms": sum(inside) / 1e3 / steps, "idle_in_step_gaps": len(inside) / steps,
+            "idle_between_steps_ms": sum(g for g in gaps if g >= 1000) / 1e3 / steps,
             "native_of_R": (weight_bytes + kv_bytes) / (rate * native_ms), "native_all_ms": native_all_ms,
             "native_all_of_R": (weight_bytes + kv_bytes) / (rate * native_all_ms),
             "kernels": [{"name": n[:160], "class": classify(n), "ms": round(t, 4)}
                         for n, t in sorted(by.items(), key=lambda kv: -kv[1])]}
+
+
+NCU_METRICS = ("gpu__time_duration.sum", "dram__bytes_read.sum", "dram__bytes_write.sum", "lts__t_sectors_op_read.sum",
+               "lts__t_sectors_op_write.sum")
+
+
+def ncu_rows(text: str) -> list[dict]:
+    """`ncu --import … --csv --page raw --print-units base`: one dict a kernel, its name and NCU_METRICS as floats."""
+    import csv
+    import io
+    rows = []
+    for r in csv.DictReader(io.StringIO(text)):
+        if not (r.get("ID") or "").strip().isdigit():
+            continue  # the units row
+        rows.append({"name": r["Kernel Name"], **{m: float(r[m].replace(",", "")) for m in NCU_METRICS}})
+    return rows
+
+
+def ncu_split(rows: list[dict], steps: int, weight_bytes: float, kv_bytes: float, R: float) -> dict:
+    """Each class's DRAM bytes a step against the bytes registered for it (the GEMMs: the weights; attention: the KV;
+    the rest: nothing), and the bus time inside kernels that their traffic leaves (duration × R minus reads and
+    writes)."""
+    reg = {"gemm": weight_bytes, "attention": kv_bytes, "other": 0.0}
+    out = {}
+    for c in ("gemm", "attention", "other", "all"):
+        rs = [r for r in rows if c == "all" or classify(r["name"]) == c]
+        rd = sum(r["dram__bytes_read.sum"] for r in rs) / steps
+        wr = sum(r["dram__bytes_write.sum"] for r in rs) / steps
+        ns = sum(r["gpu__time_duration.sum"] for r in rs) / steps
+        registered = sum(reg.values()) if c == "all" else reg[c]
+        out[c] = {"kernels": len(rs) / steps, "ms": ns / 1e6, "dram_read_GB": rd / 1e9, "dram_write_GB": wr / 1e9,
+                  "l2_read_GB": sum(r["lts__t_sectors_op_read.sum"] for r in rs) * 32 / steps / 1e9,
+                  "l2_write_GB": sum(r["lts__t_sectors_op_write.sum"] for r in rs) * 32 / steps / 1e9,
+                  "registered_GB": registered / 1e9, "read_over_registered": rd / registered if registered else None,
+                  "dram_GBps": (rd + wr) / ns if ns else None,
+                  "bus_left_GB": (ns * 1e-9 * R * 1e9 - rd - wr) / 1e9}
+    by: dict = {}
+    for r in rows:
+        k = by.setdefault(r["name"][:160], {"class": classify(r["name"]), "n": 0, "ms": 0.0, "read_GB": 0.0,
+                                            "write_GB": 0.0})
+        k["n"] += 1
+        k["ms"] += r["gpu__time_duration.sum"] / 1e6 / steps
+        k["read_GB"] += r["dram__bytes_read.sum"] / 1e9 / steps
+        k["write_GB"] += r["dram__bytes_write.sum"] / 1e9 / steps
+    out["kernels"] = [{"name": n, **v} for n, v in sorted(by.items(), key=lambda kv: -kv[1]["ms"])]
+    return out
 
 
 def main() -> int:
@@ -69,8 +124,27 @@ def main() -> int:
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--R", type=float, default=1540.0)
     ap.add_argument("--native-R", type=float, default=0.96)
+    ap.add_argument("--ncu", action="store_true",
+                    help="bracket the measured steps with cudaProfilerStart/Stop for `ncu --profile-from-start off`, "
+                         "no torch profiler; writes step_profile-ncu.json")
+    ap.add_argument("--from-ncu", type=Path,
+                    help="no vLLM: split the kernels of `ncu --import … --csv --page raw --print-units base` against "
+                         "the bytes step_profile-ncu.json registers; writes step_profile-ncu-split.json")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
+    if a.from_ncu:
+        meta = json.loads((a.out / "step_profile-ncu.json").read_text())
+        rows = ncu_rows(a.from_ncu.read_text())
+        s = meta["shapes"][0]
+        res = {**meta, "split": ncu_split(rows, s["steps"], meta["weight_bytes_per_step"], s["kv_bytes_per_step"], a.R)}
+        (a.out / "step_profile-ncu-split.json").write_text(json.dumps(res, indent=1) + "\n")
+        for c in ("gemm", "attention", "other", "all"):
+            v = res["split"][c]
+            print(f"{c}: {v['kernels']:.0f} kernels, {v['ms']:.3f} ms; DRAM read {v['dram_read_GB']:.3f} GB against "
+                  f"{v['registered_GB']:.3f} registered ({v['read_over_registered'] or 0:.3f}), write "
+                  f"{v['dram_write_GB']:.3f} GB; L2 read {v['l2_read_GB']:.3f} GB; {v['dram_GBps'] or 0:.0f} GB/s; "
+                  f"bus left inside {v['bus_left_GB']:.3f} GB", flush=True)
+        return 0
     logf = (a.out / "step_profile.log").open("a")
 
     def log(msg: str) -> None:
@@ -120,6 +194,21 @@ def main() -> int:
                 made[o.request_id] = len(o.outputs[0].token_ids)
         torch.cuda.synchronize()
         count[0] = 0
+        if a.ncu:
+            torch.cuda.cudart().cudaProfilerStart()
+            for _ in range(a.steps):
+                eng.step()
+            torch.cuda.synchronize()
+            torch.cuda.cudart().cudaProfilerStop()
+            steps = count[0]
+            eng.abort_request(ids)
+            while eng.has_unfinished_requests():
+                eng.step()
+            res["shapes"].append({"batch": batch, "ctx": ctx, "steps": steps,
+                                  "kv_bytes_per_step": batch * (ctx + 4 + a.steps / 2) * KV_TOKEN_BYTES})
+            (a.out / "step_profile-ncu.json").write_text(json.dumps(res, indent=1) + "\n")
+            log(f"{batch}x{ctx}: {steps} steps under ncu")
+            continue
         with profile(activities=[ProfilerActivity.CUDA]) as prof:
             for _ in range(a.steps):
                 eng.step()
@@ -141,7 +230,9 @@ def main() -> int:
             f"(span {s['span_ms']:.3f}) a step at {s['of_R']:.3f} R ({s['of_R_span']:.3f} on the span): GEMM "
             f"{s['ms']['gemm']:.3f} ms at {s['gemm_of_R'] or 0:.3f} R, attention {s['ms']['attention']:.3f} ms at "
             f"{s['attention_of_R'] or 0:.3f} R, other {s['ms']['other']:.3f} ms ({s['other_share']:.1%}); native GEMMs "
-            f"{s['native_of_R']:.3f} R, every read native {s['native_all_of_R']:.3f} R")
+            f"{s['native_of_R']:.3f} R, every read native {s['native_all_of_R']:.3f} R; idle between kernels in a step "
+            f"{s['idle_in_step_ms']:.3f} ms ({s['idle_in_step_gaps']:.0f} gaps), between steps "
+            f"{s['idle_between_steps_ms']:.3f} ms")
         (a.out / "step_profile.json").write_text(json.dumps(res, indent=1) + "\n")
     log("done")
     return 0

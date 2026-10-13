@@ -53,6 +53,25 @@ if [ "$SCRIPT" = serve.py ]; then
     exit $rc' _ "$PY" $KF/serve.py --topup-lib "$B/libtopup.so" --kv-lib "$B/libkv-p512.so" --out "$O" ${ARGS:-}
   exit $?
 fi
+if [ "$SCRIPT" = step_profile.py ] && [ -n "${NCU_SHAPES:-}" ]; then
+  # One ncu report a shape (step_profile-ncu.json holds one), then the torch profiler's pass over them all for the
+  # idle time between kernels.
+  export NCUB=/usr/local/cuda/bin/ncu PY KF
+  # shellcheck disable=SC2086,SC2016
+  "${LEASE[@]}" bash -c '
+    set -e
+    for shape in $NCU_SHAPES; do
+      d=$O/ncu-$shape; mkdir -p "$d"
+      $NCUB --target-processes all --profile-from-start off --cache-control none --clock-control none \
+        --graph-profiling node --metrics gpu__time_duration.sum,dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sectors_op_read.sum,lts__t_sectors_op_write.sum \
+        -f -o "$d/step" "$PY" $KF/step_profile.py --out "$d" --ncu --shapes "$shape" --steps "${NCU_STEPS:-3}" > "$d/ncu.log" 2>&1 \
+        || { tail -40 "$d/ncu.log"; exit 6; }
+      $NCUB --import "$d/step.ncu-rep" --csv --page raw --print-units base > "$d/ncu.csv"
+      "$PY" $KF/step_profile.py --out "$d" --from-ncu "$d/ncu.csv" | tee "$d/split.txt"
+    done
+    "$PY" $KF/step_profile.py --out "$O" --shapes "$(echo $NCU_SHAPES | tr " " ,)" ${ARGS:-}' 
+  exit $?
+fi
 if [ "$SCRIPT" = step_profile.py ]; then
   # shellcheck disable=SC2086
   "${LEASE[@]}" "$PY" $KF/step_profile.py --out "$O" ${ARGS:-}
