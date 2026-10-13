@@ -10,9 +10,9 @@ import Proofs.Flock.Recursive.Loads
 `rsRead_of_layer` takes four named facts. Here they come from facts closer to V*'s files, circuits and reads file:
 
 * `OneCopy` from each accepted session being V*'s statement of its index (`SessStmt`, from the verifier's statement
-  check, `sessStmt_of_checks`) and the verifier's `rec-opening` check of one copy (`OpenUpv`), `oneCopy_of`: one
-  session per part (`openSess_of`: the list has one statement named as the part's unit) of one unit (`nv_of_copy`:
-  that statement is one of R's opening parts, of one instance).
+  check, `sessStmt_of_checks`) and the verifier's `rec-opening` check of one copy (`OpenUpv`, `openUpv`),
+  `oneCopy_of`: one session per part (`openSess_of`: the list has one statement named as the part's unit) of one unit
+  (`nv_of_copy`: that statement is one of R's opening parts, of one instance).
 * `OpenAll` from V*'s sessions (`SessionAt`'s (a)), `openAll_of_session`.
 * `RsSk` from the reads file at the ports keying the ring switches' columns (`RsSel`, S's `SelPort`), `rsSk_of_sel`:
   the column's key (`OpeningZeroAt`'s `RegBit`) puts its wire at the port's commit string (`posK_of_keyAt`).
@@ -76,12 +76,14 @@ theorem mem_io_of_readCol {Q : VStmt} (u : Fin Q.nv) {j : ℕ} (hj : j < Q.c.upv
     simp only [Rows.comp, Rows.stack] at he
     omega
 
-/-- **`RecOpening.check` accepts a `rec-opening` unit of one copy only** (named; open: the verifier reads META's
-`units_per_vu` as `upv` without checking it at a `rec-opening` unit, the verifier change rec-lean holds): a unit named
+/-- **`RecOpening.check` accepts a `rec-opening` unit of one copy only** (`openUpv`): a unit named
 `rec-opening/m<m>-c<claims>-p<j>` that `check` accepts has `upv = 1`. -/
 def OpenUpv : Prop :=
   ∀ c : Flock.Circuit, RecOpening.check c = .ok () → ∀ m cl p, RecOpening.params c.unit.name = some (m, cl, p) →
     c.upv = 1
+
+/-- **`OpenUpv` from the verifier's `rec-opening` check**, which refuses any other `upv` (`upv_of_check`). -/
+theorem openUpv : OpenUpv := fun _ h _ _ _ hp => FlockVBridge.OfVStar.upv_of_check h hp
 
 /-! ## V*'s list at a `rec-opening` name -/
 
@@ -200,70 +202,6 @@ theorem toList_getElem_of {xs : Array VStar.Stmt} {i : ℕ} {a : VStar.Stmt} (h 
   rw [Array.getElem?_toList]
   exact h
 
-/-- **The unit check, keeping its one statement**: `RecVStar.check` as statement `j` passes only where exactly one
-statement of the list has the unit's name (`check_ok`'s walk, keeping the filter). -/
-theorem check_one {i : RecVStar.Inner} {name : String} {n j : ℕ} {s : VStar.Stmt}
-    (h : RecVStar.check i name n (some j) = .ok s) :
-    ∃ ss, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ ss.toList.filter (·.name == name) = [s] := by
-  unfold RecVStar.check at h
-  dsimp only at h
-  split at h
-  all_goals try (split at h; (obtain ⟨_, h1, -⟩ := ebind_ok h); cases h1)
-  all_goals
-    obtain ⟨ss, hss, h⟩ := ebind_ok h
-    split at h
-    · cases h
-    · rename_i s' hfl
-      split at h
-      · obtain ⟨_, h1, -⟩ := ebind_ok h
-        cases h1
-      · split at h
-        · obtain ⟨_, h1, -⟩ := ebind_ok h
-          cases h1
-        · rename_i t ht
-          split at h
-          · obtain ⟨_, h1, -⟩ := ebind_ok h
-            cases h1
-          · rename_i htn
-            cases h
-            have htm : t ∈ ss.toList.filter (·.name == name) := by
-              rw [List.mem_filter]
-              exact ⟨Array.mem_toList_iff.mpr (Array.mem_of_getElem? ht), by simpa using htn⟩
-            rw [hfl, List.mem_singleton] at htm
-            exact ⟨ss, hss, htm ▸ ht, hfl⟩
-    · cases h
-
-/-- **`checkStmt` at an inner shape, statement `j` and bindings `f`, as the unit check** (`checkStmt_ok`'s walk): the
-tags are named V*'s, there is no lookup table, the unit check passes at the statement's population, and the circuit
-file is V*'s for the statement it finds. -/
-theorem checkStmt_check {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
-    {sj : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
-    {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
-    (h : RecVStar.checkStmt (some i) tags tables sj circuitB partition program (some own) (some j) (some f) rows =
-      .ok ()) :
-    tags.name = Flock.Tags.circuit.name ∧ tables = [] ∧ ∃ s,
-      RecVStar.check i sj.c.unit.name (RecVStar.population sj) (some j) = .ok s ∧
-        RecVStar.circuitFile s f = .ok circuitB := by
-  unfold RecVStar.checkStmt at h
-  dsimp only at h
-  split at h
-  · obtain ⟨_, h1, -⟩ := ebind_ok h
-    cases h1
-  · rename_i hn
-    split at h
-    · obtain ⟨_, h1, -⟩ := ebind_ok h
-      cases h1
-    · rename_i ht
-      split at h
-      · split at h
-        · obtain ⟨_, h1, -⟩ := ebind_ok h
-          cases h1
-        obtain ⟨_, -, h⟩ := ebind_ok h
-        obtain ⟨s, hs, -⟩ := ebind_ok h
-        obtain ⟨hck, hf⟩ := checkCircuit_ok hs
-        exact ⟨by simpa using hn, by simpa using ht, s, hck, checkFile_ok hf⟩
-      · cases h
-
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
 
@@ -286,7 +224,7 @@ def SessStmt (ish : RecVStar.Inner) (bind : Fin S → VStar.Bindings)
 /-- **`SessStmt` from the verifier's statement check**: where a session accepts, some transcript it accepts passes
 `checkStmt` as statement `s` under `bind s` (`StmtsChecked`, the checked family's `ChecksAccepted`), and the inputs
 carry the tags their name names (`TagsFound`): the first table's statement has the session's circuit
-(`setup_zero_c`), the check finds its unit's one statement (`checkStmt_check`, `check_one`) and V*'s file for it is
+(`setup_zero_c`), the check finds its unit's one statement (`checkStmt_ok`) and V*'s file for it is
 the inputs', whose parse is the session's circuit at V*'s tags (`parse_zkTags_vstar`, as `loads_of_verifiesV`). -/
 theorem sessStmt_of_checks {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
@@ -298,9 +236,9 @@ theorem sessStmt_of_checks {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindin
   obtain ⟨hacc, -⟩ := hA
   obtain ⟨_, _, sts, hs, hfm⟩ := hck R ω t R₂ s ⟨_, (hacc s).1⟩
   obtain ⟨h0, hc0⟩ := setup_zero_c (zs R ω t R₂ s).ht (zs R ω t R₂ s).hTags.1 (zs R ω t R₂ s).hcH hs
-  obtain ⟨htag, htab, sv, hchk, hcf⟩ := checkStmt_check (array_forM_ok hfm 0 h0)
-  rw [hc0] at hchk
-  obtain ⟨ss, hss, hj, hfl⟩ := check_one hchk
+  obtain ⟨htag, htab, ss, sv, hss, hj, -, -, hcf, -, hfl⟩ :=
+    FlockSoundness.Discharge.Recursion.checkStmt_ok (array_forM_ok hfm 0 h0)
+  rw [hc0] at hfl
   have hT : (zs R ω t R₂ s).I.tags = Flock.Tags.circuit := by
     have h : Flock.Tags.find? (zs R ω t R₂ s).I.tags.name = some (zs R ω t R₂ s).I.tags := hF R ω t R₂ s
     rw [htag, find?_circuit] at h
@@ -360,13 +298,13 @@ theorem oneCopy_of {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
     {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}
-    (hst : SessStmt ish bind zs dg N k Rw) (hu : OpenUpv) : OneCopy zs dg N k Rw sh w := by
+    (hst : SessStmt ish bind zs dg N k Rw) : OneCopy zs dg N k Rw sh w := by
   intro gs s s' un un' j j' p hc hc'
   obtain rfl := openSess_of (sh := sh) (w := w) hst gs s s' un un' j j' p hc hc'
   have hn := nv_of_copy hob hst hc
   obtain ⟨_, _, _, _, _, _, _, -, _, hj, -, hchk, -, m, cl, hpm, -⟩ := hc
   obtain ⟨_, _, _, _, _, _, _, -, _, hj', -⟩ := hc'
-  have h1 := hu _ hchk m cl p hpm
+  have h1 := openUpv _ hchk m cl p hpm
   refine ⟨rfl, ?_, ?_⟩
   · rw [Nat.lt_one_iff.mp (lt_of_lt_of_eq un.isLt hn), Nat.lt_one_iff.mp (lt_of_lt_of_eq un'.isLt hn)]
   · rw [Nat.lt_one_iff.mp (lt_of_lt_of_eq hj h1), Nat.lt_one_iff.mp (lt_of_lt_of_eq hj' h1)]
@@ -471,9 +409,9 @@ theorem rsRead_of_facts {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}
     {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs) (hst : SessStmt ish bind zs dg N k Rw)
-    (hu : OpenUpv) (hall : OpenAll zs dg N k Rw sh w) (hsel : RsSel zs dg N k Rw sh w own sel c₀)
+    (hall : OpenAll zs dg N k Rw sh w) (hsel : RsSel zs dg N k Rw sh w own sel c₀)
     (hr : RsReadCol zs dg N k Rw sh w) : RsRead zs dg N k Rw sh w own sel c₀ :=
-  rsRead_of_layer (oneCopy_of hob hst hu) hall (rsSk_of_sel hsel) (rsIo_of_readCol hr)
+  rsRead_of_layer (oneCopy_of hob hst) hall (rsSk_of_sel hsel) (rsIo_of_readCol hr)
 
 /-! ## `RsSel` at the round commitments -/
 
@@ -582,10 +520,10 @@ theorem rsRead_of_accepted {xR : HoloReg GF128 Dig} {F : C3Family T CT st hp xR 
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
     {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → Array F128}
     {own : Fin (vstarCount F.ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
-    (hu : OpenUpv) (hall : OpenAll F.zs dg N k Rw sh w) (hk : RsKeys F.zs dg N k Rw sh w)
+    (hall : OpenAll F.zs dg N k Rw sh w) (hk : RsKeys F.zs dg N k Rw sh w)
     (hr : RoundReads F.zs dg N k Rw sh w own) (hs : RoundStage sel c₀) (hrc : RsReadCol F.zs dg N k Rw sh w) :
     RsRead F.zs dg N k Rw sh w own sel c₀ :=
-  rsRead_of_facts F.hob (sessStmt_of_accepted hca hF) hu hall (rsSel_of_rounds hk hr hs) hrc
+  rsRead_of_facts F.hob (sessStmt_of_accepted hca hF) hall (rsSel_of_rounds hk hr hs) hrc
 
 end
 
