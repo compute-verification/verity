@@ -126,6 +126,7 @@ WAIT_EVERY_S = 30
 WAIT_GRACE = timedelta(minutes=5)                                # the site's default cron runs every minute
 ROUTES_DIR = "routes.d"                                          # in the notes: one `<name>.json` per inbox
 ROUTES_RAW = "https://raw.githubusercontent.com/danielreuter/research-notes/main/routes.d/"
+RAW_HOST = "raw.githubusercontent.com"                           # the notes are private: `http_get` sends it the notes token
 ROUTE_SCHEMA = "verity/slack-route/v1"
 LEAD_RE = re.compile(r"^\s*(?:(?::[a-z0-9_+'-]+:|[\u2600-\u27bf\U0001f000-\U0001faff]\ufe0f?)\s*)?"   # one emoji may lead (`:mega: @a`)
                      r"((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\|@?[^>]*)?>)[\s,:]*)+)")
@@ -844,12 +845,17 @@ def _route_ok(r: Any, name: str) -> bool:
 
 
 def http_get(url: str, timeout: float = 10) -> bytes | None:
-    """The body at `url` (http(s), or a `file://` directory for tests and offline use), or None when there is none."""
+    """The body at `url` (http(s), or a `file://` directory for tests and offline use), or None when there is none.  A
+    github.com raw file is read with RESEARCH_NOTES_TOKEN when it is set: the notes repository is private, and without
+    the token its raw files answer 404 as if they weren't there."""
     if url.startswith("file://"):
         p = Path(urllib.parse.unquote(url[7:]))
         return p.read_bytes() if p.is_file() else None
+    headers = {}
+    if urllib.parse.urlsplit(url).hostname == RAW_HOST and (token := os.environ.get("RESEARCH_NOTES_TOKEN")):
+        headers["Authorization"] = f"Bearer {token}"
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as r:
             return r.read(1 << 20)
     except urllib.error.HTTPError as e:
         if e.code == 404:
@@ -873,8 +879,8 @@ def route_answers(url: str, timeout: float = 10) -> str | None:
 
 class Routes:
     """The routes table, `routes.d/<name>.json` in the notes: the local clone's, and for a name it lacks (a clone not pulled
-    since that agent registered) the published file, read without credentials from $RESEARCH_ROUTES_URL (default the notes
-    repo's raw files)."""
+    since that agent registered) the published file, read from $RESEARCH_ROUTES_URL (default the notes repo's raw files,
+    with RESEARCH_NOTES_TOKEN)."""
 
     def __init__(self, root: Path | None = None, base: str | None = None, get: Callable[[str], bytes | None] = http_get):
         self.root, self.get = (root or notes_root()), get
