@@ -3721,7 +3721,8 @@
   },
   {
    "item": 4,
-   "work": "committer: add SiluAndMulWithClamp to ACQUIRE_CLASSES so the shared expert's act_fn module hook binds"
+   "work": "committer: add SiluAndMulWithClamp to ACQUIRE_CLASSES so the shared expert's act_fn module hook binds",
+   "done": "committer: SiluAndMulWithClamp is in ACQUIRE_CLASSES (a CustomOp of its own, not a SiluAndMul), so the shared expert's act_fn module hook binds model.layers.{i}.ffn.shared_experts.act_fn"
   },
   {
    "item": 5,

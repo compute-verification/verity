@@ -66,7 +66,7 @@ DEFAULT_CHUNK = 4096
 ACQUIRE_CLASSES = {
     "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear", "LinearBase",
     "RMSNorm", "GemmaRMSNorm", "LayerNorm",
-    "SiluAndMul", "GeluAndMul", "GeluAndMulSparse", "MulAndSilu",
+    "SiluAndMul", "GeluAndMul", "GeluAndMulSparse", "MulAndSilu", "SiluAndMulWithClamp",
     "RotaryEmbedding",
     "Attention",
     "VocabParallelEmbedding",
@@ -574,7 +574,7 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
         elif names & {"RMSNorm", "GemmaRMSNorm", "LayerNorm"}:
             hs = int(m.weight.numel()) if hasattr(m, "weight") and isinstance(m.weight, torch.Tensor) else hidden
             w = 2 * hs * isz                                                            # fused add+norm returns (out, residual)
-        elif names & {"SiluAndMul", "GeluAndMul", "GeluAndMulSparse", "MulAndSilu"}:
+        elif names & {"SiluAndMul", "GeluAndMul", "GeluAndMulSparse", "MulAndSilu", "SiluAndMulWithClamp"}:
             w = inter * 2
         elif "RotaryEmbedding" in names:
             w = (heads + kv_heads) * head_dim * 2 * rope_mult                           # returns (q, k); once per layer when shared

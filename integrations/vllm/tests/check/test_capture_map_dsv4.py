@@ -23,6 +23,7 @@ from verity_vllm.acquire.sources import moe_source, route_source
 from verity_vllm.check.capture_map import check, check_target
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit import identity as ID
+from verity_vllm.commit.committer.native_host import ACQUIRE_CLASSES
 from verity_vllm.engine import meta_inventory as MI
 from verity_vllm.pipeline import cli
 from verity_vllm.program.registry import catalog
@@ -356,6 +357,16 @@ def test_the_committer_does_not_read_the_map_yet():
     built = set(route_source.BINDERS) | {"tp_partial", "moe"}
     assert set(CMAP["binders"]) - built == {"mhc", "dsv4_attention"}
     assert len(CMAP["capture_work"]) == 6
+
+
+def test_every_module_hook_tap_is_on_a_module_the_committer_acquires():
+    """The committer hooks the modules of `ACQUIRE_CLASSES` by MRO class name; the shared expert's activation is vLLM's
+    `SiluAndMulWithClamp` (a CustomOp of its own, not a SiluAndMul) and the router gate a `GateLinear(ReplicatedLinear)`."""
+    types = {g["pattern"]: g["type"] for g in RANK0["groups"]}
+    bases = {"GateLinear": "ReplicatedLinear"}
+    hooked = {t["commit"]["name"].split("/")[0] for t in CMAP["taps"] if (t.get("commit") or {}).get("binder") == "module_hook"}
+    assert {m: bases.get(types[m], types[m]) in ACQUIRE_CLASSES for m in hooked} == dict.fromkeys(hooked, True)
+    assert types["model.layers.{i}.ffn.shared_experts.act_fn"] == "SiluAndMulWithClamp"
 
 
 def test_moe_source_binds_six_planes_on_every_layer():
