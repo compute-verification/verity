@@ -98,7 +98,7 @@ SPECIAL = (("special1", 3, 1), ("special2", 11, 2))
 SCALE_LOG2 = (-8.0, 2.0)
 SCREEN_CHUNK, SCREEN_MAX = 500, 20_000
 #: the workload's `env_required`, and vLLM's defaults for the all-reduce's routes stated
-SERVED_ENV = {"NCCL_P2P_DISABLE": "1", "VLLM_BATCH_INVARIANT": "0", "VLLM_USE_DEEP_GEMM": "0", "VLLM_ALLREDUCE_USE_SYMM_MEM": "1",
+SERVED_ENV = {"VLLM_BATCH_INVARIANT": "0", "VLLM_USE_DEEP_GEMM": "0", "VLLM_ALLREDUCE_USE_SYMM_MEM": "1",
               "VLLM_ALLREDUCE_USE_FLASHINFER": "1"}
 SWITCH_ENV = {**SERVED_ENV, "VLLM_ALLREDUCE_USE_SYMM_MEM": "0"}
 #: spawn -> (env, vLLM's custom all-reduce on: the workload's ``disable_custom_all_reduce`` negated, or the switch's)
@@ -106,7 +106,7 @@ SPAWNS = {"served": (SERVED_ENV, False), "served_again": (SERVED_ENV, False), "s
 PHASES = ("fused", "allreduce", "probe", "again", "switch")
 SPAWN_OF = {"fused": "served", "allreduce": "served", "probe": "served", "again": "served_again", "switch": "switch"}
 #: unset in every rank process: each would change the dispatch this capture states
-UNSET = ("VLLM_CUSTOM_ALLREDUCE_ALGO", "VLLM_FLASHINFER_ALLREDUCE_BACKEND", "VLLM_USE_NCCL_SYMM_MEM",
+UNSET = ("NCCL_P2P_DISABLE", "VLLM_CUSTOM_ALLREDUCE_ALGO", "VLLM_FLASHINFER_ALLREDUCE_BACKEND", "VLLM_USE_NCCL_SYMM_MEM",
          "VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC")
 NEG0, NAN = 0x8000, 0x7FC1
 #: rank r's term of a sum whose word depends on the order of its terms: 1 + 2^-8 is a bf16 tie, which six 2^-26 break (to 1 + 2^-7)
