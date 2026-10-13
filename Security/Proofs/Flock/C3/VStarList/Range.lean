@@ -149,8 +149,4 @@ theorem units_of_sparseRange {ish : Flock.RecVStar.Inner} {st : Flock.Stmt} {hp 
     exact lt_of_lt_of_le (Nat.add_lt_add_left hc _) hend
   · simp at hu'
 
-#print axioms checkInnerRange_spec
-#print axioms checkAtC3_spec
-#print axioms sparseRangeOk_of_check
-
 end FlockC3.VStarList
