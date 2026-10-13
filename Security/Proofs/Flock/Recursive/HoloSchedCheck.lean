@@ -76,8 +76,46 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
     | exact absurd (checkBind_ok h) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
     | cases h
   · rename_i hsz
-    obtain ⟨rr, hr, h⟩ := checkBind_ok h
-    have hloop := h
+    have hrun : ∃ rr : List (String × Array (Nat × ByteArray) × Array SchedRound),
+        (match cs.stream? s!"{STACKED}/rep0", i.stacked.bind stackedRounds with
+          | none, _ => pure []
+          | some st, none =>
+            throw (s!"rec-inner: the inner transcript holds R's stream ({st.name}), and the verifier's inner shape names " ++
+              "no schedule of R's")
+          | some st, some rs =>
+            let (got, want) := (st.tops.toList.map (·.size), topCounts rs)
+            if got != want then
+              throw s!"rec inner transcript: {st.name} holds tops of {got} nodes, and its schedule commits tops of {want}"
+            pure [(st.name, st.commits, rs)]) = .ok rr ∧
+        (for (s, cm, rs) in
+            (cs.reps.toList.zipIdx.map fun (cm, x) => (s!"rep {x}", cm, rep)) ++
+              (match i.sparse with
+              | some sh => [0, 1].filterMap fun x =>
+                (cs.stream? s!"{SPARSE}/rep{x}").map fun st => (st.name, st.commits, sparsePhaseRounds sh)
+              | none => []) ++ rr do
+          let (got, want) := (cm.toList.map (·.1), commitRounds rs)
+          if got != want then
+            let j := ((got.zip want).findIdx? fun (a, b) => a != b).getD (min got.length want.length)
+            let at_ := fun (ks : List Nat) => (ks[j]?.map (s!"round {·}")).getD "no round"
+            throw (s!"rec inner transcript: {s}'s message round {j} is at {at_ got}, and its schedule's at {at_ want} " ++
+              s!"({got.length} message rounds, the schedule's {want.length})")) = .ok () := by
+      cases hs : cs.stream? s!"{STACKED}/rep0" with
+      | none =>
+        refine ⟨[], by simp only [hs], ?_⟩
+        simpa only [hs] using h
+      | some st =>
+        cases hrs : i.stacked.bind stackedRounds with
+        | none =>
+          rw [hs, hrs] at h
+          cases h
+        | some rs =>
+          by_cases ht : (st.tops.toList.map (·.size) != topCounts rs) = true
+          · rw [hs, hrs, if_pos ht] at h
+            cases h
+          · refine ⟨[(st.name, st.commits, rs)], ?_, ?_⟩
+            · rw [hs, hrs, if_neg ht]
+            · simpa only [hs, hrs, if_neg ht] using h
+    obtain ⟨rr, hr, hloop⟩ := hrun
     have hall := forIn_each (fun a : String × Array (Nat × ByteArray) × Array SchedRound =>
         a.2.1.toList.map (·.1) = commitRounds a.2.2) (fun a r hb => by
           obtain ⟨s, cm, rs⟩ := a
