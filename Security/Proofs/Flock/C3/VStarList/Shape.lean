@@ -251,5 +251,3 @@ theorem mReg_of_list {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.I
   rw [hm, tableM_eq, mReg_holoAt hell]
 
 end FlockC3.VStarList
-
-#print axioms FlockC3.VStarList.stacked_of_list

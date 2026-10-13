@@ -349,5 +349,3 @@ theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk 
 end Family
 
 end FlockC3.PubRows
-
-#print axioms FlockC3.PubRows.nameChecked

@@ -603,10 +603,6 @@ end
 
 end FlockC3.RegLevels
 
-#print axioms FlockC3.RegLevels.stackedNet_of
-#print axioms FlockC3.RegLevels.stackedName_inj
-#print axioms FlockC3.RegLevels.stackedName_startsWith
-#print axioms FlockC3.RegLevels.stackedParams_of_check
 #print axioms FlockC3.RegLevels.shape?_opening
 #print axioms FlockC3.RegLevels.stackedParams_of_checked
 #print axioms FlockC3.RegLevels.ligSteps_of_plays
