@@ -396,6 +396,9 @@ class DeviceStore:
         sub_at = [0] * (h0 + 1)
         for g in range(h0):
             sub_at[g + 1] = sub_at[g] + ((1 << h0) >> g)
+        device_seeds = [seed for (seed, *_), _ in items if not isinstance(seed, bytes)]
+        copied_seeds = iter(torch.stack(device_seeds).cpu().numpy()) if device_seeds else iter(())
+        seeds = [seed if isinstance(seed, bytes) else bytes(next(copied_seeds)) for (seed, *_), _ in items]
         firsts = [np.unique((np.asarray(ps, dtype=np.int64) // PER_LEAF) >> h0 << h0) for _, ps in items]
         total = sum(len(f) for f in firsts)
         ys = torch.empty((max(total, 1) * S, 8), dtype=torch.int64, device="cuda")
@@ -449,7 +452,7 @@ class DeviceStore:
         raw, braw = memoryview(raw_t.numpy().reshape(-1)), memoryview(braw_t.numpy().reshape(-1))
         t2 = time.perf_counter_ns()
         out, q = [], 0
-        for (seed, *_), positions in items:
+        for seed, (_handle, positions) in zip(seeds, items):
             mine = []
             for p in positions:
                 r = 64 * cols * q
