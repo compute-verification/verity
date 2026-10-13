@@ -198,11 +198,17 @@ def portOf (own : Array Flock.Registered.Port) (nm : String) : Flock.Registered.
 theorem portOf_spec {own : Array Flock.Registered.Port} {nm : String} (h : ∃ pt ∈ own, pt.name = nm) :
     portOf own nm ∈ own ∧ (portOf own nm).name = nm := by
   obtain ⟨pt, hpt, hn⟩ := h
-  obtain ⟨a, ha⟩ := Option.isSome_iff_exists.mp
-    (List.find?_isSome.mpr ⟨pt, by simpa using hpt, by simpa using hn⟩)
-  have h1 : portOf own nm = a := by simp [portOf, ha]
+  have hs : (own.toList.find? (·.name == nm)).isSome = true :=
+    List.find?_isSome.mpr ⟨pt, by simpa using hpt, by simpa using hn⟩
+  obtain ⟨a, ha⟩ := Option.isSome_iff_exists.mp hs
+  have h1 : portOf own nm = a := by
+    show (own.toList.find? (·.name == nm)).getD default = a
+    rw [ha]
+    rfl
   rw [h1]
-  exact ⟨by simpa using List.mem_of_find?_eq_some ha, by simpa using List.find?_some ha⟩
+  refine ⟨by simpa using List.mem_of_find?_eq_some ha, ?_⟩
+  have hb := List.find?_some ha
+  simpa using hb
 
 /-- `c` names each port once (G's `PortNamesUnique`, a fact of V*'s circuits). -/
 def NamesOnce (c : Flock.Circuit) : Prop :=
