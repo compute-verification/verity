@@ -1,7 +1,8 @@
 """τ of the prover's pass on one GPU: the read alone (`rb_read`), the plain pass kernel by kernel (sketch, receipts,
 leaves, tree), the tensor-core receipts alone (checked equal to the plain ones), and the pipelined pass (`rs_pass`)
 at each chunk size and CTA count asked for, every pass checked to give the plain pass's root, over a store of random words (no codec: a pass's cost does not depend on the bytes).
-Writes OUT/pass_bench.json.
+The store is rounded down to a whole 2^18-block pass chunk, not to a power of two; receipt trees use the driver's
+canonical padding. Writes OUT/pass_bench.json.
 
     python pass_bench.py --lib session.so --gib 16 --out OUT [--chunks 14,15,16,17,18 --ctas 0 --passes 30]
 """
@@ -55,11 +56,11 @@ def main() -> int:
     shutil.copyfile(a.lib, copy.name)
     lib_open = Lib(copy.name, torch)
     n = int(a.gib * 2 ** 30) // BLOCK
-    blocks = PER_LEAF << ((n // PER_LEAF).bit_length() - 1)
+    blocks = n // (1 << 18) * (1 << 18)
     g = torch.Generator(device="cuda")
     g.manual_seed(1)
     store = DeviceStore(torch, lib, lib_open, None, blocks, b"k" * 32, g, kept_from=a.kept_from)
-    N, nl = blocks, blocks // PER_LEAF
+    N, nl, width = blocks, blocks // PER_LEAF, store.tree_leaves
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     sms = torch.cuda.get_device_properties(0).multi_processor_count
     reads = [timed(torch, lambda: lib.call("rb_read", store.data.data_ptr(), N * BLOCK, xr.data_ptr(), 16 * sms))
@@ -74,19 +75,21 @@ def main() -> int:
     store.set_pass(lib, seed)
     sk = torch.empty((N, skr.ROWS), dtype=torch.int32, device="cuda")
     ys = torch.empty((N, 8), dtype=torch.int64, device="cuda")
-    dig = torch.empty((nl, 8), dtype=torch.int64, device="cuda")
-    up = torch.empty((nl - 1, 8), dtype=torch.int64, device="cuda")
+    dig = torch.empty((width, 8), dtype=torch.int64, device="cuda")
+    up = torch.empty((width - 1, 8), dtype=torch.int64, device="cuda")
     plain = {k: [] for k in ("sketch", "hash", "leaves", "tree")}
     for _ in range(6):
         plain["sketch"].append(timed(torch, lambda: lib.call("rb_sketch", store.data.data_ptr(), None, N,
                                                             signs.data_ptr(), sk.data_ptr(), 0)))
         plain["hash"].append(timed(torch, lambda: lib.call("rb_sketch_hash", sk.data_ptr(), 0, N, ys.data_ptr())))
         plain["leaves"].append(timed(torch, lambda: lib.call("rb_leaves", ys.data_ptr(), 0, nl, dig.data_ptr(), None)))
-        plain["tree"].append(timed(torch, lambda: lib.call("rb_tree", dig.data_ptr(), nl, 0, up.data_ptr())))
+        if width > nl:
+            lib.call("rb_pads", nl, width - nl, dig[nl:].data_ptr())
+        plain["tree"].append(timed(torch, lambda: lib.call("rb_tree", dig.data_ptr(), width, 0, up.data_ptr())))
     out["plain_ms"] = {k: min(v[1:]) for k, v in plain.items()}
     out["plain_ms"]["sum"] = sum(out["plain_ms"].values())
     out["plain_tau"] = out["plain_ms"]["sum"] / read_ms
-    plain_root = device.digests(up[nl - 2:nl - 1].cpu())[0]
+    plain_root = device.digests(up[-1:].cpu())[0]
     del sk, dig, up
     pk = torch.empty(device.PACK16_WORDS, dtype=torch.int32, device="cuda")
     lib.call("rs_pack16", signs.data_ptr(), pk.data_ptr())

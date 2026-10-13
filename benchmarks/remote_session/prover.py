@@ -100,8 +100,9 @@ class CpuBackend:
 
 class ProverSide:
     def __init__(self, conn: wire.Conn, backend, node: bytes, plan: list[tuple[str, float]], *, seed: int = 0,
-                 log=print) -> None:
+                 defer_openings: bool = True, log=print) -> None:
         self.conn, self.backend, self.node, self.plan, self.log = conn, backend, node, plan, log
+        self.defer_openings = defer_openings
         self.rng = random.Random(seed)
         self.inbox: queue.Queue = queue.Queue()
         self.jobs: queue.Queue = queue.Queue()
@@ -131,7 +132,8 @@ class ProverSide:
             # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
             # the verifier may check after all roots are final, and this also makes the measured pass span contain
             # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
-            self.open_enabled.wait()
+            if self.defer_openings:
+                self.open_enabled.wait()
             c0 = time.perf_counter_ns()
             by_pass = defaultdict(list)
             for k, (i, p) in enumerate(draws):
@@ -196,7 +198,8 @@ class ProverSide:
         dropped = set(self.rng.sample(range(N), round(fraction * N))) if mode == "skip" else set()
         self.backend.arm(dropped)
         self.dropped, self.opened = dropped, []
-        self.open_enabled.clear()
+        if self.defer_openings:
+            self.open_enabled.clear()
         self.conn.send({"type": "armed", "k": k})
         head, _, _ = self.expect("coin")
         coin = wire.coin_of(head["coin"])
@@ -272,6 +275,8 @@ def main() -> int:
     ap.add_argument("--plan", default="honest")
     ap.add_argument("--node", default="vy-nebius/rtx-pro-6000/0")
     ap.add_argument("--seed", type=int, default=20261013)
+    ap.add_argument("--overlap-openings", action="store_true",
+                    help="benchmark the old behavior: prepare each window's openings while later timed passes run")
     import device
 
     device.add_arguments(ap)
@@ -281,7 +286,8 @@ def main() -> int:
     backend = device.from_arguments(a, log=lambda m: print(m, flush=True))
     host, port = a.connect.rsplit(":", 1)
     conn = wire.connect(host, int(port))
-    p = ProverSide(conn, backend, a.node.encode(), parse_plan(a.plan), seed=a.seed, log=lambda m: print(m, flush=True))
+    p = ProverSide(conn, backend, a.node.encode(), parse_plan(a.plan), seed=a.seed,
+                   defer_openings=not a.overlap_openings, log=lambda m: print(m, flush=True))
     cal = p.register()
     print(f"prover: registered, calibration {json.dumps(cal)}", flush=True)
     (a.out / "prover.json").write_text(json.dumps({"calibration": cal, "gates": backend.gates}, indent=1))
