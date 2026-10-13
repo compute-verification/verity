@@ -217,7 +217,18 @@ def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() 
 
     class Experts:
         def __init__(self, w1_scale, w2_scale) -> None:
-            self.w1_scale, self.w2_scale = w1_scale, w2_scale
+            self.quant_config = SimpleNamespace(
+                _w1=SimpleNamespace(scale=w1_scale),
+                _w2=SimpleNamespace(scale=w2_scale),
+            )
+
+        @property
+        def w1_scale(self):
+            return self.quant_config._w1.scale
+
+        @property
+        def w2_scale(self):
+            return self.quant_config._w2.scale
 
         def apply(self, x):
             return x * self.w1_scale + self.w2_scale

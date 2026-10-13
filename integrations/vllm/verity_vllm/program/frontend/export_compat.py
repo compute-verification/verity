@@ -309,10 +309,11 @@ def _expert_weight_scales_through_owner(layer, quant_method, h) -> None:
     """Make a plain MoE-kernel object read its registered expert-scale Parameters through their owning module during export.
 
     vLLM's FP8 ``_init_moe_kernel`` copies the ``RoutedExperts.w13_weight_scale_inv`` / ``w2_weight_scale_inv`` objects into
-    ``moe_kernel.fused_experts.w1_scale`` / ``w2_scale``.  ``fused_experts`` is not an ``nn.Module``.  Torch export swaps Parameters on modules
-    for graph values while tracing, so the stale references on that plain object otherwise become lifted tensor constants.  Refresh
-    them immediately before ``experts.apply`` from the owning module, exactly as ``_router_bias_through_owner`` does for the router's
-    correction bias.  Identity is checked before patching: a backend-owned derived scale is not silently relabelled as a Parameter."""
+    ``moe_kernel.fused_experts.quant_config._w1.scale`` / ``_w2.scale``; the experts' ``w1_scale`` / ``w2_scale`` are read-only
+    properties over those descriptors.  Neither object is an ``nn.Module``.  Torch export swaps Parameters on modules for graph values
+    while tracing, so the stale descriptor references otherwise become lifted tensor constants.  Refresh them immediately before
+    ``fused_experts.apply`` from the owning module, exactly as ``_router_bias_through_owner`` does for the router's correction bias.
+    Identity is checked before patching: a backend-owned derived scale is not silently relabelled as a Parameter."""
     kernel = getattr(quant_method, "moe_kernel", None)
     experts = getattr(kernel, "fused_experts", None)
     apply = getattr(experts, "apply", None)
@@ -320,20 +321,22 @@ def _expert_weight_scales_through_owner(layer, quant_method, h) -> None:
         return
     owners = {id(p): (mod, name) for mod in layer.modules() for name, p in mod._parameters.items() if p is not None}
     bindings = []
-    for attr in ("w1_scale", "w2_scale"):
+    quant_config = getattr(experts, "quant_config", None)
+    for attr, descriptor_name in (("w1_scale", "_w1"), ("w2_scale", "_w2")):
         scale = getattr(experts, attr, None)
-        if id(scale) in owners:
-            bindings.append((attr, *owners[id(scale)]))
+        descriptor = getattr(quant_config, descriptor_name, None)
+        if descriptor is not None and getattr(descriptor, "scale", None) is scale and id(scale) in owners:
+            bindings.append((descriptor, *owners[id(scale)]))
     if not bindings:
         return
 
-    def apply_with_owned_scales(*args, _experts=experts, _apply=apply, _bindings=tuple(bindings), **kwargs):
-        for attr, owner, name in _bindings:
-            setattr(_experts, attr, getattr(owner, name))
+    def apply_with_owned_scales(*args, _apply=apply, _bindings=tuple(bindings), **kwargs):
+        for descriptor, owner, name in _bindings:
+            descriptor.scale = getattr(owner, name)
         return _apply(*args, **kwargs)
 
-    for attr, _owner, _name in bindings:
-        h.patch(experts, attr, getattr(experts, attr))
+    for descriptor, _owner, _name in bindings:
+        h.patch(descriptor, "scale", descriptor.scale)
     h.patch(experts, "apply", apply_with_owned_scales)
 
 
