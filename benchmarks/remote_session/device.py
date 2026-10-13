@@ -655,15 +655,19 @@ class Device:
             seed, chained_root, seed_dev, chained_kept = first
             self.gates["device_seed"] = (seed_dev if isinstance(seed_dev, bytes)
                                          else bytes(seed_dev.cpu().numpy())) == seed
-            self.gates["plain_root"] = s.plain_root(seed, chained_kept) == chained_root
+            plain_root = s.plain_root(seed, chained_kept)
+            self.gates["plain_root"] = plain_root == chained_root
             self.gates["plain_levels"] = s.plain_level_matches
+            host_root, _ = s.run_pass(seed)
+            self.gates["host_root"] = host_root == plain_root
             self.gates["device_signs"] = all(s.signs_match(rb.seed(challenge, i, bytes(64))) for i in range(4))
         torch.cuda.synchronize()
         if not self.gates["device_seed"]:
             raise RuntimeError("the device's chained seed is not the driver's")
         if not self.gates["plain_root"]:
-            raise RuntimeError(f"the pipelined pass differs from the plain pass at level/index "
-                               f"{[(h, bad) for h, bad in s.plain_level_matches.items() if bad]}")
+            raise RuntimeError(f"the chained pass differs from the plain pass at level/index "
+                               f"{[(h, bad) for h, bad in s.plain_level_matches.items() if bad]}; "
+                               f"the host-prepared pass matches={self.gates['host_root']}")
         if not self.gates["device_signs"]:
             raise RuntimeError("the device's signs are not the reference's")
         # A window's openings once, over the calibration's passes, before any session: the opener's stream reaches
