@@ -254,21 +254,4 @@ theorem fixedRow_valueRound {cs : InnerCommits} {rep : Array SchedRound} {sparse
         | some p => exact fixedRow_sparseRound hci hoi hti hpi hsp h
         | none => simp [fixedRow, hci, hoi, hti, hpi] at h
 
-#print axioms msgRounds_getElem?
-#print axioms topRounds_getElem?
-#print axioms heldCommits_sparse
-#print axioms heldCommits_stacked
-#print axioms claim_or_sparse
-#print axioms sparseRow_ok
-#print axioms fixedRow_sparse_eq
-#print axioms fixedRow_repRound
-#print axioms fixedRow_openingRound
-#print axioms fixedRow_topRound
-#print axioms fixedRow_sparseRound
-#print axioms fixedRow_valueRound
-#print axioms RepsCommitsAt
-#print axioms SparseCommitsAt
-#print axioms StackedAt
-#print axioms ClaimReadsAt
-
 end Flock.Guarantees
