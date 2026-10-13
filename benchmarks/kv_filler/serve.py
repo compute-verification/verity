@@ -138,6 +138,22 @@ def windows(steps: list[dict], idle: list[tuple[float, float]], recs, offset_ms:
             "filler_share": sum(fil) / max(1.0, sum(reg) + sum(fil)), "fractions": [round(v, 4) for v in frac]}
 
 
+def within(recs, offset_ms: float, t0: float, t1: float) -> list[tuple]:
+    """The filler's records cut to the trace's host interval [t0, t1), each one's bytes pro rata: the filler also reads
+    through the token gate before the trace and until it stops after, and those bytes cover none of the trace's R·T."""
+    out = []
+    for a, b, nbytes, *rest in recs:
+        ha, hb = (a - offset_ms) / 1e3, (b - offset_ms) / 1e3
+        if hb <= ha:
+            if t0 <= ha < t1:
+                out.append((a, b, nbytes, *rest))
+            continue
+        lo, hi = max(ha, t0), min(hb, t1)
+        if hi > lo:
+            out.append((lo * 1e3 + offset_ms, hi * 1e3 + offset_ms, nbytes * (hi - lo) / (hb - ha), *rest))
+    return out
+
+
 def filler_by_phase(steps: list[dict], recs, offset_ms: float) -> dict:
     """The filler's bytes by where they fell on the host's clock, pro rata: in decode steps, in steps that prefill
     (a step's tokens beyond one a request), and between steps."""
@@ -580,6 +596,7 @@ def main() -> int:
             ttft = [first[i] - (by_id[i]["t"] + t_start) for i in first]
             tpot = [(done[i] - first[i]) / max(1, by_id[i]["output"] - 1) for i in done if i in first]
             dec = [s["t1"] - s["t0"] for s in steps if s["prefill_tokens"] == 0 and s["reqs"] > 0]
+            recs_all, recs = recs, within(recs, offset_ms, t_start, t_end)
             run = {"policy": policy, "mode": mode, "token_gate": cur.get("token_gate"), "seconds": t_end - t_start,
                    "steps": len(steps),
                    "requests_done": len(done), "ttft_s_median": statistics.median(ttft) if ttft else None,
@@ -587,6 +604,7 @@ def main() -> int:
                    "tpot_ms_median": statistics.median(tpot) * 1e3 if tpot else None,
                    "decode_step_ms_median": statistics.median(dec) * 1e3 if dec else None,
                    "idle_s": sum(b - a for a, b in idle), "filler_bytes": sum(r[2] for r in recs),
+                   "filler_bytes_outside": sum(r[2] for r in recs_all) - sum(r[2] for r in recs),
                    "preemptions": sum(s["preempted"] for s in steps),
                    "free_blocks_min": min((s["free_blocks"] for s in steps), default=None),
                    "windows": [windows(steps, idle, recs, offset_ms, t_start, t_end, w, a.R, weight_bytes)
