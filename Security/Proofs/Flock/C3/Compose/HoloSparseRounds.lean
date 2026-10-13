@@ -27,10 +27,7 @@ theorem heldBefore_size (s : HoloStream) (rs : Array SchedRound) :
   congr 1
   refine List.ext_getElem (by simp) fun n _ h₂ => ?_
   have hn : n < rs.size := by simpa using h₂
-  first
-  | simp [hn]
-  | simp only [List.getElem_map, List.getElem_range, Array.getElem_toList, Array.getD_eq_getD_getElem?,
-      Array.getElem?_eq_getElem hn, Option.getD_some]
+  simp [hn]
 
 /-- **A sparse phase's rounds take `nc` history rounds**: its stream rounds' coin counts sum to the coins its phase
 draws, ζ_c's and ζ_r's twelve, H3's `ν + S_LOG`, ζ_p's `P_LOG` and ρ_t's `T_LOG` (`holoSizes_sparse`). -/
@@ -82,7 +79,7 @@ theorem roundAt_sparseRounds (rs : Array SchedRound) (sp : RecSparse.Shape) (R :
 
 /-- **A schedule's rounds that pass a test, below `m`, are a sublist of the first `m` rounds.** -/
 theorem filter_range_sublist (P : ℕ → Bool) (m n : ℕ) (h : ∀ q ∈ (List.range n).filter P, q < m) :
-    (List.range n).filter P <+ List.range m := by
+    List.Sublist ((List.range n).filter P) (List.range m) := by
   induction n with
   | zero => simp
   | succ n ih =>
@@ -91,14 +88,14 @@ theorem filter_range_sublist (P : ℕ → Bool) (m n : ℕ) (h : ∀ q ∈ (List
     rw [List.range_succ, List.filter_append, List.filter_cons, List.filter_nil]
     cases hp : P n
     · simpa using ih'
-    · show List.filter P (List.range n) ++ [n] <+ List.range m
+    · show List.Sublist (List.filter P (List.range n) ++ [n]) (List.range m)
       exact (List.filter_sublist.append (List.Sublist.refl [n])).trans
         (by rw [← List.range_succ]; exact List.range_sublist.2 (hn hp))
 
 /-- **The held rounds at some of a stream's rounds are its rounds of coins**, in order: where the rounds `ks` are a
 sublist of the stream's, each holds coins, and they are as many as the stream's rounds of coins (`RecCoins.sparseCoins`'
 `filter`). -/
-theorem map_getD_eq_filter {H : Array (Array F128)} {ks : List ℕ} (hks : ks <+ List.range H.size)
+theorem map_getD_eq_filter {H : Array (Array F128)} {ks : List ℕ} (hks : List.Sublist ks (List.range H.size))
     (hne : ∀ q ∈ ks, (H.getD q #[]).size ≠ 0) (hlen : ks.length = (H.filter (·.size != 0)).size) :
     ks.map (H.getD · #[]) = (H.filter (·.size != 0)).toList := by
   have hH : (List.range H.size).map (H.getD · #[]) = H.toList := by
@@ -108,7 +105,7 @@ theorem map_getD_eq_filter {H : Array (Array F128)} {ks : List ℕ} (hks : ks <+
     | simp [hn]
     | simp only [List.getElem_map, List.getElem_range, Array.getElem_toList, Array.getD_eq_getD_getElem?,
         Array.getElem?_eq_getElem hn, Option.getD_some]
-  have hsub : ks.map (H.getD · #[]) <+ H.toList := by
+  have hsub : List.Sublist (ks.map (H.getD · #[])) H.toList := by
     rw [← hH]
     exact hks.map _
   have hf : (ks.map (H.getD · #[])).filter (·.size != 0) = ks.map (H.getD · #[]) := by
