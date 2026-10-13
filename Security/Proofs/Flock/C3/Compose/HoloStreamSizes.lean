@@ -1,4 +1,5 @@
 import Proofs.Flock.C3.Compose.HoloCoinTys
+import Proofs.Flock.C3.VStarList.Shape
 
 /-!
 # The sparse phases' and R's streams at the model's coins
@@ -8,7 +9,8 @@ The inner shape's sparse phases' and R's streams (`holoStreams`, at the verifier
 
 * `degrees_length`: H3's rounds are the entries' and the slots' (`nu + sLog`); `stacked_iff`: the verifier's ρ_t round
   (`stacked`) is where the model has its message (`tLog ≠ 0`); `pLog_sparseOf`, `mReg_sparseOf`: the planes' bits and
-  R's table are the model's at `sparseOf`.
+  R's table are the model's at `sparseOf`; `shape_holoAt`: `sparseOf` of the inner shape's `sparse` entry is the
+  shape of candidate 3's class (`holoAt`) where `ℓ` is in its range.
 * `holoSizes_sparse`: a sparse phase's stream draws `sparseForms`' scalars.
 * `holoSizes_stacked`: R's stream draws R's opening's two claims' coins and compiled Ligerito's at `fast100`'s schedule
   (`opForms 2 ++ ligForms (schedAt m)`), by evaluating `stackedRounds` at each `m` below 36.
@@ -44,6 +46,19 @@ theorem mReg_sparseOf (sp : RecSparse.Shape) : (sparseOf sp).mReg = tableM sp :=
   show max 22 (sp.nu + (sparseOf sp).pLog + sp.tLog) = max PAD_TO (sp.nu + sp.pLog + sp.tLog)
   rw [pLog_sparseOf]
   rfl
+
+/-- **The model's sparse shape is the verifier's**: at `hp` the inner shape's `sparse` entry `sp` (`SparseIs`) and `ℓ`
+in the class's range, candidate 3's class at `hp` (`holoAt`) has `sparseOf sp`'s shape. -/
+theorem shape_holoAt {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.Inner} {sp : RecSparse.Shape}
+    (hsp : FlockC3.VStarList.SparseIs ish hp) (hs : ish.sparse = some sp) (hell : hp.EllOk (execClassAt st).cls.kLog) :
+    (holoAt st hp).cls.shape = sparseOf sp := by
+  obtain rfl := Option.some.inj (hs.symm.trans (show ish.sparse = _ from hsp))
+  have h : (holoAt st hp).cls.slotLog = hp.ell := ite_eq_left hell
+  show (⟨hp.nu, (holoAt st hp).cls.slotLog, hp.sLog, hp.tLog⟩ : FlockSoundness.Model.SparseShape) =
+    ⟨hp.nu, hp.ell, hp.sLog, hp.tLog⟩
+  exact congrArg (fun e => (⟨hp.nu, e, hp.sLog, hp.tLog⟩ : FlockSoundness.Model.SparseShape)) h
+
+#print axioms shape_holoAt
 
 theorem flatMap_replicate_fst : ∀ l : List SchedRound,
     l.flatMap (fun q => List.replicate q.1 1) = List.replicate (l.map (·.1)).sum 1
