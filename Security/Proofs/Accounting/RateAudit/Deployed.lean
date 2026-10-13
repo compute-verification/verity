@@ -542,3 +542,96 @@ theorem pr_paid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (
 end DeployedSession
 
 end Accounting.Rate
+
+namespace Accounting.Rate.Deployed
+
+open scoped ENNReal
+
+/-- The named terms of a pass's `γ` sum to its slack in bits, a fraction of its `N·b`. -/
+theorem gammaPass_mul (N b ρ S L lam rounds cRoot F : ℕ) (hN : 0 < N) (hb : 0 < b) :
+    gammaPass N b ρ S L lam rounds cRoot F * (N * b) =
+      ((S + (L - ρ) + rebuildBits b rounds cRoot F + lam : ℕ) : ℝ) := by
+  have hNb : (N : ℝ) * b ≠ 0 := by positivity
+  unfold gammaPass muChip muLink muRebuild muLambda
+  rw [← add_div, ← add_div, ← add_div, div_mul_cancel₀ _ hNb]
+  push_cast
+  ring
+
+/-- A count at most `t·c` of `c` items, as a fraction in `ℝ≥0∞`. -/
+theorem div_le_ofReal {a c : ℕ} (hc : 0 < c) {t : ℝ} (h : (a : ℝ) ≤ t * c) :
+    (a : ℝ≥0∞) / c ≤ ENNReal.ofReal t := by
+  have hc' : (0 : ℝ) < c := by exact_mod_cast hc
+  rw [← ENNReal.ofReal_natCast a, ← ENNReal.ofReal_natCast c, ← ENNReal.ofReal_div_of_pos hc']
+  exact ENNReal.ofReal_le_ofReal ((div_le_iff₀ hc').2 h)
+
+/-- The horizon's draw term at `K = ⌊(1 − d̄)·M⌋`: at most `(1 − d̄)^e`. -/
+theorem horizon_le (dbar : ℝ) (M e : ℕ) (hM : 0 < M) :
+    ((⌊(1 - dbar) * M⌋₊ : ℝ≥0∞) / M) ^ e ≤ ENNReal.ofReal (1 - dbar) ^ e := by
+  refine pow_le_pow_left₀ zero_le ?_ e
+  by_cases h : 0 ≤ 1 - dbar
+  · exact div_le_ofReal hM (Nat.floor_le (by positivity))
+  · rw [Nat.floor_eq_zero.2 (by nlinarith [show (0 : ℝ) < M by exact_mod_cast hM])]
+    simp
+
+/-- The window's draw term at `K_w = ⌊(1 − d_w)·P·N⌋`: at most `(1 − d_w/n)^e`. -/
+theorem window_le (dw : ℝ) (n M e : ℕ) (hn : 0 < n) (hM : 0 < M) (hdw : dw ≤ 1) :
+    ((((n - 1) * M + ⌊(1 - dw) * M⌋₊ : ℕ) : ℝ≥0∞) / (n * M)) ^ e ≤ ENNReal.ofReal (1 - dw / n) ^ e := by
+  refine pow_le_pow_left₀ zero_le ?_ e
+  have hM' : (0 : ℝ) < M := by exact_mod_cast hM
+  have hn' : (0 : ℝ) < n := by exact_mod_cast hn
+  have hfl : (⌊(1 - dw) * M⌋₊ : ℝ) ≤ (1 - dw) * M := Nat.floor_le (by nlinarith)
+  have := div_le_ofReal (a := (n - 1) * M + ⌊(1 - dw) * M⌋₊) (c := n * M) (by positivity) (t := 1 - dw / n) (by
+    push_cast [Nat.cast_sub (show 1 ≤ n by omega)]
+    rw [show (1 - dw / n) * (n * M) = (n - 1) * M + (1 - dw) * M by field_simp; ring]
+    linarith)
+  simpa using this
+
+/-- A reading's shortfall as a count: reads short of `(1 − (t + γ))` of `c` passes' `N·b` bits, with `γ·N·b` the
+pass's slack, are short of `⌊(1 − t)·c·N⌋ + 1` words with the `c` slacks. -/
+theorem count_lt {R t g c Nn b sl : ℝ} (hb : 0 < b) (hg : g * (Nn * b) = sl)
+    (h : R < (1 - (t + g)) * (c * Nn * b)) : R + c * sl < (⌊(1 - t) * (c * Nn)⌋₊ + 1) * b := by
+  have e : (1 - (t + g)) * (c * Nn * b) = (1 - t) * (c * Nn) * b - c * (g * (Nn * b)) := by ring
+  rw [e, hg] at h
+  have := mul_lt_mul_of_pos_right (Nat.lt_floor_add_one ((1 - t) * (c * Nn))) hb
+  linarith
+
+end Accounting.Rate.Deployed
+
+namespace Accounting.SecurityProofs
+
+open Accounting.Rate
+open Pous (pr)
+open scoped ENNReal
+open Bandwidth (pr_mono)
+
+/-- **The remote bandwidth audit as deployed: an accepted session conserves its words**
+(`Accounting.Guarantees.RemoteSessionConservation`). -/
+theorem RemoteSessionConservation : Accounting.Guarantees.RemoteSessionConservation := by
+  intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF hA
+  have hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ Deployed.rebuildBits b rounds cRoot F :=
+    fun w η j ι c E R O => PIDevice.completed_le _ hrc hW (hF w η j ι c) E R O
+  have hε := fun w η j ι c =>
+    PIDevice.pr_unpaid_le ((A.window w η).device j ι c) tier (Deployed.rebuildBits b rounds cRoot F) lam (hA w η j ι c)
+  have main := DeployedSession.pr_paid_le A tier _ _ ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊ _
+    hX hε
+  have hγ := Deployed.gammaPass_mul N b ρ S L lam rounds cRoot F hN hb
+  have hb' : (0 : ℝ) < b := by exact_mod_cast hb
+  refine (pr_mono (fun x hx => ?_)).trans (main.trans ?_)
+  · obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
+    · refine ⟨hall, Or.inl ?_⟩
+      have := Deployed.count_lt (c := (n : ℝ) * P) hb' hγ hT
+      rw [← mul_assoc]
+      exact_mod_cast this
+    · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
+      have := Deployed.count_lt (c := (P : ℝ)) hb' hγ hw
+      exact_mod_cast this
+  · have e1 : ((n : ℝ) * P * N) = ((n * P * N : ℕ) : ℝ) := by push_cast; ring
+    have e2 : ((P : ℝ) * N) = ((P * N : ℕ) : ℝ) := by push_cast; ring
+    rw [e1, e2]
+    refine add_le_add (add_le_add ?_ ?_) (le_of_eq (by ring))
+    · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+      exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+    · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+      exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+
+end Accounting.SecurityProofs
