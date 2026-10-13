@@ -7,11 +7,11 @@
  },
  "runs": {
   "NetworkCheck.DifftestMain": {
-   "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/core/protocols/certifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_message and node, with each ValueError a refusal",
+   "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/core/protocols/certifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_message (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "2000"],
    "data": {
-    "difftest/instances.jsonl": "14d0e95610f1801ff19d7c90c4b5c0cdff601921eb8d980f0bbf8e54ae2736dc",
-    "difftest/python.jsonl": "2f4e531f3b962cc95fc5f9d798648b0022840f9309c09f1554cc6ec3c63ec250"
+    "difftest/instances.jsonl": "480e4f4280a3a7cb6ff952e67370bff4c6eebb4ac7899df70cf4262f6b9d965f",
+    "difftest/python.jsonl": "b970b70d2d2e138ac906837400deee1d11b0235418a1ffe97265b1ed2a9fca31"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }

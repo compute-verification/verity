@@ -17,9 +17,15 @@ is `lean-records/local`. `--tree` names another only under `lean-records/`. The 
 of the audit's (taken once per manifest and toolchain, else fetched cold), never links, so what Lake writes there stays out of
 what the audit keeps. That bounds Lake's own writes, not compile-time code: audit.py builds in its sandbox only where the
 machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
-included, as any build this user runs by hand can. A tree keeps one package's copy (about 170k inodes, 8 GB), so auditing
-another package that fetches dependencies there drops it first. `--update` writes the record back into this checkout, but not
-in a recorded run, whose source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`.
+included, as any build this user runs by hand can. `--update` writes the record back into this checkout, but not in a recorded
+run, whose source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`.
+
+Then it audits, the same way but never with `--update`, every package whose guarantees' records read PKG's build
+(`requirers`: PKG is in its `closure`, by path or by `proved_in`), each after those it requires, its reports under
+`requirer-<path>/` beside PKG's. A change to what another package's pinned guarantees read (`Security/Properties`' when
+`Security` changes) fails here, not at a train's check; the exit status is the first failure's. A tree keeps the copies of
+the packages one run audits (about 170k inodes, 8 GB each), so auditing another package that fetches dependencies there
+drops the rest first.
 
 Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no tests. The kind is written into the
 `audit.json` and each package's `report.json` it leaves (`--out`, else the run's `lean-audit/`, else a temporary directory) and,
@@ -94,13 +100,31 @@ def missed(files: list[str], cache: Path) -> list[str]:
     """The packages whose audit would run, those another requires by path first, and a spec after the packages its
     `proved_in` names."""
     pkgs = [p for p in LA.packages(files) if not (cache / f"{LA.key(p, files, LA.FLAGS)}.json").is_file()]
-    rank = lambda p: max([len(LA.path_deps(p)), *(len(LA.path_deps(q)) + 1 for q in LA.provers(p))])
     return sorted(pkgs, key=lambda p: (rank(p), p))
+
+
+def rank(pkg: str) -> int:
+    """How deep ``pkg`` sits among the packages it requires by path and those its `proved_in` names: each sorts after them."""
+    return max([len(LA.path_deps(pkg)), *(len(LA.path_deps(q)) + 1 for q in LA.provers(pkg))])
 
 
 def closure(pkg: str) -> list[str]:
     """``pkg``, the packages it requires by path, and those its `proved_in` names with theirs, whose builds `records` reads."""
     return list(dict.fromkeys([pkg, *LA.path_deps(pkg), *(d for q in LA.provers(pkg) for d in (q, *LA.path_deps(q)))]))
+
+
+def lists_guarantees(pkg: str) -> bool:
+    """Whether ``pkg``'s `lean-audit.json` lists a guarantee; True when it can't be read, which the audit then fails."""
+    try:
+        return bool(json.loads((ROOT / pkg / "lean-audit.json").read_text()).get("guarantees"))
+    except (OSError, ValueError, AttributeError):
+        return True
+
+
+def requirers(pkg: str, pkgs: list[str]) -> list[str]:
+    """The other packages among ``pkgs`` whose guarantees' records read ``pkg``'s build (``pkg`` is in their `closure`), each
+    after those it requires, as `missed` orders them."""
+    return sorted((q for q in pkgs if q != pkg and pkg in closure(q) and lists_guarantees(q)), key=lambda p: (rank(p), p))
 
 
 def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
@@ -331,31 +355,40 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             except BlockingIOError:
                 log(f"lean-records: another run holds {tree}")
                 return 2
-            t0 = time.monotonic()
             links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
-            n = sync(closure(pkg), files, tree)
-            for other in [p for p in links if p != pkg and LA.deps_key(tree / pkg)]:
-                unlink(other, tree, links)
-            if not link(pkg, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / pkg)):
-                links[pkg] = k
-                log(f"lean-records: {pkg}: its dependencies are fetched cold, once for this tree")
-            (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
             run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
             out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
-            argv = [sys.executable, str(AUDIT_PY), "--build", "--no-replay", "--no-runs", *(["--update"] if update else []),
-                    *(["--moved", str(moved.resolve())] if moved else []), "--out", str(out), str(tree / pkg)]
-            rc = subprocess.run(argv, cwd=tree, env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
-                                pass_fds=() if slot is None else (slot,)).returncode
-            label(out)
+            todo, rc = [pkg, *requirers(pkg, pkgs)], 0
+            for p in todo:
+                t0 = time.monotonic()
+                n = sync(closure(p), files, tree)
+                for other in [q for q in links if q not in todo and LA.deps_key(tree / p)]:
+                    unlink(other, tree, links)
+                if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
+                    links[p] = k
+                    log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
+                (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+                mine_out = out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
+                argv = [sys.executable, str(AUDIT_PY), "--build", "--no-replay", "--no-runs",
+                        *(["--update"] if update and p == pkg else []),
+                        *(["--moved", str(moved.resolve())] if moved and p == pkg else []), "--out", str(mine_out), str(tree / p)]
+                got = subprocess.run(argv, cwd=tree, env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
+                                     pass_fds=() if slot is None else (slot,)).returncode
+                label(mine_out)
+                log(f"lean-records: {p}: audit.py exit {got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files changed "
+                    f"there), without the kernel replay or the tests: a {FAST_KIND} result, which check and research merge "
+                    f"refuse; reports in {mine_out}")
+                if p == pkg:
+                    record, mine = tree / pkg / "lean-audit.json", ROOT / pkg / "lean-audit.json"
+                    if update and not run_dir and record.read_bytes() != mine.read_bytes():
+                        shutil.copyfile(record, mine)
+                        log(f"lean-records: wrote {mine}")
+                elif got:
+                    log(f"lean-records: {p} requires {pkg}, and its records fail on this tree: what its guarantees read "
+                        f"changed; if that is meant, run --records {p} --update")
+                rc = rc or got
             if run_dir and run_id:
                 write_result(Path(run_dir), run_id, pkg, rc, out, update)
-            log(f"lean-records: {pkg}: audit.py exit {rc} in {time.monotonic() - t0:.0f} s on {tree} ({n} files changed there), "
-                f"without the kernel replay or the tests: a {FAST_KIND} result, which check and research merge refuse; "
-                f"reports in {out}")
-            record, mine = tree / pkg / "lean-audit.json", ROOT / pkg / "lean-audit.json"
-            if update and not run_dir and record.read_bytes() != mine.read_bytes():
-                shutil.copyfile(record, mine)
-                log(f"lean-records: wrote {mine}")
     finally:
         if slot is not None:
             os.close(slot)

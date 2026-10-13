@@ -5,9 +5,9 @@ import Properties.Proofs.NetworkCertifier.Extract
 # What a certificate's digest and message pin down
 
 Where SHA-512 has no collision on the strings both hash, two heads with one digest are one (`head_inj`), and a
-certificate message's input names one link-window and digest (`messageInput_inj`, with `link_short` for the link's
-length). `Properties.Proofs.CertifierNetwork.Runs` uses them to match each record an accepted unit holds to the one the
-certifier device issued.
+certificate message's input names one certifier session, link-window and digest (`messageInput_inj`, with
+`link_short` for the link's length). `Properties.Proofs.CertifierNetwork.Runs` uses them to match each record an
+accepted unit holds to the one the certifier device issued.
 -/
 
 open NetworkCheck hiding Params
@@ -32,10 +32,10 @@ theorem digest_ok {h : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) :
     obtain ⟨x, hx, rfl⟩ := Properties.Identity.taggedSha512_ok.mp e'
     exact ⟨enc, x, rfl, hx, rfl⟩
 
-theorem certificateMessage_ok {k : ByteArray} {l : String} {d : Direction} {w : Int} {g m : ByteArray}
-    (e : certificateMessage k l d w g = .ok m) : ∃ x, messageInput k l d w g = .ok x ∧ m = Sha512.hash x := by
+theorem certificateMessage_ok {k s : ByteArray} {l : String} {d : Direction} {w : Int} {g m : ByteArray}
+    (e : certificateMessage k s l d w g = .ok m) : ∃ x, messageInput k s l d w g = .ok x ∧ m = Sha512.hash x := by
   unfold certificateMessage at e
-  cases hx : messageInput k l d w g with
+  cases hx : messageInput k s l d w g with
   | error _ => rw [hx] at e; exact (error_ne_ok e).elim
   | ok x => rw [hx] at e; exact ⟨x, rfl, (Except.ok.inj e).symm⟩
 

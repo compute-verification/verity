@@ -180,7 +180,41 @@ theorem omega_injective : ∀ d ≤ 64, Set.InjOn omega {q | q < 2 ^ d} := by
 /-- The seven pinned coordinates (the executable's `Flock.pinned`). -/
 def pinnedF (i : Fin 7) : GF128 := GF128.of (Flock.pinned[i.val]!)
 
-theorem pinned_exec_ne_one : ∀ i : Fin 7, Flock.pinned[i.val]! ≠ 1 := by decide +kernel
+/-- `Flock.pinned`'s value, computed once by the executable. Entries 3–6 are `y · (y + 1)⁻¹`, each checked by one
+multiplication (`frac_eq`), so the kernel never evaluates the four inverses. -/
+def pinnedLit : Array F128 := #[
+  ⟨0xd8a5ae31928b4da1, 0x1cf7a0fe8922c83f⟩,
+  ⟨0xa0415e708193f42a, 0xffdb65d9987f058c⟩,
+  ⟨0x26cb812e5dc6f8a5, 0x44020450758a0366⟩,
+  ⟨0xffffffffffffff83, 0xffffffffffffffff⟩,
+  ⟨0x555555555555557f, 0x5555555555555555⟩,
+  ⟨0xeeeeeeeeeeeeee9a, 0xeeeeeeeeeeeeeeee⟩,
+  ⟨0xd3d3d3d3d3d3d3b9, 0xd3d3d3d3d3d3d3d3⟩]
+
+theorem frac_eq {y w : F128} (hy : y + 1 ≠ 0) (hw : w * (y + 1) = y) : y * (y + 1).inv = w := by
+  have h1 : GF128.of (y + 1) ≠ 0 := by rw [GF128.zero_eq]; exact hy
+  have h2 : GF128.of y = GF128.of w * GF128.of (y + 1) := by rw [GF128.mul_eq, hw]
+  show GF128.of (y * (y + 1).inv) = GF128.of w
+  rw [← GF128.mul_eq, ← GF128.inv_eq, ← div_eq_mul_inv]
+  exact div_eq_of_eq_mul h1 h2
+
+/-- `x^(2^j)` as `Flock.pinned` writes it. -/
+def xPow : ℕ → F128
+  | 0 => F128.monomial 1
+  | 1 => F128.monomial 1 * F128.monomial 1
+  | 2 => F128.monomial 1 * F128.monomial 1 * F128.monomial 1 * F128.monomial 1
+  | _ => F128.monomial 1 * F128.monomial 1 * F128.monomial 1 * F128.monomial 1 * F128.monomial 1 *
+      F128.monomial 1 * F128.monomial 1 * F128.monomial 1
+
+theorem pinned_eq_lit : Flock.pinned = pinnedLit := by
+  have e : ∀ j < 4, xPow j * (xPow j + 1).inv = pinnedLit[3 + j]! := fun j hj =>
+    frac_eq (by revert j; decide +kernel) (by revert j; decide +kernel)
+  rw [show Flock.pinned = #[phi8 0xF7, phi8 0x53, phi8 0xB5, xPow 0 * (xPow 0 + 1).inv, xPow 1 * (xPow 1 + 1).inv,
+      xPow 2 * (xPow 2 + 1).inv, xPow 3 * (xPow 3 + 1).inv] from rfl,
+    e 0 (by decide), e 1 (by decide), e 2 (by decide), e 3 (by decide)]
+  decide +kernel
+
+theorem pinned_exec_ne_one : ∀ i : Fin 7, Flock.pinned[i.val]! ≠ 1 := by rw [pinned_eq_lit]; decide +kernel
 
 theorem pinned_ne_one : ∀ i, pinnedF i ≠ 1 := by
   intro i h

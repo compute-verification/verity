@@ -7,14 +7,15 @@ its served y and its weight side). `replay` checks:
 1. every call's leaf, which binds its weight side's, is under the committed root (the root is recomputed over every
    record, in call order);
 2. each call's anchored inputs are the ones the verifier derives (`derived`): the commitment's salt; the forward index,
-   counting passes from the calls (a pass starts at linear 0); the position ``w << 32`` and the weight id ``w``; the pass's
+   counting passes from the calls (a pass starts at linear 0) from the salt's first unused one (`anchors.SaltWindows`); the position ``w << 32`` and the weight id ``w``; the pass's
    global row ids (the rows of earlier passes, then its own); and the columns 0 … n − 1; and its weight side is its
    weight's, under the same salt and columns;
 3. each weight side's Y unit leaves open to its units root and its inputs (the weight's rows as read) to its inputs digest;
    each call's unit leaves open to its units root, its inputs (Y and c₀ as the call read them) to its inputs digest, and its
    served y to its dequantization units' leaves;
 4. the window's draw (`verity.core.protocols.pouw.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
-   on its `anchors.Receipt`, sealed before any key exists; `anchors.Ledger.open` derives the window's key from a fresh
+   on its `anchors.Receipt`, sealed before any key exists; `anchors.SaltWindows.open` refuses a call index an earlier window of the salt used, and
+   `anchors.Ledger.open` derives the window's key from a fresh
    source, and each call draws its plan (`Traced.draw`) under #362's work law at its share of the window's budget
    (`plan.window_laws`). Every proved unit of a call is opened by the prover (`CallRecord.opening`, regenerated natively),
    and so is every unit it reads; so is each Y unit its drawn tiles read, in its weight side (once per replay). Each
@@ -64,9 +65,10 @@ M32 = 0xFFFFFFFF
 NEG_ZERO_BF16 = 0x8000
 
 
-def derived(records: Sequence[PC.CallRecord], salt: bytes) -> list[CA.Anchors]:
-    """The verifier's own anchors for each call, from the calls' order alone: a pass starts at linear 0."""
-    out, forward, base, seen = [], -1, 0, 0
+def derived(records: Sequence[PC.CallRecord], salt: bytes, first: int = 0) -> list[CA.Anchors]:
+    """The verifier's own anchors for each call, from the calls' order alone: a pass starts at linear 0, and the window's
+    first pass is forward ``first`` (`CA.SaltWindows.next_forward`)."""
+    out, forward, base, seen = [], first - 1, 0, 0
     for rec in records:
         c, sh = rec.call, rec.shape
         if c.layer == 0:
@@ -76,10 +78,10 @@ def derived(records: Sequence[PC.CallRecord], salt: bytes) -> list[CA.Anchors]:
     return out
 
 
-def anchors(records: Sequence[PC.CallRecord], salt: bytes) -> list[str]:
+def anchors(records: Sequence[PC.CallRecord], salt: bytes, first: int = 0) -> list[str]:
     """What differs between each call's anchored inputs, or its weight side's, and the verifier's own derivation."""
     out = []
-    for rec, an in zip(records, derived(records, salt)):
+    for rec, an in zip(records, derived(records, salt, first)):
         c, side = rec.call, rec.side
         want = {"salt": salt, "forward": an.forward, "site": an.site, "weight": an.weight, "rowids": np.array(an.rows),
                 "colids": np.array(an.cols)}
@@ -191,18 +193,23 @@ def link(traced: Any, plan: Any, rec: PC.CallRecord, opened_side) -> str | None:
     return None
 
 
-def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: int | None = None) -> dict[str, Any]:
+def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: int | None = None,
+           windows: CA.SaltWindows | None = None) -> dict[str, Any]:
     """Every call of the run, one window: the root, the anchors, each record's own commitments and each call's plan under
-    the window's fresh key. ``k`` is the window's budget K (`RECORD_K` when None). ``result`` is True only when all hold."""
+    the window's fresh key. ``k`` is the window's budget K (`RECORD_K` when None). ``windows`` holds the salt's earlier
+    windows (a fresh `CA.SaltWindows` when None): the window's forwards start at its `next_forward`, and it refuses a
+    call index an earlier window used. ``result`` is True only when all hold."""
     t0 = time.monotonic()
     salt, wroot = bytes.fromhex(commitment["salt"]), bytes.fromhex(commitment["weights_root"])
+    windows = windows if windows is not None else CA.SaltWindows(salt)
+    first = windows.next_forward
     k = k or CPL.RECORD_K
     why: list[str] = []
     if not records:
         why.append("no ncp-v2 call was committed")
     elif commitment.get("calls_root") != PC.calls_root(salt, wroot, records).hex():
         why.append("the calls do not open to the committed calls root")
-    why += anchors(records, salt)
+    why += anchors(records, salt, first)
     sides = PC.sides(records)
     for side in sides:
         why += [f"weight {side.weight}: {w}" for w in check_side(side)]
@@ -212,8 +219,8 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: i
     if records:
         traced = [PC.program(r.scheme, r.shape.m, r.shape.k, r.shape.n).traced for r in records]
         try:
-            ans = derived(records, salt)
-            ledger = CA.Ledger.open(CA.Receipt(tuple((a, r.shape, PC.call_leaf(r)) for a, r in zip(ans, records))))
+            ans = derived(records, salt, first)
+            ledger = windows.open(CA.Receipt(tuple((a, r.shape, PC.call_leaf(r)) for a, r in zip(ans, records))))
             laws = CPL.window_laws([t.layout() for t in traced], k)
             plans = [t.draw(law, a, ledger) for t, law, a in zip(traced, laws, ans)]
             ledger.sent()
