@@ -512,12 +512,12 @@ class _ProcessEngine:
     def _ask(self, name: str, arg: Any = None) -> Any:
         self.conn.send((name, arg))
         try:
-            msg = self.conn.recv()
+            response = self.conn.recv()
         except EOFError:
             raise RuntimeError(f"benchmark engine process exited with code {self.process.exitcode}") from None
-        if "error" in msg:
-            raise RuntimeError(msg["error"] + "\n" + msg.get("trace", ""))
-        return msg["value"]
+        if "error" in response:
+            raise RuntimeError(response["error"] + "\n" + response.get("trace", ""))
+        return response["value"]
 
     def gate(self, point: SweepPoint) -> Mapping[str, tuple[int, ...]]:
         return self._ask("gate", point)
@@ -556,14 +556,14 @@ class ProcessEngineFactory:
         process.start()
         child.close()
         try:
-            msg = parent.recv()
+            response = parent.recv()
         except EOFError:
             process.join()
             raise RuntimeError(f"benchmark engine {arm.id!r} exited during startup with code {process.exitcode}") from None
-        if "error" in msg:
+        if "error" in response:
             process.join()
-            error = msg["error"] + "\n" + msg.get("trace", "")
-            if resident and msg.get("capacity"):
+            error = response["error"] + "\n" + response.get("trace", "")
+            if resident and response.get("capacity"):
                 raise ResidentCapacityError(error)
             raise RuntimeError(error)
-        return _ProcessEngine(process, parent, msg["ready"])
+        return _ProcessEngine(process, parent, response["ready"])
