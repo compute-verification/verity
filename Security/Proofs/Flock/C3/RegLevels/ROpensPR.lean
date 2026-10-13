@@ -398,6 +398,3 @@ theorem opensAtMaps_readMaps (M : FlockC3.Reps.StackedMaps stmt Vs) {zs : (s : F
 end
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.opensAtMaps_readMaps
-#print axioms FlockC3.RegLevels.elems_of_cols

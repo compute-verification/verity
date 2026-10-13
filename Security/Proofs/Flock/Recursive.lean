@@ -36,6 +36,7 @@ import Proofs.Flock.Recursive.PublicAuditProof
 import Proofs.Flock.Recursive.HoloExec
 import Proofs.Flock.Recursive.StageKinds
 import Proofs.Flock.Recursive.HoloCoins
+import Proofs.Flock.Recursive.HoloSched
 import Proofs.Flock.Recursive.ForkLast
 import Proofs.Flock.Recursive.ForkInnerC
 import Proofs.Flock.Recursive.AuditC3
