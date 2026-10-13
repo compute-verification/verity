@@ -6,20 +6,25 @@ import Proofs.Accounting.Memory
 # B2, proved
 
 `LengthCode`: the code's last `1` sits at the string's length, so equal codes have equal lengths, then equal bits.
+`TimelyTicks`: by induction on `j`, each window adding at most `span`.
 
 `B2` is a choice construction. The responder's state before challenge `j` is `stateOf`: `lengthCode M` of `X`'s state's
-content at `t j`, and the help's `H`-bit code (`exists_code`, from the help's count), packed into `N` bits (`pack`).
-The preprocessing picks an outcome with the primitive and the encoding it is given (`pre`); the step at challenge `j`
-picks an outcome whose state codes to its state, with content of at most `M` bits, and whose challenge `j` is the one
-asked (`out`), and returns that run's answer and its next state. At an outcome where `mem_X(t_j) ≤ M`, the pick has
-the same content (`LengthCode`, with `content_length_le`) and the same help (the code is injective on the help's
-values), so the same ingress during window `j`, so by `CausalFrom` the same `acts` and answer, and by `Decided` the
-same state at `t (j + 1)` (`out_spec`). `decided` derives `Decided` from `CausalFrom`: since v2.6 what `X` does during
-a window includes its state at the window's end. `seqAnswers_eq` and `seqState_eq` fold that over the challenges.
+content at `t x j`, a `τ`-bit code of `t x j` (injective on the ticks challenge `j` takes on the runs on time, `ticks`),
+and the help's `H`-bit code (`exists_code`), packed into `N` bits (`pack`). The preprocessing picks an outcome with the
+primitive and the encoding it is given (`pre`); the step at challenge `j` picks an outcome whose state codes to its
+state, with content of at most `M` bits, a tick among `ticks j`, and whose challenge `j` is the one asked (`out`), and
+returns that run's answer and its next state. At an outcome on time where `mem_X(t_j) ≤ M`, the pick has the same
+content (`LengthCode`, with `content_length_le`), the same tick and the same help (the codes are injective), so the same
+ingress until the earlier of the two next ticks, so by `CausalFrom` the same `acts` until then, so by `ArrivalRule` the
+same next tick (`next_tick_eq`), so the same window, `acts` and answer, and the same state at the next tick
+(`image_state_eq_of_acts`: what `X` does during a window includes its state at the window's end). `seqAnswers_eq` and
+`seqState_eq` fold that over the challenges.
 
-`B2Audit` applies PoUS's guarantee to that responder at `M = N − 1 − H`: an outcome that passes with
-`mem_X(t_j) + 1 + H ≤ N` is one the responder answers correctly. `B2Determines` reads `z` back with a left inverse of
-the length code (`decodeLen`).
+`B2Audit` applies PoUS's guarantee to that responder at `M = N − 1 − τ − H`: an outcome that passes with
+`mem_X(t_j) + 1 + τ + H ≤ N` is on time and one the responder answers correctly. The deployed forms get `TicksIn`
+from a fixed first tick (`ticksIn_of_start`: on time, challenge `j`'s tick is in `[t₀, t₀ + j·span]`).
+`B2Determines` reads `z` back with a left inverse of the length code (`decodeLen`). `B2_fixed` and `B2Audit_fixed`
+check that the fixed-schedule statements of #1857 are the case `t x = t`, `τ = 0`.
 -/
 
 namespace Accounting.SecurityProofs
@@ -53,15 +58,18 @@ theorem pr_mono {β : Type} [Fintype β] {P Q : β → Prop} (h : ∀ x, P x →
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hx ⊢
     exact h x hx
 
-namespace Responder
 
-/-- **`X`'s state is decided at the challenge ticks**: for each challenge `j + 1 < k`, `X`'s state's content at
-`t (j + 1)` is a function of its content at `t j` and of what reached it from outside during window `j`. -/
-def Decided {L : Type*} [LinearOrder L] {Ω : Type*} (S : Ω → Actual.Run L) (X : Finset L) (t : ℕ → ℕ) (k : ℕ) :
-    Prop :=
-  ∀ j, j + 1 < k → ∀ r r', (S r).content X (t j) = (S r').content X (t j) →
-    (S r).crossing (↑X)ᶜ ↑X (window t j) = (S r').crossing (↑X)ᶜ ↑X (window t j) →
-    (S r).content X (t (j + 1)) = (S r').content X (t (j + 1))
+theorem TimelyTicks : Guarantees.TimelyTicks := by
+  intro t span k ht j hj
+  induction j with
+  | zero => simp
+  | succ j ih =>
+    have h1 := ht j (by omega)
+    have h2 := ih (by omega)
+    rw [Nat.succ_mul]
+    omega
+
+namespace Responder
 
 /-- What `X` does during `[t, u)`, `t < u`, fixes its state at `u` as seen (v2.6: its state at the end of the window's
 last tick is among what it does). -/
@@ -84,34 +92,98 @@ theorem image_state_eq_of_acts {L : Type*} [LinearOrder L] {Ω : Type*} {S : Ω 
   ext p
   rw [← key (S r) p, ← key (S r') p, h3]
 
-/-- **`Decided` from causality** (v2.6): with the challenge ticks increasing, a strategy causal from every tick has
-`X`'s state decided at them. -/
-theorem decided {L : Type*} [LinearOrder L] {Ω : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom S) (X : Finset L)
-    {t : ℕ → ℕ} (ht : StrictMono t) (k : ℕ) : Decided S X t k := by
-  intro j _ r r' hcont hx
-  have hacts := hc X (t j) (t (j + 1)) r r' hcont hx
-  unfold Actual.Run.content
-  rw [image_state_eq_of_acts (ht (Nat.lt_succ_self j)) hacts]
+
+section
+
+variable {L : Type*} [LinearOrder L] {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ}
+  {S : Pous.Outcome sch k → Actual.Run L} {X : Finset L} {t : Pous.Outcome sch k → ℕ → ℕ} {α : Type*}
+  {help : Pous.Outcome sch k → α}
+
+/-- **The next tick agrees**: at two outcomes with the same help, challenge `j`, tick `t j` and content there, the next
+challenge tick is the same. Until the earlier of the two, what reaches `X` is the same (`IngressFixed`), so what `X`
+does is (`CausalFrom`), and the earlier one is then the other's too (`ArrivalRule`). -/
+theorem next_tick_eq (hc : CausalFrom S) (hinc : ∀ x (j : Fin k), t x j < t x (j + 1)) (hin : IngressFixed S X t help)
+    (har : ArrivalRule S X t help) {x x' : Pous.Outcome sch k} (j : Fin k) (hh : help x = help x')
+    (hi : x.2.2 j = x'.2.2 j) (ht : t x j = t x' j)
+    (hcont : (S x).content X (t x j) = (S x').content X (t x' j)) : t x (j + 1) = t x' (j + 1) := by
+  have hcr := hin x x' j hh hi ht
+  rw [← ht] at hcont
+  have hacts := hc X (t x j) (min (t x (j + 1)) (t x' (j + 1))) x x' hcont hcr
+  have hs : t x j < min (t x (j + 1)) (t x' (j + 1)) := lt_min (hinc x j) (ht ▸ hinc x' j)
+  rcases min_choice (t x (j + 1)) (t x' (j + 1)) with hm | hm
+  · rw [hm] at hacts hs
+    exact (har x x' j _ hh hi ht hs hacts rfl).symm
+  · rw [hm] at hacts hs
+    rw [ht] at hacts hs
+    exact har x' x j _ hh.symm hi.symm ht.symm hs hacts.symm rfl
+
+omit [LinearOrder L] in
+/-- On time with the first tick at `t₀`, challenge `j`'s tick is in `[t₀, t₀ + j·span]`, so with `k·span ≤ 2^τ` it
+takes at most `2^τ` values. -/
+theorem ticksIn_of_start (hinc : ∀ x (j : Fin k), t x j < t x (j + 1)) {t₀ span τ : ℕ} (h0 : ∀ x, t x 0 = t₀)
+    (hτ : k * span ≤ 2 ^ τ) : TicksIn t span τ := by
+  intro j
+  have hsub : {v | ∃ x, Timely (t x) span k ∧ t x j = v} ⊆ (Finset.Icc t₀ (t₀ + j * span) : Set ℕ) := by
+    rintro v ⟨x, hx, rfl⟩
+    have hle : ∀ i ≤ (j : ℕ), t x 0 ≤ t x i := by
+      intro i hi
+      induction i with
+      | zero => exact le_rfl
+      | succ i ih => exact (ih (by omega)).trans (hinc x ⟨i, by omega⟩).le
+    have := TimelyTicks (t x) span k hx j j.isLt.le
+    simp only [Finset.coe_Icc, Set.mem_Icc]
+    exact ⟨h0 x ▸ hle j le_rfl, h0 x ▸ this⟩
+  refine (Set.encard_le_encard hsub).trans ?_
+  rw [Set.encard_coe_eq_coe_finsetCard, Nat.card_Icc]
+  have : t₀ + j * span + 1 - t₀ ≤ 2 ^ τ := by
+    rcases Nat.eq_zero_or_pos span with h | h
+    · subst h; simpa using Nat.one_le_two_pow
+    · have := Nat.mul_le_mul_right span (show (j : ℕ) + 1 ≤ k from j.isLt)
+      rw [Nat.succ_mul] at this
+      omega
+  exact_mod_cast this
+
+/-- The ticks challenge `j` takes on the runs on time. -/
+def ticks (t : Pous.Outcome sch k → ℕ → ℕ) (span : ℕ) (j : ℕ) : Set ℕ := {v | ∃ x, Timely (t x) span k ∧ t x j = v}
+
+omit [LinearOrder L] in
+/-- With `TicksIn`, each challenge's ticks on the runs on time have a `τ`-bit code, injective on them. -/
+theorem exists_tick_code {span τ : ℕ} (h : TicksIn t span τ) :
+    ∃ ct : ℕ → ℕ → Pous.Bits τ, ∀ j < k, Set.InjOn (ct j) (ticks t span j) := by
+  have : ∀ j : ℕ, ∃ c : ℕ → Pous.Bits τ, j < k → Set.InjOn c (ticks t span j) := by
+    intro j
+    by_cases hj : j < k
+    · have h' : (ticks t span j).encard ≤ ((2 ^ τ : ℕ) : ℕ∞) := h ⟨j, hj⟩
+      have hle : (ticks t span j).encard ≤ (Set.univ : Set (Pous.Bits τ)).encard := by
+        rw [Set.encard_univ, ENat.card_eq_coe_fintype_card]
+        simpa [Fintype.card_fun] using h'
+      obtain ⟨c, -, hc⟩ := (Set.finite_of_encard_le_coe h').exists_injOn_of_encard_le hle
+      exact ⟨c, fun _ => hc⟩
+    · exact ⟨fun _ _ => false, fun h' => absurd h' hj⟩
+  choose ct hct using this
+  exact ⟨ct, hct⟩
+
+end
 
 /-- `a` then `b`, then `false`s, in `N` bits. -/
-def pack (M H N : ℕ) (a : Pous.Bits (M + 1)) (b : Pous.Bits H) : Pous.Bits N :=
-  fun i => if h : i.val < M + 1 then a ⟨i, h⟩ else if h' : i.val - (M + 1) < H then b ⟨i - (M + 1), h'⟩ else false
+def pack (A B N : ℕ) (a : Pous.Bits A) (b : Pous.Bits B) : Pous.Bits N :=
+  fun i => if h : i.val < A then a ⟨i, h⟩ else if h' : i.val - A < B then b ⟨i - A, h'⟩ else false
 
-theorem pack_inj {M H N : ℕ} (hN : M + 1 + H ≤ N) {a a' : Pous.Bits (M + 1)} {b b' : Pous.Bits H}
-    (h : pack M H N a b = pack M H N a' b') : a = a' ∧ b = b' := by
+theorem pack_inj {A B N : ℕ} (hN : A + B ≤ N) {a a' : Pous.Bits A} {b b' : Pous.Bits B}
+    (h : pack A B N a b = pack A B N a' b') : a = a' ∧ b = b' := by
   refine ⟨funext fun i => ?_, funext fun i => ?_⟩
   · have := congrFun h ⟨i, by omega⟩
     simpa only [pack, i.isLt, dite_true] using this
-  · have := congrFun h ⟨M + 1 + i, by omega⟩
-    have e : M + 1 + i.val - (M + 1) = i.val := by omega
-    simp only [pack, show ¬ (M + 1 + i.val < M + 1) by omega, dite_false, e, i.isLt, dite_true] at this
+  · have := congrFun h ⟨A + i, by omega⟩
+    have e : A + i.val - A = i.val := by omega
+    simp only [pack, show ¬ (A + i.val < A) by omega, dite_false, e, i.isLt, dite_true] at this
     exact this
 
-/-- The first `M + 1` bits of an `N`-bit state. -/
-def unpack (M N : ℕ) (hN : M + 1 ≤ N) (σ : Pous.Bits N) : Pous.Bits (M + 1) := fun i => σ ⟨i, by omega⟩
+/-- The first `A` bits of an `N`-bit state. -/
+def unpack (A N : ℕ) (hN : A ≤ N) (σ : Pous.Bits N) : Pous.Bits A := fun i => σ ⟨i, by omega⟩
 
-theorem unpack_pack {M H N : ℕ} (hN : M + 1 ≤ N) (a : Pous.Bits (M + 1)) (b : Pous.Bits H) :
-    unpack M N hN (pack M H N a b) = a := by
+theorem unpack_pack {A B N : ℕ} (hN : A ≤ N) (a : Pous.Bits A) (b : Pous.Bits B) :
+    unpack A N hN (pack A B N a b) = a := by
   funext i
   simp [unpack, pack, i.isLt]
 
@@ -133,6 +205,7 @@ theorem exists_code {β α : Type*} [Finite β] (help : β → α) {H : ℕ}
     simpa [Fintype.card_fun] using h
   obtain ⟨c, -, hc⟩ := (Set.finite_range help).exists_injOn_of_encard_le hle
   exact ⟨c, hc⟩
+
 
 theorem seqAnswers_eq {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans)
     (step : ℕ → Pous.Bits N → Fin B → Pous.Prog I (Pous.Bits ℓ × Pous.Bits N)) (k : ℕ) (σ : ℕ → Pous.Bits N)
@@ -190,118 +263,136 @@ theorem seqState_eq {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans)
     exact h j hj
 
 variable {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) {k : ℕ}
-  (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
-  (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (M H N : ℕ)
-  (c : α → Pous.Bits H)
+  (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : Pous.Outcome sch k → ℕ → ℕ)
+  (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (span M τ H N : ℕ)
+  (c : α → Pous.Bits H) (ct : ℕ → ℕ → Pous.Bits τ)
 
-/-- The responder's state before challenge `j` at the outcome `x`: `X`'s content at `t j` coded in `M + 1` bits, and
-the help's code. -/
+/-- The responder's state before challenge `j` at the outcome `x`: `X`'s content at `t x j` coded in `M + 1` bits, the
+tick's code and the help's code. -/
 noncomputable def stateOf (x : Pous.Outcome sch k) (j : ℕ) : Pous.Bits N :=
-  pack M H N (lengthCode M ((S x).content X (t j))) (c (help x))
+  pack (M + 1) (τ + H) N (lengthCode M ((S x).content X (t x j))) (pack τ H (τ + H) (ct j (t x j)) (c (help x)))
 
 open Classical in
-/-- The preprocessing: the state at `t 0` of an outcome with the given primitive and encoding. -/
+/-- The preprocessing: the state at the first challenge of an outcome with the given primitive and encoding. -/
 noncomputable def pre : Pous.Preprocessor sch N := fun _ pp C ω =>
   if h : ∃ x : Pous.Outcome sch k, x.1 = ω ∧ sch.enc W ω x.2.1 = (pp, C) then
-    stateOf sch S X t help M H N c (Classical.choose h) 0
+    stateOf sch S X t help M τ H N c ct (Classical.choose h) 0
   else fun _ => false
 
 open Classical in
 /-- What the step at challenge `j` returns from the state `σ` and the index `i`: the answer and the next state of an
-outcome whose state codes to `σ` with content of at most `M` bits and whose challenge `j` is `i`. -/
+outcome whose state codes to `σ`, with content of at most `M` bits and a tick among `ticks j`, and whose challenge `j`
+is `i`. -/
 noncomputable def out (j : ℕ) (σ : Pous.Bits N) (i : Fin sch.B) : Pous.Bits sch.ℓ × Pous.Bits N :=
   if hj : j < k then
-    if h : ∃ x : Pous.Outcome sch k, x.2.2 ⟨j, hj⟩ = i ∧ ((S x).content X (t j)).length ≤ M ∧
-        stateOf sch S X t help M H N c x j = σ then
-      (ans j ((S (Classical.choose h)).acts X (window t j)), stateOf sch S X t help M H N c (Classical.choose h) (j + 1))
+    if h : ∃ x : Pous.Outcome sch k, x.2.2 ⟨j, hj⟩ = i ∧ ((S x).content X (t x j)).length ≤ M ∧
+        t x j ∈ ticks t span j ∧ stateOf sch S X t help M τ H N c ct x j = σ then
+      (ans j ((S (Classical.choose h)).acts X (window (t (Classical.choose h)) j)),
+        stateOf sch S X t help M τ H N c ct (Classical.choose h) (j + 1))
     else (fun _ => false, σ)
   else (fun _ => false, σ)
 
 /-- The responder: `out`, with no query. -/
 noncomputable def resp : Pous.SeqResponderOn sch N 0 0 0 where
-  step _ _ j σ i := .ret (out sch S X t ans help M H N c j σ i)
+  step _ _ j σ i := .ret (out sch S X t ans help span M τ H N c ct j σ i)
   bounded _ _ _ _ _ := fun _ => by simp [Pous.Prog.mulDepth, Pous.Prog.keyWork, Pous.Prog.ringWork]
 
-variable {sch W S X t ans help M H N c}
+variable {sch W S X t ans help span M τ H N c ct}
 
-/-- When `X`'s state at `t 0` and the help depend on the outcome only through the primitive and the encoding, the
-preprocessing returns `stateOf … 0`. -/
-theorem pre_spec (hset' : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
-      (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x') (x : Pous.Outcome sch k) :
-    pre sch W S X t help M H N c W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1 =
-      stateOf sch S X t help M H N c x 0 := by
+/-- When the setup fixes `X`'s state at the first challenge, that tick and the help, the preprocessing returns
+`stateOf … 0`. -/
+theorem pre_spec (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) :
+    pre sch W S X t help M τ H N c ct W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1 =
+      stateOf sch S X t help M τ H N c ct x 0 := by
   have h : ∃ x' : Pous.Outcome sch k, x'.1 = x.1 ∧
       sch.enc W x.1 x'.2.1 = ((sch.enc W x.1 x.2.1).1, (sch.enc W x.1 x.2.1).2) := ⟨x, rfl, rfl⟩
   obtain ⟨h1, h2⟩ := Classical.choose_spec h
-  obtain ⟨hcont, hhelp⟩ := hset' _ _ h1 (by rw [h1]; exact h2)
-  simp only [pre, dite_eq_left h, stateOf, hcont, hhelp]
+  obtain ⟨hcont, htick, hhelp⟩ := hset _ _ h1 (by rw [h1]; exact h2)
+  simp only [pre, dite_eq_left h, stateOf]
+  rw [hcont, htick, hhelp]
 
 section
-variable (hc : CausalFrom S) (hd : Decided S X t k)
-  (hin : ∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
-    (S x).crossing (↑X)ᶜ ↑X (window t j) = (S x').crossing (↑X)ᶜ ↑X (window t j))
-  (hcode : Set.InjOn c (Set.range help)) (hN : M + 1 + H ≤ N)
-include hc hd hin hcode hN
+variable (hc : CausalFrom S) (hinc : ∀ x (j : Fin k), t x j < t x (j + 1)) (hin : IngressFixed S X t help)
+  (har : ArrivalRule S X t help) (hct : ∀ j < k, Set.InjOn (ct j) (ticks t span j))
+  (hcode : Set.InjOn c (Set.range help)) (hN : M + 1 + τ + H ≤ N)
+include hc hinc hin har hct hcode hN
 
-/-- At an outcome where `X`'s content at `t j` has at most `M` bits, the step at challenge `j` answers as `X` does and,
-unless `j` is the last challenge, moves to `X`'s next state. -/
-theorem out_spec (x : Pous.Outcome sch k) (j : ℕ) (hj : j < k) (hm : ((S x).content X (t j)).length ≤ M) :
-    (out sch S X t ans help M H N c j (stateOf sch S X t help M H N c x j) (x.2.2 ⟨j, hj⟩)).1 =
-        ans j ((S x).acts X (window t j)) ∧
-      (j + 1 < k → (out sch S X t ans help M H N c j (stateOf sch S X t help M H N c x j) (x.2.2 ⟨j, hj⟩)).2 =
-        stateOf sch S X t help M H N c x (j + 1)) := by
-  have h : ∃ x' : Pous.Outcome sch k, x'.2.2 ⟨j, hj⟩ = x.2.2 ⟨j, hj⟩ ∧ ((S x').content X (t j)).length ≤ M ∧
-      stateOf sch S X t help M H N c x' j = stateOf sch S X t help M H N c x j := ⟨x, rfl, hm, rfl⟩
-  obtain ⟨hi, hl, hs⟩ := Classical.choose_spec h
-  obtain ⟨h1, h2⟩ := pack_inj hN hs
+/-- At an outcome on time where `X`'s content at `t x j` has at most `M` bits, the step at challenge `j` answers as `X`
+does and, unless `j` is the last challenge, moves to `X`'s next state. -/
+theorem out_spec (x : Pous.Outcome sch k) (hx : Timely (t x) span k) (j : ℕ) (hj : j < k)
+    (hm : ((S x).content X (t x j)).length ≤ M) :
+    (out sch S X t ans help span M τ H N c ct j (stateOf sch S X t help M τ H N c ct x j) (x.2.2 ⟨j, hj⟩)).1 =
+        ans j ((S x).acts X (window (t x) j)) ∧
+      (j + 1 < k → (out sch S X t ans help span M τ H N c ct j (stateOf sch S X t help M τ H N c ct x j)
+        (x.2.2 ⟨j, hj⟩)).2 = stateOf sch S X t help M τ H N c ct x (j + 1)) := by
+  have hxt : t x j ∈ ticks t span j := ⟨x, hx, rfl⟩
+  have h : ∃ x' : Pous.Outcome sch k, x'.2.2 ⟨j, hj⟩ = x.2.2 ⟨j, hj⟩ ∧ ((S x').content X (t x' j)).length ≤ M ∧
+      t x' j ∈ ticks t span j ∧ stateOf sch S X t help M τ H N c ct x' j = stateOf sch S X t help M τ H N c ct x j :=
+    ⟨x, rfl, hm, hxt, rfl⟩
+  obtain ⟨hi, hl, hR, hs⟩ := Classical.choose_spec h
+  set x' := Classical.choose h
+  obtain ⟨h1, h2⟩ := pack_inj (by omega) hs
+  obtain ⟨h3, h4⟩ := pack_inj le_rfl h2
   have hcont := LengthCode M hl hm h1
-  have hhelp := hcode ⟨_, rfl⟩ ⟨_, rfl⟩ h2
-  have hx := hin _ _ ⟨j, hj⟩ hhelp hi
-  have hacts := hc X (t j) (t (j + 1)) _ _ hcont hx
-  have e : out sch S X t ans help M H N c j (stateOf sch S X t help M H N c x j) (x.2.2 ⟨j, hj⟩) =
-      (ans j ((S (Classical.choose h)).acts X (window t j)),
-        stateOf sch S X t help M H N c (Classical.choose h) (j + 1)) := by
+  have htick : t x' j = t x j := hct j hj hR hxt h3
+  have hhelp : help x' = help x := hcode ⟨_, rfl⟩ ⟨_, rfl⟩ h4
+  have hnext : t x' (j + 1) = t x (j + 1) := next_tick_eq hc hinc hin har ⟨j, hj⟩ hhelp hi htick hcont
+  have hcr := hin x' x ⟨j, hj⟩ hhelp hi htick
+  simp only [hnext, min_self] at hcr
+  rw [← htick] at hcont
+  have hacts := hc X (t x' j) (t x' (j + 1)) x' x hcont (by rw [hnext]; exact hcr)
+  have e : out sch S X t ans help span M τ H N c ct j (stateOf sch S X t help M τ H N c ct x j) (x.2.2 ⟨j, hj⟩) =
+      (ans j ((S x').acts X (window (t x') j)), stateOf sch S X t help M τ H N c ct x' (j + 1)) := by
     unfold out
     rw [dite_eq_left hj]
     exact dite_eq_left h
   rw [e]
-  exact ⟨congrArg (ans j) hacts, fun hj1 =>
-    congrArg₂ (pack M H N) (congrArg (lengthCode M) (hd j hj1 _ _ hcont hx)) (congrArg c hhelp)⟩
+  have hw : window (t x') j = window (t x) j := by simp only [window, htick, hnext]
+  refine ⟨?_, fun _ => ?_⟩
+  · rw [← hw]
+    exact congrArg (ans j) (by simpa only [window, hnext, htick] using hacts)
+  · have hst := image_state_eq_of_acts (hinc x' ⟨j, hj⟩) hacts
+    have hc' : (S x').content X (t x' (j + 1)) = (S x).content X (t x (j + 1)) := by
+      unfold Actual.Run.content
+      rw [hst, hnext]
+    simp only [stateOf]
+    rw [hc', hnext, hhelp]
 
-/-- **The responder answers as `X` does** at every outcome where `mem_X(t_j) ≤ M` at each challenge. -/
-theorem seqAnswers_resp (hset' : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
-      (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x') (x : Pous.Outcome sch k)
-    (hm : ∀ j : Fin k, (S x).mem X (t j) ≤ M) :
-    Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) ((resp sch S X t ans help M H N c).step W (sch.enc W x.1 x.2.1).1)
-        0 (List.ofFn x.2.2) (pre sch W S X t help M H N c W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
-      List.ofFn fun j : Fin k => ans j ((S x).acts X (window t j)) := by
-  have hl : ∀ j (hj : j < k), ((S x).content X (t j)).length ≤ M := fun j hj =>
+/-- **The responder answers as `X` does** at every outcome on time where `mem_X(t_j) ≤ M` at each challenge. -/
+theorem seqAnswers_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) (hx : Timely (t x) span k)
+    (hm : ∀ j : Fin k, (S x).mem X (t x j) ≤ M) :
+    Pous.seqAnswers ((Pous.ringRO B w p).answer x.1)
+        ((resp sch S X t ans help span M τ H N c ct).step W (sch.enc W x.1 x.2.1).1) 0 (List.ofFn x.2.2)
+        (pre sch W S X t help M τ H N c ct W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
+      List.ofFn fun j : Fin k => ans j ((S x).acts X (window (t x) j)) := by
+  have hl : ∀ j (hj : j < k), ((S x).content X (t x j)).length ≤ M := fun j hj =>
     (Actual.content_length_le _ _ _).trans (hm ⟨j, hj⟩)
   let is : ℕ → Fin sch.B := fun j => if hj : j < k then x.2.2 ⟨j, hj⟩ else ⟨0, sch.B_pos⟩
-  have key := seqAnswers_eq ((Pous.ringRO B w p).answer x.1) ((resp sch S X t ans help M H N c).step W
-    (sch.enc W x.1 x.2.1).1) k (stateOf sch S X t help M H N c x) (fun j => ans j ((S x).acts X (window t j))) is
+  have key := seqAnswers_eq ((Pous.ringRO B w p).answer x.1) ((resp sch S X t ans help span M τ H N c ct).step W
+    (sch.enc W x.1 x.2.1).1) k (stateOf sch S X t help M τ H N c ct x)
+    (fun j => ans j ((S x).acts X (window (t x) j))) is
     (fun j hj => by
       simp only [resp, Pous.Prog.run, is, dite_eq_left hj]
-      exact out_spec hc hd hin hcode hN x j hj (hl j hj)) k 0 (by omega)
-  rw [pre_spec hset' x]
+      exact out_spec hc hinc hin har hct hcode hN x hx j hj (hl j hj)) k 0 (by omega)
+  rw [pre_spec hset x]
   simp only [Nat.zero_add] at key
   convert key using 2
   congr 1
   funext i
   simp [is, i.isLt]
 
-/-- **The state before each challenge is `stateOf`** at every outcome where `mem_X(t_j) ≤ M` at each challenge. -/
-theorem seqState_resp (hset' : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
-      (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x') (x : Pous.Outcome sch k)
-    (hm : ∀ j : Fin k, (S x).mem X (t j) ≤ M) (j : ℕ) (hj : j < k) :
+/-- **The state before each challenge is `stateOf`** at every outcome on time where `mem_X(t_j) ≤ M` at each
+challenge. -/
+theorem seqState_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) (hx : Timely (t x) span k)
+    (hm : ∀ j : Fin k, (S x).mem X (t x j) ≤ M) (j : ℕ) (hj : j < k) :
     Pous.Sampled.seqState ((Pous.ringRO B w p).answer x.1)
-        ((resp sch S X t ans help M H N c).step W (sch.enc W x.1 x.2.1).1) 0 ((List.ofFn x.2.2).take j)
-        (pre sch W S X t help M H N c W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
-      stateOf sch S X t help M H N c x j := by
-  rw [pre_spec hset' x]
-  refine seqState_eq _ _ k (stateOf sch S X t help M H N c x) x.2.2 (fun j hj => ?_) j hj
+        ((resp sch S X t ans help span M τ H N c ct).step W (sch.enc W x.1 x.2.1).1) 0 ((List.ofFn x.2.2).take j)
+        (pre sch W S X t help M τ H N c ct W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
+      stateOf sch S X t help M τ H N c ct x j := by
+  rw [pre_spec hset x]
+  refine seqState_eq _ _ k (stateOf sch S X t help M τ H N c ct x) x.2.2 (fun j hj => ?_) j hj
   simp only [resp, Pous.Prog.run]
-  exact (out_spec hc hd hin hcode hN x j (by omega)
+  exact (out_spec hc hinc hin har hct hcode hN x hx j (by omega)
     ((Actual.content_length_le _ _ _).trans (hm ⟨j, by omega⟩))).2 hj
 
 end
@@ -310,20 +401,22 @@ end Responder
 
 open Responder in
 theorem B2 : Guarantees.B2 := by
-  intro L _ B w p _ sch k W S X t ans α help M H N hc ht hset hin hcount hN
+  intro L _ B w p _ sch k W S X t span ans α help M τ H N hc hinc hset hin har hticks hcount hN
   obtain ⟨c, hcode⟩ := exists_code help hcount
-  exact ⟨pre sch W S X t help M H N c, resp sch S X t ans help M H N c,
-    fun x hm => seqAnswers_resp hc (decided hc X ht k) hin hcode hN hset x hm⟩
+  obtain ⟨ct, hct⟩ := exists_tick_code hticks
+  exact ⟨pre sch W S X t help M τ H N c ct, resp sch S X t ans help span M τ H N c ct,
+    fun x hx hm => seqAnswers_resp hc hinc hin har hct hcode hN hset x hx hm⟩
 
 theorem B2Audit : Guarantees.B2Audit := by
-  intro L _ B w p _ sch N k δ ε hsec W S X t ans α help H hc ht hset hin hcount
-  by_cases hN : 1 + H ≤ N
-  · obtain ⟨A₁, A₂, hA⟩ := B2 sch k W S X t ans help (N - 1 - H) H N hc ht hset hin hcount (by omega)
+  intro L _ B w p _ sch N k δ ε hsec W S X t span ans α help τ H hc hinc hset hin har hticks hcount
+  by_cases hN : 1 + τ + H ≤ N
+  · obtain ⟨A₁, A₂, hA⟩ :=
+      B2 sch k W S X t span ans help (N - 1 - τ - H) τ H N hc hinc hset hin har hticks hcount (by omega)
     refine (pr_mono fun x hx => ?_).trans (hsec W A₁ A₂)
-    obtain ⟨hp, hm⟩ := hx
+    obtain ⟨⟨htime, hp⟩, hm⟩ := hx
     unfold Pous.seqAcceptsOn
     dsimp only
-    rw [hA x fun j => by have := hm j; omega]
+    rw [hA x htime fun j => by have := hm j; omega]
     exact congrArg List.ofFn (funext hp)
   · let A₂ : Pous.SeqResponderOn sch N 0 0 0 :=
       { step := fun _ _ _ σ _ => .ret (fun _ => false, σ)
@@ -335,37 +428,102 @@ theorem B2Audit : Guarantees.B2Audit := by
     · have := hx.2 ⟨0, hk⟩
       omega
 
+open Responder in
 theorem B2P2Ring : Guarantees.B2P2Ring := by
-  intro hsec L _ W S X t ans α help H hc ht hset hin hcount
-  exact B2Audit _ _ _ _ _ hsec W S X t ans help H hc ht hset hin hcount
+  intro hsec L _ W S X t t₀ span ans α help τ H hc hinc hset hin har h0 hτ hcount
+  exact B2Audit _ _ _ _ _ hsec W S X t span ans help τ H hc hinc hset hin har (ticksIn_of_start hinc h0 hτ) hcount
 
 open Responder in
 theorem B2Determines : Guarantees.B2Determines := by
-  intro L _ B w p _ sch k q W S X t ans α help ζ M H hc ht hset hin hcount hm hζ
+  intro L _ B w p _ sch k q W S X t span ans α help ζ M τ H hc hinc hset hin har hticks hcount htime hm hζ
   choose c hcode using fun z => exists_code (help z) (hcount z)
-  have hN : M + 1 + H ≤ M + 1 + H := le_rfl
-  refine ⟨fun z => pre sch W (S z) X t (help z) M H (M + 1 + H) (c z),
-    fun z => resp sch (S z) X t ans (help z) M H (M + 1 + H) (c z),
-    fun j σ => ζ j (decodeLen M (unpack M (M + 1 + H) (by omega) σ)), fun z x j hj => ?_, fun z x =>
-      seqAnswers_resp (hc z) (decided (hc z) X ht k) (hin z) (hcode z) hN (hset z) x (hm z x)⟩
-  rw [seqState_resp (hc z) (decided (hc z) X ht k) (hin z) (hcode z) hN (hset z) x (hm z x) j hj]
+  choose ct hct using fun z => exists_tick_code (hticks z)
+  have hN : M + 1 + τ + H ≤ M + 1 + τ + H := le_rfl
+  refine ⟨fun z => pre sch W (S z) X (t z) (help z) M τ H (M + 1 + τ + H) (c z) (ct z),
+    fun z => resp sch (S z) X (t z) ans (help z) span M τ H (M + 1 + τ + H) (c z) (ct z),
+    fun j σ => ζ j (decodeLen M (unpack (M + 1) (M + 1 + τ + H) (by omega) σ)), fun z x j hj => ?_, fun z x =>
+      seqAnswers_resp (hc z) (hinc z) (hin z) (har z) (hct z) (hcode z) hN (hset z) x (htime z x) (hm z x)⟩
+  rw [seqState_resp (hc z) (hinc z) (hin z) (har z) (hct z) (hcode z) hN (hset z) x (htime z x) (hm z x) j hj]
   simp only [stateOf]
   rw [unpack_pack, decodeLen_lengthCode ((Actual.content_length_le _ _ _).trans (hm z x ⟨j, hj⟩))]
   exact hζ z x ⟨j, hj⟩
 
 theorem B2Adds : Guarantees.B2Adds := by
-  intro L _ B w p _ sch N c δ ε hsec q k W S X t ans α help ζ M H hc ht hset hin hcount hm hζ
-  obtain ⟨A₁, A₂, π, hdet, hans⟩ := B2Determines sch c q W S X t ans help ζ M H hc ht hset hin hcount hm hζ
-  refine (pr_mono fun x hx => ?_).trans (Memory.AddsOn sch N 0 0 0 c δ ε hsec (M + 1) H q k W π A₁ A₂ hdet)
+  intro L _ B w p _ sch N c δ ε hsec q k W S X t span ans α help ζ M τ H hc hinc hset hin har hticks hcount htime hm hζ
+  obtain ⟨A₁, A₂, π, hdet, hans⟩ :=
+    B2Determines sch c q W S X t span ans help ζ M τ H hc hinc hset hin har hticks hcount htime hm hζ
+  refine (pr_mono fun x hx => ?_).trans
+    (Memory.AddsOn sch N 0 0 0 c δ ε hsec (M + 1 + τ) H q k W π A₁ A₂ hdet)
   refine ⟨?_, hx.2⟩
   unfold Pous.seqAcceptsOn
   dsimp only
   rw [hans x.1 x.2]
-  exact congrArg List.ofFn (funext hx.1)
+  exact congrArg List.ofFn (funext hx.1.2)
 
+open Responder in
 theorem B2AddsP2Ring : Guarantees.B2AddsP2Ring := by
-  intro hsec L _ q k W S X t ans α help ζ M H hc ht hset hin hcount hm hζ
-  have := B2Adds _ _ _ _ _ hsec q k W S X t ans help ζ M H hc ht hset hin hcount hm hζ
+  intro hsec L _ q k W S X t t₀ span ans α help ζ M τ H hc hinc hset hin har h0 hτ hcount htime hm hζ
+  have := B2Adds _ _ _ _ _ hsec q k W S X t span ans help ζ M τ H hc hinc hset hin har
+    (fun z => ticksIn_of_start (hinc z) (h0 z) hτ) hcount htime hm hζ
   rwa [Nat.cast_ofNat] at this
+
+open Responder in
+/-- **#1857's `B2`, on a fixed schedule**, from `B2` at `t x = t`, `span = t k` and `τ = 0`. -/
+theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k : ℕ)
+    (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
+    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (M H N : ℕ)
+    (hc : CausalFrom S) (ht : StrictMono t)
+    (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
+      (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x')
+    (hin : ∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
+      (S x).crossing (↑X)ᶜ ↑X (window t j) = (S x').crossing (↑X)ᶜ ↑X (window t j))
+    (hcount : (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) (hN : M + 1 + H ≤ N) :
+    ∃ (A₁ : Pous.Preprocessor sch N) (A₂ : Pous.SeqResponderOn sch N 0 0 0),
+      ∀ x, (∀ j : Fin k, (S x).mem X (t j) ≤ M) →
+        Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) (A₂.step W (sch.enc W x.1 x.2.1).1) 0 (List.ofFn x.2.2)
+            (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
+          List.ofFn fun j : Fin k => ans j ((S x).acts X (window t j)) := by
+  have htime : ∀ x : Pous.Outcome sch k, Timely ((fun _ => t) x) (t k) k := fun _ j hj => by
+    have := ht.monotone (show j + 1 ≤ k by omega)
+    dsimp only
+    omega
+  have hticks : TicksIn (fun _ : Pous.Outcome sch k => t) (t k) 0 := by
+    intro j
+    refine (Set.encard_le_encard (t := {t j}) ?_).trans (by simp)
+    rintro v ⟨x, -, rfl⟩
+    rfl
+  obtain ⟨A₁, A₂, hA⟩ := B2 sch k W S X (fun _ => t) (t k) ans help M 0 H N hc (fun _ j => ht (Nat.lt_succ_self j))
+    (fun x x' h1 h2 => ⟨(hset x x' h1 h2).1, rfl, (hset x x' h1 h2).2⟩)
+    (fun x x' j hh hi _ => by simpa only [min_self, window] using hin x x' j hh hi)
+    (fun _ _ _ _ _ _ _ _ _ h => h) hticks hcount (by omega)
+  exact ⟨A₁, A₂, fun x hm => hA x (htime x) hm⟩
+
+/-- **#1857's `B2Audit`, on a fixed schedule**, from `B2Audit` at `t x = t`, `span = t k` and `τ = 0`. -/
+theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p))
+    (N k : ℕ) (δ ε : ℝ≥0∞) (hsec : Pous.AuditSecureOn sch .sequential N 0 0 0 k δ ε)
+    (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
+    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (H : ℕ)
+    (hc : CausalFrom S) (ht : StrictMono t)
+    (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
+      (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x')
+    (hin : ∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
+      (S x).crossing (↑X)ᶜ ↑X (window t j) = (S x').crossing (↑X)ᶜ ↑X (window t j))
+    (hcount : (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) :
+    Pous.pr (fun x => (∀ j : Fin k, ans j ((S x).acts X (window t j)) = (sch.enc W x.1 x.2.1).2 (x.2.2 j)) ∧
+      ∀ j : Fin k, (S x).mem X (t j) + 1 + H ≤ N) ≤ δ + ε := by
+  have htime : ∀ x : Pous.Outcome sch k, Timely ((fun _ => t) x) (t k) k := fun _ j hj => by
+    have := ht.monotone (show j + 1 ≤ k by omega)
+    dsimp only
+    omega
+  have hticks : TicksIn (fun _ : Pous.Outcome sch k => t) (t k) 0 := by
+    intro j
+    refine (Set.encard_le_encard (t := {t j}) ?_).trans (by simp)
+    rintro v ⟨x, -, rfl⟩
+    rfl
+  refine (pr_mono fun x hx => ?_).trans (B2Audit sch N k δ ε hsec W S X (fun _ => t) (t k) ans help 0 H hc
+    (fun _ j => ht (Nat.lt_succ_self j)) (fun x x' h1 h2 => ⟨(hset x x' h1 h2).1, rfl, (hset x x' h1 h2).2⟩)
+    (fun x x' j hh hi _ => by simpa only [min_self, window] using hin x x' j hh hi)
+    (fun _ _ _ _ _ _ _ _ _ h => h) hticks hcount)
+  exact ⟨⟨htime x, hx.1⟩, fun j => by simpa using hx.2 j⟩
 
 end Accounting.SecurityProofs
