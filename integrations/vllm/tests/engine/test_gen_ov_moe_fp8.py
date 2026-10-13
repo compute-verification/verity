@@ -5,7 +5,8 @@ quant, the w2 launch), at the Qwen3-30B-A3B TP2 rank shapes, on a cc 12.0 target
 It checks that the scope claims every event, binds both quants as `Fp8GroupQuant_v1{K,64}` and both launches as the block-FP8 pair forms
 with the target's e4m3 step, with operand rows the Definitions' parameters fit; and that it refuses, by name, a missing attestation, a
 bf16 launch, another block, another quant group, column-major or 128-grid scales, the fused SiLU-quant, a missing quant, and a target
-with no e4m3 step.
+with no e4m3 step; that a cc 9.0 target folds the pinned tile on Hopper's wgmma step; and that without batch invariance it folds the
+tuned wgmma tiles the Build accepts and refuses the others.
 """
 from __future__ import annotations
 
@@ -63,8 +64,8 @@ def scale_shapes(g: int = G) -> dict[str, tuple[int, int, int]]:
     return {"w13": (E, cdiv(2 * I, g), cdiv(H, g)), "w2": (E, cdiv(H, g), cdiv(I, g))}
 
 
-def fp8_scope_events(M: int, *, naive: bool = False, consts_up: dict | None = None, quant_group: int = G, x_s_strides=None,
-                     w13_scale_shape=None, input_quant: bool = True, fused_silu_quant: bool = False):
+def fp8_scope_events(M: int, *, naive: bool = False, consts_up: dict | None = None, consts_down: dict | None = None, quant_group: int = G,
+                     x_s_strides=None, w13_scale_shape=None, input_quant: bool = True, fused_silu_quant: bool = False):
     """One `vllm.moe_forward` scope of layer LAYER at the rank shapes with block-FP8 experts (cf. test_gen_ov_moe_qwen3.moe_scope_events)."""
     nid = [1000]
 
@@ -132,7 +133,7 @@ def fp8_scope_events(M: int, *, naive: bool = False, consts_up: dict | None = No
     else:
         op("_C.silu_and_mul.default", "_C::silu_and_mul(Tensor($0! -> ) result, Tensor input) -> ()", [cache2, view(301, (P, 2 * I), offset=P * I)])
         quant(cache2, hq, hs, quant_group)
-    launch(hq, hs, w2, w2s, cache3, w_, H, I, dict(CONSTS, naive_block_assignment=naive, MUL_ROUTED_WEIGHT=True, top_k=1))
+    launch(hq, hs, w2, w2s, cache3, w_, H, I, dict(CONSTS, naive_block_assignment=naive, MUL_ROUTED_WEIGHT=True, top_k=1, **(consts_down or {})))
     op("_moe_C.moe_sum.default", "_moe_C::moe_sum(Tensor input, Tensor($0! -> ) output, Tensor? topk_ids=None, Tensor? expert_map=None) -> ()",
        [cache3, out, None, None])
     i = new()
@@ -227,13 +228,50 @@ def test_block_fp8_scope_folds_both_quants_and_both_pair_forms_on_the_target_s_e
     ({"w13_scale_shape": scale_shapes(128)["w13"]}, {}, "b_scale is not the contiguous f32"),
     ({"fused_silu_quant": True}, {}, "fused_experts shape"),
     ({"input_quant": False}, {}, "two per_token_group_fp8_quant calls"),
-    ({}, {"target": TargetProfile(compute_capability=(9, 0), num_sms=132, moe_backend="triton")}, "no registered e4m3 step"),
+    ({}, {"target": TargetProfile(compute_capability=(8, 0), num_sms=108, moe_backend="triton")}, "no registered e4m3 step"),
     ({}, {"target": TargetProfile(compute_capability=(8, 9), num_sms=128, moe_backend="triton")}, "no registered e4m3 step"),
 ])
 def test_block_fp8_scope_refuses_by_name(kw, ctx_kw, needle):
     res, _ = _resolve(3, ctx_kw=ctx_kw, **kw)
     bad = [r for r in res if isinstance(r, Unsupported)]
     assert bad and needle in bad[0].reason, [getattr(r, "reason", r) for r in res]
+
+
+def test_a_cc9_target_folds_the_pinned_tile_on_the_wgmma_step():
+    """The pinned [64, 64] tile with four warps is a wgmma tile on cc 9.0, so both launches take Hopper's k32 step."""
+    h200 = TargetProfile(compute_capability=(9, 0), num_sms=132, moe_backend="triton")
+    res, _ = _resolve(3, ctx_kw={"target": h200})
+    assert len(res) == 1 and isinstance(res[0], Group), res
+    gemms = [p.spec.id for p in res[0].parts if isinstance(p, Compute) and p.spec.id.startswith("MoeExpertFp8Gemm")]
+    assert len(gemms) == 2 and all(g.endswith(",DOT=HopperE4m3QgmmaDot32_v1}") for g in gemms), gemms
+
+
+H200_TUNED = TargetProfile(compute_capability=(9, 0), num_sms=132, moe_backend="triton", batch_invariant=False)
+
+
+@pytest.mark.parametrize("bm,bn,kb,swap,needle", [
+    (16, 128, 64, True, None), (64, 64, 64, False, None), (16, 64, 32, True, None),
+    (8, 32, 64, False, "no wgmma tile"), (16, 128, 64, False, "enable_swap_ab"), (64, 64, 16, False, "k32 step"),
+])
+def test_a_tuned_cc9_target_folds_the_wgmma_tiles_the_build_accepts_and_refuses_the_rest(bm, bn, kb, swap, needle):
+    """Without batch invariance vLLM's tuned config picks the tile; the fold applies the Build's rule (`moe_fp8_tuned_tile_refusal`),
+    and the Definitions read the launch's KB and SWAP."""
+    tile = {"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "BLOCK_SIZE_K": kb, "GROUP_SIZE_M": 1, "SWAP_AB": swap}
+    res, _ = _resolve(3, ctx_kw={"target": H200_TUNED}, consts_up=tile, consts_down=tile)
+    if needle is not None:
+        bad = [r for r in res if isinstance(r, Unsupported)]
+        assert bad and needle in bad[0].reason, [getattr(r, "reason", r) for r in res]
+        return
+    assert len(res) == 1 and isinstance(res[0], Group), [getattr(r, "reason", r) for r in res]
+    gemms = [p.spec.id for p in res[0].parts if isinstance(p, Compute) and p.spec.id.startswith("MoeExpertFp8Gemm")]
+    assert len(gemms) == 2 and all(f",KB={kb},SWAP={swap},DOT=HopperE4m3QgmmaDot32_v1}}" in g for g in gemms), gemms
+
+
+def test_a_batch_invariant_target_keeps_the_pinned_tile_and_swap_ab_false():
+    res, _ = _resolve(3, ctx_kw={"target": TargetProfile(compute_capability=(9, 0), num_sms=132, moe_backend="triton")},
+                      consts_up={"SWAP_AB": True})
+    bad = [r for r in res if isinstance(r, Unsupported)]
+    assert bad and "differ from the modelled block-FP8 kernel" in bad[0].reason and "SWAP_AB" in str(bad[0].detail)
 
 
 def test_the_bf16_scope_does_not_claim_a_block_fp8_scope():
