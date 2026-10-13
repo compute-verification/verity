@@ -8,6 +8,9 @@ V=$PWD
 export PYTHONPATH=$V:$(cd ../.. && pwd -P):$(cd ../../tools/research/src && pwd -P)
 export VERITY_TREE=$V HF_HOME=/workspace/cp/hf HF_HUB_OFFLINE=1
 export PY=/workspace/cp/venv312/bin/python
+# As the row driver gives its children: FlashInfer JIT-builds its TRT-LLM all-reduce at warmup with the venv's ninja and nvcc 12.9
+# (r20261013-000545-90ea: FileNotFoundError 'ninja' on every rank).
+export CUDA_HOME=/usr/local/cuda PATH=/workspace/cp/venv312/bin:/usr/local/cuda/bin:$PATH
 export SWEEP_DIR=${SWEEP_DIR:-/workspace/cp/sweep} GUARD_PRESERVE_FILE=/workspace/cp/guard.preserve
 REPO=zai-org/GLM-5.3 REV=aca966e4e02791568aa6a4ced368624b3d897f42 ROLE=GLM53
 CK=/workspace/fs/glm53/$REV

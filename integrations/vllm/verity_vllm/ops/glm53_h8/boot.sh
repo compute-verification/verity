@@ -12,11 +12,16 @@ for f in /workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so /workspace/cp/fa2
   [ -e "$f" ] && echo "artifact present: $f" || echo "artifact absent: $f"
 done
 "$PY" - "$CK" "$CMAP" <<'EOF'
-import hashlib, json, os, sys
+import hashlib, json, os, shutil, subprocess, sys
 import importlib.metadata as md
 import torch, vllm
 ck, cmap = sys.argv[1], sys.argv[2]
 fail, rec = [], {}
+rec["jit_tools"] = {t: shutil.which(t) for t in ("ninja", "nvcc")}
+if not all(rec["jit_tools"].values()):
+    fail.append("ninja/nvcc not on PATH (FlashInfer's all-reduce JIT)")
+else:
+    rec["nvcc"] = subprocess.run(["nvcc", "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1]
 n = torch.cuda.device_count()
 rec["gpus"] = [{"name": torch.cuda.get_device_name(i), "cc": list(torch.cuda.get_device_capability(i)),
                 "sms": torch.cuda.get_device_properties(i).multi_processor_count,
