@@ -418,6 +418,19 @@ class _Unreachable:
         return fail
 
 
+def test_every_git_command_that_talks_to_the_remote_aborts_a_stalled_transfer(tmp_path, monkeypatch):
+    import research.queue as Q
+
+    q = World(tmp_path).queue()
+    seen = []
+    real = Q._git
+    monkeypatch.setattr(Q, "_git", lambda cwd, *a, **k: seen.append(a) or real(cwd, *a, **k))
+    q._clone()
+    q.fetch()
+    remote = [a for a in seen if {"clone", "fetch", "push", "ls-remote"} & set(a)]
+    assert remote and all(a[: len(Q.STALL)] == Q.STALL for a in remote), seen
+
+
 def test_ready_marks_read_through_to_the_remote_and_without_that_pull_the_queue_refuses_to_answer(tmp_path, monkeypatch):
     """A failed pull, an unusable remote, or none at all (a cloud VM's shell that lost its store secrets) used to leave the queue
     answering from this machine's labels, with a warning at most, so its ready marks could be stale.  Each is `STALE` now."""
