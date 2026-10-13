@@ -171,9 +171,10 @@ class Ops(D.Ops):
         return self._halves[bits]
 
 
-def word_ops(B) -> Ops:
-    return Ops(B, WORD, lambda bits: B.call(const(32, bits)), lambda x: B.call(F32Neg, x), lambda bits: B.call(const(16, bits)),
-               WORD_T, 1)
+def word_ops(B, defs: dict | None = None) -> Ops:
+    """`Ops` over `WORD`, or over ``defs`` (`flashmla_prefill`'s steps)."""
+    return Ops(B, WORD if defs is None else defs, lambda bits: B.call(const(32, bits)), lambda x: B.call(F32Neg, x),
+               lambda bits: B.call(const(16, bits)), WORD_T, 1)
 
 
 # ---- the CUDA libm pieces ---------------------------------------------------------------------------------------------------
@@ -247,9 +248,9 @@ def _staged(D_: int, T: Types):
     return Tuple(Array(D_, T.bf16), T.bit)
 
 
-def check_row_statics(DN: int, DR: int, QT: int) -> None:
+def check_row_statics(DN: int, DR: int, QT: int, name: str = "FlashMlaKvRow") -> None:
     if DN < 1 or DR < 0 or QT < 1 or DN % QT:
-        raise ValueError(f"FlashMlaKvRow: QT={QT} must divide DN={DN} (one scale per QT NoPE elements), DR={DR} >= 0")
+        raise ValueError(f"{name}: QT={QT} must divide DN={DN} (one scale per QT NoPE elements), DR={DR} >= 0")
 
 
 def kv_row(o: Ops, S, nope, scale, rope, valid):

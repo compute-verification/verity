@@ -94,10 +94,11 @@ FLASHMLA_DSV4 = {**F.FLASHMLA_DSV4, "DOT": BG.HopperBF16WgmmaDot16}
 _LIFTED = ("DOT",)
 
 
-def bit_ops(B) -> F.Ops:
+def bit_ops(B, defs: dict | None = None) -> F.Ops:
+    """`flashmla.Ops` over `BITS`, or over ``defs`` (`boolean_flashmla_prefill`'s steps)."""
     c = _Bits(B)
-    return F.Ops(B, BITS, lambda v: c.word(v, 32), lambda x: Coll(F32, concat([x.refs.slice(0, 31), B.call(BL.NOT, x[31]).refs])),
-                 lambda v: c.word(v, 16), BIT_T, 16)
+    return F.Ops(B, BITS if defs is None else defs, lambda v: c.word(v, 32),
+                 lambda x: Coll(F32, concat([x.refs.slice(0, 31), B.call(BL.NOT, x[31]).refs])), lambda v: c.word(v, 16), BIT_T, 16)
 
 
 _X = lambda S: ((("x", F32),), F32)  # noqa: E731
