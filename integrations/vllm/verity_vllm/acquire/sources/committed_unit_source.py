@@ -7,6 +7,7 @@ into the Commit's ordinary step stream.
 """
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from typing import Any, Mapping
 
@@ -113,7 +114,7 @@ class CommittedUnitSource:
             return
         rows = units[occurrence]
         tensors = _tensors(out)
-        written = _written_values(func, args, kwargs or {}) if func is not None else []
+        written = _written_values(func, args, kwargs or {}, selected=rows[0].get("write_arguments")) if func is not None else []
         if written:
             tensors.extend(t for value in written for t in _tensors(value))
         if len(tensors) != len(rows):
@@ -148,13 +149,27 @@ def _tensors(value: Any) -> list[Any]:
     return []
 
 
-def _written_values(func: Any, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> list[Any]:
+def _written_values(func: Any, args: tuple[Any, ...], kwargs: Mapping[str, Any], *,
+                    selected: Any = None) -> list[Any]:
     schema = getattr(func, "_schema", None)
     if schema is None:
         return []
-    return [args[k] if k < len(args) else kwargs.get(arg.name)
-            for k, arg in enumerate(schema.arguments)
-            if arg.alias_info is not None and arg.alias_info.is_write]
+    selected = set(selected or ())
+    out = []
+    for k, arg in enumerate(schema.arguments):
+        if arg.alias_info is None or not arg.alias_info.is_write:
+            continue
+        value = args[k] if k < len(args) else kwargs.get(arg.name)
+        if isinstance(value, (tuple, list)) and selected and str(func) == "verity_cba.triton_launch.default" and len(args) > 2:
+            try:
+                names = json.loads(args[2]).get("tensor_args") or ()
+                out.extend(v for name, v in zip(names, value) if name in selected)
+                continue
+            except (TypeError, ValueError):
+                pass
+        if not selected or arg.name in selected:
+            out.append(value)
+    return out
 
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,

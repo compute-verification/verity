@@ -717,7 +717,8 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
             if hit is None:
                 continue
             k, entry = hit
-            writes = _written_operands(node)
+            write_items = _written_operand_items(node)
+            writes = [value for _name, value in write_items]
             try:
                 returns = node.meta.get("val") is not None
                 component_types = ([type_of(node.meta.get("val"), node.name)] if returns else []) + [
@@ -749,7 +750,9 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     committed_provenance = [{"input": f"committed_{k}", "op": str(node.target), "module": module, "reason": entry["reason"],
                              "list_entry": entry, "node": node.name, "type": str(params[committed_offset + k][1]),
                              "returns": node.meta.get("val") is not None,
-                             **({"writes": [arg.name for arg in committed_writes[node]]} if node in committed_writes else {})}
+                             **({"writes": [arg.name for arg in committed_writes[node]],
+                                "write_arguments": [name for name, _arg in _written_operand_items(node)]}
+                                if node in committed_writes else {})}
                             for k, (node, entry, module) in enumerate(committed_nodes)]
     weights_coll = pcolls[-1] if wrec_t is not None else None
     ctx = Ctx(mode=mode, profile=profile, config=config, allowed_dims=allowed_dims, name=name, ruleset=ruleset, vocab=vocab, module=module,
@@ -976,19 +979,47 @@ def _mutates(t) -> bool:
     return any(arg.alias_info is not None and arg.alias_info.is_write for arg in schema.arguments)
 
 
-def _written_operands(node) -> list[Any]:
-    """FX tensor operands a mutable op writes, in schema order."""
+def _written_operand_items(node) -> list[tuple[str, Any]]:
+    """Named FX tensor operands a mutable op writes, in schema order.
+
+    A custom op may expose a mutable ``Tensor[]`` even though only its
+    preallocated output members are writes (the captured Triton launch).  In
+    that case retain allocation-backed members and use the launch metadata's
+    tensor argument names so the runtime tap can select the same values.
+    """
     schema = getattr(node.target, "_schema", None)
     if schema is None:
         return []
-    out = []
+    out: list[tuple[str, Any]] = []
     for k, arg in enumerate(schema.arguments):
         if arg.alias_info is None or not arg.alias_info.is_write:
             continue
         value = node.args[k] if k < len(node.args) else node.kwargs.get(arg.name)
         if isinstance(value, torch.fx.Node):
-            out.append(value)
+            out.append((arg.name, value))
+        elif isinstance(value, (list, tuple)):
+            nodes = [v for v in value if isinstance(v, torch.fx.Node)]
+            names = [f"{arg.name}[{j}]" for j in range(len(nodes))]
+            if str(node.target) == "verity_cba.triton_launch.default" and len(node.args) > 2:
+                try:
+                    import json
+                    names = list(json.loads(node.args[2]).get("tensor_args") or names)
+                except (TypeError, ValueError):
+                    pass
+            items = list(zip(names, nodes))
+            allocations = [(name, value) for name, value in items if _from_allocation(value)]
+            out.extend(allocations or items)
     return out
+
+
+def _from_allocation(node, depth: int = 0) -> bool:
+    """Whether an FX value is an allocation or a short view chain over one."""
+    if not isinstance(node, torch.fx.Node) or depth > 8:
+        return False
+    target = getattr(node.target, "__name__", str(node.target)).split(".")[0]
+    if target in {"empty", "empty_like", "new_empty", "empty_strided"}:
+        return True
+    return target in _VIEW_LIKE and bool(node.args) and _from_allocation(node.args[0], depth + 1)
 
 
 def fx_arg_nodes(node) -> list[tuple[int, Any]]:

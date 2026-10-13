@@ -611,7 +611,8 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
                 member = str(unit["input"]) if len(p.port_table) == 1 else f"{unit['input']}/{port.name}"
                 add(FAMILY, step, 0, impl(str(unit.get("module") or "")), member, 0, port.elems,
                     dtype=_dtype(port.width), op=unit.get("op"), reason=unit.get("reason"),
-                    list_entry=unit.get("list_entry"), fx_node=unit.get("node"), unverified=True)
+                    list_entry=unit.get("list_entry"), fx_node=unit.get("node"),
+                    write_arguments=unit.get("write_arguments"), unverified=True)
 
     # --- weights: every prescribed record field --------------------------------------------------------------------------------------
     for p in record_params:

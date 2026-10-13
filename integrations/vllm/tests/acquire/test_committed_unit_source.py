@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -104,3 +105,19 @@ def test_mutable_op_tap_commits_the_return_and_post_write_operand():
     assert torch.equal(got, torch.tensor([3.0]))
     assert [name for name, _tensor, _step in com.acquired] == ["committed_0/0", "committed_0/1"]
     assert all(torch.equal(tensor, got) for _name, tensor, _step in com.acquired)
+
+
+def test_tensor_list_tap_selects_only_named_writes():
+    class _Func:
+        _schema = SimpleNamespace(arguments=[
+            SimpleNamespace(name="kernel", alias_info=None),
+            SimpleNamespace(name="tensors", alias_info=SimpleNamespace(is_write=True)),
+            SimpleNamespace(name="meta_json", alias_info=None),
+        ])
+
+        def __str__(self):
+            return "verity_cba.triton_launch.default"
+
+    a, b, c = (torch.tensor([v]) for v in (1, 2, 3))
+    meta = json.dumps({"tensor_args": ["a_ptr", "b_ptr", "c_ptr"]})
+    assert S._written_values(_Func(), ("kernel", [a, b, c], meta), {}, selected=["c_ptr"])[0] is c
