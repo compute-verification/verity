@@ -83,7 +83,7 @@ def test_every_kv_option_spends_gamma_for_what_it_saves():
     rows = {r["arm"]: r for r in S.compare("8B", TRACE1, S.ARMS, V)}
     stated = rows["stated"]
     for name, r in rows.items():
-        if name.startswith("stock") or name.startswith("e1") or name.startswith("e2") or name == "stated":
+        if name.startswith("stock") or name.startswith("e") or name == "stated":
             continue
         assert r["gamma_kv"] > stated["gamma_kv"]
     assert rows["a all k=2"]["gpus_x"] < 0.8 * stated["gpus_x"]
@@ -97,6 +97,31 @@ def test_a_deferred_encode_waits_at_least_for_its_bursts_encode():
     srv = S.Server("8B", S.mix_of("prompt-heavy"), _arm("d deferred 0.5 s"), V)
     assert r["lag_s"] >= min(0.5, burst * S.mix_of("prompt-heavy").prompt * srv.enc_tok) - 1e-12
     assert r["ttft_s"] < rows["stock"]["ttft_s"] * r["gpus_x"]
+
+
+def test_prefix_reuse_takes_its_share_off_what_the_audit_adds_to_a_prompt():
+    def added(reuse):
+        audited = S.Server("8B", TRACE1, replace(_arm("stated"), reuse=reuse), V)
+        stock = S.Server("8B", TRACE1, replace(S.STOCK, reuse=reuse), V)
+        fr = S.kv_fractions(TRACE1, audited.arm)
+        return audited.prefill(fr) - stock.prefill(fr)
+    assert added(0.5) == pytest.approx(0.5 * added(0.0), rel=1e-9)
+    assert added(0.0) == pytest.approx(TRACE1.prompt * S.prefill_token(SHAPES["8B"], 1, 1024, _arm("stated"), V)[0]
+                                       - TRACE1.prompt * S.prefill_token(SHAPES["8B"], 1, 1024, S.STOCK, V)[0])
+
+
+def test_a_reused_prefix_is_registered_once_and_costs_no_gamma():
+    rows = {r["arm"]: r for r in S.compare("8B", TRACE1, [_arm("stated"), _arm("e3 reuse 50%")], V)}
+    assert rows["e3 reuse 50%"]["gamma_kv"] == rows["stated"]["gamma_kv"]
+    assert rows["e3 reuse 50%"]["gpus_x"] < rows["stated"]["gpus_x"]
+    assert "stock, reuse 50%" in rows
+
+
+def test_the_least_reuse_inside_4x_is_where_the_gpus_cross_4():
+    r = S.reuse_inside("8B", TRACE1, _arm("stated"), V)
+    assert r is not None and 0.0 < r < 0.99
+    assert S.gpus_at_reuse("8B", TRACE1, _arm("stated"), V, r) <= 4.0
+    assert S.gpus_at_reuse("8B", TRACE1, _arm("stated"), V, r - 0.01) > 4.0
 
 
 def test_fp8_kv_halves_the_encode():

@@ -22,6 +22,10 @@ multiplies every GPU time by its measured TPOT factor and leaves its measured η
 μ_partial); μ_kv, the share of R·T spent reading KV that isn't registered (options b, c, d) and, unregistered, its
 writes; μ_scratch, the prefill's weight scratch (written and read a chunk, unregistered by design). The rest of γ
 (the frontier's per-pass terms, sampling, λ) and η are the same for every option and are reported beside them.
+
+Prefix reuse (``reuse``): that share of every prompt is a cached prefix, encoded and registered once and read by
+every request after, so a request computes and encodes only the rest, whose attention still reads the whole prompt.
+Stock caches the same prefixes, and the one-time encode of each is taken as amortized away.
 """
 
 from __future__ import annotations
@@ -123,6 +127,7 @@ class Arm:
     after: int = 0
     lag: float = 0.0
     host: bool = False
+    reuse: float = 0.0
 
 
 ARMS: list[Arm] = [
@@ -142,6 +147,11 @@ ARMS: list[Arm] = [
     Arm("e1 FP8 KV", "the stated codec over an FP8 KV cache (the operator's dtype)", kv_dtype=1),
     Arm("e1 FP8 KV, all k=2", "FP8 KV, the weights and KV at k = 2", k_w=2, k_kv=2, kv_dtype=1),
     Arm("e2 host encodes", "the host's IFMA takes its share of the encode (h of the GPUs' squaring)", host=True),
+    Arm("e3 reuse 50%", "the stated codec, half of every prompt a cached prefix registered once (stock caches the "
+        "same)", reuse=0.5),
+    Arm("e1+e3 FP8, reuse 50%", "the stated codec over FP8 KV, half of every prompt cached", kv_dtype=1, reuse=0.5),
+    Arm("e1+d FP8, deferred 0.5 s", "the stated codec over FP8 KV, the prompt's encode deferred within 0.5 s",
+        kv_dtype=1, kv="deferred", lag=0.5),
     Arm("rec: all k=2 + d 0.5 s", "the fallback, the prompt's encode deferred within 0.5 s", k_w=2, k_kv=2,
         kv="deferred", lag=0.5),
     Arm("rec + FP8 KV", "the same over an FP8 KV cache", k_w=2, k_kv=2, kv_dtype=1, kv="deferred", lag=0.5),
@@ -151,6 +161,11 @@ STOCK_FP8 = Arm("stock FP8 KV", "vLLM, no audit, FP8 KV", audited=False, kv_dtyp
 PROJECTED = ("stated", "a all k=2", "c KV unregistered", "e1 FP8 KV, all k=2", "rec: all k=2 + d 0.5 s",
              "rec + FP8 KV")
 SWEPT = ("stated", "a all k=2", "a all p512 k=2", "c KV unregistered", "e1 FP8 KV, all k=2", "rec: all k=2 + d 0.5 s")
+# Three rounds until the partial-completion attack is measured (Daniel, 12 Oct, assumption 7): the options at k = 3,
+# and the KV-only fallback for reference.
+K3 = ("stated", "e1 FP8 KV", "e3 reuse 50%", "d deferred 0.5 s", "e1+e3 FP8, reuse 50%", "e1+d FP8, deferred 0.5 s",
+      "a KV k=2")
+K3_MIXES = ("trace 1", "prompt-heavy", "decode-heavy")
 
 
 def values() -> dict[str, Any]:
@@ -258,8 +273,9 @@ def kv_fractions(mix: Mix, arm: Arm, n_lag: float = 0.0) -> dict[str, float]:
     if arm.kv == "plain":
         return {"u": 1.0, "e_gen": 0.0, "skip": 0.0, "n": 0.0}
     n = arm.after if arm.kv == "after" else n_lag
-    prompt_unreg = mix.mean(lambda p, g: p * min(n, g))
-    skip = mix.mean(lambda p, g: p if g <= n else 0.0)
+    c = 1.0 - arm.reuse
+    prompt_unreg = mix.mean(lambda p, g: c * p * min(n, g))
+    skip = mix.mean(lambda p, g: c * p if g <= n else 0.0)
     if arm.kv == "deferred":
         return {"u": prompt_unreg / mix.reads, "e_gen": 1.0, "skip": skip, "n": n}
     gen_unreg = mix.mean(lambda p, g: _below(n, g))
@@ -272,7 +288,9 @@ class Server:
 
     def __init__(self, model: str, mix: Mix, arm: Arm, v: dict[str, Any], slow: float = 1.0):
         self.shape, self.tp, self.mix, self.arm, self.v, self.slow = SHAPES[model], MODELS[model], mix, arm, v, slow
-        self.classes = [(p, g, w, *prefill_token(self.shape, self.tp, p, arm, v)) for p, g, w in mix.classes]
+        self.computed = 1.0 - arm.reuse
+        self.classes = [(p, g, w, *prefill_token(self.shape, self.tp, (1.0 + arm.reuse) * p, arm, v))
+                        for p, g, w in mix.classes]
         self.kv_tok = kv_shape(self.shape, arm.kv_dtype).kv_bytes_per_token
         room = self.tp * v["H"] - self.shape.weight_bytes
         self.b_max = min(float(v["b_max"]), room / (mix.ctx * self.kv_tok))
@@ -283,7 +301,7 @@ class Server:
 
     def prefill(self, fr: dict[str, float]) -> float:
         """Each GPU's prefill seconds a request, less the encode of prompts whose request ends before it's due."""
-        pf = sum(w * p * t for p, g, w, t, _ in self.classes) / self.mix.weight
+        pf = self.computed * sum(w * p * t for p, g, w, t, _ in self.classes) / self.mix.weight
         return (pf - fr["skip"] * self.enc_tok) * self.slow
 
     def t_d(self, batch: float, fr: dict[str, float]) -> float:
@@ -331,7 +349,7 @@ class Server:
         crit = sum(w * p * (t - (enc if late else 0.0)) for p, g, w, t, enc in self.classes)
         crit /= sum(w * p for p, g, w, *_ in self.classes)
         tok = crit * self.slow + op["t_d"] / (self.v["chunk"] - op["batch"])
-        return (max(1.0, burst) + 1) / 2 * self.mix.prompt * tok
+        return (max(1.0, burst) + 1) / 2 * self.computed * self.mix.prompt * tok
 
     def gamma(self, op: dict[str, Any]) -> dict[str, float]:
         """The KV option's γ at the operating point, a GPU's shares of R·T."""
@@ -346,7 +364,7 @@ class Server:
         kv = op["u"] * kv_read / R
         if arm.kv == "plain":
             kv += lam * (self.mix.prompt + self.mix.generated) * self.kv_tok / tp * v["write_bus"] / R
-        scratch = lam * self.mix.prompt / v["chunk"] * 2 * self.shape.weight_bytes / tp / R
+        scratch = lam * self.computed * self.mix.prompt / v["chunk"] * 2 * self.shape.weight_bytes / tp / R
         w = Workload(kv_shape(self.shape, arm.kv_dtype), op["batch"], int(self.mix.ctx), tp)
         p = Params(arm.k_w, BLOCK, K_S, 0)
         st = {**step(w, p, _at(v, arm.bits_w)), "cap": op["t_d"], "unfilled": 0.0}
@@ -358,7 +376,7 @@ class Server:
     def encode_share(self, op: dict[str, Any]) -> float:
         """The share of the GPU's time spent encoding KV: the prompts' encoded in prefill and the appended tokens'."""
         fr = self.fractions(op["tpot"])
-        tokens = self.mix.prompt - fr["skip"] + self.mix.generated * fr["e_gen"]
+        tokens = self.computed * self.mix.prompt - fr["skip"] + self.mix.generated * fr["e_gen"]
         return op["lambda"] * tokens * self.enc_tok * self.slow
 
 
@@ -371,20 +389,24 @@ def ratio_mix(r: float) -> Mix:
 
 
 def compare(model: str, mix: Mix, arms: list[Arm], v: dict[str, Any], filler: str = "F64/8w") -> list[dict[str, Any]]:
-    """Each arm beside stock (at the arm's KV dtype) at stock's utilization on trace 1, without and with ``filler``."""
+    """Each arm beside stock (at the arm's KV dtype and prefix reuse) at stock's utilization on trace 1, without and
+    with ``filler``."""
     rho0 = v["lambda0"] / Server("8B", mix_of("trace 1"), STOCK, v).capacity()["lambda"]
     slow, eta, _ = FILLERS[filler]
     out = []
-    stocks = {d: Server(model, mix, replace(STOCK, kv_dtype=d), v) for d in (1, 2)}
-    stock_cap = {d: s.capacity()["lambda"] for d, s in stocks.items()}
-    stock_filled = {d: Server(model, mix, replace(STOCK, kv_dtype=d), v, STOCK_FILLER[0]).capacity()["lambda"]
-                    for d in (1, 2)}
-    for arm in [STOCK, STOCK_FP8] + arms:
+    keys = sorted({(1, 0.0), (2, 0.0)} | {(a.kv_dtype, a.reuse) for a in arms})
+    stock_of = {(d, r): replace(STOCK, name="stock" + (", FP8 KV" if d == 1 else "") +
+                                (f", reuse {r:.0%}" if r else ""), kv_dtype=d, reuse=r) for d, r in keys}
+    stock_cap = {key: Server(model, mix, s, v).capacity()["lambda"] for key, s in stock_of.items()}
+    stock_filled = {key: Server(model, mix, s, v, STOCK_FILLER[0]).capacity()["lambda"]
+                    for key, s in stock_of.items()}
+    for arm in [stock_of[(2, 0.0)], stock_of[(1, 0.0)]] + [stock_of[k] for k in keys if k[1]] + arms:
         srv = Server(model, mix, arm, v)
         cap = srv.capacity()
-        base = stock_cap[arm.kv_dtype]
+        key = (arm.kv_dtype, arm.reuse)
+        base = stock_cap[key]
         if arm.kv == "deferred":
-            need = v["burst"] * cap["lambda"] / base * mix.prompt * srv.enc_tok
+            need = v["burst"] * cap["lambda"] / base * srv.computed * mix.prompt * srv.enc_tok
             if need > arm.lag:
                 arm = replace(arm, lag=need)
                 srv = Server(model, mix, arm, v)
@@ -398,11 +420,11 @@ def compare(model: str, mix: Mix, arms: list[Arm], v: dict[str, Any], filler: st
         same = srv.operate(rho0 * base)
         row = {
             "arm": arm.name, "what": arm.what, "model": model, "tp": srv.tp, "kv_dtype": arm.kv_dtype,
-            "b_max": srv.b_max, "rho0": rho0,
+            "reuse": arm.reuse, "b_max": srv.b_max, "rho0": rho0,
             "capacity_req_s_gpu": cap["lambda"] / srv.tp,
             "capacity_tok_s_gpu": cap["lambda"] * (mix.prompt + mix.generated) / srv.tp,
-            "gpus_x": r, "gpus_x_filled": stock_cap[arm.kv_dtype] / cap_f["lambda"],
-            "gpus_x_filled_vs_filled_stock": stock_filled[arm.kv_dtype] / cap_f["lambda"],
+            "gpus_x": r, "gpus_x_filled": base / cap_f["lambda"],
+            "gpus_x_filled_vs_filled_stock": stock_filled[key] / cap_f["lambda"],
             "tpot_ms": op["tpot"] * 1e3 if op else None, "batch": op["batch"] if op else None,
             "ttft_s": srv.ttft(op, v["burst"] / r) if op else None,
             "tpot_ms_filled": op_f["tpot"] * 1e3 if op_f else None,
@@ -431,6 +453,25 @@ def sweep(v: dict[str, Any]) -> list[dict[str, Any]]:
                 cap = Server(model, mix, arm, v).capacity()["lambda"]
                 rows.append({"ratio": r, "model": model, "arm": name, "gpus_x": stocks[arm.kv_dtype] / cap})
     return rows
+
+
+def gpus_at_reuse(model: str, mix: Mix, arm: Arm, v: dict[str, Any], reuse: float) -> float:
+    stock = Server(model, mix, replace(STOCK, kv_dtype=arm.kv_dtype, reuse=reuse), v).capacity()["lambda"]
+    return stock / Server(model, mix, replace(arm, reuse=reuse), v).capacity()["lambda"]
+
+
+def reuse_inside(model: str, mix: Mix, arm: Arm, v: dict[str, Any], limit: float = 4.0) -> float | None:
+    """The least prefix reuse at which ``arm`` serves within ``limit`` × stock's GPUs (stock reusing the same), or
+    None if even 99% doesn't."""
+    if gpus_at_reuse(model, mix, arm, v, 0.0) <= limit:
+        return 0.0
+    if gpus_at_reuse(model, mix, arm, v, 0.99) > limit:
+        return None
+    lo, hi = 0.0, 0.99
+    for _ in range(30):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if gpus_at_reuse(model, mix, arm, v, mid) > limit else (lo, mid)
+    return hi
 
 
 def validate(v: dict[str, Any]) -> dict[str, dict[str, float]]:
@@ -510,10 +551,15 @@ def main(argv: list[str] | None = None) -> int:
     fillers = {f: compare("8B", mix_of("trace 1"), [a for a in ARMS if a.name in PROJECTED], v, f)
                for f in FILLERS if f != "none"}
     slots32 = compare("8B", mix_of("trace 1"), ARMS, {**v, "b_max": 32})
+    k3_arms = [next(a for a in ARMS if a.name == n) for n in K3]
+    k3 = {model: {m: compare(model, mix_of(m), k3_arms, v) for m in K3_MIXES} for model in MODELS}
+    k3_reuse = {model: {m: {a.name: reuse_inside(model, mix_of(m), a, v) for a in k3_arms[:2]} for m in K3_MIXES}
+                for model in MODELS}
     doc = {"schema": "verity/overhead-serving/v1", "inputs": {n: asdict(i) for n, i in SERVING.items()},
            "fillers": FILLERS, "stock_filler": STOCK_FILLER, "mixes": MIXES, "models": MODELS,
            "arms": [asdict(a) for a in ARMS], "validation": checks, "results": results, "fillers_8B_trace1": fillers,
-           "slots32_8B_trace1": slots32, "ratio_sweep": sweep(v), "encode_price": encode_price(v)}
+           "slots32_8B_trace1": slots32, "ratio_sweep": sweep(v), "encode_price": encode_price(v),
+           "k3_options": k3, "k3_reuse_inside_4x": k3_reuse}
     (args.out / "serving.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     print("== the model beside the measurements (8B, BF16 KV, one GPU)")
     for name, c in checks.items():
@@ -541,6 +587,15 @@ def main(argv: list[str] | None = None) -> int:
         for r in RATIOS:
             each = [x["gpus_x"] for x in sw if x["model"] == model and x["ratio"] == r]
             print(f"  {'':5} {r:6g} " + " ".join(f"{x:18.2f}" for x in each))
+    for model, by_mix in k3.items():
+        for m, rows in by_mix.items():
+            print(f"\n== k = 3 (three rounds until the partial-completion attack is measured): {model} {m}")
+            print(table(rows))
+    print("\n== the least prefix reuse inside 4× at k = 3 (stock reusing the same; — if none up to 99%)")
+    for model, by_mix in k3_reuse.items():
+        for m, each in by_mix.items():
+            print(f"  {model:5} {m:13} " + "  ".join(
+                f"{n}: {'—' if x is None else f'{x:.0%}'}" for n, x in each.items()))
     return 0
 
 
