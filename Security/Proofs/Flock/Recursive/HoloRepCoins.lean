@@ -274,14 +274,4 @@ theorem coinRounds_holoRep_split {m kLog claims : Nat} {rs : Array SchedRound} (
   rw [coinRounds_holoRep hc h]
   exact (range'_split_filter (holoRounds_coins hc h).1).symm
 
-#print axioms fast100_facts
-#print axioms repRounds_coins
-#print axioms holoRepRounds_m
-#print axioms getElem?_insert
-#print axioms holoRounds_coins
-#print axioms coinRounds_holo
-#print axioms coinRounds_holoRep
-#print axioms range'_split_filter
-#print axioms coinRounds_holoRep_split
-
 end Flock.Guarantees.HoloRepCoins

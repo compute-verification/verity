@@ -235,12 +235,6 @@ theorem stackedAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRou
     rw [← topCounts_eq]
     exact ht
 
-#print axioms topCounts_eq
-#print axioms commitRounds_of_check
-#print axioms repsCommitsAt_of_check
-#print axioms sparseCommitsAt_of_check
-#print axioms stackedAt_of_check
-
 theorem recC_ne_claim (k : Nat) : s!"rec-c{k}" ≠ CLAIM_VALUE := by
   intro h
   have h := congrArg String.toList h

@@ -62,8 +62,4 @@ theorem repIdxB_of_size {S₀ : Model.Statement} {b : ValsSrc} {m kLog claims : 
   rw [hz, hk]
   exact (HoloRepCoins.coinRounds_holoRep_split hc hrs).symm
 
-#print axioms heldRounds_size_of_counted
-#print axioms repRoundsCounted_of_rounds
-#print axioms repIdxB_of_size
-
 end FlockC3.Reps
