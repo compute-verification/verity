@@ -20,6 +20,10 @@ Stage `s`'s keys for rep `ρ` are the keys of the messages rep `ρ` sends at sta
   (`MsgsOfKeys`, the slices). At `repsOfVals` the weave is `unitWeave`'s (`wovenAt_repsOfVals`, its extra claims'
   count fixed by `extraClaims_length`), so `tsRead_repsOfVals` gives `TsRead` there from the lengths, `MsgsOfKeys` and
   `WColsAt`.
+* The slices, at `ValsSrc`'s values: a rep's first `m_z − 4` messages, the zerocheck's, read only `zcKeys`
+  (`unitMsgs_zc_read`), and its next `k_log − 4`, the lincheck's with `h`, only `lcKeys` at a holo shape
+  (`unitMsgs_lc_read`). No key of either is `.cons`, so `rep₀`'s consistency sums stand in for the rep's
+  (`valOf_cons_irrel`).
 -/
 
 namespace FlockC3.Reps
@@ -121,6 +125,284 @@ theorem sentK_noCons {σ : List FlockSoundness.Discharge.Exec.Kind} {c₀ : ℕ}
     ∀ s ρ ℓ l, ¬ sentK σ c₀ keys s ρ (.cons ℓ l) := by
   rintro _ _ ℓ l ⟨_, _, _, h⟩
   exact h ℓ l rfl
+
+/-! ## The slices: the zerocheck's and the lincheck's messages read only their keys -/
+
+section slices
+
+universe u
+
+open FlockSoundness.Refine (zcMsgs lcMsgs holoLcMsgs holoRepMsgs vecOf pairOf fOf)
+open FlockVBridge.Compiled (RepData)
+
+theorem list3_get {α : Type u} {a a' z z' : α} {f f' : ℕ → α} {n m : ℕ} (h0 : m = 0 → a = a')
+    (h1 : ∀ i, m = i + 1 → i < n → f i = f' i) (h2 : m = n + 1 → z = z') :
+    (a :: (List.range n).map f ++ [z])[m]? = (a' :: (List.range n).map f' ++ [z'])[m]? := by
+  rw [List.cons_append, List.cons_append]
+  rcases m with _ | m
+  · rw [List.getElem?_cons_zero, List.getElem?_cons_zero, h0 rfl]
+  rw [List.getElem?_cons_succ, List.getElem?_cons_succ]
+  rcases Nat.lt_or_ge m n with hm | hm
+  · rw [List.getElem?_append_left (by rw [List.length_map, List.length_range]; exact hm),
+      List.getElem?_append_left (by rw [List.length_map, List.length_range]; exact hm), List.getElem?_map,
+      List.getElem?_map, List.getElem?_range hm, Option.map_some, Option.map_some, h1 m rfl hm]
+  · rw [List.getElem?_append_right (by rw [List.length_map, List.length_range]; exact hm),
+      List.getElem?_append_right (by rw [List.length_map, List.length_range]; exact hm), List.length_map,
+      List.length_map, List.length_range]
+    rcases Nat.eq_or_lt_of_le hm with rfl | hm'
+    · rw [Nat.sub_self, h2 rfl]
+    · rw [List.getElem?_eq_none (by rw [List.length_singleton]; omega),
+        List.getElem?_eq_none (by rw [List.length_singleton]; omega)]
+
+theorem list3_length {α : Type u} (a z : α) (f : ℕ → α) (n : ℕ) :
+    (a :: (List.range n).map f ++ [z]).length = n + 2 := by
+  rw [List.length_append, List.length_cons, List.length_map, List.length_range, List.length_singleton]
+
+theorem append_get_right {α : Type u} {A A' B B' : List α} {m : ℕ} (hm : A.length ≤ m) (hA : A.length = A'.length)
+    (h : B[m - A.length]? = B'[m - A.length]?) : (A ++ B)[m]? = (A' ++ B')[m]? := by
+  rw [List.getElem?_append_right hm, List.getElem?_append_right (hA ▸ hm), ← hA, h]
+
+theorem list2_get {α : Type u} {f f' : ℕ → α} {y y' z z' : α} {n m : ℕ}
+    (h1 : m < n → f m = f' m) (h2 : m = n → y = y') (h3 : m = n + 1 → z = z') :
+    ((List.range n).map f ++ [y] ++ [z])[m]? = ((List.range n).map f' ++ [y'] ++ [z'])[m]? := by
+  rcases Nat.lt_or_ge m n with hm | hm
+  · have hl : m < ((List.range n).map f ++ [y]).length := by
+      rw [List.length_append, List.length_map, List.length_range, List.length_singleton]; omega
+    have hl' : m < ((List.range n).map f' ++ [y']).length := by
+      rw [List.length_append, List.length_map, List.length_range, List.length_singleton]; omega
+    rw [List.getElem?_append_left hl, List.getElem?_append_left hl',
+      List.getElem?_append_left (by rw [List.length_map, List.length_range]; exact hm),
+      List.getElem?_append_left (by rw [List.length_map, List.length_range]; exact hm), List.getElem?_map,
+      List.getElem?_map, List.getElem?_range hm, Option.map_some, Option.map_some, h1 hm]
+  · rw [List.append_assoc, List.append_assoc]
+    refine append_get_right (by rw [List.length_map, List.length_range]; exact hm)
+      (by rw [List.length_map, List.length_map]) ?_
+    rw [List.length_map, List.length_range, List.singleton_append, List.singleton_append]
+    rcases Nat.eq_or_lt_of_le hm with rfl | hm'
+    · rw [Nat.sub_self, List.getElem?_cons_zero, List.getElem?_cons_zero, h2 rfl]
+    · obtain ⟨j, rfl⟩ : ∃ j, m = n + 1 + j := ⟨m - (n + 1), by omega⟩
+      rw [show n + 1 + j - n = j + 1 by omega, List.getElem?_cons_succ, List.getElem?_cons_succ]
+      rcases j with _ | j
+      · rw [List.getElem?_cons_zero, List.getElem?_cons_zero, h3 rfl]
+      · rw [List.getElem?_eq_none (by rw [List.length_singleton]; omega),
+          List.getElem?_eq_none (by rw [List.length_singleton]; omega)]
+
+theorem list2_length {α : Type u} (f : ℕ → α) (n : ℕ) (y z : α) :
+    ((List.range n).map f ++ [y] ++ [z]).length = n + 2 := by
+  rw [List.length_append, List.length_append, List.length_map, List.length_range, List.length_singleton,
+    List.length_singleton]
+
+/-- **Evaluated variables read only their keys.** -/
+theorem vars_read {K L F : Type} (var : K → L) (eval : (K → F) → L → F) (heval : ∀ v k, eval v (var k) = v k)
+    (n : ℕ) (key : ℕ → K) {v v' : K → F} (h : ∀ i < n, v (key i) = v' (key i)) :
+    ((Array.range n).map (var ∘ key)).map (eval v) = ((Array.range n).map (var ∘ key)).map (eval v') :=
+  Array.map_inj_left.2 fun f hf => by
+    obtain ⟨i, hi, rfl⟩ := Array.mem_map.1 hf
+    rw [Function.comp_apply, heval, heval]
+    exact h i (Array.mem_range.1 hi)
+
+/-- **An evaluated pair of variables reads only its two keys.** -/
+theorem pairs_read {K L F : Type} [Inhabited F] (var : K → L) (eval : (K → F) → L → F)
+    (heval : ∀ v k, eval v (var k) = v k) (n i : ℕ) (k₁ k₂ : ℕ → K) {v v' : K → F}
+    (h : i < n → v (k₁ i) = v' (k₁ i) ∧ v (k₂ i) = v' (k₂ i)) :
+    (((Array.range n).map fun j => (var (k₁ j), var (k₂ j))).map fun p => (eval v p.1, eval v p.2))[i]! =
+      (((Array.range n).map fun j => (var (k₁ j), var (k₂ j))).map fun p => (eval v' p.1, eval v' p.2))[i]! := by
+  by_cases hi : i < n
+  · simp only [getElem!_def, Array.getElem?_map, Array.getElem?_range, hi, ↓reduceIte, Option.map_some, heval,
+      (h hi).1, (h hi).2]
+  · simp only [getElem!_def, Array.getElem?_map, Array.getElem?_range, hi, ↓reduceIte, Option.map_none]
+
+/-- **A key that is not a consistency sum reads no consistency sum.** -/
+theorem valOf_cons_irrel (sh : Flock.Shape) (w comb : Array F128) (c c' : ℕ → ℕ → F128)
+    {x : Flock.RecAlgebra.Key} (hx : ∀ ℓ l, x ≠ .cons ℓ l) :
+    Flock.RecAlgebra.valOf sh w comb c x = Flock.RecAlgebra.valOf sh w comb c' x := by
+  cases x with
+  | cons ℓ l => exact absurd rfl (hx ℓ l)
+  | _ => rfl
+
+/-- The keys of the zerocheck's message `m` at `m_z` variables: `(ab, c)`, round `m − 1`'s `(g1, ginf)`, then
+`(fa, fb)`. -/
+def zcKeys (mz : ℕ) : ℕ → List Flock.RecAlgebra.Key
+  | 0 => (List.range 64).map .ab ++ (List.range 64).map .c
+  | i + 1 => if i < mz - 6 then [.g1 i, .ginf i] else [.fa, .fb]
+
+theorem zcKeys_noCons {mz m : ℕ} {x : Flock.RecAlgebra.Key} (hx : x ∈ zcKeys mz m) : ∀ ℓ l, x ≠ .cons ℓ l := by
+  rintro ℓ l rfl
+  rcases m with _ | i
+  · simp [zcKeys] at hx
+  · by_cases hi : i < mz - 6
+    · simp [zcKeys, hi] at hx
+    · simp [zcKeys, hi] at hx
+
+/-- **The zerocheck's message `m` of G's proof file reads only `zcKeys m`.** -/
+theorem zcMsgs_read (mz : ℕ) (sh : Flock.Shape) {params params' : Flock.PcsParams} {cap cap' : Array ByteArray}
+    {lig lig' : Flock.LigeritoProof} {d d' : RepData} (m : ℕ)
+    (h : ∀ x ∈ zcKeys mz m,
+      Flock.RecAlgebra.valOf sh d.w d.comb d.cons x = Flock.RecAlgebra.valOf sh d'.w d'.comb d'.cons x) :
+    (zcMsgs mz (FlockVBridge.Family.proofOf sh params cap lig d).zerocheck)[m]? =
+      (zcMsgs mz (FlockVBridge.Family.proofOf sh params' cap' lig' d').zerocheck)[m]? := by
+  unfold zcMsgs
+  apply list3_get
+  · intro h0
+    subst h0
+    have hab : (RecAlgebra.decoded sh d.w d.comb d.cons).ab = (RecAlgebra.decoded sh d'.w d'.comb d'.cons).ab :=
+      vars_read RecAlgebra.Lin.var RecAlgebra.Lin.eval RecAlgebra.Lin.eval_var 64 RecAlgebra.Key.ab fun i hi =>
+        h _ (List.mem_append_left _ (List.mem_map_of_mem (List.mem_range.2 hi)))
+    have hc : (RecAlgebra.decoded sh d.w d.comb d.cons).c = (RecAlgebra.decoded sh d'.w d'.comb d'.cons).c :=
+      vars_read RecAlgebra.Lin.var RecAlgebra.Lin.eval RecAlgebra.Lin.eval_var 64 RecAlgebra.Key.c fun i hi =>
+        h _ (List.mem_append_right _ (List.mem_map_of_mem (List.mem_range.2 hi)))
+    show (⟨_, (vecOf 64 (RecAlgebra.decoded sh d.w d.comb d.cons).ab,
+        vecOf 64 (RecAlgebra.decoded sh d.w d.comb d.cons).c)⟩ : FlockSoundness.Game.Msg) =
+      ⟨_, (vecOf 64 (RecAlgebra.decoded sh d'.w d'.comb d'.cons).ab,
+        vecOf 64 (RecAlgebra.decoded sh d'.w d'.comb d'.cons).c)⟩
+    rw [hab, hc]
+  · intro i hi hin
+    subst hi
+    have hz : (RecAlgebra.decoded sh d.w d.comb d.cons).zc[i]! = (RecAlgebra.decoded sh d'.w d'.comb d'.cons).zc[i]! :=
+      pairs_read RecAlgebra.Lin.var RecAlgebra.Lin.eval RecAlgebra.Lin.eval_var (sh.m - 6) i RecAlgebra.Key.g1
+        RecAlgebra.Key.ginf fun _ => by
+          have hk : zcKeys mz (i + 1) = [.g1 i, .ginf i] := ite_eq_left hin
+          exact ⟨h _ (hk ▸ List.mem_cons_self), h _ (hk ▸ List.mem_cons_of_mem _ List.mem_cons_self)⟩
+    show (⟨_, pairOf (RecAlgebra.decoded sh d.w d.comb d.cons).zc[i]!⟩ : FlockSoundness.Game.Msg) =
+      ⟨_, pairOf (RecAlgebra.decoded sh d'.w d'.comb d'.cons).zc[i]!⟩
+    rw [hz]
+  · intro h2
+    subst h2
+    have hk : zcKeys mz (mz - 6 + 1) = [.fa, .fb] := ite_eq_right (Nat.lt_irrefl _)
+    have hfa : (RecAlgebra.decoded sh d.w d.comb d.cons).fa = (RecAlgebra.decoded sh d'.w d'.comb d'.cons).fa := by
+      show RecAlgebra.Lin.eval (RecAlgebra.valOf sh d.w d.comb d.cons) (RecAlgebra.Lin.var .fa) =
+        RecAlgebra.Lin.eval (RecAlgebra.valOf sh d'.w d'.comb d'.cons) (RecAlgebra.Lin.var .fa)
+      rw [RecAlgebra.Lin.eval_var, RecAlgebra.Lin.eval_var]
+      exact h _ (hk ▸ List.mem_cons_self)
+    have hfb : (RecAlgebra.decoded sh d.w d.comb d.cons).fb = (RecAlgebra.decoded sh d'.w d'.comb d'.cons).fb := by
+      show RecAlgebra.Lin.eval (RecAlgebra.valOf sh d.w d.comb d.cons) (RecAlgebra.Lin.var .fb) =
+        RecAlgebra.Lin.eval (RecAlgebra.valOf sh d'.w d'.comb d'.cons) (RecAlgebra.Lin.var .fb)
+      rw [RecAlgebra.Lin.eval_var, RecAlgebra.Lin.eval_var]
+      exact h _ (hk ▸ List.mem_cons_of_mem _ List.mem_cons_self)
+    show (⟨_, (fOf (RecAlgebra.decoded sh d.w d.comb d.cons).fa,
+        fOf (RecAlgebra.decoded sh d.w d.comb d.cons).fb)⟩ : FlockSoundness.Game.Msg) =
+      ⟨_, (fOf (RecAlgebra.decoded sh d'.w d'.comb d'.cons).fa, fOf (RecAlgebra.decoded sh d'.w d'.comb d'.cons).fb)⟩
+    rw [hfa, hfb]
+
+theorem zcMsgs_length (mz : ℕ) (p : Flock.ZerocheckProof) : (zcMsgs mz p).length = mz - 6 + 2 := by
+  rw [zcMsgs, list3_length]
+
+/-- **A rep's first `m_z − 4` messages are the zerocheck's.** -/
+theorem unitMsgs_zc (nX : ℕ) (sh : Flock.Shape) (d : RepData) (v : UnitVals) {m : ℕ} (hm : m < v.st.m - 6 + 2) :
+    (unitMsgs nX sh d v)[m]? = (zcMsgs v.st.m v.p.zerocheck)[m]? := by
+  have hl : m < (zcMsgs v.st.m v.p.zerocheck).length := by rw [zcMsgs_length]; exact hm
+  rw [unitMsgs, holoRepMsgs, List.append_assoc, List.append_assoc, List.getElem?_append_left hl]
+
+/-- **The zerocheck slice at `ValsSrc`'s values**: a rep's message `m < m_z − 4` reads only `zcKeys m`, none a
+consistency sum, at `rep₀`'s consistency sums or any others. -/
+theorem unitMsgs_zc_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : RepData} (hst : b.st = b'.st) {m : ℕ}
+    (hm : m < b.st.m - 6 + 2)
+    (h : ∀ x ∈ zcKeys b.st.m m, (∀ ℓ l, x ≠ .cons ℓ l) →
+      Flock.RecAlgebra.valOf sh d.w d.comb (fun _ _ => 0) x =
+        Flock.RecAlgebra.valOf sh d'.w d'.comb (fun _ _ => 0) x) :
+    (unitMsgs nX sh d (b.vals sh d))[m]? = (unitMsgs nX sh d' (b'.vals sh d'))[m]? := by
+  have hm' : m < b'.st.m - 6 + 2 := hst ▸ hm
+  rw [unitMsgs_zc nX sh d (b.vals sh d) hm, unitMsgs_zc nX sh d' (b'.vals sh d') hm']
+  show (zcMsgs b.st.m (FlockVBridge.Family.proofOf sh b.params b.cap b.lig d).zerocheck)[m]? =
+    (zcMsgs b'.st.m (FlockVBridge.Family.proofOf sh b'.params b'.cap b'.lig d').zerocheck)[m]?
+  rw [← hst]
+  exact zcMsgs_read b.st.m sh m fun x hx =>
+    (valOf_cons_irrel sh d.w d.comb d.cons (fun _ _ => 0) (zcKeys_noCons hx)).trans
+      ((h x hx (zcKeys_noCons hx)).trans (valOf_cons_irrel sh d'.w d'.comb (fun _ _ => 0) d'.cons (zcKeys_noCons hx)))
+
+/-- The keys of the lincheck's message `m` at `k_log`, with `h` after `z_partial`: round `m`'s `(q1, qinf)`, then
+`z_partial`'s, then `h`'s. -/
+def lcKeys (kLog m : ℕ) : List Flock.RecAlgebra.Key :=
+  if m < kLog - 6 then [.q1 m, .qinf m]
+  else if m = kLog - 6 then (List.range 64).map .zp
+  else (List.range 64).map .h
+
+theorem lcKeys_noCons {kLog m : ℕ} {x : Flock.RecAlgebra.Key} (hx : x ∈ lcKeys kLog m) : ∀ ℓ l, x ≠ .cons ℓ l := by
+  rintro ℓ l rfl
+  by_cases h1 : m < kLog - 6
+  · simp [lcKeys, h1] at hx
+  · by_cases h2 : m = kLog - 6
+    · rw [lcKeys, ite_eq_right h1, ite_eq_left h2] at hx
+      simp at hx
+    · simp [lcKeys, h1, h2] at hx
+
+/-- **The lincheck's message `m` of G's proof file, with `h` after `z_partial`, reads only `lcKeys m`** at a holo
+shape. -/
+theorem holoLcMsgs_read (kLog : ℕ) {sh : Flock.Shape} (hh : sh.holo = true) {params params' : Flock.PcsParams}
+    {cap cap' : Array ByteArray} {lig lig' : Flock.LigeritoProof} {d d' : RepData} (m : ℕ)
+    (h : ∀ x ∈ lcKeys kLog m,
+      Flock.RecAlgebra.valOf sh d.w d.comb d.cons x = Flock.RecAlgebra.valOf sh d'.w d'.comb d'.cons x) :
+    (holoLcMsgs kLog (FlockVBridge.Family.proofOf sh params cap lig d).lincheck (RecAlgebra.hOfW sh d.w))[m]? =
+      (holoLcMsgs kLog (FlockVBridge.Family.proofOf sh params' cap' lig' d').lincheck
+        (RecAlgebra.hOfW sh d'.w))[m]? := by
+  unfold holoLcMsgs lcMsgs
+  apply list2_get
+  · intro hm
+    have hz : (RecAlgebra.decoded sh d.w d.comb d.cons).lc[m]! = (RecAlgebra.decoded sh d'.w d'.comb d'.cons).lc[m]! :=
+      pairs_read RecAlgebra.Lin.var RecAlgebra.Lin.eval RecAlgebra.Lin.eval_var (sh.kLog - 6) m RecAlgebra.Key.q1
+        RecAlgebra.Key.qinf fun _ => by
+          have hk : lcKeys kLog m = [.q1 m, .qinf m] := ite_eq_left hm
+          exact ⟨h _ (hk ▸ List.mem_cons_self), h _ (hk ▸ List.mem_cons_of_mem _ List.mem_cons_self)⟩
+    show (⟨_, pairOf (RecAlgebra.decoded sh d.w d.comb d.cons).lc[m]!⟩ : FlockSoundness.Game.Msg) =
+      ⟨_, pairOf (RecAlgebra.decoded sh d'.w d'.comb d'.cons).lc[m]!⟩
+    rw [hz]
+  · intro hm
+    have hk : lcKeys kLog m = (List.range 64).map .zp := (ite_eq_right (by omega)).trans (ite_eq_left hm)
+    have hzp : (RecAlgebra.decoded sh d.w d.comb d.cons).zp = (RecAlgebra.decoded sh d'.w d'.comb d'.cons).zp :=
+      vars_read RecAlgebra.Lin.var RecAlgebra.Lin.eval RecAlgebra.Lin.eval_var 64 RecAlgebra.Key.zp fun i hi =>
+        h _ (by rw [hk]; exact List.mem_map_of_mem (List.mem_range.2 hi))
+    show (⟨_, vecOf 64 (RecAlgebra.decoded sh d.w d.comb d.cons).zp⟩ : FlockSoundness.Game.Msg) =
+      ⟨_, vecOf 64 (RecAlgebra.decoded sh d'.w d'.comb d'.cons).zp⟩
+    rw [hzp]
+  · intro hm
+    have hk : lcKeys kLog m = (List.range 64).map .h := (ite_eq_right (by omega)).trans (ite_eq_right (by omega))
+    have hv : vecOf 64 (RecAlgebra.hOfW sh d.w) = vecOf 64 (RecAlgebra.hOfW sh d'.w) := funext fun i => by
+      have hx : Flock.RecAlgebra.valOf sh d.w d.comb d.cons (.h i.val) =
+          Flock.RecAlgebra.valOf sh d'.w d'.comb d'.cons (.h i.val) :=
+        h _ (by rw [hk]; exact List.mem_map_of_mem (List.mem_range.2 i.isLt))
+      show fOf (RecAlgebra.hOfW sh d.w)[i.val]! = fOf (RecAlgebra.hOfW sh d'.w)[i.val]!
+      rw [hOfW_valOf hh d.w d.comb d.cons i.isLt, hOfW_valOf hh d'.w d'.comb d'.cons i.isLt, hx]
+    rw [hv]
+
+theorem holoLcMsgs_length (kLog : ℕ) (p : Flock.LincheckProof) (hpart : Array F128) :
+    (holoLcMsgs kLog p hpart).length = kLog - 6 + 2 := by
+  rw [holoLcMsgs, lcMsgs, list2_length]
+
+/-- **A rep's next `k_log − 4` messages are the lincheck's with `h`.** -/
+theorem unitMsgs_lc (nX : ℕ) (sh : Flock.Shape) (d : RepData) (v : UnitVals) {i j : ℕ}
+    (hi : i = v.st.m - 6 + 2 + j) (hj : j < v.st.kLog - 6 + 2) :
+    (unitMsgs nX sh d v)[i]? = (holoLcMsgs v.st.kLog v.p.lincheck (RecAlgebra.hOfW sh d.w))[j]? := by
+  have hz : (zcMsgs v.st.m v.p.zerocheck).length ≤ i := by rw [zcMsgs_length]; omega
+  have hl : i - (zcMsgs v.st.m v.p.zerocheck).length <
+      (holoLcMsgs v.st.kLog v.p.lincheck (RecAlgebra.hOfW sh d.w)).length := by
+    rw [zcMsgs_length, holoLcMsgs_length]; omega
+  have he : i - (zcMsgs v.st.m v.p.zerocheck).length = j := by rw [zcMsgs_length]; omega
+  rw [unitMsgs, holoRepMsgs, List.append_assoc, List.append_assoc, List.getElem?_append_right hz,
+    List.getElem?_append_left hl, he]
+
+/-- **The lincheck slice at `ValsSrc`'s values**: at a holo shape a rep's message `m_z − 4 + j`, `j < k_log − 4`,
+reads only `lcKeys j`, none a consistency sum. -/
+theorem unitMsgs_lc_read (nX : ℕ) {sh : Flock.Shape} (hh : sh.holo = true) {b b' : ValsSrc} {d d' : RepData}
+    (hst : b.st = b'.st) {j : ℕ} (hj : j < b.st.kLog - 6 + 2)
+    (h : ∀ x ∈ lcKeys b.st.kLog j, (∀ ℓ l, x ≠ .cons ℓ l) →
+      Flock.RecAlgebra.valOf sh d.w d.comb (fun _ _ => 0) x =
+        Flock.RecAlgebra.valOf sh d'.w d'.comb (fun _ _ => 0) x) :
+    (unitMsgs nX sh d (b.vals sh d))[b.st.m - 6 + 2 + j]? =
+      (unitMsgs nX sh d' (b'.vals sh d'))[b.st.m - 6 + 2 + j]? := by
+  have hj' : j < b'.st.kLog - 6 + 2 := hst ▸ hj
+  rw [unitMsgs_lc nX sh d (b.vals sh d) (i := b.st.m - 6 + 2 + j) rfl hj,
+    unitMsgs_lc nX sh d' (b'.vals sh d') (i := b.st.m - 6 + 2 + j)
+      (congrArg (fun s : Flock.Setup => s.m - 6 + 2 + j) hst) hj']
+  show (holoLcMsgs b.st.kLog (FlockVBridge.Family.proofOf sh b.params b.cap b.lig d).lincheck
+      (RecAlgebra.hOfW sh d.w))[j]? =
+    (holoLcMsgs b'.st.kLog (FlockVBridge.Family.proofOf sh b'.params b'.cap b'.lig d').lincheck
+      (RecAlgebra.hOfW sh d'.w))[j]?
+  rw [← hst]
+  exact holoLcMsgs_read b.st.kLog hh j fun x hx =>
+    (valOf_cons_irrel sh d.w d.comb d.cons (fun _ _ => 0) (lcKeys_noCons hx)).trans
+      ((h x hx (lcKeys_noCons hx)).trans (valOf_cons_irrel sh d'.w d'.comb (fun _ _ => 0) d'.cons (lcKeys_noCons hx)))
+
+end slices
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
@@ -401,3 +683,21 @@ end FlockC3.Reps
 #print axioms FlockC3.Reps.unitCoins_length
 #print axioms FlockC3.Reps.lengths_vals
 #print axioms FlockC3.Reps.tsRead_valsSrc
+#print axioms FlockC3.Reps.list3_get
+#print axioms FlockC3.Reps.list3_length
+#print axioms FlockC3.Reps.append_get_right
+#print axioms FlockC3.Reps.list2_get
+#print axioms FlockC3.Reps.list2_length
+#print axioms FlockC3.Reps.vars_read
+#print axioms FlockC3.Reps.pairs_read
+#print axioms FlockC3.Reps.valOf_cons_irrel
+#print axioms FlockC3.Reps.zcKeys_noCons
+#print axioms FlockC3.Reps.zcMsgs_read
+#print axioms FlockC3.Reps.zcMsgs_length
+#print axioms FlockC3.Reps.unitMsgs_zc
+#print axioms FlockC3.Reps.unitMsgs_zc_read
+#print axioms FlockC3.Reps.lcKeys_noCons
+#print axioms FlockC3.Reps.holoLcMsgs_read
+#print axioms FlockC3.Reps.holoLcMsgs_length
+#print axioms FlockC3.Reps.unitMsgs_lc
+#print axioms FlockC3.Reps.unitMsgs_lc_read
