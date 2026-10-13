@@ -85,6 +85,10 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         if engine.target is not None and engine.target.moe_backend is not None:
             from verity_vllm.program.frontend.target_profile import moe_experts_class_of
             manifest["backends"]["moe_experts_class"] = moe_experts_class_of(engine.model)
+        # the MoE gates' cuteDSL ll_bf16_gemm tier (M <= 16), which leaves no torch op behind: written only when a gate took it, so
+        # every record without such a gate keeps its profile id
+        if moe_gate_ll_bf16_gemm_of(engine.model):
+            manifest["backends"]["moe_gate_ll_bf16_gemm"] = True
         manifest["engine_kwargs"]["kernel_config"] = dict(engine.kwargs.get("kernel_config") or {})
         if engine.target is not None:
             manifest["target"] = engine.target.to_json()
@@ -136,6 +140,12 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         pid = hashlib.sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:12]
         notes["profile_id_method"] = f"FALLBACK sha256(engine kwargs + versions): build_manifest failed: {e!r}"[:400]
     return manifest, pid, notes
+
+
+def moe_gate_ll_bf16_gemm_of(model) -> bool:
+    """READ BACK whether any MoE gate (vLLM `GateLinear`) is eligible for its cuteDSL `ll_bf16_gemm` tier: its
+    `allow_ll_bf16_gemm`, set at load from the device, the weight and out dtypes and cuteDSL's availability."""
+    return any(getattr(m, "allow_ll_bf16_gemm", False) is True for m in model.modules())
 
 
 def model_config_subset(engine: Engine) -> dict:

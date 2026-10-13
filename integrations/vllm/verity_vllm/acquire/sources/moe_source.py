@@ -70,6 +70,7 @@ import time
 from typing import Any
 
 from verity_vllm.engine import hooks
+from verity_vllm.program.registry.moe import router_kernel
 
 MOE_MODULE_CLASSES = {"MoERunner", "MoERunnerInterface", "FusedMoE", "SharedFusedMoE"}
 TENSORS_PER_LAYER = 6
@@ -82,15 +83,6 @@ GROUPED_TOPK_PARAMS = (("hidden_states", None), ("gating_output", None), ("topk"
 TOPK_BIAS_MODULE = "vllm.model_executor.layers.fused_moe.router.fused_topk_bias_router"
 #: moe_wna16_marlin_gemm's positional index of each argument the source reads, after (input, output)
 MARLIN_ARGS = {"a_scales": 3, "top_k": 14, "mul_topk_weights": 15}
-
-
-def router_kernel(num_experts: int, num_tokens: int, topk: int) -> str | None:
-    """The kernel `_moe_C.grouped_topk` launches for one group (`grouped_topk_kernels.cu` `launch`): `single_group_topk_block_kernel`
-    ("block") for at least 1024 experts or for at least 256 experts and at most 1024 tokens, else `single_group_topk_warp_kernel`
-    ("warp").  None where the tuned top-16 block tiers (896 or 1024 experts) could apply, which this does not pin."""
-    if topk > 8 and 512 < num_experts < 1024:
-        return None
-    return "block" if num_experts >= 1024 or (num_experts >= 256 and num_tokens <= 1024) else "warp"
 
 
 def grouped_topk_args(a: tuple, k: dict) -> dict[str, Any]:

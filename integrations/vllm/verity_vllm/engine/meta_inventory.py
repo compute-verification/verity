@@ -181,6 +181,14 @@ def live_document(per_rank: list[dict[str, Any]], **fields: Any) -> dict[str, An
     return {"schema": SCHEMA, **fields, "ranks": {str(r["rank"]): r for r in sorted(per_rank, key=lambda r: r["rank"])}}
 
 
+def write_live(llm: Any, path: Path, *, timeout: float | None = None, **fields: Any) -> dict[str, Any]:
+    """`live_document` of every rank of a loaded `llm` (`LLM.collective_rpc(rank_inventory)`), with `fields`, written to `path`."""
+    doc = live_document(llm.collective_rpc(rank_inventory, timeout=timeout), source="live", **fields)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    return doc
+
+
 # ----------------------------------------------------------------------------------------------------- the meta instantiation
 
 
