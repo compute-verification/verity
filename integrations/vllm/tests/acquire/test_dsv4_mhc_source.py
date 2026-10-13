@@ -161,7 +161,7 @@ def test_the_arena_bound_counts_one_hc_route():
         assert got == {"per_token_bytes": 2 * L * side + (HC + 1) * ENV["H"] * 2, "per_seq_bytes": 0, "tensors_per_step": 8 * L + 2}
 
 
-def test_attach_attaches_the_mhc_source_beside_the_route_source(monkeypatch):
+def test_attach_attaches_the_mhc_source_beside_the_route_source():
     class Com:
         def __init__(self) -> None:
             self.sources: list[Any] = []
@@ -170,7 +170,6 @@ def test_attach_attaches_the_mhc_source_beside_the_route_source(monkeypatch):
             self.sources.append(s)
 
     assert MS.BINDER in RS.BINDERS and MS.BINDER not in RS.unbuilt(CMAP)
-    monkeypatch.setattr(RS, "OWN_RULES", (*RS.OWN_RULES, *RS.unbuilt(CMAP)))
     com = Com()
     src = RS.attach(com, dsv4_model(), rank=3)
-    assert [s.short_name for s in com.sources] == ["routes", "mhc"] and com.sources[0] is src
+    assert [s.short_name for s in com.sources] == ["routes", "mhc", "dsv4_attention"] and com.sources[0] is src

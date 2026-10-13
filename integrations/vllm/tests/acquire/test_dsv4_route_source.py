@@ -132,8 +132,9 @@ def test_a_layer_without_attention_rows_or_split_indexers_fail(run, capsys):
 
 
 def test_a_tp_rank_attaches_the_route_source_once_no_binder_is_unbuilt(monkeypatch):
-    """While the map binds taps through a binder no source builds, a rank leaves the map alone: nothing would commit those taps, and
-    the route source would release the modules the map knows from the module rule."""
+    """Every binder of the map is built, so each rank attaches the route source and the sources of its binders; while the map
+    named a binder no source builds, a rank would leave the map alone: nothing would commit those taps, and the route source would
+    release the modules the map knows from the module rule."""
     class Com:
         def __init__(self) -> None:
             self.sources: list[Any] = []
@@ -142,11 +143,11 @@ def test_a_tp_rank_attaches_the_route_source_once_no_binder_is_unbuilt(monkeypat
             self.sources.append(s)
 
     attach = TAPS.for_ranks(TAPS.TapSources())
-    missing = RS.unbuilt(CMAP)
-    assert missing and missing <= {"mhc", "dsv4_attention"}
-    made = [{"rank": r, "tap_sources": attach(Com(), dsv4_model(), None, r)} for r in (0, 1)]
-    assert all("route_source" not in m["tap_sources"] for m in made), made
-    monkeypatch.setattr(RS, "OWN_RULES", (*RS.OWN_RULES, *missing))
-    made = [{"rank": r, "tap_sources": attach(Com(), dsv4_model(), None, r)} for r in (0, 1)]
+    assert RS.unbuilt(CMAP) == set()
+    coms = {r: Com() for r in (0, 1)}
+    made = [{"rank": r, "tap_sources": attach(coms[r], dsv4_model(), None, r)} for r in (0, 1)]
     assert all(m["tap_sources"]["route_source"]["stats"]["layers"] == L for m in made), made
+    assert all([s.short_name for s in c.sources] == ["routes", "mhc", "dsv4_attention"] for c in coms.values())
     assert TAPS.require_on_every_rank(made, ("a",), {}, TAPS.TapSources(), explicit_classes=False) == ("a",)
+    monkeypatch.setattr(RS, "BINDERS", tuple(b for b in RS.BINDERS if b != "dsv4_attention"))
+    assert RS.unbuilt(CMAP) == {"dsv4_attention"} and RS.attach(Com(), dsv4_model(), rank=0) is None

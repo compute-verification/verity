@@ -351,8 +351,8 @@ def test_target_only_taps_are_named_on_the_target_only():
 
 def test_the_route_site_decides_three_routes_and_the_committer_waits_for_its_binders():
     """`route_site` names the calls that decide a step's rows, mHC and indexer routes, each decision's routes are the map's, and
-    `route_source.attach` leaves the map alone while the attention binder is capture work (`tests/acquire/test_dsv4_route_source.py`
-    and `test_dsv4_mhc_source.py` run the sources)."""
+    a source builds every binder, so `route_source.attach` uses the map (`tests/acquire/test_dsv4_route_source.py`,
+    `test_dsv4_mhc_source.py` and `test_dsv4_attention_source.py` run the sources)."""
     sites = CM.route_sites(CMAP)
     decided: dict[str, set[str]] = {}
     for s in sites:
@@ -361,9 +361,8 @@ def test_the_route_site_decides_three_routes_and_the_committer_waits_for_its_bin
                        "indexer": {"indexer-short", "indexer-scored"}}
     undecided = set(CMAP["routes"]) - set().union(*decided.values())
     assert undecided == {"fp8-swapab", "fp8-deepgemm"} and not undecided & {t["route"] for t in CMAP["taps"] if "route" in t}
-    assert route_source.unbuilt(CMAP) == {"dsv4_attention"}
-    done = {c["item"] for c in CMAP["capture_work"] if "done" in c}
-    assert len(CMAP["capture_work"]) == 6 and {1, 3, 4, 5, 6} <= done
+    assert route_source.unbuilt(CMAP) == set()
+    assert [c["item"] for c in CMAP["capture_work"] if "done" in c] == [1, 2, 3, 4, 5, 6]
 
 
 def test_the_tp_partials_are_the_four_collectives_the_pinned_vllm_issues_at_tp8():
