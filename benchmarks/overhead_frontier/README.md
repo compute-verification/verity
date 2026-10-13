@@ -25,9 +25,16 @@ receipts to z is an opt-in. The codec is the stated one, masked p1024 at k = 3, 
   and masked, at 512, 768 and 1,024 bits (`widths`); per pass, the largest d that keeps γ ≤ 1% (`d_cap`); and the
   sensitivity from η = 0 (one lever at a time, the greedy path, one reverted from projected, the risks) and again
   from today's measured η.
+- `serving.py`: the audit in serving, per GPU, for a prompt/generation mix (trace 1, decode-heavy, prompt-heavy and a
+  sweep of P/G): decode steps from `model.step` plus the engine's own ops, prefill priced apart (stock's chunk, the
+  weights' decode to scratch, the KV encode), continuous batching's steady state for throughput, TPOT and TTFT, the
+  SM-partitioned filler at its measured cost, and the KV cache's design options (its codec, registering it late or not
+  at all, deferring its encode, FP8 KV, the host's help), each with its γ. It reproduces ra-vllm-encoded-stack's
+  decode steps, prefill chunks and stock's TPOT (`validate`).
 
 ```text
 uv run python benchmarks/overhead_frontier/frontier.py --out DIR [--receipt block-sha512]  # DIR/frontier.json, tables on stdout
+uv run python benchmarks/overhead_frontier/serving.py --out DIR  # DIR/serving.json, tables on stdout
 uv run tools/verity/check/suites.py benchmarks/overhead_frontier
 ```
 

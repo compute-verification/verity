@@ -152,7 +152,9 @@ INPUTS: dict[str, Input] = {
                   {2: ((32, 0.087), (160, 0.087)), 3: ((32, 0.534), (160, 0.534))},
                   "a persistent mma-ws attention kernel (the 16-warp floor, 0.087 / 0.534)"),
     "x1_h": Input(240.0, "read-times per round", "the honest KV append: ra-word-codec 226 (3.39 GB/s at k = 2), "
-                  "ra-codec-tensor's implied 232–257", "measured"),
+                  "ra-codec-tensor's implied 232–257; at the stated codec it gives 164.1 µs a BF16 8B token, and "
+                  "the stack's prefill encode in vLLM measures 164.5 (ra-vllm-encoded-stack r20261013-085555-3005)",
+                  "measured"),
     "beta": Input(0.5, "of tensor-bound time", "ra-word-codec: about 52% of the KV encode hides beside the FP8 GEMM "
                   "at B80–160", "measured"),
     "e_attn": Input(1540.0 / 1495.0, "reads", "ra-codec-tensor: plain attention at 1,495 of 1,540 GB/s", "measured"),
