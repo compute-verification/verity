@@ -83,9 +83,20 @@ def main() -> int:
     out["plain_ms"]["sum"] = sum(out["plain_ms"].values())
     out["plain_tau"] = out["plain_ms"]["sum"] / read_ms
     plain_root = device.digests(up[nl - 2:nl - 1].cpu())[0]
-    del sk, ys, dig, up
+    del sk, dig, up
+    pk = torch.empty(device.PACK16_WORDS, dtype=torch.int32, device="cuda")
+    lib.call("rs_pack16", signs.data_ptr(), pk.data_ptr())
+    ys16 = torch.empty((N, 8), dtype=torch.int64, device="cuda")
+    tensor = [timed(torch, lambda: lib.call("rs_sketch16_receipts", store.data.data_ptr(), 0, N, pk.data_ptr(),
+                                            ys16.data_ptr(), 0)) for _ in range(6)]
+    out["tensor_receipts_ms"] = min(tensor[1:])
+    out["tensor_receipts_tau"] = out["tensor_receipts_ms"] / read_ms
+    out["tensor_receipts_equal"] = bool(torch.equal(ys, ys16))
+    del ys, ys16, pk
     torch.cuda.empty_cache()
-    print(json.dumps({"plain_ms": out["plain_ms"], "plain_tau": out["plain_tau"]}), flush=True)
+    print(json.dumps({"plain_ms": out["plain_ms"], "plain_tau": out["plain_tau"],
+                      "tensor_receipts_ms": out["tensor_receipts_ms"], "tensor_receipts_tau": out["tensor_receipts_tau"],
+                      "tensor_receipts_equal": out["tensor_receipts_equal"]}), flush=True)
 
     out["pipelined"] = []
     for c in [int(x) for x in a.chunks.split(",")]:
@@ -131,7 +142,7 @@ def main() -> int:
             store.open_window([(kept[i], ps) for i, ps in sorted(by.items())])
             torch.cuda.synchronize()
             open_ns = time.perf_counter_ns() - t0
-    out["open"] = {"openings": a.openings, "passes": len(kept), "ns": open_ns}
+    out["open"] = {"openings": a.openings, "passes": len(kept), "ns": open_ns, "stats": store.open_stats[-1]}
     print(json.dumps({"signs_host_ns": out["signs_host_ns"], "open": out["open"]}), flush=True)
     (a.out / "pass_bench.json").write_text(json.dumps(out, indent=1))
     return 0

@@ -50,6 +50,7 @@ from prover import PAYLOAD_LABEL  # noqa: E402
 BLOCK = rcodec.BLOCK_BYTES
 SALT_DOMAIN = b"verity/store/salt/v0\0"
 PER_LEAF = rb.PER_LEAF
+PACK16_WORDS = BLOCK // 64 * 32  # session.cu's SK16_PACK
 
 
 def store_salt(key: bytes, label: bytes, c: int) -> bytes:
@@ -83,6 +84,8 @@ class Lib:
         self.so.rs_gather64.argtypes = [v, u64, v, v]
         self.so.rs_pass.argtypes = [v, u64, v, v, v, v, v, v, i, u64, i, v, v]
         self.so.rs_subtrees.argtypes = [v, v, v, u64, i, v, v, v, v]
+        self.so.rs_pack16.argtypes = [v, v, v]
+        self.so.rs_sketch16_receipts.argtypes = [v, u64, u64, v, v, i, v]
 
     def call(self, fn: str, *args) -> None:
         rc = getattr(self.so, fn)(*args, self.torch.cuda.current_stream().cuda_stream)
@@ -168,6 +171,7 @@ class DeviceStore:
         self.plan = rb.Plan.whole(blocks)
         self.dropped: dict[int, bytes] = {}
         self.pass_gpu_ms: list[float] = []
+        self.open_stats: list[dict] = []
 
     def shape(self, chunk: int, kept_from: int, sketch_ctas: int) -> None:
         """A pass's chunk (blocks), h0 (at most the chunk's subtree height) and the sketch's CTAs, and its ring."""
@@ -180,7 +184,7 @@ class DeviceStore:
             self.kept_at[h + 1] = self.kept_at[h] + (nl >> h)
         lc = self.chunk // PER_LEAF
         self.ring = None
-        self.ring = (torch.empty((2 * self.chunk, skr.ROWS), dtype=torch.int32, device="cuda"),
+        self.ring = (torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda"),
                      torch.empty((2 * self.chunk, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"))
@@ -286,9 +290,10 @@ class DeviceStore:
         total = sum(len(f) for f in firsts)
         ys = torch.empty((max(total, 1) * S, 8), dtype=torch.int64, device="cuda")
         nodes = torch.empty((max(total, 1) * per, 8), dtype=torch.int64, device="cuda")
-        sk = torch.empty((S, skr.ROWS), dtype=torch.int32, device="cuda")
+        sk = torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda")
         stream = torch.cuda.current_stream().cuda_stream
-        q0, rows, flat, bases = 0, [], [], []
+        q0, rows, flat = 0, [], []
+        t0 = time.perf_counter_ns()
         for ((seed, signs, kept), positions), first in zip(items, firsts):
             self.set_pass(lib, seed)
             c = np.ascontiguousarray(first, dtype=np.uint64)
@@ -316,25 +321,30 @@ class DeviceStore:
             q0 += len(first)
         addrs = np.concatenate(rows)
         n = addrs.size
+        t1 = time.perf_counter_ns()
         dev = torch.from_numpy(addrs.reshape(-1).view(np.int64)).cuda()
         got = torch.empty((n, 8), dtype=torch.int64, device="cuda")
         lib.call("rs_gather64", dev.data_ptr(), n, got.data_ptr())
         blocks = self.data.view(-1, BLOCK)[torch.tensor(flat, dtype=torch.int64, device="cuda")]
         hr, hp = self.H, N.bit_length() - 1
-        raw = got.cpu().numpy().astype(np.uint64).astype(">u8").reshape(len(flat), -1, 8)
-        braw = blocks.cpu().numpy()
+        cols = PER_LEAF + hr + hp
+        raw = got.cpu().numpy().astype(np.uint64).astype(">u8").tobytes()
+        braw = blocks.cpu().numpy().tobytes()
+        t2 = time.perf_counter_ns()
         out, q = [], 0
         for (seed, *_), positions in items:
             mine = []
             for p in positions:
-                r = raw[q]
-                d = [r[k].tobytes() for k in range(PER_LEAF + hr + hp)]
+                r = 64 * cols * q
+                d = [raw[r + 64 * k:r + 64 * k + 64] for k in range(PER_LEAF, cols)]
                 c = p // PER_LEAF
-                mine.append((self.dropped.get(p) or braw[q].tobytes(), b"".join(d[:PER_LEAF]),
-                             store_salt(self.key, seed, c), tuple(d[PER_LEAF:PER_LEAF + hr]),
-                             store_salt(self.key, PAYLOAD_LABEL, p), tuple(d[PER_LEAF + hr:])))
+                mine.append((self.dropped.get(p) or braw[BLOCK * q:BLOCK * (q + 1)], raw[r:r + 64 * PER_LEAF],
+                             store_salt(self.key, seed, c), tuple(d[:hr]),
+                             store_salt(self.key, PAYLOAD_LABEL, p), tuple(d[hr:])))
                 q += 1
             out.append(mine)
+        self.open_stats.append({"openings": len(flat), "subtrees": total, "subtrees_ns": t1 - t0,
+                                "gather_ns": t2 - t1, "assemble_ns": time.perf_counter_ns() - t2})
         return out
 
     def open(self, handle, positions: list[int]) -> list[tuple]:
