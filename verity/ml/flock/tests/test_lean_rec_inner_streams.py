@@ -689,32 +689,48 @@ def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_p
 STAGE = PLAIN.parent / "u" / "stage"
 
 
-@pytest.mark.parametrize("circuit,why", [
-    ("header", "rec inner circuit: circuit: no unit circuit"),
-    (None, "rec inner circuit: candidate 3's session needs the inner circuit (--rec-inner-circuit), whose META binds "
-     "R's registration and shape"),
-    ("whole", "unit-class/77279c8f61f2206d-packed: one of V*'s statements, which are verity/flock-circuit statements "
-     "(--statement verity/flock-circuit), not verity/flock-circuit+plain-leaves"),
-], ids=["header", "none", "whole"])
-def test_candidate_3s_inner_circuit_is_its_headers(tmp_path, circuit, why):
-    """`RecSetup.checkMeta`: the verifier holds candidate 3's transcript to what the inner circuit's header's META binds
-    (R's registration and shape), and setup holds the circuit itself to that META, before the V* checks. `statement` on
-    `rec-coins`' inner statement (any statement that sets up reaches them) at candidate 3's inner shape refuses 2d61's
-    session with its circuit's header alone, which does not parse as the inner statement's circuit, and 2d61's session
-    without R (no registration to bind) with no inner circuit at all; with a whole circuit, whose META is its header's,
-    it goes on to `checkStmt`, which refuses that statement as no V* statement."""
+#: candidate 3's inner shape at `STAGE` (m 27, k_log 22, claims 8 over 3 regions), with a RecSparse shape whose sparse
+#: range check 5 passes on it (`RecCoins.checkAtC3`), and R's
+AT_STAGE = {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22, "claims": 8, "regions": 3, "sparse": [1, 12, 1, 0],
+            "stacked": R_SHAPE}
+
+
+NO_TRANSCRIPT = ("rec inner transcript: candidate 3's session needs the inner transcript (--rec-inner-transcript, "
+                 "--rec-inner-session), which its V* list and rows are checked against")
+NO_REGISTRATION = ("rec inner registration: candidate 3's session needs R's circuit registration "
+                   "(--rec-inner-registration), which binds R before the coins")
+
+
+@pytest.mark.parametrize("cmd,transcript,why", [
+    ("statement", False, (1, f"setup: {NO_TRANSCRIPT}")),
+    ("statement", True, (2, NO_REGISTRATION)),
+    ("verify", True, (2, NO_REGISTRATION)),
+], ids=["no-transcript", "no-registration", "verify-no-registration"])
+def test_candidate_3s_session_needs_the_inner_transcript_and_rs_registration(tmp_path, cmd, transcript, why):
+    """What the bridge to `AcceptsC3` reads beside the inner statement's files. `statement` on `rec-coins`' inner
+    statement at candidate 3's inner shape there, with that statement's files, which pass check 5's sparse range
+    (`RecCoins.checkAtC3`) and whose circuit's META is its header's (`RecSetup.checkMeta`), refuses it at setup without
+    the inner transcript (`RecSetup.checks`), and refuses its inputs (exit 2) with the transcript and no circuit
+    registration (`RecSetup.commits`). `verify` reads its inputs as `statement` does (shown on an empty outer circuit:
+    it refuses a plain-leaves one at its inputs, and sets up no empty one as far as the V* checks)."""
     _fixture(PLAIN)
-    if circuit == "header":
-        transcript, shape, inner = _fixture(C3) / "public.json", _shape(tmp_path), _inner()
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    (tmp_path / "empty").write_bytes(b"")
+    files = ["--rec-inner-circuit", str(STAGE / "circuit.txt"), "--rec-inner-public", str(STAGE / "pub-64.bin"),
+             "--rec-inner-partition", str(STAGE / "partition.json"), "--rec-inner-session", str(PLAIN / "session"),
+             *(["--rec-inner-transcript", str(PLAIN / "public.json")] if transcript else [])]
+    inner = ["--rec-inner", str(_write(tmp_path / "rec-inner.json", AT_STAGE)), *files]
+    if cmd == "statement":
+        args = ["statement", "--statement", "verity/flock-circuit+plain-leaves", "--circuit",
+                str(STAGE / "circuit.txt"), "--public", str(STAGE / "pub-64.bin"), "--partition",
+                str(STAGE / "partition.json"), "--coins", "os"]
     else:
-        transcript, shape = _changed(tmp_path, _drop_stacked_everywhere), _shape(tmp_path, stacked=None)
-        inner = [] if circuit is None else ["--rec-inner-circuit", str(STAGE / "circuit.txt")]
-    p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit+plain-leaves", "--circuit",
-                        str(STAGE / "circuit.txt"), "--public", str(STAGE / "pub-64.bin"), "--partition",
-                        str(STAGE / "partition.json"), "--coins", "os", *shape, "--rec-inner-transcript",
-                        str(transcript), "--rec-inner-session", str(C3 / "prover"), *inner],
-                       capture_output=True, text=True)
-    assert (p.returncode, p.stdout.strip()) == (1, f"setup: {why}"), p.stdout + p.stderr
+        args = ["verify", "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"), "--session",
+                str(tmp_path / "s")]
+    p = subprocess.run([str(BIN), *args, *inner], capture_output=True, text=True)
+    out = p.stdout.strip() if why[0] == 1 else p.stderr.strip()
+    assert (p.returncode, out) == why, p.stdout + p.stderr
 
 
 def test_rec_inner_refuses_r_without_the_sparse_shape():

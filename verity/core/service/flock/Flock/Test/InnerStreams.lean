@@ -272,17 +272,6 @@ def roundsOff (s : String) (n : Nat) : Option String :=
 #guard withRep (repCoins reps25).pop == roundsOff "circuit/rep0" 93
 #guard withRep ((repCoins reps25).modify 0 (·.push 0)) == roundsOff "circuit/rep0" 94
 
--- candidate 3's inner circuit is the one whose header's META the verifier read (`RecSetup.checkMeta`): a session
--- without it, or with bytes that do not parse as the inner statement's circuit, is refused before the V* checks, and a
--- session whose inner shape names no RecSparse shape reads none
-def checksAt (i : Inner) (circuit : Option ByteArray) : Option String :=
-  why (Flock.RecSetup.checks (some i) (some (c3cs (some r23))) circuit (.ok (none, some r23)) Flock.Tags.circuit [] #[]
-    ByteArray.empty none none none none none none)
-
-#guard checksAt c3 none == some ("rec inner circuit: candidate 3's session needs the inner circuit " ++
-  "(--rec-inner-circuit), whose META binds R's registration and shape")
-#guard (checksAt c3 (some ByteArray.empty)).map (·.startsWith "rec inner circuit: circuit: ") == some true
-#guard checksAt { c3 with sparse := none } none == why (checkCovers { c3 with sparse := none } (c3cs (some r23)))
 #guard Flock.RecSetup.boundKey (some "a", some r23) != Flock.RecSetup.boundKey (some "a", some ⟨24, 2⟩) &&
   Flock.RecSetup.boundKey (some "a", some r23) != Flock.RecSetup.boundKey (some "a", some ⟨23, 3⟩) &&
   Flock.RecSetup.boundKey (none, some r23) != Flock.RecSetup.boundKey (some "a", some r23) &&
@@ -324,5 +313,29 @@ def NO_FILES : String := "rec-inner: candidate 3's session needs the inner state
 #guard err (RecCoins.checkAtC3 none none) == none && err (RecCoins.checkAtC3 (some { c3 with sparse := none }) none) == none
 #guard err (RecCoins.checkAtC3 (some c3) none) == some NO_FILES
 #guard err (RecCoins.checkAtC3 (some c3) (some (.coins .null ""))) == some NO_FILES
+
+-- candidate 3's session needs the inner statement's files (`RecSetup.checkInner`, through `RecCoins.checkAtC3`'s
+-- one refusal), the inner transcript (`RecSetup.checks`) and R's registration (`RecSetup.commits`); an inner shape
+-- naming no RecSparse shape needs none of them
+def NO_TRANSCRIPT : String := "rec inner transcript: candidate 3's session needs the inner transcript " ++
+  "(--rec-inner-transcript, --rec-inner-session), which its V* list and rows are checked against"
+def NO_REG : String := "rec inner registration: candidate 3's session needs R's circuit registration " ++
+  "(--rec-inner-registration), which binds R before the coins"
+def checksAt (i : Inner) (cs : Option InnerCommits) : Option String :=
+  why (Flock.RecSetup.checks (some i) cs Flock.Tags.circuit [] #[] ByteArray.empty none none none none none none)
+def commitsAt (i : Inner) (r : Option String) : Option String :=
+  why (do let _ ← Flock.RecSetup.commits (some i) (.ok "{}") (.ok r) (.ok (none, none)) "{}"; pure ())
+
+#guard checksAt c3 none == some NO_TRANSCRIPT && checksAt { c3 with sparse := none } none == none
+#guard checksAt c3 (some (c3cs (some r23))) == why (checkCovers c3 (c3cs (some r23)))
+#guard err (Flock.RecSetup.checkInner (some c3) none (.ok (none, some r23))) == some NO_FILES
+#guard err (Flock.RecSetup.checkInner (some { c3 with sparse := none }) none (.ok (none, none))) == none
+#guard commitsAt c3 none == some NO_REG
+#guard [commitsAt { c3 with sparse := none } none, commitsAt c3 (some "{}")].all
+  (· == some "rec inner transcript: not a rec/inner-transcript/v1 record")
+-- the inner circuit is the one whose header's META the verifier read (`RecSetup.checkMeta`): bytes that do not parse as
+-- the inner statement's circuit are refused
+#guard (err (Flock.RecSetup.checkMeta ByteArray.empty (.ok (none, some r23)))).map
+  (·.startsWith "rec inner circuit: circuit: ") == some true
 
 end Flock.Test.InnerStreams
