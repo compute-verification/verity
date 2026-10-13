@@ -20,7 +20,7 @@ source $HOME/.cargo/env
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export PATH=$W/py/bin:$PATH; python3 --version
-export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python
 cd $W; [ -d flock ] || git clone -q https://github.com/succinctlabs/flock.git
 cd $F && git checkout -q b684b12 && git checkout -q -- . && git clean -qfd crates && git apply $SRC/flock-link-b684b12.patch && git apply $SRC/flock-gpu-link-b684b12.patch || exit 1
 rm -rf crates/flock-live && cp -r $SRC/live crates/flock-live

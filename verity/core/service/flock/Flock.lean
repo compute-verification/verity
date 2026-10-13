@@ -27,11 +27,17 @@ import Flock.Zk
 import Flock.Partition
 import Flock.HmNets
 import Flock.RecOpen
+import Flock.RecSparse
+import Flock.RecSparseCmd
 import Flock.RecAlgebra
 import Flock.RecResiduals
+import Flock.RecOpening
 import Flock.HmRow
+import Flock.RecVStar
 import Flock.ProvedScope
 import Flock.Registered
+import Flock.Keccak
+import Flock.RecCoins
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll
@@ -45,3 +51,5 @@ import Flock.Firewall
 import Flock.Firewall.Contract
 import Flock.Firewall.Assumptions
 import Flock.Firewall.Released
+import Flock.Witness
+import Flock.RecOpeningCmd

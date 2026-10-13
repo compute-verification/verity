@@ -15,7 +15,7 @@ ports as given. `layout` reads its ports only through their sums, except in the 
 does not read (`laidRows_layout_congr`), so `laid_recOpen` holds at `unitLaid` (`laid_unit`); its outputs are 2,048 bits,
 its 128 output words (`length_recOpenOuts`).
 
-`unit_check`: a unit the verifier accepted (`RecOpen.check`) under the name `rec-open/l<L>-h<H>` has `H ≤ 16` and is the
+`unit_check`: a unit the verifier accepted (`RecOpen.check`) under the name `rec-open/l<L>-h<H>` has `H ≤ 32` and is the
 verifier's net at `L` and `H` (`RecOpen.check_ok`), so a copy of it in a unit of any partition computes the climb and the
 consistency term; `keyProg_parse` is the same for a unit of `Placed.keyProg` of a circuit `HmRow.parse` accepted, which
 ran the check (`ParseFacts.recNet`).
@@ -186,9 +186,9 @@ theorem foldl_wordPorts (N : ℕ) : (Flock.RecOpen.wordPorts N).foldl (· + ·) 
 abbrev unitIn (LANES H : ℕ) : ℕ := (Flock.RecOpen.ports LANES H).bits.foldl (· + ·) 0
 
 theorem unitIn_eq (LANES H : ℕ) :
-    unitIn LANES H = 128 * LANES + 1024 * ((H + 1) / 2) + 1024 + 256 * LANES + 1024 := by
+    unitIn LANES H = 128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + 1024 := by
   rw [unitIn, Flock.RecOpen.Ports.bits, ← Array.foldl_toList]
-  show 0 + 128 * LANES + 1024 * ((H + 1) / 2) + 1024 + 256 * LANES + 1024 = _
+  show 0 + 128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + 1024 = _
   rw [Nat.zero_add]
 
 /-- One 16-bit port per word has as many bits as the ports. -/
@@ -253,20 +253,20 @@ theorem length_recOpenOuts (LANES H : ℕ) (p : Ports) (hacc : p.acc = 1024) : (
 /-- **The verifier's laid-out opening computes the verifier of record's climb and the opening's consistency term**:
 `laid_recOpen` at `RecOpen.unitLaid`, M0's ports one 16-bit port per word. Whenever its rows hold at the column values
 `v`, if the `row` columns hold the bytes of the `LANES` elements `r`, the `aux` columns the 64-byte siblings `ss` one after
-another (`64 ⌈H / 2⌉` words), the `acc` columns two elements `a` and then 96 bytes `rest`, the `coef` columns the
-`2 LANES` elements `c`, and direction column `h < H` bit `h` of the position `idx`, the output columns from `outStart`
-hold `Flock.climb ms (SHA-512(rowBytes r)) idx ss` and 64 zero bytes, then the bytes of `consTerm` at `k = 0, 1` and
-`rest`. -/
+another (`64 max(1, ⌈H / 2⌉)` words), the `acc` columns two elements `a` and then 96 bytes `rest`, the `coef` columns
+the `2 LANES` elements `c`, and direction column `h < H` bit `h` of the position `idx`, the output columns from
+`outStart` hold `Flock.climb ms (SHA-512(rowBytes r)) idx ss` and 64 zero bytes, then the bytes of `consTerm` at
+`k = 0, 1` and `rest`. -/
 theorem laid_unit (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r)) (LANES H : ℕ)
-    (hH : H ≤ 16) (v : ℕ → Bool)
+    (hH : H ≤ 32) (v : ℕ → Bool)
     (h : LaidRows (Flock.RecOpen.unitLaid LANES H) (inRowsOf (Flock.RecOpen.wordPorts (unitIn LANES H))) v)
     (r a c : Array Flock.F128) (rest : ByteArray) (idx : ℕ) (ss : List ByteArray)
     (hr : r.size = LANES) (ha : a.size = 2) (hc : c.size = 2 * LANES) (hrest : rest.size = 96) (hss : ss.length = H)
     (hrow : ColsHold v 0 (Flock.MerkleScheme.rowBytes r))
     (haux : ∀ i (hi : i < ss.length), ss[i].size = 64 ∧ ColsHold v (128 * LANES + 512 * i) ss[i])
-    (hacc : ColsHold v (128 * LANES + 1024 * ((H + 1) / 2)) (Flock.MerkleScheme.rowBytes a ++ rest))
-    (hcoef : ColsHold v (128 * LANES + 1024 * ((H + 1) / 2) + 1024) (Flock.MerkleScheme.rowBytes c))
-    (hdir : ∀ h < H, v (128 * LANES + 1024 * ((H + 1) / 2) + 1024 + 256 * LANES + h) = idx.testBit h) :
+    (hacc : ColsHold v (128 * LANES + 1024 * max 1 ((H + 1) / 2)) (Flock.MerkleScheme.rowBytes a ++ rest))
+    (hcoef : ColsHold v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024) (Flock.MerkleScheme.rowBytes c))
+    (hdir : ∀ h < H, v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + h) = idx.testBit h) :
     ColsHold v
       (outStart ((Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)).run St.empty).2
         (Flock.RecOpen.wordPorts (unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))
@@ -301,7 +301,7 @@ theorem inWords_unit {LANES H : ℕ} {name : String} {net : Flock.Net}
   simp [inRowsOf]
 
 /-- **A copy of a unit the verifier accepted as `rec-open/l<L>-h<H>`, in a unit of any partition, computes the climb
-and the consistency term.** If `RecOpen.check` accepted `c` and its unit's name gives `L` and `H`, then `H ≤ 16` and
+and the consistency term.** If `RecOpen.check` accepted `c` and its unit's name gives `L` and `H`, then `H ≤ 32` and
 the unit is the verifier's net (`RecOpen.check_ok`). Let unit `u` be an instance of `k` stacked copies of the unit's rows
 (`Rows.ofNet`), the transcript `X` carrying 1 at the stack's constant. Then at copy `j`'s column values (`copyVal`),
 `laid_unit` holds. -/
@@ -315,16 +315,19 @@ theorem unit_check {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n}
     (hr : r.size = LANES) (ha : a.size = 2) (hcf : cf.size = 2 * LANES) (hrest : rest.size = 96) (hss : ss.length = H)
     (hrow : ColsHold (copyVal I X hj) 0 (Flock.MerkleScheme.rowBytes r))
     (haux : ∀ i (hi : i < ss.length), ss[i].size = 64 ∧ ColsHold (copyVal I X hj) (128 * LANES + 512 * i) ss[i])
-    (hacc : ColsHold (copyVal I X hj) (128 * LANES + 1024 * ((H + 1) / 2)) (Flock.MerkleScheme.rowBytes a ++ rest))
-    (hcoef : ColsHold (copyVal I X hj) (128 * LANES + 1024 * ((H + 1) / 2) + 1024) (Flock.MerkleScheme.rowBytes cf))
-    (hdir : ∀ h < H, copyVal I X hj (128 * LANES + 1024 * ((H + 1) / 2) + 1024 + 256 * LANES + h) = idx.testBit h) :
+    (hacc : ColsHold (copyVal I X hj) (128 * LANES + 1024 * max 1 ((H + 1) / 2))
+      (Flock.MerkleScheme.rowBytes a ++ rest))
+    (hcoef : ColsHold (copyVal I X hj) (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024)
+      (Flock.MerkleScheme.rowBytes cf))
+    (hdir : ∀ h < H, copyVal I X hj (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + h) =
+      idx.testBit h) :
     ColsHold (copyVal I X hj)
       (outStart ((Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)).run St.empty).2
         (Flock.RecOpen.wordPorts (unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))
       ((Flock.climb ms (Flock.Sha512.hash (Flock.MerkleScheme.rowBytes r)) idx ss ++ ⟨Array.replicate 64 0⟩) ++
         (Flock.MerkleScheme.rowBytes #[consTerm LANES r a cf 0, consTerm LANES r a cf 1] ++ rest)) := by
   obtain ⟨hv, hl⟩ := Flock.RecOpen.check_ok hrec hp
-  have hH : H ≤ 16 := by
+  have hH : H ≤ 32 := by
     simp only [Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
     exact hv.2
   obtain ⟨hs, h1⟩ := sat_copy I X hj
@@ -346,12 +349,13 @@ theorem keyProg_parse {tags : Flock.Tags} {bytes : ByteArray} {tables : List (St
     (hrow : ColsHold (copyVal (keyInst hU n outs u) X hj) 0 (Flock.MerkleScheme.rowBytes r))
     (haux : ∀ i (hi : i < ss.length), ss[i].size = 64 ∧
       ColsHold (copyVal (keyInst hU n outs u) X hj) (128 * LANES + 512 * i) ss[i])
-    (hacc : ColsHold (copyVal (keyInst hU n outs u) X hj) (128 * LANES + 1024 * ((H + 1) / 2))
+    (hacc : ColsHold (copyVal (keyInst hU n outs u) X hj) (128 * LANES + 1024 * max 1 ((H + 1) / 2))
       (Flock.MerkleScheme.rowBytes a ++ rest))
-    (hcoef : ColsHold (copyVal (keyInst hU n outs u) X hj) (128 * LANES + 1024 * ((H + 1) / 2) + 1024)
+    (hcoef : ColsHold (copyVal (keyInst hU n outs u) X hj) (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024)
       (Flock.MerkleScheme.rowBytes cf))
-    (hdir : ∀ h < H, copyVal (keyInst hU n outs u) X hj (128 * LANES + 1024 * ((H + 1) / 2) + 1024 + 256 * LANES + h) =
-      idx.testBit h) :
+    (hdir : ∀ h < H,
+      copyVal (keyInst hU n outs u) X hj (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + h) =
+        idx.testBit h) :
     ColsHold (copyVal (keyInst hU n outs u) X hj)
       (outStart ((Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)).run St.empty).2
         (Flock.RecOpen.wordPorts (unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))

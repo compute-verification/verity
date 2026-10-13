@@ -315,8 +315,8 @@ is written so that these slot in without restructuring:
   theorem, over uniform prover randomness).
 - **Differential tests** tie production to it byte for byte: on the same inputs, seeds and coins, the production prover
   must emit exactly its messages, which pins down mask placement.
-- **Still trusted:** that equivalence beyond the tested inputs, and the quality of the operating system's and ChaCha's
-  randomness.
+- **Still trusted:** that equivalence beyond the tested inputs, and the quality of the operating system's randomness (A3,
+  which the leaf salts read directly) and of ChaCha's (the masks and padding).
 
 ## 7. Staging against a16z's security stages
 

@@ -129,7 +129,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - `roots`: the modules the audit imports; every module under them is audited. `axioms` is optional.
 - `proved_in` (optional): the packages, as paths relative to this one, that prove its guarantees (below).
 - `runs`: the package's tests, compiled evaluation that no proof reads (a bulk conformance check over more vectors than
-  the kernel checks). Each is an exempt module, run after the replay by `lake env lean --run` in the build sandbox, and
+  the kernel checks). Each is an exempt module, run beside the facts and the replay by `lake env lean --run` in the build sandbox, and
   passes when it exits 0. An argument `{NAME}` is the path of data file NAME, which is what `generate` writes (run first,
   outside the sandbox, with `{repo}` the checkout, `--repo`, and `{out}` the directory it writes) or else the package's
   own file, either one possibly gzipped (`NAME.gz`). A file is used only with the SHA-256 under `data`: another fails the
@@ -166,14 +166,19 @@ installs it first, so a machine without elan works), must pass clean and fail on
   entry without one. A changed owner is one line in the review and no change of the statement.
 - `shape`: `{"premises": [module prefixes], "properties": {G: {"function": F, "outcome": O}}, "frozen": {name: why}}`,
   the shape every guarantee has (the lean-proofs skill, "One shape"). `Facts.lean` unfolds a lifted definition once,
-  inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that reaches `F`
+  inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that applies `F`
   (a constant, several, or a field path such as `P.protocol.check`) and, unless `O` is `accept`, a constant named `O`,
   and premises (hypotheses whose head is under `premises`), up to the first input bound after that acceptance; what
   follows is its conclusion. With `O` `none` (a function that always returns) it takes no acceptance and must mention
   `F`. A conjunction whose conjuncts are about different functions (soundness of a check and simulation of a server)
   gives `{"conjuncts": [{"function": F1, "outcome": O1}, ...]}` in place of `function` and `outcome`, one per
-  conjunct in order, so each is checked against its own. Several acceptances of `F` count as one, of the tuple of their inputs. A `Prop` field of a structure under
-  `meaning` that an input ranges over is a hypothesis. A guarantee under `frozen` (with why it doesn't fit yet) is
+  conjunct in order, so each is checked against its own. Several acceptances of `F` count as one, of the tuple of their
+  inputs. A hypothesis is read by its body, under its leading binders: the acceptance's body applies `F` through
+  definitions (mentioning a structure whose fields name `F`, such as an outer session, is not applying it) and the
+  acceptance holds under no hypothesis of its own (`A → accepts` is not one), and a premise's head is its body's (`∀ j,
+  P j` is headed by `P`). A `Prop` field of a structure under `meaning` that an input ranges over, or that an input
+  returns (a family `Vs : Fin S → VStmt`, through reducible abbreviations), is a hypothesis, its
+  own `Nonempty` among them. A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` component) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
@@ -181,7 +186,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   guarantees by category. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
   conjectures a property may rest on, each a named assumption: one is a premise when it heads a hypothesis, and a
   property with a hypothesis reaching one lists it under its entry's `rests_on` (it is conditional). An open one names
-  its falsification test `T`, which a suite runs, so a counterexample fails `check`; a falsified one refuses every
+  its falsification test `T`, a pytest node id `PATH::NAME` from the repository's root that a suite runs
+  (`tests/test_lean_packages.py` checks the test exists), so a counterexample fails `check`; a falsified one refuses every
   property resting on it, which stays under `frozen` only as `falsified`. Every package is checked: without a `shape`
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
   is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
@@ -207,6 +213,10 @@ replay pass it: only the records see it, and only a person can judge it. (A rede
 Merkle binding guarantee vacuous for unsalted schemes; the records flagged it and a review caught it.) `--update` records
 the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
+An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions or
+type hash, a `reads` group, an assumption's digest: what a train's merge of two PRs, each recorded on its own side, can
+leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
+`regenerated` names that file; a missing record or name, an owner or any other failure writes none.
 When the change lands on `main` (`research merge --push`, `research queue land`), Daniel gets a DM with each new, removed
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
@@ -221,8 +231,8 @@ are, and in place of `G as` the value of `G` at the type's universe levels with 
 `Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
 theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
 type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
-read by no other guarantee, needs no reading of its own; the review then holds no statement change, so the merge needs no
-statement reviewer for it. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+read by no other guarantee, needs no reading of its own; the review then holds no statement change. (No merge needs a
+statement reviewer, for a lift or any other change: Daniel, 8 Oct.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
 theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
 lists a lifted guarantee as changed.
@@ -368,8 +378,10 @@ module docstring has the layout and the rules. In short:
   `setup.sh` (the toolchain, Mathlib's cache, the dependencies' sources) and `cache.py get`, and compiles none of ArkLib.
 - A miss or a mismatch means building from source. So do a missing read credential (`LEAN_CACHE_R2_*`), the kill switch
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
-- The audit never reads the cache: `lake_env()` sets `LAKE_ARTIFACT_CACHE=false` and `LEAN_CACHE=off`, so the validator
-  builds from source.
+- The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off`, and `LAKE_ARTIFACT_CACHE=false` unless check's audit
+  names its node's own Lake cache (`--artifacts`, `lean_audit.LakeArtifacts`), which only a passing audit on that node
+  writes and the sandboxed builds only read. A module is then built from source or restored from an earlier passing audit,
+  as a kept build's modules are: Lake's input hash decides which, in both.
 - Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
   its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
   bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link

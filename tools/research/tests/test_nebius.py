@@ -473,6 +473,39 @@ def test_gpu_lease_leaves_the_gpus_to_an_older_waiter_and_forgets_a_dead_one(tmp
 
 
 @needs_flock
+def test_a_waiter_pinned_with_on_holds_back_only_its_own_gpus(tmp_path):
+    """ra-host-tier (12 Oct 19:35Z): a waiting `gpu-lease N --on LIST` deferred every later request, so its waiter kept free GPUs
+    outside LIST from seven lanes. A later request may take a GPU outside every older waiter's list (by index or UUID), and an
+    unpinned waiter still holds back all of them."""
+    env = {**gpu_env(tmp_path, count=4), "GPU_LEASE_UUID_TABLE": "GPU-a0,GPU-b1,GPU-c2,GPU-d3"}
+    gl = tmp_path / "gl"
+    gl.mkdir()
+    show = 'echo "$CUDA_VISIBLE_DEVICES"'
+
+    def hold(name: str, line: str) -> subprocess.Popen:
+        p = subprocess.Popen(["bash", "-c", f'exec 9>"{gl / name}"; flock -x 9; echo "{line}" >&9; echo ready; read x'],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        assert p.stdout.readline().strip() == "ready"
+        return p
+
+    waiters = [hold("wait.0000000000000000001.1", "pid=1 n=2 on=1,GPU-c2 who=pinned")]
+    try:
+        r = subprocess.run(["bash", str(GPU_LEASE), "2", "--", "sh", "-c", show], env=env, capture_output=True, text=True)
+        assert r.returncode == 0 and r.stdout.strip() == "0,3", r.stderr
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "1,2", "--", "true"], env=env, capture_output=True, text=True)
+        assert r.returncode == 75 and "who=pinned" in r.stderr
+        r = subprocess.run(["bash", str(GPU_LEASE), "3", "--", "true"], env=env, capture_output=True, text=True)
+        assert r.returncode == 75 and "who=pinned" in r.stderr
+        waiters.append(hold("wait.0000000000000000002.2", "pid=2 n=1 who=whole"))
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "0", "--", "true"], env=env, capture_output=True, text=True)
+        assert r.returncode == 75 and "who=pinned" in r.stderr
+    finally:
+        for p in waiters:
+            p.stdin.close()
+            p.wait()
+
+
+@needs_flock
 def test_gpu_lease_backfills_a_short_request_ahead_of_a_waiter_that_cannot_start_yet(tmp_path):
     """A 3-GPU waiter can't start before GPU 0's lease (no until=, so its start plus 30 min) ends: a 10-minute request may use
     the two free GPUs meanwhile, a 40-minute one may not, and a backfilled lease records when it ends."""
@@ -2844,6 +2877,21 @@ def test_n1_lease_kills_everything_a_policy_command_that_overruns_started(monkey
     os.close(r)
     assert len(events) == 1 and events[0]["error"].startswith("TimeoutExpired") and events[0]["fallback"] == "environment"
     assert len([a for a, _ in calls if a[0] == "create"]) == 3
+
+
+@needs_flock
+def test_n1_lease_sees_a_waiter_that_a_read_of_proc_locks_misses(monkeypatch, tmp_path, reap):
+    """/proc/locks comes a page per read, so on a node with many locks one read can miss a lock held throughout (seen on node 1,
+    where it left a waiter unserved for a tick): a waiter is its file's lock, probed directly."""
+    m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 3)
+    keys(max=3)
+    (tmp_path / "gl" / "wait.2.4343").write_text("pid=4343 n=1 who=gone since=x\n")
+    monkeypatch.setattr(m, "lock_holders", dict)
+    assert [w["file"] for w in m.waiters()] == ["wait.1.4242"]
+    m.Controller().tick(1_800_000_000.0)
+    os.close(fd)
+    assert len([a for a, _ in calls if a[0] == "create"]) == 3
+    assert not m.waiters()
 
 
 @needs_flock

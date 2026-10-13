@@ -1,4 +1,4 @@
-import Properties.CertifierNetwork
+import Properties.Proofs.CertifierNetwork.Defs
 import Properties.Proofs.CertifierDevice.Fifo
 import Properties.Proofs.NetworkCertifier.Bytes
 
@@ -109,8 +109,8 @@ theorem Sized.arrive {B : Nat} {s : Shaper} (h : Sized B s) (position : Nat) {fr
         exact hf
       · exact h k x hx
 
-theorem Sized.handStep {B : Nat} {s s' : Shaper} (h : Sized B s) (hs : HandStep s s') : Sized B s' := by
-  obtain ⟨frame, ready, hh, hand, -, -, rfl⟩ := hs
+theorem Sized.handStep {B T : Nat} {s s' : Shaper} (h : Sized B s) (hs : HandStep T s s') : Sized B s' := by
+  obtain ⟨frame, ready, sync, hh, hand, -, -, -, -, -, rfl⟩ := hs
   intro k x hx
   dsimp only at hx
   rw [Std.HashMap.get?_erase] at hx

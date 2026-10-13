@@ -408,6 +408,7 @@ and the record keeps it as `unit_draw`. The offline checks:
 | U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
 | U2 | the draw is well formed: exactly the sampling design's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, floor, k}`, a floor of at least one, `W ≥ 1`, each `k` the work rule's above its floor, and a closure (when there is one) of non-empty, ascending, distinct units of the population, none of them drawn. When the verifier holds the program and a template-query partition object, a stratified draw's sampling design must be its own derivation from them, and `verify` refuses a stratified draw without them and its own `K` (`--stratified K`), or at another `K`. A work draw's sampling design must always be its own derivation from them, its work table (works and floors) and its own `K`, and `verify` refuses a work draw without all four or at another `K` |
 | U3 | the statement's `instances` is the number of drawn units and their closure. A work draw's closure must be the verifier's own derivation from its closure map, and `verify` refuses a closure draw without the map |
+| U4 | every unit that reads a round's commitment by the verifier's own registered reads (a port whose value is `rec-c<i>`, `rec-top-L<l>`, `rec-opening-c<i>`, `rec-top-stacked-L<l>` or one of the sparse phase's messages `rec-sparse-<p>`, §16.10) is drawn in full: its stratum's `k` is its size (a `subset` draw of `K = N`, a `p = 1` draw). A statement without a draw passes |
 
 `stratified_agree.py` checks the Lean verifier's sampling designs, draws and U2 verdicts against core's (#164's
 `verity.core.protocols.sampled_proofs.one_stage.draw`, #161's `Stratified`).
@@ -1093,8 +1094,10 @@ included. Claims are listed region-major, then point 0 before point 1.
   `m > 35` (no Fast100 schedule exists above it).
 - **The proved range** (`checkInRange`, in `setup` and `setupH` for every statement). The statement must lie in the
   soundness package's `Stmt.InRange`: `k_log ≤ 27`, at most 1024 regions, and `m_pts = 24 + nbl ≤ 64`. So the verifier,
-  and not only the writer, accepts only statements the proved bound covers. `checkInRange_ok` (pinned) states that the
-  check accepts exactly that range.
+  and not only the writer, accepts only statements the proved bound covers. The pinned statement is
+  `flock_verify_sound_205` (`Security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean`): every statement
+  accepted without `--zk` carries the 2^-205 per-table bound, with no range hypothesis, since acceptance gives the range.
+  `checkInRange_ok` is the lemma that says the check accepts exactly that range.
 
 ### 16.6 frame-v3 roots
 
@@ -1223,20 +1226,27 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   no slots would escape the block bound.
 - **The nets the verifier builds.** The `sha512x3` and `hm96` nets must equal the verifier's own, in every field
   (`Flock.HmNets`, D7). So must a unit net whose name starts with `rec-open/` (V*'s opening, `rec_outer.lowering`):
-  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `1 ≤ H ≤ 16` (`rec_open` builds
-    `0 ≤ H ≤ 32`, reading the side bits above 16 from `dirs`' word 1 and giving `H = 0` one unread `aux` row; this verifier
-    refuses those heights until `Flock.RecOpen` does the same);
-  - its input ports must total `384·LANES + 1024·⌈H/2⌉ + 2048` bits and its output ports 2048, compared before the
-    verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's rows
-    allow;
+  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `0 ≤ H ≤ 32` (the side bits
+    are `dirs`' words 0 and 1, and at `H = 0` there is no climb);
+  - its input ports must total `384·LANES + 1024·max(1, ⌈H/2⌉) + 2048` bits and its output ports 2048, compared before
+    the verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's
+    rows allow;
   - the net must be `Flock.RecOpen`'s builder of `rec_open._steps` at those parameters, laid out as `ir_lower.layout`
-    lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·⌈H/2⌉`, `64`, `16·LANES` and `64` u16 words, and
-    outputs `out` then `acc_out` of 64 words each, one 16-bit port per word.
+    lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·max(1, ⌈H/2⌉)` (at `H = 0` one row the net does
+    not read), `64`, `16·LANES` and `64` u16 words, and outputs `out` then `acc_out` of 64 words each, one 16-bit port
+    per word.
 
   So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
     `claims ≥ 2`, and neither `k_log` nor `claims` above the unit's input bits, compared before the verifier computes
     the structure;
+  - META `holo` (`RecResiduals.HOLO_KEY`: `true`, or absent for false; any other value refuses) says whether the parts
+    are a private circuit's (`rec_algebra.Shape.holo`: each comb operand also reads its `h`). The shape is at that
+    `holo`, so exactly one net is accepted: a holo statement on plain parts refuses, and so does a plain statement on
+    holo parts. With `--rec-inner`, V*'s statements are built at the verifier's own `--hide` (`holo` in
+    `verity/rec-inner/v1`, `RecVStar.Inner.holo`), so a file's META `holo` must equal it, and every `VERDICT` line
+    carries it as `private_circuit`. The verifier refuses an inner shape with `holo` true until V*'s circuit writer
+    writes holo parts;
   - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
     its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
     residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 160 `sha512x3`
@@ -1248,6 +1258,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     its output ports 2048, compared before the verifier builds its net;
   - the net must be `Flock.RecResiduals`' builder of `rec_residuals.unit_circuit` on part `j`'s S, laid out as
     `ir_lower.layout` lays it out, one 16-bit port per word.
+
+  So must a unit net whose name starts with `rec-opening/` (a part of R's opening, `rec_residuals.stage_opening`):
+  - its name must be `rec-opening/m<m>-c<claims>-p<j>`, with a `fast100` schedule at `m` and `claims ≥ 1`;
+  - the circuit must have one unit per VU (`units_per_vu = 1`), so each part is one copy of its unit, refused before
+    the structure is computed;
+  - the rest is a `rec-residuals/` part's (the claims bounded by the input bits, part `j`'s bits, the net), at the
+    opening's S (`Flock.RecOpening.structureOf`, `rec_algebra.structure` at an opening-only shape) and its row ports.
 
   Any other unit is not checked against a builder (D13, §17.1).
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
@@ -1365,7 +1382,16 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   output port's row, whose table is the instances' output rows, instance `i`'s ref `i`, so instance `i`'s output is the
   registered row at `positions[i]`. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its
   position, each instance's ref name its unit's read position in the verifier's program (units `derived`). A port on
-  one side only refuses; verdicts report `registered`.
+  one side only refuses; verdicts report `registered`. A recursive statement reads the inner session's round commitments
+  as registered values, round `i`'s as `rec-c<i>` and level `l`'s committed tops as `rec-top-L<l>`; a drawn statement
+  must draw in full every unit the verifier's reads of such a value name (U4, `Registered.checkFull`, D14), so that no
+  stage's message is read off a sample. The registered opening (`RecOpening`) reads its rounds as registered values too:
+  `rec-opening-c<i>` is round `i` of `RecOpening.rounds` (each claim's ring switch, then Ligerito's rounds in
+  `ligRounds` order), and its ports are the `c<i>`, then `acc0`, `acc1`, then the claims. U4 names these as well
+  (`Registered.roundCommitment`), with the stacked table R's level-`l` tops `rec-top-stacked-L<l>` and the sparse phase's
+  messages `rec-sparse-<p>`, `p` one of `pre<j>`, `v2`, `sc<j>`, `u` and `vt` (`rec_sparse.message_ports` without `h`,
+  which reads the rep's `rec-c<i>`, and `claim`, which reads `rec-claim`). The sparse phase's `rec-sparse-v`,
+  `rec-sparse-zero` and `rec-sparse-tau` are no round's commitment.
 - **Identifier.** The header may carry `identifier`, a JSON object C-Flock does not read (an application's name for what the
   statement is about, such as PoUW's). The public digest covers the header, so Σ binds it. The verifier needs its own
   `--identifier F` (a JSON object, by path or archive digest), and the header's must equal `F`'s in RFC 8785 form: both are
@@ -1617,6 +1643,27 @@ statement whose leaf scheme is that object (`Tags.plainLeaves`), with or without
 covers it: every hidden-output headline needs `merkleLeaf = "hm96-sha512/v1"`. The statement is ZK off, and upstream's
 `--zk` refuses it too.
 
+**A registered description.** When the inner statement is a private circuit's (its description, the circuit's `op`,
+`src` and `out` bits, one row port every instance reads), the developer registers the description's rows once (§16.10's
+registration: `hm96-sha512/row/v1` rows under salts drawn once, a frame-v3-sha512 root under the registration's domain),
+and the statement opens them against that root: the header's `registered` names the description port, and each of its
+table rows' position and path (`verity_flock.inner_registered`). The verifier that holds the root (`statement
+--registered F` on a plain-leaves statement; V*'s native side, `InnerFold.lean --registered F`) refuses the statement
+unless, for each port of `F` (`Registered.checkDescription`):
+
+1. the header's `registered` names exactly `F`'s ports, each a row of the circuit, `hm96-sha512/row/v1` rows of the
+   registered width (`Port.fits`), and a table of a shared-row file;
+2. the port's table is the registration in order: as many rows as the registration's leaves, table row `r` at position
+   `r`, its `b ‖ c` opening the registered root there through its path;
+3. every instance's ref names a row of the table; and
+4. every table row is some instance's ref: the statement reads every registered row (D14).
+
+Each refusal names the port and the value it compared (the table's rows and the registration's leaves, the row, its
+stated position, the instance and its ref). No position depends on which unit an instance is, so the units need not be
+derived from the verifier's program, as §16.10's reads need them. Without `F`, a statement naming registered reads is
+refused as §16.10 refuses one. The description's registered value is its packed row (16 description bits to a u16 word,
+as the class statement lays out the parameter), so its `words` are the port's.
+
 ## 17. Acceptance, assumptions and trust
 
 ### 17.1 How the Lean verifier becomes the verifier of record
@@ -1690,6 +1737,14 @@ expectation):
   parameters, one whose port bits are not the opening's at them, and one whose net differs from the verifier's. No vector
   exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean
   verifier.
+- **D14:** U4 (§7.3, §16.10): a drawn statement must draw in full each unit that reads a round's commitment. Upstream
+  ignores the header's `registered` (D5) and so cannot tell which units read one; the spec refuses the draw at setup. No
+  vector exercises it: no set's draw meets a port of a round's commitment (`rec-c<i>`, `rec-top-L<l>`, R's and the sparse
+  phase's). `Flock.Test.Full` runs it on synthetic ports and draws.
+- **D15:** an inner statement's registered description (§16.16). Upstream ignores the header's `registered`; the spec
+  refuses a description table that is not the registration in order, a row that does not open the registered root, and a
+  registered row no instance reads. No vector exercises it; `verity/ml/flock/tests/test_inner_registered.py` runs each
+  refusal on the Lean verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
@@ -1746,7 +1801,7 @@ is the article's recursion caveat, applied to the slots of one block.
 | 1b PCS binding | Ligerito, with the paper's proximity and correlated-agreement results as named axioms; Merkle binding under the scheme's collision resistance (SHA-256, or SHA-512 on the target statement; an explicit collision extractor) | 4a; Merkle 3 |
 | 1c Fiat–Shamir | not used (interactive coins). Replaced by **session binding**: every coin is issued only after the framed bytes it answers are fixed by their SHA-256 digest (R2); both reps bind one root (S13, S16, S18); Σ, the digest and the link points precede every Flock coin (S4, S14, §9.1) | 3 |
 | 1d constraint system = semantics | the lowering theorem for every pinned circuit against its reference function (soundness and totality), and the assembly: the fold equals the multilinear extension of `I ⊗ A_0 + Δ`, the region values equal the extension of the known bytes, and Δ makes the stated copies | 3 |
-| 1e glue | one theorem, `FailClosed.flock_verify_sound`, over every statement `verify` accepts, `setupH`'s and `Stmt.setupHidden`'s (§16.13, §16.15): `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, and the rows hash to the public roots, except with probability δ. Without `--zk`, no zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
+| 1e glue | one theorem, `FailClosed.flock_verify_sound`, over every statement `verify` accepts, `setupH`'s and `Stmt.setupHidden`'s (§16.13, §16.15): `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, except with probability δ. That the public file's `frame_v3` roots, domains and schemas are those of its `b ‖ c` rows and output words is the verifier's native check (`checkPublic`, §16.10), stated deterministically by `FailClosed.flock_verify_public_ties`, not by `flock_verify_sound`. Without `--zk`, no zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
 | 2 implementation = protocol | the executable is the definition the theorems are about, so no second implementation has to be matched. The field code is proved to be GF(2^128) and K (level 3, below). What remains: the decoders implement §8 and §5.1; the hash code meets FIPS 180-4 and the BLAKE3 spec (tested against vectors, used as assumptions); compiler and runtime trust (§17.3) | 3 |
 | 3 prover completeness | out of scope (upstream's prover). Every honest session in the corpus is accepted | tests |
 

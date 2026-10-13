@@ -439,7 +439,8 @@ The masked protocol and the reference prover are in DESIGN.md §6, and the sessi
   every completed first run (`V*` picks them) are hypotheses.
 
 **Not in Lean:** the link from `flock-circuit --zk` to the model (the Lean reference prover and its differential test,
-DESIGN.md §6), which would instantiate `Model` and those hypotheses; ChaCha20 as uniform randomness.
+DESIGN.md §6), which would instantiate `Model` and those hypotheses; ChaCha20 as uniform randomness for the masks and
+padding. The leaf salts are the operating system's bytes, uniform under A3 (`Discharge/ZkView/OsSalts.lean`).
 
 The verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an acceptable
 fallback anywhere.
@@ -455,16 +456,18 @@ tables' public statements alone, and runs in expected polynomial time. The simul
 
 - **It rests on** special honest-verifier ZK of masked Flock: a simulator for every fixed coin sequence, which is VEIL's
   notion and the first zero-knowledge lemma to prove. The lemma is statistical. Its only caveat is ChaCha20 standing in
-  for uniform prover randomness. The simulations of a session's tables compose, because their masks are independent.
+  for uniform masks and padding; the leaf salts are the operating system's (A3). The simulations of a session's tables compose, because their masks are independent.
 - **Serialized sessions** then compose sequentially (Goldreich–Oren 1994).
 - **Reserve, if concurrency is ever needed:** a single registered verifier key, or a Prabhakaran–Rosen–Sahai preamble
   (DESIGN.md §11.2).
 
 **Expected assumptions** (to be confirmed against M1's spec):
 
-- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production they are
-  ChaCha20 output under a seed from the operating system. Treating that output as uniform is the one caveat to the
-  lemma's statistical zero knowledge, and the seed's quality is trusted.
+- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production the
+  leaf salts are the operating system's bytes, 192 a leaf (`getrandom`; Daniel, 9 Oct, decision 4(a)), which A3 makes
+  uniform (`Discharge/ZkView/OsSalts.lean`), and the masks and padding are ChaCha20 output under a seed from the
+  operating system. Treating that output as uniform is the one caveat to the lemma's statistical zero knowledge, and
+  the operating system's randomness is A3.
 - **Leaf hiding.** Halevi–Micali leaves are statistically hiding in the standard model, by the leftover hash lemma, with
   no random oracle (`N·2^-256` for N leaves with a fresh key, §4). They are binding under collision resistance of their
   hash, SHA-512 in the adopted variant.

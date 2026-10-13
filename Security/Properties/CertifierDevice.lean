@@ -10,8 +10,9 @@ state it leaves and the proxy's actions out. The code has no fold of it over a t
 (`outputs`, `after`, from `init c`); every statement is about it, for every configuration and every trace, whatever its
 events' clock readings, order or bytes. `Issuer.certify` (`Issuer.lean`) signs a closed window's record. Each statement
 is a named `Prop`, proved as the lower-case theorem of the same name in `Properties.Proofs.CertifierDevice`, and a
-guarantee of this package (`lean-audit.json`). No statement takes an assumption about the world: the hypotheses each
-takes are in its statement.
+guarantee of this package (`lean-audit.json`). Each has one shape: for every input, if the code accepts it, the
+conclusion holds. `step` always returns, so the trace statements take no hypothesis; the issuer's takes the acceptances
+of the calls that made the key and of the one they are about. No statement takes an assumption about the world.
 
 **(1) The link's schedule is content-independent.**
 
@@ -30,23 +31,25 @@ takes are in its statement.
   `⟨egressLink, w, ρ (w·T) … ρ (w·T + T − 1), σ w⟩` with the egress grid's parameters: every published egress record's
   grid is the `T` rows its buckets released, each the frames its bucket wrote. No other event writes the link or
   publishes anything but an ingress record.
-* `CompleteRows`: a record whose status is complete, of a window with a declared sync, has every row equal to
-  `NetworkCertifier.expectedRow` over the frames the shaper handed (their bits, `bitsOf`, as the difftest compares) under
-  the syncs `step` declared, provided each frame was handed at the bucket the Program hands it
-  (`NetworkCertifier.handingBuckets`). That hypothesis is honest timing, stated over the trace (`handed`): it fails
-  where a frame is read after its logical hand bucket's tick, or ready after its logical hand time.
+* `CompleteRows`: a record an egress tick publishes whose status is complete, of a window with a declared sync, has
+  every row equal to `NetworkCertifier.expectedRow` over the frames the shaper handed through that tick (their bits,
+  `bitsOf`, as the difftest compares) under the syncs `step` declared through it (`ProgramRows`). It needs no honest
+  timing: the shaper hands a frame at its logical hand bucket (`NetworkCertifier.handingBuckets`) or later, and a frame
+  handed later faults the window it is handed in, so no complete window holds one.
 
 **(3) Fail-closed.** `FailClosed`: once the egress certifier holds a fault `r`, every later egress tick of that window
 releases nothing (it writes `r · B` zero bytes), and the window's record has status `notEstablished r` and padding in
 every row from the fault on. The certifier keeps the first fault of a window, so `r` is the first fault's reason.
 
-**(4) The issuer.**
+**(4) The issuer.** `IssuerVerifies`: for every key `Lms.key` derives under parameters `Lms.Params.make` admits,
+every certificate `Issuer.certify` returns with it, in a certifier session, verifies (`CertifiedRecord.verify`) under the
+key's parameters and public key in that session. Its subject is such a key: the two calls' acceptances are its
+hypotheses, beside `certify`'s.
 
-* `LmsCorrect`: for a key `Lms.key` derives under parameters `Lms.Params.make` admits, `Lms.signAt` signs every message
-  at every leaf below `2^H`, `Lms.verify` accepts the signature under the key's public key, and the signature's encoding
-  decodes back to it.
-* `IssuerVerifies`: every certificate `Issuer.certify` returns verifies (`CertifiedRecord.verify`) under the key's
-  public key; `IssuerSigns`: given a leaf below `2^H` and a record with a head, it returns one.
+That `signAt` and `certify` do return, at every leaf below `2^H` and for every record with a head, and that every
+signature `signAt` returns verifies, are completeness, not guarantees: `Proofs.CertifierDevice.Lms.lmsSigns`,
+`Proofs.CertifierDevice.Lms.lmsCorrect` and `Proofs.CertifierDevice.Issuer.issuerSigns`, each with a toy-LMS instance in
+`Proofs.CertifierNetwork.Instance`.
 -/
 
 namespace Properties.CertifierDevice
@@ -102,11 +105,13 @@ def linkWrites (acts : List Action) : List Nat :=
 def LinkSchedule : Prop :=
   ∀ (c : Config) (tr : List Event), (outputs (init c) tr).map linkWrites = writeSchedule c (tr.map tickView)
 
-/-- **Content independence.** Traces with the same tick views in the same positions write the link in the same lengths
-at every event. -/
-def ContentIndependent : Prop :=
-  ∀ (c : Config) (tr tr' : List Event), tr.map tickView = tr'.map tickView →
-    (outputs (init c) tr).map linkWrites = (outputs (init c) tr').map linkWrites
+/-- If `tr` and `tr'` have the same tick views in the same positions, they write the link in the same lengths at every
+event. -/
+def SameWrites (c : Config) (tr tr' : List Event) : Prop :=
+  tr.map tickView = tr'.map tickView → (outputs (init c) tr).map linkWrites = (outputs (init c) tr').map linkWrites
+
+/-- **Content independence**, for every pair of traces. -/
+def ContentIndependent : Prop := ∀ (c : Config) (tr tr' : List Event), SameWrites c tr tr'
 
 /-! ## (2) The records -/
 
@@ -133,14 +138,17 @@ def egressActions (c : Config) (ρ : Nat → Slots) (σ : Nat → Status) (k bac
       [.publish ⟨c.egressLink, k / T, Array.ofFn fun j : Fin T => ρ (k / T * T + j), σ (k / T)⟩ c.egress]
     else []
 
-/-- **The records are the rows written.** Some packed row per egress bucket and status per window make every egress
-tick's actions exactly `egressActions`; no other event writes the link or publishes but an ingress record. -/
-def Records : Prop :=
-  ∀ (c : Config) (tr : List Event), ∃ (ρ : Nat → Slots) (σ : Nat → Status),
+/-- **The records of `tr` are the rows written.** Some packed row per egress bucket and status per window make every
+egress tick's actions exactly `egressActions`; no other event writes the link or publishes but an ingress record. -/
+def RowsWritten (c : Config) (tr : List Event) : Prop :=
+  ∃ (ρ : Nat → Slots) (σ : Nat → Status),
     (∀ k, Packed c.egress (ρ k)) ∧
     (∀ n k backlog, EgressAt c tr n k backlog → (outputs (init c) tr)[n]? = some (egressActions c ρ σ k backlog)) ∧
     ∀ n acts, (outputs (init c) tr)[n]? = some acts → (¬ ∃ k backlog, EgressAt c tr n k backlog) →
       ∀ a ∈ acts, (∀ b, a ≠ .writeLink b) ∧ ∀ r p, a = .publish r p → r.link = c.ingressLink ∧ p = c.ingress
+
+/-- **The records are the rows written**, on every trace. -/
+def Records : Prop := ∀ (c : Config) (tr : List Event), RowsWritten c tr
 
 /-- The frames the shaper hands its certifier at event `ev` from `st`, in order: the canonical positions its handing
 passes, as it held them. -/
@@ -153,30 +161,36 @@ def handed : State → List Event → List (Frame × Nat)
   | _, [] => []
   | st, ev :: tr => (handedAt st ev).map (·, st.shaper.t) ++ handed (step st ev).1 tr
 
-/-- **A complete record is the Program's.** If each frame the shaper hands over the trace is handed at the bucket
-`NetworkCertifier.handingBuckets` gives it, under the syncs `step` declared, then every published egress record whose
-status is complete, of a window with a declared sync, has as row `j`, slot by slot, `NetworkCertifier.expectedRow` at
-bucket `w·T + j` of the handed frames (their bits, as the difftest's honest check reads them). -/
-def CompleteRows : Prop :=
-  ∀ (c : Config) (tr : List Event),
-    let hs := handed (init c) tr
-    let syncs := (after (init c) tr).shaper.syncs
+/-- **The complete records of `tr` are the Program's.** Every record an egress tick of `tr` publishes, event `n`, whose
+status is complete, of a window with a sync among those `step` declared through event `n`, has as row `j`, slot by slot,
+`NetworkCertifier.expectedRow` at bucket `w·T + j` of the frames the shaper handed through event `n` (their bits, as the
+difftest's honest check reads them), under those syncs.
+
+Its record is the Program's on the frames handed by its close: the Program's grid on the frames handed by the record's
+publish, not on every frame the Program places in its window. A frame the Program places in window `w` but the shaper
+hands late, in `w + 1`, faults `w + 1`, and `w` still closes complete without it. An accepted run excludes that, since
+every one of its windows must be complete. -/
+def ProgramRows (c : Config) (tr : List Event) : Prop :=
+  ∀ n k backlog acts rec p, EgressAt c tr n k backlog → (outputs (init c) tr)[n]? = some acts → .publish rec p ∈ acts →
+    let hs := handed (init c) (tr.take (n + 1))
+    let syncs := (after (init c) (tr.take (n + 1))).shaper.syncs
     let frames : List LogicalFrame := hs.map fun x => ⟨bitsOf x.1.bytes, x.1.anchor, x.1.index⟩
     let T := c.egress.buckets
-    hs.map Prod.snd = NetworkCertifier.handingBuckets T syncs.size (fun w => syncs[w]) frames →
-    ∀ n k backlog acts rec p, EgressAt c tr n k backlog → (outputs (init c) tr)[n]? = some acts →
-      .publish rec p ∈ acts → rec.status = .complete → rec.window < syncs.size →
-      ∀ j < T, ∀ (s : Nat) (hs : s < c.egress.allocation),
-        NetworkCertifier.expectedRow c.egress.allocation T syncs.size (fun w => syncs[w]) frames (rec.window * T + j)
-          ⟨s, hs⟩ = (rec.grid[j]!)[s]!.map bitsOf
+    rec.status = .complete → rec.window < syncs.size →
+    ∀ j < T, ∀ (s : Nat) (hs : s < c.egress.allocation),
+      NetworkCertifier.expectedRow c.egress.allocation T syncs.size (fun w => syncs[w]) frames (rec.window * T + j)
+        ⟨s, hs⟩ = (rec.grid[j]!)[s]!.map bitsOf
+
+/-- **A complete record is the Program's**, on every trace. -/
+def CompleteRows : Prop := ∀ (c : Config) (tr : List Event), ProgramRows c tr
 
 /-! ## (3) Fail-closed -/
 
-/-- **Fail-closed.** If after the first `n` events the egress certifier holds fault `r`, every later egress tick of the
-same window writes only padding and, at the window's last bucket, publishes the record with status `notEstablished r`,
-its rows from the fault's bucket on padding. -/
-def FailClosed : Prop :=
-  ∀ (c : Config) (tr : List Event) (n : Nat) (r : Reason),
+/-- **`tr` fails closed.** If after its first `n` events the egress certifier holds fault `r`, every later egress tick
+of the same window writes only padding and, at the window's last bucket, publishes the record with status
+`notEstablished r`, its rows from the fault's bucket on padding. -/
+def ClosedAfterFault (c : Config) (tr : List Event) : Prop :=
+  ∀ (n : Nat) (r : Reason),
     let st := after (init c) (tr.take n)
     let T := c.egress.buckets
     st.shaper.certifier.fault = some r →
@@ -188,38 +202,22 @@ def FailClosed : Prop :=
               [.writeLink ⟨Array.replicate (bucketBytes c.egress) 0⟩] else []) ++
             if (k + 1) % T = 0 then [.publish ⟨c.egressLink, k / T, grid, .notEstablished r⟩ c.egress] else [])
 
+/-- **Fail-closed**, on every trace. -/
+def FailClosed : Prop := ∀ (c : Config) (tr : List Event), ClosedAfterFault c tr
+
 /-! ## (4) The issuer -/
 
-/-- **LMS signatures verify.** For a key `Lms.key` derives under parameters `Lms.Params.make` admits, every leaf below
-`2^H` signs every message, `Lms.verify` accepts the signature under the key's public key, and its encoding decodes back
-to it. -/
-def LmsCorrect : Prop :=
-  ∀ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I seed : ByteArray) (k : Lms.PrivateKey) (q : Nat)
-    (message : ByteArray),
-    Lms.Params.make N W H toy = .ok p → Lms.key p I seed = .ok k → q < 2 ^ H →
-    ∃ sig, Lms.signAt k q message = .ok sig ∧ Lms.verify p k.publicKey message sig = .ok true ∧
-      Lms.Signature.decode p sig.encode = .ok sig
-
-/-- An issuer's key: one `Lms.key` derives under parameters `Lms.Params.make` admits. -/
-def ValidKey (k : Lms.PrivateKey) : Prop :=
-  ∃ (N W H : Nat) (toy : Bool) (I seed : ByteArray), Lms.Params.make N W H toy = .ok k.params ∧
-    Lms.key k.params I seed = .ok k
-
-/-- **Every certificate the issuer returns verifies** under its key's public key. -/
+/-- **Every certificate the issuer returns verifies.** For a key `Lms.key` derives under parameters `Lms.Params.make`
+admits, every certificate `Issuer.certify` returns with that key in certifier session `session` verifies
+(`CertifiedRecord.verify`) under the parameters and the key's public key in that session. -/
 def IssuerVerifies : Prop :=
-  ∀ (i i' : Issuer) (leaf : Except String Nat) (record : Record) (direction : NetworkCheck.Direction)
-    (params : Params) (parameters : ByteArray) (deadline : Bool) (cr : CertifiedRecord),
-    ValidKey i.key → i.certify leaf record direction params parameters deadline = .ok (i', some cr) →
-    cr.verify i.key.params i.key.publicKey = true
-
-/-- **The issuer certifies at every leaf.** Given a leaf below `2^H` and a record with a head (`Issuer.prepare`
-succeeds), `Issuer.certify` returns a certificate, which verifies. -/
-def IssuerSigns : Prop :=
-  ∀ (i : Issuer) (q : Nat) (record : Record) (direction : NetworkCheck.Direction) (params : Params)
-    (parameters : ByteArray) (deadline : Bool) (prepared : NetworkCheck.RecordHead × ByteArray × ByteArray),
-    ValidKey i.key → q < 2 ^ i.key.params.H →
-    i.prepare record direction params parameters deadline = .ok prepared →
-    ∃ cr, i.certify (.ok q) record direction params parameters deadline = .ok (i, some cr) ∧
-      cr.verify i.key.params i.key.publicKey = true
+  ∀ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I seed : ByteArray) (k : Lms.PrivateKey) (session : ByteArray)
+    (refused : Array (String × NetworkCheck.Direction × Nat)) (i' : Issuer) (leaf : Except String Nat)
+    (record : Record) (direction : NetworkCheck.Direction) (params : Params) (parameters : ByteArray) (deadline : Bool)
+    (cr : CertifiedRecord),
+    Lms.Params.make N W H toy = .ok p → Lms.key p I seed = .ok k →
+    ({ key := k, session, refused } : Issuer).certify leaf record direction params parameters deadline =
+      .ok (i', some cr) →
+    cr.verify p k.publicKey session = true
 
 end Properties.CertifierDevice

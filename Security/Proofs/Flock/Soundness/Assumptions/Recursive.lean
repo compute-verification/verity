@@ -1,4 +1,4 @@
-import Proofs.Flock.Recursive.StageRead
+import Proofs.Flock.Recursive.Registrants
 
 /-!
 # V*'s bridge: the recursive audit's open obligation
@@ -16,7 +16,7 @@ files) and at the values it registers itself (the rounds' coins and the comb `co
 when the inner verifier accepts the inner transcript those commitments open to.
 
 C-Flock's definitions are still in its proofs package (`Proofs.Flock.Soundness`), and so is the recursion's model
-(`Proofs.Flock.Recursive`), so this module imports `Proofs.Flock.Recursive.StageRead`, and `Models.lean`, which the `security`
+(`Proofs.Flock.Recursive`), so this module imports `Proofs.Flock.Recursive.Registrants`, and `Models.lean`, which the `security`
 package builds without `security_proofs`, does not import it: `Proofs.Flock.Recursive` does.
 -/
 
@@ -36,8 +36,10 @@ units, the rounds' commitments and coins) and every registration `R₂` of the o
 sessions read that the history does not fix, its running sums `rec-acc` and with `link_rows` its opened rows
 `rec-rows-L<level>`, sent after the last inner coin and before any session):
 
-* **they accept only an accepted inner transcript** (`Recursion.VBridge`): at all strategies of V*'s sessions there,
-  when every session's outcome `flock-verify verify --zk --registered` accepts and every session's value layer is
+* **they accept only an accepted inner transcript** (`VBridgeOff RegColl`): where no two of V*'s sessions' registrant
+  records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512 collision, which the
+  recursive guarantees answer with a registrant fork, `regFinder`), at all strategies of V*'s sessions there, when
+  every session's outcome `flock-verify verify --zk --registered` accepts and every session's value layer is
   `Good` (no wrong unit, and at every unit each registered read carries the registrant's value: the hidden circuit's
   rows as registered, `R₂`'s values, and the values V* registers itself, the coins and the comb `coef`), the messages
   `wmsg` reads from the layers hold an inner transcript the inner verifier accepts on the hidden circuit's statement
@@ -50,8 +52,8 @@ sessions read that the history does not fix, its running sums `rec-acc` and with
   wires of each `Sk i j` that some unit reads (`ReadW`) are those of the values `v j` hold `msg i v` as their round-`i`
   message (true at V* when every wire `wmsg` depends on is some unit's `io`, which is what VBridge G's
   `vbridgeRead_assembled` builds);
-* **their laws draw every such wire** (`VFullR`): each read wire of `Sk i j` is a wire of a unit whose stratum session
-  `j`'s law draws in full.
+* **their laws draw every such wire** (`VFullR`): each read wire of `Sk i j` is a wire of a unit session `j`'s law
+  draws. Every unit is drawn under the full draw, so this holds of every `Sk` (`vFullR_of_read`).
 
 Both read only the wires some unit reads: V*'s rows pad a port to whole words, and no unit reads the padding.
 
@@ -64,7 +66,7 @@ def VBridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ}
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg) : Prop :=
-  Recursion.VBridge zs dg N k Rw x wmsg ∧ VCommits zs Sk cmt ∧ VDecodesR wmsg (fun _ _ a b => a = b) Sk msg ∧
+  VBridgeOff (RegColl zs) zs dg N k Rw x wmsg ∧ VCommits zs Sk cmt ∧ VDecodesR wmsg (fun _ _ a b => a = b) Sk msg ∧
     VFullR I.r Sk
 
 end Flock.Assumptions

@@ -97,6 +97,11 @@ not what the target is), nor one whose reads, digested again by the process that
 the entry would record (the tree changed during the run: a concurrent run rewrote it), nor one after a module was imported from
 outside the tree (another tree's copy, which no recorded read covers).
 
+The task list of ``--all`` (each target and its key) is an entry too, of the request ``task-list``: it holds what any target
+could (every binding's recording, every Definition the catalog reached with what its build read, `task_list_reads`), every in-tree
+module the process imported and every binding file whole, and counts only when each is unchanged where it was, never through a
+move; a run reuses it only when every target it lists is reused that way too, and then builds no Definition.
+
 Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
 """
@@ -1541,6 +1546,12 @@ def version() -> str:
     return h.hexdigest()
 
 
+_DISTRIBUTIONS: list[str] = []
+#: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
+#: `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in another
+UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
+
+
 def key(request: dict) -> dict:
     from importlib import metadata
 
@@ -1551,13 +1562,16 @@ def key(request: dict) -> dict:
         plat = "-".join([platform.system(), platform.machine(), *platform.libc_ver()])
     finally:
         _INTERNAL.pop()
-    dists = sorted(f"{d.metadata['Name']}=={d.version}" for d in metadata.distributions())
+    if not _DISTRIBUTIONS:                             # read once: 20 ms a key, over 3,887 targets a minute of the run
+        dists = sorted(f"{d.metadata['Name']}=={d.version}" for d in metadata.distributions())
+        _DISTRIBUTIONS.append(hashlib.sha512("\n".join(dists).encode()).hexdigest())
     return {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "optimize": sys.flags.optimize,
             "platform": plat,
-            "distributions": hashlib.sha512("\n".join(dists).encode()).hexdigest(),
+            "distributions": _DISTRIBUTIONS[0],
             "path": _path_entries(_ROOT[0]) if _ROOT else list(sys.path),
             "registries": hashlib.sha256("\n".join(_REGISTRIES).encode()).hexdigest(),
-            "environment": {k: v for k, v in sorted(os.environ.items()) if k.startswith(("VERITY_", "CIRCUIT_CHECK_"))}}
+            "environment": {k: v for k, v in sorted(os.environ.items())
+                            if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED}}
 
 
 _OWN: dict[int, tuple[Any, str]] = {}
@@ -1859,10 +1873,11 @@ _RENAMED = ("modules", "enums", "present")
 _SIDE_RENAMED = ("units", "pins")
 
 
-def lookup(cache: Path, k: dict, root: Path) -> tuple[dict, str] | None:
+def lookup(cache: Path, k: dict, root: Path, moved: bool = True) -> tuple[dict, str] | None:
     """(report, entry id) of an entry with key ``k`` whose every recorded read is unchanged under ``root``, else None.  An entry
     found only where its modules moved (`_moved`) is stored again with its reads renamed to where they are, digested now (what
-    a run would record), so that a later edit of a moved module is told from a move."""
+    a run would record), so that a later edit of a moved module is told from a move; not with ``moved`` false, which `_moved`
+    needs for the modules this process imported (`_loaded`)."""
     d = _dir(cache, k)
     if not d.is_dir():
         return None
@@ -1880,6 +1895,8 @@ def lookup(cache: Path, k: dict, root: Path) -> tuple[dict, str] | None:
         now = _digests(root, {k: list(v) for k, v in rec.items()})
         if now == rec:
             return e["report"], p.stem
+        if not moved:
+            continue
         renamed: dict[str, str] = {}
         _INTERNAL.append(True)
         try:
@@ -1901,6 +1918,30 @@ def seen(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | Non
     return _digests(root, got, fresh=True)
 
 
+def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
+    """What the task list's entry holds (`cli.run`): what any target could hold (`attributed` over every binding's recording and
+    every root), every in-tree module this process imported, and every binding file whole.  More than the union of the targets'
+    reads: a new binding entry, a new Definition in a registry module or a new module an enumerated package lists changes the
+    list without changing what any target read."""
+    fr = Frame()
+    for f in _PRODUCED.values():
+        fr.merge(f)
+    got = attributed(fr, (), roots)
+    _INTERNAL.append(True)
+    try:
+        root = _ROOT[0]
+        by_file: dict[str, str] = {}
+        for name, m in list(sys.modules.items()):
+            if isinstance(f := getattr(m, "__file__", None), str):
+                by_file.setdefault(os.path.abspath(f), name)
+        mods = {name for f, name in by_file.items() if _rel(f) is not None and (p := _resolve(root, name)) is not None
+                and os.path.realpath(p) == os.path.realpath(f)}
+        units = {f"{n}#*" for f in _unit_files() if (n := _named_file(f, ".py", by_file)) is not None}
+    finally:
+        _INTERNAL.pop()
+    return {**got, "modules": sorted(set(got["modules"]) | mods), "units": sorted(set(got["units"]) | units)}
+
+
 def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: dict,
           worker: dict[str, dict[str, str | None]] | None = None) -> str | None:
     """Record ``report`` under ``k`` with its reads' digests; None, and nothing stored, when ``worker`` (`seen` in the process that
@@ -1920,5 +1961,5 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
 
 
 __all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
-           "produced", "recorded_pins", "recording", "registries", "seen", "store", "trace", "tracing", "unit_files", "untraced",
-           "version"]
+           "produced", "recorded_pins", "recording", "registries", "seen", "store", "task_list_reads", "trace", "tracing",
+           "unit_files", "untraced", "version"]

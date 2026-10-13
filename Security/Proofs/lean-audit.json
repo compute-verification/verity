@@ -1,5 +1,13 @@
 {
- "roots": ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier", "Proofs.Flock"],
+ "roots": [
+  "Proofs.Core",
+  "Proofs.Nci",
+  "Proofs.Pous",
+  "Proofs.Pouw",
+  "Proofs.NetworkCertifier",
+  "Proofs.Flock",
+  "Proofs.Accounting"
+ ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
   "Proofs.Pous.Targets": "open targets: every pinned statement as a sorry stub",
@@ -25,8 +33,8 @@
  },
  "compile_time": {
   "Proofs.Flock.Soundness.Refine.Walk": {
-   "why": "walk_step, the tactic that steps through a successful computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "c8e7697dd01461092e5dda778796c82404aa9f23e79fa67b532c5123f96f8333"
+   "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
+   "digest": "01a97925bc0546457b627fff99e05739c3739fe9a1366622621c7d23578e162e"
   }
  },
  "layers": {
@@ -220,12 +228,12 @@
   "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
   "VCVio": "d8c0d42db31325df600f165e6fc5fd1ad5fb38da84ea81d52fcb92cc4dd73d22",
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
-  "batteries": "5a2410f298248ea44bf4d2fba0cf6fa143c56a185230ef6f3d1d6e22effd58f8",
+  "batteries": "83d6487a6f41072714347b765ec3e233bad10d8b25d822e8543ab47531f610be",
   "cslib": "4fbda9ca9a3ebb5d9e1215ea17eca3ef36fb846b72ef716232fca52747cbfdb1",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "de8969dc06d080acee14850be02114ed029a0ba8836fdaf3bd3eeb5b84952eb8",
+  "mathlib": "4b2e37339cdaa30627ba7f4ee6e6e866f14180ea06b549d7e9a386ea89e52601",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
-  "toolchain": "03fc7216d49ae2ec6e8f09309ddd544a4ef90a222fd4856c142919aa4aac2ae0"
+  "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
  }
 }

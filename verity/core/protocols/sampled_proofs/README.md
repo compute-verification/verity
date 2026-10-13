@@ -67,8 +67,13 @@ The proof service runs the two-stage audit whose first stage checks every proof 
 with `check="all"`). Not built yet: a second draw (a count `k`), the security function and its red-team review
 (decision 41), and composition checks such as PoUW's tiles per proof unit matching this partition (the IR checks
 refinement, `verity.ml.circuits.partition.validate_refinement`).
-Serving does not yet commit with the scheme the audit proves: run A0 registers a stand-in, a fresh commitment to values
-captured from serving, and says so (`window.kind = "stand-in"`).
+Serving's record is not yet the scheme the audit proves: run A0 registers a stand-in, a fresh commitment to values
+captured from serving, and says so (`window.kind = "stand-in"`). Run A5 (`benchmarks/one_stage/a5.py`) registers a stand-in
+too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
+(`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
+those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any draw are
+`served`: serving's own commitment, with no claim that they hold the values under the vllm-v1 roots. A deferred window becomes
+`served` once serving's record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vllm-v1 SHA-256 leaves.
 
 ## Where things are
 
@@ -105,8 +110,9 @@ captured from serving, and says so (`window.kind = "stand-in"`).
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
   verifier.
 - **The users.** C-Flock draws and checks the draw in its Lean verifier and proves the drawn units. The vLLM integration
-  commits serving rows with the registration and served domains of `one_stage` (`verity_vllm.commit.serving_rows`); its
-  replay challenge is its own (`verity_vllm.commit.challenge`).
+  commits serving rows with the registration and served domains of `one_stage` (`verity_vllm.commit.serving_rows`, in the
+  Commit or from a deferred Commit's bundle by `verity_vllm.pipeline.deferred_rows`); its replay challenge is its own
+  (`verity_vllm.commit.challenge`).
 
 Tests: `uv run tools/verity/check/suites.py verity-sampled-proofs`.
 
@@ -191,7 +197,9 @@ named with each. A rule leaves this list in the change whose Lean states it.
 - The receipt is `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier": ..., "received":
   "<UTC, %Y-%m-%dT%H:%M:%SZ>"}`, and the draw names it.
 - The verifier holds its own public file (scheme, roots, their domains, its instance count) to the record
-  (`matches_public`).
+  (`matches_public`). That those roots, domains and instance count are the proved rows' is flock-verify's check of the
+  public file (`checkPublic`), stated deterministically by the Lean guarantee
+  `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
 - `window` is provenance only: `served` roots are what serving committed, and `stand-in` roots a fresh commitment to
   values captured from serving, whose link to the served root is provenance, not proof.
 - A served root's domain (`served_domain`, agreed with vllm-serving-commit) binds the program, the partition, the port,

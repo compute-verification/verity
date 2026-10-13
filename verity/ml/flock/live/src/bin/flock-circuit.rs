@@ -5,6 +5,7 @@
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
+//!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --statement-digest HEX --verifier ADDR [--dump F])   (`stacked`)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
 //! `b || c`, the output rows' too; no row, no salt, no output word) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
@@ -4678,6 +4679,108 @@ fn refuse(why: String) -> ! {
     std::process::exit(2);
 }
 
+const STACKED_TABLE: &str = "stacked";
+const STACKED_DOMAIN: &str = "flock-circuit/stacked/fast100/rep0";
+
+/// R, the stacked table (`--table`): 2^m cells, cell i at byte i >> 3, bit i & 7, packed 128 cells an element.
+fn stacked_table(path: &str) -> (usize, Vec<u8>, Vec<F128>) {
+    let b = std::fs::read(path).unwrap_or_else(|e| refuse(format!("--table {path}: {e}")));
+    let m = (b.len() * 8).trailing_zeros() as usize;
+    if !b.len().is_power_of_two() || !(22..=35).contains(&m) {
+        refuse(format!("--table {path}: {} bytes, not 2^m cells with 22 <= m <= 35 (fast100)", b.len()));
+    }
+    let word = |c: &[u8]| u64::from_le_bytes(c.try_into().unwrap());
+    let z = b.chunks_exact(16).map(|c| F128::new(word(&c[..8]), word(&c[8..]))).collect();
+    (m, b, z)
+}
+
+/// `--points`: `{"x": [x_0, x_1, ...]}`, claim k's x = its point[6:] (`rec_sparse.RegisteredClaim.x`), each coordinate an
+/// `f128_hex`.
+fn stacked_points(m: usize) -> Vec<Vec<F128>> {
+    let path = arg("--points", "points.json");
+    let v: Value = std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
+        .unwrap_or_else(|e| refuse(format!("--points {path}: {e}")));
+    let xs = v["x"].as_array().filter(|a| !a.is_empty()).unwrap_or_else(|| refuse(format!("--points {path}: no claim points")));
+    xs.iter().map(|x| {
+        let x: Vec<F128> = x.as_array().into_iter().flatten().map(|h| {
+            let u = h.as_str().filter(|s| s.len() == 32).and_then(|s| u128::from_str_radix(s, 16).ok())
+                .unwrap_or_else(|| refuse(format!("--points {path}: {h} is not an f128_hex")));
+            F128::new(u as u64, (u >> 64) as u64)
+        }).collect();
+        if x.len() != m - 6 {
+            refuse(format!("--points {path}: a point's x of {} coordinates, R's wants m - 6 = {}", x.len(), m - 6));
+        }
+        x
+    }).collect()
+}
+
+/// `stacked`: candidate 3's registered opening, `rec_algebra.Shape(m, 6, claims, salt_len=0, opening_only=True)`. R is committed
+/// under plain SHA-512 leaves at fast100(m) and opened at the relay's claim points by upstream's batch opening, on the live stream
+/// `stacked/rep0`, bound as a rep is (`bind_statement`'s label, the inner statement's digest, R's cap): the circuit reps' own
+/// statement digest (`--statement-digest`, which the firewall holds to theirs), so the stream's first coin follows the
+/// statement's META and the circuit registration it binds; no zerocheck or lincheck precedes it.
+///
+///   flock-circuit stacked --table R.bin --root-out ROOT.json                         R's registered root, at staging
+///   flock-circuit stacked --table R.bin --points P.json --statement-digest HEX --verifier ADDR [--dump F]   the opening
+///
+/// `ROOT.json` is `{m, cap, digest}` in hex, the cap table `stacked`'s Commit root. The opening commits R again (plain leaves
+/// take no salt, so to the same cap), sends only `Open`, its rounds, `Proof` and `Finish`, and its proof is bincode((Commitment,
+/// R1csProofLigerito)) with an empty zerocheck and lincheck: a circuit rep's container, as V* decodes it.
+fn stacked() {
+    use flock_transcript::challenger::Challenger;
+    let (m, raw, z) = stacked_table(&arg("--table", "R.bin"));
+    let pcs = PcsParams { merkle_hash: HashKind::Sha512, ..params(m, LigeritoProfile::Fast100) };
+    let t0 = Instant::now();
+    let (cm, pd) = flock_core::pcs::commit::commit(&z, &pcs);
+    let root = merkle_digest_bytes(&cm.cap).to_vec();
+    let digest = Sha512::digest(&raw)[..32].to_vec();
+    let mut out = json!({"m": m, "digest": hex(&digest), "t.commit": t0.elapsed().as_secs_f64()});
+    let root_out = arg("--root-out", "");
+    if !root_out.is_empty() {
+        std::fs::write(&root_out, json!({"m": m, "cap": hex(&root), "digest": hex(&digest)}).to_string()).expect("--root-out");
+        println!("STACKED\t{out}");
+        return;
+    }
+    let xs = stacked_points(m);
+    let sd = arg("--statement-digest", "");
+    let statement_digest: Vec<u8> = (sd.len() == 64 && sd.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then(|| (0..32).map(|i| u8::from_str_radix(&sd[2 * i..2 * i + 2], 16).unwrap()).collect())
+        .unwrap_or_else(|| refuse(format!("--statement-digest {sd:?}: the inner statement's 32-byte digest, 64 hex digits")));
+    let addr = arg("--verifier", "127.0.0.1:7500");
+    let t = shared(TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the challenger at {addr}: {e}"))));
+    let mut ch = LiveChallenger::new(t.clone(), STACKED_TABLE, 0, STACKED_DOMAIN.as_bytes()).unwrap_or_else(|e| refuse(format!("Open: {e}")));
+    ch.observe_label(b"flock-r1cs-v0");
+    ch.observe_bytes(&statement_digest);
+    ch.observe_bytes(&root);
+    let lc = pcs.ligerito_prover_config().unwrap_or_else(|e| refuse(e));
+    let refs: Vec<&[F128]> = xs.iter().map(Vec::as_slice).collect();
+    let pre: Vec<Option<&[F128]>> = vec![None; refs.len()];
+    let tp = Instant::now();
+    let pcs_open = flock_core::pcs::open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding(
+        z, &pd, &cm, &refs, &pre, &[], &flock_core::zerocheck::PaddingSpec::dense(m), &lc, pcs.opening_grinding(), &mut ch);
+    let zerocheck = flock_core::zerocheck::ZerocheckProof { round1_ab: vec![], round1_c: vec![], multilinear_rounds: vec![],
+        final_a_eval: F128::ZERO, final_b_eval: F128::ZERO, final_c_eval: F128::ZERO, grinding_nonces: vec![] };
+    let lincheck = flock_core::lincheck::LincheckProof { rounds: vec![], z_partial: vec![], matrix_evals: vec![], grinding_nonces: vec![],
+        comb_partial: vec![] };
+    let bytes = bincode::serialize(&(&cm, &R1csProofLigerito { zerocheck, lincheck, pcs_open })).unwrap();
+    out["t.open"] = json!(tp.elapsed().as_secs_f64());
+    out["proof_bytes"] = json!(bytes.len());
+    let dump = arg("--dump", "");
+    if !dump.is_empty() {
+        std::fs::write(&dump, &bytes).expect("--dump");
+    }
+    match call(&t, Req::Proof { table: STACKED_TABLE.into(), rep: 0, bytes }) {
+        Ok(Resp::Ok) => {}
+        other => refuse(format!("Proof: {other:?}")),
+    }
+    out["verdict"] = match call(&t, Req::Finish) {
+        Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap_or(Value::String(v)),
+        Ok(Resp::Ok) => Value::Null,
+        other => refuse(format!("Finish: {other:?}")),
+    };
+    println!("STACKED\t{out}");
+}
+
 fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     if cmd == "replay-coins" {
@@ -4687,6 +4790,9 @@ fn main() {
             Err(e) => { println!("COINS\t{}", json!({"replayed": false, "why": e})); std::process::exit(1) }
         }
         return;
+    }
+    if cmd == "stacked" {
+        return stacked();
     }
     let tb = Instant::now();
     let c = load_composite(&arg("--circuit", "circuit.txt"));
@@ -4789,6 +4895,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ..."),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ..."),
     }
 }

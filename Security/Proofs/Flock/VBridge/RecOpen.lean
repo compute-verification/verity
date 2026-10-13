@@ -8,10 +8,10 @@ import Proofs.Flock.Soundness.Refine.Paths
 `_steps` of `verity_flock.rec_open`'s `RecOpen_v3` (rec-step3 `273017068`, `rec_open.py:197-200`) and
 `RecOpen_v4` (#1347, `:200-203`), as the verifier's builder (`Flock.HmNets`) states it. First the consistency term:
 `residual_forms` at `cons_structure(LANES)` over the row's elements and `acc`'s first two (`row + acc[:256]`) and the
-coefficients `coef`, then `_climb` at the directions `dirs[:16]` (`climbRow`). `out` is the climb; `acc_out` is the two
+coefficients `coef`, then `_climb` at the directions `dirs[:32]` (`climbRow`). `out` is the climb; `acc_out` is the two
 residuals and then `acc[256:]`. The two versions share `_steps` and `cons_structure`. v4's `dirs` is 64 words where
 v3's is 8, and v4 reads `coef` and `dirs` as values the verifier registers where v3 takes them public; `recOpen` takes
-the ports as forms and reads only `dirs[:16]`, so everything here holds for both.
+the ports as forms and reads only `dirs[:32]`, so everything here holds for both.
 
 `sound_recOpen`: whenever the rows hold, if the ports carry the bytes of the row's elements `r`, of `acc`'s first two
 elements `a` and the rest of `acc`, of the coefficients `c`, of 64-byte siblings, and the directions are the position's
@@ -37,10 +37,10 @@ def consStructure (LANES : ℕ) : GfS where
     { mul := (List.range LANES).map fun l => (LANES + r * LANES + l, l), add := [Term.w (LANES + r)] }
 
 /-- `RecOpen_v3`'s and `RecOpen_v4`'s `_steps` (`rec_open.py:197-200` in v3): the residuals `t` over
-`row + acc[:256]` and `coef` first, then `_climb` at `dirs[:16]`; the result is `(out, t + acc[256:])`. -/
+`row + acc[:256]` and `coef` first, then `_climb` at `dirs[:32]`; the result is `(out, t + acc[256:])`. -/
 def recOpen (LANES H : ℕ) (row aux acc coef dirs : List Lin) : M (List Lin × List Lin) := do
   let t ← residualForms (consStructure LANES) (row ++ acc.take 256) coef
-  let out ← climbRow H row aux (dirs.take 16)
+  let out ← climbRow H row aux (dirs.take 32)
   pure (out, t ++ acc.drop 256)
 
 /-! ## What it computes -/
@@ -227,13 +227,13 @@ theorem resVal_consStructure (LANES : ℕ) (r a c : Array F128) (hr : r.size = L
 /-! ## The opening -/
 
 /-- **V*'s opening computes the verifier of record's climb and the opening's consistency term.** For a Merkle scheme
-`ms` whose node is `SHA-512(l ‖ r)` and `H ≤ 16` levels (`rec_open._check`), whenever the rows of
+`ms` whose node is `SHA-512(l ‖ r)` and `H ≤ 32` levels (`rec_open._check`), whenever the rows of
 `recOpen LANES H row aux acc coef dirs` hold under `z`: if `row` carries the bytes of the `LANES` elements `r`, `acc`
 those of two elements `a` and then `rest`, `coef` those of `c`, the `H` sibling forms of `aux` carry 64-byte siblings
 `ss`, and the direction bit at level `h < H` is bit `h` of the position `idx`, then `out` carries
 `Flock.climb ms (SHA-512(rowBytes r)) idx ss` and 64 zero bytes (`rec_open.expected` of that node), and `acc_out` carries
 the bytes of `consTerm` at `k = 0, 1`, then `rest` (`rec_open.acc_ref`). -/
-theorem sound_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 16)
+theorem sound_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
     (row aux acc coef dirs : List Lin) :
     Sound (recOpen LANES H row aux acc coef dirs) fun z o =>
       ∀ (r a c : Array F128) (rest : ByteArray) (idx : ℕ) (ss : List ByteArray),

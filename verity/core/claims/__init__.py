@@ -18,7 +18,8 @@ from typing import Literal
 __all__ = ["ENTRIES", "INSTANCES", "PROPERTIES", "Entry", "Instance", "Property", "assumption", "get"]
 
 Kind = Literal["guarantee", "assumption", "model"]
-Standing = Literal["standard", "algebraic", "proven", "conjectured"]
+# ``conjectured`` is for mathematics only; ``measured``: an assumption about a device, falsified by a measurement (Daniel, 8 Oct)
+Standing = Literal["standard", "algebraic", "proven", "conjectured", "measured"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,16 +110,80 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "hm96-sha256/v1 and hm96-sha512/v1 (their hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
+    # the bandwidth audit v0's device (Bandwidth.Guarantees.AuditRO, Security/Models/Accounting/Guarantees/Bandwidth.lean): the
+    # guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is such;
+    # a co-audited set is one such device over its members' stores (Bandwidth.Guarantees.AuditSet), and side sources that may
+    # carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
+    Entry("bandwidth-device", "model",
+          "Bandwidth device model: the bound is stated for a co-audited set of whole PCIe-only GPUs (no MIG slices, no NVLink; "
+          "NVLink domains are to be certified as sets later) running simultaneous windows over pairwise-distinct stores, with "
+          "every device that could hold a copy of a store in the set or isolated, so that the set's side sources are its "
+          "external links. The set is a chip whose on-chip state, device memory and side sources are laid out before the "
+          "verifier's fresh seed, which reads device memory only through counted ingress, computes every tag on chip, and "
+          "commits to the tags before the sample is drawn. A device whose side sources may carry tags a peer computed is "
+          "covered by AuditRelay instead, at the deficit c + m * b for m relayed blocks", "Bandwidth device"),
+    # falsified by an on-chip working set above S_chip: a pointer-chase sweep on the stated device finding more bytes served
+    # faster than device memory (registers, shared memory and L1, L2, any other SRAM), or a datasheet listing more
+    Entry("bandwidth-s-chip", "assumption",
+          "Bandwidth on-chip state: on the stated device, all on-chip storage (registers, shared memory and L1, L2 and any "
+          "other SRAM) holds at most S_chip bits", "Bandwidth S_chip", "measured"),
+    # falsified by a measured transfer into the device above cap_side during a window: host-to-device copies over PCIe, peer
+    # copies over NVLink or PCIe, and any other path into the chip that bypasses device memory, run at their peak
+    Entry("bandwidth-side-cap", "assumption",
+          "Bandwidth side channels: during a window of length T, the stated device receives at most cap_side * T bits from "
+          "outside its device memory and chip (PCIe from the host and its devices, peer links)", "Bandwidth side cap",
+          "measured"),
+    # falsified by a faster rebuild of one block of E from setup: for P2 blocks, the measurement behind pous-ring-speed (a
+    # root's 16,447 sequential squarings, about 2 ms)
+    Entry("bandwidth-regen-time", "assumption",
+          "Bandwidth regeneration: rebuilding one block of E from setup takes at least R_regen on the stated device, so a "
+          "window of length T rebuilds at most T / R_regen blocks per device that rebuilds", "Bandwidth regeneration time",
+          "measured"),
+    Entry("bandwidth-instantiation", "assumption",
+          "The blocks of E, the PoUS encoding's, are no easier to hold information about than uniformly random blocks, "
+          "except by rebuilding them from setup", "Bandwidth instantiation", "conjectured"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean); no attestation hardware backs it
+    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean) states its part about one run; no
+    # attestation hardware backs it
     Entry("trusted-nebius-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host",
-          "Trusted Nebius host", "standard"),
+          "An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware on a machine "
+          "its host provider runs and the prover doesn't control; it runs its stated code on its Nebius host, and its host "
+          "never restores an earlier copy of the state the device keeps there", "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
+    # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
+    # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation
+    Entry("pous-ring-device", "model",
+          "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
+          "setup, the session and its rounds, with one session per audit and the memory challenger's coins drawn online, "
+          "after its state is fixed", "PoUS ring device"),
+    # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
+    # the timing red team's floor, note:20261004T2102Z-report-relay-p2-redteam-timing
+    # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
+    # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
+    # stated device falsifies it
+    Entry("pous-ring-speed", "assumption",
+          "PoUS ring speed: on the stated device (up to 8 cores of one chiplet cooperating, each at least as slow as a "
+          "Zen 5 core at 5.7 GHz with full-rate IFMA), within Δ + RTT (at most 854 µs) no server finishes a 16,447th "
+          "sequential multiplication round (one root's depth, so D = 16,446), more than Q = 2^20 key queries or more than "
+          "L = 2^64 ring operations per answer; measured: a cooperating 8-core 16,448-bit squaring takes at least 103.6 ns, "
+          "so 16,447 rounds take 1.995× Δ + RTT, and 1.64× and 1.25× under the timing red team's sync model",
+          "PoUS ring speed", "measured"),
+    Entry("pous-ring-instantiation", "assumption",
+          "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
+          "than p2ring with a uniformly random odd labeling and uniformly random keys", "PoUS ring instantiation",
+          "conjectured"),
+    # `Pouw.PearlC.GγPerCoin (W1.w1Priced dv salt)` (Security/Definitions/Pouw/PearlC/W1Stop.lean): the one open hypothesis
+    # of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced); it implies
+    # the γ-gap property Gγ itself (Pouw.PearlC.W1Stop.gγ_of_withStop)
+    Entry("pouw-gamma-per-coin", "assumption",
+          "Pearl-C's γ-gap property with the budget per coin, at W1 priced (its arithmetic at W1's instruction prices and "
+          "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
+          "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
+          "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
 )}
 
 

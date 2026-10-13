@@ -1,8 +1,8 @@
-# V*'s circuits as executable Lean (lane rec-v0's outer statement): each Ligerito level's `RecOpen{LANES, H}` statement and
-# each `InnerRepCheck{S}` part of the algebra, emitted as the `flock-circuit` file `Flock.Circuit` parses. Code, not
-# analysis: Lean core and C-Flock's verifier (its circuit builder `Flock.HmNets`, hashes and canonical JSON), no Mathlib.
+# V*'s `vstar` command and its difftest port (lane rec-v0's outer statement). The library `VStar` (each Ligerito level's
+# `RecOpen{LANES, H}` statement and each `InnerRepCheck{S}` part of the algebra, emitted as the `flock-circuit` file
+# `Flock.Circuit` parses) is in C-Flock's verifier's package, whose `Flock.RecVStar` holds a V* statement's circuit file to it.
 name = "core_vstar"
-defaultTargets = ["VStar", "vstar", "vstar-difftest"]
+defaultTargets = ["vstar", "vstar-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -15,9 +15,6 @@ path = "../flock"
 [[require]]
 name = "verity_difftest"
 path = "../../difftest/lean"
-
-[[lean_lib]]
-name = "VStar"
 
 [[lean_exe]]
 name = "vstar"

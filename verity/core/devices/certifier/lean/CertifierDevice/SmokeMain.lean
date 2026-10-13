@@ -4,9 +4,10 @@ import CertifierDevice.Issuer
 loopback link and server: a peer that has written two requests on the link, and a server that answers each request
 (`GET /s`) with one event, at position s − 1, once it is written. Two windows of five 20 ms buckets; it fails unless all
 four records are published complete, the egress grids carry both events, and the link got every bucket's bytes. Then it
-certifies the four records with a toy key of four leaves, reserved from the world's leaf counter, and fails unless each
-certificate verifies and a fifth reservation is refused and listed. Run by hand (`lake exe certifier-device-smoke`); it
-reads the wall clock, so no test runs it. -/
+certifies the four records with a toy key of four leaves, reserved from the world's leaf counter, in a session the world
+starts once, and fails unless each certificate verifies in that session and not in another, a fifth reservation is
+refused and listed, and a second issuer in the same session is refused at its start. Run by hand
+(`lake exe certifier-device-smoke`); it reads the wall clock, so no test runs it. -/
 
 open CertifierDevice NetworkCertifier
 
@@ -38,6 +39,7 @@ def main : IO UInt32 := do
   let wrote ← IO.mkRef ByteArray.empty
   let records ← IO.mkRef (#[] : Array Record)
   let next ← IO.mkRef 0
+  let started ← IO.mkRef (#[] : Array ByteArray)
   let now ← IO.monoNanosNow
   let config : Config := { egress := egressParams, ingress := ingressParams, syncSet, syncs := #[sync, sync],
                            windows := 2, origin := now + 20 * ms, slack := 15 * ms }
@@ -51,7 +53,11 @@ def main : IO UInt32 := do
       let q ← next.get
       if q ≥ 4 then return .error "all 2^2 leaves are used"
       next.set (q + 1)
-      return .ok q }
+      return .ok q,
+    start := fun s => do
+      if (← started.get).contains s then return .error "session already started"
+      started.modify (·.push s)
+      return .ok () }
   run world config
   let records ← records.get
   let wrote ← wrote.get
@@ -66,16 +72,29 @@ def main : IO UInt32 := do
     wrote.size == 2 * egressParams.buckets * egressParams.allocation * egressParams.frameBytes
   let lms ← IO.ofExcept (Lms.Params.make 8 4 2 true)
   let key ← IO.ofExcept (Lms.keygen lms "smoke!!!".toUTF8)
-  let mut issuer : Issuer := { key }
+  let session := ⟨Array.replicate 32 7⟩
+  let other := ⟨Array.replicate 32 8⟩
+  let mut issuer : Issuer := { key, session }
   let mut verified := 0
+  let mut elsewhere := 0
   for r in records ++ records.extract 0 1 do
     let (direction, params, ss) := if r.link == config.egressLink then (.egress, egressParams, some syncSet)
       else (.ingress, ingressParams, none)
     let (i, c?) ← certifyWith world issuer r direction params (← IO.ofExcept (parameters params ss))
     issuer := i
     if let some c := c? then
-      if c.verify lms key.publicKey then verified := verified + 1
-  IO.println s!"certified: {verified} verified, {issuer.refused.size} refused"
-  let ok := ok && verified == 4 && issuer.refused.size == 1
+      if c.verify lms key.publicKey session then verified := verified + 1
+      if c.verify lms key.publicKey other then elsewhere := elsewhere + 1
+  let mut again : Issuer := { key, session }
+  let mut reissued := 0
+  for r in records.extract 0 1 do
+    let (i, c?) ← certifyWith world again r .egress egressParams
+      (← IO.ofExcept (parameters egressParams (some syncSet)))
+    again := i
+    if c?.isSome then reissued := reissued + 1
+  IO.println s!"certified: {verified} verified, {elsewhere} in another session, {issuer.refused.size} refused; \
+    a second run of the session: {again.refused.size} refused"
+  let ok := ok && verified == 4 && elsewhere == 0 && issuer.refused.size == 1 && reissued == 0 &&
+    again.refused.size == 1
   IO.println (if ok then "smoke: PASS" else "smoke: FAIL")
   IO.Process.exit (if ok then 0 else 1)

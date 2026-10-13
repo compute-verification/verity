@@ -8,8 +8,9 @@ given.
 
 The analysis states its assumptions about the traces a `World` produces, not about these functions: to Lean's logic an
 `IO` action is opaque. Those are the verifier's coins (A3, `UniformRandomBytes`, and A5 for the window secret), the clock's
-drift against real time, and that an LMS leaf state is never rolled back. Everything else a `World` returns (link bytes,
-a refused connection, an unpublished record) is adversarial, and a device fails closed on it.
+drift against real time, and `trusted-nebius-host` for a signer's state (an LMS key's next leaf and the session ids it
+has started), which is state the device keeps on its host. Everything else a `World` returns (link bytes, a refused
+connection, an unpublished record) is adversarial, and a device fails closed on it.
 -/
 
 namespace Core
@@ -37,7 +38,9 @@ window, its record and grid parameters).
 - `connect`: a new connection upstream, or the reason it was refused.
 - `publish`: hand an output to the service.
 - `reserve`: the next unused LMS leaf, which the leaf state has advanced past on disk before this returns, or the reason
-  the signer refuses (missing, another key's, behind its journal, held by another signer). -/
+  the signer refuses (missing, another key's, behind its journal, held by another signer).
+- `start s`: session `s` recorded as started in the signer's state on disk before this returns, or the reason the signer
+  refuses (`s` already started, or the same refusals as `reserve`). -/
 structure World (Out : Type) where
   coins : Nat → IO ByteArray
   clock : IO Nat
@@ -46,6 +49,7 @@ structure World (Out : Type) where
   connect : IO (Except String Conn)
   publish : Out → IO Unit
   reserve : IO (Except String Nat)
+  start : ByteArray → IO (Except String Unit)
 
 /-- The operating system's randomness, as A3 states it: `IO.getRandomBytes`. -/
 def World.coinsOS (n : Nat) : IO ByteArray := IO.getRandomBytes n.toUSize

@@ -1,6 +1,7 @@
 import Definitions.Pous.Accounting.Params
 import Definitions.Pous.Model.FreeBlocks
 import Definitions.Pous.Model.M1p
+import Models.Pous.Assumptions.P2
 
 /-!
 # The `m1p` statements at P2's parameters (trusted)
@@ -10,10 +11,14 @@ permutations of `[0, p)`, forward queries only), at the block counts, widths and
 against, in namespace `Pous.Guarantees` with the rest. The proofs are in `Security/Proofs/Pous/P2/`
 (`Pous.SecurityProofs.P2MeetsM1pB19Uncond` and the others in `Security/Proofs/Pous.lean`); a docstring's
 `lean/submissions/efficient-crypto/…` path names the store draft each was graded from. A seventh,
-`P2SlackFamilyFreeBlocks` (the sampled setup's free blocks), is proved in `Security/Proofs/Pous/FreeBlocks/`.
+`P2SlackFamilyFreeBlocks` (the sampled setup's free blocks), is proved in `Security/Proofs/Pous/FreeBlocks/`. Two more,
+`P2SlackFamilyWide` and `P2SlackFamilyFreeBlocksWide`, carry the families from `2^23` to `2^64` blocks
+(`Security/Proofs/Pous/P2/Wide.lean`). The last, `P2RingAuditSecureOfReduces`, carries the `m1p` row to P2 in the ring
+model under the reduction the spec states.
 
-Each is a theorem about `m1p` only, not about the concrete P2: nothing here models square–mask–square, SHAKE256, roots
-or time, so none of them says the deployed P2 is secure.
+All but the last are theorems about `m1p` only, not about the concrete P2: none models square–mask–square, SHAKE256,
+roots or time. The last reaches square–mask–square only in the ring model (`p2ring`) and only under its hypothesis, a
+named conjecture. So none of them says the deployed P2 is secure.
 -/
 
 namespace Pous.Guarantees
@@ -178,5 +183,117 @@ def P2SlackFamilyFreeBlocks : Prop :=
     let sch := m1p B 16448 (2 ^ 16448 - 21065) b
     AuditSecureFree sch (B / 100) (sch.stateBound (Params.ρ * (99 / 100)) + 128 * sch.B) D (2 ^ 20) 140
       (ENNReal.ofReal Params.δ) (Params.εMax + (2⁻¹ : ℝ≥0∞) ^ 129)
+
+/-! ## The families to `2^64` blocks -/
+
+/-- **Unconditional (no hypothesis): the slack rows and the `λ = 0` row for block counts from 2^8 to 2^64, at
+`ε = 2^-129`.** For every `B` with `2^8 ≤ B ≤ 2^64` and every `b` with `20·16448 ≤ 21·b` and `b ≤ 16447`,
+`m1p B 16448 (2^16448 − 21065) b` is correct, holds `W`, and is within the space bound. Every adversary holding
+`⌊ρ·|C|⌋ + λ·B` bits, with sequential reveal, `2^20` forward queries per answer and any depth, is accepted with
+probability at most `1% + 2^-129`, at:
+
+- `λ = 0`: `k = 88`;
+- `λ = 64`: `k = 96`, and `k = 95` for `B ≥ 2^10`;
+- `λ = 128`: `k = 105`, and `k = 104` for `B ≥ 2^9`;
+- `λ = 256`: `k = 128`, and `k = 127` for `B ≥ 2^10`.
+
+It is `P2SlackFamilyUncond` with `P2MeetsM1pFamilyUncond`'s `λ = 0` row, both at the error split's `2^-129`
+(`P2ErrorSplitB19Uncond` at every `B`), and with the cap `2^23` raised to `2^64`: the families' cap came only from
+the domain hypothesis `2·B·21065 ≤ 2^16448`, which holds to `2^64` (`PousP2Wide.hBc_64`), and the uniform
+certificates `g = ⌊c·B⌋ + 1` keep their `c` and margins above `2^23` (`PousP2Wide.famw_*`). So the ideal term's
+error at `k = 105` does not grow with the store: the 1% term is `c^k` for a fixed `c`, and the `2^-129` term is
+met with more room as `B` grows. Statement non-vacuity: as `P2SlackB19Uncond`, at `B = 2^19`. Scope: as
+`P2SlackB19Uncond`.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
+def P2SlackFamilyWide : Prop :=
+  ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 64 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
+    let sch := m1p B 16448 (2 ^ 16448 - 21065) b
+    sch.Correct ∧ sch.CodeHoldsW ∧ sch.SpaceBound Params.expansion ∧
+      AuditSecure sch .sequential (sch.stateBound Params.ρ) D (2 ^ 20) 88 (ENNReal.ofReal Params.δ)
+        ((2⁻¹ : ℝ≥0∞) ^ 129) ∧
+      AuditSecure sch .sequential (sch.stateBound Params.ρ + 64 * sch.B) D (2 ^ 20) 96 (ENNReal.ofReal Params.δ)
+        ((2⁻¹ : ℝ≥0∞) ^ 129) ∧
+      AuditSecure sch .sequential (sch.stateBound Params.ρ + 128 * sch.B) D (2 ^ 20) 105 (ENNReal.ofReal Params.δ)
+        ((2⁻¹ : ℝ≥0∞) ^ 129) ∧
+      AuditSecure sch .sequential (sch.stateBound Params.ρ + 256 * sch.B) D (2 ^ 20) 128 (ENNReal.ofReal Params.δ)
+        ((2⁻¹ : ℝ≥0∞) ^ 129) ∧
+      (2 ^ 9 ≤ B → AuditSecure sch .sequential (sch.stateBound Params.ρ + 128 * sch.B) D (2 ^ 20) 104
+        (ENNReal.ofReal Params.δ) ((2⁻¹ : ℝ≥0∞) ^ 129)) ∧
+      (2 ^ 10 ≤ B →
+        AuditSecure sch .sequential (sch.stateBound Params.ρ + 64 * sch.B) D (2 ^ 20) 95 (ENNReal.ofReal Params.δ)
+          ((2⁻¹ : ℝ≥0∞) ^ 129) ∧
+        AuditSecure sch .sequential (sch.stateBound Params.ρ + 256 * sch.B) D (2 ^ 20) 127 (ENNReal.ofReal Params.δ)
+          ((2⁻¹ : ℝ≥0∞) ^ 129))
+
+/-- **The sampled setup's free blocks, for block counts from 2^8 to 2^64.** `P2SlackFamilyFreeBlocks` with the cap
+`2^23` raised to `2^64`, by the same certificate (`g = ⌊0.9576·B⌋ + 1`) and the domain hypothesis at `2^64`
+(`PousP2Wide.p2_slack_family_free_blocks_wide`): the `k = 140` audit with at most `⌊B/100⌋` free blocks
+accepts every adversary holding `⌊ρ_eff·|C|⌋ + 128·B` bits, `ρ_eff = 18/19 · 99/100`, with probability at most
+`1% + 2^-128 + 2^-129`. The sampled setup it pairs with checks `s = 8,828` blocks whatever `B` is. Scope: as
+`P2SlackB19Uncond`.
+
+Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
+def P2SlackFamilyFreeBlocksWide : Prop :=
+  ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 64 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
+    let sch := m1p B 16448 (2 ^ 16448 - 21065) b
+    AuditSecureFree sch (B / 100) (sch.stateBound (Params.ρ * (99 / 100)) + 128 * sch.B) D (2 ^ 20) 140
+      (ENNReal.ofReal Params.δ) (Params.εMax + (2⁻¹ : ℝ≥0∞) ^ 129)
+
+/-! ## From the `m1p` row to P2 in the ring model -/
+
+/-- **The bridge: the reduction the spec states gives the weak form, at every `(D, Q, L)`.** If every
+`⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded responder against `p2ring (2^19) 16448 (2^16448 − 21065) 16432` at 105 challenges is
+matched up to `2^-130` by an `m1p` responder with `128` more bits per block and `2^20` forward queries per answer
+(`P2RingReducesToM1p`), then P2 in the ring model accepts every such responder with probability at most
+`1% + 2^-129 + 2^-130` (`P2RingAuditSecure`). It rests on no assumption beyond its hypothesis: the `m1p` side is
+`P2ErrorSplitB19Uncond`'s `λ = 128` row (`k = 104`), and one more challenge never raises the sequential audit's
+acceptance (`PousP2Bridge.pr_seqAccepts_le`).
+
+Frozen (no-function, hash): it relates two ring-model statements about the abstract P2, not the setup check's code. -/
+def P2RingAuditSecureOfReduces : Prop :=
+  ∀ D Q L, Pous.P2.Assumptions.P2RingReducesToM1p D Q L → Pous.P2.Assumptions.P2RingAuditSecure D Q L
+
+/-! ## From the per-round conjecture: the deployed whole-audit form and the graded bound -/
+
+/-- **The per-round form gives today's whole-audit form at `2^19` blocks.** If P2 in the ring model holds per round
+with floor `p` and bad-event mass `ε₀` per round (`P2RingRoundSecure p ε₀ D Q L`), and
+`(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130`, then every `⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded responder against
+`p2ring (2^19) 16448 (2^16448 − 21065) 16432` at 105 challenges is accepted with probability at most
+`1% + 2^-129 + 2^-130` (`P2RingAuditSecure D Q L`). A responder of today's game holds `⌊ρ·|C|⌋` bits at all 105
+boundaries, so it is `P2RingGradedOfRoundSecure` at `m = k = 105`. With `ε₀ = 2^-137` the condition holds at
+`p = 0.043` (`PousP2Rounds.floor_043_eps`); with any `105·ε₀ ≤ 2^-130` it fails for `p < 1 − 0.01^(1/105) ≈ 0.04291`.
+
+Frozen (no-function, hash): it relates two ring-model statements about the abstract P2, not the setup check's code. -/
+def P2RingAuditSecureOfRoundSecure : Prop :=
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ),
+    (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
+    Pous.P2.Assumptions.P2RingRoundSecure p ε₀ D Q L → Pous.P2.Assumptions.P2RingAuditSecure D Q L
+
+/-- **The graded bound: below `S₀` at `m` of `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`.** If
+P2 in the ring model holds per round with floor `p` and bad-event mass `ε₀` per round
+(`P2RingRoundSecure p ε₀ D Q L`), then for
+every block count `N` from `2^19` to `2^25`, every `k`, every payload `W` and every responder against
+`p2ring N 16448 (2^16448 − 21065) 16432` holding `Sz j` bits at boundary `j` (`VarResponderOn`, each round within
+`(D, Q, L)`), all `k` answers are correct with probability at most `(1 − p)^m + k·ε₀`, where `m` is the number of
+boundaries `j < k` at which the state is at most `S₀ = ⌊ρ·|C|⌋` bits (`lowBoundaries`). The game has no times, so
+the share of low boundaries is not a time average: reading it as one needs a statement about when challenges arrive,
+which this one doesn't make (PoUS sends each challenge when the last answer arrives).
+
+It covers schedules `Sz` fixed in advance, before the coins and the challenges are drawn, and not schedules chosen from
+the history. A server whose state size adapts to the challenges so far, or to the coins, is covered only through its
+padded schedule, `Sz j` the largest size it may hold at boundary `j` over every history, which counts fewer low
+boundaries. Adapting doesn't help a cheater pass, since later challenges are independent of the history, but a
+consumer that needs `E[(1 − p)^M]` for a random number `M` of low boundaries can't read it off this bound.
+
+Frozen (no-function, hash): it relates two ring-model statements about the abstract P2, not the setup check's code. -/
+def P2RingGradedOfRoundSecure : Prop :=
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), Pous.P2.Assumptions.P2RingRoundSecure p ε₀ D Q L →
+    ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 25 →
+      ∀ (Sz : ℕ → ℕ) (k : ℕ) (W : Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
+        (A₁ : Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
+        (A₂ : VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
+        pr (varPassesOn _ k k W A₁ A₂) ≤
+          (1 - p) ^ lowBoundaries Sz ((p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) k + k * ε₀
 
 end Pous.Guarantees

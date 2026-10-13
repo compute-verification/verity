@@ -390,11 +390,66 @@ def test_v1_publishes_at_its_cap_1_1000_from_both_price_twins(n, issue, loop):
     assert P.lookup(t, "pearl-c-sm120/v2", "cast-8.72", n, n)["published"] is not None
 
 
+LLAMA = {(6144, 4096): ("508661/135634400", "851373343/226641700000"),
+         (4096, 4096): ("1359/350750", "295006781/75957050000"),
+         (28672, 4096): ("928813/261481000", "1863165467/524322650000"),
+         (4096, 14336): ("106307/27386000", "3045273083/782596025000")}
+
+
+@pytest.mark.parametrize("nk", list(LLAMA), ids=lambda nk: f"n{nk[0]}k{nk[1]}")
+def test_v1_publishes_at_llama_3_1_8b_s_linears_from_both_price_twins(nk):
+    """A linear (n, k) that isn't a pinned cube reads its own twins, at any batch m: Llama-3.1-8B's four at the cast 8.72
+    and the cap 1/1,000 (`ServedFadd8Rev1Gamma` at FADD 8.00, `ServedRev1Gamma` at the loop price), the larger published."""
+    (n, k), (issue, loop) = nk, LLAMA[nk]
+    g = P.lookup(P.load(), "pearl-c-sm120/v1", "cast-8.72", n, k)
+    assert g["missing"] == [] and g["pins"] == ["pinned"] and (g["shape"], g["layout"]) == (None, None)
+    assert {p: v["gamma"] for p, v in g["by_price"].items()} == {"8": issue, "1047/125": loop}
+    assert (g["published"], g["published_at"]) == (loop, "1047/125")
+    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n{n}k{k}"
+
+
+def test_a_layout_reads_its_own_twins_whose_gamma_is_its_worst_linear_s():
+    t = P.load()
+    g = P.lookup(t, "pearl-c-sm120/v1", "cast-8.72", None, None, layout="llama31_8b")
+    assert g["missing"] == [] and (g["published"], g["published_at"]) == (LLAMA[(4096, 14336)][1], "1047/125")
+    assert g["by_price"]["1047/125"]["pin"] == "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b"
+    assert P.lookup(t, "pearl-c-sm120/v1", "cast-8.72", 6144, 4096, layout="qwen3_8b")["missing"] == [
+        f"a forming-credited twin of pearl-c-sm120/v1 on cast-8.72 at layout qwen3_8b, FADD {f}, cap 1/1000"
+        for f in ("8", "1047/125")]
+
+
+def test_a_twin_whose_domain_isn_t_its_name_s_linear_or_layout_is_an_error():
+    sig = ("Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 : Pouw.PearlC.Gγ CM "
+           "(Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) "
+           "(instHSub.hSub (218 / 25) (8953 / 1000))) (Pouw.PearlC.pearlCDomainDevNK "
+           "(Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) 6144 4096) (851373343 / 226641700000).cast Pouw.PearlC.εPearlC")
+    name = "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096"
+    assert (P.parse(name, {"signature": [sig]}) or {}).get("n") == 6144
+    with pytest.raises(P.TwinError, match="isn't the linear"):
+        P.parse(name, {"signature": [sig.replace(" 6144 4096)", " 4096 4096)")]})
+    with pytest.raises(P.TwinError, match="isn't the layout llama31_8bLinears"):
+        P.parse(name.replace("n6144k4096", "llama31_8b"), {"signature": [sig]})
+
+
+def test_a_repository_only_refresh_keeps_the_store_s_rows_and_rereads_the_repository_s(tmp_path):
+    """`--repository-only` is `build` when only the repository's audit changed: the store's rows as checked in, the
+    repository's re-read."""
+    doc = json.loads(P.TABLE.read_text())
+    assert P.refresh(doc) == doc, "price_twins.json is stale: run python benchmarks/pouw/harness/price_twins.py --repository-only"
+    audit = json.loads(P.REPO_AUDIT.read_text())
+    gone = next(t["pin"] for t in doc["twins"] if t["source"] == P.REPO_SOURCE)
+    del audit["guarantees"][gone]
+    (tmp_path / "lean-audit.json").write_text(json.dumps(audit))
+    (tmp_path / "Models").symlink_to(P.REPO_AUDIT.parent / "Models")
+    assert gone not in {t["pin"] for t in P.refresh(doc, tmp_path / "lean-audit.json")["twins"]}
+
+
 def test_a_lookup_names_what_it_lacks_and_the_table_stays_small():
     t = P.load()
     assert P.lookup(t, "pearl-c-sm120/v2", None, 8192, 8192)["missing"] == [
         "the priced path (GateRecord.prices, from the variant's prices)"]
-    assert "a pinned cube" in P.lookup(t, "pearl-c-sm120/v2", "cast-8.72", 3584, 18944)["missing"][0]
+    assert "(n, k) = (3584, 18944), FADD 8" in P.lookup(t, "pearl-c-sm120/v2", "cast-8.72", 3584, 18944)["missing"][0]
+    assert P.lookup(t, "pearl-c-sm120/v1", "cast-8.72", None, 4096)["missing"] == ["the linear's (n, k), here (None, 4096)"]
     assert P.lookup(t, "pearl-c-sm120/v2", "cast-9", 8192, 8192)["published"] is None
     assert P.statement("pearl-c-sm120", "v2-hot-h3") == "pearl-c-sm120/v2-hot" and P.statement("x", None) is None
     assert P.TABLE.stat().st_size < 256 * 1024

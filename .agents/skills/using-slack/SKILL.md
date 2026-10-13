@@ -2,7 +2,7 @@
 name: using-slack
 description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
-  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, and the
+  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console, and the
   advisors @old-accounting and @old-circuits-and-proofs) are roles; everything between them happens in #agent-coordination,
   #agent-alerts is machines to @infra, and #ask-daniel holds everything that needs Daniel, one question per card (`research
   msg ask-daniel`: blocking or default, options with a recommendation, a Pacific deadline). Covers the three interactions
@@ -19,7 +19,7 @@ description: >
 The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
-  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), plus two advisors,
+  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier) and `@console`, plus two advisors,
   `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. The
   registry names each one's holder; one agent may hold several, and one handle may have two holders, and posts as whichever it acts for (`--as`). They are Slack user groups, so
   a human's composer autocompletes them. Daniel is a member of each, so a tag notifies him too.
@@ -47,11 +47,13 @@ A reply (`send --thread TS`) you post in your own thread without naming anyone w
 every handle. So a progress note goes out as `send --kind fyi`, which is quiet: it wakes only the `--to` names it starts
 with, and everyone else reads it in their digest.
 
-A reply under an announcement, quiet or not (a status line aside), also rings the owner of each PR it names, by number
-(`#1585`, or the numbers in a `train-prep-...` branch) or by its `cursor/` branch: the owner is the handle whose holder's agent
-id ends in the branch's last 4 characters (or that lists them in `branch_suffixes`). It also rings a handle that, earlier in
-the thread, named a run id (`dd21`) beside one of its own PRs, when the post names that run. A PR whose owner can't be found
-rings whoever named it in the thread. Everything else there stays in `research msg read`.
+A reply under an announcement that names someone rings only the names it starts with, whatever PRs and runs its body
+mentions; so a landing or a prep post names each owner it needs at its start. One that names no one (quiet or not, a status
+line aside) also rings the owner of each PR it names, by number (`#1585`, or the numbers in a `train-prep-...` branch) or by
+its `cursor/` branch: the owner is the handle whose holder's agent id ends in the branch's last 4 characters (or that lists
+them in `branch_suffixes`). It also rings a handle that, earlier in the thread, named a run id (`dd21`) beside one of its own
+PRs, when the post names that run. A PR whose owner can't be found rings the handle that named it in the thread. Everything
+else there stays in `research msg read`.
 
 Only the names a post starts with ring anyone. So `send`, `reply` and `ask` refuse a body that names a handle with `@` past
 its start, or writes `handle:` after its leading names, at the start of a later line or of a sentence (`@top ci: rebuild`).
@@ -85,17 +87,18 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 
 - **Holders in the top-level's Project don't subscribe to `#agent-coordination`.** The top-level agent (bc-7f347b4b) reads it
   and forwards each holder only the posts addressed to it. The registry's `subscribers` lists only the holders outside that
-  Project (the `old-*` handles). A forwarded post that turns out not to be for you ends the turn silently. On timer wakes,
+  Project (the `old-*` handles and `@console`, on Daniel's laptop). A forwarded post that turns out not to be for you ends the turn silently. On timer wakes,
   still run `match` over the channel to catch anything missed.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - Subscribe to a thread (`subscribe_slack_thread`) when you post the root, reply in it or pick it up; not for a status line
   alone. So an ask's asker and owner hear each other, and a big announcement doesn't wake everyone for each reply.
 - Never subscribe to an announcement's thread (the merge thread is one), and unsubscribe from any you hold: there the
-  doorbell rings you for a post that names you at its start, one of your PRs, or a run you named beside one of your PRs.
+  doorbell rings you for a post that names you at its start, or, naming no one, one of your PRs or a run you named beside
+  one of your PRs.
 - Ask for 30 days (`expiresInSeconds: 2592000`); "On every wake" below says when to renew.
 
 ~~~text
-subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=2592000)  # the top-level and old-* holders only
+subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=2592000)  # the top-level, old-* and console holders only
 subscribe_slack_channel(channelId=<#agent-alerts id>, topLevelOnly=true, expiresInSeconds=2592000)       # @infra only
 subscribe_slack_channel(channelId=<#ask-daniel id>, topLevelOnly=true, expiresInSeconds=2592000)         # @infra only
 subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=2592000)
@@ -253,7 +256,7 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
 Add or change a handle in `registry.json` (the tests check it loads). Then, with a token that has `usergroups:write`:
 
 ~~~bash
-research msg groups sync            # the plan: which user groups it would create, update or re-enable
+research msg groups sync            # the plan: which user groups it would create, update, re-enable, or disable (a retired name's)
 research msg groups sync --apply    # makes the changes; writes each group's id, and the bot's, into registry.json; commit that
 ~~~
 

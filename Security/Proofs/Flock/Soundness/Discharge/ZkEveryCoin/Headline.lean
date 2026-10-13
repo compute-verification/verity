@@ -64,28 +64,29 @@ theorem leafT_hm96 (C : CoinedSetup) (c : CoinsZK C.Rest) (t : 𝔽) (y : ZkView
   exact ZkView.leafSplit (Sha512.hash (Zk.TAU_TAG ++ F128.toBytes t)) y (Sha512.hash_size _)
 
 open Classical in
-/-- **One coin vector**: the prover's and the simulator's probabilities at `c` are within `2·|LeafPos|·2^-193`. -/
-theorem coin_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96)
+/-- **One coin vector, at any hm96 hiding bound `δ`**: the prover's and the simulator's probabilities at `c` are within
+`2·|LeafPos|·δ`. -/
+theorem coin_close_le (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
+    {δ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (w w0 : Witness C.S.m) (hv : C.Valid w) (hreg : ∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg)
     (E : ∀ c : CoinsZK C.Rest, (C.T c).tab.View ⊕ (C.T c).tab.Cut → Prop) (c : CoinsZK C.Rest) :
     prCoin (fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
         ≤ prCoin (fun p : (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) => E c (simAll C c w0 p.1 p.2))
-          + 2 * Fintype.card (LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ)
+          + 2 * Fintype.card (LeafPos C.z) * δ
       ∧ prCoin (fun p : (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) => E c (simAll C c w0 p.1 p.2))
         ≤ prCoin (fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
-          + 2 * Fintype.card (LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
+          + 2 * Fintype.card (LeafPos C.z) * δ := by
   by_cases hA : C.Admits c
   · simp only [outExe, simAll, hA, ite_true]
-    obtain ⟨h1, h2⟩ := zkViewAt_of_ok C hC hKey c hA
+    obtain ⟨h1, h2⟩ := zkViewAtReg_of_ok C hC hT1 c hA
       (fun v => (Sum.inl (v 0) : (C.T c).tab.View ⊕ (C.T c).tab.Cut)) (fun _ => w) (fun _ => w0) (fun _ => hv)
       (fun _ => hreg c) (E c)
     have eR := ZK.prCoin_congr_equiv (Equiv.funUnique (Fin 1) ((C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt)))
       (fun p => E c (.inl ((C.T c).viewExe w p.1 p.2)))
     have eS := ZK.prCoin_congr_equiv (Equiv.funUnique (Fin 1) ((C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt)))
       (fun p => E c (.inl ((C.T c).simExe w0 p.1 p.2)))
-    have hs : ∑ _j : Fin 1, 2 * (Fintype.card (C.T c).tab.Hid : ℝ≥0∞) * (2 : ℝ≥0∞) ^ (-193 : ℤ)
-        ≤ 2 * Fintype.card (LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
+    have hs : ∑ _j : Fin 1, 2 * (Fintype.card (C.T c).tab.Hid : ℝ≥0∞) * δ
+        ≤ 2 * Fintype.card (LeafPos C.z) * δ := by
       rw [Fin.sum_univ_one]
       gcongr
       exact_mod_cast card_hid_le C c
@@ -95,13 +96,28 @@ theorem coin_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.
     have hT := leafT_hm96 C c
     have hS : (C.T c).tab.Admits (sentAt C c) :=
       ZK.Session.sent_admits (fun _ : Fin 1 => (C.T c).tab) (fun _ => (C.T c).rep) 0
-    have h1 : Assumptions.Hm96Hiding (C.T c).hm96.My (C.T c).hm96.cs ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
+    have h1 : Assumptions.Hm96Hiding (C.T c).hm96.My (C.T c).hm96.cs δ := by
       rw [ZkView.Coined.hm96At_My (C.T c) ZkView.My rfl, ZkView.Coined.hm96At_cs (C.T c) ZkView.My rfl]
-      exact hKey
+      exact hT1
     have h := ZK.Table.table_abort_hm96 (C.T c).tab (C.T c).hm96 _ hT h1 (sentAt C c) hS w (hreg c) w0
       (fun v => E c (.inr v))
     rw [card_pre] at h
     exact h
+
+open Classical in
+/-- **One coin vector**: the prover's and the simulator's probabilities at `c` are within `2·|LeafPos|·2^-193`
+(`coin_close_le` under `hash-derived-key`). -/
+theorem coin_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96)
+    (w w0 : Witness C.S.m) (hv : C.Valid w) (hreg : ∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg)
+    (E : ∀ c : CoinsZK C.Rest, (C.T c).tab.View ⊕ (C.T c).tab.Cut → Prop) (c : CoinsZK C.Rest) :
+    prCoin (fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
+        ≤ prCoin (fun p : (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) => E c (simAll C c w0 p.1 p.2))
+          + 2 * Fintype.card (LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ)
+      ∧ prCoin (fun p : (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) => E c (simAll C c w0 p.1 p.2))
+        ≤ prCoin (fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
+          + 2 * Fintype.card (LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) :=
+  coin_close_le C hC (δ := (2 : ℝ≥0∞) ^ (-193 : ℤ)) hKey w w0 hv hreg E c
 
 /-- **Zero knowledge at every coin vector at a `CoinedSetup` from its facts**: Lemma B where the prover doesn't refuse
 (`zkViewAt_of_ok`), and the refusal where it does (`Table.table_abort_hm96`, which reads nothing of `CoinedOK`). -/

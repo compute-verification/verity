@@ -717,6 +717,61 @@ The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over
 `Pous.ColumnGame`, is being drafted.
 
+### P2 end to end (`Security/Properties/Pous/EndToEnd.lean`)
+
+Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
+
+- `Pous.EndToEnd.RunCertifies`, about the deployed code, deterministic and with no assumption: when setup and the
+  memory challenger's verdict accept a run (`Accepted`), `C*` decodes to the committed `W`, its root is published, and
+  every one of the device's 105 recorded answers was the challenged block of `C*` on time on the device's own clock; or
+  the run holds a SHA-512 collision or an LMS forgery. It is a statement no theorem proves yet (`unstated`).
+- `Pous.EndToEnd.EndToEndRing`, **in the ring model, with ω uniform**: a server holding at most `⌊ρ·|C|⌋` bits
+  between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown the session
+  commitment the code builds, with the memory challenger's coins drawn online by the code's own sampler and coin tree,
+  passes with probability at most `1% + 2^-128`. It is proved (`Pous.EndToEnd.SecurityProofs.endToEndRing`) from two
+  named assumptions: `P2RingAuditSecure D Q L` (open), and `CoinCommitHides` at `2^-131` (`statistical-hiding`: the
+  coin tree's root and hm96 key hide the indices; the leftover-hash argument is in its docstring, and Lean has no
+  leftover hash lemma to prove it with). The budget is `2^-129 + 2^-130 + 2^-131 + ε_rs ≤ 2^-128`, with `ε_rs = 0`
+  proved (`DrawExact`: `uniformOn` reads 11 bytes at `2^19` blocks and `2^19` divides `2^88`, so no word is rejected).
+  `EndToEndRingDeployed` is it at one root's depth, `D = 16,446`, about half of `RingTight`'s falsification at
+  32,894, with `Q = 2^20` and `L = 2^64` (the truncation attack passes `k = 105` only at about `2^168`). In the ring
+  model a root is 16,447 multiplication rounds (16,446 over the exponent's bits and one to fix the sign,
+  `rootProg_cost`), and recomputing a block takes two, `2 · 16,447 = 32,894`; 16,446 is the largest `D` at which that
+  program cannot finish one root. The timing keeps its 2× margin there: at SeqRoot's measured floor (103.6 ns per
+  cooperating squaring), 16,447 rounds take 1,704 µs, 1.995× `Δ + RTT`, and 1.64× and 1.25× under the red team's sync
+  model. `HonestPassesRing` and
+  `HonestPassesAccepts` prove that the honest full-state server passes P2's ring audit, and the end-to-end event, with
+  probability 1.
+
+`P2RingAuditSecure` is also derived from the per-round conjecture `P2RingRoundSecure p ε₀ D Q L` (Daniel's ruling of
+12 Oct, item 5): at every block count from `2^19` to `2^25`, at a boundary where the server holds at most `⌊ρ·|C|⌋`
+bits, a uniform challenge is answered with probability at most `1 − p` given the earlier answers, outside an event of
+mass `k·ε₀` over `k` rounds (one `ε₀` per round, the same at every block count). `Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure` gives `P2RingAuditSecure` from it when
+`(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`p = 0.043` with `ε₀ = 2^-137` suffices; `p < 0.04291` doesn't), and
+`Pous.SecurityProofs.P2RingGradedOfRoundSecure` is the graded bound: a server held at most `⌊ρ·|C|⌋` bits at `m` of
+the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its falsification tests are
+`Security/Proofs/Pous/P2/RoundTests.lean`'s, at every block count in the range: recomputation forces `p = 0` at
+`D ≥ 32,894`, and truncation refutes `p = 0.043` from `L ≥ 2^167` at `2^19`.
+
+`EndToEndRing` reaches the deployed system only through four claims, each cited on its own:
+
+- `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
+  its rounds, with one session per audit and the coins drawn online;
+- `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
+  round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the measurement
+  behind `ROOT_CALL_NS` (SeqRoot, under P2 in "The generic protocol"): the 8-core cooperation run
+  `r20260929-060834-0ec4` (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed) and the timing red
+  team's `note:20261004T2102Z-report-relay-p2-redteam-timing`
+  (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57); its margin is 1.995×, and 1.64× and 1.25×
+  under the red team's sync model;
+- `pous-ring-instantiation`: P2 with the identity labeling and SHA-512-CTR keys is no easier than `p2ring` with
+  uniform ω;
+- `prf/sha-512`: the memory challenger's derived index streams are as good as uniform bytes.
+
+Nothing may cite either statement as covering the deployed verifier until two gaps are fixed in code: G-1, nothing
+enforces one session per audit (a `SessionCommitment`'s `binding` defaults to `b""`); G-2, there is no composed
+setup-to-challenger check, and `Accepted` restates the glue by hand.
+
 ## Named assumptions (`Security/Models/Pous/Assumptions.lean`)
 
 Each is a `Prop` taken as a hypothesis, never an `axiom`.

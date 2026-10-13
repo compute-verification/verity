@@ -129,7 +129,7 @@ def test_family_facts_rules_agree_with_analytic():
     for fam, f in FF.FAMILY_FACTS.items():
         if fam in analytic.FAMILY_RULES:
             assert f["rules"] == analytic.FAMILY_RULES[fam], fam
-        assert f["arch"] in ("dense", "dense-ln", "moe"), fam
+        assert f["arch"] in ("dense", "dense-ln", "moe", "dsa-moe"), fam
         assert "ForCausalLM" in f["vllm_class"], fam
         assert "vllm/model_executor/models/" in f["rules_provenance"] or "transformers" in f["rules_provenance"], fam
 
@@ -223,6 +223,25 @@ def test_structural_refusals_are_stated():
     m = json.loads((dg.HF_CONFIG_DIR / "QWEN3_30B_A3B.config.json").read_text())
     assert "mlp_only_layers" in G.structural_refusal({**m, "mlp_only_layers": [0]})
     assert "awq" in G.structural_refusal(json.loads((dg.HF_CONFIG_DIR / "QWEN15_AWQ.config.json").read_text()))
+
+
+def test_the_sparse_attention_family_is_described_and_refused():
+    """GLM-5.3's `glm_moe_dsa`: the facts resolve over a TP8 rank's configuration to what the MoE scope and the capture map read, and the
+    profile refuses the class (no fold patterns for the indexer or sparse MLA)."""
+    from pathlib import Path
+
+    cfg = json.loads((Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
+    assert FF.facts_for(cfg)["arch"] == "dsa-moe"
+    assert "sparse attention" in G.structural_refusal(cfg)
+    with pytest.raises(ValueError, match="sparse attention"):
+        G.derive_config(cfg, repo=None, revision=None, world=8)
+    vals, prov = FF.resolve_facts(G.rank_hf_config(cfg, 8), {})
+    assert {k: vals[k] for k in ("NUM_EXPERTS", "N_GROUP", "TOPK_GROUP", "RENORMALIZE", "SCORING", "ROUTED_SCALING_FACTOR", "SHARED_I",
+                                 "INDEX_HEADS", "INDEX_HEAD_DIM", "INDEX_TOPK", "INDEX_TOPK_FREQ", "INDEX_SKIP_TOPK_OFFSET", "FIRST_DENSE")} == {
+        "NUM_EXPERTS": 256, "N_GROUP": 1, "TOPK_GROUP": 1, "RENORMALIZE": True, "SCORING": "sigmoid", "ROUTED_SCALING_FACTOR": 2.5,
+        "SHARED_I": 256, "INDEX_HEADS": 32, "INDEX_HEAD_DIM": 128, "INDEX_TOPK": 2048, "INDEX_TOPK_FREQ": 4, "INDEX_SKIP_TOPK_OFFSET": 3,
+        "FIRST_DENSE": 3}
+    assert vals["ATTN_SCALE"] == 256 ** -0.5 and vals["ROPE_NEOX"] is False and prov["SHARED_I"] == "derived"
 
 
 def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():

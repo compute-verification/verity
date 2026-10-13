@@ -157,9 +157,9 @@ def _gf_summary(S: dict) -> dict:
             "products": sum(len(r["mul"]) for r in S["res"])}
 
 
-def _shape(v) -> A.Shape:
+def _shape(v, holo: bool = False) -> A.Shape:
     o = _obj(v, ("m", "k_log", "claims"))
-    return A.Shape(_nat(o["m"]), _nat(o["k_log"]), _nat(o["claims"]))
+    return A.Shape(_nat(o["m"]), _nat(o["k_log"]), _nat(o["claims"]), holo=holo)
 
 
 def _algebra(f, sh: A.Shape):
@@ -176,24 +176,26 @@ def structure(v) -> dict:
     return _gf_summary(_algebra(lambda sh: A.structure(sh)[0], _shape(v)))
 
 
-def spec(v) -> dict:
-    S = _algebra(RR.spec, _shape(v))
+def spec(v, holo: bool = False) -> dict:
+    S = _algebra(RR.spec, _shape(v, holo))
     return {"S": _sha256(S), "ports": S["ports"], **_gf_summary(S["gf"])}
 
 
 def parts(v) -> list:
     """`rec_residuals.parts` on a checked S: it reads S's terms through their ports unchecked, so past `check_structure`
     its lookups fail."""
-    o = _obj(v, ("S", "max_regions", "max_slots"))
+    o = _obj(v, ("S", "max_regions", "max_slots", "max_lone_slots"))
     S = _reps(o["S"])
     G.check_structure(S["gf"])
-    return [{"S": p.S, "res": p.res, "v": p.v} for p in RR.parts(S, _nat(o["max_regions"]), _nat(o["max_slots"]))]
+    return [{"S": p.S, "res": p.res, "v": p.v}
+            for p in RR.parts(S, _nat(o["max_regions"]), _nat(o["max_slots"]), _nat(o["max_lone_slots"]))]
 
 
-def statements(v) -> list:
+def statements(v, holo: bool = False) -> list:
     """`rec_vstage.stage`'s statements: per Ligerito level, `rec_outer.levels` of the session's openings (`rec_vstar.decode`
-    gives level l's rows ``2^lanes`` elements and ``d - cap`` siblings, each rep ``q`` openings), then the algebra's parts."""
-    sh = _shape(v)
+    gives level l's rows ``2^lanes`` elements and ``d - cap`` siblings, each rep ``q`` openings), then the algebra's parts;
+    ``holo``: over a holo inner session (`rec_algebra.Shape.holo`)."""
+    sh = _shape(v, holo)
     ps = _algebra(lambda sh: RR.parts(RR.spec(sh)), sh)
     out = [{"name": f"rec-open/l{1 << lv.lanes}-h{lv.d - lv.cap}", "dir": f"L{l}", "instances": 2 * lv.q, "level": l,
             "LANES": 1 << lv.lanes, "H": lv.d - lv.cap} for l, lv in enumerate(A.fast100(sh.m).levels)]
@@ -202,10 +204,10 @@ def statements(v) -> list:
                   for j, p in enumerate(ps)]
 
 
-def verifier_parts(v) -> dict:
+def verifier_parts(v, holo: bool = False) -> dict:
     """Every algebra statement's unit is the Lean verifier's own `rec-residuals/…` net, and it refuses the part past the
     last."""
-    sh = _shape(v)
+    sh = _shape(v, holo)
     ps = _algebra(lambda sh: RR.parts(RR.spec(sh)), sh)
     return {"parts": [{"name": f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", "equal": True} for j in range(len(ps))],
             "past_refused": True}
@@ -213,6 +215,22 @@ def verifier_parts(v) -> dict:
 
 def _lowering(low: IL.Lowering) -> dict:
     return {"sha256": low.sha256, "bytes": len(low.text.encode()), "rows": low.layout.useful}
+
+
+def verifier_algebra(v) -> dict:
+    """`rec_residuals.spec` and `parts` at ``Shape(m, k_log, claims, holo=holo)``: the whole S's summary and each part's S,
+    residuals and v elements, with ``units`` each part's lowering under its `rec-residuals/…` name."""
+    o = _obj(v, ("m", "k_log", "claims", "holo", "units"))
+    if not isinstance(o["holo"], bool) or not isinstance(o["units"], bool):
+        raise D.Reject("holo and units are booleans")
+    sh = A.Shape(_nat(o["m"]), _nat(o["k_log"]), _nat(o["claims"]), holo=o["holo"])
+    S = _algebra(RR.spec, sh)
+    out = []
+    for j, p in enumerate(RR.parts(S)):
+        name = f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}"
+        out.append({"name": name, "S": _sha256(p.S), "res": p.res, "v": p.v,
+                    "unit": _lowering(RR.lowering(p.S, name)) if o["units"] else None})
+    return {"parts": out, **_gf_summary(S["gf"])}
 
 
 def _given(**_):
@@ -260,15 +278,33 @@ def inner_unit(v) -> dict:
     return _lowering(RR.lowering(_inner(o["S"]), _str(o["name"])))
 
 
-def _inner_text(o: dict) -> str:
+def _inner_text(o: dict, holo: bool = False) -> str:
+    """`compose` of InnerRepCheck{S} as `rec_residuals.statement` composes it, ``holo`` its META's `HOLO_KEY`."""
     S, name = _inner(o["S"]), _str(o["name"])
     partition, program = _str(o["partition"]), _str(o["program"])
     sub = _sub(name, "rec-residuals", [nm for nm, _ in S["ports"]] + ["v"], ["out"], o["program_digests"])
-    return FC.compose(RR.lowering(S, name), sub, partition=partition, program=program)
+    return FC.compose(RR.lowering(S, name), sub, partition=partition, program=program,
+                      extra_meta={RR.HOLO_KEY: True} if holo else None)
 
 
-def inner_circuit(v) -> dict:
-    return _file(_inner_text(_obj(v, ("S", "name", "partition", "program", "program_digests"))))
+def inner_circuit(v, holo: bool = False) -> dict:
+    return _file(_inner_text(_obj(v, ("S", "name", "partition", "program", "program_digests")), holo))
+
+
+def spec_holo(v) -> dict:
+    return spec(v, holo=True)
+
+
+def statements_holo(v) -> list:
+    return statements(v, holo=True)
+
+
+def verifier_parts_holo(v) -> dict:
+    return verifier_parts(v, holo=True)
+
+
+def inner_circuit_holo(v) -> dict:
+    return inner_circuit(v, holo=True)
 
 
 # --- the inputs: valid ones and the readers' and builders' refusals -------------------------------------------------------------
@@ -376,22 +412,26 @@ def _many(draw) -> dict:
     return {**S, "gf": {**S["gf"], "res": res}}
 
 
-#: S cut under limits it fits (64 regions, 160 slots), limits few residuals fit (3 regions: one port a part; 1 or 2 slots),
-#: S of more residuals than a part holds, and S or limits that refuse
-MAX = {"max_regions": st.just(RR.MAX_REGIONS), "max_slots": st.just(RR.MAX_SLOTS)}
+#: S cut under limits it fits (64 regions, 160 slots, 223 alone), limits few residuals fit (3 regions: one port a part; 1 or
+#: 2 slots, alone 1 to 3 or more than packed), S of more residuals than a part holds, and S or limits that refuse
+MAX = {"max_regions": st.just(RR.MAX_REGIONS), "max_slots": st.just(RR.MAX_SLOTS), "max_lone_slots": st.just(RR.MAX_LONE_SLOTS)}
 PARTS = st.one_of(
     st.fixed_dictionaries({"S": rep_s(), "max_regions": st.sampled_from([3, 4, RR.MAX_REGIONS]),
-                           "max_slots": st.sampled_from([1, 2, RR.MAX_SLOTS])}),
+                           "max_slots": st.sampled_from([1, 2, RR.MAX_SLOTS]),
+                           "max_lone_slots": st.sampled_from([0, 1, 2, 3, RR.MAX_LONE_SLOTS])}),
     st.fixed_dictionaries({"S": rep_s(big=True), "max_regions": st.sampled_from([3, RR.MAX_REGIONS]),
-                           "max_slots": st.sampled_from([2, RR.MAX_SLOTS])}),
+                           "max_slots": st.sampled_from([2, RR.MAX_SLOTS]), "max_lone_slots": st.sampled_from([2, 3, RR.MAX_LONE_SLOTS])}),
     _one(st.fixed_dictionaries({"S": _many(), **MAX})),
-    _one(st.fixed_dictionaries({"S": rep_s(valid=False) | rep_s(), "max_regions": _near(0, 3), "max_slots": _near(0, 3)}),
+    _one(st.fixed_dictionaries({"S": rep_s(valid=False) | rep_s(), "max_regions": _near(0, 3), "max_slots": _near(0, 3),
+                                "max_lone_slots": _near(0, 3)}),
          st.fixed_dictionaries({"S": rep_s(valid=False), **MAX}), JSON))
 
 REPS = st.one_of(rep_s(), rep_s(valid=False), JSON)
 DIGEST = st.text(HEX, min_size=128, max_size=128)
-BINDING = st.one_of(DIGEST, st.sampled_from(["a" * 128, "A" * 128, "a" * 127, "a" * 129, "g" * 128]))
 DIGESTS = st.dictionaries(st.text(max_size=12), st.text(HEX, max_size=64), max_size=2) | JSON
+#: `compose`'s inputs under bindings that are digests (`test_inner_circuit_agrees` replays ones that are not)
+INNER = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": DIGEST, "program": DIGEST,
+                               "program_digests": DIGESTS})
 
 
 def port(fn: str, reference, inputs) -> D.Port:
@@ -453,12 +493,13 @@ def test_parts_agree(server):
 
 @pytest.mark.slow
 def test_statements_agree(server):
-    """Drawn shapes, the universal unit's inner shape (17 residuals, two parts), and the largest whose widest residual fits
-    MAX_SLOTS (14 claims: 151 slots; 15 claims' 162 refuse)."""
+    """Drawn shapes, the universal unit's inner shape (17 residuals, two parts), llama32-1b/b1/i256's 2^29 bucket (16 claims:
+    its batched T alone, 172 slots), and the largest whose widest residual stands alone within MAX_LONE_SLOTS (20 claims:
+    215 slots; 21 claims' 226 refuse)."""
     p = port("statements", statements, _shapes(14))
-    for sh in ({"m": 26, "k_log": 23, "claims": 12}, {"m": 35, "k_log": 32, "claims": 14}):
+    for sh in ({"m": 26, "k_log": 23, "claims": 12}, {"m": 35, "k_log": 27, "claims": 16}, {"m": 35, "k_log": 32, "claims": 20}):
         assert D.replay(p, sh, server)[0] == "output"
-    assert D.replay(p, {"m": 35, "k_log": 32, "claims": 15}, server)[0] == "reject"
+    assert D.replay(p, {"m": 35, "k_log": 32, "claims": 21}, server)[0] == "reject"
     stats = D.run(p, examples=32, seed=SEED, server=server)
     assert stats.outputs >= 8 and stats.rejects >= 4, stats
 
@@ -474,10 +515,74 @@ def test_the_verifiers_part_nets_are_vstars_units(server):
         assert D.replay(p, shape, server)[0] == "output", shape
 
 
+#: the smallest shape a holo part was refused at (m22-k10-c2), and candidate 3's inner shape, Shape(25, 22, 8)
+ALGEBRA = ({"m": 22, "k_log": 10, "claims": 2}, {"m": 25, "k_log": 22, "claims": 8})
+
+
+@pytest.mark.parametrize("holo", [False, True], ids=["plain", "holo"])
+@pytest.mark.parametrize("shape", ALGEBRA, ids=lambda s: f"m{s['m']}-k{s['k_log']}-c{s['claims']}")
+def test_the_verifiers_algebra_is_rec_algebras(server, shape, holo):
+    """The Lean verifier's own algebra (`Flock.RecAlgebra.structureOf`, `Flock.RecResiduals.part`), from which it builds
+    the net a `rec-residuals/…` unit must be, is `rec_residuals.spec`'s and `parts`' byte for byte: the whole S, and each
+    part's S (row ports by name), residuals and v elements. A holo shape's h round is a row port after z_partial's, and the
+    comb's 64 operands read it (`[v comb_l, w h_l]`)."""
+    p = port("verifier_algebra", verifier_algebra, st.nothing())
+    assert D.replay(p, {**shape, "holo": holo, "units": False}, server)[0] == "output"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("shape", ALGEBRA, ids=lambda s: f"m{s['m']}-k{s['k_log']}-c{s['claims']}")
+def test_the_verifiers_holo_part_nets_are_rec_residuals_units(server, shape):
+    """Each holo part's net, as `RecResiduals.check` builds it, is `rec_residuals.lowering`'s unit for that part: its text's
+    SHA-256, bytes and rows; `test_the_verifiers_holo_part_nets_are_vstars_units` holds V*'s holo units to the same nets.
+    No cheaper test builds a holo part's net on both sides."""
+    p = port("verifier_algebra", verifier_algebra, st.nothing())
+    assert D.replay(p, {**shape, "holo": True, "units": True}, server)[0] == "output"
+
+
+# --- holo inner sessions: V*'s statements over an inner session whose circuits are private ---------------------------------------
+
+@pytest.mark.parametrize("shape", ALGEBRA, ids=lambda s: f"m{s['m']}-k{s['k_log']}-c{s['claims']}")
+def test_holo_statements_agree(server, shape):
+    """V*'s algebra and statements over a holo inner session (`VStar.Algebra.specHolo`, `VStar.statementsHolo`) are
+    `rec_residuals.spec`'s and `rec_vstage.stage`'s at ``Shape(..., holo=True)``: h's row port after z_partial's, every later
+    w element 64 places on, the comb's operands reading h (`[v comb_l, w h_l]`), and each part's S, residuals and v."""
+    assert D.replay(port("spec_holo", spec_holo, st.nothing()), shape, server)[0] == "output"
+    assert D.replay(port("statements_holo", statements_holo, st.nothing()), shape, server)[0] == "output"
+
+
+@pytest.mark.slow
+def test_holo_statements_agree_on_drawn_shapes(server):
+    for fn, ref in (("spec_holo", spec_holo), ("statements_holo", statements_holo)):
+        stats = D.run(port(fn, ref, _shapes(14)), examples=24, seed=SEED, server=server)
+        assert stats.outputs >= 6 and stats.rejects >= 3, (fn, stats)
+
+
+@pytest.mark.slow
+def test_inner_holo_circuit_agrees(server):
+    """`compose` with META `holo` (`rec_residuals.statement(..., holo=True)`) on small units under drawn bindings, and
+    replayed with names outside ASCII, past the BMP included: `VStar.withMeta` reads META back, so a name it could not
+    write again as it was would be refused."""
+    p = port("inner_circuit_holo", inner_circuit_holo, INNER)
+    good = {"S": {"gf": {"nv": 1, "nw": 1, "ops": [], "res": []}, "ports": [["row0", 1]]}, "name": "row0",
+            "partition": "a" * 128, "program": "b" * 128, "program_digests": {}}
+    for name in ("row0", "rec-residuals/ü", "\U0001f600\t\"\\"):
+        assert D.replay(p, {**good, "name": name, "program_digests": {name: "e" * 64}}, server)[0] == "output", name
+    stats = D.run(p, examples=5, seed=SEED, server=server)
+    assert stats.outputs >= 2, stats
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("shape", ALGEBRA, ids=lambda s: f"m{s['m']}-k{s['k_log']}-c{s['claims']}")
+def test_the_verifiers_holo_part_nets_are_vstars_units(server, shape):
+    """V*'s units over a holo inner session are the nets the Lean verifier holds a `rec-residuals/…` unit to when its
+    statement's META says `holo` (`Flock.RecResiduals.check`); no cheaper test builds both."""
+    assert D.replay(port("verifier_parts_holo", verifier_parts_holo, st.nothing()), shape, server)[0] == "output"
+
+
 # --- the units ------------------------------------------------------------------------------------------------------------------
 
-#: `rec_open` also builds H = 0 and 17 .. 32, which `VStar.checkRecOpen` refuses until it reads `dirs`' word 1; the
-#: refused heights drawn here are ones both refuse.
+#: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than drawing them.
 REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
                      st.fixed_dictionaries({"LANES": st.sampled_from([0, 4, 7, 9, 12, -8, True]), "H": st.just(1)}),
                      st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([33, -1, True])}),
@@ -486,14 +591,29 @@ REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
 
 @pytest.mark.slow
 def test_inner_unit_agrees(server):
-    stats = D.run(port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON), examples=40,
-                  seed=SEED, server=server)
+    """Drawn, and replayed on an S whose GfResiduals S is in range but whose row ports repeat a name (`checkRepS`'s refusal)
+    and on one whose ports are right but whose add term is past w (`checkS`'s): Lean's `residualForms` reads such a term as
+    zero, so without its own check `innerUnit` would emit a unit where `unit_circuit` refuses. A drawn invalid S is
+    usually refused by `checkRepS` first, so the draws alone rarely reach `checkS`."""
+    p = port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON)
+    gf = lambda t: {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
+    good = {"S": {"gf": gf(["w", 1]), "ports": [["a", 2]]}, "name": "row0"}
+    assert D.replay(p, good, server)[0] == "output"
+    for S in ({"gf": gf(["w", 1]), "ports": [["a", 1], ["a", 1]]}, {"gf": gf(["w", 2]), "ports": [["a", 2]]}):
+        assert D.replay(p, {"S": S, "name": "row0"}, server)[0] == "reject", S
+    stats = D.run(p, examples=40, seed=SEED, server=server)
     assert stats.outputs >= 5 and stats.rejects >= 5, stats
 
 
 @pytest.mark.slow
 def test_rec_open_unit_agrees(server):
-    stats = D.run(port("rec_open_unit", rec_open_unit, REC_OPEN), examples=30, seed=SEED, server=server)
+    """`RecOpen{LANES, H}`'s lowering, drawn at H = 1 and at parameters both refuse, and replayed at the climb's edges: H = 0
+    (`aux` one row the unit does not read) and 17 (the first height whose side bits are `dirs`' word 1). Lowering H = 17
+    takes about a minute; no cheaper test compares V*'s builder with `rec_open` at those heights."""
+    p = port("rec_open_unit", rec_open_unit, REC_OPEN)
+    for h in (0, 17):
+        assert D.replay(p, {"LANES": 8, "H": h}, server)[0] == "output", h
+    stats = D.run(p, examples=30, seed=SEED, server=server)
     assert stats.outputs >= 1 and stats.rejects >= 10, stats
 
 
@@ -501,11 +621,18 @@ def test_rec_open_unit_agrees(server):
 
 @pytest.mark.slow
 def test_inner_circuit_agrees(server):
-    """`compose` on small InnerRepCheck units under drawn bindings, invalid ones included: META, the zero instance's
-    outputs and `b ‖ c`, the slot ranges and the block size."""
-    inputs = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": BINDING, "program": BINDING,
-                                    "program_digests": DIGESTS})
-    stats = D.run(port("inner_circuit", inner_circuit, inputs), examples=5, seed=SEED, server=server)
+    """`compose` on small InnerRepCheck units under drawn bindings: META, the zero instance's outputs and `b ‖ c`, the slot
+    ranges and the block size. A binding that is not a digest is replayed in each place, not drawn: drawn, it refused
+    most of the five units, and which ones moved with the source of modules the reference loads (Hypothesis draws their
+    constants too)."""
+    p = port("inner_circuit", inner_circuit, INNER)
+    good = {"S": {"gf": {"nv": 1, "nw": 1, "ops": [], "res": []}, "ports": [["row0", 1]]}, "name": "row0",
+            "partition": "a" * 128, "program": "b" * 128, "program_digests": {}}
+    assert D.replay(p, good, server)[0] == "output"
+    for key in ("partition", "program"):
+        for bad in ("A" * 128, "a" * 127, "a" * 129, "g" * 128):
+            assert D.replay(p, {**good, key: bad}, server)[0] == "reject", (key, bad)
+    stats = D.run(p, examples=5, seed=SEED, server=server)
     assert stats.outputs >= 2 and stats.rejects >= 1, stats
 
 
@@ -522,10 +649,10 @@ def test_rec_open_circuit_refuses_as_compose_does(server):
 
 # --- whole files, byte for byte -------------------------------------------------------------------------------------------------
 
-def _vstar(tmp_path: Path, *args) -> bytes:
+def _vstar(tmp_path: Path, *args, flags: tuple[str, ...] = ()) -> bytes:
     exe = D.build(LEAN, "vstar")
     out = tmp_path / "circuit.txt"
-    p = subprocess.run([str(exe), *args, str(out)], capture_output=True, text=True)
+    p = subprocess.run([str(exe), *args, str(out), *flags], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr
     data, said = out.read_bytes(), json.loads(p.stdout)
     assert (said["sha512"], said["bytes"]) == (hashlib.sha512(data).hexdigest(), len(data))
@@ -560,6 +687,34 @@ def test_inner_file_is_byte_equal(tmp_path):
     (tmp_path / "b.json").write_text(json.dumps(b))
     lean = _vstar(tmp_path, "inner", str(tmp_path / "s.json"), "rec-residuals/ü", str(tmp_path / "b.json"))
     assert lean == _inner_text({"S": S, "name": "rec-residuals/ü", **b}).encode()
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("shape", ALGEBRA, ids=lambda s: f"m{s['m']}-k{s['k_log']}-c{s['claims']}")
+def test_holo_part_files_are_byte_equal(tmp_path, shape):
+    """Each algebra part's circuit file over a holo inner session, from `vstar inner S NAME BINDINGS OUT --holo` on the S
+    `vstar statements --holo` gives, against `rec_residuals.statement(p.S, name, 2, holo=True)`'s text under that
+    statement's bindings, byte for byte: the file the verifier compares with V*'s own (`RecVStar.checkFile`) once it takes
+    a private inner session. A few minutes a shape (Python lowers each part, a few million rows); no cheaper test writes a
+    real holo part's whole file on both sides."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    sh = A.Shape(shape["m"], shape["k_log"], shape["claims"], holo=True)
+    p = subprocess.run([str(D.build(LEAN, "vstar")), "statements", *map(str, (sh.m, sh.k_log, sh.claims)), "--holo"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    lean = [s for s in json.loads(p.stdout) if s["template"] == "rec-residuals"]
+    ps = RR.parts(RR.spec(sh))
+    assert [(s["S"], s["res"], s["v"]) for s in lean] == [(q.S, q.res, q.v) for q in ps]
+    for s in lean:
+        st_ = RR.statement(s["S"], s["name"], 2, holo=True)
+        b = {"partition": P.digest(st_.part), "program": st_.prog, "program_digests": FC.program_digests(st_.sub)}
+        (tmp_path / "s.json").write_text(json.dumps(s["S"]))
+        (tmp_path / "b.json").write_text(json.dumps(b))
+        data = _vstar(tmp_path, "inner", str(tmp_path / "s.json"), s["name"], str(tmp_path / "b.json"), flags=("--holo",))
+        assert json.loads(data.split(b"\n", 2)[1].removeprefix(b"META "))[RR.HOLO_KEY] is True
+        assert data == st_.text.encode(), s["name"]
+        del data, st_
 
 
 def _stage(sh: A.Shape) -> list[tuple[str, dict, object]]:

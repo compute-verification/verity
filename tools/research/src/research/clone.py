@@ -22,6 +22,18 @@ import sys
 import tempfile
 from pathlib import Path
 
+#: git's merge drivers for `lean-audit.json`, `.lean` files and the fixture map (`.gitattributes`), set in every run clone and
+#: for every git a gate runs (research.gates): a clone's config holds it only after `merge.py --install`, and without it git
+#: merges a record line by line (the queue's own clone, a fresh VM's checkout); a tree from before the tools/verity move has it
+#: at tools/lean/merge.py.  Here, not in gates, because the suites that read clone.py (vllm's, evaluate's) don't read gates.py
+RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarantees, reads and dependencies (tools/verity/lean/merge.py)",
+                 "merge.lean-audit.driver": 'f=tools/verity/lean/merge.py; [ -f "$f" ] || f=tools/lean/merge.py; python3 "$f" %O %A %B %P',
+                 "merge.lean-imports.name": ".lean: each side's imports (tools/verity/lean/merge.py)",
+                 "merge.lean-imports.driver": "python3 tools/verity/lean/merge.py --lean %O %A %B %P",
+                 "merge.fixture-map.name": "fixtures/artifacts.json: each side's fixtures (tools/verity/check/merge_map.py)",
+                 "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P"}
+
+
 CWD_CLONE = "clone"
 
 
@@ -147,6 +159,8 @@ def make(source_root: Path, dest: Path, *, commit: str | None = None, clean: boo
         r = _git(["clone", "-q", "--shared", "--no-checkout", str(src), str(dest)])
         if r.returncode == 0:
             r = _git(["-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head], dest)
+        for k, v in RECORD_DRIVER.items():
+            r = r if r.returncode else _git(["config", k, v], dest)
         if r.returncode:
             raise Refused(f"git could not clone {src} into {dest}: {_why(r)}")
         got = _git(["rev-parse", "HEAD"], dest).stdout.strip()

@@ -9,8 +9,10 @@ The functions `verity_flock`'s builders are held to (`tests/test_vstar_difftest.
 circuits on the parameters it is given: a part's rows as a laid-out netlist (`sha`, `climb`, `residuals`: the netlist's
 SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`), and a statement's whole circuit file
 (`rec_open_circuit`, `inner_circuit`: its SHA-512 and bytes); the algebra's structure and its parts (`structure`,
-`spec`, `parts`), and V*'s statements over an inner session's shape (`statements`). `verifier_parts` holds the Lean
-verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units.
+`spec`, `parts`), and V*'s statements over an inner session's shape (`statements`); `spec_holo`, `statements_holo`,
+`inner_circuit_holo` and `verifier_parts_holo` are those over a holo inner session (`VStar.Holo`). `verifier_parts` holds the Lean
+verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units, and `verifier_algebra` the verifier's own algebra
+(`Flock.RecAlgebra`, its parts and their nets, holo shapes included) to `rec_algebra` and `rec_residuals`.
 -/
 
 namespace VStar.DT
@@ -68,10 +70,10 @@ def unitJson (u : UnitC) : Except String Json := do
   let l ← u.laid
   pure (digestsJson (← unitDigests u l) l.useful)
 
-def circuitJson (u : UnitC) (sub : Sub) (o : String → Json) : Except String Json := do
+def circuitJson (u : UnitC) (sub : Sub) (o : String → Json) (holo : Bool := false) : Except String Json := do
   let l ← u.laid
   let b : Bindings := ⟨← jStr (o "partition") "partition", ← jStr (o "program") "program", o "program_digests"⟩
-  let e ← emitCircuit hashPut u l sub b
+  let e ← emitCircuitOf holo hashPut u l sub b
   let d := (e.run {}).2
   pure (Json.mkObj [("sha512", Flock.hexOf d.sha512.finish), ("bytes", (d.bytes : Json))])
 
@@ -92,12 +94,13 @@ def innerLowering (j : Json) : Except String Json := do
   let o ← input' j ["S", "name"]
   unitJson (← innerUnit (← RepS.ofJson (o "S")) (← jStr (o "name") "name"))
 
-/-- `circuit.compose` of `InnerRepCheck{S}`'s lowering under the given bindings. -/
-def innerCircuit (j : Json) : Except String Json := do
+/-- `circuit.compose` of `InnerRepCheck{S}`'s lowering under the given bindings; `holo`: with META `holo`
+(`rec_residuals.statement(..., holo=True)`). -/
+def innerCircuit (holo : Bool) (j : Json) : Except String Json := do
   let o ← input' j ["S", "name", "partition", "program", "program_digests"]
   let S ← RepS.ofJson (o "S")
   let name ← jStr (o "name") "name"
-  circuitJson (← innerUnit S name) (innerSub S name) o
+  circuitJson (← innerUnit S name) (innerSub S name) o holo
 
 /-- A JSON value's SHA-256 as `json.dumps(sort_keys=True, separators=(",", ":"))` writes it. -/
 def jsonSha256 (j : Json) : Except String String := do
@@ -118,37 +121,42 @@ def natsJson (xs : List Nat) : Json := Json.arr (xs.toArray.map fun (i : Nat) =>
 def structureFn (j : Json) : Except String Json := do
   pure (Json.mkObj (← gfSummary (← Algebra.structure_ (← shapeOf j))))
 
-/-- `rec_residuals.spec(Shape(m, k_log, claims))`: the structure's summary, the ports, and the whole S's SHA-256. -/
-def specFn (j : Json) : Except String Json := do
-  let S ← Algebra.spec (← shapeOf j)
+/-- `rec_residuals.spec(Shape(m, k_log, claims, holo=holo))`: the structure's summary, the ports, and the whole S's
+SHA-256. -/
+def specFn (holo : Bool) (j : Json) : Except String Json := do
+  let S ← if holo then Algebra.specHolo (← shapeOf j) else Algebra.spec (← shapeOf j)
   pure (Json.mkObj (("S", ← jsonSha256 S.toJson) :: ("ports", Json.arr (S.ports.toArray.map fun (nm, n) =>
     Json.arr #[(nm : Json), (n : Json)])) :: (← gfSummary S.gf)))
 
-/-- `rec_residuals.parts(S, max_regions, max_slots)`, each part whole. -/
+/-- `rec_residuals.parts(S, max_regions, max_slots, max_lone_slots)`, each part whole. -/
 def partsFn (j : Json) : Except String Json := do
-  let o ← input' j ["S", "max_regions", "max_slots"]
+  let o ← input' j ["S", "max_regions", "max_slots", "max_lone_slots"]
   let ps ← parts (← RepS.ofJson (o "S")) (← jNat (o "max_regions") "max_regions") (← jNat (o "max_slots") "max_slots")
+    (← jNat (o "max_lone_slots") "max_lone_slots")
   pure (Json.arr (ps.map fun p => Json.mkObj [("S", p.S.toJson), ("res", natsJson p.res), ("v", natsJson p.v)]))
 
-/-- `rec_vstage.stage`'s statements over an inner session of shape `(m, k_log, claims)`: each level's `RecOpen` and each
-algebra part's S (its SHA-256, sizes, residuals and v elements). -/
-def statementsFn (j : Json) : Except String Json := do
-  let st ← statements (← shapeOf j)
+/-- `rec_vstage.stage`'s statements over an inner session of shape `(m, k_log, claims)`, holo or plain: each level's
+`RecOpen` and each algebra part's S (its SHA-256, sizes, residuals and v elements). -/
+def statementsFn (holo : Bool) (j : Json) : Except String Json := do
+  let st ← statementsOf (← shapeOf j) holo
   let out ← st.mapM fun s => match s with
     | .recOpen level L H n => pure (Json.mkObj [("name", s.name), ("dir", s.dir), ("instances", (n : Json)),
         ("level", (level : Json)), ("LANES", (L : Json)), ("H", (H : Json))])
     | .inner _ _ p => do pure (Json.mkObj ([("name", (s.name : Json)), ("dir", (s.dir : Json)), ("instances", (s.instances : Json)),
         ("S", ((← jsonSha256 p.S.toJson) : Json)), ("ports", (p.S.ports.length : Json)), ("res_of", natsJson p.res),
         ("v_of", natsJson p.v)] ++ (← gfSummary p.S.gf)))
+    | s => throw s!"{s.name}: not one of statements' kinds"
   pure (Json.arr out)
 
-/-- Each of V*'s algebra statements over an inner session of shape `(m, k_log, claims)`: its name and whether the Lean
-verifier's net for it (`Flock.RecResiduals`, which a `rec-residuals/…` unit must equal) is V*'s unit's; and whether the
-verifier refuses the part past the last. -/
-def verifierPartsFn (j : Json) : Except String Json := do
+/-- Each of V*'s algebra statements over an inner session of shape `(m, k_log, claims)`, holo or plain: its name and
+whether the Lean verifier's net for it (`Flock.RecResiduals`, which a `rec-residuals/…` unit must equal; at a holo shape
+the one a statement whose META says `holo` is held to) is V*'s unit's; and whether the verifier refuses the part past the
+last. -/
+def verifierPartsFn (holo : Bool) (j : Json) : Except String Json := do
   let sh ← shapeOf j
-  let st ← statements sh
-  let some fsh := Flock.RecResiduals.shape? sh.m sh.kLog sh.claims | throw "the verifier refuses a shape V* takes"
+  let st ← statementsOf sh holo
+  let some fsh0 := Flock.RecResiduals.shape? sh.m sh.kLog sh.claims | throw "the verifier refuses a shape V* takes"
+  let fsh := { fsh0 with holo }
   let mut out : Array Json := #[]
   let mut n := 0
   for s in st do
@@ -160,11 +168,64 @@ def verifierPartsFn (j : Json) : Except String Json := do
       out := out.push (Json.mkObj [("name", (name : Json)), ("equal", (decide (mine = theirs) : Json))])
   pure (Json.mkObj [("parts", Json.arr out), ("past_refused", ((Flock.RecResiduals.part fsh n).toOption.isNone : Json))])
 
+def recTerm : Flock.RecOpen.Term → Term
+  | .w i => .w i
+  | .v i => .v i
+  | .wt i u => .wt i u
+
+def algTerm : Flock.RecAlgebra.Term → Term
+  | .w i => .w i
+  | .v i => .v i
+  | .wt i u => .wt i u
+
+/-- The verifier's whole S (`RecAlgebra.structureOf`) in `gf2k`'s form. -/
+def algGfS (S : Flock.RecAlgebra.GfS) : GfS :=
+  { nw := S.nw, nv := S.nv, ops := (S.ops.map fun o => (o.map algTerm).toList).toList,
+    res := (S.res.map fun r => ({ mul := r.mul.toList, add := (r.add.map algTerm).toList } : Res)).toList }
+
+/-- A row port's name in `rec_residuals.spec`: `m<i>` for round `i`, then the running sums'. -/
+def portName (rounds p : Nat) : String :=
+  if p < rounds then s!"m{p}" else if p == rounds then "acc0" else "acc1"
+
+/-- The Lean verifier's own algebra at `Shape(m, k_log, claims, holo)` (`Flock.RecAlgebra`, `Flock.RecResiduals`), as
+`rec_residuals.spec` and `parts` give it: the whole S's summary, and per part its S as `InnerRepCheck`'s (row ports named
+as `spec` names them), its residuals and v elements, and with `units` the net `RecResiduals.check` holds a unit to, as
+`rec_residuals.lowering(p.S, name)` writes it. -/
+def verifierAlgebraFn (j : Json) : Except String Json := do
+  let o ← input' j ["m", "k_log", "claims", "holo", "units"]
+  let (m, k, cl) := (← jNat (o "m") "m", ← jNat (o "k_log") "k_log", ← jNat (o "claims") "claims")
+  let holo ← match o "holo" with | .bool b => pure b | _ => throw "holo: not a boolean"
+  let units ← match o "units" with | .bool b => pure b | _ => throw "units: not a boolean"
+  let some sh0 := Flock.RecResiduals.shape? m k cl | throw "the verifier refuses the shape"
+  let sh := { sh0 with holo }
+  let S ← Flock.RecAlgebra.structureOf sh
+  let sizes := Flock.RecResiduals.portSizes sh
+  let gs ← Flock.RecResiduals.groups S sizes
+  let nr := (Flock.RecAlgebra.rounds sh).size
+  let mut out : Array Json := #[]
+  for i in [0:gs.size] do
+    let (R, P, Vs) := gs[i]!
+    let (pS, ns, nv) ← Flock.RecResiduals.part sh i
+    let rep : RepS := { gf := { nw := ns.foldl (· + ·) 0, nv, ops := pS.ops.map (·.map recTerm),
+                                res := pS.res.map fun r => ({ mul := r.mul, add := r.add.map recTerm } : Res) },
+                        ports := (P.toList.zip ns).map fun (p, n) => (portName nr p, n) }
+    let name := Flock.RecResiduals.unitName m k cl i
+    let unit ← if units then do
+        let r := (Flock.RecResiduals.unitNet' pS ns nv).run St.empty
+        unitJson { name, inPorts := Flock.RecResiduals.portWords ns nv, outPorts := [Flock.RecResiduals.RES_OUT_WORDS],
+                   st := r.2, outs := r.1.toArray }
+      else pure Json.null
+    out := out.push (Json.mkObj [("name", (name : Json)), ("S", ← jsonSha256 rep.toJson), ("res", natsJson R.toList),
+      ("v", natsJson Vs.toList), ("unit", unit)])
+  pure (Json.mkObj ([("parts", Json.arr out)] ++ (← gfSummary (algGfS S))))
+
 end VStar.DT
 
 open VStar.DT in
 def main : IO Unit := Difftest.serve (Difftest.table [
   ("sha", sha), ("climb", climb), ("residuals", residuals), ("rec_open_unit", recOpenLowering),
-  ("rec_open_circuit", recOpenCircuit), ("inner_unit", innerLowering), ("inner_circuit", innerCircuit),
-  ("structure", structureFn), ("spec", specFn), ("parts", partsFn), ("statements", statementsFn),
-  ("verifier_parts", verifierPartsFn)])
+  ("rec_open_circuit", recOpenCircuit), ("inner_unit", innerLowering), ("inner_circuit", innerCircuit false),
+  ("structure", structureFn), ("spec", specFn false), ("parts", partsFn), ("statements", statementsFn false),
+  ("verifier_parts", verifierPartsFn false), ("verifier_algebra", verifierAlgebraFn), ("spec_holo", specFn true),
+  ("statements_holo", statementsFn true), ("inner_circuit_holo", innerCircuit true),
+  ("verifier_parts_holo", verifierPartsFn true)])
