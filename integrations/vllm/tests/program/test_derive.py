@@ -573,9 +573,11 @@ def test_committed_mutable_op_rebinds_its_written_operand():
     rep = derive_report(source, (torch.empty_like(x),), **REF, committed_units=[
         {"op": "aten.add_.Tensor", "module": "*", "reason": "test mutable gap"}])
     assert rep.ok, rep.unsupported
-    assert rep.provenance["committed_units"][0]["writes"]
+    unit = rep.provenance["committed_units"][0]
+    assert unit["returns"] and unit["writes"]
+    assert repr(rep.program.fn.body.params[1][1]).startswith("(")
     true_bits = [int(v) for v in _bits(source(x))]
-    table = materialize(rep.program, [[int(v) for v in _bits(x)], true_bits])
+    table = materialize(rep.program, [[int(v) for v in _bits(x)], true_bits + true_bits])
     assert [table[g] for g in rep.program.circuit.root_outputs()] == true_bits
 
 

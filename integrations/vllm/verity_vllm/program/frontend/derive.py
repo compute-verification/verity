@@ -719,11 +719,12 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
             k, entry = hit
             writes = _written_operands(node)
             try:
-                if writes:
-                    write_types = [type_of(arg.meta.get("val"), arg.name) for arg in writes]
-                    output_type = write_types[0] if len(write_types) == 1 else TupleT(*write_types)
-                else:
-                    output_type = type_of(node.meta.get("val"), node.name)
+                returns = node.meta.get("val") is not None
+                component_types = ([type_of(node.meta.get("val"), node.name)] if returns else []) + [
+                    type_of(arg.meta.get("val"), arg.name) for arg in writes]
+                if not component_types:
+                    refuse("shape", node, module_path, "committed-only op has neither a returned value nor a written tensor operand")
+                output_type = component_types[0] if len(component_types) == 1 else TupleT(*component_types)
             except FrontendError as e:
                 refuse("shape", node, module_path, f"committed-only output cannot be typed: {e.message}")
             input_name = f"committed_{len(committed_nodes)}"
@@ -747,6 +748,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     committed_inputs = {node: pcolls[committed_offset + k] for k, (node, _entry, _module) in enumerate(committed_nodes)}
     committed_provenance = [{"input": f"committed_{k}", "op": str(node.target), "module": module, "reason": entry["reason"],
                              "list_entry": entry, "node": node.name, "type": str(params[committed_offset + k][1]),
+                             "returns": node.meta.get("val") is not None,
                              **({"writes": [arg.name for arg in committed_writes[node]]} if node in committed_writes else {})}
                             for k, (node, entry, module) in enumerate(committed_nodes)]
     weights_coll = pcolls[-1] if wrec_t is not None else None
@@ -825,13 +827,15 @@ def _translate(ctx: Ctx) -> Coll:
                 unit["operand_refs"] = operands
                 committed = ctx.committed_inputs[node]
                 writes = ctx.committed_writes.get(node, ())
+                returns = bool(unit["returns"])
                 if writes:
-                    for k, arg in enumerate(writes):
-                        ctx.env[arg] = committed if len(writes) == 1 else committed[k]
-                    if node.meta.get("val") is not None:
-                        ctx.define(node, committed if len(writes) == 1 else committed[0])
+                    components = int(returns) + len(writes)
+                    if returns:
+                        ctx.define(node, committed if components == 1 else committed[0])
                     else:
                         ctx.env[node] = None
+                    for k, arg in enumerate(writes):
+                        ctx.env[arg] = committed if components == 1 else committed[int(returns) + k]
                 else:
                     ctx.define(node, committed)
                 continue

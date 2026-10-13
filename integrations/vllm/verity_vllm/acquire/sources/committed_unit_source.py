@@ -115,7 +115,7 @@ class CommittedUnitSource:
         tensors = _tensors(out)
         written = _written_values(func, args, kwargs or {}) if func is not None else []
         if written:
-            tensors = [t for value in written for t in _tensors(value)]
+            tensors.extend(t for value in written for t in _tensors(value))
         if len(tensors) != len(rows):
             self.c.errors.append(
                 f"committed units: {op} under {module} returned {len(tensors)} tensors; "

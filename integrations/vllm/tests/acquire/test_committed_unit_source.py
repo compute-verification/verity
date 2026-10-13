@@ -89,13 +89,18 @@ def test_tuple_output_is_committed_as_one_input_group_with_members():
     assert [name for name, _tensor, _step in com.acquired] == ["block/committed_0/0", "block/committed_0/1"]
 
 
-def test_mutable_op_tap_commits_the_post_write_operand():
+def test_mutable_op_tap_commits_the_return_and_post_write_operand():
     com, model = _Committer(), _InPlace()
-    site = {"family": C.FAMILY, "step": 0, "op_path": "", "op": "aten.add_.Tensor", "output_member": "committed_0"}
-    source = S.CommittedUnitSource(com, model, [site])
+    sites = [
+        {"family": C.FAMILY, "step": 0, "op_path": "", "op": "aten.add_.Tensor",
+         "output_member": f"committed_0/{member}"}
+        for member in ("0", "1")
+    ]
+    source = S.CommittedUnitSource(com, model, sites)
     source.install()
     source.on_step_begin()
     got = model(torch.tensor([1.0]))
     source.uninstall()
     assert torch.equal(got, torch.tensor([3.0]))
-    assert len(com.acquired) == 1 and torch.equal(com.acquired[0][1], got)
+    assert [name for name, _tensor, _step in com.acquired] == ["committed_0/0", "committed_0/1"]
+    assert all(torch.equal(tensor, got) for _name, tensor, _step in com.acquired)
