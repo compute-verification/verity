@@ -2602,9 +2602,9 @@ __device__ __forceinline__ void sketch_warp(const uint8_t *smem, u64 *ready, u64
 // with 0x01010101 << ρ, ρ = 2 mt + r % 2: the accumulator holds 2^ρ Σ bit e (−2^7 at ρ = 7), a fifth MMA of ones
 // holds T = Σ e, and σ = T − 2 (acc >> ρ) (T + 2 (acc >> 7) at ρ = 7); a group is 640 MMAs. The warp waits on `ready`
 // for the group's tasks, task t's only once the producer has relayed task t - stages (`relayed`: a parity names just
-// a barrier's current phase and the one before, and at stages < SKW GT a group's wait would otherwise meet its
-// stage's phase before last and pass at once), and arrives on `sketched` for each once it has read them, so a launch
-// has stages >= GT, the
+// a barrier's current phase and the one before, and at stages <= (SKW - 1) GT a group's first wait would otherwise
+// meet its stage's phase before last and pass at once), and arrives on `sketched` for each once it has read them, so
+// a launch has stages >= GT, the
 // tasks a group: SK_G, or 2 (receipt_tasks: 128 rows of x leave room for 3 stages), whose groups leave blocks 4 .. 7
 // of the MMAs' columns zero and their lanes out of the hash. It
 // keeps each group's 8 sketches in its batch buffer (rows of sk_rs(KS) words, so the C fragments' stores and the
