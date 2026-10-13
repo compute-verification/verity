@@ -8,7 +8,7 @@ The event carries the verifier's hold of the inner transcript (`innerCommitsAt`,
 holds R's stream only with a round 0 (its count check), walks its rounds in round order so round 0's tops are pushed
 first, and refuses a binding round whose first top does not make, canonically, the `stacked` entry of the registration
 META binds (`TopHold.innerCommits_top`). So R's stream's first top is the registered top's commit strings, and a cap whose
-commit strings they are is R's registered top (`StackedTop`).
+commit strings they are is R's registered top (`StackedTopAt`).
 -/
 
 namespace FlockC3.RegLevels
