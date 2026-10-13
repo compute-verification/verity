@@ -47,6 +47,27 @@ def _git(repo: Path, *args: str) -> str:
                           env=env).stdout.strip()
 
 
+@pytest.fixture(autouse=True)
+def _no_store(monkeypatch):
+    monkeypatch.setattr(PT, "passed", lambda sha: None)
+
+
+def test_a_train_drive_fast_forwarded_main_to_is_a_landing_of_the_check_that_passed_on_it(tmp_path, monkeypatch):
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Merge #1 into next")
+    train = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a lane's commit")
+    lane = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", f"{train}:refs/heads/main")
+    _git(repo, "fetch", "-q", "origin")
+    checked = {train: "r20261012-141854-3bba", lane: "r20261012-150000-0001"}
+    monkeypatch.setattr(PT, "passed", checked.get)
+    assert PT.check_attempt(train, cwd=repo) == "r20261012-141854-3bba"
+    assert PT.check_attempt(lane, cwd=repo) is None, "a checked commit main doesn't contain is no landing"
+
+
 def test_only_a_landing_has_a_check_attempt_to_label(tmp_path):
     _git(tmp_path, "init", "-q", "-b", "main")
     _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "a lane's commit")

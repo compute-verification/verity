@@ -110,15 +110,49 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "hm96-sha256/v1 and hm96-sha512/v1 (their hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
+    # the bandwidth audit v0's device (Bandwidth.Guarantees.AuditRO, Security/Models/Accounting/Guarantees/Bandwidth.lean): the
+    # guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is such;
+    # a co-audited set is one such device over its members' stores (Bandwidth.Guarantees.AuditSet), and side sources that may
+    # carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
+    Entry("bandwidth-device", "model",
+          "Bandwidth device model: the bound is stated for a co-audited set of whole PCIe-only GPUs (no MIG slices, no NVLink; "
+          "NVLink domains are to be certified as sets later) running simultaneous windows over pairwise-distinct stores, with "
+          "every device that could hold a copy of a store in the set or isolated, so that the set's side sources are its "
+          "external links. The set is a chip whose on-chip state, device memory and side sources are laid out before the "
+          "verifier's fresh seed, which reads device memory only through counted ingress, computes every tag on chip, and "
+          "commits to the tags before the sample is drawn. A device whose side sources may carry tags a peer computed is "
+          "covered by AuditRelay instead, at the deficit c + m * b for m relayed blocks", "Bandwidth device"),
+    # falsified by an on-chip working set above S_chip: a pointer-chase sweep on the stated device finding more bytes served
+    # faster than device memory (registers, shared memory and L1, L2, any other SRAM), or a datasheet listing more
+    Entry("bandwidth-s-chip", "assumption",
+          "Bandwidth on-chip state: on the stated device, all on-chip storage (registers, shared memory and L1, L2 and any "
+          "other SRAM) holds at most S_chip bits", "Bandwidth S_chip", "measured"),
+    # falsified by a measured transfer into the device above cap_side during a window: host-to-device copies over PCIe, peer
+    # copies over NVLink or PCIe, and any other path into the chip that bypasses device memory, run at their peak
+    Entry("bandwidth-side-cap", "assumption",
+          "Bandwidth side channels: during a window of length T, the stated device receives at most cap_side * T bits from "
+          "outside its device memory and chip (PCIe from the host and its devices, peer links)", "Bandwidth side cap",
+          "measured"),
+    # falsified by a faster rebuild of one block of E from setup: for P2 blocks, the measurement behind pous-ring-speed (a
+    # root's 16,447 sequential squarings, about 2 ms)
+    Entry("bandwidth-regen-time", "assumption",
+          "Bandwidth regeneration: rebuilding one block of E from setup takes at least R_regen on the stated device, so a "
+          "window of length T rebuilds at most T / R_regen blocks per device that rebuilds", "Bandwidth regeneration time",
+          "measured"),
+    Entry("bandwidth-instantiation", "assumption",
+          "The blocks of E, the PoUS encoding's, are no easier to hold information about than uniformly random blocks, "
+          "except by rebuilding them from setup", "Bandwidth instantiation", "conjectured"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean); no attestation hardware backs it
+    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean) states its part about one run; no
+    # attestation hardware backs it
     Entry("trusted-nebius-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host",
-          "Trusted Nebius host", "standard"),
+          "An auditor-trusted device (a network certifier, the memory challenger, the bandwidth audit's challenger) runs "
+          "its stated code on its Nebius host, and its host never restores an earlier copy of the state the device keeps "
+          "there", "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation
@@ -142,6 +176,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
           "than p2ring with a uniformly random odd labeling and uniformly random keys", "PoUS ring instantiation",
           "conjectured"),
+    # `Pouw.PearlC.GγPerCoin (W1.w1Priced dv salt)` (Security/Definitions/Pouw/PearlC/W1Stop.lean): the one open hypothesis
+    # of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced); it implies
+    # the γ-gap property Gγ itself (Pouw.PearlC.W1Stop.gγ_of_withStop)
+    Entry("pouw-gamma-per-coin", "assumption",
+          "Pearl-C's γ-gap property with the budget per coin, at W1 priced (its arithmetic at W1's instruction prices and "
+          "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
+          "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
+          "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
 )}
 
 
