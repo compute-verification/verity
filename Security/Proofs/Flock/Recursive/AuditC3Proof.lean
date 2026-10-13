@@ -147,11 +147,10 @@ theorem vbridgeC_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Ty
       htr⟩,
     hdec, hfull⟩
 
-/-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
-theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
-  refine And.intro ?_ ?_
-  swap
-  · exact RecursiveFirewallPrivate
+/-- **The recursive audit at candidate 3's soundness half, at every coin types `CT`.** -/
+theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
+    (CT : (st : Flock.Stmt) → (hp : HoloParams) → Fin (r st hp) → Type) [∀ st hp k, Fintype (CT st hp k)]
+    [∀ st hp k, Inhabited (CT st hp k)] : Flock.Guarantees.RecursiveAuditC3At CT := by
   intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _hstk ish Vs zr hCust _im _hIC
     bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
@@ -178,7 +177,7 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
       exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
-  rcases zk_sessions_recursive_fork_reg (Flock.Guarantees.holoTys st hp) (Flock.Guarantees.holoCTs st hp) hp
+  rcases zk_sessions_recursive_fork_reg (Flock.Guarantees.holoTys st hp) (CT st hp) hp
     (classOk_of_accepts hacc.acceptsStmt) hA3
     (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
       hT) dg N hk hRw hM hρ hr'
@@ -194,8 +193,8 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
       (fun R ω t R₂ j => And.left (hCust R ω t R₂ j)) hT hF σ _
       (fun o => AcceptsV (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-        ¬ (holoInnerAt (Flock.Guarantees.holoTys st hp) (Flock.Guarantees.holoCTs st hp) st hp).holds
-          (Flock.Guarantees.regStmt (Flock.Guarantees.holoTys st hp) (Flock.Guarantees.holoCTs st hp) st hp
+        ¬ (holoInnerAt (Flock.Guarantees.holoTys st hp) (CT st hp) st hp).holds
+          (Flock.Guarantees.regStmt (Flock.Guarantees.holoTys st hp) (CT st hp) st hp
           (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
             hCust hT) dg N k Rw wmsg
           (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
@@ -204,5 +203,12 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
         ⟨acceptsV_checked (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2) hlen.ge hall
           (verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2).1 ho.2.2.1,
           ho.2.2.2⟩)) hb))))
+
+/-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
+theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
+  refine And.intro ?_ ?_
+  swap
+  · exact RecursiveFirewallPrivate
+  exact recursiveAuditC3At Flock.Guarantees.holoCTs
 
 end Flock.SecurityProofs
