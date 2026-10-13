@@ -2,9 +2,13 @@
 held as words of one field (`wt.cu`: the fused decode, ro-sketch-blake3/v0 or sketch-sha512 at k_s = 16 and the FP8 MMA,
 then the step's leaves and tree), and a bf16 KV cache that fills the rest of the GPU's memory at `--batch` sequences,
 held as words of the same field and decoded inside attention (`benchmarks/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
-`kv_append`, all layers in one launch on a second stream, beside the step). The same step on plain data (each linear's
-fastest native FP8 GEMM, the faster plain attention form, a plain append) is its denominator, and a native pass (a read of every byte
-the step reads) its unit. Writes `step.json` and `step.log` under `--out`, and in a `research run` its `result.json`.
+`kv_append`, all layers in one launch on a second stream, beside the step). With sketch-sha512 (a WT_RECEIPT build)
+the KV carries receipts too: attention is `kv_attn`'s form 10, which sketches the words it decodes (`kv_receipt`'s
+unbound sketch, at a fixed seed), and after each layer `step.cu`'s `kv_rc_sha8_at` hashes the layer's sketches into its
+SHA-512 half-block receipts, after the weights' receipts in the one buffer the pass's commit covers. The same step on
+plain data (each linear's fastest native FP8 GEMM, the faster plain attention form, a plain append) is its
+denominator, and a native pass (a read of every byte the step reads) its unit. Writes `step.json` and `step.log` under
+`--out`, and in a `research run` its `result.json`.
 
 Nothing is timed before its gate passed:
 - wt.cu's decode primitives at inputs that take their rare branches (`gate_prims`), which no gate's random words reach;
@@ -14,8 +18,10 @@ Nothing is timed before its gate passed:
   bit for bit at every k and config, the plain kernel's within FP32 rounding of torch's, and every sketch vector, tag,
   leaf and root; its per-linear timings pick the configs the step runs;
 - attention at the step's batch × context (two layers): `kv_attn` over the encoded cache, in each encoded form (the
-  CUDA-core forms 1 and 2, the tensor-core forms 4 and 5) and at every split count tried, equals its plain form (0 or
-  3) bit for bit at each k, and each plain form is within RTOL of float64 attention (on a few sequences);
+  CUDA-core forms 1 and 2, the tensor-core forms 4 and 5, and with the KV's receipts form 10) and at every split count
+  tried, equals its plain form (0 or 3) bit for bit at each k, and each plain form is within RTOL of float64 attention
+  (on a few sequences); form 10's sketches equal `kv_receipt`'s from the encoded words and its SHA-512 receipts
+  `kv_receipt`'s over them, every one, at each k and split count;
 - the append: encoded, the cache's bytes equal `kv_encode` of the same words at each slot's index; plain, the words;
 - the per-pass key (red team F29, `bench.gate_pass`): each sketched step starts with `wt_pass`, which derives pass j's
   seed pass_seed(σ, j, root_(j−1)), signs, key and leaves' prefix on the device from the previous step's root (the
@@ -27,7 +33,8 @@ the weights and the cache fill the memory once. Arms, interleaved over `--reps`,
 - `plain` and per k `enc{k}`: the whole step (and `_layerwise`: each layer's append on the second stream after its qkv;
   `_noappend`: no append);
 - the parts alone: `_W` the linears (encoded: sketched, with the step's commit; `_Wn` sketched without it, so `_Wn` −
-  `_Wu` is the receipt and `_W` − `_Wn` the commit; `_Wu` untagged), `_A` attention, `_P` the append on the main stream.
+  `_Wu` is the receipt and `_W` − `_Wn` the commit; `_Wu` untagged), `_A` attention (with the KV's receipts), `_P`
+  the append on the main stream.
 `model` sets the measured terms (in native passes) beside the mainline model's,
 step = 1 + f_KV max(0, c k - h) + f_W (small) + f_KV k x_1 / ctx + tau.
 """
@@ -56,6 +63,8 @@ import sketching as SKT  # noqa: E402
 sys.path.insert(0, str(HERE.parent / "word_codec"))
 import kv as K  # noqa: E402
 import kv_bench as KB  # noqa: E402
+import kv_exhaust as KE  # noqa: E402
+import kv_receipt as R  # noqa: E402
 import kv_twin as KT  # noqa: E402
 
 LM_HEAD = {"8b": (128256, 4096), "70b": (128256, 8192), "tiny": (2048, 512)}
@@ -64,9 +73,13 @@ ORDER = ("qkv", "o", "gate_up", "down")          # a layer's linears; attention 
 PLAIN_CFGS = "4x4,8x8"
 MODEL_TERMS = {"c": (0.54, 0.59), "h": 0.30, "x1": 230.0, "x1_pooled": 175.0, "tau": 0.04}
 HEADS = {"8b": 32, "70b": 64}    # query heads; kv.cu's build (KV_QHEADS) must match
-FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-phased", 5: "mma-ws"}
-PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3}      # each encoded form's output equals its plain form's bit for bit
+FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-phased", 5: "mma-ws",
+         10: "mma-ws-receipt"}
+PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3, 10: 3}      # each encoded form's output equals its plain form's bit for bit
 RTOL = {0: KB.ATTN_RTOL, 3: 8e-3}        # the tensor-core form rounds P to bf16
+RECEIPT_FORM = 10                        # mma-ws sketching the words it decodes (kv_receipt's unbound sketch, rc 1)
+KV_RC_SEED = hashlib.sha256(b"verity/codec-tensor/step/kv-receipt").digest()
+KV_RC_JBASE = (1 << 40) + 12345          # the attention gate's first receipt index
 
 
 def model_shapes(name: str):
@@ -80,17 +93,29 @@ def splits_for(b: int, ctx: int, tt: int, sms: int) -> list[int]:
                    for c in KB.ATTN_CTAS_PER_SM for t in KB.ATTN_SPLIT_TILES})
 
 
-def forms_of(sh: dict) -> tuple[list[int], list[int]]:
-    """kv_attn's plain and encoded forms in this build (the tensor-core ones where the field's words tile a head)."""
-    return ([0, 3], [1, 2, 4, 5]) if sh["mma"] else ([0], [1, 2])
+def forms_of(sh: dict, rc: bool = False) -> tuple[list[int], list[int]]:
+    """kv_attn's plain and encoded forms in this build (the tensor-core ones where the field's words tile a head), and
+    with rc the receipt form."""
+    return ([0, 3], [1, 2, 4, 5] + [RECEIPT_FORM] * rc) if sh["mma"] else ([0], [1, 2])
 
 
-def split_cands(sh: dict, b: int, ctx: int, sms: int) -> dict[int, list[int]]:
+def split_cands(sh: dict, b: int, ctx: int, sms: int, rc: bool = False) -> dict[int, list[int]]:
     """Per form the split counts tried: a CUDA-core CTA is a split of a sequence (all KV heads, tiles of TT tokens), a
     tensor-core CTA a split of one KV head (tiles of MT tokens)."""
     fma = splits_for(b, ctx, sh["tt"], sms)
     mma = splits_for(b * sh["kv_heads"], ctx, sh["mt"], sms) if sh["mma"] else []
-    return {fm: (mma if fm >= 3 else fma) for fm in sum(forms_of(sh), [])}
+    return {fm: (mma if fm >= 3 else fma) for fm in sum(forms_of(sh, rc), [])}
+
+
+def kv_receipts(wt, sh: dict) -> bool:
+    """The KV's receipts go in the pass's commit beside the weights' where both are SHA-512 receipts of 64 bytes
+    (sketch-sha512, a WT_RECEIPT build), on the tensor-core forms."""
+    return bool(wt.receipt and sh["mma"])
+
+
+def kv_halves(kv, sh: dict, b: int, ctx: int) -> int:
+    """A layer's SHA-512 half-block receipts: one a decoder warp's 8 vectors of a block (RT tiles of a KV head)."""
+    return KE.receipt_vectors(sh, KE.rc_shape(kv), b, ctx) // 8
 
 
 # wt.cu's WT_FOLD6 (kv.cu's KV_FOLD6: the first two)
@@ -170,16 +195,19 @@ def gate_append(kv, torch, ks, log) -> dict:
     return {"ok": ok, "k": out}
 
 
-def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log) -> dict:
+def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, rc: bool = False) -> dict:
     """kv_attn at the step's batch × context over two layers (the step's index rule, layer 1): each encoded form equals
     its plain form (PLAIN_OF) bit for bit at each k and split count, and each plain form is within RTOL of float64
-    attention on the first few sequences."""
+    attention on the first few sequences. With rc, the receipt form's sketches at each k and split count (into
+    sketches set to -1: a block two splits share is summed) equal kv_receipt's from the encoded words, every sketch of
+    every sequence and KV head, and kv_rc_sha8_at's SHA-512 receipts over them kv_receipt's at receipt indices from
+    KV_RC_JBASE."""
     sh = KB.attn_shape(kv)
     tl, tle = K.TOKEN_LAYER_BYTES, sh["tle"]
     if tle != tl:
         raise RuntimeError(f"{kv.name}: a token-layer's words take {tle} bytes, not {tl}")
-    plains, encs = forms_of(sh)
-    cands = split_cands(sh, b, ctx, sms)
+    plains, encs = forms_of(sh, rc)
+    cands = split_cands(sh, b, ctx, sms, rc)
     layers, layer, nref = 2, 1, min(b, 4)
     st = KB.stream(torch)
     g = torch.Generator(device="cuda").manual_seed(b * 7919 + ctx)
@@ -210,24 +238,53 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log) -> dict:
     del ref
     enc = torch.empty_like(plain.view(torch.uint8))
     n_words = enc.numel() // kv.field.word_bytes
-    equal = {}
+    equal, sketches, receipts = {}, {}, {}
+    if rc:
+        rs = KE.rc_shape(kv)
+        bits = KE.rc_setup(kv, KV_RC_SEED)[1]
+        nh = kv_halves(kv, sh, b, ctx)
+        sk = torch.empty(8 * nh, 16, dtype=torch.int32, device="cuda")
+        tg = torch.empty(nh, 16, dtype=torch.int32, device="cuda")
+        kv.call("kv_rc_buffers", KB.ptr(sk), None, None)
     for k in ks:
         KB.set_key(kv, KB.lib_key(kv, k))
         kv.call("kv_encode", KB.ptr(plain), KB.ptr(enc), n_words, 0, k, sms * 8, st)
+        if rc:
+            encl = enc.view(b, ctx, layers, tl)[:, :, layer].cpu().numpy()
+            want = np.concatenate([R.sketch(KE.cta_lanes(encl, s, hd, 0, ctx, rs), bits, rs["rt"]).reshape(-1, 16)
+                                   for s in range(b) for hd in range(sh["kv_heads"])]).astype(np.int32)
+            ys = b"".join(R.sha_receipt(KV_RC_SEED, KV_RC_JBASE + u, want[8 * u:8 * u + 8]) for u in range(nh))
+            del encl
         for form in encs:
             for sp in cands[form]:
                 o_e.fill_(float("nan"))
+                if form == RECEIPT_FORM:
+                    sk.fill_(-1)
                 run(enc, form, o_e, sp, k)
                 torch.cuda.synchronize()
                 equal[f"k{k}_form{form}_sp{sp}"] = bool(torch.equal(o_p[(PLAIN_OF[form], sp)], o_e))
-    ok = all(rel[FORMS[fm]] <= RTOL[fm] for fm in plains) and all(equal.values())
+                if form == RECEIPT_FORM:
+                    sketches[f"k{k}_sp{sp}"] = bool(np.array_equal(sk.cpu().numpy(), want))
+                    tg.zero_()
+                    kv.call("kv_rc_sha8_at", KB.ptr(tg), nh, KV_RC_JBASE, st)
+                    torch.cuda.synchronize()
+                    receipts[f"k{k}_sp{sp}"] = tg.cpu().numpy().tobytes() == ys
+    sets = len(ks) * len(cands[RECEIPT_FORM]) if rc else 0
+    ok = (all(rel[FORMS[fm]] <= RTOL[fm] for fm in plains) and all(equal.values()) and all(sketches.values())
+          and all(receipts.values()) and len(sketches) == len(receipts) == sets)
     log(f"gate attention B={b} ctx={ctx}: {'ok' if ok else 'FAIL'} (plain rel err "
         + ", ".join(f"{n} {v:.1e}" for n, v in rel.items()) + f" on {nref} sequences; {sum(equal.values())}/"
         f"{len(equal)} encoded = their plain form, k {list(ks)}, forms {encs}, splits "
-        + ", ".join(f"{fm}: {c}" for fm, c in cands.items()) + ")")
+        + ", ".join(f"{fm}: {c}" for fm, c in cands.items())
+        + (f"; receipt form: {sum(sketches.values())}/{len(sketches)} sketch sets and {sum(receipts.values())}/"
+           f"{len(receipts)} SHA-512 receipt sets = kv_receipt's, {nh} receipts a set" if rc else "") + ")")
     del plain, enc, q, part, o_p, o_e, kvl
+    if rc:
+        kv.call("kv_rc_buffers", None, None, None)
+        del sk, tg
     torch.cuda.empty_cache()
-    return {"ok": ok, "rel_err": rel, "equal": equal, "splits": cands, "layers": layers}
+    return {"ok": ok, "rel_err": rel, "equal": equal, "sketches": sketches, "receipts": receipts, "splits": cands,
+            "layers": layers}
 
 
 def gate_gemm(wt, torch, shapes: dict, b: int, ks, reps: int, sketch_t: int, log,
@@ -268,9 +325,9 @@ class Step:
     """The step's buffers and its launches, each enqueued on the current stream (and the append's stream)."""
 
     def __init__(self, wt, kv, torch, model: str, b: int, m: int, ctx: int, ks, picks: dict, sketch_t: int,
-                 log) -> None:
+                 log, rc: bool = False) -> None:
         self.wt, self.kv, self.torch, self.b, self.ctx, self.ks, self.T = wt, kv, torch, b, ctx, list(ks), sketch_t
-        self.m = m
+        self.m, self.rc = m, rc
         self.layers, shapes, lm = model_shapes(model)
         self.shapes = {**shapes, "lm_head": lm}
         self.picks = picks
@@ -310,8 +367,15 @@ class Step:
         self.q = (torch.randn(b, self.sh["heads"], K.HEAD_DIM, device="cuda", generator=g) * scale).to(
             torch.bfloat16).contiguous()
         self.o_attn = torch.empty(b, self.sh["heads"], K.HEAD_DIM, dtype=torch.float32, device="cuda")
-        self.split_cands = split_cands(self.sh, b, ctx, torch.cuda.get_device_properties(0).multi_processor_count)
+        self.split_cands = split_cands(self.sh, b, ctx, torch.cuda.get_device_properties(0).multi_processor_count, rc)
         self.part = torch.empty(part_floats(self.sh, b, self.split_cands), dtype=torch.float32, device="cuda")
+        # The receipt form's sketches, one layer's at a time; its receipts follow the weights' (Step.attn)
+        self.nh = kv_halves(kv, self.sh, b, ctx) if rc else 0
+        self.nkv = self.layers * self.nh
+        if rc:
+            KE.rc_setup(kv, KV_RC_SEED)
+            self.rc_sk = torch.empty(8 * self.nh, 16, dtype=torch.int32, device="cuda")
+            kv.call("kv_rc_buffers", self.rc_sk.data_ptr(), None, None)
         self.new_all = KB.random_words(torch, b * self.layers * self.tlw, f, 21)
         self.new_one = KB.random_words(torch, b * self.tlw, f, 22)
         self.xr = torch.zeros(1, dtype=torch.int64, device="cuda")
@@ -352,7 +416,7 @@ class Step:
                 self.tag_off[(k, l, name)] = tot
                 tot += self.prm[(name, k, "sketch")][3]
             self.nvec[k] = tot
-        top = max(self.nvec.values())
+        top = max(self.nvec.values()) + self.nkv
         self.tags = torch.empty(top * wt.tag_bytes, dtype=torch.uint8, device="cuda")
         nleaves = -(-top // BW.TG.PER_LEAF)
         self.nodes = torch.zeros((2 * nleaves + 64) * 64, dtype=torch.uint8, device="cuda")
@@ -374,7 +438,7 @@ class Step:
         BW.set_key(self.wt, self.torch, self.keys[k])
         KB.set_key(self.kv, KB.lib_key(self.kv, k))
         if self.wt.receipt:   # the tree's binding and salts at a fixed seed (host constants), the receipts at s_j
-            BW.READER.begin(BW.RECEIPT_SEED, BW.SR.rb.Plan.whole(self.nvec[k]), BW.STORE_KEY)
+            BW.READER.begin(BW.RECEIPT_SEED, BW.SR.rb.Plan.whole(self.nvec[k] + self.nkv), BW.STORE_KEY)
 
     def lin_plain(self, l: int, name: str) -> None:
         n, kd = self.shapes[name]
@@ -414,7 +478,7 @@ class Step:
 
     def commit(self, k: int) -> None:
         st = BW.stream(self.torch)
-        n = self.nvec[k]
+        n = self.nvec[k] + self.nkv
         if self.wt.receipt:
             self.commit_receipts(n, st)
             return
@@ -501,12 +565,19 @@ class Step:
         return out
 
     def attn(self, l: int, form: int, k: int, splits: int | None = None) -> None:
+        """Layer l's attention; the receipt form's sketches are hashed into layer l's receipts, pass receipts
+        nvec + l nh .. nvec + (l + 1) nh - 1 (after the weights')."""
         sp = splits if splits is not None else self.splits[(form, k)]
+        st = BW.stream(self.torch)
         rc = self.kv.so.kv_attn(self.KV.data_ptr(), form, self.q.data_ptr(), self.o_attn.data_ptr(),
-                                self.part.data_ptr(), self.b, self.ctx, self.layers, l, sp, k,
-                                BW.stream(self.torch))
+                                self.part.data_ptr(), self.b, self.ctx, self.layers, l, sp, k, st)
         if rc:
             raise RuntimeError(f"kv_attn form {form} k={k}: error {rc}")
+        if form == RECEIPT_FORM:
+            j = self.nvec[k] + l * self.nh
+            rc = self.kv.so.kv_rc_sha8_at(self.tags.data_ptr() + self.wt.tag_bytes * j, self.nh, self.wt.jbase + j, st)
+            if rc:
+                raise RuntimeError(f"kv_rc_sha8_at k={k}: error {rc}")
 
     def append(self, k: int, l0: int, nl: int, s) -> None:
         src = self.new_all if nl > 1 else self.new_one
@@ -579,9 +650,10 @@ def queued(wt, torch, fn, cycles: int) -> tuple[float, float]:
 
 def choose_splits(S: Step, torch, reps: int, cycles: int, log) -> dict:
     """Per attention form (each plain form, and each encoded form at each k) the split count whose pass over every layer
-    is the fastest, at the step's shape on the step's cache; per k the fastest form (k = 0: plain)."""
+    is the fastest, at the step's shape on the step's cache; per k the fastest form (k = 0: plain), or with the KV's
+    receipts the receipt form, and what it takes over the fastest form without them (`k{k}_receipt_s`)."""
     out = {}
-    plains, encs = forms_of(S.sh)
+    plains, encs = forms_of(S.sh, S.rc)
     for k in [0] + S.ks:
         if k:
             S.set_keys(k)
@@ -597,11 +669,16 @@ def choose_splits(S: Step, torch, reps: int, cycles: int, log) -> dict:
             best = min(per, key=per.get)
             S.splits[(form, k)] = best
             out[f"form{form}_k{k}"] = {"splits_s": per, "best": best, "best_s": per[best]}
-        S.form[k] = min(forms, key=lambda fm: out[f"form{fm}_k{k}"]["best_s"])
+        bare = [fm for fm in forms if fm != RECEIPT_FORM]
+        S.form[k] = RECEIPT_FORM if k and S.rc else min(bare, key=lambda fm: out[f"form{fm}_k{k}"]["best_s"])
         out[f"k{k}_form"] = S.form[k]
+        if k and S.rc:
+            out[f"k{k}_receipt_s"] = out[f"form{RECEIPT_FORM}_k{k}"]["best_s"] - min(
+                out[f"form{fm}_k{k}"]["best_s"] for fm in bare)
         log(f"splits k={k}: " + ", ".join(f"{FORMS[fm]} {out[f'form{fm}_k{k}']['best']} "
                                           f"({out[f'form{fm}_k{k}']['best_s'] * 1e3:.2f} ms)" for fm in forms)
-            + f"; form {FORMS[S.form[k]]}")
+            + f"; form {FORMS[S.form[k]]}"
+            + (f" (the KV's receipts {out[f'k{k}_receipt_s'] * 1e3:+.2f} ms)" if k and S.rc else ""))
     return out
 
 
@@ -649,6 +726,7 @@ def model_terms(res: dict) -> dict:
             "weights_receipt": (t[f"{e}_Wn"] - t[f"{e}_Wu"]) / p,
             "weights_commit": (t[f"{e}_W"] - t[f"{e}_Wn"]) / p,
             "attention": (t[f"{e}_A"] - t["plain_A"]) / p,
+            "attention_receipt": res["splits"].get(f"k{k}_receipt_s", 0.0) / p,
             "append_async": (t[e] - t[f"{e}_noappend"]) / p,
             "append_serial": t[f"{e}_P"] / p,
             "append_plain_async": (t["plain"] - t["plain_noappend"]) / p,
@@ -687,6 +765,8 @@ def step_points(res: dict, run_id: str | None) -> dict:
                     "k": int(k), "word_bits": res.get("word_bits", 512), "mask": res.get("mask", False),
                     "squaring": res.get("squaring", "columns"), "k_s": 16,
                     "receipt": res.get("receipt", "ro-sketch-blake3/v0") + ", re-keyed every pass",
+                    "kv_receipt": res.get("kv_receipt"),
+                    "attention_receipt": r["attention_receipt"],
                     "f_kv": res["f_kv"], "f_w": res["f_w"], "stored_bytes": res["stored_bytes"],
                     "step_over_plain": r["step_over_plain"], "d": r["d"], "plain_over_pass": res["model"]["plain_over_pass"],
                     "o_w_per_w_pass": r["o_w_per_w_pass"], "tau_w_per_w_pass": r["tau_w_per_w_pass"],
@@ -710,7 +790,7 @@ def write_result(res: dict, out_dir: Path, libs) -> None:
         ms.append({"name": f"{a}_s", "value": v, "unit": "s"})
     for k, row in res.get("model", {}).get("k", {}).items():
         for name in ("step_over_plain", "d", "weights", "weights_decode", "weights_receipt", "weights_commit",
-                     "attention", "append_async"):
+                     "attention", "attention_receipt", "append_async"):
             ms.append({"name": f"k{k}_{name}", "value": row[name], "unit": "1"})
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/step.json", f"{rel}/step.log"] + ([f"{rel}/step-points.json"] if "model" in res else [])
@@ -720,7 +800,8 @@ def write_result(res: dict, out_dir: Path, libs) -> None:
                                     "model": res["model_name"], "batch": res["batch"], "ctx": res.get("ctx")},
            "validation": {"status": "passed" if res["ok"] else "failed", "checker": "hbm step gates",
                           "detail": "codecs = wide.py and kv.py; fused partial sums = plain, sketch tags and root; "
-                                    "encoded attention = plain; append = kv_encode", "evidence": files},
+                                    "encoded attention = plain; KV sketches and SHA-512 receipts = kv_receipt; "
+                                    "append = kv_encode", "evidence": files},
            "measurements": ms, "measurement_files": files, "artifacts": files}
     tmp = Path(run_dir) / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1))
@@ -771,6 +852,7 @@ def main() -> int:
     kv = KB.Lib(wt.field.name, a.kv_lib)
     v, i = ctypes.c_void_p, ctypes.c_int
     kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
+    kv.so.kv_rc_sha8_at.argtypes = [v, ctypes.c_uint64, ctypes.c_uint64, v]
     wt.so.wt_prim.argtypes = [i, v, v, v, i, v]
     if not wt.field.full_slot or kv.field.n != wt.n or kv.mask != wt.mask or max(ks) > min(wt.kmax, kv.kmax):
         raise SystemExit(f"want full-slot builds of one field and mask with k up to {max(ks)}: wt {wt.name} kmax "
@@ -788,10 +870,14 @@ def main() -> int:
     sms = props.multi_processor_count
     layers, shapes, lm = model_shapes(a.model)
     all_shapes = {**shapes, "lm_head": lm}
+    rc = kv_receipts(wt, ash)
     res = {"device": props.name, "sms": sms, "total_memory": props.total_memory, "model_name": a.model,
            "batch": a.batch, "gemm_m": m, "ks": ks, "args": vars(a), "ok": True, "gate": {}, "word_bits": wt.n,
            "mask": wt.mask, "squaring": SQUARINGS[wt.fold6], "kv_squaring": SQUARINGS[kv.so.kv_fold6()],
-           "receipt": "sketch-sha512" if wt.receipt else "ro-sketch-blake3/v0"}
+           "receipt": "sketch-sha512" if wt.receipt else "ro-sketch-blake3/v0",
+           "kv_receipt": f"{R.NAMES[1]}'s sketch in {FORMS[RECEIPT_FORM]}, SHA-512 half-block receipts "
+                         "(kv_receipt.sha_receipt) in the pass's commit, at a fixed seed" if rc else None,
+           "kv_rc_shape": KE.rc_shape(kv)}
 
     def save() -> None:
         (out_dir / "step.json").write_text(json.dumps(res, indent=1, default=str))
@@ -843,7 +929,7 @@ def main() -> int:
     res["f_w"] = 1 - res["f_kv"]
     log(f"fill: {free / 1e9:.2f} GB free; weights {w_bytes / 1e9:.2f} GB, KV {res['kv_bytes'] / 1e9:.2f} GB at ctx "
         f"{ctx} (f_KV {res['f_kv']:.3f})")
-    res["gate"]["attention"] = gate_attention(kv, torch, a.batch, a.gate_ctx or ctx, ks, sms, log)
+    res["gate"]["attention"] = gate_attention(kv, torch, a.batch, a.gate_ctx or ctx, ks, sms, log, rc)
     save()
     if not res["gate"]["attention"]["ok"]:
         res["ok"] = False
@@ -851,7 +937,10 @@ def main() -> int:
         write_result(res, out_dir, [a.wt_lib, a.kv_lib])
         return 5
 
-    S = Step(wt, kv, torch, a.model, a.batch, m, ctx, ks, picks, a.sketch_t, log)
+    S = Step(wt, kv, torch, a.model, a.batch, m, ctx, ks, picks, a.sketch_t, log, rc)
+    if rc:
+        log(f"the KV's receipts: {S.nh} a layer, {S.nkv} a pass after the weights' {max(S.nvec.values())} "
+            f"({S.rc_sk.numel() * 4 / 1e6:.2f} MB of sketches a layer)")
     free_after, _ = torch.cuda.mem_get_info()
     res["free_after"] = free_after
     res["stored_bytes"] = S.w_bytes + S.kv_bytes
@@ -931,7 +1020,8 @@ def main() -> int:
         f"k={k}: step {r['step_over_plain']:.3f}x plain, d {r['d']:.3f} (layerwise append {r['d_layerwise']:.3f}); "
         f"weights {r['weights']:+.3f} (decode {r['weights_decode']:+.3f}, tag {r['weights_tag']:+.3f}: receipt "
         f"{r['weights_receipt']:+.3f}, commit {r['weights_commit']:+.3f}), attention "
-        f"{r['attention']:+.3f} (model {r['model_attention'][0]:+.3f}..{r['model_attention'][1]:+.3f}), append "
+        f"{r['attention']:+.3f} (receipts {r['attention_receipt']:+.3f}; model {r['model_attention'][0]:+.3f}.."
+        f"{r['model_attention'][1]:+.3f}), append "
         f"{r['append_async']:+.3f} async / {r['append_serial']:.3f} serial (model {r['model_append']:.3f}); model step "
         f"{r['model_step'][0]:.3f}..{r['model_step'][1]:.3f}; mu_rebuild {r['mu_rebuild_pooled']:.2%} at x1 175"
         for k, r in res["model"]["k"].items()))

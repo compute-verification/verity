@@ -13,7 +13,8 @@ With --kv-lib (step.cu) the same for the KV side: attention at each k in the for
 step's partial buffer for that form and split, `step.part_floats`), and the append of a token at every layer, whose
 outputs are its words. A partial record's m and l are each a group's GROUP floats from its own warp, half a sector at
 GROUP = 4 (8B), so attention is held to the sectors its records span (`part_sector_bytes`) and its ratio to the bytes
-is recorded beside it.
+is recorded beside it. The receipt form (step.RECEIPT_FORM) also writes its sketches (`sketch_sector_bytes`), and the
+KV's receipts kernel after it (`kv_rc_sha8_at`) its 64-byte receipts.
 
     python write_gate.py --wt-lib wt.so [--kv-lib step.so] [--reader-lib reader.so] --step-json OUT/step.json --out OUT
 """
@@ -43,7 +44,22 @@ import kv_bench as BW_KV  # noqa: E402
 METRICS = ("lts__t_sectors_op_write.sum", "lts__t_sectors_srcunit_tex_op_write.sum", "lts__t_sectors_op_red.sum",
            "lts__t_sectors_op_atom.sum", "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum", "dram__bytes_write.sum")
 WRITE, ALL = METRICS[1], METRICS[0]   # the SMs' L2 writes, and every source's
-KERNELS = "regex:fused_kernel|leaves_kernel|level_kernel|pads_kernel|attn_|append_kernel"
+KERNELS = "regex:fused_kernel|leaves_kernel|level_kernel|pads_kernel|attn_|append_kernel|rc_sha8_kernel"
+
+
+def sketch_sector_bytes(sh: dict, rs: dict, b: int, ctx: int, splits: int) -> int:
+    """The receipt form's sketch writes at `splits`: a decoder warp's 16 vectors of a block are 1 KiB stored by the one
+    CTA that holds the whole block, or 2 KiB of sectors added (4-byte reductions, two to a sector) by each CTA that
+    holds part of it (kv_attn's splits at RC = 1 end at any tile)."""
+    mt, bt = rs["mt"], rs["rt"] * rs["mt"]
+    per = -(-ctx // splits)
+    per = -(-per // mt) * mt
+    tot = 0
+    for t0 in range(0, ctx, per):
+        t1 = min(ctx, t0 + per)
+        tot += sum(1024 if blk * bt >= t0 and min(ctx, (blk + 1) * bt) <= t1 else 2048
+                   for blk in range(t0 // bt, -(-t1 // bt)))
+    return b * sh["kv_heads"] * rs["mdw"] * tot
 
 
 def launches(a) -> list[dict]:
@@ -117,19 +133,35 @@ def kv_launches(a, step: dict, torch, st) -> list[dict]:
     q = torch.randn(b, sh["heads"], STEP.K.HEAD_DIM, device="cuda").to(torch.bfloat16).contiguous()
     o = torch.empty(b, sh["heads"], STEP.K.HEAD_DIM, dtype=torch.float32, device="cuda")
     out = []
+    rs = STEP.KE.rc_shape(kv)
     for k in step["ks"]:
         BW_KV.set_key(kv, BW_KV.lib_key(kv, k))
         form = step["splits"][f"k{k}_form"]
         sp = step["splits"][f"form{form}_k{k}"]["best"]
         part = torch.empty(STEP.part_floats(sh, b, {form: [sp]}), dtype=torch.float32, device="cuda")
+        rc = form == STEP.RECEIPT_FORM
+        if rc:
+            STEP.KE.rc_setup(kv, STEP.KV_RC_SEED)
+            nh = STEP.kv_halves(kv, sh, b, ctx)
+            sk = torch.empty(8 * nh, 16, dtype=torch.int32, device="cuda")
+            tg = torch.empty(nh, 16, dtype=torch.int32, device="cuda")
+            kv.so.kv_rc_sha8_at.argtypes = [v, ctypes.c_uint64, ctypes.c_uint64, v]
+            kv.call("kv_rc_buffers", BW_KV.ptr(sk), None, None)
         kv.call("kv_attn", BW_KV.ptr(cache), form, BW_KV.ptr(q), BW_KV.ptr(o), BW_KV.ptr(part), b, ctx, layers, 1, sp,
                 k, st)
+        if rc:
+            kv.call("kv_rc_sha8_at", BW_KV.ptr(tg), nh, 0, st)
         torch.cuda.synchronize()
         group_ml = 32 * -(-4 * (sh["heads"] // sh["kv_heads"]) // 32)
         out.append({"kernel": "attention", "k": k, "form": form, "splits": sp, "batch": b, "ctx": ctx,
                     "out_bytes": o.numel() * 4, "part_bytes": part.numel() * 4,
                     "part_sector_bytes": part.numel() // sh["part"] * (
-                        4 * sh["heads"] * STEP.K.HEAD_DIM + 2 * sh["kv_heads"] * group_ml)})
+                        4 * sh["heads"] * STEP.K.HEAD_DIM + 2 * sh["kv_heads"] * group_ml),
+                    "sketch_bytes": sketch_sector_bytes(sh, rs, b, ctx, sp) if rc else 0})
+        if rc:
+            out.append({"kernel": "kv_receipts", "k": k, "receipts": nh, "receipt_bytes": 64 * nh})
+            kv.call("kv_rc_buffers", None, None, None)
+            del sk, tg
     del cache
     model_layers = BW.MODELS[step["model_name"]][0]
     new = BW_KV.random_words(torch, b * model_layers * tlw, f, 23)
@@ -197,11 +229,22 @@ def summarize(stdout: str, rc: int) -> dict:
     for w, g in zip(attn, groups):
         wb = sum(bytes_of(kv, WRITE) + bytes_of(kv, "lts__t_sectors_op_red.sum") for kv in g)
         lb = sum(bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum") for kv in g)
-        must = w["out_bytes"] + w["part_sector_bytes"]
+        must = w["out_bytes"] + w["part_sector_bytes"] + w.get("sketch_bytes", 0)
         rows_out.append({**w, "kernels": [kv["name"][:40] for kv in g], "l2_write_bytes": wb,
                          "l2_write_all_bytes": sum(bytes_of(kv, ALL) for kv in g), "local_store_bytes": lb,
                          "write_over_outputs_and_partials": wb / (w["out_bytes"] + w["part_bytes"]),
                          "write_over_sectors": wb / must, "ok": lb == 0 and wb <= 1.01 * must + 4096 * len(g)})
+    rcw = [w for w in want if w["kernel"] == "kv_receipts"]
+    rck = [kv for kv in kernels if "rc_sha8_kernel" in kv["name"]]
+    if len(rck) != len(rcw):
+        res["ok"] = False
+        res["rows"] = rows_out
+        return res
+    for w, kv in zip(rcw, rck):
+        wb, lb = bytes_of(kv, WRITE), bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum")
+        rows_out.append({**w, "l2_write_bytes": wb, "l2_write_all_bytes": bytes_of(kv, ALL), "local_store_bytes": lb,
+                         "write_over_receipts": wb / w["receipt_bytes"],
+                         "ok": lb == 0 and wb <= 1.01 * w["receipt_bytes"] + 4096})
     app = [w for w in want if w["kernel"] == "append"]
     ak = [kv for kv in kernels if "append_kernel" in kv["name"]]
     if len(ak) != len(app):
