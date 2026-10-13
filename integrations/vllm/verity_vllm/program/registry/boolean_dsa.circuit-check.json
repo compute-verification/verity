@@ -1,5 +1,11 @@
 {
  "definitions": {
+  "DsaTopKSelection_v2{TOPK=16,N=64}": {
+   "and": 16580
+  },
+  "DsaTopKSelection_v2{TOPK=5,N=37}": {
+   "and": 8775
+  },
   "DsaTopKShortRow_v2{TOPK=16}": {
    "and": 469
   },
