@@ -1,5 +1,15 @@
 {
- "roots": ["Flock", "FlockVerify", "Flock.Test.Full", "Flock.Test.Sha512", "Flock.Test.InnerStreams", "Flock.Test.RecOpen", "Flock.Test.RecOpening", "VStar"],
+ "roots": [
+  "Flock",
+  "FlockVerify",
+  "Flock.Test.Full",
+  "Flock.Test.Sha512",
+  "Flock.Test.InnerStreams",
+  "Flock.Test.RecOpen",
+  "Flock.Test.RecOpening",
+  "Flock.Test.ReadWhole",
+  "VStar"
+ ],
  "exempt": {
   "FlockFirewall": "the flock-firewall executable's entry point; its commands are Flock.Firewall.cmd and (`contract`) Flock.Firewall.Contract.cmd, audited under Flock",
   "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock",
