@@ -7,7 +7,9 @@ kernels (`quant_method`, an attention layer's backend, a fused-MoE layer's route
 No GPU is touched: no CUDA device is visible to the process (`engine.env.hide_devices`), every tensor vLLM places on `cuda`
 is made on `meta`, and vLLM's platform is the CUDA platform answering the declared `TargetProfile` (`--target`: compute
 capability, SM count, switches) and the target device's name and memory, so the model code takes the branches it takes on
-the target (an H200 for a model our nodes cannot serve).  Each rank's tensor-parallel group is the Build's stand-in
+the target (an H200 for a model our nodes cannot serve).  The host's toolchain is the target's too: vLLM counts FlashInfer as
+present only with its cubins or `nvcc` on PATH, as on the pods, so run it with the CUDA toolkit's `bin` on PATH (`selections`
+records `has_flashinfer`).  Each rank's tensor-parallel group is the Build's stand-in
 (`export_ops.tp_group_override`); no collective runs.  The same `inventory(model)` lists a live model's modules on a serving
 rank (the go/no-go check of a capture map on the target): `live_document(llm.collective_rpc(rank_inventory))`.
 
@@ -298,10 +300,20 @@ def _selections() -> dict[str, Any]:
         out["deep_gemm_e8m0"] = bool(deep_gemm.is_deep_gemm_e8m0_used())
     except Exception as e:  # recorded, so a missing switch is visible rather than defaulted
         out["deep_gemm_error"] = repr(e)
+    try:
+        # FlashInfer counts as present only with its cubins or `nvcc` on PATH (`has_flashinfer`), and its block-scale FP8 GEMM
+        # leads the sm_90 FP8 linear's kernel list (`FlashInferFp8DeepGEMMDynamicBlockScaledKernel`)
+        from vllm.utils import flashinfer
+
+        out["flashinfer"] = bool(flashinfer.has_flashinfer())
+        out["flashinfer_fp8_blockscale_gemm"] = bool(flashinfer.is_flashinfer_fp8_blockscale_gemm_supported())
+    except Exception as e:
+        out["flashinfer_error"] = repr(e)
     import vllm.envs as envs
 
     for k in ("VLLM_BATCH_INVARIANT", "VLLM_USE_DEEP_GEMM", "VLLM_MOE_USE_DEEP_GEMM", "VLLM_USE_DEEP_GEMM_E8M0",
-              "VLLM_USE_FUSED_MOE_GROUPED_TOPK", "VLLM_ALLREDUCE_USE_FLASHINFER", "VLLM_ALLREDUCE_USE_SYMM_MEM"):
+              "VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER", "VLLM_USE_FUSED_MOE_GROUPED_TOPK", "VLLM_ALLREDUCE_USE_FLASHINFER",
+              "VLLM_ALLREDUCE_USE_SYMM_MEM"):
         try:
             out[k] = getattr(envs, k)
         except AttributeError:
