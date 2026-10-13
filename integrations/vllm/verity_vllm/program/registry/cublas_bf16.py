@@ -37,7 +37,8 @@ from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.types import Array, Type
 
-__all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP", "chain_step", "dot_step"]
+__all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP", "HopperBf16Dot16Step",
+           "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX", "chain_step", "dot_step"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 CONFORMANCE = "not-yet-established: GLM-5.3's shapes on the H200 (tests/properties/glm53_bf16_gemm_capture_gpu.py)"
@@ -81,6 +82,7 @@ def chain_step(name: str, build: Callable, params: Sequence[tuple[str, Type]], d
 _A16 = Array(16, BF16)
 HOPPER_STEP = chain_step("HopperBf16Dot16Step", BG.HopperBF16WgmmaDot16.build, (("acc", F32), ("a", _A16), ("b", _A16)),
                          ("HopperBF16WgmmaDot16_v1(acc, a, b)", "a"))
+HopperBf16Dot16StepFirstX, HopperBf16Dot16StepFirst, HopperBf16Dot16StepX, HopperBf16Dot16Step = HOPPER_STEP
 _DOT_STEPS = {BG.HopperBF16WgmmaDot16.id: HOPPER_STEP}
 
 

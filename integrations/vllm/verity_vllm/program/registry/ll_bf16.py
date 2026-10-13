@@ -42,7 +42,9 @@ from verity.ml.circuits.types import Array
 from verity_vllm.program.registry import cublas_bf16 as CB
 
 __all__ = ["LL_FMA_STEP", "LL_MUL_ADD_STEP", "LlBf16DotprodDot", "LlBf16DotprodDotWord", "LlBf16DotprodGemm", "LlBf16DotprodGemmWord",
-           "LlBf16SplitKDot", "LlBf16SplitKDotWord", "LlBf16SplitKGemm", "LlBf16SplitKGemmWord", "WARP"]
+           "LlBf16FmaStep", "LlBf16FmaStepFirst", "LlBf16FmaStepFirstX", "LlBf16FmaStepX", "LlBf16MulAddStep",
+           "LlBf16MulAddStepFirst", "LlBf16MulAddStepFirstX", "LlBf16MulAddStepX", "LlBf16SplitKDot", "LlBf16SplitKDotWord",
+           "LlBf16SplitKGemm", "LlBf16SplitKGemmWord", "WARP"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 WARP = 32
@@ -74,6 +76,8 @@ LL_MUL_ADD_STEP = CB.chain_step(
     "LlBf16MulAddStep",
     lambda C, acc, x, w: fp.f32_add(C, acc, fp.f32_mul(C, fp.bf16_to_f32(x), fp.bf16_to_f32(w), ir_nan=True), ir_nan=True),
     _STEP_PARAMS, ("acc + f32(x) * f32(w), an FMUL then an FADD (F32Mul_v1's and F32Add_v1's NaN words)", "x"))
+LlBf16FmaStepFirstX, LlBf16FmaStepFirst, LlBf16FmaStepX, LlBf16FmaStep = LL_FMA_STEP
+LlBf16MulAddStepFirstX, LlBf16MulAddStepFirst, LlBf16MulAddStepX, LlBf16MulAddStep = LL_MUL_ADD_STEP
 _LL_STEPS = {1: LL_FMA_STEP, 0: LL_MUL_ADD_STEP}
 
 
