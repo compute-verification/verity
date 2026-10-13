@@ -16,6 +16,7 @@ import Proofs.Flock.C3.Sparse.SrcLayer
 import Proofs.Flock.C3.Sparse.SessionAt
 import Proofs.Flock.C3.Sparse.SrcEnd
 import Proofs.Flock.C3.Sparse.MsgsRead
+import Proofs.Flock.C3.Sparse.MsgsLayers
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
