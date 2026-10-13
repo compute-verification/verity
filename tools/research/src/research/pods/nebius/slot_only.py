@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import signal
 import sys
 from datetime import datetime, timezone
@@ -24,14 +25,20 @@ RUNS = Path("/workspace/research/runs")
 LOG = Path("/workspace/monitoring/slot-only.jsonl")
 #: slot.py from a shipped tree
 SLOT_PATHS = ("tools/verity/check/slot.py",)
+#: `env CHECK_SLOTS=...` before slot.py: a pool of its own, with its own line, in one of these files (vy-nebius-cpu-1's
+#: `proofs` pool, 13 Oct), so a lane's runs never queue behind the merge checks
+POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
 
 
 def through_slot(command: object) -> bool:
-    """Whether a workload command is `python3 <tree>/check/slot.py [OPTS] -- CMD...`, the way check.py's SLOT_WRAP, train.sh and
-    `research queue ready --on` send a check: CMD then runs under a slot's lock and cores. `slot.py --status` is not a run."""
-    if not (isinstance(command, list) and len(command) >= 4 and all(isinstance(c, str) for c in command)):
+    """Whether a workload command is `[env CHECK_SLOTS=POOL] python3 <tree>/check/slot.py [OPTS] -- CMD...`, the way check.py's
+    SLOT_WRAP, train.sh and `research queue ready --on` send a check: CMD then runs under a slot's lock and cores. `slot.py
+    --status` is not a run."""
+    if not (isinstance(command, list) and all(isinstance(c, str) for c in command)):
         return False
-    if command[0] != "python3" or command[1] not in SLOT_PATHS or "--" not in command[2:]:
+    if command[:1] == ["env"] and len(command) > 1 and POOL.fullmatch(command[1]):
+        command = command[2:]
+    if len(command) < 4 or command[0] != "python3" or command[1] not in SLOT_PATHS or "--" not in command[2:]:
         return False
     return command.index("--", 2) < len(command) - 1
 
