@@ -214,47 +214,6 @@ __device__ __forceinline__ void sketch_loaded(uint4 (&v)[DEPTH][4], const uint8_
   }
 }
 
-// The same with the signs as a slot's MMA fragments (`Signs::frag`, defined below): two 16-byte loads an offset, served
-// by L1 or L2, instead of the expansion. Plain loads, as for the words.
-template <int PROBE = 0>
-__device__ __forceinline__ void sketch_frag(const uint8_t* __restrict__ p, const uint4* frag, uint64_t pol,
-                                            uint32_t (&m)[16]) {
-  const int lane = threadIdx.x & 31, g = lane >> 2, c = lane & 3;
-  int acc[4][4];
-#pragma unroll
-  for (int q = 0; q < 4; ++q)
-#pragma unroll
-    for (int i = 0; i < 4; ++i) acc[q][i] = 0;
-  const uint8_t* src = p + (uint64_t)g * BLK + 16 * c;
-  const uint4* fr = frag + 2 * lane;
-  constexpr int STEPS = BLK / 64;
-  uint4 v[DEPTH][4];
-  preload(v, p, pol);
-#pragma unroll 2
-  for (int o = 0; o < STEPS; ++o) {
-    const int slot = o % DEPTH;
-    uint4 cur[4];
-#pragma unroll
-    for (int q = 0; q < 4; ++q) cur[q] = v[slot][q];
-    if (o + DEPTH < STEPS) {
-#pragma unroll
-      for (int q = 0; q < 4; ++q) v[slot][q] = ld_stream(src + (uint64_t)q * 8 * BLK + 64 * (o + DEPTH), pol);
-    }
-    if (PROBE & NO_MMA) {
-#pragma unroll
-      for (int q = 0; q < 4; ++q) acc[q][0] ^= (int)(cur[q].x ^ cur[q].y ^ cur[q].z ^ cur[q].w);
-      continue;
-    }
-    const uint4 a = fr[64 * o], e = fr[64 * o + 1];
-#pragma unroll
-    for (int q = 0; q < 4; ++q) {
-      mma(acc[q], a.x, a.y, a.z, a.w, cur[q].x, cur[q].y);
-      mma(acc[q], e.x, e.y, e.z, e.w, cur[q].z, cur[q].w);
-    }
-  }
-  gather(acc, m);
-}
-
 // The sketches of 32 blocks at `p` (block 8q + g of group q): lane n's block n, its 16 sums into m.
 template <int PROBE = 0>
 __device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint32_t* signs, uint64_t pol,
@@ -378,12 +337,8 @@ constexpr uint64_t TAG_HI = 0x66696c6c2d736b31ull, TAG_BLK = 0x362f76322f626c6bu
 // pass's first unit derives the next pass's, after every unit of the pass that held its slot is done (done[slot] == P):
 // those units were taken before it, so the wait ends, and no unit reads signs that are being replaced.
 constexpr uint32_t SIGN_SLOTS = 4;
-// A slot's MMA fragments: for offset o and lane (g, c), the ±1 bytes of rows g and g + 8 at 64 o + 16 c as the A
-// operands of `sketch_step`'s two MMAs, (a0, a1, a2, a3) then (e0, e1, e2, e3), at uint4 2 (32 o + lane).
-constexpr uint32_t FRAG_U4 = 2 * 32 * (BLK / 64);  // 4,096 uint4, 64 KiB
 struct Signs {
   uint32_t* words;  // SIGN_SLOTS × SIGN_WORDS, each a sign string's bytes as little-endian words
-  uint4* frag;  // SIGN_SLOTS × FRAG_U4, the same signs expanded (derived with the words)
   unsigned long long* pass;  // which pass each slot holds (~0: none)
   unsigned long long* done;  // the units done of the pass each slot holds
   uint64_t seed[4];  // the run seed as big-endian words
@@ -415,16 +370,6 @@ __device__ void derive_signs(const Signs& sg, uint64_t q, uint64_t P) {
       out[16 * i + 2 * k] = bswap32((uint32_t)(s[k] >> 32));
       out[16 * i + 2 * k + 1] = bswap32((uint32_t)s[k]);
     }
-  }
-  __syncwarp();
-  uint4* fr = sg.frag + (uint64_t)slot * FRAG_U4;
-#pragma unroll 1
-  for (uint32_t x = lane; x < FRAG_U4 / 2; x += 32) {
-    const uint32_t o = x / 32, ln = x % 32, g = ln >> 2, c = ln & 3, sh = (c & 1) * 16;
-    const uint32_t r0 = (out[g * (BLK / 32) + 2 * o + (c >> 1)] >> sh) & 0xFFFFu;
-    const uint32_t r8 = (out[(g + 8) * (BLK / 32) + 2 * o + (c >> 1)] >> sh) & 0xFFFFu;
-    fr[2 * x] = make_uint4(expand(r0 & 15), expand(r8 & 15), expand((r0 >> 4) & 15), expand((r8 >> 4) & 15));
-    fr[2 * x + 1] = make_uint4(expand((r0 >> 8) & 15), expand((r8 >> 8) & 15), expand(r0 >> 12), expand(r8 >> 12));
   }
   __threadfence();
   __syncwarp();
@@ -538,9 +483,8 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, Signs
     if (s == NONE) return;
     const uint64_t U = s % P, pass = s / P;
     acquire_signs(sg, pass, &have);
-    uint32_t m[16];
-    sketch_frag<PROBE>(unit_at(R, U), sg.frag + (pass % SIGN_SLOTS) * FRAG_U4, pol, m);
-    finish(sg, ring, s, P, words_v2<PROBE>(m, U * UNIT_BLOCKS, pass));
+    const uint32_t* signs = sg.words + (pass % SIGN_SLOTS) * SIGN_WORDS;
+    finish(sg, ring, s, P, unit_v2<PROBE>(unit_at(R, U), U * UNIT_BLOCKS, pass, signs, pol));
   }
 }
 
