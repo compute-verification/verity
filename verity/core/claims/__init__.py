@@ -147,13 +147,19 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("rate-device", "model",
           "Rate device model: the bandwidth device model, with the trusted host streaming rho fresh bits to each device over "
           "its side link in every window, after the layout and before the deadline, and every tag absorbing all of them, so "
-          "the link carries them and at most L - rho bits of anything else; a word the device neither holds nor reads it "
-          "rebuilds with the codec's inverse, whose ops are charged to accounts other than the compute account", "Rate device"),
-    # falsified by a faster rebuild on the stated device: k words of E, rebuilt from setup and the weights they encode, in
-    # less than k * c_enc of the compute account's units, by any schedule (one word alone, or many at once)
+          "the link carries them and at most L - rho bits of anything else; its side sources are non-adaptive, each "
+          "answering a read at an address the chip picks as a function of E fixed before the window, never of what the chip "
+          "sent, the stream or the oracle; a word the device neither holds nor reads it rebuilds with the codec's inverse, "
+          "whose ops are charged to accounts other than the compute account", "Rate device"),
+    # falsified by a partial completion cheaper than x * c_enc / b: x bits of a word of E, rebuilt from setup, the weights
+    # they encode and the rest of the word, in less than that of the compute account's units, by any schedule; at k = 1
+    # with the payload known, the red team's F27 (r20261012-132841-565e) is such a completion
     Entry("rate-codec-work", "assumption",
-          "Rate codec work: on the stated device, rebuilding k words of E that it neither holds nor reads, from setup and "
-          "the weights they encode, costs at least k * c_enc units of compute, with no amortization across words",
+          "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
+          "neither holds nor reads, from setup and the weights they encode, costs at least x * c_enc / b units of compute "
+          "(b the word's bits), with no amortization across words; at k = 1 it is false when the payload is known (F27: "
+          "keeping a word's top two-thirds, a 2-dimensional lattice completes the rest for about 0.094 of a root at 1,536 "
+          "bits), and holds only for words whose payload is unknown, under Incompressible(W)",
           "Rate codec work", "measured"),
     # the sketch-then-hash rate audit's device (Accounting.Guarantees.RateAuditSketch,
     # Security/Models/Accounting/Guarantees/RateAuditSketch.lean): falsified by a device or host that passes while holding,
@@ -169,10 +175,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean); no attestation hardware backs it
+    # `Verity.Assumptions.TrustedNebiusHost` (Security/Models/Core/Assumptions.lean) states its part about one run; no
+    # attestation hardware backs it
     Entry("trusted-nebius-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host",
-          "Trusted Nebius host", "standard"),
+          "An auditor-trusted device (a network certifier, the memory challenger, the bandwidth audit's challenger) runs "
+          "its stated code on its Nebius host, and its host never restores an earlier copy of the state the device keeps "
+          "there", "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation
@@ -196,6 +204,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
           "than p2ring with a uniformly random odd labeling and uniformly random keys", "PoUS ring instantiation",
           "conjectured"),
+    # `Pouw.PearlC.GγPerCoin (W1.w1Priced dv salt)` (Security/Definitions/Pouw/PearlC/W1Stop.lean): the one open hypothesis
+    # of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced); it implies
+    # the γ-gap property Gγ itself (Pouw.PearlC.W1Stop.gγ_of_withStop)
+    Entry("pouw-gamma-per-coin", "assumption",
+          "Pearl-C's γ-gap property with the budget per coin, at W1 priced (its arithmetic at W1's instruction prices and "
+          "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
+          "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
+          "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
 )}
 
 

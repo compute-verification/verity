@@ -57,11 +57,11 @@ theorem window_lt {P : List Record} {l : String} {W : Nat} (h : windowsOn l P = 
 
 /-- **An egress record's grid is the Program's**: row by row, slot by slot, the bytes of `expectedRow` of the handed
 frames under the declared syncs. -/
-theorem grid_eq {c : Config} {tr : List Event} (key : Lms.PrivateKey) (hT : Ticking c) (hd : Distinct c)
+theorem grid_eq {c : Config} {tr : List Event} (key : Lms.PrivateKey) (session : ByteArray) (hT : Ticking c) (hd : Distinct c)
     (hc : Closed c tr) (ht : HonestTiming c tr) (hnf : NoFault c tr) (hsd : (declaredSyncs c tr).size = c.windows)
     {r : Record}
     (hr : r ∈ published c tr) (hl : r.link = c.egressLink) (hw : r.window < c.windows) :
-    r.grid = Properties.NetworkCertifier.programGrid (unitParams c key) (syncsFn (declaredSyncs c tr) c.windows hsd)
+    r.grid = Properties.NetworkCertifier.programGrid (unitParams c key session) (syncsFn (declaredSyncs c tr) c.windows hsd)
       (openedFrames c tr) r.window := by
   obtain ⟨n, acts, p, hn, hm⟩ := mem_published hr
   obtain ⟨k, b, hE⟩ := egress_at hd hn hm hl
@@ -173,7 +173,7 @@ theorem honestTiming_of {c : Config} {tr : List Event} (hT : Ticking c) (hc : Cl
 
 /-- **`DeviceOutputAccepted`.** -/
 theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
-  intro c tr i next hT he hd hdg hk hc hnf hsd hsa hleft
+  intro c tr i next hT he hd hdg hk hsf hc hnf hsd hsa hleft
   have ht := honestTiming_of hT hc hnf
   replace hsd : (declaredSyncs c tr).size = c.windows := hsd
   obtain ⟨heW, hiW, hof⟩ := closed_records hT hd hc
@@ -195,18 +195,19 @@ theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
       have hgr : gridOf c r = c.egress := by simp [gridOf, hl]
       have hss : syncSetOf c r = some c.syncSet := by simp [syncSetOf, hl]
       rw [hgr, hss]
-      exact ⟨eg, heg, prepare_of hI hs hp (parameters_size heg) (hl ▸ hel) (lt_of_lt_of_le hw hW64) hge.1 hge.2.1
+      exact ⟨eg, heg, prepare_of hI hsf hs hp (parameters_size heg) (hl ▸ hel) (lt_of_lt_of_le hw hW64) hge.1 hge.2.1
         hge.2.2.1 hge.2.2.2 (hnf r hr)⟩
     · have hw := window_lt hiW hr hl
       have hgr : gridOf c r = c.ingress := by simp [gridOf, hl, hdi]
       have hss : syncSetOf c r = none := by simp [syncSetOf, hl, hdi]
       rw [hgr, hss]
-      exact ⟨ig, hig, prepare_of hI hs hp (parameters_size hig) (hl ▸ hil) (lt_of_lt_of_le hw hW64) hgi.1 hgi.2.1
+      exact ⟨ig, hig, prepare_of hI hsf hs hp (parameters_size hig) (hl ▸ hil) (lt_of_lt_of_le hw hW64) hgi.1 hgi.2.1
         hgi.2.2.1 hgi.2.2.2 (hnf r hr)⟩
   obtain ⟨crs, hcrs, hall⟩ := certifyAll_ok hk (published c tr) next hleft hprep
   refine ⟨i, crs, hcrs, fun bytes => ?_⟩
   have hws : ∀ w < c.windows, w < (declaredSyncs c tr).size := fun w hw => hsd ▸ hw
-  apply Properties.NetworkCertifier.honestAccepted (unitParams c i.key) (commitment crs bytes) (evidence c tr) eg ig
+  apply Properties.NetworkCertifier.honestAccepted (unitParams c i.key i.session) (commitment crs bytes) (evidence c tr)
+    eg ig
   · refine ⟨rfl, ?_, ?_⟩
     · intro link hl
       simp only [evidence, List.mem_singleton, List.toList_toArray] at hl
@@ -242,7 +243,7 @@ theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
       have hss : syncSetOf c r = some c.syncSet := by simp [syncSetOf, hl]
       rw [hgr, hss, heg] at hpd
       cases hpd
-      rw [hgr, hdir, grid_eq i.key hT hd hc ht hnf hsd hr hl (hrw ▸ hw), hl, hrw] at hh
+      rw [hgr, hdir, grid_eq i.key i.session hT hd hc ht hnf hsd hr hl (hrw ▸ hw), hl, hrw] at hh
       exact hh
     · rw [hrec]
       unfold certified Properties.NetworkCertifier.honestRecord

@@ -45,7 +45,7 @@ VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_
                      "grant", "ready", "lean_review", "commit_map", "custody", "source-lost")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
                  "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype")
-APPROACH_KEYS = ("approach", "title", "hypothesis", "approach_type", "attacks", "owner", "approach_status", "reason", "cites")
+APPROACH_KEYS = ("approach", "title", "hypothesis", "approach_type", "attacks", "owner", "approach_status", "reason", "cites", "uncites")
 
 
 def test_vocabulary_pins_every_key_by_asserter_and_form():

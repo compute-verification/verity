@@ -100,21 +100,30 @@ frame-v3's SHA-512 tree (`frame-v3-sha512`) doesn't fit, for three reasons:
 - its `owner` is a weights, boundary or replay unit, not a link-window;
 - it pads its leaves to the next power of two of N, so its depth and opening shape change with the occupancy.
 
-**The certificate** is the record digest and a signature over a 64-byte message that binds it to the key and the
-link-window, so a certificate can't be replayed onto another window, link, direction or key:
+**The certificate** is the record digest and a signature over a 64-byte message that binds it to the key, the
+certifier session and the link-window, so a certificate can't be replayed onto another window, link, direction, key or
+session:
 
-    message = SHA-512( [tag] ‖ I ‖ [ [link] ‖ [direction] ‖ u64be window ] ‖ [record digest] ),
-              tag = "verity/network-certificate/v1", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
+    message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [record digest] ),
+              tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
 
-This is LMS's network-certificate role digest (`verity.ml.crypto.lms.certificate_message`), the message its in-proof
-verifier takes. I is the certifier's 16-byte LMS identifier. The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1,
+This is LMS's network-certificate role digest (`verity.ml.crypto.lms.certificate_message`, its tag `lms.ROLES`'
+`network-certificate`), the message its in-proof verifier takes, and Lean's `NetworkCheck.messageInput` hashed. I is the
+certifier's 16-byte LMS identifier. `session` is the certifier session's id: 32 bytes (`lms.SESSION_BYTES`) the
+challenger draws for the session and issues to the certifier, and the audit takes from its parameters, as it takes the
+key; the record head and `service.encode` don't carry it. The tag is the message's own domain separation, distinct from
+the ids of the checks that read it: the network certificate check `verity/network-certificate/v3` and the audit over
+every record `verity/network-records/v2`. The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1,
 h = 20, the whole SHA-512 output, not truncated), and its unforgeability is `euf-cma/lms-sha512-n64`.
 The certifier's `Issuer` holds it as a `Signer` (`key_id`, `sign(message)`; `certificate.LmsSigner`) and the audit as a
 `PublicKey` (`key_id`, `verify(message, signature)`; `certificate.LmsKey`), so the scheme is a parameter of both. `LmsSigner`
-keeps its next unused leaf in an `lms.LeafState`, which it holds from its first signature on. A signer whose state is missing,
-behind the leaves its journal has used or its `floor`, or held by another signer, refuses (`SignerRefused`). The certifier then
-publishes nothing for the link-window (`Issuer.refused` lists it), which fails closed as a `no-verdict`; it never signs with a
-reused leaf.
+keeps its next unused leaf and the session ids it has started in an `lms.LeafState`, which it holds from its first use on.
+The `Issuer` starts its session on the signer (`Signer.start`) before its first signature, and the state refuses a session
+id it has already started, so the device runs once per session. A signer whose state is missing, behind the leaves its
+journal has used or its `floor`, or held by another signer, refuses (`SignerRefused`), and so does a refused start. The
+certifier then publishes nothing for the link-window (`Issuer.refused` lists it), which fails closed as a `no-verdict`; it
+never signs with a reused leaf, nor in a session it has run before. Both rest on `trusted-nebius-host`, where the state
+the device keeps on its host is its next LMS leaf and the session ids it has started.
 
 **The check.** On egress the audit recomputes the record digest from the Program's grid, with a complete status, the
 deadline bit set and the parameters digest of `params` and Σ_sync, and compares it with the certificate's. Under
@@ -133,15 +142,15 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
 - **Public:** the population, the window, the value's leaf count, domain and salted root, the parameters digests and
-  the charge (log2 #Σ_sync per window, 7 bits at 16 × 8), both bound by the spec's context with the link, the run and
-  the certifier's key id, and the check's outputs `verdict` and `deadline`. A rejected link-window shows only the
+  the charge (log2 #Σ_sync per window, 7 bits at 16 × 8), both bound by the spec's context with the link, the run,
+  the certifier's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A rejected link-window shows only the
   service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
   a root entry with another key, or anything more in `window` is refused.
 - **The check** is `service.UNIT`, `NetworkLinkWindow` v0: one opaque primitive from the two leaves' committed digests to
   the verdict bit. It has no gates. Its Program's digest is the check's, so the spec, the stream and each registration
   bind to it, but nothing proves it in a circuit. Its verifier of record is a host-side stand-in, `LinkWindows.verify`,
   that reads the opening: it accepts when the opening reproduces the registered root and the audit accepts both
-  records under the certifier's key (`check_link` against the Program's grid under the declared syncs,
+  records under the certifier's key in its session (`LinkWindows.certifier_session`; `check_link` against the Program's grid under the declared syncs,
   `check_ingress_link` on the status and parameters). The outcome passes the opening's root as the session's, which
   one-stage's audit holds to the registered one. An unset deadline bit is a `no-verdict` there, so a reject; a proof
   after `proof_deadline` is the service's `late`.
@@ -475,16 +484,20 @@ and seven lemmas, and three more proved lemmas:
   - the head is injective on left-packed grids, by enumeration, and binds every field; padding never enters the tree,
     and every frame opens at depth D;
   - the certified audit's verdicts equal the raw and committed audits', per link-window, on egress and ingress;
-  - a certificate moved to another window, link or direction, relabelled, forged or checked under another key is a
-    `signature` violation; an unset deadline bit is a `no-verdict`, another Σ_sync or Q a `mismatch`;
+  - a certificate moved to another window, link or direction, relabelled, forged, checked under another key or signed
+    by the same key in another of the certifier's sessions (the cross-session replay) is a `signature` violation; an unset deadline bit is a `no-verdict`, another Σ_sync or Q a `mismatch`;
   - a signer whose state is missing or behind refuses, and that link-window is a `no-verdict`; it signs again once its
     state is restored, never reusing a leaf. A second signer on held state, or one whose floor is past the state, refuses
     too. The signer is the certifier's `LmsSigner` on a tree of 2^6 leaves (`tests/signers.py`), not the deployed 2^20;
-  - the certificate message is LMS's network-certificate role digest;
+  - a second run of the key under a session its state has started is refused at its start, and its link-windows are
+    `no-verdict`s;
+  - the certificate message is LMS's network-certificate role digest, and binds the key, the session, the link-window
+    and the digest;
 - **`test_network_certifier_service.py`:** one link-window through the proof service: the round trip to an exhaustive
   accept, nothing of a certificate or a violation's kind in what the challenger keeps, each refused registration (an
   extra field, a certificate in the clear, a window other than the order), and each reject (a bad signature, a digest
-  mismatch, another window or link, an unset deadline bit, a late proof, an opening of another root);
+  mismatch, another window or link, a certificate from another session, an unset deadline bit, a late proof, an opening of
+  another root);
 - **`test_network_certifier_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
   brute force, on one link and on several under one clock;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
