@@ -139,6 +139,23 @@ def test_collective_bus_world_3_peer_layout_and_rank_order():
     assert ag.shape == (2, 12) and ag[0, :4].tolist() == [1.0] * 4 and ag[0, 4:8].tolist() == [10.0] * 4 and ag[0, 8:].tolist() == [100.0] * 4
 
 
+def test_a_world_4_all_reduce_refuses_on_a_target_without_batch_invariance(monkeypatch):
+    """`AllReduce_v2` states the tree chain vLLM's batch-invariant mode pins NCCL to.  On a target without batch invariance the served
+    all-reduce is whatever route vLLM's dispatch takes, so the toy rank's first all-reduce (its embedding's) refuses; the default target
+    derives the same rank."""
+    pytest.importorskip("torch")
+    from tests.pipeline import tp_toy as T
+    from verity_vllm.program.frontend.derive import derive_report
+    from verity_vllm.program.frontend.rules.vllm_bindings import observations as VB, vllm_ruleset
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    T.derive_rank(4, 1)
+    mod, inputs, _record, _inner = T.rank_source(4, 1)
+    monkeypatch.setitem(VB._OBSERVED, "target_profile", TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False))
+    rep = derive_report(mod, inputs, mode="profile", profile="b1-eager-v3", rules=vllm_ruleset(), name="vLLMStep[ToyRank]",
+                        check_registry=True, rank=(4, 1))
+    assert not rep.ok and "AllReduce_v2 states the tree chain vLLM's batch-invariant mode pins NCCL to" in rep.unsupported.hint, rep.unsupported
+
+
 # --- tp_links.json: v2 schema at world N, v1 files read as v2 ----------------------------------------------------------------
 
 def test_read_tp_links_upgrades_v1_and_accepts_v2(tmp_path):

@@ -10,6 +10,7 @@ from verity_vllm.program.frontend.derive import StaticIndex
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
 
 
@@ -140,10 +141,11 @@ class AllReduceRule(OpRule):
     """[lane vllm-tp-n] `verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_reduce{WORLD=W, N}` (`AllReduce_v2{WORLD,N}`:
     the chain of one-rounding bf16 additions in `b1_tp2.allreduce_order`) per row, for a world of W > 2 ranks (world 2 is `AllReduce2Rule`,
     the recorded identity).  Exactly one operand is this rank's own partial; the other W-1 are PEER INPUTS bound by `tp_links.json` to
-    the other ranks' committed partials."""
+    the other ranks' committed partials.  That chain is the one vLLM's batch-invariant mode pins NCCL to; on a target without batch
+    invariance the all-reduce is whichever route vLLM's dispatch takes (symmetric memory, FlashInfer, NCCL's own algorithm choice)."""
     modes = frozenset({"profile"})
     info = RuleInfo("AllReduce[tp]", 1, "op-binding", applies_to="verity_tp::all_reduce([a_0 .. a_{W-1}] each [.., N] bf16) (rank order), W > 2",
-                    preconditions=("every operand is a bf16 value collection of identical shape", "world size > 2"),
+                    preconditions=("every operand is a bf16 value collection of identical shape", "world size > 2", "the target is batch-invariant"),
                     evidence_domain="structural; numerics: AllReduce_v2{WORLD,N} states NCCL's intra-node tree chain (b1_tp2.allreduce_order); the Match value leg checks it")
 
     def targets(self):
@@ -153,6 +155,9 @@ class AllReduceRule(OpRule):
         parts = _tp_parts(node)
         if len(parts) <= 2:
             return f"world {len(parts)}: the two-rank collective is AllReduce2 (recorded identity)"
+        if not active_target_profile().batch_invariant:
+            return ("numerics_unregistered: AllReduce_v2 states the tree chain vLLM's batch-invariant mode pins NCCL to "
+                    "(b1_tp2.allreduce_order); on a target without batch invariance the all-reduce is the route vLLM's dispatch takes")
         for i, a in enumerate(parts):
             r = _row_value(ctx, a, f"part_rank{i}")
             if r:
