@@ -22,6 +22,8 @@ Candidate 3's statements are checked the same way at coins the prover's record d
 the session (`C3`, `--rec-inner-transcript` with the verifier's inner shape `rec-inner --sparse`): RecSparse's `v`
 (`rec-sparse-v`, `checkSparse`) at each rep's inner points and `sparse/rep<r>`'s coins; R's levels' `coef` and `dirs`
 (`checkStackedLevel`) and R's opening's `v` (`checkOpening`) at `stacked/rep0`'s coins and the two reps' claim points.
+RecSparse's refusals that read only the points' sizes are checked on the inner statement itself at every candidate-3
+session's setup, whatever its unit (`checkAtC3`, `checkInnerRange`).
 -/
 import Flock.Keccak
 import Flock.Registered
@@ -96,13 +98,24 @@ structure Inner where
 /-- A recursive session's inner statement (PROTOCOL.md §16.16), on the coins the coin server draws. -/
 def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 
-/-- The inner statement as the recursive audit's event reads it (`AcceptsStmt`): set up from its circuit and public files
-on the coin server's coins, with an `m` that `Zk.schedule` accepts, and its session's record decoded. -/
-def Inner.load (unit : String) (f : Files) : V Inner := do
+/-- The inner circuit's unit range: META's one range of its unit net, whose slots the sparse phase's layout factors weigh. -/
+def unitRangeOf (st : Stmt) : V Range :=
+  match st.c.ranges.filter (·.kind == Kind.net st.c.unitNet) with
+  | #[r] => .ok r
+  | rs => .error s!"the inner circuit has {rs.size} ranges of its unit net, not one"
+
+/-- The inner statement, set up from its circuit and public files on the coin server's coins, and its session's spec. -/
+def Files.stmt (unit : String) (f : Files) : V (SessionSpec × Stmt) := do
   let (spec, sts) ← match Stmt.setupTables innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition) with
     | .ok x => pure x
     | .error e => throw s!"rec-coins: {unit}: the inner statement: {e}"
   let some st := sts[0]? | throw s!"rec-coins: {unit}: the inner statement has no table"
+  return (spec, st)
+
+/-- The inner statement as the recursive audit's event reads it (`AcceptsStmt`): set up from its circuit and public files
+on the coin server's coins, with an `m` that `Zk.schedule` accepts, and its session's record decoded. -/
+def Inner.load (unit : String) (f : Files) : V Inner := do
+  let (spec, st) ← f.stmt unit
   if let some i := f.inner then
     if let .error e := RecVStar.checkInnerStmt i st then throw s!"rec-coins: {unit}: {e}"
   if let .error e := Zk.schedule st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
@@ -119,9 +132,7 @@ def Inner.load (unit : String) (f : Files) : V Inner := do
            combOf := fun _ info => do
              let f := info.lc.fold
              setup.fold.folded f.alpha f.beta f.lw f.rhoIn f.ts
-           unitRange := match st.c.ranges.filter (·.kind == Kind.net st.c.unitNet) with
-             | #[r] => .ok r
-             | rs => .error s!"the inner circuit has {rs.size} ranges of its unit net, not one" }
+           unitRange := unitRangeOf st }
 
 /-- Rep `r`'s coins, round by round: its stream's, as `verifyRep` replays them (Verify.lean:40). -/
 def Inner.rounds (inn : Inner) (r : Nat) : V (Array (Array F128)) :=
@@ -335,6 +346,21 @@ def checkSparse (inn : Inner) (c3 : C3) (c : Circuit) (pub : Public) (own : Arra
     pure (padTo (words v) (RecSparse.portWords (RecSparse.nv sh)))
   checkValue c pub own "v" SPARSE_V_VALUE rows fun r => s!"rep {r}: RecSparse's v"
 
+/-- **Check 5's sparse refusals on the inner statement itself**: the verifier's inner shape `i` is candidate 3's at `st`
+(`RecVStar.checkInnerStmt`), and at its RecSparse shape, which is valid, the inner points' `k_log − 6` coordinates are not
+short of its `ELL − 6` (`sparseV`'s check) and the layout factors at the inner circuit's unit range are computed
+(`layoutFactors`). Both read only the points' sizes, so at zero points this is their verdict at every rep's points. -/
+def checkInnerRange (i : RecVStar.Inner) (st : Stmt) : V Unit := do
+  RecVStar.checkInnerStmt i st
+  let some sp := i.sparse | return
+  if !sp.valid then
+    throw s!"rec-inner: {RecSparse.unitName sp}: rec-sparse's NU is at least 1, ELL at least 6 and T_LOG at most 16"
+  let xs := Array.replicate (st.c.kLog - 6) (0 : F128)
+  if xs.size < sp.ell - RecSparse.PRE_ROUNDS then
+    throw s!"rec-inner: the inner points are short of {RecSparse.unitName sp}'s"
+  let rng ← (unitRangeOf st).mapError (s!"rec-inner: " ++ ·)
+  if let .error e := layoutFactors sp xs xs rng then throw s!"rec-inner: {e}"
+
 /-- R's registered opening as the verifier computes it: its opening-only shape, `v` (the coefficient slots; no comb), each
 Ligerito level's query positions and eq(α), and the final check's κ. -/
 structure Opening where
@@ -501,6 +527,17 @@ the verifier's inner shape `i`, which `Inner.load` checks it against. -/
 def Source.atC3 : Option Source → Option RecVStar.Inner → Option RecVStar.InnerCommits → Option Source
   | some (.files f), some i, some cs => some (.files (if cs.streams.isEmpty then f else { f with inner := some i }))
   | s, _, _ => s
+
+/-- **Candidate 3's inner statement at a session's setup**: where the verifier's inner shape names a RecSparse shape, the
+inner statement set up from its files (`Files.stmt`) passes `checkInnerRange`, whatever the session's unit; such a session
+without the inner statement's files is refused. -/
+def checkAtC3 (inner : Option RecVStar.Inner) (src : Option Source) : V Unit := do
+  let some i := inner | return
+  if i.sparse.isNone then return
+  let some (.files f) := src
+    | throw ("rec-inner: candidate 3's session needs the inner statement (--rec-inner-circuit, --rec-inner-public, " ++
+        "--rec-inner-partition, --rec-inner-session): its sparse range is checked on it")
+  checkInnerRange i (← f.stmt "the inner session").2
 
 /-- V*'s statement `st` against the verifier's coins: a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…`,
 `rec-open-stacked/…` or `rec-opening/…` unit is refused unless the verifier holds its registered reads and the inner session

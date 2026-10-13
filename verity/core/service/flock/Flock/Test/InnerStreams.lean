@@ -2,7 +2,7 @@
 `RecVStar.fixedRow` on an inner session of two reps of two message rounds each and R's stream (one message round, a level-0
 top of two nodes and a level-1 top of one): what row `x` of each value the inner transcript fixes is.
 -/
-import Flock.RecVStar
+import Flock.RecCoins
 
 namespace Flock.Test.InnerStreams
 
@@ -249,5 +249,42 @@ def badTops (ns : List Nat) : Option String :=
   why (checkCommitRounds i (c3cs (some r23))) == some ("rec-inner: the inner transcript holds R's stream " ++
     "(stacked/rep0), and the verifier's inner shape names no schedule of R's")
 #guard why (checkCommitRounds { c3 with stacked := none } (withS #[sparseAt 0, sparseAt 1])) == none
+
+/-! Check 5's sparse refusals on the inner statement (`RecCoins.checkInnerRange`), at 2d61's shape: k_log 22, so 16 inner
+point coordinates, and its unit range of 64 slots of 2^13 rows at 256 (`rec_vstage stage`'s RANGE). -/
+
+def unitRng (slotLog := 13) (pos0 := 256) (count := 64) : Range := { kind := .net 0, slotLog, pos0, count, role := .none }
+def innerSt (kLog := 22) (ranges := #[unitRng]) : Stmt :=
+  { (default : Stmt) with m := 25, regions := #[default, default, default],
+                          c := { (default : Circuit) with kLog, unitNet := 0, ranges } }
+def range (i : Inner) (st : Stmt := innerSt) : Option String := err (RecCoins.checkInnerRange i st)
+
+#guard range c3 == none
+-- the inner shape is candidate 3's at the statement (`checkInnerStmt`)
+#guard range { c3 with sparse := none } == err (checkInnerShape { c3 with sparse := none } 25 22 3)
+#guard range c3 (innerSt (kLog := 21)) ==
+  some "rec-inner: the verifier's inner shape (m 25, k_log 22, regions 3) is not the inner statement's (m 25, k_log 21, regions 3)"
+-- a RecSparse shape that is not valid
+#guard range { c3 with sparse := some ⟨0, 13, 6, 0⟩ } ==
+  some "rec-inner: rec-sparse/n0-e13-s6-t0: rec-sparse's NU is at least 1, ELL at least 6 and T_LOG at most 16"
+-- 16 inner point coordinates, short of ELL − 6 = 17
+#guard range { c3 with sparse := some ⟨18, 23, 6, 0⟩ } ==
+  some "rec-inner: the inner points are short of rec-sparse/n18-e23-s6-t0's"
+-- no one range of the unit net
+#guard range c3 (innerSt (ranges := #[unitRng, { unitRng with kind := .net 1 }, unitRng])) ==
+  some "rec-inner: the inner circuit has 2 ranges of its unit net, not one"
+-- the unit range's slots not of 2^ELL rows, or past the block's 2^(k_log − ELL) = 512
+#guard range c3 (innerSt (ranges := #[unitRng (slotLog := 12)])) == some ("rec-inner: the inner circuit's unit range " ++
+  "(slot_log 12, pos0 256, count 64) is not at most 64 slots of 2^13 rows inside the block")
+#guard range c3 (innerSt (ranges := #[unitRng (pos0 := 449)])) == some ("rec-inner: the inner circuit's unit range " ++
+  "(slot_log 13, pos0 449, count 64) is not at most 64 slots of 2^13 rows inside the block")
+#guard range c3 (innerSt (ranges := #[unitRng (pos0 := 448)])) == none
+
+-- at a session's setup: only where the inner shape names a RecSparse shape, and then on the inner statement's files
+def NO_FILES : String := "rec-inner: candidate 3's session needs the inner statement (--rec-inner-circuit, --rec-inner-public, " ++
+  "--rec-inner-partition, --rec-inner-session): its sparse range is checked on it"
+#guard err (RecCoins.checkAtC3 none none) == none && err (RecCoins.checkAtC3 (some { c3 with sparse := none }) none) == none
+#guard err (RecCoins.checkAtC3 (some c3) none) == some NO_FILES
+#guard err (RecCoins.checkAtC3 (some c3) (some (.coins .null ""))) == some NO_FILES
 
 end Flock.Test.InnerStreams
