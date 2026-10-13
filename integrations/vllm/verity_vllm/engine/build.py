@@ -228,19 +228,28 @@ def vllm_has_flashinfer() -> bool | None:
         return None
 
 
-def observed_flash_attn_version(model: Any) -> int | None:
-    """[R13 hopper] The `vllm_flash_attn_version` the instantiated attention layers carry (one value over all layers), None if absent / mixed."""
+def flash_attn_versions(model: Any) -> set:
+    """The `vllm_flash_attn_version` values the instantiated attention impls carry; empty when none is a FlashAttention impl (vLLM's
+    MLA impls, sparse ones included, carry none)."""
     vs: set = set()
     for _, mod in model.named_modules():
         impl = getattr(mod, "impl", None)
         if impl is not None and hasattr(impl, "vllm_flash_attn_version"):
             vs.add(getattr(impl, "vllm_flash_attn_version"))
+    return vs
+
+
+def observed_flash_attn_version(model: Any) -> int | None:
+    """[R13 hopper] The `vllm_flash_attn_version` the instantiated attention layers carry (one value over all layers), None if absent / mixed."""
+    vs = flash_attn_versions(model)
     return int(vs.pop()) if len(vs) == 1 and None not in vs else None
 
 
 def target_mismatches(engine: Engine) -> list[str]:
     """[R13 hopper] Declared `TargetProfile` vs the built engine: device capability + SM count (`torch.cuda.get_device_properties`) and the
-    attention layers' FA version (`effective_flash_attn_version`).  Empty = the engine executes the declared target."""
+    attention layers' FA version (`effective_flash_attn_version`).  Empty = the engine executes the declared target.  An engine whose
+    attention impls carry no FA version (GLM-5.3's sparse MLA) is no FA-version question, as for the Build's read-back
+    (`pipeline.build`)."""
     tp = engine.target
     if tp is None:
         return []
@@ -251,7 +260,7 @@ def target_mismatches(engine: Engine) -> list[str]:
     if int(p.multi_processor_count) != int(tp.num_sms):
         bad.append(f"num_sms declared {tp.num_sms}, device {p.multi_processor_count}")
     fav = observed_flash_attn_version(engine.model)
-    if fav != tp.effective_flash_attn_version():
+    if fav != tp.effective_flash_attn_version() and (fav is not None or flash_attn_versions(engine.model)):
         bad.append(f"flash_attn_version declared {tp.flash_attn_version!r} (effective {tp.effective_flash_attn_version()}), layers report {fav!r}")
     # [R15 compiled] the engine must realise the declared EXECUTION: eager profile -> enforce_eager True; `piecewise` -> torch.compile
     # (VLLM_COMPILE) + CUDAGraphMode PIECEWISE read back from the built vllm_config (an eager engine labelled compiled, or a compiled one

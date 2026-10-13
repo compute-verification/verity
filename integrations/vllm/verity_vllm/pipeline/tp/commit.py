@@ -258,7 +258,7 @@ class Options:
 def main(args: Options) -> int:
     from verity_vllm.engine import engine_profile as prof
     prof.apply_env()
-    from verity_vllm.pipeline.tp import lease as TPL
+    from verity_vllm.pipeline.tp import lease as TPL, target as TT
     from vllm import LLM
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.commit import git_head, run_workload
@@ -292,22 +292,22 @@ def main(args: Options) -> int:
     (out := Path(args.out)).mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, None)
     TPL.acquire()             # a leased Commit's GPUs, all at once, to its last run's finalize (pipeline.tp.lease); the target reads the device
-    PO.commit_guard(va.target_of_workload(wl), world=args.tp, installs=False)      # exit 3 when the target declares protocols
+    target = PO.commit_guard(va.target_of_workload(wl), world=args.tp, installs=False)      # exit 3 when the target declares protocols
+    target_env, target_kw = TT.apply(target)      # as `tp-capture` applies it, and every rank's engine checked against it (`tp.target`)
     case = va.case_of(wl, args.case)
-    env_flags = prof.apply_env()
+    env_flags = {**prof.apply_env(), **target_env}
     cp = prof.checkpoint_for(case, args.checkpoints)
     kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
-    kw["enable_prefix_caching"] = False
-    kw["max_num_seqs"] = int(args.max_num_seqs)
+    kw.update({"enable_prefix_caching": False, "max_num_seqs": int(args.max_num_seqs), **target_kw})
     kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k not in ("tensor_parallel_size",)})
-    kw.update(parse_engine_args(args.engine_arg))
-    kw["worker_extension_cls"] = EXTENSION
+    kw.update(parse_engine_args(args.engine_arg), worker_extension_cls=EXTENSION)
     print(f"[tp2commit] tp={args.tp} case={case} committer={args.committer} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
     llm, build_s, topo = PH.engine(lambda: LLM(**kw), args.tp, args.rpc_timeout, model=cp["repo"], enforce_eager=kw.get("enforce_eager"), case=case, max_num_seqs=args.max_num_seqs)
-    eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case)
+    TT.require_ranks(llm, target, args.rpc_timeout)
+    eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case, target=target)
     world = len(topo)
     versions = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
-                "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
+                "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")}, "target": TT.as_json(target),
                 "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT", "HIDDEN_GPU"))},
                 "env_required": {"NCCL_P2P_DISABLE": "1"}, "ranks": topo, "root_combination": "tp_run_root = SHA-256(tag || u32 world || (u32 rank || root_rank)...)",
                 "root_tag": TP_ROOT_TAG.decode(), "layout_version_per_rank": "chunk-leaf-v1 (unchanged)", "required_classes": list(required_classes),

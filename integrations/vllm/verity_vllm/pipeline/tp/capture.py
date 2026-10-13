@@ -15,6 +15,10 @@ uninstrumented throwaway warm-up, our request ids) with two differences forced b
     plus `rank<r>/{values,snapshots.json,versions.json,cos_sin_cache.npy}`, `stats.rank<r>.json`, `tokens.rank<r>.json`, and the
     driver's `tokens.json` (what the engine returned = rank 0's sampler), `topology.json` (per-rank probe), `ranks.json`.
 
+The workload's declared target (`target_of_workload`) is applied as `build_engine` applies it (its environment knobs, then its engine
+arguments under the CLI's), every rank's engine is checked against it before anything runs, and each rank's header attests it
+(`pipeline.tp.target`).
+
 `--inventory-out PATH`: every rank's module inventory of the loaded engine, before the warm-up, as one document
 (`meta_inventory.live_document` of `rank_inventory`), what `capture-map check --inventory` reads, so a capture-map check on the
 target costs no engine load of its own.
@@ -42,6 +46,7 @@ prof.apply_env()
 
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.engine.rank_worker import EXTENSION
+from verity_vllm.pipeline.tp import target as TT
 
 
 def parse_engine_args(items: list[str]) -> dict[str, Any]:
@@ -111,6 +116,8 @@ def main(args: Options) -> None:
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, args.max_tokens)
     TPL.acquire()        # a leased row's Match leg: every GPU of the task from here to the exit (`row_tp.TpRow.match`); nothing reads the device before
+    target = va.target_of_workload(wl)
+    target_env, target_kw = TT.apply(target)       # its env knobs before vLLM reads them; its engine args under the CLI's
     case = va.case_of(wl, args.case)
     revision = args.adapter_revision
     if revision is None:
@@ -118,13 +125,14 @@ def main(args: Options) -> None:
             revision = json.loads(Path("EXPORT.json").read_text()).get("commit", "unknown")
         except Exception:  # noqa: BLE001
             revision = "unknown"
-    env_flags = prof.apply_env()
+    env_flags = {**prof.apply_env(), **target_env}
     cp = prof.checkpoint_for(case, args.checkpoints)
     if args.verify_weights:
         prof.verify_local_weights(cp)
     kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
     kw["enable_prefix_caching"] = False
     kw["max_num_seqs"] = int(args.max_num_seqs)
+    kw.update(target_kw)
     kw.update(parse_engine_args(args.engine_arg))
     observer = not (args.no_observer or args.census)
     with_extension = observer or args.census
@@ -135,7 +143,8 @@ def main(args: Options) -> None:
     t0 = time.perf_counter()
     llm = LLM(**kw)
     build_s = time.perf_counter() - t0
-    eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case)
+    eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case, target=target)
+    TT.require_ranks(llm, target, args.rpc_timeout)
     core = getattr(llm.llm_engine, "engine_core", None)
     inner = getattr(core, "engine_core", None) or core
     executor = getattr(inner, "model_executor", None)
@@ -151,6 +160,7 @@ def main(args: Options) -> None:
         topo["in_process_runner"] = f"none: {e}"
     versions = va.versions_doc(eng)
     versions["gpu_count"] = __import__("torch").cuda.device_count()
+    versions["target"] = TT.as_json(target)
     (out / "versions.json").write_text(json.dumps(versions, indent=1) + "\n")
     if with_extension:
         topo["ranks"] = llm.collective_rpc("tp2_probe", timeout=args.rpc_timeout)
@@ -176,7 +186,8 @@ def main(args: Options) -> None:
             "out_dir": str(out), "workload": wl, "case": case, "cp": cp, "engine_kwargs": {k: v for k, v in kw.items()},
             "env_flags": env_flags, "snapshot_steps": steps, "snapshot_max_bytes": args.snapshot_max_bytes, "adapter_revision": revision,
             "wheel_sha256": args.wheel_sha256, "vllm_commit": args.vllm_commit, "reenter": not args.no_reenter, "triton": not args.no_triton,
-            "module_hooks": not args.no_module_hooks, "weights_verified": bool(args.verify_weights), "argv": sys.argv})
+            "module_hooks": not args.no_module_hooks, "weights_verified": bool(args.verify_weights), "argv": sys.argv,
+            "target": target})
         ranks_doc["install"] = inst
         print(f"[tp2] observer installed on {len(inst)} ranks: " + "; ".join(f"rank {r['rank']} pid {r['pid']} roots {r['roots']} pid={r['profile_id']}" for r in inst), flush=True)
         if args.param_hashes:

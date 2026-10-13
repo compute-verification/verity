@@ -197,7 +197,7 @@ class TP2CaptureWorkerExtension:
     def tp2_install(self, *, out_dir: str, workload: dict, case: str, cp: dict, engine_kwargs: dict, env_flags: dict,
                     snapshot_steps: list[int], snapshot_max_bytes: int, adapter_revision: str, wheel_sha256: str | None,
                     vllm_commit: str | None, reenter: bool = True, triton: bool = True, module_hooks: bool = True,
-                    weights_verified: bool = False, argv: list[str] | None = None) -> dict[str, Any]:
+                    weights_verified: bool = False, argv: list[str] | None = None, target: Any = None) -> dict[str, Any]:
         import torch
 
         from verity_vllm.engine import vllm_adapter as va
@@ -211,7 +211,7 @@ class TP2CaptureWorkerExtension:
         runner = self.model_runner
         model = runner.get_model()
         engine = va.Engine(llm=_LLMShim(self), runner=runner, model=model, cp=dict(cp), kwargs=dict(engine_kwargs),
-                           env_flags=dict(env_flags), build_s=0.0, case=case)
+                           env_flags=dict(env_flags), build_s=0.0, case=case, target=target)
         header = va.make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
                                 extra_notes={"tp2": {"rank": rank, "world_size": world, "log": f"log.rank{rank}.jsonl.gz",
                                                      "seam": "worker_extension_cls " + EXTENSION, "facts": facts},
