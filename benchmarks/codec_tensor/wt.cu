@@ -989,11 +989,12 @@ __device__ __forceinline__ u64 fold64(const u32 (&x)[NL]) {
   return h;
 }
 
-// mode 0: decode and XOR (checksum); mode 2: also write the result's limbs (out: NL u32 a word).
+// mode 0: decode and XOR (checksum); mode 2: also write the result's limbs (out: NL u32 a word), through shared memory so
+// a warp's stores are consecutive u32s (whole sectors), not each thread's word at a stride of NL u32s.
 template <int K, int MODE>
 __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__ store, u32 *__restrict__ out, u64 n,
                                                      u64 base, unsigned long long *xr) {
-  __shared__ __align__(16) uint8_t sm[STAGE_BYTES];
+  __shared__ __align__(16) uint8_t sm[MODE == 2 && WPB * NL * 4 > STAGE_BYTES ? WPB * NL * 4 : STAGE_BYTES];
   u64 acc = 0;
   u32 t[NL], step[NL];
   {
@@ -1013,15 +1014,25 @@ __global__ void __launch_bounds__(WPB) decode_kernel(const uint8_t *__restrict__
     stage_words(store, first, n, sm);
     __syncthreads();
     const u64 i = first + threadIdx.x;
+    u32 y[NL];
     if (i < n) {
-      u32 y[NL];
       load_word_smem(sm + threadIdx.x * S, y);
       decode_word_wk<K>(y, t);
-      if (MODE == 2) {
-#pragma unroll
-        for (int k = 0; k < NL; ++k) out[i * NL + k] = y[k];
-      }
       acc ^= fold64(y);
+    }
+    if (MODE == 2) {
+      u32 *so = reinterpret_cast<u32 *>(sm);   // word w's limb l at w NL + (l + w) % NL: no bank conflicts either way
+      __syncthreads();
+      if (i < n) {
+#pragma unroll
+        for (int k = 0; k < NL; ++k) so[threadIdx.x * NL + (k + threadIdx.x) % NL] = y[k];
+      }
+      __syncthreads();
+      const u32 c = (u32)min((u64)WPB, n - first) * NL;
+      for (u32 x = threadIdx.x; x < c; x += WPB) {
+        const u32 w = x / NL, l = x % NL;
+        out[first * NL + x] = so[w * NL + (l + w) % NL];
+      }
     }
     u32 t2[NL];
     submod_cc(t, step, t2);

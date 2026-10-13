@@ -192,6 +192,28 @@ __global__ void __launch_bounds__(32 * CW) pg_combine(const float *__restrict__ 
                  : make_uint2(bf16x2_rn(iz, iz, r0, r1), bf16x2_rn(iz, iz, r0, r1));
 }
 
+// A warp's words, one a lane (dst nullptr: none), stored through shared memory a whole word to Q = NL/4 lanes, so a store
+// instruction writes whole 32-byte sectors (a lane's own 16-byte stores at a word's stride would each write half of one).
+// Every lane of the warp calls it; blocks are 128 threads.
+constexpr int SQ = NL / 4;
+static_assert(NL % 4 == 0 && 32 % SQ == 0, "a word is whole 16-byte chunks, a whole number of them to a warp");
+
+__device__ __forceinline__ void store_warp(u32 *dst, const u32 (&x)[NL]) {
+  __shared__ uint4 sw[4][32][SQ + 1];
+  const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
+#pragma unroll
+  for (int q = 0; q < SQ; ++q) sw[w][lane][q] = make_uint4(x[4 * q], x[4 * q + 1], x[4 * q + 2], x[4 * q + 3]);
+  __syncwarp();
+  const int sub = lane % SQ, grp = lane / SQ;
+#pragma unroll
+  for (int r = 0; r < SQ; ++r) {
+    const int o = r * (32 / SQ) + grp;
+    uint4 *d = reinterpret_cast<uint4 *>(__shfl_sync(0xffffffffu, reinterpret_cast<unsigned long long>(dst), o));
+    if (d) d[sub] = sw[w][o][sub];
+  }
+  __syncwarp();
+}
+
 // A step's new tokens into the cache: token i's head g, K then V, as HW words at slot slots[i] (vLLM's slot mapping,
 // block bs slots; negative: padding, skipped), encoded at k rounds (ENC) or as they are. A thread a word.
 template <bool ENC>
@@ -200,17 +222,21 @@ __global__ void __launch_bounds__(128) pg_append_kernel(const uint16_t *__restri
                                                         int n, u32 *__restrict__ cache, int bs, int sb, int sh, int ss,
                                                         u64 lbase, int k) {
   const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
-  if (u >= (u64)n * KV_HEADS * HW) return;
-  const int j = (int)(u % HW), g = (int)(u / HW % KV_HEADS), i = (int)(u / ((u64)HW * KV_HEADS));
-  const long long slot = slots[i];
-  if (slot < 0) return;
-  const uint16_t *src = (j < HW / 2 ? key + (size_t)i * kstride : val + (size_t)i * vstride) + (size_t)g * HEAD_DIM +
-                        (size_t)(j % (HW / 2)) * (WB / 2);
-  u32 x[NL];
-  load(reinterpret_cast<const u32 *>(src), x);
-  const u64 wl = (u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j;
-  if constexpr (ENC) encode_word(x, lbase + wl, k);
-  store(cache + wl * NL, x);
+  u32 x[NL] = {};
+  u32 *dst = nullptr;
+  if (u < (u64)n * KV_HEADS * HW) {
+    const int j = (int)(u % HW), g = (int)(u / HW % KV_HEADS), i = (int)(u / ((u64)HW * KV_HEADS));
+    const long long slot = slots[i];
+    if (slot >= 0) {
+      const uint16_t *src = (j < HW / 2 ? key + (size_t)i * kstride : val + (size_t)i * vstride) + (size_t)g * HEAD_DIM +
+                            (size_t)(j % (HW / 2)) * (WB / 2);
+      load(reinterpret_cast<const u32 *>(src), x);
+      const u64 wl = (u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j;
+      if constexpr (ENC) encode_word(x, lbase + wl, k);
+      dst = cache + wl * NL;
+    }
+  }
+  store_warp(dst, x);
 }
 
 // pg_append_kernel over layers: layer l's row i of rows at u = (l rows + i) KV_HEADS HW + g HW + j; its table entry
@@ -220,21 +246,24 @@ __global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restr
                                                               int sb, int sh, int ss, int k) {
   const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
   const u64 per = (u64)rows * KV_HEADS * HW;
-  if (u >= (u64)layers * per) return;
-  const u64 *e = tab + 8 * (u / per);
-  const u64 r = u % per;
-  const int j = (int)(r % HW), g = (int)(r / HW % KV_HEADS), i = (int)(r / ((u64)HW * KV_HEADS));
-  if (i >= (int)e[5]) return;
-  const long long slot = reinterpret_cast<const long long *>(e[4])[i];
-  if (slot < 0) return;
-  const uint16_t *src = (j < HW / 2 ? reinterpret_cast<const uint16_t *>(e[0]) + (size_t)i * e[2]
-                                    : reinterpret_cast<const uint16_t *>(e[1]) + (size_t)i * e[3]) +
-                        (size_t)g * HEAD_DIM + (size_t)(j % (HW / 2)) * (WB / 2);
-  u32 x[NL];
-  load(reinterpret_cast<const u32 *>(src), x);
-  const u64 wl = (u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j;
-  if constexpr (ENC) encode_word(x, e[7] + wl, k);
-  store(reinterpret_cast<u32 *>(e[6]) + wl * NL, x);
+  u32 x[NL] = {};
+  u32 *dst = nullptr;
+  if (u < (u64)layers * per) {
+    const u64 *e = tab + 8 * (u / per);
+    const u64 r = u % per;
+    const int j = (int)(r % HW), g = (int)(r / HW % KV_HEADS), i = (int)(r / ((u64)HW * KV_HEADS));
+    const long long slot = i < (int)e[5] ? reinterpret_cast<const long long *>(e[4])[i] : -1;
+    if (slot >= 0) {
+      const uint16_t *src = (j < HW / 2 ? reinterpret_cast<const uint16_t *>(e[0]) + (size_t)i * e[2]
+                                        : reinterpret_cast<const uint16_t *>(e[1]) + (size_t)i * e[3]) +
+                            (size_t)g * HEAD_DIM + (size_t)(j % (HW / 2)) * (WB / 2);
+      load(reinterpret_cast<const u32 *>(src), x);
+      const u64 wl = (u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j;
+      if constexpr (ENC) encode_word(x, e[7] + wl, k);
+      dst = reinterpret_cast<u32 *>(e[6]) + wl * NL;
+    }
+  }
+  store_warp(dst, x);
 }
 
 // nb whole blocks (blocks[b], bw words each, contiguous) of a layer's cache into out, block b at word b bw: decoded
@@ -243,13 +272,16 @@ template <bool ENC>
 __global__ void __launch_bounds__(128) pg_gather_kernel(const u32 *__restrict__ cache, const int *__restrict__ blocks,
                                                         int nb, int bw, u32 *__restrict__ out, u64 lbase, int k) {
   const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
-  if (u >= (u64)nb * bw) return;
-  const int b = (int)(u / bw), w = (int)(u % bw);
-  const u64 wl = (u64)blocks[b] * bw + w;
-  u32 x[NL];
-  load(cache + wl * NL, x);
-  if constexpr (ENC) decode_word(x, lbase + wl, k);
-  store(out + u * NL, x);
+  u32 x[NL] = {};
+  u32 *dst = nullptr;
+  if (u < (u64)nb * bw) {
+    const unsigned b = (unsigned)u / (unsigned)bw, w = (unsigned)u % (unsigned)bw;   // pg_gather: nb bw < 2^32
+    const u64 wl = (u64)blocks[b] * bw + w;
+    load(cache + wl * NL, x);
+    if constexpr (ENC) decode_word(x, lbase + wl, k);
+    dst = out + ((u64)blockIdx.x * 128 + threadIdx.x) * NL;   // u again, not held across the decode (ptxas spills it)
+  }
+  store_warp(dst, x);
 }
 
 __global__ void __launch_bounds__(256) pg_reduce_kernel(const float *__restrict__ part, int nch, int n, int mn,
@@ -337,7 +369,7 @@ int pg_append_multi(const unsigned long long *tab, int layers, int rows, int bs,
 
 int pg_gather(const void *cache, const int *blocks, int nb, int bw, void *out, unsigned long long lbase, int encoded,
               int k, cudaStream_t s) {
-  if (nb < 0 || bw < 1 || (encoded && (k < 1 || k > kv::KMAX))) return -1;
+  if (nb < 0 || bw < 1 || (unsigned long long)nb * bw >= 1ull << 32 || (encoded && (k < 1 || k > kv::KMAX))) return -1;
   if (!nb) return 0;
   const unsigned long long words = (unsigned long long)nb * bw;
   (encoded ? kv::pg_gather_kernel<true> : kv::pg_gather_kernel<false>)<<<(unsigned)((words + 127) / 128), 128, 0, s>>>(
