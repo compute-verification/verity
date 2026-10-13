@@ -212,7 +212,8 @@ theorem sparsePart_ends {e : ExecHolo} {u : C3Run e} (hr : ∀ i, RepTie e u i) 
   obtain ⟨l, c, hl⟩ := ends_of_kinds ((hks 1).trans hσ)
   refine ⟨?_, (runSteps u).take 2 ++ (firstSteps (u.ts 0) ++ u.ts 1 ++ u.sp 0) ++ l, c, ?_⟩
   · rw [sparsePart, coins_append, h2]
-    simp only [coins_append, FlockVBridge.Family.firstSteps_rights, coins_eq_kindCoins, hkr, hks, sparseCoins]
+    simp only [coins_append, FlockVBridge.Family.firstSteps_rights]
+    simp only [coins_eq_kindCoins, hkr, hks, sparseCoins]
     omega
   · rw [sparsePart, hl]
     simp only [List.append_assoc]
@@ -330,11 +331,12 @@ theorem rsRead_of_layer
     split_ifs at h with hC
     · exact h
     · exact (hC ⟨hsk i hi s un g hW, un, hio i hi s un g hW⟩).elim
+  subst hgd
   rw [← hb b hb₀, fill_rowCol _ hz hj hS hg hpg hpart hk hb₀, hke, ← hke',
-    ← fill_rowCol _ hz hj hS hg hpg hpart hk' hb₀, ← hb' b hb₀, FlockVBridge.copyVal_input _ _ hj hcn,
-    FlockVBridge.copyVal_input _ _ hj hcn, ← hgd, FlockVBridge.Decode.fill_io _ hAg (hio i hi s un g hW),
-    FlockVBridge.Decode.fill_io _ hAg' (hio i hi s un g hW)]
-  exact hm
+    ← fill_rowCol _ hz hj hS hg hpg hpart hk' hb₀, ← hb' b hb₀]
+  refine (FlockVBridge.copyVal_input _ _ hj hcn).trans (Eq.trans ?_ (FlockVBridge.copyVal_input _ _ hj' hcn).symm)
+  exact (FlockVBridge.Decode.fill_io _ hAg (hio i hi s un _ hW)).trans
+    (hm.trans (FlockVBridge.Decode.fill_io _ hAg' (hio i hi s un _ hW)).symm)
 
 end
 
