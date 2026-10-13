@@ -128,7 +128,7 @@ def test_a_row_is_valid_when_its_index_is_not_minus_one_and_it_lies_within_its_s
 # --- the decode against float64 ---------------------------------------------------------------------------------------------------
 
 DSV4 = F.FLASHMLA_DSV4
-E4M3 = CK.e4m3_to_f32_batch(np.arange(127, dtype=np.uint8))[0].astype(np.float64)
+E4M3 = CK.e4m3_to_f32_batch(np.arange(127, dtype=np.uint8))[0].view(np.float32).astype(np.float64)
 
 
 def _to_e4m3(x: np.ndarray) -> np.ndarray:
@@ -164,7 +164,7 @@ def _softmax_with_sink(q, nope, scale, rope, idx, lens, sink, NW: int) -> np.nda
 def test_the_decode_is_softmax_with_the_sink(seed):
     """A token's 16 heads over the 128-row window and 512 compressed rows, in one split and in the 10 a lone request gets: each
     head within 0.01 of its largest output from float64 softmax with the sink, and the two within 0.015 of each other (a sweep
-    over seeds 0-19: worst 0.0043 and 0.0071; P is rounded to bf16 before P V)."""
+    over seeds 0-19: worst 0.0044 and 0.0076; P is rounded to bf16 before P V)."""
     rng = np.random.default_rng(seed)
     ops = _operands(rng, 640, 128, swa=int(rng.integers(1, 129)), extra=int(rng.integers(1, 513)))
     want = _softmax_with_sink(*ops, NW=128)
