@@ -568,11 +568,11 @@ def topEntryFields (program : String) (bcs : Array ByteArray) (e : Json) : V Boo
   let dom ← Registered.domain program STACKED TOP_ROW_WORDS bcs.size Registered.WORD_BITS
   let leaves := bcs.mapIdx fun i bc => Registered.rowLeaf dom i (Hm96.Default512.treeLeaf bc)
   let root := FV3.root dom leaves Sha512.hash
-  return e.getObjValAs? String "value" == .ok STACKED &&
-    e.getObjValAs? String "root" == .ok (hexOf root) &&
-    e.getObjValAs? Nat "leaves" == .ok bcs.size &&
-    e.getObjValAs? Nat "words" == .ok TOP_ROW_WORDS &&
-    e.getObjValAs? String "domain" == .ok (hexOf dom)
+  return (e.getObjValAs? String "value").toOption == some STACKED &&
+    (e.getObjValAs? String "root").toOption == some (hexOf root) &&
+    (e.getObjValAs? Nat "leaves").toOption == some bcs.size &&
+    (e.getObjValAs? Nat "words").toOption == some TOP_ROW_WORDS &&
+    (e.getObjValAs? String "domain").toOption == some (hexOf dom)
 
 /-- **R's registration**: the circuit registration (`--rec-inner-registration`, one-stage `registration.record`'s
 `verity/registration/v2` record, written at staging, `inner_registered.REGISTRATION`) whose digest the inner circuit's META
