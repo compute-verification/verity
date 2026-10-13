@@ -426,6 +426,8 @@ class LmHead:
             g[0].replay()
             y = self.out[:m].clone()
         if commit:
+            # A graph replay executes the receipt writes but not `run`'s Python update of the receipt cursor.
+            st.at = self.lin.at[st.pass_m] + self.lin.receipts(m)
             st.attention.finish_pass()
         if bias is not None:
             y = y + bias
