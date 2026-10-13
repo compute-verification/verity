@@ -544,3 +544,19 @@ def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refus
     ok[0] = True
     h.d.refuse(state, "k", "#1 conflicts", "circuits")
     assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @ci @circuits")
+
+
+@pytest.mark.parametrize("to, sender", [(("@ci",), "ci"), (("@ci", "@circuits"), "ci"), (("@ci", "@lean"), "lean")])
+def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to, sender):
+    """13 Oct 17:41Z: train b22a's failure, for @ci alone, started `@ci queue:`, and `msg send` refused it as a post that wakes
+    only its author.  A stand-in for `msg send` had hidden that refusal, so here each post goes through `msg send` itself."""
+    from research import drive, slack
+
+    monkeypatch.setattr(slack, "acting_as", lambda ns, reg, name: slack.name_entry(ns, reg, name))
+
+    def run(cmd, **kw):
+        assert cmd[1:5] == ["-m", "research", "msg", "send"]
+        return drive.subprocess.CompletedProcess(cmd, slack.main([*cmd[4:], "--dry-run"]))
+
+    monkeypatch.setattr(drive.subprocess, "run", run)
+    assert drive.merge_thread_post(f"{' '.join(to)} queue: b22a0c54d29e on `next` (#1 #2) failed its check", to, sender=sender)
