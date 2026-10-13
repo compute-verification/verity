@@ -13,6 +13,10 @@ Schemas (from vllm/csrc/torch_bindings.cpp, `d9105ea80`):
     rotary_embedding(Tensor positions, Tensor! query, Tensor!? key, int head_size, Tensor cos_sin_cache, bool is_neox) -> ()
     silu_and_mul(Tensor! result, Tensor input) -> ()
     gelu_tanh_and_mul(Tensor! out, Tensor input) -> ()
+    silu_and_mul_per_block_quant(Tensor! out, Tensor input, Tensor! scales, int group_size, Tensor? scale_ub, bool is_scale_transposed) -> ()
+and of `_moe_C` (vllm/csrc/moe/torch_bindings.cpp; the call `_custom_ops.grouped_topk` makes):
+    grouped_topk(Tensor scores, int n_group, int topk_group, int topk, bool renormalize, float routed_scaling_factor, Tensor bias,
+                 int scoring_func) -> (Tensor, Tensor)
 and vLLM V1's model-level attention entry point (vllm/attention/layer.py):
     unified_attention(Tensor query, Tensor key, Tensor value, str layer_name) -> Tensor
 """
@@ -43,6 +47,13 @@ _define_once("rotary_embedding(Tensor positions, Tensor(a!) query, Tensor(b!)? k
              "rotary_embedding", lambda positions, query, key, head_size, cos_sin_cache, is_neox: None)
 _define_once("silu_and_mul(Tensor(a!) result, Tensor input) -> ()", "silu_and_mul", lambda result, input: None)
 _define_once("gelu_tanh_and_mul(Tensor(a!) out, Tensor input) -> ()", "gelu_tanh_and_mul", lambda out, input: None)
+_define_once("silu_and_mul_per_block_quant(Tensor(a!) out, Tensor input, Tensor(b!) scales, int group_size, Tensor? scale_ub, "
+             "bool is_scale_transposed) -> ()", "silu_and_mul_per_block_quant",
+             lambda out, input, scales, group_size, scale_ub, is_scale_transposed: None)
+_define_once("grouped_topk(Tensor scores, int n_group, int topk_group, int topk, bool renormalize, float routed_scaling_factor, "
+             "Tensor bias, int scoring_func=0) -> (Tensor, Tensor)", "grouped_topk",
+             lambda scores, n_group, topk_group, topk, renormalize, routed_scaling_factor, bias, scoring_func=0:
+                 (scores.new_empty((scores.shape[0], topk), dtype=torch.float32), scores.new_empty((scores.shape[0], topk), dtype=torch.int32)))
 _define_once("unified_attention(Tensor query, Tensor key, Tensor value, str layer_name) -> Tensor", "unified_attention",
              lambda query, key, value, layer_name: torch.empty_like(query))
 # The implicit-cache counterpart of `_C_cache_ops.reshape_and_cache_flash(key, value, key_cache, value_cache, slot_mapping, ...)`:
