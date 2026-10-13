@@ -305,6 +305,11 @@ def MsgNamesAt (ish : RecVStar.Inner) (zs : Reg → L.Ω → List (Cm × (ℐ).C
     ∃ (ss : Array VStar.Stmt) (sv : VStar.Stmt), RecVStar.statements ish = .ok ss ∧ ss[(s : ℕ)]? = some sv ∧
       RecVStar.checkMsgNames sv (Vs s).c = .ok ()
 
+/-- **Some outer proof is accepted** (named; at its history and registration). -/
+def AcceptedAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
+  ∃ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o
+
 /-- **`MsgNamesAt` from the verifier's statement check** (`StmtsChecked`, as `sessStmt_of_checks`). -/
 theorem msgNamesAt_of_checks {bind : Fin S → VStar.Bindings}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
@@ -329,19 +334,17 @@ theorem msgNamesAt_of_accepted {xR : HoloReg GF128 Dig} {F : C3Family T CT st hp
     obtain ⟨tr, -, -, hs⟩ := hca R ω t R₂ s h
     exact ⟨tr, hs⟩)
 
-variable {bind : Fin S → VStar.Bindings} {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
-  {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-
 /-- **A session whose unit is named as a part's has the part's port `m<i>` and two units**, where its circuit has a
 port `m<i>`. -/
-theorem roundPort_inner (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs) (hst : SessStmt ish bind zs dg N k Rw)
-    (hmn : MsgNamesAt ish zs dg N k Rw) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
-    (hA : ∃ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) (s : Fin S) {m kk cl j : ℕ}
+theorem roundPort_inner {bind : Fin S → VStar.Bindings}
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs) (hst : SessStmt ish bind zs dg N k Rw)
+    (hmn : MsgNamesAt ish zs dg N k Rw) (hA : AcceptedAt zs dg N k Rw) (s : Fin S) {m kk cl j : ℕ}
     (hpar : RecResiduals.params (Vs s).c.unit.name = some (m, kk, cl, j)) (q : Fin (Vs s).c.ports.size) {i : ℕ}
     (hq : (Vs s).c.ports[q].name = s!"m{i}") :
     ∃ ss sv, RecVStar.statements ish = .ok ss ∧ ss[(s : ℕ)]? = some sv ∧
       (s!"m{i}", s!"rec-c{i}", #[some 0, some 1]) ∈ ownPorts sv ∧ (Vs s).nv = 2 := by
-  obtain ⟨τ, o, hA⟩ := hA
+  obtain ⟨R, ω, t, R₂, τ, o, hA⟩ := hA
   obtain ⟨ss, sv, cf, hss, hj, hf, hcf, hc⟩ := hst R ω t R₂ τ o hA s
   obtain ⟨ss', sv', hss', hj', hm⟩ := hmn R ω t R₂ τ o hA s
   obtain rfl : ss' = ss := Except.ok.inj (hss'.symm.trans hss)
@@ -353,10 +356,10 @@ theorem roundPort_inner (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
 /-- **`WRoundReads`' read at a part's session**: where the session's unit is named as a part's, its circuit has a port
 `m<m>` and the map reads `rec-c<m>` row `ρ` at `stage ρ m`, the reads file reads it at unit `ρ` (`un` at two
 units). -/
-theorem wRoundRead_inner (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
-    (hst : SessStmt ish bind zs dg N k Rw) (hmn : MsgNamesAt ish zs dg N k Rw) {R : Reg} {ω : L.Ω}
-    {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
-    (hA : ∃ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o)
+theorem wRoundRead_inner {bind : Fin S → VStar.Bindings}
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
+    (hst : SessStmt ish bind zs dg N k Rw) (hmn : MsgNamesAt ish zs dg N k Rw) (hA : AcceptedAt zs dg N k Rw)
     {own : Fin S → Array Flock.Registered.Port}
     (hown : ∀ (s : Fin S) ss sv, RecVStar.statements ish = .ok ss → ss[(s : ℕ)]? = some sv → OwnHas (own s) sv)
     {sel : ℕ → String → ℕ → Prop} {stage : Fin 2 → ℕ → ℕ} {sess : ℕ → Fin S}
@@ -377,7 +380,9 @@ theorem wRoundRead_inner (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs
 /-- **`RoundReads`' read at a `rec-opening` copy**, at a port `m<i>` of its circuit (`RsKeys`' port): the copy is
 unit 0 of one of R's opening parts (`nv_of_copy`, `opening_of_name`), whose port `m<i>` the reads file reads at row
 0, where the map reads `rec-opening-c<i>` at `c₀ + i`. -/
-theorem roundRead_opening (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
+theorem roundRead_opening {bind : Fin S → VStar.Bindings}
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
     (hst : SessStmt ish bind zs dg N k Rw) (hmn : MsgNamesAt ish zs dg N k Rw) {own : Fin S → Array Flock.Registered.Port}
     (hown : ∀ (s : Fin S) ss sv, RecVStar.statements ish = .ok ss → ss[(s : ℕ)]? = some sv → OwnHas (own s) sv)
     {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ} {sh : Flock.Shape}
