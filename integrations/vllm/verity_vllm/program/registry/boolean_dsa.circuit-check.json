@@ -1,10 +1,67 @@
 {
  "definitions": {
+  "DsaTopKChunk_v1{TOPK=1024,N=262144,C=16384,H=0}": {
+   "and": 2816936
+  },
+  "DsaTopKChunk_v1{TOPK=1024,N=262144,C=16384,H=15}": {
+   "and": 2816953
+  },
+  "DsaTopKChunk_v1{TOPK=16,N=64,C=16,H=0}": {
+   "and": 2140
+  },
+  "DsaTopKChunk_v1{TOPK=16,N=64,C=16,H=1}": {
+   "and": 2167
+  },
+  "DsaTopKChunk_v1{TOPK=16,N=64,C=16,H=2}": {
+   "and": 2166
+  },
+  "DsaTopKChunk_v1{TOPK=16,N=64,C=16,H=3}": {
+   "and": 2167
+  },
+  "DsaTopKChunk_v1{TOPK=2048,N=131072,C=16384,H=0}": {
+   "and": 4490038
+  },
+  "DsaTopKChunk_v1{TOPK=2048,N=131072,C=16384,H=7}": {
+   "and": 4490055
+  },
+  "DsaTopKChunk_v1{TOPK=5,N=37,C=8,H=0}": {
+   "and": 612
+  },
+  "DsaTopKChunk_v1{TOPK=5,N=37,C=8,H=1}": {
+   "and": 640
+  },
+  "DsaTopKChunk_v1{TOPK=5,N=37,C=8,H=2}": {
+   "and": 639
+  },
+  "DsaTopKChunk_v1{TOPK=5,N=37,C=8,H=3}": {
+   "and": 640
+  },
+  "DsaTopKChunk_v1{TOPK=5,N=37,C=8,H=4}": {
+   "and": 538
+  },
+  "DsaTopKFinal_v1{TOPK=1024,N=262144,C=16384}": {
+   "and": 70694
+  },
+  "DsaTopKFinal_v1{TOPK=16,N=64,C=16}": {
+   "and": 1154
+  },
+  "DsaTopKFinal_v1{TOPK=2048,N=131072,C=16384}": {
+   "and": 141338
+  },
+  "DsaTopKFinal_v1{TOPK=5,N=37,C=8}": {
+   "and": 402
+  },
   "DsaTopKSelection_v2{TOPK=16,N=64}": {
    "and": 16580
   },
   "DsaTopKSelection_v2{TOPK=5,N=37}": {
    "and": 8775
+  },
+  "DsaTopKSelection_v4{TOPK=16,N=64,C=16}": {
+   "and": 8552
+  },
+  "DsaTopKSelection_v4{TOPK=5,N=37,C=8}": {
+   "and": 2921
   },
   "DsaTopKShortRow_v2{TOPK=16}": {
    "and": 469
