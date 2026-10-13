@@ -151,9 +151,16 @@ class Driver:
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
         self.launch, self.states, self.post, self.now, self.cancel = launch, states, post, now, cancel
-        self.repo = q.workdir
+        self.repo, self.dry_run, self._seen = q.workdir, False, {}
 
     # -- what the store says of a commit
+
+    def _states(self, ids: list[str]) -> dict:
+        """`states` of ``ids``, each run read once a tick: one `research status` is a few seconds over ssh, and a tick asks of the
+        same launch for `held`, before the sync, for the running count and for its train (12 Oct: 25 s of a 52 s tick)."""
+        if missing := [rid for rid in ids if rid not in self._seen]:
+            self._seen.update(self.states(self.repo, missing))
+        return {rid: self._seen[rid] for rid in ids}
 
     def verdict(self, commit: str, base: str, drive: dict) -> Verdict:
         """`commit`'s check: passed (the gate's rule, against `base`), failed, running (a launch of ours not yet in the store),
@@ -181,7 +188,7 @@ class Driver:
         launch = drive["launched"].get(commit)
         if not launch:
             return Verdict("none")
-        states = self.states(self.repo, launch["ids"])
+        states = self._states(launch["ids"])
         if any(st in ACTIVE for st, _, _ in states.values()):
             return Verdict("running", " ".join(launch["ids"]))
         if all(rc == NOT_STARTED for _, rc, _ in states.values()):
@@ -299,12 +306,12 @@ class Driver:
 
     def refuse(self, drive: dict, key: str, text: str, handle: str | None = None) -> None:
         """Tell the lander once per key, and ``handle``, the PR's owning lane, beside it so the owner hears without a relay;
-        with --shadow, only log it."""
+        with --shadow or --dry-run, only log it."""
         if key in drive["told"]:
             return
         to = (LANDER, *([f"@{handle}"] if handle and f"@{handle}" != LANDER else []))
-        if self.q.shadow:
-            self.q.log(f"research queue drive: would tell {' '.join(to)}: {text} [shadow]")
+        if self.q.shadow or self.dry_run:
+            self.q.log(f"research queue drive: would tell {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
             return
         if self.post(f"{' '.join(to)} queue: {text}", to):
             drive["told"].append(key)
@@ -320,6 +327,7 @@ class Driver:
 
     def tick(self, dry_run: bool = False) -> str:
         q = self.q
+        self.dry_run, self._seen = dry_run, {}
         q._clone()
         q.fetch()
         if q.store is not None and q.store.remote is not None:
@@ -358,7 +366,7 @@ class Driver:
         on_chain = {m.commit for m in members}
         for c, v in drive["launched"].items():
             if c not in on_chain and not dry_run:
-                live = [rid for rid, (st, _, _) in self.states(self.repo, v["ids"]).items()
+                live = [rid for rid, (st, _, _) in self._states(v["ids"]).items()
                         if st in ACTIVE and st != "unknown"]
                 if live:
                     self.cancel(self.repo, live, f"drive: {c[:12]} is no longer on `{q.branch}` (rebuilt); no check of it lands")

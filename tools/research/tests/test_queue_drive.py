@@ -175,6 +175,34 @@ def test_a_failure_is_told_even_when_the_same_ticks_rebuild_takes_its_commit_off
     assert len(h.posts) == 1 and "failed its check" in h.posts[0] and "(#1)" in h.posts[0]
 
 
+def test_a_dry_run_tells_nobody_and_a_real_tick_after_it_still_does(world, monkeypatch):
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    h.tick(dry_run=True)
+    assert h.posts == [] and any("would tell" in x and "[dry run]" in x for x in world.logs)
+    h.tick()
+    assert len(h.posts) == 1 and "failed its check" in h.posts[0]
+
+
+def test_each_launched_runs_state_is_read_once_a_tick(world, monkeypatch):
+    """A tick asks of a running launch for `held`, before the sync, for the running count and for its train; each read is a
+    `research status` over ssh (12 Oct: 4 of them were 25 s of a 52 s tick)."""
+    h = Harness(world, monkeypatch)
+    reads: list[str] = []
+    states = h.d.states
+    h.d.states = lambda repo, ids: reads.extend(ids) or states(repo, ids)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    assert "running" in h.tick()
+    (rid,) = h.run_state
+    assert reads == [rid]
+    h.run_state[rid] = ("failed", 75, None)
+    h.tick()                                        # the next tick reads it afresh, sees no twin started, and relaunches
+    assert reads == [rid, rid] and len(h.launched) == 2
+
+
 def test_a_launch_that_ended_without_an_attempt_is_lost_after_the_grace_and_one_whose_twins_never_started_is_relaunched(world, monkeypatch):
     h = Harness(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
