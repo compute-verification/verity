@@ -57,7 +57,7 @@ TAG_BASE = (1 << 32) + 3                                                      # 
 RECEIPT_SEED = SR.rb.seed(TAG_SEED, 0, bytes(64))    # a WT_RECEIPT build's window seed (sketch-sha512's are 64 bytes)
 STORE_KEY = hashlib.sha256(b"verity/codec-tensor/bench/store-key").digest()  # the receipt tree's salt key
 COMMIT_GATE_BLOCKS = 4096      # sketch-sha512's commit gate: the driver's tree over a launch's first receipts
-READER = None                  # a WT_RECEIPT build's commit: reader.Reader (reader.cu), set by step.py's main
+READER = None                  # a WT_RECEIPT build's commit: reader.Reader (reader.cu), set by --reader-lib
 B3_PER_BLOCK = (67, 72)        # compressions a block (4,096 message bytes): the fewest (64 chunk, 3 parent), and the
                                # tag warps' (4 lanes, 16 + 2 each)
 PIPE_OPS = ("imad_wide", "imad", "iadd", "mac")   # wt_chain 5's ops
@@ -1210,6 +1210,7 @@ def main() -> int:
     ap.add_argument("--sketch-t", type=int, default=8, help="tasks a sketch tile (n = 32 ceil(SB / 512) T bytes)")
     ap.add_argument("--mma-knobs", default="8,16,32,48,64,96")
     ap.add_argument("--imad-knobs", default="32,64,128,192,256")
+    ap.add_argument("--reader-lib", default="", help="reader.cu, the commit of a WT_RECEIPT=1 build (its gemm gate)")
     a = ap.parse_args()
 
     import torch
@@ -1227,6 +1228,10 @@ def main() -> int:
         (out_dir / "codec-tensor.json").write_text(json.dumps(res, indent=1))
 
     libs = [Lib(p) for p in a.lib]
+    if a.reader_lib:
+        import reader as RD
+        global READER
+        READER = RD.Reader(a.reader_lib, torch)
     for lib in libs:
         set_tag(lib)
     props = torch.cuda.get_device_properties(0)

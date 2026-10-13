@@ -9,7 +9,8 @@
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). FIELDS (default "255 511 512 521 767 768 1023
 # 1279") names the builds; NVFLAGS adds nvcc flags (a variant's -D); DIAGS ("1 3 7") adds a WT_SK_DIAG build of each
-# field per value; BENCH_ARGS passes through to bench.py. PROFILE, if set, runs bench.py under ncu with those options
+# field per value; RECEIPT=1 adds -DWT_RECEIPT=1 and builds reader.cu, the receipts' commit; BENCH_ARGS passes through
+# to bench.py. PROFILE, if set, runs bench.py under ncu with those options
 # (out/prof.ncu-rep) and prints its details and SASS source pages.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
@@ -21,6 +22,12 @@ CT=benchmarks/codec_tensor
 FIELDS=${FIELDS:-255 511 512 521 767 768 1023 1279}
 B=$(mktemp -d /tmp/codec-tensor.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v ${NVFLAGS:-})
+READER=()
+if [ "${RECEIPT:-0}" = 1 ]; then
+  nvcc "${FLAGS[@]}" -o "$B/reader.so" $CT/reader.cu > "$O/reader.ptxas" 2>&1 || { tail -40 "$O/reader.ptxas"; exit 4; }
+  READER=(--reader-lib "$B/reader.so")
+  FLAGS+=(-DWT_RECEIPT=1)
+fi
 declare -A PIDS=()
 BUILDS=()
 for n in $FIELDS; do
@@ -44,7 +51,7 @@ if "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $CT/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
 [ -n "${COMPILE_ONLY:-}" ] && exit 0
-export B PY CT FIELDS BUILD_NAMES="${BUILDS[*]}" BENCH_ARGS=${BENCH_ARGS:-} PROFILE=${PROFILE:-}
+export B PY CT FIELDS BUILD_NAMES="${BUILDS[*]}" BENCH_ARGS="${BENCH_ARGS:-} ${READER[*]}" PROFILE=${PROFILE:-}
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
