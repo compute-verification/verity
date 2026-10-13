@@ -5,8 +5,8 @@ many reads of a node's registered blocks the node made in each window, from rece
    hm96-sha512/row/v2 leaf) and sends the root.  Only then does the verifier draw the codec seed from its own secret and
    a fresh nonce (`register`), and the prover encodes every block under it (`Store`) with the codec the registration
    names (`codec.DEFAULT`, p1024 masked at k = 3, unless another is named).  The registration also names the receipt
-   kind (`receipts.KINDS`: block-sha512 by default, or sketch-sha512) and whether its receipts bind PoUW's tile
-   outputs (`bind`, off by default: PoUW's opt-in join).  `Registration.digest` binds the node, the store's size, the
+   kind (`receipts.KINDS`: sketch-sha512 by default, or block-sha512 for comparison) and whether its receipts bind
+   PoUW's tile outputs (`bind`, off by default: PoUW's opt-in join).  `Registration.digest` binds the node, the store's size, the
    payload root, the codec seed, the codec's name, the receipt kind and `bind`.
 2. Coins.  Before the session the challenger draws two live coins a window, its challenge `σ_t` and its openings coin,
    and commits to them (`coins.Challenger`).  The prover gets the commitment first (`Session.commitment`).

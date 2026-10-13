@@ -24,7 +24,7 @@ import math
 from dataclasses import dataclass
 
 from .codec import BLOCK_BYTES
-from .receipts import DIGEST_BYTES, PER_LEAF, SALT_BYTES
+from .receipts import DEFAULT, DIGEST_BYTES, KINDS, PER_LEAF, SALT_BYTES
 
 MS = 1_000_000
 US = 1_000
@@ -144,6 +144,10 @@ def _pct(x: float) -> str:
 
 def _grid() -> None:
     gap, jitter = 50 * US, _ns(0.05)
+    print(f"# receipts: {DEFAULT} by default, of the block alone; {', '.join(k for k in KINDS if k != DEFAULT)} kept for "
+          "comparison.  The schedule and openings below are the same under either kind, with no tile evidence unless "
+          "the registration binds z")
+    print()
     print(f"# μ_timing of chained sessions: g = {gap // US} µs, J = {jitter / MS} ms each way, A = RTT + 2J + pass + g; "
           "one-way delays RTT/2; isolated is a session of one window")
     print("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 | steady state g/(pass + g) |")

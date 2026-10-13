@@ -11,8 +11,8 @@ openings coin); the payload salts are drawn in block order and the receipt leave
 three passes are one window's chain: pass 0 follows the registration's digest and each later pass the root before it.
 A GPU receipter fills its store with the same payloads, encodes them under the pinned codec seed, and checks its blocks,
 receipts and roots against these.  The middle pass reads a partial plan out of store order, so its receipt for position
-p is block plan[p]'s and its tree has 10 positions.  The main chain is the default registration's: the default receipt
-kind, of the block alone.  `variants` holds every other: the same store registered under each other kind and `bind`
+p is block plan[p]'s and its tree has 10 positions.  The main chain is the default registration's: sketch-sha512, the
+default receipt kind, of the block alone.  `variants` holds every other: the same store registered under each other kind and `bind`
 (named "kind", or "kind/bind" for receipts that bind the stub tiles' z) with the same nonce, so the same codec seed and
 blocks (neither is in the seed's context) under another digest, so other coins' binding, seeds, signs and roots.
 """

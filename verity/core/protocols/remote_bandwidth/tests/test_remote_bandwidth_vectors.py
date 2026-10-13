@@ -129,7 +129,7 @@ def test_the_registration_and_the_codecs_words_reproduce_the_pinned_ones() -> No
     reg = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, nonce=rv.NONCE)
     assert pinned["payload"]["root"] == root.hex() and pinned["registration"]["digest"] == reg.digest.hex()
     assert pinned["registration"]["codec"] == pinned["codec"]["name"] == reg.codec.name == "p1024/k3/masked"
-    assert pinned["registration"]["receipt"] == reg.receipt == receipts.DEFAULT
+    assert pinned["registration"]["receipt"] == reg.receipt == receipts.DEFAULT == "sketch-sha512"
     assert pinned["registration"]["bind"] is reg.bind is False
     assert set(pinned["variants"]) == {rv.name(kind, bind) for kind, bind in rv.VARIANTS} and len(rv.VARIANTS) == 3
     for kind, bind in rv.VARIANTS:

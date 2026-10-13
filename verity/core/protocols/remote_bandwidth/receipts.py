@@ -13,10 +13,10 @@ plan_(t,i)    R runs (first, count) in read order: count ≥ 1, inside the store
 spread(z)     z laid over b = 4096 bytes: byte u of z XORed into byte u mod b (a z of b bytes or more folds), a shorter
               z repeated
 e_(i,j)       E_j, the store's block j; under a registration that binds z (opt-in), E_j ⊕ spread(z_(i,j))
-y_(i,p)       block-sha512, the default: SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ e_(i,j)),
-              j = plan_i[p],  RECEIPT_DOMAIN = "verity/remote-bandwidth/receipt/v0\0"                    64 bytes
-              sketch-sha512: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ σ_(i,j)),
-              SKETCH_RECEIPT_DOMAIN = "verity/remote-bandwidth/sketch-receipt/v0\0"                      64 bytes
+y_(i,p)       sketch-sha512, the default: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ σ_(i,j)),
+              j = plan_i[p],  SKETCH_RECEIPT_DOMAIN = "verity/remote-bandwidth/sketch-receipt/v0\0"      64 bytes
+              block-sha512, for comparison: SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ e_(i,j)),
+              RECEIPT_DOMAIN = "verity/remote-bandwidth/receipt/v0\0"                                    64 bytes
 S_i           sketch-sha512's 16 × 4096 signs of pass i: K = derive(seed_i, SIGN_DOMAIN, {"tag": "sketch-sha512",
               "k": 16, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB first)
               1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
@@ -35,10 +35,11 @@ PoUW's noised output of the tile before block j's read in pass i, which then ent
 compression, so a relay that meets the block and z over a link carries `min(|z|, b)` bytes per block, not a digest of
 one side.
 
-The registration names its receipt kind (`KINDS`).  A sketch-sha512 receipt hashes 72 bytes after the seed's block, not
-4,104: one SHA-512 compression where block-sha512 takes 33, and the signs, derived from the pass's seed, exist only
-after the previous pass's root, as the seed does.  Leaves, salts and the tree are the same under either kind.  What
-each kind rests on is `PROTOCOL.md` §4.
+The registration names its receipt kind (`KINDS`): sketch-sha512 (`DEFAULT`, the stated receipt), or block-sha512, kept
+for comparison.  A sketch-sha512 receipt hashes 72 bytes after the seed's block, not 4,104: one SHA-512 compression
+where block-sha512 takes 33, and the signs, derived from the pass's seed, exist only after the previous pass's root, as
+the seed does.  Leaves, salts and the tree are the same under either kind.  What each kind rests on is `PROTOCOL.md`
+§4.
 
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
 that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is
@@ -264,8 +265,8 @@ def _e(block: bytes, z: bytes | None) -> bytes:
 
 
 class Receipter:
-    """block-sha512 receipts under one pass's seed: `receipter(j, block)` is `y_(i,j)`, and `receipter(j, block, z)`
-    the receipt that binds z."""
+    """block-sha512 receipts under one pass's seed, the kind kept for comparison: `receipter(j, block)` is `y_(i,j)`,
+    and `receipter(j, block, z)` the receipt that binds z."""
 
     kind = BLOCK_SHA512
 
@@ -302,9 +303,10 @@ def _int8_sum(planes: list[int], mask: int) -> int:
 
 
 class SketchReceipter:
-    """sketch-sha512 receipts under one pass's seed: `receipter(j, block)` is `y_(i,j)`, and `sketch(block)` its
-    `σ_(i,j)`; given `z`, the receipt and sketch that bind it.  The product is in pure Python, a row's ±1 dot product as
-    T − 2·(the sum where its sign is −1), each sum over the block's bit planes: about 0.25 ms a block."""
+    """sketch-sha512 receipts under one pass's seed, the default kind: `receipter(j, block)` is `y_(i,j)`, and
+    `sketch(block)` its `σ_(i,j)`; given `z`, the receipt and sketch that bind it.  The product is in pure Python, a
+    row's ±1 dot product as T − 2·(the sum where its sign is −1), each sum over the block's bit planes: about 0.25 ms a
+    block."""
 
     kind = SKETCH_SHA512
 
@@ -325,9 +327,9 @@ class SketchReceipter:
         return h.digest()
 
 
-RECEIPTERS = {BLOCK_SHA512: Receipter, SKETCH_SHA512: SketchReceipter}
+RECEIPTERS = {SKETCH_SHA512: SketchReceipter, BLOCK_SHA512: Receipter}
 KINDS = tuple(RECEIPTERS)
-DEFAULT = BLOCK_SHA512
+DEFAULT = SKETCH_SHA512
 
 
 def receipt_kind(kind: object) -> str:
