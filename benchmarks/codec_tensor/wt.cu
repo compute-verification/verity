@@ -1654,6 +1654,7 @@ __global__ void __maxnreg__(168) gemm_ws_kernel(const void *__restrict__ wstore,
     uint4 wv[TASK_TILES];
 #pragma unroll
     for (int tt = 0; tt < TASK_TILES; ++tt) wv[tt] = sp[tt * LANES];
+    asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");   // before `empty`, as fused_kernel's MMA warp
     __syncwarp();
     if (lane == 0) mbar_arrive(empty + s);
 #pragma unroll
@@ -2713,6 +2714,10 @@ __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
       }
       if constexpr (SKK > 0 && SKW == 0)
         if (J.blk >= 0 && skt * (J.tile + SK_BUFS) <= i + stages) sk_finish<SKK>(J, lane, sk);
+      // `empty` hands the stage to the next bulk copy (the async proxy): only a proxy fence orders this warp's shared
+      // loads before it, as ptxas issues the arrive straight after the last fragment's load. The decoders' and the
+      // sketch warps' reads precede the decoders' stores, which the decoders fence.
+      asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
       mbar_arrive(empty + s);
       store_task<NB8, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq);
       if constexpr (SKK > 0 && SKW == 0)
