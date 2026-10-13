@@ -21,5 +21,9 @@ theorem AddsIsolated : Accounting.Guarantees.Memory.AddsIsolated := Accounting.M
 theorem AddsOnIsolated : Accounting.Guarantees.Memory.AddsOnIsolated := Accounting.MemoryProofs.addsOnIsolated
 theorem AddsP2RingIsolated : Accounting.Guarantees.Memory.AddsP2RingIsolated :=
   Accounting.MemoryProofs.addsP2RingIsolated
+theorem CountingAdvice : Accounting.Guarantees.Memory.CountingAdvice := Accounting.MemoryProofs.countingAdvice
+theorem AddsAdvice : Accounting.Guarantees.Memory.AddsAdvice := Accounting.MemoryProofs.addsAdvice
+theorem AddsAdviceOn : Accounting.Guarantees.Memory.AddsAdviceOn := Accounting.MemoryProofs.addsAdviceOn
+theorem AddsAdviceP2Ring : Accounting.Guarantees.Memory.AddsAdviceP2Ring := Accounting.MemoryProofs.addsAdviceP2Ring
 
 end Accounting.SecurityProofs.Memory

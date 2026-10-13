@@ -32,7 +32,7 @@ def TreeString (g : Grid) (grid : Array (Array (Option ByteArray))) (x : ByteArr
 the head and frame tree it recomputes of each egress link-window. -/
 def CheckString (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) (x : ByteArray) : Prop :=
   (∃ r ∈ c.records.toList, HeadString r.head x ∨
-    messageInput r.certificate.keyId r.certificate.link r.certificate.direction r.certificate.window
+    messageInput r.certificate.keyId p.session r.certificate.link r.certificate.direction r.certificate.window
       r.certificate.digest = .ok x) ∨
   ∃ l link, (l, link) ∈ p.egress.toList.zip e.links.toList ∧ ∃ w < p.windows,
     ∃ syncs : Fin p.windows → ClockSync, Declares link syncs ∧ (TreeString p.grid (programGrid p syncs link.frames w) x ∨
