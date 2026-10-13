@@ -61,5 +61,5 @@ template half proved about the firewall's code, what it sends at every salt list
 honest worker's half left an obligation (`FirewallFollows`), and the recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
 (`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, `AuditC3`, its proof `AuditC3Proof` from the
-pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`, a stub), and
+pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`), and
 `flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`). -/
