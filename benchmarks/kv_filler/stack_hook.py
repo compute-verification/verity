@@ -47,4 +47,4 @@ def weight_bytes(inst, model) -> int:
     fragments and rows), and the model's other parameters but the embedding."""
     st = inst.stack
     rest = sum(p.numel() * p.element_size() for n, p in model.named_parameters() if "embed_tokens" not in n)
-    return rest + sum(lin.nbytes for lin in st.linears) + st.lm.nbytes
+    return rest + sum(lin.nbytes for lin in st.linears)

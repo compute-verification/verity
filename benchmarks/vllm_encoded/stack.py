@@ -4,17 +4,21 @@ codec words, and the plain stack, the same engine over the same kernels' plain f
 
 ~~~text
 linears   stack: wt.cu (WT_RECEIPT, full slot, masked) fused decode + FP8 MMA + sketch-sha512 receipts on two sketch
-          warps, at M <= 128 rows in launches of at most 64; the chunks' sums reduced in order (paged.cu's pg_reduce).
-          pstack: wt_gemm over the plain fragments, the same sums bit for bit (gated). M > 128 (prefill): the layer
+          warps, at M <= 128 rows in one launch; the chunks' sums reduced in order (paged.cu's pg_reduce). pstack:
+          wt_gemm over the plain fragments in launches of at most 64 rows, the same sums bit for bit (gated). M > 128
+          (prefill): the layer
           decoded straight into an ephemeral scratch as its N × K matrix (stack, wt_decode_rows; gated against the
           weight) or unpermuted (pstack) for vLLM's CUTLASS GEMM.
 receipts  a decode step is a pass: before the model's forward (eager, the runner's _model_forward) wt_pass derives pass
           j's seed, signs and receipt prefix from root_(j−1) on the device; each linear writes its vectors' receipts
-          at the step's running offset; after the last linear (inside the step's CUDA graph) reader.cu's leaves, pads
-          and tree, and the root copied to the buffer the next pass reads.
-lm_head   BF16 payloads (Daniel's ruling: its logits are BF16's), the head's rows as words; ROWS rows at a time decoded
-          (stack) into an L2-sized scratch, or read as they are (pstack), times x (torch.mm); one CUDA graph a batch.
-          Not receipted.
+          at the step's running offset, the lm_head's last; after it (in the lm_head's CUDA graph) reader.cu's leaves,
+          pads and tree, and the root copied to the buffer the next pass reads. A forward with no lm_head after it
+          (vLLM's warm-ups) leaves its pass uncommitted, and the next pass starts from the last root committed.
+lm_head   BF16 payloads (Daniel's ruling: its logits are BF16's) in the linears' plain layout (the BF16 matrix's bytes,
+          which mma.m16n8k16.bf16 takes as e4m3 m16n8k32 takes FP8), as words: wt.cu's wt_fused_sketch_bf decodes,
+          multiplies (BF16 MMA, FP32 sums) and receipts them in one launch, the chunks' sums reduced in order to BF16;
+          pstack: wt_gemm's BF16 mode over the plain fragments, the same sums. One CUDA graph a batch, its partial sums
+          and logits in buffers the graphs share.
 KV        vLLM's own paged cache tensors, a layer's words at their place in the pool (paged.cu): the append encodes (all
           layers' in one launch on a second stream after the step's forward; the step reads its own tokens from vLLM's
           rows), a decode-only step's attention decodes inside paged.cu's tensor-core attention (CUDA-graph safe), and
@@ -49,12 +53,11 @@ import paged as P  # noqa: E402
 SR = BW.SR
 T = 8                                   # tasks a sketch vector
 PLAIN_CFGS = ((4, 4), (8, 8))           # wt_gemm's (consumers, stages): step.py's PLAIN_CFGS
-FUSED_ROWS = 64                         # wt_fused_sketch's rows a launch
-MAX_ROWS = 128                          # a decode's rows on the fused kernel (in launches of at most FUSED_ROWS)
+MAX_ROWS = 128                          # a decode's rows on the fused kernel (wt_fused_sketch's most a launch)
+PLAIN_ROWS = 64                         # wt_gemm's most a launch (pstack, the gates' reference)
 CAPTURE = [1, 4, 8, 16, 32, 48, 64, 96, 128]
-FUSED = [m for m in CAPTURE if m <= FUSED_ROWS]   # the launch sizes whose configs are selected and gated
+WIDE_CFGS = [(d, s, -2, 16) for d in (5, 4, 3) for s in (3, 2)]   # past 64 rows: 128 rows of x leave 3 stages
 ROOT0 = hashlib.sha512(b"verity/vllm-encoded/stack/registration").digest()   # root_(−1)
-LM_ROWS = 4096                          # lm_head rows a chunk: 32 MB of BF16, in L2
 GATE_RECEIPTS = 64                      # receipts of a linear checked against sketch_receipt
 GATE_TREE = (1, 32, 128)                # batches whose whole step tree is checked against the driver's
 
@@ -70,9 +73,9 @@ def new_stream() -> torch.cuda.Stream:
     return torch.cuda.Stream()
 
 
-def pieces(m: int) -> list[int]:
-    """A decode of m rows as launches of at most FUSED_ROWS, their sizes as even as they go."""
-    p = -(-m // FUSED_ROWS)
+def pieces(m: int, most: int) -> list[int]:
+    """A decode of m rows as launches of at most `most`, their sizes as even as they go."""
+    p = -(-m // most)
     return [m // p + (i < m % p) for i in range(p)]
 
 
@@ -105,7 +108,9 @@ class Stack:
         self.frags = BW.sign_frags(wt, torch, self.signs, T, st)
         self.root = BW.to_dev(torch, BW.root_words(ROOT0)).view(torch.int64)
         self.reader = BW.READER = RD.Reader(args.reader_lib, torch)
-        self.j, self.plan_n, self.at, self.pass_m = 0, None, 0, None
+        self.j, self.plan_n, self.at, self.pass_m, self.open = 0, None, 0, None, False
+        self.rows = MAX_ROWS if encoded else PLAIN_ROWS   # a launch's most rows
+        self.fused = [m for m in CAPTURE if m <= self.rows]   # the launch sizes whose configs are selected and gated
         self.xr = torch.zeros(1, dtype=torch.int64, device="cuda")
         self.plib = P.PagedLib(f"p{wt.n}", args.paged_lib)
         if self.plib.field.n != wt.n or self.plib.mask != wt.mask:
@@ -113,7 +118,8 @@ class Stack:
         if encoded:
             P.KB.set_key(self.plib, P.KB.lib_key(self.plib, self.k))
         self.words = 0                       # the store's next word index (linears, then the lm_head)
-        self.linears: list[StackLinear] = []
+        self.linears: list[StackLinear] = []   # the FP8 linears, then the lm_head
+        self.lm: LmHead | None = None
         self.nvec: dict[int, int] = {}       # a step's receipts at each batch
         self.passes = 0
 
@@ -136,7 +142,7 @@ class Stack:
         s = stream()
         self.wt.call("wt_pass", self.j & 0xFFFFFFFF, self.root.data_ptr(), self.signs.data_ptr(), T, s)
         self.wt.call("wt_sign_frags", self.signs.data_ptr(), self.frags.data_ptr(), T, s)
-        self.j, self.pass_m, self.passes = self.j + 1, m, self.passes + 1
+        self.j, self.pass_m, self.passes, self.open = self.j + 1, m, self.passes + 1, True
 
     def commit(self, m: int) -> None:
         n = self.at
@@ -152,19 +158,22 @@ class Stack:
             if rc:
                 raise RuntimeError(f"the step's commit: error {rc}")
         self.root.copy_(self.dig[0] if width == 1 else self.up[width - 2])
+        self.open = False
 
 
 class StackLinear:
-    """One FP8 linear: its words (stack, int16 so no uint8 tensor of a linear's size is in the process) at word indices
-    base … or its plain fragments (pstack), and each batch's launch."""
+    """One linear: its words (stack, int16 so no uint8 tensor of a linear's size is in the process) at word indices
+    base … or its plain fragments (pstack), and each batch's launch. FP8 (an N × K weight, a per-tensor scale), or BF16
+    (bf: the lm_head, N × K BF16 as an N × 2K byte matrix; kd counts bytes, and x is BF16 rows)."""
 
-    def __init__(self, st: Stack, name: str, w: torch.Tensor, ws: torch.Tensor) -> None:
-        self.st, self.name, self.idx = st, name, len(st.linears)
-        self.n, self.kd = w.shape
+    def __init__(self, st: Stack, name: str, w: torch.Tensor, ws: torch.Tensor | None, bf: bool = False) -> None:
+        self.st, self.name, self.idx, self.bf = st, name, len(st.linears), bf
+        wb = w.view(torch.uint8)
+        self.n, self.kd = wb.shape
         self.nch = self.kd // 512
-        self.ws = ws.reshape(1).float()
+        self.ws = torch.ones(1, dtype=torch.float32, device="cuda") if bf else ws.reshape(1).float()
         wt = st.wt
-        plain = BW.plain_layout(w.view(torch.uint8))
+        plain = BW.plain_layout(wb)
         self.words = plain.numel() // wt.s
         self.k = st.k
         if st.encoded:
@@ -184,22 +193,35 @@ class StackLinear:
     def nbytes(self) -> int:
         return self.store.numel() * self.store.element_size()
 
+    @property
+    def fused(self):
+        so = self.st.wt.so
+        return so.wt_fused_sketch_bf if self.bf else so.wt_fused_sketch
+
+    def dry(self, m: int, cfg) -> tuple[int, int]:
+        """The launch at m and cfg, not run: its rc and CTA groups."""
+        launched = ctypes.c_int(0)
+        if self.st.encoded:
+            rc = self.fused(self.k, None, None, None, m, self.n, self.kd, 0, 0, cfg[0], cfg[1], 0, 0, None, None, 0,
+                            16, None, None, T, 2, ctypes.byref(launched), stream())
+        else:
+            rc = self.st.wt.so.wt_gemm(3 if self.bf else 0, None, None, None, m, self.n, self.kd, 0, cfg[0], cfg[1],
+                                       0, 0, None, ctypes.byref(launched), stream())
+        return rc, launched.value // self.nch
+
     def candidates(self, m: int) -> list[tuple]:
         if not self.st.encoded:
             return list(PLAIN_CFGS)
-        return [c for c in BW.fused_cfgs(self.st.wt, "auto", "16", T)
-                if c[2] == -2 and BW.fused_fits(self.st.wt, self.k, m, self.n, self.kd, c, T)]
+        cfgs = [c for c in BW.fused_cfgs(self.st.wt, "auto", "16", T) if c[2] == -2]
+        cfgs += [c for c in WIDE_CFGS if m > PLAIN_ROWS and c not in cfgs]
+        return [c for c in cfgs if self.dry(m, c)[0] == 0]
 
     def probe(self, m: int, cfg) -> int:
         """The launch's CTA groups."""
-        wt, launched = self.st.wt, ctypes.c_int(0)
-        if self.st.encoded:
-            wt.call("wt_fused_sketch", self.k, None, None, None, m, self.n, self.kd, 0, 0, cfg[0], cfg[1], 0, 0, None,
-                    None, 0, 16, None, None, T, 2, ctypes.byref(launched), stream())
-        else:
-            wt.call("wt_gemm", 0, None, None, None, m, self.n, self.kd, 0, cfg[0], cfg[1], 0, 0, None,
-                    ctypes.byref(launched), stream())
-        return launched.value // self.nch
+        rc, gr = self.dry(m, cfg)
+        if rc:
+            raise RuntimeError(f"{self.name} m={m} cfg={cfg}: error {rc}")
+        return gr
 
     def planned(self, m: int, cfg, cache: dict) -> tuple:
         at = (self.n, self.kd, m, tuple(cfg))
@@ -219,15 +241,14 @@ class StackLinear:
         st, wt, m = self.st, self.st.wt, x8.shape[0]
         if st.encoded:
             tags = st.tags if tags is None else tags
-            rc = wt.so.wt_fused_sketch(self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), m, self.n,
-                                       self.kd, self.base, 1, cfg[0], cfg[1], gr, 0, steps.data_ptr(),
-                                       tags.data_ptr() + wt.tag_bytes * at, wt.jbase + at, 16,
-                                       st.frags.data_ptr(), None, T, 2, None, stream())
+            rc = self.fused(self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), m, self.n, self.kd,
+                            self.base, 1, cfg[0], cfg[1], gr, 0, steps.data_ptr(), tags.data_ptr() + wt.tag_bytes * at,
+                            wt.jbase + at, 16, st.frags.data_ptr(), None, T, 2, None, stream())
         else:
-            rc = wt.so.wt_gemm(0, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), m, self.n, self.kd, 1,
-                               cfg[0], cfg[1], gr, 0, st.xr.data_ptr(), None, stream())
+            rc = wt.so.wt_gemm(3 if self.bf else 0, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), m, self.n,
+                               self.kd, 1, cfg[0], cfg[1], gr, 0, st.xr.data_ptr(), None, stream())
         if rc:
-            raise RuntimeError(f"{self.name} m={m}: {'wt_fused_sketch' if st.encoded else 'wt_gemm'} error {rc}")
+            raise RuntimeError(f"{self.name} m={m}: {'the fused kernel' if st.encoded else 'wt_gemm'} error {rc}")
 
     def sums(self, x8: torch.Tensor, plan: tuple, at: int | None = None) -> torch.Tensor:
         """The sums; at None (the gates, before the step's buffers), the receipts into a buffer of their own."""
@@ -289,77 +310,79 @@ class StackLinear:
             self.reduce(self.sums(x8[r0:r0 + r], plan, st.at), xs if xs.numel() == 1 else xs[r0:r0 + r], y[r0:r0 + r])
             st.at += plan[3]
             r0 += r
-        if st.encoded and self.idx == len(st.linears) - 1:
-            st.commit(m)
         return y
 
 
 class LmHead:
-    """The lm_head's BF16 rows as words (stack) or as they are (pstack): logits LM_ROWS rows at a time."""
+    """The lm_head: a BF16 StackLinear, the pass's last linear (its receipts after the FP8 linears', then the step's
+    commit), into partial sums and logits the batches' CUDA graphs share. Outside a pass (a prefill step's logits,
+    vLLM's warm-ups) its receipts go to a buffer of their own and nothing is committed."""
 
     def __init__(self, st: Stack, layer) -> None:
-        self.st = st
         w = layer.weight
         if w.dtype != torch.bfloat16 or not w.is_contiguous():
             raise RuntimeError(f"lm_head weight {w.dtype} {tuple(w.shape)}: the stack takes contiguous BF16")
+        self.st = st
         self.v, self.h = w.shape
-        wt = st.wt
-        if (self.h * 2) % wt.s:
-            raise RuntimeError(f"an lm_head row of {self.h * 2} bytes is not whole {wt.s}-byte words")
-        self.row_words = self.h * 2 // wt.s
-        if st.encoded:
-            self.base = st.words
-            self.words = w.numel() * 2 // wt.s
-            st.words += self.words
-            self.store = torch.empty(w.numel(), dtype=torch.int16, device="cuda")
-            wt.call("wt_encode", w.data_ptr(), self.store.data_ptr(), self.words, self.base, st.k, 8 * st.sms,
-                    stream())
-            self.scratch = torch.empty(LM_ROWS, self.h, dtype=torch.bfloat16, device="cuda")
-        else:
-            self.base, self.words, self.store, self.scratch = 0, w.numel() * 2 // wt.s, w, None
-        self.graphs: dict[int, tuple] = {}
+        self.lin = StackLinear(st, "lm_head", w, None, bf=True)
+        self.part = torch.empty(self.lin.nch * MAX_ROWS * self.v, dtype=torch.float32, device="cuda")
+        self.out = torch.empty((MAX_ROWS, self.v), dtype=torch.bfloat16, device="cuda")
+        self.ones = torch.ones(1, dtype=torch.float32, device="cuda")
+        self.graphs: dict[tuple, tuple] = {}
         self.cap = None
 
     @property
     def nbytes(self) -> int:
-        return self.store.numel() * self.store.element_size()
+        return self.lin.nbytes
 
-    def chunk(self, r0: int, r1: int) -> torch.Tensor:
-        if not self.st.encoded:
-            return self.store[r0:r1]
-        st = self.st
-        st.wt.call("wt_decode", self.store.data_ptr() + 2 * r0 * self.h, self.scratch.data_ptr(),
-                   (r1 - r0) * self.row_words, self.base + r0 * self.row_words, st.k, st.xr.data_ptr(), 8 * st.sms,
-                   stream())
-        return self.scratch[: r1 - r0]
+    @property
+    def scratch_bytes(self) -> int:
+        return self.part.numel() * 4 + self.out.numel() * 2
 
-    def run(self, x: torch.Tensor) -> torch.Tensor:
-        out = torch.empty((x.shape[0], self.v), dtype=torch.bfloat16, device="cuda")
-        for r0 in range(0, self.v, LM_ROWS):
-            r1 = min(self.v, r0 + LM_ROWS)
-            out[:, r0:r1] = torch.mm(x, self.chunk(r0, r1).t())
-        return out
+    def run(self, x: torch.Tensor, commit: bool) -> torch.Tensor:
+        """Logits of x (m <= MAX_ROWS BF16 rows, contiguous) into self.out[:m]; commit: at the pass's offset, then the
+        step's commit."""
+        st, lin, m = self.st, self.lin, x.shape[0]
+        y = self.out[:m]
+        at = lin.at[st.pass_m] if commit else 0
+        r0 = 0
+        for r, plan in lin.plan[m]:
+            part = self.part[: lin.nch * r * self.v].view(lin.nch, r, self.v)
+            lin.launch(x[r0:r0 + r], part, plan, at, None if commit else lin.own_tags(plan))
+            lin.reduce(part, self.ones, y[r0:r0 + r])
+            at += plan[3] if commit else 0
+            r0 += r
+        if commit:
+            st.at = at
+            st.commit(st.pass_m)
+        return y
 
     def apply(self, layer, x: torch.Tensor, bias=None) -> torch.Tensor:
-        x2 = x.reshape(-1, self.h)
+        st = self.st
+        x2 = x.reshape(-1, self.h).contiguous()
         m = x2.shape[0]
-        if m > MAX_ROWS or torch.cuda.is_current_stream_capturing():
-            y = self.run(x2.contiguous())
+        capturing = torch.cuda.is_current_stream_capturing()
+        commit = st.encoded and st.open and not capturing and m <= MAX_ROWS
+        if m > MAX_ROWS or capturing or (st.encoded and not commit):
+            y = torch.cat([self.run(x2[r0:r0 + MAX_ROWS], False).clone() for r0 in range(0, m, MAX_ROWS)])
         else:
-            g = self.graphs.get(m)
+            key = (m, commit, self.lin.at[st.pass_m] if commit else 0)
+            g = self.graphs.get(key)
             if g is None:
-                xs = x2.contiguous().clone()
-                self.run(xs)
+                xs = x2.clone()
+                self.run(xs, commit)
                 torch.cuda.synchronize()
                 graph = torch.cuda.CUDAGraph()
                 if self.cap is None:
                     self.cap = new_stream()
                 with torch.cuda.graph(graph, stream=self.cap):
-                    out = self.run(xs)
-                g = self.graphs[m] = (graph, xs, out)
+                    self.run(xs, commit)
+                g = self.graphs[key] = (graph, xs)
             g[1].copy_(x2)
             g[0].replay()
-            y = g[2].clone()
+            if commit:
+                st.open = False
+            y = self.out[:m].clone()
         if bias is not None:
             y = y + bias
         return y.reshape(*x.shape[:-1], self.v)
@@ -567,6 +590,13 @@ def rand_fp8(m: int, k: int, gen: torch.Generator) -> torch.Tensor:
     return (torch.randn((m, k), generator=gen, device="cuda") * 0.5).to(torch.float8_e4m3fn)
 
 
+def rand_x(lin: StackLinear, m: int, gen: torch.Generator) -> torch.Tensor:
+    """m rows of the linear's activations: FP8, or BF16 (the lm_head's)."""
+    if lin.bf:
+        return (torch.randn((m, lin.kd // 2), generator=gen, device="cuda") * 0.5).to(torch.bfloat16)
+    return rand_fp8(m, lin.kd, gen)
+
+
 def select(st: Stack, trials: int, log) -> list[dict]:
     """Each shape's config at each capture size, by CUDA-graph timing over all of the shape's linears in turn."""
     groups: dict[tuple, list[StackLinear]] = {}
@@ -576,8 +606,8 @@ def select(st: Stack, trials: int, log) -> list[dict]:
     cache: dict = {}
     out = []
     for (n, kd), lins in groups.items():
-        for m in FUSED:
-            x8 = rand_fp8(m, kd, gen)
+        for m in st.fused:
+            x8 = rand_x(lins[0], m, gen)
             part = torch.empty((lins[0].nch, m, n), dtype=torch.float32, device="cuda")
             times = {}
             for cfg in lins[0].candidates(m):
@@ -612,7 +642,8 @@ def select(st: Stack, trials: int, log) -> list[dict]:
             log(f"select n={n} k={kd} m={m}: {best} {times[best]:.1f} us/layer")
     for lin in st.linears:
         for m in range(1, MAX_ROWS + 1):
-            lin.plan[m] = [(r, lin.planned(r, lin.cfgs[min(c for c in FUSED if c >= r)], cache)) for r in pieces(m)]
+            lin.plan[m] = [(r, lin.planned(r, lin.cfgs[min(c for c in st.fused if c >= r)], cache))
+                           for r in pieces(m, st.rows)]
     for m in range(1, MAX_ROWS + 1):
         at = 0
         for lin in st.linears:
@@ -641,8 +672,8 @@ def gate_linear(st: Stack, lin: StackLinear, w: torch.Tensor, plain: torch.Tenso
             gates["python_words"] += 1
     ref_lib = PlainRef(st, lin, plain)
     cache: dict = {}
-    for m in FUSED:
-        x8 = rand_fp8(m, lin.kd, gen)
+    for m in st.fused:
+        x8 = rand_x(lin, m, gen)
         ref = ref_lib.sums(x8)
         for cfg in lin.candidates(m):
             got = lin.sums(x8, lin.planned(m, cfg, cache))
@@ -660,26 +691,31 @@ def gate_linear(st: Stack, lin: StackLinear, w: torch.Tensor, plain: torch.Tenso
 
 
 class PlainRef:
-    """wt_gemm over a linear's plain fragments at its first plain config: the gates' reference sums."""
+    """wt_gemm over a linear's plain fragments at its first plain config (BF16's mode for the lm_head), in launches of
+    at most PLAIN_ROWS rows: the gates' reference sums."""
 
     def __init__(self, st: Stack, lin: StackLinear, plain: torch.Tensor) -> None:
         self.st, self.lin, self.plain = st, lin, plain
 
     def sums(self, x8: torch.Tensor) -> torch.Tensor:
         st, lin, m = self.st, self.lin, x8.shape[0]
+        if m > PLAIN_ROWS:
+            r = pieces(m, PLAIN_ROWS)
+            return torch.cat([self.sums(x) for x in x8.split(r)], dim=1)
         c, s = PLAIN_CFGS[0]
+        mode = 3 if lin.bf else 0
         launched = ctypes.c_int(0)
-        st.wt.call("wt_gemm", 0, None, None, None, m, lin.n, lin.kd, 0, c, s, 0, 0, None, ctypes.byref(launched),
+        st.wt.call("wt_gemm", mode, None, None, None, m, lin.n, lin.kd, 0, c, s, 0, 0, None, ctypes.byref(launched),
                    stream())
         part = torch.empty((lin.nch, m, lin.n), dtype=torch.float32, device="cuda")
-        st.wt.call("wt_gemm", 0, self.plain.data_ptr(), x8.data_ptr(), part.data_ptr(), m, lin.n, lin.kd, 1, c, s,
+        st.wt.call("wt_gemm", mode, self.plain.data_ptr(), x8.data_ptr(), part.data_ptr(), m, lin.n, lin.kd, 1, c, s,
                    launched.value // lin.nch, 0, st.xr.data_ptr(), None, stream())
         return part
 
 
 def gate_step(st: Stack, log) -> dict:
     """A decode step's receipts at each capture size (encoded): every linear at batch m after begin_pass, then the
-    commit. The pass's seed on the device is pass_seed(σ, j, root_(j−1)) of the previous step's root as committed (the
+    lm_head and its commit. The pass's seed on the device is pass_seed(σ, j, root_(j−1)) of the previous step's root as committed (the
     first: the registration's), the first GATE_RECEIPTS receipts of the first and last layers' linears are
     sketch_receipt's of their stored words at that seed and their offsets, and at GATE_TREE's batches the step's root
     is the driver's receipt tree over all of its receipts (`receipts.tree`, salts under STORE_KEY)."""
@@ -696,10 +732,11 @@ def gate_step(st: Stack, log) -> dict:
         torch.cuda.synchronize()
         seed = BW.pass_seed(wt, j, root_prev)
         got = BW.pass_state(wt)
-        x8 = {kd: rand_fp8(m, kd, gen) for kd in {lin.kd for lin in st.linears}}
+        x8 = {(lin.kd, lin.bf): rand_x(lin, m, gen) for lin in st.linears}
         xs = torch.ones(1, dtype=torch.float32, device="cuda")
-        for lin in st.linears:
-            lin.forward(x8[lin.kd], xs)
+        for lin in st.linears[:-1]:
+            lin.forward(x8[lin.kd, lin.bf], xs)
+        st.lm.run(x8[st.lm.lin.kd, True], True)
         torch.cuda.synchronize()
         row = {"j": j, "seed": got["seed"] == seed, "receipts": st.nvec[m], "linears_checked": 0, "receipts_ok": True}
         nbits = BW.sketch_bits(wt, seed, 16, SKT.vector_bytes(wt.sb, T))
@@ -736,10 +773,10 @@ def gate_step(st: Stack, log) -> dict:
     return out
 
 
-def components(st: Stack, lm: "LmHead", trials: int = 5) -> dict:
+def components(st: Stack, lm: LmHead, trials: int = 5) -> dict:
     """Each part of a decode step alone, in ms (the best of `trials` CUDA-event timings, after one warm launch): every
-    linear at m (one CUDA graph, its receipts and, encoded, the commit), the commit alone, the lm_head, the pass's
-    start."""
+    FP8 linear at m (one CUDA graph, their receipts), the commit alone, the lm_head (its receipts, no commit), the
+    pass's start."""
     def best(fn) -> float:
         fn()
         torch.cuda.synchronize()
@@ -757,11 +794,11 @@ def components(st: Stack, lm: "LmHead", trials: int = 5) -> dict:
     xs = torch.ones(1, dtype=torch.float32, device="cuda")
     out = {}
     for m in (1, 32):
-        x8 = {kd: rand_fp8(m, kd, gen) for kd in {lin.kd for lin in st.linears}}
+        x8 = {lin.kd: rand_x(lin, m, gen) for lin in st.linears[:-1]}
         st.begin_pass(m)
 
         def linears():
-            for lin in st.linears:
+            for lin in st.linears[:-1]:
                 lin.forward(x8[lin.kd], xs)
         linears()
         torch.cuda.synchronize()
@@ -777,7 +814,7 @@ def components(st: Stack, lm: "LmHead", trials: int = 5) -> dict:
             row["commit"] = best(commit)
             row["begin_pass"] = best(lambda: st.begin_pass(m))
         h = torch.randn((m, lm.h), generator=gen, device="cuda").to(torch.bfloat16)
-        row["lm_head"] = best(lambda: lm.run(h))
+        row["lm_head"] = best(lambda: lm.run(h, False))
         out[m] = row
     return out
 
@@ -828,16 +865,12 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
                              dtype=torch.int32, device="cuda") if st.encoded else None
     head = model.lm_head
     w = head.weight
-    lm = LmHead(st, head)
-    if st.encoded:
-        torch.cuda.synchronize()
-        back = torch.cat([lm.chunk(r0, min(lm.v, r0 + LM_ROWS)).clone() for r0 in range(0, lm.v, LM_ROWS)])
-        if not torch.equal(back.view(torch.int16), w.view(torch.int16)):
-            raise RuntimeError("gate: the lm_head's store does not decode to its weight")
-        del back
-        head._parameters["weight"] = torch.nn.Parameter(torch.empty(0, dtype=torch.bfloat16, device="cuda"),
-                                                        requires_grad=False)
-    del w
+    lm = st.lm = LmHead(st, head)
+    plain = BW.plain_layout(w.view(torch.uint8)) if st.encoded else lm.lin.store
+    gate_linear(st, lm.lin, w, plain, gen, gates)
+    del plain, w
+    head._parameters["weight"] = torch.nn.Parameter(torch.empty(0, dtype=torch.bfloat16, device="cuda"),
+                                                    requires_grad=False)
     hooks.wrap(head.quant_method, "apply", lambda orig: lm.apply)
     selection = select(st, args.select_trials, log)
     st.buffers()
@@ -857,20 +890,20 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
     scan = plaintext_scan(min(lin.n * lin.kd for lin in st.linears))
     if st.encoded and (scan["fp8"] or scan["uint8"]):
         raise RuntimeError(f"gate: plaintext left in the process: {scan}")
-    store_bytes = sum(lin.nbytes for lin in st.linears)
-    st.attention, st.lm = att, lm
+    store_bytes = sum(lin.nbytes for lin in st.linears if not lin.bf)
+    st.attention = att
     wt = st.wt
     return {"stack": st, "record": {
         "arm": args.arm, "k": st.k, "wt_lib": Path(args.wt_lib).name, "paged_lib": Path(args.paged_lib).name,
         "codec": {"field": wt.field.name, "mask": wt.mask, "fold6": wt.fold6, "receipt": "sketch-sha512" if st.encoded
                   else None, "sketch_t": T, "kv_field": st.plib.field.name, "kv_fold6": st.plib.fold6,
-                  "receipts_per_step": st.nvec, "lm_head": {"rows": lm.v, "chunk_rows": LM_ROWS, "receipted": False,
+                  "receipts_per_step": st.nvec, "lm_head": {"rows": lm.v, "fused": True, "receipted": bool(st.encoded),
                                                            "payload": "bf16", "bytes": lm.nbytes}},
         "layers": len(layers), "plain_bytes": plain_bytes, "store_bytes": store_bytes,
         "store_over_plain": store_bytes / plain_bytes, "words": st.words, "encode_s": encode_s,
         "allocated_before": alloc0, "allocated_after": alloc1, "allocated_delta": alloc1 - alloc0,
         "scratch_bytes": {"prefill_linear": st.scratch.numel() * 4 if st.scratch is not None else 0,
-                          "lm_head": lm.scratch.numel() * 2 if lm.scratch is not None else 0,
+                          "lm_head": lm.scratch_bytes,
                           "attention_partials": att.part.numel() * 4,
                           "kv_stage": att.stage_bytes,
                           "receipts": st.tags.numel() * 8 + 64 * (st.dig.shape[0] + st.up.shape[0])},
@@ -904,6 +937,8 @@ def hook_passes(st: Stack, att: Attention, hooks, model) -> str:
         att.join()
         if 0 < m <= MAX_ROWS:
             st.begin_pass(m)
+        else:
+            st.open = False
         return True
 
     def replay(orig):
@@ -930,7 +965,7 @@ def hook_passes(st: Stack, att: Attention, hooks, model) -> str:
 
 def summary(st: Stack) -> dict:
     return {"passes": st.passes, "j": st.j, "attention_calls": st.attention.calls,
-            "lm_head_graphs": sorted(st.lm.graphs)}
+            "lm_head_graphs": sorted({key[0] for key in st.lm.graphs})}
 
 
 __all__ = ["Attention", "LmHead", "Stack", "StackLinear", "install", "summary"]

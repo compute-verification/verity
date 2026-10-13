@@ -404,7 +404,7 @@ def main() -> int:
            "vllm": vllm.__version__, "torch": torch.__version__, "gpu": torch.cuda.get_device_name(),
            "card_bytes": card, "weight_bytes_per_step": weight_bytes,
            "weight_bytes_resident": sum(p.numel() * p.element_size() for p in runner.model.parameters()) + (
-               sum(lin.nbytes for lin in stack[1].stack.linears) + stack[1].stack.lm.nbytes if stack else 0),
+               sum(lin.nbytes for lin in stack[1].stack.linears) if stack else 0),
            "kv_pool_bytes": pool_bytes, "static_filler_bytes": static if filler is not None else 0,
            "kv_blocks": int(cache.num_gpu_blocks), "block_size": int(cache.block_size),
            "filler_bytes": sum(n for _, n in regions), "topup_regions": len(regions), "runs": [],

@@ -119,7 +119,7 @@ def launches(a) -> list[dict]:
     P.gather(lib, torch, kvc, lay, 0, 1, st.k, blocks, scratch)
     torch.cuda.synchronize()
     out.append({"kernel": "gather", "blocks": 64, "word_bytes": scratch.numel() * 2})
-    rows_lm, h = S.LM_ROWS, 4096
+    rows_lm, h = 4096, 4096
     store = torch.empty(rows_lm * h, dtype=torch.int16, device="cuda").random_()
     plain = torch.empty(rows_lm * h, dtype=torch.int16, device="cuda")
     torch.cuda.synchronize()
