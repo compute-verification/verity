@@ -192,16 +192,17 @@ def fi_lane_elements(l: int) -> tuple[int, ...]:
 def fi_group(o: Ops, x, T=WORD_TYPES):
     """`FlashInferFp8Quant1x128Group_v1`'s body: (q words, stored scale)."""
     zero = o.word(0)
+    xf = [o.cvt(x[i]) for i in range(FP8_BLOCK)]
     lanes = []
     for l in range(FI_LANES):
         v = zero
         for i in fi_lane_elements(l):
-            v = o.fmaxf(v, o.fabs(o.cvt(x[i])))
+            v = o.fmaxf(v, o.fabs(xf[i]))
         lanes.append(v)
     amax = D.halving_tree(lanes, lambda a, b: o.isel(o.lt_ftz(a, b), b, a))
     nz = o.bf16_gt(o.f2bf16(amax), o.half(0))
     scale = o.isel(nz, o.mul_ftz(o.rcp_ftz(amax), o.word(F_448)), o.word(F_ONE))
-    q = [o.e4m3(o.mul_ftz(scale, o.cvt(x[i]))) for i in range(FP8_BLOCK)]
+    q = [o.e4m3(o.mul_ftz(scale, xf[i])) for i in range(FP8_BLOCK)]
     return tuple_of(_row(FP8_BLOCK, q, T[1]), o.rcp_ftz(scale))
 
 
