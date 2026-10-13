@@ -4,6 +4,8 @@ import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.Reps.SrcOpens
 import Proofs.Flock.C3.Reps.IoCols
 import Proofs.Flock.C3.Reps.SrcOK
+import Proofs.Flock.C3.PubRows.Shape
+import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
@@ -15,7 +17,9 @@ a row reads (`StackedOpenCols`, `RepMaps.OpenCols`' form at R's map), `opensRead
 `StackedOpenCols` is `RepMaps.openCols_of_readCol`'s at R's map (`stackedOpenCols_of`), from its units' parameters
 (`StackedParams`, at `RecCoins.stackedParams`), their nets (`StackedNet`, from `RecOpen.check`: `stackedNet_of`) and S's
 `OpenReadCol` at their names (`StackedReadCol`). `stackedParams_of_check`: a unit `RecOpen.check` accepted under V*'s
-name `rec-open-stacked/l<L>-h<H>` has `stackedParams` `(L, H)`.
+name `rec-open-stacked/l<L>-h<H>` has `stackedParams` `(L, H)`, so `stackedParams_of_checked`: `StackedParams` at a
+family's list (`listStmt`) from R's levels in it, the verifier's check of each level's statement and R's shape at
+`fast100`'s schedule at R's `m` (`shape?_opening`).
 
 * `openRow_ligOfRead_out`, `openRow_ligOfRead_past`: past a level's `q` a `ligOfRead` opening is empty, and past a
   schedule of at least two levels (`DimSeam`) it is the last level's row with no siblings (the default level's `d - cap`
@@ -212,6 +216,54 @@ theorem stackedParams_of_check {c : Flock.Circuit} (h : Flock.RecOpen.check c = 
     dsimp only at h
     rw [hn', Flock.RecOpen.startsWith_stackedName, stackedName_startsWith] at h
     cases h
+
+/-- **R's shape at the opening's** (`RecOpening.shape?`, where `RecCoins.opening` reads R): its `m` and `fast100`'s
+schedule at it. -/
+theorem shape?_opening {m c : ℕ} {sh : Flock.Shape} (h : Flock.RecOpening.shape? m c = some sh) :
+    sh.m = m ∧ Flock.fast100 sh.m = some sh.sched := by
+  unfold Flock.RecOpening.shape? at h
+  cases hf : Flock.fast100 m with
+  | none => rw [hf] at h; cases h
+  | some s =>
+    rw [hf] at h
+    dsimp only at h
+    split at h
+    · cases h
+    · cases h
+      exact ⟨rfl, hf⟩
+
+/-- **V*'s statements as the family's list** (`StackedMaps`' `stmt` at a family): statement `j` is the list's `j`-th
+(`vstarCount_eq`). -/
+def listStmt {xR : HoloReg GF128 Dig} (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
+    (j : Fin (vstarCount F.ish)) : VStar.Stmt :=
+  F.stmts[(j : ℕ)]'(by rw [← FlockC3.VStarList.vstarCount_eq F.hstmts]; exact j.isLt)
+
+/-- **`StackedParams` at the family's list, from the verifier's checks**: at R's shape `shR` (R's `m`, `fast100`'s
+schedule at it, as `shape?_opening` gives), the list holds level `ℓ`'s statement at some index (`stacked_of_list`),
+which is `M.sess ℓ` (`hsess`); the circuit the verifier checked as statement `M.sess ℓ` (`hck`, `stmt_of_session` at
+an accepted session) is named as it (`nameChecked`), `rec-open-stacked/l<levelLanes>-h<d - cap>`, and every unit
+passes `RecOpen.check` (`recCheck`), so `stackedParams_of_check`. -/
+theorem stackedParams_of_checked {xR : HoloReg GF128 Dig} (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
+    (hne : Nonempty (Reg × L.Ω × Reg₂)) (M : FlockC3.Reps.StackedMaps (listStmt F) F.Vs)
+    {r : Flock.RecVStar.StackedShape} (hr : F.ish.stacked = some r) {shR : Flock.Shape} (hm : shR.m = r.m)
+    (hf : Flock.fast100 shR.m = some shR.sched)
+    (hck : ∀ ℓ < shR.sched.levels.size, ∃ (sj : Flock.Stmt) tags tables circuitB partition program own rows,
+      sj.c = (F.Vs (M.sess ℓ)).c ∧ Flock.RecVStar.checkStmt (some F.ish) tags tables sj circuitB partition program
+        (some own) (some (M.sess ℓ : ℕ)) (some (F.bind (M.sess ℓ))) rows = .ok ()) :
+    StackedParams M shR := by
+  obtain ⟨⟨R, ω, R₂⟩⟩ := hne
+  intro ℓ hℓ
+  obtain ⟨sch, hsch, hmem⟩ := FlockC3.VStarList.stacked_of_list F.hstmts hr
+  obtain rfl : sch = shR.sched := Option.some.inj (hsch.symm.trans (hm ▸ hf))
+  obtain ⟨i, hi, hget⟩ := Array.mem_iff_getElem.1 (hmem ℓ hℓ)
+  have hi' : i < vstarCount F.ish := by rw [FlockC3.VStarList.vstarCount_eq F.hstmts]; exact hi
+  have hj : M.sess ℓ = ⟨i, hi'⟩ := M.hsess ℓ ⟨i, hi'⟩ ⟨_, _, _, hget⟩
+  obtain ⟨sj, tags, tables, circuitB, partition, program, own, rows, hc, hpass⟩ := hck ℓ hℓ
+  obtain ⟨s, hs, hname⟩ :=
+    FlockC3.PubRows.nameChecked F _ sj tags tables circuitB partition program own rows hc hpass
+  rw [hj, Array.getElem?_eq_getElem hi, hget] at hs
+  cases hs
+  exact stackedParams_of_check (FlockC3.Reps.recCheck (F.zs R ω [] R₂ (M.sess ℓ))) hname.symm
 
 /-- **Hypothesis: `OpenReadCol` at R's stacked names** (`OpenReadCol` is at `RecOpen.unitName`; over any name it gives
 this). -/
@@ -479,3 +531,5 @@ end FlockC3.RegLevels
 #print axioms FlockC3.RegLevels.stackedName_inj
 #print axioms FlockC3.RegLevels.stackedName_startsWith
 #print axioms FlockC3.RegLevels.stackedParams_of_check
+#print axioms FlockC3.RegLevels.shape?_opening
+#print axioms FlockC3.RegLevels.stackedParams_of_checked
