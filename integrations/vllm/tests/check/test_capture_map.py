@@ -159,14 +159,14 @@ def test_every_tap_names_a_program_of_a_known_status():
 
 def test_the_target_only_taps_are_the_indexer_and_the_sparse_attention_and_name_their_programs(registry):
     """Each names the Program of its kernel: fused_q's two outputs `DsaIndexerQ_v1`, the indexer cache row `DsaIndexerKRow_v1`,
-    DeepGEMM's logits `DsaMqaLogits_v1`, the top-2048 `DsaTopKShortRow_v1` and forward_mqa's FA3 `SparseMla_v1`.  Each is `port`:
-    registered, but no Build rule binds it and the H200 capture has not pinned the kernel variant (`test_capture_map_versions`
-    holds an `exists` Program to the Definitions the Build binds)."""
+    DeepGEMM's logits `DsaMqaLogits_v3` (the H200's contraction; v1 is refuted), the top-2048 `DsaTopKShortRow_v1` and
+    forward_mqa's FA3 `SparseMla_v1`.  Each is `port`: registered, but no Build rule binds it (`test_capture_map_versions` holds
+    an `exists` Program to the Definitions the Build binds)."""
     taps = {t["id"]: t for t in CMAP["taps"]}
     assert {tid for tid, t in taps.items() if t["target_only"]} == TARGET_ONLY
     first = {tid: CMAP["programs"][taps[tid]["program"]]["definitions"][0] for tid in TARGET_ONLY}
     assert first == {"attn": "SparseMla_v1", "indexer.q_fp8": "DsaIndexerQ_v1", "indexer.weights": "DsaIndexerQ_v1",
-                     "indexer.k_cache": "DsaIndexerKRow_v1", "indexer.logits": "DsaMqaLogits_v1", "indexer.topk": "DsaTopKShortRow_v1"}
+                     "indexer.k_cache": "DsaIndexerKRow_v1", "indexer.logits": "DsaMqaLogits_v3", "indexer.topk": "DsaTopKShortRow_v1"}
     assert {CMAP["programs"][taps[tid]["program"]]["status"] for tid in TARGET_ONLY} == {"port"}
     assert all(d in registry for tid in TARGET_ONLY for d in CMAP["programs"][taps[tid]["program"]]["definitions"])
 
