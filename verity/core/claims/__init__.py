@@ -169,17 +169,18 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "a floor of 0.025 of a root at 512 bits, down to 0.003 at 2,048, against a per-bit price of 0.32), and holds "
           "only for words whose payload is unknown, under Incompressible(W)",
           "Rate codec work", "measured"),
-    # the sketch-then-hash rate audit's device (Accounting.Guarantees.RateAuditSketch,
-    # Security/Models/Accounting/Guarantees/RateAuditSketch.lean): falsified by a device or host that passes while holding,
-    # reading or sending something other than E's sectors as they are; Accounting.Guarantees.RateSketchTable is why the
-    # class is needed: a prover whose memory may hold any function of E (RateAudit's model) passes on every coin reading
-    # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows
+    # the sketch-then-hash receipt's model, restated by Daniel on 13 Oct: falsified by a prover that passes while holding
+    # some tier's share of the store as anything other than E's blocks. Accounting.Guarantees.RateSketchTable is why the
+    # model is needed: a prover whose memory may hold any function of E (RateAudit's model) passes on every coin reading
+    # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows. What Lean proves is
+    # the narrower verbatim class (Accounting.Guarantees.RateAuditSketch, RateAuditTensorSketchRank: on-chip state, device
+    # memory, the side link and rebuilding each return whole sectors as they are); the restated form, where a device that
+    # computes from blocks it read has those reads counted, is the remote audit's composition, not yet proved for the sketch
     Entry("rate-sketch-verbatim", "model",
-          "Rate sketch verbatim device model: the rate device model for a sketch-then-hash tag, with on-chip state, device "
-          "memory, the side link and rebuilding each returning whole sectors of E or of the certified stream as they are, "
-          "the sectors on chip chosen before the signs, so nothing the device holds, reads or takes in is a function of "
-          "several sectors; a host that computes sketches after the signs are revealed and sends them over the link is "
-          "outside it", "Rate sketch verbatim"),
+          "Rate sketch store-as-blocks model: in every tier the prover holds the store only as its blocks (any number of "
+          "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "
+          "which sketches cost less to read than the blocks themselves, such as a table of precomputed sketches, is "
+          "outside it", "Rate sketch store as blocks"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "

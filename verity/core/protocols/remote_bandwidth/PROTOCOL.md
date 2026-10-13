@@ -24,7 +24,8 @@ its own root left the node. So every read serves at most one receipt of the sess
 (`IntegrityProfile.bound`). Pooled over the session's windows instead, the openings bound the wrong receipts of all
 of them at once, and each window's share, except with \(\delta\) for the session (§10).
 
-`ledger` turns that into γ, given the node's measured capacity \(R\) (HBM plus host DRAM read bandwidth) and its
+`ledger` turns that into γ, given the node's capacity \(R\) (HBM plus host DRAM read bandwidth; specified or measured,
+§1 "Which \(R\) is the headline") and its
 on-chip storage \(S_{\text{chip}}\). Over the session's span \(\Sigma = D_{W-1} - b_{-1}\), the reads of registered
 data are at least \((1 - \gamma) R \Sigma\), with
 
@@ -75,6 +76,13 @@ by itself, and λ with \(\mu_{\text{rebuild}}\) (§10, `timing.stated`). Below a
 33 GB a GPU no \(T\) meets 1% (§10, `timing.store_floor`). 20 s and 1 s are options with their own readings: at 20 s
 and 11,091 openings every window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.23–1.32%, and at 1 s
 and 2,773 its \(\mu_{\text{sample}}\) is under 1% and its whole \(\gamma_t\) 5–14%.
+
+**Which \(R\) is the headline** (Daniel, 13 Oct). γ is reported twice: against the GPU's specified read bandwidth,
+which is the headline, and against the measured one beside it. The figures above are at the measured \(R\) = 1.488
+TB/s. The RTX PRO 6000 Server Edition is specified at 1.597 TB/s, which no measured kernel reaches, so at spec every
+reading also carries that gap: \(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\),
+about 7.5% for the worst stated window. The 1% per window holds at the measured \(R\) only. The two-machine sessions
+(`benchmarks/remote_session`) read 0.118 at spec and 0.085 at their own measured 1.5395 TB/s.
 
 What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The prover
 is one undifferentiated resource of capacity \(R\) (Daniel, 12 Oct, #1884): the guarantee is over whatever reads the
@@ -266,9 +274,13 @@ What each kind rests on:
   sectors of 32 bytes having been obtained, except for a guess. A query made without one of them is right with
   chance at most \(g/2^{256}\) per query, \(g\) the largest fiber of one sector under the signs. The signs bind
   that far except with \(\Pr_S[g < \text{fib}_S]\). Four conditions come with it:
-  - **The verbatim class.** The device obtains a sector only whole and as it is (`rate-sketch-verbatim`). A device
-    that holds blocks' sketches, or a host that computes sketches once the signs are out and relays them, is outside
-    the class. Window isolation must keep such a host off the link.
+  - **The store is held as its blocks** (`rate-sketch-verbatim`, restated by Daniel on 13 Oct). In every tier the
+    prover holds the store only as its blocks, any number of copies anywhere, and any device may compute from the
+    blocks it reads, every such read counted. A layout from which sketches cost less to read than the blocks, such as
+    a table of precomputed sketches, is outside it. That exclusion is needed: Lean shows such a table passes every
+    check while reading 1/64 of each block at 16 rows (`RateSketchTable`), though it needs about \(2^{65536}\) times
+    the store in memory. What Lean proves today is the narrower form, where each device obtains a sector only whole
+    and as it is.
   - **Signs fresh per pass.** \(S_{(t,i)}\) comes from each pass's chained seed, never once per window (F29, §8).
     The statement's window is this protocol's pass.
   - **Grinding.** The statement takes the signs uniform. Here they are derived from a seed the prover can choose
