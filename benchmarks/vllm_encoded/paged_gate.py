@@ -176,6 +176,12 @@ def main() -> int:
                 ck = torch.zeros(nrows, G * D, dtype=torch.bfloat16, device="cuda")
                 cv = torch.zeros_like(ck)
                 pl_x, enc_x = pl[layer].clone(), enc[layer].clone()
+                readers: dict[tuple, int] = {}   # the tables overlap: a slot is overwritten only if one token reads it
+                for i in range(b):
+                    for p in range(lens_l[i]):
+                        at = (int(bt[i, p // BS]), p % BS)
+                        readers[at] = readers.get(at, 0) + 1
+                overwritten = 0
                 for i in range(b):
                     L = lens_l[i]
                     if not L:
@@ -183,9 +189,11 @@ def main() -> int:
                     blk, off = int(bt[i, (L - 1) // BS]), (L - 1) % BS
                     ck[i] = pl[layer][blk, :, off, :D].reshape(-1)
                     cv[i] = pl[layer][blk, :, off, D:].reshape(-1)
-                    junk = (torch.randn(G, 2 * D, device="cuda") * 9).to(torch.bfloat16)
-                    pl_x[blk, :, off] = junk
-                    enc_x[blk, :, off] = junk
+                    if readers[(blk, off)] == 1:
+                        junk = (torch.randn(G, 2 * D, device="cuda") * 9).to(torch.bfloat16)
+                        pl_x[blk, :, off] = junk
+                        enc_x[blk, :, off] = junk
+                        overwritten += 1
                 o_cp = torch.full_like(o_p, 1.0)
                 o_ce = torch.full_like(o_p, 2.0)
                 P.attn(lib, torch, pl_x, lay, lbase[layer], 0, k, q, o_cp, part, lens, btd, b, sp, ck=ck, cv=cv)
@@ -208,7 +216,7 @@ def main() -> int:
                 err = float((o_p[:b].double().view(b, H, D) - ref[:b]).abs().max() / m)
                 ok = equal and zero_pad and zero_len and qrow_eq and rows_eq and err <= RTOL
                 att["cells"].append({"batch": b, "splits": sp, "layer": layer, "lens": lens_l, "equal": equal,
-                                     "zero_padding": zero_pad, "zero_length": zero_len, "qrow": qrow_eq, "last_rows": rows_eq,
+                                     "zero_padding": zero_pad, "zero_length": zero_len, "qrow": qrow_eq, "last_rows": rows_eq, "last_overwritten": overwritten,
                                      "rel_err": err, "ok": ok})
                 att["ok"] &= ok
                 if not ok:
