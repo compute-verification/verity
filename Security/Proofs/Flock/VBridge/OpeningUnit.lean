@@ -9,6 +9,7 @@ grouping and renumbering cut from the opening's S (`RecOpening.structureOf`). Th
 `rec-residuals` part's, so `ResUnit`'s theorems read it unchanged.
 
 * `check_opening`: what `check` accepted, the verifier's net for part `j`.
+* `upv_of_check`: at one unit per VU.
 * `opening_small`: that part has at most 16 residuals (`groups_small`), as `laid_part` asks.
 * `decode_opening`: in a layer agreeing with the registrant, a copy of the unit whose row ports are registered bits of
   `w` at the part's indices and whose `v` port registered bits of `vv` at `V` holds the part's residuals at part ports
@@ -34,6 +35,8 @@ theorem check_opening {c : Flock.Circuit} (h : RecOpening.check c = .ok ()) {m c
   dsimp only at h
   split at h
   · cases h
+  split at h
+  · cases h
   · split at h
     · cases h
     · rename_i S ns nv hpart
@@ -46,6 +49,19 @@ theorem check_opening {c : Flock.Circuit} (h : RecOpening.check c = .ok ()) {m c
           · rename_i hcg
             exact ⟨S, ns, nv, hpart, by rw [hcg]; exact hg⟩
           · cases h
+
+/-- **`RecOpening.check` accepts a `rec-opening/m<m>-c<claims>-p<j>` unit at one unit per VU only.** -/
+theorem upv_of_check {c : Flock.Circuit} (h : RecOpening.check c = .ok ()) {m cl j : ℕ}
+    (hp : RecOpening.params c.unit.name = some (m, cl, j)) : c.upv = 1 := by
+  unfold RecOpening.check at h
+  rw [hp] at h
+  dsimp only at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · rename_i hv
+      simpa using hv
 
 /-- **The verifier's opening part has at most 16 residuals** (`groups_small`): `partS` gives it one residual for each
 of its group's (`PartS.res_partS`). -/

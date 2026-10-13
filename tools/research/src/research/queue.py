@@ -5,7 +5,7 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue land [--dry-run]                fast-forward `main` to the newest commit on `next` that passed `check`, push it
-    research queue eject PR --reason TEXT          keep the PR's current head out of `next`; a new push re-admits it
+    research queue eject PR --reason TEXT          keep the PR's current head out of `next`; a new push or ready mark re-admits it
     research queue ready PR (--on MACHINE | --local | --mark) [--by LANE]
                                                    the owner's word that the PR is ready at its current head (a new push needs it again),
                                                    once the quick tier passes there: as a run on MACHINE in a check slot
@@ -14,7 +14,7 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    --mark, on the owner's word alone (`MarkOnly`)
     research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--first N,...] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
-                                                   check `next` in trains with train.sh, tell the lander what it refuses
+                                                   check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
@@ -46,7 +46,7 @@ Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the 
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
 `next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).  `drive`
 (`research.drive`) is the loop's tick that needs no agent: it launches the checks of `next`'s trains, lands what passed (onto a
-moved `main` too, when the two share no file) and tells the lander what it refuses.
+moved `main` too, when the two share no file), ejects the PR a failure points at alone and tells `@ci` what it refuses.
 
 Notices.  A refusal (a conflict, an ejection) is sent once per PR head: a handoff in the owner's lane directory of the notes, or in
 `lanes/coordinator/` for an owner known only by agent id.
@@ -94,6 +94,9 @@ RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
+#: a transfer from the remote under 1 KB/s for 2 min aborts: git has no timeout, and a stalled HTTPS fetch held a drive tick
+#: for 10 min (13 Oct 02:33Z), the next tick retrying it
+STALL = ("-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=120")
 LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
@@ -223,6 +226,22 @@ class StoreLabels:
         self.store, self.log, self.since = store, log, since
         self._pulled: set[int] = set()
         self._newest: dict[tuple[int, str], object] = {}
+        self._fresh: set[str] = set()
+
+    def prefetch(self, heads: Iterable[tuple[int, str]]) -> None:
+        """Pull the labels of each `pr:{n}@{head}` from the store's remote at once, so `ready` answers each from them without a
+        pull of its own (12 Oct: one listing per open PR, in turn, was 10 s of every drive tick).  A failed pull leaves each
+        target to its own, which says why."""
+        from .store import labels_sync
+
+        targets = [label_target(n, h) for n, h in heads]
+        if not targets or getattr(self.store, "remote", None) is None:
+            return
+        try:
+            labels_sync.pull_targets(self.store, targets, jobs=labels_sync.SYNC_JOBS)
+        except Exception:  # noqa: BLE001
+            return
+        self._fresh.update(targets)
 
     def ready(self, pr: int, head: str) -> bool:
         """Whether the newest `ready` label on `pr:{n}@{head}` is `true`, written at or after ``since`` (`--marked-after`) when
@@ -236,6 +255,11 @@ class StoreLabels:
         """Who wrote the newest `ready` label `ready` read on `pr:{n}@{head}`."""
         lab = self._newest.get((pr, head))
         return None if lab is None else lab.by
+
+    def marked_at(self, pr: int, head: str) -> str | None:
+        """When the newest `ready` label `ready` read on `pr:{n}@{head}` was written."""
+        lab = self._newest.get((pr, head))
+        return None if lab is None else lab.ts
 
     def before_cutoff(self, pr: int, head: str) -> str | None:
         """When the newest `ready` label `ready` read on `pr:{n}@{head}` is `true` but older than ``since``, its time: a mark
@@ -270,6 +294,8 @@ class StoreLabels:
         from .store.local import StoreError
 
         target = label_target(pr, head)
+        if target in self._fresh:
+            return self.store.labels(target, key=key)
         try:
             labels_sync.read_through(self.store, [target], lambda s: self.log(f"research queue: {s}"), strict=True)
         except StoreError as e:
@@ -309,10 +335,12 @@ class Queue:
                  store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
                  auth: tuple[str, ...] = (), first: tuple[int, ...] = (),
                  before_cutoff: Callable[[int, str], str | None] | None = None,
-                 marked_by: Callable[[int, str], str | None] | None = None):
+                 marked_by: Callable[[int, str], str | None] | None = None,
+                 marked_at: Callable[[int, str], str | None] | None = None,
+                 prefetch: Callable[[list[tuple[int, str]]], None] | None = None):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
-        self.before_cutoff, self.marked_by = before_cutoff, marked_by
+        self.before_cutoff, self.marked_by, self.marked_at, self.prefetch = before_cutoff, marked_by, marked_at, prefetch
         #: how many members at the bottom of `next` a running check covers (`Drive`): `first` goes above them, so no reorder
         #: takes a running check's commit off `next`
         self.hold = 0
@@ -324,7 +352,7 @@ class Queue:
 
     def _remote(self, cwd: Path, *args: str, ok: tuple[int, ...] | None = (0,)) -> subprocess.CompletedProcess:
         """A git command that talks to the remote, with `auth` (`credential_args`); one that exits outside `ok` raises."""
-        r = _git(cwd, *self.auth, *args, check=False)
+        r = _git(cwd, *STALL, *self.auth, *args, check=False)
         if ok is not None and r.returncode not in ok:
             err = (r.stderr or r.stdout).strip()[-400:]
             hint = ("; no credential helper applies to the remote outside the caller's checkout: set one in git's global config, "
@@ -399,10 +427,23 @@ class Queue:
 
     # -- admission
 
+    def _marked_again(self, p: PR, ejected: dict) -> bool:
+        """Whether ``p``'s owner marked it ready after its ejection at this head: the store's newest mark decides on every VM, so
+        this queue's own record of the ejection can't hold a PR that mark admits (12 Oct: #1736, re-marked at its ejected head,
+        stayed off `next` on the ejecting VM's queue only)."""
+        if self.marked_at is None or not self.ready(p.number, p.head):
+            return False
+        when, at = self.marked_at(p.number, p.head), ejected.get("at", "")
+        if len(at) == len("2026-10-12T21:09Z"):
+            at = at[:-1] + ":59Z"                       # recorded to the minute: a mark in that minute may predate the ejection
+        return when is not None and when > at
+
     def entries(self, prs: list[PR], state: dict) -> dict[int, Entry]:
         rules = self.rules()
         heads = {p.head: p.number for p in prs}
         out: dict[int, Entry] = {}
+        if self.prefetch is not None:
+            self.prefetch([(p.number, p.head) for p in prs if rules.hold_label not in p.labels and p.owner is not None])
         for p in prs:
             e = out[p.number] = Entry(p)
             ejected = state["ejected"].get(str(p.number))
@@ -410,8 +451,8 @@ class Queue:
                 e.state, e.why = "waiting", f"held (`{rules.hold_label}` label)"
             elif p.owner is None:
                 e.state, e.why = "waiting", "no owner: add a `Lane {name}` line to the PR body"
-            elif ejected and ejected["head"] == p.head:
-                e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push re-admits it)"
+            elif ejected and ejected["head"] == p.head and not self._marked_again(p, ejected):
+                e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push or ready mark re-admits it)"
             elif self.ready(p.number, p.head):
                 pass
             elif self.before_cutoff and (when := self.before_cutoff(p.number, p.head)):
@@ -537,7 +578,7 @@ class Queue:
         if pr not in prs:
             raise QueueError(f"#{pr} isn't an open PR")
         state = self.load_state()
-        state["ejected"][str(pr)] = {"head": prs[pr].head, "why": reason, "by": by, "at": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime())}
+        state["ejected"][str(pr)] = {"head": prs[pr].head, "why": reason, "by": by, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         if self.store is not None and not self.shadow:
             from .store.cli import _label_write_through
 
@@ -639,7 +680,7 @@ class Queue:
             if e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
             elif e.state == "ready":
-                e.why = "admitted: ready for a train (the queue does not land trains yet)"
+                e.why = f"admitted: the next sync merges it onto `{self.branch}`, and drive checks and lands it in a train"
         return entries
 
 
@@ -1098,7 +1139,8 @@ def main(argv: list[str]) -> int:
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
                   auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in a.first.split(",") if n),
-                  before_cutoff=labels.before_cutoff, marked_by=labels.marked_by)
+                  before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
+                  prefetch=labels.prefetch)
         lock = _lock(a.workdir)  # noqa: F841
         if not a.marked_after:
             if a.rules is None:

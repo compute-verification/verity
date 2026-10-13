@@ -19,7 +19,7 @@ F=/workspace/flock-gpu-link/flock; FEAT=; [ $G = 1 ] && FEAT="--features gpu"
 (cd $F && cargo build --release -p flock-live $FEAT --bin flock-vllm-v1 -j $TH) >> $O/build.log 2>&1 || { tail -40 $O/build.log; exit 1; }
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python
 B=$F/target/release/flock-vllm-v1; sha256sum $B | tee $O/binary.sha256
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 if [ $ROLE = verifier ]; then
