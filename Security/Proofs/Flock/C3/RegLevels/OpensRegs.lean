@@ -15,6 +15,10 @@ import Proofs.Flock.C3.RegLevels.StackedReg
   (`lg_eq_of_opening`). Where the opening's `dirs` columns are the bits of the first two words of the rows
   `checkValue` accepted (`hval`), they are the position's low `H` bits, at every valid `H` (`H ≤ 32`): `dirsRow` holds
   them 16 a word.
+* `srcKey_opening`, `regBit_opening`: at a unit `RecOpen.check` accepted, the statement's first five rows are the
+  opening's (`rowsOk`) and every copy reads their words in order (`leavesOk`), so copy `j`'s input bit `preBits q + k`
+  has the Δ key of bit `k` of row `q` (`srcKey_inOrder`), a registered bit wherever unit `u`'s row `q` is a registered
+  read. `accCoef_of_check` and `dirsCols_of_check` are `opensTopAt_of_regs`' `acc`, `coef` and `dirs` columns so.
 -/
 
 namespace FlockC3.RegLevels
@@ -223,10 +227,312 @@ theorem dirs_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.
   have e := hval _ what hdv j (by simpa using hj) b (by omega)
   rwa [getElem!_map_range _ hj, dirsRow_testBit _ _ hb (by omega)] at e
 
-#print axioms regBits_of_cols
-#print axioms regOuts_of_cols
-#print axioms opensTopAt_of_regs
-#print axioms dirsLevel_of_check
+/-! ## The opening's keys, from the verifier's check -/
+
+/-- **In a unit of one group of 16-bit ports from column 0, a copy that reads the leaf words in order reads each port's
+row**: the Δ key of copy `j`'s input bit `16 · starts[q] + k` is message bit `k % 8` of byte `k / 8` of port `q`, for `k`
+within the row. -/
+theorem srcKey_inOrder {c : Flock.Circuit} {g : Flock.Group} (hg : c.unit.inGroups = #[g]) (hg0 : g.col = 0)
+    (h16 : ∀ b ∈ g.bits.toList, b = 16) (hnd : (FlockSoundness.portBits c.unit.inGroups).Nodup) {j : ℕ}
+    (hlv : c.leavesIn.getD j #[] = (Array.range g.bits.size).map Int.ofNat) {q k : ℕ} (hq : q < c.ports.size)
+    (hk : k < 16 * c.ports[q].words) (hkb : k < c.ports[q].bits)
+    (hfit : (FlockSoundness.Typed.starts c)[q]! + c.ports[q].words ≤ g.bits.size)
+    (hN : 16 * g.bits.size ≤ c.unit.inWords * Flock.WORD) :
+    Aliased.srcKey c (j * (c.unit.inWords * Flock.WORD) + (16 * (FlockSoundness.Typed.starts c)[q]! + k)) =
+      .msg q (k / 8) (k % 8) := by
+  have htake : ∀ a (ha : a < c.ports.size), ((c.ports.toList.take (a + 1)).map (·.words)).sum =
+      ((c.ports.toList.take a).map (·.words)).sum + c.ports[a].words := by
+    intro a ha
+    rw [List.take_add_one, List.map_append, List.sum_append, List.getElem?_eq_getElem (by simpa using ha)]
+    simp
+  have hmono : ∀ a (ha : a < c.ports.size) b, a < b → b < c.ports.size →
+      (FlockSoundness.Typed.starts c)[a]! + c.ports[a].words ≤ (FlockSoundness.Typed.starts c)[b]! := by
+    intro a ha b hab hb
+    rw [FlockSoundness.Discharge.Layout.starts_get c ha, FlockSoundness.Discharge.Layout.starts_get c hb]
+    have e1 : c.ports.toList.take b =
+        c.ports.toList.take (a + 1) ++ (c.ports.toList.drop (a + 1)).take (b - (a + 1)) := by
+      rw [← List.take_add]
+      congr 1
+      omega
+    rw [e1, List.map_append, List.sum_append, htake a ha]
+    omega
+  have hx : (FlockSoundness.Typed.starts c)[q]! + k / 16 < c.inWords := by
+    have e : (c.ports.toList.map (·.words)).sum = ((c.ports.toList.take (q + 1)).map (·.words)).sum +
+        ((c.ports.toList.drop (q + 1)).map (·.words)).sum := by
+      rw [← List.sum_append, ← List.map_append, List.take_append_drop]
+    rw [FlockSoundness.Discharge.Layout.inWords_eq, e, htake q hq, ← FlockSoundness.Discharge.Layout.starts_get c hq]
+    omega
+  generalize hs : (FlockSoundness.Typed.starts c)[q]! = s at hfit hx ⊢
+  have hcol : 16 * s + k < c.unit.inWords * Flock.WORD := by omega
+  have hmod : (j * (c.unit.inWords * Flock.WORD) + (16 * s + k)) % (c.unit.inWords * Flock.WORD) = 16 * s + k := by
+    rw [Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt hcol]
+  have hdiv : (j * (c.unit.inWords * Flock.WORD) + (16 * s + k)) / (c.unit.inWords * Flock.WORD) = j := by
+    rw [Nat.mul_comm, Nat.mul_add_div (by omega), Nat.div_eq_of_lt hcol, Nat.add_zero]
+  have hsz : (Flock.portCols c.unit.inGroups).size = g.bits.size := by
+    rw [hg]
+    simpa using congrArg List.length (FlockSoundness.portCols_single g)
+  have hpb : s + k / 16 < g.bits.size := by omega
+  have hp : s + k / 16 < (Flock.portCols c.unit.inGroups).size := by rw [hsz]; exact hpb
+  have hc1 : (Flock.portCols c.unit.inGroups)[s + k / 16]!.1 = 16 * (s + k / 16) := by
+    rw [← FlockSoundness.Layout.getD_portCols hp, hg, FlockSoundness.Discharge.HiddenExec.portCols_16_get h16 hpb, hg0]
+    simp
+  have hc2 : (Flock.portCols c.unit.inGroups)[s + k / 16]!.2 = 16 := by
+    have hpg : s + k / 16 < (Flock.portCols #[g]).size := by rw [← hg]; exact hp
+    have := List.getElem_of_eq (FlockSoundness.portCols_single g) (by simpa using hpg)
+    simp only [List.getElem_map, Array.getElem_toList] at this
+    rw [hg, getElem!_pos (Flock.portCols #[g]) (s + k / 16) hpg, this]
+    exact h16 _ (Array.getElem_mem_toList _)
+  have hcol' : 16 * s + k = (Flock.portCols c.unit.inGroups)[s + k / 16]!.1 + k % 16 := by rw [hc1]; omega
+  have hm : 16 * s + k ∈ FlockSoundness.portBits c.unit.inGroups := by
+    unfold FlockSoundness.portBits
+    refine List.mem_flatMap.2 ⟨(Flock.portCols c.unit.inGroups)[s + k / 16]!, ?_, ?_⟩
+    · rw [getElem!_pos (Flock.portCols c.unit.inGroups) (s + k / 16) hp]
+      exact Array.getElem_mem_toList _
+    · rw [List.mem_range'_1, hc1, hc2]
+      omega
+  unfold Aliased.srcKey
+  rw [hmod, ite_eq_left hm, hdiv, hcol', FlockSoundness.portOf_eq hnd hp (by rw [hc2]; omega), Nat.add_sub_cancel_left]
+  unfold Aliased.srcAt
+  have hp0 : s + k / 16 < (c.unit.inGroups.getD 0 default).bits.size := by rw [hg]; exact hpb
+  have hleaf : (c.leavesIn.getD j #[])[s + k / 16]! = Int.ofNat (s + k / 16) := by
+    rw [hlv, getElem!_pos _ _ (by simpa using hpb)]
+    simp
+  have hnat : (Int.ofNat (s + k / 16)).toNat = s + k / 16 := rfl
+  rw [ite_eq_left hp0, hleaf, ite_eq_right (by rw [Int.ofNat_eq_natCast]; omega)]
+  dsimp only
+  rw [hnat]
+  have hQ : ((List.range (FlockSoundness.Typed.starts c).size).reverse.find?
+      (fun i => (FlockSoundness.Typed.starts c)[i]! ≤ s + k / 16)).getD 0 = q := by
+    obtain ⟨Q, hQ⟩ : ∃ Q, ((List.range (FlockSoundness.Typed.starts c).size).reverse.find?
+        (fun i => (FlockSoundness.Typed.starts c)[i]! ≤ s + k / 16)).getD 0 = Q := ⟨_, rfl⟩
+    obtain ⟨hQs, hle, hlt⟩ := FlockSoundness.Discharge.Layout.starts_find c hx hQ
+    rw [hQ]
+    rcases Nat.lt_trichotomy Q q with h | h | h
+    · have := hmono Q hQs q h hq
+      omega
+    · exact h
+    · have := hmono q hq Q h hQs
+      omega
+  rw [hQ, hs, getElem!_pos c.ports q hq, ite_eq_left (by omega)]
+  congr 1 <;> omega
+
+/-- **What `checkAt` accepted of the statement's rows and its copies' leaves** (`rowsOk`, `leavesOk`). -/
+theorem checkAt_rows {c : Flock.Circuit} {name : String} {L H : ℕ} (h : Flock.RecOpen.checkAt c name L H = .ok ()) :
+    Flock.RecOpen.rowsOk c L H = true ∧ Flock.RecOpen.leavesOk c L H = true := by
+  unfold Flock.RecOpen.checkAt at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · rename_i hr
+        split at h
+        · cases h
+        · rename_i hv
+          exact ⟨by simpa using hr, by simpa using hv⟩
+
+/-- **What `check` accepted of a `rec-open/…` or `rec-open-stacked/…` unit's rows and leaves.** -/
+theorem check_rows {c : Flock.Circuit} (h : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
+    (hp : Flock.RecOpen.params c.unit.name = some (L, H) ∨ Flock.RecOpen.stackedParams c.unit.name = some (L, H)) :
+    Flock.RecOpen.rowsOk c L H = true ∧ Flock.RecOpen.leavesOk c L H = true := by
+  unfold Flock.RecOpen.check at h
+  rcases hp with hp | hp
+  · rw [hp] at h
+    exact checkAt_rows h
+  · rw [Flock.RecOpen.params_stacked hp] at h
+    dsimp only at h
+    rw [← Flock.RecOpen.stackedName_of_params hp, Flock.RecOpen.startsWith_stackedName,
+      Flock.RecOpen.stackedName_of_params hp, hp] at h
+    exact checkAt_rows h
+
+theorem rows_snd (L H : ℕ) {q : ℕ} (hq : q < 5) :
+    ((Flock.RecOpen.rows L H)[q]!).2 = (Flock.RecOpen.ports L H).bits[q]! := by
+  obtain rfl | rfl | rfl | rfl | rfl : q = 0 ∨ q = 1 ∨ q = 2 ∨ q = 3 ∨ q = 4 := by omega
+  all_goals rfl
+
+/-- **`rowsOk`, row by row**: the statement's row `q < 5` is the opening's input row `q`, by name and width. -/
+theorem rowsOk_get {c : Flock.Circuit} {L H : ℕ} (h : Flock.RecOpen.rowsOk c L H = true) {q : ℕ} (hq : q < 5) :
+    ∃ hq' : q < c.ports.size, c.ports[q].name = ((Flock.RecOpen.rows L H)[q]!).1 ∧
+      16 * c.ports[q].words = (Flock.RecOpen.ports L H).bits[q]! ∧
+        c.ports[q].bits = (Flock.RecOpen.ports L H).bits[q]! := by
+  unfold Flock.RecOpen.rowsOk at h
+  have e := of_decide_eq_true h
+  have h5r : (Flock.RecOpen.rows L H).size = 5 := rfl
+  have hs := congrArg Array.size e
+  simp only [Array.size_map, Array.size_extract, h5r] at hs
+  have hq' : q < c.ports.size := by omega
+  refine ⟨hq', ?_⟩
+  have e2 := congrArg (fun a => a[q]!) e
+  rw [getElem!_pos _ q (by simp; omega), getElem!_pos _ q (by simp [h5r]; omega)] at e2
+  simp only [Array.getElem_map, Array.getElem_extract, Nat.zero_add] at e2
+  rw [← rows_snd L H hq, getElem!_pos (Flock.RecOpen.rows L H) q (by rw [h5r]; exact hq)]
+  simp only [Prod.mk.injEq] at e2
+  exact ⟨e2.1, e2.2.1, e2.2.2⟩
+
+/-- **`leavesOk` at copy `j`**: its leaves are the rows' words in order. -/
+theorem leavesOk_get {c : Flock.Circuit} {L H : ℕ} (h : Flock.RecOpen.leavesOk c L H = true) {j : ℕ}
+    (hj : j < c.leavesIn.size) :
+    c.leavesIn.getD j #[] = (Array.range ((Flock.RecOpen.ports L H).bits.foldl (· + ·) 0 / 16)).map Int.ofNat := by
+  unfold Flock.RecOpen.leavesOk at h
+  rw [Array.all_eq_true] at h
+  have := h j hj
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some]
+  simpa using this
+
+/-- The opening's input bits before its row `q` (`row`, `aux`, `acc`, `coef`, `dirs`, in that order). -/
+def preBits (LANES H q : ℕ) : ℕ := (((Flock.RecOpen.ports LANES H).bits.toList).take q).sum
+
+theorem preBits_le (L H : ℕ) {q : ℕ} (hq : q < 5) :
+    preBits L H q + (Flock.RecOpen.ports L H).bits[q]! ≤ (Flock.RecOpen.ports L H).bits.foldl (· + ·) 0 := by
+  obtain rfl | rfl | rfl | rfl | rfl : q = 0 ∨ q = 1 ∨ q = 2 ∨ q = 3 ∨ q = 4 := by omega
+  all_goals (simp [preBits, Flock.RecOpen.ports, Flock.RecOpen.Ports.bits]; try omega)
+
+theorem inGroups_of_laid {name : String} {L H : ℕ} {net : Flock.Net}
+    (hl : Flock.HmNets.netOf name (Flock.RecOpen.unitLaid L H) = .ok net) :
+    net.inGroups = #[⟨0, Flock.HmNets.groupWords ((Flock.RecOpen.wordPorts (FlockVBridge.unitIn L H)).foldl (· + ·) 0),
+      Flock.RecOpen.wordPorts (FlockVBridge.unitIn L H)⟩] := by
+  unfold Flock.HmNets.netOf at hl
+  rw [(Flock.Net.ofRows_ok hl).2.2.2.2.2.1]
+  rfl
+
+/-- **An accepted opening's copies read its rows** (`srcKey_inOrder`): at the verifier's net at `L` and `H`, with the
+statement's first five rows the opening's (`rowsOk`) and copy `j` reading their words in order (`leavesOk`), the Δ key
+of copy `j`'s input bit `preBits q + k`, for `k` within row `q < 5`, is bit `k` of the statement's row `q`. -/
+theorem srcKey_opening {c : Flock.Circuit} {name : String} {L H : ℕ}
+    (hl : Flock.HmNets.netOf name (Flock.RecOpen.unitLaid L H) = .ok c.unit)
+    (hrows : Flock.RecOpen.rowsOk c L H = true) (hlv : Flock.RecOpen.leavesOk c L H = true)
+    (hnd : (FlockSoundness.portBits c.unit.inGroups).Nodup) {j : ℕ} (hj : j < c.leavesIn.size) {q : ℕ} (hq : q < 5)
+    {k : ℕ} (hk : k < (Flock.RecOpen.ports L H).bits[q]!) :
+    ∃ hq' : q < c.ports.size, c.ports[q].name = ((Flock.RecOpen.rows L H)[q]!).1 ∧ k < 16 * c.ports[q].words ∧
+      preBits L H q + k < c.unit.inWords * Flock.WORD ∧
+      Aliased.srcKey c (j * (c.unit.inWords * Flock.WORD) + (preBits L H q + k)) = .msg q (k / 8) (k % 8) := by
+  obtain ⟨hq', hname, hw, hb⟩ := rowsOk_get hrows hq
+  have hpre : ∀ i ≤ 5, 16 * ((c.ports.toList.take i).map (·.words)).sum = preBits L H i := by
+    intro i hi
+    induction i with
+    | zero => simp [preBits]
+    | succ i ih =>
+      obtain ⟨hi', -, hwi, -⟩ := rowsOk_get hrows (show i < 5 by omega)
+      have hB : i < (Flock.RecOpen.ports L H).bits.toList.length := by
+        simp [Flock.RecOpen.Ports.bits]
+        omega
+      have hBi : (Flock.RecOpen.ports L H).bits.toList[i] = (Flock.RecOpen.ports L H).bits[i]! := by
+        rw [Array.getElem_toList, getElem!_pos _ i (by simpa using hB)]
+      unfold preBits at ih ⊢
+      rw [List.take_add_one, List.map_append, List.sum_append, List.getElem?_eq_getElem (by simpa using hi'),
+        List.take_add_one, List.sum_append, List.getElem?_eq_getElem hB, hBi, ← hwi, ← ih (by omega)]
+      simp [Nat.mul_add]
+  have hst : 16 * (FlockSoundness.Typed.starts c)[q]! = preBits L H q := by
+    rw [FlockSoundness.Discharge.Layout.starts_get c hq']
+    exact hpre q (by omega)
+  have hg := inGroups_of_laid hl
+  have h16 : ∀ b ∈ (Flock.RecOpen.wordPorts (FlockVBridge.unitIn L H)).toList, b = 16 := by
+    intro b hb
+    rw [Flock.RecOpen.wordPorts, Array.toList_replicate] at hb
+    exact List.eq_of_mem_replicate hb
+  have hsz : (Flock.RecOpen.wordPorts (FlockVBridge.unitIn L H)).size = FlockVBridge.unitIn L H / 16 := by
+    simp [Flock.RecOpen.wordPorts]
+  have hN : 16 * (Flock.RecOpen.wordPorts (FlockVBridge.unitIn L H)).size ≤ c.unit.inWords * Flock.WORD := by
+    rw [FlockVBridge.inWords_unit hl, hsz, FlockSoundness.Discharge.Hm.inRowsOf, FlockVBridge.foldl_wordPorts]
+    exact Flock.HmNets.le_groupWords _
+  have hle := preBits_le L H hq
+  have hT : FlockVBridge.unitIn L H = (Flock.RecOpen.ports L H).bits.foldl (· + ·) 0 := rfl
+  have hfit : (FlockSoundness.Typed.starts c)[q]! + c.ports[q].words ≤
+      (Flock.RecOpen.wordPorts (FlockVBridge.unitIn L H)).size := by
+    rw [hsz]
+    omega
+  have key := srcKey_inOrder hg rfl h16 hnd (j := j) (k := k) (by rw [leavesOk_get hlv hj, hsz]) hq' (by omega) (by omega)
+    hfit hN
+  rw [hst] at key
+  exact ⟨hq', hname, by omega, by omega, key⟩
+
+theorem preBits_aux (L H : ℕ) : preBits L H 1 = (Flock.RecOpen.ports L H).row := by
+  simp [preBits, Flock.RecOpen.Ports.bits] <;> omega
+
+theorem preBits_acc (L H : ℕ) :
+    preBits L H 2 = (Flock.RecOpen.ports L H).row + (Flock.RecOpen.ports L H).aux := by
+  simp [preBits, Flock.RecOpen.Ports.bits] <;> omega
+
+theorem preBits_coef (L H : ℕ) :
+    preBits L H 3 = (Flock.RecOpen.ports L H).row + (Flock.RecOpen.ports L H).aux + (Flock.RecOpen.ports L H).acc := by
+  simp [preBits, Flock.RecOpen.Ports.bits] <;> omega
+
+theorem preBits_dirs (L H : ℕ) :
+    preBits L H 4 = (Flock.RecOpen.ports L H).row + (Flock.RecOpen.ports L H).aux + (Flock.RecOpen.ports L H).acc +
+      (Flock.RecOpen.ports L H).coef := by
+  simp [preBits, Flock.RecOpen.Ports.bits] <;> omega
+
+theorem bits_acc (L H : ℕ) : (Flock.RecOpen.ports L H).bits[2]! = (Flock.RecOpen.ports L H).acc := rfl
+
+theorem bits_coef (L H : ℕ) : (Flock.RecOpen.ports L H).bits[3]! = (Flock.RecOpen.ports L H).coef := rfl
+
+theorem bits_dirs (L H : ℕ) : (Flock.RecOpen.ports L H).bits[4]! = (Flock.RecOpen.ports L H).dirs := rfl
+
+section Keyed
+
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+
+/-- **An accepted opening's input columns are registered bits where its rows are registered reads**
+(`srcKey_opening`): at a unit the verifier accepted as `rec-open/l<L>-h<H>` or `rec-open-stacked/l<L>-h<H>`, copy `j`'s
+column `preBits q + k`, bit `k` of its row `q < 5`, is a registered bit wherever unit `u`'s row `q` is a registered
+read. -/
+theorem regBit_opening (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
+    (hp : Flock.RecOpen.params c.unit.name = some (L, H) ∨ Flock.RecOpen.stackedParams c.unit.name = some (L, H))
+    {j : ℕ} (hj : j < c.leavesIn.size) {u : Fin nv} {q : ℕ} (hq : q < 5)
+    (hread : ∀ hq' : q < c.ports.size, FlockVBridge.Decode.regRead zo (.inl (u, ⟨q, hq'⟩))) {k : ℕ}
+    (hk : k < (Flock.RecOpen.ports L H).bits[q]!) : ∃ b, RegBit zo u j (preBits L H q + k) b := by
+  obtain ⟨hrows, hlv⟩ := check_rows hrec hp
+  obtain ⟨name, hl⟩ : ∃ name, Flock.HmNets.netOf name (Flock.RecOpen.unitLaid L H) = .ok c.unit := by
+    rcases hp with hp | hp
+    · exact ⟨_, (Flock.RecOpen.check_ok hrec hp).2⟩
+    · exact ⟨_, (Flock.RecOpen.check_ok_stacked hrec hp).2⟩
+  obtain ⟨hq', -, hk', hcol, hkey⟩ :=
+    srcKey_opening hl hrows hlv (FlockSoundness.Discharge.Aliased.portBits_nodup hU) hj hq hk
+  rw [← FlockSoundness.Discharge.Layout.ofNet_nIn_eq (hU := hU)] at hcol hkey
+  exact ⟨_, hcol, ⟨q, hq'⟩, k, hk', hkey, hread hq', rfl⟩
+
+/-- **`opensTopAt_of_regs`' `hacc` and `hcoef` from the verifier's check** (`regBit_opening`): where unit `u`'s `acc`
+and `coef` rows (rows 2 and 3) are registered reads, each of copy `j`'s `acc` and `coef` columns is a registered bit. -/
+theorem accCoef_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
+    (hp : Flock.RecOpen.params c.unit.name = some (L, H) ∨ Flock.RecOpen.stackedParams c.unit.name = some (L, H))
+    {j : ℕ} (hj : j < c.leavesIn.size) {u : Fin nv}
+    (hacc : ∀ hq : 2 < c.ports.size, FlockVBridge.Decode.regRead zo (.inl (u, ⟨2, hq⟩)))
+    (hcoef : ∀ hq : 3 < c.ports.size, FlockVBridge.Decode.regRead zo (.inl (u, ⟨3, hq⟩))) :
+    (∀ t < (Flock.RecOpen.ports L H).acc, ∃ b,
+      RegBit zo u j ((Flock.RecOpen.ports L H).row + (Flock.RecOpen.ports L H).aux + t) b) ∧
+    ∀ t < (Flock.RecOpen.ports L H).coef, ∃ b, RegBit zo u j
+      ((Flock.RecOpen.ports L H).row + (Flock.RecOpen.ports L H).aux + (Flock.RecOpen.ports L H).acc + t) b := by
+  refine ⟨fun t ht => ?_, fun t ht => ?_⟩
+  · have := regBit_opening zo hrec hp hj (q := 2) (by decide) hacc (k := t) (by rw [bits_acc]; exact ht)
+    rwa [preBits_acc] at this
+  · have := regBit_opening zo hrec hp hj (q := 3) (by decide) hcoef (k := t) (by rw [bits_coef]; exact ht)
+    rwa [preBits_coef] at this
+
+/-- **The `dirs` columns `opensTopAt_of_regs` reads are keyed** (`regBit_opening`): where unit `u`'s `dirs` row (row 4)
+is a registered read, each of copy `j`'s `dirs` columns is a registered bit; which bit is `dirs_of_check`'s. -/
+theorem dirsCols_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
+    (hp : Flock.RecOpen.params c.unit.name = some (L, H) ∨ Flock.RecOpen.stackedParams c.unit.name = some (L, H))
+    {j : ℕ} (hj : j < c.leavesIn.size) {u : Fin nv}
+    (hdirs : ∀ hq : 4 < c.ports.size, FlockVBridge.Decode.regRead zo (.inl (u, ⟨4, hq⟩))) :
+    ∀ t < (Flock.RecOpen.ports L H).dirs, ∃ b, RegBit zo u j ((Flock.RecOpen.ports L H).row +
+      (Flock.RecOpen.ports L H).aux + (Flock.RecOpen.ports L H).acc + (Flock.RecOpen.ports L H).coef + t) b := by
+  intro t ht
+  have := regBit_opening zo hrec hp hj (q := 4) (by decide) hdirs (k := t) (by rw [bits_dirs]; exact ht)
+  rwa [preBits_dirs] at this
+
+end Keyed
+
 #print axioms dirs_of_check
+#print axioms srcKey_inOrder
+#print axioms check_rows
+#print axioms rowsOk_get
+#print axioms leavesOk_get
+#print axioms preBits_le
+#print axioms srcKey_opening
+#print axioms regBit_opening
+#print axioms accCoef_of_check
+#print axioms dirsCols_of_check
 
 end FlockC3.RegLevels
