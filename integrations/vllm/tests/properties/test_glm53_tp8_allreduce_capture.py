@@ -746,13 +746,14 @@ def _bind_captured(c: T.Captured, M: int):
 
 def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
     """Every `tp_allreduce.CAPTURED` entry is, at each M it covers, the route vLLM's dispatch takes at its setting (the fused path to
-    FlashInfer's budget, the custom all-reduce 2-stage throughout), cites the two GO runs, and its Definition binds at its first
-    and last M with what they read (GLM-5.3's tree on every owner, IEEE adds, FMA in both shots); `covered` names it there and
-    nowhere past it."""
+    FlashInfer's budget, the custom all-reduce 2-stage throughout), cites exactly the GO runs at that setting, and its Definition
+    binds at its first and last M with what they read (GLM-5.3's tree on every owner, IEEE adds, FMA in both shots); `covered`
+    names it there and nowhere past it."""
     assert X.tree_str(T.GLM53_H200_TREE) == "((((((0,(1,2)),3),5),6),4),7)"
-    assert T.CAPTURE_RUNS == ("r20261013-085842-2147", "r20261013-091723-e383")
+    assert T.CAPTURE_RUNS == ("r20261013-085842-2147", "r20261013-091723-e383", "r20261013-115512-5ff3")
+    runs = {"custom-off": T.CAPTURE_RUNS[:2], "defaults": T.CAPTURE_RUNS[2:], "switch": T.CAPTURE_RUNS}
     for c in T.CAPTURED:
-        assert c.N == X.HIDDEN and c.runs == T.CAPTURE_RUNS and c.setting in T.SETTINGS and c.setting != "defaults"
+        assert c.N in (X.HIDDEN, X.DSV4_HIDDEN) and c.runs == runs[c.setting] and c.setting in T.SETTINGS
         for M in range(c.lo, c.hi + 1):
             if c.route == "fused":
                 assert X.expected_path(M) == X.FUSED, (c, M)
@@ -766,13 +767,19 @@ def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
             assert _bind_captured(c, M).id.split("{")[0] == c.definition
 
 
-def test_nothing_at_vllms_defaults_is_covered_yet() -> None:
-    """Until a capture at vLLM's defaults is GO, no call at them is covered on any route, nothing at DeepSeek-V4-Pro's width at any
-    setting, and NCCL's route at none; a setting `SETTINGS` does not name is refused."""
+def test_vllms_defaults_are_covered_through_the_captured_range() -> None:
+    """The GO capture covers every GLM-5.3 call at vLLM's defaults through 2048 tokens, and DeepSeek-V4-Pro's standalone
+    all-reduces there through 2048. It covers neither width past that range, DeepSeek-V4-Pro at another setting, nor NCCL;
+    a setting `SETTINGS` does not name is refused."""
     routes = ("fused", "fi_ar_comm", "ca_comm", "symm_mem_comm", "pynccl_comm")
     for M in (1, 9, 10, 11, 36, 37, 42, 43, 256, 682, 683, 2048, 5461, 5462):
-        assert all(T.covered("defaults", n, r, M) is None for r in routes for n in (X.HIDDEN, X.DSV4_HIDDEN))
-        assert all(T.covered(s, X.DSV4_HIDDEN, r, M) is None for s in T.SETTINGS for r in routes)
+        for n in (X.HIDDEN, X.DSV4_HIDDEN):
+            expected = X.expected_comm(M, "defaults", n)
+            assert (T.covered("defaults", n, expected, M) is not None) == (M <= 2048)
+            assert all(T.covered("defaults", n, r, M) is None for r in routes if r != expected and r != "fused")
+        assert (T.covered("defaults", X.HIDDEN, "fused", M) is not None) == (M <= X.FUSED_MAX)
+        assert T.covered("defaults", X.DSV4_HIDDEN, "fused", M) is None
+        assert all(T.covered(s, X.DSV4_HIDDEN, r, M) is None for s in ("custom-off", "switch") for r in routes)
         assert all(T.covered(s, X.HIDDEN, "pynccl_comm", M) is None for s in T.SETTINGS)
     with pytest.raises(ValueError, match="setting 'served'"):
         T.covered("served", X.HIDDEN, "fi_ar_comm", 1)
@@ -798,6 +805,8 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
         if uncovered:
             assert p["status"] != "exists", (pid, setting, uncovered[:3])
             assert all(status_of(DEFS.defs[d].conformance) == "not-yet-established" for d in p["definitions"]), pid
+        else:
+            assert all(status_of(DEFS.defs[d].conformance) == "exact-model-tested" for d in p["definitions"]), pid
     for c in T.CAPTURED:
         assert c.definition in cmap["programs"]["fused-allreduce-rmsnorm" if c.route == "fused" else "tp-allreduce"]["definitions"]
 
