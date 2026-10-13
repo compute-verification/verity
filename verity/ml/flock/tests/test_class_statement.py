@@ -303,6 +303,26 @@ def test_committed_words_leave_a_boolean_definitions_gates_as_they_are():
     assert committed.text == plain.text
 
 
+def test_a_class_staged_without_shared_rows_opens_every_instances_own_rows_under_the_same_circuit(tmp_path: Path):
+    """``share_rows=False``: the same circuit, and public and prover files without ``shared_rows`` (the form Lean's
+    ``ProvedScope.sharedRowsOk`` covers without registered reads), every instance's rows its own, one per port, so the prover's
+    file is the shared one's with every table as long as the instances; a wired class keeps its link rows shared."""
+    units, s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
+    lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
+    shared = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "shared", key)
+    own = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "own", key, share_rows=False)
+    head = lambda d, f: json.loads((tmp_path / d / f"{f}-{own['n']}.bin").read_bytes().split(b"\n", 1)[0])  # noqa: E731
+    assert own["circuit_sha512"] == shared["circuit_sha512"] and own["shared_rows"] is None
+    assert "shared_rows" in head("shared", "pub") and "shared_rows" in head("shared", "inst")
+    assert "shared_rows" not in head("own", "pub") and "shared_rows" not in head("own", "inst")
+    meta = json.loads((tmp_path / "own" / "circuit.txt").read_text().split("\n", 2)[1][5:])
+    n, words = own["n"], sum(w for _p, w, _c in meta["ports"])
+    body = (tmp_path / "own" / f"inst-{n}.bin").read_bytes().split(b"\n", 1)[1]
+    assert len(body) == n * (2 * words + (192 + 128) * len(meta["ports"]))
+    with pytest.raises(ValueError, match="share_rows"):
+        CS.stage(units, "q-word", s, cl, lanes, tmp_path / "wired", key, wiring=SimpleNamespace(), share_rows=False)
+
+
 def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):
     """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
     (the output row's, §16.13, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
