@@ -415,33 +415,3 @@ end honest
 end
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.UnitVals
-#print axioms FlockC3.Reps.UnitProof
-#print axioms FlockC3.Reps.UnitSetup
-#print axioms FlockC3.Reps.UnitFrames
-#print axioms FlockC3.Reps.UnitSteps
-#print axioms FlockC3.Reps.unitOfParts
-#print axioms FlockC3.Reps.RepTie
-#print axioms FlockC3.Reps.reps_prefix
-#print axioms FlockC3.Reps.repsReadAt_of_tie
-#print axioms FlockC3.Reps.cutOf
-#print axioms FlockC3.Reps.cutOf_ne_nil
-#print axioms FlockC3.Reps.cutOf_append
-#print axioms FlockC3.Reps.repPart
-#print axioms FlockC3.Reps.runSteps_split
-#print axioms FlockC3.Reps.c3Msgs_repPart
-#print axioms FlockC3.Reps.RepsMsgsRead
-#print axioms FlockC3.Reps.msgsRead_repPart
-#print axioms FlockC3.Reps.SrcRepTie
-#print axioms FlockC3.Reps.srcRepsReadAt_of_tie
-#print axioms FlockC3.Reps.AtRep
-#print axioms FlockC3.Reps.RepUnitOfAlg
-#print axioms FlockC3.Reps.ProofOfVals
-#print axioms FlockC3.Reps.SetupOfVals
-#print axioms FlockC3.Reps.FramesOfVals
-#print axioms FlockC3.Reps.StepsOfVals
-#print axioms FlockC3.Reps.repUnitOfAlg_of_parts
-#print axioms FlockC3.Reps.srcRepTie_of_alg
-#print axioms FlockC3.Reps.repsRead_of_tie
-#print axioms FlockC3.Reps.hReps_of_tie

@@ -65,5 +65,3 @@ theorem srcOK_repsOfVals {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
 end
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.srcOK_repsOfVals

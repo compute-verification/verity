@@ -340,24 +340,3 @@ end source
 end
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.ofRounds_size
-#print axioms FlockC3.Reps.ProofFrom
-#print axioms FlockC3.Reps.msgs_proofOf
-#print axioms FlockC3.Reps.unitProof_of_from
-#print axioms FlockC3.Reps.SetupFrom
-#print axioms FlockC3.Reps.unitSetup_of_from
-#print axioms FlockC3.Reps.claimsAt
-#print axioms FlockC3.Reps.claimsAt_eq
-#print axioms FlockC3.Reps.ValsSrc
-#print axioms FlockC3.Reps.ValsSrc.vals
-#print axioms FlockC3.Reps.RepExtrasAt
-#print axioms FlockC3.Reps.extras_of_at
-#print axioms FlockC3.Reps.ValsSrc.proofFrom
-#print axioms FlockC3.Reps.ValsSrc.setupFrom
-#print axioms FlockC3.Reps.sched_holoAt
-#print axioms FlockC3.Reps.ValsSrc.setupFrom_holo
-#print axioms FlockC3.Reps.proofOfVals_of_from
-#print axioms FlockC3.Reps.setupOfVals_of_from
-#print axioms FlockC3.Reps.proofOfVals_of_src
-#print axioms FlockC3.Reps.setupOfVals_of_src

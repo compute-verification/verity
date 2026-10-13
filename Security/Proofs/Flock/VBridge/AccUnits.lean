@@ -313,19 +313,3 @@ end outer
 end Sessions
 
 end FlockVBridge.AccChain
-
-#print axioms FlockVBridge.AccChain.eq_of_bitOf
-#print axioms FlockVBridge.AccChain.getElem!_of_bitL
-#print axioms FlockVBridge.AccChain.climb_size_of
-#print axioms FlockVBridge.AccChain.consTerm_acc
-#print axioms FlockVBridge.AccChain.acc_of_cols
-#print axioms FlockVBridge.AccChain.unitSum_of_cols
-#print axioms FlockVBridge.AccChain.RegOut
-#print axioms FlockVBridge.AccChain.copyVal_regOut
-#print axioms FlockVBridge.AccChain.unitSum_of_decode
-#print axioms FlockVBridge.AccChain.OpensAt
-#print axioms FlockVBridge.AccChain.unitSum_of_opensAt
-#print axioms FlockVBridge.AccChain.regBit_unique
-#print axioms FlockVBridge.AccChain.readsEnds_of_regBits
-#print axioms FlockVBridge.AccChain.unitSums_of_decode
-#print axioms FlockVBridge.AccChain.accChains_of_decode

@@ -172,11 +172,3 @@ theorem vbridge_exec
 end outer
 
 end FlockVBridge.Stages
-
-#print axioms FlockVBridge.Stages.TableFiles
-#print axioms FlockVBridge.Stages.TableFiles.Finds
-#print axioms FlockVBridge.Stages.TableFiles.Valid
-#print axioms FlockVBridge.Stages.TableFiles.Runs
-#print axioms FlockVBridge.Stages.TableFiles.accepts
-#print axioms FlockVBridge.Stages.stagesAccept_of_runs
-#print axioms FlockVBridge.Stages.vbridge_exec

@@ -327,28 +327,3 @@ theorem accChains_of_units (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂
 end outer
 
 end FlockVBridge.AccChain
-
-#print axioms FlockVBridge.AccChain.SameShape
-#print axioms FlockVBridge.AccChain.SameShape.refl
-#print axioms FlockVBridge.AccChain.SameShape.trans
-#print axioms FlockVBridge.AccChain.sameShape_modify
-#print axioms FlockVBridge.AccChain.kapAdd_shape
-#print axioms FlockVBridge.AccChain.accTerms_shape
-#print axioms FlockVBridge.AccChain.buildRes_shape
-#print axioms FlockVBridge.AccChain.buildAll_shape
-#print axioms FlockVBridge.AccChain.levelLanes
-#print axioms FlockVBridge.AccChain.build_kappa
-#print axioms FlockVBridge.AccChain.verifierRows_kappa
-#print axioms FlockVBridge.AccChain.Openings
-#print axioms FlockVBridge.AccChain.Openings.start
-#print axioms FlockVBridge.AccChain.Openings.start_zero
-#print axioms FlockVBridge.AccChain.Openings.start_succ
-#print axioms FlockVBridge.AccChain.UnitSums
-#print axioms FlockVBridge.AccChain.CoefsAre
-#print axioms FlockVBridge.AccChain.ConsAre
-#print axioms FlockVBridge.AccChain.ReadsEnds
-#print axioms FlockVBridge.AccChain.level_sums
-#print axioms FlockVBridge.AccChain.chain_sums
-#print axioms FlockVBridge.AccChain.fOf_kapSum
-#print axioms FlockVBridge.AccChain.accHolds_of_units
-#print axioms FlockVBridge.AccChain.accChains_of_units

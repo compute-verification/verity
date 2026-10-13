@@ -246,20 +246,3 @@ theorem capRead_vals {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {
 end
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.coinSteps_map
-#print axioms FlockC3.Reps.getElem!_of_map
-#print axioms FlockC3.Reps.coinsAt_of_idx
-#print axioms FlockC3.Reps.repStart
-#print axioms FlockC3.Reps.CoinsEncoded
-#print axioms FlockC3.Reps.repIdx
-#print axioms FlockC3.Reps.unitCoins_eq
-#print axioms FlockC3.Reps.cap_vals
-#print axioms FlockC3.Reps.coinsAt_rep
-#print axioms FlockC3.Reps.RepRoundsHeld
-#print axioms FlockC3.Reps.heldRounds
-#print axioms FlockC3.Reps.heldCoins_eq
-#print axioms FlockC3.Reps.repRoundsHeld_of_rounds
-#print axioms FlockC3.Reps.RepsDrawn
-#print axioms FlockC3.Reps.repCoins_repsOfVals
-#print axioms FlockC3.Reps.capRead_vals
