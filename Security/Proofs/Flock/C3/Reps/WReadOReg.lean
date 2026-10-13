@@ -221,3 +221,11 @@ end read
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.openingName_inj
+#print axioms FlockC3.Reps.startsWith_openingName
+#print axioms FlockC3.Reps.openParams_of_check
+#print axioms FlockC3.Reps.openUnit_of
+#print axioms FlockC3.Reps.keyedCol_of_regBit
+#print axioms FlockC3.Reps.regBit_wReadO
+#print axioms FlockC3.Reps.openingZeroAtL_of_regs

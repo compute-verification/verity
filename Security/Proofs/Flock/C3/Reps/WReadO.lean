@@ -312,3 +312,9 @@ end read
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.ofO_part
+#print axioms FlockC3.Reps.bitOf_wReadO
+#print axioms FlockC3.Reps.openingZeroAtL_wReadO
+#print axioms FlockC3.Reps.el_wReadO_acc
+#print axioms FlockC3.Reps.sessionAt_wReadO
