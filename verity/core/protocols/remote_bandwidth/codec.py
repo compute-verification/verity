@@ -95,6 +95,12 @@ class Codec:
         """The most blocks a store under it holds: its words' indices fit a u64 (2^59 at p1024, 2^58 at p512)."""
         return WORD_INDICES // self.field.block_words
 
+    @property
+    def encode_squarings(self) -> int:
+        """A block's encode in squarings: k roots a word, each the bit length of (p + 1)/4 less one (98,016 at
+        p1024/k3/masked, 65,344 at p1024/k2/masked, 65,152 at p512/k2)."""
+        return self.field.block_words * self.rounds * (((self.field.p + 1) // 4).bit_length() - 1)
+
     def to_json(self) -> dict:
         """Its parameters: the field `p = 2^n − c`, k, and the mask."""
         return {"c": self.field.c, "field": self.field.name, "masked": self.masked, "n": self.field.n,

@@ -17,10 +17,12 @@ y_(i,p)       sketch-sha512, the default: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ fra
               j = plan_i[p],  SKETCH_RECEIPT_DOMAIN = "verity/remote-bandwidth/sketch-receipt/v0\0"      64 bytes
               block-sha512, for comparison: SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ e_(i,j)),
               RECEIPT_DOMAIN = "verity/remote-bandwidth/receipt/v0\0"                                    64 bytes
-S_i           sketch-sha512's 16 × 4096 signs of pass i: K = derive(seed_i, SIGN_DOMAIN, {"tag": "sketch-sha512",
-              "k": 16, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB first)
-              1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
-σ_(i,j)       S_i · e_(i,j), its 4096 bytes as int8, over the integers (|σ[c]| ≤ 2^19): 16 int32 little-endian  64 bytes
+k_s           sketch-sha512's rows, the registration's: 16 (the default) or 64 (`ROWS`); 0 under block-sha512
+S_i           sketch-sha512's k_s × 4096 signs of pass i: K = derive(seed_i, SIGN_DOMAIN, {"tag": "sketch-sha512",
+              "k": k_s, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB
+              first) 1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
+σ_(i,j)       S_i · e_(i,j), its 4096 bytes as int8, over the integers (|σ[c]| ≤ 2^19): k_s int32 little-endian, 64
+              bytes at 16 rows (y one compression after the seed's block) and 256 at 64 (three)
 leaf c        v_c = y_(16c) ‖ … ‖ y_(16c+15), positions in plan order, the last leaf short; committed as an
               hm96-sha512/row/v2 leaf: x_c = sha512/row/v2(v_c), value hm96-sha512 tree_leaf(key, commit_string(key,
               x_c, salt_c)), salt_c 192 fresh bytes, key hm96-sha512's pinned key
@@ -36,16 +38,18 @@ compression, so a relay that meets the block and z over a link carries `min(|z|,
 one side.
 
 The registration names its receipt kind (`KINDS`): sketch-sha512 (`DEFAULT`, the stated receipt), or block-sha512, kept
-for comparison.  A sketch-sha512 receipt hashes 72 bytes after the seed's block, not 4,104: one SHA-512 compression
-where block-sha512 takes 33, and the signs, derived from the pass's seed, exist only after the previous pass's root, as
-the seed does.  Leaves, salts and the tree are the same under either kind.  What each kind rests on is `PROTOCOL.md`
-§4.
+for comparison.  A sketch-sha512 receipt hashes 72 bytes after the seed's block at 16 rows, not 4,104: one SHA-512
+compression where block-sha512 takes 33 (three at 64 rows), and the signs, derived from the pass's seed, exist only
+after the previous pass's root, as the seed does.  Under sketch-sha512 the registration also names k_s
+(`sketch_rows`), which the signs' key binds.  Leaves, salts and the tree are the same under either kind.  What each
+kind rests on is `PROTOCOL.md` §4.
 
 The registration also names its block layout (`LAYOUTS`): how a kernel's sketch vectors map to the registered blocks,
 each block j the encoded store's bytes 4096·j … 4096·j + 4095, whole codec words.  Under store-order/v0, the only one,
 a vector is one registered block's bytes in store order.  `plan_of` takes a kernel's map from its vectors' bytes to
 the store's and returns the plan its vectors are, refusing padding, a codec word split across vectors and a block
-twice, so that only registered blocks' bytes are credited.
+twice, so that only registered blocks' bytes are credited.  The fused GEMM's fragment cut is refused until the byte
+permutation ra-codec-tensor proposes for it is a layout of its own here.
 
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
 that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is
@@ -80,6 +84,7 @@ TREE_DOMAIN = b"verity/remote-bandwidth/receipt-tree/v0\0"
 BLOCK_SHA512 = "block-sha512"
 SKETCH_SHA512 = "sketch-sha512"
 SKETCH_ROWS = 16
+ROWS = (16, 64)
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 CHALLENGE_BYTES = 32
 DIGEST_BYTES = 64
@@ -286,10 +291,12 @@ class Receipter:
         return h.digest()
 
 
-def sign_bits(seed: bytes) -> tuple[bytes, ...]:
-    """`S_i`'s sign bits, 16 rows of 512 bytes: bit u of row c (byte u // 8, LSB first) is 1 where `S_i[c][u] = −1`."""
-    key = derive(_digest(seed, "a pass seed"), SIGN_DOMAIN, {"tag": SKETCH_SHA512, "k": SKETCH_ROWS, "n": BLOCK_BYTES})
-    return tuple(key.stream(("row", c), BLOCK_BYTES // 8) for c in range(SKETCH_ROWS))
+def sign_bits(seed: bytes, rows: int = SKETCH_ROWS) -> tuple[bytes, ...]:
+    """`S_i`'s sign bits, `rows` = k_s rows of 512 bytes: bit u of row c (byte u // 8, LSB first) is 1 where
+    `S_i[c][u] = −1`.  The key binds k_s, so 64 rows are not 16 rows and 48 more."""
+    rows = sketch_rows(SKETCH_SHA512, rows)
+    key = derive(_digest(seed, "a pass seed"), SIGN_DOMAIN, {"tag": SKETCH_SHA512, "k": rows, "n": BLOCK_BYTES})
+    return tuple(key.stream(("row", c), BLOCK_BYTES // 8) for c in range(rows))
 
 
 def sketch_prefix(seed: bytes) -> bytes:
@@ -309,22 +316,24 @@ def _int8_sum(planes: list[int], mask: int) -> int:
 
 
 class SketchReceipter:
-    """sketch-sha512 receipts under one pass's seed, the default kind: `receipter(j, block)` is `y_(i,j)`, and
-    `sketch(block)` its `σ_(i,j)`; given `z`, the receipt and sketch that bind it.  The product is in pure Python, a
-    row's ±1 dot product as T − 2·(the sum where its sign is −1), each sum over the block's bit planes: about 0.25 ms a
-    block."""
+    """sketch-sha512 receipts under one pass's seed at `rows` = k_s, the default kind: `receipter(j, block)` is
+    `y_(i,j)`, and `sketch(block)` its `σ_(i,j)`; given `z`, the receipt and sketch that bind it.  The product is in
+    pure Python, a row's ±1 dot product as T − 2·(the sum where its sign is −1), each sum over the block's bit planes:
+    about 0.25 ms a block at 16 rows."""
 
     kind = SKETCH_SHA512
 
-    def __init__(self, seed: bytes) -> None:
-        self.rows = tuple(int.from_bytes(b"".join(_BYTE_BITS[b] for b in row), "little") for row in sign_bits(seed))
+    def __init__(self, seed: bytes, rows: int = SKETCH_ROWS) -> None:
+        self.rows = sketch_rows(SKETCH_SHA512, rows)
+        self._signs = tuple(int.from_bytes(b"".join(_BYTE_BITS[b] for b in row), "little")
+                            for row in sign_bits(seed, self.rows))
         self.head = hashlib.sha512(sketch_prefix(seed))
 
     def sketch(self, block: bytes, z: bytes | None = None) -> bytes:
         x = int.from_bytes(_e(block, z), "little")
         planes = [x >> k for k in range(8)]
         total = _int8_sum(planes, _EVERY_BYTE)
-        return struct.pack(f"<{SKETCH_ROWS}i", *(total - 2 * _int8_sum(planes, row) for row in self.rows))
+        return struct.pack(f"<{self.rows}i", *(total - 2 * _int8_sum(planes, row) for row in self._signs))
 
     def __call__(self, j: int, block: bytes, z: bytes | None = None) -> bytes:
         h = self.head.copy()
@@ -345,9 +354,24 @@ def receipt_kind(kind: object) -> str:
     return kind
 
 
-def receipter(kind: str, seed: bytes) -> Receipter | SketchReceipter:
-    """The receipter of `kind` under one pass's seed."""
-    return RECEIPTERS[receipt_kind(kind)](seed)
+def sketch_rows(kind: str, rows: object = None) -> int:
+    """A registration's k_s under `kind`: sketch-sha512's, one of `ROWS` (`SKETCH_ROWS` if None), and 0 under
+    block-sha512, which sketches nothing."""
+    if receipt_kind(kind) != SKETCH_SHA512:
+        if rows is not None and (type(rows) is not int or rows != 0):
+            raise ValueError(f"{kind} sketches nothing: its rows are 0")
+        return 0
+    if rows is None:
+        return SKETCH_ROWS
+    if type(rows) is not int or rows not in ROWS:
+        raise ValueError(f"sketch-sha512's rows are one of {list(ROWS)}")
+    return rows
+
+
+def receipter(kind: str, seed: bytes, rows: int | None = None) -> Receipter | SketchReceipter:
+    """The receipter of `kind` under one pass's seed, at k_s = `rows` under sketch-sha512 (`sketch_rows`)."""
+    rows = sketch_rows(kind, rows)
+    return SketchReceipter(seed, rows) if rows else Receipter(seed)
 
 
 STORE_ORDER = "store-order/v0"

@@ -12,9 +12,10 @@ three passes are one window's chain: pass 0 follows the registration's digest an
 A GPU receipter fills its store with the same payloads, encodes them under the pinned codec seed, and checks its blocks,
 receipts and roots against these.  The middle pass reads a partial plan out of store order, so its receipt for position
 p is block plan[p]'s and its tree has 10 positions.  The main chain is the default registration's: sketch-sha512, the
-default receipt kind, of the block alone.  `variants` holds every other: the same store registered under each other kind and `bind`
-(named "kind", or "kind/bind" for receipts that bind the stub tiles' z) with the same nonce, so the same codec seed and
-blocks (neither is in the seed's context) under another digest, so other coins' binding, seeds, signs and roots.
+default receipt kind, at 16 rows, of the block alone.  `variants` holds every other: the same store registered under
+each other kind and `bind`, and sketch-sha512 at 64 rows (named "kind", "kind/bind" for receipts that bind the stub
+tiles' z, "sketch-sha512/rows64"), with the same nonce, so the same codec seed and blocks (none of them is in the seed's
+context) under another digest, so other coins' binding, seeds, signs and roots.
 """
 
 from __future__ import annotations
@@ -39,13 +40,15 @@ PAYLOAD_SALT_LABEL = b"verity remote bandwidth vector payload salts"
 LEAF_SALT_LABEL = b"verity remote bandwidth vector receipt salts"
 BLOCKS = 21
 PLANS = (receipts.Plan.whole(BLOCKS), receipts.Plan(((16, 5), (3, 4), (0, 1)), BLOCKS), receipts.Plan.whole(BLOCKS))
-PARAMS = audit.Params(blocks=BLOCKS, deadline_ns=10, windows=1, samples=7, delta=1e-6)
+PARAMS = audit.Params(blocks=BLOCKS, deadline_ns=10, windows=1, samples=7, delta=1e-6, window_ns=10)
 TILES = audit.NoiseTiles(96)
-VARIANTS = tuple((k, b) for k in receipts.KINDS for b in (False, True) if (k, b) != (receipts.DEFAULT, False))
+DEFAULT = (receipts.DEFAULT, False, receipts.SKETCH_ROWS)
+VARIANTS = (*((k, b, receipts.sketch_rows(k)) for k in receipts.KINDS for b in (False, True)
+              if (k, b, receipts.sketch_rows(k)) != DEFAULT), (receipts.SKETCH_SHA512, False, 64))
 
 
-def name(kind: str, bind: bool) -> str:
-    return f"{kind}/bind" if bind else kind
+def name(kind: str, bind: bool, rows: int) -> str:
+    return kind + ("/bind" if bind else "") + ("" if rows == receipts.sketch_rows(kind) else f"/rows{rows}")
 
 
 class Entropy:
@@ -86,12 +89,12 @@ def store() -> audit.Store:
 
 
 @functools.cache
-def registered(receipt: str, bind: bool) -> audit.Store:
-    """`store()` registered under `receipt` and `bind` with the same nonce: its codec seed, so its blocks, are
+def registered(receipt: str, bind: bool, rows: int) -> audit.Store:
+    """`store()` registered under `receipt`, `bind` and `rows` with the same nonce: its codec seed, so its blocks, are
     `store()`'s."""
     st = store()
     reg = audit.register(SOURCE, NODE, BLOCKS, st.registration.payload_root, st.registration.codec, receipt, bind=bind,
-                         nonce=NONCE)
+                         rows=rows, nonce=NONCE)
     assert reg.codec_seed == st.registration.codec_seed
     out = copy.copy(st)
     out.registration = reg
@@ -111,7 +114,7 @@ def chain(st: audit.Store) -> tuple[coins.CoinOpening, list[dict], coins.CoinOpe
     passes, previous = [], reg.digest
     for i, plan in enumerate(PLANS):
         s = receipts.seed(challenge.coin, i, previous)
-        receipter = receipts.receipter(reg.receipt, s)
+        receipter = receipts.receipter(reg.receipt, s, reg.rows)
         zs = {j: None if tiles is None else tiles.output(s, j) for j in plan}
         ys = [receipter(j, blocks[j], zs[j]) for j in plan]
         ss = [leaf_salts(receipts.SALT_BYTES) for _ in range(receipts.leaves(plan.length))]
@@ -130,7 +133,7 @@ def chain(st: audit.Store) -> tuple[coins.CoinOpening, list[dict], coins.CoinOpe
             passes[-1]["z_1"] = tiles.output(s, 1).hex()
         if sketched:
             sigma = {str(p): receipter.sketch(blocks[j], zs[j]).hex() for p, j in zip(ends, map(plan.block, ends))}
-            passes[-1] |= {"sign_bits_sha512": _sha(b"".join(receipts.sign_bits(s))), "sigma": sigma}
+            passes[-1] |= {"sign_bits_sha512": _sha(b"".join(receipts.sign_bits(s, reg.rows))), "sigma": sigma}
         previous = root
     return challenge, passes, challenger.open(PARAMS.windows), challenger
 
@@ -140,11 +143,11 @@ def _passes(st: audit.Store, challenge: coins.CoinOpening, passes: list[dict]) -
     return out | {"z_bytes": TILES.z_bytes} if st.registration.bind else out
 
 
-def variant(kind: str, bind: bool) -> dict:
-    st = registered(kind, bind)
+def variant(kind: str, bind: bool, rows: int) -> dict:
+    st = registered(kind, bind, rows)
     reg = st.registration
     challenge, passes, opening, challenger = chain(st)
-    return {"registration": {"receipt": reg.receipt, "bind": reg.bind, "layout": reg.layout,
+    return {"registration": {"receipt": reg.receipt, "bind": reg.bind, "layout": reg.layout, "rows": reg.rows,
                              "codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()},
             "coins_root": challenger.commitment.root.hex(), "passes": _passes(st, challenge, passes),
             "openings": {"coin": opening.coin.hex(), "draws": draws(reg, opening)}}
@@ -175,7 +178,7 @@ def generate() -> dict:
                     "root": tree.commitment.root.hex()},
         "registration": {"source": SOURCE.hex(), "node": NODE.hex(), "blocks": BLOCKS, "nonce": NONCE.hex(),
                          "payload_root": reg.payload_root.hex(), "codec": reg.codec.name, "receipt": reg.receipt,
-                         "bind": reg.bind, "layout": reg.layout, "codec_seed": reg.codec_seed.hex(),
+                         "bind": reg.bind, "layout": reg.layout, "rows": reg.rows, "codec_seed": reg.codec_seed.hex(),
                          "digest": reg.digest.hex()},
         "coins": {"scheme": coins.SCHEME, "session": 0, "count": PARAMS.coins,
                   "binding": coins.domain(reg.digest, 0, PARAMS.coins).binding.hex(),
@@ -188,8 +191,8 @@ def generate() -> dict:
         "openings": {"coin": opening.coin.hex(), "index": opening.index, "units": sum(p.length for p in PLANS),
                      "draws": draws(reg, opening)},
         "sketch": {"sign_domain": receipts.SIGN_DOMAIN, "receipt_domain": receipts.SKETCH_RECEIPT_DOMAIN.decode(),
-                   "rows": receipts.SKETCH_ROWS},
-        "variants": {name(kind, bind): variant(kind, bind) for kind, bind in VARIANTS},
+                   "rows": receipts.SKETCH_ROWS, "rows_allowed": list(receipts.ROWS)},
+        "variants": {name(*v): variant(*v) for v in VARIANTS},
     }
 
 
