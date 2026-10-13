@@ -48,6 +48,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v1, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
+    Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v1",
+             "On the capture's Hopper GPU, vLLM selects MARLIN (MarlinExperts) for the 384-expert TP8 row's MXFP4 experts at bf16 "
+             "activations, each launch's kernel (its thread config and blocks per SM, profiled) is the one served at its decode "
+             "batch, one at every batch 1 to 16, and every output word of every launch, and of every accepted forced config on an "
+             "input whose summation orders show, equals MarlinMoeExpertGemm_v1 (w13) or MarlinMoeExpertGemmW_v1 (w2) at the "
+             "launch's statics, bit for bit."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
              "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "
