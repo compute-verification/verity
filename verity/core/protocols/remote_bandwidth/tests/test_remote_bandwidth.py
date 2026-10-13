@@ -3,13 +3,18 @@ and recorded, and each way a session goes wrong is rejected with its failure."""
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import hashlib
+import math
 
+import numpy as np
 import pytest
 
+from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
+from verity.ml.randomness import frame
 
 N = 20
 NODE = b"node-under-test"
@@ -41,23 +46,63 @@ class Entropy:
 
 
 def payload(j: int) -> bytes:
+    """64-byte pieces with their top byte cleared, so every word is below p at either field."""
     if j % 3 == 0:
         return bytes(codec.BLOCK_BYTES)
-    return b"".join(hashlib.sha512(b"%d/%d" % (j, w)).digest()[:63] + b"\0" for w in range(codec.BLOCK_WORDS))
+    return b"".join(hashlib.sha512(b"%d/%d" % (j, u)).digest()[:63] + b"\0" for u in range(codec.BLOCK_BYTES // 64))
 
 
 @pytest.fixture(scope="module")
 def store() -> audit.Store:
+    """The store under the fallback codec, p1024 masked at k = 2: about 4 s to encode where the default's k = 3 takes 6.
+    Nothing here depends on k; the vectors' session runs at the default."""
     payloads = [payload(j) for j in range(N)]
     salts = [Entropy(b"payload salts")(receipts.SALT_BYTES * N)[receipts.SALT_BYTES * j:receipts.SALT_BYTES * (j + 1)]
              for j in range(N)]
-    reg = audit.register(SOURCE, NODE, N, audit.payload_tree(NODE, payloads, salts).commitment.root, nonce=bytes(32))
-    return audit.Store(reg, payloads, salts)
+    root = audit.payload_tree(NODE, payloads, salts).commitment.root
+    return audit.Store(audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32)), payloads, salts)
+
+
+def registered(store: audit.Store, receipt: str, bind: bool) -> audit.Store:
+    """`store` registered under `receipt` and `bind` with the same nonce: neither is in the codec seed's context, so its
+    blocks are `store`'s, and only the registration and its digest differ."""
+    reg = audit.register(SOURCE, NODE, N, store.registration.payload_root, codec.FALLBACK, receipt, bind=bind,
+                         nonce=bytes(32))
+    assert reg.key == store.registration.key
+    out = copy.copy(store)
+    out.registration = reg
+    return out
+
+
+@pytest.fixture(scope="module")
+def stores(store) -> dict[tuple[str, bool], audit.Store]:
+    """`store` under each receipt kind, with its receipts of the block alone and binding z: four registrations, four
+    digests, one set of blocks."""
+    out = {(kind, bind): registered(store, kind, bind) for kind in receipts.KINDS for bind in (False, True)}
+    assert len({st.registration.digest for st in out.values()}) == 4
+    return out
+
+
+@pytest.fixture(scope="module")
+def sketch_store(stores) -> audit.Store:
+    """The default registration's store, named by its kind for the tests that are about it."""
+    return stores[receipts.SKETCH_SHA512, False]
+
+
+@pytest.fixture(scope="module")
+def block_store(stores) -> audit.Store:
+    """block-sha512, the kind kept for comparison."""
+    return stores[receipts.BLOCK_SHA512, False]
 
 
 def params(**kw) -> Params:
-    base = dict(blocks=N, deadline_ns=A, windows=3, samples=7, delta=1e-6)
+    base = dict(blocks=N, deadline_ns=A, windows=3, samples=7, delta=1e-6, codec=codec.FALLBACK)
     return Params(**{**base, **kw})
+
+
+def params_of(st: audit.Store, **kw) -> Params:
+    """`params` under `st`'s receipt kind and `bind`."""
+    return params(receipt=st.registration.receipt, bind=st.registration.bind, **kw)
 
 
 def challenger(store, p: Params, label: bytes = b"coins") -> coins.Challenger:
@@ -73,10 +118,11 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     """Replay `schedule` against a session: `σ_0` released at 0 and each boundary message on time, each pass computed
     as its root arrives, chained from the pass before.  `plan(t, i)` is pass (t, i)'s plan (None: the whole store);
     `run(prover, t, i, challenges, previous, plan)` replaces the honest pass and `sent(ps)` the runs sent with its
-    root."""
-    tiles = tiles or audit.NoiseTiles(96)
+    root.  `tiles` is the stub of PoUW's tiles under a registration that binds z, and None under one that does not."""
+    tiles = tiles or (audit.NoiseTiles(96) if store.registration.bind else None)
     clock = Clock()
-    s = Session(p, store.registration, verifier_tiles or tiles, challenger(store, p, label), clock=clock)
+    s = Session(p, store.registration, verifier_tiles or tiles, challenger(store, p, label), not_before_ns=0,
+                clock=clock)
     prover = audit.Prover(store, tiles, s.commitment, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in schedule.arrivals])
@@ -114,9 +160,13 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
     assert SCHEDULE.passes == (4, 3, 3) and SCHEDULE.deadlines == (1000 + A, 2000 + A, 3000 + A)
-    assert r.public() == {"block_bytes": 4096, "blocks": N, "coins": s.commitment.root.hex(), "passes": [4, 3, 3],
-                          "protocol": audit.PROTOCOL_ID, "receipts": [4 * N, 3 * N, 3 * N],
+    assert r.public() == {"bind": False, "block_bytes": 4096, "blocks": N, "codec": "p1024/k2/masked",
+                          "codec_params": {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2},
+                          "coins": s.commitment.root.hex(), "layout": "store-order/v0", "passes": [4, 3, 3],
+                          "protocol": audit.PROTOCOL_ID,
+                          "receipt": "sketch-sha512", "receipts": [4 * N, 3 * N, 3 * N],
                           "registration": store.registration.digest.hex(), "span_ns": 3000 + A}
+    assert r.codec == store.registration.codec == codec.FALLBACK
     w1 = r.profile()["windows"][1]
     assert w1["lengths"] == [N] * 3 and w1["released_ns"] == 1000 and w1["deadline_ns"] == 2000 + A
     assert w1["opened_ns"] == 3000 + A + 1
@@ -141,6 +191,14 @@ def test_a_session_of_partial_plans_is_accepted_and_certifies_its_receipts(store
     assert g.timing == pytest.approx(1 - 162 * 4096 / (N * 4096 / 300e-9 * r.span_ns / 1e9))
 
 
+def test_plans_sent_as_arrays_are_received_as_their_runs_are(store) -> None:
+    """The verifier takes a plan as the store holds it, an (R, 2) array, and checks it in numpy (`Plan.from_array`)."""
+    s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE, plan=partial,
+                                     sent=lambda ps: np.array(ps.plan.runs, np.int64))
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    assert [w.lengths for w in s.record().windows] == [(15, 16, 17, 18), (15, 16, 17), (15, 16, 17)]
+
+
 def test_a_plan_maps_positions_to_blocks_and_is_canonical() -> None:
     plan = receipts.Plan(((7, 3), (0, 2), (12, 1)), N)
     assert list(plan) == [7, 8, 9, 0, 1, 12] and [plan.block(p) for p in range(6)] == list(plan)
@@ -152,10 +210,52 @@ def test_a_plan_maps_positions_to_blocks_and_is_canonical() -> None:
         plan.block(6)
 
 
-def test_a_receipt_depends_on_its_block_not_its_position(store) -> None:
+def store_order(blocks: list[int]) -> np.ndarray:
+    """The byte map of vectors that are `blocks`' bytes in store order: row v, byte x is 4096·blocks[v] + x."""
+    return np.array(blocks, np.int64)[:, None] * 4096 + np.arange(4096, dtype=np.int64)
+
+
+def fragments(blocks: int) -> np.ndarray:
+    """A tensor-core fragment cut of `blocks` blocks (RB-D1's `gemm_blocks`): vector v holds 32-byte sector v mod 4 of
+    every 128-byte codec word of blocks 4·(v // 4) … 4·(v // 4) + 3, so each word is split across 4 vectors."""
+    words = np.arange(blocks * 32, dtype=np.int64).reshape(-1, 1, 128, 1)        # (group of 4 blocks, 1, word, 1)
+    sectors = np.arange(4, dtype=np.int64).reshape(1, 4, 1, 1) * 32 + np.arange(32, dtype=np.int64)
+    return (words * 128 + sectors).reshape(-1, 4096)
+
+
+def test_a_kernels_vectors_are_credited_only_as_whole_registered_blocks() -> None:
+    """`plan_of`: under store-order/v0 a kernel's sketch vector is one registered block's 4,096 bytes in store order
+    (32 whole codec words at p1024), and the plan it credits is those blocks.  A fragment cut that splits each word
+    across 4 vectors, padding, a byte past the store, a block twice and a layout the verifier can't map are refused."""
+    assert receipts.plan_of(store_order([3, 4, 5, 0]), N) == receipts.Plan(((3, 3), (0, 1)), N)
+    assert receipts.plan_of(store_order([3, 4, 5, 0]).tolist(), N).runs == ((3, 3), (0, 1))
+    assert receipts.plan_of(store_order(list(range(N))), N) == receipts.Plan.whole(N)
+    cut = fragments(8)
+    assert sorted(cut.ravel().tolist()) == list(range(8 * 4096))                  # every stored byte once, no padding
+    assert {len({int(v) for v in np.nonzero((cut // 128) == w)[0]}) for w in range(8 * 32)} == {4}
+    padded = store_order([0, 1])
+    padded[1, 4000:] = -1                                                         # a tail past the stored bytes
+    permuted = store_order([2])
+    permuted[0, 128:384] = np.roll(permuted[0, 128:384], 128)                     # whole words, out of store order
+    for vectors, match in [(cut, "not block 0's 4096 bytes in store order"), (padded, "vector 1 is not block 1's"),
+                           (store_order([N]), "does not start at a registered block"),
+                           (np.full((1, 4096), -1, np.int64), "does not start at a registered block"),
+                           (permuted, "not block 2's"), (store_order([1, 2, 1]), "repeat a registered block"),
+                           (store_order([0])[:, :4095], "is not 4096 bytes"), ([], "one or more vectors"),
+                           (store_order([0]).astype(np.float64), "does not start at a registered block")]:
+        with pytest.raises(ValueError, match=match):
+            receipts.plan_of(vectors, N)
+    with pytest.raises(ValueError, match="a block layout is one of"):
+        receipts.plan_of(store_order([0]), N, "gemm-a-fragment/v0")
+
+
+@pytest.mark.parametrize("bind", [False, True])
+def test_a_receipt_depends_on_its_block_not_its_position(stores, bind) -> None:
     """The plan's order is only the tree's: the same blocks listed in another order give each block the same receipt
-    (z is the tile before the block's read), and a different root."""
-    prover = audit.Prover(store, audit.NoiseTiles(96), challenger(store, params()).commitment, entropy=Entropy(b"s"))
+    (z, when the receipts bind it, is the tile before the block's read), and a different root."""
+    store = stores[receipts.DEFAULT, bind]
+    prover = audit.Prover(store, audit.NoiseTiles(96) if bind else None, challenger(store, params()).commitment,
+                          entropy=Entropy(b"s"))
     seed = receipts.seed(bytes(range(32)), 0, store.registration.digest)
     a = prover.pass_under(0, 0, seed, receipts.Plan(((0, 10),), N))
     b = prover.pass_under(0, 0, seed, receipts.Plan.of(list(reversed(range(10))), N))
@@ -171,9 +271,13 @@ def test_a_receipt_depends_on_its_block_not_its_position(store) -> None:
     (),                          # no blocks
     ([0, 5],),                   # not a run
     ((0, True),),
+    np.array([[0, 5], [3, 4]]),  # as arrays, `Plan.from_array`
+    np.array([[0, 3], [3, 2]]),
+    np.zeros((0, 2), np.int64),
+    np.array([[0.0, 5.0]]),
 ])
 def test_a_plan_that_repeats_a_block_or_is_not_canonical_rejects(store, runs) -> None:
-    s = Session(params(), store.registration, audit.NoiseTiles(96), challenger(store, params()), clock=Clock())
+    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s.start()
     assert s.receive(0, 0, bytes(64), runs) == audit.Verdict(0, False, "plan")
 
@@ -200,9 +304,77 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     assert g.chip == pytest.approx(r.passes * 4096 / whole)
     assert g.counting == pytest.approx((64 * r.receipts + 41 * r.passes) / 8 / whole) and r.receipts == r.passes * N
     assert g.gamma == pytest.approx(g.timing + g.chip + g.counting + 0.002)
+    assert g.horizon == g.floor == 0 and g.gamma_horizon == pytest.approx(g.gamma)
     assert set(g.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "overlap" not in audit.LEDGER_SOURCES
+    assert [w.span_ns for w in g.windows] == [w.span_ns for w in r.windows] == [1000 + A] * 3
+    assert [w.timing for w in g.windows] == pytest.approx(SCHEDULE.window_timing)
+    assert g.windows[0].timing == pytest.approx(1 - 4 * 300 / (1000 + A))
+    for w, x in zip(g.windows, r.windows):
+        whole_t = capacity * x.span_ns / 1e9
+        assert w.chip == pytest.approx(x.passes * 4096 / whole_t) and w.sample == w.horizon == w.floor == 0
+        assert w.counting == pytest.approx((64 * x.receipts + 41 * x.passes) / 8 / whole_t)
+        assert w.gamma == pytest.approx(w.timing + w.chip + w.counting + 0.002)
+    assert g.worst.gamma == max(w.gamma for w in g.windows) > g.gamma
+    assert g.to_json()["worst"]["window"] == g.worst.window == 1 and g.to_json()["windows"][1] == g.windows[1].to_json()
     with pytest.raises(ValueError, match="understated"):
         audit.ledger(r, capacity_bytes_per_s=capacity / 2, chip_bytes=0)
+    with pytest.raises(ValueError, match="link term"):                 # an unbound receipt is of the block alone
+        audit.ledger(r, capacity_bytes_per_s=capacity, chip_bytes=0, link=0.001)
+    assert audit.ledger(dataclasses.replace(r, bind=True), capacity_bytes_per_s=capacity, chip_bytes=0,
+                        link=0.001).link == 0.001
+
+
+def synthetic(lengths: tuple[int, ...], drawn: int, delta: float) -> audit.Record:
+    """A record of windows of one pass each, `lengths[t]` receipts and `drawn` openings, a second apiece."""
+    windows = tuple(audit.WindowRecord(t, (u,), t * 10**9, (t + 1) * 10**9, (t + 1) * 10**9, IntegrityProfile(
+        ("receipt",), (u,), {"receipt": Subset(drawn)}, delta, drawn={"receipt": drawn})) for t, u in enumerate(lengths))
+    return audit.Record(bytes(64), bytes(64), max(lengths), 4096, windows)
+
+
+def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None:
+    """Daniel's hybrid claim at 2^-40 (#1884), as `Accounting.Guarantees.RateSessionDraw` reads it: 7 windows of 2,773
+    openings each (d·n ≥ 18,470) are short by under 0.15% over the horizon, and by under 1% in every window, together.
+    Read per window, each window's own bound at δ is about 1% of its receipts, with 7·δ in all."""
+    n, d, u, delta = 7, 2773, 100_000, 2.0 ** -40
+    g = audit.ledger(synthetic((u,) * n, d, delta), capacity_bytes_per_s=u * 4096, chip_bytes=0)
+    dbar = 1 - delta ** (1 / (n * d))
+    assert g.timing == pytest.approx(0, abs=1e-12)
+    assert g.horizon == pytest.approx(dbar) and 0.0014 < g.horizon < 0.0015
+    assert g.floor == pytest.approx(n * dbar) and (1 - g.floor / n) ** (n * d) == pytest.approx(delta)
+    assert 0.0099 < g.floor < 0.01
+    assert g.sample == pytest.approx(0.00981) and g.gamma - g.gamma_horizon == pytest.approx(g.sample - g.horizon)
+    assert g.to_json()["horizon"] == {"floor": g.floor, "gamma": g.gamma_horizon, "sample": g.horizon}
+    # Every window's own, from the record: the pooled event leaves each window's μ_sample under 1%, every one at once;
+    # its γ adds λ's 64 bits a receipt, 0.195% of a 4 KiB block, so the window's γ is 1.19%.
+    assert audit.floors(synthetic((u,) * n, d, delta)) == pytest.approx((g.floor,) * n)
+    assert all(w.horizon == pytest.approx(g.floor) and w.sample == pytest.approx(g.sample) for w in g.windows)
+    w = g.worst_horizon
+    assert w.horizon < 0.01 and w.counting == pytest.approx(64 / 8 / 4096, rel=1e-3)
+    assert w.gamma_horizon == pytest.approx(w.horizon + w.counting) and 0.0119 < w.gamma_horizon < 0.012
+    assert g.to_json()["worst"]["horizon"] == {"gamma": w.gamma_horizon, "window": w.window}
+
+
+def test_the_ledger_refuses_a_window_its_capacity_cannot_have_read() -> None:
+    """Window 0 certifies 100 blocks in its second, where the capacity reads 60: understated, though the session's two
+    seconds hold its 110."""
+    r = synthetic((100, 10), 5, 1e-6)
+    with pytest.raises(ValueError, match="window 0 .* understated"):
+        audit.ledger(r, capacity_bytes_per_s=60 * 4096, chip_bytes=0)
+    assert audit.ledger(r, capacity_bytes_per_s=100 * 4096, chip_bytes=0).windows[0].timing == 0
+
+
+def test_the_horizon_puts_the_shortfall_where_it_hides_most() -> None:
+    """Windows of unequal size: the pooled bound's shortfall goes to the largest windows first, each capped where its
+    draws would have found it (s distinct draws found s correct receipts), and a window opened whole has none."""
+    lengths, s, delta = (5000, 1000, 1000, 40), 40, 1e-6
+    wrong, floor = audit.pooled(synthetic(lengths, s, delta))
+    budget = -math.expm1(math.log(delta) / (4 * s)) * 4 * s
+    assert wrong == pytest.approx(budget / s * 5000) and floor == pytest.approx(budget / s)
+    wrong, floor = audit.pooled(synthetic((12, 1000), 10, delta))
+    budget = -math.expm1(math.log(delta) / 20) * 20
+    assert budget / 10 > 1 - 10 / 1000 and floor == pytest.approx(1 - 10 / 1000)
+    assert wrong == pytest.approx(990 + (budget - 9.9) / 10 * 12)
+    assert audit.pooled(synthetic((40,) * 3, 40, delta)) == (0.0, 0.0)
 
 
 def test_codec_round_trips_and_refuses_one_round(store) -> None:
@@ -212,22 +384,102 @@ def test_codec_round_trips_and_refuses_one_round(store) -> None:
     assert store.blocks[0] != bytes(codec.BLOCK_BYTES)            # zero weights encode to a store that is not zeros
     assert codec.decode(b"\xff" * codec.BLOCK_BYTES, 0, k) is None
     with pytest.raises(ValueError, match="at least 2 rounds"):
-        codec.key(bytes(32), 1)
-    with pytest.raises(ValueError, match="at least 2 rounds"):
-        params(rounds=1)
+        codec.Codec(codec.P1024, 1, True)
+    with pytest.raises(ValueError, match="a Codec"):
+        params(codec="p1024/k3/masked")
+
+
+def test_the_codecs_are_named_and_each_decodes_its_own_blocks() -> None:
+    """The default is p1024 masked at k = 3, the fallback k = 2 at the same width, and p512 the upgrade path: each a
+    block of 128- or 64-byte words, each its own store, and a block under one is no other's."""
+    p512 = codec.Codec(codec.P512, 2, False)
+    assert [c.name for c in (codec.DEFAULT, codec.FALLBACK, p512)] == ["p1024/k3/masked", "p1024/k2/masked", "p512/k2"]
+    assert (codec.P1024.word_bytes, codec.P1024.block_words, codec.P512.word_bytes, codec.P512.block_words) == (128, 32, 64, 64)
+    assert (codec.DEFAULT.max_blocks, p512.max_blocks) == (1 << 59, 1 << 58)
+    seed, m, j = hashlib.sha256(b"codec seed").digest(), payload(1), 3
+    keys = [codec.key(seed, c) for c in (codec.DEFAULT, codec.FALLBACK, codec.Codec(codec.P1024, 3, False), p512)]
+    blocks = [codec.encode(m, j, k) for k in keys]
+    assert len(set(blocks)) == 4 and all(codec.decode(b, j, k) == m for b, k in zip(blocks, keys))
+    assert all(codec.decode(blocks[0], j, k) != m for k in keys[1:]) and codec.decode(blocks[0], j + 1, keys[0]) != m
+    assert keys[0].c[:2] == keys[1].c and keys[0].mask == keys[1].mask and keys[2].mask is None and keys[3].mask is None
+    assert codec.decode((codec.P1024.p + 1).to_bytes(128, "little") + blocks[0][128:], j, keys[0]) is None
+    with pytest.raises(ValueError, match="below 576460752303423488"):
+        codec.encode(m, 1 << 59, keys[0])
+    with pytest.raises(ValueError, match="one of"):
+        codec.Codec(codec.Field("p1024", 1024, 107), 3, True)
 
 
 def test_the_codec_seed_is_drawn_after_and_bound_to_the_payload_root() -> None:
     root = hashlib.sha512(b"payloads").digest()
     a = audit.register(SOURCE, NODE, N, root, nonce=bytes(32))
-    assert a == audit.register(SOURCE, NODE, N, root, nonce=bytes(32))
+    assert a == audit.register(SOURCE, NODE, N, root, nonce=bytes(32)) and a.codec == codec.DEFAULT
     others = [audit.register(SOURCE, NODE, N, hashlib.sha512(b"other").digest(), nonce=bytes(32)),
               audit.register(SOURCE, b"another node", N, root, nonce=bytes(32)),
               audit.register(SOURCE, NODE, N + 1, root, nonce=bytes(32)),
               audit.register(SOURCE, NODE, N, root, nonce=bytes([1]) * 32),
-              audit.register(b"another verifier", NODE, N, root, nonce=bytes(32))]
-    assert len({a.codec_seed, *(o.codec_seed for o in others)}) == 6
-    assert len({a.digest, *(o.digest for o in others)}) == 6
+              audit.register(b"another verifier", NODE, N, root, nonce=bytes(32)),
+              audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32))]
+    assert len({a.codec_seed, *(o.codec_seed for o in others)}) == 7
+    assert len({a.digest, *(o.digest for o in others)}) == 7
+    assert dataclasses.replace(a, codec=codec.FALLBACK).digest != a.digest     # the digest binds the codec's name
+    assert a.receipt == receipts.DEFAULT == receipts.SKETCH_SHA512 == receipts.KINDS[0] and a.bind is False
+    blocked = audit.register(SOURCE, NODE, N, root, codec.DEFAULT, receipts.BLOCK_SHA512, nonce=bytes(32))
+    assert blocked == dataclasses.replace(a, receipt=receipts.BLOCK_SHA512)    # the same codec seed: the same store
+    assert blocked.digest not in {a.digest, *(o.digest for o in others)}       # the digest binds the receipt kind
+    bound = audit.register(SOURCE, NODE, N, root, bind=True, nonce=bytes(32))
+    assert bound == dataclasses.replace(a, bind=True)                          # nor is bind in the codec seed's context
+    assert bound.digest not in {a.digest, blocked.digest, *(o.digest for o in others)}   # the digest binds it
+    assert a.digest == hashlib.sha512(audit.REGISTRATION_DOMAIN + frame(NODE) + N.to_bytes(8, "big") + root
+                                      + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\0"
+                                      + frame("store-order/v0")).digest()
+    assert bound.digest == hashlib.sha512(audit.REGISTRATION_DOMAIN + frame(NODE) + N.to_bytes(8, "big") + root
+                                          + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\1"
+                                          + frame("store-order/v0")).digest()
+    assert a.layout == receipts.LAYOUT == receipts.STORE_ORDER == receipts.LAYOUTS[0]
+    assert dataclasses.replace(a, layout="gemm-a-fragment/v0").digest != a.digest   # the digest binds the layout
+    with pytest.raises(ValueError, match="a block layout is one of"):                # one the verifier can't map
+        audit.register(SOURCE, NODE, N, root, layout="gemm-a-fragment/v0", nonce=bytes(32))
+    with pytest.raises(ValueError, match="a block layout is one of"):
+        params(layout="gemm-a-fragment/v0")
+    with pytest.raises(ValueError, match="a receipt kind is one of"):
+        audit.register(SOURCE, NODE, N, root, codec.DEFAULT, "sha512", nonce=bytes(32))
+    with pytest.raises(ValueError, match="bind is True or False"):
+        audit.register(SOURCE, NODE, N, root, bind=1, nonce=bytes(32))
+    p512 = codec.Codec(codec.P512, 2, False)
+    assert audit.register(SOURCE, NODE, 1 << 58, root, p512, nonce=bytes(32)).blocks == 1 << 58
+    with pytest.raises(ValueError, match="at most"):
+        audit.register(SOURCE, NODE, (1 << 58) + 1, root, p512, nonce=bytes(32))
+    with pytest.raises(ValueError, match="names a Codec"):
+        audit.register(SOURCE, NODE, N, root, "p1024/k3/masked", nonce=bytes(32))
+
+
+def test_a_session_refuses_parameters_that_are_not_the_registrations(store, stores, block_store) -> None:
+    bound = stores[receipts.DEFAULT, True]
+    for st, p in ((store, params(codec=codec.DEFAULT)), (store, params(blocks=N + 1)),
+                  (store, params(receipt=receipts.BLOCK_SHA512)), (block_store, params()),
+                  (store, params(bind=True)), (bound, params())):
+        with pytest.raises(ValueError, match="not the registration's"):
+            Session(p, st.registration, audit.NoiseTiles(96) if p.bind else None, challenger(st, p), not_before_ns=0,
+                    clock=Clock())
+    other = copy.copy(store)
+    other.registration = dataclasses.replace(store.registration, layout="gemm-a-fragment/v0")
+    with pytest.raises(ValueError, match="not the registration's"):                # a layout the session can't map
+        Session(params(), other.registration, None, challenger(other, params()), not_before_ns=0, clock=Clock())
+    with pytest.raises(ValueError, match="a receipt kind is one of"):
+        params(receipt="sha512")
+    with pytest.raises(ValueError, match="bind is True or False"):
+        params(bind=0)
+
+
+def test_tiles_are_taken_only_by_a_registration_that_binds_z(store, stores) -> None:
+    """A receipt of the block alone has no tile, so passing PoUW's tiles to it is refused, as is leaving them out of
+    one that binds z."""
+    bound = stores[receipts.DEFAULT, True]
+    for st, tiles in ((store, audit.NoiseTiles(96)), (bound, None)):
+        with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
+            Session(params_of(st), st.registration, tiles, challenger(st, params()), not_before_ns=0, clock=Clock())
+        with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
+            audit.Prover(st, tiles, challenger(st, params()).commitment)
 
 
 def test_payload_leaves_hide_the_payload_under_their_salts(store) -> None:
@@ -241,10 +493,15 @@ def test_payload_leaves_hide_the_payload_under_their_salts(store) -> None:
     assert audit.PAYLOAD_SCHEMA == receipts.SCHEMA == "hm96-sha512/row/v2"
 
 
-def test_a_receipt_is_seed_first_and_binds_z_elementwise(store) -> None:
+def test_a_receipt_is_seed_first_of_the_block_alone_or_binds_z_elementwise(store) -> None:
+    """block-sha512 hashes the block after the seed's block; a receipt that binds z hashes the block ⊕ spread(z), so
+    every byte of z counts, and a z of 4,096 zeros gives the block alone's."""
     seed = hashlib.sha512(b"a pass seed").digest()
     pre = receipts.prefix(seed)
     assert len(pre) == 128 and seed in pre[:128]
+    alone = receipts.Receipter(seed)(5, store.blocks[5])
+    assert alone == hashlib.sha512(pre + (5).to_bytes(8, "big") + store.blocks[5]).digest()
+    assert alone == receipts.Receipter(seed)(5, store.blocks[5], bytes(codec.BLOCK_BYTES))
     z = bytes(range(96))
     y = receipts.Receipter(seed)(5, store.blocks[5], z)
     mixed = bytes(e ^ s for e, s in zip(store.blocks[5], (z * 43)[:4096]))
@@ -255,6 +512,74 @@ def test_a_receipt_is_seed_first_and_binds_z_elementwise(store) -> None:
     long = bytes(range(256)) * 20
     folded = receipts.spread(long)
     assert len(folded) == 4096 and folded[:1024] == bytes(a ^ b for a, b in zip(long[:1024], long[4096:5120]))
+
+
+def test_a_sketch_receipt_hashes_the_passs_signed_sums_of_the_block_seed_first(store) -> None:
+    """σ_j is the pass's ±1 signs times the block as int8, or the block ⊕ spread(z) when the receipt binds z (here
+    numpy's product, in `receipts` bit-plane sums), 16 int32 hashed after the seed's block.  A one-bit change of the
+    block moves every row, and another seed's signs give another receipt."""
+    seed, z, j, block = hashlib.sha512(b"a pass seed").digest(), bytes(range(96)), 5, store.blocks[5]
+    r = receipts.SketchReceipter(seed)
+    bits = np.frombuffer(b"".join(receipts.sign_bits(seed)), np.uint8).reshape(16, 512)
+    signs = 1 - 2 * np.unpackbits(bits, axis=1, bitorder="little").astype(np.int64)
+    pre = receipts.sketch_prefix(seed)
+    assert len(pre) == 128 and seed in pre and pre != receipts.prefix(seed)
+    for zz, e in ((None, block), (z, bytes(a ^ b for a, b in zip(block, (z * 43)[:4096])))):
+        sigma = r.sketch(block, zz)
+        assert sigma == (signs @ np.frombuffer(e, np.int8).astype(np.int64)).astype("<i4").tobytes()
+        y = r(j, block, zz)
+        assert y == hashlib.sha512(pre + j.to_bytes(8, "big") + sigma).digest() != receipts.Receipter(seed)(j, block, zz)
+        for u in (0, 47, 4095):
+            flipped = block[:u] + bytes([block[u] ^ 1]) + block[u + 1:]
+            assert (np.frombuffer(r.sketch(flipped, zz), "<i4") != np.frombuffer(sigma, "<i4")).all()
+        other = hashlib.sha512(b"the next pass's seed").digest()
+        assert receipts.sign_bits(other) != receipts.sign_bits(seed) and receipts.SketchReceipter(other)(j, block, zz) != y
+    assert r(j, block) == r(j, block, bytes(codec.BLOCK_BYTES)) != r(j, block, z)
+    for bad in ((-1, block, z), (j, block[:-1], z), (j, block, b""), (-1, block, None), (j, block[:-1], None)):
+        with pytest.raises(ValueError):
+            r(*bad)
+    with pytest.raises(ValueError, match="a receipt kind is one of"):
+        receipts.receipter("sha512", seed)
+
+
+@pytest.mark.parametrize("kind", receipts.KINDS)
+def test_an_honest_session_of_either_kind_is_accepted_and_names_it(stores, kind) -> None:
+    """The schedule of partial plans under each kind: the verifier recomputes each opened receipt from the block (under
+    sketch-sha512, under signs of each pass's own), and the record names the kind."""
+    st = stores[kind, False]
+    s, prover, passes, clock = drive(st, params_of(st), SCHEDULE, plan=partial)
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    r = s.record()
+    assert r.public()["receipt"] == kind and r.registration == st.registration.digest
+    ps = passes[1, 2]
+    j = ps.plan.block(0)
+    assert ps.receipts[0] == receipts.receipter(kind, ps.seed)(j, st.blocks[j])
+    if kind == receipts.SKETCH_SHA512:
+        assert len({receipts.sign_bits(ps.seed) for ps in passes.values()}) == len(passes) == 10
+
+
+def committed_with(receipter):
+    """Passes on the chain, committed under its seeds, with the receipts `receipter(seed, prover)` makes."""
+    def run(prover, t, i, challenges, previous, plan):
+        seed = receipts.seed(challenges[t].coin, i, previous)
+        plan = plan or receipts.Plan.whole(N)
+        r, tiles = receipter(seed, prover), prover.tiles
+        ys = tuple(r(j, prover.store.blocks[j], None if tiles is None else tiles.output(seed, j)) for j in plan)
+        salts = tuple(prover.entropy(receipts.SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
+        return audit.Pass(t, i, seed, plan, ys, salts, receipts.tree(seed, plan, ys, salts))
+    return run
+
+
+@pytest.mark.parametrize("receipter", [
+    lambda seed, prover: receipts.SketchReceipter(prover.store.registration.digest),
+    lambda seed, prover: receipts.Receipter(seed),
+], ids=["signs-known-before-the-session", "block-sha512"])
+def test_sketch_receipts_not_under_the_passs_signs_reject(sketch_store, receipter) -> None:
+    """Sketches under signs fixed before the session, or block-sha512 receipts, committed on the chain: each opening's
+    paths and decoding check, and the first draw fails the receipt."""
+    s, prover, passes, clock = drive(sketch_store, params(receipt=receipts.SKETCH_SHA512), SCHEDULE,
+                                     run=committed_with(receipter))
+    assert finish(s, prover, passes, clock) == [audit.Verdict(0, False, "receipt", s.windows[0].draws[0])]
 
 
 def test_the_seed_is_the_windows_challenge_the_pass_index_and_the_root_before() -> None:
@@ -336,7 +661,7 @@ def test_the_honest_prover_is_never_late_and_the_allowance_is_tight() -> None:
 
 def test_roots_out_of_order_reject(store) -> None:
     def session() -> Session:
-        return Session(params(), store.registration, audit.NoiseTiles(96), challenger(store, params()), clock=Clock())
+        return Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s = session()
     with pytest.raises(SessionError, match="not started"):
         s.receive(0, 0, bytes(64))
@@ -368,7 +693,7 @@ def test_a_window_of_too_few_passes_is_rejected(store) -> None:
 
 def test_draws_wait_for_the_windows_roots(store) -> None:
     clock = Clock()
-    s = Session(params(), store.registration, audit.NoiseTiles(96), challenger(store, params()), clock=clock)
+    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
     assert s.receive(0, 0, bytes(64)) is None
     with pytest.raises(SessionError, match="not final"):
@@ -402,7 +727,7 @@ def _tampered(field_: str, value):
     ("block", lambda o: bytes([o.block[0] ^ 1]) + o.block[1:], "payload-path"),
     ("payload_salt", lambda o: bytes([o.payload_salt[0] ^ 1]) + o.payload_salt[1:], "payload-path"),
     ("payload_path", lambda o: tuple(reversed(o.payload_path)), "payload-path"),
-    ("tile", lambda o: b"not PoUW's evidence", "tile"),
+    ("tile", lambda o: b"not PoUW's evidence", "malformed"),   # a receipt of the block alone has no tile
     ("position", lambda o: o.position + 1, "malformed"),
 ])
 def test_a_bad_opening_rejects(store, field_, value, failure) -> None:
@@ -414,12 +739,25 @@ def test_a_bad_opening_rejects(store, field_, value, failure) -> None:
         s.record()
 
 
-def test_a_receipt_without_the_tiles_output_rejects(store) -> None:
-    """Receipts made with a z PoUW's check does not recompute (here, zeros) open with good paths and fail the receipt."""
+@pytest.mark.parametrize("kind", receipts.KINDS)
+def test_a_session_that_binds_z_recomputes_each_tile(stores, kind) -> None:
+    """PoUW's opt-in join, under either kind: an honest session is accepted and its record says it binds z; each
+    receipt is of the block and the tile's z, not of the block alone; an opening without PoUW's evidence fails the tile;
+    and receipts made with a z PoUW's check does not recompute (here, zeros) open with good paths and fail the receipt."""
+    st, tiles = stores[kind, True], audit.NoiseTiles(96)
+    s, prover, passes, clock = drive(st, params_of(st), SCHEDULE, plan=partial)
+    assert all(v.accepted for v in finish(s, prover, passes, clock)) and s.record().public()["bind"] is True
+    ps = passes[1, 2]
+    j, r = ps.plan.block(0), receipts.receipter(kind, ps.seed)
+    assert ps.receipts[0] == r(j, st.blocks[j], tiles.output(ps.seed, j)) != r(j, st.blocks[j])
+    s, prover, passes, clock = drive(st, params_of(st), SCHEDULE)
+    bad = _tampered("tile", lambda o: b"not PoUW's evidence")
+    assert finish(s, prover, passes, clock, open_=lambda ps, p: bad(ps, p, prover=prover))[0].failure == "tile"
+
     class Zeros(audit.NoiseTiles):
         def output(self, seed, p):
             return bytes(self.z_bytes)
-    s, prover, passes, clock = drive(store, params(), SCHEDULE, tiles=Zeros(96), verifier_tiles=audit.NoiseTiles(96))
+    s, prover, passes, clock = drive(st, params_of(st), SCHEDULE, tiles=Zeros(96), verifier_tiles=tiles)
     assert finish(s, prover, passes, clock)[0].failure == "receipt"
 
 
@@ -441,7 +779,7 @@ def test_a_session_over_the_store_starts_after_the_one_before_it_ends(store) -> 
     finish(s, prover, passes, clock)
     end = s.record().end_ns
     clock = Clock()
-    nxt = Session(params(), store.registration, audit.NoiseTiles(96),
+    nxt = Session(params(), store.registration, None,
                   coins.Challenger(store.registration.digest, 1, params().coins, entropy=Entropy(b"next")),
                   clock=clock, not_before_ns=end)
     clock.now = end - 1
@@ -449,6 +787,12 @@ def test_a_session_over_the_store_starts_after_the_one_before_it_ends(store) -> 
         nxt.start()
     clock.now = end
     assert nxt.start().index == 0
+    later = coins.Challenger(store.registration.digest, 2, params().coins, entropy=Entropy(b"later"))
+    with pytest.raises(TypeError, match="not_before_ns"):           # every session names when it may start
+        Session(params(), store.registration, None, later, clock=clock)
+    for bad in (None, -1, 1.5, True):
+        with pytest.raises(ValueError, match="not_before_ns"):
+            Session(params(), store.registration, None, later, not_before_ns=bad, clock=clock)
 
 
 def test_opening_size_matches_the_timing_model(store) -> None:
@@ -460,7 +804,8 @@ def test_opening_size_matches_the_timing_model(store) -> None:
 @pytest.mark.parametrize("pass_ms, rtt_ms, window_ms", [(20, 1, 300), (20, 50, 1000), (50, 5, 1000), (37, 20, 300)])
 def test_honest_schedules_fill_their_windows_to_the_chained_steady_state(pass_ms, rtt_ms, window_ms) -> None:
     """Every window certifies at least `⌊(T − p − g)/(p + g)⌋` passes, and the span the passes leave uncovered is `g`
-    after each pass and the session's two ends, which come to at most `A + J`."""
+    after each pass and the session's two ends, which come to at most `A + J`.  A window over its own span `T + A` is
+    charged its ends too, and the rest of the pass in flight at its challenge: at most `A + J + p` more."""
     ms, gap, jitter = timing.MS, 50_000, 50_000
     kw = dict(gap_ns=gap, down_ns=rtt_ms * ms // 2, up_ns=rtt_ms * ms - rtt_ms * ms // 2, jitter_ns=jitter)
     st = timing.honest(window_ms * ms, 40, pass_ms * ms, **kw)
@@ -469,6 +814,8 @@ def test_honest_schedules_fill_their_windows_to_the_chained_steady_state(pass_ms
     mu = 1 - st.utilization
     steady = timing.chained(pass_ms * ms, gap)
     assert steady <= mu <= steady + (a + jitter) / st.span_ns
+    assert steady <= min(st.window_timing) and max(st.window_timing) <= steady + (a + jitter + pass_ms * ms) / (
+        window_ms * ms + a)
 
 
 @pytest.mark.parametrize("pass_ms, rtt_ms, jitter_ms, floor", [(20, 1, 0.05, 0.5), (20, 0.2, 0, 0), (50, 5, 0.5, 0.9),

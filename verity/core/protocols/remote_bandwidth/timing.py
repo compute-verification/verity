@@ -14,6 +14,11 @@ in flight, its root's reduction and its trip up, each trip at its longest.
 `live_mu` and `live_best_interval` are the steady state of the alternative `PROTOCOL.md`'s appendix weighs: a live coin a
 pass and no chain, so that passes are ordered by the clock alone.
 
+`sketch_reading` is where sketch-sha512's bound is read (`PROTOCOL.md` §4): the rank r* that minimizes `sketch_rate`,
+the failure each SHA-512 compression of the prover's buys, a guess's 2^-8r beside a fresh key's chance of signs of rank
+below r on one of a block's 128 sectors (`sign_rank_at_most`, exact through F2: `gf2_rank_at_most`).  `sketch_failure`
+is a session's, and `grind_compressions` what one grinding try costs.
+
 `python -m verity.core.protocols.remote_bandwidth.timing` prints the grid of the report.
 """
 
@@ -22,14 +27,20 @@ from __future__ import annotations
 import hashlib
 import math
 from dataclasses import dataclass
+from fractions import Fraction
 
 from .codec import BLOCK_BYTES
-from .receipts import DIGEST_BYTES, PER_LEAF, SALT_BYTES
+from .receipts import DEFAULT, DIGEST_BYTES, KINDS, PER_LEAF, SALT_BYTES, SKETCH_ROWS
 
 MS = 1_000_000
 US = 1_000
 S = 1_000_000_000
 JITTER_DOMAIN = b"verity/remote-bandwidth/timing-jitter/v0\0"
+SECTOR_BYTES = 32
+SECTORS = BLOCK_BYTES // SECTOR_BYTES
+SHA512_PER_S = 7.0e9
+"""One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms
+(#1916, art:dea3a309)."""
 
 
 def deadline(pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0) -> int:
@@ -64,6 +75,15 @@ class Schedule:
     def utilization(self) -> float:
         """The share of the session's span its certified passes fill at the node's capacity: `1 − μ_timing`."""
         return sum(self.passes) * self.pass_ns / self.span_ns
+
+    @property
+    def window_timing(self) -> tuple[float, ...]:
+        """Each window's μ_timing over its own span `[b_(t−1), D_t]` (`audit.WindowLedger`): the spans of consecutive
+        windows overlap by A, and a window's passes start when the pass in flight at its challenge ends, so each
+        window is charged A and up to a pass, where the session is charged them once: at most
+        `g/(p + g) + (A + J + p)/(T + A)`."""
+        starts = (0, *self.boundaries[:-1])
+        return tuple(1 - n * self.pass_ns / (d - b) for n, b, d in zip(self.passes, starts, self.deadlines))
 
 
 def honest(window_ns: int, windows: int, pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0,
@@ -122,6 +142,66 @@ def opening_bytes(blocks: int, tile_bytes: int = 0) -> int:
             + tile_bytes + 12)
 
 
+def gf2_rank_at_most(rows: int, cols: int, r: int) -> Fraction:
+    """The chance that a uniform `rows` × `cols` matrix over F2 has rank at most r, exactly: the matrices of rank s
+    number `∏_{i<s} (2^rows − 2^i)(2^cols − 2^i)/(2^s − 2^i)`."""
+    if r < 0:
+        return Fraction(0)
+    total = 0
+    for s in range(min(r, rows, cols) + 1):
+        num = den = 1
+        for i in range(s):
+            num *= (2 ** rows - 2 ** i) * (2 ** cols - 2 ** i)
+            den *= 2 ** s - 2 ** i
+        total += num // den
+    return Fraction(total, 2 ** (rows * cols))
+
+
+def sign_rank_at_most(rows: int, r: int, cols: int = SECTOR_BYTES) -> Fraction:
+    """An upper bound on the chance that a uniform ±1 `rows` × `cols` matrix has rank at most r over Q, the field of
+    the fiber bound.  Multiplying each column by its first row's sign, and replacing every other row v by
+    `(first − v)/2`, keeps the rank over Q and leaves the all-ones row over a uniform 0/1 matrix B.  Its rank over Q is
+    at least its rank over F2, which is `1 + rank(U)`, U being B with its first column added to the others and then
+    dropped: a uniform `(rows − 1) × (cols − 1)` matrix over F2."""
+    return gf2_rank_at_most(rows - 1, cols - 1, r - 1)
+
+
+def sketch_rate(rows: int, r: int) -> Fraction:
+    """sketch-sha512's failure a SHA-512 compression when its bound is read at rank r: a guess is right with chance at
+    most `2^-8r` while every sector's block of signs has rank at least r, and a fresh key's signs give some sector of
+    the block a rank below r with chance at most `SECTORS · sign_rank_at_most(rows, r − 1)`."""
+    return Fraction(1, 2 ** (8 * r)) + SECTORS * sign_rank_at_most(rows, r - 1)
+
+
+def sketch_reading(rows: int = SKETCH_ROWS) -> tuple[int, Fraction]:
+    """The rank r* that minimizes `sketch_rate`, and the rate there."""
+    return min(((r, sketch_rate(rows, r)) for r in range(1, min(rows, SECTOR_BYTES) + 1)), key=lambda x: x[1])
+
+
+def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: int | None = None) -> Fraction:
+    """A session's chance that some sketch-sha512 receipt is right without its block's sectors, read at rank r (r* by
+    default), against a prover of `compressions` SHA-512 compressions over a session of `passes` passes.  Every key the
+    prover sees is a seed it computed or one of the session's, so it sees at most `compressions + passes`, ground or
+    not, and every guess is a compression: `C · 2^-8r + (C + P) · SECTORS · sign_rank_at_most(rows, r − 1)`."""
+    if r is None:
+        r = sketch_reading(rows)[0]
+    return (compressions * Fraction(1, 2 ** (8 * r))
+            + (compressions + passes) * SECTORS * sign_rank_at_most(rows, r - 1))
+
+
+def grind_compressions(leaves: int) -> int:
+    """SHA-512 compressions of one grinding try as the reference computes it, over a pass of `leaves` receipt leaves,
+    reading no block: re-salting one leaf (9: its salt's digest, the key's and the tree leaf), that leaf's hash and its
+    path to the root (2, and 3 a level), the next seed (2) and its signs' key (2).  A prover that keeps the constant
+    prefixes' midstates spends fewer, and no fewer than 5: the root's last compression, and the seed's and the key's 2
+    each, whose first blocks hold the root and the seed."""
+    return 9 + 2 + 3 * math.ceil(math.log2(leaves)) + 2 + 2
+
+
+def log2(x: Fraction) -> float:
+    return math.log2(x.numerator) - math.log2(x.denominator)
+
+
 def samples_for(epsilon: float, delta: float) -> int:
     """The fewest openings with `ε_s ≤ epsilon` at `delta`: `C(n − m, s)/C(n, s) ≤ (1 − m/n)^s`, so the bound on wrong
     receipts is at most `n·(1 − δ^(1/s)) ≤ n·ln(1/δ)/s`.  A draw the prover can grind over `Q` transcripts needs
@@ -144,17 +224,24 @@ def _pct(x: float) -> str:
 
 def _grid() -> None:
     gap, jitter = 50 * US, _ns(0.05)
+    print(f"# receipts: {DEFAULT} by default, of the block alone; {', '.join(k for k in KINDS if k != DEFAULT)} kept for "
+          "comparison.  The schedule and openings below are the same under either kind, with no tile evidence unless "
+          "the registration binds z")
+    print()
     print(f"# μ_timing of chained sessions: g = {gap // US} µs, J = {jitter / MS} ms each way, A = RTT + 2J + pass + g; "
-          "one-way delays RTT/2; isolated is a session of one window")
-    print("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 | steady state g/(pass + g) |")
-    print("| --- | --- | --- | --- | --- | --- | --- | --- |")
+          "one-way delays RTT/2; isolated is a session of one window; worst window is the largest of a W = 100 "
+          "session's windows' own, each over [b_(t−1), D_t]")
+    print("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 | steady state g/(pass + g) "
+          "| worst window |")
+    print("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for p in (20, 50):
         for w in (0.3, 1, 10):
             for rtt in (1, 5, 20, 50):
                 kw = dict(gap_ns=gap, down_ns=_ns(rtt) // 2, up_ns=_ns(rtt) - _ns(rtt) // 2, jitter_ns=jitter)
                 runs = [honest(round(w * S), n, _ns(p), **kw) for n in (1, 10, 100)]
                 print(f"| {p} | {w} | {rtt} | {runs[0].passes[0]} | "
-                      + " | ".join(f"{1 - r.utilization:.2%}" for r in runs) + f" | {chained(_ns(p), gap):.2%} |")
+                      + " | ".join(f"{1 - r.utilization:.2%}" for r in runs) + f" | {chained(_ns(p), gap):.2%} "
+                      f"| {max(runs[2].window_timing):.2%} |")
     print()
     s = samples_for(1e-3, 2.0 ** -40)
     print(f"# openings at ε_s = 0.1%, δ = 2^-40: s = {s} from the window's coin; a Fiat–Shamir draw from the window's last "
@@ -193,6 +280,41 @@ def _grid() -> None:
         kj = dict(gap_ns=gap, rtt_ns=MS, jitter_ns=_ns(j), rtt_floor_ns=MS // 2)
         row.append(f"{live_mu(live_best_interval(20 * MS, **kj), 20 * MS, **kj):.2%}")
     print("| live coins | " + " | ".join(row) + " |")
+    print()
+    print(f"# sketch-sha512's rank bound (§4): P(rank ≤ r) of a uniform ±1 rows × {SECTOR_BYTES} block of one sector's "
+          f"signs over Q, bounded through F2; rate(r) = 2^-8r + {SECTORS}·P(rank ≤ r − 1) a SHA-512 compression; r* "
+          "minimizes it")
+    print("| rows | r | P(rank ≤ r), log2 | rate(r), log2 |")
+    print("| --- | --- | --- | --- |")
+    readings = {k: sketch_reading(k) for k in (SKETCH_ROWS, 64)}
+    for k, (star, _) in readings.items():
+        for r in range(min(k, SECTOR_BYTES) - 1, star - 2, -1):
+            mark = " (r*)" if r == star else ""
+            print(f"| {k} | {r}{mark} | {log2(sign_rank_at_most(k, r)):.2f} | {log2(sketch_rate(k, r)):.2f} |")
+    print()
+    node = 8 * SHA512_PER_S
+    for k, (star, rate) in readings.items():
+        print(f"{k} rows: r* = {star}, 2^{log2(rate):.2f} a compression; a session's failure stays below 2^-40 up to "
+              f"C = 2^{-40 - log2(rate):.2f} compressions ({2 ** (-40 - log2(rate)) / node / 86400:.3g} days of 8 GPUs "
+              f"at {SHA512_PER_S / 1e9:.1f}·10^9/s each), and below 2^-64 up to C = 2^{-64 - log2(rate):.2f} "
+              f"({2 ** (-64 - log2(rate)) / node:.3g} s)")
+    print()
+    print("# a grinding try reads no block: compressions to make a key straight (at least 5 with the constant "
+          f"midstates kept), at {SHA512_PER_S / 1e9:.1f}·10^9/s on one GPU; seeing a sector's 16 × 32 signs is 16 more")
+    print("| pass | leaves | compressions | ns a try | tries a second, 8 GPUs, log2 |")
+    print("| --- | --- | --- | --- | --- |")
+    for name, blocks in (("one leaf", PER_LEAF), ("8 GiB", 2 ** 21), ("94 GB", 94 * 10 ** 9 // BLOCK_BYTES)):
+        n = math.ceil(blocks / PER_LEAF)
+        c = grind_compressions(n)
+        print(f"| {name} | {n} | {c} | {c / SHA512_PER_S * 1e9:.2f} | {math.log2(node / c):.2f} |")
+    print()
+    print("| a session of 8 GPUs, every compression a guess or a key, 50 passes a second | C, log2 | failure at r*, 16 "
+          "rows | 64 rows |")
+    print("| --- | --- | --- | --- |")
+    for name, secs in (("1 s", 1), ("10 min", 600), ("1 hour", 3600), ("1 day", 86400), ("30 days", 30 * 86400)):
+        c, p = round(node * secs), secs * 50
+        print(f"| {name} | {math.log2(c):.2f} | 2^{log2(sketch_failure(c, p)):.2f} | "
+              f"2^{log2(sketch_failure(c, p, rows=64)):.2f} |")
 
 
 if __name__ == "__main__":

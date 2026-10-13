@@ -3,16 +3,22 @@ many reads of a node's registered blocks the node made in each window, from rece
 
 1. Registration.  The prover commits to its payload blocks (`payload_tree`: the weights, KV pages and filler, each an
    hm96-sha512/row/v2 leaf) and sends the root.  Only then does the verifier draw the codec seed from its own secret and
-   a fresh nonce (`register`), and the prover encodes every block under it (`Store`).  `Registration.digest` binds the
-   node, the store's size, the payload root, the codec seed and k.
+   a fresh nonce (`register`), and the prover encodes every block under it (`Store`) with the codec the registration
+   names (`codec.DEFAULT`, p1024 masked at k = 3, unless another is named).  The registration also names the receipt
+   kind (`receipts.KINDS`: sketch-sha512 by default, or block-sha512 for comparison), whether its receipts bind
+   PoUW's tile outputs (`bind`, off by default: PoUW's opt-in join), and the block layout its kernels' sketch vectors
+   follow (`receipts.LAYOUTS`: store-order/v0, a vector one registered block's bytes; `receipts.plan_of` checks a
+   kernel's map).  `Registration.digest` binds the node, the store's size, the payload root, the codec seed, the
+   codec's name, the receipt kind, `bind` and the layout.
 2. Coins.  Before the session the challenger draws two live coins a window, its challenge `σ_t` and its openings coin,
    and commits to them (`coins.Challenger`).  The prover gets the commitment first (`Session.commitment`).
 3. A session of `windows` windows.  The verifier releases `σ_0` (`Session.start`), and at each window's end the next
    window's challenge, or the close after the last (`Session.boundary`), one-way.
 4. Chained passes.  Pass i of window t reads the blocks of its plan (`receipts.Plan`: distinct blocks, the whole store by
-   default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`), each bound to
-   PoUW's tile output `z` before the read (`Tiles`); it commits them in a tree bound to the plan and sends the root and
-   the plan as soon as the pass ends (`Session.receive`).  The chain runs across the session's windows: a window's first
+   default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`), each of its
+   block alone, or under a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it
+   commits them in a tree bound to the plan and sends the root and the plan as soon as the pass ends
+   (`Session.receive`).  The chain runs across the session's windows: a window's first
    pass follows the root of the previous window's last.  On a boundary message the prover finishes the pass in flight,
    which is its window's last, and starts the next window's chain.
 5. Deadline.  Window t's roots must all arrive by `D_t = b_t + A`, where `b_t` is the verifier's clock when it sent the
@@ -22,16 +28,18 @@ many reads of a node's registered blocks the node made in each window, from rece
 6. Openings.  Once window t's roots are final (the next window's first root has arrived, or `D_t` has passed), the
    challenger releases the window's openings coin, and the verifier draws `s = samples` distinct receipts uniformly from
    the window's `U_t = Σ_i L_i` with it (`Session.close`).  The prover opens each (`Prover.open`): the block, its receipt
-   leaf with its salt and path to the pass's root, the payload's salt and path to the payload root, and PoUW's evidence
-   for the tile before it.
+   leaf with its salt and path to the pass's root, the payload's salt and path to the payload root, and, under a
+   registration that binds z, PoUW's evidence for the tile before it.
 7. Verification (`Session.verify`), each opening: the leaf's path under the pass's root; the block's words canonical
-   and their decoding's leaf on its path under the payload root; `z` recomputed by PoUW's tile check
-   (`Tiles.recompute`); the receipt recomputed from the block and `z`.  A window is accepted only if every opening
-   checks, and a rejected window ends its session.
+   and their decoding's leaf on its path under the payload root; under a registration that binds z, `z` recomputed by
+   PoUW's tile check (`Tiles.recompute`); the receipt recomputed from the block (and `z`) under the registration's
+   kind (under sketch-sha512, the block's sketch from the pass's signs first).  A window is accepted only if every opening checks,
+   and a rejected window ends its session.
 8. The record (`Session.record`): per window each pass's length, its challenge's release and its deadline on the
    verifier's clock, its openings coin's release, and an `IntegrityProfile` over its receipts with `Subset(s)` drawn;
-   `ledger` turns it, with the node's measured capacities, into each γ term.  What an accepted window certifies, and on
-   what, is `PROTOCOL.md`.
+   `ledger` turns it, with the node's measured capacities, into each γ term over the session's span and over each
+   window's own (`WindowLedger`), μ_sample read per window and pooled over the session's horizon (`pooled`, `floors`).
+   What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
 The verifier's clock is injected (`clock`, nanoseconds, `time.monotonic_ns` by default).  Openings are checked in the
 clear here, as the specification of what each zero-knowledge proof unit proves on the deployed path (`PROTOCOL.md` §8).
@@ -56,7 +64,7 @@ from verity.ml.commitments import verify_opening
 from verity.ml.randomness import derive, frame
 
 from . import codec, coins, receipts
-from .codec import BLOCK_BYTES
+from .codec import BLOCK_BYTES, SEED_BYTES, Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
 PROTOCOL_ID = "verity/remote-bandwidth/v0"
@@ -78,7 +86,7 @@ FAILURES = ("late", "order", "plan", "few", "malformed", "receipt-path", "codec"
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
     deadline, the windows `W`, the openings `s` per window at `delta`, the fewest passes a window may certify, and the
-    codec's k."""
+    store's codec, receipt kind, whether its receipts bind z and its block layout, the registration's."""
 
     blocks: int
     deadline_ns: int
@@ -86,7 +94,10 @@ class Params:
     samples: int
     delta: float
     min_passes: int = 1
-    rounds: int = codec.MIN_ROUNDS
+    codec: Codec = codec.DEFAULT
+    receipt: str = receipts.DEFAULT
+    bind: bool = False
+    layout: str = receipts.LAYOUT
 
     def __post_init__(self) -> None:
         for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes"):
@@ -94,7 +105,11 @@ class Params:
                 raise ValueError(f"{name} is a positive integer")
         if not 0 < self.delta < 1:
             raise ValueError("0 < delta < 1")
-        codec.key(bytes(codec.SEED_BYTES), self.rounds)
+        if type(self.codec) is not Codec:
+            raise ValueError("a session's codec is a Codec")
+        receipts.receipt_kind(self.receipt)
+        _bind(self.bind)
+        receipts.block_layout(self.layout)
 
     @property
     def coins(self) -> int:
@@ -106,6 +121,12 @@ def _node(node: bytes) -> bytes:
     if type(node) is not bytes or not 1 <= len(node) <= NODE_BYTES:
         raise ValueError(f"a node's id is 1 to {NODE_BYTES} bytes")
     return node
+
+
+def _bind(bind: object) -> bool:
+    if type(bind) is not bool:
+        raise ValueError("bind is True or False: whether the receipts bind PoUW's tile outputs")
+    return bind
 
 
 def payload_domain(node: bytes, blocks: int) -> CommitmentDomain:
@@ -126,56 +147,79 @@ def payload_tree(node: bytes, payloads: Sequence[bytes], salts: Sequence[bytes])
 
 @dataclass(frozen=True, slots=True)
 class Registration:
-    """What the store is: the node, `N`, the payload root, the codec seed drawn after it, and k."""
+    """What the store is: the node, `N`, the payload root, the codec seed drawn after it, the codec it names, the
+    receipt kind its sessions use, whether their receipts bind PoUW's tile outputs (`bind`), and the block layout its
+    kernels' sketch vectors follow (`receipts.LAYOUTS`)."""
 
     node: bytes
     blocks: int
     payload_root: bytes
     codec_seed: bytes
-    rounds: int
+    codec: Codec
+    receipt: str
+    bind: bool
+    layout: str
 
     @property
     def digest(self) -> bytes:
-        """SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u64be N ‖ payload root ‖ codec seed ‖ u8 k): what a record and a
-        session's coin commitment cite, and `root_(0,−1)`, the root a session's first pass follows."""
+        """SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u64be N ‖ payload root ‖ codec seed ‖ frame(codec name) ‖
+        frame(receipt kind) ‖ u8 bind ‖ frame(layout)): what a record and a session's coin commitment cite, and
+        `root_(0,−1)`, the root a session's first pass follows."""
         return hashlib.sha512(REGISTRATION_DOMAIN + frame(self.node) + self.blocks.to_bytes(8, "big") + self.payload_root
-                              + self.codec_seed + self.rounds.to_bytes(1, "big")).digest()
+                              + self.codec_seed + frame(self.codec.name) + frame(self.receipt)
+                              + bytes((self.bind,)) + frame(self.layout)).digest()
 
     @property
     def key(self) -> codec.Key:
-        return codec.key(self.codec_seed, self.rounds)
+        return codec.key(self.codec_seed, self.codec)
 
 
-def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, rounds: int = codec.MIN_ROUNDS, *,
+def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
+             receipt: str = receipts.DEFAULT, *, bind: bool = False, layout: str = receipts.LAYOUT,
              nonce: bytes | None = None) -> Registration:
     """The verifier's side of registration: the codec seed, drawn from its own secret `source` and a fresh nonce only
     after the payload root has arrived.  Drawn before it, the prover would register `decode(0)` and hold a store of
-    zeros; drawn after, each encoded block costs k square roots a word to produce, whatever the payload."""
-    if type(blocks) is not int or blocks < 1:
-        raise ValueError("a store has at least one block")
+    zeros; drawn after, each encoded block costs k square roots a word to produce, whatever the payload.  None of the
+    receipt kind, `bind` and the block layout is in the codec seed's context, since the store depends on none of them;
+    the digest binds all three."""
+    receipts.store_blocks(blocks)
+    if type(codec) is not Codec:
+        raise ValueError("a registration names a Codec")
+    receipts.receipt_kind(receipt)
+    _bind(bind)
+    receipts.block_layout(layout)
+    if blocks > codec.max_blocks:
+        raise ValueError(f"a store under {codec.name} is at most {codec.max_blocks} blocks")
     if type(payload_root) is not bytes or len(payload_root) != DIGEST_BYTES:
         raise ValueError(f"the payload root is {DIGEST_BYTES} bytes")
     nonce = secrets.token_bytes(NONCE_BYTES) if nonce is None else nonce
     if type(nonce) is not bytes or len(nonce) != NONCE_BYTES:
         raise ValueError(f"a registration's nonce is {NONCE_BYTES} bytes")
-    codec.key(bytes(codec.SEED_BYTES), rounds)
     seed = derive(source, CODEC_DOMAIN, {"node": _node(node), "blocks": blocks, "payload": payload_root,
-                                         "nonce": nonce}).stream("codec", codec.SEED_BYTES)
-    return Registration(node, blocks, payload_root, seed, rounds)
+                                         "codec": codec.name, "nonce": nonce}).stream("codec", SEED_BYTES)
+    return Registration(node, blocks, payload_root, seed, codec, receipt, bind, layout)
 
 
 class Tiles(Protocol):
-    """PoUW's side of a receipt.  `output(seed, j)` is `z_(i,j)`, the noised output of the tile the prover computes
-    before reading block j in the pass whose seed is `seed`; `evidence` is what PoUW's check reads to recompute it; and
-    `recompute`, the verifier's, returns `z_(i,j)` from that evidence or None if PoUW's check fails.  PoUW's noise for a
-    pass is derived from the pass's seed, so `z` differs every pass whatever the weights and activations, and a pass
-    reads each block once, with a tile of its own, so no `z` unlocks two receipts."""
+    """PoUW's side of a receipt, under a registration that binds z (`bind`; under one that does not, a receipt is of
+    its block alone, and the prover and the verifier take None for tiles).  `output(seed, j)` is `z_(i,j)`, the noised
+    output of the tile the prover computes before reading block j in the pass whose seed is `seed`; `evidence` is what
+    PoUW's check reads to recompute it; and `recompute`, the verifier's, returns `z_(i,j)` from that evidence or None
+    if PoUW's check fails.  PoUW's noise for a pass is derived from the pass's seed, so `z` differs every pass whatever
+    the weights and activations, and a pass reads each block once, with a tile of its own, so no `z` unlocks two
+    receipts."""
 
     def output(self, seed: bytes, j: int) -> bytes: ...
 
     def evidence(self, seed: bytes, j: int) -> bytes: ...
 
     def recompute(self, seed: bytes, j: int, evidence: bytes) -> bytes | None: ...
+
+
+def _tiles(tiles: Tiles | None, bind: bool) -> Tiles | None:
+    if (tiles is None) == bind:
+        raise ValueError("a registration that binds z takes PoUW's tiles, and one that does not takes None")
+    return tiles
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,7 +279,7 @@ class Pass:
 class Opening:
     """Receipt (i, p) of a window opened, position p of pass i, block j = plan_i[p]: the block, its receipt leaf's
     receipts, salt and path to pass i's root, the payload's salt and path to the payload root, and PoUW's evidence for
-    `z_(i,j)`."""
+    `z_(i,j)` (empty unless the registration binds z)."""
 
     pass_index: int
     position: int
@@ -256,11 +300,13 @@ class Opening:
 
 class Prover:
     """The honest prover: each pass reads its plan's blocks (every block by default), computes their receipts and
-    commits them, each leaf under a fresh salt from `entropy`."""
+    commits them, each leaf under a fresh salt from `entropy`.  `tiles` is PoUW's if the registration binds z, and
+    None if it does not."""
 
-    def __init__(self, store: Store, tiles: Tiles, commitment: coins.CoinCommitment, *,
+    def __init__(self, store: Store, tiles: Tiles | None, commitment: coins.CoinCommitment, *,
                  entropy: Callable[[int], bytes] = os.urandom) -> None:
-        self.store, self.tiles, self.commitment, self.entropy = store, tiles, commitment, entropy
+        self.store, self.commitment, self.entropy = store, commitment, entropy
+        self.tiles = _tiles(tiles, store.registration.bind)
 
     def run(self, challenge: coins.CoinOpening, i: int, previous: bytes, plan: Plan | None = None) -> Pass:
         """Pass i of the window whose challenge is `challenge`, after the root `previous`: refused unless the coin is a
@@ -276,8 +322,8 @@ class Prover:
     def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> Pass:
         """Pass i of `window`'s receipts and tree under `seed`, however it was derived."""
         plan = plan or Plan.whole(self.store.registration.blocks)
-        receipter = receipts.Receipter(seed)
-        ys = tuple(receipter(j, self.store.blocks[j], self.tiles.output(seed, j)) for j in plan)
+        receipter, tiles = receipts.receipter(self.store.registration.receipt, seed), self.tiles
+        ys = tuple(receipter(j, self.store.blocks[j], None if tiles is None else tiles.output(seed, j)) for j in plan)
         salts = tuple(self.entropy(SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
         return Pass(window, i, seed, plan, ys, salts, receipts.tree(seed, plan, ys, salts))
 
@@ -287,7 +333,7 @@ class Prover:
         leaf = ps.tree.open(c)
         return Opening(ps.index, p, self.store.blocks[j], b"".join(ps.receipts[receipts.PER_LEAF * c:receipts.PER_LEAF * (c + 1)]),
                        ps.salts[c], leaf.path, self.store.salts[j], self.store.payload_tree.open(j).path,
-                       self.tiles.evidence(ps.seed, j))
+                       b"" if self.tiles is None else self.tiles.evidence(ps.seed, j))
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,22 +368,36 @@ class WindowRecord:
         """U_t, the window's receipts."""
         return sum(self.lengths)
 
+    @property
+    def span_ns(self) -> int:
+        """`D_t − b_(t−1)`: the verifier-fixed span its reads fall in, from its challenge's release to its deadline.
+        Consecutive windows' spans overlap by A, and no read is in two windows' passes."""
+        return self.deadline_ns - self.released_ns
+
     def to_json(self) -> dict:
         return {"deadline_ns": self.deadline_ns, "lengths": list(self.lengths), "opened_ns": self.opened_ns,
-                "profile": self.profile.to_json(), "released_ns": self.released_ns, "window": self.window}
+                "profile": self.profile.to_json(), "released_ns": self.released_ns, "span_ns": self.span_ns,
+                "window": self.window}
 
 
 @dataclass(frozen=True, slots=True)
 class Record:
-    """An accepted session: its registration, its coin commitment's root, its store's `blocks`, and every window's
-    record.  `public` is what acceptance makes public; `profile` is the protocol's profile, each window's schedule and
-    openings law (the γ terms need the node's capacities: `ledger`)."""
+    """An accepted session: its registration, its coin commitment's root, its store's `blocks`, every window's record,
+    and the receipt kind the registration names, whether its receipts bind z, its codec and its block layout (its
+    digest binds all four; the record repeats them, since what a receipt rests on depends on the first two, μ_rebuild
+    on the codec, and which bytes a credited block is on the layout).  `public` is what acceptance makes public;
+    `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
+    capacities: `ledger`)."""
 
     registration: bytes
     coins: bytes
     blocks: int
     block_bytes: int
     windows: tuple[WindowRecord, ...]
+    receipt: str = receipts.DEFAULT
+    bind: bool = False
+    codec: Codec = codec.DEFAULT
+    layout: str = receipts.LAYOUT
 
     @property
     def start_ns(self) -> int:
@@ -362,8 +422,9 @@ class Record:
         return sum(w.receipts for w in self.windows)
 
     def public(self) -> dict:
-        return {"block_bytes": self.block_bytes, "blocks": self.blocks, "coins": self.coins.hex(),
-                "passes": [w.passes for w in self.windows], "protocol": PROTOCOL_ID,
+        return {"bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks, "codec": self.codec.name,
+                "codec_params": self.codec.to_json(), "coins": self.coins.hex(), "layout": self.layout,
+                "passes": [w.passes for w in self.windows], "protocol": PROTOCOL_ID, "receipt": self.receipt,
                 "receipts": [w.receipts for w in self.windows], "registration": self.registration.hex(),
                 "span_ns": self.span_ns}
 
@@ -390,18 +451,26 @@ class _Window:
 
 class Session:
     """The verifier's side of one session, driven by the coins it releases and the roots it receives, on its own clock.
-    `challenger` holds the session's coins (`coins.Challenger`), committed before the session.  `not_before_ns` is the
-    earliest its first coin may leave: the previous session's `Record.end_ns` over the same store, less the trusted
-    round-trip floor if there is one, so that no read serves receipts of both sessions."""
+    `challenger` holds the session's coins (`coins.Challenger`), committed before the session.  `not_before_ns`, which
+    every session names, is the earliest its first coin may leave on the verifier's clock: the previous session's
+    `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
+    registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
+    check if the registration binds z, and None if it does not."""
 
-    def __init__(self, params: Params, registration: Registration, tiles: Tiles, challenger: coins.Challenger, *,
-                 clock: Callable[[], int] = time.monotonic_ns, not_before_ns: int | None = None) -> None:
-        if registration.blocks != params.blocks or registration.rounds != params.rounds:
+    def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, challenger: coins.Challenger, *,
+                 not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
+        if (registration.blocks != params.blocks or registration.codec != params.codec
+                or registration.receipt != params.receipt or registration.bind != params.bind
+                or registration.layout != params.layout):
             raise ValueError("the parameters are not the registration's")
+        if type(not_before_ns) is not int or not_before_ns < 0:
+            raise ValueError("not_before_ns is the previous session's last deadline over the store, or the clock at "
+                             "registration for its first: a nonnegative integer")
         c = challenger.commitment
         if c.registration != registration.digest or c.count != params.coins:
             raise ValueError(f"the challenger's coins are not this session's: {params.coins} coins for this registration")
-        self.params, self.registration, self.tiles, self.challenger = params, registration, tiles, challenger
+        self.params, self.registration, self.challenger = params, registration, challenger
+        self.tiles = _tiles(tiles, registration.bind)
         self.clock, self.not_before_ns = clock, not_before_ns
         self.windows: list[_Window] = []
         self.filling = 0
@@ -438,7 +507,7 @@ class Session:
         if self.windows:
             raise SessionError("a session starts once")
         now = self.clock()
-        if self.not_before_ns is not None and now < self.not_before_ns:
+        if now < self.not_before_ns:
             raise SessionError(f"the session's first coin may leave at {self.not_before_ns} ns, not {now}: the session "
                                "before it over this store may still be reading")
         return self._release(0, now)
@@ -454,8 +523,9 @@ class Session:
         return self._release(t + 1, now) if t + 1 < self.params.windows else None
 
     def receive(self, t: int, i: int, root: bytes, runs: Sequence[tuple[int, int]] | None = None) -> Verdict | None:
-        """Root `i` of window `t` and its pass's plan as the prover sends it, `runs` (None: the whole store in order),
-        as they arrive.  Returns the rejection they cause, if any."""
+        """Root `i` of window `t` and its pass's plan as the prover sends it, `runs` (None: the whole store in order; a
+        numpy array of rows (first, count): `Plan.from_array`), as they arrive.  Returns the rejection they cause, if
+        any."""
         self._live()
         if not self.windows:
             raise SessionError("the session has not started")
@@ -470,8 +540,10 @@ class Session:
         d = self.deadline(t)
         if d is not None and now > d:
             return self._fail(t, "late")
+        N = self.params.blocks
         try:
-            plan = Plan.whole(self.params.blocks) if runs is None else Plan(tuple(runs), self.params.blocks)
+            plan = (Plan.whole(N) if runs is None else Plan.from_array(runs, N) if hasattr(runs, "tolist")
+                    else Plan(tuple(runs), N))
         except (TypeError, ValueError):
             return self._fail(t, "plan")
         self.windows[t].roots.append(root)
@@ -518,18 +590,19 @@ class Session:
             raise SessionError(f"window {t} has no draws awaiting openings")
         if len(openings) != len(w.draws):
             return self._fail(t, "malformed")
-        key = self.registration.key
+        key, receipters = self.registration.key, {}
         for (i, p), o in zip(w.draws, openings):
-            failure = self._check(t, i, p, o, key)
+            failure = self._check(t, i, p, o, key, receipters)
             if failure is not None:
                 return self._fail(t, failure, (i, p))
         w.verdict = Verdict(t, True)
         return w.verdict
 
-    def _check(self, t: int, i: int, p: int, o: Opening, key: codec.Key) -> str | None:
+    def _check(self, t: int, i: int, p: int, o: Opening, key: codec.Key, receipters: dict) -> str | None:
         N = self.params.blocks
         if (type(o) is not Opening or o.pass_index != i or o.position != p or type(o.block) is not bytes
                 or len(o.block) != BLOCK_BYTES or type(o.leaf) is not bytes or type(o.tile) is not bytes
+                or (self.tiles is None and o.tile != b"")
                 or any(type(x) is not bytes or len(x) != SALT_BYTES for x in (o.leaf_salt, o.payload_salt))
                 or type(o.receipt_path) is not tuple or type(o.payload_path) is not tuple
                 or any(type(x) is not bytes or len(x) != DIGEST_BYTES for x in (*o.receipt_path, *o.payload_path))):
@@ -549,10 +622,14 @@ class Session:
         if not verify_opening(self._payload_domain, Commitment(self.registration.payload_root, N), opening, PAYLOAD_SCHEMA,
                               LIMITS):
             return "payload-path"
-        z = self.tiles.recompute(seed, j, o.tile)
-        if type(z) is not bytes or not z:
-            return "tile"
-        if receipts.Receipter(seed)(j, o.block, z) != y:
+        z = None
+        if self.tiles is not None:
+            z = self.tiles.recompute(seed, j, o.tile)
+            if type(z) is not bytes or not z:
+                return "tile"
+        if i not in receipters:
+            receipters[i] = receipts.receipter(self.registration.receipt, seed)
+        if receipters[i](j, o.block, z) != y:
             return "receipt"
         return None
 
@@ -567,24 +644,74 @@ class Session:
             profile = IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(len(w.draws))},
                                        self.params.delta, drawn={"receipt": len(w.draws)})
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile))
-        return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out))
+        return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
+                      self.registration.receipt, self.registration.bind, self.registration.codec,
+                      self.registration.layout)
 
 
 LEDGER_SOURCES = {
     "timing": "the record: the span its passes don't cover at the node's capacity (the round trip and the pass in "
-              "flight at the session's ends, the chaining gaps, blocks a plan leaves out)",
-    "sample": "the record: each window's openings law, its bound on wrong receipts at delta",
+              "flight at the span's ends, the chaining gaps, blocks a plan leaves out), the session's or a window's own "
+              "[b_(t−1), D_t]",
+    "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
+              "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, `pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
-    "counting": "AuditRO's slack, queries_log2 bits a certified receipt and slack_log2 a pass",
+    "counting": "AuditRO's slack, queries_log2 bits a receipt (each certified one, whichever reading) and slack_log2 a "
+                "pass",
     "rebuild": "a model: re-encoding blocks from their payload with leftover compute (WorkHardness(p, k))",
     "host": "a model: the host tier's own shortfall and host DRAM bandwidth PCIe cannot carry",
-    "link": "a model: relays meeting z and a block copy over a link",
+    "link": "a model, under a registration that binds z: relays meeting z and a block copy over a link (0 otherwise)",
 }
 
 
+class _Terms:
+    __slots__ = ()
+
+    @property
+    def gamma(self) -> float:
+        """γ with the per-window μ_sample, except with probability `windows · delta`."""
+        return sum(getattr(self, name) for name in LEDGER_SOURCES)
+
+    @property
+    def gamma_horizon(self) -> float:
+        """γ with the pooled μ_sample, except with probability `delta`, `floor` holding with it."""
+        return self.horizon + sum(getattr(self, name) for name in LEDGER_SOURCES if name != "sample")
+
+    def _json(self) -> dict:
+        return {"gamma": self.gamma, "horizon": {"floor": self.floor, "gamma": self.gamma_horizon, "sample": self.horizon},
+                "terms": {name: getattr(self, name) for name in LEDGER_SOURCES}}
+
+
 @dataclass(frozen=True, slots=True)
-class Ledger:
-    """Each γ term as a fraction of the node's read capacity over the session's span; γ is their sum."""
+class WindowLedger(_Terms):
+    """Window t's γ terms as fractions of the node's read capacity over its own span `[b_(t−1), D_t]`
+    (`WindowRecord.span_ns`): its reads are at least `(1 − gamma)·capacity·span` except with `delta`, and at least
+    `(1 − gamma_horizon)·capacity·span` on the session's pooled event, every window's at once.  `floor` is the most
+    of its receipts that event leaves wrong, and `horizon` those receipts' bytes."""
+
+    window: int
+    span_ns: int
+    timing: float
+    sample: float
+    chip: float
+    counting: float
+    rebuild: float
+    host: float
+    link: float
+    horizon: float
+    floor: float
+
+    def to_json(self) -> dict:
+        return {"span_ns": self.span_ns, "window": self.window, **self._json()}
+
+
+@dataclass(frozen=True, slots=True)
+class Ledger(_Terms):
+    """Each γ term as a fraction of the node's read capacity over the session's span; γ is their sum.  μ_sample comes
+    both ways: `sample`, each window's openings bounding its own wrong receipts at δ, and `horizon`, the session's
+    openings pooled over its windows at one δ (`pooled`).  `floor` is the most of any window's receipts the pooled
+    event leaves wrong.  `windows` are the same terms over each window's own span, and `worst` and `worst_horizon`
+    the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's."""
 
     timing: float
     sample: float
@@ -593,14 +720,57 @@ class Ledger:
     rebuild: float
     host: float
     link: float
+    horizon: float
+    floor: float
+    windows: tuple[WindowLedger, ...]
 
     @property
-    def gamma(self) -> float:
-        return sum(getattr(self, name) for name in LEDGER_SOURCES)
+    def worst(self) -> WindowLedger:
+        return max(self.windows, key=lambda w: w.gamma)
+
+    @property
+    def worst_horizon(self) -> WindowLedger:
+        return max(self.windows, key=lambda w: w.gamma_horizon)
 
     def to_json(self) -> dict:
-        terms = {name: getattr(self, name) for name in LEDGER_SOURCES}
-        return {"gamma": self.gamma, "terms": terms}
+        w, h = self.worst, self.worst_horizon
+        return {**self._json(), "windows": [x.to_json() for x in self.windows],
+                "worst": {"gamma": w.gamma, "horizon": {"gamma": h.gamma_horizon, "window": h.window},
+                          "window": w.window}}
+
+
+def _budget(record: Record) -> tuple[list[int], float]:
+    delta = record.windows[0].profile.delta
+    drawn = [w.profile.drawn["receipt"] for w in record.windows]
+    return drawn, -math.expm1(math.log(delta) / sum(drawn)) * sum(drawn)
+
+
+def floors(record: Record) -> tuple[float, ...]:
+    """Each window's share of wrong receipts at most on `pooled`'s event, min(1 − s_t/U_t, d̄·S/s_t): every window's
+    at once, except with δ."""
+    drawn, budget = _budget(record)
+    return tuple(min(1 - s / w.receipts, budget / s) for w, s in zip(record.windows, drawn))
+
+
+def pooled(record: Record) -> tuple[float, float]:
+    """The horizon reading of a record's openings: `(wrong, floor)`, at most `wrong` of the session's receipts wrong
+    and at most a share `floor` of any window's, both except with probability δ together.
+
+    Window t draws s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
+    land on correct ones with probability at most g_t^(s_t), g_t its correct share, however the prover adapted to the
+    windows before.  Over the session (`Accounting.Guarantees.HorizonSampling`, `RateSessionDraw`), every draw lands
+    on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
+    except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
+    found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
+    min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states it for windows of one size; at unequal U_t it is the
+    same argument with each window's own."""
+    drawn, budget = _budget(record)
+    floor = max(floors(record))
+    wrong = 0.0
+    for w, s in sorted(zip(record.windows, drawn), key=lambda x: x[0].receipts / x[1], reverse=True):
+        f = min(1 - s / w.receipts, budget / s)
+        wrong, budget = wrong + f * w.receipts, max(0.0, budget - f * s)
+    return wrong, floor
 
 
 def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: float = 0.0, host: float = 0.0,
@@ -608,11 +778,19 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Ledger:
     """γ's terms for an accepted session on a node of `capacity_bytes_per_s` (HBM plus host DRAM) and `chip_bytes` of
     on-chip storage: the read bytes the record certifies are at least `(1 − γ)·capacity·span`, except with probability
-    `windows · delta` (plus 2^-slack_log2 a pass).  `rebuild`, `host` and `link` are the models' fractions, passed
-    through: the record does not bound them.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`;
-    pass an approximation for a large store)."""
+    `windows · delta`, and at least `(1 − γ_horizon)·capacity·span` except with `delta` (each plus 2^-slack_log2 a
+    pass), and each window's over its own span likewise with its own terms (`Ledger.windows`), the horizon's every
+    window's at once with the session's.  `rebuild`, `host` and `link` are the models' fractions, passed through, the
+    same in every window: the record does not bound them.
+    `link` is a binding record's only: an unbound receipt is of its block alone, and the record says nothing of where
+    its read was made.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an
+    approximation for a large store).  A sketch-sha512 record's receipts also rest on `RateAuditSketch`, whose terms
+    add to the failure probability, not to γ: `timing.sketch_failure` of the prover's SHA-512 compressions over the
+    session (`PROTOCOL.md` §4)."""
     if capacity_bytes_per_s <= 0 or chip_bytes < 0:
         raise ValueError("the capacity is positive and the chip's storage nonnegative")
+    if link and not record.bind:
+        raise ValueError("the link term is a registration's that binds z: this record's receipts are of blocks alone")
     whole = capacity_bytes_per_s * record.span_ns / 1e9
     b = record.block_bytes
     reads = record.receipts * b
@@ -620,8 +798,18 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
         raise ValueError(f"the record certifies {reads} bytes read, more than the capacity allows in its span: the "
                          "capacity is understated")
     wrong_receipts = [math.ceil(wrong(w.profile)) for w in record.windows]
-    certified = [w.receipts - m for w, m in zip(record.windows, wrong_receipts)]
-    lam_bits = sum(queries_log2 * k + slack_log2 * w.passes for w, k in zip(record.windows, certified))
+    windows = []
+    for w, f, e in zip(record.windows, floors(record), wrong_receipts):
+        whole_t, reads_t = capacity_bytes_per_s * w.span_ns / 1e9, w.receipts * b
+        if reads_t > whole_t:
+            raise ValueError(f"window {w.window} certifies {reads_t} bytes read, more than the capacity allows in its "
+                             "span: the capacity is understated")
+        windows.append(WindowLedger(
+            w.window, w.span_ns, timing=1 - reads_t / whole_t, sample=e * b / whole_t, chip=w.passes * chip_bytes / whole_t,
+            counting=(queries_log2 * w.receipts + slack_log2 * w.passes) / 8 / whole_t, rebuild=rebuild, host=host,
+            link=link, horizon=f * reads_t / whole_t, floor=f))
+    horizon, floor = pooled(record)
+    lam_bits = queries_log2 * record.receipts + slack_log2 * record.passes
     return Ledger(timing=1 - reads / whole, sample=sum(wrong_receipts) * b / whole,
                   chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=rebuild, host=host,
-                  link=link)
+                  link=link, horizon=horizon * b / whole, floor=floor, windows=tuple(windows))
