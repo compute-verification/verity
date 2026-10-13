@@ -82,7 +82,7 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
           | some st, none =>
             throw (s!"rec-inner: the inner transcript holds R's stream ({st.name}), and the verifier's inner shape names " ++
               "no schedule of R's")
-          | some st, some rs =>
+          | some st, some rs => do
             let (got, want) := (st.tops.toList.map (·.size), topCounts rs)
             if got != want then
               throw s!"rec inner transcript: {st.name} holds tops of {got} nodes, and its schedule commits tops of {want}"
