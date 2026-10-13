@@ -236,7 +236,7 @@ __global__ void __launch_bounds__(128) signs16_kernel(const StreamHead h, u32 *_
 // completes the receipt tree's constants from that seed.  Thus no seed, sign key, or tree constant crosses the host
 // between passes.  The 64-byte seed is retained with the pass because the opener's second library uses it to restore
 // that pass's constants.
-constexpr int CHAIN_THREADS = 128, CHAIN_BITS_BYTES = SK_ROWS * (BLOCK / 8);
+constexpr int CHAIN_THREADS = 128;
 
 struct ChainPass {
   uint8_t seed[160], derive[256], receipt[128], row[128];

@@ -127,18 +127,24 @@ def main() -> int:
                    "tau": sorted(gpu)[len(gpu) // 2] / read_ms, "tau_host": sorted(host)[len(host) // 2] / 1e6 / read_ms}
             challenge, prev_host = b"\x06" * 32, bytes(64)
             s.start_chain(challenge, prev_host)
-            chain_gpu, chain_host, chain_ok, p0 = [], [], True, len(s.chain_host_phases)
+            chain_gpu, chain_host, chain_seed_ok, chain_signs_ok, chain_root_ok = [], [], True, True, True
+            p0 = len(s.chain_host_phases)
             for i in range(a.passes):
                 want_seed = rb.seed(challenge, i, prev_host)
                 t0 = time.perf_counter_ns()
                 prev_host, handle = s.run_chain(i)
                 chain_host.append(time.perf_counter_ns() - t0)
                 chain_gpu.append(s.pass_gpu_ms[-1])
-                chain_ok = chain_ok and bytes(handle[0].cpu().numpy()) == want_seed
-                chain_ok = chain_ok and prev_host == s.plain_root(want_seed)
+                chain_seed_ok = chain_seed_ok and bytes(handle[0].cpu().numpy()) == want_seed
+                want_pk = torch.empty(device.PACK16_WORDS, dtype=torch.int32, device="cuda")
+                want_signs = torch.from_numpy(skr.signs(want_seed)).cuda()
+                lib.call("rs_pack16", want_signs.data_ptr(), want_pk.data_ptr())
+                chain_signs_ok = chain_signs_ok and bool(torch.equal(handle[1], want_pk))
+                chain_root_ok = chain_root_ok and prev_host == s.plain_root(want_seed)
             chain_ph = s.chain_host_phases[p0:]
             chain_names = ("alloc", "launch", "wait", "root")
-            row.update({"chain_root_ok": chain_ok,
+            row.update({"chain_seed_ok": chain_seed_ok, "chain_signs_ok": chain_signs_ok,
+                        "chain_root_ok": chain_root_ok,
                         "chain_host_phases_p50_ns": {
                             k: sorted(x[j] for x in chain_ph)[len(chain_ph) // 2] for j, k in enumerate(chain_names)
                         },
