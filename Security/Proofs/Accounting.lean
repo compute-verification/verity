@@ -13,6 +13,5 @@ import Proofs.Accounting.PerRunStop
 import Proofs.Accounting.Sanity
 import Proofs.Accounting.Tag
 import Proofs.Accounting.Actual
-import Proofs.Accounting.Bandwidth
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

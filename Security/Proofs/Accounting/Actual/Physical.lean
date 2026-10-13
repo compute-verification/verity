@@ -8,8 +8,9 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 * `forward_of_causal`: causality at any latency makes wires run forward in time inside every location, the form the
   split needs.
 * `ingress_le`, `egress_le`: under `Links`, `in_X(I), out_X(I) ≤ β_X |I|`. A gate that `A[X, I]` reads from outside `X`
-  reaches it on a link across `X`'s boundary, read during `I` at the link's end inside `X` (`inner`); a gate of `A[X, I]`
-  read outside `X` leaves on one, sent during `I` to its end outside (`outer`). Each counts one way of each link.
+  reaches it on a link across `X`'s boundary, read during `I` at the link's end inside `X` (`inner`); a gate of `X` that
+  a gate outside `X` reads during `I` leaves on one, read during `I` at its end outside (`outer`). Each counts one way
+  of each link, at the readers' ticks.
 * `computeRate_one`: compute rate at a pricing of at least one per computed gate bounds the number of gates, compute
   rate at one per gate.
 -/
@@ -66,7 +67,7 @@ theorem ingress_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ
   unfold Placed.ingress linkCapacity
   rw [Finset.sum_mul]
   refine (width_mono A ?_).trans ((width_biUnion_le A _ _).trans
-    (Finset.sum_le_sum fun e _ => (h.2 e (inner ends X e) a b).1))
+    (Finset.sum_le_sum fun e _ => h.2 e (inner ends X e) a b))
   intro c hc
   obtain ⟨hc, hcX⟩ := mem_filter.1 hc
   obtain ⟨-, g, hg, hcg⟩ := (mem_into A).1 hc
@@ -85,15 +86,15 @@ theorem egress_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ}
   unfold Placed.egress linkCapacity
   rw [Finset.sum_mul]
   refine (width_mono A ?_).trans ((width_biUnion_le A _ _).trans
-    (Finset.sum_le_sum fun e _ => (h.2 e (outer ends X e) a b).2))
+    (Finset.sum_le_sum fun e _ => h.2 e (outer ends X e) a b))
   intro g hg
-  obtain ⟨hg, k, hkX, hgk⟩ := mem_filter.1 hg
-  obtain ⟨-, hgX, hgt⟩ := (mem_region A).1 hg
+  simp only [mem_filter, mem_univ, true_and] at hg
+  obtain ⟨hgX, k, hkX, hkt, hgk⟩ := hg
   have hne : A.x g ≠ A.x k := fun h' => hkX (h' ▸ hgX)
   have he := (h.1 k g hgk hne).2.symm
   refine mem_biUnion.2 ⟨link k g, mem_boundary hkX hgX he, ?_⟩
-  simp only [Placed.sentOn, mem_filter, mem_univ, true_and]
-  exact ⟨hgt, k, hgk, hne, rfl, (inner_outer hkX hgX he).2.symm⟩
+  simp only [Placed.readOn, mem_filter, mem_univ, true_and]
+  exact ⟨k, hgk, hne, rfl, (inner_outer hkX hgX he).2.symm, hkt⟩
 
 /-- **Pricing at least one per gate bounds the gates**: compute rate at a pricing `π ≥ 1` on computed gates is compute
 rate at one per gate. -/

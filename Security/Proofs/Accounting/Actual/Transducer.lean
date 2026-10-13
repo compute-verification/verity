@@ -26,7 +26,7 @@ namespace Accounting.SecurityProofs.Actual
 variable {Ω L : Type*}
 
 /-- A wire read during `I` is one read at its own arrival tick. -/
-theorem mem_crossing_iff (R : Actual.Run L) (X Y : Set L) (I : Set ℕ) (p : ℕ × L × ℕ × L × ℕ × ℕ) :
+theorem mem_crossing_iff (R : Actual.Run L) (X Y : Set L) (I : Set ℕ) (p : ℕ × L × ℕ × L × ℕ × ℕ × ℕ) :
     p ∈ R.crossing X Y I ↔ p.1 ∈ I ∧ p ∈ R.crossing X Y {p.1} := by
   constructor
   · rintro ⟨g, a, hr, ha, hg, ht, rfl⟩
@@ -52,7 +52,7 @@ theorem crossing_Ico_congr {R R' : Actual.Run L} {X Y : Set L} {t n : ℕ}
 
 /-- What crosses into `X` at tick `u` is what the links deliver to `X`'s leaves then, from outside `X`. -/
 theorem mem_crossing_signal {E : Type*} (R : Actual.Run L) (link : Fin R.A.N → Fin R.A.N → E) (X : Finset L) (u : ℕ)
-    (p : ℕ × L × ℕ × L × ℕ × ℕ) :
+    (p : ℕ × L × ℕ × L × ℕ × ℕ × ℕ) :
     p ∈ R.crossing (↑X)ᶜ ↑X {u} ↔ p.1 = u ∧ p.2.1 ∈ X ∧ p.2.2.2.1 ∉ X ∧ ∃ e, p.2.2 ∈ R.signal link e p.2.1 u := by
   obtain ⟨u', y, s⟩ := p
   constructor
@@ -109,7 +109,7 @@ theorem portSignals_encard_le {E : Type*} (S : Ω → Actual.Run L) (β : E → 
     exact (Set.encard_le_encard this).trans (by simp)
   | p :: ps => by
     have hsub : (Set.range fun r => portSignals S link (p :: ps) r u) ⊆
-        (fun q : Set (ℕ × L × ℕ × ℕ) × List (Set (ℕ × L × ℕ × ℕ)) => q.1 :: q.2) ''
+        (fun q : Set (ℕ × L × ℕ × ℕ × ℕ) × List (Set (ℕ × L × ℕ × ℕ × ℕ)) => q.1 :: q.2) ''
           ((Set.range fun r => (S r).signal (link r) p.1 p.2 u) ×ˢ Set.range fun r => portSignals S link ps r u) := by
       rintro _ ⟨r, rfl⟩
       exact ⟨(_, _), ⟨⟨r, rfl⟩, ⟨r, rfl⟩⟩, rfl⟩
@@ -150,7 +150,7 @@ state's content at `t` (at most `mem X t` bits) and of its first `n` observation
 theorem transducer {Ob : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom S) (X : Finset L) (t : ℕ) (obs : Ω → ℕ → Ob)
     (hobs : ∀ u r r', obs r u = obs r' u → (S r).crossing (↑X)ᶜ ↑X {u} = (S r').crossing (↑X)ᶜ ↑X {u}) :
     ∃ F : ℕ → List Bool → List Ob →
-        Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ),
+        Set (ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ × ℕ),
       ∀ r n, (S r).acts ↑X (Set.Ico t (t + n)) =
         F n ((S r).content X t) ((List.range n).map fun i => obs r (t + i)) := by
   have hf : ∀ n, Function.FactorsThrough (fun r => (S r).acts ↑X (Set.Ico t (t + n)))
@@ -171,7 +171,7 @@ theorem transducer_bits {Ob : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom 
     (hobs : ∀ u r r', obs r u = obs r' u → (S r).crossing (↑X)ᶜ ↑X {u} = (S r').crossing (↑X)ᶜ ↑X {u})
     (M : ℕ) (hM : ∀ r, (S r).mem X t ≤ M) :
     ∃ F : ℕ → (Fin (M + 1) → Bool) → List Ob →
-        Set (ℕ × L × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ),
+        Set (ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) × Set (ℕ × ℕ × L × ℕ × ℕ × ℕ),
       ∀ r n, (S r).acts ↑X (Set.Ico t (t + n)) =
         F n (pad M ((S r).content X t)) ((List.range n).map fun i => obs r (t + i)) := by
   obtain ⟨F, hF⟩ := transducer hc X t obs hobs
