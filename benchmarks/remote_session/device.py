@@ -431,8 +431,7 @@ class DeviceStore:
                 if h >= self.h0:
                     got = up[at:at + n]
                     want = expected[self.kept_at[h]:self.kept_at[h] + n]
-                    bad = torch.nonzero(torch.any(got != want, dim=1)).reshape(-1).cpu().tolist()
-                    matches[h] = bad[:8]
+                    matches[h] = bool(torch.equal(got, want))
                 at += n
             self.plain_level_matches = matches
         return digests(up[-1:].cpu())[0]
@@ -658,16 +657,13 @@ class Device:
             plain_root = s.plain_root(seed, chained_kept)
             self.gates["plain_root"] = plain_root == chained_root
             self.gates["plain_levels"] = s.plain_level_matches
-            host_root, _ = s.run_pass(seed)
-            self.gates["host_root"] = host_root == plain_root
             self.gates["device_signs"] = all(s.signs_match(rb.seed(challenge, i, bytes(64))) for i in range(4))
         torch.cuda.synchronize()
         if not self.gates["device_seed"]:
             raise RuntimeError("the device's chained seed is not the driver's")
         if not self.gates["plain_root"]:
-            raise RuntimeError(f"the chained pass differs from the plain pass at level/index "
-                               f"{[(h, bad) for h, bad in s.plain_level_matches.items() if bad]}; "
-                               f"the host-prepared pass matches={self.gates['host_root']}")
+            raise RuntimeError(f"the chained pass differs from the plain pass at levels "
+                               f"{[h for h, ok in s.plain_level_matches.items() if not ok]}")
         if not self.gates["device_signs"]:
             raise RuntimeError("the device's signs are not the reference's")
         # A window's openings once, over the calibration's passes, before any session: the opener's stream reaches
@@ -748,6 +744,10 @@ class Device:
         out["session_skip_half"] = self.gate_session(small, reg, set(range(0, small.blocks, 2)))
         out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and out["pass_root"]
                      and out["session_honest"]["accepted"] and out["session_skip_half"]["failure"] == "receipt")
+        # `small` and its gate sessions use the same shared libraries as the real store, so its fixed chain templates
+        # replaced the real store's. Restore both copies before calibration derives the first real pass on the device.
+        self.lib.set_chain(self.store.plan, self.salt_key)
+        self.lib_open.set_chain(self.store.plan, self.salt_key)
         del small
         torch.cuda.empty_cache()
         return out
