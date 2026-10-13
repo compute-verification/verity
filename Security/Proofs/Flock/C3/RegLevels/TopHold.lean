@@ -510,7 +510,7 @@ theorem candidate3_top {tr : Json} {rounds : Array Json} {t : String} {names : L
             rename_i hmade
             have hm' : (structural && (s1 == s2)) = made := Except.ok.inj hm
             have hmade' : made = true := by simpa using hmade
-            have hboth : structural && (s1 == s2) = true := by
+            have hboth : (structural && (s1 == s2)) = true := by
               exact hm'.trans hmade'
             simp only [Bool.and_eq_true] at hboth
             have hstruct : structural = true := hboth.1
