@@ -3,6 +3,7 @@ import Proofs.Flock.C3.RegLevels.SrcUnits
 import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.Reps.SrcOpens
 import Proofs.Flock.C3.Reps.IoCols
+import Proofs.Flock.C3.Reps.ReadSib
 import Proofs.Flock.C3.Reps.SrcOK
 import Proofs.Flock.C3.PubRows.Shape
 import Proofs.Flock.C3.VStarList.Statements
@@ -16,10 +17,10 @@ Where those are the read of R's map's units (`StackedReads`, by construction) an
 a row reads (`StackedOpenCols`, `RepMaps.OpenCols`' form at R's map), `opensReadAt_two_of_layers`' hypotheses both hold.
 `StackedOpenCols` is `RepMaps.openCols_of_readCol`'s at R's map (`stackedOpenCols_of`), from its units' parameters
 (`StackedParams`, at `RecCoins.stackedParams`), their nets (`StackedNet`, from `RecOpen.check`: `stackedNet_of`) and S's
-`OpenReadCol` at their names (`StackedReadCol`). `stackedParams_of_check`: a unit `RecOpen.check` accepted under V*'s
-name `rec-open-stacked/l<L>-h<H>` has `stackedParams` `(L, H)`, so `stackedParams_of_checked`: `StackedParams` at a
-family's list (`listStmt`) from R's levels in it, the verifier's check of each level's statement and R's shape at
-`fast100`'s schedule at R's `m` (`shape?_opening`).
+`OpenReadCol` at their names (`stackedReadCol`, `readCol_unitLaid`'s). `stackedParams_of_check`: a unit `RecOpen.check`
+accepted under V*'s name `rec-open-stacked/l<L>-h<H>` has `stackedParams` `(L, H)`, so `stackedParams_of_checked`:
+`StackedParams` at a family's list (`listStmt`) from R's levels in it, the verifier's check of each level's statement
+and R's shape at `fast100`'s schedule at R's `m` (`shape?_opening`).
 
 * `openRow_ligOfRead_out`, `openRow_ligOfRead_past`: past a level's `q` a `ligOfRead` opening is empty, and past a
   schedule of at least two levels (`DimSeam`) it is the last level's row with no siblings (the default level's `d - cap`
@@ -33,7 +34,7 @@ family's list (`listStmt`) from R's levels in it, the verifier's check of each l
   shape of `fast100`'s schedule (two levels, `DimSeam`).
 * `readMaps`: R's map at its read (`stackedRead`'s rows, `readSibs` its siblings), where `StackedReads` holds by
   construction (`stackedReads_readMaps`) and the rows are `levelLanes` wide (`row_size_readMaps`, `levelTie_of_maps`'
-  `hwd`). `opensReadAt_two_read` is `hos₂` there from the units' parameters, nets and `StackedReadCol` alone.
+  `hwd`). `opensReadAt_two_read` is `hos₂` there from the units' parameters and nets alone.
 * `ligOfVals`: the step source with R's Ligerito steps woven from its messages and rounds along `ligShape` and its
   openings at stratum 2 R's rows (`repsOfVals`' form, at R). `ligSteps_of_plays`: where compiled Ligerito plays on them,
   the woven steps have its kinds, messages and coin steps (`levelTie_of_maps`' `hk`, `hl` and its coins), and no tie
@@ -270,13 +271,16 @@ theorem stackedParams_of_checked {xR : HoloReg GF128 Dig} (F : C3Family T CT st 
   cases hs
   exact stackedParams_of_check (FlockC3.Reps.recCheck (F.zs R ω [] R₂ (M.sess ℓ))) hname.symm
 
-/-- **Hypothesis: `OpenReadCol` at R's stacked names** (`OpenReadCol` is at `RecOpen.unitName`; over any name it gives
-this). -/
+/-- **`OpenReadCol` at R's stacked names** (`OpenReadCol` is at `RecOpen.unitName`; `stackedReadCol`). -/
 def StackedReadCol (LANES H : ℕ) : Prop :=
   ∀ {net : Flock.Net} (hU : Built net),
     Flock.HmNets.netOf (VStar.recOpenStackedName LANES H) (Flock.RecOpen.unitLaid LANES H) = .ok net →
       Flock.RecOpen.valid LANES H = true → net.unitLog ≤ 32 →
         ∀ c < 128 * LANES + 512 * H, ReadCol (Rows.ofNet hU) c
+
+/-- **`StackedReadCol`**: S's `readCol_unitLaid` at R's stacked name. -/
+theorem stackedReadCol (LANES H : ℕ) : StackedReadCol LANES H := fun hU hn hv hu =>
+  FlockC3.Reps.readCol_unitLaid LANES H _ hU hn hv hu
 
 /-- **An opening's row and `aux` columns are inputs** at any name of `unitLaid` (`lt_nIn_of_params`' argument). -/
 theorem lt_nIn_of_net {Q : VStmt} {LANES H : ℕ} {name : String}
@@ -288,16 +292,16 @@ theorem lt_nIn_of_net {Q : VStmt} {LANES H : ℕ} {name : String}
   have := Nat.le_max_right 1 ((H + 1) / 2)
   omega
 
-/-- **`StackedOpenCols` from the units' parameters and nets, and `OpenReadCol` at their names**
-(`RepMaps.openCols_of_readCol` at R's map): each level's unit is the net of `unitLaid` (`StackedNet`), so the columns
-are inputs (`lt_nIn_of_net`) and read (`StackedReadCol`, with `unitLog ≤ 32` by `unitLog_of_scope`). -/
+/-- **`StackedOpenCols` from the units' parameters and nets** (`RepMaps.openCols_of_readCol` at R's map): each level's
+unit is the net of `unitLaid` (`StackedNet`), so the columns are inputs (`lt_nIn_of_net`) and read (`stackedReadCol`,
+with `unitLog ≤ 32` by `unitLog_of_scope`). -/
 theorem stackedOpenCols_of (M : FlockC3.Reps.StackedMaps stmt Vs) {sh : Flock.Shape} (hP : StackedParams M sh)
-    (hN : StackedNet M) (hR : ∀ LANES H, StackedReadCol LANES H) : StackedOpenCols M sh.sched := by
+    (hN : StackedNet M) : StackedOpenCols M sh.sched := by
   intro ℓ hℓ c hc
   rw [FlockVBridge.Family.Conss.getD_default] at hc
   have hok := hN ℓ (hP ℓ hℓ)
   exact ⟨lt_nIn_of_net hok.2 hc,
-    hR _ _ (Vs (M.sess ℓ)).hU hok.2 hok.1 (FlockC3.Reps.unitLog_of_scope (Vs (M.sess ℓ)).hscope) c hc⟩
+    stackedReadCol _ _ (Vs (M.sess ℓ)).hU hok.2 hok.1 (FlockC3.Reps.unitLog_of_scope (Vs (M.sess ℓ)).hscope) c hc⟩
 
 /-- R's opening at level `ℓ`, query `q`, read off the layers `l`. -/
 def rdR (M : FlockC3.Reps.StackedMaps stmt Vs) (sch : Flock.Schedule) (ℓ q : ℕ) (l : (j : Fin S) → (Vs j).Bits) :
@@ -428,7 +432,7 @@ theorem srcOK_repsOfVals_pR {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → R
     (hlg : LigMsgsRead zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) own sel)
     (hv : OpensOfLayers zs dg N k Rw W rd vals)
     (M : FlockC3.Reps.StackedMaps stmt Vs) {shR : Flock.Shape} (hf : Flock.fast100 shR.m = some shR.sched)
-    (hP : StackedParams M shR) (hN : StackedNet M) (hR : ∀ LANES H, StackedReadCol LANES H)
+    (hP : StackedParams M shR) (hN : StackedNet M)
     {sb : ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ℕ → ByteArray}
     (hrd : StackedReads M shR.sched sb) {prR : ((j : Fin S) → (Vs j).Bits) → Flock.LigeritoProof}
     (hpr : ∀ Lb, ∃ e0 w kap cl k₀ c e, prR Lb = pR shR e0 w (M.ops shR Lb kap cl k₀ c) (sb Lb) e)
@@ -439,8 +443,7 @@ theorem srcOK_repsOfVals_pR {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → R
     (hplay : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => StagesPlay (holoAt st hp) u) :
     SrcOK zs dg N k Rw (tiedSrc (normSrc (repsOfVals stp sh rep vals))) own sel :=
   FlockC3.Reps.srcOK_repsOfVals hleaf hcoins hc hts hsp hop hlg hv
-    (opensReadAt_two_pR M (FlockSoundness.Refine.fast100_dims _ _ hf).1.2.1 (stackedOpenCols_of M hP hN hR) hrd hpr
-      hsrc)
+    (opensReadAt_two_pR M (FlockSoundness.Refine.fast100_dims _ _ hf).1.2.1 (stackedOpenCols_of M hP hN) hrd hpr hsrc)
     hw hcap hbool hty hT hplay
 
 /-! ## R's map at its read -/
@@ -468,11 +471,10 @@ theorem row_size_readMaps (M : FlockC3.Reps.StackedMaps stmt Vs) (sh : Flock.Sha
 
 /-- **`OpensReadAt 2` at the reps' tied source, R's map at its read** (`srcOK_repsOfVals`' `hos₂`):
 `opensReadAt_two_pR` at `readMaps`, its `StackedReads` by construction (`stackedReads_readMaps`) and its columns read
-from its units' parameters, nets and `StackedReadCol` (`stackedOpenCols_of`), at R's shape `shR` of `fast100`'s
+from its units' parameters and nets (`stackedOpenCols_of`), at R's shape `shR` of `fast100`'s
 schedule. -/
 theorem opensReadAt_two_read (M : FlockC3.Reps.StackedMaps stmt Vs) {shR : Flock.Shape}
     (hf : Flock.fast100 shR.m = some shR.sched) (hP : StackedParams M shR) (hN : StackedNet M)
-    (hR : ∀ LANES H, StackedReadCol LANES H)
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {prR : ((j : Fin S) → (Vs j).Bits) → Flock.LigeritoProof}
     (hpr : ∀ Lb, ∃ e0 w kap cl k₀ c e,
@@ -483,7 +485,7 @@ theorem opensReadAt_two_read (M : FlockC3.Reps.StackedMaps stmt Vs) {shR : Flock
     (hsrc : ∀ R ω t Lb ℓ q, (stp R ω t Lb).os.1 2 ℓ q = openRow (prR Lb) shR.sched ℓ q) :
     OpensReadAt zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) 2 :=
   opensReadAt_two_pR (readMaps M shR.sched) (FlockSoundness.Refine.fast100_dims _ _ hf).1.2.1
-    (stackedOpenCols_of (sh := shR) (readMaps M shR.sched) hP hN hR) (stackedReads_readMaps M shR.sched) hpr hsrc
+    (stackedOpenCols_of (sh := shR) (readMaps M shR.sched) hP hN) (stackedReads_readMaps M shR.sched) hpr hsrc
 
 /-- **A row is the elements its columns hold.** -/
 theorem elems_of_cols {f : ℕ → Bool} {base : ℕ} {r : Array Flock.F128}
