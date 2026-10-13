@@ -345,6 +345,14 @@ def test_a_rank_replays_its_bundle_with_the_commits_seed_against_its_own_shards(
     assert stubbed["load"][0]["programs"] == {"0": "/here/r0", "1": "/here/r1"} and stubbed["load"][1] == 0
 
 
+def test_the_ranks_one_process_replays_share_one_checkpoint_index(deferred, stubbed, monkeypatch):
+    built, opened, stub = [], [], CPU.open_weights
+    monkeypatch.setattr(WR, "CheckpointIndex", lambda *a, **k: built.append(object()) or built[-1])
+    monkeypatch.setattr(CPU, "open_weights", lambda bdir, tree, root, ck, **k: opened.append(ck) or stub(bdir, tree, root, ck, **k))
+    assert TPR.main(TPR.Options(commit_out=str(deferred.out), checkpoint_dir="/ck")) == 0
+    assert len(built) == 1 and opened == built * WORLD
+
+
 def test_a_replay_that_cannot_run_is_not_evaluated_and_fails_the_rank(deferred, stubbed, monkeypatch):
     monkeypatch.setattr(RR, "load", lambda *a: (_ for _ in ()).throw(RuntimeError("rank 0: REFUSED (not the Program of record): r0: dddd")))
     assert TPR.main(TPR.Options(commit_out=str(deferred.out), checkpoint_dir="/ck")) == 3
@@ -455,12 +463,13 @@ def test_a_tp_row_defers_its_replay_and_tp_commit_takes_the_flag(tmp_path):
         assert "--replay-deferred" not in _tp(tmp_path / f"plain{len(argv)}", *argv).commit_cmd([])
 
 
-def test_a_tp_row_refuses_a_slim_bundle_by_name(tmp_path):
+@pytest.mark.parametrize("world", [None, 8])
+def test_a_tp_row_refuses_a_slim_bundle_by_name(tmp_path, world):
     from tests.pipeline.test_row import TP_DENSE, _opts
     from verity_vllm.config import UsageError
     from verity_vllm.pipeline.row import run_row
 
-    o = _opts(tmp_path, "--replay-deferred", "slim", row=TP_DENSE)
+    o = _opts(tmp_path, "--replay-deferred", "slim", *(("--world", str(world)) if world else ()), row=TP_DENSE)
     with pytest.raises(UsageError, match="slim plan is a single-GPU"):
         run_row(o, o.stages)
 
@@ -502,10 +511,11 @@ class _AtLease(Exception):
     pass
 
 
-@pytest.mark.parametrize("world, defers", [(2, True), (4, False)])
-def test_a_tp_commit_above_tp2_drops_the_deferral_before_it_takes_its_gpus(tmp_path, monkeypatch, capsys, world, defers):
+@pytest.mark.parametrize("world, defers", [(2, True), (4, False), (8, True)])
+def test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its_gpus(tmp_path, monkeypatch, capsys, world, defers):
     """The row's `tp-commit --replay-deferred` (REPLAY_DEFERRED=1, as the dispatcher's auto resolves it) run to its GPU lease: at world 4
-    the flag is gone by then, so no rank's finalize defers and nothing is sealed, and the Commit's log says why; world 2 still defers."""
+    the flag is gone by then, so no rank's finalize defers and nothing is sealed, and the Commit's log says why; worlds 2 and 8, where
+    deferral is proven, still defer."""
     pytest.importorskip("torch")
     import sys
     from tests.pipeline.test_config_run import _tp
@@ -530,11 +540,11 @@ def test_a_tp_commit_above_tp2_drops_the_deferral_before_it_takes_its_gpus(tmp_p
         TC.main(args)
     assert at.value.args[0] == ("full" if defers else None)
     said = [ln for ln in capsys.readouterr().out.splitlines() if "--replay-deferred not taken" in ln]
-    assert said == ([] if defers else ["[tp2commit] --replay-deferred not taken (world 4 > 2: deferral is proven at TP2 only): every rank's C2 "
-                                       "replay runs in its process"])
+    assert said == ([] if defers else ["[tp2commit] --replay-deferred not taken (world 4: deferral is proven at TP2 and TP8 only): every "
+                                       "rank's C2 replay runs in its process"])
 
 
-def test_a_tp_commit_that_replayed_in_process_above_tp2_leaves_the_replay_stage_nothing_to_do(tmp_path, monkeypatch):
+def test_a_tp_commit_that_replayed_in_process_at_an_unproven_world_leaves_the_replay_stage_nothing_to_do(tmp_path, monkeypatch):
     """World 4 under REPLAY_DEFERRED=1: the Commit is decided, not PENDING, and the dispatcher's `row stage replay` runs no CPU replay and
     does not fail (its world-2 control is `test_a_pending_tp_commit_waits_for_the_replay_stage_which_decides_it`)."""
     from tests.pipeline.test_config_run import _tp
@@ -544,7 +554,7 @@ def test_a_tp_commit_that_replayed_in_process_above_tp2_leaves_the_replay_stage_
     t.W = 4
     (Path(t.d) / "commit").mkdir()
     (Path(t.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "commit_pass": True, "pass": True,
-                                                                    "replay_deferred": {"skipped": "world 4 > 2: deferral is proven at TP2 only"}}))
+                                                                    "replay_deferred": {"skipped": "world 4: deferral is proven at TP2 and TP8 only"}}))
     monkeypatch.setattr(R_, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
     monkeypatch.setattr(R_, "tp_manifest_complete", lambda d: True)
     monkeypatch.setattr(R_, "applicable_taps", lambda man, ck: [])
@@ -556,10 +566,10 @@ def test_a_tp_commit_that_replayed_in_process_above_tp2_leaves_the_replay_stage_
     assert not t.replay_pending and "commit PASS" in (Path(t.d) / "stages.txt").read_text()
     t.replay()
     assert ran == ["commit.tp_commit"] and "replay" not in (Path(t.d) / "stages.txt").read_text()
-    assert "nothing deferred, the Commit replayed every rank in process (world 4 > 2" in (Path(t.d) / "row.log").read_text()
+    assert "nothing deferred, the Commit replayed every rank in process (world 4: deferral" in (Path(t.d) / "row.log").read_text()
 
 
-def test_a_slim_bundle_above_tp2_is_not_refused_and_reaches_tp_commit_as_its_flag(tmp_path, monkeypatch):
+def test_a_slim_bundle_at_an_unproven_world_is_not_refused_and_reaches_tp_commit_as_its_flag(tmp_path, monkeypatch):
     from tests.pipeline.test_config_run import _tp
     from tests.pipeline.test_row import TP_DENSE, _opts
     from verity_vllm.pipeline import cli

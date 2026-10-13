@@ -66,6 +66,14 @@ def stmtJson : Stmt → Json
       ("instances", (s.instances : Json)), ("part", (j : Json)), ("S", p.S.toJson),
       ("res", Json.arr (p.res.toArray.map fun (i : Nat) => (i : Json))),
       ("v", Json.arr (p.v.toArray.map fun (i : Nat) => (i : Json)))]
+  | s@(.recOpenStacked level L H n) => Json.mkObj [("name", s.name), ("template", "rec-open"), ("dir", s.dir),
+      ("instances", (n : Json)), ("level", (level : Json)), ("LANES", (L : Json)), ("H", (H : Json))]
+  | s@(.sparse sh hr) => Json.mkObj [("name", s.name), ("template", "rec-sparse"), ("dir", s.dir),
+      ("instances", (s.instances : Json)), ("NU", (sh.nu : Json)), ("ELL", (sh.ell : Json)), ("S_LOG", (sh.sLog : Json)),
+      ("T_LOG", (sh.tLog : Json)), ("h_round", (hr : Json))]
+  | s@(.opening m c j _ ports nv) => Json.mkObj [("name", s.name), ("template", "rec-residuals"), ("dir", s.dir),
+      ("instances", (s.instances : Json)), ("m", (m : Json)), ("claims", (c : Json)), ("part", (j : Json)),
+      ("ports", Json.arr (ports.toArray.map fun (nm, n) => Json.arr #[(nm : Json), (n : Json)])), ("nv", (nv : Json))]
 
 /-- The pinned menus' inner sessions, each once, with the models whose menus hold it. -/
 def menuSessions : Array (Algebra.Shape × Array String) := Id.run do
