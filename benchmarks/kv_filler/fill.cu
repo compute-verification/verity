@@ -162,12 +162,23 @@ __device__ __forceinline__ void gather(const int (&acc)[4][4], uint32_t (&m)[16]
       }
 }
 
-// The sketches of 32 blocks at `p` (block 8q + g of group q): lane n's block n, its 16 sums into m.
+// The first DEPTH steps' loads of the 32 blocks at `p` (lane (g, c)'s 16 bytes of block 8q + g at 64 d + 16 c).
+__device__ __forceinline__ void preload(uint4 (&v)[DEPTH][4], const uint8_t* __restrict__ p, uint64_t pol) {
+  const int lane = threadIdx.x & 31;
+  const uint8_t* src = p + (uint64_t)(lane >> 2) * BLK + 16 * (lane & 3);
+#pragma unroll
+  for (int d = 0; d < DEPTH; ++d)
+#pragma unroll
+    for (int q = 0; q < 4; ++q) v[d][q] = ld_stream(src + (uint64_t)q * 8 * BLK + 64 * d, pol);
+}
+
+// The sketches of 32 blocks at `p` (block 8q + g of group q), its first DEPTH steps already in v (`preload`): lane n's
+// block n, its 16 sums into acc's gather. Offset o's sign fragments depend on the lane and o only, so the four groups
+// share them.
 template <int PROBE = 0>
-__device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint32_t* signs, uint64_t pol,
-                                       uint32_t (&m)[16]) {
+__device__ __forceinline__ void sketch_loaded(uint4 (&v)[DEPTH][4], const uint8_t* __restrict__ p,
+                                              const uint32_t* signs, uint64_t pol, int (&acc)[4][4]) {
   const int lane = threadIdx.x & 31, g = lane >> 2, c = lane & 3;
-  int acc[4][4];
 #pragma unroll
   for (int q = 0; q < 4; ++q)
 #pragma unroll
@@ -177,11 +188,6 @@ __device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint
   const uint32_t* sg8 = sg + 8 * (BLK / 32);
   const int sh = (c & 1) * 16;
   constexpr int STEPS = BLK / 64;
-  uint4 v[DEPTH][4];
-#pragma unroll
-  for (int d = 0; d < DEPTH; ++d)
-#pragma unroll
-    for (int q = 0; q < 4; ++q) v[d][q] = ld_stream(src + (uint64_t)q * 8 * BLK + 64 * d, pol);
 #pragma unroll 2
   for (int o = 0; o < STEPS; ++o) {
     const int slot = o % DEPTH;
@@ -192,9 +198,30 @@ __device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint
 #pragma unroll
       for (int q = 0; q < 4; ++q) v[slot][q] = ld_stream(src + (uint64_t)q * 8 * BLK + 64 * (o + DEPTH), pol);
     }
+    if (PROBE & NO_MMA) {
 #pragma unroll
-    for (int q = 0; q < 4; ++q) sketch_step<PROBE>(acc[q], acc[q], sg, sg8, sh, o, cur[q]);
+      for (int q = 0; q < 4; ++q) acc[q][0] ^= (int)(cur[q].x ^ cur[q].y ^ cur[q].z ^ cur[q].w);
+      continue;
+    }
+    const uint32_t r0 = (sg[2 * o] >> sh) & 0xFFFFu, r8 = (sg8[2 * o] >> sh) & 0xFFFFu;
+    const uint32_t a0 = expand(r0 & 15), a2 = expand((r0 >> 4) & 15), a1 = expand(r8 & 15), a3 = expand((r8 >> 4) & 15);
+    const uint32_t e0 = expand((r0 >> 8) & 15), e2 = expand(r0 >> 12), e1 = expand((r8 >> 8) & 15), e3 = expand(r8 >> 12);
+#pragma unroll
+    for (int q = 0; q < 4; ++q) {
+      mma(acc[q], a0, a1, a2, a3, cur[q].x, cur[q].y);
+      mma(acc[q], e0, e1, e2, e3, cur[q].z, cur[q].w);
+    }
   }
+}
+
+// The sketches of 32 blocks at `p` (block 8q + g of group q): lane n's block n, its 16 sums into m.
+template <int PROBE = 0>
+__device__ __forceinline__ void sketch(const uint8_t* __restrict__ p, const uint32_t* signs, uint64_t pol,
+                                       uint32_t (&m)[16]) {
+  uint4 v[DEPTH][4];
+  int acc[4][4];
+  preload(v, p, pol);
+  sketch_loaded<PROBE>(v, p, signs, pol, acc);
   gather(acc, m);
 }
 

@@ -678,7 +678,8 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
     16-byte loads or its TMA reader of S stages, each prefill bracketed as serve.py brackets a prefilling step) and `readers.cu`'s plain readers (`PC_READERS`: 16-byte loads, and TMA bulk
     copies into S stages of 16 KiB of shared memory), each a train of launches timed by events. Each cell gives the
     prefill's slowdown, the reader's bytes inside the prefills' span, and their cost: the span's added time at R per
-    reader byte. A length of 0 is a sleep in the prefill's place (each reader's rate alone), and `v2...p<k>` runs v2
+    reader byte. A length of 0 is a sleep in the prefill's place (each reader's rate alone), `v2w<W>` runs W warps a
+    CTA (4 by default), and `v2...p<k>` runs v2
     under `sq_probe(k)` (no hash, no MMAs, or neither: where a warp's time goes; receipts wrong)."""
     rows = []
     high = torch.cuda.Stream(priority=greatest)
