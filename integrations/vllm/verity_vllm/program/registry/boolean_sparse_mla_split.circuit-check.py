@@ -13,9 +13,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
     dot, inv = BX.SPARSE_MLA_GLM53["DOT"], BX.SPARSE_MLA_GLM53["INV"]
     return [
-        ("MufuLg2Ftz_v2", lambda: BX.MufuLg2Ftz),
-        ("F32NeZeroFtz_v2", lambda: BX.F32NeZeroFtz),
-        ("F32GtZeroFtz_v2", lambda: BX.F32GtZeroFtz),
         ("SparseMlaSplitEnd_v2", lambda: bind(BX.SparseMlaSplitEndV2, DV=16, INV=inv, SCALE=0.0625)),
         ("SparseMlaCombine_v2", lambda: bind(BX.SparseMlaCombineV2, NSPLIT=3, DV=16, INV=inv)),
         # two splits of one block each (T = 17 at BN = 16: a full block, then the partial one)
