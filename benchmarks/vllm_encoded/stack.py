@@ -479,6 +479,7 @@ class Attention:
         self.stage_bytes = 2 * self.stage_k.numel() * 2
         self.pool_slots = 0
         self.rc_sk = self.used = self.epoch = self.sparse_tags = None
+        self.used_host = self.slot_indices_host = self.slot_indices = self.used_ready = None
         self.kv_tags = None
         self.kv_tag_capacity = 0
         # gate_step left a valid wt_pass state; initialize the paged constants before vLLM's warmups and captures.
@@ -549,11 +550,20 @@ class Attention:
         self.graph_tab = None
         self.pool_slots = slots
         self.rc_sk = self.used = self.epoch = self.sparse_tags = None
+        self.used_host = self.slot_indices_host = self.slot_indices = self.used_ready = None
         if self.st.kv_receipts:
             self.rc_sk = torch.empty((slots, self.lib.shape["kv_heads"], 16), dtype=torch.int32, device="cuda")
             self.used = torch.full((slots,), -1, dtype=torch.int32, device="cuda")
             self.epoch = torch.full((1,), self.st.j, dtype=torch.int32, device="cuda")
             self.sparse_tags = torch.empty((slots, self.nl, 8), dtype=torch.int64, device="cuda")
+            # The selected slots make the public dynamic plan, so the host must see them once a step.  `nonzero().cpu()`
+            # makes a dynamic GPU allocation and a pageable D2H copy, whose context-wide synchronization lets the
+            # partition filler run for hundreds of milliseconds.  Copy the fixed epoch array to pinned memory instead;
+            # one stream event waits only for this stack's work, and both index buffers are reserved with the cache.
+            self.used_host = torch.empty((slots,), dtype=torch.int32, pin_memory=True)
+            self.slot_indices_host = torch.empty((slots,), dtype=torch.int64, pin_memory=True)
+            self.slot_indices = torch.empty((slots,), dtype=torch.int64, device="cuda")
+            self.used_ready = torch.cuda.Event()
 
     @staticmethod
     def index(layer) -> int:
@@ -595,11 +605,20 @@ class Attention:
             return
         torch.cuda.nvtx.range_push("kv-receipts/select-slots")
         try:
-            slots_dev = torch.nonzero(self.used == self.epoch, as_tuple=False).flatten()
-            slots = slots_dev.cpu().tolist()
+            self.used_host.copy_(self.used, non_blocking=True)
+            self.used_ready.record()
+            self.used_ready.synchronize()
+            selected = np.flatnonzero(self.used_host.numpy() == st.j)
+            n = selected.size
+            if n:
+                np.copyto(self.slot_indices_host[:n].numpy(), selected)
+                slots_dev = self.slot_indices[:n]
+                slots_dev.copy_(self.slot_indices_host[:n], non_blocking=True)
+                slots = selected.tolist()
+            else:
+                slots_dev, slots = self.slot_indices[:0], []
         finally:
             torch.cuda.nvtx.range_pop()
-        n = len(slots)
         torch.cuda.nvtx.range_push("kv-receipts/compact")
         try:
             if n:
