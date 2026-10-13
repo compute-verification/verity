@@ -280,6 +280,7 @@ def moe_ops_traced(model=None):
             qm = getattr(m, "quant_method", None)
             if qm is not None and hasattr(qm, "_init_moe_kernel") and getattr(qm, "moe_kernel", None) is None and hasattr(m, "w13_weight"):
                 qm._init_moe_kernel(m)
+            _expert_weight_scales_through_owner(m, qm, h)
             fe = getattr(m, "_forward_entry", None)
             if fe is None or not hasattr(m, "_forward_impl"):
                 continue
@@ -302,6 +303,38 @@ def moe_ops_traced(model=None):
         h.patch(_ws, "_manager", _ExportWorkspaceManager())
     with h:
         yield
+
+
+def _expert_weight_scales_through_owner(layer, quant_method, h) -> None:
+    """Make a plain MoE-kernel object read its registered expert-scale Parameters through their owning module during export.
+
+    vLLM's FP8 ``_init_moe_kernel`` copies the ``RoutedExperts.w13_weight_scale_inv`` / ``w2_weight_scale_inv`` objects into
+    ``moe_kernel.experts.w1_scale`` / ``w2_scale``.  ``experts`` is not an ``nn.Module``.  Torch export swaps Parameters on modules
+    for graph values while tracing, so the stale references on that plain object otherwise become lifted tensor constants.  Refresh
+    them immediately before ``experts.apply`` from the owning module, exactly as ``_router_bias_through_owner`` does for the router's
+    correction bias.  Identity is checked before patching: a backend-owned derived scale is not silently relabelled as a Parameter."""
+    kernel = getattr(quant_method, "moe_kernel", None)
+    experts = getattr(kernel, "experts", None)
+    apply = getattr(experts, "apply", None)
+    if experts is None or not callable(apply):
+        return
+    owners = {id(p): (mod, name) for mod in layer.modules() for name, p in mod._parameters.items() if p is not None}
+    bindings = []
+    for attr in ("w1_scale", "w2_scale"):
+        scale = getattr(experts, attr, None)
+        if id(scale) in owners:
+            bindings.append((attr, *owners[id(scale)]))
+    if not bindings:
+        return
+
+    def apply_with_owned_scales(*args, _experts=experts, _apply=apply, _bindings=tuple(bindings), **kwargs):
+        for attr, owner, name in _bindings:
+            setattr(_experts, attr, getattr(owner, name))
+        return _apply(*args, **kwargs)
+
+    for attr, _owner, _name in bindings:
+        h.patch(experts, attr, getattr(experts, attr))
+    h.patch(experts, "apply", apply_with_owned_scales)
 
 
 def _router_bias_through_owner(model, h) -> None:
