@@ -32,7 +32,7 @@
   "max_num_batched_tokens": 2048,
   "max_model_len": 288,
   "tensor_parallel_size": 8,
-  "disable_custom_all_reduce": true
+  "disable_custom_all_reduce": false
  },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 19e773648cb4e65d (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
@@ -361,9 +361,8 @@
   "tp": 8,
   "execution": "eager"
  },
- "note": "R12 sweep glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager: B=1 I<=256 O<=32 greedy arrivals=none; prompt lens [256], caps [32], arrive steps [0]; every request to max_tokens => 32 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.",
+ "note": "R12 sweep glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager: B=1 I<=256 O<=32 greedy arrivals=none; prompt lens [256], caps [32], arrive steps [0]; every request to max_tokens => 32 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.  13 Oct: NCCL_P2P_DISABLE dropped (an L40S-row carry-over; Daniel's ruling: standard vLLM on H boxes).  13 Oct: disable_custom_all_reduce dropped (an L40S-row carry-over, set false = vLLM's default; Daniel's ruling: standard vLLM on H boxes).",
  "env_required": {
-  "NCCL_P2P_DISABLE": "1",
   "VLLM_BATCH_INVARIANT": "0",
   "VLLM_USE_DEEP_GEMM": "0"
  },
@@ -374,7 +373,11 @@
   ],
   "num_sms": 132,
   "batch_invariant": false,
+<<<<<<< HEAD
   "fp8_block_gemm": "cutlass",
   "moe_backend": "triton"
+=======
+  "fp8_block_gemm": "cutlass"
+>>>>>>> 877f16bc67363b74aff88c40b0554ee0d8a35752
  }
 }
