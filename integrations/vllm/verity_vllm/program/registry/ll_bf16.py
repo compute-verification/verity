@@ -1,9 +1,12 @@
-"""vLLM's cuteDSL router GEMM `ll_bf16_gemm` (`GateLinear` tier 1: bf16 x bf16 -> f32 at M <= 16 on sm_90+), GLM-5.3's MoE gate
-on decode steps, as its two kernels reduce K (vLLM d9105ea80 `kernels/linear/cute_dsl/`, CUTLASS DSL 4.6.2):
+"""vLLM's cuteDSL router GEMM `ll_bf16_gemm` (`GateLinear` tier 1: bf16 x bf16 -> f32 at M <= 16 on sm_90+), GLM-5.3's and
+DeepSeek-V4-Pro's MoE gates on decode steps, as its two kernels reduce K (vLLM d9105ea80 `kernels/linear/cute_dsl/`, CUTLASS DSL
+4.6.2):
 
     LlBf16DotprodDot_v1{K, BS, VEC, FMA}     (x, w: Array<K, BF16>) -> F32
         `LLBf16Dotprod` (M <= 4): thread t of the CTA's BS runs one f32 chain from +0 over k = VEC BS i + VEC t + v (i, then the
-        VEC elements of its vector load, ascending), each step `acc + f32(x_k) * f32(w_k)`: one FFMA when FMA = 1 (libNVVM's
+        VEC elements of its vector load, ascending) on K's whole tiles of VEC BS, then likewise at width VEC/2 on what is left
+        (the kernel's 64-bit tail loop beside its 128-bit main loop, VEC 8), then rounds of BS, one k per thread, the last on the
+        threads below what remains; each step `acc + f32(x_k) * f32(w_k)`: one FFMA when FMA = 1 (libNVVM's
         default contraction), else an FMUL then an FADD.  Each warp's 32 chains meet in `warp_reduction_sum`'s butterfly
         (offsets 16, 8, 4, 2, 1: lane i adds lane i + o), and the BS / 32 warp sums in `TensorSSA.reduce(ADD, init 0.0)`'s
         ordered sum, ((0 + s_0) + s_1) + ...
@@ -24,9 +27,11 @@ first step is its own Definition, from the +0 accumulator with its constant bits
 read only x_k.  The rows on bits take each step of every W row at once, one batch over the rows sharing x_k's own gates, as the
 split-K's `DOT` steps do (`cublas_bf16.dot_step`), so no row computes a value another computes.  vLLM's sm_90
 dispatch at GLM-5.3's gate (K 6144, N 256): M <= 4 the dotprod at BS 128 (VEC 8, so 6 tiles of 1024); M 9 and 11 the split-K at
-SPLIT_K 8, else SPLIT_K 6 (TILE_K 256, WARPS 4, `mma.sync.m16n8k16`, `HopperBF16WgmmaDot16_v1`); `bf16_gemm_check.dispatch_sm90`,
-beside the numpy models.  The H200's kernels are pinned by `tests/properties/glm53_bf16_gemm_capture_gpu.py`, which also decides
-FMA.
+SPLIT_K 8, else SPLIT_K 6 (TILE_K 256, WARPS 4, `mma.sync.m16n8k16`, `HopperBF16WgmmaDot16_v1`).  At DeepSeek-V4-Pro's (K 7168,
+N 384): M 1 and 2 the dotprod at BS 256 (3 tiles of 2048, then one of 1024 at width 4), M 3 and 4 at BS 128 (7 tiles); M 5 the
+split-K at SPLIT_K 6, M 6, 8 and 12 at 8, M 7 to 16 otherwise at 7, over its 28 tiles of 256 (so ranks may take one tile fewer
+than rank 0).  `bf16_gemm_check.dispatch_sm90` holds the tables, beside the numpy models.  The H200's kernels are pinned by
+`tests/properties/glm53_bf16_gemm_capture_gpu.py`, which also decides FMA.
 """
 from __future__ import annotations
 
@@ -58,8 +63,7 @@ def _check(name: str, **ok: bool) -> None:
 
 
 def _check_dotprod(S) -> None:
-    tile = S.VEC * S.BS
-    _check("LlBf16DotprodDot", K_multiple_of_VEC_BS=S.K > 0 and S.K % tile == 0, BS_whole_warps=S.BS > 0 and S.BS % WARP == 0,
+    _check("LlBf16DotprodDot", BS_whole_warps=S.BS > 0 and S.BS % WARP == 0, K_at_least_BS=S.K >= S.BS, VEC_positive=S.VEC > 0,
            FMA_0_or_1=S.FMA in (0, 1))
 
 
@@ -99,9 +103,19 @@ def _ordered_sum(add, zero, parts):
 
 
 def _lanes(S) -> list[list[int]]:
-    """Each thread's chain: thread t's k in its order, VEC BS i + VEC t + v (i, then v)."""
-    tile = S.VEC * S.BS
-    return [[tile * i + S.VEC * t + v for i in range(S.K // tile) for v in range(S.VEC)] for t in range(S.BS)]
+    """Each thread's chain: thread t's k in its order, as `LLBf16Dotprod._init_k_tiles` cuts K.  The whole tiles of VEC BS, k =
+    VEC BS i + VEC t + v (i, then v); on what is left, the whole tiles of VEC/2 BS likewise; then rounds of BS, one k per thread,
+    the last on the threads below what remains."""
+    lanes: list[list[int]] = [[] for _ in range(S.BS)]
+    k0 = 0
+    for width in (S.VEC, S.VEC // 2):
+        tiles = (S.K - k0) // (width * S.BS) if width else 0
+        for t, ks in enumerate(lanes):
+            ks += [k0 + width * (S.BS * i + t) + v for i in range(tiles) for v in range(width)]
+        k0 += tiles * width * S.BS
+    for t, ks in enumerate(lanes):
+        ks += range(k0 + t, S.K, S.BS)
+    return lanes
 
 
 def _reduce(add, zero, lanes):
@@ -201,8 +215,9 @@ def _gemm_type(X, T):
 
 DOTPROD = ("K", "BS", "VEC", "FMA")
 SPLITK = ("K", "SPLIT_K", "TILE_K", "WARPS", "DOT")
-DOTPROD_DOC = ("LLBf16Dotprod's coordinate: BS thread chains from +0 over k = VEC BS i + VEC t + v (FFMA when FMA, else FMUL "
-               "then FADD), each warp's butterfly, then the warp sums in order from +0")
+DOTPROD_DOC = ("LLBf16Dotprod's coordinate: BS thread chains from +0 over k = VEC BS i + VEC t + v, then the tail at width "
+               "VEC/2, then rounds of BS (FFMA when FMA, else FMUL then FADD), each warp's butterfly, then the warp sums in order "
+               "from +0")
 SPLITK_DOC = ("LLBf16SplitK's coordinate: per cluster rank and MMA warp one DOT chain from +0 over its k16 blocks, the warps' "
               "chains then the ranks' sums added in order from +0")
 ROWS_DOC = "one token row of ll_bf16_gemm's f32 logits: the kernel's dot on each W row"

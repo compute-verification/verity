@@ -1,14 +1,15 @@
-"""numpy models of GLM-5.3's bf16 GEMMs on sm_90, the arithmetic `ll_bf16` and `cublas_bf16` compute, and vLLM d9105ea80's choice
-of kernel for the MoE gate (`GateLinear.forward`, `LLBf16Gemm.dispatch`):
+"""numpy models of GLM-5.3's and DeepSeek-V4-Pro's bf16 GEMMs on sm_90, the arithmetic `ll_bf16` and `cublas_bf16` compute, and
+vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf16Gemm.dispatch`):
 
 * `gate_rows`: x (M, K) bf16 against the gate's W (N, K) -> f32 words (M, N); M <= 16 is `ll_bf16_gemm` (`dispatch_sm90`), past
   it cuBLAS's ``torch.mm(x, W.T, out_dtype=float32)`` (`f32out_rows`);
-* `dotprod_rows`: `LlBf16DotprodGemm_v1` per token row: BS lane chains from +0 (FFMA, or FMUL then FADD), each warp's butterfly,
-  then the warp sums in order from +0;
+* `dotprod_rows`: `LlBf16DotprodGemm_v1` per token row: BS lane chains from +0 (FFMA, or FMUL then FADD) over `dotprod_rounds`,
+  each warp's butterfly, then the warp sums in order from +0;
 * `splitk_rows`: `LlBf16SplitKGemm_v1{DOT=HopperBF16WgmmaDot16_v1}` per token row: each (cluster rank, MMA warp)'s k16 blocks
   ascend, so its chain is `DotBf16` over those columns (`mla_check.dot_chain`), then the warps' and the ranks' ordered sums;
-* `f32out_rows`: `GemmF32Out_v1{DOT=HopperBF16WgmmaDot16_v1}`; `linear_rows`: core's `Gemm_v2` (lm_head, the indexer's
-  `wk_weights_proj`); `bmm_rows`: `BatchedGemm_v1`, `mla_check.bmm_rows`.
+* `f32out_rows`: `GemmF32Out_v1{DOT=HopperBF16WgmmaDot16_v1}` (also DeepSeek-V4-Pro's compressor GEMMs); `linear_rows`: core's
+  `Gemm_v2` (lm_head, GLM-5.3's indexer `wk_weights_proj`, DeepSeek-V4-Pro's `weights_proj`); `bmm_rows`: `BatchedGemm_v1`,
+  `mla_check.bmm_rows`.
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
@@ -22,7 +23,7 @@ from verity_vllm.program.registry import mla_check as MK
 
 U32 = np.uint32
 WARP = 32
-#: `LLBf16Gemm`'s defaults and the sm_90 tables at GLM-5.3's gate (K 6144, N 256), vLLM d9105ea80 `cute_dsl/ll_bf16.py`
+#: `LLBf16Gemm`'s defaults and its sm_90 tables by gate (K, N), vLLM d9105ea80 `cute_dsl/ll_bf16.py`
 DOTPROD_MAX_M, DOTPROD_BS, DOTPROD_VEC = 4, 128, 8
 SPLITK_DEFAULT, SPLITK_TILE_K, SPLITK_WARPS = 6, 256, 4
 SM90_DOTPROD_BS = {(4096, 256): {1: 256, 3: 256}, (7168, 384): {1: 256, 2: 256}}
@@ -54,19 +55,30 @@ def _ordered_sum(parts) -> np.ndarray:
     return out
 
 
+def dotprod_rounds(K: int, BS: int, VEC: int) -> list[np.ndarray]:
+    """`LLBf16Dotprod`'s K loop as rounds, each the k every thread adds then (-1: none): the vector loads at width VEC over K's
+    whole tiles of VEC BS, then at width VEC/2 over what is left (its 64-bit tail at VEC 8), then scalar rounds of BS, the last
+    ragged."""
+    t, rounds, k0 = np.arange(BS), [], 0
+    for width in (VEC, VEC // 2):
+        tiles = (K - k0) // (width * BS) if width else 0
+        rounds += [k0 + width * (BS * i + t) + v for i in range(tiles) for v in range(width)]
+        k0 += tiles * width * BS
+    rounds += [np.where(s + t < K, s + t, -1) for s in range(k0, K, BS)]
+    return rounds
+
+
 def dotprod_rows(x: np.ndarray, w: np.ndarray, BS: int = DOTPROD_BS, VEC: int = DOTPROD_VEC, FMA: int = 1) -> np.ndarray:
     """`LlBf16DotprodGemm_v1{N, K, BS, VEC, FMA}` of every row of x (M, K) against w (N, K): f32 words (M, N)."""
     x, w = np.asarray(x, np.uint16), np.asarray(w, np.uint16)
-    (M, K), N, tile = x.shape, w.shape[0], VEC * BS
-    if K % tile or BS % WARP or w.shape[1] != K:
-        raise ValueError(f"dotprod: K {K} a multiple of VEC BS {tile}, BS {BS} of 32 and W [N, K] (W {w.shape})")
-    xf = DR.bf16_to_f32_words(x).reshape(M, K // tile, BS, VEC)
-    wf = DR.bf16_to_f32_words(w).reshape(N, K // tile, BS, VEC)
+    (M, K), N = x.shape, w.shape[0]
+    if K < BS or BS % WARP or VEC < 1 or w.shape[1] != K:
+        raise ValueError(f"dotprod: K {K} at least BS {BS}, BS of 32, VEC {VEC} >= 1 and W [N, K] (W {w.shape})")
+    xf, wf = DR.bf16_to_f32_words(x), DR.bf16_to_f32_words(w)
     acc = np.zeros((M, N, BS), U32)
-    for i in range(K // tile):
-        for v in range(VEC):
-            a, b = xf[:, None, i, :, v], wf[None, :, i, :, v]
-            acc = MK.fma(a, b, acc) if FMA else MK.add(acc, MK.mul(a, b))
+    for ks in dotprod_rounds(K, BS, VEC):
+        a, b = xf[:, None, np.maximum(ks, 0)], wf[None, :, np.maximum(ks, 0)]
+        acc = np.where(ks >= 0, MK.fma(a, b, acc) if FMA else MK.add(acc, MK.mul(a, b)), acc)
     lanes = acc.reshape(M, N, BS // WARP, WARP)
     o = WARP // 2
     while o:
@@ -109,7 +121,8 @@ def bmm_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 
 def gate_rows(x: np.ndarray, w: np.ndarray, FMA: int = 1) -> np.ndarray:
-    """GLM-5.3's MoE gate on sm_90: the kernel `dispatch_sm90` names at x's M, as the Definition that is its function."""
+    """A bf16 MoE gate on sm_90: the kernel `dispatch_sm90` names at x's M and the gate's (K, N), as the Definition that is its
+    function."""
     kind, st = dispatch_sm90(x.shape[0], x.shape[1], w.shape[0])
     if kind == "dotprod":
         return dotprod_rows(x, w, FMA=FMA, **st)

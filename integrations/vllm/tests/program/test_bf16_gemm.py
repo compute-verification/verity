@@ -4,9 +4,12 @@ kernels on random words and on words at every class edge (signed zeros, subnorma
 or underflow f32, the only inputs on which the dotprod's contraction changes a word); each chain step's parts, composed,
 agree with its word from +0 and from any accumulator (the dotprod's on accumulators that cancel the product too) and no
 body on bits computes a value twice; `BatchedGemm_v2` is `mla.MlaBmm_v1`'s
-function; the words at GLM-5.3's gate statics (K 6144) agree with the models; `dispatch_sm90` is vLLM's table; and each is pinned
-by gate count and program digest."""
+function; the dotprod's K loop is the kernel's (main tiles, the tail at half width, scalar rounds); the words at GLM-5.3's and
+DeepSeek-V4-Pro's gate statics (K 6144, 7168) agree with the models; `dispatch_sm90` is vLLM's table; and each is pinned by gate
+count and program digest."""
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -67,6 +70,8 @@ PINS = {
         (550400, 871680, 54784, "310290be808e36bd3308147d713f3bf718561ee1512a5b9dc2b5b5c3e5b297308b555d436a583357cdefeef7314aa303466916d65cd181c2131406ed3e1c2979"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=0}":
         (449024, 714048, 56000, "1bdbc6c31ccaaf30aaadedaf8452b46bcdb580b123d8b2e4bad5d7c5ea8dd1d23a7456a6797f3a58d28ae97fd6d9514c759f82df5edce70b65a5d8522a9e5fbc"),
+    "LlBf16DotprodDot_v2{K=101,BS=32,VEC=2,FMA=1}":
+        (216691, 342609, 21965, "d3c340f9f4c8026aafd1bf457adc5c7b8fa37b99c5c19f20edde0c8760a57aadc0cfb16d1128ad138f3ba198fc45d89da60935943226305956e08dbcf7bb7a92"),
     "LlBf16SplitKDot_v2{K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT=HopperBF16WgmmaDot16_v2}":
         (66652, 126486, 6650, "ad93c680dafa712fcb77ce24a5988acc56d34b39d713aedd99c76e16de918ed54c29df59c010bd8053c88f8e68e43d91c3a9d68ec1099a9857dd8bedf37496c2"),
     "LlBf16DotprodGemm_v2{N=2,K=128,BS=64,VEC=2,FMA=1}":
@@ -79,6 +84,7 @@ CHAIN_STEPS = {"LlBf16FmaStep": LL.LL_FMA_STEP, "LlBf16MulAddStep": LL.LL_MUL_AD
 STEPS = [bind(d) for st in CHAIN_STEPS.values() for d in st]
 PINNED = [bind(CB.GemmF32Out, K=32, N=3, DOT=HOP), bind(CB.BatchedGemm, B=2, K=32, N=3, DOT=HOP),
           bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=1), bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=0),
+          bind(LL.LlBf16DotprodDot, K=101, BS=32, VEC=2, FMA=1),
           bind(LL.LlBf16SplitKDot, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP),
           bind(LL.LlBf16DotprodGemm, N=2, K=128, BS=64, VEC=2, FMA=1),
           bind(LL.LlBf16SplitKGemm, N=2, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP)]
@@ -189,17 +195,18 @@ def test_chain_steps_agree_with_their_words(name: str) -> None:
 def test_no_body_on_bits_computes_a_value_twice() -> None:
     """No value is computed twice anywhere in a Definition on bits (`word.Graph.recomputed`), with each chain's first step
     reading the +0 accumulator and several W rows sharing x: `circuit-check`'s redundant-gates rule, at small statics."""
-    for t in [bind(LL.LlBf16DotprodGemm, N=2, K=64, BS=32, VEC=2, FMA=f) for f in (1, 0)] + [
+    for t in [bind(LL.LlBf16DotprodGemm, N=2, K=K, BS=32, VEC=2, FMA=f) for K, f in ((64, 1), (64, 0), (101, 1))] + [
             bind(CB.BatchedGemm, B=2, K=32, N=3, DOT=HOP), bind(LL.LlBf16SplitKGemm, N=2, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP)]:
         assert WQ.Graph(t).recomputed == [], t.id
 
 
 @pytest.mark.parametrize("FMA", [1, 0])
 def test_dotprod_agrees_with_the_model(FMA: int) -> None:
-    """`LlBf16DotprodGemm_v2` against `dotprod_rows` over two tiles of two warps' lanes, and over one tile of one warp; on the wide
-    words the contracted and uncontracted models differ, and each Definition is its own."""
+    """`LlBf16DotprodGemm_v2` against `dotprod_rows` over two tiles of two warps' lanes, over one tile of one warp, and over one
+    tile, a tail tile at width 1 and a ragged round on 5 of 32 threads; on the wide words the contracted and uncontracted models
+    differ, and each Definition is its own."""
     rng = np.random.default_rng(2)
-    for K, BS_, VEC in ((128, 64, 1), (64, 32, 2)):
+    for K, BS_, VEC in ((128, 64, 1), (64, 32, 2), (101, 32, 2)):
         target = bind(LL.LlBf16DotprodGemm, N=3, K=K, BS=BS_, VEC=VEC, FMA=FMA)
         for x, w in _rows(rng, 24, 3, K):
             assert _f32_equal(_bits_rows(target, x, w), C.dotprod_rows(x, w, BS_, VEC, FMA))
@@ -242,17 +249,49 @@ def test_batched_gemm_is_mla_bmm() -> None:
             assert np.array_equal(ours, theirs), (B, K, N, kind)
 
 
+def _kernel_k_loops(K: int, BS: int, VEC: int = 8, TAIL: int = 4) -> tuple[int, int, int, int]:
+    """`LLBf16Dotprod._init_k_tiles`'s counts, as the kernel computes them: main tiles, tail tiles, full scalar rounds, ragged."""
+    main = K // (VEC * BS) * VEC * BS
+    tail = (K - main) // (TAIL * BS) * TAIL * BS
+    rem = K - main - tail
+    return main // (VEC * BS), tail // (TAIL * BS), rem // BS, rem % BS
+
+
+@pytest.mark.parametrize("K,BS_", [(6144, 128), (7168, 256), (7168, 128), (4096, 256), (7168 + 3 * 256 + 37, 256), (2049, 128)])
+def test_dotprod_rounds_are_the_kernels_k_loops(K: int, BS_: int) -> None:
+    """`dotprod_rounds` at VEC 8 is the kernel's K loop: its main tiles' 8 rounds each, its tail tiles' 4, its full scalar rounds
+    and a ragged one on the threads below the rest; every k once; and each thread's k in `ll_bf16`'s order."""
+    main, tail, full, part = _kernel_k_loops(K, BS_)
+    rounds = C.dotprod_rounds(K, BS_, 8)
+    assert len(rounds) == 8 * main + 4 * tail + full + (part > 0)
+    assert all((r >= 0).all() for r in rounds[:len(rounds) - (part > 0)])
+    if part:
+        assert ((rounds[-1] >= 0) == (np.arange(BS_) < part)).all()
+    assert sorted(int(k) for r in rounds for k in r if k >= 0) == list(range(K))
+    lanes = LL._lanes(SimpleNamespace(K=K, BS=BS_, VEC=8))
+    assert lanes == [[int(r[t]) for r in rounds if r[t] >= 0] for t in range(BS_)]
+
+
+#: (K, N) of each gate, with the dotprod's BS and the split-K's SPLIT_K that `dispatch_sm90` names there
+GATES = {"glm53": (6144, 256, (128,), (6, 8)), "dsv4-pro": (7168, 384, (256, 128), (6, 7, 8))}
+
+
+@pytest.mark.parametrize("gate", sorted(GATES))
 @pytest.mark.parametrize("kind", KINDS)
-def test_words_at_the_gates_statics_agree_with_the_models(kind: str) -> None:
-    """At GLM-5.3's gate (K 6144): the dotprod at BS 128, VEC 8 (with and without contraction), the split-K at SPLIT_K 6 and 8
-    (TILE_K 256, WARPS 4) and the f32-out GEMM, through the reference evaluator, on four rows each."""
+def test_words_at_the_gates_statics_agree_with_the_models(gate: str, kind: str) -> None:
+    """At GLM-5.3's gate (K 6144) and DeepSeek-V4-Pro's (K 7168): the dotprod at each BS its dispatch names, VEC 8 (with and
+    without contraction; at K 7168, BS 256 its main tiles leave one tail tile), the split-K at each SPLIT_K it names (TILE_K 256,
+    WARPS 4; 28 tiles over 6, 7 or 8 ranks) and the f32-out GEMM, through the reference evaluator, on two rows each."""
+    K, N, dotprod_bs, split_ks = GATES[gate]
     rng = np.random.default_rng(6)
-    x, w = _bf16_words(rng, (4, 6144), kind), _bf16_words(rng, (2, 6144), kind)
-    cases = [(bind(LL.LlBf16DotprodDotWord, K=6144, BS=128, VEC=8, FMA=f), lambda f=f: C.dotprod_rows(x, w, 128, 8, f))
-             for f in (1, 0)]
-    cases += [(bind(LL.LlBf16SplitKDotWord, K=6144, SPLIT_K=s, TILE_K=256, WARPS=4, DOT=HOPW), lambda s=s: C.splitk_rows(x, w, s))
-              for s in (6, 8)]
-    cases += [(bind(CB.GemmF32OutWord, K=6144, N=1, DOT=HOPW), lambda: C.f32out_rows(x, w))]
+    x, w = _bf16_words(rng, (2, K), kind), _bf16_words(rng, (1, K), kind)
+    assert {C.dispatch_sm90(m, K, N)[1].get("BS") for m in range(1, 5)} == set(dotprod_bs)
+    assert {C.dispatch_sm90(m, K, N)[1].get("SPLIT_K") for m in range(5, 17)} == set(split_ks)
+    cases = [(bind(LL.LlBf16DotprodDotWord, K=K, BS=bs, VEC=8, FMA=f), lambda bs=bs, f=f: C.dotprod_rows(x, w, bs, 8, f))
+             for bs in dotprod_bs for f in (1, 0)]
+    cases += [(bind(LL.LlBf16SplitKDotWord, K=K, SPLIT_K=s, TILE_K=256, WARPS=4, DOT=HOPW), lambda s=s: C.splitk_rows(x, w, s))
+              for s in split_ks]
+    cases += [(bind(CB.GemmF32OutWord, K=K, N=1, DOT=HOPW), lambda: C.f32out_rows(x, w))]
     for target, model in cases:
         want = model()
         got = np.array([[evaluate(target, *(a.astype(np.int64).tolist() for a in (x[i], w[j])))[0] for j in range(len(w))]
@@ -268,7 +307,10 @@ def test_dispatch_is_vllms_sm90_table() -> None:
     assert all(C.dispatch_sm90(m, 6144, 256)[1]["TILE_K"] == 256 and C.dispatch_sm90(m, 6144, 256)[1]["WARPS"] == 4
                for m in range(5, 17))
     assert C.dispatch_sm90(1, 4096, 256)[1]["BS"] == 256 and C.dispatch_sm90(2, 4096, 256)[1]["BS"] == 128
-    assert C.dispatch_sm90(5, 7168, 384)[1]["SPLIT_K"] == 6 and C.dispatch_sm90(9, 7168, 384)[1]["SPLIT_K"] == 7
+    assert [C.dispatch_sm90(m, 7168, 384)[1].get("BS") for m in range(1, 5)] == [256, 256, 128, 128]
+    assert {m: C.dispatch_sm90(m, 7168, 384)[1]["SPLIT_K"] for m in range(5, 17)} == {
+        m: 6 if m == 5 else 8 if m in (6, 8, 12) else 7 for m in range(5, 17)}
+    assert C.dispatch_sm90(17, 7168, 384)[0] == "cublas"
     assert C.dispatch_sm90(8, 1024, 256)[0] == "dotprod"
     with pytest.raises(ValueError):
         C.dispatch_sm90(0, 6144, 256)
@@ -283,8 +325,10 @@ def test_gate_rows_runs_the_dispatched_kernel() -> None:
 
 
 def test_the_definitions_refuse_what_they_do_not_model() -> None:
-    with pytest.raises(ValueError, match="K_multiple_of_VEC_BS"):
-        _ = bind(LL.LlBf16DotprodDot, K=96, BS=32, VEC=2, FMA=1).body
+    with pytest.raises(ValueError, match="K_at_least_BS"):
+        _ = bind(LL.LlBf16DotprodDot, K=16, BS=32, VEC=2, FMA=1).body
+    with pytest.raises(ValueError, match="VEC_positive"):
+        _ = bind(LL.LlBf16DotprodDot, K=64, BS=32, VEC=0, FMA=1).body
     with pytest.raises(ValueError, match="BS_whole_warps"):
         _ = bind(LL.LlBf16DotprodDot, K=96, BS=48, VEC=2, FMA=1).body
     with pytest.raises(ValueError, match="FMA_0_or_1"):
