@@ -4,6 +4,8 @@ without a persistent Pearl-C filler on the SMs the step doesn't use.
 
 Arms (``--arm``):
   stock       vLLM as it is: every SM, no filler
+  warmup      the same, run first and left out of the stock baseline (the first arm after the lease runs about 0.5% slow,
+              r20261013-035021-761b); compare_fill.py still gates its tokens
   gc:N        the step on a green context of N SMs (fill.cu's `gc_split`), no filler
   gc:N:fill   the same, and the 128 x 128 fold filler (bench.py's best arm) on the rest through every timed point, launched
               in bounded chunks by fill.cu's native pump (`Fill`)
@@ -157,9 +159,9 @@ def main() -> None:
     batches = [int(x) for x in args.batches.split(",")]
     contexts = [[int(y) for y in x.split("+")] for x in args.contexts.split(",")]
     parts = args.arm.split(":")
-    if parts[0] not in ("stock", "gc") or (parts[0] == "gc" and len(parts) not in (2, 3, 4)) or \
+    if parts[0] not in ("stock", "warmup", "gc") or (parts[0] == "gc" and len(parts) not in (2, 3, 4)) or \
             (len(parts) >= 3 and parts[2] not in ("fill", "rcpt")):
-        ap.error("--arm stock | gc:N | gc:N:fill[:D] | gc:N:rcpt[:D]")
+        ap.error("--arm stock | warmup | gc:N | gc:N:fill[:D] | gc:N:rcpt[:D]")
 
     lib = B.Lib(args.lib)
     sms = torch.cuda.get_device_properties(0).multi_processor_count

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The filler under real serving (cwd = the source tree): builds fill.cu as run.sh does (the SASS and resource gates), then
 # under one gpu-lease 1 --wait --max-min MAXMIN (default 40) one serve_fill.py process per arm in ARMS (default
-# "stock gc:176 gc:176:fill gc:128 gc:128:fill stock"), and compare_fill.py's gates and points. Results go to
+# "warmup stock gc:176 gc:176:fill gc:128 gc:128:fill stock"), and compare_fill.py's gates and points. Results go to
 # $RESEARCH_RUN_DIR/out.
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 64 \
@@ -30,7 +30,7 @@ python3 $FC/sass_gate.py "$O/ptxas.txt" "$B/fill.sass" "$O/res-usage.txt" "$O/sa
 cat "$MODEL"/*.safetensors > /dev/null
 "$PY" -c 'import json, sys; d = json.load(open(sys.argv[1])); print(json.dumps({k: d.get(k) for k in ("model", "vllm", "torch")}))' \
   "$WORK/ready.json" > "$O/ready.json"
-export B PY MODEL FC ARMS=${ARMS:-stock gc:176 gc:176:fill gc:128 gc:128:fill stock} SERVE_ARGS=${SERVE_ARGS:-} ARM_MIN=${ARM_MIN:-8}
+export B PY MODEL FC ARMS=${ARMS:-warmup stock gc:176 gc:176:fill gc:128 gc:128:fill stock} SERVE_ARGS=${SERVE_ARGS:-} ARM_MIN=${ARM_MIN:-8}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-40}" -- bash -c '
   export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*}

@@ -1,6 +1,7 @@
 """serve_fill.py's arms side by side: the gates (every arm ran to its end; its greedy tokens and log-probs bit-identical to
 the first stock arm's; a green arm's `execute_model` on its green stream only; a filled arm's fold or receipts equal to `gemm_pearlc_d`'s) and, per
-point, the step time against the stock arms' (their mean, so the two stock runs bracket drift), the step's HBM ratio
+point, the step time against the stock arms' (their mean, so the two stock runs bracket drift; a `warmup` arm is gated but
+left out), the step's HBM ratio
 (1 / slowdown), the filler's TFLOPS and credited W1/s, and the tensor-core utilization ((the step's FLOPs + the filler's)
 over the E4M3 and BF16 peaks at 2,100 MHz).
 
@@ -34,7 +35,7 @@ def main() -> int:
     ok, rows = True, []
     for a in arms:
         g = {"identical": a["gate"] == ref and len(a["gate"]) == len(ref), "complete": a.get("complete") is True}
-        if a["arm"] != "stock":
+        if a["arm"] not in ("stock", "warmup"):
             g["green_stream_only"] = a.get("streams_seen") == [a.get("step_stream")]
         if "filler" in a:
             chk = a["filler"].get("check", {})
