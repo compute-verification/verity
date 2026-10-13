@@ -308,5 +308,3 @@ theorem topRoot_collision {dom : ByteArray} {bcs bcs' : Array ByteArray}
   exact hne (top_bind hsz cf hroot)
 
 end Flock.SecurityProofs
-
-#print axioms Flock.SecurityProofs.topRoot_collision
