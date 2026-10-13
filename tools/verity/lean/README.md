@@ -186,7 +186,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   guarantees by category. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
   conjectures a property may rest on, each a named assumption: one is a premise when it heads a hypothesis, and a
   property with a hypothesis reaching one lists it under its entry's `rests_on` (it is conditional). An open one names
-  its falsification test `T`, which a suite runs, so a counterexample fails `check`; a falsified one refuses every
+  its falsification test `T`, a pytest node id `PATH::NAME` from the repository's root that a suite runs
+  (`tests/test_lean_packages.py` checks the test exists), so a counterexample fails `check`; a falsified one refuses every
   property resting on it, which stays under `frozen` only as `falsified`. Every package is checked: without a `shape`
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
   is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.

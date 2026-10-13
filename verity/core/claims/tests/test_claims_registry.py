@@ -79,6 +79,6 @@ def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> Non
 def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
     e = get("trusted-nebius-host")
     assert (e.kind, e.standing) == ("assumption", "standard")
-    assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger, the bandwidth audit's "
-                      "challenger) runs its stated code on its Nebius host, and its host never restores an earlier copy "
-                      "of the state the device keeps there")
+    assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware "
+                      "on a machine its host provider runs and the prover doesn't control; it runs its stated code on its "
+                      "Nebius host, and its host never restores an earlier copy of the state the device keeps there")
