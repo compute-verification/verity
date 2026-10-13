@@ -7,7 +7,7 @@ import Proofs.Flock.C3.Sparse.MsgsRead
 Stage `s`'s keys for rep `ρ` are the keys of the messages rep `ρ` sends at stage `s` (`sentK`, at each message's keys
 `keys m`), which are never `.cons` (`sentK_noCons`): no sent message is a consistency sum. So `AlphaRead` and
 `RowColsRead`, which quantify only over `.cons` keys, hold vacuously there (`alphaRead_of_noCons`,
-`RowColsRead.rowColsRead_of_noCons`), and `formsRead_maps` needs only `WCombRead` (`formsRead_sent`).
+`RepMaps.rowColsRead_of_noCons`), and `formsRead_maps` needs only `WCombRead` (`formsRead_sent`).
 
 * `wCombRead_of`: `WCombRead` from the decoder's columns (`WColsAt`: `rep₀` reads each key off input columns of one copy,
   keyed by row bits of ports stage `s` reads, `SelPort`), through `copyVal_maskOf` as in `rowColsRead_of`.
@@ -275,7 +275,7 @@ theorem weaveMsgsRead_of_keys {σ : List Exec.Kind} {c₀ : ℕ} {keys : ℕ →
 /-- The reps' extra claims at `holoAt st hp`, counted at the points zero (`extraClaims_length`: at any points). -/
 def nXOf (st : Flock.Stmt) (hp : HoloParams) : ℕ :=
   (Model.extraClaims ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
-    (holoAt st hp).cls.mPts fun _ _ => (0 : GF128)).length
+    (holoAt st hp).cls.mPts fun _ _ => (0 : FlockLevel3.GF128)).length
 
 /-- **At `repsOfVals` each rep's steps are `unitWeave`'s weave**, along a shape its extra claims' points don't change. -/
 theorem wovenAt_repsOfVals {nm nc : Fin 2 → ℕ}
@@ -291,7 +291,7 @@ theorem wovenAt_repsOfVals {nm nc : Fin 2 → ℕ}
   intro R ω t R₂ τ o hA ρ
   refine ⟨?_, hlen R ω t R₂ τ o hA ρ⟩
   show unitWeave _ _ (Model.extraClaims _ _ _ (stp R ω t (layers zs dg N k Rw R ω t R₂ τ)).pts).length sh _ _ = _
-  rw [extraClaims_length _ _ _ _ fun _ _ => (0 : GF128)]
+  rw [extraClaims_length _ _ _ _ fun _ _ => (0 : FlockLevel3.GF128)]
   rfl
 
 /-- **`TsRead` at `repsOfVals`**, from the reps' fixed lengths, the slices (`MsgsOfKeys`) and the decoder's columns at
