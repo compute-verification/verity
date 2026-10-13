@@ -19,10 +19,11 @@ registered opening (`Model.holoTableCL`, `Recursion.holoInnerAt`). It is a conju
 
 What it takes, against `PublicAudit`:
 
-* the inner protocol `holoInnerAt T CT st hp` in place of `innerAt T CT st`: `holoTableCL` at `holoAt st hp`, the class,
-  regions and schedule of `execClassAt st` with the sparse parameters `hp`, R's registered schedule `fast100`'s at
-  `mReg` and R opened at `STACKED_CLAIMS = 2` claims, the two reps' sparse claims (a constant of the model, which
-  `regPhase` opens, and of the error, `regOpenError`; no parameter the prover picks);
+* the inner protocol `holoInnerAt (holoTys st hp) CT st hp` in place of `innerAt T CT st`: `holoTableCL` at
+  `holoAt st hp`, the class, regions and schedule of `execClassAt st` with the sparse parameters `hp`, R's registered
+  schedule `fast100`'s at `mReg` and R opened at `STACKED_CLAIMS = 2` claims, the two reps' sparse claims (a constant of
+  the model, which `regPhase` opens, and of the error, `regOpenError`; no parameter the prover picks), its messages
+  typed by the stages' shapes (`holoTys`, a function of `st` and `hp`) in place of a palette `T` of the prover's;
 * R's registration, which says which table the audit is about, as `RecursiveAudit`'s `p`, `path₀` and `_hreg` say which
   private circuit: the record `reg`, the verifier of record's `--rec-inner-registration`, which `st`'s META binds by
   its digest (`metaRegistration st`, as the verifier reads it off `--rec-inner-circuit`, the file `st` is set up from),
@@ -202,13 +203,33 @@ noncomputable def regStmt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Typ
     (cap : Cap Refine.Dig) : Reg → L.Ω → HoloReg FlockLevel3.GF128 Refine.Dig :=
   fun _ ω => HoloReg.mk (regWord T CT st hp zs dg N k Rw wmsg σ cap ω) cap
 
+/-- **The inner protocol's message types at candidate 3**, a message's index naming its type: those of the stages'
+shapes at `F = GF128`, `K = GF256` and R's digests, which read `st` and `hp` only through the two Ligerito schedules'
+`ext` and the sparse shape. In order: the level-0 cap, the accept bit, and the openings with their salts; the
+zerocheck's `(round1_ab, round1_c)`, its and the lincheck's pairs, and the lincheck's `Fin 64` vectors; the ring
+switches'; Ligerito's single elements and `K` pairs, and its final messages at the circuit table's schedule and at R's;
+the sparse phase's rounds at degrees `1`, `2ℓ` and `2ℓ + 1`, and its `2^pLog` and `2^tLog` values. -/
+noncomputable def holoTys (st : Flock.Stmt) (hp : HoloParams) : Fin 16 → Type :=
+  ![FlockSoundness.Model.Cap Refine.Dig, Bool,
+    FlockSoundness.Model.Opens FlockLevel3.GF128 Refine.Dig × FlockSoundness.Model.Salts (List UInt8),
+    (Fin 64 → FlockLevel3.GF128) × (Fin 64 → FlockLevel3.GF128), FlockLevel3.GF128 × FlockLevel3.GF128,
+    Fin 64 → FlockLevel3.GF128, Fin 128 → FlockLevel3.GF128, FlockLevel3.GF128,
+    FlockLevel3.GF256 × FlockLevel3.GF256, Fin (2 ^ ((holoAt st hp).sch.ext + 1)) → FlockLevel3.GF128,
+    Fin (2 ^ ((holoAt st hp).rsch.sch.ext + 1)) → FlockLevel3.GF128,
+    FlockLevel3.GF128 × (Fin 1 → FlockLevel3.GF128),
+    FlockLevel3.GF128 × (Fin (2 * (holoAt st hp).cls.shape.ell) → FlockLevel3.GF128),
+    FlockLevel3.GF128 × (Fin (2 * (holoAt st hp).cls.shape.ell + 1) → FlockLevel3.GF128),
+    Fin (2 ^ (holoAt st hp).cls.shape.pLog) → FlockLevel3.GF128,
+    Fin (2 ^ (holoAt st hp).cls.shape.tLog) → FlockLevel3.GF128]
+
 /-- **The recursive audit at candidate 3.**
 
 (i) For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st` and sparse
 parameters `hp`, R's registration (the verifier of record's record `reg`, which `st`'s META binds by its digest, and R's
 cap `cap`, the record's `stacked` entry `_hstk`), the coin server's records of the inner session at each history (`wr`),
 check 5's source at the session record (`coins`) and the inner shape `ish`, and every prover `σ` of the recursive audit
-with candidate 3's compiled table as its inner protocol (`holoInnerAt`), at the law of the registration's draws
+with candidate 3's compiled table as its inner protocol (`holoInnerAt`, its messages of the stages' types `holoTys`),
+at the law of the registration's draws
 (`drawLaw`): V*'s statements `Vs`, one for each of the verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j`
 as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, where each round's commitment and coins go in
 the inner session's records (`im`) and those records' custody `_hIC`, the verifier of record's own inputs (V*'s bindings
@@ -236,7 +257,7 @@ slack, and candidate 3's error.
 At a private inner shape (`ish.holo`), `RecVStar.statements` refuses (`statements_holo`), so no run the verifier accepts
 has a private inner session, and the guarantee says nothing about one until V*'s holo parts land (#1896). -/
 def RecursiveAuditC3 : Prop :=
-  (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
+  (∀ {r : ℕ} (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws
     {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
     -- the verifier's own partition object and program, the inner statement and the sparse phase's parameters
@@ -244,7 +265,7 @@ def RecursiveAuditC3 : Prop :=
     -- the verifier of record's own inputs: R's registration (`--rec-inner-registration`, the record `st`'s META binds),
     -- and the coin server's records of V*'s inner session at each history (`--rec-inner-transcript` and
     -- `--rec-inner-session`)
-    (reg : Lean.Json) (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String)
+    (reg : Lean.Json) (wr : List (Cm × (holoInnerAt (holoTys st hp) CT st hp).Coin) → Lean.Json × String)
     -- check 5's source at the inner session's record (`--rec-inner-coins` with it, or the inner session's files), the
     -- verifier's own
     (coins : String → Option Flock.RecCoins.Source)
@@ -253,12 +274,12 @@ def RecursiveAuditC3 : Prop :=
     -- the verifier of record's inner shape (`--rec-inner`), and V*'s statements over its list, as the prover supplies
     -- their sessions
     (ish : RecVStar.Inner) {Vs : Fin (vstarCount ish) → VStmt}
-    (zr : Reg → (drawLaw draw).Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ →
+    (zr : Reg → (drawLaw draw).Ω → List (Cm × (holoInnerAt (holoTys st hp) CT st hp).Coin) → Reg₂ →
       (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
     -- where each round's commitment and coins go in the inner session's records, and those records' custody
-    (im : FlockSoundness.Assumptions.InnerRecordMap Cm (holoInnerAt T CT st hp).Coin)
+    (im : FlockSoundness.Assumptions.InnerRecordMap Cm (holoInnerAt (holoTys st hp) CT st hp).Coin)
     (_hIC : Flock.Premises.InnerRecordCustody wr (fun w => innerCommitsAt w.1 w.2 st reg) ish.sparse im)
     -- the verifier of record's own inputs: V*'s bindings for each statement and the shared rows
     (bind : Fin (vstarCount ish) → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
@@ -269,14 +290,15 @@ def RecursiveAuditC3 : Prop :=
     (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
-    (σ : Strategy (recGame (drawLaw draw) Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N))
+    (σ : Strategy (recGame (drawLaw draw) Reg (holoInnerAt (holoTys st hp) CT st hp) Cm fun R ω t =>
+      outerVR (zr R ω t) dg N))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
-    (wmsg : ((j : Fin (vstarCount ish)) → (Vs j).Bits) → List (holoInnerAt T CT st hp).Msg)
+    (wmsg : ((j : Fin (vstarCount ish)) → (Vs j).Bits) → List (holoInnerAt (holoTys st hp) CT st hp).Msg)
     (Sk : ℕ → (j : Fin (vstarCount ish)) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv →
       (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin (vstarCount ish)) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
-      (holoInnerAt T CT st hp).Msg)
+      (holoInnerAt (holoTys st hp) CT st hp).Msg)
     -- A3
     (_hA3 : Flock.Premises.UniformRandomBytes Vs)
     -- the count curve, bounding every session's rate
@@ -288,13 +310,15 @@ def RecursiveAuditC3 : Prop :=
     -- before the last, which it does not commit, at the checked sessions and the word the prover's runs open
     (_hbr : ∀ h : Typed zr,
       Flock.Premises.VBridgeC (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg
-        N k Rw (regStmt T CT st hp (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
-          dg N k Rw wmsg (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap)
+        N k Rw (regStmt (holoTys st hp) CT st hp
+          (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
+          (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap)
         wmsg Sk cmt msg),
     prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st (wr o.2.2.1).1 (wr o.2.2.1).2 reg) ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2)
-        (recGame (drawLaw draw) Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
+        (recGame (drawLaw draw) Reg (holoInnerAt (holoTys st hp) CT st hp) Cm fun R ω t =>
+          outerVR (zr R ω t) dg N) σ = 0 ∨
     ∃ h : Typed zr,
       (regFinder (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
@@ -304,24 +328,27 @@ def RecursiveAuditC3 : Prop :=
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) ∨
       InnerForkRec (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)
-        (regStmt T CT st hp (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k
-          Rw wmsg (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap)
-        wmsg Refine.H512 (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)) ∨
+        (regStmt (holoTys st hp) CT st hp
+          (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
+          (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap)
+        wmsg Refine.H512
+        (clashPickHL (holoTys st hp) CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)) ∨
       prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st (wr o.2.2.1).1 (wr o.2.2.1).2 reg) ∧
             VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1)
               o.2.2.2 ∧
-            ¬ (holoInnerAt T CT st hp).holds
-              (regStmt T CT st hp (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
-                dg N k Rw wmsg (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)
-                cap o.1 o.2.1))
-          (recGame (drawLaw draw) Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
+            ¬ (holoInnerAt (holoTys st hp) CT st hp).holds
+              (regStmt (holoTys st hp) CT st hp
+                (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
+                (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap o.1 o.2.1))
+          (recGame (drawLaw draw) Reg (holoInnerAt (holoTys st hp) CT st hp) Cm fun R ω t =>
+            outerVR (zr R ω t) dg N) σ ≤
         expAt (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) (fun ω t s =>
             sumV (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t) dg N
             (fun R₂ j τ =>
               (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t R₂
                 j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
-          ((holoInnerAt T CT st hp).r : ℝ≥0∞) *
+          ((holoInnerAt (holoTys st hp) CT st hp).r : ℝ≥0∞) *
             expAt (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) (fun ω t s =>
               sumV (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t) dg N
               (fun R₂ j τ =>

@@ -241,13 +241,14 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
     (Vs j).Outer Reg'}
   {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
-  {tr : Lean.Json} {record : String} {reg : Lean.Json} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+  {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
+  {dg : ByteArray → ByteArray} {N k Rw : ℕ}
   {src : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) →
     C3Run (holoAt st hp)}
 
 local notation "𝒵" => zs
 local notation "𝓓" => C3Family.honest (xR := xR) ish hss bind hob 𝒵 own sel bc
-  (c3DecOf 𝒵 dg N k Rw src own sel) tr record reg
+  (c3DecOf 𝒵 dg N k Rw src own sel) wr reg
 
 /-- **A fact of the tape and the run, at the fixed decoder**, from that fact of the source's run on its own steps: the
 tape is the source's steps (`tape_c3DecOf`) and the honest family's run their decode, which is the source's run. -/

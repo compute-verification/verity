@@ -4,7 +4,9 @@ import Proofs.Flock.C3.Compose.Discharge
 import Proofs.Flock.C3.Compose.Decoder
 import Proofs.Flock.C3.Compose.SrcClauses
 import Proofs.Flock.C3.Compose.Tied
+import Proofs.Flock.C3.Compose.HoloTys
 import Proofs.Flock.C3.Compose.LastRead
+import Proofs.Flock.C3.Compose.PartRead
 import Proofs.Flock.C3.Compose.Custody
 import Proofs.Flock.C3.Compose.DecodeFix
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
@@ -14,6 +16,7 @@ import Proofs.Flock.C3.Sparse.SrcTie
 import Proofs.Flock.C3.Sparse.SrcLayer
 import Proofs.Flock.C3.Sparse.SessionAt
 import Proofs.Flock.C3.Sparse.SrcEnd
+import Proofs.Flock.C3.Sparse.MsgsRead
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
@@ -36,8 +39,8 @@ import Proofs.Flock.C3.Reps.Frames
 import Proofs.Flock.C3.Reps.AlgL
 import Proofs.Flock.C3.Reps.Maps
 import Proofs.Flock.C3.Reps.OpensRead
-import Proofs.Flock.C3.Reps.SrcOpens
 import Proofs.Flock.C3.Reps.SrcOK
+import Proofs.Flock.C3.Reps.SrcOpens
 import Proofs.Flock.C3.Reps.TsRead
 import Proofs.Flock.C3.Reps.IoCols
 import Proofs.Flock.C3.Opening.Session
@@ -56,6 +59,7 @@ import Proofs.Flock.C3.RegLevels.Kappa
 import Proofs.Flock.C3.RegLevels.StackedReg
 import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
+import Proofs.Flock.C3.RegLevels.ROpens
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces

@@ -42,11 +42,11 @@ def PubRowsChecked (cs : Option Flock.RecVStar.InnerCommits) (sparse : Option Fl
     sts.forM (fun s => Flock.RecVStar.checkPubRows s (some own) cs sparse) = .ok ()
 
 /-- **The verifier checks every accepted session's public rows** against its hold of the inner transcript
-(`innerCommitsAt` at its own `tr`, `record` and `reg`). -/
-def ChecksPubRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (tr : Lean.Json) (record : String)
-    (reg : Lean.Json) : Prop :=
+(`innerCommitsAt` at the records `wr t` written at the history and its own `reg`). -/
+def ChecksPubRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
+    (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json) : Prop :=
   ∀ R ω t R₂ j tr', AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr' →
-    PubRowsChecked (innerCommitsAt tr record st reg).toOption F.ish.sparse (F.zs R ω t R₂ j).I
+    PubRowsChecked (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption F.ish.sparse (F.zs R ω t R₂ j).I
       (F.zs R ω t R₂ j).own tr'
 
 /-- **Each accepted session's reads are `own`'s.** -/
@@ -73,9 +73,9 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
   {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
   {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg}
-  {tr : Lean.Json} {record : String} {reg : Lean.Json}
+  {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
 
-local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec tr record reg
+local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 
 /-- **(n1) The tape at the honest family is its frame**: `decodeRun` takes each stage on a prefix of what is left
 (`decodeRun_split`), so the tape is `holoSteps` of its decode exactly where the cap, the link points and the openings
@@ -91,11 +91,11 @@ theorem hTape_of_frame {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hfr : HFra
 /-- **(n1) The public rows at the honest family, from the verifier's check**, where it reads every row `HPubRows`
 does: the accepted sessions draw and label the units reading a value `fixedRow` knows (`RowsHeld`), each circuit
 names each port once (`PortsNamed`) and V*'s rec-sparse units are at the verifier's shape (`SparseAtShape`). -/
-theorem hPubRows_of_check' (hchk : ChecksPubRows 𝓗 tr record reg) (hdrawn : RowsHeld 𝓗) (hnames : PortsNamed 𝓗)
+theorem hPubRows_of_check' (hchk : ChecksPubRows 𝓗 wr reg) (hdrawn : RowsHeld 𝓗) (hnames : PortsNamed 𝓗)
     (hsp : SparseAtShape 𝓗) : HPubRows 𝓗 := by
   intro R ω t R₂ j ⟨tr', hacc⟩ rg hrg u q x hname hread b hrow
   obtain ⟨cs, w, c, hcs, hc, hb⟩ :=
-    heldRow_some (show heldRow (innerCommitsAt tr record st reg) ish.sparse rg.value x = some b from hrow)
+    heldRow_some (show heldRow (innerCommitsAt (wr t).1 (wr t).2 st reg) ish.sparse rg.value x = some b from hrow)
   have hfix : (RecVStar.fixedRow { reps := #[] } rg.value 0).isSome = true := by
     rw [fixedRow_isSome { reps := #[] } cs rg.value 0 x none ish.sparse]
     simp [hc]
