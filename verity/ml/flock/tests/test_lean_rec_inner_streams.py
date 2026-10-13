@@ -6,8 +6,9 @@ Hello, R's top registered at staging, R's shape in META and each sparse phase's 
 record, which keeps z_partial's round 40 whole), both reps' sparse phases (34 each) and the stacked table R (36), whose root
 is no Hello table's but the top its stream's binding round commits. The reps' coins are checked against the prover's record,
 the sparse streams and R's are the coin server's alone; `session/session.json` is the relay's record, which is refused. The
-verifier holds every stream's `c_k` and tops, and refuses the session with a stream missing or a top another stream
-committed. R has no root at `Commit`, so its salted top is registered at staging (#1798: the entry `stacked` of the
+verifier holds every stream's `c_k` and tops, and refuses the session with a stream missing, a top another stream
+committed, or its table named as a sparse phase's or R's stream (`sparse`, `stacked`). R has no root at `Commit`, so
+its salted top is registered at staging (#1798: the entry `stacked` of the
 statement's `verity/registration/v2` circuit registration, `circuit-registration.json`), whose digest the inner circuit's
 META binds (`circuit-meta.txt`, the staged `circuit.txt`'s header): the verifier takes both (`--rec-inner-circuit`,
 `--rec-inner-registration`) and refuses, each with its `FIREWALL-REFUSED` reason, a record META does not bind, a session
@@ -458,6 +459,34 @@ def test_candidate_3s_session_is_held_to_its_layout(tmp_path, change, why):
     only, and R's binding round commits R's root."""
     rc, line, err = _read(C3, _changed(tmp_path, change))
     assert (rc, line, err) == (1, None, f"rec inner transcript: {why}")
+
+
+def _table(tmp_path: Path, table: str) -> tuple[Path, Path]:
+    """2d61's session with its circuit table named ``table``: the reps' streams, Hello's table and the committed root,
+    in the transcript and the prover's record alike."""
+    t = json.loads((_fixture(C3) / "public.json").read_text().replace('"circuit/rep', f'"{table}/rep'))
+    t["hello"]["tables"], t["link"]["roots"] = [table], {table: t["link"]["roots"]["circuit"]}
+    (tmp_path / "rec").mkdir(parents=True)
+    r = (C3 / "prover" / "session.json").read_text().replace('"circuit/rep', f'"{table}/rep')
+    (tmp_path / "rec" / "session.json").write_text(r)
+    return _write(tmp_path / "transcript.json", t), tmp_path / "rec"
+
+
+@pytest.mark.parametrize("table,streams", [
+    ("sparse", "[sparse/rep0, sparse/rep1, stacked/rep0]"),
+    ("stacked", "[stacked/rep0, stacked/rep1, sparse/rep0, sparse/rep1]"),
+])
+def test_a_table_named_as_candidate_3s_own_streams_is_refused(tmp_path, table, streams):
+    """A table whose reps' streams `<table>/rep<x>` are named as a sparse phase's (`sparse/rep<x>`) or R's
+    (`stacked/rep0`), where `holoMap`'s lookup by name finds the reps first: `innerCommits` takes the table's prefix
+    from a stream named neither way, so it finds no table's reps. The session with its table named otherwise is read,
+    its reps renamed."""
+    rc, line, err = _read(C3, *_table(tmp_path / "other", "other"))
+    assert rc == 0, err
+    assert [s["stream"] for s in line["streams"]][:2] == ["other/rep0", "other/rep1"]
+    rc, line, err = _read(C3, *_table(tmp_path / table, table))
+    why = f"rec inner transcript: its message rounds' streams {streams} hold no table's reps"
+    assert (rc, line, err) == (1, None, why)
 
 
 def test_the_plain_session_is_read_as_before(tmp_path):

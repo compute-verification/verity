@@ -133,8 +133,10 @@ theorem find?_repName (tbl : String) (rs : Array SchedRound) (L : List (HoloStre
       some (.rep i, rs) := by
   rcases i with ⟨_ | _ | n, hn⟩
   · exact List.find?_cons_of_pos (beq_iff_eq.2 rfl)
-  · exact (List.find?_cons_of_neg fun h => repName_ne tbl (beq_iff_eq.1 h)).trans
-      (List.find?_cons_of_pos (beq_iff_eq.2 rfl))
+  · exact (List.find?_cons_of_neg
+      (p := fun e : HoloStream × Array SchedRound => e.1.name tbl == (HoloStream.rep ⟨0 + 1, hn⟩).name tbl)
+      (a := (HoloStream.rep 0, rs)) (l := (HoloStream.rep 1, rs) :: L)
+      fun h => repName_ne tbl (beq_iff_eq.1 h)).trans (List.find?_cons_of_pos (beq_iff_eq.2 rfl))
   · exact absurd hn (by omega)
 
 /-- **Rep `i`'s rounds of coins at the map read, by its stream's name**: `holoSelOne_rep` at `(HoloStream.rep i).name`,
@@ -146,9 +148,5 @@ theorem holoSelOne_repName {ish : RecVStar.Inner} {tbl : String} {rs : Array Sch
     holoSelOne ish tbl (repStart (heldBefore (.rep 0) rs rs.size) i + heldBefore (.rep i) rs q)
       ((HoloStream.rep i).name tbl) q :=
   holoSelOne_rep hS (find?_repName tbl rs L i) hq
-
-#print axioms repName_ne
-#print axioms find?_repName
-#print axioms holoSelOne_repName
 
 end FlockC3.Compose

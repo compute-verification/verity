@@ -307,6 +307,11 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
 
+def _silu_mul_fp8_block_quant(I: int, G: int):
+    from verity_vllm.program.registry import fp8_moe as _fm  # noqa: PLC0415
+    return ir_bind(_fm.SiluMulFp8BlockQuant, I=I, G=G)
+
+
 def _moe_expert_dot(routed, E, K, N, DOT, G, KB, SWAP):
     if G is None and KB is None and SWAP is None:
         return ir_bind(_moe.MoeExpertGemmWV2 if routed else _moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT)
@@ -369,6 +374,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm_dot": lambda E, K, N, DOT, G=None, KB=None, SWAP=None: _moe_expert_dot(False, E, K, N, DOT, G, KB, SWAP),
            "moe_expert_gemm_w_dot": lambda E, K, N, DOT, G=None, KB=None, SWAP=None: _moe_expert_dot(True, E, K, N, DOT, G, KB, SWAP),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),
+           # the one-group sigmoid router (`_moe_C.grouped_topk`, DeepSeek-V3 / GLM `noaux_tc`) and the block-FP8 experts' fused activation
+           # and w2-input quant (`_C.silu_and_mul_per_block_quant`): `rules/vllm_moe_router.py`, `rules/vllm_moe_fp8.py`
+           "moe_router_sigmoid_bias": lambda E, TOPK, RSF, KERNEL: ir_bind(_moe.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL=KERNEL),
+           "silu_mul_fp8_block_quant": lambda I, G: _silu_mul_fp8_block_quant(I, G),
            # [R17-42 route A (3)] the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot
            # outputs selected by the router ids, `MoeSum_v1`); its lift of record is the hand-authored `LMoeFfnL_v1` (unselected slots DISABLED).
@@ -435,6 +444,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm_w_dot": "MoeExpertGemmW_v2{E,K,N,DOT}: MoeExpertGemmW_v1 with the target's k16 step DOT — "
                                     "bf16_rne(f32mul(DotBf16_v2{K,DOT}(x, W[e][n,:]), g))",
            "moe_sum": "MoeSum_v1{TOPK,H}: _moe_C.moe_sum — per token, ascending-k f32 sum of the TOPK weighted expert rows from +0, one bf16 RNE",
+           "moe_router_sigmoid_bias": "MoeRouterSigmoidBias_v1{E,TOPK,SCALE=RSF,KERNEL}: _moe_C.grouped_topk(n_group=1, topk_group=1, renormalize=True, "
+                                      "SIGMOID) per token row of f32 logits with the f32 selection bias -> (weights f32[TOPK], ids i32[TOPK]); "
+                                      "KERNEL the launch (block / warp kernel, registry.moe)",
+           "silu_mul_fp8_block_quant": "SiluMulFp8BlockQuant_v1{I,G}: _C.silu_and_mul_per_block_quant(group_size=G, scale_ub=None, scales not "
+                                       "transposed) per (token, slot) row [gate || up] bf16[2I] -> (q e4m3[I], scale f32[I/G]): f32 SiLU x up, "
+                                       "the group's fmaxf absmax, scale = max(absmax / 448, 1 / (448 * 512)), q = e4m3(clamp(result / scale)) "
+                                       "(registry.fp8_moe)",
            "moe_ffn_fixed": "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}: [R17-42 padded] the whole fused block of one token from its router logits -- "
                             "MoeRouterTopK_v1 -> ALL E MoeExpertBody_v1{H,I} on their own weights (g_e the routed weight of the slot the router "
                             "picked, 0.0f otherwise) -> the TOPK slot outputs selected by the ids -> MoeSum_v1; value-equal to the indexed-read "

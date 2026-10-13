@@ -231,7 +231,7 @@ def test_the_registered_reads_message_round_ports_are_the_statements(tmp_path):
 
 
 @pytest.fixture(scope="module")
-def l16_h1(tmp_path_factory) -> tuple[bytes, Path]:
+def l16_h1(once) -> tuple[bytes, Path]:
     """`rec-open/l16-h1` (V*'s statement 2 at m = 23, its last level, over 142 openings) as `compose` writes it under its
     population program's partition, and the verifier's own bindings of it, from that partition object and program."""
     from verity.ml.circuits.codec import canonical_json, encode_program
@@ -240,15 +240,18 @@ def l16_h1(tmp_path_factory) -> tuple[bytes, Path]:
     from verity_flock import rec_open as R
     from verity_flock import rec_outer as O
 
-    tmp_path = tmp_path_factory.mktemp("l16-h1")
-    defn = R.definition(16, 1)
-    program = P.population_program(defn, 142)
-    part = P.partition(program, P.template_instance_query(defn))
-    honest = FC.compose(O.lowering(16, 1), O.subcircuit(16, 1), partition=P.digest(part),
-                        program=P.program_sha512(program)).encode()
-    (tmp_path / "partition.json").write_text(json.dumps(part))
-    (tmp_path / "program.json").write_bytes(canonical_json(encode_program(program)))
-    return honest, _bindings(tmp_path, tmp_path / "bindings.json")
+    def make(d):
+        defn = R.definition(16, 1)
+        program = P.population_program(defn, 142)
+        part = P.partition(program, P.template_instance_query(defn))
+        (d / "circuit.txt").write_bytes(FC.compose(O.lowering(16, 1), O.subcircuit(16, 1), partition=P.digest(part),
+                                                   program=P.program_sha512(program)).encode())
+        (d / "partition.json").write_text(json.dumps(part))
+        (d / "program.json").write_bytes(canonical_json(encode_program(program)))
+        _bindings(d, d / "bindings.json")
+
+    d = once("vstar-l16-h1", make)
+    return (d / "circuit.txt").read_bytes(), d / "bindings.json"
 
 
 def test_a_v_star_circuit_file_is_the_one_v_star_writes_byte_for_byte(l16_h1, tmp_path):

@@ -245,8 +245,4 @@ theorem claimReadsAt_of_checkOwn {s : VStar.Stmt} {own : Array Registered.Port} 
         exact ⟨k, (congrArg Prod.fst he).symm.trans (claimIndex_some hc),
           (congrArg (fun q : String × String × Array (Option Nat) => q.2.2) he).symm⟩
 
-#print axioms commitRounds_of_check
-#print axioms repsCommitsAt_of_check
-#print axioms sparseCommitsAt_of_check
-
 end Flock.Guarantees.HoloSchedCheck

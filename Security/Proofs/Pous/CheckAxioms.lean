@@ -122,6 +122,8 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms Pous.SecurityProofs.P2SlackFamilyUncond
 #print axioms Pous.SecurityProofs.P2ErrorSplitB19Uncond
 #print axioms Pous.SecurityProofs.P2SlackFamilyFreeBlocks
+#print axioms Pous.SecurityProofs.P2SlackFamilyWide
+#print axioms Pous.SecurityProofs.P2SlackFamilyFreeBlocksWide
 #print axioms PousP2p.not_meets_m1p_b19_k85
 #print axioms PousMargin.not_slack_raw
 -- P2 in the ring cost model (`Security/Definitions/Pous/P2/Cost.lean`): `MeetsOn` at `L = Q` gives `Meets`,

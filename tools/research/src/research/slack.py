@@ -1921,6 +1921,21 @@ def _iso(t: datetime) -> str:
     return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def since_ts(raw: str) -> str:
+    """`--since`: a Slack ts as given, or an ISO time with its zone as one.  Slack answers a date passed as `oldest` with no
+    messages, so a read that took one reported a quiet channel."""
+    if re.fullmatch(r"\d+(\.\d+)?", raw):
+        return raw
+    try:
+        t = datetime.fromisoformat(raw)
+    except ValueError:
+        t = None
+    if t is None or t.tzinfo is None:
+        raise argparse.ArgumentTypeError(f"{raw!r}: give a Slack ts such as 1791876703.181769, or an ISO time with its zone "
+                                         f"such as 2026-10-13T07:05:00Z")
+    return f"{t.timestamp():.6f}"
+
+
 def parse_deadline(raw: str, now: datetime) -> datetime:
     """`3:00 PM` (today, Pacific) or an ISO time with its zone, in UTC."""
     raw = raw.strip()
@@ -2259,8 +2274,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--why", action="store_true", help="print the verdict on stderr")
     p = cmd("read", "a thread, the channel since TS, or (--as) what reached NAME since it last read (or since TS)")
     p.add_argument("--thread", default=None, metavar="TS")
-    p.add_argument("--since", default=None, metavar="TS",
-                   help="the channel since TS; with --thread, its replies since TS; with --as, NAME's doorbells and digest since TS")
+    p.add_argument("--since", default=None, metavar="TS", type=since_ts,
+                   help="the channel since TS (a Slack ts, or an ISO time with its zone); with --thread, its replies since TS; "
+                        "with --as, NAME's doorbells and digest since TS")
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
