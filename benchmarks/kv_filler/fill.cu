@@ -477,39 +477,14 @@ __global__ void __launch_bounds__(W * 32) fill_seq_kernel(const Regions R, Signs
   uint64_t pol;
   asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
   const uint64_t P = R.first_unit[R.n];
-  unsigned long long have = NONE, s = take(gate, seq, role, taken, budget);
-  if (s == NONE) return;
-  // below 16 warps the warp takes its next unit and issues that unit's first loads before it hashes this one, so loads
-  // stay in flight through the hash; at 16 the loads held through the hash would spill (128 registers a thread)
-  constexpr bool PIPE = W < 16;
-  const uint8_t* p = unit_at(R, s % P);
-  uint4 v[DEPTH][4];
-  preload(v, p, pol);
+  unsigned long long have = NONE;
   for (;;) {
+    const unsigned long long s = take(gate, seq, role, taken, budget);
+    if (s == NONE) return;
     const uint64_t U = s % P, pass = s / P;
     acquire_signs(sg, pass, &have);
-    int acc[4][4];
-    sketch_loaded<PROBE>(v, p, sg.words + (pass % SIGN_SLOTS) * SIGN_WORDS, pol, acc);
-    unsigned long long nx = NONE;
-    if (PIPE) {
-      nx = take(gate, seq, role, taken, budget);
-      if (nx != NONE) {
-        p = unit_at(R, nx % P);
-        preload(v, p, pol);
-      }
-    }
-    uint32_t m[16];
-    gather(acc, m);
-    finish(sg, ring, s, P, words_v2<PROBE>(m, U * UNIT_BLOCKS, pass));
-    if (!PIPE) {
-      nx = take(gate, seq, role, taken, budget);
-      if (nx != NONE) {
-        p = unit_at(R, nx % P);
-        preload(v, p, pol);
-      }
-    }
-    if (nx == NONE) return;
-    s = nx;
+    const uint32_t* signs = sg.words + (pass % SIGN_SLOTS) * SIGN_WORDS;
+    finish(sg, ring, s, P, unit_v2<PROBE>(unit_at(R, U), U * UNIT_BLOCKS, pass, signs, pol));
   }
 }
 
