@@ -155,6 +155,3 @@ theorem stageCoins_checked {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {h
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.holoStreams_of_list
-#print axioms FlockC3.Compose.stageCoins_checked
