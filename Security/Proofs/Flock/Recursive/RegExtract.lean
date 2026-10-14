@@ -152,5 +152,3 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
     (Nat.succ_pos r) (innerAtLeavesL_reg T CT hp _hcls zs dg N k Rw σ wmsg cap)
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms FlockSoundness.Discharge.Recursion.zk_sessions_recursive_fork_regV

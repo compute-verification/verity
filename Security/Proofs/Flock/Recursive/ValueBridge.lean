@@ -173,7 +173,3 @@ theorem zk_sessions_recursive_fork_innerLV
 end Chain
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms FlockSoundness.Discharge.Recursion.zk_sessions_recursive_fork_onV
-
-#print axioms FlockSoundness.Discharge.Recursion.zk_sessions_recursive_fork_innerLV

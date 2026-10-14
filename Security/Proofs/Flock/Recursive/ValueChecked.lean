@@ -244,13 +244,3 @@ theorem coins_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU
 end Session
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms FlockSoundness.Discharge.Recursion.value_tie_stacked
-
-#print axioms FlockSoundness.Discharge.Recursion.value_tie_opening
-
-#print axioms FlockSoundness.Discharge.Recursion.value_tie_open
-
-#print axioms FlockSoundness.Discharge.Recursion.value_tie_residuals
-
-#print axioms FlockSoundness.Discharge.Recursion.value_tie_sparse
