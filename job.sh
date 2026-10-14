@@ -3,9 +3,9 @@ set -euo pipefail
 
 if [[ "${K2_TARGET:-}" == 1 ]]; then
   cd Security/Proofs
-  lake env lean Proofs/Flock/Recursive/ValueInner.lean
-  lake env lean Proofs/Flock/C3/Sparse/SessionZero.lean
-  lake env lean Proofs/Flock/Recursive/HPortTie.lean
+  lake env lean ../Proofs/Flock/Recursive/ValueInner.lean
+  lake env lean ../Proofs/Flock/C3/Sparse/SessionZero.lean
+  lake env lean ../Proofs/Flock/Recursive/HPortTie.lean
   exit
 fi
 
