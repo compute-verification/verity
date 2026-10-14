@@ -137,7 +137,7 @@ theorem own_v_out {own : Array Flock.Registered.Port}
     {m k cl i : ℕ} (hres : Flock.RecResiduals.params sj.c.unit.name = some (m, k, cl, i)) :
     (∃ pt ∈ own, pt.name = "v") ∧ ∃ pt ∈ own, pt.name = "out" := by
   obtain ⟨inn, -, hck'⟩ := residualsCheck_of_check hck hso hop hsp ho hres
-  obtain ⟨-, -, -, hcv, hz⟩ := residualsBoth_of_check hck'
+  obtain ⟨_, _, _, hcv, hz⟩ := residualsBoth_of_check hck'
   exact ⟨FlockC3.RegLevels.own_of_checkValue hcv, FlockC3.RegLevels.own_of_checkRows hz⟩
 
 end FlockSoundness.Discharge.Recursion
