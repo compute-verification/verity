@@ -90,11 +90,10 @@ recurs: note:<id>      # optional: the earlier note about the same thing
 What happened, with ids (run, PR, commit), and what it cost. What you did instead. The better abstraction, if you see one.
 ~~~
 
-Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A Project worker without the notes clone
-writes it under the Project store's `internal/lanes/<lane>/`, which the mirror forwards. The notes are public: nothing
-private (lane contract §5b).
+Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A worker that can't push the notes puts
+the note in its report, and its coordinator saves it. The notes are public: nothing private (lane contract §5b).
 
-**The coordinator's pass.** The root coordinator reads new friction notes once a day in its existing loop
+**The admin's pass.** The admin (`@top`) reads new friction notes once a day in its existing loop
 (`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to its owner.
 Only a repeat whose fix needs money, keys or a claim becomes a question for Daniel.
 
@@ -102,9 +101,23 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-13 (11:01 PM PDT, cards 2e0ff59b and 54bd993d): a guarantee's checked family may fold in a check the compiled
+  verifier already runs, and a new fail-closed refusal modelled the same way: the statement moves toward what the
+  verifier refuses, and the landing DM shows the moved records. The same night: a free statement parameter whose
+  adversarial values break a proof is closed by a side condition decidable at any literal instantiation, discharged by
+  computation at use (never a listed assumption), keeping the general form.
+- 2026-10-13 (about 2:24 PM PDT, relayed by top): no Cursor Projects, and no agent state kept only in a Cursor store.
+  Each coordinator is a plain Cursor cloud agent that owns a vertical slice and runs its own subagents; coordinators
+  talk to each other through Slack and Linear; one admin agent holds `@top` in place of the Project's top-level agent;
+  and a successor takes over each lead: the handle stays, and its holder changes.
 - 2026-10-13 (2:22 PM PDT): leads decide open questions themselves, spend included; Daniel's explicit rulings stand until
   he reverses them. Of 8 Oct's "money, keys and claims", spend is now its lead's own call (pods still bound themselves
   under a `budgets.toml` line, and a budget line named in a standing ruling stands); keys and claims still go to Daniel.
+- 2026-10-13 (1:33 PM PDT, relayed by top): the recursive audit (`Flock.Guarantees.RecursiveAuditC3`) may rest on the
+  model claim `registrant-holds-openings` (`verity/core/claims`): the prover holds a row and a salt under every leaf it
+  registered, R's level-0 staging salts included. Those salts are held by the prover's own workers behind the firewall.
+  In Lean the guarantee takes `salt` as a binder and is applied at the salts those workers committed under, never at
+  `∃ salt` or a `Classical.choose` of one, and every docstring that reads it cites the claim (lean's review).
 - 2026-10-13 (10:42 AM PDT): an agent closes an old PR without asking when every commit on it is already in another open
   PR ("close old PRs idgaf do that").
 - 2026-10-12 (4:08 PM PDT, to top): Daniel took every recommendation then open in top's walkthrough of his decisions,
