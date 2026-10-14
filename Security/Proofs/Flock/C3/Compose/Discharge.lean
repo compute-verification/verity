@@ -187,3 +187,8 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
   exact hcap
 
 end FlockC3.Compose
+
+#print axioms FlockSoundness.Discharge.Recursion.ZkOuter.prob_unwritten
+#print axioms FlockC3.PubRows.rowsHeld
+#print axioms FlockC3.PubRows.hPubRows_of_checked
+#print axioms FlockC3.Compose.hbr_honest_reg
