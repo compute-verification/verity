@@ -1,6 +1,7 @@
 import Proofs.Flock.C3.Compose.Decoder
 import Proofs.Flock.C3.Compose.HoloStageCoins
 import Proofs.Flock.C3.Compose.HoloSparseWords
+import Proofs.Flock.C3.Compose.HoloStreamSizes
 import Proofs.Flock.C3.Reps.DrawnRounds
 import Proofs.Flock.C3.Reps.WithReads
 
@@ -14,7 +15,8 @@ one-round draws (`holoMapOne`), where the map's coins are the history's (`coinsE
 all of `holoMap`'s (a sparse phase's round of `n > 1` coins); custody at `holoMap` holds there (`custody_holoMapOne`).
 `RepsDrawn` there is `repsDrawn_checked`'s, at the reads' rounds, the record's by definition (`withReads_roundsHeld`),
 and at the class's rep forms (`repFormsAt_holoAt`), from the inner shape check the event carries (`AcceptsC3`) and the
-claims tie that V*'s list refuses without (`claims_of_statements`).
+claims tie that V*'s list refuses without (`shape_of_statements`); the session's streams exist wherever V*'s list
+builds at a RecSparse shape (`holoStreams_of_list`).
 -/
 
 namespace FlockC3.Compose
@@ -28,10 +30,11 @@ open FlockC3.Reps (repsOfVals UnitVals ProofOfVals SetupOfVals FramesOfVals SrcR
 open FlockSoundness.Assumptions (InnerRecordCustody)
 open Flock.Guarantees (holoCTs holoMap)
 
-/-- **The claims tie is the verifier's**: V*'s list refuses an inner shape whose claims are not two and two per
-region (`RecVStar.statements`). -/
-theorem claims_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
-    i.claims = 2 + 2 * i.regions := by
+/-- **V*'s shape and the claims tie are the verifier's**: V*'s list refuses an inner shape off V*'s
+(`RecResiduals.shape?`: a `fast100` schedule, `k_log ≥ 6`, two claims or more) and one whose claims are not two and
+two per region (`RecVStar.statements`). -/
+theorem shape_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
+    (∃ sh, RecResiduals.shape? i.m i.kLog i.claims = some sh) ∧ i.claims = 2 + 2 * i.regions := by
   unfold RecVStar.statements at h
   dsimp only at h
   split at h
@@ -39,10 +42,54 @@ theorem claims_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : R
   split at h
   rotate_left
   · cases h
+  rename_i sh hsh
   split at h
   · cases h
   rename_i hc
-  simpa using hc
+  exact ⟨⟨sh, hsh⟩, by simpa using hc⟩
+
+/-- **`z_partial`'s round of a rep's head** (`zpRound`) is a message round of one coin, whatever follows the head. -/
+theorem repHead_zp {m kLog claims : ℕ} (hm : 5 ≤ m) (hk : 6 ≤ kLog) (T : Array RecVStar.SchedRound) :
+    (repHead m kLog claims ++ T)[Flock.Guarantees.zpRound m kLog]? = some (1, #[], 0, true) := by
+  have e : ∀ j, j = 0 → (#[(1, #[], 0, true)] : Array RecVStar.SchedRound)[j]? = some (1, #[], 0, true) := by
+    rintro _ rfl
+    rfl
+  unfold repHead Flock.Guarantees.zpRound
+  rw [Array.getElem?_append_left ?_, Array.getElem?_append_left ?_, Array.getElem?_append_left ?_,
+    Array.getElem?_append_right ?_, e]
+  all_goals
+    simp only [Array.size_append, Array.size_replicate, List.size_toArray, List.length_cons, List.length_nil]
+    omega
+
+/-- **The session's streams exist** wherever V*'s list builds at a RecSparse shape: the inner shape is at a
+`fast100` schedule with `k_log ≥ 6` (`shape_of_statements`), so `repRounds` passes at every `k_log` and claims
+(`repRounds_tail`, by evaluating it at each `m` below 36), its head has `z_partial`'s round where `holoRounds` reads it
+(`repHead_zp`), and R's shape is `⟨tableM sp, 2⟩` (`stacked_of_candidate3`) at a `fast100` schedule (`stacked_of_list`),
+where R's rounds pass (by evaluation). -/
+theorem holoStreams_of_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (hss : RecVStar.statements i = .ok ss)
+    (hsp : i.sparse.isSome = true) :
+    ∃ Ls, Flock.Guarantees.holoStreams i.m i.kLog i.claims i.sparse i.stacked = some Ls := by
+  obtain ⟨⟨_, hsh⟩, -⟩ := shape_of_statements hss
+  obtain ⟨hf, -, -, -, hk, -⟩ := FlockVBridge.Family.shape?_eq hsh
+  obtain ⟨sp, hsp⟩ := Option.isSome_iff_exists.1 hsp
+  obtain ⟨_, _, _, -, hC, -, -⟩ := FlockC3.VStarList.statements_ok hss
+  have hst := FlockC3.VStarList.stacked_of_candidate3 hC hsp
+  obtain ⟨sch, hf', -⟩ := FlockC3.VStarList.stacked_of_list hss hst
+  replace hf' : fast100 (RecVStar.tableM sp) = some sch := hf'
+  have key : ∀ m < 36, (fast100 m).isSome → (RecVStar.repRounds m 6 1).isSome ∧
+      (RecVStar.stackedRounds ⟨m, RecVStar.STACKED_CLAIMS⟩).isSome := by
+    decide +kernel
+  obtain ⟨hm, hm'⟩ := FlockVBridge.Family.fast100_range hf
+  obtain ⟨-, hm''⟩ := FlockVBridge.Family.fast100_range hf'
+  obtain ⟨_, hout⟩ := Option.isSome_iff_exists.1 (key i.m (by omega) (Option.isSome_iff_exists.2 ⟨_, hf⟩)).1
+  obtain ⟨T, -, hall⟩ := repRounds_tail hout
+  obtain ⟨rs, hrs⟩ := Option.isSome_iff_exists.1
+    (key (RecVStar.tableM sp) (by omega) (Option.isSome_iff_exists.2 ⟨_, hf'⟩)).2
+  refine Option.isSome_iff_exists.1 ?_
+  unfold Flock.Guarantees.holoStreams Flock.Guarantees.holoRounds
+  simp only [hall, hsp, hst, Option.bind_eq_bind, Option.bind_some, repHead_zp (by omega) hk T, hrs,
+    bne_self_eq_false]
+  rfl
 
 /-- **`holoMap` at its one-round draws**: its records and coins, drawing a stream round only where it takes one history
 round (`holoSelOne`). -/
@@ -87,11 +134,9 @@ the statement's (`hi`, `AcceptsC3`'s), and the link points' and the later stages
 theorem stageCoins_checked {ss : Array VStar.Stmt} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
     {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
-    {bc : Cm → String → ℕ → List UInt8} {cap₀ : Cap Dig}
-    {Ls : List (Flock.Guarantees.HoloStream × Array RecVStar.SchedRound)} (hS₀ : 0 < S)
+    {bc : Cm → String → ℕ → List UInt8} {cap₀ : Cap Dig} (hS₀ : 0 < S)
     (hss : RecVStar.statements ish = .ok ss) (hcls : ClassOk (shapeOf st))
     (hi : (RecVStar.checkInnerStmt ish st).isOk = true)
-    (hS : Flock.Guarantees.holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some Ls)
     (halg : AlgebraDecodes (I := ℐ) 𝒵 dg N k Rw sh 𝓡) (hacc : AccChains (I := ℐ) 𝒵 dg N k Rw sh 𝓡)
     (hpr : ProofOfVals 𝒵 dg N k Rw sh 𝓡 vals)
     (hsv : SetupOfVals 𝒵 dg N k Rw (tiedSrc (repsOfVals stp sh 𝓡 vals)) sh 𝓡 vals)
@@ -108,8 +153,9 @@ theorem stageCoins_checked {ss : Array VStar.Stmt} {dg : ByteArray → ByteArray
       LaterCoins (CT := holoCTs st hp) (t.map Prod.snd) u) :
     AtSrc 𝒵 dg N k Rw (tiedSrc (repsOfVals stp sh 𝓡 vals)) fun t u =>
       StageCoins (CT := holoCTs st hp) (t.map Prod.snd) u := by
-  have htie := claims_of_statements hss
+  have htie := (shape_of_statements hss).2
   obtain ⟨⟨⟩, hi'⟩ := FlockC3.VStarList.ok_of_isOk hi
+  obtain ⟨_, hS⟩ := holoStreams_of_list hss (FlockC3.VStarList.checkInnerStmt_ok hi').1
   exact stageCoins_holo (m := holoMapOne st hp Cm ish tbl bc) (hLeafC3_checked hS₀ dg N k Rw) halg hacc hpr hsv hf
     (custody_holoMapOne hcus) M.withReads_roundsHeld coinsEncoded_holoMap
     (FlockC3.Reps.repsDrawn_checked hS₀ hS (by omega) (repFormsAt_holoAt hcls hi' (by omega)) halg hacc hpr hsv hf
@@ -119,6 +165,6 @@ end
 
 end FlockC3.Compose
 
-#print axioms FlockC3.Compose.claims_of_statements
+#print axioms FlockC3.Compose.holoStreams_of_list
 #print axioms FlockC3.Compose.custody_holoMapOne
 #print axioms FlockC3.Compose.stageCoins_checked
