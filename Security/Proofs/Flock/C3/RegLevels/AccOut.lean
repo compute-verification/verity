@@ -104,7 +104,3 @@ theorem accOutL_of_keysS (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (
 end family
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.outRead_drawn
-
-#print axioms FlockC3.RegLevels.accOutL_of_keysS

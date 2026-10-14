@@ -228,6 +228,3 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   exact recursiveAuditC3At Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
 end Flock.SecurityProofs
-
-#print axioms Flock.SecurityProofs.recursiveAuditC3At
-#print axioms Flock.SecurityProofs.RecursiveAuditC3
