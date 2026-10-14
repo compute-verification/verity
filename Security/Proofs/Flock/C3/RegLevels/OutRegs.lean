@@ -295,3 +295,9 @@ theorem accOut_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : L
   simp
 
 end FlockC3.RegLevels
+
+#print axioms FlockC3.RegLevels.regOuts_of_laid
+
+#print axioms FlockC3.RegLevels.haout_of_laid
+
+#print axioms FlockC3.RegLevels.accOutRegs_of_check

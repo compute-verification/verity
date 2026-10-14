@@ -281,3 +281,11 @@ theorem prob_regOrTop_le
     (prob_regColl_le zs dg N σ hX) (prob_topColl_le wr st reg bcs' lv cap salt hstk zs σ hT))
 
 end FlockSoundness.Discharge.Recursion
+
+#print axioms FlockSoundness.Discharge.Recursion.topOf_held
+
+#print axioms FlockSoundness.Discharge.Recursion.prob_topCollAt_le
+
+#print axioms FlockSoundness.Discharge.Recursion.prob_topColl_le
+
+#print axioms FlockSoundness.Discharge.Recursion.topFinder
