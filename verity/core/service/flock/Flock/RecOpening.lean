@@ -189,16 +189,19 @@ def part (sh : Shape) (j : Nat) : Except String (RecOpen.GfS × List Nat × Nat)
   let some (R, P, V) := gs[j]? | throw s!"part {j} of {gs.size}"
   pure (← RecResiduals.partS S sizes R P V, P.toList.map (sizes[·]!), V.size)
 
-/-- A unit named `rec-opening/…` is the verifier's part at the `m`, claims and part its name gives, equal in every field;
-any other unit passes. The claims are bounded by the file's unit before the structure is computed, and the part's input
-and output bits are compared before its net is built. Irreducible, so that no unification against it builds the net. -/
+/-- A unit named `rec-opening/…` is the verifier's part at the `m`, claims and part its name gives, equal in every
+field, at one unit per VU (each part is one copy of its unit); any other unit passes. The claims are bounded by the
+file's unit before the structure is computed, and the part's input and output bits are compared before its net is
+built. Irreducible, so that no unification against it builds the net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some (m, cl, j) =>
     match shape? m cl with
     | none => throw s!"circuit {c.name}: rec-opening's m has a fast100 schedule, claims at least 1"
     | some sh =>
-      if cl > RecOpen.inBits c.unit then
+      if c.upv != 1 then
+        throw s!"circuit {c.name}: unit {c.unit.name} has {c.upv} units per VU, not 1"
+      else if cl > RecOpen.inBits c.unit then
         throw s!"circuit {c.name}: unit {c.unit.name}'s claims exceed its {RecOpen.inBits c.unit} input bits"
       else match part sh j with
         | .error e => throw s!"circuit {c.name}: unit {c.unit.name}: {e}"
@@ -217,10 +220,11 @@ and output bits are compared before its net is built. Irreducible, so that no un
       throw s!"circuit {c.name}: unit {c.unit.name} is not rec-opening/m<m>-c<claims>-p<j>"
     else pure ()
 
-/-- `check` reads a circuit's name and unit only. -/
-theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) : check c = check c' := by
+/-- `check` reads a circuit's name, unit and units per VU only. -/
+theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) (hv : c.upv = c'.upv := by rfl) :
+    check c = check c' := by
   unfold check
-  rw [hn, hu]
+  rw [hn, hu, hv]
 
 end RecOpening
 end Flock

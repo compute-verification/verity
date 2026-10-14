@@ -9,7 +9,8 @@ expert-indexed pair forms (`fp8_moe_experts` `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,
 * their Boolean versions (`boolean_fp8_moe`: `_v4` of the `_v3` forms, `_v2` of the pair forms and gathers) agree with their word
   views, routed ids in range and out of it, and the switch maps each word view to them;
 * cc 12.0 binds them with `BlackwellE4m3QmmaDot32_v1`, the step blackwell_consumer records from the cc 12.0 fused-MoE capture
-  (property blackwell_fp8_capture) in its own field, and the targets that record no e4m3 step there refuse by name.
+  (property blackwell_fp8_capture) in its own field, cc 9.0 with `HopperE4m3QgmmaDot32_v1` (the `_v1` forms' step), and the targets
+  that record no e4m3 step there refuse by name.
 """
 from __future__ import annotations
 
@@ -211,7 +212,8 @@ def test_blackwell_consumer_records_the_moe_step_with_its_own_measurement() -> N
     for needle in ("blackwell_fp8_capture", "r20261003-220018-3f6a", "0d346c79c642a0a1", "moe/decode", "moe/small", "moe/block",
                    "moe/prefill", "11,791,360 words", "MoeExpertFp8BlockGemm(W)_v3{G=64,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v1}"):
         assert needle in ev, needle
-    assert all(GT.REGISTERED[k].fp8_moe_dot is None for k in GT.REGISTERED if k != "blackwell_consumer")
+    assert GT.REGISTERED["hopper"].fp8_moe_dot == GT.REGISTERED["hopper"].fp8_block_dot == "HopperE4m3QgmmaDot32"
+    assert all(GT.REGISTERED[k].fp8_moe_dot is None for k in GT.REGISTERED if k not in ("blackwell_consumer", "hopper"))
 
 
 def test_the_moe_step_is_keyed_on_its_own_field(monkeypatch) -> None:
@@ -224,13 +226,16 @@ def test_the_moe_step_is_keyed_on_its_own_field(monkeypatch) -> None:
         T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 4096, 384, 64, 32, False, routed=False)
 
 
-def test_cc12_binds_the_sm120_step_and_the_others_refuse() -> None:
+def test_cc12_binds_the_sm120_step_cc9_the_v1_forms_step_and_the_others_refuse() -> None:
     assert T.moe_expert_fp8_dot(_tp((12, 0))) is BW
     assert T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 4096, 384, 64, 32, False, routed=False).id == \
         "MoeExpertFp8Gemm_v1{E=128,K=4096,N=384,G=64,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v1}"
     assert T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 192, 4096, 64, 32, False, routed=True).id == \
         "MoeExpertFp8GemmW_v1{E=128,K=192,N=4096,G=64,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v1}"
-    for cc in ((8, 0), (8, 9), (9, 0)):
+    assert T.moe_expert_fp8_dot(_tp((9, 0))) is HP
+    assert T.moe_expert_fp8_gemm_spec(_tp((9, 0)), 256, 6144, 512, 128, 128, True, routed=False).id == \
+        "MoeExpertFp8Gemm_v1{E=256,K=6144,N=512,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}"
+    for cc in ((8, 0), (8, 9)):
         with pytest.raises(T.UnregisteredTarget, match="no registered e4m3 step"):
             T.moe_expert_fp8_gemm_spec(_tp(cc), 128, 4096, 384, 64, 32, False, routed=False)
     with pytest.raises(T.UnregisteredTarget):

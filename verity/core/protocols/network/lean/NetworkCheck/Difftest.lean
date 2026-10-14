@@ -18,7 +18,8 @@ with `null` where Python raises `ValueError`:
   `opens`, `open_frame` of `frames` at each k; `verifies`, each query's `verify_frame`;
 * `manifest`, the canonical JSON `parameters_digest` hashes, and `parameters`, the digest;
 * `record_head`, the encoding and digest of `record_head` of the grid under that digest; `heads`, each given head's;
-* `messages`, each `certificate_message`; `nodes`, each `node`.
+* `messages`, each `certificate_message`, sessions of 31 and 33 bytes among them, which both refuse; `nodes`, each
+  `node`.
 -/
 
 namespace NetworkCheck.Difftest
@@ -87,8 +88,9 @@ def evaluate (j : Json) : Except String Json := do
     pure (← bytesOf root, ← k.getInt?, ← bytesOf frame, ← (← arrOf path).mapM bytesOf)
   let heads ← (← arrOf (← j.getObjVal? "heads")).mapM headOf
   let messages ← (← arrOf (← j.getObjVal? "messages")).mapM fun m => do
-    let #[i, l, d, w, g] ← arrOf m | throw s!"not [key_id, link, direction, window, digest]: {m.compress}"
-    pure (← bytesOf i, ← l.getStr?, ← Direction.ofValue (← d.getStr?), ← w.getInt?, ← bytesOf g)
+    let #[i, s, l, d, w, g] ← arrOf m
+      | throw s!"not [key_id, session, link, direction, window, digest]: {m.compress}"
+    pure (← bytesOf i, ← bytesOf s, ← l.getStr?, ← Direction.ofValue (← d.getStr?), ← w.getInt?, ← bytesOf g)
   let nodes ← (← arrOf (← j.getObjVal? "nodes")).mapM fun n => do
     let #[a, b] ← arrOf n | throw s!"not [left, right]: {n.compress}"
     pure (← bytesOf a, ← bytesOf b)
@@ -105,7 +107,7 @@ def evaluate (j : Json) : Except String Json := do
     ("parameters", orNull hexJson parameters),
     ("record_head", headJson do recordHead link direction window grid status p (← parameters) deadline),
     ("heads", .arr (heads.map (headJson ∘ pure))),
-    ("messages", .arr (messages.map fun (i, l, d, w, g) => orNull hexJson (certificateMessage i l d w g))),
+    ("messages", .arr (messages.map fun (i, s, l, d, w, g) => orNull hexJson (certificateMessage i s l d w g))),
     ("nodes", .arr (nodes.map fun (a, b) => hexJson (node a b)))]
 
 /-- The results' fields, in the order they are compared. -/

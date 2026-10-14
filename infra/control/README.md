@@ -24,12 +24,15 @@ editing on the pod.
 | Budget guard (`research pods guard --supervise`) | `post_start.sh` | `/data/guard-src` (a `main` tree; its `COMMIT` file names it) | `/root/.research/pods/guard-budgets.log` |
 | Resource steward (`research notes watch ... --lease --standby`) | `steward-run.sh`, deployed as `/data/steward/run.sh` | `/data/steward/verity` (a clone of this repo) | `/data/steward/watch.log` |
 | `/tmp` sweep, hourly | `tmp_sweep.sh`, deployed as `/data/infra/tmp_sweep.sh` | the script | `/data/infra/tmp-sweep.log` |
-| Store index, every 5 min (`research data index --postgres` into Neon's `store_private`) | `store_index.sh`, deployed as `/data/infra/store_index.sh` | `/data/infra/store-index-src` (a `tools/research` tree; its `COMMIT` file names it) | `/data/infra/store-index.log` |
+| Store index, every 5 min (`research data index --postgres` into Neon's `store_private`, and `--public` into `store_public` once `store-export.env` exists) | `store_index.sh`, deployed as `/data/infra/store_index.sh` | `/data/infra/store-index-src` (a `tools/research` tree; its `COMMIT` file names it) | `/data/infra/store-index.log` |
+| Fixture export, every 5 min (`research data export` of main's `fixtures/artifacts.json` to the public export, so nobody exports a new fixture by hand; the relay's `fixtures-public` monitor alerts on one still missing) | `fixtures_export.sh`, deployed as `/data/infra/fixtures_export.sh` | `/data/infra/fixtures-export-repo` (a checkout of origin/main it fetches each pass with the deploy key) | `/data/infra/fixtures-export.log` |
 | Store panels, every 10 min | `/data/console/console-loop.sh` (`tools/research/console/`) | `/data/console` | `/data/console/console.log` |
 
 The pod holds no Slack credential, so its disk alert runs elsewhere: `control_disk_alert.py` runs on infra's VM (tmux
 `control-disk-alert`), reads `df` on the pod every 5 minutes over ssh, and posts in #agent-alerts at 90% and 95%, again under
-85%, and when the pod has been unreadable for 30 minutes. It stops when that VM is suspended.
+85%, and when the pod has been unreadable for 30 minutes. The same pass alerts when the steward's notes sync stalls (HEAD
+detached, an `index.lock` older than 10 minutes, or a change unpushed for an hour, on two reads in a row) and notes when it
+flows again. It stops when that VM is suspended.
 
 The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin with the
 read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.
@@ -41,7 +44,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/boot` | `/post_start.sh` | `post_start.sh` |
 | `/data/state/root-research` | `/root/.research` | the guard's and the steward's state |
 | `/data/state/runpod` | `/root/.runpod` | the RunPod CLI config and its ssh key |
-| `/data/state/config-verity` | `/root/.config/verity` | `r2.env` (R2 credentials), `store-index.env` (`STORE_INDEXER_DATABASE_URL`) and `panels.key` |
+| `/data/state/config-verity` | `/root/.config/verity` | `r2.env` (R2 credentials), `store-index.env` (`STORE_INDEXER_DATABASE_URL`), `store-export.env` (`RESEARCH_EXPORT_BUCKET` and the export bucket's read-only `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY`, optionally `RESEARCH_EXPORT_ENDPOINT`) and `panels.key` |
 | `/data/state/secrets` | | `notes-git-credentials`, `verity-deploy` (read-only deploy key), `panels-key-push`, `known_hosts` |
 | `/data/uv` | `/root/.local/bin/uv`, `/root/.local/share/uv/python`, `/usr/local/bin/python3.12` | uv and CPython 3.12 |
 | `/data/steward` | `/workspace/steward` | the verity clone, the research-notes clone, the steward's store, `run.sh`, `render-src` |
@@ -63,6 +66,7 @@ CP="research pods ssh nv7h6w1pairkcu --"
 $CP "cat > /data/boot/post_start.sh" < infra/control/post_start.sh
 $CP "cat > /data/steward/run.sh" < infra/control/steward-run.sh
 $CP "cat > /data/infra/store_index.sh && chmod +x /data/infra/store_index.sh" < infra/control/store_index.sh
+$CP "cat > /data/infra/fixtures_export.sh && chmod +x /data/infra/fixtures_export.sh" < infra/control/fixtures_export.sh
 git archive HEAD tools/research | $CP "rm -rf /data/infra/store-index-src.new && mkdir /data/infra/store-index-src.new && tar -x --strip-components=2 -C /data/infra/store-index-src.new && echo $(git rev-parse HEAD) > /data/infra/store-index-src.new/COMMIT && rm -rf /data/infra/store-index-src && mv /data/infra/store-index-src.new /data/infra/store-index-src"
 ~~~
 

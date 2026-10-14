@@ -12,7 +12,8 @@ judgement; `audit.py` holds the policy.
   imported module, the roots' dependencies' included; `graph`: each one's `.olean` file and what it imports.
 - `declarations`: how many constants of each kind those modules declare.
 - `axioms`: every axiom any of them uses, found by walking the bodies; `offenders`: each one that uses an axiom outside
-  `allowed`.
+  `allowed`; `unreported_errors`: each one holding a `sorry` the elaborator made for an error (`sorryAx α true`) where
+  a module built, so the error was never reported.
 - `declared_axioms`: the `axiom` declarations among them.
 - `escapes`: the `opaque` ones (a `partial def` is one), and the `unsafe`, `@[implemented_by]` and `@[extern]` ones:
   compiled code with no definition a proof can unfold. The attributes are read from the modules' data.
@@ -30,6 +31,8 @@ judgement; `audit.py` holds the policy.
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
+- `spans`: for each module under the roots, the first and last source line of each declaration range it holds, so that
+  `audit.py` can find a declaration in the source that the module does not hold.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
@@ -201,6 +204,15 @@ def uses : ConstantInfo → Array Name
   | .ctorInfo v => v.type.getUsedConstants
   | .recInfo v => v.type.getUsedConstants
   | .quotInfo _ => #[]
+
+/-- A `sorry` the elaborator made for an error (`sorryAx α true`), as opposed to a written one (`sorryAx α false`). -/
+def syntheticSorry (e : Expr) : Bool :=
+  (e.find? fun s => s.isAppOf ``sorryAx && s.getAppNumArgs ≥ 2 && s.getArg! 1 == mkConst ``Bool.true).isSome
+
+/-- Whether `ci`'s type or value holds a `syntheticSorry`. -/
+def unreported : ConstantInfo → Bool
+  | .defnInfo v | .thmInfo v | .opaqueInfo v => syntheticSorry v.type || syntheticSorry v.value
+  | ci => syntheticSorry ci.type
 
 /-- What a statement means through a constant: its type, a definition's value, an inductive type's constructors.
 Theorems contribute nothing (a proof is irrelevant to what a statement says). -/
@@ -475,6 +487,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let mnames := env.header.moduleNames
   let mut modules := #[]
   let mut imports := #[]
+  let mut spans := #[]
   let mut audited := #[]
   let mut ranges : Std.HashMap Name DeclarationRanges := {}
   for h : i in [0:mnames.size] do
@@ -486,12 +499,15 @@ unsafe def main (args : List String) : IO UInt32 := do
     if !under roots m then continue
     modules := modules.push (toJson m.toString)
     imports := imports.push (m.toString, toJson (data.imports.map (·.module.toString)))
+    spans := spans.push (m.toString, toJson ((entriesOf DeclarationRanges data declRangeExt.name).map fun (_, r) =>
+      #[r.range.pos.line, r.range.endPos.line]))
     audited := audited.push (m, data)
   let decls := audited.foldl (fun acc (_, data) => acc ++ data.constNames) #[]
   let axioms := axiomsOf env (decls ++ pins)
   let mut counts : Std.HashMap String Nat := {}
   let mut used : NameSet := {}
   let mut offenders := #[]
+  let mut unreportedErrors := #[]
   let mut declared := #[]
   let mut escapes := #[]
   let mut specDefs := #[]
@@ -518,6 +534,8 @@ unsafe def main (args : List String) : IO UInt32 := do
       if !bad.isEmpty then
         offenders := offenders.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString),
           ("axioms", toJson (bad.qsort Name.lt |>.map toString))]
+      if (uses ci).contains ``sorryAx && unreported ci then
+        unreportedErrors := unreportedErrors.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString)]
       let why := (if ci matches .opaqueInfo _ then #["opaque"] else #[]) ++ (if ci.isUnsafe then #["unsafe"] else #[]) ++
         (if impl.contains n then #["implemented_by"] else #[]) ++ (if ext.contains n then #["extern"] else #[])
       if !why.isEmpty then
@@ -579,10 +597,10 @@ unsafe def main (args : List String) : IO UInt32 := do
     graph := graph.push (mnames[i].toString, Json.mkObj [("olean", toJson olean),
       ("imports", toJson (env.header.moduleData[i]!.imports.map (·.module.toString)))])
   let doc := Json.mkObj [("lean", toJson Lean.versionString), ("modules", toJson modules), ("imports", Json.mkObj imports.toList),
-    ("oleans", toJson oleans), ("graph", Json.mkObj graph.toList),
+    ("spans", Json.mkObj spans.toList), ("oleans", toJson oleans), ("graph", Json.mkObj graph.toList),
     ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
-    ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
+    ("unreported_errors", toJson unreportedErrors), ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
     ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
     ("moved_conflicts", toJson conflicts)]
   IO.FS.writeFile out doc.compress

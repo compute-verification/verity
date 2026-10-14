@@ -71,6 +71,83 @@ def isConst (f : Lin) : Bool := f.s.isEmpty
 
 end Lin
 
+theorem symm_nil_right (a : List Var) : symm a [] = a := by
+  cases a <;> simp [symm]
+
+theorem symm_single_above : ∀ (a : List Var) (v : Var), (∀ x ∈ a, x < v) → symm a [v] = a ++ [v]
+  | [], _, _ => by simp [symm]
+  | x :: xs, v, h => by
+    have hx : x < v := h x List.mem_cons_self
+    simp only [symm, hx, ↓reduceIte, List.cons_append]
+    rw [symm_single_above xs v fun y hy => h y (List.mem_cons_of_mem x hy)]
+
+/-- One more than the largest of `l`, `0` when empty. -/
+def bound (l : List Var) : Nat := l.foldr (fun v m => max (v + 1) m) 0
+
+theorem lt_bound : ∀ (l : List Var), ∀ v ∈ l, v < bound l
+  | [], _, h => by cases h
+  | x :: xs, v, h => by
+    have e : bound (x :: xs) = max (x + 1) (bound xs) := rfl
+    rw [e]
+    rcases List.mem_cons.1 h with rfl | h
+    · exact Nat.lt_of_lt_of_le (Nat.lt_succ_self v) (Nat.le_max_left _ _)
+    · exact Nat.lt_of_lt_of_le (lt_bound xs v h) (Nat.le_max_right _ _)
+
+theorem lt_cons_bound {r : List Var} {b v : Nat} (hb : ∀ x ∈ r, x < b) (h : b ≤ v) : ∀ x ∈ v :: r, x < v + 1 := by
+  intro x hx
+  rcases List.mem_cons.1 hx with rfl | hx
+  · exact Nat.lt_succ_self x
+  · exact Nat.lt_succ_of_lt (Nat.lt_of_lt_of_le (hb x hx) h)
+
+/-- A sum of forms being built, `get` its form: the support is held descending, under the bound `b`, so that a variable
+above all of it joins in one step. `^^^` merges supports, and a sum that gains a fresh variable at each step would be
+walked whole each time. -/
+structure Acc where
+  r : List Var
+  c : Bool
+  b : Nat
+  hb : ∀ v ∈ r, v < b
+
+namespace Acc
+
+def get (a : Acc) : Lin := ⟨a.r.reverse, a.c⟩
+
+def of (f : Lin) : Acc := ⟨f.s.reverse, f.c, bound f.s, fun v h => lt_bound f.s v (List.mem_reverse.1 h)⟩
+
+/-- `a.get ^^^ g` (`add_get`): in one step when `g` is a constant or a variable above `a`'s support. -/
+def add (a : Acc) (g : Lin) : Acc :=
+  match _hs : g.s with
+  | [] => ⟨a.r, a.c ^^ g.c, a.b, a.hb⟩
+  | [v] =>
+    if h : a.b ≤ v then ⟨v :: a.r, a.c ^^ g.c, v + 1, lt_cons_bound a.hb h⟩
+    else of (a.get ^^^ g)
+  | _ :: _ :: _ => of (a.get ^^^ g)
+
+theorem of_get (f : Lin) : (of f).get = f := by
+  cases f
+  simp [of, get]
+
+theorem add_get (a : Acc) (g : Lin) : (a.add g).get = a.get ^^^ g := by
+  obtain ⟨s, c⟩ := g
+  unfold add
+  split
+  · rename_i hs
+    simp only at hs
+    subst hs
+    show (⟨a.r.reverse, a.c ^^ c⟩ : Lin) = ⟨symm a.r.reverse [], a.c ^^ c⟩
+    rw [symm_nil_right]
+  · rename_i v hs
+    simp only at hs
+    subst hs
+    split
+    · rename_i h
+      show (⟨(v :: a.r).reverse, a.c ^^ c⟩ : Lin) = ⟨symm a.r.reverse [v], a.c ^^ c⟩
+      rw [symm_single_above _ _ fun x hx => Nat.lt_of_lt_of_le (a.hb x (List.mem_reverse.1 hx)) h, List.reverse_cons]
+    · exact of_get _
+  · exact of_get _
+
+end Acc
+
 /-- A committed row: bit `out` is the product of the forms `a` and `b`. -/
 structure Row where
   out : Var

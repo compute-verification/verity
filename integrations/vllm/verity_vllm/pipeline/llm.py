@@ -31,13 +31,19 @@ SUPPORTED: dict[str, Supported] = {
     "gpu_memory_utilization": Supported((float, int), None, "fraction of device memory the engine may take (default: the "
                                                             "engine profile's)"),
     "enforce_eager": Supported(bool, True, "True runs eagerly; False compiles with torch.compile and CUDA graphs"),
+    "dtype": Supported((str, type(None)), None, "served dtype override (default: the checkpoint profile's)"),
+    "quantization": Supported((str, type(None)), None, "vLLM quantization override, such as fp8 (default: the checkpoint's)"),
+    "compilation_config": Supported((dict, type(None)), None, "vLLM compilation and CUDA-graph settings"),
     "seed": Supported(int, 0, "the engine seed"),
     "protocols": Supported((str, dict, list, tuple), None, "protocol options installed on the engine: 'pouw:<scheme>,pous:<scheme>' "
                                                              "or {name: scheme} (verity_vllm.protocol_options); default none"),
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
 #: Options passed to vLLM only when the caller sets them; unset, the engine profile's value stands.
-ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "seed")
+ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "dtype", "quantization",
+               "compilation_config", "seed")
+#: Explicit overrides that can select kernels outside a protocol option's Build.
+KERNEL_PROFILE_OVERRIDES = ("dtype", "quantization", "compilation_config")
 #: The keyword arguments ``generate`` accepts beside the prompts and sampling parameters.
 GENERATE_SUPPORTED = ("use_tqdm",)
 
@@ -61,7 +67,7 @@ def resolve_options(options: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def protocol_context(opts: dict[str, Any]) -> Any:
+def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = None) -> Any:
     """The protocol options' serving context for resolved options, None when none is enabled; ``ValueError`` names every
     refusal, before any engine exists."""
     enabled = config.parse_protocols(opts["protocols"])
@@ -72,7 +78,17 @@ def protocol_context(opts: dict[str, Any]) -> Any:
     from verity_vllm import protocol_options as PO
     ctx = PO.Context(stage="serve", enabled=enabled, world=opts["tensor_parallel_size"], enforce_eager=opts["enforce_eager"],
                      settings=PO.load_settings(opts["protocols_config"]))
-    bad = PO.refusals(ctx)
+    overrides = tuple(k for k in KERNEL_PROFILE_OVERRIDES if explicit and explicit.get(k) is not None)
+    bad = []
+    for entry in enabled:
+        try:
+            needs_build = PO.requires_build(entry, ctx)
+        except PO.Refused:
+            continue
+        if needs_build and overrides:
+            bad.append(f"{entry}: engine overrides {', '.join(overrides)} can change the served kernels and no longer match its "
+                       "Build; use the pinned engine profile")
+    bad.extend(PO.refusals(ctx))
     if bad:
         raise PO.Refused(bad)
     return ctx
@@ -117,6 +133,9 @@ class LLM:
     * ``gpu_memory_utilization`` (float): fraction of device memory the engine may take; default the engine profile's.
     * ``enforce_eager`` (bool, default True): True runs eagerly; False compiles with torch.compile and CUDA graphs, in a
       fresh Inductor cache for this process.
+    * ``dtype`` (str): served dtype override; default the checkpoint profile's.
+    * ``quantization`` (str): vLLM quantization override, such as ``"fp8"``; default the checkpoint's.
+    * ``compilation_config`` (dict): vLLM compilation and CUDA-graph settings.
     * ``seed`` (int, default 0): the engine seed.
     * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
       (:mod:`verity_vllm.protocol_options`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
@@ -135,8 +154,9 @@ class LLM:
     def __init__(self, model: str, *, revision: str, **options: Any) -> None:
         opts = resolve_options(options)
         self.options = opts
+        self.engine_overrides = {k: options[k] for k in KERNEL_PROFILE_OVERRIDES if options.get(k) is not None}
         self.pin = EnginePin.resolve(model, revision, world=opts["tensor_parallel_size"])
-        ctx = protocol_context(opts)
+        ctx = protocol_context(opts, options)
         from verity_vllm.engine import vllm_adapter as va
 
         engine_args = {k: opts[k] for k in ENGINE_ARGS if k in options}
@@ -160,6 +180,7 @@ class LLM:
         e = self._engine
         return {"pin": asdict(self.pin), "engine_kwargs": dict(e.kwargs), "env_flags": dict(e.env_flags),
                 "execution": e.execution, "effective": e.effective, "build_s": e.build_s,
+                "engine_overrides": dict(self.engine_overrides),
                 "protocols": None if self.protocols is None else self.protocols.record()}
 
     def generate(self, prompts: Any, sampling_params: Any = None, **kwargs: Any) -> list[Any]:
