@@ -272,7 +272,11 @@
       "holder": "the benchmarks coordinator (bc-681a0244-a22d-5924-b0a3-06223ae547e4)",
       "remit": "Benchmarks: the overhead and throughput measurements across backends, and the tables rendered from them.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
-      "usergroup": null
+      "usergroup": null,
+      "owns": [
+        "benchmarks/harness/",
+        "benchmarks/specs/"
+      ]
     },
     {
       "handle": "old-accounting",
