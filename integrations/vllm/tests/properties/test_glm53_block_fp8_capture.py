@@ -10,6 +10,7 @@ import pytest
 import torch
 
 from tests.properties import glm53_block_fp8_capture_gpu as X
+from verity_vllm.program.kernels import deepgemm_twins as DGT
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import fp8_moe_rows as MR
 from verity_vllm.properties.record import REGISTRY, digest_of
@@ -74,7 +75,7 @@ def test_dense_jobs_take_the_kernel_words_and_sample_the_special_rows(tmp_path) 
     t = _total([X.compare(j) for j in jobs])
     assert t == {"words": 5 * N, "mismatch": 0, "unresolved": 0, "quant_rows": 5, "quant_mismatch": 0,
                  "reference_coords": _sampled_columns((0, 2, 3, 4)), "reference_quant_rows": 4, "twin_mismatch": 0, "act_rows": 0,
-                 "act_mismatch": 0, "reference_act_rows": 0}
+                 "act_mismatch": 0, "reference_act_rows": 0, "ue8m0_rows": 0, "ue8m0_mismatch": 0, "reference_ue8m0_rows": 0}
 
 
 def test_a_flipped_word_or_quant_byte_is_found(tmp_path) -> None:
@@ -123,8 +124,30 @@ def test_moe_jobs_take_the_kernel_words(tmp_path, kind: str, KB: int, swap: bool
     assert t["words"] == 24 * N and t["mismatch"] == t["unresolved"] == t["twin_mismatch"] == t["quant_mismatch"] == t["act_mismatch"] == 0
     assert t["reference_coords"] == _sampled_columns((0, 23)) and t["quant_rows"] == t["reference_quant_rows"] * 3 == (3 if kind == "w13" else 0)
     assert (t["act_rows"], t["reference_act_rows"]) == ((24, 1) if kind == "served_w2" else (0, 0))
+    assert (t["ue8m0_rows"], t["ue8m0_mismatch"], t["reference_ue8m0_rows"]) == (0, 0, 0)
     flipped = [X.compare(j) for j in _moe_job(tmp_path, kind, KB=KB, swap=swap, dot=dot, flip=True)]
     assert _total(flipped)["mismatch"] == 1 and flipped[0]["first_mismatch"]["pair"] == 13
+
+
+def _ue8m0_job(tmp_path, *, flip: bool = False) -> list[dict]:
+    """A case's ue8m0 input quant as `jobs_append_ue8m0` saves it: 4 bf16 rows (one zero, one of subnormals), their (q, s) from
+    the twin standing in for the kernel's bits."""
+    rng = np.random.default_rng(3)
+    M = 4
+    x = _bf16_rows(rng, M)
+    q, s = DGT.ue8m0_group_quant_rows(x, G=GQ)
+    if flip:
+        q = q.copy()
+        q[2, 5] ^= 1
+    job = {"phase": "moe", "case": "small", "launch": "ue8m0_quant", "K": K, "paths": X._save(tmp_path / "ue8m0", x=x, q=q, s=s)}
+    return [{**job, "rows": [0, M], "reference": True}]
+
+
+def test_ue8m0_jobs_take_the_kernel_quant_bits(tmp_path) -> None:
+    t = _total([X.compare(j) for j in _ue8m0_job(tmp_path)])
+    assert t == {**{k: 0 for k in X.TOTALS}, "ue8m0_rows": 4, "reference_ue8m0_rows": 1}
+    flipped = [X.compare(j) for j in _ue8m0_job(tmp_path, flip=True)]
+    assert _total(flipped)["ue8m0_mismatch"] == 1 and flipped[0]["first_mismatch"] == {"ue8m0_row": 2}
 
 
 @pytest.mark.parametrize("dot,words_dot", [(MV, WG), (WG, MV)])
@@ -236,12 +259,15 @@ def test_the_programs_bind_at_every_glm53_shape() -> None:
     got = X.bind_check({(32, False, WG), (128, True, MV)})
     assert got["ok"] and got["bindings"]["ScaledMmFp8Block_v1{K=6144,N=2624,G=128}"] and got["bindings"]["SiluMulFp8BlockQuant_v1{I=256,G=128}"]
     assert got["bindings"][f"MoeExpertFp8BlockGemmW_v3{{K=256,N=6144,G=128,KB=128,SWAP=True,DOT={MV}}}"]
-    assert len(got["bindings"]) == len(X.DENSE) + len({K for _, K, _ in X.DENSE}) + 5 * len({c[1] for c in X.MOE})
+    assert got["bindings"]["Fp8GroupQuantUe8m0_v1{K=6144,G=128}"]
+    assert len(got["bindings"]) == len(X.DENSE) + len({K for _, K, _ in X.DENSE}) + 1 + 5 * len({c[1] for c in X.MOE})
 
 
 TOTALS = {"words": 10, "mismatch": 0, "unresolved": 0, "quant_rows": 2, "quant_mismatch": 0, "reference_coords": 3,
-          "reference_quant_rows": 1, "twin_mismatch": 0, "act_rows": 0, "act_mismatch": 0, "reference_act_rows": 0}
+          "reference_quant_rows": 1, "twin_mismatch": 0, "act_rows": 0, "act_mismatch": 0, "reference_act_rows": 0,
+          "ue8m0_rows": 0, "ue8m0_mismatch": 0, "reference_ue8m0_rows": 0}
 ACT = {"act_rows": 4, "reference_act_rows": 1}
+UE8 = {"ue8m0_rows": 2, "reference_ue8m0_rows": 1}
 
 
 def _doc() -> dict:
@@ -251,20 +277,27 @@ def _doc() -> dict:
     return {"schema": X.SCHEMA, "gate": {"ok": True}, "errors": {}, "selection": {"dense_ok": True, "moe_ok": True}, "ptx": {"ok": True},
             "bind": {"ok": True},
             "launches": [{**launch, "phase": "dense", "case": "o_proj", "M": 1, "operands_ok": True}, {**moe, "launch": "w13"},
-                         {**moe, "launch": "w2"}],
+                         {**moe, "launch": "w2"},
+                         {"phase": "moe", "case": "tp8_decode", "launch": "ue8m0_quant", "M": 2, "deterministic": True,
+                          "operands_ok": True}],
             "comparisons": [{"phase": "dense", "case": "o_proj", "launch": None, "M": 1, **TOTALS},
                             {"phase": "moe", "case": "tp8_decode", "launch": "w13", "M": None, **TOTALS},
+                            {"phase": "moe", "case": "tp8_decode", "launch": "ue8m0_quant", "M": None,
+                             **{k: 0 for k in X.TOTALS}, **UE8},
                             {"phase": "moe", "case": "tp8_decode", "launch": "served_w2", "M": None, **TOTALS, **ACT}],
-            "totals": {**TOTALS, **ACT}}
+            "totals": {**TOTALS, **ACT, **UE8}}
 
 
 @pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("errors", "moe/x"), "boom"), (("selection", "moe_ok"), False),
                                         (("ptx", "ok"), None), (("totals", "mismatch"), 1), (("totals", "unresolved"), 2),
                                         (("totals", "reference_coords"), 0), (("totals", "twin_mismatch"), 1),
                                         (("totals", "act_rows"), 0), (("totals", "act_mismatch"), 1), (("totals", "reference_act_rows"), 0),
+                                        (("totals", "ue8m0_rows"), 0), (("totals", "ue8m0_mismatch"), 1),
+                                        (("totals", "reference_ue8m0_rows"), 0),
                                         (("launches", 1, "statics_ok"), False), (("launches", 1, "assignment_ok"), False),
                                         (("ptx", "ok"), False), (("errors", "moe_configs"), "boom"),
-                                        (("launches", 0, "deterministic"), False), (("launches", 0, "operands_ok"), False)])
+                                        (("launches", 0, "deterministic"), False), (("launches", 0, "operands_ok"), False),
+                                        (("launches", 3, "deterministic"), False), (("launches", 3, "operands_ok"), False)])
 def test_the_verdict_needs_every_check(path: tuple, value) -> None:
     assert X._verdict(_doc())
     doc = copy.deepcopy(_doc())
@@ -345,6 +378,9 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, wgmm
                              "config": cfg, "deterministic": True, "statics_ok": True, "assignment_ok": True, "dot": dot})
             jobs += [{**j, "case": name} for j in _moe_job(tmp_path / name, kind, KB=KB, swap=swap, dot=dot,
                                                            flip=name == "small" and kind == "w2")]
+        launches.append({"phase": "moe", "case": name, "launch": "ue8m0_quant", "M": 4, "K": K, "pairs": 4, "deterministic": True,
+                         "operands_ok": True})
+        jobs += [{**j, "case": name} for j in _ue8m0_job(tmp_path / name)]
         return launches, jobs
 
     monkeypatch.setattr(X, "moe_launches", moe)
@@ -358,6 +394,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, wgmm
     assert doc["totals"]["mismatch"] == 1
     assert doc["env"].get("VLLM_TUNED_CONFIG_FOLDER") == (str(out / "moe_configs") if wgmma_configs else None)
     assert (doc["totals"]["act_rows"], doc["totals"]["act_mismatch"], doc["totals"]["reference_act_rows"]) == (48, 0, 2)
+    assert (doc["totals"]["ue8m0_rows"], doc["totals"]["ue8m0_mismatch"], doc["totals"]["reference_ue8m0_rows"]) == (8, 0, 2)
     assert doc["env"]["VLLM_BATCH_INVARIANT"] == "0" and doc["env"]["VLLM_USE_DEEP_GEMM"] == "0"
     printed = capsys.readouterr().out
     assert "case moe/small" in printed and "GLM53-BLOCK-FP8 NO-GO" in printed and "no-go cases=['moe/small']" in printed

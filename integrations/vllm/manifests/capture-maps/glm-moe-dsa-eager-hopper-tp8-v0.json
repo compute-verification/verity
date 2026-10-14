@@ -225,12 +225,14 @@
    "definitions": [
     "Fp8GroupQuant_v1",
     "Fp8GroupQuant_v2",
+    "Fp8GroupQuantUe8m0_v1",
+    "Fp8GroupQuantUe8m0_v2",
     "MoeExpertFp8BlockGemm_v1",
     "MoeExpertFp8BlockGemm_v2",
     "MoeExpertFp8BlockGemmW_v1",
     "MoeExpertFp8BlockGemmW_v2"
    ],
-   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): the cc 9.0 oracle moves Triton to the front for dynamic-128 activations, static 128-block weights and no expert parallelism even when DeepGEMM is enabled by default. Registered (fp8.Fp8GroupQuant_v1, fp8_moe.MoeExpertFp8BlockGemm(W)_v1, Booleans _v2); tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics on the H200"
+   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): the cc 9.0 oracle moves Triton to the front for dynamic-128 activations, static 128-block weights and no expert parallelism even when DeepGEMM is enabled by default. The expert input quant is per_token_group_quant_fp8 with use_ue8m0 = is_deep_gemm_e8m0_used(): True at vLLM's sm_90 defaults (DeepGEMM on), binding deepgemm.Fp8GroupQuantUe8m0_v1; False binding fp8.Fp8GroupQuant_v1. Registered (fp8_moe.MoeExpertFp8BlockGemm(W)_v1, Booleans _v2); tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics and compares both quants on the H200"
   },
   "fused-rmsnorm-triton": {
    "status": "port",

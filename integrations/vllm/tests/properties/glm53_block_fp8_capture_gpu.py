@@ -31,6 +31,11 @@ instead.  A phase that raises records its error and fails the verdict without st
              its (q, scale) on every pair against `SiluMulFp8BlockQuant_v1{I,128}` of that pair's w13 output row (twin
              `fp8_moe_rows.silu_mul_fp8_block_quant_rows`): the `act` rows.
              Every launch's (token, slot) -> expert assignment is checked against the routing.
+             Each case also runs the Build's own MoE input quant, `per_token_group_quant_fp8(x, 128, use_ue8m0=True)` (what
+             `moe_kernel_quantize_input` launches when DeepGEMM is on, vLLM's sm_90 default; the flag passed explicitly so this
+             run's `VLLM_USE_DEEP_GEMM=0` does not turn it off -- the wrapper dispatches to the same `_C.per_token_group_fp8_quant`
+             launch, fp8_utils.py:620-637), twice, and compares every row against `Fp8GroupQuantUe8m0_v1{6144,128}`
+             (registry.deepgemm; twin `deepgemm_twins.ue8m0_group_quant_row`): the `ue8m0` rows.
   reference  on a sample of the coordinates and rows of every launch, the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`) of
              `ScaledMmFp8BlockCoordinate_v1`, `MoeExpertFp8BlockCoordinate(W)_v3{...,DOT}`, `Fp8GroupQuant_v1` and
              `SiluMulFp8BlockQuant_v1`, which the twins must equal.
@@ -50,7 +55,7 @@ BLOCK_SIZE_N 64, the shape the same file gives M = 8 (`widen_for_wgmma`), to `<o
 `VLLM_TUNED_CONFIG_FOLDER` pointing there; an engine served with the same folder launches the same tiles, all wgmma.
 
 GO needs 0 mismatches and 0 unresolved words (a twin flags a word it cannot claim: a non-finite accumulator; these operands are finite
-and none should occur), every MoE case's `act` rows compared with 0 mismatches, deterministic reruns, the PTX scan, and with
+and none should occur), every MoE case's `act` and `ue8m0` rows compared with 0 mismatches, deterministic reruns, the PTX scan, and with
 `--batch-invariant` every expert launch at BLOCK_SIZE_K 32 without SWAP_AB.  The verdict line counts the expert launches by DOT.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
@@ -78,7 +83,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-block-fp8-capture/v2"
+SCHEMA = "verity-vllm/glm53-block-fp8-capture/v3"
 RECORD = "glm53_block_fp8_capture.json"
 GROUP = 128
 HIDDEN = 6144
@@ -530,9 +535,35 @@ def moe_launches(work: Path, name: str, inter: int, M: int, hot: int, seed: int,
         for p0, p1 in _chunks(n_pairs, N * K // 32):
             jobs.append({**job, "pair_range": [p0, p1], "reference": p0 == 0,
                          "quant_rows": list(range(cdiv(p0, TOP_K), cdiv(p1, TOP_K))) if kind == "w13" else []})
+    launches.append(jobs_append_ue8m0(work, name, x, jobs))
     del w1, w2
     torch.cuda.empty_cache()
     return launches, jobs
+
+
+def jobs_append_ue8m0(work: Path, name: str, x, jobs: list[dict]) -> dict[str, Any]:
+    """The Build's own MoE input quant on this case's x: `per_token_group_quant_fp8(x, 128, use_ue8m0=True)`, the call
+    `moe_kernel_quantize_input` makes when DeepGEMM is on (vLLM's sm_90 default; `use_ue8m0 = is_deep_gemm_e8m0_used()`), with the
+    flag passed explicitly so this run's `VLLM_USE_DEEP_GEMM=0` does not turn it off -- the wrapper dispatches to the same
+    `_C.per_token_group_fp8_quant` launch (fp8_utils.py:620-637).  Twice (determinism on the bits), every row against
+    `Fp8GroupQuantUe8m0_v1{6144,128}`."""
+    import torch
+    from vllm.model_executor.layers.quantization.utils.fp8_utils import per_token_group_quant_fp8
+
+    M = x.shape[0]
+    q1, s1 = per_token_group_quant_fp8(x, GROUP, use_ue8m0=True)
+    q2, s2 = per_token_group_quant_fp8(x, GROUP, use_ue8m0=True)
+    torch.cuda.synchronize()
+    rec = {"phase": "moe", "case": name, "launch": "ue8m0_quant", "M": M, "K": HIDDEN, "pairs": M,
+           "deterministic": bool(torch.equal(q1.view(torch.uint8), q2.view(torch.uint8))
+                                 and torch.equal(s1.view(torch.int32), s2.view(torch.int32))),
+           "operands_ok": (list(q1.shape) == [M, HIDDEN] and list(s1.shape) == [M, HIDDEN // GROUP]
+                           and q1.dtype == torch.float8_e4m3fn and s1.dtype == torch.float32 and s1.is_contiguous())}
+    job = {"phase": "moe", "case": name, "launch": "ue8m0_quant", "K": HIDDEN,
+           "paths": _save(work / f"moe_{name}_ue8m0", x=_u16(x), q=_u8(q1), s=_u32(s1))}
+    for r0, r1 in _chunks(M, HIDDEN):
+        jobs.append({**job, "rows": [r0, r1], "reference": r0 == 0})
+    return rec
 
 
 def compare_act(a: dict[str, np.ndarray], p0: int, p1: int, reference: bool, rec: dict[str, Any]) -> None:
@@ -553,6 +584,31 @@ def compare_act(a: dict[str, np.ndarray], p0: int, p1: int, reference: bool, rec
         y = evaluate(bind(MO.SiluMulFp8BlockQuant, I=q.shape[1], G=GROUP), a["gu"][p0].tolist())
         rec["reference_act_rows"] += 1
         rec["twin_mismatch"] += list(y) != q[0].tolist() + s[0].tolist()
+
+
+def compare_ue8m0(job: dict[str, Any]) -> dict[str, Any]:
+    """Rows [r0, r1) of one case's ue8m0 input quant: `Fp8GroupQuantUe8m0_v1{K,128}`'s twin (`ue8m0_group_quant_row`) against the
+    kernel's (q, s) bits, and the reference on row r0."""
+    from verity.ml.circuits.evaluation import evaluate
+    from verity.ml.circuits.defs import bind
+    from verity_vllm.program.kernels.deepgemm_twins import ue8m0_group_quant_row
+    from verity_vllm.program.registry import deepgemm as DG
+
+    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
+    a = _load(job["paths"])
+    r0, r1 = job["rows"]
+    for r in range(r0, r1):
+        q, s = ue8m0_group_quant_row(a["x"][r], G=GROUP)
+        rec["ue8m0_rows"] += 1
+        bad = not (np.array_equal(q, a["q"][r]) and np.array_equal(s, a["s"][r]))
+        rec["ue8m0_mismatch"] += bad
+        if bad and rec["first_mismatch"] is None:
+            rec["first_mismatch"] = {"ue8m0_row": r}
+        if job["reference"] and r == r0:
+            y = evaluate(bind(DG.Fp8GroupQuantUe8m0, K=job["K"], G=GROUP), a["x"][r].tolist())
+            rec["reference_ue8m0_rows"] += 1
+            rec["twin_mismatch"] += list(y) != q.tolist() + s.tolist()
+    return {"phase": "moe", "case": job["case"], "launch": "ue8m0_quant", "rows": job["rows"], **rec}
 
 
 def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
@@ -610,7 +666,9 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     try:
-        return compare_dense(job) if job["phase"] == "dense" else compare_moe(job)
+        if job["phase"] == "dense":
+            return compare_dense(job)
+        return compare_ue8m0(job) if job.get("launch") == "ue8m0_quant" else compare_moe(job)
     except Exception as e:  # noqa: BLE001
         return {"phase": job["phase"], "case": job["case"], "launch": job.get("launch"), "error": _error(e)}
 
@@ -661,6 +719,7 @@ def bind_check(statics: set[tuple[int, bool, str]]) -> dict[str, Any]:
     weight-scale rows each reads."""
     from verity.ml.circuits.evaluation.batch import type_shape
     from verity.ml.circuits.defs import bind
+    from verity_vllm.program.registry import deepgemm as DG
     from verity_vllm.program.registry import fp8 as F
     from verity_vllm.program.registry import fp8_moe as MO
 
@@ -669,6 +728,7 @@ def bind_check(statics: set[tuple[int, bool, str]]) -> dict[str, Any]:
         params, _ = bind(F.ScaledMmFp8Block, K=K, N=N, G=GROUP).signature()
         out[f"ScaledMmFp8Block_v1{{K={K},N={N},G={GROUP}}}"] = list(type_shape(dict(params)["ws"])) == [cdiv(N, GROUP), K // GROUP]
         out[f"Fp8GroupQuant_v1{{K={K},G={GROUP}}}"] = bool(bind(F.Fp8GroupQuant, K=K, G=GROUP).signature())
+    out[f"Fp8GroupQuantUe8m0_v1{{K={HIDDEN},G={GROUP}}}"] = bool(bind(DG.Fp8GroupQuantUe8m0, K=HIDDEN, G=GROUP).signature())
     for inter in sorted({c[1] for c in MOE}):
         params, ret = bind(MO.SiluMulFp8BlockQuant, I=inter, G=GROUP).signature()
         out[f"SiluMulFp8BlockQuant_v1{{I={inter},G={GROUP}}}"] = (list(type_shape(dict(params)["gu"])) == [2 * inter]
@@ -684,7 +744,7 @@ def bind_check(statics: set[tuple[int, bool, str]]) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------- run
 TOTALS = ("words", "mismatch", "unresolved", "quant_rows", "quant_mismatch", "reference_coords", "reference_quant_rows", "twin_mismatch",
-          "act_rows", "act_mismatch", "reference_act_rows")
+          "act_rows", "act_mismatch", "reference_act_rows", "ue8m0_rows", "ue8m0_mismatch", "reference_ue8m0_rows")
 
 
 def _launch_ok(x: dict[str, Any]) -> bool:
@@ -700,6 +760,10 @@ def _act_ok(t: dict[str, Any]) -> bool:
     return t["act_rows"] > 0 and t["act_mismatch"] == 0 and t["reference_act_rows"] > 0
 
 
+def _ue8m0_ok(t: dict[str, Any]) -> bool:
+    return t["ue8m0_rows"] > 0 and t["ue8m0_mismatch"] == 0 and t["reference_ue8m0_rows"] > 0
+
+
 def _case(x: dict[str, Any]) -> str:
     return f"dense/{x['case']}/M{x['M']}" if x["phase"] == "dense" else f"moe/{x['case']}"
 
@@ -711,7 +775,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     for x in doc["launches"]:
         c = out.setdefault(_case(x), {"launches_ok": True, "totals": {k: 0 for k in TOTALS}, "tiles": []})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)
-        if x["phase"] == "moe":
+        if x["phase"] == "moe" and "config" in x:
             cfg = x["config"]
             c["tiles"].append(f"{x['launch']}:{cfg['BLOCK_SIZE_M']}x{cfg['BLOCK_SIZE_N']}x{x['KB']}{'/swap' if x['SWAP'] else ''}"
                               f"/{FAMILY[x['dot']]}")
@@ -726,7 +790,8 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     for key, c in out.items():
         phase, name = key.split("/")[:2]
         errors = [e for e in doc["errors"] if e.startswith(key) or e.startswith(f"compare/{phase}/{name}/")]
-        c["ok"] = c["launches_ok"] and _words_ok(c["totals"]) and (phase != "moe" or _act_ok(c["totals"])) and not errors
+        c["ok"] = (c["launches_ok"] and _words_ok(c["totals"]) and (phase != "moe" or (_act_ok(c["totals"]) and _ue8m0_ok(c["totals"])))
+                   and not errors)
     return out
 
 
@@ -735,7 +800,7 @@ def _verdict(doc: dict[str, Any]) -> bool:
     return (doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("dense_ok") is True and doc["selection"].get("moe_ok") is True
             and doc["ptx"].get("ok") is True and doc["bind"].get("ok") is True
             and {x["phase"] for x in launches} == {"dense", "moe"} and all(_launch_ok(x) for x in launches) and _words_ok(doc["totals"])
-            and _act_ok(doc["totals"]))
+            and _act_ok(doc["totals"]) and _ue8m0_ok(doc["totals"]))
 
 
 def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: int, workers: int, quick: bool, batch_invariant: bool,
@@ -788,13 +853,17 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
                     doc["launches"] += launches
                     jobs += mjobs
                     for x in launches:
+                        if x["launch"] == "ue8m0_quant":
+                            print(f"[glm53-block-fp8] moe {name:13s} {x['launch']:11s} K={x['K']:5d} rows={x['M']:5d} "
+                                  f"det={x['deterministic']} operands={x['operands_ok']}", flush=True)
+                            continue
                         print(f"[glm53-block-fp8] moe {name:13s} {x['launch']:9s} K={x['K']:5d} N={x['N']:5d} pairs={x['pairs']:5d} "
                               f"KB={x['KB']} SWAP={x['SWAP']} config={x['config']} det={x['deterministic']} statics={x['statics_ok']} "
                               f"assignment={x['assignment_ok']} dot={x['dot']}", flush=True)
                 except Exception as e:  # noqa: BLE001
                     doc["errors"][f"moe/{name}"] = _error(e)
                     print(f"[glm53-block-fp8] moe {name} ERROR {doc['errors'][f'moe/{name}'][:400]}", flush=True)
-    moe = [x for x in doc["launches"] if x["phase"] == "moe"]
+    moe = [x for x in doc["launches"] if x["phase"] == "moe" and "config" in x]       # the expert launches; not the ue8m0 quant
     doc["dots"] = dict(Counter(x["dot"] for x in moe))
     doc["ptx"] = ptx(work / "triton_cache", {launch_tile(x) for x in moe}) if "moe" in only else {"ok": None}
     print(f"[glm53-block-fp8] ptx {json.dumps(doc['ptx'])}", flush=True)
@@ -820,7 +889,8 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     for r in doc["comparisons"]:
         print(f"[glm53-block-fp8] words {r['phase']:5s} {r['case']:28s} {r['launch'] or ('M=' + str(r['M'])):9s} words={r['words']} "
               f"!={r['mismatch']} unresolved={r['unresolved']} quant={r['quant_rows']}!={r['quant_mismatch']} "
-              f"act={r['act_rows']}!={r['act_mismatch']} ref={r['reference_coords']}+{r['reference_quant_rows']}+{r['reference_act_rows']} "
+              f"act={r['act_rows']}!={r['act_mismatch']} ue8m0={r['ue8m0_rows']}!={r['ue8m0_mismatch']} "
+              f"ref={r['reference_coords']}+{r['reference_quant_rows']}+{r['reference_act_rows']}+{r['reference_ue8m0_rows']} "
               f"twin!={r['twin_mismatch']}", flush=True)
     doc["totals"] = {k: sum(r[k] for r in doc["comparisons"]) for k in TOTALS}
     doc["cases"] = cases(doc)
@@ -828,7 +898,7 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
         t = c["totals"]
         print(f"[glm53-block-fp8] case {key:40s} {'GO' if c['ok'] else 'NO-GO':5s} launches_ok={c['launches_ok']} words={t['words']} "
               f"!={t['mismatch']} unresolved={t['unresolved']} quant!={t['quant_mismatch']} act={t['act_rows']}!={t['act_mismatch']} "
-              f"twin!={t['twin_mismatch']} "
+              f"ue8m0={t['ue8m0_rows']}!={t['ue8m0_mismatch']} twin!={t['twin_mismatch']} "
               f"{' '.join(c['tiles'])}", flush=True)
     doc = seal_record(doc, _verdict(doc))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")

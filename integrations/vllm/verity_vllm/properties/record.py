@@ -37,12 +37,13 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, the installed FA2 softcap kernel launches kBlockM 64 and kBlockN fa2_kblock_n(D), MUFU ex2 / rcp are "
              "core's tables and MUFU.TANH is MufuTanh_v1 on every input, and every checked output row equals the registered "
              "AttentionSoftcap_v2, which the target binds, on every head."),
-    Property("glm53_block_fp8_capture", "verity-vllm/glm53-block-fp8-capture/v2",
+    Property("glm53_block_fp8_capture", "verity-vllm/glm53-block-fp8-capture/v3",
              "On the capture's Hopper GPU, vLLM selects CutlassFp8BlockScaledMMKernel for GLM-5.3's FP8 linears and Triton's "
              "fused_moe_kernel (TritonExperts) for its experts, every compiled expert kernel runs its dot as the step fp8_moe gives its "
              "tile (k32 e4m3 wgmma, or f16 mma.sync m16n8k16 on widened e4m3), and at GLM-5.3's shapes every output word of every launch "
-             "equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v3 at the launch's statics with that step as DOT, and every "
-             "activation quant equals Fp8GroupQuant_v1, bit for bit."),
+             "equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v3 at the launch's statics with that step as DOT, every "
+             "activation quant equals Fp8GroupQuant_v1, and the experts' input quant with use_ue8m0=True (the default when DeepGEMM "
+             "is on) equals Fp8GroupQuantUe8m0_v1, bit for bit."),
     Property("deepgemm_sm90_capture", "verity-vllm/deepgemm-sm90-capture/v1",
              "On the capture's Hopper GPU, vLLM selects FlashInferFp8DeepGEMMDynamicBlockScaledKernel for DeepSeek-V4-Pro's and "
              "GLM-5.3's FP8 linears, M < 32 takes FlashInfer's branch and M >= 32 DeepGEMM's, DeepGEMM JIT-builds only the 1d2d "
