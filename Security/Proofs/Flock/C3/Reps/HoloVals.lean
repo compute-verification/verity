@@ -286,10 +286,3 @@ theorem repUnitOfAlg_holoVals (hcls : ClassOk (Recursion.shapeOf st))
 end
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.enc_holo
-#print axioms FlockC3.Reps.HoloSrc.framed
-#print axioms FlockC3.Reps.proofFrom_of_framed
-#print axioms FlockC3.Reps.HoloSrc.setupFrom_holo
-#print axioms FlockC3.Reps.stepsOfVals_norm_repsOfVals
-#print axioms FlockC3.Reps.repUnitOfAlg_holoVals
