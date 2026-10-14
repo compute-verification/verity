@@ -253,21 +253,6 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (ℐ).Msg}
   {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
 
-example {coins : String → Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
-    {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg'}
-    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
-    CoinsAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
-      rows wr reg coins := by
-  sorry
-
-example {coins : String → Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
-    {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg'}
-    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
-    CoinsAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
-      rows wr reg coins := by
-  intro R ω t R₂ j hex
-  sorry
-
 /-- **The checked family passes check 5 where a session accepts**: a checked session keeps its own list only where a
 transcript it accepts passes `ChecksC3` (`coinsAccepted_of_keep`). -/
 theorem coinsAccepted_checked {coins : String → Option Flock.RecCoins.Source}
@@ -276,8 +261,8 @@ theorem coinsAccepted_checked {coins : String → Option Flock.RecCoins.Source}
     {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
     CoinsAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       rows wr reg coins :=
-  coinsAccepted_of_keep _ (fun R ω t R₂ j => Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
-    fun _ _ _ _ _ => rfl
+  coinsAccepted_of_keep _ (fun R ω t R₂ j => Flock.Guarantees.custodied zr hCust h R ω t R₂ j) fun _ _ _ _ _ => by
+    simp only [C3Family.checked, C3Family.honest, Flock.Guarantees.checkedC3, Flock.Guarantees.innerHeld]
 
 /-- **Check 5 at the sparse session**: where session `s` accepts and V*'s list names RecSparse at `s`, at the inner
 shape's `sparse` entry `hp`'s (`SparseIs`), its circuit is named `unitName (unitShape (holoAt st hp))`
