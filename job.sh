@@ -8,6 +8,7 @@ rc=0
 python3 tools/verity/lean/lean_changed.py --records Security --update --out "$OUT/security" || rc=$?
 cat > "$d/Probe.lean" <<'EOF'
 import Proofs.Flock.C3.Compose.Discharge
+import Proofs.Flock.C3.Compose.RowsReg
 #print axioms FlockSoundness.Discharge.ZkReg.drawn_of_acceptsZKR
 #print axioms FlockC3.Compose.labelsSelf
 #print axioms FlockC3.Compose.ownReads_cover
