@@ -188,8 +188,9 @@ An addressed handle, woken by one, does four things:
 ## Asking Daniel
 
 `#ask-daniel` is the one channel for everything that needs Daniel (his design, 1:39 PM PDT on 30 Sep). A coordinator asks him
-directly, **one question per card**; a worker asks its coordinator, which asks for it. Only money, keys and claims need him
-(8 Oct): spend past a budget line, access and keys, and what a guarantee says or rests on. Anything else is its owner's call.
+directly, **one question per card**; a worker asks its coordinator, which asks for it. Only keys and claims need him
+(8 Oct, narrowed 13 Oct): access and keys, and what a guarantee says or rests on. Anything else, spend included, is its
+owner's call; his explicit standing rulings, a budget line named in one included, stand until he reverses them.
 
 **Ping him, every time** (Daniel, 2:43 PM PDT on 1 Oct). A decision that waits in a note or a lead's thread waits forever.
 `research msg ask-daniel` posts the card and mentions him on it, so Slack notifies him. If the card route fails, post the

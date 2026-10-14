@@ -260,8 +260,9 @@ Glossary, the skills, READMEs, docstrings and CLI help. When code has to change 
 owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
 it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
 
-Make every decision yourself except money, keys and claims (Daniel, 8 Oct). Spend past a budget line, access and keys,
-and what a guarantee says or rests on go to Daniel through your coordinator, with your recommendation. A change that
+Make every decision yourself except keys and claims (Daniel, 8 Oct; spend became its lead's call 13 Oct). Access and
+keys, and what a guarantee says or rests on, go to Daniel through your coordinator, with your recommendation; pods
+still bound themselves under a `budgets.toml` line, and a budget line named in a standing ruling stands. A change that
 crosses owners goes to the other owner, and the coordinator settles a disagreement. When a tool, rule or step gets in
 your way, fix it at the source if the fix is clearly yours. Record each ruling you get. The friction skill,
 `.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes.

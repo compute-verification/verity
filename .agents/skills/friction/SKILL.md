@@ -43,9 +43,9 @@ ask:
 
 - one stand-alone question to the owner of what the change touches, or to your coordinator when owners disagree or you
   can't tell who owns it (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or reply to
-  the coordinator that launched it). The coordinator decides, and says what it decided. Only money (spend past a
-  `budgets.toml` line), keys (access, a credential, a node's root) and claims (what a guarantee says or rests on) go on to
-  Daniel, as written;
+  the coordinator that launched it). The coordinator decides, and says what it decided. Only keys (access, a credential,
+  a node's root) and claims (what a guarantee says or rests on) go on to Daniel, as written; spend is its lead's call
+  (13 Oct), with pods still bounding themselves under a `budgets.toml` line;
 - the case, the change, and your recommendation, in a few lines;
 - meanwhile, prepare the change on your branch, and mark it ready only after the answer.
 
@@ -102,6 +102,9 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-13 (2:22 PM PDT): leads decide open questions themselves, spend included; Daniel's explicit rulings stand until
+  he reverses them. Of 8 Oct's "money, keys and claims", spend is now its lead's own call (pods still bound themselves
+  under a `budgets.toml` line, and a budget line named in a standing ruling stands); keys and claims still go to Daniel.
 - 2026-10-13 (10:42 AM PDT): an agent closes an old PR without asking when every commit on it is already in another open
   PR ("close old PRs idgaf do that").
 - 2026-10-12 (4:08 PM PDT, to top): Daniel took every recommendation then open in top's walkthrough of his decisions,
