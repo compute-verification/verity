@@ -12,10 +12,9 @@ sessions' registered reads at one root and position are one row's bytes or a SHA
 registrant records (`registrants_eq_or_collides`), and that collision is `RegColl`'s (`ReadsX.Clash`), which `Accepted`
 excludes and `regFinder` prices once per audit: no new event, no guarantee record moved.
 
-* `opensLeaf_of_site`, `registrants_eq_or_collides_site`: `registrants_eq_or_collides` where the two reads' ports have
-  one registration (`site`) rather than one port: the sparse unit's `h` and the algebra unit's `m<hr>` differ by name.
 * `regRows_eq_or_clash`, `regVal_bit_eq`: at any sessions, two registered reads at one registration and position hold
-  one row's bytes or two records clash (both preimages kept); with no clash and both rows unsegmented, one row's bits.
+  one row's bytes or two records clash (both preimages kept, `registrants_eq_or_collides_site`: the sparse unit's `h`
+  and the algebra unit's `m<hr>` differ by name); with no clash and both rows unsegmented, one row's bits.
 * `rep_of_unit_h`, `rep_h_of_unit`: a rep unit plays `holoRepC` to an output whose `h` is the unit's `hOfW` (what
   `holoRep_refines` gives and `rep_of_unit` drops), so the tied run's rep `i` has that `h`.
 * `HPortReads` (named): the cross-unit read, at one copy of the RecSparse unit and the values `x` of rep `i`'s `h`.
@@ -31,52 +30,6 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
 * `srcHReads_of`: `SrcHReads` from those, no read segmented (`ReadsUnsegC3`), the RecSparse circuit's `h` keys
   (`HKeys`, named) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`, named).
 -/
-
-namespace FlockVBridge.Family
-
-open FlockSoundness FlockSoundness.Refine FlockSoundness.Binding FlockSoundness.Registered Audit
-
-/-- `opensLeaf` reads of a port only its registration's root, leaf count and domain. -/
-theorem opensLeaf_of_site {a b : Flock.Registered.Port} (h : site a = site b) :
-    Flock.Registered.opensLeaf a = Flock.Registered.opensLeaf b := by
-  simp only [site, Prod.mk.injEq] at h
-  obtain ⟨-, hr, hl, -, -, hd⟩ := h
-  funext payload pos path
-  simp only [Flock.Registered.opensLeaf, hr, hl, hd]
-
-section Two
-
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
-  {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
-  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
-  {lay : Layout P plan tab decode} {rs : HmRowsX lay}
-  {C' : Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
-  {plan' : Finset (Fin n') → Reg₁ → List (TabSpec mPts')}
-  {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
-  {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
-  {lay' : Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
-
-/-- **`registrants_eq_or_collides` at one registration**: the second record's opening opens the first's port there
-too (`opensLeaf_of_site`), so the same three cases hold. -/
-theorem registrants_eq_or_collides_site (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') {p : lay.Pos} {p' : lay'.Pos}
-    (hp : rd.isRead p) (hp' : rd'.isRead p') (hsite : site (rd.port p) = site (rd'.port p'))
-    (hat : rd.readAt p = rd'.readAt p') :
-    rs.enc p (rd.wv p) = rs'.enc p' (rd'.wv p') ∨
-      Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair ∨
-      Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')) := by
-  by_cases hl : rd.leaf p = rd'.leaf p'
-  · by_cases he : rs.enc p (rd.wv p) = rs'.enc p' (rd'.wv p')
-    · exact Or.inl he
-    · exact Or.inr (Or.inr (hm96Pair_spec _ _ _ _ he hl))
-  · refine Or.inr (Or.inl (TwoOpenings.collides _ ⟨hl, rd.committed p hp, ?_⟩))
-    show Flock.Registered.opensLeaf (rd.port p) (rd'.leaf p').1 (rd.readAt p) (rd'.wpath p') = true
-    rw [opensLeaf_of_site hsite, hat]
-    exact rd'.committed p' hp'
-
-end Two
-
-end FlockVBridge.Family
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -515,12 +468,12 @@ theorem hSite_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows
     {un : Fin (F.Vs s).nv} {u' : Fin (F.Vs s').nv} {q : Fin (F.Vs s).c.ports.size} {q' : Fin (F.Vs s').c.ports.size}
     (hq : (F.Vs s).c.ports[q].name = "h") (hq' : (F.Vs s').c.ports[q'].name = s!"m{hr}")
     (hrp : s!"m{hr}" ∈ Flock.RecVStar.rowPorts st') (hu : un.val = u'.val)
-    (hr : (F.zs R ω t R₂ s).rd.isRead (.inl (un, q))) (hr' : (F.zs R ω t R₂ s').rd.isRead (.inl (u', q'))) :
+    (hrd : (F.zs R ω t R₂ s).rd.isRead (.inl (un, q))) (hrd' : (F.zs R ω t R₂ s').rd.isRead (.inl (u', q'))) :
     FlockVBridge.Family.site ((F.zs R ω t R₂ s).rd.port (.inl (un, q))) =
         FlockVBridge.Family.site ((F.zs R ω t R₂ s').rd.port (.inl (u', q'))) ∧
       (F.zs R ω t R₂ s).rd.readAt (.inl (un, q)) = (F.zs R ω t R₂ s').rd.readAt (.inl (u', q')) := by
-  obtain ⟨hmem, hname, hpos⟩ := hro R ω t R₂ τ o h s un q hr
-  obtain ⟨hmem', hname', hpos'⟩ := hro R ω t R₂ τ o h s' u' q' hr'
+  obtain ⟨hmem, hname, hpos⟩ := hro R ω t R₂ τ o h s un q hrd
+  obtain ⟨hmem', hname', hpos'⟩ := hro R ω t R₂ τ o h s' u' q' hrd'
   obtain ⟨rws, w, hrows, hw, hd⟩ := hsite R ω t R₂ τ o h s sh hr hss _ hmem (hname.trans hq)
   obtain ⟨_, -, -, _, _, hset, hfm⟩ := hchk R ω t R₂ s' ⟨_, (h.1 s').1⟩
   obtain ⟨h0, -⟩ := setup_zero_c (F.zs R ω t R₂ s').ht (F.zs R ω t R₂ s').hTags.1 (F.zs R ω t R₂ s').hcH hset
@@ -567,7 +520,6 @@ theorem srcHReads_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : O
 
 end family
 
-#print axioms FlockVBridge.Family.registrants_eq_or_collides_site
 #print axioms FlockC3.HPort.site_reads_of_portDiff
 #print axioms FlockC3.HPort.checkRows_of_checkStmt
 #print axioms FlockC3.HPort.rowPort_of_checkRows
