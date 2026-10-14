@@ -1,10 +1,13 @@
 """The default sm_90 block-FP8 linear binds the custom op's two served branches."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 import torch
 import torch.nn as nn
 
+from verity_vllm.program.frontend.export_compat import default_fp8_linear_leaf
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
@@ -77,3 +80,19 @@ def test_default_sm90_linear_refuses_another_kernel_configuration(kw: dict, reas
     rep = _derive(4, **kw)
     assert rep.program is None and rep.unsupported is not None
     assert reason in rep.unsupported.hint
+
+
+def test_default_kernel_export_keeps_the_dynamic_custom_op_as_a_leaf() -> None:
+    kernel_type = type("FlashInferFp8DeepGEMMDynamicBlockScaledKernel", (), {})
+    model = nn.Module()
+    model.quant_method = SimpleNamespace(fp8_linear=kernel_type())
+    original = object()
+    site = SimpleNamespace(dynamic_flashinfer_deepgemm_blockscale_gemm=original)
+
+    with default_fp8_linear_leaf(model, namespace=site):
+        assert site.dynamic_flashinfer_deepgemm_blockscale_gemm is iface.dynamic_flashinfer_deepgemm_blockscale_gemm
+    assert site.dynamic_flashinfer_deepgemm_blockscale_gemm is original
+
+    model.quant_method.fp8_linear = object()
+    with default_fp8_linear_leaf(model, namespace=site):
+        assert site.dynamic_flashinfer_deepgemm_blockscale_gemm is original

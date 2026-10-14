@@ -8,7 +8,8 @@ counts them as structural scaffolding.
    — the same value, recorded as `aten.detach` of the parameter placeholder.
 2. The declared target applied (`apply_target_profile`).  3. vLLM's MoE dispatcher ops traced through (`moe_ops_traced`).
 4. DeepSeek sparse attention's three kernels as leaf ops (`dsa_ops_leaf`).  5. The MoE gate's cuteDSL GEMM as a leaf op
-   (`moe_gate_leaf`).
+   (`moe_gate_leaf`).  6. The default Hopper block-FP8 linear's dynamic custom op as a leaf
+   (`default_fp8_linear_leaf`).
 """
 
 from __future__ import annotations
@@ -537,18 +538,56 @@ def moe_gate_leaf(model=None, site=None):
         yield
 
 
+_DYNAMIC_FP8_KERNEL = "FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
+_DYNAMIC_FP8_OP = "dynamic_flashinfer_deepgemm_blockscale_gemm"
+
+
+@contextmanager
+def default_fp8_linear_leaf(model=None, namespace=None):
+    """6. Keep vLLM's default Hopper block-FP8 linear as its served custom op.
+
+    The pinned kernel's ``apply_block_scaled_mm`` calls
+    ``vllm.dynamic_flashinfer_deepgemm_blockscale_gemm``.  Its runtime body
+    contains ``torch.cond`` and, under non-strict meta export, is traced
+    through to the M-specific branch.  That exposes mutating implementation
+    details (notably ``per_token_group_fp8_quant(use_ue8m0=True)``) instead of
+    the custom-op boundary the served engine dispatches.  For a model whose
+    instantiated ``quant_method.fp8_linear`` is exactly that kernel, author
+    the equivalent ``vllm_iface`` leaf for export.  The leaf has the same
+    signature and fake shape; another selected kernel is unchanged.
+    """
+    selected = {
+        type(kernel).__name__
+        for module in (model.modules() if model is not None else ())
+        if (kernel := getattr(getattr(module, "quant_method", None), "fp8_linear", None)) is not None
+    }
+    if selected != {_DYNAMIC_FP8_KERNEL}:
+        yield
+        return
+    from verity_vllm.program.frontend.rules.vllm_iface import iface
+    site = torch.ops.vllm if namespace is None else namespace
+    try:
+        getattr(site, _DYNAMIC_FP8_OP)
+    except (AttributeError, RuntimeError):
+        yield
+        return
+    with hooks.patched(site, _DYNAMIC_FP8_OP, iface.dynamic_flashinfer_deepgemm_blockscale_gemm):
+        yield
+
+
 @contextmanager
 def export_compat(profile=None, model=None):
     """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
-    dispatcher ops traced through their bodies (`moe_ops_traced`) + DeepSeek sparse attention's kernels and the MoE gate's cuteDSL GEMM
-    as leaf ops (`dsa_ops_leaf`, `moe_gate_leaf`); `model` = the instantiated module, for the per-layer entries."""
+    dispatcher ops traced through their bodies (`moe_ops_traced`) + DeepSeek sparse attention's kernels, the MoE gate's cuteDSL GEMM
+    and the default Hopper FP8 linear as leaf ops (`dsa_ops_leaf`, `moe_gate_leaf`, `default_fp8_linear_leaf`);
+    `model` = the instantiated module, for the per-layer entries."""
     if profile is None:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         profile = TargetProfile.default()
     with (tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model),
-          fused_allreduce_rms_norm_leaf(model), moe_gate_leaf(model)):
+          fused_allreduce_rms_norm_leaf(model), moe_gate_leaf(model), default_fp8_linear_leaf(model)):
         yield
 
 
 __all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "dsa_ops_leaf", "dsa_leaves",
-           "fused_allreduce_rms_norm_leaf", "moe_gate_leaf", "read_back_applied", "host_facts"]
+           "fused_allreduce_rms_norm_leaf", "moe_gate_leaf", "default_fp8_linear_leaf", "read_back_applied", "host_facts"]
