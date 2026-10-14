@@ -257,9 +257,9 @@ theorem stepsOfVals_norm_repsOfVals (hpr : ProofOfVals zs dg N k Rw sh rep vals)
     StepsOfVals zs dg N k Rw (tiedSrc (normSrc (repsOfVals stp sh rep vals))) sh rep vals :=
   stepsOfVals_of_woven (repStepsWoven_of_tie repWeaveAt_norm_repsOfVals hpr hs hf) hcap hos_norm_repsOfVals
 
+set_option maxHeartbeats 1000000 in
 /-- **`RepUnitOfAlg` at the reps' normalized tied source, at holo values** `(b R ω t Lb i).vals sh (rep R ω t Lb i)`:
 the four parts from `HoloSrc.OK` at each rep at the run's link points, the class checks and the values' cap. -/
-set_option maxHeartbeats 1000000 in
 theorem repUnitOfAlg_holoVals (hcls : ClassOk (Recursion.shapeOf st))
     {b : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → HoloSrc}
     (hok : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
