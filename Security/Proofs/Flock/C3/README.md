@@ -16,8 +16,8 @@ bound still need: Open now, next.
 
 Owners are round 21's workers (H, C, R, K, T, S, L, E), **rec-lean**, **W**, the next free worker, and S's successor. A
 size is in lines of proof: "+N" is what a branch has built, a range is an estimate of what is left. spec-2
-(`cursor/c3-spec-2-35f2`) is at `94649a946`, 14 Oct 01:57Z: round 21's T, K, R, L, E, U, S and C heads, and #1851's
-head `cb1d25f98`; K's round 5 (`f5be751ac`) is on `cursor/c3-rl21-pieces-9b2a`.
+(`cursor/c3-spec-2-35f2`), 14 Oct 02:20Z, has round 21's T, K, R, L, E, U, S and C heads, #1851's head `cb1d25f98`,
+K's round 5 (`f5be751ac`) and rec-lean's round 21.
 
 Closed since round 20, all on spec-2: the bridge (`acceptsC3_of_verify` and its checks, H; r20261013-194011-b18d),
 `SparseRangeOk` from check 5 (`sparseRangeOk_of_check`, H, in the bridge), the top finder (`TopColl`,
@@ -26,8 +26,7 @@ Closed since round 20, all on spec-2: the bridge (`acceptsC3_of_verify` and its 
 streams' list (`holoStreams_eq`, `holoStreams_sparse_eq`), the rep forms' alignment (`holoSizes_reps`, at
 `repForms m kLog claims = zcForms m ++ (lcForms kLog ++ (opForms claims ++ ligForms (schedAt m)))`, from
 `repRounds_sizes`; `heldBefore_rep_forms`), `drawnOf_holoMap`'s `hS` and `hr` (`drawnOf_holoMap_forms`), and the
-sparse rounds' forms (`holoForms_sparse_none`, `holoSelWords`' last conjunct, at `hA` below) (rec-lean, round 21, on
-`cursor/c3-rl21-pieces-9b2a`).
+sparse rounds' forms (`holoForms_sparse_none`, `holoSelWords`' last conjunct, at `hA` below) (rec-lean, round 21).
 
 | piece | names | where | size | what it gives | owner (due) |
 |---|---|---|---|---|---|
