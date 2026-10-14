@@ -246,9 +246,7 @@
       "charter": "Daniel",
       "usergroup": null,
       "linear": "TOP",
-      "branch_suffixes": [
-        "c3b2"
-      ],
+      "branch_suffixes": ["c3b2"],
       "owns": [
         "AGENTS.md",
         "README.md",
