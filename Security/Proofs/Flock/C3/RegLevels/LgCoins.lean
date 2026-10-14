@@ -1,3 +1,4 @@
+import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.RegLevels.SrcMaps
 import Proofs.Flock.Recursive.AuditC3
 import Proofs.Flock.Soundness.Assumptions.Inner
@@ -12,10 +13,15 @@ coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which `late
 * `commits_c3Of`, `heldCoins_rep0`: at the `C3` the verifier builds of its hold `cs` (`c3Of`), the coins it holds of
   `stacked/rep0` at round `q` are `rep0`'s round `q`;
 * `heldStage_of_lgCoins`: a stage whose coin steps are `rep0`'s rounds from `k₂` on has them as the coins the verifier
-  holds of `stacked/rep0` at the rounds from `k₂` to `rep0`'s round count (`StageHeld`'s first two parts at `ix = id`).
+  holds of `stacked/rep0` at the rounds from `k₂` to `rep0`'s round count (`StageHeld`'s first two parts at `ix = id`);
+* `roundIn_stacked`, `holoSelOne_stacked`: R's stream last in `holoStreams`' order, its round `q` of coins is drawn at
+  history round one past every earlier stream's and R's rounds before `q` (`roundAt_reps`, `holoSelOne_rep` at R);
+* `drawn_stacked`: where R's rounds from `k₂` each draw coins, the history's rounds from R's round `k₂`'s draw them in
+  order (`StageHeld`'s last part).
 
-Left for `h5`: `StageHeld`'s last two parts, that R's record's round count is `rep0`'s and the history's rounds from
-the stage's start draw `stacked/rep0`'s rounds in order.
+Left for `h5`: `StageHeld`'s third part, the history's round count past the stage, which reads `rep0`'s round count
+against `stackedRounds` (R's held rounds are the stream's, `candidate3`, `checkStackedShape`); that R's rounds from `k₂`
+each draw coins; and that the stage starts at R's round `k₂`'s history round.
 -/
 
 namespace FlockC3.RegLevels
@@ -71,6 +77,84 @@ theorem heldStage_of_lgCoins {ish : Flock.RecVStar.Inner} {cs : Flock.RecVStar.I
   rw [heldCoins_rep0 hc3 unit q] at hq
   rw [getElem!_def, hq]
 
+open Flock.Guarantees (HoloStream heldBefore roundIn holoStreams)
+open Flock.RecVStar (SchedRound)
+
+theorem heldBefore_succ (s : HoloStream) (rs : Array SchedRound) {k : ℕ} (hk : k < rs.size) :
+    heldBefore s rs (k + 1) = heldBefore s rs k + s.group (rs.getD k default).1 := by
+  unfold heldBefore
+  rw [Nat.min_eq_left (show k + 1 ≤ rs.size from hk), Nat.min_eq_left hk.le, List.range_succ, List.map_append,
+    List.sum_append]
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+
+/-- **R's rounds of coins from `k₂` on**: where its `p` rounds from `k₂` each draw coins, the history rounds R's stream
+takes before round `k₂ + p` are `p` past those before `k₂`. -/
+theorem heldBefore_stacked {rs : Array SchedRound} {k₂ : ℕ} (p : ℕ)
+    (h : ∀ p' < p, 0 < (rs.getD (k₂ + p') default).1) :
+    heldBefore .stacked rs (k₂ + p) = heldBefore .stacked rs k₂ + p := by
+  induction p with
+  | zero => rfl
+  | succ p ih =>
+    have hp := h p (Nat.lt_succ_self p)
+    have hk : k₂ + p < rs.size := by
+      by_contra hn
+      unfold Array.getD at hp
+      simp only [hn, ↓reduceDIte] at hp
+      exact absurd hp (Nat.lt_irrefl 0)
+    rw [← Nat.add_assoc, heldBefore_succ _ _ hk, ih fun p' hp' => h p' (by omega)]
+    show _ + min _ 1 = _
+    omega
+
+/-- **R's stream last in the history's order** (`holoStreams`' order): past streams `L` none of which is R's, R's round
+`q` takes the history rounds after all of `L`'s and R's rounds before `q`. -/
+theorem roundIn_stacked (rs : Array SchedRound) (q : ℕ) :
+    ∀ L : List (HoloStream × Array SchedRound), (∀ e ∈ L, e.1.idx ≠ HoloStream.idx .stacked) →
+      roundIn (L ++ [(.stacked, rs)]) .stacked q =
+        (L.map fun e => heldBefore e.1 e.2 e.2.size).sum + heldBefore .stacked rs q
+  | [], _ => by
+    show roundIn [(.stacked, rs)] .stacked q = 0 + _
+    rw [FlockC3.Compose.roundIn_cons_self, Nat.zero_add]
+  | (s', rs') :: L, h => by
+    simp only [List.cons_append, List.map_cons, List.sum_cons]
+    rw [FlockC3.Compose.roundIn_cons_ne (s' := s') (s := .stacked) (h (s', rs') (by simp)),
+      roundIn_stacked rs q L fun e he => h e (by simp [he]),
+      Nat.add_assoc]
+
+/-- **R's rounds of coins at the map read** (`holoSelOne_rep`'s analogue at R): where the session's streams are `L`
+and then R's rounds `rs` (`holoStreams`' order), the stream named `s` is R's (`hf`) and its round `q` draws coins,
+`holoSelOne` draws it at history round one past all of `L`'s and R's rounds before `q`. -/
+theorem holoSelOne_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : Array SchedRound}
+    {L : List (HoloStream × Array SchedRound)} {q : ℕ}
+    (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some (L ++ [(.stacked, rs)]))
+    (hL : ∀ e ∈ L, e.1.idx ≠ HoloStream.idx .stacked)
+    (hf : (L ++ [(HoloStream.stacked, rs)]).find? (fun e => e.1.name tbl == s) = some (.stacked, rs))
+    (hq : 0 < (rs.getD q default).1) :
+    FlockC3.Compose.holoSelOne ish tbl
+      (1 + (L.map fun e => heldBefore e.1 e.2 e.2.size).sum + heldBefore .stacked rs q) s q :=
+  ⟨_, _, hS, hf, Nat.min_eq_right hq, by rw [Nat.add_assoc, ← roundIn_stacked rs q L hL]; rfl⟩
+
+/-- **R's Ligerito stage's draws** (`StageHeld`'s last part at `ix = id`): where R's `n` rounds from `k₂` each draw
+coins, the history's round `p` past R's round `k₂`'s (`holoSelOne_stacked`) draws R's round `k₂ + p`. -/
+theorem drawn_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : Array SchedRound}
+    {L : List (HoloStream × Array SchedRound)} {k₂ n : ℕ}
+    (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some (L ++ [(.stacked, rs)]))
+    (hL : ∀ e ∈ L, e.1.idx ≠ HoloStream.idx .stacked)
+    (hf : (L ++ [(HoloStream.stacked, rs)]).find? (fun e => e.1.name tbl == s) = some (.stacked, rs))
+    (hpos : ∀ p < n, 0 < (rs.getD (k₂ + p) default).1) :
+    ∀ p q, (List.range' k₂ n)[p]? = some q → FlockC3.Compose.holoSelOne ish tbl
+      (1 + (L.map fun e => heldBefore e.1 e.2 e.2.size).sum + heldBefore .stacked rs k₂ + p) s q := by
+  intro p q hp
+  obtain ⟨hlt, rfl⟩ := List.getElem?_eq_some_iff.1 hp
+  rw [List.length_range'] at hlt
+  simp only [List.getElem_range', Nat.one_mul]
+  have h := holoSelOne_stacked (q := k₂ + p) hS hL hf (hpos p hlt)
+  rwa [heldBefore_stacked p fun p' hp' => hpos p' (by omega), ← Nat.add_assoc] at h
+
 end FlockC3.RegLevels
 
 #print axioms FlockC3.RegLevels.heldStage_of_lgCoins
+#print axioms FlockC3.RegLevels.heldBefore_succ
+#print axioms FlockC3.RegLevels.heldBefore_stacked
+#print axioms FlockC3.RegLevels.roundIn_stacked
+#print axioms FlockC3.RegLevels.holoSelOne_stacked
+#print axioms FlockC3.RegLevels.drawn_stacked
