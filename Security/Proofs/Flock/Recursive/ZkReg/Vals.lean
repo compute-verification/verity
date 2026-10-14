@@ -77,7 +77,8 @@ theorem regOpenZ_of_read {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (
   rcases p with uq | g
   · rfl
   · exfalso
-    simp at hrow
+    change false = true at hrow
+    exact Bool.false_ne_true hrow
 
 /-- **The committed values of a `--zk --registered` session are the registered values at its registered reads**, except
 with probability `ε_ks + δ_link + δ_reg`: for every registered-reads record `rd` of `layShHJ`, with `cr/sha-512` at
@@ -238,8 +239,9 @@ theorem regBadZ_oneG {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin 
     rw [vbHJ_pos dj y₀ ht hc hscope hU hpub _, hpos]
     rfl
   · rw [vbHJ_pos dj y₀ ht hc hscope hU hpub _, hpos]
-    change Xt (oneGK c hU n) ≠ true
-    exact hne
+    simpa [vbHJ, HmRowsZX.bindingZ, LayoutZ.bindingZ, regOpenZ, ZkHidden.layShHJ,
+      HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits, HiddenExec.keyReadersH,
+      Layout.Readers.ofRows, Layout.keyGate, oneGK] using hne
 
 /-- **`zk_session_regValsR` with the wrong units counted too**: on its assumptions, an accepted session whose draw meets
 the units that compute wrongly or read a registered-value disagreement (`regWrongZ`, at the registrant's opening
