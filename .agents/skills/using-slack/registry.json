@@ -125,20 +125,31 @@
       "usergroup": "S0C5VRGBZFE",
       "linear": "MEM",
       "owns": [
-        "verity/core/protocols/pous/",
-        "verity/core/protocols/bandwidth/",
-        "verity/core/devices/memory_challenger/",
         "Security/Definitions/Pous/",
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
-        "benchmarks/pous/",
         "benchmarks/bandwidth/",
+        "benchmarks/bound_receipt/",
+        "benchmarks/codec_mix/",
+        "benchmarks/codec_tensor/",
+        "benchmarks/ephemeral/",
+        "benchmarks/fill_compute/",
+        "benchmarks/host_tier/",
+        "benchmarks/kv_filler/",
+        "benchmarks/link_pricing/",
+        "benchmarks/overhead_frontier/",
+        "benchmarks/pous/",
+        "benchmarks/rate_redteam/",
         "benchmarks/rate_squaring/",
+        "benchmarks/remote_session/",
+        "benchmarks/resource_accounting/",
+        "benchmarks/sketch_tag/",
+        "benchmarks/tag_fast/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
-        "benchmarks/codec_tensor/",
-        "benchmarks/kv_filler/",
-        "benchmarks/remote_session/"
+        "verity/core/devices/memory_challenger/",
+        "verity/core/protocols/bandwidth/",
+        "verity/core/protocols/pous/"
       ]
     },
     {
@@ -216,7 +227,9 @@
       "charter": "Daniel",
       "usergroup": null,
       "linear": "TOP",
-      "branch_suffixes": ["c3b2"],
+      "branch_suffixes": [
+        "c3b2"
+      ],
       "owns": [
         "AGENTS.md",
         "README.md",
