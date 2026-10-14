@@ -665,10 +665,3 @@ end family
 end
 
 end FlockC3.HPort
-
-#print axioms FlockC3.HPort.hKey_of_check
-#print axioms FlockC3.HPort.srcHReads_of
-#print axioms FlockVBridge.Sparse.rowsOk_h
-#print axioms FlockVBridge.Sparse.leavesOk_get
-#print axioms FlockVBridge.Sparse.inGroups_sparse
-#print axioms FlockVBridge.Sparse.check_sparse_all
