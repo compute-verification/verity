@@ -175,11 +175,12 @@ theorem stackedRounds_coins {sh : Flock.RecVStar.StackedShape} (hc : sh.claims =
 (`innerCommitsAt`) and its stream `stacked/rep0`, the inner statement's META names R's shape, at R's two claims, and the
 stream holds a round of coins for each round of `stackedRounds` at it (`StackedCoins.innerCommits_held`). -/
 theorem stackedCoins_of_innerCommitsAt {tr : Lean.Json} {record : String} {st : Flock.Stmt} {reg : Lean.Json}
-    {cs : Flock.RecVStar.InnerCommits} (h : Flock.Guarantees.innerCommitsAt tr record st reg = .ok cs)
+    {cs : Flock.RecVStar.InnerCommits}
+    (h : FlockSoundness.Discharge.Recursion.innerCommitsAt tr record st reg = .ok cs)
     {x : Flock.RecVStar.InnerStream} (hx : cs.stream? "stacked/rep0" = some x) :
     ∃ sh rs, Flock.RecVStar.stackedShapeOf st.c.metaJ = .ok (some sh) ∧ sh.claims = Flock.RecVStar.STACKED_CLAIMS ∧
       Flock.RecVStar.stackedRounds sh = some rs ∧ x.coins.size = rs.size := by
-  unfold Flock.Guarantees.innerCommitsAt at h
+  unfold FlockSoundness.Discharge.Recursion.innerCommitsAt at h
   obtain ⟨shape, hsh, h⟩ := TopHold.eok_bind h
   obtain ⟨sh, rfl, hc, rs, hrs, hsz⟩ := StackedCoins.innerCommits_held h hx
   exact ⟨sh, rs, hsh, hc, hrs, hsz⟩
