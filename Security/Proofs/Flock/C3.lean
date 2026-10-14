@@ -100,6 +100,7 @@ import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.C3.RegLevels.AccReads
+import Proofs.Flock.C3.RegLevels.SharedRows
 import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.RegLevels.ROpens
