@@ -94,7 +94,7 @@ class World:
     def queue(self, **kw) -> Queue:
         kw.setdefault("ready", lambda n, h: (n, h) in self.gh.ready)
         return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh,
-                     store=self.store, notes=self.tmp / "notes", log=self.logs.append, **kw)
+                     store=self.store, log=self.logs.append, **kw)
 
     def on_next(self, q: Queue) -> list[int]:
         q.fetch()
@@ -208,17 +208,18 @@ def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world
     assert set(merged["guarantees"]) == {"T", "A", "B"}
 
 
-def test_a_conflicting_pr_is_left_out_and_its_owner_told_which_queued_pr_touched_the_file(world):
+def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):
+    """13 Oct: a sync on @lean's VM wrote conflict handoffs for ci's and circuits' PRs into @lean's notes clone, where they
+    waited for @lean's next notes push; drive tells each conflict in the merge thread (`Driver.refuse`)."""
+    monkeypatch.setenv("RESEARCH_NOTES", str(world.tmp / "notes"))
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, world.change({"a.txt": "two\n", "b.txt": "b2\n"}))
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1]
     assert entries[2].state == "refused" and entries[2].why == "conflicts with `next` in a.txt (touched by #1)"
-    notices = sorted((world.tmp / "notes" / "lanes" / "lane-2").glob("*-handoff-from-merge-queue-2-conflict.md"))
-    assert len(notices) == 1 and "touched by #1" in notices[0].read_text()
-    q.sync()
-    assert len(list((world.tmp / "notes" / "lanes" / "lane-2").glob("*.md"))) == 1      # one notice per head
+    assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why
+    assert not (world.tmp / "notes").exists()
     assert q.status()[2].why == "conflicts with `next` in a.txt (touched by #1) (at the last sync)"
 
 
@@ -244,8 +245,7 @@ def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
     assert world.on_next(q) == [1, 2, 3]                        # an ejection takes effect at the next sync
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 3] and entries[2].why.startswith("ejected at")
-    notice = next((world.tmp / "notes" / "lanes" / "lane-2").glob("*-eject.md")).read_text()
-    assert "breaks suite `verity`" in notice
+    assert "breaks suite `verity`" in entries[2].why                # the notice is `tell_ejected`'s post, tested below
     world.gh.put(2, world.change({"b.txt": "fixed\n"}))
     assert [m.pr for m in q.sync()[0]] == [1, 3, 2]
 
@@ -342,7 +342,7 @@ def test_the_clone_authenticates_as_the_callers_checkout_does_and_fails_rather_t
 
     def queue(auth: tuple[str, ...]) -> Queue:
         return Queue(world.tmp / "q" / "verity", remote=served, github=world.gh, ready=lambda n, h: True,
-                     notes=world.tmp / "notes", log=world.logs.append, auth=auth)
+                     log=world.logs.append, auth=auth)
 
     with pytest.raises(QueueError, match=r"git clone .*terminal prompts disabled; no credential helper applies to the remote"):
         queue(()).status()
@@ -678,7 +678,7 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
     assert labels.ready(1, h1) is True
     q = Queue(world.tmp / "q" / "verity", remote=str(world.origin), github=world.gh, ready=labels.ready,
-              store=world.store, notes=world.tmp / "notes", log=world.logs.append)
+              store=world.store, log=world.logs.append)
     members, _ = q.sync()
     assert [m.pr for m in members] == [1]
     h2 = world.change({"a.txt": "a2\n"})
