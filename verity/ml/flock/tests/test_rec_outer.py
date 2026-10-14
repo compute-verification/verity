@@ -241,12 +241,16 @@ def test_a_level_of_salted_leaves_is_refused(tmp_path):
         O.stage(level, tmp_path, O.Chain.build(PROGRAM, qs, _coefs(qs)), _coefs(qs), tops)
 
 
+def _verify(d: Path) -> subprocess.CompletedProcess:
+    return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
+                           "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program",
+                           str(d / "program.json"), "--registered", str(d / "registered.json")],
+                          capture_output=True, text=True, check=False)
+
+
 def _statement(d: Path) -> dict:
     """The Lean verifier's `statement` on a staged level under the verifier's own files: its first line."""
-    p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
-                        "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
-                        "--registered", str(d / "registered.json")],
-                       capture_output=True, text=True, check=False)
+    p = _verify(d)
     assert p.returncode == 0, p.stdout + p.stderr
     line = json.loads(p.stdout.splitlines()[0])
     assert line["partition_check"]["units"] == "derived"
@@ -260,6 +264,39 @@ def test_the_lean_verifier_reads_the_statement_under_the_verifiers_own_files(sta
     line = _statement(d)
     own = json.loads((d / "registered.json").read_text())["ports"]
     assert line["registered"] == {k: {"value": v["value"], "root": v["root"]} for k, v in own.items()}
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
+def test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening(staged, tmp_path):
+    """One of R's levels names the opening unit `rec-open-stacked/l<LANES>-h<H>` (V*'s `recOpenStackedName`), and the Lean
+    verifier holds it to the opening's net under that name (`Flock.RecOpen.check`), as it holds a `rec-open/` unit. The
+    staged level with its unit renamed (its public file pinning the renamed file) is read under the verifier's own files;
+    with the unit's first AND row changed as well, it is refused, naming the row."""
+    d, name = tmp_path / "s", "rec-open-stacked/l8-h1"
+    shutil.copytree(staged[0], d)
+    lines = (d / "circuit.txt").read_text().split("\n")
+    at = next(k for k, line in enumerate(lines) if line.startswith("CIRCUIT unit ")) + 1
+    fields = lines[at].split(" ")
+    assert fields[1] == "rec-open/l8-h1", fields[:2]
+    lines[at] = " ".join([fields[0], name, *fields[2:]])
+    head, rest = (staged[0] / "pub.bin").read_bytes().split(b"\n", 1)
+    head = json.loads(head)
+
+    def write():
+        text = "\n".join(lines)
+        (d / "circuit.txt").write_text(text)
+        head["circuit_sha512"] = FC.digest(text)
+        head["units"]["classes"] = [FC.class_digest(text)] * len(head["units"]["classes"])
+        (d / "pub.bin").write_bytes(json.dumps(head).encode() + b"\n" + rest)
+
+    write()
+    _statement(d)
+    row = next(q for q, line in enumerate(lines[at + 1:]) if line not in (f"1 {q} 1 {q}", "0 0"))
+    lines[at + 1 + row] = "1 0 1 1"
+    write()
+    p = _verify(d)
+    assert p.returncode == 1 and f"not the verifier's {name} (row {row} differs)" in p.stdout, p.stdout + p.stderr
 
 
 def _sparse(H: int, c: int, positions: list[int], seed: int):

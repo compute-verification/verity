@@ -55,7 +55,10 @@ starts, or a Python started by a program it starts, traces its own opens while i
 (`guard/child/`): one that opens a file outside the inputs fails the suite as the test would, and so does one whose tracer
 doesn't start; the failure names the test and the file. Nothing sees into other programs (bash, git, `uv`, a Python run with
 `-I`, `-E` or `-S`, or on a PYTHONPATH without the tracer): what they read is unchecked, and checking it would mean keying
-their suite on the whole tree. List what they read under `inputs`, or give the test a stand-in for it.
+their suite on the whole tree. List what they read under `inputs`, or give the test a stand-in for it. The one exception is the
+suite's own build outputs (`artifacts`, a Lean executable reads only what its arguments name): such a program's start is taken
+as reading the repository paths it is given, a file with the files beside it and a directory whole, checked against the inputs
+like any read, and `lake build` of them in their package as reading nothing the key doesn't hold (`VERITY_SUITE_PROGRAMS`).
 
 Per-test verdicts. In a suite that declares `parallel = true`, whose tests run in any order and in any process, each test that
 passed is also kept on its own, even when its suite failed: under its module's key (`module_key`), which is the suite's with the
@@ -70,7 +73,7 @@ children's included, `child/verity_suite_reads.py`), a module's pass is kept und
 file inputs, fixtures, runner and configuration whole, its test modules as above, and in place of the directories it depends on the
 run's read set (`TRACED`), each file's object id (a file git doesn't hold by its sha256) and each listed directory's names. Such a pass
 is reused while every read in its set finds what it found, so a change to a package file no test read re-runs nothing. A module
-whose tests started a program no tracer sees into (anything but a Python that loads the tracer) is kept on the suite's inputs whole,
+whose tests started a program no tracer sees into (anything but a Python that loads the tracer or a build output it declares) is kept on the suite's inputs whole,
 and so is every module when that happened outside one. A pass of a whole suite traced so (every test ran, none started such a
 program) is also kept as the suite's (`PerTest.keep_whole`), under `traced_key` with every test module in it, and a run whose
 suite key missed reuses it while its read set holds, without starting pytest: the one traced reuse a suite that doesn't declare
@@ -1263,7 +1266,7 @@ def _durations() -> dict[str, float]:
 
 
 def longest(suite: Suite, n: int) -> list[str]:
-    """The ``n`` tests of ``suite`` whose calls took longest when their passes were last kept (`PerTest`), longest first: what
+    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: what
     the guard starts at the heads of the workers' shares (`heavy_first`). An order only, which no key or verdict reads."""
     d = per_test_dir(suite)
     last: dict[str, tuple[str, float]] = {}
@@ -1294,7 +1297,7 @@ class Result:
     watched: list | None = None      # workspace metadata files the tests read
     distributions: list | None = None    # installed distributions the tests imported
     missing: list | None = None      # top-level imports that found nothing
-    passed: dict | None = None       # node id -> call seconds, for each test that passed
+    passed: dict | None = None       # node id -> setup and call seconds, for each test that passed
     failed_tests: list | None = None     # node ids of the tests that failed
     reads: dict | None = None        # test module (or "*") -> the suite's other test modules it opened
     reused: int = 0                  # tests left out because a kept pass answers for them (`PerTest`)
@@ -1347,7 +1350,8 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     report.unlink(missing_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
     env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_REPORT=str(report),
-               VERITY_SUITE_WATCH=json.dumps(list(watch)), VERITY_SUITE_MARKDOWN="1" if markdown(suite) else "0")
+               VERITY_SUITE_WATCH=json.dumps(list(watch)), VERITY_SUITE_MARKDOWN="1" if markdown(suite) else "0",
+               VERITY_SUITE_PROGRAMS=json.dumps(list(suite.artifacts)))
     env.pop("VERITY_SUITE_REUSE", None)
     env.pop("VERITY_SUITE_MODULE", None)
     (logs / f"{slug}.reuse.json").unlink(missing_ok=True)
@@ -1540,6 +1544,20 @@ def _count(r: Result) -> str:
     return ", ".join(f"{c[k]} {k}" for k in ("passed", "reused", "failed", "error", "skipped") if c.get(k)) or "no tests"
 
 
+def failing_path(out: Path) -> Path:
+    """Beside `--json`'s ``out``: the suites failed so far, rewritten as each one fails, so a check that keeps going is known to
+    have failed while it runs (`research queue drive` reads it through `research status --also`)."""
+    return out.with_name(f"{out.stem}.failed.json")
+
+
+def failing(out: Path, results: list[Result]) -> None:
+    doc = [{"name": r.suite.name, "suite": r.suite.path, "failed_tests": (r.failed_tests or [])[:10],
+            "log": r.log.name if r.log else None} for r in results if r.status == "failed"]
+    tmp = failing_path(out).with_suffix(".tmp")
+    tmp.write_text(json.dumps(doc, indent=1) + "\n")
+    tmp.replace(failing_path(out))
+
+
 def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
     # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check left a 42 GB one on vy-cpu-2, 11 Oct)
@@ -1692,6 +1710,8 @@ def main(argv: list[str] | None = None) -> int:
         r = fut.result()
         r.key = k
         results.append(r)
+        if a.json and r.status == "failed":
+            failing(a.json, results)
         known[s.name] = r.seconds
         u = used(r, paths, deps, tree, lock)
         if a.fresh and r.status == "failed":
@@ -1749,6 +1769,10 @@ def main(argv: list[str] | None = None) -> int:
                 print("        the guard wrote no report, so nothing vouches for what the tests read")
             print("        " + "\n        ".join(r.log.read_text().splitlines()[-25:]) + f"\n        log: {r.log}")
 
+    if a.json and any(r.status == "failed" for r in results):
+        failing(a.json, results)
+    elif a.json:
+        failing_path(a.json).unlink(missing_ok=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(todo))) as pool:
         futures = {pool.submit(start, s, paths): (s, keys[0], paths, deps) for s, paths, keys, deps in todo}
         handled = set()

@@ -192,6 +192,8 @@ class MoEFusedExperts:
     #: scope (`MoEFusedExpertsFp8`) overrides with `_numeric_pins`
     operand_dtype = "bfloat16"
     absent_ptrs = ("a_scale_ptr", "b_scale_ptr")
+    #: numeric pins `_tiling` checks instead (the block-FP8 scope's SWAP_AB, which a tuned tile sets)
+    tiling_keys = ()
     kernel_note = "bf16 unquantised kernel"
 
     def _numeric_pins(self) -> dict[str, Any]:
@@ -294,7 +296,7 @@ class MoEFusedExperts:
             up_spec, down_spec = (T.moe_expert_gemm_spec(target_of(ctx)[0], E, K, N, routed=w) for K, N, w in ((H, 2 * I, False), (I, H, True)))
         except T.UnregisteredTarget as e:
             return unsupported(node, f"target has no registered fused-MoE binding: {e}")
-        r = self._fused(node, up, expect_weighted=False, expect_top_k=TOPK, E=E, K=H, N=2 * I, P=P)
+        r = self._fused(node, up, ctx, expect_weighted=False, expect_top_k=TOPK, E=E, K=H, N=2 * I, P=P)
         if isinstance(r, Unsupported):
             return r
         x_up, w13, c1 = r
@@ -316,7 +318,7 @@ class MoEFusedExperts:
         parts.append(dataclasses.replace(silu_r, spec=bind(_ACT.SiluMul, I=silu_r.spec.bindings["I"]), hint=f"{hint}/silu_and_mul", pattern=self.name))
 
         # 5. down GEMM over pairs, routed weight in the epilogue ---------------------------------------------------
-        r = self._fused(node, down, expect_weighted=True, expect_top_k=1, E=E, K=I, N=H, P=P)
+        r = self._fused(node, down, ctx, expect_weighted=True, expect_top_k=1, E=E, K=I, N=H, P=P)
         if isinstance(r, Unsupported):
             return r
         x_dn, w2, c3 = r
@@ -380,19 +382,28 @@ class MoEFusedExperts:
             return r
         return unsupported(node, f"no profile pattern resolves the router's gate GEMM inside {op_name(node.op)}", child_id=gate.id)
 
-    def _fused(self, node: TreeNode, launch: TreeNode, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int, P: int):
-        """Check one `fused_moe_kernel` launch against the pins and return `(a_view, b_view, c_view)` or an Unsupported."""
+    def _tiling(self, node: TreeNode, launch: TreeNode, ctx: StepContext) -> Unsupported | None:
+        """None when the launch's tiling is the profile's pinned one (`fused_pins`, warps, stages)."""
         e = launch.enter
         consts = dict(e.constexprs)
-        bad = {k: (consts.get(k), v) for k, v in self._numeric_pins().items() if consts.get(k) != v}
-        if bad:
-            return unsupported(node, f"fused_moe_kernel numeric constexprs differ from the modelled {self.kernel_note}",
-                               mismatches={k: {"observed": o, "pinned": p} for k, (o, p) in bad.items()})
         bad = {k: (consts.get(k), v) for k, v in self.fused_pins.items() if consts.get(k) != v}
         if bad or e.num_warps != self.fused_num_warps or e.num_stages != self.fused_num_stages:
             return unsupported(node, "fused_moe_kernel tiling differs from the pinned profile",
                                mismatches={k: {"observed": o, "pinned": p} for k, (o, p) in bad.items()},
                                num_warps=e.num_warps, num_stages=e.num_stages)
+        return None
+
+    def _fused(self, node: TreeNode, launch: TreeNode, ctx: StepContext, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int,
+               P: int):
+        """Check one `fused_moe_kernel` launch against the pins and return `(a_view, b_view, c_view)` or an Unsupported."""
+        e = launch.enter
+        consts = dict(e.constexprs)
+        bad = {k: (consts.get(k), v) for k, v in self._numeric_pins().items() if k not in self.tiling_keys and consts.get(k) != v}
+        if bad:
+            return unsupported(node, f"fused_moe_kernel numeric constexprs differ from the modelled {self.kernel_note}",
+                               mismatches={k: {"observed": o, "pinned": p} for k, (o, p) in bad.items()})
+        if (t := self._tiling(node, launch, ctx)) is not None:
+            return t
         if consts.get("MUL_ROUTED_WEIGHT") is not expect_weighted or consts.get("top_k") != expect_top_k:
             return unsupported(node, "fused_moe_kernel launch order / role does not match (MUL_ROUTED_WEIGHT, top_k)",
                                observed={"MUL_ROUTED_WEIGHT": consts.get("MUL_ROUTED_WEIGHT"), "top_k": consts.get("top_k")},
@@ -496,6 +507,8 @@ MOE_CONSTRUCTION_PATTERNS = {"indexed-read": MoEFusedExperts, "padded": MoEFused
 #: the experts class whose arithmetic the block-FP8 pair forms state (`TargetProfile.moe_backend = "triton"`)
 TRITON_EXPERTS = TargetProfile.MOE_BACKEND_KERNELS["triton"]
 K_QUANT = "per_token_group_fp8_quant"
+#: block 128's fused SiLU and second activation quant (`triton_moe.py:474-485`)
+K_SILU_QUANT = "silu_and_mul_per_block_quant"
 
 
 def header_moe_experts_class(ctx: StepContext) -> str | None:
@@ -509,8 +522,11 @@ def header_moe_experts_class(ctx: StepContext) -> str | None:
 
 
 def _quant_io(q: TreeNode) -> tuple[Any, Any, Any]:
-    """`(input, output_q, output_s)` of a `per_token_group_fp8_quant` call: its first three parameters."""
+    """`(input, output_q, output_s)` of a `per_token_group_fp8_quant` call (its first three parameters), or of a
+    `silu_and_mul_per_block_quant` call (`input`, `out`, `scales`)."""
     a = bound_args(q)
+    if op_name(q.op) == K_SILU_QUANT:
+        return a.get("input"), a.get("out"), a.get("scales")
     return tuple(a.get(n, a.get(f"arg{i}")) for i, n in enumerate(("input", "output_q", "output_s")))
 
 
@@ -554,6 +570,7 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
     name = "moe.fused_experts.pairwise.fp8"
     operand_dtype = "float8_e4m3fn"
     absent_ptrs = ()
+    tiling_keys = ("SWAP_AB",)
     kernel_note = "block-FP8 kernel (use_fp8_w8a8, group_n == group_k == G)"
     group: int = 0
 
@@ -581,10 +598,29 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
                                count=len(qs), census=moe_subtree_census(node))
         return qs
 
-    def _fused(self, node: TreeNode, launch: TreeNode, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int, P: int):
+    def _tiling(self, node: TreeNode, launch: TreeNode, ctx: StepContext) -> Unsupported | None:
+        """A batch-invariant target's pinned tile (`MoEFusedExperts._tiling`) with SWAP_AB False; otherwise the tuned tile the Build
+        accepts (`targets.moe_fp8_tuned_tile_refusal`: cc 9.0, SWAP_AB = `enable_swap_ab`, a wgmma tile)."""
+        tp = target_of(ctx)[0]
+        e = launch.enter
+        c = e.constexprs
+        if tp.batch_invariant:
+            if c.get("SWAP_AB") is not False:
+                return unsupported(node, f"fused_moe_kernel numeric constexprs differ from the modelled {self.kernel_note}",
+                                   mismatches={"SWAP_AB": {"observed": c.get("SWAP_AB"), "pinned": False}})
+            return super()._tiling(node, launch, ctx)
+        why = T.moe_fp8_tuned_tile_refusal(tp, c.get("BLOCK_SIZE_M"), c.get("BLOCK_SIZE_N"), c.get("BLOCK_SIZE_K"), e.num_warps, c.get("SWAP_AB"))
+        if why is not None:
+            return unsupported(node, f"fused_moe_kernel tuned tile: {why}", child_id=launch.id,
+                               tile={k: c.get(k) for k in ("BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K", "GROUP_SIZE_M", "SWAP_AB")},
+                               num_warps=e.num_warps, num_stages=e.num_stages)
+        return None
+
+    def _fused(self, node: TreeNode, launch: TreeNode, ctx: StepContext, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int,
+               P: int):
         """`MoEFusedExperts._fused` under the FP8 pins, then the scales (`_scaled`); returns `(the bf16 input of the quant that wrote A, b,
         c)`, so `match`'s A checks read hidden_states (w13) and the SiLU output (w2) through their quants."""
-        r = super()._fused(node, launch, expect_weighted=expect_weighted, expect_top_k=expect_top_k, E=E, K=K, N=N, P=P)
+        r = super()._fused(node, launch, ctx, expect_weighted=expect_weighted, expect_top_k=expect_top_k, E=E, K=K, N=N, P=P)
         if isinstance(r, Unsupported):
             return r
         s = self._scaled(node, launch, E=E, K=K, N=N)

@@ -191,6 +191,12 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     return tuple(out)
 
 
+def requires_build(scheme: str, ctx: Context) -> bool:
+    """The circuit-backed executor is lowered into the row's Build."""
+
+    return scheme in pouw_circuit.SCHEMES
+
+
 def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
     """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
     Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at

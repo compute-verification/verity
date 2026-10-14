@@ -29,8 +29,71 @@
 #ifndef WC_PB
 #define WC_PB 56
 #endif
+#ifndef WC_B3V
+#define WC_B3V 1
+#endif
 
 namespace wc {
+
+// ro-blake3/v1's compression with every add on IMAD (ra-tag-fast's V1, benchmarks/tag_fast/tf.cu): x * 1 + y with the 1
+// read from constant memory, so ptxas cannot fold it back into an IADD3, issues on the FMA pipe beside the integer ALU
+// that the XORs and rotations take. The same function as bw::b3_compress (V0), which WC_B3V=0 selects.
+__constant__ uint32_t kOne = 1;
+
+__device__ __forceinline__ uint32_t mad1(uint32_t a, uint32_t one, uint32_t c) {
+  uint32_t d;
+  asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(d) : "r"(a), "r"(one), "r"(c));
+  return d;
+}
+
+__device__ __forceinline__ void b3_g1(uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d, uint32_t x, uint32_t y,
+                                      uint32_t one) {
+  a = mad1(b, one, mad1(x, one, a));
+  d = __byte_perm(d ^ a, 0, 0x1032);
+  c = mad1(d, one, c);
+  b = __funnelshift_r(b ^ c, b ^ c, 12);
+  a = mad1(b, one, mad1(y, one, a));
+  d = __byte_perm(d ^ a, 0, 0x0321);
+  c = mad1(d, one, c);
+  b = __funnelshift_r(b ^ c, b ^ c, 7);
+}
+
+template <int V>
+__device__ __forceinline__ void b3c(const uint32_t cv[8], uint32_t m[16], uint32_t counter, uint32_t len,
+                                    uint32_t flags, uint32_t out[8]) {
+  if constexpr (V == 0) {
+    bw::b3_compress(cv, m, counter, len, flags, out);
+  } else {
+    const uint32_t one = kOne;
+    uint32_t v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
+    uint32_t v8 = B3_IV0, v9 = B3_IV1, v10 = B3_IV2, v11 = B3_IV3, v12 = counter, v13 = 0, v14 = len, v15 = flags;
+#pragma unroll
+    for (int r = 0; r < 7; ++r) {
+      b3_g1(v0, v4, v8, v12, m[0], m[1], one);
+      b3_g1(v1, v5, v9, v13, m[2], m[3], one);
+      b3_g1(v2, v6, v10, v14, m[4], m[5], one);
+      b3_g1(v3, v7, v11, v15, m[6], m[7], one);
+      b3_g1(v0, v5, v10, v15, m[8], m[9], one);
+      b3_g1(v1, v6, v11, v12, m[10], m[11], one);
+      b3_g1(v2, v7, v8, v13, m[12], m[13], one);
+      b3_g1(v3, v4, v9, v14, m[14], m[15], one);
+      if (r < 6) {
+        const uint32_t t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13],
+                                m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]};
+#pragma unroll
+        for (int i = 0; i < 16; ++i) m[i] = t[i];
+      }
+    }
+    out[0] = v0 ^ v8;
+    out[1] = v1 ^ v9;
+    out[2] = v2 ^ v10;
+    out[3] = v3 ^ v11;
+    out[4] = v4 ^ v12;
+    out[5] = v5 ^ v13;
+    out[6] = v6 ^ v14;
+    out[7] = v7 ^ v15;
+  }
+}
 
 constexpr uint64_t P = (1ull << 61) - 1;
 constexpr int PB = WC_PB;
@@ -227,6 +290,44 @@ __global__ void __launch_bounds__(256) chain_encode(uint64_t steps, uint64_t tst
   atomicXor(xr, (unsigned long long)acc);
 }
 
+// The rebuild's work and the tag's or commit's in one thread, to test whether they add or overlap on the SM's pipes:
+// each step U encode chains (k = 1) advance a word and one hash chain R compressions (H: 0 BLAKE3 V0, 1 BLAKE3 V1,
+// 2 SHA-512), each as chain_encode<1>, chain_b3<1, H> and chain_sha512<1> alone.
+template <int H>
+__global__ void __launch_bounds__(256) chain_mix(uint64_t steps, int R, uint64_t tstep, bw::Key3 key,
+                                                 unsigned long long* xr) {
+  uint64_t id = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  uint64_t y[U], t[U];
+#pragma unroll
+  for (int u = 0; u < U; ++u) { y[u] = canon((id * U + u) * 0x9E3779B97F4A7C15ull & P); t[u] = mulmod(kTau, id * U + u); }
+  uint32_t h[8];
+  uint64_t hs[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) { h[i] = (uint32_t)id * 0x9E3779B9u + i; hs[i] = id * 0x9E3779B97F4A7C15ull + i; }
+  for (uint64_t s = 0; s < steps; ++s) {
+#pragma unroll
+    for (int u = 0; u < U; ++u) { y[u] = encode_word<1>(y[u], t[u]); t[u] = addmod(t[u], tstep); }
+#pragma unroll 1
+    for (int r = 0; r < R; ++r) {
+      if constexpr (H < 2) {
+        uint32_t m[16];
+#pragma unroll
+        for (int i = 0; i < 16; ++i) m[i] = i < 8 ? h[i] : (uint32_t)s + i + r;
+        b3c<H>(key.k, m, 0, 64, bw::B3_KEYED | bw::B3_CHUNK_START, h);
+      } else {
+        uint64_t w[16];
+#pragma unroll
+        for (int i = 0; i < 16; ++i) w[i] = i < 8 ? hs[i] : s + i + r;
+        bw::compress(hs, w);
+      }
+    }
+  }
+  uint64_t acc = (uint64_t)h[0] << 32 ^ h[1] ^ hs[0];
+#pragma unroll
+  for (int u = 0; u < U; ++u) acc ^= y[u];
+  atomicXor(xr, (unsigned long long)acc);
+}
+
 template <int UU>
 __global__ void __launch_bounds__(256) chain_square(uint64_t steps, unsigned long long* xr) {
   uint64_t id = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
@@ -265,9 +366,9 @@ __global__ void __launch_bounds__(256) chain_tag(uint64_t steps, uint32_t g, uns
   atomicXor(xr, (unsigned long long)acc);
 }
 
-// ro-blake3/v1's compression: UU chains a thread, one keyed compression of a full 64-byte block a step, the output the
-// next message's first half.
-template <int UU>
+// ro-blake3/v1's compression in form V (b3c): UU chains a thread, one keyed compression of a full 64-byte block a step,
+// the output the next message's first half.
+template <int UU, int V>
 __global__ void __launch_bounds__(256) chain_b3(uint64_t steps, bw::Key3 key, unsigned long long* xr) {
   const uint32_t id = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t h[UU][8];
@@ -281,12 +382,37 @@ __global__ void __launch_bounds__(256) chain_b3(uint64_t steps, bw::Key3 key, un
       uint32_t m[16];
 #pragma unroll
       for (int i = 0; i < 16; ++i) m[i] = i < 8 ? h[u][i] : (uint32_t)s + i;
-      bw::b3_compress(key.k, m, 0, 64, bw::B3_KEYED | bw::B3_CHUNK_START, h[u]);
+      b3c<V>(key.k, m, 0, 64, bw::B3_KEYED | bw::B3_CHUNK_START, h[u]);
     }
   }
   uint64_t acc = 0;
 #pragma unroll
   for (int u = 0; u < UU; ++u) acc ^= (uint64_t)h[u][0] << 32 | h[u][1];
+  atomicXor(xr, (unsigned long long)acc);
+}
+
+// The commit's SHA-512 compression: UU chains a thread, one compression of a 128-byte block a step, the state the next
+// block's first half.
+template <int UU>
+__global__ void __launch_bounds__(256) chain_sha512(uint64_t steps, unsigned long long* xr) {
+  const uint64_t id = blockIdx.x * blockDim.x + threadIdx.x;
+  uint64_t h[UU][8];
+#pragma unroll
+  for (int u = 0; u < UU; ++u)
+#pragma unroll
+    for (int i = 0; i < 8; ++i) h[u][i] = (id * UU + u) * 0x9E3779B97F4A7C15ull + i;
+  for (uint64_t s = 0; s < steps; ++s) {
+#pragma unroll
+    for (int u = 0; u < UU; ++u) {
+      uint64_t w[16];
+#pragma unroll
+      for (int i = 0; i < 16; ++i) w[i] = i < 8 ? h[u][i] : s + i;
+      bw::compress(h[u], w);
+    }
+  }
+  uint64_t acc = 0;
+#pragma unroll
+  for (int u = 0; u < UU; ++u) acc ^= h[u][0];
   atomicXor(xr, (unsigned long long)acc);
 }
 
@@ -570,7 +696,7 @@ constexpr int WS_MAX_WARPS = 10;   // consumers, the producer and the committers
 
 // The tag and the commit (both off when the pointers are null): `tags` gets block j = jbase + 32 q + l's ro-blake3/v1 tag
 // as 8 little-endian words at 8 (32 q + l); `committers` warps hash the leaves of `ctags` (`cblocks` tags, the previous
-// call's) into `leaves`, 8 big-endian words each. decode = 0 skips the decode (a timing arm: the tag alone).
+// call's) into `leaves`, 8 big-endian words each.
 struct WsTag {
   bw::Key3 key;
   bw::Mid leafmid;
@@ -580,8 +706,11 @@ struct WsTag {
   uint64_t cblocks;
   uint64_t* leaves;
   int committers;
-  int decode;
 };
+
+// gemm_ws_kernel's MODE, fixed at compile time so no branch splits the consumer's code: the tag, the decode, and both
+// interleaved (tag_decode_lane). Without the decode the partial sums are the encoded words' (timing arms only).
+constexpr int WS_TAG = 1, WS_DECODE = 2, WS_INTERLEAVE = 4;
 
 // ro-blake3/v1 over one lane's block: the message u64be j ‖ the LANE_WORDS words little-endian, one chunk of 8 + 8
 // LANE_WORDS bytes (five compressions at either packing).
@@ -604,7 +733,54 @@ __device__ __forceinline__ void b3_lane_tag(const bw::Key3& key, uint64_t j, con
     const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
     const uint32_t flags =
         bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
-    bw::b3_compress(cv, m, 0, len, flags, cv);
+    b3c<WC_B3V>(cv, m, 0, len, flags, cv);
+  }
+}
+
+// b3_lane_tag and decode_lane in one block of code: compression b over its words, still encoded, beside the decode of
+// compression b - 1's, which no later compression reads, so the scheduler can issue the tag's logic and the decode's
+// multiplies together. Compression b's message holds words max(0, 8 b - 1) .. 8 b + 6, each whole.
+template <int KR>
+__device__ __forceinline__ void tag_decode_lane(const bw::Key3& key, uint64_t j, uint64_t (&xw)[LANE_WORDS], uint64_t t,
+                                                uint64_t t32, uint32_t (&cv)[8]) {
+  constexpr int MSG = 2 + 2 * LANE_WORDS, BLOCKS = (MSG + 15) / 16;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+#pragma unroll
+  for (int b = 0; b <= BLOCKS; ++b) {
+    if (b < BLOCKS) {
+      uint32_t m[16];
+#pragma unroll
+      for (int i = 0; i < 16; ++i) {
+        const int u = 16 * b + i;
+        m[i] = u == 0   ? bw::bswap32((uint32_t)(j >> 32))
+               : u == 1 ? bw::bswap32((uint32_t)j)
+               : u < MSG ? (uint32_t)(xw[(u - 2) / 2] >> (32 * (u & 1)))
+                         : 0u;
+      }
+      const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
+      const uint32_t flags =
+          bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
+      b3c<WC_B3V>(cv, m, 0, len, flags, cv);
+    }
+    if (b > 0) {
+      const int lo = b == 1 ? 0 : 8 * (b - 1) - 1, hi = 8 * (b - 1) + 6 < LANE_WORDS ? 8 * (b - 1) + 6 : LANE_WORDS - 1;
+#pragma unroll
+      for (int w0 = lo; w0 <= hi; w0 += WC_G) {
+        uint64_t nt[WC_G];
+#pragma unroll
+        for (int i = 0; i < WC_G; ++i) {
+          nt[i] = ~t;
+          if (w0 + i <= hi) t = addmod(t, t32);
+        }
+#pragma unroll
+        for (int r = KR - 1; r >= 0; --r) {
+#pragma unroll
+          for (int i = 0; i < WC_G; ++i)
+            if (w0 + i <= hi) xw[w0 + i] = dec_round(xw[w0 + i], nt[i], r);
+        }
+      }
+    }
   }
 }
 
@@ -649,7 +825,7 @@ __host__ __device__ constexpr int ws_smem_bytes(int stages) {
   return stages * ws_stage_bytes<KR>() + NB8 * 8 * XS_STRIDE + 2 * stages * 8;
 }
 
-template <int KR, int NB8, bool PARTIALS, bool TAG>
+template <int KR, int NB8, bool PARTIALS, int MODE>
 __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* __restrict__ wstore,
                                                                    const uint8_t* __restrict__ x, float* __restrict__ y,
                                                                    int M, int N, int Kd, uint64_t base, int groups,
@@ -717,6 +893,9 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
       uint4 w[TASK_TILES];
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) w[tt] = st[tt * LANES];
+      // `empty` hands the stage to the producer's next bulk copy (the async proxy): only a proxy fence orders the
+      // lanes' shared loads before it, as ptxas may issue the arrive before the loads complete.
+      asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
       __syncwarp();
       if (lane == 0) mbar_arrive(empty + s);
 #pragma unroll
@@ -729,16 +908,21 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
       uint64_t xw[LANE_WORDS];
 #pragma unroll
       for (int w = 0; w < LANE_WORDS; ++w) xw[w] = st[w * LANES];
+      asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");   // before `empty`, as above
       __syncwarp();
       if (lane == 0) mbar_arrive(empty + s);
-      if constexpr (TAG) {
+      if constexpr ((MODE & WS_TAG) != 0) {
         uint32_t cv[8];
-        b3_lane_tag(tg.key, tg.jbase + q * LANES + lane, xw, cv);
+        if constexpr ((MODE & WS_INTERLEAVE) != 0)
+          tag_decode_lane<KR>(tg.key, tg.jbase + q * LANES + lane, xw,
+                              mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32, cv);
+        else b3_lane_tag(tg.key, tg.jbase + q * LANES + lane, xw, cv);
         uint4* o = reinterpret_cast<uint4*>(tg.tags + 8 * (q * LANES + lane));
         o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
         o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
       }
-      if (tg.decode) decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
+      if constexpr ((MODE & WS_DECODE) != 0 && (MODE & WS_INTERLEAVE) == 0)
+        decode_lane<KR>(xw, mulmod(kTau, (base + q * TASK_WORDS + lane) % P), t32);
 #pragma unroll
       for (int tt = 0; tt < TASK_TILES; ++tt) {
         const uint32_t a[4] = {take4(xw, 128 * tt), take4(xw, 128 * tt + 32), take4(xw, 128 * tt + 64),
@@ -757,6 +941,153 @@ __global__ void __launch_bounds__(WS_MAX_WARPS * 32) gemm_ws_kernel(const void* 
         }
       }
     }
+  }
+}
+
+// Lane block j's tag straight from the store (32 q + l's words are q TASK_WORDS + 32 w + l, a warp's loads coalesced),
+// its words loaded a compression at a time (PIPE: the next compression's while this one runs), into out's 8 words;
+// jj = jbase + j, its index in the tag.
+template <bool PIPE = false>
+__device__ __forceinline__ void audit_lane_tag(const uint64_t* __restrict__ store, const bw::Key3& key, uint64_t j,
+                                               uint64_t jj, uint32_t* out) {
+  constexpr int MSG = 2 + 2 * LANE_WORDS, BLOCKS = (MSG + 15) / 16;
+  const unsigned long long* src =
+      reinterpret_cast<const unsigned long long*>(store) + (j / LANES) * TASK_WORDS + j % LANES;
+  const auto word = [&](int u) -> uint64_t {
+    return u == 0 ? 0 : u < MSG ? __ldcs(src + (size_t)((u - 2) / 2) * LANES) : 0;
+  };
+  uint32_t cv[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key.k[i];
+  uint64_t v[8], nv[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) v[i] = word(2 * i);
+#pragma unroll
+  for (int b = 0; b < BLOCKS; ++b) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      if (!PIPE && b) v[i] = word(16 * b + 2 * i);
+      if (PIPE && b + 1 < BLOCKS) nv[i] = word(16 * (b + 1) + 2 * i);
+    }
+    uint32_t m[16];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      const bool first = b == 0 && i == 0;
+      m[2 * i] = first ? bw::bswap32((uint32_t)(jj >> 32)) : (uint32_t)v[i];
+      m[2 * i + 1] = first ? bw::bswap32((uint32_t)jj) : (uint32_t)(v[i] >> 32);
+    }
+    const uint32_t len = b + 1 < BLOCKS ? 64 : 4 * (MSG - 16 * (BLOCKS - 1));
+    const uint32_t flags =
+        bw::B3_KEYED | (b == 0 ? bw::B3_CHUNK_START : 0) | (b + 1 == BLOCKS ? bw::B3_CHUNK_END | bw::B3_ROOT : 0);
+    b3c<WC_B3V>(cv, m, 0, len, flags, cv);
+    if (PIPE && b + 1 < BLOCKS)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) v[i] = nv[i];
+  }
+  uint4* o = reinterpret_cast<uint4*>(out);
+  o[0] = make_uint4(cv[0], cv[1], cv[2], cv[3]);
+  o[1] = make_uint4(cv[4], cv[5], cv[6], cv[7]);
+}
+
+// The audit's own pass over the store, no decode and no product: a thread a lane block. Its tags are gemm_ws_kernel's.
+__global__ void __launch_bounds__(256) audit_tag_kernel(const uint64_t* __restrict__ store, uint64_t blocks,
+                                                        bw::Key3 key, uint64_t jbase, uint32_t* __restrict__ tags) {
+  for (uint64_t j = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x; j < blocks; j += (uint64_t)gridDim.x * blockDim.x)
+    audit_lane_tag(store, key, j, jbase + j, tags + 8 * j);
+}
+
+// b3_leaf over 16 tags this warp wrote before its __syncwarp, read through L1 (ld.ca), never the read-only path a
+// const __restrict__ pointer allows.
+__device__ __forceinline__ void audit_leaf(const uint32_t* T, uint64_t leaf, const bw::Mid& mid, uint64_t* out) {
+  uint64_t s[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) s[i] = mid.h[i];
+#pragma unroll 1
+  for (int blk = 0; blk < 5; ++blk) {
+    uint64_t w[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i;
+      uint64_t v = 0;
+      if (q == 0) {
+        v = leaf;
+      } else if (q <= 64) {
+        const uint2 t = __ldca(reinterpret_cast<const uint2*>(T) + (q - 1));
+        v = ((uint64_t)bw::bswap32(t.x) << 32) | bw::bswap32(t.y);
+      } else if (q == 65) {
+        v = 0x80ULL << 56;
+      }
+      if (q == 79) v = (uint64_t)(128 + 8 + 512) * 8;
+      w[i] = v;
+    }
+    bw::compress(s, w);
+  }
+#pragma unroll
+  for (int i = 0; i < 8; ++i) out[i] = s[i];
+}
+
+// The audit pass with its leaves: a warp tags 16 tasks' lane blocks (512, as audit_tag_kernel), then each lane hashes
+// one of their 32 leaves from the tags just written, still in L1 or L2, so the tags make no second trip to memory.
+// blocks % 512 == 0; the leaves are wc_commit_leaves'.
+__global__ void __launch_bounds__(256) audit_commit_kernel(const uint64_t* __restrict__ store, uint64_t blocks,
+                                                           bw::Key3 key, bw::Mid mid, uint64_t jbase, uint32_t* tags,
+                                                           uint64_t* __restrict__ leaves) {
+  const int lane = threadIdx.x % 32;
+  const uint64_t warps = (uint64_t)gridDim.x * (blockDim.x / 32);
+  for (uint64_t g = (blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) / 32; g < blocks / 512; g += warps) {
+#pragma unroll 1
+    for (int u = 0; u < 16; ++u) {
+      const uint64_t j = g * 512 + 32 * u + lane;
+      audit_lane_tag(store, key, j, jbase + j, tags + 8 * j);
+    }
+    __syncwarp();
+    const uint64_t c = g * 32 + lane;
+    audit_leaf(tags + c * 16 * 8, c, mid, leaves + c * 8);
+    __syncwarp();
+  }
+}
+
+// audit_commit_kernel into a workspace's nodes (the leaves first), the tags loaded as audit_lane_tag<PIPE>, at least
+// MINB blocks an SM. With scratch, the tags go to the warp's own 512 there (16 KiB a warp, reused every warp task, so
+// they stay in L2) instead of the workspace: the leaves and the tree are the audit's answer, and an opened leaf's tags
+// are recomputed from the store.
+template <bool PIPE, int MINB>
+__global__ void __launch_bounds__(256, MINB) audit_answer_kernel(const uint64_t* __restrict__ store, uint64_t tasks,
+                                                                 bw::Key3 key, bw::Mid mid, uint64_t jbase,
+                                                                 uint32_t* tags, uint64_t* nodes, uint32_t* scratch) {
+  const int lane = threadIdx.x % 32;
+  const uint64_t warps = (uint64_t)gridDim.x * (blockDim.x / 32);
+  const uint64_t w = (blockIdx.x * (uint64_t)blockDim.x + threadIdx.x) / 32;
+  for (uint64_t g = w; g < tasks; g += warps) {
+    uint32_t* T = scratch ? scratch + w * 512 * 8 : tags + g * 512 * 8;
+#pragma unroll 1
+    for (int u = 0; u < 16; ++u) {
+      const uint64_t j = g * 512 + 32 * u + lane;
+      audit_lane_tag<PIPE>(store, key, j, jbase + j, T + 8 * (32 * u + lane));
+    }
+    __syncwarp();
+    const uint64_t c = g * 32 + lane;
+    audit_leaf(T + lane * 16 * 8, c, mid, nodes + c * 8);
+    __syncwarp();
+  }
+}
+
+// tagger.cu's launch_tree from level k on.
+static void tree_from(const bw::Pass& p, size_t k, cudaStream_t st) {
+  const size_t top = p.lv.n.size() - 1;
+  for (; k < top && p.lv.n[k] > bw::WIDE; ++k)
+    bw::node_level<<<(unsigned)((p.lv.n[k + 1] + 127) / 128), 128, 0, st>>>(p.nodes + p.lv.off[k] * 8, p.lv.n[k],
+                                                                           p.nodes + p.lv.off[k + 1] * 8);
+  while (k < top) {
+    bw::Span s;
+    s.levels = (int)std::min<size_t>(bw::SPAN, top - k);
+    for (int t = 0; t <= s.levels; ++t) {
+      s.off[t] = p.lv.off[k + t];
+      s.n[t] = p.lv.n[k + t];
+    }
+    bw::node_span<<<(unsigned)((p.lv.n[k] + (2 * bw::SPAN_THREADS) - 1) / (2 * bw::SPAN_THREADS)), bw::SPAN_THREADS, 0,
+                    st>>>(p.nodes, s);
+    k += s.levels;
   }
 }
 
@@ -811,8 +1142,9 @@ int wc_set_key(const uint64_t* c, int k, uint64_t tau) {
   if (k < 1 || k > MAXK) return 1;
   uint64_t a[MAXK] = {}, b[MAXK] = {}, cc[MAXK] = {};
   for (int j = 0; j < k; ++j) { cc[j] = c[j]; a[j] = 2 * P - c[j] + 1; b[j] = 6 * P - c[j] + 1; }
+  const uint32_t one = 1;
   if (cudaMemcpyToSymbol(kC, cc, sizeof cc) || cudaMemcpyToSymbol(kA, a, sizeof a) || cudaMemcpyToSymbol(kB, b, sizeof b) ||
-      cudaMemcpyToSymbol(kTau, &tau, sizeof tau))
+      cudaMemcpyToSymbol(kTau, &tau, sizeof tau) || cudaMemcpyToSymbol(kOne, &one, sizeof one))
     return 2;
   return cudaDeviceSynchronize() ? 3 : 0;
 }
@@ -844,7 +1176,8 @@ int wc_tag(const uint64_t* store, uint64_t n, uint32_t g, unsigned long long* xr
 }
 
 // what: 0 decode, 1 encode (k rounds a step), 2 the bare squaring (59 a step, `ilp` chains a thread), 3 the tag (two
-// Horner steps a word, 2U words a thread). Steps: chain steps a thread.
+// Horner steps a word, 2U words a thread), 4 and 6 ro-blake3/v1's compression (V0, V1), 5 SHA-512's, 7 chain_mix (k
+// its H, ilp its R). Steps: chain steps a thread.
 int wc_chain(int what, int k, int ilp, uint64_t steps, uint64_t tstep, unsigned long long* xr, int grid, cudaStream_t s) {
   if (what == 0) {
 #define F(K) chain_decode<K><<<grid, 256, 0, s>>>(steps, tstep, xr)
@@ -864,13 +1197,32 @@ int wc_chain(int what, int k, int ilp, uint64_t steps, uint64_t tstep, unsigned 
     }
   } else if (what == 3) {
     chain_tag<<<grid, 256, 0, s>>>(steps, 0x2545F491u & M31, xr);
-  } else if (what == 4) {
+  } else if (what == 4 || what == 6) {
     bw::Key3 key;
     for (int i = 0; i < 8; ++i) key.k[i] = 0x01000193u * (i + 1);
+#define F(U) (what == 4 ? chain_b3<U, 0><<<grid, 256, 0, s>>>(steps, key, xr) \
+                        : chain_b3<U, 1><<<grid, 256, 0, s>>>(steps, key, xr))
     switch (ilp) {
-      case 1: chain_b3<1><<<grid, 256, 0, s>>>(steps, key, xr); break;
-      case 2: chain_b3<2><<<grid, 256, 0, s>>>(steps, key, xr); break;
-      case 4: chain_b3<4><<<grid, 256, 0, s>>>(steps, key, xr); break;
+      case 1: F(1); break;
+      case 2: F(2); break;
+      case 4: F(4); break;
+      default: return 1;
+    }
+#undef F
+  } else if (what == 5) {
+    switch (ilp) {
+      case 1: chain_sha512<1><<<grid, 256, 0, s>>>(steps, xr); break;
+      case 2: chain_sha512<2><<<grid, 256, 0, s>>>(steps, xr); break;
+      default: return 1;
+    }
+  } else if (what == 7) {
+    bw::Key3 key;
+    for (int i = 0; i < 8; ++i) key.k[i] = 0x01000193u * (i + 1);
+    if (ilp < 0) return 1;
+    switch (k) {
+      case 0: chain_mix<0><<<grid, 256, 0, s>>>(steps, ilp, tstep, key, xr); break;
+      case 1: chain_mix<1><<<grid, 256, 0, s>>>(steps, ilp, tstep, key, xr); break;
+      case 2: chain_mix<2><<<grid, 256, 0, s>>>(steps, ilp, tstep, key, xr); break;
       default: return 1;
     }
   } else {
@@ -960,7 +1312,8 @@ static const WsTag& ws_tag_keys(const uint8_t* seed) {
 
 // The warp-specialized form with the tag and the commit: seed (32 bytes) or null for neither; tags (null: no tag) as in
 // WsTag, jbase the first block's index; committers > 0 warps hash the leaves of ctags (cblocks tags) into leaves;
-// decode = 0 skips the decode (the partial sums are then the encoded words', a timing arm only).
+// decode = 0 skips the decode (the partial sums are then the encoded words', a timing arm only), and with a tag decode = 2
+// interleaves it with the decode (tag_decode_lane).
 int wc_gemm_ws_tag(int k, const void* w, const uint8_t* x, float* y, int M, int N, int Kd, uint64_t base, int partials,
                    int consumers, int per_consumer, int groups, int* launched, int decode, const uint8_t* seed,
                    uint64_t jbase, uint32_t* tags, int committers, const uint32_t* ctags, uint64_t cblocks,
@@ -978,7 +1331,7 @@ int wc_gemm_ws_tag(int k, const void* w, const uint8_t* x, float* y, int M, int 
   tg.cblocks = cblocks;
   tg.leaves = leaves;
   tg.committers = committers;
-  tg.decode = decode;
+  const int mode = (tags ? WS_TAG : 0) | (decode ? WS_DECODE : 0) | (tags && decode == 2 ? WS_INTERLEAVE : 0);
   const int stages = consumers * per_consumer;
   const int nb8 = M <= 8 ? 1 : M <= 16 ? 2 : 4, nchunks = Kd / TASK_COLS, nbs = N / 16;
   const int threads = (consumers + 1 + committers) * 32;
@@ -996,9 +1349,16 @@ int wc_gemm_ws_tag(int k, const void* w, const uint8_t* x, float* y, int M, int 
     if (groups > nbs) groups = nbs; \
     kern<<<groups * nchunks, threads, smem, s>>>(w, x, y, M, N, Kd, base, groups, consumers, per_consumer, tg); } while (0)
 #define GN(KR, T) do { if (nb8 == 1) G(KR, 1, T); else if (nb8 == 2) G(KR, 2, T); else G(KR, 4, T); } while (0)
-#define GK(KR) do { if (tags) GN(KR, true); else GN(KR, false); } while (0)
+#define GK(KR) do { \
+    switch (mode) { \
+      case 0: GN(KR, 0); break; \
+      case WS_TAG: GN(KR, WS_TAG); break; \
+      case WS_DECODE: GN(KR, WS_DECODE); break; \
+      case WS_TAG | WS_DECODE: GN(KR, WS_TAG | WS_DECODE); break; \
+      default: GN(KR, WS_TAG | WS_DECODE | WS_INTERLEAVE); \
+    } } while (0)
   switch (k) {
-    case 0: GN(0, false); break;
+    case 0: GN(0, WS_DECODE); break;
     WC_CASES(GK)
     default: return 1;
   }
@@ -1013,6 +1373,56 @@ int wc_gemm_ws(int k, const void* w, const uint8_t* x, float* y, int M, int N, i
                int consumers, int per_consumer, int groups, int* launched, cudaStream_t s) {
   return wc_gemm_ws_tag(k, w, x, y, M, N, Kd, base, partials, consumers, per_consumer, groups, launched, 1, nullptr, 0,
                         nullptr, 0, nullptr, 0, nullptr, s);
+}
+
+// The audit's own tag pass: `blocks` lane blocks of the encoded store, their tags into `tags` as gemm_ws_tag writes them.
+int wc_audit_tag(const void* store, uint64_t blocks, const uint8_t* seed, uint64_t jbase, uint32_t* tags, int grid,
+                 cudaStream_t s) {
+  if (!store || !seed || !tags || !blocks || grid < 1 || blocks % LANES) return 1;
+  audit_tag_kernel<<<grid, 256, 0, s>>>(static_cast<const uint64_t*>(store), blocks, ws_tag_keys(seed).key, jbase, tags);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// wc_audit_tag with the commit's leaves (a workspace's wc_commit_leaves_at) in the same pass: blocks % 512 == 0.
+int wc_audit_commit(const void* store, uint64_t blocks, const uint8_t* seed, uint64_t jbase, uint32_t* tags,
+                    uint64_t* leaves, int grid, cudaStream_t s) {
+  if (!store || !seed || !tags || !leaves || !blocks || grid < 1 || blocks % 512) return 1;
+  const WsTag& tg = ws_tag_keys(seed);
+  audit_commit_kernel<<<grid, 256, 0, s>>>(static_cast<const uint64_t*>(store), blocks, tg.key, tg.leafmid, jbase, tags,
+                                           leaves);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The audit's answer in one call: the pass, then the tree (tree_from), leaving the workspace's leaves and every level,
+// and with keep_tags its tags, as wc_audit_commit and wc_commit_tree do; without keep_tags each warp's tags stay in a
+// scratch slot of its own. form: bit 0 loads each compression's words during the one before (audit_lane_tag<true>),
+// bit 1 asks for 3 blocks an SM. blocks % 512 == 0.
+int wc_audit_tree(const void* store, uint64_t blocks, const uint8_t* seed, uint64_t jbase, void* workspace,
+                  int keep_tags, int form, int grid, cudaStream_t s) {
+  if (!store || !seed || !workspace || !blocks || grid < 1 || blocks % 512 || form < 0 || form > 3) return 1;
+  static uint32_t* scratch = nullptr;
+  static uint64_t scratch_warps = 0;
+  const uint64_t warps = (uint64_t)grid * 8;
+  if (!keep_tags && scratch_warps < warps) {
+    if (scratch) cudaFree(scratch);
+    if (cudaMalloc(&scratch, warps * 512 * 32)) return 4;
+    scratch_warps = warps;
+  }
+  const WsTag& tg = ws_tag_keys(seed);
+  bw::Pass p = bw::make_pass(bw::TAG_B3, blocks, workspace);
+  const auto* E = static_cast<const uint64_t*>(store);
+  uint32_t* sc = keep_tags ? nullptr : scratch;
+#define AK(PIPE, MINB) \
+  audit_answer_kernel<PIPE, MINB><<<grid, 256, 0, s>>>(E, blocks / 512, tg.key, tg.leafmid, jbase, p.tags, p.nodes, sc)
+  switch (form) {
+    case 0: AK(false, 1); break;
+    case 1: AK(true, 1); break;
+    case 2: AK(false, 3); break;
+    default: AK(true, 3); break;
+  }
+#undef AK
+  tree_from(p, 0, s);
+  return cudaGetLastError() ? 4 : 0;
 }
 
 // The commit's workspace for `blocks` tags (tagger.cu's layout: the tags, then every tree level, the leaves first).

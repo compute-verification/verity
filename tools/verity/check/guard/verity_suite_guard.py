@@ -65,7 +65,11 @@ _suite = os.path.join(os.path.realpath(os.getcwd()), "")         # suites.py run
 _current = "*"                                                   # the test module being collected or run
 _test = ""                                                       # the node id of the test running, if one is
 _reads: dict[str, set[str]] = {}                                 # test module (or "*") -> other test modules it opened
-_outcomes: dict[str, float | None] = {}                          # node id -> call seconds, None once a phase did not pass
+#: node id -> seconds of its setup and call, None once a phase did not pass. Setup counts: a module-scoped fixture's setup goes
+#: to the first test that needs it, and ordering by call alone started those late (test_lean_witness, 12 Oct: 138 s of calls
+#: behind 1,270-1,475 s of `f1` setup per worker). A test enters only once its call passed: one stopped mid-call never counts
+_outcomes: dict[str, float | None] = {}
+_setup_s: dict[str, float] = {}                                  # node id -> seconds of its passed setup, until its call reports
 _failed: set[str] = set()
 _traced: set[str] = set()                                        # "F<tab>file" / "L<tab>directory" this process read
 _untraced: dict[str, set[str]] = {}                              # test module (or "*") -> programs no tracer sees into
@@ -91,14 +95,16 @@ def _audit(event: str, args: tuple) -> None:
             _forked.seen(event, args, _current, _test)
         return
     try:
-        hit = _tracer.trace(event, args) if _tracer is not None else None
+        hits = _tracer.trace(event, args) if _tracer is not None else []
     except (TypeError, ValueError):
-        hit = None
-    if hit is not None:
-        if hit[0] == "X":
-            _untraced.setdefault(_current, set()).add(hit[1])
+        hits = []
+    for kind, rel in hits:
+        if kind == "X":
+            _untraced.setdefault(_current, set()).add(rel)
+        elif kind == "O":
+            _outside.add(rel)
         else:
-            _traced.add(f"{hit[0]}\t{hit[1]}")
+            _traced.add(f"{kind}\t{rel}")
     if event == "import":
         if args and isinstance(args[0], str):
             _tried.add(args[0].partition(".")[0])
@@ -287,8 +293,10 @@ def pytest_runtest_logreport(report) -> None:
         _outcomes[report.nodeid] = None
         if report.outcome == "failed":
             _failed.add(report.nodeid)
+    elif report.when == "setup":
+        _setup_s[report.nodeid] = report.duration
     elif report.when == "call" and _outcomes.get(report.nodeid, 0.0) is not None:
-        _outcomes[report.nodeid] = report.duration
+        _outcomes[report.nodeid] = _setup_s.pop(report.nodeid, 0.0) + report.duration
     if report.when == "call":
         _counts[report.outcome] += 1
         if report.duration > SLOW_S and "slow" not in report.keywords:

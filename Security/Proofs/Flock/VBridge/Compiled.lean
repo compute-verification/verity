@@ -84,18 +84,19 @@ noncomputable def layers (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ �
     (τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N)) : (j : Fin S) → (Vs j).Bits :=
   fun j => (zs R ω t R₂ j).layer dg N k Rw (τ j)
 
-/-- **G items 1–3**: at every accepted outer proof, each rep's values in V*'s layers meet E's preconditions but the
-running sums. -/
+/-- **G items 1–3**: at every accepted outer proof, each rep's values at the history and V*'s layers meet E's
+preconditions but the running sums. -/
 def AlgebraDecodes (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Shape) (rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData) :
-    Prop :=
-  ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r, AlgebraHolds sh (rep (layers zs dg N k Rw R ω t R₂ τ) r)
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Shape)
+    (rep : Reg → L.Ω → List (Cm × I.Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r,
+    AlgebraHolds sh (rep R ω t (layers zs dg N k Rw R ω t R₂ τ) r)
 
 /-- **G item 4**: at every accepted outer proof, each rep's running sums meet E's `hacc`. -/
 def AccChains (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Shape) (rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData) :
-    Prop :=
-  ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r, AccHolds sh (rep (layers zs dg N k Rw R ω t R₂ τ) r)
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Shape)
+    (rep : Reg → L.Ω → List (Cm × I.Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r, AccHolds sh (rep R ω t (layers zs dg N k Rw R ω t R₂ τ) r)
 
 /-- **G item 5**: at every accepted outer proof whose reps meet E's preconditions, the inner verifier `I` accepts the
 transcript V*'s layers hold (`wmsg`) at the rounds' coins, on the hidden circuit's statement `x R ω`. -/
@@ -135,7 +136,7 @@ theorem vbridge_compiled (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     -- V*'s algebra shape, and each rep's values in its layers
     (sh : Shape) (rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
     -- G items 1–3, 4 and 5
-    (halg : AlgebraDecodes zs dg N k Rw sh rep) (hacc : AccChains zs dg N k Rw sh rep)
+    (halg : AlgebraDecodes zs dg N k Rw sh fun _ _ _ => rep) (hacc : AccChains zs dg N k Rw sh fun _ _ _ => rep)
     (hst : StagesAccept zs dg N k Rw sh rep x wmsg)
     -- V*'s public files and laws (G item 6)
     (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg)

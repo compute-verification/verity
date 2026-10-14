@@ -1236,6 +1236,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     not read), `64`, `16·LANES` and `64` u16 words, and outputs `out` then `acc_out` of 64 words each, one 16-bit port
     per word.
 
+  So must a unit net whose name starts with `rec-open-stacked/` (one of R's levels, V*'s `recOpenStackedName`): its name
+  must be `rec-open-stacked/l<LANES>-h<H>`, and the same three rules hold at those parameters, the net being the same
+  builder's under the unit's own name.
+
   So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
     `claims ≥ 2`, and neither `k_log` nor `claims` above the unit's input bits, compared before the verifier computes
@@ -1258,6 +1262,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     its output ports 2048, compared before the verifier builds its net;
   - the net must be `Flock.RecResiduals`' builder of `rec_residuals.unit_circuit` on part `j`'s S, laid out as
     `ir_lower.layout` lays it out, one 16-bit port per word.
+
+  So must a unit net whose name starts with `rec-opening/` (a part of R's opening, `rec_residuals.stage_opening`):
+  - its name must be `rec-opening/m<m>-c<claims>-p<j>`, with a `fast100` schedule at `m` and `claims ≥ 1`;
+  - the circuit must have one unit per VU (`units_per_vu = 1`), so each part is one copy of its unit, refused before
+    the structure is computed;
+  - the rest is a `rec-residuals/` part's (the claims bounded by the input bits, part `j`'s bits, the net), at the
+    opening's S (`Flock.RecOpening.structureOf`, `rec_algebra.structure` at an opening-only shape) and its row ports.
 
   Any other unit is not checked against a builder (D13, §17.1).
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
@@ -1725,11 +1736,12 @@ expectation):
   statement whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the
   live server and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it;
   `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier.
-- **D13:** a unit net named `rec-open/…` is the verifier's V* opening net (`Flock.RecOpen`, §16.10). Upstream takes the
-  unit's net as the file gives it. The spec refuses a `rec-open/` unit whose name is not `rec-open/l<LANES>-h<H>` at valid
-  parameters, one whose port bits are not the opening's at them, and one whose net differs from the verifier's. No vector
-  exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean
-  verifier.
+- **D13:** a unit net named `rec-open/…` or `rec-open-stacked/…` is the verifier's V* opening net (`Flock.RecOpen`,
+  §16.10). Upstream takes the unit's net as the file gives it. The spec refuses such a unit whose name is not
+  `rec-open/l<LANES>-h<H>` (or `rec-open-stacked/l<LANES>-h<H>`) at valid parameters, one whose port bits are not the
+  opening's at them, and one whose net differs from the verifier's. No vector exercises it;
+  `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean verifier, and
+  `test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening` a stacked unit's acceptance and its net's.
 - **D14:** U4 (§7.3, §16.10): a drawn statement must draw in full each unit that reads a round's commitment. Upstream
   ignores the header's `registered` (D5) and so cannot tell which units read one; the spec refuses the draw at setup. No
   vector exercises it: no set's draw meets a port of a round's commitment (`rec-c<i>`, `rec-top-L<l>`, R's and the sparse
