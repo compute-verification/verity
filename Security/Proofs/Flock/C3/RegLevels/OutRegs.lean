@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.C3.PubRows.Check
+import Proofs.Flock.VBridge.Family.Openings
 
 /-!
 # n11: `OpensTopAt`'s registered outputs, from the unit's output rows
@@ -14,11 +15,14 @@ output row (`HiddenExec.rowOfH`, `outRowOf`): copy `j`'s output `o`, bit `t`, is
   `j` returning words `0..127` in order; `rec_outer.lowering`), bit `b < 1024` of output `jo < 2` is bit `b` of row
   `nIn + jo`. `RecOpen.checkAt` does not read the layout (`check_congr`: a circuit's name, unit, rows and input leaves
   only), so it is a binder here;
-* `outCols_of_laid`, `regOuts_of_laid`: at a unit built from `recOpenLaid`, output `jo`'s bit `b` is column
-  `outStart + 1024 jo + b`, a computed column, registered where row `nIn + jo` is a registered read;
+* `outCols_of_laid`, `regOuts_of_laid`: at a unit laid out by `layout` (`recOpenLaid`, or the verifier's
+  `RecOpen.unitLaid`), output `jo`'s bit `b` is column `outStart + 1024 jo + b`, a computed column, registered where
+  row `nIn + jo` is a registered read;
 * `haout_of_laid`: `opensTopAt_of_regs`' `haout`, where the reads file names `acc_out` (`accOut_of_checkStmt`, by
   `checkAcc`, `own_of_checkAcc`) and the session registers each row of a port the reads file names (`hread`, as
-  `regReads_of_check`'s).
+  `regReads_of_check`'s);
+* `accOutRegs_of_check`: at the verifier's unit, the `acc_out` columns registered as the bits of the row the `acc_out`
+  read holds, as `accOut_of_regOut` takes them (`AccOut.lean`'s `accOutL_of_keysS`).
 -/
 
 namespace FlockC3.RegLevels
@@ -164,40 +168,42 @@ theorem regOut_of_outBitRow {u : Fin nv} {j : ℕ} (hj : j < c.upv) {j' t' : ℕ
   refine (Decode.lay_bit zo _ _).trans ((congrArg (fun v => bitK c hU nv v _) hv).trans ?_)
   simp only [bitK, idxK, hrowH]
 
-/-- **A unit built from `recOpenLaid` returns its outputs from `outStart`**: the output group's first column, within
-the computed columns, past at least the outputs' bits. -/
-theorem outCols_of_laid {LANES H : ℕ} {p : Ports} {outBits : Array ℕ} {name : String}
-    (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit) :
-    (c.unit.outGroups.getD 0 default).col * Flock.WORD =
-        Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits ∧
-      (Rows.ofNet hU).nIn ≤ Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits ∧
-      Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits + outBits.foldl (· + ·) 0 ≤
-        (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp := by
+/-- **A unit laid out by `layout` returns its outputs from `outStart`**: the output group's first column, within the
+computed columns, past at least the outputs' bits. Both `recOpenLaid` and the verifier's `RecOpen.unitLaid` (its
+inputs one 16-bit port per word) are such layouts. -/
+theorem outCols_of_laid {st : Flock.HmNets.St} {i outBits : Array ℕ} {outs : Array Flock.HmNets.Lin} {name : String}
+    (hl : Flock.HmNets.netOf name (Flock.HmNets.layout st i outBits outs) = .ok c.unit) :
+    (c.unit.outGroups.getD 0 default).col * Flock.WORD = Hm.outStart st i outBits ∧
+      (Rows.ofNet hU).nIn ≤ Hm.outStart st i outBits ∧
+      Hm.outStart st i outBits + outBits.foldl (· + ·) 0 ≤ (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp := by
   obtain ⟨-, -, -, -, hcp, -, hog, -⟩ := Flock.Net.ofRows_ok hl
-  obtain ⟨h1, -⟩ := Flock.HmNets.layout_rows ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits
-    (recOpenOuts LANES H p).toArray
+  obtain ⟨h1, -⟩ := Flock.HmNets.layout_rows st i outBits outs
   have hob := Flock.HmNets.le_groupWords (outBits.foldl (· + ·) 0)
+  have hw : c.unit.inWords * Flock.WORD = Hm.inRowsOf i := by
+    obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, hw, -⟩ := Flock.Net.ofRows_ok hl
+    rw [hw, Hm.layout_inGroups]
+    simp [Hm.inRowsOf]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hog, recOpenLaid, Hm.layout_outGroups]
+  · rw [hog, Hm.layout_outGroups]
     exact Hm.outStart_word _ _ _
-  · rw [FlockSoundness.Discharge.Layout.ofNet_nIn_eq (hU := hU), inWords_recOpen hl]
+  · rw [FlockSoundness.Discharge.Layout.ofNet_nIn_eq (hU := hU), hw]
     exact Decode.inRows_le_outStart _ _ _
-  · rw [show (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp = c.unit.constPos from Rows.ofNet_one hU, hcp,
-      recOpenLaid, h1]
+  · rw [show (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp = c.unit.constPos from Rows.ofNet_one hU, hcp, h1]
     unfold Hm.outStart Hm.inRowsOf Hm.spanOf
     omega
 
 /-- **V*'s output `jo`'s columns are registered where its output row is a registered read** (`regOut_of_outBitRow` at
-`outBitRow_laid`): at a unit built from `recOpenLaid` with at least V*'s 2048 output bits, at V*'s output layout
+`outBitRow_laid`): at a unit laid out by `layout` with at least V*'s 2048 output bits, at V*'s output layout
 (`OutsLaid`), column `outStart + 1024 jo + b` of copy `j` is registered as bit `b` of the registrant's row
 `nIn + jo`. -/
-theorem regOuts_of_laid {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : Ports} {outBits : Array ℕ}
-    {name : String} (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit)
+theorem regOuts_of_laid {u : Fin nv} {j : ℕ} (hj : j < c.upv) {st : Flock.HmNets.St} {i outBits : Array ℕ}
+    {outs : Array Flock.HmNets.Lin} {name : String}
+    (hl : Flock.HmNets.netOf name (Flock.HmNets.layout st i outBits outs) = .ok c.unit)
     (hob : 2048 ≤ outBits.foldl (· + ·) 0) (hlaid : OutsLaid c j) {jo : ℕ} (hjo : jo < 2)
     (hread : ∀ hq : HmOut.nIn c + jo < c.ports.size, Decode.regRead zo (.inl (u, ⟨_, hq⟩))) {b : ℕ}
     (hb : b < 1024) :
     ∃ hq : HmOut.nIn c + jo < c.ports.size, ∃ hk : b < Layout.portRowW c ⟨_, hq⟩,
-      RegOut zo u hj (Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits + 1024 * jo + b)
+      RegOut zo u hj (Hm.outStart st i outBits + 1024 * jo + b)
         ((Decode.regVal zo (.inl (u, ⟨_, hq⟩))).2 (Fin.castLE ((Finset.le_sup (f := Layout.portRowW c)
           (Finset.mem_univ (⟨HmOut.nIn c + jo, hq⟩ : Fin c.ports.size))).trans (Nat.le_succ _)) ⟨b, hk⟩)) := by
   obtain ⟨hcW, hIn, hEnd⟩ := outCols_of_laid (hU := hU) hl
@@ -205,8 +211,7 @@ theorem regOuts_of_laid {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} 
   have hj' : 64 * jo + b / 16 < (c.leavesOut.getD j #[]).size := by
     rw [hlaid.2.1, Array.size_range]
     omega
-  have hcol : Layout.outCol c (64 * jo + b / 16) (b % 16) =
-      Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits + 1024 * jo + b := by
+  have hcol : Layout.outCol c (64 * jo + b / 16) (b % 16) = Hm.outStart st i outBits + 1024 * jo + b := by
     unfold Layout.outCol
     rw [hcW]
     omega
@@ -232,6 +237,26 @@ theorem haout_of_laid {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p
     (fun hq => hread ⟨_, hq⟩ ⟨pt, hpt, hpn.trans hn1.symm⟩) (b := t) (by omega)
   rw [Nat.mul_one] at h
   exact ⟨_, h⟩
+
+/-- **`accOut_of_regOut`'s registered columns at the verifier's unit** (`regOuts_of_laid` at `acc_out`, output 1, at
+`RecOpen.unitLaid`, `RecOpen.check_ok`): at a unit the verifier parsed as `rec-open/l<LANES>-h<H>`, with V*'s output
+layout at copy `j` (`OutsLaid`), where unit `u`'s `acc_out` row (`nIn + 1`) is a registered read whose first 256 bits
+are those of `A`'s bytes (`hval`), each of the first 256 columns of copy `j`'s `acc_out` half is registered as `A`'s
+bit. -/
+theorem accOutRegs_of_check (hrec : Flock.RecOpen.check c = .ok ()) {LANES H : ℕ}
+    (hp : Flock.RecOpen.params c.unit.name = some (LANES, H)) {u : Fin nv} {j : ℕ} (hj : j < c.upv)
+    (hlaid : OutsLaid c j) (hq : HmOut.nIn c + 1 < c.ports.size) (hread : zo.rd.isRead (.inl (u, ⟨_, hq⟩)))
+    {A : Array F128}
+    (hval : ∀ b < 256, ∀ hb : b < Layout.portRowW c ⟨_, hq⟩,
+      (Decode.regVal zo (.inl (u, ⟨_, hq⟩))).2 ⟨b, lt_of_lt_of_le hb ((Finset.le_sup (f := Layout.portRowW c)
+          (Finset.mem_univ (⟨HmOut.nIn c + 1, hq⟩ : Fin c.ports.size))).trans (Nat.le_succ _))⟩ =
+        Hm.bitL (MerkleScheme.rowBytes A).data.toList b) :
+    ∀ t < 256, RegOut zo u hj (Family.outCol LANES H + 1024 + t) (Hm.bitL (MerkleScheme.rowBytes A).data.toList t) := by
+  intro t ht
+  obtain ⟨-, hk, h⟩ := regOuts_of_laid zo hj (Flock.RecOpen.check_ok hrec hp).2
+    (by have := foldl_wordPorts 2048; omega) hlaid (jo := 1) (by decide) (fun _ => hread) (b := t) (by omega)
+  have h' : RegOut zo u hj (Family.outCol LANES H + 1024 * 1 + t) _ := h
+  convert h' using 1 <;> first | omega | exact (hval t ht hk).symm
 
 end Copy
 
