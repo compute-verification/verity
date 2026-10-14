@@ -123,8 +123,9 @@ variable {ish : RecVStar.Inner} {reg : Lean.Json} {wr : List (Cm × (ℐ).Coin) 
   {comb : ((j : Fin S) → (Vs j).Bits) → Fin 2 → Fin 64 → F128} {tbl : String}
 
 local notation "𝒵" => Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) coins bind rows zr hC h
-local notation "𝓡" => (FlockC3.Reps.RepMaps.withReads M wr (fun w => innerCommitsAt w.1 w.2 st reg)
-  (fun i => (Flock.Guarantees.HoloStream.rep i).name tbl) comb).rep
+local notation "𝓡" => FlockC3.Reps.RepMaps.rep (FlockC3.Reps.RepMaps.withReads M wr
+  (fun w => innerCommitsAt (Prod.fst w) (Prod.snd w) st reg)
+  (fun i => Flock.Guarantees.HoloStream.name tbl (Flock.Guarantees.HoloStream.rep i)) comb)
 
 /-- **The stages' coins at the checked sessions** (`hcoins` of `srcOK_holo_rs` and `srcOK_repsOfVals_pR`), at the
 decoder with its reads: the reps' from the guarantee's custody (`_hIC`) at the map's one-round draws, where the reps
