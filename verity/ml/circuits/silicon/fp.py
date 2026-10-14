@@ -391,6 +391,16 @@ def tc_dot_e5m2(C, acc, a, b, groups=(32,), W: int = 26, F: int = -133):
     return _tc_total(C, acc, a, b, U.E5M2, groups, W, F)
 
 
+def tc_dot_tf32(C, acc, a, b, groups, W: int, F: int):
+    """One accumulator coordinate of ``wgmma.mma_async.sync.aligned.m64n{N}k8.f32.tf32.tf32`` at the caller's ``groups``, adder
+    width ``W`` and floor ``F``: TF32 operands (19-bit words, sign, 8 exponent and 10 mantissa bits) with exact products,
+    ``group_sum``'s truncating adder and the BF16 step's special rule.  `instructions.py` lists the instruction unprobed, so no
+    parameters are this function's own."""
+    from . import tc_step as U
+
+    return _tc_total(C, acc, a, b, U.TF32, groups, W, F)
+
+
 def _tc_total(C, acc, a, b, fmt, groups, W, F):
     from . import tc_step as U
 

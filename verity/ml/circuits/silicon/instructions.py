@@ -328,6 +328,22 @@ INSTRUCTIONS: dict[str, Instruction] = {
             dossier="art:27fbc67eed97901502f646218cf25d8fe4db2fe2d65d30eefd9efb77923b02a3",
             evidence=(_H100_WGMMA_E5M2, "model = sm90.wgmma.m64n8k32.e4m3's pipeline (groups (32,), width 14, floor -139) with e5m2 products"),
         ),
+        # --- TF32 Hopper -----------------------------------------------------------------------------------------
+        _i(
+            # DeepSeek-V4's mHC prenorm GEMM (DeepGEMM 8b1392b9, sm90_tf32_hc_prenorm_gemm.cuh) issues CUTLASS's
+            # MMA_64x32x8_F32TF32TF32_RS_TN: A from registers, B the FP32 weight from shared memory, read as TF32.
+            id="sm90.wgmma.m64n8k8.tf32",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n8k8.f32.tf32.tf32",
+            shape=(64, 8, 8),
+            a_dtype="tf32", b_dtype="tf32", acc_dtype="f32", scale=None,
+            model=None,
+            status="unprobed",
+            evidence=("r20261013-115825-580e on an H200 fitted HopperTf32WgmmaDot8_v1 alone: one group of 8 exact TF32 products, "
+                      "a 26-bit adder and floor -133; B is rounded RNE from FP32 to TF32 (A was widened BF16 and exact in TF32). "
+                      "The end-to-end mHC capture was NO-GO because the old Definition truncated B and used the wrong NaN word in "
+                      "the separate squared sum; integrations/vllm/tests/properties/dsv4_mhc_capture_gpu.py reruns the gate",),
+        ),
         _i(
             # Measured 2026-09-22 (D14 resolved): on sm_90a this PTX op is NOT a tensor-core FP8 instruction.  ptxas lowers
             # it to two HMMA.16816.F32 (the BF16 K=16 pipeline, HOPPER_BF16_M16N8K16) over the two k-halves with zero

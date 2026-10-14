@@ -11,6 +11,7 @@ Operand formats (OCP / IEEE bit layouts, sign first):
     e4m3   1-4-3    bias 7     NO infinities; the two words with exp=15, frac=7 are NaN   max 448, subnormals at 2^-9
     e5m2   1-5-2    bias 15    exponent field 31 is inf (frac 0) or NaN (IEEE-style)  max 57344, subnormals at 2^-16
     e2m1   1-2-1    bias 1     no specials at all: the 16 codes are +-{0, .5, 1, 1.5, 2, 3, 4, 6}
+    tf32   1-8-10   bias 127   as bf16; the word is an FP32 word's top 19 bits     subnormals at 2^-136
 
 The decoders ``decode_<fmt>(word)`` are exact: a finite word becomes ``(sign, exp, sig)`` with the value
 ``(-1)^sign * sig * 2^exp`` (``sig`` an integer with the hidden bit included for normals, ``exp`` the weight of its
@@ -54,6 +55,7 @@ __all__ = [
     "pack_fp32",
     "product",
     "term_value",
+    "tf32_product",
 ]
 
 FP32_SIGNIFICAND_WIDTH = 24
@@ -181,8 +183,9 @@ BF16 = Format("bf16", 8, 7, "ieee")
 E4M3 = Format("e4m3", 4, 3, "e4m3")
 E5M2 = Format("e5m2", 5, 2, "ieee")
 E2M1 = Format("e2m1", 2, 1, "none")
+TF32 = Format("tf32", 8, 10, "ieee")  # the high 19 bits of an FP32 word
 
-FORMATS: dict[str, Format] = {f.name: f for f in (BF16, E4M3, E5M2, E2M1)}
+FORMATS: dict[str, Format] = {f.name: f for f in (BF16, E4M3, E5M2, E2M1, TF32)}
 
 
 # --- products (the BF16 / E4M3 bodies are Hawkeye's, kept verbatim) -----------------------------------------------
@@ -248,16 +251,24 @@ def e2m1_product(a: int, b: int) -> Term:
     return E2M1.product(a, b)
 
 
+def tf32_product(a: int, b: int) -> Term:
+    """Exact product of two TF32 words (19 bits: an FP32 word's sign, exponent and top 10 mantissa bits) as a 25-bit-scaled
+    :class:`Term`: the 22-bit product is carried at bits 3..24, subnormals at exponent ``-126``."""
+
+    return TF32.product(a, b)
+
+
 _PRODUCTS: dict[str, Callable[[int, int], Term]] = {
     "bf16": bf16_product,
     "e4m3": e4m3_product,
     "e5m2": e5m2_product,
     "e2m1": e2m1_product,
+    "tf32": tf32_product,
 }
 
 
 def product(dtype: str, a: int, b: int) -> Term:
-    """The exact product function of ``dtype`` (``"bf16"``, ``"e4m3"``, ``"e5m2"``, ``"e2m1"``)."""
+    """The exact product function of ``dtype`` (``"bf16"``, ``"e4m3"``, ``"e5m2"``, ``"e2m1"``, ``"tf32"``)."""
 
     try:
         return _PRODUCTS[dtype](a, b)
