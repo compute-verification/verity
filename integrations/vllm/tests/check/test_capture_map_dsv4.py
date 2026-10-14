@@ -128,6 +128,7 @@ def test_the_serve_profile():
     target = CMAP["target"]
     args = target["engine_args"]
     assert args["max_num_seqs"] == target["max_decode_batch"] == 16 and args["speculative_config"] is None
+    assert args["max_model_len"] == 16384 and "TOP-13" in target["env_reasons"]["max_model_len"]
     assert (args["tensor_parallel_size"], args["enforce_eager"], args["kv_cache_dtype"]) == (TP, True, target["kv_cache_dtype"])
     assert CONFIG["num_nextn_predict_layers"] == 1 and not any("mtp" in g["pattern"].lower() for g in RANK0["groups"])
     assert _group("model.layers.{i}.attn.indexer")["flags"]["use_fp4_kv"] is False

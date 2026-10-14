@@ -53,6 +53,7 @@
    "enforce_eager": true,
    "kv_cache_dtype": "auto",
    "max_num_seqs": 16,
+   "max_model_len": 16384,
    "speculative_config": null,
    "enable_expert_parallel": false
   },
@@ -85,6 +86,7 @@
    "VLLM_BATCH_INVARIANT": "not set: the Commit runs without it and replay uses the same batch layout",
    "kv_cache_dtype": "auto: DeepseekV4Attention rewrites it to fp8_ds_mla (_resolve_dsv4_kv_cache_dtype), the UE8M0 paged layout, 584 bytes per token (448 e4m3 NoPE + 64 bf16 RoPE + 8 scale bytes)",
    "max_decode_batch": "the serve's decode batch limit (max_num_seqs 16), below vLLM's default for the LLM entrypoint on an H200, 1024 (arg_utils.py:2664-2672, get_batch_defaults), until every kernel whose split, tile or path reads a decode step's token count has an H200 capture to 1024: the GOs reach Marlin's thread config at 16 tokens (its capture to 1024, dsv4-marlin-capture/v2, is written), FlashMLA's sparse-decode split at 160, the TF32 mHC's split count at 192 and layer 0's broadcast pre at 256, and the FP8 linears' and bf16 router GEMMs' captures (#1958, #1962) at 256, the o-projection einsum's at 64",
+   "max_model_len": "16384 is the audited serve profile's context budget, set explicitly instead of the model's 1,048,576 default: the smallest power of two covering the benchmark workloads (today's top out at 4,608 tokens, i4096+o512) with headroom, 62x below the default in block-table cost (54.3M ANDs per decode token at 16K, linear past ~16K). The number is the vllm slice's call, priced by compute accounting and recorded on TOP-13 (decided 14 Oct 07:47Z); a benchmark workload over 16K means a repricing and a new decision, through vllm",
    "engine_args": "vLLM's default Hopper kernels, chosen by the engine and held by the expectations: FlashInfer's swapAB GEMM below 32 tokens and DeepGEMM from 32 for the FP8 linears; DeepGEMM for the o-projection einsum, the TF32 mHC GEMM and the indexer logits; Marlin for the MXFP4 experts; FlashMLA for attention; the FP8 indexer cache. No MTP (speculative_config None: num_nextn_predict_layers 1 is not built), no expert parallelism (MegaMoE is sm_100 only)"
   }
  },
