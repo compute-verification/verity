@@ -125,6 +125,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "every word of the q that the fused q-norm/RoPE/KV-quant insert op returns and every byte it writes to the cache (and "
              "none other) equal Dsv4QNormRopeKvInsert_v1, each written row is the input FlashMlaKvRow_v1 dequantises, and every "
              "byte of q_fp8 and word of weights_out the CuTe IndexerQFp8Kernel returns equal Dsv4IndexerQ_v1, bit for bit."),
+    Property("dsv4_moe_capture", "verity-vllm/dsv4-moe-capture/v1",
+             "On the capture's GPU, MUFU lg2 is MufuLg2Mantissa_v1 on every 1.m, MUFU ex2 / rcp / sqrt are core's tables, and "
+             "the Triton router dsv4_topk (384 experts, top-6, renormalized, x2.5), the hash router "
+             "dsv4HashTopkSoftplusSqrt over tid2eid and the clamped SwiGLU (silu_and_mul_with_clamp, limit 10, vectorised at "
+             "d = 384 and scalar at d = 9) return exactly MoeRouterSqrtSoftplus_v1, MoeRouterHash_v1 and SiluMulClamp_v1 on "
+             "every captured row."),
     Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
              "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
              "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),

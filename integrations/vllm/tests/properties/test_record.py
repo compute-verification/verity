@@ -31,6 +31,7 @@ def test_the_registry_names_each_harness_schema_once():
         dsv4_indices_capture_gpu,
         dsv4_marlin_capture_gpu,
         dsv4_mhc_capture_gpu,
+        dsv4_moe_capture_gpu,
         dsv4_qnorm_insert_capture_gpu,
         fa2_softcap_capture_gpu,
         fa2_target_capture_gpu,
@@ -57,6 +58,7 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["dsv4_compressor_capture"].schema == dsv4_compressor_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_indices_capture"].schema == dsv4_indices_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_qnorm_insert_capture"].schema == dsv4_qnorm_insert_capture_gpu.SCHEMA
+    assert REGISTRY["dsv4_moe_capture"].schema == dsv4_moe_capture_gpu.SCHEMA
 
 
 def test_harnesses_return_sealed_records(tmp_path):
