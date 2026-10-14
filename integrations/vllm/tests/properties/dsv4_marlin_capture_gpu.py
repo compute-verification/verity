@@ -998,9 +998,10 @@ def _words_ok(t: dict[str, Any]) -> bool:
 
 
 def _forced_ok(doc: dict[str, Any]) -> bool:
-    """Each kind has an accepted forced launch, and every forced launch's probe tells two accepted configs apart."""
+    """Each kind has an accepted forced launch, and every forced launch's probe tells two accepted configs apart; nothing to hold
+    when the phase is off or `--cases` picked no FORCED case (a forced phase that failed to run leaves its error in the verdict)."""
     forced = [x for x in doc["launches"] if x["phase"] == "forced"]
-    if not doc.get("forced_phase"):
+    if not doc.get("forced_phase") or (not forced and not doc.get("probe")):
         return True
     probes = doc.get("probe", {})
     return (all(any(x["accepted"] for x in forced if x["launch"] == k) for k in ("w13", "w2"))
@@ -1261,7 +1262,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--quick", action="store_true", help=f"cases {QUICK}, forced {QUICK_FORCED}: a first signal in minutes")
     ap.add_argument("--skip-forced", action="store_true", help="no forced launches (their check is then not part of the verdict)")
     ap.add_argument("--cases", default=None, help="comma-separated CASES names to run, e.g. decode460,hot1024 (default all, "
-                                                  "or QUICK under --quick); the sweep always runs whole")
+                                                  "or QUICK under --quick); the sweep always runs whole, and a subset without "
+                                                  f"a case of {FORCED} runs no forced phase")
     a = ap.parse_args(argv)
     only = tuple(a.cases.split(",")) if a.cases else None
     if only and (unknown := sorted(set(only) - {c[0] for c in CASES})):

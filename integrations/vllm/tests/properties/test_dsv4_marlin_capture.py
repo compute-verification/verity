@@ -665,6 +665,8 @@ def test_the_verdict_needs_every_check(path: tuple, value) -> None:
     assert not X._verdict({**_doc(), "launches": _doc()["launches"][:1] + _doc()["launches"][2:]}), "both launch kinds"
     assert not X._verdict({**_doc(), "probe": {"hot16/w13": _doc()["probe"]["hot16/w13"]}}), "a forced launch without its probe"
     assert X._verdict({**_doc(), "forced_phase": False, "launches": _doc()["launches"][:2], "probe": {}})
+    assert X._verdict({**_doc(), "launches": _doc()["launches"][:2], "probe": {}}), "--cases without a FORCED case runs no forced phase"
+    assert not X._verdict({**_doc(), "launches": _doc()["launches"][:2]}), "a probe without its forced launches"
 
 
 def test_each_case_has_its_own_verdict() -> None:
