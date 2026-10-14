@@ -113,8 +113,9 @@ theorem zk_sessions_recursive_fork_reg {nT r : ℕ} (T : Fin nT → Type) (CT : 
     (Nat.succ_pos r) (innerAtLeavesL_reg T CT hp _hcls zs dg N k Rw σ wmsg cap)
 
 /-- **Gap 2 at the word the prover's runs open, off a value the verifier registers itself**: `zk_sessions_recursive_fork_reg`
-with V*'s bridge off `RegColl ∨ ValueColl zs vsrc` (`Flock.Assumptions.VBridgeCOff`), the value finder finding a
-collision one more case (`zk_sessions_recursive_fork_innerLV`). -/
+with V*'s bridge off `RegColl ∨ ValueColl zs vsrc ∨ LeafColl zs ∨ SaltColl` (`Flock.Assumptions.VBridgeCOff`, the last
+at R's level 0, `cap` and the held salts `salt`), the value, the table leaves' and the held salts' finders finding a
+collision three more cases (`zk_sessions_recursive_fork_innerLV`). -/
 theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (_hcls : ClassOk (shapeOf st))
     (_hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
@@ -128,10 +129,13 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → (holoInnerAt T CT st hp).Msg)
-    (cap : Cap Refine.Dig)
-    (_hbr : Flock.Assumptions.VBridgeCOff (ValueColl zs vsrc) zs dg N k Rw
+    (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
+    (_hbr : Flock.Assumptions.VBridgeCOff (fun R ω t R₂ => ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ ∨
+      SaltColl (holoAt st hp).rsch.sch.level₀ cap salt zs R ω t R₂) zs dg N k Rw
       (Flock.Guarantees.regStmt T CT st hp zs dg N k Rw wmsg σ cap) wmsg Sk cmt msg) :
-    (valueFinder zs vsrc dg N σ).Finds Refine.H512 ∨ (regFinder zs dg N σ).Finds Refine.H512 ∨
+    (valueFinder zs vsrc dg N σ).Finds Refine.H512 ∨ (leafFinder zs dg N σ).Finds Refine.H512 ∨
+      (saltFinder (holoAt st hp).rsch.sch.level₀ cap salt zs σ).Finds Refine.H512 ∨
+      (regFinder zs dg N σ).Finds Refine.H512 ∨
       RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       InnerForkRec zs dg N k Rw σ (Flock.Guarantees.regStmt T CT st hp zs dg N k Rw wmsg σ cap) wmsg Refine.H512
         (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)) ∨
@@ -143,7 +147,8 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
           ((holoInnerAt T CT st hp).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (holoError (holoAt st hp)) :=
-  zk_sessions_recursive_fork_innerLV _hA3 zs vsrc dg N _hk _hRw _hM _hρ _hr σ _ wmsg Sk cmt msg _hbr Refine.H512 _
+  zk_sessions_recursive_fork_innerLV _hA3 zs vsrc (holoAt st hp).rsch.sch.level₀ cap salt dg N _hk _hRw _hM _hρ _hr σ _
+    wmsg Sk cmt msg _hbr Refine.H512 _
     (Nat.succ_pos r) (innerAtLeavesL_reg T CT hp _hcls zs dg N k Rw σ wmsg cap)
 
 end FlockSoundness.Discharge.Recursion

@@ -125,7 +125,7 @@ theorem vbridgeC_of_vbridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm :
 
 **`v-bridge` at the committed rounds, off `RegColl` and `Bad`**: `VBridgeC` field for field, its first read only where
 neither two sessions' registrant records clash (`RegColl`, `regFinder`'s) nor `Bad` holds. At candidate 3, `Bad` is
-`Recursion.ValueColl` at the verifier's rows (`valueSrcC3`): a registrant's row off a value the verifier registers itself
+`Recursion.ValueColl` at the verifier's rows (`valueSrcAll`): a registrant's row off a value the verifier registers itself
 (`coef`, `dirs`, `v`), by a SHA-512 collision `valueFinder` outputs, the case `FlockC3.RegLevels.value_tie` leaves. This
 module cannot name it (its module imports this one), so `Bad` is a parameter; RegColl is not widened. `VBridgeC` gives it at
 every `Bad` (`vbridgeCOff_of_vbridgeC`). -/

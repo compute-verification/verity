@@ -1,6 +1,7 @@
 import Proofs.Flock.C3.Fork.Sound
 import Proofs.Flock.C3.Fork.Extract
 import Proofs.Flock.C3.Compose.Bridge
+import Proofs.Flock.C3.Compose.BridgeOff
 import Proofs.Flock.C3.Compose.Discharge
 import Proofs.Flock.C3.Compose.Decoder
 import Proofs.Flock.C3.Compose.SrcClauses

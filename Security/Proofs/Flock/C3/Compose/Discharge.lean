@@ -1,4 +1,5 @@
 import Proofs.Flock.C3.Compose.Bridge
+import Proofs.Flock.C3.Compose.BridgeOff
 import Proofs.Flock.C3.PubRows.Honest
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Opening.Read
@@ -25,9 +26,10 @@ is `ownIn_checked`, from `checkOwn`), and the rows it holds, at the records writ
 history's commitments (`hheld`).
 
 `hbr_honest` is at a fixed word of R's cap (`fun _ _ => xR`); `hbr_honest_reg` is `_hbr` in its form, at the word the
-transported prover's runs open (`regStmt`), off `ValueColl` at the verifier's rows: candidate 3's table reads only the
-cap (`holoAccepts_of_cap`), so VBridgeC moves between statements of one cap (`vbridgeC_of_cap`), and VBridgeC gives
-VBridgeCOff at every bad event.
+transported prover's runs open (`regStmt`), off `ValueColl` at the verifier's rows and `LeafColl`, with R's opening's
+and levels' read facts off them (`OpeningReadOff`, `RegLevelsReadOff`, where the value ties enter) and the bridge's
+acceptance part `vbridgeOff_c3_off`'s: candidate 3's table reads only the cap (`holoAccepts_of_cap`), so the bridge
+moves between statements of one cap (`vbridgeC_of_cap`).
 -/
 
 namespace FlockC3.Compose
@@ -136,9 +138,13 @@ theorem vbridgeC_of_cap {S : ℕ} {Vs : Fin S → VStmt}
   obtain ⟨hoff, hcm, hdec, hfull⟩ := hb
   exact ⟨fun R ω t R₂ hbad τ o ho => holoAccepts_of_cap (hx R ω) (hoff R ω t R₂ hbad τ o ho), hcm, hdec, hfull⟩
 
-/-- **(step 7) The guarantee's `_hbr` at the honest family, in its form**: `hbr_honest` at the word the transported
-prover's runs open at R's level 0 against `cap` (`regStmt`), whose cap is `cap`, which is `xR`'s (`hcap`), off the
-verifier's values' collisions (`ValueColl` at `valueSrcC3`), which VBridgeC gives (`vbridgeCOff_of_vbridgeC`). -/
+/-- **(step 7) The guarantee's `_hbr` at the honest family, in its form**: at the word the transported prover's runs
+open at R's level 0 against `cap` (`regStmt`), whose cap is `cap`, which is `xR`'s (`hcap`), off the verifier's values'
+collisions (`ValueColl` at `valueSrcAll`), the table leaves' (`LeafColl`) and R's level-0 top's under the held salts
+`salt` (`SaltColl`): `hbr_honest`'s facts, with R's opening's
+and levels' read facts off those (`OpeningReadOff`, `RegLevelsReadOff`: where the value ties `value_tie_coll` enter,
+which hold only off `ValueColl`), and the acceptance part `vbridgeOff_c3_off`'s at `xR`, moved to `regStmt` by
+`holoAccepts_of_cap`. -/
 theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVStar.statements ish = .ok ss)
     (bind : Fin (vstarCount ish) → VStar.Bindings) {Vs : Fin (vstarCount ish) → VStmt}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
@@ -150,18 +156,36 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
     (bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8)
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json)
-    (cap : Cap Dig) (hcap : xR.cap = cap)
-    (bcs' : Array ByteArray) (htop : ∃ lv salt, StackedTopAt lv st reg xR.cap salt bcs')
+    (cap : Cap Dig) (hcap : xR.cap = cap) (salt : ℕ → ByteArray)
+    (bcs' : Array ByteArray) (_htop : ∃ lv salt, StackedTopAt lv st reg xR.cap salt bcs')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (σ : Strategy (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N))
     (hrread : ∀ h : Typed zr, RepsRead
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hsread : ∀ h : Typed zr, SparseRead
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
-    (horead : ∀ h : Typed zr, OpeningRead
-      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
-    (hlread : ∀ h : Typed zr, RegLevelsRead
-      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
+    (horead : ∀ h : Typed zr, OpeningReadOff
+      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+      (fun R ω t R₂ =>
+        ValueColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
+          rows zr hCust h)
+          (valueSrcAll (fun t => coins (wr t).2) fun t =>
+            Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)) R ω t R₂ ∨
+        LeafColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
+          rows zr hCust h) R ω t R₂ ∨
+        SaltColl (holoAt st hp).rsch.sch.level₀ cap salt (Flock.Guarantees.checkedC3 ish
+          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂) dg N k Rw)
+    (hlread : ∀ h : Typed zr, RegLevelsReadOff
+      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+      (fun R ω t R₂ =>
+        ValueColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
+          rows zr hCust h)
+          (valueSrcAll (fun t => coins (wr t).2) fun t =>
+            Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)) R ω t R₂ ∨
+        LeafColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
+          rows zr hCust h) R ω t R₂ ∨
+        SaltColl (holoAt st hp).rsch.sch.level₀ cap salt (Flock.Guarantees.checkedC3 ish
+          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂) dg N k Rw)
     (hfr : ∀ h : Typed zr, HFrame
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hdrawn : ∀ h : Typed zr, RowsHeld
@@ -171,8 +195,15 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
     (hheld : ∀ h : Typed zr, HeldIs
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own sel bc) :
     ∀ h : Typed zr, Flock.Premises.VBridgeCOff
-      (ValueColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
-        rows zr hCust h) (valueSrcC3 fun t => Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)))
+      (fun R ω t R₂ =>
+        ValueColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
+          rows zr hCust h)
+          (valueSrcAll (fun t => coins (wr t).2) fun t =>
+            Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)) R ω t R₂ ∨
+        LeafColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
+          rows zr hCust h) R ω t R₂ ∨
+        SaltColl (holoAt st hp).rsch.sch.level₀ cap salt (Flock.Guarantees.checkedC3 ish
+          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂)
       (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows
         zr hCust h) dg N k Rw
       (Flock.Guarantees.regStmt T CT st hp
@@ -184,9 +215,15 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
       (wmsgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) (holoInnerAt T CT st hp).r dec) (skOf Vs own sel)
       (cmtOf Vs bc) (msgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) dec) := by
   intro h
-  refine Flock.Assumptions.vbridgeCOff_of_vbridgeC _ (vbridgeC_of_cap (x := fun _ _ => xR) (fun _ _ => ?_)
-    (hbr_honest ish hss bind hob zr hCust coins rows own sel bc dec wr reg bcs' htop dg N k Rw hrread hsread horead hlread
-      hfr hdrawn hown hheld h))
-  exact hcap
+  have hrows : HPubRows
+      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) :=
+    hPubRows_of_checked (checksAccepted_checked (coins := coins) (rows := rows) (zr := zr) (hCust := hCust) (h := h))
+      (hdrawn h) (sparseAtShapeChecked _)
+  exact ⟨fun R ω t R₂ hbad τ o ho => holoAccepts_of_cap hcap
+      (vbridgeOff_c3_off (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) _
+        dg N k Rw (fun _ _ _ _ => rfl) (hTape_of_frame (hfr h)) (hReps_honest_of_read (hrread h))
+        (hSparse_honest_of_read (hsread h)) hLgStages_honest (horead h) (hlread h) R ω t R₂ hbad τ o ho),
+    Flock.Assumptions.vCommits_masked (holoInnerAt T CT st hp).r (hCommits_honest hrows (hown h) (hheld h)),
+    vDecodesR_wmsgLeaf (I := holoInnerAt T CT st hp) (own := own) (sel := sel) dec, vFullR_of_read _ _⟩
 
 end FlockC3.Compose
