@@ -115,6 +115,10 @@ PROFILE_B1_EAGER = Vocabulary(
         "embedding": lambda V, H: ir_bind(b1.Embedding, V=V, H=H),
         "token_select": lambda V: ir_bind(b1.TokenSelect, V=V),
         "residual_add": lambda N: ir_bind(b1.ResidualAdd, N=N),
+        # vLLM's default non-batch-invariant CUDA RMSNorm dispatch, the same kernels at every profile (registry.cuda_rmsnorm;
+        # BLOCK = launch_block(rows, N, fused)): `rules/vllm_bindings/cuda_norm.py` asks for them off batch invariance
+        "rmsnorm_cuda": lambda N, EPS, BLOCK: ir_bind(_cuda_rmsnorm.RMSNormCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
+        "rmsnorm_fused_cuda": lambda N, EPS, BLOCK: ir_bind(_cuda_rmsnorm.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
         **_VALUE_KINDS,
     },
     notes={
@@ -132,6 +136,12 @@ PROFILE_B1_EAGER = Vocabulary(
         "embedding": "Embedding_v1{V,H}: row gather",
         "token_select": "TokenSelect_v1{V}: greedy argmax, lowest index on ties",
         "residual_add": "ResidualAdd_v1{N}",
+        "rmsnorm_cuda": "RMSNormCudaVector8_v1{N,EPS,BLOCK}: _C.rms_norm's rms_norm_kernel<bf16, 8, 2, true> on one contiguous "
+                        "row -- BLOCK threads each FMA-fold eight-element vectors t, t+BLOCK, ... from +0, CUB block reduce, "
+                        "bf16_rn((f32(x) * rsqrtf(var/N + EPS)) * f32(w)) (registry.cuda_rmsnorm)",
+        "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}: _C.fused_add_rms_norm's fused_add_rms_norm_kernel"
+                              "<bf16, 8, true> -- the vectorised residual add kept as the second output, then the same "
+                              "BLOCK-thread reduction and epilogue (registry.cuda_rmsnorm)",
     })
 
 # -- reference: NUMERIC's reference kinds (`verity_vllm/program/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
@@ -428,10 +438,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8_vocab.block_gemm(K, N, G, SCALE, FP8_DOT),
            "flashinfer_fp8_linear": lambda K, N: ir_bind(_deepgemm.FlashInferFp8Linear, K=K, N=N),
            "deepgemm_fp8_linear": lambda K, N: ir_bind(_deepgemm.DeepGemmFp8Linear, K=K, N=N),
-           # vLLM's default non-batch-invariant CUDA RMSNorm dispatch (registry.cuda_rmsnorm; BLOCK = launch_block(rows, N, fused)):
-           # `rules/vllm_bindings/cuda_norm.py` asks for them off batch invariance
-           "rmsnorm_cuda": lambda N, EPS, BLOCK: ir_bind(_cuda_rmsnorm.RMSNormCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
-           "rmsnorm_fused_cuda": lambda N, EPS, BLOCK: ir_bind(_cuda_rmsnorm.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
@@ -524,12 +530,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                     "scale_1x128_kernel followed by the TRT-LLM swapAB GEMM",
            "deepgemm_fp8_linear": "DeepGemmFp8Linear_v1{K,N}: vLLM's default Hopper block-FP8 linear for M >= 32; ue8m0 group quant "
                                   "followed by DeepGEMM fp8_gemm_nt, returning the materialised q, scale and bf16 output",
-           "rmsnorm_cuda": "RMSNormCudaVector8_v1{N,EPS,BLOCK}: _C.rms_norm's rms_norm_kernel<bf16, 8, 2, true> on one contiguous "
-                           "row -- BLOCK threads each FMA-fold eight-element vectors t, t+BLOCK, ... from +0, CUB block reduce, "
-                           "bf16_rn((f32(x) * rsqrtf(var/N + EPS)) * f32(w)) (registry.cuda_rmsnorm)",
-           "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}: _C.fused_add_rms_norm's fused_add_rms_norm_kernel"
-                                 "<bf16, 8, true> -- the vectorised residual add kept as the second output, then the same "
-                                 "BLOCK-thread reduction and epilogue (registry.cuda_rmsnorm)",
            "layer_norm_aten": "LayerNormAten_v1{N,EPS}: aten.layer_norm on a bf16 row with bf16 weight and bias -- torch 2.13 "
                               "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
                               "bf16(w * (rstd * (x - mean)) + b)",
