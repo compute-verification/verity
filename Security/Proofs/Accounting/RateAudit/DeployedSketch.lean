@@ -116,7 +116,10 @@ theorem pr_unpaid_rank_le
       change pr (fun x : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) × Data N m ρ Sector =>
         t ∈ A.correct sketch σ x.1 x.2 ∧ t ∉ queried A sketch σ x.1 x.2) ≤ (1 : ℝ≥0∞) / 2 ^ h
       refine Rate.pr_le_of_fiber _ _ (fun D => ?_)
-      refine pr_le_div_of_card_mul_le _ 1 (2 ^ h) Fintype.card_ne_zero (by positivity) ?_
+      refine pr_le_div_of_card_mul_le
+        (α := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
+        (fun O => t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
+        1 (2 ^ h) Fintype.card_ne_zero (by positivity) ?_
       simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t
     refine (Finset.sum_le_sum (fun t _ => ht t)).trans (le_of_eq ?_)
     simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, div_eq_mul_inv]
@@ -128,10 +131,9 @@ theorem pr_unpaid_rank_le
       change pr (fun x : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
         Bad A sketch σ x.2 x.1 i g) ≤ (g : ℝ≥0∞) / 2 ^ 256
       refine Rate.pr_le_of_fiber _ _ (fun O => ?_)
-      simpa [show Fintype.card Sector = 2 ^ 256 by simp [Sector]] using
-        (pr_le_div_of_card_mul_le (fun D : Data N m ρ Sector => Bad A sketch σ O D i g)
-          g (Fintype.card Sector) Fintype.card_ne_zero (by simp [Sector])
-          (card_bad_le A sketch σ O i g))
+      convert pr_le_div_of_card_mul_le (fun D : Data N m ρ Sector => Bad A sketch σ O D i g)
+        g (Fintype.card Sector) Fintype.card_ne_zero (by simp [Sector])
+        (card_bad_le A sketch σ O i g) using 1 <;> norm_num [Sector]
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans ?_
     have hg : (g : ℝ≥0∞) = 2 ^ (256 - 8 * r) := by
       dsimp [g]
@@ -147,9 +149,8 @@ theorem pr_unpaid_rank_le
         (2 : ℝ≥0∞) ^ (256 - 8 * r) /
             ((2 : ℝ≥0∞) ^ (256 - 8 * r) * 2 ^ (8 * r)) =
           1 / 2 ^ (8 * r) := by
-      rw [show (2 : ℝ≥0∞) ^ (256 - 8 * r) =
-        (2 : ℝ≥0∞) ^ (256 - 8 * r) * 1 by simp,
-        ENNReal.mul_div_mul_left 1 (2 ^ (8 * r)) hc ht]
+      simpa using (ENNReal.mul_div_mul_left (c := (2 : ℝ≥0∞) ^ (256 - 8 * r))
+        1 (2 ^ (8 * r)) hc ht)
     rw [hcancel]
     simp [ENNReal.div_eq_inv_mul, mul_comm]
 
@@ -236,7 +237,8 @@ theorem pr_unpaidAt_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : Sk
       ((Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm ((eCand.symm (y, Os)).2, ω')) i.1) = η := by
     funext i
     simp [η, i.2.ne]
-  simpa [ePass, eCand, dataEquiv, UnpaidAt, hpass, hη, Data.ofParts] using hy
+  set_option maxRecDepth 2000 in
+    simpa [ePass, eCand, dataEquiv, UnpaidAt, hpass, hη, Data.ofParts] using hy
 
 /-- At fixed signs whose sector blocks have rank at least `r`, grinding contributes one union over the `P·G`
 candidate passes. -/
@@ -302,10 +304,14 @@ theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) 
     rw [Rate.pr_equiv eGood]
     refine Rate.pr_le_of_fiber _ _ fun σ => ?_
     by_cases hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
-    · exact (pr_mono fun _ hx => hx.2).trans (pr_unpaid_good_le A σ r X hr32 hr (hX := hX))
+    · exact (pr_mono fun _ hx => hx.2).trans
+        (pr_unpaid_good_le A σ r X hr32 hr (hX := fun j η c O D => hX j η c σ O D))
     · push Not at hr
-      refine (pr_mono fun x hx => ?_).trans bot_le
-      exact (hx.1 hr).elim
+      calc
+        pr (fun x : SketchStore N m × Passes => ¬badRank σ ∧ unpaid (x.1, σ, x.2)) ≤
+            pr (fun _ : SketchStore N m × Passes => False) :=
+          pr_mono fun _ hx => (hx.1 hr).elim
+        _ ≤ (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r))) := by simp
 
 end SketchDeployedWindow
 
