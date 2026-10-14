@@ -176,7 +176,8 @@ theorem digest_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : Floc
     (hrow : ∀ v x t, F.row v x t =
       FlockSoundness.Assumptions.heldRow (innerCommitsAt (wr t).1 (wr t).2 st reg) F.ish.sparse v x)
     {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {j : Fin (vstarCount F.ish)}
-    (hacc : ∃ tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr) {pt : Flock.Registered.Port}
+    (hacc : ∃ R' tr, (F.zs R ω t R₂ j).Writes R' tr ∧ AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr)
+    {pt : Flock.Registered.Port}
     (hpt : pt ∈ (F.zs R ω t R₂ j).own) {l : ℕ} (hv : pt.value = s!"rec-top-stacked-L{l}")
     {u : Fin (F.Vs j).nv} {q : Fin (F.Vs j).c.ports.size} (hq : (F.Vs j).c.ports[q].name = pt.name) {x : ℕ}
     (hx : pt.reads[u.val]? = some (some x)) {cs : InnerCommits} {s : InnerStream} {bcs : Array ByteArray}
@@ -186,7 +187,8 @@ theorem digest_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : Floc
   (hpr R ω t R₂ j hacc pt hpt u q x hq hx bcs[x].toList (by rw [hrow, hcs, hv]; exact heldRow_top hs ht hi)).trans
     (bytes_of_toList _)
 
-/-- **`hT_of_leaf`'s `hleaf` at an accepted session**: where a registered read's port is `own`'s entry of its name
+/-- **`hT_of_leaf`'s `hleaf` at an accepted session its game reaches** (`Reached`, so the session writes the
+transcript `HPubRows` reads): where a registered read's port is `own`'s entry of its name
 read at the unit's position (`ReadsOwnAt`), registering R's level-`l` tops, and the outcome's reads `A` keeps are the
 verifier's own (`hown`), the read's leaf is `treeLeaf` of node `readAt`'s commit string in the verifier's hold, or its
 two openings conflict (`LeafColl`'s event). -/
@@ -197,7 +199,7 @@ theorem leaf_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : FlockC
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : FlockC3.HPort.ReadsOwnAt F dg N k Rw)
     {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish))
-    {A : (F.zs R ω t R₂ j).lay.Pos → Prop}
+    (hre : Reached (F.zs R ω t R₂ j) (o j)) {A : (F.zs R ω t R₂ j).lay.Pos → Prop}
     (hown : ZkReg.OwnReadsHJ (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own (F.Vs j).c (F.zs R ω t R₂ j).pub (o j).2.2
       ((F.zs R ω t R₂ j).rd.restrict A).isRead (F.zs R ω t R₂ j).rd.port (F.zs R ω t R₂ j).rd.readAt)
     {u : Fin (F.Vs j).nv} {q : Fin (F.Vs j).c.ports.size} (hp : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)))
@@ -211,7 +213,8 @@ theorem leaf_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : FlockC
       ((F.zs R ω t R₂ j).rd.openings (o j).1 (ZkReg.regPathsHJ (F.zs R ω t R₂ j).I (F.Vs j).c
         (F.zs R ω t R₂ j).pub (o j).2.2 (F.zs R ω t R₂ j).rd.port) (.inl (u, q))).Conflict := by
   obtain ⟨hmem, hname, hpos⟩ := hro R ω t R₂ τ o h j u q hp
-  rw [← digest_top hpr hrow ⟨_, (h.1 j).1⟩ hmem hv hname.symm hpos hcs hs ht hi]
+  obtain ⟨ω', R', x, ho⟩ := hre
+  rw [← digest_top hpr hrow ⟨R', (o j).2.2, ⟨ω', x, by rw [ho]⟩, (h.1 j).1⟩ hmem hv hname.symm hpos hcs hs ht hi]
   exact leaf_of_accepts (F.zs R ω t R₂ j) (o j) (h.1 j).1 hown hp hA
 
 /-- **Two sessions' reads of one registered value at one position have one row** at an accepted history (no two
