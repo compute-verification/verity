@@ -52,6 +52,9 @@ import Proofs.Flock.Recursive.TopFinder
 import Proofs.Flock.Recursive.SaltFinder
 import Proofs.Flock.Recursive.ValueSrc
 import Proofs.Flock.Recursive.ValueFinder
+import Proofs.Flock.Recursive.ValueSource
+import Proofs.Flock.Recursive.ValueBridge
+import Proofs.Flock.Recursive.ValueChecked
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees

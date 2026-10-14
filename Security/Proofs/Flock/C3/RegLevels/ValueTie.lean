@@ -493,11 +493,12 @@ variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
   {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **A registrant's row at a value the verifier registers itself is the verifier's, or SHA-512 collides**: at a
-registered read `(u, q)` of a port without segments, where `checkValue` accepted the port at the verifier's `rows`,
+registered read `(u, q)` of a port without segments, where `checkValue` accepted the port at the verifier's `rows` (at
+any public file: the tie reads only the registered root),
 the read is of row `u` and the registrant's bit `b` is bit `b % 16` of the row's word `b / 16` (R's `hval` at the read),
 or `valueColl` outputs two different SHA-512 inputs with one digest. -/
-theorem value_tie {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
-    (h : RecCoins.checkValue c zo.pub zo.own port value rows what = .ok ()) {prog : String}
+theorem value_tie {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String} {pub : Flock.Public}
+    (h : RecCoins.checkValue c pub zo.own port value rows what = .ok ()) {prog : String}
     (hprog : c.metaJ.getObjValAs? String "program_sha512" = .ok prog) {u : Fin nv} {q : Fin c.ports.size}
     (hp : zo.rd.isRead (.inl (u, q))) (hone : ∀ reg ∈ zo.own, reg.name = port → reg = zo.rd.port (.inl (u, q)))
     (hpos : (zo.rd.port (.inl (u, q))).reads[u.val]? = some (some (zo.rd.readAt (.inl (u, q)))))

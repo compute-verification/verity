@@ -1,5 +1,6 @@
 import Proofs.Flock.Recursive.SaltFinder
 import Proofs.Flock.VBridge.Decode
+import Flock.RecCoins
 
 /-!
 # The value tie's extractor and its finder, as the guarantee reads them
@@ -12,7 +13,9 @@ that plays the recursive audit once and outputs its pair (`valueFinder`, `Recurs
   in it; `openPairV`: the opening's extractor against it; `leavesV`: the leaves `checkValue` builds over its rows;
   `valueColl`: the extractor;
 * `VRead`, `ValueSrc`: a read of V*'s sessions, and the verifier's rows and salts at each; `valueAt`, `ValueColl`,
-  `valuePick`, `valueFinder`: `valueColl` at a read, some registered read where it collides, and the finder.
+  `valuePick`, `valueFinder`: `valueColl` at a read, some registered read where it collides, and the finder;
+* `stackedCoefRows`, `stackedDirsRows`, `stackedLevels`, `openingVRows`, `valueRows`, `valueSrcC3`: the source
+  `RecursiveAuditC3At` reads, the rows check 5 registers itself (their ties: `Recursive/ValueSource.lean`).
 -/
 
 namespace FlockC3.RegLevels
@@ -124,5 +127,49 @@ noncomputable def valueFinder (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (dg : ByteArray → ByteArray) (N : ℕ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) : Finder Pair :=
   oneRun _ σ (valuePick zs vsrc)
+
+/-- Level `l`'s `coef` rows at R's opening `o`: opening `j`'s `coefAt (κ[l]) LANES eq(α_l)[j]` in words. -/
+def stackedCoefRows (o : Flock.RecCoins.Opening) (l LANES : ℕ) : Array (Array ℕ) :=
+  (Array.range (o.sh.sched.levels[l]!).q).map fun j =>
+    Flock.RecCoins.words (Flock.RecCoins.coefAt (o.kappa[l]!) LANES (Flock.eqTable (o.lg.conss[l]!).alpha)[j]!)
+
+/-- Level `l`'s `dirs` rows at R's opening `o`: opening `j`'s position's low `H` bits. -/
+def stackedDirsRows (o : Flock.RecCoins.Opening) (l H : ℕ) : Array (Array ℕ) :=
+  (Array.range (o.sh.sched.levels[l]!).q).map fun j => Flock.RecCoins.dirsRow (o.lg.conss[l]!).pos[j]! H
+
+/-- The levels of R's schedule with `LANES` lanes and `H` siblings below their cap. -/
+def stackedLevels (o : Flock.RecCoins.Opening) (LANES H : ℕ) : List ℕ :=
+  (List.range o.sh.sched.levels.size).filter fun l =>
+    2 ^ (o.sh.sched.levels[l]!).lanes == LANES && (o.sh.sched.levels[l]!).d - (o.sh.sched.levels[l]!).cap == H
+
+/-- Part `j`'s `v` row of R's opening `o`. -/
+def openingVRows (o : Flock.RecCoins.Opening) (j : ℕ) : Option (Array (Array ℕ)) :=
+  match (do Flock.RecResiduals.groups (← Flock.RecOpening.structureOf o.sh) (Flock.RecOpening.portSizes o.sh)) with
+  | .ok gs => match gs[j]? with
+    | some (_, _, vs) => some #[Flock.RecCoins.padTo (Flock.RecCoins.words (vs.map (o.v[·]!))) (Flock.RecResiduals.portWordsOf vs.size)]
+    | none => none
+  | .error _ => none
+
+/-- **The rows and value check 5 registers at port `port` of circuit `c`**, at its candidate-3 inputs `c3`. -/
+def valueRows (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String) : Option (Array (Array ℕ) × String) :=
+  match c3 with
+  | none => none
+  | some c3 => match Flock.RecCoins.opening c3 c.unit.name with
+    | .error _ => none
+    | .ok o => match Flock.RecCoins.stackedParams c.unit.name, Flock.RecOpening.params c.unit.name with
+      | some (LANES, H), _ => match stackedLevels o LANES H with
+        | [l] => if port = "coef" then some (stackedCoefRows o l LANES, Flock.RecCoins.COEF_VALUE)
+          else if port = "dirs" then some (stackedDirsRows o l H, Flock.RecCoins.DIRS_VALUE) else none
+        | _ => none
+      | none, some (_, _, j) => if port = "v" then (openingVRows o j).map (·, Flock.RecCoins.V_VALUE) else none
+      | none, none => none
+
+/-- **The verifier's rows as a value source**, at its candidate-3 inputs `c3 t` at each history. -/
+def valueSrcC3 (c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3) : ValueSrc L Reg Cm Reg₂ I Vs :=
+  fun _ _ t _ x =>
+    match valueRows (c3 t) (Vs x.1).c ((Vs x.1).c.ports[x.2.2.val]!).name,
+      (Vs x.1).c.metaJ.getObjValAs? String "program_sha512" with
+    | some (rows, value), .ok prog => some (rows, Flock.RecCoins.verifierSalt prog value)
+    | _, _ => none
 
 end FlockSoundness.Discharge.Recursion
