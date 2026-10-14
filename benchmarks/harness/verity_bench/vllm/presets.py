@@ -20,11 +20,11 @@ class Preset:
 
     id: str
     model: str
-    revision: str | None
-    case: str | None
     precision: str
     gpu_id: str
     gpu_count: int
+    revision: str | None = None
+    case: str | None = None
     engine_settings: Mapping[str, Any] = field(default_factory=dict)
     vllm_pin: str = VLLM_PIN
     model_digest: str | None = None
