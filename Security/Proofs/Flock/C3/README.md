@@ -16,10 +16,12 @@ bound still need: Open now, next.
 
 Owners are round 21's workers (H, C, R, K, T, S, L, E), **rec-lean**, **W**, the next free worker, and S's successor. A
 size is in lines of proof: "+N" is what a branch has built, a range is an estimate of what is left. spec-2
-(`cursor/c3-spec-2-35f2`), 14 Oct 05:30Z, has round 21's T, K, R, L, E, U, S and C heads, #1851's head `cb1d25f98`,
+(`cursor/c3-spec-2-35f2`), 14 Oct 06:30Z, has round 21's T, K, R, L, E, U, S and C heads, #1851's head `cb1d25f98`,
 K's round 5 (`f5be751ac`), rec-lean's round 21 and S's round 22 (`b74cd6ec7`); rec-lean's round-21 pieces branch
-(`cursor/c3-rl21-pieces-9b2a`) adds R's rounds 22–24 (`90110fa71`), C's rounds 22–23 (`f0d358227`, with K's round 6
-`89750b6fd`), L's round 22 (`927241612`), W's round 2 (`e83cd54c9`) and S's round 23 (`172738c19`).
+(`cursor/c3-rl21-pieces-9b2a`) adds R's rounds 22–24 (`90110fa71`), C's rounds 22–25 (`fd388f5e2`, with K's rounds
+6–7), L's round 22 (`927241612`), W's rounds 2–3 (`45117e553`) and S's round 23 (`172738c19`). `hbr_honest_reg` takes
+R's level-0 salts `salt` (C round 25) with no caller yet: the discharge of `RecursiveAuditC3` passes it the held salts,
+the prover's workers'.
 
 Closed since round 20, all on spec-2: the bridge (`acceptsC3_of_verify` and its checks, H; r20261013-194011-b18d),
 `SparseRangeOk` from check 5 (`sparseRangeOk_of_check`, H, in the bridge), the top finder (`TopColl`,
