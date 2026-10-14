@@ -116,6 +116,8 @@ theorem pr_unpaid_rank_le
       change pr (fun x : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) × Data N m ρ Sector =>
         t ∈ A.correct sketch σ x.1 x.2 ∧ t ∉ queried A sketch σ x.1 x.2) ≤ (1 : ℝ≥0∞) / 2 ^ h
       refine Rate.pr_le_of_fiber _ _ (fun D => ?_)
+      change pr (fun O : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
+        t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D) ≤ (1 : ℝ≥0∞) / 2 ^ h
       refine pr_le_div_of_card_mul_le
         (α := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
         (fun O => t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
@@ -237,8 +239,14 @@ theorem pr_unpaidAt_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : Sk
       ((Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm ((eCand.symm (y, Os)).2, ω')) i.1) = η := by
     funext i
     simp [η, i.2.ne]
+  have hdata :
+      Data.ofParts (eCand.symm (y, Os)).1 (eCand.symm (y, Os)).2.1 = y.1 := by
+    funext p
+    rcases p with p | p <;> simp [eCand, dataEquiv, Data.ofParts]
+  have horacle : (eCand.symm (y, Os)).2.2 c = y.2 := by
+    simp [eCand]
   set_option maxRecDepth 2000 in
-    simpa [ePass, eCand, dataEquiv, UnpaidAt, hpass, hη, Data.ofParts] using hy
+    simpa [ePass, UnpaidAt, hpass, hη, hdata, horacle] using hy
 
 /-- At fixed signs whose sector blocks have rank at least `r`, grinding contributes one union over the `P·G`
 candidate passes. -/
@@ -311,7 +319,9 @@ theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) 
         pr (fun x : SketchStore N m × Passes => ¬badRank σ ∧ unpaid (x.1, σ, x.2)) ≤
             pr (fun _ : SketchStore N m × Passes => False) :=
           pr_mono fun _ hx => (hx.1 hr).elim
-        _ ≤ (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r))) := by simp
+        _ ≤ (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r))) := by
+          rw [Rate.Horizon.pr_false]
+          exact bot_le
 
 end SketchDeployedWindow
 
