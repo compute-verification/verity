@@ -3,6 +3,7 @@ set -euo pipefail
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 export TMPDIR="$d"
+export PATH="$HOME/.elan/bin:$PATH"
 rc=0
 python3 tools/verity/lean/lean_changed.py --records Security --update --out "$OUT/security" 2> >(tee "$d/records.log" >&2) || rc=$?
 tree=$(grep -o 'audit.py exit [0-9]* in [0-9]* s on [^ ]*' "$d/records.log" | head -1 | awk '{print $NF}' || true)
