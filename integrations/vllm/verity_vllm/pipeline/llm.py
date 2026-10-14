@@ -194,3 +194,15 @@ class LLM:
 
     def get_tokenizer(self) -> Any:
         return self._engine.llm.get_tokenizer()
+
+    @property
+    def vllm(self) -> Any:
+        """The ``vllm.LLM`` this wraps, for a caller that drives its ``llm_engine`` step by step
+        (`engine.arrivals.run_requests_arrivals`)."""
+        return self._engine.llm
+
+    @property
+    def model(self) -> Any:
+        """The served model in this process (the in-process model runner's, `engine_profile.get_model_runner`): the object
+        protocol options install on."""
+        return self._engine.model
