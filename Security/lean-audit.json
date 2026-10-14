@@ -12480,7 +12480,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "2bbeaa1b354b26ace95f25781f08e4c562dea2b9cdfb0d6e4aee609a0a2956dd",
+   "digest": "36923796b25c16f01a55e25bd787f5e09461aff6e5ce0192146c50fc605f7ff3",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -12532,6 +12532,8 @@
     "Flock.RecVStar.checkCandidate3._sparseCasesOn_9": "a967f6a55136501a174960edaf2630dcb2159d40918843555f40213a8681152d",
     "Flock.RecVStar.checkCircuit": "ffe1740288199e13de5f27242d4093f5076076e1713b6f74f1dabfeed8b80333",
     "Flock.RecVStar.checkFile": "e0c1c6e3a75ceecf3cdfdf879bbd2b8996cfd695754c3552a556c80837896a54",
+    "Flock.RecVStar.checkLabel": "e5da7d97f456876deca9dfb7f000b1e0c565c85ea99e2030960d64f58e6cdb9f",
+    "Flock.RecVStar.checkLabels": "8be7f22adcac9fe1cc256d18bf8d23a8ac309e0203498d1f736b842bfb7f627e",
     "Flock.RecVStar.checkMeta": "2cb42dfb7959eeb98e48aa871d41a4f1e7d9a1dca3d6f8b2946b75e0061a7405",
     "Flock.RecVStar.checkOpeningShape": "72cd792f3f66f1cebda2a556ca99a9e5c530191650429c4f9ed19f843c5e78b6",
     "Flock.RecVStar.checkOwn": "a53978531756e2b16f553d2d887ea0481ad5050214218a3be01a02b910939bbe",
@@ -12582,6 +12584,7 @@
     "Flock.RecVStar.stackedShapeOf": "34c96f8c16f81b7d1b82df4d4ee3577ae47a5e7d265b37713316244d810fb088",
     "Flock.RecVStar.stackedTopLevel": "212e5c9c9c5767a7a7fee77c10f57272e0f31cdbe6d2da861663982667690b2d",
     "Flock.RecVStar.statements": "092495bda3b68106f09c464bed9217a1ef34db009f649adf3f8848d12ef56d23",
+    "Flock.RecVStar.tableDraw": "08e3189c237f0710d211f05a023d0a700bf7510cf05bf238d95566ea802c81e7",
     "Flock.RecVStar.tableM": "e20157f21a1d001a2802c42e7c1dd13ced086908f538433c621c0254478f69da",
     "Flock.RecVStar.topEntry": "1d481f2bf7ee5616b53a939f84ba3a0df4da1dbf30746b9f422cdf080bd10b5f",
     "Flock.RecVStar.unlisted": "8cfb01c1366434eec3e33600328b6bf066a1293a9d20acf9c81aca86fefe57e5",
@@ -15019,9 +15022,9 @@
    ]
   },
   "Proofs.Flock.Recursive.AuditC3": {
-   "digest": "0b0fd491786cee547fd53c3f93cd57ae918741795f1dbbfffb5aefb2fce87244",
+   "digest": "31cf09ff384bc0fd13d6a527e7e74a51db3d52179d939b055f7075236555160d",
    "definitions": {
-    "Flock.Guarantees.ChecksC3": "a1184410f4250dc5523c6c19d2d5244c96513959daf238940d3d84f3dcf2715d",
+    "Flock.Guarantees.ChecksC3": "b90314834f29747b31ae5c1baec1a63144d75a943b24e482288eb541f70424bc",
     "Flock.Guarantees.ChecksVR": "91d4d45c655b92406ae93ab759d14b8488eee77108c5d38a2ff647a11312df12",
     "Flock.Guarantees.RecursiveAuditC3": "c627d9a8098dc7747b12bf04ed826276bf6a6d742b5daee6b4b5c74255aba752",
     "Flock.Guarantees.RecursiveAuditC3At": "528f60ccbf3726947d6928df7c55076cb93804211313c090b99f31142453a93c",
