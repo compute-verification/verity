@@ -4,7 +4,8 @@
   whole warps for the fused split; unequal TF32 splits);
 * the candidate k8 TF32 step against the twin's batched group sum on random words, on every pair of special words, and on rows
   whose products cancel or span the adder's width;
-* the Boolean versions of the sigmoid, the k8 step, the post and the Sinkhorn against their word Definitions;
+* the Boolean versions of the sigmoid, the k8 step, the post, the Sinkhorn, both TF32 compositions and the layer-0 residual
+  broadcast against their word Definitions;
 * the Sinkhorn's output doubly stochastic within the f32 rounding, each statics check, and the served split counts.
 The capture (`tests/properties/dsv4_mhc_capture_gpu.py`) checks the twin against the H200."""
 from __future__ import annotations
@@ -273,6 +274,15 @@ def test_tf32_layers_twins() -> None:
     same(leaves(T, *W.pre_broadcast(x, fnb, scale, base, w, 1, TN, REPEAT, EPS, EPS)), want, d.id)
 
 
+def test_residual_broadcast_words() -> None:
+    rng = np.random.default_rng(91)
+    T, HC, H = 3, 4, 8
+    x = bf16(rng, (T, H))
+    d = bind(M.MhcResidualBroadcast, HC=HC, H=H)
+    want = np.broadcast_to(x[:, None, :], (T, HC, H))
+    same(leaves(T, want), oracle(d, T, lambda t: (x[t],)), d.id)
+
+
 @pytest.mark.parametrize("TH", [1, 2])
 def test_hc_head_twin(TH) -> None:
     rng = np.random.default_rng(10 + TH)
@@ -320,6 +330,30 @@ def test_boolean_post_and_sinkhorn() -> None:
     x, residual, post, comb = _post_operands(rng, 16, 2, 2)
     _agree(bind(BM.MhcPostV2, HC=2, N=2), x, residual, post, comb)
     _agree(bind(BM.MhcSinkhornV2, HC=2, REPEAT=2, EPS=EPS), f32(rng, (16, 2, 2), 2.0))
+
+
+def test_boolean_residual_broadcast() -> None:
+    rng = np.random.default_rng(121)
+    _agree(bind(BM.MhcResidualBroadcastV2, HC=4, H=8), bf16(rng, (16, 8)))
+
+
+@pytest.mark.slow
+def test_boolean_tf32_compositions() -> None:
+    """The multi-launch TF32 Definitions are Calls of their Boolean pieces and have the `_v1` word views."""
+    rng = np.random.default_rng(122)
+    T, HC, H, NS, TN, REPEAT = 1, 2, 32, 1, 2, 2
+    OUT = HC * (2 + HC)
+    x, residual, post, comb = _post_operands(rng, T, HC, H)
+    fn = f32(rng, (T, OUT, HC * H), 0.1)
+    scale, base, w = f32(rng, (T, 3), 0.5), f32(rng, (T, OUT), 0.5), bf16(rng, (T, H))
+    _agree(bind(BM.MhcPostPreTf32V2, HC=HC, H=H, NS=NS, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=EPS),
+           x, residual, post, comb, fn, scale, base, w)
+
+    H, TN = 64, 4
+    x, fn = bf16(rng, (T, H)), f32(rng, (T, OUT, H), 0.1)
+    scale, base, w = f32(rng, (T, 3), 0.5), f32(rng, (T, OUT), 0.5), bf16(rng, (T, H))
+    _agree(bind(BM.MhcPreBroadcastV2, HC=HC, H=H, NS=NS, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=EPS),
+           x, fn, scale, base, w)
 
 
 # --- statics and the served split counts ----------------------------------------------------------------------------------------

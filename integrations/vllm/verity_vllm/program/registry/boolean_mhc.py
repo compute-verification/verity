@@ -7,8 +7,10 @@ Definitions (the bodies are `mhc`'s, written once over `mhc.Ops`), so each one's
     MhcPreNorm_v2{HC,H,TN,EPS}, MhcPreNormBroadcast_v2{HC,H,TN,EPS}, MhcPost_v2{HC,N}, MhcFusedSplit_v2{HC,N,OUT,TH}
     MhcPrenormTf32Split_v2{K,OUT}, HcHead_v2{HC,H,TH,EPS,HC_EPS}
                                                 each one traced circuit (`boolean_dsa.flat`)
-    MhcPreBigFuse_v2{HC,H,NS,TN,REPEAT,EPS,HC_EPS}, MhcPreBigFuseBroadcast_v2{...}, MhcPrenormTf32_v2{K,NS,OUT}
+    MhcPreBigFuse_v2{HC,H,NS,TN,REPEAT,EPS,HC_EPS}, MhcPreBigFuseBroadcast_v2{...}, MhcPrenormTf32_v2{K,NS,OUT},
+    MhcPostPreTf32_v2{HC,H,NS,TN,REPEAT,EPS,HC_EPS}, MhcPreBroadcast_v2{...}
                                                 Calls of those (`EW.on_bits`), which read disjoint operands
+    MhcResidualBroadcast_v2{HC,H}              the wiring-only copy to every layer-0 residual stream
 
 The callees are core's Boolean FP32 pieces (`elementwise`, `cast`, `mufu`, `scalar`), `gemm.F2fpBf16_v2`, `boolean_moe.NvExpf_v2`
 and the TF32 step above; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is its
@@ -18,8 +20,8 @@ word Definition on every word, NaN payloads included.  A traced circuit computes
 The squared sum's GPU-NaN FADD, FMUL and FFMA are private traced helpers: `boolean_dsa.flat` inlines their gates into the
 registered prenorm Definitions, so they add no standalone circuit target or Call.
 
-`MhcFusedPostPre_v1`, `MhcPostPreTf32_v1` and `MhcPreBroadcast_v1` have no version here: each is two or three kernel launches,
-the Calls above, and its smallest binding on bits (H 16 or 32 at HC 2) is over circuit-check's partition budget.
+`MhcFusedPostPre_v1` has no version here: its fused CUDA path is two kernel launches and its smallest useful binding on bits
+is over circuit-check's partition budget.
 """
 from __future__ import annotations
 
@@ -166,6 +168,33 @@ def _tf32(B, S, a, b):
 MhcPrenormTf32V2 = EW.on_bits("MhcPrenormTf32", 2, ["K", "NS", "OUT"], lambda S: M._sig_tf32(S, BF16, F32), _tf32, M.MhcPrenormTf32)
 
 
+def _post_pre_tf32(B, S, x, residual, post, comb, fn, scale, base, w):
+    """`MhcPostPreTf32_v1` composed from the Boolean post, TF32 prenorm and big-fuse pieces."""
+    return M.post_pre_tf32(bit_ops(B), S, x, residual, post, comb, fn, scale, base, w)
+
+
+MhcPostPreTf32V2 = EW.on_bits("MhcPostPreTf32", 2, M._FUSE, lambda S: M._sig_layer(S, BF16, F32), _post_pre_tf32,
+                              M.MhcPostPreTf32)
+
+
+def _residual_broadcast(B, S, x):
+    """`MhcResidualBroadcast_v1`'s wiring-only body on bits."""
+    return M.residual_broadcast(S, x)
+
+
+MhcResidualBroadcastV2 = EW.on_bits("MhcResidualBroadcast", 2, ["HC", "H"], lambda S: M._sig_residual_broadcast(S, BF16),
+                                    _residual_broadcast, M.MhcResidualBroadcast)
+
+
+def _pre_broadcast(B, S, x, fn, scale, base, w):
+    """`MhcPreBroadcast_v1` composed from the Boolean TF32 prenorm and broadcast big-fuse pieces."""
+    return M.pre_broadcast(bit_ops(B), S, x, fn, scale, base, w)
+
+
+MhcPreBroadcastV2 = EW.on_bits("MhcPreBroadcast", 2, M._FUSE, lambda S: M._sig_broadcast(S, BF16, F32), _pre_broadcast,
+                               M.MhcPreBroadcast)
+
+
 def _head(B, S, residual, fn, scale, base):
     """`HcHead_v1`'s body on bits."""
     return M.hc_head(bit_ops(B), S, residual, fn, scale, base)
@@ -180,4 +209,5 @@ BITS = dict(BD.BITS, expf=BMOE.NvExpf, bf16=BG.F2fpBf16, gpu_add=_MhcGpuF32Add, 
             MhcPrenormTf32Split=MhcPrenormTf32SplitV2, MhcPrenormTf32=MhcPrenormTf32V2)
 
 BOOLEAN_MHC = [HopperTf32WgmmaDot8V2, MhcSigmoidV2, MhcSinkhornV2, MhcMixesV2, MhcPreNormV2, MhcPreNormBroadcastV2, MhcPreBigFuseV2,
-               MhcPreBigFuseBroadcastV2, MhcPostV2, MhcFusedSplitV2, MhcPrenormTf32SplitV2, MhcPrenormTf32V2, HcHeadV2]
+               MhcPreBigFuseBroadcastV2, MhcPostV2, MhcFusedSplitV2, MhcPrenormTf32SplitV2, MhcPrenormTf32V2,
+               MhcPostPreTf32V2, MhcResidualBroadcastV2, MhcPreBroadcastV2, HcHeadV2]

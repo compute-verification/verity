@@ -78,12 +78,13 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "Dsv4ShortContextTopK_v1, every inverse-RoPE FP8 head Dsv4InvRopeQuantHead_v1, every compared prefill and paged logit "
              "DsaMqaLogit_v3 at 64 heads and every top-k row of at most 1024 keys DsaTopKShortRow_v1, bit for bit."),
     Property("dsv4_mhc_capture", "verity-vllm/dsv4-mhc-capture/v1",
-             "On the capture's H200, DeepGEMM serves DeepSeek-V4-Pro's mHC prenorm GEMM at vLLM's split counts, RSQ, EX2 and expf "
-             "are core's words, tf32_hc_prenorm_gemm's words on the probe are HopperTf32WgmmaDot8_v1's candidate step alone (B "
-             "rounded RNE to TF32, the squared sum's GPU FMUL/FFMA/FADD lo contraction), and at DeepSeek-V4-Pro's statics every word of every compared "
-             "launch of the fused post + pre (TileLang's FP32 path at <= 16 tokens, DeepGEMM's TF32 path above), the layer-0 "
-             "broadcast pre and hc_head equals mhc_twin, and the evaluated pieces (MhcFusedSplit_v1, MhcPost_v1, MhcPrenormTf32_v1, "
-             "MhcPreBigFuse(Broadcast)_v1, HcHead_v1) equal the kernel's words, bit for bit."),
+             "On the capture's cc 9.0 GPU (132 SMs), DeepGEMM serves the mHC prenorm GEMM (4 streams of hidden 7168) at vLLM's split "
+             "counts, RSQ, EX2 and expf are core's words, tf32_hc_prenorm_gemm's words on the probe are HopperTf32WgmmaDot8_v1's "
+             "candidate step alone (B rounded RNE to TF32, the squared sum's GPU FMUL/FFMA/FADD lo contraction), and at the served "
+             "statics (4 streams, hidden 7168, 20 Sinkhorn iterations) every word of every compared launch of the fused post + pre "
+             "(TileLang's FP32 path at <= 16 tokens, DeepGEMM's TF32 path above), the layer-0 broadcast pre and hc_head equals "
+             "mhc_twin, and the evaluated pieces (MhcFusedSplit_v1, MhcPost_v1, MhcPrenormTf32_v1, MhcPreBigFuse(Broadcast)_v1, "
+             "HcHead_v1) equal the kernel's words, bit for bit."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
              "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "
