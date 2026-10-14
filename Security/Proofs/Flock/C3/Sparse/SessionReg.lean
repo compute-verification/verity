@@ -17,10 +17,9 @@ are check 5's (`csOf`).
   `sparseParams_of_check`: a unit `RecSparse.check` accepted under `unitName sh` has `params` `sh`.
 * `nw_eq_msum`: w's elements are the message ports' words exactly (`claim` is the last port, and no earlier one).
 * `CoinsAccepted`, `coinsAccepted_of_keep`, `coinsAccepted_checked`: where a checked session accepts, a transcript it
-  accepts passes `ChecksC3`.
-  `stmt0_of_setup`: an accepted session's setup has a first statement, of its circuit. `sparseCoins_of_accepted`: at
-  the session V*'s list names RecSparse, its circuit is `unitName` of the session's shape (`unitShape`, the inner shape's
-  `sparse` entry, `SparseIs`) and check 5 gives both reps' coins.
+  accepts passes `ChecksC3`. `stmt0_of_setup`: an accepted session's setup has a first statement, of its circuit.
+  `sparseCoins_of_accepted`: at the session V*'s list names RecSparse, its circuit is `unitName` of the session's
+  shape (`unitShape`, the inner shape's `sparse` entry, `SparseIs`) and check 5 gives both reps' coins.
 * `sparseSessionAt_of_regs`: `SparseSessionAt` from that, the constant 1 (`hone`), the message columns' registrations
   (`hkeys`, which `bitAt_of_regBit` makes `wSparse`'s bits), and the registrations of `v` (`hv`), `tau` (`htau`) and the
   zero outputs (`hz`), which the verifier does not check against the coins (`rec-sparse-tau` and `rec-sparse-zero` are
@@ -245,7 +244,9 @@ theorem coinsAccepted_of_keep (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     Flock.Guarantees.ChecksC3 F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (F.bind j)
       rows J o tr) (fun _ _ _ hP => hP.2) hex
 
-theorem coinsAccepted_checked' {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
+/-- **The checked family passes check 5 where a session accepts**: a checked session keeps its own list only where a
+transcript it accepts passes `ChecksC3` (`coinsAccepted_of_keep`). -/
+theorem coinsAccepted_checked {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
     {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
     {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
     {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
@@ -255,25 +256,6 @@ theorem coinsAccepted_checked' {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {h
     {coins : String → Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
       (Vs j).OuterR Reg'}
-    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
-    CoinsAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
-      rows wr reg coins :=
-  coinsAccepted_of_keep _ (fun R ω t R₂ j => Flock.Guarantees.custodied zr hCust h R ω t R₂ j) fun _ _ _ _ _ => by
-    simp only [C3Family.checked, C3Family.honest, Flock.Guarantees.checkedC3, Flock.Guarantees.innerHeld]
-
-variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
-  {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
-  {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
-  {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
-  {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
-  {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (ℐ).Msg}
-  {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
-
-/-- **The checked family passes check 5 where a session accepts**: a checked session keeps its own list only where a
-transcript it accepts passes `ChecksC3` (`coinsAccepted_of_keep`). -/
-theorem coinsAccepted_checked {coins : String → Option Flock.RecCoins.Source}
-    {rows : Option (Array Flock.Registered.Port)}
-    {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg'}
     {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
     CoinsAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       rows wr reg coins :=
@@ -403,8 +385,5 @@ end FlockC3.Sparse
 #print axioms FlockC3.Sparse.stmt0_of_setup
 #print axioms FlockC3.Sparse.coinsAccepted_of_keep
 #print axioms FlockC3.Sparse.coinsAccepted_checked
-#print axioms FlockC3.Sparse.coinsAccepted_checked'
-#check @FlockC3.Sparse.coinsAccepted_checked
-#print FlockC3.Sparse.coinsAccepted_checked
 #print axioms FlockC3.Sparse.sparseCoins_of_accepted
 #print axioms FlockC3.Sparse.sparseSessionAt_of_regs
