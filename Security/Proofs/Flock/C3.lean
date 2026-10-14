@@ -32,6 +32,8 @@ import Proofs.Flock.C3.Sparse.MsgsRead
 import Proofs.Flock.C3.Sparse.SrcSessions
 import Proofs.Flock.C3.Sparse.MsgsLayers
 import Proofs.Flock.C3.Sparse.PubTie
+import Proofs.Flock.C3.Sparse.PubLift
+import Proofs.Flock.C3.Sparse.HeldStages
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
