@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 import tomllib
 from dataclasses import replace
@@ -159,8 +160,31 @@ def test_plan_marks_passing_points_and_dispatches_one_recorded_run_for_each_miss
     assert "--preemptible" in command[:command.index("--")]
     assert command[command.index("--gpus") + 1] == "1"
     assert command[command.index("--gpu-model") + 1] == "rtx-pro-6000"
-    assert command[command.index("--") + 1:][:4] == ["python", "-m", "verity_bench", "_vllm-point"]
+    assert command[command.index("--") + 1:][:2] == ["bash", "benchmarks/harness/run_point.sh"]
+    assert (root / "benchmarks/harness/run_point.sh").is_file()
     assert command[command.index("--point") + 1] == "b32-p512-mixed"
+
+
+def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[3]
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    monkeypatch.setenv("VERITY_BENCH_VENV", str(tmp_path / "venv"))
+    command = jobs.research_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
+    assert f"VERITY_BENCH_VENV={tmp_path / 'venv'}" == command[command.index("--env") + 1]
+
+    launcher = root / "benchmarks/harness/run_point.sh"
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
+    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert missing.returncode == 2 and "pod_bootstrap.sh" in missing.stderr
+    python = tmp_path / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$PYTHONPATH"\necho "$@"\n')
+    python.chmod(0o755)
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    pythonpath, argv = ran.stdout.splitlines()
+    assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/integrations/vllm"]
+    assert argv == "-m verity_bench _vllm-point --point p"
 
 
 def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():

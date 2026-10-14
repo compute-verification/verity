@@ -182,9 +182,11 @@ def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: P
     ]
     if spec.admission.max_minutes is not None:
         command += ["--max-min", str(spec.admission.max_minutes)]
+    if os.environ.get("VERITY_BENCH_VENV"):
+        command += ["--env", f"VERITY_BENCH_VENV={os.environ['VERITY_BENCH_VENV']}"]
     command += [
         "--",
-        "python", "-m", "verity_bench", "_vllm-point",
+        "bash", "benchmarks/harness/run_point.sh",
         "--spec", _relative_spec(source, root),
         "--point", item.point.id,
         "--identity", item.identity,
