@@ -1,0 +1,54 @@
+import Proofs.Accounting.Actual.Split
+import Proofs.Accounting.Actual.Physical
+import Proofs.Accounting.Actual.Windows
+import Proofs.Accounting.Actual.Runtime
+import Proofs.Accounting.Actual.Localization
+import Proofs.Accounting.Actual.Device
+import Proofs.Accounting.Actual.Confidence
+import Proofs.Accounting.Actual.Bridges
+import Proofs.Accounting.Actual.Transducer
+import Proofs.Accounting.Actual.Ticks
+import Proofs.Accounting.Actual.Source
+
+/-!
+# The actual circuit's guarantees
+
+The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security/Definitions/Accounting/Actual.lean`):
+
+* `Actual/Split.lean`: what a region reads from outside itself is what its location carried in plus what crossed its
+  boundary.
+* `Actual/Physical.lean`: causality at any latency makes wires run forward in time inside every location; under
+  `Links`, ingress and egress are at most `β_X` a tick; compute rate at a pricing of at least one per gate bounds the
+  gates.
+* `Actual/Windows.lean`: `Windows`, the capacity form: the windows divide the developer's region into IUs of at most
+  `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
+* `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
+* `Actual/Localization.lean`: `Localization`, over strategies causal from every tick: with what the rest can tell at
+  the window's start and what it hears from the verifier fixed, what the rest does is a prefix-causal table keyed by
+  what `X` sent it, of at most `2^e` entries; `localization_wires`, the per-run lemma on wires; memory per run on the
+  state bounds the circuit's `state` (`memory_of_mem`), and binds on memory accounting's `not_markov` circuit
+  (`markov_mem`), and admits the honest location that holds two inputs in two cells and computes `a ∧ ¬b`
+  (`and_causal`); `Recall`, B2's count: what a location does is a function of its state's content, at most `mem`
+  bits; `zero_link` fails `Alphabet` at capacity 0 while meeting `Links` (`zero_link_alphabet`, `zero_links`).
+* `Actual/Device.lean`: the bridge to the device model: the schedule a run induces, its chip and memory charges what
+  those locations hold, fits the device (`fits`, `fits_of_feasible`) and charges what an account's gates use
+  (`covers_ingress`, `covers_work`).
+* `Actual/Confidence.lean`: `Composition`, protocols sound alone compose into the confidence set at `∑ δ i`, and
+  `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; at tick 0 the state is the inputs (`state_zero`), and causality's global
+  form (`global_of_causal`); the content is a function of the state as seen (`content_congr`), of at most `mem` bits
+  (`content_length_le`).
+* `Actual/Bridges.lean`: `B4`, egress factoring: across `X`'s secret inputs, what the outside does takes at most (the
+  number of records) × `2^{res_out}` values, from causality, links as alphabets and the trusted devices across the
+  strategy; `CM_A`'s programs carry their oracle tree (`costModel_queries`), the honest clock holds at `CM_A` from
+  `t_d` on (`honestClock`), so B1 is all that is conjectured of PoUW's deadline row, and a salt-dependent gate that
+  the verifier reads before `t_d` lies in the cost window (`cost_window`, `prover_cost_window`).
+* `Actual/Transducer.lean`: a location is a transducer over what reaches it: under causality from every tick, what `X`
+  does during `[t, t + n)` is a function of its content at `t` and of its links' signals at each tick (`transducer`,
+  `crossing_of_signals`), with an `(M + 1)`-bit state (`transducer_bits`), so it takes at most `2^{M + 1 + β_X n}` values
+  (`acts_encard_le_links`; the `+ 1` is the content's length).
+* `Actual/Ticks.lean`: memory accounting's `held_tick` (a width-0 held gate at a coin-dependent tick, causal under
+  v2.2's state as seen) is closed by v2.4's content: no holding makes it causal from every tick (`held_tick_closed`),
+  and it admits one (`tick_holding`).
+* `Actual/Source.lean`: ingress by source adds over disjoint sources, and a cover of the outside bounds ingress; under
+  `Links`, ingress from a source is at most the capacity of the links joining it to `X`.
+-/

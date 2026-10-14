@@ -31,25 +31,28 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # listed: moving a member's root selects this suite. tools/verity/check/tool.py stays: the train gate parses it on main, and
 # test_jobs_vectors checks that it still can. infra/cluster: the console computes its usage rows with cluster.usage, and
 # `research usage` runs `cluster usage`. tools/verity/check/slot.py and lean_slot.py: the quick tier and the Lean sandbox ship
-# them to the node (test_queue, test_merge_gate, test_nebius_lean_sandbox).
+# them to the node (test_queue, test_merge_gate, test_nebius_lean_sandbox). tools/verity/lean/merge.py and check.py: test_queue
+# commits them into its origin so the queue's clone runs the `lean-audit` record driver it configures.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "archive/direct", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
           "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "benchmarks/tc_probe",
           "pyproject.toml", "verity/ml/flock/pyproject.toml", "archive/gkr/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "archive/sp1/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
           "benchmarks/pouw/pyproject.toml", "tools/verity/check/pyproject.toml", "tools/verity/circuit_check/pyproject.toml",
-          "infra/cluster", "tools/verity/lean/pyproject.toml", "tools/verity/lean/run_daily.py", "benchmarks/native_peak/pyproject.toml",
+          "infra/cluster", "tools/verity/lean/pyproject.toml", "tools/verity/lean/run_daily.py", "tools/verity/lean/merge.py",
+          "tools/verity/lean/check.py", "benchmarks/native_peak/pyproject.toml",
           "benchmarks/tc_probe_fp4/pyproject.toml"]
 parallel = true
 # What the suites of packages depending on research read of it, and so key on in place of this directory: the store and its
 # telemetry, running and recording a run (`python -m research`, its CLI's other commands imported only when run), the merge
-# gate and queue `check` drives, and the pod registry; of the store and telemetry, the files a `research data fetch` and a run's
-# record import, so the store's bucket index, custody and eviction aren't inputs of every dependent. Not the coordination tooling
-# (Slack, notes, monitors, the steward) nor pods/nebius, which verity-ops declares. A dependent's test that reads another file
-# of it fails the guard until it is listed.
+# gate and queue `check` drives, the memory reservations a check slot holds (`mem`), and the pod registry; of the store and
+# telemetry, the files a `research data fetch` and a run's record import, so the store's bucket index, custody and eviction aren't
+# inputs of every dependent. Not the coordination tooling (Slack, notes, monitors, the steward) nor pods/nebius, which verity-ops
+# declares. A dependent's test that reads another file of it fails the guard until it is listed.
 exports = ["tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py", "tools/research/src/research/cli.py",
            "tools/research/src/research/clone.py", "tools/research/src/research/compare.py", "tools/research/src/research/env.py",
-           "tools/research/src/research/gates.py", "tools/research/src/research/merge.py", "tools/research/src/research/pythonpath.py",
-           "tools/research/src/research/queue.py", "tools/research/src/research/quick_tier.py", "tools/research/src/research/record.py",
+           "tools/research/src/research/gates.py", "tools/research/src/research/mem.py", "tools/research/src/research/merge.py",
+           "tools/research/src/research/pythonpath.py", "tools/research/src/research/queue.py",
+           "tools/research/src/research/quick_tier.py", "tools/research/src/research/record.py",
            "tools/research/src/research/remote.py", "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
            "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
            "tools/research/src/research/pods/__init__.py", "tools/research/src/research/pods/registry.py",

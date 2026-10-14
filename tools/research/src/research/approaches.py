@@ -3,6 +3,7 @@
   research notes claim C/SLUG --lane L [--title T --hypothesis H --type T [--attacks C/SLUG]] [--cite TOKEN]... [--reopen WHY]
   research notes approach C/SLUG STATUS --by L [--reason R] [--cite TOKEN]... [--superseded-by C/SLUG] [--owner L] [--at UTC]
                           [--title T --hypothesis H --type T [--attacks C/SLUG]]      # a new name: the record of work already done
+  research notes approach C/SLUG --by L [--cite TOKEN]... [--uncite TOKEN]...         # no status: its evidence alone
   research notes approaches [--campaign C] [--status S[,S]] [--owner L] [--grep WORDS] [--refresh] [--json]
   research notes approaches render [--campaign C] [--refresh] [--root DIR]            # campaigns/<c>/APPROACHES.md in the notes
   research notes approaches check [--refresh] [--root DIR]                            # the lint: exit 1 on any error
@@ -16,16 +17,17 @@ is the same record everywhere.  Every fact about it is a label on that record (s
     reason              one line: why the status changed (required unless live)
     superseded_by       the <campaign>/<slug> that replaces it          attacks   the <campaign>/<slug> an attack targets
     cites               one evidence token per label (EVIDENCE_RE)      approach  on a run or artifact: the approach it belongs to
+    uncites             one token the approach no longer cites
 
 The status describes the entry's own line of work: `live` its owner works on it now; `parked` nobody does, it is not refuted, anyone
 may claim it; `killed` it cannot work (an attack that found nothing is killed: "target held"); `superseded` replaced; `merged` done
 and adopted (landed in main, chosen, or an attack's finding accepted and acted on).
 
-The state is a fold over the labels in ts order, one change per (ts, by): the newest value of each key wins, `cites` accumulate,
-and a change that makes a live approach live under another lane without a `reason` is ignored (the loser of a claim race; `check`
-warns about it).  Every command refuses (exit 2, nothing written) what the fold would reject: a missing field, a non-live status
-without a reason, a merged one without evidence, a `superseded_by` / `attacks` that names no approach, an evidence token of no
-known form, a field over `MAX_FIELD` characters or with a line break.  Claims and changes go through to the remote at once (a
+The state is a fold over the labels in ts order, one change per (ts, by): the newest value of each key wins, `cites` accumulate
+until an `uncites` takes one back, and a change that makes a live approach live under another lane without a `reason` is ignored
+(the loser of a claim race; `check` warns about it).  Every command refuses (exit 2, nothing written) what the fold would reject: a
+missing field, a non-live status without a reason, a merged one without evidence, a `superseded_by` / `attacks` that names no
+approach, an evidence token of no known form, a field over `MAX_FIELD` characters or with a line break.  Claims and changes go through to the remote at once (a
 claim nobody can see is not a claim), and `claim` re-reads the remote after writing, exiting 3 when another claim landed first.
 Without a usable remote, `claim` writes a pending claim file into the lane's own folder (`lanes/<lane>/<stamp>-claim-….md`, exit
 4) and the steward's rule records it at its next pass, handing a refusal back to the lane.
@@ -68,7 +70,6 @@ EVIDENCE_RE = re.compile(
     r"|(?:art|drv):[0-9a-f]{8,64}"                          # a store object, full or abbreviated
     r"|(?:note|notes-asset):\S+"                            # a notes id or a notes asset path
     r"|approach:[a-z0-9][a-z0-9-]{0,39}/[a-z0-9][a-z0-9-]{0,63}"
-    r"|store:[A-Za-z0-9._-]+/\S+"                           # a path in a private Project store: <project>/<path>
     r"|[A-Za-z0-9_.-]+#\d+"                                 # a pull request or issue: <repo>#<n>
     r"|[A-Za-z0-9_.-]+@[0-9a-f]{7,40}"                      # a commit: <repo>@<sha>
     r"|https://\S+)$")
@@ -166,6 +167,7 @@ def fold(name: str, labels: Iterable[Label]) -> Approach:
             if key in one:
                 setattr(a, attr, one[key])
         a.cites += [c for c in kv.get(vocab.CITES, []) if c not in a.cites]
+        a.cites = [c for c in a.cites if c not in kv.get(vocab.UNCITES, ())]
         if vocab.APPROACH_STATUS in one:
             a.status, a.reason, a.updated = one[vocab.APPROACH_STATUS], one.get(vocab.REASON), ts
             if a.owner is None:
@@ -206,7 +208,11 @@ def problems(a: Approach, known=lambda name: True) -> list[str]:
     for key, ref in ((vocab.SUPERSEDED_BY, a.superseded_by), (vocab.ATTACKS, a.attacks)):
         if ref and (not NAME_RE.match(ref) or ref == a.name or not known(ref)):
             out.append(f"{key} {ref!r} names no other approach")
-    out += [f"evidence {c!r} is of no known form" for c in a.cites if not EVIDENCE_RE.match(str(c))]
+    for c in a.cites:
+        if str(c).startswith("store:"):
+            out.append(f"evidence {c!r} is a private agent store's path: copy it into the notes, then --cite note:ID --uncite {c}")
+        elif not EVIDENCE_RE.match(str(c)):
+            out.append(f"evidence {c!r} is of no known form")
     return out
 
 
@@ -270,14 +276,20 @@ def _ts(at: str | None, labels: list[Label]) -> str:
 
 
 def _write(store: LocalStore, name: str, labels: list[Label], change: dict[str, object], by: str, at: str | None,
-           cites: list[str]) -> Approach:
+           cites: list[str], uncites: list[str] = ()) -> Approach:
     """Validate the folded state with `change` applied, then put the record and the change's labels and push them."""
     if not LANE_RE.match(by or ""):
         raise Refused(f"{by!r} is not a lane name")
+    if both := set(cites) & set(uncites):
+        raise Refused(f"{min(both)!r} is both cited and uncited")
+    cited = fold(name, labels).cites if labels else []
+    if missing := [c for c in uncites if c not in cited]:
+        raise Refused(f"{name} does not cite {missing[0]!r}")
     ts = _ts(at, labels)
     ref = cites[0] if cites else None
     new = [Label(target=record_id(name), key=k, value=v, by=by, ts=ts, ref=ref) for k, v in change.items() if v is not None]
     new += [Label(target=record_id(name), key=vocab.CITES, value=c, by=by, ts=ts, ref=ref) for c in cites]
+    new += [Label(target=record_id(name), key=vocab.UNCITES, value=c, by=by, ts=ts, ref=ref) for c in uncites]
     for lab in new:
         if why := vocab.check(lab.key, lab.value):
             raise Refused(why)
@@ -376,14 +388,25 @@ def claim(store: LocalStore, name: str, lane: str, *, title: str | None = None, 
     return 0, f"claimed {name} for {lane} (live); cite approach:{name} in your checkpoint"
 
 
-def set_status(store: LocalStore, name: str, status: str, by: str, *, reason: str | None = None, owner: str | None = None,
+def set_status(store: LocalStore, name: str, status: str | None, by: str, *, reason: str | None = None, owner: str | None = None,
                superseded_by: str | None = None, cites: list[str] = (), at: str | None = None, title: str | None = None,
-               hypothesis: str | None = None, type_: str | None = None, attacks: str | None = None) -> Approach:
-    if status not in STATUSES:
+               hypothesis: str | None = None, type_: str | None = None, attacks: str | None = None,
+               uncites: list[str] = ()) -> Approach:
+    """A change of status, or with `status` None a change of evidence alone (`cites`, `uncites`), which leaves the status, its
+    reason and the history as they are."""
+    if status is not None and status not in STATUSES:
         raise Refused(f"status {status!r} is not one of {', '.join(STATUSES)}")
     art = record_id(name)
     labels = current_labels(store, art)
     cur = fold(name, labels) if labels else None
+    if status is None:
+        if cur is None:
+            raise Refused(f"{name} is not recorded: give its status")
+        if any((reason, owner, superseded_by, title, hypothesis, type_, attacks)):
+            raise Refused("without a status a change carries only --cite and --uncite")
+        if not (cites or uncites):
+            raise Refused("nothing to change: give a status, --cite or --uncite")
+        return _write(store, name, labels, {}, by, at, list(cites), list(uncites))
     if cur is None and not (title and hypothesis and type_):
         raise Refused(f"{name} is new: give --title, --hypothesis and --type to record it (or `research notes claim` it)")
     if cur and cur.status == LIVE and status == LIVE and not handover(cur.owner, owner or cur.owner, by, reason):
@@ -391,7 +414,7 @@ def set_status(store: LocalStore, name: str, status: str, by: str, *, reason: st
     change = {vocab.APPROACH_STATUS: status, vocab.REASON: reason, vocab.OWNER: owner or (None if cur else by),
               vocab.SUPERSEDED_BY: superseded_by, vocab.TITLE: title, vocab.HYPOTHESIS: hypothesis, vocab.APPROACH_TYPE: type_,
               vocab.ATTACKS: attacks}
-    return _write(store, name, labels, change, by, at, list(cites))
+    return _write(store, name, labels, change, by, at, list(cites), list(uncites))
 
 
 # ---- the lint --------------------------------------------------------------------------------------------------------------------
@@ -558,7 +581,7 @@ def main(argv: list[str], default_root: Path) -> int:
     else:
         ap.add_argument("name", metavar="CAMPAIGN/SLUG")
         if cmd == "approach":
-            ap.add_argument("status", choices=STATUSES)
+            ap.add_argument("status", nargs="?", choices=STATUSES, help="omit it to change the evidence alone")
             ap.add_argument("--by", required=True, metavar="LANE")
             ap.add_argument("--reason", help="one line: why (required unless live)")
             ap.add_argument("--owner", metavar="LANE", help="hand the approach to this lane")
@@ -572,6 +595,8 @@ def main(argv: list[str], default_root: Path) -> int:
         ap.add_argument("--type", choices=TYPES)
         ap.add_argument("--attacks", metavar="CAMPAIGN/SLUG", help="an attack's target")
         ap.add_argument("--cite", action="append", default=[], metavar="TOKEN", help="evidence: a run id, art:, note:, <repo>#<n>, ...")
+        if cmd == "approach":
+            ap.add_argument("--uncite", action="append", default=[], metavar="TOKEN", help="evidence the approach no longer cites")
     ns = ap.parse_args(rest)
     root = ns.root or default_root
     try:
@@ -594,8 +619,9 @@ def main(argv: list[str], default_root: Path) -> int:
         if cmd == "approach":
             a = set_status(LocalStore(ns.store), ns.name, ns.status, ns.by, reason=ns.reason, owner=ns.owner,
                            superseded_by=ns.superseded_by, cites=ns.cite, at=ns.at, title=ns.title, hypothesis=ns.hypothesis,
-                           type_=ns.type, attacks=ns.attacks)
-            print(f"{a.name}: {a.status} (owner {a.owner})" + (f": {a.reason}" if a.reason else ""))
+                           type_=ns.type, attacks=ns.attacks, uncites=ns.uncite)
+            print(f"{a.name}: {a.status} (owner {a.owner})" + (f": {a.reason}" if a.reason else "")
+                  + ("" if ns.status else f"; cites {' '.join(a.cites) or 'nothing'}"))
             return 0
     except Refused as e:
         print(f"research notes {cmd}: refused: {e}.  Nothing written", file=sys.stderr)

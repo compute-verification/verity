@@ -55,6 +55,7 @@ from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import moe_expert_refusal, moe_expert_role
 
 aten = torch.ops.aten
@@ -122,7 +123,6 @@ PADDED = "padded"
 
 def active_moe_construction() -> str:
     """The construction the ACTIVE TargetProfile declares (`TargetProfile.DEFAULT_MOE_CONSTRUCTION` when undeclared); read at `applies` time, never cached."""
-    from verity_vllm.program.frontend.rules.vllm_bindings import active_target_profile  # noqa: PLC0415  (vllm_bindings imports this module lazily; keep the cycle lazy both ways)
     return active_target_profile().effective_moe_construction()
 
 

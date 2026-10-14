@@ -429,12 +429,13 @@ def recMap {outer outer' : Reg → L.Ω → List (Cm × I.Coin) → Game β}
   ⟨σ.1, fun ω => mapRounds I.r _ _ (fun t s => Strategy.map (fun b => (σ.1, ω, t, b)) (outer' σ.1 ω t)
     (φ σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s))) (σ.2 ω)⟩
 
-/-- **A bound at every outer session bounds the recursive audit**: when each outer session's event is no likelier than
-`p'`'s at the strategy `φ` carries it to, so is the recursive audit's. -/
+/-- **A bound at every outer session bounds the recursive audit**: when each outer session's event at a whole history
+(one entry per inner round, the only ones `rounds` reaches) is no likelier than `p'`'s at the strategy `φ` carries it
+to, so is the recursive audit's. -/
 theorem prob_recMap_le {outer outer' : Reg → L.Ω → List (Cm × I.Coin) → Game β}
     (φ : ∀ R ω t, Strategy (outer R ω t) → Strategy (outer' R ω t)) (p p' : Reg × L.Ω × List (Cm × I.Coin) × β → Prop)
     (σ : Strategy (recGame L Reg I Cm outer))
-    (h : ∀ ω t s, prob (fun b => p (σ.1, ω, t, b)) (outer σ.1 ω t) s ≤
+    (h : ∀ ω t s, t.length = I.r → prob (fun b => p (σ.1, ω, t, b)) (outer σ.1 ω t) s ≤
       prob (fun b => p' (σ.1, ω, t, b)) (outer' σ.1 ω t) (φ σ.1 ω t s)) :
     prob p (recGame L Reg I Cm outer) σ ≤ prob p' (recGame L Reg I Cm outer') (recMap φ σ) := by
   rw [prob_recGame, prob_recGame]
@@ -448,15 +449,15 @@ theorem prob_recMap_le {outer outer' : Reg → L.Ω → List (Cm × I.Coin) → 
         (φ σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s))) (σ.2 ω)))
   refine avg_mono fun ω => ?_
   rw [leafAvg_mapRounds]
-  refine leafAvg_mono (fun t s => ?_) _
+  refine leafAvg_mono_len (fun t s ht => ?_) _
   rw [ofMap_map]
-  exact h ω t _
+  exact h ω t _ ht
 
 /-- **An event empty at every outer session is empty.** -/
 theorem prob_recGame_zero {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
     (p : Reg × L.Ω × List (Cm × I.Coin) × β → Prop) (σ : Strategy (recGame L Reg I Cm outer))
     (h : ∀ ω t s, prob (fun b => p (σ.1, ω, t, b)) (outer σ.1 ω t) s = 0) : prob p (recGame L Reg I Cm outer) σ = 0 :=
-  le_antisymm ((prob_recMap_le (fun _ _ _ s => s) p (fun _ => False) σ fun ω t s =>
+  le_antisymm ((prob_recMap_le (fun _ _ _ s => s) p (fun _ => False) σ fun ω t s _ =>
     (h ω t s).le.trans (zero_le ..)).trans (prob_false _ _).le) (zero_le ..)
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ}

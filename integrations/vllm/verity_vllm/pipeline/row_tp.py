@@ -39,6 +39,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.engine.profiles.transport import row_p2p_env, workload_custom_all_reduce_off
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
@@ -66,9 +67,9 @@ def _grep(path: str, pred: Any) -> list[str]:
 
 class TpRow(Row):
     def __init__(self, *, row: str, role: str, repo: str, rev: str, stages: str, env: RunEnv, world: int, gpu_util: str | None,
-                 nccl_p2p_disable: str, build: BuildConfig, match: MatchConfig, commit: CommitConfig):
+                 build: BuildConfig, match: MatchConfig, commit: CommitConfig):
         super().__init__(row=row, role=role, repo=repo, rev=rev, stages=stages, env=env, proc="tp_stage")
-        self.W, self.nccl = world, nccl_p2p_disable
+        self.W = world
         self.gpu_util = gpu_util or TP_UTIL
         self.commit_util = commit.commit_gpu_util or self.gpu_util
         self.cb, self.cm, self.ck_ = build, match, commit
@@ -110,10 +111,11 @@ class TpRow(Row):
     def prepare(self) -> None:
         env = self.env
         self.ncb = env.native_collect_build or env.native_collect_default
-        self.setup({"NCCL_P2P_DISABLE": self.nccl, "NATIVE_COLLECT_BUILD": self.ncb})
+        self.setup({"NATIVE_COLLECT_BUILD": self.ncb})
         if not os.path.isfile(self.path(self.wl)):
             print(f"no manifest {self.wl}")
             raise Stop(2)
+        self.nccl = self.p2p_env()
         self.hidden_so = self.hidden_build()
         self.bdir, self.M = f"{self.d}/build", f"{self.d}/match"
         for p in (self.d, self.bdir, self.M, self.ncb):
@@ -142,17 +144,41 @@ class TpRow(Row):
         self.tgt_args = ["--target", tgt] if tgt else []
         fp = self.cm.fold_profile
         self.fold_profile = f"derived_{self.role}_tp{self.W}" if fp is None else fp
-        self.engine = ["--engine-arg", f"max_model_len={self.MML}", "--engine-arg", f"max_num_batched_tokens={self.MNBT}",
-                       "--engine-arg", "disable_custom_all_reduce=true"]
+        self.engine = self.engine_args()
         code9 = self.code9 = sha[:9]
         shapes = " ".join(f"{lp},{t}" for lp, t in self.shapes)
         self.log(f"start tp={self.W} B={self.B} I={self.I} O={self.O} MML={self.MML} mnbt={self.MNBT} shapes=[{shapes}] ckpt={self.ck or '-'} "
-                 f"stages={self.stages} fold_profile={self.fold_profile or 'none'} gpu_util={self.gpu_util} hidden_so={self.hidden_so} code={code9}")
+                 f"stages={self.stages} fold_profile={self.fold_profile or 'none'} gpu_util={self.gpu_util} hidden_so={self.hidden_so} code={code9} "
+                 f"NCCL_P2P_DISABLE={self.nccl or 'unset'} {self.engine[-1]}")
         self.tl("row", "start", ("stages", self.stages), ("B", self.B), ("tp", self.W), ("code", code9), ("pod", os.uname().nodename))
         self.install_signal_forwarding()
         if not os.path.isdir(self.ck):
             self.verdict("build", "FAIL", f"no local checkpoint dir for {self.repo} @ {self.rev} (checkpoints.json local_path / HF snapshot absent; HF_HUB_OFFLINE=1)")
             raise Stop(10)
+
+    def p2p_env(self) -> str | None:
+        """The stages' NCCL_P2P_DISABLE: the workload's ``env_required`` value, else unset (one the caller's environment has is
+        dropped).  A workload written before it had ``env_required`` requires what the generator writes for its target
+        (`engine.profiles.transport.row_p2p_env`)."""
+        req = (R.load_json(self.path(self.wl)) or {}).get("env_required")
+        v = (row_p2p_env(self.row) if req is None else req).get("NCCL_P2P_DISABLE")
+        if v is None:
+            self.child_env.pop("NCCL_P2P_DISABLE", None)
+            return None
+        self.child_env["NCCL_P2P_DISABLE"] = str(v)
+        return str(v)
+
+    def custom_all_reduce_off(self) -> bool:
+        """The engines' ``disable_custom_all_reduce`` (tp-capture's and tp-commit's ``--engine-arg``): the workload's
+        ``engine_args_required`` value.  Its fallback is not `p2p_env`'s: a workload without the field keeps True, what every TP row's
+        engines ran before (`engine.profiles.transport.workload_custom_all_reduce_off`), where a workload without ``env_required``
+        takes the generator's value for its target."""
+        return workload_custom_all_reduce_off(R.load_json(self.path(self.wl)) or {})
+
+    def engine_args(self) -> list[str]:
+        """The ``--engine-arg``s tp-capture and tp-commit share; ``disable_custom_all_reduce`` last."""
+        return ["--engine-arg", f"max_model_len={self.MML}", "--engine-arg", f"max_num_batched_tokens={self.MNBT}",
+                "--engine-arg", f"disable_custom_all_reduce={str(self.custom_all_reduce_off()).lower()}"]
 
     def hidden_build(self) -> str:
         """The FA2 tap build the ranks run: the guarded-max one unless GUARDED_MAX_TAP=0 (for A/B only)."""
@@ -429,7 +455,7 @@ class TpRow(Row):
                        *arms, "--replay-workers", str(ck.replay_workers), "--label", self.row, "--out", f"{d}/commit")
         if not self.config_run and self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):
             cmd.append("--require-fold-match")
-        if ck.replay_deferred in ("1", "slim"):    # slim reaches a TP row only above TP2 (`run_row`), where tp-commit replays in process
+        if ck.replay_deferred in ("1", "slim"):    # slim reaches a TP row only at a world where tp-commit replays in process (`run_row`)
             cmd.append("--replay-deferred")
         return cmd + R.tap_source_args(taps, self.env) + (ck.extra_commit_args or "").split()
 

@@ -38,6 +38,7 @@ class AttnRun(Run):
         self.src.attention = self.att
         self.att.install()
         self.rec: dict[int, list[tuple[str, torch.Tensor]]] = {}
+        self.unstaged: list[str] = []
         self.log: list[tuple[str, str]] = []
         self.seen: dict[int, dict[int, dict[str, Any]]] = {}
         self.com._acquire = self._record
@@ -45,6 +46,8 @@ class AttnRun(Run):
 
     def _record(self, name: str, t: torch.Tensor, job: Any) -> None:
         self.rec.setdefault(int(job.step), []).append((name, t.clone()))
+        if not AS.pitched_2d(t):
+            self.unstaged.append(name)
         self.log.append(("acquire", name))
 
     def _flush(self, what: str) -> bool:
@@ -122,6 +125,29 @@ def test_the_shared_top_k_buffer_is_flushed_as_soon_as_it_is_bound(runs):
     topk = [j for j, (what, name) in enumerate(log) if what == "acquire" and name.endswith("indexer_op/topk")]
     assert len(topk) == 3 * len(INDEXER), "the decode, mixed and sparse prefill steps, on every indexer layer"
     assert all(log[j + 1] == ("flush", AS.TOPK) for j in topk)
+
+
+def test_pitched_2d_is_the_native_collectors_staging_rule():
+    base = torch.zeros(5, 576)
+    assert AS.pitched_2d(base) and AS.pitched_2d(base[:, 512:]), "contiguous, and rows of 64 at a pitch of 576"
+    assert AS.pitched_2d(base[:, 512:].unsqueeze(1)), "a size-1 dim carries no layout"
+    absorbed = torch.zeros(8, 5, 512).transpose(0, 1)
+    assert not AS.pitched_2d(absorbed), "a transposed bmm output [T, H, L], strides (L, T * L, 1)"
+    assert AS.pitched_2d(absorbed[:1]), "one row of it is contiguous"
+    assert AS.pitched_2d(base[:, ::2]), "every other word: rows of one word at a pitch of two"
+    assert not AS.pitched_2d(base[::2, ::2]), "every other word of every other row"
+
+
+def test_every_value_handed_to_the_committer_is_one_the_native_collector_stages(runs):
+    """The native collector stages a contiguous tensor or equally spaced contiguous rows and raises on anything else ("layout is
+    not 2-D pitched", every rank of r20261013-002759-c965 on 8x H200). The W_UK_T product of a step of more than one token is a
+    transposed bmm output, so the source hands the committer a contiguous copy of it, word-equal to it
+    (`test_each_bound_value_is_the_one_the_layer_computed`)."""
+    for r in runs.values():
+        assert r.unstaged == []
+        assert "q_nope_absorb" in r.att.stats["copied_by_tap"]
+    multi = sum(1 for md, _routes, _phase in STEPS if md.num_actual_tokens > 1)
+    assert runs[True].att.stats["copied_by_tap"]["q_nope_absorb"] == multi * L
 
 
 def full_steps(r: AttnRun, capsys, target: bool) -> dict[int, list[str]]:
