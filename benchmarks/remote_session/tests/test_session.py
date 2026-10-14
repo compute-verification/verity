@@ -79,11 +79,22 @@ class TickingBackend(prover.CpuBackend):
         return out
 
 
-def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None):
+class ArchivingBackend(TickingBackend):
+    def __init__(self, *args, **kw) -> None:
+        super().__init__(*args, **kw)
+        self.archived = []
+
+    def archive_window(self, handles):
+        self.archived.append(len(handles))
+        return handles
+
+
+def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
+        backend_cls=TickingBackend):
     clock = PassClock()
     a, b = socket.socketpair()
     vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
-    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=1e20)
+    backend = backend_cls(clock, blocks, random.Random(7), read_bytes_per_s=1e20)
     p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None)
     results = []
 
@@ -106,12 +117,12 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         out.append(r)
         not_before = r.get("end_ns", clock.now())
     th.join()
-    return out, results
+    return out, results, backend
 
 
 def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    (r,), (pr,) = run("honest")
+    (r,), (pr,), _ = run("honest")
     assert r["accepted"] and pr["accepted"] and r["failure"] is None
     assert [w["passes"] for w in r["windows_seen"]] == pr["passes"] and min(pr["passes"]) >= 1
     lg = r["ledger"]["spec"]
@@ -121,7 +132,7 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
 
 
 def test_a_prover_that_dropped_blocks_is_rejected_at_an_opening():
-    (r,), (pr,) = run("skip:0.5", samples=8)
+    (r,), (pr,), _ = run("skip:0.5", samples=8)
     assert not r["accepted"] and not pr["accepted"]
     assert r["failure"]["failure"] == "receipt"
     i, p = r["failure"]["at"]
@@ -129,10 +140,16 @@ def test_a_prover_that_dropped_blocks_is_rejected_at_an_opening():
 
 
 def test_a_second_session_waits_out_the_first_and_is_accepted():
-    rs, prs = run("honest,honest", sessions=2)
+    rs, prs, _ = run("honest,honest", sessions=2)
     assert [r["accepted"] for r in rs] == [True, True]
     assert rs[1]["windows_seen"][0]["released_ns"] >= rs[0]["end_ns"]
     assert rs[0]["coins"] != rs[1]["coins"]
+
+
+def test_each_completed_window_is_archived_before_deferred_opening():
+    (r,), (pr,), backend = run("honest", backend_cls=ArchivingBackend)
+    assert r["accepted"] and pr["accepted"]
+    assert backend.archived == pr["passes"]
 
 
 @pytest.fixture(scope="module")
@@ -147,10 +164,10 @@ def pool():
 def test_worker_checks_give_the_verdicts_of_session_verify(monkeypatch, pool):
     monkeypatch.setattr(prover, "OPENINGS_PART", 2)
     monkeypatch.setattr(verifier, "CHECK_BATCH", 3)
-    (r,), (pr,) = run("honest", checks=pool)
+    (r,), (pr,), _ = run("honest", checks=pool)
     assert r["accepted"] and pr["accepted"] and r["check_workers"] == 2
     assert all(c > 0 for c in r["verify_cpu_ns"].values())
-    (r,), (pr,) = run("skip:0.5", samples=8, checks=pool)
+    (r,), (pr,), _ = run("skip:0.5", samples=8, checks=pool)
     assert not r["accepted"] and r["failure"]["failure"] == "receipt" and r["failure"]["at"][1] in pr["dropped"]
 
 

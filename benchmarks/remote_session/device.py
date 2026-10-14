@@ -596,6 +596,8 @@ class Device:
         self.open_stream = torch.cuda.Stream()
         self.offload_jobs: queue.Queue = queue.Queue()
         threading.Thread(target=self._offload, daemon=True).start()
+        self.archive_by_window = False
+        self.archive_stats: list[dict] = []
         self.gates: dict = {}
         with torch.cuda.stream(self.main_stream):
             self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, self.gen,
@@ -712,6 +714,9 @@ class Device:
             return self.store.run_pass(seed)
 
     def begin_window(self, challenge: bytes, previous: bytes | None) -> None:
+        # Calibration has no window boundary and offloads each handle immediately. A live session retains one
+        # bounded window on the device, then archives that window together once its draws arrive.
+        self.archive_by_window = self.store.offload_handles
         with self.torch.cuda.stream(self.main_stream):
             self.store.start_chain(challenge, previous)
 
@@ -725,9 +730,24 @@ class Device:
         with self.torch.cuda.stream(self.open_stream):
             return self.store.open_window(items)
 
+    def archive_window(self, handles: list[object]) -> list[object]:
+        """Archive one completed window's device handles together, outside that window's timed pass phase."""
+        if not self.store.offload_handles or not handles or isinstance(handles[0], OffloadedHandle):
+            return handles
+        t0 = time.perf_counter_ns()
+        out = []
+        for handle in handles:
+            archived = OffloadedHandle()
+            self.offload_jobs.put((handle, archived))
+            out.append(archived)
+        self.offload_jobs.join()
+        ready = [self._ready(handle) for handle in out]
+        self.archive_stats.append({"handles": len(ready), "ns": time.perf_counter_ns() - t0})
+        return ready
+
     def _run_chain(self, i: int):
         root, handle = self.store.run_chain(i)
-        if not self.store.offload_handles:
+        if not self.store.offload_handles or self.archive_by_window:
             return root, handle
         out = OffloadedHandle()
         self.offload_jobs.put((handle, out))
@@ -755,8 +775,11 @@ class Device:
 
     def session_stats(self) -> dict:
         gpu = self.store.pass_gpu_ms
-        return {"passes": len(gpu), "pass_gpu_ms_sum": sum(gpu), "pass_gpu_ms_median": sorted(gpu)[len(gpu) // 2]
-                if gpu else None, "pass_gpu_ms_max": max(gpu) if gpu else None}
+        out = {"passes": len(gpu), "pass_gpu_ms_sum": sum(gpu), "pass_gpu_ms_median":
+               sorted(gpu)[len(gpu) // 2] if gpu else None, "pass_gpu_ms_max": max(gpu) if gpu else None,
+               "archives": list(self.archive_stats)}
+        self.archive_stats.clear()
+        return out
 
     def gate(self, registration: audit.Registration) -> dict:
         torch, key, out = self.torch, registration.key, {}
@@ -852,7 +875,7 @@ def add_arguments(ap) -> None:
                     help="h0: the payload tree's levels kept; lower paths are recomputed for openings")
     ap.add_argument("--sketch-ctas", type=int, default=0, help="the receipts grid's CTAs (0: one an SM)")
     ap.add_argument("--offload-handles", action="store_true",
-                    help="keep pass handles on the CPU between their root and openings (automatic above 64 GiB)")
+                    help="archive each completed window's pass handles on the CPU (automatic above 64 GiB)")
 
 
 def from_arguments(a, log=print) -> Device:
