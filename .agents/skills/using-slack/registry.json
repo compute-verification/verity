@@ -205,6 +205,7 @@
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
       "owns": [
+        "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/move/",
@@ -248,7 +249,9 @@
       "charter": "Daniel",
       "usergroup": "S0C977GL9R7",
       "linear": "TOP",
-      "branch_suffixes": ["c3b2"],
+      "branch_suffixes": [
+        "c3b2"
+      ],
       "owns": [
         "AGENTS.md",
         "README.md",
@@ -281,7 +284,8 @@
       "usergroup": "S0C9ZLL7T88",
       "linear": "BENCH",
       "owns": [
-        "benchmarks/harness/"
+        "benchmarks/harness/",
+        "benchmarks/specs/"
       ]
     },
     {

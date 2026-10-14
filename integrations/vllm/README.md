@@ -201,6 +201,10 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 `model` and `revision` (the full commit sha) must be pinned in `manifests/checkpoints.json` with the snapshot on the host.
 The engine is built by `engine.vllm_adapter.build_engine` from that pin's engine profile, as every `verity-vllm` stage
 builds it: dtype, tokenizer and attention come from the profile unless explicitly overridden, and prefix caching is off.
+`LLM.from_spec(path)` builds the same engine from an engine spec, a config v0 document (`verity_config`) of schema
+`verity-vllm/engine-spec/v0` with `model`, `revision` and an `[engine]` table of exactly the options below
+(`pipeline/engine_spec.py`).  An unknown or missing key, or a value of the wrong type, refuses before any engine is
+built, and the spec's canonical SHA-256 is `engine_record["spec_digest"]`.
 Supported keyword options:
 
 | option | default | sets |

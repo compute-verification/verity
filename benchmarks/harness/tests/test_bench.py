@@ -2,14 +2,28 @@ from __future__ import annotations
 
 import sys
 from dataclasses import replace
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
 
+from verity_config import Admission
+
+from verity_bench import jobs
 from verity_bench.cli import _parser
 from verity_bench.vllm.arms import Arm, resolve_arms
 from verity_bench.vllm.cli import effective_eager
-from verity_bench.vllm.presets import GPUS, SweepPoint, expand_sweep, get_preset, local_checkpoint
+from verity_bench.vllm.presets import (
+    GPUS,
+    SPEC_ROOT,
+    SweepPoint,
+    expand_sweep,
+    get_preset,
+    load_spec,
+    load_sweep,
+    local_checkpoint,
+    resolve_spec,
+)
 from verity_bench.vllm.result import IdentityMismatch, judge, validate
 from verity_bench.vllm.runner import ResidentCapacityError, run_benchmark
 from verity_bench.vllm.table import render
@@ -93,8 +107,62 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
         "vllm", "--preset", "llama31-8b-fp8-1gpu", "--arms", "stock,stock-fp8", "--out", str(tmp_path),
     ])
     assert args.command == "vllm"
-    assert get_preset(args.preset).gpu_id == "rtx-pro-6000"
+    preset = get_preset(args.preset)
+    assert preset.gpu_id == "rtx-pro-6000"
+    assert preset.engine_settings["resident_gpu_memory_utilization"] == 0.40
+    assert preset.engine_settings["block_gpu_memory_utilization"] == 0.80
     assert set(GPUS) == {"rtx-pro-6000", "h200"}
+
+
+def test_every_toml_spec_strictly_loads():
+    loaded = []
+    for path in sorted(SPEC_ROOT.glob("*.toml")):
+        first = path.read_text().splitlines()[0]
+        loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
+    assert len(loaded) == 5
+
+
+def test_plan_identity_binds_resolved_spec_commit_lock_pin_and_point_but_not_admission():
+    root = Path(__file__).resolve().parents[3]
+    spec = resolve_spec("llama31-8b-fp8-1gpu")
+    other = replace(spec, admission=Admission(999.0, "2099-01-01T00:00:00Z", 1))
+    assert spec.config_sha256 == other.config_sha256
+    pins = jobs.toolchain(root, spec, commit="a" * 40)
+    point = expand_sweep("quick")[0]
+    identity = jobs.point_identity(spec.config_sha256, pins, point)
+    assert identity != jobs.point_identity(spec.config_sha256, replace(pins, commit="b" * 40), point)
+    assert identity != jobs.point_identity(spec.config_sha256, replace(pins, uv_lock_sha256="c" * 64), point)
+    assert identity != jobs.point_identity(spec.config_sha256, pins, expand_sweep("quick")[1])
+
+
+def test_plan_marks_passing_points_and_dispatches_one_recorded_run_for_each_missing_point():
+    root = Path(__file__).resolve().parents[3]
+    seen = []
+
+    def lookup(identity, commit):
+        seen.append((identity, commit))
+        return "r-passed" if len(seen) == 1 else None
+
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lookup)
+    assert [point.passing_run for point in plan.points] == ["r-passed", None]
+    commands = []
+    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root,
+                         execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
+    [(command, cwd)] = commands
+    assert cwd == root
+    assert command[:3] == ["research", "run", "--queue"]
+    assert command[command.index("--gpus") + 1] == "1"
+    assert command[command.index("--gpu-model") + 1] == "rtx-pro-6000"
+    assert command[command.index("--") + 1:][:4] == ["python", "-m", "verity_bench", "_vllm-point"]
+    assert command[command.index("--point") + 1] == "b32-p512-mixed"
+
+
+def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
+    parser = _parser()
+    assert parser.parse_args(["plan", "llama31-8b-fp8-1gpu"]).command == "plan"
+    assert parser.parse_args(["run", "llama31-8b-fp8-1gpu"]).command == "run"
+    assert parser.parse_args(["check", "llama31-8b-fp8-1gpu"]).command == "check"
+    assert parser.parse_args(["compare", str(tmp_path / "a"), str(tmp_path / "b")]).command == "compare"
 
 
 def test_glm53_keeps_the_verified_vllm_scheduler_default_and_runs_eager():

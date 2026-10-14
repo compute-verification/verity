@@ -165,10 +165,24 @@ class LLM:
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
                                        engine_args=engine_args, execution=va.execution_label_of(opts["enforce_eager"]))
         self.records: list[GenerateRecord] = []
+        self.spec_digest: str | None = None
         self.protocols = None
         if ctx is not None:
             from verity_vllm import protocol_options as PO
             self.protocols = PO.install(self._engine.model, ctx)
+
+    @classmethod
+    def from_spec(cls, spec: Any) -> LLM:
+        """The engine an engine spec describes (`pipeline.engine_spec`: a path to its TOML, or a loaded `EngineSpec`),
+        with the spec's digest in ``engine_record["spec_digest"]``.  A spec that isn't strictly of the declared shape raises
+        ``verity_config.ConfigError`` before the engine is built."""
+        from verity_vllm.pipeline import engine_spec
+
+        if not isinstance(spec, engine_spec.EngineSpec):
+            spec = engine_spec.load(spec)
+        llm = cls(spec.model, revision=spec.revision, **spec.options())
+        llm.spec_digest = spec.digest
+        return llm
 
     def close(self) -> None:
         """Uninstall the protocol options.  Idempotent."""
@@ -180,7 +194,7 @@ class LLM:
         e = self._engine
         return {"pin": asdict(self.pin), "engine_kwargs": dict(e.kwargs), "env_flags": dict(e.env_flags),
                 "execution": e.execution, "effective": e.effective, "build_s": e.build_s,
-                "engine_overrides": dict(self.engine_overrides),
+                "engine_overrides": dict(self.engine_overrides), "spec_digest": self.spec_digest,
                 "protocols": None if self.protocols is None else self.protocols.record()}
 
     def generate(self, prompts: Any, sampling_params: Any = None, **kwargs: Any) -> list[Any]:
