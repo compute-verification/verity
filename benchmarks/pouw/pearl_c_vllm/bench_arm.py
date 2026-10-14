@@ -65,6 +65,12 @@ class PearlCArm:
     def install(self, target: Any) -> "PearlCArm":
         return self
 
+    def engine_overrides(self, target: Any) -> dict[str, Any]:
+        """Headroom for the run's own device memory (B̃ about a byte per weight, the pass's leaf and flag buffers),
+        which sits beside vLLM's budget: without this the block mode's 0.90 utilization leaves nothing (OOM at 94.8
+        of 95 GiB, r20261014-062817-4c45)."""
+        return {"gpu_memory_utilization": float(os.environ.get("PEARLC_GPU_UTIL", "0.55"))}
+
     def kernel_digest(self, target: Any) -> str | None:
         path = Path(self.cubin) if self.cubin else self.kernel_dir / "pearl_c_sm120.cubin"
         return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
@@ -75,8 +81,8 @@ class PearlCArm:
         cdiv = lambda a, b: -(-a // b)  # noqa: E731
         cfg = target.engine._engine.llm.llm_engine.vllm_config.scheduler_config
         step_rows = int(getattr(cfg, "max_num_batched_tokens", 8192) or 8192)
-        tiles = 4 * cdiv(step_rows, tile) * sum(cdiv(n, tile) for n in ns)
-        rows = 4 * len(ns) * cdiv(step_rows, row_align) * row_align
+        tiles = 2 * cdiv(step_rows, tile) * sum(cdiv(n, tile) for n in ns)
+        rows = 2 * len(ns) * cdiv(step_rows, row_align) * row_align
         pow2 = lambda x: 1 << max(0, x - 1).bit_length()  # noqa: E731
         return max(leaf_default, pow2(tiles)), max(rows_default, pow2(rows))
 
