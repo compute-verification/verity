@@ -283,13 +283,15 @@ theorem check_ok {i : RecVStar.Inner} {name : String} {n j : ℕ} {s : VStar.Stm
     · cases h
 
 /-- **The part check**: at a part's statement whose unit's name, shape, META and part are the verifier's part's
-(`RecResiduals.check`'s), V*'s part's row ports' elements and v elements are that part's. -/
+(`RecResiduals.check`'s), V*'s part's row ports' elements and v elements are that part's, and its row ports are
+named the whole S's (`portNames`) at the part's ports (`partPorts`). -/
 theorem checkPart_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkPart s c = .ok ()) {p : ℕ}
     {nm : String} {pt : VStar.Part} (hs : s = .inner p nm pt) {m k cl j : ℕ}
     (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
     (hsh : RecResiduals.shape? m k cl = some sh) {holo : Bool} (hh : RecResiduals.holoOf c = .ok holo)
     {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} (hpart : RecResiduals.part { sh with holo } j = .ok (S, ns, nv)) :
-    pt.S.ports.map (·.2) = ns ∧ pt.S.gf.nv = nv := by
+    pt.S.ports.map (·.2) = ns ∧ pt.S.gf.nv = nv ∧ ∀ P, RecVStar.partPorts { sh with holo } j = .ok P →
+      pt.S.ports.map (·.1) = P.toList.map ((RecVStar.portNames { sh with holo })[·]!) := by
   subst hs
   unfold RecVStar.checkPart at h
   rw [hp] at h
@@ -304,7 +306,14 @@ theorem checkPart_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkPar
   · cases h
   · rename_i hne
     simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Classical.not_not] at hne
-    exact hne
+    refine ⟨hne.1, hne.2, fun P hP => ?_⟩
+    rw [hP] at h
+    dsimp only at h
+    split at h
+    · cases h
+    · rename_i hn
+      simp only [bne_iff_ne, ne_eq, Classical.not_not] at hn
+      exact hn
 
 /-- **The circuit check, as V*'s statement `j` under the verifier's bindings `f`**: the unit check as statement `j`,
 the file check under `f`, the parse check and the part check. -/
