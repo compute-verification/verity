@@ -15,7 +15,7 @@ hypothesis, never an `axiom`:
   measured rate times the pass duration; `PIDevice.TimeBudget.squaringCeiling` derives this assumption at the sum of
   their rates.
 * `SketchRank ks m r ε`: the probability that some sector's signs block has rational rank below `r` is at most `ε`.
-  Its numeric value is computed outside Lean.
+  Its numeric value is computed outside Lean (art:d3c891e4).
 -/
 
 namespace Accounting.Assumptions
@@ -30,7 +30,11 @@ sector's `ks × 32` block below rational rank `r` with probability at most `ε`:
   `Pr_σ[∃ u, rank_ℚ(block_u σ) < r] ≤ ε`.
 
 The finite probability is exact; only its numerical evaluation is outside Lean. At the deployed 16 rows the chosen
-rank is `r = 12`; at 64 rows it is `r = 27`. -/
+rank is `r = 12`, where `ε = 128 · Pr[rank_ℚ(16 × 32 block) ≤ 11] ≤ 2^(-96.25)`: evaluated, with the per-compression
+reading `2^(-96) + ε = 2^(-95.12)`, by the standalone seeded script of art:d3c891e4 (exact rational arithmetic through
+the F2 rank law, with exhaustive and seeded self-checks; the script and its output are the artifact, and
+`verity/core/protocols/remote_bandwidth/tests/test_sketch_reading.py` holds the in-suite falsification tests). At 64
+rows it is `r = 27`. -/
 def SketchRank (ks m r : ℕ) (ε : ℝ≥0∞) : Prop :=
   pr (fun σ : SketchSigns ks m =>
     ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r) ≤ ε
