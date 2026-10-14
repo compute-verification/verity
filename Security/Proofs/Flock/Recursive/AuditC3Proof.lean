@@ -122,10 +122,10 @@ theorem vbridge_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Typ
       ⟨acceptsZKR_of_keepOwn (z := Flock.Guarantees.custodied zr hC h R ω t R₂ j)
         (P := fun J own tr => I.r ≤ t.length ∧ Flock.Guarantees.ChecksC3 ish (cs t) (coins t) j (bind j) rows J own tr)
         (ho j).1, (ho j).2⟩,
-    fun i R ω t e he R₂ j ⟨tr, htr⟩ => hcm i R ω t e he R₂ j ⟨tr, acceptsZKR_of_keepOwn
+    fun i R ω t e he R₂ j R' tr hw htr => hcm i R ω t e he R₂ j R' tr hw (acceptsZKR_of_keepOwn
       (z := Flock.Guarantees.custodied zr hC h R ω t R₂ j)
       (P := fun J own tr => I.r ≤ t.length ∧ Flock.Guarantees.ChecksC3 ish (cs t) (coins t) j (bind j) rows J own tr)
-      htr⟩,
+      htr),
     hdec, hfull⟩
 
 /-- **VBridgeC at the typed sessions gives it at the checked sessions**, as `vbridge_checked`. -/
@@ -147,10 +147,10 @@ theorem vbridgeC_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Ty
       ⟨acceptsZKR_of_keepOwn (z := Flock.Guarantees.custodied zr hC h R ω t R₂ j)
         (P := fun J own tr => I.r ≤ t.length ∧ Flock.Guarantees.ChecksC3 ish (cs t) (coins t) j (bind j) rows J own tr)
         (ho j).1, (ho j).2⟩,
-    fun i R ω t e he R₂ j ⟨tr, htr⟩ => hcm i R ω t e he R₂ j ⟨tr, acceptsZKR_of_keepOwn
+    fun i R ω t e he R₂ j R' tr hw htr => hcm i R ω t e he R₂ j R' tr hw (acceptsZKR_of_keepOwn
       (z := Flock.Guarantees.custodied zr hC h R ω t R₂ j)
       (P := fun J own tr => I.r ≤ t.length ∧ Flock.Guarantees.ChecksC3 ish (cs t) (coins t) j (bind j) rows J own tr)
-      htr⟩,
+      htr),
     hdec, hfull⟩
 
 /-- **The recursive audit at candidate 3's soundness half, at every coin types `CT` and record map `im`.** -/

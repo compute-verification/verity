@@ -84,32 +84,35 @@ theorem tsOf_congr {R : Array Flock.Round} {k₀ : ℕ} {P : ByteArray} {t : Tra
   rw [h j hj]
 
 /-- **The points `verifierRows` reads at a holo record** (`rows_coins`): every round below `z_partial`'s issued coins,
-so they are the record's coins there, as at plain. -/
-theorem holoRows_coins {sh : Shape} {d : RepData} {v : Array F128} {info : Info Lin}
-    {kappa : Array (Array (Array F128))} (hrows : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa))
-    (hm : 14 ≤ sh.m) {t : Transcript} (ht : t.k = 0) (hd : d.rounds = t.rounds.map (·.coins))
+so they are the record's coins there, as at plain, at any extra claims and comb. -/
+theorem holoRows_coins {sh : Shape} {rounds : Array (Array F128)} {xs : Array Claim} {cb v : Array F128}
+    {info : Info Lin} {kappa : Array (Array (Array F128))} (hrows : verifierRows sh rounds xs cb = .ok (v, info, kappa))
+    (hm : 14 ≤ sh.m) {t : Transcript} (ht : t.k = 0) (hd : rounds = t.rounds.map (·.coins))
     (hpos : ∀ j < t.k + 3 + (sh.m - 6) + 2 + (sh.kLog - 6),
       j < t.rounds.size ∧ decide ((t.rounds[j]!).coins.size ≠ 0) = true) :
     info.zc.r = pinned ++ (t.rounds[t.k + 1]!).coins ∧ info.zc.z = (t.rounds[t.k + 2]!).coins.getD 0 0 ∧
-      info.zc.rho = rhoOf t sh.m ∧ info.lc.fold.ts = tsOf t (t.k + 3 + (sh.m - 6)) sh.kLog := by
+      info.zc.rho = rhoOf t sh.m ∧ info.lc.fold.ts = tsOf t (t.k + 3 + (sh.m - 6)) sh.kLog ∧
+      info.lc.fold.alpha = (t.rounds[t.k + 3 + (sh.m - 6)]!).coins.getD 0 0 ∧
+      info.lc.fold.rhoIn = info.zc.rho.extract 0 (sh.kLog - 6) ∧ info.lc.rIn = info.lc.fold.ts.reverse := by
   obtain ⟨R', hR'⟩ : ∃ R', R' = t.rounds.filter (fun x => decide (x.coins.size ≠ 0)) := ⟨_, rfl⟩
   have hget : ∀ j < t.k + 3 + (sh.m - 6) + 2 + (sh.kLog - 6), R'[j]! = t.rounds[j]! := by
     rw [hR']
     exact filter_getElem!_of _ t.rounds _ hpos
-  have hd' : d.rounds.filter (·.size ≠ 0) = R'.map (·.coins) := by
+  have hd' : rounds.filter (·.size ≠ 0) = R'.map (·.coins) := by
     rw [hd, Array.filter_map, hR']
     rfl
-  have hrows' : verifierRows sh (d.rounds.filter (·.size ≠ 0)) d.extras d.comb =
-      verifierRows sh d.rounds d.extras d.comb := by
+  have hrows' : verifierRows sh (rounds.filter (·.size ≠ 0)) xs cb =
+      verifierRows sh rounds xs cb := by
     unfold verifierRows
     rw [ofRounds_filter]
-  obtain ⟨hr, hz, hrho, -, -, -, -, hts, -⟩ :=
-    rows_coins (hrows'.trans hrows) hm (t := ⟨R', t.k, t.pending⟩) ht hd' (noEmpty_filter d.rounds)
-  dsimp only at hr hz hrho hts
+  obtain ⟨hr, hz, hrho, hα, -, -, hrin, hts, -, hrIn⟩ :=
+    rows_coins (hrows'.trans hrows) hm (t := ⟨R', t.k, t.pending⟩) ht hd' (noEmpty_filter rounds)
+  dsimp only at hr hz hrho hα hts
   rw [hget (t.k + 1) (by omega)] at hr
   rw [hget (t.k + 2) (by omega)] at hz
+  rw [hget (t.k + 3 + (sh.m - 6)) (by omega)] at hα
   exact ⟨hr, hz, hrho.trans (rhoOf_congr fun i hi => hget (t.k + 3 + i) (by omega)),
-    hts.trans (tsOf_congr fun j hj => hget (t.k + 3 + (sh.m - 6) + 2 + j) (by omega))⟩
+    hts.trans (tsOf_congr fun j hj => hget (t.k + 3 + (sh.m - 6) + 2 + j) (by omega)), hα, hrin, hrIn⟩
 
 /-- **The holo rep's program from E's zerocheck and lincheck.** `holoProg_of_checks` with its zerocheck and lincheck
 checks from `zclc_of_residuals_dec`, at the transcript's coins, where the lincheck's rounds end at `comb + h`
