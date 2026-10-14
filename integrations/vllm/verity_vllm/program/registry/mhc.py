@@ -76,7 +76,7 @@ from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.ops.scalar import F32Neg
-from verity.ml.circuits.silicon.models import GroupSum
+from verity.ml.circuits.silicon.models import HOPPER_BF16_WGMMA_K16, GroupSum
 from verity.ml.circuits.silicon.term import TF32, tf32_product
 from verity.ml.circuits.silicon.total import NAN, Inf, fp32_value, group_step_total, pack_value
 from verity_vllm.program.registry import dsa as D
@@ -89,18 +89,18 @@ F_ONE, F_NEG_INF = 0x3F800000, 0xFF800000
 
 _CONF = ("model-untested: read from the TileLang kernels' generated CUDA and PTX at the commits the module docstring pins; "
          "tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
-_TF32_CONF = ("exact-model-tested: r20261013-115825-580e's H200 probe fitted this k8 step alone (one group, 26 bits, floor -133) "
-              "on exact products after each f32 operand is rounded RNE to TF32")
-_DG_CONF = ("model-untested: read from DeepGEMM 8b1392b9 sm90_tf32_hc_prenorm_gemm.cuh:150-240 on the candidate "
-            "HopperTf32WgmmaDot8_v1; tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
+_TF32_CONF = ("exact-model-tested: r20261013-115825-580e's probe on a cc 9.0 GPU (132 SMs) fitted this k8 step alone (one group, "
+              "26 bits, floor -133) on exact products after each f32 operand is rounded RNE to TF32")
+_DG_CONF = ("model-untested: read from DeepGEMM 8b1392b9's cc 9.0 TF32 hc-prenorm GEMM (the header and lines :150-240 the module "
+            "docstring names) on the candidate HopperTf32WgmmaDot8_v1; tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
 _BROADCAST_CONF = ("exact-model-tested: vLLM d9105ea80 tilelang_kernels.py:453-454 copies each loaded bf16 embedding word to "
-                   "every hc_mult stream; r20261013-205619-36e8 checked every residual_out copy in the H200 broadcast cases")
+                   "every hc_mult stream; r20261013-205619-36e8 checked every residual_out copy in the cc 9.0 broadcast cases")
 
 #: The candidate k8 step's grouped sum: the sm_90 BF16 step's adder (`HOPPER_BF16_WGMMA_K16`) over the eight products
 TF32_GROUPS, TF32_WIDTH, TF32_FLOOR = (8,), 26, -133
 HOPPER_TF32_WGMMA_K8_CANDIDATE = GroupSum(
-    name="hopper_tf32_wgmma_k8_candidate", arch="sm_90", dtype="tf32", operand_bits=19, groups=TF32_GROUPS, width=TF32_WIDTH,
-    zero_exponent=TF32_FLOOR, validated="r20261013-115825-580e: the H200 probe fitted this step alone")
+    name="hopper_tf32_wgmma_k8_candidate", arch=HOPPER_BF16_WGMMA_K16.arch, dtype="tf32", operand_bits=19, groups=TF32_GROUPS,
+    width=TF32_WIDTH, zero_exponent=TF32_FLOOR, validated="r20261013-115825-580e: the cc 9.0 probe (132 SMs) fitted this step alone")
 
 
 class Ops(D.Ops):
@@ -247,7 +247,7 @@ def MhcMixes(B, S, yp, rp, scale, base):
 
 def _check_norm(H: int, TN: int) -> None:
     if not (TN > 0 and TN & (TN - 1) == 0 and H % (16 * TN) == 0):
-        raise ValueError(f"the fused RMSNorm takes 16 elements per thread a block over a power-of-two thread count (H={H}, TN={TN})")
+        raise ValueError(f"the fused RMS norm takes 16 elements per thread a block over a power-of-two thread count (H={H}, TN={TN})")
 
 
 def prenorm(o: D.Ops, HC: int, H: int, TN: int, eps, rows: list, pre: list, w) -> list:
