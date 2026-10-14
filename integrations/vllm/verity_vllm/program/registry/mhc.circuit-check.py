@@ -28,6 +28,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("MhcFusedSplit_v1", lambda: bind(mhc.MhcFusedSplit, HC=4, N=1792, OUT=24, TH=256)),
         ("MhcPrenormTf32Split_v1", lambda: bind(mhc.MhcPrenormTf32Split, K=256, OUT=24)),
         ("MhcPrenormTf32_v1", lambda: bind(mhc.MhcPrenormTf32, K=7168, NS=28, OUT=24)),
+        # Wiring-only layer-0 copy; the served shape is HC=4,H=7168.
+        ("MhcResidualBroadcast_v1", lambda: bind(mhc.MhcResidualBroadcast, HC=2, H=8)),
         ("MhcPreBroadcast_v1", lambda: bind(mhc.MhcPreBroadcast, HC=4, H=7168, NS=28, TN=64, REPEAT=20, **e)),
         ("HcHead_v1", lambda: bind(mhc.HcHead, HC=4, H=7168, TH=128, **e)),
         # the two whole post + pre layers at hidden 1024 (4 splits of 256 elements, one a thread; the TF32 GEMM's 64 blocks in 4
