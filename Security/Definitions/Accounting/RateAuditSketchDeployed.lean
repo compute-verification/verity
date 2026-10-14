@@ -72,7 +72,7 @@ def correctAll (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : SketchStore
     let D := Data.ofParts E (ω p.1).1
     let B := A.dev p.1 E σ ω
     let O := A.oracle p.1 E σ ω
-    B.tags σ O D p.2 = O (D.stream, p.2, sketch σ (D.tile p.2))
+    p.2 ∈ B.correct sketch σ O D
 
 /-- Device-memory sectors read in the window, in bits, summed over its passes. -/
 def reads (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : SketchStore N m)
