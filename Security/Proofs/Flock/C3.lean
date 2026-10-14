@@ -92,6 +92,8 @@ import Proofs.Flock.C3.RegLevels.RsT
 import Proofs.Flock.C3.RegLevels.Kappa
 import Proofs.Flock.C3.RegLevels.StackedReg
 import Proofs.Flock.C3.RegLevels.OpensRegs
+import Proofs.Flock.C3.RegLevels.ValueTie
+import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.C3.RegLevels.AccReads
 import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
