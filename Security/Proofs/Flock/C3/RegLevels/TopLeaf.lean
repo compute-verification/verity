@@ -235,23 +235,3 @@ theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hsh : Share
 end Family
 
 end FlockC3.RegLevels
-
-#print axioms FlockSoundness.Registered.enc_eq_of_not_clash
-
-#print axioms FlockC3.RegLevels.fixedRow_top
-
-#print axioms FlockC3.RegLevels.heldRow_top
-
-#print axioms FlockC3.RegLevels.bytes_of_toList
-
-#print axioms FlockC3.RegLevels.port_of_topRead
-
-#print axioms FlockC3.RegLevels.read_of_topRead
-
-#print axioms FlockC3.RegLevels.leaf_drawn
-
-#print axioms FlockC3.RegLevels.digest_top
-
-#print axioms FlockC3.RegLevels.leaf_top
-
-#print axioms FlockC3.RegLevels.row_agree
