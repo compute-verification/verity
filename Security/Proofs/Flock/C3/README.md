@@ -207,6 +207,9 @@ checks are those of a transcript each session writes (`hreach`, into `hPubRows_o
   `sparse` entry (`RecVStar.Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`).
 * Private inner sessions: `RecVStar.statements` refuses a holo inner shape (`statements_holo`), so the guarantee covers
   none until V*'s holo-parts writer lands with its proof (#1896, its own PR after C3 closes).
+* Prover constraint (W round 8): the verifier refuses a held `sparse/…` stream whose coins by round are not
+  `sparsePhaseRounds`' (`RecVStar.checkSparseCoins`, in `checkCovers`), coins at a zero-coin round included, so a prover
+  change to how the sparse phases' coins are recorded keeps `rec_live.sparse_rounds` exactly.
 
 ## Decisions
 
