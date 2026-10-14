@@ -673,7 +673,7 @@ theorem hAccRows_of (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (ℐ).
     rw [hp]
     rfl
   obtain ⟨hreg, hio⟩ := hin R ω t R₂ τ o h r ℓ hℓ j hj
-  exact ⟨accIn_of_regBit (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2.2 hup hreg (hio hup) i hi,
+  exact ⟨accIn_of_regBit (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2.2.1 hup hreg (hio hup) i hi,
     accOut_of_regOut (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2 hup hp' (hout R ω t R₂ τ o h r ℓ hℓ j hj hup) i hi⟩
 
 /-- **`HEnds` from the algebra unit's registered bits** (`readsEnds_of_regBits`): at every accepted outer proof, rep
