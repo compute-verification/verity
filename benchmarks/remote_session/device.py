@@ -7,9 +7,10 @@ payload    N blocks of seeded random bytes, each 128-byte word's top byte below 
            built a chunk at a time and retained on the CPU, so it does not displace the encoded store from HBM
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) at the registration's key
 pass       sketch-sha512 receipts of every block by one persistent grid on tensor cores, the leaves under
-           salt_c = SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be c) (`rb_leaves`) and the tree chunk by chunk on a
-           second stream, so the hashing runs under the later chunks' reads (`rs_pass`), its signs derived on the device
-           (`rs_signs16`); a pass keeps its packed signs (8 KiB) and its
+           salt_c = SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be c) and the whole tree by a persistent consumer grid
+           on a second stream, group by group as the receipts grid counts each group's tiles done (`rs_pass`), so the
+           hashing runs under the pass's own reads and only the root's final spine trails the last tile; its signs
+           derived on the device (`rs_signs16`); a pass keeps its packed signs (8 KiB) and its
            tree's levels from h0 up (2 · N / 16 / 2^h0 nodes), nothing per block
 opening    a window's draws at once, on a stream of their own: each drawn leaf's subtree of 2^h0 leaves recomputed
            from the store under its pass's constants by a second copy of the library (`rs_subtrees`), then its
@@ -95,7 +96,7 @@ class Lib:
         self.so.rb_sketch_hash.argtypes = [v, u64, u64, v, v]
         self.so.rs_payload_leaves.argtypes = [v, u64, u64, v, v]
         self.so.rs_gather64.argtypes = [v, u64, v, v]
-        self.so.rs_pass.argtypes = [v, u64, v, v, v, v, v, v, v, i, u64, i, v, v]
+        self.so.rs_pass.argtypes = [v, u64, v, v, v, v, v, i, u64, i, i, v, v]
         self.so.rs_subtrees.argtypes = [v, v, v, u64, i, v, v, v]
         self.so.rs_signs16.argtypes = [b, i, v, v]
         self.so.rs_chain_set.argtypes = [b, v]
@@ -191,8 +192,8 @@ class DeviceStore:
     """N blocks on the GPU, their payload tree on the CPU, then the encoded store and the passes over it."""
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *,
-                 chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0, payload_kept_from: int = 6,
-                 offload_handles: bool = False) -> None:
+                 chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0, tree_ctas: int = 0,
+                 payload_kept_from: int = 6, offload_handles: bool = False) -> None:
         nl = blocks // PER_LEAF
         if blocks % PER_LEAF or blocks % chunk:
             raise ValueError(f"{blocks} blocks: the harness takes a multiple of the pass chunk and {PER_LEAF}")
@@ -202,7 +203,7 @@ class DeviceStore:
         self.payload_h0 = max(1, min(payload_kept_from, chunk.bit_length() - 1))
         self.offload_handles = offload_handles
         self.side = torch.cuda.Stream(priority=-1)
-        self.shape(chunk, kept_from, sketch_ctas)
+        self.shape(chunk, kept_from, sketch_ctas, tree_ctas)
         self.data = torch.empty(blocks * BLOCK, dtype=torch.uint8, device="cuda")
         chunk = 1 << 18
         for j in range(0, blocks, chunk):
@@ -222,22 +223,25 @@ class DeviceStore:
         self.chain_previous = None
         self.root_host = torch.empty((1, 8), dtype=torch.int64, pin_memory=True)
 
-    def shape(self, chunk: int, kept_from: int, sketch_ctas: int) -> None:
-        """A pass's chunk (blocks), h0 (at most the chunk's subtree height) and the sketch's CTAs, and its ring."""
+    def shape(self, chunk: int, kept_from: int, sketch_ctas: int, tree_ctas: int = 0) -> None:
+        """A pass's chunk (blocks), h0 (at most the chunk's subtree height), the sketch's and the tree consumer's CTAs,
+        and its ring: the counters (the next tile, each group's tiles done, a ready counter per node above hg), the
+        receipts, and the canonical padding's scratch."""
         torch, nl = self.torch, self.tree_leaves
         self.chunk = min(chunk, self.blocks)
-        self.h0 = max(1, min(kept_from, (self.chunk // PER_LEAF).bit_length() - 1))
-        self.sketch_ctas = sketch_ctas
+        hc = (self.chunk // PER_LEAF).bit_length() - 1
+        self.h0 = max(1, min(kept_from, hc))
+        self.hg = min(hc, max(self.h0, 8))
+        self.sketch_ctas, self.tree_ctas = sketch_ctas, tree_ctas
         self.kept_at = [0] * (self.H + 2)
         for h in range(self.h0, self.H + 1):
             self.kept_at[h + 1] = self.kept_at[h] + (nl >> h)
-        lc = self.chunk // PER_LEAF
+        groups = self.blocks // (PER_LEAF << self.hg)
+        ready = (nl >> self.hg) - 1
         self.ring = None
         pads = nl - self.blocks // PER_LEAF
-        self.ring = (torch.empty(1 + self.blocks // self.chunk, dtype=torch.int32, device="cuda"),
+        self.ring = (torch.empty(1 + groups + ready, dtype=torch.int32, device="cuda"),
                      torch.empty((self.blocks, 8), dtype=torch.int64, device="cuda"),
-                     torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
-                     torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((max(2 * pads, 1), 8), dtype=torch.int64, device="cuda"))
 
     def block(self, j: int) -> bytes:
@@ -330,15 +334,14 @@ class DeviceStore:
         t2 = time.perf_counter_ns()
         pk = torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda")
         kept = torch.empty((self.kept_at[self.H + 1], 8), dtype=torch.int64, device="cuda")
-        ctr, ys, dig, up, pad = self.ring
+        ctr, ys, pad = self.ring
         a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         t3 = time.perf_counter_ns()
         a.record()
         main = torch.cuda.current_stream().cuda_stream
         rc = self.lib.so.rs_signs16(head, len(head), pk.data_ptr(), main) or self.lib.so.rs_pass(
-            self.data.data_ptr(), self.blocks, pk.data_ptr(), ctr.data_ptr(), ys.data_ptr(), dig.data_ptr(),
-            up.data_ptr(), pad.data_ptr(), kept.data_ptr(), self.h0, self.chunk, self.sketch_ctas, main,
-            self.side.cuda_stream)
+            self.data.data_ptr(), self.blocks, pk.data_ptr(), ctr.data_ptr(), ys.data_ptr(), pad.data_ptr(),
+            kept.data_ptr(), self.h0, self.chunk, self.sketch_ctas, self.tree_ctas, main, self.side.cuda_stream)
         if rc:
             raise RuntimeError(f"rs_pass: {rc}")
         b.record()
@@ -372,7 +375,7 @@ class DeviceStore:
         seed = torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device="cuda")
         pk = torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda")
         kept = torch.empty((self.kept_at[self.H + 1], 8), dtype=torch.int64, device="cuda")
-        ctr, ys, dig, up, pad = self.ring
+        ctr, ys, pad = self.ring
         a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         t1 = time.perf_counter_ns()
         a.record()
@@ -380,8 +383,8 @@ class DeviceStore:
         rc = self.lib.so.rs_chain_prepare(i, self.chain_previous.data_ptr(), seed.data_ptr(), pk.data_ptr(), main)
         if not rc:
             rc = self.lib.so.rs_pass(self.data.data_ptr(), self.blocks, pk.data_ptr(), ctr.data_ptr(), ys.data_ptr(),
-                                     dig.data_ptr(), up.data_ptr(), pad.data_ptr(), kept.data_ptr(), self.h0, self.chunk,
-                                     self.sketch_ctas, main, self.side.cuda_stream)
+                                     pad.data_ptr(), kept.data_ptr(), self.h0, self.chunk, self.sketch_ctas,
+                                     self.tree_ctas, main, self.side.cuda_stream)
         if rc:
             raise RuntimeError(f"chained rs_pass: {rc}")
         b.record()
@@ -578,10 +581,10 @@ class Device:
     def __init__(self, torch, lib_path: str, kv_path: str, blocks: int, *, seed: int, log=print,
                  gate_blocks: int = 4096, gate_chunk: int = 1024, calibration_passes: int = 4000,
                  warm_openings: int = 2773, chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0,
-                 payload_kept_from: int = 6, offload_handles: bool = False) -> None:
+                 tree_ctas: int = 0, payload_kept_from: int = 6, offload_handles: bool = False) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks, warm_openings
         self.gate_blocks, self.gate_chunk, self.calibration_passes = gate_blocks, gate_chunk, calibration_passes
-        self.shape = {"chunk": chunk, "kept_from": kept_from, "sketch_ctas": sketch_ctas,
+        self.shape = {"chunk": chunk, "kept_from": kept_from, "sketch_ctas": sketch_ctas, "tree_ctas": tree_ctas,
                       "payload_kept_from": payload_kept_from, "offload_handles": offload_handles}
         self.lib = Lib(lib_path, torch)
         self._open_copy = tempfile.NamedTemporaryFile(suffix=".so")
@@ -787,7 +790,8 @@ class Device:
         with torch.cuda.stream(self.main_stream):
             small = DeviceStore(torch, self.lib, self.lib_open, self.kv, self.gate_blocks, self.salt_key, g,
                                 chunk=self.gate_chunk, kept_from=self.shape["kept_from"],
-                                sketch_ctas=self.shape["sketch_ctas"], payload_kept_from=self.shape["payload_kept_from"])
+                                sketch_ctas=self.shape["sketch_ctas"], tree_ctas=self.shape["tree_ctas"],
+                                payload_kept_from=self.shape["payload_kept_from"])
             payloads = small.host_blocks(0, small.blocks)
             root = small.payload_tree(self.node)
             salts = [store_salt(self.salt_key, PAYLOAD_LABEL, j) for j in range(small.blocks)]
@@ -870,7 +874,8 @@ def add_arguments(ap) -> None:
     ap.add_argument("--kept-from", type=int, default=6, help="h0: the pass tree's levels kept for the openings")
     ap.add_argument("--payload-kept-from", type=int, default=6,
                     help="h0: the payload tree's levels kept; lower paths are recomputed for openings")
-    ap.add_argument("--sketch-ctas", type=int, default=0, help="the receipts grid's CTAs (0: one an SM)")
+    ap.add_argument("--sketch-ctas", type=int, default=128, help="the receipts grid's CTAs (0: one an SM)")
+    ap.add_argument("--tree-ctas", type=int, default=0, help="the tree consumer grid's CTAs (0: one a group, at most 64)")
     ap.add_argument("--offload-handles", action="store_true",
                     help="archive pass handles through a dedicated pinned copy stream (automatic above 64 GiB)")
 
@@ -882,5 +887,5 @@ def from_arguments(a, log=print) -> Device:
     blocks = n // a.chunk_blocks * a.chunk_blocks
     return Device(torch, a.lib, a.kv, blocks, seed=a.seed, log=log, gate_blocks=a.gate_blocks,
                   calibration_passes=a.calibration_passes, warm_openings=a.warm_openings, chunk=a.chunk_blocks,
-                  kept_from=a.kept_from, sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
-                  offload_handles=a.offload_handles or a.gib > 64)
+                  kept_from=a.kept_from, sketch_ctas=a.sketch_ctas, tree_ctas=a.tree_ctas,
+                  payload_kept_from=a.payload_kept_from, offload_handles=a.offload_handles or a.gib > 64)
