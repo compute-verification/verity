@@ -132,14 +132,14 @@ class ProverSide:
             # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
             # the verifier may check after all roots are final, and this also makes the measured pass span contain
             # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
+            if self.defer_openings:
+                self.open_enabled.wait()
             c0 = time.perf_counter_ns()
             by_pass = defaultdict(list)
             for k, (i, p) in enumerate(draws):
                 by_pass[i].append((k, p))
             out: list = [None] * len(draws)
             passes = sorted(by_pass.items())
-            if self.defer_openings:
-                self.open_enabled.wait()
             with self.lock:
                 handles = [self.kept[(t, i)] for i, _ in passes]
             c1 = time.perf_counter_ns()
