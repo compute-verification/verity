@@ -7,7 +7,8 @@ import Proofs.Flock.Recursive.ValueFinder
 `j` (`valueRows`, at the verifier's candidate-3 inputs `c3 t`), under `RecCoins.verifierSalt` of META's
 `program_sha512` and the value's name. `valueRows` computes the rows as the check does: a level of R's openings
 (`rec-open-stacked`, `RecCoins.checkStackedLevel`: `coef`, `dirs`) and a part of R's opening (`rec-opening`,
-`RecCoins.checkOpening`: `v`), and none elsewhere. The finder's budget counts each row's words once and each salt's
+`RecCoins.checkOpening`: `v`, and `out`'s one zero row, which `checkZero` holds under `zeroSalt`, `valueSrcAll`'s salt
+there), and none elsewhere. The finder's budget counts each row's words once and each salt's
 SHAKE256 once. The definitions are in `Recursive/ValueSrc.lean`, below `RecursiveAuditC3At`, which reads them; here
 are their ties:
 
@@ -49,11 +50,13 @@ theorem stacked_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flo
       exact ⟨o, l, hop, hls, ⟨_, hcv⟩, _, hdv⟩
   · cases h
 
-/-- **What an accepted `rec-opening` unit checked**: R's opening `o` and its `v` at part `j`'s row. -/
+/-- **What an accepted `rec-opening` unit checked**: R's opening `o`, its `v` at part `j`'s row, and its `out` at one
+zero row. -/
 theorem opening_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public} {own : Array Flock.Registered.Port}
     {m cl j : ℕ} (h : Flock.RecCoins.checkOpening c3 c pub own m cl j = .ok ()) :
     ∃ o rows what, Flock.RecCoins.opening c3 c.unit.name = .ok o ∧ openingVRows o j = some rows ∧
-      Flock.RecCoins.checkValue c pub own "v" Flock.RecCoins.V_VALUE rows what = .ok () := by
+      Flock.RecCoins.checkValue c pub own "v" Flock.RecCoins.V_VALUE rows what = .ok () ∧
+      Flock.RecCoins.checkZero c pub own Flock.RecCoins.ZERO_VALUE 1 Flock.RecCoins.OUT_WORDS = .ok () := by
   unfold Flock.RecCoins.checkOpening at h
   dsimp only at h
   obtain ⟨o, hop, h⟩ := FlockVBridge.PartS.bind_ok h
@@ -67,7 +70,8 @@ theorem opening_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flo
       · rename_i hj
         split at h
         · cases h
-        · exact ⟨o, _, _, hop, by simp only [openingVRows, hX, hj], h⟩
+        · obtain ⟨⟨⟩, hcv, hz⟩ := FlockVBridge.PartS.bind_ok h
+          exact ⟨o, _, _, hop, by simp only [openingVRows, hX, hj], hcv, hz⟩
       · cases h
     · cases h
 
@@ -92,6 +96,12 @@ theorem valueRows_v {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {m cl j : ℕ} 
     valueRows (some c3) c "v" = some (rows, Flock.RecCoins.V_VALUE) := by
   simp only [valueRows, hop, hso, hp, hr]
   rfl
+
+theorem valueRows_out {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {m cl j : ℕ} {o : Flock.RecCoins.Opening}
+    (hso : Flock.RecCoins.stackedParams c.unit.name = none)
+    (hp : Flock.RecOpening.params c.unit.name = some (m, cl, j)) (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o) :
+    valueRows (some c3) c "out" = some (Flock.RecCoins.zeroRows 1 Flock.RecCoins.OUT_WORDS, Flock.RecCoins.ZERO_VALUE) := by
+  simp only [valueRows, hop, hso, hp] <;> rfl
 
 /-- **Check 5 at a `rec-open-stacked` unit runs `checkStackedLevel`** at its parameters. -/
 theorem stackedLevel_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Port} {files : Option Flock.RecCoins.Source}

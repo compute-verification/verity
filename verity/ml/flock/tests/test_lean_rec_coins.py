@@ -336,6 +336,24 @@ def test_a_parts_out_registered_under_another_zero_salt_is_refused_at_its_zero_r
                    "rec-residuals-zero row 0"), why
 
 
+#: `Test/RecCoins.lean`'s root of R's opening part's one zero row at program "p" (`RecCoins.checkOpening`'s `checkZero`)
+OPENING_ZERO_ROOT = ("af8c0fa801627686aad3af3cc4c63840162705a903222f507a84c01e9f1414742bb6985e4eee425f0dd1539277a0b71fcb6d895abd7"
+                     "bad14ce4f03dc487265b9")
+
+
+def test_r_openings_zero_row_is_the_one_check_5_computes_and_another_salt_is_not():
+    """`RecCoins.checkOpening`'s `checkZero` at `rec-residuals-zero`, one row: the root `rec_residuals.stage_opening`
+    registers for R's opening part's `out` is the one the Lean verifier computes (its `#guard`), and the same zero row under
+    salt 0 one bit off has another root, which check 5's root comparison refuses. No staged session reaches check 5 at R's
+    opening here: its honest sessions are replayed on the pod."""
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+
+    ss = S.RR.zero_salts(S.RR.ZERO_VALUE, 1)
+    commit = lambda salts: RG.Registered.commit("p", S.RR.ZERO_VALUE, [[0] * S.RR.OUT_WORDS], salts=salts).root.hex()
+    assert commit(ss) == OPENING_ZERO_ROOT
+    assert commit([bytes([ss[0][0] ^ 1]) + ss[0][1:]]) != OPENING_ZERO_ROOT
+
+
 def _transcript(dst: Path, change) -> Path:
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
     change(next(r for r in sorted(t["rounds"], key=lambda r: r["k"]) if r["stream"].endswith("/rep0") and r.get("commits")))
