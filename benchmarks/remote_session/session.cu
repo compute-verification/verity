@@ -376,7 +376,7 @@ __device__ __forceinline__ void receipt_leaf(const u64 *__restrict__ Y, u64 c, u
 // above hg the thread that finishes the second child of a node computes it (`ready`, one counter a node), so the tree
 // finishes with the last group and nothing trails the pass but the root's final spine. The canonical padding's
 // level-hg nodes, in kept before this kernel launches, enter the same climb as pad_tops virtual groups.
-constexpr int TC_THREADS = 128, TC_HG = 8, TC_MAX_HG = 10;
+constexpr int TC_THREADS = 256, TC_HG = 8, TC_MAX_HG = 10;
 
 __global__ void __launch_bounds__(TC_THREADS) tree_consumer_kernel(const u64 *__restrict__ ys,
                                                                    volatile unsigned *__restrict__ ctr,
