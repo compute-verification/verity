@@ -14,8 +14,8 @@ DeepSeek-V4-Pro keeps HC = 4 residual streams [HC, H] bf16 per token.  Each laye
    `compute_num_split(64, 28672, cdiv(T, 64))` splits, :19), then the same big fuse: `MhcPostPreTf32_v1`.
 3. layer 0's attention pre on the embedding broadcast to the streams (`mhc_pre_broadcast_tilelang`, tilelang.py:303): DeepGEMM
    `tf32_hc_prenorm_gemm` over `fn_broadcast` [24, H] at K = H, at every token count (decode included), then
-   `mhc_pre_big_fuse_broadcast_with_norm_tilelang` (:332): `MhcPreBroadcast_v1`.  Its `residual_out` (the four copies of the
-   embedding) is a copy no Definition states.
+   `mhc_pre_big_fuse_broadcast_with_norm_tilelang` (:332): `MhcPreBroadcast_v1`.  That kernel's copy of the embedding to each
+   residual stream is `MhcResidualBroadcast_v1`.
 4. `hc_head_fuse_tilelang` (:847) on the last streams: `HcHead_v1`.
 
 What nvcc makes of TileLang's expressions, in the CUDA and its PTX: `a + b * c` is `fma.rn.f32`; `a / b` is `div.rn.f32` and
@@ -61,6 +61,7 @@ Registered functions (all `Name_v1`; OUT = HC * (2 + HC), the 24 mixes; `yp`, `r
   MhcPrenormTf32Split{K,OUT}                  (a: K bf16, b: OUT x K f32) -> (yp: OUT, rp)
   MhcPrenormTf32{K,NS,OUT}                    (a: K bf16, b: OUT x K f32) -> (yp: NS x OUT, rp: NS)
   MhcPostPreTf32{HC,H,NS,TN,REPEAT,EPS,HC_EPS}  as MhcFusedPostPre, above 16 tokens
+  MhcResidualBroadcast{HC,H}                  (x: H bf16) -> HC x H bf16
   MhcPreBroadcast{HC,H,NS,TN,REPEAT,EPS,HC_EPS} (x: H bf16, fn: OUT x H, scale: 3, base: OUT f32, w: H bf16) -> (out, post, comb)
   HcHead{HC,H,TH,EPS,HC_EPS}                  (residual: HC x H bf16, fn: HC x HC*H, scale: 1, base: HC f32) -> H bf16
 
@@ -92,6 +93,8 @@ _TF32_CONF = ("exact-model-tested: r20261013-115825-580e's H200 probe fitted thi
               "on exact products after each f32 operand is rounded RNE to TF32")
 _DG_CONF = ("model-untested: read from DeepGEMM 8b1392b9 sm90_tf32_hc_prenorm_gemm.cuh:150-240 on the candidate "
             "HopperTf32WgmmaDot8_v1; tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
+_BROADCAST_CONF = ("exact-model-tested: vLLM d9105ea80 tilelang_kernels.py:453-454 copies each loaded bf16 embedding word to "
+                   "every hc_mult stream; r20261013-205619-36e8 checked every residual_out copy in the H200 broadcast cases")
 
 #: The candidate k8 step's grouped sum: the sm_90 BF16 step's adder (`HOPPER_BF16_WGMMA_K16`) over the eight products
 TF32_GROUPS, TF32_WIDTH, TF32_FLOOR = (8,), 26, -133
@@ -598,6 +601,24 @@ def _sig_broadcast(S, bf16=BF16, f32=F32):
              ("w", Array(S.H, bf16))), Tuple(Array(S.H, bf16), Array(S.HC, f32), Array(S.HC, Array(S.HC, f32))))
 
 
+def _sig_residual_broadcast(S, bf16=BF16):
+    return ((("x", Array(S.H, bf16)),), Array(S.HC, Array(S.H, bf16)))
+
+
+def residual_broadcast(S, x):
+    """The layer-0 embedding copied, without arithmetic, to each of the HC residual streams."""
+    if S.HC <= 0 or S.H <= 0:
+        raise ValueError(f"mHC residual broadcast takes positive HC and H (HC={S.HC}, H={S.H})")
+    return stack([x for _ in range(S.HC)])
+
+
+@composite("MhcResidualBroadcast", 1, ["HC", "H"], _sig_residual_broadcast, conformance=_BROADCAST_CONF)
+def MhcResidualBroadcast(B, S, x):
+    """vLLM d9105ea80 `vllm/model_executor/kernels/mhc/tilelang_kernels.py:453-454`: for every stream `i_hc` and position
+    `i1_h`, `residual_out[i, i_hc, i0_h * hidden_block + i1_h] = xs[i1_h]`, where `xs` is the bf16 embedding block."""
+    return residual_broadcast(S, x)
+
+
 def pre_broadcast(o: Ops, S, x, fn, scale, base, w):
     g = o.B.call(o.sub("MhcPrenormTf32", K=S.H, NS=S.NS, OUT=_out(S.HC)), x, fn)
     fuse = o.sub("MhcPreBigFuseBroadcast", HC=S.HC, H=S.H, NS=S.NS, TN=S.TN, REPEAT=S.REPEAT, EPS=S.EPS, HC_EPS=S.HC_EPS)
@@ -672,5 +693,5 @@ WORD = dict(D.WORD, expf=M.NvExpf, bf16=P.F2fpBf16, gpu_add=P.F32AddV2, gpu_mul=
 
 MHC_PRIMITIVES = [HopperTf32WgmmaDot8]
 MHC_COMPOSITES = [MhcSigmoid, MhcSinkhorn, MhcMixes, MhcPreNorm, MhcPreNormBroadcast, MhcPreBigFuse, MhcPreBigFuseBroadcast,
-                  MhcPost, MhcFusedSplit, MhcFusedPostPre, MhcPrenormTf32Split, MhcPrenormTf32, MhcPostPreTf32, MhcPreBroadcast,
-                  HcHead]
+                  MhcPost, MhcFusedSplit, MhcFusedPostPre, MhcPrenormTf32Split, MhcPrenormTf32, MhcPostPreTf32,
+                  MhcResidualBroadcast, MhcPreBroadcast, HcHead]
