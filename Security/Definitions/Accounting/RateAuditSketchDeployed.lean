@@ -33,9 +33,18 @@ are drawn once outside the passes. -/
 abbrev SketchPassCoins (N ρ h ks G : ℕ) : Type :=
   SketchStream ρ × (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
 
+instance instFintypeSketchPassCoins (N ρ h ks G : ℕ) : Fintype (SketchPassCoins N ρ h ks G) := by
+  letI : Fintype (Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
+  exact inferInstance
+
 /-- One window's coins: one signs matrix, `P` passes, then `d` pooled openings among the `P·N` receipts. -/
 abbrev SketchWindowCoins (P N m ρ h ks G d : ℕ) : Type :=
   SketchSigns ks m × (Fin P → SketchPassCoins N ρ h ks G) × (Fin d → Fin P × Fin N)
+
+instance instFintypeSketchWindowCoins (P N m ρ h ks G d : ℕ) :
+    Fintype (SketchWindowCoins P N m ρ h ks G d) := by
+  letI : Fintype (SketchPassCoins N ρ h ks G) := instFintypeSketchPassCoins N ρ h ks G
+  exact inferInstance
 
 /-- A window of `P` causal verbatim-sector passes with `G` oracle candidates per pass. -/
 structure SketchDeployedWindow (P N m ρ h S L q ks G : ℕ) where
