@@ -225,8 +225,8 @@ class DeviceStore:
 
     def shape(self, chunk: int, kept_from: int, sketch_ctas: int, tree_ctas: int = 0) -> None:
         """A pass's chunk (blocks), h0 (at most the chunk's subtree height), the sketch's and the tree consumer's CTAs,
-        and its ring: the counters (the next tile, each group's tiles done, a ready counter per node above hg), the
-        receipts, and the canonical padding's scratch."""
+        and its ring: the counters (the next tile, each group's tiles done, a ready counter per node above hg, the
+        consumer's ticket), the receipts, and the canonical padding's scratch."""
         torch, nl = self.torch, self.tree_leaves
         self.chunk = min(chunk, self.blocks)
         hc = (self.chunk // PER_LEAF).bit_length() - 1
@@ -240,7 +240,7 @@ class DeviceStore:
         ready = (nl >> self.hg) - 1
         self.ring = None
         pads = nl - self.blocks // PER_LEAF
-        self.ring = (torch.empty(1 + groups + ready, dtype=torch.int32, device="cuda"),
+        self.ring = (torch.empty(2 + groups + ready, dtype=torch.int32, device="cuda"),
                      torch.empty((self.blocks, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((max(2 * pads, 1), 8), dtype=torch.int64, device="cuda"))
 

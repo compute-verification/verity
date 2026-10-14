@@ -370,24 +370,30 @@ __device__ __forceinline__ void receipt_leaf(const u64 *__restrict__ Y, u64 c, u
   hm96_leaf(c, x, d);
 }
 
-// The receipt leaves and the whole tree while the pass streams. A group is PER_LEAF << hg blocks; CTA c takes groups
-// c, c + gridDim.x, …, each ready once the receipts grid has counted its tiles (ctr[1 + g], tiles_per of them). The
-// CTA hashes the group's 2^hg leaves from ys and climbs its subtree (into kept from h0 up, shared memory below), and
-// above hg the thread that finishes the second child of a node computes it (`ready`, one counter a node), so the tree
-// finishes with the last group and nothing trails the pass but the root's final spine. The canonical padding's
-// level-hg nodes, in kept before this kernel launches, enter the same climb as pad_tops virtual groups.
-constexpr int TC_THREADS = 256, TC_HG = 8, TC_MAX_HG = 10;
+// The receipt leaves and the whole tree while the pass streams. A group is PER_LEAF << hg blocks; a CTA claims the
+// next group from `ticket` (so no CTA's backlog holds a group back), waits until the receipts grid has counted its
+// tiles (ctr[1 + g], tiles_per of them), hashes its 2^hg leaves from ys and climbs its subtree (into kept from h0
+// up, shared memory below). Above hg the thread that finishes the second child of a node computes it (`ready`, one
+// counter a node), so the tree finishes with the last group and nothing trails the pass but the root's final spine.
+// The canonical padding's level-hg nodes, in kept before this kernel launches, enter the same climb as pad_tops
+// virtual groups (claimed after the real ones, so they overlap the pass too).
+constexpr int TC_THREADS = 128, TC_HG = 8, TC_MAX_HG = 10;
 
 __global__ void __launch_bounds__(TC_THREADS) tree_consumer_kernel(const u64 *__restrict__ ys,
                                                                    volatile unsigned *__restrict__ ctr,
                                                                    unsigned tiles_per, u64 groups, u64 pad_tops,
                                                                    int hg, int h0, u64 width, int H,
-                                                                   u64 *__restrict__ kept,
-                                                                   unsigned *__restrict__ ready) {
+                                                                   u64 *__restrict__ kept, unsigned *__restrict__ ready,
+                                                                   unsigned *__restrict__ ticket) {
   extern __shared__ u64 tc[];
+  __shared__ u64 g_sh;
   const int lg = 1 << hg;
   u64 *s0 = tc, *s1 = tc + 8 * lg;
-  for (u64 g = blockIdx.x; g < groups + pad_tops; g += gridDim.x) {
+  for (;;) {
+    if (threadIdx.x == 0) g_sh = atomicAdd(ticket, 1u);
+    __syncthreads();
+    const u64 g = g_sh;
+    if (g >= groups + pad_tops) break;
     if (g < groups) {
       if (threadIdx.x == 0) {
         while (ctr[1 + g] < tiles_per) __nanosleep(512);
@@ -650,8 +656,8 @@ static int log2_exact(uint64_t n) {
 // (`tree_consumer_kernel`, CUDA cores; 0: one per group up to 64), group by group (PER_LEAF << hg blocks,
 // hg = min(hc, max(h0, 8))) as the receipts grid counts each group's tiles done: the hashing runs under the pass's own
 // reads, and after the last tile only the last group's subtree and the root's spine remain. pk is the pass's packed
-// signs (`rs_signs16`); ctr is scratch of 1 + groups + (width >> hg) − 1 words (the next tile, each group's tiles
-// done, then a ready counter per node above hg); ys holds all n receipts (8 words each). `pad` is two digests per
+// signs (`rs_signs16`); ctr is scratch of 2 + groups + (width >> hg) − 1 words (the next tile, each group's tiles
+// done, a ready counter per node above hg, then the consumer's ticket); ys holds all n receipts (8 words each). `pad` is two digests per
 // canonical padding leaf: the leaves followed by scratch for their levels below h0, prepared on sb as soon as the
 // pass starts; the padding's level-hg nodes join the consumer's climb as virtual groups. Levels h0 … H of the tree
 // go to kept (level h0 first, `kept_off`), the root last; levels below h0 are not kept. sa waits for the whole pass
@@ -692,7 +698,7 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
     smem_set = smem;
   }
   int rc;
-  if (cudaMemsetAsync(ctr, 0, 4 * (1 + groups + rdy), sa) || cudaEventRecord(go, sa) || cudaStreamWaitEvent(sb, go, 0))
+  if (cudaMemsetAsync(ctr, 0, 4 * (2 + groups + rdy), sa) || cudaEventRecord(go, sa) || cudaStreamWaitEvent(sb, go, 0))
     return 4;
   sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, pk, ys, ctr, tiles_per);
   if (cudaGetLastError()) return 4;
@@ -711,7 +717,7 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
     }
   }
   tree_consumer_kernel<<<tree_ctas, TC_THREADS, smem, sb>>>(ys, ctr, tiles_per, groups, pad_tops, hg, h0, width, H,
-                                                            kept, ctr + 1 + groups);
+                                                            kept, ctr + 1 + groups, ctr + 1 + groups + rdy);
   if (cudaGetLastError()) return 4;
   if (cudaEventRecord(end, sb) || cudaStreamWaitEvent(sa, end, 0)) return 4;
   return cudaGetLastError() ? 4 : 0;
