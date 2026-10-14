@@ -1,6 +1,6 @@
 import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.C3.RegLevels.AccReads
-import Proofs.Flock.C3.RegLevels.ReadsOwn
+import Proofs.Flock.Recursive.HPortTie
 
 /-!
 # n11: `AccOutL` (`HAccRows`' second half), from each opening's registered `acc_out` read
@@ -156,7 +156,7 @@ of unit `r · q + j`, rep `r`'s opening `j`, is at row `r · n + opensBelow l + 
 theorem accPos_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-    (hrc : ReachedChecked F dg N k Rw) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (hrc : FlockC3.HPort.ReachedChecked F dg N k Rw) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (s : Fin (vstarCount F.ish)) {l LANES H m : ℕ}
     (hs : F.stmts[(s : ℕ)]? = some (.recOpen l LANES H m)) {sch : Flock.Schedule}
     (hsch : Flock.fast100 F.ish.m = some sch) {r j : ℕ} (hr : r < 2) (hj : j < (sch.levels[l]!).q)
@@ -165,9 +165,8 @@ theorem accPos_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     (hq : (F.Vs s).c.ports[q].name = nm) (hrd : (F.zs R ω t R₂ s).rd.isRead (.inl (u, q))) :
     (F.zs R ω t R₂ s).rd.readAt (.inl (u, q)) =
       r * Flock.RecVStar.opensBelow sch sch.levels.size + Flock.RecVStar.opensBelow sch l + j + d := by
-  obtain ⟨hre, _, _, _, _, _, spec, sts, hst, -, -, -, hlb, -⟩ := hrc R ω t R₂ τ o h s
-  obtain ⟨-, -, hpos⟩ :=
-    accRead_at_unit hchk h s hre ⟨spec, sts, hst, hlb⟩ hs rfl (accReads_recOpen hsch l LANES H m) hnm hq hrd
+  obtain ⟨hre, _, _, _, _, _, hc3⟩ := hrc R ω t R₂ τ o h s
+  obtain ⟨-, -, hpos⟩ := accRead_at_unit hchk h s hre hc3 hs rfl (accReads_recOpen hsch l LANES H m) hnm hq hrd
   have hlt : u.val < 2 * (sch.levels[l]!).q := by
     rw [hu]
     rcases (show r = 0 ∨ r = 1 by omega) with rfl | rfl <;> omega

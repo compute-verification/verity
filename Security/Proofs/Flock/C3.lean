@@ -4,6 +4,7 @@ import Proofs.Flock.C3.Compose.Bridge
 import Proofs.Flock.C3.Compose.BridgeOff
 import Proofs.Flock.C3.Compose.Discharge
 import Proofs.Flock.C3.Compose.Decoder
+import Proofs.Flock.C3.Compose.RepsOff
 import Proofs.Flock.C3.Compose.SrcClauses
 import Proofs.Flock.C3.Compose.Tied
 import Proofs.Flock.C3.Compose.HoloTys
@@ -113,7 +114,6 @@ import Proofs.Flock.C3.RegLevels.AccReads
 import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.C3.RegLevels.SharedRows
-import Proofs.Flock.C3.RegLevels.ReadsOwn
 import Proofs.Flock.C3.RegLevels.TopTie
 import Proofs.Flock.C3.RegLevels.TopLeaf
 import Proofs.Flock.C3.RegLevels.AccOut

@@ -3,7 +3,6 @@ import Proofs.Flock.C3.Sparse.SessionAt
 import Proofs.Flock.VBridge.Family.Registrants
 import Proofs.Flock.C3.RegLevels.SharedRows
 import Std.Data.String.ToNat
-import Proofs.Flock.C3.RegLevels.ReadsOwn
 
 /-!
 # The sparse phase's `h` from the rep's, across two units' reads of one registered row
@@ -27,11 +26,14 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
 * `site_reads_of_portDiff`, `regChecks_of_checkStmt`, `rowPort_of_checkRows`, `own_of_checkOwn`: `checkRows` pins a
   part's row port's entry to `--rec-rows`' entry of its name, registration and reads, and `checkOwn` a message-round
   port's entry to its value and reads (`mIndex_m`: `m<hr>` is round `hr`'s).
+* `ReadsOwnAt`, `readsOwnAt_of`: a registered read is the reads file's entry of its name at the unit's own row, from
+  `readsOwn_of_hown` and the label check at reached, checked outcomes (`ReachedChecked`, named: `accRead_at_unit`'s
+  premises at every session).
 * `hSite_of_checked`: the two reads' registration and position: both entries read `rec-c<hr>` at both reps' rows
   (`checkOwn`), `--rec-rows` registers it (`checkRows` at the part's `m<hr>`), and `checkShared` holds both to its
   first entry of that value (`site_of_checkShared`).
-* `srcHReads_of`: `SrcHReads` from those, the reads at the units' own rows and no read of a segmented row
-  (`ReadsOwnAt`, `readsUnsegC3`, in `C3/RegLevels/ReadsOwn`), the RecSparse circuit's `h` keys (`HKeys`, named) and the algebra unit's row
+* `readsUnsegC3`: no read is of a segmented row (`VStmt.hscope`'s `v1Ports`).
+* `srcHReads_of`: `SrcHReads` from those, the RecSparse circuit's `h` keys (`HKeys`, named) and the algebra unit's row
   of rep `i`'s `h` (`HAlgRows`, named).
 -/
 
@@ -301,6 +303,15 @@ theorem rowPort_of_checkRows {s : VStar.Stmt} {own : Array Flock.Registered.Port
           · cases hr
         · cases hr
 
+/-- **A V* circuit's rows are unsegmented** (`scopeOk`'s `v1Ports`). -/
+theorem segs_of_scopeOk {c : Flock.Circuit} (h : Layout.scopeOk c = true) (q : Fin c.ports.size) :
+    c.ports[q.val]!.segs = none := by
+  unfold Layout.scopeOk Layout.v1Ports at h
+  simp only [Bool.and_eq_true, Array.all_eq_true', Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h
+  rw [getElem!_pos c.ports q.val q.isLt]
+  obtain ⟨⟨⟨-, hs⟩, -⟩, -⟩ := h.2 _ (Array.getElem_mem q.isLt)
+  simpa using hs
+
 end checks
 
 section point
@@ -454,12 +465,50 @@ section family
 
 open FlockC3.PubRows (ChecksAccepted)
 open FlockC3.RegLevels (Reached readsOwn_of_hown SharedValue site_of_checkShared site_of_portDiff)
-open FlockC3.RegLevels (ReachedChecked ReadsOwnAt readsOwnAt_of ReadsUnsegC3 readsUnsegC3)
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
+
+/-- Obligation (`accRead_at_unit`'s premises, at every session): each accepted outcome is one its session's game
+reaches (`Reached`) and passes candidate 3's checks at its own transcript (`ChecksC3`, which the event's `ChecksVR`
+states there). -/
+def ReachedChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j : Fin (vstarCount F.ish),
+    Reached (F.zs R ω t R₂ j) (o j) ∧ ∃ (ish : Flock.RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits)
+      (coins : Option Flock.RecCoins.Source) (f : VStar.Bindings) (rows' : Option (Array Flock.Registered.Port)),
+      Flock.Guarantees.ChecksC3 ish cs coins j f rows' (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own (o j).2.2
+
+/-- **A registered read's port is the reads file's entry of its name, read at the unit's own row.** -/
+def ReadsOwnAt (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
+    (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) →
+      (F.zs R ω t R₂ j).rd.port (.inl (u, q)) ∈ (F.zs R ω t R₂ j).own ∧
+      ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).name = (F.Vs j).c.ports[q].name ∧
+      ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).reads[u.val]? =
+        some (some ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))))
+
+/-- **`ReadsOwnAt` from `ReachedChecked`**: `readsOwn_of_hown` puts the read at the unit's label, which the label check
+makes the unit (`label_of_checked`), as `accRead_at_unit` does at a level's `acc`. -/
+theorem readsOwnAt_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    (hrc : ReachedChecked F dg N k Rw) : ReadsOwnAt F dg N k Rw := by
+  intro R ω t R₂ τ o h j u q hr
+  obtain ⟨hre, _, _, _, _, _, hc3⟩ := hrc R ω t R₂ τ o h j
+  obtain ⟨hmem, hname, d, D, dp, idx, hd, hD, hdp, hidx, hu, hpos⟩ := readsOwn_of_hown h j hre u q hr
+  obtain ⟨spec, sts, hst, -, -, -, hlb, -⟩ := hc3
+  rw [FlockC3.PubRows.label_of_checked (F.zs R ω t R₂ j) (h.1 j).1 ⟨spec, sts, hst, hlb⟩ hd hD hdp hidx hu] at hpos
+  exact ⟨hmem, hname, hpos⟩
+
+/-- `ReadsUnsegmented`'s, at candidate 3's family: no registered read is of a segmented row. -/
+def ReadsUnsegC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
+    (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) → (F.Vs j).c.ports[q.val]!.segs = none
+
+/-- **`ReadsUnsegC3` holds**: every V* circuit's rows are unsegmented (`VStmt.hscope`, `segs_of_scopeOk`), read or not. -/
+theorem readsUnsegC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) :
+    ReadsUnsegC3 F dg N k Rw :=
+  fun _ _ _ _ _ _ _ j _ q _ => segs_of_scopeOk (F.Vs j).hscope q
 
 /-- Obligation (the rep's decode of `h` at its algebra unit): at every accepted outer proof and rep `i`, some rep unit
 `U` of rep `i`'s steps is such that where a RecSparse copy at unit `i` holds rep `i`'s phase, its session is
