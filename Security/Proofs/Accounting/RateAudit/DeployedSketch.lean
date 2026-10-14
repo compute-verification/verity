@@ -609,10 +609,31 @@ theorem sketchQueryTermCaps :
   simpa using (ENNReal.mul_div_mul_left (c := (2 : ℝ≥0∞) ^ 96) (2 ^ 14) 1
     (pow_ne_zero _ (by norm_num)) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top))
 
-/-- **The verbatim sketch session at the deployed receipt parameters**
-(`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`). -/
-theorem RemoteSessionConservationSketchDeployed :
-    Accounting.Guarantees.RemoteSessionConservationSketchDeployed := by
+/-- **The verbatim sketch session at the deployed receipt parameters, product form.** The multiplicative bound
+`2·2^-40 + n·ε + n·P·G·(N/2^512 + q/2^96)`: each grinding candidate at its own query cap `q`, which is the special
+case `qtot = G·q` of the deployed guarantee's shared budget (`Device.budget_of_bounded`). At the conservative caps
+`q = G = 2^55` its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`), which is why the deployed
+guarantee (`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`, proved in `DeployedSketchSum.lean`)
+states the sum form instead. -/
+theorem RemoteSessionConservationSketchDeployedProduct :
+    ∀ (n P N ρ S L q G X : ℕ) (ε : ℝ≥0∞)
+      (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773),
+      7 ≤ n → 0 < P → 0 < N →
+      Accounting.Assumptions.SketchRank 16 128 12 ε →
+      (∀ w η j ι c E σ R O,
+        let B := (A.window w η).device j ι c
+        let D := RateSketch.Data.ofParts E R
+        (B.prog σ D).rebuilds O D * 256 ≤ X) →
+      pr (fun x : RateSketch.SketchStore N 128 ×
+          (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+        (∀ w t, (x.2 w).2.2 t ∈
+          (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
+          ((((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+              (1 - (0.0015 + RateSketch.gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
+            ∃ w, (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+              (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
+        ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε +
+          (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512 + (q : ℝ≥0∞) / 2 ^ 96) := by
   intro n P N ρ S L q G X ε A hn hP hN hRank hX
   have h := RemoteSessionConservationSketch n P N 128 ρ 512 S L q 16 G 2773 12 X ε A
     0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) (by norm_num) hRank hX

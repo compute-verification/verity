@@ -27,11 +27,13 @@ At the deployed parameters (`h = 512`, `r = 12`) and the same caps `G = qtot = 2
 The chain: `card_resample_ground` (the resampling count against its ground set), `Device.card_bad_ground_le` (one
 query index's bad data, counted against the data where that index exists), `Device.card_bad_family_le` (the budgeted
 union over a candidate family's query indices), `Device.pr_unpaid_rank_family_le` (one pass, all candidates),
-`SketchDeployedWindow.pr_unpaid_good_sum_le` and `pr_unpaid_sum_le` (the window), and
-`Accounting.SecurityProofs.RemoteSessionConservationSketchSum` (the session). The budget hypothesis is new: it is
-stated inline here, beside the frozen guarantees, and `budget_of_bounded` shows `qtot = G·q` always satisfies it, so
-the sum form at the worst budget recovers the product form. Adopting the sum form as the deployed guarantee (and
-giving the budget a named home) is a statement change, which goes to Daniel.
+`SketchDeployedWindow.pr_unpaid_good_sum_le` and `pr_unpaid_sum_le` (the window),
+`Accounting.SecurityProofs.RemoteSessionConservationSketchSum` (the session, at every parameter), and
+`Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed` (the deployed guarantee,
+`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`, card 5d1805d1). The budget is the named assumption
+`Accounting.Assumptions.SketchHashBudget`; `budget_of_bounded` shows `qtot = G·q` always satisfies it, so the sum
+form at the worst budget recovers the product form (`RemoteSessionConservationSketchDeployedProduct` in
+`DeployedSketch.lean` keeps that bound stated).
 -/
 
 namespace Accounting.RateSketch
@@ -600,16 +602,16 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class, under a per-pass query
-budget: the sum form.** `Accounting.Guarantees.RemoteSessionConservationSketch`'s statement with one added
-hypothesis — across each pass's `G` candidate oracles the queries total at most `qtot` — and the receipt term
+/-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class, under the per-pass
+hash budget: the sum form.** `Accounting.Guarantees.RemoteSessionConservationSketch`'s statement with one added named
+assumption — across each pass's `G` candidate oracles the queries total at most `qtot`
+(`Accounting.Assumptions.SketchHashBudget`) — and the receipt term
 
   `(n·P·G)·N/2^h + (n·P)·qtot/2^(8r)`
 
 in place of `n·P·G·(N/2^h + q/2^(8r))`: queries add across a pass's grinding candidates, and grinding multiplies only
-the tag-guess term. By `Device.budget_of_bounded` the hypothesis holds at `qtot = G·q`, where this bound recovers the
-product form. Stated beside the frozen guarantee: adopting it as the guarantee, and giving the budget a named home, is
-a statement change (Daniel's). -/
+the tag-guess term. By `Device.budget_of_bounded` the assumption holds at `qtot = G·q`, where this bound recovers the
+product form. -/
 theorem RemoteSessionConservationSketchSum :
     ∀ (n P N m ρ h S L q ks G d r X qtot : ℕ) (ε : ℝ≥0∞)
       (A : RateSketch.SketchDeployedSession n P N m ρ h S L q ks G d) (dbar dw : ℝ),
@@ -619,9 +621,7 @@ theorem RemoteSessionConservationSketchSum :
         let B := (A.window w η).device j ι c
         let D := RateSketch.Data.ofParts E R
         (B.prog σ D).rebuilds O D * 256 ≤ X) →
-      (∀ w η j ι σ E R (Os : Fin G → RateSketch.Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))),
-        let D := RateSketch.Data.ofParts E R
-        ∑ c, ((((A.window w η).device j ι c).prog σ D).queries (Os c) D).length ≤ qtot) →
+      (∀ w η j ι, Accounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
       pr (fun x : RateSketch.SketchStore N m ×
           (Fin n → RateSketch.SketchWindowCoins P N m ρ h ks G d) =>
         (∀ w t, (x.2 w).2.2 t ∈
@@ -647,14 +647,8 @@ theorem RemoteSessionConservationSketchSum :
     simpa [hD] using hX w η j ι c E σ R O
   have hq' : ∀ w η j ι σ (Os : Fin G → RateSketch.Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
       (D : RateSketch.Data N m ρ Sector),
-      ∑ c, ((((A.window w η).device j ι c).prog σ D).queries (Os c) D).length ≤ qtot := by
-    intro w η j ι σ Os D
-    let E : RateSketch.SketchStore N m := fun p => D (.inl p)
-    let R : RateSketch.SketchStream ρ := fun i => D (.inr i)
-    have hD : RateSketch.Data.ofParts E R = D := by
-      funext p
-      rcases p with p | p <;> rfl
-    simpa [hD] using hq w η j ι σ E R Os
+      ∑ c, ((((A.window w η).device j ι c).prog σ D).queries (Os c) D).length ≤ qtot :=
+    fun w η j ι => hq w η j ι
   have hε : ∀ w η, pr (fun y : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
       (A.window w η).reads y.1 y.2.1 y.2.2.1 + P * slack <
         ((A.window w η).correctAll y.1 y.2.1 y.2.2.1).card * (m * 256)) ≤
@@ -702,38 +696,13 @@ theorem RemoteSessionConservationSketchSum :
             (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
         ring
 
-/-- **The verbatim sketch session at the deployed receipt parameters, under the per-pass query budget.**
-`RemoteSessionConservationSketchSum` at `RemoteSessionConservationSketchDeployed`'s parameters: 4 KiB tiles
-(`m = 128`), 16 sketch rows, SHA-512 tags, rank `r = 12`, 2,773 pooled openings per window, `d̄ = 0.15%`, `d_w = 1%`.
-From seven windows on,
-
-  `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96`.
-
-At the conservative caps `G = qtot = 2^55` the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`), where the product
-form's `G·q/2^96` alone was `2^14`. -/
-theorem RemoteSessionConservationSketchSumDeployed :
-    ∀ (n P N ρ S L q G X qtot : ℕ) (ε : ℝ≥0∞)
-      (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773),
-      7 ≤ n → 0 < P → 0 < N →
-      Accounting.Assumptions.SketchRank 16 128 12 ε →
-      (∀ w η j ι c E σ R O,
-        let B := (A.window w η).device j ι c
-        let D := RateSketch.Data.ofParts E R
-        (B.prog σ D).rebuilds O D * 256 ≤ X) →
-      (∀ w η j ι σ E R (Os : Fin G → RateSketch.Oracle N ρ 512 Sector (Fin 16 → ZMod (2 ^ 32))),
-        let D := RateSketch.Data.ofParts E R
-        ∑ c, ((((A.window w η).device j ι c).prog σ D).queries (Os c) D).length ≤ qtot) →
-      pr (fun x : RateSketch.SketchStore N 128 ×
-          (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
-        (∀ w t, (x.2 w).2.2 t ∈
-          (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
-          ((((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
-              (1 - (0.0015 + RateSketch.gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
-            ∃ w, (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
-              (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
-        ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε +
-          (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
-            (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) := by
+/-- **The verbatim sketch session at the deployed receipt parameters, under the per-pass hash budget**
+(`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`). `RemoteSessionConservationSketchSum` at 4 KiB
+tiles (`m = 128`), 16 sketch rows, SHA-512 tags, rank `r = 12`, 2,773 pooled openings per window, `d̄ = 0.15%`,
+`d_w = 1%`. At the conservative caps `G = qtot = 2^55` the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`),
+where the product form's `G·q/2^96` alone was `2^14`. -/
+theorem RemoteSessionConservationSketchDeployed :
+    Accounting.Guarantees.RemoteSessionConservationSketchDeployed := by
   intro n P N ρ S L q G X qtot ε A hn hP hN hRank hX hq
   have h := RemoteSessionConservationSketchSum n P N 128 ρ 512 S L q 16 G 2773 12 X qtot ε A
     0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) (by norm_num) hRank hX hq

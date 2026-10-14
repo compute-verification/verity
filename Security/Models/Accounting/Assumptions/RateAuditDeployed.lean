@@ -16,6 +16,8 @@ hypothesis, never an `axiom`:
   their rates.
 * `SketchRank ks m r ε`: the probability that some sector's signs block has rational rank below `r` is at most `ε`.
   Its numeric value is computed outside Lean.
+* `SketchHashBudget A qtot`: across a pass's `G` grinding candidates, the oracle queries total at most `qtot`, the
+  node's hash budget for the pass.
 -/
 
 namespace Accounting.Assumptions
@@ -34,6 +36,25 @@ rank is `r = 12`; at 64 rows it is `r = 27`. -/
 def SketchRank (ks m r : ℕ) (ε : ℝ≥0∞) : Prop :=
   pr (fun σ : SketchSigns ks m =>
     ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r) ≤ ε
+
+/-- **The per-pass hash budget: a pass's grinding candidates share at most `qtot` oracle queries.** Across a family
+of `G` candidate devices on shared data — a pass's grinding candidates, which differ only in their oracles — the
+oracle queries total at most `qtot`, at every signs, oracle family and data:
+
+  `∑_c |queries_c| ≤ qtot`.
+
+`qtot` is the node's hash budget for the pass: the compressions it can compute in the pass's duration, the same
+measured cap the deployed parameters state for a single candidate's `q` (at most `2^55` compressions a pass). The
+budget is what makes grinding pay for its queries once rather than per candidate: a candidate the prover grinds spends
+real compressions, so the `G` candidates' queries add within the one budget instead of each getting it whole. The
+per-candidate cap `Device.bounded` alone gives only the trivial budget `qtot = G·q`
+(`Accounting.RateSketch.Device.budget_of_bounded` in `Security/Proofs/Accounting/RateAudit/DeployedSketchSum.lean`),
+at which the budgeted bound recovers the multiplicative one. As for `SquaringCeiling`, the bound holds in every world:
+it is the hardware's capacity, which no oracle answer raises. -/
+def SketchHashBudget {N m ρ h S L q w G : ℕ} {X Sig Dg : Type}
+    (A : Fin G → RateSketch.Device N m ρ h S L q w X Sig Dg) (qtot : ℕ) : Prop :=
+  ∀ (σ : Sig) (Os : Fin G → RateSketch.Oracle N ρ h X Dg) (D : RateSketch.Data N m ρ X),
+    ∑ c, (((A c).prog σ D).queries (Os c) D).length ≤ qtot
 
 /-- **The squaring ceiling: a pass's completions cost at most the node's measured squaring capacity `F`.** From every
 on-chip state and in every world, the compute the chip's completions cost, at `cost x` per completion of `x` bits, is

@@ -6,6 +6,9 @@
    "owner": "@memory-accounting",
    "digest": "9d865547ca23af09cf67e3ad5149642660839a871ec3c4cb85abd72829fdb257"
   },
+  "Accounting.Assumptions.SketchHashBudget": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.Assumptions.SketchRank": {
    "owner": "@memory-accounting",
    "digest": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c"
@@ -5088,7 +5091,7 @@
    "Accounting.SecurityProofs.SketchRankFiber": "frozen (premise): Like Accounting.SecurityProofs.SketchBinds, it is a property of Accounting.RateSketch.sketch under a hypothesis on the window's signs (every sector's block has rank at least r over Q), which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketchRank prices the hypothesis as Pr_sigma[exists u, rank < r].",
    "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
-   "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketch at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40; its q/2^96 query term remains explicit."
+   "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
