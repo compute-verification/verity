@@ -12708,7 +12708,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "43fb4ff610dcdb9dbef81d83fb7a23fa37e1ff46221f9263f5ecd2985659b9db",
+   "digest": "59da6cc3c2c740f20d7f568ead96b7a3dcd83a6f6990fd02279a27f256416d65",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -12761,7 +12761,7 @@
     "Flock.RecVStar.checkCandidate3._sparseCasesOn_1": "f1793be39997bc1359f7e71aadbf6aeff1be8b406d9a3532c3e7dd6848d9e022",
     "Flock.RecVStar.checkCandidate3._sparseCasesOn_6": "b265f62b903f6fed706e890cde48328d8f17ac2f0f30cabcafc5e1bb7c727a28",
     "Flock.RecVStar.checkCandidate3._sparseCasesOn_9": "a967f6a55136501a174960edaf2630dcb2159d40918843555f40213a8681152d",
-    "Flock.RecVStar.checkCircuit": "e804d6086aa74f2260d37067ebd6292409245d965ec3015d308600e7ebfd28a1",
+    "Flock.RecVStar.checkCircuit": "702c72817e8fce766b2246d0bd43d55ceadc4e795718e37f7b021b93a6cd0f94",
     "Flock.RecVStar.checkCommitRounds": "a5bf5c8301a326f9647fb143b86dfb4a9c517fd71e427df807e59fc97ebd3700",
     "Flock.RecVStar.checkCovers": "23551cb87aa62e9d989db5bcab340308eb18b04fd23d7c8cb3382e173b68da37",
     "Flock.RecVStar.checkFile": "e0c1c6e3a75ceecf3cdfdf879bbd2b8996cfd695754c3552a556c80837896a54",
@@ -12778,6 +12778,8 @@
     "Flock.RecVStar.checkOwnBindings": "7e7215cbc641d4e7a62734a4e1f4251f2f53c64cb049e1d4220b185aedb15094",
     "Flock.RecVStar.checkOwnBindings._sparseCasesOn_3": "b34af140f0b48801762d540c7186d39a2f42a3e25d1179ece5789df6802dbeb0",
     "Flock.RecVStar.checkParsed": "e539d8cc3c3d3fb971603d00836e816a09961e55cf25fe88648ed2330207c9eb",
+    "Flock.RecVStar.checkPart": "e617219c60783417c083cf32f00d98f8d0c898147017a81fe911d2775dd3592e",
+    "Flock.RecVStar.checkPart._sparseCasesOn_9": "0239ae6e3280c221f05d87bb12ade0f34319c2cd3e4bf133ef9852fbef44183a",
     "Flock.RecVStar.checkPubRows": "7773199351841982f8f64f395559a2fd44d2b6c622e42742a299b7cbee968db6",
     "Flock.RecVStar.checkRows": "d7bbf004f2ea230d7ff114671294fb50278b0eac9cddd19a99ba322800865906",
     "Flock.RecVStar.checkStackedShape": "cdc27d3648f54150ff75001e409dbe488f224903f45ac61d7c258064c6e5fb1a",
