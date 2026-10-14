@@ -57,6 +57,7 @@ import Proofs.Flock.Recursive.ValueBridge
 import Proofs.Flock.Recursive.LeafFinder
 import Proofs.Flock.Recursive.ValueChecked
 import Proofs.Flock.Recursive.ValueInner
+import Proofs.Flock.Recursive.PartTie
 import Proofs.Flock.Recursive.HPortTie
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,

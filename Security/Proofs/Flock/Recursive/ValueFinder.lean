@@ -63,8 +63,31 @@ theorem valueColl_of_tie {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ �
   ⟨⟨j, u, q⟩, hp, by rw [valueAt_of_some hsrc]; exact h⟩
 
 /-- **`value_tie` in `ValueColl`'s terms**: at a registered read `(u, q)` of a port without segments of session `j`,
-where `checkValue` accepted the port at the verifier's `rows` and the source gives them under `verifierSalt`, the read
-is of row `u` and the registrant's bit `b` is bit `b % 16` of the row's word `b / 16`, or `ValueColl`. -/
+where `checkRows` accepted the port at the verifier's `rows` under `salt` and the source gives them under `salt` of
+META's program, the read is of row `u` and the registrant's bit `b` is bit `b % 16` of the row's word `b / 16`, or
+`ValueColl`. -/
+theorem value_tie_collR {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {vsrc : ValueSrc L Reg Cm Reg₂ I Vs} {R : Reg} {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} {j : Fin S}
+    {salt : String → ℕ → ByteArray} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
+    {pub : Flock.Public} (h : Flock.RecCoins.checkRows salt (Vs j).c pub (zs R ω t R₂ j).own port value rows what = .ok ())
+    {prog : String} (hprog : (Vs j).c.metaJ.getObjValAs? String "program_sha512" = .ok prog)
+    {u : Fin (Vs j).nv} {q : Fin (Vs j).c.ports.size}
+    (hsrc : vsrc R ω t R₂ ⟨j, u, q⟩ = some (rows, salt prog))
+    (hp : (zs R ω t R₂ j).rd.isRead (.inl (u, q)))
+    (hone : ∀ reg ∈ (zs R ω t R₂ j).own, reg.name = port → reg = (zs R ω t R₂ j).rd.port (.inl (u, q)))
+    (hpos : ((zs R ω t R₂ j).rd.port (.inl (u, q))).reads[u.val]? =
+      some (some ((zs R ω t R₂ j).rd.readAt (.inl (u, q)))))
+    (hseg : (Vs j).c.ports[q.val]!.segs = none) :
+    u.val < rows.size ∧
+      ((∀ (b : ℕ) (hb : b < FlockSoundness.Discharge.Layout.portRowW (Vs j).c q),
+        (FlockVBridge.Decode.regVal (zs R ω t R₂ j) (.inl (u, q))).2
+            ⟨b, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))⟩ =
+          (rows[u.val]!)[b / 16]!.testBit (b % 16)) ∨
+      ValueColl zs vsrc R ω t R₂) := by
+  obtain ⟨hu, hor⟩ := FlockC3.RegLevels.value_tie (zs R ω t R₂ j) h hprog hp hone hpos hseg
+  exact ⟨hu, hor.imp id fun hc => valueColl_of_tie hsrc hp hc⟩
+
+/-- **`value_tie_collR` at `checkValue`**, whose salt is `verifierSalt`. -/
 theorem value_tie_coll {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {vsrc : ValueSrc L Reg Cm Reg₂ I Vs} {R : Reg} {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} {j : Fin S}
     {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String} {pub : Flock.Public}
@@ -82,9 +105,8 @@ theorem value_tie_coll {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
         (FlockVBridge.Decode.regVal (zs R ω t R₂ j) (.inl (u, q))).2
             ⟨b, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))⟩ =
           (rows[u.val]!)[b / 16]!.testBit (b % 16)) ∨
-      ValueColl zs vsrc R ω t R₂) := by
-  obtain ⟨hu, hor⟩ := FlockC3.RegLevels.value_tie (zs R ω t R₂ j) h hprog hp hone hpos hseg
-  exact ⟨hu, hor.imp id fun hc => valueColl_of_tie hsrc hp hc⟩
+      ValueColl zs vsrc R ω t R₂) :=
+  value_tie_collR (salt := fun p => Flock.RecCoins.verifierSalt p value) h hprog hsrc hp hone hpos hseg
 
 theorem ind_valueColl_le (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) {β : Type} (o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × β)) :

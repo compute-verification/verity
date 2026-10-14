@@ -13,8 +13,8 @@ the honest level is refused. Every verify names the session's statement (`--rec-
 list) and passes the verifier's own bindings (`--rec-bindings F`, `rec_bindings` of its partition object and program).
 Staging the level takes about a minute and each verify sets up its 158 MB circuit, so the
 module is slow; it catches what no test before it can: the Lean verifier's coefficients, positions and salts at real
-coins, against the ones V*'s Python registers. The algebra's parts are staged too, for their verifier-registered `v`,
-their message rows and their row ports, and every session's `rec-acc` reads, against the verifier's record of V*'s shared
+coins, against the ones V*'s Python registers. The algebra's parts are staged too, for their verifier-registered `v` and
+zero `out`, their message rows and their row ports, and every session's `rec-acc` reads, against the verifier's record of V*'s shared
 rows (`--rec-rows`), and their rows of the chain; and check 5 on `rec-coins`' record of the inner session in place of its
 statement (`--rec-inner-coins`).
 A level staged with bit rows, which hidden outputs admit and V*'s statement does not, is refused under the inner shape.
@@ -309,6 +309,31 @@ def test_a_v_registered_one_element_off_is_refused_at_its_part(comb, algebra, sh
                   session=undrawn, rows=rows)["why"]
     assert re.fullmatch(rf"setup: rec-coins: rec-residuals/m\d+-k\d+-c\d+-{p.name}: rep 0: part {p.name[1:]}'s \d+ elements of v: "
                         "the statement's v row is not the verifier's rec-v row 0", why), why
+
+
+def test_a_parts_out_registered_under_another_zero_salt_is_refused_at_its_zero_rows(algebra, shape, undrawn, rows, once):
+    """`ZeroReads`' check (`RecCoins.checkZero` at `rec-residuals-zero`): the algebra staged with the zero outputs' salt 0
+    one bit off (`rec_residuals.zero_salts`) registers the same zero rows as another `rec-residuals-zero`, consistently,
+    and its first part is refused at rep 0's `out` row by the salts the verifier computes. Its one verify sets the part up
+    over its whole population, as the comb test's does; only a staged part reaches check 5's `out` rows."""
+    honest = S.RR.zero_salts
+
+    def zero_salts(value, n):
+        ss = honest(value, n)
+        return [bytes([ss[0][0] ^ 1]) + ss[0][1:], *ss[1:]]
+
+    def make(d):
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(S.RR, "zero_salts", zero_salts)
+            _stage(d, levels=[], algebra=True, evaluate=False)
+
+    p = sorted((once("rec-coins-zero", make, _KEY) / "alg").iterdir())[0]
+    out = lambda d: json.loads((d / "registered.json").read_text())["ports"]["out"]["root"]
+    assert out(p) != out(algebra / p.name)
+    why = _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
+                  str(SET / "inner-honest" / "public.json"), session=undrawn, rows=rows)["why"]
+    assert why == (f"setup: rec-coins: {_unit(p)}: rep 0's zero outputs: the statement's out row is not the verifier's "
+                   "rec-residuals-zero row 0"), why
 
 
 def _transcript(dst: Path, change) -> Path:
