@@ -49,6 +49,8 @@ import Proofs.Flock.Recursive.AuditC3Proof
 import Proofs.Flock.Recursive.Witness
 import Proofs.Flock.Recursive.TopRoot
 import Proofs.Flock.Recursive.TopFinder
+import Proofs.Flock.Recursive.SaltFinder
+import Proofs.Flock.Recursive.ValueSrc
 import Proofs.Flock.Recursive.ValueFinder
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,

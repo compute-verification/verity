@@ -75,7 +75,7 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
     (bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8)
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json)
-    (bcs' : Array ByteArray) (_htop : ∃ lv, StackedTopAt lv st reg xR.cap bcs')
+    (bcs' : Array ByteArray) (_htop : ∃ lv salt, StackedTopAt lv st reg xR.cap salt bcs')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (hrread : ∀ h : Typed zr, RepsRead
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
@@ -149,7 +149,7 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json)
     (cap : Cap Dig) (hcap : xR.cap = cap)
-    (bcs' : Array ByteArray) (htop : ∃ lv, StackedTopAt lv st reg xR.cap bcs')
+    (bcs' : Array ByteArray) (htop : ∃ lv salt, StackedTopAt lv st reg xR.cap salt bcs')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (σ : Strategy (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N))
     (hrread : ∀ h : Typed zr, RepsRead
