@@ -46,8 +46,8 @@ sessions read that the history does not fix, its running sums `rec-acc` and with
   `x R ω` at the rounds' coins;
 * **their public files register the firewall's commitments** (`VCommits`): the digest session `j`'s value binding
   registers at each commit string of stage `i`'s `Sk i j` is the firewall's stage-`i` commitment's, `cmt j`, at every
-  `R₂` where session `j` accepts some transcript (the verifier ties a public file's rows to its registration only on an
-  accepted run);
+  `R₂` and registration `R'` where session `j` accepts a transcript it writes at `R'` (`ZkOuter.Writes`, an outcome
+  its game reaches; the verifier ties a public file's rows to its registration only on an accepted run);
 * **they decode each round's message from those commit strings** (`VDecodesR`, at equality): layers whose bits on the
   wires of each `Sk i j` that some unit reads (`ReadW`) are those of the values `v j` hold `msg i v` as their round-`i`
   message (true at V* when every wire `wmsg` depends on is some unit's `io`, which is what VBridge G's
@@ -93,9 +93,9 @@ theorem vCommits_masked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Typ
     {Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
     {cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg} (r : ℕ)
     (h : VCommits zs Sk cmt) : VCommits zs (fun i j => if i + 1 < r then Sk i j else ∅) cmt := by
-  intro i R ω t e he R₂ j hacc pos hp R'
+  intro i R ω t e he R₂ j R' tr hw hacc pos hp
   by_cases hc : i + 1 < r
-  · exact h i R ω t e he R₂ j hacc pos (by simpa [hc] using hp) R'
+  · exact h i R ω t e he R₂ j R' tr hw hacc pos (by simpa [hc] using hp)
   · exact absurd hp (by simp [hc])
 
 /-- **`VBridge` gives `VBridgeC`** (this direction only), at a decoder that holds a message at the last round, as

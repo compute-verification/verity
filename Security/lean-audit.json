@@ -15823,17 +15823,18 @@
    ]
   },
   "Proofs.Flock.Recursive.Stage": {
-   "digest": "0adee78f7b00fa1159734a75126ccf04714011afd600533cee198052a09d0412",
+   "digest": "5fcda20f35d9616656c4bac9340e93eb5f134596ee8aadb49a0d243eb4c22cab",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.Openings.sigma": "f27e1c3c377262da02cc867376cb3e03c8c173960b0b5bf2a6b0894a8944c42f",
     "FlockSoundness.Discharge.Recursion.PosK": "53d9ed266468b8504b5d54a59d6f58c88f857a0c3d57dbe091d965e4df556332",
     "FlockSoundness.Discharge.Recursion.ReadW": "81560b23656f8dc8058c0d1888d20dd4b5649f904990001833c8fa18677dfed3",
     "FlockSoundness.Discharge.Recursion.RoundFork": "9e201c3cb9fe9268c9a22083fda5e8efc89e8f5ca95de712777c132ce314e4e9",
     "FlockSoundness.Discharge.Recursion.SessionFork": "6d99e88e90bfc1bf24534ee327b2ff6405748bee8498a53bafc12e4d03d45e1c",
-    "FlockSoundness.Discharge.Recursion.VCommits": "d0cf8960940061e5e4af127fac2bc4e06ea991099cbfa0e480e2e0c681dfd66b",
+    "FlockSoundness.Discharge.Recursion.VCommits": "3fcac952ec228b82d6cd8da2861bce3588e65cb00bca992fbde89dd387f08aa1",
     "FlockSoundness.Discharge.Recursion.VDecodesR": "5c802974a3d13d4d6aa5cf940a52ff2f4a53c97a16ac355abe5662b5d5add80f",
     "FlockSoundness.Discharge.Recursion.VFullR": "fe5664ce9ff4c57375ff3f4086beffed14eb25761d6bb797938db83cc98e2a24",
     "FlockSoundness.Discharge.Recursion.ValK": "8195cd44a3add667689eea3a12f40b2615263218a0e898343751d8f7af5ab5ac",
+    "FlockSoundness.Discharge.Recursion.ZkOuter.Writes": "3946968476b9fdf43a5da4f1688525d00b97d6b309db2a0932cf308971c4cfba",
     "FlockSoundness.Discharge.Recursion.ZkOuter.slackCR": "42bf3668cbbc7e499cd06e06daf6616746d7bb3b8397a9a6ed69d224a72ce721",
     "FlockSoundness.Discharge.Recursion.ZkOuter.trial": "c3be0421f8f51c3b097610488a7ba0bbe8373dcbfcc2ff6500368240c4dfa358",
     "FlockSoundness.Discharge.Recursion.bitK": "2391fdb83957b5b981b6d3327655dbaf93d6997ff708cf26a44c40b90de52e39",
