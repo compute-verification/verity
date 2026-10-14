@@ -79,7 +79,14 @@ theorem pr_unpaid_rank_le
       Fintype.card_fin] at hc
     have hob := A.card_obtained σ O D
     have hrebuild := hX O D
-    unfold Device.footprint at hunpaid
+    have hpay :
+        (A.correct sketch σ O D).card * (m * 256) + ρ * 256 ≤
+          S + A.footprint σ O D + L + X := by
+      calc
+        _ = ((A.correct sketch σ O D).card * m + ρ) * 256 := by ring
+        _ ≤ (A.obtained σ O D).card * 256 := Nat.mul_le_mul_right 256 hc
+        _ ≤ S + A.footprint σ O D + L + (A.prog σ D).rebuilds O D * 256 := hob
+        _ ≤ S + A.footprint σ O D + L + X := by omega
     omega
   refine (pr_mono hsplit).trans ((pr_or_le _ _).trans (add_le_add ?_ ?_))
   · refine (pr_exists_le _).trans ?_
@@ -89,6 +96,8 @@ theorem pr_unpaid_rank_le
           ≤ (1 : ℝ≥0∞) / 2 ^ h := by
       intro t
       rw [Rate.pr_equiv (Equiv.prodComm _ _)]
+      change pr (fun x : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) × Data N m ρ Sector =>
+        t ∈ A.correct sketch σ x.1 x.2 ∧ t ∉ queried A sketch σ x.1 x.2) ≤ (1 : ℝ≥0∞) / 2 ^ h
       refine Rate.pr_le_of_fiber _ _ (fun D => ?_)
       refine pr_le_of_card _ (2 ^ h) 1 (by positivity) ?_
       simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t
@@ -99,6 +108,8 @@ theorem pr_unpaid_rank_le
         pr (fun x : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
           Bad A sketch σ x.2 x.1 i g) ≤ (g : ℝ≥0∞) / 2 ^ 256 := by
       intro i
+      change pr (fun x : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
+        Bad A sketch σ x.2 x.1 i g) ≤ (g : ℝ≥0∞) / 2 ^ 256
       refine Rate.pr_le_of_fiber _ _ (fun O => ?_)
       refine pr_le_of_card _ (Fintype.card Sector) g (by simp [Sector]) ?_
       simpa [show Fintype.card Sector = 2 ^ 256 by simp [Sector]] using
@@ -106,12 +117,18 @@ theorem pr_unpaid_rank_le
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans ?_
     have hg : (g : ℝ≥0∞) = 2 ^ (256 - 8 * r) := by
       dsimp [g]
+      push_cast
       rw [show (256 : ℝ≥0∞) = 2 ^ 8 by norm_num, ← pow_mul,
         show 8 * (32 - r) = 256 - 8 * r by omega]
     have hsplitPow : (2 : ℝ≥0∞) ^ 256 = 2 ^ (256 - 8 * r) * 2 ^ (8 * r) := by
       rw [← pow_add, Nat.sub_add_cancel (by omega)]
     simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, hg, hsplitPow]
-    rw [ENNReal.mul_div_mul_left _ _ (by positivity) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top)]
+    have hc : (2 : ℝ≥0∞) ^ (256 - 8 * r) ≠ 0 := pow_ne_zero _ (by norm_num)
+    have ht : (2 : ℝ≥0∞) ^ (256 - 8 * r) ≠ ⊤ := ENNReal.pow_ne_top ENNReal.ofNat_ne_top
+    rw [show (2 : ℝ≥0∞) ^ (256 - 8 * r) =
+        (2 : ℝ≥0∞) ^ (256 - 8 * r) * 1 by simp,
+      ENNReal.mul_div_mul_left 1 (2 ^ (8 * r)) hc ht]
+    simp [ENNReal.div_eq_inv_mul, mul_comm]
 
 end Device
 
@@ -170,7 +187,7 @@ theorem pr_unpaidAt_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : Sk
     (hε : ∀ η, pr (fun x : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
       let B := A.device j η c
       B.footprint σ x.2 x.1 + slack < (B.correct sketch σ x.2 x.1).card * (m * 256)) ≤ ε) :
-    pr (UnpaidAt A σ slack j) ≤ ε := by
+    pr (UnpaidAt A σ slack j c) ≤ ε := by
   classical
   let ePass : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) ≃
       (SketchStore N m × SketchPassCoins N ρ h ks G) ×
@@ -234,11 +251,9 @@ theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) 
   let Passes := Fin P → SketchPassCoins N ρ h ks G
   let Draw := Fin d → Fin P × Fin N
   let eDraw : SketchStore N m × (SketchSigns ks m × Passes × Draw) ≃
-      (SketchStore N m × (SketchSigns ks m × Passes)) × Draw where
-    toFun x := ((x.1, x.2.1, x.2.2.1), x.2.2.2)
-    invFun y := (y.1.1, y.1.2.1, y.1.2.2, y.2)
-    left_inv _ := rfl
-    right_inv _ := rfl
+      (SketchStore N m × (SketchSigns ks m × Passes)) × Draw :=
+    ((Equiv.refl _).prodCongr (Equiv.prodAssoc _ _ _).symm).trans
+      (Equiv.prodAssoc _ _ _).symm
   rw [Rate.pr_equiv eDraw]
   refine Rate.pr_le_of_fiber _ _ (fun _draw => ?_)
   let badRank : SketchSigns ks m → Prop := fun σ =>
@@ -328,11 +343,11 @@ theorem pr_draws_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G d)
       ((w : Fin n) → X w × (Fin d → Fin (P * N))) :=
     Equiv.piCongrRight fun _ =>
       (Equiv.prodAssoc _ _ _).symm |>.trans
-        ((Equiv.refl _).prodCongr (Equiv.arrowCongr (Equiv.refl _) Rate.finProdFinEquiv))
+        ((Equiv.refl _).prodCongr (Equiv.arrowCongr (Equiv.refl _) finProdFinEquiv))
   rw [Rate.pr_equiv e]
   let Gs : (w : Fin n) → ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Finset (Fin (P * N)) :=
     fun w ω => ((A.win w (e.symm ω)).correctAll E (e.symm ω w).1.1 (e.symm ω w).1.2).map
-      Rate.finProdFinEquiv.toEmbedding
+      finProdFinEquiv.toEmbedding
   have hG : Rate.Causal (s := fun _ => d) Gs := by
     intro w ω ω' hlt hw
     have hη : (fun v : {v : Fin n // v < w} => e.symm ω v.1) =
