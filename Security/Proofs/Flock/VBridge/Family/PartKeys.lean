@@ -1,5 +1,6 @@
 import Proofs.Flock.VBridge.Family.OutCols
 import Proofs.Flock.C3.RegLevels.OpensRegs
+import Proofs.Flock.VBridge.Family.PartReads
 
 /-!
 # A part's input keys, from V*'s META
@@ -11,11 +12,13 @@ so the Δ key (`Aliased.srcKey`, copy 0) of each of the unit's input bits is the
 * `srcKey_laid`: at the verifier's `unitLaid`, the key of input bit `16 · (words before q) + k` is bit `k` of port `q`
   (`srcKey_inOrder`);
 * `repKeys_part`: part `p`'s circuit has those keys at V*'s part `pt.S`'s ports (`RepKeys`);
-* `srcKey_v`: so the `v` column `vBase + q` is bit `q` of the port V* names `v`.
+* `srcKey_v`, `srcKey_row`: so the `v` column `vBase + q` is bit `q` of the port V* names `v`, and the row column
+  `rowCol q` is a bit of the row port it lies in (`rowCol_at`), named as V* names it;
+* `part_counts`, `part_link`: V*'s part `pt.S` has the verifier's part's row ports and v (`nsOf F.sh p`, `nvOf F.sh p`;
+  `VStarFamily.hpart`, `RecVStar.checkPart`), so the keys hold at the verifier's part (`partRep`, which `rowCol` and
+  `vBase` read only through those counts): `partVCols` (`PartVCols`'s statement) and `partRowCols` (`PartRowCols`).
 
-`PartVCols` reads the keys at the verifier's part `RecResiduals.part F.sh p` (`partRep`), not at V*'s `pt.S`: that the
-two have the same ports' words (`nsOf F.sh p`, `nvOf F.sh p`) is not proved here, nor are the row columns' keys
-(`rowCol`, which `PartRowCols` and `PartRowBits` read).
+`PartRowBits`, that two parts' columns of one element of w key one bit of rows of one name, is not proved here.
 -/
 
 namespace FlockVBridge.OfVStar
@@ -153,6 +156,103 @@ theorem srcKey_v {c : Flock.Circuit} {S : VStar.RepS} (h : RepKeys c S) (n : ℕ
   · rw [Nat.zero_mul, Nat.zero_add, ← hv]
     exact hkey q (hb q hq)
 
+theorem repPorts_get (S : VStar.RepS) {i : ℕ} (hi : i < S.ports.length) (h : i < (repPorts S).length) :
+    (repPorts S)[i] = VStar.portWordsOf S.ports[i].2 := by
+  simp only [repPorts, List.getElem_append, List.length_map, hi, dite_true, List.getElem_map]
+
+theorem names_row (S : VStar.RepS) {i : ℕ} (hi : i < S.ports.length) :
+    (S.ports.map (·.1) ++ ["v"])[i]! = S.ports[i].1 := by
+  rw [getElem!_pos _ _ (by rw [List.length_append, List.length_map, List.length_singleton]; omega),
+    List.getElem_append_left (by rw [List.length_map]; exact hi), List.getElem_map]
+
+/-- **A row column `rowCol` lies in one row port**: bit `q` of the row ports is bit `e` of port `i`, past the ports
+before it. -/
+theorem rowCol_at : ∀ (ps : List (String × ℕ)) (k q : ℕ), q < 128 * (ps.map (·.2)).sum →
+    ∃ i, ∃ hi : i < ps.length, ∃ e < 128 * ps[i].2, q = 128 * ((ps.map (·.2)).take i).sum + e ∧
+      rowCol ps k q = k + 16 * ((ps.map fun p => VStar.portWordsOf p.2).take i).sum + e
+  | [], _, _, h => by
+    simp only [List.map_nil, List.sum_nil] at h
+    omega
+  | p :: ps, k, q, h => by
+    unfold rowCol
+    by_cases hq : q < 128 * p.2
+    · refine ⟨0, Nat.succ_pos _, q, by simp only [List.getElem_cons_zero]; exact hq,
+        by simp only [List.take_zero, List.sum_nil]; omega, ?_⟩
+      rw [ite_eq_left hq]
+      simp only [List.take_zero, List.sum_nil]
+      omega
+    · rw [ite_eq_right hq]
+      have h' : q - 128 * p.2 < 128 * (ps.map (·.2)).sum := by
+        simp only [List.map_cons, List.sum_cons] at h
+        omega
+      obtain ⟨i, hi, e, he, hqe, hr⟩ := rowCol_at ps (k + 16 * VStar.portWordsOf p.2) (q - 128 * p.2) h'
+      refine ⟨i + 1, Nat.succ_lt_succ hi, e, by simp only [List.getElem_cons_succ]; exact he, ?_, ?_⟩
+      · simp only [List.map_cons, List.take_succ_cons, List.sum_cons]
+        omega
+      · rw [hr]
+        simp only [List.map_cons, List.take_succ_cons, List.sum_cons]
+        omega
+
+/-- **The row columns at V*'s part**: row column `rowCol S.ports 0 q` is keyed by bit `e` of row port `i`, named as
+V* names it, where `q` is bit `e` of the `i`-th row's `128 n` bits. -/
+theorem srcKey_row {c : Flock.Circuit} {S : VStar.RepS} (h : RepKeys c S) (n : ℕ) {q : ℕ}
+    (hq : q < 128 * (S.ports.map (·.2)).sum) :
+    ∃ (i : Fin c.ports.size) (hi : i.val < S.ports.length) (e : ℕ) (_ : e < 128 * S.ports[i.val].2),
+      q = 128 * ((S.ports.map (·.2)).take i).sum + e ∧ c.ports[i].name = S.ports[i.val].1 ∧
+        e < Layout.portRowW c i ∧ Aliased.srcKey c (0 * n + rowCol S.ports 0 q) = .msg i.val (e / 8) (e % 8) := by
+  obtain ⟨i, hi, e, he, hqe, hr⟩ := rowCol_at S.ports 0 q hq
+  have hil : i < (repPorts S).length := by rw [repPorts_length]; omega
+  obtain ⟨hq', hnm, hw, hkey⟩ := h i hil
+  have hb : e < 16 * (repPorts S)[i] := by
+    rw [repPorts_get S hi _]
+    exact Nat.lt_of_lt_of_le he (le_portWords _)
+  refine ⟨⟨i, hq'⟩, hi, e, he, hqe, hnm.trans (names_row S hi), ?_, ?_⟩
+  · show e < 16 * c.ports[i].words
+    rw [hw]
+    exact hb
+  · rw [Nat.zero_mul, Nat.zero_add, hr, Nat.zero_add, ← repPorts_take S (Nat.le_of_lt hi)]
+    exact hkey e hb
+
+/-- `rowCol` reads only the ports' element counts. -/
+theorem rowCol_snd : ∀ (ps ps' : List (String × ℕ)), ps.map (·.2) = ps'.map (·.2) → ∀ k q,
+    rowCol ps k q = rowCol ps' k q
+  | [], [], _, _, _ => rfl
+  | [], _ :: _, h, _, _ => by simp at h
+  | _ :: _, [], h, _, _ => by simp at h
+  | p :: ps, p' :: ps', h, k, q => by
+    simp only [List.map_cons, List.cons.injEq] at h
+    unfold rowCol
+    rw [h.1, rowCol_snd ps ps' h.2]
+
+/-- So does `vBase`. -/
+theorem vBase_snd {S S' : VStar.RepS} (h : S.ports.map (·.2) = S'.ports.map (·.2)) : vBase S = vBase S' := by
+  have e : ∀ S : VStar.RepS, S.ports.map (fun p => VStar.portWordsOf p.2) = (S.ports.map (·.2)).map VStar.portWordsOf :=
+    fun S => by simp only [List.map_map, Function.comp_def]
+  rw [vBase, vBase, e, e, h]
+
+theorem partRep_snd (ns : List ℕ) (nv : ℕ) : (partRep ns nv).ports.map (·.2) = ns := by
+  simp only [partRep, List.map_map, Function.comp_def, List.map_id']
+
+/-- The verifier's part `p` is one of its groups. -/
+theorem part_lt {sh : Flock.Shape} {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
+    (hS : RecAlgebra.structureOf sh = .ok S) (hg : RecResiduals.groups S (RecResiduals.portSizes sh) = .ok gs) {p : ℕ}
+    {x : RecOpen.GfS × List ℕ × ℕ} (h : RecResiduals.part sh p = .ok x) : p < gs.size := by
+  unfold RecResiduals.part at h
+  obtain ⟨S0, hS0, h⟩ := FlockVBridge.PartS.bind_ok h
+  rw [hS] at hS0
+  cases hS0
+  dsimp only at h
+  split at h
+  · cases h
+  · obtain ⟨gs0, hg0, h⟩ := FlockVBridge.PartS.bind_ok h
+    rw [hg] at hg0
+    cases hg0
+    split at h
+    · rename_i hj
+      obtain ⟨hp, -⟩ := Array.getElem?_eq_some_iff.mp hj
+      exact hp
+    · cases h
+
 end FlockVBridge.OfVStar
 
 namespace FlockVBridge.Family
@@ -215,6 +315,57 @@ theorem part_counts (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin 
     rfl
   exact checkPart_ok (F.hpart j) hj (resParams_of_check hchk hnm) F.hsh (F.hplain j)
     (by rw [e F.sh (OfVStar.shape?_holo F.hsh)]; exact hpart)
+
+/-- **The verifier's part `p`'s row ports and v are V*'s part's** (`part_counts` at the part `check_part` gives, which
+is `nsOf` and `nvOf`'s, `part_eq`). -/
+theorem part_link (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
+    {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) :
+    nsOf F.sh p = pt.S.ports.map (·.2) ∧ nvOf F.sh p = pt.S.gf.nv := by
+  have hname := F.hUnitName_of hne
+  obtain ⟨⟨R, ω, R₂⟩⟩ := hne
+  have hnm : (F.Vs j).c.unit.name = RecResiduals.unitName F.vsh.m F.vsh.kLog F.vsh.claims p :=
+    (hname j p nm pt hj).trans (statements_name F.hstmts _ hj)
+  have hchk : RecResiduals.check (F.Vs j).c = .ok () := (parse_facts (F.zs R ω [] R₂ j).hc).recResiduals
+  obtain ⟨S, ns, nv, hpart, -⟩ := OfVStar.check_part hchk (resParams_of_check hchk hnm) F.hsh (F.hplain j)
+  obtain ⟨h1, h2⟩ := F.part_counts ⟨(R, ω, R₂)⟩ hj hpart
+  obtain ⟨GS, gs, hS, hg⟩ := FlockC3.Reps.ReadWhole.part_ok hpart
+  have hp := OfVStar.part_lt hS hg hpart
+  obtain ⟨-, hns, hnv⟩ := OfVStar.part_eq hS hg hp hpart
+  have hgp : (partsOf F.sh)[p]! = gs[p] := by rw [partsOf_eq hS hg, getElem!_pos gs p hp]
+  exact ⟨by rw [nsOf, hgp, ← hns, h1], by rw [nvOf, hgp, ← hnv, h2]⟩
+
+/-- **`PartVCols` at part `p`'s statement**: `srcKey_v` at V*'s part (`repKeys_part`), which is the verifier's
+(`part_link`). -/
+theorem partVCols (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
+    {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) :
+    ∃ qv : Fin (F.Vs j).c.ports.size, (F.Vs j).c.ports[qv].name = "v" ∧
+      ∀ q < 128 * nvOf F.sh p, ∃ _ : q < Layout.portRowW (F.Vs j).c qv,
+        Aliased.srcKey (F.Vs j).c
+            (0 * (Rows.ofNet (F.Vs j).hU).nIn + (OfVStar.vBase (OfVStar.partRep (nsOf F.sh p) (nvOf F.sh p)) + q)) =
+          .msg qv.val (q / 8) (q % 8) := by
+  obtain ⟨hns, hnv⟩ := F.part_link hne hj
+  rw [hns, hnv, OfVStar.vBase_snd (OfVStar.partRep_snd _ _)]
+  exact OfVStar.srcKey_v (F.repKeys_part hne hj) _
+
+/-- **`PartRowCols` at part `p`'s statement**: `srcKey_row` at V*'s part (`repKeys_part`), which is the verifier's
+(`part_link`). -/
+theorem partRowCols (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
+    {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) :
+    ∀ q < 128 * (nsOf F.sh p).sum,
+      ∃ (q' : Fin (F.Vs j).c.ports.size) (k' : ℕ) (_ : k' < Layout.portRowW (F.Vs j).c q'),
+        Aliased.srcKey (F.Vs j).c (0 * (Rows.ofNet (F.Vs j).hU).nIn + rowColOf F.sh p q) =
+          .msg q'.val (k' / 8) (k' % 8) := by
+  obtain ⟨hns, -⟩ := F.part_link hne hj
+  intro q hq
+  rw [hns] at hq
+  obtain ⟨i, -, e, -, -, -, he, hk⟩ := OfVStar.srcKey_row (F.repKeys_part hne hj) (Rows.ofNet (F.Vs j).hU).nIn hq
+  refine ⟨i, e, he, ?_⟩
+  rw [rowColOf, hns, OfVStar.rowCol_snd _ pt.S.ports (OfVStar.partRep_snd _ _)]
+  exact hk
+
+/-- **`PartRowCols` holds** at every family with a history. -/
+theorem partRowCols_holds (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.PartRowCols :=
+  fun _ _ _ _ hj => F.partRowCols hne hj
 
 end VStarFamily
 
