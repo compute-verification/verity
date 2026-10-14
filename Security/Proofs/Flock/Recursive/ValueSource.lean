@@ -154,12 +154,3 @@ theorem openingCheck_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Po
   simp [hso, hp]
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms FlockSoundness.Discharge.Recursion.valueSrcC3_eq
-#print axioms FlockSoundness.Discharge.Recursion.stacked_of_check
-#print axioms FlockSoundness.Discharge.Recursion.opening_of_check
-#print axioms FlockSoundness.Discharge.Recursion.valueRows_coef
-#print axioms FlockSoundness.Discharge.Recursion.valueRows_dirs
-#print axioms FlockSoundness.Discharge.Recursion.valueRows_v
-#print axioms FlockSoundness.Discharge.Recursion.stackedLevel_of_check
-#print axioms FlockSoundness.Discharge.Recursion.openingCheck_of_check
