@@ -222,7 +222,62 @@ Any other option raises `TypeError` naming it and this list; an engine built els
 sampling_params=None, use_tqdm=True)` returns vLLM's `RequestOutput` list unchanged and appends a `GenerateRecord` (sampling
 parameters, prompt and generated token ids per request) to `llm.records`; `llm.pin` is the resolved `EnginePin` and
 `llm.engine_record` the engine as built (the `vllm.LLM` keyword arguments, the profile's environment flags, the execution vLLM
-reports, the protocol composition record).
+reports, the protocol composition record).  `llm.vllm` is the wrapped `vllm.LLM` (for driving its engine step by step) and
+`llm.model` the served model in this process, the object protocol options install on.
+
+## Hook interface
+
+What a caller may attach to the engine, in what order, and what it may read back.  The names below are the surface other
+slices build on (protocol options, the benchmarks harness); vllm owns them, and a change to one is announced to its users.
+
+**One mechanism.**  Every runtime patch goes through `engine/hooks.py`: `patch`, `wrap`, `append` (a library's hook list)
+and `service` (an in-process thread), each undone exactly by `uninstall`.  A component takes a `Hooks(tag=...)`, makes
+every entry through it, and uninstalls it newest first; `hooks.live(tag)` lists what a component has installed.  Nothing
+else replaces an attribute on a vLLM, torch or Triton object.
+
+**What an add-on registers.**  Two kinds:
+
+- *A protocol option* is one adapter module in `protocol_options/` with `NAME`, `schemes()`, `refusals(scheme, ctx)` and
+  `install(scheme, target) -> Installed`, plus the optional `requires_build`, `EXECUTES`, `keeps_weight_copy` and
+  `commit_weights` (the contract is `protocol_options/interface.py`).  It finds its sites by type, never by module name,
+  and patches only through `target.hooks(entry)`.  Its protocol logic stays in its `verity.core.protocols` package.
+- *A benchmark arm or experiment* patches only through a `Hooks` tagged by its id (`bench:<arm>`).  The harness
+  (`verity_bench.vllm.runner`, benchmarks') calls its `install` before the engine is built and its `ready` once
+  `llm.vllm` and `llm.model` exist; it refuses an arm whose `install` added a live entry outside its tag, and uninstalls
+  the arm's hooks when the engine closes.
+
+**Order.**  At each site the nesting is `protocol_options.SITES`, outermost first: at `LinearBase.quant_method.apply`,
+POUS wraps PoUW, which executes (a site has at most one executor, `EXECUTES`).  Sampled proofs commits at module
+boundaries, outside every site.  A composition runs in two phases: every option first commits to the plaintext weights
+(`commit_weights`, model untouched), then each installs in `config.PROTOCOLS` order, innermost first.  Uninstall is the
+reverse, and an install that raises unwinds every hook already made.  Where it happens depends on the stage: `LLM` installs right
+after the engine is built; a Match capture installs the executors and wrappers only, no sampled proofs (`at_capture`); a Commit
+installs after its committers register the weights of record and after its warm-ups (`at_commit`).  An arm's hooks are
+installed before the engine is built; how they nest with a protocol option at a site in `SITES` is not stated yet, so
+an arm patches a site of its own or runs without protocol options.
+
+**Multi-GPU.**  Under `tensor_parallel_size > 1` the model, its weights and every kernel live in the rank worker processes,
+so a hook installed in the driver sees nothing.  The seam is vLLM's `worker_extension_cls`: `engine/rank_worker.py` mixes
+methods into every rank's worker, and the driver runs them on each rank with `LLM.collective_rpc`.  The TP capture and
+Commit drivers (`pipeline/tp/`) install per-rank observers and committers this way, and `collectives/collective_sites.py`
+is the one finder of the collective sites they hook.  Protocol options do not compose across ranks yet: `refusals`
+refuses any set at TP > 1.  The planned shape is the same seam: one `install` per rank with `Target.rank`, a per-rank
+`Composition`, and a record that lists the ranks; that refusal lifts in the change that wires it.
+
+**Per-step timing.**  A caller that times the engine drives it with
+`engine.arrivals.run_requests_arrivals(llm.vllm, requests, params_for, clock=..., request_timing=True, step_timing=True)`:
+
+- `timing["requests"][rid]` carries `arrival_s`, `first_output_s` and `time_to_first_token_s`;
+- `timing["steps"]` holds one entry per `step()` call: `iter`, `s` (the clock's duration of that call), `outputs`, `forward`
+  and `forward_index`, so a step that only drained a finish isn't counted as a forward;
+- `wall_s`, `engine_steps` and the token rates are the whole run's;
+- `on_step(outputs)` is called after every step, for a caller's own per-step reads;
+- the protocol options' own counters are `llm.protocols.info()`.
+
+The durations are host time around `step()`, and include device time only where vLLM synchronizes inside the step.  A
+caller that needs device time synchronizes around the run itself, as the harness does.  `clock` is injectable, so tests
+measure on a stub clock.  The capture's timing-only mode (`engine.capture.Capture`, its `step_times` with `forward_s` and
+`sample_s`) times an observed run, not a served one.
 
 ## Protocol options
 
