@@ -42,9 +42,10 @@ def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → L
     (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos → (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Opening :=
   fun p => match p with
     | .inl uq => (.inl uq, rd.wv (.inl uq), rd.ws (.inl uq))
-    | .inr g => (.inr g,
-        (HiddenExec.keyReadersH (ZkHidden.sitesShHJ_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n)
-          (fun _ => pub)).regVal R (.inr g), [])
+    | .inr g =>
+        let readers := HiddenExec.keyReadersH (ZkHidden.sitesShHJ_parse dj y₀ ht hc hscope)
+          (Layout.outsOf c hU n) (fun _ => pub)
+        (.inr g, (Layout.widthOf readers.W (readers.rowBits (.inr g)), readers.regVal R (.inr g)), [])
 
 /-- At a registered read, `regOpenZ` is the registrant's row opening. -/
 theorem regOpenZ_of_read {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
