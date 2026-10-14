@@ -18,7 +18,9 @@ registered opening (`Model.holoTableCL`, `Recursion.holoInnerAt`). It is a conju
   empty, or the sessions type and there is a registrant fork, a round fork, a session fork or an inner fork of the
   prover's own runs whose decoded transcripts play candidate 3's table to outcomes that clash (`clashPickHL`), or
   Lean's verifier accepts `st`, builds V*'s statement list and accepts every session as V*'s statement of its index while
-  no table near the word the prover's own runs open at R's level 0 (`regStmt`) has a satisfiable hidden statement, with
+  no hidden types make a table near the word the prover's own runs open at R's level 0 (`regStmt`) satisfiable
+  (`HoloSatSome`: the slots' types are the partition's, private, so the statement binds them existentially — for some
+  hidden types — below `2^tLog`, the range the zero outputs pin), with
   probability at most `RecursiveSound`'s bound with candidate 3's error (`holoError`) as its inner term;
 * (ii) zero knowledge: `RecursiveFirewallPrivate`, as in `PublicAudit`.
 
@@ -239,6 +241,26 @@ noncomputable def holoTys (st : Flock.Stmt) (hp : HoloParams) : Fin 16 → Type 
     Fin (2 ^ (holoAt st hp).cls.shape.pLog) → FlockLevel3.GF128,
     Fin (2 ^ (holoAt st hp).cls.shape.tLog) → FlockLevel3.GF128]
 
+/-- **The sparse parameters at a typing `τ`**: `hp` with its slots' types replaced. The verifier owns `ℓ`, `ν`, the
+slots' and types' bits and the unit slots; the slots' types are the partition's, private, so the guarantee never
+reads `hp.τ`: its premise holds at some typing `τv` (`_hbr`'s existential, which its discharge takes as the
+registered one), and its event asks satisfiability at some typing (`HoloSatSome`). `hpτ` leaves every other field,
+so everything `holoAt st hp` reads but the typing — the class, regions and schedules — is `holoAt st (hpτ hp τv)`'s
+definitionally. -/
+def hpτ (hp : HoloParams) (τ : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) : HoloParams :=
+  { hp with τ := τ }
+
+/-- **Some hidden types make a table near the word satisfiable**: `holoInnerCL`'s `holds` with the slots' types
+existentially bound — for some hidden types — in place of the parameter `hp.τ`, which the verifier does not hold
+(partitions are private). The types' bound is the binder's range `Fin (2^tLog)`, which the run carries through the
+zero outputs: the sparse unit lays each slot's type out as 16 output bits with the bits from `tLog` up pinned to zero
+(`RecSparse.steps`' stacked tail, check 5's `rec-sparse-zero` rows), so the typing any accepted run registers is
+below `2^tLog`. -/
+def HoloSatSome (st : Flock.Stmt) (hp : HoloParams) (x : HoloReg FlockLevel3.GF128 Refine.Dig) : Prop :=
+  ∃ (τ : Fin (2 ^ (holoAt st hp).cls.sLog) → Fin (2 ^ (holoAt st hp).cls.tLog))
+    (R : RegTable (holoAt st hp).cls),
+    (holoAt st hp).rsch.Close execArith x.w R ∧ ∃ z, (R.toStatement τ (holoAt st hp).regs).Satisfies z
+
 /-- **The recursive audit at candidate 3's soundness half, at coin types `CT` and the record map `im`**
 (`RecursiveAuditC3` reads it at the inner session's coin kinds, `holoCTs`, and the verifier's map, `holoMap`).
 
@@ -262,7 +284,10 @@ parse into scope as the verifier's acceptance parses them, parse to `Vs` (`VStar
 carrying the tags their name names (`TagsFound`), the messages V*'s layers hold and the rounds' commitments (`wmsg`,
 `Sk`, `cmt`, `msg`). Taken: A3 (`_hA3`).
 Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at each setup of its inputs, given that
-V*'s circuits compute candidate 3's inner verifier at the checked sessions (`checkedC3`: the typed sessions at a whole
+at some typing `τv` of the slots (`_hbr`'s existential, below `2^tLog` — the discharge takes the registered one, which
+the zero outputs pin to that range; `hpτ`)
+V*'s circuits compute candidate 3's inner verifier at that typing at the checked sessions (`checkedC3`: the typed
+sessions at a whole
 history where the verifier's checks at candidate 3 pass) and the word the transported prover's runs open at R's level 0
 against `cap` (`regStmt`), at the rounds before the last, off a registrant's row off a value the verifier registers
 itself at its rows `valueSrcAll` (`ValueColl`), off a session's registered read whose leaf is not the table's by a
@@ -270,14 +295,16 @@ collision (`LeafColl`) and off a session's read of R's level-0 top other than it
 collision (`SaltColl`) (VBridge at the committed rounds, `Flock.Premises.VBridgeCOff`):
 Lean's verifier, at the records written at the outcome's history, never builds `st`, accepts its inputs at candidate 3
 and accepts every session as V*'s statement of its index with its checks at candidate 3;
-or the sessions type and there is a registrant fork, a held top other than `bcs'` (`topFinder`), a registrant's row
+or the sessions type and there is, at some typing `τv`, a registrant fork, a held top other than `bcs'` (`topFinder`),
+a registrant's row
 off a value the verifier registers itself, at its rows and salts (`valueFinder` at `valueSrcAll`), a session's
 registered read off the table's leaf (`leafFinder`), a session's read of R's level-0 top other than its row under the
 held salts (`saltFinder`), a round fork, a session fork, or an inner fork of the transported prover's own runs at the
-checked sessions whose decoded transcripts play candidate 3's table to outcomes that clash against each other (`clashPickHL`); or, with `w` the word the transported prover's runs open at the draw (`regWord`),
+checked sessions whose decoded transcripts play candidate 3's table at `τv` to outcomes that clash against each other
+(`clashPickHL`); or, with `w` the word the transported prover's runs open at the draw (`regWord`, at `τv`),
 $$\Pr[\text{Lean's verifier builds } st \wedge \text{it accepts its inputs at candidate 3} \wedge \text{every session
-  verifies as V*'s statement of its index and passes its checks at candidate 3} \wedge \neg\,\exists R \text{ near } w,\
-  R\text{'s hidden statement holds}]$$
+  verifies as V*'s statement of its index and passes its checks at candidate 3} \wedge \neg\,\exists \tau\,
+  \exists R \text{ near } w,\ R\text{'s hidden statement at } \tau \text{ holds}]$$
 is at most the checked sessions' expected statistical errors under the full draw's model, `r` times their expected stage
 slack, and candidate 3's error.
 
@@ -347,12 +374,15 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (_hr : ∀ R ω t R₂ j S₀
       (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
-    -- VBridge at the committed rounds, a premise: V*'s circuits compute candidate 3's inner verifier at the rounds
-    -- before the last, which it does not commit, at the checked sessions and the word the prover's runs open, off a
-    -- registrant's row off a value the verifier registers itself, at the verifier's rows (`valueSrcAll`), off a read's
-    -- leaf off the table's, and off a read of R's level-0 top off its node's row under the held salts
-    (_hbr : ∀ h : Typed zr,
+    -- VBridge at the committed rounds, a premise: at some typing `τv` of the slots — its discharge takes the
+    -- registered one, which the zero outputs pin below `2^tLog` — V*'s circuits compute candidate 3's inner verifier
+    -- at that typing at the rounds before the last, which it does not commit, at the checked sessions and the word
+    -- the prover's runs open, off a registrant's row off a value the verifier registers itself, at the verifier's
+    -- rows (`valueSrcAll`), off a read's leaf off the table's, and off a read of R's level-0 top off its node's row
+    -- under the held salts
+    (_hbr : ∀ h : Typed zr, ∃ τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog),
       Flock.Premises.VBridgeCOff
+        (I := holoInnerAt (holoTys st hp) (CT st hp) st (hpτ hp τv))
         (fun R ω t R₂ =>
           ValueColl (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
             (valueSrcAll (fun t => coins (wr t).2) fun t => c3Of ish (innerHeld wr st reg t)) R ω t R₂ ∨
@@ -360,7 +390,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
           SaltColl (holoAt st hp).rsch.sch.level₀ cap salt
             (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂)
         (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg
-        N k Rw (regStmt (holoTys st hp) (CT st hp) st hp
+        N k Rw (regStmt (holoTys st hp) (CT st hp) st (hpτ hp τv)
           (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
           (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap)
         wmsg Sk cmt msg),
@@ -369,7 +399,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
           ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2)
         (recGame (drawLaw draw) Reg (holoInnerAt (holoTys st hp) (CT st hp) st hp) Cm fun R ω t =>
           outerVR (zr R ω t) dg N) σ = 0 ∨
-    ∃ h : Typed zr,
+    ∃ (h : Typed zr) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)),
       (regFinder (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
       (topFinder wr st reg bcs' (holoAt st hp).rsch.sch.level₀ cap salt _hstk
@@ -389,18 +419,18 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) ∨
       InnerForkRec (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)
-        (regStmt (holoTys st hp) (CT st hp) st hp
+        (regStmt (holoTys st hp) (CT st hp) st (hpτ hp τv)
           (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
           (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap)
         wmsg Refine.H512
         (clashPickHL (holoTys st hp) (CT st hp) execArith Refine.H512 Refine.enc512 Refine.leafPlain
-          (holoAt st hp)) ∨
+          (holoAt st (hpτ hp τv))) ∨
       prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st (wr o.2.2.1).1 (wr o.2.2.1).2 reg) ∧
             VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1)
               o.2.2.2 ∧
-            ¬ (holoInnerAt (holoTys st hp) (CT st hp) st hp).holds
-              (regStmt (holoTys st hp) (CT st hp) st hp
+            ¬ HoloSatSome st hp
+              (regStmt (holoTys st hp) (CT st hp) st (hpτ hp τv)
                 (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
                 (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap o.1 o.2.1))
           (recGame (drawLaw draw) Reg (holoInnerAt (holoTys st hp) (CT st hp) st hp) Cm fun R ω t =>
