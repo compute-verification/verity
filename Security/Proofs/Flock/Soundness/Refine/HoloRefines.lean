@@ -19,8 +19,9 @@ local notation "𝔽" => FlockLevel3.GF128
 `t'`, on a circuit fold realizing `S` and on a zerocheck output that is the model's `zc'`, it consumed `k_log − 6 + 4`
 rounds, the one after the rounds (`z_partial`'s) issued no coins, and the model's `holoLincheck` on `zc'`, played with
 the proof's lincheck messages and `h` and the coins of the other rounds, returns the executable's `ab` claim, read in
-the model's field, with `h` as the hidden part's fold. -/
-theorem holoLincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
+the model's field, with `h` as the hidden part's fold, `α` round `t.k`'s first coin and the rounds' challenges rounds
+`t.k + 2 + j`'s. -/
+theorem holoLincheck_refines_coins (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof) (hpart : Array F128)
     (t t' : Transcript) (lc : LcOut) (hwf : RoundsWF t.rounds)
     (h : holoLincheckT c zc p hpart t = .ok (lc, t')) :
@@ -29,7 +30,9 @@ theorem holoLincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldR
         Plays fOf (Model.holoLincheck execArith S zc') (holoLcMsgs S.kLog p hpart)
           (consumed t.rounds t.k (t.k + 2 + (S.kLog - 6)) ++ consumed t.rounds (t.k + 2 + (S.kLog - 6) + 1) t'.k)
           (some out) ∧
-        ClaimRel S.m (abcClaims S.m S.kLog zc lc)[0]! out.ab ∧ out.h = vecOf 64 hpart := by
+        ClaimRel S.m (abcClaims S.m S.kLog zc lc)[0]! out.ab ∧ out.h = vecOf 64 hpart ∧
+        out.alpha = fOf ((t.rounds[t.k]!).coins.getD 0 0) ∧
+        ∀ j : Fin (S.kLog - 6), out.ts j = fOf ((t.rounds[t.k + 2 + j.val]!).coins.getD 0 0) := by
   unfold holoLincheckT at h
   obtain ⟨t₁, k₁, h⟩ := label_bind h
   obtain ⟨lt₁, n₁, t₂, r₂, kk₂, h⟩ := sample_bind h
@@ -162,7 +165,7 @@ theorem holoLincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldR
     have hres := lincheckRounds_plays p.rounds C (S.kLog - 6) 0 s₀ hCsz
     rw [← hs, ← hclaim0] at hres
     have htsF_size : s.2.size = S.kLog - 6 := by rw [htsF, hs₀]; simp [htsL_len]
-    refine ⟨hrt, hkt, hzn', ?out, ?plays, ?rel, ?hh⟩
+    refine ⟨hrt, hkt, hzn', ?out, ?plays, ?rel, ?hh, ?al, ?ts⟩
     case plays =>
       rw [hcoins]
       unfold Model.holoLincheck
@@ -208,6 +211,28 @@ theorem holoLincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldR
         simp [htsF_size]
         omega
     case hh => rfl
+    case al =>
+      have e : cα = (t.rounds[t.k]!).coins := by rw [hcα, k₁.1, k₁.2]
+      rw [← e]
+    case ts =>
+      intro j
+      show fOf s.2[s₀.2.size + j.val]! = _
+      rw [htsF, lStep_ts_get _ _ _ (by rw [htsL_len]; exact j.isLt)]
+      simp [htsL, hC, hr₃, hk₃]
+
+/-- **The lincheck with hidden units refines the model's**: `holoLincheck_refines_coins` without the coins. -/
+theorem holoLincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
+    (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof) (hpart : Array F128)
+    (t t' : Transcript) (lc : LcOut) (hwf : RoundsWF t.rounds)
+    (h : holoLincheckT c zc p hpart t = .ok (lc, t')) :
+    t'.rounds = t.rounds ∧ t'.k = t.k + 2 + (S.kLog - 6) + 2 ∧ (t.rounds[t.k + 2 + (S.kLog - 6)]!).n = 0 ∧
+      ∃ out : HoloLcOut 𝔽 S.m (S.kLog - 6),
+        Plays fOf (Model.holoLincheck execArith S zc') (holoLcMsgs S.kLog p hpart)
+          (consumed t.rounds t.k (t.k + 2 + (S.kLog - 6)) ++ consumed t.rounds (t.k + 2 + (S.kLog - 6) + 1) t'.k)
+          (some out) ∧
+        ClaimRel S.m (abcClaims S.m S.kLog zc lc)[0]! out.ab ∧ out.h = vecOf 64 hpart := by
+  obtain ⟨h₁, h₂, h₃, out, hp, hr, hh, -⟩ := holoLincheck_refines_coins S c hc zc zc' hzc p hpart t t' lc hwf h
+  exact ⟨h₁, h₂, h₃, out, hp, hr, hh⟩
 
 /-- **One rep with hidden units refines the model's** (§9–§14 with L4′). When `holoRepProg` returns from `t` to `t'`,
 on a statement whose `m`, `k_log` and circuit fold are the model's `S`, with the extra claims `extras` the model's
