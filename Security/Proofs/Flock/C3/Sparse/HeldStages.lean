@@ -211,9 +211,21 @@ theorem htbl_of {tbl : String}
     FlockVBridge.toString_str, String.toList_append] at this
   exact this.1 (List.prefix_append _ _)
 
+/-- **The table's prefix is not R's stream's** (the guarantee's `_htbl`): at `tbl = stacked/`, rep 0's name
+`stacked/rep0` starts with it. -/
+theorem htblR_of {tbl : String}
+    (h : ∀ i : Fin 2, (((HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.SPARSE}/" ||
+      ((HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.STACKED}/") = false) :
+    tbl ≠ s!"{Flock.RecVStar.STACKED}/" := by
+  rintro rfl
+  have := h 0
+  simp only [HoloStream.name, Bool.or_eq_false_iff, String.startsWith_string_eq_false_iff,
+    FlockVBridge.toString_str, String.toList_append] at this
+  exact this.2 (List.prefix_append _ _)
+
 /-- **`SparseDrawnAt` at the map read**: at `holoStreams`' order (`holoStreams_sparse_eq`), sparse phase `x`'s
-stream, found by its name (`find?_sparseName`, the table's prefix not the sparse streams', `htbl_of` at the guarantee's
-`_htbl`), starts one past
+stream, found by its name (`find?_sparseName`, the table's prefix not the sparse streams', `htbl`; `htbl_of` gives it
+from the guarantee's `_htbl`), starts one past
 both reps' rounds and, for phase 1, phase 0's (`roundAt_sparseRounds`, `stageStarts`' start), its rounds of forms
 `none` (`holoForms_sparse_none`), and its `nc` rounds inside `holoForms` past both reps' (`heldBefore_rep_forms`). -/
 theorem sparseDrawnAt_holo {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.Inner} {tbl : String}
@@ -222,9 +234,7 @@ theorem sparseDrawnAt_holo {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecV
     (hS : ∃ L, Flock.Guarantees.holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L)
     (hc : 0 < ish.claims)
     (hA : FlockC3.Compose.repFormsAt (holoAt st hp) = FlockC3.Compose.repForms ish.m ish.kLog ish.claims)
-    (hshape : (holoAt st hp).cls.shape = FlockC3.Compose.sparseOf sp)
-    (htbl : ∀ i : Fin 2, (((HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.SPARSE}/" ||
-      ((HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.STACKED}/") = false) :
+    (hshape : (holoAt st hp).cls.shape = FlockC3.Compose.sparseOf sp) (htbl : tbl ≠ s!"{Flock.RecVStar.SPARSE}/") :
     SparseDrawnAt (FlockC3.Compose.holoSelWords st hp ish tbl)
       (1 + (kindCoinTys (Flock.Guarantees.holoKinds (holoAt st hp))).length) sp x
       (1 + 2 * heldBefore (.rep 0) rs rs.size + x.val * nc (FlockC3.Compose.sparseOf sp)) := by
@@ -247,7 +257,7 @@ theorem sparseDrawnAt_holo {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecV
   have hq' : q < (sparseRounds sp).size ∧ 0 < ((sparseRounds sp).getD q default).1 := by
     unfold coinRounds at hq
     simpa using hq
-  refine ⟨_, (.sparse x, sparseRounds sp), hS, find?_sparseName (htbl_of htbl) _ _ R x, hq'.2, ?_,
+  refine ⟨_, (.sparse x, sparseRounds sp), hS, find?_sparseName htbl _ _ R x, hq'.2, ?_,
     FlockC3.Compose.holoForms_sparse_none hS hsp hc hA hshape (by fin_cases x <;> simp) rfl⟩
   rw [FlockC3.Compose.roundAt_sparseRounds]
   show _ = _ + ((sparseRounds sp).getD q default).1
