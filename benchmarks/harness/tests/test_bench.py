@@ -16,7 +16,11 @@ from verity_bench.vllm.table import render
 class FakeEngine:
     def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
-        self.identity = {"vllm_version": "0.fake+gd9105ea80", "kernel_digest": f"digest-{arm.id}"}
+        self.identity = {
+            "vllm_version": "0.fake+gd9105ea80",
+            "kernel_digest": f"digest-{arm.id}",
+            "engine_overrides": {"quantization": "fp8"} if arm.id == "stock-fp8" else {},
+        }
 
     def gate(self, point):
         self.events.append(("gate", self.arm.id, point.id))
@@ -154,6 +158,7 @@ def test_result_schema_and_identity_strict_judge():
     preset, points, arms = inputs()
     doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
     validate(doc)
+    assert doc["identity"]["arms"][0]["engine_overrides"] == {"quantization": "fp8"}
     other = {**doc, "identity": {**doc["identity"], "git_commit": "def"}}
     with pytest.raises(IdentityMismatch, match="git_commit"):
         judge(doc, other)
