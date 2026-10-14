@@ -524,4 +524,98 @@ theorem pr_paid_of_window (A : SketchDeployedSession n P N m ρ h S L q ks G d) 
 
 end SketchDeployedSession
 
+/-- The named non-sampling terms of a sketch pass sum to its slack in bits. -/
+theorem gammaSketch_mul (N m ρ S L X : ℕ) (hN : 0 < N) (hm : 0 < m) :
+    gammaSketch N m ρ S L X * (N * m * 256) = ((S + (L - ρ * 256) + X : ℕ) : ℝ) := by
+  have hNm : (N : ℝ) * m * 256 ≠ 0 := by positivity
+  unfold gammaSketch
+  rw [div_mul_cancel₀ _ hNm]
+  push_cast
+  ring
+
 end Accounting.RateSketch
+
+namespace Accounting.SecurityProofs
+
+open Accounting.Rate Accounting.RateSketch
+open Pous (pr)
+open scoped ENNReal
+open Bandwidth (pr_mono)
+
+/-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class**
+(`Accounting.Guarantees.RemoteSessionConservationSketch`). -/
+theorem RemoteSessionConservationSketch : Accounting.Guarantees.RemoteSessionConservationSketch := by
+  intro n P N m ρ h S L q ks G d r X ε A dbar dw hn hP hN hm hr32 hdw hRank hX
+  let slack := S + (L - ρ * 256) + X
+  let term := (N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r)
+  have hX' : ∀ w η j ι c σ O D,
+      (((A.window w η).device j ι c).prog σ D).rebuilds O D * 256 ≤ X := by
+    intro w η j ι c σ O D
+    let E : RateSketch.SketchStore N m := fun p => D (.inl p)
+    let R : RateSketch.SketchStream ρ := fun i => D (.inr i)
+    have hD : RateSketch.Data.ofParts E R = D := by
+      funext p
+      rcases p with p | p <;> rfl
+    simpa [hD] using hX w η j ι c E σ R O
+  have hε : ∀ w η, pr (fun y : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
+      (A.window w η).reads y.1 y.2.1 y.2.2.1 + P * slack <
+        ((A.window w η).correctAll y.1 y.2.1 y.2.2.1).card * (m * 256)) ≤
+      ε + (P : ℝ≥0∞) * (G * term) := fun w η =>
+    SketchDeployedWindow.pr_unpaid_le (A.window w η) r X ε hr32 hRank (hX' w η)
+  have main := SketchDeployedSession.pr_paid_of_window A slack
+    ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊
+    (ε + (P : ℝ≥0∞) * (G * term)) hε
+  have hγ := gammaSketch_mul N m ρ S L X hN hm
+  have hb : (0 : ℝ) < m * 256 := by positivity
+  refine (pr_mono (fun x hx => ?_)).trans (main.trans ?_)
+  · obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
+    · refine ⟨hall, Or.inl ?_⟩
+      have hc := Deployed.count_lt (c := (n : ℝ) * P) hb hγ hT
+      rw [← mul_assoc]
+      exact_mod_cast hc
+    · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
+      have hc := Deployed.count_lt (c := (P : ℝ)) hb hγ hw
+      exact_mod_cast hc
+  · have e1 : ((n : ℝ) * P * N) = ((n * P * N : ℕ) : ℝ) := by push_cast; ring
+    have e2 : ((P : ℝ) * N) = ((P * N : ℕ) : ℝ) := by push_cast; ring
+    rw [e1, e2]
+    calc
+      _ ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
+          (n : ℝ≥0∞) * (ε + (P : ℝ≥0∞) * (G * term)) := by
+        refine add_le_add (add_le_add ?_ ?_) le_rfl
+        · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+          exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+        · rw [show ((n : ℝ≥0∞) * P * N) =
+              (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+          exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+      _ = ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
+          (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * term := by
+        push_cast
+        ring
+
+/-- At the conservative deployed caps, the rank-query term is already `2^14` before multiplying by windows or
+passes. This is why the 16-row worst-cap bound is vacuous. -/
+theorem sketchQueryTermCaps :
+    (2 ^ 55 : ℝ≥0∞) * ((2 ^ 55 : ℝ≥0∞) / 2 ^ 96) = 2 ^ 14 := by
+  rw [show (2 : ℝ≥0∞) ^ 96 = 2 ^ 55 * 2 ^ 41 by rw [← pow_add]; norm_num,
+    ENNReal.mul_div_mul_left 1 (2 ^ 41) (pow_ne_zero _ (by norm_num))
+      (ENNReal.pow_ne_top ENNReal.ofNat_ne_top)]
+  rw [show (2 : ℝ≥0∞) ^ 41 = 2 ^ 27 * 2 ^ 14 by rw [← pow_add]; norm_num,
+    show (1 : ℝ≥0∞) / (2 ^ 27 * 2 ^ 14) * 2 ^ 55 = 2 ^ 14 by norm_num]
+
+/-- **The verbatim sketch session at the deployed receipt parameters**
+(`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`). -/
+theorem RemoteSessionConservationSketchDeployed :
+    Accounting.Guarantees.RemoteSessionConservationSketchDeployed := by
+  intro n P N ρ S L q G X ε A hn hP hN hRank hX
+  have h := RemoteSessionConservationSketch n P N 128 ρ 512 S L q 16 G 2773 12 X ε A
+    0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) (by norm_num) hRank hX
+  refine h.trans ?_
+  rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
+    rw [ENNReal.div_add_div_same]; norm_num]
+  norm_num only [show 8 * 12 = 96 by norm_num]
+  gcongr
+  · exact Deployed.horizon_deployed n hn
+  · exact Deployed.window_deployed n (by omega)
+
+end Accounting.SecurityProofs
