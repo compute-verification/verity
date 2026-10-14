@@ -67,7 +67,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v3, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
-               "the k_pe and q_pe RoPE words are each one named contraction."),
+             "the k_pe and q_pe RoPE words are each one named contraction."),
     Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v2",
              "On the capture's Hopper GPU and driver (the capture map's target.driver), vLLM selects MARLIN (MarlinExperts) for "
              "the 384-expert TP8 row's MXFP4 experts at bf16 activations and defaults the LLM entrypoint's max_num_seqs to 1024, "
@@ -92,12 +92,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "statics (4 streams, hidden 7168, 20 Sinkhorn iterations) every word of every compared launch of the fused post + pre "
              "(TileLang's FP32 path at <= 16 tokens, DeepGEMM's TF32 path above), the layer-0 broadcast pre and hc_head equals "
              "mhc_twin, and the evaluated pieces (MhcFusedSplit_v1, MhcPost_v1, MhcPrenormTf32_v1, MhcPreBigFuse(Broadcast)_v1, "
-              "HcHead_v1) equal the kernel's words, bit for bit."),
+             "HcHead_v1) equal the kernel's words, bit for bit."),
     Property("glm53_cuda_rmsnorm_capture", "verity-vllm/glm53-cuda-rmsnorm-capture/v1",
              "On the capture's cc 9.0 GPU, vLLM's default non-batch-invariant BF16 rms_norm and fused_add_rms_norm launch their pinned "
              "width-8 paths and block sizes at hidden sizes 6144 and 7168, and every output and residual word equals the "
              "registered CUDA vector-8 Definitions, including planted finite, subnormal, infinity and NaN rows."),
-     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
+    Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
              "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "
              "three M classes run three CUTLASS kernels, and at those shapes every output word equals the k32 BlackwellE4m3QmmaDot32 "
