@@ -948,6 +948,16 @@ def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (boun
   if c3 then return { reps, streams := ← candidate3 tr rounds t names msgs regR shape, stacked := shape }
   return { reps }
 
+/-- **Each sparse phase draws its schedule's coins round for round**: under the verifier's RecSparse shape, every held
+stream named `sparse/…` holds `sparsePhaseRounds`' coin count at each of its rounds, as `checkCommitRounds` holds the
+reps' streams to theirs (`sparseCoins` counts only the rounds that draw coins). -/
+def checkSparseCoins (i : Inner) (cs : InnerCommits) : V Unit := do
+  if let some sh := i.sparse then
+    for st in cs.streams do
+      if st.name.startsWith s!"{SPARSE}/" && st.coins.map (·.size) != (sparsePhaseRounds sh).map (·.1) then
+        throw (s!"rec inner transcript: {st.name} draws {st.coins.map (·.size)} coins by round, and its schedule " ++
+          s!"({RecSparse.unitName sh}) {(sparsePhaseRounds sh).map (·.1)}")
+
 /-- **Each stream's `c_k` sit at its schedule's message rounds** (`commitRounds`): the circuit table's two reps'
 (`InnerCommits.reps`) at `repRounds` of the inner shape `i`, `holoRepRounds` when its circuits are private (`i.holo`,
 `rec_live.schedule_for`'s `holo`), with the verifier's RecSparse shape `sparse/rep<x>`'s at `sparsePhaseRounds` of it,
@@ -957,7 +967,7 @@ this check is what puts the `j`-th `c_k` the verifier holds at the schedule's `j
 holds R's transcript rounds to its schedule; this holds the `c_k` and tops the verifier keeps of them, and refuses R's
 stream under an inner shape naming no schedule of R's. It reads `sparse/rep0` and `sparse/rep1` only, so it refuses
 any other held stream named `sparse/…`. Every held stream draws its schedule's coins round for round: the reps' at
-their schedule, the sparse phases' at `sparsePhaseRounds` (`sparseCoins` counts only the rounds that draw coins). -/
+their schedule, the sparse phases' at `sparsePhaseRounds` (`checkSparseCoins`). -/
 def checkCommitRounds (i : Inner) (cs : InnerCommits) : V Unit := do
   let some rep := (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
     | throw s!"rec-inner: the inner shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) has no fast100 schedule"
@@ -971,11 +981,7 @@ def checkCommitRounds (i : Inner) (cs : InnerCommits) : V Unit := do
       st.name != s!"{SPARSE}/rep0" && st.name != s!"{SPARSE}/rep1" then
     throw (s!"rec inner transcript: it holds {st.name}, and a sparse phase is one of the two reps' " ++
       s!"({SPARSE}/rep0, {SPARSE}/rep1)")
-  if let some sh := i.sparse then
-    for st in cs.streams do
-      if st.name.startsWith s!"{SPARSE}/" && st.coins.map (·.size) != (sparsePhaseRounds sh).map (·.1) then
-        throw (s!"rec inner transcript: {st.name} draws {st.coins.map (·.size)} coins by round, and its schedule " ++
-          s!"({RecSparse.unitName sh}) {(sparsePhaseRounds sh).map (·.1)}")
+  checkSparseCoins i cs
   let sp := match i.sparse with
     | some sh => [0, 1].filterMap fun x =>
       (cs.stream? s!"{SPARSE}/rep{x}").map fun st => (st.name, st.commits, sparsePhaseRounds sh)
