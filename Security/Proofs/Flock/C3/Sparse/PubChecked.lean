@@ -287,3 +287,5 @@ theorem checkSparse_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
 end accepted
 
 end FlockC3.Sparse
+
+#print axioms FlockC3.Sparse.checkSparse_of_accepted
