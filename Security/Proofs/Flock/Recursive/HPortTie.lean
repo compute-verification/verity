@@ -1,7 +1,8 @@
 import Proofs.Flock.C3.Compose.Tied
 import Proofs.Flock.C3.Sparse.SessionAt
 import Proofs.Flock.VBridge.Family.Registrants
-import Proofs.Flock.C3.RegLevels.AccReads
+import Proofs.Flock.C3.RegLevels.SharedRows
+import Std.Data.String.ToNat
 
 /-!
 # The sparse phase's `h` from the rep's, across two units' reads of one registered row
@@ -22,13 +23,18 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
   `i`'s steps, w's first 64 elements are the tied rep's `h`.
 * `SrcHReads` (named, family form), `SrcHTie`, `srcHTie_of`: the same at every accepted outer proof, at the copy of
   rep `i`'s unit (`un = i`, the row it reads); `SrcHTie` is `SparseRepTie`'s `h` half at `tiedSrc stp`.
-* `site_reads_of_portDiff`, `checkRows_of_checkStmt`, `rowPort_of_checkRows`: `checkRows` pins a part's row port's
-  entry to `--rec-rows`' entry of its name, registration and reads.
-* `hSite_of_checked`: the two reads' registration and position, from `checkRows` at the algebra session, the reads
-  file's entries (`ReadsOwnC3`, names unique) and `SparseHSite` (named: `h`'s entry against `--rec-rows`' `m<hr>`,
-  which no check of the verifier makes yet; `checkRows` reads no row port of RecSparse).
-* `srcHReads_of`: `SrcHReads` from those, no read segmented (`ReadsUnsegC3`), the RecSparse circuit's `h` keys
-  (`HKeys`, named) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`, named).
+* `site_reads_of_portDiff`, `regChecks_of_checkStmt`, `rowPort_of_checkRows`, `own_of_checkOwn`: `checkRows` pins a
+  part's row port's entry to `--rec-rows`' entry of its name, registration and reads, and `checkOwn` a message-round
+  port's entry to its value and reads (`mIndex_m`: `m<hr>` is round `hr`'s).
+* `ReadsOwnAt`, `readsOwnAt_of`: a registered read is the reads file's entry of its name at the unit's own row, from
+  `readsOwn_of_hown` and the label check at reached, checked outcomes (`ReachedChecked`, named: `accRead_at_unit`'s
+  premises at every session).
+* `hSite_of_checked`: the two reads' registration and position: both entries read `rec-c<hr>` at both reps' rows
+  (`checkOwn`), `--rec-rows` registers it (`checkRows` at the part's `m<hr>`), and `checkShared` holds both to its
+  first entry of that value (`site_of_checkShared`).
+* `readsUnsegC3`: no read is of a segmented row (`VStmt.hscope`'s `v1Ports`).
+* `srcHReads_of`: `SrcHReads` from those, the RecSparse circuit's `h` keys (`HKeys`, named) and the algebra unit's row
+  of rep `i`'s `h` (`HAlgRows`, named).
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -172,14 +178,15 @@ theorem site_reads_of_portDiff {a b : Flock.Registered.Port} (h : Flock.RecVStar
     simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, e5, e6, hne] at h
   exact ⟨by simp only [FlockVBridge.Family.site, e1, e2, e3, e4, e5, e6], e7⟩
 
-/-- **`checkStmt` ran `checkRows` on V*'s statement `j`** at the verifier's own reads (`checkAcc_of_checkStmt`'s
-walk). -/
-theorem checkRows_of_checkStmt {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+/-- **`checkStmt` ran `checkOwn`, `checkRows` and `checkShared` on V*'s statement `j`** at the verifier's own reads
+(`regs_of_checkStmt`'s walk). -/
+theorem regChecks_of_checkStmt {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
     (h : Flock.RecVStar.checkStmt (some i) tags tables st circuitB partition program (some own) (some j) (some f)
       rows = .ok ()) :
-    ∃ ss s, Flock.RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ Flock.RecVStar.checkRows s own rows = .ok () := by
+    ∃ ss s, Flock.RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ Flock.RecVStar.checkOwn s own = .ok () ∧
+      Flock.RecVStar.checkRows s own rows = .ok () ∧ Flock.RecVStar.checkShared s own rows = .ok () := by
   unfold Flock.RecVStar.checkStmt at h
   dsimp only at h
   split at h
@@ -196,10 +203,55 @@ theorem checkRows_of_checkStmt {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {t
         obtain ⟨hck, -⟩ := FlockSoundness.Discharge.Recursion.checkCircuit_ok hs
         obtain ⟨ss, hss, hj, -⟩ := FlockSoundness.Discharge.Recursion.check_ok hck
         obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+        obtain ⟨⟨⟩, hown, h⟩ := FlockSoundness.Refine.ebind_ok h
+        obtain ⟨⟨⟩, hrw, h⟩ := FlockSoundness.Refine.ebind_ok h
         obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
-        obtain ⟨⟨⟩, hrw, -⟩ := FlockSoundness.Refine.ebind_ok h
-        exact ⟨ss, s, hss, hj, hrw⟩
+        obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+        exact ⟨ss, s, hss, hj, hown, hrw, h⟩
       · cases h
+
+/-- `m<n>`'s `mIndex` is `n`. -/
+theorem mIndex_m (n : ℕ) : Flock.RecVStar.mIndex s!"m{n}" = some n := by
+  have hm : (s!"m{n}").toList = 'm' :: (Nat.repr n).toList := by
+    rw [String.toList_append]; rfl
+  have hd : ((s!"m{n}").drop 1).toString = Nat.repr n := by
+    apply String.toList_inj.mp
+    rw [String.Slice.toString_eq, String.toList_copy_drop, hm]; rfl
+  have hs : (s!"m{n}").startsWith "m" = true := by
+    rw [String.startsWith_string_iff, hm]; exact ⟨_, rfl⟩
+  unfold Flock.RecVStar.mIndex
+  rw [ite_eq_left hs, hd, Nat.toNat?_repr]
+
+/-- A row port of a statement is a part's (`rowPorts` of any other statement is empty), one of its `S.ports`. -/
+theorem inner_of_rowPorts {s : VStar.Stmt} {nm : String} (h : nm ∈ Flock.RecVStar.rowPorts s) :
+    ∃ j name p x, s = .inner j name p ∧ (nm, x) ∈ p.S.ports := by
+  cases s <;> simp only [Flock.RecVStar.rowPorts, List.not_mem_nil] at h
+  rename_i j name p
+  obtain ⟨⟨a, x⟩, hx, rfl⟩ := List.mem_map.1 h
+  exact ⟨j, name, p, x, rfl, hx⟩
+
+/-- **A part's row port `m<hr>` is a message-round port under `rec-c<hr>` at both reps' rows** (`ownPorts`). -/
+theorem mem_ownPorts_inner {j : ℕ} {name : String} {p : VStar.Part} {hr x : ℕ} (hx : (s!"m{hr}", x) ∈ p.S.ports) :
+    (s!"m{hr}", s!"rec-c{hr}", #[some 0, some 1]) ∈ Flock.RecVStar.ownPorts (.inner j name p) := by
+  unfold Flock.RecVStar.ownPorts
+  exact List.mem_filterMap.2 ⟨_, hx, by dsimp only; rw [mIndex_m]; rfl⟩
+
+/-- **RecSparse's `h` is a message-round port under `rec-c<hr>` at both reps' rows** (`ownPorts`). -/
+theorem mem_ownPorts_sparse {sh : Flock.RecSparse.Shape} {hr : ℕ} :
+    ("h", s!"rec-c{hr}", #[some 0, some 1]) ∈ Flock.RecVStar.ownPorts (.sparse sh hr) := by
+  unfold Flock.RecVStar.ownPorts
+  exact List.mem_cons_self ..
+
+/-- **`checkOwn` pins the reads file's entry of a message-round port's name**, the file naming each port once. -/
+theorem own_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : Flock.RecVStar.checkOwn s own = .ok ())
+    {nm v : String} {rd : Array (Option ℕ)} (hq : (nm, v, rd) ∈ Flock.RecVStar.ownPorts s) {p : Flock.Registered.Port}
+    (hp : p ∈ own) (hn : p.name = nm) (hnd : ∀ p ∈ own, ∀ p' ∈ own, p.name = p'.name → p = p') :
+    p.value = v ∧ p.reads = rd := by
+  obtain ⟨p', hp', he⟩ := List.mem_map.1 ((FlockC3.PubRows.checkOwn_ok h).1 _ hq)
+  simp only [Prod.mk.injEq] at he
+  obtain ⟨hn', hv, hrd⟩ := he
+  obtain rfl := hnd p' (Array.mem_toList_iff.1 (List.mem_filter.1 hp').1) p hp (hn'.trans hn.symm)
+  exact ⟨hv, hrd⟩
 
 /-- **`checkRows`' loop**: each of the statement's row ports has a first entry in the reads file and one in
 `--rec-rows`, and `portDiff?` finds no field (reads included) in which they differ. -/
@@ -250,6 +302,15 @@ theorem rowPort_of_checkRows {s : VStar.Stmt} {own : Array Flock.Registered.Port
               · cases hr; rfl
           · cases hr
         · cases hr
+
+/-- **A V* circuit's rows are unsegmented** (`scopeOk`'s `v1Ports`). -/
+theorem segs_of_scopeOk {c : Flock.Circuit} (h : Layout.scopeOk c = true) (q : Fin c.ports.size) :
+    c.ports[q.val]!.segs = none := by
+  unfold Layout.scopeOk Layout.v1Ports at h
+  simp only [Bool.and_eq_true, Array.all_eq_true', Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h
+  rw [getElem!_pos c.ports q.val q.isLt]
+  obtain ⟨⟨⟨-, hs⟩, -⟩, -⟩ := h.2 _ (Array.getElem_mem q.isLt)
+  simpa using hs
 
 end checks
 
@@ -403,27 +464,51 @@ end src
 section family
 
 open FlockC3.PubRows (ChecksAccepted)
-open FlockC3.RegLevels (ReadsOwnC3)
+open FlockC3.RegLevels (Reached readsOwn_of_hown SharedValue site_of_checkShared site_of_portDiff)
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- Obligation, which no check of the verifier makes: at a RecSparse session (`.sparse _ hr`), the reads file's `h`
-entry is `--rec-rows`' `m<hr>` entry in every field `portDiff?` compares, as `checkRows` pins a part's `m<hr>`
-(`rowPorts` of RecSparse is empty). A fail-closed check in `checkStmt` at `.sparse _ hr` would give it. -/
-def SparseHSite (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Option (Array Flock.Registered.Port))
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
-  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (s : Fin (vstarCount F.ish))
-    (sh : Flock.RecSparse.Shape) (hr : ℕ), F.stmts[(s : ℕ)]? = some (.sparse sh hr) →
-    ∀ pa ∈ (F.zs R ω t R₂ s).own, pa.name = "h" →
-      ∃ rws w, rows = some rws ∧ rws.find? (·.name == s!"m{hr}") = some w ∧ Flock.RecVStar.portDiff? pa w = none
+/-- Obligation (`accRead_at_unit`'s premises, at every session): each accepted outcome is one its session's game
+reaches (`Reached`) and passes candidate 3's checks at its own transcript (`ChecksC3`, which the event's `ChecksVR`
+states there). -/
+def ReachedChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j : Fin (vstarCount F.ish),
+    Reached (F.zs R ω t R₂ j) (o j) ∧ ∃ (ish : Flock.RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits)
+      (coins : Option Flock.RecCoins.Source) (f : VStar.Bindings) (rows' : Option (Array Flock.Registered.Port)),
+      Flock.Guarantees.ChecksC3 ish cs coins j f rows' (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own (o j).2.2
 
-/-- Obligation (`ReadsUnsegmented`'s, at candidate 3's family): no registered read is of a segmented row. -/
+/-- **A registered read's port is the reads file's entry of its name, read at the unit's own row.** -/
+def ReadsOwnAt (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
+    (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) →
+      (F.zs R ω t R₂ j).rd.port (.inl (u, q)) ∈ (F.zs R ω t R₂ j).own ∧
+      ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).name = (F.Vs j).c.ports[q].name ∧
+      ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).reads[u.val]? =
+        some (some ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))))
+
+/-- **`ReadsOwnAt` from `ReachedChecked`**: `readsOwn_of_hown` puts the read at the unit's label, which the label check
+makes the unit (`label_of_checked`), as `accRead_at_unit` does at a level's `acc`. -/
+theorem readsOwnAt_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    (hrc : ReachedChecked F dg N k Rw) : ReadsOwnAt F dg N k Rw := by
+  intro R ω t R₂ τ o h j u q hr
+  obtain ⟨hre, _, _, _, _, _, hc3⟩ := hrc R ω t R₂ τ o h j
+  obtain ⟨hmem, hname, d, D, dp, idx, hd, hD, hdp, hidx, hu, hpos⟩ := readsOwn_of_hown h j hre u q hr
+  obtain ⟨spec, sts, hst, -, -, -, hlb⟩ := hc3
+  rw [FlockC3.PubRows.label_of_checked (F.zs R ω t R₂ j) (h.1 j).1 ⟨spec, sts, hst, hlb⟩ hd hD hdp hidx hu] at hpos
+  exact ⟨hmem, hname, hpos⟩
+
+/-- `ReadsUnsegmented`'s, at candidate 3's family: no registered read is of a segmented row. -/
 def ReadsUnsegC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
     (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) → (F.Vs j).c.ports[q.val]!.segs = none
+
+/-- **`ReadsUnsegC3` holds**: every V* circuit's rows are unsegmented (`VStmt.hscope`, `segs_of_scopeOk`), read or not. -/
+theorem readsUnsegC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) :
+    ReadsUnsegC3 F dg N k Rw :=
+  fun _ _ _ _ _ _ _ j _ q _ => segs_of_scopeOk (F.Vs j).hscope q
 
 /-- Obligation (the rep's decode of `h` at its algebra unit): at every accepted outer proof and rep `i`, some rep unit
 `U` of rep `i`'s steps is such that where a RecSparse copy at unit `i` holds rep `i`'s phase, its session is
@@ -454,15 +539,15 @@ def HAlgRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray �
                     ⟨128 * l.val + e, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q')).trans (Nat.le_succ _))⟩ =
                   bitOf ((hOfW U.sh U.d.w)[l.val]!) e
 
-/-- **The sparse unit's `h` and the algebra unit's `m<hr>` reads have one registration and position**: the reads
-file's entries of the two reads' ports (`ReadsOwnC3`) are `--rec-rows`' `m<hr>` in registration and reads, the
-sparse one by `SparseHSite` and the part's by `checkRows` (`rowPort_of_checkRows`, the reads file's names unique), so
-units of one index read one row. -/
+/-- **The sparse unit's `h` and the algebra unit's `m<hr>` reads have one registration and position**: `checkOwn` puts
+both reads' entries (`ReadsOwnAt`, the reads file's names unique) under `rec-c<hr>` at both reps' rows, `checkRows`
+registers `rec-c<hr>` in `--rec-rows` (the part's `m<hr>` entry), and `checkShared` holds each to `--rec-rows`' first
+entry of that value in every field but reads (`site_of_checkShared`), so units of one index read one row. -/
 theorem hSite_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hchk : ChecksAccepted F rows wr reg)
-    {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : ReadsOwnC3 F dg N k Rw)
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : ReadsOwnAt F dg N k Rw)
     (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
-    (hsite : SparseHSite F rows dg N k Rw) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) {s s' : Fin (vstarCount F.ish)} {sh : Flock.RecSparse.Shape}
     {hr : ℕ} (hss : F.stmts[(s : ℕ)]? = some (.sparse sh hr)) {st' : VStar.Stmt} (hss' : F.stmts[(s' : ℕ)]? = some st')
     {un : Fin (F.Vs s).nv} {u' : Fin (F.Vs s').nv} {q : Fin (F.Vs s).c.ports.size} {q' : Fin (F.Vs s').c.ports.size}
@@ -472,34 +557,48 @@ theorem hSite_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows
     FlockVBridge.Family.site ((F.zs R ω t R₂ s).rd.port (.inl (un, q))) =
         FlockVBridge.Family.site ((F.zs R ω t R₂ s').rd.port (.inl (u', q'))) ∧
       (F.zs R ω t R₂ s).rd.readAt (.inl (un, q)) = (F.zs R ω t R₂ s').rd.readAt (.inl (u', q')) := by
+  have chk : ∀ j : Fin (vstarCount F.ish), ∃ sj, F.stmts[(j : ℕ)]? = some sj ∧
+      Flock.RecVStar.checkOwn sj (F.zs R ω t R₂ j).own = .ok () ∧
+      Flock.RecVStar.checkRows sj (F.zs R ω t R₂ j).own rows = .ok () ∧
+      Flock.RecVStar.checkShared sj (F.zs R ω t R₂ j).own rows = .ok () := fun j => by
+    obtain ⟨_, -, -, _, _, hset, hfm⟩ := hchk R ω t R₂ j ⟨_, (h.1 j).1⟩
+    obtain ⟨h0, -⟩ := setup_zero_c (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hTags.1 (F.zs R ω t R₂ j).hcH hset
+    obtain ⟨ss, sj, hss₁, hj₁, ho, hrw, hsh⟩ := regChecks_of_checkStmt (array_forM_ok hfm 0 h0)
+    obtain rfl : ss = F.stmts := Except.ok.inj (hss₁.symm.trans F.hstmts)
+    exact ⟨sj, hj₁, ho, hrw, hsh⟩
   obtain ⟨hmem, hname, hpos⟩ := hro R ω t R₂ τ o h s un q hrd
   obtain ⟨hmem', hname', hpos'⟩ := hro R ω t R₂ τ o h s' u' q' hrd'
-  obtain ⟨rws, w, hrows, hw, hd⟩ := hsite R ω t R₂ τ o h s sh hr hss _ hmem (hname.trans hq)
-  obtain ⟨_, -, -, _, _, hset, hfm⟩ := hchk R ω t R₂ s' ⟨_, (h.1 s').1⟩
-  obtain ⟨h0, -⟩ := setup_zero_c (F.zs R ω t R₂ s').ht (F.zs R ω t R₂ s').hTags.1 (F.zs R ω t R₂ s').hcH hset
-  obtain ⟨ss, s₁, hss₁, hj₁, hrw⟩ := checkRows_of_checkStmt (array_forM_ok hfm 0 h0)
-  obtain rfl : ss = F.stmts := Except.ok.inj (hss₁.symm.trans F.hstmts)
-  obtain rfl : s₁ = st' := Option.some.inj (hj₁.symm.trans hss')
-  obtain ⟨rws', pb, w', hrows', hpb, hw', hd'⟩ := rowPort_of_checkRows hrw hrp
-  obtain rfl : rws' = rws := Option.some.inj (hrows'.symm.trans hrows)
-  obtain rfl : w' = w := Option.some.inj (hw'.symm.trans hw)
+  obtain ⟨sa, hsa, hoa, -, hsha⟩ := chk s
+  obtain rfl : sa = .sparse sh hr := Option.some.inj (hsa.symm.trans hss)
+  obtain ⟨sb, hsb, hob, hrwb, hshb⟩ := chk s'
+  obtain rfl : sb = st' := Option.some.inj (hsb.symm.trans hss')
+  obtain ⟨jn, nmn, pt, x, rfl, hx⟩ := inner_of_rowPorts hrp
+  obtain ⟨hva, hra⟩ := own_of_checkOwn hoa mem_ownPorts_sparse hmem (hname.trans hq) (hnd R ω t R₂ s)
+  obtain ⟨hvb, hrb⟩ := own_of_checkOwn hob (mem_ownPorts_inner hx) hmem' (hname'.trans hq') (hnd R ω t R₂ s')
+  obtain ⟨rws, pb, w, hrows, hpb, hw, hd⟩ := rowPort_of_checkRows hrwb hrp
   obtain rfl : pb = (F.zs R ω t R₂ s').rd.port (.inl (u', q')) :=
     hnd R ω t R₂ s' _ (Array.mem_of_find?_eq_some hpb) _ hmem'
       ((by simpa using Array.find?_some hpb : pb.name = s!"m{hr}").trans (hname'.trans hq').symm)
-  obtain ⟨hs1, hr1⟩ := site_reads_of_portDiff hd
-  obtain ⟨hs2, hr2⟩ := site_reads_of_portDiff hd'
-  refine ⟨hs1.trans hs2.symm, ?_⟩
-  rw [hr1, ← hr2, hu] at hpos
+  have hwv : w.value = s!"rec-c{hr}" := (congrArg Prod.fst (site_reads_of_portDiff hd).1).symm.trans hvb
+  have hsv : SharedValue rows ((F.zs R ω t R₂ s).rd.port (.inl (un, q))).value := Or.inl (by
+    rw [hrows, hva, Option.bind_some]
+    exact Array.find?_isSome.2 ⟨w, Array.mem_of_find?_eq_some hw, by simp [hwv]⟩)
+  obtain ⟨w₀, hw₀, hd₀⟩ := site_of_checkShared hsha hmem hsv
+  obtain ⟨w₁, hw₁, hd₁⟩ := site_of_checkShared hshb hmem' (by rw [hvb, ← hva]; exact hsv)
+  rw [hvb, ← hva, hw₀] at hw₁
+  obtain rfl := Option.some.inj hw₁
+  refine ⟨(site_of_portDiff hd₀).trans (site_of_portDiff hd₁).symm, ?_⟩
+  rw [hra] at hpos
+  rw [hrb, ← hu] at hpos'
   exact Option.some.inj (Option.some.inj (hpos.symm.trans hpos'))
 
-/-- **`SrcHReads` from the verifier's checks** (`hSite_of_checked`) and the named pieces: no registered read
-segmented (`ReadsUnsegC3`), the RecSparse circuit's `h` keys (`HKeys`), the algebra unit's row of rep `i`'s `h`
-(`HAlgRows`) and the sparse `h` entry's registration (`SparseHSite`). -/
+/-- **`SrcHReads` from the verifier's checks** (`hSite_of_checked`, `readsUnsegC3`) and the named pieces: the reads at
+the units' own rows (`ReadsOwnAt`, from `ReachedChecked` by `readsOwnAt_of`), the RecSparse circuit's `h` keys
+(`HKeys`) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`). -/
 theorem srcHReads_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hchk : ChecksAccepted F rows wr reg)
-    {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : ReadsOwnC3 F dg N k Rw)
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : ReadsOwnAt F dg N k Rw)
     (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
-    (hsite : SparseHSite F rows dg N k Rw) (hseg : ReadsUnsegC3 F dg N k Rw)
     (hkeys : ∀ (s : Fin (vstarCount F.ish)) (j : ℕ), Flock.RecSparse.check (F.Vs s).c = .ok () →
       Flock.RecSparse.params (F.Vs s).c.unit.name = some (FlockC3.Sparse.unitShape (holoAt st hp)) →
       HKeys (F.Vs s) (Flock.RecSparse.messagePorts (FlockC3.Sparse.unitShape (holoAt st hp))) j)
@@ -515,11 +614,24 @@ theorem srcHReads_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : O
   refine ⟨hk.1, fun l e he q b hb hkey hread => ?_⟩
   obtain ⟨hq, rfl⟩ := hk.2 l e he q b hb hkey
   obtain ⟨hb', hv⟩ := hbits l e he
-  obtain ⟨hst, hat⟩ := hSite_of_checked hchk hro hnd hsite hA hss hss' hq hq' hrp (hun.trans hu'.symm) hread hr'
-  exact ⟨hseg R ω t R₂ τ o hA s un q hread, s', u', q', hb', hr', hseg R ω t R₂ τ o hA s' u' q' hr', hst, hat, hv⟩
+  obtain ⟨hst, hat⟩ := hSite_of_checked hchk hro hnd hA hss hss' hq hq' hrp (hun.trans hu'.symm) hread hr'
+  have hseg := readsUnsegC3 F dg N k Rw R ω t R₂ τ o hA
+  exact ⟨hseg s un q hread, s', u', q', hb', hr', hseg s' u' q' hr', hst, hat, hv⟩
 
 end family
 
 end
+
+#print axioms regChecks_of_checkStmt
+#print axioms mIndex_m
+#print axioms inner_of_rowPorts
+#print axioms mem_ownPorts_inner
+#print axioms mem_ownPorts_sparse
+#print axioms own_of_checkOwn
+#print axioms segs_of_scopeOk
+#print axioms readsOwnAt_of
+#print axioms readsUnsegC3
+#print axioms hSite_of_checked
+#print axioms srcHReads_of
 
 end FlockC3.HPort
