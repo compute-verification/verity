@@ -1,6 +1,7 @@
 import Proofs.Flock.VBridge.Top
 import VStar.Stage
 import VStar.Compose
+import Flock.RecVStar
 
 /-!
 # VBridge G at V*'s statement family
