@@ -55,7 +55,6 @@
         "infra/",
         "infra/cluster/",
         "tools/agent-guard/",
-        "tools/config/",
         "tools/research/",
         "benchmarks/judge.py",
         ".cursor/"
@@ -168,6 +167,7 @@
       "usergroup": null,
       "linear": "CI",
       "owns": [
+        "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/move/",
