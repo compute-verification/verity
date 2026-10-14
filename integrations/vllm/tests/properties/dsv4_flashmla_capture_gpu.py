@@ -50,7 +50,8 @@ vLLM's default max_num_seqs on the H200, past the largest graph (18 in a partiti
 token and its MTP draft (23 in a partition); `swagraph` the window-only layer (the MTP layer's) at 500 tokens and 12 pads.
 The prefill's: `swa` a window-only layer (index rows 128 wide, one pair); `c4` a compress-ratio 4
 layer (rows 1152 wide: topk_length 1..1152, even and odd block counts, every NP from 1 to 9); `c128` a compress-ratio 128 layer (rows 256
-wide); `edge` (C4) UE8M0 scales 0x00 / 0xFE / 0xFF, E4M3 NaN and subnormal bytes, rows that overflow bf16, indices -1, -2,
+wide); `c128l` a compress-ratio 128 layer at W = 8192 (rows 8320 wide, the chunk's longest request at max_model_len 2^20: NP 65
+at both block parities, 33 and 17 — the W ladder's full rows past C4's 9 — and 1); `edge` (C4) UE8M0 scales 0x00 / 0xFE / 0xFF, E4M3 NaN and subnormal bytes, rows that overflow bf16, indices -1, -2,
 INT_MIN, s_kv and INT_MAX within a length and valid ones onto NaN rows past it, overflowing, zero and subnormal queries,
 topk_length 0, one row repeated, a length of 1152 with one valid index, and the decode's sinks.
 
@@ -69,8 +70,8 @@ check, the selection and the bindings.
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/dsv4_flashmla_capture_gpu.py --out DIR [--scratch DIR] [--quick]
 
-The comparisons take about 2 CPU-hours of twin and four references of 127 or 130 blocks, about 12 minutes and 3 GB each; under
---quick, `max`'s reference is most of it.
+The comparisons take about 2 CPU-hours of twin and five references of 127 or 130 blocks (the decode's four and the prefill's
+NP-65 token), about 12 minutes and 3 GB each; under --quick, `max`'s reference is most of it.
 """
 from __future__ import annotations
 
@@ -147,21 +148,36 @@ CASE_LAYERS = {"swa": ("swa", 1), "c4": ("c4", 2), "c128": ("c128", 3), "lone": 
                "long17": ("c128l", 7), "long24": ("c128l", 8), "max": ("c128l", 9), "graph": ("c4", 10), "eager": ("c128l", 15),
                "mtp": ("c4", 16), "swagraph": ("swa", 17)}
 #: `_forward_prefill` (flashmla.py:266-398) per layer: (compress ratio, the compressed cache's page block, top_k: the indexer's 1024
-#: on C4, c128a's width on C128, here 128); a token's index row is round_up(top_k + WINDOW, 128) wide (max_image_tokens 0:
+#: on C4, c128a's width on C128, here 128; `c128l` the C128 layer in a step whose longest sequence is past 2^19 positions, so
+#: W = 8192, as the decode's); a token's index row is round_up(top_k + WINDOW, 128) wide (max_image_tokens 0:
 #: DeepSeek-V4-Pro has no vision layers)
-PREFILL_LAYERS: dict[str, tuple[int, int, int]] = {"swa": (1, SWA_PBS, 0), "c4": (4, 64, C4_TOPK), "c128": (128, 2, 128)}
+PREFILL_LAYERS: dict[str, tuple[int, int, int]] = {"swa": (1, SWA_PBS, 0), "c4": (4, 64, C4_TOPK), "c128": (128, 2, 128),
+                                                   "c128l": (128, 2, 8192)}
 #: the chunk's requests, (seq_len, gather_len): the compressed gather writes request r's seq_len // ratio rows from row 0 of its
 #: workspace, the SWA gather its last gather_len positions from row N_c = the most compressed rows of any request
 PREFILL_REQS = ((5000, 144), (4100, 130), (16384, 129), (1300, 128))
-#: per token, (request, compressed rows, window rows): its topk_length is their sum
+#: `c128l`'s chunk: request 0 at max_model_len 2^20 (8192 compressed rows, the full W), 1 past 2^18 (2048) and 2 past 2^19 (4099)
+PREFILL_REQS_C128L = ((1 << 20, 144), (2048 * 128 + 77, 130), (4096 * 128 + 500, 129), (1300, 128))
+
+
+def prefill_reqs(layer: str) -> tuple[tuple[int, int], ...]:
+    """A prefill layer's chunk: `c128l`'s requests hold the compressed rows its tokens pick (seq_len // 128 >= their counts)."""
+    return PREFILL_REQS_C128L if layer == "c128l" else PREFILL_REQS
+
+
+#: per token, (request, compressed rows, window rows): its topk_length is their sum.  `c128l`'s tokens sit on the W ladder's
+#: full-row boundaries past C4's NP 9 (sparse_mla.py:246-252: W = next_pow2(max_seq_len / 128) clamped to [128, 8192]): rows of
+#: 8320 (NP 65, 130 blocks), 8202 (NP 65, 129 blocks: the last pair's second block entirely past topk_length), 4224 (NP 33,
+#: W 4096's widest row), 2176 and 2112 (NP 17, W 2048's, both block parities), and 13 (NP 1, the quick reference)
 PREFILL_LENS = {
     "swa": ((0, 0, 1), (1, 0, 2), (2, 0, 63), (3, 0, 64), (0, 0, 65), (1, 0, 127), (2, 0, 128), (3, 0, 100)),
     "c4": ((0, 1024, 128), (1, 1000, 128), (0, 960, 128), (2, 512, 1), (3, 0, 1), (3, 63, 1), (1, 64, 1), (0, 127, 1),
            (2, 128, 1), (0, 700, 77), (1, 1024, 1), (2, 255, 128), (1, 400, 100), (2, 640, 100), (0, 900, 60)),
     "c128": ((2, 128, 128), (2, 1, 128), (3, 0, 1), (0, 39, 64), (2, 127, 128), (1, 5, 3)),
+    "c128l": ((0, 8192, 128), (0, 8192, 10), (2, 4096, 128), (1, 2048, 128), (1, 2048, 64), (3, 10, 3)),
     "edge": ((0, 1024, 128), (1, 200, 100), (2, 300, 128), (3, 64, 64), (0, 0, 128), (1, 0, 0), (2, 0, 128), (2, 1024, 128)),
 }
-PREFILL_CASE_LAYERS = {"swa": ("swa", 11), "c4": ("c4", 12), "c128": ("c128", 13), "edge": ("c4", 14)}
+PREFILL_CASE_LAYERS = {"swa": ("swa", 11), "c4": ("c4", 12), "c128": ("c128", 13), "c128l": ("c128l", 18), "edge": ("c4", 14)}
 CASES = tuple(("decode", c) for c in CASE_LAYERS) + tuple(("prefill", c) for c in PREFILL_CASE_LAYERS)
 I32_MIN, I32_MAX = -(1 << 31), (1 << 31) - 1
 #: tokens per twin job
@@ -488,8 +504,9 @@ def prefill_operands(case: str) -> dict[str, Any]:
     layer, seed = PREFILL_CASE_LAYERS[case]
     ratio, pbs, _ = PREFILL_LAYERS[layer]
     rng = np.random.default_rng(seed)
-    seq = np.array([s for s, _ in PREFILL_REQS], dtype=np.int32)
-    gl = np.array([g for _, g in PREFILL_REQS], dtype=np.int32)
+    reqs = prefill_reqs(layer)
+    seq = np.array([s for s, _ in reqs], dtype=np.int32)
+    gl = np.array([g for _, g in reqs], dtype=np.int32)
     comp = seq // ratio if ratio > 1 else np.zeros_like(seq)
     nc = int(comp.max())
     m = nc + int(gl.max())
@@ -751,7 +768,7 @@ def launch_prefill(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], 
     o = prefill_operands(case)
     ratio, pbs, _ = PREFILL_LAYERS[o["layer"]]
     nc, m = (int(v) for v in o["geom"])
-    r_, t_ = len(PREFILL_REQS), o["q"].shape[0]
+    r_, t_ = int(o["seq_lens"].size), o["q"].shape[0]
     dev = "cuda"
 
     def on(a: np.ndarray):
@@ -917,7 +934,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics: a window-only token (two blocks, one split), a full compressed token cut in
     two, the lone token's split, combine and head shapes, the combine of the most splits any batch gives a request (127), the KV
-    row; the prefill's gather row and a token of one pair and of a full C4 row's nine."""
+    row; the prefill's gather row and a token of one pair, of a full C4 row's nine and of a full W-8192 C128 row's 65."""
     from verity.ml.circuits.defs import bind
 
     st = {k: v for k, v in F.FLASHMLA_DSV4.items() if k != "NH"}
@@ -927,6 +944,8 @@ def bind_check() -> dict[str, Any]:
         "FlashMlaPrefill_v1{NH=16,NP=1,...}": lambda: bind(P.FlashMlaPrefill, NP=1, **P.FLASHMLA_PREFILL_DSV4),
         "FlashMlaPrefill_v1{NH=16,NP=9,...}": lambda: bind(P.FlashMlaPrefill, NP=prefill_pairs(prefill_width("c4")),
                                                            **P.FLASHMLA_PREFILL_DSV4),
+        "FlashMlaPrefill_v1{NH=16,NP=65,...}": lambda: bind(P.FlashMlaPrefill, NP=prefill_pairs(prefill_width("c128l")),
+                                                            **P.FLASHMLA_PREFILL_DSV4),
         "FlashMlaKvRow_v1{DN=448,DR=64,QT=64}": lambda: bind(F.FlashMlaKvRow, DN=DN, DR=DR, QT=QT),
         "FlashMlaSplit_v1{NB=2,PARTIAL=False,...}": lambda: bind(F.FlashMlaSplit, NB=2, PARTIAL=False, **blk),
         "FlashMlaSplit_v1{NB=1,PARTIAL=True,...}": lambda: bind(F.FlashMlaSplit, NB=1, PARTIAL=True, **blk),

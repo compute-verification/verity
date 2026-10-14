@@ -70,15 +70,23 @@ def test_the_statics_are_dsv4s() -> None:
 
 
 def test_the_prefill_statics_are_dsv4s() -> None:
-    """`_forward_prefill`'s index rows round_up(top_k + 128, 128) wide (128, 1152, 256), NP = ceil(ceil(n / 64) / 2) and at least
-    one, the compressed caches' page blocks the decode's, the C4 tokens over every NP of a 1152-wide row and both parities of their
-    block counts, and the Definitions' statics the capture's."""
-    assert [X.prefill_width(k) for k in ("swa", "c4", "c128")] == [128, 1152, 256]
+    """`_forward_prefill`'s index rows round_up(top_k + 128, 128) wide (128, 1152, 256, 8320), NP = ceil(ceil(n / 64) / 2) and at
+    least one, the compressed caches' page blocks the decode's, the C4 tokens over every NP of a 1152-wide row and both parities
+    of their block counts, the `c128l` tokens on the W ladder's full-row boundaries past 9 (17, 33, 65 at both block parities of
+    65 and 17, the longest the full 8320-wide row), and the Definitions' statics the capture's."""
+    assert [X.prefill_width(k) for k in ("swa", "c4", "c128", "c128l")] == [128, 1152, 256, 8320]
     assert [X.prefill_pairs(n) for n in (0, 1, 64, 65, 128, 129, 513, 1088, 1152)] == [1, 1, 1, 1, 1, 2, 5, 9, 9]
-    assert all(X.PREFILL_LAYERS[k][1] == X.LAYERS[k][0] for k in ("c4", "c128")) and X.PREFILL_LAYERS["c4"][2] == X.C4_TOPK
+    assert [X.prefill_pairs(n) for n in (2112, 2176, 4224, 8202, 8320)] == [17, 17, 33, 65, 65]
+    assert all(X.PREFILL_LAYERS[k][1] == X.LAYERS[k][0] for k in ("c4", "c128", "c128l"))
+    assert X.PREFILL_LAYERS["c4"][2] == X.C4_TOPK and X.PREFILL_LAYERS["c128l"][2] == X.LAYERS["c128l"][1] == 8192
     n = np.array([kc + w for _, kc, w in X.PREFILL_LENS["c4"]])
     assert sorted({X.prefill_pairs(int(v)) for v in n}) == list(range(1, X.prefill_pairs(X.prefill_width("c4")) + 1))
     assert set((-(-n // X.BN) % 2).tolist()) == {0, 1} and n.max() == X.prefill_width("c4")
+    n = np.array([kc + w for _, kc, w in X.PREFILL_LENS["c128l"]])
+    pairs = np.array([X.prefill_pairs(int(v)) for v in n])
+    assert sorted(set(pairs.tolist())) == [1, 17, 33, 65] and int(n.max()) == X.prefill_width("c128l")
+    nb = -(-n // X.BN)
+    assert set((nb[pairs == 65] % 2).tolist()) == {0, 1} and set((nb[pairs == 17] % 2).tolist()) == {0, 1}
     st = P.FLASHMLA_PREFILL_DSV4
     assert (st["NH"], st["D"], st["BN"], st["SCALE"]) == (X.NH, X.D, X.BN, X.SCALE) and st["DOT"] is F.FLASHMLA_DSV4["DOT"]
     assert P.FLASHMLA_GATHER_DSV4 == {"DN": X.DN, "DR": X.DR, "QT": X.QT}
@@ -88,10 +96,10 @@ def test_every_prefill_token_reads_its_requests_gathered_rows() -> None:
     """Each token's indices as `PREFILL_LENS` lays them out: distinct compressed rows of its request, then consecutive window rows
     within its request's, every one a row the gathers write, -1 past its length; no block table onto a reserved block; and
     `prefill_token` the token's 2 NP 64 rows at those indices."""
-    for case in ("swa", "c4", "c128"):
+    for case in ("swa", "c4", "c128", "c128l"):
         o = X.prefill_operands(case)
         nc, m = (int(v) for v in o["geom"])
-        r_ = len(X.PREFILL_REQS)
+        r_ = len(X.prefill_reqs(o["layer"]))
         assert nc == int(o["comp_lens"].max()) and m == nc + int(o["gather_lens"].max())
         assert not o["q"][:, X.NH:].any() and np.all(o["sink"][X.NH:] == X.F_NINF)
         assert np.all(o["swa_table"] < X.CACHE_BLOCKS["swa"] - 1)
@@ -124,11 +132,12 @@ def test_the_workspace_is_each_requests_rows_dequantised() -> None:
     """`workspace`, the two gathers' rows, restated in torch: request r's compressed positions 0.. and its last gather_len window
     positions through their block tables, each e4m3 byte as bf16 times its tile's UE8M0 byte shifted into a bf16's exponent, then
     the bf16 RoPE, at rows 0.. and N_c..; the sentinel everywhere else."""
-    for case in ("c4", "c128"):
+    for case in ("c4", "c128", "c128l"):
         o = X.prefill_operands(case)
         nc, m = (int(v) for v in o["geom"])
-        want = np.full((len(X.PREFILL_REQS), m, X.D), X.SENTINELS[1], np.uint16)
-        for r, (s, g) in enumerate(X.PREFILL_REQS):
+        reqs = X.prefill_reqs(o["layer"])
+        want = np.full((len(reqs), m, X.D), X.SENTINELS[1], np.uint16)
+        for r, (s, g) in enumerate(reqs):
             n = int(o["comp_lens"][r])
             want[r, :n] = _dequantised(o["extra_cache"], o["extra_table"], r, np.arange(n), int(o["extra_pbs"][0]))
             want[r, nc:nc + g] = _dequantised(o["swa_cache"], o["swa_table"], r, np.arange(s - g, s), X.SWA_PBS)
