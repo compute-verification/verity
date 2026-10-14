@@ -233,9 +233,9 @@ theorem zero_regOut (hc : sj.c = (Vs j).c)
       ValueColl zs (valueSrcAll src c3) R ω t R₂ := by
   obtain ⟨hq, hnm, -, hseg⟩ := hlaid.2.2
   obtain ⟨-, hor⟩ := zero_tie (q := ⟨_, hq⟩) hc hck hf hso hop hsp ho hres
-    (by simp only [getElem!_pos (Vs j).c.ports _ hq, hnm]) hprog (hp hq)
-    (fun reg hr hr' => hone hq reg hr (hr'.trans (by simp only [getElem!_pos (Vs j).c.ports _ hq, hnm]))) (hpos hq)
-    (by simp only [getElem!_pos (Vs j).c.ports _ hq, hseg])
+    (by simp only [getElem!_pos (Vs j).c.ports _ (by exact hq), hnm]) hprog (hp hq)
+    (fun reg hr hr' => hone hq reg hr (hr'.trans (by simp only [getElem!_pos (Vs j).c.ports _ (by exact hq), hnm]))) (hpos hq)
+    (by simp only [getElem!_pos (Vs j).c.ports _ (by exact hq), hseg])
   exact hor.imp (fun hz => zeroOut_of_laid (zs R ω t R₂ j) hcp hlaid he hoc h1 h2 hp fun _ hk => hz e hk) id
 
 end FlockSoundness.Discharge.Recursion

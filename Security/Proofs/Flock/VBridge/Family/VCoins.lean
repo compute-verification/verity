@@ -160,9 +160,9 @@ proves `HFiles`). **Check 5's inner session is the family's rep.** At every acce
 source `coins t` loads the inner session `inn` at part `p`'s unit, `inn`'s algebra is the verifier's shape at rep
 `r`'s extra claims, and the rep check 5 computes at rep `r`'s unit has rep `r`'s rounds and, where part `p`'s elements
 reach the comb, rep `r`'s comb: `Recursion.vRows_tie`'s `halg` and `hrep`, at which its conclusion is `VRowsAre`'s. -/
-def InnerIsRep (coins : List (Cm × (ℐ).Coin) → Option RecCoins.Source) : Prop :=
+def InnerIsRep (coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r p, p < (partsOf F.sh).size →
-    ∀ f inn, coins t = some f → f.load (F.Vs (F.sess p)).c.unit.name = .ok inn →
+    ∀ (f : Flock.RecCoins.Source) (inn : Flock.RecCoins.Inner), coins t = some f → f.load (F.Vs (F.sess p)).c.unit.name = .ok inn →
       inn.algebra = .ok (F.sh, (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras) ∧
       ∀ rep, inn.rep F.sh (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras (F.un p r).val = .ok rep →
         rep.rounds = (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).rounds ∧

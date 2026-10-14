@@ -150,7 +150,7 @@ theorem readOne_of (hrd : F.ReadsOwn dg N k Rw) (hnd : F.OwnNamesOne dg N k Rw) 
       some (some ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q)))) := by
   obtain ⟨hm, hn, hr⟩ := hrd R ω t R₂ τ o hacc p j nm pt hj u q hread
   refine ⟨fun reg hreg hname => hnd R ω t R₂ τ o hacc p j nm pt hj reg hreg _ hm ?_, hr⟩
-  simp only [getElem!_pos (F.Vs j).c.ports _ q.isLt] at hname
+  simp only [getElem!_pos (F.Vs j).c.ports _ (by exact q.isLt)] at hname
   exact hname.trans hn.symm
 
 /-- **A part's row columns are inputs**: its circuit passes `RecResiduals.check` (`ParseFacts.recResiduals`), so its
