@@ -14,8 +14,8 @@ that the drawn statement labels itself reads its row of the port at one of those
 `HPubRows` reads every unit and every port of a name, at the verifier's own RecSparse shape; the check reads the drawn
 units, the first port of a name, and a rec-sparse unit's own shape. What closes the gap is the family's:
 
-* `RowsHeld`: an accepted session draws every unit that reads a value `fixedRow` knows, and labels it itself (G's
-  `RowsDrawn` at every such value, not only `rec-c<k>`);
+* `RowsHeld`: an accepted session draws every unit that reads a value `fixedRow` knows (G's `RowsDrawn` at every such
+  value, not only `rec-c<k>`), whose label is the unit by the verifier's label check (`label_of_checked`);
 * `PortsNamed`: each circuit names each port once (G's `PortNamesUnique`);
 * `SparseAtShape`: a rec-sparse unit's shape is the verifier's own.
 -/
@@ -285,14 +285,78 @@ theorem pubRow_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {h
   rw [← hx] at hb
   exact ⟨w, b, hb, hdig.trans hrow⟩
 
+theorem getD_idxOf {a : Array ℕ} {u : ℕ} (h : u ∈ a) : a.getD (a.idxOf u) 0 = u := by
+  rcases a with ⟨l⟩
+  have hl : u ∈ l := by simpa using h
+  have hlt := List.idxOf_lt_length_of_mem hl
+  simp [Array.getD, hlt, List.getElem_idxOf hlt]
+
+theorem checkLabel_ok {dj : Lean.Json} {pub : Public} {j : ℕ} (h : RecVStar.checkLabel dj pub j = .ok ())
+    {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson dj = .ok D) {idx : Array ℕ}
+    (hidx : Registered.unitIndices pub = .ok idx) : idx = D.proved := by
+  simp only [RecVStar.checkLabel, hD, hidx, Bind.bind, Except.bind] at h
+  split at h
+  · simp [throw, throwThe, MonadExceptOf.throw] at h
+  · rename_i hb
+    simpa using hb
+
+theorem checkLabels_at {d : Lean.Json} {count : ℕ} {sts : Array Stmt}
+    (h : RecVStar.checkLabels (some d) count sts = .ok ()) (j : ℕ) (hj : j < sts.size) :
+    RecVStar.checkLabel (RecVStar.tableDraw d count j) sts[j].pub j = .ok () := by
+  have := array_forM_ok (show (Array.range sts.size).forM
+    (fun j => RecVStar.checkLabel (RecVStar.tableDraw d count j) sts[j]!.pub j) = .ok () from h) j (by simpa using hj)
+  simpa [Array.getElem_range, getElem!_pos sts j hj] using this
+
+/-- The verifier's table draw is the one the model's tables are set up from. -/
+theorem drawJ_tableDraw (I : Inputs) (d : Lean.Json) (j : ℕ) : drawJ I d j = RecVStar.tableDraw d I.count j := by
+  unfold drawJ RecVStar.tableDraw DecodeZLJ.partJson Tables.partDraw
+  rfl
+
+/-- **The label conjunct, from the verifier's label check** (`RecVStar.checkLabels`): at an accepted transcript whose
+tables label their instances with the units their draws prove, the drawn statement's label of a drawn unit is the
+unit. -/
+theorem label_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
+    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+    {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr)
+    (hlb : ∃ spec sts, setupOf (zkInputs zo.I) tr.record = .ok (spec, sts) ∧
+      RecVStar.checkLabels (recordDraw tr.record) zo.I.count sts = .ok ())
+    {u : Fin nv} {d : Lean.Json} {D : Draw.UnitDraw} {dp : Public} {idx : Array ℕ}
+    (hd : recordDraw tr.record = some d)
+    (hD : Draw.UnitDraw.ofJson (drawJ zo.I d (partOf zo.I d u.val)) = .ok D)
+    (hdp : HmOut.drawn c zo.pub (drawJ zo.I d (partOf zo.I d u.val)) = .ok dp)
+    (hidx : Registered.unitIndices dp = .ok idx) (hu : u.val ∈ D.proved) :
+    idx.getD (D.proved.idxOf u.val) 0 = u.val := by
+  obtain ⟨spec, sts, hs, -⟩ := hacc
+  obtain ⟨spec', sts', hs', hlb⟩ := hlb
+  have hst : sts' = sts := congrArg Prod.snd (Except.ok.inj (hs'.symm.trans hs))
+  rw [hst, hd] at hlb
+  obtain ⟨hsz, hstJ⟩ := ZkHidden.setupOf_tableJH zo.hTags.1 hd hs
+  have hjs : (partOf zo.I d u.val).val < sts.size := by rw [hsz]; exact (partOf zo.I d u.val).isLt
+  have s := Hidden.setupHidden_spec' (hstJ _ hjs)
+  have hcst : sts[(partOf zo.I d u.val).val].c = c := by
+    have h1 := s.parse
+    rw [ZkHidden.parseH_tagsAt ((zkTags_typed zo.I).trans zo.ht), zo.hcH] at h1
+    exact (Except.ok.inj h1).symm
+  obtain ⟨pop', hpop', -, hdr⟩ := s.pub
+  rw [hcst, ZkHidden.loadPublicH_tagsAt, zo.hpub] at hpop'
+  cases hpop'
+  have hdr' := hdr _ rfl
+  rw [hcst, hdp] at hdr'
+  have hpd : sts[(partOf zo.I d u.val).val].pub = dp := (Except.ok.inj hdr').symm
+  have hl := checkLabels_at hlb _ hjs
+  rw [← drawJ_tableDraw, hpd] at hl
+  rw [checkLabel_ok hl hD hidx]
+  exact getD_idxOf hu
+
 /-! ## At the family -/
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n1) An accepted session draws the units that read a value `fixedRow` knows, and labels them itself**: G's
-`RowsDrawn` at every such value. `AcceptsZKR` checks the drawn units only (U4, `checkFull`, is not among its checks), so
-a unit it does not draw has a public row no check reads. -/
+/-- **(n1) An accepted session draws the units that read a value `fixedRow` knows**: G's `RowsDrawn` at every such
+value. `AcceptsZKR` checks the drawn units only (U4, `checkFull`, is not among its checks), so a unit it does not draw
+has a public row no check reads. The drawn statement's label of the unit (`Registered.unitIndices`) is the unit by the
+verifier's label check (`label_of_checked`), not by this. -/
 def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
   ∀ R ω t R₂ j tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr → ∀ reg ∈ (F.zs R ω t R₂ j).own,
     (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true →
@@ -301,7 +365,7 @@ def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
         Draw.UnitDraw.ofJson (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok D ∧
         HmOut.drawn (F.Vs j).c (F.zs R ω t R₂ j).pub
           (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok dp ∧
-        Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧ idx.getD (D.proved.idxOf u.val) 0 = u.val
+        Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved
 
 /-- **(n1) Each of V*'s circuits names each port once** (G's `PortNamesUnique`): the check reads the first port of a
 name. -/
