@@ -33,6 +33,9 @@
   "GemmCoordinateE4m3_v2{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
    "and": 18050
   },
+  "GemmCoordinateE4m3_v2{K=64,DOT=HopperE4m3MmaV2Dot32_v2}": {
+   "and": 19215
+  },
   "GemmCoordinateE4m3_v2{K=64,DOT=HopperE4m3QgmmaDot32_v2}": {
    "and": 13445
   },
@@ -62,6 +65,9 @@
   },
   "HopperBF16WgmmaDot16_v2": {
    "and": 7872
+  },
+  "HopperE4m3MmaV2Dot32_v2": {
+   "and": 9710
   },
   "HopperE4m3QgmmaDot32_v2": {
    "and": 6799

@@ -82,6 +82,25 @@ def test_the_engine_profile_reads_this_table() -> None:
                           "HF_HUB_OFFLINE": "1", "VLLM_LOGGING_LEVEL": "WARNING", "TOKENIZERS_PARALLELISM": "false"}
 
 
+def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
+    import json
+
+    import pytest
+
+    from verity_vllm.engine import engine_profile as prof
+
+    entry = {"repo": "org/model", "role": "ROLE_X", "downloaded": True, "local_path": str(tmp_path / "gone")}
+    (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [entry]}))
+    with pytest.raises(SystemExit, match=f"org/model: local snapshot {tmp_path / 'gone'} missing"):
+        prof.checkpoint_for("ROLE_X", m)
+    m.write_text(json.dumps({"checkpoints": [dict(entry, downloaded=False)]}))
+    with pytest.raises(SystemExit, match="org/model is not downloaded on this pod"):
+        prof.checkpoint_for("ROLE_X", m)
+    (tmp_path / "gone").mkdir()
+    m.write_text(json.dumps({"checkpoints": [entry]}))
+    assert prof.checkpoint_for("ROLE_X", m) == entry
+
+
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
     """A Build orders a shared expert on the main stream, so a served run must run it there too: on two streams, its log's order
     is not the execution order, and wiring (operand_provenance) fails."""

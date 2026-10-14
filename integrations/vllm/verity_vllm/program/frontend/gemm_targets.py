@@ -128,9 +128,10 @@ class GemmTarget:
     fp8_block_dot: str | None = None
     #: the block-FP8 fused-MoE experts (`TritonExperts`: `fused_moe_kernel` with `use_fp8_w8a8` over [M, K/G] x [E, cdiv(N, G), K/G]
     #: scales), as measured: the e4m3 k32 step of its `tl.dot` (`targets.FP8_DOTS`; `targets.moe_expert_fp8_gemm_spec` binds each
-    #: (token, slot) pair over it); blackwell_consumer's is measured by property blackwell_fp8_capture (`evidence`).  None = that kernel
-    #: has no registered Definition on this target, and the block-FP8 experts are refused by name (cc 9.0's GLM-5.3 experts bind the
-    #: Hopper-step `_v1` forms through their capture map, not this record).
+    #: (token, slot) pair over it); blackwell_consumer's is measured by property blackwell_fp8_capture (`evidence`); hopper's is the
+    #: wgmma k32 step its blockwise FP8 linear runs (`fp8_block_dot`), the step the `MoeExpertFp8BlockGemm(W)_v1` forms hard-code, whose
+    #: composition in `fused_moe_kernel` property glm53_block_fp8_capture checks on the H200.  None = that kernel has no registered
+    #: Definition on this target, and the block-FP8 experts are refused by name.
     fp8_moe_dot: str | None = None
     #: the NVFP4 (W4A4) linear (`CutlassNvFp4LinearKernel`: `cvt_fp16_to_fp4` then the block-scaled GEMM), as measured (`evidence`):
     #: its k64 block-scaled step (`targets.FP4_DOTS`); None = not recorded on this target.
@@ -190,7 +191,7 @@ REGISTERED: dict[str, GemmTarget] = {
     # statics-lifted `Gemm_v2{K,N,DOT}` (`verity_vllm.program.frontend.targets.gemm_spec`), not `Gemm_v1`.  vLLM family "hopper": the tuned table above.
     "hopper": GemmTarget(
         key="hopper", compute_capabilities=((9, 0),), vllm_arch_family="hopper", dot="HopperBF16WgmmaDot16", tuned_table=HOPPER_TUNED_GEMM,
-        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_block_dot="HopperE4m3QgmmaDot32",
+        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_block_dot="HopperE4m3QgmmaDot32", fp8_moe_dot="HopperE4m3QgmmaDot32",
         evidence=("lane HP CONF-b1-hopper (Qwen2.5-1.5B on an H100: GemmHopper = Gemm with DOT=HopperBF16WgmmaDot16 exact on every GEMM leaf); "
                   "R13 lane hopper: verity_vllm/program/kernels/gemm_target_correspondence.py on cp-h100a (cc 9.0, 132 SMs, family 'hopper': the "
                   "(2048,2048) tuned rows BLOCK_SIZE_M 16 / BLOCK_SIZE_K 128 at M<=16 and the default tiling elsewhere, Triton PTX sm_90 wgmma) — "

@@ -153,6 +153,9 @@ DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods
 DIRECT_CPUS_FILE = "/etc/vy/direct-cpus"      # the CPUs a direct run starts on (a cpu list, e.g. 0-95): the rest are pinned benchmarks'.
                                               # A command may still pin itself elsewhere (taskset -c 128-159 ...); absent: no default
 RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only through a check slot (pods/nebius/slot_only.py); cpu-1's
+#: the machine's own slot_only.py (deploy.toml installs it beside the marker, and vy-slot-only.timer runs it): when present it, not
+#: the shipped tree's package, says which commands pass, so a lane's branch older than a rule change is judged by the deployed rule
+NODE_SLOT_ONLY_FILE = "/usr/local/lib/vy-monitoring/slot_only.py"
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -377,6 +380,23 @@ def ssh_read(ssh: list[str], remote_argv: list[str], consume: Callable[[IO[bytes
 
 
 # ---- snapshots --------------------------------------------------------------------------------------------------------------------------
+
+def node_slot_only() -> Any:
+    """The check-slot rule this machine enforces: its deployed NODE_SLOT_ONLY_FILE (stdlib, one file) when it has one, else this
+    package's `pods.nebius.slot_only`."""
+    p = Path(os.environ.get("NODE_SLOT_ONLY_FILE") or NODE_SLOT_ONLY_FILE)
+    if p.is_file():
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("vy_node_slot_only", p)
+        if spec is not None and spec.loader is not None:
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    from .pods.nebius import slot_only
+
+    return slot_only
+
 
 def source_tool_package(source: Path | None) -> Path | None:
     """The `research` package a shipped source tree carries (tools/research/src/research), or None.  When present it is the tool the
@@ -1258,8 +1278,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     remote["request"] = str(request_path)
     try:
         if (marker := Path(os.environ.get("RUNS_VIA_SLOT_FILE") or RUNS_VIA_SLOT_FILE)).exists():
-            from .pods.nebius import slot_only
-
+            slot_only = node_slot_only()
             if not slot_only.through_slot(req["command"]):
                 raise Refused(slot_only.refusal(marker))
         if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
@@ -1814,8 +1833,12 @@ def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
     return None
 
 
-def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
-    """Copy records (or everything) from the machine into the local run dir.  Unreachable -> observed_utc unchanged, reason recorded."""
+def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
+    records (paths under the run dir: the workload's own small progress files and logs).  Unreachable -> observed_utc
+    unchanged, reason recorded."""
+    if bad := [n for n in also if not n or n.startswith("/") or any(p in ("", "..") or p.startswith(".") for p in n.split("/"))]:
+        raise Refused(f"--also takes paths of files under the run dir, not {', '.join(map(repr, bad))}")
     rec = _read_json(local_dir / "remote.json")
     if not rec or not rec.get("remote_run_dir"):
         raise Refused(f"{local_dir} is not a launched remote run")
@@ -1824,7 +1847,7 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     if everything:
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && tar -cf - ."]
     else:
-        names = " ".join(shlex.quote(n) for n in SMALL_FILES)
+        names = " ".join(shlex.quote(n) for n in (*SMALL_FILES, *also))
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && ls {names} 2>/dev/null | tar -cf - -T -"]
 
     def extract(stream: IO[bytes]) -> None:           # member by member off the ssh pipe: a big run is never in the launcher's memory

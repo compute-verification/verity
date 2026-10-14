@@ -47,7 +47,7 @@ m0path() { if [ -f $1/packages/verity/pyproject.toml ]; then echo $1/packages/ve
            else echo $1:$1/catalog:$1/kernels:$1/experimental:$1/benchmarks/numerical/python:$1/verity/ml/flock/python:$1/integrations/vllm; fi; }
 M0PATH=$(m0path $W/m0)
 export RAYON_NUM_THREADS=$(nproc)
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/integrations/vllm:$REPO/catalog:$REPO/kernels:$REPO/experimental
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/integrations/vllm
 if [ "${RUN:-a0}" = a2 ]; then
   rm -rf $W/served && mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
   SERVED=$(dirname $(find $W/served -name registration.json | head -1))

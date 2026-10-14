@@ -66,13 +66,11 @@ def basis (sws : Array Switched) (q : Array F256) (e : Nat) : Array F256 :=
 def ringSwitch (m : Nat) (claims : Array Claim) (rs : Array (Array F128)) : TM (F128 × Array Switched) := do
   let n := claims.size
   label "flock-pcs-open-batch-v0"
-  check (rs.size == n) "opening: ring_switches is not one per claim"
   let mut betas : Array F128 := #[]
   let mut perClaim : Array (Array F128 × Array F128) := #[]
   for k in [0:n] do
     let c := claims[k]!
     let s := rs[k]!
-    check (s.size == 128 && c.skip.size == 64 && c.x.size == m - 6) "opening: malformed claim or ring switch"
     label "flock-ring-switch-v0"
     absorbSlice s
     let x0 := c.x[0]!

@@ -232,6 +232,36 @@ def test_sorry_native_decide_and_other_axioms_are_named():
         "declared: `axiom P.magic` in P.Defs; state an assumption as a named Prop, taken as a hypothesis"]
 
 
+def test_a_sorry_for_an_unreported_error_is_named_apart_from_a_written_one():
+    """A build that passes on a `sorryAx _ true` (the `unreported` control's local-notation binder) never ran its proofs; a
+    spec package's fast path audits no proving package, so `proved` names those of each one it reads."""
+    off = [{"name": "P.stub", "module": "P.Thms", "axioms": ["sorryAx"]}, {"name": "P.unrun", "module": "P.Thms", "axioms": ["sorryAx"]}]
+    fails = A.judge(recorded(), facts(offenders=off, unreported_errors=[{"name": "P.unrun", "module": "P.Thms"}]), FILES)[0]
+    assert "sorry: sorryAx is used by P.stub, P.unrun" in fails
+    (u,) = [f for f in fails if f.startswith("unreported:")]
+    assert u.startswith("unreported: P.unrun hold a `sorry` Lean made for an elaboration error it did not report")
+    assert A.unreported(facts(), "../Proofs's ") == []
+    assert A.unreported(facts(unreported_errors=[{"name": "Q.x", "module": "Q"}]), "../Proofs's ")[0].startswith(
+        "unreported: ../Proofs's Q.x hold")
+
+
+def test_a_declaration_the_olean_does_not_hold_is_dropped(tmp_path):
+    """Lean can drop a declaration with no error (PartRead at a1b479d26: the theorems after a `variable` using a local
+    notation are in no `.olean`), so no axiom shows it: the source's declaration lines are matched to the module's spans.
+    Keywords in comments, docstrings and strings, indented ones and `example` start none."""
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "Thms.lean").write_text(
+        "/-- A doc.\ntheorem in_doc : True := trivial -/\n@[simp] theorem kept : True :=\n  trivial\n"
+        "-- def in_comment\nexample : True := trivial\nprivate noncomputable def gone := 1\n"
+        "structure S where\n  def_like : Nat\ninstance : Inhabited S := ⟨⟨0⟩⟩\n")
+    files = {"P.Thms": "P/Thms.lean"}
+    held = {"P.Thms": [[1, 4], [8, 9]]}
+    (d,) = A.dropped(tmp_path, files, {"spans": held}, "../Proofs's ")
+    assert d.startswith("dropped: ../Proofs's P/Thms.lean:7 (def), P/Thms.lean:10 (instance) start a declaration")
+    assert A.dropped(tmp_path, files, {"spans": held | {"P.Thms": [[1, 4], [7, 7], [8, 10]]}}) == []
+    assert A.dropped(tmp_path, files, {}) == []
+
+
 def test_escapes_must_be_listed_and_listed_ones_must_exist():
     esc = [{"name": "P.loop", "module": "P.Defs", "why": ["opaque"]}]
     fails = A.judge(recorded(), facts(escapes=esc), FILES)[0]
@@ -309,6 +339,14 @@ def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
                                           {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}])})
     text = A.review(old, A.judge(old, moved, FILES, update=True)[1], moved, {})
     assert text == [f"guarantee P.t: {A.REHASHED}", "definition P.f (P.Defs), read by P.t: changed", f"reads: 1 {A.REGROUPED}"]
+
+
+def test_facts_names_a_module_without_listing_every_module():
+    """`EnvironmentHeader.moduleNames` maps over every imported module on each call. Indexed once per constant a
+    guarantee's reads reach, it was 1,471 s of `Security`'s 1,504 s audit (check r20261012-005706-568f)."""
+    for tool in ("Facts.lean", "Upstream.lean"):
+        assert "moduleNames[" not in (HERE.parent / tool).read_text(), \
+            f"{tool}: name a module by `env.header.modules[i].module` (`moduleName env i`), not `env.header.moduleNames[i]`"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -1463,17 +1501,26 @@ def test_the_controls(tmp_path):
 
 def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path):
     """`run` reaps with `os.wait4`, so a step's `peak_gib` covers the grandchildren a `lake` runs, not only `lake` itself;
-    the output and exit code are what `subprocess.run` gave."""
+    the output and exit code are what `subprocess.run` gave.  It runs in an interpreter of its own: a child's `ru_maxrss`
+    counts the resident set it was forked with, so in a test worker grown past 0.3 GiB even `true` peaked there (8577, 12 Oct)."""
     child = "import sys; b = bytearray(300 << 20); b[::4096] = b'x' * len(b[::4096]); print('out'); sys.exit(3)"
-    rep = {"seconds": {}}
-    A._peak.bytes = 0
-    rc, text = A.run(["bash", "-c", f"{sys.executable} -c \"{child}\"; exit $?"], tmp_path, tmp_path / "step.log")
-    assert (rc, text) == (3, "out\n") and (tmp_path / "step.log").read_text() == "out\n"
-    A.took(rep, "replay", 0.0)
-    assert rep["peak_gib"]["replay"] >= 0.3
-    A.run(["true"], tmp_path)
-    A.took(rep, "fresh", 0.0)
-    assert rep["peak_gib"]["fresh"] < 0.3                                   # each step's own peak, not the run's so far
+    script = f"""import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("lean_audit", {str(HERE.parent / "check.py")!r})
+A = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(A)
+tmp = Path({str(tmp_path)!r})
+rep = {{"seconds": {{}}}}
+rc, text = A.run(["bash", "-c", sys.executable + " -c " + repr({child!r}) + "; exit $?"], tmp, tmp / "step.log")
+assert (rc, text) == (3, "out\\n") and (tmp / "step.log").read_text() == "out\\n", (rc, text)
+A.took(rep, "replay", 0.0)
+assert rep["peak_gib"]["replay"] >= 0.3, rep
+A.run(["true"], tmp)
+A.took(rep, "fresh", 0.0)
+assert rep["peak_gib"]["fresh"] < 0.3, rep                              # each step's own peak, not the run's so far
+"""
+    r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 def hyp(name, at, reaches, module=None, source="binder"):
