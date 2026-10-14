@@ -23,7 +23,7 @@ row `HPubRows` does (`hdrawn`, `hnames`), their reads are its own (`hown`), and 
 written at the history (`wr`), are the history's commitments (`hheld`).
 
 `hbr_honest` is at a fixed word of R's cap (`fun _ _ => xR`); `hbr_honest_reg` is `_hbr` in its form, at the word the
-transported prover's runs open (`regStmt`), off `ValueColl` at the verifier's rows: candidate 3's table reads only the
+transported prover's runs open (`regStmt`), off `ValueColl` at the verifier's rows and `LeafColl`: candidate 3's table reads only the
 cap (`holoAccepts_of_cap`), so VBridgeC moves between statements of one cap (`vbridgeC_of_cap`), and VBridgeC gives
 VBridgeCOff at every bad event.
 -/
@@ -138,7 +138,8 @@ theorem vbridgeC_of_cap {S : ℕ} {Vs : Fin S → VStmt}
 
 /-- **(step 7) The guarantee's `_hbr` at the honest family, in its form**: `hbr_honest` at the word the transported
 prover's runs open at R's level 0 against `cap` (`regStmt`), whose cap is `cap`, which is `xR`'s (`hcap`), off the
-verifier's values' collisions (`ValueColl` at `valueSrcC3`), which VBridgeC gives (`vbridgeCOff_of_vbridgeC`). -/
+verifier's values' collisions (`ValueColl` at `valueSrcC3`) and the table leaves' (`LeafColl`), which VBridgeC gives
+(`vbridgeCOff_of_vbridgeC`). -/
 theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVStar.statements ish = .ok ss)
     (bind : Fin (vstarCount ish) → VStar.Bindings) {Vs : Fin (vstarCount ish) → VStmt}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
@@ -173,8 +174,12 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
     (hheld : ∀ h : Typed zr, HeldIs
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own sel bc) :
     ∀ h : Typed zr, Flock.Premises.VBridgeCOff
-      (ValueColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
-        rows zr hCust h) (valueSrcC3 fun t => Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)))
+      (fun R ω t R₂ =>
+        ValueColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
+          rows zr hCust h) (valueSrcC3 fun t => Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t))
+          R ω t R₂ ∨
+        LeafColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
+          rows zr hCust h) R ω t R₂)
       (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows
         zr hCust h) dg N k Rw
       (Flock.Guarantees.regStmt T CT st hp

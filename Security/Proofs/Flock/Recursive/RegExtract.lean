@@ -113,8 +113,8 @@ theorem zk_sessions_recursive_fork_reg {nT r : ℕ} (T : Fin nT → Type) (CT : 
     (Nat.succ_pos r) (innerAtLeavesL_reg T CT hp _hcls zs dg N k Rw σ wmsg cap)
 
 /-- **Gap 2 at the word the prover's runs open, off a value the verifier registers itself**: `zk_sessions_recursive_fork_reg`
-with V*'s bridge off `RegColl ∨ ValueColl zs vsrc` (`Flock.Assumptions.VBridgeCOff`), the value finder finding a
-collision one more case (`zk_sessions_recursive_fork_innerLV`). -/
+with V*'s bridge off `RegColl ∨ ValueColl zs vsrc ∨ LeafColl zs` (`Flock.Assumptions.VBridgeCOff`), the value and the
+table leaves' finders finding a collision two more cases (`zk_sessions_recursive_fork_innerLV`). -/
 theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (_hcls : ClassOk (shapeOf st))
     (_hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
@@ -129,9 +129,10 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → (holoInnerAt T CT st hp).Msg)
     (cap : Cap Refine.Dig)
-    (_hbr : Flock.Assumptions.VBridgeCOff (ValueColl zs vsrc) zs dg N k Rw
-      (Flock.Guarantees.regStmt T CT st hp zs dg N k Rw wmsg σ cap) wmsg Sk cmt msg) :
-    (valueFinder zs vsrc dg N σ).Finds Refine.H512 ∨ (regFinder zs dg N σ).Finds Refine.H512 ∨
+    (_hbr : Flock.Assumptions.VBridgeCOff (fun R ω t R₂ => ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂) zs dg N k
+      Rw (Flock.Guarantees.regStmt T CT st hp zs dg N k Rw wmsg σ cap) wmsg Sk cmt msg) :
+    (valueFinder zs vsrc dg N σ).Finds Refine.H512 ∨ (leafFinder zs dg N σ).Finds Refine.H512 ∨
+      (regFinder zs dg N σ).Finds Refine.H512 ∨
       RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       InnerForkRec zs dg N k Rw σ (Flock.Guarantees.regStmt T CT st hp zs dg N k Rw wmsg σ cap) wmsg Refine.H512
         (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)) ∨
