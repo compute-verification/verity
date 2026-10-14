@@ -319,8 +319,8 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_receipts_kernel(c
 }
 
 // The whole pass's receipts by a persistent grid, a warp taking the next tile of 32 blocks from ctr[0] and, once its
-// receipts are stored, counting it in ctr[1 + its chunk] (tiles_per of them a chunk), so the leaves of a chunk can start
-// while later chunks are read, with no kernel boundary on the reads between chunks.
+// receipts are stored, counting it in ctr[1 + its consumer group] (`tiles_per` tiles per group), so a retained subtree
+// can start while later receipts are read, with no kernel boundary on the reads between groups.
 __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_pass_kernel(const uint4 *__restrict__ data, u64 n,
                                                                            const u32 *__restrict__ pk,
                                                                            u64 *__restrict__ ys, unsigned *ctr,
@@ -381,9 +381,9 @@ __global__ void __launch_bounds__(128) pass_consumer_kernel(const u64 *__restric
                                                             unsigned *__restrict__ chunks_done, u64 *__restrict__ kept,
                                                             u64 width, u64 chunk, int h0, int hc, int H, u64 chunks) {
   const u64 lc = chunk / PER_LEAF, leaves = 1ULL << h0, groups = lc >> h0;
-  const u64 k = blockIdx.x / groups, first = (blockIdx.x - k * groups) * leaves, c0 = k * lc;
-  const unsigned tiles_per = (unsigned)(chunk / 32);
-  while (*(volatile const unsigned *)(ready + k) < tiles_per) __nanosleep(256);
+  const u64 q = blockIdx.x, k = q / groups, first = (q - k * groups) * leaves, c0 = k * lc;
+  const unsigned tiles_per = (unsigned)(leaves * PER_LEAF / 32);
+  while (*(volatile const unsigned *)(ready + q) < tiles_per) __nanosleep(256);
   __threadfence();
   extern __shared__ u64 scratch[];
   u64 *in = scratch, *out = scratch + 8 * leaves;
@@ -680,8 +680,8 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
 // cores; 0: one an SM, so a consumer CTA fits beside each), and on sb, one persistent consumer CTA per chunk hashes its
 // leaves and tree as soon as the producer counts the chunk's tiles done. A final consumer CTA joins the chunk roots, so
 // the whole receipt tree follows the reads without a leaf or level kernel boundary. pk is the pass's packed signs
-// (`rs_signs16`); ctr is scratch of 2 + 2 n / chunk words (the next tile, each chunk's tiles done, each chunk's completed
-// subtrees, completed chunks); ys
+// (`rs_signs16`); ctr is scratch for the next tile, each 2^h0-leaf group's completed receipt tiles, each chunk's
+// completed subtrees and completed chunks; ys
 // holds all n receipts (8 words each). dig and up remain fallback scratch for an unusually large h0. `pad` is two
 // digests per canonical padding leaf: the
 // leaves followed by scratch for their levels below h0. Padding is prepared on sb as soon as the pass starts, under
@@ -706,14 +706,19 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
   const uint64_t chunks = n / chunk;
   const int H = log2_exact(width), hc = log2_exact(lc);
   if (H < 0 || hc < 0 || h0 < 1 || h0 > hc || n / 32 >= (1ULL << 32)) return 1;
+  const bool fused = h0 <= 8;
+  const uint64_t group_blocks = (uint64_t)PER_LEAF << h0;
+  const uint64_t groups = n / group_blocks;
   if (!ctas) {
     int dev;
     if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
   }
   int rc;
-  if (cudaMemsetAsync(ctr, 0, 4 * (2 + 2 * chunks), sa) || cudaEventRecord(go, sa) || cudaStreamWaitEvent(sb, go, 0))
+  if (cudaMemsetAsync(ctr, 0, 4 * (2 + groups + chunks), sa) || cudaEventRecord(go, sa) ||
+      cudaStreamWaitEvent(sb, go, 0))
     return 4;
-  sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, pk, ys, ctr, (unsigned)(chunk / 32));
+  const unsigned ready_tiles = (unsigned)((fused ? group_blocks : chunk) / 32);
+  sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, pk, ys, ctr, ready_tiles);
   if (cudaGetLastError()) return 4;
   // These nodes depend on this pass's seed, but not on its receipts. Compute each once at the start and reuse the
   // retained subtree roots when the real and padded halves are joined above hc.
@@ -731,12 +736,11 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
   }
   // h0 <= 8 fits the consumer's two 2^h0-digest reduction buffers in CUDA's default dynamic-shared-memory limit. Keep the old exact path
   // for diagnostic configurations with larger retained subtrees.
-  if (h0 <= 8) {
+  if (fused) {
     const size_t shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
-    const uint64_t groups = chunks * (lc >> h0);
     if (groups > 0xFFFFFFFFULL) return 1;
-    pass_consumer_kernel<<<groups, 128, shared, sb>>>(ys, ctr + 1, ctr + 1 + chunks, ctr + 1 + 2 * chunks, kept, width,
-                                                     chunk, h0, hc, H, chunks);
+    pass_consumer_kernel<<<groups, 128, shared, sb>>>(ys, ctr + 1, ctr + 1 + groups, ctr + 1 + groups + chunks, kept,
+                                                     width, chunk, h0, hc, H, chunks);
   } else {
     for (uint64_t k = 0; k < chunks; ++k) {
       const int slot = k & 1;

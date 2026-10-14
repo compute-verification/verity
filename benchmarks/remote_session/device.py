@@ -232,9 +232,10 @@ class DeviceStore:
         for h in range(self.h0, self.H + 1):
             self.kept_at[h + 1] = self.kept_at[h] + (nl >> h)
         lc = self.chunk // PER_LEAF
+        groups = self.blocks // (PER_LEAF << self.h0)
         self.ring = None
         pads = nl - self.blocks // PER_LEAF
-        self.ring = (torch.empty(2 + 2 * (self.blocks // self.chunk), dtype=torch.int32, device="cuda"),
+        self.ring = (torch.empty(2 + groups + self.blocks // self.chunk, dtype=torch.int32, device="cuda"),
                      torch.empty((self.blocks, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
