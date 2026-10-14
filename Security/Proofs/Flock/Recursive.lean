@@ -33,6 +33,18 @@ import Proofs.Flock.Recursive.FirewallRun
 import Proofs.Flock.Recursive.FirewallFollows
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
+import Proofs.Flock.Recursive.HoloExec
+import Proofs.Flock.Recursive.StageKinds
+import Proofs.Flock.Recursive.HoloCoins
+import Proofs.Flock.Recursive.HoloSched
+import Proofs.Flock.Recursive.HoloSchedRead
+import Proofs.Flock.Recursive.HoloSchedCheck
+import Proofs.Flock.Recursive.HoloMap
+import Proofs.Flock.Recursive.ForkLast
+import Proofs.Flock.Recursive.ForkInnerC
+import Proofs.Flock.Recursive.AuditC3
+import Proofs.Flock.Recursive.RegExtract
+import Proofs.Flock.Recursive.AuditC3Proof
 import Proofs.Flock.Recursive.Witness
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
@@ -52,4 +64,7 @@ and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), its proof 
 template half proved about the firewall's code, what it sends at every salt list fixed by one run (`FirewallRun`), the
 honest worker's half left an obligation (`FirewallFollows`), and the recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
-(`PublicAuditProof`), and `flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`). -/
+(`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, its coins `HoloCoins`, its schedule and the
+verifier's map of its records `HoloSched` and `HoloMap`, `AuditC3`, its proof `AuditC3Proof` from the
+pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`), and
+`flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`). -/

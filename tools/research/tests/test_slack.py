@@ -28,7 +28,7 @@ TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
-           "ci", "lean", "comms", "top", "old-accounting", "old-circuits-and-proofs"]
+           "ci", "lean", "comms", "top", "vllm", "benchmarks", "old-accounting", "old-circuits-and-proofs"]
 
 
 class FakeSlack:
@@ -1145,7 +1145,7 @@ def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, caps
     assert run(capsys, "send", "--as", "infra", "--text", "node 2 is free")[0] == 0
     before = len(fake.messages[COORD])
     rc, _, err = run(capsys, "send", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"], "--text", "x")
-    assert rc == 2 and f"@ci is held by {held['ci'][0]}, and this agent is {held['infra'][0]}" in err
+    assert rc == 2 and f"@ci is held by {', '.join(held['ci'])}, and this agent is {held['infra'][0]}" in err
     rc, _, err = run(capsys, "close", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"])
     assert rc == 2 and "post as your own handle" in err and len(fake.messages[COORD]) == before
     lander = next(a for a in held["old-circuits-and-proofs"] if len(a) > 11)
@@ -1388,6 +1388,32 @@ def test_names_list_shows_a_handles_published_route_that_the_clone_lacks(fake, r
     add_route(routes_dirs[1], "circuits", "1.0", holder="bc-11111111")
     rc, out, _ = run(capsys, "names", "list")
     assert rc == 0 and out.startswith("@circuits") and "bc-11111111" in out and "open" in out
+
+
+def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeypatch):
+    """The notes repository is private: its raw files answer 404 without a token, so the published-route fallback (and
+    `names list` on a clone that lacks the route) only works when the request carries RESEARCH_NOTES_TOKEN."""
+    seen = []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def urlopen(req, timeout):
+        seen.append((req.full_url, req.get_header("Authorization")))
+        return Reply(b'{"name": "x"}')
+
+    monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
+    assert slack.http_get("https://example.invalid/routes.d/x.json") == b'{"name": "x"}'
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN")
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
+    assert seen == [(f"{slack.ROUTES_RAW}x.json", "Bearer t0k"), ("https://example.invalid/routes.d/x.json", None),
+                    (f"{slack.ROUTES_RAW}x.json", None)]
 
 
 def notes_clone(tmp_path) -> Path:

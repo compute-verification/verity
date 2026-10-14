@@ -17,6 +17,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--first N,...] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
                                                    check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest
+    research queue report --on MACHINE [--max-running N] [--dry-run]
+                                                   one tick of the reporter for GitHub's merge queue (`research.mergequeue`): check
+                                                   each merge group's head, post its `verity/check` status
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
@@ -50,8 +53,10 @@ the tree that was checked, with no new merge commit.  A push refused because `ma
 (`research.drive`) is the loop's tick that needs no agent: it launches the checks of `next`'s trains, lands what passed (onto a
 moved `main` too, when the two share no file), ejects the PR a failure points at alone and tells `@ci` what it refuses.
 
-Notices.  A refusal (a conflict, an ejection) is sent once per PR head: a handoff in the owner's lane directory of the notes, or in
-`lanes/coordinator/` for an owner known only by agent id.
+Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `@ci` and the owner's handle, once per PR head:
+drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
+there reached its owner only when the VM that ran the sync pushed its notes, inside that lane's commit (13 Oct: @lean's
+held notes carried conflict handoffs for ci's and circuits' PRs).
 
 `--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside the trains
 with no effect on them.
@@ -99,6 +104,9 @@ DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
 #: a transfer from the remote under 1 KB/s for 2 min aborts: git has no timeout, and a stalled HTTPS fetch held a drive tick
 #: for 10 min (13 Oct 02:33Z), the next tick retrying it
 STALL = ("-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=120")
+#: `gh api`'s limit: gh has no timeout, and a listing of the open PRs held a drive tick on a dead connection for 5 min
+#: (14 Oct 00:46Z) while the same call answered in a second from a fresh one
+GH_TIMEOUT_S = 120
 LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
@@ -189,7 +197,11 @@ class GitHub:
         self.repo = repo
 
     def open_prs(self) -> list[PR]:
-        r = subprocess.run(["gh", "api", "--paginate", f"repos/{self.repo}/pulls?state=open&per_page=100"], capture_output=True, text=True)
+        try:
+            r = subprocess.run(["gh", "api", "--paginate", f"repos/{self.repo}/pulls?state=open&per_page=100"], capture_output=True,
+                               text=True, timeout=GH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            raise QueueError(f"gh api repos/{self.repo}/pulls: no answer in {GH_TIMEOUT_S} s") from None
         if r.returncode:
             raise QueueError(f"gh api repos/{self.repo}/pulls: {(r.stderr or r.stdout).strip()[-300:]}")
         return [PR.from_api(d) for page in _json_values(r.stdout) for d in (page if isinstance(page, list) else [page])]
@@ -334,7 +346,7 @@ def _message(pr: PR) -> str:
 
 class Queue:
     def __init__(self, workdir: Path, *, remote: str, github, ready: Callable[[int, str], bool],
-                 store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
+                 store=None, shadow: bool = False, rules: Rules | None = None, log: Callable[[str], None] = print,
                  auth: tuple[str, ...] = (), first: tuple[int, ...] = (),
                  before_cutoff: Callable[[int, str], str | None] | None = None,
                  marked_by: Callable[[int, str], str | None] | None = None,
@@ -347,7 +359,6 @@ class Queue:
         #: takes a running check's commit off `next`
         self.hold = 0
         self.branch = SHADOW_BRANCH if shadow else BRANCH
-        self.notes = Path(notes or os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes")
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
 
     # -- the clone and its state
@@ -410,7 +421,7 @@ class Queue:
         try:
             return json.loads(self.state_path.read_text())
         except (OSError, ValueError):
-            return {"ejected": {}, "notified": [], "conflicts": {}}
+            return {"ejected": {}, "conflicts": {}}
 
     def save_state(self, state: dict) -> None:
         tmp = self.state_path.with_suffix(".tmp")
@@ -576,7 +587,6 @@ class Queue:
                 e.state, e.why = "refused", why
                 dropped.add(n)
                 conflicts[str(n)] = {"head": e.pr.head, "why": why, "handle": self.handle(e.pr)}
-                self.notify(e, "conflict", why, state, dry_run)
                 continue
             tip = commit
             members.append(Member(n, e.pr.head, e.pr.owner or "", commit))
@@ -609,13 +619,12 @@ class Queue:
             self.log(f"research queue: #{pr}'s ready mark at {prs[pr].head[:12]} is withdrawn ({target}); {said}")
             if lost:
                 raise QueueError(f"#{pr}'s withdrawn mark didn't reach the store's remote, so other queues may still admit it: {said}")
-        self.notify(Entry(prs[pr]), "eject", f"ejected from `{self.branch}`: {reason}", state, False)
         self.save_state(state)
         return prs[pr]
 
     def tell_ejected(self, p: PR, reason: str, by: str, post: Callable[..., bool] | None = None) -> int:
-        """A hand ejection's notice, posted as ``by`` in the merge thread to `@ci` and the lane that owns ``p``: the handoff note
-        `notify` writes reaches no one from a VM that doesn't sync its notes, and only a handle's holder may post as it.  Drive's
+        """A hand ejection's notice, posted as ``by`` in the merge thread to `@ci` and the lane that owns ``p`` (only a handle's
+        holder may post as it).  Drive's
         own ejections are told by `Driver.refuse`.  1, with the text to send, when the post failed."""
         from .drive import CI, _merge_thread, merge_thread_post
 
@@ -681,31 +690,6 @@ class Queue:
             return m
         self.log(f"research queue: no commit on `{self.branch}` has a passing check yet (newest: {newest})")
         return None
-
-    # -- notices
-
-    def notify(self, e: Entry, kind: str, text: str, state: dict, dry_run: bool) -> None:
-        """One handoff per PR head and kind, to the owner's lane (or `coordinator/` for an owner known only by agent id)."""
-        key = f"{e.pr.number}@{e.pr.head}:{kind}"
-        if key in state["notified"]:
-            return
-        owner = e.pr.owner or "unknown"
-        lane = "coordinator" if AGENT_RE.fullmatch(owner) or owner == "unknown" else owner
-        if self.shadow or dry_run:
-            self.log(f"research queue: would tell {owner} (lanes/{lane}/): #{e.pr.number} {text}")
-            return
-        stamp = time.strftime("%Y%m%dT%H%MZ", time.gmtime())
-        d = self.notes / "lanes" / lane
-        d.mkdir(parents=True, exist_ok=True)
-        p = d / f"{stamp}-handoff-from-merge-queue-{e.pr.number}-{kind}.md"
-        p.write_text(f"lane: {lane} · kind: handoff · from: merge-queue · to: {owner} · created: {stamp}\n\n"
-                     f"# #{e.pr.number} {kind}: {text.split(':')[0]}\n\n- **PR:** #{e.pr.number} {e.pr.title}\n"
-                     f"- **Head:** `{e.pr.head}`\n- **What happened:** {text}\n"
-                     f"- **Next:** push a fix; a new head is admitted again at the tip of `{self.branch}`.\n")
-        state["notified"].append(key)
-        if os.environ.get("RESEARCH_NOTES_SYNC") == "1":
-            subprocess.run([sys.executable, "-m", "research", "notes", "sync", "--path", f"lanes/{lane}"], capture_output=True)
-        self.log(f"research queue: wrote {owner}'s handoff note: {p}")
 
     # -- status
 
@@ -1118,7 +1102,7 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive"])
+    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report"])
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
@@ -1138,7 +1122,8 @@ def main(argv: list[str]) -> int:
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
-    ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once")
+    ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once; "
+                                                                      "report: of merge groups")
     ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
                                                                            "or after this time (default: `marked_after` in the rules file)")
@@ -1150,14 +1135,14 @@ def main(argv: list[str]) -> int:
         ap.error(f"--first {a.first!r}: PR numbers separated by commas")
     if a.marked_after and not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", a.marked_after):
         ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
-    if a.dry_run and a.command not in ("sync", "land", "drive"):
-        ap.error(f"--dry-run is for sync, land and drive only: `{a.command}` would act for real")
+    if a.dry_run and a.command not in ("sync", "land", "drive", "report"):
+        ap.error(f"--dry-run is for sync, land, drive and report only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot), --local (here) and --mark (no tier)")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
-    if a.command == "drive" and not a.on:
-        ap.error("drive needs --on MACHINE (train.sh's: a machine, or `auto`) for the checks it launches")
+    if a.command in ("drive", "report") and not a.on:
+        ap.error(f"{a.command} needs --on MACHINE (train.sh's: a machine, or `auto`) for the checks it launches")
     if a.command in ("ready", "judge") and not a.by:
         ap.error(f"{a.command} writes the owner's ready mark: pass --by <lane> (or set $RESEARCH_LANE)")
     a.by = a.by or "merge-queue"
@@ -1210,6 +1195,11 @@ def main(argv: list[str]) -> int:
             from .drive import Driver
 
             Driver(q, on=a.on, max_running=a.max_running, train_size=a.train_size).tick(dry_run=a.dry_run)
+            return 0
+        if a.command == "report":
+            from .mergequeue import Reporter, Statuses
+
+            Reporter(q, on=a.on, statuses=Statuses(repo), max_running=a.max_running).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")

@@ -237,6 +237,18 @@ def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
     assert why == ["layers[D].mode: added on both sides, differently"]
 
 
+def test_two_branches_that_each_add_a_root_merge_the_roots():
+    """c3-spec-2 against c3-n11-readcol (13 Oct): each side added a test module to Flock's roots."""
+    base = {"roots": ["Flock", "Flock.Test.RecOpening", "VStar"]}
+    ours = {"roots": ["Flock", "Flock.Test.RecOpen", "Flock.Test.RecOpening", "VStar"]}
+    theirs = {"roots": ["Flock", "Flock.Test.RecOpening", "Flock.Test.ReadWhole", "VStar"]}
+    merged, why = M.merge(base, ours, theirs)
+    assert why == []
+    assert merged["roots"] == ["Flock", "Flock.Test.RecOpen", "Flock.Test.RecOpening", "Flock.Test.ReadWhole", "VStar"]
+    merged, why = M.merge(base, {"roots": ["Flock", "VStar"]}, theirs)
+    assert why == [] and merged["roots"] == ["Flock", "Flock.Test.ReadWhole", "VStar"], "what one side removed stays removed"
+
+
 def _lean(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
     for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
         (tmp / n).write_text(t)

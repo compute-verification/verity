@@ -72,7 +72,7 @@
   "fp8_moe_backend": "TRITON (oracle.fp8: on sm_90 with 128x128 block FP8 and no expert parallelism Triton is moved to the front)",
   "router": "GroupedTopKRouter -> _C.grouped_topk (sigmoid, n_group 1, topk_group 1, renormalize, routed_scaling_factor 2.5 inside the kernel)",
   "rotary": "one shared RotaryEmbedding (is_neox_style false, base 8e6, cos_sin_cache [1048576, 64] bf16); the indexer's rope is the same instance (indexer_rope_interleave true)",
-  "allreduce_norm": "fused_allreduce_rms_norm: FlashInfer TRT-LLM fused all-reduce + residual add + RMSNorm (fp32 accumulation) when the step's token count M <= 0.5 MiB / (H * 2 B) = 42 at TP8 on sm_90 and the NVSwitch workspace exists; otherwise tensor_model_parallel_all_reduce then RMSNorm.forward_cuda (fused_add_rms_norm). Decode steps take the first path, a 256-token prefill the second.",
+  "allreduce_norm": "fused_allreduce_rms_norm: FlashInfer TRT-LLM fused all-reduce + residual add + RMSNorm (fp32 accumulation) when the step's token count M <= 0.5 MiB / (H * 2 B) = 42 at TP8 on sm_90 and the NVSwitch workspace exists; otherwise tensor_model_parallel_all_reduce then RMSNorm.forward_cuda (fused_add_rms_norm). Decode steps take the first path, a 256-token prefill the second. tensor_model_parallel_all_reduce runs FlashInfer's standalone MNNVL all-reduce (fi_ar_comm) to 42 tokens and torch's multimem_all_reduce_ (symm_mem_comm) past it to 64 MiB, whose f32 adds happen in the NVSwitch in an order the capture reads off with probes, at vLLM's defaults (the custom all-reduce on, capped at 256 KiB beside symmetric memory, so taking none) as with the custom all-reduce off. The capture covers both settings through 2048 tokens at H=6144 and the defaults through 2048 at H=7168 (tp_allreduce.CAPTURED).",
   "embedding": "VocabParallelEmbedding sharded (19360 rows per rank): masked gather then all-reduce; fused_embed_norm is not used (it needs the full table on a rank)",
   "glm52_low_latency_gemm": "inactive (SM103 and BF16 only)",
   "mtp": "num_nextn_predict_layers 1 is not built: no speculative decoding in the serve command"
@@ -181,9 +181,12 @@
    "note": "torch.ops._C.silu_and_mul (CUDA act_and_mul_kernel): SiluMul_v2, the Build's silu_mul. SiluMul_v1 is not this kernel's function (NaN, gate -inf, gates past expf overflow, -0)"
   },
   "silu-mul-block-quant": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. No Definition yet (fp8_moe.py on cursor/hopper-block-fp8-8c79 leaves it to its own); its two outputs are the w2 Program's xq and sx"
+   "status": "port",
+   "definitions": [
+    "SiluMulFp8BlockQuant_v1",
+    "SiluMulFp8BlockQuant_v2"
+   ],
+   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. fp8_moe.SiluMulFp8BlockQuant_v1{I, G} (Boolean _v2); its two outputs are the w2 Program's xq and sx; tests/properties/glm53_block_fp8_capture_gpu.py compares the served w2 input against it on the H200"
   },
   "bf16-add": {
    "status": "exists",
@@ -221,16 +224,24 @@
    "note": "a value the runtime only moves (a cache write): checked by word equality against the taps it copies, no Program"
   },
   "sigmoid-router": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp",
-   "branch": "cursor/sigmoid-router-8c79"
+   "status": "port",
+   "definitions": [
+    "MoeRouterSigmoidBias_v1",
+    "MoeRouterSigmoidBias_v2"
+   ],
+   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp. Registered (moe.MoeRouterSigmoidBias_v1, Boolean _v2); its capture GO is on sm_120, not yet cc 9.0"
   },
   "fp8-moe-triton": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): per_token_group_quant_fp8 of the expert input (ue8m0 iff DeepGEMM e8m0 is in use: off with VLLM_USE_DEEP_GEMM=0), w13 launch, then the w2 launch with MUL_ROUTED_WEIGHT",
-   "branch": "cursor/hopper-block-fp8-8c79"
+   "status": "port",
+   "definitions": [
+    "Fp8GroupQuant_v1",
+    "Fp8GroupQuant_v2",
+    "MoeExpertFp8BlockGemm_v1",
+    "MoeExpertFp8BlockGemm_v2",
+    "MoeExpertFp8BlockGemmW_v1",
+    "MoeExpertFp8BlockGemmW_v2"
+   ],
+   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): per_token_group_quant_fp8 of the expert input (ue8m0 iff DeepGEMM e8m0 is in use: off with VLLM_USE_DEEP_GEMM=0), w13 launch, then the w2 launch with MUL_ROUTED_WEIGHT. Registered (fp8.Fp8GroupQuant_v1, fp8_moe.MoeExpertFp8BlockGemm(W)_v1, Booleans _v2); tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics on the H200"
   },
   "fused-rmsnorm-triton": {
    "status": "port",
@@ -255,27 +266,50 @@
    "note": "interleaved (GPT-J) RoPE on the 64 rope dims inside _fused_norm_rope_kernel (k_pe) and fused_q (q_pe): f32 from the bf16 cos_sin_cache, out[2i] = bf16(fma(x1, c, -RN(x2 s))) and out[2i+1] = bf16(fma(x1, s, RN(x2 c))) (x1, x2 = x[2i], x[2i+1]): RoPEHeadGptJ_v2{D=64} per head. The H200 capture (tests/properties/glm53_dsa_capture_gpu.py, run r20261012-222325-ce92) settles both k_pe and q_pe on it; RoPEHeadGptJ_v1 differs on 48 and 384 of their words"
   },
   "tp-allreduce": {
-   "status": "committed-only",
+   "status": "port",
    "definitions": [
-    "AllReduce2_v1",
-    "AllReduce_v2"
+    "AllReduceMnnvl_v1",
+    "AllReduceMultimem_v1",
+    "AllReduceCustom_v1"
    ],
-   "note": "the TP8 all-reduce on 8xH200 (custom / symm-mem / NCCL, chosen at runtime): AllReduce2_v1 is WORLD 2 and AllReduce_v2 WORLD 4 on L40S, neither this one. Every rank's partial is a tap, so a later AllReduce Program checks against the same root"
+   "note": "the TP8 all-reduce on 8xH200 at WORLD 8 (registry/tp_allreduce.py): FlashInfer's MNNVL all-reduce to 42 tokens at H=6144 (AllReduceMnnvl_v1, one-shot to 10 tokens, two-shot past), torch's multimem_all_reduce_ past it to 5461 (AllReduceMultimem_v1, parameterised by one f32 add tree per owner rank and FTZ, which the capture pins), at vLLM's defaults and with the custom all-reduce off alike: beside symmetric memory the custom all-reduce's cap is 256 KiB, inside FlashInfer's 0.5 MiB, so it takes none of them. Only under VLLM_ALLREDUCE_USE_SYMM_MEM=0 (the switch) does vLLM's custom all-reduce run, to 682 tokens (AllReduceCustom_v1, 2-stage there). Covered (tp_allreduce.CAPTURED; runs r20261013-085842-2147, r20261013-091723-e383 and r20261013-115512-5ff3): at H=6144, FlashInfer 1-42 and multimem 43-2048 both at the defaults and with the custom all-reduce off; at H=7168, FlashInfer 1-36 and multimem 37-2048 at the defaults, with the same trees and IEEE adds; and the custom all-reduce 43-682 under the switch. NCCL's routes are not covered. Port until a Build rule binds them. Every rank's partial is a tap, so the Program checks against the same root"
   },
   "fused-allreduce-rmsnorm": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "FlashInfer trtllm_allreduce_fusion (one-shot, fp32_acc, AR_RESIDUAL_RMS_NORM) on decode steps; on prefill steps the TP8 all-reduce then fused_add_rms_norm. No Program for either the fused kernel or the TP8 all-reduce"
+   "status": "port",
+   "definitions": [
+    "AllReduceRmsNormMnnvl_v1"
+   ],
+   "note": "FlashInfer's allreduce_fusion on its MNNVL workspace (kARResidualRMSNorm, fp32_acc, weight_bias 0) on decode steps: AllReduceRmsNormMnnvl_v1 at the shot mnnvl_shot names, its sum * rcp(N) + eps contraction decided per shot by the H200 capture (FMA in both shots); on prefill steps the TP8 all-reduce (tp-allreduce) then fused_add_rms_norm (rmsnorm-cuda). _can_use_flashinfer reads neither the custom all-reduce nor symmetric memory, so the split at 42 tokens is the same at every setting. Covered (tp_allreduce.CAPTURED) at 1-42 tokens both at vLLM's defaults and with the custom all-reduce off. Port until a Build rule binds it"
   },
   "cublas-bf16-gemm": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "cuBLAS/cuBLASLt BF16 GEMM (F.linear, torch.mm out_dtype=f32, torch.bmm). The registered BF16 GEMMs model vLLM's batch-invariant Triton matmul_persistent, which runs only under VLLM_BATCH_INVARIANT=1 (refused for this model)"
+   "status": "port",
+   "definitions": [
+    "Gemm_v2",
+    "Gemm_v3",
+    "BatchedGemm_v1",
+    "BatchedGemm_v2",
+    "CublasSplitKGemm_v1",
+    "CublasSplitKGemm_v2"
+   ],
+   "note": "cuBLAS/cuBLASLt BF16 GEMM at vLLM's default: a non-split output coordinate is core's Gemm_v2{K, N, HopperBF16WgmmaDot16_v1} (Boolean Gemm_v3); a split-K bf16 output is cublas_bf16.CublasSplitKGemm_v1{K, N, SPLIT_K, DOT} / _v2, with SPLIT_K pinned by bf16_gemm_check.default_cublas_split_k for cuBLAS 12.9.1 on the H200. q_nope_absorb and v_absorb (torch.bmm on the load-derived W_UK_T / W_UV views) are cublas_bf16.BatchedGemm_v1{NHL, K, N, DOT} / _v2. tests/properties/glm53_bf16_gemm_capture_gpu.py pins each kernel, grid, split count, cuBLAS version, hypothesis fit and every output word on the H200; its split-K-off run remains a named comparison variant"
   },
   "router-gemm": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "GateLinear bf16 x bf16 -> f32: cuteDSL ll_bf16_gemm for M <= 16 when available, else cuBLAS torch.mm(out_dtype=f32); which tier runs is a flag of the module (allow_ll_bf16_gemm / allow_cublas_router_gemm)"
+   "status": "port",
+   "definitions": [
+    "LlBf16DotprodGemm_v1",
+    "LlBf16DotprodGemm_v2",
+    "LlBf16DotprodDot_v1",
+    "LlBf16DotprodDot_v2",
+    "LlBf16SplitKGemm_v1",
+    "LlBf16SplitKGemm_v2",
+    "LlBf16SplitKDot_v1",
+    "LlBf16SplitKDot_v2",
+    "GemmF32Out_v1",
+    "GemmF32Out_v2",
+    "CublasSplitKGemmF32Out_v1",
+    "CublasSplitKGemmF32Out_v2"
+   ],
+   "note": "GateLinear bf16 x bf16 -> f32, by M as bf16_gemm_check.dispatch_sm90 names vLLM's kernel: M <= 4 cuteDSL ll_bf16 dotprod (LlBf16DotprodGemm_v1{256, 6144, BS 128, VEC 8, FMA}; FMA the H200 capture decides), 5 <= M <= 16 ll_bf16 split-K (LlBf16SplitKGemm_v1{256, 6144, SPLIT_K 6, or 8 at M 9 and 11, TILE_K 256, WARPS 4, HopperBF16WgmmaDot16_v1}), M > 16 default cuBLAS torch.mm(out_dtype=f32), either GemmF32Out_v1 / _v2 or CublasSplitKGemmF32Out_v1 / _v2 at bf16_gemm_check.default_cublas_split_k's H200 split count. tests/properties/glm53_bf16_gemm_capture_gpu.py pins the dispatch, cuBLAS selection, hypotheses and words on the H200"
   },
   "fa3-prefill-attention": {
    "status": "port",

@@ -1,7 +1,8 @@
 """GLM-5.3-FP8's block-scaled FP8 GEMMs on Hopper against their Programs: the H200's first-hour go/no-go for binding
-`fp8.ScaledMmFp8Block_v1` (CUTLASS blockwise, `CutlassFp8BlockScaledMMKernel`), `fp8_moe.MoeExpertFp8BlockGemm(W)_v1` (Triton
-`fused_moe_kernel`), `fp8_moe.SiluMulFp8BlockQuant_v1` (`silu_and_mul_per_block_quant` between the expert launches) and
-`fp8.Fp8GroupQuant_v1` (`_C.per_token_group_fp8_quant`) at GLM-5.3's shapes.
+`fp8.ScaledMmFp8Block_v1` (CUTLASS blockwise, `CutlassFp8BlockScaledMMKernel`), `fp8_moe.MoeExpertFp8BlockGemm(W)_v3{...,DOT}` (Triton
+`fused_moe_kernel`, DOT the step of the launch's tile, `fp8_moe.sm90_dot`), `fp8_moe.SiluMulFp8BlockQuant_v1`
+(`silu_and_mul_per_block_quant` between the expert launches) and `fp8.Fp8GroupQuant_v1` (`_C.per_token_group_fp8_quant`) at GLM-5.3's
+shapes.
 
 One GPU process writes `<out>/glm53_block_fp8_capture.json`, the property record `glm53_block_fp8_capture` (`properties.record`), and
 prints one line per case and then `GLM53-BLOCK-FP8 GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
@@ -22,32 +23,36 @@ instead.  A phase that raises records its error and fails the verdict without st
              output word against `ScaledMmFp8Block_v1{K,N,128}` (twin `scaled_mm_fp8_block_row`).
   moe        `fused_experts` (E = 256, top_k 8, hidden 6144), twice, at one TP8 rank's shard (I = 256) and at whole experts (I = 2048),
              with uniform and hot routing: every `fused_moe_kernel` launch is intercepted (its operands, config, and BLOCK_SIZE_K and
-             SWAP_AB as invoke_fused_moe_triton_kernel computes them, fused_moe.py:789-846), every (token, slot) row of the w13 launch
-             against `MoeExpertFp8BlockGemm_v1{K=6144,N=2I,G=128,KB,SWAP}`, of the w2 launch against `MoeExpertFp8BlockGemmW_v1{K=I,
-             N=6144,...}` (twin `fp8_moe_rows.moe_expert_fp8_block_row`), and the w13 activation's quant against `Fp8GroupQuant_v1`.  TritonExperts's
+             SWAP_AB as invoke_fused_moe_triton_kernel computes them, fused_moe.py:789-846), its e4m3 step DOT = `launch_dot` of its
+             tile, every (token, slot) row of the w13 launch against `MoeExpertFp8BlockGemm_v3{K=6144,N=2I,G=128,KB,SWAP,DOT}`, of the
+             w2 launch against `MoeExpertFp8BlockGemmW_v3{K=I,N=6144,...}` (twin `fp8_moe_rows.moe_expert_fp8_block_row` with that
+             DOT's step), and the w13 activation's quant against `Fp8GroupQuant_v1`.  TritonExperts's
              own w2 input, `silu_and_mul_per_block_quant` of the w13 output (triton_moe.py:471-485), is launched as `served_w2`, and
              its (q, scale) on every pair against `SiluMulFp8BlockQuant_v1{I,128}` of that pair's w13 output row (twin
              `fp8_moe_rows.silu_mul_fp8_block_quant_rows`): the `act` rows.
-             Every launch's (token, slot) -> expert assignment is checked against the routing, and its tile against `wgmma_tile`.
+             Every launch's (token, slot) -> expert assignment is checked against the routing.
   reference  on a sample of the coordinates and rows of every launch, the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`) of
-             `ScaledMmFp8BlockCoordinate_v1`, `MoeExpertFp8BlockCoordinate(W)_v1`, `Fp8GroupQuant_v1` and `SiluMulFp8BlockQuant_v1`, which
-             the twins must equal.
-  ptx        every `fused_moe_kernel` compiled in the run's Triton cache: its dot is wgmma, every wgmma `.m64nNk32.f32.e4m3.e4m3`, and
-             no `mma.sync`.
+             `ScaledMmFp8BlockCoordinate_v1`, `MoeExpertFp8BlockCoordinate(W)_v3{...,DOT}`, `Fp8GroupQuant_v1` and
+             `SiluMulFp8BlockQuant_v1`, which the twins must equal.
+  ptx        every `fused_moe_kernel` compiled in the run's Triton cache, by the e4m3 `tt.dot` of its TTIR and its warps: a wgmma tile's
+             PTX has wgmma, every one `.m64nNk32.f32.e4m3.e4m3`, and no `mma.sync`; an MMAv2 tile's has `mma.sync`, every one
+             `.m16n8k16.row.col.f32.f16.f16.f32`, the e4m3 widening `cvt.rn.f16x2.e4m3x2`, and no wgmma; and every launch's tile (the
+             dot's M, N and K, and its warps) is among the compiled kernels.
   bind       the Programs bind at every shape (`ScaledMmFp8Block_v1{6144,2624,128}` reads cdiv(2624, 128) = 21 weight-scale rows).
 
-The Programs model the k32 wgmma step only.  vLLM's tuned H200 config for GLM-5.3's TP8 expert shard (fused_moe/configs/`E=256,N=256,
-device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json`, looked up at the nearest batch size, fused_moe.py:1442-1447)
-gives M <= 3 (every decode step of a batch of one) BLOCK_SIZE_M 8 x BLOCK_SIZE_N 32, which SWAP_AB does not take (BLOCK_SIZE_N < 64)
-and wgmma cannot run (the dot's M is not a multiple of 64), and M in 4..6 BLOCK_SIZE_M 8 x BLOCK_SIZE_N 64, which SWAP_AB takes with
-the dot's N = 8, which Triton 3.7.1 does not lower to wgmma either (both took `mma.sync.m16n8k16` on f16 on the H200, run
-r20261012-215811-1ef7): those launches fail `wgmma_tile` and the PTX scan.  `--wgmma-configs` writes those configs with every such
-entry widened to BLOCK_SIZE_M 16 x BLOCK_SIZE_N 64, the shape the same file gives M = 8 (`widen_for_wgmma`), to `<out>/moe_configs/`,
-and runs with `VLLM_TUNED_CONFIG_FOLDER` pointing there; an engine served with the same folder launches the same tiles.
+vLLM's tuned H200 config for GLM-5.3's TP8 expert shard (fused_moe/configs/`E=256,N=256,device_name=NVIDIA_H200,dtype=fp8_w8a8,
+block_shape=[128,128].json`, looked up at the nearest batch size, fused_moe.py:1442-1447) gives M <= 3 (every decode step of a batch
+of one) BLOCK_SIZE_M 8 x BLOCK_SIZE_N 32, which SWAP_AB does not take (BLOCK_SIZE_N < 64), and M in 4..6 BLOCK_SIZE_M 8 x
+BLOCK_SIZE_N 64, which SWAP_AB takes with the dot's N = 8: no wgmma tile either way (both took `mma.sync.m16n8k16` on f16 on the
+H200, run r20261012-215811-1ef7), so their DOT is `HopperE4m3MmaV2Dot32_v1`, every larger batch's and whole experts'
+`HopperE4m3QgmmaDot32_v1`.  `--wgmma-configs` instead writes those configs with every such entry widened to BLOCK_SIZE_M 16 x
+BLOCK_SIZE_N 64, the shape the same file gives M = 8 (`widen_for_wgmma`), to `<out>/moe_configs/`, and runs with
+`VLLM_TUNED_CONFIG_FOLDER` pointing there; an engine served with the same folder launches the same tiles, all wgmma.
 
 GO needs 0 mismatches and 0 unresolved words (a twin flags a word it cannot claim: a non-finite accumulator; these operands are finite
-and none should occur), every MoE case's `act` rows compared with 0 mismatches, deterministic reruns, every expert launch on a wgmma
-tile, and with `--batch-invariant` every expert launch at BLOCK_SIZE_K 32 without SWAP_AB.
+and none should occur), every MoE case's `act` rows compared with 0 mismatches, deterministic reruns (the same words, as bits:
+`same_words`), the PTX scan, and with `--batch-invariant` every expert launch at BLOCK_SIZE_K 32 without SWAP_AB.  The verdict line
+counts the expert launches by DOT.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_block_fp8_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--wgmma-configs] [--batch-invariant]
@@ -74,7 +79,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-block-fp8-capture/v1"
+SCHEMA = "verity-vllm/glm53-block-fp8-capture/v2"
 RECORD = "glm53_block_fp8_capture.json"
 GROUP = 128
 HIDDEN = 6144
@@ -101,6 +106,12 @@ JOB_LANE_STEPS = 4_000_000
 WGMMA = re.compile(r"wgmma\.mma_async\.sync\.aligned\.m\d+n\d+k\d+\.\w+\.\w+\.\w+")
 WGMMA_OK = re.compile(r"wgmma\.mma_async\.sync\.aligned\.m64n\d+k32\.f32\.e4m3\.e4m3")
 MMA_SYNC = re.compile(r"(?<![\w.])mma\.sync\.aligned\.m\d+n\d+k\d+[\w.]*")
+MMA_SYNC_OK = re.compile(r"mma\.sync\.aligned\.m16n8k16\.row\.col\.f32\.f16\.f16\.f32")
+CVT_E4M3 = re.compile(r"cvt\.rn\.f16x2\.e4m3x2")
+#: an e4m3 `tl.dot` in a kernel's TTIR: (M, K) x (K, N)
+TT_DOT = re.compile(r"tt\.dot [^\n]*: tensor<(\d+)x(\d+)xf8E4M3FN> \* tensor<(\d+)x(\d+)xf8E4M3FN> -> tensor<(\d+)x(\d+)xf32>")
+#: the PTX each DOT's instructions are (`ptx`)
+FAMILY = {"HopperE4m3QgmmaDot32_v1": "wgmma", "HopperE4m3MmaV2Dot32_v1": "mmav2"}
 
 
 def cdiv(a: int, b: int) -> int:
@@ -120,14 +131,32 @@ def environment(batch_invariant: bool, triton_cache: Path) -> dict[str, str]:
     return env
 
 
+def launch_dot(config: dict[str, Any], swap: bool):
+    """The e4m3 k32 step a `fused_moe_kernel` launch's tile compiles to, the DOT its Programs bind (`fp8_moe.sm90_dot`; Triton's
+    default 4 warps when the config names none)."""
+    from verity_vllm.program.registry.fp8_moe import sm90_dot
+
+    return sm90_dot(config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"], config.get("num_warps", 4), swap)
+
+
+def dot_definition(dot_id: str):
+    """The DOT a launch record names, by id."""
+    from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+
+    return {d.id: d for d in (HopperE4m3QgmmaDot32, HopperE4m3MmaV2Dot32)}[dot_id]
+
+
+def launch_tile(x: dict[str, Any]) -> tuple[int, int, int, int]:
+    """A launch record's `tl.dot` as its kernel's TTIR shows it, (M, N, K, warps): M x N = BLOCK_SIZE_N x BLOCK_SIZE_M under SWAP_AB."""
+    c = x["config"]
+    m, n = (c["BLOCK_SIZE_N"], c["BLOCK_SIZE_M"]) if x["SWAP"] else (c["BLOCK_SIZE_M"], c["BLOCK_SIZE_N"])
+    return m, n, x["KB"], c.get("num_warps", 4)
+
+
 def wgmma_tile(config: dict[str, Any], swap: bool) -> bool:
-    """Whether Triton can lower a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3), the one FP8 dot the Programs model: the
-    dot's M (BLOCK_SIZE_N under SWAP_AB, else BLOCK_SIZE_M) a multiple of 64 over a multiple of 4 warps and its N a multiple of 8 and
-    at least 16 (Triton 3.7.1 on the H200 lowered the e4m3 dot at N = 8 to `mma.sync.m16n8k16` and at N = 16 to `wgmma.m64n16k32`,
-    run r20261012-215811-1ef7).  A smaller tile takes `mma.sync` or FMA, which no Program models; the PTX scan checks the compiled
-    kernels either way."""
-    m, n = (config["BLOCK_SIZE_N"], config["BLOCK_SIZE_M"]) if swap else (config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"])
-    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 8 == 0 and n >= 16
+    """Whether Triton lowers a launch's `tl.dot` to wgmma (MMAv3): `launch_dot` is `HopperE4m3QgmmaDot32_v1` (Triton 3.7.1 on the
+    H200 lowered the e4m3 dot at N = 8 to `mma.sync.m16n8k16` and at N = 16 to `wgmma.m64n16k32`, run r20261012-215811-1ef7)."""
+    return FAMILY[launch_dot(config, swap).id] == "wgmma"
 
 
 def widen_for_wgmma(configs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, list]]:
@@ -210,6 +239,15 @@ def _u32(t) -> np.ndarray:
     import torch
 
     return t.contiguous().to(torch.float32).cpu().numpy().view(np.uint32)
+
+
+def same_words(a, b) -> bool:
+    """Two runs' outputs of one launch hold the same words, compared as bits: a NaN word is unequal to itself as a float, so
+    `torch.equal` calls two runs that wrote the same words different wherever one is NaN."""
+    import torch
+
+    return bool(a.dtype == b.dtype and a.shape == b.shape
+                and torch.equal(a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8)))
 
 
 def _save(d: Path, **arrays: np.ndarray) -> dict[str, str]:
@@ -300,7 +338,7 @@ def dense_launch(work: Path, name: str, K: int, N: int, M: int, seed: int) -> tu
     op = seen[0]
     launch = {"phase": "dense", "case": name, "K": K, "N": N, "M": M, "kernel": type(kernel).__name__,
               "swap_ab_expected": M % 4 != 0, "A_shape": list(op["A"].shape), "As_shape": list(op["As"].shape),
-              "Bs_shape": list(op["Bs"].shape), "out_dtype": str(out1.dtype), "deterministic": bool(torch.equal(out1, out2)),
+              "Bs_shape": list(op["Bs"].shape), "out_dtype": str(out1.dtype), "deterministic": same_words(out1, out2),
               "operands_ok": (list(op["A"].shape) == [M, K] and list(op["As"].shape) == [M, K // GROUP]
                               and list(op["B"].shape) == [N, K] and list(op["Bs"].shape) == [cdiv(N, GROUP), K // GROUP]
                               and op["A"].dtype == torch.float8_e4m3fn and out1.dtype == torch.bfloat16)}
@@ -479,8 +517,8 @@ def moe_launches(work: Path, name: str, inter: int, M: int, hot: int, seed: int,
         rec = {"phase": "moe", "case": name, "launch": kind, "I": inter, "M": M, "hot": hot, "K": int(K), "N": int(N), "pairs": int(n_pairs),
                "config": L["config"], "KB": L["KB"], "SWAP": L["SWAP"], "block_shape": L["block_shape"], "flags": L["flags"], "bias": L["bias"],
                "mul_routed_weight": L["mul_routed_weight"], "top_k": L["top_k"], "experts_used": int(used.size),
-               "deterministic": True if twin is None else bool(torch.equal(L["C"], twin["C"])),
-               "assignment_ok": _assignment_ok(L, ids_flat), "wgmma_tile": wgmma_tile(L["config"], L["SWAP"])}
+               "deterministic": True if twin is None else same_words(L["C"], twin["C"]),
+               "assignment_ok": _assignment_ok(L, ids_flat), "dot": launch_dot(L["config"], L["SWAP"]).id}
         rec["statics_ok"] = (statics_known and L["block_shape"] == [GROUP, GROUP] and L["flags"] == [True, False, False, False, False]
                              and not L["bias"] and L["mul_routed_weight"] == (kind != "w13") and L["top_k"] == (TOP_K if kind == "w13" else 1)
                              and n_pairs == M * TOP_K and (not batch_invariant or (L["KB"] == 32 and not L["SWAP"]
@@ -496,7 +534,7 @@ def moe_launches(work: Path, name: str, inter: int, M: int, hot: int, seed: int,
             arrays["x"] = _u16(x)
         if kind == "served_w2":
             arrays["gu"] = _u16(w13["C"].reshape(n_pairs, 2 * inter))
-        job = {"phase": "moe", "case": name, "launch": kind, "K": int(K), "N": int(N), "KB": L["KB"], "SWAP": L["SWAP"],
+        job = {"phase": "moe", "case": name, "launch": kind, "K": int(K), "N": int(N), "KB": L["KB"], "SWAP": L["SWAP"], "dot": rec["dot"],
                "mul": L["mul_routed_weight"], "top_k": L["top_k"], "pairs": int(n_pairs), "statics_known": statics_known,
                "paths": _save(d, **arrays)}
         for p0, p1 in _chunks(n_pairs, N * K // 32):
@@ -528,12 +566,12 @@ def compare_act(a: dict[str, np.ndarray], p0: int, p1: int, reference: bool, rec
 
 
 def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
-    """Pairs [p0, p1) of one expert launch: the GEMM twin at the launch's statics against the kernel's words, the w13 activation's
-    quant twin, the served w2 launch's input against the activation's twin, and the reference on a sample."""
+    """Pairs [p0, p1) of one expert launch: the GEMM twin at the launch's statics and DOT against the kernel's words, the w13
+    activation's quant twin, the served w2 launch's input against the activation's twin, and the reference on a sample."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.kernels.fp8_moe_rows import moe_expert_fp8_block_row
+    from verity_vllm.program.kernels.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
     from verity_vllm.program.registry import fp8 as F
     from verity_vllm.program.registry import fp8_moe as MO
 
@@ -550,7 +588,8 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     for p in range(p0, p1):
         t, u = p // top_k, int(a["umap"][int(a["ids"][p])])
         g = int(a["tw"][p]) if job["mul"] else None
-        want, nonfin = moe_expert_fp8_block_row(a["A"][t], a["As"][t], a["B"][u], a["Bs"][u], G=GROUP, KB=KB, swap=SWAP, g=g)
+        want, nonfin = moe_expert_fp8_block_row(a["A"][t], a["As"][t], a["B"][u], a["Bs"][u], G=GROUP, KB=KB, swap=SWAP, g=g,
+                                                dot=TWIN_DOT_OF[job["dot"]])
         got = np.asarray(a["C"][p])
         bad = np.flatnonzero((want != got) & ~nonfin)
         rec["words"] += N
@@ -560,8 +599,8 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
             rec["first_mismatch"] = {"pair": p, "token": t, "expert": int(a["ids"][p]), "column": int(bad[0]), "want": int(want[bad[0]]),
                                      "kernel": int(got[bad[0]])}
         if job["reference"] and p in (p0, p1 - 1):
-            fam = MO.MoeExpertFp8BlockCoordinateW if job["mul"] else MO.MoeExpertFp8BlockCoordinate
-            fn = bind(fam, K=K, G=GROUP, KB=KB, SWAP=SWAP)
+            fam = MO.MoeExpertFp8BlockCoordinateWV3 if job["mul"] else MO.MoeExpertFp8BlockCoordinateV3
+            fn = bind(fam, K=K, G=GROUP, KB=KB, SWAP=SWAP, DOT=dot_definition(job["dot"]))
             for n in sorted({0, N - 1, (p * 7919) % N}):
                 args = [a["A"][t].tolist(), a["As"][t].tolist()] + ([g] if g is not None else []) + [a["B"][u][n].tolist(),
                                                                                                      a["Bs"][u][n // GROUP].tolist()]
@@ -587,20 +626,49 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------------------------------------------- ptx and bind
-def ptx(triton_cache: Path) -> dict[str, Any]:
-    """Every `fused_moe_kernel` the run compiled (one Triton cache entry per specialization): its wgmma and mma.sync instructions;
-    ok when each has a wgmma, every wgmma k32 e4m3, and none an mma.sync (a kernel with neither runs its dot on FMAs)."""
-    kernels = {}
+def ptx_family(text: str) -> str | None:
+    """The DOT family a kernel's PTX runs: "wgmma" (every wgmma k32 e4m3, no mma.sync), "mmav2" (every mma.sync the f16 m16n8k16
+    with an f32 accumulator, on e4m3 widened by `cvt.rn.f16x2.e4m3x2`, no wgmma), else None (neither, both, or another form: a
+    kernel with neither runs its dot on FMAs)."""
+    wg, ms = WGMMA.findall(text), MMA_SYNC.findall(text)
+    if wg and not ms and all(WGMMA_OK.fullmatch(w) for w in wg):
+        return "wgmma"
+    if ms and not wg and all(MMA_SYNC_OK.fullmatch(m) for m in ms) and CVT_E4M3.search(text):
+        return "mmav2"
+    return None
+
+
+def ptx(triton_cache: Path, tiles: set[tuple[int, int, int, int]] = frozenset()) -> dict[str, Any]:
+    """Every `fused_moe_kernel` the run compiled (one Triton cache entry per specialization): its e4m3 `tt.dot` (M, N, K) from the
+    TTIR, its warps from the entry's metadata, the DOT family `fp8_moe.sm90_dot` gives that tile, and the family its PTX runs
+    (`ptx_family`); ok when every kernel's two agree and every launch's tile (`launch_tile`) is among the kernels."""
+    from verity_vllm.program.registry.fp8_moe import sm90_dot
+
+    kernels: dict[str, Any] = {}
     for f in sorted(glob.glob(str(triton_cache / "**" / "fused_moe_kernel*.ptx"), recursive=True)):
-        text = Path(f).read_text(errors="replace")
-        kernels[str(Path(f).relative_to(triton_cache))] = {"wgmma": dict(Counter(WGMMA.findall(text))),
-                                                           "mma_sync": dict(Counter(MMA_SYNC.findall(text)))}
-    ok = bool(kernels) and all(k["wgmma"] and not k["mma_sync"] and all(WGMMA_OK.fullmatch(w) for w in k["wgmma"]) for k in kernels.values())
-    return {"files": len(kernels), "kernels": kernels, "ok": ok}
+        p = Path(f)
+        text = p.read_text(errors="replace")
+        ttir, meta = p.with_suffix(".ttir"), p.with_suffix(".json")
+        dots = TT_DOT.findall(ttir.read_text(errors="replace")) if ttir.exists() else []
+        warps = json.loads(meta.read_text()).get("num_warps") if meta.exists() else None
+        k = {"wgmma": dict(Counter(WGMMA.findall(text))), "mma_sync": dict(Counter(MMA_SYNC.findall(text))),
+             "cvt_e4m3": len(CVT_E4M3.findall(text)), "tt_dot": sorted({tuple(map(int, d)) for d in dots}), "num_warps": warps}
+        shapes = {(int(m), int(n), int(kk)) for m, kk, _, n, _, _ in dots}
+        k["tile"] = [*next(iter(shapes)), warps] if len(shapes) == 1 and isinstance(warps, int) else None
+        k["expected"] = FAMILY[sm90_dot(k["tile"][0], k["tile"][1], warps, False).id] if k["tile"] else None
+        k["observed"] = ptx_family(text)
+        k["ok"] = k["expected"] is not None and k["observed"] == k["expected"]
+        kernels[str(p.relative_to(triton_cache))] = k
+    compiled = {tuple(k["tile"]) for k in kernels.values() if k["tile"]}
+    missing = sorted(t for t in tiles if t not in compiled)
+    ok = bool(kernels) and all(k["ok"] for k in kernels.values()) and not missing
+    return {"files": len(kernels), "kernels": kernels, "families": dict(Counter(k["observed"] for k in kernels.values())),
+            "missing_tiles": [list(t) for t in missing], "ok": ok}
 
 
-def bind_check(statics: set[tuple[int, bool]]) -> dict[str, Any]:
-    """The Programs bind at every GLM-5.3 shape, with the weight-scale rows each reads."""
+def bind_check(statics: set[tuple[int, bool, str]]) -> dict[str, Any]:
+    """The Programs bind at every GLM-5.3 shape, the expert GEMMs at every (KB, SWAP, DOT id) the run launched, with the
+    weight-scale rows each reads."""
     from verity.ml.circuits.evaluation.batch import type_shape
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import fp8 as F
@@ -615,12 +683,12 @@ def bind_check(statics: set[tuple[int, bool]]) -> dict[str, Any]:
         params, ret = bind(MO.SiluMulFp8BlockQuant, I=inter, G=GROUP).signature()
         out[f"SiluMulFp8BlockQuant_v1{{I={inter},G={GROUP}}}"] = (list(type_shape(dict(params)["gu"])) == [2 * inter]
                                                                   and [list(type_shape(t)) for t in ret.fields] == [[inter], [inter // GROUP]])
-    for KB, SWAP in sorted(statics or {(32, False)}):
+    for KB, SWAP, dot in sorted(statics or {(32, False, "HopperE4m3QgmmaDot32_v1")}):
         for inter in sorted({c[1] for c in MOE}):
-            for fam, K, N in ((MO.MoeExpertFp8BlockGemm, HIDDEN, 2 * inter), (MO.MoeExpertFp8BlockGemmW, inter, HIDDEN)):
-                params, _ = bind(fam, K=K, N=N, G=GROUP, KB=KB, SWAP=SWAP).signature()
-                out[f"{fam.name}_v1{{K={K},N={N},G={GROUP},KB={KB},SWAP={SWAP}}}"] = \
-                    list(type_shape(dict(params)["ws"])) == [cdiv(N, GROUP), K // GROUP]
+            for fam, K, N in ((MO.MoeExpertFp8BlockGemmV3, HIDDEN, 2 * inter), (MO.MoeExpertFp8BlockGemmWV3, inter, HIDDEN)):
+                fn = bind(fam, K=K, N=N, G=GROUP, KB=KB, SWAP=SWAP, DOT=dot_definition(dot))
+                params, _ = fn.signature()
+                out[fn.id] = list(type_shape(dict(params)["ws"])) == [cdiv(N, GROUP), K // GROUP]
     return {"bindings": out, "ok": all(out.values())}
 
 
@@ -630,8 +698,7 @@ TOTALS = ("words", "mismatch", "unresolved", "quant_rows", "quant_mismatch", "re
 
 
 def _launch_ok(x: dict[str, Any]) -> bool:
-    return bool(x["deterministic"] and x.get("operands_ok", True) and x.get("statics_ok", True) and x.get("assignment_ok") is not False
-                and x.get("wgmma_tile", True))
+    return bool(x["deterministic"] and x.get("operands_ok", True) and x.get("statics_ok", True) and x.get("assignment_ok") is not False)
 
 
 def _words_ok(t: dict[str, Any]) -> bool:
@@ -657,7 +724,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if x["phase"] == "moe":
             cfg = x["config"]
             c["tiles"].append(f"{x['launch']}:{cfg['BLOCK_SIZE_M']}x{cfg['BLOCK_SIZE_N']}x{x['KB']}{'/swap' if x['SWAP'] else ''}"
-                              f"{'' if x['wgmma_tile'] else '/no-wgmma'}")
+                              f"/{FAMILY[x['dot']]}")
     for e in doc["errors"]:
         if e.split("/")[0] in ("dense", "moe") and e not in out:
             out[e] = {"launches_ok": False, "totals": {k: 0 for k in TOTALS}, "tiles": []}
@@ -733,14 +800,16 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
                     for x in launches:
                         print(f"[glm53-block-fp8] moe {name:13s} {x['launch']:9s} K={x['K']:5d} N={x['N']:5d} pairs={x['pairs']:5d} "
                               f"KB={x['KB']} SWAP={x['SWAP']} config={x['config']} det={x['deterministic']} statics={x['statics_ok']} "
-                              f"assignment={x['assignment_ok']} wgmma_tile={x['wgmma_tile']}", flush=True)
+                              f"assignment={x['assignment_ok']} dot={x['dot']}", flush=True)
                 except Exception as e:  # noqa: BLE001
                     doc["errors"][f"moe/{name}"] = _error(e)
                     print(f"[glm53-block-fp8] moe {name} ERROR {doc['errors'][f'moe/{name}'][:400]}", flush=True)
-    doc["ptx"] = ptx(work / "triton_cache") if "moe" in only else {"ok": None}
+    moe = [x for x in doc["launches"] if x["phase"] == "moe"]
+    doc["dots"] = dict(Counter(x["dot"] for x in moe))
+    doc["ptx"] = ptx(work / "triton_cache", {launch_tile(x) for x in moe}) if "moe" in only else {"ok": None}
     print(f"[glm53-block-fp8] ptx {json.dumps(doc['ptx'])}", flush=True)
     try:
-        doc["bind"] = bind_check({(x["KB"], x["SWAP"]) for x in doc["launches"] if x["phase"] == "moe"})
+        doc["bind"] = bind_check({(x["KB"], x["SWAP"], x["dot"]) for x in moe})
     except Exception as e:  # noqa: BLE001
         doc["errors"]["bind"] = _error(e)
         doc["bind"] = {"ok": False}
@@ -775,7 +844,8 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
     print(f"GLM53-BLOCK-FP8 {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} totals={json.dumps(doc['totals'])} "
-          f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}", flush=True)
+          f"dots={json.dumps(doc['dots'])} no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} "
+          f"errors={sorted(doc['errors'])}", flush=True)
     return doc
 
 

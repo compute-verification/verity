@@ -361,6 +361,18 @@ class _VllmEngine:
         from verity_vllm.engine.hooks import Hooks, live
         from verity_vllm.pipeline.llm import LLM
 
+        self.arm, self.obj, self.installed = arm, plugin(arm), None
+        self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
+        if self.obj is not None:
+            before = {id(e) for e in live()}
+            self.installed = _callback(self.obj, "install", self.target, None)
+            added = [e for e in live() if id(e) not in before]
+            owned = {id(e) for e in self.target.hooks.entries}
+            foreign = [e for e in added if id(e) not in owned or e.tag != self.target.hooks.tag]
+            if foreign:
+                self.target.hooks.uninstall()
+                raise RuntimeError(f"experimental arm {arm.id!r} patched outside target.hooks")
+
         settings = preset.engine_settings
         precision = arm.precision or preset.precision
         engine: dict[str, Any] = {
@@ -399,17 +411,10 @@ class _VllmEngine:
         else:
             engine["protocols"] = ",".join(arm.protocols) or None
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
-        self.arm, self.obj, self.installed = arm, plugin(arm), None
-        self.target = Target(arm, self.llm, self.llm._engine.model, Hooks(tag=f"bench:{arm.id}"))
-        if self.obj is not None:
-            before = {id(e) for e in live()}
-            self.installed = _callback(self.obj, "install", self.target, None)
-            added = [e for e in live() if id(e) not in before]
-            owned = {id(e) for e in self.target.hooks.entries}
-            foreign = [e for e in added if id(e) not in owned or e.tag != self.target.hooks.tag]
-            if foreign:
-                self.target.hooks.uninstall()
-                raise RuntimeError(f"experimental arm {arm.id!r} patched outside target.hooks")
+        self.target.engine, self.target.model = self.llm, self.llm._engine.model
+        ready = getattr(self.installed, "ready", None)
+        if callable(ready):
+            ready(self.target)
         self.identity = {
             "vllm_version": vllm.__version__,
             "kernel_digest": (
@@ -597,6 +602,8 @@ class ProcessEngineFactory:
         self.context = mp.get_context("spawn")
 
     def create(self, arm: Arm, preset: Preset, *, resident: bool) -> BenchEngine:
+        if resident and not arm.resident:
+            raise ResidentCapacityError(f"arm {arm.id!r} requires an isolated engine lifetime")
         parent, child = self.context.Pipe()
         process = self.context.Process(target=_worker, args=(child, arm, preset, resident, self.eager))
         process.start()

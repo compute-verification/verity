@@ -56,6 +56,17 @@ def test_bandwidth_device_claims_are_measured_and_cited_separately() -> None:
     assert (inst.kind, inst.standing) == ("assumption", "conjectured") and "uniformly random blocks" in inst.name
 
 
+def test_rate_audit_claims_are_cited_separately() -> None:
+    device, work = get("rate-device"), get("rate-codec-work")
+    assert (device.kind, device.standing) == ("model", None) and "L - rho" in device.name and "non-adaptive" in device.name
+    assert (work.kind, work.standing) == ("assumption", "measured") and "x * c_enc / b" in work.name
+    assert "k >= 2 rounds" in work.name and "false when the payload is known" in work.name
+    assert "Incompressible(W)" in work.name
+    verbatim = get("rate-sketch-verbatim")
+    assert (verbatim.kind, verbatim.standing) == ("model", None) and "only as its blocks" in verbatim.name
+    assert "precomputed sketches" in verbatim.name
+
+
 def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
     device, speed, inst = get("pous-ring-device"), get("pous-ring-speed"), get("pous-ring-instantiation")
     assert (device.kind, device.standing) == ("model", None) and not any(c.isdigit() for c in device.name)
