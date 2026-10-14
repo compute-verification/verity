@@ -132,6 +132,37 @@ def test_graphs_are_refused_for_arms_bound_to_the_build():
         ProcessEngineFactory(eager=False).create(bound_arm, get_preset("llama31-8b-fp8-1gpu"), resident=True)
 
 
+def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
+    from verity_bench.vllm.runner import _ProcessEngine
+
+    class DeadConn:
+        def __init__(self, final=None):
+            self.final = final
+
+        def send(self, _):
+            raise BrokenPipeError
+
+        def poll(self, _timeout):
+            return self.final is not None
+
+        def recv(self):
+            return self.final
+
+    class DeadProcess:
+        exitcode = -9
+
+        def join(self):
+            pass
+
+    point = SweepPoint(batch=8, prompt_tokens=512, traffic="mixed", output_tokens=64)
+    drained = _ProcessEngine(DeadProcess(), DeadConn({"error": "RuntimeError: CUDA out of memory", "trace": ""}), {})
+    with pytest.raises(RuntimeError, match="died during gate: RuntimeError: CUDA out of memory"):
+        drained.gate(point)
+    silent = _ProcessEngine(DeadProcess(), DeadConn(), {})
+    with pytest.raises(RuntimeError, match=r"exit code -9 \(SIGKILL: likely out of memory"):
+        silent.gate(point)
+
+
 def test_local_checkpoint_is_content_bound(tmp_path):
     (tmp_path / "config.json").write_bytes(b"config")
     (tmp_path / "weights.safetensors").write_bytes(b"weights")

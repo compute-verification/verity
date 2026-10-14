@@ -561,14 +561,30 @@ class _ProcessEngine:
     closed: bool = False
 
     def _ask(self, name: str, arg: Any = None) -> Any:
-        self.conn.send((name, arg))
         try:
+            self.conn.send((name, arg))
             response = self.conn.recv()
-        except EOFError:
-            raise RuntimeError(f"benchmark engine process exited with code {self.process.exitcode}") from None
+        except (EOFError, ConnectionResetError, BrokenPipeError):
+            raise RuntimeError(self._death_report(name)) from None
         if "error" in response:
             raise RuntimeError(response["error"] + "\n" + response.get("trace", ""))
         return response["value"]
+
+    def _death_report(self, doing: str) -> str:
+        """The engine process died under ``doing``: its own last error when it managed to send one, else its exit code,
+        so a kill during a gate surfaces as what it was instead of a connection error (re-baseline bug list, 14 Oct)."""
+        final = None
+        try:
+            if self.conn.poll(0):
+                final = self.conn.recv()
+        except (EOFError, ConnectionResetError, OSError):
+            pass
+        self.process.join()
+        if isinstance(final, dict) and "error" in final:
+            return f"benchmark engine process died during {doing}: " + final["error"] + "\n" + final.get("trace", "")
+        code = self.process.exitcode
+        hint = " (SIGKILL: likely out of memory; its own last error is on the job's stderr)" if code == -9 else ""
+        return f"benchmark engine process died during {doing} with exit code {code}{hint}"
 
     def gate(self, point: SweepPoint) -> Mapping[str, tuple[int, ...]]:
         return self._ask("gate", point)
@@ -617,9 +633,11 @@ class ProcessEngineFactory:
         child.close()
         try:
             response = parent.recv()
-        except EOFError:
+        except (EOFError, ConnectionResetError):
             process.join()
-            raise RuntimeError(f"benchmark engine {arm.id!r} exited during startup with code {process.exitcode}") from None
+            code = process.exitcode
+            hint = " (SIGKILL: likely out of memory; its own last error is on the job's stderr)" if code == -9 else ""
+            raise RuntimeError(f"benchmark engine {arm.id!r} exited during startup with code {code}{hint}") from None
         if "error" in response:
             process.join()
             error = response["error"] + "\n" + response.get("trace", "")
