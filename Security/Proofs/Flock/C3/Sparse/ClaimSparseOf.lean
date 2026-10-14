@@ -232,3 +232,10 @@ theorem hlt_sparseOf {stmt : Fin S → VStar.Stmt}
 end
 
 end FlockC3.Sparse
+
+#print axioms FlockC3.Sparse.playsT_claim_of_session
+#print axioms FlockC3.Sparse.coins_of_session
+#print axioms FlockC3.Sparse.claim_sparseOf
+#print axioms FlockC3.Sparse.ties_sparseOf
+#print axioms FlockC3.Sparse.hot_sparseOf
+#print axioms FlockC3.Sparse.hlt_sparseOf
