@@ -234,7 +234,3 @@ theorem sparseCountedAt_of_check {Cm Coin : Type} {wr : List (Cm × Coin) → Le
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.sparseCoins_of_checkCommitRounds
-#print axioms FlockC3.Compose.sparseCountedAt_of_check
-#print axioms Flock.Guarantees.HoloSchedCheck.commitRounds_of_check
