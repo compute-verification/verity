@@ -219,5 +219,3 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
     vDecodesR_wmsgLeaf (I := holoInnerAt T CT st hp) (own := own) (sel := sel) dec, vFullR_of_read _ _⟩
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.hbr_honest_reg

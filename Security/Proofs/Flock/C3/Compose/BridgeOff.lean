@@ -86,5 +86,3 @@ theorem vbridgeOff_c3_off (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
   exact ⟨out, (congrArg (fun l => PlaysT _ l out) ht).mpr hpl, hacc⟩
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.vbridgeOff_c3_off

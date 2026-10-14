@@ -159,9 +159,3 @@ theorem leaf_of_accepts (o : Reg' × Finset (Fin nv) × FlockSoundness.Discharge
 end Session
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.hT_of_root
-
-#print axioms FlockC3.RegLevels.hT_of_leaf
-
-#print axioms FlockC3.RegLevels.leaf_of_accepts
