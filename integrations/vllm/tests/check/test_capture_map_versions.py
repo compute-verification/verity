@@ -38,6 +38,10 @@ SITES = {
     "moe-sum": {"moe_sum": dict(TOPK=2, H=8)},
     "token-select": {"token_select": dict(V=16)},
     "all-gather": {"all_gather": dict(WORLD=8, N=8)},
+    "rmsnorm-cuda": {
+        "rmsnorm_cuda": dict(N=6144, EPS=1e-5, BLOCK=768),
+        "rmsnorm_fused_cuda": dict(N=6144, EPS=1e-5, BLOCK=1024),
+    },
 }
 
 

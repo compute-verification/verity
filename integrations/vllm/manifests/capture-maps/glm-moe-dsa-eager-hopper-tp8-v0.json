@@ -241,7 +241,9 @@
    "status": "exists",
    "definitions": [
     "RMSNormCudaVector8_v1",
-    "RMSNormFusedCudaVector8_v1"
+    "RMSNormFusedCudaVector8_v1",
+    "RMSNormCudaVector8_v2",
+    "RMSNormFusedCudaVector8_v2"
    ],
    "note": "vLLM's default non-batch-invariant BF16 rms_norm / fused_add_rms_norm width-8 paths. The Program records BLOCK because M < 256 launches rms_norm at min(N/8,1024) and fused_add_rms_norm at min(N,1024), while M >= 256 launches both at 256; the H200 capture checks M 1,42,43,64,256,2048 at GLM-5.3 N=6144 and DeepSeek-V4-Pro N=7168"
   },

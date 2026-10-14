@@ -191,11 +191,11 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        40, 29, {"exists": 16, "tonight": 4, "port": 12, "copy": 2, "committed-only": 17})
+        40, 29, {"exists": 17, "tonight": 4, "port": 11, "copy": 2, "committed-only": 17})
     assert brief(CM.counts(CMAP, ENV, ("dense-mha",))) == (
-        47, 2347, {"exists": 720, "tonight": 300, "port": 454, "copy": 79, "committed-only": 794}, 63)
+        47, 2347, {"exists": 721, "tonight": 300, "port": 453, "copy": 79, "committed-only": 794}, 63)
     assert brief(CM.counts(CMAP, ENV, ("sparse-mqa",))) == (
-        49, 2389, {"exists": 642, "tonight": 300, "port": 496, "copy": 79, "committed-only": 872}, 183)
+        49, 2389, {"exists": 643, "tonight": 300, "port": 495, "copy": 79, "committed-only": 872}, 183)
 
 
 def test_the_bound_tap_counts():

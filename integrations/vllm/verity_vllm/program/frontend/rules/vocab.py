@@ -14,6 +14,7 @@ from typing import Callable
 from verity.ml.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
+from verity_vllm.program.registry import cuda_rmsnorm as _cuda_rmsnorm
 from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
@@ -340,6 +341,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # accepted records' (Ampere-family step under FA2); those keep `gemm` / `attention` above, so their digests do not move.
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
            "gemm_bias_dot": lambda K, N, DOT: ir_bind(_gemm_bias.GemmBiasV2, K=K, N=N, DOT=DOT),
+           "rmsnorm_cuda": lambda N, EPS, BLOCK: ir_bind(_cuda_rmsnorm.RMSNormCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
+           "rmsnorm_fused_cuda": lambda N, EPS, BLOCK:
+               ir_bind(_cuda_rmsnorm.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
            # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`), an
            # `FA2_MASKED_FROM` FA2's (`Attention_v5`, `targets.fa2_check_inf`); optional statics, so the role and its note -- and with them
            # this vocabulary's version -- stay as they were; a `CAP` with an `FA2_MASKED_FROM` binds the softcapped chain
@@ -417,6 +421,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "gemm_dot": "Gemm_v2{K,N,DOT}: the batch-invariant Triton GEMM with the target's registered k16 step (registry.targets.gemm_spec)",
            "gemm_bias_dot": "GemmBias_v2{K,N,DOT}: Gemm_v2 then BiasAdd_v1 per output word, the biased linear on a target whose record says "
                             "gemm_bias_dot (registry.targets.gemm_bias_spec)",
+           "rmsnorm_cuda": "RMSNormCudaVector8_v1{N,EPS,BLOCK}: vLLM's default non-batch-invariant BF16 CUDA rms_norm",
+           "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}: vLLM's default non-batch-invariant BF16 CUDA "
+                                 "fused_add_rms_norm",
            "attention_dot": "Attention_v2{T,NH,KVH,D,BN,DOT,INV}: FA2/FA3 causal GQA with the target's step, block size and epilogue "
                             "(registry.targets.attention_spec)",
            "attention": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}: FA2 causal GQA, kBlockN as a declared static (b1.AttentionV3)",
