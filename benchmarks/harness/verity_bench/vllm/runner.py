@@ -358,13 +358,14 @@ class _VllmEngine:
         engine: dict[str, Any] = {
             "tensor_parallel_size": preset.gpu_count,
             "max_num_seqs": 128,
-            "max_num_batched_tokens": int(settings["max_num_batched_tokens"]),
             "max_model_len": int(settings["max_model_len"]),
             "gpu_memory_utilization": float(settings[
                 "resident_gpu_memory_utilization" if resident else "block_gpu_memory_utilization"
             ]),
             "enforce_eager": eager,
         }
+        if settings.get("max_num_batched_tokens") is not None:
+            engine["max_num_batched_tokens"] = int(settings["max_num_batched_tokens"])
         if precision == "fp8":
             engine["quantization"] = "fp8"
         elif precision != "bfloat16":

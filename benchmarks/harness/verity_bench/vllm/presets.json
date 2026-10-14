@@ -5,7 +5,10 @@
   "case": "LLAMA31_8B",
   "precision": "fp8",
   "gpu_id": "rtx-pro-6000",
-  "gpu_count": 1
+  "gpu_count": 1,
+  "engine_settings": {
+   "max_num_batched_tokens": 16384
+  }
  },
  "llama31-70b-fp8-8gpu": {
   "model": "meta-llama/Llama-3.1-70B",
@@ -15,6 +18,7 @@
   "gpu_id": "rtx-pro-6000",
   "gpu_count": 8,
   "engine_settings": {
+   "max_num_batched_tokens": 16384,
    "resident_gpu_memory_utilization": 0.44
   },
   "unavailable_reason": "the repository has no pinned Llama-3.1-70B checkpoint yet"
@@ -27,7 +31,7 @@
   "gpu_id": "h200",
   "gpu_count": 8,
   "engine_settings": {
-   "max_num_batched_tokens": 32768
+   "enforce_eager": true
   }
  }
 }

@@ -18,6 +18,12 @@ from verity_bench.vllm.runner import ProcessEngineFactory, run_benchmark
 from verity_bench.vllm.table import render
 
 
+def effective_eager(preset: Any, requested: bool) -> bool:
+    """A preset may require eager execution even when the CLI default uses graphs."""
+
+    return bool(requested or preset.engine_settings.get("enforce_eager", False))
+
+
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--preset", choices=tuple(PRESETS), required=True)
     parser.add_argument("--model-path", type=Path, default=None,
@@ -38,18 +44,19 @@ def run(a: Any) -> int:
     preset = get_preset(a.preset)
     if a.model_path is not None:
         preset = local_checkpoint(preset, a.model_path)
+    eager = effective_eager(preset, a.eager)
     preset = replace(
         preset,
         engine_settings={
             **preset.engine_settings,
-            "cuda_graphs": not a.eager,
-            "enforce_eager": a.eager,
+            "cuda_graphs": not eager,
+            "enforce_eager": eager,
         },
     )
     arms = resolve_arms(a.arms, tuple(a.arm_module))
     points = expand_sweep(a.sweep)
     a.out.mkdir(parents=True, exist_ok=True)
-    doc = run_benchmark(preset, arms, points, sweep=a.sweep, reps=a.reps, factory=ProcessEngineFactory(eager=a.eager))
+    doc = run_benchmark(preset, arms, points, sweep=a.sweep, reps=a.reps, factory=ProcessEngineFactory(eager=eager))
     write(doc, a.out / "result.json")
     table = render(doc)
     (a.out / "table.md").write_text(table)

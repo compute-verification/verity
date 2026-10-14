@@ -44,7 +44,6 @@ class Preset:
 COMMON = {
     "cuda_graphs": True,
     "capture_sizes": [1, 8, 32, 128],
-    "max_num_batched_tokens": 16_384,
     "max_model_len": 8_384,
     "resident_gpu_memory_utilization": 0.40,
     "block_gpu_memory_utilization": 0.90,

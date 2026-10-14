@@ -6,6 +6,7 @@ import pytest
 
 from verity_bench.cli import _parser
 from verity_bench.vllm.arms import Arm, resolve_arms
+from verity_bench.vllm.cli import effective_eager
 from verity_bench.vllm.presets import GPUS, SweepPoint, expand_sweep, get_preset, local_checkpoint
 from verity_bench.vllm.result import IdentityMismatch, judge, validate
 from verity_bench.vllm.runner import ResidentCapacityError, run_benchmark
@@ -88,6 +89,14 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
     assert args.command == "vllm"
     assert get_preset(args.preset).gpu_id == "rtx-pro-6000"
     assert set(GPUS) == {"rtx-pro-6000", "h200"}
+
+
+def test_glm53_keeps_the_verified_vllm_scheduler_default_and_runs_eager():
+    preset = get_preset("glm53-fp8-8gpu")
+    assert preset.revision == "aca966e4e02791568aa6a4ced368624b3d897f42"
+    assert "max_num_batched_tokens" not in preset.engine_settings
+    assert effective_eager(preset, requested=False) is True
+    assert get_preset("llama31-8b-fp8-1gpu").engine_settings["max_num_batched_tokens"] == 16_384
 
 
 def test_stock_precisions_are_independent_reference_arms():
