@@ -148,6 +148,38 @@ def test_arrival_loop_reports_request_latency_from_the_injected_clock():
     } == {"arrival_s": 1.0, "first_output_s": 3.0, "time_to_first_token_s": 2.0}
 
 
+def test_arrival_loop_records_none_latency_when_a_request_finishes_without_output():
+    va = _load_adapter()
+
+    class NoOutputEngine:
+        def __init__(self):
+            self.active = False
+
+        def add_request(self, **kwargs):
+            self.active = True
+
+        def has_unfinished_requests(self):
+            return self.active
+
+        def step(self):
+            self.active = False
+            return [types.SimpleNamespace(request_id="r0", finished=True, outputs=[])]
+
+    request = types.SimpleNamespace(request_id="r0", prompt_token_ids=[1], max_tokens=0, arrive_step=0)
+    ticks = iter((10.0, 11.0, 12.0, 13.0))
+    _, timing = va.run_requests_arrivals(
+        types.SimpleNamespace(llm_engine=NoOutputEngine()),
+        [request],
+        lambda r: types.SimpleNamespace(max_tokens=r.max_tokens),
+        clock=lambda: next(ticks),
+        request_timing=True,
+    )
+    record = timing["requests"]["r0"]
+    assert record["first_output_s"] is None
+    assert record["time_to_first_token_s"] is None
+    assert record["n_generated"] == timing["generated_tokens"] == 0
+
+
 class _LaggedStubEngine(_StubEngine):
     """vLLM V1's shape: `step()` runs a forward for the active requests but RETURNS the previous forward's outputs (one-iteration
     output lag); a request stays 'unfinished' for the client until its finish output has been returned; a step with nothing active

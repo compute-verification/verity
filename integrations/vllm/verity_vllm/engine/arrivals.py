@@ -193,13 +193,14 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
         rec[rid]["admit_iter"] = ai
         rec[rid]["finish_iter"] = fi
         if request_timing:
+            first = first_at.get(rid)
             rec[rid]["arrival_s"] = admit_at[rid] - t0
-            rec[rid]["first_output_s"] = first_at[rid] - t0
-            rec[rid]["time_to_first_token_s"] = first_at[rid] - admit_at[rid]
-    gen = sum(len(o.outputs[0].token_ids) for o in finished.values())
+            rec[rid]["first_output_s"] = None if first is None else first - t0
+            rec[rid]["time_to_first_token_s"] = None if first is None else first - admit_at[rid]
+    gen = sum(len(o.outputs[0].token_ids) if o.outputs else 0 for o in finished.values())
     prompt = sum(len(r.prompt_token_ids) for r in reqs)
     for rid, o in finished.items():
-        rec[rid]["n_generated"] = len(o.outputs[0].token_ids)
+        rec[rid]["n_generated"] = len(o.outputs[0].token_ids) if o.outputs else 0
     timing = {"wall_s": dt, "add_requests_s": t_add, "engine_steps": n_forwards, "step_iterations": steps, "output_lag_steps": lag,
               "output_lag_source": lag_source, "output_lag_measured": measured,
               "generated_tokens": gen, "prompt_tokens": prompt,
