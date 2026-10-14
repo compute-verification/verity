@@ -245,6 +245,22 @@ theorem coinsAccepted_of_keep (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     Flock.Guarantees.ChecksC3 F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (F.bind j)
       rows J o tr) (fun _ _ _ hP => hP.2) hex
 
+theorem coinsAccepted_checked' {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
+    {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
+    {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
+    {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
+    {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
+    {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg}
+    {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
+    {coins : String → Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+      (Vs j).OuterR Reg'}
+    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
+    CoinsAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+      rows wr reg coins :=
+  coinsAccepted_of_keep _ (fun R ω t R₂ j => Flock.Guarantees.custodied zr hCust h R ω t R₂ j) fun _ _ _ _ _ => by
+    simp only [C3Family.checked, C3Family.honest, Flock.Guarantees.checkedC3, Flock.Guarantees.innerHeld]
+
 variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
   {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
   {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
@@ -387,5 +403,8 @@ end FlockC3.Sparse
 #print axioms FlockC3.Sparse.stmt0_of_setup
 #print axioms FlockC3.Sparse.coinsAccepted_of_keep
 #print axioms FlockC3.Sparse.coinsAccepted_checked
+#print axioms FlockC3.Sparse.coinsAccepted_checked'
+#check @FlockC3.Sparse.coinsAccepted_checked
+#print FlockC3.Sparse.coinsAccepted_checked
 #print axioms FlockC3.Sparse.sparseCoins_of_accepted
 #print axioms FlockC3.Sparse.sparseSessionAt_of_regs
