@@ -117,9 +117,9 @@ PROFILE_B1_EAGER = Vocabulary(
         "pouw_linear_row_bias": "NcpLinearRowBias_v1{K,N}: one row of a biased pouw:ncp-v2 linear's served y (NcpDequant adds the bias)",
         "bias_add": "BiasAdd_v1{N}: aten.add(bf16, bf16)",
         "gemm_bias": "GemmBias_v1{K,N}: Gemm_v1 then BiasAdd_v1 per output word (the batch-invariant linear with a bias)",
-        "rmsnorm": "target-selected RMSNorm: batch-invariant Triton RMSNormTriton_v1{N,EPS}, otherwise "
+        "rmsnorm": "target-selected norm: batch-invariant Triton RMSNormTriton_v1{N,EPS}, otherwise "
                    "RMSNormCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
-        "rmsnorm_fused": "target-selected fused RMSNorm: batch-invariant generic RMSNormFusedCuda_v2{N,EPS}, otherwise "
+        "rmsnorm_fused": "target-selected fused norm: batch-invariant generic RMSNormFusedCuda_v2{N,EPS}, otherwise "
                          "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
         "rope": "RoPE_v1{NHEADS,D}: vLLM _C.rotary_embedding NeoX, bf16 cos/sin cache row as Input",
         "attention": "Attention_v1{T,NH,KVH,D}: FA2 causal GQA over [T][KVH][D] caches",
