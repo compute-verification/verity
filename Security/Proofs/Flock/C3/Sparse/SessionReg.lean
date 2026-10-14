@@ -7,20 +7,23 @@ import Proofs.Flock.C3.Reps.WRead
 /-!
 # `SparseSessionAt` from the sparse session's acceptance
 
-`SparseSessionAt` at the rec-sparse session `s` of V*'s list, at copy 0 of a unit `u`, the coins record the verifier
-holds (`c3Held`), the words copy 0 holds at the message columns (`wSparse`, `rdOf`'s array) and coins whose phase coins
-are check 5's (`csOf`).
+`SparseSessionAt` at the rec-sparse session `s` of V*'s list, at copy 0 of a unit `u` with `u.val = i.val`, at any
+coins record `C` every hold's `c3Of` is (`C3Held`'s form: W's `c3Held_heldC3` gives it at `heldC3 ish sp (held (wr t))`,
+with `held x := innerCommitsAt x.1 x.2 st reg`), the words copy 0 holds at the message columns (`wSparse`, `rdOf`'s
+array) and coins whose phase coins are check 5's (`csOf`).
 
 * `checkSparse_coins`, `check_sparseCoins`: check 5 (`RecCoins.check`) at a `rec-sparse/…` unit holds the coins record
   (`c3`) and computes both reps' sparse coins (`sparseCoins`) under the unit's name. `stackedParams_sparse`,
   `openingParams_sparse`: a RecSparse name is no stacked level's or opening part's, so check 5 reaches `checkSparse`.
   `sparseParams_of_check`: a unit `RecSparse.check` accepted under `unitName sh` has `params` `sh`.
+* `c3_eq_of_held`: the record check 5 holds is `C` where every hold's `c3Of` is `C`.
 * `nw_eq_msum`: w's elements are the message ports' words exactly (`claim` is the last port, and no earlier one).
 * `CoinsAccepted`, `coinsAccepted_of_keep`, `coinsAccepted_checked`: where a checked session accepts, a transcript it
   accepts passes `ChecksC3`. `stmt0_of_setup`: an accepted session's setup has a first statement, of its circuit.
   `sparseCoins_of_accepted`: at the session V*'s list names RecSparse, its circuit is `unitName` of the session's
   shape (`unitShape`, the inner shape's `sparse` entry, `SparseIs`) and check 5 gives both reps' coins.
-* `sparseSessionAt_of_regs`: `SparseSessionAt` from that, the constant 1 (`hone`), the message columns' registrations
+* `sparseSessionAt_of_regs`: `SparseSessionAt`, and its copy with `un.val = i.val` (the h-half tie's pin, K's
+  `h_of_sessionAt`), from that, the constant 1 (`hone`), the message columns' registrations
   (`hkeys`, which `bitAt_of_regBit` makes `wSparse`'s bits), and the registrations of `v` (`hv`), `tau` (`htau`) and the
   zero outputs (`hz`), which the verifier does not check against the coins (`rec-sparse-tau` and `rec-sparse-zero` are
   the prover's registrations, and no check reads their rows).
@@ -145,15 +148,16 @@ theorem nw_eq_msum (sh : RecSparse.Shape) : nw (shOf sh) = ((RecSparse.messagePo
 
 /-! ## The coins record and the words -/
 
-/-- The coins record check 5 holds at the inner shape `ish` and the verifier's hold `cs` (`c3Of`), a fixed record where
-it holds none. -/
-def c3Held (ish : RecVStar.Inner) (cs : Option RecVStar.InnerCommits) : RecCoins.C3 :=
-  (Flock.Guarantees.c3Of ish cs).getD ⟨⟨0, 0, 0, 0⟩, none, ⟨#[], #[], none⟩⟩
-
-theorem c3Held_eq {ish : RecVStar.Inner} {cs : Option RecVStar.InnerCommits} {c3 : RecCoins.C3}
-    (h : Flock.Guarantees.c3Of ish cs = some c3) : c3Held ish cs = c3 := by
-  rw [c3Held, h]
-  rfl
+/-- **The coins record check 5 holds is `C`** where every hold's `c3Of` is `C` (`C3Held`'s form, which W's
+`c3Held_heldC3` gives at `heldC3 ish sp (held (wr t))`). -/
+theorem c3_eq_of_held {ish : RecVStar.Inner} {r : Except String RecVStar.InnerCommits} {c3 C : RecCoins.C3}
+    (h : Flock.Guarantees.c3Of ish r.toOption = some c3)
+    (hC : ∀ cs, r = .ok cs → Flock.Guarantees.c3Of ish (some cs) = some C) : c3 = C := by
+  cases r with
+  | error e =>
+    unfold Flock.Guarantees.c3Of at h
+    cases h
+  | ok cs => exact Option.some.inj (h.symm.trans (hC cs rfl))
 
 theorem c3Of_sparse {ish : RecVStar.Inner} {cs : Option RecVStar.InnerCommits} {c3 : RecCoins.C3}
     (h : Flock.Guarantees.c3Of ish cs = some c3) {sp : RecSparse.Shape} (hsp : ish.sparse = some sp) :
@@ -297,9 +301,10 @@ theorem sparseCoins_of_accepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
   exact ⟨c3, hc3, hco, hname⟩
 
 /-- **(n7) Rep `i`'s sparse phase in V*'s sessions, from the sparse session's acceptance** (`SparseSessionAt`): at an
-accepted outer proof, at session `s`, which V*'s list names RecSparse, and copy 0 of its unit `u`, at the coins record
-the verifier holds (`c3Held`), the words copy 0 holds at the message columns (`wSparse`) and coins `c` whose phase coins
-are check 5's (`csOf`). The coins are check 5's (`sparseCoins_of_accepted`) at the inner shape's RecSparse shape
+accepted outer proof, at session `s`, which V*'s list names RecSparse, and copy 0 of its unit `u` (`u.val = i.val`,
+which the second conjunct carries as the copy's pin), at a coins record `C` every hold's `c3Of` is (`hC`), the words
+copy 0 holds at the message columns (`wSparse`) and coins `c` whose phase coins are check 5's (`csOf`). The coins are
+check 5's (`sparseCoins_of_accepted`, at `C` by `c3_eq_of_held`) at the inner shape's RecSparse shape
 (`c3Of_sparse`); the unit is the verifier's at that shape (`ParseFacts.recSparse`, `sparseParams_of_check`); its message
 columns a row reads register `wSparse`'s bits where they register any (`hkeys`, `bitAt_of_regBit` in the session's
 layer, which agrees with the registrant, and `nw_eq_msum`). The constant 1 (`hone`), `v`'s registered verifier row
@@ -312,9 +317,10 @@ theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
     {τ : (j : Fin (vstarCount F.ish)) → Strategy ((F.zs R ω t R₂ j).game dg N)}
     {o : (j : Fin (vstarCount F.ish)) → Reg' × Finset (Fin (F.Vs j).nv) × Exec.Transcript}
-    (hA : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (i : Fin 2) (u : Fin (F.Vs s).nv) {c : SCoins}
-    (hcs : c.cs = csOf (c3Held F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption)
-      (Flock.RecSparse.unitName (unitShape (holoAt st hp))) i.val)
+    (hA : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (i : Fin 2) (u : Fin (F.Vs s).nv) (hu : u.val = i.val)
+    {C : Flock.RecCoins.C3}
+    (hC : ∀ cs, innerCommitsAt (wr t).1 (wr t).2 st reg = .ok cs → Flock.Guarantees.c3Of F.ish (some cs) = some C)
+    {c : SCoins} (hcs : c.cs = csOf C (Flock.RecSparse.unitName (unitShape (holoAt st hp))) i.val)
     (hone : layers F.zs dg N k Rw R ω t R₂ τ s
       (Const.Prog.oneAt (Placed.keyProg (F.Vs s).c (F.Vs s).hU (F.Vs s).nv) u) = true)
     (hkeys : ∀ q < 128 * ((Flock.RecSparse.messagePorts (unitShape (holoAt st hp))).map (·.2)).sum,
@@ -329,21 +335,24 @@ theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
     (hz : ∀ x < 128 * (Flock.RecSparse.residualNames (unitShape (holoAt st hp))).length,
       RegOut (F.zs R ω t R₂ s) u (FlockC3.Reps.upv_of_outer (F.zs R ω t R₂ s))
         (sparseBase (unitShape (holoAt st hp)) + x) false) :
-    SparseSessionAt (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
-      (c3Held F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption)
-      (Flock.RecSparse.unitName (unitShape (holoAt st hp))) i
-      (wSparse F.Vs (holoAt st hp).cls.shape (Flock.RecSparse.messagePorts (unitShape (holoAt st hp)))
-        (layers F.zs dg N k Rw R ω t R₂ τ) s u) c := by
+    SparseSessionAt (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ) (holoAt st hp) C
+        (Flock.RecSparse.unitName (unitShape (holoAt st hp))) i
+        (wSparse F.Vs (holoAt st hp).cls.shape (Flock.RecSparse.messagePorts (unitShape (holoAt st hp)))
+          (layers F.zs dg N k Rw R ω t R₂ τ) s u) c ∧
+      ∃ (s' : Fin (vstarCount F.ish)) (un : Fin (F.Vs s').nv) (j : ℕ) (hj : j < (F.Vs s').c.upv), un.val = i.val ∧
+        SparseCopyAt (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
+          (wSparse F.Vs (holoAt st hp).cls.shape (Flock.RecSparse.messagePorts (unitShape (holoAt st hp)))
+            (layers F.zs dg N k Rw R ω t R₂ τ) s u) c s' un j hj := by
   obtain ⟨c3, hc3, hco, hname⟩ := sparseCoins_of_accepted F hchk hsp hell hs ⟨(o s).2.2, (hA.1 s).1⟩
   have hck := (parse_facts (F.zs R ω t R₂ s).hc).recSparse
   have hpar := sparseParams_of_check hck hname
-  have hc3' := c3Held_eq hc3
+  obtain rfl := c3_eq_of_held hc3 hC
   obtain ⟨sc, hsc⟩ := hco i.val i.isLt
-  refine ⟨⟨sc, by rw [hc3']; exact hsc, ?_, by rw [hcs, hc3']; exact csOf_eq hsc⟩, Array.size_ofFn, s, u, 0,
-    FlockC3.Reps.upv_of_outer (F.zs R ω t R₂ s), hck, hpar, hone, FlockVBridge.Family.unitLog_le (F.Vs s).hscope,
-    ?_, hv, htau, hz⟩
-  · rw [hc3', c3Of_sparse hc3 hsp, unitShape_holoAt hell]
-  · intro q hq hrd
+  have hcopy : SparseCopyAt (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
+      (wSparse F.Vs (holoAt st hp).cls.shape (Flock.RecSparse.messagePorts (unitShape (holoAt st hp)))
+        (layers F.zs dg N k Rw R ω t R₂ τ) s u) c s u 0 (FlockC3.Reps.upv_of_outer (F.zs R ω t R₂ s)) := by
+    refine ⟨hck, hpar, hone, FlockVBridge.Family.unitLog_le (F.Vs s).hscope, ?_, hv, htau, hz⟩
+    intro q hq hrd
     obtain ⟨b, hb⟩ := hkeys q hq hrd
     obtain ⟨-, -, -, hn⟩ := FlockVBridge.Sparse.check_sparse hck hpar
     have hn' : Flock.HmNets.netOf (Flock.RecSparse.unitName (unitShape (holoAt st hp)))
@@ -364,6 +373,8 @@ theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
       exact hbit
     rw [hw]
     exact hb
+  exact ⟨⟨⟨sc, hsc, by rw [c3Of_sparse hc3 hsp, unitShape_holoAt hell], by rw [hcs]; exact csOf_eq hsc⟩,
+    Array.size_ofFn, s, u, 0, _, hcopy⟩, s, u, 0, _, hu, hcopy⟩
 
 end Family
 
