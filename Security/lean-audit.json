@@ -12708,7 +12708,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "59da6cc3c2c740f20d7f568ead96b7a3dcd83a6f6990fd02279a27f256416d65",
+   "digest": "b533d8db961f49bf2a90fcdbe2cc39140613db112f7b70d6abb4595fe4435d90",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -12778,8 +12778,8 @@
     "Flock.RecVStar.checkOwnBindings": "7e7215cbc641d4e7a62734a4e1f4251f2f53c64cb049e1d4220b185aedb15094",
     "Flock.RecVStar.checkOwnBindings._sparseCasesOn_3": "b34af140f0b48801762d540c7186d39a2f42a3e25d1179ece5789df6802dbeb0",
     "Flock.RecVStar.checkParsed": "e539d8cc3c3d3fb971603d00836e816a09961e55cf25fe88648ed2330207c9eb",
-    "Flock.RecVStar.checkPart": "e617219c60783417c083cf32f00d98f8d0c898147017a81fe911d2775dd3592e",
-    "Flock.RecVStar.checkPart._sparseCasesOn_9": "0239ae6e3280c221f05d87bb12ade0f34319c2cd3e4bf133ef9852fbef44183a",
+    "Flock.RecVStar.checkPart": "b898f3383a6bbc763efbbba6a4a3bfcf2024420745a111242fd24097e5e14afb",
+    "Flock.RecVStar.checkPart._sparseCasesOn_11": "eae0c65d813d90f1267631ab068f7b15e7cbb006dc2488b5b884b404e22554d9",
     "Flock.RecVStar.checkPubRows": "7773199351841982f8f64f395559a2fd44d2b6c622e42742a299b7cbee968db6",
     "Flock.RecVStar.checkRows": "d7bbf004f2ea230d7ff114671294fb50278b0eac9cddd19a99ba322800865906",
     "Flock.RecVStar.checkStackedShape": "cdc27d3648f54150ff75001e409dbe488f224903f45ac61d7c258064c6e5fb1a",
@@ -12810,8 +12810,10 @@
     "Flock.RecVStar.openingPortName": "2316902adfd1c0ed7761e02db5e6e82f0407e5b4eaaa569121a46df988c9529f",
     "Flock.RecVStar.opensBelow": "9baa6453d2437cc2b389173e6622b4db73716f38f7a11cadb9a5c400d358d2ab",
     "Flock.RecVStar.ownPorts": "d276211a420fc635bcf042faca1813aa205001dde5e8016ad78e02668241886e",
+    "Flock.RecVStar.partPorts": "f9669c07a7c4302403e9c5f40f41d514b2078b6d22035ec844cd66a2491cd5c3",
     "Flock.RecVStar.population": "2a41ae08f10ede678cf208852812d2048e712c9c726ed84cd5caaf3a38cd6c94",
     "Flock.RecVStar.portDiff?": "fa3e403d42061786f84d4ba22a5a1346021dfb62680eee9a33f024229a1feae0",
+    "Flock.RecVStar.portNames": "13482f5a31c60fda117a1297d79837cb311ad381de1f918c6d3a940d21114a5f",
     "Flock.RecVStar.rLevelUnder": "44744c534b4f8dc9af93276b4afe267d329086f0ef45653279ec6aa607c5ce4d",
     "Flock.RecVStar.refused": "433c0358c0382ad1c9958b8a66f5fe6f01c0184244e47098d2313ad4a150534f",
     "Flock.RecVStar.registration": "a4ca4c58f3c221551f382c02d10fe9e25e3a134506c4c6246ae473d5862f7b4a",
