@@ -192,5 +192,3 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
   exact hcap
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.hbr_honest_reg
