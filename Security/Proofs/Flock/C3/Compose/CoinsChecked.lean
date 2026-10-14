@@ -75,8 +75,8 @@ theorem holoStreams_of_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (hss : 
   obtain ⟨_, _, _, -, hC, -, -⟩ := FlockC3.VStarList.statements_ok hss
   have hst := FlockC3.VStarList.stacked_of_candidate3 hC hsp
   obtain ⟨sch, hf', -⟩ := FlockC3.VStarList.stacked_of_list hss hst
-  replace hf' : fast100 (RecVStar.tableM sp) = some sch := hf'
-  have key : ∀ m < 36, (fast100 m).isSome → (RecVStar.repRounds m 6 1).isSome ∧
+  replace hf' : Flock.fast100 (RecVStar.tableM sp) = some sch := hf'
+  have key : ∀ m < 36, (Flock.fast100 m).isSome → (RecVStar.repRounds m 6 1).isSome ∧
       (RecVStar.stackedRounds ⟨m, RecVStar.STACKED_CLAIMS⟩).isSome := by
     decide +kernel
   obtain ⟨hm, hm'⟩ := FlockVBridge.Family.fast100_range hf
@@ -158,7 +158,7 @@ theorem stageCoins_checked {ss : Array VStar.Stmt} {dg : ByteArray → ByteArray
   obtain ⟨⟨⟩, hi'⟩ := FlockC3.VStarList.ok_of_isOk hi
   obtain ⟨_, hS⟩ := holoStreams_of_list hss (FlockC3.VStarList.checkInnerStmt_ok hi').1
   exact stageCoins_holo (m := holoMapOne st hp Cm ish tbl bc) (hLeafC3_checked hS₀ dg N k Rw) halg hacc hpr hsv hf
-    (custody_holoMapOne hcus) M.withReads_roundsHeld coinsEncoded_holoMap
+    (custody_holoMapOne hcus) M.withReads_roundsHeld (coinsEncoded_holoMap (ish := ish) (tbl := tbl) (bc := bc))
     (FlockC3.Reps.repsDrawn_checked hS₀ hS (by omega) (repFormsAt_holoAt hcls hi' (by omega)) halg hacc hpr hsv hf
       hcus (fun _ _ _ _ _ => rfl) htbl) hrt hst hot hlt hlater
 
