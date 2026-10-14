@@ -393,8 +393,6 @@ class _VllmEngine:
                 "cudagraph_mode": "FULL_DECODE_ONLY",
                 "cudagraph_capture_sizes": list(settings["capture_sizes"]),
             }
-        overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
-        engine.update(overrides or {})
         if preset.model_digest is not None:
             if arm.protocols:
                 raise ValueError("a local checkpoint override supports stock and experimental arms, not protocol-option arms")
@@ -408,8 +406,7 @@ class _VllmEngine:
                 {k: engine[k] for k in ("dtype", "quantization", "compilation_config") if engine.get(k) is not None},
             )
         else:
-            if arm.protocols:
-                engine["protocols"] = ",".join(arm.protocols)
+            engine["protocols"] = ",".join(arm.protocols) or None
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
         self.target.engine, self.target.model = self.llm, self.llm._engine.model
         ready = getattr(self.installed, "ready", None)
