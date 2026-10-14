@@ -119,11 +119,11 @@ theorem consumed_eq_map (rs : Array Round) (k n : ℕ) :
 /-- **The zerocheck refines the model's** (PROTOCOL.md §9.1–§9.2). If the executable's statement binding and zerocheck
 succeed from `t` to `t'`, the model's zerocheck, played with the proof's zerocheck messages and the coins of the rounds
 consumed from `t` to `t'`, returns the executable's output, read in the model's field, its `z` round `t.k + 2`'s first
-coin and its `ρ` rounds `t.k + 3 + i`'s. -/
+coin and its `ρ` rounds `t.k + 3 + i`'s, and `t'` is `m − 6 + 3` rounds on. -/
 theorem zerocheck_refines_coins (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArray) (p : ZerocheckProof)
     (t t' : Transcript) (zc : Flock.ZcOut) (hwf : RoundsWF t.rounds)
     (h : bindAndZerocheck m digest cap p t = .ok (zc, t')) :
-    t'.rounds = t.rounds ∧ t.k ≤ t'.k ∧
+    t'.rounds = t.rounds ∧ t'.k = t.k + 3 + (m - 6) ∧
       ∃ zc', Plays fOf (Model.zerocheck execArith m) (zcMsgs m p) (consumed t.rounds t.k t'.k) (some zc') ∧
         ZcRel m zc zc' ∧ zc'.z = fOf ((t.rounds[t.k + 2]!).coins.getD 0 0) ∧
         ∀ i : Fin (m - 6), zc'.ρ i = fOf ((t.rounds[t.k + 3 + i.val]!).coins.getD 0 0) := by
@@ -215,7 +215,7 @@ theorem zerocheck_refines_coins (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArra
     (dot (combWeights (c₂.getD 0 0)) (Array.map (fun i => p.round1ab[i]! + p.round1c[i]!) (Array.range 64)) +
       dot (lagrange nodesL den6Inv (c₂.getD 0 0)) p.round1c, #[])
   rw [← hs] at hsz
-  refine ⟨hrt, by omega, ⟨fOf (c₂.getD 0 0), fun j => fOf s.2[0 + j.val]!,
+  refine ⟨hrt, hkt, ⟨fOf (c₂.getD 0 0), fun j => fOf s.2[0 + j.val]!,
     Model.zcVector execArith (vecOf (m - 13) c₁), fOf p.finalA, fOf p.finalB, fOf p.finalC⟩, ?_, ?_, ?_, ?_⟩
   · rw [hcoins]
     unfold Model.zerocheck
@@ -245,7 +245,7 @@ theorem zerocheck_refines_coins (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArra
     have hs2 : s.2 = (#[] : Array F128) ++ ((List.range' 0 (m - 6)).map fun i => (C i).getD 0 0).toArray := by
       rw [hs, zStep_fold]
     show fOf s.2[0 + i.val]! = _
-    rw [hs2, getElem!_pos _ _ (by simp <;> omega), Array.getElem_append_right (by simp)]
+    rw [hs2, getElem!_pos _ _ (by simp), Array.getElem_append_right (by simp)]
     simp [hC, hr₉, hk₉]
 
 /-- **The zerocheck refines the model's**: `zerocheck_refines_coins` without the coins. -/
@@ -256,6 +256,6 @@ theorem zerocheck_refines (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArray) (p 
       ∃ zc', Plays fOf (Model.zerocheck execArith m) (zcMsgs m p) (consumed t.rounds t.k t'.k) (some zc') ∧
         ZcRel m zc zc' := by
   obtain ⟨h₁, h₂, zc', hp, hz, -⟩ := zerocheck_refines_coins m hm digest cap p t t' zc hwf h
-  exact ⟨h₁, h₂, zc', hp, hz⟩
+  exact ⟨h₁, by omega, zc', hp, hz⟩
 
 end FlockSoundness.Refine

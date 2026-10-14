@@ -241,8 +241,10 @@ coins are not one word, one round `kz` in between issued no coins (`z_partial`'s
 rounds past the zerocheck's end. At the proof's openings `o`, the
 model's `holoRepC`, played with the proof's messages and `h` (`holoRepMsgs`) and the coins of every round from `t.k` to
 `t'.k` but `kz`, returns the zerocheck's and the lincheck's outputs, `h` the lincheck's, and a result whose verdict
-is true, whose caps are the proof's and whose requests passed the executable's Merkle checks. -/
-theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
+is true, whose caps are the proof's and whose requests passed the executable's Merkle checks. The zerocheck's `z`
+and `ρ` and the lincheck's `alpha` and `ts` are the coins of the rounds of `t` that draw them
+(`zerocheck_refines_coins`, `holoLincheck_refines_coins`). -/
+theorem holoRep_refines_coins {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
     (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (extra : List (Model.Claim 𝔽 S.m)) (extras : Array Claim) (hlenx : extras.size = extra.length)
     (hcx : ∀ (j : ℕ) (hj : j < extra.length), ClaimRel S.m extras[j]! extra[j])
@@ -262,16 +264,20 @@ theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 �
           (consumed t.rounds t.k kz ++ consumed t.rounds (kz + 1) t'.k) (some (zc, lc), pend) ∧
         lc.h = vecOf 64 hpart ∧
         pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capD p.ligerito.recursiveCaps[j]!) ∧
-        (∀ req ∈ pend.reqs, ReqOK st.merkle sch p.cap p.ligerito req) ∧ pend.verdict o = true := by
+        (∀ req ∈ pend.reqs, ReqOK st.merkle sch p.cap p.ligerito req) ∧ pend.verdict o = true ∧
+        zc.z = fOf ((t.rounds[t.k + 2]!).coins.getD 0 0) ∧
+        (∀ i : Fin (S.m - 6), zc.ρ i = fOf ((t.rounds[t.k + 3 + i.val]!).coins.getD 0 0)) ∧
+        lc.alpha = fOf ((t.rounds[t.k + 3 + (S.m - 6)]!).coins.getD 0 0) ∧
+        ∀ j : Fin (S.kLog - 6), lc.ts j = fOf ((t.rounds[t.k + 3 + (S.m - 6) + 2 + j.val]!).coins.getD 0 0) := by
   unfold holoRepProg at hrun
   obtain ⟨zc, t₁, h₁, hrun⟩ := bind_ok hrun
   obtain ⟨lc, t₂, h₂, hrun⟩ := bind_ok hrun
   obtain ⟨⟨T, sws⟩, t₃, h₃, h₄⟩ := bind_ok hrun
   have h₁₀ := h₁
   rw [hmS] at h₁
-  obtain ⟨hr₁, hk₁, zc', hpl₁, hzc⟩ := zerocheck_refines S.m h15 _ _ _ _ _ zc hwf h₁
-  obtain ⟨hr₂, hk₂, hz₂, lc', hpl₂, hab, hh⟩ := holoLincheck_refines S st.fold hfold zc zc' hzc p.lincheck hpart
-    t₁ t₂ lc (hr₁ ▸ hwf) h₂
+  obtain ⟨hr₁, hk₁, zc', hpl₁, hzc, hzz, hzρ⟩ := zerocheck_refines_coins S.m h15 _ _ _ _ _ zc hwf h₁
+  obtain ⟨hr₂, hk₂, hz₂, lc', hpl₂, hab, hh, hal, hts⟩ := holoLincheck_refines_coins S st.fold hfold zc zc' hzc
+    p.lincheck hpart t₁ t₂ lc (hr₁ ▸ hwf) h₂
   rw [hmS, hkS] at h₃
   have hcsz : (abcClaims S.m S.kLog zc lc ++ extras).size = (lc'.ab :: Model.cClaim execArith zc' :: extra).length := by
     simp [abcClaims, hlenx]; omega
@@ -299,7 +305,7 @@ theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 �
   have e3 : t₃.rounds = t.rounds := hr₃.trans e2
   have e4 : t'.rounds = t.rounds := hr₄.trans e3
   refine ⟨e4, t₁.k + 2 + (S.kLog - 6), by omega, by omega, by rw [← hr₁]; exact hz₂, fun zc₁ t₁' h' => ?_, zc',
-    lc', pend, ?_, hh, hcaps, hreqs, hver⟩
+    lc', pend, ?_, hh, hcaps, hreqs, hver, hzz, hzρ, ?_, fun j => ?_⟩
   · obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj (h₁₀.symm.trans h'))
     rfl
   have hcs : consumed t.rounds t.k (t₁.k + 2 + (S.kLog - 6)) ++
@@ -307,7 +313,7 @@ theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 �
         consumed t.rounds t.k t₁.k ++ ((consumed t₁.rounds t₁.k (t₁.k + 2 + (S.kLog - 6)) ++
           consumed t₁.rounds (t₁.k + 2 + (S.kLog - 6) + 1) t₂.k) ++
             (consumed t₂.rounds t₂.k t₃.k ++ consumed t₃.rounds t₃.k t'.k)) := by
-    rw [hr₁, e2, e3, consumed_append t.rounds hk₁ (by omega : t₁.k ≤ t₁.k + 2 + (S.kLog - 6)),
+    rw [hr₁, e2, e3, consumed_append t.rounds (by omega : t.k ≤ t₁.k) (by omega : t₁.k ≤ t₁.k + 2 + (S.kLog - 6)),
       consumed_append t.rounds (by omega : t₁.k + 2 + (S.kLog - 6) + 1 ≤ t₂.k) (hk₃.trans hk₄),
       consumed_append t.rounds hk₃ hk₄]
     simp only [List.append_assoc]
@@ -321,6 +327,35 @@ theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 �
   refine Plays.bind' (ms₂ := opMsgs (2 + extra.length) p.ringSwitches ++ ligMsgs p.ligerito capD sch) hpl₂ ?_
     (by simp) rfl
   refine Plays.bind' hpl₃ ?_ rfl rfl
-  exact Plays.bind' (ms₂ := []) (cs₂ := []) hpl₄ (Plays.pure _) (by simp) (by simp)
+  · exact Plays.bind' (ms₂ := []) (cs₂ := []) hpl₄ (Plays.pure _) (by simp) (by simp)
+  · rw [hal, hr₁, hk₁]
+  · rw [hts j, hr₁, hk₁]
+
+/-- **One rep with hidden units refines the model's**: `holoRep_refines_coins` without the coins. -/
+theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
+    (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
+    (extra : List (Model.Claim 𝔽 S.m)) (extras : Array Claim) (hlenx : extras.size = extra.length)
+    (hcx : ∀ (j : ℕ) (hj : j < extra.length), ClaimRel S.m extras[j]! extra[j])
+    (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
+    (hα1 : ∀ i < sch.levels.size, ceilLog2 (sch.levels.getD i default).q ≠ 1) (hschm : sch.m = S.m)
+    (p : Proof) (hpart : Array F128) (r : ℕ) (t t' : Transcript) (hwf : RoundsWF t.rounds)
+    (hrun : holoRepProg st sch p hpart extras t = .ok ((), t'))
+    (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D)
+    (ho : ∀ ℓ < sch.levels.size, ∀ j < (sch.levels.getD ℓ default).q,
+      (o r ℓ j).1 = ((openAt p.ligerito (sch.levels.size - 1) ℓ).1)[j]!.toList.map fOf) :
+    t'.rounds = t.rounds ∧ ∃ kz, t.k ≤ kz ∧ kz < t'.k ∧ (t.rounds[kz]!).n = 0 ∧
+      (∀ zc₁ t₁, Flock.bindAndZerocheck st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck t =
+        .ok (zc₁, t₁) → kz = t₁.k + 2 + (S.kLog - 6)) ∧
+      ∃ (zc : Model.ZcOut 𝔽 S.m) (lc : HoloLcOut 𝔽 S.m (S.kLog - 6)) (pend : PendL 𝔽 D),
+        Plays fOf (Model.holoRepC execArith r S (schedOf sch) hm extra)
+          (holoRepMsgs st sch (2 + extra.length) p hpart capD)
+          (consumed t.rounds t.k kz ++ consumed t.rounds (kz + 1) t'.k) (some (zc, lc), pend) ∧
+        lc.h = vecOf 64 hpart ∧
+        pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capD p.ligerito.recursiveCaps[j]!) ∧
+        (∀ req ∈ pend.reqs, ReqOK st.merkle sch p.cap p.ligerito req) ∧ pend.verdict o = true := by
+  obtain ⟨h₁, kz, h₂, h₃, h₄, h₅, zc, lc, pend, h₆, h₇, h₈, h₉, h₁₀, -⟩ :=
+    holoRep_refines_coins st S hm h15 sch hmS hkS hfold extra extras hlenx hcx hdim hlv hα1 hschm p hpart r t t' hwf hrun
+      capD o ho
+  exact ⟨h₁, kz, h₂, h₃, h₄, h₅, zc, lc, pend, h₆, h₇, h₈, h₉, h₁₀⟩
 
 end FlockSoundness.Refine
