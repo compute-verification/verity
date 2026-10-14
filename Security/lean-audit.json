@@ -577,7 +577,7 @@
    "type_hash": "e2e03a565f2673725106c963088c645ec35f4fc1a0b04fe2d222844abe5949aa"
   },
   "Accounting.SecurityProofs.B4": {
-   "owner": "@lean",
+   "owner": "@network-accounting",
    "signature": ["Accounting.SecurityProofs.B4.{u_1, u_2, u_3} : Accounting.Guarantees.B4"],
    "assumptions": [],
    "type_hash": "f5ec95b7103c1028179ab4aa3c8ce73b7d1c31a8fac0d0fc4724d831b7f2db36"
@@ -627,7 +627,7 @@
    "type_hash": "0c644c6c64294ed89544204572c11c8995da2c255c53b7d25e0783fc27344661"
   },
   "Accounting.SecurityProofs.Composition": {
-   "owner": "@lean",
+   "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Composition.{u_1} : Accounting.Guarantees.Composition"],
    "assumptions": [],
    "type_hash": "68a2985cb5f4e2e89e1024fc536a3da954ad2e21ebff335f3b9102c85564ff3c"
@@ -687,7 +687,7 @@
    "type_hash": "0b217c8812262f71cd1d92dedfdfa361ea82bcda7daf976dcf1351d20fa42619"
   },
   "Accounting.SecurityProofs.Fit": {
-   "owner": "@lean",
+   "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Fit.{u_1} : Accounting.Guarantees.Fit"],
    "assumptions": [],
    "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
@@ -729,7 +729,7 @@
    "type_hash": "fd29b937301f7e15c35e5f75741a436e4d352970128213b20320c38ea8c02146"
   },
   "Accounting.SecurityProofs.Localization": {
-   "owner": "@lean",
+   "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Localization.{u_1, u_2} : Accounting.Guarantees.Localization"],
    "assumptions": [],
    "type_hash": "1c4add285dad9b08b8fc8f6051762475568ce296efd6f4ea116fc0842db782c1"
@@ -1085,7 +1085,7 @@
    "type_hash": "32536a10cb2a211bb8640b5c9a6a719db991a873f974d47440c297021ad8fe38"
   },
   "Accounting.SecurityProofs.Recall": {
-   "owner": "@lean",
+   "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Recall.{u_1, u_2} : Accounting.Guarantees.Recall"],
    "assumptions": [],
    "type_hash": "6f9da408630883d8770f358eaddf47063f1b76099677faea7bdb35c5e45d777a"
@@ -1275,7 +1275,7 @@
    "type_hash": "ab3137950546f75ee0e1162e5c57e3e27769cfbdd1b95cbf27d8c29b140450b7"
   },
   "Accounting.SecurityProofs.pouwRow": {
-   "owner": "@lean",
+   "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.pouwRow : Accounting.Guarantees.pouwRow"],
    "assumptions": [],
    "type_hash": "906825a3b08429ff5792f39a31164d1d252f77a3bc93b02bd84df4c92d3386a9"
