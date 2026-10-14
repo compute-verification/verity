@@ -254,7 +254,6 @@
         "tests/",
         "fixtures/",
         "benchmarks/census/",
-        "benchmarks/harness/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
