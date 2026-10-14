@@ -200,7 +200,3 @@ end honest
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.repsReadOff_of_alg
-#print axioms FlockC3.Compose.algebraDecodesOff_of_decodeLH
-#print axioms FlockC3.Compose.accChainsOff_of_decodeL

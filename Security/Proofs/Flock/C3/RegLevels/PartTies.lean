@@ -216,7 +216,3 @@ theorem zeroOff_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
   exact ⟨hu2, hor.resolve_right fun hv => hb (hbad R ω t R₂ hv)⟩
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.names_of_checks
-#print axioms FlockC3.RegLevels.vRowsOff_of
-#print axioms FlockC3.RegLevels.zeroOff_of
