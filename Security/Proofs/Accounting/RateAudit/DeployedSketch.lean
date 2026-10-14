@@ -18,6 +18,22 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_le_of_card pr_mono pr_or_le)
 
+/-- A uniform finite event whose count times `m` is at most `g` times the sample-space size has probability at most
+`g/m`. -/
+private theorem pr_le_div_of_card_mul_le {α : Type} [Fintype α] (P : α → Prop) [DecidablePred P] (g m : ℕ)
+    (hα : Fintype.card α ≠ 0) (hm : m ≠ 0)
+    (h : (Finset.univ.filter P).card * m ≤ g * Fintype.card α) :
+    pr P ≤ (g : ℝ≥0∞) / m := by
+  unfold pr
+  rw [ENNReal.div_le_iff (by exact_mod_cast hα) (ENNReal.natCast_ne_top _)]
+  rw [show (g : ℝ≥0∞) / m * Fintype.card α =
+      ((g : ℝ≥0∞) * Fintype.card α) / m by
+        simp only [ENNReal.div_eq_inv_mul]
+        ac_rfl]
+  rw [ENNReal.le_div_iff_mul_le (Or.inl (by exact_mod_cast hm)) (Or.inl (ENNReal.natCast_ne_top _))]
+  rw [Finset.filter_congr_decidable]
+  exact_mod_cast h
+
 namespace Device
 
 variable {N m ρ h S L q ks : ℕ}
@@ -44,6 +60,7 @@ theorem pr_unpaid_rank_le
         (∃ t, t ∈ A.correct sketch σ x.2 x.1 ∧ t ∉ queried A sketch σ x.2 x.1) ∨
           ∃ i : Fin q, Bad A sketch σ x.2 x.1 i g := by
     rintro ⟨D, O⟩ hunpaid
+    dsimp only at hunpaid
     by_cases hall : ∀ t ∈ A.correct sketch σ O D, t ∈ queried A sketch σ O D
     swap
     · push Not at hall
@@ -99,7 +116,7 @@ theorem pr_unpaid_rank_le
       change pr (fun x : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) × Data N m ρ Sector =>
         t ∈ A.correct sketch σ x.1 x.2 ∧ t ∉ queried A sketch σ x.1 x.2) ≤ (1 : ℝ≥0∞) / 2 ^ h
       refine Rate.pr_le_of_fiber _ _ (fun D => ?_)
-      refine pr_le_of_card _ (2 ^ h) 1 (by positivity) ?_
+      refine pr_le_div_of_card_mul_le _ 1 (2 ^ h) Fintype.card_ne_zero (by positivity) ?_
       simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t
     refine (Finset.sum_le_sum (fun t _ => ht t)).trans (le_of_eq ?_)
     simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, div_eq_mul_inv]
@@ -111,9 +128,10 @@ theorem pr_unpaid_rank_le
       change pr (fun x : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
         Bad A sketch σ x.2 x.1 i g) ≤ (g : ℝ≥0∞) / 2 ^ 256
       refine Rate.pr_le_of_fiber _ _ (fun O => ?_)
-      refine pr_le_of_card _ (Fintype.card Sector) g (by simp [Sector]) ?_
       simpa [show Fintype.card Sector = 2 ^ 256 by simp [Sector]] using
-        card_bad_le A sketch σ O i g
+        (pr_le_div_of_card_mul_le (fun D : Data N m ρ Sector => Bad A sketch σ O D i g)
+          g (Fintype.card Sector) Fintype.card_ne_zero (by simp [Sector])
+          (card_bad_le A sketch σ O i g))
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans ?_
     have hg : (g : ℝ≥0∞) = 2 ^ (256 - 8 * r) := by
       dsimp [g]
@@ -125,9 +143,14 @@ theorem pr_unpaid_rank_le
     simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, hg, hsplitPow]
     have hc : (2 : ℝ≥0∞) ^ (256 - 8 * r) ≠ 0 := pow_ne_zero _ (by norm_num)
     have ht : (2 : ℝ≥0∞) ^ (256 - 8 * r) ≠ ⊤ := ENNReal.pow_ne_top ENNReal.ofNat_ne_top
-    rw [show (2 : ℝ≥0∞) ^ (256 - 8 * r) =
+    have hcancel :
+        (2 : ℝ≥0∞) ^ (256 - 8 * r) /
+            ((2 : ℝ≥0∞) ^ (256 - 8 * r) * 2 ^ (8 * r)) =
+          1 / 2 ^ (8 * r) := by
+      rw [show (2 : ℝ≥0∞) ^ (256 - 8 * r) =
         (2 : ℝ≥0∞) ^ (256 - 8 * r) * 1 by simp,
-      ENNReal.mul_div_mul_left 1 (2 ^ (8 * r)) hc ht]
+        ENNReal.mul_div_mul_left 1 (2 ^ (8 * r)) hc ht]
+    rw [hcancel]
     simp [ENNReal.div_eq_inv_mul, mul_comm]
 
 end Device
@@ -203,6 +226,7 @@ theorem pr_unpaidAt_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : Sk
         ({z : Fin G // z ≠ c} → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) :=
     (Equiv.prodAssoc _ _ _).symm |>.trans
       (dataEquiv.symm.prodCongr (Equiv.funSplitAt c _)) |>.trans (Equiv.prodAssoc _ _ _).symm
+  letI : Fintype (Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
   rw [Rate.pr_equiv eCand]
   refine Rate.pr_le_of_fiber _ _ (fun Os => ?_)
   refine (pr_mono (fun y hy => ?_)).trans (hε η)
@@ -267,19 +291,14 @@ theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) 
     · exact Or.inr ⟨hb, hx⟩
   refine (pr_mono hsubset).trans ((pr_or_le _ _).trans (add_le_add ?_ ?_))
   · let eRank : SketchStore N m × (SketchSigns ks m × Passes) ≃
-        SketchSigns ks m × (SketchStore N m × Passes) where
-      toFun x := (x.2.1, x.1, x.2.2)
-      invFun y := (y.2.1, y.1, y.2.2)
-      left_inv _ := rfl
-      right_inv _ := rfl
+        SketchSigns ks m × (SketchStore N m × Passes) :=
+      (Equiv.prodAssoc _ _ _).symm |>.trans
+        ((Equiv.prodComm _ _).prodCongr (Equiv.refl _)) |>.trans (Equiv.prodAssoc _ _ _)
     rw [Rate.pr_equiv eRank]
     exact Rate.pr_le_of_fiber _ _ fun _ => hRank
   · let eGood : SketchStore N m × (SketchSigns ks m × Passes) ≃
-        (SketchStore N m × Passes) × SketchSigns ks m where
-      toFun x := ((x.1, x.2.2), x.2.1)
-      invFun y := (y.1.1, y.2, y.1.2)
-      left_inv _ := rfl
-      right_inv _ := rfl
+        (SketchStore N m × Passes) × SketchSigns ks m :=
+      ((Equiv.refl _).prodCongr (Equiv.prodComm _ _)).trans (Equiv.prodAssoc _ _ _).symm
     rw [Rate.pr_equiv eGood]
     refine Rate.pr_le_of_fiber _ _ fun σ => ?_
     by_cases hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
@@ -346,15 +365,16 @@ theorem pr_draws_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G d)
         ((Equiv.refl _).prodCongr (Equiv.arrowCongr (Equiv.refl _) finProdFinEquiv))
   rw [Rate.pr_equiv e]
   let Gs : (w : Fin n) → ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Finset (Fin (P * N)) :=
-    fun w ω => ((A.win w (e.symm ω)).correctAll E (e.symm ω w).1.1 (e.symm ω w).1.2).map
+    fun w ω => ((A.win w (e.symm ω)).correctAll E (e.symm ω w).1 (e.symm ω w).2.1).map
       finProdFinEquiv.toEmbedding
   have hG : Rate.Causal (s := fun _ => d) Gs := by
     intro w ω ω' hlt hw
     have hη : (fun v : {v : Fin n // v < w} => e.symm ω v.1) =
         (fun v => e.symm ω' v.1) := funext fun v => by simp [e, hlt v.1 v.2]
-    have h₁ : (e.symm ω w).1 = (e.symm ω' w).1 := by simp [e, hw]
+    have hσ : (e.symm ω w).1 = (e.symm ω' w).1 := by simp [e, hw]
+    have hp : (e.symm ω w).2.1 = (e.symm ω' w).2.1 := by simp [e, hw]
     simp only [Gs, SketchDeployedSession.win]
-    rw [hη, h₁]
+    rw [hη, hσ, hp]
   have hmem : ∀ ω w t, (e.symm ω w).2.2 t ∈
       (A.win w (e.symm ω)).correctAll E (e.symm ω w).1 (e.symm ω w).2.1 →
       (ω w).2 t ∈ Gs w ω := by
