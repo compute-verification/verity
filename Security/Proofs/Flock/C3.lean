@@ -110,6 +110,7 @@ import Proofs.Flock.C3.RegLevels.LevelsChecked
 import Proofs.Flock.C3.RegLevels.SrcMaps
 import Proofs.Flock.C3.Sparse.SessionReg
 import Proofs.Flock.C3.Sparse.SessionZero
+import Proofs.Flock.C3.Sparse.SessionKeys
 import Proofs.Flock.C3.RegLevels.LgCoins
 
 /-!

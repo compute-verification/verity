@@ -18,8 +18,9 @@ holds, are registered as 0 (`sparseSessionAt_of_regs`' `hz`):
 * `outCols_of_sparse`, `regOuts_sparse`: at a unit built from `unitLaid`, the output starts at `sparseBase`, and column
   `sparseBase + b` of copy `j` is registered as bit `b` of row `nIn` where that row is a registered read
   (`regOut_of_outBitRow`);
-* `sparseSessionAt_of_zero`: `sparseSessionAt_of_regs` with `hz` from these, at the session's `out` read (`hout`) and
-  off `ValueColl` at the family's sources (`hnc`).
+* `sparseSessionAt_of_zero`: `sparseSessionAt_of_regs` with `hz` from these, at the session's registered rows (`hread`,
+  `RowsRegistered` at one session and unit), the `out` read's facts in `zero_tie`'s form (`hown`, `hpos`, `hseg`) and
+  off `ValueColl` at the family's sources (`hnc`, as `zero_tie`'s consumers take it).
 -/
 
 namespace FlockC3.Sparse
@@ -33,9 +34,10 @@ open FlockVBridge FlockVBridge.AccChain
 /-! ## The registrant's `out` bits -/
 
 /-- **A sparse unit's `out` read is zero, or `ValueColl`** (`zero_tie` at `rec-sparse`): where check 5 accepted the
-`rec-sparse` unit at a source `f` and a coins record `C`, at a registered read `(u, q)` of its `out` port (without
-segments), the read is of one of the two zero rows (`rec-sparse-zero`, `checkZero`), and every bit the registrant holds
-there is 0. -/
+`rec-sparse` unit at a source `f` and a coins record `C`, its reads file names `out` (`checkZero`'s `find?`), so where
+the session registers each row of a port its reads file names at unit `u` (`hread`, `haout_of_laid`'s form), `(u, q)`
+of the `out` port (without segments) is a registered read, of one of the two zero rows (`rec-sparse-zero`), and every
+bit the registrant holds there is 0. -/
 theorem sparseZero_tie {n : ℕ} {L : Law n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
     {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {src : List (Cm × I.Coin) → Option Flock.RecCoins.Source} {c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3}
@@ -45,13 +47,14 @@ theorem sparseZero_tie {n : ℕ} {L : Law n} {Reg Cm Reg₂ Reg' : Type} {I : In
     (h3 : c3 t = some C) (hso : Flock.RecCoins.stackedParams (Vs j).c.unit.name = none)
     (hop : Flock.RecOpening.params (Vs j).c.unit.name = none) {sh : Flock.RecSparse.Shape}
     (hsp : Flock.RecSparse.params (Vs j).c.unit.name = some sh) (hname : ((Vs j).c.ports[q.val]!).name = "out")
-    (hp : (zs R ω t R₂ j).rd.isRead (.inl (u, q)))
+    (hread : ∀ q' : Fin (Vs j).c.ports.size, (∃ pt ∈ (zs R ω t R₂ j).own, pt.name = (Vs j).c.ports[q'].name) →
+      (zs R ω t R₂ j).rd.isRead (.inl (u, q')))
     (hone : ∀ reg ∈ (zs R ω t R₂ j).own, reg.name = ((Vs j).c.ports[q.val]!).name →
       reg = (zs R ω t R₂ j).rd.port (.inl (u, q)))
     (hpos : ((zs R ω t R₂ j).rd.port (.inl (u, q))).reads[u.val]? =
       some (some ((zs R ω t R₂ j).rd.readAt (.inl (u, q)))))
     (hseg : (Vs j).c.ports[q.val]!.segs = none) :
-    u.val < 2 ∧
+    (zs R ω t R₂ j).rd.isRead (.inl (u, q)) ∧ u.val < 2 ∧
       ((∀ (b : ℕ) (hb : b < FlockSoundness.Discharge.Layout.portRowW (Vs j).c q),
         (FlockVBridge.Decode.regVal (zs R ω t R₂ j) (.inl (u, q))).2
             ⟨b, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))⟩ = false) ∨
@@ -60,7 +63,12 @@ theorem sparseZero_tie {n : ℕ} {L : Law n} {Reg Cm Reg₂ Reg' : Type} {I : In
     (by rw [hc]; exact hsp)
   obtain ⟨-, -, -, -, hz⟩ := sparse_of_check hck'
   rw [hc] at hl hz
-  obtain ⟨-, prog, -, -, -, hprog, -⟩ := FlockC3.RegLevels.checkRows_root hz
+  obtain ⟨reg, prog, hfind, -, -, hprog, -⟩ := FlockC3.RegLevels.checkRows_root hz
+  have hp : (zs R ω t R₂ j).rd.isRead (.inl (u, q)) := by
+    have e : (Vs j).c.ports[q.val]! = (Vs j).c.ports[q] := getElem!_pos _ q.val q.isLt
+    refine hread q ⟨reg, Array.mem_of_find?_eq_some hfind, ?_⟩
+    rw [← e, hname]
+    simpa using Array.find?_some hfind
   have hv : valueRowsAll (src t) (c3 t) (Vs j).c ((Vs j).c.ports[q.val]!).name =
       some (Flock.RecCoins.zeroRows 2 (Flock.RecSparse.outWords sh), Flock.RecCoins.SPARSE_ZERO_VALUE) := by
     rw [hf, h3, valueRowsAll_load hso hop hl, hname]
@@ -68,15 +76,16 @@ theorem sparseZero_tie {n : ℕ} {L : Law n} {Reg Cm Reg₂ Reg' : Type} {I : In
   obtain ⟨hu, hor⟩ := value_tie_collR (zs := zs) (vsrc := valueSrcAll src c3)
     (salt := fun _ => Flock.RecCoins.zeroSalt Flock.RecCoins.SPARSE_ZERO_VALUE) hz hprog
     (valueSrcAll_zero hv hprog (hz := Or.inr rfl)) hp (fun reg hr hr' => hone reg hr (hr'.trans hname.symm)) hpos hseg
-  refine ⟨by simpa only [Flock.RecCoins.zeroRows, Array.size_replicate] using hu, hor.imp (fun he b hb => ?_) id⟩
+  refine ⟨hp, by simpa only [Flock.RecCoins.zeroRows, Array.size_replicate] using hu, hor.imp (fun he b hb => ?_) id⟩
   rw [he b hb, zeroRows_get, Nat.zero_testBit]
 
 /-! ## The sparse unit's output row -/
 
 /-- **V*'s output layout at copy `j` of the sparse unit** (`rec_sparse.unit_circuit`, `ir_lower.layout`): one output
 port, `out`, of `outWords sh` words, the first past the input rows, copy `j` returning words `0 .. outWords sh - 1` in
-order. A fact of V*'s circuit file, which `RecSparse.check` does not read (it reads the unit), as `OutsLaid` is at
-R's levels. -/
+order. A fact of V*'s circuit file, which `RecSparse.check` does not read (it reads the unit). `OutsLaid`'s form at one
+port: a refusal in `RecSparse.check` of `RecOpen.outsOk`'s form at `#[("out", outWords sh)]` discharges it at every copy
+the leaf maps cover, as `outsLaid_of_outsOk` does `OutsLaid`. -/
 def SparseOutsLaid (c : Flock.Circuit) (sh : Flock.RecSparse.Shape) (j : ℕ) : Prop :=
   c.outPorts = #[("out", Flock.RecSparse.outWords sh)] ∧
     c.leavesOut.getD j #[] = Array.range (Flock.RecSparse.outWords sh) ∧
@@ -185,11 +194,12 @@ open FlockVBridge.Sparse (SCoins nw verifierRow tauBase vBaseS sparseBase)
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n7) `sparseSessionAt_of_regs` with its zero outputs from check 5** (`hz`): at the session's `out` read of copy 0
-of unit `u` (`hout`: a registered read, the reads file's one `out` entry, at the row its reads name, without
-segments), at the sparse unit's output layout (`hlaid`), and off `ValueColl` at the family's sources (`hnc`), each of
-copy 0's residual output columns is registered as 0: `sparseZero_tie` at check 5's accepted statement
-(`sparseCheck_at`), `regOuts_sparse` at the unit's layout (`check_sparse`). -/
+/-- **(n7) `sparseSessionAt_of_regs` with its zero outputs from check 5** (`hz`): where the session registers each row of
+a port its reads file names at unit `u` (`hread`), at the `out` read of copy 0 of `u` (`zero_tie`'s `hone`, `hpos` and
+`hseg`: the reads file's one `out` entry, at the row its reads name, without segments), at the sparse unit's output
+layout (`hlaid`), and off `ValueColl` at the family's sources (`hnc`), each of copy 0's residual output columns is
+registered as 0: `sparseZero_tie` at check 5's accepted statement (`sparseCheck_at`), `regOuts_sparse` at the unit's
+layout (`check_sparse`). -/
 theorem sparseSessionAt_of_zero (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
@@ -215,12 +225,14 @@ theorem sparseSessionAt_of_zero (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
       RegBit (F.zs R ω t R₂ s) u 0 (tauBase (unitShape (holoAt st hp)) + (16 * x + b))
         (((tauArr (holoAt st hp))[x]!).testBit b))
     (hlaid : SparseOutsLaid (F.Vs s).c (unitShape (holoAt st hp)) 0)
-    (hout : ∀ hq : HmOut.nIn (F.Vs s).c < (F.Vs s).c.ports.size,
-      (F.zs R ω t R₂ s).rd.isRead (.inl (u, ⟨_, hq⟩)) ∧
-      (∀ pt ∈ (F.zs R ω t R₂ s).own, pt.name = "out" → pt = (F.zs R ω t R₂ s).rd.port (.inl (u, ⟨_, hq⟩))) ∧
+    (hread : ∀ q : Fin (F.Vs s).c.ports.size,
+      (∃ pt ∈ (F.zs R ω t R₂ s).own, pt.name = (F.Vs s).c.ports[q].name) → (F.zs R ω t R₂ s).rd.isRead (.inl (u, q)))
+    (hown : ∀ hq : HmOut.nIn (F.Vs s).c < (F.Vs s).c.ports.size, ∀ pt ∈ (F.zs R ω t R₂ s).own,
+      pt.name = ((F.Vs s).c.ports[HmOut.nIn (F.Vs s).c]!).name → pt = (F.zs R ω t R₂ s).rd.port (.inl (u, ⟨_, hq⟩)))
+    (hpos : ∀ hq : HmOut.nIn (F.Vs s).c < (F.Vs s).c.ports.size,
       ((F.zs R ω t R₂ s).rd.port (.inl (u, ⟨_, hq⟩))).reads[u.val]? =
-        some (some ((F.zs R ω t R₂ s).rd.readAt (.inl (u, ⟨_, hq⟩)))) ∧
-      ((F.Vs s).c.ports[HmOut.nIn (F.Vs s).c]!).segs = none)
+        some (some ((F.zs R ω t R₂ s).rd.readAt (.inl (u, ⟨_, hq⟩)))))
+    (hseg : ((F.Vs s).c.ports[HmOut.nIn (F.Vs s).c]!).segs = none)
     (hnc : ¬ ValueColl F.zs (valueSrcAll (fun t => coins (wr t).2)
       (fun t => Flock.Guarantees.c3Of F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption)) R ω t R₂) :
     SparseSessionAt (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ) (holoAt st hp) C
@@ -241,18 +253,17 @@ theorem sparseSessionAt_of_zero (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
   have hx' : x < 16 * Flock.RecSparse.outWords (unitShape (holoAt st hp)) := by
     have := FlockVBridge.Sparse.outWords_ge (unitShape (holoAt st hp))
     omega
-  obtain ⟨hq, hk, hreg⟩ := regOuts_sparse (F.zs R ω t R₂ s) (u := u) (FlockC3.Reps.upv_of_outer (F.zs R ω t R₂ s))
-    hn' hlaid (fun hq => (hout hq).1) hx'
-  obtain ⟨hrd, hown, hpos, hseg⟩ := hout hq
-  obtain ⟨hq', hnm, -⟩ := hlaid.2.2
+  obtain ⟨hq, hnm, -⟩ := hlaid.2.2
   have hname' : ((F.Vs s).c.ports[(⟨HmOut.nIn (F.Vs s).c, hq⟩ : Fin (F.Vs s).c.ports.size).val]!).name = "out" := by
     show ((F.Vs s).c.ports[HmOut.nIn (F.Vs s).c]!).name = "out"
     rw [getElem!_pos (F.Vs s).c.ports _ hq]
     exact hnm
-  obtain ⟨-, hor⟩ := sparseZero_tie (zs := F.zs) (src := fun t => coins (wr t).2)
-    (c3 := fun t => Flock.Guarantees.c3Of F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption) hc hck hf hc3
-    (by rw [hname]; exact stackedParams_sparse _) (by rw [hname]; exact openingParams_sparse _) hpar hname' hrd
-    (fun pt hpt hpn => hown pt hpt (hpn.trans hname')) hpos hseg
+  obtain ⟨hrd, -, hor⟩ := sparseZero_tie (zs := F.zs) (src := fun t => coins (wr t).2)
+    (c3 := fun t => Flock.Guarantees.c3Of F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption)
+    (q := ⟨_, hq⟩) hc hck hf hc3 (by rw [hname]; exact stackedParams_sparse _)
+    (by rw [hname]; exact openingParams_sparse _) hpar hname' hread (hown hq) (hpos hq) hseg
+  obtain ⟨_, hk, hreg⟩ := regOuts_sparse (F.zs R ω t R₂ s) (u := u) (FlockC3.Reps.upv_of_outer (F.zs R ω t R₂ s))
+    hn' hlaid (fun _ => hrd) hx'
   rcases hor with hbits | hcoll
   · convert hreg using 1
     exact (hbits x hk).symm
