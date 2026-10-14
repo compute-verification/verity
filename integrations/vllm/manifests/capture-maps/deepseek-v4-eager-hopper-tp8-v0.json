@@ -383,9 +383,13 @@
    "status": "port",
    "definitions": [
     "MhcPreBroadcast_v1",
-    "MhcPostPreTf32_v1"
+    "MhcResidualBroadcast_v1",
+    "MhcPostPreTf32_v1",
+    "MhcPreBroadcast_v2",
+    "MhcResidualBroadcast_v2",
+    "MhcPostPreTf32_v2"
    ],
-   "note": "the TF32 pre (registry/mhc.py, #1961): DeepGEMM tf32_hc_prenorm_gemm (HopperTf32WgmmaDot8_v1 steps, split-K over compute_num_split's splits: MhcPrenormTf32_v1) then mhc_pre_big_fuse(_broadcast)_with_norm_tilelang. Layer 0's mhc_pre_broadcast_tilelang takes it at every token count (MhcPreBroadcast_v1, NS 28; its residual, the embedding copied to each of the HC streams, is a copy the Definition does not state: word-equal to embed per stream), so it checks one mHC pre on every decode step; every later post-and-pre past 16 tokens (route hc-split) is mhc_post_tilelang, the GEMM and the big fuse: MhcPostPreTf32_v1. The H200's GO: run r20261013-205619-36e8 (tests/properties/dsv4_mhc_capture_gpu.py: the broadcast at 1, 16, 64 and 65 tokens, the TF32 path at 17, 64, 65, 128 and 129). Neither composite has a Boolean version (boolean_mhc: over circuit-check's partition budget); its pieces have (MhcPrenormTf32_v2, MhcPreBigFuse_v2, MhcPreBigFuseBroadcast_v2, MhcPost_v2). Port until a Build rule binds it"
+   "note": "the TF32 pre (registry/mhc.py, #1961): DeepGEMM tf32_hc_prenorm_gemm (HopperTf32WgmmaDot8_v1 steps, split-K over compute_num_split's splits: MhcPrenormTf32_v1) then mhc_pre_big_fuse(_broadcast)_with_norm_tilelang. Layer 0's mhc_pre_broadcast_tilelang takes it at every token count (MhcPreBroadcast_v1, NS 28; its residual, the embedding copied without arithmetic to each of the HC streams, is MhcResidualBroadcast_v1{HC 4, H 7168}), so it checks one mHC pre on every decode step; every later post-and-pre past 16 tokens (route hc-split) is mhc_post_tilelang, the GEMM and the big fuse: MhcPostPreTf32_v1. The H200's GO: run r20261013-205619-36e8 (tests/properties/dsv4_mhc_capture_gpu.py: the broadcast at 1, 16, 64 and 65 tokens, the TF32 path at 17, 64, 65, 128 and 129; every residual_out copy in the broadcast cases). Boolean: MhcPreBroadcast_v2, MhcResidualBroadcast_v2 and MhcPostPreTf32_v2 (boolean_mhc: Calls of the pieces' Boolean versions MhcPrenormTf32_v2, MhcPreBigFuse(Broadcast)_v2 and MhcPost_v2; the copy is wiring only). Port until a Build rule binds it"
   },
   "mhc-post": {
    "status": "port",
@@ -657,7 +661,7 @@
      "provenance": "checkpoint"
     }
    ],
-   "note": "residual is the embedding broadcast to the HC streams, a copy; the mixes and x come from DeepGEMM's TF32 GEMM at every token count, decode included",
+   "note": "residual is the embedding broadcast to the HC streams (MhcResidualBroadcast_v1, a copy without arithmetic); the mixes and x come from DeepGEMM's TF32 GEMM at every token count, decode included",
    "commit": {
     "name": "model.layers.{i}/hc_attn_residual",
     "binder": "mhc"
