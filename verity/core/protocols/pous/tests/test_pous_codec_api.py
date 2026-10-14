@@ -12,6 +12,7 @@ from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed
 from verity.core.protocols.pous.codec import Codec, encode_segments, split
 from verity.core.protocols.pous.layout import Layout, decode_tensor
+from verity.core.protocols.pous.memory_challenger import block_digest
 from verity.core.protocols.pous.params import Params
 from verity.core.protocols.pous.primitives import reference
 from verity.core.protocols.pous.scheme import P3, decode_segment, encode, encode_segment
@@ -55,6 +56,10 @@ def test_verifier_key_without_the_encoding():
     leaves = [x for s, blocks in enumerate(segments) for x in segment_leaves(PARAMS, SALT, s, blocks)]
     assert VerifierKey.from_leaves(PARAMS, SALT, leaves) == built
     assert VerifierKey.from_segments(PARAMS, SALT, iter(segments)) == built
+    rows = [block_digest(enc.block(i)) for i in range(PARAMS.blocks)]
+    assert VerifierKey.from_row_digests(PARAMS, SALT, rows) == built
+    with pytest.raises(ValueError, match="row digests"):
+        VerifierKey.from_row_digests(PARAMS, SALT, rows[:-1])
     block = enc.block(13)
     assert leaf_hash(PARAMS, SALT, 13, [block[:7], block[7:40], block[40:]]) == leaf_hash(PARAMS, SALT, 13, block)
     commitment = setup.commit(PARAMS, W)

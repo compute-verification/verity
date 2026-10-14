@@ -25,12 +25,12 @@ def test_the_nebius_description_loads():
     n1, n2 = c.nodes["vy-nebius-1"], c.nodes["vy-nebius-2"]
     assert (n1.owner, n2.owner) == ("verity", "pous")
     assert len(n1.cpus) == 184 and len(n2.cpus) == 192 and len(n1.gpus) == len(n2.gpus) == 8
-    assert n2.admission_ends == model.instant("2026-10-14T13:00:00Z")
+    assert n2.admission_ends == model.instant("2026-10-16T13:00:00Z")
     assert c.standing("verity", "vy-nebius-2") == c.standing("pous", "vy-nebius-1") == model.GUEST
     share = c.share("verity", "vy-nebius-2")
     # Daniel's defaults (decision 1): Verity's node-2 share gets GPUs; PoUW overflows onto node 1 off its reserved CPUs
     assert cpuset.format(share.cpus) == "48-95" and share.max_job_memory_gib == 256 and share.max_gpus is None
-    assert share.until == model.instant("2026-10-14T15:00:00Z")
+    assert share.until == model.instant("2026-10-16T15:00:00Z")
     assert cpuset.format(c.share("pous", "vy-nebius-1").cpus) == "96-191"
     assert cpuset.format(n1.pools["checks"]) == "8-95,128-159" and cpuset.format(n1.pools["provers"]) == "160-191"
     assert n2.pools == {}
