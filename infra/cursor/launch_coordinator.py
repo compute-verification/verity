@@ -46,8 +46,9 @@ on "{env_name}". Read origin/main's AGENTS.md and the lane contract first.
 Your slice: {remit} Your paths: {owns}. Your Linear team: {team}. {scope}
 First hour, in order:
 1. Launch check. Run each, and post the first failure in the {thread_kind} thread, then stop:
-   git push --dry-run origin HEAD:refs/heads/cursor/launch-check-{suffix}
-   gh api repos/compute-verification/verity --jq .permissions.push
+   git push --dry-run origin HEAD:refs/heads/cursor/launch-check-{suffix}   (the push check)
+   gh pr list --repo compute-verification/verity --limit 1   (the broker's app token always reports .permissions.push \
+false, so don't probe that)
    research msg linear check
    research msg names read --as {handle} --peek
    plus the lane checks your {source} names (Lean, pod ssh, the Nebius CLI, gpu-lease, slot.py).
@@ -58,7 +59,8 @@ with research notes sync --path lanes/{handle}. This is also the notes-token che
 5. Post "up" in the {thread_kind} thread (#agent-coordination, thread {thread}) with your link.
 6. {acting}
 Keep nothing only in a Cursor agent store: it's scratch. Reports and logs go to the notes repo, work items to Linear, \
-decisions to Notion, runs to the evidence store.
+decisions to Notion, runs to the evidence store. Daniel's decisions so far, including what still waits on him, are \
+in Notion's "Daniel's decisions log" (https://app.notion.com/p/3f9399515d9e8179bf21e021353fad5b), which the admin keeps.
 --- {source} from {author} ---
 """
 
