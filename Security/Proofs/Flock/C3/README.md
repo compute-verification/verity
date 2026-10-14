@@ -19,7 +19,8 @@ size is in lines of proof: "+N" is what a branch has built, a range is an estima
 (`cursor/c3-spec-2-35f2`), 14 Oct 06:30Z, has round 21's T, K, R, L, E, U, S and C heads, #1851's head `cb1d25f98`,
 K's round 5 (`f5be751ac`), rec-lean's round 21 and S's round 22 (`b74cd6ec7`); rec-lean's round-21 pieces branch
 (`cursor/c3-rl21-pieces-9b2a`) adds R's rounds 22–24 (`90110fa71`), C's rounds 22–25 (`fd388f5e2`, with K's rounds
-6–7), L's round 22 (`927241612`), W's rounds 2–3 (`45117e553`) and S's round 23 (`172738c19`). `hbr_honest_reg` takes
+6–7), L's round 22 (`927241612`), W's rounds 2–3 (`45117e553`), S's round 23 (`172738c19`), E's labels
+(`f77469c1d`) and L's round 23 (`ed6a18610`). `hbr_honest_reg` takes
 R's level-0 salts `salt` (C round 25) with no caller yet: the discharge of `RecursiveAuditC3` passes it the held salts,
 the prover's workers'.
 
@@ -36,7 +37,8 @@ its `hA` (`repFormsAt_holoAt`, at `hcl` below) (rec-lean, round 21). On the piec
 step now `RowsHeld`'s label conjunct), `StackedCoins` and `stackedStreams_of_covers` (R, rounds 22–24); the level-0
 salt binder (`salt`, `saltFinder`), the verifier's value source (`valueSrcC3`, `Recursive/ValueSrc.lean`) and
 `valueFinder` in the guarantee, and `_hbr` as `VBridgeCOff` off `ValueColl` (C, rounds 22–23); `AccHeldO` from
-`RecCoins.opening`'s `accHeld` refusal (`accHeldO_of_opening`, L round 22); R's levels' tops reads (`TopRead`,
+`RecCoins.opening`'s `accHeld` refusal (`accHeldO_of_opening`, L round 22); the drawn labels (`RecVStar.checkLabels` in `ChecksC3`, `label_of_checked`: `RowsHeld` asks
+nothing of them, E round 4); R's levels' tops reads (`TopRead`,
 `topReads_of_accepted`, `C3/RegLevels/TopRead.lean`): `RecCoins.checkStackedLevel` refuses a level whose `out` is not
 R's tops `rec-top-stacked-L<l>` read at node `pos[j] >>> H` (`checkTopReads`, S round 23).
 
@@ -139,7 +141,9 @@ takes, each with who discharges it:
   decoder, from `tape_c3DecOf` and the source's facts (n7). `SrcOK`'s `HLeafC3` is G's `HLeaf`: no decoder meets a
   read fact or `HFrame` at a history shorter than the inner rounds (`zip` stops at the last coin; at `t = []` the tape
   is empty), and the checked sessions refuse one (`hLeafC3_checked`, wherever V* has a statement).
-* `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W).
+* `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>`. The drawn statement's
+  label of a unit is the unit by the verifier's refusal of any other (`RecVStar.checkLabels`, in `ChecksC3` and
+  `PubRowsChecked`; `label_of_checked`), so `RowsHeld` asks nothing of the labels (E).
 * `PortsNamed` (G's `PortNamesUnique` at V*'s circuits) is no hypothesis: the statement check refuses a circuit naming a
   port twice (`checkMsgNames`), so it holds at each accepted session (`names_of_checkStmt`, in `hPubRows_of_checked`).
 * `hown` (`OwnIn`): each accepted session's reads hold `own`'s ports by name, value and reads. At

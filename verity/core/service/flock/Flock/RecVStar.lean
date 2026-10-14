@@ -1145,6 +1145,35 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
         throw s!"rec-pub: {unit}: port {reg.name}'s table row {r} reads row {x} of {reg.value}, and {why}"
       | none => throw s!"rec-pub: {unit}: port {reg.name}: the inner transcript fixes no {reg.value}"
 
+/-- Table `j`'s draw among `count` tables of a session drawn by `d`, as `Stmt.setupTables` builds it: `d` at one table,
+else part `j` of `d`'s units, a subset draw of the population. -/
+def tableDraw (d : Json) (count j : Nat) : Json :=
+  if count ≤ 1 then d else
+    match Draw.UnitDraw.ofJson d with
+    | .ok u => Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson u.population),
+        ("k", Lean.toJson (u.units.size / count)),
+        ("units", Json.arr ((u.units.extract (j * (u.units.size / count))
+          (j * (u.units.size / count) + u.units.size / count)).map Lean.toJson))]
+    | .error _ => d
+
+/-- Table `j`'s statement labels its instances with the units its draw `dj` proves. -/
+def checkLabel (dj : Json) (pub : Public) (j : Nat) : V Unit := do
+  let D ← Draw.UnitDraw.ofJson dj
+  let idx ← Registered.unitIndices pub
+  if idx != D.proved then
+    throw s!"rec-labels: table {j} labels its instances {idx}, not the units its draw proves {D.proved}"
+
+/-- **A drawn session of V*'s labels each instance with the unit it is**: every table's statement names, in its header's
+`units.indices`, exactly the units its draw proves (`tableDraw`). A registered read's position is read at an instance's
+label (`Registered.checkPort`), so the label must be the unit. V*'s populations are their units `0..n-1`, so an honest
+statement's labels (the population's labels of the drawn units) are those units; a population labelled from another
+start would not pass, and only a session with an inner shape (`--rec-inner`) is checked. A session without a draw
+passes. -/
+def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :=
+  match draw with
+  | none => pure ()
+  | some d => (Array.range sts.size).forM fun j => checkLabel (tableDraw d count j) sts[j]!.pub j
+
 /-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
 V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table
 (`tables`, the verifier's `--tables`/`--archive` MUFU tables, is empty: V*'s circuits read none); it needs the verifier's own
