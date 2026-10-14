@@ -405,16 +405,123 @@ def test_a_case_s_records_read_its_two_runs(tmp_path, M: int) -> None:
     records, specs, captured = X.case_launches(tmp_path, "decode2", M, "uniform", _tensor(ids.reshape(M, X.TOP_K)), launches, W, 132,
                                                TYPES)
     w13, w2 = records
-    assert w13["assignment_ok"] and w13["statics_ok"] and w13["deterministic"] and w13["kernel_ok"] and w13["config_deterministic"]
+    assert w13["assignment_ok"] and w13["statics_ok"] and w13["unmoved_equal"] and w13["kernel_ok"] and w13["config_deterministic"]
+    assert w13["moved_pairs"] == 0 and w2["moved_pairs"] == 0, "both runs read one _align here"
     assert w13["config"] == list(w13_at) and w13["moe_block"] == block and w13["par"] == len(ex) == ntpp // block
     assert w13["experts_used"] == len(set(ex.tolist())) and (len(ex) > w13["experts_used"]) is (M > 2)
-    assert not w2["deterministic"] and not w2["config_deterministic"] and w2["config"] == [64, 128, 1]
+    assert not w2["unmoved_equal"] and not w2["config_deterministic"] and w2["config"] == [64, 128, 1]
     assert [s["launch"] for s in specs] == ["w13", "w2"] and [c["launch"] for c in captured] == ["w13", "w2"]
     arrays = X._load(specs[1]["paths"])
     assert arrays["x"].shape == (M * X.TOP_K, X.INTER) and arrays["g"].tolist() == [0x3F000000] * (M * X.TOP_K)
     assert arrays["blk"].tolist() == w2_blocks(st, ids.size, block)
     with pytest.raises(RuntimeError):
         X.case_launches(tmp_path, "decode2", M, "uniform", _tensor(ids), launches[:3], W, 132, TYPES)
+
+
+def test_two_align_draws_split_a_case_into_unmoved_and_moved_pairs(tmp_path) -> None:
+    """Run r20261014-065141-a1ec: decode460 and hot1024 were NO-GO on the v2 whole-output comparison at zero word mismatches
+    against the twin, because `moe_align_block_size` places a multi-block expert's pairs across its blocks in atomic arrival order
+    and a pair's words read its block's k-slice schedule (the capture's module docstring, Replay determinism).  Two runs whose
+    aligns placed one expert's pairs differently must still check out: the pairs both placed alike are held to each other
+    (`unmoved_equal`, which run2's differing moved rows do not break), and run2's moved pairs get a spec of their own, at run2's
+    recorded blocks."""
+    ids = np.repeat(np.arange(1, 5), 9)                      # 6 tokens x top-6: experts 1..4, 9 pairs each, two moe blocks each
+    M = ids.size // X.TOP_K
+    st1, ex, ntpp = _align(ids)
+    st2 = st1.copy()
+    st2[[0, 8]] = st2[[8, 0]]                                # expert 1's first pair swaps moe blocks with its ninth
+    _, blk1, e, par = X.assignment(st1, ex, ntpp, ids, block=8)
+    ok2, blk2, _, _ = X.assignment(st2, ex, ntpp, ids, block=8)
+    assert ok2 and par == 8 > len(set(ids.tolist()))
+    moved = np.flatnonzero(blk1 != blk2)
+    assert sorted(moved.tolist()) == sorted(int(v) for v in (st1[0], st1[8]))
+    launches = []
+    for run, st in (("run1", st1), ("run2", st2)):
+        for kind in ("w13", "w2"):
+            K_, N_ = X.shape(kind)
+            out = torch.zeros(ids.size, N_, dtype=torch.bfloat16)
+            if run == "run2":
+                out[torch.from_numpy(moved)] = 1.0           # a moved pair's words may change; an unmoved pair's may not
+            launches.append({**_served_launch(kind, M), "label": f"decode8/{run}", "output": out,
+                             "input": torch.zeros(M if kind == "w13" else ids.size, K_, dtype=torch.bfloat16),
+                             "sorted_token_ids": _tensor(st), "expert_ids": _tensor(ex), "num_tokens_past_padded": _tensor([ntpp]),
+                             "topk_weights": torch.full((M, X.TOP_K), 0.5), "workspace": 528, "kernel": _kernel((64, 128, 4))})
+    W = {"paths": {"w13": {"wq": "-", "ws": "-"}, "w2": {"wq": "-", "ws": "-"}}}
+    records, specs, _ = X.case_launches(tmp_path, "decode8", M, "uniform", _tensor(ids.reshape(M, X.TOP_K)), launches, W, 132, TYPES)
+    for r in records:
+        assert r["assignment_ok"] and r["unmoved_equal"] and r["moved_pairs"] == moved.size, r["launch"]
+    assert [(s["launch"], s.get("run")) for s in specs] == [("w13", None), ("w13", 2), ("w2", None), ("w2", 2)]
+    for s in specs:
+        arrays = X._load(s["paths"])
+        want = blk2 if s.get("run") == 2 else blk1
+        assert arrays["blk"].tolist() == want.tolist() and s.get("moved", moved.tolist()) == moved.tolist()
+    bumped = copy.deepcopy(launches)
+    bumped[2]["output"][int(np.setdiff1d(np.arange(ids.size), moved)[0]), 0] = 1.0
+    records, _, _ = X.case_launches(tmp_path / "b", "decode8", M, "uniform", _tensor(ids.reshape(M, X.TOP_K)), bumped, W, 132, TYPES)
+    assert not records[0]["unmoved_equal"], "an unmoved pair whose words changed still fails"
+
+
+def test_a_moved_pair_s_words_read_its_own_block(tmp_path) -> None:
+    """Run2's moved pairs are compared against the twin at run2's recorded blocks, where they match; at run1's they do not, since
+    the two blocks' k-slice cut patterns differ (here par 8 over GRID 12: iters 3, and NT * KT = 4 is no multiple)."""
+    ids = np.repeat(np.arange(1, 5), 9)
+    M = ids.size // X.TOP_K
+    st1, ex, ntpp = _align(ids)
+    st2 = st1.copy()
+    st2[[0, 8]] = st2[[8, 0]]
+    _, blk1, e, par = X.assignment(st1, ex, ntpp, ids, block=8)
+    _, blk2, _, _ = X.assignment(st2, ex, ntpp, ids, block=8)
+    moved = np.flatnonzero(blk1 != blk2)
+    w = X._load(paths := _weights(tmp_path))
+    xp = X.probe(np.random.default_rng(2), [e[r * X.TOP_K:(r + 1) * X.TOP_K] for r in range(M)], w["wq"], w["ws"])[0]
+    x_pairs = xp[np.arange(ids.size) // X.TOP_K]
+    statics = [TRUE[0], TRUE[1], SMS * TRUE[2]]
+    C2 = MR.launch(x_pairs, blk2, par, e, w["wq"], w["ws"], np.arange(N), TK=TRUE[0], TN=TRUE[1], GRID=statics[2])
+
+    def spec(blk: np.ndarray) -> dict:
+        return {"phase": "auto", "run": 2, "case": "decode8", "launch": "w13", "config": list(TRUE), "M": M, "K": K, "N": N, "E": E,
+                "top_k": X.TOP_K, "pairs": int(ids.size), "par": par, "weights": paths, "moved": [int(v) for v in moved],
+                "paths": X._save(tmp_path / f"run2_{blk[int(moved[0])]}", x=xp, C=C2, blk=blk, e=e)}
+
+    jobs = X.word_jobs(spec(blk2), statics)
+    t = _total([X.compare(j) for j in jobs])
+    assert t["words"] == moved.size * N and t["mismatch"] == 0, "run2's words match the twin at run2's blocks"
+    res = [X.compare(j) for j in X.word_jobs(spec(blk1), statics)]
+    bad = {k: sum(r.get(k, 0) for r in res) for k in X.TOTALS}
+    assert bad["mismatch"] > 0, "and not at run1's: the moved pair's block picks its k-slice fold"
+    first = next(r["first_mismatch"] for r in res if r["first_mismatch"])
+    assert first["pair"] in moved.tolist()
+
+
+def test_the_replay_relaunches_the_recorded_call(monkeypatch) -> None:
+    """`replay` re-launches run1's exact call into a SENTINEL-filled output with a fresh workspace and holds the words to run1's,
+    as bits (the vLLM op stood in for here; on the GPU the kernel's slice fold is lock-serialized, so the real one must agree)."""
+    import sys
+    import types
+
+    recorded = torch.tensor(np.array([[17, 0x7FA6], [3, 4]], dtype=np.int16)).view(torch.bfloat16)
+    state = {"words": recorded.view(torch.int16).clone()}
+
+    def gemm(**kw):
+        assert kw["workspace"] == "fresh" and kw["output"] is not recorded and kw["input"] == "x"
+        assert bool((kw["output"].view(torch.int16) == X.SENTINEL).all()), "the output starts as SENTINEL"
+        kw["output"].view(torch.int16).copy_(state["words"])
+
+    ops = types.ModuleType("vllm._custom_ops")
+    ops.moe_wna16_marlin_gemm = gemm
+    chain = ("vllm", "vllm.model_executor", "vllm.model_executor.layers", "vllm.model_executor.layers.quantization",
+             "vllm.model_executor.layers.quantization.utils")
+    mods = {name: types.ModuleType(name) for name in chain}
+    mu = types.ModuleType("vllm.model_executor.layers.quantization.utils.marlin_utils")
+    mu.marlin_make_workspace_new = lambda device, n: "fresh"
+    mods["vllm"]._custom_ops = ops
+    for name, mod in {**mods, "vllm._custom_ops": ops, "vllm.model_executor.layers.quantization.utils.marlin_utils": mu}.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
+    L = {"output": recorded, "call": {"input": "x", "output": "stale", "workspace": "stale"}}
+    assert X.replay(L)
+    state["words"][0, 1] ^= 1
+    assert not X.replay(L), "a word one bit off, a NaN payload among them, is not a replay"
 
 
 def test_a_case_over_the_edge_experts_is_deterministic_by_its_words(tmp_path) -> None:
@@ -451,11 +558,12 @@ def test_a_case_over_the_edge_experts_is_deterministic_by_its_words(tmp_path) ->
 
     a, b = output("w2", False), output("w2", False)
     assert not torch.equal(a, b) and X.same_words(a, b) and not X.same_words(a, output("w2", True))
+    assert X.unmoved_rows_equal(a, b, np.zeros(0, dtype=np.int64)) and not X.unmoved_rows_equal(a, output("w2", True), np.zeros(0, dtype=np.int64))
     for r in records(None):
-        assert r["deterministic"] and X._launch_ok({**r, "identified": True}), r["launch"]
+        assert r["unmoved_equal"] and X._launch_ok({**r, "identified": True, "replay_ok": True}), r["launch"]
         assert r["config"] == [64, 128, 4] and r["par"] == r["experts_used"] == X.EDGE_EXPERTS and r["pairs"] == M * X.TOP_K
     w13, w2 = records("w2")
-    assert w13["deterministic"] and not w2["deterministic"] and not X._launch_ok({**w2, "identified": True})
+    assert w13["unmoved_equal"] and not w2["unmoved_equal"] and not X._launch_ok({**w2, "identified": True, "replay_ok": True})
 
 
 def w2_blocks(st: list[int], n: int, block: int) -> list[int]:
@@ -519,7 +627,8 @@ TOTALS = {"words": 10, "mismatch": 0, "reference_schedules": 2, "reference_coord
 
 
 def _doc() -> dict:
-    auto = {"phase": "auto", "case": "decode1", "deterministic": True, "statics_ok": True, "assignment_ok": True, "kernel_ok": True,
+    auto = {"phase": "auto", "case": "decode1", "unmoved_equal": True, "replay_ok": True, "moved_pairs": 0, "statics_ok": True,
+            "assignment_ok": True, "kernel_ok": True,
             "config_deterministic": True, "identified": True, "config": [128, 64, 2], "served": [128, 64, 2]}
     forced = {"phase": "forced", "case": "hot16", "config": [64, 128, 1]}
     probe = {"case": "hot16", "accepted": 2, "classes": [[[64, 128, 1]], [[128, 64, 1]]], "ok": True}
@@ -538,7 +647,8 @@ def _doc() -> dict:
                                         (("totals", "mismatch"), 1),
                                         (("totals", "words"), 0), (("totals", "twin_mismatch"), 1), (("totals", "reference_coords"), 0),
                                         (("totals", "reference_schedules"), 0), (("totals", "reference_expert_coords"), 0),
-                                        (("launches", 0, "deterministic"), False), (("launches", 1, "statics_ok"), False),
+                                        (("launches", 0, "unmoved_equal"), False), (("launches", 1, "replay_ok"), False),
+                                        (("launches", 1, "statics_ok"), False),
                                         (("launches", 0, "assignment_ok"), False), (("launches", 1, "identified"), False),
                                         (("launches", 0, "kernel_ok"), False), (("launches", 1, "config_deterministic"), False),
                                         (("launches", 3, "accepted"), False), (("probe", "hot16/w2", "ok"), False)])
@@ -610,14 +720,15 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
 
     monkeypatch.setattr(X, "jit", jit)
 
-    def gpu(doc, work, sms, quick, forced):
-        assert sms == SMS and forced and not quick
+    def gpu(doc, work, sms, quick, forced, only=None):
+        assert sms == SMS and forced and not quick and only is None
         doc["selection"] = {"ok": True}
         doc["sweep"] = {"ok": True, "served": {k: {str(M): list(TRUE) for M in X.SERVED_M} for k in ("w13", "w2")}}
         specs = [{**_launch(tmp_path / "a", kind, M=1), "case": "decode1"} for kind in ("w13", "w2")]
         doc["launches"] += [{"phase": "auto", "case": "decode1", "launch": s["launch"], "M": 1, "pairs": s["pairs"], "par": s["par"],
-                             "deterministic": True, "statics_ok": True, "assignment_ok": True, "kernel_ok": True,
-                             "config_deterministic": True, "config": list(TRUE)} for s in specs]
+                             "unmoved_equal": True, "replay_ok": True, "moved_pairs": 2, "statics_ok": True, "assignment_ok": True,
+                             "kernel_ok": True, "config_deterministic": True, "config": list(TRUE)} for s in specs]
+        specs.append({**specs[0], "run": 2, "moved": [0, 5]})
         fs = {**_launch(tmp_path / "f", "w2", forced_at, M=1, flip=(3, 5) if flip else None, phase="forced", probe=True),
               "case": "decode1"}
         doc["launches"] += [{"phase": "forced", "case": "decode1", "launch": k, "config": list(forced_at), "accepted": True}
@@ -638,7 +749,8 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
     assert all(x["identified"] and x["served"] == list(TRUE) for x in doc["launches"][:2])
     assert doc["bind"]["ok"] and len(doc["bind"]["bindings"]) == 2
     assert doc["totals"]["mismatch"] == (1 if flip else 0) and doc["totals"]["reference_expert_coords"] == 1
-    assert doc["totals"]["words"] == 3 * 6 * N
+    assert doc["totals"]["words"] == 3 * 6 * N + 2 * N, "the auto and forced launches whole, and run2's two moved pairs"
+    assert sum(r.get("run") == 2 for r in doc["comparisons"]) == 1, "run2's moved pairs are their own comparison row"
     assert doc["cases"]["decode1"]["ok"] is (not flip)
     printed = capsys.readouterr().out
     assert f"DSV4-MARLIN {'NO-GO' if flip else 'GO'}" in printed and "case decode1" in printed

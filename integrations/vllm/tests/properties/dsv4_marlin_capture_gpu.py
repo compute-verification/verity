@@ -21,11 +21,14 @@ runs when it fails (exit 3).  A phase that raises records its error and fails th
   auto       on one layer of random logical weights (every e2m1 code; scale bytes 118..127, and experts 0..7 with 30% of their scale
              bytes from `EDGE_BYTES`: +0, +inf, overflow) repacked by `prepare_moe_mxfp4_layer_for_marlin`, `fused_marlin_moe` runs
              each case twice (`CASES`: over experts 8..383 decode batches from 1 to 17 tokens, 460 and 461 (moe blocks 8 and 16),
-             922 (32) and ENVELOPE, over 12 hot experts 16 and ENVELOPE tokens, and over the edge experts only 8 and 922);
-             every `moe_wna16_marlin_gemm` launch is intercepted, its statics checked against the served path's (the moe block
-             `fused_marlin_moe` picks for the batch, `block_of`, fp32 reduce, no atomic add, top_k and mul_topk_weights per launch, no
-             bias, zeros, act order or global scale), its (pair -> block, expert) assignment against the routing, and its words
-             between the two runs.
+             922 (32) and ENVELOPE, over 12 hot experts 16 and ENVELOPE tokens, and over the edge experts only 8 and 922;
+             `--cases` runs a named subset); every `moe_wna16_marlin_gemm` launch is intercepted, its statics checked against the
+             served path's (the moe block `fused_marlin_moe` picks for the batch, `block_of`, fp32 reduce, no atomic add, top_k and
+             mul_topk_weights per launch, no bias, zeros, act order or global scale), its (pair -> block, expert) assignment against
+             the routing in both runs, its words between the two runs on every pair both placed in the same moe block
+             (`unmoved_rows_equal`), the second run's moved pairs against the twin at their own recorded blocks, and the first
+             run's exact call replayed into a SENTINEL-filled output with a fresh workspace (`replay`), which must write the same
+             words.
   kernel     the launch's thread config and blocks per SM are ops.cu's choice (`determine_exec_config`, ops.cu:476-490), invisible
              from the host and, on fp32 sums rounded once to bf16, almost never visible in the words: one torch.profiler session
              over every auto and sweep launch names each launch's kernel, `marlin_moe_wna16::Marlin<a, b, c, s, threads,
@@ -56,11 +59,29 @@ runs when it fails (exit 3).  A phase that raises records its error and fails th
              `MarlinMoeExpertCoordinateW_v1{E=384}` on one column through the 384-expert gather, which the twin must equal.
   bind       `MarlinMoeExpertGemm(W)_v1` bind at every served config, and each names its Boolean version.
 
-GO needs every launch at the served statics, deterministic and assigned as routed, every auto launch's kernel read and at its M's
-swept config, a swept config per kind at every M of SERVED_M, at least one accepted forced launch per kind and more than one word
-class wherever two were accepted (when the phase runs), 0 mismatched words, every reference evaluation equal to the twin, and every
-profiled kernel's SASS read back from the driver's cache.  The forced cases are at a moe block of 8: forcing one at 922 tokens would
-compare about 4.6e10 coordinate-k steps per candidate config (its w13 and w2 launches), against about 2.2e8 a second on 14 workers.
+GO needs every launch at the served statics, assigned as routed in both runs, bit-identical on replay and, between the runs, on
+every unmoved pair, every auto launch's kernel read and at its M's swept config, a swept config per kind at every M of SERVED_M, at
+least one accepted forced launch per kind and more than one word class wherever two were accepted (when the phase runs), 0
+mismatched words (the moved pairs' among them), every reference evaluation equal to the twin, and every profiled kernel's SASS read
+back from the driver's cache.  The forced cases are at a moe block of 8: forcing one at 922 tokens would compare about 4.6e10
+coordinate-k steps per candidate config (its w13 and w2 launches), against about 2.2e8 a second on 14 workers.
+
+Replay determinism (run r20261014-065141-a1ec, schema v2).  v2 compared the two runs' outputs whole, and decode460 and hot1024 were
+NO-GO on that comparison alone, while every one of run1's 242,460,672 words matched the twin at run1's recorded assignment.  The
+launch is a function of its call: the k-slice fold is lock-serialized in slice order (marlin_template.h:2162-2170 at the pin,
+`barrier_acquire(&locks[locks_off], slice_idx)` before each `global_reduce_fp32`), and `replay` now checks that directly.  What
+moved between the runs is the assignment: `moe_align_block_size` places a multi-block expert's pairs across its blocks in
+`atomicAdd` arrival order (csrc/libtorch_stable/moe/moe_align_sum_kernels.cu:316-319, `_count_and_sort_expert_tokens`, one thread
+per pair over many CTAs; at 384 local experts the sequential small-batch kernel, numel < 1024 and at most 64 experts, :658-661,
+never runs), while expert_ids and num_tokens_post_padded come from per-expert counts and are stable.  A pair's words read its block
+index through the schedule (`MarlinMoeSchedule_v1`: the DP part's columns are uncut, and the stream-K part's cut positions shift by
+NT * KT mod iters per block), so a reshuffle shows exactly where an expert spans blocks whose cut patterns differ: decode460 (par
+494 > 376 experts used; w13 blocks from 440 are stream-K at iters 69, and NT * KT = 672 is not a multiple) and hot1024 (par 197 >
+12, every expert about 16 blocks, iters 54 likewise); hot16 and edge922 also run experts over several blocks but their w13 pattern
+is block-invariant (672 a multiple of iters 21 and iters 112) and only a thin w2 tail differs, and their runs drew equal
+placements.  So v3 checks what the record claims: each run against the twin at its own recorded assignment, the runs against each
+other on the pairs they agree on, and the launch replayed at run1's call, bit for bit.  A served step's sorted_token_ids are part
+of its committed inputs, so the Programs bind at whatever placement the align kernel draws; nothing here needs a Definition change.
 
 What the JIT decides.  At a given config (TK, TN, GRID) the served kernels' arithmetic is fixed by their PTX, and the JIT chooses no
 rounding in it.  In each of the three instantiations served at a moe block of 8 (256 threads at 8 x 8 n x k blocks, 128 at 8 x 4
@@ -80,6 +101,7 @@ blocks per SM), whose registers and opcodes this capture reads the same way and 
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/dsv4_marlin_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--skip-forced] [--driver VERSION]
+                                                    [--cases NAME,NAME]
 """
 from __future__ import annotations
 
@@ -109,7 +131,7 @@ from tests.properties.glm53_block_fp8_capture_gpu import _activation, _error, _l
 from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/dsv4-marlin-capture/v2"
+SCHEMA = "verity-vllm/dsv4-marlin-capture/v3"
 RECORD = "dsv4_marlin_capture.json"
 #: one TP8 rank: hidden 7168, moe_intermediate 3072 / 8, 384 routed experts, top-6; DeepSeek-V4-Pro's swiglu_limit
 HIDDEN, INTER, NUM_EXPERTS, TOP_K, SWIGLU_LIMIT = 7168, 384, 384, 6, 10.0
@@ -661,10 +683,40 @@ def same_words(a, b) -> bool:
                 and torch.equal(a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8)))
 
 
+def unmoved_rows_equal(a, b, moved: np.ndarray) -> bool:
+    """The rows of two runs' outputs outside ``moved`` hold the same words, as bits per row: a pair the two align draws placed in
+    different moe blocks of its expert reads a different k-slice schedule (module docstring, Replay determinism), so only the pairs
+    both runs placed alike are held to each other; the moved ones are checked against the twin at their own run's assignment."""
+    import torch
+
+    if a.dtype != b.dtype or a.shape != b.shape:
+        return False
+    same = (a.contiguous().view(torch.uint8) == b.contiguous().view(torch.uint8)).reshape(a.shape[0], -1).all(dim=1)
+    keep = torch.ones(a.shape[0], dtype=torch.bool, device=same.device)
+    if moved.size:
+        keep[torch.as_tensor(np.asarray(moved, dtype=np.int64), device=same.device)] = False
+    return bool(same[keep].all().item())
+
+
+def replay(L: dict[str, Any]) -> bool:
+    """Run1's recorded call again, into a SENTINEL-filled output with a fresh workspace, which must write run1's words: the served
+    kernel's k-slice fold is lock-serialized in slice order (marlin_template.h:2162-2170), so a launch's words are a function of its
+    call alone, the claim the record makes of the served path."""
+    import torch
+    from vllm import _custom_ops as ops
+    from vllm.model_executor.layers.quantization.utils.marlin_utils import marlin_make_workspace_new
+
+    out = torch.full_like(L["output"].view(torch.int16), SENTINEL).view(torch.bfloat16)
+    ops.moe_wna16_marlin_gemm(**{**L["call"], "output": out, "workspace": marlin_make_workspace_new(out.device, 4)})
+    torch.cuda.synchronize()
+    return same_words(out, L["output"])
+
+
 def case_launches(work: Path, name: str, M: int, pool_kind: str, ids, launches: list[dict], W: dict[str, Any], sms: int,
                   types: list[int] | None) -> tuple[list[dict], list[dict], list[dict]]:
     """One case's records from its two runs' launches (labels `<name>/run1`, `<name>/run2`), each with its kernel; returns (launch
-    records, launch specs for the jobs, the captured launches for the forced phase)."""
+    records, launch specs for the jobs — run1's whole, and run2's moved pairs at run2's own assignment where the two align draws
+    differ — and the captured run1 launches for the replay and forced phases)."""
     by = {(L["label"].split("/")[1], kind_of(L)): L for L in launches if L["label"].startswith(f"{name}/")}
     ids_flat = ids.cpu().numpy().astype(np.int64).reshape(-1)
     block = block_of(M)
@@ -675,18 +727,28 @@ def case_launches(work: Path, name: str, M: int, pool_kind: str, ids, launches: 
             raise RuntimeError(f"no {kind} launch in both runs: {sorted(by)}")
         ok, blk, e, par = assignment(L["sorted_token_ids"].cpu().numpy(), L["expert_ids"].cpu().numpy(),
                                      int(L["num_tokens_past_padded"].reshape(-1)[0]), ids_flat, block=block)
+        ok2, blk2, e2, par2 = assignment(twin["sorted_token_ids"].cpu().numpy(), twin["expert_ids"].cpu().numpy(),
+                                         int(twin["num_tokens_past_padded"].reshape(-1)[0]), ids_flat, block=block)
+        moved = np.flatnonzero(blk != blk2)
         K, N = shape(kind)
         config, kernel_ok = kernel_config(L.get("kernel"), sms, types, block=block)
         rec = {"phase": "auto", "case": name, "launch": kind, "M": M, "pool": pool_kind, "pairs": int(ids_flat.size), "K": K, "N": N,
                "prob_m": prob_m(kind, M), "moe_block": block, "par": par, "experts_used": int(np.unique(ids_flat).size),
                "args": L["args"], "absent": L["absent"], "dtypes": L["dtypes"], "workspace": L["workspace"],
-               "deterministic": same_words(L["output"], twin["output"]), "assignment_ok": ok, "statics_ok": statics_ok(L, kind, M),
+               "assignment_ok": bool(ok and ok2 and par2 == par and np.array_equal(e, e2)), "moved_pairs": int(moved.size),
+               "unmoved_equal": unmoved_rows_equal(L["output"], twin["output"], moved),
+               "statics_ok": statics_ok(L, kind, M) and statics_ok(twin, kind, M),
                "kernel": _kernel(L.get("kernel")), "config": config, "kernel_ok": kernel_ok,
                "config_deterministic": config == kernel_config(twin.get("kernel"), sms, types, block=block)[0]}
         records.append(rec)
         specs.append({"phase": "auto", "case": name, "launch": kind, "config": None, "M": M, "K": K, "N": N, "E": NUM_EXPERTS,
                       "top_k": launch_top_k(kind), "pairs": int(ids_flat.size), "par": par, "weights": W["paths"][kind],
                       "paths": _save(work / f"{name}_{kind}", **_launch_arrays(L, blk, e, kind))})
+        if moved.size:
+            specs.append({"phase": "auto", "run": 2, "case": name, "launch": kind, "config": None, "M": M, "K": K, "N": N,
+                          "E": NUM_EXPERTS, "top_k": launch_top_k(kind), "pairs": int(ids_flat.size), "par": par,
+                          "weights": W["paths"][kind], "moved": [int(v) for v in moved],
+                          "paths": _save(work / f"{name}_{kind}_run2", **_launch_arrays(twin, blk2, e, kind))})
         captured.append({"case": name, "launch": kind, "M": M, "L": L, "blk": blk, "e": e, "par": par})
     return records, specs, captured
 
@@ -780,8 +842,10 @@ def _operands(job: dict[str, Any], p: np.ndarray) -> tuple:
 
 
 def word_jobs(spec: dict[str, Any], statics: list[int]) -> list[dict[str, Any]]:
+    """One job per chunk of the spec's pairs: all of them, or only `moved` (run2's pairs whose moe block moved, indices into it)."""
+    n = len(spec["moved"]) if "moved" in spec else spec["pairs"]
     return [{**spec, "job": "words", "statics": list(statics), "pair_range": [p0, p1]}
-            for p0, p1 in _chunks(spec["pairs"], spec["N"] * spec["K"])]
+            for p0, p1 in _chunks(n, spec["N"] * spec["K"])]
 
 
 def _chunks(n: int, cost: int) -> list[tuple[int, int]]:
@@ -798,12 +862,13 @@ def _twin(job: dict[str, Any], p: np.ndarray, cols: np.ndarray) -> tuple[np.ndar
 
 def compare_words(job: dict[str, Any]) -> dict[str, Any]:
     p0, p1 = job["pair_range"]
-    want, got = _twin(job, np.arange(p0, p1), np.arange(job["N"]))
+    p = np.asarray(job["moved"][p0:p1], dtype=np.int64) if "moved" in job else np.arange(p0, p1)
+    want, got = _twin(job, p, np.arange(job["N"]))
     bad = np.argwhere(want != got)
     rec = {"words": int(want.size), "mismatch": len(bad), "first_mismatch": None}
     if len(bad):
         i, n = (int(v) for v in bad[0])
-        rec["first_mismatch"] = {"pair": p0 + i, "column": n, "want": int(want[i, n]), "kernel": int(got[i, n])}
+        rec["first_mismatch"] = {"pair": int(p[i]), "column": n, "want": int(want[i, n]), "kernel": int(got[i, n])}
     return rec
 
 
@@ -858,7 +923,7 @@ def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
-    head = {k: job.get(k) for k in ("job", "phase", "case", "launch", "config", "statics", "pair_range")}
+    head = {k: job.get(k) for k in ("job", "phase", "run", "case", "launch", "config", "statics", "pair_range")}
     try:
         return {**head, **{"words": compare_words, "reference": compare_reference}[job["job"]](job)}
     except Exception as e:  # noqa: BLE001
@@ -923,8 +988,8 @@ TOTALS = ("words", "mismatch", "reference_schedules", "reference_coords", "refer
 def _launch_ok(x: dict[str, Any]) -> bool:
     if x["phase"] == "forced":
         return True
-    return bool(x["deterministic"] and x["statics_ok"] and x["assignment_ok"] and x["kernel_ok"] and x["config_deterministic"]
-                and x.get("identified") is True)
+    return bool(x["unmoved_equal"] and x["replay_ok"] and x["statics_ok"] and x["assignment_ok"] and x["kernel_ok"]
+                and x["config_deterministic"] and x.get("identified") is True)
 
 
 def _words_ok(t: dict[str, Any]) -> bool:
@@ -984,7 +1049,7 @@ def _verdict(doc: dict[str, Any]) -> bool:
 
 
 def _key(r: dict[str, Any]) -> tuple:
-    return (r["phase"], r["case"], r["launch"], tuple(r["config"] or ()))
+    return (r["phase"], r.get("run") or 1, r["case"], r["launch"], tuple(r["config"] or ()))
 
 
 def _pool_map(ex, jobs: list[dict[str, Any]], doc: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1001,8 +1066,10 @@ def _say(msg: str) -> None:
     print(f"[dsv4-marlin] {msg}", flush=True)
 
 
-def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: bool) -> tuple[list[dict], list[dict]]:
-    """selection, binary, the weights, every case's auto launches and the forced ones; returns (auto specs, forced specs)."""
+def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: bool,
+               only: tuple[str, ...] | None = None) -> tuple[list[dict], list[dict]]:
+    """selection, binary, the weights, every case's auto launches (``only`` restricts them to named CASES) and the forced ones;
+    returns (auto specs, forced specs)."""
     for phase, fn in (("selection", selection), ("binary", binary)):
         try:
             doc[phase] = fn()
@@ -1023,7 +1090,8 @@ def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: b
     except Exception as e:  # noqa: BLE001
         types = None
         doc["errors"]["types"] = _error(e)
-    picked = [(i, name, M, pool) for i, (name, M, pool) in enumerate(CASES) if not quick or name in QUICK]
+    names = set(only) if only else (set(QUICK) if quick else {c[0] for c in CASES})
+    picked = [(i, name, M, pool) for i, (name, M, pool) in enumerate(CASES) if name in names]
     runs, routed = [], {}
     for i, name, M, pool in picked:
         x, ids, tw = _inputs(11_000 + i, M, pool)
@@ -1061,14 +1129,20 @@ def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: b
             doc["errors"][f"case/{name}"] = _error(e)
             _say(f"auto {name} ERROR {doc['errors'][f'case/{name}'][:600]}")
             continue
+        for x, c in zip(records, cap):
+            try:
+                x["replay_ok"] = replay(c["L"])
+            except Exception as e:  # noqa: BLE001
+                x["replay_ok"] = False
+                doc["errors"][f"case/{name}/replay/{x['launch']}"] = _error(e)
         doc["launches"] += records
         specs += sp
         captured += [c for c in cap if forced and name in (QUICK_FORCED if quick else FORCED)]
         for x in records:
             _say(f"auto {name:10s} {x['launch']:3s} M={M:4d} block={x['moe_block']:2d} pairs={x['pairs']:4d} par={x['par']:4d} "
                  f"experts={x['experts_used']:3d} "
-                 f"det={x['deterministic']} statics={x['statics_ok']} assignment={x['assignment_ok']} kernel={x['config']} "
-                 f"kernel_ok={x['kernel_ok']}")
+                 f"moved={x['moved_pairs']:4d} unmoved_eq={x['unmoved_equal']} replay={x['replay_ok']} statics={x['statics_ok']} "
+                 f"assignment={x['assignment_ok']} kernel={x['config']} kernel_ok={x['kernel_ok']}")
     forced_specs = []
     doc["probe"] = {}
     for j, cap in enumerate(captured):
@@ -1088,36 +1162,41 @@ def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: b
 
 
 def compare_all(ex, doc: dict[str, Any], specs: list[dict], forced_specs: list[dict], sms: int) -> None:
-    """Every auto launch's words at its kernel's config with its reference job, and every accepted forced launch's at its own;
-    `doc["comparisons"]` per (phase, case, launch, config)."""
+    """Every auto launch's words at its kernel's config with its reference job, run2's moved pairs at run2's own assignment, and
+    every accepted forced launch's words at its own config; `doc["comparisons"]` per (phase, run, case, launch, config)."""
     auto = {(x["case"], x["launch"]): x for x in doc["launches"] if x["phase"] == "auto"}
     jobs = []
     for s in specs:
         x = auto[(s["case"], s["launch"])]
-        x["served"] = served_config(doc["sweep"], s["launch"], s["M"])
-        x["identified"] = bool(x["kernel_ok"] and x["config"] == x["served"])
         at = x["config"] if x["kernel_ok"] else None
+        if s.get("run") != 2:
+            x["served"] = served_config(doc["sweep"], s["launch"], s["M"])
+            x["identified"] = bool(x["kernel_ok"] and x["config"] == x["served"])
         if at is not None:
             statics = [at[0], at[1], sms * at[2]]
-            jobs += word_jobs({**s, "config": list(at)}, statics) + [reference_job({**s, "config": list(at)}, statics)]
+            jobs += word_jobs({**s, "config": list(at)}, statics)
+            if s.get("run") != 2:
+                jobs += [reference_job({**s, "config": list(at)}, statics)]
     jobs += [j for s in forced_specs for j in word_jobs(s, s["statics"])]
     _say(f"comparing: {len(jobs)} jobs")
     results: dict[tuple, dict[str, Any]] = {}
     for res in _pool_map(ex, jobs, doc):
-        agg = results.setdefault(_key(res), {"phase": res["phase"], "case": res["case"], "launch": res["launch"], "config": res["config"],
+        agg = results.setdefault(_key(res), {"phase": res["phase"], "run": res.get("run") or 1, "case": res["case"],
+                                             "launch": res["launch"], "config": res["config"],
                                              **{k: 0 for k in TOTALS}, "first_mismatch": None})
         for k in TOTALS:
             agg[k] += res.get(k, 0)
         agg["first_mismatch"] = agg["first_mismatch"] or res.get("first_mismatch")
     doc["comparisons"] = list(results.values())
     for r in doc["comparisons"]:
-        _say(f"words {r['phase']:6s} {r['case']:9s} {r['launch']:3s} {'/'.join(map(str, r['config'] or [])):10s} words={r['words']} "
-             f"!={r['mismatch']} ref={r['reference_schedules']}+{r['reference_coords']}+{r['reference_expert_coords']} "
-             f"twin!={r['twin_mismatch']} {json.dumps(r['first_mismatch']) if r['first_mismatch'] else ''}")
+        _say(f"words {r['phase']:6s} run{r['run']} {r['case']:9s} {r['launch']:3s} {'/'.join(map(str, r['config'] or [])):10s} "
+             f"words={r['words']} !={r['mismatch']} ref={r['reference_schedules']}+{r['reference_coords']}"
+             f"+{r['reference_expert_coords']} twin!={r['twin_mismatch']} "
+             f"{json.dumps(r['first_mismatch']) if r['first_mismatch'] else ''}")
 
 
 def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: int, workers: int, quick: bool,
-        forced: bool, driver: str) -> dict[str, Any]:
+        forced: bool, driver: str, only: tuple[str, ...] | None = None) -> dict[str, Any]:
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=scratch)
@@ -1135,7 +1214,7 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
         raise SystemExit(3)
     sms = int(doc["gate"]["sms"])
     with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
-        specs, forced_specs = gpu_phases(doc, work, sms, quick, forced)
+        specs, forced_specs = gpu_phases(doc, work, sms, quick, forced, only)
     try:
         doc["jit"] = jit(work / "compute-cache", outdir / "jit", doc.get("kernels", {}).get("served", []),
                          "sm_" + want_cc.replace(".", ""))
@@ -1181,8 +1260,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=C.cpu_workers())
     ap.add_argument("--quick", action="store_true", help=f"cases {QUICK}, forced {QUICK_FORCED}: a first signal in minutes")
     ap.add_argument("--skip-forced", action="store_true", help="no forced launches (their check is then not part of the verdict)")
+    ap.add_argument("--cases", default=None, help="comma-separated CASES names to run, e.g. decode460,hot1024 (default all, "
+                                                  "or QUICK under --quick); the sweep always runs whole")
     a = ap.parse_args(argv)
-    doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick, not a.skip_forced, a.driver or pinned_driver())
+    only = tuple(a.cases.split(",")) if a.cases else None
+    if only and (unknown := sorted(set(only) - {c[0] for c in CASES})):
+        ap.error(f"unknown cases {unknown}; known: {[c[0] for c in CASES]}")
+    doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick, not a.skip_forced,
+              a.driver or pinned_driver(), only)
     return 0 if doc["ok"] else 1
 
 
