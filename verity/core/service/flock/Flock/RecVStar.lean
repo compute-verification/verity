@@ -310,10 +310,21 @@ def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
   if ports != vstarRows s.sub u then
     throw s!"{s.name}: the parsed circuit's row ports {ports} are not V*'s {vstarRows s.sub u}"
 
+/-- The whole S's row ports' names (`VStar.Algebra.spec`'s): round `r`'s `m<r>`, then `acc0` and `acc1`. -/
+def portNames (sh : Shape) : Array String :=
+  (Array.range (RecAlgebra.rounds sh).size).map (s!"m{·}") ++ #["acc0", "acc1"]
+
+/-- Part `j`'s row ports, as indices of the whole S's (`RecResiduals.groups`' `P`). -/
+def partPorts (sh : Shape) (j : Nat) : Except String (Array Nat) := do
+  let gs ← RecResiduals.groups (← RecAlgebra.structureOf sh) (RecResiduals.portSizes sh)
+  let some (_, P, _) := gs[j]? | throw s!"part {j} of {gs.size}"
+  pure P
+
 /-- **V*'s part is the verifier's**: at a part's statement, V*'s row ports' elements and v elements are those of the
 verifier's part (`RecResiduals.part`) at the shape, holo flag and part the unit's name and META give, as
 `RecResiduals.check` derives it; the words `checkParsed` compares round them up (`portWordsOf`), so the counts are
-compared themselves. Any other statement passes. -/
+compared themselves. Its row ports' names are the whole S's (`portNames`) at the part's ports (`partPorts`). Any other
+statement passes. -/
 def checkPart (s : VStar.Stmt) (c : Circuit) : V Unit :=
   match s with
   | .inner _ _ pt =>
@@ -332,7 +343,14 @@ def checkPart (s : VStar.Stmt) (c : Circuit) : V Unit :=
             if pt.S.ports.map (·.2) != ns || pt.S.gf.nv != nv then
               throw (s!"{s.name}: V*'s part has row ports of {pt.S.ports.map (·.2)} elements and {pt.S.gf.nv} v " ++
                 s!"elements, the verifier's {ns} and {nv}")
-            else pure ()
+            else
+              match partPorts { sh with holo } j with
+              | .error e => throw s!"{s.name}: {e}"
+              | .ok P =>
+                let names := P.toList.map ((portNames { sh with holo })[·]!)
+                if pt.S.ports.map (·.1) != names then
+                  throw s!"{s.name}: V*'s part's row ports are named {pt.S.ports.map (·.1)}, the verifier's {names}"
+                else pure ()
   | _ => pure ()
 
 /-- A statement's population: the registered population's instances for a drawn session, else its own. -/
