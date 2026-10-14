@@ -285,9 +285,6 @@
     {"file": "verity_vllm/program/registry/layer_norm.py", "kind": "sm-arch", "symbol": "LayerNormAten", "detail": "sm_89"},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "layer-class", "symbol": "<module>", "detail": "OLMoE"},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "model", "symbol": "<module>", "detail": "olmoe"},
-    {"file": "verity_vllm/program/registry/mhc.py", "kind": "gpu", "symbol": "<module>", "detail": "h200", "count": 2},
-    {"file": "verity_vllm/program/registry/mhc.py", "kind": "layer-class", "symbol": "_check_norm", "detail": "RMSNorm"},
-    {"file": "verity_vllm/program/registry/mhc.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_90", "count": 2},
     {"file": "verity_vllm/program/registry/moe.py", "kind": "layer-class", "symbol": "<module>", "detail": "FusedMoE"},
     {"file": "verity_vllm/program/kernels/rmsnorm_fused_sweep.py", "kind": "model", "symbol": "<module>", "detail": "smollm"},
     {"file": "verity_vllm/program/registry/spec.py", "kind": "model", "symbol": "<module>", "detail": "qwen"},
@@ -302,8 +299,7 @@
     {"file": "verity_vllm/properties/protected.py", "kind": "model", "symbol": "new_patterns", "detail": "qwen"},
     {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_89", "count": 2},
     {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "new_patterns", "detail": "sm_89", "count": 2},
-    {"file": "verity_vllm/properties/record.py", "kind": "gpu", "symbol": "<module>", "detail": "h200"},
-    {"file": "verity_vllm/properties/record.py", "kind": "model", "symbol": "<module>", "detail": "deepseek", "count": 2},
+    {"file": "verity_vllm/properties/record.py", "kind": "model", "symbol": "<module>", "detail": "deepseek"},
     {"file": "verity_vllm/query/required.py", "kind": "layer-class", "symbol": "<module>", "detail": "RotaryEmbedding"}
   ]
 }
