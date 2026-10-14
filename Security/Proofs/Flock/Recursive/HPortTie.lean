@@ -274,13 +274,3 @@ end src
 end
 
 end FlockC3.HPort
-
-#print axioms FlockSoundness.Discharge.Recursion.regRows_eq_or_clash
-#print axioms FlockSoundness.Discharge.Recursion.regVal_bit_eq
-#print axioms FlockC3.HoloValues.rep_of_unit_h
-#print axioms FlockC3.HoloValues.rep_h_of_unit
-#print axioms FlockC3.HPort.h_lt_ports
-#print axioms FlockC3.HPort.w_eq_of_reads
-#print axioms FlockC3.HPort.h_of_reads
-#print axioms FlockC3.HPort.srcHTie_of
-#print axioms FlockC3.HPort.h_of_sessionAt
