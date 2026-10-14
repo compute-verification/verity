@@ -88,7 +88,8 @@ theorem coinsAcceptedAt_checked {ish : RecVStar.Inner} {ss : Array VStar.Stmt}
     CoinsAcceptedAt (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       (fun t => coins (wr t).2) (fun t => Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)) := by
   intro R ω t R₂ j hex
-  obtain ⟨tr', -, hc⟩ := FlockC3.PubRows.checks_of_keepOwn (z := Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
+  obtain ⟨-, tr', -, -, hc⟩ :=
+    FlockC3.PubRows.checks_of_keepOwn (z := Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
     (P := fun J o tr' => (ℐ).r ≤ t.length ∧
       Flock.Guarantees.ChecksC3 ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (bind j)
         rows J o tr')

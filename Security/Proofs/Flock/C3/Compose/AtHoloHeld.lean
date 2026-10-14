@@ -87,8 +87,6 @@ theorem srcOK_holo_held {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Ar
     (htbl : ∀ i : Fin 2, (((HoloStream.rep i).name tbl).startsWith s!"{RecVStar.SPARSE}/" ||
       ((HoloStream.rep i).name tbl).startsWith s!"{RecVStar.STACKED}/") = false)
     (hpts : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u => RecordPoints wr t u)
-    (hlen : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ =>
-      1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length + 1 ≤ t.length)
     (hheld : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ => HeldOk wr held t)
     (hcnt : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ => SparseCountedAt wr held sp t)
     (hss' : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
@@ -101,7 +99,7 @@ theorem srcOK_holo_held {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Ar
     exact hLeafC3_checked hS dg N k Rw
   have hlt := FlockC3.RegLevels.srcLevelTie_of_maps M hell hosh unit (repsOfVals stp sh rep vals) c3 w kap e0 sb e hmaps
   have hcoins := stageCoins_holo_held hleaf halg hacc hpr hsv hf hcus hheldR hdr hrt hst hot hell hosh hmaps hc3
-    hrep hsp hsh hcl hrs hc hA hshape (FlockC3.Sparse.htbl_of htbl) (FlockC3.Sparse.htblR_of htbl) hpts hlen hheld hcnt
+    hrep hsp hsh hcl hrs hc hA hshape (FlockC3.Sparse.htbl_of htbl) (FlockC3.Sparse.htblR_of htbl) hpts hheld hcnt
     hss' hx hts
   exact srcOK_holo_rs (sh := osh) hzs hF hS hcoins hrp hsp' he (fun R ω t R₂ τ o hA' => (hmaps R ω t R₂ τ o hA').2.2.1)
     hall hk hr hlg hos hrt hst hot hlt
