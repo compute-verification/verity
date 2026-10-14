@@ -70,9 +70,11 @@ theorem outColAt_stackCol {j : ℕ} (hj : j < c.upv) {col : ℕ} (hcol : col < (
   split
   next hc => exact absurd hc h1
   next =>
-    split
-    next => rfl
-    next hc' => exact absurd h2 hc'
+    first
+    | rfl
+    | (split
+       · rfl
+       · exact absurd h2 ‹_›)
 
 /-- **A copy's gate at a returned output's column is committed**: it is unit `u`'s instance's gate there, which
 `Layout.outsOf` returns, an output of the program's circuit. -/
@@ -83,7 +85,7 @@ theorem outCol_committed (u : Fin nv) {j : ℕ} (hj : j < c.upv) {col : ℕ} (hc
   refine Partition.mem_committed_of_output _ ?_
   show _ ∈ Layout.outsOf c hU nv
   unfold Layout.outsOf
-  exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, u, _,
+  exact (@Finset.mem_filter _ _ (Classical.decPred _) _ _).mpr ⟨Finset.mem_univ _, u, _,
     (Const.Prog.castW_wire (Placed.rows_circuitProg c hU nv _ _ u)
       (Const.Prog.rowsWireC (Placed.keyProg c hU nv) u) _).symm, j, j', t, h⟩
 
