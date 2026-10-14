@@ -154,16 +154,15 @@ theorem regOut_of_outBitRow {u : Fin nv} {j : ℕ} (hj : j < c.upv) {j' t' : ℕ
   have hmem : (Const.Prog.instC (Placed.keyProg c hU nv) (Layout.outsOf c hU nv) u).wire x' ∈
       Layout.outsOf c hU nv :=
     (@Finset.mem_filter _ _ (Classical.decPred _) _ _).2 ⟨Finset.mem_univ _, u, x', rfl, j, j', t', hoc⟩
-  -- `zo.rd.wv` and `zo.rd.isRead` take `layShHJ`'s `Pos`, which is `PosK` only past `implicit` transparency, so
-  -- `.inl (u, q)` reaches them through `hpos` and `regVal`/`regRead`, never through a `rw` motive
+  -- `layShHJ`'s `Pos` and `keyN` are `PosK` and the key circuit's `N` only past `instances` transparency, where `rw`
+  -- matches and checks its motive, so `lay_pos`, `lay_bit` and `.inl (u, q)` enter by unification instead
   have hpos := (Decode.lay_pos zo _).trans hp
   have hv : zo.rd.wv (zo.lay.pos ((Const.Prog.instC (Placed.keyProg c hU nv) (Layout.outsOf c hU nv) u).wire x')) =
       Decode.regVal zo (.inl (u, q)) := congrArg zo.rd.wv hpos
   rw [hw]
   refine ⟨FlockSoundness.Audit.Partition.mem_committed_of_output _ hmem, (congrArg zo.rd.isRead hpos).mpr hread, ?_⟩
-  rw [Decode.lay_bit zo, hv]
-  unfold bitK idxK
-  simp only [hrowH]
+  refine (Decode.lay_bit zo _ _).trans ((congrArg (fun v => bitK c hU nv v _) hv).trans ?_)
+  simp only [bitK, idxK, hrowH]
 
 /-- **A unit built from `recOpenLaid` returns its outputs from `outStart`**: the output group's first column, within
 the computed columns, past at least the outputs' bits. -/
