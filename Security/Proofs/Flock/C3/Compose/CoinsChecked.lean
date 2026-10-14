@@ -122,7 +122,6 @@ variable {ish : RecVStar.Inner} {reg : Lean.Json} {wr : List (Cm × (ℐ).Coin) 
 
 -- the hypotheses at `holoInnerAt`'s coins unfold its coin count (`holoKinds`, `zcShape`), which ran past the default
 -- (r20261014-083229-2ab0)
-set_option diagnostics true in
 set_option maxHeartbeats 1600000 in
 /-- **The stages' coins at the checked sessions** (`hcoins` of `srcOK_holo_rs` and `srcOK_repsOfVals_pR`), at `zs` the
 checked sessions (`hzs`, `rfl`; stated at `zs`, as at the checked sessions themselves the signature does not
