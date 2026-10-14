@@ -39,8 +39,8 @@ SITES = {
     "token-select": {"token_select": dict(V=16)},
     "all-gather": {"all_gather": dict(WORLD=8, N=8)},
     "rmsnorm-cuda": {
-        "rmsnorm_cuda": dict(N=6144, EPS=1e-5, BLOCK=768),
-        "rmsnorm_fused_cuda": dict(N=6144, EPS=1e-5, BLOCK=1024),
+        "rmsnorm": dict(N=6144, EPS=1e-5, M=1),
+        "rmsnorm_fused": dict(N=6144, EPS=1e-5, M=1),
     },
 }
 
@@ -52,7 +52,8 @@ def _base(d) -> str:
 def _selecting(tp: TargetProfile) -> dict[str, tuple[tuple, str]]:
     """The statics that select among Definitions: every registered value, and the target's."""
     return {"SCALE": (TargetProfile.FP8_SCALE_CONSTRUCTIONS, tp.effective_fp8_scale_construction()),
-            "CONSTRUCTION": (TargetProfile.SAMPLER_CONSTRUCTIONS, tp.effective_sampler_construction())}
+            "CONSTRUCTION": (TargetProfile.SAMPLER_CONSTRUCTIONS, tp.effective_sampler_construction()),
+            "TARGET": ((TargetProfile.default(), tp), tp)}
 
 
 def build_bindings(cmap: dict, role: str, statics: dict) -> tuple[object, set[str]]:

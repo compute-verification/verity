@@ -14,7 +14,6 @@ from typing import Callable
 from verity.ml.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
-from verity_vllm.program.registry import cuda_rmsnorm as _cuda_rmsnorm
 from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
@@ -71,8 +70,8 @@ def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
 # -- the kinds whose program values are inputs (`TargetProfile.registered_values`): the value is the kind's last operand, a field of
 # the registered `values` parameter (`Ctx.supplied`); the rules ask for them instead of the constant-holding kinds under the switch
 _VALUE_KINDS = {
-    "rmsnorm_value": lambda N: ir_bind(_vi.RMSNormTritonV3, N=N),
-    "rmsnorm_fused_value": lambda N, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, eps_input=True),
+    "rmsnorm_value": lambda N, TARGET, M=1: _targets.rmsnorm_value_spec(TARGET, N),
+    "rmsnorm_fused_value": lambda N, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, eps_input=True, M=M),
     "attention_value": lambda T, NH, KVH, D: ir_bind(_vi.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
     "attention_dot_value": _attention_dot_value,
     "attention_dot_plain_value": lambda T, NH, KVH, D, BN, DOT, INV: ir_bind(_vi.AttentionV12, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV),
@@ -99,10 +98,10 @@ PROFILE_B1_EAGER = Vocabulary(
         "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "gemm_bias": lambda K, N: ir_bind(_gemm_bias.GemmBias, K=K, N=N),
-        "rmsnorm": lambda N, EPS: ir_bind(b1.RMSNormTriton, N=N, EPS=EPS),
-        # `_C.fused_add_rms_norm` by the declared target (`frontend.targets.rmsnorm_fused_spec`, which the fold calls too): the rule
-        # states `TARGET`, and without it the role has no kind
-        "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
+        # The target and launch row count select the batch-invariant kernels or
+        # vLLM's default width-8 CUDA kernels and their launch blocks.
+        "rmsnorm": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_spec(TARGET, N, EPS, M),
+        "rmsnorm_fused": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, EPS, M=M),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
         "attention": lambda T, NH, KVH, D: ir_bind(b1.Attention, T=T, NH=NH, KVH=KVH, D=D),
         "silu_mul": lambda I: ir_bind(b1.SiluMul, I=I),
@@ -118,8 +117,10 @@ PROFILE_B1_EAGER = Vocabulary(
         "pouw_linear_row_bias": "NcpLinearRowBias_v1{K,N}: one row of a biased pouw:ncp-v2 linear's served y (NcpDequant adds the bias)",
         "bias_add": "BiasAdd_v1{N}: aten.add(bf16, bf16)",
         "gemm_bias": "GemmBias_v1{K,N}: Gemm_v1 then BiasAdd_v1 per output word (the batch-invariant linear with a bias)",
-        "rmsnorm": "RMSNormTriton_v1{N,EPS}: vLLM batch-invariant Triton _rms_norm_kernel",
-        "rmsnorm_fused": "RMSNormFusedCuda_v2{N,EPS}: vLLM CUDA fused_add_rms_norm (generic kernel)",
+        "rmsnorm": "target-selected RMSNorm: batch-invariant Triton RMSNormTriton_v1{N,EPS}, otherwise "
+                   "RMSNormCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
+        "rmsnorm_fused": "target-selected fused RMSNorm: batch-invariant generic RMSNormFusedCuda_v2{N,EPS}, otherwise "
+                         "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
         "rope": "RoPE_v1{NHEADS,D}: vLLM _C.rotary_embedding NeoX, bf16 cos/sin cache row as Input",
         "attention": "Attention_v1{T,NH,KVH,D}: FA2 causal GQA over [T][KVH][D] caches",
         "silu_mul": "SiluMul_v1{I}: vLLM _C.silu_and_mul",
@@ -189,13 +190,6 @@ from verity_vllm.program.registry import topp_words as _topp_words  # the keep w
 from verity_vllm.program.registry import layer_norm as _LN
 
 
-def _norm_v2(role: str):
-    def bind_norm(N, EPS):
-        rec = b1.norm_bundle({"H": N, "EPS": EPS})
-        return rec[role]
-    return bind_norm
-
-
 PROFILE_B1_EAGER_V2 = Vocabulary(
     "b1-eager-v2", "profile", "b1-eager-v2",
     kinds={
@@ -203,8 +197,8 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
         "pouw_linear_row": lambda K, N: ir_bind(_pouw_rows.NcpLinearRow, K=K, N=N),
         "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
-        "rmsnorm": _norm_v2("L0"),
-        "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
+        "rmsnorm": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_spec(TARGET, N, EPS, M),
+        "rmsnorm_fused": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, EPS, M=M),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
         "attention": lambda T, NH, KVH, D: ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, **b1.ATTENTION_FA2),
         "silu_mul": lambda I: ir_bind(b1.SiluMul, I=I),
@@ -341,9 +335,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # accepted records' (Ampere-family step under FA2); those keep `gemm` / `attention` above, so their digests do not move.
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
            "gemm_bias_dot": lambda K, N, DOT: ir_bind(_gemm_bias.GemmBiasV2, K=K, N=N, DOT=DOT),
-           "rmsnorm_cuda": lambda N, EPS, BLOCK: ir_bind(_cuda_rmsnorm.RMSNormCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
-           "rmsnorm_fused_cuda": lambda N, EPS, BLOCK:
-               ir_bind(_cuda_rmsnorm.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
            # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`), an
            # `FA2_MASKED_FROM` FA2's (`Attention_v5`, `targets.fa2_check_inf`); optional statics, so the role and its note -- and with them
            # this vocabulary's version -- stay as they were; a `CAP` with an `FA2_MASKED_FROM` binds the softcapped chain
@@ -421,9 +412,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "gemm_dot": "Gemm_v2{K,N,DOT}: the batch-invariant Triton GEMM with the target's registered k16 step (registry.targets.gemm_spec)",
            "gemm_bias_dot": "GemmBias_v2{K,N,DOT}: Gemm_v2 then BiasAdd_v1 per output word, the biased linear on a target whose record says "
                             "gemm_bias_dot (registry.targets.gemm_bias_spec)",
-           "rmsnorm_cuda": "RMSNormCudaVector8_v1{N,EPS,BLOCK}: vLLM's default non-batch-invariant BF16 CUDA rms_norm",
-           "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}: vLLM's default non-batch-invariant BF16 CUDA "
-                                 "fused_add_rms_norm",
            "attention_dot": "Attention_v2{T,NH,KVH,D,BN,DOT,INV}: FA2/FA3 causal GQA with the target's step, block size and epilogue "
                             "(registry.targets.attention_spec)",
            "attention": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}: FA2 causal GQA, kBlockN as a declared static (b1.AttentionV3)",
