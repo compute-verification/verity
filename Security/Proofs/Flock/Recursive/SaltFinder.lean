@@ -5,10 +5,10 @@ import Proofs.Flock.Recursive.TopFinder
 
 R's level-0 top is committed node by node: node `i`'s commit string is the hm96 commit string of its row
 (`Firewall.topRows`) under `salt i`, `salt` the salts the prover's workers committed R's level-0 top rows under, which
-they hold (`registrant-holds-openings`; the guarantee is applied at the held salts, `TopOf`). A session reading node `i` opens the
-port's root at the leaf of its own row bytes and salt; where that leaf is node `i`'s (`treeLeaf` of its commit string)
-and the bytes are not node `i`'s row's, the two hm96 leaves' preimages collide (`hm96Pair`), a pair computable only with
-`salt i` in hand.
+they hold (`registrant-holds-openings`; the guarantee is applied at the held salts, `TopOf`). A session reading node
+`i` opens the port's root at the leaf of its own row bytes and salt; where that leaf is node `i`'s (`treeLeaf` of its
+commit string) and the bytes are not node `i`'s row's, the two hm96 leaves' preimages collide (`hm96Pair`), a pair
+computable only with `salt i` in hand.
 
 * `rowInV`: the bytes `Firewall.rowDigest` hashes for `RecCoins.commitRow`'s row; `capRow`, `capRows`: a node's row and
   `cap`'s rows;
