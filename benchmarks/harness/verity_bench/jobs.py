@@ -169,6 +169,8 @@ def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: P
         "research", "run",
         "--queue",
         "--kind", queue_kind(spec.preset.gpu_count),
+        # A guest's GPU job must be; a stopped point reruns whole when requeued, and resume skips only passing points.
+        "--preemptible",
         "--source", str(root),
         "--project", "verity",
         "--campaign", "vllm-bench",

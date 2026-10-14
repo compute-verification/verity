@@ -156,6 +156,7 @@ def test_plan_marks_passing_points_and_dispatches_one_recorded_run_for_each_miss
     assert cwd == root
     assert command[:3] == ["research", "run", "--queue"]
     assert command[command.index("--kind") + 1] == "vllm-bench-1gpu"
+    assert "--preemptible" in command[:command.index("--")]
     assert command[command.index("--gpus") + 1] == "1"
     assert command[command.index("--gpu-model") + 1] == "rtx-pro-6000"
     assert command[command.index("--") + 1:][:4] == ["python", "-m", "verity_bench", "_vllm-point"]
