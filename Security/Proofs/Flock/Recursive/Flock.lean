@@ -285,11 +285,11 @@ def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
     bits g = zo.lay.bit (zo.rd.wv (zo.lay.pos g)) g
 
 /-- **Every unit reads the constant gate.** -/
-theorem oneG_mem_io (u : Fin nv) :
+theorem oneG_mem_io (z : ZkOuter mPts nv J Reg' c hU hscope Lv) (u : Fin nv) :
     Layout.oneG (c := c) (hU := hU) (n := nv) ∈
       ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u := by
-  have hc : HmRow.parse (zkTags zo.I) zo.I.circuitFile zo.I.tables = .ok c :=
-    (Hidden.parse_untyped (zkTyped zo.ht) zo.hcH).1
+  have hc : HmRow.parse (zkTags z.I) z.I.circuitFile z.I.tables = .ok c :=
+    (Hidden.parse_untyped (zkTyped z.ht) z.hcH).1
   have P := parse_facts hc
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
@@ -304,7 +304,7 @@ theorem oneG_mem_io (u : Fin nv) :
   have hupv : 0 < c.upv := Nat.pos_of_ne_zero fun h0 => by simp [h0] at hp
   have hm := (FlockVBridge.keyInst hU nv (Layout.outsOf c hU nv) u).mem_io_of_read
     (i := ⟨0 * ((Rows.ofNet hU).nComp + 1) + 0, Rows.mul_add_lt hupv (by omega)⟩)
-    (by rw [Rows.stack_a_one]; simp) (by
+    (by rw [FlockVBridge.stack_a_one]; simp) (by
       intro i h
       have he := congrArg Fin.val h
       have hi := i.isLt
