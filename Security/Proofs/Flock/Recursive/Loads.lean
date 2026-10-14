@@ -187,3 +187,5 @@ theorem verifies_zsOf {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type} {dg
   exact ⟨hacc, hck⟩
 
 end FlockSoundness.Discharge.Recursion
+
+#print axioms FlockSoundness.Discharge.Recursion.prob_recT_le

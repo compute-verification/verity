@@ -227,3 +227,6 @@ end Flock.SecurityProofs
 
 #print axioms Flock.SecurityProofs.recursiveAuditC3At
 #print axioms Flock.SecurityProofs.RecursiveAuditC3
+
+#print axioms Flock.SecurityProofs.acceptsV_checked
+#print axioms Flock.SecurityProofs.acceptsZKR_of_keepOwn
