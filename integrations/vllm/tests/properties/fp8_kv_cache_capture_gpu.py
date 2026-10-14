@@ -186,7 +186,7 @@ def main() -> int:
     capture = Capture(a.out)
     capture.install()
     prompts = ["The capital of France is", "Write one word for the color of grass"]
-    outputs = llm.generate(prompts, SamplingParams(temperature=0.0, max_tokens=3, ignore_eos=True, seed=0), use_tqdm=False)
+    outputs = llm.generate(prompts, SamplingParams(temperature=0.0, max_tokens=4, ignore_eos=True, seed=0), use_tqdm=False)
     capture.hooks.uninstall()
 
     props = torch.cuda.get_device_properties(0)
