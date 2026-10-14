@@ -10,9 +10,11 @@ entries `RoundReads` and `WRoundReads` ask for: R's opening part's `m<i>` under 
 the circuit has the port and `checkMsgNames` passed. The accepted sessions' reads hold `ownAt`'s ports (`OwnIn`,
 `ownIn_checked`, from `checkOwn`). At the map's `sel` (`holoMap`), R's first two message rounds are R's rounds 0 and 1,
 one history round apart (`stackedRounds_open`, by evaluating `stackedRounds`; `roundAt_opening`), so the map reads
-`rec-opening-c<i>` at `c₀ + i`, `c₀` R's round 0's history round (`holoSel_opening_at`). Left as hypotheses: the stage
-selector at the reps' rounds (`holoSel_stageOf`), a part's session's unit name (`hpar`, `wSel_of_rounds`' `hck`) and
-the unit a rep reads at (`hun`).
+`rec-opening-c<i>` at `c₀ + i`, `c₀` R's round 0's history round (`holoSel_opening_at`). At the reps' rounds the map
+reads a part's port `m<m>` at `stageOf σ c₀` (`holoSel_parts`, from `holoSel_stageOf`) where `m` is one of the reps'
+message rounds and `roundOf σ m` the reps' history rounds before its stream round (`hm`, left as a hypothesis, with
+`c₀` rep 0's history rounds). Left as hypotheses too: a part's session's unit name (`hpar`, `wSel_of_rounds`' `hck`)
+and the unit a rep reads at (`hun`).
 
 * `roundReads_ownAt`, `roundReads_checked`: `RoundReads` at `ownAt ss`, and at the checked family; `roundReads_holo`:
   at the map's `sel`, at `c₀ := roundAt L .stacked 0`.
@@ -205,6 +207,27 @@ theorem holoSel_opening_at {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish 
   rw [← he]
   exact holoSel_opening hS hr (by rw [hst]; exact hrs) hl
 
+theorem heldBefore_rep (ρ : Fin 2) (rs : Array SchedRound) (k : ℕ) :
+    heldBefore (.rep ρ) rs k = heldBefore (.rep 0) rs k := rfl
+
+/-- **The map reads each part's round `m` at rep `ρ`'s stage of it** (`holoSel_stageOf`), where `c₀` is rep 0's history
+rounds and, at each port `m<m>` of a part's circuit, `m` is one of the reps' message rounds whose stream round has
+`roundOf σ m` of the reps' history rounds before it (`hm`): `WRoundReads`' stage selector at the map. -/
+theorem holoSel_parts {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
+    {bm : Cm → String → ℕ → List UInt8} {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)}
+    (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some ((.rep 0, rs) :: (.rep 1, rs) :: L))
+    (hr : holoRounds ish.m ish.kLog ish.claims = some rs) {σ : List FlockSoundness.Discharge.Exec.Kind} {c₀ : ℕ}
+    (hc₀ : c₀ = heldBefore (.rep 0) rs rs.size) {S : ℕ} {Vs : Fin S → VStmt} {sh : Flock.Shape} {sess : ℕ → Fin S}
+    (hm : ∀ p < (partsOf sh).size, ∀ (m : ℕ) (q : Fin (Vs (sess p)).c.ports.size),
+      (Vs (sess p)).c.ports[q].name = s!"m{m}" → ∃ hm : m < (msgRounds rs).length,
+        FlockC3.Sparse.roundOf σ m = heldBefore (.rep 0) rs ((msgRounds rs)[m]'hm)) :
+    ∀ p < (partsOf sh).size, ∀ (m : ℕ) (ρ : Fin 2) (q : Fin (Vs (sess p)).c.ports.size),
+      (Vs (sess p)).c.ports[q].name = s!"m{m}" →
+        (holoMap st hp Cm ish tbl bm).sel (stageOf σ c₀ ρ m) s!"rec-c{m}" ρ.val := by
+  intro p hp' m ρ q hq
+  obtain ⟨hm', hσ⟩ := hm p hp' m q hq
+  exact holoSel_stageOf hS hr ρ hm' hc₀ (hσ.trans (heldBefore_rep ρ rs _).symm)
+
 end Opening
 
 section Checked
@@ -277,6 +300,7 @@ end Checked
 #print axioms holoStreams_stacked
 #print axioms roundAt_opening
 #print axioms holoSel_opening_at
+#print axioms holoSel_parts
 #print axioms roundReads_holo
 
 end FlockC3.Reps.RoundReads
