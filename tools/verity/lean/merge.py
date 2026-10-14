@@ -19,7 +19,8 @@ regenerate the record on the merged tree (`check.py --update`), as without the d
 a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record.
 
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
-and `except` as lists, `why` as a list of its `; ` clauses (`layers`). For a `.lean` file (`--lean`, `lean-imports` in
+and `except` as lists, `why` as a list of its `; ` clauses (`layers`). The roots (`roots`), which two branches that each add a
+module to build both change, merge as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
 `.gitattributes`), git's own merge runs and only a conflict all of whose sides are `import` lines is merged, as a list: two branches
 that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's.
 """
@@ -192,6 +193,8 @@ def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
             v = guarantees({} if o is MISSING else o, a, b, why)
         elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = layers({} if o is MISSING else o, a, b, why)
+        elif k == "roots" and isinstance(a, list) and isinstance(b, list) and (o is MISSING or isinstance(o, list)):
+            v = items([] if o is MISSING else o, a, b)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1)
         else:

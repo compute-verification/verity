@@ -46,9 +46,12 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
     Entry("ideal-permutation", "model",
           "Ideal-permutation model: the scheme's permutation is uniformly random and queried in both directions",
           "Ideal permutation"),
+    # The id is the earlier model's, kept because certificates and their pinned vectors carry it.
     Entry("perfect-isolation", "model",
-          "Perfect isolation: during an audit the server gets no outside help, so its state is all it holds",
-          "Perfect isolation"),
+          "Help accounted: on PoUS's challenge schedule some challenge tick t_j has mem_X(t_j) + 2^e·h >= S for the "
+          "audited location X, where h is the help X received (console's actual-circuit model; proved at e = 0 for a "
+          "location that does no arithmetic modulo p). Nothing attests the prover's machine",
+          "Help accounted"),
     Entry("sequential-step-floor", "assumption",
           "No call of the scheme's permutation completes faster than the certificate's call time on a CPU or GPU core "
           "(ASICs out of scope); it bounds an adversary only in the ideal-permutation model, since at the reference "

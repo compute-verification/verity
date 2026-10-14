@@ -1139,7 +1139,7 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
 
 MERGE_THREAD = "1790957906.278529"      # #agent-coordination's merge thread, where the lander and the lanes follow the trains
 LANDER = "old-circuits-and-proofs"
-REPO_SLUG = "danielreuter/verity"
+REPO_SLUG = "compute-verification/verity"
 # Node 2 too without N2_GUARD: its check slots run whole checks at any time, so one niced read of their run files a minute is
 # nothing they don't already bear (and its guard refuses everything while its fill runner is stopped)
 CHECK_MACHINES = (("vy-nebius-1", "n1"), ("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1"))
@@ -1532,7 +1532,7 @@ def note(ev: dict, now: float) -> tuple[str, str]:
     """An open as alert_sink.py's note: (file name, markdown), the lane contract's front matter plus the monitor's own fields."""
     name = f"{time.strftime('%Y%m%dT%H%MZ', time.gmtime(now))}-alert-{_slug(ev['monitor'])}-{hashlib.sha256(ev['key'].encode()).hexdigest()[:8]}.md"
     lines = ["---", f"id: {name[:-3]}", "campaign: nebius-monitoring", "lane: infra", "kind: finding", "status: open",
-             f"tags: [{ev['severity']}]", "repo: danielreuter/verity", f"origin: {ev['by']} (research monitors, research/monitors.py)",
+             f"tags: [{ev['severity']}]", "repo: compute-verification/verity", f"origin: {ev['by']} (research monitors, research/monitors.py)",
              f"monitor: {ev['monitor']}", f"key: {json.dumps(ev['key'])}", f"owners: [{', '.join(ev['owners'])}]",
              f"severity: {ev['severity']}", "---", "", f"# {title(ev['text'])}", "", ev["text"], "", f"What to do: {ev['action']}", ""]
     return name, "\n".join(lines)

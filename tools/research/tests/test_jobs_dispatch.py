@@ -329,6 +329,12 @@ def test_the_commands_each_kind_runs(tmp_path):
     assert '$RESEARCH_RUN_DIR/records/$p' in regen[-1] and regen[-1].endswith("exit $rc")
 
 
+def test_a_job_under_the_repositorys_old_name_is_the_same_repository():
+    job = {"kind": "merge-check", "payload": {"commit": C1, "base": BASE, "repo": "danielreuter/verity"}}
+    D.validate(job, "compute-verification/verity")
+    D.validate({**job, "payload": {**job["payload"], "repo": "compute-verification/verity"}}, "danielreuter/verity")
+
+
 @pytest.mark.parametrize("payload,why", [
     ({"commit": "abc", "base": BASE}, "full commit sha"),
     ({"commit": C1}, "payload.base"),

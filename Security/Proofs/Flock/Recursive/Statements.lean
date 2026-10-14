@@ -59,7 +59,8 @@ tables, under their laws `(Vs j).law`, each the full draw (`--draw subset:<units
 `zs R ω t R₂ j`, whose fields carry `flock-verify verify --zk --registered`'s setup, the `live-verifier` record custody
 (`ZkOuter.hRec`) and the registrant's record of the registered reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s
 values, and the verifier's own). For every prover `σ` of the recursive audit, given V*'s bridge
-(`Flock.Assumptions.VBridge`) and the inner protocol's soundness at `ε_in`, one of four holds.
+(`Flock.Assumptions.VBridge`) and the inner protocol's soundness at `ε_in`, one of four holds. It needs `VBridge` in
+full, which a protocol whose last round isn't committed (candidate 3 today) doesn't give.
 
 * A registrant fork (`regFinder`): one run of `σ` reaches an outcome at whose history and registration two of V*'s
   sessions' registrant records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512
@@ -364,7 +365,8 @@ read some of the rows, never necessarily all of them: on a run `o` whose session
 read row `i`, and `row o i` and `op o i` are the row and the opening of `rt` at `i` the run carries (`_hop`; the run's
 output holds the strategy the prover names for each session, and with it the registered reads), and the hidden
 statement the inner verifier ran on is the statement at the draw of every private circuit that has the rows the run read
-(`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of five holds.
+(`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of five holds. It needs `VBridge` in full, which a protocol
+whose last round isn't committed (candidate 3 today) doesn't give.
 
 * `RecursiveSound`'s registrant fork (`regFinder`), round fork (`RoundFork`) or session fork (`SessionFork`).
 * A registration break: some outcome `o` that `σ` reaches has all of V*'s sessions accepting, having read at some

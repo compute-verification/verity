@@ -476,8 +476,8 @@ def _draws(seed: int):
 
 def test_the_prover_at_t1_is_accepted_and_its_claim_is_rs_value():
     """On a hidden circuit's entries, h as the relay folds it, and coins drawn a round at a time: the reference accepts the
-    rep; the rounds are h's 6 coins, H2's 6 pairs, v2 alone (no coins), H3's NU + S_LOG and u's P_LOG; the registered claim is
-    R's value at the coins' point, with R padded to 2^16 cells and the point with zeros; the entries' cell held in both A and
+    rep; the rounds are h's 6 coins, H2's 6 pairs, v2 alone (no coins), H3's NU + S_LOG, u's P_LOG and the claim alone (no
+    coins), the claim it sends; the registered claim is R's value at the coins' point, with R padded to 2^16 cells and the point with zeros; the entries' cell held in both A and
     B is one entry, the one held twice in A none."""
     sh = TOY
     ents, pts, U, h = _toy(0)
@@ -486,7 +486,8 @@ def test_the_prover_at_t1_is_accepted_and_its_claim_is_rs_value():
     coins, msgs = RS.prove(sh, ents, pts, U, h, draw)
     assert RS.sparse_ref(sh, RS.rows(sh, msgs, RS.verifier_row(sh, coins))) == [0] * RS.out_words(sh)
     shape = [(len(e), n) for e, n in drawn]
-    assert shape == [(0, 6)] + [(2, 1)] * 6 + [(1, 0)] + [(d, 1) for d in sh.degrees] + [(sh.PP, sh.P_LOG)]
+    assert shape == [(0, 6)] + [(2, 1)] * 6 + [(1, 0)] + [(d, 1) for d in sh.degrees] + [(sh.PP, sh.P_LOG), (1, 0)]
+    assert drawn[-1][0] == [msgs["claim"]]
     point = list(coins.rounds[:sh.NU]) + list(coins.zeta_p)
     assert RS.table_value(RS.table(sh, ents, pad_to=0), point) == msgs["claim"]
     c = RS.registered_claim(sh, coins, 0, pad_to=16)
@@ -514,7 +515,7 @@ def test_the_provers_h3_rounds_are_the_generic_provers():
     sc, rounds, _, _ = _sumcheck(_Replay(coins.rounds), Q + [[U[j // n] for j in range(n * sh.S)]], factors, msgs["v2"],
                                  sh.degrees)
     assert sc == msgs["sc"] and tuple(rounds) == coins.rounds
-    replay = iter([c for c in [coins.zeta_c, *[(r,) for r in coins.pre], (), *[(r,) for r in coins.rounds], coins.zeta_p]])
+    replay = iter([c for c in [coins.zeta_c, *[(r,) for r in coins.pre], (), *[(r,) for r in coins.rounds], coins.zeta_p, ()]])
     coins4, msgs4 = RS.prove(sh, ents, pts, U, h, lambda _e, _n: list(next(replay)), workers=4)
     assert msgs4 == msgs and coins4 == coins
 

@@ -16,8 +16,9 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Models/` states their guarantees, and one whose
     proof isn't in `Security/Proofs/` is open: that verifier's properties aren't proven yet.
     - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
-      its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`) and
-      the network certifier (`certifier`), each a Python
+      its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`), the
+      remote bandwidth audit over a node's registered store (`remote_bandwidth`) and the network certifier
+      (`certifier`), each a Python
       verifier with the code that runs it. A protocol's Lean code is its `lean/`. NCI is Lean only
       (`verity/core/protocols/network/nci/`).
     - `claims`: the ids of security claims.
@@ -59,6 +60,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 - `infra/`: our machines.
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
   - `control/`: the control pod's boot script and loops.
+  - `cursor/`: the coordinators, each a plain Cursor cloud agent: `launch_coordinator.py` creates and archives them from
+    Daniel's laptop.
   - `nebius/`: the console's units.
   - `ops/` (`verity_ops`): `ops deploy` and `ops keeper`, on top of `research`.
 - `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
@@ -122,7 +125,9 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
 - **Live coins only.** Fiat–Shamir is out. There are no retries: a failed proof is a visible failure, and a retry never
   redraws. Outer proofs go through the firewall one at a time.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
-  witness and never reaches the auditor in the clear. They run on Nebius, and trust in Nebius is a named assumption.
+  witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
+  doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
+  assumption (`trusted-nebius-host`). Nothing the prover runs or hosts is trusted.
 - **Soundness is one theorem** (see Lean below).
 
 ## Tests
@@ -167,7 +172,7 @@ fast by reusing a part's verdict whenever its inputs haven't changed. Each verdi
 declared inputs (the read guard enforces them), the base image and the code that decides that verdict (a suite's runner and
 harness, not every line of the check tool; Daniel, 9 Oct), so that a docs-only change reruns nothing, a deleted test reruns
 its suite, and a layout move or a change to the runner reruns everything. The merge
-queue is to run the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
+queue runs the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
 something it doesn't declare, and it is fixed in the check, not by reverting anyone's change.
 
 Check time is to come down by a lot, and anyone may do whatever it takes (Daniel, 11 Oct): a change to how `check` runs
@@ -184,8 +189,11 @@ landing.
 
 PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
 
-- Drive admits a PR once its owner marks it ready at its head: `research data label pr:N@SHA ready true --by LANE`. It
-  needs no quick-tier pass, and `research queue status` says what each PR waits for.
+- Drive admits a PR once its owner marks it ready at its head: `research queue ready N --mark --by LANE`, or
+  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass, and a new head needs a new mark. The
+  owner is the lane a `Lane NAME` line in the PR's body names, else the Cursor agent id the body carries. Marks written
+  before `marked_after` in `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out.
+  `research queue status` says what each PR waits for.
 - No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
 - Drive stacks admitted PRs on `next`, checks them in trains and lands the newest train whose check passed. What it
   refuses (a conflict, a failed check) goes to the lander, who ejects the PR that caused it; its owner is told, and
@@ -193,8 +201,9 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
 - A PR whose head is in a train being checked keeps that head until the train lands or fails: a new head takes it off
   `next` and cancels the checks of its train and every train above it.
 - A landing that breaks `main` is reverted at once (`git revert -m 1`), and its owner relands with the fix.
-- A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies goes first, alone in
-  its train.
+- A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
+  of the queue, since drive doesn't order it: the lander lands it with `research merge` on its own passing check, and
+  drive's next sync rebuilds `next` on it.
 
 ## Lean
 
@@ -298,11 +307,20 @@ Never print a secret's value.
   - Tables and reports are rendered on demand from code plus the store.
 - **Findings and claims about a run** are labels, never edits to a shared table:
   `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>`.
-- **Architecture decisions** go in Notion, which the coordinator publishes.
+- **Open work** (an ask that outlives its thread, what a handoff hands over) is an issue in the owning handle's Linear
+  team (the using-slack skill).
+- **Architecture decisions** and Daniel's decisions log go in Notion, which the admin keeps.
 
 ## Lanes (worker agents)
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook.
+
+Each coordinator (a handle's holder in `.agents/skills/using-slack/registry.json`) is a plain Cursor cloud agent on the
+one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
+There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
+quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work.
+Coordinators are launched, handed over and archived from Daniel's laptop with `infra/cursor/launch_coordinator.py`
+(`infra/cursor/README.md`).
 
 - **Reread the rules every night.** At the start of each night, reread this file and the rulings in
   `.agents/skills/friction/SKILL.md` and `.agents/skills/lean-proofs/SKILL.md`: rules change during the day, and a lane
