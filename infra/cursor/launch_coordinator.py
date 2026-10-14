@@ -164,7 +164,8 @@ def launch(args: argparse.Namespace) -> None:
         "name": f"verity: {args.handle}",
         "prompt": {"text": brief(args.handle, author, new_slice, args.pairing_thread, env_name, new_id, text)},
         "env": {"type": "cloud", "name": env_name},
-        "autoCreatePR": False,
+        # No PR gate on coordinators (Daniel, 14 Oct 11:34 AM PDT): leave PR creation to the team's
+        # "Create PRs" setting instead of pinning it off per run.
     }
     if args.model:
         body["model"] = {"id": args.model}
