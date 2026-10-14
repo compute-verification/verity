@@ -21,7 +21,7 @@ cuda_graphs = true
 capture_sizes = [1, 8, 32, 128]
 max_model_len = 8384
 resident_gpu_memory_utilization = 0.40
-block_gpu_memory_utilization = 0.90
+block_gpu_memory_utilization = 0.80
 max_num_batched_tokens = 16384
 
 [admission]
