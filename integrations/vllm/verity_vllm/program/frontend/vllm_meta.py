@@ -157,13 +157,11 @@ class _CudaFactoriesOnMeta(torch.overrides.TorchFunctionMode):
 
 def instantiate_meta(vllm_config) -> nn.Module:
     """The registered model class for `vllm_config.model_config` (vLLM's registry), constructed on `meta` (shapes only); a buffer
-    vLLM puts on the CUDA device explicitly is on `meta` too (`_CudaFactoriesOnMeta`).  Construction enters through vLLM's loader,
-    as serving does: the loader first gives the quant config the model's packed-module mapping, which affects the selected kernel
-    for fused FP8 linears."""
+    vLLM puts on the CUDA device explicitly is on `meta` too (`_CudaFactoriesOnMeta`)."""
     from vllm.config import set_current_vllm_config
-    from vllm.model_executor.model_loader.utils import get_model_architecture, initialize_model
+    from vllm.model_executor.model_loader.utils import get_model_architecture
     from vllm.utils.torch_utils import set_default_torch_dtype
-    _, arch = get_model_architecture(vllm_config.model_config)
+    model_cls, arch = get_model_architecture(vllm_config.model_config)
     # worker parity (vllm/v1/worker/worker_base.py: "IR op priority and torch-wrap state are constant for the worker's lifetime"):
     # without these, vLLM's `ir.ops.*` (e.g. GemmaRMSNorm's unfused norm) stay opaque `vllm_ir.*` torch ops instead of running
     # their Python implementation as the engine does. Generic scaffolding, no model fact.
@@ -175,7 +173,7 @@ def instantiate_meta(vllm_config) -> nn.Module:
         pass
     with set_current_vllm_config(vllm_config), set_default_torch_dtype(vllm_config.model_config.dtype), torch.device("meta"), \
             _CudaFactoriesOnMeta():
-        model = initialize_model(vllm_config)
+        model = model_cls(vllm_config=vllm_config)
     model.eval()
     model._verity_arch = arch  # annotation only
     return model
