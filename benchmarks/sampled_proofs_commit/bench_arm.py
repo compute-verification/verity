@@ -127,8 +127,12 @@ class _Committing:
         os.environ["VERITY_WINDOW_SLOTS"] = str(s["window_slots"])
         os.environ["VERITY_RETAIN"] = "none"
         os.environ.setdefault("VERITY_WEIGHTS_HASH", "device")
-        raw = target.engine._engine.llm
-        engine = SimpleNamespace(llm=raw, runner=get_model_runner(raw), model=target.engine._engine.model)
+        built = target.engine._engine
+        engine = built
+        if getattr(built, "runner", None) is None or getattr(built, "cp", None) is None:
+            model_config = built.llm.llm_engine.vllm_config.model_config
+            engine = SimpleNamespace(llm=built.llm, runner=get_model_runner(built.llm), model=built.model,
+                                     cp={"repo": model_config.model, "revision": getattr(model_config, "revision", None)})
         com = native_collect.NativeCollectCommitter(
             engine,
             run_id=f"bench-{ARM_ID}",
