@@ -282,7 +282,7 @@ theorem hAccRows_of_keys (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (
     F.HAccRows dg N k Rw V := by
   intro R ω t R₂ τ o h r ℓ hℓ j hj i hi
   obtain ⟨hup, -⟩ := hU ℓ hℓ
-  refine ⟨accIn_of_regBit (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2.2 (u := F.unO ℓ r j) hup
+  refine ⟨accIn_of_regBit (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2.2.1 (u := F.unO ℓ r j) hup
     (base := accCol (levelLanes F.sh ℓ) (F.depth ℓ))
     (A := V R ω t R₂ (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j)) (fun b hb => ?_) (fun b hb hc => ?_) i hi,
     hout R ω t R₂ τ o h r ℓ hℓ j hj i hi⟩
