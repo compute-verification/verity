@@ -20,7 +20,8 @@ verifier's rows (`valueSrcAll`), the obligations of `Family/VCoins.lean` at one 
   `RegOut … false`, `ZeroReads` at one column.
 
 The family's obligations hold these at every accepted outer proof; there they need `¬ ValueColl` threaded (the
-guarantee's disjunct, `VBridgeCOff`) and the rep's rounds and comb as the family's (`HFiles`).
+guarantee's disjunct, `VBridgeCOff`), the rep's rounds and comb as the family's (`Family.InnerIsRep`), and `hone`,
+`hpos` from the family's reads (`Family.readOne_of`).
 -/
 
 namespace FlockSoundness.Discharge.Recursion
