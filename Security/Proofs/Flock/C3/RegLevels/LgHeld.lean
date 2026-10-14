@@ -85,7 +85,3 @@ theorem stageHeld_lg {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List (Cm �
   exact hd
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.holoStreams_four
-#print axioms FlockC3.RegLevels.stageHeld_lg
-#print axioms FlockC3.Compose.coins_total_holo
