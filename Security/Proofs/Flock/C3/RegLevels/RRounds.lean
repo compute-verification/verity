@@ -16,8 +16,8 @@ verifier holds of `stacked/rep0`:
   are `stackedRounds` of META's shape, as many as the stream's rounds of coins, with `holoSelOne_stacked`'s and
   `drawn_stacked`'s `hS`, `hL` and `hf`.
 
-The covers check is `AcceptsC3`'s conjunct at the commits the verifier holds, so `hcov` is its instance, not a
-fold into `ChecksC3`.
+The covers check is `AcceptsC3`'s conjunct at the commits the verifier holds, so `hcov` is its instance (`ChecksC3`
+carries the same check at the checked sessions' acceptances, `FlockC3.Reps.covers_checked`).
 -/
 
 deriving instance ReflBEq, LawfulBEq for Flock.RecVStar.StackedShape

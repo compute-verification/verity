@@ -65,8 +65,10 @@ What it takes, against `PublicAudit`:
   `tableError`;
 * the verifier's checks at candidate 3 of each session it accepts, in the event (`ChecksVR`): it holds the session's
   statements to V*'s statement of its index with its own reads (`RecVStar.checkStmt`, which runs `checkOwn`), their
-  verifier-registered values to check 5's source at the session record (`coins`, `RecCoins.check`) and their public rows
-  to what the inner transcript fixes (`RecVStar.checkPubRows`), both at the records written at the history; and
+  verifier-registered values to check 5's source at the session record (`coins`, `RecCoins.check`), their public rows
+  to what the inner transcript fixes (`RecVStar.checkPubRows`), their instances' labels to the record's draw
+  (`RecVStar.checkLabels`) and the inner transcript to the covers check (`RecVStar.checkCovers`), at the records written
+  at the history; and
   VBridge, the forks and the bound at the typed sessions kept at a whole history where those checks pass (`checkedC3`,
   each refusing everything elsewhere, so VBridge is read at the histories `recGame` plays), whose games are the typed
   sessions';
@@ -108,9 +110,11 @@ def innerHeld {Cm Coin : Type} (wr : List (Cm × Coin) → Lean.Json × String) 
 statement the session sets up from `zkInputs I` and the record's draw is V*'s statement `j` under the bindings `f` at
 the inner shape `ish`, with the verifier's own reads `own` and shared rows `rows` (`RecVStar.checkStmt`, which runs
 `checkOwn`); its verifier-registered values are the ones check 5's source `coins` gives at the inner commits `cs`
-(`RecCoins.check` at `c3Of`); its public rows are the ones the inner transcript fixes (`RecVStar.checkPubRows`); and
+(`RecCoins.check` at `c3Of`); its public rows are the ones the inner transcript fixes (`RecVStar.checkPubRows`);
 each table's statement labels its instances with the units its part of the record's draw proves
-(`RecVStar.checkLabels`). `checkCovers` and `Zk.shapeOk` are not read here. -/
+(`RecVStar.checkLabels`); and the inner commits `cs` pass the covers check (`RecVStar.checkCovers`, whose last step
+`checkCommitRounds` holds every stream but the sparse phases' and R's to the inner shape's schedule round for round),
+as `AcceptsC3` has it at the history. `Zk.shapeOk` is not read here. -/
 def ChecksC3 (ish : RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits) (coins : Option Flock.RecCoins.Source)
     (j : ℕ) (f : VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
     (I : FlockSoundness.Discharge.Exec.Inputs) (own : Array Flock.Registered.Port)
@@ -121,7 +125,8 @@ def ChecksC3 (ish : RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits) (c
       (some j) (some f) rows) = .ok () ∧
     sts.forM (Flock.RecCoins.check · (some own) coins (c3Of ish cs)) = .ok () ∧
     sts.forM (Flock.RecVStar.checkPubRows · (some own) cs ish.sparse) = .ok () ∧
-    Flock.RecVStar.checkLabels (FlockSoundness.Discharge.Exec.recordDraw t.record) I.count sts = .ok ()
+    Flock.RecVStar.checkLabels (FlockSoundness.Discharge.Exec.recordDraw t.record) I.count sts = .ok () ∧
+    ∀ c, cs = some c → (Flock.RecVStar.checkCovers ish c).isOk = true
 
 /-- **The verifier's checks at candidate 3 of every one of V*'s sessions**, as the prover supplies them: session `j` as
 V*'s statement `j` under `bind j` (`ChecksC3`), at the registration the outcome records. -/
@@ -318,6 +323,9 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (tbl : String) (bc : Cm → String → Nat → List UInt8)
     (_hIC : Flock.Premises.InnerRecordCustody wr (fun w => innerCommitsAt w.1 w.2 st reg) ish.sparse
       (im st hp Cm ish tbl bc))
+    -- the reps' streams are named past the sparse phases' and R's
+    (_htbl : ∀ i : Fin 2, (((HoloStream.rep i).name tbl).startsWith s!"{RecVStar.SPARSE}/" ||
+      ((HoloStream.rep i).name tbl).startsWith s!"{RecVStar.STACKED}/") = false)
     -- the verifier of record's own inputs: V*'s bindings for each statement and the shared rows
     (bind : Fin (vstarCount ish) → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
     -- obligation (gap 4(c)): where V*'s statement `j`'s file under `bind j` parses into scope, as the verifier's

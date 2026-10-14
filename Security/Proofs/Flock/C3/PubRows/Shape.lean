@@ -423,7 +423,7 @@ theorem checksAccepted_checked {coins : String → Option Flock.RecCoins.Source}
     (Pc := fun J o tr' => PubRowsChecked (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption ish.sparse J o tr' ∧
       StmtsChecked ish j (bind j) rows J o tr') ?_ hex
   intro J o tr' hp
-  obtain ⟨-, spec, sts, hs, hst, -, hpr, hlb⟩ := hp
+  obtain ⟨-, spec, sts, hs, hst, -, hpr, hlb, -⟩ := hp
   exact ⟨⟨spec, sts, hs, hpr, hlb⟩, spec, sts, hs, hst⟩
 
 /-- **(n1b) The accepted sessions' reads hold the verifier's message-round ports** (`OwnIn` at `ownAt`) where a
