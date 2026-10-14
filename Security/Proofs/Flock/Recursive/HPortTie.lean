@@ -520,14 +520,6 @@ theorem srcHReads_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : O
 
 end family
 
-#print axioms FlockC3.HPort.site_reads_of_portDiff
-#print axioms FlockC3.HPort.checkRows_of_checkStmt
-#print axioms FlockC3.HPort.rowPort_of_checkRows
-#print axioms FlockC3.HPort.hSite_of_checked
-#print axioms FlockC3.HPort.srcHReads_of
-#print axioms FlockC3.HPort.srcHTie_of
-#print axioms FlockC3.HPort.h_of_sessionAt
-
 end
 
 end FlockC3.HPort
