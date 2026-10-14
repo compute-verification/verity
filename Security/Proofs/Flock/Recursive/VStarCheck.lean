@@ -346,7 +346,7 @@ theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (St
     · rename_i ht
       split at h
       · split at h
-        · first | (obtain ⟨_, h1, -⟩ := ebind_ok h; cases h1) | cases h
+        · obtain ⟨_, h1, -⟩ := ebind_ok h; cases h1
         obtain ⟨_, -, h⟩ := ebind_ok h
         obtain ⟨s, hs, h⟩ := ebind_ok h
         obtain ⟨hck, hf, -⟩ := checkCircuit_ok hs
@@ -464,7 +464,7 @@ theorem checkStmt_scope {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List 
       cases h1
     · split at h
       · split at h
-        · first | (obtain ⟨_, h1, -⟩ := ebind_ok h; cases h1) | cases h
+        · obtain ⟨_, h1, -⟩ := ebind_ok h; cases h1
         rename_i hsc
         simpa using hsc
       · cases h
