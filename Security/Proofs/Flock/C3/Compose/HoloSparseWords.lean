@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.Compose.HoloSparseRounds
 import Proofs.Flock.Level3.ArithFacts
+import Proofs.Flock.C3.VStarList.Range
 
 /-!
 # The map's coins word by word, where a stream round takes many history rounds
@@ -12,7 +13,9 @@ steps, one word each, read the coins the verifier holds of a round word by word,
 
 `holoForms_sparse_none`: `holoSelWords`' last conjunct at a sparse phase's round, where the model's rep forms are the
 verifier's (`repFormsAt`, `repForms`): past both reps' rounds (`heldBefore_rep_forms`) the round's history rounds are
-inside the phase's `sparseForms`, every one `none`.
+inside the phase's `sparseForms`, every one `none`. `repFormsAt_holoAt` is `hA` where the inner statement's class
+checks pass and the inner shape is the statement's (`checkInnerStmt`), at its claims `2 · regions + 2` (`hcl`), which
+`checkInnerShape` does not check.
 -/
 
 namespace FlockC3.Reps
@@ -206,6 +209,31 @@ theorem holoForms_sparse_none {st : Flock.Stmt} {hp : HoloParams} {ish : RecVSta
       (.sparse 1, sparseRounds sp) :: R) (.sparse x) q + j = 2 * (repForms ish.m ish.kLog ish.claims).length +
       x.val * (sparseForms (sparseOf sp)).length + (heldBefore (.sparse x) (sparseRounds sp) q + j) by omega]
   exact getD_sparseForms (S := sparseForms (sparseOf sp)) (fun y hy => List.eq_of_mem_replicate hy) x (by omega)
+
+/-- **The model's rep forms are the verifier's** (`holoForms_sparse_none`'s `hA`): where the inner statement's class
+checks pass (`hc`) and the inner shape's `m`, `k_log` and regions are the statement's (`checkInnerStmt_ok`), at the
+inner shape's claims `2 · regions + 2` (`hcl`), the class's claims. -/
+theorem repFormsAt_holoAt {st : Flock.Stmt} {hp : HoloParams} {ish : RecVStar.Inner} (hc : ClassOk (shapeOf st))
+    (hi : RecVStar.checkInnerStmt ish st = .ok ()) (hcl : ish.claims = 2 * ish.regions + 2) :
+    repFormsAt (holoAt st hp) = repForms ish.m ish.kLog ish.claims := by
+  obtain ⟨-, hm, hk, hr⟩ := FlockC3.VStarList.checkInnerStmt_ok hi
+  have hm' : (execClassAt st).cls.m = st.m := by
+    rw [execClassAt, dite_eq_left hc]
+    rfl
+  have hk' := FlockC3.VStarList.execClassAt_kLog hc
+  have hl : (execClassAt st).regs.length = st.regions.size := by
+    rw [execClassAt_regs_length, ite_eq_left hc]
+    exact Array.size_map ..
+  have hs : (execClassAt st).sch = schedAt st.m := by
+    rw [execClassAt_sch, ite_eq_left hc]
+    rfl
+  unfold repFormsAt repForms
+  show zcForms (execClassAt st).cls.m ++ (lcForms (execClassAt st).cls.kLog ++
+    (opForms (2 * (execClassAt st).regs.length + 2) ++ ligForms (execClassAt st).sch)) = _
+  rw [show zcForms (execClassAt st).cls.m = zcForms ish.m from congrArg zcForms (hm'.trans hm.symm),
+    show lcForms (execClassAt st).cls.kLog = lcForms ish.kLog from congrArg lcForms (hk'.trans hk.symm),
+    show opForms (2 * (execClassAt st).regs.length + 2) = opForms ish.claims by rw [hl, hcl, hr],
+    show ligForms (execClassAt st).sch = ligForms (schedAt ish.m) by rw [hs, hm]]
 
 theorem selC_of_holoSelWords {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
     {bc : Cm → String → Nat → List UInt8} {i : ℕ} {s : String} {q : ℕ} (h : holoSelWords st hp ish tbl i s q) :

@@ -26,12 +26,13 @@ Closed since round 20, all on spec-2: the bridge (`acceptsC3_of_verify` and its 
 streams' list (`holoStreams_eq`, `holoStreams_sparse_eq`), the rep forms' alignment (`holoSizes_reps`, at
 `repForms m kLog claims = zcForms m ++ (lcForms kLog ++ (opForms claims ++ ligForms (schedAt m)))`, from
 `repRounds_sizes`; `heldBefore_rep_forms`), `drawnOf_holoMap`'s `hS` and `hr` (`drawnOf_holoMap_forms`), and the
-sparse rounds' forms (`holoForms_sparse_none`, `holoSelWords`' last conjunct, at `hA` below) (rec-lean, round 21).
+sparse rounds' forms (`holoForms_sparse_none`, `holoSelWords`' last conjunct) with its `hA` (`repFormsAt_holoAt`, at
+`hcl` below) (rec-lean, round 21).
 
 | piece | names | where | size | what it gives | owner (due) |
 |---|---|---|---|---|---|
 | the reps' round count | `checkCommitRounds`' round-for-round check (on the bridge), into `repIdxB_of_rounds` (`C3/Reps/RepsCounted.lean`) with `hk` (`t₄.k` is the stream's round count, S15/R2) at each rep | | 20 after H's check | `drawnOf_holoMap_forms`' `hb` | H's check, then rec-lean |
-| the model's rep forms | `hA`: `repFormsAt (holoAt st hp) = repForms ish.m ish.kLog ish.claims` (the class's public statement's `m`, `kLog` and `2·regions + 2` claims, and `sch = schedAt m`, are the inner shape's), and `0 < ish.claims` | `C3/Compose/HoloSparseWords.lean` | 60–120 | `holoForms_sparse_none`'s `hA`, so `holoSelWords` at the sparse streams | rec-lean (round 22) |
+| the rep claims' tie | `hcl`: the inner shape's claims are the class's, `ish.claims = 2 · ish.regions + 2`. `checkInnerShape` (`RecVStar.lean`) checks `m`, `k_log` and the regions against the statement but not `claims`, which META gives: a fail-closed refusal there (`i.claims != 2 + 2 · regions`, `innerOf`'s `2 + points · regions` at two points), then `checkInnerStmt_ok` gives it. `repFormsAt_holoAt` (proved) is `hA` from it, `hc` and `checkInnerStmt` | verifier, `C3/Compose/HoloSparseWords.lean` | 5 after the refusal | `holoForms_sparse_none`'s `hA`, so `holoSelWords` at the sparse streams | refusal: circuits (C); then rec-lean (round 22) |
 | the dirs value tie, (b) part 2 | `valueColl`, `tie_read`, `value_tie`, `dirs_tie` (merged); open: `hone`, `hpos`, `hseg` (VBridge's `PartPortsOne`, `ReadsOwn`, `ReadsUnsegmented`) at the read | `C3/RegLevels/ValueTie.lean` | | the tie without `hval`, in finder form | C |
 | the value collision in the bound | `ValueColl`, `valueFinder`, `prob_valueColl_le`, `value_tie_coll`, `prob_regTopValue_le` (merged, K round 5); open: the guarantee's bound reading `prob_regTopValue_le`, and C's level-0 salt case as one more `prob_or_le` around it | `Recursive/ValueFinder.lean` | unsized | the value tie's collision disjunct priced in the bound | C (level-0 salt), then K |
 | OpenKeys, row 5 | row 5's remainder; `hnd` (`own` names each port once, `C3/RegLevels/AccReads.lean:194`, `OpensRegs.lean`); `ReadsOwnC3` (`AccReads.lean:285`) threaded to the checked sessions | `C3/RegLevels/{AccReads,OpensRegs}.lean` | unsized | OpenKeys at `RepMaps.OpenCols`, R's levels from the checked sessions | R (round 22) |
