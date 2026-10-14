@@ -71,6 +71,7 @@ import Proofs.Flock.VBridge.Family.Registrants
 import Proofs.Flock.VBridge.Family.PartReads
 import Proofs.Flock.VBridge.Family.OutCols
 import Proofs.Flock.VBridge.Family.VCoins
+import Proofs.Flock.VBridge.Family.PartKeys
 import Proofs.Flock.VBridge.Family.Ends
 import Proofs.Flock.VBridge.Family.MsgsRead
 import Proofs.Flock.VBridge.Family.AccRows

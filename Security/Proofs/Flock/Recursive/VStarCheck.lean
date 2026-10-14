@@ -30,7 +30,8 @@ to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in 
   `verifyCmd` forms them; `find?_circuit`: `Tags.circuit`'s name names `Tags.circuit`. With refusal (5)'s name
   equation they give V*'s tags.
 * `firstDiff?_eq_none`: byte strings without a first difference are equal (`forIn_none_all`, the loop running through).
-* `checkFile_ok`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it passes.
+* `checkFile_ok`, `checkParsed_ok`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it
+  passes.
 * `population_of_setupHidden`: the set-up statement's population (`RecVStar.population`) is the size of the public
   file `loadPublic` reads, drawn or not (`drawn` records it, `loadPublic` records none and leaves `n` at it).
 * `setup_of_accepts`: a raw session that passes the statement check sets up a first table, with `circZ I` as its
@@ -218,6 +219,32 @@ theorem checkFile_ok {s : VStar.Stmt} {b : VStar.Bindings} {circuitB : ByteArray
       rw [hd] at h
       cases h
 
+/-- **The parse check**: the circuit has one unit per VU and no leaf cuts, its input leaves are its unit's input words
+in order, and its row ports are V*'s rows of `s`'s unit, by name, words and bits. -/
+theorem checkParsed_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkParsed s c = .ok ()) :
+    ∃ u, s.unit = .ok u ∧ c.upv = 1 ∧ c.leafCuts = #[] ∧
+      c.leavesIn.getD 0 #[] = (Array.range u.inWords).map Int.ofNat ∧
+      c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = RecVStar.vstarRows s.sub u := by
+  unfold RecVStar.checkParsed at h
+  dsimp only at h
+  split at h
+  · rename_i u hs
+    refine ⟨u, hs, ?_⟩
+    rw [pure_bind] at h
+    split at h
+    · cases h
+    · rename_i h1
+      split at h
+      · cases h
+      · rename_i h2
+        split at h
+        · cases h
+        · rename_i h3
+          simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, Bool.not_eq_true', Array.isEmpty_iff, not_or,
+            Classical.not_not, Bool.not_eq_false] at h1 h2 h3
+          exact ⟨h1.1, h1.2, h2, h3⟩
+  · cases h
+
 /-- **The unit check, as V*'s statement `j`**: a unit named `name` over `n` instances is statement `j` of V*'s
 statements at `i` (the one statement so named, and statement `j`'s name is it), and `n` is its instance count. -/
 theorem check_ok {i : RecVStar.Inner} {name : String} {n j : ℕ} {s : VStar.Stmt}
@@ -255,17 +282,44 @@ theorem check_ok {i : RecVStar.Inner} {name : String} {n j : ℕ} {s : VStar.Stm
             exact ⟨ss, hss, htm ▸ ht, by simpa using hm.2, by simpa using hn, hfl⟩
     · cases h
 
+/-- **The part check**: at a part's statement whose unit's name, shape, META and part are the verifier's part's
+(`RecResiduals.check`'s), V*'s part's row ports' elements and v elements are that part's. -/
+theorem checkPart_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkPart s c = .ok ()) {p : ℕ}
+    {nm : String} {pt : VStar.Part} (hs : s = .inner p nm pt) {m k cl j : ℕ}
+    (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
+    (hsh : RecResiduals.shape? m k cl = some sh) {holo : Bool} (hh : RecResiduals.holoOf c = .ok holo)
+    {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} (hpart : RecResiduals.part { sh with holo } j = .ok (S, ns, nv)) :
+    pt.S.ports.map (·.2) = ns ∧ pt.S.gf.nv = nv := by
+  subst hs
+  unfold RecVStar.checkPart at h
+  rw [hp] at h
+  dsimp only at h
+  rw [hsh] at h
+  dsimp only at h
+  rw [hh] at h
+  dsimp only at h
+  rw [hpart] at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rename_i hne
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Classical.not_not] at hne
+    exact hne
+
 /-- **The circuit check, as V*'s statement `j` under the verifier's bindings `f`**: the unit check as statement `j`,
-and the file check under `f`. -/
+the file check under `f`, the parse check and the part check. -/
 theorem checkCircuit_ok {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : ℕ} {circuitB : ByteArray}
     {f : VStar.Bindings} {s : VStar.Stmt} (h : RecVStar.checkCircuit i j c n circuitB f = .ok s) :
-    RecVStar.check i c.unit.name n (some j) = .ok s ∧ RecVStar.checkFile s f circuitB = .ok () := by
+    RecVStar.check i c.unit.name n (some j) = .ok s ∧ RecVStar.checkFile s f circuitB = .ok () ∧
+      RecVStar.checkParsed s c = .ok () ∧ RecVStar.checkPart s c = .ok () := by
   unfold RecVStar.checkCircuit at h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨s', hs', h⟩ := ebind_ok h
   obtain ⟨u, hu, h⟩ := ebind_ok h
+  obtain ⟨u', hp, h⟩ := ebind_ok h
+  obtain ⟨u'', hq, h⟩ := ebind_ok h
   cases h
-  exact ⟨hs', hu⟩
+  exact ⟨hs', hu, hp, hq⟩
 
 /-- **`checkStmt` at an inner shape, the verifier's own reads, statement `j` and bindings `f`**: the statement is set
 up under tags named V*'s `Tags.circuit` with no lookup table (refusals 5 and 6), and its circuit file is
@@ -295,7 +349,7 @@ theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (St
         · first | (obtain ⟨_, h1, -⟩ := ebind_ok h; cases h1) | cases h
         obtain ⟨_, -, h⟩ := ebind_ok h
         obtain ⟨s, hs, h⟩ := ebind_ok h
-        obtain ⟨hck, hf⟩ := checkCircuit_ok hs
+        obtain ⟨hck, hf, -⟩ := checkCircuit_ok hs
         obtain ⟨ss, hss, hj, hname, hpop, hfl⟩ := check_ok hck
         obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
         obtain ⟨⟨⟩, ho, -⟩ := ebind_ok h
