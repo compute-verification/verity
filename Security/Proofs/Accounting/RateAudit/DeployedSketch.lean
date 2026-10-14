@@ -531,7 +531,6 @@ theorem gammaSketch_mul (N m ρ S L X : ℕ) (hN : 0 < N) (hm : 0 < m) :
   unfold gammaSketch
   rw [div_mul_cancel₀ _ hNm]
   push_cast
-  ring
 
 end Accounting.RateSketch
 
@@ -566,15 +565,23 @@ theorem RemoteSessionConservationSketch : Accounting.Guarantees.RemoteSessionCon
     ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊
     (ε + (P : ℝ≥0∞) * (G * term)) hε
   have hγ := gammaSketch_mul N m ρ S L X hN hm
+  have hγ' : gammaSketch N m ρ S L X * ((N : ℝ) * (m * 256)) = (slack : ℝ) := by
+    simpa [slack, mul_assoc] using hγ
   have hb : (0 : ℝ) < m * 256 := by positivity
   refine (pr_mono (fun x hx => ?_)).trans (main.trans ?_)
   · obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
     · refine ⟨hall, Or.inl ?_⟩
-      have hc := Deployed.count_lt (c := (n : ℝ) * P) hb hγ hT
+      have hT' : ((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+          (1 - (dbar + gammaSketch N m ρ S L X)) * (((n : ℝ) * P) * ((N : ℝ) * (m * 256))) := by
+        simpa [mul_assoc] using hT
+      have hc := Deployed.count_lt (c := (n : ℝ) * P) hb hγ' hT'
       rw [← mul_assoc]
       exact_mod_cast hc
     · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
-      have hc := Deployed.count_lt (c := (P : ℝ)) hb hγ hw
+      have hw' : (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+          (1 - (dw + gammaSketch N m ρ S L X)) * ((P : ℝ) * ((N : ℝ) * (m * 256))) := by
+        simpa [mul_assoc] using hw
+      have hc := Deployed.count_lt (c := (P : ℝ)) hb hγ' hw'
       exact_mod_cast hc
   · have e1 : ((n : ℝ) * P * N) = ((n * P * N : ℕ) : ℝ) := by push_cast; ring
     have e2 : ((P : ℝ) * N) = ((P * N : ℕ) : ℝ) := by push_cast; ring
@@ -597,11 +604,11 @@ theorem RemoteSessionConservationSketch : Accounting.Guarantees.RemoteSessionCon
 passes. This is why the 16-row worst-cap bound is vacuous. -/
 theorem sketchQueryTermCaps :
     (2 ^ 55 : ℝ≥0∞) * ((2 ^ 55 : ℝ≥0∞) / 2 ^ 96) = 2 ^ 14 := by
-  rw [show (2 : ℝ≥0∞) ^ 96 = 2 ^ 55 * 2 ^ 41 by rw [← pow_add]; norm_num,
-    ENNReal.mul_div_mul_left 1 (2 ^ 41) (pow_ne_zero _ (by norm_num))
-      (ENNReal.pow_ne_top ENNReal.ofNat_ne_top)]
-  rw [show (2 : ℝ≥0∞) ^ 41 = 2 ^ 27 * 2 ^ 14 by rw [← pow_add]; norm_num,
-    show (1 : ℝ≥0∞) / (2 ^ 27 * 2 ^ 14) * 2 ^ 55 = 2 ^ 14 by norm_num]
+  rw [← mul_div_assoc]
+  rw [show (2 : ℝ≥0∞) ^ 55 * 2 ^ 55 = 2 ^ 96 * 2 ^ 14 by
+    rw [← pow_add, ← pow_add]; norm_num]
+  simpa using (ENNReal.mul_div_mul_left (c := (2 : ℝ≥0∞) ^ 96) (2 ^ 14) 1
+    (pow_ne_zero _ (by norm_num)) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top))
 
 /-- **The verbatim sketch session at the deployed receipt parameters**
 (`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`). -/
@@ -610,7 +617,20 @@ theorem RemoteSessionConservationSketchDeployed :
   intro n P N ρ S L q G X ε A hn hP hN hRank hX
   have h := RemoteSessionConservationSketch n P N 128 ρ 512 S L q 16 G 2773 12 X ε A
     0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) (by norm_num) hRank hX
-  refine h.trans ?_
+  have h' :
+      pr (fun x : RateSketch.SketchStore N 128 ×
+          (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+        (∀ w t, (x.2 w).2.2 t ∈
+          (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
+          ((((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+              (1 - (0.0015 + RateSketch.gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
+            ∃ w, (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+              (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L X)) * (P * N * 32768))) ≤
+        ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) + ENNReal.ofReal (1 - 0.01 / n) ^ (2773 * n) +
+          (n : ℝ≥0∞) * ε +
+            (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512 + (q : ℝ≥0∞) / 2 ^ 96) := by
+    convert h using 1 <;> norm_num <;> ring
+  refine h'.trans ?_
   rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
     rw [ENNReal.div_add_div_same]; norm_num]
   norm_num only [show 8 * 12 = 96 by norm_num]
