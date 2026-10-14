@@ -9,6 +9,10 @@ map's full selector `selC` at rounds of form `none`: a sparse phase's round of `
 the history's prefix is `g` words, the `w`-th of which, as a coin step of one word, is the coin of the `w`-th of those
 rounds (`CoinWordsEncoded`). `coinsEncoded_holoMap` is the case of one history round at any form; a sparse stage's coin
 steps, one word each, read the coins the verifier holds of a round word by word, which this gives.
+
+`holoForms_sparse_none`: `holoSelWords`' last conjunct at a sparse phase's round, where the model's rep forms are the
+verifier's (`repFormsAt`, `repForms`): past both reps' rounds (`heldBefore_rep_forms`) the round's history rounds are
+inside the phase's `sparseForms`, every one `none`.
 -/
 
 namespace FlockC3.Reps
@@ -97,6 +101,111 @@ def holoSelWords (st : Flock.Stmt) (hp : HoloParams) (ish : RecVStar.Inner) (tbl
     L.find? (fun e => e.1.name tbl == s) = some e ∧ 0 < e.1.group (e.2.getD q default).1 ∧
     i + 1 = roundAt L e.1 q + e.1.group (e.2.getD q default).1 ∧
     ∀ j < e.1.group (e.2.getD q default).1, ((holoForms (holoAt st hp))[roundIn L e.1 q + j]?).getD none = none
+
+/-- **One rep's coins' forms in `holoForms`**, at the class's public statement. -/
+noncomputable def repFormsAt (e : ExecHolo) : List (Option ℕ) :=
+  zcForms (e.cls.pubStatement e.regs).m ++ (lcForms (e.cls.pubStatement e.regs).kLog ++
+    (opForms (2 * (e.cls.pubStatement e.regs).regions.length + 2) ++ ligForms e.sch))
+
+theorem holoForms_eq (e : ExecHolo) : holoForms e = repFormsAt e ++ (repFormsAt e ++
+    (sparseForms e.cls.shape ++ (sparseForms e.cls.shape ++ (opForms 2 ++ ligForms e.rsch.sch)))) := rfl
+
+theorem sum_range_mono (f : ℕ → ℕ) {a b : ℕ} (h : a ≤ b) :
+    ((List.range a).map f).sum ≤ ((List.range b).map f).sum := by
+  induction h with
+  | refl => exact Nat.le_refl _
+  | step _ ih =>
+    rw [List.range_succ, List.map_append, List.sum_append]
+    omega
+
+theorem heldBefore_le (s : HoloStream) (rs : Array SchedRound) (k : ℕ) : heldBefore s rs k ≤ heldBefore s rs rs.size := by
+  unfold heldBefore
+  rw [Nat.min_self]
+  exact sum_range_mono _ (Nat.min_le_right _ _)
+
+theorem heldBefore_succ (s : HoloStream) (rs : Array SchedRound) {q : ℕ} (hq : q < rs.size) :
+    heldBefore s rs (q + 1) = heldBefore s rs q + s.group (rs.getD q default).1 := by
+  unfold heldBefore
+  rw [Nat.min_eq_left (show q + 1 ≤ rs.size by omega), Nat.min_eq_left (Nat.le_of_lt hq), List.range_succ,
+    List.map_append, List.sum_append]
+  simp
+
+theorem nzSizes_length (x : Fin 2) : ∀ l : List SchedRound,
+    (l.map fun q => (HoloStream.rep x).group q.1).sum = (nzSizes l).length
+  | [] => rfl
+  | q :: l => by
+    rw [List.map_cons, List.sum_cons, nzSizes_length x l]
+    simp only [nzSizes, List.flatMap_cons, List.length_append, HoloStream.group]
+    split
+    · simp_all
+    · simp_all
+      omega
+
+/-- **A rep's rounds take as many history rounds as it has coin forms**, at a claim (`holoSizes_rep`). -/
+theorem heldBefore_rep_forms (x : Fin 2) {m kLog claims : ℕ} {rs : Array SchedRound} (hc : 0 < claims)
+    (h : holoRounds m kLog claims = some rs) : heldBefore (.rep x) rs rs.size = (repForms m kLog claims).length := by
+  have e := congrArg List.length (holoSizes_rep x hc h)
+  rw [holoSizes_rep_nz, List.length_map] at e
+  rw [heldBefore_size, ← e]
+  exact nzSizes_length x rs.toList
+
+theorem getD_sparseForms {A S rest : List (Option ℕ)} (hS : ∀ y ∈ S, y = none) (x : Fin 2) {k : ℕ}
+    (hk : k < S.length) : ((A ++ (A ++ (S ++ (S ++ rest))))[2 * A.length + x.val * S.length + k]?).getD none = none := by
+  rw [List.getElem?_append_right (by omega), List.getElem?_append_right (by omega),
+    show 2 * A.length + x.val * S.length + k - A.length - A.length = x.val * S.length + k by omega]
+  have hS' : (S[k]?).getD none = none := by
+    rw [List.getElem?_eq_getElem hk, Option.getD_some]
+    exact hS _ (List.getElem_mem hk)
+  rcases (show x.val = 0 ∨ x.val = 1 by omega) with h | h
+  · rw [h, Nat.zero_mul, Nat.zero_add, List.getElem?_append_left hk]
+    exact hS'
+  · rw [h, Nat.one_mul, List.getElem?_append_right (by omega), Nat.add_sub_cancel_left, List.getElem?_append_left hk]
+    exact hS'
+
+/-- **A sparse phase's rounds are of form `none`** (`holoSelWords`' last conjunct): past both reps' coins, sparse phase
+`x`'s round `q` takes history rounds inside phase `x`'s `sparseForms`, where the model's rep forms are the verifier's
+(`hA`) and its sparse shape the inner shape's `sparse` entry's (`hshape`, `shape_holoAt`). -/
+theorem holoForms_sparse_none {st : Flock.Stmt} {hp : HoloParams} {ish : RecVStar.Inner} {sp : RecSparse.Shape}
+    {L : List (HoloStream × Array SchedRound)} {e : HoloStream × Array SchedRound} {x : Fin 2} {q : ℕ}
+    (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L) (hsp : ish.sparse = some sp)
+    (hc : 0 < ish.claims) (hA : repFormsAt (holoAt st hp) = repForms ish.m ish.kLog ish.claims)
+    (hshape : (holoAt st hp).cls.shape = sparseOf sp) (he : e ∈ L) (hx : e.1 = .sparse x) :
+    ∀ j < e.1.group (e.2.getD q default).1, ((holoForms (holoAt st hp))[roundIn L e.1 q + j]?).getD none = none := by
+  rw [hsp] at hS
+  obtain ⟨rs, R, hr, hR, rfl⟩ := holoStreams_sparse_eq hS
+  obtain ⟨e1, e2⟩ := e
+  dsimp only at hx
+  subst hx
+  have he2 : e2 = sparseRounds sp := by
+    simp only [List.mem_cons] at he
+    rcases he with h | h | h | h | h
+    · cases h
+    · cases h
+    · cases h; rfl
+    · cases h; rfl
+    · cases hR _ h
+  subst he2
+  intro j hj
+  dsimp only at hj ⊢
+  have hq : q < (sparseRounds sp).size := by
+    refine Decidable.by_contra fun hq => ?_
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)] at hj
+    exact absurd hj (Nat.not_lt_zero _)
+  have hle := heldBefore_le (.sparse x) (sparseRounds sp) (q + 1)
+  rw [heldBefore_sparse_size, heldBefore_succ _ _ hq] at hle
+  have hg : (HoloStream.sparse x).group ((sparseRounds sp).getD q default).1 =
+      ((sparseRounds sp).getD q default).1 := rfl
+  have hn : FlockVBridge.Sparse.nc (sparseOf sp) = (sparseForms (sparseOf sp)).length := by
+    simp only [sparseForms, List.length_replicate, FlockVBridge.Sparse.nc, FlockVBridge.Sparse.nR]
+    omega
+  have hround := roundAt_sparseRounds rs sp R x q
+  unfold roundAt at hround
+  rw [hn] at hround
+  have hrep := heldBefore_rep_forms 0 hc hr
+  rw [holoForms_eq, hA, hshape, show roundIn ((.rep 0, rs) :: (.rep 1, rs) :: (.sparse 0, sparseRounds sp) ::
+      (.sparse 1, sparseRounds sp) :: R) (.sparse x) q + j = 2 * (repForms ish.m ish.kLog ish.claims).length +
+      x.val * (sparseForms (sparseOf sp)).length + (heldBefore (.sparse x) (sparseRounds sp) q + j) by omega]
+  exact getD_sparseForms (S := sparseForms (sparseOf sp)) (fun y hy => List.eq_of_mem_replicate hy) x (by omega)
 
 theorem selC_of_holoSelWords {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
     {bc : Cm → String → Nat → List UInt8} {i : ℕ} {s : String} {q : ℕ} (h : holoSelWords st hp ish tbl i s q) :
