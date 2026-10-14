@@ -109,6 +109,7 @@ __global__ void __launch_bounds__(128) payload_leaves_kernel(const uint4 *__rest
 // a bit of 1 is −1. A warp takes 32 blocks, stages their σ in shared memory and each lane hashes one into its receipt,
 // sketch_hash_kernel's compression, so σ never leaves the SM. The sums are exact, so the receipts are sketch_kernel's.
 constexpr int SK16_P = BLOCK / 64, SK16_WARPS = 8, SK16_PACK = SK16_P * 32;
+constexpr u64 CONSUMER_READY_BLOCKS = 1ULL << 13;
 
 __global__ void __launch_bounds__(128) pack16_kernel(const int8_t *__restrict__ signs, u32 *__restrict__ pk) {
   const int q = blockIdx.x * blockDim.x + threadIdx.x;
@@ -379,11 +380,13 @@ __device__ __forceinline__ u64 pass_kept_at(u64 width, int h0, int h) {
 __global__ void __launch_bounds__(128) pass_consumer_kernel(const u64 *__restrict__ ys, const unsigned *__restrict__ ready,
                                                             unsigned *__restrict__ subtree_done,
                                                             unsigned *__restrict__ chunks_done, u64 *__restrict__ kept,
-                                                            u64 width, u64 chunk, int h0, int hc, int H, u64 chunks) {
+                                                            u64 width, u64 chunk, u64 ready_blocks, int h0, int hc, int H,
+                                                            u64 chunks) {
   const u64 lc = chunk / PER_LEAF, leaves = 1ULL << h0, groups = lc >> h0;
   const u64 q = blockIdx.x, k = q / groups, first = (q - k * groups) * leaves, c0 = k * lc;
-  const unsigned tiles_per = (unsigned)(leaves * PER_LEAF / 32);
-  while (*(volatile const unsigned *)(ready + q) < tiles_per) __nanosleep(256);
+  const u64 block0 = (c0 + first) * PER_LEAF;
+  const unsigned tiles_per = (unsigned)(ready_blocks / 32);
+  while (*(volatile const unsigned *)(ready + block0 / ready_blocks) < tiles_per) __nanosleep(256);
   __threadfence();
   extern __shared__ u64 scratch[];
   u64 *in = scratch, *out = scratch + 8 * leaves;
@@ -709,15 +712,17 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
   const bool fused = h0 <= 8;
   const uint64_t group_blocks = (uint64_t)PER_LEAF << h0;
   const uint64_t groups = n / group_blocks;
+  const uint64_t ready_blocks = chunk < CONSUMER_READY_BLOCKS ? chunk : CONSUMER_READY_BLOCKS;
+  const uint64_t ready_groups = n / ready_blocks;
   if (!ctas) {
     int dev;
     if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
   }
   int rc;
-  if (cudaMemsetAsync(ctr, 0, 4 * (2 + groups + chunks), sa) || cudaEventRecord(go, sa) ||
+  if (cudaMemsetAsync(ctr, 0, 4 * (2 + ready_groups + chunks), sa) || cudaEventRecord(go, sa) ||
       cudaStreamWaitEvent(sb, go, 0))
     return 4;
-  const unsigned ready_tiles = (unsigned)((fused ? group_blocks : chunk) / 32);
+  const unsigned ready_tiles = (unsigned)((fused ? ready_blocks : chunk) / 32);
   sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, pk, ys, ctr, ready_tiles);
   if (cudaGetLastError()) return 4;
   // These nodes depend on this pass's seed, but not on its receipts. Compute each once at the start and reuse the
@@ -739,8 +744,9 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
   if (fused) {
     const size_t shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
     if (groups > 0xFFFFFFFFULL) return 1;
-    pass_consumer_kernel<<<groups, 128, shared, sb>>>(ys, ctr + 1, ctr + 1 + groups, ctr + 1 + groups + chunks, kept,
-                                                     width, chunk, h0, hc, H, chunks);
+    pass_consumer_kernel<<<groups, 128, shared, sb>>>(ys, ctr + 1, ctr + 1 + ready_groups,
+                                                     ctr + 1 + ready_groups + chunks, kept, width, chunk, ready_blocks,
+                                                     h0, hc, H, chunks);
   } else {
     for (uint64_t k = 0; k < chunks; ++k) {
       const int slot = k & 1;
