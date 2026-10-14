@@ -121,6 +121,17 @@ def test_experimental_arm_can_require_an_isolated_engine(monkeypatch):
     assert arm.experimental and not arm.resident
 
 
+def test_graphs_are_refused_for_arms_bound_to_the_build():
+    from verity_bench.vllm.arms import build_bound
+    from verity_bench.vllm.runner import ProcessEngineFactory
+
+    bound_arm, _control = resolve_arms("sampled-proofs:hm96,stock-fp8")
+    assert build_bound(bound_arm) == ("sampled-proofs:hm96",)
+    assert build_bound(resolve_arms("stock")[0]) == ()
+    with pytest.raises(ValueError, match="Build"):
+        ProcessEngineFactory(eager=False).create(bound_arm, get_preset("llama31-8b-fp8-1gpu"), resident=True)
+
+
 def test_local_checkpoint_is_content_bound(tmp_path):
     (tmp_path / "config.json").write_bytes(b"config")
     (tmp_path / "weights.safetensors").write_bytes(b"weights")

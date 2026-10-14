@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from typing import Any, Protocol
 
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.arms import Arm, Target, plugin
+from verity_bench.vllm.arms import Arm, Target, build_bound, plugin
 from verity_bench.vllm.presets import Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
@@ -602,6 +602,13 @@ class ProcessEngineFactory:
         self.context = mp.get_context("spawn")
 
     def create(self, arm: Arm, preset: Preset, *, resident: bool) -> BenchEngine:
+        if not self.eager:
+            bound = build_bound(arm, preset.gpu_count)
+            if bound:
+                raise ValueError(
+                    f"arm {arm.id!r} binds its served kernels to the row's Build ({', '.join(bound)}); CUDA graphs can "
+                    "change the served kernels so they no longer match it: run with --eager (or enforce_eager = true "
+                    "in the preset's engine settings)")
         if resident and not arm.resident:
             raise ResidentCapacityError(f"arm {arm.id!r} requires an isolated engine lifetime")
         parent, child = self.context.Pipe()
