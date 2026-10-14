@@ -239,3 +239,9 @@ theorem stageHeldW_sparse {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List 
 end
 
 end FlockC3.Sparse
+
+#print axioms FlockC3.Sparse.weave_coins
+#print axioms FlockC3.Sparse.coins_stepsOf
+#print axioms FlockC3.Sparse.stageStarts
+#print axioms FlockC3.Sparse.coinRounds_take_sum
+#print axioms FlockC3.Sparse.stageHeldW_sparse
