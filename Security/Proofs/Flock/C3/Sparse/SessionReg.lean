@@ -370,20 +370,3 @@ end Family
 end
 
 end FlockC3.Sparse
-
-#print axioms FlockC3.Sparse.checkSparse_coins
-#print axioms FlockC3.Sparse.check_sparseCoins
-#print axioms FlockC3.Sparse.stackedParams_sparse
-#print axioms FlockC3.Sparse.openingParams_sparse
-#print axioms FlockC3.Sparse.startsWith_sparseName
-#print axioms FlockC3.Sparse.sparseParams_of_check
-#print axioms FlockC3.Sparse.nw_eq_msum
-#print axioms FlockC3.Sparse.c3Held_eq
-#print axioms FlockC3.Sparse.c3Of_sparse
-#print axioms FlockC3.Sparse.csOf_eq
-#print axioms FlockC3.Sparse.unitShape_holoAt
-#print axioms FlockC3.Sparse.stmt0_of_setup
-#print axioms FlockC3.Sparse.coinsAccepted_of_keep
-#print axioms FlockC3.Sparse.coinsAccepted_checked
-#print axioms FlockC3.Sparse.sparseCoins_of_accepted
-#print axioms FlockC3.Sparse.sparseSessionAt_of_regs
