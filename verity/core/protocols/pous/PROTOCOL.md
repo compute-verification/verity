@@ -39,7 +39,7 @@ fails is the `feistel-indifferentiability` claim, now refuted, and every sentenc
 deadline into a count of whole `Π₂` calls (`call_ns`, the effective `D`, the cliff, the cap): each holds in the
 ideal-permutation model only, and none bounds an adversary at the reference `Π₂`.
 
-## The problem: timed audit, perfect isolation
+## The problem: timed audit, help accounted
 
 - **Syntax.** A trusted encoder `Enc(W) → (pp, C, vk)` runs once and erases its secrets. `W` is arbitrary and fixed
   before any setup randomness (all zeros included). Decoding `Dec(pp, C) = W` is public and bit-exact. `C` is `N`
@@ -52,6 +52,15 @@ ideal-permutation model only, and none bounds an adversary at the reference `Π�
   else. The memory challenger issues `k` uniform block indices, all at once or one at a time. Each answer is due within
   the deadline, so the responder is `(D, Q)`-bounded, with no outside help. Whenever a challenge arrives the adversary's
   state is at most `ρ|C|` bits; `W` and `pp` are free.
+- **Deployment: help is accounted, not excluded.** No guarantee assumes trusted prover hardware (Daniel, 12 Oct 2026),
+  so nothing attests the prover's machine and nothing asks that its responder be isolated. The game's "no outside
+  help" is read through the help-accounted row of console's actual-circuit model, the model a certificate cites under
+  the id `perfect-isolation` (kept from the earlier model, since certificates pin it): on PoUS's challenge schedule,
+  some challenge tick `t_j` has `mem_X(t_j) + 2^e·h ≥ S` for the audited location `X`, where `h` is the help `X`
+  received. It is proved at `e = 0` for a location that does no arithmetic modulo `p` (PR #1860), for challenges on a
+  fixed schedule. PoUS keeps sending each challenge when the last answer arrives, and the model's bridge is to cover
+  that schedule (Daniel, 12 Oct); that bridge is not written yet. An accepted audit bounds what `X` held plus what it
+  was helped, never `X`'s memory alone.
 - **Requirement.** `Pr[every answer correct and on time] ≤ δ + ε_crypto`. The honest prover stores `C` and answers by
   lookup.
 - **Cost** (not modeled in Lean): encoded matmuls at most 2× the tuned plaintext sequence, decoding on every use.
@@ -340,9 +349,10 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `segDom_inj` is the certificates' hypothesis.
   - `tests/test_pous_protocol.py` checks it for every scheme, and replays the attack on real labels.
   - `benchmarks/pous` gates every implementation's tags against `salt ‖ u64 s` over 448 segments.
-- **Claims.** `protocol.claim(id)` resolves an id from `verity.core.claims`, or from `protocol.LOCAL_CLAIMS` until core holds
-  it: `ideal-permutation`, `perfect-isolation`, `sequential-step-floor`, `feistel-indifferentiability` (refuted at the
-  reference `Π₂`: "Main caveat"), and P2's `m1-ideal-permutations`, `sms-m1-instantiation`, `seq-root`.
+- **Claims.** `protocol.claim(id)` resolves an id from `verity.core.claims`, or from `protocol.LOCAL_CLAIMS` until core
+  holds it: `ideal-permutation`, `perfect-isolation` (the help-accounted row: "The problem"), `sequential-step-floor`,
+  `feistel-indifferentiability` (refuted at the reference `Π₂`: "Main caveat"), and P2's `m1-ideal-permutations`,
+  `sms-m1-instantiation`, `seq-root`.
 - **Tests.** `tests/test_pous_protocol.py` runs one conformance suite over every scheme, plus a toy that implements
   only the two methods. Each registered scheme's vectors are pinned in `tests/fixtures/schemes/<name>.json`, written
   by `tests/pous_scheme_vectors.py`: the certificate at the registered point, and a small instance's segment digests
@@ -607,9 +617,10 @@ The game assumes three requirements on the protocol, and the certificate says no
    ideal-permutation model (not at the reference `Π₂`: "Main caveat").
 3. **Every answer past `Δ` is counted late.**
 
-**Isolation over the whole graded window.** Perfect isolation ("The problem") is assumed for the whole graded audit, not
+**Help over the whole graded window.** The game's "no outside help" ("The problem") covers the whole graded audit, not
 round by round: from the first challenge to the last answer the server has no outside help, and its state when each
-challenge arrives is its storage at rest. The worst row is `t = 3`, `k = 243` rounds. After a late answer the prover
+challenge arrives is its storage at rest. In a deployment the help-accounted row counts, in `h`, the help received over
+that same window. The worst row is `t = 3`, `k = 243` rounds. After a late answer the prover
 times the next arrival, so the certificate needs the whole window to be too short to re-encode `C` from `W`.
 Re-encoding a segment takes `R(d) = Σ_{v<512} (min(v, d) + 1) ≥ R(5) = 3,057` sequential `Π₂` calls (6,578 at
 `d = 12`). The window is wall-clock time, and a rebuild runs through the rounds and the memory challenger's gaps between
@@ -671,8 +682,8 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 
 **Not proved here:**
 - a concrete permutation for `Π₂` (the main caveat);
-- the conversion of the deadline into `D = 5` rounds, which assumes no ASIC and at least 50 ns per Keccak-f, and perfect
-  isolation: both outside Lean;
+- the conversion of the deadline into `D = 5` rounds, which assumes no ASIC and at least 50 ns per Keccak-f, and the
+  reading of help through the help-accounted row ("The problem"): both outside Lean;
 - decode cost, which isn't modeled.
 
 ## Guarantees and lemmas
