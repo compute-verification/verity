@@ -519,3 +519,13 @@ end VStarFamily
 end family
 
 end FlockVBridge.Family
+
+#print axioms FlockVBridge.OfVStar.partPorts_eq
+#print axioms FlockVBridge.OfVStar.wIdx_get
+#print axioms FlockVBridge.OfVStar.take_sum_inj
+#print axioms FlockVBridge.OfVStar.starts_inj
+#print axioms FlockVBridge.OfVStar.rowBit_of
+#print axioms FlockVBridge.Family.VStarFamily.part_link
+#print axioms FlockVBridge.Family.VStarFamily.rowBit
+#print axioms FlockVBridge.Family.VStarFamily.partRowBits_holds
+#print axioms FlockVBridge.Family.VStarFamily.partRowCols_holds
