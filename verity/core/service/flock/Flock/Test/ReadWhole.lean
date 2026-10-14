@@ -4,7 +4,9 @@
 all is named with how many, wherever it sits among held elements read in no bit. `readIns` marks the input columns the
 computed rows read and nothing past the inputs. `RecOpening.rsUnread` on m = 22's shape: w's slot 0 is a claim's ring
 switch's (`.rs 0 0`) and slots 362–365 the running sums' (`.acc0 0` to `.acc1 1`), each named unless read in all 128
-bits, and slot 256 (Ligerito's first) is neither.
+bits, and slot 256 (Ligerito's first) is neither. `RecOpening.accHeld` at m = 22's shape, on an S of one residual per
+list of w slots it adds: refused with no residual, with only `acc0`'s port held, and with only a ring switch's and
+`acc1`'s; passed once some part holds both running sums' ports, in one residual or two.
 -/
 import Flock.RecOpening
 
@@ -54,5 +56,17 @@ def rsUnread (W : Array Nat) (reads : List (List Nat)) : Option (Nat × Nat) :=
 #guard rsUnread #[364] [] == some (0, 0)
 #guard rsUnread #[256, 365] [List.range 128] == some (1, 0)
 #guard rsUnread #[362, 363, 364, 365] [List.range 128, List.range' 1024 128, List.range' 2048 128] == some (3, 0)
+
+def accHeld (ts : List (List Nat)) : Bool :=
+  match RecOpening.shape? 22 2 with
+  | some sh => RecOpening.accHeld sh
+      ⟨RecOpening.nw sh, 0, #[], (ts.map fun t => (⟨#[], (t.map RecAlgebra.Term.w).toArray⟩ : RecAlgebra.Res)).toArray⟩
+  | none => true
+
+#guard !accHeld []
+#guard !accHeld [[362]]
+#guard !accHeld [[0], [365]]
+#guard accHeld [[362, 364]]
+#guard accHeld [[363], [365]]
 
 end Flock.Test.ReadWhole

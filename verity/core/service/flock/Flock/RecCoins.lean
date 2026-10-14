@@ -343,7 +343,8 @@ structure Opening where
 `stacked/rep0`'s coins: the claims' ring switches, then Ligerito, built as `RecOpening.build` builds S (which must be
 `RecOpening.structureOf`'s), at both reps' registered claims (`rec_sparse.registered_claim`): rep `k`'s point
 `(r_k, ζ_p, ρ_t)` from its sparse coins, zero-padded to R's `m`, its skip weights eq(point[:6], ·) and `x` the rest; a
-claim's value is a row of `rec-claim`, w's, so it is none of v's. -/
+claim's value is a row of `rec-claim`, w's, so it is none of v's. Refused unless some part of that S holds each running
+sum (`RecOpening.accHeld`). -/
 def opening (c3 : C3) (unit : String) : V Opening := do
   let some r := c3.stacked | throw s!"rec-coins: {unit}: the verifier's inner shape names no R (the inner circuit's META's stacked)"
   let some sh := RecOpening.shape? r.m r.claims
@@ -370,6 +371,8 @@ def opening (c3 : C3) (unit : String) : V Opening := do
     let (res, st) ← (RecOpening.buildAll sh lins.toList 0).run { kappa }
     if some (⟨RecOpening.nw sh, st.vNames.size, st.ops, res⟩ : RecAlgebra.GfS) != (RecOpening.structureOf sh).toOption then
       throw "the structure moved with the coins"
+    if !RecOpening.accHeld sh ⟨RecOpening.nw sh, st.vNames.size, st.ops, res⟩ then
+      throw "no part of its S holds each of Ligerito's running sums"
     pure { sh, v := st.vVals, lg, kappa := st.kappa }
   built.mapError (s!"rec-coins: {unit}: R's opening at {RecVStar.STACKED}/rep0's coins: " ++ ·)
 
