@@ -375,7 +375,7 @@ variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n
 
 local notation "ℐ" => holoInnerAt T (Flock.Guarantees.holoCTs st hp) st hp
 
-/-- **`RepsDrawn` at the verifier's map's one-round draws**, as `stageCoins_holo`'s `hdr` reads it at `holoMapOne`:
+/-- **`RepsDrawn` at the verifier's map's one-round draws**, as `stageCoins_holo`'s `hdr` reads it at `holoSelOne`:
 `repsDrawn_holoMap` at the guarantee's coin types and `m := holoMap`, which draws each rep's first coin round below the
 coin count (`holoSel_first`). -/
 theorem repsDrawn_holoMapAt {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}

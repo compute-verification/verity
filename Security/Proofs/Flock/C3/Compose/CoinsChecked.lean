@@ -10,9 +10,9 @@ import Proofs.Flock.C3.Reps.DrawnRounds
 `stageCoins_checked`: `hcoins` of `srcOK_holo_rs` and `srcOK_repsOfVals_pR` (`StageCoins` at `holoCTs`, at the tied
 source of `repsOfVals`) at the checked sessions, the guarantee's hold of the inner transcript and reps whose rounds are
 the record's (`hrd`, `rfl` at the decoder with its reads, `RepMaps.withReads`), from the guarantee's custody at
-`holoMap` (`_hIC`). It is `stageCoins_holo` at the map's one-round draws (`holoMapOne`), where the map's coins are the
-history's (`coinsEncoded_holoMap`), as they are not at all of `holoMap`'s (a sparse phase's round of `n > 1` coins);
-custody at `holoMap` holds there (`custody_holoMapOne`), and the reps' rounds are held by `hrd`
+`holoMap` (`_hIC`). It is `stageCoins_holo` at the map's one-round draws (`holoSelOne`, each one of the map's:
+`selC_of_holoSelOne`), where the map's coins are the history's (`coinsEncoded_holoMap`), as they are not at all of
+`holoMap`'s (a sparse phase's round of `n > 1` coins), and the reps' rounds are held by `hrd`
 (`repRoundsHeld_of_rounds`). `RepsDrawn` there is `repsDrawn_checked`'s, at the class's rep forms (`repFormsAt_holoAt`),
 from the inner shape check the event carries (`AcceptsC3`) and the claims tie that V*'s list refuses without
 (`shape_of_statements`); the session's streams exist wherever V*'s list builds at a RecSparse shape
@@ -27,8 +27,7 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockC3.Reps (repsOfVals UnitVals ProofOfVals SetupOfVals FramesOfVals SrcRepTie)
-open FlockSoundness.Assumptions (InnerRecordCustody)
-open Flock.Guarantees (holoCTs holoMap)
+open Flock.Guarantees (holoCTs)
 
 /-- **V*'s shape and the claims tie are the verifier's**: V*'s list refuses an inner shape off V*'s
 (`RecResiduals.shape?`: a `fast100` schedule, `k_log ≥ 6`, two claims or more) and one whose claims are not two and
@@ -91,24 +90,6 @@ theorem holoStreams_of_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (hss : 
   simp only [hall, hsp, hst, Option.bind_eq_bind, Option.bind_some, hzp, hrs, bne_self_eq_false]
   all_goals rfl
 
-/-- **`holoMap` at its one-round draws**: its records and coins, drawing a stream round only where it takes one history
-round (`holoSelOne`). -/
-def holoMapOne (st : Flock.Stmt) (hp : HoloParams) (Cm : Type) (ish : RecVStar.Inner) (tbl : String)
-    (bc : Cm → String → Nat → List UInt8) :
-    FlockSoundness.Assumptions.InnerRecordMap Cm
-      ((k : Fin (1 + (Exec.kindCoinTys (Flock.Guarantees.holoKinds (holoAt st hp))).length)) → holoCTs st hp k) :=
-  { holoMap st hp Cm ish tbl bc with selC := holoSelOne ish tbl }
-
-/-- **Custody at `holoMap` holds at its one-round draws**, each one of the map's (`selC_of_holoSelOne`). -/
-theorem custody_holoMapOne {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
-    {bc : Cm → String → Nat → List UInt8}
-    {wr : List (Cm × ((k : Fin (1 + (Exec.kindCoinTys (Flock.Guarantees.holoKinds (holoAt st hp))).length)) →
-      holoCTs st hp k)) → Lean.Json × String}
-    {held : Lean.Json × String → Except String RecVStar.InnerCommits} {sparse : Option RecSparse.Shape}
-    (h : InnerRecordCustody wr held sparse (holoMap st hp Cm ish tbl bc)) :
-    InnerRecordCustody wr held sparse (holoMapOne st hp Cm ish tbl bc) := fun t =>
-  ⟨fun i e he => ⟨((h t).1 i e he).1, fun _ _ hs => ((h t).1 i e he).2 _ _ (selC_of_holoSelOne hs)⟩, (h t).2⟩
-
 -- the hypotheses at `holoInnerAt`'s coins unfold its coin count (`holoKinds`, `zcShape`); at the default the
 -- elaboration ran out (r20261014-083229-2ab0)
 set_option maxHeartbeats 1600000 in
@@ -164,11 +145,10 @@ theorem stageCoins_checked {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {h
   have htie := (shape_of_statements hss).2
   obtain ⟨⟨⟩, hi'⟩ := FlockC3.VStarList.ok_of_isOk hi
   obtain ⟨_, hS⟩ := holoStreams_of_list hss (FlockC3.VStarList.checkInnerStmt_ok hi').1
-  exact stageCoins_holo (m := holoMapOne st hp Cm ish tbl bc) (hLeafC3_checked hS₀ dg N k Rw) halg hacc hpr hsv hf
-    (custody_holoMapOne hcus)
+  exact stageCoins_holo (hLeafC3_checked hS₀ dg N k Rw) halg hacc hpr hsv hf hcus
     (FlockC3.Reps.repRoundsHeld_of_rounds (wr := wr) (held := fun w => innerCommitsAt w.1 w.2 st reg)
       (s := fun i => (Flock.Guarantees.HoloStream.rep i).name tbl) hrd)
-    (coinsEncoded_holoMap (ish := ish) (tbl := tbl) (bc := bc))
+    (coinsEncoded_holoMap (ish := ish) (tbl := tbl) (bc := bc)) (fun _ _ _ h => selC_of_holoSelOne h)
     (FlockC3.Reps.repsDrawn_checked hS₀ hS (by omega) (repFormsAt_holoAt hcls hi' (by omega)) halg hacc hpr hsv hf
       hcus hrd htbl) hrt hst hot hlt hlater
 
@@ -177,5 +157,4 @@ end
 end FlockC3.Compose
 
 #print axioms FlockC3.Compose.holoStreams_of_list
-#print axioms FlockC3.Compose.custody_holoMapOne
 #print axioms FlockC3.Compose.stageCoins_checked
