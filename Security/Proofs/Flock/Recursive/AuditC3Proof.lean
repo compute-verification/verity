@@ -18,7 +18,7 @@ In (i), as in `PublicAudit`'s:
   (`zk_sessions_recursive_fork_regV`, `Recursive/RegExtract.lean`: the extraction from piece (a)'s runs, off a
   registrant's row off a value the verifier registers itself at its rows, `valueSrcAll`, else `valueFinder`, off a
   read's leaf off the table's, else `leafFinder`, and off a read of R's level-0 top off its node's row under the held
-  salts, else `saltFinder`), here at
+  salts, else `saltFinder`, and off a held top other than `bcs'`, else `topFinder`, at `_hstk`), here at
   the checked sessions (`checkedC3`), whose games are the typed sessions', so the transported prover plays them;
 * the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each draw
   (`regStmt`), and the raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`,
@@ -28,10 +28,11 @@ In (i), as in `PublicAudit`'s:
 
 Candidate 3's table ignores the last round's coin, as its pick does (`schedInner_lastFree`, `clashPickHL_lastFree`), so
 gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerLV`, `innerC`'s form off
-`ValueColl ∨ LeafColl ∨ SaltColl` that `RegExtract`'s proof reads).
+`ValueColl ∨ LeafColl ∨ SaltColl ∨ TopColl` that `RegExtract`'s proof reads).
 
-`_hstk` is not read here: VBridgeCOff is a premise, and `_hstk` is what its discharge at the honest family takes as
-`htop` (`FlockC3.Compose.hbr_honest_reg`, at `⟨_, _, _hstk⟩`, which gives VBridgeCOff at the checked sessions and
+`_hstk` is read here only as `TopColl`'s collision (`topFinder`): VBridgeCOff is a premise, and `_hstk` is what its
+discharge at the honest family takes as `htop` (`FlockC3.Compose.hbr_honest_reg`, off `TopColl` the held top is
+`TopOf`'s, `topOf_held`, which gives VBridgeCOff at the checked sessions and
 the word the runs open, `_hbr`'s form, from `hbr_honest` at a fixed word of R's cap, since candidate 3's table reads
 only the cap; its decoder reads the last round from the layers in full); `vbridge_checked` and `vbridgeC_checked` carry VBridge and
 VBridgeC from the typed sessions to the checked ones.
@@ -160,7 +161,7 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
       (Cm → String → Nat → List UInt8) →
         FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin (r st hp)) → CT st hp k)) :
     Flock.Guarantees.RecursiveAuditC3At CT im := by
-  intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap salt _bcs' _hstk ish Vs zr hCust _hRC _tbl _bc
+  intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap salt bcs' hstk ish Vs zr hCust _hRC _tbl _bc
     _hIC bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
@@ -194,11 +195,12 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     dg N hk hRw hM hρ hr'
     (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
       hT σ)
-    wmsg Sk cmt msg cap salt (hbr hT)
-    with hf | hf | hf | hf | hf | hf | hf | hb
+    wmsg Sk cmt msg cap salt wr reg bcs' hstk (hbr hT)
+    with hf | hf | hf | hf | hf | hf | hf | hf | hb
   · exact Or.inr (Or.inr (Or.inl hf))
   · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf))))
+  · exact Or.inr (Or.inl hf)
   · exact Or.inl hf
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf)))))
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf))))))

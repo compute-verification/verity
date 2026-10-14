@@ -26,7 +26,8 @@ is `ownIn_checked`, from `checkOwn`), and the rows it holds, at the records writ
 history's commitments (`hheld`).
 
 `hbr_honest` is at a fixed word of R's cap (`fun _ _ => xR`); `hbr_honest_reg` is `_hbr` in its form, at the word the
-transported prover's runs open (`regStmt`), off `ValueColl` at the verifier's rows and `LeafColl`, with R's opening's
+transported prover's runs open (`regStmt`), off `ValueColl` at the verifier's rows, `LeafColl`, `SaltColl` and
+`TopColl`, with R's opening's
 and levels' read facts off them (`OpeningReadOff`, `RegLevelsReadOff`, where the value ties enter) and the bridge's
 acceptance part `vbridgeOff_c3_off`'s: candidate 3's table reads only the cap (`holoAccepts_of_cap`), so the bridge
 moves between statements of one cap (`vbridgeC_of_cap`).
@@ -140,8 +141,8 @@ theorem vbridgeC_of_cap {S : ℕ} {Vs : Fin S → VStmt}
 
 /-- **(step 7) The guarantee's `_hbr` at the honest family, in its form**: at the word the transported prover's runs
 open at R's level 0 against `cap` (`regStmt`), whose cap is `cap`, which is `xR`'s (`hcap`), off the verifier's values'
-collisions (`ValueColl` at `valueSrcAll`), the table leaves' (`LeafColl`) and R's level-0 top's under the held salts
-`salt` (`SaltColl`): `hbr_honest`'s facts, with R's opening's
+collisions (`ValueColl` at `valueSrcAll`), the table leaves' (`LeafColl`), R's level-0 top's under the held salts
+`salt` (`SaltColl`) and the held top's (`TopColl`, off which it is `TopOf`'s, `topOf_held`): `hbr_honest`'s facts, with R's opening's
 and levels' read facts off those (`OpeningReadOff`, `RegLevelsReadOff`: where the value ties `value_tie_coll` enter,
 which hold only off `ValueColl`), and the acceptance part `vbridgeOff_c3_off`'s at `xR`, moved to `regStmt` by
 `holoAccepts_of_cap`. -/
@@ -174,7 +175,8 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
         LeafColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
           rows zr hCust h) R ω t R₂ ∨
         SaltColl (holoAt st hp).rsch.sch.level₀ cap salt (Flock.Guarantees.checkedC3 ish
-          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂) dg N k Rw)
+          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂ ∨
+        TopColl wr st reg bcs' t) dg N k Rw)
     (hlread : ∀ h : Typed zr, RegLevelsReadOff
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       (fun R ω t R₂ =>
@@ -185,7 +187,8 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
         LeafColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
           rows zr hCust h) R ω t R₂ ∨
         SaltColl (holoAt st hp).rsch.sch.level₀ cap salt (Flock.Guarantees.checkedC3 ish
-          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂) dg N k Rw)
+          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂ ∨
+        TopColl wr st reg bcs' t) dg N k Rw)
     (hfr : ∀ h : Typed zr, HFrame
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hdrawn : ∀ h : Typed zr, RowsHeld
@@ -203,7 +206,8 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
         LeafColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
           rows zr hCust h) R ω t R₂ ∨
         SaltColl (holoAt st hp).rsch.sch.level₀ cap salt (Flock.Guarantees.checkedC3 ish
-          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂)
+          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂ ∨
+        TopColl wr st reg bcs' t)
       (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows
         zr hCust h) dg N k Rw
       (Flock.Guarantees.regStmt T CT st hp

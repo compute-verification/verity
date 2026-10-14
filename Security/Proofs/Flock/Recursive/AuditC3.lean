@@ -263,8 +263,9 @@ V*'s circuits compute candidate 3's inner verifier at the checked sessions (`che
 history where the verifier's checks at candidate 3 pass) and the word the transported prover's runs open at R's level 0
 against `cap` (`regStmt`), at the rounds before the last, off a registrant's row off a value the verifier registers
 itself at its rows `valueSrcAll` (`ValueColl`), off a session's registered read whose leaf is not the table's by a
-collision (`LeafColl`) and off a session's read of R's level-0 top other than its row under the held salts by a
-collision (`SaltColl`) (VBridge at the committed rounds, `Flock.Premises.VBridgeCOff`):
+collision (`LeafColl`), off a session's read of R's level-0 top other than its row under the held salts by a
+collision (`SaltColl`) and off a held top other than `bcs'` (`TopColl`) (VBridge at the committed rounds,
+`Flock.Premises.VBridgeCOff`):
 Lean's verifier, at the records written at the outcome's history, never builds `st`, accepts its inputs at candidate 3
 and accepts every session as V*'s statement of its index with its checks at candidate 3;
 or the sessions type and there is a registrant fork, a held top other than `bcs'` (`topFinder`), a registrant's row
@@ -346,7 +347,8 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     -- VBridge at the committed rounds, a premise: V*'s circuits compute candidate 3's inner verifier at the rounds
     -- before the last, which it does not commit, at the checked sessions and the word the prover's runs open, off a
     -- registrant's row off a value the verifier registers itself, at the verifier's rows (`valueSrcAll`), off a read's
-    -- leaf off the table's, and off a read of R's level-0 top off its node's row under the held salts
+    -- leaf off the table's, off a read of R's level-0 top off its node's row under the held salts, and off a held
+    -- top other than `bcs'`
     (_hbr : ∀ h : Typed zr,
       Flock.Premises.VBridgeCOff
         (fun R ω t R₂ =>
@@ -354,7 +356,8 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
             (valueSrcAll (fun t => coins (wr t).2) fun t => c3Of ish (innerHeld wr st reg t)) R ω t R₂ ∨
           LeafColl (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂ ∨
           SaltColl (holoAt st hp).rsch.sch.level₀ cap salt
-            (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂)
+            (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂ ∨
+          TopColl wr st reg bcs' t)
         (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg
         N k Rw (regStmt (holoTys st hp) (CT st hp) st hp
           (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
