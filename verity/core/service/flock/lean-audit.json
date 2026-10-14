@@ -10,6 +10,7 @@
   "Flock.Test.RecOpening",
   "Flock.Test.RecOpenLeaves",
   "Flock.Test.ReadWhole",
+  "Flock.Test.MsgNames",
   "VStar"
  ],
  "exempt": {

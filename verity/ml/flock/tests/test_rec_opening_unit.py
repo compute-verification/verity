@@ -38,13 +38,18 @@ def _shape(m: int, c: int) -> A.Shape:
 
 @pytest.mark.parametrize("m,c", [(m, 2) for m in range(22, 36)] + [(22, 1), (27, 8)])
 def test_the_verifiers_opening_algebra_is_rec_residuals_spec_and_parts(m, c):
+    """The verifier's S, row ports and parts are Python's, and some part holds each running sum (``acc0``, ``acc1``) in
+    both (`RecOpening.accHeld`, without which `RecCoins.opening` refuses R's opening)."""
     S = RR.spec(_shape(m, c))
     rc, [line] = _run("structure", str(m), str(c))
     assert rc == 0, line
     assert line["gf"] == S["gf"]
     assert line["ports"] == [n for _, n in S["ports"]]
+    parts = RR.parts(S)
     assert [{"ports": [n for _, n in p.S["ports"]], "nv": p.S["gf"]["nv"], "ops": p.S["gf"]["ops"], "res": p.S["gf"]["res"]}
-            for p in RR.parts(S)] == line["parts"]
+            for p in parts] == line["parts"]
+    assert all(any(acc in {nm for nm, _ in p.S["ports"]} for p in parts) for acc in ("acc0", "acc1"))
+    assert line["acc_held"] is True
 
 
 def test_an_opening_whose_residual_fits_no_part_is_refused_as_parts_refuses_it():
@@ -85,23 +90,19 @@ def test_the_verifiers_opening_unit_is_the_one_stage_opening_writes(m, rows, sta
 
 def test_the_staged_opening_unit_reads_each_element_whole(staged):
     """`RecResiduals.partlyRead` and `RecOpening.rsUnread` in Python, on m = 22's file: its computed rows read each row-port
-    element in all 128 bits or in none, and each element of a claim's ring switch (ports ``m0``, ``m1``) in all 128. The
-    check refuses the verifier's own net, so this is where a builder change that reads an element in part shows by the
-    element."""
+    element in all 128 bits or in none, and each element of a claim's ring switch (ports ``m0``, ``m1``) and of the
+    running sums (``acc0``, ``acc1``) in all 128. The unit's inputs are its part's ports and ``v``, the bits the check
+    holds its unit to. The check refuses the verifier's own net, so this is where a builder change that reads an element
+    in part shows by the element."""
     [f] = staged(22)
     lines = f.read_bytes().split(b"\n")
-    head = lines[3].split()
-    const, groups, at = int(head[3]), int(head[4]), 5
-    words = 0
-    for _ in range(groups):
-        words += int(head[at + 1])
-        at += 3 + int(head[at + 2])
-    n_in = min(16 * words, const)
+    const = int(lines[3].split()[3])
+    [p] = RR.parts(RR.spec(_shape(22, 2)))
+    n_in = min(16 * (sum(RR.port_words(n) for _, n in p.S["ports"]) + RR.v_words(p.S)), const)
     read = set()
     for r in range(n_in, const):
         row = list(map(int, lines[4 + r].split()))
         read.update(c for c in row[1:1 + row[0]] + row[2 + row[0]:] if c < n_in)
-    [p] = RR.parts(RR.spec(_shape(22, 2)))
     col, counts = 0, {}
     for name, n in p.S["ports"]:
         for e in range(n):
@@ -109,6 +110,7 @@ def test_the_staged_opening_unit_reads_each_element_whole(staged):
         col += 16 * RR.port_words(n)
     assert {k for k in counts.values()} <= {0, 128}, {e: k for e, k in counts.items() if k not in (0, 128)}
     assert all(counts[f"m{k}", e] == 128 for k in range(2) for e in range(128))
+    assert all(counts[acc, e] == 128 for acc in ("acc0", "acc1") for e in range(2))
 
 
 def test_a_unit_off_the_verifiers_opening_is_refused_by_what_it_differs_in(staged, tmp_path):
