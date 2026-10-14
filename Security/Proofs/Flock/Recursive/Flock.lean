@@ -302,21 +302,24 @@ theorem oneG_mem_io (z : ZkOuter mPts nv J Reg' c hU hscope Lv) (u : Fin nv) :
   unfold Flock.isPow2 at hp
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
   have hupv : 0 < c.upv := Nat.pos_of_ne_zero fun h0 => by simp [h0] at hp
+  have hone : Const.Prog.oneAt (keyProg c hU nv) u = Layout.oneG (c := c) (hU := hU) (n := nv) :=
+    Fin.ext (Layout.oneAt_uniform_val (k := Placed.inGates nv (Layout.keyB c hU))
+      (R := Placed.circuitRows c hU)
+      (ins := Placed.insOf nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
+      (one := Placed.oneGate nv (Layout.keyB c hU))
+      (hone := Placed.insOf_ne_one nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) nv u)
+  have hnone : (keyProg c hU nv).unit (Layout.oneG (c := c) (hU := hU) (n := nv)) = none :=
+    Layout.unit_uniform_input (k := Placed.inGates nv (Layout.keyB c hU)) (R := Placed.circuitRows c hU)
+      (ins := Placed.insOf nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
+      (one := Placed.oneGate nv (Layout.keyB c hU))
+      (hone := Placed.insOf_ne_one nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) nv _
+      (by simp [Layout.oneG, Placed.oneGate])
   have hm := (FlockVBridge.keyInst hU nv (Layout.outsOf c hU nv) u).mem_io_of_read
     (i := ⟨0 * ((Rows.ofNet hU).nComp + 1) + 0, Rows.mul_add_lt hupv (by omega)⟩)
-    (by rw [FlockVBridge.stack_a_one]; simp) (by
-      intro i h
-      have he := congrArg Fin.val h
-      have hi := i.isLt
-      simp only [Rows.one, Rows.comp] at he
-      omega)
-  rw [FlockVBridge.keyInst_one] at hm
-  convert hm using 1
-  exact Fin.ext (Layout.oneAt_uniform_val (k := Placed.inGates nv (Layout.keyB c hU))
-    (R := Placed.circuitRows c hU)
-    (ins := Placed.insOf nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
-    (one := Placed.oneGate nv (Layout.keyB c hU))
-    (hone := Placed.insOf_ne_one nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) nv u)
+    (c := ((Rows.ofNet hU).stack c.upv).one)
+    (by rw [FlockVBridge.stack_a_one]; simp)
+    (by rw [FlockVBridge.keyInst_one, hone, hnone]; simp)
+  rwa [FlockVBridge.keyInst_one, hone] at hm
 
 /-- **A good layer**: no wrong unit, agreement with the registrant, and 1 at every unit's constant gate. -/
 def Good (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
