@@ -139,7 +139,7 @@ theorem outCols_of_sparse {sh : Flock.RecSparse.Shape} {name : String}
   refine ⟨?_, ?_, ?_⟩
   · rw [hog, e, Hm.layout_outGroups]
     exact Hm.outStart_word _ _ _
-  · rw [FlockSoundness.Discharge.Layout.ofNet_nIn_eq (hU := hU), inWords_sparse hl]
+  · rw [FlockSoundness.Discharge.Layout.ofNet_nIn_eq (hU := hU), FlockVBridge.Sparse.inWords_sparse hl]
     exact Decode.inRows_le_outStart _ _ _
   · rw [show (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp = c.unit.constPos from Rows.ofNet_one hU, hcp, e, h1]
     unfold FlockVBridge.Sparse.sparseBase FlockVBridge.Sparse.sparseInBits Hm.outStart Hm.inRowsOf Hm.spanOf
