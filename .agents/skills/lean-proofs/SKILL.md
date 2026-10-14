@@ -97,6 +97,10 @@ While proving, check one file at a time, and leave the whole package and the Lea
   example (a b : Nat) : a + b = b + a := by exact?
   ~~~
 
+  Probe what you build on, not only what you wrote: a section-level `variable` whose type goes through a local
+  notation can elaborate to `sorry` with no error or warning, and the silent `sorryAx` then shows up as opaque
+  timeouts in proofs that use the binder (proofs' worker, 14 Oct: five failed pod runs before a `#print axioms`
+  probe caught it). Put such binders on the theorem itself, not in a section `variable`.
 - **See a goal** by putting `trace_state` before a `sorry`: the goal prints with the file's output. The editor's language
   server shows it too.
 - **Search before you prove:** `exact?` or `apply?` on a scratch `example` (both work without Mathlib), then `rg` for the
