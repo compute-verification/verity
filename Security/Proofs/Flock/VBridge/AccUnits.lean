@@ -303,7 +303,7 @@ theorem accChains_of_decode (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg�
     (hrd : ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r,
       ReadsEnds sh (rep (layers zs dg N k Rw R ω t R₂ τ) r) (acc (layers zs dg N k Rw R ω t R₂ τ))
         (ops (layers zs dg N k Rw R ω t R₂ τ) r)) :
-    AccChains zs dg N k Rw sh rep :=
+    AccChains zs dg N k Rw sh fun _ _ _ => rep :=
   accChains_of_units zs dg N k Rw sh rep acc ops
     (fun R ω t R₂ τ o h r => unitSums_of_decode (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (fun s => (h.1 s).2) sh
       _ _ sess un cp (hu R ω t R₂ τ o h r)) hc hcons hrd

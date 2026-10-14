@@ -125,7 +125,7 @@ DECIDED = ("decided", "approved", "denied")                      # new cards, th
 WAIT_EVERY_S = 30
 WAIT_GRACE = timedelta(minutes=5)                                # the site's default cron runs every minute
 ROUTES_DIR = "routes.d"                                          # in the notes: one `<name>.json` per inbox
-ROUTES_RAW = "https://raw.githubusercontent.com/danielreuter/research-notes/main/routes.d/"
+ROUTES_RAW = "https://raw.githubusercontent.com/compute-verification/research-notes/main/routes.d/"
 ROUTE_SCHEMA = "verity/slack-route/v1"
 LEAD_RE = re.compile(r"^\s*(?:(?::[a-z0-9_+'-]+:|[\u2600-\u27bf\U0001f000-\U0001faff]\ufe0f?)\s*)?"   # one emoji may lead (`:mega: @a`)
                      r"((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\|@?[^>]*)?>)[\s,:]*)+)")
@@ -142,7 +142,7 @@ BRANCH_RE = re.compile(r"\bcursor/([a-z0-9._-]*[a-z0-9])")
 TRAIN_PREP_RE = re.compile(r"^train-prep-((?:\d+-)+)")                  # `cursor/train-prep-1585-1586-on-041c30713-4292`
 RUN_ID_RE = re.compile(r"\br\d{8}-\d{6}-([0-9a-f]{4})\b|(?<![\w./#@-])([0-9a-f]{4})(?![\w/@-])")   # a run, or its last 4
 HISTORY_S = 86400                                                # how far back a reply's thread counts for `pr_watchers`
-GH, GH_REPO = "gh", "danielreuter/verity"                       # `pr_branches` asks gh for PR branches
+GH, GH_REPO = "gh", "compute-verification/verity"                       # `pr_branches` asks gh for PR branches
 TAG_SEP = " \u00b7 "
 _TAG = r"(?:[a-z0-9][a-z0-9._-]*|\([a-z]+\))"
 FOOTER_RE = re.compile(rf"\n_({_TAG}(?: \u00b7 {_TAG})*)_\s*$")                                  # `_ask · urgent_`
@@ -388,7 +388,7 @@ def broker_error(method: str, e: urllib.error.HTTPError) -> str:
     if e.code == 401:
         return f"{method}: the Slack broker rejected this agent's Cursor identity ({why}); set SLACK_BOT_TOKEN or ask @infra"
     if e.code == 403:
-        return f"{method}: the Slack broker refused the call ({why}): it serves danielreuter/verity's agents and BROKER_METHODS only"
+        return f"{method}: the Slack broker refused the call ({why}): it serves compute-verification/verity's agents and BROKER_METHODS only"
     if e.code == 413:
         return f"{method}: the request is larger than the broker takes ({why}); put the content in a file and link it"
     if e.code == 429:
@@ -843,13 +843,21 @@ def _route_ok(r: Any, name: str) -> bool:
     return isinstance(r, dict) and r.get("schema") == ROUTE_SCHEMA and r.get("name") == name and isinstance(r.get("inbox_ts"), str)
 
 
+RAW_HOST = "raw.githubusercontent.com"                           # the notes are private: `http_get` sends it the notes token
+
+
 def http_get(url: str, timeout: float = 10) -> bytes | None:
-    """The body at `url` (http(s), or a `file://` directory for tests and offline use), or None when there is none."""
+    """The body at `url` (http(s), or a `file://` directory for tests and offline use), or None when there is none.  A
+    github.com raw file is read with RESEARCH_NOTES_TOKEN when it is set: the notes repository is private, and without
+    the token its raw files answer 404 as if they weren't there."""
     if url.startswith("file://"):
         p = Path(urllib.parse.unquote(url[7:]))
         return p.read_bytes() if p.is_file() else None
+    headers = {}
+    if urllib.parse.urlsplit(url).hostname == RAW_HOST and (token := os.environ.get("RESEARCH_NOTES_TOKEN")):
+        headers["Authorization"] = f"Bearer {token}"
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as r:
             return r.read(1 << 20)
     except urllib.error.HTTPError as e:
         if e.code == 404:
@@ -873,8 +881,8 @@ def route_answers(url: str, timeout: float = 10) -> str | None:
 
 class Routes:
     """The routes table, `routes.d/<name>.json` in the notes: the local clone's, and for a name it lacks (a clone not pulled
-    since that agent registered) the published file, read without credentials from $RESEARCH_ROUTES_URL (default the notes
-    repo's raw files)."""
+    since that agent registered) the published file, read from $RESEARCH_ROUTES_URL (default the notes repo's raw files,
+    with RESEARCH_NOTES_TOKEN)."""
 
     def __init__(self, root: Path | None = None, base: str | None = None, get: Callable[[str], bytes | None] = http_get):
         self.root, self.get = (root or notes_root()), get
@@ -1921,6 +1929,21 @@ def _iso(t: datetime) -> str:
     return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def since_ts(raw: str) -> str:
+    """`--since`: a Slack ts as given, or an ISO time with its zone as one.  Slack answers a date passed as `oldest` with no
+    messages, so a read that took one reported a quiet channel."""
+    if re.fullmatch(r"\d+(\.\d+)?", raw):
+        return raw
+    try:
+        t = datetime.fromisoformat(raw)
+    except ValueError:
+        t = None
+    if t is None or t.tzinfo is None:
+        raise argparse.ArgumentTypeError(f"{raw!r}: give a Slack ts such as 1791876703.181769, or an ISO time with its zone "
+                                         f"such as 2026-10-13T07:05:00Z")
+    return f"{t.timestamp():.6f}"
+
+
 def parse_deadline(raw: str, now: datetime) -> datetime:
     """`3:00 PM` (today, Pacific) or an ISO time with its zone, in UTC."""
     raw = raw.strip()
@@ -2015,7 +2038,7 @@ def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]
 def route_error(what: str, e: urllib.error.HTTPError) -> str:
     why = f"HTTP {e.code}{_code(e)}"
     if e.code == 401:
-        return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on danielreuter/verity only"
+        return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on compute-verification/verity only"
     if e.code == 403:
         return f"{what}: the route refused ({why}): only a card's own asker may resolve it"
     if e.code == 429:
@@ -2259,8 +2282,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--why", action="store_true", help="print the verdict on stderr")
     p = cmd("read", "a thread, the channel since TS, or (--as) what reached NAME since it last read (or since TS)")
     p.add_argument("--thread", default=None, metavar="TS")
-    p.add_argument("--since", default=None, metavar="TS",
-                   help="the channel since TS; with --thread, its replies since TS; with --as, NAME's doorbells and digest since TS")
+    p.add_argument("--since", default=None, metavar="TS", type=since_ts,
+                   help="the channel since TS (a Slack ts, or an ISO time with its zone); with --thread, its replies since TS; "
+                        "with --as, NAME's doorbells and digest since TS")
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--peek", action="store_true", help="--as: don't mark them read")

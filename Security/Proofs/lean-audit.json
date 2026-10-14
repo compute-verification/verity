@@ -6,7 +6,8 @@
   "Proofs.Pouw",
   "Proofs.NetworkCertifier",
   "Proofs.Flock",
-  "Proofs.Accounting"
+  "Proofs.Accounting",
+  "Proofs.Accounting.Bandwidth"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
@@ -33,8 +34,8 @@
  },
  "compile_time": {
   "Proofs.Flock.Soundness.Refine.Walk": {
-   "why": "walk_step, the tactic that steps through a successful computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "c8e7697dd01461092e5dda778796c82404aa9f23e79fa67b532c5123f96f8333"
+   "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
+   "digest": "01a97925bc0546457b627fff99e05739c3739fe9a1366622621c7d23578e162e"
   }
  },
  "layers": {

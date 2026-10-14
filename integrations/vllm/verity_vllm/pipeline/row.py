@@ -37,7 +37,6 @@ class _Row:
                                   help="gpu_memory_utilization (default 0.5; TP 0.6: a rank shard above 0.6 of the device memory "
                                        "needs more, e.g. 0.92 with --commit-gpu-util 0.80 for a 30B MoE at TP2 on 48 GB)")
     world: int | None = option("--world", env="WORLD", type=int, default=None, help="TP: ranks (default: the manifest's sweep.tp)")
-    nccl_p2p_disable: str = option("--nccl-p2p-disable", env="NCCL_P2P_DISABLE", default="1", help="TP: NCCL_P2P_DISABLE of the stages")
     query: str = option("--query", env="VERITY_QUERY_ID", default="Q_word_v1{X=16,W=32,R=no-recompute}", help="verification query id (recorded)")
     protocols: str | None = option("--protocols", env="PROTOCOLS", default=None,
                                    help="the row's protocol set, sampled proofs included: 'pouw:<scheme>,pous:<scheme>,sampled-proofs:vllm-v1' "
@@ -116,16 +115,16 @@ def run_row(o: Run | Stage, stages: str) -> int:
     if row_world(o.row) > 1:
         from verity_vllm.pipeline import row_records as R
         from verity_vllm.pipeline.row_tp import TpRow
-        from verity_vllm.pipeline.tp.c2 import DEFER_MAX_WORLD
+        from verity_vllm.pipeline.tp.c2 import DEFER_WORLDS
         world = o.world if o.world is not None else R.tp_world(_workload(o.row))
         if world < 2:
             raise UsageError(f"--world {world}: a tensor-parallel row needs a world of at least 2 ranks")
         if o.commit.group:
             raise UsageError(f"--commit-group: {o.row} is a tensor-parallel row; a grouped Commit is a single-GPU row's")
-        if o.commit.replay_deferred == "slim" and world <= DEFER_MAX_WORLD:     # above it the TP Commit replays in process
+        if o.commit.replay_deferred == "slim" and world in DEFER_WORLDS:     # at any other world the TP Commit replays in process
             raise UsageError(f"--replay-deferred slim: {o.row} is a tensor-parallel row; the slim plan is a single-GPU Commit's (TP defers with 1)")
         return TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=stages, env=o.env, world=world, gpu_util=o.gpu_util,
-                     nccl_p2p_disable=o.nccl_p2p_disable, build=o.build, match=o.match, commit=o.commit).run()
+                     build=o.build, match=o.match, commit=o.commit).run()
     from verity_vllm.pipeline.row_stages import SingleRow
     return SingleRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=stages, env=o.env, gpu_util=o.gpu_util or "0.5",
                      build=o.build, match=o.match, commit=o.commit, protocols=protocols).run()
