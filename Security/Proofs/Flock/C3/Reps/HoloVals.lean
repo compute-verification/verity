@@ -257,6 +257,7 @@ theorem stepsOfVals_norm_repsOfVals (hpr : ProofOfVals zs dg N k Rw sh rep vals)
     StepsOfVals zs dg N k Rw (tiedSrc (normSrc (repsOfVals stp sh rep vals))) sh rep vals :=
   stepsOfVals_of_woven (repStepsWoven_of_tie repWeaveAt_norm_repsOfVals hpr hs hf) hcap hos_norm_repsOfVals
 
+-- Elaborating the four nested `AtRep` parts together exceeds the default at `whnf`.
 set_option maxHeartbeats 1000000 in
 /-- **`RepUnitOfAlg` at the reps' normalized tied source, at holo values** `(b R ω t Lb i).vals sh (rep R ω t Lb i)`:
 the four parts from `HoloSrc.OK` at each rep at the run's link points, the class checks and the values' cap. -/
@@ -285,3 +286,10 @@ theorem repUnitOfAlg_holoVals (hcls : ClassOk (Recursion.shapeOf st))
 end
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.enc_holo
+#print axioms FlockC3.Reps.HoloSrc.framed
+#print axioms FlockC3.Reps.proofFrom_of_framed
+#print axioms FlockC3.Reps.HoloSrc.setupFrom_holo
+#print axioms FlockC3.Reps.stepsOfVals_norm_repsOfVals
+#print axioms FlockC3.Reps.repUnitOfAlg_holoVals
