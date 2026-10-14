@@ -33,7 +33,8 @@ def kv_cache_append_e4m3_word(x: int, scale: int) -> int:
     1,
     [],
     lambda _S: ((("x", P.BF16), ("scale", P.F32)), P.E4M3),
-    conformance="model-untested",
+    conformance="exact-model-tested; vLLM d9105ea80 FlashInfer reshape_and_cache_flash on the RTX PRO 6000 "
+                "(run r20261014-060040-6de8): 43,008/43,008 cache bytes bit-exact over one prefill and three decode appends",
 )
 def KvCacheAppendE4m3(B, _S, x, scale):
     """One BF16 key/value element appended to vLLM's per-tensor E4M3 KV cache.
@@ -41,6 +42,9 @@ def KvCacheAppendE4m3(B, _S, x, scale):
     The scale is the dequantization scale: the stored byte is
     ``satfinite_e4m3_rne(div_rne(f32(x), scale))``.  In particular, vLLM
     divides by the scale; it does not multiply by a precomputed reciprocal.
+    ``BaseKVCacheMethod`` loads separate key and value scales from the
+    checkpoint (or duplicates its legacy combined scale); absent scales
+    default independently to FP32 ``1.0``.
     """
     widened = B.call(P.Bf16ToF32, x)
     scaled = B.call(F.F32DivV2, widened, scale)
