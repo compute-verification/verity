@@ -77,6 +77,7 @@ theorem stageHeld_lg {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List (Cm �
     s!"{STACKED}/rep0", id, h1, fun q c h => h2 q c (by rw [hh] at h; exact h),
     by rw [List.length_range']; omega, ?_⟩
   intro p q hp
+  have hlt : p < n := by simpa using (List.getElem?_eq_some_iff.1 hp).1
   have hk : heldBefore .stacked rs k₂ = k₂ := by
     have e := heldBefore_stacked (rs := rs) (k₂ := 0) k₂ fun p' hp' => hpos (0 + p') (by omega)
     rw [Nat.zero_add] at e
@@ -93,12 +94,12 @@ theorem weave_coins_prefix : ∀ σ ms cs,
   | [], _, _ => List.nil_prefix
   | .msg _ :: _, [], _ => List.nil_prefix
   | .msg _ :: σ, _ :: ms, cs => by
-      simpa [FlockSoundness.Discharge.Exec.weave] using weave_coins_prefix σ ms cs
+      simpa [FlockSoundness.Discharge.Exec.weave, List.filterMap_cons] using weave_coins_prefix σ ms cs
   | .coin _ :: _, _, [] => List.nil_prefix
   | .coin _ :: σ, ms, _ :: cs => by
       simpa [FlockSoundness.Discharge.Exec.weave, List.cons_prefix_cons] using weave_coins_prefix σ ms cs
 
-theorem eq_range'_of_prefix {α : Type} {f : ℕ → α} {l : List α} {k N : ℕ} (h : l <+: (List.range' k N).map f) :
+theorem eq_range'_of_prefix {α : Type _} {f : ℕ → α} {l : List α} {k N : ℕ} (h : l <+: (List.range' k N).map f) :
     l = (List.range' k l.length).map f ∧ l.length ≤ N := by
   have hle : l.length ≤ N := by simpa using h.length_le
   refine ⟨?_, hle⟩
@@ -128,7 +129,7 @@ theorem stageHeld_lg_of_run {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : Lis
     {held : Lean.Json × String → Except String InnerCommits} {st : Flock.Stmt} {hp : HoloParams}
     {u : FlockC3.Compose.C3Run (holoAt st hp)} {ish : Inner} {tbl : String} {cs : InnerCommits}
     {c3 : Flock.RecCoins.C3} {unit : String} {rep rs : Array SchedRound} {sp : Flock.RecSparse.Shape}
-    {sh : StackedShape} {x : InnerStream} {S : ℕ} {stmt : Fin S → Flock.VStar.Stmt} {Vs : Fin S → VStmt}
+    {sh : StackedShape} {x : InnerStream} {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt}
     {Reg' : Type} {M : FlockC3.Reps.StackedMaps stmt Vs} {zs : (s : Fin S) → (Vs s).Outer Reg'}
     {Lb : (s : Fin S) → (Vs s).Bits} {osh : Flock.Shape} {w : Array Flock.F128}
     {kap : Array (Array (Array Flock.F128))} {e0 sb e cap₀} {res : Array Flock.F128} {k₁ : ℕ}
