@@ -2,6 +2,7 @@ import Proofs.Flock.C3.Compose.Tied
 import Proofs.Flock.C3.Sparse.SessionAt
 import Proofs.Flock.VBridge.Family.Registrants
 import Proofs.Flock.C3.RegLevels.AccReads
+import Proofs.Flock.C3.RegLevels.TopLeaf
 
 /-!
 # The sparse phase's `h` from the rep's, across two units' reads of one registered row
