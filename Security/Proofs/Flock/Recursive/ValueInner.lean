@@ -188,6 +188,32 @@ theorem zeroRows_get (n w u k : ℕ) : ((Flock.RecCoins.zeroRows n w)[u]!)[k]! =
   · simp only [getElem!_neg (Array.replicate n (Array.replicate w 0)) u (by simpa using hu)] at h
     exact absurd h (Nat.not_lt_zero _)
 
+/-- **A source loaded from the inner-session files has a decodable record**: `Inner.load` reaches
+`Record.decode` only after setting up the statement and checking its shape and schedule. -/
+theorem record_decode_of_load {unit : String} {f : Flock.RecCoins.Files} {inn : Flock.RecCoins.Inner}
+    (h : Flock.RecCoins.Inner.load unit f = .ok inn) :
+    ∃ spec sess, Flock.Record.decode spec f.record = .ok sess := by
+  unfold Flock.RecCoins.Inner.load at h
+  obtain ⟨⟨spec, st⟩, _, h⟩ := FlockVBridge.PartS.bind_ok h
+  cases hi : f.inner with
+  | none =>
+      cases hs : Flock.Zk.schedule st.m with
+      | error e => simp [hi, hs] at h
+      | ok p =>
+          cases hd : Flock.Record.decode spec f.record with
+          | error e => simp [hi, hs, hd] at h
+          | ok sess => exact ⟨spec, sess, hd⟩
+  | some i =>
+      cases hc : Flock.RecVStar.checkInnerStmt i st with
+      | error e => simp [hi, hc] at h
+      | ok u =>
+          cases hs : Flock.Zk.schedule st.m with
+          | error e => simp [hi, hc, hs] at h
+          | ok p =>
+              cases hd : Flock.Record.decode spec f.record with
+              | error e => simp [hi, hc, hs, hd] at h
+              | ok sess => exact ⟨spec, sess, hd⟩
+
 /-- **Check 5 at a `rec-open` unit runs `checkOpen`** at the inner session and its parameters. -/
 theorem openCheck_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Port} {f : Flock.RecCoins.Source}
     {c3 : Option Flock.RecCoins.C3} {LANES H : ℕ} (h : Flock.RecCoins.check st (some own) (some f) c3 = .ok ())

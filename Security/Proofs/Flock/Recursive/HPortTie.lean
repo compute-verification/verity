@@ -502,7 +502,45 @@ theorem h_of_sessionAt {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂
   obtain ⟨s, un, j, hj, hun, hcp⟩ := hs
   exact h R ω t R₂ τ o hA i s un j hj c hcp hun
 
+/-- **A sparse session and its tied `h`, in the form `SparseRepTie` consumes**: the conjunction returned by
+`sparseSessionAt_of_zero` supplies `h_of_sessionAt`'s copy, including its `un.val = i.val` pin. -/
+theorem session_h_of_sessionAt
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → Array Flock.F128}
+    (h : SrcHTie zs dg N k Rw stp w) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
+    {τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N)}
+    {o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript}
+    (hA : Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) {i : Fin 2} {c : FlockVBridge.Sparse.SCoins}
+    {c3 : Flock.RecCoins.C3} {unit : String}
+    (hs : FlockC3.Sparse.SparseSessionAt (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
+        c3 unit i (w R ω t (layers zs dg N k Rw R ω t R₂ τ) i) c ∧
+      ∃ (s : Fin S) (un : Fin (Vs s).nv) (j : ℕ) (hj : j < (Vs s).c.upv), un.val = i.val ∧
+        FlockC3.Sparse.SparseCopyAt (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
+          (w R ω t (layers zs dg N k Rw R ω t R₂ τ) i) c s un j hj) :
+    FlockC3.Sparse.SparseSessionAt (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
+        c3 unit i (w R ω t (layers zs dg N k Rw R ω t R₂ τ) i) c ∧
+      ∀ l : Fin 64, fOf (w R ω t (layers zs dg N k Rw R ω t R₂ τ) i)[l.val]! =
+        ((tiedSrc stp R ω t (layers zs dg N k Rw R ω t R₂ τ)).rep i).2.h l :=
+  ⟨hs.1, h_of_sessionAt h hA hs.2⟩
+
 end src
+
+section points
+
+variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
+
+local notation "ℐ" => holoInnerAt T (Flock.Guarantees.holoCTs st hp) st hp
+
+/-- **The run's link points are the history's first coin under `holoMap`**. This is the source-side half of
+`RecordPoints`; custody turns any successful decode of the same record into the other half. -/
+def PointsFromHistory (ish : Flock.RecVStar.Inner) (tbl : String) (bc : Cm → String → Nat → List UInt8)
+    (t : List (Cm × (ℐ).Coin)) (u : C3Run (holoAt st hp)) : Prop :=
+  ∀ e, t[0]? = some e →
+    u.pts = holoPts (holoAt st hp).cls.mPts ((Flock.Guarantees.holoMap st hp Cm ish tbl bc).points e.2)
+
+end points
 
 section family
 

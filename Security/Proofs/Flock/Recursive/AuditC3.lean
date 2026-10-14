@@ -255,7 +255,8 @@ at the law of the registration's draws
 as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, their registrants' records covering the
 rows their reads files name `_hRC`, the table's prefix `tbl` and the `b ‖ c`
 `bc` at which the map `im` says where each round's commitment and coins go in the inner session's records, and those
-records' custody `_hIC` at `im`, the verifier of record's own inputs (V*'s bindings
+records' custody `_hIC` at `im`; check 5's source at each record is that record's inner-session files (`_hcoins`), the
+verifier of record's own inputs (V*'s bindings
 `bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at which V*'s statements' files, where they
 parse into scope as the verifier's acceptance parses them, parse to `Vs` (`VStarParsesScoped`), every session's inputs
 carrying the tags their name names (`TagsFound`), the messages V*'s layers hold and the rounds' commitments (`wmsg`,
@@ -320,6 +321,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (tbl : String) (bc : Cm → String → Nat → List UInt8)
     (_hIC : Flock.Premises.InnerRecordCustody wr (fun w => innerCommitsAt w.1 w.2 st reg) ish.sparse
       (im st hp Cm ish tbl bc))
+    (_hcoins : ∀ r src, coins r = some src → ∃ f, src = .files f ∧ f.record = r)
     -- the verifier of record's own inputs: V*'s bindings for each statement and the shared rows
     (bind : Fin (vstarCount ish) → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
     -- obligation (gap 4(c)): where V*'s statement `j`'s file under `bind j` parses into scope, as the verifier's

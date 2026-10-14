@@ -258,6 +258,33 @@ theorem sparseSessionAt_of_zero (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
     exact (hbits x hk).symm
   · exact absurd hcoll hnc
 
+/-- **The inner-session record decodes at an accepted candidate-3 proof**: the sparse statement's check 5 loads its
+source; the guarantee's source condition identifies it with the files of this record, and `Inner.load` decodes it. -/
+theorem record_decodes_of_accepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
+    {rows : Option (Array Flock.Registered.Port)}
+    {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
+    {coins : String → Option Flock.RecCoins.Source} (hchk : CoinsAccepted F rows wr reg coins)
+    (hsp : FlockC3.VStarList.SparseIs F.ish hp) (hell : hp.EllOk (execClassAt st).cls.kLog)
+    {s : Fin (vstarCount F.ish)} {sh : Flock.RecSparse.Shape} {hR : ℕ}
+    (hs : F.stmts[(s : ℕ)]? = some (.sparse sh hR))
+    (hfiles : ∀ r src, coins r = some src → ∃ f, src = .files f ∧ f.record = r)
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω}
+    {t : List (Cm × (holoInnerAt T CT st hp).Coin)} {R₂ : Reg₂}
+    {τ : (j : Fin (vstarCount F.ish)) → Strategy ((F.zs R ω t R₂ j).game dg N)}
+    {o : (j : Fin (vstarCount F.ish)) → Reg' × Finset (Fin (F.Vs j).nv) × Exec.Transcript}
+    (hA : Accepted (I := holoInnerAt T CT st hp) F.zs dg N k Rw R ω t R₂ τ o) :
+    ∃ spec sess, Flock.Record.decode spec (wr t).2 = .ok sess := by
+  obtain ⟨sj, src, c3, hc, hsrc, -, hck, hpar⟩ :=
+    sparseCheck_at F hchk hsp hell hs ⟨(o s).2.2, (hA.1 s).1⟩
+  obtain ⟨f, rfl, hrecord⟩ := hfiles (wr t).2 src hsrc
+  have hname : (F.Vs s).c.unit.name = Flock.RecSparse.unitName (unitShape (holoAt st hp)) :=
+    (FlockVBridge.Sparse.unitName_params hpar).symm
+  obtain ⟨inn, hload, -⟩ := FlockSoundness.Discharge.Recursion.sparseCheck_of_check hck
+    (by rw [hc, hname]; exact stackedParams_sparse _)
+    (by rw [hc, hname]; exact openingParams_sparse _) (by rw [hc]; exact hpar)
+  obtain ⟨spec, sess, hdec⟩ := FlockSoundness.Discharge.Recursion.record_decode_of_load hload
+  exact ⟨spec, sess, by simpa [hrecord] using hdec⟩
+
 end Family
 
 end
