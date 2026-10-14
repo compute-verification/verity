@@ -141,8 +141,3 @@ theorem stackedStreams_of_covers {tr : Lean.Json} {record : String} {st : Flock.
   exact ⟨sh, rs, L, hi, hsh, hc, hrs, hsz, hS, hL, hf⟩
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.stacked_of_covers
-#print axioms FlockC3.RegLevels.repName_ne_stacked
-#print axioms FlockC3.RegLevels.holoStreams_stacked
-#print axioms FlockC3.RegLevels.stackedStreams_of_covers
