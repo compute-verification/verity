@@ -1,4 +1,5 @@
 import Proofs.Flock.VBridge.Family.Registered
+import Flock.RecCoins
 
 /-!
 # VBridge G at V*'s family: the parts' `v` and `out` columns (`HVCoins`, `HZeroL`)
