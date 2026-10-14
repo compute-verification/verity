@@ -174,18 +174,3 @@ theorem sparseCheck_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Por
   exact FlockVBridge.PartS.bind_ok h'
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms FlockSoundness.Discharge.Recursion.valueSrcAll_eq
-#print axioms FlockSoundness.Discharge.Recursion.valueRowsAll_stacked
-#print axioms FlockSoundness.Discharge.Recursion.valueRowsAll_opening
-#print axioms FlockSoundness.Discharge.Recursion.valueRowsAll_load
-#print axioms FlockSoundness.Discharge.Recursion.open_of_check
-#print axioms FlockSoundness.Discharge.Recursion.residuals_of_check
-#print axioms FlockSoundness.Discharge.Recursion.sparse_of_check
-#print axioms FlockSoundness.Discharge.Recursion.innerRows_coef
-#print axioms FlockSoundness.Discharge.Recursion.innerRows_dirs
-#print axioms FlockSoundness.Discharge.Recursion.innerRows_v
-#print axioms FlockSoundness.Discharge.Recursion.innerRows_sparse
-#print axioms FlockSoundness.Discharge.Recursion.openCheck_of_check
-#print axioms FlockSoundness.Discharge.Recursion.residualsCheck_of_check
-#print axioms FlockSoundness.Discharge.Recursion.sparseCheck_of_check
