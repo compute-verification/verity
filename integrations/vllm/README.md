@@ -200,7 +200,8 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 
 `model` and `revision` (the full commit sha) must be pinned in `manifests/checkpoints.json` with the snapshot on the host.
 The engine is built by `engine.vllm_adapter.build_engine` from that pin's engine profile, as every `verity-vllm` stage
-builds it: dtype, tokenizer and attention come from the profile, and prefix caching is off.  Supported keyword options:
+builds it: dtype, tokenizer and attention come from the profile unless explicitly overridden, and prefix caching is off.
+Supported keyword options:
 
 | option | default | sets |
 | --- | --- | --- |
@@ -210,6 +211,9 @@ builds it: dtype, tokenizer and attention come from the profile, and prefix cach
 | `max_model_len` | the pin's | context length |
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
+| `dtype` | the profile's | served dtype override |
+| `quantization` | the checkpoint's | vLLM quantization override, such as `"fp8"` |
+| `compilation_config` | vLLM's | compilation and CUDA-graph settings |
 | `seed` | 0 | the engine seed |
 | `protocols` | none | protocol options installed on the engine: `"pouw:<scheme>,pous:<scheme>"` or `{name: scheme}` |
 | `protocols_config` | none | each enabled protocol's settings, `{name: {...}}`; never hashed |

@@ -168,3 +168,20 @@ def test_every_upstream_watch_is_scanned():
             and (up := json.loads(p.read_text()).get("upstream", {})).get("watch") and not up.get("scan")]
     assert not bare, bare
     assert "Arklib" in json.loads((PROOFS / "lean-audit.json").read_text())["upstream"]["scan"]
+
+
+def test_every_open_conjecture_names_a_test_that_exists():
+    """An open entry of a lock's `shape.conjectures` names its falsification test as a pytest node id, `PATH::NAME` from
+    the repository's root, and that file defines the test (Daniel, 8 Oct: each conjecture's test runs)."""
+    bad = []
+    for p in sorted(ROOT.rglob("lean-audit.json")):
+        if ".lake" in p.parts:
+            continue
+        for name, c in json.loads(p.read_text()).get("shape", {}).get("conjectures", {}).items():
+            if c.get("status") != "open":
+                continue
+            path, _, test = str(c.get("test", "")).partition("::")
+            node = test.split("[")[0]
+            if not (ROOT / path).is_file() or not re.search(rf"^def {re.escape(node)}\(", (ROOT / path).read_text(), re.M):
+                bad.append(f"{p.relative_to(ROOT)}: {name}'s test {c.get('test')!r} is not PATH::NAME of a test in the tree")
+    assert not bad, bad

@@ -16,11 +16,13 @@ import pytest
 REGISTRY = "verity_vllm.program.registry"
 DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
 FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", "boolean_fp8", "boolean_fp8_moe", "nvfp4",
-          "boolean_gather")
+          "boolean_gather", "dsv4_moe", "boolean_dsv4_moe")
 #: other families' modules the family's Definitions call: the scalar and bit primitives (`prims`, `ref_prims`, `pad_prims`), the B1
-#: composites (`b1`), Hopper's tensor-core step (`hopper`), the lifted-Definition makers (`lifted`) and the Boolean bit views
-#: (`boolean_attention._Bits`)
-OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention")
+#: composites (`b1`), Hopper's tensor-core step (`hopper`), the lifted-Definition makers (`lifted`), the Boolean bit views
+#: (`boolean_attention._Bits`), and the SwiGLU and logf that DeepSeek-V4's routers and activation call (`act`, `boolean_silu`,
+#: `topp_word_gates`, `gumbel_boolean`)
+OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention", "act", "boolean_silu",
+                            "topp_word_gates", "gumbel_boolean")
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"

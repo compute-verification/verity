@@ -80,7 +80,7 @@ theorem rs_of_residuals {sh : Shape} {d : RepData} {v : Array F128} {info : Info
     (hm : 14 ≤ st.m) (hmS : st.m = sh.m) (hkS : st.kLog = sh.kLog) (hfS : st.fold.kLog = sh.kLog)
     (hkm : st.kLog ≤ st.m) (hxs : d.extras = extras)
     (hext : ∀ j < extras.size, extras[j]!.skip.size = 64 ∧ extras[j]!.x.size = st.m - 6)
-    (hco : d.rounds = t.rounds.map (·.coins)) (hne : NoEmpty d.rounds) (ht : t.k = 0) (hpl : sh.holo = false)
+    (hco : d.rounds = t.rounds.map (·.coins)) (hne : NoEmpty d.rounds) (ht : t.k = 0)
     (hfc : p.zerocheck.finalC = info.zc.vc.eval (valOf sh d.w d.comb d.cons))
     (hzp : p.lincheck.zPartial = (decoded sh d.w d.comb d.cons).zp)
     (hrsw : p.ringSwitches = (decoded sh d.w d.comb d.cons).rs)
@@ -107,8 +107,8 @@ theorem rs_of_residuals {sh : Shape} {d : RepData} {v : Array F128} {info : Info
       rsSws (claimsF sh (valOf sh d.w d.comb d.cons) info extras) (fun k => (info.rs.sws[k]!).rpp) info.rs.gamma =
         info.rs.sws := by
   subst hxs
-  obtain ⟨hcl0, hval, hT⟩ := ringSwitch_of_residuals hpl hrows hS hw hc hacc hres hzero
-  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run d.w d.comb d.cons hpl hrows hS hw hc hacc
+  obtain ⟨hcl0, hval, hT⟩ := ringSwitch_of_residuals hrows hS hw hc hacc hres hzero
+  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run d.w d.comb d.cons hrows hS hw hc hacc
   rw [hres] at hres'
   cases hres'
   rw [hco] at hrun hne
