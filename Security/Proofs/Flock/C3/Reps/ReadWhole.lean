@@ -180,15 +180,47 @@ theorem partW_eq {sh : Shape} {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Ar
     exact h.symm
   · cases h
 
-/-- **What `RecOpening.check` accepted reads its ring-switch elements whole, and every other element whole or not at
-all**: the verifier's net for part `j`, whose computed rows read each element of a claim's ring switch at `partW`'s
-slots in all 128 bits, and each row-port element in all 128 or in none. -/
+theorem getElem?_of_wiA {sh : Shape} {k : RecAlgebra.Key} {e : ℕ} (h : RecAlgebra.wi sh k = some e) :
+    (RecAlgebra.wNames sh)[e]? = some k := by
+  unfold RecAlgebra.wi at h
+  generalize RecAlgebra.wNames sh = xs at h ⊢
+  rcases xs with ⟨l⟩
+  rw [List.idxOf?_toArray, List.idxOf?_eq_some_iff] at h
+  obtain ⟨hl, he, -⟩ := h
+  rw [List.getElem?_toArray, List.getElem?_eq_getElem hl, he]
+
+/-- **The residuals' `partW` is `wIdx` of the part's group's row ports.** -/
+theorem partW_eqR {sh : Shape} {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
+    (hS : RecAlgebra.structureOf sh = .ok S0) (hg : RecResiduals.groups S0 (RecResiduals.portSizes sh) = .ok gs)
+    {p : ℕ} (hp : p < gs.size) {W : Array ℕ} (h : RecResiduals.partW sh p = .ok W) :
+    W = FlockVBridge.PartS.wIdx (RecResiduals.portSizes sh) gs[p].2.1 := by
+  unfold RecResiduals.partW at h
+  obtain ⟨S1, hS1, h⟩ := FlockVBridge.PartS.bind_ok h
+  rw [hS] at hS1
+  cases hS1
+  obtain ⟨gs1, hg1, h⟩ := FlockVBridge.PartS.bind_ok h
+  rw [hg] at hg1
+  cases hg1
+  dsimp only at h
+  split at h
+  · rename_i R P V hj
+    rw [Array.getElem?_eq_getElem hp, Option.some.injEq] at hj
+    rw [hj]
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    exact h.symm
+  · cases h
+
+/-- **What `RecOpening.check` accepted reads its ring-switch elements whole, every other element whole or not at
+all, and keys each ring switch's bits by its claim's port**: the verifier's net for part `j`, whose computed rows read
+each element of a claim's ring switch at `partW`'s slots in all 128 bits, each row-port element in all 128 or in none,
+and whose bits of claim `i`'s ring-switch element are keyed by ports named `m<i>`. -/
 theorem check_rsWhole {c : Circuit} (h : RecOpening.check c = .ok ()) {m cl j : ℕ}
     (hp : RecOpening.params c.unit.name = some (m, cl, j)) {sh : Shape} (hsh : RecOpening.shape? m cl = some sh) :
     ∃ S ns nv W, RecOpening.part sh j = .ok (S, ns, nv) ∧
       HmNets.netOf (RecOpening.unitName m cl j) (RecResiduals.unitLaid S ns nv) = .ok c.unit ∧
       RecOpening.partW sh j = .ok W ∧ RecOpening.rsUnread sh W (RecResiduals.readIns c.unit) ns = none ∧
-      RecResiduals.partlyRead (RecResiduals.readIns c.unit) ns = none := by
+      RecResiduals.partlyRead (RecResiduals.readIns c.unit) ns = none ∧
+      RecResiduals.misnamed c ns W.size (RecOpening.rsName sh W) = none := by
   unfold RecOpening.check at h
   rw [hp] at h
   dsimp only at h
@@ -216,19 +248,26 @@ theorem check_rsWhole {c : Circuit} (h : RecOpening.check c = .ok ()) {m cl j : 
               · rename_i hn
                 split at h
                 · rename_i hw
-                  exact ⟨S, ns, nv, W, hpart, hg, hW, hn, hw⟩
+                  split at h
+                  · rename_i hmis
+                    exact ⟨S, ns, nv, W, hpart, hg, hW, hn, hw, hmis⟩
+                  · cases h
                 · cases h
               · cases h
           · cases h
 
-/-- **What `RecResiduals.check` accepted reads its row-port elements whole or not at all**: the verifier's net for
-part `j`, whose computed rows read each row-port element in all 128 bits or in none. -/
+/-- **What `RecResiduals.check` accepted reads its row-port elements whole or not at all, keyed by their rounds'
+ports**: the verifier's net for part `j`, whose computed rows read each row-port element in all 128 bits or in none,
+and whose bits of an element of w a round holds are keyed by ports named for each round holding it. -/
 theorem check_whole {c : Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j : ℕ}
     (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Shape}
     (hsh : RecResiduals.shape? m k cl = some sh) {holo : Bool} (hh : RecResiduals.holoOf c = .ok holo) :
     ∃ S ns nv, RecResiduals.part { sh with holo } j = .ok (S, ns, nv) ∧
       HmNets.netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S ns nv) = .ok c.unit ∧
-      RecResiduals.partlyRead (RecResiduals.readIns c.unit) ns = none := by
+      RecResiduals.partlyRead (RecResiduals.readIns c.unit) ns = none ∧ ∃ W,
+        RecResiduals.partW { sh with holo } j = .ok W ∧
+        RecResiduals.misnamed c ns W.size (fun a => RecResiduals.roundNames (RecAlgebra.rounds { sh with holo })
+          (RecAlgebra.wNames { sh with holo })[W[a]!]?) = none := by
   unfold RecResiduals.check at h
   rw [hp] at h
   dsimp only at h
@@ -251,7 +290,13 @@ theorem check_whole {c : Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j 
             subst hcg
             split at h
             · rename_i hn
-              exact ⟨S, ns, nv, hpart, hg, hn⟩
+              split at h
+              · cases h
+              · rename_i W hW
+                split at h
+                · rename_i hmis
+                  exact ⟨S, ns, nv, hpart, hg, hn, W, hW, hmis⟩
+                · cases h
             · cases h
           · cases h
 
@@ -371,7 +416,7 @@ theorem readCol_openWhole {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpenin
     (hpart : RecOpening.part sh p = .ok (S₁, ns, nv)) {q b : ℕ} (hq : q < ns.sum) (hb : b < 128)
     (hr : ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * q + b))) {b₀ : ℕ} (hb₀ : b₀ < 128) :
     ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 (128 * q + b₀)) := by
-  obtain ⟨S₂, ns₂, nv₂, -, hpart₂, hn, -, -, hw⟩ := check_rsWhole h hp hsh
+  obtain ⟨S₂, ns₂, nv₂, -, hpart₂, hn, -, -, hw, -⟩ := check_rsWhole h hp hsh
   obtain ⟨rfl, rfl, rfl⟩ : S₁ = S₂ ∧ ns = ns₂ ∧ nv = nv₂ := by
     simpa only [Prod.mk.injEq] using Except.ok.inj (hpart.symm.trans hpart₂)
   exact readCol_whole hU hu hn hw hq hb hr hb₀

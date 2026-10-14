@@ -21,8 +21,8 @@ import Proofs.Flock.Recursive.Loads
   `ioColAt_of_readCol` at copy `j`).
 
 `rsRead_of_facts` composes them. `RsSel` is at the round commitments (`rsSel_of_rounds`): ring switch `i`'s columns
-are keyed by port `m<i>` (`RsKeys`, a circuit fact), whose reads-file entry is `rec-opening-c<i>`, read at the unit
-where stage `c₀ + i` reads it (`RoundReads`). `SessStmt` is at any family whose checks pass (`sessStmt_of_accepted`,
+are keyed by port `m<i>` (`RsKeys`, the opening's check, `rsKeys`), whose reads-file entry is `rec-opening-c<i>`, read
+at the unit where stage `c₀ + i` reads it (`RoundReads`; `WRoundReads` is it at the residuals' parts). `SessStmt` is at any family whose checks pass (`sessStmt_of_accepted`,
 from `ChecksAccepted`), and at the checked family from the guarantee's `_hF` (`sessStmt_checked`: the checked
 sessions carry the prover's inputs, `tagsFound_checked`); `rsRead_of_accepted` composes them, and `rsRead_checked` is
 it at the checked family.
@@ -365,6 +365,8 @@ def RsSel (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128)
     (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) (c₀ : ℕ) : Prop :=
   ∀ i < 2, ∀ gs (s : Fin S) (un : Fin (Vs s).nv) (j p : ℕ), OpenCopy zs dg N k Rw sh w gs s un j p →
+    ∀ (S0 : RecAlgebra.GfS), RecOpening.structureOf sh = .ok S0 →
+      Flock.RecResiduals.groups S0 (RecOpening.portSizes sh) = .ok gs →
     ∀ (hpg : p < gs.size) (S₁ : RecOpen.GfS) (ns : List ℕ) (nv : ℕ), RecOpening.part sh p = .ok (S₁, ns, nv) →
       ∀ (q e : ℕ) (t : Fin 128), (wIdx (RecOpening.portSizes sh) gs[p].2.1)[q]? = some e →
         RecOpening.wi sh (.rs i t.val) = some e → ∀ b < 128, ∀ (q' : Fin (Vs s).c.ports.size) (kk : ℕ),
@@ -383,7 +385,7 @@ theorem rsSk_of_sel {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
   obtain ⟨gs, j, p, hj, hpg, S0, S₁, ns, nv, q, t, e, b, hc, hO, hS, hg, hpart, he, hwi, hb, rfl⟩ := hW
   obtain ⟨-, hcol, q', kk, hkk, hkey⟩ := openCopy_key hO hS hg hpg hpart he hwi hb
   rw [posK_of_keyAt un hj hcol hkk hkey hc]
-  exact mem_skOf_inl.2 (hsel i hi gs s un j p hO hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey)
+  exact mem_skOf_inl.2 (hsel i hi gs s un j p hO S0 hS hg hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey)
 
 /-- **The `rec-opening` unit reads its ring switches' columns** (S's `ReadCol`, `rsReadCol`): at a copy registering w as
 part `p`, a column of bit `b` of the part's row-port element `q` holding ring switch `i`'s slot `t`, an input column
@@ -438,14 +440,16 @@ theorem rsRead_of_facts {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
 
 /-! ## `RsSel` at the round commitments -/
 
-/-- Obligation: discharged by the `rec-opening` circuits (row port `m<i>` holds round `i` of `RecOpening.rounds`, the
-claims' ring switch `i`, `rec_vstage.opening_messages`). **Ring switch `i`'s columns are keyed by port `m<i>`**: at a
+/-- Discharged by the verifier's `rec-opening` check (`RecResiduals.misnamed` at `RecOpening.rsName`, `rsKeys`). **Ring
+switch `i`'s columns are keyed by port `m<i>`**: at a
 copy of the `rec-opening` unit registering w as part `p`, a row port `q'` whose bit keys copy `j`'s column of a bit of
 the part's row-port element holding ring switch `i`'s slot `t` is named `m<i>`. -/
 def RsKeys (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128) : Prop :=
   ∀ i < 2, ∀ gs (s : Fin S) (un : Fin (Vs s).nv) (j p : ℕ), OpenCopy zs dg N k Rw sh w gs s un j p →
+    ∀ (S0 : RecAlgebra.GfS), RecOpening.structureOf sh = .ok S0 →
+      Flock.RecResiduals.groups S0 (RecOpening.portSizes sh) = .ok gs →
     ∀ (hpg : p < gs.size) (S₁ : RecOpen.GfS) (ns : List ℕ) (nv : ℕ), RecOpening.part sh p = .ok (S₁, ns, nv) →
       ∀ (q e : ℕ) (t : Fin 128), (wIdx (RecOpening.portSizes sh) gs[p].2.1)[q]? = some e →
         RecOpening.wi sh (.rs i t.val) = some e → ∀ b < 128, ∀ (q' : Fin (Vs s).c.ports.size) (kk : ℕ),
@@ -465,6 +469,17 @@ def RoundReads (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j 
     ∃ pt ∈ own s, pt.name = s!"m{i}" ∧ pt.value = s!"rec-opening-c{i}" ∧
       ∃ x, pt.reads[un.val]? = some (some x) ∧ sel (c₀ + i) pt.value x
 
+/-- **Hypothesis on the reads file and the stage selector: a part's unit reads round `m`'s commitment at port `m<m>`,
+where rep `ρ`'s stage of round `m` reads it** (`RoundReads` at the residuals' parts): at the session of part `p`, where
+its circuit has a port named `m<m>`, the reads file has an entry named `m<m>` of value `rec-c<m>` (round `m`'s
+commitment) whose read of rep `ρ`'s unit is at a position `x` that `stage ρ m` reads of that value. -/
+def WRoundReads (sh : Flock.Shape) (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
+    (stage : Fin 2 → ℕ → ℕ) (sess : ℕ → Fin S) (un : (p : ℕ) → Fin 2 → Fin (Vs (sess p)).nv) : Prop :=
+  ∀ p < (FlockVBridge.Family.partsOf sh).size, ∀ (m : ℕ) (ρ : Fin 2) (q : Fin (Vs (sess p)).c.ports.size),
+    (Vs (sess p)).c.ports[q].name = s!"m{m}" →
+    ∃ pt ∈ own (sess p), pt.name = s!"m{m}" ∧ pt.value = s!"rec-c{m}" ∧
+      ∃ x, pt.reads[(un p ρ).val]? = some (some x) ∧ sel (stage ρ m) pt.value x
+
 /-- **`RsSel` at the round commitments**: the port keying a ring switch's column is its round's (`RsKeys`), whose entry
 in the reads file is that round's commitment, read at the unit where the round's stage reads it (`RoundReads`). -/
 theorem rsSel_of_rounds {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
@@ -473,9 +488,9 @@ theorem rsSel_of_rounds {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
     {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
     (hk : RsKeys zs dg N k Rw sh w) (hr : RoundReads zs dg N k Rw sh w own sel c₀) :
     RsSel zs dg N k Rw sh w own sel c₀ := by
-  intro i hi gs s un j p hO hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey
+  intro i hi gs s un j p hO S0 hS hg hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey
   obtain ⟨pt, hpt, hn, -, x, hx, hsx⟩ := hr i hi gs s un j p hO
-  have hq := hk i hi gs s un j p hO hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey
+  have hq := hk i hi gs s un j p hO S0 hS hg hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey
   exact ⟨pt, hpt, hn.trans hq.symm, x, hx, hsx⟩
 
 /-! ## `SessStmt` from the verifier's checks -/

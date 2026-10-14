@@ -2,15 +2,45 @@
 
 `Flock.SecurityProofs.RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3` (`Recursive/AuditC3.lean`,
 `Recursive/AuditC3Proof.lean`) is PublicAudit's proof at candidate 3's table (`holoInnerAt`, R from the registration's
-`stacked` entry, V*'s statements over the verifier's own list). Its only `sorry`s are the stubs below; the guarantee's
-proof itself has none. It takes VBridge (`_hbr`) and V*'s parse (`_hob`) as PublicAudit does; pieces (b)–(h) discharge
+`stacked` entry, V*'s statements over the verifier's own list). It has no `sorry`: every stub in the two tables below
+is proved. It takes VBridge (`_hbr`) and V*'s parse (`_hob`) as PublicAudit does; pieces (b)–(h) discharge
 them. V*'s statements are indexed by the verifier's own list (`vstarCount ish`), which at candidate 3's inner shape is
 circuits' gap 2's (#1847, merged here at `100c17932`): eleven statements in the writer's order, 0–3 `rec-open`, 4–5
 `rec-residuals`, 6 `rec-sparse`, 7–9 R's levels `rec-open-stacked`, 10 `rec-opening` at META's `stacked` shape.
 
-Sizes are estimates of the proof, in lines. Owners: **W** a parallel worker, **C** circuits' code, **L** rec-lean.
+What stays open is the hypotheses the discharge takes, `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself)
+and `srcOK_holo_rs`'s (`C3/Compose/AtHolo.lean`, `SrcOK` at the checked family), and what the event's bridge and the
+bound still need: Open now, next.
 
-## Start now (independent)
+## Open now (round 20, against Wed 14 Oct EOD PT)
+
+Owners are round 20's workers (H, C, R, K, T, S, L, E), **rec-lean**, and **W**, the next free worker. A size is in
+lines of proof: "+N" is what a branch has built, a range is an estimate of what is left. Branch heads are as of 19:50Z,
+13 Oct.
+
+| piece | names | where | size | what it gives | owner (due) |
+|---|---|---|---|---|---|
+| the bridge | `acceptsC3_of_verify`, `c3_of_checks`, `checks_ok`, `commits_of_checks`, `statements_of_checkStmt`, `checkMeta_ok`, `checkInner_ok` | `cursor/c3-n19-bridge-95d4` @ `da54b6e7f`, merged here | +1299 −147 over 23 files, verifier included | `AcceptsC3` from the verifier's run | H, done (round 20; r20261013-194011-b18d) |
+| `SparseRangeOk` from check 5 | `sparseRangeOk_of_check`, `checkInnerRange_spec`, `checkAtC3_spec`, `execClassAt_kLog` | `Recursive/HoloExec.lean`, `C3/VStarList/Range.lean`; `cursor/c3-n18-sparserange-fbf2` @ `46e878bbe`, in the bridge | +764 −91 | the event's `SparseRangeOk`, read by `ellOk_of_sparseRange` and `units_of_sparseRange` | H, done (in the bridge) |
+| the reps' round count | `checkCommitRounds`' round-for-round check (on the bridge), into `repIdxB_of_rounds` (`C3/Reps/RepsCounted.lean`) with `hk` (`t₄.k` is the stream's round count, S15/R2) at each rep | | 20 after H's check | `drawnOf_holoMap`'s `hb` | H's check (round 21), then rec-lean |
+| the dirs value tie, (b) part 2 | `valueColl`, `valueColl_spec`, `tie_read`, `value_tie`, `dirs_tie`, `checkValue_root`, `openPairV_collides`, `bits_of_rowInV` | `C3/RegLevels/ValueTie.lean`; `cursor/c3-c-valuetie-95d4` @ `27cfb37fd` | +562 | the tie without `hval`, in finder form; open in it are `hone`, `hpos`, `hseg` (VBridge's `PartPortsOne`, `ReadsOwn`, `ReadsUnsegmented`) at the read, which acceptance does not give | C (22:00Z) |
+| OpenKeys, check-to-level, row 5 | `accRead_of_checked`, `ReadsOwnC3`, `accRead_drawn`, `accPort_of_checkStmt`, `reads_of_checkAccReads`, `accReads_recOpen`, `accReads_recOpenStacked`; `CoinsChecked`, `CoinsAccepted`, `coinsAccepted_checked`, `stackedLevel_of_accepted`, `levels_of_accepted`; `lgCoins_of_held`, `heldCoins_rep0`, `commits_c3Of` | `C3/RegLevels/{AccReads,LevelsChecked,LgCoins}.lean`; `cursor/c3-openkeys-95d4` @ `cec482074` | +522 | OpenKeys at `RepMaps.OpenCols` (`C3/Reps/SrcOpens.lean`), R's levels from the checked sessions, R's Ligerito coins from the held record | R (21:30Z) |
+| the top finder | `TopColl`, `TopColl.collision`, `prob_topColl_le`, `prob_regOrTop_le` | `Recursive/TopFinder.lean`; `cursor/c3-k-topfinder-321a` @ `5245fe505`, T's `TopRoot.lean` merged | +267 | an accepted held binding top other than the registered top is a frame-v3 root collision, so the bound covers the event `stackedTop_of_innerCommits` reads | K (21:30Z) |
+| the top-root collision | `topRoot_collision`, `top_bind`, `fv3Root_bind`, `root_mem`, `topLeaves` | `Recursive/TopRoot.lean`; `cursor/c3-t-toproot-95d4` @ `30978deed` | +299 | two equal-size frame-v3 trees with one root give a SHA-512 collision | T (20:30Z) |
+| R's opening's round reads | `RoundReads`, `WRoundReads` (`C3/Compose/RsFacts.lean`); the refusal under them, `RecVStar.checkMsgNames` (`Flock/Test/MsgNames`), with `VStarCheck.checkStmt_ok` past it, is on `cursor/c3-u-roundlinks-95d4` @ `a6fcb9021` | | unsized | `srcOK_holo_rs`'s `hr`, through `openMsgsRead_checked`; `PortNames`' uses | S (22:00Z) |
+| acc-read refusal, (b), `hw` | `bitOf_wReadO`, `openingZeroAtL_wReadO`, `el_wReadO_acc`, `AccHeldO`, `sessionAt_wReadO` (`C3/Reps/WReadO.lean`); `openingName_inj`, `openParams_of_check`, `openUnit_of`, `keyedCol_of_regBit`, `regBit_wReadO`, `openingZeroAtL_of_regs` (`C3/Reps/WReadOReg.lean`) | `cursor/c3-n15-wdec-1642` @ `6ece4c2f4`, `cursor/c3-n21-run-1642` @ `f5a573d7e` | +231 in `WReadOReg`, `WReadO` reworked | R's opening's `SessionAt` (`OpeningZeroAtL`) from the registered bits, for `srcOK_holo_rs`'s `hot` | L (22:15Z) |
+| the registered rows | `RowsRegisteredC3`, `RowsCovered`, `rowsRegisteredC3_of_covered`, `rowsCovered_checked`, `registrantCovers_coveredR`, `registrantCovers_attained`, from `RegistrantCovers` | `C3/Compose/RowsReg.lean`; `cursor/c3-e-rowsreg-95d4` @ `5934dd4cc` | +339 | `RowsRegisteredC3`; `RegistrantCovers` is a new named premise on the prover's `zr` | E (22:00Z, pending Daniel) |
+| the holo streams' list | `holoStreams_eq`: `holoStreams` at the inner shape is `(.rep 0, rs) :: (.rep 1, rs) :: L` (now `hL` inside `holoSizes_holoStreams`) | `C3/Compose/HoloStreamSizes.lean` | 15 | `drawnOf_holoMap`'s `hS` (`C3/Reps/RepsDrawnAt.lean`), so `DrawnOf` and, through `repsDrawn_valsSrc`, `RepsDrawn` | rec-lean (round 21) |
+| the rep forms' alignment | `holoSizes [(.rep 0, rs), (.rep 1, rs)] = (repF ++ repF).map formSize` at `repF = zcForms m ++ (lcForms kLog ++ (opForms … ++ ligForms sch))`, so `(coinRounds rs).length = repF.length` | `C3/Compose/HoloStreamSizes.lean` | 80–120 | `drawnOf_holoMap`'s `hr`, and the next row | rec-lean (round 21) |
+| the sparse rounds' forms | `holoSelWords`' last conjunct, `holoForms (holoAt st hp)` is `none` at `roundIn L (.sparse x) q + j`, from `roundAt_sparseRounds` and the alignment | `C3/Compose/HoloSparseWords.lean` | 40 | `coinWordsEncoded_holoMap` at the sparse streams | rec-lean (round 21) |
+| the word-level `StageHeld` | `StageHeldW`: a stage's coins are one stream's words `(g q)[w]`, flat index `p ↔ (q, w)`, history round `j + p = i + 1 − (g q).size + w`; its coins lemma, from `coinsAt_of_idx` at `f (q, w) = coinArr fOf #[(g q)[w]!]` with custody's coins half and `CoinWordsEncoded` at `holoSelWords`; `laterCoins_of_held`'s `h2`, `h3` at it | `C3/Compose/LaterHeld.lean` | 120–130 | the sparse phases' `StageCoins`, for `srcOK_holo_rs`'s `hcoins` | W |
+| the sparse stage's source | `SrcSparseTie` at `tiedSrc stp`, from `sparseTie_of_layer` at V*'s accepted RecSparse units and the word-level coins | `C3/Sparse/SrcTie.lean` | 80–120 | `srcOK_holo_rs`'s `hst` | W |
+| the public rows' premises | `RowsHeld`, `PortsNamed` (`C3/PubRows/Check.lean`), `OwnIs` (`C3/PubRows/Honest.lean`), with no producer yet | | unsized | `hbr_honest_reg`'s `hdrawn`, `hnames`, `hown` | unassigned; E's rows, S's port names, C's `ReadsOwn` and R's `ReadsOwnC3` are beside them |
+
+## Start now (independent, rounds 1–4; proved, but a1c, a cleanup, is open)
+
+Sizes are estimates of the proof, in lines. Owners in this table and the next: **W** a parallel worker, **C** circuits'
+code, **L** rec-lean.
 
 | # | lemma (stub) | file | size | depends on | owner |
 |---|---|---|---|---|---|
@@ -34,6 +64,11 @@ oracle count and `CompiledL`'s lockstep, about 3,500 lines) has no holographic a
 So these start at once: a1s and a1r (a W each, against their stubs alone), a1's assembly (L), h1 (W), b1 → b2 (W),
 c1 (W); h2 builds on #1847's list.
 
+v1, closed (round 20): verify ⇒ `SparseRangeOk`. `acceptsC3_of_verify` (`C3/VStarList/Accepts.lean`) concludes all of
+`AcceptsC3` from the verifier's acceptance at both setups: each runs check 5's range check on the inner files first
+(`RecSetup.checkInner`, `RecCoins.checkAtC3`), and `sparseRangeOk_of_check` reads its verdict at the event's `st`, set
+up from the same circuit and public file (`setupHidden_same`).
+
 ## Next: the honest decoder and the stage discharges (stated, round 3)
 
 Pieces (c)–(g) are obligations of a free decoder (`C3Family`'s `run`, `row`), as G's H-props are of `VStarFamily`'s
@@ -49,7 +84,7 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
 
 | # | lemma (stub) | file | size | depends on | owner |
 |---|---|---|---|---|---|
-| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTop`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean`, `TopHold.lean` | proved (round 4) | | |
+| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTopAt`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean`, `TopHold.lean` | proved (round 4) | | |
 | n1 | `hPubRows_of_check'` (from `ChecksPubRows`, `RowsHeld`, `PortsNamed`, `SparseAtShape`); `hTape_of_frame` (from `HFrame`, `hTape_iff_frame`) | `C3/PubRows/Honest.lean`, `Check.lean`, `Frame.lean` | proved (round 4) | | |
 | n1′ | `sparseAtShapeChecked`: `SparseAtShape` at the units `checkStmt` passes (`SparseAtShapeChecked`), for every family; `hPubRows_of_checked`: `hPubRows_of_check'` with it, where some transcript each accepting session accepts passes the verifier's checks (`ChecksAccepted`; at the checked family, `checksAccepted_checked`) | `C3/PubRows/Shape.lean` | proved (round 5, H; round 6) | | |
 | n2 | `hReps_of_read` (with `hRepStages_honest`, so `hReps_honest_of_read`): `HReps` from the reps' read fact (`RepsRead`) | `C3/HoloValues/Read.lean`, `Shape.lean`, `ZcLc.lean` | proved (round 5, C) | | |
@@ -115,12 +150,14 @@ takes, each with who discharges it:
 * Sparse-phase order: the recorded one. `holoTableCL` plays each rep's sparse phase after both reps, reading only that
   rep's zerocheck, lincheck and `h`, fixed before its coins, so the bridge replays the record round for round and no
   reordering lemma is needed.
-* `Creg`: the inner statement's `x.cap`, tied by `StackedTop` to the META-bound record's `stacked` entry; the
+* `Creg`: the inner statement's `x.cap`, tied by `StackedTopAt` at explicit commit strings to the META-bound record's
+  structurally checked `stacked` entry; the
   registrant's openings of every level-0 position are `_hreg` (`HoloReg.Opens`). Closeness is in `holds`, not a hypothesis.
-* The tie is the verifier's (round 3, ruling 1): the event's `AcceptsC3` holds the inner transcript against `reg`
+* The tie is the verifier's (round 4 follow-up): the event's `AcceptsC3` holds the inner transcript against `reg`
   (`innerCommitsAt`, `RecVStar.innerCommits` at the verifier's own `tr`, `record` and `reg`), whose binding round's top
-  must make the `stacked` entry, compared canonically (`TopOf`); `_hstk` is gone, and t0 derives `StackedTop` from that
-  hold. The digest is `metaRegistration st`, META's `registration` of the inner circuit the verifier reads off
+  must match the `stacked` entry's five fields as well as its canonical form. `_hstk : StackedTopAt … bcs'` carries
+  the registered strings explicitly; a different held top is `topFinder`'s one-run collision event. The digest is
+  `metaRegistration st`, META's `registration` of the inner circuit the verifier reads off
   `--rec-inner-circuit`, the file `AcceptsPublic` sets `st` up from.
 * Who registers R: the inner session's prover. Its staging commits R's table and writes the registration record, and
   the verifier checks only that META binds the record's digest and that the binding round's top makes its `stacked`
@@ -128,8 +165,9 @@ takes, each with who discharges it:
   position, so a prover who registers a cap with no preimage is outside the statement (Weakness, below).
 * `ℓ` and the slots' units come from check 5 (round 3, ruling 2 and 4): `SparseRangeOk` (in the event) is
   `RecSparse.Shape.valid`, `sparseV`'s shortness check and `layoutFactors` at the inner circuit's unit range, so
-  `ellOk_of_sparseRange` gives `hp.EllOk` and `units_of_sparseRange` gives the slots' units at `UnitsOf`. Check 5 runs
-  only with `--rec-inner-*` and the coin server's coins, and reads inner points as `k_log − 6` coordinates.
+  `ellOk_of_sparseRange` gives `hp.EllOk` and `units_of_sparseRange` gives the slots' units at `UnitsOf`. Every
+  candidate-3 session's setup evaluates it on the inner statement from its files, whatever the unit, and refuses a
+  session without them (`RecCoins.checkAtC3`); `sparseRangeOk_of_check` reads it off that check at `ClassOk`.
 * `mReg` is padded (ruling 4): `mReg = max PAD_TO (…)` and R's bits are zero-padded to it, so `7 ≤ mReg` is free
   (`seven_le_mReg`) and `mReg_of_list` has no `hpad`. Workers on a1s and a1r: a proof that unfolds `mReg` meets the
   `max`.

@@ -73,7 +73,8 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
     (bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8)
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json)
-    (_htop : ∃ lv, StackedTop lv st reg xR.cap) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (bcs' : Array ByteArray) (_htop : ∃ lv, StackedTopAt lv st reg xR.cap bcs')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (hrread : ∀ h : Typed zr, RepsRead
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hsread : ∀ h : Typed zr, SparseRead
@@ -148,7 +149,8 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json)
     (cap : Cap Dig) (hcap : xR.cap = cap)
-    (htop : ∃ lv, StackedTop lv st reg xR.cap) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (bcs' : Array ByteArray) (htop : ∃ lv, StackedTopAt lv st reg xR.cap bcs')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (σ : Strategy (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N))
     (hrread : ∀ h : Typed zr, RepsRead
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
@@ -181,7 +183,7 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
       (cmtOf Vs bc) (msgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) dec) := by
   intro h
   refine vbridgeC_of_cap (x := fun _ _ => xR) (fun _ _ => ?_)
-    (hbr_honest ish hss bind hob zr hCust coins rows own sel bc dec wr reg htop dg N k Rw hrread hsread horead hlread
+    (hbr_honest ish hss bind hob zr hCust coins rows own sel bc dec wr reg bcs' htop dg N k Rw hrread hsread horead hlread
       hfr hdrawn hnames hown hheld h)
   exact hcap
 

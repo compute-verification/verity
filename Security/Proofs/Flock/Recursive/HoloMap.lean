@@ -58,10 +58,13 @@ def roundAt (L : List (HoloStream × Array SchedRound)) (s : HoloStream) (k : Na
 
 open Classical in
 /-- **A coin's words**: the array a run reads as the coin step `c` (`Discharge.PlaysCoin.coinArr` at `fOf`, the one
-word of a scalar or the words of a vector), empty where no array reads as `c`. -/
+word of a scalar or the words of a vector), else the array whose words are the coordinates of the vector `c` (a vector
+of one coordinate, which `coinArr` reads as a scalar), empty where neither reads as `c`. -/
 noncomputable def coinWords (C : Type) (c : C) : Array F128 :=
   if h : ∃ a : Array F128, FlockSoundness.Discharge.PlaysCoin.coinArr FlockSoundness.Refine.fOf a = ⟨C, c⟩ then
     h.choose
+  else if h : ∃ a : Array F128, (⟨Fin a.size → GF128, fun i => FlockSoundness.Refine.fOf a[i.val]!⟩ :
+      FlockSoundness.Game.Msg) = ⟨C, c⟩ then h.choose
   else #[]
 
 /-- **The words of history round `j`'s coin** in the history's coins `cs`: coordinate `j` of its coin, the one round `j`

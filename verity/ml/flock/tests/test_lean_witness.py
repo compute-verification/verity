@@ -367,8 +367,8 @@ def test_f1_vstars_statements_are_outer_statements_at(f1_gate, f1_inner):
 def test_f1_the_session_meets(f1, part):
     """V*'s statement `j` at its session: `checkStmt` (`AcceptsZKV`'s second conjunct, so the session's circuit file is
     Lean's own `RecVStar.circuitFile` under the verifier's bindings, byte for byte, and its registered reads pass
-    `checkOwn`, `checkRows` and `checkAcc`), `TagsOkZHJ` (`ZkOuterR.hTags`), `ScopeZR`, `VStmt.hscope`, and the full draw
-    over its population (`RecordCustody`)."""
+    `checkOwn`, `checkRows`, `checkAcc` and `checkAccReads`), `TagsOkZHJ` (`ZkOuterR.hTags`), `ScopeZR`, `VStmt.hscope`,
+    and the full draw over its population (`RecordCustody`)."""
     w, j = f1[part, STATEMENT], F1_PARTS.index(part)
     assert w["accepts_zkv"]["part"] == j
     assert "check_stmt" not in w["accepts_zkv"], w["accepts_zkv"]["check_stmt"]
