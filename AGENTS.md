@@ -60,6 +60,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 - `infra/`: our machines.
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
   - `control/`: the control pod's boot script and loops.
+  - `cursor/`: the coordinators, each a plain Cursor cloud agent: `launch_coordinator.py` creates and archives them from
+    Daniel's laptop.
   - `nebius/`: the console's units.
   - `ops/` (`verity_ops`): `ops deploy` and `ops keeper`, on top of `research`.
 - `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
