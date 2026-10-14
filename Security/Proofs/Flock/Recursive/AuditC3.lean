@@ -138,26 +138,27 @@ def ChecksVR {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (ish : RecVSt
   ∀ j : Fin S, ChecksC3 ish cs coins j (bind j) rows (zr o.1 j).I (zr o.1 j).own (o.2 j).2.2.2
 
 open Classical in
-/-- **A session kept where an accepted transcript passes `P`**: `z` where some transcript `z` accepts passes `P` at its
-inputs and own list, and elsewhere `z` with the own list `freshOwn`, which accepts nothing (`ZkOuter.refuse`'s pattern,
-`not_acceptsZKR_fresh`). Its game is `z`'s. -/
+/-- **A session kept where a written, accepted transcript passes `P`**: `z` where some transcript `z` writes at some
+registration (`ZkOuter.Writes`, an outcome of its game) and accepts passes `P` at its inputs and own list, and elsewhere
+`z` with the own list `freshOwn`, which accepts nothing (`ZkOuter.refuse`'s pattern, `not_acceptsZKR_fresh`). Its game
+is `z`'s. -/
 noncomputable def keepOwn {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
     (P : FlockSoundness.Discharge.Exec.Inputs → Array Flock.Registered.Port →
       FlockSoundness.Discharge.Exec.Transcript → Prop) : Q.Outer Reg' :=
   { z with
-    own := if ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t then z.own else freshOwn Q.c
+    own := if ∃ R' t, z.Writes R' t ∧ AcceptsZKR z.I z.own t ∧ P z.I z.own t then z.own else freshOwn Q.c
     hown := fun ω R' o h => by
-      by_cases hp : ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t
+      by_cases hp : ∃ R' t, z.Writes R' t ∧ AcceptsZKR z.I z.own t ∧ P z.I z.own t
       · rw [ite_eq_left hp] at h ⊢
         exact z.hown ω R' o h
       · rw [ite_eq_right hp] at h
         exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH _ h).elim }
 
 /-- **V*'s checked sessions**: the typed sessions (`custodied`), each kept at a whole history `t` (a coin for each of the
-inner protocol's rounds, the only histories `recGame` plays) where an accepted transcript passes the verifier's checks
-at candidate 3 as V*'s statement of its index (`ChecksC3`) at its hold of the inner transcript and check 5's source at
-`t` (`cs t`, `coins t`), and refusing everything elsewhere (`keepOwn`). Their games are the typed sessions', so the
-transported prover plays them (`checkedT`). -/
+inner protocol's rounds, the only histories `recGame` plays) where a written, accepted transcript passes the verifier's
+checks at candidate 3 as V*'s statement of its index (`ChecksC3`) at its hold of the inner transcript and check 5's
+source at `t` (`cs t`, `coins t`), and refusing everything elsewhere (`keepOwn`). Their games are the typed sessions',
+so the transported prover plays them (`checkedT`). -/
 noncomputable abbrev checkedC3 {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B D : Type} {I : Inner} {Cm : Type}
     (ish : RecVStar.Inner) (cs : List (Cm × I.Coin) → Option Flock.RecVStar.InnerCommits)
     (coins : List (Cm × I.Coin) → Option Flock.RecCoins.Source)

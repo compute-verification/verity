@@ -1,5 +1,6 @@
 import Proofs.Flock.Recursive.Raw
 import Proofs.Flock.Recursive.VStarCheck
+import Proofs.Flock.Recursive.Written
 import Proofs.Flock.Soundness.Discharge.FailClosed.One
 
 /-!
@@ -137,9 +138,10 @@ theorem prob_sessionsR_untypable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} 
 
 /-- **The raw recursive audit's event is no likelier than the typed one's**, at the transported strategy (`recT`), when
 the event has every session accept as V*'s statement of its index and pass the statement check (`hp`), where every
-session's inputs carry the tags their name names (`hF`), and gives `q` at a whole history where every session types
-(`hq`): where every session at a registration types, the typed sessions are the raw ones (`sessions_zsOf`,
-`prob_sessT`); where one doesn't, the raw event is empty there (`prob_sessionsR_untypable`). -/
+session's inputs carry the tags their name names (`hF`), and gives `q` at a whole history where every session types,
+at an outcome whose transcripts the typed sessions write (`hq`): where every session at a registration types, the
+typed sessions are the raw ones (`sessions_zsOf`, `prob_sessT`), every outcome of which they write
+(`leaves_sessions`); where one doesn't, the raw event is empty there (`prob_sessionsR_untypable`). -/
 theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ}
     {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)} (hob : VStarParsesScoped Flock.Tags.circuit i bind Vs)
@@ -151,14 +153,18 @@ theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg :
     (p q : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Prop)
     (hp : ∀ o, p o → AcceptsVRV i bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
       ∀ j, ScopeZR (zr o.1 o.2.1 o.2.2.1 o.2.2.2.1 j).I)
-    (hq : ∀ o, o.2.2.1.length = I.r → (∀ j, (zr o.1 o.2.1 o.2.2.1 o.2.2.2.1 j).Typable) → p o → q o) :
+    (hq : ∀ o, o.2.2.1.length = I.r → (∀ j, (zr o.1 o.2.1 o.2.2.1 o.2.2.2.1 j).Typable) →
+      (∀ j, (zsOf zr hRec h o.1 o.2.1 o.2.2.1 o.2.2.2.1 j).Writes (o.2.2.2.2 j).2.1 (o.2.2.2.2 j).2.2.2) → p o → q o) :
     prob p (recGame L Reg I Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
       prob q (recGame L Reg I Cm fun R ω t => outerV (zsOf zr hRec h R ω t) dg N) (recT zr hRec h σ) := by
   refine prob_recMap_le (fun R ω t => outerT (zsOf zr hRec h R ω t) (zr R ω t)) p q σ fun ω t s ht => ?_
   rw [prob_outerVR, prob_outerT]
   by_cases hall : ∀ j, (zr σ.1 ω t s.1 j).Typable
   · rw [prob_sessT _ _ (sessions_zsOf zr hRec h σ.1 ω t s.1 hall)]
-    exact prob_mono (fun b hb => hq (σ.1, ω, t, (s.1, b)) ht hall hb) _ _
+    have hw := leaves_sessions (zsOf zr hRec h σ.1 ω t s.1) dg N
+    rw [sessions_zsOf zr hRec h σ.1 ω t s.1 hall] at hw
+    exact Game.prob_mono_outcome _ _ fun b hb hpb =>
+      hq (σ.1, ω, t, (s.1, b)) ht hall (Game.Leaves.outcome _ _ hw hb) hpb
   · push Not at hall
     obtain ⟨j₀, hj₀⟩ := hall
     rw [prob_sessionsR_untypable hob (zr σ.1 ω t s.1) (fun j => hRec σ.1 ω t s.1 j) (hF σ.1 ω t s.1) j₀ hj₀ _

@@ -21,7 +21,7 @@ In (i), as in `PublicAudit`'s:
 * the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each draw
   (`regStmt`), and the raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`,
   `verifies_zsOf`), where the event's checks at candidate 3 (`ChecksVR`) keep every session's own list at the whole
-  histories `recGame` plays (`acceptsV_checked`);
+  histories `recGame` plays (`acceptsV_checked`), at the transcripts the sessions write (`leaves_sessions`);
 * `_hob` is read where the event parses a session's file into scope (`loads_of_verifiesV`, `scope_of_accepts`).
 
 Candidate 3's table ignores the last round's coin, as its pick does (`schedInner_lastFree`, `clashPickHL_lastFree`), so
@@ -48,15 +48,17 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 open Classical in
-/-- **A kept session's own list is its own** where an accepted transcript passes `P`. -/
+/-- **A kept session's own list is its own** where a written, accepted transcript passes `P`. -/
 theorem own_keepOwn {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
     (P : FlockSoundness.Discharge.Exec.Inputs → Array Flock.Registered.Port →
       FlockSoundness.Discharge.Exec.Transcript → Prop)
-    (hp : ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t) : (Flock.Guarantees.keepOwn z P).own = z.own :=
+    (hp : ∃ R' t, z.Writes R' t ∧ AcceptsZKR z.I z.own t ∧ P z.I z.own t) :
+    (Flock.Guarantees.keepOwn z P).own = z.own :=
   ite_eq_left hp
 
 /-- **The checked sessions accept what the typed sessions accept and the verifier's checks at candidate 3 pass**, at a
-whole history: at typed sessions, the checks of the accepted transcript keep each session's own list
+whole history and an outcome whose transcripts the typed sessions write (`hw`, every outcome of their game,
+`leaves_sessions`): at typed sessions, the checks of the written, accepted transcript keep each session's own list
 (`own_keepOwn`). -/
 theorem acceptsV_checked {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B D : Type} {I : Inner} {Cm : Type}
     {ish : RecVStar.Inner} {cs : List (Cm × I.Coin) → Option Flock.RecVStar.InnerCommits}
@@ -65,15 +67,17 @@ theorem acceptsV_checked {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B D : Type} {I
     {zr : A → B → List (Cm × I.Coin) → D → (j : Fin S) → (Vs j).OuterR Reg'} {hC : Flock.Premises.RecordCustody zr}
     {h : Typed zr} {R : A} {ω : B} {t : List (Cm × I.Coin)} {dg : ByteArray → ByteArray} {N : ℕ}
     {o : D × VRec Vs Reg' dg N} (hlen : I.r ≤ t.length) (hall : ∀ j, (zr R ω t o.1 j).Typable)
+    (hw : ∀ j, (Flock.Guarantees.custodied zr hC h R ω t o.1 j).Writes (o.2 j).2.1 (o.2 j).2.2.2)
     (hv : AcceptsV (Flock.Guarantees.custodied zr hC h R ω t) o)
     (hchk : Flock.Guarantees.ChecksVR ish (cs t) (coins t) bind rows (zr R ω t) o) :
     AcceptsV (Flock.Guarantees.checkedC3 ish cs coins bind rows zr hC h R ω t) o := by
   intro j
-  have hp : ∃ t', AcceptsZKR (Flock.Guarantees.custodied zr hC h R ω t o.1 j).I
+  have hp : ∃ R' t', (Flock.Guarantees.custodied zr hC h R ω t o.1 j).Writes R' t' ∧
+      AcceptsZKR (Flock.Guarantees.custodied zr hC h R ω t o.1 j).I
       (Flock.Guarantees.custodied zr hC h R ω t o.1 j).own t' ∧
       (I.r ≤ t.length ∧ Flock.Guarantees.ChecksC3 ish (cs t) (coins t) j (bind j) rows
         (Flock.Guarantees.custodied zr hC h R ω t o.1 j).I (Flock.Guarantees.custodied zr hC h R ω t o.1 j).own t') := by
-    refine ⟨(o.2 j).2.2.2, hv j, hlen, ?_⟩
+    refine ⟨(o.2 j).2.1, (o.2 j).2.2.2, hw j, hv j, hlen, ?_⟩
     dsimp only [Flock.Guarantees.custodied]
     rw [zsOf_pos zr _ h R ω t o.1 j (hall j)]
     exact hchk j
@@ -91,7 +95,7 @@ theorem acceptsZKR_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'}
       FlockSoundness.Discharge.Exec.Transcript → Prop} {t : FlockSoundness.Discharge.Exec.Transcript}
     (h : AcceptsZKR (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own t) :
     AcceptsZKR z.I z.own t := by
-  by_cases hp : ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t
+  by_cases hp : ∃ R' t, z.Writes R' t ∧ AcceptsZKR z.I z.own t ∧ P z.I z.own t
   · rw [own_keepOwn z P hp] at h
     exact h
   · have hf : (Flock.Guarantees.keepOwn z P).own = freshOwn Q.c := ite_eq_right hp
@@ -207,9 +211,9 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
             hCust hT) dg N k Rw wmsg
           (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
             hCust hT σ) cap o.1 o.2.1))
-      (fun o ho => ho.2.1) (fun o hlen hall ho =>
+      (fun o ho => ho.2.1) (fun o hlen hall hw ho =>
         ⟨acceptsV_checked (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2) hlen.ge hall
-          (verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2).1 ho.2.2.1,
+          hw (verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2).1 ho.2.2.1,
           ho.2.2.2⟩)) hb)))))))
 
 /-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
