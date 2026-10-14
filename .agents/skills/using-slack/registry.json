@@ -58,6 +58,9 @@
         "tools/research/",
         "benchmarks/judge.py",
         ".cursor/"
+      ],
+      "branch_suffixes": [
+        "558b"
       ]
     },
     {
@@ -78,6 +81,9 @@
         "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
+      ],
+      "branch_suffixes": [
+        "95d4"
       ]
     },
     {
@@ -112,6 +118,9 @@
         "integrations/vllm/tests/properties/",
         "integrations/vllm/tests/check/test_capture_map.py",
         "integrations/vllm/tests/check/test_capture_map_versions.py"
+      ],
+      "branch_suffixes": [
+        "8c79"
       ]
     },
     {
@@ -145,6 +154,9 @@
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py"
+      ],
+      "branch_suffixes": [
+        "e3fa"
       ]
     },
     {
@@ -171,6 +183,9 @@
         "benchmarks/kv_filler/",
         "benchmarks/remote_session/",
         "integrations/vllm/verity_vllm/protocol_options/pous.py"
+      ],
+      "branch_suffixes": [
+        "3cf5"
       ]
     },
     {
@@ -187,6 +202,9 @@
         "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/"
+      ],
+      "branch_suffixes": [
+        "728f"
       ]
     },
     {
@@ -211,6 +229,9 @@
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py"
+      ],
+      "branch_suffixes": [
+        "4292"
       ]
     },
     {
@@ -225,6 +246,9 @@
         "tools/lean/",
         ".agents/skills/lean-proofs/",
         "Security/"
+      ],
+      "branch_suffixes": [
+        "741b"
       ]
     },
     {
@@ -239,6 +263,9 @@
         "tools/research/src/research/slack.py",
         "tools/research/tests/test_slack.py",
         "tools/research/tests/slack_routing_vectors.json"
+      ],
+      "branch_suffixes": [
+        "b252"
       ]
     },
     {
@@ -248,7 +275,9 @@
       "charter": "Daniel",
       "usergroup": "S0C977GL9R7",
       "linear": "TOP",
-      "branch_suffixes": ["c3b2"],
+      "branch_suffixes": [
+        "c3b2"
+      ],
       "owns": [
         "AGENTS.md",
         "README.md",
