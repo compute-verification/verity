@@ -86,6 +86,10 @@ NEW_SLICE = dict(
 )
 
 
+MODEL = "claude-opus-5-5"
+EFFORT = "high"
+
+
 def agent_id(handle: str, generation: int) -> str:
     return f"bc-{uuid.uuid5(NAMESPACE, f'{handle}/{generation}')}"
 
@@ -167,8 +171,7 @@ def launch(args: argparse.Namespace) -> None:
         # No PR gate on coordinators (Daniel, 14 Oct 11:34 AM PDT): leave PR creation to the team's
         # "Create PRs" setting instead of pinning it off per run.
     }
-    if args.model:
-        body["model"] = {"id": args.model}
+    body["model"] = {"id": args.model, "params": [{"id": "effort", "value": args.effort}]}
     if args.dry_run:
         print(json.dumps(body, indent=2))
         return
@@ -203,7 +206,8 @@ def main() -> None:
     src.add_argument("--charter-from", help="a new slice: the charter author's agent id (reads artifacts/charter-HANDLE.md)")
     q.add_argument("--pairing-thread", required=True, help="ts of the handover or launch thread in #agent-coordination")
     q.add_argument("--generation", type=int, help="default: 2 for a successor, 1 for a new slice")
-    q.add_argument("--model", help="a model id from GET /v1/models; default: Daniel's default model")
+    q.add_argument("--model", default=MODEL, help=f"a canonical model id from GET /v1/models; default {MODEL} (Daniel, 14 Oct: coordinators run Opus 5.5 High, never the account default)")
+    q.add_argument("--effort", default=EFFORT, help=f"the model's effort parameter; default {EFFORT}")
     q.add_argument("--text-file", help="read the handoff or charter from this file instead of the author's artifacts")
     q.add_argument("--dry-run", action="store_true", help="print the create request and send nothing")
     q.set_defaults(fn=launch)
