@@ -15,7 +15,7 @@ what the part sessions' reads files and registrants hold there:
 * `outCol_committed`, `outColAt_stackCol`: a copy's gate at a returned output's column is committed (it is an output of
   the program's circuit, `Layout.outsOf`), the committed conjunct of `RegOut`;
 * `PartOutCols`, `ZeroReads`: each part's `out` columns are its leaf's returned output (the parse), and the gates there
-  are registered reads whose registrant's bit is 0 (`rec-residuals-zero`, `Recursion.zero_tie` off `ValueColl`);
+  are registered reads whose registrant's bit is 0 (`rec-residuals-zero`, `Recursion.zero_regOut` off `ValueColl`);
 * `hZeroL_of`: `HZeroL` from those (`copyVal_regOut` in the accepted `Good` layer).
 -/
 
@@ -188,7 +188,8 @@ def PartOutCols : Prop :=
 
 /-- Obligation: discharged, off `ValueColl`, by check 5's `checkZero` (`checkResiduals` holds the part's `out` to the
 zero rows `rec-residuals-zero` under `zeroSalt`, `rec_residuals.zero_salts`): `Recursion.zero_tie` gives the
-registrant's bits at the `out` read `(u, q)` as 0, and the read is the gate's at its position (`rowOfH`, open).
+registrant's bits at the `out` read `(u, q)` as 0, and `Recursion.zero_regOut` the gate at each `out` column as that
+read's bit (`rowOfH`, at V*'s part output layout `Recursion.PartOutsLaid`, a fact of the parse as `PartOutCols`).
 **A part's `out` gates are registered reads of zero bits.** At an accepted outer proof, the gate of rep `r`'s copy of
 part `p` at each `out` column is at a registered read, and the registrant's bit there is 0. -/
 def ZeroReads : Prop :=
