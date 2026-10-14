@@ -11,18 +11,19 @@ from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
-from verity_vllm.program.frontend.rules.vllm_iface import iface
+from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity_vllm.program.registry.fp8 import QUANT_GROUPS, weight_blocks
 
 
 # -- [R15 fp8] block-scaled FP8 linears: vLLM's sm_90 default dynamic route, and the explicit CUTLASS route ------------------------------
 
 FP8_E4M3 = torch.float8_e4m3fn
-#: the quant op's pinned scalars (`per_token_group_quant_fp8(..., group_size=128, eps=1e-10, dtype=e4m3, use_ue8m0=False)` as vLLM's
-#: `QuantFP8(group_shape=(1, 128), use_ue8m0=False)` calls it for `CutlassFp8BlockScaledMMKernel`); the Definition `Fp8GroupQuant_v1{K,G}`
-#: hard-codes eps and the e4m3 range, so a launch with other values is refused (another kernel configuration, not this Definition).
+#: the quant op's pinned scalars (`per_token_group_quant_fp8(..., group_size=128, eps=1e-10, dtype=e4m3)` as vLLM calls it for
+#: `CutlassFp8BlockScaledMMKernel` and the block-FP8 Triton experts); the Definitions `Fp8GroupQuant_v1{K,G}` and
+#: `Fp8GroupQuantUe8m0_v1{K,G}` hard-code eps and the e4m3 range, so a launch with other values is refused (another kernel
+#: configuration, not these Definitions).  `use_ue8m0` is not pinned: it selects between the two Definitions.
 #: `group_size` is the blockwise GEMM's block; the quant takes any of `fp8.QUANT_GROUPS`.
-FP8_QUANT_PINS = {"group_size": 128, "eps": 1e-10, "fp8_min": -448.0, "fp8_max": 448.0, "use_ue8m0": False}
+FP8_QUANT_PINS = {"group_size": 128, "eps": 1e-10, "fp8_min": -448.0, "fp8_max": 448.0}
 
 
 def _f32_equal(a, b: float) -> bool:
@@ -122,7 +123,9 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
 
 class PerTokenGroupFp8QuantRule(InPlaceRule):
     """`_C.per_token_group_fp8_quant(x bf16 [.., K], x_q! e4m3 [.., K], x_s! f32 [.., K/G], G, eps, fp8_min, fp8_max, use_ue8m0,
-    column_major_scales, tma_aligned_scales)` -> `fp8_group_quant{K,G}` (Fp8GroupQuant_v1) per token row; BOTH allocations are rebound
+    column_major_scales, tma_aligned_scales)` -> `fp8_group_quant{K,G}` (Fp8GroupQuant_v1), or under `use_ue8m0=True` (power-of-two
+    scales, what `moe_kernel_quantize_input` passes for the block-FP8 Triton experts when DeepGEMM is on, vLLM's sm_90 default)
+    `fp8_group_quant_ue8m0{K,G}` (Fp8GroupQuantUe8m0_v1), per token row; BOTH allocations are rebound
     (`x_q` to port 0, `x_s` to port 1).  `x_s` is usually a permuted view of its allocation (column-major scales): the view node is what the
     GEMM reads, so the view node is rebound (AllocView v2).  The scale layout / TMA alignment flags are storage facts, not values."""
     modes = frozenset({"profile"})
@@ -130,12 +133,14 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
                     applies_to="_C.per_token_group_fp8_quant(x, Tensor! x_q, Tensor! x_s, group_size, eps, fp8_min, fp8_max, use_ue8m0, column_major_scales, tma_aligned_scales)",
                     preconditions=("x is bf16 [.., K] with K % group_size == 0", "x_q is an unwritten allocation float8_e4m3fn [.., K]",
                                    "x_s is an unwritten allocation (or a view of one) f32 [.., K/group_size]",
-                                   "group_size in fp8.QUANT_GROUPS (64, 128), eps == 1e-10f, fp8_min/max == -448/448, use_ue8m0 == False "
-                                   "(the pinned Definition)"),
-                    evidence_domain="structural; numerics: Fp8GroupQuant_v1 (exact-model-tested on the H100 against _C.per_token_group_fp8_quant)")
+                                   "group_size in fp8.QUANT_GROUPS (64, 128), eps == 1e-10f, fp8_min/max == -448/448",
+                                   "use_ue8m0 selects the Definition: False -> Fp8GroupQuant_v1, True -> Fp8GroupQuantUe8m0_v1"),
+                    evidence_domain="structural; numerics: Fp8GroupQuant_v1 (exact-model-tested on the H100 against _C.per_token_group_fp8_quant); "
+                                    "Fp8GroupQuantUe8m0_v1 (registry.deepgemm: tests/properties/deepgemm_sm90_capture_gpu.py is its hardware check, "
+                                    "and tests/properties/glm53_block_fp8_capture_gpu.py compares it at the MoE shapes)")
 
     def targets(self):
-        return _C_op("per_token_group_fp8_quant")
+        return _C_op("per_token_group_fp8_quant") | targets_for("per_token_group_fp8_quant")
 
     @staticmethod
     def _scalars(node) -> dict:
@@ -160,8 +165,6 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
         for key in ("eps", "fp8_min", "fp8_max"):
             if not _f32_equal(a[key], FP8_QUANT_PINS[key]):
                 return f"numerics_unregistered: {key}={a[key]!r} differs from the pinned {FP8_QUANT_PINS[key]!r} (another kernel configuration)"
-        if bool(a.get("use_ue8m0", False)):
-            return "numerics_unregistered: use_ue8m0=True (power-of-two scales, the DeepGEMM path) has no registered Definition"
         for name in ("x_q", "x_s"):
             if not isinstance(ctx.val(a[name]), Alloc):
                 return f"{name} is not an unwritten allocation ({type(ctx.val(a[name])).__name__})"
@@ -179,7 +182,7 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
         a = self._scalars(node)
         rows, lead = rows_of(ctx.coll(a["x"]))
         K, G = rows[0].type.n, int(a["group_size"])
-        fn = ctx.kind("fp8_group_quant", node, K=K, G=G)
+        fn = ctx.kind("fp8_group_quant_ue8m0" if bool(a.get("use_ue8m0", False)) else "fp8_group_quant", node, K=K, G=G)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(a["x_q"], from_rows([o[0] for o in outs], lead), self, what="x_q")
         ctx.rebind(a["x_s"], from_rows([o[1] for o in outs], lead), self, what="x_s")

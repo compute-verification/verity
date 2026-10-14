@@ -3,11 +3,16 @@
 * `_moe_C.grouped_topk` (`GroupedTopkRule`) derives to `MoeRouterSigmoidBias_v1{E,TOPK,SCALE,KERNEL}` per token row, KERNEL the launch
   `registry.moe.router_kernel` picks, with the bias as a weight Input; another grouping, scoring or an unpinned launch refuses by name;
 * `_C.silu_and_mul_per_block_quant` (`SiluAndMulPerBlockQuantRule`) derives to `SiluMulFp8BlockQuant_v1{I,G}` per row, equal to its twin;
+* `_C.per_token_group_fp8_quant` (`PerTokenGroupFp8QuantRule`) derives to `Fp8GroupQuant_v1{K,G}` per row -- and with `use_ue8m0=True`
+  (what `moe_kernel_quantize_input` passes when DeepGEMM is on, vLLM's sm_90 default) to `Fp8GroupQuantUe8m0_v1{K,G}`
+  (registry.deepgemm) -- each equal to its twin;
 * on cc 9.0 without batch invariance a block-FP8 `fused_moe_kernel` launch derives to
   `MoeExpertFp8Gemm(W)_v1{...,KB,SWAP,DOT}` with #1944's tile-dependent MMAv2/QGMMA step, and a SWAP_AB that is not
   `enable_swap_ab` refuses by name;
 * the chain router -> w13 -> fused activation quant -> w2, as `TritonExperts` runs it for GLM-5.3-FP8, derives in one Program whose
-  words are the twins' on the routed experts."""
+  words are the twins' on the routed experts;
+* the same chain from the bf16 hidden states through the ue8m0 input quant (the whole `mlp.experts` step of the Build at vLLM's
+  defaults) derives in one Program whose words are the twins'."""
 from __future__ import annotations
 
 import json
@@ -185,6 +190,51 @@ def test_each_activation_pin_refuses_by_name(kw, needle, on_target):
     assert "SiluAndMulPerBlockQuant[vllm-moe]_v1" in hint and needle in hint, hint
 
 
+# -- the input quant (`moe_kernel_quantize_input`'s `_C.per_token_group_fp8_quant` launch) -------------------------------------
+
+
+class _InputQuant(nn.Module):
+    """`_C.per_token_group_fp8_quant` on the bf16 hidden states, as `moe_kernel_quantize_input` launches it for the block-FP8
+    Triton experts: `use_ue8m0 = is_deep_gemm_e8m0_used()`, True at vLLM's sm_90 defaults."""
+
+    def __init__(self, ue8m0: bool, group: int = G, eps: float = 1e-10) -> None:
+        super().__init__()
+        self.ue8m0, self.group, self.eps = ue8m0, group, eps
+
+    def forward(self, x):
+        rows, k = x.shape
+        q = torch.empty(rows, k, dtype=F8)
+        s = torch.empty(rows, k // self.group, dtype=torch.float32)
+        torch.ops.vllm_iface.per_token_group_fp8_quant(x, q, s, self.group, self.eps, -448.0, 448.0, self.ue8m0, False, False)
+        return q, s
+
+
+@pytest.mark.parametrize("ue8m0,family", [(False, "Fp8GroupQuant_v1"), (True, "Fp8GroupQuantUe8m0_v1")])
+def test_per_token_group_fp8_quant_derives_one_row_form_per_row_equal_to_the_twin(ue8m0, family, on_target):
+    from verity_vllm.program.kernels.deepgemm_twins import ue8m0_group_quant_row
+    from verity_vllm.program.kernels.derived_rows import fp8_group_quant_row
+
+    on_target(H200)
+    x = _bf16(np.random.default_rng(6), M, 2 * G)
+    rep = _derive(_InputQuant(ue8m0), (x,))
+    assert rep.program is not None, rep.unsupported
+    assert _ids(rep) == [f"{family}{{K={2 * G},G={G}}}"] * M
+    got = _run(rep, _InputQuant(ue8m0), (x,))
+    twin = ue8m0_group_quant_row if ue8m0 else fp8_group_quant_row
+    want_q, want_s = [], []
+    for r in np.array(_words(x), dtype=np.uint16).reshape(M, 2 * G):
+        q, s = twin(r, G=G)
+        want_q += q.tolist()
+        want_s += s.tolist()
+    assert got == want_q + want_s
+
+
+def test_an_unpinned_quant_eps_refuses_by_name(on_target):
+    on_target(H200)
+    hint = _hint(_derive(_InputQuant(True, eps=1e-6), (_bf16(np.random.default_rng(6), M, 2 * G),)))
+    assert "PerTokenGroupFp8Quant[vllm]_v1: numerics_unregistered: eps=1e-06" in hint, hint
+
+
 # -- the expert launches on a tuned Hopper tile, and the chain ---------------------------------------------------------------
 
 
@@ -335,6 +385,57 @@ def test_the_fp8_expert_rule_binds_1944s_dot_across_the_served_envelope(on_targe
         assert all(fn.endswith(f",DOT={want}}}") for fn in _ids(rep)), (m, _ids(rep))
         swap = config["BLOCK_SIZE_M"] < 64 and config["BLOCK_SIZE_N"] >= 64
         assert calls and set(calls) == {(config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"], config["num_warps"], swap)}
+
+
+class _ExpertsDefault(nn.Module):
+    """The whole `mlp.experts` step at vLLM's sm_90 defaults, from the bf16 hidden states: `moe_kernel_quantize_input`'s ue8m0
+    `_C.per_token_group_fp8_quant`, then the `_Experts` chain (router -> w13 -> fused activation quant -> w2)."""
+
+    def __init__(self, tiles: dict = TUNED) -> None:
+        super().__init__()
+        self.experts = _Experts(tiles)
+
+    def forward(self, logits, x):
+        rows, k = x.shape
+        xq = torch.empty(rows, k, dtype=F8)
+        sx = torch.empty(rows, k // G, dtype=torch.float32)
+        torch.ops.vllm_iface.per_token_group_fp8_quant(x, xq, sx, G, 1e-10, -448.0, 448.0, True, False, False)
+        return self.experts(logits, xq, sx)
+
+
+def test_the_default_experts_chain_with_the_ue8m0_input_quant_derives_in_one_program_equal_to_the_twins(on_target):
+    """The refusal of the GLM-5.3 rank-0 derive at layer 3's `mlp.experts` (`_C.per_token_group_fp8_quant(use_ue8m0=True)` had no
+    registered Definition) cleared: the step's whole chain derives, its input quant `Fp8GroupQuantUe8m0_v1` per token row, and the
+    Program's words are the twins'."""
+    from verity_vllm.program.kernels.deepgemm_twins import ue8m0_group_quant_rows
+
+    on_target(H200)
+    logits, x = _logits(E), _bf16(np.random.default_rng(7), M, H)
+    m = _ExpertsDefault()
+    rep = _derive(m, (logits, x))
+    assert rep.program is not None, rep.unsupported
+    router = bind(MOE.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL="warp")
+    assert _ids(rep) == ([f"Fp8GroupQuantUe8m0_v1{{K={H},G={G}}}"] * M + [router.id] * M
+                         + [f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV
+                         + [f"SiluMulFp8BlockQuant_v1{{I={I},G={G}}}"] * NV
+                         + [f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV)
+    got = [w & 0xFFFF for w in _run(rep, m, (logits, x))]
+    me = m.experts
+    bias = _words(me.bias)
+    routes = [list(evaluate(router, _words(logits[r]), bias)) for r in range(M)]
+    gw = [int(w) for r in routes for w in r[:TOPK]]
+    ids = [int(i) for r in routes for i in r[TOPK:]]
+    xq, sx = ue8m0_group_quant_rows(np.array(_words(x), dtype=np.uint16).reshape(M, H), G=G)
+    w13, w13s, w2, w2s = (_np(t) for t in (me.w13, me.w13_s, me.w2, me.w2_s))
+    up = np.stack([moe_expert_fp8_block_row(xq[p // TOPK], sx[p // TOPK], w13[ids[p]], w13s[ids[p]], G=G, KB=128, swap=True)[0]
+                   for p in range(NV)])
+    q, s = silu_mul_fp8_block_quant_rows(up.astype(np.uint16), G=G)
+    want = []
+    for p in range(NV):
+        words, nonfin = moe_expert_fp8_block_row(q[p], s[p], w2[ids[p]], w2s[ids[p]], G=G, KB=128, swap=True, g=gw[p])
+        assert not nonfin.any()
+        want += words.tolist()
+    assert got == want
 
 
 def test_the_routed_experts_chain_derives_in_one_program_equal_to_the_twins(on_target):

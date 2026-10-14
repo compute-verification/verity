@@ -14,6 +14,8 @@ Schemas (from vllm/csrc/torch_bindings.cpp, `d9105ea80`):
     silu_and_mul(Tensor! result, Tensor input) -> ()
     gelu_tanh_and_mul(Tensor! out, Tensor input) -> ()
     silu_and_mul_per_block_quant(Tensor! out, Tensor input, Tensor! scales, int group_size, Tensor? scale_ub, bool is_scale_transposed) -> ()
+    per_token_group_fp8_quant(Tensor input, Tensor! output_q, Tensor! output_s, int group_size, float eps, float fp8_min,
+                              float fp8_max, bool scale_ue8m0, bool column_major_scales, bool tma_aligned) -> ()
 and of `_moe_C` (vllm/csrc/moe/torch_bindings.cpp; the call `_custom_ops.grouped_topk` makes):
     grouped_topk(Tensor scores, int n_group, int topk_group, int topk, bool renormalize, float routed_scaling_factor, Tensor bias,
                  int scoring_func) -> (Tensor, Tensor)
@@ -50,6 +52,13 @@ _define_once("gelu_tanh_and_mul(Tensor(a!) out, Tensor input) -> ()", "gelu_tanh
 _define_once("silu_and_mul_per_block_quant(Tensor(a!) out, Tensor input, Tensor(b!) scales, int group_size, Tensor? scale_ub, "
              "bool is_scale_transposed) -> ()", "silu_and_mul_per_block_quant",
              lambda out, input, scales, group_size, scale_ub, is_scale_transposed: None)
+# `_C.per_token_group_fp8_quant` (vllm/csrc/torch_bindings.cpp): the per-group activation quant of the block-FP8 linears and the
+# block-FP8 Triton experts' input (`moe_kernel_quantize_input` -> `per_token_group_quant_fp8`, which passes `use_ue8m0 =
+# is_deep_gemm_e8m0_used()`: True at vLLM's sm_90 defaults).
+_define_once("per_token_group_fp8_quant(Tensor input, Tensor(a!) output_q, Tensor(b!) output_s, int group_size, float eps, "
+             "float fp8_min, float fp8_max, bool scale_ue8m0, bool column_major_scales, bool tma_aligned) -> ()",
+             "per_token_group_fp8_quant",
+             lambda input, output_q, output_s, group_size, eps, fp8_min, fp8_max, scale_ue8m0, column_major_scales, tma_aligned: None)
 _define_once("grouped_topk(Tensor scores, int n_group, int topk_group, int topk, bool renormalize, float routed_scaling_factor, "
              "Tensor bias, int scoring_func=0) -> (Tensor, Tensor)", "grouped_topk",
              lambda scores, n_group, topk_group, topk, renormalize, routed_scaling_factor, bias, scoring_func=0:

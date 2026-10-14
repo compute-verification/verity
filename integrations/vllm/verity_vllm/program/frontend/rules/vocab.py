@@ -421,6 +421,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`; FP8_DOT, given on a target whose blockwise step is not Hopper's
            # (`frontend.targets.fp8_block_dot`), binds the version 3 forms over it (the role and its note stay as they were).
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
+           # the same op with `use_ue8m0=True` (power-of-two scales), what `moe_kernel_quantize_input` launches for the block-FP8
+           # Triton experts when DeepGEMM is on (vLLM's sm_90 default): registry.deepgemm's quant, `DeepGemmFp8Linear_v1`'s own
+           "fp8_group_quant_ue8m0": lambda K, G: ir_bind(_deepgemm.Fp8GroupQuantUe8m0, K=K, G=G),
            "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8_vocab.block_gemm(K, N, G, SCALE, FP8_DOT),
            "flashinfer_fp8_linear": lambda K, N: ir_bind(_deepgemm.FlashInferFp8Linear, K=K, N=N),
            "deepgemm_fp8_linear": lambda K, N: ir_bind(_deepgemm.DeepGemmFp8Linear, K=K, N=N),
@@ -505,6 +508,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "embedding_shard": "EmbeddingShard_v1{VS,H,START}: one rank of VocabParallelEmbedding — shard[id-START] if START<=id<START+VS else 0 (b1_tp2)",
            "fp8_group_quant": "Fp8GroupQuant_v1{K,G}: _C.per_token_group_fp8_quant on one bf16 row -> (x_q e4m3[K], x_s f32[K/G]); per group absmax fmaxf-fold "
                               "from eps 1e-10, s = absmax/448 (div.rn), q = e4m3(clamp(f32(x)/s, ±448)); both outputs computed",
+           "fp8_group_quant_ue8m0": "Fp8GroupQuantUe8m0_v1{K,G}: _C.per_token_group_fp8_quant(use_ue8m0=True) on one bf16 row -> (x_q e4m3[K], "
+                                    "x_s f32[K/G]); s = Fp8Ue8m0Ceil_v1 of the group's absmax/448 (the power of two at or above it), "
+                                    "q = e4m3(clamp(f32(x)/s, ±448)); both outputs computed (registry.deepgemm)",
            "scaled_mm_fp8_block": "ScaledMmFp8BlockSharedScale_v1{K,N,G} (SCALE shared-per-block) or ScaledMmFp8Block_v1{K,N,G} (per-coordinate): blockwise "
                                   "_C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x HopperE4m3QgmmaDot32 from +0, "
                                   "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "

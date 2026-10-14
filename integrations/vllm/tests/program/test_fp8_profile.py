@@ -160,11 +160,14 @@ def quant_args(**over):
     return [a["x"], a["xq"], a["xs"], a["G"], a["eps"], a["lo"], a["hi"], a["ue8m0"], a["col"], a["tma"]]
 
 
-def test_per_token_group_quant_resolves_to_the_registered_family_with_both_outputs():
+@pytest.mark.parametrize("ue8m0, family", [(False, "Fp8GroupQuant_v1"), (True, "Fp8GroupQuantUe8m0_v1")])
+def test_per_token_group_quant_resolves_to_the_registered_family_with_both_outputs(ue8m0, family):
+    """`scale_ue8m0` selects the Definition: False the pinned Fp8GroupQuant_v1, True the power-of-two-scale Fp8GroupQuantUe8m0_v1
+    (registry.deepgemm, what `moe_kernel_quantize_input` launches on sm_90 with DeepGEMM at its default)."""
     ctx = _ctx()
-    r = PerTokenGroupFp8Quant(group=G).match(_node("_C.per_token_group_fp8_quant.default", QUANT_SCHEMA, quant_args()), ctx)
+    r = PerTokenGroupFp8Quant(group=G).match(_node("_C.per_token_group_fp8_quant.default", QUANT_SCHEMA, quant_args(ue8m0=ue8m0)), ctx)
     assert isinstance(r, Compute)
-    assert spec_label(r.spec) == f"Fp8GroupQuant_v1{{K={K},G={G}}}"
+    assert spec_label(r.spec) == f"{family}{{K={K},G={G}}}"
     assert r.rows == M and len(r.operands) == 1 and isinstance(r.operands[0], PerRow)
     assert len(r.outputs) == 2 and all(isinstance(o, PerRow) for o in r.outputs)
     assert r.outputs[0].view.dtype == "float8_e4m3fn" and r.outputs[1].view.shape == (M, K // G)
@@ -172,7 +175,7 @@ def test_per_token_group_quant_resolves_to_the_registered_family_with_both_outpu
 
 
 @pytest.mark.parametrize("over, why", [
-    ({"G": 64}, "group size"), ({"eps": 1e-6}, "knobs"), ({"hi": 224.0}, "knobs"), ({"ue8m0": True}, "knobs"),
+    ({"G": 64}, "group size"), ({"eps": 1e-6}, "knobs"), ({"hi": 224.0}, "knobs"),
     ({"xs": view(A_XS, (M, K // 64), "float32")}, "[M, K/G]"),
     ({"xq": view(A_XQ, (M, K), "float8_e5m2")}, "e4m3"),
 ])

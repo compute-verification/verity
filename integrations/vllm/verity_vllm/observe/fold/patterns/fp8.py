@@ -20,7 +20,8 @@ torch._scaled_mm on Ada, DeepGEMM, its own blockwise CUTLASS kernel), which has 
 looser comparison (COORD 6).
 
 Everything the kernels take as a knob that changes VALUES is pinned (`group_size == G`, `eps == 1e-10`, `fp8_min/max == -+448`,
-`scale_ue8m0 == False`, no bias); the layout knobs (`column_major_scales`, `tma_aligned`) only change the scale tensor's strides,
+no bias), except `scale_ue8m0`, which selects the quant Definition (`Fp8GroupQuantUe8m0_v1` under power-of-two scales, the
+DeepGEMM-default branch); the layout knobs (`column_major_scales`, `tma_aligned`) only change the scale tensor's strides,
 which the views carry.  The two weight operands of the GEMM are named per operand (`Compute.roots`) so the comparator can map each
 weight range to its own field.
 """
@@ -65,10 +66,12 @@ def _arg(a: dict[str, Any], *names: str, pos: int) -> Any:
 @dataclass
 class PerTokenGroupFp8Quant:
     """`_C.per_token_group_fp8_quant` (csrc/quantization/fp8/per_token_group_quant.cu, `per_token_group_quant_8bit_kernel`) on a
-    bf16 `[M, K]` activation: per row and per G-wide group, `s = fmaxf-fold(eps, |f32(x)|) / 448`, `q = e4m3(clamp(f32(x) / s))`;
-    both outputs are materialised (`x_q` e4m3 `[M, K]`, `x_s` f32 `[M, K/G]`, column-major when vLLM asks for it).  `group` is the G
-    this instance resolves (the checkpoint's weight block for the dense linears, the refined block inside a fused-MoE scope), one of
-    `fp8.QUANT_GROUPS`; a launch at another G is refused."""
+    bf16 `[M, K]` activation: per row and per G-wide group, `s = fmaxf-fold(eps, |f32(x)|) / 448` -- under `scale_ue8m0` rounded up
+    to a power of two (`SCALE_UE8M0=true`, the DeepGEMM-default branch `moe_kernel_quantize_input` takes on sm_90) -- and
+    `q = e4m3(clamp(f32(x) / s))`; both outputs are materialised (`x_q` e4m3 `[M, K]`, `x_s` f32 `[M, K/G]`, column-major when vLLM
+    asks for it).  Resolves `Fp8GroupQuant_v1{K,G}`, or `Fp8GroupQuantUe8m0_v1{K,G}` (registry.deepgemm) under `scale_ue8m0`.
+    `group` is the G this instance resolves (the checkpoint's weight block for the dense linears, the refined block inside a
+    fused-MoE scope), one of `fp8.QUANT_GROUPS`; a launch at another G is refused."""
 
     group: int
     name: str = "fp8.per_token_group_fp8_quant"
@@ -90,9 +93,9 @@ class PerTokenGroupFp8Quant:
             return unsupported(node, "group size differs from the group this pattern resolves", group_size=G, pinned=self.group)
         if G not in fp8.QUANT_GROUPS:
             return unsupported(node, "group size is not one Fp8GroupQuant_v1 is registered at", group_size=G, registered=list(fp8.QUANT_GROUPS))
-        if eps != QUANT_EPS or lo != -FP8_MAX or hi != FP8_MAX or bool(ue8m0):
-            return unsupported(node, "quantisation knobs differ from the registered Fp8GroupQuant_v1 (eps 1e-10, [-448, 448], no ue8m0)",
-                               eps=eps, fp8_min=lo, fp8_max=hi, scale_ue8m0=ue8m0)
+        if eps != QUANT_EPS or lo != -FP8_MAX or hi != FP8_MAX:
+            return unsupported(node, "quantisation knobs differ from the registered Fp8GroupQuant_v1 (eps 1e-10, [-448, 448])",
+                               eps=eps, fp8_min=lo, fp8_max=hi)
         if x.rank != 2 or not is_row_major(x) or xq.shape != x.shape or not is_row_major(xq):
             return unsupported(node, "input / output_q are not row-major [M,K] views of one shape", x=repr(x), xq=repr(xq))
         M, K = x.shape
@@ -102,7 +105,12 @@ class PerTokenGroupFp8Quant:
             return unsupported(node, "output_s is not a [M, K/G] view", xs=repr(xs), M=M, K=K, G=G)
         if not (x.dtype == "bfloat16" and xq.dtype == E4M3 and xs.dtype == "float32"):
             return unsupported(node, "Fp8GroupQuant_v1 is bf16 -> (e4m3, f32)", dtypes=[x.dtype, xq.dtype, xs.dtype])
-        return Compute(bind(fp8.Fp8GroupQuant, K=K, G=G), M, (PerRow(x),), (PerRow(xq), PerRow(xs)), (node.id,),
+        if bool(ue8m0):
+            from verity_vllm.program.registry import deepgemm  # noqa: PLC0415  (loaded only on the ue8m0 branch)
+            spec = bind(deepgemm.Fp8GroupQuantUe8m0, K=K, G=G)
+        else:
+            spec = bind(fp8.Fp8GroupQuant, K=K, G=G)
+        return Compute(spec, M, (PerRow(x),), (PerRow(xq), PerRow(xs)), (node.id,),
                        hint=hint_of(node, "fp8_quant"), kernels=("per_token_group_quant_8bit_kernel",),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
 
