@@ -15,6 +15,7 @@ import Proofs.Flock.C3.Compose.Custody
 import Proofs.Flock.C3.Compose.DecodeFix
 import Proofs.Flock.C3.Compose.HoloStageCoins
 import Proofs.Flock.C3.Compose.LaterHeld
+import Proofs.Flock.C3.Compose.LaterHeldW
 import Proofs.Flock.C3.Compose.HoloCoinTys
 import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.Compose.HoloStreamSizes
@@ -28,6 +29,7 @@ import Proofs.Flock.C3.Sparse.SrcLayer
 import Proofs.Flock.C3.Sparse.SessionAt
 import Proofs.Flock.C3.Sparse.SrcEnd
 import Proofs.Flock.C3.Sparse.MsgsRead
+import Proofs.Flock.C3.Sparse.SrcSessions
 import Proofs.Flock.C3.Sparse.MsgsLayers
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
