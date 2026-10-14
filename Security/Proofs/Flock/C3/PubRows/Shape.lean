@@ -515,7 +515,3 @@ theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk 
 end Family
 
 end FlockC3.PubRows
-
-#print axioms FlockC3.PubRows.checks_of_keepOwn
-#print axioms FlockC3.PubRows.checksAccepted_checked
-#print axioms FlockC3.PubRows.checksReached_checked

@@ -98,8 +98,3 @@ theorem leaves_sessions {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} (zs : (j 
     (zs j).Writes o.1 o.2.2) fun j => (zs j).leaves_game dg N
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms FlockSoundness.Game.Leaves.outcome
-#print axioms FlockSoundness.Discharge.Recursion.leaves_seqC
-#print axioms FlockSoundness.Discharge.Recursion.ZkOuter.leaves_game
-#print axioms FlockSoundness.Discharge.Recursion.leaves_sessions

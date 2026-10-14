@@ -15,7 +15,12 @@ that plays the recursive audit once and outputs its pair (`valueFinder`, `Recurs
 * `VRead`, `ValueSrc`: a read of V*'s sessions, and the verifier's rows and salts at each; `valueAt`, `ValueColl`,
   `valuePick`, `valueFinder`: `valueColl` at a read, some registered read where it collides, and the finder;
 * `stackedCoefRows`, `stackedDirsRows`, `stackedLevels`, `openingVRows`, `valueRows`, `valueSrcC3`: the source
-  `RecursiveAuditC3At` reads, the rows check 5 registers itself (their ties: `Recursive/ValueSource.lean`).
+  `RecursiveAuditC3At` reads, the rows check 5 registers itself (their ties: `Recursive/ValueSource.lean`);
+* `openRows`, `residualRows`, `sparseRows` (with `innerLevels`, `openCoef`, `openDirs`, `residualGroups`,
+  `residualRowsOf`, `sparseRange`, `sparseRowsOf`), `innerRows`, `loadRows`, `valueRowsAll`, `valueSrcAll`: `valueSrcC3`
+  with the rows check 5 registers at the units it checks against the inner session (`src t`, `RecCoins.check`'s
+  `files`): `coef` and `dirs` at `rec-open`, `v` at `rec-residuals` and `rec-sparse` (their ties:
+  `Recursive/ValueInner.lean`).
 -/
 
 namespace FlockC3.RegLevels
@@ -161,7 +166,9 @@ def valueRows (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String
         | [l] => if port = "coef" then some (stackedCoefRows o l LANES, Flock.RecCoins.COEF_VALUE)
           else if port = "dirs" then some (stackedDirsRows o l H, Flock.RecCoins.DIRS_VALUE) else none
         | _ => none
-      | none, some (_, _, j) => if port = "v" then (openingVRows o j).map (·, Flock.RecCoins.V_VALUE) else none
+      | none, some (_, _, j) => if port = "v" then (openingVRows o j).map (·, Flock.RecCoins.V_VALUE)
+        else if port = "out" then some (Flock.RecCoins.zeroRows 1 Flock.RecCoins.OUT_WORDS, Flock.RecCoins.ZERO_VALUE)
+        else none
       | none, none => none
 
 /-- **The verifier's rows as a value source**, at its candidate-3 inputs `c3 t` at each history. -/
@@ -170,6 +177,132 @@ def valueSrcC3 (c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3) : ValueSr
     match valueRows (c3 t) (Vs x.1).c ((Vs x.1).c.ports[x.2.2.val]!).name,
       (Vs x.1).c.metaJ.getObjValAs? String "program_sha512" with
     | some (rows, value), .ok prog => some (rows, Flock.RecCoins.verifierSalt prog value)
+    | _, _ => none
+
+/-- The levels of the inner schedule with `LANES` lanes and `H` siblings below their cap. -/
+def innerLevels (sh : Flock.Shape) (LANES H : ℕ) : List ℕ :=
+  (List.range sh.sched.levels.size).filter fun l =>
+    2 ^ sh.sched.levels[l]!.lanes == LANES && sh.sched.levels[l]!.d - sh.sched.levels[l]!.cap == H
+
+/-- Level `l`'s `coef` rows: rep `i / q`'s opening `i % q`'s `coefAt (κ[l]) LANES eq(α_l)[j]` in words. -/
+def openCoef (sh : Flock.Shape) (l LANES : ℕ) (r0 r1 : Flock.RecCoins.Rep) : Array (Array ℕ) :=
+  (Array.range (2 * sh.sched.levels[l]!.q)).map fun i =>
+    let (rep, j) := (if i < sh.sched.levels[l]!.q then r0 else r1, i % sh.sched.levels[l]!.q)
+    Flock.RecCoins.words (Flock.RecCoins.coefAt (rep.kappa[l]!) LANES (Flock.eqTable (rep.info.lg.conss[l]!).alpha)[j]!)
+
+/-- Level `l`'s `dirs` rows: rep `i / q`'s opening `i % q`'s position's low `H` bits. -/
+def openDirs (sh : Flock.Shape) (l H : ℕ) (r0 r1 : Flock.RecCoins.Rep) : Array (Array ℕ) :=
+  (Array.range (2 * sh.sched.levels[l]!.q)).map fun i =>
+    let (rep, j) := (if i < sh.sched.levels[l]!.q then r0 else r1, i % sh.sched.levels[l]!.q)
+    Flock.RecCoins.dirsRow (rep.info.lg.conss[l]!).pos[j]! H
+
+/-- `rec-open`'s `coef` and `dirs` rows at the inner session `inn`. -/
+def openRows (inn : Flock.RecCoins.Inner) (LANES H : ℕ) : Option (Array (Array ℕ) × Array (Array ℕ)) :=
+  match inn.algebra with
+  | .error _ => none
+  | .ok (sh, extras) => match innerLevels sh LANES H with
+    | [l] => match inn.rep sh extras 0, inn.rep sh extras 1 with
+      | .ok r0, .ok r1 => some (openCoef sh l LANES r0 r1, openDirs sh l H r0 r1)
+      | _, _ => none
+    | _ => none
+
+/-- The parts of the inner algebra's v. -/
+def residualGroups (sh : Flock.Shape) : Except String (Array (Array ℕ × Array ℕ × Array ℕ)) :=
+  do Flock.RecResiduals.groups (← Flock.RecAlgebra.structureOf sh) (Flock.RecResiduals.portSizes sh)
+
+/-- Each rep's `v` elements `vs` (the comb last), padded to the port's words. -/
+def residualRowsOf (inn : Flock.RecCoins.Inner) (sh : Flock.Shape) (extras : Array Flock.Claim) (vs : Array ℕ) :
+    Flock.V (Array (Array ℕ)) :=
+  #[0, 1].mapM fun r => do
+    let rep ← inn.rep sh extras r
+    let base := rep.v.extract 0 (rep.v.size - 64)
+    let comb ← if vs.any (· ≥ base.size) then inn.comb r rep else pure Flock.RecCoins.ZERO_COMB
+    let full := base ++ comb
+    pure (Flock.RecCoins.padTo (Flock.RecCoins.words (vs.map (full[·]!))) (Flock.RecResiduals.portWordsOf vs.size))
+
+/-- `rec-residuals`' `v` rows of part `j` at the inner session `inn`. -/
+def residualRows (inn : Flock.RecCoins.Inner) (j : ℕ) : Option (Array (Array ℕ)) :=
+  match inn.algebra with
+  | .error _ => none
+  | .ok (sh, extras) => match residualGroups sh with
+    | .error _ => none
+    | .ok gs => match gs[j]? with
+      | none => none
+      | some (_, _, vs) => match residualRowsOf inn sh extras vs with
+        | .ok rows => some rows
+        | .error _ => none
+
+/-- The inner circuit's unit range, as `checkSparse` reads it at unit `unit`. -/
+def sparseRange (inn : Flock.RecCoins.Inner) (unit : String) : Flock.V Flock.Range :=
+  inn.unitRange.mapError (s!"rec-coins: {unit}: " ++ ·)
+
+/-- Each rep's RecSparse `v` (`sparseV`) at its inner points and sparse coins, padded to the port's words. -/
+def sparseRowsOf (inn : Flock.RecCoins.Inner) (c3 : Flock.RecCoins.C3) (unit : String) (sh : Flock.RecSparse.Shape)
+    (ash : Flock.Shape) (extras : Array Flock.Claim) (rng : Flock.Range) : Flock.V (Array (Array ℕ)) :=
+  #[0, 1].mapM fun r => do
+    let rep ← inn.rep ash extras r
+    let sc ← Flock.RecCoins.sparseCoins c3 unit r
+    let i := rep.info
+    let v ← (do
+        Flock.RecCoins.sparseV sh sc i.lc.fold.alpha i.zc.z i.lc.fold.rhoIn i.lc.rIn
+          (← Flock.RecCoins.layoutFactors sh i.lc.fold.rhoIn i.lc.rIn rng)).mapError (s!"rec-coins: {unit}: rep {r}: " ++ ·)
+    pure (Flock.RecCoins.padTo (Flock.RecCoins.words v) (Flock.RecSparse.portWords (Flock.RecSparse.nv sh)))
+
+/-- `rec-sparse`'s `v` rows at the inner session `inn` and candidate 3's inputs `c3`. -/
+def sparseRows (inn : Flock.RecCoins.Inner) (c3 : Flock.RecCoins.C3) (unit : String) (sh : Flock.RecSparse.Shape) :
+    Option (Array (Array ℕ)) :=
+  match inn.algebra, sparseRange inn unit with
+  | .ok (ash, extras), .ok rng => match sparseRowsOf inn c3 unit sh ash extras rng with
+    | .ok rows => some rows
+    | .error _ => none
+  | _, _ => none
+
+/-- The rows and value check 5 registers at port `port` of a unit it checks against the inner session `inn`: a part's
+`v`, and its `out`, the zero rows (`checkZero`). -/
+def innerRows (inn : Flock.RecCoins.Inner) (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String) :
+    Option (Array (Array ℕ) × String) :=
+  match Flock.RecSparse.params c.unit.name, Flock.RecOpen.params c.unit.name, Flock.RecResiduals.params c.unit.name with
+  | some sh, _, _ => match c3 with
+    | some c3 => if port = "v" then (sparseRows inn c3 c.unit.name sh).map (·, Flock.RecCoins.SPARSE_V_VALUE)
+      else if port = "out" then some (Flock.RecCoins.zeroRows 2 (Flock.RecSparse.outWords sh),
+        Flock.RecCoins.SPARSE_ZERO_VALUE) else none
+    | none => none
+  | none, some (LANES, H), _ => match openRows inn LANES H with
+    | some (cr, dr) => if port = "coef" then some (cr, Flock.RecCoins.COEF_VALUE)
+      else if port = "dirs" then some (dr, Flock.RecCoins.DIRS_VALUE) else none
+    | none => none
+  | none, none, some (_, _, _, j) => if port = "v" then (residualRows inn j).map (·, Flock.RecCoins.V_VALUE)
+    else if port = "out" then some (Flock.RecCoins.zeroRows 2 Flock.RecCoins.OUT_WORDS, Flock.RecCoins.ZERO_VALUE)
+    else none
+  | none, none, none => none
+
+/-- `innerRows` at the inner session `src` loads. -/
+def loadRows (src : Option Flock.RecCoins.Source) (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String) :
+    Option (Array (Array ℕ) × String) :=
+  match src with
+  | none => none
+  | some f => match f.load c.unit.name with
+    | .error _ => none
+    | .ok inn => innerRows inn c3 c port
+
+/-- **The rows and value check 5 registers at port `port` of circuit `c`**, at its inner session `src` and candidate-3
+inputs `c3`. -/
+def valueRowsAll (src : Option Flock.RecCoins.Source) (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit)
+    (port : String) : Option (Array (Array ℕ) × String) :=
+  match Flock.RecCoins.stackedParams c.unit.name, Flock.RecOpening.params c.unit.name with
+  | none, none => loadRows src c3 c port
+  | _, _ => valueRows c3 c port
+
+/-- **The verifier's rows as a value source**, at its inner session `src t` and candidate-3 inputs `c3 t`, under the
+salts check 5 holds them to: a zero value's `zeroSalt`, every other value's `verifierSalt`. -/
+def valueSrcAll (src : List (Cm × I.Coin) → Option Flock.RecCoins.Source)
+    (c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3) : ValueSrc L Reg Cm Reg₂ I Vs :=
+  fun _ _ t _ x =>
+    match valueRowsAll (src t) (c3 t) (Vs x.1).c ((Vs x.1).c.ports[x.2.2.val]!).name,
+      (Vs x.1).c.metaJ.getObjValAs? String "program_sha512" with
+    | some (rows, value), .ok prog => some (rows,
+        if value = Flock.RecCoins.ZERO_VALUE ∨ value = Flock.RecCoins.SPARSE_ZERO_VALUE then Flock.RecCoins.zeroSalt value
+        else Flock.RecCoins.verifierSalt prog value)
     | _, _ => none
 
 end FlockSoundness.Discharge.Recursion

@@ -4,6 +4,7 @@ import Proofs.Flock.Recursive.HoloCoins
 import Proofs.Flock.Recursive.HoloMap
 import Proofs.Flock.Recursive.TopFinder
 import Proofs.Flock.Recursive.ValueSrc
+import Proofs.Flock.Recursive.LeafFinder
 
 /-!
 # The recursive audit at candidate 3 (trusted)
@@ -270,15 +271,16 @@ Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at
 V*'s circuits compute candidate 3's inner verifier at the checked sessions (`checkedC3`: the typed sessions at a whole
 history where the verifier's checks at candidate 3 pass) and the word the transported prover's runs open at R's level 0
 against `cap` (`regStmt`), at the rounds before the last, off a registrant's row off a value the verifier registers
-itself at its rows `valueSrcC3` (VBridge at the committed rounds, `Flock.Premises.VBridgeCOff`):
+itself at its rows `valueSrcAll` (`ValueColl`), off a session's registered read whose leaf is not the table's by a
+collision (`LeafColl`) and off a session's read of R's level-0 top other than its row under the held salts by a
+collision (`SaltColl`) (VBridge at the committed rounds, `Flock.Premises.VBridgeCOff`):
 Lean's verifier, at the records written at the outcome's history, never builds `st`, accepts its inputs at candidate 3
 and accepts every session as V*'s statement of its index with its checks at candidate 3;
 or the sessions type and there is a registrant fork, a held top other than `bcs'` (`topFinder`), a registrant's row
-off a value the verifier registers itself, at its rows and salts (`valueFinder` at `valueSrcC3`), a session's read
-of R's level-0 top other than its row under the held salts (`saltFinder`), a round fork, a session fork, or an inner fork
-of the transported prover's own runs at the checked sessions whose decoded transcripts play candidate 3's table to
-outcomes that clash
-against each other (`clashPickHL`); or, with `w` the word the transported prover's runs open at the draw (`regWord`),
+off a value the verifier registers itself, at its rows and salts (`valueFinder` at `valueSrcAll`), a session's
+registered read off the table's leaf (`leafFinder`), a session's read of R's level-0 top other than its row under the
+held salts (`saltFinder`), a round fork, a session fork, or an inner fork of the transported prover's own runs at the
+checked sessions whose decoded transcripts play candidate 3's table to outcomes that clash against each other (`clashPickHL`); or, with `w` the word the transported prover's runs open at the draw (`regWord`),
 $$\Pr[\text{Lean's verifier builds } st \wedge \text{it accepts its inputs at candidate 3} \wedge \text{every session
   verifies as V*'s statement of its index and passes its checks at candidate 3} \wedge \neg\,\exists R \text{ near } w,\
   R\text{'s hidden statement holds}]$$
@@ -355,11 +357,16 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- VBridge at the committed rounds, a premise: V*'s circuits compute candidate 3's inner verifier at the rounds
     -- before the last, which it does not commit, at the checked sessions and the word the prover's runs open, off a
-    -- registrant's row off a value the verifier registers itself, at the verifier's rows (`valueSrcC3`)
+    -- registrant's row off a value the verifier registers itself, at the verifier's rows (`valueSrcAll`), off a read's
+    -- leaf off the table's, and off a read of R's level-0 top off its node's row under the held salts
     (_hbr : ∀ h : Typed zr,
       Flock.Premises.VBridgeCOff
-        (ValueColl (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
-          (valueSrcC3 fun t => c3Of ish (innerHeld wr st reg t)))
+        (fun R ω t R₂ =>
+          ValueColl (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
+            (valueSrcAll (fun t => coins (wr t).2) fun t => c3Of ish (innerHeld wr st reg t)) R ω t R₂ ∨
+          LeafColl (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂ ∨
+          SaltColl (holoAt st hp).rsch.sch.level₀ cap salt
+            (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) R ω t R₂)
         (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg
         N k Rw (regStmt (holoTys st hp) (CT st hp) st hp
           (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
@@ -377,7 +384,9 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
         (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
       (valueFinder (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
-        (valueSrcC3 fun t => c3Of ish (innerHeld wr st reg t)) dg N
+        (valueSrcAll (fun t => coins (wr t).2) fun t => c3Of ish (innerHeld wr st reg t)) dg N
+        (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
+      (leafFinder (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
       (saltFinder (holoAt st hp).rsch.sch.level₀ cap salt
         (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)

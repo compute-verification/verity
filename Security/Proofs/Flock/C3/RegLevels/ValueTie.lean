@@ -6,7 +6,8 @@ import Proofs.Flock.Recursive.ValueSrc
 # The value tie: a registrant's row at a value the verifier registers itself is the verifier's, or SHA-512 collides
 
 `checkValue` (`RecCoins.checkValue`) accepts a port the verifier registers itself (`coef`, `dirs`) only when the
-registered root is the frame-v3-sha512 root of the verifier's own rows (`checkValue_root`). A registrant's record opens
+registered root is the frame-v3-sha512 root of the verifier's own rows (`checkRows_root`, at any salt: `checkValue`'s
+`verifierSalt`, `checkZero`'s `zeroSalt`, whose zero rows the same ties cover). A registrant's record opens
 that root at the row's position (`ReadsX.committed`), so the registrant's row is the verifier's, or one of three
 SHA-512 bindings breaks, each with both preimages in hand:
 
@@ -215,15 +216,16 @@ theorem eq_of_not_bne {a b : ByteArray} (h : ¬ (a != b) = true) : a = b := by
   have hb : (a == b) = true := by simpa [bne] using h
   exact ByteArray.ext (beq_iff_eq.1 (hb : (a.data == b.data) = true))
 
-/-- **What `checkValue` checked of the registered root**: the reads file's entry `reg` of the port, of `rows.size`
-leaves, unit `i` reading row `i`, whose root is `FV3.root` of the verifier's rows under `verifierSalt` of META's
-`program_sha512`. -/
-theorem checkValue_root {c : Flock.Circuit} {pub : Flock.Public} {own : Array Registered.Port} {port value : String}
-    {rows : Array (Array ℕ)} {what : ℕ → String} (h : RecCoins.checkValue c pub own port value rows what = .ok ()) :
+/-- **What `checkRows` checked of the registered root**: the reads file's entry `reg` of the port, of `rows.size`
+leaves, unit `i` reading row `i`, whose root is `FV3.root` of the verifier's rows under `salt` of META's
+`program_sha512` (`checkValue`'s `verifierSalt`, `checkZero`'s `zeroSalt`). -/
+theorem checkRows_root {salt : String → ℕ → ByteArray} {c : Flock.Circuit} {pub : Flock.Public}
+    {own : Array Registered.Port} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
+    (h : RecCoins.checkRows salt c pub own port value rows what = .ok ()) :
     ∃ reg prog, own.find? (·.name == port) = some reg ∧ reg.leaves = rows.size ∧
       reg.reads = (Array.range rows.size).map some ∧ c.metaJ.getObjValAs? String "program_sha512" = .ok prog ∧
-      FV3.root reg.domain (leavesV reg.domain rows (RecCoins.verifierSalt prog value)) Sha512.hash = reg.root := by
-  unfold RecCoins.checkValue at h
+      FV3.root reg.domain (leavesV reg.domain rows (salt prog)) Sha512.hash = reg.root := by
+  unfold RecCoins.checkRows at h
   dsimp only at h
   split at h
   · rename_i reg hf
@@ -419,20 +421,21 @@ variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} 
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : FlockSoundness.Binding.HmRowsX lay}
 
-/-- **A registered read of a value the verifier registers itself**: where `checkValue` accepted the port `port` at
-the verifier's `rows`, the read's root is the reads file's one entry of that name (`hone`), and that entry's position
-for unit `u` is the read's (`hpos`), the read is of row `u`, and its row bytes are the verifier's row's (`rowInV`), or
-`valueColl` collides. -/
+/-- **A registered read of a value the verifier registers itself**: where `checkRows` accepted the port `port` at
+the verifier's `rows` under `salt`, the read's root is the reads file's one entry of that name (`hone`), and that entry's
+position for unit `u` is the read's (`hpos`), the read is of row `u`, and its row bytes are the verifier's row's
+(`rowInV`), or `valueColl` collides. -/
 theorem tie_read (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (hp : rd.isRead p)
-    {c : Flock.Circuit} {pub : Flock.Public} {own : Array Registered.Port} {port value : String}
-    {rows : Array (Array ℕ)} {what : ℕ → String} (h : RecCoins.checkValue c pub own port value rows what = .ok ())
+    {salt : String → ℕ → ByteArray} {c : Flock.Circuit} {pub : Flock.Public} {own : Array Registered.Port}
+    {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
+    (h : RecCoins.checkRows salt c pub own port value rows what = .ok ())
     {prog : String} (hprog : c.metaJ.getObjValAs? String "program_sha512" = .ok prog)
     (hone : ∀ reg ∈ own, reg.name = port → reg = rd.port p) {u : ℕ}
     (hpos : (rd.port p).reads[u]? = some (some (rd.readAt p))) :
     u < rows.size ∧ (rs.enc p (rd.wv p) = rowInV rows[u]! ∨
-      ∃ x y, valueColl (rd.port p) rows (RecCoins.verifierSalt prog value) u (rs.enc p (rd.wv p)) (rd.ws p)
+      ∃ x y, valueColl (rd.port p) rows (salt prog) u (rs.enc p (rd.wv p)) (rd.ws p)
         (rd.wpath p) = some (x, y) ∧ x ≠ y ∧ H512 x = H512 y) := by
-  obtain ⟨reg, prog', hf, hn, hreads, hprog', hroot⟩ := checkValue_root h
+  obtain ⟨reg, prog', hf, hn, hreads, hprog', hroot⟩ := checkRows_root h
   obtain rfl : prog' = prog := Except.ok.inj (hprog'.symm.trans hprog)
   obtain rfl : reg = rd.port p := hone reg (Array.mem_of_find?_eq_some hf) (by simpa using Array.find?_some hf)
   rw [hreads] at hpos
@@ -493,12 +496,12 @@ variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
   {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **A registrant's row at a value the verifier registers itself is the verifier's, or SHA-512 collides**: at a
-registered read `(u, q)` of a port without segments, where `checkValue` accepted the port at the verifier's `rows` (at
-any public file: the tie reads only the registered root),
+registered read `(u, q)` of a port without segments, where `checkRows` accepted the port at the verifier's `rows` under
+`salt` (at any public file: the tie reads only the registered root),
 the read is of row `u` and the registrant's bit `b` is bit `b % 16` of the row's word `b / 16` (R's `hval` at the read),
 or `valueColl` outputs two different SHA-512 inputs with one digest. -/
-theorem value_tie {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String} {pub : Flock.Public}
-    (h : RecCoins.checkValue c pub zo.own port value rows what = .ok ()) {prog : String}
+theorem value_tie {salt : String → ℕ → ByteArray} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
+    {pub : Flock.Public} (h : RecCoins.checkRows salt c pub zo.own port value rows what = .ok ()) {prog : String}
     (hprog : c.metaJ.getObjValAs? String "program_sha512" = .ok prog) {u : Fin nv} {q : Fin c.ports.size}
     (hp : zo.rd.isRead (.inl (u, q))) (hone : ∀ reg ∈ zo.own, reg.name = port → reg = zo.rd.port (.inl (u, q)))
     (hpos : (zo.rd.port (.inl (u, q))).reads[u.val]? = some (some (zo.rd.readAt (.inl (u, q)))))
@@ -508,7 +511,7 @@ theorem value_tie {port value : String} {rows : Array (Array ℕ)} {what : ℕ �
         (FlockVBridge.Decode.regVal zo (.inl (u, q))).2
             ⟨b, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))⟩ =
           (rows[u.val]!)[b / 16]!.testBit (b % 16)) ∨
-      ∃ x y, valueColl (zo.rd.port (.inl (u, q))) rows (RecCoins.verifierSalt prog value) u.val
+      ∃ x y, valueColl (zo.rd.port (.inl (u, q))) rows (salt prog) u.val
           (encPortH c.ports[q.val]! (FlockVBridge.Decode.regVal zo (.inl (u, q)))) (zo.rd.ws (.inl (u, q)))
           (zo.rd.wpath (.inl (u, q))) = some (x, y) ∧ x ≠ y ∧ H512 x = H512 y) := by
   obtain ⟨hu, hor⟩ := tie_read zo.rd hp h hprog hone hpos
@@ -544,7 +547,8 @@ theorem dirs_tie {c3 : RecCoins.C3} {LANES H : ℕ} (h : RecCoins.checkStackedLe
   subst ho
   have hl : ℓ = l := hu ℓ hℓ hL hH
   subst hl
-  obtain ⟨hlt, hor⟩ := value_tie zo hdv hprog hp hone hpos hseg
+  obtain ⟨hlt, hor⟩ := value_tie zo (salt := fun p => RecCoins.verifierSalt p RecCoins.DIRS_VALUE) hdv hprog hp hone
+    hpos hseg
   rw [Array.size_map, Array.size_range] at hlt
   refine ⟨hlt, hor.imp (fun he b hbH hb => ?_) id⟩
   rw [he b hb, getElem!_map_range _ hlt, dirsRow_testBit _ _ hbH (by omega)]

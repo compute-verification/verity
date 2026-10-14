@@ -16,7 +16,9 @@ In (i), as in `PublicAudit`'s:
   first conjunct);
 * at one it builds, the class checks pass (`classOk_of_accepts`), and gap 2 holds at the word the prover's runs open
   (`zk_sessions_recursive_fork_regV`, `Recursive/RegExtract.lean`: the extraction from piece (a)'s runs, off a
-  registrant's row off a value the verifier registers itself at its rows, `valueSrcC3`, else `valueFinder`), here at
+  registrant's row off a value the verifier registers itself at its rows, `valueSrcAll`, else `valueFinder`, off a
+  read's leaf off the table's, else `leafFinder`, and off a read of R's level-0 top off its node's row under the held
+  salts, else `saltFinder`), here at
   the checked sessions (`checkedC3`), whose games are the typed sessions', so the transported prover plays them;
 * the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each draw
   (`regStmt`), and the raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`,
@@ -26,7 +28,7 @@ In (i), as in `PublicAudit`'s:
 
 Candidate 3's table ignores the last round's coin, as its pick does (`schedInner_lastFree`, `clashPickHL_lastFree`), so
 gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerLV`, `innerC`'s form off
-`ValueColl` that `RegExtract`'s proof reads).
+`ValueColl ∨ LeafColl ∨ SaltColl` that `RegExtract`'s proof reads).
 
 `_hstk` is not read here: VBridgeCOff is a premise, and `_hstk` is what its discharge at the honest family takes as
 `htop` (`FlockC3.Compose.hbr_honest_reg`, at `⟨_, _, _hstk⟩`, which gives VBridgeCOff at the checked sessions and
@@ -162,8 +164,8 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
       (Cm → String → Nat → List UInt8) →
         FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin (r st hp)) → CT st hp k)) :
     Flock.Guarantees.RecursiveAuditC3At CT im := by
-  intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _salt _bcs' _hstk ish Vs zr hCust _hRC _tbl _bc
-    _hIC _htbl bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
+  intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap salt _bcs' _hstk ish Vs zr hCust _hRC _tbl _bc
+    _hIC bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
   · left
@@ -191,17 +193,21 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
   rcases zk_sessions_recursive_fork_regV (Flock.Guarantees.holoTys st hp) (CT st hp) hp
     (classOk_of_accepts hacc.acceptsStmt) hA3
     (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
-      hT) (valueSrcC3 fun t => Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)) dg N hk hRw hM hρ hr'
+      hT)
+    (valueSrcAll (fun t => coins (wr t).2) fun t => Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t))
+    dg N hk hRw hM hρ hr'
     (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
       hT σ)
-    wmsg Sk cmt msg cap (hbr hT)
-    with hf | hf | hf | hf | hf | hb
+    wmsg Sk cmt msg cap salt (hbr hT)
+    with hf | hf | hf | hf | hf | hf | hf | hb
   · exact Or.inr (Or.inr (Or.inl hf))
-  · exact Or.inl hf
+  · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf))))
+  · exact Or.inl hf
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf)))))
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf))))))
-  · refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf)))))))
+  · refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr
       (fun R ω t R₂ j => And.left (hCust R ω t R₂ j)) hT hF σ _
       (fun o => AcceptsV (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
@@ -214,7 +220,7 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
       (fun o ho => ho.2.1) (fun o hlen hall hw ho =>
         ⟨acceptsV_checked (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2) hlen.ge hall
           hw (verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2).1 ho.2.2.1,
-          ho.2.2.2⟩)) hb)))))))
+          ho.2.2.2⟩)) hb))))))))
 
 /-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
 theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
@@ -224,9 +230,3 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
   exact recursiveAuditC3At Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
 end Flock.SecurityProofs
-
-#print axioms Flock.SecurityProofs.recursiveAuditC3At
-#print axioms Flock.SecurityProofs.RecursiveAuditC3
-
-#print axioms Flock.SecurityProofs.acceptsV_checked
-#print axioms Flock.SecurityProofs.acceptsZKR_of_keepOwn
