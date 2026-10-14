@@ -478,6 +478,19 @@ def checkRows (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Opti
 
 def ACC_VALUE : String := "rec-acc"
 
+/-- The first name two of the verifier's registered ports share. -/
+def dupName? (registered : Array Registered.Port) : Option String :=
+  let names := registered.toList.map (·.name)
+  names.find? fun nm => names.count nm != 1
+
+/-- **The verifier's reads file names each port once** (`dupName?`): `checkAcc` and `checkAccReads` read a name's first
+port (`find?`), so a second port of that name would be one neither checks. A file `Registered.ofJson` parses names each
+once (a JSON object's keys); the refusal holds whatever list of ports the verifier is given. -/
+def checkNames (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit :=
+  match dupName? registered with
+  | some nm => throw s!"{s.name}: the registered reads name two ports {nm}, and each check reads a name's first"
+  | none => pure ()
+
 /-- A statement's ports that read `rec-acc`: a level's `acc` and `acc_out` (`rec_outer.stage`, rec_outer.py:236), R's
 levels' too (R's openings follow the reps' in the chain, `rec_vstage.stage_stacked`), a part's `acc0` and `acc1` among its
 ports (rec_vstage.py:357), a part of R's opening's too (`rec_residuals.stage_opening`); RecSparse reads none. -/
@@ -488,11 +501,12 @@ def accPorts : VStar.Stmt → List String
   | .opening _ _ _ _ ports _ => (ports.map (·.1)).filter fun nm => nm == "acc0" || nm == "acc1"
 
 /-- **A session's `rec-acc` reads are one registration, the verifier's** (the `site` of `Family/AccRows.lean`: value,
-root, leaf count, row width and domain; not name or reads): each of the statement's `accPorts` is a port of `--registered`
-reading `rec-acc`, every port there reading `rec-acc` has the registration of the first, and that is the registration of
-`acc0` in the verifier's shared rows (`--rec-rows`), one file for every session of the family, whose `rec-acc` ports all
-have it. -/
+root, leaf count, row width and domain; not name or reads): `--registered` names each port once (`checkNames`), each of
+the statement's `accPorts` is a port of it reading `rec-acc`, every port there reading `rec-acc` has the registration of
+the first, and that is the registration of `acc0` in the verifier's shared rows (`--rec-rows`), one file for every session
+of the family, whose `rec-acc` ports all have it. -/
 def checkAcc (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option (Array Registered.Port)) : V Unit := do
+  checkNames s registered
   for nm in accPorts s do
     match registered.find? (·.name == nm) with
     | some p => if p.value != ACC_VALUE then throw s!"{s.name}: its port {nm} reads {p.value}, not {ACC_VALUE}"
@@ -1130,6 +1144,35 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
       | some (.error why) =>
         throw s!"rec-pub: {unit}: port {reg.name}'s table row {r} reads row {x} of {reg.value}, and {why}"
       | none => throw s!"rec-pub: {unit}: port {reg.name}: the inner transcript fixes no {reg.value}"
+
+/-- Table `j`'s draw among `count` tables of a session drawn by `d`, as `Stmt.setupTables` builds it: `d` at one table,
+else part `j` of `d`'s units, a subset draw of the population. -/
+def tableDraw (d : Json) (count j : Nat) : Json :=
+  if count ≤ 1 then d else
+    match Draw.UnitDraw.ofJson d with
+    | .ok u => Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson u.population),
+        ("k", Lean.toJson (u.units.size / count)),
+        ("units", Json.arr ((u.units.extract (j * (u.units.size / count))
+          (j * (u.units.size / count) + u.units.size / count)).map Lean.toJson))]
+    | .error _ => d
+
+/-- Table `j`'s statement labels its instances with the units its draw `dj` proves. -/
+def checkLabel (dj : Json) (pub : Public) (j : Nat) : V Unit := do
+  let D ← Draw.UnitDraw.ofJson dj
+  let idx ← Registered.unitIndices pub
+  if idx != D.proved then
+    throw s!"rec-labels: table {j} labels its instances {idx}, not the units its draw proves {D.proved}"
+
+/-- **A drawn session of V*'s labels each instance with the unit it is**: every table's statement names, in its header's
+`units.indices`, exactly the units its draw proves (`tableDraw`). A registered read's position is read at an instance's
+label (`Registered.checkPort`), so the label must be the unit. V*'s populations are their units `0..n-1`, so an honest
+statement's labels (the population's labels of the drawn units) are those units; a population labelled from another
+start would not pass, and only a session with an inner shape (`--rec-inner`) is checked. A session without a draw
+passes. -/
+def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :=
+  match draw with
+  | none => pure ()
+  | some d => (Array.range sts.size).forM fun j => checkLabel (tableDraw d count j) sts[j]!.pub j
 
 /-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
 V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table

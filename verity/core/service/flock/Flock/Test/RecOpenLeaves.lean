@@ -9,6 +9,9 @@ openings a rep) and, for R's levels, R at m 22 (218, 106 and 53): level 3's `acc
 to 895 for rep 1, as the recorded level's reads file does, and `acc_out` the next rows; R's level 1 reads rows from
 `2 · 448 + 218`. A reads file whose `acc` reads its openings level-major, or whose `acc_out` reads `acc`'s rows, or one
 short, is refused at the first unit it differs at.
+
+`RecVStar.checkAcc` refuses a reads file that names a port twice (`checkNames`): `checkAccReads` reads a name's first
+port, so a second `acc` reading level-major rows passes it unread.
 -/
 import Flock.RecOpen
 import Flock.RecVStar
@@ -96,5 +99,20 @@ def after (r : Array (Option Nat)) : Array (Option Nat) := r.map (·.map (· + 1
 #guard accRefusal inner level3 (rowsAt level3).pop (after (rowsAt level3)) ==
   some "rec-open/l16-h4: its port acc reads rec-acc at nothing in unit 105, not at 895 (the chain runs rep-major, then by level and query)"
 #guard (RecVStar.checkAccReads inner level3 #[accPort "acc" (rowsAt level3)]) matches .error _
+
+def honestAcc : Array Registered.Port := #[accPort "acc" (rowsAt level3), accPort "acc_out" (after (rowsAt level3))]
+
+def twiceAcc : Array Registered.Port := honestAcc.push (accPort "acc" ((Array.range 106).map fun u => some (790 + u)))
+
+def namesRefusal (ports : Array Registered.Port) : Option String :=
+  match RecVStar.checkAcc level3 ports (some #[accPort "acc0" #[]]) with
+  | .error e => some e
+  | .ok () => none
+
+#guard (RecVStar.checkAccReads inner level3 twiceAcc) matches .ok _
+#guard namesRefusal honestAcc == none
+#guard namesRefusal twiceAcc == some "rec-open/l16-h4: the registered reads name two ports acc, and each check reads a name's first"
+#guard namesRefusal (#[accPort "acc_out" #[]] ++ honestAcc) ==
+  some "rec-open/l16-h4: the registered reads name two ports acc_out, and each check reads a name's first"
 
 end Flock.Test.RecOpenLeaves
