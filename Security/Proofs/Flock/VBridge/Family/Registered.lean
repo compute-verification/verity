@@ -66,8 +66,11 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
-/-- Obligation: discharged by a check of the layer at `oneG` in `ZkOuter.Good` (`Recursive/Flock.lean`), since V*
-registers no row holding the constant (`circuit.py:16-18`). **The layers carry 1 at the constant gate.** At every accepted outer proof, each session's layer is `true` at
+/-- Obligation: no executable check discharges it, since the layer is the extractor's, which the verifier never sees;
+every opening at `.inr oneG` already holds 1 (`keyProgH_valPinned`, `Readers.regLeaf`). Discharged by a conjunct
+`bits oneG = true` in `ZkOuter.Good` (`Recursive/Flock.lean`), which `accepts_le` bounds through `regWrongZ` once
+`regOpenZ` opens `.inr oneG` at `regVal`; V* registers no row holding the constant (`circuit.py:16-18`). **The layers
+carry 1 at the constant gate.** At every accepted outer proof, each session's layer is `true` at
 `Layout.oneG`, the input gate every unit's constant is wired to (`oneAt_keyProg`). Acceptance does not give it: the
 layer is `XplurZC`'s plurality of the prover's openings, `oneG` is no unit's gate and its commit string `.inr oneG` is
 no registered read, so neither `wrong = ∅` nor `RegAgree` reads it; the public-file layer `Xpub` pins it
