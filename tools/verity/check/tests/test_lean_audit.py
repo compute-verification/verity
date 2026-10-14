@@ -581,6 +581,28 @@ def test_packages_of_one_manifest_and_toolchain_both_build_warm(tmp_path, monkey
     assert (tmp_path / "cache" / "lean-deps" / LA.deps_key(root / "pkg/a") / "dep" / "built").exists()
 
 
+def test_kept_builds_past_the_cap_go_least_recently_used_first_and_a_held_one_stays(tmp_path):
+    """Every tree whose manifest or lakefile differs keeps a build of its own, and nothing removed them: infra found 71, 19 GB,
+    on a 200 GB disk (12 Oct). A build given back is the newest whatever its directory's mtime was; one whose lock a run
+    holds stays."""
+    import fcntl
+
+    store = tmp_path / "lean-builds"
+    for i in range(6):
+        (store / f"k{i}").mkdir(parents=True)
+        os.utime(store / f"k{i}", (1000 + i, 1000 + i))
+    work = tmp_path / "work"
+    (work / "pkg" / ".lake" / "build").mkdir(parents=True)
+    os.utime(work / "pkg" / ".lake" / "build", (1, 1))                 # renamed in, it would keep this mtime
+    builds = LA.WarmBuilds(store, kept=3)
+    with open(store / "k0.lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        builds.give_back(work, {work / "pkg"})
+    left = sorted(p.name for p in store.iterdir() if p.is_dir())
+    assert left == sorted(["k0", "k4", "k5", LA.build_key("pkg", work)])
+    assert builds.evict() == 1 and "k0" not in {p.name for p in store.iterdir()}
+
+
 def test_inputs_are_the_package_its_path_dependencies_and_the_auditor(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch)
     files = LA.COMMON.tracked_files()

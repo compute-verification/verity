@@ -15,7 +15,8 @@ Staging the level takes about a minute and each verify sets up its 158 MB circui
 module is slow; it catches what no test before it can: the Lean verifier's coefficients, positions and salts at real
 coins, against the ones V*'s Python registers. The algebra's parts are staged too, for their verifier-registered `v`,
 their message rows and their row ports, and every session's `rec-acc` reads, against the verifier's record of V*'s shared
-rows (`--rec-rows`); and check 5 on `rec-coins`' record of the inner session in place of its statement (`--rec-inner-coins`)."""
+rows (`--rec-rows`); and check 5 on `rec-coins`' record of the inner session in place of its statement (`--rec-inner-coins`).
+A level staged with bit rows, which hidden outputs admit and V*'s statement does not, is refused under the inner shape."""
 from __future__ import annotations
 
 import concurrent.futures as cf
@@ -29,6 +30,7 @@ import subprocess
 import threading
 from pathlib import Path
 
+import keyed
 import pytest
 from verity_flock import rec_bindings as RB
 from verity_flock import rec_vstage as S
@@ -44,6 +46,10 @@ CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479
                   "459a42e2dda3e07463")
 #: the recorded outer session's refusal as `verity/flock-circuit`, after setup
 S2_R7 = "S2/R7: the session parameters are not the verifier's"
+#: a staging's key (`once`): the inner session and V*'s fold, points and salts it reads, and the import closure of this
+#: module, which holds the code each staging runs
+_KEY = functools.partial(keyed.key, SET / "inner-honest", SET / "fold-honest.json", SET / "points-honest.json",
+                         SET / "acc-salts.bin", code=[__name__])
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
@@ -75,7 +81,7 @@ def forged(built, once) -> Path:
                           algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
         assert res["levels"][f"L{LEVEL}"]["opened"] == res["levels"][f"L{LEVEL}"]["instances"] == 106
 
-    out = once("rec-coins-forged", make) / f"L{LEVEL}"
+    out = once("rec-coins-forged", make, _KEY) / f"L{LEVEL}"
     assert hashlib.sha512((out / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
     return out
 
@@ -84,8 +90,8 @@ def forged(built, once) -> Path:
 def shape(built, tmp_path_factory) -> Path:
     """The verifier's own inner shape (`rec-inner`) from the inner statement, which `verify` needs for any V* statement."""
     u = SET / "u" / "stage"
-    p = subprocess.run([str(BIN), "rec-inner", "--circuit", str(u / "circuit.txt"), "--public", str(u / "pub-64.bin"),
-                        "--partition", str(u / "partition.json")], capture_output=True, text=True, check=True)
+    p = keyed.run([str(BIN), "rec-inner", "--circuit", str(u / "circuit.txt"), "--public", str(u / "pub-64.bin"),
+                   "--partition", str(u / "partition.json")], check=True)
     f = tmp_path_factory.mktemp("rec-inner") / "inner.json"
     f.write_text(p.stdout)
     return f
@@ -93,7 +99,7 @@ def shape(built, tmp_path_factory) -> Path:
 
 @functools.cache
 def _statements(shape: str) -> list[str]:
-    p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", shape], capture_output=True, text=True, check=True)
+    p = keyed.run([str(BIN), "rec-statements", "--rec-inner", shape], check=True)
     (line,) = [json.loads(ln[9:]) for ln in p.stdout.splitlines() if ln.startswith("RECVSTAR ")]
     return [s[0] for s in line["statements"]]
 
@@ -129,9 +135,8 @@ def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | 
              "--rec-inner-partition", str(u / "partition.json")]
     rec = [] if inner is None else [*(files if coins is None else ["--rec-inner-coins", str(coins)]),
                                     "--rec-inner-session", str(SET / inner / "session")]
-    p = subprocess.run([str(BIN), "verify", "--zk", *_files(level, public, registered, shape, rows, statement), *rec, *extra,
-                        "--session", str(session)], capture_output=True, text=True, check=False)
-    return p
+    return keyed.run([str(BIN), "verify", "--zk", *_files(level, public, registered, shape, rows, statement), *rec, *extra,
+                      "--session", str(session)])
 
 
 @pytest.fixture(scope="module")
@@ -140,9 +145,9 @@ def coins(built, once) -> Path:
     u = SET / "u" / "stage"
 
     def make(d):
-        p = subprocess.run([str(BIN), "rec-coins", "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public",
-                            str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
-                            str(SET / "inner-honest" / "session")], capture_output=True, text=True, check=True)
+        p = keyed.run([str(BIN), "rec-coins", "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public",
+                       str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
+                       str(SET / "inner-honest" / "session")], check=True)
         (d / "coins.json").write_text(p.stdout)
 
     return once("rec-coins-coins", make) / "coins.json"
@@ -237,13 +242,13 @@ def undrawn(tmp_path_factory) -> Path:
 @pytest.fixture(scope="module")
 def algebra(built, once) -> Path:
     """V*'s algebra parts (`p<j>`) staged over the honest inner session."""
-    return once("rec-coins-algebra", lambda d: _stage(d, levels=[], algebra=True, evaluate=False)) / "alg"
+    return once("rec-coins-algebra", lambda d: _stage(d, levels=[], algebra=True, evaluate=False), _KEY) / "alg"
 
 
 @pytest.fixture(scope="module")
 def comb(built, once) -> Path:
     """The algebra staged with rep 0's first comb element of v one bit off (`rec_vstage --forge comb`)."""
-    return once("rec-coins-comb", lambda d: _stage(d, levels=[], algebra=True, evaluate=False, forge="comb")) / (
+    return once("rec-coins-comb", lambda d: _stage(d, levels=[], algebra=True, evaluate=False, forge="comb"), _KEY) / (
         "forged-comb/alg")
 
 
@@ -255,7 +260,7 @@ def salted(built, once) -> Path:
             mp.setattr(S, "acc_salts", _salted)
             _stage(d, levels=[LEVEL], algebra=True, evaluate=False)
 
-    return once("rec-coins-salted", make)
+    return once("rec-coins-salted", make, _KEY)
 
 
 def _rec_rows(dst: Path, parts: list[Path]) -> Path:
@@ -457,9 +462,9 @@ def test_the_honest_level_is_refused_as_another_statement_than_v_stars(forged, s
            f"verity/flock-circuit), not {other}")
     rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
     pub, reg = SET / "L3" / "pub.bin", SET / "L3" / "registered.json"
-    p = subprocess.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows)], capture_output=True, text=True)
+    p = keyed.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows)])
     assert p.returncode == 0 and json.loads(p.stdout)["statement"] == "verity/flock-circuit", (p.stdout, p.stderr)
-    p = subprocess.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows, other)], capture_output=True, text=True)
+    p = keyed.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows, other)])
     assert p.returncode == 1 and p.stdout.strip() == why, p.stdout
     v = _verify(forged, pub, reg, shape, "inner-honest", rows=rows, statement=other)
     assert v["why"] == why, v["why"]
@@ -474,11 +479,54 @@ def test_the_honest_level_is_refused_with_a_lookup_table_held(forged, shape, tmp
     why = f"setup: {UNIT}: one of V*'s statements, which read no lookup table; the verifier holds [rcp] (--tables, --archive)"
     rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
     pub, reg = SET / "L3" / "pub.bin", SET / "L3" / "registered.json"
-    p = subprocess.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows), "--tables", str(tmp_path / "tables")],
-                       capture_output=True, text=True)
+    p = keyed.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows), "--tables", str(tmp_path / "tables")])
     assert p.returncode == 1 and p.stdout.strip() == why, p.stdout
     v = _verify(forged, pub, reg, shape, "inner-honest", "--tables", str(tmp_path / "tables"), rows=rows)
     assert v["why"] == why, v["why"]
+
+
+@pytest.fixture(scope="module")
+def bit_rows(built, once) -> Path:
+    """Level 3 staged with every row a `sha512/row/v2` bit row of its words' 16 bits (`compose`'s `port_bits`, META
+    `row_schemas`), which `ProvedScope.scopeOkH` admits under hidden outputs (`bitRows`) and V*'s `scopeOk` does not. Its
+    rows read no registered value: a bit row's registered reads are refused by `Registered` (registered rows are
+    `sha512/row/v1` rows), so the verifier holds none (no `--registered`), and `scopeOk` alone stands between it and V*."""
+    from verity_flock import circuit as FC
+
+    compose, write = FC.compose, FC.write
+
+    def make(d):
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(FC, "compose", lambda low, sub, **kw: compose(
+                low, sub, port_bits=[16 * w for w, _ in low.leaves["in_ports"]], **kw))
+            mp.setattr(FC, "write", lambda *a, registered=None, **kw: write(*a, **kw))
+            S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL],
+                    algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
+
+    out = once("rec-coins-bit-rows", make, _KEY) / f"L{LEVEL}"
+    assert '"row_schemas":[["hm96-sha512/row/v2",' in (out / "circuit.txt").open().readlines()[1]
+    return out
+
+
+def test_a_v_star_file_of_bit_rows_is_refused_under_the_inner_shape(bit_rows, shape):
+    """`VStmt.hscope` is `scopeOk` (every row `sha512/row/v1`), so under `--rec-inner` a V* statement whose rows are bit
+    rows, which `ProvedScope.check` admits with hidden outputs (`scopeOkH`'s `bitRows`), is refused by `checkStmt` by name
+    before its file is compared with V*'s: by `statement`, and by `verify` at setup. The honest level passes both
+    (`test_the_honest_level_passes_setup_at_the_honest_inner_session`)."""
+    why = (f"{UNIT}: one of V*'s statements, whose circuits are in ProvedScope.scopeOk (every row sha512/row/v1, VStmt.hscope), "
+           "not scopeOkH's bit rows: a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk")
+    files = _files(bit_rows, bit_rows / "pub.bin", bit_rows / "registered.json", shape)
+    i = files.index("--registered")
+    files = files[:i] + files[i + 2:]
+    p = subprocess.run([str(BIN), "statement", *files], capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.strip() == f"setup: {why}", (p.stdout, p.stderr)
+    u = SET / "u" / "stage"
+    p = subprocess.run([str(BIN), "verify", "--zk", *files, "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public",
+                        str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
+                        str(SET / "inner-honest" / "session"), "--session", str(SET / "outer-L3" / "session")],
+                       capture_output=True, text=True)
+    (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
+    assert (v["accepted"], v["why"]) == (False, f"setup: {why}"), v
 
 
 def test_check_5_gives_the_part_holding_vs_comb_one_verdict_with_the_record_or_without(algebra, shape, undrawn, rows, coins):

@@ -68,7 +68,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Proofs.Pouw.Check", "Properties.Proofs.Pouw.Commit", "Properties.Nci", "Properties.Proofs.Nci",
   "Properties.CertifierDevice", "Properties.Proofs.CertifierDevice", "Properties.Pous", "Properties.Proofs.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd", "Properties.Proofs.Pous.TimedAudit",
-  "Properties.Proofs.Pous.MemoryChallenger", "Properties.NetworkCertifier", "Properties.Proofs.NetworkCertifier",
+  "Properties.Proofs.Pous.MemoryChallenger", "Properties.Proofs.Pous.Run", "Properties.NetworkCertifier", "Properties.Proofs.NetworkCertifier",
   "Properties.CertifierNetwork", "Properties.Proofs.CertifierNetwork", "Properties.CertifierNetwork.Runs",
   "Properties.Proofs.CertifierNetwork.Runs", "Properties.Identity", "Properties.Proofs.Identity",
   "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.Evaluate", "Properties.Proofs.Evaluate",

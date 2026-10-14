@@ -151,7 +151,7 @@ def test_an_unregistered_definition_fails(registry):
 
 def test_every_tap_names_a_program_of_a_known_status():
     statuses = {pid: p["status"] for pid, p in CMAP["programs"].items()}
-    assert {statuses[t["program"]] for t in CMAP["taps"]} == set(CM.STATUSES)
+    assert {statuses[t["program"]] for t in CMAP["taps"]} <= set(CM.STATUSES)
     for p in CMAP["programs"].values():
         assert p["status"] != "exists" or p["definitions"]
         assert p["status"] != "tonight" or p["branch"].startswith("cursor/")
@@ -191,11 +191,11 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        40, 29, {"exists": 16, "tonight": 4, "port": 12, "copy": 2, "committed-only": 17})
+        40, 29, {"exists": 17, "tonight": 0, "port": 32, "copy": 2, "committed-only": 0})
     assert brief(CM.counts(CMAP, ENV, ("dense-mha",))) == (
-        47, 2347, {"exists": 720, "tonight": 300, "port": 454, "copy": 79, "committed-only": 794}, 63)
+        47, 2347, {"exists": 721, "tonight": 0, "port": 1547, "copy": 79, "committed-only": 0}, 63)
     assert brief(CM.counts(CMAP, ENV, ("sparse-mqa",))) == (
-        49, 2389, {"exists": 642, "tonight": 300, "port": 496, "copy": 79, "committed-only": 872}, 183)
+        49, 2389, {"exists": 643, "tonight": 0, "port": 1667, "copy": 79, "committed-only": 0}, 183)
 
 
 def test_the_bound_tap_counts():
@@ -271,6 +271,31 @@ def test_the_check_command_passes_the_meta_build_and_a_live_document(tmp_path, c
     (tmp_path / "live.json").write_text(json.dumps(MI.live_document(per_rank)))
     code, out = _cli_check(tmp_path / "live.json", capsys)
     assert code == 1 and out.count("FAIL") == 1 and "FAIL rank 5: switch VLLM_USE_DEEP_GEMM" in out
+
+
+def test_a_tp_capture_writes_the_live_document_the_check_reads_from_its_own_engine_before_any_request(tmp_path, capsys):
+    """`tp-capture --inventory-out` (the H200 runbook's serve smoke, capture-map check and observer log in one engine load): the
+    document `write_live` makes of the ranks' `rank_inventory` passes the check, and the capture writes it once the engine is built,
+    before the warm-up and the observer."""
+    import ast
+
+    from verity_vllm.pipeline.tp import lease as TPL
+
+    rpc_timeout = object()      # handed to collective_rpc unchanged
+
+    class _LLM:
+        def collective_rpc(self, fn, timeout=None):
+            assert fn is MI.rank_inventory and timeout is rpc_timeout
+            return [{"rank": r, **copy.deepcopy(RANK0)} for r in reversed(range(TP))]
+
+    live = MI.write_live(_LLM(), tmp_path / "inv" / "live.json", timeout=rpc_timeout, repo=DOC["repo"], revision=DOC["revision"], tp=TP)
+    assert json.loads((tmp_path / "inv" / "live.json").read_text()) == live and live["source"] == "live" and live["tp"] == TP
+    code, out = _cli_check(tmp_path / "inv" / "live.json", capsys)
+    assert code == 0 and out.count(": 0 problems") == TP
+    src = Path(TPL.__file__).with_name("capture.py").read_text()
+    main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    at = [main.index(m) for m in ("LLM(**kw)", "write_live(llm", "throwaway_requests(", '"tp2_install"')]
+    assert at == sorted(at), at
 
 
 def test_ranks_that_build_different_modules_fail_the_check(tmp_path, capsys):

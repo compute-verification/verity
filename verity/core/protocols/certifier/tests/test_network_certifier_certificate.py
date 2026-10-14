@@ -24,6 +24,7 @@ import signers
 
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 PARAMS = bytes(range(64))
+SESSION, OTHER_SESSION = signers.SESSION, signers.OTHER_SESSION
 
 
 def block(data: bytes) -> bytes:
@@ -132,12 +133,14 @@ def certify_all(issuer, records, direction=EGRESS, params=P, sync_set=SYNC_SET):
     return [c for r in records if (c := issuer.certify(r, direction, params, parameters)) is not None]
 
 
-def egress_verdicts(records, key=None, syncs=SYNCS, link="responses"):
-    return [v.violation for v in Audit().check_link(link, records, FRAMES, syncs, SYNC_SET, P, key=key)]
+def egress_verdicts(records, key=None, syncs=SYNCS, link="responses", session=SESSION):
+    return [v.violation for v in Audit().check_link(link, records, FRAMES, syncs, SYNC_SET, P, key=key,
+                                                    session=session)]
 
 
-def ingress_verdicts(records, windows, key=None):
-    return [v.violation for v in Audit().check_ingress_link("requests", records, windows, key=key, params=P)]
+def ingress_verdicts(records, windows, key=None, session=SESSION):
+    return [v.violation for v in Audit().check_ingress_link("requests", records, windows, key=key, params=P,
+                                                            session=session)]
 
 
 def scenarios():
@@ -175,7 +178,7 @@ def test_certified_audit_matches_raw_audit_on_every_egress_scenario(tmp_path):
     seen = set()
     for name, (records, syncs) in scenarios().items():
         raw = egress_verdicts(records, syncs=syncs)
-        certified = certify_all(Issuer(signer), records)
+        certified = certify_all(Issuer(signer, SESSION), records)
         assert egress_verdicts(certified, key, syncs) == raw, name
         assert egress_verdicts([commit(r, P) for r in records], syncs=syncs) == raw, name
         seen.update(raw)
@@ -189,11 +192,11 @@ def test_certified_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path
     other = [SYNCS[0], ClockSync(2, 1), SYNCS[2]]
     responses = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     tokens = run_shaper(FRAMES, honest_ready(), other, Certifier("tokens", P))
-    issuer = Issuer(signer)
+    issuer = Issuer(signer, SESSION)
     for recs in ((responses, tokens), (certify_all(issuer, responses), certify_all(issuer, tokens))):
         audit = Audit()
-        audit.check_link("responses", recs[0], FRAMES, SYNCS, SYNC_SET, P, key=key)
-        audit.check_link("tokens", recs[1], FRAMES, other, SYNC_SET, P, key=key)
+        audit.check_link("responses", recs[0], FRAMES, SYNCS, SYNC_SET, P, key=key, session=SESSION)
+        audit.check_link("tokens", recs[1], FRAMES, other, SYNC_SET, P, key=key, session=SESSION)
         assert [(v.link, v.window, v.violation) for v in audit.violations] == [("tokens", 1, "advice")]
 
 
@@ -207,7 +210,7 @@ def test_certified_audit_matches_raw_audit_on_ingress(tmp_path):
     faulted = ingress_run([[1, 0, 0, 0], [0, 2, 0, 0]], faults={1: Reason.DELIVERY_REFUSED})
     for records, windows in ((early, 3), (late, 3), ([faulted[0], *faulted], 3), (faulted, 2)):
         raw = ingress_verdicts(records, windows)
-        assert ingress_verdicts(certify_all(Issuer(signer), records, INGRESS), windows, key) == raw
+        assert ingress_verdicts(certify_all(Issuer(signer, SESSION), records, INGRESS), windows, key) == raw
     assert ingress_verdicts([faulted[0], *faulted], 3) == ["duplicate", "status:delivery-refused", "no-verdict"]
 
 
@@ -217,7 +220,7 @@ def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    certified = certify_all(Issuer(signer), honest)
+    certified = certify_all(Issuer(signer, SESSION), honest)
     c0, c1 = certified[0], certified[1]
 
     def with_window_0(rec: CertifiedRecord, *, head=True, cert=True) -> CertifiedRecord:
@@ -240,7 +243,7 @@ def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
     assert egress_verdicts([forged, *certified[1:]], key) == ["signature", None, None]
     (tmp_path / "stranger").mkdir()
     stranger = signers.signer(tmp_path / "stranger", seed=b"other")
-    assert egress_verdicts(certify_all(Issuer(stranger), honest), key) == ["signature"] * 3
+    assert egress_verdicts(certify_all(Issuer(stranger, SESSION), honest), key) == ["signature"] * 3
     assert egress_verdicts(certified, key) == [None, None, None]
 
 
@@ -251,7 +254,7 @@ def test_a_relayed_status_the_certificate_disagrees_with_is_a_signature_violatio
     w.fault(Reason.DROPPED)
     for _ in range(P.buckets):
         w.tick()
-    faulted = certify_all(Issuer(signer), [w.close_window()], INGRESS)[0]
+    faulted = certify_all(Issuer(signer, SESSION), [w.close_window()], INGRESS)[0]
     lying = CertifiedRecord(RecordHead(**{f: getattr(faulted.head, f) for f in RecordHead.__slots__}
                                        | {"status": COMPLETE}), faulted.certificate)
     key = signer.public_key()
@@ -263,7 +266,7 @@ def test_a_record_past_the_deadline_is_no_verdict_and_other_parameters_a_mismatc
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    issuer = Issuer(signer)
+    issuer = Issuer(signer, SESSION)
     parameters = parameters_digest(P, SYNC_SET)
     late = [issuer.certify(honest[0], EGRESS, P, parameters, deadline=False)] + certify_all(issuer, honest[1:])
     assert egress_verdicts(late, key) == ["no-verdict", None, None]
@@ -282,12 +285,14 @@ def test_a_record_past_the_deadline_is_no_verdict_and_other_parameters_a_mismatc
 def test_certified_records_need_the_key_and_ingress_its_parameters(tmp_path):
     signer = signers.signer(tmp_path)
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    certified = certify_all(Issuer(signer), honest)
+    certified = certify_all(Issuer(signer, SESSION), honest)
     with pytest.raises(ValueError, match="public key"):
         egress_verdicts(certified)
-    ingress = certify_all(Issuer(signer), ingress_run([[1, 0, 0, 0]]), INGRESS)
+    with pytest.raises(ValueError, match="session"):
+        egress_verdicts(certified, signer.public_key(), session=None)
+    ingress = certify_all(Issuer(signer, SESSION), ingress_run([[1, 0, 0, 0]]), INGRESS)
     with pytest.raises(ValueError, match="params"):
-        Audit().check_ingress_link("requests", ingress, 1, key=signer.public_key())
+        Audit().check_ingress_link("requests", ingress, 1, key=signer.public_key(), session=SESSION)
 
 
 def test_a_signer_with_missing_or_behind_state_refuses_and_the_window_fails_closed(tmp_path):
@@ -298,7 +303,7 @@ def test_a_signer_with_missing_or_behind_state_refuses_and_the_window_fails_clos
     key = signer.public_key()
     old, current = tmp_path / "old-state.json", tmp_path / "current-state.json"
     shutil.copy(signer.state, old)
-    issuer = Issuer(signer)
+    issuer = Issuer(signer, SESSION)
     first = issuer.certify(honest[0], EGRESS, P, parameters_digest(P, SYNC_SET))
     shutil.copy(signer.state, current)
     shutil.copy(old, signer.state)
@@ -310,7 +315,7 @@ def test_a_signer_with_missing_or_behind_state_refuses_and_the_window_fails_clos
     assert egress_verdicts([first, *certify_all(issuer, honest[1:])], key) == [None, None, None]
     assert signers.used(signer) == [0, 1, 2]
     signer.state.unlink()
-    missing = Issuer(signer)
+    missing = Issuer(signer, SESSION)
     assert certify_all(missing, honest) == [] and len(missing.refused) == 3
     assert egress_verdicts([], key) == ["no-verdict"] * 3
 
@@ -321,22 +326,62 @@ def test_a_second_signer_on_one_state_or_below_its_floor_refuses(tmp_path):
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     parameters = parameters_digest(P, SYNC_SET)
     first = signers.signer(tmp_path)
-    assert Issuer(first).certify(honest[0], EGRESS, P, parameters) is not None
-    second = Issuer(LmsSigner(first.key, first.state))
+    assert Issuer(first, SESSION).certify(honest[0], EGRESS, P, parameters) is not None
+    second = Issuer(LmsSigner(first.key, first.state), OTHER_SESSION)
     assert second.certify(honest[1], EGRESS, P, parameters) is None and second.refused == [("responses", EGRESS, 1)]
     first.close()
-    floored = Issuer(LmsSigner(first.key, first.state, floor=5))
+    floored = Issuer(LmsSigner(first.key, first.state, floor=5), OTHER_SESSION)
     assert floored.certify(honest[1], EGRESS, P, parameters) is None
     again = second.certify(honest[1], EGRESS, P, parameters)
-    assert again is not None and again.verify(first.public_key())
+    assert again is not None and again.verify(first.public_key(), OTHER_SESSION)
     assert lms.Signature.decode(signers.SMALL, again.certificate.signature).q == 1
 
 
-def test_certificate_message_binds_key_link_direction_window_and_digest():
-    d = bytes(64)
-    base = certificate_message(b"I" * 16, "l", EGRESS, 0, d)
-    others = [certificate_message(b"J" * 16, "l", EGRESS, 0, d), certificate_message(b"I" * 16, "m", EGRESS, 0, d),
-              certificate_message(b"I" * 16, "l", INGRESS, 0, d), certificate_message(b"I" * 16, "l", EGRESS, 1, d),
-              certificate_message(b"I" * 16, "l", EGRESS, 0, b"\1" + bytes(63))]
-    assert len(base) == 64 and len({base, *others}) == 6
-    assert base == lms.certificate_message(b"I" * 16, "l", "egress", 0, d)
+def test_a_session_already_started_is_refused_and_its_windows_fail_closed(tmp_path):
+    """The device runs once per session id: a second run of the key under a session its state has started, after a
+    restart, signs nothing and every window is `no-verdict`; under a fresh session it signs from the next leaf."""
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    first = signers.signer(tmp_path)
+    key = first.public_key()
+    assert egress_verdicts(certify_all(Issuer(first, SESSION), honest), key) == [None, None, None]
+    first.close()
+    replay = Issuer(LmsSigner(first.key, first.state), SESSION)
+    assert certify_all(replay, honest) == [] and len(replay.refused) == 3 and not replay.started
+    assert signers.used(first) == [0, 1, 2]
+    fresh = Issuer(replay.signer, OTHER_SESSION)
+    assert egress_verdicts(certify_all(fresh, honest), key, session=OTHER_SESSION) == [None, None, None]
+    assert signers.used(first) == [0, 1, 2, 3, 4, 5]
+
+
+def test_a_certificate_from_another_session_is_a_signature_violation(tmp_path):
+    """The cross-session replay: certificates the key signed in another session of the certifier, honest ones of the
+    same link-windows, are a `signature` violation in this session, every window; in their own they are accepted."""
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    signer = signers.signer(tmp_path)
+    key = signer.public_key()
+    other = certify_all(Issuer(signer, OTHER_SESSION), honest)
+    assert egress_verdicts(other, key, session=OTHER_SESSION) == [None, None, None]
+    assert egress_verdicts(other, key, session=SESSION) == ["signature"] * 3
+    ingress = certify_all(Issuer(signer, OTHER_SESSION), ingress_run([[1, 0, 0, 0]]), INGRESS)
+    assert ingress_verdicts(ingress, 1, key, session=SESSION) == ["signature"]
+    assert ingress_verdicts(ingress, 1, key, session=OTHER_SESSION) == [None]
+    assert not other[0].verify(key, bytes(31)) and not other[0].verify(key, bytes(33))
+
+
+def test_certificate_message_binds_key_session_link_direction_window_and_digest():
+    d, s = bytes(64), SESSION
+    base = certificate_message(b"I" * 16, s, "l", EGRESS, 0, d)
+    others = [certificate_message(b"J" * 16, s, "l", EGRESS, 0, d), certificate_message(b"I" * 16, s, "m", EGRESS, 0, d),
+              certificate_message(b"I" * 16, s, "l", INGRESS, 0, d), certificate_message(b"I" * 16, s, "l", EGRESS, 1, d),
+              certificate_message(b"I" * 16, s, "l", EGRESS, 0, b"\1" + bytes(63)),
+              certificate_message(b"I" * 16, OTHER_SESSION, "l", EGRESS, 0, d)]
+    assert len(base) == 64 and len({base, *others}) == 7
+    assert base == lms.certificate_message(b"I" * 16, s, "l", "egress", 0, d)
+    tag = lms.ROLES["network-certificate"].encode()
+    field = lambda b: struct.pack(">Q", len(b)) + b  # noqa: E731
+    context = field(s) + field(b"l") + field(b"egress") + bytes(8)
+    assert tag == b"verity/network-certificate-message/v2"
+    assert base == hashlib.sha512(field(tag) + b"I" * 16 + field(context) + field(d)).digest()
+    for n in (31, 33):
+        with pytest.raises(ValueError, match="session id is 32 bytes"):
+            certificate_message(b"I" * 16, bytes(n), "l", EGRESS, 0, d)

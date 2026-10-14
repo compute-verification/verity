@@ -25,11 +25,14 @@ editing on the pod.
 | Resource steward (`research notes watch ... --lease --standby`) | `steward-run.sh`, deployed as `/data/steward/run.sh` | `/data/steward/verity` (a clone of this repo) | `/data/steward/watch.log` |
 | `/tmp` sweep, hourly | `tmp_sweep.sh`, deployed as `/data/infra/tmp_sweep.sh` | the script | `/data/infra/tmp-sweep.log` |
 | Store index, every 5 min (`research data index --postgres` into Neon's `store_private`, and `--public` into `store_public` once `store-export.env` exists) | `store_index.sh`, deployed as `/data/infra/store_index.sh` | `/data/infra/store-index-src` (a `tools/research` tree; its `COMMIT` file names it) | `/data/infra/store-index.log` |
+| Fixture export, every 5 min (`research data export` of main's `fixtures/artifacts.json` to the public export, so nobody exports a new fixture by hand; the relay's `fixtures-public` monitor alerts on one still missing) | `fixtures_export.sh`, deployed as `/data/infra/fixtures_export.sh` | `/data/infra/fixtures-export-repo` (a checkout of origin/main it fetches each pass with the deploy key) | `/data/infra/fixtures-export.log` |
 | Store panels, every 10 min | `/data/console/console-loop.sh` (`tools/research/console/`) | `/data/console` | `/data/console/console.log` |
 
 The pod holds no Slack credential, so its disk alert runs elsewhere: `control_disk_alert.py` runs on infra's VM (tmux
 `control-disk-alert`), reads `df` on the pod every 5 minutes over ssh, and posts in #agent-alerts at 90% and 95%, again under
-85%, and when the pod has been unreadable for 30 minutes. It stops when that VM is suspended.
+85%, and when the pod has been unreadable for 30 minutes. The same pass alerts when the steward's notes sync stalls (HEAD
+detached, an `index.lock` older than 10 minutes, or a change unpushed for an hour, on two reads in a row) and notes when it
+flows again. It stops when that VM is suspended.
 
 The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin with the
 read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.
@@ -63,6 +66,7 @@ CP="research pods ssh nv7h6w1pairkcu --"
 $CP "cat > /data/boot/post_start.sh" < infra/control/post_start.sh
 $CP "cat > /data/steward/run.sh" < infra/control/steward-run.sh
 $CP "cat > /data/infra/store_index.sh && chmod +x /data/infra/store_index.sh" < infra/control/store_index.sh
+$CP "cat > /data/infra/fixtures_export.sh && chmod +x /data/infra/fixtures_export.sh" < infra/control/fixtures_export.sh
 git archive HEAD tools/research | $CP "rm -rf /data/infra/store-index-src.new && mkdir /data/infra/store-index-src.new && tar -x --strip-components=2 -C /data/infra/store-index-src.new && echo $(git rev-parse HEAD) > /data/infra/store-index-src.new/COMMIT && rm -rf /data/infra/store-index-src && mv /data/infra/store-index-src.new /data/infra/store-index-src"
 ~~~
 

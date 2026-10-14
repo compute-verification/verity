@@ -19,7 +19,8 @@ unit, so it gets its own `audit.Audit` and one clock:
 - **the verifier** is `Audit.check_link` on egress and `Audit.check_ingress_link` on ingress, once on the raw records,
   once on the committed ones and once on the certified ones. The three must agree on every link-window.
 
-`ReplaySigner` is a stand-in: real LMS signatures under a toy key (`REPLAY_LMS`), leaves reused, as no certifier may.
+`ReplaySigner` is a stand-in: real LMS signatures under a toy key (`REPLAY_LMS`), leaves reused and every configuration
+signed in one certifier session (`REPLAY_SESSION`), as no certifier may.
 
 A frame's content is its position in its link's canonical order, as 8 bytes (`REPLAY_FRAME_BYTES`), so the release
 bucket of every frame is read back from the records. Frames of the report's B (4 KiB) would hold gigabytes per window.
@@ -67,12 +68,14 @@ from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, Sy
 
 REPLAY_FRAME_BYTES = 8
 REPLAY_LMS = lms.Params(8, 2, 2, toy=True)
+REPLAY_SESSION = hashlib.sha512(b"verity-network-traces/replay session").digest()[:lms.SESSION_BYTES]
 PERCENTILES = (50, 99, 99.9)
 AUDITS = ("raw", "committed", "certified")
 
 
 class ReplaySigner:
-    """The replay's signer: its n-th signature is at leaf n mod 2^H of the toy key (the module docstring)."""
+    """The replay's signer: it starts any session, and its n-th signature is at leaf n mod 2^H of the toy key (the module
+    docstring)."""
 
     def __init__(self) -> None:
         self.key, self.n = _replay_key(), 0
@@ -83,6 +86,9 @@ class ReplaySigner:
 
     def public_key(self) -> LmsKey:
         return LmsKey(self.key.params, lms.public_key(self.key))
+
+    def start(self, session: bytes) -> None:
+        pass
 
     def sign(self, message: bytes) -> bytes:
         self.n += 1
@@ -96,7 +102,7 @@ def _replay_key() -> lms.PrivateKey:
 
 def certify(records: Sequence[Record], direction: Direction, params: GridParams, parameters: bytes,
             signer: ReplaySigner) -> list:
-    issuer = Issuer(signer)
+    issuer = Issuer(signer, REPLAY_SESSION)
     return [c for r in records if (c := issuer.certify(r, direction, params, parameters)) is not None]
 
 
@@ -233,7 +239,8 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prio
         signed = certify(records, Direction.EGRESS, params, parameters_digest(params, sync_set), signer)
         v_raw = raw.check_link(name, records, frames, syncs, sync_set, params)
         v_com = committed.check_link(name, published, frames, syncs, sync_set, params)
-        v_cer = certified.check_link(name, signed, frames, syncs, sync_set, params, key=key)
+        v_cer = certified.check_link(name, signed, frames, syncs, sync_set, params, key=key,
+                                     session=REPLAY_SESSION)
         released = releases(records, T)
         expected, deviating = None, []
         if any(not v.accepted for v in v_raw + v_com + v_cer):
@@ -291,7 +298,8 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prio
         signed = certify(records, Direction.INGRESS, params, parameters_digest(params), signer)
         v_raw = raw.check_ingress_link(name, records, windows)
         v_com = committed.check_ingress_link(name, published, windows)
-        v_cer = certified.check_ingress_link(name, signed, windows, key=key, params=params)
+        v_cer = certified.check_ingress_link(name, signed, windows, key=key, params=params,
+                                             session=REPLAY_SESSION)
         released = releases(records, params.buckets)
         i = tally["ingress"]
         for w, (a, b, c) in enumerate(zip(v_raw, v_com, v_cer, strict=True)):

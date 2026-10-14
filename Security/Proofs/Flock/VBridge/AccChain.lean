@@ -321,7 +321,7 @@ theorem accChains_of_units (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂
     (hrd : ∀ R ω t R₂ τ o, Accepted zs dg N k Rw R ω t R₂ τ o → ∀ r,
       ReadsEnds sh (rep (layers zs dg N k Rw R ω t R₂ τ) r) (acc (layers zs dg N k Rw R ω t R₂ τ))
         (ops (layers zs dg N k Rw R ω t R₂ τ) r)) :
-    AccChains zs dg N k Rw sh rep := fun R ω t R₂ τ o h r =>
+    AccChains zs dg N k Rw sh (fun _ _ _ => rep) := fun R ω t R₂ τ o h r =>
   accHolds_of_units (hu R ω t R₂ τ o h r) (hc R ω t R₂ τ o h r) (hcons R ω t R₂ τ o h r) (hrd R ω t R₂ τ o h r)
 
 end outer

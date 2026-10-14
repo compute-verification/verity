@@ -92,9 +92,9 @@ class World:
         self.store = LocalStore(self.tmp / "store", config_path=self.tmp / "store.toml")
 
     def queue(self, **kw) -> Queue:
+        kw.setdefault("ready", lambda n, h: (n, h) in self.gh.ready)
         return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh,
-                     ready=lambda n, h: (n, h) in self.gh.ready,
-                     store=self.store, notes=self.tmp / "notes", log=self.logs.append, **kw)
+                     store=self.store, log=self.logs.append, **kw)
 
     def on_next(self, q: Queue) -> list[int]:
         q.fetch()
@@ -152,6 +152,26 @@ def test_a_new_push_moves_its_pr_to_the_tip_and_keeps_the_commits_before_it(worl
     assert again[2].head == world.gh.prs[2].head
 
 
+def test_an_api_head_ahead_of_its_pull_ref_waits_without_blocking_the_queue(world):
+    """GitHub's REST PR head can update before refs/pull/N/head; the queue must not walk the absent REST commit or stop the tick."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, old := world.change({"b.txt": "old\n"}))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+
+    new = world.change({"b.txt": "new\n"})
+    world.gh.prs[2] = PR(2, new, "change 2", "Lane `lane-2`.")
+    world.gh.ready.add((2, new))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1]
+    assert entries[2].state == "waiting"
+    assert entries[2].why == f"GitHub's API head {new[:12]} and pull ref {old[:12]} disagree; retrying next sync"
+    assert world.logs[-2] == f"research queue: #2's API head {new[:12]} and fetched pull ref {old[:12]} disagree; retrying next sync"
+
+    world.gh.put(2, new)
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+
+
 def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
     """12 Oct: a flaky test on `main` failed 8577 and its fix (#1858) sat behind the next train; `--first` restacks `next` so the
     next train starts with the fix.  A PR in `--first` that isn't ready is passed over, and another queue's sync without the
@@ -188,17 +208,18 @@ def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world
     assert set(merged["guarantees"]) == {"T", "A", "B"}
 
 
-def test_a_conflicting_pr_is_left_out_and_its_owner_told_which_queued_pr_touched_the_file(world):
+def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):
+    """13 Oct: a sync on @lean's VM wrote conflict handoffs for ci's and circuits' PRs into @lean's notes clone, where they
+    waited for @lean's next notes push; drive tells each conflict in the merge thread (`Driver.refuse`)."""
+    monkeypatch.setenv("RESEARCH_NOTES", str(world.tmp / "notes"))
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, world.change({"a.txt": "two\n", "b.txt": "b2\n"}))
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1]
     assert entries[2].state == "refused" and entries[2].why == "conflicts with `next` in a.txt (touched by #1)"
-    notices = sorted((world.tmp / "notes" / "lanes" / "lane-2").glob("*-handoff-from-merge-queue-2-conflict.md"))
-    assert len(notices) == 1 and "touched by #1" in notices[0].read_text()
-    q.sync()
-    assert len(list((world.tmp / "notes" / "lanes" / "lane-2").glob("*.md"))) == 1      # one notice per head
+    assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why
+    assert not (world.tmp / "notes").exists()
     assert q.status()[2].why == "conflicts with `next` in a.txt (touched by #1) (at the last sync)"
 
 
@@ -224,8 +245,7 @@ def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
     assert world.on_next(q) == [1, 2, 3]                        # an ejection takes effect at the next sync
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 3] and entries[2].why.startswith("ejected at")
-    notice = next((world.tmp / "notes" / "lanes" / "lane-2").glob("*-eject.md")).read_text()
-    assert "breaks suite `verity`" in notice
+    assert "breaks suite `verity`" in entries[2].why                # the notice is `tell_ejected`'s post, tested below
     world.gh.put(2, world.change({"b.txt": "fixed\n"}))
     assert [m.pr for m in q.sync()[0]] == [1, 3, 2]
 
@@ -322,7 +342,7 @@ def test_the_clone_authenticates_as_the_callers_checkout_does_and_fails_rather_t
 
     def queue(auth: tuple[str, ...]) -> Queue:
         return Queue(world.tmp / "q" / "verity", remote=served, github=world.gh, ready=lambda n, h: True,
-                     notes=world.tmp / "notes", log=world.logs.append, auth=auth)
+                     log=world.logs.append, auth=auth)
 
     with pytest.raises(QueueError, match=r"git clone .*terminal prompts disabled; no credential helper applies to the remote"):
         queue(()).status()
@@ -418,6 +438,19 @@ class _Unreachable:
         return fail
 
 
+def test_every_git_command_that_talks_to_the_remote_aborts_a_stalled_transfer(tmp_path, monkeypatch):
+    import research.queue as Q
+
+    q = World(tmp_path).queue()
+    seen = []
+    real = Q._git
+    monkeypatch.setattr(Q, "_git", lambda cwd, *a, **k: seen.append(a) or real(cwd, *a, **k))
+    q._clone()
+    q.fetch()
+    remote = [a for a in seen if {"clone", "fetch", "push", "ls-remote"} & set(a)]
+    assert remote and all(a[: len(Q.STALL)] == Q.STALL for a in remote), seen
+
+
 def test_ready_marks_read_through_to_the_remote_and_without_that_pull_the_queue_refuses_to_answer(tmp_path, monkeypatch):
     """A failed pull, an unusable remote, or none at all (a cloud VM's shell that lost its store secrets) used to leave the queue
     answering from this machine's labels, with a warning at most, so its ready marks could be stale.  Each is `STALE` now."""
@@ -476,6 +509,45 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
     assert StoreLabels(LocalStore(tmp_path / "q5")).ready(12, head) is True          # until its owner marks it again
 
 
+def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that_fails(tmp_path, monkeypatch):
+    """12 Oct: one listing of the store's remote per open PR, in turn, was 105 listings, 10 s of every drive tick."""
+    from research.queue import StoreLabels
+
+    heads = {n: f"{n:040x}" for n in (1, 2, 3)}
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    lane = LocalStore(tmp_path / "lane")
+    for n, value in ((1, True), (2, False)):
+        lane.add_label(label_target(n, heads[n]), vocab.READY, value, f"lane-{n}", ts="2026-10-12T07:00:00Z")
+    assert labels_sync.push_targets(lane, [label_target(n, heads[n]) for n in (1, 2)])["failed"] == []
+    pulls: list[tuple[int, int]] = []
+    pull = labels_sync.pull_targets
+    monkeypatch.setattr(labels_sync, "pull_targets", lambda store, targets, jobs=1: pulls.append((len(targets), jobs))
+                        or pull(store, targets, jobs=jobs))
+    labels = StoreLabels(LocalStore(tmp_path / "q1"))
+    labels.prefetch(list(heads.items()))
+    assert [labels.ready(n, heads[n]) for n in (1, 2, 3)] == [True, False, False]
+    assert pulls == [(3, labels_sync.SYNC_JOBS)]
+
+    pulls.clear()
+    monkeypatch.setattr(labels_sync, "remote_labels_for", lambda r, t, f=labels_sync.remote_labels_for:
+                        (_ for _ in ()).throw(OSError("listing refused")) if not pulls[1:] else f(r, t))
+    labels = StoreLabels(LocalStore(tmp_path / "q2"))
+    labels.prefetch(list(heads.items()))
+    assert [labels.ready(n, heads[n]) for n in (1, 2, 3)] == [True, False, False]
+    assert pulls == [(3, labels_sync.SYNC_JOBS), (1, 1), (1, 1), (1, 1)]
+
+
+def test_admission_prefetches_the_marks_of_every_pr_it_will_ask_of(world):
+    asked: list[list[tuple[int, str]]] = []
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}), labels=("hold",))
+    world.gh.put(3, h3 := world.change({"c.txt": "3\n"}))
+    world.queue(prefetch=asked.append).sync()
+    assert asked == [[(1, h1), (3, h3)]]
+
+
 def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypatch, capsys):
     """12 Oct: `research queue status` on architecture's VM, run without `--marked-after`, listed week-old marks (#1145, #1736)
     as admitted though drive, with its cutoff, never took them.  The cutoff is `marked_after` in the rules on `main`, and a PR whose
@@ -500,7 +572,7 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
     assert research_main(argv) == 0
     got = {e["pr"]: (e["state"], e["why"]) for e in json.loads(capsys.readouterr().out)}
     assert got[1][0] == "waiting" and got[1][1].startswith("ignored: marked before cutoff") and "2026-10-05T09:00:00Z" in got[1][1]
-    assert got[2][0] == "ready"
+    assert got[2][0] == "ready" and "the next sync merges it onto `next`" in got[2][1]
     assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
     assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
 
@@ -513,6 +585,67 @@ def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     head = next(p.head for p in world.gh.open_prs() if p.number == 1)
     (lab,) = world.store.labels(label_target(1, head), key=vocab.READY)
     assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for Daniel's decision 10")
+
+
+def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_so_when_no_one_was_told(world, monkeypatch, capsys):
+    """13 Oct: `research queue eject 1847` wrote its notice only as a handoff note on the ejecting VM, which syncs no notes, and
+    logged that it told circuits, who heard through a relay."""
+    import research.drive as D
+    import research.queue as Qm
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setenv("RESEARCH_NOTES", str(world.tmp / "notes"))
+    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+    reg = world.dev / Qm.REGISTRY
+    reg.parent.mkdir(parents=True)
+    reg.write_text(json.dumps({"handles": [{"handle": "ci"}, {"handle": "lane-1"}]}))
+    _git(world.dev, "add", "-A")
+    _git(world.dev, "commit", "-qm", "the registry")
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
+    world.gh.put(1, head := world.change({"a.txt": "1\n"}))
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    posts, ok = [], [True]
+    monkeypatch.setattr(D, "merge_thread_post", lambda text, to, sender="ci": posts.append((text, to, sender)) or ok[0])
+    argv = ["queue", "eject", "1", "--reason", "breaks suite `verity`", "--by", "ci", "--workdir", str(world.tmp / "q" / "verity"),
+            "--remote", str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "queue-store")]
+    assert research_main(argv) == 0
+    ((text, to, sender),) = posts
+    assert (to, sender) == (("@ci", "@lane-1"), "ci")
+    assert text.startswith(f"@ci @lane-1 queue: #1 at {head[:8]} is ejected from `next` by ci: breaks suite `verity`")
+    ok[0] = False
+    assert research_main(argv) == 1
+    err = capsys.readouterr().err
+    assert "#1 is ejected, but posting its notice as @ci failed, so no one was told" in err
+    assert "research msg send --as HANDLE --thread" in err and "--to @ci @lane-1" in err
+
+
+def test_a_ready_mark_written_after_an_ejection_re_admits_the_same_head(world):
+    """12 Oct: #1736, ejected at 2e050d8b and re-marked there by its owner, stayed off `next` on the ejecting VM's queue alone:
+    the queue state's record of the ejection held it whatever the store's newest mark said."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    world.gh.put(1, head := world.change({"a.txt": "1\n"}))
+    target = label_target(1, head)
+    world.store.add_label(target, vocab.READY, True, "lane-1", ts="2026-10-12T21:00:00Z")
+    labels = StoreLabels(world.store)
+    q = world.queue(ready=labels.ready, marked_at=labels.marked_at)
+    assert [m.pr for m in q.sync()[0]] == [1]
+    q.eject(1, "breaks the repository suite", "ci")
+    members, entries = q.sync()
+    assert members == [] and entries[1].why.startswith("ejected at")
+    world.store.add_label(target, vocab.READY, True, "lane-1", ts="2999-01-01T00:00:00Z")
+    assert [m.pr for m in q.sync()[0]] == [1]
+
+    state = q.load_state()                      # an ejection recorded to the minute, with no withdrawn mark in the store
+    state["ejected"]["1"] = {"head": head, "why": "w", "by": "ci", "at": "2999-01-01T00:00Z"}
+    q.save_state(state)
+    assert q.sync()[0] == [], "a mark from the ejection's own minute may be older than it"
+    state["ejected"]["1"]["at"] = "2998-12-31T23:59Z"
+    q.save_state(state)
+    assert [m.pr for m in q.sync()[0]] == [1]
 
 
 def test_rules_name_the_hold_label_and_refuse_anything_else():
@@ -545,7 +678,7 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
     assert labels.ready(1, h1) is True
     q = Queue(world.tmp / "q" / "verity", remote=str(world.origin), github=world.gh, ready=labels.ready,
-              store=world.store, notes=world.tmp / "notes", log=world.logs.append)
+              store=world.store, log=world.logs.append)
     members, _ = q.sync()
     assert [m.pr for m in members] == [1]
     h2 = world.change({"a.txt": "a2\n"})
@@ -1199,9 +1332,9 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, land and drive only"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, land and drive only"),
-                      (["queue", "drive"], "drive needs --on MACHINE")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, land, drive and report only"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, land, drive and report only"),
+                      (["queue", "drive"], "drive needs --on MACHINE"), (["queue", "report"], "report needs --on MACHINE")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
@@ -1256,3 +1389,22 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
     assert quick_tier.warm_dir({"HOME": env["HOME"]}, d) is None and quick_tier.warm_dir({**env, "CHECK_SLOT": "../x"}, d) is None
     env.pop("CHECK_SLOT")
     assert run(4) == {"dir": d, "rc": 0, "start": "cold"} and log.read_text().split()[-1] == "cold"
+
+
+def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monkeypatch):
+    """14 Oct 00:46Z: drive's listing of the open PRs hung for 5 min on a dead connection, and gh has no timeout of its own."""
+    import research.merge as M
+    import research.queue as Q
+
+    asked = []
+
+    def hangs(argv, **kw):
+        asked.append(kw.get("timeout"))
+        raise subprocess.TimeoutExpired(argv, kw["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", hangs)
+    with pytest.raises(QueueError, match=f"no answer in {Q.GH_TIMEOUT_S} s"):
+        Q.GitHub("o/r").open_prs()
+    with pytest.raises(M.Refused, match=f"no answer in {M.GH_TIMEOUT_S} s"):
+        M._gh_cli(Path("."), "pr", "view", "1")
+    assert asked == [Q.GH_TIMEOUT_S, M.GH_TIMEOUT_S]

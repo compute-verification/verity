@@ -947,10 +947,17 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
 
 
 def phase_attn(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any], topk: dict[str, Any], quick: bool):
-    """FA3's sparse decode on ATTN_TOKENS' prefill top-k rows, as `forward_mqa` calls it."""
+    """FA3's sparse decode on ATTN_TOKENS' prefill top-k rows, as `forward_mqa` calls it: through its module's
+    ``flash_attn_varlen_func`` under the serving switch (`engine.sparse_mla`, off by default: vLLM's heuristic splits; with
+    ``VERITY_SPARSE_MLA_NUM_SPLITS=1``, one split, `SparseMlaHead_v1`).  The record says which (``switch``); with the pin on,
+    the heuristic on the same call is recorded beside it (``heuristic_differs``), not checked."""
     import torch
+    from vllm.v1.attention.backends.mla import flashattn_mla_sparse as FMS
     from vllm.v1.attention.backends.mla.sparse_utils import flat_kv_row_view, triton_convert_req_index_to_global_index
-    from vllm.vllm_flash_attn.flash_attn_interface import flash_attn_varlen_func
+
+    from verity_vllm.engine import sparse_mla
+
+    pin = sparse_mla.install(FMS)
 
     toks = np.array(QUICK_ATTN_TOKENS if quick else ATTN_TOKENS)
     S = toks.size
@@ -968,21 +975,23 @@ def phase_attn(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str
     v_cache = kv_rows[:, :KV_LORA].unsqueeze(1).unsqueeze(1)
     cu = torch.arange(0, S + 1, dtype=torch.int32, device="cuda")
 
-    def fa3():
-        return flash_attn_varlen_func(q=q_rope, k=k_cache, v=v_cache, q_v=q_nope, max_seqlen_q=1, cu_seqlens_q=cu,
-                                      max_seqlen_k=TOPK, seqused_k=valid_t, block_table=glob_t, softmax_scale=SCALE, causal=True,
-                                      fa_version=3)
+    def fa3(fn):
+        return fn(q=q_rope, k=k_cache, v=v_cache, q_v=q_nope, max_seqlen_q=1, cu_seqlens_q=cu, max_seqlen_k=TOPK, seqused_k=valid_t,
+                  block_table=glob_t, softmax_scale=SCALE, causal=True, fa_version=3)
 
-    out1, out2 = fa3(), fa3()
+    out1, out2 = fa3(FMS.flash_attn_varlen_func), fa3(FMS.flash_attn_varlen_func)
+    heuristic = fa3(pin.original) if pin is not None else None
     torch.cuda.synchronize()
     want_g, want_n = convert_rows(rows, o["bt"].cpu().numpy()[0], bsr)
     g, n = glob_t.cpu().numpy(), valid_t.cpu().numpy()
+    kvr = _u16(kv_rows)
+    qn, qr, out = _u16(q_nope), _u16(q_rope), _u16(out1)
     rec = {"phase": "attn", "case": "fa3_sparse", "tokens": toks.tolist(), "valid": n.tolist(), "block_stride_rows": int(bsr),
+           "switch": {sparse_mla.ENV: os.environ.get(sparse_mla.ENV), "num_splits": sparse_mla.num_splits()},
+           "heuristic_differs": None if heuristic is None else int((_u16(heuristic) != out).sum()),
            "checks": {"conversion": bool(np.array_equal(g, want_g) and np.array_equal(n, want_n)),
                       "deterministic": bool(torch.equal(out1.view(torch.int16), out2.view(torch.int16))),
                       "shape": list(out1.shape) == [S, NH, DV] and out1.dtype == torch.bfloat16}}
-    kvr = _u16(kv_rows)
-    qn, qr, out = _u16(q_nope), _u16(q_rope), _u16(out1)
     jobs = []
     for i, t in enumerate(toks):
         paths = _save(work / f"attn_{t}", qn=qn[i], qr=qr[i], kv=kvr[g[i, :n[i]]], out=out[i])
