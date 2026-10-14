@@ -342,10 +342,6 @@ theorem names_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : Li
   obtain ⟨_, _, -, -, hm⟩ := msgNames_of_checkStmt h
   exact names_of_msgNames hm
 
-#print axioms names_of_msgNames
-#print axioms msgNames_of_checkStmt
-#print axioms names_of_checkStmt
-
 end Session
 
 section Family
@@ -477,8 +473,6 @@ theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk 
   have he := (fixedRow_or (hsp j sj _ _ _ _ _ _ _ hsj hck) hc).symm.trans hc'
   simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he
   exact hdig.trans (he.2.symm.trans hb.symm)
-
-#print axioms hPubRows_of_checked
 
 end Family
 

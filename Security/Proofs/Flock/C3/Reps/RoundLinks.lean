@@ -376,9 +376,4 @@ theorem roundRead_opening {bind : Fin S → VStar.Bindings}
   rw [hu]
   exact read_of_port (hown _ _ _ hss hj) (opening_port_of_msgNames hm hq) 0 0 rfl (sel (c₀ + i)) hsel
 
-#print axioms ownName_of_msgNames
-#print axioms msgNamesAt_of_checks
-#print axioms roundRead_opening
-#print axioms wRoundRead_inner
-
 end FlockC3.Reps

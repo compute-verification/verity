@@ -282,11 +282,4 @@ theorem wRoundReads_checked (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j
 
 end Checked
 
-#print axioms stackedRounds_open
-#print axioms roundIn_stacked
-#print axioms holoStreams_stacked
-#print axioms roundAt_opening
-#print axioms holoSel_opening_at
-#print axioms holoSel_parts
-
 end FlockC3.Reps.RoundReads
