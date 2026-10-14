@@ -91,8 +91,6 @@ theorem inner_round_lt_of_checkMsgNames
   have hi' := of_decide_eq_false hi
   omega
 
-#print axioms inner_round_lt_of_checkMsgNames
-
 /-- **`checkMsgNames` passing at a part or a part of R's opening**: each circuit port named `m<k>` is the name of one
 of the statement's message-round ports. -/
 theorem ownName_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit}
