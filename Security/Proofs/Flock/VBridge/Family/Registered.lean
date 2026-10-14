@@ -73,7 +73,7 @@ def OneInLayer : Prop :=
 
 /-- **`OneInLayer` from the accepted layers' `Good` facts.** -/
 theorem oneInLayer : F.OneInLayer dg N k Rw :=
-  fun R ω t R₂ τ o ha j u => (ha.1 j).2.2 u
+  fun R ω t R₂ τ o ha j u => (ha.1 j).2.2.2 u
 
 /-- **`HOne` from `OneInLayer`**. -/
 theorem hOne_of (h : F.OneInLayer dg N k Rw) : F.HOne dg N k Rw := by
