@@ -21,7 +21,8 @@ root of the verifier's rows, which every instance reads at its own index (`check
 Candidate 3's statements are checked the same way at coins the prover's record does not hold, the coin server's record of
 the session (`C3`, `--rec-inner-transcript` with the verifier's inner shape `rec-inner --sparse`): RecSparse's `v`
 (`rec-sparse-v`, `checkSparse`) at each rep's inner points and `sparse/rep<r>`'s coins; R's levels' `coef` and `dirs`
-(`checkStackedLevel`) and R's opening's `v` (`checkOpening`) at `stacked/rep0`'s coins and the two reps' claim points.
+(`checkStackedLevel`) and R's opening's `v` (`checkOpening`) at `stacked/rep0`'s coins and the two reps' claim points; an R
+level's `out` reads R's tops `rec-top-stacked-L<l>` at each opening's node above its `H` siblings (`checkTopReads`).
 RecSparse's refusals that read only the points' sizes are checked on the inner statement itself at every candidate-3
 session's setup, whatever its unit (`checkAtC3`, `checkInnerRange`).
 -/
@@ -404,9 +405,21 @@ def opening (c3 : C3) (unit : String) : V Opening := do
     pure { sh, v := st.vVals, lg, kappa := st.kappa }
   built.mapError (s!"rec-coins: {unit}: R's opening at {RecVStar.STACKED}/rep0's coins: " ++ ·)
 
+/-- R's level `l`'s `out` port in the reads file: R's level-`l` tops `rec-top-stacked-L<l>` (`rec_vstage.stage_stacked`), opening
+`j` of `q` reading node `pos[j] >>> H` of them, the node `H` levels above its query position (`rec_outer.TopValue.position`:
+R's one rep's tops are the value's only run). -/
+def checkTopReads (unit : String) (own : Array Registered.Port) (l q H : Nat) (pos : Array Nat) : V Unit := do
+  let some reg := own.find? (·.name == "out")
+    | throw s!"rec-coins: {unit}: the verifier's registered reads hold no port out: R's level {l} tops would be the prover's"
+  if reg.value != s!"rec-top-stacked-L{l}" then
+    throw s!"rec-coins: {unit}: port out reads {reg.value}, not R's level {l} tops rec-top-stacked-L{l}"
+  if reg.reads != (Array.range q).map fun j => some (pos[j]! >>> H) then
+    throw s!"rec-coins: {unit}: rec-top-stacked-L{l}: the reads file does not read opening j's top at node pos[j] >>> {H}"
+
 /-- A level of R's openings, `rec-open-stacked/l<LANES>-h<H>`: the level of R's schedule with `LANES` lanes and `H` siblings
 below its cap, its `q` openings instance by instance (R's one rep, `rec_vstage.stage_stacked`), each instance's `coef`
-`coefAt (κ[ℓ]) LANES eq(α_ℓ)[j]` and its `dirs` the low `H` bits of its query position, at R's coins (`opening`). -/
+`coefAt (κ[ℓ]) LANES eq(α_ℓ)[j]`, its `dirs` the low `H` bits of its query position, and its `out` R's tops at the node
+above them (`checkTopReads`), at R's coins (`opening`). -/
 def checkStackedLevel (c3 : C3) (c : Circuit) (pub : Public) (own : Array Registered.Port) (LANES H : Nat) : V Unit := do
   let unit := c.unit.name
   let o ← opening c3 unit
@@ -422,6 +435,7 @@ def checkStackedLevel (c3 : C3) (c : Circuit) (pub : Public) (own : Array Regist
   let what := fun (j : Nat) => s!"R's level {l} opening {j}"
   checkValue c pub own "coef" COEF_VALUE ((Array.range q).map fun j => words (coefAt (o.kappa[l]!) LANES ea[j]!)) what
   checkValue c pub own "dirs" DIRS_VALUE ((Array.range q).map fun j => dirsRow (cons[l]!).pos[j]! H) what
+  checkTopReads unit own l q H (cons[l]!).pos
 
 /-- A part of R's opening, `rec-opening/m<m>-c<claims>-p<j>`, at R's shape: one instance, its `v` part `j`'s elements
 (`RecResiduals.groups` of `RecOpening.structureOf`) of the verifier's v at R's coins (`opening`). -/
