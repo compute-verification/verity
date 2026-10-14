@@ -12,8 +12,8 @@ output row (`HiddenExec.rowOfH`, `outRowOf`): copy `j`'s output `o`, bit `t`, is
 * `regOut_of_outBitRow`: where that row is a registered read, the column is registered, its bit the registrant's;
 * `OutsLaid`, `outBitRow_laid`: at V*'s output layout (`out` then `acc_out`, 64 words each, one output row each, copy
   `j` returning words `0..127` in order; `rec_outer.lowering`), bit `b < 1024` of output `jo < 2` is bit `b` of row
-  `nIn + jo`. `RecOpen.checkAt` does not read the layout (`check_congr`: a circuit's name, unit, rows and input leaves
-  only), so it is a binder here;
+  `nIn + jo`. `RecOpen.checkAt` refuses a circuit without that layout (`RecOpen.outsOk`), so the binder is discharged
+  at an accepted circuit (`outsLaid_of_outsOk`, from `RecOpen.outsOk_of_check_stacked` at R's levels);
 * `outCols_of_laid`, `regOuts_of_laid`: at a unit built from `recOpenLaid`, output `jo`'s bit `b` is column
   `outStart + 1024 jo + b`, a computed column, registered where row `nIn + jo` is a registered read;
 * `haout_of_laid`: `opensTopAt_of_regs`' `haout`, where the reads file names `acc_out` (`accOut_of_checkStmt`, by
@@ -31,13 +31,52 @@ open FlockVBridge FlockVBridge.AccChain
 
 /-- **V*'s output layout at copy `j` of an R level's unit** (`rec_outer.lowering`): the outputs are `out` then
 `acc_out`, 64 words each, copy `j` returns words `0..127` in order, and each is one output row, `out` the first past the
-input rows. A fact of V*'s circuit file (`RecVStar.checkFile`), which `RecOpen.checkAt` does not read. -/
+input rows. A fact of V*'s circuit file, which `RecOpen.checkAt` refuses a circuit without (`RecOpen.outsOk`):
+`outsLaid_of_outsOk` discharges it at every copy the leaf maps cover. -/
 def OutsLaid (c : Flock.Circuit) (j : ℕ) : Prop :=
   c.outPorts = #[("out", 64), ("acc_out", 64)] ∧ c.leavesOut.getD j #[] = Array.range 128 ∧
     ∃ hq : HmOut.nIn c + 1 < c.ports.size,
       (c.ports[HmOut.nIn c]'(Nat.lt_of_succ_lt hq)).name = "out" ∧
       (c.ports[HmOut.nIn c]'(Nat.lt_of_succ_lt hq)).words = 64 ∧
       c.ports[HmOut.nIn c + 1].name = "acc_out" ∧ c.ports[HmOut.nIn c + 1].words = 64
+
+/-- **`OutsLaid` from the verifier's output check** (`RecOpen.outsOk`, which `RecOpen.checkAt` refuses a circuit
+without): at every copy the leaf maps cover (one per unit, `Circuit.checkLayout`), an accepted circuit has V*'s output
+layout. -/
+theorem outsLaid_of_outsOk {c : Flock.Circuit} (h : Flock.RecOpen.outsOk c = true) {j : ℕ}
+    (hj : j < c.leavesOut.size) : OutsLaid c j := by
+  unfold Flock.RecOpen.outsOk at h
+  rw [Bool.and_eq_true, Bool.and_eq_true] at h
+  obtain ⟨⟨hop, hall⟩, hpx⟩ := h
+  rw [decide_eq_true_eq] at hop hpx
+  have hsz := congrArg Array.size hpx
+  rw [Array.size_map, Array.size_extract] at hsz
+  rw [show (#[("out", 64), ("acc_out", 64)] : Array (String × ℕ)).size = 2 from rfl] at hsz
+  have hq : HmOut.nIn c + 1 < c.ports.size := by
+    unfold HmOut.nIn
+    omega
+  have hn : HmOut.nIn c = c.ports.size - c.outRowPorts.size := rfl
+  have hsx : 0 < (c.ports.extract (c.ports.size - c.outRowPorts.size)
+      (c.ports.size - c.outRowPorts.size + 2)).size ∧ 1 < (c.ports.extract (c.ports.size - c.outRowPorts.size)
+      (c.ports.size - c.outRowPorts.size + 2)).size := by
+    rw [Array.size_extract]
+    omega
+  have h0 : ((c.ports.extract (c.ports.size - c.outRowPorts.size) (c.ports.size - c.outRowPorts.size + 2)).map
+      (fun q => (q.name, q.words)))[0]'(by rw [Array.size_map]; exact hsx.1) = ("out", 64) := by
+    simp only [hpx]
+    rfl
+  have h1 : ((c.ports.extract (c.ports.size - c.outRowPorts.size) (c.ports.size - c.outRowPorts.size + 2)).map
+      (fun q => (q.name, q.words)))[1]'(by rw [Array.size_map]; exact hsx.2) = ("acc_out", 64) := by
+    simp only [hpx]
+    rfl
+  rw [Array.getElem_map, Array.getElem_extract, Prod.mk.injEq] at h0 h1
+  refine ⟨hop, ?_, hq, ?_, ?_, ?_, ?_⟩
+  · simp only [Array.getD, hj, reduceDIte]
+    simpa using Array.all_eq_true.1 hall j hj
+  · simpa [hn] using h0.1
+  · simpa [hn] using h0.2
+  · simpa [hn] using h1.1
+  · simpa [hn] using h1.2
 
 theorem outBitRow_eq {c : Flock.Circuit} {n : ℕ} (u : Fin n) {d : ℕ × ℕ × ℕ} {q k : ℕ} (hq : q < c.ports.size)
     (hqv : HmOut.nIn c + HiddenExec.outPortOf c (HiddenExec.outWordOf c d) = q)
