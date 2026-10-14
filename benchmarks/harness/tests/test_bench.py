@@ -187,6 +187,21 @@ def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(
     assert argv == "-m verity_bench _vllm-point --point p"
 
 
+def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
+    from verity_bench.tool import VLLM_BENCH_POINT
+
+    root = Path(__file__).resolve().parents[3]
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    item = plan.points[0]
+    workload = jobs.research_command(plan, "llama31-8b-fp8-1gpu", item, root)
+    workload = workload[workload.index("--") + 1:]
+    wrapped = ["/workspace/pouw/infra/bin/gpu-lease", "1", "--wait", "--max-min", "120", "--mem-gb", "64", "--", *workload]
+    for argv in (workload, wrapped):
+        params, key = VLLM_BENCH_POINT.resolve_params(argv, root)
+        assert key == {"identity": item.identity}
+        assert params["point"] == item.point.id and params["spec"] == "benchmarks/specs/llama31-8b-fp8-1gpu.toml"
+
+
 def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
     """The queue refuses an unregistered kind's job without --mem-gb, so each spec's points need a kind whose shape has
     the spec's GPUs and whose wall time covers its admission."""
