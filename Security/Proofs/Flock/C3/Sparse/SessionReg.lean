@@ -327,13 +327,14 @@ theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
       (Flock.RecSparse.unitName (unitShape (holoAt st hp))) i
       (wSparse F.Vs (holoAt st hp).cls.shape (Flock.RecSparse.messagePorts (unitShape (holoAt st hp)))
         (layers F.zs dg N k Rw R ω t R₂ τ) s u) c := by
-  obtain ⟨c3, hc3, hco, hname⟩ := sparseCoins_of_accepted F hchk hsp hell hs ⟨_, (hA.1 s).1⟩
+  obtain ⟨c3, hc3, hco, hname⟩ := sparseCoins_of_accepted F hchk hsp hell hs ⟨(o s).2.2, (hA.1 s).1⟩
   have hck := (parse_facts (F.zs R ω t R₂ s).hc).recSparse
   have hpar := sparseParams_of_check hck hname
   have hc3' := c3Held_eq hc3
   obtain ⟨sc, hsc⟩ := hco i.val i.isLt
   refine ⟨⟨sc, by rw [hc3']; exact hsc, ?_, by rw [hcs, hc3']; exact csOf_eq hsc⟩, Array.size_ofFn _, s, u, 0,
-    FlockC3.Reps.upv_of_outer _, hck, hpar, hone, FlockVBridge.Family.unitLog_le (F.Vs s).hscope, ?_, hv, htau, hz⟩
+    FlockC3.Reps.upv_of_outer (F.zs R ω t R₂ s), hck, hpar, hone, FlockVBridge.Family.unitLog_le (F.Vs s).hscope,
+    ?_, hv, htau, hz⟩
   · rw [hc3', c3Of_sparse hc3 hsp, unitShape_holoAt hell]
   · intro q hq hrd
     obtain ⟨b, hb⟩ := hkeys q hq hrd
@@ -342,7 +343,7 @@ theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
         (Flock.RecSparse.unitLaid (unitShape (holoAt st hp))) = .ok (F.Vs s).c.unit := hn
     have hlt := FlockVBridge.Sparse.rowCol_lt_nInS (F.Vs s).hU hn' hq
     have hbit := bitAt_of_regBit (F.zs R ω t R₂ s) (bits := layers F.zs dg N k Rw R ω t R₂ τ s) (hA.1 s).2.2 hb
-      (ioColAt_of_readCol u hlt hrd) (FlockC3.Reps.upv_of_outer _)
+      (ioColAt_of_readCol u hlt hrd) (FlockC3.Reps.upv_of_outer (F.zs R ω t R₂ s))
     have hm : nw (holoAt st hp).cls.shape =
         ((Flock.RecSparse.messagePorts (unitShape (holoAt st hp))).map (·.2)).sum :=
       nw_eq_msum (unitShape (holoAt st hp))
