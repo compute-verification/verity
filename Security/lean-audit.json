@@ -15541,9 +15541,9 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.HoloExec": {
-   "digest": "d3f3db4ae53611fa26922838ae9ca3328fa0bf25246a043129f4ccb8fd274b28",
+   "digest": "a5bc314bb565e1958b5300c6684b0cc960c676553d7bc28367dd0e5f9e30d138",
    "definitions": {
-    "FlockSoundness.Discharge.Recursion.AcceptsC3": "82c3f4b89edaaf55aab3a17d95fc7eff0dc4a3111a5f3da775ebb010c65da189",
+    "FlockSoundness.Discharge.Recursion.AcceptsC3": "2e177318b1a03c6cb74402509a256ac1f8dee74e82a3c92a4eec31c246c98577",
     "FlockSoundness.Discharge.Recursion.ClashRunHL": "a03e6715f8ddb6f556e12f71f5dda54a1f50997202b8fb9ab824b9e29d0442b0",
     "FlockSoundness.Discharge.Recursion.ExecHolo": "a5d0f5bb9ab7ad14b847badb37db7f315c16b088d400f391e02e43322e5a98a2",
     "FlockSoundness.Discharge.Recursion.ExecHolo.cls": "a4d6f581a6a1486f6d00e502189afcbb3cbb4d5fe01746b8b649df801b273079",
