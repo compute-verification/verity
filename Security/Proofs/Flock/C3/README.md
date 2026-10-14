@@ -84,7 +84,7 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
 
 | # | lemma (stub) | file | size | depends on | owner |
 |---|---|---|---|---|---|
-| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTop`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean`, `TopHold.lean` | proved (round 4) | | |
+| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTopAt`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean`, `TopHold.lean` | proved (round 4) | | |
 | n1 | `hPubRows_of_check'` (from `ChecksPubRows`, `RowsHeld`, `PortsNamed`, `SparseAtShape`); `hTape_of_frame` (from `HFrame`, `hTape_iff_frame`) | `C3/PubRows/Honest.lean`, `Check.lean`, `Frame.lean` | proved (round 4) | | |
 | n1′ | `sparseAtShapeChecked`: `SparseAtShape` at the units `checkStmt` passes (`SparseAtShapeChecked`), for every family; `hPubRows_of_checked`: `hPubRows_of_check'` with it, where some transcript each accepting session accepts passes the verifier's checks (`ChecksAccepted`; at the checked family, `checksAccepted_checked`) | `C3/PubRows/Shape.lean` | proved (round 5, H; round 6) | | |
 | n2 | `hReps_of_read` (with `hRepStages_honest`, so `hReps_honest_of_read`): `HReps` from the reps' read fact (`RepsRead`) | `C3/HoloValues/Read.lean`, `Shape.lean`, `ZcLc.lean` | proved (round 5, C) | | |
@@ -108,7 +108,12 @@ takes, each with who discharges it:
   is empty), and the checked sessions refuse one (`hLeafC3_checked`, wherever V* has a statement).
 * `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W).
 * `hnames` (`PortsNamed`): G's `PortNamesUnique` at V*'s circuits (W, with h2's parse).
-* `hown` (`OwnIs`): each accepted session's reads are the verifier's own `own`; G's `HOwn` at the honest family.
+* `hown` (`OwnIn`): each accepted session's reads hold `own`'s ports by name, value and reads. At
+  `own := fun j => ownAt ss j`, the verifier's message ports of statement `j` (`ownPorts` and RecSparse's other
+  messages, `sparseMsgs`), it is proved (`ownIn_checked`, `C3/PubRows/Shape.lean`, from `checkOwn`'s second and third
+  loops). The session may read more; no reader of `own` needs the converse. `RoundReads` and `WRoundReads` at that
+  `own` are `C3/Reps/RoundReads.lean`'s (`roundReads_checked`, `wRoundReads_checked`, from U's links in
+  `C3/Reps/RoundLinks.lean`), with the stage selector at the rounds as hypotheses.
 * `hheld` (`HeldIs`): n1c, below.
 * `hss` and `_htop`: the event's (`AcceptsC3`'s list and the guarantee's `_hstk`); `_htop` is unused by `hbr_honest`
   and is what n6's `RegLevelsRead` reads.
@@ -150,12 +155,14 @@ takes, each with who discharges it:
 * Sparse-phase order: the recorded one. `holoTableCL` plays each rep's sparse phase after both reps, reading only that
   rep's zerocheck, lincheck and `h`, fixed before its coins, so the bridge replays the record round for round and no
   reordering lemma is needed.
-* `Creg`: the inner statement's `x.cap`, tied by `StackedTop` to the META-bound record's `stacked` entry; the
+* `Creg`: the inner statement's `x.cap`, tied by `StackedTopAt` at explicit commit strings to the META-bound record's
+  structurally checked `stacked` entry; the
   registrant's openings of every level-0 position are `_hreg` (`HoloReg.Opens`). Closeness is in `holds`, not a hypothesis.
-* The tie is the verifier's (round 3, ruling 1): the event's `AcceptsC3` holds the inner transcript against `reg`
+* The tie is the verifier's (round 4 follow-up): the event's `AcceptsC3` holds the inner transcript against `reg`
   (`innerCommitsAt`, `RecVStar.innerCommits` at the verifier's own `tr`, `record` and `reg`), whose binding round's top
-  must make the `stacked` entry, compared canonically (`TopOf`); `_hstk` is gone, and t0 derives `StackedTop` from that
-  hold. The digest is `metaRegistration st`, META's `registration` of the inner circuit the verifier reads off
+  must match the `stacked` entry's five fields as well as its canonical form. `_hstk : StackedTopAt … bcs'` carries
+  the registered strings explicitly; a different held top is `topFinder`'s one-run collision event. The digest is
+  `metaRegistration st`, META's `registration` of the inner circuit the verifier reads off
   `--rec-inner-circuit`, the file `AcceptsPublic` sets `st` up from.
 * Who registers R: the inner session's prover. Its staging commits R's table and writes the registration record, and
   the verifier checks only that META binds the record's digest and that the binding round's top makes its `stacked`

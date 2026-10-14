@@ -22,10 +22,11 @@ import Proofs.Flock.Recursive.Loads
 
 `rsRead_of_facts` composes them. `RsSel` is at the round commitments (`rsSel_of_rounds`): ring switch `i`'s columns
 are keyed by port `m<i>` (`RsKeys`, the opening's check, `rsKeys`), whose reads-file entry is `rec-opening-c<i>`, read
-at the unit where stage `c₀ + i` reads it (`RoundReads`; `WRoundReads` is it at the residuals' parts). `SessStmt` is at any family whose checks pass (`sessStmt_of_accepted`,
-from `ChecksAccepted`), and at the checked family from the guarantee's `_hF` (`sessStmt_checked`: the checked
-sessions carry the prover's inputs, `tagsFound_checked`); `rsRead_of_accepted` composes them, and `rsRead_checked` is
-it at the checked family.
+at the unit where stage `c₀ + i` reads it (`RoundReads`; `WRoundReads` is it at the residuals' parts; both at the
+verifier's own ports, `own := ownAt ss`, are `C3/Reps/RoundReads.lean`'s). `SessStmt` is at any family whose checks
+pass (`sessStmt_of_accepted`, from `ChecksAccepted`), and at the checked family from the guarantee's `_hF`
+(`sessStmt_checked`: the checked sessions carry the prover's inputs, `tagsFound_checked`); `rsRead_of_accepted`
+composes them, and `rsRead_checked` is it at the checked family.
 -/
 
 namespace FlockC3.Compose
@@ -458,14 +459,16 @@ def RsKeys (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fi
             .msg q'.val (kk / 8) (kk % 8) → (Vs s).c.ports[q'].name = s!"m{i}"
 
 /-- **Hypothesis on the reads file and the stage selector: a copy's unit reads round `i`'s commitment at port `m<i>`,
-where stage `c₀ + i` reads it**: at the session and unit of a copy registering w, the reads file has an entry named
-`m<i>` of value `rec-opening-c<i>` (round `i`'s commitment, `rec_vstage.opening_messages`) whose read of the unit is at
-a position `x` that stage `c₀ + i` reads of that value. -/
+where stage `c₀ + i` reads it**: at the session and unit of a copy registering w, where the session's circuit has a
+port named `m<i>` (`RsKeys`' conclusion), the reads file has an entry named `m<i>` of value `rec-opening-c<i>` (round
+`i`'s commitment, `rec_vstage.opening_messages`) whose read of the unit is at a position `x` that stage `c₀ + i` reads
+of that value. -/
 def RoundReads (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128)
     (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) (c₀ : ℕ) : Prop :=
   ∀ i < 2, ∀ gs (s : Fin S) (un : Fin (Vs s).nv) (j p : ℕ), OpenCopy zs dg N k Rw sh w gs s un j p →
+    ∀ q : Fin (Vs s).c.ports.size, (Vs s).c.ports[q].name = s!"m{i}" →
     ∃ pt ∈ own s, pt.name = s!"m{i}" ∧ pt.value = s!"rec-opening-c{i}" ∧
       ∃ x, pt.reads[un.val]? = some (some x) ∧ sel (c₀ + i) pt.value x
 
@@ -489,8 +492,8 @@ theorem rsSel_of_rounds {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
     (hk : RsKeys zs dg N k Rw sh w) (hr : RoundReads zs dg N k Rw sh w own sel c₀) :
     RsSel zs dg N k Rw sh w own sel c₀ := by
   intro i hi gs s un j p hO S0 hS hg hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey
-  obtain ⟨pt, hpt, hn, -, x, hx, hsx⟩ := hr i hi gs s un j p hO
   have hq := hk i hi gs s un j p hO S0 hS hg hpg S₁ ns nv hpart q e t he hwi b hb q' kk hkk hkey
+  obtain ⟨pt, hpt, hn, -, x, hx, hsx⟩ := hr i hi gs s un j p hO q' hq
   exact ⟨pt, hpt, hn.trans hq.symm, x, hx, hsx⟩
 
 /-! ## `SessStmt` from the verifier's checks -/

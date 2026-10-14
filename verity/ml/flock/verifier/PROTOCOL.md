@@ -1277,9 +1277,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     the structure is computed;
   - the rest is a `rec-residuals/` part's (the claims bounded by the input bits, part `j`'s bits, the net), at the
     opening's S (`Flock.RecOpening.structureOf`, `rec_algebra.structure` at an opening-only shape) and its row ports;
-  - its computed rows must read each element of a claim's ring switch the part holds in all 128 bits
-    (`RecOpening.rsUnread`), refused by the first that is not and how many of its bits are, and each other element in
-    all 128 or in none (`RecResiduals.partlyRead`), refused as a `rec-residuals/` part is;
+  - its computed rows must read each element of a claim's ring switch, and of Ligerito's running sums (`acc0`,
+    `acc1`), the part holds in all 128 bits (`RecOpening.rsUnread`), refused by the first that is not and how many of
+    its bits are, and each other element in all 128 or in none (`RecResiduals.partlyRead`), refused as a
+    `rec-residuals/` part is;
   - a circuit port that keys a bit of claim `i`'s ring-switch element must be named `m<i>` (`RecResiduals.misnamed`,
     `RecOpening.rsName`), refused as a `rec-residuals/` part's misnamed port is.
 

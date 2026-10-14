@@ -124,8 +124,10 @@ def err (x : Except String Unit) : Option String := match x with | .error e => s
 def port (name value : String) (reads : List Nat) : Registered.Port :=
   { name, value, root := ByteArray.empty, leaves := 2, words := none, wordBits := 16, domain := ByteArray.empty,
     reads := (reads.map some).toArray }
+def sparseMsgsOwn (rd : List Nat) : Array Registered.Port :=
+  ((sparseMsgs (.sparse sp18 38)).map fun q => port q.1 q.2.1 rd).toArray
 def sparseOwn (claim : List Nat) : Array Registered.Port :=
-  #[port "h" "rec-c38" [0, 1], port "claim" "rec-claim" claim, port "v" "rec-sparse-v" [0, 1]]
+  sparseMsgsOwn [0, 1] ++ #[port "h" "rec-c38" [0, 1], port "claim" "rec-claim" claim, port "v" "rec-sparse-v" [0, 1]]
 def openOwn (claim1 : List Nat) : Array Registered.Port :=
   #[port "m3" "rec-opening-c3" [0], port "acc0" "rec-acc" [4], port "claim1" "rec-claim" claim1]
 def openSt : VStar.Stmt := .opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("claim1", 1)] 1
@@ -135,6 +137,12 @@ def openSt : VStar.Stmt := .opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("c
   "rec-sparse/n18-e13-s6-t0: the registered reads' port claim under rec-claim reading [1, 0] is not the statement's: the statement's is claim under rec-claim reading [0, 1]"
 #guard err (checkOwn (.sparse sp18 38) (sparseOwn [0, 1]).pop.pop) == some
   "rec-sparse/n18-e13-s6-t0: the statement's message-round port claim under rec-claim reading [0, 1] is not in the registered reads (1 message-round ports)"
+-- RecSparse's other messages are read under `rec-sparse-<p>` at both reps' rows; a file missing one, or reading one at
+-- other rows, is refused
+#guard err (checkOwn (.sparse sp18 38) ((sparseOwn [0, 1]).extract 1 (sparseOwn [0, 1]).size)) == some
+  "rec-sparse/n18-e13-s6-t0: the statement's message port pre0 under rec-sparse-pre0 reading [0, 1] is not in the registered reads"
+#guard err (checkOwn (.sparse sp18 38) (sparseMsgsOwn [1, 0] ++ (sparseOwn [0, 1]).extract (sparseMsgsOwn [0, 1]).size 100))
+  == some "rec-sparse/n18-e13-s6-t0: the statement's message port pre0 under rec-sparse-pre0 reading [0, 1] is not in the registered reads"
 #guard claimIndex "claim12" == some 12 && claimIndex "claim01" == none && claimIndex "claim" == none
 #guard err (checkOwn openSt (openOwn [1])) == none
 #guard err (checkOwn openSt (openOwn [0])) == some
