@@ -64,6 +64,35 @@ theorem cIndex_opening (k : ℕ) : cIndex s!"rec-opening-c{k}" = none := by
 
 /-! ## The statement's port -/
 
+/-- **An accepted part port names an algebra message**: when the part name fixes its recursive shape and
+`checkMsgNames` accepts a circuit port named `m<i>`, `i` is below the algebra-message rounds. -/
+theorem inner_round_lt_of_checkMsgNames
+    {p m kLog claims partNo i : ℕ} {name : String} {part : VStar.Part} {c : Flock.Circuit}
+    (hp : RecResiduals.params name = some (m, kLog, claims, partNo))
+    (h : checkMsgNames (.inner p name part) c = .ok ())
+    {q : Fin c.ports.size} (hq : c.ports[q].name = s!"m{i}") :
+    i < m + kLog + claims - 8 := by
+  have hr : innerMsgRounds (.inner p name part) = some (m + kLog + claims - 8) := by
+    simp [innerMsgRounds, hp]
+  have hn : msgRoundOutOfRange (m + kLog + claims - 8) c = none := by
+    cases hx : msgRoundOutOfRange (m + kLog + claims - 8) c with
+    | none => rfl
+    | some nm =>
+      simp only [checkMsgNames] at h
+      split at h
+      · cases h
+      · split at h
+        · cases h
+        · simp only [hr, hx] at h
+  have hmem : s!"m{i}" ∈ c.ports.toList.map (·.name) :=
+    List.mem_map.2 ⟨c.ports[q], Array.mem_toList_iff.2 (Array.getElem_mem q.isLt), hq⟩
+  have hi := List.find?_eq_none.1 hn _ hmem
+  rw [mIndex_m] at hi
+  simp only [decide_eq_false_iff_not] at hi
+  omega
+
+#print axioms inner_round_lt_of_checkMsgNames
+
 /-- **`checkMsgNames` passing at a part or a part of R's opening**: each circuit port named `m<k>` is the name of one
 of the statement's message-round ports. -/
 theorem ownName_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit}
