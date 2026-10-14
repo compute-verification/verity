@@ -254,9 +254,3 @@ theorem srcSparseTie_of_pubH {rng : Flock.Range} (hu : UnitsOf st hp) (hrng : un
 end src
 
 end FlockC3.Sparse
-
-#print axioms FlockC3.Sparse.checkSparse_of_check
-#print axioms FlockC3.Sparse.rep_of_checkSparse
-#print axioms FlockC3.Sparse.sparsePubRead_of_checkSparse
-#print axioms FlockC3.Sparse.sparsePubRead_of_files
-#print axioms FlockC3.Sparse.srcSparseTie_of_pubH
