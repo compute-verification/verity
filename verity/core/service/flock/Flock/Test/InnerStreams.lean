@@ -198,8 +198,10 @@ def openSt : VStar.Stmt := .opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("c
 -- the inner shape covers the transcript: candidate 3's streams need the shapes, and R's is META's; each stream's c_k
 -- sit at its schedule's message rounds, and R's tops at its schedule's
 def atRounds (ks : List Nat) (base : Nat) : Array (Nat × ByteArray) := ks.toArray.zipIdx.map fun (k, i) => (k, b (base + i))
-def sparseAt (x : Nat) (ks : List Nat := commitRounds (sparsePhaseRounds sp18)) : InnerStream :=
-  { name := s!"sparse/rep{x}", commits := atRounds ks (50 * x), tops := #[] }
+def repCoins (rs : Array SchedRound) : Array (Array Flock.F128) := rs.map fun r => Array.replicate r.1 0
+def sparseAt (x : Nat) (ks : List Nat := commitRounds (sparsePhaseRounds sp18))
+    (coins : Array (Array Flock.F128) := repCoins (sparsePhaseRounds sp18)) : InnerStream :=
+  { name := s!"sparse/rep{x}", commits := atRounds ks (50 * x), tops := #[], coins }
 def rRounds : Array SchedRound := (stackedRounds r23).getD #[]
 def stackedAt (ks : List Nat := commitRounds rRounds) (ns : List Nat := topCounts rRounds) : InnerStream :=
   { name := "stacked/rep0", commits := atRounds ks 200, tops := ns.toArray.map fun n => Array.replicate n (b 9) }
@@ -240,6 +242,16 @@ def msgAt (s : String) (j : Nat) (got want : String) (n m : Nat) : Option String
   msgAt "sparse/rep1" 0 "round 2" "round 1" 33 33
 #guard why (checkCovers c3 (withS #[sparseAt 0 spRounds.dropLast, sparseAt 1, stackedAt])) ==
   msgAt "sparse/rep0" 32 "no round" "round 33" 32 33
+-- each sparse stream draws its phase's coins round for round (the coin server's record of r20261012-081440-2d61 holds
+-- 6, six 1s, 0, a 1 per H3 round, P_LOG's 5 and the claim's 0): a round short, a coin over, and none are refused
+def spCoins : Array (Array Flock.F128) := repCoins (sparsePhaseRounds sp18)
+def spDraws (cs : Array (Array Flock.F128)) : Option String :=
+  some (s!"rec inner transcript: sparse/rep1 draws {cs.map (·.size)} coins by round, and its schedule " ++
+    s!"(rec-sparse/n18-e13-s6-t0) {spCoins.map (·.size)}")
+
+#guard (spCoins.map (·.size)).toList == [6, 1, 1, 1, 1, 1, 1, 0] ++ List.replicate 24 1 ++ [5, 0]
+#guard [spCoins.pop, spCoins.modify 7 (·.push 0), #[]].all fun cs =>
+  why (checkCovers c3 (withS #[sparseAt 0, sparseAt 1 (coins := cs), stackedAt])) == spDraws cs
 -- R's stream at (m 23, claims 2): 25 message rounds and tops of 128, 64 and 64 nodes. Its c_k one round off or one
 -- short, its tops other than its rounds commit, and R's stream under an inner shape naming no schedule of R's are
 -- refused
@@ -266,7 +278,6 @@ def otherSparse (n : String) : Option String :=
 #guard otherSparse "sparse/rep1" == none
 -- every stream but the sparse phases' and R's holds the rep's rounds at the inner shape, round for round (`RepsDrawn`'s
 -- second half): a stream named neither way with no rounds, one round short, or one coin over in a round is refused
-def repCoins (rs : Array SchedRound) : Array (Array Flock.F128) := rs.map fun r => Array.replicate r.1 0
 def reps25 : Array SchedRound := (repRounds 25 22 8).getD #[]
 def repStream (coins : Array (Array Flock.F128)) : InnerStream :=
   { name := "circuit/rep0", commits := #[], tops := #[], coins := coins }
@@ -276,7 +287,7 @@ def roundsOff (s : String) (n : Nat) : Option String :=
   some s!"rec inner transcript: {s} holds {n} rounds, and its schedule (m 25, k_log 22, claims 8) 94"
 
 #guard reps25.size == 94 && withRep (repCoins reps25) == none
-#guard otherSparse "sparse-rep2" == roundsOff "sparse-rep2" 0
+#guard otherSparse "sparse-rep2" == roundsOff "sparse-rep2" 34
 #guard withRep (repCoins reps25).pop == roundsOff "circuit/rep0" 93
 #guard withRep ((repCoins reps25).modify 0 (·.push 0)) == roundsOff "circuit/rep0" 94
 
