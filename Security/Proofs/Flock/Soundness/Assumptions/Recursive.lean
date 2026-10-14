@@ -121,4 +121,37 @@ theorem vbridgeC_of_vbridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm :
   · rw [List.getElem?_eq_getElem (by have := hlast Xt; omega)]
     exact Option.Rel.some (by intro h; exact absurd h hc)
 
+/-- Obligation, as `VBridgeC`, off one more bad event `Bad`.
+
+**`v-bridge` at the committed rounds, off `RegColl` and `Bad`**: `VBridgeC` field for field, its first read only where
+neither two sessions' registrant records clash (`RegColl`, `regFinder`'s) nor `Bad` holds. At candidate 3, `Bad` is
+`Recursion.ValueColl` at the verifier's rows (`valueSrcAll`): a registrant's row off a value the verifier registers itself
+(`coef`, `dirs`, `v`), by a SHA-512 collision `valueFinder` outputs, the case `FlockC3.RegLevels.value_tie` leaves. This
+module cannot name it (its module imports this one), so `Bad` is a parameter; RegColl is not widened. `VBridgeC` gives it at
+every `Bad` (`vbridgeCOff_of_vbridgeC`). -/
+def VBridgeCOff {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type} (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop)
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray)
+    (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg) : Prop :=
+  VBridgeOff (fun R ω t R₂ => RegColl zs R ω t R₂ ∨ Bad R ω t R₂) zs dg N k Rw x wmsg ∧
+    VCommits zs (fun i j => if i + 1 < I.r then Sk i j else ∅) cmt ∧
+    VDecodesR wmsg (fun i _ a b => i + 1 < I.r → a = b) (fun i j => if i + 1 < I.r then Sk i j else ∅) msg ∧
+    VFullR I.r (fun i j => if i + 1 < I.r then Sk i j else ∅)
+
+/-- **`VBridgeC` gives `VBridgeCOff` at every `Bad`**: off more, the bridge asks less. -/
+theorem vbridgeCOff_of_vbridgeC {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ}
+    {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop)
+    {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {x : Reg → L.Ω → I.Stmt}
+    {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg}
+    {Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
+    {cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg}
+    {msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg}
+    (hb : VBridgeC zs dg N k Rw x wmsg Sk cmt msg) : VBridgeCOff Bad zs dg N k Rw x wmsg Sk cmt msg :=
+  ⟨fun R ω t R₂ hn => hb.1 R ω t R₂ fun h => hn (Or.inl h), hb.2⟩
+
 end Flock.Assumptions
