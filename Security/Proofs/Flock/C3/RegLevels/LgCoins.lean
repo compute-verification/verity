@@ -17,11 +17,12 @@ coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which `late
 * `roundIn_stacked`, `holoSelOne_stacked`: R's stream last in `holoStreams`' order, its round `q` of coins is drawn at
   history round one past every earlier stream's and R's rounds before `q` (`roundAt_reps`, `holoSelOne_rep` at R);
 * `drawn_stacked`: where R's rounds from `k₂` each draw coins, the history's rounds from R's round `k₂`'s draw them in
-  order (`StageHeld`'s last part).
+  order (`StageHeld`'s last part);
+* `stackedRounds_coins`: every round of R's stream draws coins, at each shape `fast100` has (`drawn_stacked`'s `hpos`).
 
 Left for `h5`: `StageHeld`'s third part, the history's round count past the stage, which reads `rep0`'s round count
-against `stackedRounds` (R's held rounds are the stream's, `candidate3`, `checkStackedShape`); that R's rounds from `k₂`
-each draw coins; and that the stage starts at R's round `k₂`'s history round.
+against `stackedRounds` (R's held rounds are the stream's, `candidate3`, `checkStackedShape`); and that the stage starts
+at R's round `k₂`'s history round.
 -/
 
 namespace FlockC3.RegLevels
@@ -150,6 +151,22 @@ theorem drawn_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : Array 
   have h := holoSelOne_stacked (q := k₂ + p) hS hL hf (hpos p hlt)
   rwa [heldBefore_stacked p fun p' hp' => hpos p' (by omega), ← Nat.add_assoc] at h
 
+/-- **Every round of R's stream draws coins** (`drawn_stacked`'s `hpos` at every `k₂`): at R's two claims, each of the
+fourteen shapes `fast100` has (`m` from 22 to 35) by evaluation, and past them `stackedRounds` is none. -/
+theorem stackedRounds_coins {sh : Flock.RecVStar.StackedShape} (hc : sh.claims = Flock.RecVStar.STACKED_CLAIMS)
+    {rs : Array SchedRound} (h : Flock.RecVStar.stackedRounds sh = some rs) :
+    ∀ q < rs.size, 0 < (rs.getD q default).1 := by
+  obtain ⟨m, claims⟩ := sh
+  subst hc
+  by_cases hm : m < 36
+  · have hall : ∀ m < 36, ∀ rs, Flock.RecVStar.stackedRounds { m, claims := Flock.RecVStar.STACKED_CLAIMS } = some rs →
+        ∀ q < rs.size, 0 < (rs.getD q default).1 := by decide +kernel
+    exact hall m hm rs h
+  · have hf : Flock.fast100 m = none := by
+      unfold Flock.fast100
+      simp [show m > 35 by omega]
+    simp [Flock.RecVStar.stackedRounds, hf] at h
+
 end FlockC3.RegLevels
 
 #print axioms FlockC3.RegLevels.heldStage_of_lgCoins
@@ -158,3 +175,4 @@ end FlockC3.RegLevels
 #print axioms FlockC3.RegLevels.roundIn_stacked
 #print axioms FlockC3.RegLevels.holoSelOne_stacked
 #print axioms FlockC3.RegLevels.drawn_stacked
+#print axioms FlockC3.RegLevels.stackedRounds_coins
