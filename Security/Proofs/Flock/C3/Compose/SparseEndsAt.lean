@@ -35,17 +35,18 @@ theorem sparseForms_length (sp : RecSparse.Shape) :
   omega
 
 /-- **The sparse part's coins are the history rounds before R's first**, at `holoStreams`' list where the inner shape
-is the inner statement's (`checkInnerStmt`) and the class's sparse shape the inner shape's (`hshape`). -/
+is the inner statement's (`checkInnerStmt`), its claims two and two per region (`hcl`, V*'s list's:
+`shape_of_statements`), and the class's sparse shape the inner shape's (`hshape`). -/
 theorem sparseCoins_roundAt {st : Flock.Stmt} {hp : HoloParams} {ish : RecVStar.Inner} {sp : RecSparse.Shape}
     {shR : StackedShape} {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)}
-    (hc : ClassOk (shapeOf st)) (hi : RecVStar.checkInnerStmt ish st = .ok ()) (hsp : ish.sparse = some sp)
-    (hsh : ish.stacked = some shR) (hrs : stackedRounds shR = some rs) (hshape : (holoAt st hp).cls.shape = sparseOf sp)
+    (hc : ClassOk (shapeOf st)) (hi : RecVStar.checkInnerStmt ish st = .ok ()) (hcl : ish.claims = 2 * ish.regions + 2)
+    (hsp : ish.sparse = some sp) (hsh : ish.stacked = some shR) (hrs : stackedRounds shR = some rs)
+    (hshape : (holoAt st hp).cls.shape = sparseOf sp)
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L) :
     sparseCoins (holoAt st hp) = roundAt L .stacked 0 := by
   obtain ⟨rep, -, hrep, -⟩ := holoStreams_eq hS
   have hL := Option.some.inj (hS.symm.trans (FlockC3.RegLevels.holoStreams_four hrep hsp hsh hrs))
   rw [hL]
-  have hcl := FlockC3.VStarList.claims_of_checkInnerStmt hi
   have h0 : 0 < ish.claims := by omega
   have hr0 := heldBefore_rep_forms 0 h0 hrep
   have hr1 := heldBefore_rep_forms 1 h0 hrep
@@ -67,7 +68,7 @@ theorem sparseCoins_roundAt {st : Flock.Stmt} {hp : HoloParams} {ish : RecVStar.
       (holoAt st hp).regs).m ((holoAt st hp).cls.pubStatement (holoAt st hp).regs).kLog
       (2 * ((holoAt st hp).cls.pubStatement (holoAt st hp).regs).regions.length) (holoAt st hp).sch) =
       (repForms ish.m ish.kLog ish.claims).length := by
-    rw [kindCoins_eq_length, kindCoinTys_holoRepShape, List.length_map, ← repFormsAt_holoAt (hp := hp) hc hi]
+    rw [kindCoins_eq_length, kindCoinTys_holoRepShape, List.length_map, ← repFormsAt_holoAt (hp := hp) hc hi hcl]
     rfl
   have hspC : kindCoins (FlockC3.Sparse.sparseKinds GF128 (holoAt st hp).cls.shape) =
       FlockVBridge.Sparse.nc (sparseOf sp) := by
@@ -89,14 +90,14 @@ local notation "ℐ" => holoInnerAt T CT st hp
 /-- **`srcOK_holo_rs`' `he`**: `partEnds_sparse` at R's first history round (`sparseCoins_roundAt`). -/
 theorem partEnds_sparse_roundAt {ish : RecVStar.Inner} {sp : RecSparse.Shape} {shR : StackedShape}
     {rs : Array SchedRound} {Ls : List (HoloStream × Array SchedRound)} (hc : ClassOk (shapeOf st))
-    (hi : RecVStar.checkInnerStmt ish st = .ok ()) (hsp : ish.sparse = some sp) (hsh : ish.stacked = some shR)
-    (hrs : stackedRounds shR = some rs) (hshape : (holoAt st hp).cls.shape = sparseOf sp)
+    (hi : RecVStar.checkInnerStmt ish st = .ok ()) (hcl : ish.claims = 2 * ish.regions + 2) (hsp : ish.sparse = some sp)
+    (hsh : ish.stacked = some shR) (hrs : stackedRounds shR = some rs) (hshape : (holoAt st hp).cls.shape = sparseOf sp)
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some Ls)
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
     (hr : FlockC3.Reps.SrcRepTie zs dg N k Rw src) (hs : FlockC3.Sparse.SrcSparseTie zs dg N k Rw src) :
     PartEnds sparsePart zs dg N k Rw src (roundAt Ls .stacked 0) := by
-  rw [← sparseCoins_roundAt hc hi hsp hsh hrs hshape hS]
+  rw [← sparseCoins_roundAt hc hi hcl hsp hsh hrs hshape hS]
   exact partEnds_sparse hr hs
 
 end FlockC3.Compose

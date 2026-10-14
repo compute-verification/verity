@@ -12,8 +12,8 @@ parts of R's opening at META's `stacked`. `checkCandidate3` refuses a list with 
 * `SparseIs ish hp`: `hp` is the verifier's own, the inner shape's `sparse` entry (`[NU, ELL, S_LOG, T_LOG]`).
 * `sparse_of_list`: the list holds RecSparse at that entry; `stacked_of_list`: with R, it holds each of R's levels at
   `fast100(m)` (`recOpenStacked`); `stacked_of_candidate3`: and the inner shape names R at `(table_m, STACKED_CLAIMS)`.
-* `checkInnerStmt_ok`, `claims_of_checkInnerStmt`: where check 5 passes `checkInnerStmt`, the inner shape names a
-  sparse entry, its `m`, `k_log` and region count are the inner statement's, and its claims two and two per region.
+* `checkInnerStmt_ok`: where check 5 passes `checkInnerStmt`, the inner shape names a sparse entry and its `m`,
+  `k_log` and region count are the inner statement's.
 * `mReg_of_list`: each of the list's `rec-opening` statements is at `m = mReg` and `STACKED_CLAIMS` claims, where
   `mReg` is the model's (`(holoAt st hp).cls.shape.mReg`, padded to `PAD_TO` as the verifier's `tableM` is) and `ℓ` is
   in the class's range.
@@ -130,24 +130,6 @@ theorem checkInnerStmt_ok {i : Flock.RecVStar.Inner} {st : Flock.Stmt}
   cases hs : i.sparse with
   | none => rw [hs] at h1; exact absurd rfl h1
   | some _ => rfl
-
-/-- **The inner shape's claims are the class's** where `checkInnerStmt` passes: two and two per region (its claims
-refusal, `innerOf`'s `2 + points · regions` at two points). -/
-theorem claims_of_checkInnerStmt {i : Flock.RecVStar.Inner} {st : Flock.Stmt}
-    (h : Flock.RecVStar.checkInnerStmt i st = .ok ()) : i.claims = 2 * i.regions + 2 := by
-  have hr := (checkInnerStmt_ok h).2.2.2
-  unfold Flock.RecVStar.checkInnerStmt Flock.RecVStar.checkInnerShape at h
-  by_cases h1 : i.sparse.isNone = true
-  · simp only [h1, ↓reduceIte] at h
-    cases h
-  by_cases h2 : (i.m != st.m || i.kLog != st.c.kLog || i.regions != st.regions.size) = true
-  · simp only [h1, h2, Bool.false_eq_true, ↓reduceIte] at h
-    cases h
-  by_cases h3 : (i.claims != 2 + 2 * st.regions.size) = true
-  · simp only [h1, h2, h3, Bool.false_eq_true, ↓reduceIte] at h
-    cases h
-  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at h3
-  omega
 
 /-- **A loop that runs through passes each element**: where each step that succeeds continues and holds `P` of its
 element, a loop that succeeds holds `P` of every element. -/

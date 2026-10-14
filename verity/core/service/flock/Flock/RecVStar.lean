@@ -1024,9 +1024,6 @@ def checkInnerShape (i : Inner) (m kLog regions : Nat) : Except String Unit := d
   if i.m != m || i.kLog != kLog || i.regions != regions then
     throw (s!"rec-inner: the verifier's inner shape (m {i.m}, k_log {i.kLog}, regions {i.regions}) is not the inner " ++
       s!"statement's (m {m}, k_log {kLog}, regions {regions})")
-  if i.claims != 2 + 2 * regions then
-    throw (s!"rec-inner: the verifier's inner shape has {i.claims} claims, not candidate 3's two and two per region " ++
-      s!"(at two points, {2 + 2 * regions})")
 
 /-- `checkInnerShape` at the inner statement `st`. -/
 def checkInnerStmt (i : Inner) (st : Stmt) : Except String Unit :=

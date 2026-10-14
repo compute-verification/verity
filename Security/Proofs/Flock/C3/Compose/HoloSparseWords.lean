@@ -14,7 +14,8 @@ steps, one word each, read the coins the verifier holds of a round word by word,
 `holoForms_sparse_none`: `holoSelWords`' last conjunct at a sparse phase's round, where the model's rep forms are the
 verifier's (`repFormsAt`, `repForms`): past both reps' rounds (`heldBefore_rep_forms`) the round's history rounds are
 inside the phase's `sparseForms`, every one `none`. `repFormsAt_holoAt` is `hA` where the inner statement's class
-checks pass and the inner shape is the statement's (`checkInnerStmt`), its claims `2 · regions + 2` among it.
+checks pass and the inner shape is the statement's (`checkInnerStmt`), at its claims `2 · regions + 2` (`hcl`), which V*'s
+list gives (`shape_of_statements`).
 -/
 
 namespace FlockC3.Reps
@@ -210,13 +211,12 @@ theorem holoForms_sparse_none {st : Flock.Stmt} {hp : HoloParams} {ish : RecVSta
   exact getD_sparseForms (S := sparseForms (sparseOf sp)) (fun y hy => List.eq_of_mem_replicate hy) x (by omega)
 
 /-- **The model's rep forms are the verifier's** (`holoForms_sparse_none`'s `hA`): where the inner statement's class
-checks pass (`hc`) and the inner shape's `m`, `k_log`, regions and claims are the statement's (`checkInnerStmt_ok`,
-`claims_of_checkInnerStmt`): its claims `2 · regions + 2` are the class's. -/
+checks pass (`hc`) and the inner shape's `m`, `k_log` and regions are the statement's (`checkInnerStmt_ok`), at the
+inner shape's claims `2 · regions + 2` (`hcl`), the class's claims. -/
 theorem repFormsAt_holoAt {st : Flock.Stmt} {hp : HoloParams} {ish : RecVStar.Inner} (hc : ClassOk (shapeOf st))
-    (hi : RecVStar.checkInnerStmt ish st = .ok ()) :
+    (hi : RecVStar.checkInnerStmt ish st = .ok ()) (hcl : ish.claims = 2 * ish.regions + 2) :
     repFormsAt (holoAt st hp) = repForms ish.m ish.kLog ish.claims := by
   obtain ⟨-, hm, hk, hr⟩ := FlockC3.VStarList.checkInnerStmt_ok hi
-  have hcl := FlockC3.VStarList.claims_of_checkInnerStmt hi
   have hm' : (execClassAt st).cls.m = st.m := by
     rw [execClassAt, dite_eq_left hc]
     rfl
