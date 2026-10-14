@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.Compose.AtHoloHeld
 import Proofs.Flock.C3.Sparse.PubChecked
+import Proofs.Flock.C3.Reps.DrawnRounds
 
 /-!
 # The verifier's hold at the map read: `HeldOk`, `C3Held`, `SparseStagesAt` and `SparseCountedAt`
@@ -8,7 +9,7 @@ import Proofs.Flock.C3.Sparse.PubChecked
 
 * `heldOk_of_selC`, `heldOk_holo`: the verifier holds the record at every history long enough for the map's rounds:
   sparse phase 0's first coin round is drawn below them (`sparseDrawnAt_holo` at `holoSelWords`), and custody holds what
-  a drawn round reads, which an error holds nowhere (`heldCoins`);
+  a drawn round reads (`FlockC3.Reps.stream_of_custody`);
 * `c3Held_heldC3`: `C3Held` at the `C3` built of the hold (`heldC3`, `c3Of`'s at a hold), the one check 5 reads at the
   guarantee; `held_commits`: with `HeldOk`, the record held is the run's `C3`'s commits (`stageHeldW_sparse`'s `hh`);
 * `sparseStagesAt_sparseOf`: `SparseStagesAt` at the source whose sparse stages are the steps of `w` at `c` (`sparseOf`),
@@ -30,18 +31,14 @@ open FlockC3.Reps (repsOfVals UnitVals)
 open Flock.Guarantees (holoCTs holoKinds holoRounds heldBefore coinRounds sparseRounds c3Of)
 
 /-- **Custody at a drawn round holds the record**: where round `i` of the history draws a stream's round (`m.selC`),
-custody holds its coins there, which an error holds nowhere. -/
+custody holds the record there (`FlockC3.Reps.stream_of_custody`). -/
 theorem heldOk_of_selC {Cm Coin : Type} {wr : List (Cm × Coin) → Lean.Json × String}
     {held : Lean.Json × String → Except String RecVStar.InnerCommits} {sparse : Option RecSparse.Shape}
     {m : FlockSoundness.Assumptions.InnerRecordMap Cm Coin}
     (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m) {t : List (Cm × Coin)} {i : ℕ}
     (hi : i < t.length) {s : String} {q : ℕ} (hq : m.selC i s q) : HeldOk wr held t := by
-  have hc := ((hcus t).1 i t[i] (List.getElem?_eq_getElem hi)).2 s q hq
-  cases h : held (wr t) with
-  | error _ =>
-    rw [h] at hc
-    simp [FlockSoundness.Assumptions.heldCoins] at hc
-  | ok cs => exact ⟨cs, h⟩
+  obtain ⟨cs, -, h, -⟩ := FlockC3.Reps.stream_of_custody hcus (List.getElem?_eq_getElem hi) hq
+  exact ⟨cs, h⟩
 
 /-- **`HeldOk` at the map read**: sparse phase 0's first coin round (ζ_c's, of `PRE_ROUNDS` coins) is drawn at a
 history round below the map's (`sparseDrawnAt_holo`), which a history of `hlen`'s length has. -/

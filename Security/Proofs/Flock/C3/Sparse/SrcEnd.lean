@@ -40,29 +40,37 @@ theorem playsT_claim_of_unit {sh : SparseShape} {pub : SparsePub GF128 sh} {τ' 
   rw [(hiff.1 hacc).2] at hpl
   exact playsT_stepsOf hpl
 
-/-- **A tied rep's claim is its unit's**: its stage is the unit's steps, and the claim it plays to is `sparseClaim`. -/
+/-- **A rep tied at `w` and `c` plays its stage to its unit's claim there** (`sparseClaim`): the unit's verifier row
+runs the phase to it (`playsT_claim_of_unit`). -/
+theorem playsT_claim_of_tieAt {e : ExecHolo} {u : C3Run e} {i : Fin 2} {w : Array Flock.F128} {c : SCoins}
+    (h : SparseTieAt e u i w c) : PlaysT (sparseAt e u i) (u.sp i) (some (sparseClaim e.cls.shape w c)) := by
+  obtain ⟨cc, v, hw, hc, hpub, hh, hs, hck, hpar, hL, hin, h0⟩ := h
+  have hv := (check_sparse hck hpar).1
+  simp only [Flock.RecSparse.Shape.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
+  obtain ⟨hbits, -⟩ := laid_sparse (unitShape e) hv.2 v hL w (verifierRow (shOf (unitShape e)) c) (tauArr e) hin
+  rw [hs]
+  refine playsT_claim_of_unit (τ := tauArr e) ⟨hw, hc, hpub,
+    fun σ => arr_ofFn_get (fun σ => (e.τ σ).val) σ.isLt, hh, _, out_eq (shOf (unitShape e)) w (tauArr e) c hw,
+    ⟨fun x hx => ?_, fun y hy => ?_⟩⟩
+  · obtain ⟨r, hr, rfl⟩ := Array.mem_iff_getElem.1 hx
+    refine eq_of_bitOf fun k hk => (hbits r hr k hk).symm.trans ((h0 _ ?_).trans (bitOf_zero k).symm)
+    have := Nat.lt_of_lt_of_eq hr (outOf_size (unitShape e) _ _ _ _)
+    omega
+  · rw [outOf_eq] at hy
+    split at hy
+    · simp at hy
+    · exact (tail_iff (shOf (unitShape e)) (tauArr e)).2
+        (fun s hs => (arr_ofFn_get (fun σ => (e.τ σ).val) hs).trans_lt (e.τ _).isLt) y hy
+
+/-- **A tied rep's claim is its unit's**: its stage is the unit's steps, and the claim it plays to is `sparseClaim`
+(`playsT_claim_of_tieAt`; a game plays on one tape to one outcome). -/
 theorem claim_of_tie {e : ExecHolo} {u : C3Run e} {i : Fin 2} (h : SparseTie e u i)
     (hp : PlaysT (sparseAt e u i) (u.sp i) (some (u.claim i))) :
     ∃ (w : Array Flock.F128) (c : SCoins), w.size = nw e.cls.shape ∧ nc e.cls.shape ≤ c.cs.size ∧
       u.sp i = stepsOf e.cls.shape w c.cs ∧ u.claim i = sparseClaim e.cls.shape w c := by
-  obtain ⟨w, c, cc, v, hw, hc, hpub, hh, hs, hck, hpar, hL, hin, h0⟩ := h
-  have hv := (check_sparse hck hpar).1
-  simp only [Flock.RecSparse.Shape.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
-  obtain ⟨hbits, -⟩ := laid_sparse (unitShape e) hv.2 v hL w (verifierRow (shOf (unitShape e)) c) (tauArr e) hin
-  have hq : PlaysT (sparseAt e u i) (stepsOf e.cls.shape w c.cs) (some (sparseClaim e.cls.shape w c)) := by
-    refine playsT_claim_of_unit (τ := tauArr e) ⟨hw, hc, hpub,
-      fun σ => arr_ofFn_get (fun σ => (e.τ σ).val) σ.isLt, hh, _, out_eq (shOf (unitShape e)) w (tauArr e) c hw,
-      ⟨fun x hx => ?_, fun y hy => ?_⟩⟩
-    · obtain ⟨r, hr, rfl⟩ := Array.mem_iff_getElem.1 hx
-      refine eq_of_bitOf fun k hk => (hbits r hr k hk).symm.trans ((h0 _ ?_).trans (bitOf_zero k).symm)
-      have := Nat.lt_of_lt_of_eq hr (outOf_size (unitShape e) _ _ _ _)
-      omega
-    · rw [outOf_eq] at hy
-      split at hy
-      · simp at hy
-      · exact (tail_iff (shOf (unitShape e)) (tauArr e)).2
-          (fun s hs => (arr_ofFn_get (fun σ => (e.τ σ).val) hs).trans_lt (e.τ _).isLt) y hy
-  rw [hs] at hp
+  obtain ⟨w, c, ht⟩ := h
+  have hq := playsT_claim_of_tieAt ht
+  obtain ⟨-, -, hw, hc, -, -, hs, -⟩ := ht
   exact ⟨w, c, hw, hc, hs, Option.some.inj (FlockSoundness.Game.PlaysT.det hp hq)⟩
 
 theorem size_of_sizes {cs : Array (Array Flock.F128)} {want : Array ℕ} (h : cs.map (·.size) = want) {i : ℕ}

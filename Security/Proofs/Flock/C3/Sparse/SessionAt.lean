@@ -138,11 +138,11 @@ def SparseSessionAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS)
 
 /-- **(n7's sparse tie from V*'s sessions)** At good layers, the sparse session and what the source reads there give
 `SparseTieL` at the session's layer: the coins' count is `nc`'s (`sparseCoins_size`), and the residuals' output
-columns, past the unit's inputs, are 0 in the layer (`copyVal_regOut`). -/
-theorem sparseTieL_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits}
+columns, past the unit's inputs, are 0 in the layer (`copyVal_regOut`). At the session's `w` and `c`. -/
+theorem sparseTieLAt_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits}
     {e : ExecHolo} {c3 : Flock.RecCoins.C3} {unit : String} {i : Fin 2} {w : Array Flock.F128} {c : SCoins}
     {u : C3Run e} (hG : ∀ s, (zs s).Good (Lb s)) (hs : SparseSessionAt zs Lb e c3 unit i w c)
-    (hsrc : SparseSrcAt e u i w c) : ∃ s, SparseTieL (zs s) (Lb s) e u i := by
+    (hsrc : SparseSrcAt e u i w c) : ∃ s, SparseTieLAt (zs s) (Lb s) e u i w c := by
   obtain ⟨⟨sc, hsc, hsh, hcs⟩, hw, s, un, j, hj, hck, hpar, hone, hu, hrw, hrv, hrt, h0⟩ := hs
   obtain ⟨hpub, hh, hst⟩ := hsrc
   have hnc : nc e.cls.shape ≤ c.cs.size := by
@@ -156,9 +156,16 @@ theorem sparseTieL_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s
   have hbase : (FlockSoundness.Rows.ofNet (Vs s).hU).nIn ≤ sparseBase (unitShape e) := by
     rw [FlockSoundness.Discharge.Layout.ofNet_nIn_eq, inWords_sparse hn']
     exact FlockVBridge.Decode.inRows_le_outStart _ _ _
-  exact ⟨s, w, c, un, j, hj, hw, hnc, hpub, hh, hst, hck, hpar, hone, hu, hrw, hrv, hrt, fun t ht =>
+  exact ⟨s, un, j, hj, hw, hnc, hpub, hh, hst, hck, hpar, hone, hu, hrw, hrv, hrt, fun t ht =>
     copyVal_regOut (zs s) (hG s).2 (FlockVBridge.keyProg_correct (Vs s).hU (Vs s).nv (hG s).1 un) hj (by omega)
       (h0 t ht)⟩
+
+/-- `sparseTieLAt_of_session` at the session's witnesses. -/
+theorem sparseTieL_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits}
+    {e : ExecHolo} {c3 : Flock.RecCoins.C3} {unit : String} {i : Fin 2} {w : Array Flock.F128} {c : SCoins}
+    {u : C3Run e} (hG : ∀ s, (zs s).Good (Lb s)) (hs : SparseSessionAt zs Lb e c3 unit i w c)
+    (hsrc : SparseSrcAt e u i w c) : ∃ s, SparseTieL (zs s) (Lb s) e u i :=
+  (sparseTieLAt_of_session hG hs hsrc).elim fun s h => ⟨s, w, c, h⟩
 
 /-- **The sparse tie from V*'s sessions** (`sparseTie_of_layer` at the session's layer). -/
 theorem sparseTie_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits}

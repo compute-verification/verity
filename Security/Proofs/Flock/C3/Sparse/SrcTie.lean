@@ -39,9 +39,9 @@ def tauArr (e : ExecHolo) : Array ℕ := Array.ofFn fun σ => (e.τ σ).val
 /-- **Rep `i`'s sparse stage is a RecSparse unit V*'s check accepted**: words `w` and coins `c` at the rep's values
 (all of `SparseUnit` but its acceptance), whose steps are the stage, and a circuit `RecSparse.check` accepted at the
 session's shape whose laid-out unit's rows hold at `v`, with its input columns holding `w`, the verifier row at `c` and
-the slots' types, and its residuals' output columns zero. -/
-def SparseTie (e : ExecHolo) (u : C3Run e) (i : Fin 2) : Prop :=
-  ∃ (w : Array Flock.F128) (c : SCoins) (cc : Flock.Circuit) (v : ℕ → Bool),
+the slots' types, and its residuals' output columns zero (`SparseTieAt`, at those `w` and `c`). -/
+abbrev SparseTieAt (e : ExecHolo) (u : C3Run e) (i : Fin 2) (w : Array Flock.F128) (c : SCoins) : Prop :=
+  ∃ (cc : Flock.Circuit) (v : ℕ → Bool),
     w.size = nw e.cls.shape ∧ nc e.cls.shape ≤ c.cs.size ∧
     FlockVBridge.Sparse.pubOf e.cls.shape c =
       holoPub (e.cls.pubStatement e.regs) e.cls.shape e.cls.units (u.rep i).1 (u.rep i).2 ∧
@@ -50,6 +50,10 @@ def SparseTie (e : ExecHolo) (u : C3Run e) (i : Fin 2) : Prop :=
     LaidRows (Flock.RecSparse.unitLaid (unitShape e)) (inRowsOf (sparseInBits (unitShape e))) v ∧
     SparseIn (unitShape e) (w[·]!) ((verifierRow e.cls.shape c)[·]!) ((tauArr e)[·]!) v ∧
     ∀ t < 128 * (Flock.RecSparse.residualNames (unitShape e)).length, v (sparseBase (unitShape e) + t) = false
+
+@[inherit_doc SparseTieAt]
+def SparseTie (e : ExecHolo) (u : C3Run e) (i : Fin 2) : Prop :=
+  ∃ (w : Array Flock.F128) (c : SCoins), SparseTieAt e u i w c
 
 theorem outOf_size (sh : Flock.RecSparse.Shape) (rs w v : Array Flock.F128) (τ : Array ℕ) :
     (outOf (shOf sh) rs w v τ).1.size = (Flock.RecSparse.residualNames sh).length := by
