@@ -61,9 +61,8 @@ theorem open_of_check {inn : Flock.RecCoins.Inner} {c : Flock.Circuit} {pub : Fl
     obtain ⟨⟨⟩, -, h⟩ := FlockVBridge.PartS.bind_ok h
     try dsimp only at h
     obtain ⟨⟨⟩, hcv, hdv⟩ := FlockVBridge.PartS.bind_ok h
-    exact ⟨_, _, by simp only [openRows, halg, hls', h0, h1],
-      ⟨_, (hcv : Flock.RecCoins.checkValue c pub own "coef" Flock.RecCoins.COEF_VALUE (openCoef sh l LANES r0 r1) _ = _)⟩,
-      _, (hdv : Flock.RecCoins.checkValue c pub own "dirs" Flock.RecCoins.DIRS_VALUE (openDirs sh l H r0 r1) _ = _)⟩
+    exact ⟨openCoef sh l LANES r0 r1, openDirs sh l H r0 r1, by simp only [openRows, halg, hls', h0, h1], ⟨_, hcv⟩, _,
+      hdv⟩
   · cases h
 
 /-- **What an accepted `rec-residuals` unit checked**: its `v` at `residualRows`' rows. -/
