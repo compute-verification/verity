@@ -22,7 +22,10 @@ K's round 5 (`f5be751ac`), rec-lean's round 21 and S's round 22 (`b74cd6ec7`); r
 6–7), L's round 22 (`927241612`), W's rounds 2–3 (`45117e553`), S's round 23 (`172738c19`), E's labels
 (`f77469c1d`), L's round 23 (`ed6a18610`) and H's round 23 (`3539d74a4`), which spec-2 has since `d70c2b892`; then, at
 14 Oct 09:30Z, R's round 25 (`b1fe9f30c`), W's rounds 4–5 (`8ed4a1b57`), C's round 26 (`098d4d57e`), K's round 8
-(`4b848b7db`), S's round 24 (`58865f706`) and L's round 24 (`88dd89e1f`). `hbr_honest_reg` takes
+(`4b848b7db`), S's round 24 (`58865f706`) and L's round 24 (`88dd89e1f`); and, in spec-2's final batch at `b8a642627`
+(r20261014-111059-e1bc, on main `3662d9fd9`), K's round 9 (`613c87695`), C's round 27 (`9ba215ca1`: `_hstk` from the
+`TopColl` event, `haout`'s second half), R's round 28 (`ca2f2d652`) and W's round 6 (`56041cc6a`: `srcOK_holo_held`).
+`hbr_honest_reg` takes
 R's level-0 salts `salt` (C round 25) with no caller yet: the discharge of `RecursiveAuditC3` passes it the held salts,
 the prover's workers'.
 
