@@ -136,7 +136,8 @@
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "benchmarks/codec_tensor/",
-        "benchmarks/kv_filler/"
+        "benchmarks/kv_filler/",
+        "benchmarks/remote_session/"
       ]
     },
     {
