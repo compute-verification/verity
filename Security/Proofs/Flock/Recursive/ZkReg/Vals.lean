@@ -44,6 +44,20 @@ def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → L
     | .inl uq => (.inl uq, rd.wv (.inl uq), rd.ws (.inl uq))
     | .inr g => (.inr g, (layShHJ dj y₀ ht hc hscope hU (pub := pub)).regVal R (.inr g), [])
 
+/-- At a registered read, `regOpenZ` is the registrant's row opening. -/
+theorem regOpenZ_of_read {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
+    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
+    (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
+    (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+      (rsShHJS dj y₀ ht hc hscope hU hpub)) (R : Reg)
+    (p : (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos) (hp : rd.isRead p) :
+    regOpenZ ht dj y₀ hc hU hpub hscope rd R p = (p, rd.wv p, rd.ws p) := by
+  have hrow := rd.read_row p hp
+  rcases p with uq | g
+  · rfl
+  · simp at hrow
+
 /-- **The committed values of a `--zk --registered` session are the registered values at its registered reads**, except
 with probability `ε_ks + δ_link + δ_reg`: for every registered-reads record `rd` of `layShHJ`, with `cr/sha-512` at
 budgets `qF, qS` for the knowledge finders of `τ`'s simulation (`hCR`) and at budget `qW` for its registered-value finders
@@ -124,6 +138,7 @@ theorem zk_session_regValsR
       (le_trans (prob_mono ?_ _ _) hc'))
   rintro o ⟨hacc, u, hu, g, hg, hread, hleaf, hne⟩
   refine ⟨hacc, u, hu, g, hg, ?_, hne⟩
+  rw [regOpenZ_of_read ht dj y₀ hc hU hpub hscope rd _ _ hread]
   refine Prod.ext rfl ?_
   show ((rsZHJS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
   unfold HmRowsZX.scheme
@@ -147,6 +162,7 @@ theorem regBadZ_of_leaf {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (F
       (rd.wv ((layShHJ dj y₀ ht hc hscope hU (pub := pub)).pos g)) g) :
     RegBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
       (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd R) R Xt g := by
+  rw [regOpenZ_of_read ht dj y₀ hc hU hpub hscope rd R _ hread]
   refine ⟨Prod.ext rfl ?_, hne⟩
   show ((rsZHJS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
   unfold HmRowsZX.scheme
@@ -168,7 +184,29 @@ theorem regBadZ_oneG {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin 
       (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd R) R Xt
         (Layout.oneG (c := c) (hU := hU) (n := n)) := by
   refine ⟨?_, ?_⟩
-  · rfl
+  · have hkey : Layout.keyRowOf c hU n (Layout.portRowW c)
+        (Layout.oneG (c := c) (hU := hU) (n := n)) = none := by
+      unfold Layout.keyRowOf Layout.oneG
+      simp [Placed.oneGate]
+    have hunit : (keyProg c hU n).unit (Layout.oneG (c := c) (hU := hU) (n := n)) = none :=
+      Layout.unit_uniform_input (k := Placed.inGates n (Layout.keyB c hU)) (R := Placed.circuitRows c hU)
+        (ins := Placed.insOf n (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
+        (one := Placed.oneGate n (Layout.keyB c hU))
+        (hone := Placed.insOf_ne_one n (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) n _
+        (by simp [Layout.oneG, Placed.oneGate])
+    have hrow : HiddenExec.rowOfH c hU n (Layout.outsOf c hU n)
+        (Layout.oneG (c := c) (hU := hU) (n := n)) = none := by
+      rw [HiddenExec.rowOfH_of_none _ hkey]
+      unfold HiddenExec.outRowOf
+      rw [hunit]
+    have hpos : (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).pos
+        (Layout.oneG (c := c) (hU := hU) (n := n)) =
+        .inr (Layout.oneG (c := c) (hU := hU) (n := n)) := by
+      dsimp only [layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits,
+        HiddenExec.keyReadersH]
+      exact Layout.ofRows_pos_none _ hrow
+    rw [hpos]
+    rfl
   · simpa [regOpenZ, ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout,
       Layout.Readers.ofRows, Layout.keyGate] using hne
 
