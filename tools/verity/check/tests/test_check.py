@@ -1049,6 +1049,23 @@ def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agre
     assert CHECK.agreement_closure(changed) == changed
 
 
+def test_every_file_the_agreement_reads_needs_the_agreement_to_merge():
+    """The rule `check.py --record` sends the upstream build by, and the gate refuses by, covers each tracked file the agreement
+    reads (`agreement_closure`: its scripts and the Lean package `flock-verify` is built from) but the docs, so a change to any
+    of them can't land on a check that skipped it (13 Oct: the rule was read as covering verity/ml/flock/ alone)."""
+    from research.merge import rule_touches
+
+    spec2 = importlib.util.spec_from_file_location("check_tool_reads", ROOT / "tools" / "verity" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(tool)
+    rule = list(tool.CHECK.merge_requires["lean-agreement"])
+    reads = CHECK.agreement_closure(CHECK.tracked_files(ROOT))
+    lean = CHECK.FLOCK_LEAN.relative_to(ROOT).as_posix() + "/"
+    assert any(f.startswith(lean) and f.endswith(".lean") for f in reads)
+    # the rule leaves out the docs only, which the agreement never reads (`test_the_agreement_is_not_required_for_docs_alone`)
+    assert {f.rsplit("/", 1)[-1] for f in reads if not rule_touches(rule, [f])} <= {"README.md", "PROTOCOL.md"}
+
+
 def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_path, monkeypatch, capsys):
     """`reuse`, at the top of result.json and printed in the log: a flag or input that turns reuse off shows as a low rate there,
     with each suite run again and the inputs that forced it."""

@@ -33,6 +33,38 @@ def test_the_sketch_warps_sum_each_store_block(nbs, nchunks, groups):
     assert SR.receipts_of(SEED, mma, j0) == [receipter(j0 + v, blocks[v].tobytes()) for v in range(len(blocks))]
 
 
+@pytest.mark.parametrize("nbs, nchunks, groups", [(3, 1, 2), (5, 2, 1), (9, 1, 9)])
+def test_the_64_row_sketch_warps_sum_each_store_block(nbs, nchunks, groups):
+    """At 64 rows receipt_warp's A is one AND of a bit plane (`sign_planes`) a register, 2^ρ times row ρ's bits, and
+    a ones MMA's T recovers σ = T − 2 (Σ bit e): each receipt is the store block's σ at 64 rows, at the extremes
+    (blocks of −128 and of 127, where |acc| reaches 2^26) too, and its receipts are the driver's at rows = 64."""
+    store = np.random.default_rng(64 + nbs + groups).integers(0, 256, nbs * nchunks * SB, dtype=np.uint8)
+    store[:SR.BLOCK], store[SR.BLOCK:2 * SR.BLOCK] = 0x80, 0x7F
+    blocks = SR.gemm_blocks(store, SB)
+    mma = SR.fragment_sketch64(store, nbs, nchunks, SB, groups, SR.sign_planes(SR.sign_bits(SEED, SR.ROWS64)))
+    assert np.array_equal(SR.sketches(SR.signs(SEED, SR.ROWS64), blocks), mma)
+    receipter = SR.rb.receipter(SR.rb.SKETCH_SHA512, SEED, 64)
+    assert SR.receipts_of(SEED, mma, 5) == [receipter(5 + v, blocks[v].tobytes()) for v in range(len(blocks))]
+    assert SR.receipts_of(SEED, mma[:, :SR.ROWS], 5)[0] != SR.rb.SketchReceipter(SEED)(5, blocks[0].tobytes())
+
+
+def test_the_64_row_planes():
+    """sign_words takes 64 rows as it takes 16; sign_planes' bit 8 b + ρ of lane (g, t)'s word 2 s + hh at p is row
+    16 (ρ // 2) + g + 8 (ρ % 2)'s sign at 64 p + 16 t + 8 s + 4 hh + b; sign_frags refuses 64 rows."""
+    bits = SR.sign_bits(SEED, SR.ROWS64)
+    assert SR.sign_words(bits).tobytes() == bits.tobytes() and SR.sign_words(bits).size == SR.PLANE_WORDS
+    pl = SR.sign_planes(bits).reshape(SR.BLOCK // 64, SR.LANES, 4)
+    signs = SR.signs(SEED, SR.ROWS64)
+    for p, lane, w, b, rho in ((0, 0, 0, 0, 0), (63, 31, 3, 3, 7), (17, 9, 2, 1, 4), (40, 22, 1, 2, 5)):
+        g, t = divmod(lane, 4)
+        bit = int(pl[p, lane, w]) >> (8 * b + rho) & 1
+        assert 1 - 2 * bit == signs[16 * (rho >> 1) + g + 8 * (rho & 1), 64 * p + 16 * t + 8 * (w >> 1) + 4 * (w & 1) + b]
+    with pytest.raises(ValueError, match="16 × 512"):
+        SR.sign_frags(bits)
+    with pytest.raises(ValueError, match="64 × 512"):
+        SR.sign_planes(SR.sign_bits(SEED))
+
+
 @pytest.mark.parametrize("groups", [1, 2, 5])
 def test_a_launch_receipts_the_registered_blocks(groups):
     nbs, nchunks = 5, 2

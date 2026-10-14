@@ -60,7 +60,9 @@ def launches(a) -> list[dict]:
     shapes = {**shapes, "lm_head": (128256, 4096 if step["model_name"] == "8b" else 8192)}
     st = BW.stream(torch)
     BW.set_sketch_tag(lib)
-    bits = BW.sketch_bits(lib, BW.window_seed(lib), 16, SKT.vector_bytes(lib.sb, t))
+    rows = step.get("k_s", BW.SR.ROWS)
+    BW.set_pass(lib, t, rows=rows)
+    bits = BW.sketch_bits(lib, BW.window_seed(lib), rows, SKT.vector_bytes(lib.sb, t))
     signs = torch.from_numpy(BW.pass_signs(lib, bits, t).view(np.int32)).cuda()
     frags = BW.sign_frags(lib, torch, signs, t, st)
     out = []

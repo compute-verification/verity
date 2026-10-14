@@ -152,6 +152,26 @@ def test_a_new_push_moves_its_pr_to_the_tip_and_keeps_the_commits_before_it(worl
     assert again[2].head == world.gh.prs[2].head
 
 
+def test_an_api_head_ahead_of_its_pull_ref_waits_without_blocking_the_queue(world):
+    """GitHub's REST PR head can update before refs/pull/N/head; the queue must not walk the absent REST commit or stop the tick."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, old := world.change({"b.txt": "old\n"}))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+
+    new = world.change({"b.txt": "new\n"})
+    world.gh.prs[2] = PR(2, new, "change 2", "Lane `lane-2`.")
+    world.gh.ready.add((2, new))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1]
+    assert entries[2].state == "waiting"
+    assert entries[2].why == f"GitHub's API head {new[:12]} and pull ref {old[:12]} disagree; retrying next sync"
+    assert world.logs[-2] == f"research queue: #2's API head {new[:12]} and fetched pull ref {old[:12]} disagree; retrying next sync"
+
+    world.gh.put(2, new)
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+
+
 def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
     """12 Oct: a flaky test on `main` failed 8577 and its fix (#1858) sat behind the next train; `--first` restacks `next` so the
     next train starts with the fix.  A PR in `--first` that isn't ready is passed over, and another queue's sync without the
@@ -418,6 +438,19 @@ class _Unreachable:
         return fail
 
 
+def test_every_git_command_that_talks_to_the_remote_aborts_a_stalled_transfer(tmp_path, monkeypatch):
+    import research.queue as Q
+
+    q = World(tmp_path).queue()
+    seen = []
+    real = Q._git
+    monkeypatch.setattr(Q, "_git", lambda cwd, *a, **k: seen.append(a) or real(cwd, *a, **k))
+    q._clone()
+    q.fetch()
+    remote = [a for a in seen if {"clone", "fetch", "push", "ls-remote"} & set(a)]
+    assert remote and all(a[: len(Q.STALL)] == Q.STALL for a in remote), seen
+
+
 def test_ready_marks_read_through_to_the_remote_and_without_that_pull_the_queue_refuses_to_answer(tmp_path, monkeypatch):
     """A failed pull, an unusable remote, or none at all (a cloud VM's shell that lost its store secrets) used to leave the queue
     answering from this machine's labels, with a warning at most, so its ready marks could be stale.  Each is `STALE` now."""
@@ -552,6 +585,40 @@ def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     head = next(p.head for p in world.gh.open_prs() if p.number == 1)
     (lab,) = world.store.labels(label_target(1, head), key=vocab.READY)
     assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for Daniel's decision 10")
+
+
+def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_so_when_no_one_was_told(world, monkeypatch, capsys):
+    """13 Oct: `research queue eject 1847` wrote its notice only as a handoff note on the ejecting VM, which syncs no notes, and
+    logged that it told circuits, who heard through a relay."""
+    import research.drive as D
+    import research.queue as Qm
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setenv("RESEARCH_NOTES", str(world.tmp / "notes"))
+    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+    reg = world.dev / Qm.REGISTRY
+    reg.parent.mkdir(parents=True)
+    reg.write_text(json.dumps({"handles": [{"handle": "ci"}, {"handle": "lane-1"}]}))
+    _git(world.dev, "add", "-A")
+    _git(world.dev, "commit", "-qm", "the registry")
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
+    world.gh.put(1, head := world.change({"a.txt": "1\n"}))
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    posts, ok = [], [True]
+    monkeypatch.setattr(D, "merge_thread_post", lambda text, to, sender="ci": posts.append((text, to, sender)) or ok[0])
+    argv = ["queue", "eject", "1", "--reason", "breaks suite `verity`", "--by", "ci", "--workdir", str(world.tmp / "q" / "verity"),
+            "--remote", str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "queue-store")]
+    assert research_main(argv) == 0
+    ((text, to, sender),) = posts
+    assert (to, sender) == (("@ci", "@lane-1"), "ci")
+    assert text.startswith(f"@ci @lane-1 queue: #1 at {head[:8]} is ejected from `next` by ci: breaks suite `verity`")
+    ok[0] = False
+    assert research_main(argv) == 1
+    err = capsys.readouterr().err
+    assert "#1 is ejected, but posting its notice as @ci failed, so no one was told" in err
+    assert "research msg send --as HANDLE --thread" in err and "--to @ci @lane-1" in err
 
 
 def test_a_ready_mark_written_after_an_ejection_re_admits_the_same_head(world):
