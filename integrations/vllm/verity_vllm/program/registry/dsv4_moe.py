@@ -150,9 +150,10 @@ def mufu_lg2_mantissa_bits(x: int) -> int:
 
 
 @primitive("MufuLg2Mantissa", 1, [("x", F32)], F32,
-           conformance="exact-model-tested: lg2.approx.ftz.f32 on every 1.m of [1, 2), 8,388,608 words measured on the RTX PRO 6000 "
-                       "(cc 12.0; run r20261004-060203-ba52) equal to the interpolant; cc 9.0 not yet captured "
-                       "(tests/properties/dsv4_moe_capture_gpu.py)",
+           conformance="exact-model-tested: lg2.approx.ftz.f32 on every 1.m of [1, 2), 8,388,608 words measured on a cc 12.0 GPU "
+                       "(run r20261004-060203-ba52) equal to the interpolant; captured on a cc 9.0 GPU (132 SMs) too: "
+                       "lg2.approx.ftz.f32 and lg2.approx.f32 on every 1.m are those words, lg2(2) = 1 and a NaN 0x7FFFFFFF "
+                       "(run r20261013-205619-5c39 at a9be5ce66, tests/properties/dsv4_moe_capture_gpu.py)",
            # a measured MUFU table in substance, but not on `verity.ml.circuits.library`'s versioned list, so the guard lists it
            tables=(("lg2_coeffs", "registered"),))
 def MufuLg2Mantissa(x: int) -> int:
@@ -168,10 +169,18 @@ C_LOG2E, C_NEG_LOG2E, C_LN2, C_NAN_SCORE = (b1.const(32, c) for c in (LOG2E, NEG
 ONE32 = b1.f32c(1.0)
 PTX_NAN = b1.const(32, F32_NAN_PTX)
 
-_UNCAPTURED = "not-yet-established: vLLM d9105ea80's Hopper lowering read offline; no GPU capture yet (tests/properties/dsv4_moe_capture_gpu.py)"
+#: vLLM d9105ea80 on a cc 9.0 GPU: each kernel run twice on every captured row, both runs bit-exact against the Program's numpy
+#: twin, and the Program itself evaluated on every row (`--check`)
+_CAPTURED = "on a cc 9.0 GPU (132 SMs; run r20261013-205619-5c39 at a9be5ce66, tests/properties/dsv4_moe_capture_gpu.py)"
+_ROUTER_ROWS = "8,192 rows of _dsv4_topk_kernel at E=384, SCALE=2.5, both runs bit-exact against this Program"
+_HASH_ROWS = "8,192 rows of dsv4HashTopkSoftplusSqrt<int, int> at E=384, SCALE=2.5, both runs bit-exact against this Program"
+_CLAMP_ROWS = ("act_and_mul_kernel with HAS_CLAMP at LIMIT=10, vectorised at I=384 (7,510 rows) and scalar at I=9 (1,024 rows), "
+               "both runs bit-exact against this Program")
 
 
-@composite("Ex2Approx", 1, [], lambda S: ((("t", F32),), F32), conformance=_UNCAPTURED)
+@composite("Ex2Approx", 1, [], lambda S: ((("t", F32),), F32),
+           conformance=f"exact-model-tested: ex2.approx.f32 on every word of [-150, -125] and a sweep (2,883,585 words) is this "
+                       f"lowering, and inside both routers' rows {_CAPTURED}")
 def Ex2Approx(B, S, t):
     """``ex2.approx.f32`` (not .ftz): ``t < -126`` (ordered) halves t before MUFU.EX2 and squares the result (FMUL)."""
     small = B.call(F32GtStrict, B.call(C_MINUS_126), t)
@@ -179,7 +188,8 @@ def Ex2Approx(B, S, t):
     return B.call(P.SelectF32, small, B.call(P.F32Mul, y, y), y)
 
 
-@composite("Dsv4HashWeight", 1, [], lambda S: ((("x", F32),), F32), conformance=_UNCAPTURED)
+@composite("Dsv4HashWeight", 1, [], lambda S: ((("x", F32),), F32),
+           conformance=f"exact-model-tested: inside MoeRouterHash_v1's {_HASH_ROWS} {_CAPTURED}")
 def Dsv4HashWeight(B, S, x):
     """``sqrtf(fmaxf(x, 0.f) + __logf(1.f + __expf(-fabsf(x))))``, a NaN +0, as nvcc compiles it for sm_90: ``y = Ex2Approx(|x| *
     -log2 e) + 1``, MUFU.LG2 of y (1.0 at y = 2, 0x7FFFFFFF at a NaN, `MufuLg2Mantissa_v1` on [1, 2)), ``fma(lg2, ln 2, fmaxf(x,
@@ -198,7 +208,8 @@ def _denominator(B, total):
 
 
 @composite("MoeRouterHash", 1, ["E", "SCALE"],
-           lambda S: ((("logits", Array(S.E, F32)), ("ids", Array(TOPK, I32))), Array(TOPK, F32)), conformance=_UNCAPTURED)
+           lambda S: ((("logits", Array(S.E, F32)), ("ids", Array(TOPK, I32))), Array(TOPK, F32)),
+           conformance=f"exact-model-tested: {_HASH_ROWS} {_CAPTURED}")
 def MoeRouterHash(B, S, logits, ids):
     """`dsv4HashTopkSoftplusSqrt`'s weights for one text token's row of f32 router logits and its six table ids (each in [0, E)):
     ``w[k] = Dsv4HashWeight_v1(logits[ids[k]])``, the warp's sum (`moe._lane0_sum`), ``w[k] * SCALE / (sum > 0 ? sum : 1)``."""
@@ -210,7 +221,8 @@ def MoeRouterHash(B, S, logits, ids):
 
 # --- the Triton router (dsv4_topk) -----------------------------------------------------------------------------------------------
 
-@composite("Dsv4SqrtSoftplus", 1, [], lambda S: ((("x", F32),), F32), conformance=_UNCAPTURED)
+@composite("Dsv4SqrtSoftplus", 1, [], lambda S: ((("x", F32),), F32),
+           conformance=f"exact-model-tested: inside MoeRouterSqrtSoftplus_v1's {_ROUTER_ROWS} {_CAPTURED}")
 def Dsv4SqrtSoftplus(B, S, x):
     """``tl.sqrt(tl.where(x > 20, x, tl.log(1 + tl.exp(x))))``: ``Ex2Approx_v1(x * log2 e) + 1``, `NvLogf_v2`, the select,
     `MufuSqrtFtz_v1`."""
@@ -231,7 +243,7 @@ def _first_max(B, s: list, c0, c1):
 
 @composite("MoeRouterSqrtSoftplus", 1, ["E", "SCALE"],
            lambda S: ((("logits", Array(S.E, F32)), ("bias", Array(S.E, F32))), Tuple(Array(TOPK, F32), Array(TOPK, I32))),
-           conformance=_UNCAPTURED)
+           conformance=f"exact-model-tested: {_ROUTER_ROWS} {_CAPTURED}")
 def MoeRouterSqrtSoftplus(B, S, logits, bias):
     """`dsv4_topk(logits, bias, rsf=SCALE)` for one token row of f32 router logits and the f32 `e_score_correction_bias`: per
     expert the score `Dsv4SqrtSoftplus_v1` and ``current = score + bias`` (a NaN -1e30); six slots of the first maximum of
@@ -272,7 +284,8 @@ def limit_bits(limit: float) -> int:
     return bits
 
 
-@composite("SiluMulClampBf16", 1, ["LIMIT"], lambda S: ((("g", BF16), ("u", BF16)), BF16), conformance=_UNCAPTURED)
+@composite("SiluMulClampBf16", 1, ["LIMIT"], lambda S: ((("g", BF16), ("u", BF16)), BF16),
+           conformance=f"exact-model-tested: inside SiluMulClamp_v1's {_CLAMP_ROWS} {_CAPTURED}")
 def SiluMulClampBf16(B, S, g, u):
     """``SiluMulBf16_v2(bf16(fminf(f32(g), LIMIT)), bf16(fmaxf(fminf(f32(u), LIMIT), -LIMIT)))``: both casts exact."""
     lim = limit_bits(S.LIMIT)
@@ -282,7 +295,8 @@ def SiluMulClampBf16(B, S, g, u):
     return B.call(act.SiluMulBf16, gc, uc)
 
 
-@composite("SiluMulClamp", 1, ["I", "LIMIT"], lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)), conformance=_UNCAPTURED)
+@composite("SiluMulClamp", 1, ["I", "LIMIT"], lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
+           conformance=f"exact-model-tested: {_CLAMP_ROWS} {_CAPTURED}")
 def SiluMulClamp(B, S, gu):
     """`_C.silu_and_mul_with_clamp(out, gu, LIMIT, 1.0, 0.0)` for one row: ``out[i] = SiluMulClampBf16_v1(gu[i], gu[I + i])``."""
     return B.batch(bind(SiluMulClampBf16, LIMIT=S.LIMIT), gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0))
