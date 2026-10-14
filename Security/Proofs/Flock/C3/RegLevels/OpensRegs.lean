@@ -496,6 +496,7 @@ theorem acc_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     (h : RecVStar.checkAcc s own rows = .ok ()) : ∃ pt ∈ own, pt.name = "acc" := by
   unfold RecVStar.checkAcc at h
   rw [hs] at h
+  obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   obtain ⟨_, h, -⟩ := FlockSoundness.Refine.ebind_ok h
   rw [List.forIn_cons] at h
   obtain ⟨_, h, -⟩ := FlockSoundness.Refine.ebind_ok h

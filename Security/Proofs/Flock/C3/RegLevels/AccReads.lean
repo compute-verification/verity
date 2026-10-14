@@ -58,12 +58,29 @@ theorem site_of_portDiff {a b : Flock.Registered.Port} (h : Flock.RecVStar.portD
     simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, e5, hne] at h
   simp only [FlockVBridge.Family.site, e1, e2, e3, e4, e5, e6]
 
+/-- **`checkAcc` names each port once** (`checkNames`): two entries of `own` with one name are one. -/
+theorem names_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
+    {rows : Option (Array Flock.Registered.Port)} (h : Flock.RecVStar.checkAcc s own rows = .ok ()) :
+    ∀ p ∈ own, ∀ p' ∈ own, p.name = p'.name → p = p' := by
+  unfold Flock.RecVStar.checkAcc at h
+  obtain ⟨⟨⟩, h, -⟩ := FlockSoundness.Refine.ebind_ok h
+  unfold Flock.RecVStar.checkNames at h
+  split at h
+  · cases h
+  · rename_i hd
+    simp only [Flock.RecVStar.dupName?, List.find?_eq_none] at hd
+    have hnd : (own.toList.map (·.name)).Nodup :=
+      List.nodup_iff_count_eq_one.2 fun nm hm => by simpa using hd nm hm
+    intro p hp p' hp' he
+    exact List.inj_on_of_nodup_map hnd (Array.mem_toList_iff.2 hp) (Array.mem_toList_iff.2 hp') he
+
 /-- **`checkAcc`'s first loop**: each of the statement's `accPorts` is `own`'s first entry of its name, reading
 `rec-acc`. -/
 theorem value_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (h : Flock.RecVStar.checkAcc s own rows = .ok ()) :
     ∀ nm ∈ Flock.RecVStar.accPorts s, ∃ p, own.find? (·.name == nm) = some p ∧ p.value = Flock.RecVStar.ACC_VALUE := by
   unfold Flock.RecVStar.checkAcc at h
+  obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   obtain ⟨_, h, -⟩ := FlockSoundness.Refine.ebind_ok h
   refine FlockC3.PubRows.rows_forIn_each _ ?_ _ h
   intro nm r hr
@@ -87,6 +104,7 @@ theorem site_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     ∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
       FlockVBridge.Family.site b = FlockVBridge.Family.site w := by
   unfold Flock.RecVStar.checkAcc at h
+  obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   dsimp only at h
   have hbm : b ∈ own.filter (·.value == Flock.RecVStar.ACC_VALUE) := Array.mem_filter.2 ⟨hb, by simpa using hv⟩
@@ -184,14 +202,13 @@ theorem getElem?_accRow (f : ℕ → ℕ) {m d u : ℕ} (hu : u < m) :
     (((Array.range m).map fun u => some (f u)).map (·.map (· + d)))[u]? = some (some (f u + d)) := by
   simp [hu]
 
-/-- **A level's `acc` or `acc_out` entry, from `checkAcc` and `checkAccReads`**, where `own` names each port once
-(`hnd`): the entry `pa` of the name has `acc0`'s registration in the verifier's shared rows and reads `accReads`' rows,
-the second one on. -/
+/-- **A level's `acc` or `acc_out` entry, from `checkAcc` and `checkAccReads`**, `own` naming each port once
+(`names_of_checkAcc`): the entry `pa` of the name has `acc0`'s registration in the verifier's shared rows and reads
+`accReads`' rows, the second one on. -/
 theorem accPort_of_checks {i : Flock.RecVStar.Inner} {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (hacc : Flock.RecVStar.checkAcc s own rows = .ok ())
     (hrd : Flock.RecVStar.checkAccReads i s own = .ok ()) (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"])
-    {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads i s = .ok (some want))
-    (hnd : ∀ p ∈ own, ∀ p' ∈ own, p.name = p'.name → p = p') {nm : String} {d : ℕ}
+    {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads i s = .ok (some want)) {nm : String} {d : ℕ}
     (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) {pa : Flock.Registered.Port} (hpa : pa ∈ own)
     (hpn : pa.name = nm) :
     (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
@@ -202,7 +219,7 @@ theorem accPort_of_checks {i : Flock.RecVStar.Inner} {s : VStar.Stmt} {own : Arr
     simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hnm
     rcases hnm with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> simp
   obtain ⟨p, hf, hv⟩ := value_of_checkAcc hacc nm hnm'
-  obtain rfl : p = pa := hnd p (Array.mem_of_find?_eq_some hf) pa hpa
+  obtain rfl : p = pa := names_of_checkAcc hacc p (Array.mem_of_find?_eq_some hf) pa hpa
     ((by simpa using Array.find?_some hf : p.name = nm).trans hpn.symm)
   obtain ⟨p', hf', hr⟩ := reads_of_checkAccReads hrd hw (nm, d) hnm
   obtain rfl : p' = p := Option.some.inj (hf'.symm.trans hf)
@@ -217,15 +234,14 @@ theorem accPort_of_checkStmt {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tab
       rows = .ok ()) {s : VStar.Stmt}
     (hj : ∀ ss : Array VStar.Stmt, Flock.RecVStar.statements i = .ok ss → ss[j]? = some s)
     (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"]) {want : Array (Option ℕ)}
-    (hw : Flock.RecVStar.accReads i s = .ok (some want)) (hnd : ∀ p ∈ own, ∀ p' ∈ own, p.name = p'.name → p = p')
-    {nm : String} {d : ℕ} (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) {pa : Flock.Registered.Port}
-    (hpa : pa ∈ own) (hpn : pa.name = nm) :
+    (hw : Flock.RecVStar.accReads i s = .ok (some want)) {nm : String} {d : ℕ}
+    (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) {pa : Flock.Registered.Port} (hpa : pa ∈ own) (hpn : pa.name = nm) :
     (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
       FlockVBridge.Family.site pa = FlockVBridge.Family.site w) ∧
       pa.reads = want.map (·.map (· + d)) := by
   obtain ⟨ss, s', hss, hs', hacc, hrd⟩ := checkAcc_of_checkStmt h
   obtain rfl : s' = s := Option.some.inj (hs'.symm.trans (hj ss hss))
-  exact accPort_of_checks hacc hrd hl hw hnd hnm hpa hpn
+  exact accPort_of_checks hacc hrd hl hw hnm hpa hpn
 
 /-! ## At a drawn unit -/
 
@@ -245,8 +261,7 @@ theorem accRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     {q : Fin c.ports.size} (hr : zo.rd.isRead (.inl (u, q))) {i : Flock.RecVStar.Inner} {s : VStar.Stmt}
     {rows : Option (Array Flock.Registered.Port)} (hck : Flock.RecVStar.checkAcc s zo.own rows = .ok ())
     (hrd : Flock.RecVStar.checkAccReads i s zo.own = .ok ()) (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"])
-    {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads i s = .ok (some want))
-    (hnd : ∀ p ∈ zo.own, ∀ p' ∈ zo.own, p.name = p'.name → p = p') {nm : String} {d : ℕ}
+    {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads i s = .ok (some want)) {nm : String} {d : ℕ}
     (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) (hq : c.ports[q].name = nm) :
     (∃ pt ∈ zo.own, pt.name = c.ports[q].name) ∧
       (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
@@ -260,7 +275,7 @@ theorem accRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     have h1 := List.find?_some hf
     rw [beq_iff_eq, getElem!_pos c.ports q.val q.isLt] at h1
     exact h1.symm.trans hq
-  obtain ⟨hsite, hreads⟩ := accPort_of_checks hck hrd hl hw hnd hnm hmem hn
+  obtain ⟨hsite, hreads⟩ := accPort_of_checks hck hrd hl hw hnm hmem hn
   refine ⟨⟨_, hmem, hn.trans hq.symm⟩, hsite, idx.getD (D.proved.idxOf u.val) 0, ?_⟩
   rw [← hreads]
   exact hpos
@@ -298,9 +313,7 @@ registered read of the level's `acc` (`acc_out`) column at unit `u` is a read of
 theorem accRead_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-    (hro : ReadsOwnC3 F dg N k Rw)
-    (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
-    {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
+    (hro : ReadsOwnC3 F dg N k Rw) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
     {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish)) {s : VStar.Stmt}
     (hs : F.stmts[(j : ℕ)]? = some s) (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"])
@@ -315,8 +328,7 @@ theorem accRead_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {ro
   obtain ⟨h0, -⟩ := setup_zero_c (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hTags.1 (F.zs R ω t R₂ j).hcH hset
   obtain ⟨hmem, hname, hpos⟩ := hro R ω t R₂ τ o h j u q hr
   obtain ⟨hsite, hreads⟩ := accPort_of_checkStmt (array_forM_ok hfm 0 h0)
-    (fun ss hss => by rw [← Except.ok.inj (F.hstmts.symm.trans hss)]; exact hs) hl hw (hnd R ω t R₂ j) hnm hmem
-    (hname.trans hq)
+    (fun ss hss => by rw [← Except.ok.inj (F.hstmts.symm.trans hss)]; exact hs) hl hw hnm hmem (hname.trans hq)
   refine ⟨⟨_, hmem, hname⟩, hsite, ?_⟩
   rw [← hreads]
   exact hpos
