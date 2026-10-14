@@ -13,10 +13,8 @@ family's choice.
 * `rd_isLeft`: a registered read is a row of a unit's port (`read_row`: `rsShHJS`'s rows are `posK`'s `.inl`). V*'s
   sessions hide their outputs, so a row is an input port's words or a returned output port's (`HiddenExec.rowOfH`),
   and `RegOut` at an output column, which `ResZeroAt`, `OpensAt` and `hAccRows_of`'s `hout` ask for, can hold.
-* `oneAt_keyProg`: every unit's constant is the program's input gate `Layout.oneG`; `hOne_of`, `hOneOpen_of`: `HOne` and
-  `HOneOpen` from `OneInLayer`, the layers carrying 1 at that gate. V* registers no row holding the constant: a row is an
-  input port's words or an output port's (`circuit.py:16-18`), and the reads files name ports only
-  (`rec_outer.py:236-238`, `rec_vstage.py:356-367`).
+* `oneAt_keyProg`: every unit's constant is the program's input gate `Layout.oneG`; `oneInLayer`, `hOne_of`,
+  `hOneOpen_of`: `OneInLayer`, `HOne` and `HOneOpen` from the accepted layer's `Good` fact.
 * `hRowKeys_of`: `HRowKeys` from the part circuits' keys (`RowColKeys`) and the family's registered reads covering the
   rows `own` names (`RowsRegistered`); `hRowsAgree_of`: `HRowsAgree` from those, the two parts' columns keying one bit
   of rows at one registered root and position (`SameRow`), and one registrant row there (`RowsShared`).
@@ -66,30 +64,28 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
-/-- Obligation: no executable check discharges it, since the layer is the extractor's, which the verifier never sees;
-every opening at `.inr oneG` already holds 1 (`keyProgH_valPinned`, `Readers.regLeaf`). Discharged by a conjunct
-`bits oneG = true` in `ZkOuter.Good` (`Recursive/Flock.lean`), which `accepts_le` bounds through `regWrongZ` once
-`regOpenZ` opens `.inr oneG` at `regVal`; V* registers no row holding the constant (`circuit.py:16-18`). **The layers
-carry 1 at the constant gate.** At every accepted outer proof, each session's layer is `true` at
-`Layout.oneG`, the input gate every unit's constant is wired to (`oneAt_keyProg`). Acceptance does not give it: the
-layer is `XplurZC`'s plurality of the prover's openings, `oneG` is no unit's gate and its commit string `.inr oneG` is
-no registered read, so neither `wrong = ∅` nor `RegAgree` reads it; the public-file layer `Xpub` pins it
-(`FlockPublic.lean`), the `--zk` layer does not. -/
+/-- **The layers carry 1 at each unit's constant gate.** -/
 def OneInLayer : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j,
-    layers F.zs dg N k Rw R ω t R₂ τ j (Layout.oneG (c := (F.Vs j).c) (hU := (F.Vs j).hU) (n := (F.Vs j).nv)) = true
+    ∀ _u : Fin (F.Vs j).nv,
+      layers F.zs dg N k Rw R ω t R₂ τ j
+        (Layout.oneG (c := (F.Vs j).c) (hU := (F.Vs j).hU) (n := (F.Vs j).nv)) = true
+
+/-- **`OneInLayer` from the accepted layers' `Good` facts.** -/
+theorem oneInLayer : F.OneInLayer dg N k Rw :=
+  fun R ω t R₂ τ o ha j u => (ha.1 j).2.2 u
 
 /-- **`HOne` from `OneInLayer`**. -/
 theorem hOne_of (h : F.OneInLayer dg N k Rw) : F.HOne dg N k Rw := by
   intro R ω t R₂ τ o ha r p _
   rw [oneAt_keyProg]
-  exact h R ω t R₂ τ o ha (F.sess p)
+  exact h R ω t R₂ τ o ha (F.sess p) (F.un p r)
 
 /-- **`HOneOpen` from `OneInLayer`**. -/
 theorem hOneOpen_of (h : F.OneInLayer dg N k Rw) : F.HOneOpen dg N k Rw := by
   intro R ω t R₂ τ o ha r ℓ _ j _
   rw [oneAt_keyProg]
-  exact h R ω t R₂ τ o ha (F.sessO ℓ)
+  exact h R ω t R₂ τ o ha (F.sessO ℓ) (F.unO ℓ r j)
 
 /-- Obligation: discharged by extraction at the committed trace τ* (an accepted registration's rows are the openings
 the extractor gets), else by record custody. **The rows `own` names are registered reads.** At every accepted outer proof, in each session, the row of every

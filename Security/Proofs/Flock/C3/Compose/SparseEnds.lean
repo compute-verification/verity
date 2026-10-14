@@ -328,8 +328,8 @@ theorem rsRead_of_layer
   obtain ⟨_, _, _, _, _, _, _, _, _, S₂, ns₂, nv₂, hpart₂, hw, _, _⟩ := id hz
   obtain ⟨rfl, rfl, rfl⟩ : S₁ = S₂ ∧ ns = ns₂ ∧ nv = nv₂ := by
     simpa only [Prod.mk.injEq] using Except.ok.inj (hpart.symm.trans hpart₂)
-  have hAg : (zs R ω t R₂ s).RegAgree (layers zs dg N k Rw R ω t R₂ τ s) := (hA.1 s).2.2
-  have hAg' : (zs R' ω' t' R₂' s).RegAgree (layers zs dg N k Rw R' ω' t' R₂' τ' s) := (hA'.1 s).2.2
+  have hAg : (zs R ω t R₂ s).RegAgree (layers zs dg N k Rw R ω t R₂ τ s) := (hA.1 s).2.2.1
+  have hAg' : (zs R' ω' t' R₂' s).RegAgree (layers zs dg N k Rw R' ω' t' R₂' τ' s) := (hA'.1 s).2.2.1
   funext tt
   obtain ⟨e, he, hwi, -⟩ := hxb tt
   obtain ⟨e₁, hwi₁, hx1⟩ := ex tt

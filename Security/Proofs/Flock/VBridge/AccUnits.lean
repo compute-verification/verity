@@ -212,7 +212,7 @@ theorem unitSum_of_opensAt {bits : Fin (Layout.keyN c hU nv) → Bool} (hG : zo.
     {r a cf A : Array F128} (h : OpensAt zo bits u j LANES r a cf A) : ∀ k < 2, A[k]! = consTerm LANES r a cf k := by
   obtain ⟨hj, hone, ms, hms, H, p, outBits, name, rest, idx, ss, hH, hl, hu, hout, hr, ha, hss, hrowN, hauxN, haccN,
     hcoefN, hdirsN, hrow, haux, hacc, hcoef, hdir, haout⟩ := h
-  exact unitSum_of_decode zo hG.2 u (keyProg_correct hU nv hG.1 u) hj hone ms hms LANES H hH p outBits hl hu hout r a cf
+  exact unitSum_of_decode zo hG.2.1 u (keyProg_correct hU nv hG.1 u) hj hone ms hms LANES H hH p outBits hl hu hout r a cf
     rest idx ss hr ha hss hrowN hauxN haccN hcoefN hdirsN hrow haux hacc hcoef hdir A haout
 
 /-! ## The algebra's reads -/

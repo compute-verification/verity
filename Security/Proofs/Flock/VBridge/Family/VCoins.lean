@@ -220,7 +220,7 @@ theorem hZeroL_of (hcov : F.HCover) (hcols : F.PartOutCols) (hz : F.ZeroReads dg
   have hcol : partBase S ns nv + e < (Rows.ofNet (F.Vs (F.sess p)).hU).w := Nat.lt_succ_of_lt hhi
   obtain ⟨hread, hbit⟩ := hz R ω t R₂ τ o ha r p hp S ns nv hpart hj e he hcol
   have hG := (ha.1 (F.sess p)).2
-  exact AccChain.copyVal_regOut _ hG.2 (keyProg_correct _ _ hG.1 _) hj (by omega)
+  exact AccChain.copyVal_regOut _ hG.2.1 (keyProg_correct _ _ hG.1 _) hj (by omega)
     ⟨hcol, outCol_committed _ hj hcol (outColAt_stackCol hj hcol hoc hlv (Nat.mod_lt _ (by decide)) (by omega) hhi),
       hread, hbit⟩
 

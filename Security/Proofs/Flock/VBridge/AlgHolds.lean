@@ -204,7 +204,7 @@ theorem partCols_of_resZeroAt {bits : Fin (Layout.keyN c hU nU) → Bool} (hG : 
         PartCols S' w' v' col base ∧ ∀ t < 128 * S'.res.length, col (base + t) = false := by
   obtain ⟨hpg, hj, hone, hc, hh, hu, m, k, cl, hp, hsh, S, ns, nv, hpart, hw, hv, hz⟩ := h
   obtain ⟨hS', w', v', hw', hv', hcols⟩ :=
-    decode_part zo hG.2 u hj hone hc hp hsh hS hg hpg hpart hu hh rounds extras comb w hw hv
+    decode_part zo hG.2.1 u hj hone hc hp hsh hS hg hpg hpart hu hh rounds extras comb w hw hv
   obtain ⟨S1, ns1, nv1, hpart1, hn⟩ := check_part hc hp hsh hh
   rw [hpart] at hpart1
   cases hpart1
@@ -213,7 +213,7 @@ theorem partCols_of_resZeroAt {bits : Fin (Layout.keyN c hU nU) → Bool} (hG : 
     exact inRows_le_outStart _ _ _
   have hsmall := part_small hpart
   exact ⟨hpg, S, hS', w', v', _, _, hw', hv', hcols, fun t ht =>
-    copyVal_regOut zo hG.2 (keyProg_correct hU nU hG.1 u) hj (by omega) (hz t (by omega))⟩
+    copyVal_regOut zo hG.2.1 (keyProg_correct hU nU hG.1 u) hj (by omega) (hz t (by omega))⟩
 
 /-- **`ResZeroAt` on a holo statement**: copy `j` of unit `u` is part `p` of the groups `gs` of `sh`, the holo form of
 the shape the verifier accepts (META `holo: true`), its outputs registered zero. -/
@@ -243,7 +243,7 @@ theorem partCols_of_resZeroAtH {bits : Fin (Layout.keyN c hU nU) → Bool} (hG :
         PartCols S' w' v' col base ∧ ∀ t < 128 * S'.res.length, col (base + t) = false := by
   obtain ⟨hpg, hj, hone, hc, hh, hu, m, k, cl, hp, sh0, hsh, hho, S, ns, nv, hpart, hw, hv, hz⟩ := h
   obtain ⟨hS', w', v', hw', hv', hcols⟩ :=
-    decode_part_holo zo hG.2 u hj hone hc hp hsh hho hS hg hpg hpart hu hh rounds extras comb w hw hv
+    decode_part_holo zo hG.2.1 u hj hone hc hp hsh hho hS hg hpg hpart hu hh rounds extras comb w hw hv
   obtain ⟨S1, ns1, nv1, hpart1, hn⟩ := check_part_holo hc hp hsh hh
   rw [← hho, hpart] at hpart1
   cases hpart1
@@ -252,7 +252,7 @@ theorem partCols_of_resZeroAtH {bits : Fin (Layout.keyN c hU nU) → Bool} (hG :
     exact inRows_le_outStart _ _ _
   have hsmall := part_small hpart
   exact ⟨hpg, S, hS', w', v', _, _, hw', hv', hcols, fun t ht =>
-    copyVal_regOut zo hG.2 (keyProg_correct hU nU hG.1 u) hj (by omega) (hz t (by omega))⟩
+    copyVal_regOut zo hG.2.1 (keyProg_correct hU nU hG.1 u) hj (by omega) (hz t (by omega))⟩
 
 end Copy
 

@@ -31,15 +31,18 @@ noncomputable abbrev vbHJ {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀
     (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) :=
   (rsZHJS (Reg := Reg) dj y₀ ht hc hscope hU hpub).bindingZ (rsZHJS_computes dj y₀ ht hc hscope hU hpub)
 
-/-- **The registrant's opening** of each commit string of `vbHJ`: the row and the salt `rd` reads there. -/
+/-- **The registrant's opening** of each commit string of `vbHJ`: at a registered row, the row and salt `rd` reads
+there; at a single gate, the value pinned by the registration (whose plain leaf ignores the salt). -/
 def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
-      (rsShHJS dj y₀ ht hc hscope hU hpub)) :
+      (rsShHJS dj y₀ ht hc hscope hU hpub)) (R : Reg) :
     (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos → (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Opening :=
-  fun p => (p, rd.wv p, rd.ws p)
+  fun p => match p with
+    | .inl uq => (.inl uq, rd.wv (.inl uq), rd.ws (.inl uq))
+    | .inr g => (.inr g, (layShHJ dj y₀ ht hc hscope hU (pub := pub)).regVal R (.inr g), [])
 
 /-- **The committed values of a `--zk --registered` session are the registered values at its registered reads**, except
 with probability `ε_ks + δ_link + δ_reg`: for every registered-reads record `rd` of `layShHJ`, with `cr/sha-512` at
@@ -77,7 +80,8 @@ theorem zk_session_regValsR
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ) ω)) qF qS)
     {qW : ℝ}
     (hW : RegCRZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
-      (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd)
+      (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd
+        (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)))
       (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
       (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) k Rw qW) :
     prob (fun o => LiveAcceptsZKR I own o ∧
@@ -103,7 +107,8 @@ theorem zk_session_regValsR
     (ZkHidden.runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr Lv hTags hRec hDraw)
   have hc' := zk_flock_regValsC_cr execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀)
     (tabZHJ dj y₀) execArith_correct (placeZHJ dj y₀ ht hc hscope hU) (vbHJ dj y₀ ht hc hscope hU hpub)
-    (regOpenZ ht dj y₀ hc hU hpub hscope rd) hk hRw hM hρ hr ht'
+    (regOpenZ ht dj y₀ hc hU hpub hscope rd
+      (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))) hk hRw hM hρ hr ht'
     (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ) hCR hW
   refine le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
     (zk_headline_exec_drawnJ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun R S => ∃ u ∈ S,
@@ -141,13 +146,31 @@ theorem regBadZ_of_leaf {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (F
     (hne : Xt g ≠ (layShHJ dj y₀ ht hc hscope hU (pub := pub)).bit
       (rd.wv ((layShHJ dj y₀ ht hc hscope hU (pub := pub)).pos g)) g) :
     RegBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
-      (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd) R Xt g := by
+      (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd R) R Xt g := by
   refine ⟨Prod.ext rfl ?_, hne⟩
   show ((rsZHJS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
   unfold HmRowsZX.scheme
   split_ifs with hrow
   · exact hleaf.symm
   · exact absurd (rd.read_row _ hread) hrow
+
+/-- **A layer carrying 0 at the constant has a registered-value disagreement there**: the constant is a single-gate
+commit string, and its registration-pinned value is 1. -/
+theorem regBadZ_oneG {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
+    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
+    (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
+    (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+      (rsShHJS dj y₀ ht hc hscope hU hpub))
+    (R : Reg) (Xt : Fin (Layout.keyN c hU n) → Bool)
+    (hne : Xt (Layout.oneG (c := c) (hU := hU) (n := n)) ≠ true) :
+    RegBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+      (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd R) R Xt
+        (Layout.oneG (c := c) (hU := hU) (n := n)) := by
+  refine ⟨?_, ?_⟩
+  · rfl
+  · simpa [regOpenZ, ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout,
+      Layout.Readers.ofRows, Layout.keyGate] using hne
 
 /-- **`zk_session_regValsR` with the wrong units counted too**: on its assumptions, an accepted session whose draw meets
 the units that compute wrongly or read a registered-value disagreement (`regWrongZ`, at the registrant's opening
@@ -183,7 +206,8 @@ theorem zk_session_regDrawnR
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ) ω)) qF qS)
     {qW : ℝ}
     (hW : RegCRZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
-      (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd)
+      (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd
+        (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)))
       (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
       (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) k Rw qW) :
     prob (fun o => LiveAcceptsZKR I own o ∧
@@ -192,7 +216,8 @@ theorem zk_session_regDrawnR
               (vbHJ dj y₀ ht hc hscope hU hpub) (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
               (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) k Rw) ∪
           regWrongZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
-            (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd)
+            (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd
+              (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)))
             (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
             (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
               (vbHJ dj y₀ ht hc hscope hU hpub) (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
@@ -210,7 +235,8 @@ theorem zk_session_regDrawnR
     (ZkHidden.runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr Lv hTags hRec hDraw)
   have hc' := zk_flock_regDrawnC_cr execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀)
     (tabZHJ dj y₀) execArith_correct (placeZHJ dj y₀ ht hc hscope hU) (vbHJ dj y₀ ht hc hscope hU hpub)
-    (regOpenZ ht dj y₀ hc hU hpub hscope rd) hk hRw hM hρ hr ht'
+    (regOpenZ ht dj y₀ hc hU hpub hscope rd
+      (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))) hk hRw hM hρ hr ht'
     (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ) hCR hW
   exact le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
     (zk_headline_exec_drawnJ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun _ S => ¬ Disjoint
@@ -219,7 +245,8 @@ theorem zk_session_regDrawnR
             (vbHJ dj y₀ ht hc hscope hU hpub) (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
             (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) k Rw) ∪
         regWrongZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
-          (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd)
+          (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd
+            (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)))
           (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             (vbHJ dj y₀ ht hc hscope hU hpub) (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))

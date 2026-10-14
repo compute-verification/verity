@@ -251,7 +251,7 @@ theorem sparseTie_of_layer {bits : Fin (FlockSoundness.Discharge.Layout.keyN cc 
     fun k hk => (getElem!_neg w k (by omega)).trans rfl
   have hv0 : ∀ k, Flock.RecSparse.nv (unitShape e) ≤ k → (verifierRow e.cls.shape c)[k]! = 0 :=
     fun k hk => (getElem!_neg (verifierRow e.cls.shape c) k (by omega)).trans rfl
-  obtain ⟨v, hL, hin, hout⟩ := decode_sparseR zo hG.2 un hj hone (unitShape e) hn hu
+  obtain ⟨v, hL, hin, hout⟩ := decode_sparseR zo hG.2.1 un hj hone (unitShape e) hn hu
     (w := (w[·]!)) (vv := ((verifierRow e.cls.shape c)[·]!)) (τ := ((tauArr e)[·]!)) hrw hrv hrt hw0 hv0
   exact ⟨w, c, cc, v, hw, hc, hpub, hh, hs, hck, hpar, hL, hin, fun t ht => (hout t).trans (h0 t ht)⟩
 

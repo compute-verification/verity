@@ -5,6 +5,7 @@ import Proofs.Flock.Recursive.ZkReg.Vals
 import Proofs.Flock.Recursive.ZkReg.Off
 import Proofs.Flock.Recursive.Finds
 import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+import Proofs.Flock.VBridge.Keyed
 
 /-!
 # Recursion: the outer proof, `--zk --registered` sessions of fixed public verifiers V*
@@ -16,8 +17,8 @@ inputs `zs R ω t j` (`ZkOuter`: public file, registered reads, the coin server'
 session accepts (`Accepts`), and the decoded witness is each session's value layer (`XplurZC`, `ZkOuter.layer`).
 
 * `ZkOuter.Good`: a layer with no wrong unit whose every unit reads, at each of its registered reads, the registrant's
-  value (`RegAgree`). `rd` records those values, the hidden circuit's rows as registered and the values the verifier
-  registers itself (its coins, the comb `coef`).
+  value (`RegAgree`), and whose constant gate is 1. `rd` records those values, the hidden circuit's rows as registered
+  and the values the verifier registers itself (its coins, the comb `coef`).
 * `ZkOuter.accepts_le`: an accepted session whose layer is not `Good` is at most `bound` likely: the draw misses every
   bad unit (`miss 1`); or a drawn unit computes wrongly or reads a registered value other than the registrant's at a
   leaf that is the registrant's (`zk_session_regDrawnR`: `ksAvgStrictZ + linkBoundZC + regTermZC`); or a drawn row's
@@ -202,7 +203,8 @@ outputs the extractor's pair of an off-leaf read at a drawn row (`ReadsX.pick`) 
 def CR (k Rw : ℕ) (qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : Prop :=
   zo.TabCR dg N qF qS τ ∧
     RegCRZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀) (tabZHJ zo.dj zo.y₀)
-      zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd) (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw
+      zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd
+        (reg (zo.sim dg N τ))) (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw
       qW ∧
     (StrictCR.oneRun (zo.game dg N) τ fun o =>
       (zo.rd.restrict (rowIn o.2.1)).pick o.1 (regPathsHJ zo.I c zo.pub o.2.2 zo.rd.port)).CR H512 qR
@@ -231,7 +233,8 @@ def Fork (k Rw M : ℕ) (τ : Strategy (zo.game dg N)) : Prop :=
   (∃ ω j, TableForkZ execArith hs512 (planZHJ zo.dj zo.y₀ (Lv.draw ω) (reg (zo.sim dg N τ))) j
       (zcStrat execArith hs512 (planZHJ zo.dj zo.y₀) (cont (zo.sim dg N τ) ω))) ∨
     RegForkZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
-      (tabZHJ zo.dj zo.y₀) zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd) (reg (zo.sim dg N τ))
+      (tabZHJ zo.dj zo.y₀) zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub
+        (Layout.scopeOkH_of_scopeOk hscope) zo.rd (reg (zo.sim dg N τ))) (reg (zo.sim dg N τ))
       (cont (zo.sim dg N τ)) k Rw ∨
     (StrictCR.oneRun (zo.game dg N) τ fun o =>
       (zo.rd.restrict (rowIn o.2.1)).pick o.1 (regPathsHJ zo.I c zo.pub o.2.2 zo.rd.port)).Finds H512 ∨
@@ -281,9 +284,42 @@ def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
   ∀ u, ∀ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u, zo.rd.isRead (zo.lay.pos g) →
     bits g = zo.lay.bit (zo.rd.wv (zo.lay.pos g)) g
 
-/-- **A good layer**: no wrong unit, and agreement with the registrant. -/
+/-- **Every unit reads the constant gate.** -/
+theorem oneG_mem_io (u : Fin nv) :
+    Layout.oneG (c := c) (hU := hU) (n := nv) ∈
+      ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u := by
+  have P := parse_facts zo.hc
+  obtain ⟨ls, hls⟩ := P.check
+  have C := check_facts P.typed hls
+  have ho : c.outNet = c.unitNet := by
+    unfold Layout.scopeOk at hscope
+    simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hscope
+    exact hscope.1.1.1.2
+  have hp := C.unit_pow2 ho
+  rw [C.unit_range.2] at hp
+  unfold Flock.isPow2 at hp
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
+  have hupv : 0 < c.upv := Nat.pos_of_ne_zero fun h0 => by simp [h0] at hp
+  have hm := (FlockVBridge.keyInst hU nv (Layout.outsOf c hU nv) u).mem_io_of_read
+    (i := ⟨0 * ((Rows.ofNet hU).nComp + 1) + 0, Rows.mul_add_lt hupv (by omega)⟩)
+    (by rw [Rows.stack_a_one]; simp) (by
+      intro i h
+      have he := congrArg Fin.val h
+      have hi := i.isLt
+      simp only [Rows.one, Rows.comp] at he
+      omega)
+  rw [FlockVBridge.keyInst_one] at hm
+  convert hm using 1
+  exact Fin.ext (Layout.oneAt_uniform_val (k := Placed.inGates nv (Layout.keyB c hU))
+    (R := Placed.circuitRows c hU)
+    (ins := Placed.insOf nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
+    (one := Placed.oneGate nv (Layout.keyB c hU))
+    (hone := Placed.insOf_ne_one nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) nv u)
+
+/-- **A good layer**: no wrong unit, agreement with the registrant, and 1 at every unit's constant gate. -/
 def Good (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
-  ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong bits = ∅ ∧ zo.RegAgree bits
+  ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong bits = ∅ ∧ zo.RegAgree bits ∧
+    ∀ _u : Fin nv, bits (Layout.oneG (c := c) (hU := hU) (n := nv)) = true
 
 open Classical in
 /-- The units with a row at a registered read whose leaf under `R` is not the registrant's. -/
@@ -295,7 +331,8 @@ registrant's leaf, or holding an off-leaf registered read. -/
 noncomputable def badUnits (k Rw : ℕ) (τ : Strategy (zo.game dg N)) : Finset (Fin nv) :=
   ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong (zo.layer dg N k Rw τ) ∪
     regWrongZ execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀) (tabZHJ zo.dj zo.y₀)
-      zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd) (reg (zo.sim dg N τ)) (zo.layer dg N k Rw τ) ∪
+      zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd
+        (reg (zo.sim dg N τ))) (reg (zo.sim dg N τ)) (zo.layer dg N k Rw τ) ∪
     zo.offUnits τ.1
 
 /-- **A layer that is not good has a bad unit.** -/
@@ -303,22 +340,35 @@ theorem badUnits_nonempty (k Rw : ℕ) (τ : Strategy (zo.game dg N)) (hG : ¬ z
     (zo.badUnits dg N k Rw τ).Nonempty := by
   classical
   by_cases hw : ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong (zo.layer dg N k Rw τ) = ∅
-  · obtain ⟨u, g, hg, hread, hne⟩ : ∃ u, ∃ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u,
-        zo.rd.isRead (zo.lay.pos g) ∧ zo.layer dg N k Rw τ g ≠ zo.lay.bit (zo.rd.wv (zo.lay.pos g)) g := by
-      by_contra h
-      refine hG ⟨hw, fun u g hg hread => ?_⟩
-      by_contra hne
-      exact h ⟨u, g, hg, hread, hne⟩
-    by_cases hleaf : zo.lay.regLeaf τ.1 (zo.lay.pos g) = zo.rd.leaf (zo.lay.pos g)
-    · refine ⟨u, Finset.mem_union_left _ (Finset.mem_union_right _
-        (Finset.mem_filter.2 ⟨Finset.mem_univ _, g, hg, ?_⟩))⟩
-      exact regBadZ_of_leaf zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd _ _ g hread
-        (by rw [zo.reg_sim dg N τ]; exact hleaf) hne
-    · obtain ⟨⟨u', q⟩, hp⟩ := Sum.isLeft_iff.1 (zo.rd.read_row _ hread)
-      refine ⟨u', Finset.mem_union_right _
-        (Finset.mem_filter.2 ⟨Finset.mem_univ _, zo.lay.pos g, hread, ?_, hleaf⟩)⟩
-      rw [hp]
-      exact Finset.mem_singleton_self u'
+  · by_cases hA : zo.RegAgree (zo.layer dg N k Rw τ)
+    · obtain ⟨u, hone⟩ : ∃ u : Fin nv,
+          zo.layer dg N k Rw τ (Layout.oneG (c := c) (hU := hU) (n := nv)) ≠ true := by
+        by_contra h
+        refine hG ⟨hw, hA, fun u => ?_⟩
+        by_contra hne
+        exact h ⟨u, hne⟩
+      refine ⟨u, Finset.mem_union_left _ (Finset.mem_union_right _
+        (Finset.mem_filter.2 ⟨Finset.mem_univ _, Layout.oneG (c := c) (hU := hU) (n := nv),
+          zo.oneG_mem_io u, ?_⟩))⟩
+      exact regBadZ_oneG zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd
+        (reg (zo.sim dg N τ)) _ hone
+    · obtain ⟨u, g, hg, hread, hne⟩ : ∃ u, ∃ g ∈
+          ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u,
+          zo.rd.isRead (zo.lay.pos g) ∧ zo.layer dg N k Rw τ g ≠ zo.lay.bit (zo.rd.wv (zo.lay.pos g)) g := by
+        by_contra h
+        exact hA fun u g hg hread => by
+          by_contra hne
+          exact h ⟨u, g, hg, hread, hne⟩
+      by_cases hleaf : zo.lay.regLeaf τ.1 (zo.lay.pos g) = zo.rd.leaf (zo.lay.pos g)
+      · refine ⟨u, Finset.mem_union_left _ (Finset.mem_union_right _
+          (Finset.mem_filter.2 ⟨Finset.mem_univ _, g, hg, ?_⟩))⟩
+        exact regBadZ_of_leaf zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd _ _ g hread
+          (by rw [zo.reg_sim dg N τ]; exact hleaf) hne
+      · obtain ⟨⟨u', q⟩, hp⟩ := Sum.isLeft_iff.1 (zo.rd.read_row _ hread)
+        refine ⟨u', Finset.mem_union_right _
+          (Finset.mem_filter.2 ⟨Finset.mem_univ _, zo.lay.pos g, hread, ?_, hleaf⟩)⟩
+        rw [hp]
+        exact Finset.mem_singleton_self u'
   · exact (Finset.nonempty_iff_ne_empty.2 hw).mono (Finset.subset_union_left.trans Finset.subset_union_left)
 
 /-- **An off-leaf registered read at a drawn row**, at an accepted outcome, is at most `qR²/2^513` likely, under

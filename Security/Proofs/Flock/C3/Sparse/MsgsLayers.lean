@@ -284,7 +284,8 @@ theorem sparseMsgsOfLayers_of_sessions
   have hr := hrb _ hq hrd
   rw [bitOf_msgWord hb, bitAt_mask (skOf Vs own sel) _ _ (zs R ω t R₂ (sess i)) hr hio
       fun q byte bit hkey => mem_skOf_inl.2 (hK i m e b he he' hb q byte bit hkey),
-    bitAt_of_regBit (zs R ω t R₂ (sess i)) (bits := layers zs dg N k Rw R ω t R₂ τ (sess i)) (hA.1 (sess i)).2.2 hr hio
+    bitAt_of_regBit (zs R ω t R₂ (sess i)) (bits := layers zs dg N k Rw R ω t R₂ τ (sess i))
+      (hA.1 (sess i)).2.2.1 hr hio
       hj, wbit_elem _ _ hb]
 
 end src

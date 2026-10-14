@@ -319,7 +319,7 @@ theorem partCols_of_resZeroAtL {bits : Fin (Layout.keyN c hU nU) → Bool} (hG :
         PartCols S' w' v' col base ∧ ∀ t < 128 * S'.res.length, col (base + t) = false := by
   obtain ⟨hpg, hj, hone, hc, hh, hu, m, k, cl, hp, hsh, S, ns, nv, hpart, hw, hv, hz⟩ := h
   obtain ⟨hS', w', v', hw', hv', hcols⟩ :=
-    decode_partR zo hG.2 u hj hone hc hp hsh hS hg hpg hpart hu hh rounds extras comb w hw hv
+    decode_partR zo hG.2.1 u hj hone hc hp hsh hS hg hpg hpart hu hh rounds extras comb w hw hv
   have hsmall := part_small hpart
   exact ⟨hpg, S, hS', w', v', _, _, hw', hv', hcols, fun t ht => hz t (by omega)⟩
 
@@ -353,7 +353,7 @@ theorem partCols_of_resZeroAtLH {bits : Fin (Layout.keyN c hU nU) → Bool} (hG 
         PartCols S' w' v' col base ∧ ∀ t < 128 * S'.res.length, col (base + t) = false := by
   obtain ⟨hpg, hj, hone, hc, hh, hu, m, k, cl, hp, sh0, hsh, hho, S, ns, nv, hpart, hw, hv, hz⟩ := h
   obtain ⟨hS', w', v', hw', hv', hcols⟩ :=
-    decode_partR_holo zo hG.2 u hj hone hc hp hsh hho hS hg hpg hpart hu hh rounds extras comb w hw hv
+    decode_partR_holo zo hG.2.1 u hj hone hc hp hsh hho hS hg hpg hpart hu hh rounds extras comb w hw hv
   have hsmall := part_small hpart
   exact ⟨hpg, S, hS', w', v', _, _, hw', hv', hcols, fun t ht => hz t (by omega)⟩
 

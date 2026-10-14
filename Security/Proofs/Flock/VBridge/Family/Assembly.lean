@@ -86,7 +86,7 @@ theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j)
     (hcmt : F.cmt = cmtOf F.Vs bc) (hw : F.wmsg = wmsgOf F.Vs F.Sk (ℐ).r dec) (hm : F.msg = msgOf F.Vs F.Sk dec)
     (hne : Nonempty (Reg × L.Ω × Reg₂)) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
     (hv : F.HVCoins dg N k Rw)
-    (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
+    (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
     (hsame : F.SameRow dg N k Rw) (hseg : F.ReadsUnsegmented dg N k Rw) (hz : F.HZeroL dg N k Rw)
     (hcoef : F.HCoefCols dg N k Rw) (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
     (hV : F.HAccRows dg N k Rw V) (hE : F.HEnds dg N k Rw V)
@@ -111,8 +111,9 @@ theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j)
   have henc := F.hEnc_of dg N k Rw spec st cap lig hset hshp hfit hxs hcapS hligS hregs
   exact vbridgeRead_of_layers F dg N k Rw hst (F.hShape_of dg N k Rw hrep hst hfit)
     (F.hResL_of dg N k Rw hrep hst hcov hname (F.hRowKeys_of dg N k Rw hrr hrck)
-      (F.hRowsAgree_of dg N k Rw hrr hrck hsame (F.rowsShared dg N k Rw hseg)) (F.hOne_of dg N k Rw hlay) hv hz)
-    (F.hUL_of dg N k Rw hrows hacc hU (F.hOneOpen_of dg N k Rw hlay) hcoef V hV)
+      (F.hRowsAgree_of dg N k Rw hrr hrck hsame (F.rowsShared dg N k Rw hseg))
+      (F.hOne_of dg N k Rw (F.oneInLayer dg N k Rw)) hv hz)
+    (F.hUL_of dg N k Rw hrows hacc hU (F.hOneOpen_of dg N k Rw (F.oneInLayer dg N k Rw)) hcoef V hV)
     (F.hReads_of dg N k Rw hacc hn V hV hE)
     (F.hSch_of spec st cap lig hF) (F.hFilesR_of dg N k Rw spec st cap lig hF hrep hset henc hCT hleaf hmsgs)
     (F.hRuns_of dg N k Rw spec st cap lig hF hset hshp henc hxs
@@ -156,7 +157,7 @@ registrations `assembled` keeps. -/
 theorem vbridgeRead_assembled
     (hne : Nonempty (Reg × L.Ω × Reg₂)) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
     (hv : (F.assembled dg N k Rw spec st cap lig own sel bc).HVCoins dg N k Rw)
-    (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
+    (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
     (hsame : F.SameRow dg N k Rw) (hseg : F.ReadsUnsegmented dg N k Rw) (hz : F.HZeroL dg N k Rw)
     (hcoef : (F.assembled dg N k Rw spec st cap lig own sel bc).HCoefCols dg N k Rw)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
@@ -179,7 +180,7 @@ theorem vbridgeRead_assembled
       (cmtOf F.Vs bc) (msgOf F.Vs (skOf F.Vs own sel) (F.decOf dg N k Rw spec st cap lig own sel)) :=
   (F.assembled dg N k Rw spec st cap lig own sel bc).vbridgeRead_of_lanes dg N k Rw spec st cap lig own sel bc
     (F.decOf dg N k Rw spec st cap lig own sel) rfl rfl rfl rfl rfl rfl rfl rfl
-    hne honame hcount hname hv hlay hrr hrck hsame hseg
+    hne honame hcount hname hv hrr hrck hsame hseg
     hz hcoef V hV hE hset hshp hcl hfold hco hcapS hligS hregs hCT hleaf
     (F.msgsAre_assembled dg N k Rw spec st cap lig own sel bc hread (F.msgTys_of dg N k Rw spec st cap lig hT))
     hopen hpub

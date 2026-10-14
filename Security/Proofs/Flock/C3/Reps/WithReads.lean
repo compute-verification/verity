@@ -163,7 +163,8 @@ theorem withReads_algebraDecodes (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).C
         Array.size_ofFn (f := comb (layers zs dg N k Rw R ω t R₂ τ) ρ)⟩)
     fun R ω t R₂ τ o hA ρ _ hp => by
       obtain ⟨w, hw⟩ := hw R ω t R₂ τ o hA ρ
-      have hAg : ∀ j, (zs R ω t R₂ j).RegAgree (layers zs dg N k Rw R ω t R₂ τ j) := fun j => (hA.1 j).2.2
+      have hAg : ∀ j, (zs R ω t R₂ j).RegAgree (layers zs dg N k Rw R ω t R₂ τ j) :=
+        fun j => (hA.1 j).2.2.1
       exact resZeroAtLH_wRead hrc hAg hst.1 hst.2 ρ hw hp
 
 end RepMaps

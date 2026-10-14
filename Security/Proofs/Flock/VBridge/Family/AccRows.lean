@@ -199,7 +199,7 @@ theorem bytesAt_of_regOut {bits : Q.Bits} (hG : zo.Good bits) {u : Fin Q.nv} (hj
     exact Decode.inRows_le_outStart _ _ _
   refine bytesAt_of_cols fun t ht => ?_
   rw [colOf_eq Q bits u hj]
-  exact AccChain.copyVal_regOut zo hG.2 (keyProg_correct Q.hU Q.nv hG.1 u) hj (by omega) (h t ht)
+  exact AccChain.copyVal_regOut zo hG.2.1 (keyProg_correct Q.hU Q.nv hG.1 u) hj (by omega) (h t ht)
 
 end Tops
 

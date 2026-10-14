@@ -160,7 +160,7 @@ theorem climb_of_opensTop {bits : Fin (Layout.keyN c hU nv) → Bool} (hG : zo.G
     climb (MerkleScheme.sha512 msId) (Sha512.hash (MerkleScheme.rowBytes r)) pos ss = top := by
   obtain ⟨hj, hone, ms, hms, p, outBits, name, rest, hH, hl, hu, hout, hr, ha, hss, hrowN, hauxN, haccN, hcoefN,
     hdirsN, hio, hrow, haux, hacc, hcoef, hdir, -, htop, hT⟩ := h
-  have hO := decode_recOpenCols zo hG.2 u hj hone ms hms LANES H hH p outBits hl hu hout r a cf rest pos ss hr ha
+  have hO := decode_recOpenCols zo hG.2.1 u hj hone ms hms LANES H hH p outBits hl hu hout r a cf rest pos ss hr ha
     hss hrowN hauxN haccN hcoefN hdirsN hio hrow haux hacc hcoef hdir
   have hnIn : (Rows.ofNet hU).nIn ≤
       Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits := by
@@ -170,7 +170,7 @@ theorem climb_of_opensTop {bits : Fin (Layout.keyN c hU nv) → Bool} (hG : zo.G
   rw [climb_size_of ms hms ss pos _ (FlockSoundness.Refine.sha512_size _)] at hX
   have hT' : ColsHold (copyVal (keyInst hU nv (Layout.outsOf c hU nv) u) bits hj)
       (Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits) top := fun t ht =>
-    copyVal_regOut zo hG.2 (keyProg_correct hU nv hG.1 u) hj (by omega) (hT t (by omega))
+    copyVal_regOut zo hG.2.1 (keyProg_correct hU nv hG.1 u) hj (by omega) (hT t (by omega))
   have hY := Family.bytesAt_of_cols hT'
   rw [htop] at hY
   exact (climb_node (ms := MerkleScheme.sha512 msId) (ms' := ms) (fun l r => (hms l r).symm) ss _ pos).trans

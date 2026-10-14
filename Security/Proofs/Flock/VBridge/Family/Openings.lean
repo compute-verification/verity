@@ -232,7 +232,7 @@ theorem accOut_of_regOut {bits : Q.Bits} (hG : zo.Good bits) {u : Fin Q.nv} (hj 
   refine AccChain.getElem!_of_bitL fun s hs => ?_
   rw [← colsHold_elems (colOf Q bits u) (outCol LANES H + 1024) 2 (128 * i + s)
     (by rw [size_rowBytes, size_elems]; omega), colOf_eq Q bits u hj]
-  exact AccChain.copyVal_regOut zo hG.2 (keyProg_correct Q.hU Q.nv hG.1 u) hj (by omega) (h _ (by omega))
+  exact AccChain.copyVal_regOut zo hG.2.1 (keyProg_correct Q.hU Q.nv hG.1 u) hj (by omega) (h _ (by omega))
 
 /-- **An opening's `acc`, from its registered input columns** (`copyVal_regBit`): in a layer agreeing with the
 registrant, when the 256 columns from `base` of copy 0 are registered bits of the bytes of `A` (`RegBit`) on wires the

@@ -531,7 +531,7 @@ lanes' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
 theorem vbridgeRead_model
     (hshape : F.ShapeAt) (hcount : F.HPartCount)
     (hv : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).HVCoins dg N k Rw)
-    (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
+    (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
     (hsame : F.SameRow dg N k Rw) (hseg : F.ReadsUnsegmented dg N k Rw) (hz : F.HZeroL dg N k Rw)
     (hcoef : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).HCoefCols dg N k Rw)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
@@ -562,7 +562,7 @@ theorem vbridgeRead_model
     obtain ⟨GS, gs, hst⟩ := F.hStruct_of hne hsome (F.hUnitName_of hne)
     exact F.vbridgeRead_assembled dg N k Rw spec F.innerSetup cap lig own sel bc hne (F.hOpenName_of hne) hcount
       (F.hUnitName_of hne) hv
-      hlay hrr hrck hsame hseg hz hcoef V hV hE (F.setupRealizes_of hshape) (F.shapeIs_of hshape) hcl
+      hrr hrck hsame hseg hz hcoef V hV hE (F.setupRealizes_of hshape) (F.shapeIs_of hshape) hcl
       (F.foldsOk_of hshape) (F.coinsAgree_at hshape hst.1 hcl) hcapS hligS hregs hCT hleaf hread hT hopen hpub
 
 end VStarFamily
@@ -587,7 +587,7 @@ variable (spec : SessionSpec) (own : Fin F.stmts.size → Array Flock.Registered
 theorem vbridgeRead_model_msgs
     (hshape : F.ShapeAt) (hcount : F.HPartCount)
     (hv : (F.assembled dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel bc).HVCoins dg N k Rw)
-    (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
+    (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
     (hsame : F.SameRow dg N k Rw) (hseg : F.ReadsUnsegmented dg N k Rw) (hz : F.HZeroL dg N k Rw)
     (hcoef : (F.assembled dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel bc).HCoefCols dg N k Rw)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
@@ -605,7 +605,7 @@ theorem vbridgeRead_model_msgs
       (wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r (F.decOf dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel))
       (skOf F.Vs own sel) (cmtOf F.Vs bc)
       (msgOf F.Vs (skOf F.Vs own sel) (F.decOf dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel)) :=
-  F.vbridgeRead_model dg N k Rw spec (F.capW w) (F.ligW w) own sel bc hshape hcount hv hlay hrr
+  F.vbridgeRead_model dg N k Rw spec (F.capW w) (F.ligW w) own sel bc hshape hcount hv hrr
     hrck hsame hseg hz hcoef V hV hE hcl
     (F.hCapS_of dg N k Rw F.innerSetup (F.setupRealizes_of hshape) w)
     (F.hLigS_of dg N k Rw F.innerSetup (F.setupRealizes_of hshape) w) hregs hCT hleaf hread hT hopen hpub

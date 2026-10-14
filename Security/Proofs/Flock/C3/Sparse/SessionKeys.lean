@@ -78,12 +78,13 @@ theorem hkeys_of_rows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) {dg : By
     (hA : Accepted (I := holoInnerAt T CT st hp) F.zs dg N k Rw R ω t R₂ τ o) {s : Fin (vstarCount F.ish)}
     {sh : Flock.RecSparse.Shape} {name : String}
     (hn : Flock.HmNets.netOf name (Flock.RecSparse.unitLaid sh) = .ok (F.Vs s).c.unit)
-    (hcol : SparseColKeys (F.Vs s).c (F.Vs s).hU sh) (hown : OwnNamesMsgs (F.zs R ω t R₂ s).own sh)
+    (hcol : SparseColKeys (F.Vs s).c (F.Vs s).hU sh)
+    (sparseOwnNames_of_checkOwn : OwnNamesMsgs (F.zs R ω t R₂ s).own sh)
     (u : Fin (F.Vs s).nv) :
     ∀ q < 128 * ((Flock.RecSparse.messagePorts sh).map (·.2)).sum,
       ReadCol (Rows.ofNet (F.Vs s).hU) (rowCol (Flock.RecSparse.messagePorts sh) 0 q) →
         ∃ b, RegBit (F.zs R ω t R₂ s) u 0 (rowCol (Flock.RecSparse.messagePorts sh) 0 q) b :=
-  hkeys_of (F.zs R ω t R₂ s) hn hcol hown (hrr R ω t R₂ τ o hA s u)
+  hkeys_of (F.zs R ω t R₂ s) hn hcol sparseOwnNames_of_checkOwn (hrr R ω t R₂ τ o hA s u)
 
 end Family
 

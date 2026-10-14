@@ -400,7 +400,8 @@ theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
     have hn' : Flock.HmNets.netOf (Flock.RecSparse.unitName (unitShape (holoAt st hp)))
         (Flock.RecSparse.unitLaid (unitShape (holoAt st hp))) = .ok (F.Vs s).c.unit := hn
     have hlt := FlockVBridge.Sparse.rowCol_lt_nInS (F.Vs s).hU hn' hq
-    have hbit := bitAt_of_regBit (F.zs R ω t R₂ s) (bits := layers F.zs dg N k Rw R ω t R₂ τ s) (hA.1 s).2.2 hb
+    have hbit := bitAt_of_regBit (F.zs R ω t R₂ s) (bits := layers F.zs dg N k Rw R ω t R₂ τ s)
+      (hA.1 s).2.2.1 hb
       (ioColAt_of_readCol u hlt hrd) (FlockC3.Reps.upv_of_outer (F.zs R ω t R₂ s))
     have hm : nw (holoAt st hp).cls.shape =
         ((Flock.RecSparse.messagePorts (unitShape (holoAt st hp))).map (·.2)).sum :=

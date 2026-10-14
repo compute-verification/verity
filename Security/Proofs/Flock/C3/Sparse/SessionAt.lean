@@ -157,7 +157,7 @@ theorem sparseTieL_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s
     rw [FlockSoundness.Discharge.Layout.ofNet_nIn_eq, inWords_sparse hn']
     exact FlockVBridge.Decode.inRows_le_outStart _ _ _
   exact ⟨s, w, c, un, j, hj, hw, hnc, hpub, hh, hst, hck, hpar, hone, hu, hrw, hrv, hrt, fun t ht =>
-    copyVal_regOut (zs s) (hG s).2 (FlockVBridge.keyProg_correct (Vs s).hU (Vs s).nv (hG s).1 un) hj (by omega)
+    copyVal_regOut (zs s) (hG s).2.1 (FlockVBridge.keyProg_correct (Vs s).hU (Vs s).nv (hG s).1 un) hj (by omega)
       (h0 t ht)⟩
 
 /-- **The sparse tie from V*'s sessions** (`sparseTie_of_layer` at the session's layer). -/

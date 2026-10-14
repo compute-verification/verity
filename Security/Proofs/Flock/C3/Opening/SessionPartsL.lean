@@ -84,7 +84,7 @@ theorem partCols_of_openingZeroAtL {bits : Fin (Layout.keyN c hU nU) → Bool} (
         PartCols S' w' v' col base ∧ ∀ t < 128 * S'.res.length, col (base + t) = false := by
   obtain ⟨hpg, hj, hone, hc, hu, m, cl, hp, hsh, S, ns, nv, hpart, hw, hv, hz⟩ := h
   obtain ⟨hS', hns, hnv⟩ := part_eqOpening hS hg hpg hpart
-  obtain ⟨w', v', hw', hv', hcols⟩ := decode_openingR zo hG.2 u hj hone hc hp hsh hpart hu w v _ _
+  obtain ⟨w', v', hw', hv', hcols⟩ := decode_openingR zo hG.2.1 u hj hone hc hp hsh hpart hu w v _ _
     (Nat.le_of_eq (by rw [wIdx_size, hns])) (Nat.le_of_eq hnv.symm) hw hv
   obtain ⟨S1, ns1, nv1, hpart1, hn⟩ := check_opening hc hp hsh
   rw [hpart] at hpart1
@@ -94,6 +94,6 @@ theorem partCols_of_openingZeroAtL {bits : Fin (Layout.keyN c hU nU) → Bool} (
     exact inRows_le_outStart _ _ _
   have hsmall := opening_small hpart
   exact ⟨hpg, S, hS', w', v', _, _, hw', hv', hcols, fun t ht =>
-    copyVal_regOut zo hG.2 (keyProg_correct hU nU hG.1 u) hj (by omega) (hz t (by omega))⟩
+    copyVal_regOut zo hG.2.1 (keyProg_correct hU nU hG.1 u) hj (by omega) (hz t (by omega))⟩
 
 end FlockVBridge.OfVStar

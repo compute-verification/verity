@@ -618,7 +618,7 @@ theorem hResL_of {tf : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin F.
       rw [wIOf, nsOf, FlockVBridge.OfVStar.wIdx_size]
     obtain ⟨b0, hb0⟩ := hkeys R ω t R₂ τ o h r _ hp0
       (128 * (F.locOf r (wIOf F.sh p)[q / 128] (q % 128)).2 + q % 128) (by rw [← hsz0]; omega)
-    have hdec := bitAt_of_regBit (F.zs R ω t R₂ _) (h.1 _).2.2 hb0 hio0 (hupv _)
+    have hdec := bitAt_of_regBit (F.zs R ω t R₂ _) (h.1 _).2.2.1 hb0 hio0 (hupv _)
     have hb := hagree R ω t R₂ τ o h r _ p _ (q / 128) (q % 128) b0 hp0 hpP ha0 ha hi0 he hb0
     have hval : FlockVBridge.wbit (sub (wIOf F.sh p) (el (F.wOf (layers F.zs dg N k Rw R ω t R₂ τ) r))) q = b0 := by
       unfold FlockVBridge.wbit
