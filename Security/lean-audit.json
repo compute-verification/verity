@@ -14238,7 +14238,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "cbdb4fba875250ad567d2d3a85746ed0c46c5208095a84018350a8f1890a31ec",
+   "digest": "d1ef820f10e44ddc62478cf3f1040e2dab0c0dc7663f5237797ac25f964b8d17",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -14295,7 +14295,7 @@
     "Flock.RecVStar.checkCommitRounds": "a5bf5c8301a326f9647fb143b86dfb4a9c517fd71e427df807e59fc97ebd3700",
     "Flock.RecVStar.checkCovers": "23551cb87aa62e9d989db5bcab340308eb18b04fd23d7c8cb3382e173b68da37",
     "Flock.RecVStar.checkFile": "e0c1c6e3a75ceecf3cdfdf879bbd2b8996cfd695754c3552a556c80837896a54",
-    "Flock.RecVStar.checkInnerShape": "8e426fefb6e1fefef38053c309a6d8d302610c0c4ef2a71ae718eda00e58cc81",
+    "Flock.RecVStar.checkInnerShape": "0b62e5081c1d16dd25a4408b36fb4f08d86d508675e5c2f01f748e8c5effeff4",
     "Flock.RecVStar.checkInnerStmt": "977912d3d95bb18977548dc2fcd1ddb004757b32c66a9874d44e0ffabe41d56a",
     "Flock.RecVStar.checkLabel": "e5da7d97f456876deca9dfb7f000b1e0c565c85ea99e2030960d64f58e6cdb9f",
     "Flock.RecVStar.checkLabels": "8be7f22adcac9fe1cc256d18bf8d23a8ac309e0203498d1f736b842bfb7f627e",
