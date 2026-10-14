@@ -129,7 +129,6 @@
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
-        "benchmarks/bound_receipt/",
         "benchmarks/codec_mix/",
         "benchmarks/codec_tensor/",
         "benchmarks/ephemeral/",
