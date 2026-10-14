@@ -106,7 +106,9 @@ takes, each with who discharges it:
   decoder, from `tape_c3DecOf` and the source's facts (n7). `SrcOK`'s `HLeafC3` is G's `HLeaf`: no decoder meets a
   read fact or `HFrame` at a history shorter than the inner rounds (`zip` stops at the last coin; at `t = []` the tape
   is empty), and the checked sessions refuse one (`hLeafC3_checked`, wherever V* has a statement).
-* `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W).
+* `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>`. The drawn statement's
+  label of a unit is the unit by the verifier's refusal of any other (`RecVStar.checkLabels`, in `ChecksC3` and
+  `PubRowsChecked`; `label_of_checked`), so `RowsHeld` asks nothing of the labels (E).
 * `hnames` (`PortsNamed`): G's `PortNamesUnique` at V*'s circuits (W, with h2's parse).
 * `hown` (`OwnIn`): each accepted session's reads hold `own`'s ports by name, value and reads. At
   `own := fun j => ownAt ss j`, the verifier's message ports of statement `j` (`ownPorts` and RecSparse's other

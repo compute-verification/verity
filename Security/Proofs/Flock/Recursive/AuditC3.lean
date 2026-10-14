@@ -105,8 +105,9 @@ def innerHeld {Cm Coin : Type} (wr : List (Cm × Coin) → Lean.Json × String) 
 statement the session sets up from `zkInputs I` and the record's draw is V*'s statement `j` under the bindings `f` at
 the inner shape `ish`, with the verifier's own reads `own` and shared rows `rows` (`RecVStar.checkStmt`, which runs
 `checkOwn`); its verifier-registered values are the ones check 5's source `coins` gives at the inner commits `cs`
-(`RecCoins.check` at `c3Of`); and its public rows are the ones the inner transcript fixes (`RecVStar.checkPubRows`).
-`checkCovers` and `Zk.shapeOk` are not read here. -/
+(`RecCoins.check` at `c3Of`); its public rows are the ones the inner transcript fixes (`RecVStar.checkPubRows`); and
+each table's statement labels its instances with the units its part of the record's draw proves
+(`RecVStar.checkLabels`). `checkCovers` and `Zk.shapeOk` are not read here. -/
 def ChecksC3 (ish : RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits) (coins : Option Flock.RecCoins.Source)
     (j : ℕ) (f : VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
     (I : FlockSoundness.Discharge.Exec.Inputs) (own : Array Flock.Registered.Port)
@@ -116,7 +117,8 @@ def ChecksC3 (ish : RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits) (c
     sts.forM (Flock.RecVStar.checkStmt (some ish) I.tags I.tables · I.circuitFile I.partition I.program (some own)
       (some j) (some f) rows) = .ok () ∧
     sts.forM (Flock.RecCoins.check · (some own) coins (c3Of ish cs)) = .ok () ∧
-    sts.forM (Flock.RecVStar.checkPubRows · (some own) cs ish.sparse) = .ok ()
+    sts.forM (Flock.RecVStar.checkPubRows · (some own) cs ish.sparse) = .ok () ∧
+    Flock.RecVStar.checkLabels (FlockSoundness.Discharge.Exec.recordDraw t.record) I.count sts = .ok ()
 
 /-- **The verifier's checks at candidate 3 of every one of V*'s sessions**, as the prover supplies them: session `j` as
 V*'s statement `j` under `bind j` (`ChecksC3`), at the registration the outcome records. -/
