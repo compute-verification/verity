@@ -238,6 +238,8 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
 
 /-- **The checked family passes check 5 where a session accepts**: a checked session that accepts kept its own list
 (`checks_of_keepOwn`), so a transcript it accepts passes `ChecksC3`. -/
+set_option maxHeartbeats 1000000 in
+set_option linter.unusedVariables false in
 theorem coinsAccepted_checked {coins : String → Option Flock.RecCoins.Source}
     {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg'}
@@ -332,7 +334,7 @@ theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
   have hpar := sparseParams_of_check hck hname
   have hc3' := c3Held_eq hc3
   obtain ⟨sc, hsc⟩ := hco i.val i.isLt
-  refine ⟨⟨sc, by rw [hc3']; exact hsc, ?_, by rw [hcs, hc3']; exact csOf_eq hsc⟩, Array.size_ofFn _, s, u, 0,
+  refine ⟨⟨sc, by rw [hc3']; exact hsc, ?_, by rw [hcs, hc3']; exact csOf_eq hsc⟩, Array.size_ofFn, s, u, 0,
     FlockC3.Reps.upv_of_outer (F.zs R ω t R₂ s), hck, hpar, hone, FlockVBridge.Family.unitLog_le (F.Vs s).hscope,
     ?_, hv, htau, hz⟩
   · rw [hc3', c3Of_sparse hc3 hsp, unitShape_holoAt hell]
@@ -352,6 +354,7 @@ theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
         (Flock.RecSparse.messagePorts (unitShape (holoAt st hp))) (layers F.zs dg N k Rw R ω t R₂ τ) s u)[e]!) q =
         b := by
       unfold FlockVBridge.wbit wSparse
+      beta_reduce
       rw [getElem!_rd hq', bitOf_msgWord (Nat.mod_lt _ (by omega)), Nat.div_add_mod]
       exact hbit
     rw [hw]
