@@ -118,12 +118,13 @@ theorem pr_unpaid_rank_le
       refine Rate.pr_le_of_fiber _ _ (fun D => ?_)
       change pr (fun O : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
         t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D) ≤ (1 : ℝ≥0∞) / 2 ^ h
-      refine pr_le_div_of_card_mul_le
+      have hbound := pr_le_div_of_card_mul_le
         (α := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
         (fun O => t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
-        1 (2 ^ h) Fintype.card_ne_zero (by positivity) ?_ <;>
-        simp only [Nat.cast_one, Nat.cast_pow, Nat.cast_ofNat] at *
-      simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t
+        1 (2 ^ h) Fintype.card_ne_zero (by positivity)
+        (by simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t)
+      push_cast at hbound
+      simpa using hbound
     refine (Finset.sum_le_sum (fun t _ => ht t)).trans (le_of_eq ?_)
     simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, div_eq_mul_inv]
   · refine (pr_exists_le _).trans ?_
