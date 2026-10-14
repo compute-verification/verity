@@ -22,6 +22,7 @@ import Proofs.Flock.C3.Compose.LaterHolo
 import Proofs.Flock.C3.Compose.AtHoloHeld
 import Proofs.Flock.C3.Compose.HeldHyps
 import Proofs.Flock.C3.Compose.SparseEndsAt
+import Proofs.Flock.C3.Compose.LaterFamily
 import Proofs.Flock.C3.Compose.HoloCoinTys
 import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.Compose.RowsReg
@@ -127,6 +128,8 @@ import Proofs.Flock.C3.RegLevels.ROpensPR
 import Proofs.Flock.C3.RegLevels.LevelsChecked
 import Proofs.Flock.C3.RegLevels.TopRead
 import Proofs.Flock.C3.RegLevels.SrcMaps
+import Proofs.Flock.C3.Sparse.SessionReg
+import Proofs.Flock.C3.Sparse.SessionZero
 import Proofs.Flock.C3.RegLevels.LgCoins
 import Proofs.Flock.C3.RegLevels.RRounds
 import Proofs.Flock.C3.RegLevels.LgHeld

@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.Compose.HoloStageCoins
 import Proofs.Flock.C3.RegLevels.LgHeld
+import Proofs.Flock.Recursive.HPortTie
 
 /-!
 # `LaterCoins` at the verifier's map, from its hold of the inner session
@@ -151,6 +152,19 @@ def C3Held (wr : List (Cm × (ℐ).Coin) → Lean.Json × String)
     (c3 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → RecCoins.C3) : Prop :=
   ∀ R ω t Lb cs, held (wr t) = .ok cs → c3Of ish (some cs) = some (c3 R ω t Lb)
 
+/-- **`RecordPoints` from a decode of the record and the history's first coin**: custody (`hcus`) gives any decode of
+the record `t`'s first coin as its points, which `PointsFromHistory` makes the run's link points. -/
+theorem recordPoints_of {wr : List (Cm × (ℐ).Coin) → Lean.Json × String}
+    {held : Lean.Json × String → Except String RecVStar.InnerCommits} {sparse : Option RecSparse.Shape}
+    {ish : RecVStar.Inner} {tbl : String} {bc : Cm → String → Nat → List UInt8}
+    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse (Flock.Guarantees.holoMap st hp Cm ish tbl bc))
+    {t : List (Cm × (ℐ).Coin)} {u : C3Run (holoAt st hp)} (ht : 0 < t.length)
+    (hdec : ∃ spec sess, Flock.Record.decode spec (wr t).2 = .ok sess)
+    (hpts : FlockC3.HPort.PointsFromHistory ish tbl bc t u) : RecordPoints wr t u := by
+  obtain ⟨spec, sess, hd⟩ := hdec
+  obtain ⟨e, he⟩ : ∃ e, t[0]? = some e := ⟨t[0], List.getElem?_eq_getElem ht⟩
+  exact ⟨spec, sess, hd, by rw [(hcus t).2 e he spec sess hd]; exact (hpts e he).symm⟩
+
 /-- **Hypothesis: R's opening is in V*'s sessions at the map `M`** (`srcLevelTie_of_maps`' `h`): at every accepted
 outer proof, R's opening at the openings `opsAt` is in V*'s sessions, the claim tie holds, the source's opening is on
 the ring switches V*'s layer holds (`OpenTieL`), and `MapsLeft`. -/
@@ -182,7 +196,9 @@ at R's run from `MapsAt`'s session (`run_of_sessionAt`) at the `C3` of the verif
 total from their ties (`coins_total_holo`), the history's length from `hleaf` (`(ℐ).r` is the table's coin kinds'
 `1 + length` and one more, by `schedInner`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
 encoded and drawn at the map's one-round draws (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
-`repsDrawn_holoMapAt` gives it). -/
+`repsDrawn_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, as
+`FlockC3.Sparse.record_decodes_of_accepted` gives it at a family) and the run's points are the history's first coin
+(`hpts`, `PointsFromHistory`). -/
 theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -220,7 +236,10 @@ theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → 
     (hA : repFormsAt (holoAt st hp) = repForms ish.m ish.kLog ish.claims)
     (hshape : (holoAt st hp).cls.shape = sparseOf sp) (htblS : tbl ≠ s!"{RecVStar.SPARSE}/")
     (htbl : tbl ≠ s!"{RecVStar.STACKED}/")
-    (hpts : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u => RecordPoints wr t u)
+    (hrec : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ =>
+      ∃ spec sess, Flock.Record.decode spec (wr t).2 = .ok sess)
+    (hpts : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
+      FlockC3.HPort.PointsFromHistory ish tbl bc t u)
     (hheld : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ => HeldOk wr held t)
     (hcnt : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ => SparseCountedAt wr held sp t)
     (hss : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
@@ -236,12 +255,13 @@ theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → 
   intro R ω t R₂ τ o hA'
   obtain ⟨cs, hh⟩ := hheld R ω t R₂ τ o hA'
   have hc3' := hc3 R ω t (layers zs dg N k Rw R ω t R₂ τ) cs hh
-  obtain ⟨spec, sess, hdec, hu⟩ := hpts R ω t R₂ τ o hA'
+  have hlen : 1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length + 1 ≤ t.length := hleaf R ω t R₂ τ o hA'
+  obtain ⟨spec, sess, hdec, hu⟩ := recordPoints_of hcus (by omega) (hrec R ω t R₂ τ o hA') (hpts R ω t R₂ τ o hA')
   obtain ⟨xs, hxe, hxs⟩ := hx R ω t R₂ τ o hA' cs hh
   obtain ⟨hs, -, -, hleft⟩ := hmaps R ω t R₂ τ o hA'
   obtain ⟨_, _, _, _, -, -, hrun, hz⟩ := FlockC3.Opening.run_of_sessionAt hA' hosh hs
   obtain ⟨_, _, _, ho, hor⟩ := hot R ω t R₂ τ o hA'
-  exact laterCoins_holo hcus hdec hu (hleaf R ω t R₂ τ o hA') hh hc3' hrep hsp hsh hcl hrs hc hA hshape htblS htbl
+  exact laterCoins_holo hcus hdec hu hlen hh hc3' hrep hsp hsh hcl hrs hc hA hshape htblS htbl
     (hts R ω t R₂ τ o hA') (hcnt R ω t R₂ τ o hA' cs hh) (hss R ω t R₂ τ o hA' cs _ hh hc3') hxe hxs hrun hz hleft
     (coins_total_holo (hrt R ω t R₂ τ o hA') (hst R ω t R₂ τ o hA') ho hor (hlt R ω t R₂ τ o hA'))
 

@@ -10,10 +10,13 @@
   "Flock.Test.RecOpen",
   "Flock.Test.RecOpening",
   "Flock.Test.RecOpenLeaves",
+  "Flock.Test.RecSparseRows",
   "Flock.Test.ReadWhole",
   "Flock.Test.MsgNames",
   "Flock.Test.Parsed",
   "Flock.Test.Part",
+  "Flock.Test.TopReads",
+  "Flock.Test.SharedRows",
   "VStar"
  ],
  "exempt": {
