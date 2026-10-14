@@ -20,7 +20,9 @@ size is in lines of proof: "+N" is what a branch has built, a range is an estima
 K's round 5 (`f5be751ac`), rec-lean's round 21 and S's round 22 (`b74cd6ec7`); rec-lean's round-21 pieces branch
 (`cursor/c3-rl21-pieces-9b2a`) adds R's rounds 22–24 (`90110fa71`), C's rounds 22–25 (`fd388f5e2`, with K's rounds
 6–7), L's round 22 (`927241612`), W's rounds 2–3 (`45117e553`), S's round 23 (`172738c19`), E's labels
-(`f77469c1d`) and L's round 23 (`ed6a18610`). `hbr_honest_reg` takes
+(`f77469c1d`), L's round 23 (`ed6a18610`) and H's round 23 (`3539d74a4`), which spec-2 has since `d70c2b892`; then, at
+14 Oct 09:30Z, R's round 25 (`b1fe9f30c`), W's rounds 4–5 (`8ed4a1b57`), C's round 26 (`098d4d57e`), K's round 8
+(`4b848b7db`), S's round 24 (`58865f706`) and L's round 24 (`88dd89e1f`). `hbr_honest_reg` takes
 R's level-0 salts `salt` (C round 25) with no caller yet: the discharge of `RecursiveAuditC3` passes it the held salts,
 the prover's workers'.
 
@@ -40,7 +42,12 @@ salt binder (`salt`, `saltFinder`), the verifier's value source (`valueSrcC3`, `
 `RecCoins.opening`'s `accHeld` refusal (`accHeldO_of_opening`, L round 22); the drawn labels (`RecVStar.checkLabels` in `ChecksC3`, `label_of_checked`: `RowsHeld` asks
 nothing of them, E round 4); R's levels' tops reads (`TopRead`,
 `topReads_of_accepted`, `C3/RegLevels/TopRead.lean`): `RecCoins.checkStackedLevel` refuses a level whose `out` is not
-R's tops `rec-top-stacked-L<l>` read at node `pos[j] >>> H` (`checkTopReads`, S round 23).
+R's tops `rec-top-stacked-L<l>` read at node `pos[j] >>> H` (`checkTopReads`, S round 23); `RowsHeld` (`rowsHeld`:
+`VCommits`, `HPubRows`, `HeldIs` and `ChecksPubRows` read a session only at a transcript it writes, `ZkOuter.Writes`, so
+`hbr_honest_reg`'s `hdrawn` is `hreach`, S round 24; `TopLeaf`'s `digest_top` and `leaf_top` take that written
+acceptance); the parts' outputs held to V*'s zero rows (`RecCoins.checkZero` at `rec-residuals-zero` and
+`rec-sparse-zero`, `checkValue` as `checkRows` under `verifierSalt`, L round 24); `SparsePubRead` from check 5
+(`sparsePubRead_of_checkSparse`, `C3/Sparse/PubChecked.lean`, W round 5).
 
 Known test gap: no test replays honest R levels through `verify` with candidate-3 coins, so `checkTopReads`' acceptance
 of an honest prover is untested (lean-agreement does not reach it). Its honesty argument is the prover's code: R's
