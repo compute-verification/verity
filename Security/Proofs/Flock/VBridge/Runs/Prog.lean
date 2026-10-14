@@ -61,7 +61,7 @@ theorem prog_of_algebra (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (h
     repProg st sch p extras t = .ok ((), t₄) := by
   obtain ⟨v, info, kappa, S, res, hrows, hS, hw, hc, hres, hzero⟩ := halg
   obtain ⟨hcl, hrs, hshape, hval, hR, hT, hSws⟩ :=
-    rs_of_residuals hrows hS hw hc (hacc v info kappa hrows) hres hzero hm14 hm hkS hkL hkm hxs hext hd hne ht hpl
+    rs_of_residuals hrows hS hw hc (hacc v info kappa hrows) hres hzero hm14 hm hkS hkL hkm hxs hext hd hne ht
       (hzp v info kappa hrows).fc hlp.zp hrsw rfl rfl hrn hra hgn hga
   obtain ⟨hr, hz, hrho, -, -, -, -, hts, -⟩ := rows_coins hrows (hm ▸ hm14) ht hd hne
   rw [hr, hz, hrho, hts, ← hm, ← hkL] at hcl

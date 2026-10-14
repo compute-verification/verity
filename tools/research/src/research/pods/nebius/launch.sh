@@ -190,6 +190,10 @@ eval "SSH=($(PYTHONPATH=$src python3 -c 'import shlex, sys; from research import
 for _ in $(seq 90); do "${SSH[@]}" true 2> /dev/null && break; sleep 10; done
 "${SSH[@]}" true || die "no ssh to $SSH_USER@$IP"
 "${SSH[@]}" 'sudo cloud-init status --wait > /dev/null; test -f /var/lib/vy-setup.done' || die "first-boot setup did not finish: ssh in and read /var/log/cloud-init-output.log"
+if ! why=$("${SSH[@]}" "/usr/local/sbin/vy-nebius-stop --probe $VM_ID"); then
+  nb compute instance stop --id "$VM_ID" --async > /dev/null || true
+  die "stopped $VM_ID: its lease and deadline could not stop it ($why)"
+fi
 if [ -n "$deadline_epoch" ]; then
   "${SSH[@]}" "sudo install -d -m 755 /etc/research && printf '%s %s %s\\n' $deadline_epoch $(date -u -d "@$deadline_epoch" +%Y-%m-%dT%H:%M:%SZ) launch \
     | sudo tee /etc/research/deadline.tmp > /dev/null && sudo mv -f /etc/research/deadline.tmp /etc/research/deadline && cat /etc/research/deadline" \

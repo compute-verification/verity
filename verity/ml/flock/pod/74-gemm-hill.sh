@@ -179,7 +179,7 @@ for i in $(seq 0 $(( (ran > 0 ? ran : 1) - 1 ))); do
   P=$(pdir $i); mkdir -p $R/out/$P
   BS=$R/out/${P}m35/binary.sha256; [ -f $BS ] || BS=$R/out/preflight/binary.sha256
   if [ "$POINTS" = 1 ]; then RES=$R/result.json HC=$R/hillclimb.json; else RES=$R/out/${P}result.json HC=$R/hillclimb-$i.json; fi
-  PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python \
+  PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python \
     $PYBIN verity/ml/flock/pod/gemm_hill.py metrics --dtype $DTYPE --K $K --preflight $R/out/preflight/classes/results.jsonl --sweep $R/out/${P}results.jsonl \
     --stamps $R/out/${P}stamps.tsv --warm ${WARM:-1} --runs ${RUNS:-3} --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
     --gpu-csv $R/out/gpu.csv --census benchmarks/census/hardware.json ${PEAK_ID:+--peak-id $PEAK_ID} --binary-sha $BS --step ${STEP:-0} \

@@ -221,11 +221,12 @@ _MOE_DISPATCH_OPS = ("moe_forward", "moe_forward_shared", "fused_experts")
 
 
 def _moe_c_fake_impls() -> list:
-    """Fake (meta) kernels for the `_moe_C` / `_C` leaf ops the traced MoE body launches, when the pinned vLLM registers none: every one
-    of them writes into caller-allocated outputs and returns nothing, so the fake is `None` (shapes are the allocations').  Returns the
-    ops registered (nothing to undo: registration is per process and is only ever the same None-returning fake)."""
+    """Fake (meta) kernels for the `_moe_C` / `_C` leaf ops the traced MoE body launches, when the pinned vLLM registers none: all but
+    `grouped_topk` write into caller-allocated outputs and return nothing, so their fake is `None` (shapes are the allocations').  Returns
+    the ops registered (nothing to undo: registration is per process and is only ever the same fake)."""
     done = []
-    for ns, name in (("_moe_C", "topk_softmax"), ("_moe_C", "moe_align_block_size"), ("_moe_C", "moe_sum"), ("_C", "silu_and_mul")):
+    for ns, name in (("_moe_C", "topk_softmax"), ("_moe_C", "moe_align_block_size"), ("_moe_C", "moe_sum"), ("_C", "silu_and_mul"),
+                     ("_C", "silu_and_mul_per_block_quant")):
         try:
             op = getattr(getattr(torch.ops, ns), name)
         except (AttributeError, RuntimeError):
@@ -235,6 +236,15 @@ def _moe_c_fake_impls() -> list:
             done.append(f"{ns}::{name}")
         except RuntimeError:  # already has a fake / meta kernel
             pass
+    # `grouped_topk(scores [M, E], n_group, topk_group, topk, ...)` allocates its outputs: f32 weights and int32 ids, [M, topk]
+    try:
+        torch.ops._moe_C.grouped_topk
+        torch.library.register_fake("_moe_C::grouped_topk")(
+            lambda scores, n_group, topk_group, topk, *a, **k: (scores.new_empty((scores.shape[0], topk), dtype=torch.float32),
+                                                                scores.new_empty((scores.shape[0], topk), dtype=torch.int32)))
+        done.append("_moe_C::grouped_topk")
+    except (AttributeError, RuntimeError):
+        pass
     return done
 
 
@@ -272,6 +282,7 @@ def moe_ops_traced(model=None):
                 continue
             if fe is packets.get("moe_forward") or fe is packets.get("moe_forward_shared"):
                 h.patch(m, "_forward_entry", (lambda hs, rl, sei, ids, _name, _hd, _l=m: _l._forward_impl(hs, rl, sei, ids)))
+        _router_bias_through_owner(model, h)
     if "fused_experts" in packets:
         # `_OpNamespace.__getattr__` caches resolved packets as instance attributes; a plain function in its place is what callers
         # of `torch.ops.vllm.fused_experts(**kw)` now reach, and the packet is restored below.
@@ -288,6 +299,28 @@ def moe_ops_traced(model=None):
         h.patch(_ws, "_manager", _ExportWorkspaceManager())
     with h:
         yield
+
+
+def _router_bias_through_owner(model, h) -> None:
+    """A MoE router is a plain object (not a module) holding the layer's `e_score_correction_bias` Parameter (`GroupedTopKRouter`,
+    `FusedTopKBiasRouter`).  The export swaps each module's parameters for its own tensors while it traces, so a reference held
+    outside the module tree is the original tensor, which the export lifts as a hidden constant.  For the duration, each such
+    router reads the bias from the module that registers it, at every `select_experts` (the same Parameter: the bias the engine
+    loads into it)."""
+    owners = {id(p): (mod, n) for mod in model.modules() for n, p in mod._parameters.items() if p is not None}
+    for m in model.modules():
+        r = getattr(m, "router", None)
+        b = getattr(r, "e_score_correction_bias", None)
+        if r is None or isinstance(r, torch.nn.Module) or not isinstance(b, torch.nn.Parameter) or id(b) not in owners:
+            continue
+        owner, name = owners[id(b)]
+
+        def select(*a, _r=r, _o=owner, _n=name, _sel=r.select_experts, **k):
+            _r.e_score_correction_bias = getattr(_o, _n)
+            return _sel(*a, **k)
+
+        h.patch(r, "e_score_correction_bias", b)
+        h.patch(r, "select_experts", select)
 
 
 class _ExportWorkspaceManager:

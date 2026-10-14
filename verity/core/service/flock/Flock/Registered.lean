@@ -3,6 +3,7 @@ PROTOCOL.md §16.10 (registered reads); `protocols/sampled_proofs/README.md`, "R
 registered value (a program's weights, constants and tables, committed once at registration under `hm96-sha512/row/v1`
 leaves), opened against the verifier's own registered roots at the positions its own program reads.
 -/
+import Flock.Canon
 import Flock.HmRow
 
 namespace Flock
@@ -11,6 +12,31 @@ namespace Registered
 open Lean (Json)
 
 def FORMAT : String := "verity/registered-reads/v0"
+
+def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
+/-- The default leaf width, which the domain and the entry name only by leaving `word_bits` out. -/
+def WORD_BITS : Nat := 16
+def WIDTHS : List Nat := [16, 32]
+def WIDTH_KEY : String := "word_bits"
+
+private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String) (manifest : Json) : V ByteArray := do
+  let t := tag.toUTF8
+  let m := (← Flock.canon manifest).toUTF8
+  return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
+
+/-- `registered.domain(program, value, words, leaves, word_bits).domain_id` (one-stage `registered.py`), `leaves` the
+value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the bytes of
+`identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})` with
+`"word_bits"` beside them when it is not 16. -/
+def domain (program value : String) (words leaves wordBits : Nat) : V ByteArray := do
+  if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
+  let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str HmRow.ROW_SCHEMA),
+    ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
+    (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]))
+  let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
+  let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
+    (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
+  return FV3.hash "domain" [binding, FV3.uint 0, positions, FV3.uint leaves] Flock.Sha512.hash
 
 /-- A port of the verifier's own `--registered` file: the value its rows are rows of, the value's registered root, leaf
 count, row width and frame-v3-sha512 domain, and the position every unit of the population reads (none: a unit of

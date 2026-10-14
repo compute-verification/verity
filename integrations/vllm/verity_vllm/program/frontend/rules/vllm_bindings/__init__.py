@@ -65,9 +65,10 @@ def vllm_ruleset():
     base = [r for r in DEFAULT_RULES.rules if type(r) is not _FusedAddRmsNormRule]
     from verity_vllm.program.frontend.rules.vllm_moe import VLLM_MOE_RULES  # [R13 MOE-01] the fused-MoE block's leaf kernels
     from verity_vllm.program.frontend.rules.vllm_moe_fp8 import VLLM_MOE_FP8_RULES  # the block-FP8 fused_moe_kernel launches
+    from verity_vllm.program.frontend.rules.vllm_moe_router import VLLM_MOE_ROUTER_RULES  # the one-group sigmoid router (grouped_topk)
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES  # [R15 stoch] the seeded temperature + top-p token select (GumbelTopPTokenSelect_v1{V,S})
-    return RuleSet("default+vllm-bindings", base + VLLM_BINDING_RULES + VLLM_MOE_RULES + VLLM_MOE_FP8_RULES + list(VLLM_SAMPLING_RULES),
-                   list(DEFAULT_RULES.families))
+    return RuleSet("default+vllm-bindings", base + VLLM_BINDING_RULES + VLLM_MOE_RULES + VLLM_MOE_FP8_RULES + VLLM_MOE_ROUTER_RULES
+                   + list(VLLM_SAMPLING_RULES), list(DEFAULT_RULES.families))
 
 
 __all__ = ["AllocViewRule", "GEMM_PINS", "LayerNormAtenRule", "MEAN_PINS", "RMS_PINS", "TritonGemmRule", "VLLM_BINDING_RULES", "_OBSERVED", "_pins_ok",
