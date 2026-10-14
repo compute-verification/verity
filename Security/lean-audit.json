@@ -12306,11 +12306,10 @@
     "Flock.RecCoins.checkOpen._sparseCasesOn_4": "623f6554b0467fbbc8c98025cf4c2fc200aa835828cc13653f9edf8a952089a5",
     "Flock.RecCoins.checkOpening": "f02c5963ace5c052745ad0afd4cc1c68a065469366b7624d8ef9af74fe74fda2",
     "Flock.RecCoins.checkResiduals": "d113b42f27683212bf1b760ed55a96c887f932c38156283c195fb76cb532bc6f",
-    "Flock.RecCoins.checkSparse": "bda01d816b2471cef7d74e41beff2041adba031c6a3de4c3eb0eb91682d9af85",
+    "Flock.RecCoins.checkSparse": "71b436e9dee2a00379f9158a8ba7071f6cdfd7a6d91a12b75735d615930f9283",
     "Flock.RecCoins.checkStackedLevel": "bff72edddf6143a8417a8752680b8ebfc1f2e1a40d6a13b3df369953fb236614",
     "Flock.RecCoins.checkTopReads": "02f990952a621432f626f7ce5e7f28d4ed7865d25f5b68a8df5587b6c822ffa1",
     "Flock.RecCoins.checkValue": "6b49e43fac038c40dbabad922102077b8bff7eb4f3c5c49433e0e0dbf945d307",
-    "Flock.RecCoins.checkValue._sparseCasesOn_7": "4ea8e47fdf2794834c496a0116795ca57036361fb6cb760af7bfd51c851bc18f",
     "Flock.RecCoins.coefAt": "b4b21e6b3ae81577057fc7c51f1f61902efa6c88913906612a9df4bf8b41cd8a",
     "Flock.RecCoins.commitRow": "48e36581cf7e3d3796b210f5907cfda8daa430d6b04eb9a04761c5f996990264",
     "Flock.RecCoins.dirsRow": "f40fdeb3beb7826e7eb47eff0b5fd0c7d96735743f3c2996ac36122031909a99",
@@ -12327,7 +12326,16 @@
     "Flock.RecCoins.stackedParams": "c990ac16582954820e9fbdb87b21f7b1b7242a938a1a5a73c2e98f9dc1a42b76",
     "Flock.RecCoins.unitRangeOf": "c064e5df9e9559478cbfc9d3a13eab32a264bcd3cd9c94db02f0c9b38c41273f",
     "Flock.RecCoins.verifierSalt": "49840e67bd772944d89b47f3fc9166d73cf5b75758c9cf2fc8741b56bc3a812e",
-    "Flock.RecCoins.words": "b1d5624f7e21ce0cb07cedde44e8247292d2e195853c40a6bf3a6bc1b0b020f7"
+    "Flock.RecCoins.words": "b1d5624f7e21ce0cb07cedde44e8247292d2e195853c40a6bf3a6bc1b0b020f7",
+    "Flock.RecCoins.OUT_WORDS": "7fda4a430c29c7c5ea119eed1c24916dc8ab7637368f95dbcc2e031c4662dfad",
+    "Flock.RecCoins.SPARSE_ZERO_VALUE": "014e442b745de5e15f370c990ac893ef5a9afd268429ed6f7f11e23e19786038",
+    "Flock.RecCoins.ZERO_SALT": "8fee70f5c59ed1db56fbc397dd4d1a4088cf751f2e42c52077a9e02a739ff44d",
+    "Flock.RecCoins.ZERO_VALUE": "27ee455a72c5f927e3b6a97776ad0dc3a87e42197ab0274008dba695dfe96c9a",
+    "Flock.RecCoins.checkRows": "d0fd76da5899cc200a9c7cac06b1016dfd3a38a50bcdb6dbe6b24fbf126ac1a7",
+    "Flock.RecCoins.checkRows._sparseCasesOn_7": "9899da9f27ffc471375c6929ab9efce9274e2e0dbc627c767cd48d004eef0026",
+    "Flock.RecCoins.checkZero": "b0e6d4b41aca4164c1c980752baad127fd02d8a11ae343deaf9097ad0bececcf",
+    "Flock.RecCoins.zeroRows": "cb35e6e312d87edca4b25c598512d6fe10eb8df377321f7de7c60945beb1d6f3",
+    "Flock.RecCoins.zeroSalt": "245e72bf3ac9daa44f4cf3fe1afc3b44d54be23f00d5e8f0ffee4419e11d9d30"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
@@ -15964,7 +15972,7 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.ValueSrc": {
-   "digest": "db99e89391ff1817bade51d6193bf49b3f9fa3df68a7934072e1ecdb7b100dce",
+   "digest": "a214fddc3875f30ca8eb82692fb97b764003988cb1bc3ff811e185245e0c25bd",
    "definitions": {
     "FlockC3.RegLevels.leavesV": "7a24e5e65a9fd6c1b599494f00fb3525ac3a08077d8b263b8fbcde3c55ca76a5",
     "FlockC3.RegLevels.lev": "db02a00333edb36cb19d5ca175214bd41121d9338a2b4fd1253ab1a124d82e22",
@@ -15978,7 +15986,7 @@
     "FlockSoundness.Discharge.Recursion.ValueColl": "75ab0b39763255286a813f4e1022232adb4a19cc8c82e0e707cb6db542124fe2",
     "FlockSoundness.Discharge.Recursion.ValueSrc": "4611f5f955794a44e07ab698cd4fae3b6deb6297d99c5f7969a6bc239bfe2db6",
     "FlockSoundness.Discharge.Recursion.innerLevels": "b5dadbd11fcd33c37cf43766a924771407a10bcb1821f20d07d303d9b242c018",
-    "FlockSoundness.Discharge.Recursion.innerRows": "f0e66514a3094d9ab7d66918b2a093ec1b678f70a4513bd4890b03b26df7dd52",
+    "FlockSoundness.Discharge.Recursion.innerRows": "16c76d6e17290bd43439619659271fe077be04628281e7e45193e137379dac61",
     "FlockSoundness.Discharge.Recursion.loadRows": "ed3eed0d000b85f95d2b5d044864817a93088b6368069899a3e82690a2c333b9",
     "FlockSoundness.Discharge.Recursion.openCoef": "e4e9071270069cf1acf79d64474f8c174f811f8d0ccb4df3e059c499849907d7",
     "FlockSoundness.Discharge.Recursion.openDirs": "12a726dc1f53307e6beb5467c41a970e3852da71e82d0f40855df3bf9c0d24c4",
@@ -16001,7 +16009,7 @@
     "FlockSoundness.Discharge.Recursion.valueRows._sparseCasesOn_2": "3bdd94c59576d6c2bb97a1ab01439d5331fc1c3c031bce53d5653358190e7957",
     "FlockSoundness.Discharge.Recursion.valueRowsAll": "8698108a9bcce76cd500c10dd328c0406eccafdafbcecedb33cde5310b7ca998",
     "FlockSoundness.Discharge.Recursion.valueRowsAll._sparseCasesOn_1": "b257748e11e6824d460506cbeba07bdd19d0abffc8a43b4d73aac1beecc9d4b4",
-    "FlockSoundness.Discharge.Recursion.valueSrcAll": "3726bd42bc08654350154bbb0995ea7d81e22a7e7124d852002d28725cb9db22",
+    "FlockSoundness.Discharge.Recursion.valueSrcAll": "7249f76c1fd954befdf043208cec601d5cc30f35b0c10df459462f41a204d0a9",
     "FlockSoundness.Discharge.Recursion.valueSrcC3._sparseCasesOn_1": "7416d7d1c43602a2ef3d4486c49fa820ab173c3932903475d211d31a5429d44c",
     "FlockSoundness.Discharge.Recursion.valueSrcC3._sparseCasesOn_2": "b37f27feec417f8a5e3c7126ac59f36349baf5cc66b02c359e2a6f6fec0f3085",
     "FlockSoundness.Discharge.Recursion.valueSrcC3.match_1": "1d242b8326f9bae60389d41b10e20ed8a37dad1ebcd00976f98500c508ac85a6"
