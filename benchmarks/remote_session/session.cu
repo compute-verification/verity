@@ -373,70 +373,29 @@ __device__ __forceinline__ u64 pass_kept_at(u64 width, int h0, int h) {
   return at;
 }
 
-// A block owns one completed receipt chunk. It hashes every group of 2^h0 leaves and all of that chunk's levels in
-// place in kept, so no leaf/level launch follows the producer. The last block waits for every real chunk and combines
-// their roots with the padding roots already in kept, through the pass root.
+// A block owns one 2^h0-leaf subtree of a completed receipt chunk. The last subtree block of each chunk builds that
+// chunk's retained levels, and the last completed chunk builds the upper levels through the root. Thus the leaf and
+// every level follow the producer in one launch without serializing a chunk's leaves in one CTA.
 __global__ void __launch_bounds__(128) pass_consumer_kernel(const u64 *__restrict__ ys, const unsigned *__restrict__ ready,
-                                                            unsigned *done, u64 *__restrict__ kept, u64 width, u64 chunk,
-                                                            int h0, int hc, int H, u64 chunks) {
-  const u64 k = blockIdx.x;
-  if (k == chunks) {
-    while (*(volatile const unsigned *)done < chunks) __nanosleep(256);
-    __threadfence();
-    for (int h = hc; h < H; ++h) {
-      const u64 m = width >> (h + 1), i0 = 0;
-      const u64 *in = kept + 8 * pass_kept_at(width, h0, h);
-      u64 *out = kept + 8 * pass_kept_at(width, h0, h + 1);
-      for (u64 i = threadIdx.x; i < m; i += blockDim.x) {
-        u64 d[8];
-        node_digest(kC.node_mid[h], i0 + i, in + 16 * i, in + 16 * i + 8, d);
-#pragma unroll
-        for (int x = 0; x < 8; ++x) out[8 * i + x] = d[x];
-      }
-      __syncthreads();
-    }
-    return;
-  }
-
+                                                            unsigned *__restrict__ subtree_done,
+                                                            unsigned *__restrict__ chunks_done, u64 *__restrict__ kept,
+                                                            u64 width, u64 chunk, int h0, int hc, int H, u64 chunks) {
+  const u64 lc = chunk / PER_LEAF, leaves = 1ULL << h0, groups = lc >> h0;
+  const u64 k = blockIdx.x / groups, first = (blockIdx.x - k * groups) * leaves, c0 = k * lc;
   const unsigned tiles_per = (unsigned)(chunk / 32);
   while (*(volatile const unsigned *)(ready + k) < tiles_per) __nanosleep(256);
   __threadfence();
   extern __shared__ u64 scratch[];
-  const u64 lc = chunk / PER_LEAF, leaves = 1ULL << h0, c0 = k * lc;
-  for (u64 first = 0; first < lc; first += leaves) {
-    u64 *in = scratch, *out = scratch + 8 * leaves;
-    for (u64 j = threadIdx.x; j < leaves; j += blockDim.x) {
-      u64 d[8];
-      pass_leaf(ys + 8 * PER_LEAF * (c0 + first + j), c0 + first + j, d);
+  u64 *in = scratch, *out = scratch + 8 * leaves;
+  for (u64 j = threadIdx.x; j < leaves; j += blockDim.x) {
+    u64 d[8];
+    pass_leaf(ys + 8 * PER_LEAF * (c0 + first + j), c0 + first + j, d);
 #pragma unroll
-      for (int x = 0; x < 8; ++x) in[8 * j + x] = d[x];
-    }
-    __syncthreads();
-    for (int h = 0; h < h0; ++h) {
-      const u64 m = leaves >> (h + 1), i0 = (c0 + first) >> (h + 1);
-      for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
-        u64 d[8];
-        node_digest(kC.node_mid[h], i0 + j, in + 16 * j, in + 16 * j + 8, d);
-#pragma unroll
-        for (int x = 0; x < 8; ++x) out[8 * j + x] = d[x];
-      }
-      __syncthreads();
-      u64 *tmp = in;
-      in = out;
-      out = tmp;
-    }
-    if (!threadIdx.x) {
-      const u64 at = pass_kept_at(width, h0, h0) + ((c0 + first) >> h0);
-#pragma unroll
-      for (int x = 0; x < 8; ++x) kept[8 * at + x] = in[x];
-    }
-    __syncthreads();
+    for (int x = 0; x < 8; ++x) in[8 * j + x] = d[x];
   }
-
-  for (int h = h0; h < hc; ++h) {
-    const u64 m = lc >> (h + 1), i0 = c0 >> (h + 1);
-    const u64 *in = kept + 8 * (pass_kept_at(width, h0, h) + (c0 >> h));
-    u64 *out = kept + 8 * (pass_kept_at(width, h0, h + 1) + i0);
+  __syncthreads();
+  for (int h = 0; h < h0; ++h) {
+    const u64 m = leaves >> (h + 1), i0 = (c0 + first) >> (h + 1);
     for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
       u64 d[8];
       node_digest(kC.node_mid[h], i0 + j, in + 16 * j, in + 16 * j + 8, d);
@@ -444,9 +403,50 @@ __global__ void __launch_bounds__(128) pass_consumer_kernel(const u64 *__restric
       for (int x = 0; x < 8; ++x) out[8 * j + x] = d[x];
     }
     __syncthreads();
+    u64 *tmp = in;
+    in = out;
+    out = tmp;
+  }
+  if (!threadIdx.x) {
+    const u64 at = pass_kept_at(width, h0, h0) + ((c0 + first) >> h0);
+#pragma unroll
+    for (int x = 0; x < 8; ++x) kept[8 * at + x] = in[x];
   }
   __threadfence();
-  if (!threadIdx.x) atomicAdd(done, 1u);
+  __shared__ int last;
+  if (!threadIdx.x) last = atomicAdd(subtree_done + k, 1u) + 1 == groups;
+  __syncthreads();
+  if (!last) return;
+  __threadfence();
+  for (int h = h0; h < hc; ++h) {
+    const u64 m = lc >> (h + 1), i0 = c0 >> (h + 1);
+    const u64 *level_in = kept + 8 * (pass_kept_at(width, h0, h) + (c0 >> h));
+    u64 *level_out = kept + 8 * (pass_kept_at(width, h0, h + 1) + i0);
+    for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
+      u64 d[8];
+      node_digest(kC.node_mid[h], i0 + j, level_in + 16 * j, level_in + 16 * j + 8, d);
+#pragma unroll
+      for (int x = 0; x < 8; ++x) level_out[8 * j + x] = d[x];
+    }
+    __syncthreads();
+  }
+  __threadfence();
+  if (!threadIdx.x) last = atomicAdd(chunks_done, 1u) + 1 == chunks;
+  __syncthreads();
+  if (!last) return;
+  __threadfence();
+  for (int h = hc; h < H; ++h) {
+    const u64 m = width >> (h + 1);
+    const u64 *level_in = kept + 8 * pass_kept_at(width, h0, h);
+    u64 *level_out = kept + 8 * pass_kept_at(width, h0, h + 1);
+    for (u64 i = threadIdx.x; i < m; i += blockDim.x) {
+      u64 d[8];
+      node_digest(kC.node_mid[h], i, level_in + 16 * i, level_in + 16 * i + 8, d);
+#pragma unroll
+      for (int x = 0; x < 8; ++x) level_out[8 * i + x] = d[x];
+    }
+    __syncthreads();
+  }
 }
 
 // The subtrees' kernels behind rs_subtrees: subtree q's first leaf c[q], its 16 · 2^h0 receipts at ys + q · 16 · 2^h0
@@ -680,7 +680,8 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
 // cores; 0: one an SM, so a consumer CTA fits beside each), and on sb, one persistent consumer CTA per chunk hashes its
 // leaves and tree as soon as the producer counts the chunk's tiles done. A final consumer CTA joins the chunk roots, so
 // the whole receipt tree follows the reads without a leaf or level kernel boundary. pk is the pass's packed signs
-// (`rs_signs16`); ctr is scratch of 2 + n / chunk words (the next tile, each chunk's tiles done, completed chunks); ys
+// (`rs_signs16`); ctr is scratch of 2 + 2 n / chunk words (the next tile, each chunk's tiles done, each chunk's completed
+// subtrees, completed chunks); ys
 // holds all n receipts (8 words each). dig and up remain fallback scratch for an unusually large h0. `pad` is two
 // digests per canonical padding leaf: the
 // leaves followed by scratch for their levels below h0. Padding is prepared on sb as soon as the pass starts, under
@@ -710,7 +711,7 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
     if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
   }
   int rc;
-  if (cudaMemsetAsync(ctr, 0, 4 * (2 + chunks), sa) || cudaEventRecord(go, sa) || cudaStreamWaitEvent(sb, go, 0))
+  if (cudaMemsetAsync(ctr, 0, 4 * (2 + 2 * chunks), sa) || cudaEventRecord(go, sa) || cudaStreamWaitEvent(sb, go, 0))
     return 4;
   sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, pk, ys, ctr, (unsigned)(chunk / 32));
   if (cudaGetLastError()) return 4;
@@ -732,8 +733,10 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
   // for diagnostic configurations with larger retained subtrees.
   if (h0 <= 8) {
     const size_t shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
-    pass_consumer_kernel<<<chunks + 1, 128, shared, sb>>>(ys, ctr + 1, ctr + 1 + chunks, kept, width, chunk, h0, hc, H,
-                                                         chunks);
+    const uint64_t groups = chunks * (lc >> h0);
+    if (groups > 0xFFFFFFFFULL) return 1;
+    pass_consumer_kernel<<<groups, 128, shared, sb>>>(ys, ctr + 1, ctr + 1 + chunks, ctr + 1 + 2 * chunks, kept, width,
+                                                     chunk, h0, hc, H, chunks);
   } else {
     for (uint64_t k = 0; k < chunks; ++k) {
       const int slot = k & 1;
