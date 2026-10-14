@@ -88,6 +88,7 @@
       "linear": "CIR",
       "owns": [
         "integrations/",
+        "benchmarks/served_units/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
@@ -131,7 +132,9 @@
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
-        "benchmarks/bandwidth/"
+        "benchmarks/bandwidth/",
+        "benchmarks/word_codec/",
+        "benchmarks/codec_tensor/"
       ]
     },
     {

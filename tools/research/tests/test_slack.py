@@ -697,6 +697,21 @@ def test_read_thread_since_reads_only_the_replies_after_ts(fake, registry, capsy
     assert rc == 0 and [m["text"] for m in json.loads(out)] == ["second answer", "third answer"]
 
 
+def test_read_since_takes_an_iso_time_as_its_ts_and_refuses_anything_else(fake, registry, capsys):
+    """Slack answers a date passed as `oldest` with no messages, so a sweep reading `--since 2026-…Z` saw a quiet channel."""
+    root = fake.add(COORD, text="before", user="U1", ts="1793525400.000100")                  # 2026-11-01T09:30:00Z
+    fake.add(COORD, text="after", user="U2", ts="1793525460.000100")
+    fake.add(COORD, text="reply after", user="U3", ts="1793525470.000100", thread_ts=root["ts"])
+    rc, out, _ = run(capsys, "read", "--since", "2026-11-01T09:30:30Z")
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["after"]
+    rc, out, _ = run(capsys, "read", "--thread", root["ts"], "--since", "2026-11-01T01:30:30-08:00")
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["reply after"]
+    for bad in ("2026-11-01T09:30:30", "yesterday"):
+        with pytest.raises(SystemExit) as e:
+            run(capsys, "read", "--since", bad)
+        assert e.value.code == 2 and "an ISO time with its zone" in capsys.readouterr().err
+
+
 def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, registry, capsys):
     text = "freeze 2026-11-01T09:30Z, see note:20260930T2020Z-handoff-infra and `--since 2026-11-01T09:30Z`"
     assert run(capsys, "ask", "--as", "infra", "--to", "@memory-accounting", "--text", text)[0] == 0
@@ -1373,6 +1388,32 @@ def test_names_list_shows_a_handles_published_route_that_the_clone_lacks(fake, r
     add_route(routes_dirs[1], "circuits", "1.0", holder="bc-11111111")
     rc, out, _ = run(capsys, "names", "list")
     assert rc == 0 and out.startswith("@circuits") and "bc-11111111" in out and "open" in out
+
+
+def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeypatch):
+    """The notes repository is private: its raw files answer 404 without a token, so the published-route fallback (and
+    `names list` on a clone that lacks the route) only works when the request carries RESEARCH_NOTES_TOKEN."""
+    seen = []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def urlopen(req, timeout):
+        seen.append((req.full_url, req.get_header("Authorization")))
+        return Reply(b'{"name": "x"}')
+
+    monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
+    assert slack.http_get("https://example.invalid/routes.d/x.json") == b'{"name": "x"}'
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN")
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
+    assert seen == [(f"{slack.ROUTES_RAW}x.json", "Bearer t0k"), ("https://example.invalid/routes.d/x.json", None),
+                    (f"{slack.ROUTES_RAW}x.json", None)]
 
 
 def notes_clone(tmp_path) -> Path:
