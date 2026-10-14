@@ -273,3 +273,9 @@ end family
 end
 
 end FlockC3.HPort
+
+#print axioms FlockC3.HPort.claim_eq_of_reads
+#print axioms FlockC3.HPort.mem_ownPorts_opening
+#print axioms FlockC3.HPort.claimSite_of_checked
+#print axioms FlockC3.HPort.claim_word_of
+#print axioms FlockC3.HPort.claimWords_of

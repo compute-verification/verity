@@ -268,3 +268,8 @@ theorem accPos_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
 end C3
 
 end FlockC3.RegLevels
+
+#print axioms FlockC3.RegLevels.open_stmt
+#print axioms FlockC3.RegLevels.outReadsS_of_checks
+#print axioms FlockC3.RegLevels.outKeysS_of_checks
+#print axioms FlockC3.RegLevels.accOutL_of_checks
