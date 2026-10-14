@@ -151,6 +151,15 @@ def test_the_gathers_are_column_reads() -> None:
     assert X.gather_e4m3(3).id == "GatherE4m3x3_v1" and X.gather_f32(128).id == "GatherF32x128_v1"
 
 
+def test_the_gathers_resolve_by_id_in_a_cold_decode() -> None:
+    """A descriptor naming `GatherE4m3x{V}_v1` / `GatherF32x{V}_v1` decodes in a process that never built the program (the gathers
+    are made per vocabulary while deriving): the lazy families resolve them like `GatherBf16x{V}_v1` (the GLM-5.3 Match of record)."""
+    from verity.ml.circuits.codec import lookup_primitive
+    from verity.ml.circuits.defs import REGISTRY
+    assert lookup_primitive(REGISTRY, "GatherE4m3x256_v1") is X.gather_e4m3(256)
+    assert lookup_primitive(REGISTRY, "GatherF32x256_v1") is X.gather_f32(256)
+
+
 #: on bits: two tiles over two scale blocks (the step sm_120's or Hopper's), the GEMMs over a whole and a partial weight block, the
 #: gathers, and the pair forms over 3 experts
 BOOLEAN = [bind(BM.MoeExpertFp8BlockCoordinateV4, K=64, G=32, KB=32, SWAP=False, DOT=BG.BlackwellE4m3QmmaDot32),

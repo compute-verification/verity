@@ -324,8 +324,13 @@ def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int, ms: bool = False)
 
 
 def load_program(program_dir: str) -> dict[str, Any]:
+    from verity_vllm.program.compact import expanded_file_args
     with gzip.open(os.path.join(program_dir, "instances.json.gz"), "rt") as f:
         inst = json.load(f)
+    for r in inst.get("rows") or ():   # a v2 file's argument progressions -> the v1 per-leaf run lists every consumer reads
+        a = r.get("args")
+        if a:
+            r["args"] = expanded_file_args(a)
     res = json.load(open(os.path.join(program_dir, "result.json")))
     art = None
     p = os.path.join(program_dir, "artifact.json")

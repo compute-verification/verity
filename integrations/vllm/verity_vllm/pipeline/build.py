@@ -45,11 +45,14 @@ def _spec_histogram(program) -> dict[str, int]:
 
 
 def _instance_rows(program):
-    """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py), one at a time."""
+    """The flat body as (spec, argument items) rows — the comparator's unit (compare.py), one at a time.  An argument is stored in the
+    progressions form (instances v2, `compact.file_items_from_refs`, the fold writer's): O(rows) for a scattered Strided where `runs()`
+    is O(leaves) — the GLM-5.3 MLA-absorb transposed-weight read is ~1e6 leaves per operand.  Every reader expands back to the
+    per-leaf run lists, bit-identically (`compact.expanded_file_args` at `program_view.iter_instance_rows` and the raw doc loaders)."""
     from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.refs import runs
+    from verity_vllm.program.compact import file_items_from_refs
     for k, n in enumerate(program.fn.body.nodes):
-        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [runs(a.refs) for a in n.args]}  # json writes a run tuple as the list it was
+        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [file_items_from_refs(a.refs) for a in n.args]}
 
 
 def _instance_sequence(program) -> list[dict]:
@@ -629,7 +632,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
     json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
     _write_instances_file(os.path.join(out, "instances.json.gz"),
-                          {"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
+                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest,
                            "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
                           _instance_rows(program))
     # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
@@ -726,7 +729,7 @@ def _write_manifest(out: str, res: dict) -> None:
                           "site_packages_by_package": tr.get("site_packages_by_package"),
                           "non_site_packages_paths": [p for p in tr.get("non_site_packages_paths", []) if not p.startswith("/usr/lib/python")]},
          "program": res.get("program"), "spec_histogram": res.get("spec_histogram"), "ok": res.get("ok"), "unsupported": res.get("unsupported"),
-         "files": ["descriptor.json.gz (verity.ml.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand runs)", "derive-report.json", "inputs.json", "result.json",
+         "files": ["descriptor.json.gz (verity.ml.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand run progressions)", "derive-report.json", "inputs.json", "result.json",
                    "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
     if res.get("relabeled_from"):
         m["relabeled_from"] = res["relabeled_from"]
