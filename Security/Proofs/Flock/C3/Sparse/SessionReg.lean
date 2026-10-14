@@ -16,7 +16,8 @@ are check 5's (`csOf`).
   `openingParams_sparse`: a RecSparse name is no stacked level's or opening part's, so check 5 reaches `checkSparse`.
   `sparseParams_of_check`: a unit `RecSparse.check` accepted under `unitName sh` has `params` `sh`.
 * `nw_eq_msum`: w's elements are the message ports' words exactly (`claim` is the last port, and no earlier one).
-* `CoinsAccepted`, `coinsAccepted_checked`: where a checked session accepts, a transcript it accepts passes `ChecksC3`.
+* `CoinsAccepted`, `coinsAccepted_of_keep`, `coinsAccepted_checked`: where a checked session accepts, a transcript it
+  accepts passes `ChecksC3`.
   `stmt0_of_setup`: an accepted session's setup has a first statement, of its circuit. `sparseCoins_of_accepted`: at
   the session V*'s list names RecSparse, its circuit is `unitName` of the session's shape (`unitShape`, the inner shape's
   `sparse` entry, `SparseIs`) and check 5 gives both reps' coins.
@@ -228,6 +229,22 @@ def CoinsAccepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Opti
       Flock.Guarantees.ChecksC3 F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (F.bind j)
         rows (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr'
 
+/-- **Check 5 where a session accepts, at a family whose sessions keep their own list only under `ChecksC3`**
+(`hzs`, `checks_of_keepOwn`). -/
+theorem coinsAccepted_of_keep (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
+    {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
+    {coins : String → Option Flock.RecCoins.Source}
+    (z : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount F.ish)) → (F.Vs j).Outer Reg')
+    (hzs : ∀ R ω t R₂ j, F.zs R ω t R₂ j = Flock.Guarantees.keepOwn (z R ω t R₂ j) fun J o tr =>
+      (ℐ).r ≤ t.length ∧ Flock.Guarantees.ChecksC3 F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption
+        (coins (wr t).2) j (F.bind j) rows J o tr) :
+    CoinsAccepted F rows wr reg coins := by
+  intro R ω t R₂ j hex
+  rw [hzs] at hex ⊢
+  exact FlockC3.PubRows.checks_of_keepOwn (Pc := fun J o tr =>
+    Flock.Guarantees.ChecksC3 F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (F.bind j)
+      rows J o tr) (fun _ _ _ hP => hP.2) hex
+
 variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
   {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
   {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
@@ -236,26 +253,31 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (ℐ).Msg}
   {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
 
-/-- **The checked family passes check 5 where a session accepts**: a checked session that accepts kept its own list
-(`checks_of_keepOwn`), so a transcript it accepts passes `ChecksC3`. -/
-set_option maxHeartbeats 1000000 in
-set_option linter.unusedVariables false in
-theorem coinsAccepted_checked {coins : String → Option Flock.RecCoins.Source}
-    {rows : Option (Array Flock.Registered.Port)}
+example {coins : String → Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg'}
+    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
+    CoinsAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+      rows wr reg coins := by
+  sorry
+
+example {coins : String → Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg'}
     {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
     CoinsAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       rows wr reg coins := by
   intro R ω t R₂ j hex
-  refine FlockC3.PubRows.checks_of_keepOwn (z := Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
-    (P := fun J o tr' => (holoInnerAt T CT st hp).r ≤ t.length ∧
-      Flock.Guarantees.ChecksC3 ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (bind j)
-        rows J o tr')
-    (Pc := fun J o tr' =>
-      Flock.Guarantees.ChecksC3 ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (bind j)
-        rows J o tr') ?_ hex
-  intro J o tr' hP
-  exact hP.2
+  sorry
+
+/-- **The checked family passes check 5 where a session accepts**: a checked session keeps its own list only where a
+transcript it accepts passes `ChecksC3` (`coinsAccepted_of_keep`). -/
+theorem coinsAccepted_checked {coins : String → Option Flock.RecCoins.Source}
+    {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg'}
+    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
+    CoinsAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+      rows wr reg coins :=
+  coinsAccepted_of_keep _ (fun R ω t R₂ j => Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
+    fun _ _ _ _ _ => rfl
 
 /-- **Check 5 at the sparse session**: where session `s` accepts and V*'s list names RecSparse at `s`, at the inner
 shape's `sparse` entry `hp`'s (`SparseIs`), its circuit is named `unitName (unitShape (holoAt st hp))`
@@ -378,6 +400,7 @@ end FlockC3.Sparse
 #print axioms FlockC3.Sparse.csOf_eq
 #print axioms FlockC3.Sparse.unitShape_holoAt
 #print axioms FlockC3.Sparse.stmt0_of_setup
+#print axioms FlockC3.Sparse.coinsAccepted_of_keep
 #print axioms FlockC3.Sparse.coinsAccepted_checked
 #print axioms FlockC3.Sparse.sparseCoins_of_accepted
 #print axioms FlockC3.Sparse.sparseSessionAt_of_regs
