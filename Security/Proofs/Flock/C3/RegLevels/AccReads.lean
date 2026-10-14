@@ -29,8 +29,10 @@ checked its statement (`checkAcc_of_checkStmt`):
   name, read at the drawn statement's label of the unit (`AtLabel`; `HmRow.drawn` labels unit `u` with the registered
   population's `units.indices` at `u`, which no check here holds to `u`);
 * `accRead_of_checked`: so at such an outcome of a session whose statements the verifier checked (`ChecksAccepted`), the
-  read is also at `accReads`' row of the unit's label. `OpenKeysS` reads it at the unit's own row, the step `RowsHeld`'s
-  label conjunct makes.
+  read is also at `accReads`' row of the unit's label;
+* `accRead_at_unit`: where the verifier's checks at candidate 3 also pass at the outcome's own transcript (`ChecksC3`,
+  as the event's `ChecksVR` states them), its label check (`RecVStar.checkLabels`) makes that label the unit
+  (`PubRows.label_of_checked`), so the read is at `accReads`' row of the unit, which `OpenKeysS` reads.
 -/
 
 namespace FlockC3.RegLevels
@@ -308,8 +310,8 @@ local notation "ℐ" => holoInnerAt T CT st hp
 
 /-- **`reads` reads `pos` at the drawn statement's label of unit `u`** (`OwnReadsHJ`'s position): at the draw the
 transcript `tr` records, `u`'s table's drawn statement labels `u` with `idx.getD (D.proved.idxOf u.val) 0`
-(`Registered.unitIndices`), which `loadPublic` holds only to ascending, so not to `u` (`RowsHeld` ends with this
-label's read). -/
+(`Registered.unitIndices`), which `loadPublic` holds only to ascending; the verifier's label check holds it to `u`
+(`accRead_at_unit`). -/
 def AtLabel (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂)
     (j : Fin (vstarCount F.ish)) (tr : Exec.Transcript) (u : Fin (F.Vs j).nv) (reads : Array (Option ℕ)) (pos : ℕ) :
     Prop :=
@@ -347,8 +349,7 @@ theorem readsOwn_of_hown {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
 checked the session's statements (`ChecksAccepted`; the first table's, `setup_zero_c`), at an accepted outcome the
 session reaches (`Reached`), a registered read of the level's `acc` (`acc_out`) column at unit `u` is a read of a port
 the reads file names, of `acc0`'s registration in the shared rows, at `accReads`' row (the next one) of `u`'s label
-(`AtLabel`). `OpenKeysS` reads it at `u`'s own row, so that step is `RowsHeld`'s, the read at the label being the read
-at the unit. -/
+(`AtLabel`). `OpenKeysS` reads it at `u`'s own row (`accRead_at_unit`). -/
 theorem accRead_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray}
@@ -371,6 +372,32 @@ theorem accRead_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {ro
   refine ⟨⟨_, hmem, hname⟩, hsite, ?_⟩
   rw [← hreads]
   exact hpos
+
+/-- **`OpenKeysS`' reads-file conjuncts at the unit's own row**: where moreover the verifier's checks at candidate 3
+pass at the outcome's own transcript (`ChecksC3`, which the event's `ChecksVR` states there), its label check
+(`RecVStar.checkLabels`) labels the drawn unit `u` with itself (`PubRows.label_of_checked`), so the read
+`accRead_of_checked` puts at `u`'s label is at `accReads`' row (the next one) of `u`. -/
+theorem accRead_at_unit {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
+    {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
+    (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish))
+    (hre : Reached (F.zs R ω t R₂ j) (o j)) {ish : Flock.RecVStar.Inner} {cs : Option Flock.RecVStar.InnerCommits}
+    {coins : Option Flock.RecCoins.Source} {f : VStar.Bindings} {rows' : Option (Array Flock.Registered.Port)}
+    (hc3 : Flock.Guarantees.ChecksC3 ish cs coins j f rows' (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own (o j).2.2)
+    {s : VStar.Stmt} (hs : F.stmts[(j : ℕ)]? = some s) (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"])
+    {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads F.ish s = .ok (some want)) {nm : String} {d : ℕ}
+    (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) {u : Fin (F.Vs j).nv} {q : Fin (F.Vs j).c.ports.size}
+    (hq : (F.Vs j).c.ports[q].name = nm) (hr : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q))) :
+    (∃ pt ∈ (F.zs R ω t R₂ j).own, pt.name = (F.Vs j).c.ports[q].name) ∧
+      (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
+        FlockVBridge.Family.site ((F.zs R ω t R₂ j).rd.port (.inl (u, q))) = FlockVBridge.Family.site w) ∧
+      (want.map (·.map (· + d)))[u.val]? = some (some ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q)))) := by
+  obtain ⟨hown, hsite, d', D, dp, idx, hd, hD, hdp, hidx, hu, hpos⟩ :=
+    accRead_of_checked hchk h j hre hs hl hw hnm hq hr
+  obtain ⟨spec, sts, hst, -, -, -, hlb⟩ := hc3
+  rw [FlockC3.PubRows.label_of_checked (F.zs R ω t R₂ j) (h.1 j).1 ⟨spec, sts, hst, hlb⟩ hd hD hdp hidx hu] at hpos
+  exact ⟨hown, hsite, hpos⟩
 
 end Family
 
