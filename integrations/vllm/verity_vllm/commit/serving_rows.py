@@ -3,6 +3,13 @@
 one-stage audit reads (``verity.core.protocols.sampled_proofs.one_stage``).  Off by default: ``vllm-v1`` stays the record, and this commits beside it without
 touching any root of record, until the re-baseline switches the record.
 
+The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
+counts (``population_program``, core's ``partition.population_program`` / ``mixed_population_program``), its query the template
+query over them, so the partition (``verity/partition/v1``) and its digest are core's over that program, and the registration is
+core's ``verity/registration/v1`` record (``registration.record``) with ``window = {"kind": "served" | "stand-in", "run": <vllm-v1
+run root>, ...provenance}`` (``registration``).  The served Programs' digests are provenance in the window: no query of core's selects
+template instances inside a served Program (the template queries need every root node to be an instance).
+
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, each with its row ports and
 output ports in M0's order.  Each output port is a row too, after the member's input rows: its words zero-padded to whole SHA-512
 blocks, committed under its own salt like an input row (an output is a value: no output word is ever public).  Per row
@@ -16,35 +23,36 @@ blocks, committed under its own salt like an input row (an output is a value: no
   string  ``b || c = hm96.SHA512.commit_string(default_key, x, y)``                               (public, 128 bytes)
   leaf    the ``frame-v3-sha512`` row leaf, schema ``hm96-sha512/row/v1``, over ``hm96.SHA512.tree_leaf(default_key, b || c)``
 
-Each port ``<descriptor id>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with the domain
-rule agreed with the one-stage lane: ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port, schema, leaves, run})``,
-every field a registration field, so the verifier recomputes every domain from the registration.  The population is fixed
-before serving by the Build's Program and the verifier's partition file; serving refuses one that differs.  ``write`` puts into a
-window directory ``registration.json`` (source ``served``), ``index.json`` (unit -> served identity), per member ``m<k>-public.bin``
-and ``m<k>-private.bin`` (M0's public and prover bodies; the private one is prover only) and ``window.json``;
-``flock_input_files`` wraps member ``k``'s bodies as M0's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``.
+Each port ``<descriptor id>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with core's
+served-domain rule (``registration.served_domain``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
+schema, leaves, run})``, every field a registration field and ``run`` the vllm-v1 run root, so the verifier recomputes every domain
+from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
+member's template to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window directory ``registration.json``,
+``index.json`` (unit -> served identity, its SHA-512 in the window's provenance), per member ``m<k>-public.bin`` and
+``m<k>-private.bin`` (M0's public and prover bodies; the private one is prover only) and ``window.json``; ``flock_input_files`` wraps
+member ``k``'s bodies as M0's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``.
 """
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
 import multiprocessing
 import os
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
-from verity.ml.circuits import codec
 from verity.ml.circuits.codec import canonical_json
 
 from .hiding import HidingLeaves
@@ -52,10 +60,10 @@ from .hiding import HidingLeaves
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW_SCHEMA = SCHEMA_HM96_SHA512_ROW
 WORD_SCHEMA = "u16"
-DOMAIN_TAG = "verity/one-stage/served-domain/v1"
+DOMAIN_TAG = R.SERVED_DOMAIN
 OWNER = -1
-REGISTRATION = "verity/one-stage/registration/v0"
 ORDER = "verity-vllm/serving-rows/order/v0"
+LEAF_LAYER = "SHA-512 of canon({template: SHA-512 of m<k>-public.bin}) over the window's members"
 INDEX_SCHEMA = "verity-vllm/serving-rows/index/v0"
 INST = hm96.SHA512
 SALT_BYTES = INST.salt_bytes
@@ -220,20 +228,41 @@ class Member:
         return f"{self.template}/{name}"
 
 
+def population_program(templates: Sequence[tuple[Any, int]]) -> tuple[Any, dict[str, Any]]:
+    """The verifier's population program and query over ``(template Definition, instances)`` in order: ``TemplateInstances`` and
+    ``Q_template_instance`` for one template, ``TemplatePopulations`` and ``Q_template_instances`` for several."""
+    if len(templates) == 1:
+        (t, n), = templates
+        return P.population_program(t, n), P.template_instance_query(t)
+    return P.mixed_population_program(list(templates)), P.template_instances_query([t for t, _ in templates])
+
+
 @dataclass(frozen=True)
 class Window:
-    """What the roots are bound to: the verifier's partition (program and query, its digest, the population), the run, and the
-    members the population is made of, in the partition's order."""
-    partition: dict[str, Any]
-    partition_digest: str
-    population: int
+    """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
+    run (the vllm-v1 run root, hex), and the members the population is made of, in the partition's order (refused otherwise)."""
+    program: Any
+    query: dict[str, Any]
+    law: dict[str, Any]
     run: str
     members: tuple[Member, ...]
 
-    @classmethod
-    def from_file(cls, path: str | Path, run: str, members: Sequence[Member]) -> "Window":
-        d = json.loads(Path(path).read_text())
-        return cls(d["partition"], d["partition_digest"], int(d["population"]), run, tuple(members))
+    def __post_init__(self) -> None:
+        mine = [(m.template, m.base, m.n) for m in self.members]
+        if P.ranges(self.program, self.query) != mine:
+            raise ValueError(f"members {mine} are not the partition's units {P.ranges(self.program, self.query)}")
+
+    @cached_property
+    def partition(self) -> dict[str, Any]:
+        return P.partition(self.program, self.query)
+
+    @cached_property
+    def partition_digest(self) -> str:
+        return P.digest(self.partition)
+
+    @cached_property
+    def population(self) -> int:
+        return P.units(self.program, self.query)
 
     def binding(self, port: str, schema: str, leaves: int) -> bytes:
         return identity_digest_sha512(DOMAIN_TAG, {"program": self.partition["program"], "partition": self.partition_digest,
@@ -367,19 +396,37 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
 
 # --- the files ----------------------------------------------------------------------------------------------------------
 
-def registration(c: Committed, source: dict[str, Any], registered_utc: str | None = None) -> dict[str, Any]:
-    """``verity/one-stage/registration/v0``'s shape, source ``served``: the roots, leaves and domains by ``<descriptor id>/<port>``.
-    The one-stage lane's ``verity/registration/v1`` is built from it after serving (its digests are the verifier's code)."""
+def port_leaves(m: Member) -> dict[str, int]:
+    """Each of member ``m``'s row ports (outputs included) and its leaf count: its table's size for a shared-row input, else ``n``."""
+    tables = dict(m.tables)
+    return {p: tables.get(p, m.n) for p, _ in m.all_rows}
+
+
+def expected_ports(window: Window) -> dict[str, dict[str, Any]]:
+    """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<descriptor id>/<port>: {leaves,
+    domain}}``, each domain ``registration.served_domain`` over the window's program, partition and run."""
+    prog, part = window.partition["program"], window.partition_digest
+    return {m.port(p): {"leaves": n, "domain": R.served_domain(prog, part, m.port(p), ROW_SCHEMA, n, window.run)}
+            for m in window.members for p, n in port_leaves(m).items()}
+
+
+def leaf_layer(publics: Mapping[str, bytes]) -> str:
+    """``LEAF_LAYER`` over ``{template: public body}``."""
+    return hashlib.sha512(canonical_json({t: hashlib.sha512(b).hexdigest() for t, b in publics.items()})).hexdigest()
+
+
+def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served") -> dict[str, Any]:
+    """Core's ``verity/registration/v1`` record of the window: its program, query and law, the scheme, every port's root, leaves and
+    served domain, the leaf layer, and ``window = {"kind": kind, "run": <vllm-v1 run root>, **provenance}``.  ``served``: these
+    roots are serving's own commitment, made before any draw (the in-Commit hook); ``stand-in``: a fresh commitment to values
+    opened from serving's record afterwards, whose link to the vllm-v1 roots is provenance (``pipeline.deferred_rows``)."""
+    if kind not in R.KINDS:
+        raise ValueError(f"window kind {kind!r} is not one of {R.KINDS}")
     w = c.window
-    return {"format": REGISTRATION, "commitment": {"scheme": SCHEME, "source": {"kind": "served", **source}},
-            "roots": {p: r.hex() for p, r in c.roots.items()}, "leaves": {p: d.count for p, d in c.domains.items()},
-            "domains": {p: d.domain_id.hex() for p, d in c.domains.items()}, "partition": w.partition,
-            "partition_digest": w.partition_digest, "population": w.population,
-            "registered_utc": registered_utc or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-
-
-def registration_digest(record: dict[str, Any]) -> str:
-    return hashlib.sha512(REGISTRATION.encode() + b"\0" + canonical_json(record)).hexdigest()
+    roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
+    publics = {m.template: c.public_body(k) for k, m in enumerate(w.members)}
+    return R.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
+                    leaf_layer=leaf_layer(publics), previous=previous)
 
 
 def index_doc(members: Sequence[Member], entries: Sequence[Sequence[list[Any]]], run: str) -> dict[str, Any]:
@@ -394,13 +441,15 @@ def index_bytes(doc: dict[str, Any]) -> bytes:
     return (json.dumps(doc, separators=(",", ":")) + "\n").encode()
 
 
-def write(c: Committed, out_dir: str | Path, source: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The window's files; ``source`` gets the index's SHA-512 (so the registration binds the unit -> identity map)."""
+def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
+          kind: str = "served") -> dict[str, Any]:
+    """The window's files, its registration's window of ``kind`` (`registration`); the window's provenance gets the index's SHA-512
+    (so the registration binds the unit -> identity map)."""
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     ib = index_bytes(index)
     (d / "index.json").write_bytes(ib)
-    rec = registration(c, {**source, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER})
+    rec = registration(c, {**provenance, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER}, kind=kind)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     members = []
     for k, m in enumerate(c.window.members):
@@ -413,18 +462,20 @@ def write(c: Committed, out_dir: str | Path, source: dict[str, Any], index: dict
                         "input_ports": len(m.rows), "out_ports": [list(p) for p in m.outs], "frame_v3": c.frame_entry(k),
                         "public_sha512": hashlib.sha512(pub).hexdigest(),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {})})
-    win = {"schema": "verity-vllm/serving-rows/v1", "scheme": SCHEME, "population": c.window.population, "members": members,
-           "domain_tag": DOMAIN_TAG, "registration_sha512": registration_digest(rec), "index_sha512": hashlib.sha512(ib).hexdigest(),
+    win = {"schema": "verity-vllm/serving-rows/v2", "scheme": SCHEME, "population": c.window.population, "members": members,
+           "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
+           "domain_tag": DOMAIN_TAG, "registration": R.FORMAT, "registration_digest": R.digest(rec), "leaf_layer": rec["leaf_layer"],
+           "leaf_layer_rule": LEAF_LAYER, "index_sha512": hashlib.sha512(ib).hexdigest(),
            "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, nonce = the row port's index over all members "
            "(12 bytes le), row i at stream offset 192 i; the key is dropped after expansion", "seconds": c.seconds, **(extra or {})}
     (d / "window.json").write_text(json.dumps(win, indent=1, default=str) + "\n")
     return win
 
 
-def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir: str | Path, subcircuit: str) -> dict[str, Any]:
+def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir: str | Path) -> dict[str, Any]:
     """Member ``k``'s M0 ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``, under the header
-    ``verity_flock.circuit.write`` gives the circuit it composed: its SHA-512 pin, its META's block shape and class, the member's
-    global unit indices, and its ``frame_v3``.  The bodies are the window's bytes."""
+    ``verity_flock.circuit.write`` gives the circuit it composed: its SHA-512 pin, its META's statement, subcircuit, block shape
+    and class, the member's global unit indices, and its ``frame_v3``.  The bodies are the window's bytes."""
     d, o = Path(window_dir), Path(out_dir)
     win = json.loads((d / "window.json").read_text())
     rec = json.loads((d / "registration.json").read_text())
@@ -443,8 +494,8 @@ def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir
     idx = list(range(int(mem["base"]), int(mem["base"]) + n))
     units = {"vus_per_block": G, "units_per_vu": meta["units_per_vu"], "indices": idx, "blocks": [idx[b:b + G] for b in range(0, n, G)],
              "classes": [cls] * n}
-    head = {"format": M0_FORMAT, "statement": M0_STATEMENT, "scheme": SCHEME, "set": f"served/{rec['commitment']['source']['run']}/m{k}",
-            "subcircuit": subcircuit, "range": [0, n], "instances": n,
+    head = {"format": M0_FORMAT, "statement": meta.get("statement", M0_STATEMENT), "scheme": SCHEME,
+            "set": f"served/{rec['window']['run']}/m{k}", "subcircuit": meta["subcircuit"], "range": [0, n], "instances": n,
             "circuit_sha512": hashlib.sha512(circuit_text.encode()).hexdigest(), "units": units, "frame_v3": mem["frame_v3"], "rows": True}
     if mem.get("shared_rows"):
         head["shared_rows"] = mem["shared_rows"]
@@ -455,8 +506,3 @@ def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir
     with os.fdopen(fd, "wb") as f:
         f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + (d / f"m{k}-private.bin").read_bytes() + pub)
     return {"pub": str(o / f"m{k}-pub-{n}.bin"), "inst": str(o / f"m{k}-inst-{n}.bin"), "circuit_sha512": head["circuit_sha512"], "class": cls}
-
-
-def program_digest(program_dir: str | Path) -> str:
-    """Core's ``program_digest`` of the Build's ``descriptor.json.gz``."""
-    return codec.program_digest(json.loads(gzip.open(Path(program_dir) / "descriptor.json.gz").read()))

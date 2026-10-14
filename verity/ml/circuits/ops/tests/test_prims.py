@@ -136,6 +136,57 @@ def test_the_sm120_fp8_step_is_the_total_function_of_its_pinned_model() -> None:
     assert step.evaluate(0x3F800001, *zeros) == 0x3F800001 and P.HopperE4m3QgmmaDot32.evaluate(0x3F800001, *zeros) == 0x3F800000
 
 
+def test_the_triton_mmav2_step_is_two_chained_hopper_hmma_k16_steps() -> None:
+    """`HopperE4m3MmaV2Dot32_v1` is, on every encoding, Hopper's mma.sync k16 step (`HOPPER_BF16_M16N8K16`) on the exactly widened
+    operands at k mod 4 in {0, 1}, then again on k mod 4 in {2, 3} from that result: the two `HMMA.16816.F32` Triton chains."""
+    from verity.ml.circuits.silicon.cast import e4m3_to_f32_word
+    from verity.ml.circuits.silicon.models import HOPPER_BF16_M16N8K16
+    from verity.ml.circuits.silicon.total_fp8 import MMAV2_E4M3_K_ORDER
+
+    step = P.HopperE4m3MmaV2Dot32
+    assert step.id == "HopperE4m3MmaV2Dot32_v1" and REGISTRY[step.id] is step and step.conformance.startswith("model-untested")
+    assert step.signature() == P.HopperE4m3QgmmaDot32.signature()
+    assert sorted(MMAV2_E4M3_K_ORDER) == list(range(32)) and MMAV2_E4M3_K_ORDER[:4] == (0, 1, 4, 5)
+    S0, S1 = [k for k in range(32) if k % 4 < 2], [k for k in range(32) if k % 4 >= 2]
+
+    def wide(e: int) -> int:
+        return 0x7FC0 | (e & 0x80) << 8 if (e & 0x7F) == 0x7F else e4m3_to_f32_word(e) >> 16
+
+    def chained(acc, a, b):
+        mid = tc_dot_total(HOPPER_BF16_M16N8K16, acc, [wide(a[k]) for k in S0], [wide(b[k]) for k in S0])
+        return tc_dot_total(HOPPER_BF16_M16N8K16, mid, [wide(a[k]) for k in S1], [wide(b[k]) for k in S1])
+
+    rng = random.Random(9)
+    specials8 = [0x7F, 0xFF, 0x00, 0x80, 0x01, 0x7E, 0xFE, 0x38]
+    cases = [(rng.getrandbits(32), [rng.getrandbits(8) for _ in range(32)], [rng.getrandbits(8) for _ in range(32)])
+             for _ in range(300)]
+    cases += [(_rand_finite_f32(rng), [rng.getrandbits(7) % 0x7F | rng.getrandbits(1) << 7 for _ in range(32)],
+               [rng.getrandbits(7) % 0x7F | rng.getrandbits(1) << 7 for _ in range(32)]) for _ in range(300)]
+    for acc in (0, 0x80000000, ONE32, NAN32, PINF32, NINF32, 0x7F7FFFFF, 0x00000001):
+        for sa in specials8:
+            for k in (5, 6):
+                a, b = [0x38] * 32, [0x38] * 32
+                a[k], b[k] = sa, rng.choice(specials8)
+                cases.append((acc, a, b))
+    for acc, a, b in cases:
+        assert step.evaluate(acc, *a, *b) == chained(acc, a, b)
+    assert step.evaluate(0, *([0x38] * 64)) == 0x42000000
+    zeros = [0x00] * 64
+    assert step.evaluate(0x3F800001, *zeros) == 0x3F800001 and P.HopperE4m3QgmmaDot32.evaluate(0x3F800001, *zeros) == 0x3F800000
+    # 64 + 2^-18 + 2^-18 (two products of the least subnormal 0x01): summed in one group it is 64 + 2^-17, an f32 word; the first
+    # mma's 64 + 2^-18 truncates to 64 before the second adds its own 2^-18, so the step is 64 when the two are in different halves
+    def two_tiny(i: int, j: int) -> int:
+        a = [0x00] * 32
+        a[i] = a[j] = 0x01
+        return step.evaluate(0x42800000, *a, *a)
+
+    assert two_tiny(0, 2) == two_tiny(1, 31) == 0x42800000
+    assert two_tiny(0, 1) == two_tiny(4, 29) == two_tiny(2, 3) == 0x42800001
+    a = [0x00] * 32
+    a[0] = a[2] = 0x01
+    assert P.BlackwellE4m3QmmaDot32.evaluate(0x42800000, *a, *a) == 0x42800001
+
+
 E5M2_PINF, E5M2_NINF, E5M2_NAN, E5M2_ONE, E5M2_MAX = 0x7C, 0xFC, 0x7D, 0x3C, 0x7B
 
 

@@ -2,14 +2,15 @@ import Proofs.Flock.Recursive.Property
 import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.Loads
+import Proofs.Flock.Recursive.ForkInnerC
 
 /-!
 # The recursive audit's property: its proof and what it rests on
 
-`Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit`, from `zk_sessions_recursive_fork_inner` at
-the compiled table, the description's binding of the hidden statement to the registered rows
-(`Recursion.ofRows_eq_or_collides`), and `RecursiveFirewallPrivate` (`Proofs.Flock.Recursive.FirewallZK`). Its
-premises are `Proofs.Flock.Recursive.Premises`'.
+`Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit`, from `zk_sessions_recursive_fork_innerC` at
+the compiled table (which, as its pick, ignores the last round's coin), the description's binding of the hidden
+statement to the registered rows (`Recursion.ofRows_eq_or_collides`), and `RecursiveFirewallPrivate`
+(`Proofs.Flock.Recursive.FirewallZK`). Its premises are `Proofs.Flock.Recursive.Premises`'.
 
 In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`, `Proofs.Flock.Recursive.Loads`):
 * where some index has no session that types, the event is empty: a session that verifies as V*'s statement of its
@@ -62,6 +63,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   · exact RecursiveFirewallPrivate
   intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ st Vs zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt msg rt
     stmt hA3 p path₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
+  replace hob := vstarParsesScoped_of hob
   by_cases hT : Typed zr
   swap
   · left
@@ -94,10 +96,12 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
       exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
-  rcases zk_sessions_recursive_fork_inner hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
+  rcases zk_sessions_recursive_fork_innerC hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.transported zr hCust hT σ) (Flock.Guarantees.hiddenAt st rt stmt) wmsg Sk cmt msg (hbr hT)
-    Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls
-      (execClassAt st).regs (execClassAt st).sch) hin with hf | hf | hf | hf | hb
+    Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
+      (execClassAt st).regs (execClassAt st).sch) hin (Nat.succ_pos r) (schedInner_lastFree T CT _ _ _ _)
+    (fun M => clashPickCL_lastFree T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
+      (execClassAt st).regs (execClassAt st).sch M) with hf | hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
@@ -106,7 +110,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
       (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
         Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ¬ (Flock.Guarantees.innerAt T CT st).holds (Flock.Guarantees.stmtAt rt stmt p o.2.1))
-      (fun o ho => ho.2.2.1) (fun o hall ho =>
+      (fun o ho => ho.2.2.1) (fun o _ hall ho =>
         ⟨ho.1, ho.2.1, verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.2.1.1) ho.2.2.1.2,
           ho.2.2.2⟩))
       (le_trans (prob_mono_outcome _ (Flock.Guarantees.transported zr hCust hT σ)

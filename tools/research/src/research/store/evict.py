@@ -30,7 +30,9 @@ Two kinds of local copy can go, and only these:
   run dir names it, no live check or Lean slot holder or waiter (`<root>/locks`) names it, no job script queued for the fill
   (`retention.JobScripts`) names it, and nothing in it changed and no run naming it was recorded within `SRC_KEEP_S`; (3) no run
   record holds it as its source's only copy: its READY.json names its own commit, and every run record naming it names that commit
-  as its clean source.  A tree with a `research keep` record is left to `research retention`.  Not on a free-space target: an
+  as its source, clean, or dirty with the dirty bytes in the run's preserved record (the runner's capture, env.DIRTY_CAPTURE, at the
+  size and sha256 job.json names, listed by the run's `.custody`; `_dirty_preserved`).  A tree with a `research keep` record is left
+  to `research retention`.  This pass is the only thing that deletes a whole source tree (`node_sweep.sh` no longer does).  Not on a free-space target: an
   unused tree costs inodes as much as bytes (node 1 at 74% inodes, 4 Oct), and `research run` re-ships one from
   `refs/research/src/<sha>`.  Before a deletion the tree is checked again, renamed to `.evicting-<sha>-<nonce>` (never executable
   by name), checked once more (renamed back when something uses it, or on any error) and removed READY.json first, one pass at a
@@ -590,6 +592,18 @@ def _get(d: Any, *keys: str) -> Any:
     return d
 
 
+def _dirty_preserved(rd: Path, job: dict[str, Any], src: dict[str, Any]) -> bool:
+    """Whether the run's record on the remote holds its dirty source: job.json names a capture (`store.dirty_capture`, cli.py) of the
+    digest its conditions record, and the run's valid `.custody` (store.custody) lists that file at the capture's size and sha256."""
+    cap = _get(job, "store", "dirty_capture")
+    digest = src.get("dirty_digest")
+    if not isinstance(cap, dict) or not digest or digest == "too-large" or cap.get("dirty_digest") != digest:
+        return False
+    marker = _doc(_text(rd / ".custody"))
+    files = marker.get("files") if isinstance(marker, dict) and marker.get("preserved") is True else None
+    return isinstance(files, dict) and files.get(cap.get("path")) == [cap.get("bytes"), cap.get("sha256")]
+
+
 def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: Path, *, now: float,
                 keep_s: float = SRC_KEEP_S) -> dict[str, set[str]]:
     """{sha: reasons} from the run records that name a tree (job.json, launch.json, remote.json) and the requests: a run that has
@@ -626,8 +640,8 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
                 other = next((x for x in (sha, src.get("commit")) if x not in (None, t)), None)
                 if other:
                     add({t}, f"3: run {name} names it, and its source is {other}")
-                elif src.get("dirty"):
-                    add({t}, f"3: run {name}'s source is dirty")
+                elif src.get("dirty") and not _dirty_preserved(rd, job, src):
+                    add({t}, f"3: run {name}'s source is dirty, and no preserved record of the run holds its capture")
                 elif sha is None and src.get("commit") is None:
                     add({t}, f"3: run {name} names it and records no source commit")
     for name in _entries(requests_dir):

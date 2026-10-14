@@ -88,6 +88,7 @@
       "linear": "CIR",
       "owns": [
         "integrations/",
+        "benchmarks/served_units/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
@@ -125,11 +126,15 @@
       "linear": "MEM",
       "owns": [
         "verity/core/protocols/pous/",
+        "verity/core/protocols/bandwidth/",
         "verity/core/devices/memory_challenger/",
         "Security/Definitions/Pous/",
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
-        "benchmarks/pous/"
+        "benchmarks/pous/",
+        "benchmarks/bandwidth/",
+        "benchmarks/word_codec/",
+        "benchmarks/codec_tensor/"
       ]
     },
     {

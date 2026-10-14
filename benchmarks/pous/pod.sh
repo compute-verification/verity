@@ -18,6 +18,9 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then P2_ARM (p2-v3-gpu), and the table
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2  # build check: kernels built, gates run
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6 [WS=...]   # the band at in-degree d (>= 5; side-by-side's band arm too)
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-scale [SCALE_STAGES=gpu,audit] [SCALE_LOG2=19,25] [FIT_PYTHON=<vLLM's python>
+#          FIT_CPUS=... FIT_MODEL=<id, or a snapshot directory when the HF cache has no refs>]   # p2_v1/scale.py into $OUT:
+#          the device encode rate, the store of 2^e blocks audited, vLLM beside it
 #
 # On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
 # the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
@@ -63,7 +66,8 @@ IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
 # lake: the pod image's /opt/elan, else the user's elan (node 2's research user); verity_difftest serves the memory
 # challenger's Lean verdict (its Server and build need only the stdlib)
 export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
-export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/tools/research/src:$REPO/verity/core/difftest/python
+# Every entry must exist: importlib.metadata opens a missing one as a zip, and the suite guard counts that open as a read.
+export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/core/difftest/python
 # PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
 # p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
 # (pous-timed-audit, band_gpu's judge) where its lakefile declares one. Run it from a clone (--cwd clone: the build writes
@@ -207,7 +211,8 @@ elif [ "$IMPL" = band-gpu ]; then
   RC=$?
   clocks after
   exit $RC
-elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-gpu ] || [ "$IMPL" = side-by-side ]; then
+elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-gpu ] || [ "$IMPL" = side-by-side ] \
+     || [ "$IMPL" = p2-scale ]; then
   gpu_env || exit 3
   record_host
   # P2 v1's library (benchmarks/pous/p2_v1): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
@@ -234,6 +239,20 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
     ${P2FAST+"FAST=$P2FAST"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   fi
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
+  if [ "$IMPL" = p2-scale ]; then
+    SO=${OUT:-$O/bench}; SC=$(mktemp -d); trap 'rm -rf "$SC"' EXIT; RC=0
+    case ",${SCALE_STAGES:-gpu,audit}," in *,gpu,*)
+      "$PY" benchmarks/pous/p2_v1/scale.py gpu --out "$SO" --p2-lib "$P2LIB" --build-dir "$POUS_BUILD" || RC=1 ;;
+    esac
+    case ",${SCALE_STAGES:-gpu,audit}," in *,audit,*)
+      "$PY" benchmarks/pous/p2_v1/scale.py audit --out "$SO" --p2-lib "$P2LIB" --build-dir "$POUS_BUILD" --scratch "$SC" \
+        --log2 "${SCALE_LOG2:-19,25}" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" --workers "$WORKERS" --audits "$AUDITS" \
+           ${FIT_PYTHON:+--fit-python "$FIT_PYTHON"} ${FIT_MODEL:+--fit-model "$FIT_MODEL"} ${FIT_CPUS:+--fit-cpus "$FIT_CPUS"} \
+        ${FIT_BATCHES:+--fit-batches "$FIT_BATCHES"} || RC=1 ;;
+    esac
+    clocks after
+    exit $RC
+  fi
   arm() {  # arm IMPL OUT [sub]: one bench.py run of that implementation into OUT; a sub-run writes no result.json of its own
     ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$POUS_BUILD" --p2-lib "$P2LIB" \
       --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$2" --audits "$AUDITS" \

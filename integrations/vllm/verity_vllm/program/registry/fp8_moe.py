@@ -19,8 +19,9 @@ The path, read from the source:
    device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json`: BLOCK_SIZE_K 128, and BLOCK_SIZE_M 8 or 16 under SWAP_AB from
    M = 4 to 512), or `get_default_config`'s block-FP8 tile where no file exists (whole experts: BLOCK_SIZE_K 128, BLOCK_SIZE_M 16
    under SWAP_AB up to M = 64); the Definitions take KB and SWAP as statics.  Under `VLLM_BATCH_INVARIANT` it is `get_default_config`'s
-   fixed tile BLOCK_SIZE_M 64, N 64, K 32 (fused_moe.py:1308-1315): KB 32, SWAP_AB False.  The tuned file's M <= 3 entries,
-   BLOCK_SIZE_M 8 x BLOCK_SIZE_N 32, are no wgmma tile (SWAP_AB needs BLOCK_SIZE_N >= 64), and no Definition here models their dot.
+   fixed tile BLOCK_SIZE_M 64, N 64, K 32 (fused_moe.py:1308-1315): KB 32, SWAP_AB False.  The tuned file's M <= 6 entries,
+   BLOCK_SIZE_M 8 x BLOCK_SIZE_N 32 (M <= 3, no SWAP_AB: BLOCK_SIZE_N < 64) and 8 x 64 under SWAP_AB (M 4 to 6, the dot's N 8), are
+   no wgmma tile, and Triton runs their dot on mma.sync (`sm90_dot`).
 4. Between them, `ops.silu_and_mul_per_block_quant(group_size=128)` (triton_moe.py:471-485), the fused branch every GLM-5.3 layer
    takes (SiLU, fp8_w8a8, block [128, 128], no LoRA, no e8m0): `SiluMulFp8BlockQuant_v1` below.  Its (q, scale) is the w2 launch's
    (A, A_scale); no bf16 intermediate exists.
@@ -35,7 +36,11 @@ Per output coordinate this is:
 
 * `tl.dot(a, b)` with no accumulator is a fresh f32 chain from +0: on cc 9.0 an FP8 dot takes `max_num_imprecise_acc = 2**30`
   (triton/backends/nvidia/compiler.py:204, language/semantic.py:1571-1573), so the whole dot is one wgmma chain with no promotion
-  inside it, KB/32 `HopperE4m3QgmmaDot32` steps (wgmma k32 e4m3) in ascending k, the first from +0.
+  inside it, KB/32 `HopperE4m3QgmmaDot32` steps (wgmma k32 e4m3) in ascending k, the first from +0.  That holds on a wgmma tile
+  (`sm90_dot`); on the others Triton takes MMAv2, the e4m3 operands widened to f16 (`cvt.rn.f16x2.e4m3x2`) and each 32-wide k
+  block two chained `mma.sync.m16n8k16.f32.f16` (HMMA.16816.F32), over k mod 4 in {0, 1} then {2, 3}: KB/32
+  `HopperE4m3MmaV2Dot32` steps, the first from +0, with no FADD between them (an offline sm_90 compile at the 8 x 32 and 8 x 64
+  SWAP_AB tiles: 8 chained HMMA.16816.F32 per K tile of 128).
 * `(dot * a_scale) * b_scale` is two FMULs left to right, and Triton compiles with `enable_fp_fusion` on (compiler.py:117, 201-202,
   447), so LLVM contracts the add into the second: `acc = FFMA(FMUL(dot, a_scale), b_scale, acc)` from acc = +0, the tiles in ascending
   k.  With SWAP_AB the scales swap places: `FFMA(FMUL(dot, b_scale), a_scale, acc)`.  The dot itself is the same either way (each
@@ -51,7 +56,8 @@ Registered functions (all `Name_v1`; statics K, N, G = 128 the scale block, KB =
   MoeExpertFp8BlockGemm{K,N,G,KB,SWAP}        the w13 launch on one (token, slot) pair: the N coordinates over the expert's rows
   MoeExpertFp8BlockGemmW{K,N,G,KB,SWAP}       the w2 launch on one pair
 and `Name_v3{..., DOT}` of each, the same body with the e4m3 k32 step `DOT` (the target's `tl.dot` step: `BlackwellE4m3QmmaDot32_v1`
-on cc 12.0, where SWAP_AB is never taken and the block-[64, 64] checkpoints launch at G = 64).
+on cc 12.0, where SWAP_AB is never taken and the block-[64, 64] checkpoints launch at G = 64; on cc 9.0 `sm90_dot` of the launch's
+tile, `HopperE4m3QgmmaDot32_v1` where `_v3` is the `_v1` function and `HopperE4m3MmaV2Dot32_v1` at the small-batch tiles).
 The expert's e4m3 weight rows `w` [N, K] and their f32 block scales `ws` [cdiv(N, G), K/G] (`w13_weight_scale_inv` /
 `w2_weight_scale_inv`, the checkpoint's words) are operands; `xq` / `sx` are the pair's quantised activation and its group scales.
 
@@ -76,7 +82,7 @@ from __future__ import annotations
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
-from verity.ml.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
+from verity.ml.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
@@ -169,14 +175,14 @@ def MoeExpertFp8BlockGemmW(B, S, xq, sx, g, w, ws):
 # `_v1` bodies with `DOT` for `HopperE4m3QgmmaDot32_v1`; `_v2` is each `_v1`'s Boolean version
 # ---------------------------------------------------------------------------------------------------------
 
-DOT_CONF = ("exact-model-tested at the one DOT a registered target binds (GemmTarget.fp8_moe_dot), BlackwellE4m3QmmaDot32_v1 at G = 64, "
+DOT_CONF = ("exact-model-tested at cc 12.0's DOT (GemmTarget.fp8_moe_dot), BlackwellE4m3QmmaDot32_v1 at G = 64, "
              "KB = 32, SWAP = False (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, run r20261003-220018-3f6a, record "
              "0d346c79c642a0a1 (#1000 @ 2fd4e257f), cases moe/decode, moe/small, moe/block and "
              "moe/prefill: fused_experts (E 128, top 8, hidden 4096, I 192) under TritonExperts, every block-[64, 64] fused_moe_kernel "
              "launch at 64x64x32, 11,791,360 w13 and w2 words, 0 mismatches; Hopper's step, the swapped and CUTLASS scale orders and an "
              "unfused mul + add each refuted (3,942, 577, 568 and 575 words); read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1 "
-             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); at DOT = HopperE4m3QgmmaDot32_v1 the function of the `_v1` "
-             "forms (tests/program/test_fp8_moe_dot.py), which are model-untested")
+             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); at DOT = HopperE4m3QgmmaDot32_v1 (cc 9.0's) the function of "
+             "the `_v1` forms (tests/program/test_fp8_moe_dot.py), which are model-untested")
 
 
 def coordinate_sig(routed: bool, e4m3=E4M3, f32=F32, bf16=BF16):
@@ -190,6 +196,16 @@ def gemm_sig(routed: bool, e4m3=E4M3, f32=F32, bf16=BF16):
     return lambda S: ((("xq", Array(S.K, e4m3)), ("sx", Array(S.K // S.G, f32))) + g
                       + (("w", Array(S.N, Array(S.K, e4m3))), ("ws", Array(weight_blocks(S.N, S.G), Array(S.K // S.G, f32)))),
                       Array(S.N, bf16))
+
+
+def sm90_dot(bm: int, bn: int, warps: int, swap: bool):
+    """The e4m3 k32 step of a block-FP8 `fused_moe_kernel` launch on cc 9.0, by its tile, the `DOT` its `_v3` forms bind: Triton
+    3.7.1 lowers the `tl.dot` (M x N = BLOCK_SIZE_N x BLOCK_SIZE_M under SWAP_AB, else BLOCK_SIZE_M x BLOCK_SIZE_N; K = BLOCK_SIZE_K,
+    at least 32) to wgmma when the warps are a multiple of 4, M of 64 and N of 16 (`supportMMA` v3, lib/Analysis/Utility.cpp:926-953),
+    `HopperE4m3QgmmaDot32_v1`; else to MMAv2, `HopperE4m3MmaV2Dot32_v1` (`mmav2SupportsFp8Operands` is false on sm_90, so the operands
+    are promoted to f16, AccelerateMatmul.cpp:910-935)."""
+    m, n = (bn, bm) if swap else (bm, bn)
+    return HopperE4m3QgmmaDot32 if warps % 4 == 0 and m % 64 == 0 and n % 16 == 0 else HopperE4m3MmaV2Dot32
 
 
 @composite("MoeExpertFp8BlockCoordinate", 3, ["K", "G", "KB", "SWAP", "DOT"], coordinate_sig(False), conformance=DOT_CONF)

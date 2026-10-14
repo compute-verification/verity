@@ -66,7 +66,7 @@ environment extension loaded, so none of the package's code runs), and replays t
                  a bump that brings such a proof fails until someone has looked at it
     fresh        (`--fresh` only) `leanchecker --fresh` on a root rejects a declaration of its whole import closure,
                  Mathlib and core included
-    runs         a test under `runs` (an exempt module: compiled evaluation, not a proof), run after the replay by
+    runs         a test under `runs` (an exempt module: compiled evaluation, not a proof), run beside the replay by
                  `lake env lean --run` in the sandbox, exits nonzero, or a data file it reads (the package's own, or what
                  its `generate` command writes) has a SHA-256 other than the record's (`--update` records it); or its
                  `generate` or `args` names a path outside the package other than as `{repo}/...`, which check's scratch
@@ -228,13 +228,22 @@ def cores() -> int:
     return n
 
 
+#: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
+ARTIFACTS: Path | None = None
+
+
 def lake_env() -> dict[str, str]:
-    """The environment of every `lake` and `setup.sh` the audit runs. The audit builds from source: Lake neither reads nor
-    writes its local artifact cache, and `setup.sh` restores nothing from the build cache (`cache.py`)."""
+    """The environment of every `lake` and `setup.sh` the audit runs. `setup.sh` restores nothing from the build cache
+    (`cache.py`). Lake builds from source, or with `--artifacts` restores a module whose input hash it finds there: with
+    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
-    env["LAKE_ARTIFACT_CACHE"] = "false"
+    if ARTIFACTS:
+        env.pop("LAKE_ARTIFACT_CACHE", None)
+        env["LAKE_CACHE_DIR"] = str(ARTIFACTS)
+    else:
+        env["LAKE_ARTIFACT_CACHE"] = "false"
     env["LEAN_CACHE"] = "off"
     return env
 
@@ -1672,9 +1681,10 @@ def writable(pkg: Path) -> list[Path]:
 
 
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
-    """``argv`` inside the build sandbox, writable only in the package's `writable` directories (``argv`` as is where there
-    is no sandbox)."""
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
+    """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
+    (``argv`` as is where there is no sandbox)."""
+    ro = ["--ro", str(ARTIFACTS)] if ARTIFACTS else []
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
 
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
@@ -1744,6 +1754,41 @@ def replay_keys(facts: dict, toolchain: str) -> dict[str, str]:
     return keys
 
 
+def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None) -> tuple[list[str], dict]:
+    """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
+    (`Replay.lean`), each module whose `replay_keys` key ``replay_cache`` holds joining it unchecked, and each module checked
+    stored there when the replay passes."""
+    found = work / "replay.json"
+    found.unlink(missing_ok=True)
+    keys = replay_keys(facts, toolchain) if replay_cache else {}
+    reused = [m for m in facts["modules"] if m in keys and (replay_cache / f"{keys[m]}.json").is_file()]
+    checked = [m for m in facts["modules"] if m not in reused]
+    rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *checked,
+                    *(["--reused", *reused] if reused else [])], pkg, work / "replay.log")
+    fails = []
+    if killed(rc):
+        fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
+    elif rc or not found.exists():
+        fails.append(f"replay: the kernel rejected a declaration under {', '.join(policy['roots'])} (exit {rc}):\n"
+                     f"{text[-2000:]}")
+    elif (walked := sorted(json.loads(found.read_text())["axioms"])) != sorted(facts["axioms"]):
+        fails.append(f"replay: the replayed environment uses the axioms {', '.join(walked) or 'none'}, the .olean files "
+                     f"record {', '.join(sorted(facts['axioms'])) or 'none'}")
+    elif keys:
+        replay_cache.mkdir(parents=True, exist_ok=True)
+        for m in checked:
+            tmp = replay_cache / f".{keys[m]}.{os.getpid()}.tmp"
+            tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": m, "key": keys[m]}))
+            os.replace(tmp, replay_cache / f"{keys[m]}.json")
+    return fails, {"checked": len(checked), "reused": len(reused)}
+
+
+def timed(f, *args):
+    """(``f(*args)``, the seconds it took)."""
+    s = time.monotonic()
+    return f(*args), round(time.monotonic() - s, 1)
+
+
 def dependency_digests(pkg: Path, toolchain: str, oleans: list[str]) -> dict[str, str]:
     """A digest of the `.olean` files (every part) of the modules the package imports (``oleans``, which `Facts.lean`
     reports), per package ``pkg`` fetches (`.lake/packages/*`: Mathlib's downloaded cache, ArkLib's local build...) and for
@@ -1775,8 +1820,8 @@ def unpacked(src: Path, dst: Path) -> Path:
 
 
 def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path, update: bool) -> tuple[list[str], dict]:
-    """(failures, the `runs` section with each data file's SHA-256 as found): run each test under `runs` on its data, after
-    the kernel's verdicts. A test is an exempt module, run by `lake env lean --run` in the sandbox with its `args`, where
+    """(failures, the `runs` section with each data file's SHA-256 as found): run each test under `runs` on its data, beside
+    the facts and the kernel replay (`audit`). A test is an exempt module, run by `lake env lean --run` in the sandbox with its `args`, where
     an argument `{NAME}` is the path of data file NAME. The data is what `generate` writes (run here, outside the sandbox,
     with ``repo`` for `{repo}` and the directory it writes for `{out}`), else the package's own files; a file may be
     gzipped (NAME.gz). A file whose SHA-256 is not the record's fails the test unrun, and `--update` records it instead."""
@@ -1903,6 +1948,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 rep["failures"].append(f"{step}: exit {rc}\n{text[-3000:]}")
                 return rep
     built()
+    files = lean_modules(pkg)
+    background = ThreadPoolExecutor(max_workers=2)
+    ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
     current = policy
     if moved:
         renames = {}
@@ -1918,15 +1966,17 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, ready)
     except RuntimeError as e:
         rep["failures"].append(f"lean: {e}")
+        background.shutdown()
         return rep
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
+    replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache) \
+        if replay and not lifts else None
     if lifts:
         try:
             rep["moved"] = lift(pkg, current, facts, lifts)
         except ValueError as e:
             rep["failures"].append(f"lift: {e}")
         return rep
-    files = lean_modules(pkg)
     fails, new = judge(current, facts, files, update, owner)
     fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current)) + shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
@@ -1965,31 +2015,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                              f"record. After a change to the package's imports, or at a bump, run `audit.py --update` (and "
                              f"review it at a bump); otherwise it is a different cache or toolchain, a build that is not "
                              f"reproducible, or tampering")
-    if replay:
-        s = time.monotonic()
-        found = work / "replay.json"
-        found.unlink(missing_ok=True)
-        keys = replay_keys(facts, rep["toolchain"]) if replay_cache else {}
-        reused = [m for m in facts["modules"] if m in keys and (replay_cache / f"{keys[m]}.json").is_file()]
-        checked = [m for m in facts["modules"] if m not in reused]
-        rep["replay"] = {"checked": len(checked), "reused": len(reused)}
-        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *checked,
-                        *(["--reused", *reused] if reused else [])], pkg, work / "replay.log")
-        if killed(rc):
-            fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
-        elif rc or not found.exists():
-            fails.append(f"replay: the kernel rejected a declaration under {', '.join(policy['roots'])} (exit {rc}):\n"
-                         f"{text[-2000:]}")
-        elif (walked := sorted(json.loads(found.read_text())["axioms"])) != sorted(facts["axioms"]):
-            fails.append(f"replay: the replayed environment uses the axioms {', '.join(walked) or 'none'}, the .olean files "
-                         f"record {', '.join(sorted(facts['axioms'])) or 'none'}")
-        elif keys:
-            replay_cache.mkdir(parents=True, exist_ok=True)
-            for m in checked:
-                tmp = replay_cache / f".{keys[m]}.{os.getpid()}.tmp"
-                tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": m, "key": keys[m]}))
-                os.replace(tmp, replay_cache / f"{keys[m]}.json")
-        rep["seconds"]["replay"] = round(time.monotonic() - s, 1)
+    if replayed:
+        (rfails, rep["replay"]), rep["seconds"]["replay"] = replayed.result()
+        fails += rfails
     if fresh:
         s = time.monotonic()
         for r in policy["roots"]:
@@ -2000,13 +2028,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 fails.append(f"fresh: the kernel rejected a declaration in the closure of {r} (exit {rc}):\n{text[-2000:]}")
         rep["seconds"]["fresh"] = round(time.monotonic() - s, 1)
     fails += run_paths(pkg, policy, repo)
-    if runs and policy.get("runs"):
-        s = time.monotonic()
-        rfails, ran = tests(pkg, policy, files, work, repo, update)
+    if ran:
+        (rfails, now), rep["seconds"]["runs"] = ran.result()
         fails += rfails
         if update:
-            new["runs"] = ran
-        rep["seconds"]["runs"] = round(time.monotonic() - s, 1)
+            new["runs"] = now
+    background.shutdown()
     lfails, listed, lnotes = listings(pkg, files, policy, facts, update)
     fails += lfails
     if update and listed:
@@ -2156,7 +2183,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL
+    global TOOL, ARTIFACTS
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -2177,6 +2204,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
+    ap.add_argument("--artifacts", type=Path, metavar="DIR", help="Lake's artifact cache, which the builds read and never write "
+                    "(`lake_env`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
     ap.add_argument("--no-runs", action="store_true", help="skip the packages' tests (`runs`)")
@@ -2199,6 +2228,7 @@ def main(argv: list[str]) -> int:
             ap.error(f"{a.moved}: a JSON object of old names to new names")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
+    ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
     lifts = None
     if a.lift:
         if a.update or a.all or a.name_instances or len(pkgs) != 1:

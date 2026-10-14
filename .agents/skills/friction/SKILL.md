@@ -102,6 +102,48 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-13 (10:42 AM PDT): an agent closes an old PR without asking when every commit on it is already in another open
+  PR ("close old PRs idgaf do that").
+- 2026-10-12 (4:08 PM PDT, to top): Daniel took every recommendation then open in top's walkthrough of his decisions,
+  unread, for maximum research velocity, and may revisit any of them later. The ones that set rules:
+  - The network certifier and the memory challenger are the auditor's hardware, so they survive the 10:03 AM ruling
+    below, on two conditions: each runs on a machine the prover doesn't control (the auditor's own VM or box, under the
+    auditor's account, never a process on the prover's node), and `trusted-nebius-host` trusts only such a device and
+    its host provider, never a host the prover controls. The bandwidth audit's challenger runs on the GPU's own node,
+    so it is prover hardware and not one of them.
+  - PoUS keeps sending each challenge when the last answer arrives, and the actual-circuit model's bridge covers that
+    schedule, rather than PoUS moving to a fixed one.
+  - PoUS's conjecture is restated once, per round and for any store size in a stated range, with today's whole-audit
+    form at 2^19 blocks derived from it.
+  - PoUW's machine stop restates `TT_OUT` with a per-coin budget, and the static refund stays held.
+  - P2 at 2^25 blocks may land first as a stopgap, with the sampled setup check at k = 140, while the word codec is
+    the direction.
+- 2026-10-12 (about 10:03 AM PDT, in memory accounting's thread): no protocol or guarantee assumes trusted prover
+  hardware ("in our setting we will never assume trusted prover hardware so forget about that more broadly"). Nothing
+  the prover runs or hosts is trusted: not its GPUs, its host, its links, a confidential-computing enclave or a process
+  on its machines. So the bandwidth audit treats host memory over PCIe as a slower tier of the prover's memory and
+  prices relayed tags with `RateAuditInteractive`, instead of a trusted host challenger.
+- 2026-10-12 (06:00Z, relayed by top): writing for Daniel puts its math in LaTeX, `\( \)` inline and `\[ \]`
+  displayed, quantities included, and states a protocol or guarantee as its security assumptions, then the protocol's
+  shape, then the properties provable under them.
+- 2026-10-11 (8:53 PM PDT, through his console): a part of `check` whose cold run takes more than about 10 minutes may
+  run right after its train lands instead of before, on every landing that changed its inputs, and a failure there
+  reverts the landing at once; a reused verdict stays in the gate, and the Lean check always runs before landing.
+  `main` then passes every part except those in the post-landing tier, and citations and tables read only commits
+  whose trailing parts passed. ci and infra build it; until they do, the whole `check` stays before landing. This
+  replaces 7 Oct's "not into teaching `research merge` to land on part of a check" for those parts.
+- 2026-10-11 (about 7 PM PDT, relayed by top): check time comes down by a lot, and everyone may do whatever it takes.
+  A change to how `check` runs (a suite's declared inputs, Lean reuse per module or declaration, circuit-check's task
+  list, scheduling, sharding, more slots or machines under a budget line, splitting or cutting a slow test) lands on its
+  own passing check with no review by the file's owner, who is told, not asked. infra owns check time as an outcome,
+  and each lever's owner builds it, or infra does in its place. Only spend past a budget line and moving a part out of
+  the gate that `main`'s passing check covers go to Daniel. The same evening: hand landing is to be automated, and ci
+  owns it. From an owner's ready mark to `main` moving (the prep, the merge check, the landing, the sweep, the spec DM),
+  no agent acts unless the automation refuses; the lander handles what it refuses (a conflict, a failed check, a
+  revert), and infra hosts it.
+- 2026-10-11 (relayed by top): the store has no API server. Writers and guards use the bucket, and displays query an
+  index derived from it. D2–D4 (the keys, private metadata in the index, what is public) are as in the design,
+  note:verity-top/20261011T1758Z-draft-store-contract.
 - 2026-10-09 (7:04 PM PDT, relayed by top): the end goal is sampled proofs through recursion with hidden unit circuits,
   on four assumptions: record custody, the OS's randomness, the coin server's randomness, and SHA-512 entering only
   through reductions. The partition is hidden from the start. The auditor checks only padded counts. The outer proof
@@ -188,7 +230,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
     blocked the rest, not with landing counts;
   - only the lander lands, restacks and reruns. A lane pushes its PR, marks it ready and goes back to research, and hears
     back only if the PR fails. A lane holds at most two open PRs. This ends 6 Oct's trains without ready marks: a PR
-    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived;
+    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived. Since 12 Oct, ci's
+    `research queue drive` lands, restacks and reruns, and the lander handles what it refuses (11 Oct);
   - infra keeps the machines up and the checks fast, and builds nothing new unless it removes a measured research cost.
     Kueue as the only scheduler (#1460) is one, since it takes slot assignment off the coordinator;
   - the Python verifiers move into `verity/core/`, by one agent with `main` frozen, and `Security/Models/` tracks which of
@@ -223,7 +266,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   call. "Network transparency" is "network accounting".
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
   asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
-  tip that pins the old one at landing, and their checks are spent for nothing.
+  tip that pins the old one at landing, and their checks are spent for nothing. Since 12 Oct, drive leaves a conflicting
+  PR out of `next` for the lander (11 Oct), and a new head still cancels the checks of the trains above it.
 - 2026-10-06 (8:07 AM PDT): one hash covers derivations and PRFs: `derive` is SHA-512, P2's key expansion counter-mode
   SHA-512, and SHA-512 truncated to 256 bits counts as SHA-512; Pearl's FP8 scheme keeps BLAKE3 as Pearl's own
   definition.
@@ -232,7 +276,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   - a train member needs no quick-tier pass (its own line below);
   - a flaky test is deleted, not rerun or fixed (testing skill, "Write tests that mean something");
   - an auditor-trusted device runs on Nebius, with trust in Nebius a named assumption, rather than on hardware that
-    attests.
+    attests (since 12 Oct: on a machine the prover doesn't control, 4:08 PM PDT above).
 - 2026-10-06 (8:14 AM PDT): a protocol carries no policy parameter. It surfaces what its draw established (ε at δ, in the
   integrity profile), and accounting decides later what it accepts. The model's size is public.
 - 2026-10-06 (7:51 to 8:14 AM PDT): one hash, SHA-512 with its whole output, everywhere: Pearl-C's `-h3` (its cost over
@@ -318,7 +362,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-02 (10:27 PM PDT): `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption. Hiding is
   proved at a fresh uniform key, and nobody works on proving that the pinned key behaves like one.
 - 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain
-  (`ci`) trial-merges, preflights and hands over train tips, but never starts a merge check itself.
+  (`ci`) trial-merges, preflights and hands over train tips, but never starts a merge check itself. Since 11 Oct, ci's
+  landing automation starts them too.
 - 2026-10-02 (7:23 AM PDT): an overhead reported to Daniel is the `--zk` prover's only (no M0 number and no `--zk`/M0
   ratio), normalized to the chip's peak: prover seconds over the time the computation's FLOPs take at the census's dense
   datasheet peak for its dtype, never over a measured runtime such as a vLLM run's, written to one significant digit

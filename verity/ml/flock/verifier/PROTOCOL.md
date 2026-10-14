@@ -408,7 +408,7 @@ and the record keeps it as `unit_draw`. The offline checks:
 | U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
 | U2 | the draw is well formed: exactly the sampling design's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, floor, k}`, a floor of at least one, `W ≥ 1`, each `k` the work rule's above its floor, and a closure (when there is one) of non-empty, ascending, distinct units of the population, none of them drawn. When the verifier holds the program and a template-query partition object, a stratified draw's sampling design must be its own derivation from them, and `verify` refuses a stratified draw without them and its own `K` (`--stratified K`), or at another `K`. A work draw's sampling design must always be its own derivation from them, its work table (works and floors) and its own `K`, and `verify` refuses a work draw without all four or at another `K` |
 | U3 | the statement's `instances` is the number of drawn units and their closure. A work draw's closure must be the verifier's own derivation from its closure map, and `verify` refuses a closure draw without the map |
-| U4 | every unit that reads a round's commitment by the verifier's own registered reads (a port whose value is `rec-c<i>` or `rec-top-L<l>`, §16.10) is drawn in full: its stratum's `k` is its size (a `subset` draw of `K = N`, a `p = 1` draw). A statement without a draw passes |
+| U4 | every unit that reads a round's commitment by the verifier's own registered reads (a port whose value is `rec-c<i>`, `rec-top-L<l>`, `rec-opening-c<i>`, `rec-top-stacked-L<l>` or one of the sparse phase's messages `rec-sparse-<p>`, §16.10) is drawn in full: its stratum's `k` is its size (a `subset` draw of `K = N`, a `p = 1` draw). A statement without a draw passes |
 
 `stratified_agree.py` checks the Lean verifier's sampling designs, draws and U2 verdicts against core's (#164's
 `verity.core.protocols.sampled_proofs.one_stage.draw`, #161's `Stratified`).
@@ -1236,6 +1236,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     not read), `64`, `16·LANES` and `64` u16 words, and outputs `out` then `acc_out` of 64 words each, one 16-bit port
     per word.
 
+  So must a unit net whose name starts with `rec-open-stacked/` (one of R's levels, V*'s `recOpenStackedName`): its name
+  must be `rec-open-stacked/l<LANES>-h<H>`, and the same three rules hold at those parameters, the net being the same
+  builder's under the unit's own name.
+
   So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
     `claims ≥ 2`, and neither `k_log` nor `claims` above the unit's input bits, compared before the verifier computes
@@ -1258,6 +1262,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     its output ports 2048, compared before the verifier builds its net;
   - the net must be `Flock.RecResiduals`' builder of `rec_residuals.unit_circuit` on part `j`'s S, laid out as
     `ir_lower.layout` lays it out, one 16-bit port per word.
+
+  So must a unit net whose name starts with `rec-opening/` (a part of R's opening, `rec_residuals.stage_opening`):
+  - its name must be `rec-opening/m<m>-c<claims>-p<j>`, with a `fast100` schedule at `m` and `claims ≥ 1`;
+  - the circuit must have one unit per VU (`units_per_vu = 1`), so each part is one copy of its unit, refused before
+    the structure is computed;
+  - the rest is a `rec-residuals/` part's (the claims bounded by the input bits, part `j`'s bits, the net), at the
+    opening's S (`Flock.RecOpening.structureOf`, `rec_algebra.structure` at an opening-only shape) and its row ports.
 
   Any other unit is not checked against a builder (D13, §17.1).
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
@@ -1380,9 +1391,11 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   must draw in full every unit the verifier's reads of such a value name (U4, `Registered.checkFull`, D14), so that no
   stage's message is read off a sample. The registered opening (`RecOpening`) reads its rounds as registered values too:
   `rec-opening-c<i>` is round `i` of `RecOpening.rounds` (each claim's ring switch, then Ligerito's rounds in
-  `ligRounds` order), and its ports are the `c<i>`, then `acc0`, `acc1`, then the claims. U4 does not name these yet
-  (`Registered.roundCommitment` recognises only `rec-c<i>` and `rec-top-L<l>`), so no drawn statement is yet held to
-  draw them in full.
+  `ligRounds` order), and its ports are the `c<i>`, then `acc0`, `acc1`, then the claims. U4 names these as well
+  (`Registered.roundCommitment`), with the stacked table R's level-`l` tops `rec-top-stacked-L<l>` and the sparse phase's
+  messages `rec-sparse-<p>`, `p` one of `pre<j>`, `v2`, `sc<j>`, `u` and `vt` (`rec_sparse.message_ports` without `h`,
+  which reads the rep's `rec-c<i>`, and `claim`, which reads `rec-claim`). The sparse phase's `rec-sparse-v`,
+  `rec-sparse-zero` and `rec-sparse-tau` are no round's commitment.
 - **Identifier.** The header may carry `identifier`, a JSON object C-Flock does not read (an application's name for what the
   statement is about, such as PoUW's). The public digest covers the header, so Σ binds it. The verifier needs its own
   `--identifier F` (a JSON object, by path or archive digest), and the header's must equal `F`'s in RFC 8785 form: both are
@@ -1723,15 +1736,16 @@ expectation):
   statement whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the
   live server and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it;
   `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier.
-- **D13:** a unit net named `rec-open/…` is the verifier's V* opening net (`Flock.RecOpen`, §16.10). Upstream takes the
-  unit's net as the file gives it. The spec refuses a `rec-open/` unit whose name is not `rec-open/l<LANES>-h<H>` at valid
-  parameters, one whose port bits are not the opening's at them, and one whose net differs from the verifier's. No vector
-  exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean
-  verifier.
+- **D13:** a unit net named `rec-open/…` or `rec-open-stacked/…` is the verifier's V* opening net (`Flock.RecOpen`,
+  §16.10). Upstream takes the unit's net as the file gives it. The spec refuses such a unit whose name is not
+  `rec-open/l<LANES>-h<H>` (or `rec-open-stacked/l<LANES>-h<H>`) at valid parameters, one whose port bits are not the
+  opening's at them, and one whose net differs from the verifier's. No vector exercises it;
+  `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean verifier, and
+  `test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening` a stacked unit's acceptance and its net's.
 - **D14:** U4 (§7.3, §16.10): a drawn statement must draw in full each unit that reads a round's commitment. Upstream
   ignores the header's `registered` (D5) and so cannot tell which units read one; the spec refuses the draw at setup. No
-  vector exercises it: no set's draw meets a `rec-c<i>` or `rec-top-L<l>` port. `Flock.Test.Full` runs it on synthetic
-  ports and draws.
+  vector exercises it: no set's draw meets a port of a round's commitment (`rec-c<i>`, `rec-top-L<l>`, R's and the sparse
+  phase's). `Flock.Test.Full` runs it on synthetic ports and draws.
 - **D15:** an inner statement's registered description (§16.16). Upstream ignores the header's `registered`; the spec
   refuses a description table that is not the registration in order, a row that does not open the registered root, and a
   registered row no instance reads. No vector exercises it; `verity/ml/flock/tests/test_inner_registered.py` runs each

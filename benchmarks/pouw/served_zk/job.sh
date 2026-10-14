@@ -66,7 +66,7 @@ export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row o
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
-export PYTHONPATH=$SRC:$SRC/catalog:$SRC/kernels:$SRC/experimental:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/verity/ml/flock/python:$SRC/verity/core/difftest/python
+export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/verity/ml/flock/python:$SRC/verity/core/difftest/python
 SC="$Z/served_commit.py"
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 

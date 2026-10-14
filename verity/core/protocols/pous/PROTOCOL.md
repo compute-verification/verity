@@ -753,6 +753,16 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   `HonestPassesAccepts` prove that the honest full-state server passes P2's ring audit, and the end-to-end event, with
   probability 1.
 
+`P2RingAuditSecure` is also derived from the per-round conjecture `P2RingRoundSecure p ε₀ D Q L` (Daniel's ruling of
+12 Oct, item 5): at every block count from `2^19` to `2^25`, at a boundary where the server holds at most `⌊ρ·|C|⌋`
+bits, a uniform challenge is answered with probability at most `1 − p` given the earlier answers, outside an event of
+mass `k·ε₀` over `k` rounds (one `ε₀` per round, the same at every block count). `Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure` gives `P2RingAuditSecure` from it when
+`(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`p = 0.043` with `ε₀ = 2^-137` suffices; `p < 0.04291` doesn't), and
+`Pous.SecurityProofs.P2RingGradedOfRoundSecure` is the graded bound: a server held at most `⌊ρ·|C|⌋` bits at `m` of
+the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its falsification tests are
+`Security/Proofs/Pous/P2/RoundTests.lean`'s, at every block count in the range: recomputation forces `p = 0` at
+`D ≥ 32,894`, and truncation refutes `p = 0.043` from `L ≥ 2^167` at `2^19`.
+
 `EndToEndRing` reaches the deployed system only through four claims, each cited on its own:
 
 - `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and

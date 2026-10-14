@@ -278,6 +278,42 @@ def test_a_tree_that_may_be_a_runs_only_copy_of_its_source_is_kept(node, setup, 
     assert (node.src / node.a).is_dir()
 
 
+def _captured(n, *, marker: dict | None, digest: str = "d" * 64, cap_digest: str | None = None) -> None:
+    rd = write_run(n, "r14", source=n.a, store={"commit": n.a, "dirty": True, "dirty_digest": digest})
+    job = json.loads((rd / "job.json").read_text())
+    job["store"]["dirty_capture"] = {"path": "source-dirty.tar", "bytes": 10, "sha256": "e" * 64, "dirty_digest": cap_digest or digest}
+    (rd / "job.json").write_text(json.dumps(job))
+    if marker is not None:
+        (rd / ".custody").write_text(json.dumps(marker))
+    _age(rd, 3)
+
+
+PRESERVED = {"preserved": True, "files": {"job.json": [1, "f" * 64], "source-dirty.tar": [10, "e" * 64]}}
+
+
+def test_a_dirty_run_whose_preserved_record_holds_its_capture_no_longer_keeps_the_tree(node):
+    """The 10 Oct src sweep deleted trees that were seven runs' only copy of their dirty sources; the runner now captures a dirty
+    source into the run dir and custody uploads it, so once the record is preserved the tree is not the only copy."""
+    _captured(node, marker=PRESERVED)
+    rep = run(node)
+    assert rep["error"] is None and node.a in [d["tree"] for d in rep["deleted"]], kept(rep)
+
+
+@pytest.mark.parametrize("marker, digest, cap_digest", [
+    (None, "d" * 64, None),
+    ({**PRESERVED, "preserved": False}, "d" * 64, None),
+    ({"preserved": True, "files": {"source-dirty.tar": [10, "0" * 64]}}, "d" * 64, None),
+    ({"preserved": True, "files": {"job.json": [1, "f" * 64]}}, "d" * 64, None),
+    (PRESERVED, "too-large", None),
+    (PRESERVED, "d" * 64, "a" * 64),
+], ids=["no-custody", "not-preserved", "other-bytes", "not-in-record", "too-large", "other-digest"])
+def test_a_dirty_run_keeps_the_tree_unless_its_preserved_record_holds_that_capture(node, marker, digest, cap_digest):
+    _captured(node, marker=marker, digest=digest, cap_digest=cap_digest)
+    rep = run(node)
+    assert any(w.startswith("3: run r14's source is dirty, and no preserved record") for w in kept(rep).get(node.a, [])), kept(rep)
+    assert (node.src / node.a).is_dir()
+
+
 def test_a_research_keep_record_leaves_the_tree_to_retention(node):
     from research import retention as RT
     RT.keep(node.src / node.a, owner="@infra", expires=None, priority="keep", root=node.root.parent, why="pinned")

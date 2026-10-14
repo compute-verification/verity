@@ -82,12 +82,13 @@ def VerifiesVStar {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (i : Rec
   AcceptsVRV i bind rows zr o ∧ ∀ j, FailClosed.ScopeZR (zr o.1 j).I
 
 /-- **C-Flock's compiled inner protocol as the executable runs it**: `flockInnerCL` at the executable's arithmetic
-(`execArith`) and its hm96-sha512 Merkle scheme (`Refine.enc512`, `Refine.leaf512` under `Refine.H512`), on the class
-`cls`, its regions and the schedule `sch`. -/
+(`execArith`) and the inner statement's Merkle scheme, SHA-512 with plain leaves (`Refine.enc512`, `Refine.leafPlain`
+under `Refine.H512`: `flock-leaf/sha512-unsalted`, which `RecVStar.innerTags` names), on the class `cls`, its regions
+and the schedule `sch`. -/
 noncomputable abbrev innerExec {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
     (sch : Accounting.Schedule) : Inner :=
-  flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch
+  flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain cls regs sch
 
 /-- **The number of V*'s outer statements** over an inner session of a table of `m` variables, `k_log` and `claims`
 claims, as V*'s staging lays them out (`rec_vstage.stage`, `VStar.statements`) and the verifier of record groups the
@@ -177,12 +178,12 @@ private circuit whose `rt.leaves` rows the commit strings `q` commit to (`stmtAt
 `Flock.Registered.rowsOf st.c st.pub rt` that Lean's verifier opens against `rt`, `AcceptsDescription`, PROTOCOL.md
 §16.16), whichever rows V*'s sessions read. Taken: A3 (`_hA3`). Then for the registered commit strings `p`, each
 opening `rt` at its row `r < rt.leaves` through the developer's path `path₀ r`, for every count curve `(k, R_w, M, ρ)`
-that bounds every session's rate at each setup of its inputs, given V*'s bridge (VBridge) at the typed sessions and
-that hidden statement: the event below is empty; or at some row `st`'s commit string is not `p r`, and its opening of
-`rt` and the developer's give an explicit SHA-512 collision (`Flock.Registered.bcPair`); or the sessions type and
-there is a registrant fork (one run of the transported prover reaching two sessions whose registrant records clash,
-`regFinder`), a round fork, a session fork, or an inner fork of the transported prover's own runs whose decoded
-transcripts play the compiled table to outcomes that clash; or
+that bounds every session's rate at each setup of its inputs, given V*'s bridge at the committed rounds (VBridgeC, which
+VBridge gives) at the typed sessions and that hidden statement: the event below is empty; or at some row `st`'s commit
+string is not `p r`, and its opening of `rt` and the developer's give an explicit SHA-512 collision
+(`Flock.Registered.bcPair`); or the sessions type and there is a registrant fork (one run of the transported prover
+reaching two sessions whose registrant records clash, `regFinder`), a round fork, a session fork, or an inner fork of
+the transported prover's own runs whose decoded transcripts play the compiled table to outcomes that clash; or
 $$\Pr[\text{Lean's verifier accepts } st \text{ and its description} \wedge \text{every session verifies as V*'s}
   \text{ statement of its index} \wedge
   \neg\,\text{the statement of } p \text{ holds}]$$
@@ -246,9 +247,9 @@ def RecursiveAudit : Prop :=
     (_hr : ∀ R ω t R₂ j S₀
       (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
-    -- V*'s bridge, at the typed sessions
+    -- V*'s bridge at the committed rounds, at the typed sessions
     (_hbr : ∀ h : Typed zr,
-      Flock.Premises.VBridge (custodied zr _hCust h) dg N k Rw (hiddenAt st rt stmt) wmsg Sk cmt msg),
+      Flock.Premises.VBridgeC (custodied zr _hCust h) dg N k Rw (hiddenAt st rt stmt) wmsg Sk cmt msg),
     prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
         (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
@@ -260,7 +261,7 @@ def RecursiveAudit : Prop :=
       RoundFork (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) cmt ∨
       SessionFork (custodied zr _hCust h) dg N k Rw M (transported zr _hCust h σ) ∨
       InnerForkRec (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) (hiddenAt st rt stmt) wmsg
-        Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls
+        Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
           (execClassAt st).regs (execClassAt st).sch) ∨
       prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
             VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧

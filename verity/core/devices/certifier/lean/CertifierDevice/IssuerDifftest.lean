@@ -4,9 +4,9 @@ import CertifierDevice.Difftest
 /-!
 # The issuer difftest: `Issuer.certify` against `certificate.Issuer`, on generated records
 
-`scripts/issuer_vectors.py` writes instances (an LMS key from a seed, and calls to one issuer: a record, its direction,
-grid parameters, Σ_sync, parameters digest and deadline bit, the leaf the host reserves for it or a refusal, and a
-tamper) and what the checkout's real `certificate.Issuer` does with each, its signer signing at the call's leaf.
+`scripts/issuer_vectors.py` writes instances (an LMS key from a seed, a certifier session's id, 32 bytes or another
+length, and calls to one issuer in that session: a record, its direction, grid parameters, Σ_sync, parameters digest
+and deadline bit, the leaf the host reserves for it or a refusal, and a tamper) and what the checkout's real `certificate.Issuer` does with each, its signer signing at the call's leaf.
 `CertifierDevice/IssuerDifftestMain.lean` reads both files and fails unless `evaluate`, which makes the key with
 `Lms.keygen` and threads one `Issuer` through the calls, gives every result exactly: each call's parameters digest
 (`parameters`), and `null` where `Issuer.certify` refuses the record, or the certified record (`null` when the
@@ -49,9 +49,11 @@ def flip (b : ByteArray) (pos : Nat) : ByteArray :=
     b.set! i (b.get! i ^^^ 1)
 
 /-- `verify` after the tamper: the certificate's signature (a byte, or its last byte dropped), link, direction, window or
-digest changed, the head's deadline bit flipped, or the public key's identifier or root changed; or the certificate's
-link, direction, window or key identifier changed and signed again by `k` at leaf `q`. -/
-def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub : ByteArray) : String × Nat → Except String Bool
+digest changed, the head's deadline bit flipped, the public key's identifier or root changed, or the certificate checked
+in another session; or the certificate's link, direction, window or key identifier changed and signed again by `k` at
+leaf `q`. -/
+def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub session : ByteArray) :
+    String × Nat → Except String Bool
   | (kind, pos) => do
     let x := c.certificate
     let h := c.head
@@ -59,24 +61,26 @@ def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub : ByteArr
     let root := pub.extract 16 pub.size
     let other := if x.direction == .egress then Direction.ingress else .egress
     let resign (y : Certificate) : Except String CertifiedRecord := do
-      let m ← NetworkCheck.certificateMessage y.keyId y.link y.direction y.window y.digest
+      let m ← NetworkCheck.certificateMessage y.keyId session y.link y.direction y.window y.digest
       pure { c with certificate := { y with signature := (← Lms.signAt k q m).encode } }
-    let (c, pub) ← match kind with
-      | "signature" => pure ({ c with certificate := { x with signature := flip x.signature pos } }, pub)
-      | "signature-length" => pure ({ c with certificate := { x with signature := x.signature.extract 0 (x.signature.size - 1) } }, pub)
-      | "link" => pure ({ c with certificate := { x with link := x.link ++ "x" } }, pub)
-      | "direction" => pure ({ c with certificate := { x with direction := other } }, pub)
-      | "window" => pure ({ c with certificate := { x with window := x.window ^^^ 1 } }, pub)
-      | "digest" => pure ({ c with certificate := { x with digest := flip x.digest pos } }, pub)
-      | "deadline" => pure ({ c with head := { h with deadline := !h.deadline } }, pub)
-      | "public-id" => pure (c, flip id pos ++ root)
-      | "public-root" => pure (c, id ++ flip root pos)
-      | "resign-link" => pure (← resign { x with link := x.link ++ "x" }, pub)
-      | "resign-direction" => pure (← resign { x with direction := other }, pub)
-      | "resign-window" => pure (← resign { x with window := x.window ^^^ 1 }, pub)
-      | "resign-key-id" => pure (← resign { x with keyId := flip x.keyId pos }, pub)
+    let (c, pub, session) ← match kind with
+      | "signature" => pure ({ c with certificate := { x with signature := flip x.signature pos } }, pub, session)
+      | "signature-length" =>
+        pure ({ c with certificate := { x with signature := x.signature.extract 0 (x.signature.size - 1) } }, pub, session)
+      | "link" => pure ({ c with certificate := { x with link := x.link ++ "x" } }, pub, session)
+      | "direction" => pure ({ c with certificate := { x with direction := other } }, pub, session)
+      | "window" => pure ({ c with certificate := { x with window := x.window ^^^ 1 } }, pub, session)
+      | "digest" => pure ({ c with certificate := { x with digest := flip x.digest pos } }, pub, session)
+      | "deadline" => pure ({ c with head := { h with deadline := !h.deadline } }, pub, session)
+      | "public-id" => pure (c, flip id pos ++ root, session)
+      | "public-root" => pure (c, id ++ flip root pos, session)
+      | "session" => pure (c, pub, flip session pos)
+      | "resign-link" => pure (← resign { x with link := x.link ++ "x" }, pub, session)
+      | "resign-direction" => pure (← resign { x with direction := other }, pub, session)
+      | "resign-window" => pure (← resign { x with window := x.window ^^^ 1 }, pub, session)
+      | "resign-key-id" => pure (← resign { x with keyId := flip x.keyId pos }, pub, session)
       | t => throw s!"no tamper {t}"
-    pure (c.verify k.params pub)
+    pure (c.verify k.params pub session)
 
 def certifiedJson (c : CertifiedRecord) (verified : Bool) (tampered : Json) : Except String Json := do
   let x := c.certificate
@@ -93,7 +97,8 @@ def evaluate (j : Json) : Except String (Json × List String) := do
   let p ← Lms.Params.make (← n.getNat?) (← w.getNat?) (← h.getNat?) (← toy.getBool?)
   let k ← Lms.keygen p (← bytesOf (← key.getObjVal? "seed"))
   let pub := k.publicKey
-  let mut issuer : Issuer := { key := k }
+  let session ← bytesOf (← j.getObjVal? "session")
+  let mut issuer : Issuer := { key := k, session }
   let mut calls := #[]
   let mut outcomes := []
   for c in ← j.getObjValAs? (Array Json) "calls" do
@@ -124,10 +129,10 @@ def evaluate (j : Json) : Except String (Json × List String) := do
       outcomes := "refused leaf" :: outcomes
     | .ok (i, some cr) =>
       issuer := i
-      let verified := cr.verify p pub
+      let verified := cr.verify p pub session
       let t ← match tamper with
         | none => pure Json.null
-        | some t => toJson <$> tampered cr k (← leaf) pub t
+        | some t => toJson <$> tampered cr k (← leaf) pub session t
       certify := Json.mkObj [("certified", ← certifiedJson cr verified t)]
       outcomes := s!"certified, {if verified then "verified" else "NOT verified"}" :: outcomes
       if let some (kind, _) := tamper then
