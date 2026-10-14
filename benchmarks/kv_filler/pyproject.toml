@@ -4,4 +4,6 @@
 testpaths = ["tests"]
 
 [tool.verity.tests]
-inputs = ["verity/ml/crypto/blake3.py"]
+# bench.py puts benchmarks/word_codec on the path for kv.py, which imports blake3 through the verity package
+inputs = ["benchmarks/word_codec/kv.py", "verity/__init__.py", "verity/ml/__init__.py", "verity/ml/crypto/__init__.py",
+          "verity/ml/crypto/blake3.py"]
