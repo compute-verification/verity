@@ -44,7 +44,7 @@ open FlockVBridge.Sparse (SCoins nw verifierRow tauBase vBaseS sparseBase shOf)
 /-! ## Check 5 at a rec-sparse unit -/
 
 /-- **`checkSparse` computes both reps' sparse coins** under the unit's name. -/
-theorem checkSparse_coins {inn : RecCoins.Inner} {c3 : RecCoins.C3} {c : Circuit} {pub : Public}
+theorem checkSparse_coins {inn : RecCoins.Inner} {c3 : RecCoins.C3} {c : Flock.Circuit} {pub : Public}
     {own : Array Registered.Port} {sh : RecSparse.Shape} (h : RecCoins.checkSparse inn c3 c pub own sh = .ok ()) :
     ∀ r < 2, ∃ sc, RecCoins.sparseCoins c3 c.unit.name r = .ok sc := by
   unfold RecCoins.checkSparse at h
@@ -67,7 +67,7 @@ theorem checkSparse_coins {inn : RecCoins.Inner} {c3 : RecCoins.C3} {c : Circuit
 
 /-- **Check 5 at a `rec-sparse/…` unit** that is no stacked level and no opening part: the verifier holds the coins
 record, and `checkSparse` computes both reps' sparse coins. -/
-theorem check_sparseCoins {st : Stmt} {own : Array Registered.Port} {files : Option RecCoins.Source}
+theorem check_sparseCoins {st : Flock.Stmt} {own : Array Registered.Port} {files : Option RecCoins.Source}
     {c3o : Option RecCoins.C3} {sh : RecSparse.Shape} (h : RecCoins.check st (some own) files c3o = .ok ())
     (hp : RecSparse.params st.c.unit.name = some sh) (hso : RecCoins.stackedParams st.c.unit.name = none)
     (hop : RecOpening.params st.c.unit.name = none) :
@@ -93,14 +93,14 @@ theorem stackedParams_sparse (sh : RecSparse.Shape) : RecCoins.stackedParams (Re
   | none => rfl
   | some p =>
     obtain ⟨L, H⟩ := p
-    exact ((FlockC3.PubRows.sparse_ne_names sh).2.2.1 L H) (RecOpen.stackedName_of_params hq).symm
+    exact (((FlockC3.PubRows.sparse_ne_names sh).2.2.1 L H) (RecOpen.stackedName_of_params hq).symm).elim
 
 theorem openingParams_sparse (sh : RecSparse.Shape) : RecOpening.params (RecSparse.unitName sh) = none := by
   cases hq : RecOpening.params (RecSparse.unitName sh) with
   | none => rfl
   | some p =>
     obtain ⟨m, cl, j⟩ := p
-    exact ((FlockC3.PubRows.sparse_ne_names sh).2.2.2 m cl j) (openingName_params hq).symm
+    exact (((FlockC3.PubRows.sparse_ne_names sh).2.2.2 m cl j) (openingName_params hq).symm).elim
 
 theorem startsWith_sparseName (sh : RecSparse.Shape) : (RecSparse.unitName sh).startsWith "rec-sparse/" = true := by
   have : RecSparse.unitName sh = "rec-sparse/" ++ s!"n{sh.nu}-e{sh.ell}-s{sh.sLog}-t{sh.tLog}" := by
@@ -110,7 +110,7 @@ theorem startsWith_sparseName (sh : RecSparse.Shape) : (RecSparse.unitName sh).s
 
 /-- **A unit `RecSparse.check` accepted under the name `unitName sh` has `params` `sh`**: where `params` is `none`,
 the check refuses a name beginning `rec-sparse/`. -/
-theorem sparseParams_of_check {c : Circuit} (h : RecSparse.check c = .ok ()) {sh : RecSparse.Shape}
+theorem sparseParams_of_check {c : Flock.Circuit} (h : RecSparse.check c = .ok ()) {sh : RecSparse.Shape}
     (hn : c.unit.name = RecSparse.unitName sh) : RecSparse.params c.unit.name = some sh := by
   cases hp : RecSparse.params c.unit.name with
   | some sh' => rw [FlockC3.PubRows.sparse_unitName_inj ((FlockVBridge.Sparse.unitName_params hp).trans hn)]
@@ -245,10 +245,15 @@ theorem coinsAccepted_checked {coins : String → Option Flock.RecCoins.Source}
     CoinsAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       rows wr reg coins := by
   intro R ω t R₂ j hex
-  exact FlockC3.PubRows.checks_of_keepOwn (z := Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
-    (P := fun J o tr' => (ℐ).r ≤ t.length ∧
+  refine FlockC3.PubRows.checks_of_keepOwn (z := Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
+    (P := fun J o tr' => (holoInnerAt T CT st hp).r ≤ t.length ∧
       Flock.Guarantees.ChecksC3 ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (bind j)
-        rows J o tr') (fun _ _ _ hP => hP.2) hex
+        rows J o tr')
+    (Pc := fun J o tr' =>
+      Flock.Guarantees.ChecksC3 ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (bind j)
+        rows J o tr') ?_ hex
+  intro J o tr' hP
+  exact hP.2
 
 /-- **Check 5 at the sparse session**: where session `s` accepts and V*'s list names RecSparse at `s`, at the inner
 shape's `sparse` entry `hp`'s (`SparseIs`), its circuit is named `unitName (unitShape (holoAt st hp))`
