@@ -209,6 +209,37 @@ theorem checkOwn_ok {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : Re
             | some q' => exact absurd hf (hnone' q')
           simpa using List.find?_eq_none.1 hfind q hq
 
+/-- **`checkOwn` accepting, its second loop, at the reads file's ports**: each of the statement's message-round ports is
+a port of the reads file, by name, value and reads. -/
+theorem own_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : RecVStar.checkOwn s own = .ok ()) :
+    ∀ q ∈ RecVStar.ownPorts s, ∃ p ∈ own, (p.name, p.value, p.reads) = q := by
+  intro q hq
+  obtain ⟨p, hp, rfl⟩ := List.mem_map.1 ((checkOwn_ok h).1 q hq)
+  exact ⟨p, Array.mem_toList_iff.1 (List.mem_filter.1 hp).1, rfl⟩
+
+/-- **A RecSparse statement's reads file names every one of its message ports** (`RecSparse.messagePorts`): `h` and
+`claim` by `checkOwn`'s second loop (`ownPorts`), the others by its third (`sparseMsgs`, `checkOwn_ok`). -/
+theorem sparseOwnNames_of_checkOwn {sh : RecSparse.Shape} {hr : ℕ} {own : Array Flock.Registered.Port}
+    (h : RecVStar.checkOwn (.sparse sh hr) own = .ok ()) :
+    ∀ nm ∈ (RecSparse.messagePorts sh).map (·.1), ∃ p ∈ own, p.name = nm := by
+  obtain ⟨rest, hY⟩ : ∃ rest, RecSparse.messagePorts sh = ("h", RecSparse.SKIP) :: (rest ++ [("claim", 1)]) :=
+    ⟨_, rfl⟩
+  have hown := own_of_checkOwn h
+  have h3 := (checkOwn_ok h).2
+  simp only [RecVStar.sparseMsgs, hY, List.drop_succ_cons, List.drop_zero, List.dropLast_concat] at h3
+  intro nm hnm
+  rw [hY] at hnm
+  simp only [List.map_cons, List.map_append, List.map_nil, List.mem_cons, List.mem_append, List.not_mem_nil,
+    or_false] at hnm
+  rcases hnm with rfl | hnm | rfl
+  · obtain ⟨p, hp, he⟩ := hown ("h", s!"rec-c{hr}", #[some 0, some 1]) (by simp [RecVStar.ownPorts])
+    exact ⟨p, hp, (Prod.mk.inj he).1⟩
+  · obtain ⟨⟨a, b⟩, hx, rfl⟩ := List.mem_map.1 hnm
+    obtain ⟨p, hp, he⟩ := List.mem_map.1 (h3 _ (List.mem_map.2 ⟨(a, b), hx, rfl⟩))
+    exact ⟨p, Array.mem_toList_iff.1 hp, (Prod.mk.inj he).1⟩
+  · obtain ⟨p, hp, he⟩ := hown ("claim", RecVStar.CLAIM_VALUE, #[some 0, some 1]) (by simp [RecVStar.ownPorts])
+    exact ⟨p, hp, (Prod.mk.inj he).1⟩
+
 /-- **A statement the verifier checked as V*'s statement `j` has its message ports in the reads file**: each port of
 `ownAt ss j` is one of `own`'s by name, value and reads (`checkStmt_ok`'s `checkOwn`, its second and third loops). -/
 theorem ownIn_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
