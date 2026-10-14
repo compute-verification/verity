@@ -193,7 +193,7 @@ def UnitsOf (st : Flock.Stmt) (hp : HoloParams) : Prop :=
 `--rec-inner`, and the unit range of the statement it builds from its partition object and program. `checkInnerStmt`
 refuses `T_LOG ≠ 0`, so the one possible slot type is zero; no clear private `τ` row is an input to the verifier. -/
 def holoParamsAt (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : HoloParams :=
-  let sp := ish.sparse.getD default
+  let sp := ish.sparse.getD { nu := 0, ell := 0, sLog := 0, tLog := 0 }
   { ell := sp.ell
     nu := sp.nu
     sLog := sp.sLog
@@ -202,7 +202,7 @@ def holoParamsAt (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : HoloParams :=
       match (unitRangeOf st).toOption with
       | some rng => if σ.val < rng.count then {rng.pos0 + σ.val} else ∅
       | none => ∅
-    τ := fun _ => ⟨0, by simp⟩ }
+    τ := fun _ => ⟨0, Nat.two_pow_pos _⟩ }
 
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
