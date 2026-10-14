@@ -1,5 +1,12 @@
 {
  "definitions": {
+  "MhcResidualBroadcast_v2{HC=2,H=8}": {
+   "and": 0
+  }
+ }
+}
+{
+ "definitions": {
   "HopperTf32WgmmaDot8_v2": {
    "and": 6524
   },
