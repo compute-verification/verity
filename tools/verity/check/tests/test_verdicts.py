@@ -113,6 +113,47 @@ def test_since_a_snapshot_a_pack_holds_only_what_the_run_stored(tmp_path, monkey
         assert sorted(tar.getnames()) == ["check/lean-audit/k2.json", "tests/k4.json"]
 
 
+def test_snapshot_and_export_read_only_what_the_index_does_not_know(tmp_path, monkeypatch):
+    """The caches run to hundreds of GB; re-reading every entry at both ends of a check held a finished run for an hour of
+    disk reads once another job had evicted the page cache (14 Oct, r20261014-032950-9e49).  The per-root index memoizes each
+    entry's sha256 by (size, mtime_ns): a second snapshot reads nothing, and a closing export reads only the run's own writes."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    reads = []
+    real = V._read
+    monkeypatch.setattr(V, "_read", lambda p: reads.append(p) or real(p))
+    before = V.snapshot()
+    assert len(reads) == len(VERDICTS) and (r["check"] / V.INDEX).is_file() and (r["tests"] / V.INDEX).is_file()
+    reads.clear()
+    assert V.snapshot() == before and reads == []                     # every entry answered by the index
+    _write(r["tests"] / "k4.json", '{"suite": "new"}')
+    pack = tmp_path / "run.tar.gz"
+    assert V.export(pack, before) == 1 and {p.name for p in reads} == {"k4.json"}   # hashed, then streamed into the pack
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["tests/k4.json"]
+
+
+def test_a_garbled_or_stale_index_only_costs_the_reread(tmp_path, monkeypatch):
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    before = V.snapshot()
+    (r["tests"] / V.INDEX).write_text("not json")
+    (r["check"] / V.INDEX).write_text(json.dumps({"lean-audit/k2.json": [1, 2, "0" * 64]}))   # wrong size and mtime: stale
+    assert V.snapshot() == before                                     # recomputed from the files, and the index rewritten
+    assert json.loads((r["tests"] / V.INDEX).read_text())
+    assert V.export(tmp_path / "none.tar.gz", before) == 0
+
+
+def test_the_index_is_never_listed_or_packed(tmp_path, monkeypatch):
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    V.snapshot()
+    assert (r["check"] / V.INDEX).is_file() and sorted(V.entries()) == VERDICTS
+    assert V.export(pack := tmp_path / "pack.tar.gz") == 4
+    with tarfile.open(pack) as tar:
+        assert sorted(tar.getnames()) == VERDICTS
+
+
 def test_an_entry_that_goes_away_while_it_is_read_is_left_out(tmp_path, monkeypatch):
     """Another slot's suites prune a module's older passes, or its audit removes its scratch tree, after this one lists them."""
     r = _machine(tmp_path, monkeypatch, "a")

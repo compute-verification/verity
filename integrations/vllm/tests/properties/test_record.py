@@ -26,6 +26,7 @@ def test_seal_binds_ok_and_every_field_to_the_digest():
 def test_the_registry_names_each_harness_schema_once():
     from tests.properties import (
         dsv4_flashmla_capture_gpu,
+        dsv4_indexer_capture_gpu,
         dsv4_mhc_capture_gpu,
         dsv4_moe_capture_gpu,
         dsv4_qnorm_insert_capture_gpu,
@@ -47,6 +48,7 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["glm53_bf16_gemm_capture"].schema == glm53_bf16_gemm_capture_gpu.SCHEMA
     assert REGISTRY["glm53_dsa_capture"].schema == glm53_dsa_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_mhc_capture"].schema == dsv4_mhc_capture_gpu.SCHEMA
+    assert REGISTRY["dsv4_indexer_capture"].schema == dsv4_indexer_capture_gpu.SCHEMA
     assert REGISTRY["glm53_tp8_allreduce_capture"].schema == glm53_tp8_allreduce_capture_gpu.SCHEMA
     assert REGISTRY["blackwell_fp8_capture"].schema == fp8_sm120_capture_gpu.SCHEMA
     assert REGISTRY["sigmoid_router_capture"].schema == sigmoid_router_capture_gpu.SCHEMA
