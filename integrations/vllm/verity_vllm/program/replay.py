@@ -5,7 +5,53 @@ from __future__ import annotations
 from typing import Any
 
 from verity.ml.circuits.defs import Body, Builder
-from verity.ml.circuits.refs import Coll, PartLog, concat, prefix_runs
+from verity.ml.circuits.refs import Affine, Coll, Concat, PartLog, Refs, Strided, concat, prefix_runs, runs
+
+
+def _scattered(p: Refs) -> bool:
+    """A `Strided` whose runs are O(count) leaves: per-leaf iteration (`inner != 1` with a non-unit inner stride) or
+    single-leaf rows (`inner == 1` with a non-unit outer stride). A transposed weight read is the common case: at
+    GLM-5.3 scale one such argument is >1e6 runs, so substituting it run by run never finishes."""
+    if not isinstance(p, Strided) or (p.outer_stride == 0 and p.inner_stride == 0):
+        return False
+    return p.outer_stride not in (0, 1) if p.inner == 1 else p.inner_stride != 1
+
+
+def _rebase(p: Strided, env: dict[tuple[str, int], Any]) -> Strided | None:
+    """`p` substituted in O(1): when the target's refs over `p`'s leaf span are one contiguous `Affine` run, every leaf
+    maps through the same shift, so the result is `p` itself rebased onto the target. None when the span is not one run
+    (the caller falls back to run-by-run substitution)."""
+    outer = -(-p.count // p.inner)
+    last = p.count - (outer - 1) * p.inner
+    leaves = [p.base + q * p.outer_stride + r * p.inner_stride
+              for q in ({0, max(outer - 2, 0), outer - 1}) for r in (0, (last if q == outer - 1 else p.inner) - 1)]
+    lo, hi = min(leaves), max(leaves) + 1
+    t = env[(p.space, p.idx)].slice(lo, hi)
+    if isinstance(t, Affine) and t.count == hi - lo:
+        return Strided(t.space, t.idx, t.base + (p.base - lo), p.inner, p.outer_stride, p.inner_stride, p.count)
+    return None
+
+
+def _substitute_scattered(refs, env: dict[tuple[str, int], Any]):
+    """Partwise substitution when some part of `refs` is a scattered `Strided` that rebases in O(1); None otherwise
+    (every other shape takes the run path below, whose output is bit-identical to before). A `Concat` cut from a
+    `PartLog` keeps the memoised run path: its parts are attention prefixes, never scattered."""
+    if isinstance(refs, Concat):
+        if refs.prefix is not None:
+            return None
+        parts = refs.parts
+    else:
+        parts = (refs,)
+    sub = [_rebase(p, env) if _scattered(p) else None for p in parts]
+    if not any(r is not None for r in sub):
+        return None
+    out: list[Refs] = []
+    for p, r in zip(parts, sub):
+        if r is not None:
+            out.append(r)
+        else:
+            out.extend(env[(space, idx)].slice(lo, hi) for space, idx, lo, hi in runs(p))
+    return concat(out)
 
 
 def substitute(refs, env: dict[tuple[str, int], Any], logs: dict[int, tuple[Any, Any]] | None = None):
@@ -13,6 +59,9 @@ def substitute(refs, env: dict[tuple[str, int], Any], logs: dict[int, tuple[Any,
 
     `logs` (one per `env`) maps a `PartLog` the flat body cut `refs` from to the log of its substituted shared runs, so the
     runs every longer cut shares are substituted once."""
+    fast = _substitute_scattered(refs, env)
+    if fast is not None:
+        return fast
     rs, log, s = prefix_runs(refs)
     if log is None or logs is None or s == 0:
         parts = [env[(space, idx)].slice(lo, hi) for space, idx, lo, hi in rs]
