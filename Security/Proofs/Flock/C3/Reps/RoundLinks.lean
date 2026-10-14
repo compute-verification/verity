@@ -88,7 +88,7 @@ theorem inner_round_lt_of_checkMsgNames
     List.mem_map.2 ⟨c.ports[q], Array.mem_toList_iff.2 (Array.getElem_mem q.isLt), hq⟩
   have hi := List.find?_eq_none.1 hn _ hmem
   rw [mIndex_m] at hi
-  have hi' := of_decide_eq_false hi
+  simp only at hi
   omega
 
 /-- **`checkMsgNames` passing at a part or a part of R's opening**: each circuit port named `m<k>` is the name of one
