@@ -282,16 +282,3 @@ theorem repsDrawn_holoMap {m : InnerRecordMap Cm (ℐ).Coin} {ish : Flock.RecVSt
 end atRep
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.coins_of_checkCommitRounds
-#print axioms FlockC3.Reps.repRounds_zp
-#print axioms FlockC3.Reps.heldRounds_of_check
-#print axioms FlockC3.Reps.stream_of_custody
-#print axioms FlockC3.Reps.coinRounds_zero
-#print axioms FlockC3.Reps.holoSel_first
-#print axioms FlockC3.Reps.repIdx_of_size
-#print axioms FlockC3.Reps.repIdx_of_check
-#print axioms FlockC3.Reps.streams_of_custody
-#print axioms FlockC3.Reps.repIdx_atRep
-#print axioms FlockC3.Reps.repsDrawn_of_counts
-#print axioms FlockC3.Reps.repsDrawn_holoMap
