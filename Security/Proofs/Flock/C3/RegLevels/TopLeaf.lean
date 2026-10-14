@@ -162,6 +162,17 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
+/-- A registered read's port is `own`'s entry of its name, read at the unit's position. `AccReads.readsOwn_of_hown`
+gives it at the drawn label (`AtLabel`) at an outcome a session's game reaches, and `PubRows.label_of_checked` takes the
+label to the unit where `ChecksC3` passed. -/
+def ReadsOwnC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
+    (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) →
+      (F.zs R ω t R₂ j).rd.port (.inl (u, q)) ∈ (F.zs R ω t R₂ j).own ∧
+      ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).name = (F.Vs j).c.ports[q].name ∧
+      ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).reads[u.val]? =
+        some (some ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))))
+
 /-- **The public file's row at a read of R's level-`l` tops is the node's commit string**: `HPubRows` at the verifier's
 hold of the inner transcript (`hrow`), where it holds `stacked/rep0`'s level-`l` tops `bcs`. -/
 theorem digest_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : FlockC3.PubRows.HPubRows F)
