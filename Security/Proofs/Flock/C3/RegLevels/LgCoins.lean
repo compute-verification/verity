@@ -10,7 +10,7 @@ import Proofs.Flock.Soundness.Assumptions.Inner
 At `MapsLeft`'s weave, R's Ligerito's coin steps are `stacked/rep0`'s rounds of coins (`rep0`) from the ring switches'
 `k₂`, as many as the stage takes (`LgHeld.lgCoins_of_weave`). `rep0` reads the verifier's hold of that stream
 (`C3.coins`, `commits.stream?`'s coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which
-`laterCoins_of_held`'s `h5` reads:
+`laterCoins_of_held`'s `h5` (and, from round 0, `h4`) reads:
 
 * `commits_c3Of`, `heldCoins_rep0`: at the `C3` the verifier builds of its hold `cs` (`c3Of`), the coins it holds of
   `stacked/rep0` at round `q` are `rep0`'s round `q`;
@@ -27,8 +27,8 @@ At `MapsLeft`'s weave, R's Ligerito's coin steps are `stacked/rep0`'s rounds of 
   (`StackedCoins.innerCommits_held`), which `rep0`'s round count reads.
 
 `RRounds.lean` reads `holoStreams`' R rounds (at the verifier's `ish.stacked`) as META's (`stackedStreams_of_covers`).
-`LgHeld.lean` assembles `h5` (`stageHeld_lg`; at R's run and `MapsLeft`, `stageHeld_lg_of_run`): the stage's start at
-R's round `k₂`'s history round (`stageStarts`), and its third part from the run's round total
+`LgHeld.lean` assembles `h4` and `h5` (`stageHeld_stacked`; at R's run and `MapsLeft`, `stagesHeld_of_run`): each
+stage's start at its first round's history round (`stageStarts`), and its third part from the run's round total
 (`Compose.coins_total_holo`).
 -/
 

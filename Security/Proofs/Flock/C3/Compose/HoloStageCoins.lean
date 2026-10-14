@@ -54,7 +54,7 @@ def LaterCoins {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} (cs : List ((k : F
       (nCoins u.lg) u.lg
 
 /-- **A tied run's stages take `holoKinds`' coins**, `holoCTs`' count after the link points: each tied stage takes its
-whole shape. It bounds the rounds `laterCoins_of_held`'s `h5` reads (`RegLevels.stageHeld_lg`'s `htot`). -/
+whole shape. It bounds the rounds `laterCoins_of_held`'s `h4`, `h5` read (`RegLevels.stagesHeld_of_run`'s `htot`). -/
 theorem coins_total_holo {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoAt st hp)} {cap₀ : Cap Dig}
     {sh : Flock.Shape} {w : Array F128} {ops : FlockVBridge.AccChain.Openings}
     (hr : ∀ i, RepTie (holoAt st hp) u i) (hs : ∀ i, FlockC3.Sparse.SparseTie (holoAt st hp) u i)
