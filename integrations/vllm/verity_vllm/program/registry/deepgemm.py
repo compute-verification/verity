@@ -25,6 +25,11 @@ ascending k, then `__float22bfloat162_rn`; TRT-LLM's swapAB kernel and `sm90_fp8
 csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp:291-330) are the same chain.  So the GEMM is `fp8_vocab.block_gemm(K, N, 128, scale)`,
 `ScaledMmFp8BlockSharedScale_v1` by default.
 
+The kernel has no split-K: whatever layout `get_best_config<SM90ArchSpec>` picks for a token count (block sizes, stages, cluster,
+multicast), each output word's k-blocks accumulate in ascending order in one tile, so these Definitions hold at every M and need no
+schedule parameter.  The layout choice itself is mirrored by `kernels.deepgemm_schedule`, which the capture uses to sweep both
+sides of every M where it changes (up to 1024) and to hold the JIT'd template arguments to the prediction.
+
 FlashInfer's `scale_1x128_kernel`, one 128-element group per warp, as its sm_90 PTX has it:
 
     lane l holds x[2l], x[2l+1], x[64+2l], x[65+2l]; v_l = max.bf16 from 0 over abs.bf16 of them   exact, NaN dropped, subnormals kept

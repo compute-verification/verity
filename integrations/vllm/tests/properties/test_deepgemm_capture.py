@@ -69,34 +69,37 @@ def _zero(**kw) -> dict:
 
 def _linear_jobs(tmp_path, branch: str, *, M: int = 6, flip_word: bool = False, flip_quant: bool = False,
                  edit=None) -> list[dict]:
-    """One launch of a K = 256, N = 200 linear (a partial weight block) on `_rows`: DeepGEMM's branch with its (q, s) and the GEMM
-    over them, or FlashInfer's words, a non-finite lane the canonical NaN except at the sampled columns, where it is the
-    reference's word (as the GPU's must be)."""
+    """One launch of a K = 256, N = 200 linear (a partial weight block) on `_rows`, saved at `sample_rows` as the GPU script saves
+    it: DeepGEMM's branch with its (q, s) and the GEMM over them, or FlashInfer's words, a non-finite lane the canonical NaN except
+    at the sampled columns, where it is the reference's word (as the GPU's must be)."""
     rng = np.random.default_rng(1)
+    rows = X.sample_rows(M)
     x = _rows(rng, M)
     w = _e4m3(rng, N, K)
     ws = T.upcast_e8m0(rng.integers(X.E8M0_LO, X.E8M0_HI + 1, (X.cdiv(N, GQ), K // GQ)))
-    arrays = {"x": x, "w": w, "ws": ws}
+    arrays = {"x": x[rows], "w": w, "ws": ws}
     if branch == "deepgemm":
         q, s = T.ue8m0_group_quant_rows(x)
         if flip_quant:
             q[0, 9] ^= 0x80
-        out = np.stack([R.scaled_mm_fp8_block_row(q[r], s[r], w, ws, G=GQ)[0] for r in range(M)])
-        arrays |= {"q": q, "s": s}
+        out = np.stack([R.scaled_mm_fp8_block_row(q[r], s[r], w, ws, G=GQ)[0] for r in rows])
+        arrays |= {"q": q[rows], "s": s[rows]}
     else:
-        out, nf = map(np.stack, zip(*(T.flashinfer_linear_row(x[r], w, ws) for r in range(M))))
+        out, nf = map(np.stack, zip(*(T.flashinfer_linear_row(x[r], w, ws) for r in rows)))
         out[nf] = 0x7FC0
         coord = bind(F.ScaledMmFp8BlockCoordinate, K=K, G=GQ)
-        for r in X.reference_rows(M):
+        for i, r in enumerate(rows):
+            if r not in X.reference_rows(M):
+                continue
             xq, sx = T.flashinfer_quant_1x128_row(x[r])
             for n in _columns(r):
-                if nf[r, n]:
-                    out[r, n] = evaluate(coord, xq.tolist(), sx.tolist(), w[n].tolist(), ws[n // GQ].tolist())[0]
+                if nf[i, n]:
+                    out[i, n] = evaluate(coord, xq.tolist(), sx.tolist(), w[n].tolist(), ws[n // GQ].tolist())[0]
     if flip_word:
         out[2, 150] ^= 1
     if edit:
         edit(out)
-    job = {"phase": "linear", "model": "dsv4", "case": "ragged", "K": K, "N": N, "M": M, "branch": branch,
+    job = {"phase": "linear", "model": "dsv4", "case": "ragged", "K": K, "N": N, "M": M, "branch": branch, "row_map": rows,
            "paths": X.B._save(tmp_path / f"{branch}_M{M}", out=out, **arrays)}
     return X.row_jobs(job, N * K // 32)
 
@@ -124,6 +127,32 @@ def test_row_chunks_split_the_rows_and_the_reference(tmp_path, monkeypatch) -> N
     monkeypatch.undo()
     (whole,) = _linear_jobs(tmp_path / "one", "deepgemm")
     assert chunked == _total([X.compare(whole)])
+
+
+def test_rows_past_full_rows_are_sampled_at_the_tile_edges(tmp_path) -> None:
+    """Past `FULL_ROWS` the jobs compare `sample_rows` only: the planted rows, both sides of every multiple of 64, the last row;
+    the reference still lands on rows 0, 2, 3, 4 and M - 1."""
+    assert X.sample_rows(256) == list(range(256))
+    assert X.sample_rows(300) == [0, 1, 2, 3, 4, 63, 64, 127, 128, 191, 192, 255, 256, 299]
+    assert len(X.sample_rows(1024)) == 36 and X.sample_rows(1024)[-2:] == [960, 1023]
+    jobs = _linear_jobs(tmp_path, "deepgemm", M=300)
+    rows = X.sample_rows(300)
+    assert sorted(rows[i] for j in jobs for i in j["reference_rows"]) == [0, 2, 3, 4, 299]
+    t = _total([X.compare(j) for j in jobs])
+    assert t == _zero(words=len(rows) * N, quant_rows=len(rows), reference_quant_rows=5,
+                      reference_coords=sum(len(_columns(r)) for r in (0, 2, 3, 4, 299)))
+
+
+def test_the_sweeps_reach_every_boundary_and_the_endpoint() -> None:
+    """`sweep_for` and `einsum_sweep` at the gate's 132 SMs: the dense base, both sides of each launch-configuration boundary
+    (pinned in tests/program/test_deepgemm_schedule.py), and 1024."""
+    ms = X.sweep_for(7168, 2048, 132, False)
+    assert set(X.LINEAR_M) <= set(ms) and ms[-1] == X.MAX_M == 1024
+    assert {32, 33, 512, 513, 832, 833} <= set(ms) and 48 not in ms
+    assert set(ms) == set(X.S.sweep_ms(X.LINEAR_M, 2048, 7168, num_sms=132, lo=32, hi=1024))
+    assert set(X.sweep_for(7168, 2048, 132, True)) >= {16, 17}                  # --batch-invariant sweeps DeepGEMM's boundaries below 32
+    es = X.einsum_sweep(132)
+    assert set(X.EINSUM_M) <= set(es) and es[-1] == 1024 and {16, 17, 448, 449, 768, 769} <= set(es)
 
 
 @pytest.mark.parametrize("branch", ["deepgemm", "flashinfer"])
@@ -238,7 +267,7 @@ def _einsum_jobs(tmp_path, *, flip: bool = False) -> list[dict]:
     z = np.stack([T.scaled_mm_fp8_block_grouped_row(xq[t], sx[t], w, ws)[0] for t in range(EM)])
     if flip:
         z[3, 1, 100] ^= 1
-    job = {"phase": "einsum", "model": "dsv4", "case": "wo_a", "H": EH, "K": EK, "N": EN, "M": EM,
+    job = {"phase": "einsum", "model": "dsv4", "case": "wo_a", "H": EH, "K": EK, "N": EN, "M": EM, "row_map": X.sample_rows(EM),
            "paths": X.B._save(tmp_path / "einsum", xq=xq, sx=sx, z=z, w=w.reshape(EH * EN, EK), ws=ws.reshape(EH * nb, EK // GQ))}
     return X.row_jobs(job, EH * EN * EK // 32)
 
@@ -365,21 +394,40 @@ def _with(i: int, v: str) -> list[str]:
 
 GOOD = {"kernel.a": (X.GEMM_IMPL, GEMM), "kernel.b": (X.GEMM_IMPL, _with(17, "GemmType::Batched")),
         "kernel.c": (X.LAYOUT_IMPL, ["128", "64", "56"])}
+#: the schedule's predictions matching `GOOD` (compiled n where the generated kernel left it runtime)
+PRED = [_with(2, "2048"), _with(17, "GemmType::Batched")]
 
 
-def test_the_jit_scan_takes_only_the_1d2d_gemms_and_the_scale_transpose(tmp_path) -> None:
-    got = X.jit(_jit_cache(tmp_path / "ok", GOOD))
-    assert got["ok"] and (got["files"], got["gemms"], got["layouts"]) == (3, 2, 1)
+def test_the_jit_scan_takes_only_the_predicted_1d2d_gemms_and_the_scale_transpose(tmp_path) -> None:
+    got = X.jit(_jit_cache(tmp_path / "ok", GOOD), PRED)
+    assert got["ok"] and (got["files"], got["gemms"], got["layouts"]) == (3, 2, 1) and not got["unlaunched"]
     assert got["gemm_types"] == ["GemmType::Batched", "GemmType::Normal"] and got["kernels"]["cache/kernel.a/kernel.cu"]["args"] == GEMM
     bad = {"1d1d": ("sm90_fp8_gemm_1d1d_impl", GEMM), "block_k": (X.GEMM_IMPL, _with(7, "64")), "f32_out": (X.GEMM_IMPL, _with(18, "float")),
            "epilogue": (X.GEMM_IMPL, _with(19, "epilogue::transform::EpilogueHeadSplits")),
            "grouped": (X.GEMM_IMPL, _with(17, "GemmType::MGroupedContiguous")), "short": (X.GEMM_IMPL, GEMM[:19]),
-           "pack": ("transpose_and_pack_fp32_into_ue8m0", ["128", "64", "56", "1", "false"]), "none": (None, [])}
+           "pack": ("transpose_and_pack_fp32_into_ue8m0", ["128", "64", "56", "1", "false"]), "none": (None, []),
+           "unpredicted_stages": (X.GEMM_IMPL, _with(11, "4"))}
     for name, kernel in bad.items():
-        got = X.jit(_jit_cache(tmp_path / name, {**GOOD, "kernel.x": kernel}))
+        got = X.jit(_jit_cache(tmp_path / name, {**GOOD, "kernel.x": kernel}), PRED)
         assert got["ok"] is False and got["kernels"]["cache/kernel.x/kernel.cu"]["ok"] is False, name
-    assert X.jit(_jit_cache(tmp_path / "layouts", {"kernel.c": GOOD["kernel.c"]}))["ok"] is False
-    assert X.jit(tmp_path / "nothing")["ok"] is False
+    assert X.jit(_jit_cache(tmp_path / "layouts", {"kernel.c": GOOD["kernel.c"]}), [])["ok"] is False
+    assert X.jit(tmp_path / "nothing", [])["ok"] is False
+
+
+def test_a_predicted_configuration_the_run_never_generated_fails_the_scan(tmp_path) -> None:
+    extra = _with(5, "256")
+    got = X.jit(_jit_cache(tmp_path / "missing", GOOD), PRED + [extra])
+    assert got["ok"] is False and got["unlaunched"] == [extra]
+
+
+def test_args_match_is_exact_but_for_the_compiled_dims() -> None:
+    """m, n and k (indices 1-3) may be runtime ("0") on either side; everything else is exact."""
+    pred = _with(2, "2048")
+    assert X._args_match(GEMM, pred)                                            # generated n runtime, prediction compiled
+    assert X._args_match(pred, pred) and X._args_match(_with(1, "64"), pred)    # a compiled m against the runtime prediction
+    assert not X._args_match(_with(2, "1024"), pred)                            # a different compiled n
+    assert not X._args_match(_with(11, "4"), pred) and not X._args_match(GEMM[:19], pred)
+    assert not X._args_match(_with(17, "GemmType::Batched"), pred)
 
 
 def test_the_programs_bind_at_every_shape() -> None:
@@ -406,7 +454,8 @@ def _doc(batch_invariant: bool = False) -> dict:
     branches = ("deepgemm", "deepgemm") if batch_invariant else ("flashinfer", "deepgemm")
     weights = lambda case: {"phase": "weights", "model": "dsv4", "case": case, "deterministic": True, "operands_ok": True}
     doc = {"schema": X.SCHEMA, "batch_invariant": batch_invariant, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True},
-           "mufu": {"rcp_ok": True}, "jit": {"ok": True, "gemm_types": ["GemmType::Batched", "GemmType::Normal"]}, "bind": {"ok": True},
+           "mufu": {"rcp_ok": True}, "schedule": {"ok": True},
+           "jit": {"ok": True, "gemm_types": ["GemmType::Batched", "GemmType::Normal"]}, "bind": {"ok": True},
            "launches": [weights("wq_b"), {**lin, "M": 1, "branch": branches[0]}, {**lin, "M": 32, "branch": branches[1]}, weights("wo_a"),
                         {"phase": "einsum", "model": "dsv4", "case": "wo_a", "M": 1, "deterministic": True, "operands_ok": True}],
            "comparisons": [{"phase": "weights", "model": "dsv4", "case": "wq_b", **BLOCKS},
@@ -422,7 +471,8 @@ def _doc(batch_invariant: bool = False) -> dict:
 
 @pytest.mark.parametrize("path,value", [
     (("gate", "ok"), False), (("errors", "linear/glm53/q_a_proj"), "boom"), (("selection", "ok"), False), (("mufu", "rcp_ok"), None),
-    (("mufu", "rcp_ok"), False), (("jit", "ok"), False), (("jit", "gemm_types"), ["GemmType::Normal"]), (("bind", "ok"), False),
+    (("mufu", "rcp_ok"), False), (("schedule", "ok"), False), (("jit", "ok"), False), (("jit", "gemm_types"), ["GemmType::Normal"]),
+    (("bind", "ok"), False),
     (("totals", "words"), 0), (("totals", "mismatch"), 1), (("totals", "unresolved"), 1), (("totals", "quant_mismatch"), 1),
     (("totals", "quant_rows"), 0), (("totals", "reference_coords"), 0), (("totals", "reference_quant_rows"), 0),
     (("totals", "twin_mismatch"), 1), (("totals", "nonfinite_mismatch"), 1), (("totals", "weight_blocks"), 0),
@@ -484,14 +534,14 @@ def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False
     for k in ENV:
         monkeypatch.setenv(k, "")
     seen: dict = {"mufu": [], "jit": [], "linear": []}
-    monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": gate_ok, "torch_capability": "9.0"})
+    monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": gate_ok, "torch_capability": "9.0", "sms": 132})
     monkeypatch.setattr(X.C, "mufu", lambda work, arch: (seen["mufu"].append(arch), copy.deepcopy(MUFU))[1])
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "selection", lambda cfg: {"ok": True})
     monkeypatch.setattr(X, "model_config", lambda cfg, model_type: contextlib.nullcontext())
     monkeypatch.setattr(X, "linear_cases", lambda: [("dsv4", "small", K, N)])
-    canned = X.jit(_jit_cache(tmp_path / "jit", GOOD))
-    monkeypatch.setattr(X, "jit", lambda cache: (seen["jit"].append(str(cache)), copy.deepcopy(canned))[1])
+    canned = X.jit(_jit_cache(tmp_path / "jit", GOOD), PRED)
+    monkeypatch.setattr(X, "jit", lambda cache, predicted: (seen["jit"].append(str(cache)), copy.deepcopy(canned))[1])
 
     def linear(work, model, name, K_, N_, Ms, seed, batch_invariant):
         seen["linear"].append((model, name, K_, N_, Ms, batch_invariant))
@@ -506,8 +556,8 @@ def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False
 
     def einsum(work, Ms, seed):
         launches = [{"phase": "weights", "model": "dsv4", "case": "wo_a", "deterministic": True, "operands_ok": True},
-                    {"phase": "einsum", "model": "dsv4", "case": "wo_a", "M": EM, "calls": ["fused_inv_rope_fp8_quant", "fp8_einsum"],
-                     "deterministic": True, "operands_ok": True}]
+                    {"phase": "einsum", "model": "dsv4", "case": "wo_a", "H": EH, "K": EK, "N": EN, "M": EM,
+                     "calls": ["fused_inv_rope_fp8_quant", "fp8_einsum"], "deterministic": True, "operands_ok": True}]
         jobs = [{**j, "model": "dsv4", "case": "wo_a"} for j in _weights_jobs(tmp_path / "we", "e8m0")[0]] + _einsum_jobs(tmp_path / "e")
         return launches, jobs
 
@@ -533,6 +583,9 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert doc["env"]["VLLM_USE_DEEP_GEMM"] == "1" and doc["env"]["VLLM_BATCH_INVARIANT"] == "0"
     assert seen["mufu"] == ["sm_90"] and seen["jit"] == [doc["env"]["DG_JIT_CACHE_DIR"]] and seen["linear"][0][4] == X.QUICK_LINEAR_M
     assert doc["totals"]["quant_rows"] == 32 and doc["totals"]["weight_blocks"] == 12 and doc["bind"]["ok"]
+    assert doc["schedule"]["ok"] and doc["schedule"]["num_sms"] == 132
+    assert set(doc["schedule"]["configs"]) == {"linear/dsv4/small/M32", "einsum/dsv4/wo_a/M5"}
+    assert all(len(p) == 20 and p[7] == "128" for p in doc["schedule"]["predicted"])
     printed = capsys.readouterr().out
     assert "DEEPGEMM GO" in printed and "no-go cases=[]" in printed and "case linear/dsv4/small/M32" in printed
 

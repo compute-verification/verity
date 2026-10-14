@@ -20,21 +20,30 @@ A phase that raises records its error and fails the verdict without stopping the
              is built with -use_fast_math: its scale is MUFU.RCP + FMUL.FTZ).
   linear     each model's FP8 linears as one TP8 rank runs them (`LINEARS`) on one layer of random e4m3 weights and served-format scales
              (DeepSeek-V4: e8m0 bytes; GLM-5.3: f32, with `BAND_SCALES` planted) after the selected kernel's
-             `process_weights_after_loading`, at M in `LINEAR_M`: `apply_weights`, twice, with the branch's module globals tapped
-             (flashinfer.py:252-299).  The branch taken, its operands, and every output word against `DeepGemmFp8Linear_v1{K,N}`
-             (the quant's (q, s) against `Fp8GroupQuantUe8m0_v1`, the GEMM over the kernel's own (q, s); twins
-             `deepgemm_twins.ue8m0_group_quant_row`, `derived_rows.scaled_mm_fp8_block_row`) or `FlashInferFp8Linear_v1{K,N}` (twin
-             `deepgemm_twins.flashinfer_linear_row`).
+             `process_weights_after_loading`, at M in the shape's sweep (`sweep_for`: `LINEAR_M` densely, then both sides of every
+             m where `kernels.deepgemm_schedule` says the launch configuration changes, and `MAX_M` = 1024): `apply_weights`,
+             twice, with the branch's module globals tapped (flashinfer.py:252-299).  The branch taken, its operands, and every
+             compared output word against `DeepGemmFp8Linear_v1{K,N}` (the quant's (q, s) against `Fp8GroupQuantUe8m0_v1`, the
+             GEMM over the kernel's own (q, s); twins `deepgemm_twins.ue8m0_group_quant_row`,
+             `derived_rows.scaled_mm_fp8_block_row`) or `FlashInferFp8Linear_v1{K,N}` (twin
+             `deepgemm_twins.flashinfer_linear_row`).  Up to M = `FULL_ROWS` every row is compared; past it `sample_rows` picks
+             the planted rows, both sides of every possible block_m tile edge and the last (the kernel has no split-K and
+             accumulates k ascending, so a word's math is partition-invariant; the launch configuration itself is held below).
   weights    every 128x128 block of every processed weight against the twin of its processing: DeepSeek-V4's bytes unchanged and
              scales `upcast_e8m0`, GLM-5.3's `requant_weight_ue8m0` (a block whose `amax / 448` is in `requant_band` is the GPU's
              division and log2's to decide: counted, not claimed).
   einsum     DeepSeek-V4's `wo_a` at TP8 (H = 2 groups, K = 4096, N = 1024) through the model's own `deep_gemm_fp8_o_proj`
-             (o_proj.py:28-73) with `fused_inv_rope_fp8_quant` and `fp8_einsum` tapped, twice, at M in `EINSUM_M`: every output word
-             against `ScaledMmFp8BlockGrouped_v1{2,4096,1024,128}` over the einsum's own operands (twin
-             `deepgemm_twins.scaled_mm_fp8_block_grouped_row`); its weight through the selected kernel's `is_bmm` processing.
+             (o_proj.py:28-73) with `fused_inv_rope_fp8_quant` and `fp8_einsum` tapped, twice, at M in its sweep (`einsum_sweep`:
+             `EINSUM_M` densely, the batched GEMM's boundaries from M = 1, and 1024): every compared output word against
+             `ScaledMmFp8BlockGrouped_v1{2,4096,1024,128}` over the einsum's own operands (twin
+             `deepgemm_twins.scaled_mm_fp8_block_grouped_row`, rows sampled past `FULL_ROWS` as in linear); its weight through the
+             selected kernel's `is_bmm` processing.
+  schedule   each DeepGEMM launch's layout as `kernels.deepgemm_schedule.best_config` predicts it at the gate's SM count, and the
+             distinct template-argument lists those layouts JIT (`schedule`).
   jit        every kernel DeepGEMM's JIT generated in the run (`DG_JIT_CACHE_DIR`'s `kernel.cu`): each GEMM `sm90_fp8_gemm_1d2d_impl`
-             at BLOCK_K 128, `GemmType::Normal` (fp8_gemm_nt) or `GemmType::Batched` (fp8_einsum), bf16 out, the identity epilogue;
-             otherwise only `transpose_fp32`, which puts an activation's f32 scales in TMA-aligned MN-major layout.
+             at BLOCK_K 128, `GemmType::Normal` (fp8_gemm_nt) or `GemmType::Batched` (fp8_einsum), bf16 out, the identity epilogue,
+             and one of the schedule's predicted argument lists; every prediction generated; otherwise only `transpose_fp32`, which
+             puts an activation's f32 scales in TMA-aligned MN-major layout.
   reference  on a sample of the rows, the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`) of
              `fp8.ScaledMmFp8BlockCoordinate_v1{K,128}` at three columns, `Fp8GroupQuantUe8m0_v1{K,128}` and
              `FlashInferFp8Quant1x128_v1{K}`, which the twins must equal; on a non-finite column, the coordinate's word must be the GPU's.
@@ -47,7 +56,8 @@ flag it non-finite, and the GPU's words there must be non-finite), and row 4's t
 eps (1e-10) keeps both finite.
 
 GO needs 0 mismatches and 0 unresolved words (a word the twin flags non-finite whose GPU word is finite), every reference equal, every
-resolved weight block equal, deterministic reruns, the expected branch with the expected operands at every M, and the JIT kernels.
+resolved weight block equal, deterministic reruns, the expected branch with the expected operands at every M, and the JIT kernels:
+every generated GEMM at a predicted launch configuration and every predicted configuration generated.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/deepgemm_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--batch-invariant] [--only PHASES]
@@ -73,6 +83,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as B
+from verity_vllm.program.kernels import deepgemm_schedule as S
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/deepgemm-capture/v2"
@@ -89,10 +100,15 @@ MODELS = {"dsv4": (DSV4_LINEARS, "e8m0", "deepseek_v4"), "glm53": (B.DENSE, "f32
 #: DeepSeek-V4's `wo_a` at TP8: (H local groups, K = 8 heads x 512, N = o_lora_rank), its heads per group and head split
 EINSUM = (2, 8 * 512, 1024)
 HEADS_PER_GROUP, NOPE, ROPE, MAX_POS = 8, 448, 64, 4096
-#: either side of the branch point (M < 32), the decode batch of one and a prefill of 256
+#: the dense base of every linear's sweep: either side of the branch point (M < 32), the decode batch of one and a prefill of
+#: 256; `sweep_for` adds both sides of every launch-configuration boundary up to `MAX_M` (`deepgemm_schedule.sweep_ms`)
 LINEAR_M = (1, 8, 16, 31, 32, 64, 256)
 EINSUM_M = (1, 31, 64)
 QUICK_LINEAR_M, QUICK_EINSUM_M = (1, 32), (1,)
+#: the largest swept batch: vLLM's default `max_num_seqs` on this class of GPU
+MAX_M = 1024
+#: every row is compared up to this M; past it `sample_rows` picks the compared rows
+FULL_ROWS = 256
 #: DeepSeek-V4's e8m0 scale bytes: 2^-15 .. 2^-3
 E8M0_LO, E8M0_HI = 112, 124
 #: GLM-5.3 block scales planted on the first blocks (each with a 448 in it, so amax / 448 is about the scale): a power of two, one and
@@ -352,11 +368,12 @@ def linear_launches(work: Path, model: str, name: str, K: int, N: int, Ms: tuple
                   "deterministic": _equal(out1, out2), "out_dtype": str(out1.dtype)}
         launch["operands_ok"] = launch["branch_ok"] and branch_operands_ok(calls1, branch, x, layer, out1) and out1.dtype == torch.bfloat16
         launches.append(launch)
-        arrays = {"x": B._u16(x), "out": B._u16(out1)}
+        rows = sample_rows(M)
+        arrays = {"x": B._u16(x)[rows], "out": B._u16(out1)[rows]}
         if branch == "deepgemm":
             q, s = calls1[0]["out"]
-            arrays |= {"q": B._u8(q), "s": B._u32(s)}
-        job = {"phase": "linear", "model": model, "case": name, "K": K, "N": N, "M": M, "branch": branch,
+            arrays |= {"q": B._u8(q)[rows], "s": B._u32(s)[rows]}
+        job = {"phase": "linear", "model": model, "case": name, "K": K, "N": N, "M": M, "branch": branch, "row_map": rows,
                "paths": {**B._save(d / f"M{M}", **arrays), "w": weights["w"], "ws": weights["ws"]}}
         jobs += row_jobs(job, N * K // 32)
     del w, ws, layer
@@ -372,10 +389,21 @@ def reference_rows(M: int) -> list[int]:
     return sorted({r for r in (0, 2, 3, 4, M - 1) if r < M})
 
 
+def sample_rows(M: int) -> list[int]:
+    """Every row up to `FULL_ROWS`; past that the compared sample: the planted rows (0..4), both sides of every multiple of 64
+    (each possible block_m tile edge) and the last.  The kernel's per-word math is partition-invariant (no split-K, k ascending),
+    so the sample is economy, not doubt; the launch configuration itself is held by the jit phase."""
+    if M <= FULL_ROWS:
+        return list(range(M))
+    return sorted({0, 1, 2, 3, 4, M - 1} | {r for e in range(64, M, 64) for r in (e - 1, e)})
+
+
 def row_jobs(job: dict[str, Any], cost: int) -> list[dict[str, Any]]:
-    """Row chunks of one launch whose rows cost ``cost`` lane steps each; the reference runs on rows 0, 2, 3, 4 and M - 1."""
-    ref = reference_rows(job["M"])
-    return [{**job, "rows": [r0, r1], "reference_rows": [r for r in ref if r0 <= r < r1]} for r0, r1 in B._chunks(job["M"], cost)]
+    """Chunks of one launch's saved rows (``row_map``: their row numbers in the launch) whose rows cost ``cost`` lane steps each;
+    the reference runs where the map hits rows 0, 2, 3, 4 and M - 1."""
+    rmap, ref = job["row_map"], set(reference_rows(job["M"]))
+    return [{**job, "rows": [r0, r1], "reference_rows": [i for i in range(r0, r1) if rmap[i] in ref]}
+            for r0, r1 in B._chunks(len(rmap), cost)]
 
 
 def _tally(rec: dict[str, Any], want: np.ndarray, nf: np.ndarray, got: np.ndarray, where: dict[str, Any]) -> None:
@@ -419,25 +447,26 @@ def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
     from verity_vllm.program.registry import deepgemm as DG
 
     a = B._load(job["paths"])
-    K, N, deep = job["K"], job["N"], job["branch"] == "deepgemm"
+    K, N, deep, rmap = job["K"], job["N"], job["branch"] == "deepgemm", job["row_map"]
     rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     r0, r1 = job["rows"]
-    for r in range(r0, r1):
-        x = np.asarray(a["x"][r])
+    for i in range(r0, r1):
+        r = rmap[i]
+        x = np.asarray(a["x"][i])
         if deep:
             q, s = T.ue8m0_group_quant_row(x)
-            bad_q = not (np.array_equal(q, a["q"][r]) and np.array_equal(s, a["s"][r]))
+            bad_q = not (np.array_equal(q, a["q"][i]) and np.array_equal(s, a["s"][i]))
             rec["quant_rows"] += 1
             rec["quant_mismatch"] += bad_q
             if bad_q and rec["first_mismatch"] is None:
                 rec["first_mismatch"] = {"row": r, "quant": True}
-            xq, sx = np.asarray(a["q"][r]), np.asarray(a["s"][r])
+            xq, sx = np.asarray(a["q"][i]), np.asarray(a["s"][i])
         else:
             q, s = xq, sx = T.flashinfer_quant_1x128_row(x)
         want, nf = R.scaled_mm_fp8_block_row(xq, sx, a["w"], a["ws"], G=GROUP)
-        got = np.asarray(a["out"][r])
+        got = np.asarray(a["out"][i])
         _tally(rec, want, nf, got, {"row": r})
-        if r in job["reference_rows"]:
+        if i in job["reference_rows"]:
             _reference_coords(rec, K, xq, sx, a["w"], a["ws"], want, nf, got, {0, N - 1, (r * 7919) % N})
             fn = bind(DG.Fp8GroupQuantUe8m0, K=K, G=GROUP) if deep else bind(DG.FlashInferFp8Quant1x128, K=K)
             rec["reference_quant_rows"] += 1
@@ -525,8 +554,10 @@ def einsum_launches(work: Path, Ms: tuple[int, ...], seed: int) -> tuple[list[di
         launch["operands_ok"] = bool(ok)
         launches.append(launch)
         if ok:
-            job = {"phase": "einsum", "model": "dsv4", "case": "wo_a", "H": H, "K": K, "N": N, "M": M,
-                   "paths": {**B._save(d / f"M{M}", xq=B._u8(xq), sx=B._u32(sx), z=B._u16(z1).reshape(M, H, N)),
+            rows = sample_rows(M)
+            job = {"phase": "einsum", "model": "dsv4", "case": "wo_a", "H": H, "K": K, "N": N, "M": M, "row_map": rows,
+                   "paths": {**B._save(d / f"M{M}", xq=B._u8(xq)[rows], sx=B._u32(sx)[rows],
+                                       z=B._u16(z1).reshape(M, H, N)[rows]),
                              "w": weights["w"], "ws": weights["ws"]}}
             jobs += row_jobs(job, H * N * K // 32)
     del w, ws, layer
@@ -540,18 +571,19 @@ def compare_einsum(job: dict[str, Any]) -> dict[str, Any]:
     from verity_vllm.program.kernels import deepgemm_twins as T
 
     a = B._load(job["paths"])
-    H, K, N = job["H"], job["K"], job["N"]
+    H, K, N, rmap = job["H"], job["K"], job["N"], job["row_map"]
     w = np.asarray(a["w"]).reshape(H, N, K)
     ws = np.asarray(a["ws"]).reshape(H, cdiv(N, GROUP), K // GROUP)
     rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     r0, r1 = job["rows"]
-    for t in range(r0, r1):
-        want, nf = T.scaled_mm_fp8_block_grouped_row(a["xq"][t], a["sx"][t], w, ws, G=GROUP)
+    for i in range(r0, r1):
+        t = rmap[i]
+        want, nf = T.scaled_mm_fp8_block_grouped_row(a["xq"][i], a["sx"][i], w, ws, G=GROUP)
         for h in range(H):
-            got = np.asarray(a["z"][t, h])
+            got = np.asarray(a["z"][i, h])
             _tally(rec, want[h], nf[h], got, {"row": t, "group": h})
-            if t in job["reference_rows"]:
-                _reference_coords(rec, K, a["xq"][t, h], a["sx"][t, h], w[h], ws[h], want[h], nf[h], got, {0, N - 1, (t * 7919 + h) % N})
+            if i in job["reference_rows"]:
+                _reference_coords(rec, K, a["xq"][i, h], a["sx"][i, h], w[h], ws[h], want[h], nf[h], got, {0, N - 1, (t * 7919 + h) % N})
     return {"phase": "einsum", "model": job["model"], "case": job["case"], "M": job["M"], "rows": job["rows"], **rec}
 
 
@@ -562,11 +594,53 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
         return {"phase": job["phase"], "model": job["model"], "case": job["case"], "M": job.get("M"), "error": B._error(e)}
 
 
-# ------------------------------------------------------------------------------------------------------------------- jit and bind
-def jit(cache: Path) -> dict[str, Any]:
+# --------------------------------------------------------------------------------------------------------- schedule, jit and bind
+def sweep_for(K: int, N: int, sms: int, from_one: bool) -> tuple[int, ...]:
+    """One linear's batch sweep: `LINEAR_M` densely, both sides of every launch-configuration boundary and `MAX_M`
+    (`deepgemm_schedule.sweep_ms`).  Boundaries below the branch point can't launch DeepGEMM, so the scan starts at 32 unless
+    `--batch-invariant` sends every M there (``from_one``)."""
+    return S.sweep_ms(LINEAR_M, N, K, num_sms=sms, lo=1 if from_one else 32, hi=MAX_M)
+
+
+def einsum_sweep(sms: int) -> tuple[int, ...]:
+    """The einsum's batch sweep: `EINSUM_M` densely, every boundary of its batched GEMM from M = 1, and `MAX_M`."""
+    H, K, N = EINSUM
+    return S.sweep_ms(EINSUM_M, N, K, num_sms=sms, num_groups=H, batched=True, lo=1, hi=MAX_M)
+
+
+def schedule(launches: list[dict[str, Any]], sms: int) -> dict[str, Any]:
+    """Each DeepGEMM launch's predicted layout (`deepgemm_schedule.best_config`) and the distinct template-argument lists the JIT
+    must have generated, exactly: the jit phase holds the cache to these."""
+    preds: list[list[str]] = []
+    configs: dict[str, Any] = {}
+    for x in launches:
+        if x["phase"] == "linear" and x["branch"] == "deepgemm":
+            cfg = S.best_config(x["M"], x["N"], x["K"], num_sms=sms)
+            args = S.template_args(x["N"], x["K"], num_groups=1, num_sms=sms, gemm_type="Normal", config=cfg)
+        elif x["phase"] == "einsum":
+            cfg = S.best_config(x["M"], x["N"], x["K"], num_sms=sms, num_groups=x["H"], batched=True)
+            args = S.template_args(x["N"], x["K"], num_groups=x["H"], num_sms=sms, gemm_type="Batched", config=cfg)
+        else:
+            continue
+        configs[_case(x)] = cfg._asdict()
+        if args not in preds:
+            preds.append(args)
+    return {"num_sms": sms, "configs": configs, "predicted": preds, "ok": True}
+
+
+def _args_match(gen: list[str], pred: list[str]) -> bool:
+    """A generated instantiation against a prediction: every argument exact, except the compiled dims m, n, k (indices 1-3), where
+    the JIT may leave a dim runtime ("0": `get_compiled_dim`'s default is m runtime, and `set_ignore_compile_dims` zeroes all
+    three) or compile one the prediction left runtime."""
+    return len(gen) == len(pred) and all(g == p or (i in (1, 2, 3) and (g == "0" or (p == "0" and g.isdigit())))
+                                         for i, (g, p) in enumerate(zip(gen, pred)))
+
+
+def jit(cache: Path, predicted: list[list[str]]) -> dict[str, Any]:
     """Every kernel DeepGEMM's JIT generated under ``cache`` (one directory per kernel, its `kernel.cu`), as its template and its
-    arguments (sm90_fp8_gemm_1d2d.hpp:34-68): each GEMM `sm90_fp8_gemm_1d2d_impl` at BLOCK_K 128, Normal or Batched, bf16 out and
-    the identity epilogue; besides them only `transpose_fp32` (smxx_layout.hpp:25-37)."""
+    arguments (sm90_fp8_gemm_1d2d.hpp:34-68): each GEMM `sm90_fp8_gemm_1d2d_impl` at BLOCK_K 128, Normal or Batched, bf16 out,
+    the identity epilogue, and one of the launches' ``predicted`` argument lists; every prediction generated (``unlaunched``
+    empty); besides the GEMMs only `transpose_fp32` (smxx_layout.hpp:25-37)."""
     kernels = {}
     for f in sorted(glob.glob(str(cache / "**" / "kernel.cu"), recursive=True)):
         m = JIT.search(Path(f).read_text(errors="replace"))
@@ -574,12 +648,15 @@ def jit(cache: Path) -> dict[str, Any]:
         k = {"impl": name, "args": args}
         k["ok"] = name == LAYOUT_IMPL or (name == GEMM_IMPL and len(args) == 20 and args[7] == str(GROUP)
                                           and args[17] in ("GemmType::Normal", "GemmType::Batched")
-                                          and args[18] == "cutlass::bfloat16_t" and args[19] == "epilogue::transform::EpilogueIdentity")
+                                          and args[18] == "cutlass::bfloat16_t" and args[19] == "epilogue::transform::EpilogueIdentity"
+                                          and any(_args_match(args, p) for p in predicted))
         kernels[str(Path(f).relative_to(cache))] = k
     gemms = [k for k in kernels.values() if k["impl"] == GEMM_IMPL]
+    unlaunched = [p for p in predicted if not any(_args_match(k["args"], p) for k in gemms)]
     return {"files": len(kernels), "gemms": len(gemms), "layouts": sum(k["impl"] == LAYOUT_IMPL for k in kernels.values()),
             "kernels": kernels, "gemm_types": sorted({k["args"][17] for k in gemms if k["ok"]}),
-            "ok": bool(gemms) and all(k["ok"] for k in kernels.values())}
+            "predicted": len(predicted), "unlaunched": unlaunched,
+            "ok": bool(gemms) and not unlaunched and all(k["ok"] for k in kernels.values())}
 
 
 def bind_check() -> dict[str, Any]:
@@ -663,6 +740,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def _verdict(doc: dict[str, Any]) -> bool:
     launches, t = doc["launches"], doc["totals"]
     return (doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("ok") is True and doc["mufu"].get("rcp_ok") is True
+            and doc["schedule"].get("ok") is True
             and doc["jit"].get("ok") is True and doc["jit"].get("gemm_types") == ["GemmType::Batched", "GemmType::Normal"]
             and doc["bind"].get("ok") is True and {x["phase"] for x in launches} == {"linear", "weights", "einsum"}
             and {x["branch"] for x in launches if x["phase"] == "linear"} == ({"deepgemm"} if doc["batch_invariant"] else {"deepgemm", "flashinfer"})
@@ -718,8 +796,9 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
         if "linear" in only:
             for i, (model, name, K, N) in enumerate(linear_cases()):
                 try:
+                    Ms = QUICK_LINEAR_M if quick else sweep_for(K, N, doc["gate"]["sms"], batch_invariant)
                     with model_config(cfg, MODELS[model][2]):
-                        launches, ljobs = linear_launches(work, model, name, K, N, QUICK_LINEAR_M if quick else LINEAR_M, 7100 + i,
+                        launches, ljobs = linear_launches(work, model, name, K, N, Ms, 7100 + i,
                                                           batch_invariant)
                     doc["launches"] += launches
                     jobs += ljobs
@@ -732,7 +811,7 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
         if "einsum" in only:
             try:
                 with model_config(cfg, MODELS["dsv4"][2]):
-                    launches, ejobs = einsum_launches(work, QUICK_EINSUM_M if quick else EINSUM_M, 9100)
+                    launches, ejobs = einsum_launches(work, QUICK_EINSUM_M if quick else einsum_sweep(doc["gate"]["sms"]), 9100)
                 doc["launches"] += launches
                 jobs += ejobs
                 for x in launches[1:]:
@@ -741,9 +820,16 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
             except Exception as e:  # noqa: BLE001
                 doc["errors"]["einsum/dsv4/wo_a"] = B._error(e)
                 print(f"[deepgemm] einsum ERROR {doc['errors']['einsum/dsv4/wo_a'][:400]}", flush=True)
-    doc["jit"] = jit(Path(env["DG_JIT_CACHE_DIR"]))
+    try:
+        doc["schedule"] = schedule(doc["launches"], doc["gate"]["sms"])
+    except Exception as e:  # noqa: BLE001
+        doc["errors"]["schedule"] = B._error(e)
+        doc["schedule"] = {"predicted": [], "ok": False}
+    print(f"[deepgemm] schedule configs={len(doc['schedule'].get('configs', {}))} "
+          f"predicted={len(doc['schedule']['predicted'])} ok={doc['schedule']['ok']}", flush=True)
+    doc["jit"] = jit(Path(env["DG_JIT_CACHE_DIR"]), doc["schedule"]["predicted"])
     print(f"[deepgemm] jit files={doc['jit']['files']} gemms={doc['jit']['gemms']} layouts={doc['jit']['layouts']} "
-          f"types={doc['jit']['gemm_types']} ok={doc['jit']['ok']}", flush=True)
+          f"types={doc['jit']['gemm_types']} unlaunched={len(doc['jit']['unlaunched'])} ok={doc['jit']['ok']}", flush=True)
     try:
         doc["bind"] = bind_check()
     except Exception as e:  # noqa: BLE001
