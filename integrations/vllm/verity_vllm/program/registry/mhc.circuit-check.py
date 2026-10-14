@@ -14,11 +14,13 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     e = dict(EPS=1e-6, HC_EPS=1e-6)
     return [
         # DeepSeek-V4-Pro's served statics (HC 4, H 7168, Sinkhorn 20, the eps 1e-6): the Sinkhorn, the mixes at 4 splits (at most
-        # 16 tokens), 112 (the TF32 GEMM at most 64 tokens) and 28 (layer 0's broadcast), the fused RMSNorm, the post, one split of
-        # mhc_fused, one split and the whole of the TF32 prenorm GEMM, the broadcast pre and hc_head
+        # 16 tokens), 112 (the TF32 GEMM at most 64 tokens), 8 (both GEMMs at the 1024-token envelope) and 28 (layer 0's
+        # broadcast), the fused RMSNorm, the post, one split of mhc_fused, one split and the whole of the TF32 prenorm GEMM
+        # (shortest and longest served splits), the broadcast pre and hc_head
         ("MhcSinkhorn_v1", lambda: bind(mhc.MhcSinkhorn, HC=4, REPEAT=20, EPS=1e-6)),
         ("MhcMixes_v1", lambda: bind(mhc.MhcMixes, HC=4, NS=4, K=28672, REPEAT=20, **e)),
         ("MhcMixes_v1/ns112", lambda: bind(mhc.MhcMixes, HC=4, NS=112, K=28672, REPEAT=20, **e)),
+        ("MhcMixes_v1/ns8", lambda: bind(mhc.MhcMixes, HC=4, NS=8, K=28672, REPEAT=20, **e)),
         ("MhcMixes_v1/broadcast", lambda: bind(mhc.MhcMixes, HC=4, NS=28, K=7168, REPEAT=20, **e)),
         ("MhcPreNorm_v1", lambda: bind(mhc.MhcPreNorm, HC=4, H=7168, TN=64, EPS=1e-6)),
         ("MhcPreNormBroadcast_v1", lambda: bind(mhc.MhcPreNormBroadcast, HC=4, H=7168, TN=64, EPS=1e-6)),
@@ -27,7 +29,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("MhcPost_v1", lambda: bind(mhc.MhcPost, HC=4, N=7168)),
         ("MhcFusedSplit_v1", lambda: bind(mhc.MhcFusedSplit, HC=4, N=1792, OUT=24, TH=256)),
         ("MhcPrenormTf32Split_v1", lambda: bind(mhc.MhcPrenormTf32Split, K=256, OUT=24)),
+        ("MhcPrenormTf32Split_v1/k3584", lambda: bind(mhc.MhcPrenormTf32Split, K=3584, OUT=24)),
         ("MhcPrenormTf32_v1", lambda: bind(mhc.MhcPrenormTf32, K=7168, NS=28, OUT=24)),
+        ("MhcPrenormTf32_v1/ns8", lambda: bind(mhc.MhcPrenormTf32, K=7168, NS=8, OUT=24)),
         # Wiring-only layer-0 copy; the served shape is HC=4,H=7168.
         ("MhcResidualBroadcast_v1", lambda: bind(mhc.MhcResidualBroadcast, HC=2, H=8)),
         ("MhcPreBroadcast_v1", lambda: bind(mhc.MhcPreBroadcast, HC=4, H=7168, NS=28, TN=64, REPEAT=20, **e)),

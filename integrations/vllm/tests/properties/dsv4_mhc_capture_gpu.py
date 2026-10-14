@@ -14,7 +14,8 @@ A phase that raises records its error and fails the verdict without stopping the
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
   stack      the versions (torch, Triton, TileLang and vLLM's TileLang pass configs, DeepGEMM); `is_deep_gemm_supported()`, so
              above 16 tokens the served GEMM is DeepGEMM's and not `_tilelang_hc_prenorm_gemm`; vLLM's `compute_num_split` on this
-             device equals `mhc_twin.tf32_num_split` at every token count here.
+             device equals `mhc_twin.tf32_num_split` at every token count here and on both sides of every 64-token grid edge to
+             the 1024 envelope (the split count moves only at a grid edge, so those agreements pin the whole schedule).
   mufu       the special-function words the Definitions read: `rsqrt.approx.ftz.f32` on every word of [1, 4) against core's RSQ
              table (captured on sm_89) and `rsqrt.approx.f32` on a sweep and the specials against `RsqrtApprox_v1`;
              `ex2.approx.ftz.f32` on [0, 1) against the EX2 table; `torch.exp` (libdevice `expf`, no fast-math) on a sweep
@@ -26,8 +27,10 @@ A phase that raises records its error and fails the verdict without stopping the
              then `mhc_pre_big_fuse_with_norm_tilelang`), twice: residual', the split partials (read where the big fuse takes
              them), post', comb' and the layer input against `mhc_twin.fused_post_pre` (`MhcFusedPostPre_v1`).
   tf32       the same wrapper at T in TF32_T (`mhc_post_tilelang`, DeepGEMM over `tf32_num_split(T, 28672)` splits, the big
-             fuse) against `mhc_twin.post_pre_tf32` on the candidate step (`MhcPostPreTf32_v1`).
-  broadcast  `mhc_pre_broadcast_tilelang` (layer 0, DeepGEMM at every token count) at T in BROADCAST_T on the model's own
+             fuse) against `mhc_twin.post_pre_tf32` on the candidate step (`MhcPostPreTf32_v1`): both sides of the first two
+             grid edges, then the first token count of each split-count regime to the 1024 envelope (TF32_T's comment).
+  broadcast  `mhc_pre_broadcast_tilelang` (layer 0, DeepGEMM at every token count) at T in BROADCAST_T (the regime firsts and
+             the envelope, as TF32_T) on the model's own
              `fn_broadcast` (`fn.view(24, 4, H).sum(1)`, model.py:1655): residual_out the four copies of x, and the partials,
              post, comb and layer input against `mhc_twin.pre_broadcast` (`MhcPreBroadcast_v1`).
   head       `hc_head_fused_kernel_tilelang` at T in HEAD_T against `mhc_twin.hc_head` (`HcHead_v1`).
@@ -94,10 +97,16 @@ OUT = HC * (2 + HC)
 TH, TH_HEAD, TN, NS_SMALL, SMS = 256, 128, 64, 4, 132
 STATICS = {"HC": HC, "H": H, "TH": TH, "TH_HEAD": TH_HEAD, "TN": TN, "REPEAT": REPEAT, "EPS": EPS, "HC_EPS": HC_EPS}
 FUSED_T = (1, 2, 7, 8, 9, 15, 16)
-TF32_T = (17, 64, 65, 128, 129)
-BROADCAST_T = (1, 16, 64, 65)
+#: vLLM's LLM decode-batch default on this device (arg_utils' max_num_seqs envelope at cc 9.0)
+ENVELOPE = 1024
+#: both sides of the first two grid edges densely, then only the first token count of each later split-count regime
+#: (`mhc_twin.tf32_split_schedule`: the split count moves only at a 64-token grid edge, and every token count between two
+#: edges runs one launch configuration, so one case covers the regime) and the envelope; `stack` pins the split count on
+#: both sides of every grid edge to the envelope
+TF32_T = (17, 64, 65, 128, 129) + tuple(T for T, _ in W.tf32_split_schedule(HC * H, SMS, ENVELOPE) if T > 129) + (ENVELOPE,)
+BROADCAST_T = (1, 16, 64, 65) + tuple(T for T, _ in W.tf32_split_schedule(H, SMS, ENVELOPE) if T > 65) + (ENVELOPE,)
 HEAD_T = (1, 7, 16, 64, 129)
-QUICK = {"fused": (1, 16), "tf32": (17, 65), "broadcast": (1,), "head": (1, 16)}
+QUICK = {"fused": (1, 16), "tf32": (17, 65, ENVELOPE), "broadcast": (1, ENVELOPE), "head": (1, 16)}
 PHASES = ("fused", "tf32", "broadcast", "head")
 SEED = 20261013
 TOTALS = ("words", "mismatch", "reference", "ref_words", "ref_mismatch")
@@ -153,7 +162,8 @@ def stack(plan: dict[str, tuple[int, ...]]) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         rec["deep_gemm"] = {"error": _error(e)}
     splits = {}
-    for T in sorted(set(plan["tf32"]) | set(plan["broadcast"]) | {1, 16, 17, 256, 257, 1024}):
+    edges = {t for g in range(1, ENVELOPE // 64 + 1) for t in (64 * g, 64 * g + 1) if t <= ENVELOPE}
+    for T in sorted(set(plan["tf32"]) | set(plan["broadcast"]) | {1, 16, 17} | edges):
         for K in (HC * H, H):
             splits[f"T{T}/K{K}"] = [int(TK.compute_num_split(64, K, -(-T // 64))), W.tf32_num_split(T, K, SMS)]
     rec["splits"] = splits
@@ -763,6 +773,7 @@ def served_bindings() -> dict[str, Any]:
            "MhcFusedSplit_v1{4,1792,24,256}": lambda: bind(R.MhcFusedSplit, HC=HC, N=H // NS_SMALL, OUT=OUT, TH=TH),
            "MhcFusedPostPre_v1{4,7168,4,256,64}": lambda: bind(R.MhcFusedPostPre, HC=HC, H=H, NS=NS_SMALL, TH=TH, TN=TN, **norm),
            "MhcPrenormTf32Split_v1{256,24}": lambda: bind(R.MhcPrenormTf32Split, K=256, OUT=OUT),
+           "MhcPrenormTf32Split_v1{3584,24}": lambda: bind(R.MhcPrenormTf32Split, K=3584, OUT=OUT),  # the longest served split (NS 8)
            "HcHead_v1{4,7168,128}": lambda: bind(R.HcHead, HC=HC, H=H, TH=TH_HEAD, EPS=EPS, HC_EPS=HC_EPS)}
     for K, NS in sorted({(HC * H, W.tf32_num_split(T, HC * H, SMS)) for T in TF32_T} | {(H, W.tf32_num_split(T, H, SMS)) for T in BROADCAST_T}):
         out[f"MhcPrenormTf32_v1{{{K},{NS},24}}"] = lambda K=K, NS=NS: bind(R.MhcPrenormTf32, K=K, NS=NS, OUT=OUT)

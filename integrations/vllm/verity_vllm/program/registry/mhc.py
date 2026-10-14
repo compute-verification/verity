@@ -67,7 +67,11 @@ Registered functions (all `Name_v1`; OUT = HC * (2 + HC), the 24 mixes; `yp`, `r
 
 DeepSeek-V4-Pro's statics: HC 4, H 7168, REPEAT 20, EPS (`rms_eps`, and `norm_eps`, the same `rms_norm_eps`) and HC_EPS
 (`hc_pre_eps` and `hc_sinkhorn_eps`, both `hc_eps`) 1e-6, TH 256 (`mhc_fused`) and 128 (hc_head), TN 64 (the fused norm), NS 4
-at most 16 tokens, 112 (T <= 64), 66 (T <= 128), ... above, 28 for the broadcast.  `hc_post_mult_value` 2.0 is `s + s`.
+at most 16 tokens.  Above, NS is `compute_num_split(64, K, cdiv(T, 64))` on 132 SMs, changing only at a 64-token grid edge: at
+K 28672 it is 112 (T <= 64), 66 (<= 128), 44 (<= 192), 33 (<= 256), 26 (<= 320), 22 (<= 384), 18 (<= 448), 16 (<= 512),
+14 (<= 576), 13 (<= 640), 12 (<= 704), 11 (<= 768), 10 (<= 832), 9 (<= 896) and 8 (<= 1024, vLLM's decode-batch envelope);
+the broadcast's K 7168 caps at 28 (T <= 256) and then runs the same 26 .. 8 regimes (`mhc_twin.tf32_split_schedule`).
+`hc_post_mult_value` 2.0 is `s + s`.
 """
 from __future__ import annotations
 

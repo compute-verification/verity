@@ -378,9 +378,24 @@ def test_served_splits() -> None:
     K = 4 * 7168
     assert [W.tf32_num_split(T, K) for T in (17, 64, 65, 128, 129, 1024)] == [112, 112, 66, 66, 44, 8]
     assert [W.tf32_num_split(T, 7168) for T in (1, 64, 320, 1024)] == [28, 28, 26, 8]
-    for K_, NS in ((K, 112), (K, 66), (K, 44), (7168, 28), (7168, 26)):
-        ranges = M.tf32_ranges(K_, NS)
-        assert sum(n for _, n in ranges) == K_ and ranges[0][0] == 0
-        assert all(o + n == o2 for (o, n), (o2, _) in zip(ranges, ranges[1:]))
+    assert W.tf32_split_schedule(K) == [(1, 112), (65, 66), (129, 44), (193, 33), (257, 26), (321, 22), (385, 18), (449, 16),
+                                        (513, 14), (577, 13), (641, 12), (705, 11), (769, 10), (833, 9), (897, 8)]
+    assert W.tf32_split_schedule(7168) == [(1, 28)] + W.tf32_split_schedule(K)[4:]
+    for K_ in (K, 7168):
+        for _, NS in W.tf32_split_schedule(K_):
+            ranges = M.tf32_ranges(K_, NS)
+            assert sum(n for _, n in ranges) == K_ and ranges[0][0] == 0
+            assert all(o + n == o2 for (o, n), (o2, _) in zip(ranges, ranges[1:]))
     assert {n for _, n in M.tf32_ranges(K, 112)} == {256}
     assert {n for _, n in M.tf32_ranges(K, 66)} == {384, 448}
+    assert {n for _, n in M.tf32_ranges(K, 8)} == {3584} and {n for _, n in M.tf32_ranges(7168, 8)} == {896}
+
+
+def test_the_schedule_covers_every_decode_batch() -> None:
+    """`tf32_split_schedule` is exhaustive to the 1024-token envelope: the split count at every T is its regime's, so the
+    capture's one case per regime covers every decode batch."""
+    for K_ in (4 * 7168, 7168):
+        sched = W.tf32_split_schedule(K_)
+        for T in range(1, 1025):
+            want = [ns for t0, ns in sched if t0 <= T][-1]
+            assert W.tf32_num_split(T, K_) == want, (K_, T)

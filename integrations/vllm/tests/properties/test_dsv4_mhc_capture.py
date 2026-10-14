@@ -287,18 +287,26 @@ def test_the_source_scan_wants_each_kernel_and_no_fast_math(tmp_path, monkeypatc
 def test_the_programs_bind_at_dsv4s_statics() -> None:
     got = X.bind_check()
     assert got["ok"], {k: v for k, v in got["bindings"].items() if v is not True}
-    for name in ("MhcFusedPostPre_v1{4,7168,4,256,64}", "MhcPostPreTf32_v1{4,7168,112,64}", "MhcPreBroadcast_v1{4,7168,28,64}",
-                 "HcHead_v1{4,7168,128}", "HopperTf32WgmmaDot8_v1"):
+    for name in ("MhcFusedPostPre_v1{4,7168,4,256,64}", "MhcPostPreTf32_v1{4,7168,112,64}", "MhcPostPreTf32_v1{4,7168,33,64}",
+                 "MhcPostPreTf32_v1{4,7168,8,64}", "MhcPreBroadcast_v1{4,7168,28,64}", "MhcPreBroadcast_v1{4,7168,8,64}",
+                 "MhcPrenormTf32Split_v1{3584,24}", "HcHead_v1{4,7168,128}", "HopperTf32WgmmaDot8_v1"):
         assert name in got["bindings"], name
 
 
 def test_the_statics_are_dsv4s() -> None:
     """DeepSeek-V4-Pro's config (hidden 7168, hc_mult 4, 20 Sinkhorn iterations, hc_eps and rms_norm_eps 1e-6) and the split
-    counts each served token count takes."""
+    counts each served token count takes: both sides of the first two grid edges densely, then exactly the first token count
+    of each later split-count regime (`tf32_split_schedule`) and the 1024 envelope — the schedule's edges, not every M."""
     assert (X.H, X.HC, X.REPEAT, X.HC_EPS, X.EPS, X.OUT) == (7168, 4, 20, 1e-6, 1e-6, 24)
-    assert max(X.FUSED_T) == 16 and min(X.TF32_T) == 17
-    assert [W.tf32_num_split(T, X.HC * X.H, X.SMS) for T in X.TF32_T] == [112, 112, 66, 66, 44]
-    assert [W.tf32_num_split(T, X.H, X.SMS) for T in X.BROADCAST_T] == [28, 28, 28, 28]
+    assert max(X.FUSED_T) == 16 and min(X.TF32_T) == 17 and X.ENVELOPE == 1024
+    assert X.TF32_T == (17, 64, 65, 128, 129, 193, 257, 321, 385, 449, 513, 577, 641, 705, 769, 833, 897, 1024)
+    assert X.BROADCAST_T == (1, 16, 64, 65, 257, 321, 385, 449, 513, 577, 641, 705, 769, 833, 897, 1024)
+    assert set(X.TF32_T[5:-1]) == {T for T, _ in W.tf32_split_schedule(X.HC * X.H, X.SMS) if T > 129}
+    assert set(X.BROADCAST_T[4:-1]) == {T for T, _ in W.tf32_split_schedule(X.H, X.SMS) if T > 65}
+    assert [W.tf32_num_split(T, X.HC * X.H, X.SMS) for T in X.TF32_T] == \
+        [112, 112, 66, 66, 44, 33, 26, 22, 18, 16, 14, 13, 12, 11, 10, 9, 8, 8]
+    assert [W.tf32_num_split(T, X.H, X.SMS) for T in X.BROADCAST_T] == \
+        [28, 28, 28, 28, 26, 22, 18, 16, 14, 13, 12, 11, 10, 9, 8, 8]
 
 
 # ----------------------------------------------------------------------------------------------------------------- verdict
@@ -397,14 +405,14 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["digest"] == digest_of(doc) and doc["ok"] is False and not doc["errors"] and doc["tf32_go"] is False
     assert {c: v["ok"] for c, v in doc["cases"].items()} == {
-        "mufu/expf": True, "fused/T1": True, "fused/T16": False, "tf32/T17": False, "tf32/T65": False, "broadcast/T1": False,
-        "head/T1": True, "head/T16": False}
+        "mufu/expf": True, "fused/T1": True, "fused/T16": False, "tf32/T17": False, "tf32/T65": False, "tf32/T1024": False,
+        "broadcast/T1": False, "broadcast/T1024": False, "head/T1": True, "head/T16": False}
     assert doc["totals"]["mismatch"] == 1 and doc["totals"]["ref_mismatch"] >= 1 and doc["totals"]["reference"] > 0
     assert doc["env"]["VLLM_USE_DEEP_GEMM"] == "1" and doc["env"]["TILELANG_CACHE_DIR"].endswith("tilelang")
     printed = capsys.readouterr().out
     assert f"DSV4-MHC TF32 NO-GO step=['{X.CANDIDATE_NAME}'] rounding=['rne'] sqrsum=['lo']" in printed
     assert f"DSV4-MHC-CAPTURE NO-GO {doc['digest']}" in printed
-    assert "no-go cases=['fused/T16', 'tf32/T17', 'tf32/T65', 'broadcast/T1', 'head/T16']" in printed
+    assert "no-go cases=['fused/T16', 'tf32/T17', 'tf32/T65', 'tf32/T1024', 'broadcast/T1', 'broadcast/T1024', 'head/T16']" in printed
 
 
 def test_the_gate_failure_writes_a_sealed_record(tmp_path, monkeypatch, capsys) -> None:
