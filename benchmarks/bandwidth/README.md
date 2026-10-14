@@ -39,6 +39,36 @@ under `vk`, so a generated store exercises the same work. Its salt is the device
 reference.COMMITMENT, device)` for the device the challenger read, from a secret drawn fresh in each run and never
 written out, as the verifier requires (`audit.Verifier` refuses any other salt).
 
+## The certified PCIe stream and the chip's stores
+
+The side link and the chip are the two terms of `c` and `S` that the audit's bound charges a device for. These files
+measure what is left of each on the card.
+
+- `stream.py` is `stream/v1`, the challenger's stream: AES-128-CTR under a key the challenger derives from its own
+  randomness under the window's nonce, permuted so that every warp load on the device is 512 contiguous bytes, and
+  absorbed into `D`, a BLAKE3 tree keyed from σ, which the prover commits beside the root. The verifier opens sampled
+  chunks against `D` without hashing the stream. `fold` is the cheaper leaf `stream-fold/v1`, each 1 KiB chunk of the
+  stream to the XOR of its AES blocks, which the verifier checks whole. Its docstring is the format, and
+  `tests/stream_vectors.json` pins it (`python3 stream.py OUT` writes them).
+- `stream_host.cpp` generates the keystream on the host (AVX-512 VAES, with non-temporal stores for pinned memory;
+  AES-NI; OpenSSL for comparison). `stream.cu` (`bwstream`) is the device's absorb and the streamed window, built with
+  `tagger.cu`, and its modes measure the link's ceilings, HBM reads beside the link, the generators, the sustained
+  generate-and-copy pipe, the absorb, windows with and without the stream, and the fold read zero copy on a few SMs
+  beside the tag pass (`fold`), behind a frontier the host's generators advance after σ (`foldlive`), and from the
+  challenger's own process beside the prover's (`foldtwo`, under an MPS daemon that `run_stream.sh` starts with
+  `MPS=1`; `--challenger-first` makes the challenger's context and buffers before the prover's). Their transports:
+  zero copy from non-temporal or, with `--temporal`, cached generator stores (`--clwb`: written back and left clean),
+  or the copy engines into HBM (`--dma-piece-kib`, `--dma-streams`; `carry` times that path alone). `attack` is
+  `foldtwo`'s premise tried as an attack, the prover's process reading the challenger's mapped buffer through the CUDA
+  API, the OS and a kernel; `egress` is D2H against H2D and the timing a device can give its egress. `run_stream.sh` is one Attempt: the gates first (the generators against the
+  vectors, the absorb and both fold kernels against the reference, the tag pass's root), then the timings. Its header
+  lists the environment and outputs.
+- `chip.cu` (`bwchip`) measures the on-chip stores that S_chip has to cover: the instruction caches (code-footprint
+  sweeps over PTX that it writes and ptxas assembles), whether code and constants share a cache, and where the evicted
+  constants come back from; the constant cache, the TLBs, L1 and L2 retention; and how many uniform registers a warp
+  has (`chip_ur.py` rewrites a cubin's uniform-register fields past what ptxas allocates). `run_chip.sh` is one
+  Attempt, and it refuses any cubin whose SASS doesn't hold the code that its sweep says it does.
+
 `tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 and BLAKE3 constants read out
 of `tagger.cu`. It checks them against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
 `tests/test_prover.py` checks, with a fake tagger, that every window the harness runs is prepared before its seed and is
