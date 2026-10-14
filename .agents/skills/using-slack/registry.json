@@ -281,8 +281,7 @@
       "usergroup": "S0C9ZLL7T88",
       "linear": "BENCH",
       "owns": [
-        "benchmarks/harness/",
-        "benchmarks/specs/"
+        "benchmarks/harness/"
       ]
     },
     {
