@@ -357,7 +357,10 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
                 return unsupported(node, f"the {'w2' if routed else 'w13'} launch's A is not written by "
                                          f"{K_SILU_QUANT if routed else 'the routed input quant'}", writer=s.quant.id)
             try:
-                spec = T.moe_expert_fp8_gemm_spec(tp, E, K, N, G, s.KB, bool(launch.enter.constexprs.get("SWAP_AB")), routed=routed)
+                c = launch.enter.constexprs
+                spec = T.moe_expert_fp8_gemm_spec(tp, E, K, N, G, s.KB, bool(c.get("SWAP_AB")),
+                                                  BM=c.get("BLOCK_SIZE_M"), BN=c.get("BLOCK_SIZE_N"),
+                                                  WARPS=launch.enter.num_warps, routed=routed)
             except T.UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered block-FP8 fused-MoE binding: {e}")
             launched[routed] = (s, r[2], spec)

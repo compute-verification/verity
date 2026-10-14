@@ -4,11 +4,11 @@ events shaped as vLLM d9105ea80 issues them for GLM-5.3 at a TP8 rank on the H20
 cutlass block-FP8 linears.
 
 It checks that the scope claims every event and binds the gate (both tiers, through the profile's `gate_spec`), the shared expert's
-two quantised linears and SiLU, the sigmoid router, the routed input quant, both pair forms on Hopper's tuned wgmma tiles, the fused
-SiLU quant and `moe_sum`, with operand rows the Definitions' parameters fit, and that the combine after the op is `ResidualAdd_v1`;
-and that it refuses, by name, a missing gate Definition, an unattested cuteDSL gate, a missing attestation, a non-wgmma tile, another
-router, another block, the unfused SiLU quant and shared experts that read another input; and that `run_facts` attests the cuteDSL
-gate tier only when a gate is eligible for it.
+two quantised linears and SiLU, the sigmoid router, the routed input quant, both pair forms on Hopper's tuned tiles with #1944's
+MMAv2/QGMMA step selection (`fp8_moe.sm90_dot`), the fused SiLU quant and `moe_sum`, with operand rows the Definitions' parameters
+fit, and that the combine after the op is `ResidualAdd_v1`; and that it refuses, by name, a missing gate Definition, an unattested
+cuteDSL gate, a missing attestation, a bad k32 pin, another router, another block, the unfused SiLU quant and shared experts that
+read another input; and that `run_facts` attests the cuteDSL gate tier only when a gate is eligible for it.
 """
 from __future__ import annotations
 
@@ -242,15 +242,18 @@ def _reasons(res) -> list:
     return [getattr(r, "reason", r) for r in res if isinstance(r, Unsupported)]
 
 
-@pytest.mark.parametrize("M,gate", [(4, GATE_CUBLAS), (32, GATE_CUBLAS), (4, GATE_CUTEDSL), (16, GATE_CUTEDSL)])
-def test_the_shared_scope_folds_the_gate_the_shared_expert_the_router_and_the_routed_pairs_on_the_tuned_wgmma_tiles(M, gate):
+#: #1944's tile-dependent e4m3 step (`fp8_moe.sm90_dot`): the M=4 tile (8, 64) puts the dot's N at 8 under SWAP_AB, MMAv2;
+#: the M=16 (16, 64) and M=32 (16, 128) tiles are wgmma, QGMMA
+@pytest.mark.parametrize("M,gate,dot", [(4, GATE_CUBLAS, "HopperE4m3MmaV2Dot32_v1"), (32, GATE_CUBLAS, "HopperE4m3QgmmaDot32_v1"),
+                                        (4, GATE_CUTEDSL, "HopperE4m3MmaV2Dot32_v1"), (16, GATE_CUTEDSL, "HopperE4m3QgmmaDot32_v1")])
+def test_the_shared_scope_folds_the_gate_the_shared_expert_the_router_and_the_routed_pairs_on_the_tuned_tiles(M, gate, dot):
     res, se = _resolve(M, gate=gate, ctx_kw={"ll_bf16": True} if gate == GATE_CUTEDSL else None)
     assert len(res) == 2 and isinstance(res[0], Group), _reasons(res)
     g = res[0]
     assert g.consumed == tuple(sorted(se.roots[0].ids())) and g.pattern == "moe.fused_shared_experts.pairwise.fp8"
     computes = [p for p in g.parts if isinstance(p, Compute)]
     bm, bn, kb = TUNED[min(TUNED, key=lambda k: abs(k - M))]
-    fp8 = f"G={G},KB={kb},SWAP={bm < 64 and bn >= 64},DOT=HopperE4m3QgmmaDot32_v1"
+    fp8 = f"G={G},KB={kb},SWAP={bm < 64 and bn >= 64},DOT={dot}"
     assert [c.spec.id for c in computes] == [
         bind(GateStandIn, K=H, N=E, TIER=gate).id,
         f"Fp8GroupQuant_v1{{K={H},G={G}}}", T.scaled_mm_fp8_block_spec(H200, H, 2 * SI, G).id, f"SiluMul_v2{{I={SI}}}",
@@ -297,7 +300,7 @@ def test_the_cutedsl_gate_binds_the_gate_weight_root_by_the_empty_it_fills():
     (32, {"gate": GATE_CUTEDSL}, {"ll_bf16": True}, "does not attest the cuteDSL ll_bf16_gemm tier at M <= 16"),
     (4, {}, {"experts": None}, f"does not attest {TRITON_EXPERTS}"),
     (4, {}, {"fp8_kernel": None}, "the shared expert's cutlass_scaled_mm did not resolve at block 128"),
-    (2, {}, {}, "no wgmma tile"),
+    (4, {"tile": (64, 64, 16)}, {}, "k32 step"),
     (4, {"tile": (8, 64, 128)}, {"target": TargetProfile(compute_capability=(12, 0), num_sms=188, moe_backend="triton", batch_invariant=False)},
      "modelled on cc 9.0 only"),
     (4, {"router_args": {"n_group": 8, "topk_group": 4}}, {}, "one group, renormalized, sigmoid"),

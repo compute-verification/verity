@@ -223,20 +223,21 @@ def test_the_moe_step_is_keyed_on_its_own_field(monkeypatch) -> None:
     monkeypatch.setitem(GT.REGISTERED, "blackwell_consumer", gt)
     assert gt.fp8_dot == gt.fp8_block_dot == "BlackwellE4m3QmmaDot32"
     with pytest.raises(T.UnregisteredTarget, match=r"blackwell_consumer \(12\.0\): no registered e4m3 step \(GemmTarget.fp8_moe_dot\)"):
-        T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 4096, 384, 64, 32, False, routed=False)
+        T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 4096, 384, 64, 32, False, BM=16, BN=128, WARPS=4, routed=False)
 
 
 def test_cc12_binds_the_sm120_step_cc9_the_v1_forms_step_and_the_others_refuse() -> None:
+    """`_tp` is batch-invariant, so the launch dot is the target-wide `GemmTarget.fp8_moe_dot`, whatever the tile."""
     assert T.moe_expert_fp8_dot(_tp((12, 0))) is BW
-    assert T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 4096, 384, 64, 32, False, routed=False).id == \
+    assert T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 4096, 384, 64, 32, False, BM=16, BN=128, WARPS=4, routed=False).id == \
         "MoeExpertFp8Gemm_v1{E=128,K=4096,N=384,G=64,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v1}"
-    assert T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 192, 4096, 64, 32, False, routed=True).id == \
+    assert T.moe_expert_fp8_gemm_spec(_tp((12, 0)), 128, 192, 4096, 64, 32, False, BM=16, BN=128, WARPS=4, routed=True).id == \
         "MoeExpertFp8GemmW_v1{E=128,K=192,N=4096,G=64,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v1}"
     assert T.moe_expert_fp8_dot(_tp((9, 0))) is HP
-    assert T.moe_expert_fp8_gemm_spec(_tp((9, 0)), 256, 6144, 512, 128, 128, True, routed=False).id == \
+    assert T.moe_expert_fp8_gemm_spec(_tp((9, 0)), 256, 6144, 512, 128, 128, True, BM=8, BN=32, WARPS=4, routed=False).id == \
         "MoeExpertFp8Gemm_v1{E=256,K=6144,N=512,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}"
     for cc in ((8, 0), (8, 9)):
         with pytest.raises(T.UnregisteredTarget, match="no registered e4m3 step"):
-            T.moe_expert_fp8_gemm_spec(_tp(cc), 128, 4096, 384, 64, 32, False, routed=False)
+            T.moe_expert_fp8_gemm_spec(_tp(cc), 128, 4096, 384, 64, 32, False, BM=16, BN=128, WARPS=4, routed=False)
     with pytest.raises(T.UnregisteredTarget):
         T.moe_expert_fp8_dot(_tp((10, 0)))
