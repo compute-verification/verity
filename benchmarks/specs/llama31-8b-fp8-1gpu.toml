@@ -23,6 +23,9 @@ max_model_len = 8384
 resident_gpu_memory_utilization = 0.40
 block_gpu_memory_utilization = 0.80
 max_num_batched_tokens = 16384
+# MEM-15: every isolated (block-mode) engine of one arm group gets the same exact KV pool, or vLLM schedules the arms
+# differently at over-pool points and their greedy tokens can diverge (#2036's kv-pool gate catches it).
+block_kv_cache_memory_bytes = 60129542144
 
 [admission]
 max_minutes = 120
