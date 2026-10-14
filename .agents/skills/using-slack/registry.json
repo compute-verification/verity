@@ -246,7 +246,9 @@
       "charter": "Daniel",
       "usergroup": null,
       "linear": "TOP",
-      "branch_suffixes": ["c3b2"],
+      "branch_suffixes": [
+        "c3b2"
+      ],
       "owns": [
         "AGENTS.md",
         "README.md",
@@ -277,8 +279,7 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": null,
       "owns": [
-        "benchmarks/harness/",
-        "benchmarks/specs/"
+        "benchmarks/harness/"
       ]
     },
     {
