@@ -9,7 +9,8 @@ import Proofs.Flock.Soundness.Assumptions.Inner
 
 At `MapsLeft`'s weave, R's Ligerito's coin steps are `stacked/rep0`'s rounds of coins (`rep0`) from the ring switches'
 `k₂`, as many as the stage takes (`LgHeld.lgCoins_of_weave`). `rep0` reads the verifier's hold of that stream
-(`C3.coins`, `commits.stream?`'s coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which `laterCoins_of_held`'s `h5` reads:
+(`C3.coins`, `commits.stream?`'s coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which
+`laterCoins_of_held`'s `h5` reads:
 
 * `commits_c3Of`, `heldCoins_rep0`: at the `C3` the verifier builds of its hold `cs` (`c3Of`), the coins it holds of
   `stacked/rep0` at round `q` are `rep0`'s round `q`;
