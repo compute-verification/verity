@@ -241,7 +241,8 @@ theorem regBadZ_oneG {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin 
   · rw [vbHJ_pos dj y₀ ht hc hscope hU hpub _, hpos]
     simpa [vbHJ, HmRowsZX.bindingZ, LayoutZ.bindingZ, regOpenZ, ZkHidden.layZHJ,
       LayoutZ.ofShadow, ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout,
-      Layout.ofBits, HiddenExec.keyReadersH, Layout.Readers.ofRows, Layout.keyGate, oneGK, hrow] using hne
+      Layout.ofBits, HiddenExec.keyReadersH, Layout.Readers.ofRows, Layout.keyGate, Layout.padBits,
+      oneGK, hrow] using hne
 
 /-- **`zk_session_regValsR` with the wrong units counted too**: on its assumptions, an accepted session whose draw meets
 the units that compute wrongly or read a registered-value disagreement (`regWrongZ`, at the registrant's opening
