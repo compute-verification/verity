@@ -76,7 +76,7 @@ theorem ownName_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit}
       | none => rfl
       | some x =>
         simp only [checkMsgNames, hm] at h
-        cases h
+        split at h <;> cases h
   have hmem : s!"m{k}" ∈ c.ports.toList.map (·.name) :=
     List.mem_map.2 ⟨c.ports[q], Array.mem_toList_iff.2 (Array.getElem_mem q.isLt), hq⟩
   have hp := List.find?_eq_none.1 hn _ hmem
@@ -127,33 +127,6 @@ theorem opening_port_of_msgNames {m cl j nv : ℕ} {S : Flock.RecOpen.GfS} {ps :
   refine List.mem_filterMap.2 ⟨_, ha, ?_⟩
   dsimp only
   rw [mIndex_m]
-
-/-- **`checkStmt` accepting passes `checkMsgNames`** at statement `j` of the list, on the circuit. -/
-theorem msgNames_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
-    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
-    {own : Option (Array Flock.Registered.Port)} {j : ℕ} {f : VStar.Bindings}
-    {rows : Option (Array Flock.Registered.Port)}
-    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program own (some j) (some f) rows = .ok ()) :
-    ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ RecVStar.checkMsgNames s st.c = .ok () := by
-  unfold RecVStar.checkStmt at h
-  dsimp only at h
-  split at h
-  · obtain ⟨_, h1, -⟩ := ebind_ok h
-    cases h1
-  · split at h
-    · obtain ⟨_, h1, -⟩ := ebind_ok h
-      cases h1
-    · split at h
-      · split at h
-        · obtain ⟨_, h1, -⟩ := ebind_ok h
-          cases h1
-        obtain ⟨_, -, h⟩ := ebind_ok h
-        obtain ⟨s, hs, h⟩ := ebind_ok h
-        obtain ⟨ss, hss, hj, -⟩ := FlockSoundness.Discharge.Recursion.check_ok
-          (FlockSoundness.Discharge.Recursion.checkCircuit_ok hs).1
-        obtain ⟨⟨⟩, hm, -⟩ := ebind_ok h
-        exact ⟨ss, s, hss, hj, hm⟩
-      · cases h
 
 /-! ## The statement's form -/
 
@@ -321,7 +294,7 @@ theorem msgNamesAt_of_checks {bind : Fin S → VStar.Bindings}
   obtain ⟨hacc, -⟩ := hA
   obtain ⟨_, _, sts, hs, hfm⟩ := hck R ω t R₂ s ⟨_, (hacc s).1⟩
   obtain ⟨h0, hc0⟩ := setup_zero_c (zs R ω t R₂ s).ht (zs R ω t R₂ s).hTags.1 (zs R ω t R₂ s).hcH hs
-  obtain ⟨ss, sv, hss, hj, hm⟩ := msgNames_of_checkStmt (array_forM_ok hfm 0 h0)
+  obtain ⟨ss, sv, hss, hj, hm⟩ := FlockC3.PubRows.msgNames_of_checkStmt (array_forM_ok hfm 0 h0)
   rw [hc0] at hm
   exact ⟨ss, sv, hss, hj, hm⟩
 
@@ -402,5 +375,10 @@ theorem roundRead_opening {bind : Fin S → VStar.Bindings}
     ((openingName_params hpm).trans (name_of_filter hf).2.symm)
   rw [hu]
   exact read_of_port (hown _ _ _ hss hj) (opening_port_of_msgNames hm hq) 0 0 rfl (sel (c₀ + i)) hsel
+
+#print axioms ownName_of_msgNames
+#print axioms msgNamesAt_of_checks
+#print axioms roundRead_opening
+#print axioms wRoundRead_inner
 
 end FlockC3.Reps

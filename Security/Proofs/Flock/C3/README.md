@@ -35,7 +35,7 @@ lines of proof: "+N" is what a branch has built, a range is an estimate of what 
 | the sparse rounds' forms | `holoSelWords`' last conjunct, `holoForms (holoAt st hp)` is `none` at `roundIn L (.sparse x) q + j`, from `roundAt_sparseRounds` and the alignment | `C3/Compose/HoloSparseWords.lean` | 40 | `coinWordsEncoded_holoMap` at the sparse streams | rec-lean (round 21) |
 | the word-level `StageHeld` | `StageHeldW`: a stage's coins are one stream's words `(g q)[w]`, flat index `p ↔ (q, w)`, history round `j + p = i + 1 − (g q).size + w`; its coins lemma, from `coinsAt_of_idx` at `f (q, w) = coinArr fOf #[(g q)[w]!]` with custody's coins half and `CoinWordsEncoded` at `holoSelWords`; `laterCoins_of_held`'s `h2`, `h3` at it | `C3/Compose/LaterHeld.lean` | 120–130 | the sparse phases' `StageCoins`, for `srcOK_holo_rs`'s `hcoins` | W |
 | the sparse stage's source | `SrcSparseTie` at `tiedSrc stp`, from `sparseTie_of_layer` at V*'s accepted RecSparse units and the word-level coins | `C3/Sparse/SrcTie.lean` | 80–120 | `srcOK_holo_rs`'s `hst` | W |
-| the public rows' premises | `RowsHeld`, `PortsNamed` (`C3/PubRows/Check.lean`), `OwnIs` (`C3/PubRows/Honest.lean`), with no producer yet | | unsized | `hbr_honest_reg`'s `hdrawn`, `hnames`, `hown` | unassigned; E's rows, S's port names, C's `ReadsOwn` and R's `ReadsOwnC3` are beside them |
+| the public rows' premises | `RowsHeld` (`C3/PubRows/Check.lean`), with no producer yet; `OwnIn` is `ownIn_checked` (round 21); `PortsNamed` is derived (round 22): `RecVStar.checkMsgNames` refuses a circuit naming a port twice (`Flock/Test/MsgNames`), so `hPubRows_of_checked` reads it at each accepted session (`names_of_checkStmt`, `C3/PubRows/Shape.lean`) and `hbr_honest_reg` has no `hnames` | | unsized | `hbr_honest_reg`'s `hdrawn` | unassigned; E's rows, C's `ReadsOwn` and R's `ReadsOwnC3` are beside it |
 
 ## Start now (independent, rounds 1–4; proved, but a1c, a cleanup, is open)
 
@@ -107,7 +107,8 @@ takes, each with who discharges it:
   read fact or `HFrame` at a history shorter than the inner rounds (`zip` stops at the last coin; at `t = []` the tape
   is empty), and the checked sessions refuse one (`hLeafC3_checked`, wherever V* has a statement).
 * `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W).
-* `hnames` (`PortsNamed`): G's `PortNamesUnique` at V*'s circuits (W, with h2's parse).
+* `PortsNamed` (G's `PortNamesUnique` at V*'s circuits) is no hypothesis: the statement check refuses a circuit naming a
+  port twice (`checkMsgNames`), so it holds at each accepted session (`names_of_checkStmt`, in `hPubRows_of_checked`).
 * `hown` (`OwnIn`): each accepted session's reads hold `own`'s ports by name, value and reads. At
   `own := fun j => ownAt ss j`, the verifier's message ports of statement `j` (`ownPorts` and RecSparse's other
   messages, `sparseMsgs`), it is proved (`ownIn_checked`, `C3/PubRows/Shape.lean`, from `checkOwn`'s second and third
