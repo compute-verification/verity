@@ -6,10 +6,10 @@ import Proofs.Flock.C3.Compose.LaterHeld
 
 `pointsEncoded_holoMap`: the verifier's map's link points read back as the history's first coin (`PointsEncoded` at
 `holoPts`).
-`coinsEncoded_holoMap`: at `HoloCoinTys`, where a stream round takes one history round (`holoSelOne`: the reps' and R's
-rounds of coins, a sparse phase's of one), the coin the map reads off the history's prefix is that round's coin
-(`CoinsEncoded`). A sparse phase's round of `n > 1` coins is not one: the map reads its `n` history rounds' words as one
-array, while each of those rounds draws a coin of one word.
+`coinsEncoded_holoMap`: where a stream round takes one history round (`holoSelOne`: the reps' and R's rounds of coins,
+a sparse phase's of one), the coin the map reads off the history's prefix is that round's coin (`CoinsEncoded`), at
+every inner statement and sparse parameters. A sparse phase's round of `n > 1` coins is not one: the map reads its `n`
+history rounds' words as one array, while each of those rounds draws a coin of one word.
 `roundAt_reps`: the history order of the reps' rounds at the map read, rep 0's from round 1 and rep 1's past all of rep
 0's coin rounds (`repStart`), the `j + p` that `StageHeld` reads; `holoSelOne_rep` selects rep `i`'s rounds of coins
 there.
@@ -67,11 +67,12 @@ theorem roundWords_take {st : Flock.Stmt} {hp : HoloParams}
   unfold roundWords
   rw [List.getElem?_take_of_lt h]
 
-/-- **The map's coins are the history's** (`CoinsEncoded`, the `CoinTys`/`vCT` analogue) at `HoloCoinTys`, where a
-stream round takes one history round: there the map reads the words of that round's coin off the history's prefix,
-and they read back as the coin (`coinArr_roundWords`). -/
+/-- **The map's coins are the history's** (`CoinsEncoded`, the `CoinTys`/`vCT` analogue) where a stream round takes
+one history round: there the map reads the words of that round's coin off the history's prefix, and they read back as
+the coin (`coinArr_roundWords`, at a form other than a vector of one coordinate, which no coin is:
+`holoForms_getD_ne_one`). -/
 theorem coinsEncoded_holoMap {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
-    {bc : Cm → String → Nat → List UInt8} {L : List (HoloStream × Array SchedRound)} (hL : HoloCoinTys st hp L) :
+    {bc : Cm → String → Nat → List UInt8} :
     CoinsEncoded (CT := holoCTs st hp) (holoSelOne ish tbl) (holoMap st hp Cm ish tbl bc).coin := by
   intro i hi s q cs hc hsel
   obtain ⟨L', e, hS, hf, hg, rfl⟩ := hsel
@@ -81,15 +82,15 @@ theorem coinsEncoded_holoMap {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {is
     simp only [holoMap, hS, hf]
   rw [hcoin, hg, List.range_one, List.flatMap_cons, List.flatMap_nil, List.append_nil, Array.toArray_toList,
     Nat.add_zero (roundAt L' e.1 q), roundWords_take cs (show roundAt L' e.1 q < roundAt L' e.1 q + 1 from Nat.lt_succ_self _)]
-  exact coinArr_roundWords hL cs _ hi hc
+  exact coinArr_roundWords cs _ hi hc (holoForms_getD_ne_one st hp _)
 
 theorem roundIn_cons_self {s : HoloStream} {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)} {k : ℕ} :
     roundIn ((s, rs) :: L) s k = heldBefore s rs k :=
-  if_pos rfl
+  ite_eq_left rfl
 
 theorem roundIn_cons_ne {s' s : HoloStream} {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)} {k : ℕ}
     (h : ¬s'.idx = s.idx) : roundIn ((s', rs) :: L) s k = heldBefore s' rs rs.size + roundIn L s k :=
-  if_neg h
+  ite_eq_right h
 
 /-- **The reps' history order at the map read** (lean (i)): in `holoStreams`' order, rep 0's rounds `rs` and then rep
 1's, rep `i`'s round `q` is history round `repStart c₀ i` (1, or past rep 0's `c₀` coin rounds) plus rep `i`'s coin

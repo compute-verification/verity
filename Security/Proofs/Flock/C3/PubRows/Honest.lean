@@ -19,7 +19,8 @@ import Proofs.Flock.C3.PubRows.Check
   step after the openings changes it, so they don't give `HTape`: at the honest family it is exactly `HFrame`
   (`hTape_iff_frame`, `PubRows/Frame.lean`), the tape's cap and link points first and the openings alone after the
   stages, an obligation on the decoder `dec`.
-* `hCommits_honest`: `VCommits` at the honest family, from `HPubRows`, the sessions' reads being `own`'s (`OwnIs`) and
+* `hCommits_honest`: `VCommits` at the honest family, from `HPubRows`, the sessions' reads holding `own`'s by name,
+  value and reads (`OwnIn`; at the checked family and `own := ownAt ss`, the verifier's `checkOwn`, `ownIn_checked`) and
   the rows the verifier holds being the history's commitments (`HeldIs`, the record–history link, gap n1c): G's
   `hCommits_of` after `pubCommits_of_pubRows`.
 -/
@@ -51,10 +52,18 @@ def ChecksPubRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     PubRowsChecked (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption F.ish.sparse (F.zs R ω t R₂ j).I
       (F.zs R ω t R₂ j).own tr'
 
-/-- **Each accepted session's reads are `own`'s.** -/
-def OwnIs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (own : Fin (vstarCount F.ish) → Array Flock.Registered.Port) :
+/-- **The verifier's message ports of statement `j`**: `ownPorts` and `sparseMsgs` of the list's statement `j`, each as
+a port of its name, value and reads (the other fields `default`'s, which no reader of `own` reads). -/
+def ownAt (ss : Array VStar.Stmt) (j : ℕ) : Array Flock.Registered.Port :=
+  (((ss[j]?).map fun s => RecVStar.ownPorts s ++ RecVStar.sparseMsgs s).getD []).toArray.map fun q =>
+    { (default : Flock.Registered.Port) with name := q.1, value := q.2.1, reads := q.2.2 }
+
+/-- **Each accepted session's reads hold `own`'s**: each port of `own j` is one of the session's by name, value and
+reads. The session's list may hold others, which no reader of `own` reads. -/
+def OwnIn (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (own : Fin (vstarCount F.ish) → Array Flock.Registered.Port) :
     Prop :=
-  ∀ R ω t R₂ j, (∃ tr', AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr') → (F.zs R ω t R₂ j).own = own j
+  ∀ R ω t R₂ j, (∃ tr', AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr') →
+    ∀ p ∈ own j, ∃ p' ∈ (F.zs R ω t R₂ j).own, p'.name = p.name ∧ p'.value = p.value ∧ p'.reads = p.reads
 
 /-- **The rows the verifier holds are the history's commitments**: at every history `t` where session `j` accepts and
 port `p` of `own j` registers at row `x` a value whose row holds round `i`'s message (`sel`), the row `F.row` holds there
@@ -116,15 +125,17 @@ theorem hPubRows_of_check' (hchk : ChecksPubRows 𝓗 wr reg) (hdrawn : RowsHeld
   exact hdig.trans (he.2.symm.trans hb.symm)
 
 /-- **The commitments at the honest family**: each accepted session's row of a stage's commit string holds, by
-`HPubRows`, the row the verifier holds there, which is the history's commitment (`HeldIs`). -/
-theorem hCommits_honest (hrows : HPubRows 𝓗) (hown : OwnIs 𝓗 own) (hheld : HeldIs 𝓗 own sel bc) :
+`HPubRows` at the session's port of `own`'s name, value and reads (`OwnIn`), the row the verifier holds there, which is
+the history's commitment (`HeldIs`). -/
+theorem hCommits_honest (hrows : HPubRows 𝓗) (hown : OwnIn 𝓗 own) (hheld : HeldIs 𝓗 own sel bc) :
     VCommits (𝓗).zs (𝓗).Sk (𝓗).cmt := by
   intro i R ω t e he R₂ j hacc pos hpos R'
   rcases pos with ⟨u, q⟩ | g
   · have hpos' : Sum.inl (u, q) ∈ skOf Vs own sel i j := hpos
     obtain ⟨p, hp, hname, x, hx, hsel⟩ := mem_skOf_inl.1 hpos'
-    have hd := hrows R ω t R₂ j hacc p (by rw [hown R ω t R₂ j hacc]; exact hp) u q x hname.symm hx _
-      (hheld i R ω t e he R₂ j hacc u q p hp hname x hx hsel)
+    obtain ⟨p', hp', hn, hv, hr⟩ := hown R ω t R₂ j hacc p hp
+    have hd := hrows R ω t R₂ j hacc p' hp' u q x (hname.symm.trans hn.symm) (by rw [hr]; exact hx) _
+      (by rw [hv]; exact hheld i R ω t e he R₂ j hacc u q p hp hname x hx hsel)
     show _ = cmtOf Vs bc j e.1 (.inl (u, q))
     rw [vb_cs_inl, hd]
     simp [cmtOf]

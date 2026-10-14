@@ -38,6 +38,7 @@ import Flock.ProvedScope
 import Flock.Registered
 import Flock.Keccak
 import Flock.RecCoins
+import Flock.RecSetup
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll
