@@ -13757,7 +13757,7 @@
    ]
   },
   "Flock.RecCoins": {
-   "digest": "62c948a6f59d26bb4f7351ddf525753f11a780088f0f79aac1ed97e772cf7963",
+   "digest": "62458cddeb20fc430ee789878c6d402da715edbfd3428a74cb2ef65eb945ed96",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "fb0c0b18cbe96a25e62783a0293d3bcb904854eaddf13076a480f92d1489c427",
@@ -13829,13 +13829,13 @@
     "Flock.RecCoins.checkOpen._sparseCasesOn_3": "70011e7aa1bba40df0340e061e112f65b24eec2ba8bbc9640b24792100243143",
     "Flock.RecCoins.checkOpen._sparseCasesOn_4": "623f6554b0467fbbc8c98025cf4c2fc200aa835828cc13653f9edf8a952089a5",
     "Flock.RecCoins.checkOpening": "f02c5963ace5c052745ad0afd4cc1c68a065469366b7624d8ef9af74fe74fda2",
-    "Flock.RecCoins.checkResiduals": "d113b42f27683212bf1b760ed55a96c887f932c38156283c195fb76cb532bc6f",
+    "Flock.RecCoins.checkResiduals": "1414d98b72f41c95c781f5ff3aed8d2ce25439122e2526adb1919f8375f530f4",
     "Flock.RecCoins.checkRows": "d0fd76da5899cc200a9c7cac06b1016dfd3a38a50bcdb6dbe6b24fbf126ac1a7",
     "Flock.RecCoins.checkRows._sparseCasesOn_7": "9899da9f27ffc471375c6929ab9efce9274e2e0dbc627c767cd48d004eef0026",
     "Flock.RecCoins.checkSparse": "71b436e9dee2a00379f9158a8ba7071f6cdfd7a6d91a12b75735d615930f9283",
     "Flock.RecCoins.checkStackedLevel": "bff72edddf6143a8417a8752680b8ebfc1f2e1a40d6a13b3df369953fb236614",
-    "Flock.RecCoins.checkTopReads": "02f990952a621432f626f7ce5e7f28d4ed7865d25f5b68a8df5587b6c822ffa1",
-    "Flock.RecCoins.checkValue": "6b49e43fac038c40dbabad922102077b8bff7eb4f3c5c49433e0e0dbf945d307",
+    "Flock.RecCoins.checkTopReads": "034b123682bb64ecd14ff707f935022c8dc3aa5fde5168a7b92f1aabb15dcc4d",
+    "Flock.RecCoins.checkValue": "a7f5fdbd874904237148130c5620334cc63a5b98a718cfdcdba796094bf9a5d6",
     "Flock.RecCoins.checkZero": "b0e6d4b41aca4164c1c980752baad127fd02d8a11ae343deaf9097ad0bececcf",
     "Flock.RecCoins.coefAt": "b4b21e6b3ae81577057fc7c51f1f61902efa6c88913906612a9df4bf8b41cd8a",
     "Flock.RecCoins.commitRow": "48e36581cf7e3d3796b210f5907cfda8daa430d6b04eb9a04761c5f996990264",
