@@ -1230,7 +1230,7 @@ theorem checkShared_claim_ok {s : VStar.Stmt} {registered : Array Registered.Por
     (hs : claimUnit s = true) : sharedClaim rows = true := by
   unfold checkShared at h
   cases hc : checkClaimShared s rows with
-  | error e => simp only [Except.bind] at h
+  | error e => cases h
   | ok u => cases u; exact checkClaimShared_ok hc hs
 
 /-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
