@@ -38,13 +38,12 @@ theorem outRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     {i : Flock.RecVStar.Inner} {s : VStar.Stmt} {rows : Option (Array Flock.Registered.Port)}
     (hck : Flock.RecVStar.checkAcc s zo.own rows = .ok ()) (hrd : Flock.RecVStar.checkAccReads i s zo.own = .ok ())
     (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"]) {want : Array (Option ℕ)}
-    (hw : Flock.RecVStar.accReads i s = .ok (some want))
-    (hnd : ∀ p ∈ zo.own, ∀ p' ∈ zo.own, p.name = p'.name → p = p') :
+    (hw : Flock.RecVStar.accReads i s = .ok (some want)) :
     (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
         site (zo.rd.port (.inl (u, ⟨_, hq⟩))) = site w) ∧
       ∃ x p : ℕ, want[x]? = some (some p) ∧ zo.rd.readAt (.inl (u, ⟨_, hq⟩)) = p + 1 := by
   obtain ⟨-, -, hq1, -, -, hn1, -⟩ := hlaid
-  obtain ⟨-, hsite, x, hx⟩ := accRead_drawn zo hacc hu hr hck hrd hl hw hnd (nm := "acc_out") (d := 1) (by simp) hn1
+  obtain ⟨-, hsite, x, hx⟩ := accRead_drawn zo hacc hu hr hck hrd hl hw (nm := "acc_out") (d := 1) (by simp) hn1
   refine ⟨hsite, x, ?_⟩
   rw [Array.getElem?_map] at hx
   cases hw' : want[x]? with

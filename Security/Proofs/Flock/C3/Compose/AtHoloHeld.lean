@@ -65,9 +65,7 @@ theorem srcOK_holo_held {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Ar
     (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse
       (Flock.Guarantees.holoMap st hp Cm ish tbl bcm))
     (hheldR : RepRoundsHeld zs dg N k Rw sh rep wr held s ix)
-    (henc : CoinsEncoded (CT := holoCTs st hp) (Flock.Guarantees.holoMap st hp Cm ish tbl bcm).selC
-      (Flock.Guarantees.holoMap st hp Cm ish tbl bcm).coin)
-    (hdr : RepsDrawn zs dg N k Rw sh rep vals (Flock.Guarantees.holoMap st hp Cm ish tbl bcm).selC s ix)
+    (hdr : RepsDrawn zs dg N k Rw sh rep vals (holoSelOne ish tbl) s ix)
     (hrp : RepsMsgsRead zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) own sel)
     (hsp' : SparseMsgsRead zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) own sel)
     (he : PartEnds sparsePart zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) c₀)
@@ -102,7 +100,7 @@ theorem srcOK_holo_held {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Ar
     subst hzs
     exact hLeafC3_checked hS dg N k Rw
   have hlt := FlockC3.RegLevels.srcLevelTie_of_maps M hell hosh unit (repsOfVals stp sh rep vals) c3 w kap e0 sb e hmaps
-  have hcoins := stageCoins_holo_held hleaf halg hacc hpr hsv hf hcus hheldR henc hdr hrt hst hot hell hosh hmaps hc3
+  have hcoins := stageCoins_holo_held hleaf halg hacc hpr hsv hf hcus hheldR hdr hrt hst hot hell hosh hmaps hc3
     hrep hsp hsh hcl hrs hc hA hshape (FlockC3.Sparse.htbl_of htbl) (FlockC3.Sparse.htblR_of htbl) hpts hlen hheld hcnt
     hss' hx hts
   exact srcOK_holo_rs (sh := osh) hzs hF hS hcoins hrp hsp' he (fun R ω t R₂ τ o hA' => (hmaps R ω t R₂ τ o hA').2.2.1)
