@@ -325,3 +325,39 @@ Tests and tools read fixtures relative to this directory: run them from here.  T
 The pod runtime (Python 3.12, torch cu129, vLLM `d9105ea80`, native taps, `hidden_gpu`) is built by `verity_vllm/ops/pod_bootstrap.sh`
 and exercised through `research run --source <sha> --on <machine>`.  On a pod without a GPU (`nvidia-smi` absent, or `--cpu`)
 it skips the native taps and writes the same `readiness.json` with `"mode": "cpu"`; `--dry-run` prints the resolved mode.
+
+## Moving the engine pin
+
+The engine is vLLM at one commit, today `d9105ea80`, and vllm owns which commit that is.  The pin is stated in several
+places, and a move rewrites all of them in one PR:
+
+- the wheel URL and its sha256 in `ops/pod_bootstrap.sh` (step 2), and its readiness check `vllm_commit_<sha9>`;
+- the engine profiles named for it (`engine/profiles/vllm_<sha9>_*`), whose κ pins were recorded from that build;
+- benchmarks' `VLLM_PIN` (`verity_bench.vllm.presets`), the `vllm_pin` of each benchmark spec, and PoUW's
+  serving venv check (`benchmarks/pouw/pearl_c_vllm/setup.sh`).
+
+`git grep <old sha9>` lists the rest: docstrings and tests that cite the old build's source.
+
+**Who asks.** Any user of the integration asks @vllm, which files the ask as a VLLM issue.  The ask names the target
+commit, why the move is needed (a fix, a model, a kernel), and the user's paths it touches.  vllm decides, and does the
+move on one branch.
+
+**What must pass.**  Each of the following is a run on the new pin, and each run id goes in the move's PR body:
+
+1. *Bootstrap:* `ops/pod_bootstrap.sh` with the new wheel's sha256 reaches readiness PASS on a GPU pod.
+2. *Tokens:* greedy tokens identical to the old pin's for each checkpoint a user serves, through `verity_vllm.LLM`.  A
+   difference is named, and it stands only if the owner of every Definition it touches accepts it.
+3. *circuits:* the kernel census against `properties/kernel_allowlist.py`, and a Build/Match/Commit GO on the rows of
+   record.  Every Definition of a served kernel is bound to the pinned build's kernels, so new kernels mean new profiles.
+4. *compute-accounting:* PoUW's device gate with its executor installed at `LinearBase.quant_method.apply`.
+5. *memory-accounting:* POUS's install and its bit-identical decode gate.
+6. *proofs:* a sampled-proofs Commit whose verdict PASSes.
+7. *benchmarks:* the quoted overheads re-run from the specs at the new `vllm_pin`.  The pin is part of each result's
+   identity, so a number measured at one pin is never compared with a number measured at another.
+
+A user whose code the move doesn't reach may answer "not affected" instead of a run id.  The move lands once every user
+has answered.
+
+**How users hear.**  When the PR is marked ready, vllm announces the move to each user's handle
+(`research msg send --kind announce --to ...`).  The announcement pins the merge commit (`git:<sha>`) and the wheel's
+sha256 (`--ships`), and each user closes it with a status line once its pods run the new pin.
