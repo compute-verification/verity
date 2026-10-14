@@ -413,7 +413,7 @@ print(json.dumps(caps))
 
 @dataclass
 class ResearchRunner:
-    repo: str = "danielreuter/verity"
+    repo: str = "compute-verification/verity"
     workdir: Path = WORKDIR
     python: str = sys.executable
     environ: dict | None = None
@@ -576,9 +576,14 @@ def command(job: dict, pod: str, python: str, pack: Path | None, preflight: bool
     raise ValueError(f"this dispatcher doesn't run {job['kind']} jobs")
 
 
+#: the repository's address before its move into the organization (GitHub redirects it); a job from a submitter still on the old
+#: name is the same repository, so submitters and dispatchers don't have to change in lockstep
+MOVED = {"danielreuter/verity": "compute-verification/verity"}
+
+
 def validate(job: dict, repo: str) -> None:
     p = job["payload"]
-    if p.get("repo", repo) != repo:
+    if MOVED.get(p.get("repo", repo), p.get("repo", repo)) != MOVED.get(repo, repo):
         raise ValueError(f"the job is for {p.get('repo')}, and this dispatcher checks {repo}")
     if not SHA.fullmatch(str(p.get("commit", ""))):
         raise ValueError("payload.commit must be a full commit sha")
