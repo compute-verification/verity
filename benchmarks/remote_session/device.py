@@ -594,10 +594,10 @@ class Device:
         self.salt_key = self.rng.bytes(32)
         self.main_stream = torch.cuda.Stream()
         self.open_stream = torch.cuda.Stream()
+        self.offload_stream = torch.cuda.Stream()
         self.offload_jobs: queue.Queue = queue.Queue()
         threading.Thread(target=self._offload, daemon=True).start()
-        self.archive_by_window = False
-        self.archive_stats: list[dict] = []
+        self.offload_ns: list[int] = []
         self.gates: dict = {}
         with torch.cuda.stream(self.main_stream):
             self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, self.gen,
@@ -708,15 +708,13 @@ class Device:
         with self.torch.cuda.stream(self.main_stream):
             self.store.arm(dropped)
         self.store.pass_gpu_ms.clear()
+        self.offload_ns.clear()
 
     def run_pass(self, seed: bytes):
         with self.torch.cuda.stream(self.main_stream):
             return self.store.run_pass(seed)
 
     def begin_window(self, challenge: bytes, previous: bytes | None) -> None:
-        # Calibration has no window boundary and offloads each handle immediately. A live session retains one
-        # bounded window on the device, then archives that window together once its draws arrive.
-        self.archive_by_window = self.store.offload_handles
         with self.torch.cuda.stream(self.main_stream):
             self.store.start_chain(challenge, previous)
 
@@ -730,37 +728,36 @@ class Device:
         with self.torch.cuda.stream(self.open_stream):
             return self.store.open_window(items)
 
-    def archive_window(self, handles: list[object]) -> list[object]:
-        """Archive one completed window's device handles together, outside that window's timed pass phase."""
-        if not self.store.offload_handles or not handles or isinstance(handles[0], OffloadedHandle):
-            return handles
-        t0 = time.perf_counter_ns()
-        out = []
-        for handle in handles:
-            archived = OffloadedHandle()
-            self.offload_jobs.put((handle, archived))
-            out.append(archived)
-        self.offload_jobs.join()
-        ready = [self._ready(handle) for handle in out]
-        self.archive_stats.append({"handles": len(ready), "ns": time.perf_counter_ns() - t0})
-        return ready
-
     def _run_chain(self, i: int):
         root, handle = self.store.run_chain(i)
-        if not self.store.offload_handles or self.archive_by_window:
+        if not self.store.offload_handles:
             return root, handle
         out = OffloadedHandle()
         self.offload_jobs.put((handle, out))
         return root, out
 
     def _offload(self) -> None:
+        staging = None
         while True:
             (seed, pk, kept), out = self.offload_jobs.get()
+            t0 = time.perf_counter_ns()
             try:
-                out.value = (bytes(seed.cpu().numpy()), pk.cpu(), kept.cpu())
+                if staging is None:
+                    staging = tuple(self.torch.empty(x.shape, dtype=x.dtype, device="cpu", pin_memory=True)
+                                    for x in (seed, pk, kept))
+                seed_host, pk_host, kept_host = staging
+                with self.torch.cuda.stream(self.offload_stream):
+                    seed_host.copy_(seed, non_blocking=True)
+                    pk_host.copy_(pk, non_blocking=True)
+                    kept_host.copy_(kept, non_blocking=True)
+                self.offload_stream.synchronize()
+                # The pinned buffers are a one-handle staging ring. Persist each handle in ordinary host memory so
+                # thousands of calibration passes do not pin tens of GiB.
+                out.value = (bytes(seed_host.numpy()), pk_host.clone(), kept_host.clone())
             except BaseException as error:
                 out.value = error
             finally:
+                self.offload_ns.append(time.perf_counter_ns() - t0)
                 self.offload_jobs.task_done()
 
     @staticmethod
@@ -777,8 +774,8 @@ class Device:
         gpu = self.store.pass_gpu_ms
         out = {"passes": len(gpu), "pass_gpu_ms_sum": sum(gpu), "pass_gpu_ms_median":
                sorted(gpu)[len(gpu) // 2] if gpu else None, "pass_gpu_ms_max": max(gpu) if gpu else None,
-               "archives": list(self.archive_stats)}
-        self.archive_stats.clear()
+               "offload_ns_median": sorted(self.offload_ns)[len(self.offload_ns) // 2] if self.offload_ns else None,
+               "offload_ns_max": max(self.offload_ns) if self.offload_ns else None}
         return out
 
     def gate(self, registration: audit.Registration) -> dict:
@@ -875,7 +872,7 @@ def add_arguments(ap) -> None:
                     help="h0: the payload tree's levels kept; lower paths are recomputed for openings")
     ap.add_argument("--sketch-ctas", type=int, default=0, help="the receipts grid's CTAs (0: one an SM)")
     ap.add_argument("--offload-handles", action="store_true",
-                    help="archive each completed window's pass handles on the CPU (automatic above 64 GiB)")
+                    help="archive pass handles through a dedicated pinned copy stream (automatic above 64 GiB)")
 
 
 def from_arguments(a, log=print) -> Device:

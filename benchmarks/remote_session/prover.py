@@ -138,15 +138,6 @@ class ProverSide:
                 by_pass[i].append((k, p))
             out: list = [None] * len(draws)
             passes = sorted(by_pass.items())
-            archive = getattr(self.backend, "archive_window", None)
-            if archive is not None:
-                with self.lock:
-                    keys = sorted(key for key in self.kept if key[0] == t)
-                    window_handles = [self.kept[key] for key in keys]
-                archived = archive(window_handles)
-                with self.lock:
-                    for key, handle in zip(keys, archived):
-                        self.kept[key] = handle
             if self.defer_openings:
                 self.open_enabled.wait()
             with self.lock:
