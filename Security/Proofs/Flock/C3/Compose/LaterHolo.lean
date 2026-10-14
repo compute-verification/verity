@@ -179,7 +179,8 @@ def MapsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fi
 
 /-- **`stageCoins_holo` at the verifier's map**, `hlater` discharged: at every accepted outer proof `laterCoins_holo`,
 at R's run from `MapsAt`'s session (`run_of_sessionAt`) at the `C3` of the verifier's hold (`C3Held`), the stages'
-total from their ties (`coins_total_holo`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
+total from their ties (`coins_total_holo`), the history's length from `hleaf` (`(ℐ).r` is the table's coin kinds'
+`1 + length` and one more, by `schedInner`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
 encoded and drawn at the map's one-round draws (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
 `repsDrawn_holoMapAt` gives it). -/
 theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
@@ -220,8 +221,6 @@ theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → 
     (hshape : (holoAt st hp).cls.shape = sparseOf sp) (htblS : tbl ≠ s!"{RecVStar.SPARSE}/")
     (htbl : tbl ≠ s!"{RecVStar.STACKED}/")
     (hpts : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u => RecordPoints wr t u)
-    (hlen : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ =>
-      1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length + 1 ≤ t.length)
     (hheld : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ => HeldOk wr held t)
     (hcnt : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ => SparseCountedAt wr held sp t)
     (hss : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
@@ -242,7 +241,7 @@ theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → 
   obtain ⟨hs, -, -, hleft⟩ := hmaps R ω t R₂ τ o hA'
   obtain ⟨_, _, _, _, -, -, hrun, hz⟩ := FlockC3.Opening.run_of_sessionAt hA' hosh hs
   obtain ⟨_, _, _, ho, hor⟩ := hot R ω t R₂ τ o hA'
-  exact laterCoins_holo hcus hdec hu (hlen R ω t R₂ τ o hA') hh hc3' hrep hsp hsh hcl hrs hc hA hshape htblS htbl
+  exact laterCoins_holo hcus hdec hu (hleaf R ω t R₂ τ o hA') hh hc3' hrep hsp hsh hcl hrs hc hA hshape htblS htbl
     (hts R ω t R₂ τ o hA') (hcnt R ω t R₂ τ o hA' cs hh) (hss R ω t R₂ τ o hA' cs _ hh hc3') hxe hxs hrun hz hleft
     (coins_total_holo (hrt R ω t R₂ τ o hA') (hst R ω t R₂ τ o hA') ho hor (hlt R ω t R₂ τ o hA'))
 
