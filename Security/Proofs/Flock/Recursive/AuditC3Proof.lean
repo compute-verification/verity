@@ -12,8 +12,8 @@ table, and `RecursiveFirewallPrivate`.
 In (i), as in `PublicAudit`'s:
 * where some index has no session that types, the event is empty (`prob_sessionsR_untypable`);
 * at a statement Lean's verifier doesn't build, or inputs at candidate 3 it refuses (`AcceptsC3`: V*'s list, the inner
-  transcript against R's registration, the covers check there, check 5's sparse refusals), the event is empty (its
-  first conjunct);
+  transcript against R's registration, the covers check there, check 5's sparse refusals, and check 5's inner shape,
+  the inner statement's), the event is empty (its first conjunct);
 * at one it builds, the class checks pass (`classOk_of_accepts`), and gap 2 holds at the word the prover's runs open
   (`zk_sessions_recursive_fork_regV`, `Recursive/RegExtract.lean`: the extraction from piece (a)'s runs, off a
   registrant's row off a value the verifier registers itself at its rows, `valueSrcAll`, else `valueFinder`, off a
