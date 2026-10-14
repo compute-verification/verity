@@ -88,3 +88,6 @@ theorem hkeys_of_rows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) {dg : By
 end Family
 
 end FlockC3.Sparse
+
+#print axioms FlockC3.Sparse.hkeys_of
+#print axioms FlockC3.Sparse.hkeys_of_rows

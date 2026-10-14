@@ -274,3 +274,6 @@ end Family
 end
 
 end FlockC3.Sparse
+
+#print axioms FlockC3.Sparse.sparseZero_tie
+#print axioms FlockC3.Sparse.sparseSessionAt_of_zero
