@@ -595,7 +595,7 @@ approach <campaign>/<slug> --by LANE`.
 ~~~text
 research notes approaches [--campaign C] [--status S] [--grep WORDS] [--refresh]   # the registry
 research notes claim C/SLUG --lane L [--title T --hypothesis H --type scheme|route|attack] [--cite TOKEN]... [--reopen WHY]
-research notes approach C/SLUG STATUS --by L --reason R [--cite TOKEN]... [--superseded-by C/SLUG] [--owner L] [--at UTC]
+research notes approach C/SLUG [STATUS --reason R] --by L [--cite TOKEN]... [--uncite TOKEN]... [--superseded-by C/SLUG] [--owner L] [--at UTC]
 research notes approaches render | check                                           # campaigns/<c>/APPROACHES.md; the lint
 ~~~
 
@@ -603,6 +603,7 @@ research notes approaches render | check                                        
   refuses a killed, superseded or merged approach without `--reopen WHY`. It writes through to the remote and re-reads it, exiting
   3 when a rival claim landed first.
 - **`approach --at`** records work done before the registry existed. History is append-only.
+- **`approach` without a status** changes only cites (`--cite`, `--uncite`).
 - **The public view** is one generated file per campaign, `campaigns/<c>/APPROACHES.md` in the notes. The steward's
   `[approaches]` rule in `steward.toml` (`store`, `every_min`) refreshes and renders it. The campaign's `BRIEF.md` front matter
   `registry: titles | full` sets whether hypotheses and reasons are shown, since the notes repo is public.

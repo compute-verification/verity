@@ -37,15 +37,35 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, the installed FA2 softcap kernel launches kBlockM 64 and kBlockN fa2_kblock_n(D), MUFU ex2 / rcp are "
              "core's tables and MUFU.TANH is MufuTanh_v1 on every input, and every checked output row equals the registered "
              "AttentionSoftcap_v2, which the target binds, on every head."),
-    Property("glm53_block_fp8_capture", "verity-vllm/glm53-block-fp8-capture/v1",
+    Property("glm53_block_fp8_capture", "verity-vllm/glm53-block-fp8-capture/v2",
              "On the capture's Hopper GPU, vLLM selects CutlassFp8BlockScaledMMKernel for GLM-5.3's FP8 linears and Triton's "
-             "fused_moe_kernel (TritonExperts) for its experts, every expert launch runs its dot as k32 e4m3 wgmma, and at GLM-5.3's "
-             "shapes every output word of every launch equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v1 at the launch's "
-             "statics, and every activation quant equals Fp8GroupQuant_v1, bit for bit."),
-    Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v1",
+             "fused_moe_kernel (TritonExperts) for its experts, every compiled expert kernel runs its dot as the step fp8_moe gives its "
+             "tile (k32 e4m3 wgmma, or f16 mma.sync m16n8k16 on widened e4m3), and at GLM-5.3's shapes every output word of every launch "
+             "equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v3 at the launch's statics with that step as DOT, and every "
+             "activation quant equals Fp8GroupQuant_v1, bit for bit."),
+    Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v3",
+             "On the capture's 8 Hopper GPUs at the record's served setting (served.setting: vLLM's defaults, or its custom "
+             "all-reduce off), each set of rank processes holding that setting's communicators, GLM-5.3's fused_allreduce_rms_norm "
+             "runs FlashInfer's MNNVL all-reduce + residual add + RMS norm up to 42 tokens at the strategy mnnvl_shot names, every "
+             "normed and residual word equals AllReduceRmsNormMnnvl_v1 at the shot's decided FMA, and every "
+             "tensor_model_parallel_all_reduce to 42 tokens runs FlashInfer's MNNVL all-reduce and equals AllReduceMnnvl_v1; past "
+             "it, prefill's route is either served (torch's multimem_all_reduce_, whose pair probes name one add tree per owner rank, "
+             "the same in every probe and in two sets of rank processes, with FTZ decided, and every word equals "
+             "AllReduceMultimem_v1 at those trees and FTZ) or switch (under VLLM_ALLREDUCE_USE_SYMM_MEM=0 with the custom all-reduce "
+             "on, every all-reduce to 682 tokens runs vLLM's custom all-reduce at custom_stage and equals AllReduceCustom_v1), bit "
+             "for bit, on every rank.  Apart from that verdict, h7168.ok says the same at vLLM's defaults of 7168-wide "
+             "tensor_model_parallel_all_reduce (the hidden-7168 pass): FlashInfer's to 36 tokens, multimem past it at its own probe's "
+             "trees and FTZ."),
+    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v3",
+             "On the capture device (cc 9.0, 132 SMs), the hidden-6144/N-256 and hidden-7168/N-384 MoE gates (GateLinear) run "
+             "cuteDSL ll_bf16_gemm on the kernel the cc 9.0 dispatch table names at M <= 16 and cuBLAS past it, and under the split-K-off "
+             "cuBLAS switch every f32 gate word equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1 or "
+             "GemmF32Out_v1, every hidden-7168 compressor word GemmF32Out_v1, every lm_head-shard and indexer-projection word "
+             "core's Gemm_v2, and every hidden-6144 K/N = 192/512 or 512/256 q_nope / v absorb word BatchedGemm_v1, bit for bit."),
+    Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v2",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
-             "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v1, every top-k row of at most 2048 keys "
+             "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v3, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
@@ -64,6 +84,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, MUFU ex2 / rcp are core's tables on every input, and vLLM's fused sigmoid noaux_tc router "
              "(_moe_C.grouped_topk, 256 experts, top-8, renormalized, x2.5) returns through its block and its warp kernel exactly the "
              "ids and weights of MoeRouterSigmoidBias_v1 for that kernel on every captured row and every logit whose sigmoid reads MUFU."),
+    Property("dsv4_moe_capture", "verity-vllm/dsv4-moe-capture/v1",
+             "On the capture's GPU, MUFU lg2 is MufuLg2Mantissa_v1 on every 1.m, MUFU ex2 / rcp / sqrt are core's tables, and "
+             "the Triton router dsv4_topk (384 experts, top-6, renormalized, x2.5), the hash router "
+             "dsv4HashTopkSoftplusSqrt over tid2eid and the clamped SwiGLU (silu_and_mul_with_clamp, limit 10, vectorised at "
+             "d = 384 and scalar at d = 9) return exactly MoeRouterSqrtSoftplus_v1, MoeRouterHash_v1 and SiluMulClamp_v1 on "
+             "every captured row."),
     Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
              "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
              "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),

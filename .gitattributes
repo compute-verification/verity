@@ -1,2 +1,6 @@
 # each side's guarantees, reads and dependencies, merged without a rebuild (tools/verity/lean/merge.py; `merge.py --install` once per clone)
 lean-audit.json merge=lean-audit
+# a conflict only in import lists merges as one list; any other stays git's (merge.py --lean)
+*.lean merge=lean-imports
+# the fixture replica map key by key; a key set two ways refuses (tools/verity/check/merge_map.py)
+fixtures/artifacts.json merge=fixture-map

@@ -7,6 +7,7 @@ import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.EndToEndRegistered
 import Proofs.Flock.ZeroKnowledgeHidden
 import Proofs.Flock.Recursive
+import Proofs.Flock.C3
 import Proofs.Flock.VBridge
 import Proofs.Flock.VBridge.Family.RegistrantFinder
 import Proofs.Flock.Sampled

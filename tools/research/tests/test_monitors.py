@@ -95,7 +95,7 @@ def test_the_note_has_alert_sinks_front_matter_and_names_its_monitor(tmp_path):
     text = next((tmp_path / "outbox").iterdir()).read_text()
     fm = M.front_matter(text)
     assert {k: fm[k] for k in ("campaign", "lane", "kind", "status", "repo")} == {
-        "campaign": "nebius-monitoring", "lane": "infra", "kind": "finding", "status": "open", "repo": "danielreuter/verity"}
+        "campaign": "nebius-monitoring", "lane": "infra", "kind": "finding", "status": "open", "repo": "compute-verification/verity"}
     assert fm["monitor"] == "m" and fm["key"] == '"m|a"' and fm["owners"] == "[infra]" and fm["id"] + ".md" == events(tmp_path)[0]["note"]
     assert "# a is wrong" in text and "What to do: do the thing" in text
 
@@ -473,15 +473,16 @@ def test_the_watermarks_key_breaches_as_the_stewards_tick_did_and_hard_ones_page
     assert set(got) == {"HARD root free # GB < # GB: no new check starts", "GPU<3> holds # GiB at #% for # min", "error:idle_gpus"}
     assert got["HARD root free # GB < # GB: no new check starts"].severity == "page"
     assert got["error:idle_gpus"].for_s == 1200 and got["GPU<3> holds # GiB at #% for # min"].severity is None
-    assert ctx.memo["rate_base"]["t"] == T0 and run.calls[0][0][:5] == M.NICE
+    assert [b["t"] for b in ctx.memo["rate_base"]] == [T0] and run.calls[0][0][:5] == M.NICE
 
 
-def test_the_inode_rate_compares_with_the_base_reading_the_memo_keeps():
+def test_the_inode_rate_compares_with_the_base_readings_the_memo_keeps():
     memo: dict = {}
     for t, iused in ((T0, 7_000_000), (T0 + 1000, 7_200_000)):
         run = Run((has("--reading"), (0, json.dumps(reading(iused=iused, t=t)), "")))
         keys = [f.key for f in M.watermarks("n1")(M.Ctx(now=t, memo=memo, run=run))]
-    assert any("inodes/h" in k for k in keys) and memo["rate_base"]["t"] == T0
+    assert any("inodes/h" in k for k in keys) and [b["t"] for b in memo["rate_base"]] == [T0, T0 + 1000]
+    assert M.norm("/workspace gaining 1 inodes/h > 2 (growing a/b +3, c +4 in 60 min)") == "/workspace gaining # inodes/h > #"
 
 
 def test_node_2s_probe_runs_in_its_session_and_its_reading_is_judged_on_node_1():
@@ -717,6 +718,26 @@ def test_an_unanswered_ask_goes_to_whoever_it_asked():
     rep = {"inboxes": [], "dropped": [], "unanswered": [{"ts": "1791050000.000100", "by": "circuits", "to": ["infra", "proofs"]}]}
     (f,) = M.asks(M.Ctx(now=T0, run=Run((has("traffic"), (0, json.dumps(rep), "")))))
     assert f.key == "1791050000.000100" and f.owners == ("infra", "proofs") and "@circuits" in f.text
+
+
+def test_fixtures_public_names_main_s_fixtures_the_public_export_lacks(monkeypatch):
+    a, b, old = ("art:" + c * 64 for c in "abc")
+    doc = {a: "fixtures/a.json", b: "fixtures/b.json", "previous": {a: [old]}}
+    run = Run((has("artifacts.json?ref=main"), (0, json.dumps(doc), "")))
+    asked = []
+    monkeypatch.setattr(M, "public_missing", lambda arts, url: asked.extend(arts) or [b])
+    (f,) = M.fixtures_public(M.Ctx(now=T0, run=run))
+    assert asked == [a, b] and f.key == "missing" and "1 of the 2 fixtures" in f.text and f"`{b[:16]}…`" in f.text
+    monkeypatch.setattr(M, "public_missing", lambda arts, url: [])
+    assert M.fixtures_public(M.Ctx(now=T0, run=run)) == []
+
+
+def test_public_missing_heads_each_manifest(monkeypatch):
+    from research.store.remote import HttpRemote
+
+    a, b = "art:" + "a" * 64, "art:" + "b" * 64
+    monkeypatch.setattr(HttpRemote, "head", lambda self, key: {"bytes": 1} if key == f"manifests/{'a' * 64}.json" else None)
+    assert M.public_missing([a, b], "https://example.invalid/store") == [b]
 
 
 def test_node_1s_heartbeat_is_stale_after_10_minutes_without_a_pass():

@@ -48,7 +48,7 @@ theorem prepare_spec {i : Issuer} {record : Record} {direction : NetworkCheck.Di
     {parameters : ByteArray} {deadline : Bool} {head : NetworkCheck.RecordHead} {digest message : ByteArray}
     (h : i.prepare record direction params parameters deadline = .ok (head, digest, message)) :
     head.link = record.link ∧ head.direction = direction ∧ head.window = record.window ∧ head.digest = .ok digest ∧
-      NetworkCheck.certificateMessage i.key.I record.link direction record.window digest = .ok message := by
+      NetworkCheck.certificateMessage i.key.I i.session record.link direction record.window digest = .ok message := by
   unfold Issuer.prepare at h
   simp only [bind, Except.bind] at h
   split at h
@@ -71,7 +71,7 @@ theorem verify_cert {i : Issuer} (hk : ValidKey i.key) {record : Record} {direct
       .ok (head, digest, message)) {q : Nat} (hq : q < 2 ^ i.key.params.H) :
     ∃ sig, Lms.signAt i.key q message = .ok sig ∧
       CertifiedRecord.verify ⟨head, ⟨i.key.I, record.link, direction, record.window, digest, sig.encode⟩⟩
-        i.key.params i.key.publicKey = true := by
+        i.key.params i.key.publicKey i.session = true := by
   obtain ⟨N, W, H, toy, I, seed, hp, hkey⟩ := hk
   obtain ⟨-, hH, -, hH30⟩ := make_spec hp
   subst hH
@@ -93,7 +93,7 @@ theorem issuerVerifies_valid {i i' : Issuer} {leaf : Except String Nat} {record 
     {direction : NetworkCheck.Direction} {params : Params} {parameters : ByteArray} {deadline : Bool}
     {cr : CertifiedRecord} (hk : ValidKey i.key)
     (h : i.certify leaf record direction params parameters deadline = .ok (i', some cr)) :
-    cr.verify i.key.params i.key.publicKey = true := by
+    cr.verify i.key.params i.key.publicKey i.session = true := by
   unfold Issuer.certify at h
   simp only [bind, Except.bind] at h
   split at h
@@ -121,10 +121,10 @@ theorem issuerVerifies_valid {i i' : Issuer} {leaf : Except String Nat} {record 
         exact hv
 
 theorem issuerVerifies_proof : IssuerVerifies := by
-  intro N W H toy p I seed k refused i' leaf record direction params parameters deadline cr hp hk h
+  intro N W H toy p I seed k session refused i' leaf record direction params parameters deadline cr hp hk h
   obtain ⟨hpk, -⟩ := Lms.key_spec hk
   have hv : ValidKey k := ⟨N, W, H, toy, I, seed, by rw [hpk]; exact hp, by rw [hpk]; exact hk⟩
-  have := issuerVerifies_valid (i := ⟨k, refused⟩) hv h
+  have := issuerVerifies_valid (i := { key := k, session, refused }) hv h
   rw [hpk] at this
   exact this
 
@@ -136,7 +136,7 @@ def IssuerSigns : Prop :=
     ValidKey i.key → q < 2 ^ i.key.params.H →
     i.prepare record direction params parameters deadline = .ok prepared →
     ∃ cr, i.certify (.ok q) record direction params parameters deadline = .ok (i, some cr) ∧
-      cr.verify i.key.params i.key.publicKey = true
+      cr.verify i.key.params i.key.publicKey i.session = true
 
 theorem issuerSigns : IssuerSigns := by
   intro i q record direction params parameters deadline prepared hk hq hprep

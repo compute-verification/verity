@@ -734,9 +734,9 @@ static void launch_tags(const Pass& p, const void* E, const uint8_t seed[32], ui
   }
 }
 
-static void launch_tree(const Pass& p, cudaStream_t st) {
+static void launch_tree(const Pass& p, cudaStream_t st, size_t from = 0) {
   const size_t top = p.lv.n.size() - 1;
-  size_t k = 0;
+  size_t k = from;
   for (; k < top && p.lv.n[k] > WIDE; ++k) {
     const uint64_t nout = p.lv.n[k + 1];
     node_level<<<(unsigned)((nout + 127) / 128), 128, 0, st>>>(p.nodes + p.lv.off[k] * 8, p.lv.n[k],

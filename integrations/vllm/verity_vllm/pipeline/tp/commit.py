@@ -242,7 +242,7 @@ class Options:
                                          help="each rank's C2 sampled replay + boundary linkage do not run in its process: every rank of every instrumented run "
                                               "seals a replay bundle (<out>/replay_bundle_p<pair>_rank<r>/, verity_vllm.pipeline.replay_bundle) and the Commit's "
                                               "verdict stays PENDING (exit 0 when every check this process runs passes) until `verity-vllm tp-commit-replay <out>` "
-                                              "replays the bundles on CPU against the checkpoint and decides it as this process would have (TP2 at most: `c2.deferral_skipped`)")
+                                              "replays the bundles on CPU against the checkpoint and decides it as this process would have (TP2 and TP8 only: `c2.deferral_skipped`)")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[manbind MAN-09, COORD M-0614 (1)] the PINNED checkpoint snapshot (safetensors shards + config.json): each rank " "builds its weights of record from its rank Program's shard map (engine-free) and compares every served shard's sha256 " "to it right after register_weights; a difference FAILs named (rank, param). Required with --required-manifest unless " "--no-weights-pin (then the record says 'weights unpinned (MAN-09)' and the Commit FAILs closed)")
     checkpoints_manifest: str | None = option("--checkpoints-manifest", default=None, help="manifests/checkpoints.json (default: the repo's) -- the shard sha256s of record")
     checkpoint_model: str | None = option("--checkpoint-model", default=None, help="HF repo id selecting the checkpoints.json entry when --checkpoint-dir is not its local_path")
@@ -256,7 +256,7 @@ class Options:
 
 
 def main(args: Options) -> int:
-    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof, env as engine_env
     prof.apply_env()
     from verity_vllm.pipeline.tp import lease as TPL
     from vllm import LLM
@@ -309,7 +309,7 @@ def main(args: Options) -> int:
     versions = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
                 "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
                 "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT", "HIDDEN_GPU"))},
-                "env_required": {"NCCL_P2P_DISABLE": "1"}, "ranks": topo, "root_combination": "tp_run_root = SHA-256(tag || u32 world || (u32 rank || root_rank)...)",
+                "env_required": {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}, "ranks": topo, "root_combination": "tp_run_root = SHA-256(tag || u32 world || (u32 rank || root_rank)...)",
                 "root_tag": TP_ROOT_TAG.decode(), "layout_version_per_rank": "chunk-leaf-v1 (unchanged)", "required_classes": list(required_classes),
                 "required_classes_source": "cli" if args.required_classes is not None else "default (REL-02) + tp_rank_partials (R14 TP-03), checked per rank",
                 "negatives": {"omit_rank": args.omit_rank, "no_tp_partials": bool(args.no_tp_partials), "relabel_rank": args.relabel_rank, "swap_requests": args.swap_requests,
