@@ -13,8 +13,8 @@ at the map) and at the reps' (`holoSel_stageOf`), a part's session's unit name (
 the unit a rep reads at (`hun`).
 
 * `roundReads_ownAt`, `roundReads_checked`: `RoundReads` at `ownAt ss`, and at the checked family.
-* `wRoundReads_ownAt`, `wRoundReads_checked`: `WRoundReads` at `ownAt ss` where a run is accepted, and at the checked
-  family.
+* `wRoundReads_ownAt`, `wRoundReads_checked`: `WRoundReads` at `ownAt ss` where some outer proof is accepted
+  (`AcceptedAt`), and at the checked family.
 -/
 
 namespace FlockC3.Reps.RoundReads
@@ -23,7 +23,7 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.PubRows
 open FlockC3.Compose
-open FlockC3.Reps (OwnHas MsgNamesAt roundRead_opening wRoundRead_inner msgNamesAt_of_accepted)
+open FlockC3.Reps (OwnHas MsgNamesAt AcceptedAt roundRead_opening wRoundRead_inner msgNamesAt_of_accepted)
 open FlockVBridge.Family (partsOf)
 
 theorem mem_ownAt {ss : Array VStar.Stmt} {j : ℕ} {s : VStar.Stmt} (hj : ss[j]? = some s)
@@ -62,8 +62,8 @@ theorem roundReads_ownAt {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings
   intro i hi _ _ _ _ _ hO q hq
   exact roundRead_opening hob hst hmn (fun s => ownHas_ownAt hss s) (hsel i hi) hO q hq
 
-/-- **`WRoundReads` at the verifier's message-round ports**, where a run is accepted (`hA`): at part `p`'s session,
-whose unit is named as a part's (`hpar`) and whose circuit has a port `m<m>`, `wRoundRead_inner` at `ownAt ss`
+/-- **`WRoundReads` at the verifier's message-round ports**, where some outer proof is accepted (`hA`): at part `p`'s
+session, whose unit is named as a part's (`hpar`) and whose circuit has a port `m<m>`, `wRoundRead_inner` at `ownAt ss`
 (`ownHas_ownAt`), at rep `ρ`'s unit (`hun`) where rep `ρ`'s stage of round `m` reads `rec-c<m>` at row `ρ`
 (`hsel`). -/
 theorem wRoundReads_ownAt {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
@@ -72,9 +72,7 @@ theorem wRoundReads_ownAt {ish : RecVStar.Inner} {bind : Fin S → VStar.Binding
     {sel : ℕ → String → ℕ → Prop} {stage : Fin 2 → ℕ → ℕ} {sess : ℕ → Fin S}
     {un : (p : ℕ) → Fin 2 → Fin (Vs (sess p)).nv}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs) (hst : SessStmt ish bind zs dg N k Rw)
-    (hmn : MsgNamesAt ish zs dg N k Rw) (hss : RecVStar.statements ish = .ok ss) {R : Reg} {ω : L.Ω}
-    {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
-    (hA : ∃ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o)
+    (hmn : MsgNamesAt ish zs dg N k Rw) (hss : RecVStar.statements ish = .ok ss) (hA : AcceptedAt zs dg N k Rw)
     (hpar : ∀ p < (partsOf sh).size, ∃ m kk cl j,
       RecResiduals.params (Vs (sess p)).c.unit.name = some (m, kk, cl, j))
     (hun : ∀ p (ρ : Fin 2), ρ.val < (Vs (sess p)).nv → (un p ρ).val = ρ.val)
@@ -118,14 +116,13 @@ theorem roundReads_checked (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j)
       (F := C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       checksAccepted_checked) hss hsel
 
-/-- **`WRoundReads` at the checked family** (`C3Family.checked`), at `ownAt ss`, where one of its runs is accepted:
-`wRoundReads_ownAt` with `SessStmt` and `MsgNamesAt` as `roundReads_checked` has them. -/
+/-- **`WRoundReads` at the checked family** (`C3Family.checked`), at `ownAt ss`, where one of its outer proofs is
+accepted: `wRoundReads_ownAt` with `SessStmt` and `MsgNamesAt` as `roundReads_checked` has them. -/
 theorem wRoundReads_checked (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I) {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {sh : Flock.Shape} {stage : Fin 2 → ℕ → ℕ} {sess : ℕ → Fin (vstarCount ish)}
-    {un : (p : ℕ) → Fin 2 → Fin (Vs (sess p)).nv} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
-    (hA : ∃ τ o, FlockVBridge.Compiled.Accepted (I := ℐ)
-      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs dg N k Rw
-        R ω t R₂ τ o)
+    {un : (p : ℕ) → Fin 2 → Fin (Vs (sess p)).nv}
+    (hA : AcceptedAt (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg).zs
+      dg N k Rw)
     (hpar : ∀ p < (partsOf sh).size, ∃ m kk cl j,
       RecResiduals.params (Vs (sess p)).c.unit.name = some (m, kk, cl, j))
     (hun : ∀ p (ρ : Fin 2), ρ.val < (Vs (sess p)).nv → (un p ρ).val = ρ.val)
