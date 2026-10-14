@@ -8,11 +8,17 @@ the statement's message-round ports (`OwnHas`, `ownHas_ownAt`), so U's links (`C
 entries `RoundReads` and `WRoundReads` ask for: R's opening part's `m<i>` under `rec-opening-c<i>` at row 0
 (`roundRead_opening`), a residuals' part's `m<m>` under `rec-c<m>` at rep `ρ`'s row (`wRoundRead_inner`), each where
 the circuit has the port and `checkMsgNames` passed. The accepted sessions' reads hold `ownAt`'s ports (`OwnIn`,
-`ownIn_checked`, from `checkOwn`). Left as hypotheses: the stage selector at R's rounds (`hsel`, U's `holoSel_opening`
-at the map) and at the reps' (`holoSel_stageOf`), a part's session's unit name (`hpar`, `wSel_of_rounds`' `hck`) and
-the unit a rep reads at (`hun`).
+`ownIn_checked`, from `checkOwn`). At the map's `sel` (`holoMap`), R's first two message rounds are R's rounds 0 and 1,
+one history round apart (`stackedRounds_open`, by evaluating `stackedRounds`; `roundAt_opening`), so the map reads
+`rec-opening-c<i>` at `c₀ + i`, `c₀` R's round 0's history round (`holoSel_opening_at`). At the reps' rounds the map
+reads a part's port `m<m>` at `stageOf σ c₀` (`holoSel_parts`, from `holoSel_stageOf`) where `m` is one of the reps'
+message rounds and `roundOf σ m` the reps' history rounds before its stream round (`hm`, left as a hypothesis, with
+`c₀` rep 0's history rounds). Left as hypotheses too: a part's session's unit name (`hpar`, `wSel_of_rounds`' `hck`)
+and the unit a rep reads at (`hun`).
 
-* `roundReads_ownAt`, `roundReads_checked`: `RoundReads` at `ownAt ss`, and at the checked family.
+* `roundReads_ownAt`, `roundReads_checked`: `RoundReads` at `ownAt ss`, and at the checked family; at the map's `sel`
+  and `c₀ := roundAt L .stacked 0`, `roundReads_checked` takes `holoSel_opening_at` as its `hsel`.
+* `holoSel_parts`: `wRoundReads_checked`'s `hsel` at the map's `sel` and `stageOf σ c₀`.
 * `wRoundReads_ownAt`, `wRoundReads_checked`: `WRoundReads` at `ownAt ss` where some outer proof is accepted
   (`AcceptedAt`), and at the checked family.
 -/
@@ -84,6 +90,146 @@ theorem wRoundReads_ownAt {ish : RecVStar.Inner} {bind : Fin S → VStar.Binding
   exact wRoundRead_inner hob hst hmn hA (fun s => ownHas_ownAt hss s) hun hpm ρ (hsel p hp m ρ q hq) q hq
 
 end Ats
+
+/-! ## R's opening's rounds at the map -/
+
+section Opening
+
+open Flock.RecVStar Flock.Guarantees
+
+private theorem bind_some {α β : Type} {x : Option α} {f : α → Option β} {b : β} (h : (x >>= f) = some b) :
+    ∃ a, x = some a ∧ f a = some b := by
+  cases x with
+  | none => cases h
+  | some a => exact ⟨a, rfl, h⟩
+
+/-- **R's stream opens with its two message rounds**: its rounds 0 and 1 absorb its first two messages, and round 0 takes
+one history round, by evaluating `stackedRounds` at each `m` below 36; past 35 `fast100` has none, nor has
+`stackedRounds`. -/
+theorem stackedRounds_open {m : ℕ} {rs : Array SchedRound} (h : stackedRounds ⟨m, STACKED_CLAIMS⟩ = some rs) :
+    (msgRounds rs).take 2 = [0, 1] ∧ heldBefore .stacked rs 1 = 1 := by
+  by_cases hm : m < 36
+  · have key : ∀ m' < 36, (stackedRounds ⟨m', STACKED_CLAIMS⟩).all
+        (fun rs => decide ((msgRounds rs).take 2 = [0, 1] ∧ heldBefore .stacked rs 1 = 1)) := by
+      decide +kernel
+    have := key m hm
+    rw [h] at this
+    simpa using this
+  · have hb : (m < 22 || m > 35) = true := by
+      simp only [Bool.or_eq_true, decide_eq_true_eq]
+      omega
+    have h0 : Flock.fast100 m = none := by
+      unfold Flock.fast100
+      simp [hb]
+    have hn : stackedRounds ⟨m, STACKED_CLAIMS⟩ = none := by
+      unfold stackedRounds
+      rw [h0]
+      rfl
+    rw [hn] at h
+    cases h
+
+/-- **R's rounds take their history rounds after every other stream's**: in streams ending in R's, R's round `k` is its
+round 0's history round plus R's rounds before `k`. -/
+theorem roundIn_stacked (P : List (HoloStream × Array SchedRound)) (hP : ∀ e ∈ P, e.1.idx ≠ HoloStream.stacked.idx)
+    (rs : Array SchedRound) (k : ℕ) :
+    roundIn (P ++ [(.stacked, rs)]) .stacked k = roundIn (P ++ [(.stacked, rs)]) .stacked 0 + heldBefore .stacked rs k := by
+  induction P with
+  | nil =>
+    show (if HoloStream.stacked.idx = HoloStream.stacked.idx then heldBefore .stacked rs k else _) =
+      (if HoloStream.stacked.idx = HoloStream.stacked.idx then heldBefore .stacked rs 0 else _) + _
+    rw [if_pos rfl, if_pos rfl]
+    simp [heldBefore]
+  | cons e P ih =>
+    obtain ⟨s', a⟩ := e
+    have hne : s'.idx ≠ HoloStream.stacked.idx := hP _ List.mem_cons_self
+    have ih' := ih fun e he => hP e (List.mem_cons_of_mem _ he)
+    show (if s'.idx = HoloStream.stacked.idx then _ else heldBefore s' a a.size + roundIn (P ++ [(.stacked, rs)]) .stacked k) =
+      (if s'.idx = HoloStream.stacked.idx then _ else
+        heldBefore s' a a.size + roundIn (P ++ [(.stacked, rs)]) .stacked 0) + _
+    rw [if_neg hne, if_neg hne, ih']
+    omega
+
+/-- **`holoStreams` ends in R's stream** where the inner shape names R: the streams before it are the reps' and the
+sparse phases', and R's rounds are `stackedRounds`'. -/
+theorem holoStreams_stacked {m kLog claims : ℕ} {sp : Option RecSparse.Shape} {r : StackedShape}
+    {L : List (HoloStream × Array SchedRound)} (h : holoStreams m kLog claims sp (some r) = some L) :
+    ∃ rep, holoRounds m kLog claims = some rep ∧ ∃ P rs, L = P ++ [(.stacked, rs)] ∧
+      (∀ e ∈ P, e.1.idx ≠ HoloStream.stacked.idx) ∧ stackedRounds r = some rs := by
+  unfold holoStreams at h
+  obtain ⟨rep, hrep, h⟩ := bind_some h
+  obtain ⟨R, hR, h⟩ := bind_some h
+  obtain ⟨rs, hrs, rfl⟩ := Option.map_eq_some_iff.1 hR
+  refine ⟨rep, hrep, _, rs, (Option.some.inj h).symm, ?_, hrs⟩
+  intro e he
+  cases sp <;> simp at he <;> rcases he with rfl | rfl | rfl | rfl <;> simp [HoloStream.idx]
+
+/-- **R's first two message rounds take consecutive history rounds**, the first at R's round 0's, where the inner shape
+names R at `STACKED_CLAIMS` claims. -/
+theorem roundAt_opening {m kLog claims mR : ℕ} {sp : Option RecSparse.Shape} {L : List (HoloStream × Array SchedRound)}
+    (h : holoStreams m kLog claims sp (some ⟨mR, STACKED_CLAIMS⟩) = some L) :
+    ∃ rep, holoRounds m kLog claims = some rep ∧ ∃ rs, stackedRounds ⟨mR, STACKED_CLAIMS⟩ = some rs ∧
+      ∀ i < 2, ∃ hl : i < (msgRounds rs).length, roundAt L .stacked ((msgRounds rs)[i]'hl) = roundAt L .stacked 0 + i := by
+  obtain ⟨rep, hrep, P, rs, rfl, hP, hrs⟩ := holoStreams_stacked h
+  obtain ⟨ht, h1⟩ := stackedRounds_open hrs
+  refine ⟨rep, hrep, rs, hrs, fun i hi => ?_⟩
+  have hlen : 2 ≤ (msgRounds rs).length := by
+    have := congrArg List.length ht
+    rw [List.length_take] at this
+    simp at this
+    omega
+  refine ⟨by omega, ?_⟩
+  have hget : (msgRounds rs)[i]'(by omega) = i := by
+    have e : ((msgRounds rs).take 2)[i]'(by rw [List.length_take]; omega) = (msgRounds rs)[i]'(by omega) :=
+      List.getElem_take
+    rw [← e]
+    simp only [ht]
+    rcases (show i = 0 ∨ i = 1 by omega) with rfl | rfl <;> rfl
+  rw [hget]
+  unfold roundAt
+  rw [roundIn_stacked P hP rs i]
+  rcases (show i = 0 ∨ i = 1 by omega) with rfl | rfl
+  · simp [heldBefore]
+  · rw [h1]
+    omega
+
+/-- **The map reads R's opening's round `i` at `rec-opening-c<i>`, row 0, at R's round 0's history round plus `i`**
+(`holoSel_opening` at `roundAt_opening`), where the inner shape names R at `STACKED_CLAIMS` claims
+(`FlockC3.VStarList.stacked_of_candidate3`). -/
+theorem holoSel_opening_at {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
+    {bm : Cm → String → ℕ → List UInt8} {L : List (HoloStream × Array SchedRound)}
+    (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L) {mR : ℕ}
+    (hst : ish.stacked = some ⟨mR, STACKED_CLAIMS⟩) :
+    ∀ i < 2, (holoMap st hp Cm ish tbl bm).sel (roundAt L .stacked 0 + i) s!"rec-opening-c{i}" 0 := by
+  intro i hi
+  have hS' := hS
+  rw [hst] at hS'
+  obtain ⟨rep, hr, rs, hrs, hat⟩ := roundAt_opening hS'
+  obtain ⟨hl, he⟩ := hat i hi
+  rw [← he]
+  exact holoSel_opening hS hr (by rw [hst]; exact hrs) hl
+
+theorem heldBefore_rep (ρ : Fin 2) (rs : Array SchedRound) (k : ℕ) :
+    heldBefore (.rep ρ) rs k = heldBefore (.rep 0) rs k := rfl
+
+/-- **The map reads each part's round `m` at rep `ρ`'s stage of it** (`holoSel_stageOf`), where `c₀` is rep 0's history
+rounds and, at each port `m<m>` of a part's circuit, `m` is one of the reps' message rounds whose stream round has
+`roundOf σ m` of the reps' history rounds before it (`hm`): `WRoundReads`' stage selector at the map. -/
+theorem holoSel_parts {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
+    {bm : Cm → String → ℕ → List UInt8} {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)}
+    (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some ((.rep 0, rs) :: (.rep 1, rs) :: L))
+    (hr : holoRounds ish.m ish.kLog ish.claims = some rs) {σ : List FlockSoundness.Discharge.Exec.Kind} {c₀ : ℕ}
+    (hc₀ : c₀ = heldBefore (.rep 0) rs rs.size) {S : ℕ} {Vs : Fin S → VStmt} {sh : Flock.Shape} {sess : ℕ → Fin S}
+    (hm : ∀ p < (partsOf sh).size, ∀ (m : ℕ) (q : Fin (Vs (sess p)).c.ports.size),
+      (Vs (sess p)).c.ports[q].name = s!"m{m}" → ∃ hm : m < (msgRounds rs).length,
+        FlockC3.Sparse.roundOf σ m = heldBefore (.rep 0) rs ((msgRounds rs)[m]'hm)) :
+    ∀ p < (partsOf sh).size, ∀ (m : ℕ) (ρ : Fin 2) (q : Fin (Vs (sess p)).c.ports.size),
+      (Vs (sess p)).c.ports[q].name = s!"m{m}" →
+        (holoMap st hp Cm ish tbl bm).sel (stageOf σ c₀ ρ m) s!"rec-c{m}" ρ.val := by
+  intro p hp' m ρ q hq
+  obtain ⟨hm', hσ⟩ := hm p hp' m q hq
+  exact holoSel_stageOf hS hr ρ hm' hc₀ (hσ.trans (heldBefore_rep ρ rs _).symm)
+
+end Opening
 
 section Checked
 

@@ -290,6 +290,59 @@ theorem checks_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'} {P Pc : I
     rw [hf] at ht
     exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH t ht).elim
 
+/-- **`checkMsgNames` passing names each port of the circuit once** (its first refusal). -/
+theorem names_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkMsgNames s c = .ok ()) :
+    ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q' := by
+  unfold RecVStar.checkMsgNames at h
+  split at h
+  · cases h
+  · rename_i hn
+    have hnd : (c.ports.toList.map (·.name)).Nodup := by simpa using hn
+    intro q q' he
+    rcases Nat.lt_trichotomy q.val q'.val with hl | he' | hl
+    · exact absurd he (by simpa using List.pairwise_iff_getElem.1 hnd q.val q'.val (by simp) (by simp) hl)
+    · exact Fin.ext he'
+    · exact absurd he.symm (by simpa using List.pairwise_iff_getElem.1 hnd q'.val q.val (by simp) (by simp) hl)
+
+/-- **`checkStmt` accepting passes `checkMsgNames`** at statement `j` of the list, on the circuit. -/
+theorem msgNames_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {own : Option (Array Flock.Registered.Port)} {j : ℕ} {f : VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
+    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program own (some j) (some f) rows = .ok ()) :
+    ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ RecVStar.checkMsgNames s st.c = .ok () := by
+  unfold RecVStar.checkStmt at h
+  dsimp only at h
+  split at h
+  · obtain ⟨_, h1, -⟩ := ebind_ok h
+    cases h1
+  · split at h
+    · obtain ⟨_, h1, -⟩ := ebind_ok h
+      cases h1
+    · split at h
+      · split at h
+        · obtain ⟨_, h1, -⟩ := ebind_ok h
+          cases h1
+        obtain ⟨_, -, h⟩ := ebind_ok h
+        obtain ⟨s, hs, h⟩ := ebind_ok h
+        obtain ⟨ss, hss, hj, -⟩ := FlockSoundness.Discharge.Recursion.check_ok
+          (FlockSoundness.Discharge.Recursion.checkCircuit_ok hs).1
+        obtain ⟨⟨⟩, hm, -⟩ := ebind_ok h
+        exact ⟨ss, s, hss, hj, hm⟩
+      · cases h
+
+/-- **A circuit `checkStmt` passes as one of V*'s statements names each port once** (`checkMsgNames`' first
+refusal), so the verifier's find of a port by name (`Registered.checkPort`) finds that port. -/
+theorem names_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {own : Option (Array Flock.Registered.Port)} {j : ℕ} {f : VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
+    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program own (some j) (some f) rows = .ok ())
+    {c : Flock.Circuit} (hc : st.c = c) : ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q' := by
+  subst hc
+  obtain ⟨_, _, -, -, hm⟩ := msgNames_of_checkStmt h
+  exact names_of_msgNames hm
+
 end Session
 
 section Family
@@ -399,9 +452,11 @@ local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel 
 
 /-- **(n1) The public rows at the honest family, from the verifier's checks**: `hPubRows_of_check'` with the
 rec-sparse shape read at an accepted transcript whose public rows and statements the verifier checks
-(`ChecksAccepted`, n1b's), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`). -/
+(`ChecksAccepted`, n1b's), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`). The port the check finds by
+name is the session's: the statement check refuses a circuit naming a port twice (`names_of_checkStmt`), so
+`PortsNamed` holds at every accepted session. -/
 theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksAccepted 𝓗 rows wr reg)
-    (hdrawn : RowsHeld 𝓗) (hnames : PortsNamed 𝓗) (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
+    (hdrawn : RowsHeld 𝓗) (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
   intro R ω t R₂ j hex rg hrg u q x hname hread b hrow
   obtain ⟨tr', hacc, hchk', hst⟩ := hchk R ω t R₂ j hex
   obtain ⟨cs, w, c, hcs, hc, hb⟩ :=
@@ -410,14 +465,14 @@ theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk 
     rw [fixedRow_isSome { reps := #[] } cs rg.value 0 x none ish.sparse]
     simp [hc]
   obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hu⟩ := hdrawn R ω t R₂ j tr' hacc rg hrg hfix u x hread
-  have hfind := port_find_of_unique (hnames j) q
+  obtain ⟨sj, hsj, hck⟩ := stmt_of_session ((𝓗).zs R ω t R₂ j) hacc hst hd u
+  have hfind := port_find_of_unique (names_of_checkStmt hck hsj) q
   rw [hname] at hfind
   rw [hcs] at hchk'
   obtain ⟨spec₀, sts₀, hs₀, hpr₀, hlb₀⟩ := hchk'
   have hlab := label_of_checked ((𝓗).zs R ω t R₂ j) hacc ⟨spec₀, sts₀, hs₀, hlb₀⟩ hd hD hdp hidx hu
   obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) ⟨spec₀, sts₀, hs₀, hpr₀⟩ hrg
     hfix hfind hd hD hdp hidx hu (by rw [hlab]; exact hread)
-  obtain ⟨sj, hsj, hck⟩ := stmt_of_session ((𝓗).zs R ω t R₂ j) hacc hst hd u
   have he := (fixedRow_or (hsp j sj _ _ _ _ _ _ _ hsj hck) hc).symm.trans hc'
   simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he
   exact hdig.trans (he.2.symm.trans hb.symm)

@@ -15,8 +15,9 @@ import Proofs.Flock.C3.Opening.ClaimTie
 * `levelTie_of_sessionAt`, `srcLevelTie_of_maps`: `levelTie_of_maps` at `opsAt`, with the run from `SessionAt`, the
   claims' and ring switches' sizes from `coinClaim` and `decodedO`, the opening's play from the tie at V*'s layer
   (`OpenTieL`) at the tied run, and the layers good from acceptance. Left, in `levelTie_of_maps`' form (`MapsLeft`):
-  custody (the coins nonempty, the opening's and Ligerito's steps' coins), R's openings at `readMaps`' rows
-  (`OpensAtMaps`), the Ligerito and openings tape, the cap; and the claim tie, in `openingReadAt_src`'s form.
+  custody (the coins nonempty, the opening's steps' coins), R's openings at `readMaps`' rows (`OpensAtMaps`), the
+  Ligerito steps' weave (`lgSteps_of_lig` makes it a play's tape) and the openings, the cap; and the claim tie, in
+  `openingReadAt_src`'s form.
 -/
 
 namespace FlockC3.Opening
@@ -57,6 +58,8 @@ theorem opening_rounds {c3 : RecCoins.C3} {unit : String} {o : RecCoins.Opening}
         split at h
         · cases h
         · rename_i hS
+          split at h
+          · cases h
           cases h
           obtain ⟨k₁, hx⟩ := run'_ok hrun
           exact ⟨rounds, a, b, lins, k₁, res, bs, hrd, ha, hb,
@@ -174,7 +177,8 @@ def opsAt (M : FlockC3.Reps.StackedMaps stmt Vs) (sh : Flock.Shape) (Lb : (s : F
 
 /-- **What `levelTie_of_maps` leaves at one run**, in its form, at R's openings `opsAt` over `readMaps M`, R's claims
 at w and `stacked/rep0`'s coins from round 0: the coins nonempty, the cap, the opening's steps' coins, R's openings at
-the map (`OpensAtMaps`) with Ligerito's steps' coins, and the Ligerito and openings tape. -/
+the map (`OpensAtMaps`) with Ligerito's steps woven from R's proof's messages and the coins from the ring switches'
+`k₂` (the source's definition, `ligOfVals`' form), and the openings. -/
 def MapsLeft (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s).Outer Reg')
     (Lb : (s : Fin S) → (Vs s).Bits) (sh : Flock.Shape) (unit : String) (c3 : Flock.RecCoins.C3)
     (w : Array Flock.F128) (kap : Array (Array (Array Flock.F128))) (e0 : ℕ → ByteArray) (sb : ℕ → ℕ → ℕ → ByteArray)
@@ -192,9 +196,9 @@ def MapsLeft (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s)
       Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) =
         .ok ((lgr, lg), k₁) →
       OpensAtMaps (readMaps M sh.sched) zs Lb sh (sibsR sh ops sb e) (capR sh e0) (pR sh e0 w ops sb e) lg ∧
-      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf)) ∧
-    u.lg.map kindOf <+: ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch ∧
-    u.lg.filterMap Sum.getLeft? = ligMsgs (pR sh e0 w ops sb e) capDig sh.sched ∧
+      u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
+        (ligMsgs (pR sh e0 w ops sb e) capDig sh.sched)
+        (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))) ∧
     ∀ ℓ j, u.os.1 2 ℓ j = openRow (pR sh e0 w ops sb e) sh.sched ℓ j
 
 /-- **R's levels at a tied run, from V*'s sessions** at one accepted outer proof: `levelTie_of_maps` at `opsAt` over
@@ -216,7 +220,7 @@ theorem levelTie_of_sessionAt
     (htie : FlockC3.Opening.OpenTieL (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) sh w (tie v))
     (hleft : MapsLeft M (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) sh unit c3 w kap e0 sb e cap₀ (tie v)) :
     LevelTie cap₀ (holoAt st hp) (tie v) := by
-  obtain ⟨hne, hcap, hcoin, hR, hk, hl, ho⟩ := hleft
+  obtain ⟨hne, hcap, hcoin, hR, ho⟩ := hleft
   obtain ⟨as, bs, _, _, ha, hb, hrun, hz⟩ := FlockC3.Opening.run_of_sessionAt hacc hsh hs
   have hot := FlockC3.Opening.openTie_of_layer hsh
     (opsAt (readMaps M sh.sched) sh (layers zs dg N k Rw R ω t R₂ τ) kap c3 unit w) htie
@@ -268,7 +272,7 @@ theorem levelTie_of_sessionAt
     (c := FlockC3.Opening.rep0 c3 unit) rfl hell hsh hrun hz hne e0 sb e hcap
     (fun ℓ _ j _ => row_size_readMaps M sh _ ℓ j) (by simp [FlockC3.Opening.claimsO_eq ha hb]) hshape
     (fun i => by rw [hq i.val i.isLt]; exact hclaim as bs ha hb i) hpl hot hcoin
-    (fun rsr rs k₂ lgr lg h₁ h₂ => hR rsr rs k₂ lgr lg _ h₁ h₂) hk hl ho
+    (fun rsr rs k₂ lgr lg h₁ h₂ => hR rsr rs k₂ lgr lg _ h₁ h₂) ho
 
 /-- **(n14) R's levels at the tied source, from V*'s sessions**: `SrcLevelTie` at `tiedSrc stp`, at R's openings
 `opsAt` over `readMaps M` at the coins `c3`, w, the verifier's `kappa` `kap` and the proof's bytes `e0`, `sb`, `e` read

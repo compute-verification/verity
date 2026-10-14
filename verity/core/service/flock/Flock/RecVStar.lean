@@ -427,12 +427,16 @@ def rowPorts : VStar.Stmt → List String
 def msgUnnamed (s : VStar.Stmt) (c : Circuit) : Option String :=
   (c.ports.toList.map (·.name)).find? fun nm => (mIndex nm).isSome && !((ownPorts s).any (·.1 == nm))
 
-/-- **A part's circuit, and a part of R's opening's, names only its statement's message-round ports**: each port `m<k>`
-of the circuit is one of the statement's (`ownPorts`: a part's `m<k>` under `rec-c<k>`, R's opening's under
-`rec-opening-c<k>`), so the verifier's reads file reads it under the statement's value (`checkOwn`). The circuit file is
-V*'s for the statement (`checkFile`), whose ports are the statement's, so an honest session passes. -/
+/-- **A statement's circuit names each port once, and a part's circuit, and a part of R's opening's, names only its
+statement's message-round ports**: the verifier finds a registered port by its name (`Registered.checkPort`, the first
+port of the name), so each name is one port's; and each port `m<k>` of a part's circuit is one of the statement's
+(`ownPorts`: a part's `m<k>` under `rec-c<k>`, R's opening's under `rec-opening-c<k>`), so the verifier's reads file
+reads it under the statement's value (`checkOwn`). The circuit file is V*'s for the statement (`checkFile`), whose ports
+are the statement's, each name once (`HmRow.checkRows` refuses a name twice), so an honest session passes. -/
 def checkMsgNames (s : VStar.Stmt) (c : Circuit) : V Unit :=
-  match s with
+  if !decide (c.ports.toList.map (·.name)).Nodup then
+    throw s!"{s.name}: the circuit names a port twice"
+  else match s with
   | .inner .. | .opening .. =>
     match msgUnnamed s c with
     | some nm => throw s!"{s.name}: the circuit's port {nm} is named as a message round's, and the statement has no such port"
@@ -474,6 +478,19 @@ def checkRows (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Opti
 
 def ACC_VALUE : String := "rec-acc"
 
+/-- The first name two of the verifier's registered ports share. -/
+def dupName? (registered : Array Registered.Port) : Option String :=
+  let names := registered.toList.map (·.name)
+  names.find? fun nm => names.count nm != 1
+
+/-- **The verifier's reads file names each port once** (`dupName?`): `checkAcc` and `checkAccReads` read a name's first
+port (`find?`), so a second port of that name would be one neither checks. A file `Registered.ofJson` parses names each
+once (a JSON object's keys); the refusal holds whatever list of ports the verifier is given. -/
+def checkNames (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit :=
+  match dupName? registered with
+  | some nm => throw s!"{s.name}: the registered reads name two ports {nm}, and each check reads a name's first"
+  | none => pure ()
+
 /-- A statement's ports that read `rec-acc`: a level's `acc` and `acc_out` (`rec_outer.stage`, rec_outer.py:236), R's
 levels' too (R's openings follow the reps' in the chain, `rec_vstage.stage_stacked`), a part's `acc0` and `acc1` among its
 ports (rec_vstage.py:357), a part of R's opening's too (`rec_residuals.stage_opening`); RecSparse reads none. -/
@@ -484,11 +501,12 @@ def accPorts : VStar.Stmt → List String
   | .opening _ _ _ _ ports _ => (ports.map (·.1)).filter fun nm => nm == "acc0" || nm == "acc1"
 
 /-- **A session's `rec-acc` reads are one registration, the verifier's** (the `site` of `Family/AccRows.lean`: value,
-root, leaf count, row width and domain; not name or reads): each of the statement's `accPorts` is a port of `--registered`
-reading `rec-acc`, every port there reading `rec-acc` has the registration of the first, and that is the registration of
-`acc0` in the verifier's shared rows (`--rec-rows`), one file for every session of the family, whose `rec-acc` ports all
-have it. -/
+root, leaf count, row width and domain; not name or reads): `--registered` names each port once (`checkNames`), each of
+the statement's `accPorts` is a port of it reading `rec-acc`, every port there reading `rec-acc` has the registration of
+the first, and that is the registration of `acc0` in the verifier's shared rows (`--rec-rows`), one file for every session
+of the family, whose `rec-acc` ports all have it. -/
 def checkAcc (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option (Array Registered.Port)) : V Unit := do
+  checkNames s registered
   for nm in accPorts s do
     match registered.find? (·.name == nm) with
     | some p => if p.value != ACC_VALUE then throw s!"{s.name}: its port {nm} reads {p.value}, not {ACC_VALUE}"

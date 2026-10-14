@@ -38,13 +38,18 @@ def _shape(m: int, c: int) -> A.Shape:
 
 @pytest.mark.parametrize("m,c", [(m, 2) for m in range(22, 36)] + [(22, 1), (27, 8)])
 def test_the_verifiers_opening_algebra_is_rec_residuals_spec_and_parts(m, c):
+    """The verifier's S, row ports and parts are Python's, and some part holds each running sum (``acc0``, ``acc1``) in
+    both (`RecOpening.accHeld`, without which `RecCoins.opening` refuses R's opening)."""
     S = RR.spec(_shape(m, c))
     rc, [line] = _run("structure", str(m), str(c))
     assert rc == 0, line
     assert line["gf"] == S["gf"]
     assert line["ports"] == [n for _, n in S["ports"]]
+    parts = RR.parts(S)
     assert [{"ports": [n for _, n in p.S["ports"]], "nv": p.S["gf"]["nv"], "ops": p.S["gf"]["ops"], "res": p.S["gf"]["res"]}
-            for p in RR.parts(S)] == line["parts"]
+            for p in parts] == line["parts"]
+    assert all(any(acc in {nm for nm, _ in p.S["ports"]} for p in parts) for acc in ("acc0", "acc1"))
+    assert line["acc_held"] is True
 
 
 def test_an_opening_whose_residual_fits_no_part_is_refused_as_parts_refuses_it():

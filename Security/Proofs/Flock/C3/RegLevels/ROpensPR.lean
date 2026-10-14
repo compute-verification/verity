@@ -558,10 +558,10 @@ def ligOfVals (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) �
       ((cs R ω t Lb).map (FlockSoundness.Discharge.PlaysCoin.coinArr fOf))
     os := (fun q ℓ j => if q = 2 then opR R ω t Lb ℓ j else (stp R ω t Lb).os.1 q ℓ j, (stp R ω t Lb).os.2) }
 
-/-- **Woven Ligerito steps are a play's tape** (`levelTie_of_maps`' `hk` and `hl`, and its Ligerito coins): where
-compiled Ligerito at R's schedule plays on `ms` and the rounds `cs`, steps woven from them along its shape are a tape
-along it (`tapeAlong_of_plays` at `ligeritoC_spine`), so they have its kinds, the messages `ms` and the coin steps of
-`cs` (`Woven.steps`). -/
+/-- **Woven Ligerito steps are a play's tape** (`lgSteps_of_lig`'s form, at any play): where compiled Ligerito at R's
+schedule plays on `ms` and the rounds `cs`, steps woven from them along its shape are a tape along it
+(`tapeAlong_of_plays` at `ligeritoC_spine`), so they have its kinds, the messages `ms` and the coin steps of `cs`
+(`Woven.steps`). -/
 theorem ligSteps_of_plays {u : C3Run (holoAt st hp)} {ms : List FlockSoundness.Game.Msg}
     {cs : List (Array Flock.F128)} {T₀ : 𝔽} {b : ℕ → 𝔽} {pend : FlockSoundness.Model.PendL 𝔽 Dig}
     (h : FlockSoundness.Game.Plays fOf
@@ -576,8 +576,8 @@ theorem ligSteps_of_plays {u : C3Run (holoAt st hp)} {ms : List FlockSoundness.G
   FlockC3.Reps.Woven.steps ⟨hu, FlockC3.Reps.tapeAlong_of_plays
     (FlockSoundness.Discharge.Exec.ligeritoC_spine (D := Dig) FlockSoundness.execArith 2 _ T₀ b) h⟩
 
-/-- **R's Ligerito steps at the reps' tied source over `ligOfVals`** are its weave (`ligSteps_of_plays`' `hu`): no tie
-changes the steps. -/
+/-- **R's Ligerito steps at the reps' tied source over `ligOfVals`** are its weave (`MapsLeft`'s, where `ms` and `cs`
+are R's proof's messages and `stacked/rep0`'s rounds from the ring switches' `k₂`): no tie changes the steps. -/
 theorem lg_tied_repsOfVals_ligOfVals
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
     (ms : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → List FlockSoundness.Game.Msg)

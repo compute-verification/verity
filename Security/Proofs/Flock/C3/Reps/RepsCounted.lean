@@ -76,9 +76,8 @@ theorem t₄k_of_counted {cs : InnerCommits} {rep : Array SchedRound} {s : Strin
     (hd : d.rounds = heldRounds (.ok cs) s) (hk : b.t₄.k = (b.vals sh d).t.rounds.size) : b.t₄.k = rep.size := by
   have e : (b.vals sh d).t.rounds.size = d.rounds.size := by
     show (FlockVBridge.Family.streamRounds d.rounds b.fr).size = d.rounds.size
-    first
-    | (unfold FlockVBridge.Family.streamRounds; rw [Array.size_mapIdx])
-    | simp [FlockVBridge.Family.streamRounds]
+    unfold FlockVBridge.Family.streamRounds
+    rw [Array.size_mapIdx]
   rw [hk, e, hd, heldRounds_size_of_counted hc hs hn]
 
 /-- **RepsDrawn (ii)'s count**: a rep's consumed rounds are the hidden-unit schedule's coin rounds where its record
