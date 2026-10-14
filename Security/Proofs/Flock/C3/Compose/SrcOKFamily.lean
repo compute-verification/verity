@@ -117,7 +117,3 @@ theorem srcOK_holo_family {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : 
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.srcOK_holo_family
-#print axioms FlockC3.Compose.srcOK_holo_rs
-#print axioms FlockC3.Compose.stageCoins_holo_family
