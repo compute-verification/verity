@@ -255,18 +255,23 @@ def sparseRows (inn : Flock.RecCoins.Inner) (c3 : Flock.RecCoins.C3) (unit : Str
     | .error _ => none
   | _, _ => none
 
-/-- The rows and value check 5 registers at port `port` of a unit it checks against the inner session `inn`. -/
+/-- The rows and value check 5 registers at port `port` of a unit it checks against the inner session `inn`: a part's
+`v`, and its `out`, the zero rows (`checkZero`). -/
 def innerRows (inn : Flock.RecCoins.Inner) (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String) :
     Option (Array (Array ℕ) × String) :=
   match Flock.RecSparse.params c.unit.name, Flock.RecOpen.params c.unit.name, Flock.RecResiduals.params c.unit.name with
   | some sh, _, _ => match c3 with
-    | some c3 => if port = "v" then (sparseRows inn c3 c.unit.name sh).map (·, Flock.RecCoins.SPARSE_V_VALUE) else none
+    | some c3 => if port = "v" then (sparseRows inn c3 c.unit.name sh).map (·, Flock.RecCoins.SPARSE_V_VALUE)
+      else if port = "out" then some (Flock.RecCoins.zeroRows 2 (Flock.RecSparse.outWords sh),
+        Flock.RecCoins.SPARSE_ZERO_VALUE) else none
     | none => none
   | none, some (LANES, H), _ => match openRows inn LANES H with
     | some (cr, dr) => if port = "coef" then some (cr, Flock.RecCoins.COEF_VALUE)
       else if port = "dirs" then some (dr, Flock.RecCoins.DIRS_VALUE) else none
     | none => none
-  | none, none, some (_, _, _, j) => if port = "v" then (residualRows inn j).map (·, Flock.RecCoins.V_VALUE) else none
+  | none, none, some (_, _, _, j) => if port = "v" then (residualRows inn j).map (·, Flock.RecCoins.V_VALUE)
+    else if port = "out" then some (Flock.RecCoins.zeroRows 2 Flock.RecCoins.OUT_WORDS, Flock.RecCoins.ZERO_VALUE)
+    else none
   | none, none, none => none
 
 /-- `innerRows` at the inner session `src` loads. -/
@@ -286,13 +291,16 @@ def valueRowsAll (src : Option Flock.RecCoins.Source) (c3 : Option Flock.RecCoin
   | none, none => loadRows src c3 c port
   | _, _ => valueRows c3 c port
 
-/-- **The verifier's rows as a value source**, at its inner session `src t` and candidate-3 inputs `c3 t`. -/
+/-- **The verifier's rows as a value source**, at its inner session `src t` and candidate-3 inputs `c3 t`, under the
+salts check 5 holds them to: a zero value's `zeroSalt`, every other value's `verifierSalt`. -/
 def valueSrcAll (src : List (Cm × I.Coin) → Option Flock.RecCoins.Source)
     (c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3) : ValueSrc L Reg Cm Reg₂ I Vs :=
   fun _ _ t _ x =>
     match valueRowsAll (src t) (c3 t) (Vs x.1).c ((Vs x.1).c.ports[x.2.2.val]!).name,
       (Vs x.1).c.metaJ.getObjValAs? String "program_sha512" with
-    | some (rows, value), .ok prog => some (rows, Flock.RecCoins.verifierSalt prog value)
+    | some (rows, value), .ok prog => some (rows,
+        if value = Flock.RecCoins.ZERO_VALUE ∨ value = Flock.RecCoins.SPARSE_ZERO_VALUE then Flock.RecCoins.zeroSalt value
+        else Flock.RecCoins.verifierSalt prog value)
     | _, _ => none
 
 end FlockSoundness.Discharge.Recursion

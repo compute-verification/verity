@@ -479,16 +479,22 @@ theorem bits_dirs (L H : ℕ) : (Flock.RecOpen.ports L H).bits[4]! = (Flock.RecO
 
 /-! ## The ports the reads file names -/
 
-/-- **A port `checkValue` accepted is a port of the reads file.** -/
-theorem own_of_checkValue {c : Flock.Circuit} {pub : Flock.Public} {own : Array Flock.Registered.Port}
-    {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
-    (h : Flock.RecCoins.checkValue c pub own port value rows what = .ok ()) : ∃ pt ∈ own, pt.name = port := by
-  unfold Flock.RecCoins.checkValue at h
+/-- **A port `checkRows` accepted is a port of the reads file.** -/
+theorem own_of_checkRows {salt : String → ℕ → ByteArray} {c : Flock.Circuit} {pub : Flock.Public}
+    {own : Array Flock.Registered.Port} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
+    (h : Flock.RecCoins.checkRows salt c pub own port value rows what = .ok ()) : ∃ pt ∈ own, pt.name = port := by
+  unfold Flock.RecCoins.checkRows at h
   dsimp only at h
   split at h
   · rename_i reg hf
     exact ⟨reg, Array.mem_of_find?_eq_some hf, by simpa using Array.find?_some hf⟩
   · cases h
+
+/-- **A port `checkValue` accepted is a port of the reads file** (`own_of_checkRows` under `verifierSalt`). -/
+theorem own_of_checkValue {c : Flock.Circuit} {pub : Flock.Public} {own : Array Flock.Registered.Port}
+    {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
+    (h : Flock.RecCoins.checkValue c pub own port value rows what = .ok ()) : ∃ pt ∈ own, pt.name = port :=
+  own_of_checkRows (salt := fun p => Flock.RecCoins.verifierSalt p value) h
 
 /-- **A statement whose `rec-acc` ports are a level's has `acc` in the reads file `checkAcc` accepted.** -/
 theorem acc_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}

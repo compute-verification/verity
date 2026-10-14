@@ -16,7 +16,9 @@ when those values are the ones the verifier computes here, from the inner sessio
   (registered.py:139) under `verifierSalt`.
 
 Every statement table row of `coef`, `dirs` or `v` must be the verifier's row at its position, and the registered root the
-root of the verifier's rows, which every instance reads at its own index (`checkValue`).
+root of the verifier's rows, which every instance reads at its own index (`checkValue`). A part's `out` port is the
+value V* registers as its unit's outputs, two all-zero rows under `zeroSalt` (`rec_residuals.zero_salts`), checked the
+same way (`checkZero`: `rec-residuals-zero` at `checkResiduals`, `rec-sparse-zero` at `checkSparse`).
 
 Candidate 3's statements are checked the same way at coins the prover's record does not hold, the coin server's record of
 the session (`C3`, `--rec-inner-transcript` with the verifier's inner shape `rec-inner --sparse`): RecSparse's `v`
@@ -51,6 +53,18 @@ SHAKE256 of the tag, the program's SHA-512 hex, the value's name and `i` (u32 li
 def verifierSalt (program value : String) (i : Nat) : ByteArray :=
   Keccak.shake256 ((((VERIFIER_SALT.toUTF8.push 0 ++ program.toUTF8).push 0 ++ value.toUTF8).push 0) ++ le32 i.toUInt32)
     SALT_BYTES
+
+def ZERO_SALT : String := "verity/rec-v0/zero-residual-salt/v0"
+def ZERO_VALUE : String := "rec-residuals-zero"
+def OUT_WORDS : Nat := 128
+
+/-- Row `i`'s salt of a value's zero rows, the outputs V* registers itself (`rec_residuals.zero_salts`,
+rec_residuals.py:402): SHAKE256 of the tag, the value's name and `i` (u32 little-endian), NUL only before `i`. -/
+def zeroSalt (value : String) (i : Nat) : ByteArray :=
+  Keccak.shake256 ((ZERO_SALT.toUTF8 ++ value.toUTF8).push 0 ++ le32 i.toUInt32) SALT_BYTES
+
+/-- `n` rows of `w` zero words. -/
+def zeroRows (n w : Nat) : Array (Array Nat) := Array.replicate n (Array.replicate w 0)
 
 /-- F elements as u16 words, 8 each, `lo` then `hi` little-endian (`rec_open.words`, rec_open.py:120). -/
 def words (xs : Array F128) : Array Nat :=
@@ -170,10 +184,10 @@ def Inner.comb (inn : Inner) (r : Nat) (rep : Rep) : V (Array F128) := do
 
 /-- Port `port` of the statement is the value `value` the verifier registers itself, of `rows`: the verifier's registered
 reads hold it as `value` (`own`), of `rows.size` rows of their width, unit `i` reading row `i`; every table row's `b ‖ c`
-is the verifier's row at its position under `verifierSalt` of META's `program_sha512`; and the registered root is the
+is the verifier's row at its position under `salt` of META's `program_sha512`; and the registered root is the
 frame-v3-sha512 root of those rows (`Registered.rowLeaf`). `what i` names row `i`. -/
-def checkValue (c : Circuit) (pub : Public) (own : Array Registered.Port) (port value : String) (rows : Array (Array Nat))
-    (what : Nat → String) : V Unit := do
+def checkRows (salt : String → Nat → ByteArray) (c : Circuit) (pub : Public) (own : Array Registered.Port)
+    (port value : String) (rows : Array (Array Nat)) (what : Nat → String) : V Unit := do
   let unit := c.unit.name
   let some reg := own.find? (·.name == port)
     | throw s!"rec-coins: {unit}: the verifier's registered reads hold no port {port}: its {value} would be the prover's"
@@ -185,7 +199,7 @@ def checkValue (c : Circuit) (pub : Public) (own : Array Registered.Port) (port 
   if reg.reads != (Array.range n).map some then
     throw s!"rec-coins: {unit}: {value}: the reads file does not read row i of the verifier's {n} rows in unit i"
   let .ok prog := c.metaJ.getObjValAs? String "program_sha512" | throw s!"rec-coins: {unit}: META names no program_sha512"
-  let bcs := (Array.range n).map fun i => commitRow rows[i]! (verifierSalt prog value i)
+  let bcs := (Array.range n).map fun i => commitRow rows[i]! (salt prog i)
   let some t := pub.tables | throw s!"rec-coins: {unit}: {port} is not a table of a shared-row file"
   let some p := (List.range c.ports.size).find? (fun p => c.ports[p]!.name == port)
     | throw s!"rec-coins: {unit}: {port} is not a row of the circuit"
@@ -197,6 +211,16 @@ def checkValue (c : Circuit) (pub : Public) (own : Array Registered.Port) (port 
   let leaves := (Array.range n).map fun i => Registered.rowLeaf reg.domain i (Hm96.Default512.treeLeaf bcs[i]!)
   if FV3.root reg.domain leaves Sha512.hash != reg.root then
     throw s!"rec-coins: {unit}: {value}: the registered root is not the root of the verifier's {n} rows"
+
+/-- `checkRows` under `verifierSalt`: a value the verifier computes. -/
+def checkValue (c : Circuit) (pub : Public) (own : Array Registered.Port) (port value : String) (rows : Array (Array Nat))
+    (what : Nat → String) : V Unit :=
+  checkRows (verifierSalt · value) c pub own port value rows what
+
+/-- Port `out` of the statement is `value`'s `n` zero rows of `w` words under `zeroSalt`, as V* registers its unit's
+outputs (`rec_residuals.write_rows`, rec_residuals.py:498). -/
+def checkZero (c : Circuit) (pub : Public) (own : Array Registered.Port) (value : String) (n w : Nat) : V Unit :=
+  checkRows (fun _ => zeroSalt value) c pub own "out" value (zeroRows n w) fun r => s!"rep {r}'s zero outputs"
 
 /-- A `rec-open/l<LANES>-h<H>` statement: the level of the inner schedule with `LANES` lanes and `H` siblings below its
 cap, `2q` instances (rep `r`'s opening `j` instance `r·q + j`, `rec_outer.levels`), each instance's `coef` the verifier's
@@ -246,10 +270,12 @@ def checkResiduals (inn : Inner) (c : Circuit) (pub : Public) (own : Array Regis
     let full := base ++ comb
     pure (padTo (words (vs.map (full[·]!))) (RecResiduals.portWordsOf vs.size))
   checkValue c pub own "v" V_VALUE rows fun r => s!"rep {r}: part {j}'s {vs.size} elements of v"
+  checkZero c pub own ZERO_VALUE 2 OUT_WORDS
 
 /-! ### Candidate 3's statements: RecSparse, R's levels and R's opening -/
 
 def SPARSE_V_VALUE : String := "rec-sparse-v"
+def SPARSE_ZERO_VALUE : String := "rec-sparse-zero"
 
 /-- What check 5 reads of candidate 3's session beside the inner statement: the verifier's own inner shape (`rec-inner
 --sparse`: the bucket's RecSparse shape, and R's, the inner circuit's META's) and the coin server's record of the session
@@ -346,6 +372,7 @@ def checkSparse (inn : Inner) (c3 : C3) (c : Circuit) (pub : Public) (own : Arra
       ).mapError (s!"rec-coins: {unit}: rep {r}: " ++ ·)
     pure (padTo (words v) (RecSparse.portWords (RecSparse.nv sh)))
   checkValue c pub own "v" SPARSE_V_VALUE rows fun r => s!"rep {r}: RecSparse's v"
+  checkZero c pub own SPARSE_ZERO_VALUE 2 (RecSparse.outWords sh)
 
 /-- **Check 5's sparse refusals on the inner statement itself**: the verifier's inner shape `i` is candidate 3's at `st`
 (`RecVStar.checkInnerStmt`), and at its RecSparse shape, which is valid, the inner points' `k_log − 6` coordinates are not

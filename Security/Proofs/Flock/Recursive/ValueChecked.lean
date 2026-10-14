@@ -198,7 +198,7 @@ theorem value_tie_sparse (hc : sj.c = (Vs j).c)
       ValueColl zs (valueSrcAll src c3) R ω t R₂) := by
   obtain ⟨inn, hl, hck'⟩ := sparseCheck_of_check hck (by rw [hc]; exact hso) (by rw [hc]; exact hop)
     (by rw [hc]; exact hsp)
-  obtain ⟨rows, what, hrows, hcv⟩ := sparse_of_check hck'
+  obtain ⟨rows, what, hrows, hcv, -⟩ := sparse_of_check hck'
   rw [hc] at hl hcv hrows
   have hv : valueRowsAll (src t) (c3 t) (Vs j).c ((Vs j).c.ports[q.val]!).name =
       some (rows, Flock.RecCoins.SPARSE_V_VALUE) := by
