@@ -124,8 +124,8 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
 class PerTokenGroupFp8QuantRule(InPlaceRule):
     """`_C.per_token_group_fp8_quant(x bf16 [.., K], x_q! e4m3 [.., K], x_s! f32 [.., K/G], G, eps, fp8_min, fp8_max, use_ue8m0,
     column_major_scales, tma_aligned_scales)` -> `fp8_group_quant{K,G}` (Fp8GroupQuant_v1), or under `use_ue8m0=True` (power-of-two
-    scales, what `moe_kernel_quantize_input` passes for the block-FP8 Triton experts when DeepGEMM is on, vLLM's sm_90 default)
-    `fp8_group_quant_ue8m0{K,G}` (Fp8GroupQuantUe8m0_v1), per token row; BOTH allocations are rebound
+    scales, what `moe_kernel_quantize_input` passes for the block-FP8 Triton experts when DeepGEMM is on, vLLM's default on the
+    target) `fp8_group_quant_ue8m0{K,G}` (Fp8GroupQuantUe8m0_v1), per token row; BOTH allocations are rebound
     (`x_q` to port 0, `x_s` to port 1).  `x_s` is usually a permuted view of its allocation (column-major scales): the view node is what the
     GEMM reads, so the view node is rebound (AllocView v2).  The scale layout / TMA alignment flags are storage facts, not values."""
     modes = frozenset({"profile"})
@@ -136,7 +136,7 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
                                    "group_size in fp8.QUANT_GROUPS (64, 128), eps == 1e-10f, fp8_min/max == -448/448",
                                    "use_ue8m0 selects the Definition: False -> Fp8GroupQuant_v1, True -> Fp8GroupQuantUe8m0_v1"),
                     evidence_domain="structural; numerics: Fp8GroupQuant_v1 (exact-model-tested on the H100 against _C.per_token_group_fp8_quant); "
-                                    "Fp8GroupQuantUe8m0_v1 (registry.deepgemm: tests/properties/deepgemm_sm90_capture_gpu.py is its hardware check, "
+                                    "Fp8GroupQuantUe8m0_v1 (registry.deepgemm: the DeepGEMM capture is its hardware check on cc 9.0, "
                                     "and tests/properties/glm53_block_fp8_capture_gpu.py compares it at the MoE shapes)")
 
     def targets(self):
