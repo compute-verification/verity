@@ -17,13 +17,13 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Model Accounting Exec StrictCR
 
 /-- **The binding round's top is R's registered top** (gap t0): where the verifier holds the inner transcript, R's
-stream's first top `bcs` makes the registered `stacked` entry, so a cap whose commit strings are `bcs` is R's
-registered top. -/
+stream's first top `bcs` makes the registered `stacked` entry, so a cap whose commit strings under `salt` are `bcs` is
+R's registered top under `salt`. -/
 theorem stackedTop_of_innerCommits {tr : Lean.Json} {record : String} {st : Flock.Stmt} {reg : Lean.Json}
     {cs : Flock.RecVStar.InnerCommits} {s : Flock.RecVStar.InnerStream} {bcs : Array ByteArray} {lv : Level}
-    {cap : Cap Refine.Dig} (h : innerCommitsAt tr record st reg = .ok cs)
-    (hs : cs.stream? "stacked/rep0" = some s) (htop : s.tops[0]? = some bcs) (hcap : TopOf lv cap bcs) :
-    StackedTopAt lv st reg cap bcs := by
+    {cap : Cap Refine.Dig} {salt : ℕ → ByteArray} (h : innerCommitsAt tr record st reg = .ok cs)
+    (hs : cs.stream? "stacked/rep0" = some s) (htop : s.tops[0]? = some bcs) (hcap : TopOf lv cap salt bcs) :
+    StackedTopAt lv st reg cap salt bcs := by
   unfold innerCommitsAt at h
   obtain ⟨_, -, h⟩ := TopHold.eok_bind h
   obtain ⟨prog, e, hreg, hfields, -⟩ := TopHold.innerCommits_top h hs htop

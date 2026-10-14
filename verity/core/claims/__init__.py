@@ -105,7 +105,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("logup", "assumption", "LogUp fractional-sum soundness", "LogUp", "proven"),
     Entry("live-verifier", "model", "Live verifier: the verifier's coins arrive online during the proof", "Live verifier"),
     # `Flock.Assumptions.RegistrantCovers` (Security/Proofs/Flock/Soundness/Assumptions/Registrant.lean), a premise of the
-    # recursive audit (Flock.Guarantees.RecursiveAuditC3At's _hRC) on the provers it covers
+    # recursive audit (Flock.Guarantees.RecursiveAuditC3At's _hRC) on the provers it covers; and the salt binder of
+    # `TopOf` and `StackedTopAt` (Security/Proofs/Flock/Recursive/HoloExec.lean) and of Flock.Guarantees.RecursiveAuditC3At,
+    # the salts the prover's workers committed R's level-0 top rows under, at which the guarantee is applied
     Entry("registrant-holds-openings", "model",
           "Registrant holds its openings: the prover holds a row and salt under every leaf it registered at a row the "
           "verifier's reads file names, and its own workers behind the firewall hold the salts they committed R's level-0 "
