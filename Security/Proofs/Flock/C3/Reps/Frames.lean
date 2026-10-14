@@ -61,7 +61,8 @@ structure HoloFramed (sh : Flock.Shape) (d : RepData) (v : UnitVals) (dom : Byte
 
 /-- **A rep unit's frames at holo** (`UnitFrames`): the counts and frames up to `r′` (`holoCounts_of_shaped`), the
 claims at the record's points (`holoRs_of_residuals`, `holoRows_coins`), ring switching's rounds, and Ligerito to `v`'s
-end (`holoHlg_of_frames`), with ring switching's and Ligerito's frames G's one round later (`holoFrameAt_gt`). -/
+end (`holoHlg_of_frames`), with ring switching's and Ligerito's frames G's one round later (`holoFrameAt_gt`); that run
+ends at the record's last round, so `v`'s end does (`HoloFramed.t₄`). -/
 theorem unitFrames_holo (hsh : LigShift) {sh : Flock.Shape} {d : RepData} {v : UnitVals} {dom : ByteArray}
     (halg : AlgebraHolds sh d) (hacc : AccHolds sh d) (H : HoloFramed sh d v dom) : UnitFrames sh d v := by
   have hH := holoCounts_of_shaped (h := hOfW sh d.w) H.coins H.record H.k0 H.pending
@@ -111,13 +112,14 @@ theorem unitFrames_holo (hsh : LigShift) {sh : Flock.Shape} {d : RepData} {v : U
         (by omega)
       rwa [frameAt_lig (i := i) _ _ _ _ _ _ (by omega)] at e)
   have e3 : v.t.k + 3 = 3 := by omega
-  refine ⟨hH.k0, hH.wf, hH.n₀, hH.n₁, hH.n₂, hH.nr, hH.a₀, hH.a₁, hH.a₂, hH.ar, hH.lc, ?_, ?_, ?_⟩
+  rw [e3] at ht₄
+  have hT₄ := ht₄ _ hl
+  refine ⟨hH.k0, hH.wf, hH.n₀, hH.n₁, hH.n₂, hH.nr, hH.a₀, hH.a₁, hH.a₂, hH.ar, hH.lc, ?_, ?_, ?_, by rw [hT₄]⟩
   · rw [hvc, hcl, hr, hz, hrho, hts]
     simp only [hk0, Nat.zero_add, hm, hkL]
   · rw [e3, hvc, hvr, hvg]
     exact hRR
-  · rw [e3] at ht₄ ⊢
-    rw [ht₄ _ hl]
+  · rw [e3, hT₄]
     exact hl
 
 end unit
