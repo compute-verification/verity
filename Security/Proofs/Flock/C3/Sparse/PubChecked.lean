@@ -1,6 +1,7 @@
 import Proofs.Flock.C3.Sparse.PubLift
 import Proofs.Flock.C3.Opening.SessionCoins
 import Proofs.Flock.C3.VStarList.Range
+import Proofs.Flock.C3.RegLevels.LevelsChecked
 
 /-!
 # `SparsePubRead` from check 5's acceptance
@@ -12,6 +13,8 @@ import Proofs.Flock.C3.VStarList.Range
   the rep's `verifierRows` at its rounds, the sparse coins and the layout factors at the rep's points.
 * `sparsePubRead_of_checkSparse`: at an inner session whose `m`, `k_log` and unit range are the class's, and rep `i`'s
   rounds `d`'s (the custody), the coins record `⟨α, z, ρ_in, r_in, U, sparseCs sc⟩` reads `SparsePubRead`.
+* `checkSparse_of_accepted`: at an accepted outer proof, a session whose unit is a RecSparse unit passes `checkSparse`
+  at some coins record, inner session and public file (`CoinsAccepted`, as `stackedLevel_of_accepted`).
 * `load_files`, `sparsePubRead_of_files`: an inner session loaded from the inner statement's files has the statement's
   `m`, `k_log` and unit range, which are the class's where its class checks pass, so the custody left is that the files'
   statement is the class's and rep `i`'s rounds `d`'s.
@@ -252,5 +255,35 @@ theorem srcSparseTie_of_pubH {rng : Flock.Range} (hu : UnitsOf st hp) (hrng : un
       hH R ω t R₂ τ o hA i (hs R ω t R₂ τ o hA i)⟩
 
 end src
+
+section accepted
+
+open FlockSoundness FlockSoundness.Discharge
+open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
+
+variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+
+local notation "ℐ" => holoInnerAt T CT st hp
+
+/-- **`checkSparse` at an accepted session whose unit is a RecSparse unit** (`checkSparse_of_check`): check 5 passes on
+the first table's statement, which has the session's circuit (`setup_zero_c`), so `checkSparse` passes at some `C3`,
+the inner session check 5 loads from its source, and some public file, at the session's reads file. -/
+theorem checkSparse_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
+    (hco : FlockC3.RegLevels.CoinsAccepted F) {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω}
+    {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish)) {sh : RecSparse.Shape}
+    (hn : RecSparse.params (F.Vs j).c.unit.name = some sh) :
+    ∃ (c3 : RecCoins.C3) (f : RecCoins.Source) (inn : RecCoins.Inner) (pub : Public),
+      f.load (F.Vs j).c.unit.name = .ok inn ∧
+        RecCoins.checkSparse inn c3 (F.Vs j).c pub (F.zs R ω t R₂ j).own sh = .ok () := by
+  obtain ⟨_, _, _, _, _, hs, hfm⟩ := hco R ω t R₂ j ⟨_, (h.1 j).1⟩
+  obtain ⟨h0, hc0⟩ := setup_zero_c (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hTags.1 (F.zs R ω t R₂ j).hcH hs
+  obtain ⟨c3, f, inn, -, -, hl, hck⟩ := checkSparse_of_check (array_forM_ok hfm 0 h0) (by rw [hc0]; exact hn)
+  rw [hc0] at hl hck
+  exact ⟨c3, f, inn, _, hl, hck⟩
+
+end accepted
 
 end FlockC3.Sparse
