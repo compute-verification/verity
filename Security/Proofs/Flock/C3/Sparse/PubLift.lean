@@ -133,10 +133,3 @@ theorem srcSparsePub_repsOfVals {rng : Flock.Range}
 end
 
 end FlockC3.Sparse
-
-#print axioms FlockC3.Sparse.pub_of_unit
-#print axioms FlockC3.Sparse.pub_tie
-#print axioms FlockC3.Sparse.units_holoAt
-#print axioms FlockC3.Sparse.rep_tiedSrc_sparseOf
-#print axioms FlockC3.Sparse.srcSparsePub_of_alg
-#print axioms FlockC3.Sparse.srcSparsePub_repsOfVals
