@@ -1505,6 +1505,39 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
 
 
+def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
+    """A stale analysis checkout must not report a fresher sender's group mentions as dropped (14 Oct: three false
+    DROPPED lines for groups created that morning); a group origin/main doesn't know either still drops."""
+    inbox(fake, routes_dirs, "circuits")
+    fake.add(COORD, text="<!subteam^SNEWGROUP> teams exist", username="comms", bot_id=BOT, ts="1600000000.000001")
+    fake.add(COORD, text="<!subteam^SNOWHERE> hello", username="comms", bot_id=BOT, ts="1600000000.000002")
+    monkeypatch.setattr(slack, "origin_groups", lambda path: {"SNEWGROUP"})
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
+    assert rc == 0 and {d["name"] for d in json.loads(out)["dropped"]} == {"subteam^SNOWHERE"}
+
+
+def test_origin_groups_reads_the_registry_as_origin_main_has_it(tmp_path):
+    """`origin_groups` fetches, then reads origin/main's registry, so it sees a group the clone's checkout predates; where
+    git can't answer it returns empty, keeping traffic's old behavior."""
+    import subprocess
+    git = lambda cwd, *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a],  # noqa: E731
+                                         cwd=cwd, check=True, capture_output=True)
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    git(upstream, "init", "-q", "-b", "main")
+    (upstream / "registry.json").write_text(json.dumps({"handles": [{"handle": "a", "usergroup": "SOLD"}]}))
+    git(upstream, "add", "-A")
+    git(upstream, "commit", "-qm", "one")
+    clone = tmp_path / "clone"
+    git(tmp_path, "clone", "-q", str(upstream), str(clone))
+    (upstream / "registry.json").write_text(json.dumps({"handles": [{"handle": "a", "usergroup": "SOLD"},
+                                                                    {"handle": "b", "usergroup": "SNEW"}]}))
+    git(upstream, "add", "-A")
+    git(upstream, "commit", "-qm", "two")                            # the clone's checkout predates this
+    assert slack.origin_groups(clone / "registry.json") == {"SOLD", "SNEW"}
+    assert slack.origin_groups(tmp_path / "nowhere" / "registry.json") == set()
+
+
 def test_verify_author_accepts_a_routed_workers_name_and_the_router(fake, registry, routes_dirs, capsys):
     inbox(fake, routes_dirs, "vllm-epoch-run")
     for who in ("vllm-epoch-run", "router"):
