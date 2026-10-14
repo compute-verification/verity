@@ -111,5 +111,3 @@ theorem levels_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hc
   fun ℓ hℓ => stackedLevel_of_accepted hco h (M.sess ℓ) (hP ℓ hℓ)
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.coinsAccepted_checked
