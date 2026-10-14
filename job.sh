@@ -7,9 +7,11 @@ if [[ "${K2_TARGET:-}" == 1 ]]; then
   exit
 fi
 
-python3 tools/verity/lean/lean_changed.py --records verity/core/service/flock --update --out "$OUT/flock"
-python3 tools/verity/lean/lean_changed.py --records Security --update --out "$OUT/security"
-python3 tools/verity/lean/lean_changed.py --records Security/Properties --update --out "$OUT/properties"
+if [[ "${K2_PROBES_ONLY:-}" != 1 ]]; then
+  python3 tools/verity/lean/lean_changed.py --records verity/core/service/flock --update --out "$OUT/flock"
+  python3 tools/verity/lean/lean_changed.py --records Security --update --out "$OUT/security"
+  python3 tools/verity/lean/lean_changed.py --records Security/Properties --update --out "$OUT/properties"
+fi
 
 cat > /tmp/k2-probes.lean <<'EOF'
 import Proofs.Flock.C3.Sparse.SessionZero
@@ -23,4 +25,8 @@ import Proofs.Flock.Recursive.AuditC3Proof
 #print axioms Flock.SecurityProofs.recursiveAuditC3At
 EOF
 
-(cd Security/Proofs && lake env lean /tmp/k2-probes.lean) | tee "$OUT/probes.txt"
+(
+  cd Security/Proofs
+  lake build Proofs.Flock.Recursive.ValueInner Proofs.Flock.C3.Sparse.SessionZero Proofs.Flock.Recursive.HPortTie
+  lake env lean /tmp/k2-probes.lean
+) | tee "$OUT/probes.txt"
