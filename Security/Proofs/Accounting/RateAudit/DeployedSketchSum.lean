@@ -40,6 +40,13 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_le_of_card pr_mono pr_or_le)
 
+/-- The oracle family of a pass's `G` grinding candidates is finite (unfolded in two steps, as
+`instFintypeSketchPassCoins` does). -/
+local instance instFintypeOracleFam (N ρ h ks G : ℕ) :
+    Fintype (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := by
+  letI : Fintype (Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
+  exact inferInstance
+
 /-- A uniform finite event whose count times `m` is at most `g` times the sample-space size has probability at most
 `g/m` (restating `DeployedSketch.lean`'s private lemma). -/
 private theorem pr_le_div_of_card_mul_le {α : Type} [Fintype α] (P : α → Prop) [DecidablePred P] (g m : ℕ)
@@ -372,13 +379,6 @@ theorem pr_guess_le
   push_cast at hbound
   simpa using hbound
 
-/-- The oracle family of a pass's `G` grinding candidates is finite (unfolded in two steps, as
-`instFintypeSketchPassCoins` does). -/
-local instance instFintypeOracleFam (N ρ h ks G : ℕ) :
-    Fintype (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := by
-  letI : Fintype (Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
-  exact inferInstance
-
 /-- **One pass, all its grinding candidates.** Outside the low-rank event, some candidate of a verbatim pass is
 unpaid with probability at most `G·N/2^h + qtot/2^(8r)`: grinding pays the tag-guess term per candidate, and the
 query term once for the shared budget `qtot`. Compare `pr_unpaid_rank_le`, whose union over candidates pays
@@ -456,4 +456,259 @@ theorem pr_unpaid_rank_family_le {G : ℕ}
 
 end Device
 
+namespace SketchDeployedWindow
+
+variable {P N m ρ h S L q ks G : ℕ}
+
+/-- Sequencing: pass `j`'s whole candidate family has the one-pass family bound for every device family selected by
+earlier pass coins. `pr_unpaidAt_le` with the candidate kept inside the event instead of fixed outside it. -/
+theorem pr_unpaidPass_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : SketchSigns ks m) (slack : ℕ)
+    (ε : ℝ≥0∞) (j : Fin P)
+    (hε : ∀ η, pr (fun y : Data N m ρ Sector × (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) =>
+      ∃ c, (A.device j η c).footprint σ (y.2 c) y.1 + slack <
+        ((A.device j η c).correct sketch σ (y.2 c) y.1).card * (m * 256)) ≤ ε) :
+    pr (fun x : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) =>
+      ∃ c, UnpaidAt A σ slack j c x) ≤ ε := by
+  classical
+  let ePass : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) ≃
+      (SketchStore N m × SketchPassCoins N ρ h ks G) ×
+        ({i : Fin P // i ≠ j} → SketchPassCoins N ρ h ks G) :=
+    ((Equiv.refl _).prodCongr (Equiv.funSplitAt j _)).trans (Equiv.prodAssoc _ _ _).symm
+  rw [Rate.pr_equiv ePass]
+  refine Rate.pr_le_of_fiber _ _ (fun ω' => ?_)
+  let η : {i : Fin P // i < j} → SketchPassCoins N ρ h ks G := fun i => ω' ⟨i.1, i.2.ne⟩
+  let dataEquiv : Data N m ρ Sector ≃ SketchStore N m × SketchStream ρ :=
+    Equiv.sumArrowEquivProdArrow _ _ _
+  let eFam : SketchStore N m × SketchPassCoins N ρ h ks G ≃
+      Data N m ρ Sector × (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) :=
+    (Equiv.prodAssoc _ _ _).symm.trans (dataEquiv.symm.prodCongr (Equiv.refl _))
+  rw [Rate.pr_equiv eFam]
+  refine (pr_mono (fun y hy => ?_)).trans (hε η)
+  obtain ⟨c, hy⟩ := hy
+  refine ⟨c, ?_⟩
+  have hpass : ((Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm
+      ((eFam.symm y).2, ω')) j = (eFam.symm y).2 := by simp
+  have hη : (fun i : {i : Fin P // i < j} =>
+      ((Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm ((eFam.symm y).2, ω')) i.1) = η := by
+    funext i
+    simp [η, i.2.ne]
+  have hηsplit :
+      (fun i : {i : Fin P // i < j} =>
+        if h : i.1 = j then (eFam.symm y).2 else ω' ⟨i.1, h⟩) = η := by
+    funext i
+    simp [η, i.2.ne]
+  have hdata :
+      Data.ofParts (eFam.symm y).1 (eFam.symm y).2.1 = y.1 := by
+    funext p
+    rcases p with p | p <;> simp [eFam, dataEquiv, Data.ofParts]
+  have horacle : (eFam.symm y).2.2 c = y.2 c := by
+    simp [eFam]
+  set_option maxRecDepth 2000 in
+    simpa [ePass, UnpaidAt, hpass, hη, hηsplit, hdata, horacle] using hy
+
+/-- **The window with a per-pass query budget.** At fixed signs whose sector blocks have rank at least `r`, if across
+each pass's `G` candidates the oracle queries total at most `qtot`, the window's unpaid event costs
+`P·(G·N/2^h + qtot/2^(8r))`: grinding multiplies the tag-guess term only. Compare `pr_unpaid_good_le`'s
+`P·G·(N/2^h + q/2^(8r))`. -/
+theorem pr_unpaid_good_sum_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : SketchSigns ks m)
+    (r X qtot : ℕ) (hr32 : r ≤ 32)
+    (hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
+    (hX : ∀ j η c O D, ((A.device j η c).prog σ D).rebuilds O D * 256 ≤ X)
+    (hq : ∀ j η (Os : Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) (D : Data N m ρ Sector),
+      ∑ c, (((A.device j η c).prog σ D).queries (Os c) D).length ≤ qtot) :
+    pr (fun x : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) =>
+      A.reads x.1 σ x.2 + P * (S + (L - ρ * 256) + X) <
+        (A.correctAll x.1 σ x.2).card * (m * 256))
+      ≤ (P : ℝ≥0∞) * ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
+  let ε := (G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)
+  calc
+    _ ≤ pr (fun x : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) =>
+        ∃ j c, UnpaidAt A σ (S + (L - ρ * 256) + X) j c x) :=
+      pr_mono (exists_unpaid A σ _)
+    _ ≤ ∑ j, pr (fun x : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) =>
+        ∃ c, UnpaidAt A σ (S + (L - ρ * 256) + X) j c x) := pr_exists_le _
+    _ ≤ ∑ _j : Fin P, ε := Finset.sum_le_sum fun j _ =>
+      pr_unpaidPass_le A σ _ ε j fun η =>
+        Device.pr_unpaid_rank_family_le (fun c => A.device j η c) σ r X qtot hr32 hr
+          (fun c => hX j η c) (hq j η)
+    _ = (P : ℝ≥0∞) * ε := by
+      simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+
+/-- One window's unpaid receipts under the per-pass budget: one rank-tail event, the tag-guess term per candidate
+pass, and the query term per pass. Compare `pr_unpaid_le`. -/
+theorem pr_unpaid_sum_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r X qtot : ℕ)
+    (εrank : ℝ≥0∞)
+    (hr32 : r ≤ 32) (hRank : Accounting.Assumptions.SketchRank ks m r εrank)
+    (hX : ∀ j η c σ O D, ((A.device j η c).prog σ D).rebuilds O D * 256 ≤ X)
+    (hq : ∀ j η σ (Os : Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) (D : Data N m ρ Sector),
+      ∑ c, (((A.device j η c).prog σ D).queries (Os c) D).length ≤ qtot) :
+    pr (fun x : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
+      A.reads x.1 x.2.1 x.2.2.1 + P * (S + (L - ρ * 256) + X) <
+        (A.correctAll x.1 x.2.1 x.2.2.1).card * (m * 256))
+      ≤ εrank + (P : ℝ≥0∞) * ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
+  classical
+  let Passes := Fin P → SketchPassCoins N ρ h ks G
+  let Draw := Fin d → Fin P × Fin N
+  let eDraw : SketchStore N m × (SketchSigns ks m × Passes × Draw) ≃
+      (SketchStore N m × (SketchSigns ks m × Passes)) × Draw :=
+    ((Equiv.refl _).prodCongr (Equiv.prodAssoc _ _ _).symm).trans
+      (Equiv.prodAssoc _ _ _).symm
+  rw [Rate.pr_equiv eDraw]
+  refine Rate.pr_le_of_fiber _ _ (fun _draw => ?_)
+  let badRank : SketchSigns ks m → Prop := fun σ =>
+    ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r
+  let unpaid : SketchStore N m × (SketchSigns ks m × Passes) → Prop := fun x =>
+    A.reads x.1 x.2.1 x.2.2 + P * (S + (L - ρ * 256) + X) <
+      (A.correctAll x.1 x.2.1 x.2.2).card * (m * 256)
+  have hsubset : ∀ x, unpaid x → badRank x.2.1 ∨ (¬ badRank x.2.1 ∧ unpaid x) := fun x hx => by
+    by_cases hb : badRank x.2.1
+    · exact Or.inl hb
+    · exact Or.inr ⟨hb, hx⟩
+  refine (pr_mono hsubset).trans ((pr_or_le _ _).trans (add_le_add ?_ ?_))
+  · let eRank : SketchStore N m × (SketchSigns ks m × Passes) ≃
+        SketchSigns ks m × (SketchStore N m × Passes) :=
+      (Equiv.prodAssoc _ _ _).symm |>.trans
+        ((Equiv.prodComm _ _).prodCongr (Equiv.refl _)) |>.trans (Equiv.prodAssoc _ _ _)
+    rw [Rate.pr_equiv eRank]
+    exact Rate.pr_le_of_fiber _ _ fun _ => hRank
+  · let eGood : SketchStore N m × (SketchSigns ks m × Passes) ≃
+        (SketchStore N m × Passes) × SketchSigns ks m :=
+      ((Equiv.refl _).prodCongr (Equiv.prodComm _ _)).trans (Equiv.prodAssoc _ _ _).symm
+    rw [Rate.pr_equiv eGood]
+    refine Rate.pr_le_of_fiber _ _ fun σ => ?_
+    by_cases hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
+    · exact (pr_mono fun _ hx => hx.2).trans
+        (pr_unpaid_good_sum_le A σ r X qtot hr32 hr
+          (hX := fun j η c O D => hX j η c σ O D) (hq := fun j η Os D => hq j η σ Os D))
+    · push Not at hr
+      calc
+        pr (fun x : SketchStore N m × Passes => ¬badRank σ ∧ unpaid (x.1, σ, x.2)) ≤
+            pr (fun _ : SketchStore N m × Passes => False) :=
+          pr_mono fun _ hx => (hx.1 hr).elim
+        _ ≤ (P : ℝ≥0∞) * ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
+          rw [Rate.Horizon.pr_false]
+          exact bot_le
+
+end SketchDeployedWindow
+
 end Accounting.RateSketch
+
+namespace Accounting.SecurityProofs
+
+open Accounting.Rate Accounting.RateSketch
+open Pous (pr)
+open scoped ENNReal
+open Bandwidth (pr_mono)
+
+/-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class, under a per-pass query
+budget: the sum form.** `Accounting.Guarantees.RemoteSessionConservationSketch`'s statement with one added
+hypothesis — across each pass's `G` candidate oracles the queries total at most `qtot` — and the receipt term
+
+  `(n·P·G)·N/2^h + (n·P)·qtot/2^(8r)`
+
+in place of `n·P·G·(N/2^h + q/2^(8r))`: queries add across a pass's grinding candidates, and grinding multiplies only
+the tag-guess term. By `Device.budget_of_bounded` the hypothesis holds at `qtot = G·q`, where this bound recovers the
+product form. Stated beside the frozen guarantee: adopting it as the guarantee, and giving the budget a named home, is
+a statement change (Daniel's). -/
+theorem RemoteSessionConservationSketchSum :
+    ∀ (n P N m ρ h S L q ks G d r X qtot : ℕ) (ε : ℝ≥0∞)
+      (A : RateSketch.SketchDeployedSession n P N m ρ h S L q ks G d) (dbar dw : ℝ),
+      0 < n → 0 < P → 0 < N → 0 < m → r ≤ 32 → dw ≤ 1 →
+      Accounting.Assumptions.SketchRank ks m r ε →
+      (∀ w η j ι c E σ R O,
+        let B := (A.window w η).device j ι c
+        let D := RateSketch.Data.ofParts E R
+        (B.prog σ D).rebuilds O D * 256 ≤ X) →
+      (∀ w η j ι σ E R (Os : Fin G → RateSketch.Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))),
+        let D := RateSketch.Data.ofParts E R
+        ∑ c, ((((A.window w η).device j ι c).prog σ D).queries (Os c) D).length ≤ qtot) →
+      pr (fun x : RateSketch.SketchStore N m ×
+          (Fin n → RateSketch.SketchWindowCoins P N m ρ h ks G d) =>
+        (∀ w t, (x.2 w).2.2 t ∈
+          (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
+          ((((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+              (1 - (dbar + RateSketch.gammaSketch N m ρ S L X)) * (n * P * N * m * 256) ∨
+            ∃ w, (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+              (1 - (dw + RateSketch.gammaSketch N m ρ S L X)) * (P * N * m * 256)))
+        ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
+          (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) +
+            (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
+  intro n P N m ρ h S L q ks G d r X qtot ε A dbar dw hn hP hN hm hr32 hdw hRank hX hq
+  let slack := S + (L - ρ * 256) + X
+  let term := (G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)
+  have hX' : ∀ w η j ι c σ O D,
+      (((A.window w η).device j ι c).prog σ D).rebuilds O D * 256 ≤ X := by
+    intro w η j ι c σ O D
+    let E : RateSketch.SketchStore N m := fun p => D (.inl p)
+    let R : RateSketch.SketchStream ρ := fun i => D (.inr i)
+    have hD : RateSketch.Data.ofParts E R = D := by
+      funext p
+      rcases p with p | p <;> rfl
+    simpa [hD] using hX w η j ι c E σ R O
+  have hq' : ∀ w η j ι σ (Os : Fin G → RateSketch.Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
+      (D : RateSketch.Data N m ρ Sector),
+      ∑ c, ((((A.window w η).device j ι c).prog σ D).queries (Os c) D).length ≤ qtot := by
+    intro w η j ι σ Os D
+    let E : RateSketch.SketchStore N m := fun p => D (.inl p)
+    let R : RateSketch.SketchStream ρ := fun i => D (.inr i)
+    have hD : RateSketch.Data.ofParts E R = D := by
+      funext p
+      rcases p with p | p <;> rfl
+    simpa [hD] using hq w η j ι σ E R Os
+  have hε : ∀ w η, pr (fun y : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
+      (A.window w η).reads y.1 y.2.1 y.2.2.1 + P * slack <
+        ((A.window w η).correctAll y.1 y.2.1 y.2.2.1).card * (m * 256)) ≤
+      ε + (P : ℝ≥0∞) * term := fun w η =>
+    SketchDeployedWindow.pr_unpaid_sum_le (A.window w η) r X qtot ε hr32 hRank (hX' w η)
+      (fun j ι σ Os D => hq' w η j ι σ Os D)
+  have main := SketchDeployedSession.pr_paid_of_window A slack
+    ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊
+    (ε + (P : ℝ≥0∞) * term) hε
+  have hγ := gammaSketch_mul N m ρ S L X hN hm
+  have hγ' : gammaSketch N m ρ S L X * ((N : ℝ) * (m * 256)) = (slack : ℝ) := by
+    simpa [slack, mul_assoc] using hγ
+  have hb : (0 : ℝ) < m * 256 := by positivity
+  refine (pr_mono (fun x hx => ?_)).trans (main.trans ?_)
+  · obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
+    · refine ⟨hall, Or.inl ?_⟩
+      have hc := Deployed.count_lt
+        (R := ((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ))
+        (t := dbar) (g := gammaSketch N m ρ S L X) (c := (n : ℝ) * P)
+        (Nn := N) (b := (m : ℝ) * 256) (sl := slack) hb hγ'
+        (by simpa [mul_assoc] using hT)
+      rw [← mul_assoc]
+      exact_mod_cast hc
+    · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
+      have hc := Deployed.count_lt
+        (R := (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ))
+        (t := dw) (g := gammaSketch N m ρ S L X) (c := (P : ℝ))
+        (Nn := N) (b := (m : ℝ) * 256) (sl := slack) hb hγ'
+        (by simpa [mul_assoc] using hw)
+      exact_mod_cast hc
+  · have e1 : ((n : ℝ) * P * N) = ((n * P * N : ℕ) : ℝ) := by push_cast; ring
+    have e2 : ((P : ℝ) * N) = ((P * N : ℕ) : ℝ) := by push_cast; ring
+    rw [e1, e2]
+    calc
+      _ ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
+          (n : ℝ≥0∞) * (ε + (P : ℝ≥0∞) * term) := by
+        refine add_le_add (add_le_add ?_ ?_) le_rfl
+        · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+          exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+        · rw [show ((n : ℝ≥0∞) * P * N) =
+              (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+          exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+      _ = ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
+          (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) +
+            (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
+        ring
+
+/-- At the conservative deployed caps the sum form's query term is `2^-41` before multiplying by windows and passes:
+`qtot = 2^55` total oracle queries per pass at rank `r = 12`. The product form's same-caps term,
+`sketchQueryTermCaps`, is `2^14`. -/
+theorem sketchQueryTermCapsSum :
+    (2 ^ 55 : ℝ≥0∞) / 2 ^ 96 = 1 / 2 ^ 41 := by
+  rw [show (2 : ℝ≥0∞) ^ 96 = 2 ^ 55 * 2 ^ 41 by rw [← pow_add]]
+  simpa using (ENNReal.mul_div_mul_left (c := (2 : ℝ≥0∞) ^ 55) 1 (2 ^ 41)
+    (pow_ne_zero _ (by norm_num)) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top))
+
+end Accounting.SecurityProofs
