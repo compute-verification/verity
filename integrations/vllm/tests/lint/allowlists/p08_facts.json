@@ -264,6 +264,7 @@
     {"file": "verity_vllm/program/registry/dense.py", "kind": "sm-arch", "symbol": "AttentionHeadSoftcap", "detail": "sm_89"},
     {"file": "verity_vllm/program/registry/dense.py", "kind": "sm-arch", "symbol": "AttentionSoftcap", "detail": "sm_89"},
     {"file": "verity_vllm/program/registry/dense.py", "kind": "sm-arch", "symbol": "AttnBlockSoftcap", "detail": "sm_89"},
+    {"file": "verity_vllm/program/frontend/rules/vllm_bindings/fp8.py", "kind": "sm-arch", "symbol": "DynamicDeepGemmFp8LinearRule", "detail": "sm_90"},
     {"file": "verity_vllm/program/registry/deepgemm.py", "kind": "gpu", "symbol": "<module>", "detail": "h100"},
     {"file": "verity_vllm/program/registry/deepgemm.py", "kind": "gpu", "symbol": "<module>", "detail": "rtx4090"},
     {"file": "verity_vllm/program/registry/deepgemm.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_90", "count": 3},
