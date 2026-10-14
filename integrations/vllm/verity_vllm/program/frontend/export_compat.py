@@ -538,11 +538,8 @@ def moe_gate_leaf(model=None, site=None):
         yield
 
 
-_DYNAMIC_FP8_OP = "dynamic_flashinfer_deepgemm_blockscale_gemm"
-
-
 @contextmanager
-def default_fp8_linear_leaf(model=None, namespace=None):
+def default_fp8_linear_leaf(model=None, kernel_class=None):
     """6. Keep vLLM's default Hopper block-FP8 linear as its served custom op.
 
     The pinned kernel's ``apply_block_scaled_mm`` calls
@@ -550,22 +547,29 @@ def default_fp8_linear_leaf(model=None, namespace=None):
     contains ``torch.cond`` and, under non-strict meta export, is traced
     through to the M-specific branch.  That exposes mutating implementation
     details (notably ``per_token_group_fp8_quant(use_ue8m0=True)``) instead of
-    the custom-op boundary the served engine dispatches.  Whenever that exact
-    op is registered, author the equivalent ``vllm_iface`` leaf for export.
-    The leaf has the same signature and fake shape; a selected kernel that
-    does not call the op is unchanged.
+    the custom-op boundary the served engine dispatches.  During export,
+    replace that kernel class's ``apply_block_scaled_mm`` with the equivalent
+    ``vllm_iface`` leaf.  Another selected kernel is unchanged.
     """
     if model is None:
         yield
         return
+    if kernel_class is None:
+        try:
+            from vllm.model_executor.kernels.linear.scaled_mm.flashinfer import (
+                FlashInferFp8DeepGEMMDynamicBlockScaledKernel as kernel_class,
+            )
+        except (ImportError, AttributeError):
+            yield
+            return
     from verity_vllm.program.frontend.rules.vllm_iface import iface
-    site = torch.ops.vllm if namespace is None else namespace
-    try:
-        getattr(site, _DYNAMIC_FP8_OP)
-    except (AttributeError, RuntimeError):
-        yield
-        return
-    with hooks.patched(site, _DYNAMIC_FP8_OP, iface.dynamic_flashinfer_deepgemm_blockscale_gemm):
+
+    def apply_block_scaled_mm(self, A, B, As, Bs):
+        return iface.dynamic_flashinfer_deepgemm_blockscale_gemm(
+            A, B, Bs, int(self.weight_group_shape.col), bool(self.fallback.use_deep_gemm_e8m0)
+        )
+
+    with hooks.patched(kernel_class, "apply_block_scaled_mm", apply_block_scaled_mm):
         yield
 
 

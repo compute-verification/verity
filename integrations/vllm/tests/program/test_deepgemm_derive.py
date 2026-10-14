@@ -83,15 +83,23 @@ def test_default_sm90_linear_refuses_another_kernel_configuration(kw: dict, reas
 
 
 def test_default_kernel_export_keeps_the_dynamic_custom_op_as_a_leaf() -> None:
-    kernel_type = type("FlashInferFp8DeepGEMMDynamicBlockScaledKernel", (), {})
     model = nn.Module()
-    model.quant_method = SimpleNamespace(fp8_linear=kernel_type())
-    original = object()
-    site = SimpleNamespace(dynamic_flashinfer_deepgemm_blockscale_gemm=original)
 
-    with default_fp8_linear_leaf(model, namespace=site):
-        assert site.dynamic_flashinfer_deepgemm_blockscale_gemm is iface.dynamic_flashinfer_deepgemm_blockscale_gemm
-    assert site.dynamic_flashinfer_deepgemm_blockscale_gemm is original
+    class Kernel:
+        weight_group_shape = SimpleNamespace(col=128)
+        fallback = SimpleNamespace(use_deep_gemm_e8m0=True)
 
-    with default_fp8_linear_leaf(None, namespace=site):
-        assert site.dynamic_flashinfer_deepgemm_blockscale_gemm is original
+        def apply_block_scaled_mm(self, A, B, As, Bs):
+            return "original"
+
+    original = Kernel.apply_block_scaled_mm
+    kernel = Kernel()
+    x = torch.empty(4, K, dtype=torch.bfloat16, device="meta")
+    w = torch.empty(N, K, dtype=torch.float8_e4m3fn, device="meta")
+    ws = torch.empty(1, 1, dtype=torch.float32, device="meta")
+
+    with default_fp8_linear_leaf(model, kernel_class=Kernel):
+        assert Kernel.apply_block_scaled_mm is not original
+        out = kernel.apply_block_scaled_mm(x, w, None, ws)
+        assert out.shape == (4, N) and out.dtype == torch.bfloat16 and out.device.type == "meta"
+    assert Kernel.apply_block_scaled_mm is original
