@@ -157,7 +157,7 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
       (Cm → String → Nat → List UInt8) →
         FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin (r st hp)) → CT st hp k)) :
     Flock.Guarantees.RecursiveAuditC3At CT im := by
-  intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _bcs' _hstk ish Vs zr hCust _tbl _bc _hIC
+  intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _bcs' _hstk ish Vs zr hCust _hRC _tbl _bc _hIC
     bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap

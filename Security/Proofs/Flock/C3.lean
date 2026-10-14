@@ -17,6 +17,7 @@ import Proofs.Flock.C3.Compose.HoloStageCoins
 import Proofs.Flock.C3.Compose.LaterHeld
 import Proofs.Flock.C3.Compose.HoloCoinTys
 import Proofs.Flock.C3.Compose.HoloEncoded
+import Proofs.Flock.C3.Compose.RowsReg
 import Proofs.Flock.C3.Compose.HoloStreamSizes
 import Proofs.Flock.C3.Compose.HoloSparseRounds
 import Proofs.Flock.C3.Compose.HoloSparseWords
