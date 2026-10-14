@@ -449,6 +449,8 @@ def test_the_opening_statement_reads_rec_claim_at_rows_0_and_1(sess, tmp_path):
     assert reads["claim0"]["reads"] == [0] and reads["claim1"]["reads"] == [1]
     assert reads["claim0"]["root"] == reads["claim1"]["root"] == claim.root.hex() and reads["claim0"]["value"] == "rec-claim"
     assert reads["acc0"]["reads"] == [0] and reads["acc1"]["reads"] == [1]
+    zero = RG.Registered.commit(program, RR.ZERO_VALUE, [[0] * RR.OUT_WORDS], salts=RR.zero_salts(RR.ZERO_VALUE, 1))
+    assert reads["out"] == {**zero.entry(), "word_bits": 16, "reads": [0]}  # `RecCoins.checkOpening`'s `checkZero`
     assert "rec-opening/m22-c2-p0" in (d / "circuit.txt").read_text()
     bad = RG.Registered.commit(program, CLAIM_VALUE, [rows["claim0"], [rows["claim1"][0] ^ 1] + rows["claim1"][1:]], salts)
     [f] = RR.stage_opening(OPEN, {**regs, "claim": bad}, (acc, 0, 1), V, tmp_path / "forged", evaluate=False,

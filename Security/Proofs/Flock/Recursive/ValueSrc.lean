@@ -166,7 +166,9 @@ def valueRows (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String
         | [l] => if port = "coef" then some (stackedCoefRows o l LANES, Flock.RecCoins.COEF_VALUE)
           else if port = "dirs" then some (stackedDirsRows o l H, Flock.RecCoins.DIRS_VALUE) else none
         | _ => none
-      | none, some (_, _, j) => if port = "v" then (openingVRows o j).map (·, Flock.RecCoins.V_VALUE) else none
+      | none, some (_, _, j) => if port = "v" then (openingVRows o j).map (·, Flock.RecCoins.V_VALUE)
+        else if port = "out" then some (Flock.RecCoins.zeroRows 1 Flock.RecCoins.OUT_WORDS, Flock.RecCoins.ZERO_VALUE)
+        else none
       | none, none => none
 
 /-- **The verifier's rows as a value source**, at its candidate-3 inputs `c3 t` at each history. -/

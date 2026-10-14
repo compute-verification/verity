@@ -17,8 +17,9 @@ when those values are the ones the verifier computes here, from the inner sessio
 
 Every statement table row of `coef`, `dirs` or `v` must be the verifier's row at its position, and the registered root the
 root of the verifier's rows, which every instance reads at its own index (`checkValue`). A part's `out` port is the
-value V* registers as its unit's outputs, two all-zero rows under `zeroSalt` (`rec_residuals.zero_salts`), checked the
-same way (`checkZero`: `rec-residuals-zero` at `checkResiduals`, `rec-sparse-zero` at `checkSparse`).
+value V* registers as its unit's outputs, all-zero rows under `zeroSalt` (`rec_residuals.zero_salts`), one per instance,
+checked the same way (`checkZero`: `rec-residuals-zero` at `checkResiduals` and `checkOpening`, `rec-sparse-zero` at
+`checkSparse`).
 
 Candidate 3's statements are checked the same way at coins the prover's record does not hold, the coin server's record of
 the session (`C3`, `--rec-inner-transcript` with the verifier's inner shape `rec-inner --sparse`): RecSparse's `v`
@@ -454,7 +455,8 @@ def checkStackedLevel (c3 : C3) (c : Circuit) (pub : Public) (own : Array Regist
   checkValue c pub own "dirs" DIRS_VALUE ((Array.range q).map fun j => dirsRow (cons[l]!).pos[j]! H) what
 
 /-- A part of R's opening, `rec-opening/m<m>-c<claims>-p<j>`, at R's shape: one instance, its `v` part `j`'s elements
-(`RecResiduals.groups` of `RecOpening.structureOf`) of the verifier's v at R's coins (`opening`). -/
+(`RecResiduals.groups` of `RecOpening.structureOf`) of the verifier's v at R's coins (`opening`), its `out` one zero row
+(`rec_residuals.stage_opening`'s `write`). -/
 def checkOpening (c3 : C3) (c : Circuit) (pub : Public) (own : Array Registered.Port) (m cl j : Nat) : V Unit := do
   let unit := c.unit.name
   let o ← opening c3 unit
@@ -466,6 +468,7 @@ def checkOpening (c3 : C3) (c : Circuit) (pub : Public) (own : Array Registered.
   if vs.any (· ≥ o.v.size) then throw s!"rec-coins: {unit}: part {j} reads past R's opening's {o.v.size} v elements"
   checkValue c pub own "v" V_VALUE #[padTo (words (vs.map (o.v[·]!))) (RecResiduals.portWordsOf vs.size)]
     fun _ => s!"part {j}'s {vs.size} elements of R's opening's v"
+  checkZero c pub own ZERO_VALUE 1 OUT_WORDS
 
 /-- `LANES` and `H` of a level of R's openings, `rec-open-stacked/l<LANES>-h<H>` in that exact form. -/
 def stackedParams (name : String) : Option (Nat × Nat) :=
