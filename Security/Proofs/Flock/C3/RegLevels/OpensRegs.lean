@@ -201,7 +201,8 @@ theorem dirsLevel_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : F
   · rename_i l hls
     split at h
     · cases h
-    · obtain ⟨_u, -, hdv⟩ := FlockVBridge.PartS.bind_ok h
+    · obtain ⟨_u, -, h⟩ := FlockVBridge.PartS.bind_ok h
+      obtain ⟨_v, hdv, -⟩ := FlockVBridge.PartS.bind_ok h
       refine ⟨o, l, _, hop, fun ℓ hℓ hL hH => ?_, hdv⟩
       have hm : ℓ ∈ [l] := by
         rw [← hls]

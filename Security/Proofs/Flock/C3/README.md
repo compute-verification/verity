@@ -16,10 +16,10 @@ bound still need: Open now, next.
 
 Owners are round 21's workers (H, C, R, K, T, S, L, E), **rec-lean**, **W**, the next free worker, and S's successor. A
 size is in lines of proof: "+N" is what a branch has built, a range is an estimate of what is left. spec-2
-(`cursor/c3-spec-2-35f2`), 14 Oct 05:00Z, has round 21's T, K, R, L, E, U, S and C heads, #1851's head `cb1d25f98`,
+(`cursor/c3-spec-2-35f2`), 14 Oct 05:30Z, has round 21's T, K, R, L, E, U, S and C heads, #1851's head `cb1d25f98`,
 K's round 5 (`f5be751ac`), rec-lean's round 21 and S's round 22 (`b74cd6ec7`); rec-lean's round-21 pieces branch
 (`cursor/c3-rl21-pieces-9b2a`) adds R's rounds 22–24 (`90110fa71`), C's rounds 22–23 (`f0d358227`, with K's round 6
-`89750b6fd`), L's round 22 (`927241612`) and W's round 2 (`e83cd54c9`).
+`89750b6fd`), L's round 22 (`927241612`), W's round 2 (`e83cd54c9`) and S's round 23 (`172738c19`).
 
 Closed since round 20, all on spec-2: the bridge (`acceptsC3_of_verify` and its checks, H; r20261013-194011-b18d),
 `SparseRangeOk` from check 5 (`sparseRangeOk_of_check`, H, in the bridge), the top finder (`TopColl`,
@@ -34,7 +34,14 @@ its `hA` (`repFormsAt_holoAt`, at `hcl` below) (rec-lean, round 21). On the piec
 step now `RowsHeld`'s label conjunct), `StackedCoins` and `stackedStreams_of_covers` (R, rounds 22–24); the level-0
 salt binder (`salt`, `saltFinder`), the verifier's value source (`valueSrcC3`, `Recursive/ValueSrc.lean`) and
 `valueFinder` in the guarantee, and `_hbr` as `VBridgeCOff` off `ValueColl` (C, rounds 22–23); `AccHeldO` from
-`RecCoins.opening`'s `accHeld` refusal (`accHeldO_of_opening`, L round 22).
+`RecCoins.opening`'s `accHeld` refusal (`accHeldO_of_opening`, L round 22); R's levels' tops reads (`TopRead`,
+`topReads_of_accepted`, `C3/RegLevels/TopRead.lean`): `RecCoins.checkStackedLevel` refuses a level whose `out` is not
+R's tops `rec-top-stacked-L<l>` read at node `pos[j] >>> H` (`checkTopReads`, S round 23).
+
+Known test gap: no test replays honest R levels through `verify` with candidate-3 coins, so `checkTopReads`' acceptance
+of an honest prover is untested (lean-agreement does not reach it). Its honesty argument is the prover's code: R's
+level-`l` tops are `rec_vstage.stage_stacked`'s `rec-top-stacked-L<l>`, and opening `j`'s top is at node `pos[j] >>> H`
+(`rec_outer.TopValue.position`) (S round 23).
 
 | piece | names | where | size | what it gives | owner (due) |
 |---|---|---|---|---|---|
