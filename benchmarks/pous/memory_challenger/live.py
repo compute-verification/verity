@@ -3,7 +3,7 @@ memory_challenger` against the responder, over the harness's responder wire (`ba
 
     python benchmarks/pous/memory_challenger/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
         [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
-        [--signer lms --lms-key DIR [--keygen-workers N] | --signer test] [--sessions FILE]
+        [--signer lms --lms-key DIR --session-log FILE [--keygen-workers N] | --signer test] [--sessions FILE]
 
 `READY.json` names the responder's port, the scheme, its manifest and the setup salt.  `DIGESTS.bin` is the `sha512/row/v2`
 digest of every block of `C` (`memory_challenger.block_digest`), in block order: what `memory_challenger.verdict` checks
@@ -12,9 +12,16 @@ against C's leaf).
 
 - **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (spec v1.1's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
   calibration (`--calibrate-only`) still measures the loopback round trip and records whether its p99.9 fits under the cap.
-- **A session** draws a fresh session id and challenger secret and commits its coin tree, every session's before the first
-  round of any; it runs `k` rounds (the certificate's `k`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a `k` or limit no
-  certificate covers (`covering_certificate`) before any round.
+- **A session** draws a fresh session id (the auditor's designation: here the harness is the auditor) and challenger
+  secret and commits its coin tree, every session's before the first round of any; it runs `k` rounds (the certificate's
+  `k`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a `k` or limit no
+  certificate covers (`covering_certificate`) before any round.  Every session's binding is `setup_root`, the root the setup
+  publishes for the `C*` of these digests under READY's salt (`VerifierKey.from_row_digests`), recorded as `setup_root`.
+- **The session log** (`--session-log FILE`, with `--signer lms`) is the memory challenger's `memory_challenger.SessionLog`:
+  every session's id goes into it, fsynced, when the session commits, and a used id is refused.  It is a file of its own,
+  refused inside `--lms-key`; it is made with a new key, and for a key that exists a missing log is refused (one made
+  before the log existed takes `memory_challenger.SessionLog.create(FILE)` once).  Under `--signer test` it is in
+  `$TMPDIR`.
 - **The signer.** `--signer lms` signs with S1's LMS at `lms.DEPLOYED` (`memory_challenger.LMS`), the key in `--lms-key DIR`:
   `seed` (secret, 0600), `public` (`I || T[1]`), `tree.bin` (the key's tree, a cache checked against `public` and
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
@@ -48,6 +55,7 @@ import importlib.util
 import json
 import os
 import sys
+import tempfile
 import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -166,6 +174,18 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
     return mc.LmsSigner(key, lms.LeafState(state_p, lms.public_key(key), p.H), scheme=scheme)
 
 
+def session_log(path: str | os.PathLike | None, new_key: bool) -> Any:
+    """The memory challenger's used-session log at `path` (`memory_challenger.SessionLog`), made there when the key is new;
+    without a `path` (the test signer), a new one in `$TMPDIR`."""
+    from verity.core.protocols.pous import memory_challenger as mc
+
+    if path is None:
+        path, new_key = Path(tempfile.mkdtemp(prefix="pous-session-log-")) / "sessions", True
+    if new_key and not Path(path).exists():
+        mc.SessionLog.create(path)
+    return mc.SessionLog(path)
+
+
 def signer_schemes(scheme: str) -> Mapping[str, Any]:
     """The mapping a session signed under `scheme` is judged by beside `memory_challenger.SCHEMES`: that one for S1's
     scheme, the test signer's for a test one."""
@@ -174,9 +194,12 @@ def signer_schemes(scheme: str) -> Mapping[str, Any]:
     return mc.SCHEMES if scheme in mc.SCHEMES else test_signer().SCHEMES
 
 
-def binding_of(salt: bytes, digests: bytes) -> bytes:
-    """What a session audits: SHA-512 of the setup salt and the table of block digests."""
-    return hashlib.sha512(b"verity-pous/bench/memory-challenger/binding/v1\0" + salt + hashlib.sha512(digests).digest()).digest()
+def setup_root(params: Any, salt: bytes, digests: bytes) -> bytes:
+    """What a session audits: the root the setup publishes for the `C*` whose block digests are `digests`, under `salt`
+    (`VerifierKey.root`)."""
+    from verity.core.protocols.pous.verifier import VerifierKey
+
+    return VerifierKey.from_row_digests(params, salt, [digests[64 * i:64 * (i + 1)] for i in range(params.blocks)]).root
 
 
 def verdicts(s: dict[str, Any], expected: Callable[[int], bytes], trusted: set[bytes],
@@ -262,17 +285,21 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
           cpu: int | None = None, allowance: str = "p99.9", deadline_ns: int | None = None, limit_ns: int | None = None,
           clock: Callable[[], int] = time.perf_counter_ns, strict: bool = True, signer: str = "test",
           lms_key: str | os.PathLike | None = None, keygen_workers: int = 1,
-          sessions_out: str | os.PathLike | None = None) -> dict[str, Any]:
+          sessions_out: str | os.PathLike | None = None, session_log_path: str | os.PathLike | None = None) -> dict[str, Any]:
     """`audits` sessions of the memory challenger against `limit_ns` (else `Δ` plus the cap), each judged after all of them
     ran, off the timed path.  The Lean verdict is made ready before any session signs (`lean_ready`), and the signed
     sessions are written to `sessions_out` (`write_sessions`) when the session loop ends, however it ends, before any
-    verdict runs."""
+    verdict runs.  Every session's id is in `session_log_path` (`session_log`) before its first round."""
     from verity.core.protocols.pous import audit as pous_audit
     from verity.core.protocols.pous import memory_challenger as mc
     from verity.core.protocols.pous.protocol import StorageProfile
 
     if signer not in ("lms", "test") or (signer == "lms") != (lms_key is not None):
         raise ValueError(f"the signer is 'lms' with a key directory or 'test' without one, not {signer!r}, {lms_key!r}")
+    if signer == "lms" and session_log_path is None:
+        raise ValueError("an LMS-signed audit takes the memory challenger's session log (--session-log FILE)")
+    if lms_key is not None and Path(session_log_path).resolve().is_relative_to(Path(lms_key).resolve()):
+        raise ValueError(f"the session log {session_log_path} is inside the key's directory {lms_key}: it is a file of its own")
     params = scheme.params
     blocks, nb = params.blocks, params.block_bytes
     if len(digests) != 64 * blocks:
@@ -283,10 +310,11 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     limit = limit_ns if fixed else deadline_ns + cap
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
+    binding = setup_root(params, salt, digests)
     base = {"memory_challenger": "memory_challenger.MemoryChallenger", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records_tree": mc.RECORDS_TREE,
             "strict": strict, "warmup_pings": WARMUP_PINGS, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
             "allowance": "cap", "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap,
-            "k": k, "scheme": scheme.name}
+            "k": k, "scheme": scheme.name, "setup_root": binding.hex()}
     gaps: tuple[str, ...] = ()
     try:
         cert = mc.covering_certificate(scheme, k, limit, experimental=True)
@@ -298,11 +326,12 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
                     "answers": 0, "late": 0, "wrong": 0, "records": []}
         cert, gaps = None, (str(e),)
     lean_ready()
+    new_key = signer == "lms" and not (Path(lms_key) / "seed").exists()
     t0 = time.perf_counter_ns()
     sig = (lms_signer(lms_key, keygen_workers) if signer == "lms"
            else test_signer().TestSigner(os.urandom(32), height=max(1, (max(1, audits) - 1).bit_length())))
     key_load_s = (time.perf_counter_ns() - t0) / 1e9
-    binding = binding_of(salt, digests)
+    log = session_log(session_log_path, new_key)
     resolution = None if clock is time.perf_counter_ns else 1
     if cpu is not None:
         os.sched_setaffinity(0, {cpu})
@@ -312,8 +341,9 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     r = LiveResponder(host, port, nb, clock)
     cpu_before = cgroup_cpu()
     sessions = []
-    challengers = [mc.MemoryChallenger(mc.CoinTree.draw(os.urandom(32), os.urandom(32), blocks, k), sig, limit_ns=limit,
-                                       block_bytes=nb, binding=binding, clock=clock, resolution_ns=resolution)
+    challengers = [mc.MemoryChallenger(mc.CoinTree.draw(os.urandom(32), os.urandom(32), blocks, k), sig, log=log,
+                                       limit_ns=limit, block_bytes=nb, binding=binding, clock=clock,
+                                       resolution_ns=resolution)
                    for _ in range(audits)]
     try:
         before = calibrate(r, pings)
@@ -352,7 +382,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
                               scheme.experimental).to_json() if accepted and cert is not None else None)
     return {**base, "gaps": list(gaps), "profile": profile,
             "signer": {"kind": signer, "scheme": sig.scheme, "public_key": sig.public_key.hex(),
-                       "test": sig.scheme not in mc.SCHEMES, "key_load_s": key_load_s,
+                       "test": sig.scheme not in mc.SCHEMES, "key_load_s": key_load_s, "session_log": str(log.path),
                        "note": ("S1's LMS at lms.DEPLOYED, its leaf state on disk" if sig.scheme in mc.SCHEMES else
                                 "a test signer: memory_challenger.SCHEMES accepts no record it signs (fail closed)")},
             "calibration_here": {"rtt_s": quantiles(before), "within_cap": quantiles(before).get("p99.9", 0) * 1e9 <= cap},
@@ -392,6 +422,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--strict", action="store_true", help="refuse a k or limit no certificate covers, before any round")
     ap.add_argument("--signer", default="test", choices=["lms", "test"])
     ap.add_argument("--lms-key", default=None, help="the S1 key's directory (--signer lms), made there when absent")
+    ap.add_argument("--session-log", default=None,
+                    help="the memory challenger's used-session log (--signer lms): a file of its own, outside --lms-key")
     ap.add_argument("--keygen-workers", type=int, default=len(os.sched_getaffinity(0)))
     ap.add_argument("--sessions", default=None,
                     help="where the signed sessions go before any verdict runs (default: sessions-<--out's name> beside it)")
@@ -413,7 +445,7 @@ def main(argv: list[str] | None = None) -> int:
            **audit("127.0.0.1", ready["port"], scheme, bytes.fromhex(ready["salt"]), Path(a.leaves).read_bytes(),
                    audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu, allowance=a.allowance, deadline_ns=deadline,
                    limit_ns=a.limit_ns or None, clock=clock, strict=a.strict, signer=a.signer, lms_key=a.lms_key,
-                   keygen_workers=a.keygen_workers,
+                   keygen_workers=a.keygen_workers, session_log_path=a.session_log,
                    sessions_out=a.sessions or Path(a.out).with_name("sessions-" + Path(a.out).name))}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     return 0 if doc["audits"] and doc["audits_accepted_under_signer"] == doc["audits"] else 1

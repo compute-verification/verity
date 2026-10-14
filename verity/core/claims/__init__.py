@@ -194,13 +194,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "never restores an earlier copy of the state the device keeps there", "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
-    # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation
+    # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
+    # session per audit cites trusted-nebius-host as network-accounting widens it
+    # (pending network-accounting's widening, Daniel decision 2)
     Entry("pous-ring-device", "model",
           "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
-          "setup, the session and its rounds, with one session per audit and the memory challenger's coins drawn online, "
+          "setup, the session and its rounds, with one session per audit (the memory challenger refuses a used session "
+          "id from its session log, and its host never restores an earlier copy of the state the device keeps there: "
+          "trusted-nebius-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
-    # the timing red team's floor, note:20261004T2102Z-report-relay-p2-redteam-timing
+    # the timing red team's modelled floor, note:20261004T2102Z-report-relay-p2-redteam-timing
     # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
     # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
     # stated device falsifies it
@@ -208,8 +212,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "PoUS ring speed: on the stated device (up to 8 cores of one chiplet cooperating, each at least as slow as a "
           "Zen 5 core at 5.7 GHz with full-rate IFMA), within Δ + RTT (at most 854 µs) no server finishes a 16,447th "
           "sequential multiplication round (one root's depth, so D = 16,446), more than Q = 2^20 key queries or more than "
-          "L = 2^64 ring operations per answer; measured: a cooperating 8-core 16,448-bit squaring takes at least 103.6 ns, "
-          "so 16,447 rounds take 1.995× Δ + RTT, and 1.64× and 1.25× under the timing red team's sync model",
+          "L = 2^64 ring operations per answer; its margin is a modelled floor cut by a measured speedup: the timing red "
+          "team's modelled single-core floor of 361.55 ns per 16,448-bit squaring (that Zen 5 core, regate.py) over the "
+          "measured 8-core cooperation speedup of 3.490× is about 103.6 ns per cooperating squaring, so 16,447 rounds take "
+          "1.995× Δ + RTT, and 1.64× and 1.25× under the timing red team's sync model",
           "PoUS ring speed", "measured"),
     Entry("pous-ring-instantiation", "assumption",
           "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "

@@ -728,11 +728,10 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
 
 
-def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi_line_secret(tmp_path):
+def _auth_harness(tmp_path):
     fake = tmp_path / "nebius"
     fake.write_text('#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = --private-key-file-path ] && cp "$2" "$OUT"; shift; done\n')
     fake.chmod(0o755)
-    body = "dummy line one\ndummy line two\n"
 
     def auth(**env: str) -> tuple[subprocess.CompletedProcess, str]:
         out = tmp_path / "key.out"
@@ -741,6 +740,14 @@ def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi
                            env={"PATH": os.environ["PATH"], "NEBIUS_BIN": str(fake), "OUT": str(out), "XDG_RUNTIME_DIR": str(tmp_path),
                                 "NEBIUS_SA_ID": "sa-dummy", "NEBIUS_SA_PUBLIC_KEY_ID": "pk-dummy", **env})
         return r, out.read_text() if out.exists() else ""
+
+    return auth
+
+
+def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi_line_secret(tmp_path):
+    auth = _auth_harness(tmp_path)
+    # adjacent literals, so no secret scanner (tests/test_repository.py among them) reads the dummy PEM as a credential
+    body = "-----BEGIN PRIVATE" " KEY-----\ndummy line one\ndummy line two\n-----END PRIVATE" " KEY-----\n"
 
     r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body and r.stdout == r.stderr == ""
@@ -755,6 +762,26 @@ def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi
     assert r.returncode == 1 and "NEBIUS_SA_PRIVATE_KEY_B64 is not set" in r.stderr
     r, _ = auth(CLOUD_AGENT_INJECTED_SECRET_NAMES="NEBIUS_SA_ID,NEBIUS_SA_PRIVATE_KEY_B64")    # injected, but lost from this shell
     assert r.returncode == 1 and "the Nebius key is not in this shell though this VM injects it" in r.stderr
+
+
+def test_nebius_auth_reads_a_der_key_whose_base64_fits_the_cursor_secret_cap(tmp_path):
+    """An RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) exceeds Cursor's 4096-byte secret cap, so the secret may
+    hold base64 of the DER (~3132 chars) instead; nebius_auth converts it back to PEM through openssl.  A throwaway
+    RSA-2048 key generated here keeps the test fast; the size arithmetic scales, and the decode path is identical."""
+    auth = _auth_harness(tmp_path)
+    pem = subprocess.run(["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048"],
+                         capture_output=True, check=True).stdout
+    der = subprocess.run(["openssl", "pkey", "-outform", "DER"], input=pem, capture_output=True, check=True).stdout
+    assert not der.startswith(b"-----") and der[0] == 0x30    # the two formats are told apart by their first bytes
+
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(der).decode())
+    assert r.returncode == 0, r.stderr
+    assert key.startswith("-----BEGIN PRIVATE" " KEY-----")
+    pub = lambda k: subprocess.run(["openssl", "pkey", "-pubout"], input=k, capture_output=True, check=True).stdout  # noqa: E731
+    assert pub(key.encode()) == pub(pem)                      # the same key came out
+
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(b"\x30\x82 not a real DER key").decode())
+    assert r.returncode == 1 and key == "" and "neither a PEM file nor a DER private key" in r.stderr
 
 
 # ---- the weight list -----------------------------------------------------------------------------------------------------------------------

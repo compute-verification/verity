@@ -11,8 +11,9 @@ The kernels take a setup's key prefix, so one arm runs either framing, both on v
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
-  Its sessions are signed with S1's LMS key in `--mc-lms-key DIR` (made there when absent), else with the PoUS tests'
-  test signer, whose sessions the verdict rejects (its `fail_closed` gate).
+  Its sessions are signed with S1's LMS key in `--mc-lms-key DIR` (made there when absent), every session's id in the
+  session log `--mc-session-log FILE`, else with the PoUS tests' test signer, whose sessions the verdict rejects (its
+  `fail_closed` gate).
 
 1. **Kernel gates.** The pinned vector of the width (`vectors.json`, the P2 kit's): its keys expanded on the device, its `m`
    encoded and its `c` decoded, all bit-exact. Then the run's own blocks: the encoded ones decode back to their payloads (the
@@ -185,9 +186,13 @@ class MC(V3):
     c_of = V3.impl
     lms_key = ""
 
-    def sign_with(self, lms_key: str) -> None:
+    def sign_with(self, lms_key: str, session_log: str = "") -> None:
+        if lms_key and not session_log:
+            raise ValueError("--mc-lms-key takes --mc-session-log FILE: the memory challenger's used-session log")
         self.lms_key = lms_key
-        self.memory_challenger_args = (*self.memory_challenger_args, *(("--signer", "lms", "--lms-key", lms_key) if lms_key else ("--signer", "test")))
+        self.memory_challenger_args = (*self.memory_challenger_args,
+                                       *(("--signer", "lms", "--lms-key", lms_key, "--session-log", session_log) if lms_key
+                                         else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
         from verity.core.protocols.pous.memory_challenger import block_digest
@@ -421,7 +426,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
         fr.bind_device(bandwidth.read_device(a.bandwidth_salt))
     if isinstance(fr, MC):
-        fr.sign_with(getattr(a, "mc_lms_key", "") or "")
+        fr.sign_with(getattr(a, "mc_lms_key", "") or "", getattr(a, "mc_session_log", "") or "")
     bound = backend.bind(P, fr.prefix)
     pad = nb - payload
     m_dev = torch.zeros(blocks, nb, dtype=torch.uint8, device=backend.device)
