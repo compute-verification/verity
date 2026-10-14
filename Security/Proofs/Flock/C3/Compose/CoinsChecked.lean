@@ -170,6 +170,105 @@ theorem stageCoins_checked {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Re
     (FlockC3.Reps.repsDrawn_checked hS₀ hS (by omega) (repFormsAt_holoAt hcls hi' (by omega)) halg hacc hpr hsv hf
       hcus hrd htbl) hrt hst hot hlt hlater
 
+theorem probeZs {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    (hzs : zs = Flock.Guarantees.checkedC3 (I := ℐ) ish (Flock.Guarantees.innerHeld wr st reg) coins bind rows zr hC h) :
+    True := trivial
+theorem probeList {ss : Array VStar.Stmt} (hS₀ : 0 < S) (hss : RecVStar.statements ish = .ok ss) : True := trivial
+theorem probeCls (hcls : ClassOk (shapeOf st)) : True := trivial
+theorem probeInner (hi : (RecVStar.checkInnerStmt ish st).isOk = true) : True := trivial
+theorem probeCus {tbl : String} {bc : Cm → String → ℕ → List UInt8}
+    (hcus : InnerRecordCustody wr (fun w => innerCommitsAt w.1 w.2 st reg) ish.sparse (holoMap st hp Cm ish tbl bc)) :
+    True := trivial
+theorem probeTbl {tbl : String} (htbl : ∀ i : Fin 2,
+    (((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{RecVStar.SPARSE}/" ||
+      ((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{RecVStar.STACKED}/") = false) : True := trivial
+theorem probeRd {tbl : String}
+    {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    (hrd : ∀ R ω t Lb i, (rep R ω t Lb i).rounds =
+      FlockC3.Reps.heldRounds (innerCommitsAt (wr t).1 (wr t).2 st reg) ((Flock.Guarantees.HoloStream.rep i).name tbl)) :
+    True := trivial
+theorem probeAlg {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
+    (hpr : ProofOfVals zs dg N k Rw sh rep vals)
+    (hsv : SetupOfVals zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) sh rep vals)
+    (hf : FramesOfVals zs dg N k Rw sh rep vals) : True := trivial
+theorem probeTies {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals} {cap₀ : Cap Dig}
+    (hrt : SrcRepTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
+    (hst : FlockC3.Sparse.SrcSparseTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
+    (hot : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => ∃ sh w ops,
+      FlockC3.Opening.OpenTie sh w ops u ∧ OpeningReadAt (runSteps u) u)
+    (hlt : FlockC3.RegLevels.SrcLevelTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) cap₀) : True := trivial
+theorem probeLater {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    (hlater : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
+      LaterCoins (CT := holoCTs st hp) (t.map Prod.snd) u)
+    (hcon : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
+      StageCoins (CT := holoCTs st hp) (t.map Prod.snd) u) : True := trivial
+
+set_option maxHeartbeats 1600000 in
+theorem probeFree {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n}
+    {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt} {ish : Flock.RecVStar.Inner} {reg : Lean.Json}
+    {wr : List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → Lean.Json × String}
+    {coins : List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → Option Flock.RecCoins.Source}
+    {bind : Fin S → VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg'}
+    {hC : Flock.Premises.RecordCustody zr} {h : Typed zr} {sh : Flock.Shape}
+    {zs : Reg → L.Ω → List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {ss : Array VStar.Stmt} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {stp : Reg → L.Ω → List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → ((j : Fin S) → (Vs j).Bits) →
+      C3Run (holoAt st hp)}
+    {rep : Reg → L.Ω → List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 →
+      RepData}
+    {vals : Reg → L.Ω → List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 →
+      UnitVals}
+    {tbl : String} {bc : Cm → String → ℕ → List UInt8} {cap₀ : Cap Dig}
+    (hzs : zs = Flock.Guarantees.checkedC3 (I := holoInnerAt T (holoCTs st hp) st hp) ish
+      (Flock.Guarantees.innerHeld wr st reg) coins bind rows zr hC h)
+    (hS₀ : 0 < S) (hss : Flock.RecVStar.statements ish = .ok ss) (hcls : ClassOk (shapeOf st))
+    (hi : (Flock.RecVStar.checkInnerStmt ish st).isOk = true)
+    (halg : AlgebraDecodes (I := holoInnerAt T (holoCTs st hp) st hp) zs dg N k Rw sh rep)
+    (hacc : AccChains (I := holoInnerAt T (holoCTs st hp) st hp) zs dg N k Rw sh rep)
+    (hpr : ProofOfVals zs dg N k Rw sh rep vals)
+    (hsv : SetupOfVals zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) sh rep vals)
+    (hf : FramesOfVals zs dg N k Rw sh rep vals)
+    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr (fun w => innerCommitsAt w.1 w.2 st reg) ish.sparse
+      (Flock.Guarantees.holoMap st hp Cm ish tbl bc))
+    (htbl : ∀ i : Fin 2, (((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.SPARSE}/" ||
+      ((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.STACKED}/") = false)
+    (hrd : ∀ R ω t Lb i, (rep R ω t Lb i).rounds =
+      FlockC3.Reps.heldRounds (innerCommitsAt (wr t).1 (wr t).2 st reg) ((Flock.Guarantees.HoloStream.rep i).name tbl))
+    (hrt : SrcRepTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
+    (hst : FlockC3.Sparse.SrcSparseTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
+    (hot : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => ∃ sh w ops,
+      FlockC3.Opening.OpenTie sh w ops u ∧ OpeningReadAt (runSteps u) u)
+    (hlt : FlockC3.RegLevels.SrcLevelTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) cap₀)
+    (hlater : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
+      LaterCoins (CT := holoCTs st hp) (t.map Prod.snd) u) :
+    AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
+      StageCoins (CT := holoCTs st hp) (t.map Prod.snd) u := by
+  subst hzs
+  have htie := (shape_of_statements hss).2
+  obtain ⟨⟨⟩, hi'⟩ := FlockC3.VStarList.ok_of_isOk hi
+  obtain ⟨_, hS⟩ := holoStreams_of_list hss (FlockC3.VStarList.checkInnerStmt_ok hi').1
+  exact stageCoins_holo (m := holoMapOne st hp Cm ish tbl bc) (hLeafC3_checked hS₀ dg N k Rw) halg hacc hpr hsv hf
+    (custody_holoMapOne hcus)
+    (FlockC3.Reps.repRoundsHeld_of_rounds (wr := wr) (held := fun w => innerCommitsAt w.1 w.2 st reg)
+      (s := fun i => (Flock.Guarantees.HoloStream.rep i).name tbl) hrd)
+    (coinsEncoded_holoMap (ish := ish) (tbl := tbl) (bc := bc))
+    (FlockC3.Reps.repsDrawn_checked hS₀ hS (by omega) (repFormsAt_holoAt hcls hi' (by omega)) halg hacc hpr hsv hf
+      hcus hrd htbl) hrt hst hot hlt hlater
+
 end
 
 end FlockC3.Compose
@@ -177,3 +276,14 @@ end FlockC3.Compose
 #print axioms FlockC3.Compose.holoStreams_of_list
 #print axioms FlockC3.Compose.custody_holoMapOne
 #print axioms FlockC3.Compose.stageCoins_checked
+#check @FlockC3.Compose.probeZs
+#check @FlockC3.Compose.probeList
+#check @FlockC3.Compose.probeCls
+#check @FlockC3.Compose.probeInner
+#check @FlockC3.Compose.probeCus
+#check @FlockC3.Compose.probeTbl
+#check @FlockC3.Compose.probeRd
+#check @FlockC3.Compose.probeAlg
+#check @FlockC3.Compose.probeTies
+#check @FlockC3.Compose.probeLater
+#print axioms FlockC3.Compose.probeFree
