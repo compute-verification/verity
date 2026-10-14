@@ -169,7 +169,7 @@
       "holder": "the ci coordinator (bc-1e3239d1-d0b7-5a0a-8e56-9b3b01792a98); until it posts stopped, its predecessor (bc-81ff5c35-39a9-5232-a6b5-8e933b944292)",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
-      "usergroup": null,
+      "usergroup": "S0C93AFCRT8",
       "linear": "CI",
       "owns": [
         "tools/verity/check/",
@@ -185,7 +185,7 @@
       "holder": "the lean coordinator (bc-b8aa4f87-8653-5bf1-87f8-944f12e26f1e); until it posts stopped, its predecessor (bc-19c498a8-628e-5c04-8f61-fe785a24741b)",
       "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
-      "usergroup": null,
+      "usergroup": "S0C93AE54K0",
       "linear": "LEAN",
       "owns": [
         "tools/verity/lean/",
@@ -199,7 +199,7 @@
       "holder": "the comms coordinator (bc-9e9cd438-d8ff-537a-9545-7fff2c9038e0); until it posts stopped, its predecessor (bc-3e100045-0b60-5d20-951e-7207a989b252)",
       "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
       "charter": "Daniel, 2026-10-01 9:12 AM PDT",
-      "usergroup": null,
+      "usergroup": "S0C8PTRMVV5",
       "linear": "COMM",
       "owns": [
         ".agents/skills/using-slack/",
@@ -213,9 +213,11 @@
       "holder": "the admin, Daniel's coordinator (bc-2b2d3505-b12f-5f7a-9a19-768dbe4d7308); until it posts stopped, its predecessor (bc-7f347b4b-6175-4b6e-84c6-731add2f8589)",
       "remit": "Top-level: Daniel's coordinator across every lead.",
       "charter": "Daniel",
-      "usergroup": null,
+      "usergroup": "S0C977GL9R7",
       "linear": "TOP",
-      "branch_suffixes": ["c3b2"],
+      "branch_suffixes": [
+        "c3b2"
+      ],
       "owns": [
         "AGENTS.md",
         "README.md",
@@ -235,7 +237,7 @@
       "holder": "the vLLM coordinator (bc-978a9463-2354-5168-8a9a-e18df53b9411)",
       "remit": "The vLLM integration: what the served model runs under verification, and its hookup to the protocols.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
-      "usergroup": null,
+      "usergroup": "S0C954BELSW",
       "owns": [
         "integrations/vllm/"
       ]
@@ -245,7 +247,7 @@
       "holder": "the benchmarks coordinator (bc-681a0244-a22d-5924-b0a3-06223ae547e4)",
       "remit": "Benchmarks: the overhead and throughput measurements across backends, and the tables rendered from them.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
-      "usergroup": null
+      "usergroup": "S0C9ZLL7T88"
     },
     {
       "handle": "old-accounting",
