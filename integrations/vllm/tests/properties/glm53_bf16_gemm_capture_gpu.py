@@ -18,18 +18,22 @@ the variant. By default the run checks the variant first and vLLM's served defau
 both, so `served_default` is first-class rather than timing-only.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
-  scan       each case once at every M of SCAN_M (256 to ENVELOPE, vLLM's default max_num_seqs for the LLM entrypoint on a GPU
-             of 70 GiB or more that is no A100, `EngineArgs.get_batch_defaults`), the same operand buffers sliced to M so the
-             heuristic sees only the shape, under one profiler session with a marker fill between launches.  Regimes
-             (`scan_regimes`) are maximal M runs over which the kernel signature (names and blocks, `scan_signature`) and four
-             kept output rows are both unchanged: the same rows against the same W give the same words exactly when the kernel
-             and its split schedule are unchanged, so a split-count change invisible to the profiler (grid.z reads 1) still
-             bounds a regime.  On the default route each reduce-bearing regime's split count is fitted from the kept rows
-             (`BC.fit_cublas_split_k` over `BC.splitk_count_probe`'s crafted boundary rows, installed atop a clone of W with
-             an all-ones x row 0, so the served partition reads out of the words under either output rounding); a regime no
-             candidate fits, a reduce under the switch or a bmm reduce fails the scan.
-             The sweep (`scan_sweep`) then adds full cases at both sides of every regime boundary past 256 plus ENVELOPE, so
-             every schedule cuBLAS serves across decode batches to ENVELOPE is word-checked without launching every M twice.
+  scan       in its own process (`scan_run`, `--scan-run`; the parent reads back its scan.json): profiler sessions this large
+             leave Kineto returning empty traces to every later session of the process that ran them, so no scan shares a
+             process with the launches' per-case sessions, and all the scan's targets run under one session.  Each case runs
+             once at every M of SCAN_M (256 to ENVELOPE, vLLM's default max_num_seqs for the LLM entrypoint on a GPU of
+             70 GiB or more that is no A100, `EngineArgs.get_batch_defaults`), the same operand buffers sliced to M so the
+             heuristic sees only the shape, with a marker fill between launches.  Regimes (`scan_regimes`) are maximal M runs
+             over which the kernel signature (names and blocks, `scan_signature`) and four kept output rows are both
+             unchanged, so a split-count change invisible to the profiler (grid.z reads 1) still bounds a regime.  cuBLAS
+             cycles through tens of kernels across these decode batches (114 regimes on the capture box), but every regime's
+             words follow one of a handful of models, and that model is read out of its kept words (`scan_analyze`): the
+             split count fitted behind its reduce (`BC.fit_cublas_split_k` over `BC.splitk_count_probe`'s crafted boundary
+             rows, installed atop a clone of W with an all-ones x row 0, so the served partition reads out of the words under
+             either output rounding), or the serial chain without one.  A regime matching neither (a bmm reduce among them),
+             or more model classes than MAX_CLASSES, fails the scan.  The sweep (`scan_sweep`) then adds one full case per
+             model class (`scan_classes`) at the first M past 256 the box serves it at, plus ENVELOPE, so every distinct
+             model cuBLAS serves across decode batches to ENVELOPE is word-checked without launching every M twice.
   selection  each model's `GateLinear(K, N)` with a bf16 weight and f32 out allows tier 1 (ll_bf16_gemm) and tier 4 (cuBLAS) and
              neither fp32 tier; `dispatch_unquantized_gemm()` is `default_unquantized_gemm` (F.linear); the switch's flags read back.
   router     `GateLinear.forward` at M in the model's `router_m`, twice: every `LLBf16Gemm.dispatch` it makes is tapped and must be
@@ -55,9 +59,9 @@ both, so `served_default` is first-class rather than timing-only.
   bind       every Definition binds at each model's statics.
   timing     each case's kernel time, the median of `REPS` CUDA-event-timed launches.
   profile    every CUDA kernel name and launch grid, the separate cuBLASLt reduction kernel, the `SPLIT_K` pinned by shape and M
-             (`BC.default_cublas_split_k`, M <= 256) or read from the scan's fit past the pins (Kineto
-             reports grid.z = 1 for these launches), and the runtime cuBLAS version. Each default split-K case includes a crafted
-             cancellation row fit against the stated
+             (`BC.default_cublas_split_k`, M <= 256, default route only) or read from the scan's fit past the pins (Kineto
+             reports grid.z = 1 for these launches), and the runtime cuBLAS version.  A trace with no kernels fails the launch
+             (`_profile_record`).  Each default split-K case includes a crafted cancellation row fit against the stated
              contiguous/f32/forward hypothesis and strided, reverse, tree and bf16-partial alternatives.
 
 GO needs, for every model and both variants, every case run (the scan's swept boundaries included), 0 mismatches on every word,
@@ -91,7 +95,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v4"
+SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v5"
 RECORD = "glm53_bf16_gemm_capture.json"
 #: GLM-5.3's MLA at one TP8 rank: heads, the nope and rope query widths, the latent rank and the value width
 NHL, QK_NOPE, QK_ROPE, KV_LORA, V_HEAD = 8, 192, 64, 512, 256
@@ -132,8 +136,9 @@ ENVELOPE = 1024
 SCAN_M = range(256, ENVELOPE + 1)
 #: the output rows and columns the scan keeps per M, enough to see any schedule change and to fit the split count
 SCAN_FIT_ROWS, SCAN_FIT_COLS = 4, 256
-#: more regimes than this across SCAN_M means the schedule churns; the scan fails rather than sweeping them all
-MAX_REGIMES = 12
+#: more distinct word models than this across SCAN_M (the box serves four: splits 2, 3 and 4, and the serial chain) means
+#: something other than the split count is moving the words; the scan fails rather than sweeping them all
+MAX_CLASSES = 8
 #: the scan's marker kernel between launches (`Tensor.fill_`), never part of a GEMM's own launches
 MARKER = "FillFunctor"
 #: the M = 1 dotprod row whose products are all below f32's normal range
@@ -563,13 +568,25 @@ def scan_regimes(Ms: list[int], sigs: list[dict[str, Any]], rows: list[np.ndarra
     return regimes
 
 
+def scan_classes(regimes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The distinct word models across the regimes, in first-appearance order: each class is one comparison model (a fitted
+    split count, or `split` None for the serial chain), however many kernels cuBLAS cycles through serving it."""
+    classes: dict[int | None, dict[str, Any]] = {}
+    for r in regimes:
+        c = classes.setdefault(r["split"], {"split": r["split"], "m0": r["m0"], "regimes": 0, "ms": 0})
+        c["regimes"] += 1
+        c["ms"] += r["m1"] - r["m0"] + 1
+    return list(classes.values())
+
+
 def scan_sweep(regimes: list[dict[str, Any]], covered: int = SCAN_M[0]) -> list[int]:
-    """The decode batches the scan adds to the sweep: both sides of every regime boundary past the already-swept `covered`,
-    and the ENVELOPE endpoint."""
-    out = {ENVELOPE}
-    for r in regimes[1:]:
-        out.update((r["m0"] - 1, r["m0"]))
-    return sorted(M for M in out if M > covered)
+    """The decode batches the scan adds as full cases: for each model class the first M past the already-swept `covered` the
+    box serves it at, plus the ENVELOPE endpoint."""
+    first: dict[int | None, int] = {}
+    for r in regimes:
+        if r["m1"] > covered:
+            first.setdefault(r["split"], max(r["m0"], covered + 1))
+    return sorted(set(first.values()) | {ENVELOPE})
 
 
 def regime_of(rec: dict[str, Any], M: int) -> dict[str, Any] | None:
@@ -591,9 +608,10 @@ def scan_targets(only: set[str], models: list[str]) -> list[tuple[str, str, str]
     return out
 
 
-def scan_case(work: Path, weights: Weights, gates: dict[str, Any], model: str, phase: str, name: str, idx: int,
-              served_default: bool) -> dict[str, Any]:
-    """cuBLAS's schedule for one case at every M of SCAN_M (module docstring, `scan`): launches, regimes, fits and the sweep."""
+def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, name: str, idx: int) -> dict[str, Any]:
+    """One scan target's operands at ENVELOPE rows and its launch, keep and model pieces (module docstring, `scan`): the
+    crafted count probe atop a clone of W with an all-ones x row 0 (never for bmm), the fit's operand words, and the serial
+    chain's words on the kept window."""
     import torch
     from verity_vllm.program.registry import bf16_gemm_check as BC
 
@@ -602,7 +620,7 @@ def scan_case(work: Path, weights: Weights, gates: dict[str, Any], model: str, p
     if phase == "router":
         w0, _ = weights.get(model, "mlp.gate")
         gate = gates[model]
-        gate.weight.data.copy_(w0)                                                 # the launches re-copy the pristine weights
+        gate.weight.data.copy_(w0)
         x, w = _activation(gen, ENVELOPE, m.hidden), gate.weight.data
         run = lambda M: _primary_output(gate(x[:M]))                               # noqa: E731
         output = "f32"
@@ -635,33 +653,121 @@ def scan_case(work: Path, weights: Weights, gates: dict[str, Any], model: str, p
         probe = BC.splitk_count_probe(w.shape[1], max_rows=min(w.shape[0], SCAN_FIT_COLS))
         x[0].fill_(1.0)
         w[:probe.shape[0]].copy_(torch.from_numpy(probe.view(np.int16)).view(torch.bfloat16).to(w.device))
-    keep = ((lambda o: o[:, :SCAN_FIT_ROWS, :SCAN_FIT_COLS].clone()) if phase == "bmm"
-            else (lambda o: o[:SCAN_FIT_ROWS, :SCAN_FIT_COLS].clone()))
-    kept = []
-    marker = torch.empty(1, device="cuda")
-    with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA]) as prof:
-        for M in SCAN_M:
-            marker.fill_(1.0)
-            kept.append(keep(run(M)))
-        marker.fill_(1.0)
-        torch.cuda.synchronize()
-    trace_path = work / f"scan_{model}_{phase}_{name}.json"
-    prof.export_chrome_trace(str(trace_path))
-    segments = scan_segments(json.loads(trace_path.read_text()), len(SCAN_M))
-    rows = [(_u32 if output == "f32" else _u16)(t) for t in kept]
-    regimes = scan_regimes(list(SCAN_M), [scan_signature(s) for s in segments], rows)
-    fit_ok = True
-    if served_default and phase != "bmm":
         xw, ww = _u16(x[:SCAN_FIT_ROWS]), _u16(w[:SCAN_FIT_COLS])
-        for r in (r for r in regimes if r["reduce"]):
-            fits = BC.fit_cublas_split_k(xw, ww, rows[list(SCAN_M).index(r["m0"])], out=output)
-            r["split_fits"], r["split"] = fits, (fits[0] if fits else None)
-            fit_ok = fit_ok and bool(fits)
-    rec = {"m": [SCAN_M[0], SCAN_M[-1]], "output": output, "regimes": regimes, "sweep": scan_sweep(regimes)}
-    rec["ok"] = fit_ok and all("split" in r or not r["reduce"] for r in regimes) and len(regimes) <= MAX_REGIMES
-    if len(regimes) > MAX_REGIMES:
-        rec["sweep"] = [ENVELOPE]
-    return rec
+        serial = (BC.f32out_rows if output == "f32" else BC.linear_rows)(xw, ww)
+        keep = lambda o: o[:SCAN_FIT_ROWS, :SCAN_FIT_COLS].clone()                 # noqa: E731
+    else:
+        xw = ww = None
+        serial = BC.bmm_rows(_u16(a[:, :SCAN_FIT_ROWS]), _u16(b))[:, :, :SCAN_FIT_COLS]
+        keep = lambda o: o[:, :SCAN_FIT_ROWS, :SCAN_FIT_COLS].clone()              # noqa: E731
+    return {"run": run, "keep": keep, "output": output, "xw": xw, "ww": ww, "serial": serial}
+
+
+def scan_analyze(op: dict[str, Any], segments: list[list[dict[str, Any]]], rows: list[np.ndarray]) -> dict[str, Any]:
+    """One scanned target's schedule map (module docstring, `scan`): the regimes, each regime's model read out of its kept
+    words (the split count fitted behind its reduce, the serial chain without one), the model classes and the sweep."""
+    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity_vllm.program.registry import mla_check as MK
+
+    regimes = scan_regimes(list(SCAN_M), [scan_signature(s) for s in segments], rows)
+    cache: dict[bytes, tuple[list[int], bool]] = {}                                # same kept words, same model: fit each once
+    for r in regimes:
+        pat = rows[list(SCAN_M).index(r["m0"])]
+        key = pat.tobytes()
+        if key not in cache:
+            fits = BC.fit_cublas_split_k(op["xw"], op["ww"], pat, out=op["output"]) if op["xw"] is not None else []
+            cache[key] = (fits, not (~MK._words_equal(pat, op["serial"], f32_words=op["output"] == "f32")).any())
+        fits, serial = cache[key]
+        r["split_fits"], r["serial_fit"] = fits, serial
+        r["split"] = fits[0] if r["reduce"] and fits else None
+        r["modeled"] = bool(fits) if r["reduce"] else (serial and not fits)
+    classes = scan_classes(regimes)
+    return {"m": [SCAN_M[0], SCAN_M[-1]], "output": op["output"], "regimes": regimes, "classes": classes,
+            "sweep": scan_sweep(regimes) if len(classes) <= MAX_CLASSES else [ENVELOPE],
+            "ok": all(r["modeled"] for r in regimes) and len(classes) <= MAX_CLASSES}
+
+
+def scan_run(a: argparse.Namespace) -> int:
+    """The scan process (module docstring, `scan`): every target's decode batches under one profiler session, the analysis
+    per target, written to `<out>/scan.json`."""
+    only, models = set(a.only.split(",")), a.models.split(",")
+    outdir = Path(a.out)
+    outdir.mkdir(parents=True, exist_ok=True)
+    tmp = tempfile.TemporaryDirectory(dir=a.scratch)
+    work = Path(tmp.name)
+    environment(a.served_default, work / "triton_cache")
+    import torch
+    from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
+
+    doc: dict[str, Any] = {"cases": {}, "errors": {}}
+    try:
+        doc["switch"] = switch(a.served_default)
+    except Exception as e:  # noqa: BLE001
+        doc["errors"]["switch"] = _error(e)
+        doc["switch"] = {"ok": False}
+    vllm_config = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
+    with set_current_vllm_config(vllm_config):
+        gates: dict[str, Any] = {}
+        for model in models:
+            try:
+                gates[model] = make_gate(vllm_config, model)
+            except Exception as e:  # noqa: BLE001
+                doc["errors"][f"gate/{model}"] = _error(e)
+        weights = Weights(work, 4000)
+        ops: list[tuple[str, dict[str, Any]]] = []
+        for j, (model, phase, name) in enumerate(scan_targets(only, models)):
+            skey = f"{model}/{phase}/{name}"
+            try:
+                ops.append((skey, scan_ops(weights, gates, model, phase, name, j)))
+            except Exception as e:  # noqa: BLE001
+                doc["errors"][skey] = _error(e)
+        kept: dict[str, list] = {skey: [] for skey, _ in ops}
+        marker = torch.empty(1, device="cuda")
+        segments = None
+        try:
+            with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA]) as prof:
+                for skey, op in ops:
+                    for M in SCAN_M:
+                        marker.fill_(1.0)
+                        kept[skey].append(op["keep"](op["run"](M)))
+                marker.fill_(1.0)
+                torch.cuda.synchronize()
+            trace_path = work / "scan_trace.json"
+            prof.export_chrome_trace(str(trace_path))
+            segments = scan_segments(json.loads(trace_path.read_text()), len(ops) * len(SCAN_M))
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["trace"] = _error(e)
+        for i, (skey, op) in enumerate(ops if segments is not None else []):
+            rows = [(_u32 if op["output"] == "f32" else _u16)(t) for t in kept[skey]]
+            try:
+                doc["cases"][skey] = scan_analyze(op, segments[i * len(SCAN_M):(i + 1) * len(SCAN_M)], rows)
+            except Exception as e:  # noqa: BLE001
+                doc["errors"][skey] = _error(e)
+    doc["ok"] = (not doc["errors"] and doc["switch"].get("ok") is True and bool(doc["cases"])
+                 and all(rec["ok"] for rec in doc["cases"].values()))
+    (outdir / "scan.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    tmp.cleanup()
+    return 0 if doc["ok"] else 1
+
+
+def scan_subprocess(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
+    """The scan in its own process: its profiler session leaves Kineto returning empty traces to every later session of the
+    process that ran it (the per-launch `_kernels` traces come back empty), so no scan ever shares a process with the
+    launches.  Returns the scan.json document, with `ok` False when the process or its record failed."""
+    sub = outdir / "scan"
+    sub.mkdir(parents=True, exist_ok=True)
+    (sub / "scan.json").unlink(missing_ok=True)                                 # a dead process never reuses a stale record
+    argv = [sys.executable, str(Path(__file__).resolve()), "--scan-run", "--out", str(sub),
+            "--models", a.models, "--only", a.only]
+    argv += (["--scratch", a.scratch] if a.scratch else []) + (["--served-default"] if a.served_default else [])
+    proc = subprocess.run(argv, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2])
+    (outdir / "scan.log").write_text(proc.stdout + proc.stderr)
+    try:
+        doc = json.loads((sub / "scan.json").read_text())
+    except Exception as e:  # noqa: BLE001
+        doc = {"ok": False, "cases": {}, "errors": {"scan": _error(e)}}
+    doc["returncode"] = proc.returncode
+    return doc
 
 
 def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phase: str, name: str, M: int,
@@ -733,8 +839,9 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
         rec["profile"] = _kernels(fn, d / "profile.json")
     except Exception as e:  # noqa: BLE001
         rec["profile"] = {"error": _error(e), "ok": False}
-    if served_default and rec["profile"].get("reduction_kernels"):
-        rec["profile"]["split_k"] = served_split(phase, M, rec["K"], rec["N"], scan_split)
+    if rec["profile"].get("reduction_kernels"):
+        # the pins describe the default route; a reduce under the switch has only the switch scan's own fit
+        rec["profile"]["split_k"] = served_split(phase, M, rec["K"], rec["N"], scan_split) if served_default else scan_split
         rec["profile"]["ok"] = (rec["profile"]["split_k"] is not None
                                 and any("splitk" in x["name"].lower() and "reduce" not in x["name"].lower()
                                         for x in rec["profile"]["launches"]))
@@ -1077,23 +1184,20 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         weights = Weights(work, 4000)
         scan_split: dict[tuple[str, str, str, int], int | None] = {}
         if run_scan:
-            for j, (model, phase, name) in enumerate(scan_targets(only, models)):
-                skey = f"{model}/{phase}/{name}"
-                try:
-                    rec = scan_case(work, weights, gates, model, phase, name, j, a.served_default)
-                except Exception as e:  # noqa: BLE001
-                    doc["errors"][f"scan/{skey}"] = _error(e)
-                    doc["scan"]["ok"] = False
-                    print(f"[glm53-bf16-gemm] scan {skey} ERROR {doc['errors'][f'scan/{skey}'][:400]}", flush=True)
-                    continue
-                doc["scan"]["cases"][skey] = rec
-                doc["scan"]["ok"] = doc["scan"]["ok"] and rec["ok"]
+            scan_doc = scan_subprocess(a, outdir)
+            doc["scan"].update(cases=scan_doc.get("cases") or {}, ok=scan_doc.get("ok") is True,
+                               switch=scan_doc.get("switch"), returncode=scan_doc.get("returncode"))
+            for skey, msg in (scan_doc.get("errors") or {}).items():
+                doc["errors"][f"scan/{skey}"] = msg
+                print(f"[glm53-bf16-gemm] scan {skey} ERROR {msg[:400]}", flush=True)
+            for skey, rec in doc["scan"]["cases"].items():
+                model, phase, name = skey.split("/")
                 for M in rec["sweep"]:
                     todo.append((model, phase, name, M))
                     r = regime_of(rec, M)
                     scan_split[(model, phase, name, M)] = r.get("split") if r else None
-                bounds = [(r["m0"], r["m1"], r.get("split"), r["reduce"]) for r in rec["regimes"]]
-                print(f"[glm53-bf16-gemm] scan {skey:44s} regimes={bounds} sweep={rec['sweep']} ok={rec['ok']}", flush=True)
+                print(f"[glm53-bf16-gemm] scan {skey:44s} regimes={len(rec['regimes'])} "
+                      f"classes={[(c['split'], c['m0']) for c in rec['classes']]} sweep={rec['sweep']} ok={rec['ok']}", flush=True)
             doc["expected"] = [case_key(*c) for c in todo]
         for i, (model, phase, name, M) in enumerate(todo):
             key = case_key(model, phase, name, M)
@@ -1186,9 +1290,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="preserve operands and outputs for launches with a separate split-K reduction, deduplicating W across M")
     ap.add_argument("--no-scan", action="store_true",
                     help=f"skip the decode-batch schedule scan over M in {SCAN_M.start}..{SCAN_M[-1]} (--quick always skips it)")
+    ap.add_argument("--scan-run", action="store_true",
+                    help="run only the scan and write <out>/scan.json (internal: the scan profiles in its own process)")
     ap.add_argument("--models", default=",".join(MODELS), help=f"comma list of models: {', '.join(MODELS)}")
     ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)}")
     a = ap.parse_args(argv)
+    if a.scan_run:
+        return scan_run(a)
     return 0 if run(a)["ok"] else 1
 
 
