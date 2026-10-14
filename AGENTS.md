@@ -16,8 +16,9 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Models/` states their guarantees, and one whose
     proof isn't in `Security/Proofs/` is open: that verifier's properties aren't proven yet.
     - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
-      its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`) and
-      the network certifier (`certifier`), each a Python
+      its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`), the
+      remote bandwidth audit over a node's registered store (`remote_bandwidth`) and the network certifier
+      (`certifier`), each a Python
       verifier with the code that runs it. A protocol's Lean code is its `lean/`. NCI is Lean only
       (`verity/core/protocols/network/nci/`).
     - `claims`: the ids of security claims.

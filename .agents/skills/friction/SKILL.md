@@ -102,6 +102,8 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-13 (10:42 AM PDT): an agent closes an old PR without asking when every commit on it is already in another open
+  PR ("close old PRs idgaf do that").
 - 2026-10-12 (4:08 PM PDT, to top): Daniel took every recommendation then open in top's walkthrough of his decisions,
   unread, for maximum research velocity, and may revisit any of them later. The ones that set rules:
   - The network certifier and the memory challenger are the auditor's hardware, so they survive the 10:03 AM ruling
