@@ -406,7 +406,8 @@ class _VllmEngine:
                 {k: engine[k] for k in ("dtype", "quantization", "compilation_config") if engine.get(k) is not None},
             )
         else:
-            engine["protocols"] = ",".join(arm.protocols) or None
+            if arm.protocols:
+                engine["protocols"] = ",".join(arm.protocols)
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
         self.target.engine, self.target.model = self.llm, self.llm._engine.model
         ready = getattr(self.installed, "ready", None)
