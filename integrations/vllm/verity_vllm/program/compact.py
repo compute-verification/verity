@@ -341,6 +341,13 @@ def is_file_prog(it) -> bool:
     return len(it) == 8 and it[0] in _FILE_SPACES
 
 
+def expanded_file_args(args: Iterable) -> list:
+    """Each operand of a stored instance row as the record form's per-leaf run lists, bit-identical to what `runs()` wrote (v1):
+    a record-form operand passes through as the same object, one with any "N"/"P" progression item expands (`runs_from_file_items`).
+    The read-side choke point of the Build's `instances.json.gz` (v2, `derive_step._instance_rows`): every reader sees v1 rows."""
+    return [a if all(len(it) != 8 for it in a) else [list(t) for t in runs_from_file_items(a)] for a in args]
+
+
 def first_runs(progs: Iterable[tuple], n: int) -> list[tuple]:
     """The first `n` runs of a compact list (bounded work: examples)."""
     out = []

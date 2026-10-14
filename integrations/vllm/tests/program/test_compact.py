@@ -383,6 +383,9 @@ def test_stored_form_progressions_is_lossless_over_the_records_run_lists():
         assert all((it[0] in ("N", "P") and len(it) == 8 and it[7] >= 2) or len(it) == 4 for it in items), items
         assert not any(it[0] in ("N", "P") and it[4:7] == [0, 0, 0] and it[7] == 1 for it in items)
         assert [tuple(x) for x in K.runs_from_file_items([list(x) for x in r])] == r   # a v1 file passes through
+        v1 = [list(x) for x in r]
+        assert K.expanded_file_args([items, v1]) == [v1, v1]                           # the readers' choke point: v1 out, either way in
+        assert K.expanded_file_args([v1])[0] is v1                                     # a v1 operand passes through as the same object
         n_items += len(items); n_runs += len(r)
     assert n_items < n_runs
 

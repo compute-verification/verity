@@ -634,7 +634,10 @@ def _read_instance_header(path: str) -> dict[str, Any]:
 
 def iter_instance_rows(path: str) -> Iterator[dict[str, Any]]:
     """The objects of the top-level `"rows": [...]` array of an instance-sequence file, one at a time (the array is never built).
-    The document's key order (`schema`, `digest`, `params`, `rows`) is the writer's (`derive_step._instance_sequence`)."""
+    The document's key order (`schema`, `digest`, `params`, `rows`) is the writer's (`derive_step._instance_sequence`).  A v2 row's
+    stored argument progressions are expanded to the v1 per-leaf run lists, bit-identically (`compact.expanded_file_args`), so every
+    reader of this iterator sees the record form whatever the file carries."""
+    from verity_vllm.program.compact import expanded_file_args
     dec = json.JSONDecoder()
     with _open_text(path) as f:
         buf = f.read(_CHUNK)
@@ -678,6 +681,9 @@ def iter_instance_rows(path: str) -> Iterator[dict[str, Any]]:
                         raise
                     buf = buf[pos:] + more
                     pos = 0
+            a = obj.get("args")
+            if a:
+                obj["args"] = expanded_file_args(a)
             yield obj
             pos = end
             if pos > _CHUNK:                               # compact: keep the buffer bounded by the chunk size plus one row
@@ -685,11 +691,13 @@ def iter_instance_rows(path: str) -> Iterator[dict[str, Any]]:
 
 
 def _instances_columns(params: tuple[InputView, ...], rows: Iterable[dict[str, Any]]) -> _Builder:
-    """Body order in, columns out; `_OutOfOrder` when the rows are not body positions in order."""
+    """Body order in, columns out; `_OutOfOrder` when the rows are not body positions in order.  A v2 document's stored argument
+    progressions are expanded to the per-leaf run lists (a no-op on rows `iter_instance_rows` already expanded)."""
+    from verity_vllm.program.compact import expanded_file_args
     b = _Builder(params)
     for r in rows:
         spec = r["spec"]
-        b.add(int(r["i"]), spec, str(r.get("form") or "call"), str(r.get("name") or ""), definition_ports(spec), r.get("args") or ())
+        b.add(int(r["i"]), spec, str(r.get("form") or "call"), str(r.get("name") or ""), definition_ports(spec), expanded_file_args(r.get("args") or ()))
     return b
 
 
