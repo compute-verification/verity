@@ -20,8 +20,10 @@ and a stage's messages are `dec`'s, so no stage follows from the public rows alo
 (`RepsRead`, `SparseRead`, `OpeningRead`, `RegLevelsRead`) and the tape its frame (`HFrame`), obligations on `dec` that
 n6 states at a fixed decoder (`C3/Compose/Decoder.lean`). What it takes besides is the verifier's: its list builds
 (`hss`), R's registered top is `xR`'s cap (`_htop`, which n6's `RegLevelsRead` reads), the accepted sessions read every
-row `HPubRows` does (`hdrawn`, `hnames`), their reads are its own (`hown`), and the rows it holds, at the records
-written at the history (`wr`), are the history's commitments (`hheld`).
+row `HPubRows` does (`hdrawn`; each circuit names a port once, `PortsNamed`, from the statement check's
+refusal, `names_of_checkStmt`), their reads hold its own (`hown`, `OwnIn`; at `own := fun j => ownAt ss j` it
+is `ownIn_checked`, from `checkOwn`), and the rows it holds, at the records written at the history (`wr`), are the
+history's commitments (`hheld`).
 
 `hbr_honest` is at a fixed word of R's cap (`fun _ _ => xR`); `hbr_honest_reg` is `_hbr` in its form, at the word the
 transported prover's runs open (`regStmt`), off `ValueColl` at the verifier's rows and `LeafColl`, with R's opening's
@@ -90,9 +92,7 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hdrawn : ∀ h : Typed zr, RowsHeld
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg))
-    (hnames : ∀ h : Typed zr, PortsNamed
-      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg))
-    (hown : ∀ h : Typed zr, OwnIs
+    (hown : ∀ h : Typed zr, OwnIn
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own)
     (hheld : ∀ h : Typed zr, HeldIs
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own sel bc) :
@@ -106,7 +106,7 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
   have hrows : HPubRows
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) :=
     hPubRows_of_checked (checksAccepted_checked (coins := coins) (rows := rows) (zr := zr) (hCust := hCust) (h := h))
-      (hdrawn h) (hnames h) (sparseAtShapeChecked _)
+      (hdrawn h) (sparseAtShapeChecked _)
   exact vbridgeC_c3 (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
     dg N k Rw (hTape_of_frame (hfr h)) (hReps_honest_of_read (hrread h)) (hSparse_honest_of_read (hsread h))
     (hOpening_of_read (horead h)) (hRegLevels_honest_of_read (hlread h))
@@ -190,9 +190,7 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hdrawn : ∀ h : Typed zr, RowsHeld
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg))
-    (hnames : ∀ h : Typed zr, PortsNamed
-      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg))
-    (hown : ∀ h : Typed zr, OwnIs
+    (hown : ∀ h : Typed zr, OwnIn
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own)
     (hheld : ∀ h : Typed zr, HeldIs
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own sel bc) :
@@ -220,7 +218,7 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
   have hrows : HPubRows
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) :=
     hPubRows_of_checked (checksAccepted_checked (coins := coins) (rows := rows) (zr := zr) (hCust := hCust) (h := h))
-      (hdrawn h) (hnames h) (sparseAtShapeChecked _)
+      (hdrawn h) (sparseAtShapeChecked _)
   exact ⟨fun R ω t R₂ hbad τ o ho => holoAccepts_of_cap hcap
       (vbridgeOff_c3_off (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) _
         dg N k Rw (fun _ _ _ _ => rfl) (hTape_of_frame (hfr h)) (hReps_honest_of_read (hrread h))

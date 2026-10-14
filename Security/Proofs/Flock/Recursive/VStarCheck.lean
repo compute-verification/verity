@@ -297,6 +297,7 @@ theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (St
         obtain ⟨s, hs, h⟩ := ebind_ok h
         obtain ⟨hck, hf⟩ := checkCircuit_ok hs
         obtain ⟨ss, hss, hj, hname, hpop, hfl⟩ := check_ok hck
+        obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
         obtain ⟨⟨⟩, ho, -⟩ := ebind_ok h
         exact ⟨by simpa using hn, by simpa using ht, ss, s, hss, hj, hname, hpop, checkFile_ok hf, ho, hfl⟩
       · cases h
