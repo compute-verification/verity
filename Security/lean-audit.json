@@ -582,6 +582,12 @@
    "assumptions": [],
    "type_hash": "f5ec95b7103c1028179ab4aa3c8ce73b7d1c31a8fac0d0fc4724d831b7f2db36"
   },
+  "Accounting.SecurityProofs.B4Covered": {
+   "owner": "@network-accounting",
+   "signature": ["Accounting.SecurityProofs.B4Covered.{u_1, u_2, u_3} : Accounting.Guarantees.B4Covered"],
+   "assumptions": [],
+   "type_hash": "a64933bd501d2363688208b61c9e55a0b2a43c4393e88dbdacc6e745fd424877"
+  },
   "Accounting.SecurityProofs.BandwidthOfAudit": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.BandwidthOfAudit : Accounting.Guarantees.BandwidthOfAudit"],
@@ -4508,9 +4514,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Accounting.SecurityProofs.B4Covered": {
-   "owner": "@network-accounting"
   }
  },
  "shape": {
@@ -5136,6 +5139,7 @@
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.B4",
+    "Accounting.SecurityProofs.B4Covered",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
@@ -5410,6 +5414,7 @@
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.B4",
+    "Accounting.SecurityProofs.B4Covered",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
@@ -5599,10 +5604,11 @@
    ]
   },
   "Definitions.Accounting.Physical": {
-   "digest": "87cd096c6d4dd7de26b7f64079e49c4a891df4db41bf5b106c61d6ae6701b1b0",
+   "digest": "0b94e407f8c752218c33d2a60fdc2348da2be15e8b2b39cb38ad25d2b43ade60",
    "definitions": {
     "Accounting.Actual.Run.record": "cef12634f1151508a108f7cc4f75fa0152800cf5a567b253af90bfd921aefccd",
     "Accounting.CausalStrategy": "c925dc397dff2c7afd95eeafa0c098ada1ed84ad87f7acaec4069157ab2d4083",
+    "Accounting.Covered": "f96318a12fcb3f487d8805649ff57383d2000740fe3ee9bc6ab3a957bb5b9a5d",
     "Accounting.DeclaredLinks": "1d42c317ec6a1bf9a8840fe0946906a0218f8f32ec847718d03f1ee6f1af1a60",
     "Accounting.Placed.Causal": "2f04d6a4fe23b7a63aebd7193ea1d651866d0c4924150d9e15f1c357f33321f6",
     "Accounting.Placed.ComputeRate": "96822ce429b2fa6114048640d01228d12b1cfb6ff66fbb3af883ef7fc773eb15",
@@ -5621,7 +5627,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
-    "Accounting.SecurityProofs.B4"
+    "Accounting.SecurityProofs.B4",
+    "Accounting.SecurityProofs.B4Covered"
    ]
   },
   "Definitions.Accounting.Pouw": {
@@ -6340,6 +6347,7 @@
     "Accounting.SecurityProofs.B2Determines",
     "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.B4",
+    "Accounting.SecurityProofs.B4Covered",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
@@ -15439,13 +15447,18 @@
    "guarantees": ["Accounting.SecurityProofs.BoundSketchRelay", "Accounting.SecurityProofs.InnerProductRelay"]
   },
   "Models.Accounting.Guarantees.Bridges": {
-   "digest": "7ada9d965ca801005b90447e2db4b52feaf6b7bffb63d760cd6146b7b25af4af",
+   "digest": "f2e2540cff9136a6cfe5fba41990afbe558c074452d1e9c9560834ed5690ba11",
    "definitions": {
     "Accounting.Guarantees.B1": "c74386e3ceabe9d2f16360aa3120a74016750e7b3bc295394d49436ae386e242",
     "Accounting.Guarantees.B4": "8f29ccafa0393cdcb5d281d95969f118e5cabeedb5f2e07a1fa8bfe132d5a4f6",
+    "Accounting.Guarantees.B4Covered": "15a36eeade9a3e8a4e6fca18c591aec3434a05fd604b4e1b03d066e112335d97",
     "Accounting.Guarantees.pouwRow": "6a594dc2e7ef18c12bee36e69e071cbafb8720d5281f33dbd810b02fa54f9786"
    },
-   "guarantees": ["Accounting.SecurityProofs.B4", "Accounting.SecurityProofs.pouwRow"]
+   "guarantees": [
+    "Accounting.SecurityProofs.B4",
+    "Accounting.SecurityProofs.B4Covered",
+    "Accounting.SecurityProofs.pouwRow"
+   ]
   },
   "Models.Accounting.Guarantees.Capacity": {
    "digest": "4f99490ca1fa68650b2d0aada8c47591602e2ce698ff48a1177d684e642be651",
