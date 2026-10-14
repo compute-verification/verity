@@ -147,7 +147,7 @@ theorem next_get (dom : ByteArray) (l : Nat) (a : Array ByteArray) {i : Nat} (hi
   rw [getElem!_pos _ i (by rw [next_size]; exact hi)]
   simp [next]
 
-/-- Equal-size, nonempty frame-v3 roots bind their supplied leaves unless two
+/-- Equal-size frame-v3 roots bind their supplied leaves unless two
 node-frame inputs from the two computations collide. -/
 theorem fv3Root_bind {dom : ByteArray} {leaves leaves' : Array ByteArray} {S : List ByteArray}
     (hsz : leaves.size = leaves'.size)
