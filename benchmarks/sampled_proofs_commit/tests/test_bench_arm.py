@@ -142,9 +142,9 @@ def test_dropped_levels_are_reused_by_every_later_step_even_after_a_failed_one()
             com._commit_step_windowed(SimpleNamespace(step=step))
         except RuntimeError:
             assert step == 1
-    assert com.pool.bytes_total == 1100 and len(com.pool.free) == 2
+    assert com.pool.bytes_total == 1024 + 104 and len(com.pool.free) == 2
     assert all(v == [] for v in com._gpu_levels.values())
-    assert peak["step_bytes"] == 8000 and peak["pool_bytes"] == 1100
+    assert peak["step_bytes"] == 8000 and peak["pool_bytes"] == 1024 + 104
     other = com.pool.take(10)                      # outside a step: the pool's own slice, not a tracked block
     assert len(other) == 10 and len(com.pool.free) == 2
 
@@ -157,6 +157,16 @@ def test_a_small_take_never_takes_a_big_free_block():
     for step in range(4):
         com._commit_step_windowed(SimpleNamespace(step=step))
     assert com.pool.bytes_total == 6000
+
+
+def test_a_step_a_little_longer_than_the_last_reuses_its_block():
+    assert [bench_arm.size_class(n) for n in (1, 15, 16, 17, 1000, 1024)] == [1, 15, 16, 18, 1024, 1024]
+    assert all(n <= bench_arm.size_class(n) <= n * 9 // 8 + 1 for n in range(1, 5000))
+    com = _fake_windowed()
+    bench_arm._guard_steps(com, drop_levels=True, cap_bytes=1 << 30)
+    for n in range(4000, 4100, 10):
+        com.pool.give_back(com.pool.take_block(n))
+    assert len(com.pool.all) == 1
 
 
 def test_steps_are_refused_by_name_once_the_pool_is_over_the_cap():

@@ -254,7 +254,7 @@ def _guard_steps(com: Any, *, drop_levels: bool, cap_bytes: int) -> dict[str, in
         fits = [(int(b.numel()), i) for i, b in enumerate(pool.free) if int(b.numel()) >= nbytes]
         if fits:
             return pool.free.pop(min(fits)[1])
-        return first_fit(nbytes)
+        return first_fit(size_class(int(nbytes)))
 
     def routed_take(nbytes: int) -> Any:
         taken = getattr(local, "taken", None)
@@ -287,6 +287,14 @@ def _guard_steps(com: Any, *, drop_levels: bool, cap_bytes: int) -> dict[str, in
     pool.take_block = best_fit
     com._commit_step_windowed = commit_step
     return peak
+
+
+def size_class(nbytes: int) -> int:
+    """``nbytes`` rounded up to one of eight sizes per power of two (at most 1/8 over): a step a few bytes longer than the
+    last reuses its level buffer instead of allocating another."""
+
+    step = 1 << max(0, nbytes.bit_length() - 4)
+    return -(-nbytes // step) * step
 
 
 def _host_pinned_bytes() -> int:
