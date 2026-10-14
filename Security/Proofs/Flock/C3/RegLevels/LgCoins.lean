@@ -186,5 +186,3 @@ theorem stackedCoins_of_innerCommitsAt {tr : Lean.Json} {record : String} {st : 
   exact ⟨sh, rs, hsh, hc, hrs, hsz⟩
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.stackedCoins_of_innerCommitsAt
