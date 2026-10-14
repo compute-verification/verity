@@ -8,8 +8,9 @@ import Proofs.Flock.C3.RegLevels.RsT
   `skel`'s, values forgotten (`ringSwitch_sim`, `ligerito_sim` at `homUnit`, `map_skel`), with the same coin points.
 * `opensUnits_of_maps`: `OpensUnits` at `StackedMaps.ops`, at the map's sessions and units and copy 0 (`OpensAtMaps`).
 * `levelTie_of_maps`: `levelTie_of_reads` at `StackedMaps.ops`: its `hrs`, `hwd` (from the map's rows' widths) and `hq`,
-  and `hR` by `hR_of_units`, its α by `runAlpha_of_run` and its units by `opensUnits_of_maps`. Left: the coins of the
-  opening and Ligerito steps (custody), each opening at its map's unit, and the run's and the proof's ties.
+  and `hR` by `hR_of_units`, its α by `runAlpha_of_run` and its units by `opensUnits_of_maps`. Left: the opening
+  steps' coins (custody), the Ligerito steps' weave (the source's definition), each opening at its map's unit, and
+  the run's and the proof's ties.
 -/
 
 namespace FlockC3.RegLevels
@@ -63,9 +64,10 @@ theorem opensUnits_of_maps (M : FlockC3.Reps.StackedMaps stmt Vs) {zs : (s : Fin
 
 /-- **(n7's levels) `LevelTie` at C3's decoder of R's openings**: `levelTie_of_reads` at `ops := M.ops`, its rows'
 count and widths (`rows_size`, `rows_get`, `hwd`), its `q` and, at the run's points, its α (`runAlpha_of_run`) by
-construction, `OpenRel` by `hR_of_units` and the openings' units by `opensUnits_of_maps`. Left: the opening steps' and
-Ligerito steps' coins (`hcoin`, `hR`'s second conjunct), each opening at its map's unit (`OpensAtMaps`), and the run's,
-the claims' and the proof's ties. -/
+construction, `OpenRel` by `hR_of_units` and the openings' units by `opensUnits_of_maps`. Left: the opening steps'
+coins (`hcoin`), the Ligerito steps woven from the proof's messages and `c`'s rounds from the ring switches' `k₂`
+(`hR`'s second conjunct, `lgSteps_of_lig`'s), each opening at its map's unit (`OpensAtMaps`), and the run's, the
+claims' and the proof's ties. -/
 theorem levelTie_of_maps (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s).Outer Reg')
     (Lb : (s : Fin S) → (Vs s).Bits) (hG : ∀ s, (zs s).Good (Lb s)) {st : Flock.Stmt} {hp : HoloParams}
     {cap₀ : Cap Dig} {u : C3Run (holoAt st hp)} {sh : Flock.Shape} {w : Array Flock.F128}
@@ -94,9 +96,9 @@ theorem levelTie_of_maps (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S
       Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) =
         .ok ((lgr, lg), k₁) →
       OpensAtMaps M zs Lb sh (sibsR sh ops sb e) (capR sh e0) (pR sh e0 w ops sb e) lg ∧
-      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))
-    (hk : u.lg.map kindOf <+: ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
-    (hl : u.lg.filterMap Sum.getLeft? = ligMsgs (pR sh e0 w ops sb e) capDig sh.sched)
+      u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
+        (ligMsgs (pR sh e0 w ops sb e) capDig sh.sched)
+        (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf)))
     (ho : ∀ ℓ j, u.os.1 2 ℓ j = openRow (pR sh e0 w ops sb e) sh.sched ℓ j) :
     LevelTie cap₀ (holoAt st hp) u := by
   subst hops
@@ -104,7 +106,7 @@ theorem levelTie_of_maps (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S
     (fun ℓ hℓ j hj => (congrArg Array.size (M.rows_get sh Lb kap _ k₀ c hj)).trans (hwd ℓ hℓ j hj)) (fun _ _ => rfl)
     (hR_of_units hsh hrun hz hne ha hshape hcl hpl htie hcoin fun rsr rs k₂ lgr lg h₁ h₂ =>
       ⟨fun ℓ _ => runAlpha_of_run h₁ h₂ ℓ, opensUnits_of_maps M (hR rsr rs k₂ lgr lg h₁ h₂).1,
-        (hR rsr rs k₂ lgr lg h₁ h₂).2⟩) hk hl ho
+        (hR rsr rs k₂ lgr lg h₁ h₂).2⟩) ho
 
 end Maps
 
