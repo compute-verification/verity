@@ -232,5 +232,3 @@ theorem levelTie_of_reads (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
 end Reads
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.levelTie_of_reads

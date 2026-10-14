@@ -235,7 +235,3 @@ theorem levelTie_of_run {st : Flock.Stmt} {hp : HoloParams} {cap₀ : Cap Dig} {
     hop hk hl hr ho
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.ligRun_of_lig
-#print axioms FlockC3.RegLevels.levelTie_of_lig
-#print axioms FlockC3.RegLevels.lgSteps_of_lig

@@ -168,11 +168,3 @@ theorem stackedRounds_coins {sh : Flock.RecVStar.StackedShape} (hc : sh.claims =
     simp [Flock.RecVStar.stackedRounds, hf] at h
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.heldStage_of_lgCoins
-#print axioms FlockC3.RegLevels.heldBefore_succ
-#print axioms FlockC3.RegLevels.heldBefore_stacked
-#print axioms FlockC3.RegLevels.roundIn_stacked
-#print axioms FlockC3.RegLevels.holoSelOne_stacked
-#print axioms FlockC3.RegLevels.drawn_stacked
-#print axioms FlockC3.RegLevels.stackedRounds_coins
