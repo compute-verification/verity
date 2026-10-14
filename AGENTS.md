@@ -286,6 +286,9 @@ Never print a secret's value.
 
 ## Where writing goes
 
+- **Work items** are Linear issues (Daniel, 14 Oct). The full brief — context, done-condition, pointers — lives in the
+  issue, filed into the owning team at creation; each lead's subscription to its own team is the wake path, and pickup
+  is the issue's state change. Slack carries conversation, broadcasts, alerts and Daniel's cards, never the brief.
 - **This repo** holds code, tests, small fixtures, and maintained current-truth docs only: `README.md`, `AGENTS.md`,
   `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`, and `PROTOCOL.md`.
   - A protocol keeps a `PROTOCOL.md` only while it is experimental. Lean is the source of truth for a mature protocol,
@@ -341,7 +344,8 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   its check fails.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
-  `.agents/skills/using-slack/SKILL.md`.
+  `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing
+  goes); Slack is the conversation around it, not the brief.
 
 ## Skills
 
