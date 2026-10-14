@@ -191,7 +191,7 @@ class DeviceStore:
     """N blocks on the GPU, their payload tree on the CPU, then the encoded store and the passes over it."""
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *,
-                 chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0, payload_kept_from: int = 6,
+                 chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
                  offload_handles: bool = False) -> None:
         nl = blocks // PER_LEAF
         if blocks % PER_LEAF or blocks % chunk:
@@ -579,7 +579,7 @@ class Device:
 
     def __init__(self, torch, lib_path: str, kv_path: str, blocks: int, *, seed: int, log=print,
                  gate_blocks: int = 4096, gate_chunk: int = 1024, calibration_passes: int = 4000,
-                 warm_openings: int = 2773, chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 0,
+                 warm_openings: int = 2773, chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128,
                  payload_kept_from: int = 6, offload_handles: bool = False) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks, warm_openings
         self.gate_blocks, self.gate_chunk, self.calibration_passes = gate_blocks, gate_chunk, calibration_passes
@@ -872,7 +872,7 @@ def add_arguments(ap) -> None:
     ap.add_argument("--kept-from", type=int, default=6, help="h0: the pass tree's levels kept for the openings")
     ap.add_argument("--payload-kept-from", type=int, default=6,
                     help="h0: the payload tree's levels kept; lower paths are recomputed for openings")
-    ap.add_argument("--sketch-ctas", type=int, default=0, help="the receipts grid's CTAs (0: one an SM)")
+    ap.add_argument("--sketch-ctas", type=int, default=128, help="the receipts grid's CTAs (0: one an SM)")
     ap.add_argument("--offload-handles", action="store_true",
                     help="archive pass handles through a dedicated pinned copy stream (automatic above 64 GiB)")
 
