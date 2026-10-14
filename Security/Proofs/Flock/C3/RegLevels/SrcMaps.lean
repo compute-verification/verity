@@ -58,6 +58,8 @@ theorem opening_rounds {c3 : RecCoins.C3} {unit : String} {o : RecCoins.Opening}
         split at h
         · cases h
         · rename_i hS
+          split at h
+          · cases h
           cases h
           obtain ⟨k₁, hx⟩ := run'_ok hrun
           exact ⟨rounds, a, b, lins, k₁, res, bs, hrd, ha, hb,
