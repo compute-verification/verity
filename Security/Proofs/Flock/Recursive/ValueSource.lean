@@ -8,7 +8,8 @@ import Proofs.Flock.Recursive.ValueFinder
 `program_sha512` and the value's name. `valueRows` computes the rows as the check does: a level of R's openings
 (`rec-open-stacked`, `RecCoins.checkStackedLevel`: `coef`, `dirs`) and a part of R's opening (`rec-opening`,
 `RecCoins.checkOpening`: `v`), and none elsewhere. The finder's budget counts each row's words once and each salt's
-SHAKE256 once.
+SHAKE256 once. The definitions are in `Recursive/ValueSrc.lean`, below `RecursiveAuditC3At`, which reads them; here
+are their ties:
 
 * `stacked_of_check`, `opening_of_check`: an accepted unit's `checkValue`s are at `valueRows`' rows
   (`valueRows_coef`, `valueRows_dirs`, `valueRows_v`), so `valueSrcC3_eq` gives `value_tie_coll`'s `hsrc`;
@@ -19,51 +20,7 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit
 
-/-- Level `l`'s `coef` rows at R's opening `o`: opening `j`'s `coefAt (κ[l]) LANES eq(α_l)[j]` in words. -/
-def stackedCoefRows (o : Flock.RecCoins.Opening) (l LANES : ℕ) : Array (Array ℕ) :=
-  (Array.range (o.sh.sched.levels[l]!).q).map fun j =>
-    Flock.RecCoins.words (Flock.RecCoins.coefAt (o.kappa[l]!) LANES (Flock.eqTable (o.lg.conss[l]!).alpha)[j]!)
-
-/-- Level `l`'s `dirs` rows at R's opening `o`: opening `j`'s position's low `H` bits. -/
-def stackedDirsRows (o : Flock.RecCoins.Opening) (l H : ℕ) : Array (Array ℕ) :=
-  (Array.range (o.sh.sched.levels[l]!).q).map fun j => Flock.RecCoins.dirsRow (o.lg.conss[l]!).pos[j]! H
-
-/-- The levels of R's schedule with `LANES` lanes and `H` siblings below their cap. -/
-def stackedLevels (o : Flock.RecCoins.Opening) (LANES H : ℕ) : List ℕ :=
-  (List.range o.sh.sched.levels.size).filter fun l =>
-    2 ^ (o.sh.sched.levels[l]!).lanes == LANES && (o.sh.sched.levels[l]!).d - (o.sh.sched.levels[l]!).cap == H
-
-/-- Part `j`'s `v` row of R's opening `o`. -/
-def openingVRows (o : Flock.RecCoins.Opening) (j : ℕ) : Option (Array (Array ℕ)) :=
-  match (do Flock.RecResiduals.groups (← Flock.RecOpening.structureOf o.sh) (Flock.RecOpening.portSizes o.sh)) with
-  | .ok gs => match gs[j]? with
-    | some (_, _, vs) => some #[Flock.RecCoins.padTo (Flock.RecCoins.words (vs.map (o.v[·]!))) (Flock.RecResiduals.portWordsOf vs.size)]
-    | none => none
-  | .error _ => none
-
-/-- **The rows and value check 5 registers at port `port` of circuit `c`**, at its candidate-3 inputs `c3`. -/
-def valueRows (c3 : Option Flock.RecCoins.C3) (c : Flock.Circuit) (port : String) : Option (Array (Array ℕ) × String) :=
-  match c3 with
-  | none => none
-  | some c3 => match Flock.RecCoins.opening c3 c.unit.name with
-    | .error _ => none
-    | .ok o => match Flock.RecCoins.stackedParams c.unit.name, Flock.RecOpening.params c.unit.name with
-      | some (LANES, H), _ => match stackedLevels o LANES H with
-        | [l] => if port = "coef" then some (stackedCoefRows o l LANES, Flock.RecCoins.COEF_VALUE)
-          else if port = "dirs" then some (stackedDirsRows o l H, Flock.RecCoins.DIRS_VALUE) else none
-        | _ => none
-      | none, some (_, _, j) => if port = "v" then (openingVRows o j).map (·, Flock.RecCoins.V_VALUE) else none
-      | none, none => none
-
 variable {n : ℕ} {L : Law n} {Reg Cm Reg₂ : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
-
-/-- **The verifier's rows as a value source**, at its candidate-3 inputs `c3 t` at each history. -/
-def valueSrcC3 (c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3) : ValueSrc L Reg Cm Reg₂ I Vs :=
-  fun _ _ t _ x =>
-    match valueRows (c3 t) (Vs x.1).c ((Vs x.1).c.ports[x.2.2.val]!).name,
-      (Vs x.1).c.metaJ.getObjValAs? String "program_sha512" with
-    | some (rows, value), .ok prog => some (rows, Flock.RecCoins.verifierSalt prog value)
-    | _, _ => none
 
 theorem valueSrcC3_eq {c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3} {R : Reg} {ω : L.Ω} {t : List (Cm × I.Coin)}
     {R₂ : Reg₂} {j : Fin S} {u : Fin (Vs j).nv} {q : Fin (Vs j).c.ports.size} {rows : Array (Array ℕ)}
