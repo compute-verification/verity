@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
+    from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3MmaV2Dot32
     from verity_vllm.program.registry import fp8_moe
 
     return [
@@ -29,6 +29,16 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                                   DOT=BlackwellE4m3QmmaDot32)),
         ("MoeExpertFp8BlockGemmW_v3", lambda: bind(fp8_moe.MoeExpertFp8BlockGemmWV3, K=192, N=72, G=64, KB=32, SWAP=False,
                                                    DOT=BlackwellE4m3QmmaDot32)),
+        # and at cc 9.0's MMAv2 step (`fp8_moe.sm90_dot` of the tuned H200 tiles 8x32x128 and 8x64x128 under SWAP_AB): GLM-5.3's TP8
+        # coordinates as served (w13 K = 6144, w2 K = 256, G = KB = 128), and GEMMs over two K tiles and a partial weight block
+        ("MoeExpertFp8BlockCoordinate_v3/mmav2", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateV3, K=6144, G=128, KB=128, SWAP=False,
+                                                              DOT=HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8BlockCoordinateW_v3/mmav2", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateWV3, K=256, G=128, KB=128, SWAP=True,
+                                                               DOT=HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8BlockGemm_v3/mmav2", lambda: bind(fp8_moe.MoeExpertFp8BlockGemmV3, K=256, N=80, G=128, KB=128, SWAP=True,
+                                                        DOT=HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8BlockGemmW_v3/mmav2", lambda: bind(fp8_moe.MoeExpertFp8BlockGemmWV3, K=256, N=48, G=128, KB=128, SWAP=False,
+                                                         DOT=HopperE4m3MmaV2Dot32)),
         # silu_and_mul_per_block_quant between the expert launches: one element, GLM-5.3's served group (G = 128), and rows of
         # two groups; on bits at G = 4 (each element about 19.6k ANDs)
         ("SiluMulFp8BlockQuantResult_v1", lambda: bind(fp8_moe.SiluMulFp8BlockQuantResult)),
