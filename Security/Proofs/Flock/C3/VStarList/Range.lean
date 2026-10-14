@@ -98,7 +98,7 @@ theorem checkAtC3_spec {i : Flock.RecVStar.Inner} {src : Option Flock.RecCoins.S
 
 /-- `execClassAt`'s `k_log` is the statement's where its class checks pass. -/
 theorem execClassAt_kLog {st : Flock.Stmt} (h : ClassOk (shapeOf st)) : (execClassAt st).cls.kLog = st.c.kLog := by
-  rw [execClassAt, dif_pos h]
+  rw [execClassAt, dite_eq_left h]
   rfl
 
 /-- **The verifier's range check gives `SparseRangeOk`**: where the inner statement's class checks pass (at an accepted
@@ -140,7 +140,7 @@ theorem units_of_sparseRange {ish : Flock.RecVStar.Inner} {st : Flock.Stmt} {hp 
   simp only [Array.size_replicate, Flock.RecSparse.PRE_ROUNDS, he] at hend
   show ((hp.units σ).filter fun u => u < 2 ^ ((execClassAt st).cls.kLog -
     (if hp.EllOk (execClassAt st).cls.kLog then hp.ell else 6))) = hp.units σ
-  rw [if_pos hell]
+  rw [ite_eq_left hell]
   apply Finset.filter_true_of_mem
   intro u hu'
   rw [hσ σ] at hu'
