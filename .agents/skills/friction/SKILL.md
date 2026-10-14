@@ -104,7 +104,9 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-14 (10:14 AM PDT): when Cursor's PR tool turns a PR creation into a dashboard approval request, the agent
   opens the PR itself with the GitHub command line through the broker instead, then says so where it registered the
   request, so nobody creates a duplicate from the dashboard. It replaces waiting on dashboard clicks, which cost about
-  six hours across fourteen finished PRs overnight on 14 Oct.
+  six hours across fourteen finished PRs overnight on 14 Oct. A cloud agent whose launch-time run rules forbid that
+  fallback registers the request and posts the exact payload where it registered it; the ruling reaches such an agent
+  at its next launch.
 - 2026-10-13 (11:01 PM PDT, cards 2e0ff59b and 54bd993d): a guarantee's checked family may fold in a check the compiled
   verifier already runs, and a new fail-closed refusal modelled the same way: the statement moves toward what the
   verifier refuses, and the landing DM shows the moved records. The same night: a free statement parameter whose
