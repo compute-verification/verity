@@ -12030,7 +12030,7 @@
    ]
   },
   "Flock.RecCoins": {
-   "digest": "a3b150654e0dcfe9087b07be2d3b49e3a1a48e3a1234132d6c20414dda7c37c7",
+   "digest": "c931dac6da4c82e6692fff869f141ee0df7f9055880f01bc76e4b7e3c87851be",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "fb0c0b18cbe96a25e62783a0293d3bcb904854eaddf13076a480f92d1489c427",
@@ -12100,7 +12100,8 @@
     "Flock.RecCoins.checkOpening": "f02c5963ace5c052745ad0afd4cc1c68a065469366b7624d8ef9af74fe74fda2",
     "Flock.RecCoins.checkResiduals": "d113b42f27683212bf1b760ed55a96c887f932c38156283c195fb76cb532bc6f",
     "Flock.RecCoins.checkSparse": "bda01d816b2471cef7d74e41beff2041adba031c6a3de4c3eb0eb91682d9af85",
-    "Flock.RecCoins.checkStackedLevel": "d9b9d006591a8390c47f275f8531ad06abdededde842852abe9d037108bb2edc",
+    "Flock.RecCoins.checkStackedLevel": "bff72edddf6143a8417a8752680b8ebfc1f2e1a40d6a13b3df369953fb236614",
+    "Flock.RecCoins.checkTopReads": "02f990952a621432f626f7ce5e7f28d4ed7865d25f5b68a8df5587b6c822ffa1",
     "Flock.RecCoins.checkValue": "6b49e43fac038c40dbabad922102077b8bff7eb4f3c5c49433e0e0dbf945d307",
     "Flock.RecCoins.checkValue._sparseCasesOn_7": "4ea8e47fdf2794834c496a0116795ca57036361fb6cb760af7bfd51c851bc18f",
     "Flock.RecCoins.coefAt": "b4b21e6b3ae81577057fc7c51f1f61902efa6c88913906612a9df4bf8b41cd8a",
