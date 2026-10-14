@@ -10,8 +10,8 @@ import Proofs.Flock.Recursive.AuditC3Proof
 
 #print axioms FlockSoundness.Discharge.Recursion.record_decode_of_load
 #print axioms FlockC3.Sparse.record_decodes_of_accepted
-#print axioms FlockC3.session_h_of_sessionAt
-#print axioms FlockC3.PointsFromHistory
+#print axioms FlockSoundness.Discharge.Recursion.FlockC3.HPort.session_h_of_sessionAt
+#print axioms FlockSoundness.Discharge.Recursion.FlockC3.HPort.PointsFromHistory
 #print axioms Flock.SecurityProofs.recursiveAuditC3At
 EOF
 
