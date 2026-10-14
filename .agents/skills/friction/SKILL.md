@@ -105,6 +105,11 @@ Newest first. Each is Daniel's unless it names the coordinator.
   Each coordinator is a plain Cursor cloud agent that owns a vertical slice and runs its own subagents; coordinators
   talk to each other through Slack and Linear; one admin agent holds `@top` in place of the Project's top-level agent;
   and a successor takes over each lead: the handle stays, and its holder changes.
+- 2026-10-13 (1:33 PM PDT, relayed by top): the recursive audit (`Flock.Guarantees.RecursiveAuditC3`) may rest on the
+  model claim `registrant-holds-openings` (`verity/core/claims`): the prover holds a row and a salt under every leaf it
+  registered, R's level-0 staging salts included. Those salts are held by the prover's own workers behind the firewall.
+  In Lean the guarantee takes `salt` as a binder and is applied at the salts those workers committed under, never at
+  `∃ salt` or a `Classical.choose` of one, and every docstring that reads it cites the claim (lean's review).
 - 2026-10-13 (10:42 AM PDT): an agent closes an old PR without asking when every commit on it is already in another open
   PR ("close old PRs idgaf do that").
 - 2026-10-12 (4:08 PM PDT, to top): Daniel took every recommendation then open in top's walkthrough of his decisions,
