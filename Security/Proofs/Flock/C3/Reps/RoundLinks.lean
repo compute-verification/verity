@@ -83,12 +83,12 @@ theorem inner_round_lt_of_checkMsgNames
       · cases h
       · split at h
         · cases h
-        · simp only [hr, hx] at h
+        · simp [hr, hx] at h
   have hmem : s!"m{i}" ∈ c.ports.toList.map (·.name) :=
     List.mem_map.2 ⟨c.ports[q], Array.mem_toList_iff.2 (Array.getElem_mem q.isLt), hq⟩
   have hi := List.find?_eq_none.1 hn _ hmem
   rw [mIndex_m] at hi
-  simp only [decide_eq_false_iff_not] at hi
+  have hi' := of_decide_eq_false hi
   omega
 
 #print axioms inner_round_lt_of_checkMsgNames
