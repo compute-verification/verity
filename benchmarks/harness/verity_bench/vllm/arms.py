@@ -94,6 +94,24 @@ def plugin(arm: Arm) -> Any | None:
     return None if arm.module_spec is None else load_object(arm.module_spec)
 
 
+def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
+    """The arm's protocol entries that bind the served computation to a row Build (`protocol_options.requires_build`)."""
+
+    if not arm.protocols:
+        return ()
+    from verity_vllm import protocol_options as PO
+
+    ctx = PO.Context(stage="serve", enabled=arm.protocols, world=world)
+    bound = []
+    for entry in arm.protocols:
+        try:
+            if PO.requires_build(entry, ctx):
+                bound.append(entry)
+        except PO.Refused:
+            continue
+    return tuple(bound)
+
+
 def _protocol_arm(name: str) -> Arm:
     entries = tuple(x for x in name.split("+") if x)
     if not entries or any(":" not in e for e in entries):
