@@ -143,9 +143,11 @@ theorem tLog_zero_of_checkInnerStmt {i : Flock.RecVStar.Inner} {st : Flock.Stmt}
   unfold Flock.RecVStar.checkInnerStmt Flock.RecVStar.checkInnerShape at h
   rw [hs] at h
   dsimp only at h
-  by_contra ht
-  simp only [ht, bne_iff_ne, ne_eq, not_false_eq_true, ↓reduceIte] at h
-  cases h
+  by_cases ht : sp.tLog = 0
+  · exact ht
+  · have hne : (sp.tLog != 0) = true := by simp [ht]
+    simp only [hne, ↓reduceIte] at h
+    cases h
 
 /-- **A loop that runs through passes each element**: where each step that succeeds continues and holds `P` of its
 element, a loop that succeeds holds `P` of every element. -/
