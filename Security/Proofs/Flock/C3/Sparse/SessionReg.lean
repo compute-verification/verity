@@ -381,8 +381,3 @@ end Family
 end
 
 end FlockC3.Sparse
-
-#print axioms FlockC3.Sparse.c3_eq_of_held
-#print axioms FlockC3.Sparse.sparseSessionAt_of_regs
-#print axioms FlockC3.Sparse.coinsAccepted_checked
-#print axioms FlockC3.Sparse.sparseCoins_of_accepted
