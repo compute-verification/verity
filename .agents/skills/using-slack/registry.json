@@ -46,7 +46,7 @@
   "handles": [
     {
       "handle": "infra",
-      "holder": "the infra coordinator (bc-c12aaa73-e9b3-5552-b46a-b20fb65e9e59); until it posts stopped, its predecessor (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)",
+      "holder": "the infra coordinator (bc-c12aaa73-e9b3-5552-b46a-b20fb65e9e59)",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0C5APDSYF9",
@@ -58,6 +58,9 @@
         "tools/research/",
         "benchmarks/judge.py",
         ".cursor/"
+      ],
+      "branch_suffixes": [
+        "558b"
       ]
     },
     {
@@ -78,11 +81,14 @@
         "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
+      ],
+      "branch_suffixes": [
+        "95d4"
       ]
     },
     {
       "handle": "circuits",
-      "holder": "the circuits coordinator (bc-cb6f399a-8db3-5399-91e2-1491d15ac491); until it posts stopped, its predecessor (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)",
+      "holder": "the circuits coordinator (bc-cb6f399a-8db3-5399-91e2-1491d15ac491)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
       "usergroup": "S0C5U3LHMFT",
@@ -112,11 +118,14 @@
         "integrations/vllm/tests/properties/",
         "integrations/vllm/tests/check/test_capture_map.py",
         "integrations/vllm/tests/check/test_capture_map_versions.py"
+      ],
+      "branch_suffixes": [
+        "8c79"
       ]
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac); until it posts stopped, its predecessor (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
+      "holder": "the compute-accounting coordinator (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac)",
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5U3Q04JD",
@@ -145,11 +154,14 @@
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py"
+      ],
+      "branch_suffixes": [
+        "e3fa"
       ]
     },
     {
       "handle": "memory-accounting",
-      "holder": "the memory-accounting coordinator (bc-4635cc01-e765-5c9d-9959-13885e12b0c1); until it posts stopped, its predecessor (bc-15ada664-f325-5371-a473-65d408be3cf5)",
+      "holder": "the memory-accounting coordinator (bc-4635cc01-e765-5c9d-9959-13885e12b0c1)",
       "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5VRGBZFE",
@@ -181,11 +193,14 @@
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
         "verity/core/protocols/pous/"
+      ],
+      "branch_suffixes": [
+        "3cf5"
       ]
     },
     {
       "handle": "network-accounting",
-      "holder": "the network-accounting coordinator (bc-5ff45337-ab03-5a59-9418-8ccb0270a190); until it posts stopped, its predecessor (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
+      "holder": "the network-accounting coordinator (bc-5ff45337-ab03-5a59-9418-8ccb0270a190)",
       "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L",
@@ -197,6 +212,9 @@
         "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/"
+      ],
+      "branch_suffixes": [
+        "728f"
       ]
     },
     {
@@ -209,7 +227,7 @@
     },
     {
       "handle": "ci",
-      "holder": "the ci coordinator (bc-1e3239d1-d0b7-5a0a-8e56-9b3b01792a98); until it posts stopped, its predecessor (bc-81ff5c35-39a9-5232-a6b5-8e933b944292)",
+      "holder": "the ci coordinator (bc-1e3239d1-d0b7-5a0a-8e56-9b3b01792a98)",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": "S0C93AFCRT8",
@@ -222,11 +240,14 @@
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py"
+      ],
+      "branch_suffixes": [
+        "4292"
       ]
     },
     {
       "handle": "lean",
-      "holder": "the lean coordinator (bc-b8aa4f87-8653-5bf1-87f8-944f12e26f1e); until it posts stopped, its predecessor (bc-19c498a8-628e-5c04-8f61-fe785a24741b)",
+      "holder": "the lean coordinator (bc-b8aa4f87-8653-5bf1-87f8-944f12e26f1e)",
       "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
       "usergroup": "S0C93AE54K0",
@@ -236,6 +257,9 @@
         "tools/lean/",
         ".agents/skills/lean-proofs/",
         "Security/"
+      ],
+      "branch_suffixes": [
+        "741b"
       ]
     },
     {
@@ -250,6 +274,9 @@
         "tools/research/src/research/slack.py",
         "tools/research/tests/test_slack.py",
         "tools/research/tests/slack_routing_vectors.json"
+      ],
+      "branch_suffixes": [
+        "b252"
       ]
     },
     {
