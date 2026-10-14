@@ -216,7 +216,7 @@ def _logit_operands(rng: np.random.Generator, n: int):
 def test_the_logits_twin_is_the_reference() -> None:
     q, w, k, ks = _logit_operands(np.random.default_rng(8), 12)
     want, nonfin = X.logit_rows(q, w, k, ks)
-    fn = bind(dsa.DsaMqaLogit, H=X.H, D=X.D)
+    fn = bind(dsa.DsaMqaLogitV3, H=X.H, D=X.D)
     assert not nonfin.any() and want[0] == want[1] == 0 and len(set(want.tolist())) > 8
     assert want.tolist() == [evaluate(fn, q[i].reshape(-1).tolist(), w[i].tolist(), k[i].tolist(), int(ks[i]))[0] for i in range(12)]
     k[3, 17] = 0x7F
@@ -354,7 +354,8 @@ def test_the_ptx_scan_wants_one_specialization_per_kernel(tmp_path) -> None:
 
 def test_the_programs_bind_at_glm53s_statics() -> None:
     got = X.bind_check()
-    assert got["ok"] and "SparseMla_v1{T=2048,NH=8,...}" in got["bindings"] and "RoPEHeadGptJ_v1{D=64}" in got["bindings"]
+    assert got["ok"] and "SparseMla_v1{T=2048,NH=8,...}" in got["bindings"] and "RoPEHeadGptJ_v2{D=64}" in got["bindings"]
+    assert "DsaMqaLogits_v3{N=64,H=32,D=128}" in got["bindings"]
 
 
 def test_the_statics_are_glm53s() -> None:

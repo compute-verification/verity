@@ -15,10 +15,11 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
 * `SparseAtShapeChecked`: `SparseAtShape` at a statement of `Vs j`'s circuit that `checkStmt` passes;
   `sparseAtShapeChecked` proves it of every family. `NameChecked` (`nameChecked`, the same way): such a circuit is
   named as the family's list's statement `j`.
-* `ChecksAccepted`: where a session accepts, a transcript it accepts passes `checkPubRows` (`PubRowsChecked`) and
+* `ChecksAccepted`: where a session accepts, a transcript it accepts passes `checkPubRows` and `checkLabels`
+  (`PubRowsChecked`) and
   `checkStmt` (`StmtsChecked`, `AcceptsZKV`'s second conjunct), n1b's checks; the checked family meets it
-  (`checksAccepted_checked`, by `checks_of_keepOwn`), and `hPubRows_of_checked` is `hPubRows_of_check'` with it and
-  `SparseAtShapeChecked`.
+  (`checksAccepted_checked`, by `checks_of_keepOwn`). `ChecksReached` is it at the transcripts a session writes, and
+  `hPubRows_of_checked` is `hPubRows_of_check'` with it, `rowsHeld` and `SparseAtShapeChecked`.
 * `ownIn_of_checks`: where `ChecksAccepted` holds, the accepted sessions' reads hold the verifier's message-round ports
   of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second and third loops (`checkOwn_ok`,
   `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
@@ -395,6 +396,20 @@ def ChecksAccepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Opt
         (F.zs R ω t R₂ j).own tr' ∧
       StmtsChecked F.ish j (F.bind j) rows (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr'
 
+/-- **(n1b) Where a session accepts a transcript it writes, a transcript it writes and accepts passes the verifier's
+checks** of its public rows (`PubRowsChecked`) and statements (`StmtsChecked`): `ChecksAccepted` at the outcomes the
+session's game reaches (`ZkOuter.Writes`), the transcripts whose records the custody reads (`rowsHeld`). The verifier
+checks the transcript it is sent; the checked family keeps a session's list where some transcript it accepts passes
+the checks, written or not (`Flock.Guarantees.keepOwn`), so it gives `ChecksAccepted` (`checksAccepted_checked`) and not
+this. -/
+def ChecksReached (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Option (Array Flock.Registered.Port))
+    (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json) : Prop :=
+  ∀ R ω t R₂ j, (∃ R' tr', (F.zs R ω t R₂ j).Writes R' tr' ∧ AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr') →
+    ∃ R' tr', (F.zs R ω t R₂ j).Writes R' tr' ∧ AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr' ∧
+      PubRowsChecked (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption F.ish.sparse (F.zs R ω t R₂ j).I
+        (F.zs R ω t R₂ j).own tr' ∧
+      StmtsChecked F.ish j (F.bind j) rows (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr'
+
 variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
   {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
   {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
@@ -422,8 +437,8 @@ theorem checksAccepted_checked {coins : String → Option Flock.RecCoins.Source}
     (Pc := fun J o tr' => PubRowsChecked (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption ish.sparse J o tr' ∧
       StmtsChecked ish j (bind j) rows J o tr') ?_ hex
   intro J o tr' hp
-  obtain ⟨-, spec, sts, hs, hst, -, hpr⟩ := hp
-  exact ⟨⟨spec, sts, hs, hpr⟩, spec, sts, hs, hst⟩
+  obtain ⟨-, spec, sts, hs, hst, -, hpr, hlb⟩ := hp
+  exact ⟨⟨spec, sts, hs, hpr, hlb⟩, spec, sts, hs, hst⟩
 
 /-- **(n1b) The accepted sessions' reads hold the verifier's message-round ports** (`OwnIn` at `ownAt`) where a
 transcript they accept passes the statement check (`ChecksAccepted`): the check of the session's first statement
@@ -450,26 +465,28 @@ theorem ownIn_checked {coins : String → Option Flock.RecCoins.Source} {rows : 
 local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 
 /-- **(n1) The public rows at the honest family, from the verifier's checks**: `hPubRows_of_check'` with the
-rec-sparse shape read at an accepted transcript whose public rows and statements the verifier checks
-(`ChecksAccepted`, n1b's), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`). The port the check finds by
-name is the session's: the statement check refuses a circuit naming a port twice (`names_of_checkStmt`), so
-`PortsNamed` holds at every accepted session. -/
-theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksAccepted 𝓗 rows wr reg)
-    (hdrawn : RowsHeld 𝓗) (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
+rec-sparse shape read at a transcript the session writes and accepts whose public rows and statements the verifier
+checks (`ChecksReached`), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`) and every unit is drawn
+(`rowsHeld`). The port the check finds by name is the session's: the statement check refuses a circuit naming a port
+twice (`names_of_checkStmt`), so `PortsNamed` holds at every accepted session. -/
+theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksReached 𝓗 rows wr reg)
+    (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
   intro R ω t R₂ j hex rg hrg u q x hname hread b hrow
-  obtain ⟨tr', hacc, hchk', hst⟩ := hchk R ω t R₂ j hex
+  obtain ⟨R', tr', hw, hacc, hchk', hst⟩ := hchk R ω t R₂ j hex
   obtain ⟨cs, w, c, hcs, hc, hb⟩ :=
     heldRow_some (show heldRow (innerCommitsAt (wr t).1 (wr t).2 st reg) ish.sparse rg.value x = some b from hrow)
   have hfix : (RecVStar.fixedRow { reps := #[] } rg.value 0).isSome = true := by
     rw [fixedRow_isSome { reps := #[] } cs rg.value 0 x none ish.sparse]
     simp [hc]
-  obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hu, hlab⟩ := hdrawn R ω t R₂ j tr' hacc rg hrg hfix u x hread
+  obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hu⟩ := rowsHeld 𝓗 R ω t R₂ j R' tr' hw hacc rg hrg hfix u x hread
   obtain ⟨sj, hsj, hck⟩ := stmt_of_session ((𝓗).zs R ω t R₂ j) hacc hst hd u
   have hfind := port_find_of_unique (names_of_checkStmt hck hsj) q
   rw [hname] at hfind
   rw [hcs] at hchk'
-  obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) hchk' hrg hfix hfind hd hD
-    hdp hidx hu (by rw [hlab]; exact hread)
+  obtain ⟨spec₀, sts₀, hs₀, hpr₀, hlb₀⟩ := hchk'
+  have hlab := label_of_checked ((𝓗).zs R ω t R₂ j) hacc ⟨spec₀, sts₀, hs₀, hlb₀⟩ hd hD hdp hidx hu
+  obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) ⟨spec₀, sts₀, hs₀, hpr₀⟩ hrg
+    hfix hfind hd hD hdp hidx hu (by rw [hlab]; exact hread)
   have he := (fixedRow_or (hsp j sj _ _ _ _ _ _ _ hsj hck) hc).symm.trans hc'
   simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he
   exact hdig.trans (he.2.symm.trans hb.symm)

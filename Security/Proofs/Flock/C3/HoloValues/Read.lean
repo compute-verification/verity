@@ -172,12 +172,17 @@ structure RepUnit (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra : 
   opens : ∀ ℓ j, os r ℓ j = openRow p.ligerito sch ℓ j
 
 /-- **A rep's unit plays `holoRepC` to an output** on its steps, whose result accepts the openings and whose level-0
-paths verify against `cap₀` at any salts. -/
-theorem rep_of_unit {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+paths verify against `cap₀` at any salts; the output's zerocheck `z` and `ρ` and lincheck `alpha` and `ts` are the
+coins of the rounds of the unit's record that draw them (`holoRep_refines_coins`). -/
+theorem rep_of_unit_coins {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} (hm : 13 ≤ S.m)
     (U : RepUnit S sch₀ extra cap₀ os r ts) :
     ∃ zc lc pend, Game.PlaysT (holoRepC (D := Dig) execArith r S sch₀ hm extra) ts (some (zc, lc), pend) ∧
-      pend.verdict os = true ∧ ∀ sl, OpensOKL H512 enc512 leafPlain cap₀ r pend os sl := by
+      pend.verdict os = true ∧ zc.z = fOf ((U.t.rounds[U.t.k + 2]!).coins.getD 0 0) ∧
+      (∀ i : Fin (S.m - 6), zc.ρ i = fOf ((U.t.rounds[U.t.k + 3 + i.val]!).coins.getD 0 0)) ∧
+      lc.alpha = fOf ((U.t.rounds[U.t.k + 3 + (S.m - 6)]!).coins.getD 0 0) ∧
+      (∀ j : Fin (S.kLog - 6), lc.ts j = fOf ((U.t.rounds[U.t.k + 3 + (S.m - 6) + 2 + j.val]!).coins.getD 0 0)) ∧
+      ∀ sl, OpensOKL H512 enc512 leafPlain cap₀ r pend os sl := by
   have h22 := exec_fast100_ge U.fast
   obtain ⟨hprog, zc₁, t₁, h₁, hk₁⟩ := holoProg_of_zclc U.sh U.d U.alg U.acc U.st U.sch U.p U.extras U.t U.k0 U.coins
     U.wf U.m (by omega) U.kL U.zp U.lp U.foldPts U.n₀ U.n₁ U.n₂ U.nr U.a₀ U.a₁ U.a₂ U.ar U.lc U.cl U.rs U.rsShape
@@ -185,7 +190,8 @@ theorem rep_of_unit {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra 
   have hdims := fast100_dims U.st.m U.sch U.fast
   have hlv : ∀ i < U.sch.levels.size, LevelSeam (U.sch.levels.getD i default) := fun i hi =>
     fast100_level U.st.m U.sch U.fast _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
-  obtain ⟨-, kz, -, -, -, hkz, zc, lc, pend, hpl, -, hcaps, hreqs, hver⟩ := holoRep_refines U.st S hm
+  obtain ⟨-, kz, -, -, -, hkz, zc, lc, pend, hpl, -, hcaps, hreqs, hver, hz, hρ, hα, hts⟩ :=
+    holoRep_refines_coins U.st S hm
     (by have := U.mS; omega) U.sch U.mS U.kS U.fold extra U.extras U.extrasLen U.extrasRel hdims.1 hlv
     (fun i hi => fast100_alpha U.st.m U.sch U.fast _
       (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi))
@@ -196,11 +202,20 @@ theorem rep_of_unit {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra 
   subst hkz'
   rw [U.sched] at hpl
   refine ⟨zc, lc, pend, playsT_of_spine (holoRepC_spine (D := Dig) execArith r S sch₀ hm extra) hpl U.kinds U.msgs
-    U.coinSteps, hver, fun sl => ?_⟩
+    U.coinSteps, hver, hz, hρ, hα, hts, fun sl => ?_⟩
   have hreqs' : ∀ req ∈ pend.reqs, ReqOK (Flock.MerkleScheme.sha512 U.msId) U.sch U.p.cap U.p.ligerito req := by
     rw [← U.merkle]; exact hreqs
   rw [← U.cap]
   exact opensOK_of U.msId U.sch hlv U.p.cap U.p.ligerito r pend os hcaps hreqs' U.opens
+
+/-- **A rep's unit plays `holoRepC` to an output**: `rep_of_unit_coins` without the coins. -/
+theorem rep_of_unit {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+    {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} (hm : 13 ≤ S.m)
+    (U : RepUnit S sch₀ extra cap₀ os r ts) :
+    ∃ zc lc pend, Game.PlaysT (holoRepC (D := Dig) execArith r S sch₀ hm extra) ts (some (zc, lc), pend) ∧
+      pend.verdict os = true ∧ ∀ sl, OpensOKL H512 enc512 leafPlain cap₀ r pend os sl := by
+  obtain ⟨zc, lc, pend, hT, hv, -, -, -, -, ho⟩ := rep_of_unit_coins hm U
+  exact ⟨zc, lc, pend, hT, hv, ho⟩
 
 end Unit
 

@@ -99,7 +99,7 @@ theorem unitFrames_holo (hsh : LigShift) {sh : Flock.Shape} {d : RepData} {v : U
       have e := hRg (3 + (v.st.m - 6) + 2 + (v.st.fold.kLog - 6) + 2 + (2 + v.extras.size)) (by omega) (by omega)
       rw [frameAt_gamma _ _ _ _ _ _ (by omega)] at e
       exact answers_of_retains' e)
-  obtain ⟨hr, hz, hrho, hts⟩ := holoRows_coins hrows (by omega) hk0 hcoins fun j hj =>
+  obtain ⟨hr, hz, hrho, hts, -⟩ := holoRows_coins hrows (by omega) hk0 hcoins fun j hj =>
     ⟨by omega, decide_eq_true (hne j (by omega) (by omega))⟩
   have hsz' := claimsF_size sh (valOf sh d.w d.comb d.cons) info v.extras
   obtain ⟨P', hl⟩ := holoHlg_of_frames hsh hrows hS hw hc (hacc w info kappa hrows) hres hzero hm14 hm.symm hkL.symm
