@@ -50,8 +50,9 @@ BLOCK_SIZE_N 64, the shape the same file gives M = 8 (`widen_for_wgmma`), to `<o
 `VLLM_TUNED_CONFIG_FOLDER` pointing there; an engine served with the same folder launches the same tiles, all wgmma.
 
 GO needs 0 mismatches and 0 unresolved words (a twin flags a word it cannot claim: a non-finite accumulator; these operands are finite
-and none should occur), every MoE case's `act` rows compared with 0 mismatches, deterministic reruns, the PTX scan, and with
-`--batch-invariant` every expert launch at BLOCK_SIZE_K 32 without SWAP_AB.  The verdict line counts the expert launches by DOT.
+and none should occur), every MoE case's `act` rows compared with 0 mismatches, deterministic reruns (the same words, as bits:
+`same_words`), the PTX scan, and with `--batch-invariant` every expert launch at BLOCK_SIZE_K 32 without SWAP_AB.  The verdict line
+counts the expert launches by DOT.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_block_fp8_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--wgmma-configs] [--batch-invariant]
@@ -240,6 +241,15 @@ def _u32(t) -> np.ndarray:
     return t.contiguous().to(torch.float32).cpu().numpy().view(np.uint32)
 
 
+def same_words(a, b) -> bool:
+    """Two runs' outputs of one launch hold the same words, compared as bits: a NaN word is unequal to itself as a float, so
+    `torch.equal` calls two runs that wrote the same words different wherever one is NaN."""
+    import torch
+
+    return bool(a.dtype == b.dtype and a.shape == b.shape
+                and torch.equal(a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8)))
+
+
 def _save(d: Path, **arrays: np.ndarray) -> dict[str, str]:
     d.mkdir(parents=True, exist_ok=True)
     out = {}
@@ -328,7 +338,7 @@ def dense_launch(work: Path, name: str, K: int, N: int, M: int, seed: int) -> tu
     op = seen[0]
     launch = {"phase": "dense", "case": name, "K": K, "N": N, "M": M, "kernel": type(kernel).__name__,
               "swap_ab_expected": M % 4 != 0, "A_shape": list(op["A"].shape), "As_shape": list(op["As"].shape),
-              "Bs_shape": list(op["Bs"].shape), "out_dtype": str(out1.dtype), "deterministic": bool(torch.equal(out1, out2)),
+              "Bs_shape": list(op["Bs"].shape), "out_dtype": str(out1.dtype), "deterministic": same_words(out1, out2),
               "operands_ok": (list(op["A"].shape) == [M, K] and list(op["As"].shape) == [M, K // GROUP]
                               and list(op["B"].shape) == [N, K] and list(op["Bs"].shape) == [cdiv(N, GROUP), K // GROUP]
                               and op["A"].dtype == torch.float8_e4m3fn and out1.dtype == torch.bfloat16)}
@@ -507,7 +517,7 @@ def moe_launches(work: Path, name: str, inter: int, M: int, hot: int, seed: int,
         rec = {"phase": "moe", "case": name, "launch": kind, "I": inter, "M": M, "hot": hot, "K": int(K), "N": int(N), "pairs": int(n_pairs),
                "config": L["config"], "KB": L["KB"], "SWAP": L["SWAP"], "block_shape": L["block_shape"], "flags": L["flags"], "bias": L["bias"],
                "mul_routed_weight": L["mul_routed_weight"], "top_k": L["top_k"], "experts_used": int(used.size),
-               "deterministic": True if twin is None else bool(torch.equal(L["C"], twin["C"])),
+               "deterministic": True if twin is None else same_words(L["C"], twin["C"]),
                "assignment_ok": _assignment_ok(L, ids_flat), "dot": launch_dot(L["config"], L["SWAP"]).id}
         rec["statics_ok"] = (statics_known and L["block_shape"] == [GROUP, GROUP] and L["flags"] == [True, False, False, False, False]
                              and not L["bias"] and L["mul_routed_weight"] == (kind != "w13") and L["top_k"] == (TOP_K if kind == "w13" else 1)
