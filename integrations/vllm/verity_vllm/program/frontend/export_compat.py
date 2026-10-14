@@ -47,6 +47,7 @@ def tensor_data_as_detach():
 
 _TUNED_TABLE_MODULES = ("vllm.model_executor.determinism.batch_invariant_configs", "vllm.model_executor.determinism.batch_invariant")
 _NUM_CU_MODULES = ("vllm.utils.platform_utils", "vllm.model_executor.determinism.batch_invariant")
+_FLASHINFER_FP8_MODULE = "vllm.model_executor.kernels.linear.scaled_mm.flashinfer"
 
 
 def _reset_tuned_table_cache(into: hooks.Hooks) -> None:
@@ -91,6 +92,12 @@ def apply_target_profile(profile):
                 continue
             if hasattr(m, "num_compute_units"):
                 h.patch(m, "num_compute_units", lambda device_id=None, _n=profile.num_sms: _n)
+        if (major, minor) == (9, 0):
+            # The standard Hopper vLLM environment carries FlashInfer.  A GPU-free Build cannot load its CUDA extension, so its
+            # availability probe would otherwise choose plain DeepGEMM while the served target selects the earlier dynamic
+            # FlashInfer/DeepGEMM kernel.  Answer the declared target's installed capability, as we do for its cc and SM count.
+            flashinfer_fp8 = importlib.import_module(_FLASHINFER_FP8_MODULE)
+            h.patch(flashinfer_fp8, "is_flashinfer_fp8_blockscale_gemm_supported", lambda: True)
         yield
 
 

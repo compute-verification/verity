@@ -189,6 +189,11 @@ def test_export_shims_restore_torch_and_vllm() -> None:
         assert all(m.num_compute_units() == 142 for m in mods if hasattr(m, "num_compute_units"))
     assert vars(cls).get("get_device_capability", hooks.ABSENT) is cap
     assert [vars(m).get("num_compute_units", hooks.ABSENT) for m in mods] == cus
+    flashinfer_fp8 = importlib.import_module("vllm.model_executor.kernels.linear.scaled_mm.flashinfer")
+    flashinfer_supported = flashinfer_fp8.is_flashinfer_fp8_blockscale_gemm_supported
+    with apply_target_profile(SimpleNamespace(compute_capability=(9, 0), num_sms=132)):
+        assert flashinfer_fp8.is_flashinfer_fp8_blockscale_gemm_supported()
+    assert flashinfer_fp8.is_flashinfer_fp8_blockscale_gemm_supported is flashinfer_supported
 
     fm = pytest.importorskip("vllm.model_executor.layers.fused_moe.fused_moe")   # registers torch.ops.vllm.fused_experts
     ns = torch.ops.vllm
