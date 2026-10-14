@@ -179,6 +179,3 @@ theorem prob_regTopValueSalt_le
     (prob_regTopValue_le wr st reg bcs' lv cap salt hstk zs vsrc dg N σ hX hT hV) (prob_saltColl_le lv cap salt zs σ hS))
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms FlockSoundness.Discharge.Recursion.prob_regTopValue_le
-#print axioms FlockSoundness.Discharge.Recursion.prob_regTopValueSalt_le

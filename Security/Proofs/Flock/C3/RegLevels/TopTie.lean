@@ -91,10 +91,3 @@ theorem hT_of_root {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : 
 end Session
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.capRow_bit
-#print axioms FlockC3.RegLevels.capAt_size
-#print axioms FlockC3.RegLevels.hT_of_root
-#print axioms FlockC3.RegLevels.tie_root
-#print axioms FlockC3.RegLevels.salt_tie
-#print axioms FlockC3.RegLevels.commitRow_capRow

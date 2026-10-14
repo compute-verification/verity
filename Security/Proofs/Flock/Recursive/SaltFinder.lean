@@ -116,7 +116,3 @@ theorem prob_saltColl_le (lv : FlockSoundness.Accounting.Level) (cap : Cap Refin
     (by positivity)).2 hev
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms FlockSoundness.Registered.ReadsX.SaltClash.collision
-#print axioms FlockSoundness.Discharge.Recursion.SaltColl.collision
-#print axioms FlockSoundness.Discharge.Recursion.prob_saltColl_le
