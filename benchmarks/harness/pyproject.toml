@@ -3,7 +3,7 @@ name = "verity-bench"
 version = "0.1.0"
 description = "Shared benchmark harnesses for Verity integrations and backends."
 requires-python = ">=3.12"
-dependencies = ["verity-vllm"]
+dependencies = ["verity-config", "verity-vllm"]
 
 [project.scripts]
 verity-bench = "verity_bench.cli:main"
@@ -16,6 +16,7 @@ build-backend = "hatchling.build"
 packages = ["verity_bench"]
 
 [tool.uv.sources]
+verity-config = { workspace = true }
 verity-vllm = { workspace = true }
 
 [tool.pytest.ini_options]
@@ -29,6 +30,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `build_bound` reads the protocol options' `requires_build` to refuse CUDA
 # graphs for arms whose served kernels are bound to a row Build.
 inputs = [
+    "benchmarks/specs",
     "integrations/vllm/verity_vllm/engine/hooks.py",
     "integrations/vllm/verity_vllm/protocol_options",
 ]

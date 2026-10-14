@@ -146,6 +146,14 @@ theorem add_get (a : Acc) (g : Lin) : (a.add g).get = a.get ^^^ g := by
     · exact of_get _
   · exact of_get _
 
+theorem zipWith_add_get : ∀ (sums : List Acc) (zs : List Lin),
+    (List.zipWith add sums zs).map get = List.zipWith (· ^^^ ·) (sums.map get) zs
+  | [], _ => rfl
+  | _ :: _, [] => rfl
+  | a :: sums, z :: zs => by
+    simp only [List.zipWith_cons_cons, List.map_cons]
+    rw [add_get, zipWith_add_get sums zs]
+
 end Acc
 
 /-- A committed row: bit `out` is the product of the forms `a` and `b`. -/

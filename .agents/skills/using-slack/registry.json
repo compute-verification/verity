@@ -62,7 +62,7 @@
     },
     {
       "handle": "proofs",
-      "holder": "the proofs coordinator (bc-ba600890-a6b7-5b7c-812b-ad5d864f9b2a); until it posts stopped, its predecessor (bc-8416bc72-c4cc-5551-93a8-b14a6e5f95d4); the research coordinator (bc-8ece7cde) keeps running the merge trains",
+      "holder": "the proofs coordinator (bc-ba600890-a6b7-5b7c-812b-ad5d864f9b2a); the research coordinator (bc-8ece7cde) keeps running the merge trains",
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0C5Q6KJZTQ",
@@ -76,7 +76,8 @@
         "archive/sp1/benchmarks/dot_product/",
         "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
-        "benchmarks/private_circuit/"
+        "benchmarks/private_circuit/",
+        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
       ]
     },
     {
@@ -94,7 +95,23 @@
         "benchmarks/tc_probe/",
         "benchmarks/tc_probe_fp4/",
         "benchmarks/load_time/",
-        "verity/ml/circuits/ops/"
+        "verity/ml/circuits/ops/",
+        "integrations/vllm/verity_vllm/program/",
+        "integrations/vllm/verity_vllm/query/",
+        "integrations/vllm/verity_vllm/correspondence/",
+        "integrations/vllm/verity_vllm/acquire/",
+        "integrations/vllm/verity_vllm/commit/",
+        "integrations/vllm/verity_vllm/properties/",
+        "integrations/vllm/verity_vllm/pipeline/build.py",
+        "integrations/vllm/verity_vllm/pipeline/match.py",
+        "integrations/vllm/verity_vllm/pipeline/commit.py",
+        "integrations/vllm/verity_vllm/pipeline/commit_group.py",
+        "integrations/vllm/verity_vllm/pipeline/commit_plan.py",
+        "integrations/vllm/workloads/",
+        "integrations/vllm/manifests/",
+        "integrations/vllm/tests/properties/",
+        "integrations/vllm/tests/check/test_capture_map.py",
+        "integrations/vllm/tests/check/test_capture_map_versions.py"
       ]
     },
     {
@@ -114,7 +131,20 @@
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
         "benchmarks/numerical/",
-        ".agents/skills/kernel-engineering/"
+        ".agents/skills/kernel-engineering/",
+        "integrations/vllm/verity_vllm/protocol_options/pouw.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_cuda/",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_native.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_host.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_kernel.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py"
       ]
     },
     {
@@ -133,11 +163,14 @@
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
         "benchmarks/bandwidth/",
+        "benchmarks/host_tiles/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
+        "benchmarks/codec_mix/",
         "benchmarks/codec_tensor/",
         "benchmarks/kv_filler/",
-        "benchmarks/remote_session/"
+        "benchmarks/remote_session/",
+        "integrations/vllm/verity_vllm/protocol_options/pous.py"
       ]
     },
     {
@@ -169,9 +202,10 @@
       "holder": "the ci coordinator (bc-1e3239d1-d0b7-5a0a-8e56-9b3b01792a98); until it posts stopped, its predecessor (bc-81ff5c35-39a9-5232-a6b5-8e933b944292)",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
-      "usergroup": null,
+      "usergroup": "S0C93AFCRT8",
       "linear": "CI",
       "owns": [
+        "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/move/",
@@ -185,7 +219,7 @@
       "holder": "the lean coordinator (bc-b8aa4f87-8653-5bf1-87f8-944f12e26f1e); until it posts stopped, its predecessor (bc-19c498a8-628e-5c04-8f61-fe785a24741b)",
       "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
-      "usergroup": null,
+      "usergroup": "S0C93AE54K0",
       "linear": "LEAN",
       "owns": [
         "tools/verity/lean/",
@@ -196,10 +230,10 @@
     },
     {
       "handle": "comms",
-      "holder": "the comms coordinator (bc-9e9cd438-d8ff-537a-9545-7fff2c9038e0); until it posts stopped, its predecessor (bc-3e100045-0b60-5d20-951e-7207a989b252)",
+      "holder": "the comms coordinator (bc-9e9cd438-d8ff-537a-9545-7fff2c9038e0)",
       "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
       "charter": "Daniel, 2026-10-01 9:12 AM PDT",
-      "usergroup": null,
+      "usergroup": "S0C8PTRMVV5",
       "linear": "COMM",
       "owns": [
         ".agents/skills/using-slack/",
@@ -213,9 +247,11 @@
       "holder": "the admin, Daniel's coordinator (bc-2b2d3505-b12f-5f7a-9a19-768dbe4d7308); until it posts stopped, its predecessor (bc-7f347b4b-6175-4b6e-84c6-731add2f8589)",
       "remit": "Top-level: Daniel's coordinator across every lead.",
       "charter": "Daniel",
-      "usergroup": null,
+      "usergroup": "S0C977GL9R7",
       "linear": "TOP",
-      "branch_suffixes": ["c3b2"],
+      "branch_suffixes": [
+        "c3b2"
+      ],
       "owns": [
         "AGENTS.md",
         "README.md",
@@ -223,7 +259,6 @@
         "tests/",
         "fixtures/",
         "benchmarks/census/",
-        "benchmarks/harness/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -235,17 +270,23 @@
       "holder": "the vLLM coordinator (bc-978a9463-2354-5168-8a9a-e18df53b9411)",
       "remit": "The vLLM integration: what the served model runs under verification, and its hookup to the protocols.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
-      "usergroup": null,
+      "usergroup": "S0C954BELSW",
       "owns": [
         "integrations/vllm/"
-      ]
+      ],
+      "linear": "VLLM"
     },
     {
       "handle": "benchmarks",
       "holder": "the benchmarks coordinator (bc-681a0244-a22d-5924-b0a3-06223ae547e4)",
       "remit": "Benchmarks: the overhead and throughput measurements across backends, and the tables rendered from them.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
-      "usergroup": null
+      "usergroup": "S0C9ZLL7T88",
+      "linear": "BENCH",
+      "owns": [
+        "benchmarks/harness/",
+        "benchmarks/specs/"
+      ]
     },
     {
       "handle": "old-accounting",

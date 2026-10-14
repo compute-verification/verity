@@ -255,6 +255,7 @@ def _identity(
     sweep: str,
     git_commit: str,
     versions: Mapping[str, Mapping[str, Any]],
+    config_identity: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     vllm_versions = {v.get("vllm_version") for v in versions.values()}
     if len(vllm_versions) != 1:
@@ -278,6 +279,7 @@ def _identity(
         "arms": arm_docs,
         "git_commit": git_commit,
         "sweep": sweep,
+        **({"config": dict(config_identity)} if config_identity is not None else {}),
     }
 
 
@@ -290,6 +292,7 @@ def run_benchmark(
     reps: int,
     factory: EngineFactory,
     git_commit: str | None = None,
+    config_identity: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run every gate before any timing, then use resident interleaving or alternating blocks."""
 
@@ -359,7 +362,7 @@ def run_benchmark(
                         engine.close()
         mode = "blocks"
 
-    identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions)
+    identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity)
     doc = {
         "schema": result_format.SCHEMA,
         "identity": identity,
