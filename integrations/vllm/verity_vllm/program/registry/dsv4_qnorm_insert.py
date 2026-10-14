@@ -62,8 +62,8 @@ from verity_vllm.program.registry.prims import BF16, F32
 M32 = 0xFFFFFFFF
 LANES = 32
 
-_CONF = ("model-untested: read from vLLM d9105ea80's fused_deepseek_v4_qnorm_rope_kv_insert_kernel.cu and the CuTe DSL "
-         "IndexerQFp8Kernel (fused_indexer_q_cutedsl.py) and their sm_90a SASS; "
+_CONF = ("model-untested: read from vLLM d9105ea80's fused q-norm/RoPE/KV-insert CUDA kernel and the CuTe DSL "
+         "IndexerQFp8Kernel (fused_indexer_q_cutedsl.py), the files the module docstring names, and their cc 9.0 SASS; "
          "tests/properties/dsv4_qnorm_insert_capture_gpu.py is its hardware check")
 _PTX = "model-untested: as the PTX ISA defines it; tests/properties/dsv4_qnorm_insert_capture_gpu.py is its hardware check"
 
