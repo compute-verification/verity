@@ -18,6 +18,18 @@ the variant. By default the run checks the variant first and vLLM's served defau
 both, so `served_default` is first-class rather than timing-only.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
+  scan       each case once at every M of SCAN_M (256 to ENVELOPE, vLLM's default max_num_seqs for the LLM entrypoint on a GPU
+             of 70 GiB or more that is no A100, `EngineArgs.get_batch_defaults`), the same operand buffers sliced to M so the
+             heuristic sees only the shape, under one profiler session with a marker fill between launches.  Regimes
+             (`scan_regimes`) are maximal M runs over which the kernel signature (names and blocks, `scan_signature`) and four
+             kept output rows are both unchanged: the same rows against the same W give the same words exactly when the kernel
+             and its split schedule are unchanged, so a split-count change invisible to the profiler (grid.z reads 1) still
+             bounds a regime.  On the default route each reduce-bearing regime's split count is fitted from the kept rows
+             (`BC.fit_cublas_split_k` over `BC.splitk_count_probe`'s crafted boundary rows, installed atop a clone of W with
+             an all-ones x row 0, so the served partition reads out of the words under either output rounding); a regime no
+             candidate fits, a reduce under the switch or a bmm reduce fails the scan.
+             The sweep (`scan_sweep`) then adds full cases at both sides of every regime boundary past 256 plus ENVELOPE, so
+             every schedule cuBLAS serves across decode batches to ENVELOPE is word-checked without launching every M twice.
   selection  each model's `GateLinear(K, N)` with a bf16 weight and f32 out allows tier 1 (ll_bf16_gemm) and tier 4 (cuBLAS) and
              neither fp32 tier; `dispatch_unquantized_gemm()` is `default_unquantized_gemm` (F.linear); the switch's flags read back.
   router     `GateLinear.forward` at M in the model's `router_m`, twice: every `LLBf16Gemm.dispatch` it makes is tapped and must be
@@ -42,17 +54,19 @@ both, so `served_default` is first-class rather than timing-only.
              (`verity.ml.circuits.evaluation.evaluate`) of the word Definition the launch binds, which the model must equal.
   bind       every Definition binds at each model's statics.
   timing     each case's kernel time, the median of `REPS` CUDA-event-timed launches.
-  profile    every CUDA kernel name and launch grid, the separate cuBLASLt reduction kernel, the shape-pinned `SPLIT_K` (Kineto
+  profile    every CUDA kernel name and launch grid, the separate cuBLASLt reduction kernel, the `SPLIT_K` pinned by shape and M
+             (`BC.default_cublas_split_k`, M <= 256) or read from the scan's fit past the pins (Kineto
              reports grid.z = 1 for these launches), and the runtime cuBLAS version. Each default split-K case includes a crafted
              cancellation row fit against the stated
              contiguous/f32/forward hypothesis and strided, reverse, tree and bf16-partial alternatives.
 
-GO needs, for every model and both variants, every case run, 0 mismatches on every word, `fma` decided, every launch deterministic
-and on its expected kernel, every profiled split-K launch and unique hypothesis fit pinned, and the references equal.
+GO needs, for every model and both variants, every case run (the scan's swept boundaries included), 0 mismatches on every word,
+`fma` decided, every launch deterministic and on its expected kernel, every profiled split-K launch's split pinned or fitted and
+its unique hypothesis fit, the scan ok, and the references equal.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
-    $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--no-default]
-        [--models glm53,dsv4-pro] [--only router,linear,f32out,bmm]
+    $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--workers N] [--quick] [--no-default]
+        [--no-scan] [--models glm53,dsv4-pro] [--only router,linear,f32out,bmm]
 """
 from __future__ import annotations
 
@@ -77,7 +91,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v3"
+SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v4"
 RECORD = "glm53_bf16_gemm_capture.json"
 #: GLM-5.3's MLA at one TP8 rank: heads, the nope and rope query widths, the latent rank and the value width
 NHL, QK_NOPE, QK_ROPE, KV_LORA, V_HEAD = 8, 192, 64, 512, 256
@@ -111,6 +125,17 @@ MODELS = {
                        ("indexer.compressor.kv_score", 7168, 4 * 128)), ()),
 }
 LINEAR_M, QUICK_M = (1, 4, 16, 128, 256), (1, 16)
+#: vLLM's default max_num_seqs for the LLM entrypoint on a GPU of 70 GiB or more that is no A100 (engine/arg_utils.py
+#: `get_batch_defaults`): a decode step reaches ENVELOPE tokens
+ENVELOPE = 1024
+#: the scan's decode batches: every M from the last pinned sweep point to the envelope
+SCAN_M = range(256, ENVELOPE + 1)
+#: the output rows and columns the scan keeps per M, enough to see any schedule change and to fit the split count
+SCAN_FIT_ROWS, SCAN_FIT_COLS = 4, 256
+#: more regimes than this across SCAN_M means the schedule churns; the scan fails rather than sweeping them all
+MAX_REGIMES = 12
+#: the scan's marker kernel between launches (`Tensor.fill_`), never part of a GEMM's own launches
+MARKER = "FillFunctor"
 #: the M = 1 dotprod row whose products are all below f32's normal range
 PROBE = "fma-probe"
 STRESS_SCALE = 2.0 ** -122
@@ -294,9 +319,9 @@ def _grid(args: dict[str, Any]) -> list[int] | None:
     return [int(args[k]) for k in keys] if keys else None
 
 
-def _profile_record(trace: dict[str, Any]) -> dict[str, Any]:
-    """Kernel names, grids, the main split-K count and any separate reduction kernel from a Kineto Chrome trace."""
-    launches = []
+def _kernel_launches(trace: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every CUDA kernel of a Kineto Chrome trace in issue order (one stream): name, grid, block."""
+    out = []
     for e in trace.get("traceEvents", []):
         args = e.get("args") or {}
         grid = _grid(args)
@@ -305,8 +330,15 @@ def _profile_record(trace: dict[str, Any]) -> dict[str, Any]:
             continue
         block_keys = next((ks for ks in (("blockX", "blockY", "blockZ"), ("block_x", "block_y", "block_z"),
                                          ("Block X", "Block Y", "Block Z")) if all(k in args for k in ks)), None)
-        launches.append({"name": str(e.get("name", "")), "grid": grid,
-                         "block": [int(args[k]) for k in block_keys] if block_keys else None})
+        out.append({"ts": e.get("ts", 0), "name": str(e.get("name", "")), "grid": grid,
+                    "block": [int(args[k]) for k in block_keys] if block_keys else None})
+    out.sort(key=lambda k: k["ts"])
+    return out
+
+
+def _profile_record(trace: dict[str, Any]) -> dict[str, Any]:
+    """Kernel names, grids, the main split-K count and any separate reduction kernel from a Kineto Chrome trace."""
+    launches = [{k: v for k, v in x.items() if k != "ts"} for x in _kernel_launches(trace)]
     # `LLBf16SplitK` has its split count in the dispatch record and reduces its cluster ranks in-kernel.  This field describes
     # cuBLAS's otherwise opaque split-K route, whose main kernel is followed by a separate reduction kernel.
     main = [x for x in launches if "splitk" in x["name"].lower() and "reduce" not in x["name"].lower()
@@ -483,8 +515,155 @@ def _cublas_split_k(job: dict[str, Any]) -> int | None:
     return split_k if split_k and (job.get("kernel") or {}).get("kind") != "splitk" else None
 
 
+def served_split(phase: str, M: int, K: int, N: int, scan_split: int | None = None) -> int | None:
+    """The default reduce route's split count at these statics: the pinned table (M <= 256), else the scan's fit at this M."""
+    from verity_vllm.program.registry import bf16_gemm_check as BC
+
+    pinned = BC.default_cublas_split_k(phase, M, K, N)
+    return pinned if pinned is not None else scan_split
+
+
+# -------------------------------------------------------------------------------------------------------------------------- scan
+def scan_segments(trace: dict[str, Any], n: int) -> list[list[dict[str, Any]]]:
+    """The kernels of each scanned launch, split on the `MARKER` fills: exactly n segments between n + 1 markers."""
+    segments: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] | None = None
+    markers = 0
+    for k in _kernel_launches(trace):
+        if MARKER in k["name"]:
+            if current is not None:
+                segments.append(current)
+            current, markers = [], markers + 1
+        elif current is not None:
+            current.append(k)
+    if markers != n + 1 or len(segments) != n:
+        raise ValueError(f"scan expected {n} launches between {n + 1} markers, got {len(segments)} between {markers}")
+    return segments
+
+
+def scan_signature(segment: list[dict[str, Any]]) -> dict[str, Any]:
+    """One scanned M's schedule as the profiler shows it: each kernel's name and block (grids grow smoothly with M and say
+    nothing; the split count is invisible here, `_profile_record`), and whether a separate reduction ran."""
+    return {"kernels": [{"name": k["name"], "block": k["block"]} for k in segment],
+            "reduce": any("splitkreduce" in k["name"].lower() for k in segment)}
+
+
+def scan_regimes(Ms: list[int], sigs: list[dict[str, Any]], rows: list[np.ndarray]) -> list[dict[str, Any]]:
+    """Maximal M runs with one schedule: the signature and the kept output words both unchanged from M - 1 (the same operand
+    rows against the same W give the same words exactly when the kernel and its split schedule are unchanged, so a split-count
+    change the profiler cannot see still ends a regime)."""
+    regimes: list[dict[str, Any]] = []
+    for i, M in enumerate(Ms):
+        if regimes and sigs[i] == sigs[i - 1] and rows[i].shape == rows[i - 1].shape and np.array_equal(rows[i], rows[i - 1]):
+            regimes[-1]["m1"] = M
+        else:
+            regimes.append({"m0": M, "m1": M, **sigs[i]})
+    return regimes
+
+
+def scan_sweep(regimes: list[dict[str, Any]], covered: int = SCAN_M[0]) -> list[int]:
+    """The decode batches the scan adds to the sweep: both sides of every regime boundary past the already-swept `covered`,
+    and the ENVELOPE endpoint."""
+    out = {ENVELOPE}
+    for r in regimes[1:]:
+        out.update((r["m0"] - 1, r["m0"]))
+    return sorted(M for M in out if M > covered)
+
+
+def regime_of(rec: dict[str, Any], M: int) -> dict[str, Any] | None:
+    """The scanned regime holding M."""
+    return next((r for r in rec["regimes"] if r["m0"] <= M <= r["m1"]), None)
+
+
+def scan_targets(only: set[str], models: list[str]) -> list[tuple[str, str, str]]:
+    """(model, phase, case) for every GEMM whose decode-batch schedule the scan maps: the router past the cuteDSL tier and
+    each linear, f32-out and bmm case."""
+    out = []
+    for model in models:
+        m = MODELS[model]
+        if "router" in only:
+            out.append((model, "router", "mlp.gate"))
+        for phase in ("linear", "f32out", "bmm"):
+            if phase in only:
+                out += [(model, phase, name) for name, _, _ in getattr(m, phase)]
+    return out
+
+
+def scan_case(work: Path, weights: Weights, gates: dict[str, Any], model: str, phase: str, name: str, idx: int,
+              served_default: bool) -> dict[str, Any]:
+    """cuBLAS's schedule for one case at every M of SCAN_M (module docstring, `scan`): launches, regimes, fits and the sweep."""
+    import torch
+    from verity_vllm.program.registry import bf16_gemm_check as BC
+
+    m = MODELS[model]
+    gen = torch.Generator(device="cuda").manual_seed(13000 + idx)
+    if phase == "router":
+        w0, _ = weights.get(model, "mlp.gate")
+        gate = gates[model]
+        gate.weight.data.copy_(w0)                                                 # the launches re-copy the pristine weights
+        x, w = _activation(gen, ENVELOPE, m.hidden), gate.weight.data
+        run = lambda M: _primary_output(gate(x[:M]))                               # noqa: E731
+        output = "f32"
+    elif phase in ("linear", "f32out"):
+        from vllm.model_executor.layers.utils import dispatch_unquantized_gemm
+
+        w0, _ = weights.get(model, name)
+        w = w0.clone()                                                             # the probe rows never touch the cached weights
+        x = _activation(gen, ENVELOPE, w.shape[1])
+        if phase == "linear":
+            gemm, layer, output = dispatch_unquantized_gemm(), torch.nn.Module(), "bf16"
+            run = lambda M: gemm(layer, x[:M], w, None)                            # noqa: E731
+        else:
+            output = "f32"
+            run = lambda M: torch.mm(x[:M], w.T, out_dtype=torch.float32)          # noqa: E731
+    else:
+        b, _ = weights.get(model, name)
+        output = "bf16"
+        if name == "q_nope_absorb":
+            q = _activation(gen, ENVELOPE, NHL * (QK_NOPE + QK_ROPE)).view(ENVELOPE, NHL, QK_NOPE + QK_ROPE)
+            a = q.split([QK_NOPE, QK_ROPE], dim=-1)[0].transpose(0, 1)
+            run = lambda M: torch.bmm(a[:, :M], b)                                 # noqa: E731
+        else:
+            a = _activation(gen, ENVELOPE, NHL * KV_LORA).view(ENVELOPE, NHL, KV_LORA).transpose(0, 1)
+            buf = torch.empty(ENVELOPE, NHL * V_HEAD, device="cuda", dtype=torch.bfloat16)
+            out_full = buf.view(ENVELOPE, NHL, V_HEAD).transpose(0, 1)
+            run = lambda M: torch.bmm(a[:, :M], b, out=out_full[:, :M])            # noqa: E731
+    if phase != "bmm":
+        # x row 0 all ones and crafted boundary rows atop W: the split count reads out of the words at either output rounding
+        probe = BC.splitk_count_probe(w.shape[1], max_rows=min(w.shape[0], SCAN_FIT_COLS))
+        x[0].fill_(1.0)
+        w[:probe.shape[0]].copy_(torch.from_numpy(probe.view(np.int16)).view(torch.bfloat16).to(w.device))
+    keep = ((lambda o: o[:, :SCAN_FIT_ROWS, :SCAN_FIT_COLS].clone()) if phase == "bmm"
+            else (lambda o: o[:SCAN_FIT_ROWS, :SCAN_FIT_COLS].clone()))
+    kept = []
+    marker = torch.empty(1, device="cuda")
+    with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA]) as prof:
+        for M in SCAN_M:
+            marker.fill_(1.0)
+            kept.append(keep(run(M)))
+        marker.fill_(1.0)
+        torch.cuda.synchronize()
+    trace_path = work / f"scan_{model}_{phase}_{name}.json"
+    prof.export_chrome_trace(str(trace_path))
+    segments = scan_segments(json.loads(trace_path.read_text()), len(SCAN_M))
+    rows = [(_u32 if output == "f32" else _u16)(t) for t in kept]
+    regimes = scan_regimes(list(SCAN_M), [scan_signature(s) for s in segments], rows)
+    fit_ok = True
+    if served_default and phase != "bmm":
+        xw, ww = _u16(x[:SCAN_FIT_ROWS]), _u16(w[:SCAN_FIT_COLS])
+        for r in (r for r in regimes if r["reduce"]):
+            fits = BC.fit_cublas_split_k(xw, ww, rows[list(SCAN_M).index(r["m0"])], out=output)
+            r["split_fits"], r["split"] = fits, (fits[0] if fits else None)
+            fit_ok = fit_ok and bool(fits)
+    rec = {"m": [SCAN_M[0], SCAN_M[-1]], "output": output, "regimes": regimes, "sweep": scan_sweep(regimes)}
+    rec["ok"] = fit_ok and all("split" in r or not r["reduce"] for r in regimes) and len(regimes) <= MAX_REGIMES
+    if len(regimes) > MAX_REGIMES:
+        rec["sweep"] = [ENVELOPE]
+    return rec
+
+
 def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phase: str, name: str, M: int,
-           seed: int, served_default: bool) -> tuple[dict[str, Any], dict[str, Any]]:
+           seed: int, served_default: bool, scan_split: int | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """One case on the GPU, twice, timed and profiled; returns (launch record, comparison job)."""
     import torch
 
@@ -553,9 +732,7 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
     except Exception as e:  # noqa: BLE001
         rec["profile"] = {"error": _error(e), "ok": False}
     if served_default and rec["profile"].get("reduction_kernels"):
-        from verity_vllm.program.registry import bf16_gemm_check as BC
-
-        rec["profile"]["split_k"] = BC.default_cublas_split_k(phase, M, rec["K"], rec["N"])
+        rec["profile"]["split_k"] = served_split(phase, M, rec["K"], rec["N"], scan_split)
         rec["profile"]["ok"] = (rec["profile"]["split_k"] is not None
                                 and any("splitk" in x["name"].lower() and "reduce" not in x["name"].lower()
                                         for x in rec["profile"]["launches"]))
@@ -818,6 +995,7 @@ def _verdict(doc: dict[str, Any]) -> bool:
             and all(s.get("ok") is True for s in doc["selection"].values()) and bool(doc["selection"])
             and doc["bind"].get("ok") is True and {_case(x) for x in doc["launches"]} == set(doc["expected"])
             and all(_launch_ok(x) for x in doc["launches"]) and _words_ok(doc["totals"]) and doc.get("fma") is not None
+            and doc.get("scan", {}).get("ok") is True
             and all(c["ok"] for c in doc["cases"].values()) and all(model_verdicts(doc).values())
             and (not doc.get("require_served_default") or doc.get("served_default", {}).get("ok") is True))
 
@@ -830,7 +1008,7 @@ def default_run(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
             "--workers", str(a.workers), "--only", a.only, "--models", a.models, "--min-driver", str(a.min_driver),
             "--want-cc", a.want_cc, "--want-sms", str(a.want_sms)]
     argv += (["--scratch", a.scratch] if a.scratch else []) + (["--quick"] if a.quick else [])
-    argv += ["--dump-operands"] if a.dump_operands else []
+    argv += (["--dump-operands"] if a.dump_operands else []) + (["--no-scan"] if a.no_scan else [])
     proc = subprocess.run(argv, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2])
     (outdir / "served_default.log").write_text(proc.stdout + proc.stderr)
     doc = json.loads((sub / RECORD).read_text())
@@ -864,10 +1042,12 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")
     todo = cases(a.quick, only, models)
+    run_scan = not a.quick and not a.no_scan
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": a.quick, "served_default": a.served_default,
                            "variant": "served_default" if a.served_default else "split_k_off",
                            "require_served_default": not a.served_default and not a.no_default,
                            "models": models, "expected": [case_key(*c) for c in todo], "environment": G._environment(),
+                           "scan": {"enabled": run_scan, "cases": {}, "ok": True},
                            "gate": C.gate(a.min_driver, a.want_cc, a.want_sms), "errors": {}}
     print(f"[glm53-bf16-gemm] gate {json.dumps(doc['gate'])}", flush=True)
     if not doc["gate"]["ok"]:
@@ -893,10 +1073,31 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                 doc["selection"][model] = {"ok": False}
             print(f"[glm53-bf16-gemm] selection {model} {json.dumps(doc['selection'][model])}", flush=True)
         weights = Weights(work, 4000)
+        scan_split: dict[tuple[str, str, str, int], int | None] = {}
+        if run_scan:
+            for j, (model, phase, name) in enumerate(scan_targets(only, models)):
+                skey = f"{model}/{phase}/{name}"
+                try:
+                    rec = scan_case(work, weights, gates, model, phase, name, j, a.served_default)
+                except Exception as e:  # noqa: BLE001
+                    doc["errors"][f"scan/{skey}"] = _error(e)
+                    doc["scan"]["ok"] = False
+                    print(f"[glm53-bf16-gemm] scan {skey} ERROR {doc['errors'][f'scan/{skey}'][:400]}", flush=True)
+                    continue
+                doc["scan"]["cases"][skey] = rec
+                doc["scan"]["ok"] = doc["scan"]["ok"] and rec["ok"]
+                for M in rec["sweep"]:
+                    todo.append((model, phase, name, M))
+                    r = regime_of(rec, M)
+                    scan_split[(model, phase, name, M)] = r.get("split") if r else None
+                bounds = [(r["m0"], r["m1"], r.get("split"), r["reduce"]) for r in rec["regimes"]]
+                print(f"[glm53-bf16-gemm] scan {skey:44s} regimes={bounds} sweep={rec['sweep']} ok={rec['ok']}", flush=True)
+            doc["expected"] = [case_key(*c) for c in todo]
         for i, (model, phase, name, M) in enumerate(todo):
             key = case_key(model, phase, name, M)
             try:
-                launch_rec, job = launch(work, weights, gates, model, phase, name, M, 7000 + i, a.served_default)
+                launch_rec, job = launch(work, weights, gates, model, phase, name, M, 7000 + i, a.served_default,
+                                         scan_split.get((model, phase, name, M)))
                 doc["launches"].append(launch_rec)
                 jobs += jobs_of(job)
                 print(f"[glm53-bf16-gemm] {key:48s} K={launch_rec['K']:5d} N={launch_rec['N']:5d} kernel={launch_rec.get('kernel')} "
@@ -981,6 +1182,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-default", action="store_true", help="skip the second process under torch's default configuration")
     ap.add_argument("--dump-operands", action="store_true",
                     help="preserve operands and outputs for launches with a separate split-K reduction, deduplicating W across M")
+    ap.add_argument("--no-scan", action="store_true",
+                    help=f"skip the decode-batch schedule scan over M in {SCAN_M.start}..{SCAN_M[-1]} (--quick always skips it)")
     ap.add_argument("--models", default=",".join(MODELS), help=f"comma list of models: {', '.join(MODELS)}")
     ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)}")
     a = ap.parse_args(argv)
