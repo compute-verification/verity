@@ -160,9 +160,9 @@ local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.lea
 /-- **V*'s statement family over one inner session.** The objects `vbridge_of_vstar` reads, each tied to V*'s code by
 an equation: the statements `VStar.statements` lists at V*'s shape `vsh` (`hstmts`), the verifier's shape `sh` the one
 `RecResiduals.shape?` gives at `vsh` (`hsh`), each session reading the circuit file `vstar stage` writes for its
-statement at its bindings (`hfile`), whose parse carries V*'s META (`hparsed`), over one unit per instance (`hnv`), and
-the units of each part and opening
-(`hsess`, `hun`, `hsessO`, `hunO`). The values the stages read off the layers (`rep₀`, `rows`, `alpha`, `acc`, `wmsg`)
+statement at its bindings (`hfile`), whose parse carries V*'s META (`hparsed`) and whose parts are the verifier's
+(`hpart`), over one unit per instance (`hnv`), and the units of each part and opening (`hsess`, `hun`, `hsessO`,
+`hunO`). The values the stages read off the layers (`rep₀`, `rows`, `alpha`, `acc`, `wmsg`)
 and V*'s registered data (`files`, `Sk`, `cmt`, `msg`) are the remaining fields. -/
 structure VStarFamily where
   /-- The inner session's shape as V* takes it: `m`, `k_log` and claims (`rec_vstage.shape`). -/
@@ -183,6 +183,9 @@ structure VStarFamily where
   accepts after `checkFile`, `checkCircuit_ok`): what `HmRow.parse` reads through `Lean.Json.parse`, which no proof
   unfolds, stated as the check's verdict. -/
   hparsed : ∀ j, RecVStar.checkParsed stmts[j] (Vs j).c = .ok ()
+  /-- Each part's statement's row ports and v elements are the verifier's part's (`RecVStar.checkPart`, which
+  `checkCircuit` runs after `checkParsed`, `checkCircuit_ok`), stated as the check's verdict. -/
+  hpart : ∀ j, RecVStar.checkPart stmts[j] (Vs j).c = .ok ()
   hnv : ∀ j, (Vs j).nv = stmts[j].instances
   /-- Each statement's circuit is over plain parts: its META carries no `holo` (`VStar.metaHead` writes none, so
   `hfile`'s bytes say so, but no META parse is stated here). -/

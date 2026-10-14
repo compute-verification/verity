@@ -282,19 +282,44 @@ theorem check_ok {i : RecVStar.Inner} {name : String} {n j : ℕ} {s : VStar.Stm
             exact ⟨ss, hss, htm ▸ ht, by simpa using hm.2, by simpa using hn, hfl⟩
     · cases h
 
+/-- **The part check**: at a part's statement whose unit's name, shape, META and part are the verifier's part's
+(`RecResiduals.check`'s), V*'s part's row ports' elements and v elements are that part's. -/
+theorem checkPart_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkPart s c = .ok ()) {p : ℕ}
+    {nm : String} {pt : VStar.Part} (hs : s = .inner p nm pt) {m k cl j : ℕ}
+    (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
+    (hsh : RecResiduals.shape? m k cl = some sh) {holo : Bool} (hh : RecResiduals.holoOf c = .ok holo)
+    {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} (hpart : RecResiduals.part { sh with holo } j = .ok (S, ns, nv)) :
+    pt.S.ports.map (·.2) = ns ∧ pt.S.gf.nv = nv := by
+  subst hs
+  unfold RecVStar.checkPart at h
+  rw [hp] at h
+  dsimp only at h
+  rw [hsh] at h
+  dsimp only at h
+  rw [hh] at h
+  dsimp only at h
+  rw [hpart] at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rename_i hne
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Classical.not_not] at hne
+    exact hne
+
 /-- **The circuit check, as V*'s statement `j` under the verifier's bindings `f`**: the unit check as statement `j`,
-the file check under `f`, and the parse check. -/
+the file check under `f`, the parse check and the part check. -/
 theorem checkCircuit_ok {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : ℕ} {circuitB : ByteArray}
     {f : VStar.Bindings} {s : VStar.Stmt} (h : RecVStar.checkCircuit i j c n circuitB f = .ok s) :
     RecVStar.check i c.unit.name n (some j) = .ok s ∧ RecVStar.checkFile s f circuitB = .ok () ∧
-      RecVStar.checkParsed s c = .ok () := by
+      RecVStar.checkParsed s c = .ok () ∧ RecVStar.checkPart s c = .ok () := by
   unfold RecVStar.checkCircuit at h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨s', hs', h⟩ := ebind_ok h
   obtain ⟨u, hu, h⟩ := ebind_ok h
   obtain ⟨u', hp, h⟩ := ebind_ok h
+  obtain ⟨u'', hq, h⟩ := ebind_ok h
   cases h
-  exact ⟨hs', hu, hp⟩
+  exact ⟨hs', hu, hp, hq⟩
 
 /-- **`checkStmt` at an inner shape, the verifier's own reads, statement `j` and bindings `f`**: the statement is set
 up under tags named V*'s `Tags.circuit` with no lookup table (refusals 5 and 6), and its circuit file is

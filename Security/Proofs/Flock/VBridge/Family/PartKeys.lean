@@ -197,6 +197,25 @@ theorem repKeys_part (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin
       show (pt.S.ports.map (·.1) ++ ["v"]).length = (OfVStar.repPorts pt.S).length
       rw [OfVStar.repPorts_length, List.length_append, List.length_map, List.length_singleton]) hq
 
+/-- **V*'s part is the verifier's part**: part `p`'s statement's row ports' elements and v elements are those of the
+verifier's part `p` at its shape (`hpart`, `checkPart_ok`, at the unit name and plain META `check_part` reads). -/
+theorem part_counts (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
+    {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (hpart : RecResiduals.part F.sh p = .ok (S, ns, nv)) : pt.S.ports.map (·.2) = ns ∧ pt.S.gf.nv = nv := by
+  have hname := F.hUnitName_of hne
+  obtain ⟨⟨R, ω, R₂⟩⟩ := hne
+  have hnm : (F.Vs j).c.unit.name = RecResiduals.unitName F.vsh.m F.vsh.kLog F.vsh.claims p :=
+    (hname j p nm pt hj).trans (statements_name F.hstmts _ hj)
+  have hchk : RecResiduals.check (F.Vs j).c = .ok () := (parse_facts (F.zs R ω [] R₂ j).hc).recResiduals
+  have e : ∀ s : Flock.Shape, s.holo = false → { s with holo := false } = s := by
+    intro s h0
+    cases s
+    simp only at h0
+    subst h0
+    rfl
+  exact checkPart_ok (F.hpart j) hj (resParams_of_check hchk hnm) F.hsh (F.hplain j)
+    (by rw [e F.sh (OfVStar.shape?_holo F.hsh)]; exact hpart)
+
 end VStarFamily
 
 end family
