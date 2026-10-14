@@ -338,6 +338,27 @@ def test_each_model_runs_its_own_gemms() -> None:
                                                       for M in X.QUICK_M]
 
 
+def test_the_base_cases_and_their_word_counts_are_conserved() -> None:
+    """The scan only adds cases: the unswept expected set and each case's compared words stay the base capture's, pinned to
+    the GO run r20261013-222550-f31c (0 of 18,734,624 words different, 7,040 dotprod words), so a collection refactor that
+    drops, shrinks or re-models a previously-GO case fails here without a GPU."""
+    words, dotprod = {}, {}
+    for model, phase, case, M in X.cases(False, set(X.PHASES), list(X.MODELS)):
+        m = X.MODELS[model]
+        key = X.case_key(model, phase, case, M)
+        if phase == "router":
+            N, dot = m.experts, X.expected_kernel(M, model)["kind"] == "dotprod"
+        else:
+            N, dot = next(n for nm, _, n in getattr(m, phase) if nm == case), False
+        (dotprod if dot else words)[key] = M * N * (X.NHL if phase == "bmm" else 1)
+    assert len(words) + len(dotprod) == 76 and sum(words.values()) == 18_734_624 and sum(dotprod.values()) == 7_040
+    assert words["glm53/linear/indexer.wk_weights_proj/M16"] == 2_560          # the words the NO-GO run miscompared
+    assert words["glm53/router/mlp.gate/M17"] == 4_352
+    assert words["glm53/bmm/q_nope_absorb/M256"] == 1_048_576
+    assert words["dsv4-pro/f32out/compressor.kv_score.c4/M1"] == 2_048
+    assert dotprod[f"glm53/router/{X.PROBE}/M1"] == 256 and dotprod["dsv4-pro/router/mlp.gate/M4"] == 1_536
+
+
 def test_an_unknown_model_or_phase_is_refused(tmp_path) -> None:
     for flag, value in (("--models", "glm53,qwen3"), ("--only", "router,attention")):
         with pytest.raises(SystemExit, match="unknown"):
