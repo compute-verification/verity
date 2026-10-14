@@ -3,7 +3,8 @@ set -euo pipefail
 
 if [[ "${K2_TARGET:-}" == 1 ]]; then
   cd Security/Proofs
-  lake build Proofs.Flock.Recursive.ValueInner Proofs.Flock.C3.Sparse.SessionZero Proofs.Flock.Recursive.HPortTie
+  lake build Proofs.Flock.Recursive.ValueInner Proofs.Flock.C3.Sparse.SessionZero \
+    Proofs.Flock.Recursive.HPortTie Proofs.Flock.Recursive.AuditC3Proof
   exit
 fi
 
@@ -26,7 +27,12 @@ import Proofs.Flock.Recursive.AuditC3Proof
 EOF
 
 (
+  if [[ -n "${K2_SEED_LAKE:-}" ]]; then
+    mkdir -p Security/Proofs/.lake
+    cp -a --reflink=auto "$K2_SEED_LAKE/." Security/Proofs/.lake/
+  fi
   cd Security/Proofs
-  lake build Proofs.Flock.Recursive.ValueInner Proofs.Flock.C3.Sparse.SessionZero Proofs.Flock.Recursive.HPortTie
+  lake build Proofs.Flock.Recursive.ValueInner Proofs.Flock.C3.Sparse.SessionZero \
+    Proofs.Flock.Recursive.HPortTie Proofs.Flock.Recursive.AuditC3Proof
   lake env lean /tmp/k2-probes.lean
 ) | tee "$OUT/probes.txt"
