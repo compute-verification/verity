@@ -1,6 +1,7 @@
 import Proofs.Flock.C3.RegLevels.TopTie
 import Proofs.Flock.C3.RegLevels.TopRead
 import Proofs.Flock.C3.RegLevels.AccReads
+import Proofs.Flock.C3.RegLevels.SharedRows
 import Proofs.Flock.C3.PubRows.Check
 import Proofs.Flock.C3.Reps.RoundLinks
 import Proofs.Flock.Recursive.Registrants
@@ -23,8 +24,8 @@ import Proofs.Flock.Recursive.Registrants
 Two registrant records' reads at one root, leaf count and domain, at one position, have one row, or the records clash
 (`enc_eq_of_not_clash`, from `TwoOpenings.collides` and `hm96Pair_spec`). At an accepted history no two of V*'s
 sessions clash (`Accepted`'s `¬ RegColl`), so two sessions' reads of one registered value at one position have one row
-where the two sessions' entries for that value share their root, leaf count and domain (`SharedOwnRoot`, a hypothesis:
-nothing proved yet ties two sessions' reads files to each other; `row_agree`).
+where the two sessions' entries for that value share their root, leaf count and domain (`row_agree`, at a
+`SharedValue`: `SharedOwnRoot`, which `checkShared` gives the checked family, `SharedRows.lean`).
 -/
 
 namespace FlockSoundness.Registered
@@ -221,29 +222,24 @@ theorem leaf_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : FlockC
   rw [← digest_top hpr hrow hw hmem hv hname.symm hpos hcs hs ht hi]
   exact leaf_of_accepts (F.zs R ω t R₂ j) (o j) (h.1 j).1 hown hp hA
 
-/-- Two of V*'s accepted sessions at a history register one value under one root, leaf count and domain. -/
-def SharedOwnRoot (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
-  ∀ R ω t R₂ j j', (∃ tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr) →
-    (∃ tr, AcceptsZKR (F.zs R ω t R₂ j').I (F.zs R ω t R₂ j').own tr) →
-    ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j').own, p.value = p'.value →
-      p.root = p'.root ∧ p.leaves = p'.leaves ∧ p.domain = p'.domain
-
 /-- **Two sessions' reads of one registered value at one position have one row** at an accepted history (no two
-sessions clash, `Accepted`'s `¬ RegColl`), where the sessions' entries for the value share their root
-(`SharedOwnRoot`) and each read's port is its reads file's entry (`ReadsOwnC3`). -/
-theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hsh : SharedOwnRoot F)
+sessions clash, `Accepted`'s `¬ RegColl`), where the value is shared (`SharedValue`), the sessions' entries for it
+share their root (`SharedOwnRoot`, `SharedRows.lean`) and each read's port is its reads file's entry (`ReadsOwnC3`). -/
+theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
+    (hsh : SharedOwnRoot rows F)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : ReadsOwnC3 F dg N k Rw)
     {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j j' : Fin (vstarCount F.ish))
     {u : Fin (F.Vs j).nv} {q : Fin (F.Vs j).c.ports.size} (hp : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)))
     {u' : Fin (F.Vs j').nv} {q' : Fin (F.Vs j').c.ports.size} (hp' : (F.zs R ω t R₂ j').rd.isRead (.inl (u', q')))
     (hv : ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).value = ((F.zs R ω t R₂ j').rd.port (.inl (u', q'))).value)
-    (hpos : (F.zs R ω t R₂ j).rd.readAt (.inl (u, q)) = (F.zs R ω t R₂ j').rd.readAt (.inl (u', q'))) :
+    (hpos : (F.zs R ω t R₂ j).rd.readAt (.inl (u, q)) = (F.zs R ω t R₂ j').rd.readAt (.inl (u', q')))
+    (hsv : SharedValue rows ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).value) :
     HiddenExec.encPortH (F.Vs j).c.ports[q.val]! (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j) (.inl (u, q))) =
       HiddenExec.encPortH (F.Vs j').c.ports[q'.val]!
         (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j') (.inl (u', q'))) := by
   obtain ⟨hroot, hn, hdom⟩ := hsh R ω t R₂ j j' ⟨_, (h.1 j).1⟩ ⟨_, (h.1 j').1⟩ _ (hro R ω t R₂ τ o h j u q hp).1 _
-    (hro R ω t R₂ τ o h j' u' q' hp').1 hv
+    (hro R ω t R₂ τ o h j' u' q' hp').1 hv hsv
   exact FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h.2 ⟨j, j', hc⟩) hp hp' hroot hn hdom hpos
 
 end Family
