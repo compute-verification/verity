@@ -152,15 +152,6 @@
    ],
    "note": "one rank of VocabParallelEmbedding: the row table[tok - START] when the rank owns the token, else zeros (START = rank * VS)"
   },
-  "fp8-block-linear": {
-   "status": "port",
-   "definitions": [
-    "Fp8GroupQuant_v1",
-    "ScaledMmFp8BlockSharedScale_v1",
-    "ScaledMmFp8Block_v1"
-   ],
-   "note": "The non-default VLLM_USE_DEEP_GEMM=0 route: _C.per_token_group_fp8_quant + CUTLASS sm_90 blockwise GEMM. Retained as a registered alternative, not selected by this workload."
-  },
   "fp8-block-linear-deepgemm": {
    "status": "exists",
    "definitions": [
@@ -169,7 +160,6 @@
    ],
    "note": "The default FlashInferFp8DeepGEMMDynamicBlockScaledKernel: FlashInferFp8Linear_v1 below 32 tokens and DeepGemmFp8Linear_v1 from 32. GLM-5.3's f32 weight scales and e4m3 weights are requantized to ue8m0 at load and declared as the served weight operands.",
    "branch": "cursor/deepgemm-sm90-8c79",
-   "alternative_to": "fp8-block-linear",
    "when": "vLLM's defaults on sm_90"
   },
   "silu-mul": {
