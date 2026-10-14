@@ -150,14 +150,14 @@ theorem pub_of_unit (hm : 13 ≤ S.m) (U : RepUnit S sch₀ extra cap₀ os r ts
     (ham : ash.m = S.m) (hak : ash.kLog = S.kLog) {sh : SparseShape} (h6 : 6 ≤ sh.ell) (hell : sh.ell ≤ S.kLog)
     (units : Fin (2 ^ sh.sLog) → Finset ℕ) {c : SCoins} (hcz : c.z = info.zc.z) (hca : c.alpha = info.lc.fold.alpha)
     (hcx : c.xRest = info.lc.fold.rhoIn) (hcy : c.yRest = info.lc.rIn)
-    (hU : ∀ σ : Fin (2 ^ sh.sLog), fOf c.U[σ.val]! = ∑ u ∈ units σ,
-      Model.eqAt (fun i : Fin (S.kLog - sh.ell) => fOf c.xRest[sh.ell - 6 + i.val]!) u *
+    (hU : c.xRest.size = S.kLog - 6 → c.yRest.size = S.kLog - 6 → ∀ σ : Fin (2 ^ sh.sLog), fOf c.U[σ.val]! =
+      ∑ u ∈ units σ, Model.eqAt (fun i : Fin (S.kLog - sh.ell) => fOf c.xRest[sh.ell - 6 + i.val]!) u *
         Model.eqAt (fun i : Fin (S.kLog - sh.ell) => fOf c.yRest[sh.ell - 6 + i.val]!) u) :
     ∃ zc lc pend, Game.PlaysT (Model.holoRepC (D := Refine.Dig) execArith r S sch₀ hm extra) ts
         (some (zc, lc), pend) ∧ pend.verdict os = true ∧
       (∀ sl, Model.OpensOKL H512 Refine.enc512 Refine.leafPlain cap₀ r pend os sl) ∧
       pubOf sh c = Model.holoPub S sh units zc lc := by
-  obtain ⟨zc, lc, pend, hT, hv, hz, hρ, hα, hts, ho⟩ := rep_of_unit_coins hm U
+  obtain ⟨zc, lc, pend, hpl, hv, hz, hρ, hα, hts, ho⟩ := rep_of_unit_coins hm U
   have h22 := Refine.exec_fast100_ge U.fast
   have hmS := U.mS
   have hSk := S.hk
@@ -165,12 +165,14 @@ theorem pub_of_unit (hm : 13 ≤ S.m) (U : RepUnit S sch₀ extra cap₀ os r ts
     (by rw [ham, hak]; exact hpos_of_unit U)
   rw [ham] at hrho hts' hα'
   rw [hak] at hrin hts'
-  refine ⟨zc, lc, pend, hT, hv, ho, pubOf_eq_holoPub h6 hell (by rw [hcz, hz', hz]) (by rw [hca, hα', hα])
-    (fun j hj => ?_) (fun j hj => ?_) hU⟩
+  have hT : (tsOf U.t (U.t.k + 3 + (S.m - 6)) S.kLog).size = S.kLog - 6 := by simp [tsOf]
+  have hxs : c.xRest.size = S.kLog - 6 := by rw [hcx, hrin, hrho]; simp [rhoOf]; omega
+  have hys : c.yRest.size = S.kLog - 6 := by rw [hcy, hrIn, hts', Array.size_reverse, hT]
+  refine ⟨zc, lc, pend, hpl, hv, ho, pubOf_eq_holoPub h6 hell (by rw [hcz, hz', hz]) (by rw [hca, hα', hα])
+    (fun j hj => ?_) (fun j hj => ?_) (hU hxs hys)⟩
   · rw [hcx, hrin, hrho, FlockLevel3.extract_get! _ 0 _ j (by omega) (by simp [rhoOf]; omega), Nat.zero_add,
       rhoOf, map_range_get _ _ (by omega), hρ ⟨j, _⟩]
-  · have hT : (tsOf U.t (U.t.k + 3 + (S.m - 6)) S.kLog).size = S.kLog - 6 := by simp [tsOf]
-    rw [hcy, hrIn, hts', getElem!_pos _ j (by rw [Array.size_reverse, hT]; omega), Array.getElem_reverse,
+  · rw [hcy, hrIn, hts', getElem!_pos _ j (by rw [Array.size_reverse, hT]; omega), Array.getElem_reverse,
       ← getElem!_pos (tsOf U.t (U.t.k + 3 + (S.m - 6)) S.kLog) _ (by rw [hT]; omega), hT, tsOf,
       map_range_get _ _ (by omega), hts ⟨S.kLog - 6 - 1 - j, by omega⟩]
 
