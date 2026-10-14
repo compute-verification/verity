@@ -11,7 +11,10 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   `Gemm_v2` (lm_head, GLM-5.3's indexer `wk_weights_proj`, DeepSeek-V4-Pro's `weights_proj`); `bmm_rows`: `BatchedGemm_v1`,
   `mla_check.bmm_rows`;
 * `cublas_splitk_rows`: cuBLAS 12.9.1's H200 route in `cublas_bf16`: equal 64-element-aligned contiguous chunks, a final
-  remainder, f32 partials and a serial increasing-order f32 reduction. `default_cublas_split_k` pins the selected split count.
+  remainder, f32 partials and a serial increasing-order f32 reduction. `default_cublas_split_k` pins the selected split count
+  where the capture pinned it (M <= 256); past the pins `fit_cublas_split_k` names the split counts whose route computes a
+  launch's observed words exactly, so the capture's decode-batch scan reads the split count out of the words (Kineto reports
+  grid.z = 1 for these launches, so no profile field carries it).
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
@@ -48,6 +51,72 @@ DEFAULT_CUBLAS_SPLIT_K = {
 def default_cublas_split_k(phase: str, M: int, K: int, N: int) -> int | None:
     """The split count selected by cuBLAS 12.9.1 on the pinned H200, or None for its non-split routes."""
     return DEFAULT_CUBLAS_SPLIT_K.get((phase, K, N), {}).get(M)
+
+
+SPLITK_CANDIDATES = range(2, 17)
+
+
+def fit_cublas_split_k(x: np.ndarray, w: np.ndarray, got: np.ndarray, *, out: str,
+                       candidates: range = SPLITK_CANDIDATES) -> list[int]:
+    """The split counts in `candidates` under which the modeled route (`cublas_splitk_rows` at the default hypothesis,
+    `CUBLAS_SPLITK_HYPOTHESIS`) computes exactly the observed words `got` of x's rows against every row of w; [] names a route
+    no candidate models.  Under `splitk_count_probe` rows the fit is unique by construction; elsewhere more than one fit means
+    these rows cannot tell the candidates apart."""
+    x, w, got = np.asarray(x, np.uint16), np.asarray(w, np.uint16), np.asarray(got)
+    fits = []
+    for s in candidates:
+        if not 1 < s <= x.shape[1] // 16:
+            continue
+        want = cublas_splitk_rows(x, w, s, out=out)
+        if not (~MK._words_equal(got, want, f32_words=out == "f32")).any():
+            fits.append(int(s))
+    return fits
+
+
+def splitk_count_probe(K: int, max_rows: int, candidates: range = SPLITK_CANDIDATES) -> np.ndarray:
+    """W rows that tell every candidate split count apart through an all-ones activation row, under either output rounding.
+
+    Each row tests one chunk boundary t of some candidate's partition: -2^25 at t - 16, +2^25 at t and +1 at t + 16 (zeros
+    elsewhere).  A serial chain that crosses no boundary at t cancels the pair exactly before adding the +1; a partition split
+    at t reduces two +-2^25 partials whose chunk chains absorbed (lost) the +1.  The 1-against-0 difference survives the bf16
+    rounding, unlike the low-bit reassociation noise random rows leave, so `fit_cublas_split_k` over these rows reads the
+    served partition out of the words at any output type.  A greedy cover picks boundaries until every pair of candidates with
+    distinct partitions differs somewhere and every candidate has a probed boundary (so the unsplit serial chain fits no
+    candidate), and the builder verifies those distinctions on the models, raising otherwise."""
+    cands = [s for s in candidates if 1 < s <= K // 16]
+    sets = {s: frozenset(int(c[0]) for c in _split_cols(K, s, "contiguous")[1:]) for s in cands}
+    usable = sorted({t for b in sets.values() for t in b if 16 <= t <= K - 32})
+    pairs = {(a, b) for i, a in enumerate(cands) for b in cands[i + 1:] if sets[a] != sets[b]}
+    chosen: list[int] = []
+    while pairs:
+        t = max(usable, key=lambda t: sum((t in sets[a]) != (t in sets[b]) for a, b in pairs))
+        covered = {(a, b) for a, b in pairs if (t in sets[a]) != (t in sets[b])}
+        if not covered:
+            raise ValueError(f"split count probe cannot separate {sorted(pairs)} at K {K}")
+        chosen.append(t)
+        pairs -= covered
+    for s in cands:
+        if not sets[s] & set(chosen):
+            hit = next((t for t in usable if t in sets[s]), None)
+            if hit is None:
+                raise ValueError(f"split count probe has no usable boundary for {s} splits at K {K}")
+            chosen.append(hit)
+    if len(chosen) > max_rows:
+        raise ValueError(f"split count probe needs {len(chosen)} rows at K {K}, only {max_rows} available")
+    w = np.zeros((len(chosen), K), np.uint16)
+    for i, t in enumerate(chosen):
+        w[i, t - 16], w[i, t], w[i, t + 16] = 0xCC00, 0x4C00, 0x3F80
+    x = np.full((1, K), 0x3F80, np.uint16)
+    for out in ("f32", "bf16"):
+        serial = MK.dot_chain(x, w) if out == "f32" else MK.bf16_of(MK.dot_chain(x, w))
+        models = {s: cublas_splitk_rows(x, w, s, out=out) for s in cands}
+        for i, a in enumerate(cands):
+            if np.array_equal(models[a], serial):
+                raise ValueError(f"split count probe does not tell {a} splits from the serial chain at K {K} ({out})")
+            for b in cands[i + 1:]:
+                if sets[a] != sets[b] and np.array_equal(models[a], models[b]):
+                    raise ValueError(f"split count probe does not tell {a} from {b} apart at K {K} ({out})")
+    return w
 
 
 def dispatch_sm90(M: int, K: int, N: int) -> tuple[str, dict]:
