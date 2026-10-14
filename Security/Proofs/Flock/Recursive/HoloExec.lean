@@ -189,6 +189,21 @@ below its count, and none past it (`RecCoins.layoutFactors`). -/
 def UnitsOf (st : Flock.Stmt) (hp : HoloParams) : Prop :=
   ∃ rng, unitRangeOf st = .ok rng ∧ ∀ σ, hp.units σ = if σ.val < rng.count then {rng.pos0 + σ.val} else ∅
 
+/-- **Candidate 3's holographic parameters from the verifier's own accepted data**: the shape it reads from
+`--rec-inner`, and the unit range of the statement it builds from its partition object and program. `checkInnerStmt`
+refuses `T_LOG ≠ 0`, so the one possible slot type is zero; no clear private `τ` row is an input to the verifier. -/
+def holoParamsAt (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : HoloParams :=
+  let sp := ish.sparse.getD default
+  { ell := sp.ell
+    nu := sp.nu
+    sLog := sp.sLog
+    tLog := sp.tLog
+    units := fun σ =>
+      match (unitRangeOf st).toOption with
+      | some rng => if σ.val < rng.count then {rng.pos0 + σ.val} else ∅
+      | none => ∅
+    τ := fun _ => ⟨0, by simp⟩ }
+
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
 /-- **Candidate 3's compiled inner protocol**: `schedInner` at `Model.holoTableCL` on the class's public statement,

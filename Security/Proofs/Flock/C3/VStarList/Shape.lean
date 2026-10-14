@@ -119,17 +119,33 @@ theorem checkInnerStmt_ok {i : Flock.RecVStar.Inner} {st : Flock.Stmt}
     (h : Flock.RecVStar.checkInnerStmt i st = .ok ()) :
     i.sparse.isSome = true ∧ i.m = st.m ∧ i.kLog = st.c.kLog ∧ i.regions = st.regions.size := by
   unfold Flock.RecVStar.checkInnerStmt Flock.RecVStar.checkInnerShape at h
-  by_cases h1 : i.sparse.isNone = true
-  · simp only [h1, ↓reduceIte] at h
-    cases h
-  by_cases h2 : (i.m != st.m || i.kLog != st.c.kLog || i.regions != st.regions.size) = true
-  · simp only [h1, h2, Bool.false_eq_true, ↓reduceIte] at h
-    cases h
-  simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at h2
-  refine ⟨?_, h2.1.1, h2.1.2, h2.2⟩
+  dsimp only at h
   cases hs : i.sparse with
-  | none => rw [hs] at h1; exact absurd rfl h1
-  | some _ => rfl
+  | none =>
+    rw [hs] at h
+    cases h
+  | some sp =>
+    rw [hs] at h
+    dsimp only at h
+    split at h
+    · cases h
+    split at h
+    · cases h
+    rename_i _ hshape
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hshape
+    exact ⟨rfl, hshape.1.1, hshape.1.2, hshape.2⟩
+
+/-- **An accepted candidate-3 shape has one sparse type**: `checkInnerStmt` refuses nonzero `T_LOG`, so the private
+type row is uniquely zero and needs no extra verifier input. -/
+theorem tLog_zero_of_checkInnerStmt {i : Flock.RecVStar.Inner} {st : Flock.Stmt}
+    (h : Flock.RecVStar.checkInnerStmt i st = .ok ()) {sp : Flock.RecSparse.Shape}
+    (hs : i.sparse = some sp) : sp.tLog = 0 := by
+  unfold Flock.RecVStar.checkInnerStmt Flock.RecVStar.checkInnerShape at h
+  rw [hs] at h
+  dsimp only at h
+  by_contra ht
+  simp only [ht, bne_iff_ne, ne_eq, not_false_eq_true, ↓reduceIte] at h
+  cases h
 
 /-- **A loop that runs through passes each element**: where each step that succeeds continues and holds `P` of its
 element, a loop that succeeds holds `P` of every element. -/

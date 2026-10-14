@@ -308,6 +308,8 @@ def range (i : Inner) (st : Stmt := innerSt) : Option String := err (RecCoins.ch
 #guard range c3 == none
 -- the inner shape is candidate 3's at the statement (`checkInnerStmt`)
 #guard range { c3 with sparse := none } == err (checkInnerShape { c3 with sparse := none } 25 22 3)
+#guard range { c3 with sparse := some ⟨18, 13, 6, 1⟩ } ==
+  some "rec-inner: candidate 3 supports one sparse type (T_LOG 0), not T_LOG 1"
 #guard range c3 (innerSt (kLog := 21)) ==
   some "rec-inner: the verifier's inner shape (m 25, k_log 22, regions 3) is not the inner statement's (m 25, k_log 21, regions 3)"
 -- a RecSparse shape that is not valid

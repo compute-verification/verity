@@ -1094,12 +1094,14 @@ def checkCovers (i : Inner) (cs : InnerCommits) : V Unit := do
   checkCommitRounds i cs
 
 /-- **Candidate 3's inner shape is its inner statement's**: it names the bucket's RecSparse shape (`rec-inner --sparse`),
-and its `m`, `k_log` and region count are those of the inner statement check 5 sets up (`m`, `kLog`, `regions`), as
-`innerOf` reads them, so V*'s list, the streams it holds and the class the sparse phase is weighed at are one table's. -/
+whose one type makes every private `τ` entry uniquely zero, and its `m`, `k_log` and region count are those of the inner
+statement check 5 sets up (`m`, `kLog`, `regions`), as `innerOf` reads them, so V*'s list, the streams it holds and the
+class the sparse phase is weighed at are one table's. -/
 def checkInnerShape (i : Inner) (m kLog regions : Nat) : Except String Unit := do
-  if i.sparse.isNone then
-    throw ("rec-inner: candidate 3's inner shape names no RecSparse shape (rec-inner --sparse): its V* list would have no " ++
-      "RecSparse statement, level of R's or part of R's opening")
+  let some sp := i.sparse | throw ("rec-inner: candidate 3's inner shape names no RecSparse shape (rec-inner --sparse): " ++
+    "its V* list would have no RecSparse statement, level of R's or part of R's opening")
+  if sp.tLog != 0 then
+    throw s!"rec-inner: candidate 3 supports one sparse type (T_LOG 0), not T_LOG {sp.tLog}"
   if i.m != m || i.kLog != kLog || i.regions != regions then
     throw (s!"rec-inner: the verifier's inner shape (m {i.m}, k_log {i.kLog}, regions {i.regions}) is not the inner " ++
       s!"statement's (m {m}, k_log {kLog}, regions {regions})")
