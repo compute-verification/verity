@@ -1750,6 +1750,11 @@ expectation):
   refuses a description table that is not the registration in order, a row that does not open the registered root, and a
   registered row no instance reads. No vector exercises it; `verity/ml/flock/tests/test_inner_registered.py` runs each
   refusal on the Lean verifier.
+- **D16:** a drawn session with an inner shape (`--rec-inner`, V*'s) must label each table's instances with the units its
+  draw proves (`RecVStar.checkLabels`): a registered read's position is read at an instance's label, so the label must be
+  the unit. V*'s populations are their units `0..n-1`, so its honest statements pass. Upstream reads no inner shape; the
+  spec refuses at setup. No vector exercises it; `Flock.Test.Labels` runs it on synthetic draws and labels, and
+  `test_the_honest_level_passes_setup_at_the_honest_inner_session` passes it on an honest V* level.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
