@@ -223,6 +223,7 @@
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
       "owns": [
+        "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/move/",
@@ -310,7 +311,8 @@
       "usergroup": "S0C9ZLL7T88",
       "linear": "BENCH",
       "owns": [
-        "benchmarks/harness/"
+        "benchmarks/harness/",
+        "benchmarks/specs/"
       ]
     },
     {
