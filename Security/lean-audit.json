@@ -17736,10 +17736,10 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.TopFinder": {
-   "digest": "66de15c69f2eddbf7a835910fcf093231013420a7022f0631b1b89064d077951",
+   "digest": "3a71f9a1a6e9b3161c6d5f2a2ab5e02fb52dc772db6514f53a9e5cd514dce25d",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.TopColl": "4f572d98fe29729bba4e0444836bf81daa3f865ccfaba9a925024213e1f5b1ee",
-    "FlockSoundness.Discharge.Recursion.topFinder": "5d89370c8b98fab9cac4dbbb795d1ab2703c5f5422400711781f3f93407096db"
+    "FlockSoundness.Discharge.Recursion.topFinder": "47c502e9c7a702d586767b7b26ef74b9b3ab2bf95306239268e2a183e2bba421"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
