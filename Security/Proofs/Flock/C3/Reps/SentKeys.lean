@@ -1237,17 +1237,3 @@ theorem repsDrawn_valsSrc {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsS
 end
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.pwRead_nil
-#print axioms FlockC3.Reps.pwRead_cons
-#print axioms FlockC3.Reps.pwRead_append
-#print axioms FlockC3.Reps.pwRead_map
-#print axioms FlockC3.Reps.msgK_mem
-#print axioms FlockC3.Reps.recMsgs_read
-#print axioms FlockC3.Reps.ligMsgs_read
-#print axioms FlockC3.Reps.keysRead_at
-#print axioms FlockC3.Reps.ligMsgs_proofOf_read
-#print axioms FlockC3.Reps.unitMsgs_lig
-#print axioms FlockC3.Reps.unitMsgs_lig_read
-#print axioms FlockC3.Reps.unitMsgs_lig_getD_read
-#print axioms FlockC3.Reps.msgsOfKeys_unit

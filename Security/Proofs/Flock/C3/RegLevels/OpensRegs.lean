@@ -201,7 +201,8 @@ theorem dirsLevel_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : F
   · rename_i l hls
     split at h
     · cases h
-    · obtain ⟨_u, -, hdv⟩ := FlockVBridge.PartS.bind_ok h
+    · obtain ⟨_u, -, h⟩ := FlockVBridge.PartS.bind_ok h
+      obtain ⟨_v, hdv, -⟩ := FlockVBridge.PartS.bind_ok h
       refine ⟨o, l, _, hop, fun ℓ hℓ hL hH => ?_, hdv⟩
       have hm : ℓ ∈ [l] := by
         rw [← hls]
@@ -504,13 +505,15 @@ theorem acc_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     exact ⟨p, Array.mem_of_find?_eq_some hf, by simpa using Array.find?_some hf⟩
   · cases h
 
-/-- **`checkStmt` ran `checkAcc` on V*'s statement `j`** at the verifier's own reads (`checkStmt_ok`'s walk). -/
+/-- **`checkStmt` ran `checkAcc` and `checkAccReads` on V*'s statement `j`** at the verifier's own reads
+(`checkStmt_ok`'s walk). -/
 theorem checkAcc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
     (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program (some own) (some j) (some f) rows =
       .ok ()) :
-    ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ RecVStar.checkAcc s own rows = .ok () := by
+    ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ RecVStar.checkAcc s own rows = .ok () ∧
+      RecVStar.checkAccReads i s own = .ok () := by
   unfold RecVStar.checkStmt at h
   dsimp only at h
   split at h
@@ -528,7 +531,9 @@ theorem checkAcc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables :
         obtain ⟨ss, hss, hj, -⟩ := FlockSoundness.Discharge.Recursion.check_ok hck
         obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
         obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
-        exact ⟨ss, s, hss, hj, h⟩
+        obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+        obtain ⟨⟨⟩, hacc, h⟩ := FlockSoundness.Refine.ebind_ok h
+        exact ⟨ss, s, hss, hj, hacc, h⟩
       · cases h
 
 /-- **An R level's checked session has `acc` in its reads file**: where V*'s statement `j` is R's level `l`
@@ -540,7 +545,7 @@ theorem acc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List
       .ok ()) {l LANES H q : ℕ}
     (hj : ∀ ss : Array VStar.Stmt, RecVStar.statements i = .ok ss → ss[j]? = some (.recOpenStacked l LANES H q)) :
     ∃ pt ∈ own, pt.name = "acc" := by
-  obtain ⟨ss, s, hss, hs, hacc⟩ := checkAcc_of_checkStmt h
+  obtain ⟨ss, s, hss, hs, hacc, -⟩ := checkAcc_of_checkStmt h
   obtain rfl : s = .recOpenStacked l LANES H q := Option.some.inj (hs.symm.trans (hj ss hss))
   exact acc_of_checkAcc (s := .recOpenStacked l LANES H q) rfl hacc
 

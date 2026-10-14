@@ -25,9 +25,9 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   binds by its digest (`metaRegistration st`, `RecVStar.registration`). Its five structural fields are those computed
   by `topEntry`; the verifier checks them beside its canonical comparison.
 * `AcceptsC3`: the verifier's checks at candidate 3 of its own inputs, which the event carries: V*'s list builds, the
-  inner transcript holds against R's registration (`innerCommitsAt`), and check 5's sparse refusals pass
-  (`SparseRangeOk`: `ℓ` in `[6, k_log]`, the unit range's slots inside the block). `UnitsOf`: the slots' units are the
-  unit range's.
+  inner transcript holds against R's registration (`innerCommitsAt`), the covers check passes there (all of
+  `RecVStar.checkCovers`), and check 5's sparse refusals pass (`SparseRangeOk`: `ℓ` in `[6, k_log]`, the unit range's
+  slots inside the block). `UnitsOf`: the slots' units are the unit range's.
 * `holoInnerCL`, `holoInnerAt`: `schedInner` at `Model.holoTableCL` with `capReg := x.cap`, at a statement `x` a word
   and a cap; it is true when some table `R` within the unique-decoding radius of `x.w` (`RegSchedule.Close`) has a
   satisfiable hidden statement at the slots' types.
@@ -141,8 +141,8 @@ def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Ref
     Flock.RecVStar.registration (some reg) (metaRegistration st) = .ok (some (prog, some e)) ∧
       Flock.RecVStar.topEntryFields prog bcs e = .ok true ∧ TopOf lv cap salt bcs
 
-/-- **The verifier's hold of the inner transcript**: `RecVStar.innerCommits` as `FlockVerify.recTranscriptInput` calls
-it, at the coin server's record of V*'s inner session `tr` (`--rec-inner-transcript`), the inner session's record
+/-- **The verifier's hold of the inner transcript**: `RecVStar.innerCommits` as `RecSetup.commits` calls it, at the
+coin server's record of V*'s inner session `tr` (`--rec-inner-transcript`), the inner session's record
 `record` (`--rec-inner-session`), R's registration `reg` (`--rec-inner-registration`), and the digest and R's shape the
 inner statement's META names (`metaRegistration`, `RecVStar.stackedShapeOf`). It refuses a registration META does not
 bind, and a binding round of R's stream whose top does not make the registered `stacked` entry. -/
@@ -151,19 +151,19 @@ def innerCommitsAt (tr : Lean.Json) (record : String) (st : Flock.Stmt) (reg : L
   let shape ← Flock.RecVStar.stackedShapeOf st.c.metaJ
   Flock.RecVStar.innerCommits tr record (some reg) (metaRegistration st) shape
 
-/-- **The inner circuit's unit range**, as check 5 reads it off the inner statement (`RecCoins.Inner.load`'s
-`unitRange`): its one range of the unit net. -/
+/-- **The inner circuit's unit range**, as check 5 reads it off the inner statement (`RecCoins.unitRangeOf`, which
+`RecCoins.Inner.load` and `RecCoins.checkInnerRange` read): its one range of the unit net. -/
 def unitRangeOf (st : Flock.Stmt) : Except String Flock.Range :=
-  match st.c.ranges.filter (·.kind == Flock.Kind.net st.c.unitNet) with
-  | #[r] => .ok r
-  | _ => .error "the inner circuit has not one range of its unit net"
+  Flock.RecCoins.unitRangeOf st
 
 /-- **Check 5's refusals at the sparse shape**, which read only the verifier's own inputs: at the inner shape's RecSparse
 shape `sp` (`RecVStar.Inner.sparse`, the verifier's `--sparse`), RecSparse's shape check (`RecSparse.Shape.valid`,
 `6 ≤ ELL`); and at inner points of the inner statement's `k_log − 6` coordinates, RecSparse's `v`'s check that they are
 not short of `ELL − 6` (`RecCoins.sparseV`) and the slots' layout factors at the inner circuit's unit range
 (`RecCoins.layoutFactors`: slots of `2^ELL` rows, at most `2^S_LOG` of them, inside the block). Both read only the
-points' sizes, so this is their verdict at every rep's points (`RecCoins.checkSparse`). -/
+points' sizes, so this is their verdict at every rep's points (`RecCoins.checkSparse`). The verifier evaluates it on the
+inner statement at every candidate-3 session's setup (`RecCoins.checkInnerRange`, through `RecCoins.checkAtC3`), at the
+statement's own `k_log`, which is the class's where its class checks pass (`FlockC3.VStarList.sparseRangeOk_of_check`). -/
 def SparseRangeOk (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : Prop :=
   ∀ sp, ish.sparse = some sp →
     let xs := Array.replicate ((execClassAt st).cls.kLog - 6) (0 : Flock.F128)
@@ -171,10 +171,16 @@ def SparseRangeOk (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : Prop :=
       ∃ rng, unitRangeOf st = .ok rng ∧ (Flock.RecCoins.layoutFactors sp xs xs rng).isOk = true
 
 /-- **Lean's verifier accepts its own inputs at candidate 3**: V*'s list builds (`RecVStar.statements`), it holds the
-inner transcript against R's registration (`innerCommitsAt`), and check 5's sparse refusals pass (`SparseRangeOk`). -/
+inner transcript against R's registration (`innerCommitsAt`), the covers check passes at the commits it holds
+(`RecVStar.checkCovers`, all of it: the sparse-presence, stacked-presence and stacked-shape refusals, and each stream's
+rounds against its schedule, `checkCommitRounds`), and check 5's sparse refusals pass (`SparseRangeOk`). It is not the
+whole compiled acceptance: `AcceptsPublic` and `ChecksVR` carry the verifier's other checks. The verifier's acceptance
+at both setups gives all of it (`FlockC3.VStarList.acceptsC3_of_verify`). -/
 def AcceptsC3 (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) (tr : Lean.Json) (record : String) (reg : Lean.Json) :
     Prop :=
-  (Flock.RecVStar.statements ish).isOk = true ∧ (innerCommitsAt tr record st reg).isOk = true ∧ SparseRangeOk ish st
+  (Flock.RecVStar.statements ish).isOk = true ∧ (innerCommitsAt tr record st reg).isOk = true ∧
+    (∀ cs, innerCommitsAt tr record st reg = .ok cs → (Flock.RecVStar.checkCovers ish cs).isOk = true) ∧
+    SparseRangeOk ish st
 
 /-- **The slots' unit slots are the verifier's**: slot `σ` fills unit `pos0 + σ` of the inner circuit's unit range
 below its count, and none past it (`RecCoins.layoutFactors`). -/
