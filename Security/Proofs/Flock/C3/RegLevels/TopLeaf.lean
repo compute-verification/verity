@@ -108,7 +108,7 @@ theorem heldRow_top {cs : InnerCommits} {sparse : Option RecSparse.Shape} {l x :
   simp only [FlockSoundness.Assumptions.heldRow, fixedRow_top hs ht hx]
 
 theorem bytes_of_toList (b : ByteArray) : (⟨b.toList.toArray⟩ : ByteArray) = b := by
-  rw [FlockC3.PubRows.bytes_toList_eq] <;> cases b <;> simp
+  rw [FlockC3.PubRows.bytes_toList_eq]
 
 /-! ## `TopRead`'s entry -/
 
@@ -119,7 +119,7 @@ theorem port_of_topRead {own : Array Flock.Registered.Port} {l qq H : ℕ} {pos 
     p.value = s!"rec-top-stacked-L{l}" ∧ p.reads = (Array.range qq).map fun j => some (pos[j]! >>> H) := by
   obtain ⟨pt, hf, hv, hr⟩ := ht
   obtain rfl : pt = p := hnd pt (Array.mem_of_find?_eq_some hf) p hp
-    ((by simpa using Array.find?_some hf : pt.name = "out").trans hn)
+    ((by simpa using Array.find?_some hf : pt.name = "out").trans hn.symm)
   exact ⟨hv, hr⟩
 
 /-- **Unit `u`'s read of `TopRead`'s entry is at node `pos[u] >>> H`**, one of the `qq` openings. -/
