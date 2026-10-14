@@ -123,6 +123,21 @@ theorem prob_auditLive_liveOfZJ_mono {n : ℕ} {L : Law n} {Reg : Type} {mPts : 
   rw [prob_map, prob_map]
   exact prob_mono (fun o' => h ω o') _ _
 
+/-- **Every outcome of `liveOfZJ`'s live audit is one `wr` writes**: at the registration the prover sends, some draw of
+the law and some output of the live session. -/
+theorem outcome_auditLive_liveOfZJ {n : ℕ} {L : Law n} {Reg : Type} {mPts : ℕ} (dg : ByteArray → ByteArray) (N : ℕ)
+    {planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts)}
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript)
+    (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) {o : Reg × Finset (Fin n) × Exec.Transcript}
+    (h : Game.Outcome (auditLive L Reg (liveOfZJ dg planZ N wr)) τ o) :
+    ∃ ω x, o = (τ.1, L.draw ω, wr (L.draw ω) τ.1 x) := by
+  have h' : ∃ ω, Game.Outcome ((liveOfZJ dg planZ N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω) o := h
+  obtain ⟨ω, hω⟩ := h'
+  obtain ⟨t, ht, rfl⟩ := Game.Outcome.of_map _ _ _ hω
+  obtain ⟨x, -, rfl⟩ := Game.Outcome.of_map (wr (L.draw ω) τ.1)
+    (liveSession dg (planZ (L.draw ω) τ.1).length mPts N) _ ht
+  exact ⟨ω, x, rfl⟩
+
 namespace ZkOuterD
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
@@ -175,6 +190,12 @@ theorem ofBase_surj (τ : Strategy (zo.game dg N)) : ∃ τ₀, zo.ofBase dg N �
         (Strategy.ofMap (zo.wr (Lv.draw ω) R) _ (Strategy.ofMap (fun t => (R, Lv.draw ω, t))
           (liveOfZJ dg (planZHJ zo.dj zo.y₀) N zo.wr (Lv.draw ω) R) (s ω)))))) = s ω
   rw [castLive_castLive, h1, h2]
+
+/-- **Every outcome of V*'s session is a transcript `wr` writes** at the registration the prover sends: some draw of
+the law and some output of the live session (`outcome_auditLive_liveOfZJ`). -/
+theorem outcome_writes (τ : Strategy (zo.game dg N)) {o : Reg' × Finset (Fin nv) × Exec.Transcript}
+    (h : Game.Outcome (zo.game dg N) τ o) : ∃ ω x, o = (τ.1, Lv.draw ω, zo.wr (Lv.draw ω) τ.1 x) :=
+  outcome_auditLive_liveOfZJ dg N zo.wr τ h
 
 /-- The prover's strategy in V*'s session, simulated in the compiled batched session (`simZHJ`). -/
 noncomputable def sim (τ : Strategy (zo.game dg N)) :=
@@ -455,6 +476,13 @@ noncomputable abbrev sessions (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : Byt
 def Accepts (zs : (j : Fin S) → (Vs j).Outer Reg') {dg : ByteArray → ByteArray} {N : ℕ} (b : VRec Vs Reg' dg N) :
     Prop :=
   ∀ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2
+
+/-- **An outcome of V*'s sessions plays each session's game to its recorded outcome, against the strategy its recorded
+name stands for** (`outcome_seqC`). -/
+theorem outcome_sessions (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
+    (s : Strategy (sessions zs dg N)) {b : VRec Vs Reg' dg N} (h : Game.Outcome (sessions zs dg N) s b) :
+    ∀ j, Game.Outcome ((zs j).game dg N) ((zs j).ofBase dg N (b j).1) (b j).2 :=
+  outcome_seqC S (fun j => (zs j).game dg N) (fun j => (zs j).ofBase dg N) s h
 
 /-- **V*'s layers** at the strategies the record names. -/
 noncomputable def layers (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N k Rw : ℕ)
