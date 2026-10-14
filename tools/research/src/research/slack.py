@@ -1084,7 +1084,11 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
             continue
         to, r = routes.resolve(name)
         if not r or (r.get("closed") and not r.get("forward_to")):
-            known = any(h["handle"] == name for h in reg["handles"])
+            h = next((h for h in reg["handles"] if h["handle"] == name), None)
+            if h and h.get("linear"):
+                lines.append(f"@{name}: no Slack inbox; reach it through its Linear team {h['linear']} (an ask to it files there)")
+                continue
+            known = h is not None
             lines.append(f"@{name}: no inbox" + (" (top-level forwards it)" if known else
                          " -- nobody will see this; check the name (`research msg names list`)") if not r else
                          f"@{name}: finished, with no forward_to: message its coordinator instead")
