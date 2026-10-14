@@ -410,7 +410,7 @@ theorem repsDrawn_holoMapAt {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → R
 (`hchk_of_held` at `covers_checked`, `ChecksC3`'s covers conjunct) that the checked sessions give, the reps' streams
 and rounds `holoStreams`' (`holoStreams_eq`), and the coin count's room for both reps' rounds from the reps' forms
 (`heldBefore_rep_forms`, `length_kindCoinTys_holoKinds`) at the class's public statement (`hA`, which
-`repFormsAt_holoAt` gives at `ClassOk`, the inner statement check and the claims tie). -/
+`repFormsAt_holoAt` gives at `ClassOk` and the inner statement check). -/
 theorem repsDrawn_checked {ish : Flock.RecVStar.Inner} {reg : Lean.Json}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String}
     {coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}

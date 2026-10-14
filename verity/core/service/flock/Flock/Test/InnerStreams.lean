@@ -180,6 +180,8 @@ def openSt : VStar.Stmt := .opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("c
   "rec-inner: the verifier's inner shape (m 25, k_log 22, regions 3) is not the inner statement's (m 25, k_log 21, regions 3)"
 #guard err (checkInnerShape c3 25 22 4) == some
   "rec-inner: the verifier's inner shape (m 25, k_log 22, regions 3) is not the inner statement's (m 25, k_log 22, regions 4)"
+#guard err (checkInnerShape { c3 with claims := 9 } 25 22 3) == some
+  "rec-inner: the verifier's inner shape has 9 claims, not candidate 3's two and two per region (at two points, 8)"
 
 -- a unit under a name none of the list's is refused with why: an R level under the circuit table's name, an opening or a
 -- RecSparse at another shape

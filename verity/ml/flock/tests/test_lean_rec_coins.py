@@ -638,13 +638,13 @@ C3_SPARSE = (1, 12, 1, 0)
 
 
 def _c3(tmp_path: Path, sparse: tuple | None, m: int = 27, circuit: Path | None = None, files: bool = True,
-        coins: bool = False, verify: bool = False) -> str:
+        coins: bool = False, verify: bool = False, claims: int = 8) -> str:
     """`statement` (or `verify` on a session) at the inner statement's inner shape with the RecSparse shape ``sparse``, on an
     empty outer circuit, which candidate 3's inner checks precede: its refusal at setup."""
     u = SET / "u" / "stage"
     (tmp_path / "empty").write_bytes(b"")
     inner = tmp_path / "inner.json"
-    inner.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": 22, "claims": 8, "regions": 3,
+    inner.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": 22, "claims": claims, "regions": 3,
                                  **({"sparse": list(sparse)} if sparse else {})}))
     session = ["--rec-inner-session", str(SET / "inner-honest" / "session")]
     if coins:
@@ -685,6 +685,14 @@ def test_candidate_3s_session_checks_the_sparse_range_on_the_inner_statement(bui
     inner shape's (`checkInnerStmt`) and passes check 5's sparse refusals at zero points (`checkInnerRange`). The honest
     shape is refused only at its (empty) outer circuit; each other is refused by name."""
     assert _c3(tmp_path, sparse, m) == (NOT_A_CIRCUIT if why is None else f"setup: {why}")
+
+
+def test_candidate_3s_session_refuses_an_inner_shape_whose_claims_are_not_the_statements(built, tmp_path):
+    """`checkInnerShape`'s claims refusal: the inner shape's claims are two and two per region of the inner statement
+    (`innerOf`'s at two points), which META does not tie to the statement, so a session at another count is refused."""
+    assert _c3(tmp_path, C3_SPARSE, claims=9) == (
+        "setup: rec-inner: the verifier's inner shape has 9 claims, not candidate 3's two and two per region (at two "
+        "points, 8)")
 
 
 def test_candidate_3s_session_needs_the_inner_statements_files(built, tmp_path):
