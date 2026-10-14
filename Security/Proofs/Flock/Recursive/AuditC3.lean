@@ -53,8 +53,9 @@ What it takes, against `PublicAudit`:
   the formula `outerStatementsAt st`; the event adds the verifier's checks at candidate 3 of its own inputs
   (`AcceptsC3`): its list builds, it holds the inner transcript against `reg`, the covers check passes there (all of
   `RecVStar.checkCovers`: the sparse-presence, stacked-presence and stacked-shape refusals and each stream's rounds),
-  and check 5's sparse refusals pass, so `ℓ` is in `[6, k_log]` and the unit range's slots are inside the block
-  (`SparseRangeOk`). These are not the whole compiled acceptance (`AcceptsPublic` and `ChecksVR` carry the rest). The
+  check 5's sparse refusals pass, so `ℓ` is in `[6, k_log]` and the unit range's slots are inside the block
+  (`SparseRangeOk`), and check 5's inner shape is the inner statement's `m`, `k_log` and region count
+  (`RecVStar.checkInnerStmt`). These are not the whole compiled acceptance (`AcceptsPublic` and `ChecksVR` carry the rest). The
   verifier's acceptance gives all of `AcceptsC3` (`FlockC3.VStarList.acceptsC3_of_verify`);
 * R's `m`: Lean's verifier never compares META's `stacked.m` with the bucket's `table_m`; it holds R's stream and each
   `rec-opening` unit to META's shape, and the unit names come from the outer program it compiles (the list). The model
