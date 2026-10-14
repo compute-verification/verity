@@ -339,7 +339,7 @@ theorem names_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : Li
     (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program own (some j) (some f) rows = .ok ())
     {c : Flock.Circuit} (hc : st.c = c) : ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q' := by
   subst hc
-  obtain ⟨-, -, -, -, hm⟩ := msgNames_of_checkStmt h
+  obtain ⟨_, _, -, -, hm⟩ := msgNames_of_checkStmt h
   exact names_of_msgNames hm
 
 #print axioms names_of_msgNames
