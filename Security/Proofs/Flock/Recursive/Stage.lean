@@ -189,8 +189,9 @@ def Writes (R' : Reg') (tr : Exec.Transcript) : Prop := ∃ ω x, tr = zo.wr (Lv
 theorem prob_unwritten {τ : Strategy (zo.game dg N)} {p : Reg' × Finset (Fin nv) × Exec.Transcript → Prop}
     (hp : ∀ o, p o → LiveAcceptsZKR zo.I zo.own o) (h : ¬ ∃ tr, zo.Writes τ.1 tr ∧ AcceptsZKR zo.I zo.own tr) :
     prob p (zo.game dg N) τ = 0 :=
-  le_antisymm ((prob_auditLive_liveOfZJ_mono dg N zo.wr τ (q := fun _ => False)
-    fun ω o' ho => h ⟨_, ⟨ω, o', rfl⟩, hp _ ho⟩).trans (prob_false _ _).le) (zero_le _)
+  le_antisymm (le_trans (prob_auditLive_liveOfZJ_mono dg N zo.wr τ (p := p) (q := fun _ => False)
+    fun ω o' ho => h ⟨zo.wr (Lv.draw ω) τ.1 o', ⟨ω, o', rfl⟩, hp (τ.1, Lv.draw ω, zo.wr (Lv.draw ω) τ.1 o') ho⟩)
+    (prob_false _ _).le) (zero_le ..)
 
 /-- **The trial for commit string `pos`** of V*'s session at the strategy `τ`, as a finder of `obK`'s openings. -/
 noncomputable def trial (k Rw : ℕ) (τ : Strategy (zo.game dg N)) (pos : PosK c hU nv) :
@@ -454,8 +455,8 @@ theorem sessions_stage_le
     intro j τ₀
     by_cases hj : ∃ tr, (zs j).Writes ((zs j).ofBase dg N τ₀).1 tr ∧ AcceptsZKR (zs j).I (zs j).own tr
     swap
-    · refine le_trans (le_of_eq ?_) (zero_le _)
-      exact (zs j).prob_unwritten dg N (fun _ ha => ha.1) hj
+    · refine le_trans (le_of_eq ((zs j).prob_unwritten dg N ?_ hj)) (zero_le ..)
+      exact fun _ ha => ha.1
     obtain ⟨tr₀, hw, hacc₀⟩ := hj
     unfold ZkOuter.slackIf
     split_ifs with hc

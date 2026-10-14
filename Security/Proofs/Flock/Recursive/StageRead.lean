@@ -72,8 +72,8 @@ theorem sessions_stage_le_read
     intro j τ₀
     by_cases hj : ∃ tr, (zs j).Writes ((zs j).ofBase dg N τ₀).1 tr ∧ AcceptsZKR (zs j).I (zs j).own tr
     swap
-    · refine le_trans (le_of_eq ?_) (zero_le _)
-      exact (zs j).prob_unwritten dg N (fun _ ha => ha.1) hj
+    · refine le_trans (le_of_eq ((zs j).prob_unwritten dg N ?_ hj)) (zero_le ..)
+      exact fun _ ha => ha.1
     obtain ⟨tr₀, hw, hacc₀⟩ := hj
     unfold ZkOuter.slackIf
     split_ifs with hc
