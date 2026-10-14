@@ -5,7 +5,7 @@
 * a split-K coordinate against its fold written out from the primitives: each segment's warp tree, folded from the highest k down;
 * the numpy twin (`kernels.marlin_moe_rows`) the H200 capture compares the kernel with, against the Definitions: the group, the
   schedule, the coordinates and a whole pair launch over three experts;
-* `auto_config` on the shapes DeepSeek-V4-Pro's TP8 rank launches.
+* `auto_config` on the shapes DeepSeek-V4-Pro's TP8 rank launches, and the moe block `fused_marlin_moe` picks for its batches.
 """
 from __future__ import annotations
 
@@ -188,11 +188,29 @@ def test_auto_config_on_the_rank_shapes() -> None:
     allow = {(128, 128): 2, (64, 128): 4, (128, 64): 4}
     # w13 (N 768, top_k 6) at one token: 6 tiles x 6 pairs x 4 = 144 under 132 x allow gives TN 128 one block per SM, and TN 64's
     # 288 two, which wins
-    assert MR.auto_config(1, 768, 6, 132, allow) == (128, 64, 2)
+    assert MR.auto_config(1, 768, 6, 132, allow, block=8) == (128, 64, 2)
     # sixteen tokens: 2304 is no longer small; the first 128-thread config allows 4
-    assert MR.auto_config(16, 768, 6, 132, allow) == (64, 128, 4)
+    assert MR.auto_config(16, 768, 6, 132, allow, block=8) == (64, 128, 4)
     # w2 (N 7168, top_k 1, prob_m 6M) at one token: 1344 is not small for any config
-    assert MR.auto_config(6, 7168, 1, 132, allow) == (64, 128, 4)
-    assert MR.auto_config(6, 7168, 1, 132, {(128, 128): 2}) == (128, 128, 2)
+    assert MR.auto_config(6, 7168, 1, 132, allow, block=8) == (64, 128, 4)
+    assert MR.auto_config(6, 7168, 1, 132, {(128, 128): 2}, block=8) == (128, 128, 2)
+    # a block of 16 is still one m block: the small-batch configs, clamped to 4
+    assert MR.auto_config(461, 768, 6, 132, {**allow, (64, 128): 7}, block=16) == (64, 128, 4)
+    # a block of 32 is two m blocks: the large-batch configs, clamped to 2, and the first of the largest count wins
+    large = {(64, 256): 2, (64, 128): 4, (128, 64): 2}
+    assert MR.auto_config(922, 768, 6, 132, large, block=32) == (64, 256, 2)
+    assert MR.auto_config(922 * 6, 7168, 1, 132, {**large, (64, 256): 1}, block=32) == (64, 128, 2)
+    assert MR.auto_config(922, 768, 6, 132, allow, block=32) == (64, 128, 2), "(128, 128) is no large-batch config"
     with pytest.raises(ValueError):
-        MR.auto_config(1, 768, 6, 132, {})
+        MR.auto_config(1, 768, 6, 132, {}, block=8)
+    with pytest.raises(ValueError):
+        MR.auto_config(922, 768, 6, 132, {(128, 128): 2}, block=32)
+
+
+@pytest.mark.parametrize("M,block", [(1, 8), (460, 8), (461, 16), (921, 16), (922, 32), (1843, 32), (1844, 48), (2764, 48),
+                                     (2765, 64), (16384, 64)])
+def test_the_moe_block_is_fused_marlin_moe_s_on_the_rank(M: int, block: int) -> None:
+    """DeepSeek-V4-Pro's TP8 rank (top_k 6 over all 384 experts): M * 6 / 384 / block < 0.9 picks the first block that holds it."""
+    assert MR.moe_block(M, 6, 384) == block
+    assert MR.thread_m_blocks(block) == max(1, block // 16) and MR.max_blocks_per_sm(block) == (4 if block <= 16 else 2)
+    assert MR.thread_configs(block) == (MR.SMALL_BATCH_CONFIGS if block <= 16 else MR.LARGE_BATCH_CONFIGS)

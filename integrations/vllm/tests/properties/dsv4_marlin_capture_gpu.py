@@ -9,8 +9,9 @@ runs when it fails (exit 3).  A phase that raises records its error and fails th
   gate       `fa2_target_capture_gpu.gate`: cc 9.0, 132 SMs (an H200), and the driver exactly `--driver`, by default the one the
              capture map's target names (`pinned_driver`, `target.driver`), since the SASS that runs is that driver's (`jit`).
   selection  `select_deepseek_v4_mxfp4_moe_backend` on DeepSeek-V4-Pro's FusedMoEConfig (oracle/mxfp4.py:656) selects MARLIN /
-             MarlinExperts, `get_marlin_input_dtype()` is None (W4A16: VLLM_MARLIN_INPUT_DTYPE unset) and Marlin's round-up leaves
-             (7168, 384) as they are (oracle/mxfp4.py:746-751).
+             MarlinExperts, `get_marlin_input_dtype()` is None (W4A16: VLLM_MARLIN_INPUT_DTYPE unset), Marlin's round-up leaves
+             (7168, 384) as they are (oracle/mxfp4.py:746-751), and the LLM entrypoint's default max_num_seqs on this GPU
+             (`EngineArgs.get_batch_defaults`) is ENVELOPE.
   binary     the SASS and PTX archs `_moe_C` carries (information: the `8.0+PTX` build has no sm_90 SASS).
   jit        the SASS that ran.  The driver JIT-compiles the compute_80 PTX into this process's own compute cache (`CUDA_CACHE_PATH`,
              empty, under the scratch directory: `environment`), and each profiled kernel is read back out of it (`jit`): the
@@ -19,20 +20,28 @@ runs when it fails (exit 3).  A phase that raises records its error and fails th
              `FP_OPS`; with libcuda's and the PTX JIT compiler's paths and sha256.  The cubins are kept in `<out>/jit/`.
   auto       on one layer of random logical weights (every e2m1 code; scale bytes 118..127, and experts 0..7 with 30% of their scale
              bytes from `EDGE_BYTES`: +0, +inf, overflow) repacked by `prepare_moe_mxfp4_layer_for_marlin`, `fused_marlin_moe` runs
-             each case twice (`CASES`: decode batches of 1 to 16 tokens over experts 8..383, 16 tokens over 12 hot experts, and 8
-             over the edge experts only); every `moe_wna16_marlin_gemm` launch is intercepted, its statics checked against the served
-             path's (moe block 8, fp32 reduce, no atomic add, top_k and mul_topk_weights per launch, no bias, zeros, act order or
-             global scale), its (pair -> block, expert) assignment against the routing, and its words between the two runs.
+             each case twice (`CASES`: over experts 8..383 decode batches from 1 to 17 tokens, 460 and 461 (moe blocks 8 and 16),
+             922 (32) and ENVELOPE, over 12 hot experts 16 and ENVELOPE tokens, and over the edge experts only 8 and 922);
+             every `moe_wna16_marlin_gemm` launch is intercepted, its statics checked against the served path's (the moe block
+             `fused_marlin_moe` picks for the batch, `block_of`, fp32 reduce, no atomic add, top_k and mul_topk_weights per launch, no
+             bias, zeros, act order or global scale), its (pair -> block, expert) assignment against the routing, and its words
+             between the two runs.
   kernel     the launch's thread config and blocks per SM are ops.cu's choice (`determine_exec_config`, ops.cu:476-490), invisible
              from the host and, on fp32 sums rounded once to bf16, almost never visible in the words: one torch.profiler session
              over every auto and sweep launch names each launch's kernel, `marlin_moe_wna16::Marlin<a, b, c, s, threads,
              thread_m_blocks, thread_n_blocks, thread_k_blocks, m_block_size_8, stages, group_blocks, is_zp_float>`, and its grid
              (sms * blocks_per_sm, ops.cu:488-533); the launch's config is (16 thread_k_blocks, 16 thread_n_blocks, grid / sms),
-             a small-batch config at 1..4 blocks per SM, the same in both runs, over the served types, one m block of 8, 4 stages
-             and groups of 2 k blocks.
-  sweep      `fused_marlin_moe` once at every decode batch M of 1..16 under the same session: the served config of each launch kind
-             at each M, which every auto launch's must be; `model` (information) the per-config limits (`MR.auto_config`'s
-             `allow`, each in 0..4) under which ops.cu's rule gives every swept config.
+             one of its moe block's thread configs (`MR.thread_configs`: the small-batch ones for a block of 8 or 16, the
+             large-batch ones for 32) at 1 to `MR.max_blocks_per_sm` blocks per SM (4 at one m block, 2 at two), the same in both
+             runs, over the served types, the block's m blocks (`kernel_statics`: `m_block_size_8` only at 8), 4 stages and groups
+             of 2 k blocks.
+  sweep      `fused_marlin_moe` once at every M of SERVED_M under the same session: the served config of each launch kind at each M,
+             which every auto launch's must be; `model` (information) per launch kind and moe block the per-config limits
+             (`MR.auto_config`'s `allow`, each in 0 to the block's clamp) under which ops.cu's rule gives every swept config.
+             SERVED_M is each batch of 1..17 and both sides of each moe block edge up to ENVELOPE, vLLM's default max_num_seqs on
+             an H200, because the rule picks one config between them: a block fixes its configs and their limits, and the one count
+             that reads M, lowered to prob_n / TN * prob_m * top_k * 4 / sms below sms * allow (<= 528 on 132 SMs), lowers none
+             from M 4 (w13's 768 / TN * M * 6 * 4 reaches 528 at M 4 for TN 128 and at 2 for TN 64; w2's 7168 / TN * 6M * 4 at 1).
   forced     on `FORCED` cases, each launch again at every candidate, forced (`thread_k`, `thread_n`, `blocks_per_sm`), into an output
              filled with `SENTINEL`, on the probe input (`probe`: random signs and mantissas over 4 binades, each row scaled by a
              power of two so the median exact column sum over its experts is 2^127.5, where fp32 partial sums overflow in some
@@ -48,22 +57,26 @@ runs when it fails (exit 3).  A phase that raises records its error and fails th
   bind       `MarlinMoeExpertGemm(W)_v1` bind at every served config, and each names its Boolean version.
 
 GO needs every launch at the served statics, deterministic and assigned as routed, every auto launch's kernel read and at its M's
-swept config, a swept config per kind at every M of 1..16, at least one accepted forced launch per kind and more than one word class
-wherever two were accepted (when the phase runs), 0 mismatched words, every reference evaluation equal to the twin, and every
-profiled kernel's SASS read back from the driver's cache.
+swept config, a swept config per kind at every M of SERVED_M, at least one accepted forced launch per kind and more than one word
+class wherever two were accepted (when the phase runs), 0 mismatched words, every reference evaluation equal to the twin, and every
+profiled kernel's SASS read back from the driver's cache.  The forced cases are at a moe block of 8: forcing one at 922 tokens would
+compare about 4.6e10 coordinate-k steps per candidate config (its w13 and w2 launches), against about 2.2e8 a second on 14 workers.
 
 What the JIT decides.  At a given config (TK, TN, GRID) the served kernels' arithmetic is fixed by their PTX, and the JIT chooses no
-rounding in it.  In each of the three served instantiations (256 threads at 8 x 8 blocks, 128 at 8 x 4 and at 4 x 8) the PTX's
-floating-point instructions are `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32` (inline asm: one HMMA.16816.F32.BF16 each,
-whose products and f32 accumulation are the tensor core's), `fma.rn.bf16x2` and `cvt.rn.bf16.f32` (explicit rounding), and `add.f32`
-(the fp32 reduce).  The PTX ISA lets the code generator optimize an add without a rounding modifier only by fusing it with a multiply
-into an FMA, and these kernels have no f32 multiply; nothing reassociates.  ptxas 12.9 compiles them for sm_90 to exactly that
-(HMMA.16816.F32.BF16; FADD; HMUL2 and HADD2.BF16_V2, the bf16x2 FMAs with a -0 addend or a unit factor; F2FP.BF16.F32.PACK_AB), plus
-MUFU.RCP in the integer-division idiom, and `jit` holds the driver's SASS to the same opcodes.  What the JIT does decide is the
-registers (ptxas 12.9: 120, 119 and 121), and `determine_exec_config` reads them (ops.cu:321-323, `device_max_reg_size` over numRegs
-x threads x 4 bytes) to bound the blocks per SM: 2 at 256 threads and 4 at 128 below 128 registers, 1 and 3 from 128.  The blocks per
-SM give GRID, and GRID fixes the k-slice schedule and the fp32 fold order, which the Programs take as statics.  So the config served
-at each batch is the driver's, and the record pins the driver and the SASS.
+rounding in it.  In each of the three instantiations served at a moe block of 8 (256 threads at 8 x 8 n x k blocks, 128 at 8 x 4
+and at 4 x 8) the PTX's floating-point instructions are `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32` (inline asm: one
+HMMA.16816.F32.BF16 each, whose products and f32 accumulation are the tensor core's), `fma.rn.bf16x2` and `cvt.rn.bf16.f32`
+(explicit rounding), and `add.f32` (the fp32 reduce).  The PTX ISA lets the code generator optimize an add without a rounding
+modifier only by fusing it with a multiply into an FMA, and these kernels have no f32 multiply; nothing reassociates.  ptxas 12.9
+compiles them for sm_90 to exactly that (HMMA.16816.F32.BF16; FADD; HMUL2 and HADD2.BF16_V2, the bf16x2 FMAs with a -0 addend or a
+unit factor; F2FP.BF16.F32.PACK_AB), plus MUFU.RCP in the integer-division idiom, and `jit` holds the driver's SASS to the same
+opcodes.  What the JIT does decide is the registers (ptxas 12.9: 120, 119 and 121), and `determine_exec_config` reads them
+(ops.cu:321-323, `device_max_reg_size` over numRegs x threads x 4 bytes) to bound the blocks per SM: 2 at 256 threads and 4 at 128
+below 128 registers, 1 and 3 from 128.  The blocks per SM give GRID, and GRID fixes the k-slice schedule and the fp32 fold order,
+which the Programs take as statics.  So the config served at each batch is the driver's, and the record pins the driver and the
+SASS.  The larger blocks run other instantiations of the same template (16: the three small-batch configs without
+`m_block_size_8`; 32: two m blocks over the large-batch configs, 256 threads at 16 x 4 blocks and the two 128-thread ones, at most 2
+blocks per SM), whose registers and opcodes this capture reads the same way and holds to the same FP_OPS.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/dsv4_marlin_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--skip-forced] [--driver VERSION]
@@ -96,16 +109,22 @@ from tests.properties.glm53_block_fp8_capture_gpu import _activation, _error, _l
 from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/dsv4-marlin-capture/v1"
+SCHEMA = "verity-vllm/dsv4-marlin-capture/v2"
 RECORD = "dsv4_marlin_capture.json"
 #: one TP8 rank: hidden 7168, moe_intermediate 3072 / 8, 384 routed experts, top-6; DeepSeek-V4-Pro's swiglu_limit
 HIDDEN, INTER, NUM_EXPERTS, TOP_K, SWIGLU_LIMIT = 7168, 384, 384, 6, 10.0
 GROUP = 32
-MOE_BLOCK = 8
-#: (name, tokens, pool): `uniform` routes over experts EDGE_EXPERTS.., `hot` over 12 of them, `edge` over the edge experts only
+#: vLLM d9105ea80's default max_num_seqs for the LLM entrypoint on a GPU of 70 GiB or more that is no A100, an H200's 141 GB
+#: (engine/arg_utils.py:2664-2672, `get_batch_defaults`): a decode step of 1 to ENVELOPE tokens
+ENVELOPE = 1024
+#: (name, tokens, pool): `uniform` routes over experts EDGE_EXPERTS.., `hot` over 12 of them, `edge` over the edge experts only; the
+#: batches above 16 are the first one, both sides of the moe block edge 8 | 16 (460, 461), the first of 32 (922) and ENVELOPE
+#: (`block_of`: 8 to 460 tokens, 16 to 921, 32 to 1843)
 CASES = (("decode1", 1, "uniform"), ("decode2", 2, "uniform"), ("decode3", 3, "uniform"), ("decode4", 4, "uniform"),
-         ("decode8", 8, "uniform"), ("decode16", 16, "uniform"), ("hot16", 16, "hot"), ("edge8", 8, "edge"))
-QUICK = ("decode1", "decode4", "hot16", "edge8")
+         ("decode8", 8, "uniform"), ("decode16", 16, "uniform"), ("hot16", 16, "hot"), ("edge8", 8, "edge"),
+         ("decode17", 17, "uniform"), ("decode460", 460, "uniform"), ("decode461", 461, "uniform"), ("decode922", 922, "uniform"),
+         ("decode1024", ENVELOPE, "uniform"), ("hot1024", ENVELOPE, "hot"), ("edge922", 922, "edge"))
+QUICK = ("decode1", "decode4", "hot16", "edge8", "decode922")
 FORCED, QUICK_FORCED = ("decode1", "hot16"), ("hot16",)
 HOT = 12
 #: experts 0..7 carry scale bytes from EDGE_BYTES on EDGE_FRACTION of their groups: +0 (code 0), the smallest, ones around 1, the
@@ -115,13 +134,11 @@ EDGE_BYTES = (0, 1, 2, 125, 126, 127, 128, 252, 253, 254, 255)
 SCALE_BYTES = (118, 128)
 #: a bf16 NaN no launch writes (a NaN word out of the kernel is 0x7FFF)
 SENTINEL = 0x7FA5
-SERVED_M = tuple(range(1, 17))
-CANDIDATES = tuple((tk, tn, b) for tk, tn, _ in MR.SMALL_BATCH_CONFIGS for b in (1, 2, 3, 4))
+#: the sweep's batches: each of 1..17 and both sides of each moe block edge to ENVELOPE (460 | 461: 8 -> 16, 921 | 922: 16 -> 32)
+SERVED_M = (*range(1, 18), 460, 461, 921, 922, ENVELOPE)
 #: the probe's rows span PROBE_BINADES binades below 2; each is scaled so its median |exact column sum| is 2^PROBE_LOG2
 PROBE_BINADES, PROBE_LOG2 = 4, 127.5
 MARLIN = "marlin_moe_wna16::Marlin<"
-#: the template statics ops.cu instantiates for this path: one m block (moe block 8 < 16), 4 stages (cc >= 8.0), group 32 = 2 k blocks
-KERNEL_STATICS = {"thread_m_blocks": 1, "m_block_size_8": True, "stages": 4, "group_blocks": GROUP // 16, "is_zp_float": False}
 TEMPLATE = ("a_type", "b_type", "c_type", "s_type", "threads", "thread_m_blocks", "thread_n_blocks", "thread_k_blocks", "m_block_size_8",
             "stages", "group_blocks", "is_zp_float")
 E2M1 = np.array([0, 0.5, 1, 1.5, 2, 3, 4, 6, -0.0, -0.5, -1, -1.5, -2, -3, -4, -6])
@@ -153,6 +170,23 @@ def prob_m(kind: str, M: int) -> int:
 
 def launch_top_k(kind: str) -> int:
     return TOP_K if kind == "w13" else 1
+
+
+def block_of(M: int) -> int:
+    """The moe block both of a batch's launches run at: `fused_marlin_moe`'s pick for M tokens of this rank (`MR.moe_block`)."""
+    return MR.moe_block(M, TOP_K, NUM_EXPERTS)
+
+
+def kernel_statics(block: int) -> dict[str, int | bool]:
+    """The template statics ops.cu instantiates for this path at a moe block (ops.cu:362-363): its m blocks of 16, `m_block_size_8`
+    at 8, 4 stages (cc >= 8.0) and groups of 32 = 2 k blocks."""
+    return {"thread_m_blocks": MR.thread_m_blocks(block), "m_block_size_8": block == 8, "stages": 4, "group_blocks": GROUP // 16,
+            "is_zp_float": False}
+
+
+def candidates(block: int) -> tuple[tuple[int, int, int], ...]:
+    """The forced phase's configs at a moe block: each of its thread configs at each count of blocks per SM ops.cu allows it."""
+    return tuple((tk, tn, b) for tk, tn, _ in MR.thread_configs(block) for b in range(1, MR.max_blocks_per_sm(block) + 1))
 
 
 # ------------------------------------------------------------------------------------------------------------------------- env
@@ -189,6 +223,7 @@ def gate(min_driver: int, want_cc: str, want_sms: int, driver: str) -> dict[str,
 # ------------------------------------------------------------------------------------------------------------------- selection
 def selection() -> dict[str, Any]:
     import torch
+    from vllm.engine.arg_utils import EngineArgs
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
     from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig, FusedMoEParallelConfig, RoutingMethodType
     from vllm.model_executor.layers.fused_moe.oracle.mxfp4 import (
@@ -197,6 +232,7 @@ def selection() -> dict[str, Any]:
         select_deepseek_v4_mxfp4_moe_backend,
     )
     from vllm.model_executor.layers.quantization.utils.marlin_utils import get_marlin_input_dtype
+    from vllm.usage.usage_lib import UsageContext
 
     cfg = FusedMoEConfig(num_experts=NUM_EXPERTS, experts_per_token=TOP_K, hidden_dim=HIDDEN, intermediate_size=INTER,
                          num_local_experts=NUM_EXPERTS, num_logical_experts=NUM_EXPERTS, activation=MoEActivation.SILU, device="cuda",
@@ -205,9 +241,10 @@ def selection() -> dict[str, Any]:
     backend, cls = select_deepseek_v4_mxfp4_moe_backend(cfg)
     rec = {"backend": getattr(backend, "name", str(backend)), "experts": getattr(cls, "__name__", None),
            "input_dtype": str(get_marlin_input_dtype()),
-           "rounded": list(mxfp4_round_up_hidden_size_and_intermediate_size(Mxfp4MoeBackend.MARLIN, HIDDEN, INTER))}
+           "rounded": list(mxfp4_round_up_hidden_size_and_intermediate_size(Mxfp4MoeBackend.MARLIN, HIDDEN, INTER)),
+           "default_max_num_seqs": EngineArgs.get_batch_defaults(world_size=8)[1].get(UsageContext.LLM_CLASS)}
     rec["ok"] = (rec["backend"] == "MARLIN" and rec["experts"] == "MarlinExperts" and rec["input_dtype"] == "None"
-                 and rec["rounded"] == [HIDDEN, INTER])
+                 and rec["rounded"] == [HIDDEN, INTER] and rec["default_max_num_seqs"] == ENVELOPE)
     return rec
 
 
@@ -466,18 +503,19 @@ def marlin_kernels(trace: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-def kernel_config(k: dict[str, Any] | None, sms: int, types: list[int] | None) -> tuple[list[int] | None, bool]:
-    """(config, ok) of one launch's kernel: config [TK, TN, blocks per SM] = [16 thread_k_blocks, 16 thread_n_blocks, grid / sms]; ok
-    when it is a small-batch config at 1..4 blocks per SM, launched at threads x 1 x 1 on a grid of sms * b x 1 x 1, with
-    KERNEL_STATICS and, when given, the served [a, b, c, s] type ids."""
+def kernel_config(k: dict[str, Any] | None, sms: int, types: list[int] | None, *, block: int) -> tuple[list[int] | None, bool]:
+    """(config, ok) of one launch's kernel at moe block ``block``: config [TK, TN, blocks per SM] = [16 thread_k_blocks,
+    16 thread_n_blocks, grid / sms]; ok when it is one of the block's thread configs at 1 to its clamp of blocks per SM, launched at
+    threads x 1 x 1 on a grid of sms * b x 1 x 1, with the block's `kernel_statics` and, when given, the served [a, b, c, s] type
+    ids."""
     t = (k or {}).get("template")
     if not t:
         return None, False
-    grid, block = list(k.get("grid") or [0, 0, 0]), list(k.get("block") or [0, 0, 0])
+    grid, threads = list(k.get("grid") or [0, 0, 0]), list(k.get("block") or [0, 0, 0])
     tk, tn = 16 * t["thread_k_blocks"], 16 * t["thread_n_blocks"]
     b = grid[0] // sms if sms and grid[0] % sms == 0 else 0
-    ok = ((tk, tn, t["threads"]) in MR.SMALL_BATCH_CONFIGS and 1 <= b <= 4 and grid[1:] == [1, 1] and block == [t["threads"], 1, 1]
-          and all(t[n] == v for n, v in KERNEL_STATICS.items())
+    ok = ((tk, tn, t["threads"]) in MR.thread_configs(block) and 1 <= b <= MR.max_blocks_per_sm(block) and grid[1:] == [1, 1]
+          and threads == [t["threads"], 1, 1] and all(t[n] == v for n, v in kernel_statics(block).items())
           and (types is None or [t["a_type"], t["b_type"], t["c_type"], t["s_type"]] == types))
     return [tk, tn, b], bool(ok)
 
@@ -538,27 +576,29 @@ def _pool(gen, kind: str):
     return pool[torch.randperm(pool.numel(), generator=gen, device="cuda")[:HOT]] if kind == "hot" else pool
 
 
-def assignment(st: np.ndarray, ex: np.ndarray, ntpp: int, ids_flat: np.ndarray) -> tuple[bool, np.ndarray, np.ndarray, int]:
-    """(ok, blk, e, par) of one launch from `moe_align_block_size`'s outputs: each pair's moe block (its position in the sorted ids
-    over 8) and that block's expert, and par = num_tokens_post_padded / 8; ok when every pair sits in exactly one block below par,
-    whose expert routes it."""
+def assignment(st: np.ndarray, ex: np.ndarray, ntpp: int, ids_flat: np.ndarray, *,
+               block: int) -> tuple[bool, np.ndarray, np.ndarray, int]:
+    """(ok, blk, e, par) of one launch from `moe_align_block_size`'s outputs at moe block ``block``: each pair's moe block (its
+    position in the sorted ids over ``block``) and that block's expert, and par = num_tokens_post_padded / ``block``; ok when every
+    pair sits in exactly one block below par, whose expert routes it."""
     n = ids_flat.size
     blk, e, seen = np.full(n, -1, dtype=np.int64), np.full(n, -1, dtype=np.int64), np.zeros(n, dtype=np.int64)
-    par = ntpp // MOE_BLOCK
+    par = ntpp // block
     for b in range(min(int(ex.size), par)):
-        p = st[b * MOE_BLOCK:(b + 1) * MOE_BLOCK]
+        p = st[b * block:(b + 1) * block]
         p = p[(p >= 0) & (p < n)]
         blk[p], e[p] = b, ex[b]
         seen[p] += 1
-    return bool(ntpp % MOE_BLOCK == 0 and np.all(seen == 1) and np.array_equal(e, ids_flat)), blk, e, par
+    return bool(ntpp % block == 0 and np.all(seen == 1) and np.array_equal(e, ids_flat)), blk, e, par
 
 
 def statics_ok(L: dict[str, Any], kind: str, M: int) -> bool:
-    """The launch is the served path's (marlin_moe.py:136-230): moe block 8, the launch kind's top_k, router weight and sizes,
-    fp32 reduce without atomic add, full K, the e2m1 weight type over e8m0 scales and bf16 activations, nothing optional."""
+    """The launch is the served path's (marlin_moe.py:136-230): M's moe block (`block_of`), the launch kind's top_k, router weight
+    and sizes, fp32 reduce without atomic add, full K, the e2m1 weight type over e8m0 scales and bf16 activations, nothing
+    optional."""
     K, N = shape(kind)
     a = L["args"]
-    want = {"moe_block_size": MOE_BLOCK, "top_k": launch_top_k(kind), "mul_topk_weights": kind == "w2", "size_m": prob_m(kind, M),
+    want = {"moe_block_size": block_of(M), "top_k": launch_top_k(kind), "mul_topk_weights": kind == "w2", "size_m": prob_m(kind, M),
             "size_n": N, "size_k": K, "is_k_full": True, "use_atomic_add": False, "use_fp32_reduce": True, "is_zp_float": False,
             "b_q_type": "float4_e2m1f", "thread_k": -1, "thread_n": -1, "blocks_per_sm": -1}
     return (all(a.get(k) == v for k, v in want.items()) and L["absent"] == sorted(ABSENT)
@@ -627,21 +667,22 @@ def case_launches(work: Path, name: str, M: int, pool_kind: str, ids, launches: 
     records, launch specs for the jobs, the captured launches for the forced phase)."""
     by = {(L["label"].split("/")[1], kind_of(L)): L for L in launches if L["label"].startswith(f"{name}/")}
     ids_flat = ids.cpu().numpy().astype(np.int64).reshape(-1)
+    block = block_of(M)
     records, specs, captured = [], [], []
     for kind in ("w13", "w2"):
         L, twin = by.get(("run1", kind)), by.get(("run2", kind))
         if L is None or twin is None:
             raise RuntimeError(f"no {kind} launch in both runs: {sorted(by)}")
         ok, blk, e, par = assignment(L["sorted_token_ids"].cpu().numpy(), L["expert_ids"].cpu().numpy(),
-                                     int(L["num_tokens_past_padded"].reshape(-1)[0]), ids_flat)
+                                     int(L["num_tokens_past_padded"].reshape(-1)[0]), ids_flat, block=block)
         K, N = shape(kind)
-        config, kernel_ok = kernel_config(L.get("kernel"), sms, types)
+        config, kernel_ok = kernel_config(L.get("kernel"), sms, types, block=block)
         rec = {"phase": "auto", "case": name, "launch": kind, "M": M, "pool": pool_kind, "pairs": int(ids_flat.size), "K": K, "N": N,
-               "prob_m": prob_m(kind, M), "par": par, "experts_used": int(np.unique(ids_flat).size), "args": L["args"],
-               "absent": L["absent"], "dtypes": L["dtypes"], "workspace": L["workspace"],
+               "prob_m": prob_m(kind, M), "moe_block": block, "par": par, "experts_used": int(np.unique(ids_flat).size),
+               "args": L["args"], "absent": L["absent"], "dtypes": L["dtypes"], "workspace": L["workspace"],
                "deterministic": same_words(L["output"], twin["output"]), "assignment_ok": ok, "statics_ok": statics_ok(L, kind, M),
                "kernel": _kernel(L.get("kernel")), "config": config, "kernel_ok": kernel_ok,
-               "config_deterministic": config == kernel_config(twin.get("kernel"), sms, types)[0]}
+               "config_deterministic": config == kernel_config(twin.get("kernel"), sms, types, block=block)[0]}
         records.append(rec)
         specs.append({"phase": "auto", "case": name, "launch": kind, "config": None, "M": M, "K": K, "N": N, "E": NUM_EXPERTS,
                       "top_k": launch_top_k(kind), "pairs": int(ids_flat.size), "par": par, "weights": W["paths"][kind],
@@ -658,7 +699,7 @@ def sweep_record(launches: list[dict], sms: int, types: list[int] | None) -> dic
     for L in launches:
         if L["label"].startswith("sweep/"):
             M, kind = int(L["label"].split("/")[1]), kind_of(L)
-            config, ok = kernel_config(L.get("kernel"), sms, types)
+            config, ok = kernel_config(L.get("kernel"), sms, types, block=block_of(M))
             served[kind][str(M)] = config if ok else None
             statics = statics and statics_ok(L, kind, M)
     ok = statics and all(served[k].get(str(M)) for k in served for M in SERVED_M)
@@ -679,8 +720,9 @@ def last_cuda_error() -> int | None:
 
 def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int,
                     seed: int) -> tuple[list[dict], list[dict], dict[str, Any]]:
-    """One captured launch again at every candidate config, forced, on the probe input into a SENTINEL-filled output; returns
-    (records, specs, the probe's record: its row shifts and the accepted configs grouped by identical words)."""
+    """One captured launch again at every candidate config of its moe block (`candidates`), forced, on the probe input into a
+    SENTINEL-filled output; returns (records, specs, the probe's record: its row shifts and the accepted configs grouped by identical
+    words)."""
     import hashlib
 
     import torch
@@ -696,7 +738,7 @@ def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int
         raise RuntimeError(f"probe {list(xs.shape)} for input {list(L['input'].shape)}")
     x = torch.from_numpy(xs.view(np.int16)).to(L["input"].device).view(torch.bfloat16)
     launches, specs, classes = [], [], {}
-    for tk, tn, b in CANDIDATES:
+    for tk, tn, b in candidates(block_of(cap["M"])):
         out = torch.full_like(L["output"].view(torch.int16), SENTINEL).view(torch.bfloat16)
         rec = {"phase": "forced", "case": cap["case"], "launch": kind, "M": cap["M"], "config": [tk, tn, b], "pairs": int(out.shape[0]),
                "K": K, "N": N, "refused": None}
@@ -825,27 +867,30 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------- the served config
 def _auto(M: int, kind: str, sms: int, allow: dict[tuple[int, int], int]) -> tuple[int, int, int] | None:
+    """ops.cu's config for one launch kind at M tokens, over ``allow``, the per-config limits of the kernels at M's moe block."""
     N = shape(kind)[1]
     try:
-        return MR.auto_config(prob_m(kind, M), N, launch_top_k(kind), sms, allow)
+        return MR.auto_config(prob_m(kind, M), N, launch_top_k(kind), sms, allow, block=block_of(M))
     except ValueError:
         return None
 
 
 def model(served: dict[str, dict[str, list[int] | None]], sms: int) -> dict[str, Any]:
-    """Per launch kind, the per-config limits `allow` (each of the three configs' in 0..4, 0 invalid) under which ops.cu's rule
-    (`MR.auto_config`) gives the swept config at every swept M: information on why the kernel runs what it runs (the limits read the
-    shared-memory cache, which depends on K and N, and the registers of a driver-compiled kernel)."""
+    """Per launch kind and moe block of SERVED_M (`<kind>/<block>`), the per-config limits `allow` (each of the block's three
+    configs' in 0 to its clamp, 0 invalid) under which ops.cu's rule (`MR.auto_config`) gives the swept config at every swept M of
+    that block: information on why the kernel runs what it runs (the limits read the shared-memory cache, which depends on K, N and
+    the block's m blocks, and the registers of a driver-compiled kernel, another instantiation at each block)."""
     out: dict[str, Any] = {}
     for kind, by_m in sorted(served.items()):
-        obs = [(int(M), tuple(c)) for M, c in sorted(by_m.items(), key=lambda kv: int(kv[0])) if c]
-        consistent = []
-        for a in itertools.product(range(5), repeat=len(MR.SMALL_BATCH_CONFIGS)):
-            allow = {(tk, tn): v for (tk, tn, _), v in zip(MR.SMALL_BATCH_CONFIGS, a) if v}
-            if obs and all(_auto(M, kind, sms, allow) == c for M, c in obs):
-                consistent.append(allow)
-        out[kind] = {"observed": len(obs), "consistent": len(consistent),
-                     "allow": [{f"{tk}/{tn}": v for (tk, tn), v in allow.items()} for allow in consistent[:8]]}
+        for block in sorted({block_of(M) for M in SERVED_M}):
+            obs = [(int(M), tuple(c)) for M, c in sorted(by_m.items(), key=lambda kv: int(kv[0])) if c and block_of(int(M)) == block]
+            configs, consistent = MR.thread_configs(block), []
+            for a in itertools.product(range(MR.max_blocks_per_sm(block) + 1), repeat=len(configs)):
+                allow = {(tk, tn): v for (tk, tn, _), v in zip(configs, a) if v}
+                if obs and all(_auto(M, kind, sms, allow) == c for M, c in obs):
+                    consistent.append(allow)
+            out[f"{kind}/{block}"] = {"observed": len(obs), "consistent": len(consistent),
+                                      "allow": [{f"{tk}/{tn}": v for (tk, tn), v in allow.items()} for allow in consistent[:8]]}
     return out
 
 
@@ -1020,7 +1065,8 @@ def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: b
         specs += sp
         captured += [c for c in cap if forced and name in (QUICK_FORCED if quick else FORCED)]
         for x in records:
-            _say(f"auto {name:9s} {x['launch']:3s} M={M:2d} pairs={x['pairs']:3d} par={x['par']:3d} experts={x['experts_used']:3d} "
+            _say(f"auto {name:10s} {x['launch']:3s} M={M:4d} block={x['moe_block']:2d} pairs={x['pairs']:4d} par={x['par']:4d} "
+                 f"experts={x['experts_used']:3d} "
                  f"det={x['deterministic']} statics={x['statics_ok']} assignment={x['assignment_ok']} kernel={x['config']} "
                  f"kernel_ok={x['kernel_ok']}")
     forced_specs = []

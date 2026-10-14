@@ -17,11 +17,11 @@ One output word of one (token, slot) pair, column n, over K:
 
 The k16 step is `mma.sync.m16n8k16` (bf16, f32 accumulate), which on sm_90 is `HopperBF16WgmmaDot16_v1` (`DOT`: measured equal on the
 H100, `verity.ml.circuits.silicon` `_H100_MMA_EQ_WGMMA`); the moe block of 8 (`m_block_size_8`) runs `mma_trans`, the operands
-swapped, which leaves each product a * b.  The f32 adds are FADD: Marlin MoE is built without fast-math.  `E2m1ToBf16` is the exact
-e2m1 value (the code's bits placed into a bf16 word, then times 2^126 by `__hmul2`: exact, a zero code's sign kept), `E8m0DequantBf16`
-the scale byte shifted to the bf16 exponent (code 0 is +0, 255 is +inf), so `w[k]` is exact but for overflow (inf), and 0 times inf
-is NaN.  It is not FlashMLA's `E8m0ToBf16_v1` (`__nv_cvt_e8m0_to_bf16raw`: code 0 the subnormal 2^-127, 255 NaN), which agrees
-with it on codes 1 to 254 only.
+swapped, which leaves each product a * b, and a block of 16 or more `mma` itself.  The f32 adds are FADD: Marlin MoE is built
+without fast-math.  `E2m1ToBf16` is the exact e2m1 value (the code's bits placed into a bf16 word, then times 2^126 by `__hmul2`:
+exact, a zero code's sign kept), `E8m0DequantBf16` the scale byte shifted to the bf16 exponent (code 0 is +0, 255 is +inf), so
+`w[k]` is exact but for overflow (inf), and 0 times inf is NaN.  It is not FlashMLA's `E8m0ToBf16_v1` (`__nv_cvt_e8m0_to_bf16raw`:
+code 0 the subnormal 2^-127, 255 NaN), which agrees with it on codes 1 to 254 only.
 
 A segment is the run of k-tiles one CTA computes for a tile; s > 1 segments are split K, and their partial sums P_i (P_0 holding
 k-tile 0) are folded by `slice_idx`, which the CTA holding the highest k leads.  Which k-tiles start a segment is the launch's
@@ -35,7 +35,9 @@ the launch's thread config (TK, TN) (ops.cu:274-342; the H200's numRegs decide b
                k-tile t > 0 starts a segment iff (j2 * KT + t) % iters == 0
 
 (no group rounding of iters: group_blocks 2 < thread_k_blocks, the template 408-416).  `blk` and `parallel` are the launch's schedule,
-`moe_align_block_size`'s sorted_token_ids (a pair's position / 8) and num_tokens_post_padded / 8: its ranks within an expert come
+`moe_align_block_size`'s sorted_token_ids (a pair's position / moe_block_size) and num_tokens_post_padded / moe_block_size; at
+every block the template reduces a tile's W = TK / 32 warp rows as above (red_off = threads / (TN / 2) / 2, 1539-1541, per m block
+of 16).  The pairs' ranks within an expert come
 from atomicAdd (moe_align_sum_kernels.cu), so they are committed values of the run, not functions of the routing.
 
 Registered functions (`_v1`):

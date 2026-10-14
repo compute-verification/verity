@@ -62,10 +62,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v3, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
-    Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v1",
+    Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v2",
              "On the capture's Hopper GPU and driver (the capture map's target.driver), vLLM selects MARLIN (MarlinExperts) for "
-             "the 384-expert TP8 row's MXFP4 experts at bf16 activations, each launch's kernel (its thread config and blocks per "
-             "SM, profiled) is the one served at its decode batch, one at every batch 1 to 16, each served kernel's SASS is the "
+             "the 384-expert TP8 row's MXFP4 experts at bf16 activations and defaults the LLM entrypoint's max_num_seqs to 1024, "
+             "each launch's kernel (its thread config and blocks per SM, profiled) is the one served at its decode batch and the "
+             "moe block fused_marlin_moe picks for it, one at every swept batch (1 to 17, and 460, 461, 921 and 922 on either side "
+             "of the moe block edges, to 1024), each served kernel's SASS is the "
              "driver's JIT of its compute_80 PTX that the record names by sha256, at the profiled registers and with no f32 "
              "multiply, and every output word of every launch, and of every accepted forced config on an input whose summation "
              "orders show, equals MarlinMoeExpertGemm_v1 (w13) or MarlinMoeExpertGemmW_v1 (w2) at the launch's statics, bit for "

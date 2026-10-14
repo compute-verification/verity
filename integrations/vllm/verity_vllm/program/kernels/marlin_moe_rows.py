@@ -1,8 +1,9 @@
 """The Marlin W4A16 MXFP4 expert GEMMs' twin (`registry.marlin_moe`: `MarlinMxfp4Coordinate(W)_v1` and the schedule
-`MarlinMoeSchedule_v1`), vectorised over a launch's (pair, column) coordinates with core's k16 step, and `auto_config`, ops.cu's
-choice of thread config and blocks per SM (`determine_exec_config`) over the per-config limits a driver's register count sets.  The
-scalar Definitions are the reference: tests/program/test_marlin_moe.py checks this twin against them word for word, and the H200
-capture (tests/properties/dsv4_marlin_capture_gpu.py) checks the kernel's words against it."""
+`MarlinMoeSchedule_v1`), vectorised over a launch's (pair, column) coordinates with core's k16 step; `moe_block`, the moe block
+`fused_marlin_moe` picks for a batch; and `auto_config`, ops.cu's choice of thread config and blocks per SM (`determine_exec_config`)
+at that block over the per-config limits a driver's register count sets.  The scalar Definitions are the reference:
+tests/program/test_marlin_moe.py checks this twin against them word for word, and the H200 capture
+(tests/properties/dsv4_marlin_capture_gpu.py) checks the kernel's words against it."""
 from __future__ import annotations
 
 import numpy as np
@@ -14,8 +15,35 @@ from verity_vllm.program.registry import marlin_moe as MM
 
 E2M1_BF16 = np.array([MM.e2m1_to_bf16(q) for q in range(16)], dtype=np.uint16)
 
-#: ops.cu's `small_batch_thread_configs` (thread_k, thread_n, num_threads), by priority: a moe block of 8 has thread_m_blocks 1
+#: ops.cu's `small_batch_thread_configs` and `large_batch_thread_configs` (thread_k, thread_n, num_threads), by priority
+#: (ops.cu:131-141): a moe block of 8 or 16 has thread_m_blocks 1 and takes the small ones, a larger block the large ones (285-292)
 SMALL_BATCH_CONFIGS = ((128, 128, 256), (64, 128, 128), (128, 64, 128))
+LARGE_BATCH_CONFIGS = ((64, 256, 256), (64, 128, 128), (128, 64, 128))
+#: `fused_marlin_moe`'s moe block candidates (vLLM d9105ea80 experts/marlin_moe.py:334)
+MOE_BLOCKS = (8, 16, 32, 48, 64)
+
+
+def moe_block(M: int, top_k: int, E: int) -> int:
+    """The moe block `fused_marlin_moe` gives M tokens over E local experts with bf16 activations (marlin_moe.py:332-339, no expert
+    map): the first of MOE_BLOCKS at which M * top_k / E / block < 0.9, in its float arithmetic, else the last."""
+    for b in MOE_BLOCKS:
+        if M * top_k / E / b < 0.9:
+            return b
+    return MOE_BLOCKS[-1]
+
+
+def thread_m_blocks(block: int) -> int:
+    """The template's m blocks of 16 for a moe block (ops.cu:362, div_ceil(moe_block_size, 16)); 8 is one, `m_block_size_8`."""
+    return -(-block // 16)
+
+
+def thread_configs(block: int) -> tuple[tuple[int, int, int], ...]:
+    return SMALL_BATCH_CONFIGS if thread_m_blocks(block) == 1 else LARGE_BATCH_CONFIGS
+
+
+def max_blocks_per_sm(block: int) -> int:
+    """The clamp on `determine_exec_config`'s per-config allow count (ops.cu:325-328): 4 at one m block, 2 at more."""
+    return 4 if thread_m_blocks(block) == 1 else 2
 
 
 def dequant(wq: np.ndarray, ws: np.ndarray) -> np.ndarray:
@@ -94,9 +122,9 @@ def coordinates(x: np.ndarray, cut: np.ndarray, wq: np.ndarray, ws: np.ndarray, 
 def launch(x: np.ndarray, blk: np.ndarray, par: int, e: np.ndarray, wq: np.ndarray, ws: np.ndarray, cols: np.ndarray, *, TK: int,
            TN: int, GRID: int, g: np.ndarray | None = None) -> np.ndarray:
     """One launch's words at the columns ``cols`` of every pair: x (P, K) the pairs' activation rows, blk (P,) their moe blocks
-    (sorted position / 8), par the launch's num_tokens_post_padded / 8, e (P,) their experts, wq (E, N, K) codes, ws (E, N, K / 32)
-    scale bytes, g (P,) f32 routed weights for the w2 launch -> (P, len(cols)) bf16 words; the cuts are `schedule`'s at
-    (K / TK, N / TN, GRID)."""
+    (sorted position / the moe block), par the launch's num_tokens_post_padded / the moe block, e (P,) their experts, wq (E, N, K)
+    codes, ws (E, N, K / 32) scale bytes, g (P,) f32 routed weights for the w2 launch -> (P, len(cols)) bf16 words; the cuts are
+    `schedule`'s at (K / TK, N / TN, GRID)."""
     P, K = x.shape
     N = wq.shape[1]
     chunk = max(1, (1 << 24) // K)
@@ -117,16 +145,19 @@ def launch(x: np.ndarray, blk: np.ndarray, par: int, e: np.ndarray, wq: np.ndarr
     return out.reshape(P, len(cols))
 
 
-def auto_config(prob_m: int, prob_n: int, top_k: int, sms: int, allow: dict[tuple[int, int], int]) -> tuple[int, int, int]:
-    """`determine_exec_config` for a moe block of 8 (ops.cu:274-342): (TK, TN, blocks_per_sm), each config's ``allow`` its
-    min(255 * 1024 / (numRegs * threads * 4), max_shared / (cache + 1536)) clamped to [1, 4] (a config absent from it is invalid
-    here), lowered to max(prob_n / TN * prob_m * top_k * 4 / sms, 1) when that count is under sms * allow; the first config with the
-    strictly largest count wins."""
+def auto_config(prob_m: int, prob_n: int, top_k: int, sms: int, allow: dict[tuple[int, int], int], *,
+                block: int) -> tuple[int, int, int]:
+    """`determine_exec_config` at a moe block of ``block`` (ops.cu:274-342): (TK, TN, blocks_per_sm) over `thread_configs(block)`,
+    each config's ``allow`` its min(255 * 1024 / (numRegs * threads * 4), max_shared / (cache + 1536)) at that block's kernel,
+    clamped to [1, `max_blocks_per_sm(block)`] (a config absent from it is invalid here), lowered to
+    max(prob_n / TN * prob_m * top_k * 4 / sms, 1) when that count is under sms * allow; the first config with the strictly largest
+    count wins."""
     best, cfg = 0, None
-    for tk, tn, _threads in SMALL_BATCH_CONFIGS:
+    cap = max_blocks_per_sm(block)
+    for tk, tn, _threads in thread_configs(block):
         if (tk, tn) not in allow:
             continue
-        a = max(min(allow[(tk, tn)], 4), 1)
+        a = max(min(allow[(tk, tn)], cap), 1)
         work = prob_n // tn * prob_m * top_k * 4
         if work < sms * a:
             a = max(work // sms, 1)

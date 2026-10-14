@@ -29,14 +29,14 @@ def _bf16_rows(rng: np.random.Generator, M: int, K_: int) -> np.ndarray:
     return (x.view(np.uint32) >> 16).astype(np.uint16)
 
 
-def _align(ids_flat: np.ndarray) -> tuple[np.ndarray, np.ndarray, int]:
-    """`moe_align_block_size` as the kernel reads it: each expert's pairs in order, padded to a block of 8 with the pair count."""
+def _align(ids_flat: np.ndarray, block: int = 8, experts: int = E) -> tuple[np.ndarray, np.ndarray, int]:
+    """`moe_align_block_size` as the kernel reads it: each expert's pairs in order, padded to a moe block with the pair count."""
     st, ex = [], []
-    for e in range(E):
+    for e in range(experts):
         p = np.flatnonzero(ids_flat == e).tolist()
-        for b in range(0, len(p), X.MOE_BLOCK):
-            blk = p[b:b + X.MOE_BLOCK]
-            st += blk + [ids_flat.size] * (X.MOE_BLOCK - len(blk))
+        for b in range(0, len(p), block):
+            blk = p[b:b + block]
+            st += blk + [ids_flat.size] * (block - len(blk))
             ex.append(e)
     return np.array(st), np.array(ex), len(st)
 
@@ -58,7 +58,7 @@ def _launch(tmp_path, kind: str, at=TRUE, *, M: int = 2, flip: tuple[int, int] |
     rng = np.random.default_rng(11 + M)
     ids = np.stack([rng.permutation(E)[:X.TOP_K] for _ in range(M)]).reshape(-1)
     st, ex, ntpp = _align(ids)
-    ok, blk, e, par = X.assignment(st, ex, ntpp, ids)
+    ok, blk, e, par = X.assignment(st, ex, ntpp, ids, block=8)
     assert ok
     top_k = X.TOP_K if kind == "w13" else 1
     P = M * X.TOP_K
@@ -85,8 +85,9 @@ def _total(results: list[dict]) -> dict:
     return {k: sum(r.get(k, 0) for r in results) for k in X.TOTALS}
 
 
-def _name(threads: int, n_blocks: int, k_blocks: int, *, m8: str = "true", stages: int = 4, group_blocks: int = 2) -> str:
-    return (f"void marlin_moe_wna16::Marlin<(vllm::ScalarTypeId)5, 1095l, 5l, 2l, {threads}, 1, {n_blocks}, {k_blocks}, {m8}, "
+def _name(threads: int, n_blocks: int, k_blocks: int, *, m8: str = "true", stages: int = 4, group_blocks: int = 2,
+          m_blocks: int = 1) -> str:
+    return (f"void marlin_moe_wna16::Marlin<(vllm::ScalarTypeId)5, 1095l, 5l, 2l, {threads}, {m_blocks}, {n_blocks}, {k_blocks}, {m8}, "
             f"{stages}, {group_blocks}, false>(int4 const*, int4 const*, int4*, int4*, int4 const*, float const*, int4 const*, "
             "float const*, int4 const*, int const*, int const*, int const*, int const*, float const*, int, bool, int, int, int, int, "
             "int*, bool, bool, bool)")
@@ -107,23 +108,44 @@ def test_the_kernel_name_and_grid_read_the_launch_config() -> None:
     assert got[0]["template"] == {"a_type": 5, "b_type": 1095, "c_type": 5, "s_type": 2, "threads": 128, "thread_m_blocks": 1,
                                   "thread_n_blocks": 8, "thread_k_blocks": 4, "m_block_size_8": True, "stages": 4, "group_blocks": 2,
                                   "is_zp_float": False}
-    assert X.kernel_config(got[0], SMS, TYPES) == ([64, 128, 4], True)
-    assert X.kernel_config(got[1], SMS, TYPES) == ([128, 128, 1], True)
-    assert X.kernel_config(got[1], SMS, None) == ([128, 128, 1], True)
-    assert not X.kernel_config(got[1], SMS, [5, 1095, 5, 3])[1], "the scale type"
+    assert X.kernel_config(got[0], SMS, TYPES, block=8) == ([64, 128, 4], True)
+    assert X.kernel_config(got[1], SMS, TYPES, block=8) == ([128, 128, 1], True)
+    assert X.kernel_config(got[1], SMS, None, block=8) == ([128, 128, 1], True)
+    assert not X.kernel_config(got[1], SMS, [5, 1095, 5, 3], block=8)[1], "the scale type"
     bad = [({"grid": [4 * SMS + 1, 1, 1]}, None), ({"grid": [5 * SMS, 1, 1]}, None), ({"grid": [SMS, 2, 1]}, None),
            ({"block": [256, 1, 1]}, None), (None, _name(128, 8, 4, stages=2)), (None, _name(128, 8, 4, group_blocks=4)),
-           (None, _name(128, 8, 4, m8="false")), (None, _name(256, 8, 4)), (None, _name(128, 4, 4))]
+           (None, _name(128, 8, 4, m8="false")), (None, _name(256, 8, 4)), (None, _name(128, 4, 4)),
+           (None, _name(128, 8, 4, m_blocks=2))]
     for args, name in bad:
         k = copy.deepcopy(got[0])
         k.update(args or {})
         if name:
             k["template"] = X.kernel_template(name)
-        assert not X.kernel_config(k, SMS, TYPES)[1], (args, name)
+        assert not X.kernel_config(k, SMS, TYPES, block=8)[1], (args, name)
+    assert not X.kernel_config(got[0], SMS, TYPES, block=16)[1], "a block of 16 runs no m_block_size_8 kernel"
+
+
+@pytest.mark.parametrize("block,name,b,ok", [
+    (16, _name(128, 8, 4, m8="false"), 4, True), (16, _name(256, 8, 8, m8="false"), 1, True),
+    (16, _name(128, 8, 4, m8="false", m_blocks=2), 2, False), (16, _name(128, 8, 4, m8="false"), 5, False),
+    (32, _name(256, 16, 4, m8="false", m_blocks=2), 2, True), (32, _name(128, 8, 4, m8="false", m_blocks=2), 1, True),
+    (32, _name(256, 16, 4, m8="false", m_blocks=2), 3, False), (32, _name(256, 8, 8, m8="false", m_blocks=2), 2, False),
+    (32, _name(256, 16, 4, m8="false"), 2, False), (32, _name(256, 16, 4, m_blocks=2), 2, False)])
+def test_a_larger_moe_block_s_kernel_is_its_own_instantiation(block: int, name: str, b: int, ok: bool) -> None:
+    """At a moe block of 16 the small-batch configs at up to 4 blocks per SM without `m_block_size_8`; at 32 two m blocks over the
+    large-batch configs at up to 2 (ops.cu:285-292, 325-328, 362-363)."""
+    t = X.kernel_template(name)
+    k = {"template": t, "grid": [b * SMS, 1, 1], "block": [t["threads"], 1, 1]}
+    config, got = X.kernel_config(k, SMS, TYPES, block=block)
+    assert config == [16 * t["thread_k_blocks"], 16 * t["thread_n_blocks"], b] and got is ok
+
+
+def test_a_kernel_name_that_does_not_parse_is_no_config() -> None:
     assert X.kernel_template("void other::Marlin<1, 2>(int)") is None
     assert X.kernel_template(_name(128, 8, 4).replace("1095l", "x")) is None
     assert X.kernel_template(_name(128, 8, 4).replace(", false>", ", false, 7>")) is None
-    assert X.kernel_config(None, SMS, TYPES) == (None, False) and X.kernel_config({"template": None}, SMS, TYPES) == (None, False)
+    assert X.kernel_config(None, SMS, TYPES, block=8) == (None, False)
+    assert X.kernel_config({"template": None}, SMS, TYPES, block=8) == (None, False)
 
 
 def _symbol(threads: int, n_blocks: int, k_blocks: int, *, group_blocks: str = "2") -> str:
@@ -227,7 +249,7 @@ def test_the_probe_tells_summation_orders_apart(tmp_path) -> None:
     M = 2
     ids = np.stack([rng.permutation(np.arange(1, E))[:X.TOP_K] for _ in range(M)]).reshape(-1)
     st, ex, ntpp = _align(ids)
-    _, blk, e, par = X.assignment(st, ex, ntpp, ids)
+    _, blk, e, par = X.assignment(st, ex, ntpp, ids, block=8)
     rows = [e[r * X.TOP_K:(r + 1) * X.TOP_K] for r in range(M)]
     xp, shifts = X.probe(np.random.default_rng(1), rows, w["wq"], w["ws"])
     assert xp.shape == (M, K) and xp.dtype == np.uint16 and np.all((xp & 0x7F80) != 0x7F80) and np.all((xp & 0x7F80) != 0)
@@ -239,7 +261,7 @@ def test_the_probe_tells_summation_orders_apart(tmp_path) -> None:
     classes = {}
     for name, x in (("probe", xp), ("plain", plain)):
         got: dict[bytes, list] = {}
-        for c in X.CANDIDATES:
+        for c in X.candidates(8):
             C = MR.launch(x[np.arange(M * X.TOP_K) // X.TOP_K], blk, par, e, w["wq"], w["ws"], np.arange(N), TK=c[0], TN=c[1],
                           GRID=SMS * c[2])
             got.setdefault(C.tobytes(), []).append(c)
@@ -280,44 +302,62 @@ def test_the_jobs_split_a_large_launch() -> None:
     assert all(a["pair_range"][1] == b["pair_range"][0] for a, b in zip(jobs, jobs[1:]))
 
 
-def _served(allow: dict, sms: int = 132) -> dict:
-    return {kind: {str(M): list(X._auto(M, kind, sms, allow)) for M in X.SERVED_M} for kind in ("w13", "w2")}
+#: the per-config limits of the large-batch kernels a block of 32 runs: 2 blocks per SM each
+LARGE = {(64, 256): 2, (64, 128): 2, (128, 64): 2}
 
 
-@pytest.mark.parametrize("allow", [{(128, 128): 2, (64, 128): 4, (128, 64): 4}, {(128, 128): 1, (64, 128): 1, (128, 64): 3},
-                                   {(64, 128): 2, (128, 64): 2}])
-def test_the_model_finds_the_limits_behind_the_sweep(allow: dict) -> None:
-    got = X.model(_served(allow), 132)
+def _served(allow: dict, sms: int = 132, large: dict = LARGE) -> dict:
+    """The config at each swept M under ``allow`` at the blocks of 8 and 16 and ``large`` at 32."""
+    return {kind: {str(M): list(X._auto(M, kind, sms, large if X.block_of(M) == 32 else allow)) for M in X.SERVED_M}
+            for kind in ("w13", "w2")}
+
+
+@pytest.mark.parametrize("allow,large", [({(128, 128): 2, (64, 128): 4, (128, 64): 4}, LARGE),
+                                         ({(128, 128): 1, (64, 128): 1, (128, 64): 3}, {(64, 256): 1, (64, 128): 2}),
+                                         ({(64, 128): 2, (128, 64): 2}, {(128, 64): 1})])
+def test_the_model_finds_the_limits_behind_the_sweep(allow: dict, large: dict) -> None:
+    got = X.model(_served(allow, large=large), 132)
+    blocks = {8: 18, 16: 2, 32: 2}
+    assert set(got) == {f"{kind}/{b}" for kind in ("w13", "w2") for b in blocks}
     for kind in ("w13", "w2"):
-        assert got[kind]["observed"] == len(X.SERVED_M) and got[kind]["consistent"] >= 1, got[kind]
-    bad = _served(allow)
+        for b, n in blocks.items():
+            assert got[f"{kind}/{b}"]["observed"] == n and got[f"{kind}/{b}"]["consistent"] >= 1, (kind, b, got[f"{kind}/{b}"])
+    if large == LARGE:
+        assert got["w13/32"]["consistent"] == got["w2/32"]["consistent"] == 9, "(64, 256) at 2 wins whatever the other two allow"
+    bad = _served(allow, large=large)
     bad["w2"]["1"] = [128, 64, 1] if bad["w2"]["1"] != [128, 64, 1] else [64, 128, 1]
-    assert X.model(bad, 132)["w2"]["consistent"] < got["w2"]["consistent"] or X.model(bad, 132)["w2"]["consistent"] == 0
+    assert X.model(bad, 132)["w2/8"]["consistent"] < got["w2/8"]["consistent"] or X.model(bad, 132)["w2/8"]["consistent"] == 0
+    assert X.model(bad, 132)["w2/32"] == got["w2/32"], "a block's limits read only its own batches"
+    bad = _served(allow, large=large)
+    bad["w13"]["1024"] = [128, 128, 2]
+    assert X.model(bad, 132)["w13/32"]["consistent"] == 0, "(128, 128) is no large-batch config"
 
 
 def _served_launch(kind: str, M: int) -> dict:
     K_, N_ = X.shape(kind)
-    return {"args": {"moe_block_size": 8, "top_k": X.launch_top_k(kind), "mul_topk_weights": kind == "w2", "size_m": X.prob_m(kind, M),
-                     "size_n": N_, "size_k": K_, "is_k_full": True, "use_atomic_add": False, "use_fp32_reduce": True, "is_zp_float": False,
+    return {"args": {"moe_block_size": X.block_of(M), "top_k": X.launch_top_k(kind), "mul_topk_weights": kind == "w2",
+                     "size_m": X.prob_m(kind, M), "size_n": N_, "size_k": K_, "is_k_full": True, "use_atomic_add": False, "use_fp32_reduce": True, "is_zp_float": False,
                      "b_q_type": "float4_e2m1f", "thread_k": -1, "thread_n": -1, "blocks_per_sm": -1},
             "absent": sorted(X.ABSENT), "dtypes": {"input": "torch.bfloat16", "b_scales": "torch.float8_e8m0fnu",
                                                    "topk_weights": "torch.float32", "b_qweight": "torch.int32", "output": "torch.bfloat16"}}
 
 
-def _kernel(config, sms: int = 132) -> dict:
+def _kernel(config, sms: int = 132, block: int = 8) -> dict:
     tk, tn, b = config
-    threads = next(t for k, n, t in MR.SMALL_BATCH_CONFIGS if (k, n) == (tk, tn))
-    return {"template": X.kernel_template(_name(threads, tn // 16, tk // 16)), "grid": [sms * b, 1, 1], "block": [threads, 1, 1],
-            "registers": 168, "shared": 0, "name": "Marlin"}
+    threads = next(t for k, n, t in MR.thread_configs(block) if (k, n) == (tk, tn))
+    name = _name(threads, tn // 16, tk // 16, m8="true" if block == 8 else "false", m_blocks=MR.thread_m_blocks(block))
+    return {"template": X.kernel_template(name), "grid": [sms * b, 1, 1], "block": [threads, 1, 1], "registers": 168, "shared": 0,
+            "name": "Marlin"}
 
 
 def test_the_sweep_names_a_served_config_at_every_batch() -> None:
     allow = {(128, 128): 2, (64, 128): 4, (128, 64): 4}
     served = _served(allow)
-    launches = [{**_served_launch(kind, M), "label": f"sweep/{M}", "kernel": _kernel(served[kind][str(M)])}
+    launches = [{**_served_launch(kind, M), "label": f"sweep/{M}", "kernel": _kernel(served[kind][str(M)], block=X.block_of(M))}
                 for M in X.SERVED_M for kind in ("w13", "w2")]
     got = X.sweep_record(launches, 132, TYPES)
-    assert got["ok"] and got["statics_ok"] and got["served"] == served and got["model"]["w2"]["consistent"] >= 1
+    assert got["ok"] and got["statics_ok"] and got["served"] == served and got["model"]["w2/8"]["consistent"] >= 1
+    assert served["w13"]["1024"] == served["w2"]["922"] == [64, 256, 2] and served["w13"]["461"] == [64, 128, 4]
     assert X.served_config(got, "w13", 16) == served["w13"]["16"] and X.served_config({}, "w13", 1) is None
     assert not X.sweep_record(launches[:-1], 132, TYPES)["ok"], "a batch the sweep did not reach"
     broken = copy.deepcopy(launches)
@@ -326,23 +366,28 @@ def test_the_sweep_names_a_served_config_at_every_batch() -> None:
     broken = copy.deepcopy(launches)
     broken[0]["args"]["use_atomic_add"] = True
     assert not X.sweep_record(broken, 132, TYPES)["ok"]
+    for M, block in ((461, 8), (922, 16), (460, 16)):
+        broken = copy.deepcopy(launches)
+        at = next(i for i, L in enumerate(broken) if L["label"] == f"sweep/{M}" and L["args"]["size_n"] == 768)
+        broken[at]["kernel"] = _kernel([64, 128, 2], block=block)
+        assert X.sweep_record(broken, 132, TYPES)["served"]["w13"][str(M)] is None, (M, block)
+        broken[at]["args"]["moe_block_size"] = block
+        assert not X.sweep_record(broken, 132, TYPES)["statics_ok"], "M's moe block is fused_marlin_moe's"
 
 
 def _tensor(a, dtype=torch.int32) -> torch.Tensor:
     return torch.tensor(np.asarray(a), dtype=dtype)
 
 
-def test_a_case_s_records_read_its_two_runs(tmp_path) -> None:
-    """`case_launches` over intercepted launches as the Interceptor leaves them (CPU tensors here): the assignment, the statics, the
-    kernel's config in both runs, determinism, and the arrays the jobs read."""
-    M = 2
+@pytest.mark.parametrize("M", [2, 461, 922])
+def test_a_case_s_records_read_its_two_runs(tmp_path, M: int) -> None:
+    """`case_launches` over intercepted launches as the Interceptor leaves them (CPU tensors here), at a moe block of 8, 16 and 32:
+    the assignment, the statics, the kernel's config in both runs, determinism, and the arrays the jobs read."""
+    block = X.block_of(M)
     rng = np.random.default_rng(5)
     ids = np.stack([rng.permutation(np.arange(8, 40))[:X.TOP_K] for _ in range(M)]).reshape(-1)
-    st, ex = [], []
-    for e in sorted(set(ids.tolist())):
-        p = np.flatnonzero(ids == e).tolist()
-        st += p + [ids.size] * (X.MOE_BLOCK - len(p))
-        ex.append(e)
+    st, ex, ntpp = _align(ids, block, experts=40)
+    w13_at = (64, 256, 2) if block == 32 else (128, 64, 2)
     launches = []
     for run in ("run1", "run2"):
         for kind in ("w13", "w2"):
@@ -353,20 +398,21 @@ def test_a_case_s_records_read_its_two_runs(tmp_path) -> None:
                 out[0, 0] = 1.0
             launches.append({**_served_launch(kind, M), "label": f"decode2/{run}", "output": out,
                              "input": torch.zeros(rows, K_, dtype=torch.bfloat16), "sorted_token_ids": _tensor(st),
-                             "expert_ids": _tensor(ex), "num_tokens_past_padded": _tensor([len(st)]),
+                             "expert_ids": _tensor(ex), "num_tokens_past_padded": _tensor([ntpp]),
                              "topk_weights": torch.full((M, X.TOP_K), 0.5), "workspace": 0,
-                             "kernel": _kernel((128, 64, 2) if kind == "w13" else (64, 128, 1 if run == "run1" else 2))})
+                             "kernel": _kernel(w13_at if kind == "w13" else (64, 128, 1 if run == "run1" else 2), block=block)})
     W = {"paths": {"w13": {"wq": "-", "ws": "-"}, "w2": {"wq": "-", "ws": "-"}}}
     records, specs, captured = X.case_launches(tmp_path, "decode2", M, "uniform", _tensor(ids.reshape(M, X.TOP_K)), launches, W, 132,
                                                TYPES)
     w13, w2 = records
     assert w13["assignment_ok"] and w13["statics_ok"] and w13["deterministic"] and w13["kernel_ok"] and w13["config_deterministic"]
-    assert w13["config"] == [128, 64, 2] and w13["par"] == len(ex) and w13["experts_used"] == len(ex)
+    assert w13["config"] == list(w13_at) and w13["moe_block"] == block and w13["par"] == len(ex) == ntpp // block
+    assert w13["experts_used"] == len(set(ex.tolist())) and (len(ex) > w13["experts_used"]) is (M > 2)
     assert not w2["deterministic"] and not w2["config_deterministic"] and w2["config"] == [64, 128, 1]
     assert [s["launch"] for s in specs] == ["w13", "w2"] and [c["launch"] for c in captured] == ["w13", "w2"]
     arrays = X._load(specs[1]["paths"])
     assert arrays["x"].shape == (M * X.TOP_K, X.INTER) and arrays["g"].tolist() == [0x3F000000] * (M * X.TOP_K)
-    assert arrays["blk"].tolist() == w2_blocks(st, ids.size)
+    assert arrays["blk"].tolist() == w2_blocks(st, ids.size, block)
     with pytest.raises(RuntimeError):
         X.case_launches(tmp_path, "decode2", M, "uniform", _tensor(ids), launches[:3], W, 132, TYPES)
 
@@ -412,11 +458,11 @@ def test_a_case_over_the_edge_experts_is_deterministic_by_its_words(tmp_path) ->
     assert w13["deterministic"] and not w2["deterministic"] and not X._launch_ok({**w2, "identified": True})
 
 
-def w2_blocks(st: list[int], n: int) -> list[int]:
+def w2_blocks(st: list[int], n: int, block: int) -> list[int]:
     blk = [0] * n
     for i, p in enumerate(st):
         if p < n:
-            blk[p] = i // X.MOE_BLOCK
+            blk[p] = i // block
     return blk
 
 
@@ -424,13 +470,19 @@ def test_the_assignment_reads_the_moe_blocks() -> None:
     ids = np.array([5, 2, 5, 7, 1, 0])
     st, ex, ntpp = np.array([5, 6, 6, 6, 6, 6, 6, 6, 4, 6, 6, 6, 6, 6, 6, 6, 1, 6, 6, 6, 6, 6, 6, 6, 0, 2, 6, 6, 6, 6, 6, 6,
                              3, 6, 6, 6, 6, 6, 6, 6]), np.array([0, 1, 2, 5, 7]), 40
-    ok, blk, e, par = X.assignment(st, ex, ntpp, ids)
+    ok, blk, e, par = X.assignment(st, ex, ntpp, ids, block=8)
     assert ok and par == 5 and blk.tolist() == [3, 2, 3, 4, 1, 0] and e.tolist() == ids.tolist()
-    assert not X.assignment(st, np.array([0, 1, 2, 7, 5]), ntpp, ids)[0]
+    assert not X.assignment(st, np.array([0, 1, 2, 7, 5]), ntpp, ids, block=8)[0]
     lost = st.copy()
     lost[24] = 6
-    assert not X.assignment(lost, ex, ntpp, ids)[0]
-    assert not X.assignment(st, ex, 32, ids)[0], "a block past num_tokens_post_padded is not run"
+    assert not X.assignment(lost, ex, ntpp, ids, block=8)[0]
+    assert not X.assignment(st, ex, 32, ids, block=8)[0], "a block past num_tokens_post_padded is not run"
+    assert not X.assignment(st, ex, ntpp, ids, block=16)[0], "read at 16, blocks of 8 put two experts' pairs in one block"
+    ids = np.repeat(np.array([3, 1]), 20)
+    st, ex, ntpp = _align(ids, 16)
+    ok, blk, e, par = X.assignment(st, ex, ntpp, ids, block=16)
+    assert ok and par == len(ex) == 4 and ex.tolist() == [1, 1, 3, 3] and blk.tolist() == [2] * 16 + [3] * 4 + [0] * 16 + [1] * 4
+    assert not X.assignment(st, ex, ntpp, ids, block=8)[0] and not X.assignment(st, ex, ntpp - 16, ids, block=16)[0]
 
 
 @pytest.mark.parametrize("kind", ["w13", "w2"])
@@ -448,11 +500,16 @@ def test_the_statics_are_the_served_paths(kind: str) -> None:
     L = _served_launch(kind, 3)
     L["dtypes"]["b_scales"] = "torch.float8_e4m3fn"
     assert not X.statics_ok(L, kind, 3)
+    for M, block in ((460, 8), (461, 16), (921, 16), (922, 32), (X.ENVELOPE, 32)):
+        L = _served_launch(kind, M)
+        assert L["args"]["moe_block_size"] == block and X.statics_ok(L, kind, M), M
+        L["args"]["moe_block_size"] = 8 if block > 8 else 16
+        assert not X.statics_ok(L, kind, M), M
 
 
 def test_the_programs_bind_at_the_served_configs() -> None:
-    got = X.bind_check({("w13", 128, 64, 264), ("w2", 64, 128, 528)})
-    assert got["ok"] and len(got["bindings"]) == 2
+    got = X.bind_check({("w13", 128, 64, 264), ("w2", 64, 128, 528), ("w13", 64, 256, 264)})
+    assert got["ok"] and len(got["bindings"]) == 3
     assert got["bindings"]["MarlinMoeExpertGemm_v1{E=384,K=7168,N=768,TK=128,TN=64,GRID=264,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}"] == {
         "ok": True, "boolean": "MarlinMoeExpertGemm_v2{E=384,K=7168,N=768,TK=128,TN=64,GRID=264,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}"}
     assert not X.bind_check(set())["ok"]
@@ -596,8 +653,14 @@ def test_the_record_is_a_registered_property() -> None:
 
 
 def test_the_cases_cover_the_decode_batches_and_the_edge_experts() -> None:
-    assert {M for _, M, _ in X.CASES} >= {1, 2, 3, 4} and max(M for _, M, _ in X.CASES) == max(X.SERVED_M) == 16
+    Ms = {M for _, M, _ in X.CASES}
+    assert Ms >= {1, 2, 3, 4} and max(Ms) == max(X.SERVED_M) == X.ENVELOPE == 1024 and Ms <= set(X.SERVED_M)
     assert set(X.QUICK) <= {c[0] for c in X.CASES} and set(X.FORCED) | set(X.QUICK_FORCED) <= {c[0] for c in X.CASES}
     assert [c for c in X.CASES if c[2] == "edge"] and 0 in X.EDGE_BYTES and 255 in X.EDGE_BYTES
-    assert len(X.CANDIDATES) == 12 and X.SENTINEL != 0x7FFF
+    assert len(X.candidates(8)) == len(X.candidates(16)) == 12 and len(X.candidates(32)) == 6 and X.SENTINEL != 0x7FFF
     assert all(c[2] != "edge" for c in X.CASES if c[0] in X.FORCED + X.QUICK_FORCED), "the probe's scale reads finite weights"
+    assert {X.block_of(M) for M in range(1, X.ENVELOPE + 1)} == {X.block_of(M) for M in Ms} == {8, 16, 32}
+    assert {X.block_of(M) for M, pool in ((c[1], c[2]) for c in X.CASES) if pool == "edge"} == {8, 32}
+    assert all(X.block_of(c[1]) == 8 for c in X.CASES if c[0] in X.FORCED + X.QUICK_FORCED)
+    edges = {m for M in range(2, X.ENVELOPE + 1) if X.block_of(M) != X.block_of(M - 1) for m in (M - 1, M)}
+    assert edges == {460, 461, 921, 922} and set(X.SERVED_M) == set(range(1, 18)) | edges | {X.ENVELOPE}
