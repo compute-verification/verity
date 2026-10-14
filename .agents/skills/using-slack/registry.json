@@ -76,7 +76,8 @@
         "archive/sp1/benchmarks/dot_product/",
         "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
-        "benchmarks/private_circuit/"
+        "benchmarks/private_circuit/",
+        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
       ]
     },
     {
@@ -94,7 +95,23 @@
         "benchmarks/tc_probe/",
         "benchmarks/tc_probe_fp4/",
         "benchmarks/load_time/",
-        "verity/ml/circuits/ops/"
+        "verity/ml/circuits/ops/",
+        "integrations/vllm/verity_vllm/program/",
+        "integrations/vllm/verity_vllm/query/",
+        "integrations/vllm/verity_vllm/correspondence/",
+        "integrations/vllm/verity_vllm/acquire/",
+        "integrations/vllm/verity_vllm/commit/",
+        "integrations/vllm/verity_vllm/properties/",
+        "integrations/vllm/verity_vllm/pipeline/build.py",
+        "integrations/vllm/verity_vllm/pipeline/match.py",
+        "integrations/vllm/verity_vllm/pipeline/commit.py",
+        "integrations/vllm/verity_vllm/pipeline/commit_group.py",
+        "integrations/vllm/verity_vllm/pipeline/commit_plan.py",
+        "integrations/vllm/workloads/",
+        "integrations/vllm/manifests/",
+        "integrations/vllm/tests/properties/",
+        "integrations/vllm/tests/check/test_capture_map.py",
+        "integrations/vllm/tests/check/test_capture_map_versions.py"
       ]
     },
     {
@@ -114,7 +131,20 @@
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
         "benchmarks/numerical/",
-        ".agents/skills/kernel-engineering/"
+        ".agents/skills/kernel-engineering/",
+        "integrations/vllm/verity_vllm/protocol_options/pouw.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_cuda/",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_native.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_host.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_kernel.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py"
       ]
     },
     {
@@ -137,7 +167,8 @@
         "benchmarks/word_codec/",
         "benchmarks/codec_tensor/",
         "benchmarks/kv_filler/",
-        "benchmarks/remote_session/"
+        "benchmarks/remote_session/",
+        "integrations/vllm/verity_vllm/protocol_options/pous.py"
       ]
     },
     {
@@ -223,7 +254,6 @@
         "tests/",
         "fixtures/",
         "benchmarks/census/",
-        "benchmarks/harness/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -245,7 +275,10 @@
       "holder": "the benchmarks coordinator (bc-681a0244-a22d-5924-b0a3-06223ae547e4)",
       "remit": "Benchmarks: the overhead and throughput measurements across backends, and the tables rendered from them.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
-      "usergroup": null
+      "usergroup": null,
+      "owns": [
+        "benchmarks/harness/"
+      ]
     },
     {
       "handle": "old-accounting",
