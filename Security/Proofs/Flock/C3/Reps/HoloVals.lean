@@ -153,7 +153,7 @@ construction's. -/
 theorem HoloSrc.framed {b : HoloSrc} {S : FlockSoundness.Model.Statement} {ptLocal mPts : ℕ}
     {pts : Fin 2 → Fin mPts → 𝔽} {sh : Flock.Shape} {d : RepData} (h : b.OK S ptLocal mPts pts sh d)
     (halg : AlgebraHolds sh d) : HoloFramed sh d (b.vals sh d) b.dom := by
-  obtain ⟨-, -, -, -, -, hrows, -, -, -, -, -⟩ := halg
+  obtain ⟨v, info, kappa, S', rs, hrows, hS, hw, hc, hres, hzero⟩ := halg
   have henc := enc_holo (params := b.params) h.realizes h.shape hrows h.capShaped h.ligShaped h.fits
   obtain ⟨-, -, -, -, hfast, hm14, hkm, hkL, -⟩ := h.realizes
   obtain ⟨_, ⟨e, he, -, hes⟩, he'⟩ := h.extras
