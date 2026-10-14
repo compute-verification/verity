@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.Compose.AtHoloHeld
 import Proofs.Flock.C3.Sparse.PubChecked
+import Proofs.Flock.Recursive.HoloSchedCheck
 import Proofs.Flock.C3.Reps.DrawnRounds
 
 /-!
@@ -14,10 +15,10 @@ import Proofs.Flock.C3.Reps.DrawnRounds
   guarantee; `held_commits`: with `HeldOk`, the record held is the run's `C3`'s commits (`stageHeldW_sparse`'s `hh`);
 * `sparseStagesAt_sparseOf`: `SparseStagesAt` at the source whose sparse stages are the steps of `w` at `c` (`sparseOf`),
   from V*'s sessions at the run's `C3` (`SparseSessionAt`'s coins conjunct, `c.cs = sparseCs sc`) and `C3Held`;
-* `sparseCountedAt_of_rounds`: `SparseCountedAt` from the round-for-round count of the held sparse streams. The
-  verifier does not make that check: `checkCommitRounds`' first loop (`RecVStar.lean` 963-967) skips `sparse/…`, and
-  `sparseCoins` counts only the rounds that draw coins. The same loop at `sparsePhaseRounds sh` (`some sh := i.sparse`)
-  gives `h` as `coins_of_checkCommitRounds` gives the reps'.
+* `sparseCountedAt_of_rounds`: `SparseCountedAt` from the round-for-round count of the held sparse streams, which
+  `checkCommitRounds` makes at `sparsePhaseRounds sh` under `some sh := i.sparse` (`sparseCoins_of_checkCommitRounds`,
+  as `coins_of_checkCommitRounds` reads the reps'; `sparseCoins` counts only the rounds that draw coins), so
+  `sparseCountedAt_of_check` gives it from every hold's check.
 -/
 
 namespace FlockC3.Compose
@@ -29,6 +30,7 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockC3.Reps (repsOfVals UnitVals)
 open Flock.Guarantees (holoCTs holoKinds holoRounds heldBefore coinRounds sparseRounds c3Of)
+open Flock.Guarantees.HoloSchedCheck (checkBind_ok checkThrow_ne forIn_each)
 
 /-- **Custody at a drawn round holds the record**: where round `i` of the history draws a stream's round (`m.selC`),
 custody holds the record there (`FlockC3.Reps.stream_of_custody`). -/
@@ -176,6 +178,55 @@ theorem sparseCountedAt_of_rounds {Cm Coin : Type} {wr : List (Cm × Coin) → L
   rw [hname, String.startsWith_string_iff]
   simp only [FlockVBridge.toString_str, String.toList_append, List.append_assoc]
   exact List.prefix_append _ _
+
+/-- **`checkCommitRounds` accepting counts the sparse phases' coins**: under the verifier's RecSparse shape `sh`, every
+held stream named `sparse/…` draws `sparsePhaseRounds sh`'s coins round for round (its loop after the refusal of any
+other `sparse/…` name). -/
+theorem sparseCoins_of_checkCommitRounds {i : RecVStar.Inner} {cs : RecVStar.InnerCommits}
+    {rep : Array RecVStar.SchedRound} {sh : RecSparse.Shape}
+    (hsch : (if i.holo then RecVStar.holoRepRounds else RecVStar.repRounds) i.m i.kLog i.claims = some rep)
+    (hsp : i.sparse = some sh) (h : RecVStar.checkCommitRounds i cs = .ok ()) :
+    ∀ st ∈ cs.streams, st.name.startsWith s!"{RecVStar.SPARSE}/" = true →
+      st.coins.map (·.size) = (RecVStar.sparsePhaseRounds sh).map (·.1) := by
+  unfold RecVStar.checkCommitRounds at h
+  rw [hsch] at h
+  try simp only at h
+  obtain ⟨_, -, h⟩ := checkBind_ok h
+  split at h
+  · exact absurd h (checkThrow_ne _ _)
+  rcases hf : cs.streams.find? (fun st => st.name.startsWith s!"{RecVStar.SPARSE}/" &&
+      st.name != s!"{RecVStar.SPARSE}/rep0" && st.name != s!"{RecVStar.SPARSE}/rep1") with _ | stx
+  rotate_left
+  · rw [hf] at h
+    try simp only at h
+    exact absurd h (checkThrow_ne _ _)
+  rw [hf] at h
+  try simp only at h
+  obtain ⟨_, h, -⟩ := checkBind_ok h
+  unfold RecVStar.checkSparseCoins at h
+  rw [hsp] at h
+  try simp only at h
+  obtain ⟨_, h, -⟩ := checkBind_ok h
+  have hall := forIn_each (fun st : RecVStar.InnerStream => st.name.startsWith s!"{RecVStar.SPARSE}/" = true →
+      st.coins.map (·.size) = (RecVStar.sparsePhaseRounds sh).map (·.1)) ?_ cs.streams.toList
+    (Array.forIn_toList.trans h)
+  · exact fun st hst => hall st (Array.mem_toList_iff.2 hst)
+  intro a r hb
+  try simp only at hb
+  split at hb
+  · exact absurd hb (checkThrow_ne _ _)
+  · rename_i hne
+    exact ⟨fun hn => by simpa [hn] using hne, (Except.ok.inj hb).symm⟩
+
+/-- **`SparseCountedAt` from the verifier's check**: where every hold at `t` passes `checkCommitRounds` at an inner shape
+with a reps' schedule and RecSparse shape `sp` (`hchk_of_held`'s `hchk`), its sparse streams are counted. -/
+theorem sparseCountedAt_of_check {Cm Coin : Type} {wr : List (Cm × Coin) → Lean.Json × String}
+    {held : Lean.Json × String → Except String RecVStar.InnerCommits} {sp : RecSparse.Shape} {t : List (Cm × Coin)}
+    {i : RecVStar.Inner} {rep : Array RecVStar.SchedRound}
+    (hsch : (if i.holo then RecVStar.holoRepRounds else RecVStar.repRounds) i.m i.kLog i.claims = some rep)
+    (hsp : i.sparse = some sp) (hchk : ∀ cs, held (wr t) = .ok cs → RecVStar.checkCommitRounds i cs = .ok ()) :
+    SparseCountedAt wr held sp t :=
+  sparseCountedAt_of_rounds fun cs hh => sparseCoins_of_checkCommitRounds hsch hsp (hchk cs hh)
 
 end
 
