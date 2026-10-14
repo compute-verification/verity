@@ -12030,7 +12030,7 @@
    ]
   },
   "Flock.RecCoins": {
-   "digest": "fc778cb7c206cdcc9ac9f6ad703c044dfbef057ddd0ef0fc0794cbb9fd4a75fd",
+   "digest": "be430cc4f2253bfeb78aadf80218cb437b6be7a7262c6e83416f4904363cc336",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "fb0c0b18cbe96a25e62783a0293d3bcb904854eaddf13076a480f92d1489c427",
@@ -12101,7 +12101,7 @@
     "Flock.RecCoins.checkOpen": "cac39228b775be084b188b5c724a7fa0f225250305ff4b30db208166d17f3208",
     "Flock.RecCoins.checkOpen._sparseCasesOn_3": "70011e7aa1bba40df0340e061e112f65b24eec2ba8bbc9640b24792100243143",
     "Flock.RecCoins.checkOpen._sparseCasesOn_4": "623f6554b0467fbbc8c98025cf4c2fc200aa835828cc13653f9edf8a952089a5",
-    "Flock.RecCoins.checkOpening": "f02c5963ace5c052745ad0afd4cc1c68a065469366b7624d8ef9af74fe74fda2",
+    "Flock.RecCoins.checkOpening": "b50fe679b0ac01276cea476ab973f4c9d60d1ec0c3143fc5bda2eaa2a5f567fb",
     "Flock.RecCoins.checkResiduals": "1414d98b72f41c95c781f5ff3aed8d2ce25439122e2526adb1919f8375f530f4",
     "Flock.RecCoins.checkRows": "d0fd76da5899cc200a9c7cac06b1016dfd3a38a50bcdb6dbe6b24fbf126ac1a7",
     "Flock.RecCoins.checkRows._sparseCasesOn_7": "9899da9f27ffc471375c6929ab9efce9274e2e0dbc627c767cd48d004eef0026",
@@ -15725,7 +15725,7 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.ValueSrc": {
-   "digest": "a214fddc3875f30ca8eb82692fb97b764003988cb1bc3ff811e185245e0c25bd",
+   "digest": "bbeb24efba9d03914c1921efb366dd6a0865f16993e6e763c199229c5e35c5c5",
    "definitions": {
     "FlockC3.RegLevels.leavesV": "7a24e5e65a9fd6c1b599494f00fb3525ac3a08077d8b263b8fbcde3c55ca76a5",
     "FlockC3.RegLevels.lev": "db02a00333edb36cb19d5ca175214bd41121d9338a2b4fd1253ab1a124d82e22",
@@ -15757,7 +15757,7 @@
     "FlockSoundness.Discharge.Recursion.valueAt": "be23b6a577934cc0746c6f22365d406bf1d846b1576d4880ba0188f61da4c787",
     "FlockSoundness.Discharge.Recursion.valueFinder": "e6998b3e2c0cf31d3b84fde5dcc7ca9e81666eb12281358b2c7ef3b6f47cefdc",
     "FlockSoundness.Discharge.Recursion.valuePick": "97d48e5d1aa17f1493532e0f6f63586cdaf1f41e1ef59fe1282bc6b3e6c24c27",
-    "FlockSoundness.Discharge.Recursion.valueRows": "b8d972467b4ed90c392ffccff484e330055f4e09061f3d17934ea1d17bc8db79",
+    "FlockSoundness.Discharge.Recursion.valueRows": "e167055e96627af1d8de27a30b40b1e6a79ca3a5ee610bd1500cfa316be5ef46",
     "FlockSoundness.Discharge.Recursion.valueRows._sparseCasesOn_1": "b712dbd4101f4d59df52b02e31c06d46d3aacfde57bdbdc7ec147d237927fc0a",
     "FlockSoundness.Discharge.Recursion.valueRows._sparseCasesOn_2": "3bdd94c59576d6c2bb97a1ab01439d5331fc1c3c031bce53d5653358190e7957",
     "FlockSoundness.Discharge.Recursion.valueRowsAll": "8698108a9bcce76cd500c10dd328c0406eccafdafbcecedb33cde5310b7ca998",
