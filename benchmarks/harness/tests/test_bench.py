@@ -4,11 +4,12 @@ from dataclasses import replace
 
 import pytest
 
-from verity_vllm.bench.arms import Arm, resolve_arms
-from verity_vllm.bench.presets import SweepPoint, expand_sweep, get_preset, local_checkpoint
-from verity_vllm.bench.result import IdentityMismatch, judge, validate
-from verity_vllm.bench.runner import ResidentCapacityError, run_benchmark
-from verity_vllm.bench.table import render
+from verity_bench.cli import _parser
+from verity_bench.vllm.arms import Arm, resolve_arms
+from verity_bench.vllm.presets import GPUS, SweepPoint, expand_sweep, get_preset, local_checkpoint
+from verity_bench.vllm.result import IdentityMismatch, judge, validate
+from verity_bench.vllm.runner import ResidentCapacityError, run_benchmark
+from verity_bench.vllm.table import render
 
 
 class FakeEngine:
@@ -78,6 +79,15 @@ def test_sweep_expansion_and_staggered_mixed_requests():
     assert {p.prompt_tokens for p in full} == {512, 8192}
     assert {p.traffic for p in full} == {"decode-heavy", "prefill-heavy", "mixed"}
     assert [r.arrive_step for r in quick[0].requests()] == [0, 0, 1, 1, 2, 2, 3, 3]
+
+
+def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
+    args = _parser().parse_args([
+        "vllm", "--preset", "llama31-8b-fp8-1gpu", "--arms", "stock,stock-fp8", "--out", str(tmp_path),
+    ])
+    assert args.command == "vllm"
+    assert get_preset(args.preset).gpu_id == "rtx-pro-6000"
+    assert set(GPUS) == {"rtx-pro-6000", "h200"}
 
 
 def test_stock_precisions_are_independent_reference_arms():

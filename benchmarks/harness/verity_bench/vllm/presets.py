@@ -1,15 +1,24 @@
-"""Named machines and deterministic request sweeps for ``verity-vllm bench``."""
+"""Named machines and deterministic request sweeps for ``verity-bench vllm``."""
 
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity_vllm.engine.profiles.benchmark import PRESET_FACTS
-
 VLLM_PIN = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+# Stable ids are kept in this one table until the shared GPU registry lands.
+GPUS: dict[str, str] = {
+    "rtx-pro-6000": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "h200": "NVIDIA H200",
+}
+
+PRESET_FACTS: dict[str, dict[str, Any]] = json.loads(
+    Path(__file__).with_name("presets.json").read_text()
+)
 
 
 @dataclass(frozen=True)
@@ -21,7 +30,7 @@ class Preset:
     revision: str | None
     case: str | None
     precision: str
-    gpu_type: str
+    gpu_id: str
     gpu_count: int
     engine_settings: Mapping[str, Any] = field(default_factory=dict)
     vllm_pin: str = VLLM_PIN
@@ -54,6 +63,10 @@ PRESETS: dict[str, Preset] = {
     )
     for name, facts in PRESET_FACTS.items()
 }
+
+unknown_gpus = sorted({preset.gpu_id for preset in PRESETS.values()} - GPUS.keys())
+if unknown_gpus:
+    raise ValueError(f"benchmark presets name unknown GPU ids: {unknown_gpus}")
 
 
 def get_preset(name: str) -> Preset:

@@ -104,6 +104,7 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - the proof systems before C-Flock are in [`archive/`](archive/README.md)
 - `integrations/`: one directory per outside system; [`integrations/vllm/`](integrations/vllm/README.md) is the vLLM integration, a hooked vLLM engine that builds each served workload's circuit and commits its values while serving
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, including the [one-stage audit end to end](benchmarks/one_stage/README.md), and the benchmark tools
+- `benchmarks/harness/` (`verity-bench`, `verity_bench`): the shared top-level harness; `verity-bench vllm` measures integrations as a user and leaves the integration independent of benchmark policy
 - [`benchmarks/census/`](benchmarks/census/README.md): data only: hardware, datatypes, networks, subcircuits, input sets and workloads
 - `benchmarks/tc_probe/`, `benchmarks/tc_probe_fp4/`, `benchmarks/native_peak/`: GPU probes that compare tensor-core instructions bit for bit with the primitive circuits' models, and measure native peak throughput
 - `tools/verity/`: the `verity` command (`tools/verity/cli/`) and the tools it runs:

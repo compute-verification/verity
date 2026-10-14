@@ -1,4 +1,4 @@
-"""Benchmark arms: stock engines, protocol-option sets, and experimental hook modules."""
+"""vLLM benchmark arms: stock engines, protocol options, and hook modules."""
 
 from __future__ import annotations
 

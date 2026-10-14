@@ -15,9 +15,9 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Protocol
 
-from verity_vllm.bench import result as result_format
-from verity_vllm.bench.arms import Arm, Target, plugin
-from verity_vllm.bench.presets import Preset, SweepPoint
+from verity_bench.vllm import result as result_format
+from verity_bench.vllm.arms import Arm, Target, plugin
+from verity_bench.vllm.presets import Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228}
