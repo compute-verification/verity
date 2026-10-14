@@ -179,3 +179,15 @@ end Unit
 end
 
 end FlockC3.Sparse
+
+#print axioms FlockSoundness.Refine.zerocheck_refines_coins
+#print axioms FlockSoundness.Refine.holoLincheck_refines_coins
+#print axioms FlockSoundness.Refine.holoRep_refines_coins
+#print axioms FlockSoundness.Refine.holoRep_refines
+#print axioms FlockVBridge.Runs.rows_coins
+#print axioms FlockC3.HoloValues.holoRows_coins
+#print axioms FlockC3.HoloValues.rep_of_unit_coins
+#print axioms FlockC3.Sparse.pubOf_eq_holoPub
+#print axioms FlockC3.Sparse.layoutFactors_U
+#print axioms FlockC3.Sparse.hpos_of_unit
+#print axioms FlockC3.Sparse.pub_of_unit
