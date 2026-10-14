@@ -43,11 +43,11 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "shapes every output word of every launch equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v1 at the launch's "
              "statics, and every activation quant equals Fp8GroupQuant_v1, bit for bit."),
     Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v3",
-             "On the capture's Hopper GPU, GLM-5.3's and DeepSeek-V4-Pro's MoE gates (GateLinear) run cuteDSL ll_bf16_gemm on the "
-             "kernel dispatch_sm90 names at M <= 16 and cuBLAS past it, and under the split-K-off cuBLAS switch every f32 gate word "
-             "equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1 or GemmF32Out_v1, every DeepSeek-V4-Pro "
-             "compressor word GemmF32Out_v1, every lm_head-shard and indexer-projection word core's Gemm_v2, and every GLM-5.3 "
-             "q_nope / v absorb word BatchedGemm_v1, bit for bit."),
+             "On the capture device (cc 9.0, 132 SMs), the hidden-6144/N-256 and hidden-7168/N-384 MoE gates (GateLinear) run "
+             "cuteDSL ll_bf16_gemm on the kernel dispatch_sm90 names at M <= 16 and cuBLAS past it, and under the split-K-off "
+             "cuBLAS switch every f32 gate word equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1 or "
+             "GemmF32Out_v1, every hidden-7168 compressor word GemmF32Out_v1, every lm_head-shard and indexer-projection word "
+             "core's Gemm_v2, and every hidden-6144 K/N = 192/512 or 512/256 q_nope / v absorb word BatchedGemm_v1, bit for bit."),
     Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v1",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
