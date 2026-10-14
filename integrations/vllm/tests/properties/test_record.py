@@ -25,6 +25,7 @@ def test_seal_binds_ok_and_every_field_to_the_digest():
 
 def test_the_registry_names_each_harness_schema_once():
     from tests.properties import (
+        deepgemm_sm90_capture_gpu,
         dsv4_moe_capture_gpu,
         fa2_softcap_capture_gpu,
         fa2_target_capture_gpu,
@@ -43,6 +44,7 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["fa2_target_capture"].schema == fa2_target_capture_gpu.SCHEMA
     assert REGISTRY["fa2_softcap_capture"].schema == fa2_softcap_capture_gpu.SCHEMA
     assert REGISTRY["glm53_block_fp8_capture"].schema == glm53_block_fp8_capture_gpu.SCHEMA
+    assert REGISTRY["deepgemm_sm90_capture"].schema == deepgemm_sm90_capture_gpu.SCHEMA
     assert REGISTRY["glm53_bf16_gemm_capture"].schema == glm53_bf16_gemm_capture_gpu.SCHEMA
     assert REGISTRY["glm53_dsa_capture"].schema == glm53_dsa_capture_gpu.SCHEMA
     assert REGISTRY["glm53_tp8_allreduce_capture"].schema == glm53_tp8_allreduce_capture_gpu.SCHEMA
