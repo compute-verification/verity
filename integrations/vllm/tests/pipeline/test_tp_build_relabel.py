@@ -1,6 +1,6 @@
 """A relabeled TP Build (`build --emit-ranks`, the row's `--build-relabel on`) writes each rank the files a full derive of that rank
 writes, its guard fails closed by name, and with the flag off the Build is the one it was.  vLLM is not importable here, so the
-ranks are `tp_toy`'s (a vocab-parallel embedding, all-reduces and an all-gather through the construction's own `CollectiveBus`),
+ranks are `tp_toy`'s (a vocab-parallel embedding and cross-rank reduces through the construction's own `CollectiveBus`),
 at W = 2 (template rank 0) and W = 4 (template rank 1, so rank 0's START = 0 is relabeled to), derived and written in-process by
 the Build's own `_write_program`, `_finish` and `emit_ranks` (`_fake_build`, `build.run`'s order)."""
 from __future__ import annotations
