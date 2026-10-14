@@ -382,6 +382,10 @@ def test_profile_vocabulary_binds_the_served_default_glm53_families() -> None:
     v = PROFILE_B1_EAGER_V3
     assert v.kind("cublas_splitk_gemm", K=6144, N=160, SPLIT_K=4, DOT=HOPW).id == \
         bind(CB.CublasSplitKGemmWord, K=6144, N=160, SPLIT_K=4, DOT=HOPW).id
+    assert v.kind("cublas_gemm_f32out", K=6144, N=256, DOT=HOPW).id == \
+        bind(CB.GemmF32OutWord, K=6144, N=256, DOT=HOPW).id
+    assert v.kind("cublas_splitk_gemm_f32out", K=6144, N=256, SPLIT_K=3, DOT=HOPW).id == \
+        bind(CB.CublasSplitKGemmF32OutWord, K=6144, N=256, SPLIT_K=3, DOT=HOPW).id
     assert v.kind("batched_gemm", B=8, K=192, N=512, DOT=HOPW).id == bind(CB.BatchedGemmWord, B=8, K=192, N=512, DOT=HOPW).id
     assert v.kind("batched_gemm", B=8, K=512, N=256, DOT=HOPW).id == bind(CB.BatchedGemmWord, B=8, K=512, N=256, DOT=HOPW).id
     assert v.kind("ll_bf16_dotprod", N=256, K=6144, BS=128, VEC=8, FMA=1).id == \

@@ -307,6 +307,17 @@ class _Gate(nn.Module):
         return GATE_SITE.ll_bf16_gemm(x, self.weight, self.out_dtype)
 
 
+class _CublasGate(nn.Module):
+    """`GateLinear.forward`'s tier 4: default cuBLAS `torch.mm(x, W.T, out_dtype=float32)` above 16 tokens."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.empty(256, 6144, device="meta", dtype=torch.bfloat16), requires_grad=False)
+
+    def forward(self, x):
+        return torch.mm(x, self.weight.T, out_dtype=torch.float32)
+
+
 @pytest.mark.parametrize("M", [1, 5, 16])
 def test_the_gate_shim_exports_the_cutedsl_gemm_as_a_leaf_and_unwinds(M):
     from verity_vllm.program.frontend.export_compat import moe_gate_leaf
@@ -321,6 +332,26 @@ def test_the_gate_shim_exports_the_cutedsl_gemm_as_a_leaf_and_unwinds(M):
     gate = _Gate(rng, torch.bfloat16)
     with moe_gate_leaf(gate, site=GATE_SITE), pytest.raises(NotImplementedError, match="ll_bf16_gemm with output dtype torch.bfloat16"):
         torch.export.export(gate, (_bf16(rng, M, 8),), strict=False)
+
+
+def test_the_large_gate_binds_the_captured_default_cublas_splitk_route(served):
+    model = _CublasGate()
+    rep = _derive(model, (torch.empty(256, 6144, device="meta", dtype=torch.bfloat16),))
+    assert rep.program is not None, rep.unsupported
+    want = PROFILE_B1_EAGER_V3.kind("cublas_splitk_gemm_f32out", K=6144, N=256, SPLIT_K=3, DOT=DOT).id
+    assert _ids(rep) == [want] * 256
+    (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "CublasRouter[vllm-default]_v1"]
+    assert app["preconditions_checked"] == {
+        "M": 256, "K": 6144, "N": 256, "kernel": "splitk", "SPLIT_K": 3, "DOT": DOT.name
+    }
+    assert rep.provenance["weight_roles"]["weight"] == {
+        "rule": "CublasRouter[vllm-default]_v1", "role": "moe.gate.weight", "K": 6144, "N": 256
+    }
+
+
+def test_the_large_gate_refuses_an_uncaptured_default_cublas_route(served):
+    rep = _derive(_CublasGate(), (torch.empty(18, 6144, device="meta", dtype=torch.bfloat16),))
+    assert "no captured vLLM-default cuBLAS router route for M=18, K=6144, N=256" in _hint(rep)
 
 
 def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):

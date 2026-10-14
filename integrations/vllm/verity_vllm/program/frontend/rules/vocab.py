@@ -436,6 +436,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_q_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
            "cublas_splitk_gemm": lambda K, N, SPLIT_K, DOT:
                ir_bind(_cublas_bf16.CublasSplitKGemmWord, K=K, N=N, SPLIT_K=SPLIT_K, DOT=DOT),
+           "cublas_gemm_f32out": lambda K, N, DOT:
+               ir_bind(_cublas_bf16.GemmF32OutWord, K=K, N=N, DOT=DOT),
+           "cublas_splitk_gemm_f32out": lambda K, N, SPLIT_K, DOT:
+               ir_bind(_cublas_bf16.CublasSplitKGemmF32OutWord, K=K, N=N, SPLIT_K=SPLIT_K, DOT=DOT),
            "batched_gemm": lambda B, K, N, DOT: ir_bind(_cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=DOT),
            "ll_bf16_dotprod": lambda N, K, BS, VEC, FMA:
                ir_bind(_ll_bf16.LlBf16DotprodGemmWord, N=N, K=K, BS=BS, VEC=VEC, FMA=FMA),
@@ -518,6 +522,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_kv_rope": "RoPEHeadGptJ_v2{D}: _fused_norm_rope_kernel's interleaved k_pe head",
            "dsa_q_rope": "RoPEHeadGptJ_v2{D}: _fused_q_kernel's interleaved q_pe head",
            "cublas_splitk_gemm": "CublasSplitKGemm_v1{K,N,SPLIT_K,DOT}: vLLM-default cuBLAS BF16 linear at a captured split count",
+           "cublas_gemm_f32out": "GemmF32Out_v1{K,N,DOT}: vLLM-default cuBLAS BF16-to-F32 MoE gate at a captured non-split route",
+           "cublas_splitk_gemm_f32out": "CublasSplitKGemmF32Out_v1{K,N,SPLIT_K,DOT}: vLLM-default cuBLAS BF16-to-F32 MoE gate "
+                                                "at a captured split count",
            "batched_gemm": "BatchedGemm_v1{B,K,N,DOT}: vLLM-default cuBLAS batched BF16 MLA absorption",
            "ll_bf16_dotprod": "LlBf16DotprodGemm_v1{N,K,BS,VEC,FMA}: vLLM-default cuteDSL MoE gate for M <= 4",
            "ll_bf16_splitk": "LlBf16SplitKGemm_v1{N,K,SPLIT_K,TILE_K,WARPS,DOT}: vLLM-default cuteDSL MoE gate for 5 <= M <= 16",
