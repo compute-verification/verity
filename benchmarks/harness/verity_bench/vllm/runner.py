@@ -212,7 +212,11 @@ def _identity(
     arm_docs = []
     for arm in arms:
         runtime = versions[arm.id]
-        arm_docs.append({**arm.to_json(), "kernel_digest": runtime.get("kernel_digest") or arm.kernel_digest})
+        arm_docs.append({
+            **arm.to_json(),
+            "kernel_digest": runtime.get("kernel_digest") or arm.kernel_digest,
+            "engine_overrides": dict(runtime.get("engine_overrides") or {}),
+        })
     return {
         "preset": preset.to_json(),
         "vllm_version": vllm_version,
@@ -323,11 +327,12 @@ def _callback(obj: Any, name: str, target: Target, default: Any) -> Any:
 class _DirectLLM:
     """The subset of ``verity_vllm.LLM`` needed for a content-bound local checkpoint."""
 
-    def __init__(self, llm: Any) -> None:
+    def __init__(self, llm: Any, engine_overrides: Mapping[str, Any]) -> None:
         from verity_vllm.engine.engine_profile import get_model_runner
 
         runner = get_model_runner(llm)
         self._engine = SimpleNamespace(llm=llm, model=runner.get_model())
+        self.engine_record = {"engine_overrides": dict(engine_overrides)}
         self.protocols = None
 
     def close(self) -> None:
@@ -370,13 +375,14 @@ class _VllmEngine:
         engine: dict[str, Any] = {
             "tensor_parallel_size": preset.gpu_count,
             "max_num_seqs": 128,
-            "max_num_batched_tokens": int(settings["max_num_batched_tokens"]),
             "max_model_len": int(settings["max_model_len"]),
             "gpu_memory_utilization": float(settings[
                 "resident_gpu_memory_utilization" if resident else "block_gpu_memory_utilization"
             ]),
             "enforce_eager": eager,
         }
+        if settings.get("max_num_batched_tokens") is not None:
+            engine["max_num_batched_tokens"] = int(settings["max_num_batched_tokens"])
         if precision == "fp8":
             engine["quantization"] = "fp8"
         elif precision != "bfloat16":
@@ -390,12 +396,15 @@ class _VllmEngine:
         if preset.model_digest is not None:
             if arm.protocols:
                 raise ValueError("a local checkpoint override supports stock and experimental arms, not protocol-option arms")
-            self.llm = _DirectLLM(vllm.LLM(
-                model=preset.model,
-                enable_prefix_caching=False,
-                seed=0,
-                **engine,
-            ))
+            self.llm = _DirectLLM(
+                vllm.LLM(
+                    model=preset.model,
+                    enable_prefix_caching=False,
+                    seed=0,
+                    **engine,
+                ),
+                {k: engine[k] for k in ("dtype", "quantization", "compilation_config") if engine.get(k) is not None},
+            )
         else:
             engine["protocols"] = ",".join(arm.protocols) or None
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
@@ -413,6 +422,7 @@ class _VllmEngine:
                 else arm.kernel_digest
             ),
             "gpu": torch.cuda.get_device_name(0),
+            "engine_overrides": dict(self.llm.engine_record.get("engine_overrides") or {}),
         }
 
     def _requests(self, point: SweepPoint) -> list[Any]:

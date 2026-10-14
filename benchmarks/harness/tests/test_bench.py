@@ -8,6 +8,7 @@ import pytest
 
 from verity_bench.cli import _parser
 from verity_bench.vllm.arms import Arm, resolve_arms
+from verity_bench.vllm.cli import effective_eager
 from verity_bench.vllm.presets import GPUS, SweepPoint, expand_sweep, get_preset, local_checkpoint
 from verity_bench.vllm.result import IdentityMismatch, judge, validate
 from verity_bench.vllm.runner import ResidentCapacityError, run_benchmark
@@ -17,7 +18,11 @@ from verity_bench.vllm.table import render
 class FakeEngine:
     def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
-        self.identity = {"vllm_version": "0.fake+gd9105ea80", "kernel_digest": f"digest-{arm.id}"}
+        self.identity = {
+            "vllm_version": "0.fake+gd9105ea80",
+            "kernel_digest": f"digest-{arm.id}",
+            "engine_overrides": {"quantization": "fp8"} if arm.id == "stock-fp8" else {},
+        }
 
     def gate(self, point):
         self.events.append(("gate", self.arm.id, point.id))
@@ -92,6 +97,14 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
     assert set(GPUS) == {"rtx-pro-6000", "h200"}
 
 
+def test_glm53_keeps_the_verified_vllm_scheduler_default_and_runs_eager():
+    preset = get_preset("glm53-fp8-8gpu")
+    assert preset.revision == "aca966e4e02791568aa6a4ced368624b3d897f42"
+    assert "max_num_batched_tokens" not in preset.engine_settings
+    assert effective_eager(preset, requested=False) is True
+    assert get_preset("llama31-8b-fp8-1gpu").engine_settings["max_num_batched_tokens"] == 16_384
+
+
 def test_stock_precisions_are_independent_reference_arms():
     arms = resolve_arms("stock,stock-fp8")
     assert [(arm.id, arm.precision, arm.control) for arm in arms] == [
@@ -155,6 +168,7 @@ def test_result_schema_and_identity_strict_judge():
     preset, points, arms = inputs()
     doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
     validate(doc)
+    assert doc["identity"]["arms"][0]["engine_overrides"] == {"quantization": "fp8"}
     other = {**doc, "identity": {**doc["identity"], "git_commit": "def"}}
     with pytest.raises(IdentityMismatch, match="git_commit"):
         judge(doc, other)
