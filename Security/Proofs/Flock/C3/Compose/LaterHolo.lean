@@ -249,7 +249,3 @@ end src
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.sparse_c3Of
-#print axioms FlockC3.Compose.laterCoins_holo
-#print axioms FlockC3.Compose.stageCoins_holo_held

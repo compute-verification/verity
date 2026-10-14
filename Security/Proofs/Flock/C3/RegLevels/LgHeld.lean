@@ -184,7 +184,3 @@ theorem stagesHeld_of_run {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List 
   exact stageHeld_stacked hh hc3 hrep hsp hsh hcl hrs hcsz htbl hj hlg (by omega) (by omega)
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.stageHeld_stacked
-#print axioms FlockC3.RegLevels.le_size_of_ringSwitch
-#print axioms FlockC3.RegLevels.stagesHeld_of_run
