@@ -38,17 +38,11 @@ negative while swa_len > 0 (pos = INT32_MAX, or pos below INT32_MIN + WINDOW - 1
 outside its row; the Definition gives that row's own slots (all -1) and its length.  A served position is below
 `max_model_len`.
 
-The decode's indices are not Definitions here.  The window's (`_compute_swa_indices_and_lens_kernel`,
-v1/attention/backends/mla/sparse_swa.py:931-1008) are slot ids of the paged window cache: for a valid token, slot o is
-`block_table[req][(start + o) // block_size] * block_size + (start + o) % block_size` for o < its window length (the
-arithmetic of the window above) and -1 past it, and an invalid token's row is all -1 with length 0.  That is a function of the
-block table, the position and the window, all schedule metadata, the class of `_compute_slot_mappings_kernel` (the
-public-metadata kernels `kernel_allowlist` names): FlashMLA's decode takes the rows they select and their lengths, and which
-rows is wiring the verifier derives from the schedule, as the capture resolves each slot to its position through the step's
-block tables.  Ratio 128's decode row is the same class (`_build_c128a_topk_metadata_kernel`'s decode branch, sparse_mla.py:
-388-416: the block-table slots of positions below min((position + 1) // 128, K), the length 0 for an invalid token).  Still
-open: ratio 4's decode row, `compute_global_topk_indices_and_lens` (cache_utils.py:435-517), the block-table lookup of the
-indexer's selection, a function of a committed value.
+The decode's indices are Definitions of their own modules: the window's (`_compute_swa_indices_and_lens_kernel`,
+v1/attention/backends/mla/sparse_swa.py:924-1008, slot ids of the paged window cache) and ratio 128's
+(`_build_c128a_topk_metadata_kernel`'s decode branch, sparse_mla.py:361-416) are `dsv4_decode_metadata.Dsv4SwaIndices_v1` and
+`.Dsv4C128aGlobalTopk_v1`; ratio 4's (`compute_global_topk_indices_and_lens`, cache_utils.py:435-517, the block-table lookup of
+the indexer's selection) is `dsv4_decode_indices.Dsv4GlobalTopk_v1`.
 
 Registered functions:
   Dsv4CombineTopkSwa{TOPK,RATIO,WINDOW,WIDTH}  (topk: TOPK i32, pos, mb, n, gs: i32) -> (WIDTH i32, len: i32)

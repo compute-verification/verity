@@ -8,7 +8,7 @@ on bf16 an FMA with -0.
 
 One output word of one (token, slot) pair, column n, over K:
 
-    w[k]   = Bf16MulBf16(E2m1ToBf16(q[k]), MarlinE8m0ToBf16(s[k / 32])) dequant.h:433-470, 551-562; the template's scale(), 115-123
+    w[k]   = Bf16MulBf16(E2m1ToBf16(q[k]), E8m0DequantBf16(s[k / 32]))  dequant.h:433-470, 551-562; the template's scale(), 115-123
     acc_r  = per warp row r < W = TK / 32, over the k-tiles t of a segment in ascending order, from +0 (zero_accums at each slice):
              HopperBF16WgmmaDot16(acc_r, x[t*TK + 32r + 16j : +16], w[same]) for j = 0, 1     the template 1068-1080, 1179
     P      = acc_0 + (acc_1 + (acc_3 + acc_2)) for W = 4, acc_0 + acc_1 for W = 2          thread_block_reduce, 1539-1593
@@ -18,10 +18,10 @@ One output word of one (token, slot) pair, column n, over K:
 The k16 step is `mma.sync.m16n8k16` (bf16, f32 accumulate), which on sm_90 is `HopperBF16WgmmaDot16_v1` (`DOT`: measured equal on the
 H100, `verity.ml.circuits.silicon` `_H100_MMA_EQ_WGMMA`); the moe block of 8 (`m_block_size_8`) runs `mma_trans`, the operands
 swapped, which leaves each product a * b.  The f32 adds are FADD: Marlin MoE is built without fast-math.  `E2m1ToBf16` is the exact
-e2m1 value (the code's bits placed into a bf16 word, then times 2^126 by `__hmul2`: exact, a zero code's sign kept),
-`MarlinE8m0ToBf16` the scale byte shifted to the bf16 exponent (code 0 is +0, 255 is +inf), so `w[k]` is exact but for overflow
-(inf), and 0 times inf is NaN.  It is not FlashMLA's `E8m0ToBf16_v1` (`__nv_cvt_e8m0_to_bf16raw`: code 0 the subnormal 2^-127,
-255 NaN), which agrees with it on codes 1 to 254 only.
+e2m1 value (the code's bits placed into a bf16 word, then times 2^126 by `__hmul2`: exact, a zero code's sign kept), `E8m0DequantBf16`
+the scale byte shifted to the bf16 exponent (code 0 is +0, 255 is +inf), so `w[k]` is exact but for overflow (inf), and 0 times inf
+is NaN.  It is not FlashMLA's `E8m0ToBf16_v1` (`__nv_cvt_e8m0_to_bf16raw`: code 0 the subnormal 2^-127, 255 NaN), which agrees
+with it on codes 1 to 254 only.
 
 A segment is the run of k-tiles one CTA computes for a tile; s > 1 segments are split K, and their partial sums P_i (P_0 holding
 k-tile 0) are folded by `slice_idx`, which the CTA holding the highest k leads.  Which k-tiles start a segment is the launch's
@@ -39,7 +39,7 @@ the launch's thread config (TK, TN) (ops.cu:274-342; the H200's numRegs decide b
 from atomicAdd (moe_align_sum_kernels.cu), so they are committed values of the run, not functions of the routing.
 
 Registered functions (`_v1`):
-  E2m1ToBf16, MarlinE8m0ToBf16                primitives: the exact e2m1 value, the e8m0 scale as bf16
+  E2m1ToBf16, E8m0DequantBf16                 primitives: the exact e2m1 value, the e8m0 scale as bf16
   I32Mul, I32Div, I32Rem                      primitives: mul.lo.s32, div.s32, rem.s32 (C `int` * / %); a zero divisor gives
                                               quotient -1 and remainder a (a total extension: every divisor here is a positive count)
   MarlinMxfp4Group                            (q: 32 e2m1, s: e8m0) -> 32 bf16: one scale group's weights, the scale decoded once
@@ -116,8 +116,8 @@ def E2m1ToBf16(q: int) -> int:
     return e2m1_to_bf16(q)
 
 
-@primitive("MarlinE8m0ToBf16", 1, [("s", E8M0)], BF16, conformance=_CONF)
-def MarlinE8m0ToBf16(s: int) -> int:
+@primitive("E8m0DequantBf16", 1, [("s", E8M0)], BF16, conformance=_CONF)
+def E8m0DequantBf16(s: int) -> int:
     """`dequant_fp8_scales<nv_bfloat162, kFE8M0fnu>` on one byte: `e8m0_to_bf16`."""
     return e8m0_to_bf16(s)
 
@@ -157,7 +157,7 @@ def I32Rem(a: int, b: int) -> int:
     return i32_divrem(a, b)[1]
 
 
-MARLIN_PRIMITIVES = [E2m1ToBf16, MarlinE8m0ToBf16, I32Mul, I32Div, I32Rem]
+MARLIN_PRIMITIVES = [E2m1ToBf16, E8m0DequantBf16, I32Mul, I32Div, I32Rem]
 
 
 def group_sig(e2m1=E2M1, e8m0=E8M0, bf16=BF16):
@@ -169,7 +169,7 @@ def MarlinMxfp4Group(B, S, q, s):
     """One scale group's 32 dequantised weights: `scale()`'s `__hmul2` (the template 115-123) of each e2m1 value and the group's
     e8m0 scale, a single bf16 rounding, which Bf16MulBf16_v1's f32 product then RNE equals (the product of two bf16 words is exact
     in f32)."""
-    sb = B.call(MarlinE8m0ToBf16, s)
+    sb = B.call(E8m0DequantBf16, s)
     return B.batch(Bf16MulBf16, B.batch(E2m1ToBf16, q, axes=(0,)), sb, axes=(0, None))
 
 

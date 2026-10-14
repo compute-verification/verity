@@ -131,6 +131,20 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "dsv4HashTopkSoftplusSqrt over tid2eid and the clamped SwiGLU (silu_and_mul_with_clamp, limit 10, vectorised at "
              "d = 384 and scalar at d = 9) return exactly MoeRouterSqrtSoftplus_v1, MoeRouterHash_v1 and SiluMulClamp_v1 on "
              "every captured row."),
+    Property("dsv4_decode_index_row_capture", "verity-vllm/dsv4-decode-index-row-capture/v1",
+             "On the capture's Hopper GPU, the DSV4 row's ratio-4 FlashMLA decode calls vLLM's Triton "
+             "compute_global_topk_indices_and_lens (Triton 3.7.1) at block size 64, whose PTX holds the arithmetic the Definition "
+             "was read from, and at the row's TP8 statics (the top-k of 1024, the block table's row at max_model_len 1,048,576 and "
+             "4096) every slot id and length it writes for a decode token, padding tokens and bytes other than 0 and 1 included, "
+             "equals Dsv4GlobalTopk_v1, at served steps and at the int32 edges of its domain, bit for bit."),
+    Property("dsv4_decode_metadata_capture", "verity-vllm/dsv4-decode-metadata-capture/v1",
+             "On the capture's Hopper GPU, the DSV4 row's FlashMLA decode reads the window builder's "
+             "_compute_swa_indices_and_lens_kernel and the HCA builder's _build_c128a_topk_metadata_kernel (Triton 3.7.1), whose "
+             "PTX holds the arithmetic the Definitions were read from, and at the row's TP8 statics (the window of 128 at block 64, "
+             "ratio 128 at block 2 and the step's width, the block tables' rows at max_model_len 1,048,576 and 4096) every slot id "
+             "and length they write for a decode token, padding tokens and bytes other than 0 and 1 included, equals "
+             "Dsv4SwaIndices_v1 and Dsv4C128aGlobalTopk_v1, at served steps and at the int32 and int64 edges of their domains, bit "
+             "for bit."),
     Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
              "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
              "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),

@@ -68,6 +68,9 @@ PORTED = {
     "sqrtsoftplus-router": ["MoeRouterSqrtSoftplus_v1", "MoeRouterSqrtSoftplus_v2"],
     "hash-router": ["MoeRouterHash_v1", "MoeRouterHash_v2"],
     "silu-mul-clamp": ["SiluMulClamp_v1", "SiluMulClamp_v2"],
+    "dsv4-csa-decode-indices": ["Dsv4GlobalTopk_v1", "Dsv4GlobalTopk_v2"],
+    "dsv4-swa-decode-indices": ["Dsv4SwaIndices_v1", "Dsv4SwaIndices_v2"],
+    "dsv4-hca-decode-indices": ["Dsv4C128aGlobalTopk_v1", "Dsv4C128aGlobalTopk_v2"],
 }
 
 DECODE = ("hc-fused", "indexer-short", "decode-tokens")
@@ -329,17 +332,17 @@ def test_the_program_statuses():
     """What has no Definition on main is `tonight` on the branch of the row that writes it.  The Programs that went GO on the H200
     on other rows' branches (the TP8 all-reduce at H 7168, the query norm and cache insert, the indexer's query, the head-512
     compressor, mHC, hc_head, FlashMLA's decode and prefill, the indexer's compressor, logits, short-context fill and inverse
-    RoPE, and the two routers and the clamped SwiGLU) are `port`: registered here, bound by no Build rule.  Committed-only are the decode attention's indices, which no row
-    states yet.  The step's two inputs from the schedule, its token ids and its
-    positions, are root inputs no kernel computes, held by word equality (`copy-equality`)."""
+    RoPE, the two routers and the clamped SwiGLU, and the decode attention's window, ratio-4 and ratio-128 indices) are `port`:
+    registered here, bound by no Build rule.  No Program is committed-only.  The step's two inputs from the schedule, its token ids
+    and its positions, are root inputs no kernel computes, held by word equality (`copy-equality`)."""
     statuses = {pid: p["status"] for pid, p in CMAP["programs"].items()}
-    assert {statuses[t["program"]] for t in CMAP["taps"]} == set(CM.STATUSES)
+    assert {statuses[t["program"]] for t in CMAP["taps"]} == set(CM.STATUSES) - {"committed-only"}
     tonight: dict[str, set[str]] = {}
     for pid, p in CMAP["programs"].items():
         if p["status"] == "tonight":
             tonight.setdefault(p["branch"], set()).add(pid)
     assert tonight == OWNERS
-    assert {pid for pid, s in statuses.items() if s == "committed-only"} == {"dsv4-decode-indices"}
+    assert {pid for pid, s in statuses.items() if s == "committed-only"} == set()
     assert {t["id"] for t in CMAP["taps"] if t["program"] == "copy-equality"} == {"input_ids", "attn.positions"}
     assert {pid: (statuses[pid], CMAP["programs"][pid]["definitions"]) for pid in PORTED} == {
         pid: ("port", defs) for pid, defs in PORTED.items()}
@@ -348,16 +351,40 @@ def test_the_program_statuses():
         assert p["status"] != "tonight" or not p["definitions"]
 
 
-def test_a_decode_step_s_one_tf32_mhc_pre_is_layer_0s_and_its_committed_only_taps_the_attention_bookkeeping():
+def test_a_decode_step_s_one_tf32_mhc_pre_is_layer_0s_and_no_tap_is_committed_only():
     """On a decode step (<= 16 tokens) every mHC pre after layer 0's is the FMA kernel; layer 0's broadcast pre runs DeepGEMM's
     TF32 GEMM at every token count, so its four returns are the step's only TF32 mHC taps. Nothing of prefill's FlashMLA runs, and
-    what stays committed-only is the decode attention's indices."""
+    no tap is committed-only: the decode attention's indices are the three decode index rows' Programs."""
     status = {pid: p["status"] for pid, p in CMAP["programs"].items()}
     taps = list(CM._step_taps(CMAP, ENV, "decode", DECODE))
     tf32 = [(t["id"], layer) for t, layer in taps if t["program"] == "mhc-tf32"]
     assert tf32 == [(f"hc_attn.first.{v}", 0) for v in ("residual", "post_mix", "comb_mix", "x")]
     assert not any(t["program"] == "flashmla-sparse-prefill" for t, _ in taps)
-    assert {t["program"] for t, _ in taps if status[t["program"]] == "committed-only"} == {"dsv4-decode-indices"}
+    assert {t["program"] for t, _ in taps if status[t["program"]] == "committed-only"} == set()
+
+
+def test_the_decode_index_rows_are_programs(registry):
+    """FlashMLA's decode indices and lengths each cite their row's Program, every one `port` at registered Definitions: every
+    layer's window (`dsv4-swa-decode-indices`, `Dsv4SwaIndices_v1`), a CSA layer's top-k (`dsv4-csa-decode-indices`,
+    `Dsv4GlobalTopk_v1`) and an HCA layer's ratio-128 row (`dsv4-hca-decode-indices`, `Dsv4C128aGlobalTopk_v1`).  Each layer has
+    one length tap, under one committed name."""
+    rows = {"swa": "dsv4-swa-decode-indices", "csa": "dsv4-csa-decode-indices", "hca": "dsv4-hca-decode-indices"}
+    for pid in rows.values():
+        p = CMAP["programs"][pid]
+        assert p["status"] == "port" and p["definitions"] and all(d in registry for d in p["definitions"]), pid
+    csa, hca = (set(CM.layer_set(CMAP, k, ENV)) for k in ("csa", "hca"))
+    by = {}
+    for t, layer in CM._step_taps(CMAP, ENV, "decode", DECODE):
+        if t["op"] == "layers.{i}.attn.decode_indices":
+            by.setdefault((t["port"], layer), []).append(t)
+    for (port, layer), ts in by.items():
+        assert len(ts) == 1, (port, layer)
+        row = "swa" if port in (0, 1) else "csa" if layer in csa else "hca"
+        assert ts[0]["program"] == rows[row], (port, layer)
+    assert {layer for (port, layer) in by if port == 3} == csa | hca == set(range(ENV["L"]))
+    assert len(by) == 2 * ENV["L"] + 2 * (len(csa) + len(hca))
+    lens = [t for t in CMAP["taps"] if t["id"].startswith("attn.extra_lens")]
+    assert {t["commit"]["name"] for t in lens} == {"model.layers.{i}.attn/extra_lens"}
 
 
 @pytest.mark.parametrize("step", sorted(STEPS))
@@ -396,15 +423,15 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 11, "port": 55, "copy": 2, "committed-only": 5})
+        42, 28, {"exists": 5, "tonight": 11, "port": 61, "copy": 2, "committed-only": 0})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        64, 2539, {"exists": 125, "tonight": 518, "port": 1650, "copy": 2, "committed-only": 244}, 122)
+        65, 2539, {"exists": 125, "tonight": 518, "port": 1894, "copy": 2, "committed-only": 0}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        68, 2659, {"exists": 125, "tonight": 548, "port": 1740, "copy": 2, "committed-only": 244}, 242)
+        69, 2659, {"exists": 125, "tonight": 548, "port": 1984, "copy": 2, "committed-only": 0}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
         63, 2415, {"exists": 125, "tonight": 548, "port": 1740, "copy": 2, "committed-only": 0}, 726)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        69, 2720, {"exists": 125, "tonight": 548, "port": 1801, "copy": 2, "committed-only": 244}, 787)
+        70, 2720, {"exists": 125, "tonight": 548, "port": 2045, "copy": 2, "committed-only": 0}, 787)
 
 
 def test_the_bound_tap_counts():

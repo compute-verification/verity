@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "Dsv4GlobalTopkLen_v2{TOPK=1024}": {
+   "and": 1041
+  },
+  "Dsv4GlobalTopkLen_v2{TOPK=16}": {
+   "and": 27
+  },
+  "Dsv4GlobalTopkLen_v2{TOPK=8}": {
+   "and": 18
+  },
+  "Dsv4GlobalTopkSlot_v2{BS=4,NB=8}": {
+   "and": 268
+  },
+  "Dsv4GlobalTopkSlot_v2{BS=64,NB=16}": {
+   "and": 443
+  },
+  "Dsv4GlobalTopkSlot_v2{BS=64,NB=4096}": {
+   "and": 106515
+  },
+  "Dsv4GlobalTopk_v2{TOPK=16,BS=64,NB=16}": {
+   "and": 7115
+  },
+  "Dsv4GlobalTopk_v2{TOPK=8,BS=4,NB=8}": {
+   "and": 2162
+  }
+ }
+}
