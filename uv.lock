@@ -1621,11 +1621,15 @@ name = "verity-bench"
 version = "0.1.0"
 source = { editable = "benchmarks/harness" }
 dependencies = [
+    { name = "verity-config" },
     { name = "verity-vllm" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-vllm", editable = "integrations/vllm" }]
+requires-dist = [
+    { name = "verity-config", editable = "tools/config" },
+    { name = "verity-vllm", editable = "integrations/vllm" },
+]
 
 [[package]]
 name = "verity-check"

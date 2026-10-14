@@ -1,24 +1,17 @@
-"""Named machines and deterministic request sweeps for ``verity-bench vllm``."""
+"""Strict benchmark specs and deterministic request sweeps for vLLM."""
 
 from __future__ import annotations
 
 import hashlib
-import json
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping
 
+from verity_config import Admission, ConfigError, gpus, load, sha256
+
 VLLM_PIN = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
-
-# Stable ids are kept in this one table until the shared GPU registry lands.
-GPUS: dict[str, str] = {
-    "rtx-pro-6000": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
-    "h200": "NVIDIA H200",
-}
-
-PRESET_FACTS: dict[str, dict[str, Any]] = json.loads(
-    Path(__file__).with_name("presets.json").read_text()
-)
+SPEC_ROOT = Path(__file__).resolve().parents[3] / "specs"
+GPUS = gpus()
 
 
 @dataclass(frozen=True)
@@ -41,26 +34,109 @@ class Preset:
         return asdict(self)
 
 
-COMMON = {
-    "cuda_graphs": True,
-    "capture_sizes": [1, 8, 32, 128],
-    "max_model_len": 8_384,
-    "resident_gpu_memory_utilization": 0.40,
-    "block_gpu_memory_utilization": 0.90,
-}
+@dataclass(frozen=True)
+class BenchmarkSpec:
+    """One runnable benchmark configuration before its named sweep is resolved."""
+
+    schema: str
+    backend: str
+    id: str
+    arms: tuple[str, ...]
+    sweep: str
+    reps: int
+    eager: bool
+    preset: Preset
+    arm_modules: tuple[str, ...] = ()
+    admission: Admission = Admission()
+
+
+@dataclass(frozen=True)
+class Sweep:
+    schema: str
+    id: str
+    batches: tuple[int, ...]
+    prompt_tokens: tuple[int, ...]
+    traffic: tuple[str, ...]
+    output_tokens: Mapping[str, int]
+
+
+@dataclass(frozen=True)
+class ResolvedSpec:
+    schema: str
+    backend: str
+    id: str
+    arms: tuple[str, ...]
+    sweep: Sweep
+    reps: int
+    eager: bool
+    preset: Preset
+    arm_modules: tuple[str, ...] = ()
+    admission: Admission = Admission()
+
+    @property
+    def config_sha256(self) -> str:
+        return sha256(self, identity=True)
+
+
+def _spec_path(spec: str | Path) -> Path:
+    path = Path(spec)
+    if path.is_file():
+        return path
+    named = SPEC_ROOT / f"{spec}.toml"
+    if named.is_file():
+        return named
+    raise ConfigError(f"no benchmark spec {spec!r}")
+
+
+def load_spec(spec: str | Path) -> BenchmarkSpec:
+    path = _spec_path(spec)
+    doc = load(path, BenchmarkSpec)
+    if doc.schema != "verity-bench/vllm-spec/v0" or doc.backend != "vllm":
+        raise ConfigError(f"{path}: expected a verity-bench/vllm-spec/v0 document")
+    if doc.id != doc.preset.id:
+        raise ConfigError(f"{path}: spec id {doc.id!r} differs from preset id {doc.preset.id!r}")
+    if doc.preset.gpu_id not in GPUS:
+        raise ConfigError(f"{path}: unknown GPU id {doc.preset.gpu_id!r}")
+    if doc.preset.gpu_count < 1 or doc.preset.gpu_count > GPUS[doc.preset.gpu_id].count_per_node:
+        raise ConfigError(f"{path}: gpu_count is outside {doc.preset.gpu_id!r}'s per-node capacity")
+    if doc.reps < 1 or not doc.arms:
+        raise ConfigError(f"{path}: arms must be nonempty and reps must be positive")
+    return doc
+
+
+def load_sweep(name: str) -> Sweep:
+    path = SPEC_ROOT / f"{name}.toml"
+    doc = load(path, Sweep)
+    if doc.schema != "verity-bench/vllm-sweep/v0" or doc.id != name:
+        raise ConfigError(f"{path}: expected sweep {name!r}")
+    if not doc.batches or not doc.prompt_tokens or not doc.traffic:
+        raise ConfigError(f"{path}: sweep axes must be nonempty")
+    missing = sorted(set(doc.traffic) - set(doc.output_tokens))
+    if missing:
+        raise ConfigError(f"{path}: output_tokens has no value for {missing}")
+    return doc
+
+
+def resolve_spec(spec: str | Path) -> ResolvedSpec:
+    doc = load_spec(spec)
+    return ResolvedSpec(
+        schema=doc.schema,
+        backend=doc.backend,
+        id=doc.id,
+        arms=doc.arms,
+        sweep=load_sweep(doc.sweep),
+        reps=doc.reps,
+        eager=doc.eager,
+        preset=doc.preset,
+        arm_modules=doc.arm_modules,
+        admission=doc.admission,
+    )
+
 
 PRESETS: dict[str, Preset] = {
-    name: Preset(
-        id=name,
-        **{
-            **facts,
-            "engine_settings": {
-                **COMMON,
-                **facts.get("engine_settings", {}),
-            },
-        },
-    )
-    for name, facts in PRESET_FACTS.items()
+    path.stem: load_spec(path).preset
+    for path in sorted(SPEC_ROOT.glob("*.toml"))
+    if "vllm-spec/v0" in path.read_text(encoding="utf-8").splitlines()[0]
 }
 
 unknown_gpus = sorted({preset.gpu_id for preset in PRESETS.values()} - GPUS.keys())
@@ -159,16 +235,12 @@ class SweepPoint:
 
 
 def expand_sweep(name: str) -> tuple[SweepPoint, ...]:
-    """Expand ``quick`` (two batches, one mixed shape) or the fixed full panel."""
+    """Expand a strict sweep document into its fixed Cartesian product."""
 
-    if name == "quick":
-        return tuple(SweepPoint(b, 512, "mixed", 64) for b in (8, 32))
-    if name != "full":
-        raise ValueError("benchmark sweep must be 'quick' or 'full'")
-    output = {"decode-heavy": 128, "prefill-heavy": 8, "mixed": 64}
+    sweep = load_sweep(name)
     return tuple(
-        SweepPoint(batch, prompt, traffic, output[traffic])
-        for batch in (1, 8, 32, 128)
-        for prompt in (512, 8192)
-        for traffic in ("decode-heavy", "prefill-heavy", "mixed")
+        SweepPoint(batch, prompt, traffic, sweep.output_tokens[traffic])
+        for batch in sweep.batches
+        for prompt in sweep.prompt_tokens
+        for traffic in sweep.traffic
     )

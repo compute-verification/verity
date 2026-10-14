@@ -1,0 +1,27 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "llama31-70b-fp8-8gpu"
+arms = ["stock", "stock-fp8"]
+sweep = "quick"
+reps = 3
+eager = false
+
+[preset]
+id = "llama31-70b-fp8-8gpu"
+model = "meta-llama/Llama-3.1-70B"
+precision = "fp8"
+gpu_id = "rtx-pro-6000"
+gpu_count = 8
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+unavailable_reason = "the repository has no pinned Llama-3.1-70B checkpoint yet"
+
+[preset.engine_settings]
+cuda_graphs = true
+capture_sizes = [1, 8, 32, 128]
+max_model_len = 8384
+resident_gpu_memory_utilization = 0.44
+block_gpu_memory_utilization = 0.90
+max_num_batched_tokens = 16384
+
+[admission]
+max_minutes = 240
