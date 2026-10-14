@@ -82,7 +82,7 @@ which is the headline, and against the measured one beside it. The figures above
 TB/s. The RTX PRO 6000 Server Edition is specified at 1.597 TB/s, which no measured kernel reaches, so at spec every
 reading also carries that gap: \(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\),
 about 7.5% for the worst stated window. The 1% per window holds at the measured \(R\) only. The two-machine sessions
-(`benchmarks/remote_session`) read 0.118 at spec and 0.085 at their own measured 1.5395 TB/s.
+(#1948) read 0.118 at spec and 0.085 at their own measured 1.5395 TB/s.
 
 What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The prover
 is one undifferentiated resource of capacity \(R\) (Daniel, 12 Oct, #1884): the guarantee is over whatever reads the
