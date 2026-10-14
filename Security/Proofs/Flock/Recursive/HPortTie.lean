@@ -622,16 +622,5 @@ end family
 
 end
 
-#print axioms regChecks_of_checkStmt
-#print axioms mIndex_m
-#print axioms inner_of_rowPorts
-#print axioms mem_ownPorts_inner
-#print axioms mem_ownPorts_sparse
-#print axioms own_of_checkOwn
-#print axioms segs_of_scopeOk
-#print axioms readsOwnAt_of
-#print axioms readsUnsegC3
-#print axioms hSite_of_checked
-#print axioms srcHReads_of
 
 end FlockC3.HPort
