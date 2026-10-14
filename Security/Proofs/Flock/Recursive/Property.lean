@@ -178,12 +178,12 @@ private circuit whose `rt.leaves` rows the commit strings `q` commit to (`stmtAt
 `Flock.Registered.rowsOf st.c st.pub rt` that Lean's verifier opens against `rt`, `AcceptsDescription`, PROTOCOL.md
 §16.16), whichever rows V*'s sessions read. Taken: A3 (`_hA3`). Then for the registered commit strings `p`, each
 opening `rt` at its row `r < rt.leaves` through the developer's path `path₀ r`, for every count curve `(k, R_w, M, ρ)`
-that bounds every session's rate at each setup of its inputs, given V*'s bridge (VBridge) at the typed sessions and
-that hidden statement: the event below is empty; or at some row `st`'s commit string is not `p r`, and its opening of
-`rt` and the developer's give an explicit SHA-512 collision (`Flock.Registered.bcPair`); or the sessions type and
-there is a registrant fork (one run of the transported prover reaching two sessions whose registrant records clash,
-`regFinder`), a round fork, a session fork, or an inner fork of the transported prover's own runs whose decoded
-transcripts play the compiled table to outcomes that clash; or
+that bounds every session's rate at each setup of its inputs, given V*'s bridge at the committed rounds (VBridgeC, which
+VBridge gives) at the typed sessions and that hidden statement: the event below is empty; or at some row `st`'s commit
+string is not `p r`, and its opening of `rt` and the developer's give an explicit SHA-512 collision
+(`Flock.Registered.bcPair`); or the sessions type and there is a registrant fork (one run of the transported prover
+reaching two sessions whose registrant records clash, `regFinder`), a round fork, a session fork, or an inner fork of
+the transported prover's own runs whose decoded transcripts play the compiled table to outcomes that clash; or
 $$\Pr[\text{Lean's verifier accepts } st \text{ and its description} \wedge \text{every session verifies as V*'s}
   \text{ statement of its index} \wedge
   \neg\,\text{the statement of } p \text{ holds}]$$
@@ -247,9 +247,9 @@ def RecursiveAudit : Prop :=
     (_hr : ∀ R ω t R₂ j S₀
       (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
-    -- V*'s bridge, at the typed sessions
+    -- V*'s bridge at the committed rounds, at the typed sessions
     (_hbr : ∀ h : Typed zr,
-      Flock.Premises.VBridge (custodied zr _hCust h) dg N k Rw (hiddenAt st rt stmt) wmsg Sk cmt msg),
+      Flock.Premises.VBridgeC (custodied zr _hCust h) dg N k Rw (hiddenAt st rt stmt) wmsg Sk cmt msg),
     prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
         (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨

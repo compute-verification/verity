@@ -67,13 +67,13 @@ theorem run_of_algebra (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (ha
       repProg st sch p extras t = .ok ((), ⟨t.rounds, t.rounds.size, P'⟩) := by
   obtain ⟨v, info, kappa, S, res, hrows, hS, hw, hc, hres, hzero⟩ := halg
   obtain ⟨-, -, -, -, -, hT, hSws⟩ :=
-    rs_of_residuals hrows hS hw hc (hacc v info kappa hrows) hres hzero hm14 hm hkS hkL hkm hxs hext hd hne ht hpl
+    rs_of_residuals hrows hS hw hc (hacc v info kappa hrows) hres hzero hm14 hm hkS hkL hkm hxs hext hd hne ht
       (hzp v info kappa hrows).fc hlp.zp hrsw rfl rfl hrn hra hgn hga
   have hsz := claimsF_size sh (valOf sh d.w d.comb d.cons) info extras
   obtain ⟨F, P', hF⟩ := hlg_of_residuals (bytes := bytes) hrows hS hw hc (hacc v info kappa hrows) hres hzero hm14
     hm.symm hkL.symm hsch hf hdec hmessages hoodValues hyr hinitialCap (hopen v info kappa hrows)
     (claims := claimsF sh (valOf sh d.w d.comb d.cons) info extras) (rpp := fun k => (info.rs.sws[k]!).rpp)
-    (gamma := info.rs.gamma) (by rw [hsz, hxs]) hT hSws hd hne hwf ht hpl rfl rfl
+    (gamma := info.rs.gamma) (by rw [hsz, hxs]) hT hSws hd hne hwf ht rfl rfl
   refine ⟨F, P', fun hfr => prog_of_algebra sh d ⟨v, info, kappa, S, res, hrows, hS, hw, hc, hres, hzero⟩ hacc st
     sch p extras t ht hd hne hm hm14 hkL hkS hkm hxs hext hzp hlp hpl hrsw hfoldPts hn₀ hn₁ hn₂ hnr ha₀ ha₁ ha₂ har
     hlc hrn
@@ -138,13 +138,13 @@ theorem run_of_frames (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (hac
     ∃ t₄ : Transcript, repProg st sch p extras t = .ok ((), t₄) ∧ t₄.k = t.rounds.size := by
   obtain ⟨v, info, kappa, S, res, hrows, hS, hw, hc, hres, hzero⟩ := halg
   obtain ⟨-, -, -, -, -, hT, hSws⟩ :=
-    rs_of_residuals hrows hS hw hc (hacc v info kappa hrows) hres hzero hm14 hm hkS hkL hkm hxs hext hd hne ht hpl
+    rs_of_residuals hrows hS hw hc (hacc v info kappa hrows) hres hzero hm14 hm hkS hkL hkm hxs hext hd hne ht
       (hzp v info kappa hrows).fc hlp.zp hrsw rfl rfl hrn hra hgn hga
   have hsz := claimsF_size sh (valOf sh d.w d.comb d.cons) info extras
   obtain ⟨P', hF⟩ := hlg_of_frames (bytes := bytes) hrows hS hw hc (hacc v info kappa hrows) hres hzero hm14
     hm.symm hkL.symm hsch hf hdec hmessages hoodValues hyr hinitialCap (hopen v info kappa hrows)
     (claims := claimsF sh (valOf sh d.w d.comb d.cons) info extras) (rpp := fun k => (info.rs.sws[k]!).rpp)
-    (gamma := info.rs.gamma) (by rw [hsz, hxs]) hT hSws hd hne hwf ht hpl (k₁ := t.k + 3 + (st.m - 6))
+    (gamma := info.rs.gamma) (by rw [hsz, hxs]) hT hSws hd hne hwf ht (k₁ := t.k + 3 + (st.m - 6))
     (k₂ := t.k + 3 + (st.m - 6) + 2 + (st.fold.kLog - 6) + 1) rfl rfl (fun i hi => by rw [hsz]; exact hfr i hi)
   refine ⟨⟨t.rounds, t.rounds.size, P'⟩, prog_of_algebra sh d ⟨v, info, kappa, S, res, hrows, hS, hw, hc, hres, hzero⟩
     hacc st sch p extras t ht hd hne hm hm14 hkL hkS hkm hxs hext hzp hlp hpl hrsw hfoldPts hn₀ hn₁ hn₂ hnr ha₀ ha₁ ha₂

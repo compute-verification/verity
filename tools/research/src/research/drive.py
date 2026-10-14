@@ -12,9 +12,10 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
    tip): `train.sh COMMIT MACHINE`, with `--agreement` when the train changes a `lean-audit.json` (the lander's rule; train.sh
    itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run.
 
-What it refuses goes to the lander in the merge thread, once per commit or head: a failed check, a conflict, a check that ran
-and passed but lacks a step the gate needs, a launch that registered no run.  The lander ejects the PR that broke it
-(`research queue eject`), and the next sync rebuilds `next` without it.
+What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns: a failed
+check, a conflict, a check that ran and passed but lacks a step the gate needs, a launch that registered no run.  A failed
+check whose failing tests' files and the files their failures name (a traceback's frames, a lint's offender) only one
+PR of the train changes (`implicated`) ejects that PR itself (`research queue eject`, by `ci`); otherwise `@ci` ejects the PR that broke it.  The next sync rebuilds `next` without it.
 
 `--shadow` drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
@@ -33,9 +34,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .queue import IDENTITY, Member, Queue, _git, _out
+from .queue import IDENTITY, Member, Queue, QueueError, _git, _out
 
-LANDER = "@old-circuits-and-proofs"
+#: who hears what drive can't settle (13 Oct: the other Project's lander, its addressee before, acts on none of it)
+CI = "@ci"
+#: a pytest location (`tests/test_x.py:503: NameError`) or a traceback frame (`File "/.../x.py", line 12`) in a suite's log
+TRACE_RE = re.compile(r'^\s*([\w./+-]+\.py):\d+:|File "([^"]+\.py)", line \d+', re.M)
+#: a repository path a pytest failure report names (`E   tools/x/README.md: 48 KB > 48 KB`, 13 Oct: a lint's offender is in
+#: its assertion, not its traceback); relative, with a directory
+NAMED_RE = re.compile(r"(?<![\w./-])((?:[\w+-]+/)+[\w+.-]*\w\.\w+)")
+#: pytest's failing tests in its short summary
+FAILED_RE = re.compile(r"^FAILED ([^\s:]+)::", re.M)
 #: states `research status` reports for a run that may still publish an attempt
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: after a launched run ends, how long its attempt may take to reach the store before the launch counts as lost
@@ -102,16 +111,50 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
 
 
-def run_states(repo: Path, ids: list[str]) -> dict[str, tuple[str, int | None, str | None]]:
-    """Each run's (state, rc, ended_utc) from `research status RUN --json`; a run it can't read is ("unknown", None, None)."""
+#: what a running check has written of its steps and suites so far (check.py's `STEPS_LOG`, suites.py's `failing_path` of each
+#: `--json`), fetched with its records
+PROGRESS = ("steps.jsonl", "suites.failed.json", "suites-lean.failed.json")
+
+
+def failing(run_dir: Path) -> str | None:
+    """What has failed so far in a check still running under `--keep-going`, which fails it whatever else it finds, or None."""
+    out = []
+    try:
+        lines = (run_dir / PROGRESS[0]).read_text().splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if rec.get("status") == "failed":
+            out.append(f"step {rec.get('step')}")
+    for name in PROGRESS[1:]:
+        try:
+            doc = json.loads((run_dir / name).read_text())
+        except (OSError, ValueError):
+            continue
+        for s in doc if isinstance(doc, list) else ():
+            tests = s.get("failed_tests") or []
+            out.append(f"suite {s.get('name')}" + (f" ({', '.join(tests[:2])}{' ...' if len(tests) > 2 else ''})" if tests else ""))
+    return "; ".join(out) or None
+
+
+def run_states(repo: Path, ids: list[str]) -> dict[str, tuple[str, int | None, str | None, str | None]]:
+    """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`) from `research status RUN --json`, which
+    fetches `PROGRESS` with its records; a run it can't read is ("unknown", None, None, None)."""
     out = {}
+    also = [x for n in PROGRESS for x in ("--also", n)]
     for rid in ids:
-        r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json"], cwd=repo, capture_output=True, text=True)
+        r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
         try:
             run = json.loads(r.stdout)["runs"][0]
-            out[rid] = (run.get("state") or "unknown", run.get("rc"), run.get("ended_utc"))
+            state = run.get("state") or "unknown"
+            out[rid] = (state, run.get("rc"), run.get("ended_utc"),
+                        failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None)
         except (ValueError, KeyError, IndexError):
-            out[rid] = ("unknown", None, None)
+            out[rid] = ("unknown", None, None, None)
     return out
 
 
@@ -121,9 +164,15 @@ def cancel_runs(repo: Path, ids: list[str], reason: str) -> None:
                        capture_output=True, text=True)
 
 
-def merge_thread_post(text: str, to: tuple[str, ...] = (LANDER,)) -> bool:
-    r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", "ci", "--thread", _merge_thread(), "--to", *to,
-                        "--quiet", "--text", text], capture_output=True, text=True)
+def merge_thread_post(text: str, to: tuple[str, ...] = (CI,), sender: str = "ci") -> bool:
+    """Post ``text`` to the merge thread as ``sender``, addressed to ``to`` but not the sender, and with the sender dropped from
+    the names ``text`` starts with: `research msg send` refuses a `--to` naming the sender (13 Oct: from 05:07Z every notice
+    drive sent named @ci and none was posted) and a post that starts with its sender's name alone (17:41Z: b22a's failure)."""
+    others = [t for t in to if t != f"@{sender}"]
+    if lead := re.match(r"(?:@[\w.-]+ )+", text):
+        text = " ".join([*(n for n in lead[0].split() if n != f"@{sender}"), text[lead.end():]])
+    r = subprocess.run([sys.executable, "-m", "research", "msg", "send", "--as", sender, "--thread", _merge_thread(),
+                        *(["--to", *others] if others else []), "--quiet", "--text", text], capture_output=True, text=True)
     return r.returncode == 0
 
 
@@ -142,18 +191,122 @@ def _utc(ts: str | None) -> float | None:
         return None
 
 
+
+def _docs(run_dir: Path, *names: str) -> list[dict]:
+    out = []
+    for name in names:
+        try:
+            doc = json.loads((run_dir / name).read_text())
+        except (OSError, ValueError):
+            continue
+        out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else []
+    return out
+
+
+def failed_suites(run_dir: Path) -> list[dict]:
+    """Each failed suite's record: from `suites.json` and `suites-lean.json` once the check ended, else from what it has written
+    of its failures so far (`PROGRESS`)."""
+    done = [s for s in _docs(run_dir, "suites.json", "suites-lean.json") if s.get("status") == "failed"]
+    return done or _docs(run_dir, *PROGRESS[1:])
+
+
+def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
+    also = [x for n in names for x in ("--also", n)]
+    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
+    try:
+        return Path(json.loads(r.stdout)["runs"][0]["dir"])
+    except (ValueError, KeyError, IndexError, TypeError):
+        return None
+
+
+def evidence(repo: Path, ids: list[str]) -> list[Path]:
+    """The local run dirs of ``ids`` with their steps, suite reports and failed suites' logs fetched (`research status --also`)."""
+    dirs = []
+    for rid in ids:
+        if (d := _fetch(repo, rid, [*PROGRESS, "suites.json", "suites-lean.json"])) is None:
+            continue
+        logs = [f"suites/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log")]
+        logs += [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in ("pytest", "lean-suites")]
+        if logs:
+            _fetch(repo, rid, logs)
+        dirs.append(d)
+    return dirs
+
+
+def failed_steps(run_dir: Path) -> list[dict]:
+    out = []
+    with contextlib.suppress(OSError):
+        for line in (run_dir / PROGRESS[0]).read_text().splitlines():
+            with contextlib.suppress(ValueError):
+                if (rec := json.loads(line)).get("status") == "failed":
+                    out.append(rec)
+    return out
+
+
+def _named(log: str, base: str) -> set[str]:
+    """The files a pytest log's failures name: its tracebacks' frames, and the repository paths in its failure report."""
+    rel = lambda p: p if p.startswith("/") else os.path.normpath(os.path.join(base, p))  # noqa: E731
+    paths = {rel(m[1] or m[2]) for m in TRACE_RE.finditer(log)}
+    report = log.partition("= FAILURES =")[2].partition("short test summary info")[0]
+    return paths | {rel(m[1]) for m in NAMED_RE.finditer(report)}
+
+
+def implicated(run_dir: Path) -> set[str] | None:
+    """The paths a failed check's failure points at: each failed suite's failing test files and the files its log's failures
+    name (`_named`: relative to the repository, or absolute as the log wrote them), and the same of a failed step that runs
+    pytest on the repository's own tests (`preflight-lints`); None when another step failed, or a failed suite or step names
+    no failing test (a timeout, a kill), so no file says what broke it."""
+    paths: set[str] = set()
+    for st in failed_steps(run_dir):
+        if st.get("step") in ("pytest", "lean-suites"):
+            continue
+        try:
+            log = (run_dir / Path(st.get("log") or "").name).read_text(errors="replace") if st.get("log") else ""
+        except OSError:
+            log = ""
+        if not (tests := FAILED_RE.findall(log)):
+            return None
+        paths |= {os.path.normpath(t) for t in tests} | _named(log, "")
+    suites = failed_suites(run_dir)
+    if not suites and not paths:
+        return None
+    for s in suites:
+        base, tests = s.get("suite") or "", s.get("failed_tests") or []
+        if not tests:
+            return None
+        paths |= {os.path.normpath(os.path.join(base, t.split("::")[0])) for t in tests}
+        if s.get("log"):
+            with contextlib.suppress(OSError):
+                paths |= _named((run_dir / "suites" / Path(s["log"]).name).read_text(errors="replace"), base)
+    return paths
+
+
+def touches(files: set[str], paths: set[str]) -> set[str]:
+    """The ``files`` (repository paths) among ``paths``, an absolute path matching the file it ends in when that file is under a
+    directory (a bare `conftest.py` would match every conftest an installed package has)."""
+    return {f for f in files for p in paths if p == f or ("/" in f and p.startswith("/") and p.endswith("/" + f))}
+
+
 class Driver:
     def __init__(self, q: Queue, *, on: str, max_running: int = 2, train_size: int = 4,
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
-                 now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs):
+                 now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs,
+                 evidence: Callable[[Path, list[str]], list[Path]] = evidence):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
-        self.launch, self.states, self.post, self.now, self.cancel = launch, states, post, now, cancel
-        self.repo = q.workdir
+        self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
+        self.repo, self.dry_run, self._seen, self._prs = q.workdir, False, {}, None
 
     # -- what the store says of a commit
+
+    def _states(self, ids: list[str]) -> dict:
+        """`states` of ``ids``, each run read once a tick: one `research status` is a few seconds over ssh, and a tick asks of the
+        same launch for `held`, before the sync, for the running count and for its train (12 Oct: 25 s of a 52 s tick)."""
+        if missing := [rid for rid in ids if rid not in self._seen]:
+            self._seen.update(self.states(self.repo, missing))
+        return {rid: self._seen[rid] for rid in ids}
 
     def verdict(self, commit: str, base: str, drive: dict) -> Verdict:
         """`commit`'s check: passed (the gate's rule, against `base`), failed, running (a launch of ours not yet in the store),
@@ -181,16 +334,20 @@ class Driver:
         launch = drive["launched"].get(commit)
         if not launch:
             return Verdict("none")
-        states = self.states(self.repo, launch["ids"])
-        if any(st in ACTIVE for st, _, _ in states.values()):
+        states = self._states(launch["ids"])
+        if early := next((s[3] for s in states.values() if len(s) > 3 and s[0] in ACTIVE and s[3]), None):
+            launch["failing"] = early
+            return Verdict("failed", " ".join(launch["ids"]), f"{' '.join(launch['ids'])} is still running (`--keep-going`, for "
+                                                              f"the full picture) and has already failed: {early}")
+        if any(st in ACTIVE for st, *_ in states.values()):
             return Verdict("running", " ".join(launch["ids"]))
-        if all(rc == NOT_STARTED for _, rc, _ in states.values()):
+        if all(rc == NOT_STARTED for _, rc, *_ in states.values()):
             return Verdict("none", why="every twin exited without starting")
-        ended = max((_utc(e) or launch["at"] for _, _, e in states.values()), default=launch["at"])
+        ended = max((_utc(e) or launch["at"] for _, _, e, *_ in states.values()), default=launch["at"])
         if self.now() - ended < PUBLISH_GRACE_S:
             return Verdict("running", " ".join(launch["ids"]), "ended; its attempt isn't in the store yet")
         return Verdict("failed", " ".join(launch["ids"]),
-                       f"{' '.join(launch['ids'])} ended ({', '.join(f'{s} rc={rc}' for s, rc, _ in states.values())}) "
+                       f"{' '.join(launch['ids'])} ended ({', '.join(f'{s} rc={rc}' for s, rc, *_ in states.values())}) "
                        f"and no attempt reached the store in {PUBLISH_GRACE_S // 60} min")
 
     # -- landing
@@ -297,29 +454,71 @@ class Driver:
 
     # -- refusals
 
-    def refuse(self, drive: dict, key: str, text: str, handle: str | None = None) -> None:
-        """Tell the lander once per key, and ``handle``, the PR's owning lane, beside it so the owner hears without a relay;
-        with --shadow, only log it."""
+    def refuse(self, drive: dict, key: str, text: str, *handles: str | None) -> None:
+        """Tell `CI` once per key, and ``handles``, the owning lanes of the PRs it concerns, beside it so each owner hears
+        without a relay; with --shadow or --dry-run, only log it."""
         if key in drive["told"]:
             return
-        to = (LANDER, *([f"@{handle}"] if handle and f"@{handle}" != LANDER else []))
-        if self.q.shadow:
-            self.q.log(f"research queue drive: would tell {' '.join(to)}: {text} [shadow]")
+        to = tuple(dict.fromkeys((CI, *(f"@{h}" for h in handles if h))))
+        if self.q.shadow or self.dry_run:
+            self.q.log(f"research queue drive: would tell {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
             return
         if self.post(f"{' '.join(to)} queue: {text}", to):
             drive["told"].append(key)
-        self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
+            self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
+        else:
+            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
+
+    def _handle(self, pr: int) -> str | None:
+        if self._prs is None:
+            self._prs = {p.number: p for p in self.q.github.open_prs()}
+        return self.q.handle(self._prs[pr]) if pr in self._prs else None
+
+    def culprit(self, members: list[Member], v: Verdict) -> tuple[Member | None, list[Member], str]:
+        """The one member of a failed train whose own change (its merge commit against the one below) touches a file the
+        failure points at (`implicated`), else None; with the members that touch one, and what the failure points at."""
+        found: set[str] = set()
+        for d in self.evidence(self.repo, v.attempt.split()):
+            if (paths := implicated(d)) is None:
+                return None, [], "the failure names no file (a step failed with no failing test)"
+            found |= paths
+        if not found:
+            return None, [], "no failed suite's report reached drive"
+        hits = [(x, touches(changed(self.repo, f"{x.commit}^1", x.commit), found)) for x in members]
+        hits = [(x, t) for x, t in hits if t]
+        if not hits:
+            return None, [], f"no PR's change touches a file the failure names ({', '.join(sorted(found)[:4])})"
+        what = ", ".join(sorted({f for _, t in hits for f in t}))
+        return (hits[0][0] if len(hits) == 1 else None), [x for x, _ in hits], what
 
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
-        prs = " ".join(f"#{x.pr}" for x in members)
-        self.refuse(drive, f"failed:{m.commit}", f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}. "
-                                                "Eject the PR that broke it (`research queue eject N --reason ...`); "
-                                                "the next sync rebuilds without it")
+        key, prs = f"failed:{m.commit}", " ".join(f"#{x.pr}" for x in members)
+        if key in drive["told"]:
+            return
+        head = f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}"
+        pick, hit, what = self.culprit(members, v)
+        why = f"{len(hit)} PRs ({' '.join(f'#{x.pr}' for x in hit)}) touch {what}" if hit else what
+        if pick is not None:
+            reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which only #{pick.pr} changes"
+            if self.q.shadow or self.dry_run:
+                self.q.log(f"research queue drive: would eject #{pick.pr}: {reason}")
+            else:
+                try:
+                    self.q.eject(pick.pr, reason, "ci")
+                except QueueError as e:
+                    pick, why = None, f"only #{pick.pr} touches {what}, but ejecting it failed: {e}"
+        if pick is not None:
+            self.refuse(drive, key, f"{head}. Ejected #{pick.pr}: its change is the only one in {what}; the next sync rebuilds "
+                                    f"without it. Fix it and re-mark it", self._handle(pick.pr))
+            return
+        self.refuse(drive, key, f"{head}. Not ejected: {why}. Eject the PR that broke it (`research queue eject N --reason ...`); "
+                                "the next sync rebuilds without it", *(self._handle(x.pr) for x in hit))
 
     # -- the tick
 
     def tick(self, dry_run: bool = False) -> str:
         q = self.q
+        self.dry_run, self._seen, self._prs = dry_run, {}, None
         q._clone()
         q.fetch()
         if q.store is not None and q.store.remote is not None:
@@ -358,9 +557,12 @@ class Driver:
         on_chain = {m.commit for m in members}
         for c, v in drive["launched"].items():
             if c not in on_chain and not dry_run:
-                live = [rid for rid, (st, _, _) in self.states(self.repo, v["ids"]).items()
+                live = [rid for rid, (st, *_) in self._states(v["ids"]).items()
                         if st in ACTIVE and st != "unknown"]
-                if live:
+                if live and v.get("failing"):
+                    q.log(f"research queue drive: {' '.join(live)} of {c[:12]}, no longer on `{q.branch}`, keeps going for the "
+                          f"full picture of its failure ({v['failing']})")
+                elif live:
                     self.cancel(self.repo, live, f"drive: {c[:12]} is no longer on `{q.branch}` (rebuilt); no check of it lands")
                     q.log(f"research queue drive: cancelled {' '.join(live)}: {c[:12]} is no longer on `{q.branch}`")
         drive["launched"] = {c: v for c, v in drive["launched"].items() if c in on_chain}
@@ -400,6 +602,7 @@ class Driver:
             what.append(f"launched {' '.join(ids)}")
             running += 1
         if not dry_run:
+            state["ejected"] = {**state.get("ejected", {}), **q.load_state().get("ejected", {})}   # what `failed` ejected since
             q.save_state(state)
         q.log(f"research queue drive: {'; '.join(what) or 'nothing queued'}")
         return "; ".join(what) or "idle"

@@ -507,7 +507,7 @@ def test_sync_warns_once_pushed_on_a_citation_the_store_lacks(machines, tmp_path
 # ---- RESEARCH_NOTES_TOKEN: past a cloud VM's global insteadOf --------------------------------------------------------------------------
 
 TOKEN = "dummy-notes-token"
-EXPLICIT = "https://x-access-token@github.com/danielreuter/research-notes.git"
+EXPLICIT = "https://x-access-token@github.com/compute-verification/research-notes.git"
 
 
 @pytest.fixture
@@ -542,7 +542,8 @@ def _argv_log(monkeypatch) -> list[list[str]]:
 def test_token_url_names_the_github_repo_with_an_explicit_user_and_never_the_token(monkeypatch):
     assert NS.token_url(NS.NOTES_URL) is None, "unset: nothing changes"
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
-    for url in (NS.NOTES_URL, "https://github.com/danielreuter/research-notes", "git@github.com:danielreuter/research-notes.git",
+    for url in (NS.NOTES_URL, "https://github.com/compute-verification/research-notes", "https://github.com/danielreuter/research-notes",
+                "git@github.com:danielreuter/research-notes.git",
                 "ssh://git@github.com/danielreuter/research-notes.git", "https://someone@github.com/danielreuter/research-notes.git"):
         opts, where = NS.token_url(url)
         assert where == EXPLICIT and not where.startswith("https://github.com/"), url

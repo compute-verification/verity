@@ -6,11 +6,12 @@ import Properties.Proofs.NetworkCertifier.Run
 /-!
 # An accepted run's records are the Program's (5a)
 
-Every certificate the device's code issues is of a record it published (`issued_spec`): the head `record_head` makes of
-the record under its grid's parameters digest, its digest, and the record's link-window. Unless a certificate of the
-commitment is an LMS forgery, the message of each one the check accepts is one the device signed; unless two distinct
-strings of the run have one SHA-512 digest, that message names the same link-window and digest (`messageInput_inj`),
-and the digest the same head (`head_inj`) (`device_record`). The device publishes one record per link-window
+Every certificate the device's code issues is of a record it published (`issued_spec`, `deviceCode_certificates`: it
+issues none where its signing state has started its session): the head `record_head` makes of the record under its
+grid's parameters digest, its digest, and the record's link-window. Unless a certificate of the commitment is an LMS
+forgery, the message of each one the check accepts, in the run's session, is one the device signed in it; unless two
+distinct strings of the run have one SHA-512 digest, that message names the same link-window and digest
+(`messageInput_inj`), and the digest the same head (`head_inj`) (`device_record`). The device publishes one record per link-window
 (`unique`, from `Inv`), so each record it published on its links is the one the check accepted: complete, since the
 check's is settled, and on egress of the Program's grid (`recordHead_grid_inj`).
 -/
@@ -96,6 +97,22 @@ theorem issued_spec {c : Config} : ∀ {i : Issuer} {next : Nat} {rs : List Reco
         exact ⟨rec, List.mem_cons_of_mem _ hrec, rest⟩
     · cases h
 
+/-- The code's certificates are ones its issuer issues: none where the signer's state has started the session. -/
+theorem deviceCode_certificates {x : DeviceInput} {cr : CertifiedRecord} (h : cr ∈ (deviceCode x).certificates) :
+    cr ∈ issued x.config x.issuer x.next (published x.config x.trace) := by
+  unfold deviceCode at h
+  dsimp only at h
+  split at h
+  · cases h
+  · exact h
+
+/-- **A second run under a started session signs nothing**: where the signer's state has started the issuer's session
+(it is in `x.sessions`), the device's code issues no certificate. -/
+theorem deviceCode_started {x : DeviceInput} (h : x.issuer.session ∈ x.sessions) : (deviceCode x).certificates = [] := by
+  unfold deviceCode
+  dsimp only
+  exact ite_eq_left (List.any_eq_true.2 ⟨_, h, decide_eq_true rfl⟩)
+
 /-! ## One record per link-window -/
 
 theorem nodup_windows {l : String} {P : List Record} {n : Nat} (h : windowsOn l P = List.range n) {r r' : Record}
@@ -131,8 +148,8 @@ theorem mem_run_head {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {e 
 
 theorem mem_run_message {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {e : Evidence}
     {cr : CertifiedRecord} (hcr : cr ∈ out.certificates) {y : ByteArray}
-    (h : messageInput cr.certificate.keyId cr.certificate.link cr.certificate.direction cr.certificate.window
-      cr.certificate.digest = .ok y) : y ∈ runStrings x out c e := by
+    (h : messageInput cr.certificate.keyId x.issuer.session cr.certificate.link cr.certificate.direction
+      cr.certificate.window cr.certificate.digest = .ok y) : y ∈ runStrings x out c e := by
   refine List.mem_append_right _ (List.mem_append_left _ (List.mem_flatMap.mpr ⟨cr, hcr, List.mem_append_right _ ?_⟩))
   rw [h]
   exact List.mem_singleton_self _
@@ -149,8 +166,8 @@ message the device signed, each record the check finds signed is the head the de
 that link-window, in that direction. -/
 theorem device_record {x : DeviceInput} {c : Commitment} {e : Evidence}
     (hcr : CF fun y => y ∈ runStrings x (deviceCode x) c e)
-    (hsig : ∀ r ∈ c.records.toList, ∀ m, certMessage r = some m → LmsVerifies (deviceParams x) m r.certificate.signature →
-      Signed (deviceCode x) m)
+    (hsig : ∀ r ∈ c.records.toList, ∀ m, certMessage x.issuer.session r = some m →
+      LmsVerifies (deviceParams x) m r.certificate.signature → Signed x.issuer.session (deviceCode x) m)
     {d : NetworkCheck.Direction} {l : String} {w : Nat} {r : Certified} {dg : ByteArray}
     (hs : Signs (deviceParams x) c d l w r dg) :
     ∃ rec ∈ published x.config x.trace, rec.link = l ∧ rec.window = w ∧ directionOf x.config rec = d ∧
@@ -160,12 +177,13 @@ theorem device_record {x : DeviceInput} {c : Commitment} {e : Evidence}
   obtain ⟨hrec, hdig, hcdg, hk, hcl, hcd, hcw, m, hm, hσ⟩ := hs
   have hmem : r ∈ recordsOf c d l w := by rw [hrec]; exact List.mem_singleton_self r
   have hr : r ∈ c.records.toList := (List.mem_filter.mp hmem).1
-  obtain ⟨cr, hcrm, hcm⟩ := hsig r hr m (by rw [certMessage, hk, hcl, hcd, hcw, hcdg, hm]; rfl) hσ
-  obtain ⟨rec, hrecm, pd, hpd, hhead, hcrd, hcrl, hcrdir, hcrw⟩ := issued_spec hcrm
+  obtain ⟨cr, hcrm, hcm⟩ := hsig r hr m
+    (by rw [certMessage, hk, hcl, hcd, hcw, hcdg, show x.issuer.session = (deviceParams x).session from rfl, hm]; rfl) hσ
+  obtain ⟨rec, hrecm, pd, hpd, hhead, hcrd, hcrl, hcrdir, hcrw⟩ := issued_spec (deviceCode_certificates hcrm)
   obtain ⟨y, hy, rfl⟩ := certificateMessage_ok hm
   obtain ⟨y', hy', hyy⟩ := certificateMessage_ok (toOption_eq_some.mp hcm)
-  change messageInput cr.certificate.keyId cr.certificate.link cr.certificate.direction cr.certificate.window
-    cr.certificate.digest = .ok y' at hy'
+  change messageInput cr.certificate.keyId x.issuer.session cr.certificate.link cr.certificate.direction
+    cr.certificate.window cr.certificate.digest = .ok y' at hy'
   have hY : y ∈ runStrings x (deviceCode x) c e :=
     mem_run_check (Or.inl ⟨r, hr, Or.inr (by rw [hk, hcl, hcd, hcw, hcdg]; exact hy)⟩)
   have hY' : y' ∈ runStrings x (deviceCode x) c e := mem_run_message hcrm hy'
@@ -173,7 +191,7 @@ theorem device_record {x : DeviceInput} {c : Commitment} {e : Evidence}
   subst this
   have hrl : r.head.link = l := (recordsOf_mem hmem).2.1
   have hcrhl : cr.head.link = rec.link := (recordHead_head hhead).1
-  obtain ⟨-, hl, hd, hw, hg⟩ := messageInput_inj hy hy' (by rw [← hrl]; exact link_short hdig)
+  obtain ⟨-, -, hl, hd, hw, hg⟩ := messageInput_inj hy hy' (by rw [← hrl]; exact link_short hdig)
     (by rw [hcrl, ← hcrhl]; exact link_short hcrd)
   have hh : r.head = cr.head := head_inj hcr (fun z hz => mem_run_check (Or.inl ⟨r, hr, Or.inl hz⟩))
     (fun z hz => mem_run_head hcrm hz) hdig (by rw [hcrd, ← hg])
@@ -195,15 +213,15 @@ theorem acceptedRowsAreProgramRows : AcceptedRowsAreProgramRows := by
   by_cases hc : ∃ y ∈ runStrings x (deviceCode x) c e, ∃ z ∈ runStrings x (deviceCode x) c e, y ≠ z ∧
       Sha512.hash y = Sha512.hash z
   · exact Or.inr (Or.inl hc)
-  by_cases hf : ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧
-      LmsVerifies (deviceParams x) m r.certificate.signature ∧ ¬ Signed (deviceCode x) m
+  by_cases hf : ∃ r ∈ c.records.toList, ∃ m, certMessage x.issuer.session r = some m ∧
+      LmsVerifies (deviceParams x) m r.certificate.signature ∧ ¬ Signed x.issuer.session (deviceCode x) m
   · exact Or.inr (Or.inr hf)
   refine Or.inl ?_
   have hcr : CF fun y => y ∈ runStrings x (deviceCode x) c e := fun y z hy hz hh =>
     Classical.byContradiction fun hne => hc ⟨y, hy, z, hz, hne, hh⟩
-  have hsig : ∀ r ∈ c.records.toList, ∀ m, certMessage r = some m →
-      LmsVerifies (deviceParams x) m r.certificate.signature → Signed (deviceCode x) m := fun r hr m hm hv =>
-    Classical.byContradiction fun hn => hf ⟨r, hr, m, hm, hv, hn⟩
+  have hsig : ∀ r ∈ c.records.toList, ∀ m, certMessage x.issuer.session r = some m →
+      LmsVerifies (deviceParams x) m r.certificate.signature → Signed x.issuer.session (deviceCode x) m :=
+    fun r hr m hm hv => Classical.byContradiction fun hn => hf ⟨r, hr, m, hm, hv, hn⟩
   have dev := fun {d l w r dg} (hs : Signs (deviceParams x) c d l w r dg) => device_record hcr hsig hs
   obtain ⟨hfit, eg, ig, hpd, he, hi⟩ := acceptsLinkWindows _ c e hacc
   have heg : egressDigest (deviceParams x) = eg := by
