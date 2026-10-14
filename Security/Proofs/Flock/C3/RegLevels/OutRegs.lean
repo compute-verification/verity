@@ -269,12 +269,4 @@ theorem accOut_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : L
   rw [show RecVStar.accPorts (.recOpenStacked l LANES H q) = ["acc", "acc_out"] from rfl]
   simp
 
-#print axioms outBitRow_laid
-#print axioms regOut_of_outBitRow
-#print axioms outCols_of_laid
-#print axioms regOuts_of_laid
-#print axioms haout_of_laid
-#print axioms own_of_checkAcc
-#print axioms accOut_of_checkStmt
-
 end FlockC3.RegLevels

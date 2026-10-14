@@ -3,8 +3,8 @@ import Proofs.Flock.Recursive.ValueSource
 /-!
 # The verifier's rows at the inner session's units
 
-`ValueSource.lean`'s `valueSrcAll` at `rec-open`, `rec-residuals` and `rec-sparse` (`openRows`, `residualRows`,
-`sparseRows`, defined there beside `valueSrcC3`):
+`valueSrcAll` at `rec-open`, `rec-residuals` and `rec-sparse` (`openRows`, `residualRows`, `sparseRows`, defined beside
+`valueSrcC3` in `Recursive/ValueSrc.lean`):
 
 * `open_of_check`, `residuals_of_check`, `sparse_of_check`: an accepted unit's `checkValue`s are at those rows, which
   are `valueRowsAll`'s (`valueRowsAll_load`, `innerRows_coef`, `innerRows_dirs`, `innerRows_v`, `innerRows_sparse`), so

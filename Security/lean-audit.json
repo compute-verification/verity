@@ -2,6 +2,10 @@
  "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
  "assumptions": {
+  "Flock.Assumptions.RegistrantCovers": {
+   "owner": "@proofs",
+   "digest": "c9624861b2572dfa4fe1887a5972b0d62070ac779fbebd0f5f6a0782ee367024"
+  },
   "Flock.Assumptions.VBridge": {
    "owner": "@proofs",
    "digest": "928812a52c621ba8f1c48148872bf2c21c58388a45335bf64fc92e571ac56ef1"
@@ -4310,7 +4314,7 @@
    "NetTiming.SecurityProofs.ExpectedRowCausal": "frozen (no-function): A rule of the model's expectedRow (Definitions), which the network check's grid equals only through Code; restated over NetworkCheck's expected grids it would be a property of the check.",
    "Flock.SecurityProofs.PublicAudit": "restatable: (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, and the obligations _hob (VStarParses) and _hF (TagsFound), none a premise; it fits once the recursive model's inputs and count curve, and those two obligations, are restated as premises (constants of Proofs.Flock.Recursive.Premises).",
    "Flock.SecurityProofs.RanRegisteredRun": "frozen (obligation,no-function): It is about an abstract session (a game G and its acceptance acc) rather than a Lean function, and takes that session's soundness bound (prob (acc ∧ Q) ≤ B) as an open obligation, beside the commitment's binding (com.Binding, an extractor's pair, no hash assumed) and the registrant's opening. It stays here until RecursiveAudit is pinned after gap 4.",
-   "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
+   "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hRC, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
    "Flock.SecurityProofs.RecursiveCircuitIndist": "frozen (obligation,no-function): RecursiveCircuitPrivate's two-circuit form: it takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter) as open obligations; as an indistinguishability statement at two honest witnesses it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4. Vacuous today: statements_holo refuses every holo inner shape; #1896.",
    "Flock.SecurityProofs.RecursiveCircuitPrivate": "frozen (obligation,no-function): It takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter) as open obligations; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4. Vacuous today: statements_holo refuses every holo inner shape; #1896.",
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "frozen (obligation,no-function): It takes V*'s sessions' zero knowledge (_hOuter) as an open obligation; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, the registration's leaves included, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4. Vacuous today: statements_holo refuses every holo inner shape; #1896.",
@@ -15019,12 +15023,12 @@
    ]
   },
   "Proofs.Flock.Recursive.AuditC3": {
-   "digest": "f7d75ca9c57953d886a776ecbeedbf26792a75314320fa50fd46676408a7bf72",
+   "digest": "19cdf039681f1af1dd7dc6d5c7e3670c1571ccc49e85b92dfeb8745e36f78f7e",
    "definitions": {
     "Flock.Guarantees.ChecksC3": "a1184410f4250dc5523c6c19d2d5244c96513959daf238940d3d84f3dcf2715d",
     "Flock.Guarantees.ChecksVR": "91d4d45c655b92406ae93ab759d14b8488eee77108c5d38a2ff647a11312df12",
     "Flock.Guarantees.RecursiveAuditC3": "c627d9a8098dc7747b12bf04ed826276bf6a6d742b5daee6b4b5c74255aba752",
-    "Flock.Guarantees.RecursiveAuditC3At": "6b7d196d3379a14dab70839ae9d0aa4d1ab6b2ecadf965bd6da35da1913a721f",
+    "Flock.Guarantees.RecursiveAuditC3At": "504e75db323a3e2808245940052a522801e10966c2f11b1684b31135069d7f29",
     "Flock.Guarantees.RunOpensReg": "9fda8b4dbc946dcea4f52a843cd28022c3ce478f12bee70f3cd7d83fdd233871",
     "Flock.Guarantees.c3Of": "7a387edb360170506c4d9fe694a6badb5d15ffef124c97ec1b1350e75cbd2465",
     "Flock.Guarantees.checkedC3": "484710ae525294bcf9048eb3d726f25330e38d02e3e0000642eb08e508042213",
@@ -15257,7 +15261,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.HoloExec": {
-   "digest": "19508a4acdc587131e9d57accade0d5323fdaa195250e0851d704b63f8dde694",
+   "digest": "9bb038fe0d7d5360230e6bc5354e995f25b597bd40997fcdd4326dab515591ad",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.AcceptsC3": "bcf2ca3b9227e3c7ef3078a6de4e8945f843d61216c26bc0de527f0d056d2ede",
     "FlockSoundness.Discharge.Recursion.ClashRunHL": "a03e6715f8ddb6f556e12f71f5dda54a1f50997202b8fb9ab824b9e29d0442b0",
@@ -15280,8 +15284,8 @@
     "FlockSoundness.Discharge.Recursion.HoloReg.cap": "55c7338887d8076edf485dc3dcfa0c528a5bb6af4482277470ca9dc232447a76",
     "FlockSoundness.Discharge.Recursion.HoloReg.w": "09a206cbf4c7103eb92d97daa2ea4e20459c8b638dd5a9385bc9118be5b27932",
     "FlockSoundness.Discharge.Recursion.SparseRangeOk": "9d27c5bb7709fb7e65f07405ea7014d6aad85aa6c389ab4ab348114c7c21390b",
-    "FlockSoundness.Discharge.Recursion.StackedTopAt": "403c4edcb5f445afaf7207be2afaee86c91d96ce55805119a3b946d6d5e91189",
-    "FlockSoundness.Discharge.Recursion.TopOf": "2420849e80418933ae0af175d167bae9fc0bd4d333ec0183d8660dc694ec197b",
+    "FlockSoundness.Discharge.Recursion.StackedTopAt": "0a0d08c5d2f7d9044fda87519784c5a1b9af90ce006ee1e819c4b816994c8c71",
+    "FlockSoundness.Discharge.Recursion.TopOf": "75b5e38f12d89e4dccb2cb27292307b666c9f04425da610d224bcab033b4312d",
     "FlockSoundness.Discharge.Recursion.clashPickHL": "2b96c1501aef4df19d83574a5f56e38467b5b919d86000bb2bd8c51a38a7a479",
     "FlockSoundness.Discharge.Recursion.holoAt": "ea56c3301d8dcd818dfd6ec57fb66bc88d96dcef3ffb31efda35763838cb778d",
     "FlockSoundness.Discharge.Recursion.holoError": "d4cf9f569e355ff36e94cddab904651a43f69cead9b02c62e795d630e5a0bfaf",
@@ -15361,12 +15365,14 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Premises": {
-   "digest": "968fbb70fde291a1c863c8e2cd99eecbdfefd5d0272f46c5e9c30b0526846507",
+   "digest": "450469ae72d2f4dcd472374c342a3eb359a92f4111fa794e59cc8c77cddfbd8a",
    "definitions": {
     "Flock.Premises.InnerRecordCustody": "2afabb4d9e1746d428a44b6c1cc048df05c0450b7e53714d48b9c3f43a605c18",
     "Flock.Premises.RecordCustody": "5cc22f72232e075941f6d919bace45466b731ef8e3da4aea701c4b607180b328",
+    "Flock.Premises.RegistrantCovers": "e02fb2dd924877b3b777c02864964bf71425ab796183d5bdaf39dedb684d106c",
     "Flock.Premises.UniformRandomBytes": "10dd4f26d2074bc44191e45cdff4bcb3e1726dacf0cca34843cc954b3581cd8a",
-    "Flock.Premises.VBridgeC": "c56f32cc02f564bfa3322b1e67ef9a244a61bad23901e49ea7c26534a233bb6f"
+    "Flock.Premises.VBridgeC": "c56f32cc02f564bfa3322b1e67ef9a244a61bad23901e49ea7c26534a233bb6f",
+    "Flock.Premises.VBridgeCOff": "b3e00f6948b0a77f2097c04cdae31999ac78031e29baefc43793048df646f170"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
@@ -15448,6 +15454,19 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
+  },
+  "Proofs.Flock.Recursive.SaltFinder": {
+   "digest": "d6b32f2cabd03c9c2ba5727061296c8a175863710edce50899de764b4253633a",
+   "definitions": {
+    "FlockC3.RegLevels.capRow": "60e7639c81f17473ec8f397de3c8c0d61c64759e44bc245715dc08eb6381fae3",
+    "FlockC3.RegLevels.capRows": "30830337e7a8248adcd62e6ce4e3b27f7beeba26a66e711be6eb018e57afc260",
+    "FlockC3.RegLevels.rowInV": "bbf920364d31aea4c919d0deebe91c4d73f44c776ef5b617f7c09e7f7532d085",
+    "FlockC3.RegLevels.wordBytes": "5ab3a5d469535e97783447c8c73cb46d55069c9fc72811c9a931e0647fdfc35a",
+    "FlockSoundness.Discharge.Recursion.SaltColl": "5d19f67746f12cc5f03d77770d2951ddb7ec2320f465270e716c0c69dfae2657",
+    "FlockSoundness.Discharge.Recursion.saltFinder": "fd584b7505243c4f3ae17afed6d0b1e5f437e1a6e6e8bbf9a5f820bfba036666",
+    "FlockSoundness.Registered.ReadsX.SaltClash": "95bac6b10374b26dca3f45a3fa06bd3644f0ed9531ed393861752c5c158f52f4"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Schedule": {
    "digest": "6d1f7bc5a68aec58611f50d86312dac3d740aa7ed55ff57f17604537b2b7da42",
@@ -15615,10 +15634,10 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.TopFinder": {
-   "digest": "169a471731b100015f881b7fe6d9f9e7c88bdb5340a63312f9f0896b2ef0bba7",
+   "digest": "66de15c69f2eddbf7a835910fcf093231013420a7022f0631b1b89064d077951",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.TopColl": "4f572d98fe29729bba4e0444836bf81daa3f865ccfaba9a925024213e1f5b1ee",
-    "FlockSoundness.Discharge.Recursion.topFinder": "183d5e992730e27b46106bf85ecba12a69b1d43c4885d82fad18bda8ac51a236"
+    "FlockSoundness.Discharge.Recursion.topFinder": "5d89370c8b98fab9cac4dbbb795d1ab2703c5f5422400711781f3f93407096db"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
@@ -15653,6 +15672,36 @@
     "FlockSoundness.Discharge.Recursion.VStarParsesScoped": "3df46ed2e494270bcd0ac4cb5e6028296654979bbe23fe7ac67e12f519cee50f"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
+  },
+  "Proofs.Flock.Recursive.ValueSrc": {
+   "digest": "9917b29067ecd5f5b74b256ec77ba6b07b0b27a55444ec870f545c3d80f187f5",
+   "definitions": {
+    "FlockC3.RegLevels.leavesV": "7a24e5e65a9fd6c1b599494f00fb3525ac3a08077d8b263b8fbcde3c55ca76a5",
+    "FlockC3.RegLevels.lev": "db02a00333edb36cb19d5ca175214bd41121d9338a2b4fd1253ab1a124d82e22",
+    "FlockC3.RegLevels.openPairV": "75966100c3d206580da32aad0854732a1fd3dc702d72c9f91c90f7f8c25c46fd",
+    "FlockC3.RegLevels.sibIdx": "967266d9b57bb7187e8e9dc3b2e094c20a89b7df8b8098d95058b8d8719ce269",
+    "FlockC3.RegLevels.sibsFrom": "f9bca255557df828e9d542c3ce5de0d378b1251c4aaa17585222b738cfa6132d",
+    "FlockC3.RegLevels.sibsV": "a7734b82281d18926bd66de38b216de879a58997711cff9a67fc7f15b206c4ef",
+    "FlockC3.RegLevels.up": "bb7977ad263a4dfb3af66403d732bf1894d7e8d8d06803480190f8d1931b09b8",
+    "FlockC3.RegLevels.valueColl": "e8a53d6b40629e36ca8d32cf830343e095e655222d80e498b2b4606f31cf9289",
+    "FlockSoundness.Discharge.Recursion.VRead": "39a6821844a8a4264208d2dfe396fcee3d2f3c63137156637c2199660a89c4bf",
+    "FlockSoundness.Discharge.Recursion.ValueColl": "75ab0b39763255286a813f4e1022232adb4a19cc8c82e0e707cb6db542124fe2",
+    "FlockSoundness.Discharge.Recursion.ValueSrc": "4611f5f955794a44e07ab698cd4fae3b6deb6297d99c5f7969a6bc239bfe2db6",
+    "FlockSoundness.Discharge.Recursion.openingVRows": "a27a17126303a97f1907f7c8083f03ed4207ab0ac08d96ea06669ac0fecc4564",
+    "FlockSoundness.Discharge.Recursion.stackedCoefRows": "2e0d23e22c373949af529a2f507f6333ab05e7cd0a0e5d81b686396d2d299e92",
+    "FlockSoundness.Discharge.Recursion.stackedDirsRows": "a457a6fecbabb101a037cdc69925a4fdbd62e3523fb0da83519c420c1be52d22",
+    "FlockSoundness.Discharge.Recursion.stackedLevels": "0059db9f0817345021e6f271d76a777e5eb5992e610a1d88075562e4c0a49dbb",
+    "FlockSoundness.Discharge.Recursion.valueAt": "be23b6a577934cc0746c6f22365d406bf1d846b1576d4880ba0188f61da4c787",
+    "FlockSoundness.Discharge.Recursion.valueFinder": "e6998b3e2c0cf31d3b84fde5dcc7ca9e81666eb12281358b2c7ef3b6f47cefdc",
+    "FlockSoundness.Discharge.Recursion.valuePick": "97d48e5d1aa17f1493532e0f6f63586cdaf1f41e1ef59fe1282bc6b3e6c24c27",
+    "FlockSoundness.Discharge.Recursion.valueRows": "b8d972467b4ed90c392ffccff484e330055f4e09061f3d17934ea1d17bc8db79",
+    "FlockSoundness.Discharge.Recursion.valueRows._sparseCasesOn_1": "b712dbd4101f4d59df52b02e31c06d46d3aacfde57bdbdc7ec147d237927fc0a",
+    "FlockSoundness.Discharge.Recursion.valueRows._sparseCasesOn_2": "3bdd94c59576d6c2bb97a1ab01439d5331fc1c3c031bce53d5653358190e7957",
+    "FlockSoundness.Discharge.Recursion.valueSrcC3": "eba01873359588a980c7e7f249345ed792c93ef4f36c02cc4f84eba7d82d1d4f",
+    "FlockSoundness.Discharge.Recursion.valueSrcC3._sparseCasesOn_1": "7416d7d1c43602a2ef3d4486c49fa820ab173c3932903475d211d31a5429d44c",
+    "FlockSoundness.Discharge.Recursion.valueSrcC3._sparseCasesOn_2": "b37f27feec417f8a5e3c7126ac59f36349baf5cc66b02c359e2a6f6fec0f3085"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.ZkReg.DrawnRefines": {
    "digest": "03dde6640e365e244ae39bfc2f6341c3433ea98fb333c69bf835507fb95c41f9",
@@ -15976,10 +16025,11 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Soundness.Assumptions.Recursive": {
-   "digest": "d815dfaf6009a03001eb778062e89664a0e0143a183c185568b6d95d31067fe6",
+   "digest": "079ddceedbf92d4ab146d73e04e3aceb7973a997daf304a0f00b43acfbebae83",
    "definitions": {
     "Flock.Assumptions.VBridge": "928812a52c621ba8f1c48148872bf2c21c58388a45335bf64fc92e571ac56ef1",
-    "Flock.Assumptions.VBridgeC": "f9e7fd3761957e71e935cba01ba6a70c706967e1ede8fe1a55d33e6d9f50d997"
+    "Flock.Assumptions.VBridgeC": "f9e7fd3761957e71e935cba01ba6a70c706967e1ede8fe1a55d33e6d9f50d997",
+    "Flock.Assumptions.VBridgeCOff": "1fc8f000f79cf07496eaedb4efe80b80d2d54748ba31451c82377e28a17e7591"
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
@@ -15987,6 +16037,13 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound"
    ]
+  },
+  "Proofs.Flock.Soundness.Assumptions.Registrant": {
+   "digest": "6a049a8ed898ccacd525bdc1727492dc0d7d17f4802bbd84929df66c4b444ee0",
+   "definitions": {
+    "Flock.Assumptions.RegistrantCovers": "c9624861b2572dfa4fe1887a5972b0d62070ac779fbebd0f5f6a0782ee367024"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Soundness.Assumptions.Zk": {
    "digest": "d55ecdf03f1115b0b56d864eb0cbec6613befe7fc295adc82de7535f8a1b1c27",
@@ -21854,6 +21911,13 @@
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.unit_recOpen"
    ]
+  },
+  "Proofs.Flock.VBridge.Decode": {
+   "digest": "ef23d72969d8f50a14f92e29c0b876862c40bbfa51a6724a125fc07ffd72577c",
+   "definitions": {
+    "FlockVBridge.Decode.regVal": "0274b6027486d2c9cdc8a2b0a652416540122690d11ee850f938d645605a65d6"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.VBridge.Inputs": {
    "digest": "5b09a649578c7e30ed61051624917b313a35705aec5a9c40b192a33ea74f7f9a",

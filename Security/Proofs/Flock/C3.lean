@@ -17,6 +17,7 @@ import Proofs.Flock.C3.Compose.HoloStageCoins
 import Proofs.Flock.C3.Compose.LaterHeld
 import Proofs.Flock.C3.Compose.HoloCoinTys
 import Proofs.Flock.C3.Compose.HoloEncoded
+import Proofs.Flock.C3.Compose.RowsReg
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Sparse.Src
@@ -80,6 +81,7 @@ import Proofs.Flock.C3.RegLevels.StackedReg
 import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.C3.RegLevels.OutRegs
+import Proofs.Flock.C3.RegLevels.TopTie
 import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.RegLevels.ROpens
