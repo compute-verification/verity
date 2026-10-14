@@ -56,6 +56,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "for bit, on every rank.  Apart from that verdict, h7168.ok says the same at vLLM's defaults of 7168-wide "
              "tensor_model_parallel_all_reduce (the hidden-7168 pass): FlashInfer's to 36 tokens, multimem past it at its own probe's "
              "trees and FTZ."),
+    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v3",
+             "On the capture device (cc 9.0, 132 SMs), the hidden-6144/N-256 and hidden-7168/N-384 MoE gates (GateLinear) run "
+             "cuteDSL ll_bf16_gemm on the kernel the cc 9.0 dispatch table names at M <= 16 and cuBLAS past it, and under the split-K-off "
+             "cuBLAS switch every f32 gate word equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1 or "
+             "GemmF32Out_v1, every hidden-7168 compressor word GemmF32Out_v1, every lm_head-shard and indexer-projection word "
+             "core's Gemm_v2, and every hidden-6144 K/N = 192/512 or 512/256 q_nope / v absorb word BatchedGemm_v1, bit for bit."),
     Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v2",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "

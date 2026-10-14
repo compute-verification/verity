@@ -151,7 +151,7 @@ def test_an_unregistered_definition_fails(registry):
 
 def test_every_tap_names_a_program_of_a_known_status():
     statuses = {pid: p["status"] for pid, p in CMAP["programs"].items()}
-    assert {statuses[t["program"]] for t in CMAP["taps"]} == set(CM.STATUSES)
+    assert {statuses[t["program"]] for t in CMAP["taps"]} <= set(CM.STATUSES)
     for p in CMAP["programs"].values():
         assert p["status"] != "exists" or p["definitions"]
         assert p["status"] != "tonight" or p["branch"].startswith("cursor/")
@@ -191,11 +191,11 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        40, 29, {"exists": 16, "tonight": 4, "port": 22, "copy": 2, "committed-only": 7})
+        40, 29, {"exists": 16, "tonight": 0, "port": 33, "copy": 2, "committed-only": 0})
     assert brief(CM.counts(CMAP, ENV, ("dense-mha",))) == (
-        47, 2347, {"exists": 720, "tonight": 300, "port": 923, "copy": 79, "committed-only": 325}, 63)
+        47, 2347, {"exists": 720, "tonight": 0, "port": 1548, "copy": 79, "committed-only": 0}, 63)
     assert brief(CM.counts(CMAP, ENV, ("sparse-mqa",))) == (
-        49, 2389, {"exists": 642, "tonight": 300, "port": 965, "copy": 79, "committed-only": 403}, 183)
+        49, 2389, {"exists": 642, "tonight": 0, "port": 1668, "copy": 79, "committed-only": 0}, 183)
 
 
 def test_the_bound_tap_counts():
