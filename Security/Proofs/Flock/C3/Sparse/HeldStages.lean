@@ -422,7 +422,3 @@ theorem stageHeldW_sparse {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List 
 end
 
 end FlockC3.Sparse
-
-#print axioms FlockC3.Sparse.htbl_of
-#print axioms FlockC3.Sparse.htblR_of
-#print axioms FlockC3.Sparse.sparseDrawnAt_holo

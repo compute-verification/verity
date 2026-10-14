@@ -111,5 +111,3 @@ theorem srcOK_holo_held {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Ar
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.srcOK_holo_held
