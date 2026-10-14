@@ -6,6 +6,9 @@
    "owner": "@memory-accounting",
    "digest": "9d865547ca23af09cf67e3ad5149642660839a871ec3c4cb85abd72829fdb257"
   },
+  "Accounting.Assumptions.SketchRank": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
@@ -1111,6 +1114,12 @@
    ],
    "assumptions": [],
    "type_hash": "aacbdc6e96631e4cce10ab559eaa9649053358ae15a63805e27d2f656fb6f754"
+  },
+  "Accounting.SecurityProofs.RemoteSessionConservationSketch": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.RemoteSessionRoutes": {
    "owner": "@memory-accounting",
@@ -5057,6 +5066,8 @@
    "Accounting.SecurityProofs.RemoteSessionConservationDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservation at the deployed parameters, with the draw's two terms bounded by 2^-40: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionRoutes": "frozen (no-function,hash): It reads Accounting.Guarantees.RemoteSessionConservation's deployed session as a run of the remote audit (Accounting.Remote.Run.ofDeployed) and proves for it the routes Sampled (the horizon's draw, DeployedSession.pr_draws_horizon_le) and Paid (RatePaidNamedRO at each pass, a union over the G candidates): abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionRunConservation": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at Accounting.SecurityProofs.RemoteSessionRoutes' routes, read at the node: the run's payments other than its tier reads are the passes' S + (L - rho) + X bits, so its tier reads are at least (1 - (dbar + gammaPass)) of C, RemoteSessionConservation's horizon reading: abstract chip programs in the random-oracle model, not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketch at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40; its q/2^96 query term remains explicit.",
    "Accounting.SecurityProofs.RemoteWindowRunConservation": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at each window's run (Accounting.Remote.Run.ofDeployedWindow), with Sampled at the window's draw (DeployedSession.pr_draws_window_le) and Paid at the window's P G terms, read at the node at gamma_w, RemoteSessionConservation's per-window reading: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationRelay": "frozen (no-function,hash): Accounting.Guarantees.RemoteSessionConservation without the hypothesis that the side sources ignore the oracle: each pass device simulated with its completions read from device memory (PIDevice.toInteractiveMem) on its own link, RatePaid at each pass with m relayed words, a union over the G candidates, and the session's pooled draws: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionRunConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.Conservation at the deployed session's run (Accounting.Remote.Run.ofDeployed) with side sources that may relay receipts, Sampled at the horizon's draw and Paid at RatePaid's terms with the run's slack lam + m b, read at the node: abstract chip programs in the random-oracle model, not the rate audit's code.",
