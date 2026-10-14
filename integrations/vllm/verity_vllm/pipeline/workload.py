@@ -41,6 +41,7 @@ from dataclasses import dataclass
 
 from verity_vllm.config import CHECKPOINTS, WORKLOADS
 from verity_vllm.config import option
+from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = "verity-vllm/workload/v1"
@@ -334,11 +335,12 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
     }
     doc["sweep"]["lengths_only"] = tok is None
     # [lane vllm-tp-n] a tensor-parallel row (`__tp<N>__` in the row id, N >= 2): the engine's world, the manifests' TP flags of record
-    # (#70 / #75: disable_custom_all_reduce, NCCL_P2P_DISABLE=1 -- P2P hangs on the SYS topology -- VLLM_BATCH_INVARIANT=1) and `sweep.tp`
+    # (#70 / #75: VLLM_BATCH_INVARIANT=1; on a SYS target, where P2P hangs, disable_custom_all_reduce and NCCL_P2P_DISABLE=1) and `sweep.tp`
     world = row_world(p["row_id"])
     if world > 1:
-        doc["engine_args_required"].update({"tensor_parallel_size": int(world), "disable_custom_all_reduce": True})
-        doc["env_required"] = {"NCCL_P2P_DISABLE": "1", "VLLM_BATCH_INVARIANT": "1"}
+        doc["engine_args_required"].update({"tensor_parallel_size": int(world),
+                                            "disable_custom_all_reduce": row_custom_all_reduce_off(p["row_id"])})
+        doc["env_required"] = {**row_p2p_env(p["row_id"]), "VLLM_BATCH_INVARIANT": "1"}
         doc["sweep"]["tp"] = int(world)
     return doc
 

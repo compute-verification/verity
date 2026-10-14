@@ -378,8 +378,10 @@ class Queue:
         _git(self.workdir, "reset", "-q", "--hard")
         _git(self.workdir, "clean", "-qfdx")
 
-    def fetch(self, prs: Iterable[PR] = ()) -> None:
-        """Forced refspecs only: `main`, the queue's branch when it exists, and each open PR's head as `refs/queue/pr/{n}`."""
+    def fetch(self, prs: Iterable[PR] = ()) -> dict[int, str]:
+        """Forced refspecs only: `main`, the queue's branch when it exists, and each open PR's head as `refs/queue/pr/{n}`;
+        return each fetched pull ref's commit, which can briefly differ from GitHub's API head."""
+        prs = list(prs)
         specs = ["+refs/heads/main:refs/remotes/origin/main", *(f"+refs/pull/{p.number}/head:refs/queue/pr/{p.number}" for p in prs)]
         self._remote(self.workdir, "fetch", "-q", "--prune", "origin", *specs)
         # exit 2: no such branch; any other failure is the remote's, never an empty queue
@@ -387,6 +389,22 @@ class Queue:
             self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{self.branch}:refs/remotes/origin/{self.branch}")
         else:
             _git(self.workdir, "update-ref", "-d", f"refs/remotes/origin/{self.branch}", check=False)
+        return {p.number: _out(self.workdir, "rev-parse", f"refs/queue/pr/{p.number}") for p in prs}
+
+    def fetch_prs(self, prs: list[PR]) -> tuple[list[PR], dict[int, Entry]]:
+        """Fetch ``prs`` and separate any whose API head disagrees with its pull ref, so one GitHub propagation race cannot stop
+        the queue.  Such a PR waits outside ``next`` until a later snapshot agrees rather than admitting an unverified old head."""
+        fetched = self.fetch(prs)
+        consistent, waiting = [], {}
+        for p in prs:
+            if fetched[p.number] == p.head:
+                consistent.append(p)
+                continue
+            why = f"GitHub's API head {p.head[:12]} and pull ref {fetched[p.number][:12]} disagree; retrying next sync"
+            waiting[p.number] = Entry(p, state="waiting", why=why)
+            self.log(f"research queue: #{p.number}'s API head {p.head[:12]} and fetched pull ref "
+                     f"{fetched[p.number][:12]} disagree; retrying next sync")
+        return consistent, waiting
 
     def load_state(self) -> dict:
         try:
@@ -536,9 +554,10 @@ class Queue:
         self._clone()
         state = self.load_state()
         prs = [p for p in self.github.open_prs() if p.base == "main"]
-        self.fetch(prs)
+        prs, waiting = self.fetch_prs(prs)
         chain = self.chain()
         entries = self.entries(prs, state)
+        entries.update(waiting)
         order = self.order(chain, entries)
         want = [(n, entries[n].pr.head) for n in order]
         k = next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
@@ -694,8 +713,9 @@ class Queue:
         self._clone()
         state = self.load_state()
         prs = [p for p in self.github.open_prs() if p.base == "main"]
-        self.fetch(prs)
+        prs, waiting = self.fetch_prs(prs)
         entries = self.entries(prs, state)
+        entries.update(waiting)
         for i, m in enumerate(self.chain(), 1):
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit

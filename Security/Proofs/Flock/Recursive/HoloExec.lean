@@ -19,10 +19,10 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
 * `HoloReg`: a word `w` and a level-0 cap `cap`, the inner statement; `Opens` is a registrant's openings of every
   position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditC3` does
   not take: its word is the one the prover's own runs open (`Recursive/RegExtract.lean`).
-* `StackedTop lv st reg cap`: `cap` is R's registered top, the `stacked` entry of the registration record `reg` (the
-  verifier's `--rec-inner-registration`) that the inner statement's META binds by its digest (`metaRegistration st`,
-  `RecVStar.registration`): the entry `topEntry` makes from one hm96 commit string per node, each over the node's row
-  (`Firewall.topRows`, `rowDigest`) under a salt. The verifier holds it of the binding round's top (`innerCommitsAt`).
+* `StackedTopAt lv st reg cap bcs'`: `cap` is R's registered top at the explicit commit strings `bcs'`, the `stacked`
+  entry of the registration record `reg` (the verifier's `--rec-inner-registration`) that the inner statement's META
+  binds by its digest (`metaRegistration st`, `RecVStar.registration`). Its five structural fields are those computed
+  by `topEntry`; the verifier checks them beside its canonical comparison.
 * `AcceptsC3`: the verifier's checks at candidate 3 of its own inputs, which the event carries: V*'s list builds, the
   inner transcript holds against R's registration (`innerCommitsAt`), the covers check passes there (all of
   `RecVStar.checkCovers`), and check 5's sparse refusals pass (`SparseRangeOk`: `ℓ` in `[6, k_log]`, the unit range's
@@ -127,14 +127,15 @@ def TopOf (lv : Level) (cap : Cap Refine.Dig) (bcs : Array ByteArray) : Prop :=
     bcs[i] = Flock.Hm96.Default512.commitString (Flock.Firewall.rowDigest ((Flock.Firewall.topRows (cap i).1).headD #[]))
       (salt i)
 
-/-- **`cap` is R's registered top**: the registration record `reg` (`--rec-inner-registration`, the verifier's own
-input) is the one the inner statement's META binds by its digest (`metaRegistration st`), it names `stacked` under its
-`program`, and that entry is, canonically, what `topEntry` makes from `cap`'s commit strings (`TopOf`), as
-`RecVStar.candidate3` compares them. -/
-def StackedTop (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) : Prop :=
-  ∃ (prog : String) (e e' : Lean.Json) (bcs : Array ByteArray) (s : String),
+/-- **`cap` is R's registered top at explicit commit strings `bcs`**: the registration record `reg`
+(`--rec-inner-registration`, the verifier's own input) is the one the inner statement's META binds by its digest, it
+names `stacked` under its `program`, and the entry's five structural fields are exactly those computed from `bcs`.
+`TopOf` ties the same explicit strings to `cap`; no choice is hidden in this relation. -/
+def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig)
+    (bcs : Array ByteArray) : Prop :=
+  ∃ (prog : String) (e : Lean.Json),
     Flock.RecVStar.registration (some reg) (metaRegistration st) = .ok (some (prog, some e)) ∧
-      Flock.RecVStar.topEntry prog bcs = .ok e' ∧ Flock.canon e' = .ok s ∧ Flock.canon e = .ok s ∧ TopOf lv cap bcs
+      Flock.RecVStar.topEntryFields prog bcs e = .ok true ∧ TopOf lv cap bcs
 
 /-- **The verifier's hold of the inner transcript**: `RecVStar.innerCommits` as `RecSetup.commits` calls it, at the
 coin server's record of V*'s inner session `tr` (`--rec-inner-transcript`), the inner session's record
@@ -241,7 +242,7 @@ def RegClash (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Lea
   ∃ y ∈ slotOpensL (o.reg x.cap) 0 0 lv.queries, y.1 < 2 ^ lv.logLen ∧
     VerifiedL H E Lf x.cap lv.lanes (pathLen lv) y ∧ y.2.1 ≠ x.column lv.lanes y.1
 
-omit [Fintype F] [DecidableEq F] in
+omit [Field F] [Fintype F] [DecidableEq F] in
 theorem RegClash.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {lv : Level} {x : HoloReg F D} {o : OutHL F D Sl} (hx : x.Opens H E Lf lv) (h : RegClash H E Lf lv x o) :
     Merkle.Collision H := by

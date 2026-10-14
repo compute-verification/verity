@@ -79,7 +79,7 @@ def _tp_row(tmp: Path, monkeypatch, *, world: int = 8, shapes=(SHAPE,), cpus: in
     env.update(environ or {})
     o = cli.parse("row", ["run", ROW, "QWEN3_30B_A3B", "Qwen/Qwen3-30B-A3B", "rev", "--sweep-dir", str(tmp), "--py", sys.executable,
                           "--native-collect-default", str(tmp / "nc_build")], env)
-    t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=world, gpu_util=None, nccl_p2p_disable="1",
+    t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=world, gpu_util=None,
               build=o.build, match=o.match, commit=o.commit)
     os.makedirs(t.d)
     ck = tmp / "ck"

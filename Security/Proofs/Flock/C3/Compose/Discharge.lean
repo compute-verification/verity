@@ -19,8 +19,10 @@ and a stage's messages are `dec`'s, so no stage follows from the public rows alo
 (`RepsRead`, `SparseRead`, `OpeningRead`, `RegLevelsRead`) and the tape its frame (`HFrame`), obligations on `dec` that
 n6 states at a fixed decoder (`C3/Compose/Decoder.lean`). What it takes besides is the verifier's: its list builds
 (`hss`), R's registered top is `xR`'s cap (`_htop`, which n6's `RegLevelsRead` reads), the accepted sessions read every
-row `HPubRows` does (`hdrawn`, `hnames`), their reads are its own (`hown`), and the rows it holds, at the records
-written at the history (`wr`), are the history's commitments (`hheld`).
+row `HPubRows` does (`hdrawn`; each circuit names a port once, `PortsNamed`, from the statement check's
+refusal, `names_of_checkStmt`), their reads hold its own (`hown`, `OwnIn`; at `own := fun j => ownAt ss j` it
+is `ownIn_checked`, from `checkOwn`), and the rows it holds, at the records written at the history (`wr`), are the
+history's commitments (`hheld`).
 
 `hbr_honest` is at a fixed word of R's cap (`fun _ _ => xR`); `hbr_honest_reg` is `_hbr` in its form, at the word the
 transported prover's runs open (`regStmt`): candidate 3's table reads only the cap (`holoAccepts_of_cap`), so VBridgeC
@@ -73,7 +75,8 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
     (bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8)
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json)
-    (_htop : ∃ lv, StackedTop lv st reg xR.cap) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (bcs' : Array ByteArray) (_htop : ∃ lv, StackedTopAt lv st reg xR.cap bcs')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (hrread : ∀ h : Typed zr, RepsRead
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hsread : ∀ h : Typed zr, SparseRead
@@ -86,9 +89,7 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hdrawn : ∀ h : Typed zr, RowsHeld
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg))
-    (hnames : ∀ h : Typed zr, PortsNamed
-      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg))
-    (hown : ∀ h : Typed zr, OwnIs
+    (hown : ∀ h : Typed zr, OwnIn
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own)
     (hheld : ∀ h : Typed zr, HeldIs
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own sel bc) :
@@ -102,7 +103,7 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
   have hrows : HPubRows
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) :=
     hPubRows_of_checked (checksAccepted_checked (coins := coins) (rows := rows) (zr := zr) (hCust := hCust) (h := h))
-      (hdrawn h) (hnames h) (sparseAtShapeChecked _)
+      (hdrawn h) (sparseAtShapeChecked _)
   exact vbridgeC_c3 (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
     dg N k Rw (hTape_of_frame (hfr h)) (hReps_honest_of_read (hrread h)) (hSparse_honest_of_read (hsread h))
     (hOpening_of_read (horead h)) (hRegLevels_honest_of_read (hlread h))
@@ -148,7 +149,8 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json)
     (cap : Cap Dig) (hcap : xR.cap = cap)
-    (htop : ∃ lv, StackedTop lv st reg xR.cap) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (bcs' : Array ByteArray) (htop : ∃ lv, StackedTopAt lv st reg xR.cap bcs')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (σ : Strategy (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N))
     (hrread : ∀ h : Typed zr, RepsRead
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
@@ -162,9 +164,7 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hdrawn : ∀ h : Typed zr, RowsHeld
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg))
-    (hnames : ∀ h : Typed zr, PortsNamed
-      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg))
-    (hown : ∀ h : Typed zr, OwnIs
+    (hown : ∀ h : Typed zr, OwnIn
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own)
     (hheld : ∀ h : Typed zr, HeldIs
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own sel bc) :
@@ -181,8 +181,8 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
       (cmtOf Vs bc) (msgOf Vs (skLeaf Vs own sel (holoInnerAt T CT st hp).r) dec) := by
   intro h
   refine vbridgeC_of_cap (x := fun _ _ => xR) (fun _ _ => ?_)
-    (hbr_honest ish hss bind hob zr hCust coins rows own sel bc dec wr reg htop dg N k Rw hrread hsread horead hlread
-      hfr hdrawn hnames hown hheld h)
+    (hbr_honest ish hss bind hob zr hCust coins rows own sel bc dec wr reg bcs' htop dg N k Rw hrread hsread horead hlread
+      hfr hdrawn hown hheld h)
   exact hcap
 
 end FlockC3.Compose

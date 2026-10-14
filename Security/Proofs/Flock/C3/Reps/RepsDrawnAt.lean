@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.Reps.RepsCounted
 import Proofs.Flock.C3.Compose.HoloEncoded
+import Proofs.Flock.C3.Compose.HoloSparseWords
 
 /-!
 # `DrawnOf` at the verifier's map, from the reps' coin rounds
@@ -8,7 +9,9 @@ A rep's round `q` of coins takes one history round, so the reps' held rounds bef
 schedule's coin rounds before it (`heldBefore_rep`): all of them at the schedule's end (`heldBefore_rep_size`), and `p`
 at the `p`-th (`heldBefore_of_coinRound`, by `filter_range_getElem?`). `holoSelOne_coinRound` puts rep `i`'s `p`-th
 coin round at history round `repStart c₀ i + p`, and `drawnOf_holoMap` is `DrawnOf` at `holoMap`'s draws where each
-rep's consumed rounds are the schedule's coin rounds (`repIdxB_of_size`, `repIdxB_of_rounds`).
+rep's consumed rounds are the schedule's coin rounds (`repIdxB_of_size`, `repIdxB_of_rounds`);
+`drawnOf_holoMap_forms` at the session's streams (`holoStreams_eq`) and room for both reps' coin forms
+(`heldBefore_rep_forms`).
 -/
 
 namespace FlockC3.Reps
@@ -101,5 +104,22 @@ theorem drawnOf_holoMap {S : ℕ} {Vs : Fin S → VStmt} {st : Flock.Stmt} {hp :
   refine ⟨?_, fun p q h => FlockC3.Compose.selC_of_holoSelOne (holoSelOne_coinRound hS i h)⟩
   unfold repStart
   split <;> omega
+
+/-- **`DrawnOf` at `holoMap`'s draws, at the session's streams**: both reps' are first (`holoStreams_eq`), and their
+coin rounds are as many as a rep's coin forms (`heldBefore_rep_forms`), so the history needs room for both reps'
+forms (`hr`). -/
+theorem drawnOf_holoMap_forms {S : ℕ} {Vs : Fin S → VStmt} {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
+    {ish : RecVStar.Inner} {tbl : String} {bc : Cm → String → ℕ → List UInt8} {rs : Array SchedRound}
+    {L : List (HoloStream × Array SchedRound)}
+    (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L)
+    (hrs : holoRounds ish.m ish.kLog ish.claims = some rs) (hc : 0 < ish.claims)
+    {S₀ : Model.Statement} {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
+    (hb : ∀ Lb i, repIdxB S₀ (b Lb i) = coinRounds rs) {r : ℕ}
+    (hr : 1 + 2 * (FlockC3.Compose.repForms ish.m ish.kLog ish.claims).length ≤ r) :
+    DrawnOf S₀ r b (holoMap st hp Cm ish tbl bc).selC fun i => (HoloStream.rep i).name tbl := by
+  obtain ⟨rs', L', hrs', rfl⟩ := FlockC3.Compose.holoStreams_eq hS
+  obtain rfl : rs' = rs := Option.some.inj (hrs'.symm.trans hrs)
+  refine drawnOf_holoMap hS hb ?_
+  rwa [← heldBefore_rep_size 0, FlockC3.Compose.heldBefore_rep_forms 0 hc hrs]
 
 end FlockC3.Reps

@@ -19,6 +19,9 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
   `checkStmt` (`StmtsChecked`, `AcceptsZKV`'s second conjunct), n1b's checks; the checked family meets it
   (`checksAccepted_checked`, by `checks_of_keepOwn`), and `hPubRows_of_checked` is `hPubRows_of_check'` with it and
   `SparseAtShapeChecked`.
+* `ownIn_of_checks`: where `ChecksAccepted` holds, the accepted sessions' reads hold the verifier's message-round ports
+  of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second and third loops (`checkOwn_ok`,
+  `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
 -/
 
 namespace FlockC3.PubRows
@@ -176,6 +179,55 @@ theorem sparse_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : L
   exact sparse_of_name hss (Array.mem_of_getElem? hj)
     ((FlockVBridge.Sparse.unitName_params hp).trans hname.symm)
 
+/-- **`checkOwn` accepting, its second and third loops**: each of the statement's message-round ports is one of the
+reads file's, and each of its `sparseMsgs` is one of the file's ports. -/
+theorem checkOwn_ok {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : RecVStar.checkOwn s own = .ok ()) :
+    (∀ q ∈ RecVStar.ownPorts s, q ∈ RecVStar.msgPorts own) ∧
+      ∀ q ∈ RecVStar.sparseMsgs s, q ∈ own.toList.map fun p => (p.name, p.value, p.reads) := by
+  unfold RecVStar.checkOwn at h
+  simp only at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · rename_i hnone
+      split at h
+      · cases h
+      · rename_i hnone'
+        refine ⟨fun q hq => ?_, fun q hq => ?_⟩
+        · have hfind : (RecVStar.ownPorts s).find? (fun x => !(RecVStar.msgPorts own).contains x) = none := by
+            cases hf : (RecVStar.ownPorts s).find? (fun x => !(RecVStar.msgPorts own).contains x) with
+            | none => rfl
+            | some q' => exact absurd hf (hnone q')
+          simpa using List.find?_eq_none.1 hfind q hq
+        · have hfind : (RecVStar.sparseMsgs s).find?
+              (fun x => !(own.toList.map fun p => (p.name, p.value, p.reads)).contains x) = none := by
+            cases hf : (RecVStar.sparseMsgs s).find?
+                (fun x => !(own.toList.map fun p => (p.name, p.value, p.reads)).contains x) with
+            | none => rfl
+            | some q' => exact absurd hf (hnone' q')
+          simpa using List.find?_eq_none.1 hfind q hq
+
+/-- **A statement the verifier checked as V*'s statement `j` has its message ports in the reads file**: each port of
+`ownAt ss j` is one of `own`'s by name, value and reads (`checkStmt_ok`'s `checkOwn`, its second and third loops). -/
+theorem ownIn_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program (some own) (some j) (some f) rows =
+      .ok ()) {ss : Array VStar.Stmt} (hss : RecVStar.statements i = .ok ss) :
+    ∀ p ∈ ownAt ss j, ∃ p' ∈ own, p'.name = p.name ∧ p'.value = p.value ∧ p'.reads = p.reads := by
+  obtain ⟨-, -, ss', s, hss', hj, -, -, -, ho, -⟩ := FlockSoundness.Discharge.Recursion.checkStmt_ok h
+  obtain rfl := Except.ok.inj (hss'.symm.trans hss)
+  intro p hp
+  simp only [ownAt, hj, Option.map_some, Option.getD_some, List.map_toArray, List.mem_toArray, List.mem_map] at hp
+  obtain ⟨q, hq, rfl⟩ := hp
+  obtain ⟨h2, h3⟩ := checkOwn_ok ho
+  rcases List.mem_append.1 hq with hq | hq
+  · obtain ⟨p', hp', rfl⟩ := List.mem_map.1 (h2 q hq)
+    exact ⟨p', Array.mem_toList_iff.1 (List.mem_filter.1 hp').1, rfl, rfl, rfl⟩
+  · obtain ⟨p', hp', rfl⟩ := List.mem_map.1 (h3 q hq)
+    exact ⟨p', Array.mem_toList_iff.1 hp', rfl, rfl, rfl⟩
+
 end List
 
 section Session
@@ -236,6 +288,59 @@ theorem checks_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'} {P Pc : I
   · have hf : (Flock.Guarantees.keepOwn z P).own = freshOwn Q.c := ite_eq_right hp
     rw [hf] at ht
     exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH t ht).elim
+
+/-- **`checkMsgNames` passing names each port of the circuit once** (its first refusal). -/
+theorem names_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkMsgNames s c = .ok ()) :
+    ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q' := by
+  unfold RecVStar.checkMsgNames at h
+  split at h
+  · cases h
+  · rename_i hn
+    have hnd : (c.ports.toList.map (·.name)).Nodup := by simpa using hn
+    intro q q' he
+    rcases Nat.lt_trichotomy q.val q'.val with hl | he' | hl
+    · exact absurd he (by simpa using List.pairwise_iff_getElem.1 hnd q.val q'.val (by simp) (by simp) hl)
+    · exact Fin.ext he'
+    · exact absurd he.symm (by simpa using List.pairwise_iff_getElem.1 hnd q'.val q.val (by simp) (by simp) hl)
+
+/-- **`checkStmt` accepting passes `checkMsgNames`** at statement `j` of the list, on the circuit. -/
+theorem msgNames_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {own : Option (Array Flock.Registered.Port)} {j : ℕ} {f : VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
+    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program own (some j) (some f) rows = .ok ()) :
+    ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ RecVStar.checkMsgNames s st.c = .ok () := by
+  unfold RecVStar.checkStmt at h
+  dsimp only at h
+  split at h
+  · obtain ⟨_, h1, -⟩ := ebind_ok h
+    cases h1
+  · split at h
+    · obtain ⟨_, h1, -⟩ := ebind_ok h
+      cases h1
+    · split at h
+      · split at h
+        · obtain ⟨_, h1, -⟩ := ebind_ok h
+          cases h1
+        obtain ⟨_, -, h⟩ := ebind_ok h
+        obtain ⟨s, hs, h⟩ := ebind_ok h
+        obtain ⟨ss, hss, hj, -⟩ := FlockSoundness.Discharge.Recursion.check_ok
+          (FlockSoundness.Discharge.Recursion.checkCircuit_ok hs).1
+        obtain ⟨⟨⟩, hm, -⟩ := ebind_ok h
+        exact ⟨ss, s, hss, hj, hm⟩
+      · cases h
+
+/-- **A circuit `checkStmt` passes as one of V*'s statements names each port once** (`checkMsgNames`' first
+refusal), so the verifier's find of a port by name (`Registered.checkPort`) finds that port. -/
+theorem names_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {own : Option (Array Flock.Registered.Port)} {j : ℕ} {f : VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
+    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program own (some j) (some f) rows = .ok ())
+    {c : Flock.Circuit} (hc : st.c = c) : ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q' := by
+  subst hc
+  obtain ⟨_, _, -, -, hm⟩ := msgNames_of_checkStmt h
+  exact names_of_msgNames hm
 
 end Session
 
@@ -320,13 +425,37 @@ theorem checksAccepted_checked {coins : String → Option Flock.RecCoins.Source}
   obtain ⟨-, spec, sts, hs, hst, -, hpr⟩ := hp
   exact ⟨⟨spec, sts, hs, hpr⟩, spec, sts, hs, hst⟩
 
+/-- **(n1b) The accepted sessions' reads hold the verifier's message-round ports** (`OwnIn` at `ownAt`) where a
+transcript they accept passes the statement check (`ChecksAccepted`): the check of the session's first statement
+(`setup_zero_c`) is `checkOwn` at the family's list's statement `j` (`ownIn_of_checkStmt`). -/
+theorem ownIn_of_checks {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
+    {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
+    (hca : ChecksAccepted F rows wr reg) : OwnIn F fun j => ownAt F.stmts j := by
+  intro R ω t R₂ j hex
+  obtain ⟨tr, -, -, spec, sts, hs, hfm⟩ := hca R ω t R₂ j hex
+  obtain ⟨h0, -⟩ := setup_zero_c (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hTags.1 (F.zs R ω t R₂ j).hcH hs
+  exact ownIn_of_checkStmt (array_forM_ok hfm 0 h0) F.hstmts
+
+/-- **(n1b) The checked family's accepted sessions' reads hold the verifier's message-round ports**, at whatever `own`
+the family is (`checksAccepted_checked`, `ownIn_of_checks`); at `own := fun j => ownAt ss j` it is `hbr_honest`'s
+`hown`. -/
+theorem ownIn_checked {coins : String → Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+      (Vs j).OuterR Reg'}
+    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
+    OwnIn (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+      fun j => ownAt ss j :=
+  ownIn_of_checks (checksAccepted_checked (coins := coins) (rows := rows) (zr := zr) (hCust := hCust) (h := h))
+
 local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 
 /-- **(n1) The public rows at the honest family, from the verifier's checks**: `hPubRows_of_check'` with the
 rec-sparse shape read at an accepted transcript whose public rows and statements the verifier checks
-(`ChecksAccepted`, n1b's), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`). -/
+(`ChecksAccepted`, n1b's), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`). The port the check finds by
+name is the session's: the statement check refuses a circuit naming a port twice (`names_of_checkStmt`), so
+`PortsNamed` holds at every accepted session. -/
 theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksAccepted 𝓗 rows wr reg)
-    (hdrawn : RowsHeld 𝓗) (hnames : PortsNamed 𝓗) (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
+    (hdrawn : RowsHeld 𝓗) (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
   intro R ω t R₂ j hex rg hrg u q x hname hread b hrow
   obtain ⟨tr', hacc, hchk', hst⟩ := hchk R ω t R₂ j hex
   obtain ⟨cs, w, c, hcs, hc, hb⟩ :=
@@ -335,12 +464,12 @@ theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk 
     rw [fixedRow_isSome { reps := #[] } cs rg.value 0 x none ish.sparse]
     simp [hc]
   obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hu, hlab⟩ := hdrawn R ω t R₂ j tr' hacc rg hrg hfix u x hread
-  have hfind := port_find_of_unique (hnames j) q
+  obtain ⟨sj, hsj, hck⟩ := stmt_of_session ((𝓗).zs R ω t R₂ j) hacc hst hd u
+  have hfind := port_find_of_unique (names_of_checkStmt hck hsj) q
   rw [hname] at hfind
   rw [hcs] at hchk'
   obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) hchk' hrg hfix hfind hd hD
     hdp hidx hu (by rw [hlab]; exact hread)
-  obtain ⟨sj, hsj, hck⟩ := stmt_of_session ((𝓗).zs R ω t R₂ j) hacc hst hd u
   have he := (fixedRow_or (hsp j sj _ _ _ _ _ _ _ hsj hck) hc).symm.trans hc'
   simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he
   exact hdig.trans (he.2.symm.trans hb.symm)

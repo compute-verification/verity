@@ -388,12 +388,19 @@ def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
     | none, some k => some (nm, CLAIM_VALUE, #[some k])
     | none, none => none
 
+/-- A statement's message ports that `ownPorts` leaves out: RecSparse's messages but `h` and `claim`, each `<p>` under
+`rec-sparse-<p>` at both reps' rows (`rec_vstage.sparse_messages`, `rec_sparse.reads`); no other statement has any. -/
+def sparseMsgs : VStar.Stmt → List (String × String × Array (Option Nat))
+  | .sparse sh _ => ((RecSparse.messagePorts sh).drop 1).dropLast.map fun (nm, _) =>
+    (nm, s!"rec-sparse-{nm}", #[some 0, some 1])
+  | _ => []
+
 def showPort (q : String × String × Array (Option Nat)) : String :=
   s!"{q.1} under {q.2.1} reading {q.2.2.toList.map fun r => (r.map toString).getD "null"}"
 
 /-- **The verifier's reads file has the statement's message-round ports**: `msgPorts` of the `--registered` file and
 `ownPorts` of the statement hold the same ports, compared by membership (`Registered.ofJson` lists a file's ports in its
-object's key order). -/
+object's key order), and the file has each of the statement's `sparseMsgs`. -/
 def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := do
   let file := msgPorts registered
   let own := ownPorts s
@@ -404,6 +411,9 @@ def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := d
     throw s!"{s.name}: the registered reads' port {showPort q} is not the statement's: {theirs}"
   if let some q := own.find? (!file.contains ·) then
     throw s!"{s.name}: the statement's message-round port {showPort q} is not in the registered reads ({file.length} message-round ports)"
+  let all := registered.toList.map fun p => (p.name, p.value, p.reads)
+  if let some q := (sparseMsgs s).find? (!all.contains ·) then
+    throw s!"{s.name}: the statement's message port {showPort q} is not in the registered reads"
 
 /-- A statement's row ports: a part's ports (`VStar/Algebra.lean:385-387`: its `m<k>`, `acc0`, `acc1`), not its `v` and
 `out`, which are its own (`rec_residuals.write`, rec_residuals.py:451-461); a level has none, and neither has candidate 3's
@@ -411,6 +421,27 @@ statements, which share no row with another session of the family. -/
 def rowPorts : VStar.Stmt → List String
   | .inner _ _ p => p.S.ports.map (·.1)
   | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. => []
+
+/-- The first port of a circuit named as a message round's (`m<k>`) that is none of a statement's message-round ports
+(`ownPorts`). -/
+def msgUnnamed (s : VStar.Stmt) (c : Circuit) : Option String :=
+  (c.ports.toList.map (·.name)).find? fun nm => (mIndex nm).isSome && !((ownPorts s).any (·.1 == nm))
+
+/-- **A statement's circuit names each port once, and a part's circuit, and a part of R's opening's, names only its
+statement's message-round ports**: the verifier finds a registered port by its name (`Registered.checkPort`, the first
+port of the name), so each name is one port's; and each port `m<k>` of a part's circuit is one of the statement's
+(`ownPorts`: a part's `m<k>` under `rec-c<k>`, R's opening's under `rec-opening-c<k>`), so the verifier's reads file
+reads it under the statement's value (`checkOwn`). The circuit file is V*'s for the statement (`checkFile`), whose ports
+are the statement's, each name once (`HmRow.checkRows` refuses a name twice), so an honest session passes. -/
+def checkMsgNames (s : VStar.Stmt) (c : Circuit) : V Unit :=
+  if !decide (c.ports.toList.map (·.name)).Nodup then
+    throw s!"{s.name}: the circuit names a port twice"
+  else match s with
+  | .inner .. | .opening .. =>
+    match msgUnnamed s c with
+    | some nm => throw s!"{s.name}: the circuit's port {nm} is named as a message round's, and the statement has no such port"
+    | none => pure ()
+  | _ => pure ()
 
 def showReads (r : Array (Option Nat)) : String := toString (r.toList.map fun x => (x.map toString).getD "null")
 
@@ -606,6 +637,19 @@ def topEntry (program : String) (bcs : Array ByteArray) : V Json := do
   return Json.mkObj [("value", Json.str STACKED), ("root", Json.str (hexOf root)), ("leaves", toJson bcs.size),
     ("words", toJson TOP_ROW_WORDS), ("domain", Json.str (hexOf dom))]
 
+/-- The five fields that bind a `stacked` registration entry to the binding round's concrete top. This is deliberately
+checked structurally beside the canonical-JSON comparison: proofs use these field equalities, while keeping the old
+comparison makes the verifier accept no new entry. -/
+def topEntryFields (program : String) (bcs : Array ByteArray) (e : Json) : V Bool := do
+  let dom ← Registered.domain program STACKED TOP_ROW_WORDS bcs.size Registered.WORD_BITS
+  let leaves := bcs.mapIdx fun i bc => Registered.rowLeaf dom i (Hm96.Default512.treeLeaf bc)
+  let root := FV3.root dom leaves Sha512.hash
+  return (e.getObjValAs? String "value").toOption == some STACKED &&
+    (e.getObjValAs? String "root").toOption == some (hexOf root) &&
+    (e.getObjValAs? Nat "leaves").toOption == some bcs.size &&
+    (e.getObjValAs? Nat "words").toOption == some TOP_ROW_WORDS &&
+    (e.getObjValAs? String "domain").toOption == some (hexOf dom)
+
 /-- **R's registration**: the circuit registration (`--rec-inner-registration`, one-stage `registration.record`'s
 `verity/registration/v2` record, written at staging, `inner_registered.REGISTRATION`) whose digest the inner circuit's META
 binds (`bound`, META's `registration`), and its entry named `stacked` (R's registered top, `rec_live.register_top`) with the
@@ -798,7 +842,9 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
         let bcs ← hexList s!"{s} round {k}'s top {i}" top
         if table == some STACKED && k == 0 && i == 0 then
           let made ← match regR with
-            | some (program, e) => do pure ((← canon (← topEntry program bcs)) == (← canon e))
+            | some (program, e) => do
+                let structural ← topEntryFields program bcs e
+                pure (structural && (← canon (← topEntry program bcs)) == (← canon e))
             | none => pure false
           if !made then throw (refused s!"registration: {s}'s binding round's top is not {STACKED}'s registered top")
         tops := tops.push bcs
@@ -1092,8 +1138,8 @@ partition object and program, which of V*'s statements the session is (`part`, `
 bindings (`bindings`, `--rec-bindings F`); its circuit must be in `ProvedScope.scopeOk`, every row a `sha512/row/v1` row
 (`v1Ports`), never `scopeOkH`'s `bitRows`, which `ProvedScope.check` admits under hidden outputs and V*'s statement
 (`VStmt.hscope`) does not cover; then `checkOwnBindings` of those bindings against the partition object and
-program, `checkCircuit` on the statement's circuit and population as statement `part` under those bindings, and
-`checkOwn`, `checkRows` and `checkAcc` (against the verifier's shared rows `rows`, `--rec-rows`) and `checkAccReads` on
+program, `checkCircuit` on the statement's circuit and population as statement `part` under those bindings,
+`checkMsgNames` on its circuit's `m<k>` ports, and `checkOwn`, `checkRows` and `checkAcc` (against the verifier's shared rows `rows`, `--rec-rows`) and `checkAccReads` on
 the verifier's own registered reads. -/
 def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × ByteArray)) (st : Stmt) (circuitB : ByteArray)
     (partition : Option Json := none)
@@ -1116,6 +1162,7 @@ def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × Byt
       throw s!"{name}: one of V*'s statements, whose circuits are in ProvedScope.scopeOk (every row sha512/row/v1, VStmt.hscope), not scopeOkH's bit rows: {ProvedScope.scopeWhy false st.c}"
     checkOwnBindings name f obj prog
     let s ← checkCircuit i j st.c (population st) circuitB f
+    checkMsgNames s st.c
     if let some r := registered then
       checkOwn s r
       checkRows s r rows

@@ -217,11 +217,14 @@ def test_a_cap_other_than_the_registered_top_is_refused(tmp_path, change):
     lambda r: _stacked(r).__setitem__("leaves", 64),
     lambda r: _stacked(r).__setitem__("words", 32),
     lambda r: _stacked(r).__setitem__("word_bits", 32),
+    lambda r: _stacked(r).__delitem__("root"),
+    lambda r: _stacked(r).__delitem__("leaves"),
+    lambda r: _stacked(r).__delitem__("domain"),
     lambda r: r.__setitem__("program", "cd" * 64),
-], ids=["root", "domain", "leaves", "words", "word-bits", "program"])
+], ids=["root", "domain", "leaves", "words", "word-bits", "no-root", "no-leaves", "no-domain", "program"])
 def test_a_registered_entry_the_top_does_not_make_is_refused(tmp_path, change):
     """A record META binds whose entry `stacked` is not the one R's binding round's top makes: its root, domain, leaf count
-    or row width another, or its program another (the domain is the program's, derived, never read from the entry)."""
+    or row width another or absent, or its program another (the domain is the program's, derived, then checked)."""
     assert _read(C3, inner=_registered(tmp_path, change)) == (1, None, CAP)
 
 
@@ -553,10 +556,15 @@ def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse,
     n18-e13-s6-t0, is the only RecSparse statement whose message rows a coin server recorded, so nothing smaller shows
     the verifier reads `sparse/rep<x>`'s rounds at the ports' order. `statement` with the inner transcript sets it up
     (its `rec-sparse-v` compared with no round), and refuses it at a transcript whose `sparse/rep1`
-    `c_k` of `u` (the round before the claim's) is one bit off; without the transcript it sets up as before."""
+    `c_k` of `u` (the round before the claim's) is one bit off; without the transcript it sets up as before. Its reads file
+    holds the statement's message ports as `RecVStar.checkOwn` asks (`rec-statements --registered`, at public inner
+    circuits since a private session has no statements yet: `ownPorts` and RecSparse's other messages, `sparseMsgs`)."""
     unit = f"rec-sparse/n{SPARSE[0]}-e{SPARSE[1]}-s{SPARSE[2]}-t{SPARSE[3]}"
     ports = {k: x["value"] for k, x in json.loads((sparse / "registered.json").read_text())["ports"].items()}
     assert {"rec-sparse-u", "rec-sparse-v"} <= set(ports.values()), ports
+    p = subprocess.run([str(BIN), "rec-statements", *_shape(tmp_path, holo=False), "--unit", unit, "--instances", "2",
+                        "--registered", str(sparse / "registered.json")], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
     (port,) = [k for k, v in ports.items() if v == "rec-sparse-u"]
     for t in (None, _fixture(C3) / "public.json"):
         p = _statement(sparse, t)

@@ -167,7 +167,7 @@ theorem decOf_specC (hread : F.MsgsReadC dg N k Rw spec st cap lig own sel)
   have hd : F.decOf dg N k Rw spec st cap lig own sel i
       (maskOf F.Vs (skOf F.Vs own sel) i (layers F.zs dg N k Rw R ω t R₂ τ)) = toSs T (Classical.choose hex) := by
     unfold decOf
-    exact dite_cond_eq_true (eq_true hex)
+    exact dite_eq_left_of_eq_true (eq_true hex)
   rw [hd]
   obtain ⟨R', ω', t', R₂', τ', o', h', hX', hg'⟩ := Classical.choose_spec hex
   have e := hread i hi R ω t R₂ τ o R' ω' t' R₂' τ' o' h h' hX'.symm
