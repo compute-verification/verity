@@ -1,0 +1,10 @@
+schema = "verity-vllm/engine-spec/v0"
+model = "unsloth/Llama-3.1-8B"
+revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+
+[engine]
+quantization = "fp8"
+max_model_len = 8384
+gpu_memory_utilization = 0.40
+max_num_seqs = 8
+enforce_eager = true
