@@ -102,6 +102,3 @@ theorem stageCoins_holo_family (F : C3Family T (holoCTs st hp) st hp xR L Reg Cm
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.recordDecodes_family
-#print axioms FlockC3.Compose.stageCoins_holo_family
