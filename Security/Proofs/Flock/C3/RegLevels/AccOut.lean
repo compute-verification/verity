@@ -56,6 +56,16 @@ theorem outRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
 
 end Drawn
 
+/-- **Rep `r`'s opening `j` in `accReads`' rows** (`chain_order`, rep-major): unit `r · q + j` (`j < q`) reads row
+`r · n + b + j`. -/
+theorem accRow_opening {q n b r j : ℕ} (hj : j < q) : (r * q + j) / q * n + b + (r * q + j) % q = r * n + b + j := by
+  have hq : 0 < q := by omega
+  have h1 : (r * q + j) / q = r := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ hq, Nat.div_eq_of_lt hj, Nat.zero_add]
+  have h2 : (r * q + j) % q = j := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hj]
+  rw [h1, h2]
+
 section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
@@ -77,6 +87,32 @@ def OutKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) 
         site ((F.zs R ω t R₂ (F.sessO ℓ)).rd.port (.inl (F.unO ℓ r j, ⟨_, hq⟩))) = s R ω t R₂ ∧
         (F.zs R ω t R₂ (F.sessO ℓ)).rd.readAt (.inl (F.unO ℓ r j, ⟨_, hq⟩)) =
           r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j + 1
+
+/-- Obligation: discharged where the verifier checked the level's statement (`checkAcc`, `checkAccReads`:
+`outRead_drawn`, `accPos_of_checked`). **Each opening's `acc_out` row is read at registration `s`, one past its unit's
+row of `accReads`** (`u / q · n + Σ_{ℓ' < ℓ} q + u % q`). -/
+def OutReadsS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ ℓ < F.sh.sched.levels.size,
+    ∀ j < F.q ℓ, ∃ hq : HmOut.nIn (F.Vs (F.sessO ℓ)).c + 1 < (F.Vs (F.sessO ℓ)).c.ports.size,
+      (F.zs R ω t R₂ (F.sessO ℓ)).rd.isRead (.inl (F.unO ℓ r j, ⟨_, hq⟩)) ∧
+        site ((F.zs R ω t R₂ (F.sessO ℓ)).rd.port (.inl (F.unO ℓ r j, ⟨_, hq⟩))) = s R ω t R₂ ∧
+        (F.zs R ω t R₂ (F.sessO ℓ)).rd.readAt (.inl (F.unO ℓ r j, ⟨_, hq⟩)) =
+          (F.unO ℓ r j).val / F.q ℓ * F.nOpen + ((List.range ℓ).map F.q).sum + (F.unO ℓ r j).val % F.q ℓ + 1
+
+/-- **`OutKeysS` from the units' rows** (the unit-to-`(r, j)` map): rep `r`'s opening `j` of level `ℓ` is unit
+`r · q + j` (`hunO`, within the level's `2 q` instances, `hnv`), whose row is the opening's chain position
+(`accRow_opening`). -/
+theorem outKeysS_of_reads (hnv : ∀ ℓ < F.sh.sched.levels.size, 2 * F.q ℓ ≤ (F.Vs (F.sessO ℓ)).nv)
+    {s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site} (h : OutReadsS F dg N k Rw s) : OutKeysS F dg N k Rw s := by
+  intro R ω t R₂ τ o ha r ℓ hℓ j hj
+  obtain ⟨hq, hrd, hsite, hat⟩ := h R ω t R₂ τ o ha r ℓ hℓ j hj
+  refine ⟨hq, hrd, hsite, ?_⟩
+  have hlt : r.val * F.q ℓ + j < (F.Vs (F.sessO ℓ)).nv := by
+    have := hnv ℓ hℓ
+    rcases (show r.val = 0 ∨ r.val = 1 by omega) with h0 | h0 <;> rw [h0] <;> omega
+  have e := F.hunO ℓ r j hlt
+  rw [show (F.sh.sched.levels[ℓ]!).q = F.q ℓ from rfl] at e
+  rw [hat, e, accRow_opening hj]
 
 /-- **`AccOutL` from the openings' `acc_out` reads** (`accOutRegs_of_check`, `AccRowsAreS`, `accOut_of_regOut`): where
 each level's circuit has V*'s output layout at copy 0 (`hlaid`) and each opening's `acc_out` row is read at
@@ -101,5 +137,47 @@ theorem accOutL_of_keysS (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (
   exact hacc R ω t R₂ τ o h (F.sessO ℓ) (F.unO ℓ r j) ⟨_, hq⟩ hrd hsite b hb hb'
 
 end family
+
+section C3
+
+open FlockSoundness.Game FlockSoundness.Discharge.ZkSession FlockSoundness.Discharge.ZkExec FlockC3.Compose
+
+variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+
+local notation "ℐ" => holoInnerAt T CT st hp
+
+/-- **An opening's `acc` (`acc_out`) read is at its chain position (the next one)**, at C3's family: where the verifier
+checked the session's statements (`ChecksAccepted`), the table's level `l` (`.recOpen`) at the inner schedule `sch`,
+its reads file names each port once (`hnd`) and a registered read is `own`'s entry of its name at the unit's position
+(`ReadsOwnC3`), the read of unit `r · q + j`, rep `r`'s opening `j`, is at row `r · n + opensBelow l + j` (plus `d`):
+`accRead_of_checked` at `accReads_recOpen`'s rows, `accRow_opening`. -/
+theorem accPos_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
+    {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
+    (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    (hro : ReadsOwnC3 F dg N k Rw)
+    (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
+    {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (s : Fin (vstarCount F.ish)) {l LANES H m : ℕ}
+    (hs : F.stmts[(s : ℕ)]? = some (.recOpen l LANES H m)) {sch : Flock.Schedule}
+    (hsch : Flock.fast100 F.ish.m = some sch) {r j : ℕ} (hr : r < 2) (hj : j < (sch.levels[l]!).q)
+    {u : Fin (F.Vs s).nv} (hu : u.val = r * (sch.levels[l]!).q + j) {nm : String} {d : ℕ}
+    (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) {q : Fin (F.Vs s).c.ports.size}
+    (hq : (F.Vs s).c.ports[q].name = nm) (hrd : (F.zs R ω t R₂ s).rd.isRead (.inl (u, q))) :
+    (F.zs R ω t R₂ s).rd.readAt (.inl (u, q)) =
+      r * Flock.RecVStar.opensBelow sch sch.levels.size + Flock.RecVStar.opensBelow sch l + j + d := by
+  obtain ⟨-, -, hpos⟩ := accRead_of_checked hchk hro hnd h s hs rfl (accReads_recOpen hsch l LANES H m) hnm hq hrd
+  have hlt : u.val < 2 * (sch.levels[l]!).q := by
+    rw [hu]
+    rcases (show r = 0 ∨ r = 1 by omega) with rfl | rfl <;> omega
+  rw [getElem?_accRow _ hlt] at hpos
+  have e := Option.some.inj (Option.some.inj hpos)
+  have e2 := accRow_opening (n := Flock.RecVStar.opensBelow sch sch.levels.size)
+    (b := Flock.RecVStar.opensBelow sch l) (r := r) hj
+  rw [← hu] at e2
+  rw [← e]
+  exact congrArg (· + d) e2
+
+end C3
 
 end FlockC3.RegLevels

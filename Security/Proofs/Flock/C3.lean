@@ -112,6 +112,7 @@ import Proofs.Flock.C3.RegLevels.SharedRows
 import Proofs.Flock.C3.RegLevels.TopTie
 import Proofs.Flock.C3.RegLevels.TopLeaf
 import Proofs.Flock.C3.RegLevels.AccOut
+import Proofs.Flock.C3.RegLevels.PartTies
 import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.RegLevels.ROpens
