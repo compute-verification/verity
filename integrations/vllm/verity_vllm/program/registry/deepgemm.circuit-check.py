@@ -17,6 +17,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("FlashInferFp8Linear_v1", lambda: bind(deepgemm.FlashInferFp8Linear, K=256, N=256)),
         # a partial last weight block (GLM-5.3's fused_qkv_a_proj, N = 2624 over 21 scale rows)
         ("DeepGemmFp8Linear_v1/ragged", lambda: bind(deepgemm.DeepGemmFp8Linear, K=256, N=192)),
+        # the standalone ue8m0 activation quant (the block-FP8 Triton experts' input at the sm_90 defaults), two groups at the real G
+        ("Fp8GroupQuantUe8m0_v1", lambda: bind(deepgemm.Fp8GroupQuantUe8m0, K=256, G=128)),
         # DeepSeek-V4's wo_a einsum: two local groups, a partial last weight block
         ("ScaledMmFp8BlockGrouped_v1", lambda: bind(deepgemm.ScaledMmFp8BlockGrouped, H=2, K=256, N=192, G=128)),
     ]
