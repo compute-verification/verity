@@ -1389,3 +1389,22 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
     assert quick_tier.warm_dir({"HOME": env["HOME"]}, d) is None and quick_tier.warm_dir({**env, "CHECK_SLOT": "../x"}, d) is None
     env.pop("CHECK_SLOT")
     assert run(4) == {"dir": d, "rc": 0, "start": "cold"} and log.read_text().split()[-1] == "cold"
+
+
+def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monkeypatch):
+    """14 Oct 00:46Z: drive's listing of the open PRs hung for 5 min on a dead connection, and gh has no timeout of its own."""
+    import research.merge as M
+    import research.queue as Q
+
+    asked = []
+
+    def hangs(argv, **kw):
+        asked.append(kw.get("timeout"))
+        raise subprocess.TimeoutExpired(argv, kw["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", hangs)
+    with pytest.raises(QueueError, match=f"no answer in {Q.GH_TIMEOUT_S} s"):
+        Q.GitHub("o/r").open_prs()
+    with pytest.raises(M.Refused, match=f"no answer in {M.GH_TIMEOUT_S} s"):
+        M._gh_cli(Path("."), "pr", "view", "1")
+    assert asked == [Q.GH_TIMEOUT_S, M.GH_TIMEOUT_S]

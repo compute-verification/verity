@@ -104,6 +104,9 @@ DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
 #: a transfer from the remote under 1 KB/s for 2 min aborts: git has no timeout, and a stalled HTTPS fetch held a drive tick
 #: for 10 min (13 Oct 02:33Z), the next tick retrying it
 STALL = ("-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=120")
+#: `gh api`'s limit: gh has no timeout, and a listing of the open PRs held a drive tick on a dead connection for 5 min
+#: (14 Oct 00:46Z) while the same call answered in a second from a fresh one
+GH_TIMEOUT_S = 120
 LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
@@ -194,7 +197,11 @@ class GitHub:
         self.repo = repo
 
     def open_prs(self) -> list[PR]:
-        r = subprocess.run(["gh", "api", "--paginate", f"repos/{self.repo}/pulls?state=open&per_page=100"], capture_output=True, text=True)
+        try:
+            r = subprocess.run(["gh", "api", "--paginate", f"repos/{self.repo}/pulls?state=open&per_page=100"], capture_output=True,
+                               text=True, timeout=GH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            raise QueueError(f"gh api repos/{self.repo}/pulls: no answer in {GH_TIMEOUT_S} s") from None
         if r.returncode:
             raise QueueError(f"gh api repos/{self.repo}/pulls: {(r.stderr or r.stdout).strip()[-300:]}")
         return [PR.from_api(d) for page in _json_values(r.stdout) for d in (page if isinstance(page, list) else [page])]

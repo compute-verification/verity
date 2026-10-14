@@ -1026,8 +1026,15 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
         _git(repo, "branch", "-D", branch, check=False)
 
 
+#: gh has no timeout of its own: a call on a dead connection held a drive tick for 5 min (14 Oct 00:46Z)
+GH_TIMEOUT_S = 120
+
+
 def _gh_cli(repo: Path, *args: str) -> str:
-    r = subprocess.run(["gh", *args], cwd=repo, capture_output=True, text=True)
+    try:
+        r = subprocess.run(["gh", *args], cwd=repo, capture_output=True, text=True, timeout=GH_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise Refused(f"gh {' '.join(args[:2])}: no answer in {GH_TIMEOUT_S} s") from None
     if r.returncode:
         raise Refused(f"gh {' '.join(args[:2])}: {(r.stderr or r.stdout).strip()[-300:]}")
     return r.stdout
