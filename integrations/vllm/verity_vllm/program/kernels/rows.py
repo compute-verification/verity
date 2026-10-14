@@ -791,10 +791,7 @@ def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dic
 EVALUATORS |= {m.FAMILY: m.EVALUATOR for m in (softcap_rows, act_rows, dsa_norm_rows)}
 for m, fn in ((softcap_rows, attention_softcap), (act_rows, act_rows.silu_mul_expf), (dsa_norm_rows, dsa_norm_rows.row)):
     _row(m.FAMILY, fn, ("out",), check_targets=m.check_targets)
-EVALUATORS |= deepgemm_rows.EVALUATORS
-for _f, (_fn, _returns) in deepgemm_rows.ROWS.items():
-    _row(_f, _fn, _returns, check_targets=lambda rng, f=_f: deepgemm_rows.check_targets(f))
-
+deepgemm_rows.register_rows(EVALUATORS, _row)
 from verity_vllm.program.kernels import ir_rows  # noqa: E402
 
 for _f in ir_rows.FAMILIES:

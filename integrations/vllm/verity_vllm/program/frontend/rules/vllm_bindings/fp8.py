@@ -33,7 +33,7 @@ def _f32_equal(a, b: float) -> bool:
 def _vllm_op(name: str) -> set:
     try:
         return {getattr(torch.ops.vllm, name).default}
-    except Exception:  # noqa: BLE001 — vLLM is optional for CPU-only tests
+    except (AttributeError, RuntimeError):
         return set()
 
 
@@ -53,7 +53,7 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
         "op-binding",
         applies_to="vllm.dynamic_flashinfer_deepgemm_blockscale_gemm(input, weight, weight_scale, 128, True)",
         preconditions=(
-            "cc 9.0 without batch invariance and vLLM's default dynamic FlashInfer/DeepGEMM custom op",
+            "Hopper without batch invariance and vLLM's default dynamic FlashInfer/DeepGEMM custom op",
             "bf16 input [M,K], e4m3 weight [N,K], f32 weight scales [ceil(N/128),K/128]",
             "group_size=128 and use_deep_gemm_e8m0=True",
         ),

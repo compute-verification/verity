@@ -555,13 +555,9 @@ def default_fp8_linear_leaf(model=None, kernel_class=None):
         yield
         return
     if kernel_class is None:
-        try:
-            from vllm.model_executor.kernels.linear.scaled_mm.flashinfer import (
-                FlashInferFp8DeepGEMMDynamicBlockScaledKernel as kernel_class,
-            )
-        except (ImportError, AttributeError):
-            yield
-            return
+        from vllm.model_executor.kernels.linear.scaled_mm.flashinfer import (
+            FlashInferFp8DeepGEMMDynamicBlockScaledKernel as kernel_class,
+        )
     from verity_vllm.program.frontend.rules.vllm_iface import iface
 
     def apply_block_scaled_mm(self, A, B, As, Bs):
