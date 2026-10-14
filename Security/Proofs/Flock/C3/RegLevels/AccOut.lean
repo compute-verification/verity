@@ -145,8 +145,12 @@ theorem open_stmt {ℓ : ℕ} (hℓ : ℓ < F.sh.sched.levels.size) :
   have hss := F.sched_eq hs
   subst hss
   obtain ⟨hj, hst⟩ := statements_recOpen F.hstmts hs hℓ
-  rw [F.hsessO ℓ ⟨ℓ, hj⟩ ⟨_, _, _, hst⟩]
-  exact ⟨⟨_, _, hst⟩, (F.hnv _).trans (congrArg VStar.Stmt.instances hst)⟩
+  have hsess : F.sessO ℓ = ⟨ℓ, hj⟩ := F.hsessO ℓ ⟨ℓ, hj⟩ ⟨_, _, _, hst⟩
+  have hstmt : F.stmts[F.sessO ℓ] =
+      .recOpen ℓ (2 ^ (F.sh.sched.levels[ℓ]!).lanes)
+        ((F.sh.sched.levels[ℓ]!).d - (F.sh.sched.levels[ℓ]!).cap) (2 * F.q ℓ) := by
+    simpa only [hsess] using hst
+  exact ⟨⟨_, _, hstmt⟩, (F.hnv _).trans (congrArg VStar.Stmt.instances hstmt)⟩
 
 /-- Obligation: discharged at C3's family by `readsOwnAt_of` (`ReachedChecked`: `readsOwn_of_hown` and the label
 check). **Each level's registered reads are of `own`'s entry of the port's name, at the unit's own row of its
