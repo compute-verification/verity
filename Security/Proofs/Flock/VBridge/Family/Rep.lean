@@ -479,9 +479,10 @@ def HOne : Prop :=
     layers F.zs dg N k Rw R ω t R₂ τ (F.sess p)
       (Const.Prog.oneAt (Placed.keyProg (F.Vs (F.sess p)).c (F.Vs (F.sess p)).hU (F.Vs (F.sess p)).nv) (F.un p r)) = true
 
-/-- Obligation: discharged by check 5's `RecCoins.checkResiduals` (in the event as `ChecksC3`'s `RecCoins.check`),
-which holds the `v` port's registration to `verifierRows` at the inner session's coins, extra claims and comb
-(`checkValue` at `rec-v`).
+/-- Obligation: discharged by `hVCoins_of` (`Family/VCoins.lean`) from the parts' `v` keys (`PartVCols`), their reads
+files naming `v` (`OwnNamesV`) and the registrant's `v` (`VRowsAre`): check 5's `RecCoins.checkResiduals` (in the event
+as `ChecksC3`'s `RecCoins.check`) holds the `v` port's registration to `verifierRows` at the inner session's coins, extra
+claims and comb (`checkValue` at `rec-v`).
 **The registered `v` is the verifier's at the rep's coins.** At an accepted outer proof, the `v` port of rep `r`'s copy
 of part `p` is registered bits of `verifierRows`' coefficients at the rep's coins, extra claims and comb (`vOf`), at the
 part's `V`; established from that check's rows (the registrant's rows at `rec-v`'s root, as `AccRowsAre` reads
@@ -495,8 +496,9 @@ def HVCoins : Prop :=
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb)) q)
 
-/-- Obligation: to be discharged by acceptance, now that the layout keys a returned output gate to its output row
-(`HiddenExec.rowOfH`), which makes `RegOut` hold at the parts' `out` columns where they are registered reads.
+/-- Obligation: discharged by `hZeroL_of` (`Family/VCoins.lean`) from the parts' `out` columns (`PartOutCols`, which
+makes their gates committed, `outCol_committed`) and their reads (`ZeroReads`, open: the Lean verifier does not check
+`out`'s registration).
 **The parts' outputs are 0 in the layer.** At an accepted outer proof, every output column of rep `r`'s copy of
 part `p` is 0 in the layer (`copyVal`). V* registers each part's `out` as reads of the zero row `rec-residuals-zero`
 (`rec_vstage.py`), and `ZkOuter.Good` asks the layer to agree with the registrant at registered reads only
